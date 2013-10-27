@@ -5,8 +5,10 @@ A lightweight graphics device manager for Rust.
 ## Design Goals
 
 - Lightweight implementation
-- Minimal performance overhead
-- API agnostic (OpenGL/D3D)
+- Minimal public API
+- Low performance overhead
+- Graphics API agnostic (OpenGL/DirectX)
+- Maths library agnostic
 - Clear documentation with examples
 
 ## Note
