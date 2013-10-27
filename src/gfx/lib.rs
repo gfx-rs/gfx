@@ -12,15 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern mod gl;
+#[feature(globs)];
 
-struct HandleManager<T>;
+// extern mod gl;
 
-impl<T> HandleManager<T> {
-    fn new() -> HandleManager<T> {
-        HandleManager;
-    }
-}
+#[cfg(test)] use lib::resource::{Handle, HandleManager};
+#[cfg(not(test))] use resource::{Handle, HandleManager};
+
+mod resource;
 
 pub struct IndexBuffer;
 pub struct VertexBuffer;
