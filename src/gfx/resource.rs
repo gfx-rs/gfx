@@ -34,17 +34,17 @@ impl ElementIndex {
     }
 }
 
-/// A handle manager
+/// A resource manager
 ///
 /// Performance is optimised towards batch operations on the stored data, at
-/// the slight expense of handle lookups.
+/// the slight expense of handle lookups and element deletions.
 ///
 /// ~~~
 ///                             +---+
 ///                             |   |  Handle
 ///                             +-.-+
 ///                               |
-/// +- HandleManager -------------|---------------------------------------+
+/// +- ResourceManager -----------|---------------------------------------+
 /// |                             |                                       |
 /// |   +---+---+---+---+---+---+-V-+---+---+---+ - - - +---+             |
 /// |   | i | i |   | i | i | i | i |   |   | i |       |   |  indices    |
@@ -60,7 +60,7 @@ impl ElementIndex {
 /// |                                                                     |
 /// +---------------------------------------------------------------------+
 /// ~~~
-pub struct HandleManager<T> {
+pub struct ResourceManager<T> {
     /// A sparse array of indices pointing to elements
     priv indices: ~[ElementIndex],  // Should be a fixed vector
     /// A packed array of elements.
@@ -69,9 +69,9 @@ pub struct HandleManager<T> {
     priv len: u16,
 }
 
-impl<T> HandleManager<T> {
-    pub fn new() -> HandleManager<T> {
-        HandleManager {
+impl<T> ResourceManager<T> {
+    pub fn new() -> ResourceManager<T> {
+        ResourceManager {
             indices: ~[],
             elements: ~[],
             len: 0,
@@ -142,9 +142,9 @@ impl<T> HandleManager<T> {
 
 // Element Iterators
 
-/// An iterator over the elements stored in a `HandleManager`
+/// An iterator over the elements stored in a `ResourceManager`
 pub struct ElementIterator<'self, T> {
-    priv manager: &'self HandleManager<T>,
+    priv manager: &'self ResourceManager<T>,
     priv index: uint,
 }
 
@@ -167,9 +167,9 @@ impl<'self, T> Iterator<&'self T> for ElementIterator<'self, T> {
     }
 }
 
-/// An iterator for modifying the elements stored in a `HandleManager`
+/// An iterator for modifying the elements stored in a `ResourceManager`
 pub struct MutElementIterator<'self, T> {
-    priv manager: &'self mut HandleManager<T>,
+    priv manager: &'self mut ResourceManager<T>,
     priv index: uint,
 }
 
@@ -198,7 +198,7 @@ mod tests {
 
     #[test]
     fn test_add() {
-        let mut hm = HandleManager::<int>::new();
+        let mut hm = ResourceManager::<int>::new();
         let h = hm.add(1);
         do hm.with(h) |x| {
             assert!(x.is_some());
@@ -211,7 +211,7 @@ mod tests {
 
     #[test]
     fn test_with() {
-        let mut hm = HandleManager::<int>::new();
+        let mut hm = ResourceManager::<int>::new();
         let h = hm.add(1);
         do hm.with(h) |x| {
             let x = x.unwrap();
@@ -221,7 +221,7 @@ mod tests {
 
     #[test]
     fn test_with_mut() {
-        let mut hm = HandleManager::<int>::new();
+        let mut hm = ResourceManager::<int>::new();
         let h = hm.add(1);
         do hm.with_mut(h) |x| {
             x.map(|x| *x = 12);
@@ -234,7 +234,7 @@ mod tests {
 
     #[test]
     fn test_remove_handle() {
-        let mut hm = HandleManager::<int>::new();
+        let mut hm = ResourceManager::<int>::new();
         let h = hm.add(1);
         hm.remove(h);
         assert!(hm.is_empty())

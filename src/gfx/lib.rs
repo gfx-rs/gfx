@@ -16,8 +16,8 @@
 
 // extern mod gl;
 
-#[cfg(test)] use lib::resource::{Handle, HandleManager};
-#[cfg(not(test))] use resource::{Handle, HandleManager};
+#[cfg(test)] use lib::resource::{Handle, ResourceManager};
+#[cfg(not(test))] use resource::{Handle, ResourceManager};
 
 mod resource;
 
@@ -30,20 +30,20 @@ pub struct ShaderProgram;
 
 /// A graphics device manager
 pub struct DeviceManager {
-    index_buffers: HandleManager<IndexBuffer>,
-    vertex_buffers: HandleManager<VertexBuffer>,
-    uniform_buffers: HandleManager<UniformBuffer>,
-    shader_programs: HandleManager<ShaderProgram>,
+    index_buffers: ResourceManager<IndexBuffer>,
+    vertex_buffers: ResourceManager<VertexBuffer>,
+    uniform_buffers: ResourceManager<UniformBuffer>,
+    shader_programs: ResourceManager<ShaderProgram>,
 }
 
 impl DeviceManager {
     /// Initialise a new graphics device manager
     pub fn new() -> DeviceManager {
         DeviceManager {
-            index_buffers: HandleManager::new(),
-            vertex_buffers: HandleManager::new(),
-            uniform_buffers: HandleManager::new(),
-            shader_programs: HandleManager::new(),
+            index_buffers: ResourceManager::new(),
+            vertex_buffers: ResourceManager::new(),
+            uniform_buffers: ResourceManager::new(),
+            shader_programs: ResourceManager::new(),
         }
     }
 
