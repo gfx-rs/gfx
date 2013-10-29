@@ -21,3 +21,7 @@
 - [Adventures in data-oriented design – Part 4: Skinning it to 11](http://molecularmusings.wordpress.com/2013/08/22/adventures-in-data-oriented-design-part-4-skinning-it-to-11/) (Molecular Musings)
 - [Implementing a semi-automatic structure-of-arrays data container](http://molecularmusings.wordpress.com/2013/10/22/implementing-a-semi-automatic-structure-of-arrays-data-container/) (Molecular Musings)
 - [Understanding cache-friendly, data-oriented objects and handles](http://stackoverflow.com/questions/19385853/understanding-cache-friendly-data-oriented-objects-and-handles) (StackOverflow)
+
+## Draw Call Bucketing
+
+- [Order your graphics draw calls around!](http://realtimecollisiondetection.net/blog/?p=86) (realtimecollisiondetection.net)

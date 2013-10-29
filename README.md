@@ -31,6 +31,7 @@ A lightweight buffer, shader and render queue manager for Rust.
   this model could be the problem of 'handle lifetimes' - ie. what happens if
   the data associated with a handle is removed? Using this model could negate
   some of the advantages of using Rust in the first place.
+- Make use of 'draw call bucketing'. See `research.md` for more information.
 - Leave scene and model managment up to the client, and focus instead on
   buffers and shaders. Provide ways of accessing the underlying rendering API,
   to allow clients to make use of advanced, non-standard features if neccesary.
