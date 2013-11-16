@@ -13,72 +13,86 @@
 // limitations under the License.
 
 #[feature(globs)];
+#[feature(macro_rules)];
 
-// extern mod gl;
+pub mod data;
 pub mod interop;
 
-#[cfg(test)] use lib::resource::{Handle, ResourceManager};
-#[cfg(not(test))] use resource::{Handle, ResourceManager};
+data_manager! {
+    data ShaderProgram {
+        id: uint,
+        ty: uint
+    }
+}
 
-mod resource;
+data_manager! {
+    data IndexBuffer {
+        id: uint
+    }
+}
 
-pub struct IndexBuffer;
-pub struct VertexBuffer;
-pub struct UniformBuffer;
+data_manager! {
+    data UniformBuffer {
+        id: uint
+    }
+}
 
-pub struct Shader;
-pub struct ShaderProgram;
+data_manager! {
+    data VertexBuffer {
+        id: uint
+    }
+}
 
 /// A graphics device manager
 pub struct DeviceManager {
-    index_buffers: ResourceManager<IndexBuffer>,
-    vertex_buffers: ResourceManager<VertexBuffer>,
-    uniform_buffers: ResourceManager<UniformBuffer>,
-    shader_programs: ResourceManager<ShaderProgram>,
+    index_buffers: IndexBuffer::Manager,
+    vertex_buffers: VertexBuffer::Manager,
+    uniform_buffers: UniformBuffer::Manager,
+    shader_programs: ShaderProgram::Manager,
 }
 
 impl DeviceManager {
     /// Initialise a new graphics device manager
     pub fn new() -> DeviceManager {
         DeviceManager {
-            index_buffers: ResourceManager::new(),
-            vertex_buffers: ResourceManager::new(),
-            uniform_buffers: ResourceManager::new(),
-            shader_programs: ResourceManager::new(),
+            index_buffers: IndexBuffer::Manager::new(),
+            vertex_buffers: VertexBuffer::Manager::new(),
+            uniform_buffers: UniformBuffer::Manager::new(),
+            shader_programs: ShaderProgram::Manager::new(),
         }
     }
 
     pub fn destroy(self) {}
 
-    pub fn add_vertex_buffer<T>(&mut self, _data: ~[T], _stride: u32) -> Handle<VertexBuffer> {
+    pub fn add_vertex_buffer<T>(&mut self, _data: ~[T], _stride: u32) -> VertexBuffer::Handle {
         fail!("Not yet implemented.");
     }
 
-    pub fn destroy_vertex_buffer(&mut self, _handle: Handle<VertexBuffer>) {
+    pub fn destroy_vertex_buffer(&mut self, _handle: VertexBuffer::Handle) {
         fail!("Not yet implemented.");
     }
 
-    pub fn add_index_buffer(&mut self, _data: ~[u32]) -> Handle<IndexBuffer> {
+    pub fn add_index_buffer(&mut self, _data: ~[u32]) -> IndexBuffer::Handle {
         fail!("Not yet implemented.");
     }
 
-    pub fn destroy_index_buffer(&mut self, _handle: Handle<IndexBuffer>) {
+    pub fn destroy_index_buffer(&mut self, _handle: IndexBuffer::Handle) {
         fail!("Not yet implemented.");
     }
 
-    pub fn add_uniform_buffer(&mut self/*, ...*/) -> Handle<UniformBuffer> {
+    pub fn add_uniform_buffer(&mut self/*, ...*/) -> UniformBuffer::Handle {
         fail!("Not yet implemented.");
     }
 
-    pub fn destroy_uniform_buffer(&mut self, _handle: Handle<UniformBuffer>) {
+    pub fn destroy_uniform_buffer(&mut self, _handle: UniformBuffer::Handle) {
         fail!("Not yet implemented.");
     }
 
-    pub fn add_shader_program(&mut self, _shaders: ~[Shader]) -> Handle<ShaderProgram> {
+    pub fn add_shader_program(&mut self, _shaders: ~[()/*Shader*/]) -> ShaderProgram::Handle {
         fail!("Not yet implemented.");
     }
 
-    pub fn destroy_shader_program(&mut self, _handle: Handle<ShaderProgram>) {
+    pub fn destroy_shader_program(&mut self, _handle: ShaderProgram::Handle) {
         fail!("Not yet implemented.");
     }
 }
