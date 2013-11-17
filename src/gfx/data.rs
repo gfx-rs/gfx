@@ -24,8 +24,8 @@
 //!     pub struct Handle;
 //!     pub struct Manager;
 //!
-//!     pub struct DataRef<'a> { $($field: &'a $T     ),* }
-//!     pub struct DataMut<'a> { $($field: &'a mut $T ),* }
+//!     pub struct DataRef<'a> { $($field: &'a $Field     ),* }
+//!     pub struct DataMut<'a> { $($field: &'a mut $Field ),* }
 //!
 //!     pub struct DataRefIterator<'a>;
 //!     pub struct DataMutIterator<'a>;
@@ -222,46 +222,31 @@ macro_rules! data_manager(
                 }
 
                 #[inline]
+                pub fn find<'a>(&'a self, handle: Handle) -> Option<DataRef<'a>> {
+                    match self.inner_refs[handle.ref_index as uint] {
+                        InnerRef { data_index: Some(i), generation: c } if c <= handle.generation => {
+                            Some(DataRef { $($field: &'a self.$field[i]),* })
+                        }
+                        _ => None,
+                    }
+                }
+
+                #[inline]
+                pub fn find_mut<'a>(&'a mut self, handle: Handle) -> Option<DataMut<'a>> {
+                    match self.inner_refs[handle.ref_index as uint] {
+                        InnerRef { data_index: Some(i), generation: c } if c <= handle.generation => {
+                            Some(DataMut { $($field: &'a mut self.$field[i]),* })
+                        }
+                        _ => None,
+                    }
+                }
+
+                #[inline]
                 pub fn set<'a>(&'a mut self, handle: Handle, $($field: $Field),*) {
                     let i = self.get_data_index(handle) as uint;
                     $(self.$field[i] = $field;)*
                 }
 
-                #[inline]
-                pub fn with<'a, T>(&'a self, handle: Handle, f: &fn(Option<DataRef<'a>>) -> T) -> T {
-                    match self.inner_refs[handle.ref_index as uint] {
-                        InnerRef { data_index: Some(i), generation: c }
-                        if c <= handle.generation => {
-                            f(Some(DataRef {
-                                $($field: &'a self.$field[i]),*
-                            }))
-                        }
-                        _ => f(None),
-                    }
-                }
-
-                #[inline]
-                pub fn with_mut<'a, T>(&'a mut self, handle: Handle, f: &fn(Option<DataMut<'a>>) -> T) -> T {
-                    match self.inner_refs[handle.ref_index as uint] {
-                        InnerRef { data_index: Some(i), generation: c }
-                        if c <= handle.generation => {
-                            f(Some(DataMut {
-                                $($field: &'a mut self.$field[i]),*
-                            }))
-                        }
-                        _ => f(None),
-                    }
-                }
-
-                #[inline]
-                pub fn find<'a>(&'a self, handle: Handle) -> Option<DataRef<'a>> {
-                    self.with(handle, |x| x)
-                }
-
-                #[inline]
-                pub fn find_mut<'a>(&'a mut self, handle: Handle) -> Option<DataMut<'a>> {
-                    self.with_mut(handle, |x| x)
-                }
 
                 #[inline]
                 pub fn iter<'a>(&'a self) -> DataRefIterator<'a> {
