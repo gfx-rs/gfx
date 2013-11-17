@@ -309,7 +309,7 @@ mod tests {
     data_manager! {
         data Animal {
             name: ~str,
-            pos: super::Point,
+            pos: super::Point
         }
     }
 
@@ -395,9 +395,8 @@ mod tests {
     }
 
     #[test]
-    #[should_fail]
     fn test_get_mut_invalid() {
-        // fail!("Not yet implemented.")
+        fail!("Not yet implemented.")
     }
 
     #[test]
@@ -416,28 +415,12 @@ mod tests {
     }
 
     #[test]
-    fn test_with() {
-        fail!("Not yet implemented.")
-    }
-
-    #[test]
-    fn test_with_invalid() {
-        fail!("Not yet implemented.")
-    }
-
-    #[test]
-    fn test_with_mut() {
-        fail!("Not yet implemented.")
-    }
-
-    #[test]
-    fn test_with_mut_invalid() {
-        fail!("Not yet implemented.")
-    }
-
-    #[test]
     fn test_find() {
-        fail!("Not yet implemented.")
+        let mut animals = Animal::Manager::new();
+        let h = animals.add(~"kitten", Point { x: 2, y: 3 });
+        let x = animals.find(h).unwrap();
+        assert_eq!(*x.name, ~"kitten");
+        assert_eq!(*x.pos, Point { x: 2, y: 3 });
     }
 
     #[test]
@@ -447,7 +430,16 @@ mod tests {
 
     #[test]
     fn test_find_mut() {
-        fail!("Not yet implemented.")
+        let mut animals = Animal::Manager::new();
+        let h = animals.add(~"kitten", Point { x: 2, y: 3 });
+        {
+            let x = animals.find_mut(h).unwrap();
+            *x.name = ~"puppy";
+            *x.pos = Point { x: 0, y: -1 };
+        }
+        let y = animals.find(h).unwrap();
+        assert_eq!(*y.name, ~"puppy");
+        assert_eq!(*y.pos, Point { x: 0, y: -1 });
     }
 
     #[test]

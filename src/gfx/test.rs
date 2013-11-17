@@ -13,5 +13,6 @@
 // limitations under the License.
 
 #[feature(globs)];
+#[feature(macro_rules)];
 
 mod lib;
