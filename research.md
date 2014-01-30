@@ -21,6 +21,9 @@
 - [Adventures in data-oriented design – Part 4: Skinning it to 11](http://molecularmusings.wordpress.com/2013/08/22/adventures-in-data-oriented-design-part-4-skinning-it-to-11/) (Molecular Musings)
 - [Implementing a semi-automatic structure-of-arrays data container](http://molecularmusings.wordpress.com/2013/10/22/implementing-a-semi-automatic-structure-of-arrays-data-container/) (Molecular Musings)
 - [Understanding cache-friendly, data-oriented objects and handles](http://stackoverflow.com/questions/19385853/understanding-cache-friendly-data-oriented-objects-and-handles) (StackOverflow)
+- [Ogre 2.0 forum thread](http://www.ogre3d.org/forums/viewtopic.php?f=25&t=75459)
+  - [Slides](http://www.mediafire.com/view/?7k0q4guxgm74y2g)
+  - [Addendum](http://www.mediafire.com/view/?575z0dfnrk0377v)
 
 ## Draw Call Bucketing
 
