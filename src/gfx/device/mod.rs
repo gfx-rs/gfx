@@ -54,10 +54,11 @@ impl<Api, P: Platform<Api>> Server<P> {
     /// thread.
     pub fn update(&self) {
         // Get updates from the renderer and pass on results
-        loop {
+        'recv: loop {
             match self.stream.try_recv() {
-                Ok(_) => self.stream.send(unimplemented!()),
-                Err(comm::Empty) => break,
+                Ok(server::Cast(_)) => {},
+                Ok(server::Call(_)) => self.stream.send(unimplemented!()),
+                Err(comm::Empty) => break 'recv,
                 Err(comm::Disconnected) => fail!("Render task has closed."),
             }
         }

@@ -45,13 +45,16 @@ impl Client {
 pub fn start(options: (), device: device::Client) -> Client {
     let (render_stream, task_stream) = comm::duplex::<Request, Reply>();
     spawn(proc() {
-        loop {
-            // TODO
-            let _ = task_stream.recv();
-            task_stream.send(unimplemented!());
-
-            // TODO
-            let _ = device;
+        'render: loop {
+            let _ = device; // TODO: do stuff with the device
+            'recv: loop {
+                match task_stream.try_recv() {
+                    Ok(server::Cast(_)) => {},
+                    Ok(server::Call(_)) => task_stream.send(unimplemented!()),
+                    Err(comm::Empty) => break 'recv, // finished all the pending rendering messages
+                    Err(comm::Disconnected) => break 'render, // terminate the rendering task
+                }
+            }
         }
     });
     Client {
