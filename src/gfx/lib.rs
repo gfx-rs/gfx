@@ -27,6 +27,7 @@
 //!     // spawn game task
 //!     spawn(proc {
 //!         let _ = renderer; // do stuff with renderer
+//!         loop {}
 //!     })
 //!
 //!     loop {
@@ -52,15 +53,22 @@
 //!                        |                                            |
 //! ~~~
 
+#![crate_id = "github.com/bjz/gfx-rs#gfx:0.1"]
+#![comment = "A lightweight graphics device manager for Rust"]
+#![license = "ASL2"]
+#![crate_type = "lib"]
+
 pub use Renderer = render::Client;
 pub use Platform = device::Server;
 pub use device::InitError;
+
+pub type Options = ();
 
 mod server;
 mod device;
 mod render;
 
-pub fn start(options: ()) -> Result<(Renderer, Platform), InitError> {
+pub fn start(options: Options) -> Result<(Renderer, Platform), InitError> {
     device::init(options).map(|(device, platform)| {
         ((render::start(options, device), platform))
     })

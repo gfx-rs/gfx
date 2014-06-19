@@ -59,9 +59,10 @@ impl Server {
     // TODO: command register methods
 }
 
+#[deriving(Show)]
 pub enum InitError {}
 
-pub fn init(options: ()) -> Result<(Client, Server), InitError> {
+pub fn init(options: super::Options) -> Result<(Client, Server), InitError> {
     // TODO: Platform-specific initialization (GLFW / SDL2, OpenGL)
 
     let (device_stream, platform_stream) = comm::duplex();
