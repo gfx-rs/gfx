@@ -59,17 +59,20 @@
 #![crate_type = "lib"]
 
 pub use Renderer = render::Client;
-pub use Platform = device::Server;
+pub use Device = device::Server;
 pub use device::InitError;
+pub use platform::Platform;
 
 pub type Options = ();
 
 mod server;
 mod device;
 mod render;
+pub mod platform;
 
-pub fn start(options: Options) -> Result<(Renderer, Platform), InitError> {
-    device::init(options).map(|(device, platform)| {
-        ((render::start(options, device), platform))
+pub fn start<Api, P: Platform<Api>>(platform: P, options: Options)
+        -> Result<(Renderer, Device<P>), InitError> {
+    device::init(platform, options).map(|(server, client)| {
+        ((render::start(options, server), client))
     })
 }

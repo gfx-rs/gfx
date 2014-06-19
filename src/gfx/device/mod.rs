@@ -17,6 +17,7 @@ use std::comm::DuplexStream;
 use std::kinds::marker;
 
 use server;
+use Platform;
 
 pub enum Call {}
 pub enum Cast {}
@@ -41,40 +42,45 @@ impl Client {
     // TODO: public functions
 }
 
-pub struct Server {
+pub struct Server<P> {
     no_send: marker::NoSend,
     no_share: marker::NoShare,
     stream: DuplexStream<Reply, Request>,
+    platform: P,
 }
 
-impl Server {
-    /// Update the platform.
+impl<Api, P: Platform<Api>> Server<P> {
+    /// Update the platform. The client must manually update this on the main
+    /// thread.
     pub fn update(&self) {
-        // Poll events
         // Get updates from the renderer and pass on results
-        let _ = self.stream.recv();
-        self.stream.send(unimplemented!());
-    }
+        loop {
+            match self.stream.try_recv() {
+                Ok(_) => self.stream.send(unimplemented!()),
+                Err(_) => break,
+            }
+        }
 
-    // TODO: command register methods
+        self.platform.swap_buffers();
+    }
 }
 
 #[deriving(Show)]
 pub enum InitError {}
 
-pub fn init(options: super::Options) -> Result<(Client, Server), InitError> {
-    // TODO: Platform-specific initialization (GLFW / SDL2, OpenGL)
+pub fn init<Api, P: Platform<Api>>(platform: P, _: super::Options)
+        -> Result<(Client, Server<P>), InitError> {
+    let (client_stream, server_stream) = comm::duplex();
 
-    let (device_stream, platform_stream) = comm::duplex();
-
-    let device = Client {
-        stream: device_stream,
+    let client = Client {
+        stream: client_stream,
     };
-    let platform = Server {
+    let server = Server {
         no_send: marker::NoSend,
         no_share: marker::NoShare,
-        stream: platform_stream,
+        stream: server_stream,
+        platform: platform,
     };
 
-    Ok((device, platform))
+    Ok((client, server))
 }
