@@ -57,7 +57,8 @@ impl<Api, P: Platform<Api>> Server<P> {
         loop {
             match self.stream.try_recv() {
                 Ok(_) => self.stream.send(unimplemented!()),
-                Err(_) => break,
+                Err(comm::Empty) => break,
+                Err(comm::Disconnected) => fail!("Render task has closed."),
             }
         }
 
