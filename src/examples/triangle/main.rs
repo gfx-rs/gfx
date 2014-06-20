@@ -17,13 +17,13 @@ fn main() {
     let platform = gfx::platform::Glfw::new(window.render_context());
 
     // spawn render task
-    let (renderer, device) = gfx::start(platform, ()).unwrap();
+    let (renderer, mut device) = gfx::start(platform, ()).unwrap();
 
     // spawn game task
     spawn(proc() {
-        let _ = renderer;
         loop {
-            // do stuff with renderer
+            //renderer.clear(0.3,0.3,0.3);
+            //renderer.finish();
         }
     });
 

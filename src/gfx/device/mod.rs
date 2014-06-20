@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-#[cfg(gl)] pub use Gl = self::gl::Device;
-#[cfg(gl)] mod gl;
+#[cfg(gl)] pub use self::gl::Device;
+#[cfg(gl)] use dev = self::gl;
 
 use std::comm;
 use std::comm::DuplexStream;
@@ -22,7 +21,11 @@ use std::kinds::marker;
 
 use server;
 use Platform;
-//use backend;
+
+#[cfg(gl)] mod gl;
+
+pub type Color = [f32, ..4];
+
 
 pub enum Call {
     CallNewBuffer,
@@ -31,7 +34,7 @@ pub enum Call {
 }
 
 pub enum Cast {
-    CastClear,
+    CastClear(Color),
     CastDraw,
     CastSwapBuffers,
 }
@@ -39,7 +42,7 @@ pub enum Cast {
 pub type Request = server::Request<Call, Cast>;
 
 pub enum Reply {
-    //ReplyNewBuffer(backend::BufferRaw)
+    ReplyNewBuffer(dev::Buffer),
 }
 
 pub struct Client {
@@ -57,8 +60,8 @@ impl Client {
     }
 
     pub fn clear(&self, r: f32, g: f32, b: f32) {
-        let (_, _, _) = (r, g, b);
-        self.cast(unimplemented!());
+        let color = [r, g, b, 1.0];
+        self.cast(CastClear(color));
     }
 }
 
@@ -67,15 +70,19 @@ pub struct Server<P> {
     no_share: marker::NoShare,
     stream: DuplexStream<Reply, Request>,
     platform: P,
+    device: Device,
 }
 
 impl<Api, P: Platform<Api>> Server<P> {
     /// Update the platform. The client must manually update this on the main
     /// thread.
-    pub fn update(&self) {
+    pub fn update(&mut self) {
         // Get updates from the renderer and pass on results
         'recv: loop {
             match self.stream.try_recv() {
+                Ok(server::Cast(CastClear(color))) => {
+                    self.device.clear(color.as_slice());
+                },
                 Ok(server::Cast(_)) => {},
                 Ok(server::Call(_)) => self.stream.send(unimplemented!()),
                 Err(comm::Empty) => break 'recv,
@@ -102,6 +109,7 @@ pub fn init<Api, P: Platform<Api>>(platform: P, _: super::Options)
         no_share: marker::NoShare,
         stream: server_stream,
         platform: platform,
+        device: Device::new(),
     };
 
     Ok((client, server))
