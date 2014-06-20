@@ -19,7 +19,10 @@ use server;
 use device;
 
 pub enum Call {}
-pub enum Cast {}
+pub enum Cast {
+    Clear(f32, f32, f32), // TODO: use color-rs?
+    Finish,
+}
 pub type Request = server::Request<Call, Cast>;
 
 pub enum Reply {}
@@ -38,7 +41,13 @@ impl Client {
         self.stream.send(server::Cast(msg));
     }
 
-    // TODO: public functions
+    pub fn clear(&self, r: f32, g: f32, b: f32) {
+        self.cast(Clear(r, g, b));
+    }
+
+    pub fn finish(&self) {
+        self.cast(Finish);
+    }
 }
 
 /// Start a render server using the provided device client
@@ -46,13 +55,21 @@ pub fn start(options: (), device: device::Client) -> Client {
     let (render_stream, task_stream) = comm::duplex::<Request, Reply>();
     spawn(proc() {
         'render: loop {
-            let _ = device; // TODO: do stuff with the device
             'recv: loop {
                 match task_stream.try_recv() {
-                    Ok(server::Cast(_)) => {},
-                    Ok(server::Call(_)) => task_stream.send(unimplemented!()),
-                    Err(comm::Empty) => break 'recv, // finished all the pending rendering messages
-                    Err(comm::Disconnected) => break 'render, // terminate the rendering task
+                    Err(comm::Disconnected) | Ok(server::Cast(Finish)) => {
+                        break 'render; // terminate the rendering task
+                                       // TODO: device.finish()?
+                    },
+                    Ok(server::Cast(Clear(r, g, b))) => {
+                        device.clear(r, g, b);
+                    },
+                    Ok(server::Call(_)) => {
+                        task_stream.send(unimplemented!());
+                    },
+                    Err(comm::Empty)  => {
+                        break 'recv; // finished all the pending rendering messages
+                    },
                 }
             }
         }

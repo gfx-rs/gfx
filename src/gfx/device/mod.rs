@@ -39,7 +39,10 @@ impl Client {
         self.stream.send(server::Cast(msg));
     }
 
-    // TODO: public functions
+    pub fn clear(&self, r: f32, g: f32, b: f32) {
+        let (_, _, _) = (r, g, b);
+        self.cast(unimplemented!());
+    }
 }
 
 pub struct Server<P> {
