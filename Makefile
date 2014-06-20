@@ -12,10 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.PHONY	=all help lib deps examples
-
-help:
-	echo "Valid commands are all, lib, dep-*, deps, clean, examples"
+.PHONY= all help lib deps examples
 
 all: deps lib examples
 
@@ -36,3 +33,6 @@ deps: clean dep-gl dep-glfw
 
 examples:
 	rustc -L bin -L deps -o bin/ex-triangle src/examples/triangle/main.rs
+
+help:
+	echo "Valid commands are all, lib, dep-*, deps, clean, examples"
