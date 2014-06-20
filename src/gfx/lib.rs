@@ -58,6 +58,8 @@
 #![license = "ASL2"]
 #![crate_type = "lib"]
 
+//extern crate backend;
+
 pub use Renderer = render::Client;
 pub use Device = device::Server;
 pub use device::InitError;

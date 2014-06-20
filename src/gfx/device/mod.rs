@@ -12,18 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+
+#[cfg(gl)] pub use Gl = self::gl::Device;
+#[cfg(gl)] mod gl;
+
 use std::comm;
 use std::comm::DuplexStream;
 use std::kinds::marker;
 
 use server;
 use Platform;
+//use backend;
 
-pub enum Call {}
-pub enum Cast {}
+pub enum Call {
+    CallNewBuffer,
+    CallNewShader,
+    CallNewProgram,
+}
+
+pub enum Cast {
+    CastClear,
+    CastDraw,
+    CastSwapBuffers,
+}
+
 pub type Request = server::Request<Call, Cast>;
 
-pub enum Reply {}
+pub enum Reply {
+    //ReplyNewBuffer(backend::BufferRaw)
+}
 
 pub struct Client {
     stream: DuplexStream<Request, Reply>,
