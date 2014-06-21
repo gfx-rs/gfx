@@ -151,10 +151,6 @@ impl Device {
     /// Draw
 
     pub fn draw(&self, start: u32, count: u32) {
-        gl::PolygonMode(gl::FRONT_AND_BACK, gl::FILL);
-        gl::Disable(gl::CULL_FACE);
-        gl::Disable(gl::DEPTH_TEST);
-        gl::Disable(gl::STENCIL_TEST);
         gl::DrawArrays(gl::TRIANGLES,
             start as gl::types::GLsizei,
             count as gl::types::GLsizei);

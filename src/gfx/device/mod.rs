@@ -14,6 +14,7 @@
 
 #[cfg(gl)] pub use self::gl::Device;
 #[cfg(gl)] pub use dev = self::gl;
+// #[cfg(d3d11)] ... // TODO
 
 use std::comm;
 use std::comm::DuplexStream;
