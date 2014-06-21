@@ -30,6 +30,7 @@ install:
   - sudo apt-get install rust-nightly
   - rustc -v
 script:
-  - git submodule init
-  - git submodule update
+  - make deps
   - make
+  - make clean
+  - make clean deps

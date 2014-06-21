@@ -12,27 +12,78 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.PHONY= all help lib deps examples
+RUSTC                 ?= rustc
+RUSTDOC               ?= rustdoc
 
-all: deps lib examples
+MAKE = make
+ifeq ($(OS), Windows_NT)
+	MAKE = mingw32-make
+endif
+
+LINK_ARGS             = $(shell sh etc/glfw-link-args.sh)
+
+SRC_DIR               = src
+DEPS_DIR              = deps
+LIB_FILE              = $(SRC_DIR)/gfx/lib.rs
+EXAMPLE_FILES         = $(SRC_DIR)/examples/*/*.rs
+
+DOC_DIR               = doc
+EXAMPLES_DIR          = examples
+LIB_DIR               = lib
+DEPS_LIB_DIRS         = $(wildcard $(DEPS_DIR)/*/lib)
+
+DEPS_INCLUDE_FLAGS    = $(patsubst %,-L %, $(DEPS_LIB_DIRS))
+LIB_INCLUDE_FLAGS     = $(DEPS_INCLUDE_FLAGS)
+EXAMPLE_INCLUDE_FLAGS = -L $(LIB_DIR) $(DEPS_INCLUDE_FLAGS)
+
+GFX_API               ?= gl
+GFX_PLATFORM          ?= glfw
+
+GFX_CFG               = --cfg=$(GFX_API) --cfg=$(GFX_PLATFORM)
+
+all: lib examples doc
+
+submodule-update:
+	@git submodule init
+	@git submodule update --recursive
+
+$(DEPS_DIR)/gl-rs/README.md: submodule-update
+
+deps: $(DEPS_DIR)/gl-rs/README.md
+	$(MAKE) lib -C $(DEPS_DIR)/gl-rs
+	$(MAKE) lib -C $(DEPS_DIR)/glfw-rs
 
 lib:
-	mkdir -p bin
-	rustc -L bin -L deps --out-dir=bin --cfg=glfw --cfg=gl src/gfx/lib.rs
+	mkdir -p $(LIB_DIR)
+	$(RUSTC) $(LIB_INCLUDE_FLAGS) --out-dir=$(LIB_DIR) $(GFX_CFG) -O $(LIB_FILE)
 
-dep-gl:
-	(cd deps/gl-rs && make submodule-update lib && cp lib/*.rlib ..)
+doc:
+	mkdir -p $(DOC_DIR)
+	$(RUSTDOC) $(LIB_INCLUDE_FLAGS) $(GFX_CFG) -o $(DOC_DIR) $(LIB_FILE)
 
-dep-glfw:
-	(cd deps/glfw-rs && make lib && cp lib/*.rlib ..)
+examples-dir:
+	mkdir -p $(EXAMPLES_DIR)
+
+$(EXAMPLE_FILES): lib examples-dir
+	$(RUSTC) $(EXAMPLE_INCLUDE_FLAGS) --out-dir=$(EXAMPLES_DIR) $@
+
+examples: $(EXAMPLE_FILES)
+
+clean-deps:
+	$(MAKE) clean -C $(DEPS_DIR)/gl-rs
+	$(MAKE) clean -C $(DEPS_DIR)/glfw-rs
 
 clean:
-	rm -f deps/*.rlib
+	rm -rf $(LIB_DIR)
+	rm -rf $(EXAMPLES_DIR)
 
-deps: clean dep-gl dep-glfw
-
-examples:
-	rustc -L bin -L deps -o bin/ex-triangle src/examples/triangle/main.rs
-
-help:
-	echo "Valid commands are all, lib, dep-*, deps, clean, examples"
+.PHONY: \
+	all \
+	submodule-update \
+	deps \
+	lib \
+	doc \
+	examples \
+	examples-dir \
+	$(EXAMPLE_FILES) \
+	clean
