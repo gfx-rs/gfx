@@ -20,19 +20,17 @@ use server;
 use device;
 
 pub use ProgramHandle = device::dev::Program;
-pub struct MeshHandle {
-    vertex_buf: device::dev::Buffer,
-    array_buffer: device::dev::ArrayBuffer,
-}
+pub use MeshHandle = device::Mesh;
 
 
 pub enum Call {
     CallNewProgram(Vec<u8>, Vec<u8>),
-    CallNewMesh(Vec<f32>),
+    CallNewMesh(u32, Vec<f32>),
 }
 
 pub enum Cast {
     CastClear(f32, f32, f32), // TODO: use color-rs?
+    CastDraw(MeshHandle, ProgramHandle),
     CastEndFrame,
     CastFinish,
 }
@@ -63,6 +61,10 @@ impl Client {
         self.cast(CastClear(r, g, b));
     }
 
+    pub fn draw(&self, mesh: MeshHandle, program: ProgramHandle) {
+        self.cast(CastDraw(mesh, program))
+    }
+
     pub fn end_frame(&self) {
         self.cast(CastEndFrame)
     }
@@ -78,8 +80,8 @@ impl Client {
         }
     }
 
-    pub fn create_mesh(&self, data: Vec<f32>) -> MeshHandle {
-        match self.call(CallNewMesh(data)) {
+    pub fn create_mesh(&self, num_vert: u32, data: Vec<f32>) -> MeshHandle {
+        match self.call(CallNewMesh(num_vert, data)) {
             ReplyMesh(mesh) => mesh,
             _ => fail!("unknown reply")
         }
@@ -118,6 +120,10 @@ impl Server {
                 Ok(server::Cast(CastClear(r, g, b))) => {
                     self.device.clear(r, g, b);
                 },
+                Ok(server::Cast(CastDraw(mesh, program))) => {
+                    self.device.bind_program(program);
+                    self.device.draw(mesh);
+                },
                 Ok(server::Cast(CastEndFrame)) => {
                     self.device.end_frame();
                 },
@@ -127,9 +133,10 @@ impl Server {
                     let prog = self.device.new_program(vec!(h_vs, h_fs));
                     self.stream.send(ReplyProgram(prog));
                 },
-                Ok(server::Call(CallNewMesh(data))) => {
+                Ok(server::Call(CallNewMesh(num_vert, data))) => {
                     let buffer = self.device.new_buffer(data);
                     let mesh = MeshHandle {
+                        num_vertices: num_vert,
                         vertex_buf: buffer,
                         array_buffer: self.array_buffer,
                     };

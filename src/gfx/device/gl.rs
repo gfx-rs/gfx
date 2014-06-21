@@ -27,6 +27,8 @@ impl Device {
         gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT);
     }
 
+    /// Buffer
+
     pub fn create_buffer<T>(&self, data: &[T]) -> Buffer {
         let mut name = 0 as Buffer;
         unsafe{
@@ -42,6 +44,12 @@ impl Device {
         name
     }
 
+    pub fn bind_vertex_buffer(&self, buffer: Buffer) {
+        gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
+    }
+
+    /// Vertex Array Buffer
+
     pub fn create_array_buffer(&self) -> ArrayBuffer {
         let mut name = 0 as ArrayBuffer;
         unsafe{
@@ -50,6 +58,21 @@ impl Device {
         info!("\tCreated array buffer {}", name);
         name
     }
+
+    pub fn bind_array_buffer(&self, vao: ArrayBuffer) {
+        gl::BindVertexArray(vao);
+    }
+
+    pub fn bind_attribute(&self, slot: u8, count: u32, stride: u32) { 
+        unsafe{
+            gl::VertexAttribPointer(slot as gl::types::GLuint,
+                count as gl::types::GLint, gl::FLOAT, gl::FALSE,
+                stride as gl::types::GLint, std::ptr::null());
+        }
+        gl::EnableVertexAttribArray(slot as gl::types::GLuint);
+    }
+
+    /// Shader Object
 
     pub fn create_shader(&self, kind: char, data: &[u8]) -> Shader {
         let target = match kind {
@@ -86,6 +109,8 @@ impl Device {
         name
     }
 
+    /// Shader Program
+
     fn query_program_int(&self, prog: Program, query: gl::types::GLenum) -> gl::types::GLint {
         let mut ret = 0 as gl::types::GLint;
         unsafe {
@@ -119,18 +144,19 @@ impl Device {
         name
     }
 
-    pub fn draw(&self, buffer: Buffer, array_buffer: ArrayBuffer, program: Program, count: uint) {
+    pub fn bind_program(&self, program: Program) {
+        gl::UseProgram(program);
+    }
+
+    /// Draw
+
+    pub fn draw(&self, start: u32, count: u32) {
         gl::PolygonMode(gl::FRONT_AND_BACK, gl::FILL);
         gl::Disable(gl::CULL_FACE);
         gl::Disable(gl::DEPTH_TEST);
         gl::Disable(gl::STENCIL_TEST);
-        gl::UseProgram(program);
-        gl::BindVertexArray(array_buffer);
-        gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
-        unsafe{
-            gl::VertexAttribPointer(0, 2, gl::FLOAT, gl::FALSE, 8, std::ptr::null());
-        }
-        gl::EnableVertexAttribArray(0);
-        gl::DrawArrays(gl::TRIANGLES, 0, count as gl::types::GLsizei);
+        gl::DrawArrays(gl::TRIANGLES,
+            start as gl::types::GLsizei,
+            count as gl::types::GLsizei);
     }
 }

@@ -26,6 +26,12 @@ use Platform;
 
 pub type Color = [f32, ..4];
 
+pub struct Mesh {
+    pub num_vertices: u32,
+    pub vertex_buf: dev::Buffer,
+    pub array_buffer: dev::ArrayBuffer,
+}
+
 
 pub enum Call {
     CallNewBuffer(Vec<f32>),
@@ -36,7 +42,8 @@ pub enum Call {
 
 pub enum Cast {
     CastClear(Color),
-    CastDraw,
+    CastBindProgram(dev::Program),
+    CastDraw(Mesh),
     CastSwapBuffers,
 }
 
@@ -68,6 +75,14 @@ impl Client {
     pub fn clear(&self, r: f32, g: f32, b: f32) {
         let color = [r, g, b, 1.0];
         self.cast(CastClear(color));
+    }
+
+    pub fn bind_program(&self, prog: dev::Program) {
+        self.cast(CastBindProgram(prog));
+    }
+
+    pub fn draw(&self, mesh: Mesh) {
+        self.cast(CastDraw(mesh));
     }
 
     pub fn end_frame(&self) {
@@ -121,8 +136,14 @@ impl<Api, P: Platform<Api>> Server<P> {
                 Ok(server::Cast(CastClear(color))) => {
                     self.device.clear(color.as_slice());
                 },
-                Ok(server::Cast(CastDraw)) => {
-                    unimplemented!()
+                Ok(server::Cast(CastBindProgram(prog))) => {
+                    self.device.bind_program(prog);
+                },
+                Ok(server::Cast(CastDraw(mesh))) => {
+                    self.device.bind_array_buffer(mesh.array_buffer);
+                    self.device.bind_vertex_buffer(mesh.vertex_buf);
+                    self.device.bind_attribute(0, mesh.num_vertices, 8);
+                    self.device.draw(0, mesh.num_vertices);
                 },
                 Ok(server::Cast(CastSwapBuffers)) => {
                     break 'recv

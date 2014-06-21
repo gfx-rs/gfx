@@ -45,7 +45,7 @@ fn main() {
             code_vertex.as_bytes().to_owned(),
             code_fragment.as_bytes().to_owned());
         let data = vec!(-0.5f32, -0.5f32, -0.5f32, 0.5f32, 0.5f32, 0.5f32);
-        let mesh = renderer.create_mesh(data);
+        let mesh = renderer.create_mesh(3, data);
         loop {
             renderer.clear(0.3,0.3,0.3);
             renderer.draw(mesh, program);
