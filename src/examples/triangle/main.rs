@@ -1,22 +1,21 @@
 extern crate gfx;
 extern crate glfw;
 
-
-static code_vertex: &'static str = "
+static VERTEX_SRC: &'static [u8] = b"
     #version 150 core
     in vec2 pos;
     void main() {
         gl_Position = vec4(pos, 0.0, 1.0);
     }
 ";
-static code_fragment: &'static str = "
+
+static FRAGMENT_SRC: &'static [u8] = b"
     #version 150 core
     out vec4 o_Color;
     void main() {
         o_Color = vec4(1.0, 0.0, 0.0, 1.0);
     }
 ";
-
 
 #[start]
 fn start(argc: int, argv: **u8) -> int {
@@ -42,12 +41,12 @@ fn main() {
     // spawn game task
     spawn(proc() {
         let program = renderer.create_program(
-            code_vertex.as_bytes().to_owned(),
-            code_fragment.as_bytes().to_owned());
-        let data = vec!(-0.5f32, -0.5f32, -0.5f32, 0.5f32, 0.5f32, 0.5f32);
+            VERTEX_SRC.to_owned(),
+            FRAGMENT_SRC.to_owned());
+        let data = vec![-0.5f32, -0.5, -0.5, 0.5, 0.5, 0.5];
         let mesh = renderer.create_mesh(3, data);
         loop {
-            renderer.clear(0.3,0.3,0.3);
+            renderer.clear(0.3, 0.3, 0.3);
             renderer.draw(mesh, program);
             renderer.end_frame();
         }
