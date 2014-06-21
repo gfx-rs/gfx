@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #[cfg(gl)] pub use self::gl::Device;
-#[cfg(gl)] use dev = self::gl;
+#[cfg(gl)] pub use dev = self::gl;
 
 use std::comm;
 use std::comm::DuplexStream;
@@ -28,9 +28,10 @@ pub type Color = [f32, ..4];
 
 
 pub enum Call {
-    CallNewBuffer,
-    CallNewShader,
-    CallNewProgram,
+    CallNewBuffer(Vec<f32>),
+    CallNewArrayBuffer,
+    CallNewShader(char, Vec<u8>),
+    CallNewProgram(Vec<dev::Shader>),
 }
 
 pub enum Cast {
@@ -43,6 +44,9 @@ pub type Request = server::Request<Call, Cast>;
 
 pub enum Reply {
     ReplyNewBuffer(dev::Buffer),
+    ReplyNewArrayBuffer(dev::ArrayBuffer),
+    ReplyNewShader(dev::Shader),
+    ReplyNewProgram(dev::Program),
 }
 
 pub struct Client {
@@ -52,6 +56,8 @@ pub struct Client {
 impl Client {
     fn call(&self, msg: Call) -> Reply {
         self.stream.send(server::Call(msg));
+        //TODO: make it asynchronous, we need to give it time
+        // to process requests before demanding the results
         self.stream.recv()
     }
 
@@ -62,6 +68,38 @@ impl Client {
     pub fn clear(&self, r: f32, g: f32, b: f32) {
         let color = [r, g, b, 1.0];
         self.cast(CastClear(color));
+    }
+
+    pub fn end_frame(&self) {
+        self.cast(CastSwapBuffers);
+    }
+
+    pub fn new_shader(&self, kind: char, code: Vec<u8>) -> dev::Shader {
+        match self.call(CallNewShader(kind, code)) {
+            ReplyNewShader(name) => name,
+            _ => fail!("unexpected device reply")
+        }
+    }
+
+    pub fn new_program(&self, shaders: Vec<dev::Shader>) -> dev::Program {
+        match self.call(CallNewProgram(shaders)) {
+            ReplyNewProgram(name) => name,
+            _ => fail!("unexpected device reply")
+        }
+    }
+
+    pub fn new_buffer(&self, data: Vec<f32>) -> dev::Buffer {
+        match self.call(CallNewBuffer(data)) {
+            ReplyNewBuffer(name) => name,
+            _ => fail!("unexpected device reply")
+        }
+    }
+
+    pub fn new_array_buffer(&self) -> dev::ArrayBuffer {
+        match self.call(CallNewArrayBuffer) {
+            ReplyNewArrayBuffer(name) => name,
+            _ => fail!("unexpected device reply")
+        }
     }
 }
 
@@ -83,8 +121,28 @@ impl<Api, P: Platform<Api>> Server<P> {
                 Ok(server::Cast(CastClear(color))) => {
                     self.device.clear(color.as_slice());
                 },
-                Ok(server::Cast(_)) => {},
-                Ok(server::Call(_)) => self.stream.send(unimplemented!()),
+                Ok(server::Cast(CastDraw)) => {
+                    unimplemented!()
+                },
+                Ok(server::Cast(CastSwapBuffers)) => {
+                    break 'recv
+                },
+                Ok(server::Call(CallNewBuffer(data))) => {
+                    let name = self.device.create_buffer(data.as_slice());
+                    self.stream.send(ReplyNewBuffer(name));
+                },
+                Ok(server::Call(CallNewArrayBuffer)) => {
+                    let name = self.device.create_array_buffer();
+                    self.stream.send(ReplyNewArrayBuffer(name));
+                },
+                Ok(server::Call(CallNewShader(kind, code))) => {
+                    let name = self.device.create_shader(kind, code.as_slice());
+                    self.stream.send(ReplyNewShader(name));
+                },
+                Ok(server::Call(CallNewProgram(code))) => {
+                    let name = self.device.create_program(code.as_slice());
+                    self.stream.send(ReplyNewProgram(name));
+                },
                 Err(comm::Empty) => break 'recv,
                 Err(comm::Disconnected) => fail!("Render task has closed."),
             }
@@ -97,19 +155,20 @@ impl<Api, P: Platform<Api>> Server<P> {
 #[deriving(Show)]
 pub enum InitError {}
 
-pub fn init<Api, P: Platform<Api>>(platform: P, _: super::Options)
+pub fn init<Api, P: Platform<Api>>(platform: P, options: super::Options)
         -> Result<(Client, Server<P>), InitError> {
     let (client_stream, server_stream) = comm::duplex();
 
     let client = Client {
         stream: client_stream,
     };
+    let dev = Device::new(options);
     let server = Server {
         no_send: marker::NoSend,
         no_share: marker::NoShare,
         stream: server_stream,
         platform: platform,
-        device: Device::new(),
+        device: dev,
     };
 
     Ok((client, server))

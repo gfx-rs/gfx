@@ -1,6 +1,8 @@
 extern crate gl;
+extern crate libc;
 
 use std;
+use platform::GlProvider;
 
 pub type Buffer         = gl::types::GLuint;
 pub type ArrayBuffer    = gl::types::GLuint;
@@ -11,7 +13,8 @@ pub struct Device;
 
 
 impl Device {
-    pub fn new() -> Device {
+    pub fn new(provider: &GlProvider) -> Device {
+        gl::load_with(|s| provider.get_proc_address(s));
         Device
     }
 
@@ -24,14 +27,14 @@ impl Device {
         gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT);
     }
 
-    pub fn create_buffer(&self, data: &[u8]) -> Buffer {
+    pub fn create_buffer<T>(&self, data: &[T]) -> Buffer {
         let mut name = 0 as Buffer;
         unsafe{
             gl::GenBuffers(1, &mut name);
         }
         gl::BindBuffer(gl::ARRAY_BUFFER, name);
         info!("\tCreated buffer {}", name);
-        let size = (data.len() * std::mem::size_of::<f32>()) as gl::types::GLsizeiptr;
+        let size = (data.len() * std::mem::size_of::<T>()) as gl::types::GLsizeiptr;
         let raw = data.as_ptr() as *gl::types::GLvoid;
         unsafe{
             gl::BufferData(gl::ARRAY_BUFFER, size, raw, gl::STATIC_DRAW);
