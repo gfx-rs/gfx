@@ -24,6 +24,7 @@ pub struct GlfwPlatform<C> {
 
 impl<C: Context> GlfwPlatform<C> {
     pub fn new(context: C) -> GlfwPlatform<C> {
+        context.make_current();
         GlfwPlatform { context: context }
     }
 }
@@ -31,5 +32,14 @@ impl<C: Context> GlfwPlatform<C> {
 impl<C: Context> Platform<GlApi> for GlfwPlatform<C> {
     fn swap_buffers(&self) {
         self.context.swap_buffers();
+    }
+}
+
+impl super::GlProvider for glfw::Glfw {
+    fn get_proc_address(&self, name: &str) -> *::libc::c_void {
+        self.get_proc_address(name)
+    }
+    fn is_extension_supported(&self, name: &str) -> bool {
+        self.extension_supported(name)
     }
 }
