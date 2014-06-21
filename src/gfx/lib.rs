@@ -69,7 +69,6 @@ pub use platform::Platform;
 
 pub type Options<'a> = &'a platform::GlProvider;
 
-mod server;
 mod device;
 mod render;
 pub mod platform;

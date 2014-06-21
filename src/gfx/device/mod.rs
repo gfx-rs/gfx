@@ -20,7 +20,6 @@ use std::comm;
 use std::comm::DuplexStream;
 use std::kinds::marker;
 
-use server;
 use Platform;
 
 #[cfg(gl)] mod gl;
@@ -34,21 +33,18 @@ pub struct Mesh {
 }
 
 
-pub enum Call {
+pub enum Request {
+    // Requests that require a reply:
     CallNewBuffer(Vec<f32>),
     CallNewArrayBuffer,
     CallNewShader(char, Vec<u8>),
     CallNewProgram(Vec<dev::Shader>),
-}
-
-pub enum Cast {
+    // Requests that don't expect a reply:
     CastClear(Color),
     CastBindProgram(dev::Program),
     CastDraw(Mesh),
     CastSwapBuffers,
 }
-
-pub type Request = server::Request<Call, Cast>;
 
 pub enum Reply {
     ReplyNewBuffer(dev::Buffer),
@@ -62,57 +58,50 @@ pub struct Client {
 }
 
 impl Client {
-    fn call(&self, msg: Call) -> Reply {
-        self.stream.send(server::Call(msg));
-        //TODO: make it asynchronous, we need to give it time
-        // to process requests before demanding the results
-        self.stream.recv()
-    }
-
-    fn cast(&self, msg: Cast) {
-        self.stream.send(server::Cast(msg));
-    }
-
     pub fn clear(&self, r: f32, g: f32, b: f32) {
         let color = [r, g, b, 1.0];
-        self.cast(CastClear(color));
+        self.stream.send(CastClear(color));
     }
 
     pub fn bind_program(&self, prog: dev::Program) {
-        self.cast(CastBindProgram(prog));
+        self.stream.send(CastBindProgram(prog));
     }
 
     pub fn draw(&self, mesh: Mesh) {
-        self.cast(CastDraw(mesh));
+        self.stream.send(CastDraw(mesh));
     }
 
     pub fn end_frame(&self) {
-        self.cast(CastSwapBuffers);
+        self.stream.send(CastSwapBuffers);
     }
 
     pub fn new_shader(&self, kind: char, code: Vec<u8>) -> dev::Shader {
-        match self.call(CallNewShader(kind, code)) {
+        self.stream.send(CallNewShader(kind, code));
+        match self.stream.recv() {
             ReplyNewShader(name) => name,
             _ => fail!("unexpected device reply")
         }
     }
 
     pub fn new_program(&self, shaders: Vec<dev::Shader>) -> dev::Program {
-        match self.call(CallNewProgram(shaders)) {
+        self.stream.send(CallNewProgram(shaders));
+        match self.stream.recv() {
             ReplyNewProgram(name) => name,
             _ => fail!("unexpected device reply")
         }
     }
 
     pub fn new_buffer(&self, data: Vec<f32>) -> dev::Buffer {
-        match self.call(CallNewBuffer(data)) {
+        self.stream.send(CallNewBuffer(data));
+        match self.stream.recv() {
             ReplyNewBuffer(name) => name,
             _ => fail!("unexpected device reply")
         }
     }
 
     pub fn new_array_buffer(&self) -> dev::ArrayBuffer {
-        match self.call(CallNewArrayBuffer) {
+        self.stream.send(CallNewArrayBuffer);
+        match self.stream.recv() {
             ReplyNewArrayBuffer(name) => name,
             _ => fail!("unexpected device reply")
         }
@@ -134,34 +123,34 @@ impl<Api, P: Platform<Api>> Server<P> {
         // Get updates from the renderer and pass on results
         'recv: loop {
             match self.stream.try_recv() {
-                Ok(server::Cast(CastClear(color))) => {
+                Ok(CastClear(color)) => {
                     self.device.clear(color.as_slice());
                 },
-                Ok(server::Cast(CastBindProgram(prog))) => {
+                Ok(CastBindProgram(prog)) => {
                     self.device.bind_program(prog);
                 },
-                Ok(server::Cast(CastDraw(mesh))) => {
+                Ok(CastDraw(mesh)) => {
                     self.device.bind_array_buffer(mesh.array_buffer);
                     self.device.bind_vertex_buffer(mesh.vertex_buf);
                     self.device.bind_attribute(0, mesh.num_vertices, 8);
                     self.device.draw(0, mesh.num_vertices);
                 },
-                Ok(server::Cast(CastSwapBuffers)) => {
+                Ok(CastSwapBuffers) => {
                     break 'recv
                 },
-                Ok(server::Call(CallNewBuffer(data))) => {
+                Ok(CallNewBuffer(data)) => {
                     let name = self.device.create_buffer(data.as_slice());
                     self.stream.send(ReplyNewBuffer(name));
                 },
-                Ok(server::Call(CallNewArrayBuffer)) => {
+                Ok(CallNewArrayBuffer) => {
                     let name = self.device.create_array_buffer();
                     self.stream.send(ReplyNewArrayBuffer(name));
                 },
-                Ok(server::Call(CallNewShader(kind, code))) => {
+                Ok(CallNewShader(kind, code)) => {
                     let name = self.device.create_shader(kind, code.as_slice());
                     self.stream.send(ReplyNewShader(name));
                 },
-                Ok(server::Call(CallNewProgram(code))) => {
+                Ok(CallNewProgram(code)) => {
                     let name = self.device.create_program(code.as_slice());
                     self.stream.send(ReplyNewProgram(name));
                 },

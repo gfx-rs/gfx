@@ -16,25 +16,22 @@ use std::comm;
 use std::comm::DuplexStream;
 use std::kinds::marker;
 
-use server;
 use device;
 
 pub use ProgramHandle = device::dev::Program;
 pub use MeshHandle = device::Mesh;
 
 
-pub enum Call {
+pub enum Request {
+    // Requests that require a reply:
     CallNewProgram(Vec<u8>, Vec<u8>),
     CallNewMesh(u32, Vec<f32>),
-}
-
-pub enum Cast {
+    // Requests that don't expect a reply:
     CastClear(f32, f32, f32), // TODO: use color-rs?
     CastDraw(MeshHandle, ProgramHandle),
     CastEndFrame,
     CastFinish,
 }
-pub type Request = server::Request<Call, Cast>;
 
 pub enum Reply {
     ReplyProgram(ProgramHandle),
@@ -46,42 +43,35 @@ pub struct Client {
 }
 
 impl Client {
-    fn call(&self, msg: Call) -> Reply {
-        self.stream.send(server::Call(msg));
-        //TODO: make it asynchronous, we need to give it time
-        // to process requests before demanding the results
-        self.stream.recv()
-    }
-
-    fn cast(&self, msg: Cast) {
-        self.stream.send(server::Cast(msg));
-    }
-
     pub fn clear(&self, r: f32, g: f32, b: f32) {
-        self.cast(CastClear(r, g, b));
+        self.stream.send(CastClear(r, g, b));
     }
 
     pub fn draw(&self, mesh: MeshHandle, program: ProgramHandle) {
-        self.cast(CastDraw(mesh, program))
+        self.stream.send(CastDraw(mesh, program))
     }
 
     pub fn end_frame(&self) {
-        self.cast(CastEndFrame)
+        self.stream.send(CastEndFrame)
     }
 
     pub fn finish(&self) {
-        self.cast(CastFinish);
+        self.stream.send(CastFinish);
     }
 
     pub fn create_program(&self, vs_code: Vec<u8>, fs_code: Vec<u8>) -> ProgramHandle {
-        match self.call(CallNewProgram(vs_code, fs_code)) {
+        self.stream.send(CallNewProgram(vs_code, fs_code));
+        // TODO: delay recv()
+        match self.stream.recv() {
             ReplyProgram(handle) => handle,
             _ => fail!("unknown reply")
         }
     }
 
     pub fn create_mesh(&self, num_vert: u32, data: Vec<f32>) -> MeshHandle {
-        match self.call(CallNewMesh(num_vert, data)) {
+        self.stream.send(CallNewMesh(num_vert, data));
+        // TODO: delay recv()
+        match self.stream.recv() {
             ReplyMesh(mesh) => mesh,
             _ => fail!("unknown reply")
         }
@@ -113,27 +103,27 @@ impl Server {
     pub fn update(&mut self) -> bool {
         'recv: loop {
             match self.stream.try_recv() {
-                Err(comm::Disconnected) | Ok(server::Cast(CastFinish)) => {
+                Err(comm::Disconnected) | Ok(CastFinish) => {
                     return false; // terminate the rendering task
                                   // TODO: device.finish()?
                 },
-                Ok(server::Cast(CastClear(r, g, b))) => {
+                Ok(CastClear(r, g, b)) => {
                     self.device.clear(r, g, b);
                 },
-                Ok(server::Cast(CastDraw(mesh, program))) => {
+                Ok(CastDraw(mesh, program)) => {
                     self.device.bind_program(program);
                     self.device.draw(mesh);
                 },
-                Ok(server::Cast(CastEndFrame)) => {
+                Ok(CastEndFrame) => {
                     self.device.end_frame();
                 },
-                Ok(server::Call(CallNewProgram(vs, fs))) => {
+                Ok(CallNewProgram(vs, fs)) => {
                     let h_vs = self.device.new_shader('v', vs);
                     let h_fs = self.device.new_shader('f', fs);
                     let prog = self.device.new_program(vec!(h_vs, h_fs));
                     self.stream.send(ReplyProgram(prog));
                 },
-                Ok(server::Call(CallNewMesh(num_vert, data))) => {
+                Ok(CallNewMesh(num_vert, data)) => {
                     let buffer = self.device.new_buffer(data);
                     let mesh = MeshHandle {
                         num_vertices: num_vert,
