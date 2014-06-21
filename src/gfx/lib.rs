@@ -22,7 +22,7 @@
 //!
 //! fn main() {
 //!     // spawn render task
-//!     let (renderer, platform) = gfx::start(()).unwrap();
+//!     let (renderer, mut device) = gfx::start(()).unwrap();
 //!
 //!     // spawn game task
 //!     spawn(proc {
@@ -31,7 +31,7 @@
 //!     })
 //!
 //!     loop {
-//!         platform.update(); // update platform
+//!         device.update(); // update device
 //!     }
 //! }
 //! ~~~
@@ -58,12 +58,16 @@
 #![license = "ASL2"]
 #![crate_type = "lib"]
 
+#![feature(phase)]
+#[phase(plugin, link)] extern crate log;
+extern crate libc;
+
 pub use Renderer = render::Client;
 pub use Device = device::Server;
 pub use device::InitError;
 pub use platform::Platform;
 
-pub type Options = ();
+pub type Options<'a> = &'a platform::GlProvider;
 
 mod server;
 mod device;

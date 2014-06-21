@@ -26,3 +26,8 @@ pub enum D3dApi {}
 pub trait Platform<Api> {
     fn swap_buffers(&self);
 }
+
+pub trait GlProvider {
+	fn get_proc_address(&self, &str) -> *::libc::c_void;
+	fn is_extension_supported(&self, &str) -> bool;
+}

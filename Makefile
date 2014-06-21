@@ -18,7 +18,7 @@ all: deps lib examples
 
 lib:
 	mkdir -p bin
-	rustc -L bin -L deps --out-dir=bin --cfg=glfw src/gfx/lib.rs
+	rustc -L bin -L deps --out-dir=bin --cfg=glfw --cfg=gl src/gfx/lib.rs
 
 dep-gl:
 	(cd deps/gl-rs && make submodule-update lib && cp lib/*.rlib ..)
