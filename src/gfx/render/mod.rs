@@ -101,7 +101,7 @@ impl Server {
     }
 
     pub fn update(&mut self) -> bool {
-        'recv: loop {
+        loop {
             match self.stream.try_recv() {
                 Err(comm::Disconnected) | Ok(CastFinish) => {
                     return false; // terminate the rendering task
@@ -133,7 +133,7 @@ impl Server {
                     self.stream.send(ReplyMesh(mesh));
                 },
                 Err(comm::Empty)  => {
-                    break 'recv; // finished all the pending rendering messages
+                    break; // finished all the pending rendering messages
                 },
             }
         }

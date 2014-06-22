@@ -52,7 +52,7 @@ fn main() {
         }
     });
 
-    loop {
-        device.update(); // update device
+    while device.update() {
+        // update device
     }
 }

@@ -119,9 +119,9 @@ pub struct Server<P> {
 impl<Api, P: Platform<Api>> Server<P> {
     /// Update the platform. The client must manually update this on the main
     /// thread.
-    pub fn update(&mut self) {
+    pub fn update(&mut self) -> bool {
         // Get updates from the renderer and pass on results
-        'recv: loop {
+        loop {
             match self.stream.try_recv() {
                 Ok(CastClear(color)) => {
                     self.device.clear(color.as_slice());
@@ -136,7 +136,7 @@ impl<Api, P: Platform<Api>> Server<P> {
                     self.device.draw(0, mesh.num_vertices);
                 },
                 Ok(CastSwapBuffers) => {
-                    break 'recv
+                    break;
                 },
                 Ok(CallNewBuffer(data)) => {
                     let name = self.device.create_buffer(data.as_slice());
@@ -154,12 +154,12 @@ impl<Api, P: Platform<Api>> Server<P> {
                     let name = self.device.create_program(code.as_slice());
                     self.stream.send(ReplyNewProgram(name));
                 },
-                Err(comm::Empty) => break 'recv,
-                Err(comm::Disconnected) => fail!("Render task has closed."),
+                Err(comm::Empty) => break,
+                Err(comm::Disconnected) => return false,
             }
         }
-
         self.platform.swap_buffers();
+        true
     }
 }
 
