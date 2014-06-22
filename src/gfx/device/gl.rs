@@ -63,11 +63,11 @@ impl Device {
         gl::BindVertexArray(vao);
     }
 
-    pub fn bind_attribute(&self, slot: u8, count: u32, stride: u32) { 
+    pub fn bind_attribute(&self, slot: u8, count: u32, offset: u32, stride: u32) {
         unsafe{
             gl::VertexAttribPointer(slot as gl::types::GLuint,
                 count as gl::types::GLint, gl::FLOAT, gl::FALSE,
-                stride as gl::types::GLint, std::ptr::null());
+                stride as gl::types::GLint, offset as *gl::types::GLvoid);
         }
         gl::EnableVertexAttribArray(slot as gl::types::GLuint);
     }

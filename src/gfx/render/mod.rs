@@ -27,7 +27,7 @@ pub mod mesh;
 pub enum Request {
     // Requests that require a reply:
     CallNewProgram(Vec<u8>, Vec<u8>),
-    CallNewMesh(u32, Vec<f32>),
+    CallNewMesh(mesh::VertexCount, Vec<f32>),
     // Requests that don't expect a reply:
     CastClear(f32, f32, f32), // TODO: use color-rs?
     CastDraw(MeshHandle, ProgramHandle),
@@ -70,7 +70,7 @@ impl Client {
         }
     }
 
-    pub fn create_mesh(&self, num_vert: u32, data: Vec<f32>) -> MeshHandle {
+    pub fn create_mesh(&self, num_vert: mesh::VertexCount, data: Vec<f32>) -> MeshHandle {
         self.stream.send(CallNewMesh(num_vert, data));
         // TODO: delay recv()
         match self.stream.recv() {
@@ -114,7 +114,12 @@ impl Server {
                 },
                 Ok(CastDraw(mesh, program)) => {
                     self.device.bind_program(program);
-                    self.device.draw(mesh);
+                    self.device.bind_array_buffer(mesh.array_buffer);
+                    for (i, at) in mesh.attributes.iter().enumerate().filter(|&(_,at)| at.buffer!=0) {
+                        self.device.bind_attribute(i as u8, at.buffer, mesh.num_vertices,
+                            at.offset as u32, at.stride as u32);
+                    }
+                    self.device.draw(0, mesh.num_vertices);
                 },
                 Ok(CastEndFrame) => {
                     self.device.end_frame();
@@ -127,10 +132,14 @@ impl Server {
                 },
                 Ok(CallNewMesh(num_vert, data)) => {
                     let buffer = self.device.new_buffer(data);
-                    let mesh = MeshHandle {
-                        num_vertices: num_vert,
-                        vertex_buf: buffer,
-                        array_buffer: self.array_buffer,
+                    let mut mesh = MeshHandle::new(num_vert, self.array_buffer);
+                    mesh.attributes[0] = mesh::Attribute {
+                        buffer: buffer,
+                        offset: 0,
+                        stride: 8,
+                        is_normalized: false,
+                        is_interpolated: false,
+                        name: (),
                     };
                     self.stream.send(ReplyMesh(mesh));
                 },
