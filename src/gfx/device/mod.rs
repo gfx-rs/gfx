@@ -25,12 +25,7 @@ use Platform;
 #[cfg(gl)] mod gl;
 
 pub type Color = [f32, ..4];
-
-pub struct Mesh {
-    pub num_vertices: u32,
-    pub vertex_buf: dev::Buffer,
-    pub array_buffer: dev::ArrayBuffer,
-}
+pub type VertexCount = u16;
 
 
 pub enum Request {
@@ -42,7 +37,9 @@ pub enum Request {
     // Requests that don't expect a reply:
     CastClear(Color),
     CastBindProgram(dev::Program),
-    CastDraw(Mesh),
+    CastBindArrayBuffer(dev::ArrayBuffer),
+    CastBindAttribute(u8, dev::Buffer, VertexCount, u32, u32),
+    CastDraw(VertexCount, VertexCount),
     CastSwapBuffers,
 }
 
@@ -67,8 +64,16 @@ impl Client {
         self.stream.send(CastBindProgram(prog));
     }
 
-    pub fn draw(&self, mesh: Mesh) {
-        self.stream.send(CastDraw(mesh));
+    pub fn bind_array_buffer(&self, abuf: dev::ArrayBuffer) {
+        self.stream.send(CastBindArrayBuffer(abuf));
+    }
+
+    pub fn bind_attribute(&self, index: u8, buf: dev::Buffer, count: VertexCount, offset: u32, stride: u32) {
+        self.stream.send(CastBindAttribute(index, buf, count, offset, stride));
+    }
+
+    pub fn draw(&self, offset: VertexCount, count: VertexCount) {
+        self.stream.send(CastDraw(offset, count));
     }
 
     pub fn end_frame(&self) {
@@ -129,11 +134,14 @@ impl<Api, P: Platform<Api>> Server<P> {
                 Ok(CastBindProgram(prog)) => {
                     self.device.bind_program(prog);
                 },
-                Ok(CastDraw(mesh)) => {
-                    self.device.bind_array_buffer(mesh.array_buffer);
-                    self.device.bind_vertex_buffer(mesh.vertex_buf);
-                    self.device.bind_attribute(0, mesh.num_vertices, 8);
-                    self.device.draw(0, mesh.num_vertices);
+                Ok(CastBindArrayBuffer(abuf)) => {
+                    self.device.bind_array_buffer(abuf);
+                },
+                Ok(CastBindAttribute(index, buf, count, offset, stride)) => {
+                    self.device.bind_attribute(index, count as u32, offset, stride);
+                },
+                Ok(CastDraw(offset, count)) => {
+                    self.device.draw(offset as u32, count as u32);
                 },
                 Ok(CastSwapBuffers) => {
                     break;
