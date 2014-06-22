@@ -19,7 +19,9 @@ use std::kinds::marker;
 use device;
 
 pub use ProgramHandle = device::dev::Program;
-pub use MeshHandle = device::Mesh;
+pub use MeshHandle = self::mesh::Mesh;
+
+pub mod mesh;
 
 
 pub enum Request {

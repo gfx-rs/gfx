@@ -20,17 +20,12 @@ use std::comm;
 use std::comm::DuplexStream;
 use std::kinds::marker;
 
+use render::mesh::Mesh;
 use Platform;
 
 #[cfg(gl)] mod gl;
 
 pub type Color = [f32, ..4];
-
-pub struct Mesh {
-    pub num_vertices: u32,
-    pub vertex_buf: dev::Buffer,
-    pub array_buffer: dev::ArrayBuffer,
-}
 
 
 pub enum Request {
