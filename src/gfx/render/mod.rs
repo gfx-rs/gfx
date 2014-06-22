@@ -20,8 +20,10 @@ use device;
 
 pub use ProgramHandle = device::dev::Program;
 pub use MeshHandle = self::mesh::Mesh;
+pub type Environment = ();  // placeholder
 
 pub mod mesh;
+pub mod target;
 
 
 pub enum Request {
@@ -29,8 +31,8 @@ pub enum Request {
     CallNewProgram(Vec<u8>, Vec<u8>),
     CallNewMesh(mesh::VertexCount, Vec<f32>, u8),
     // Requests that don't expect a reply:
-    CastClear(f32, f32, f32), // TODO: use color-rs?
-    CastDraw(MeshHandle, ProgramHandle),
+    CastClear(target::ClearData, Option<target::Frame>),
+    CastDraw(MeshHandle, Option<target::Frame>, ProgramHandle),
     CastEndFrame,
     CastFinish,
 }
@@ -45,12 +47,12 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn clear(&self, r: f32, g: f32, b: f32) {
-        self.stream.send(CastClear(r, g, b));
+    pub fn clear(&self, data: target::ClearData, frame: Option<target::Frame>) {
+        self.stream.send(CastClear(data, frame));
     }
 
-    pub fn draw(&self, mesh: MeshHandle, program: ProgramHandle) {
-        self.stream.send(CastDraw(mesh, program))
+    pub fn draw(&self, mesh: MeshHandle, frame: Option<target::Frame>, program: ProgramHandle) {
+        self.stream.send(CastDraw(mesh, frame, program))
     }
 
     pub fn end_frame(&self) {
@@ -86,8 +88,9 @@ struct Server {
     stream: DuplexStream<Reply, Request>,
     device: device::Client,
     /// a common VAO for mesh rendering
-    array_buffer: device::dev::ArrayBuffer,
-
+    common_array_buffer: device::dev::ArrayBuffer,
+    /// the default FBO for drawing
+    default_frame_buffer: device::dev::FrameBuffer,
 }
 
 impl Server {
@@ -98,7 +101,21 @@ impl Server {
             no_share: marker::NoShare,
             stream: stream,
             device: device,
-            array_buffer: abuf,
+            common_array_buffer: abuf,
+            default_frame_buffer: 0,
+        }
+    }
+
+    fn bind_frame(&mut self, frame_opt: &Option<target::Frame>) {
+        match frame_opt {
+            &Some(ref frame) => {
+                //TODO: find an existing FBO that matches the plane set
+                // or create a new one and bind it
+                unimplemented!()
+            },
+            &None => {
+                self.device.bind_frame_buffer(self.default_frame_buffer);
+            }
         }
     }
 
@@ -109,12 +126,19 @@ impl Server {
                     return false; // terminate the rendering task
                                   // TODO: device.finish()?
                 },
-                Ok(CastClear(r, g, b)) => {
-                    self.device.clear(r, g, b);
+                Ok(CastClear(data, frame)) => {
+                    self.bind_frame(&frame);
+                    match data.color {
+                        Some(col) => {
+                            self.device.clear(col);
+                        },
+                        None => unimplemented!()
+                    }
                 },
-                Ok(CastDraw(mesh, program)) => {
+                Ok(CastDraw(mesh, frame, program)) => {
+                    self.bind_frame(&frame);
                     self.device.bind_program(program);
-                    self.device.bind_array_buffer(self.array_buffer);
+                    self.device.bind_array_buffer(self.common_array_buffer);
                     for (i, at) in mesh.attributes.iter().enumerate().filter(|&(_,at)| at.buffer!=0) {
                         self.device.bind_attribute(i as u8, at.buffer, mesh.num_vertices,
                             at.offset as u32, at.stride as u32);

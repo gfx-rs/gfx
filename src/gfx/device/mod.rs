@@ -39,6 +39,7 @@ pub enum Request {
     CastBindProgram(dev::Program),
     CastBindArrayBuffer(dev::ArrayBuffer),
     CastBindAttribute(u8, dev::Buffer, VertexCount, u32, u32),
+    CastBindFrameBuffer(dev::FrameBuffer),
     CastDraw(VertexCount, VertexCount),
     CastSwapBuffers,
 }
@@ -55,8 +56,7 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn clear(&self, r: f32, g: f32, b: f32) {
-        let color = [r, g, b, 1.0];
+    pub fn clear(&self, color: Color) {
         self.stream.send(CastClear(color));
     }
 
@@ -70,6 +70,10 @@ impl Client {
 
     pub fn bind_attribute(&self, index: u8, buf: dev::Buffer, count: VertexCount, offset: u32, stride: u32) {
         self.stream.send(CastBindAttribute(index, buf, count, offset, stride));
+    }
+
+    pub fn bind_frame_buffer(&self, fbo: dev::FrameBuffer) {
+        self.stream.send(CastBindFrameBuffer(fbo));
     }
 
     pub fn draw(&self, offset: VertexCount, count: VertexCount) {
@@ -139,6 +143,9 @@ impl<Api, P: Platform<Api>> Server<P> {
                 },
                 Ok(CastBindAttribute(index, buf, count, offset, stride)) => {
                     self.device.bind_attribute(index, count as u32, offset, stride);
+                },
+                Ok(CastBindFrameBuffer(fbo)) => {
+                    self.device.bind_frame_buffer(fbo);
                 },
                 Ok(CastDraw(offset, count)) => {
                     self.device.draw(offset as u32, count as u32);

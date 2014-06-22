@@ -46,8 +46,13 @@ fn main() {
         let data = vec![-0.5f32, -0.5, -0.5, 0.5, 0.5, 0.5];
         let mesh = renderer.create_mesh(3, data, 8);
         loop {
-            renderer.clear(0.3, 0.3, 0.3);
-            renderer.draw(mesh, program);
+            let cdata = gfx::ClearData {
+                color: Some([0.3, 0.3, 0.3, 1.0]),
+                depth: None,
+                stencil: None,
+            };
+            renderer.clear(cdata, None);
+            renderer.draw(mesh, None, program);
             renderer.end_frame();
         }
     });

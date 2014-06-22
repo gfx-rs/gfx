@@ -22,6 +22,9 @@ pub type Buffer         = gl::types::GLuint;
 pub type ArrayBuffer    = gl::types::GLuint;
 pub type Shader         = gl::types::GLuint;
 pub type Program        = gl::types::GLuint;
+pub type FrameBuffer    = gl::types::GLuint;
+pub type Surface        = gl::types::GLuint;
+pub type Texture        = gl::types::GLuint;
 
 pub struct Device;
 
@@ -160,6 +163,12 @@ impl Device {
 
     pub fn bind_program(&self, program: Program) {
         gl::UseProgram(program);
+    }
+
+    /// Frame Buffer
+
+    pub fn bind_frame_buffer(&self, fbo: FrameBuffer) {
+        gl::BindFramebuffer(gl::FRAMEBUFFER, fbo);
     }
 
     /// Draw

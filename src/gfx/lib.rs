@@ -66,6 +66,7 @@ pub use Renderer = render::Client;
 pub use Device = device::Server;
 pub use device::InitError;
 pub use platform::Platform;
+pub use render::target::ClearData;
 
 pub type Options<'a> = &'a platform::GlProvider;
 
