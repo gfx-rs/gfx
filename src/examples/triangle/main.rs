@@ -44,7 +44,7 @@ fn main() {
             VERTEX_SRC.to_owned(),
             FRAGMENT_SRC.to_owned());
         let data = vec![-0.5f32, -0.5, -0.5, 0.5, 0.5, 0.5];
-        let mesh = renderer.create_mesh(3, data);
+        let mesh = renderer.create_mesh(3, data, 8);
         loop {
             renderer.clear(0.3, 0.3, 0.3);
             renderer.draw(mesh, program);

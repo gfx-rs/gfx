@@ -39,16 +39,14 @@ pub enum PolygonType {
 pub struct Mesh {
     pub poly_type       : PolygonType,
     pub num_vertices    : VertexCount,
-    pub array_buffer    : dev::ArrayBuffer,
     pub attributes      : [Attribute, ..MAX_ATTRIBUTES],
 }
 
 impl Mesh {
-    pub fn new(nv: VertexCount, abuf: dev::ArrayBuffer) -> Mesh {
+    pub fn new(nv: VertexCount) -> Mesh {
         Mesh {
             poly_type: TriangleList,
             num_vertices: nv,
-            array_buffer: abuf,
             attributes: [ATTRIB_EMPTY, ..MAX_ATTRIBUTES],
         }
     }

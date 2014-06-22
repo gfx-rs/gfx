@@ -27,7 +27,7 @@ pub mod mesh;
 pub enum Request {
     // Requests that require a reply:
     CallNewProgram(Vec<u8>, Vec<u8>),
-    CallNewMesh(mesh::VertexCount, Vec<f32>),
+    CallNewMesh(mesh::VertexCount, Vec<f32>, u8),
     // Requests that don't expect a reply:
     CastClear(f32, f32, f32), // TODO: use color-rs?
     CastDraw(MeshHandle, ProgramHandle),
@@ -70,8 +70,8 @@ impl Client {
         }
     }
 
-    pub fn create_mesh(&self, num_vert: mesh::VertexCount, data: Vec<f32>) -> MeshHandle {
-        self.stream.send(CallNewMesh(num_vert, data));
+    pub fn create_mesh(&self, num_vert: mesh::VertexCount, data: Vec<f32>, stride0: u8) -> MeshHandle {
+        self.stream.send(CallNewMesh(num_vert, data, stride0));
         // TODO: delay recv()
         match self.stream.recv() {
             ReplyMesh(mesh) => mesh,
@@ -114,7 +114,7 @@ impl Server {
                 },
                 Ok(CastDraw(mesh, program)) => {
                     self.device.bind_program(program);
-                    self.device.bind_array_buffer(mesh.array_buffer);
+                    self.device.bind_array_buffer(self.array_buffer);
                     for (i, at) in mesh.attributes.iter().enumerate().filter(|&(_,at)| at.buffer!=0) {
                         self.device.bind_attribute(i as u8, at.buffer, mesh.num_vertices,
                             at.offset as u32, at.stride as u32);
@@ -130,13 +130,13 @@ impl Server {
                     let prog = self.device.new_program(vec!(h_vs, h_fs));
                     self.stream.send(ReplyProgram(prog));
                 },
-                Ok(CallNewMesh(num_vert, data)) => {
+                Ok(CallNewMesh(num_vert, data, stride)) => {
                     let buffer = self.device.new_buffer(data);
-                    let mut mesh = MeshHandle::new(num_vert, self.array_buffer);
+                    let mut mesh = MeshHandle::new(num_vert);
                     mesh.attributes[0] = mesh::Attribute {
                         buffer: buffer,
                         offset: 0,
-                        stride: 8,
+                        stride: stride,
                         is_normalized: false,
                         is_interpolated: false,
                         name: (),
