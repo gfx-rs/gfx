@@ -30,7 +30,7 @@ EXAMPLE_FILES         = $(SRC_DIR)/examples/*/*.rs
 DOC_DIR               = doc
 EXAMPLES_DIR          = examples
 LIB_DIR               = lib
-DEPS_LIB_DIRS         = $(wildcard $(DEPS_DIR)/*/lib)
+DEPS_LIB_DIRS         = $(patsubst %,$(DEPS_DIR)/%,gl-rs/lib glfw-rs/lib)
 
 DEPS_INCLUDE_FLAGS    = $(patsubst %,-L %, $(DEPS_LIB_DIRS))
 LIB_INCLUDE_FLAGS     = $(DEPS_INCLUDE_FLAGS)
