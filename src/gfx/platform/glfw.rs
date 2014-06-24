@@ -16,20 +16,20 @@ extern crate glfw;
 
 use self::glfw::Context;
 
-use platform::{GlApi, Platform};
+use platform::{GlApi, GraphicsContext};
 
-pub struct GlfwPlatform<C> {
+pub struct GlfwGraphicsContext<C> {
     pub context: C,
 }
 
-impl<C: Context> GlfwPlatform<C> {
-    pub fn new(context: C) -> GlfwPlatform<C> {
+impl<C: Context> GlfwGraphicsContext<C> {
+    pub fn new(context: C) -> GlfwGraphicsContext<C> {
         context.make_current();
-        GlfwPlatform { context: context }
+        GlfwGraphicsContext { context: context }
     }
 }
 
-impl<C: Context> Platform<GlApi> for GlfwPlatform<C> {
+impl<C: Context> GraphicsContext<GlApi> for GlfwGraphicsContext<C> {
     fn swap_buffers(&self) {
         self.context.swap_buffers();
     }
