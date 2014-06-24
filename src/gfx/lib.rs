@@ -65,7 +65,7 @@ extern crate libc;
 pub use Renderer = render::Client;
 pub use Device = device::Server;
 pub use device::InitError;
-pub use platform::Platform;
+pub use platform::GraphicsContext;
 pub use render::target::ClearData;
 
 pub type Options<'a> = &'a platform::GlProvider;
@@ -74,9 +74,9 @@ mod device;
 mod render;
 pub mod platform;
 
-pub fn start<Api, P: Platform<Api>>(platform: P, options: Options)
+pub fn start<Api, P: GraphicsContext<Api>>(graphics_context: P, options: Options)
         -> Result<(Renderer, Device<P>), InitError> {
-    device::init(platform, options).map(|(server, client)| {
+    device::init(graphics_context, options).map(|(server, client)| {
         ((render::start(options, server), client))
     })
 }

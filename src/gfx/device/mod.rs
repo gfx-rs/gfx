@@ -20,7 +20,7 @@ use std::comm;
 use std::comm::DuplexStream;
 use std::kinds::marker;
 
-use Platform;
+use GraphicsContext;
 
 #[cfg(gl)] mod gl;
 
@@ -121,11 +121,11 @@ pub struct Server<P> {
     no_send: marker::NoSend,
     no_share: marker::NoShare,
     stream: DuplexStream<Reply, Request>,
-    platform: P,
+    graphics_context: P,
     device: Device,
 }
 
-impl<Api, P: Platform<Api>> Server<P> {
+impl<Api, P: GraphicsContext<Api>> Server<P> {
     /// Update the platform. The client must manually update this on the main
     /// thread.
     pub fn update(&mut self) -> bool {
@@ -173,7 +173,7 @@ impl<Api, P: Platform<Api>> Server<P> {
                 Err(comm::Disconnected) => return false,
             }
         }
-        self.platform.swap_buffers();
+        self.graphics_context.swap_buffers();
         true
     }
 }
@@ -181,7 +181,7 @@ impl<Api, P: Platform<Api>> Server<P> {
 #[deriving(Show)]
 pub enum InitError {}
 
-pub fn init<Api, P: Platform<Api>>(platform: P, options: super::Options)
+pub fn init<Api, P: GraphicsContext<Api>>(graphics_context: P, options: super::Options)
         -> Result<(Client, Server<P>), InitError> {
     let (client_stream, server_stream) = comm::duplex();
 
@@ -193,7 +193,7 @@ pub fn init<Api, P: Platform<Api>>(platform: P, options: super::Options)
         no_send: marker::NoSend,
         no_share: marker::NoShare,
         stream: server_stream,
-        platform: platform,
+        graphics_context: graphics_context,
         device: dev,
     };
 

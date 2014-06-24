@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(glfw)] pub use Glfw = self::glfw::GlfwPlatform;
+#[cfg(glfw)] pub use Glfw = self::glfw::GlfwGraphicsContext;
 // #[cfg(sdl2)] pub use Sdl2 = sdl2::Sdl2Platform; // TODO
 // #[cfg(d3d)] pub use D3d = d3d::D3dPlatform; // TODO
 //
@@ -23,7 +23,7 @@
 pub enum GlApi {}
 pub enum D3dApi {}
 
-pub trait Platform<Api> {
+pub trait GraphicsContext<Api> {
     fn swap_buffers(&self);
 }
 
