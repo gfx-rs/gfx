@@ -23,6 +23,7 @@ use std::kinds::marker;
 use GraphicsContext;
 
 #[cfg(gl)] mod gl;
+mod shade;
 
 pub type Color = [f32, ..4];
 pub type VertexCount = u16;
