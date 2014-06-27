@@ -18,6 +18,7 @@ use std::cell::Cell;
 // Describing shader parameters
 
 pub type Dimension = u8;
+pub type IsDouble = bool;
 pub type IsArray = bool;
 pub type IsShadow = bool;
 pub type IsMultiSample = bool;
@@ -38,6 +39,7 @@ pub enum SamplerType {
 
 pub enum BaseType {
     BaseFloat,
+    BaseDouble,
     BaseInt,
     BaseUnsigned,
     BaseBool,
@@ -45,7 +47,7 @@ pub enum BaseType {
 
 pub enum VarType {
     Vector(BaseType, Dimension),
-    Matrix(MatrixFormat, Dimension, Dimension),
+    Matrix(MatrixFormat, IsDouble, Dimension, Dimension),
 }
 
 
