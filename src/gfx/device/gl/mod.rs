@@ -103,37 +103,15 @@ impl Device {
 
     /// Shader Program
 
-    fn query_program_int(&self, prog: Program, query: gl::types::GLenum) -> gl::types::GLint {
-        let mut ret = 0 as gl::types::GLint;
-        unsafe {
-            gl::GetProgramiv(prog, query, &mut ret);
-        }
-        ret
-    }
-
     pub fn create_program(&self, shaders: &[Shader]) -> Program {
-        let name = gl::CreateProgram();
-        for &sh in shaders.iter() {
-            gl::AttachShader(name, sh);
+        let (meta_opt, info) = shade::create_program(shaders);
+        if info.len() != 0 {
+            warn!("\tProgram link log: {}", info);
         }
-        gl::LinkProgram(name);
-        info!("\tLinked program {}", name);
-        //info!("\tLinked program {} from objects {}", h, shaders);
-        // get info message
-        let status      = self.query_program_int(name, gl::LINK_STATUS);
-        let mut length  = self.query_program_int(name, gl::INFO_LOG_LENGTH);
-        let mut info = String::with_capacity(length as uint);
-        info.grow(length as uint, 0u8 as char);
-        unsafe {
-            gl::GetProgramInfoLog(name, length, &mut length,
-                info.as_slice().as_ptr() as *mut gl::types::GLchar);
+        match meta_opt {
+            Some(meta) => meta.name,
+            None => 0,
         }
-        info.truncate(length as uint);
-        if status == 0  {
-            error!("GL error {}", gl::GetError());
-            fail!("GLSL program error: {}", info)
-        }
-        name
     }
 
     pub fn bind_program(&self, program: Program) {

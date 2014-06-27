@@ -71,38 +71,38 @@ pub enum UniformValue {
 }
 
 pub struct Attribute {
-    name: String,
-    location: uint, // Vertex attribute binding
-    count: uint,
-    var_type: VarType,
+    pub name: String,
+    pub location: uint, // Vertex attribute binding
+    pub count: uint,
+    pub var_type: VarType,
 }
 
 pub struct UniformVar {
-    name: String,
-    location: Location,
-    count: uint,
-    var_type: VarType,
-    active_value: Cell<UniformValue>,
+    pub name: String,
+    pub location: Location,
+    pub count: uint,
+    pub var_type: VarType,
+    pub active_value: Cell<UniformValue>,
 }
 
 pub struct BlockVar {
-    name: String,
-    size: uint,
-    usage: u8, // Bit flags for each shader stage
-    active_slot: Cell<u8>, // Active uniform block binding
+    pub name: String,
+    pub size: uint,
+    pub usage: u8, // Bit flags for each shader stage
+    pub active_slot: Cell<u8>, // Active uniform block binding
 }
 
 pub struct SamplerVar {
-    name: String,
-    value_type: BaseType,
-    sampler_type: SamplerType,
-    active_slot: Cell<u8>, // Active texture binding
+    pub name: String,
+    pub value_type: BaseType,
+    pub sampler_type: SamplerType,
+    pub active_slot: Cell<u8>, // Active texture binding
 }
 
-pub struct ProgramInfo {
-    name: super::dev::Program,
-    attributes: Vec<Attribute>,
-    uniforms: Vec<UniformVar>,
-    blocks: Vec<BlockVar>,
-    textures: Vec<SamplerVar>,
+pub struct ProgramMeta {
+    pub name: super::dev::Program,
+    pub attributes: Vec<Attribute>,
+    pub uniforms: Vec<UniformVar>,
+    pub blocks: Vec<BlockVar>,
+    pub textures: Vec<SamplerVar>,
 }

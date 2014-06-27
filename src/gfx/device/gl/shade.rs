@@ -45,3 +45,43 @@ pub fn create_object(stage: common::Stage, data: &[u8]) -> (Option<super::Shader
     info.truncate(length as uint);
     (if status == 0 {None} else {Some(name)}, info)
 }
+
+
+fn query_program_int(prog: super::Program, query: gl::types::GLenum) -> gl::types::GLint {
+    let mut ret = 0 as gl::types::GLint;
+    unsafe {
+        gl::GetProgramiv(prog, query, &mut ret);
+    }
+    ret
+}
+
+pub fn create_program(shaders: &[super::Shader]) -> (Option<common::ProgramMeta>, String) {
+    let name = gl::CreateProgram();
+    for &sh in shaders.iter() {
+        gl::AttachShader(name, sh);
+    }
+    gl::LinkProgram(name);
+    info!("\tLinked program {}", name);
+    // get info message
+    let status      = query_program_int(name, gl::LINK_STATUS);
+    let mut length  = query_program_int(name, gl::INFO_LOG_LENGTH);
+    let mut info = String::with_capacity(length as uint);
+    info.grow(length as uint, 0u8 as char);
+    unsafe {
+        gl::GetProgramInfoLog(name, length, &mut length,
+            info.as_slice().as_ptr() as *mut gl::types::GLchar);
+    }
+    info.truncate(length as uint);
+    (if status != 0 {
+        let meta = common::ProgramMeta {
+            name: name, 
+            attributes: Vec::new(),
+            uniforms: Vec::new(),
+            blocks: Vec::new(),
+            textures: Vec::new(),
+        };
+        Some(meta)
+    }else {
+        None
+    }, info)
+}
