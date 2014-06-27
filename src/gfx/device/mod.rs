@@ -22,8 +22,8 @@ use std::kinds::marker;
 
 use GraphicsContext;
 
+pub mod shade;
 #[cfg(gl)] mod gl;
-mod shade;
 
 pub type Color = [f32, ..4];
 pub type VertexCount = u16;
@@ -33,7 +33,7 @@ pub enum Request {
     // Requests that require a reply:
     CallNewBuffer(Vec<f32>),
     CallNewArrayBuffer,
-    CallNewShader(char, Vec<u8>),
+    CallNewShader(shade::Stage, Vec<u8>),
     CallNewProgram(Vec<dev::Shader>),
     // Requests that don't expect a reply:
     CastClear(Color),
@@ -85,8 +85,8 @@ impl Client {
         self.stream.send(CastSwapBuffers);
     }
 
-    pub fn new_shader(&self, kind: char, code: Vec<u8>) -> dev::Shader {
-        self.stream.send(CallNewShader(kind, code));
+    pub fn new_shader(&self, stage: shade::Stage, code: Vec<u8>) -> dev::Shader {
+        self.stream.send(CallNewShader(stage, code));
         match self.stream.recv() {
             ReplyNewShader(name) => name,
             _ => fail!("unexpected device reply")
@@ -162,8 +162,8 @@ impl<Api, P: GraphicsContext<Api>> Server<P> {
                     let name = self.device.create_array_buffer();
                     self.stream.send(ReplyNewArrayBuffer(name));
                 },
-                Ok(CallNewShader(kind, code)) => {
-                    let name = self.device.create_shader(kind, code.as_slice());
+                Ok(CallNewShader(stage, code)) => {
+                    let name = self.device.create_shader(stage, code.as_slice());
                     self.stream.send(ReplyNewShader(name));
                 },
                 Ok(CallNewProgram(code)) => {

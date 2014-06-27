@@ -18,6 +18,7 @@ use std::kinds::marker;
 
 use device;
 
+use device::shade::{Vertex, Fragment};
 pub use ProgramHandle = device::dev::Program;
 pub use MeshHandle = self::mesh::Mesh;
 pub type Environment = ();  // placeholder
@@ -149,8 +150,8 @@ impl Server {
                     self.device.end_frame();
                 },
                 Ok(CallNewProgram(vs, fs)) => {
-                    let h_vs = self.device.new_shader('v', vs);
-                    let h_fs = self.device.new_shader('f', fs);
+                    let h_vs = self.device.new_shader(Vertex, vs);
+                    let h_fs = self.device.new_shader(Fragment, fs);
                     let prog = self.device.new_program(vec!(h_vs, h_fs));
                     self.stream.send(ReplyProgram(prog));
                 },
