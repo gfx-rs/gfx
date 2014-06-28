@@ -3,17 +3,26 @@ extern crate glfw;
 
 static VERTEX_SRC: &'static [u8] = b"
     #version 150 core
-    in vec2 pos;
+    in vec2 a_Pos;
+    out vec4 v_Color;
     void main() {
-        gl_Position = vec4(pos, 0.0, 1.0);
+        v_Color = vec4(a_Pos+0.5, 0.0, 1.0);
+        gl_Position = vec4(a_Pos, 0.0, 1.0);
     }
 ";
 
 static FRAGMENT_SRC: &'static [u8] = b"
     #version 150 core
+    in vec4 v_Color;
     out vec4 o_Color;
+    uniform sampler3D tex3D;
+    uniform MyBlock {
+        vec4 color;
+    } block;
     void main() {
-        o_Color = vec4(1.0, 0.0, 0.0, 1.0);
+        vec4 texel = texture(tex3D, vec3(0.5,0.5,0.5));
+        vec4 unused = mix(texel, block.color, 0.5);
+        o_Color = v_Color.x<0.0 ? unused : v_Color;
     }
 ";
 
@@ -43,7 +52,7 @@ fn main() {
         let program = renderer.create_program(
             VERTEX_SRC.to_owned(),
             FRAGMENT_SRC.to_owned());
-        let data = vec![-0.5f32, -0.5, -0.5, 0.5, 0.5, 0.5];
+        let data = vec![-0.0f32, 0.5, 0.5, -0.5, -0.5, -0.5];
         let mesh = renderer.create_mesh(3, data, 8);
         loop {
             let cdata = gfx::ClearData {

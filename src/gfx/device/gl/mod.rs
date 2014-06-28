@@ -18,6 +18,8 @@ extern crate libc;
 use std;
 use platform::GlProvider;
 
+mod shade;
+
 pub type Buffer         = gl::types::GLuint;
 pub type ArrayBuffer    = gl::types::GLuint;
 pub type Shader         = gl::types::GLuint;
@@ -91,74 +93,25 @@ impl Device {
 
     /// Shader Object
 
-    pub fn create_shader(&self, kind: char, data: &[u8]) -> Shader {
-        let target = match kind {
-            'v' => gl::VERTEX_SHADER,
-            'g' => gl::GEOMETRY_SHADER,
-            'f' => gl::FRAGMENT_SHADER,
-            _   => fail!("Unknown shader kind: {}", kind)
-        };
-        let name = gl::CreateShader(target);
-        let mut length = data.len() as gl::types::GLint;
-        unsafe {
-            gl::ShaderSource(name, 1, &(data.as_ptr() as *gl::types::GLchar), &length);
+    pub fn create_shader(&self, stage: super::shade::Stage, data: &[u8]) -> Shader {
+        let (name_opt, info) = shade::create_object(stage, data);
+        if info.len() != 0 {
+            warn!("\tObject compile log: {}", info);
         }
-        gl::CompileShader(name);
-        info!("\tCompiled shader {}", name);
-        // get info message
-        let mut status = 0 as gl::types::GLint;
-        length = 0;
-        unsafe {
-            gl::GetShaderiv(name, gl::COMPILE_STATUS,  &mut status);
-            gl::GetShaderiv(name, gl::INFO_LOG_LENGTH, &mut length);
-        }
-        let mut info = String::with_capacity(length as uint);
-        info.grow(length as uint, 0u8 as char);
-        unsafe {
-            gl::GetShaderInfoLog(name, length, &mut length,
-                info.as_slice().as_ptr() as *mut gl::types::GLchar);
-        }
-        info.truncate(length as uint);
-        if status == 0  {
-            error!("Failed shader code:\n{}\n", std::str::from_utf8(data).unwrap());
-            fail!("GLSL: {}", info);
-        }
-        name
+        name_opt.unwrap_or(0)
     }
 
     /// Shader Program
 
-    fn query_program_int(&self, prog: Program, query: gl::types::GLenum) -> gl::types::GLint {
-        let mut ret = 0 as gl::types::GLint;
-        unsafe {
-            gl::GetProgramiv(prog, query, &mut ret);
-        }
-        ret
-    }
-
     pub fn create_program(&self, shaders: &[Shader]) -> Program {
-        let name = gl::CreateProgram();
-        for &sh in shaders.iter() {
-            gl::AttachShader(name, sh);
+        let (meta_opt, info) = shade::create_program(shaders);
+        if info.len() != 0 {
+            warn!("\tProgram link log: {}", info);
         }
-        gl::LinkProgram(name);
-        info!("\tLinked program {}", name);
-        //info!("\tLinked program {} from objects {}", h, shaders);
-        // get info message
-        let status      = self.query_program_int(name, gl::LINK_STATUS);
-        let mut length  = self.query_program_int(name, gl::INFO_LOG_LENGTH);
-        let mut info = String::with_capacity(length as uint);
-        info.grow(length as uint, 0u8 as char);
-        unsafe {
-            gl::GetProgramInfoLog(name, length, &mut length,
-                info.as_slice().as_ptr() as *mut gl::types::GLchar);
+        match meta_opt {
+            Some(meta) => meta.name,
+            None => 0,
         }
-        info.truncate(length as uint);
-        if status == 0  {
-            error!("GL error {}", gl::GetError());
-            fail!("GLSL program error: {}", info)
-        }
-        name
     }
 
     pub fn bind_program(&self, program: Program) {
