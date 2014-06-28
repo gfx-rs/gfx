@@ -285,9 +285,9 @@ pub fn create_program(shaders: &[super::Shader]) -> (Option<common::ProgramMeta>
         let meta = common::ProgramMeta {
             name: name, 
             attributes: query_attributes(name),
-            uniforms: uniforms,   //TODO
-            blocks: query_blocks(name),     //TODO
-            textures: textures,   //TODO
+            uniforms: uniforms,
+            blocks: query_blocks(name),
+            textures: textures,
         };
         Some(meta)
     }else {
