@@ -14,6 +14,7 @@
 
 use common = super::super::shade;
 use super::gl;
+use std::cell::Cell;
 
 
 pub fn create_object(stage: common::Stage, data: &[u8]) -> (Option<super::Shader>, String) {
@@ -120,13 +121,55 @@ fn query_attributes(prog: super::Program) -> Vec<common::Attribute> {
         };
         info!("\t\tAttrib[{}] = '{}',\tformat = 0x{:x}", loc, name, storage);
         common::Attribute {
-            name: name.clone(),
+            name: name.as_slice().slice_to(length as uint).to_string(),
             location: loc as uint,
             count: size as uint,
             var_type: derive_attribute(storage),
         }
     }).collect()
 }
+
+fn query_blocks(prog: super::Program) -> Vec<common::BlockVar> {
+    let num     = query_program_int(prog, gl::ACTIVE_UNIFORM_BLOCKS);
+    range(0, num as gl::types::GLuint).map(|i| {
+        let mut length  = 0 as gl::types::GLint;
+        let mut size    = 0 as gl::types::GLint;
+        let mut tmp     = 0 as gl::types::GLint;
+        let mut usage = 0u8;
+        unsafe {
+            gl::GetActiveUniformBlockiv(prog, i, gl::UNIFORM_BLOCK_NAME_LENGTH, &mut size);
+            for (j, &eval) in [gl::UNIFORM_BLOCK_REFERENCED_BY_VERTEX_SHADER,
+                    gl::UNIFORM_BLOCK_REFERENCED_BY_FRAGMENT_SHADER].iter().enumerate() {
+                gl::GetActiveUniformBlockiv(prog, i, eval, &mut tmp);
+                if tmp != 0 {usage |= 1<<i;}
+            }
+        }
+        let mut name = String::with_capacity(size as uint); //includes terminating null
+        name.grow(size as uint, 0u8 as char);
+        let mut actual_name_size = 0 as gl::types::GLint;
+        unsafe {
+            gl::GetActiveUniformBlockName(prog, i, size, &mut actual_name_size,
+                name.as_slice().as_ptr() as *mut gl::types::GLchar);
+            assert_eq!(actual_name_size+1, size);
+            gl::GetActiveUniformBlockiv(prog, i, gl::UNIFORM_BLOCK_DATA_SIZE, &mut size);
+        }
+        info!("\t\tBlock '{}' of size {}", name, size);
+        common::BlockVar {
+            name: name,
+            size: size as uint,
+            usage: usage,
+            active_slot: Cell::new(0),
+        }
+    }).collect()
+}
+
+fn query_parameters(prog: super::Program) -> (Vec<common::UniformVar>, Vec<common::SamplerVar>) {
+    let mut uniforms = Vec::new();
+    let mut textures = Vec::new();
+
+    (uniforms, textures)
+}
+
 
 pub fn create_program(shaders: &[super::Shader]) -> (Option<common::ProgramMeta>, String) {
     let name = gl::CreateProgram();
@@ -146,12 +189,13 @@ pub fn create_program(shaders: &[super::Shader]) -> (Option<common::ProgramMeta>
     }
     info.truncate(length as uint);
     (if status != 0 {
+        let (uniforms, textures) = query_parameters(name);
         let meta = common::ProgramMeta {
             name: name, 
             attributes: query_attributes(name),
-            uniforms: Vec::new(),   //TODO
-            blocks: Vec::new(),     //TODO
-            textures: Vec::new(),   //TODO
+            uniforms: uniforms,   //TODO
+            blocks: query_blocks(name),     //TODO
+            textures: textures,   //TODO
         };
         Some(meta)
     }else {
