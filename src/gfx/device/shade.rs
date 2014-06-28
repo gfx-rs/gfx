@@ -72,6 +72,7 @@ pub type Location = uint;
 
 //#[deriving(Show)] // unable to derive fixed arrays
 pub enum UniformValue {
+    ValueUnitialized,
     ValueInt(i32),
     ValueFloat(f32),
     ValueIntVec([i32, ..4]),
@@ -110,7 +111,7 @@ pub struct BlockVar {
 pub struct SamplerVar {
     pub name: String,
     pub location: Location,
-    pub value_type: BaseType,
+    pub base_type: BaseType,
     pub sampler_type: SamplerType,
     pub active_slot: Cell<u8>, // Active texture binding
 }

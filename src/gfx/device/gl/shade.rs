@@ -102,6 +102,42 @@ fn parse_storage(storage: gl::types::GLenum) -> ParseResult {
         gl::FLOAT_MAT4x3 =>
             Var(common::BaseFloat, common::Matrix(common::ColumnMajor, 4, 3)),
         // double matrices //TODO
+        // float samplers 1D
+        gl::SAMPLER_1D =>
+            Sampler(common::BaseFloat, common::Sampler1D(false, false)),
+        gl::SAMPLER_1D_ARRAY =>
+            Sampler(common::BaseFloat, common::Sampler1D(true, false)),
+        gl::SAMPLER_1D_SHADOW =>
+            Sampler(common::BaseFloat, common::Sampler1D(false, true)),
+        gl::SAMPLER_1D_ARRAY_SHADOW =>
+            Sampler(common::BaseFloat, common::Sampler1D(true, true)),
+        // float samplers 2D
+        gl::SAMPLER_2D =>
+            Sampler(common::BaseFloat, common::Sampler2D(false, false, false, false)),
+        gl::SAMPLER_2D_ARRAY =>
+            Sampler(common::BaseFloat, common::Sampler2D(true, false, false, false)),
+        gl::SAMPLER_2D_SHADOW =>
+            Sampler(common::BaseFloat, common::Sampler2D(false, true, false, false)),
+        gl::SAMPLER_2D_MULTISAMPLE =>
+            Sampler(common::BaseFloat, common::Sampler2D(false, false, true, false)),
+        gl::SAMPLER_2D_RECT =>
+            Sampler(common::BaseFloat, common::Sampler2D(false, false, false, true)),
+        gl::SAMPLER_2D_ARRAY_SHADOW =>
+            Sampler(common::BaseFloat, common::Sampler2D(true, true, false, false)),
+        gl::SAMPLER_2D_MULTISAMPLE_ARRAY =>
+            Sampler(common::BaseFloat, common::Sampler2D(true, false, true, false)),
+        gl::SAMPLER_2D_RECT_SHADOW =>
+            Sampler(common::BaseFloat, common::Sampler2D(false, true, false, true)),
+        // float samplers 3D and Cube
+        gl::SAMPLER_3D =>
+            Sampler(common::BaseFloat, common::Sampler3D),
+        gl::SAMPLER_CUBE =>
+            Sampler(common::BaseFloat, common::SamplerCube(false)),
+        gl::SAMPLER_CUBE_SHADOW =>
+            Sampler(common::BaseFloat, common::SamplerCube(true)),
+        // int samplers //TODO
+        // unsigned samplers //TODO
+        // unknown
         _ => Unknown
     }
 }
@@ -125,8 +161,7 @@ fn query_attributes(prog: super::Program) -> Vec<common::Attribute> {
             Var(b, c) => (b, c),
             _ => fail!("Unrecognized attribute storage: {}", storage)
         };
-        info!("\t\tAttrib[{}] = '{}',\tbase = {}, container = {}",
-            loc, real_name, base, container);
+        info!("\t\tAttrib[{}] = '{}'\t{}\t{}", loc, real_name, base, container);
         common::Attribute {
             name: real_name,
             location: loc as uint,
@@ -174,40 +209,52 @@ fn query_blocks(prog: super::Program) -> Vec<common::BlockVar> {
 fn query_parameters(prog: super::Program) -> (Vec<common::UniformVar>, Vec<common::SamplerVar>) {
     let mut uniforms = Vec::new();
     let mut textures = Vec::new();
-    let mut num = 0 as gl::types::GLint;
-    // obtain the indices of uniforms in the default block
-    unsafe {    //experimental
-        gl::GetActiveUniformBlockiv(prog, -1, gl::UNIFORM_BLOCK_ACTIVE_UNIFORMS, &mut num);
-    }
-    let mut indices = Vec::from_elem(num as uint, 0 as gl::types::GLint);
+    let total_num = query_program_int(prog, gl::ACTIVE_UNIFORMS);
+    let indices: Vec<gl::types::GLuint> = range(0, total_num as gl::types::GLuint).collect();
+    let mut block_indices = Vec::from_elem(total_num as uint, 0 as gl::types::GLint);
     unsafe {
-        gl::GetActiveUniformBlockiv(prog, -1, gl::UNIFORM_BLOCK_ACTIVE_UNIFORM_INDICES,
-            indices.as_mut_slice().as_mut_ptr());
+        gl::GetActiveUniformsiv(prog, total_num as gl::types::GLsizei,
+            indices.as_slice().as_ptr(), gl::UNIFORM_BLOCK_INDEX,
+            block_indices.as_mut_slice().as_mut_ptr());
+        //TODO: UNIFORM_IS_ROW_MAJOR
     }
     // prepare the name string
     let max_len = query_program_int(prog, gl::ACTIVE_UNIFORM_MAX_LENGTH);
     let mut name = String::with_capacity(max_len as uint);
     name.grow(max_len as uint, 0u8 as char);
     // walk the indices
-    for &id in indices.iter() {
+    for (&i, _) in indices.iter().zip(block_indices.iter()).filter(|&(_, &b)| b<0) {
         let mut length = 0 as gl::types::GLint;
         let mut size = 0 as gl::types::GLint;
         let mut storage = 0 as gl::types::GLenum;
         let loc = unsafe {
             let raw = name.as_slice().as_ptr() as *mut gl::types::GLchar;
-            gl::GetActiveUniform(prog, id as gl::types::GLuint,
+            gl::GetActiveUniform(prog, i,
                 max_len, &mut length, &mut size, &mut storage, raw);
             gl::GetUniformLocation(prog, raw as *gl::types::GLchar)
         };
         let real_name = name.as_slice().slice_to(length as uint).to_string();
         match parse_storage(storage) {
             Var(base, container) => {
-                info!("\t\tUniform[{}] = '{}',\tbase = {}, type = {}",
-                    loc, real_name, base, container);
+                info!("\t\tUniform[{}] = '{}'\t{}\t{}", loc, real_name, base, container);
+                uniforms.push(common::UniformVar {
+                    name: real_name,
+                    location: loc as uint,
+                    count: size as uint,
+                    base_type: base,
+                    container: container,
+                    active_value: Cell::new(common::ValueUnitialized),
+                });
             },
             Sampler(base, sam_type) => {
-                info!("\t\tSampler[{}] = '{}',\tbase = {}, type = {}",
-                    loc, real_name, base, sam_type);
+                info!("\t\tSampler[{}] = '{}'\t{}\t{}", loc, real_name, base, sam_type);
+                textures.push(common::SamplerVar {
+                    name: real_name,
+                    location: loc as uint,
+                    base_type: base,
+                    sampler_type: sam_type,
+                    active_slot: Cell::new(0),
+                });
             },
             Unknown => fail!("Unrecognized uniform storage: {}", storage)
         }
