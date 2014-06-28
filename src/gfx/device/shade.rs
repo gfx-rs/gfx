@@ -13,22 +13,24 @@
 // limitations under the License.
 
 use std::cell::Cell;
+use std::fmt::Show;
 
 
 // Describing shader parameters
 
 pub type Dimension = u8;
-pub type IsDouble = bool;
 pub type IsArray = bool;
 pub type IsShadow = bool;
 pub type IsMultiSample = bool;
 pub type IsRect = bool;
 
+#[deriving(Show)]
 pub enum MatrixFormat {
     ColumnMajor,
     RowMajor,
 }
 
+#[deriving(Show)]
 pub enum SamplerType {
     SamplerBuffer,
     Sampler1D(IsArray, IsShadow),
@@ -37,6 +39,7 @@ pub enum SamplerType {
     SamplerCube(IsShadow),
 }
 
+#[deriving(Show)]
 pub enum BaseType {
     BaseFloat,
     BaseDouble,
@@ -45,14 +48,17 @@ pub enum BaseType {
     BaseBool,
 }
 
-pub enum VarType {
-    Vector(BaseType, Dimension),
-    Matrix(MatrixFormat, IsDouble, Dimension, Dimension),
+#[deriving(Show)]
+pub enum ContainerType {
+    Single,
+    Vector(Dimension),
+    Matrix(MatrixFormat, Dimension, Dimension),
 }
 
 
 // Describing object data
 
+#[deriving(Show)]
 pub enum Stage {
     Vertex,
     Geometry,
@@ -64,6 +70,7 @@ pub enum Stage {
 
 pub type Location = uint;
 
+//#[deriving(Show)] // unable to derive fixed arrays
 pub enum UniformValue {
     ValueInt(i32),
     ValueFloat(f32),
@@ -72,21 +79,26 @@ pub enum UniformValue {
     ValueMatrix([[f32, ..4], ..4]),
 }
 
+#[deriving(Show)]
 pub struct Attribute {
     pub name: String,
     pub location: uint, // Vertex attribute binding
     pub count: uint,
-    pub var_type: VarType,
+    pub base_type: BaseType,
+    pub container: ContainerType,
 }
 
+//#[deriving(Show)]
 pub struct UniformVar {
     pub name: String,
     pub location: Location,
     pub count: uint,
-    pub var_type: VarType,
+    pub base_type: BaseType,
+    pub container: ContainerType,
     pub active_value: Cell<UniformValue>,
 }
 
+#[deriving(Show)]
 pub struct BlockVar {
     pub name: String,
     pub size: uint,
@@ -94,13 +106,16 @@ pub struct BlockVar {
     pub active_slot: Cell<u8>, // Active uniform block binding
 }
 
+#[deriving(Show)]
 pub struct SamplerVar {
     pub name: String,
+    pub location: Location,
     pub value_type: BaseType,
     pub sampler_type: SamplerType,
     pub active_slot: Cell<u8>, // Active texture binding
 }
 
+//#[deriving(Show)]
 pub struct ProgramMeta {
     pub name: super::dev::Program,
     pub attributes: Vec<Attribute>,

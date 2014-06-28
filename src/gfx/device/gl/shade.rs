@@ -56,51 +56,53 @@ fn query_program_int(prog: super::Program, query: gl::types::GLenum) -> gl::type
     ret
 }
 
-fn derive_attribute(storage: gl::types::GLenum) -> common::VarType {
+enum ParseResult {
+    Var(common::BaseType, common::ContainerType),
+    Sampler(common::BaseType, common::SamplerType),
+    Unknown,
+}
+
+fn parse_storage(storage: gl::types::GLenum) -> ParseResult {
     match storage {
         // float vecs
         gl::FLOAT =>
-            common::Vector(common::BaseFloat, 1),
+            Var(common::BaseFloat, common::Single),
         gl::FLOAT_VEC2 | gl::FLOAT_VEC3 | gl::FLOAT_VEC4 =>
-            common::Vector(common::BaseFloat, (storage+2-gl::FLOAT_VEC2) as u8),
+            Var(common::BaseFloat, common::Vector((storage+2-gl::FLOAT_VEC2) as u8)),
         // int vecs
         gl::INT =>
-            common::Vector(common::BaseInt, 1),
+            Var(common::BaseInt, common::Single),
         gl::INT_VEC2 | gl::INT_VEC3 | gl::INT_VEC4 =>
-            common::Vector(common::BaseInt, (storage+2-gl::INT_VEC2) as u8),
+            Var(common::BaseInt, common::Vector((storage+2-gl::INT_VEC2) as u8)),
         // unsigned vecs
         gl::UNSIGNED_INT =>
-            common::Vector(common::BaseUnsigned, 1),
+            Var(common::BaseUnsigned, common::Single),
         gl::UNSIGNED_INT_VEC2 | gl::UNSIGNED_INT_VEC3 | gl::UNSIGNED_INT_VEC4 =>
-            common::Vector(common::BaseUnsigned, (storage+2-gl::UNSIGNED_INT_VEC2) as u8),
+            Var(common::BaseUnsigned, common::Vector((storage+2-gl::UNSIGNED_INT_VEC2) as u8)),
         // bool vecs
         gl::BOOL =>
-            common::Vector(common::BaseBool, 1),
+            Var(common::BaseBool, common::Single),
         gl::BOOL_VEC2 | gl::BOOL_VEC3 | gl::BOOL_VEC4 =>
-            common::Vector(common::BaseBool, (storage+2-gl::BOOL_VEC2) as u8),
+            Var(common::BaseBool, common::Vector((storage+2-gl::BOOL_VEC2) as u8)),
         // float matrices
         gl::FLOAT_MAT2 | gl::FLOAT_MAT3 | gl::FLOAT_MAT4 => {
             let dim = (storage+2-gl::FLOAT_MAT2) as u8;
-            common::Matrix(common::ColumnMajor, false, dim, dim)
+            Var(common::BaseFloat, common::Matrix(common::ColumnMajor, dim, dim))
         },
         gl::FLOAT_MAT2x3 =>
-            common::Matrix(common::ColumnMajor, false, 2, 3),
+            Var(common::BaseFloat, common::Matrix(common::ColumnMajor, 2, 3)),
         gl::FLOAT_MAT2x4 =>
-            common::Matrix(common::ColumnMajor, false, 2, 4),
+            Var(common::BaseFloat, common::Matrix(common::ColumnMajor, 2, 4)),
         gl::FLOAT_MAT3x2 =>
-            common::Matrix(common::ColumnMajor, false, 3, 2),
+            Var(common::BaseFloat, common::Matrix(common::ColumnMajor, 3, 2)),
         gl::FLOAT_MAT3x4 =>
-            common::Matrix(common::ColumnMajor, false, 3, 4),
+            Var(common::BaseFloat, common::Matrix(common::ColumnMajor, 3, 4)),
         gl::FLOAT_MAT4x2 =>
-            common::Matrix(common::ColumnMajor, false, 4, 2),
+            Var(common::BaseFloat, common::Matrix(common::ColumnMajor, 4, 2)),
         gl::FLOAT_MAT4x3 =>
-            common::Matrix(common::ColumnMajor, false, 4, 3),
+            Var(common::BaseFloat, common::Matrix(common::ColumnMajor, 4, 3)),
         // double matrices //TODO
-        // unknown
-        _ => {
-            error!("Unrecognized attribute storage: {}", storage);
-            common::Vector(common::BaseFloat, 0)
-        }
+        _ => Unknown
     }
 }
 
@@ -109,22 +111,28 @@ fn query_attributes(prog: super::Program) -> Vec<common::Attribute> {
     let max_len = query_program_int(prog, gl::ACTIVE_ATTRIBUTE_MAX_LENGTH);
     let mut name = String::with_capacity(max_len as uint);
     name.grow(max_len as uint, 0u8 as char);
-    range(0, num).map(|i| {
+    range(0, num as gl::types::GLuint).map(|i| {
         let mut length = 0 as gl::types::GLint;
         let mut size = 0 as gl::types::GLint;
         let mut storage = 0 as gl::types::GLenum;
         let loc = unsafe {
             let raw = name.as_slice().as_ptr() as *mut gl::types::GLchar;
-            gl::GetActiveAttrib(prog, i as gl::types::GLuint,
-                max_len, &mut length, &mut size, &mut storage, raw);
+            gl::GetActiveAttrib(prog, i, max_len, &mut length, &mut size, &mut storage, raw);
             gl::GetAttribLocation(prog, raw as *gl::types::GLchar)
         };
-        info!("\t\tAttrib[{}] = '{}',\tformat = 0x{:x}", loc, name, storage);
+        let real_name = name.as_slice().slice_to(length as uint).to_string();
+        let (base, container) = match parse_storage(storage) {
+            Var(b, c) => (b, c),
+            _ => fail!("Unrecognized attribute storage: {}", storage)
+        };
+        info!("\t\tAttrib[{}] = '{}',\tbase = {}, container = {}",
+            loc, real_name, base, container);
         common::Attribute {
-            name: name.as_slice().slice_to(length as uint).to_string(),
+            name: real_name,
             location: loc as uint,
             count: size as uint,
-            var_type: derive_attribute(storage),
+            base_type: base,
+            container: container,
         }
     }).collect()
 }
@@ -138,10 +146,10 @@ fn query_blocks(prog: super::Program) -> Vec<common::BlockVar> {
         let mut usage = 0u8;
         unsafe {
             gl::GetActiveUniformBlockiv(prog, i, gl::UNIFORM_BLOCK_NAME_LENGTH, &mut size);
-            for (j, &eval) in [gl::UNIFORM_BLOCK_REFERENCED_BY_VERTEX_SHADER,
+            for (stage, &eval) in [gl::UNIFORM_BLOCK_REFERENCED_BY_VERTEX_SHADER,
                     gl::UNIFORM_BLOCK_REFERENCED_BY_FRAGMENT_SHADER].iter().enumerate() {
                 gl::GetActiveUniformBlockiv(prog, i, eval, &mut tmp);
-                if tmp != 0 {usage |= 1<<i;}
+                if tmp != 0 {usage |= 1<<stage;}
             }
         }
         let mut name = String::with_capacity(size as uint); //includes terminating null
@@ -150,9 +158,9 @@ fn query_blocks(prog: super::Program) -> Vec<common::BlockVar> {
         unsafe {
             gl::GetActiveUniformBlockName(prog, i, size, &mut actual_name_size,
                 name.as_slice().as_ptr() as *mut gl::types::GLchar);
-            assert_eq!(actual_name_size+1, size);
             gl::GetActiveUniformBlockiv(prog, i, gl::UNIFORM_BLOCK_DATA_SIZE, &mut size);
         }
+        name.truncate(actual_name_size as uint);
         info!("\t\tBlock '{}' of size {}", name, size);
         common::BlockVar {
             name: name,
@@ -166,7 +174,44 @@ fn query_blocks(prog: super::Program) -> Vec<common::BlockVar> {
 fn query_parameters(prog: super::Program) -> (Vec<common::UniformVar>, Vec<common::SamplerVar>) {
     let mut uniforms = Vec::new();
     let mut textures = Vec::new();
-
+    let mut num = 0 as gl::types::GLint;
+    // obtain the indices of uniforms in the default block
+    unsafe {    //experimental
+        gl::GetActiveUniformBlockiv(prog, -1, gl::UNIFORM_BLOCK_ACTIVE_UNIFORMS, &mut num);
+    }
+    let mut indices = Vec::from_elem(num as uint, 0 as gl::types::GLint);
+    unsafe {
+        gl::GetActiveUniformBlockiv(prog, -1, gl::UNIFORM_BLOCK_ACTIVE_UNIFORM_INDICES,
+            indices.as_mut_slice().as_mut_ptr());
+    }
+    // prepare the name string
+    let max_len = query_program_int(prog, gl::ACTIVE_UNIFORM_MAX_LENGTH);
+    let mut name = String::with_capacity(max_len as uint);
+    name.grow(max_len as uint, 0u8 as char);
+    // walk the indices
+    for &id in indices.iter() {
+        let mut length = 0 as gl::types::GLint;
+        let mut size = 0 as gl::types::GLint;
+        let mut storage = 0 as gl::types::GLenum;
+        let loc = unsafe {
+            let raw = name.as_slice().as_ptr() as *mut gl::types::GLchar;
+            gl::GetActiveUniform(prog, id as gl::types::GLuint,
+                max_len, &mut length, &mut size, &mut storage, raw);
+            gl::GetUniformLocation(prog, raw as *gl::types::GLchar)
+        };
+        let real_name = name.as_slice().slice_to(length as uint).to_string();
+        match parse_storage(storage) {
+            Var(base, container) => {
+                info!("\t\tUniform[{}] = '{}',\tbase = {}, type = {}",
+                    loc, real_name, base, container);
+            },
+            Sampler(base, sam_type) => {
+                info!("\t\tSampler[{}] = '{}',\tbase = {}, type = {}",
+                    loc, real_name, base, sam_type);
+            },
+            Unknown => fail!("Unrecognized uniform storage: {}", storage)
+        }
+    }
     (uniforms, textures)
 }
 
