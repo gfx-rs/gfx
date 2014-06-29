@@ -16,8 +16,8 @@ use s = super::super::shade;
 use super::gl;
 use std::cell::Cell;
 
-
-pub fn create_object(stage: s::Stage, data: &[u8]) -> (Option<super::Shader>, String) {
+pub fn create_object(stage: s::Stage, data: &[u8])
+        -> (Result<super::Shader, ()>, Option<String>) {
     let target = match stage {
         s::Vertex => gl::VERTEX_SHADER,
         s::Geometry => gl::GEOMETRY_SHADER,
@@ -30,23 +30,35 @@ pub fn create_object(stage: s::Stage, data: &[u8]) -> (Option<super::Shader>, St
     }
     gl::CompileShader(name);
     info!("\tCompiled shader {}", name);
-    // get info message
-    let mut status = 0 as gl::types::GLint;
-    length = 0;
-    unsafe {
-        gl::GetShaderiv(name, gl::COMPILE_STATUS,  &mut status);
-        gl::GetShaderiv(name, gl::INFO_LOG_LENGTH, &mut length);
-    }
-    let mut info = String::with_capacity(length as uint);
-    info.grow(length as uint, 0u8 as char);
-    unsafe {
-        gl::GetShaderInfoLog(name, length, &mut length,
-            info.as_slice().as_ptr() as *mut gl::types::GLchar);
-    }
-    info.truncate(length as uint);
-    (if status != 0 {Some(name)} else {None}, info)
+
+    let status = query_shader_int(name, gl::COMPILE_STATUS);
+    let mut length = query_shader_int(name, gl::INFO_LOG_LENGTH);
+
+    let info = if length > 0 {
+        let mut info = String::with_capacity(length as uint);
+        info.grow(length as uint, 0u8 as char);
+        unsafe {
+            gl::GetShaderInfoLog(name, length, &mut length,
+                info.as_slice().as_ptr() as *mut gl::types::GLchar);
+        }
+        info.truncate(length as uint);
+        Some(info)
+    } else {
+        None
+    };
+
+    let name = if status != 0 { Ok(name) } else { Err(()) };
+
+    (name, info)
 }
 
+fn query_shader_int(shader: super::Shader, query: gl::types::GLenum) -> gl::types::GLint {
+    let mut ret = 0 as gl::types::GLint;
+    unsafe {
+        gl::GetShaderiv(shader, query, &mut ret);
+    }
+    ret
+}
 
 fn query_program_int(prog: super::Program, query: gl::types::GLenum) -> gl::types::GLint {
     let mut ret = 0 as gl::types::GLint;
@@ -244,25 +256,32 @@ fn query_parameters(prog: super::Program) -> (Vec<s::UniformVar>, Vec<s::Sampler
     (uniforms, textures)
 }
 
-
-pub fn create_program(shaders: &[super::Shader]) -> (Option<s::ProgramMeta>, String) {
+pub fn create_program(shaders: &[super::Shader])
+        -> (Result<s::ProgramMeta, ()>, Option<String>) {
     let name = gl::CreateProgram();
     for &sh in shaders.iter() {
         gl::AttachShader(name, sh);
     }
     gl::LinkProgram(name);
     info!("\tLinked program {}", name);
+
     // get info message
     let status      = query_program_int(name, gl::LINK_STATUS);
     let mut length  = query_program_int(name, gl::INFO_LOG_LENGTH);
-    let mut info = String::with_capacity(length as uint);
-    info.grow(length as uint, 0u8 as char);
-    unsafe {
-        gl::GetProgramInfoLog(name, length, &mut length,
-            info.as_slice().as_ptr() as *mut gl::types::GLchar);
-    }
-    info.truncate(length as uint);
-    (if status != 0 {
+    let info = if length > 0 {
+        let mut info = String::with_capacity(length as uint);
+        info.grow(length as uint, 0u8 as char);
+        unsafe {
+            gl::GetProgramInfoLog(name, length, &mut length,
+                info.as_slice().as_ptr() as *mut gl::types::GLchar);
+        }
+        info.truncate(length as uint);
+        Some(info)
+    } else {
+        None
+    };
+
+    let meta = if status != 0 {
         let (uniforms, textures) = query_parameters(name);
         let meta = s::ProgramMeta {
             name: name,
@@ -271,8 +290,10 @@ pub fn create_program(shaders: &[super::Shader]) -> (Option<s::ProgramMeta>, Str
             blocks: query_blocks(name),
             textures: textures,
         };
-        Some(meta)
-    }else {
-        None
-    }, info)
+        Ok(meta)
+    } else {
+        Err(())
+    };
+
+    (meta, info)
 }
