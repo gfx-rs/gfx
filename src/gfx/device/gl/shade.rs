@@ -16,7 +16,7 @@ use s = super::super::shade;
 use super::gl;
 use std::cell::Cell;
 
-pub fn create_object(stage: s::Stage, data: &[u8])
+pub fn create_shader(stage: s::Stage, data: &[u8])
         -> (Result<super::Shader, ()>, Option<String>) {
     let target = match stage {
         s::Vertex => gl::VERTEX_SHADER,
