@@ -71,13 +71,13 @@ impl StorageType {
             gl::FLOAT_VEC4                   => Var(s::BaseF32, s::Vector(4)),
 
             gl::INT                          => Var(s::BaseI32, s::Single),
-            gl::INT_VEC2                     => Var(s::BaseI32, s::Vector(4)),
-            gl::INT_VEC3                     => Var(s::BaseI32, s::Vector(4)),
+            gl::INT_VEC2                     => Var(s::BaseI32, s::Vector(2)),
+            gl::INT_VEC3                     => Var(s::BaseI32, s::Vector(3)),
             gl::INT_VEC4                     => Var(s::BaseI32, s::Vector(4)),
 
             gl::UNSIGNED_INT                 => Var(s::BaseU32, s::Single),
             gl::UNSIGNED_INT_VEC2            => Var(s::BaseU32, s::Vector(2)),
-            gl::UNSIGNED_INT_VEC3            => Var(s::BaseU32, s::Vector(1)),
+            gl::UNSIGNED_INT_VEC3            => Var(s::BaseU32, s::Vector(3)),
             gl::UNSIGNED_INT_VEC4            => Var(s::BaseU32, s::Vector(4)),
 
             gl::BOOL                         => Var(s::BaseBool, s::Single),
