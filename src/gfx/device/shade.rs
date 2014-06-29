@@ -13,22 +13,26 @@
 // limitations under the License.
 
 use std::cell::Cell;
-use std::fmt::Show;
-
+use std::fmt;
 
 // Describing shader parameters
 
 pub type Dimension = u8;
-pub type IsArray = bool;
-pub type IsShadow = bool;
-pub type IsMultiSample = bool;
-pub type IsRect = bool;
 
 #[deriving(Show)]
-pub enum MatrixFormat {
-    ColumnMajor,
-    RowMajor,
-}
+pub enum IsArray { Array, NoArray }
+
+#[deriving(Show)]
+pub enum IsShadow { Shadow, NoShadow }
+
+#[deriving(Show)]
+pub enum IsMultiSample { MultiSample, NoMultiSample }
+
+#[deriving(Show)]
+pub enum IsRect { Rect, NoRect }
+
+#[deriving(Show)]
+pub enum MatrixFormat { ColumnMajor, RowMajor }
 
 #[deriving(Show)]
 pub enum SamplerType {
@@ -41,10 +45,10 @@ pub enum SamplerType {
 
 #[deriving(Show)]
 pub enum BaseType {
-    BaseFloat,
-    BaseDouble,
-    BaseInt,
-    BaseUnsigned,
+    BaseF32,
+    BaseF64,
+    BaseI32,
+    BaseU32,
     BaseBool,
 }
 
@@ -55,7 +59,6 @@ pub enum ContainerType {
     Matrix(MatrixFormat, Dimension, Dimension),
 }
 
-
 // Describing object data
 
 #[deriving(Show)]
@@ -65,7 +68,6 @@ pub enum Stage {
     Fragment,
 }
 
-
 // Describing program data
 
 pub type Location = uint;
@@ -73,11 +75,30 @@ pub type Location = uint;
 //#[deriving(Show)] // unable to derive fixed arrays
 pub enum UniformValue {
     ValueUnitialized,
-    ValueInt(i32),
-    ValueFloat(f32),
-    ValueIntVec([i32, ..4]),
-    ValueFloatVec([f32, ..4]),
-    ValueMatrix([[f32, ..4], ..4]),
+    ValueI32(i32),
+    ValueF32(f32),
+    ValueI32Vec([i32, ..4]),
+    ValueF32Vec([f32, ..4]),
+    ValueF32Matrix([[f32, ..4], ..4]),
+}
+
+impl fmt::Show for UniformValue {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            ValueUnitialized      => write!(f, "ValueUnitialized"),
+            ValueI32(x)           => write!(f, "ValueI32({})", x),
+            ValueF32(x)           => write!(f, "ValueF32({})", x),
+            ValueI32Vec(ref v)    => write!(f, "ValueI32Vec({})", v.as_slice()),
+            ValueF32Vec(ref v)    => write!(f, "ValueF32Vec({})", v.as_slice()),
+            ValueF32Matrix(ref m) => {
+                try!(write!(f, "ValueF32Matrix("));
+                for v in m.iter() {
+                    try!(write!(f, "{}", v.as_slice()));
+                }
+                write!(f, ")")
+            },
+        }
+    }
 }
 
 #[deriving(Show)]
@@ -89,7 +110,7 @@ pub struct Attribute {
     pub container: ContainerType,
 }
 
-//#[deriving(Show)]
+#[deriving(Show)]
 pub struct UniformVar {
     pub name: String,
     pub location: Location,
@@ -116,7 +137,7 @@ pub struct SamplerVar {
     pub active_slot: Cell<u8>, // Active texture binding
 }
 
-//#[deriving(Show)]
+#[deriving(Show)]
 pub struct ProgramMeta {
     pub name: super::dev::Program,
     pub attributes: Vec<Attribute>,
