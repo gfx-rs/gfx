@@ -94,8 +94,8 @@ impl Device {
     /// Shader Object
 
     pub fn create_shader(&self, stage: super::shade::Stage, data: &[u8]) -> Shader {
-        let (name, info) = shade::create_object(stage, data);
-        info.map(|info| warn!("\tObject compile log: {}", info));
+        let (name, info) = shade::create_shader(stage, data);
+        info.map(|info| warn!("\tShader compile log: {}", info));
         name.unwrap_or(0)
     }
 
