@@ -66,7 +66,17 @@ fn main() {
         }
     });
 
-    while device.update() {
+    // FIXME: some task fails when the window closes
+    while device.update() && !window.should_close() {
         // update device
+        glfw.poll_events();
+        for (_, event) in glfw::flush_messages(&events) {
+            match event {
+                glfw::KeyEvent(glfw::KeyEscape, _, glfw::Press, _) => {
+                    window.set_should_close(true);
+                },
+                _ => {},
+            }
+        }
     }
 }
