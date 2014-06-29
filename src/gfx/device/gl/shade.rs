@@ -141,7 +141,10 @@ fn query_attributes(prog: super::Program) -> Vec<s::Attribute> {
         let real_name = name.as_slice().slice_to(length as uint).to_string();
         let (base, container) = match StorageType::new(storage) {
             Var(b, c) => (b, c),
-            _ => fail!("Unrecognized attribute storage: {}", storage)
+            _ => {
+                error!("Unrecognized attribute storage: {}", storage);
+                (s::BaseF32, s::Single)
+            }
         };
         info!("\t\tAttrib[{}] = '{}'\t{}\t{}", loc, real_name, base, container);
         s::Attribute {
@@ -238,7 +241,9 @@ fn query_parameters(prog: super::Program) -> (Vec<s::UniformVar>, Vec<s::Sampler
                     active_slot: Cell::new(0),
                 });
             },
-            Unknown => fail!("Unrecognized uniform storage: {}", storage)
+            Unknown => {
+                error!("Unrecognized uniform storage: {}", storage);
+            }
         }
     }
     (uniforms, textures)

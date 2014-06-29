@@ -49,7 +49,7 @@ pub enum Reply {
     ReplyNewBuffer(dev::Buffer),
     ReplyNewArrayBuffer(dev::ArrayBuffer),
     ReplyNewShader(dev::Shader),
-    ReplyNewProgram(dev::Program),
+    ReplyNewProgram(Option<shade::ProgramMeta>),
 }
 
 pub struct Client {
@@ -93,10 +93,10 @@ impl Client {
         }
     }
 
-    pub fn new_program(&self, shaders: Vec<dev::Shader>) -> dev::Program {
+    pub fn new_program(&self, shaders: Vec<dev::Shader>) -> Option<shade::ProgramMeta> {
         self.stream.send(CallNewProgram(shaders));
         match self.stream.recv() {
-            ReplyNewProgram(name) => name,
+            ReplyNewProgram(meta) => meta,
             _ => fail!("unexpected device reply")
         }
     }
@@ -166,9 +166,9 @@ impl<Api, P: GraphicsContext<Api>> Server<P> {
                     let name = self.device.create_shader(stage, code.as_slice());
                     self.stream.send(ReplyNewShader(name));
                 },
-                Ok(CallNewProgram(code)) => {
-                    let name = self.device.create_program(code.as_slice());
-                    self.stream.send(ReplyNewProgram(name));
+                Ok(CallNewProgram(shaders)) => {
+                    let meta = self.device.create_program(shaders.as_slice());
+                    self.stream.send(ReplyNewProgram(meta));
                 },
                 Err(comm::Empty) => break,
                 Err(comm::Disconnected) => return false,
