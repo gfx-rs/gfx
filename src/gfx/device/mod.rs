@@ -49,7 +49,7 @@ pub enum Reply {
     ReplyNewBuffer(dev::Buffer),
     ReplyNewArrayBuffer(dev::ArrayBuffer),
     ReplyNewShader(dev::Shader),
-    ReplyNewProgram(Option<shade::ProgramMeta>),
+    ReplyNewProgram(Result<shade::ProgramMeta, ()>),
 }
 
 pub struct Client {
@@ -93,7 +93,7 @@ impl Client {
         }
     }
 
-    pub fn new_program(&self, shaders: Vec<dev::Shader>) -> Option<shade::ProgramMeta> {
+    pub fn new_program(&self, shaders: Vec<dev::Shader>) -> Result<shade::ProgramMeta, ()> {
         self.stream.send(CallNewProgram(shaders));
         match self.stream.recv() {
             ReplyNewProgram(meta) => meta,

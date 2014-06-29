@@ -175,13 +175,13 @@ impl Server {
                 Ok(CallNewProgram(vs, fs)) => {
                     let h_vs = self.device.new_shader(Vertex, vs);
                     let h_fs = self.device.new_shader(Fragment, fs);
-                    let prog_opt = self.device.new_program(vec!(h_vs, h_fs));
-                    let handle = match prog_opt {
-                        Some(prog) => {
+                    let prog = self.device.new_program(vec![h_vs, h_fs]);
+                    let handle = match prog {
+                        Ok(prog) => {
                             self.cache.programs.push(prog);
-                            self.cache.programs.len()-1
+                            self.cache.programs.len() - 1
                         },
-                        None => 0,
+                        Err(_) => 0,
                     };
                     self.stream.send(ReplyProgram(handle));
                 },
