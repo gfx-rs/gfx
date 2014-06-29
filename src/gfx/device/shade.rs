@@ -82,6 +82,25 @@ pub enum UniformValue {
     ValueF32Matrix([[f32, ..4], ..4]),
 }
 
+impl fmt::Show for UniformValue {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            ValueUnitialized      => write!(f, "ValueUnitialized"),
+            ValueI32(x)           => write!(f, "ValueI32({})", x),
+            ValueF32(x)           => write!(f, "ValueF32({})", x),
+            ValueI32Vec(ref v)    => write!(f, "ValueI32Vec({})", v.as_slice()),
+            ValueF32Vec(ref v)    => write!(f, "ValueF32Vec({})", v.as_slice()),
+            ValueF32Matrix(ref m) => {
+                try!(write!(f, "ValueF32Matrix("));
+                for v in m.iter() {
+                    try!(write!(f, "{}", v.as_slice()));
+                }
+                write!(f, ")")
+            },
+        }
+    }
+}
+
 #[deriving(Show)]
 pub struct Attribute {
     pub name: String,
@@ -91,7 +110,7 @@ pub struct Attribute {
     pub container: ContainerType,
 }
 
-//#[deriving(Show)]
+#[deriving(Show)]
 pub struct UniformVar {
     pub name: String,
     pub location: Location,
@@ -118,7 +137,7 @@ pub struct SamplerVar {
     pub active_slot: Cell<u8>, // Active texture binding
 }
 
-//#[deriving(Show)]
+#[deriving(Show)]
 pub struct ProgramMeta {
     pub name: super::dev::Program,
     pub attributes: Vec<Attribute>,
