@@ -103,15 +103,12 @@ impl Device {
 
     /// Shader Program
 
-    pub fn create_program(&self, shaders: &[Shader]) -> Program {
+    pub fn create_program(&self, shaders: &[Shader]) -> Option<super::shade::ProgramMeta> {
         let (meta_opt, info) = shade::create_program(shaders);
         if info.len() != 0 {
             warn!("\tProgram link log: {}", info);
         }
-        match meta_opt {
-            Some(meta) => meta.name,
-            None => 0,
-        }
+        meta_opt
     }
 
     pub fn bind_program(&self, program: Program) {

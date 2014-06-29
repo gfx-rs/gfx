@@ -143,7 +143,7 @@ fn query_attributes(prog: super::Program) -> Vec<s::Attribute> {
             Var(b, c) => (b, c),
             _ => {
                 error!("Unrecognized attribute storage: {}", storage);
-                (common::BaseFloat, common::Single)
+                (s::BaseF32, s::Single)
             }
         };
         info!("\t\tAttrib[{}] = '{}'\t{}\t{}", loc, real_name, base, container);
