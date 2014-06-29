@@ -31,8 +31,8 @@ pub fn create_object(stage: s::Stage, data: &[u8])
     gl::CompileShader(name);
     info!("\tCompiled shader {}", name);
 
-    let status = query_shader_int(name, gl::COMPILE_STATUS);
-    let mut length = query_shader_int(name, gl::INFO_LOG_LENGTH);
+    let status = get_shader_iv(name, gl::COMPILE_STATUS);
+    let mut length = get_shader_iv(name, gl::INFO_LOG_LENGTH);
 
     let info = if length > 0 {
         let mut info = String::with_capacity(length as uint);
@@ -52,20 +52,16 @@ pub fn create_object(stage: s::Stage, data: &[u8])
     (name, info)
 }
 
-fn query_shader_int(shader: super::Shader, query: gl::types::GLenum) -> gl::types::GLint {
-    let mut ret = 0 as gl::types::GLint;
-    unsafe {
-        gl::GetShaderiv(shader, query, &mut ret);
-    }
-    ret
+fn get_shader_iv(shader: super::Shader, query: gl::types::GLenum) -> gl::types::GLint {
+    let mut iv = 0;
+    unsafe { gl::GetShaderiv(shader, query, &mut iv) };
+    iv
 }
 
-fn query_program_int(prog: super::Program, query: gl::types::GLenum) -> gl::types::GLint {
-    let mut ret = 0 as gl::types::GLint;
-    unsafe {
-        gl::GetProgramiv(prog, query, &mut ret);
-    }
-    ret
+fn get_program_iv(program: super::Program, query: gl::types::GLenum) -> gl::types::GLint {
+    let mut iv = 0;
+    unsafe { gl::GetProgramiv(program, query, &mut iv) };
+    iv
 }
 
 enum StorageType {
@@ -137,8 +133,8 @@ impl StorageType {
 }
 
 fn query_attributes(prog: super::Program) -> Vec<s::Attribute> {
-    let num     = query_program_int(prog, gl::ACTIVE_ATTRIBUTES);
-    let max_len = query_program_int(prog, gl::ACTIVE_ATTRIBUTE_MAX_LENGTH);
+    let num = get_program_iv(prog, gl::ACTIVE_ATTRIBUTES);
+    let max_len = get_program_iv(prog, gl::ACTIVE_ATTRIBUTE_MAX_LENGTH);
     let mut name = String::with_capacity(max_len as uint);
     name.grow(max_len as uint, 0u8 as char);
     range(0, num as gl::types::GLuint).map(|i| {
@@ -167,7 +163,7 @@ fn query_attributes(prog: super::Program) -> Vec<s::Attribute> {
 }
 
 fn query_blocks(prog: super::Program) -> Vec<s::BlockVar> {
-    let num     = query_program_int(prog, gl::ACTIVE_UNIFORM_BLOCKS);
+    let num = get_program_iv(prog, gl::ACTIVE_UNIFORM_BLOCKS);
     range(0, num as gl::types::GLuint).map(|i| {
         let mut length  = 0 as gl::types::GLint;
         let mut size    = 0 as gl::types::GLint;
@@ -203,7 +199,7 @@ fn query_blocks(prog: super::Program) -> Vec<s::BlockVar> {
 fn query_parameters(prog: super::Program) -> (Vec<s::UniformVar>, Vec<s::SamplerVar>) {
     let mut uniforms = Vec::new();
     let mut textures = Vec::new();
-    let total_num = query_program_int(prog, gl::ACTIVE_UNIFORMS);
+    let total_num = get_program_iv(prog, gl::ACTIVE_UNIFORMS);
     let indices: Vec<gl::types::GLuint> = range(0, total_num as gl::types::GLuint).collect();
     let mut block_indices = Vec::from_elem(total_num as uint, 0 as gl::types::GLint);
     unsafe {
@@ -213,7 +209,7 @@ fn query_parameters(prog: super::Program) -> (Vec<s::UniformVar>, Vec<s::Sampler
         //TODO: UNIFORM_IS_ROW_MAJOR
     }
     // prepare the name string
-    let max_len = query_program_int(prog, gl::ACTIVE_UNIFORM_MAX_LENGTH);
+    let max_len = get_program_iv(prog, gl::ACTIVE_UNIFORM_MAX_LENGTH);
     let mut name = String::with_capacity(max_len as uint);
     name.grow(max_len as uint, 0u8 as char);
     // walk the indices
@@ -266,8 +262,8 @@ pub fn create_program(shaders: &[super::Shader])
     info!("\tLinked program {}", name);
 
     // get info message
-    let status      = query_program_int(name, gl::LINK_STATUS);
-    let mut length  = query_program_int(name, gl::INFO_LOG_LENGTH);
+    let status = get_program_iv(name, gl::LINK_STATUS);
+    let mut length  = get_program_iv(name, gl::INFO_LOG_LENGTH);
     let info = if length > 0 {
         let mut info = String::with_capacity(length as uint);
         info.grow(length as uint, 0u8 as char);
