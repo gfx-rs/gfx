@@ -18,7 +18,7 @@ use std::kinds::marker;
 
 use device;
 
-use device::shade::{Vertex, Fragment};
+use device::shade::{ProgramMeta, Vertex, Fragment};
 pub use ProgramHandle = device::dev::Program;
 pub use MeshHandle = self::mesh::Mesh;
 pub type Environment = ();  // placeholder
@@ -118,6 +118,17 @@ impl Server {
                 self.device.bind_frame_buffer(self.default_frame_buffer);
             }
         }
+    }
+
+    fn bind_mesh(&mut self, mesh: MeshHandle, prog: ProgramMeta) -> bool {
+        for sat in prog.attributes.iter() {
+            match mesh.attributes.iter().find(|a| a.name.as_slice() == sat.name.as_slice()) {
+                Some(vat) => self.device.bind_attribute(sat.location as u8,
+                    vat.buffer, mesh.num_vertices, vat.offset as u32, vat.stride as u32),
+                None => return false
+            }
+        }
+        true
     }
 
     pub fn update(&mut self) -> bool {
