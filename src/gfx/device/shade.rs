@@ -13,8 +13,7 @@
 // limitations under the License.
 
 use std::cell::Cell;
-use std::fmt::Show;
-
+use std::fmt;
 
 // Describing shader parameters
 
@@ -46,10 +45,10 @@ pub enum SamplerType {
 
 #[deriving(Show)]
 pub enum BaseType {
-    BaseFloat,
-    BaseDouble,
-    BaseInt,
-    BaseUnsigned,
+    BaseF32,
+    BaseF64,
+    BaseI32,
+    BaseU32,
     BaseBool,
 }
 
@@ -60,7 +59,6 @@ pub enum ContainerType {
     Matrix(MatrixFormat, Dimension, Dimension),
 }
 
-
 // Describing object data
 
 #[deriving(Show)]
@@ -70,7 +68,6 @@ pub enum Stage {
     Fragment,
 }
 
-
 // Describing program data
 
 pub type Location = uint;
@@ -78,11 +75,11 @@ pub type Location = uint;
 //#[deriving(Show)] // unable to derive fixed arrays
 pub enum UniformValue {
     ValueUnitialized,
-    ValueInt(i32),
-    ValueFloat(f32),
-    ValueIntVec([i32, ..4]),
-    ValueFloatVec([f32, ..4]),
-    ValueMatrix([[f32, ..4], ..4]),
+    ValueI32(i32),
+    ValueF32(f32),
+    ValueI32Vec([i32, ..4]),
+    ValueF32Vec([f32, ..4]),
+    ValueF32Matrix([[f32, ..4], ..4]),
 }
 
 #[deriving(Show)]
