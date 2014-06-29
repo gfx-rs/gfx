@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common = super::super::shade;
+use s = super::super::shade;
 use super::gl;
 use std::cell::Cell;
 
 
-pub fn create_object(stage: common::Stage, data: &[u8]) -> (Option<super::Shader>, String) {
+pub fn create_object(stage: s::Stage, data: &[u8]) -> (Option<super::Shader>, String) {
     let target = match stage {
-        common::Vertex => gl::VERTEX_SHADER,
-        common::Geometry => gl::GEOMETRY_SHADER,
-        common::Fragment => gl::FRAGMENT_SHADER,
+        s::Vertex => gl::VERTEX_SHADER,
+        s::Geometry => gl::GEOMETRY_SHADER,
+        s::Fragment => gl::FRAGMENT_SHADER,
     };
     let name = gl::CreateShader(target);
     let mut length = data.len() as gl::types::GLint;
@@ -56,93 +56,75 @@ fn query_program_int(prog: super::Program, query: gl::types::GLenum) -> gl::type
     ret
 }
 
-enum ParseResult {
-    Var(common::BaseType, common::ContainerType),
-    Sampler(common::BaseType, common::SamplerType),
+enum StorageType {
+    Var(s::BaseType, s::ContainerType),
+    Sampler(s::BaseType, s::SamplerType),
     Unknown,
 }
 
-fn parse_storage(storage: gl::types::GLenum) -> ParseResult {
-    match storage {
-        // float vecs
-        gl::FLOAT =>
-            Var(common::BaseFloat, common::Single),
-        gl::FLOAT_VEC2 | gl::FLOAT_VEC3 | gl::FLOAT_VEC4 =>
-            Var(common::BaseFloat, common::Vector((storage+2-gl::FLOAT_VEC2) as u8)),
-        // int vecs
-        gl::INT =>
-            Var(common::BaseInt, common::Single),
-        gl::INT_VEC2 | gl::INT_VEC3 | gl::INT_VEC4 =>
-            Var(common::BaseInt, common::Vector((storage+2-gl::INT_VEC2) as u8)),
-        // unsigned vecs
-        gl::UNSIGNED_INT =>
-            Var(common::BaseUnsigned, common::Single),
-        gl::UNSIGNED_INT_VEC2 | gl::UNSIGNED_INT_VEC3 | gl::UNSIGNED_INT_VEC4 =>
-            Var(common::BaseUnsigned, common::Vector((storage+2-gl::UNSIGNED_INT_VEC2) as u8)),
-        // bool vecs
-        gl::BOOL =>
-            Var(common::BaseBool, common::Single),
-        gl::BOOL_VEC2 | gl::BOOL_VEC3 | gl::BOOL_VEC4 =>
-            Var(common::BaseBool, common::Vector((storage+2-gl::BOOL_VEC2) as u8)),
-        // float matrices
-        gl::FLOAT_MAT2 | gl::FLOAT_MAT3 | gl::FLOAT_MAT4 => {
-            let dim = (storage+2-gl::FLOAT_MAT2) as u8;
-            Var(common::BaseFloat, common::Matrix(common::ColumnMajor, dim, dim))
-        },
-        gl::FLOAT_MAT2x3 =>
-            Var(common::BaseFloat, common::Matrix(common::ColumnMajor, 2, 3)),
-        gl::FLOAT_MAT2x4 =>
-            Var(common::BaseFloat, common::Matrix(common::ColumnMajor, 2, 4)),
-        gl::FLOAT_MAT3x2 =>
-            Var(common::BaseFloat, common::Matrix(common::ColumnMajor, 3, 2)),
-        gl::FLOAT_MAT3x4 =>
-            Var(common::BaseFloat, common::Matrix(common::ColumnMajor, 3, 4)),
-        gl::FLOAT_MAT4x2 =>
-            Var(common::BaseFloat, common::Matrix(common::ColumnMajor, 4, 2)),
-        gl::FLOAT_MAT4x3 =>
-            Var(common::BaseFloat, common::Matrix(common::ColumnMajor, 4, 3)),
-        // double matrices //TODO
-        // float samplers 1D
-        gl::SAMPLER_1D =>
-            Sampler(common::BaseFloat, common::Sampler1D(false, false)),
-        gl::SAMPLER_1D_ARRAY =>
-            Sampler(common::BaseFloat, common::Sampler1D(true, false)),
-        gl::SAMPLER_1D_SHADOW =>
-            Sampler(common::BaseFloat, common::Sampler1D(false, true)),
-        gl::SAMPLER_1D_ARRAY_SHADOW =>
-            Sampler(common::BaseFloat, common::Sampler1D(true, true)),
-        // float samplers 2D
-        gl::SAMPLER_2D =>
-            Sampler(common::BaseFloat, common::Sampler2D(false, false, false, false)),
-        gl::SAMPLER_2D_ARRAY =>
-            Sampler(common::BaseFloat, common::Sampler2D(true, false, false, false)),
-        gl::SAMPLER_2D_SHADOW =>
-            Sampler(common::BaseFloat, common::Sampler2D(false, true, false, false)),
-        gl::SAMPLER_2D_MULTISAMPLE =>
-            Sampler(common::BaseFloat, common::Sampler2D(false, false, true, false)),
-        gl::SAMPLER_2D_RECT =>
-            Sampler(common::BaseFloat, common::Sampler2D(false, false, false, true)),
-        gl::SAMPLER_2D_ARRAY_SHADOW =>
-            Sampler(common::BaseFloat, common::Sampler2D(true, true, false, false)),
-        gl::SAMPLER_2D_MULTISAMPLE_ARRAY =>
-            Sampler(common::BaseFloat, common::Sampler2D(true, false, true, false)),
-        gl::SAMPLER_2D_RECT_SHADOW =>
-            Sampler(common::BaseFloat, common::Sampler2D(false, true, false, true)),
-        // float samplers 3D and Cube
-        gl::SAMPLER_3D =>
-            Sampler(common::BaseFloat, common::Sampler3D),
-        gl::SAMPLER_CUBE =>
-            Sampler(common::BaseFloat, common::SamplerCube(false)),
-        gl::SAMPLER_CUBE_SHADOW =>
-            Sampler(common::BaseFloat, common::SamplerCube(true)),
-        // int samplers //TODO
-        // unsigned samplers //TODO
-        // unknown
-        _ => Unknown
+impl StorageType {
+    fn new(storage: gl::types::GLenum) -> StorageType {
+        match storage {
+            gl::FLOAT                        => Var(s::BaseFloat, s::Single),
+            gl::FLOAT_VEC2                   => Var(s::BaseFloat, s::Vector(2)),
+            gl::FLOAT_VEC3                   => Var(s::BaseFloat, s::Vector(3)),
+            gl::FLOAT_VEC4                   => Var(s::BaseFloat, s::Vector(4)),
+
+            gl::INT                          => Var(s::BaseInt, s::Single),
+            gl::INT_VEC2                     => Var(s::BaseInt, s::Vector(4)),
+            gl::INT_VEC3                     => Var(s::BaseInt, s::Vector(4)),
+            gl::INT_VEC4                     => Var(s::BaseInt, s::Vector(4)),
+
+            gl::UNSIGNED_INT                 => Var(s::BaseUnsigned, s::Single),
+            gl::UNSIGNED_INT_VEC2            => Var(s::BaseUnsigned, s::Vector(2)),
+            gl::UNSIGNED_INT_VEC3            => Var(s::BaseUnsigned, s::Vector(1)),
+            gl::UNSIGNED_INT_VEC4            => Var(s::BaseUnsigned, s::Vector(4)),
+
+            gl::BOOL                         => Var(s::BaseBool, s::Single),
+            gl::BOOL_VEC2                    => Var(s::BaseBool, s::Vector(2)),
+            gl::BOOL_VEC3                    => Var(s::BaseBool, s::Vector(3)),
+            gl::BOOL_VEC4                    => Var(s::BaseBool, s::Vector(4)),
+
+            gl::FLOAT_MAT2                   => Var(s::BaseFloat, s::Matrix(s::ColumnMajor, 2, 2)),
+            gl::FLOAT_MAT3                   => Var(s::BaseFloat, s::Matrix(s::ColumnMajor, 3, 3)),
+            gl::FLOAT_MAT4                   => Var(s::BaseFloat, s::Matrix(s::ColumnMajor, 4, 4)),
+            gl::FLOAT_MAT2x3                 => Var(s::BaseFloat, s::Matrix(s::ColumnMajor, 2, 3)),
+            gl::FLOAT_MAT2x4                 => Var(s::BaseFloat, s::Matrix(s::ColumnMajor, 2, 4)),
+            gl::FLOAT_MAT3x2                 => Var(s::BaseFloat, s::Matrix(s::ColumnMajor, 3, 2)),
+            gl::FLOAT_MAT3x4                 => Var(s::BaseFloat, s::Matrix(s::ColumnMajor, 3, 4)),
+            gl::FLOAT_MAT4x2                 => Var(s::BaseFloat, s::Matrix(s::ColumnMajor, 4, 2)),
+            gl::FLOAT_MAT4x3                 => Var(s::BaseFloat, s::Matrix(s::ColumnMajor, 4, 3)),
+
+            // TODO: double matrices
+
+            gl::SAMPLER_1D                   => Sampler(s::BaseFloat, s::Sampler1D(s::NoArray, s::NoShadow)),
+            gl::SAMPLER_1D_ARRAY             => Sampler(s::BaseFloat, s::Sampler1D(s::Array,   s::NoShadow)),
+            gl::SAMPLER_1D_SHADOW            => Sampler(s::BaseFloat, s::Sampler1D(s::NoArray, s::Shadow)),
+            gl::SAMPLER_1D_ARRAY_SHADOW      => Sampler(s::BaseFloat, s::Sampler1D(s::Array,   s::Shadow)),
+
+            gl::SAMPLER_2D                   => Sampler(s::BaseFloat, s::Sampler2D(s::NoArray, s::NoShadow, s::NoMultiSample, s::NoRect)),
+            gl::SAMPLER_2D_ARRAY             => Sampler(s::BaseFloat, s::Sampler2D(s::Array,   s::NoShadow, s::NoMultiSample, s::NoRect)),
+            gl::SAMPLER_2D_SHADOW            => Sampler(s::BaseFloat, s::Sampler2D(s::NoArray, s::Shadow,   s::NoMultiSample, s::NoRect)),
+            gl::SAMPLER_2D_MULTISAMPLE       => Sampler(s::BaseFloat, s::Sampler2D(s::NoArray, s::NoShadow, s::MultiSample,   s::NoRect)),
+            gl::SAMPLER_2D_RECT              => Sampler(s::BaseFloat, s::Sampler2D(s::NoArray, s::NoShadow, s::NoMultiSample, s::Rect)),
+            gl::SAMPLER_2D_ARRAY_SHADOW      => Sampler(s::BaseFloat, s::Sampler2D(s::Array,   s::Shadow,   s::NoMultiSample, s::NoRect)),
+            gl::SAMPLER_2D_MULTISAMPLE_ARRAY => Sampler(s::BaseFloat, s::Sampler2D(s::Array,   s::NoShadow, s::MultiSample,   s::NoRect)),
+            gl::SAMPLER_2D_RECT_SHADOW       => Sampler(s::BaseFloat, s::Sampler2D(s::NoArray, s::Shadow,   s::NoMultiSample, s::Rect)),
+
+            gl::SAMPLER_3D                   => Sampler(s::BaseFloat, s::Sampler3D),
+            gl::SAMPLER_CUBE                 => Sampler(s::BaseFloat, s::SamplerCube(s::NoShadow)),
+            gl::SAMPLER_CUBE_SHADOW          => Sampler(s::BaseFloat, s::SamplerCube(s::Shadow)),
+
+            // TODO: int samplers
+
+            // TODO: unsigned samplers
+
+            _ => Unknown,
+        }
     }
 }
 
-fn query_attributes(prog: super::Program) -> Vec<common::Attribute> {
+fn query_attributes(prog: super::Program) -> Vec<s::Attribute> {
     let num     = query_program_int(prog, gl::ACTIVE_ATTRIBUTES);
     let max_len = query_program_int(prog, gl::ACTIVE_ATTRIBUTE_MAX_LENGTH);
     let mut name = String::with_capacity(max_len as uint);
@@ -157,12 +139,12 @@ fn query_attributes(prog: super::Program) -> Vec<common::Attribute> {
             gl::GetAttribLocation(prog, raw as *gl::types::GLchar)
         };
         let real_name = name.as_slice().slice_to(length as uint).to_string();
-        let (base, container) = match parse_storage(storage) {
+        let (base, container) = match StorageType::new(storage) {
             Var(b, c) => (b, c),
             _ => fail!("Unrecognized attribute storage: {}", storage)
         };
         info!("\t\tAttrib[{}] = '{}'\t{}\t{}", loc, real_name, base, container);
-        common::Attribute {
+        s::Attribute {
             name: real_name,
             location: loc as uint,
             count: size as uint,
@@ -172,7 +154,7 @@ fn query_attributes(prog: super::Program) -> Vec<common::Attribute> {
     }).collect()
 }
 
-fn query_blocks(prog: super::Program) -> Vec<common::BlockVar> {
+fn query_blocks(prog: super::Program) -> Vec<s::BlockVar> {
     let num     = query_program_int(prog, gl::ACTIVE_UNIFORM_BLOCKS);
     range(0, num as gl::types::GLuint).map(|i| {
         let mut length  = 0 as gl::types::GLint;
@@ -197,7 +179,7 @@ fn query_blocks(prog: super::Program) -> Vec<common::BlockVar> {
         }
         name.truncate(actual_name_size as uint);
         info!("\t\tBlock '{}' of size {}", name, size);
-        common::BlockVar {
+        s::BlockVar {
             name: name,
             size: size as uint,
             usage: usage,
@@ -206,7 +188,7 @@ fn query_blocks(prog: super::Program) -> Vec<common::BlockVar> {
     }).collect()
 }
 
-fn query_parameters(prog: super::Program) -> (Vec<common::UniformVar>, Vec<common::SamplerVar>) {
+fn query_parameters(prog: super::Program) -> (Vec<s::UniformVar>, Vec<s::SamplerVar>) {
     let mut uniforms = Vec::new();
     let mut textures = Vec::new();
     let total_num = query_program_int(prog, gl::ACTIVE_UNIFORMS);
@@ -234,21 +216,21 @@ fn query_parameters(prog: super::Program) -> (Vec<common::UniformVar>, Vec<commo
             gl::GetUniformLocation(prog, raw as *gl::types::GLchar)
         };
         let real_name = name.as_slice().slice_to(length as uint).to_string();
-        match parse_storage(storage) {
+        match StorageType::new(storage) {
             Var(base, container) => {
                 info!("\t\tUniform[{}] = '{}'\t{}\t{}", loc, real_name, base, container);
-                uniforms.push(common::UniformVar {
+                uniforms.push(s::UniformVar {
                     name: real_name,
                     location: loc as uint,
                     count: size as uint,
                     base_type: base,
                     container: container,
-                    active_value: Cell::new(common::ValueUnitialized),
+                    active_value: Cell::new(s::ValueUnitialized),
                 });
             },
             Sampler(base, sam_type) => {
                 info!("\t\tSampler[{}] = '{}'\t{}\t{}", loc, real_name, base, sam_type);
-                textures.push(common::SamplerVar {
+                textures.push(s::SamplerVar {
                     name: real_name,
                     location: loc as uint,
                     base_type: base,
@@ -263,7 +245,7 @@ fn query_parameters(prog: super::Program) -> (Vec<common::UniformVar>, Vec<commo
 }
 
 
-pub fn create_program(shaders: &[super::Shader]) -> (Option<common::ProgramMeta>, String) {
+pub fn create_program(shaders: &[super::Shader]) -> (Option<s::ProgramMeta>, String) {
     let name = gl::CreateProgram();
     for &sh in shaders.iter() {
         gl::AttachShader(name, sh);
@@ -282,8 +264,8 @@ pub fn create_program(shaders: &[super::Shader]) -> (Option<common::ProgramMeta>
     info.truncate(length as uint);
     (if status != 0 {
         let (uniforms, textures) = query_parameters(name);
-        let meta = common::ProgramMeta {
-            name: name, 
+        let meta = s::ProgramMeta {
+            name: name,
             attributes: query_attributes(name),
             uniforms: uniforms,
             blocks: query_blocks(name),

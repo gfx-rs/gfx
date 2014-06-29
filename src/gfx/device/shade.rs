@@ -19,16 +19,21 @@ use std::fmt::Show;
 // Describing shader parameters
 
 pub type Dimension = u8;
-pub type IsArray = bool;
-pub type IsShadow = bool;
-pub type IsMultiSample = bool;
-pub type IsRect = bool;
 
 #[deriving(Show)]
-pub enum MatrixFormat {
-    ColumnMajor,
-    RowMajor,
-}
+pub enum IsArray { Array, NoArray }
+
+#[deriving(Show)]
+pub enum IsShadow { Shadow, NoShadow }
+
+#[deriving(Show)]
+pub enum IsMultiSample { MultiSample, NoMultiSample }
+
+#[deriving(Show)]
+pub enum IsRect { Rect, NoRect }
+
+#[deriving(Show)]
+pub enum MatrixFormat { ColumnMajor, RowMajor }
 
 #[deriving(Show)]
 pub enum SamplerType {
