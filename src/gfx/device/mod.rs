@@ -119,7 +119,6 @@ impl Client {
 }
 
 pub struct Server<P> {
-    no_send: marker::NoSend,
     no_share: marker::NoShare,
     stream: DuplexStream<Reply, Request>,
     graphics_context: P,
@@ -195,7 +194,6 @@ pub fn init<Api, P: GraphicsContext<Api>>(graphics_context: P, options: super::O
     };
     let dev = Device::new(options);
     let server = Server {
-        no_send: marker::NoSend,
         no_share: marker::NoShare,
         stream: server_stream,
         graphics_context: graphics_context,
