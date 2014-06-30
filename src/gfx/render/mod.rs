@@ -19,6 +19,7 @@ use std::kinds::marker;
 use device;
 
 use device::shade::{Vertex, Fragment};
+pub use BufferHandle = device::dev::Buffer;
 pub use ProgramHandle = device::dev::Program;
 pub use MeshHandle = self::mesh::Mesh;
 pub type Environment = ();  // placeholder
@@ -31,6 +32,7 @@ pub enum Request {
     // Requests that require a reply:
     CallNewProgram(Vec<u8>, Vec<u8>),
     CallNewMesh(mesh::VertexCount, Vec<f32>, u8, u8),
+    CallNewIndexBuffer(Vec<u16>),
     // Requests that don't expect a reply:
     CastClear(target::ClearData, Option<target::Frame>),
     CastDraw(MeshHandle, mesh::Slice, Option<target::Frame>, ProgramHandle),
@@ -41,6 +43,7 @@ pub enum Request {
 pub enum Reply {
     ReplyProgram(ProgramHandle),
     ReplyMesh(MeshHandle),
+    ReplyIndexBuffer(BufferHandle),
 }
 
 pub struct Client {
@@ -81,7 +84,17 @@ impl Client {
             _ => fail!("unknown reply")
         }
     }
+
+    pub fn create_index_buffer(&self, data: Vec<u16>) -> BufferHandle {
+        self.stream.send(CallNewIndexBuffer(data));
+        // TODO: delay recv()
+        match self.stream.recv() {
+            ReplyIndexBuffer(buffer) => buffer,
+            _ => fail!("unknown reply")
+        }
+    }
 }
+
 
 struct Server {
     no_send: marker::NoSend,
@@ -164,7 +177,7 @@ impl Server {
                     self.stream.send(ReplyProgram(prog));
                 },
                 Ok(CallNewMesh(num_vert, data, count, stride)) => {
-                    let buffer = self.device.new_buffer(data);
+                    let buffer = self.device.new_vertex_buffer(data);
                     let mut mesh = MeshHandle::new(num_vert);
                     mesh.attributes.push(mesh::Attribute {
                         buffer: buffer,
@@ -176,6 +189,10 @@ impl Server {
                         name: "a_Pos".to_string(),
                     });
                     self.stream.send(ReplyMesh(mesh));
+                },
+                Ok(CallNewIndexBuffer(data)) => {
+                    let buffer = self.device.new_index_buffer(data);
+                    self.stream.send(ReplyIndexBuffer(buffer));
                 },
                 Err(comm::Empty)  => {
                     break; // finished all the pending rendering messages

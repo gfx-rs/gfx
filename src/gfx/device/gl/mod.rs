@@ -130,11 +130,12 @@ impl Device {
     }
 
     pub fn draw_index(&self, start: u16, count: u16) {
+        let offset = start * (std::mem::size_of::<u16>() as u16);
         unsafe {
             gl::DrawElements(gl::TRIANGLES,
                 count as gl::types::GLsizei,
                 gl::UNSIGNED_SHORT,
-                (start*2) as *const gl::types::GLvoid);
+                offset as *const gl::types::GLvoid);
         }
     }
 }

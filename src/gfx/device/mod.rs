@@ -32,7 +32,8 @@ pub type IndexCount = u16;
 
 pub enum Request {
     // Requests that require a reply:
-    CallNewBuffer(Vec<f32>),
+    CallNewVertexBuffer(Vec<f32>),
+    CallNewIndexBuffer(Vec<u16>),
     CallNewArrayBuffer,
     CallNewShader(shade::Stage, Vec<u8>),
     CallNewProgram(Vec<dev::Shader>),
@@ -112,8 +113,16 @@ impl Client {
         }
     }
 
-    pub fn new_buffer(&self, data: Vec<f32>) -> dev::Buffer {
-        self.stream.send(CallNewBuffer(data));
+    pub fn new_vertex_buffer(&self, data: Vec<f32>) -> dev::Buffer {
+        self.stream.send(CallNewVertexBuffer(data));
+        match self.stream.recv() {
+            ReplyNewBuffer(name) => name,
+            _ => fail!("unexpected device reply")
+        }
+    }
+
+    pub fn new_index_buffer(&self, data: Vec<u16>) -> dev::Buffer {
+        self.stream.send(CallNewIndexBuffer(data));
         match self.stream.recv() {
             ReplyNewBuffer(name) => name,
             _ => fail!("unexpected device reply")
@@ -172,7 +181,11 @@ impl<Api, P: GraphicsContext<Api>> Server<P> {
                 Ok(CastSwapBuffers) => {
                     break;
                 },
-                Ok(CallNewBuffer(data)) => {
+                Ok(CallNewVertexBuffer(data)) => {
+                    let name = self.device.create_buffer(data.as_slice());
+                    self.stream.send(ReplyNewBuffer(name));
+                },
+                Ok(CallNewIndexBuffer(data)) => {
                     let name = self.device.create_buffer(data.as_slice());
                     self.stream.send(ReplyNewBuffer(name));
                 },
