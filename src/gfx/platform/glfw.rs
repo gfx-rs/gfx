@@ -30,6 +30,10 @@ impl<C: Context> GlfwGraphicsContext<C> {
 }
 
 impl<C: Context> GraphicsContext<GlApi> for GlfwGraphicsContext<C> {
+    fn make_current(&self) {
+        self.context.make_current();
+    }
+
     fn swap_buffers(&self) {
         self.context.swap_buffers();
     }

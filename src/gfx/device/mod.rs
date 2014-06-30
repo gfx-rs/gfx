@@ -127,6 +127,10 @@ pub struct Server<P> {
 }
 
 impl<Api, P: GraphicsContext<Api>> Server<P> {
+    pub fn make_current(&self) {
+        self.graphics_context.make_current();
+    }
+
     /// Update the platform. The client must manually update this on the main
     /// thread.
     pub fn update(&mut self) -> bool {
