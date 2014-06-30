@@ -52,8 +52,8 @@ pub enum Request {
 pub enum Reply {
     ReplyNewBuffer(dev::Buffer),
     ReplyNewArrayBuffer(dev::ArrayBuffer),
-    ReplyNewShader(dev::Shader),
-    ReplyNewProgram(dev::Program),
+    ReplyNewShader(Result<dev::Shader, ()>),
+    ReplyNewProgram(Result<shade::ProgramMeta, ()>),
 }
 
 pub struct Client {
@@ -97,7 +97,7 @@ impl Client {
         self.stream.send(CastSwapBuffers);
     }
 
-    pub fn new_shader(&self, stage: shade::Stage, code: Vec<u8>) -> dev::Shader {
+    pub fn new_shader(&self, stage: shade::Stage, code: Vec<u8>) -> Result<dev::Shader, ()> {
         self.stream.send(CallNewShader(stage, code));
         match self.stream.recv() {
             ReplyNewShader(name) => name,
@@ -105,7 +105,7 @@ impl Client {
         }
     }
 
-    pub fn new_program(&self, shaders: Vec<dev::Shader>) -> dev::Program {
+    pub fn new_program(&self, shaders: Vec<dev::Shader>) -> Result<shade::ProgramMeta, ()> {
         self.stream.send(CallNewProgram(shaders));
         match self.stream.recv() {
             ReplyNewProgram(name) => name,

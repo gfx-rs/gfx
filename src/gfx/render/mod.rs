@@ -171,9 +171,13 @@ impl Server {
                     self.device.end_frame();
                 },
                 Ok(CallNewProgram(vs, fs)) => {
-                    let h_vs = self.device.new_shader(Vertex, vs);
-                    let h_fs = self.device.new_shader(Fragment, fs);
+                    let h_vs = self.device.new_shader(Vertex, vs).unwrap_or(0);
+                    let h_fs = self.device.new_shader(Fragment, fs).unwrap_or(0);
                     let prog = self.device.new_program(vec!(h_vs, h_fs));
+                    let prog = match prog {
+                        Ok(prog) => prog.name,
+                        Err(_) => 0,
+                    };
                     self.stream.send(ReplyProgram(prog));
                 },
                 Ok(CallNewMesh(num_vert, data, count, stride)) => {
