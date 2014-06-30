@@ -97,18 +97,18 @@ impl Device {
 
     /// Shader Object
 
-    pub fn create_shader(&self, stage: super::shade::Stage, data: &[u8]) -> Shader {
+    pub fn create_shader(&self, stage: super::shade::Stage, data: &[u8]) -> Result<Shader, ()> {
         let (name, info) = shade::create_shader(stage, data);
         info.map(|info| warn!("\tShader compile log: {}", info));
-        name.unwrap_or(0)
+        name
     }
 
     /// Shader Program
 
-    pub fn create_program(&self, shaders: &[Shader]) -> Program {
+    pub fn create_program(&self, shaders: &[Shader]) -> Result<super::shade::ProgramMeta, ()> {
         let (meta, info) = shade::create_program(shaders);
         info.map(|info| warn!("\tProgram link log: {}", info));
-        match meta { Ok(meta) => meta.name, Err(_) => 0 }
+        meta
     }
 
     pub fn bind_program(&self, program: Program) {
