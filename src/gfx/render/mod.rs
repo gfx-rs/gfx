@@ -30,7 +30,7 @@ pub mod target;
 pub enum Request {
     // Requests that require a reply:
     CallNewProgram(Vec<u8>, Vec<u8>),
-    CallNewMesh(mesh::VertexCount, Vec<f32>, u8),
+    CallNewMesh(mesh::VertexCount, Vec<f32>, u8, u8),
     // Requests that don't expect a reply:
     CastClear(target::ClearData, Option<target::Frame>),
     CastDraw(MeshHandle, Option<target::Frame>, ProgramHandle),
@@ -73,8 +73,8 @@ impl Client {
         }
     }
 
-    pub fn create_mesh(&self, num_vert: mesh::VertexCount, data: Vec<f32>, stride0: u8) -> MeshHandle {
-        self.stream.send(CallNewMesh(num_vert, data, stride0));
+    pub fn create_mesh(&self, num_vert: mesh::VertexCount, data: Vec<f32>, count0: u8, stride0: u8) -> MeshHandle {
+        self.stream.send(CallNewMesh(num_vert, data, count0, stride0));
         // TODO: delay recv()
         match self.stream.recv() {
             ReplyMesh(mesh) => mesh,
@@ -141,8 +141,8 @@ impl Server {
                     self.device.bind_program(program);
                     self.device.bind_array_buffer(self.common_array_buffer);
                     for (i, at) in mesh.attributes.iter().enumerate().filter(|&(_,at)| at.buffer!=0) {
-                        self.device.bind_attribute(i as u8, at.buffer, mesh.num_vertices,
-                            at.offset as u32, at.stride as u32);
+                        self.device.bind_attribute(i as u8, at.buffer,
+                            at.size as u32, at.offset as u32, at.stride as u32);
                     }
                     self.device.draw(0, mesh.num_vertices);
                 },
@@ -155,17 +155,18 @@ impl Server {
                     let prog = self.device.new_program(vec!(h_vs, h_fs));
                     self.stream.send(ReplyProgram(prog));
                 },
-                Ok(CallNewMesh(num_vert, data, stride)) => {
+                Ok(CallNewMesh(num_vert, data, count, stride)) => {
                     let buffer = self.device.new_buffer(data);
                     let mut mesh = MeshHandle::new(num_vert);
-                    mesh.attributes[0] = mesh::Attribute {
+                    mesh.attributes.push(mesh::Attribute {
                         buffer: buffer,
+                        size: count,
                         offset: 0,
                         stride: stride,
                         is_normalized: false,
                         is_interpolated: false,
-                        name: (),
-                    };
+                        name: "a_Pos".to_string(),
+                    });
                     self.stream.send(ReplyMesh(mesh));
                 },
                 Err(comm::Empty)  => {

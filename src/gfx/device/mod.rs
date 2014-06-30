@@ -39,7 +39,7 @@ pub enum Request {
     CastClear(Color),
     CastBindProgram(dev::Program),
     CastBindArrayBuffer(dev::ArrayBuffer),
-    CastBindAttribute(u8, dev::Buffer, VertexCount, u32, u32),
+    CastBindAttribute(u8, dev::Buffer, u32, u32, u32),
     CastBindFrameBuffer(dev::FrameBuffer),
     CastDraw(VertexCount, VertexCount),
     CastSwapBuffers,
@@ -69,7 +69,7 @@ impl Client {
         self.stream.send(CastBindArrayBuffer(abuf));
     }
 
-    pub fn bind_attribute(&self, index: u8, buf: dev::Buffer, count: VertexCount, offset: u32, stride: u32) {
+    pub fn bind_attribute(&self, index: u8, buf: dev::Buffer, count: u32, offset: u32, stride: u32) {
         self.stream.send(CastBindAttribute(index, buf, count, offset, stride));
     }
 

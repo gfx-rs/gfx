@@ -53,7 +53,7 @@ fn main() {
             VERTEX_SRC.to_owned(),
             FRAGMENT_SRC.to_owned());
         let data = vec![-0.0f32, 0.5, 0.5, -0.5, -0.5, -0.5];
-        let mesh = renderer.create_mesh(3, data, 8);
+        let mesh = renderer.create_mesh(3, data, 2, 8);
         loop {
             let cdata = gfx::ClearData {
                 color: Some([0.3, 0.3, 0.3, 1.0]),
@@ -61,7 +61,7 @@ fn main() {
                 stencil: None,
             };
             renderer.clear(cdata, None);
-            renderer.draw(mesh, None, program);
+            renderer.draw(mesh.clone(), None, program);
             renderer.end_frame();
         }
     });
