@@ -26,7 +26,7 @@ pub fn create_shader(stage: s::Stage, data: &[u8])
     let name = gl::CreateShader(target);
     unsafe {
         gl::ShaderSource(name, 1,
-            &(data.as_ptr() as *gl::types::GLchar),
+            &(data.as_ptr() as *const gl::types::GLchar),
             &(data.len() as gl::types::GLint));
     }
     gl::CompileShader(name);
@@ -145,7 +145,7 @@ fn query_attributes(prog: super::Program) -> Vec<s::Attribute> {
         let loc = unsafe {
             let raw = name.as_slice().as_ptr() as *mut gl::types::GLchar;
             gl::GetActiveAttrib(prog, i, max_len, &mut length, &mut size, &mut storage, raw);
-            gl::GetAttribLocation(prog, raw as *gl::types::GLchar)
+            gl::GetAttribLocation(prog, raw as *const gl::types::GLchar)
         };
         let real_name = name.as_slice().slice_to(length as uint).to_string();
         let (base, container) = match StorageType::new(storage) {
@@ -220,7 +220,7 @@ fn query_parameters(prog: super::Program) -> (Vec<s::UniformVar>, Vec<s::Sampler
         let loc = unsafe {
             let raw = name.as_slice().as_ptr() as *mut gl::types::GLchar;
             gl::GetActiveUniform(prog, i, max_len, &mut length, &mut size, &mut storage, raw);
-            gl::GetUniformLocation(prog, raw as *gl::types::GLchar)
+            gl::GetUniformLocation(prog, raw as *const gl::types::GLchar)
         };
         let real_name = name.as_slice().slice_to(length as uint).to_string();
         match StorageType::new(storage) {
