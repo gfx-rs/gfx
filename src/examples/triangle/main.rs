@@ -61,7 +61,7 @@ fn main() {
                 stencil: None,
             };
             renderer.clear(cdata, None);
-            renderer.draw(mesh.clone(), None, program);
+            renderer.draw(mesh.clone(), gfx::VertexSlice(0, 3), None, program);
             renderer.end_frame();
         }
     });

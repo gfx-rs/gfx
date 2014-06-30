@@ -33,7 +33,7 @@ pub enum Request {
     CallNewMesh(mesh::VertexCount, Vec<f32>, u8, u8),
     // Requests that don't expect a reply:
     CastClear(target::ClearData, Option<target::Frame>),
-    CastDraw(MeshHandle, Option<target::Frame>, ProgramHandle),
+    CastDraw(MeshHandle, mesh::Slice, Option<target::Frame>, ProgramHandle),
     CastEndFrame,
     CastFinish,
 }
@@ -52,8 +52,8 @@ impl Client {
         self.stream.send(CastClear(data, frame));
     }
 
-    pub fn draw(&self, mesh: MeshHandle, frame: Option<target::Frame>, program: ProgramHandle) {
-        self.stream.send(CastDraw(mesh, frame, program))
+    pub fn draw(&self, mesh: MeshHandle, slice: mesh::Slice, frame: Option<target::Frame>, program: ProgramHandle) {
+        self.stream.send(CastDraw(mesh, slice, frame, program))
     }
 
     pub fn end_frame(&self) {
@@ -136,7 +136,7 @@ impl Server {
                         None => unimplemented!()
                     }
                 },
-                Ok(CastDraw(mesh, frame, program)) => {
+                Ok(CastDraw(mesh, slice, frame, program)) => {
                     self.bind_frame(&frame);
                     self.device.bind_program(program);
                     self.device.bind_array_buffer(self.common_array_buffer);
@@ -144,7 +144,15 @@ impl Server {
                         self.device.bind_attribute(i as u8, at.buffer,
                             at.size as u32, at.offset as u32, at.stride as u32);
                     }
-                    self.device.draw(0, mesh.num_vertices);
+                    match slice {
+                        mesh::VertexSlice(start, end) => {
+                            self.device.draw(start, end);
+                        },
+                        mesh::IndexSlice(buf, start, end) => {
+                            self.device.bind_index(buf);
+                            self.device.draw_indexed(start, end);
+                        },
+                    }
                 },
                 Ok(CastEndFrame) => {
                     self.device.end_frame();

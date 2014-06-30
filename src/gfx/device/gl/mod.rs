@@ -67,6 +67,10 @@ impl Device {
         gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
     }
 
+    pub fn bind_index_buffer(&self, buffer: Buffer) {
+        gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer);
+    }
+
     /// Vertex Array Buffer
 
     pub fn create_array_buffer(&self) -> ArrayBuffer {
@@ -123,5 +127,14 @@ impl Device {
         gl::DrawArrays(gl::TRIANGLES,
             start as gl::types::GLsizei,
             count as gl::types::GLsizei);
+    }
+
+    pub fn draw_index(&self, start: u16, count: u16) {
+        unsafe {
+            gl::DrawElements(gl::TRIANGLES,
+                count as gl::types::GLsizei,
+                gl::UNSIGNED_SHORT,
+                (start*2) as *const gl::types::GLvoid);
+        }
     }
 }

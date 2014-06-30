@@ -27,6 +27,7 @@ pub mod shade;
 
 pub type Color = [f32, ..4];
 pub type VertexCount = u16;
+pub type IndexCount = u16;
 
 
 pub enum Request {
@@ -40,8 +41,10 @@ pub enum Request {
     CastBindProgram(dev::Program),
     CastBindArrayBuffer(dev::ArrayBuffer),
     CastBindAttribute(u8, dev::Buffer, u32, u32, u32),
+    CastBindIndex(dev::Buffer),
     CastBindFrameBuffer(dev::FrameBuffer),
     CastDraw(VertexCount, VertexCount),
+    CastDrawIndexed(IndexCount, IndexCount),
     CastSwapBuffers,
 }
 
@@ -73,12 +76,20 @@ impl Client {
         self.stream.send(CastBindAttribute(index, buf, count, offset, stride));
     }
 
+    pub fn bind_index(&self, buf: dev::Buffer) {
+        self.stream.send(CastBindIndex(buf));
+    }
+
     pub fn bind_frame_buffer(&self, fbo: dev::FrameBuffer) {
         self.stream.send(CastBindFrameBuffer(fbo));
     }
 
     pub fn draw(&self, offset: VertexCount, count: VertexCount) {
         self.stream.send(CastDraw(offset, count));
+    }
+
+    pub fn draw_indexed(&self, offset: IndexCount, count: IndexCount) {
+        self.stream.send(CastDrawIndexed(offset, count));
     }
 
     pub fn end_frame(&self) {
@@ -143,13 +154,20 @@ impl<Api, P: GraphicsContext<Api>> Server<P> {
                     self.device.bind_array_buffer(abuf);
                 },
                 Ok(CastBindAttribute(index, buf, count, offset, stride)) => {
+                    self.device.bind_vertex_buffer(buf);
                     self.device.bind_attribute(index, count as u32, offset, stride);
+                },
+                Ok(CastBindIndex(buf)) => {
+                    self.device.bind_index_buffer(buf);
                 },
                 Ok(CastBindFrameBuffer(fbo)) => {
                     self.device.bind_frame_buffer(fbo);
                 },
                 Ok(CastDraw(offset, count)) => {
                     self.device.draw(offset as u32, count as u32);
+                },
+                Ok(CastDrawIndexed(offset, count)) => {
+                    self.device.draw_index(offset, count);
                 },
                 Ok(CastSwapBuffers) => {
                     break;
