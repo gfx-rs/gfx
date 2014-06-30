@@ -27,11 +27,13 @@ pub mod shade;
 
 pub type Color = [f32, ..4];
 pub type VertexCount = u16;
+pub type IndexCount = u16;
 
 
 pub enum Request {
     // Requests that require a reply:
-    CallNewBuffer(Vec<f32>),
+    CallNewVertexBuffer(Vec<f32>),
+    CallNewIndexBuffer(Vec<u16>),
     CallNewArrayBuffer,
     CallNewShader(shade::Stage, Vec<u8>),
     CallNewProgram(Vec<dev::Shader>),
@@ -39,9 +41,11 @@ pub enum Request {
     CastClear(Color),
     CastBindProgram(dev::Program),
     CastBindArrayBuffer(dev::ArrayBuffer),
-    CastBindAttribute(u8, dev::Buffer, VertexCount, u32, u32),
+    CastBindAttribute(u8, dev::Buffer, u32, u32, u32),
+    CastBindIndex(dev::Buffer),
     CastBindFrameBuffer(dev::FrameBuffer),
     CastDraw(VertexCount, VertexCount),
+    CastDrawIndexed(IndexCount, IndexCount),
     CastSwapBuffers,
 }
 
@@ -69,8 +73,12 @@ impl Client {
         self.stream.send(CastBindArrayBuffer(abuf));
     }
 
-    pub fn bind_attribute(&self, index: u8, buf: dev::Buffer, count: VertexCount, offset: u32, stride: u32) {
+    pub fn bind_attribute(&self, index: u8, buf: dev::Buffer, count: u32, offset: u32, stride: u32) {
         self.stream.send(CastBindAttribute(index, buf, count, offset, stride));
+    }
+
+    pub fn bind_index(&self, buf: dev::Buffer) {
+        self.stream.send(CastBindIndex(buf));
     }
 
     pub fn bind_frame_buffer(&self, fbo: dev::FrameBuffer) {
@@ -79,6 +87,10 @@ impl Client {
 
     pub fn draw(&self, offset: VertexCount, count: VertexCount) {
         self.stream.send(CastDraw(offset, count));
+    }
+
+    pub fn draw_indexed(&self, offset: IndexCount, count: IndexCount) {
+        self.stream.send(CastDrawIndexed(offset, count));
     }
 
     pub fn end_frame(&self) {
@@ -101,8 +113,16 @@ impl Client {
         }
     }
 
-    pub fn new_buffer(&self, data: Vec<f32>) -> dev::Buffer {
-        self.stream.send(CallNewBuffer(data));
+    pub fn new_vertex_buffer(&self, data: Vec<f32>) -> dev::Buffer {
+        self.stream.send(CallNewVertexBuffer(data));
+        match self.stream.recv() {
+            ReplyNewBuffer(name) => name,
+            _ => fail!("unexpected device reply")
+        }
+    }
+
+    pub fn new_index_buffer(&self, data: Vec<u16>) -> dev::Buffer {
+        self.stream.send(CallNewIndexBuffer(data));
         match self.stream.recv() {
             ReplyNewBuffer(name) => name,
             _ => fail!("unexpected device reply")
@@ -143,7 +163,11 @@ impl<Api, P: GraphicsContext<Api>> Server<P> {
                     self.device.bind_array_buffer(abuf);
                 },
                 Ok(CastBindAttribute(index, buf, count, offset, stride)) => {
+                    self.device.bind_vertex_buffer(buf);
                     self.device.bind_attribute(index, count as u32, offset, stride);
+                },
+                Ok(CastBindIndex(buf)) => {
+                    self.device.bind_index_buffer(buf);
                 },
                 Ok(CastBindFrameBuffer(fbo)) => {
                     self.device.bind_frame_buffer(fbo);
@@ -151,10 +175,17 @@ impl<Api, P: GraphicsContext<Api>> Server<P> {
                 Ok(CastDraw(offset, count)) => {
                     self.device.draw(offset as u32, count as u32);
                 },
+                Ok(CastDrawIndexed(offset, count)) => {
+                    self.device.draw_index(offset, count);
+                },
                 Ok(CastSwapBuffers) => {
                     break;
                 },
-                Ok(CallNewBuffer(data)) => {
+                Ok(CallNewVertexBuffer(data)) => {
+                    let name = self.device.create_buffer(data.as_slice());
+                    self.stream.send(ReplyNewBuffer(name));
+                },
+                Ok(CallNewIndexBuffer(data)) => {
                     let name = self.device.create_buffer(data.as_slice());
                     self.stream.send(ReplyNewBuffer(name));
                 },

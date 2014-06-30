@@ -18,28 +18,20 @@ pub type MaterialHandle = int;  //placeholder
 pub type VertexCount = u16;
 pub type ElementCount = u16;
 
-pub static MAX_ATTRIBUTES: uint = 8;
-
 
 /// Vertex attribute descriptor, goes into the vertex shader input
+#[deriving(Clone, Show)]
 pub struct Attribute {
-    pub buffer: dev::Buffer,
-    pub offset: u32, // can be the middle of the buffer
-    pub stride: u8, // should be enough
-    pub is_normalized: bool, // treat unsigned as fixed-point
-    pub is_interpolated: bool, // allow shader interpolation
-    pub name: (), // a real name, should be a String
+    pub buffer: dev::Buffer,    // vertex buffer to contain the data
+    pub size: u8,               // number of components per vertex
+    pub offset: u32,            // offset in bytes to the first vertex
+    pub stride: u8,             // stride in bytes between consecutive vertices
+    pub is_normalized: bool,    // treat unsigned as fixed-point
+    pub is_interpolated: bool,  // allow shader interpolation
+    pub name: String,           // a name to match the shader input
 }
 
-pub static ATTRIB_EMPTY: Attribute = Attribute {
-    buffer: 0,
-    offset: 0,
-    stride: 0,
-    is_normalized: false,
-    is_interpolated: false,
-    name: (),
-};
-
+#[deriving(Clone, Show)]
 pub enum PolygonType {
     Point,
     Line,
@@ -50,10 +42,11 @@ pub enum PolygonType {
 }
 
 /// Mesh descriptor, as a collection of attributes
+#[deriving(Clone, Show)]
 pub struct Mesh {
     pub poly_type       : PolygonType,
     pub num_vertices    : VertexCount,
-    pub attributes      : [Attribute, ..MAX_ATTRIBUTES],
+    pub attributes      : Vec<Attribute>,
 }
 
 impl Mesh {
@@ -61,18 +54,20 @@ impl Mesh {
         Mesh {
             poly_type: TriangleList,
             num_vertices: nv,
-            attributes: [ATTRIB_EMPTY, ..MAX_ATTRIBUTES],
+            attributes: Vec::new(),
         }
     }
 }
 
 
+#[deriving(Clone, Show)]
 pub enum Slice  {
     VertexSlice(VertexCount, VertexCount),
     IndexSlice(dev::Buffer, ElementCount, ElementCount),
 }
 
 /// Slice descriptor with an assigned material
+#[deriving(Clone, Show)]
 pub struct SubMesh {
     pub mesh: Mesh,
     pub material: MaterialHandle,
