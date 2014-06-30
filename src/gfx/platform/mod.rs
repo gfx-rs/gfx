@@ -28,6 +28,6 @@ pub trait GraphicsContext<Api> {
 }
 
 pub trait GlProvider {
-	fn get_proc_address(&self, &str) -> *::libc::c_void;
+	fn get_proc_address(&self, &str) -> *const ::libc::c_void;
 	fn is_extension_supported(&self, &str) -> bool;
 }

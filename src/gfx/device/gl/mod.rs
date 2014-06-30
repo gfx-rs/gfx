@@ -56,7 +56,7 @@ impl Device {
         gl::BindBuffer(gl::ARRAY_BUFFER, name);
         info!("\tCreated buffer {}", name);
         let size = (data.len() * std::mem::size_of::<T>()) as gl::types::GLsizeiptr;
-        let raw = data.as_ptr() as *gl::types::GLvoid;
+        let raw = data.as_ptr() as *const gl::types::GLvoid;
         unsafe{
             gl::BufferData(gl::ARRAY_BUFFER, size, raw, gl::STATIC_DRAW);
         }
@@ -86,7 +86,7 @@ impl Device {
         unsafe{
             gl::VertexAttribPointer(slot as gl::types::GLuint,
                 count as gl::types::GLint, gl::FLOAT, gl::FALSE,
-                stride as gl::types::GLint, offset as *gl::types::GLvoid);
+                stride as gl::types::GLint, offset as *const gl::types::GLvoid);
         }
         gl::EnableVertexAttribArray(slot as gl::types::GLuint);
     }
