@@ -191,6 +191,24 @@ impl Server {
         Ok(())
     }
 
+    fn bind_environment(device: &mut device::Client, env: &envir::Storage, cut: &envir::Shortcut, prog: &ProgramMeta) {
+        debug_assert!(cut.is_fit(prog));
+        device.bind_program(prog.name);
+
+        for (&_i, _block) in cut.blocks.iter().zip(prog.blocks.iter()) {
+            //TODO
+        }
+
+        for (&i, uniform) in cut.uniforms.iter().zip(prog.uniforms.iter()) {
+            let value = env.get_uniform(i);
+            device.bind_uniform(uniform.location, value);
+        }
+
+        for (&_i, _texture) in cut.textures.iter().zip(prog.textures.iter()) {
+            //TODO
+        }
+    }
+
     pub fn update(&mut self) -> bool {
         loop {
             match self.stream.try_recv() {
@@ -207,14 +225,19 @@ impl Server {
                         None => unimplemented!()
                     }
                 },
-                Ok(CastDraw(mesh_handle, slice, frame, prog_handle, env_handle)) => {
+                Ok(CastDraw(mesh_handle, slice, frame, program_handle, env_handle)) => {
                     // bind output frame
                     self.bind_frame(&frame);
                     // bind shaders
-                    let program = self.cache.programs.get(prog_handle);
-                    let envir = self.cache.environments.get(env_handle);
-                    let _shortcut = envir::Shortcut::build(envir, program);
-                    self.device.bind_program(program.name);
+                    let program = self.cache.programs.get(program_handle);
+                    let env = self.cache.environments.get(env_handle);
+                    match envir::Shortcut::build(env, program) {
+                        Ok(ref cut) => Server::bind_environment(&mut self.device, env, cut, program),
+                        Err(_) => {
+                            error!("Failed to build environment shortcut");
+                            continue
+                        },
+                    }
                     // bind vertex attributes
                     self.device.bind_array_buffer(self.common_array_buffer);
                     let mesh = self.cache.meshes.get(mesh_handle);

@@ -28,6 +28,9 @@ pub mod shade;
 pub type Color = [f32, ..4];
 pub type VertexCount = u16;
 pub type IndexCount = u16;
+pub type AttributeIndex = u8;
+pub type UniformBlockIndex = u8;
+pub type TextureIndex = u8;
 
 
 pub enum Request {
@@ -41,9 +44,12 @@ pub enum Request {
     CastClear(Color),
     CastBindProgram(dev::Program),
     CastBindArrayBuffer(dev::ArrayBuffer),
-    CastBindAttribute(u8, dev::Buffer, u32, u32, u32),
+    CastBindAttribute(AttributeIndex, dev::Buffer, u32, u32, u32),
     CastBindIndex(dev::Buffer),
     CastBindFrameBuffer(dev::FrameBuffer),
+    //CastBindUniformBlock(UniformBlockIndex, dev::Buffer), //TODO
+    CastBindUniform(shade::Location, shade::UniformValue),
+    //CastBindTexture(TextureIndex, dev::Texture, dev::Sampler),    //TODO
     CastDraw(VertexCount, VertexCount),
     CastDrawIndexed(IndexCount, IndexCount),
     CastSwapBuffers,
@@ -83,6 +89,10 @@ impl Client {
 
     pub fn bind_frame_buffer(&self, fbo: dev::FrameBuffer) {
         self.stream.send(CastBindFrameBuffer(fbo));
+    }
+
+    pub fn bind_uniform(&self, loc: shade::Location, value: shade::UniformValue) {
+        self.stream.send(CastBindUniform(loc, value));
     }
 
     pub fn draw(&self, offset: VertexCount, count: VertexCount) {
@@ -171,6 +181,9 @@ impl<Api, P: GraphicsContext<Api>> Server<P> {
                 },
                 Ok(CastBindFrameBuffer(fbo)) => {
                     self.device.bind_frame_buffer(fbo);
+                },
+                Ok(CastBindUniform(loc, value)) => {
+                    self.device.bind_uniform(loc, value);
                 },
                 Ok(CastDraw(offset, count)) => {
                     self.device.draw(offset as u32, count as u32);

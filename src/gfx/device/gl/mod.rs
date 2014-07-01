@@ -27,6 +27,7 @@ pub type Program        = gl::types::GLuint;
 pub type FrameBuffer    = gl::types::GLuint;
 pub type Surface        = gl::types::GLuint;
 pub type Texture        = gl::types::GLuint;
+pub type Sampler        = gl::types::GLuint;
 
 pub struct Device;
 
@@ -114,6 +115,10 @@ impl Device {
 
     pub fn bind_program(&self, program: Program) {
         gl::UseProgram(program);
+    }
+
+    pub fn bind_uniform(&self, location: super::shade::Location, uniform: super::shade::UniformValue) {
+        shade::bind_uniform(location as gl::types::GLint, uniform);
     }
 
     /// Frame Buffer
