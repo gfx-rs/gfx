@@ -82,6 +82,26 @@ pub enum UniformValue {
     ValueF32Matrix([[f32, ..4], ..4]),
 }
 
+impl UniformValue {
+    pub fn is_valid(&self) -> bool {
+        match *self {
+            ValueUninitialized => false,
+            _ => true,
+        }
+    }
+
+    pub fn is_same_type(&self, other: &UniformValue) -> bool {
+        match (*self, *other) {
+            (ValueI32(_), ValueI32(_)) => true,
+            (ValueF32(_), ValueF32(_)) => true,
+            (ValueI32Vec(_), ValueI32Vec(_)) => true,
+            (ValueF32Vec(_), ValueI32Vec(_)) => true,
+            (ValueF32Matrix(_), ValueF32Matrix(_)) => true,
+            _ => false,
+        }
+    }
+}
+
 /*  // the type has Copy implemented implicitly, until we introduce boxed fields
 impl Clone for UniformValue {
     fn clone(&self) -> UniformValue {
@@ -163,4 +183,30 @@ pub struct ProgramMeta {
     pub uniforms: Vec<UniformVar>,
     pub blocks: Vec<BlockVar>,
     pub textures: Vec<SamplerVar>,
+}
+
+
+pub enum CompatibilityError {
+    ErrorArraySize,
+    ErrorBaseType,
+    ErrorContainer,
+}
+
+impl UniformVar {
+    pub fn is_compatible(&self, value: &UniformValue) -> Result<(), CompatibilityError> {
+        if self.count != 1 {
+            return Err(ErrorArraySize)
+        }
+        match (self.base_type, self.container, *value) {
+            (BaseI32, Single, ValueI32(_)) => Ok(()),
+            (BaseF32, Single, ValueF32(_)) => Ok(()),
+            (BaseF32, Vector(4), ValueF32Vec(_)) => Ok(()),
+            (BaseF32, Vector(_), ValueF32Vec(_)) => Err(ErrorContainer),
+            (BaseI32, Vector(4), ValueI32Vec(_)) => Ok(()),
+            (BaseI32, Vector(_), ValueI32Vec(_)) => Err(ErrorContainer),
+            (BaseF32, Matrix(_, 4,4), ValueF32Matrix(_)) => Ok(()),
+            (BaseF32, Matrix(_, _,_), ValueF32Matrix(_)) => Err(ErrorContainer),
+            _ => Err(ErrorBaseType)
+        }
+    }
 }

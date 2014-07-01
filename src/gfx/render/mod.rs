@@ -206,23 +206,23 @@ impl Server {
         Ok(())
     }
 
-    fn bind_environment(device: &mut device::Client, env: &envir::Storage, cut: &envir::Shortcut, prog: &ProgramMeta) {
-        debug_assert!(cut.is_fit(prog));
-        device.bind_program(prog.name);
+    fn bind_environment(device: &mut device::Client, storage: &envir::Storage, shortcut: &envir::Shortcut, program: &ProgramMeta) {
+        debug_assert!(storage.is_fit(shortcut, program));
+        device.bind_program(program.name);
 
-        for (i, (&k, block_var)) in cut.blocks.iter().zip(prog.blocks.iter()).enumerate() {
-            let block = env.get_block(k);
+        for (i, (&k, block_var)) in shortcut.blocks.iter().zip(program.blocks.iter()).enumerate() {
+            let block = storage.get_block(k);
             block_var.active_slot.set(i as u8);
-            device.bind_uniform_block(prog.name, i as u8, i as device::UniformBufferSlot, block);
+            device.bind_uniform_block(program.name, i as u8, i as device::UniformBufferSlot, block);
         }
 
-        for (&k, uniform_var) in cut.uniforms.iter().zip(prog.uniforms.iter()) {
-            let value = env.get_uniform(k);
+        for (&k, uniform_var) in shortcut.uniforms.iter().zip(program.uniforms.iter()) {
+            let value = storage.get_uniform(k);
             uniform_var.active_value.set(value);
             device.bind_uniform(uniform_var.location, value);
         }
 
-        for (_i, (&_k, _texture)) in cut.textures.iter().zip(prog.textures.iter()).enumerate() {
+        for (_i, (&_k, _texture)) in shortcut.textures.iter().zip(program.textures.iter()).enumerate() {
             unimplemented!()
         }
     }
@@ -249,7 +249,7 @@ impl Server {
                     // bind shaders
                     let program = self.cache.programs.get(program_handle);
                     let env = self.cache.environments.get(env_handle);
-                    match envir::Shortcut::build(env, program) {
+                    match env.optimize(program) {
                         Ok(ref cut) => Server::bind_environment(&mut self.device, env, cut, program),
                         Err(_) => {
                             error!("Failed to build environment shortcut");
