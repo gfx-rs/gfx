@@ -251,8 +251,8 @@ impl Server {
                     let env = self.cache.environments.get(env_handle);
                     match env.optimize(program) {
                         Ok(ref cut) => Server::bind_environment(&mut self.device, env, cut, program),
-                        Err(_) => {
-                            error!("Failed to build environment shortcut");
+                        Err(err) => {
+                            error!("Failed to build environment shortcut {}", err);
                             continue
                         },
                     }

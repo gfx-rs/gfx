@@ -95,7 +95,7 @@ impl UniformValue {
             (ValueI32(_), ValueI32(_)) => true,
             (ValueF32(_), ValueF32(_)) => true,
             (ValueI32Vec(_), ValueI32Vec(_)) => true,
-            (ValueF32Vec(_), ValueI32Vec(_)) => true,
+            (ValueF32Vec(_), ValueF32Vec(_)) => true,
             (ValueF32Matrix(_), ValueF32Matrix(_)) => true,
             _ => false,
         }
@@ -185,7 +185,7 @@ pub struct ProgramMeta {
     pub textures: Vec<SamplerVar>,
 }
 
-
+#[deriving(Show)]
 pub enum CompatibilityError {
     ErrorArraySize,
     ErrorBaseType,

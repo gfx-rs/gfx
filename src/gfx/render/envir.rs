@@ -99,6 +99,7 @@ pub struct Shortcut {
     pub textures: Vec<TextureId>,
 }
 
+#[deriving(Show)]
 pub enum OptimizeError<'a> {
     ErrorBlockNotFound(&'a str),
     ErrorUniformNotFound(&'a str),
