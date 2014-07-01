@@ -65,6 +65,7 @@ extern crate libc;
 pub use Renderer = render::Client;
 pub use MeshSlice = render::mesh::Slice;
 pub use VertexSlice = render::mesh::VertexSlice;
+pub use IndexSlice = render::mesh::IndexSlice;
 pub use Device = device::Server;
 pub use device::InitError;
 pub use platform::GraphicsContext;
