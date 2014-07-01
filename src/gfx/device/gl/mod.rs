@@ -71,13 +71,16 @@ impl Device {
         gl::BindBufferBase(gl::UNIFORM_BUFFER, loc as gl::types::GLuint, buf);
     }
 
-    pub fn update_buffer<T>(&self, buffer: Buffer, data: &[T], dynamic: bool) {
+    pub fn update_buffer<T>(&self, buffer: Buffer, data: &[T], usage: super::BufferUsage) {
         self.bind_vertex_buffer(buffer);
         let size = (data.len() * std::mem::size_of::<T>()) as gl::types::GLsizeiptr;
         let raw = data.as_ptr() as *const gl::types::GLvoid;
+        let usage = match usage {
+            super::UsageStatic => gl::STATIC_DRAW,
+            super::UsageDynamic => gl::DYNAMIC_DRAW,
+        };
         unsafe{
-            gl::BufferData(gl::ARRAY_BUFFER, size, raw,
-                if dynamic {gl::DYNAMIC_DRAW} else {gl::STATIC_DRAW});
+            gl::BufferData(gl::ARRAY_BUFFER, size, raw, usage);
         }
     }
 

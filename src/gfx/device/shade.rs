@@ -72,9 +72,9 @@ pub enum Stage {
 
 pub type Location = uint;
 
-//#[deriving(Show)] // unable to derive fixed arrays
+// unable to derive anything for fixed arrays
 pub enum UniformValue {
-    ValueUnitialized,
+    ValueUninitialized,
     ValueI32(i32),
     ValueF32(f32),
     ValueI32Vec([i32, ..4]),
@@ -82,10 +82,29 @@ pub enum UniformValue {
     ValueF32Matrix([[f32, ..4], ..4]),
 }
 
+/*  // the type has Copy implemented implicitly, until we introduce boxed fields
+impl Clone for UniformValue {
+    fn clone(&self) -> UniformValue {
+        match *self {
+            ValueUninitialized  => ValueUninitialized,
+            ValueI32(val)       => ValueI32(val),
+            ValueF32(val)       => ValueF32(val),
+            ValueI32Vec(v)      => ValueI32Vec([v[0], v[1], v[2], v[3]]),
+            ValueF32Vec(v)      => ValueF32Vec([v[0], v[1], v[2], v[3]]),
+            ValueF32Matrix(v)   => ValueF32Matrix(box [
+                [v[0][0], v[0][1], v[0][2], v[0][3]],
+                [v[1][0], v[1][1], v[1][2], v[1][3]],
+                [v[2][0], v[2][1], v[2][2], v[2][3]],
+                [v[3][0], v[3][1], v[3][2], v[3][3]]
+                ])),
+        }
+    }
+}*/
+
 impl fmt::Show for UniformValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            ValueUnitialized      => write!(f, "ValueUnitialized"),
+            ValueUninitialized    => write!(f, "ValueUninitialized"),
             ValueI32(x)           => write!(f, "ValueI32({})", x),
             ValueF32(x)           => write!(f, "ValueF32({})", x),
             ValueI32Vec(ref v)    => write!(f, "ValueI32Vec({})", v.as_slice()),

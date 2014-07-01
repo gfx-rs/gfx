@@ -19,6 +19,7 @@ use std::kinds::marker;
 use device;
 
 use device::shade::{ProgramMeta, Vertex, Fragment, UniformValue};
+use self::envir::BindableStorage;
 pub use BufferHandle = device::dev::Buffer;
 pub type MeshHandle = uint;
 pub type SurfaceHandle = device::dev::Surface;

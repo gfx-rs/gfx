@@ -32,6 +32,11 @@ pub type AttributeSlot = u8;
 pub type UniformBufferSlot = u8;
 pub type TextureSlot = u8;
 
+pub enum BufferUsage {
+    UsageStatic,
+    UsageDynamic,
+}
+
 
 pub enum Request {
     // Requests that require a reply:
@@ -209,7 +214,7 @@ impl<Api, P: GraphicsContext<Api>> Server<P> {
                     self.device.bind_uniform(loc, value);
                 },
                 Ok(CastUpdateBuffer(buf, data)) => {
-                    self.device.update_buffer(buf, data.as_slice(), true);
+                    self.device.update_buffer(buf, data.as_slice(), UsageDynamic);
                 },
                 Ok(CastDraw(offset, count)) => {
                     self.device.draw(offset as u32, count as u32);
@@ -222,12 +227,12 @@ impl<Api, P: GraphicsContext<Api>> Server<P> {
                 },
                 Ok(CallNewVertexBuffer(data)) => {
                     let name = self.device.create_buffer();
-                    self.device.update_buffer(name, data.as_slice(), false);
+                    self.device.update_buffer(name, data.as_slice(), UsageStatic);
                     self.stream.send(ReplyNewBuffer(name));
                 },
                 Ok(CallNewIndexBuffer(data)) => {
                     let name = self.device.create_buffer();
-                    self.device.update_buffer(name, data.as_slice(), false);
+                    self.device.update_buffer(name, data.as_slice(), UsageStatic);
                     self.stream.send(ReplyNewBuffer(name));
                 },
                 Ok(CallNewRawBuffer) => {

@@ -235,7 +235,7 @@ fn query_parameters(prog: super::Program) -> (Vec<s::UniformVar>, Vec<s::Sampler
                     count: size as uint,
                     base_type: base,
                     container: container,
-                    active_value: Cell::new(s::ValueUnitialized),
+                    active_value: Cell::new(s::ValueUninitialized),
                 });
             },
             Sampler(base, sam_type) => {
@@ -301,7 +301,7 @@ pub fn create_program(shaders: &[super::Shader])
 
 pub fn bind_uniform(loc: gl::types::GLint, uniform: s::UniformValue) {
     match uniform {
-        s::ValueUnitialized => fail!("Non-initialized uniform value detected"),
+        s::ValueUninitialized => fail!("Non-initialized uniform value detected"),
         s::ValueI32(val) => gl::Uniform1i(loc, val),
         s::ValueF32(val) => gl::Uniform1f(loc, val),
         s::ValueI32Vec(val) => unsafe { gl::Uniform4iv(loc, 1, val.as_ptr()) },
