@@ -37,9 +37,9 @@ pub enum Plane {
 
 
 pub struct Frame {
-    colors: [Plane, ..MAX_COLOR_TARGETS],
-    depth: Plane,
-    stencil: Plane,
+    pub colors: [Plane, ..MAX_COLOR_TARGETS],
+    pub depth: Plane,
+    pub stencil: Plane,
 }
 
 impl Frame {

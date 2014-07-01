@@ -18,32 +18,48 @@ use std::kinds::marker;
 
 use device;
 
-use device::shade::{ProgramMeta, Vertex, Fragment};
+use device::shade::{ProgramMeta, Vertex, Fragment, UniformValue};
+use self::envir::BindableStorage;
 pub use BufferHandle = device::dev::Buffer;
-pub type ProgramHandle = uint;
 pub type MeshHandle = uint;
-pub type Environment = ();  // placeholder
+pub type SurfaceHandle = device::dev::Surface;
+pub type TextureHandle = device::dev::Texture;
+pub type SamplerHandle = uint;
+pub type ProgramHandle = uint;
+pub type EnvirHandle = uint;
 
+pub mod envir;
 pub mod mesh;
 pub mod target;
 
 
-pub enum Request {
+enum EnvirChangeRequest {
+    EnvirBlock(envir::BlockVar, BufferHandle),
+    EnvirUniform(envir::UniformVar, UniformValue),
+    EnvirTexture(envir::TextureVar, TextureHandle, SamplerHandle),
+}
+
+enum Request {
     // Requests that require a reply:
     CallNewProgram(Vec<u8>, Vec<u8>),
     CallNewMesh(mesh::VertexCount, Vec<f32>, u8, u8),
     CallNewIndexBuffer(Vec<u16>),
+    CallNewRawBuffer,
+    CallNewEnvironment(envir::Storage),
     // Requests that don't expect a reply:
     CastClear(target::ClearData, Option<target::Frame>),
-    CastDraw(MeshHandle, mesh::Slice, Option<target::Frame>, ProgramHandle),
+    CastDraw(MeshHandle, mesh::Slice, Option<target::Frame>, ProgramHandle, EnvirHandle),
+    CastSetEnvironment(EnvirHandle, EnvirChangeRequest),
+    CastUpdateBuffer(BufferHandle, Vec<f32>),
     CastEndFrame,
     CastFinish,
 }
 
-pub enum Reply {
+enum Reply {
     ReplyProgram(ProgramHandle),
     ReplyMesh(MeshHandle),
-    ReplyIndexBuffer(BufferHandle),
+    ReplyBuffer(BufferHandle),
+    ReplyEnvironment(EnvirHandle),
 }
 
 pub struct Client {
@@ -55,8 +71,8 @@ impl Client {
         self.stream.send(CastClear(data, frame));
     }
 
-    pub fn draw(&self, mesh: MeshHandle, slice: mesh::Slice, frame: Option<target::Frame>, program: ProgramHandle) {
-        self.stream.send(CastDraw(mesh, slice, frame, program))
+    pub fn draw(&self, mesh: MeshHandle, slice: mesh::Slice, frame: Option<target::Frame>, program: ProgramHandle, env: EnvirHandle) {
+        self.stream.send(CastDraw(mesh, slice, frame, program, env))
     }
 
     pub fn end_frame(&self) {
@@ -89,9 +105,41 @@ impl Client {
         self.stream.send(CallNewIndexBuffer(data));
         // TODO: delay recv()
         match self.stream.recv() {
-            ReplyIndexBuffer(buffer) => buffer,
+            ReplyBuffer(buffer) => buffer,
             _ => fail!("unknown reply")
         }
+    }
+
+    pub fn create_raw_buffer(&self) -> BufferHandle {
+        self.stream.send(CallNewRawBuffer);
+        match self.stream.recv() {
+            ReplyBuffer(buffer) => buffer,
+            _ => fail!("unknown reply")
+        }
+    }
+
+    pub fn create_environment(&self, storage: envir::Storage) -> EnvirHandle {
+        self.stream.send(CallNewEnvironment(storage));
+        match self.stream.recv() {
+            ReplyEnvironment(handle) => handle,
+            _ => fail!("unknown reply")
+        }
+    }
+
+    pub fn set_env_block(&self, env: EnvirHandle, var: envir::BlockVar, buf: BufferHandle) {
+        self.stream.send(CastSetEnvironment(env, EnvirBlock(var, buf)));
+    }
+
+    pub fn set_env_uniform(&self, env: EnvirHandle, var: envir::UniformVar, value: UniformValue) {
+        self.stream.send(CastSetEnvironment(env, EnvirUniform(var, value)));
+    }
+
+    pub fn set_env_texture(&self, env: EnvirHandle, var: envir::TextureVar, texture: TextureHandle, sampler: SamplerHandle) {
+        self.stream.send(CastSetEnvironment(env, EnvirTexture(var, texture, sampler)));
+    }
+
+    pub fn update_buffer(&self, buf: BufferHandle, data: Vec<f32>) {
+        self.stream.send(CastUpdateBuffer(buf, data));
     }
 }
 
@@ -100,6 +148,7 @@ impl Client {
 struct Cache {
     pub meshes: Vec<mesh::Mesh>,
     pub programs: Vec<ProgramMeta>,
+    pub environments: Vec<envir::Storage>,
 }
 
 struct Server {
@@ -128,13 +177,14 @@ impl Server {
             cache: Cache {
                 meshes: Vec::new(),
                 programs: Vec::new(),
+                environments: Vec::new(),
             },
         }
     }
 
     fn bind_frame(&mut self, frame_opt: &Option<target::Frame>) {
         match frame_opt {
-            &Some(ref frame) => {
+            &Some(ref _frame) => {
                 //TODO: find an existing FBO that matches the plane set
                 // or create a new one and bind it
                 unimplemented!()
@@ -156,6 +206,27 @@ impl Server {
         Ok(())
     }
 
+    fn bind_environment(device: &mut device::Client, storage: &envir::Storage, shortcut: &envir::Shortcut, program: &ProgramMeta) {
+        debug_assert!(storage.is_fit(shortcut, program));
+        device.bind_program(program.name);
+
+        for (i, (&k, block_var)) in shortcut.blocks.iter().zip(program.blocks.iter()).enumerate() {
+            let block = storage.get_block(k);
+            block_var.active_slot.set(i as u8);
+            device.bind_uniform_block(program.name, i as u8, i as device::UniformBufferSlot, block);
+        }
+
+        for (&k, uniform_var) in shortcut.uniforms.iter().zip(program.uniforms.iter()) {
+            let value = storage.get_uniform(k);
+            uniform_var.active_value.set(value);
+            device.bind_uniform(uniform_var.location, value);
+        }
+
+        for (_i, (&_k, _texture)) in shortcut.textures.iter().zip(program.textures.iter()).enumerate() {
+            unimplemented!()
+        }
+    }
+
     pub fn update(&mut self) -> bool {
         loop {
             match self.stream.try_recv() {
@@ -172,14 +243,23 @@ impl Server {
                         None => unimplemented!()
                     }
                 },
-                Ok(CastDraw(mesh_handle, slice, frame, prog_handle)) => {
-                    // bind resources
+                Ok(CastDraw(mesh_handle, slice, frame, program_handle, env_handle)) => {
+                    // bind output frame
                     self.bind_frame(&frame);
+                    // bind shaders
+                    let program = self.cache.programs.get(program_handle);
+                    let env = self.cache.environments.get(env_handle);
+                    match env.optimize(program) {
+                        Ok(ref cut) => Server::bind_environment(&mut self.device, env, cut, program),
+                        Err(_) => {
+                            error!("Failed to build environment shortcut");
+                            continue
+                        },
+                    }
+                    // bind vertex attributes
                     self.device.bind_array_buffer(self.common_array_buffer);
                     let mesh = self.cache.meshes.get(mesh_handle);
-                    let program = self.cache.programs.get(prog_handle);
                     Server::bind_mesh(&mut self.device, mesh, program).unwrap();
-                    self.device.bind_program(program.name);
                     // draw
                     match slice {
                         mesh::VertexSlice(start, end) => {
@@ -190,6 +270,17 @@ impl Server {
                             self.device.draw_indexed(start, end);
                         },
                     }
+                },
+                Ok(CastSetEnvironment(handle, change)) => {
+                    let env = self.cache.environments.get_mut(handle);
+                    match change {
+                        EnvirBlock(var, buf)                => env.set_block(var, buf),
+                        EnvirUniform(var, value)            => env.set_uniform(var, value),
+                        EnvirTexture(var, texture, sampler) => env.set_texture(var, texture, sampler),
+                    }
+                },
+                Ok(CastUpdateBuffer(handle, data)) => {
+                    self.device.update_buffer(handle, data);
                 },
                 Ok(CastEndFrame) => {
                     self.device.end_frame();
@@ -225,7 +316,16 @@ impl Server {
                 },
                 Ok(CallNewIndexBuffer(data)) => {
                     let buffer = self.device.new_index_buffer(data);
-                    self.stream.send(ReplyIndexBuffer(buffer));
+                    self.stream.send(ReplyBuffer(buffer));
+                },
+                Ok(CallNewRawBuffer) => {
+                    let buffer = self.device.new_raw_buffer();
+                    self.stream.send(ReplyBuffer(buffer));
+                },
+                Ok(CallNewEnvironment(storage)) => {
+                    let handle = self.cache.environments.len();
+                    self.cache.environments.push(storage);
+                    self.stream.send(ReplyEnvironment(handle));
                 },
                 Err(comm::Empty)  => {
                     break; // finished all the pending rendering messages

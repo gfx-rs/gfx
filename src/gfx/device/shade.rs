@@ -72,9 +72,9 @@ pub enum Stage {
 
 pub type Location = uint;
 
-//#[deriving(Show)] // unable to derive fixed arrays
+// unable to derive anything for fixed arrays
 pub enum UniformValue {
-    ValueUnitialized,
+    ValueUninitialized,
     ValueI32(i32),
     ValueF32(f32),
     ValueI32Vec([i32, ..4]),
@@ -82,10 +82,49 @@ pub enum UniformValue {
     ValueF32Matrix([[f32, ..4], ..4]),
 }
 
+impl UniformValue {
+    pub fn is_valid(&self) -> bool {
+        match *self {
+            ValueUninitialized => false,
+            _ => true,
+        }
+    }
+
+    pub fn is_same_type(&self, other: &UniformValue) -> bool {
+        match (*self, *other) {
+            (ValueI32(_), ValueI32(_)) => true,
+            (ValueF32(_), ValueF32(_)) => true,
+            (ValueI32Vec(_), ValueI32Vec(_)) => true,
+            (ValueF32Vec(_), ValueI32Vec(_)) => true,
+            (ValueF32Matrix(_), ValueF32Matrix(_)) => true,
+            _ => false,
+        }
+    }
+}
+
+/*  // the type has Copy implemented implicitly, until we introduce boxed fields
+impl Clone for UniformValue {
+    fn clone(&self) -> UniformValue {
+        match *self {
+            ValueUninitialized  => ValueUninitialized,
+            ValueI32(val)       => ValueI32(val),
+            ValueF32(val)       => ValueF32(val),
+            ValueI32Vec(v)      => ValueI32Vec([v[0], v[1], v[2], v[3]]),
+            ValueF32Vec(v)      => ValueF32Vec([v[0], v[1], v[2], v[3]]),
+            ValueF32Matrix(v)   => ValueF32Matrix(box [
+                [v[0][0], v[0][1], v[0][2], v[0][3]],
+                [v[1][0], v[1][1], v[1][2], v[1][3]],
+                [v[2][0], v[2][1], v[2][2], v[2][3]],
+                [v[3][0], v[3][1], v[3][2], v[3][3]]
+                ])),
+        }
+    }
+}*/
+
 impl fmt::Show for UniformValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            ValueUnitialized      => write!(f, "ValueUnitialized"),
+            ValueUninitialized    => write!(f, "ValueUninitialized"),
             ValueI32(x)           => write!(f, "ValueI32({})", x),
             ValueF32(x)           => write!(f, "ValueF32({})", x),
             ValueI32Vec(ref v)    => write!(f, "ValueI32Vec({})", v.as_slice()),
@@ -144,4 +183,30 @@ pub struct ProgramMeta {
     pub uniforms: Vec<UniformVar>,
     pub blocks: Vec<BlockVar>,
     pub textures: Vec<SamplerVar>,
+}
+
+
+pub enum CompatibilityError {
+    ErrorArraySize,
+    ErrorBaseType,
+    ErrorContainer,
+}
+
+impl UniformVar {
+    pub fn is_compatible(&self, value: &UniformValue) -> Result<(), CompatibilityError> {
+        if self.count != 1 {
+            return Err(ErrorArraySize)
+        }
+        match (self.base_type, self.container, *value) {
+            (BaseI32, Single, ValueI32(_)) => Ok(()),
+            (BaseF32, Single, ValueF32(_)) => Ok(()),
+            (BaseF32, Vector(4), ValueF32Vec(_)) => Ok(()),
+            (BaseF32, Vector(_), ValueF32Vec(_)) => Err(ErrorContainer),
+            (BaseI32, Vector(4), ValueI32Vec(_)) => Ok(()),
+            (BaseI32, Vector(_), ValueI32Vec(_)) => Err(ErrorContainer),
+            (BaseF32, Matrix(_, 4,4), ValueF32Matrix(_)) => Ok(()),
+            (BaseF32, Matrix(_, _,_), ValueF32Matrix(_)) => Err(ErrorContainer),
+            _ => Err(ErrorBaseType)
+        }
+    }
 }
