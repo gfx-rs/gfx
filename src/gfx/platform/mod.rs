@@ -25,6 +25,7 @@ pub enum D3dApi {}
 
 pub trait GraphicsContext<Api> {
     fn swap_buffers(&self);
+    fn make_current(&self);
 }
 
 pub trait GlProvider {

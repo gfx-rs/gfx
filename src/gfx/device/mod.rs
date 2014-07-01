@@ -139,7 +139,6 @@ impl Client {
 }
 
 pub struct Server<P> {
-    no_send: marker::NoSend,
     no_share: marker::NoShare,
     stream: DuplexStream<Reply, Request>,
     graphics_context: P,
@@ -147,6 +146,10 @@ pub struct Server<P> {
 }
 
 impl<Api, P: GraphicsContext<Api>> Server<P> {
+    pub fn make_current(&self) {
+        self.graphics_context.make_current();
+    }
+
     /// Update the platform. The client must manually update this on the main
     /// thread.
     pub fn update(&mut self) -> bool {
@@ -222,7 +225,6 @@ pub fn init<Api, P: GraphicsContext<Api>>(graphics_context: P, options: super::O
     };
     let dev = Device::new(options);
     let server = Server {
-        no_send: marker::NoSend,
         no_share: marker::NoShare,
         stream: server_stream,
         graphics_context: graphics_context,
