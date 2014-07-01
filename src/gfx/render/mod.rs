@@ -46,8 +46,8 @@ enum Request {
     CallNewEnvironment(envir::Storage),
     // Requests that don't expect a reply:
     CastClear(target::ClearData, Option<target::Frame>),
-    CastDraw(MeshHandle, mesh::Slice, Option<target::Frame>, ProgramHandle),
-    CastSetEnvir(EnvirHandle, EnvirChangeRequest),
+    CastDraw(MeshHandle, mesh::Slice, Option<target::Frame>, ProgramHandle, EnvirHandle),
+    CastSetEnvironment(EnvirHandle, EnvirChangeRequest),
     CastEndFrame,
     CastFinish,
 }
@@ -68,8 +68,8 @@ impl Client {
         self.stream.send(CastClear(data, frame));
     }
 
-    pub fn draw(&self, mesh: MeshHandle, slice: mesh::Slice, frame: Option<target::Frame>, program: ProgramHandle) {
-        self.stream.send(CastDraw(mesh, slice, frame, program))
+    pub fn draw(&self, mesh: MeshHandle, slice: mesh::Slice, frame: Option<target::Frame>, program: ProgramHandle, env: EnvirHandle) {
+        self.stream.send(CastDraw(mesh, slice, frame, program, env))
     }
 
     pub fn end_frame(&self) {
@@ -116,15 +116,15 @@ impl Client {
     }
 
     pub fn set_env_block(&self, env: EnvirHandle, var: envir::BlockVar, buf: BufferHandle) {
-        self.stream.send(CastSetEnvir(env, EnvirBlock(var, buf)));
+        self.stream.send(CastSetEnvironment(env, EnvirBlock(var, buf)));
     }
 
     pub fn set_env_uniform(&self, env: EnvirHandle, var: envir::UniformVar, value: UniformValue) {
-        self.stream.send(CastSetEnvir(env, EnvirUniform(var, value)));
+        self.stream.send(CastSetEnvironment(env, EnvirUniform(var, value)));
     }
 
     pub fn set_env_texture(&self, env: EnvirHandle, var: envir::TextureVar, texture: TextureHandle, sampler: SamplerHandle) {
-        self.stream.send(CastSetEnvir(env, EnvirTexture(var, texture, sampler)));
+        self.stream.send(CastSetEnvironment(env, EnvirTexture(var, texture, sampler)));
     }
 }
 
@@ -207,14 +207,18 @@ impl Server {
                         None => unimplemented!()
                     }
                 },
-                Ok(CastDraw(mesh_handle, slice, frame, prog_handle)) => {
-                    // bind resources
+                Ok(CastDraw(mesh_handle, slice, frame, prog_handle, env_handle)) => {
+                    // bind output frame
                     self.bind_frame(&frame);
+                    // bind shaders
+                    let program = self.cache.programs.get(prog_handle);
+                    let envir = self.cache.environments.get(env_handle);
+                    let _shortcut = envir::Shortcut::build(envir, program);
+                    self.device.bind_program(program.name);
+                    // bind vertex attributes
                     self.device.bind_array_buffer(self.common_array_buffer);
                     let mesh = self.cache.meshes.get(mesh_handle);
-                    let program = self.cache.programs.get(prog_handle);
                     Server::bind_mesh(&mut self.device, mesh, program).unwrap();
-                    self.device.bind_program(program.name);
                     // draw
                     match slice {
                         mesh::VertexSlice(start, end) => {
@@ -226,7 +230,7 @@ impl Server {
                         },
                     }
                 },
-                Ok(CastSetEnvir(handle, change)) => {
+                Ok(CastSetEnvironment(handle, change)) => {
                     let env = self.cache.environments.get_mut(handle);
                     match change {
                         EnvirBlock(var, buf)                => env.set_block(var, buf),

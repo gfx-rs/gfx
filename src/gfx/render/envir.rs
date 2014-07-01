@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use device::shade::UniformValue;
+use device::shade::{UniformValue, ProgramMeta};
 
 pub type BlockVar = u8;
 pub type UniformVar = u16;
@@ -70,4 +70,38 @@ impl Storage {
         *tex = texture;
         *sam = sampler;    	
     }
+}
+
+
+/// Environment shortcut - the acceleration structure used for
+/// binding shader program parameters. Each *Var serves as a
+/// pointer from a program parameter to the environment data.
+pub struct Shortcut {
+	pub blocks: Vec<BlockVar>,
+	pub uniforms: Vec<UniformVar>,
+	pub textures: Vec<TextureVar>,
+}
+
+impl Shortcut {
+	pub fn is_fit(&self, program: &ProgramMeta) -> bool {
+		self.blocks.len() == program.blocks.len() &&
+		self.uniforms.len() == program.uniforms.len() &&
+		self.textures.len() == program.textures.len()
+	}
+
+	pub fn build(storage: &Storage, program: &ProgramMeta) -> Result<Shortcut,()> {
+		let sh = Shortcut {
+			blocks: program.blocks.iter().scan((), |_, b|
+				storage.blocks.iter().position(|&(ref name,_)| name==&b.name).map(|p| p as BlockVar)
+				).collect(),
+			uniforms: program.uniforms.iter().scan((), |_, u|
+				storage.uniforms.iter().position(|&(ref name, _)| name==&u.name).map(|p| p as UniformVar)
+				).collect(),
+			textures: program.textures.iter().scan((), |_, t|
+				storage.textures.iter().position(|&(ref name, _, _)| name==&t.name).map(|p| p as TextureVar)
+				).collect(),
+		};
+		if sh.is_fit(program) {Ok(sh)}
+		else {Err(())}
+	}
 }
