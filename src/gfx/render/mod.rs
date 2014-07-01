@@ -18,8 +18,10 @@ use std::kinds::marker;
 
 use device;
 
-pub use ProgramHandle = device::dev::Program;
-pub use MeshHandle = self::mesh::Mesh;
+use device::shade::{ProgramMeta, Vertex, Fragment};
+pub use BufferHandle = device::dev::Buffer;
+pub type ProgramHandle = uint;
+pub type MeshHandle = uint;
 pub type Environment = ();  // placeholder
 
 pub mod mesh;
@@ -29,10 +31,11 @@ pub mod target;
 pub enum Request {
     // Requests that require a reply:
     CallNewProgram(Vec<u8>, Vec<u8>),
-    CallNewMesh(mesh::VertexCount, Vec<f32>, u8),
+    CallNewMesh(mesh::VertexCount, Vec<f32>, u8, u8),
+    CallNewIndexBuffer(Vec<u16>),
     // Requests that don't expect a reply:
     CastClear(target::ClearData, Option<target::Frame>),
-    CastDraw(MeshHandle, Option<target::Frame>, ProgramHandle),
+    CastDraw(MeshHandle, mesh::Slice, Option<target::Frame>, ProgramHandle),
     CastEndFrame,
     CastFinish,
 }
@@ -40,6 +43,7 @@ pub enum Request {
 pub enum Reply {
     ReplyProgram(ProgramHandle),
     ReplyMesh(MeshHandle),
+    ReplyIndexBuffer(BufferHandle),
 }
 
 pub struct Client {
@@ -51,8 +55,8 @@ impl Client {
         self.stream.send(CastClear(data, frame));
     }
 
-    pub fn draw(&self, mesh: MeshHandle, frame: Option<target::Frame>, program: ProgramHandle) {
-        self.stream.send(CastDraw(mesh, frame, program))
+    pub fn draw(&self, mesh: MeshHandle, slice: mesh::Slice, frame: Option<target::Frame>, program: ProgramHandle) {
+        self.stream.send(CastDraw(mesh, slice, frame, program))
     }
 
     pub fn end_frame(&self) {
@@ -72,14 +76,30 @@ impl Client {
         }
     }
 
-    pub fn create_mesh(&self, num_vert: mesh::VertexCount, data: Vec<f32>, stride0: u8) -> MeshHandle {
-        self.stream.send(CallNewMesh(num_vert, data, stride0));
+    pub fn create_mesh(&self, num_vert: mesh::VertexCount, data: Vec<f32>, count0: u8, stride0: u8) -> MeshHandle {
+        self.stream.send(CallNewMesh(num_vert, data, count0, stride0));
         // TODO: delay recv()
         match self.stream.recv() {
             ReplyMesh(mesh) => mesh,
             _ => fail!("unknown reply")
         }
     }
+
+    pub fn create_index_buffer(&self, data: Vec<u16>) -> BufferHandle {
+        self.stream.send(CallNewIndexBuffer(data));
+        // TODO: delay recv()
+        match self.stream.recv() {
+            ReplyIndexBuffer(buffer) => buffer,
+            _ => fail!("unknown reply")
+        }
+    }
+}
+
+
+/// Temporary cache system before we get the handle manager
+struct Cache {
+    pub meshes: Vec<mesh::Mesh>,
+    pub programs: Vec<ProgramMeta>,
 }
 
 struct Server {
@@ -91,6 +111,8 @@ struct Server {
     common_array_buffer: device::dev::ArrayBuffer,
     /// the default FBO for drawing
     default_frame_buffer: device::dev::FrameBuffer,
+    /// cached meta-data for meshes and programs
+    cache: Cache,
 }
 
 impl Server {
@@ -103,6 +125,10 @@ impl Server {
             device: device,
             common_array_buffer: abuf,
             default_frame_buffer: 0,
+            cache: Cache {
+                meshes: Vec::new(),
+                programs: Vec::new(),
+            },
         }
     }
 
@@ -117,6 +143,17 @@ impl Server {
                 self.device.bind_frame_buffer(self.default_frame_buffer);
             }
         }
+    }
+
+    fn bind_mesh(device: &mut device::Client, mesh: &mesh::Mesh, prog: &ProgramMeta) -> Result<(),()> {
+        for sat in prog.attributes.iter() {
+            match mesh.attributes.iter().find(|a| a.name.as_slice() == sat.name.as_slice()) {
+                Some(vat) => device.bind_attribute(sat.location as u8,
+                    vat.buffer, vat.size as u32, vat.offset as u32, vat.stride as u32),
+                None => return Err(())
+            }
+        }
+        Ok(())
     }
 
     pub fn update(&mut self) -> bool {
@@ -135,37 +172,60 @@ impl Server {
                         None => unimplemented!()
                     }
                 },
-                Ok(CastDraw(mesh, frame, program)) => {
+                Ok(CastDraw(mesh_handle, slice, frame, prog_handle)) => {
+                    // bind resources
                     self.bind_frame(&frame);
-                    self.device.bind_program(program);
                     self.device.bind_array_buffer(self.common_array_buffer);
-                    for (i, at) in mesh.attributes.iter().enumerate().filter(|&(_,at)| at.buffer!=0) {
-                        self.device.bind_attribute(i as u8, at.buffer, mesh.num_vertices,
-                            at.offset as u32, at.stride as u32);
+                    let mesh = self.cache.meshes.get(mesh_handle);
+                    let program = self.cache.programs.get(prog_handle);
+                    Server::bind_mesh(&mut self.device, mesh, program).unwrap();
+                    self.device.bind_program(program.name);
+                    // draw
+                    match slice {
+                        mesh::VertexSlice(start, end) => {
+                            self.device.draw(start, end);
+                        },
+                        mesh::IndexSlice(buf, start, end) => {
+                            self.device.bind_index(buf);
+                            self.device.draw_indexed(start, end);
+                        },
                     }
-                    self.device.draw(0, mesh.num_vertices);
                 },
                 Ok(CastEndFrame) => {
                     self.device.end_frame();
                 },
                 Ok(CallNewProgram(vs, fs)) => {
-                    let h_vs = self.device.new_shader('v', vs);
-                    let h_fs = self.device.new_shader('f', fs);
+                    let h_vs = self.device.new_shader(Vertex, vs).unwrap_or(0);
+                    let h_fs = self.device.new_shader(Fragment, fs).unwrap_or(0);
                     let prog = self.device.new_program(vec!(h_vs, h_fs));
+                    let prog = match prog {
+                        Ok(prog) => {
+                            self.cache.programs.push(prog);
+                            self.cache.programs.len() - 1
+                        },
+                        Err(_) => 0,
+                    };
                     self.stream.send(ReplyProgram(prog));
                 },
-                Ok(CallNewMesh(num_vert, data, stride)) => {
-                    let buffer = self.device.new_buffer(data);
-                    let mut mesh = MeshHandle::new(num_vert);
-                    mesh.attributes[0] = mesh::Attribute {
+                Ok(CallNewMesh(num_vert, data, count, stride)) => {
+                    let buffer = self.device.new_vertex_buffer(data);
+                    let mut mesh = mesh::Mesh::new(num_vert);
+                    mesh.attributes.push(mesh::Attribute {
                         buffer: buffer,
+                        size: count,
                         offset: 0,
                         stride: stride,
                         is_normalized: false,
                         is_interpolated: false,
-                        name: (),
-                    };
-                    self.stream.send(ReplyMesh(mesh));
+                        name: "a_Pos".to_string(),
+                    });
+                    let handle = self.cache.meshes.len();
+                    self.cache.meshes.push(mesh);
+                    self.stream.send(ReplyMesh(handle));
+                },
+                Ok(CallNewIndexBuffer(data)) => {
+                    let buffer = self.device.new_index_buffer(data);
+                    self.stream.send(ReplyIndexBuffer(buffer));
                 },
                 Err(comm::Empty)  => {
                     break; // finished all the pending rendering messages

@@ -18,6 +18,8 @@ extern crate libc;
 use std;
 use platform::GlProvider;
 
+mod shade;
+
 pub type Buffer         = gl::types::GLuint;
 pub type ArrayBuffer    = gl::types::GLuint;
 pub type Shader         = gl::types::GLuint;
@@ -54,7 +56,7 @@ impl Device {
         gl::BindBuffer(gl::ARRAY_BUFFER, name);
         info!("\tCreated buffer {}", name);
         let size = (data.len() * std::mem::size_of::<T>()) as gl::types::GLsizeiptr;
-        let raw = data.as_ptr() as *gl::types::GLvoid;
+        let raw = data.as_ptr() as *const gl::types::GLvoid;
         unsafe{
             gl::BufferData(gl::ARRAY_BUFFER, size, raw, gl::STATIC_DRAW);
         }
@@ -63,6 +65,10 @@ impl Device {
 
     pub fn bind_vertex_buffer(&self, buffer: Buffer) {
         gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
+    }
+
+    pub fn bind_index_buffer(&self, buffer: Buffer) {
+        gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer);
     }
 
     /// Vertex Array Buffer
@@ -84,81 +90,25 @@ impl Device {
         unsafe{
             gl::VertexAttribPointer(slot as gl::types::GLuint,
                 count as gl::types::GLint, gl::FLOAT, gl::FALSE,
-                stride as gl::types::GLint, offset as *gl::types::GLvoid);
+                stride as gl::types::GLint, offset as *const gl::types::GLvoid);
         }
         gl::EnableVertexAttribArray(slot as gl::types::GLuint);
     }
 
     /// Shader Object
 
-    pub fn create_shader(&self, kind: char, data: &[u8]) -> Shader {
-        let target = match kind {
-            'v' => gl::VERTEX_SHADER,
-            'g' => gl::GEOMETRY_SHADER,
-            'f' => gl::FRAGMENT_SHADER,
-            _   => fail!("Unknown shader kind: {}", kind)
-        };
-        let name = gl::CreateShader(target);
-        let mut length = data.len() as gl::types::GLint;
-        unsafe {
-            gl::ShaderSource(name, 1, &(data.as_ptr() as *gl::types::GLchar), &length);
-        }
-        gl::CompileShader(name);
-        info!("\tCompiled shader {}", name);
-        // get info message
-        let mut status = 0 as gl::types::GLint;
-        length = 0;
-        unsafe {
-            gl::GetShaderiv(name, gl::COMPILE_STATUS,  &mut status);
-            gl::GetShaderiv(name, gl::INFO_LOG_LENGTH, &mut length);
-        }
-        let mut info = String::with_capacity(length as uint);
-        info.grow(length as uint, 0u8 as char);
-        unsafe {
-            gl::GetShaderInfoLog(name, length, &mut length,
-                info.as_slice().as_ptr() as *mut gl::types::GLchar);
-        }
-        info.truncate(length as uint);
-        if status == 0  {
-            error!("Failed shader code:\n{}\n", std::str::from_utf8(data).unwrap());
-            fail!("GLSL: {}", info);
-        }
+    pub fn create_shader(&self, stage: super::shade::Stage, data: &[u8]) -> Result<Shader, ()> {
+        let (name, info) = shade::create_shader(stage, data);
+        info.map(|info| warn!("\tShader compile log: {}", info));
         name
     }
 
     /// Shader Program
 
-    fn query_program_int(&self, prog: Program, query: gl::types::GLenum) -> gl::types::GLint {
-        let mut ret = 0 as gl::types::GLint;
-        unsafe {
-            gl::GetProgramiv(prog, query, &mut ret);
-        }
-        ret
-    }
-
-    pub fn create_program(&self, shaders: &[Shader]) -> Program {
-        let name = gl::CreateProgram();
-        for &sh in shaders.iter() {
-            gl::AttachShader(name, sh);
-        }
-        gl::LinkProgram(name);
-        info!("\tLinked program {}", name);
-        //info!("\tLinked program {} from objects {}", h, shaders);
-        // get info message
-        let status      = self.query_program_int(name, gl::LINK_STATUS);
-        let mut length  = self.query_program_int(name, gl::INFO_LOG_LENGTH);
-        let mut info = String::with_capacity(length as uint);
-        info.grow(length as uint, 0u8 as char);
-        unsafe {
-            gl::GetProgramInfoLog(name, length, &mut length,
-                info.as_slice().as_ptr() as *mut gl::types::GLchar);
-        }
-        info.truncate(length as uint);
-        if status == 0  {
-            error!("GL error {}", gl::GetError());
-            fail!("GLSL program error: {}", info)
-        }
-        name
+    pub fn create_program(&self, shaders: &[Shader]) -> Result<super::shade::ProgramMeta, ()> {
+        let (meta, info) = shade::create_program(shaders);
+        info.map(|info| warn!("\tProgram link log: {}", info));
+        meta
     }
 
     pub fn bind_program(&self, program: Program) {
@@ -177,5 +127,15 @@ impl Device {
         gl::DrawArrays(gl::TRIANGLES,
             start as gl::types::GLsizei,
             count as gl::types::GLsizei);
+    }
+
+    pub fn draw_index(&self, start: u16, count: u16) {
+        let offset = start * (std::mem::size_of::<u16>() as u16);
+        unsafe {
+            gl::DrawElements(gl::TRIANGLES,
+                count as gl::types::GLsizei,
+                gl::UNSIGNED_SHORT,
+                offset as *const gl::types::GLvoid);
+        }
     }
 }

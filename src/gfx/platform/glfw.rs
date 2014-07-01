@@ -30,13 +30,17 @@ impl<C: Context> GlfwGraphicsContext<C> {
 }
 
 impl<C: Context> GraphicsContext<GlApi> for GlfwGraphicsContext<C> {
+    fn make_current(&self) {
+        self.context.make_current();
+    }
+
     fn swap_buffers(&self) {
         self.context.swap_buffers();
     }
 }
 
 impl super::GlProvider for glfw::Glfw {
-    fn get_proc_address(&self, name: &str) -> *::libc::c_void {
+    fn get_proc_address(&self, name: &str) -> *const ::libc::c_void {
         self.get_proc_address(name)
     }
     fn is_extension_supported(&self, name: &str) -> bool {

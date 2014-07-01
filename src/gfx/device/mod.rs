@@ -22,33 +22,38 @@ use std::kinds::marker;
 
 use GraphicsContext;
 
+pub mod shade;
 #[cfg(gl)] mod gl;
 
 pub type Color = [f32, ..4];
 pub type VertexCount = u16;
+pub type IndexCount = u16;
 
 
 pub enum Request {
     // Requests that require a reply:
-    CallNewBuffer(Vec<f32>),
+    CallNewVertexBuffer(Vec<f32>),
+    CallNewIndexBuffer(Vec<u16>),
     CallNewArrayBuffer,
-    CallNewShader(char, Vec<u8>),
+    CallNewShader(shade::Stage, Vec<u8>),
     CallNewProgram(Vec<dev::Shader>),
     // Requests that don't expect a reply:
     CastClear(Color),
     CastBindProgram(dev::Program),
     CastBindArrayBuffer(dev::ArrayBuffer),
-    CastBindAttribute(u8, dev::Buffer, VertexCount, u32, u32),
+    CastBindAttribute(u8, dev::Buffer, u32, u32, u32),
+    CastBindIndex(dev::Buffer),
     CastBindFrameBuffer(dev::FrameBuffer),
     CastDraw(VertexCount, VertexCount),
+    CastDrawIndexed(IndexCount, IndexCount),
     CastSwapBuffers,
 }
 
 pub enum Reply {
     ReplyNewBuffer(dev::Buffer),
     ReplyNewArrayBuffer(dev::ArrayBuffer),
-    ReplyNewShader(dev::Shader),
-    ReplyNewProgram(dev::Program),
+    ReplyNewShader(Result<dev::Shader, ()>),
+    ReplyNewProgram(Result<shade::ProgramMeta, ()>),
 }
 
 pub struct Client {
@@ -68,8 +73,12 @@ impl Client {
         self.stream.send(CastBindArrayBuffer(abuf));
     }
 
-    pub fn bind_attribute(&self, index: u8, buf: dev::Buffer, count: VertexCount, offset: u32, stride: u32) {
+    pub fn bind_attribute(&self, index: u8, buf: dev::Buffer, count: u32, offset: u32, stride: u32) {
         self.stream.send(CastBindAttribute(index, buf, count, offset, stride));
+    }
+
+    pub fn bind_index(&self, buf: dev::Buffer) {
+        self.stream.send(CastBindIndex(buf));
     }
 
     pub fn bind_frame_buffer(&self, fbo: dev::FrameBuffer) {
@@ -80,19 +89,23 @@ impl Client {
         self.stream.send(CastDraw(offset, count));
     }
 
+    pub fn draw_indexed(&self, offset: IndexCount, count: IndexCount) {
+        self.stream.send(CastDrawIndexed(offset, count));
+    }
+
     pub fn end_frame(&self) {
         self.stream.send(CastSwapBuffers);
     }
 
-    pub fn new_shader(&self, kind: char, code: Vec<u8>) -> dev::Shader {
-        self.stream.send(CallNewShader(kind, code));
+    pub fn new_shader(&self, stage: shade::Stage, code: Vec<u8>) -> Result<dev::Shader, ()> {
+        self.stream.send(CallNewShader(stage, code));
         match self.stream.recv() {
             ReplyNewShader(name) => name,
             _ => fail!("unexpected device reply")
         }
     }
 
-    pub fn new_program(&self, shaders: Vec<dev::Shader>) -> dev::Program {
+    pub fn new_program(&self, shaders: Vec<dev::Shader>) -> Result<shade::ProgramMeta, ()> {
         self.stream.send(CallNewProgram(shaders));
         match self.stream.recv() {
             ReplyNewProgram(name) => name,
@@ -100,8 +113,16 @@ impl Client {
         }
     }
 
-    pub fn new_buffer(&self, data: Vec<f32>) -> dev::Buffer {
-        self.stream.send(CallNewBuffer(data));
+    pub fn new_vertex_buffer(&self, data: Vec<f32>) -> dev::Buffer {
+        self.stream.send(CallNewVertexBuffer(data));
+        match self.stream.recv() {
+            ReplyNewBuffer(name) => name,
+            _ => fail!("unexpected device reply")
+        }
+    }
+
+    pub fn new_index_buffer(&self, data: Vec<u16>) -> dev::Buffer {
+        self.stream.send(CallNewIndexBuffer(data));
         match self.stream.recv() {
             ReplyNewBuffer(name) => name,
             _ => fail!("unexpected device reply")
@@ -118,7 +139,6 @@ impl Client {
 }
 
 pub struct Server<P> {
-    no_send: marker::NoSend,
     no_share: marker::NoShare,
     stream: DuplexStream<Reply, Request>,
     graphics_context: P,
@@ -126,12 +146,16 @@ pub struct Server<P> {
 }
 
 impl<Api, P: GraphicsContext<Api>> Server<P> {
+    pub fn make_current(&self) {
+        self.graphics_context.make_current();
+    }
+
     /// Update the platform. The client must manually update this on the main
     /// thread.
     pub fn update(&mut self) -> bool {
         // Get updates from the renderer and pass on results
         loop {
-            match self.stream.try_recv() {
+            match self.stream.recv_opt() {
                 Ok(CastClear(color)) => {
                     self.device.clear(color.as_slice());
                 },
@@ -142,7 +166,11 @@ impl<Api, P: GraphicsContext<Api>> Server<P> {
                     self.device.bind_array_buffer(abuf);
                 },
                 Ok(CastBindAttribute(index, buf, count, offset, stride)) => {
+                    self.device.bind_vertex_buffer(buf);
                     self.device.bind_attribute(index, count as u32, offset, stride);
+                },
+                Ok(CastBindIndex(buf)) => {
+                    self.device.bind_index_buffer(buf);
                 },
                 Ok(CastBindFrameBuffer(fbo)) => {
                     self.device.bind_frame_buffer(fbo);
@@ -150,10 +178,18 @@ impl<Api, P: GraphicsContext<Api>> Server<P> {
                 Ok(CastDraw(offset, count)) => {
                     self.device.draw(offset as u32, count as u32);
                 },
+                Ok(CastDrawIndexed(offset, count)) => {
+                    self.device.draw_index(offset, count);
+                },
                 Ok(CastSwapBuffers) => {
+                    self.graphics_context.swap_buffers();
                     break;
                 },
-                Ok(CallNewBuffer(data)) => {
+                Ok(CallNewVertexBuffer(data)) => {
+                    let name = self.device.create_buffer(data.as_slice());
+                    self.stream.send(ReplyNewBuffer(name));
+                },
+                Ok(CallNewIndexBuffer(data)) => {
                     let name = self.device.create_buffer(data.as_slice());
                     self.stream.send(ReplyNewBuffer(name));
                 },
@@ -161,19 +197,17 @@ impl<Api, P: GraphicsContext<Api>> Server<P> {
                     let name = self.device.create_array_buffer();
                     self.stream.send(ReplyNewArrayBuffer(name));
                 },
-                Ok(CallNewShader(kind, code)) => {
-                    let name = self.device.create_shader(kind, code.as_slice());
+                Ok(CallNewShader(stage, code)) => {
+                    let name = self.device.create_shader(stage, code.as_slice());
                     self.stream.send(ReplyNewShader(name));
                 },
                 Ok(CallNewProgram(code)) => {
                     let name = self.device.create_program(code.as_slice());
                     self.stream.send(ReplyNewProgram(name));
                 },
-                Err(comm::Empty) => break,
-                Err(comm::Disconnected) => return false,
+                Err(()) => return false,
             }
         }
-        self.graphics_context.swap_buffers();
         true
     }
 }
@@ -190,7 +224,6 @@ pub fn init<Api, P: GraphicsContext<Api>>(graphics_context: P, options: super::O
     };
     let dev = Device::new(options);
     let server = Server {
-        no_send: marker::NoSend,
         no_share: marker::NoShare,
         stream: server_stream,
         graphics_context: graphics_context,
