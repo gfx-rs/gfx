@@ -155,7 +155,7 @@ impl<Api, P: GraphicsContext<Api>> Server<P> {
     pub fn update(&mut self) -> bool {
         // Get updates from the renderer and pass on results
         loop {
-            match self.stream.try_recv() {
+            match self.stream.recv_opt() {
                 Ok(CastClear(color)) => {
                     self.device.clear(color.as_slice());
                 },
@@ -182,6 +182,7 @@ impl<Api, P: GraphicsContext<Api>> Server<P> {
                     self.device.draw_index(offset, count);
                 },
                 Ok(CastSwapBuffers) => {
+                    self.graphics_context.swap_buffers();
                     break;
                 },
                 Ok(CallNewVertexBuffer(data)) => {
@@ -204,11 +205,9 @@ impl<Api, P: GraphicsContext<Api>> Server<P> {
                     let name = self.device.create_program(code.as_slice());
                     self.stream.send(ReplyNewProgram(name));
                 },
-                Err(comm::Empty) => break,
-                Err(comm::Disconnected) => return false,
+                Err(()) => return false,
             }
         }
-        self.graphics_context.swap_buffers();
         true
     }
 }
