@@ -28,12 +28,21 @@ pub mod shade;
 pub type Color = [f32, ..4];
 pub type VertexCount = u16;
 pub type IndexCount = u16;
+pub type AttributeSlot = u8;
+pub type UniformBufferSlot = u8;
+pub type TextureSlot = u8;
+
+pub enum BufferUsage {
+    UsageStatic,
+    UsageDynamic,
+}
 
 
 pub enum Request {
     // Requests that require a reply:
     CallNewVertexBuffer(Vec<f32>),
     CallNewIndexBuffer(Vec<u16>),
+    CallNewRawBuffer,
     CallNewArrayBuffer,
     CallNewShader(shade::Stage, Vec<u8>),
     CallNewProgram(Vec<dev::Shader>),
@@ -41,9 +50,13 @@ pub enum Request {
     CastClear(Color),
     CastBindProgram(dev::Program),
     CastBindArrayBuffer(dev::ArrayBuffer),
-    CastBindAttribute(u8, dev::Buffer, u32, u32, u32),
+    CastBindAttribute(AttributeSlot, dev::Buffer, u32, u32, u32),
     CastBindIndex(dev::Buffer),
     CastBindFrameBuffer(dev::FrameBuffer),
+    CastBindUniformBlock(dev::Program, u8, UniformBufferSlot, dev::Buffer),
+    CastBindUniform(shade::Location, shade::UniformValue),
+    //CastBindTexture(TextureSlot, dev::Texture, dev::Sampler),    //TODO
+    CastUpdateBuffer(dev::Buffer, Vec<f32>),
     CastDraw(VertexCount, VertexCount),
     CastDrawIndexed(IndexCount, IndexCount),
     CastSwapBuffers,
@@ -55,6 +68,7 @@ pub enum Reply {
     ReplyNewShader(Result<dev::Shader, ()>),
     ReplyNewProgram(Result<shade::ProgramMeta, ()>),
 }
+
 
 pub struct Client {
     stream: DuplexStream<Request, Reply>,
@@ -73,7 +87,7 @@ impl Client {
         self.stream.send(CastBindArrayBuffer(abuf));
     }
 
-    pub fn bind_attribute(&self, index: u8, buf: dev::Buffer, count: u32, offset: u32, stride: u32) {
+    pub fn bind_attribute(&self, index: AttributeSlot, buf: dev::Buffer, count: u32, offset: u32, stride: u32) {
         self.stream.send(CastBindAttribute(index, buf, count, offset, stride));
     }
 
@@ -83,6 +97,18 @@ impl Client {
 
     pub fn bind_frame_buffer(&self, fbo: dev::FrameBuffer) {
         self.stream.send(CastBindFrameBuffer(fbo));
+    }
+
+    pub fn bind_uniform_block(&self, program: dev::Program, index: u8, location: UniformBufferSlot, buf: dev::Buffer) {
+        self.stream.send(CastBindUniformBlock(program, index, location, buf));
+    }
+
+    pub fn bind_uniform(&self, loc: shade::Location, value: shade::UniformValue) {
+        self.stream.send(CastBindUniform(loc, value));
+    }
+
+    pub fn update_buffer(&self, buf: dev::Buffer, data: Vec<f32>) {
+        self.stream.send(CastUpdateBuffer(buf, data));
     }
 
     pub fn draw(&self, offset: VertexCount, count: VertexCount) {
@@ -123,6 +149,14 @@ impl Client {
 
     pub fn new_index_buffer(&self, data: Vec<u16>) -> dev::Buffer {
         self.stream.send(CallNewIndexBuffer(data));
+        match self.stream.recv() {
+            ReplyNewBuffer(name) => name,
+            _ => fail!("unexpected device reply")
+        }
+    }
+
+    pub fn new_raw_buffer(&self) -> dev::Buffer {
+        self.stream.send(CallNewRawBuffer);
         match self.stream.recv() {
             ReplyNewBuffer(name) => name,
             _ => fail!("unexpected device reply")
@@ -175,6 +209,16 @@ impl<Api, P: GraphicsContext<Api>> Server<P> {
                 Ok(CastBindFrameBuffer(fbo)) => {
                     self.device.bind_frame_buffer(fbo);
                 },
+                Ok(CastBindUniformBlock(prog, index, loc, buf)) => {
+                    self.device.bind_uniform_block(prog, index, loc);
+                    self.device.map_uniform_buffer(loc, buf);
+                },
+                Ok(CastBindUniform(loc, value)) => {
+                    self.device.bind_uniform(loc, value);
+                },
+                Ok(CastUpdateBuffer(buf, data)) => {
+                    self.device.update_buffer(buf, data.as_slice(), UsageDynamic);
+                },
                 Ok(CastDraw(offset, count)) => {
                     self.device.draw(offset as u32, count as u32);
                 },
@@ -186,11 +230,17 @@ impl<Api, P: GraphicsContext<Api>> Server<P> {
                     break;
                 },
                 Ok(CallNewVertexBuffer(data)) => {
-                    let name = self.device.create_buffer(data.as_slice());
+                    let name = self.device.create_buffer();
+                    self.device.update_buffer(name, data.as_slice(), UsageStatic);
                     self.stream.send(ReplyNewBuffer(name));
                 },
                 Ok(CallNewIndexBuffer(data)) => {
-                    let name = self.device.create_buffer(data.as_slice());
+                    let name = self.device.create_buffer();
+                    self.device.update_buffer(name, data.as_slice(), UsageStatic);
+                    self.stream.send(ReplyNewBuffer(name));
+                },
+                Ok(CallNewRawBuffer) => {
+                    let name = self.device.create_buffer();
                     self.stream.send(ReplyNewBuffer(name));
                 },
                 Ok(CallNewArrayBuffer) => {

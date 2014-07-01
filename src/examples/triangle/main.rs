@@ -15,14 +15,8 @@ static FRAGMENT_SRC: &'static [u8] = b"
     #version 150 core
     in vec4 v_Color;
     out vec4 o_Color;
-    uniform sampler3D tex3D;
-    uniform MyBlock {
-        vec4 color;
-    } block;
     void main() {
-        vec4 texel = texture(tex3D, vec3(0.5,0.5,0.5));
-        vec4 unused = mix(texel, block.color, 0.5);
-        o_Color = v_Color.x<0.0 ? unused : v_Color;
+        o_Color = v_Color;
     }
 ";
 
@@ -52,6 +46,9 @@ fn main() {
         let program = renderer.create_program(
             VERTEX_SRC.to_owned(),
             FRAGMENT_SRC.to_owned());
+        let mut env = gfx::Environment::new();
+        env.add_uniform("color", gfx::ValueF32Vec([0.1, 0.1, 0.1, 0.1]));
+        let env = renderer.create_environment(env);
         let data = vec![-0.0f32, 0.5, 0.5, -0.5, -0.5, -0.5];
         let mesh = renderer.create_mesh(3, data, 2, 8);
         loop {
@@ -61,7 +58,7 @@ fn main() {
                 stencil: None,
             };
             renderer.clear(cdata, None);
-            renderer.draw(mesh, gfx::VertexSlice(0, 3), None, program);
+            renderer.draw(mesh, gfx::VertexSlice(0, 3), None, program, env);
             renderer.end_frame();
         }
     });
