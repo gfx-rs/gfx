@@ -50,18 +50,12 @@ impl Device {
 
     /// Buffer
 
-    pub fn create_buffer<T>(&self, data: &[T]) -> Buffer {
+    pub fn create_buffer(&self) -> Buffer {
         let mut name = 0 as Buffer;
         unsafe{
             gl::GenBuffers(1, &mut name);
         }
-        gl::BindBuffer(gl::ARRAY_BUFFER, name);
         info!("\tCreated buffer {}", name);
-        let size = (data.len() * std::mem::size_of::<T>()) as gl::types::GLsizeiptr;
-        let raw = data.as_ptr() as *const gl::types::GLvoid;
-        unsafe{
-            gl::BufferData(gl::ARRAY_BUFFER, size, raw, gl::STATIC_DRAW);
-        }
         name
     }
 
@@ -71,6 +65,20 @@ impl Device {
 
     pub fn bind_index_buffer(&self, buffer: Buffer) {
         gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer);
+    }
+
+    pub fn map_uniform_buffer(&self, loc: super::UniformBufferSlot, buf: Buffer) {
+        gl::BindBufferBase(gl::UNIFORM_BUFFER, loc as gl::types::GLuint, buf);
+    }
+
+    pub fn update_buffer<T>(&self, buffer: Buffer, data: &[T], dynamic: bool) {
+        self.bind_vertex_buffer(buffer);
+        let size = (data.len() * std::mem::size_of::<T>()) as gl::types::GLsizeiptr;
+        let raw = data.as_ptr() as *const gl::types::GLvoid;
+        unsafe{
+            gl::BufferData(gl::ARRAY_BUFFER, size, raw,
+                if dynamic {gl::DYNAMIC_DRAW} else {gl::STATIC_DRAW});
+        }
     }
 
     /// Vertex Array Buffer
@@ -119,6 +127,10 @@ impl Device {
 
     pub fn bind_uniform(&self, location: super::shade::Location, uniform: super::shade::UniformValue) {
         shade::bind_uniform(location as gl::types::GLint, uniform);
+    }
+
+    pub fn bind_uniform_block(&self, program: Program, index: u8, loc: super::UniformBufferSlot) {
+        gl::UniformBlockBinding(program, index as gl::types::GLuint, loc as gl::types::GLuint);
     }
 
     /// Frame Buffer

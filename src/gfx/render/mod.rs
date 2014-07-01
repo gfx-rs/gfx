@@ -43,11 +43,13 @@ enum Request {
     CallNewProgram(Vec<u8>, Vec<u8>),
     CallNewMesh(mesh::VertexCount, Vec<f32>, u8, u8),
     CallNewIndexBuffer(Vec<u16>),
+    CallNewRawBuffer,
     CallNewEnvironment(envir::Storage),
     // Requests that don't expect a reply:
     CastClear(target::ClearData, Option<target::Frame>),
     CastDraw(MeshHandle, mesh::Slice, Option<target::Frame>, ProgramHandle, EnvirHandle),
     CastSetEnvironment(EnvirHandle, EnvirChangeRequest),
+    CastUpdateBuffer(BufferHandle, Vec<f32>),
     CastEndFrame,
     CastFinish,
 }
@@ -55,7 +57,7 @@ enum Request {
 enum Reply {
     ReplyProgram(ProgramHandle),
     ReplyMesh(MeshHandle),
-    ReplyIndexBuffer(BufferHandle),
+    ReplyBuffer(BufferHandle),
     ReplyEnvironment(EnvirHandle),
 }
 
@@ -102,7 +104,15 @@ impl Client {
         self.stream.send(CallNewIndexBuffer(data));
         // TODO: delay recv()
         match self.stream.recv() {
-            ReplyIndexBuffer(buffer) => buffer,
+            ReplyBuffer(buffer) => buffer,
+            _ => fail!("unknown reply")
+        }
+    }
+
+    pub fn create_raw_buffer(&self) -> BufferHandle {
+        self.stream.send(CallNewRawBuffer);
+        match self.stream.recv() {
+            ReplyBuffer(buffer) => buffer,
             _ => fail!("unknown reply")
         }
     }
@@ -125,6 +135,10 @@ impl Client {
 
     pub fn set_env_texture(&self, env: EnvirHandle, var: envir::TextureVar, texture: TextureHandle, sampler: SamplerHandle) {
         self.stream.send(CastSetEnvironment(env, EnvirTexture(var, texture, sampler)));
+    }
+
+    pub fn update_buffer(&self, buf: BufferHandle, data: Vec<f32>) {
+        self.stream.send(CastUpdateBuffer(buf, data));
     }
 }
 
@@ -195,17 +209,20 @@ impl Server {
         debug_assert!(cut.is_fit(prog));
         device.bind_program(prog.name);
 
-        for (&_i, _block) in cut.blocks.iter().zip(prog.blocks.iter()) {
-            //TODO
+        for (i, (&k, block_var)) in cut.blocks.iter().zip(prog.blocks.iter()).enumerate() {
+            let block = env.get_block(k);
+            block_var.active_slot.set(i as u8);
+            device.bind_uniform_block(prog.name, i as u8, i as device::UniformBufferSlot, block);
         }
 
-        for (&i, uniform) in cut.uniforms.iter().zip(prog.uniforms.iter()) {
-            let value = env.get_uniform(i);
-            device.bind_uniform(uniform.location, value);
+        for (&k, uniform_var) in cut.uniforms.iter().zip(prog.uniforms.iter()) {
+            let value = env.get_uniform(k);
+            uniform_var.active_value.set(value);
+            device.bind_uniform(uniform_var.location, value);
         }
 
-        for (&_i, _texture) in cut.textures.iter().zip(prog.textures.iter()) {
-            //TODO
+        for (_i, (&_k, _texture)) in cut.textures.iter().zip(prog.textures.iter()).enumerate() {
+            unimplemented!()
         }
     }
 
@@ -261,6 +278,9 @@ impl Server {
                         EnvirTexture(var, texture, sampler) => env.set_texture(var, texture, sampler),
                     }
                 },
+                Ok(CastUpdateBuffer(handle, data)) => {
+                    self.device.update_buffer(handle, data);
+                },
                 Ok(CastEndFrame) => {
                     self.device.end_frame();
                 },
@@ -295,7 +315,11 @@ impl Server {
                 },
                 Ok(CallNewIndexBuffer(data)) => {
                     let buffer = self.device.new_index_buffer(data);
-                    self.stream.send(ReplyIndexBuffer(buffer));
+                    self.stream.send(ReplyBuffer(buffer));
+                },
+                Ok(CallNewRawBuffer) => {
+                    let buffer = self.device.new_raw_buffer();
+                    self.stream.send(ReplyBuffer(buffer));
                 },
                 Ok(CallNewEnvironment(storage)) => {
                     let handle = self.cache.environments.len();
