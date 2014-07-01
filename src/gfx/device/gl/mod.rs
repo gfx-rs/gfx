@@ -37,6 +37,7 @@ impl Device {
         Device
     }
 
+    #[allow(dead_code)]
     fn check(&self) {
         assert_eq!(gl::GetError(), gl::NO_ERROR);
     }

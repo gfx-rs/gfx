@@ -20,10 +20,14 @@ use device;
 
 use device::shade::{ProgramMeta, Vertex, Fragment};
 pub use BufferHandle = device::dev::Buffer;
-pub type ProgramHandle = uint;
 pub type MeshHandle = uint;
-pub type Environment = ();  // placeholder
+pub type SurfaceHandle = device::dev::Surface;
+pub type TextureHandle = device::dev::Texture;
+pub type SamplerHandle = uint;
+pub type ProgramHandle = uint;
+pub type EnvirHandle = uint;
 
+pub mod envir;
 pub mod mesh;
 pub mod target;
 
@@ -33,6 +37,7 @@ pub enum Request {
     CallNewProgram(Vec<u8>, Vec<u8>),
     CallNewMesh(mesh::VertexCount, Vec<f32>, u8, u8),
     CallNewIndexBuffer(Vec<u16>),
+    CallNewEnvironment(envir::Storage),
     // Requests that don't expect a reply:
     CastClear(target::ClearData, Option<target::Frame>),
     CastDraw(MeshHandle, mesh::Slice, Option<target::Frame>, ProgramHandle),
@@ -44,6 +49,7 @@ pub enum Reply {
     ReplyProgram(ProgramHandle),
     ReplyMesh(MeshHandle),
     ReplyIndexBuffer(BufferHandle),
+    ReplyEnvironment(EnvirHandle),
 }
 
 pub struct Client {
@@ -93,6 +99,14 @@ impl Client {
             _ => fail!("unknown reply")
         }
     }
+
+    pub fn create_environment(&self, storage: envir::Storage) -> EnvirHandle {
+        self.stream.send(CallNewEnvironment(storage));
+        match self.stream.recv() {
+            ReplyEnvironment(handle) => handle,
+            _ => fail!("unknown reply")
+        }
+    }
 }
 
 
@@ -100,6 +114,7 @@ impl Client {
 struct Cache {
     pub meshes: Vec<mesh::Mesh>,
     pub programs: Vec<ProgramMeta>,
+    pub environments: Vec<envir::Storage>,
 }
 
 struct Server {
@@ -128,13 +143,14 @@ impl Server {
             cache: Cache {
                 meshes: Vec::new(),
                 programs: Vec::new(),
+                environments: Vec::new(),
             },
         }
     }
 
     fn bind_frame(&mut self, frame_opt: &Option<target::Frame>) {
         match frame_opt {
-            &Some(ref frame) => {
+            &Some(ref _frame) => {
                 //TODO: find an existing FBO that matches the plane set
                 // or create a new one and bind it
                 unimplemented!()
@@ -226,6 +242,11 @@ impl Server {
                 Ok(CallNewIndexBuffer(data)) => {
                     let buffer = self.device.new_index_buffer(data);
                     self.stream.send(ReplyIndexBuffer(buffer));
+                },
+                Ok(CallNewEnvironment(storage)) => {
+                    let handle = self.cache.environments.len();
+                    self.cache.environments.push(storage);
+                    self.stream.send(ReplyEnvironment(handle));
                 },
                 Err(comm::Empty)  => {
                     break; // finished all the pending rendering messages

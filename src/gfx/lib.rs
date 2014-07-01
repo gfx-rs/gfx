@@ -62,13 +62,19 @@
 #[phase(plugin, link)] extern crate log;
 extern crate libc;
 
+// public re-exports
+pub use render::{BufferHandle, MeshHandle, SurfaceHandle, TextureHandle, SamplerHandle, ProgramHandle, EnvirHandle};
 pub use Renderer = render::Client;
 pub use MeshSlice = render::mesh::Slice;
-pub use VertexSlice = render::mesh::VertexSlice;
+pub use render::mesh::{VertexCount, ElementCount, VertexSlice, IndexSlice};
+pub use Environment = render::envir::Storage;
+pub use render::envir::{BlockVar, UniformVar, TextureVar};
+pub use render::target::{ClearData, Plane, Frame, TextureLayer, TextureLevel};
 pub use Device = device::Server;
-pub use device::InitError;
+pub use device::{Color, InitError};
+pub use device::shade::UniformValue;
 pub use platform::GraphicsContext;
-pub use render::target::ClearData;
+
 
 pub type Options<'a> = &'a platform::GlProvider;
 
