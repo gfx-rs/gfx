@@ -36,6 +36,8 @@ impl Storage {
     	}
     }
 
+    // expansion methods
+
     pub fn add_block(&mut self, name: &str, buf: super::BufferHandle) -> BlockVar {
     	self.blocks.push((name.to_string(), buf));
     	(self.blocks.len() - 1) as BlockVar
@@ -49,5 +51,23 @@ impl Storage {
     pub fn add_texture(&mut self, name: &str, texture: super::TextureHandle, sampler: super::SamplerHandle) -> TextureVar {
     	self.textures.push((name.to_string(), texture, sampler));
     	(self.textures.len() - 1) as TextureVar
+    }
+
+    // mutation methods
+
+    pub fn set_block(&mut self, var: BlockVar, buf: super::BufferHandle) {
+		let &(_, ref mut block) = self.blocks.get_mut(var as uint);
+        *block = buf;
+    }
+    
+    pub fn set_uniform(&mut self, var: UniformVar, value: UniformValue) {
+    	let &(_, ref mut uniform) = self.uniforms.get_mut(var as uint);
+        *uniform = value;
+    }
+
+    pub fn set_texture(&mut self, var: TextureVar, texture: super::TextureHandle, sampler: super::SamplerHandle) {
+        let &(_, ref mut tex, ref mut sam) = self.textures.get_mut(var as uint);
+        *tex = texture;
+        *sam = sampler;    	
     }
 }

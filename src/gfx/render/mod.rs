@@ -18,7 +18,7 @@ use std::kinds::marker;
 
 use device;
 
-use device::shade::{ProgramMeta, Vertex, Fragment};
+use device::shade::{ProgramMeta, Vertex, Fragment, UniformValue};
 pub use BufferHandle = device::dev::Buffer;
 pub type MeshHandle = uint;
 pub type SurfaceHandle = device::dev::Surface;
@@ -32,7 +32,13 @@ pub mod mesh;
 pub mod target;
 
 
-pub enum Request {
+enum EnvirChangeRequest {
+    EnvirBlock(envir::BlockVar, BufferHandle),
+    EnvirUniform(envir::UniformVar, UniformValue),
+    EnvirTexture(envir::TextureVar, TextureHandle, SamplerHandle),
+}
+
+enum Request {
     // Requests that require a reply:
     CallNewProgram(Vec<u8>, Vec<u8>),
     CallNewMesh(mesh::VertexCount, Vec<f32>, u8, u8),
@@ -41,11 +47,12 @@ pub enum Request {
     // Requests that don't expect a reply:
     CastClear(target::ClearData, Option<target::Frame>),
     CastDraw(MeshHandle, mesh::Slice, Option<target::Frame>, ProgramHandle),
+    CastSetEnvir(EnvirHandle, EnvirChangeRequest),
     CastEndFrame,
     CastFinish,
 }
 
-pub enum Reply {
+enum Reply {
     ReplyProgram(ProgramHandle),
     ReplyMesh(MeshHandle),
     ReplyIndexBuffer(BufferHandle),
@@ -106,6 +113,18 @@ impl Client {
             ReplyEnvironment(handle) => handle,
             _ => fail!("unknown reply")
         }
+    }
+
+    pub fn set_env_block(&self, env: EnvirHandle, var: envir::BlockVar, buf: BufferHandle) {
+        self.stream.send(CastSetEnvir(env, EnvirBlock(var, buf)));
+    }
+
+    pub fn set_env_uniform(&self, env: EnvirHandle, var: envir::UniformVar, value: UniformValue) {
+        self.stream.send(CastSetEnvir(env, EnvirUniform(var, value)));
+    }
+
+    pub fn set_env_texture(&self, env: EnvirHandle, var: envir::TextureVar, texture: TextureHandle, sampler: SamplerHandle) {
+        self.stream.send(CastSetEnvir(env, EnvirTexture(var, texture, sampler)));
     }
 }
 
@@ -205,6 +224,14 @@ impl Server {
                             self.device.bind_index(buf);
                             self.device.draw_indexed(start, end);
                         },
+                    }
+                },
+                Ok(CastSetEnvir(handle, change)) => {
+                    let env = self.cache.environments.get_mut(handle);
+                    match change {
+                        EnvirBlock(var, buf)                => env.set_block(var, buf),
+                        EnvirUniform(var, value)            => env.set_uniform(var, value),
+                        EnvirTexture(var, texture, sampler) => env.set_texture(var, texture, sampler),
                     }
                 },
                 Ok(CastEndFrame) => {
