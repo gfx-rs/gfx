@@ -19,6 +19,7 @@ use std::kinds::marker;
 use device;
 
 use device::shade::{ProgramMeta, Vertex, Fragment, UniformValue};
+use self::handle::{Handle, Manager};
 use self::envir::BindableStorage;
 pub use BufferHandle = device::dev::Buffer;
 pub type MeshHandle = uint;
@@ -31,6 +32,7 @@ pub type EnvirHandle = uint;
 pub mod envir;
 pub mod mesh;
 pub mod target;
+pub mod handle;
 
 
 enum EnvirChangeRequest {
