@@ -155,7 +155,7 @@ struct Server {
     no_send: marker::NoSend,
     no_share: marker::NoShare,
     stream: DuplexStream<Reply, Request>,
-    device: device::Client2,
+    device: device::Client,
     /// a common VAO for mesh rendering
     common_array_buffer: device::dev::ArrayBuffer,
     /// the default FBO for drawing
@@ -165,7 +165,7 @@ struct Server {
 }
 
 impl Server {
-    fn new(stream: DuplexStream<Reply, Request>, device: device::Client2) -> Server {
+    fn new(stream: DuplexStream<Reply, Request>, device: device::Client) -> Server {
         device.send(device::CallNewArrayBuffer);
         let abuf = match device.recv() {
             device::ReplyNewArrayBuffer(name) => name,
@@ -199,7 +199,7 @@ impl Server {
         }
     }
 
-    fn bind_mesh(device: &mut device::Client2, mesh: &mesh::Mesh, prog: &ProgramMeta) -> Result<(),()> {
+    fn bind_mesh(device: &mut device::Client, mesh: &mesh::Mesh, prog: &ProgramMeta) -> Result<(),()> {
         for sat in prog.attributes.iter() {
             match mesh.attributes.iter().find(|a| a.name.as_slice() == sat.name.as_slice()) {
                 Some(vat) => device.send(device::CastBindAttribute(sat.location as u8,
@@ -210,7 +210,7 @@ impl Server {
         Ok(())
     }
 
-    fn bind_environment(device: &mut device::Client2, storage: &envir::Storage, shortcut: &envir::Shortcut, program: &ProgramMeta) {
+    fn bind_environment(device: &mut device::Client, storage: &envir::Storage, shortcut: &envir::Shortcut, program: &ProgramMeta) {
         debug_assert!(storage.is_fit(shortcut, program));
         device.send(device::CastBindProgram(program.name));
 
@@ -362,7 +362,7 @@ impl Server {
 }
 
 /// Start a render server using the provided device client
-pub fn start(_options: super::Options, device: device::Client2) -> Client {
+pub fn start(_options: super::Options, device: device::Client) -> Client {
     let (render_stream, task_stream) = comm::duplex::<Request, Reply>();
     spawn(proc() {
         let mut srv = Server::new(task_stream, device);
