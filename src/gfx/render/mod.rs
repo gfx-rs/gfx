@@ -155,7 +155,7 @@ struct Server {
     no_send: marker::NoSend,
     no_share: marker::NoShare,
     stream: DuplexStream<Reply, Request>,
-    device: device::Client,
+    device: device::Client2,
     /// a common VAO for mesh rendering
     common_array_buffer: device::dev::ArrayBuffer,
     /// the default FBO for drawing
@@ -165,8 +165,12 @@ struct Server {
 }
 
 impl Server {
-    fn new(stream: DuplexStream<Reply, Request>, device: device::Client) -> Server {
-        let abuf = device.new_array_buffer();
+    fn new(stream: DuplexStream<Reply, Request>, device: device::Client2) -> Server {
+        device.send(device::CallNewArrayBuffer);
+        let abuf = match device.recv() {
+            device::ReplyNewArrayBuffer(name) => name,
+            _ => fail!("invalid device reply for CallNewArrayBuffer")
+        };
         Server {
             no_send: marker::NoSend,
             no_share: marker::NoShare,
@@ -190,36 +194,36 @@ impl Server {
                 unimplemented!()
             },
             &None => {
-                self.device.bind_frame_buffer(self.default_frame_buffer);
+                self.device.send(device::CastBindFrameBuffer(self.default_frame_buffer));
             }
         }
     }
 
-    fn bind_mesh(device: &mut device::Client, mesh: &mesh::Mesh, prog: &ProgramMeta) -> Result<(),()> {
+    fn bind_mesh(device: &mut device::Client2, mesh: &mesh::Mesh, prog: &ProgramMeta) -> Result<(),()> {
         for sat in prog.attributes.iter() {
             match mesh.attributes.iter().find(|a| a.name.as_slice() == sat.name.as_slice()) {
-                Some(vat) => device.bind_attribute(sat.location as u8,
-                    vat.buffer, vat.size as u32, vat.offset as u32, vat.stride as u32),
+                Some(vat) => device.send(device::CastBindAttribute(sat.location as u8,
+                    vat.buffer, vat.size as u32, vat.offset as u32, vat.stride as u32)),
                 None => return Err(())
             }
         }
         Ok(())
     }
 
-    fn bind_environment(device: &mut device::Client, storage: &envir::Storage, shortcut: &envir::Shortcut, program: &ProgramMeta) {
+    fn bind_environment(device: &mut device::Client2, storage: &envir::Storage, shortcut: &envir::Shortcut, program: &ProgramMeta) {
         debug_assert!(storage.is_fit(shortcut, program));
-        device.bind_program(program.name);
+        device.send(device::CastBindProgram(program.name));
 
         for (i, (&k, block_var)) in shortcut.blocks.iter().zip(program.blocks.iter()).enumerate() {
             let block = storage.get_block(k);
             block_var.active_slot.set(i as u8);
-            device.bind_uniform_block(program.name, i as u8, i as device::UniformBufferSlot, block);
+            device.send(device::CastBindUniformBlock(program.name, i as u8, i as device::UniformBufferSlot, block));
         }
 
         for (&k, uniform_var) in shortcut.uniforms.iter().zip(program.uniforms.iter()) {
             let value = storage.get_uniform(k);
             uniform_var.active_value.set(value);
-            device.bind_uniform(uniform_var.location, value);
+            device.send(device::CastBindUniform(uniform_var.location, value));
         }
 
         for (_i, (&_k, _texture)) in shortcut.textures.iter().zip(program.textures.iter()).enumerate() {
@@ -238,7 +242,7 @@ impl Server {
                     self.bind_frame(&frame);
                     match data.color {
                         Some(col) => {
-                            self.device.clear(col);
+                            self.device.send(device::CastClear(col));
                         },
                         None => unimplemented!()
                     }
@@ -257,17 +261,17 @@ impl Server {
                         },
                     }
                     // bind vertex attributes
-                    self.device.bind_array_buffer(self.common_array_buffer);
+                    self.device.send(device::CastBindArrayBuffer(self.common_array_buffer));
                     let mesh = self.cache.meshes.get(mesh_handle);
                     Server::bind_mesh(&mut self.device, mesh, program).unwrap();
                     // draw
                     match slice {
                         mesh::VertexSlice(start, end) => {
-                            self.device.draw(start, end);
+                            self.device.send(device::CastDraw(start, end));
                         },
                         mesh::IndexSlice(buf, start, end) => {
-                            self.device.bind_index(buf);
-                            self.device.draw_indexed(start, end);
+                            self.device.send(device::CastBindIndex(buf));
+                            self.device.send(device::CastDrawIndexed(start, end));
                         },
                     }
                 },
@@ -280,26 +284,39 @@ impl Server {
                     }
                 },
                 Ok(CastUpdateBuffer(handle, data)) => {
-                    self.device.update_buffer(handle, data);
+                    self.device.send(device::CastUpdateBuffer(handle, data));
                 },
                 Ok(CastEndFrame) => {
-                    self.device.end_frame();
+                    self.device.send(device::CastSwapBuffers);
                 },
                 Ok(CallNewProgram(vs, fs)) => {
-                    let h_vs = self.device.new_shader(Vertex, vs).unwrap_or(0);
-                    let h_fs = self.device.new_shader(Fragment, fs).unwrap_or(0);
-                    let prog = self.device.new_program(vec!(h_vs, h_fs));
-                    let prog = match prog {
-                        Ok(prog) => {
+                    self.device.send(device::CallNewShader(Vertex, vs));
+                    self.device.send(device::CallNewShader(Fragment, fs));
+                    let h_vs = match self.device.recv() {
+                        device::ReplyNewShader(name) => name.unwrap_or(0),
+                        _ => fail!("invalid device reply for CallNewShader")
+                    };
+                    let h_fs = match self.device.recv() {
+                        device::ReplyNewShader(name) => name.unwrap_or(0),
+                        _ => fail!("invalid device reply for CallNewShader")
+                    };
+                    self.device.send(device::CallNewProgram(vec![h_vs, h_fs]));
+                    let prog = match self.device.recv() {
+                        device::ReplyNewProgram(Ok(prog)) => {
                             self.cache.programs.push(prog);
                             self.cache.programs.len() - 1
                         },
-                        Err(_) => 0,
+                        device::ReplyNewProgram(Err(_)) => 0,
+                        _ => fail!("invalid device reply for CallNewProgram")
                     };
                     self.stream.send(ReplyProgram(prog));
                 },
                 Ok(CallNewMesh(num_vert, data, count, stride)) => {
-                    let buffer = self.device.new_vertex_buffer(data);
+                    self.device.send(device::CallNewVertexBuffer(data));
+                    let buffer = match self.device.recv() {
+                        device::ReplyNewBuffer(name) => name,
+                        _ => fail!("invalid device reply for CallNewVertexBuffer")
+                    };
                     let mut mesh = mesh::Mesh::new(num_vert);
                     mesh.attributes.push(mesh::Attribute {
                         buffer: buffer,
@@ -315,11 +332,19 @@ impl Server {
                     self.stream.send(ReplyMesh(handle));
                 },
                 Ok(CallNewIndexBuffer(data)) => {
-                    let buffer = self.device.new_index_buffer(data);
+                    self.device.send(device::CallNewIndexBuffer(data));
+                    let buffer = match self.device.recv() {
+                        device::ReplyNewBuffer(name) => name,
+                        _ => fail!("invalid device reply for CallNewIndexBuffer")
+                    };
                     self.stream.send(ReplyBuffer(buffer));
                 },
                 Ok(CallNewRawBuffer) => {
-                    let buffer = self.device.new_raw_buffer();
+                    self.device.send(device::CallNewRawBuffer);
+                    let buffer = match self.device.recv() {
+                        device::ReplyNewBuffer(name) => name,
+                        _ => fail!("invalid device reply for CallNewRawBuffer")
+                    };
                     self.stream.send(ReplyBuffer(buffer));
                 },
                 Ok(CallNewEnvironment(storage)) => {
@@ -337,7 +362,7 @@ impl Server {
 }
 
 /// Start a render server using the provided device client
-pub fn start(_options: super::Options, device: device::Client) -> Client {
+pub fn start(_options: super::Options, device: device::Client2) -> Client {
     let (render_stream, task_stream) = comm::duplex::<Request, Reply>();
     spawn(proc() {
         let mut srv = Server::new(task_stream, device);

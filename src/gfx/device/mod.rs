@@ -70,6 +70,8 @@ pub enum Reply {
 }
 
 
+pub type Client2 = DuplexStream<Request, Reply>;
+
 pub struct Client {
     stream: DuplexStream<Request, Reply>,
 }
@@ -266,12 +268,9 @@ impl<Api, P: GraphicsContext<Api>> Server<P> {
 pub enum InitError {}
 
 pub fn init<Api, P: GraphicsContext<Api>>(graphics_context: P, options: super::Options)
-        -> Result<(Client, Server<P>), InitError> {
+        -> Result<(Client2, Server<P>), InitError> {
     let (client_stream, server_stream) = comm::duplex();
 
-    let client = Client {
-        stream: client_stream,
-    };
     let dev = Device::new(options);
     let server = Server {
         no_share: marker::NoShare,
@@ -280,5 +279,5 @@ pub fn init<Api, P: GraphicsContext<Api>>(graphics_context: P, options: super::O
         device: dev,
     };
 
-    Ok((client, server))
+    Ok((client_stream, server))
 }
