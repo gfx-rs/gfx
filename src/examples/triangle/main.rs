@@ -36,10 +36,12 @@ fn main() {
         .expect("Failed to create GLFW window.");
 
     window.set_key_polling(true);
-    let platform = gfx::platform::Glfw::new(window.render_context());
 
     // spawn render task
-    let (renderer, mut device) = gfx::start(platform, &glfw).unwrap();
+    let (renderer, mut device) = {
+        let (platform, options) = gfx::platform::Glfw::new(window.render_context(), &glfw);
+        gfx::start(platform, &options).unwrap()
+    };
 
     // spawn game task
     spawn(proc() {
@@ -53,7 +55,7 @@ fn main() {
         let mesh = renderer.create_mesh(3, data, 2, 8);
         loop {
             let cdata = gfx::ClearData {
-                color: Some([0.3, 0.3, 0.3, 1.0]),
+                color: Some(gfx::Color([0.3, 0.3, 0.3, 1.0])),
                 depth: None,
                 stencil: None,
             };

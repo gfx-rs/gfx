@@ -58,9 +58,10 @@
 #![license = "ASL2"]
 #![crate_type = "lib"]
 
-#![feature(phase)]
+#![feature(macro_rules, phase)]
 #[phase(plugin, link)] extern crate log;
 extern crate libc;
+extern crate device;
 
 // public re-exports
 pub use render::{BufferHandle, MeshHandle, SurfaceHandle, TextureHandle, SamplerHandle, ProgramHandle, EnvirHandle};
@@ -71,19 +72,15 @@ pub use Environment = render::envir::Storage;
 pub use render::envir::{BlockVar, UniformVar, TextureVar};
 pub use render::target::{ClearData, Plane, Frame, TextureLayer, TextureLevel};
 pub use Device = device::Server;
-pub use device::{Color, InitError};
+pub use device::{Color, GraphicsContext, InitError};
 pub use device::shade::{UniformValue, ValueI32, ValueF32, ValueI32Vec, ValueF32Vec, ValueF32Matrix};
-pub use platform::GraphicsContext;
 
-
-pub type Options<'a> = &'a platform::GlProvider;
-
-mod device;
 mod render;
 pub mod platform;
 
-pub fn start<Api, P: GraphicsContext<Api>>(graphics_context: P, options: Options)
-        -> Result<(Renderer, Device<P>), InitError> {
+#[allow(visible_private_types)]
+pub fn start<Api, P: GraphicsContext<Api>>(graphics_context: P, options: device::Options)
+        -> Result<(Renderer, Device<P, device::Device>), InitError> {
     device::init(graphics_context, options).map(|(server, client)| {
         ((render::start(options, server), client))
     })

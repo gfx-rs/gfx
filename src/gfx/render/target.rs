@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use device::Color;
+pub use device::Color;
 use device::dev;
 
 pub type TextureLayer = u16;

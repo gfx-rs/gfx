@@ -25,6 +25,7 @@ LINK_ARGS             = $(shell sh etc/glfw-link-args.sh)
 SRC_DIR               = src
 DEPS_DIR              = deps
 LIB_FILE              = $(SRC_DIR)/gfx/lib.rs
+DEVICE_FILE           = $(SRC_DIR)/device/lib.rs
 EXAMPLE_FILES         = $(SRC_DIR)/examples/*/*.rs
 
 DOC_DIR               = doc
@@ -33,15 +34,17 @@ LIB_DIR               = lib
 DEPS_LIB_DIRS         = $(wildcard $(DEPS_DIR)/*/lib)
 
 DEPS_INCLUDE_FLAGS    = $(patsubst %,-L %, $(DEPS_LIB_DIRS))
-LIB_INCLUDE_FLAGS     = $(DEPS_INCLUDE_FLAGS)
+DEVICE_INCLUDE_FLAGS  = $(DEPS_INCLUDE_FLAGS)
+LIB_INCLUDE_FLAGS     = -L $(LIB_DIR) $(DEPS_INCLUDE_FLAGS)
 EXAMPLE_INCLUDE_FLAGS = -L $(LIB_DIR) $(DEPS_INCLUDE_FLAGS)
 
 GFX_API               ?= gl
 GFX_PLATFORM          ?= glfw
 
-GFX_CFG               = --cfg=$(GFX_API) --cfg=$(GFX_PLATFORM)
+DEVICE_CFG            = --cfg=$(GFX_API)
+LIB_CFG               = --cfg=$(GFX_PLATFORM)
 
-all: lib examples doc
+all: device lib examples doc
 
 submodule-update:
 	@git submodule init
@@ -53,9 +56,12 @@ deps: $(DEPS_DIR)/gl-rs/README.md
 	$(MAKE) lib -C $(DEPS_DIR)/gl-rs
 	$(MAKE) lib -C $(DEPS_DIR)/glfw-rs
 
-lib:
+device:
 	mkdir -p $(LIB_DIR)
-	$(RUSTC) $(LIB_INCLUDE_FLAGS) --out-dir=$(LIB_DIR) $(GFX_CFG) -O $(LIB_FILE)
+	$(RUSTC) $(LIB_INCLUDE_FLAGS) --out-dir=$(LIB_DIR) $(DEVICE_CFG) -O $(DEVICE_FILE)
+
+lib: device
+	$(RUSTC) $(LIB_INCLUDE_FLAGS) --out-dir=$(LIB_DIR) $(LIB_CFG) -O $(LIB_FILE)
 
 doc:
 	mkdir -p $(DOC_DIR)
@@ -81,6 +87,7 @@ clean:
 	all \
 	submodule-update \
 	deps \
+	device \
 	lib \
 	doc \
 	examples \

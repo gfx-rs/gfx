@@ -22,13 +22,3 @@
 
 pub enum GlApi {}
 pub enum D3dApi {}
-
-pub trait GraphicsContext<Api> {
-    fn swap_buffers(&self);
-    fn make_current(&self);
-}
-
-pub trait GlProvider {
-	fn get_proc_address(&self, &str) -> *const ::libc::c_void;
-	fn is_extension_supported(&self, &str) -> bool;
-}
