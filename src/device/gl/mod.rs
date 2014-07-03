@@ -15,6 +15,7 @@
 extern crate gl;
 extern crate libc;
 
+use log;
 use std;
 
 mod shade;
@@ -45,13 +46,19 @@ impl Device {
 impl super::DeviceTask for Device {
     fn create_shader(&mut self, stage: super::shade::Stage, code: &[u8]) -> Result<Shader, ()> {
         let (name, info) = shade::create_shader(stage, code);
-        info.map(|info| warn!("\tShader compile log: {}", info));
+        info.map(|info| {
+            let level = if name.is_err() { log::ERROR } else { log::WARN };
+            log!(level, "\tShader compile log: {}", info);
+        });
         name
     }
 
     fn create_program(&mut self, shaders: &[Shader]) -> Result<super::shade::ProgramMeta, ()> {
         let (meta, info) = shade::create_program(shaders);
-        info.map(|info| warn!("\tProgram link log: {}", info));
+        info.map(|info| {
+            let level = if meta.is_err() { log::ERROR } else { log::WARN };
+            log!(level, "\tProgram link log: {}", info);
+        });
         meta
     }
 
