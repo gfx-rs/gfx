@@ -106,6 +106,7 @@ pub struct Server<P, D> {
     stream: DuplexStream<Reply, Request>,
     graphics_context: P,
     device: D,
+    swap_ack: Sender<()>
 }
 
 impl<Api, P: GraphicsContext<Api>, D: DeviceTask> Server<P, D> {
@@ -121,6 +122,7 @@ impl<Api, P: GraphicsContext<Api>, D: DeviceTask> Server<P, D> {
             match self.stream.recv_opt() {
                 Ok(CastSwapBuffers) => {
                     self.graphics_context.swap_buffers();
+                    self.swap_ack.send(());
                     break;
                 },
                 Ok(CallNewVertexBuffer(data)) => {
@@ -175,8 +177,13 @@ pub type Options<'a> = &'a GlProvider;
 
 #[allow(visible_private_types)]
 pub fn init<Api, P: GraphicsContext<Api>>(graphics_context: P, options: Options)
-        -> Result<(Client, Server<P, Device>), InitError> {
+        -> Result<(Client, Server<P, Device>, Receiver<()>), InitError> {
     let (client_stream, server_stream) = comm::duplex();
+    let (server_swap, client_swap) = channel();
+
+    for _ in range(0i, 2) {
+        server_swap.send(());
+    }
 
     let dev = Device::new(options);
     let server = Server {
@@ -184,7 +191,8 @@ pub fn init<Api, P: GraphicsContext<Api>>(graphics_context: P, options: Options)
         stream: server_stream,
         graphics_context: graphics_context,
         device: dev,
+        swap_ack: server_swap
     };
 
-    Ok((client_stream, server))
+    Ok((client_stream, server, client_swap))
 }
