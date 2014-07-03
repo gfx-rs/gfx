@@ -2,6 +2,18 @@
 
 A lightweight buffer, shader and render queue manager for Rust.
 
+## Getting Started
+
+For the initial build of both gfx-rs and all its depencies, use this make incantation:
+```
+make deps all
+```
+Afterwards, either of these two is enough:
+```
+make lib
+make examples
+```
+
 ## The Problem
 
 - Graphics APIs (Especially OpenGL), require the liberal use of unsafe
@@ -46,5 +58,6 @@ pub type Matrix4x3<T> = [[T,..3],..4];
 ## Note
 
 gfx-rs is still in the early stages of development. Help is most appreciated.
-Contact me on `irc.mozilla.org #rust-gamedev` if you are interested in helping
-out. My handle is usually `bjz`.
+
+If you are interested in helping out, you can contact the devs on https://gitter.im/bjz/gfx-rs.
+They are also often reachable on `irc.mozilla.org #rust-gamedev`.
