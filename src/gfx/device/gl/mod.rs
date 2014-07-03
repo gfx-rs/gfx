@@ -31,7 +31,6 @@ pub type Sampler        = gl::types::GLuint;
 
 pub struct Device;
 
-
 impl Device {
     pub fn new(provider: &GlProvider) -> Device {
         gl::load_with(|s| provider.get_proc_address(s));
@@ -39,18 +38,34 @@ impl Device {
     }
 
     #[allow(dead_code)]
-    fn check(&self) {
-        assert_eq!(gl::GetError(), gl::NO_ERROR);
+    fn check(&mut self) {
+        debug_assert_eq!(gl::GetError(), gl::NO_ERROR);
+    }
+}
+
+impl super::DeviceTask for Device {
+    fn create_shader(&mut self, stage: super::shade::Stage, code: &[u8]) -> Result<Shader, ()> {
+        let (name, info) = shade::create_shader(stage, code);
+        info.map(|info| warn!("\tShader compile log: {}", info));
+        name
     }
 
-    pub fn clear(&self, color: &[f32]) {
-        gl::ClearColor(color[0], color[1], color[2], color[3]);
-        gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT);
+    fn create_program(&mut self, shaders: &[Shader]) -> Result<super::shade::ProgramMeta, ()> {
+        let (meta, info) = shade::create_program(shaders);
+        info.map(|info| warn!("\tProgram link log: {}", info));
+        meta
     }
 
-    /// Buffer
+    fn create_array_buffer(&mut self) -> ArrayBuffer {
+        let mut name = 0 as ArrayBuffer;
+        unsafe{
+            gl::GenVertexArrays(1, &mut name);
+        }
+        info!("\tCreated array buffer {}", name);
+        name
+    }
 
-    pub fn create_buffer(&self) -> Buffer {
+    fn create_buffer(&mut self) -> Buffer {
         let mut name = 0 as Buffer;
         unsafe{
             gl::GenBuffers(1, &mut name);
@@ -59,20 +74,8 @@ impl Device {
         name
     }
 
-    pub fn bind_vertex_buffer(&self, buffer: Buffer) {
+    fn update_buffer<T>(&mut self, buffer: Buffer, data: &[T], usage: super::BufferUsage) {
         gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
-    }
-
-    pub fn bind_index_buffer(&self, buffer: Buffer) {
-        gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer);
-    }
-
-    pub fn map_uniform_buffer(&self, loc: super::UniformBufferSlot, buf: Buffer) {
-        gl::BindBufferBase(gl::UNIFORM_BUFFER, loc as gl::types::GLuint, buf);
-    }
-
-    pub fn update_buffer<T>(&self, buffer: Buffer, data: &[T], usage: super::BufferUsage) {
-        self.bind_vertex_buffer(buffer);
         let size = (data.len() * std::mem::size_of::<T>()) as gl::types::GLsizeiptr;
         let raw = data.as_ptr() as *const gl::types::GLvoid;
         let usage = match usage {
@@ -84,79 +87,61 @@ impl Device {
         }
     }
 
-    /// Vertex Array Buffer
-
-    pub fn create_array_buffer(&self) -> ArrayBuffer {
-        let mut name = 0 as ArrayBuffer;
-        unsafe{
-            gl::GenVertexArrays(1, &mut name);
-        }
-        info!("\tCreated array buffer {}", name);
-        name
-    }
-
-    pub fn bind_array_buffer(&self, vao: ArrayBuffer) {
-        gl::BindVertexArray(vao);
-    }
-
-    pub fn bind_attribute(&self, slot: u8, count: u32, offset: u32, stride: u32) {
-        unsafe{
-            gl::VertexAttribPointer(slot as gl::types::GLuint,
-                count as gl::types::GLint, gl::FLOAT, gl::FALSE,
-                stride as gl::types::GLint, offset as *const gl::types::GLvoid);
-        }
-        gl::EnableVertexAttribArray(slot as gl::types::GLuint);
-    }
-
-    /// Shader Object
-
-    pub fn create_shader(&self, stage: super::shade::Stage, data: &[u8]) -> Result<Shader, ()> {
-        let (name, info) = shade::create_shader(stage, data);
-        info.map(|info| warn!("\tShader compile log: {}", info));
-        name
-    }
-
-    /// Shader Program
-
-    pub fn create_program(&self, shaders: &[Shader]) -> Result<super::shade::ProgramMeta, ()> {
-        let (meta, info) = shade::create_program(shaders);
-        info.map(|info| warn!("\tProgram link log: {}", info));
-        meta
-    }
-
-    pub fn bind_program(&self, program: Program) {
-        gl::UseProgram(program);
-    }
-
-    pub fn bind_uniform(&self, location: super::shade::Location, uniform: super::shade::UniformValue) {
-        shade::bind_uniform(location as gl::types::GLint, uniform);
-    }
-
-    pub fn bind_uniform_block(&self, program: Program, index: u8, loc: super::UniformBufferSlot) {
-        gl::UniformBlockBinding(program, index as gl::types::GLuint, loc as gl::types::GLuint);
-    }
-
-    /// Frame Buffer
-
-    pub fn bind_frame_buffer(&self, fbo: FrameBuffer) {
-        gl::BindFramebuffer(gl::FRAMEBUFFER, fbo);
-    }
-
-    /// Draw
-
-    pub fn draw(&self, start: u32, count: u32) {
-        gl::DrawArrays(gl::TRIANGLES,
-            start as gl::types::GLsizei,
-            count as gl::types::GLsizei);
-    }
-
-    pub fn draw_index(&self, start: u16, count: u16) {
-        let offset = start * (std::mem::size_of::<u16>() as u16);
-        unsafe {
-            gl::DrawElements(gl::TRIANGLES,
-                count as gl::types::GLsizei,
-                gl::UNSIGNED_SHORT,
-                offset as *const gl::types::GLvoid);
+    fn process(&mut self, request: super::Request) {
+        match request {
+            super::CastClear(color) => {
+                let super::Color([r,g,b,a]) = color;
+                gl::ClearColor(r, g, b, a);
+                gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT);
+            },
+            super::CastBindProgram(program) => {
+                gl::UseProgram(program);
+            },
+            super::CastBindArrayBuffer(array_buffer) => {
+                gl::BindVertexArray(array_buffer);
+            },
+            super::CastBindAttribute(slot, buffer, count, offset, stride) => {
+                gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
+                unsafe{
+                    gl::VertexAttribPointer(slot as gl::types::GLuint,
+                        count as gl::types::GLint, gl::FLOAT, gl::FALSE,
+                        stride as gl::types::GLint, offset as *const gl::types::GLvoid);
+                }
+                gl::EnableVertexAttribArray(slot as gl::types::GLuint);
+            },
+            super::CastBindIndex(buffer) => {
+                gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer);
+            },
+            super::CastBindFrameBuffer(frame_buffer) => {
+                gl::BindFramebuffer(gl::FRAMEBUFFER, frame_buffer);
+            },
+            super::CastBindUniformBlock(program, index, loc, buffer) => {
+                gl::UniformBlockBinding(program, index as gl::types::GLuint, loc as gl::types::GLuint);
+                gl::BindBufferBase(gl::UNIFORM_BUFFER, loc as gl::types::GLuint, buffer);
+            },
+            super::CastBindUniform(loc, uniform) => {
+                shade::bind_uniform(loc as gl::types::GLint, uniform);
+            },
+            super::CastUpdateBuffer(buffer, data) => {
+                self.update_buffer(buffer, data.as_slice(), super::UsageDynamic);
+            },
+            super::CastDraw(start, count) => {
+                gl::DrawArrays(gl::TRIANGLES,
+                    start as gl::types::GLsizei,
+                    count as gl::types::GLsizei);
+                self.check();
+            },
+            super::CastDrawIndexed(start, count) => {
+                let offset = start * (std::mem::size_of::<u16>() as u16);
+                unsafe {
+                    gl::DrawElements(gl::TRIANGLES,
+                        count as gl::types::GLsizei,
+                        gl::UNSIGNED_SHORT,
+                        offset as *const gl::types::GLvoid);
+                }
+                self.check();
+            },
+            _ => fail!("Unknown GL request: {}", request)
         }
     }
 }

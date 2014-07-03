@@ -53,7 +53,7 @@ fn main() {
         let mesh = renderer.create_mesh(3, data, 2, 8);
         loop {
             let cdata = gfx::ClearData {
-                color: Some([0.3, 0.3, 0.3, 1.0]),
+                color: Some(gfx::Color([0.3, 0.3, 0.3, 1.0])),
                 depth: None,
                 stencil: None,
             };

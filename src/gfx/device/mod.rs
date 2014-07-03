@@ -16,7 +16,7 @@
 #[cfg(gl)] pub use dev = self::gl;
 // #[cfg(d3d11)] ... // TODO
 
-use std::comm;
+use std::{comm, fmt};
 use std::comm::DuplexStream;
 use std::kinds::marker;
 
@@ -25,19 +25,27 @@ use GraphicsContext;
 pub mod shade;
 #[cfg(gl)] mod gl;
 
-pub type Color = [f32, ..4];
+pub struct Color(pub [f32, ..4]);
 pub type VertexCount = u16;
 pub type IndexCount = u16;
 pub type AttributeSlot = u8;
 pub type UniformBufferSlot = u8;
 pub type TextureSlot = u8;
 
+impl fmt::Show for Color {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let Color([r,g,b,a]) = *self;
+        write!(f, "Color({}, {}, {}, {})", r, g, b, a)
+    }
+}
+
+#[deriving(Show)]
 pub enum BufferUsage {
     UsageStatic,
     UsageDynamic,
 }
 
-
+#[deriving(Show)]
 pub enum Request {
     // Requests that require a reply:
     CallNewVertexBuffer(Vec<f32>),
@@ -72,14 +80,26 @@ pub enum Reply {
 
 pub type Client = DuplexStream<Request, Reply>;
 
-pub struct Server<P> {
+pub trait DeviceTask {
+    // calls
+    fn create_shader(&mut self, shade::Stage, code: &[u8]) -> Result<dev::Shader, ()>;
+    fn create_program(&mut self, shaders: &[dev::Shader]) -> Result<shade::ProgramMeta, ()>;
+    fn create_array_buffer(&mut self) -> dev::ArrayBuffer;
+    fn create_buffer(&mut self) -> dev::Buffer;
+    // helpers
+    fn update_buffer<T>(&mut self, dev::Buffer, data: &[T], BufferUsage);
+    // casts
+    fn process(&mut self, Request);
+}
+
+pub struct Server<P, D> {
     no_share: marker::NoShare,
     stream: DuplexStream<Reply, Request>,
     graphics_context: P,
-    device: Device,
+    device: D,
 }
 
-impl<Api, P: GraphicsContext<Api>> Server<P> {
+impl<Api, P: GraphicsContext<Api>, D: DeviceTask> Server<P, D> {
     pub fn make_current(&self) {
         self.graphics_context.make_current();
     }
@@ -90,41 +110,6 @@ impl<Api, P: GraphicsContext<Api>> Server<P> {
         // Get updates from the renderer and pass on results
         loop {
             match self.stream.recv_opt() {
-                Ok(CastClear(color)) => {
-                    self.device.clear(color.as_slice());
-                },
-                Ok(CastBindProgram(prog)) => {
-                    self.device.bind_program(prog);
-                },
-                Ok(CastBindArrayBuffer(abuf)) => {
-                    self.device.bind_array_buffer(abuf);
-                },
-                Ok(CastBindAttribute(index, buf, count, offset, stride)) => {
-                    self.device.bind_vertex_buffer(buf);
-                    self.device.bind_attribute(index, count as u32, offset, stride);
-                },
-                Ok(CastBindIndex(buf)) => {
-                    self.device.bind_index_buffer(buf);
-                },
-                Ok(CastBindFrameBuffer(fbo)) => {
-                    self.device.bind_frame_buffer(fbo);
-                },
-                Ok(CastBindUniformBlock(prog, index, loc, buf)) => {
-                    self.device.bind_uniform_block(prog, index, loc);
-                    self.device.map_uniform_buffer(loc, buf);
-                },
-                Ok(CastBindUniform(loc, value)) => {
-                    self.device.bind_uniform(loc, value);
-                },
-                Ok(CastUpdateBuffer(buf, data)) => {
-                    self.device.update_buffer(buf, data.as_slice(), UsageDynamic);
-                },
-                Ok(CastDraw(offset, count)) => {
-                    self.device.draw(offset as u32, count as u32);
-                },
-                Ok(CastDrawIndexed(offset, count)) => {
-                    self.device.draw_index(offset, count);
-                },
                 Ok(CastSwapBuffers) => {
                     self.graphics_context.swap_buffers();
                     break;
@@ -155,6 +140,7 @@ impl<Api, P: GraphicsContext<Api>> Server<P> {
                     let name = self.device.create_program(code.as_slice());
                     self.stream.send(ReplyNewProgram(name));
                 },
+                Ok(request) => self.device.process(request),
                 Err(()) => return false,
             }
         }
@@ -165,8 +151,9 @@ impl<Api, P: GraphicsContext<Api>> Server<P> {
 #[deriving(Show)]
 pub enum InitError {}
 
+#[allow(visible_private_types)]
 pub fn init<Api, P: GraphicsContext<Api>>(graphics_context: P, options: super::Options)
-        -> Result<(Client, Server<P>), InitError> {
+        -> Result<(Client, Server<P, Device>), InitError> {
     let (client_stream, server_stream) = comm::duplex();
 
     let dev = Device::new(options);
