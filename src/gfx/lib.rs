@@ -81,7 +81,7 @@ pub mod platform;
 #[allow(visible_private_types)]
 pub fn start<Api, P: GraphicsContext<Api>>(graphics_context: P, options: device::Options)
         -> Result<(Renderer, Device<P, device::Device>), InitError> {
-    device::init(graphics_context, options).map(|(server, client)| {
-        ((render::start(options, server), client))
+    device::init(graphics_context, options).map(|(server, client, swap_ack)| {
+        ((render::start(options, server, swap_ack), client))
     })
 }

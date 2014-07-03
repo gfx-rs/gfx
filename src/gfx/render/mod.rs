@@ -64,9 +64,14 @@ enum Reply {
 
 pub struct Client {
     stream: DuplexStream<Request, Reply>,
+    swap_ack: Receiver<()>
 }
 
 impl Client {
+    pub fn start_frame(&self) -> bool {
+        self.swap_ack.try_recv() == Ok(())
+    }
+
     pub fn clear(&self, data: target::ClearData, frame: Option<target::Frame>) {
         self.stream.send(CastClear(data, frame));
     }
@@ -362,7 +367,7 @@ impl Server {
 }
 
 /// Start a render server using the provided device client
-pub fn start(_options: device::Options, device: device::Client) -> Client {
+pub fn start(_options: device::Options, device: device::Client, swap_ack: Receiver<()>) -> Client {
     let (render_stream, task_stream) = comm::duplex::<Request, Reply>();
     spawn(proc() {
         let mut srv = Server::new(task_stream, device);
@@ -370,5 +375,6 @@ pub fn start(_options: device::Options, device: device::Client) -> Client {
     });
     Client {
         stream: render_stream,
+        swap_ack: swap_ack
     }
 }
