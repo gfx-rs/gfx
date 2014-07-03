@@ -12,6 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![crate_id = "github.com/bjz/gfx-rs#device:0.1"]
+#![comment = "A lightweight graphics device manager for Rust"]
+#![license = "ASL2"]
+#![crate_type = "lib"]
+
+#![feature(phase)]
+#[phase(plugin, link)] extern crate log;
+extern crate libc;
+
 #[cfg(gl)] pub use self::gl::Device;
 #[cfg(gl)] pub use dev = self::gl;
 // #[cfg(d3d11)] ... // TODO
@@ -20,10 +29,9 @@ use std::{comm, fmt};
 use std::comm::DuplexStream;
 use std::kinds::marker;
 
-use GraphicsContext;
-
 pub mod shade;
 #[cfg(gl)] mod gl;
+
 
 pub struct Color(pub [f32, ..4]);
 pub type VertexCount = u16;
@@ -70,6 +78,7 @@ pub enum Request {
     CastSwapBuffers,
 }
 
+#[deriving(Show)]
 pub enum Reply {
     ReplyNewBuffer(dev::Buffer),
     ReplyNewArrayBuffer(dev::ArrayBuffer),
@@ -148,11 +157,24 @@ impl<Api, P: GraphicsContext<Api>, D: DeviceTask> Server<P, D> {
     }
 }
 
+
+pub trait GraphicsContext<Api> {
+    fn swap_buffers(&self);
+    fn make_current(&self);
+}
+
+pub trait GlProvider {
+    fn get_proc_address(&self, &str) -> *const ::libc::c_void;
+    fn is_extension_supported(&self, &str) -> bool;
+}
+
 #[deriving(Show)]
 pub enum InitError {}
 
+pub type Options<'a> = &'a GlProvider;
+
 #[allow(visible_private_types)]
-pub fn init<Api, P: GraphicsContext<Api>>(graphics_context: P, options: super::Options)
+pub fn init<Api, P: GraphicsContext<Api>>(graphics_context: P, options: Options)
         -> Result<(Client, Server<P, Device>), InitError> {
     let (client_stream, server_stream) = comm::duplex();
 

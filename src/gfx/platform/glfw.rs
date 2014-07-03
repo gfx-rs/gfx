@@ -15,35 +15,41 @@
 extern crate glfw;
 
 use self::glfw::Context;
+use device;
 
-use platform::{GlApi, GraphicsContext};
+
+struct Wrap<'a>(&'a glfw::Glfw);
+
+impl<'a> device::GlProvider for Wrap<'a> {
+    fn get_proc_address(&self, name: &str) -> *const ::libc::c_void {
+        let Wrap(provider) = *self;
+        provider.get_proc_address(name)
+    }
+    fn is_extension_supported(&self, name: &str) -> bool {
+        let Wrap(provider) = *self;
+        provider.extension_supported(name)
+    }
+}
+
 
 pub struct GlfwGraphicsContext<C> {
     pub context: C,
 }
 
 impl<C: Context> GlfwGraphicsContext<C> {
-    pub fn new(context: C) -> GlfwGraphicsContext<C> {
+    #[allow(visible_private_types)]
+    pub fn new<'a>(context: C, provider: &'a glfw::Glfw) -> (GlfwGraphicsContext<C>, Wrap<'a>)  {
         context.make_current();
-        GlfwGraphicsContext { context: context }
+        (GlfwGraphicsContext { context: context }, Wrap(provider))
     }
 }
 
-impl<C: Context> GraphicsContext<GlApi> for GlfwGraphicsContext<C> {
+impl<C: Context> device::GraphicsContext<super::GlApi> for GlfwGraphicsContext<C> {
     fn make_current(&self) {
         self.context.make_current();
     }
 
     fn swap_buffers(&self) {
         self.context.swap_buffers();
-    }
-}
-
-impl super::GlProvider for glfw::Glfw {
-    fn get_proc_address(&self, name: &str) -> *const ::libc::c_void {
-        self.get_proc_address(name)
-    }
-    fn is_extension_supported(&self, name: &str) -> bool {
-        self.extension_supported(name)
     }
 }

@@ -16,7 +16,6 @@ extern crate gl;
 extern crate libc;
 
 use std;
-use platform::GlProvider;
 
 mod shade;
 
@@ -32,7 +31,7 @@ pub type Sampler        = gl::types::GLuint;
 pub struct Device;
 
 impl Device {
-    pub fn new(provider: &GlProvider) -> Device {
+    pub fn new(provider: &super::GlProvider) -> Device {
         gl::load_with(|s| provider.get_proc_address(s));
         Device
     }

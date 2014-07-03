@@ -362,7 +362,7 @@ impl Server {
 }
 
 /// Start a render server using the provided device client
-pub fn start(_options: super::Options, device: device::Client) -> Client {
+pub fn start(_options: device::Options, device: device::Client) -> Client {
     let (render_stream, task_stream) = comm::duplex::<Request, Reply>();
     spawn(proc() {
         let mut srv = Server::new(task_stream, device);

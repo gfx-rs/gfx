@@ -36,10 +36,12 @@ fn main() {
         .expect("Failed to create GLFW window.");
 
     window.set_key_polling(true);
-    let platform = gfx::platform::Glfw::new(window.render_context());
 
     // spawn render task
-    let (renderer, mut device) = gfx::start(platform, &glfw).unwrap();
+    let (renderer, mut device) = {
+        let (platform, options) = gfx::platform::Glfw::new(window.render_context(), &glfw);
+        gfx::start(platform, &options).unwrap()
+    };
 
     // spawn game task
     spawn(proc() {
