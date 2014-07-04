@@ -22,6 +22,8 @@
 extern crate libc;
 extern crate device;
 
+use std::sync::Future;
+
 // public re-exports
 pub use render::{BufferHandle, MeshHandle, SurfaceHandle, TextureHandle, SamplerHandle, ProgramHandle, EnvirHandle};
 pub use render::Renderer;
@@ -41,7 +43,7 @@ pub mod platform;
 
 #[allow(visible_private_types)]
 pub fn start<Api, P: GraphicsContext<Api>>(graphics_context: P, options: device::Options)
-        -> Result<(Renderer, Device<P, device::Device>), InitError> {
+        -> Result<(Future<Renderer>, Device<P, device::Device>), InitError> {
     device::init(graphics_context, options).map(|(client, server)| {
         (Renderer::new(client), server)
     })

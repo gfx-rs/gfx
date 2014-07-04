@@ -45,7 +45,7 @@ fn main() {
 
     // spawn game task
     spawn(proc() {
-        let mut renderer = renderer;
+        let mut renderer = renderer.unwrap();
         let program = renderer.create_program(
             VERTEX_SRC.to_owned(),
             FRAGMENT_SRC.to_owned());
