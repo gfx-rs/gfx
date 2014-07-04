@@ -14,7 +14,6 @@
 
 pub use device::target::Color;
 use device::target::{Plane, PlaneEmpty};
-use std::fmt::Show;
 
 static MAX_COLOR_TARGETS: uint = 4;
 

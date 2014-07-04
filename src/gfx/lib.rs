@@ -32,6 +32,7 @@ pub use render::envir::{BlockVar, UniformVar, TextureVar};
 pub use render::target::Frame;
 pub use Device = device::Server;
 pub use device::target::{Color, ClearData, Plane, TextureLayer, TextureLevel};
+pub use device::target::{PlaneEmpty, PlaneSurface, PlaneTexture, PlaneTextureLayer};
 pub use device::{GraphicsContext, InitError};
 pub use device::shade::{UniformValue, ValueI32, ValueF32, ValueI32Vec, ValueF32Vec, ValueF32Matrix};
 

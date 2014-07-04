@@ -56,6 +56,7 @@ pub enum Request {
     CallNewArrayBuffer,
     CallNewShader(shade::Stage, Vec<u8>),
     CallNewProgram(Vec<dev::Shader>),
+    CallNewFrameBuffer,
     // Requests that don't expect a reply:
     CastClear(target::Color),
     CastBindProgram(dev::Program),
@@ -79,6 +80,7 @@ pub enum Reply {
     ReplyNewArrayBuffer(dev::ArrayBuffer),
     ReplyNewShader(Result<dev::Shader, ()>),
     ReplyNewProgram(Result<shade::ProgramMeta, ()>),
+    ReplyNewFrameBuffer(dev::FrameBuffer),
 }
 
 
@@ -86,10 +88,11 @@ pub type Client = DuplexStream<Request, Reply>;
 
 pub trait DeviceTask {
     // calls
+    fn create_buffer(&mut self) -> dev::Buffer;
+    fn create_array_buffer(&mut self) -> dev::ArrayBuffer;
     fn create_shader(&mut self, shade::Stage, code: &[u8]) -> Result<dev::Shader, ()>;
     fn create_program(&mut self, shaders: &[dev::Shader]) -> Result<shade::ProgramMeta, ()>;
-    fn create_array_buffer(&mut self) -> dev::ArrayBuffer;
-    fn create_buffer(&mut self) -> dev::Buffer;
+    fn create_frame_buffer(&mut self) -> dev::FrameBuffer;
     // helpers
     fn update_buffer<T>(&mut self, dev::Buffer, data: &[T], BufferUsage);
     // casts
@@ -143,6 +146,10 @@ impl<Api, P: GraphicsContext<Api>, D: DeviceTask> Server<P, D> {
                 Ok(CallNewProgram(code)) => {
                     let name = self.device.create_program(code.as_slice());
                     self.stream.send(ReplyNewProgram(name));
+                },
+                Ok(CallNewFrameBuffer) => {
+                    let name = self.device.create_frame_buffer();
+                    self.stream.send(ReplyNewFrameBuffer(name));
                 },
                 Ok(request) => self.device.process(request),
                 Err(()) => return false,

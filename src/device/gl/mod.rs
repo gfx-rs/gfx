@@ -44,6 +44,24 @@ impl Device {
 }
 
 impl super::DeviceTask for Device {
+    fn create_buffer(&mut self) -> Buffer {
+        let mut name = 0 as Buffer;
+        unsafe{
+            gl::GenBuffers(1, &mut name);
+        }
+        info!("\tCreated buffer {}", name);
+        name
+    }
+
+    fn create_array_buffer(&mut self) -> ArrayBuffer {
+        let mut name = 0 as ArrayBuffer;
+        unsafe{
+            gl::GenVertexArrays(1, &mut name);
+        }
+        info!("\tCreated array buffer {}", name);
+        name
+    }
+
     fn create_shader(&mut self, stage: super::shade::Stage, code: &[u8]) -> Result<Shader, ()> {
         let (name, info) = shade::create_shader(stage, code);
         info.map(|info| {
@@ -62,23 +80,15 @@ impl super::DeviceTask for Device {
         meta
     }
 
-    fn create_array_buffer(&mut self) -> ArrayBuffer {
-        let mut name = 0 as ArrayBuffer;
+    fn create_frame_buffer(&mut self) -> FrameBuffer {
+        let mut name = 0 as FrameBuffer;
         unsafe{
-            gl::GenVertexArrays(1, &mut name);
+            gl::GenFramebuffers(1, &mut name);
         }
-        info!("\tCreated array buffer {}", name);
+        info!("\tCreated frame buffer {}", name);
         name
     }
 
-    fn create_buffer(&mut self) -> Buffer {
-        let mut name = 0 as Buffer;
-        unsafe{
-            gl::GenBuffers(1, &mut name);
-        }
-        info!("\tCreated buffer {}", name);
-        name
-    }
 
     fn update_buffer<T>(&mut self, buffer: Buffer, data: &[T], usage: super::BufferUsage) {
         gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
