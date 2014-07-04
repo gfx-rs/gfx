@@ -12,47 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! ~~~rust
-//! extern crate gfx;
-//!
-//! #[start]
-//! fn start(argc: int, argv: **u8) -> int {
-//!     native::start(argc, argv, main)
-//! }
-//!
-//! fn main() {
-//!     // spawn render task
-//!     let (renderer, mut device) = gfx::start(()).unwrap();
-//!
-//!     // spawn game task
-//!     spawn(proc {
-//!         let _ = renderer; // do stuff with renderer
-//!         loop {}
-//!     })
-//!
-//!     loop {
-//!         device.update(); // update device
-//!     }
-//! }
-//! ~~~
-//!
-//! ~~~
-//!     Render Task        |           Main Platform Thread             |         User Task
-//!                        |                                            |
-//! +----------------+     |                      +----------------+    |
-//! |                |<----- device::Reply -------|                |    |
-//! | device::Client |     |                      | device::Server |    |
-//! |                |------ device::Request ---->|                |    |
-//! +----------------+     |                      +----------------+    |
-//!                        |                                            |
-//!                        |                                            |     +----------------+
-//!                        |<------------- render::Request -------------------|                |
-//!                        |                                            |     | render::Client |
-//!                        |-------------- render::Reply -------------------->|                |
-//!                        |                                            |     +----------------+
-//!                        |                                            |
-//! ~~~
-
 #![crate_id = "github.com/bjz/gfx-rs#gfx:0.1"]
 #![comment = "A lightweight graphics device manager for Rust"]
 #![license = "ASL2"]
@@ -65,7 +24,7 @@ extern crate device;
 
 // public re-exports
 pub use render::{BufferHandle, MeshHandle, SurfaceHandle, TextureHandle, SamplerHandle, ProgramHandle, EnvirHandle};
-pub use Renderer = render::Client;
+pub use render::Renderer;
 pub use MeshSlice = render::mesh::Slice;
 pub use render::mesh::{VertexCount, ElementCount, VertexSlice, IndexSlice};
 pub use Environment = render::envir::Storage;
@@ -81,7 +40,7 @@ pub mod platform;
 #[allow(visible_private_types)]
 pub fn start<Api, P: GraphicsContext<Api>>(graphics_context: P, options: device::Options)
         -> Result<(Renderer, Device<P, device::Device>), InitError> {
-    device::init(graphics_context, options).map(|(server, client)| {
-        ((render::start(options, server), client))
+    device::init(graphics_context, options).map(|(client, server)| {
+        (Renderer::new(client), server)
     })
 }
