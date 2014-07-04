@@ -12,47 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! ~~~rust
-//! extern crate gfx;
-//!
-//! #[start]
-//! fn start(argc: int, argv: **u8) -> int {
-//!     native::start(argc, argv, main)
-//! }
-//!
-//! fn main() {
-//!     // spawn render task
-//!     let (renderer, mut device) = gfx::start(()).unwrap();
-//!
-//!     // spawn game task
-//!     spawn(proc {
-//!         let _ = renderer; // do stuff with renderer
-//!         loop {}
-//!     })
-//!
-//!     loop {
-//!         device.update(); // update device
-//!     }
-//! }
-//! ~~~
-//!
-//! ~~~
-//!     Render Task        |           Main Platform Thread             |         User Task
-//!                        |                                            |
-//! +----------------+     |                      +----------------+    |
-//! |                |<----- device::Reply -------|                |    |
-//! | device::Client |     |                      | device::Server |    |
-//! |                |------ device::Request ---->|                |    |
-//! +----------------+     |                      +----------------+    |
-//!                        |                                            |
-//!                        |                                            |     +----------------+
-//!                        |<------------- render::Request -------------------|                |
-//!                        |                                            |     | render::Client |
-//!                        |-------------- render::Reply -------------------->|                |
-//!                        |                                            |     +----------------+
-//!                        |                                            |
-//! ~~~
-
 #![crate_id = "github.com/bjz/gfx-rs#gfx:0.1"]
 #![comment = "A lightweight graphics device manager for Rust"]
 #![license = "ASL2"]
