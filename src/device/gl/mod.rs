@@ -105,10 +105,23 @@ impl super::DeviceTask for Device {
 
     fn process(&mut self, request: super::Request) {
         match request {
-            super::CastClear(color) => {
-                let super::target::Color([r,g,b,a]) = color;
-                gl::ClearColor(r, g, b, a);
-                gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT);
+            super::CastClear(data) => {
+                let mut mask = match data.color {
+                    Some(super::target::Color([r,g,b,a])) => {
+                        gl::ClearColor(r, g, b, a);
+                        gl::COLOR_BUFFER_BIT
+                    },
+                    None => 0 as gl::types::GLenum
+                };
+                data.depth.map(|value| {
+                    gl::ClearDepth(value as gl::types::GLclampd);
+                    mask |= gl::DEPTH_BUFFER_BIT;
+                });
+                data.stencil.map(|value| {
+                    gl::ClearStencil(value as gl::types::GLint);
+                    mask |= gl::STENCIL_BUFFER_BIT;
+                });
+                gl::Clear(mask);
             },
             super::CastBindProgram(program) => {
                 gl::UseProgram(program);

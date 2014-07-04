@@ -58,7 +58,7 @@ pub enum Request {
     CallNewProgram(Vec<dev::Shader>),
     CallNewFrameBuffer,
     // Requests that don't expect a reply:
-    CastClear(target::Color),
+    CastClear(target::ClearData),
     CastBindProgram(dev::Program),
     CastBindArrayBuffer(dev::ArrayBuffer),
     CastBindAttribute(AttributeSlot, dev::Buffer, u32, u32, u32),
