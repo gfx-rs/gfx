@@ -65,7 +65,7 @@ extern crate device;
 
 // public re-exports
 pub use render::{BufferHandle, MeshHandle, SurfaceHandle, TextureHandle, SamplerHandle, ProgramHandle, EnvirHandle};
-pub use Renderer = render::Client;
+pub use render::Renderer;
 pub use MeshSlice = render::mesh::Slice;
 pub use render::mesh::{VertexCount, ElementCount, VertexSlice, IndexSlice};
 pub use Environment = render::envir::Storage;
@@ -81,7 +81,7 @@ pub mod platform;
 #[allow(visible_private_types)]
 pub fn start<Api, P: GraphicsContext<Api>>(graphics_context: P, options: device::Options)
         -> Result<(Renderer, Device<P, device::Device>), InitError> {
-    device::init(graphics_context, options).map(|(server, client)| {
-        ((render::start(options, server), client))
+    device::init(graphics_context, options).map(|(client, server)| {
+        (Renderer::new(client), server)
     })
 }
