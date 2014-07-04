@@ -25,8 +25,6 @@ extern crate libc;
 #[cfg(gl)] pub use dev = self::gl;
 // #[cfg(d3d11)] ... // TODO
 
-use std::comm;
-use std::comm::DuplexStream;
 use std::kinds::marker;
 
 pub mod shade;
@@ -83,9 +81,6 @@ pub enum Reply {
     ReplyNewFrameBuffer(dev::FrameBuffer),
 }
 
-
-pub type Client = DuplexStream<Request, Reply>;
-
 pub trait DeviceTask {
     // calls
     fn create_buffer(&mut self) -> dev::Buffer;
@@ -101,7 +96,8 @@ pub trait DeviceTask {
 
 pub struct Server<P, D> {
     no_share: marker::NoShare,
-    stream: DuplexStream<Reply, Request>,
+    request_rx: Receiver<Request>,
+    reply_tx: Sender<Reply>,
     graphics_context: P,
     device: D,
 }
@@ -116,7 +112,7 @@ impl<Api, P: GraphicsContext<Api>, D: DeviceTask> Server<P, D> {
     pub fn update(&mut self) -> bool {
         // Get updates from the renderer and pass on results
         loop {
-            match self.stream.recv_opt() {
+            match self.request_rx.recv_opt() {
                 Ok(CastSwapBuffers) => {
                     self.graphics_context.swap_buffers();
                     break;
@@ -124,32 +120,32 @@ impl<Api, P: GraphicsContext<Api>, D: DeviceTask> Server<P, D> {
                 Ok(CallNewVertexBuffer(data)) => {
                     let name = self.device.create_buffer();
                     self.device.update_buffer(name, data.as_slice(), UsageStatic);
-                    self.stream.send(ReplyNewBuffer(name));
+                    self.reply_tx.send(ReplyNewBuffer(name));
                 },
                 Ok(CallNewIndexBuffer(data)) => {
                     let name = self.device.create_buffer();
                     self.device.update_buffer(name, data.as_slice(), UsageStatic);
-                    self.stream.send(ReplyNewBuffer(name));
+                    self.reply_tx.send(ReplyNewBuffer(name));
                 },
                 Ok(CallNewRawBuffer) => {
                     let name = self.device.create_buffer();
-                    self.stream.send(ReplyNewBuffer(name));
+                    self.reply_tx.send(ReplyNewBuffer(name));
                 },
                 Ok(CallNewArrayBuffer) => {
                     let name = self.device.create_array_buffer();
-                    self.stream.send(ReplyNewArrayBuffer(name));
+                    self.reply_tx.send(ReplyNewArrayBuffer(name));
                 },
                 Ok(CallNewShader(stage, code)) => {
                     let name = self.device.create_shader(stage, code.as_slice());
-                    self.stream.send(ReplyNewShader(name));
+                    self.reply_tx.send(ReplyNewShader(name));
                 },
                 Ok(CallNewProgram(code)) => {
                     let name = self.device.create_program(code.as_slice());
-                    self.stream.send(ReplyNewProgram(name));
+                    self.reply_tx.send(ReplyNewProgram(name));
                 },
                 Ok(CallNewFrameBuffer) => {
                     let name = self.device.create_frame_buffer();
-                    self.stream.send(ReplyNewFrameBuffer(name));
+                    self.reply_tx.send(ReplyNewFrameBuffer(name));
                 },
                 Ok(request) => self.device.process(request),
                 Err(()) => return false,
@@ -177,16 +173,18 @@ pub type Options<'a> = &'a GlProvider;
 
 #[allow(visible_private_types)]
 pub fn init<Api, P: GraphicsContext<Api>>(graphics_context: P, options: Options)
-        -> Result<(Client, Server<P, Device>), InitError> {
-    let (client_stream, server_stream) = comm::duplex();
+        -> Result<(Sender<Request>, Receiver<Reply>, Server<P, Device>), InitError> {
+    let (request_tx, request_rx) = channel();
+    let (reply_tx, reply_rx) = channel();
 
     let dev = Device::new(options);
     let server = Server {
         no_share: marker::NoShare,
-        stream: server_stream,
+        request_rx: request_rx,
+        reply_tx: reply_tx,
         graphics_context: graphics_context,
         device: dev,
     };
 
-    Ok((client_stream, server))
+    Ok((request_tx, reply_rx, server))
 }
