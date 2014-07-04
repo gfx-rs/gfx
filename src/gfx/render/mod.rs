@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Future;
+
 use device;
 use device::shade::{ProgramMeta, Vertex, Fragment, UniformValue};
 use device::target::{ClearData, TargetColor, TargetDepth, TargetStencil};
@@ -45,9 +47,9 @@ struct State {
 pub struct Renderer {
     device: device::Client,
     /// a common VAO for mesh rendering
-    common_array_buffer: Option<device::dev::ArrayBuffer>,
+    common_array_buffer: device::dev::ArrayBuffer,
     /// a common FBO for drawing
-    common_frame_buffer: Option<device::dev::FrameBuffer>,
+    common_frame_buffer: device::dev::FrameBuffer,
     /// the default FBO for drawing
     default_frame_buffer: device::dev::FrameBuffer,
     /// cached meta-data for meshes and programs
@@ -57,53 +59,33 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new(device: device::Client) -> Renderer {
-        Renderer {
-            device: device,
-            common_array_buffer: None,
-            common_frame_buffer: None,
-            default_frame_buffer: 0,
-            cache: Cache {
-                meshes: Vec::new(),
-                programs: Vec::new(),
-                environments: Vec::new(),
-            },
-            state: State {
-                frame: target::Frame::new(),
-            },
-        }
-    }
-
-    fn get_common_array_buffer(&mut self) -> device::dev::ArrayBuffer {
-        match self.common_array_buffer {
-            Some(array_buffer) => array_buffer,
-            None => {
-                self.device.send(device::CallNewArrayBuffer);
-                match self.device.recv() {
-                    device::ReplyNewArrayBuffer(array_buffer) => {
-                        self.common_array_buffer = Some(array_buffer);
-                        array_buffer
-                    },
-                    _ => fail!("invalid device reply for CallNewArrayBuffer"),
-                }
-            },
-        }
-    }
-
-    fn get_common_frame_buffer(&mut self) -> device::dev::FrameBuffer {
-        match self.common_frame_buffer {
-            Some(frame_buffer) => frame_buffer,
-            None => {
-                self.device.send(device::CallNewFrameBuffer);
-                match self.device.recv() {
-                    device::ReplyNewFrameBuffer(frame_buffer) => {
-                        self.common_frame_buffer = Some(frame_buffer);
-                        frame_buffer
-                    },
-                    _ => fail!("invalid device reply for CallNewFrameBuffer"),
-                }
-            },
-        }       
+    pub fn new(device: device::Client) -> Future<Renderer> {
+        Future::from_fn(proc() {
+            device.send(device::CallNewArrayBuffer);
+            device.send(device::CallNewFrameBuffer);
+            let array_buffer = match device.recv() {
+                device::ReplyNewArrayBuffer(array_buffer) => array_buffer,
+                _ => fail!("invalid device reply for CallNewArrayBuffer"),
+            };
+            let frame_buffer = match device.recv() {
+                device::ReplyNewFrameBuffer(frame_buffer) => frame_buffer,
+                _ => fail!("invalid device reply for CallNewFrameBuffer"),
+            };
+            Renderer {
+                device: device,
+                common_array_buffer: array_buffer,
+                common_frame_buffer: frame_buffer,
+                default_frame_buffer: 0,
+                cache: Cache {
+                    meshes: Vec::new(),
+                    programs: Vec::new(),
+                    environments: Vec::new(),
+                },
+                state: State {
+                    frame: target::Frame::new(),
+                },
+            }
+        })
     }
 
     pub fn clear(&mut self, data: ClearData, frame: target::Frame) {
@@ -114,8 +96,6 @@ impl Renderer {
     pub fn draw(&mut self, mesh_handle: MeshHandle, slice: mesh::Slice, frame: target::Frame, program_handle: ProgramHandle, env_handle: EnvirHandle) {
         // bind output frame
         self.bind_frame(&frame);
-        // get array buffer for later
-        let array_buffer = self.get_common_array_buffer();
         // bind shaders
         let program = self.cache.programs.get(program_handle);
         let env = self.cache.environments.get(env_handle);
@@ -127,7 +107,7 @@ impl Renderer {
             },
         }
         // bind vertex attributes
-        self.device.send(device::CastBindArrayBuffer(array_buffer));
+        self.device.send(device::CastBindArrayBuffer(self.common_array_buffer));
         let mesh = self.cache.meshes.get(mesh_handle);
         Renderer::bind_mesh(&mut self.device, mesh, program).unwrap();
         // draw
@@ -232,8 +212,7 @@ impl Renderer {
             // binding the default FBO, not touching our common one
             self.device.send(device::CastBindFrameBuffer(self.default_frame_buffer));
         }else {
-            let frame_buffer = self.get_common_frame_buffer();
-            self.device.send(device::CastBindFrameBuffer(frame_buffer));
+            self.device.send(device::CastBindFrameBuffer(self.common_frame_buffer));
             for (i, (cur, new)) in self.state.frame.colors.mut_iter().zip(frame.colors.iter()).enumerate() {
                 if *cur != *new {
                     self.device.send(device::CastBindTarget(TargetColor(i as u8), *new));
@@ -248,7 +227,7 @@ impl Renderer {
             self.state.frame = *frame;
         }
     }
-  
+
     fn bind_mesh(device: &mut device::Client, mesh: &mesh::Mesh, prog: &ProgramMeta) -> Result<(),()> {
         for sat in prog.attributes.iter() {
             match mesh.attributes.iter().find(|a| a.name.as_slice() == sat.name.as_slice()) {
