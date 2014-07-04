@@ -12,28 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use device::Color;
-use device::dev;
-
-pub type TextureLayer = u16;
-pub type TextureLevel = u8;
+pub use device::target::Color;
+use device::target::{Plane, PlaneEmpty};
 
 static MAX_COLOR_TARGETS: uint = 4;
-
-
-pub struct ClearData {
-    pub color: Option<Color>,
-    pub depth: Option<f32>,
-    pub stencil: Option<u8>,
-}
-
-
-pub enum Plane {
-    PlaneEmpty,
-    PlaneSurface(dev::Surface),
-    PlaneTexture(dev::Texture, TextureLevel),
-    PlaneTextureLayer(dev::Texture, TextureLevel, TextureLayer),
-}
 
 
 pub struct Frame {
@@ -49,5 +31,12 @@ impl Frame {
             depth: PlaneEmpty,
             stencil: PlaneEmpty,
         }
+    }
+
+    // An empty frame is considered to match the default framebuffer
+    pub fn is_default(&self) -> bool {
+        self.colors.iter().all(|&p| p==PlaneEmpty) &&
+        self.depth == PlaneEmpty &&
+        self.stencil == PlaneEmpty
     }
 }

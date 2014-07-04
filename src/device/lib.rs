@@ -25,33 +25,27 @@ extern crate libc;
 #[cfg(gl)] pub use dev = self::gl;
 // #[cfg(d3d11)] ... // TODO
 
-use std::{comm, fmt};
+use std::comm;
 use std::comm::DuplexStream;
 use std::kinds::marker;
 
 pub mod shade;
+pub mod target;
 #[cfg(gl)] mod gl;
 
 
-pub struct Color(pub [f32, ..4]);
 pub type VertexCount = u16;
 pub type IndexCount = u16;
 pub type AttributeSlot = u8;
 pub type UniformBufferSlot = u8;
 pub type TextureSlot = u8;
 
-impl fmt::Show for Color {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let Color([r,g,b,a]) = *self;
-        write!(f, "Color({}, {}, {}, {})", r, g, b, a)
-    }
-}
-
 #[deriving(Show)]
 pub enum BufferUsage {
     UsageStatic,
     UsageDynamic,
 }
+
 
 #[deriving(Show)]
 pub enum Request {
@@ -62,13 +56,15 @@ pub enum Request {
     CallNewArrayBuffer,
     CallNewShader(shade::Stage, Vec<u8>),
     CallNewProgram(Vec<dev::Shader>),
+    CallNewFrameBuffer,
     // Requests that don't expect a reply:
-    CastClear(Color),
+    CastClear(target::ClearData),
     CastBindProgram(dev::Program),
     CastBindArrayBuffer(dev::ArrayBuffer),
     CastBindAttribute(AttributeSlot, dev::Buffer, u32, u32, u32),
     CastBindIndex(dev::Buffer),
     CastBindFrameBuffer(dev::FrameBuffer),
+    CastBindTarget(target::Target, target::Plane),
     CastBindUniformBlock(dev::Program, u8, UniformBufferSlot, dev::Buffer),
     CastBindUniform(shade::Location, shade::UniformValue),
     //CastBindTexture(TextureSlot, dev::Texture, dev::Sampler),    //TODO
@@ -84,6 +80,7 @@ pub enum Reply {
     ReplyNewArrayBuffer(dev::ArrayBuffer),
     ReplyNewShader(Result<dev::Shader, ()>),
     ReplyNewProgram(Result<shade::ProgramMeta, ()>),
+    ReplyNewFrameBuffer(dev::FrameBuffer),
 }
 
 
@@ -91,10 +88,11 @@ pub type Client = DuplexStream<Request, Reply>;
 
 pub trait DeviceTask {
     // calls
+    fn create_buffer(&mut self) -> dev::Buffer;
+    fn create_array_buffer(&mut self) -> dev::ArrayBuffer;
     fn create_shader(&mut self, shade::Stage, code: &[u8]) -> Result<dev::Shader, ()>;
     fn create_program(&mut self, shaders: &[dev::Shader]) -> Result<shade::ProgramMeta, ()>;
-    fn create_array_buffer(&mut self) -> dev::ArrayBuffer;
-    fn create_buffer(&mut self) -> dev::Buffer;
+    fn create_frame_buffer(&mut self) -> dev::FrameBuffer;
     // helpers
     fn update_buffer<T>(&mut self, dev::Buffer, data: &[T], BufferUsage);
     // casts
@@ -148,6 +146,10 @@ impl<Api, P: GraphicsContext<Api>, D: DeviceTask> Server<P, D> {
                 Ok(CallNewProgram(code)) => {
                     let name = self.device.create_program(code.as_slice());
                     self.stream.send(ReplyNewProgram(name));
+                },
+                Ok(CallNewFrameBuffer) => {
+                    let name = self.device.create_frame_buffer();
+                    self.stream.send(ReplyNewFrameBuffer(name));
                 },
                 Ok(request) => self.device.process(request),
                 Err(()) => return false,

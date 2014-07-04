@@ -14,6 +14,7 @@
 
 use device;
 use device::shade::{ProgramMeta, Vertex, Fragment, UniformValue};
+use device::target::{ClearData, TargetColor, TargetDepth, TargetStencil};
 use self::envir::BindableStorage;
 pub use BufferHandle = device::dev::Buffer;
 
@@ -35,14 +36,24 @@ struct Cache {
     pub environments: Vec<envir::Storage>,
 }
 
+/// Graphics state
+struct State {
+    frame: target::Frame,
+}
+
+
 pub struct Renderer {
     device: device::Client,
     /// a common VAO for mesh rendering
     common_array_buffer: Option<device::dev::ArrayBuffer>,
+    /// a common FBO for drawing
+    common_frame_buffer: Option<device::dev::FrameBuffer>,
     /// the default FBO for drawing
     default_frame_buffer: device::dev::FrameBuffer,
     /// cached meta-data for meshes and programs
     cache: Cache,
+    /// current state
+    state: State,
 }
 
 impl Renderer {
@@ -50,11 +61,15 @@ impl Renderer {
         Renderer {
             device: device,
             common_array_buffer: None,
+            common_frame_buffer: None,
             default_frame_buffer: 0,
             cache: Cache {
                 meshes: Vec::new(),
                 programs: Vec::new(),
                 environments: Vec::new(),
+            },
+            state: State {
+                frame: target::Frame::new(),
             },
         }
     }
@@ -75,15 +90,28 @@ impl Renderer {
         }
     }
 
-    pub fn clear(&mut self, data: target::ClearData, frame: Option<target::Frame>) {
-        self.bind_frame(&frame);
-        match data.color {
-            Some(col) => self.device.send(device::CastClear(col)),
-            None => unimplemented!(),
-        }
+    fn get_common_frame_buffer(&mut self) -> device::dev::FrameBuffer {
+        match self.common_frame_buffer {
+            Some(frame_buffer) => frame_buffer,
+            None => {
+                self.device.send(device::CallNewFrameBuffer);
+                match self.device.recv() {
+                    device::ReplyNewFrameBuffer(frame_buffer) => {
+                        self.common_frame_buffer = Some(frame_buffer);
+                        frame_buffer
+                    },
+                    _ => fail!("invalid device reply for CallNewFrameBuffer"),
+                }
+            },
+        }       
     }
 
-    pub fn draw(&mut self, mesh_handle: MeshHandle, slice: mesh::Slice, frame: Option<target::Frame>, program_handle: ProgramHandle, env_handle: EnvirHandle) {
+    pub fn clear(&mut self, data: ClearData, frame: target::Frame) {
+        self.bind_frame(&frame);
+        self.device.send(device::CastClear(data));
+    }
+
+    pub fn draw(&mut self, mesh_handle: MeshHandle, slice: mesh::Slice, frame: target::Frame, program_handle: ProgramHandle, env_handle: EnvirHandle) {
         // bind output frame
         self.bind_frame(&frame);
         // get array buffer for later
@@ -199,19 +227,28 @@ impl Renderer {
         self.device.send(device::CastUpdateBuffer(buf, data));
     }
 
-    fn bind_frame(&mut self, frame_opt: &Option<target::Frame>) {
-        match frame_opt {
-            &Some(ref _frame) => {
-                //TODO: find an existing FBO that matches the plane set
-                // or create a new one and bind it
-                unimplemented!()
-            },
-            &None => {
-                self.device.send(device::CastBindFrameBuffer(self.default_frame_buffer));
+    fn bind_frame(&mut self, frame: &target::Frame) {
+        if frame.is_default() {
+            // binding the default FBO, not touching our common one
+            self.device.send(device::CastBindFrameBuffer(self.default_frame_buffer));
+        }else {
+            let frame_buffer = self.get_common_frame_buffer();
+            self.device.send(device::CastBindFrameBuffer(frame_buffer));
+            for (i, (cur, new)) in self.state.frame.colors.mut_iter().zip(frame.colors.iter()).enumerate() {
+                if *cur != *new {
+                    self.device.send(device::CastBindTarget(TargetColor(i as u8), *new));
+                }
             }
+            if self.state.frame.depth != frame.depth {
+                self.device.send(device::CastBindTarget(TargetDepth, frame.depth));
+            }
+            if self.state.frame.stencil != frame.stencil {
+                self.device.send(device::CastBindTarget(TargetStencil, frame.stencil));
+            }
+            self.state.frame = *frame;
         }
     }
-
+  
     fn bind_mesh(device: &mut device::Client, mesh: &mesh::Mesh, prog: &ProgramMeta) -> Result<(),()> {
         for sat in prog.attributes.iter() {
             match mesh.attributes.iter().find(|a| a.name.as_slice() == sat.name.as_slice()) {

@@ -44,6 +44,24 @@ impl Device {
 }
 
 impl super::DeviceTask for Device {
+    fn create_buffer(&mut self) -> Buffer {
+        let mut name = 0 as Buffer;
+        unsafe{
+            gl::GenBuffers(1, &mut name);
+        }
+        info!("\tCreated buffer {}", name);
+        name
+    }
+
+    fn create_array_buffer(&mut self) -> ArrayBuffer {
+        let mut name = 0 as ArrayBuffer;
+        unsafe{
+            gl::GenVertexArrays(1, &mut name);
+        }
+        info!("\tCreated array buffer {}", name);
+        name
+    }
+
     fn create_shader(&mut self, stage: super::shade::Stage, code: &[u8]) -> Result<Shader, ()> {
         let (name, info) = shade::create_shader(stage, code);
         info.map(|info| {
@@ -62,23 +80,15 @@ impl super::DeviceTask for Device {
         meta
     }
 
-    fn create_array_buffer(&mut self) -> ArrayBuffer {
-        let mut name = 0 as ArrayBuffer;
+    fn create_frame_buffer(&mut self) -> FrameBuffer {
+        let mut name = 0 as FrameBuffer;
         unsafe{
-            gl::GenVertexArrays(1, &mut name);
+            gl::GenFramebuffers(1, &mut name);
         }
-        info!("\tCreated array buffer {}", name);
+        info!("\tCreated frame buffer {}", name);
         name
     }
 
-    fn create_buffer(&mut self) -> Buffer {
-        let mut name = 0 as Buffer;
-        unsafe{
-            gl::GenBuffers(1, &mut name);
-        }
-        info!("\tCreated buffer {}", name);
-        name
-    }
 
     fn update_buffer<T>(&mut self, buffer: Buffer, data: &[T], usage: super::BufferUsage) {
         gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
@@ -95,10 +105,23 @@ impl super::DeviceTask for Device {
 
     fn process(&mut self, request: super::Request) {
         match request {
-            super::CastClear(color) => {
-                let super::Color([r,g,b,a]) = color;
-                gl::ClearColor(r, g, b, a);
-                gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT);
+            super::CastClear(data) => {
+                let mut mask = match data.color {
+                    Some(super::target::Color([r,g,b,a])) => {
+                        gl::ClearColor(r, g, b, a);
+                        gl::COLOR_BUFFER_BIT
+                    },
+                    None => 0 as gl::types::GLenum
+                };
+                data.depth.map(|value| {
+                    gl::ClearDepth(value as gl::types::GLclampd);
+                    mask |= gl::DEPTH_BUFFER_BIT;
+                });
+                data.stencil.map(|value| {
+                    gl::ClearStencil(value as gl::types::GLint);
+                    mask |= gl::STENCIL_BUFFER_BIT;
+                });
+                gl::Clear(mask);
             },
             super::CastBindProgram(program) => {
                 gl::UseProgram(program);
@@ -119,7 +142,26 @@ impl super::DeviceTask for Device {
                 gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer);
             },
             super::CastBindFrameBuffer(frame_buffer) => {
-                gl::BindFramebuffer(gl::FRAMEBUFFER, frame_buffer);
+                gl::BindFramebuffer(gl::DRAW_FRAMEBUFFER, frame_buffer);
+            },
+            super::CastBindTarget(target, plane) => {
+                let attachment = match target {
+                    super::target::TargetColor(index) =>
+                        gl::COLOR_ATTACHMENT0 + (index as gl::types::GLenum),
+                    super::target::TargetDepth => gl::DEPTH_ATTACHMENT,
+                    super::target::TargetStencil => gl::STENCIL_ATTACHMENT,
+                    super::target::TargetDepthStencil => gl::DEPTH_STENCIL_ATTACHMENT,
+                };
+                match plane {
+                    super::target::PlaneEmpty => gl::FramebufferRenderbuffer
+                        (gl::DRAW_FRAMEBUFFER, attachment, gl::RENDERBUFFER, 0),
+                    super::target::PlaneSurface(name) => gl::FramebufferRenderbuffer
+                        (gl::DRAW_FRAMEBUFFER, attachment, gl::RENDERBUFFER, name),
+                    super::target::PlaneTexture(name, level) => gl::FramebufferTexture
+                        (gl::DRAW_FRAMEBUFFER, attachment, name, level as gl::types::GLint),
+                    super::target::PlaneTextureLayer(name, level, layer) => gl::FramebufferTextureLayer
+                        (gl::DRAW_FRAMEBUFFER, attachment, name, level as gl::types::GLint, layer as gl::types::GLint),
+                }
             },
             super::CastBindUniformBlock(program, index, loc, buffer) => {
                 gl::UniformBlockBinding(program, index as gl::types::GLuint, loc as gl::types::GLuint);

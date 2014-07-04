@@ -49,6 +49,7 @@ fn main() {
         let program = renderer.create_program(
             VERTEX_SRC.to_owned(),
             FRAGMENT_SRC.to_owned());
+        let frame = gfx::Frame::new();
         let mut env = gfx::Environment::new();
         env.add_uniform("color", gfx::ValueF32Vec([0.1, 0.1, 0.1, 0.1]));
         let env = renderer.create_environment(env);
@@ -60,8 +61,8 @@ fn main() {
                 depth: None,
                 stencil: None,
             };
-            renderer.clear(cdata, None);
-            renderer.draw(mesh, gfx::VertexSlice(0, 3), None, program, env);
+            renderer.clear(cdata, frame);
+            renderer.draw(mesh, gfx::VertexSlice(0, 3), frame, program, env);
             renderer.end_frame();
         }
     });
