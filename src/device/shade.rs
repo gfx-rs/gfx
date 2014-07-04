@@ -210,3 +210,53 @@ impl UniformVar {
         }
     }
 }
+
+#[deriving(Show, Clone)]
+pub enum DeviceShader {
+    StaticBytes(&'static [u8]),
+    OwnedBytes(Vec<u8>),
+    NotProvided
+}
+
+impl DeviceShader {
+    pub fn as_ref<'a>(&'a self) -> Option<&'a [u8]> {
+        match *self {
+            StaticBytes(ref b) => Some(b.as_slice()),
+            OwnedBytes(ref b) => Some(b.as_slice()),
+            NotProvided => None
+        }
+    }
+    pub fn is_provided(&self) -> bool {
+        match *self {
+            NotProvided => false,
+            _ => true
+        }
+    }
+}
+
+#[deriving(Show, Clone)]
+pub struct ShaderSource {
+    pub glsl_120: DeviceShader,
+    pub glsl_150: DeviceShader,
+    // TODO: hlsl_sm_N...
+}
+
+pub static NOT_PROVIDED: ShaderSource = ShaderSource {
+    glsl_120: NotProvided,
+    glsl_150: NotProvided
+};
+
+impl ShaderSource {
+    pub fn as_bytes(&self) -> &'static [u8] {
+        match self.glsl_120 {
+            StaticBytes(b) => b,
+            _ => fail!("Expected static bytes")
+        }
+    }
+}
+
+#[deriving(Show)]
+pub enum CreateShaderError {
+    NoSupportedShaderProvided,
+    ShaderCompilationFailed
+}

@@ -29,12 +29,14 @@ pub type Surface        = gl::types::GLuint;
 pub type Texture        = gl::types::GLuint;
 pub type Sampler        = gl::types::GLuint;
 
-pub struct Device;
+// We don't want this to be created without calling new(),
+// so we give it a private field
+pub struct Device(());
 
 impl Device {
     pub fn new(provider: &super::GlProvider) -> Device {
         gl::load_with(|s| provider.get_proc_address(s));
-        Device
+        Device(())
     }
 
     #[allow(dead_code)]
@@ -62,7 +64,7 @@ impl super::DeviceTask for Device {
         name
     }
 
-    fn create_shader(&mut self, stage: super::shade::Stage, code: &[u8]) -> Result<Shader, ()> {
+    fn create_shader(&mut self, stage: super::shade::Stage, code: super::shade::ShaderSource) -> Result<Shader, super::shade::CreateShaderError> {
         let (name, info) = shade::create_shader(stage, code);
         info.map(|info| {
             let level = if name.is_err() { log::ERROR } else { log::WARN };

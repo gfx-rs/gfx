@@ -25,7 +25,7 @@ extern crate device;
 
 use std::sync::Future;
 
-use device::shade::{ProgramMeta, Vertex, Fragment, UniformValue};
+use device::shade::{ProgramMeta, Vertex, Fragment, UniformValue, ShaderSource};
 use device::target::{ClearData, TargetColor, TargetDepth, TargetStencil};
 use envir::BindableStorage;
 pub use BufferHandle = device::dev::Buffer;
@@ -142,7 +142,7 @@ impl Renderer {
         self.swap_ack.recv();  //wait for acknowlegement
     }
 
-    pub fn create_program(&mut self, vs_src: Vec<u8>, fs_src: Vec<u8>) -> ProgramHandle {
+    pub fn create_program(&mut self, vs_src: ShaderSource, fs_src: ShaderSource) -> ProgramHandle {
         self.device_tx.send(device::CallNewShader(Vertex, vs_src));
         self.device_tx.send(device::CallNewShader(Fragment, fs_src));
         let h_vs = match self.device_rx.recv() {

@@ -41,6 +41,7 @@ pub use device::target::{Color, ClearData, Plane, TextureLayer, TextureLevel};
 pub use device::target::{PlaneEmpty, PlaneSurface, PlaneTexture, PlaneTextureLayer};
 pub use device::{GraphicsContext, InitError, Options};
 pub use device::shade::{UniformValue, ValueI32, ValueF32, ValueI32Vec, ValueF32Vec, ValueF32Matrix};
+pub use device::shade::{ShaderSource, StaticBytes, NOT_PROVIDED};
 #[cfg(glfw)] pub use GlfwPlatform = platform::Glfw;
 
 #[allow(visible_private_types)]
@@ -49,4 +50,24 @@ pub fn start<Api, P: GraphicsContext<Api>, T: device::GlProvider>(graphics_conte
     device::init(graphics_context, options).map(|(tx, rx, server, ack)| {
         (Renderer::new(tx, rx, ack), server)
     })
+}
+
+// This should live in `device`, but macro reexporting does not work yet.
+#[macro_export]
+macro_rules! shaders {
+    (GLSL_120: $v:expr $($t:tt)*) => {
+        ::gfx::ShaderSource {
+            glsl_120: ::gfx::StaticBytes($v),
+            ..shaders!($($t)*)
+        }
+    };
+    (GLSL_150: $v:expr $($t:tt)*) => {
+        ::gfx::ShaderSource {
+            glsl_150: ::gfx::StaticBytes($v),
+            ..shaders!($($t)*)
+        }
+    };
+    () => {
+        ::gfx::NOT_PROVIDED
+    }
 }
