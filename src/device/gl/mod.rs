@@ -96,7 +96,7 @@ impl super::DeviceTask for Device {
     fn process(&mut self, request: super::Request) {
         match request {
             super::CastClear(color) => {
-                let super::Color([r,g,b,a]) = color;
+                let super::target::Color([r,g,b,a]) = color;
                 gl::ClearColor(r, g, b, a);
                 gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT);
             },
@@ -119,7 +119,26 @@ impl super::DeviceTask for Device {
                 gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer);
             },
             super::CastBindFrameBuffer(frame_buffer) => {
-                gl::BindFramebuffer(gl::FRAMEBUFFER, frame_buffer);
+                gl::BindFramebuffer(gl::DRAW_FRAMEBUFFER, frame_buffer);
+            },
+            super::CastBindTarget(target, plane) => {
+                let attachment = match target {
+                    super::target::TargetColor(index) =>
+                        gl::COLOR_ATTACHMENT0 + (index as gl::types::GLenum),
+                    super::target::TargetDepth => gl::DEPTH_ATTACHMENT,
+                    super::target::TargetStencil => gl::STENCIL_ATTACHMENT,
+                    super::target::TargetDepthStencil => gl::DEPTH_STENCIL_ATTACHMENT,
+                };
+                match plane {
+                    super::target::PlaneEmpty => gl::FramebufferRenderbuffer
+                        (gl::DRAW_FRAMEBUFFER, attachment, gl::RENDERBUFFER, 0),
+                    super::target::PlaneSurface(name) => gl::FramebufferRenderbuffer
+                        (gl::DRAW_FRAMEBUFFER, attachment, gl::RENDERBUFFER, name),
+                    super::target::PlaneTexture(name, level) => gl::FramebufferTexture
+                        (gl::DRAW_FRAMEBUFFER, attachment, name, level as gl::types::GLint),
+                    super::target::PlaneTextureLayer(name, level, layer) => gl::FramebufferTextureLayer
+                        (gl::DRAW_FRAMEBUFFER, attachment, name, level as gl::types::GLint, layer as gl::types::GLint),
+                }
             },
             super::CastBindUniformBlock(program, index, loc, buffer) => {
                 gl::UniformBlockBinding(program, index as gl::types::GLuint, loc as gl::types::GLuint);

@@ -29,9 +29,10 @@ pub use MeshSlice = render::mesh::Slice;
 pub use render::mesh::{VertexCount, ElementCount, VertexSlice, IndexSlice};
 pub use Environment = render::envir::Storage;
 pub use render::envir::{BlockVar, UniformVar, TextureVar};
-pub use render::target::{ClearData, Plane, Frame, TextureLayer, TextureLevel};
+pub use render::target::Frame;
 pub use Device = device::Server;
-pub use device::{Color, GraphicsContext, InitError};
+pub use device::target::{Color, ClearData, Plane, TextureLayer, TextureLevel};
+pub use device::{GraphicsContext, InitError};
 pub use device::shade::{UniformValue, ValueI32, ValueF32, ValueI32Vec, ValueF32Vec, ValueF32Matrix};
 
 mod render;

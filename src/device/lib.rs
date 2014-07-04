@@ -25,33 +25,27 @@ extern crate libc;
 #[cfg(gl)] pub use dev = self::gl;
 // #[cfg(d3d11)] ... // TODO
 
-use std::{comm, fmt};
+use std::comm;
 use std::comm::DuplexStream;
 use std::kinds::marker;
 
 pub mod shade;
+pub mod target;
 #[cfg(gl)] mod gl;
 
 
-pub struct Color(pub [f32, ..4]);
 pub type VertexCount = u16;
 pub type IndexCount = u16;
 pub type AttributeSlot = u8;
 pub type UniformBufferSlot = u8;
 pub type TextureSlot = u8;
 
-impl fmt::Show for Color {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let Color([r,g,b,a]) = *self;
-        write!(f, "Color({}, {}, {}, {})", r, g, b, a)
-    }
-}
-
 #[deriving(Show)]
 pub enum BufferUsage {
     UsageStatic,
     UsageDynamic,
 }
+
 
 #[deriving(Show)]
 pub enum Request {
@@ -63,12 +57,13 @@ pub enum Request {
     CallNewShader(shade::Stage, Vec<u8>),
     CallNewProgram(Vec<dev::Shader>),
     // Requests that don't expect a reply:
-    CastClear(Color),
+    CastClear(target::Color),
     CastBindProgram(dev::Program),
     CastBindArrayBuffer(dev::ArrayBuffer),
     CastBindAttribute(AttributeSlot, dev::Buffer, u32, u32, u32),
     CastBindIndex(dev::Buffer),
     CastBindFrameBuffer(dev::FrameBuffer),
+    CastBindTarget(target::Target, target::Plane),
     CastBindUniformBlock(dev::Program, u8, UniformBufferSlot, dev::Buffer),
     CastBindUniform(shade::Location, shade::UniformValue),
     //CastBindTexture(TextureSlot, dev::Texture, dev::Sampler),    //TODO
