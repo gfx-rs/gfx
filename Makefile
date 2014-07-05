@@ -24,9 +24,11 @@ LINK_ARGS             = $(shell sh etc/glfw-link-args.sh)
 
 SRC_DIR               = src
 DEPS_DIR              = deps
-LIB_FILE              = $(SRC_DIR)/gfx/lib.rs
 DEVICE_FILE           = $(SRC_DIR)/device/lib.rs
+PLATFORM_FILE         = $(SRC_DIR)/platform/lib.rs
+RENDER_FILE           = $(SRC_DIR)/render/lib.rs
 EXAMPLE_FILES         = $(SRC_DIR)/examples/*/*.rs
+LIB_FILE              = $(SRC_DIR)/gfx/lib.rs
 
 DOC_DIR               = doc
 EXAMPLES_DIR          = examples
@@ -34,7 +36,6 @@ LIB_DIR               = lib
 DEPS_LIB_DIRS         = $(wildcard $(DEPS_DIR)/*/lib)
 
 DEPS_INCLUDE_FLAGS    = $(patsubst %,-L %, $(DEPS_LIB_DIRS))
-DEVICE_INCLUDE_FLAGS  = $(DEPS_INCLUDE_FLAGS)
 LIB_INCLUDE_FLAGS     = -L $(LIB_DIR) $(DEPS_INCLUDE_FLAGS)
 EXAMPLE_INCLUDE_FLAGS = -L $(LIB_DIR) $(DEPS_INCLUDE_FLAGS)
 
@@ -60,7 +61,13 @@ device:
 	mkdir -p $(LIB_DIR)
 	$(RUSTC) $(LIB_INCLUDE_FLAGS) --out-dir=$(LIB_DIR) $(DEVICE_CFG) -O $(DEVICE_FILE)
 
-lib: device
+platform: device
+	$(RUSTC) $(LIB_INCLUDE_FLAGS) --out-dir=$(LIB_DIR) $(LIB_CFG) -O $(PLATFORM_FILE)
+
+render: device
+	$(RUSTC) $(LIB_INCLUDE_FLAGS) --out-dir=$(LIB_DIR) $(LIB_CFG) -O $(RENDER_FILE)
+
+lib: device platform render
 	$(RUSTC) $(LIB_INCLUDE_FLAGS) --out-dir=$(LIB_DIR) $(LIB_CFG) -O $(LIB_FILE)
 
 doc:

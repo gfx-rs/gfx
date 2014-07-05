@@ -12,6 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![crate_id = "github.com/bjz/gfx-rs#platform:0.1"]
+#![comment = "A lightweight graphics device manager for Rust"]
+#![license = "ASL2"]
+#![crate_type = "lib"]
+
+#![feature(macro_rules, phase)]
+
+#[phase(plugin, link)] extern crate log;
+extern crate libc;
+
+extern crate device;
+
 #[cfg(glfw)] pub use Glfw = self::glfw::GlfwGraphicsContext;
 // #[cfg(sdl2)] pub use Sdl2 = sdl2::Sdl2Platform; // TODO
 // #[cfg(d3d)] pub use D3d = d3d::D3dPlatform; // TODO

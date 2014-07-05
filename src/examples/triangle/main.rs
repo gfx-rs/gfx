@@ -39,7 +39,7 @@ fn main() {
 
     // spawn render task
     let (renderer, mut device) = {
-        let (platform, provider) = gfx::platform::Glfw::new(window.render_context(), &glfw);
+        let (platform, provider) = gfx::GlfwPlatform::new(window.render_context(), &glfw);
         gfx::start(platform, gfx::Options(provider, 1)).unwrap()
     };
 

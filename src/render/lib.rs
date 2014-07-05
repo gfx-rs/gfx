@@ -12,12 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![crate_id = "github.com/bjz/gfx-rs#render:0.1"]
+#![comment = "A lightweight graphics device manager for Rust"]
+#![license = "ASL2"]
+#![crate_type = "lib"]
+
+#![feature(macro_rules, phase)]
+
+#[phase(plugin, link)] extern crate log;
+
+extern crate device;
+
 use std::sync::Future;
 
-use device;
 use device::shade::{ProgramMeta, Vertex, Fragment, UniformValue};
 use device::target::{ClearData, TargetColor, TargetDepth, TargetStencil};
-use self::envir::BindableStorage;
+use envir::BindableStorage;
 pub use BufferHandle = device::dev::Buffer;
 
 pub type MeshHandle = uint;
