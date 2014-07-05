@@ -18,9 +18,13 @@
 #![crate_type = "lib"]
 
 #![feature(macro_rules, phase)]
+
 #[phase(plugin, link)] extern crate log;
 extern crate libc;
+
 extern crate device;
+extern crate platform;
+extern crate render;
 
 use std::sync::Future;
 
@@ -37,9 +41,7 @@ pub use device::target::{Color, ClearData, Plane, TextureLayer, TextureLevel};
 pub use device::target::{PlaneEmpty, PlaneSurface, PlaneTexture, PlaneTextureLayer};
 pub use device::{GraphicsContext, InitError, Options};
 pub use device::shade::{UniformValue, ValueI32, ValueF32, ValueI32Vec, ValueF32Vec, ValueF32Matrix};
-
-mod render;
-pub mod platform;
+#[cfg(glfw)] pub use GlfwPlatform = platform::Glfw;
 
 #[allow(visible_private_types)]
 pub fn start<Api, P: GraphicsContext<Api>, T: device::GlProvider>(graphics_context: P, options: device::Options<T>)

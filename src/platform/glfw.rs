@@ -14,6 +14,8 @@
 
 extern crate glfw;
 
+use libc;
+
 use self::glfw::Context;
 use device;
 
@@ -21,7 +23,7 @@ use device;
 struct Wrap<'a>(&'a glfw::Glfw);
 
 impl<'a> device::GlProvider for Wrap<'a> {
-    fn get_proc_address(&self, name: &str) -> *const ::libc::c_void {
+    fn get_proc_address(&self, name: &str) -> *const libc::c_void {
         let Wrap(provider) = *self;
         provider.get_proc_address(name)
     }
