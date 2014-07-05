@@ -94,12 +94,16 @@ pub trait DeviceTask {
     fn process(&mut self, Request);
 }
 
+
+pub struct Ack;
+
 pub struct Server<P, D> {
     no_share: marker::NoShare,
     request_rx: Receiver<Request>,
     reply_tx: Sender<Reply>,
     graphics_context: P,
     device: D,
+    swap_ack: Sender<Ack>,
 }
 
 impl<Api, P: GraphicsContext<Api>, D: DeviceTask> Server<P, D> {
@@ -115,6 +119,7 @@ impl<Api, P: GraphicsContext<Api>, D: DeviceTask> Server<P, D> {
             match self.request_rx.recv_opt() {
                 Ok(CastSwapBuffers) => {
                     self.graphics_context.swap_buffers();
+                    self.swap_ack.send(Ack);
                     break;
                 },
                 Ok(CallNewVertexBuffer(data)) => {
@@ -169,22 +174,30 @@ pub trait GlProvider {
 #[deriving(Show)]
 pub enum InitError {}
 
-pub type Options<'a> = &'a GlProvider;
+pub type QueueSize = u8;
+pub struct Options<T>(pub T, pub QueueSize);
 
 #[allow(visible_private_types)]
-pub fn init<Api, P: GraphicsContext<Api>>(graphics_context: P, options: Options)
-        -> Result<(Sender<Request>, Receiver<Reply>, Server<P, Device>), InitError> {
+pub fn init<Api, P: GraphicsContext<Api>, T: GlProvider>(graphics_context: P, options: Options<T>)
+        -> Result<(Sender<Request>, Receiver<Reply>, Server<P, Device>, Receiver<Ack>), InitError> {
     let (request_tx, request_rx) = channel();
     let (reply_tx, reply_rx) = channel();
+    let (swap_tx, swap_rx) = channel();
 
-    let dev = Device::new(options);
+    let Options(provider, queue_size) = options;
+    for _ in range(0, queue_size) {
+        swap_tx.send(Ack);
+    }
+
+    let dev = Device::new(&provider);
     let server = Server {
         no_share: marker::NoShare,
         request_rx: request_rx,
         reply_tx: reply_tx,
         graphics_context: graphics_context,
         device: dev,
+        swap_ack: swap_tx,
     };
 
-    Ok((request_tx, reply_rx, server))
+    Ok((request_tx, reply_rx, server, swap_rx))
 }
