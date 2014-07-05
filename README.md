@@ -1,5 +1,7 @@
 # gfx-rs
 
+[![Build Status](https://travis-ci.org/bjz/gfx-rs.png?branch=master)](https://travis-ci.org/bjz/gfx-rs)
+
 A lightweight buffer, shader and render queue manager for Rust.
 
 ## Getting Started
