@@ -35,16 +35,16 @@ pub use render::target::Frame;
 pub use Device = device::Server;
 pub use device::target::{Color, ClearData, Plane, TextureLayer, TextureLevel};
 pub use device::target::{PlaneEmpty, PlaneSurface, PlaneTexture, PlaneTextureLayer};
-pub use device::{GraphicsContext, InitError};
+pub use device::{GraphicsContext, InitError, Options};
 pub use device::shade::{UniformValue, ValueI32, ValueF32, ValueI32Vec, ValueF32Vec, ValueF32Matrix};
 
 mod render;
 pub mod platform;
 
 #[allow(visible_private_types)]
-pub fn start<Api, P: GraphicsContext<Api>>(graphics_context: P, options: device::Options)
+pub fn start<Api, P: GraphicsContext<Api>, T: device::GlProvider>(graphics_context: P, options: device::Options<T>)
         -> Result<(Future<Renderer>, Device<P, device::Device>), InitError> {
-    device::init(graphics_context, options).map(|(tx, rx, server)| {
-        (Renderer::new(tx, rx), server)
+    device::init(graphics_context, options).map(|(tx, rx, server, ack)| {
+        (Renderer::new(tx, rx, ack), server)
     })
 }

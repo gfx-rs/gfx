@@ -47,6 +47,7 @@ struct State {
 pub struct Renderer {
     device_tx: Sender<device::Request>,
     device_rx: Receiver<device::Reply>,
+    swap_ack: Receiver<device::Ack>,
     /// a common VAO for mesh rendering
     common_array_buffer: device::dev::ArrayBuffer,
     /// a common FBO for drawing
@@ -60,10 +61,11 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new(device_tx: Sender<device::Request>, device_rx: Receiver<device::Reply>) -> Future<Renderer> {
+    pub fn new(device_tx: Sender<device::Request>, device_rx: Receiver<device::Reply>,
+            swap_rx: Receiver<device::Ack>) -> Future<Renderer> {
+        device_tx.send(device::CallNewArrayBuffer);
+        device_tx.send(device::CallNewFrameBuffer);
         Future::from_fn(proc() {
-            device_tx.send(device::CallNewArrayBuffer);
-            device_tx.send(device::CallNewFrameBuffer);
             let array_buffer = match device_rx.recv() {
                 device::ReplyNewArrayBuffer(array_buffer) => array_buffer,
                 _ => fail!("invalid device reply for CallNewArrayBuffer"),
@@ -75,6 +77,7 @@ impl Renderer {
             Renderer {
                 device_tx: device_tx,
                 device_rx: device_rx,
+                swap_ack: swap_rx,
                 common_array_buffer: array_buffer,
                 common_frame_buffer: frame_buffer,
                 default_frame_buffer: 0,
@@ -126,6 +129,7 @@ impl Renderer {
 
     pub fn end_frame(&self) {
         self.device_tx.send(device::CastSwapBuffers);
+        self.swap_ack.recv();  //wait for acknowlegement
     }
 
     pub fn create_program(&mut self, vs_src: Vec<u8>, fs_src: Vec<u8>) -> ProgramHandle {
