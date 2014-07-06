@@ -78,7 +78,7 @@ fn main() {
         let env = renderer.create_environment(env);
         let data = vec![-0.0f32, 0.5, 0.5, -0.5, -0.5, -0.5];
         let mesh = renderer.create_mesh(3, data, 2, 8);
-        loop {
+        while !renderer.should_finish() {
             let cdata = gfx::ClearData {
                 color: Some(gfx::Color([0.3, 0.3, 0.3, 1.0])),
                 depth: None,
@@ -90,9 +90,7 @@ fn main() {
         }
     });
 
-    // FIXME: some task fails when the window closes
-    while device.update() && !window.should_close() {
-        // update device
+    while !window.should_close() {
         glfw.poll_events();
         for (_, event) in glfw::flush_messages(&events) {
             match event {
@@ -102,5 +100,7 @@ fn main() {
                 _ => {},
             }
         }
+        device.update();
     }
+    device.close();
 }

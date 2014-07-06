@@ -24,6 +24,7 @@ LINK_ARGS             = $(shell sh etc/glfw-link-args.sh)
 
 SRC_DIR               = src
 DEPS_DIR              = deps
+COMM_FILE             = $(SRC_DIR)/comm/lib.rs
 DEVICE_FILE           = $(SRC_DIR)/device/lib.rs
 PLATFORM_FILE         = $(SRC_DIR)/platform/lib.rs
 RENDER_FILE           = $(SRC_DIR)/render/lib.rs
@@ -57,17 +58,22 @@ deps: $(DEPS_DIR)/gl-rs/README.md
 	$(MAKE) lib -C $(DEPS_DIR)/gl-rs
 	$(MAKE) lib -C $(DEPS_DIR)/glfw-rs
 
-device:
+libdir:
 	mkdir -p $(LIB_DIR)
+
+comm: libdir
+	$(RUSTC) --out-dir=$(LIB_DIR) -O $(COMM_FILE)
+
+device: libdir comm
 	$(RUSTC) $(LIB_INCLUDE_FLAGS) --out-dir=$(LIB_DIR) $(DEVICE_CFG) -O $(DEVICE_FILE)
 
-platform: device
+platform: libdir device
 	$(RUSTC) $(LIB_INCLUDE_FLAGS) --out-dir=$(LIB_DIR) $(LIB_CFG) -O $(PLATFORM_FILE)
 
-render: device
+render: libdir device comm
 	$(RUSTC) $(LIB_INCLUDE_FLAGS) --out-dir=$(LIB_DIR) $(LIB_CFG) -O $(RENDER_FILE)
 
-lib: device platform render
+lib: libdir device platform render
 	$(RUSTC) $(LIB_INCLUDE_FLAGS) --out-dir=$(LIB_DIR) $(LIB_CFG) -O $(LIB_FILE)
 
 doc:
