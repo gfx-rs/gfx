@@ -35,4 +35,30 @@ impl DrawState {
 			blend: None,
 		}
 	}
+
+	/// set the cull mode to back faces
+	pub fn cull(mut self) -> DrawState {
+		self.primitive.method = r::Fill(r::DrawFront, r::CullBack);
+		self
+	}
+
+	/// set the depth test with the mask
+	pub fn depth(mut self, fun: &str, write: bool) -> DrawState {
+		let cmp = match fun {
+			"!"  => r::Comparison(r::NoLess, r::NoEqual, r::NoGreater),
+			"<"  => r::Comparison(r::Less,   r::NoEqual, r::NoGreater),
+			"==" => r::Comparison(r::NoLess, r::Equal,   r::NoGreater),
+			"<=" => r::Comparison(r::Less,   r::Equal,   r::NoGreater),
+			">"  => r::Comparison(r::NoLess, r::NoEqual, r::Greater),
+			"!=" => r::Comparison(r::Less,   r::NoEqual, r::Greater),
+			">=" => r::Comparison(r::NoLess, r::Equal,   r::Greater),
+			"*"  => r::Comparison(r::Less,   r::Equal,   r::Greater),
+			_	 => fail!("Unknown depth func: {}", fun)
+		};
+		self.depth = Some(r::Depth {
+			fun: cmp,
+			write: write,
+		});
+		self
+	}
 }
