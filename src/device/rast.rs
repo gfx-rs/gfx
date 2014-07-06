@@ -14,24 +14,47 @@
 
 
 #[deriving(Clone, PartialEq, Show)]
-pub enum DrawCwFlag {
-    DrawCw,
-    CullCw,
-}
-
-#[deriving(Clone, PartialEq, Show)]
-pub enum DrawCcwFlag {
-    DrawCcw,
-    CullCcw,
+pub enum FrontType {
+    Cw,
+    Ccw,
 }
 
 pub type LineWidth = f32;
+pub type OffsetFactor = f32;
+pub type OffsetUnits = u32;
 
 #[deriving(Clone, PartialEq, Show)]
-pub enum Primitive {
+pub enum OffsetType {
+    NoOffset,
+    Offset(OffsetFactor, OffsetUnits),
+}
+
+#[deriving(Clone, PartialEq, Show)]
+pub enum FrontFlag {
+    DrawFront,
+    CullFront,
+}
+
+#[deriving(Clone, PartialEq, Show)]
+pub enum BackFlag {
+    DrawBack,
+    CullBack,
+}
+
+#[deriving(Clone, PartialEq, Show)]
+pub enum RasterMethod {
     Point,
     Line(LineWidth),
-    Fill(DrawCwFlag, DrawCcwFlag),
+    Fill(FrontFlag, BackFlag),
+}
+
+/// Primitive rasterization state. Note that GL allows different raster
+/// method to be used for front and back, while this abstraction does not.
+#[deriving(Clone, PartialEq, Show)]
+pub struct Primitive {
+    pub front_face: FrontType,
+    pub method: RasterMethod,
+    pub offset: OffsetType,
 }
 
 

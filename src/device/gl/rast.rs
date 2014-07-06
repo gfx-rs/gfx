@@ -15,9 +15,46 @@
 use r = super::super::rast;
 use super::gl;
 
-pub fn bind_primitive(prim: r::Primitive) {
-    unimplemented!()
+
+pub fn bind_primitive(p: r::Primitive) {
+    gl::FrontFace(match p.front_face {
+        r::Cw => gl::CW,
+        r::Ccw => gl::CCW,
+    });
+
+    let (gl_draw, gl_offset) = match p.method {
+        r::Point => (gl::POINT, gl::POLYGON_OFFSET_POINT),
+        r::Line(width) => {
+            gl::LineWidth(width);
+            (gl::LINE, gl::POLYGON_OFFSET_LINE)
+        },
+        r::Fill(front, back) => {
+            if front == r::DrawFront && back == r::DrawBack {
+                gl::Disable(gl::CULL_FACE);
+            }else {
+                gl::Enable(gl::CULL_FACE);
+                gl::CullFace(match (front, back) {
+                    (r::DrawFront, r::CullBack) => gl::BACK,
+                    (r::CullFront, r::DrawBack) => gl::FRONT,
+                    (r::CullFront, r::CullBack) => gl::FRONT_AND_BACK,
+                    _ => unreachable!(),
+                });
+            }
+            (gl::FILL, gl::POLYGON_OFFSET_FILL)
+        },
+    };
+
+    gl::PolygonMode(gl::FRONT_AND_BACK, gl_draw);
+
+    match p.offset {
+        r::Offset(factor, units) => {
+            gl::Enable(gl_offset);
+            gl::PolygonOffset(factor, units as gl::types::GLfloat);
+        },
+        r::NoOffset => gl::Disable(gl_offset),
+    }
 }
+
 
 pub fn bind_depth(depth: Option<r::Depth>) {
     unimplemented!()
