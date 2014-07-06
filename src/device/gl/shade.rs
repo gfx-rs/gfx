@@ -16,14 +16,51 @@ use s = super::super::shade;
 use super::gl;
 use std::cell::Cell;
 
-pub fn create_shader(stage: s::Stage, data: &[u8])
-        -> (Result<super::Shader, ()>, Option<String>) {
+#[deriving(PartialEq, PartialOrd)]
+enum GLSLVersion {
+    GLSL110,
+    GLSL120,
+    GLSL130,
+    GLSL140,
+    GLSL150,
+}
+
+impl GLSLVersion {
+    fn is_supported(self) -> bool {
+        let s = gl::GetString(gl::SHADING_LANGUAGE_VERSION);
+        let c_s = unsafe { ::std::c_str::CString::new(s as *const _, false) };
+        // FIXME: Could be as_bytes_no_null after a compiler fix
+        let c_s_b = c_s.as_str().unwrap();
+        match c_s_b {
+            "1.10" => self <= GLSL110,
+            "1.20" => self <= GLSL120,
+            "1.30" => self <= GLSL130,
+            "1.40" => self <= GLSL140,
+            "1.50" => self <= GLSL150,
+            _ => {
+                warn!("OpenGL driver reported unknown GLSL language version");
+                false
+            },
+        }
+    }
+}
+
+pub fn create_shader(stage: s::Stage, data: s::ShaderSource)
+        -> (Result<super::Shader, s::CreateShaderError>, Option<String>) {
     let target = match stage {
         s::Vertex => gl::VERTEX_SHADER,
         s::Geometry => gl::GEOMETRY_SHADER,
         s::Fragment => gl::FRAGMENT_SHADER,
     };
     let name = gl::CreateShader(target);
+    let data = match data {
+        s::ShaderSource { glsl_150: ref s, ..}
+            if s.is_provided() && GLSL150.is_supported() => s.as_ref().unwrap(),
+        s::ShaderSource { glsl_120: ref s, ..}
+            if s.is_provided() && GLSL120.is_supported() => s.as_ref().unwrap(),
+        _ => return (Err(s::NoSupportedShaderProvided),
+                     Some("[gfx-rs] No supported GLSL shader provided!".to_string())),
+    };
     unsafe {
         gl::ShaderSource(name, 1,
             &(data.as_ptr() as *const gl::types::GLchar),
@@ -48,7 +85,7 @@ pub fn create_shader(stage: s::Stage, data: &[u8])
         None
     };
 
-    let name = if status != 0 { Ok(name) } else { Err(()) };
+    let name = if status != 0 { Ok(name) } else { Err(s::ShaderCompilationFailed) };
 
     (name, info)
 }

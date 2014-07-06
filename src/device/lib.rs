@@ -18,6 +18,7 @@
 #![crate_type = "lib"]
 
 #![feature(phase)]
+
 #[phase(plugin, link)] extern crate log;
 extern crate libc;
 
@@ -52,7 +53,7 @@ pub enum Request {
     CallNewIndexBuffer(Vec<u16>),
     CallNewRawBuffer,
     CallNewArrayBuffer,
-    CallNewShader(shade::Stage, Vec<u8>),
+    CallNewShader(shade::Stage, shade::ShaderSource),
     CallNewProgram(Vec<dev::Shader>),
     CallNewFrameBuffer,
     // Requests that don't expect a reply:
@@ -76,7 +77,7 @@ pub enum Request {
 pub enum Reply {
     ReplyNewBuffer(dev::Buffer),
     ReplyNewArrayBuffer(dev::ArrayBuffer),
-    ReplyNewShader(Result<dev::Shader, ()>),
+    ReplyNewShader(Result<dev::Shader, shade::CreateShaderError>),
     ReplyNewProgram(Result<shade::ProgramMeta, ()>),
     ReplyNewFrameBuffer(dev::FrameBuffer),
 }
@@ -85,7 +86,7 @@ pub trait DeviceTask {
     // calls
     fn create_buffer(&mut self) -> dev::Buffer;
     fn create_array_buffer(&mut self) -> dev::ArrayBuffer;
-    fn create_shader(&mut self, shade::Stage, code: &[u8]) -> Result<dev::Shader, ()>;
+    fn create_shader(&mut self, shade::Stage, code: shade::ShaderSource) -> Result<dev::Shader, shade::CreateShaderError>;
     fn create_program(&mut self, shaders: &[dev::Shader]) -> Result<shade::ProgramMeta, ()>;
     fn create_frame_buffer(&mut self) -> dev::FrameBuffer;
     // helpers
@@ -141,7 +142,7 @@ impl<Api, P: GraphicsContext<Api>, D: DeviceTask> Server<P, D> {
                     self.reply_tx.send(ReplyNewArrayBuffer(name));
                 },
                 Ok(CallNewShader(stage, code)) => {
-                    let name = self.device.create_shader(stage, code.as_slice());
+                    let name = self.device.create_shader(stage, code);
                     self.reply_tx.send(ReplyNewShader(name));
                 },
                 Ok(CallNewProgram(code)) => {
