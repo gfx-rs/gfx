@@ -56,3 +56,22 @@ pub enum Type {
     Float(FloatSubType, FloatSize),
     Special,
 }
+
+impl Type {
+    pub fn is_compatible(&self, bt: super::shade::BaseType) -> Result<(), ()> {
+        use s = super::shade;
+        match (*self, bt) {
+            (Int(IntRaw, _, _), s::BaseI32) => Ok(()),
+            (Int(IntRaw, _, Unsigned), s::BaseU32) => Ok(()),
+            (Int(IntRaw, _, _), _) => Err(()),
+            (Int(_, _, _), s::BaseF32) => Ok(()),
+            (Int(_, _, _), _) => Err(()),
+            (Float(_, _), s::BaseF32) => Ok(()),
+            (Float(FloatPrecision, F64), s::BaseF64) => Ok(()),
+            (Float(_, _), _) => Err(()),
+            (_, s::BaseF64) => Err(()),
+            (_, s::BaseBool) => Err(()),
+            _ => Err(()),
+        }
+    }
+}
