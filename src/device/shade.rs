@@ -273,7 +273,7 @@ pub enum ShaderModel {
 impl ShaderModel {
     pub fn to_number(&self) -> u8 {
         match *self {
-            ModelUnsupported => 0,
+            ModelUnsupported => 0,  //ModelAncient, ModelPreHistoric, ModelMyGrandpaLikes
             Model30 => 30,
             Model40 => 40,
             Model41 => 41,

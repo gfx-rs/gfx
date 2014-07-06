@@ -29,9 +29,9 @@ pub type Surface        = gl::types::GLuint;
 pub type Texture        = gl::types::GLuint;
 pub type Sampler        = gl::types::GLuint;
 
-// We don't want this to be created without calling new(),
-// so we give it a private field
-pub struct Device(super::Capabilities);
+pub struct Device {
+    caps: super::Capabilities,
+}
 
 impl Device {
     fn get_uint(what: gl::types::GLenum) -> uint {
@@ -46,14 +46,13 @@ impl Device {
         gl::load_with(|s| provider.get_proc_address(s));
         let caps = super::Capabilities {
             shader_model: shade::get_model(),
-            max_color_attachments: Device::get_uint(gl::MAX_COLOR_ATTACHMENTS),
+            max_draw_buffers: Device::get_uint(gl::MAX_DRAW_BUFFERS),
+            max_texture_size: Device::get_uint(gl::MAX_TEXTURE_SIZE),
+            max_vertex_attributes: Device::get_uint(gl::MAX_VERTEX_ATTRIBS),
         };
-        Device(caps)
-    }
-
-    pub fn get_capabilities<'a>(&'a self) -> &'a super::Capabilities {
-        let &Device(ref caps) = self;
-        caps
+        Device {
+            caps: caps,
+        }
     }
 
     #[allow(dead_code)]
@@ -63,6 +62,10 @@ impl Device {
 }
 
 impl super::DeviceTask for Device {
+    fn get_capabilities<'a>(&'a self) -> &'a super::Capabilities {
+        &self.caps
+    }
+
     fn create_buffer(&mut self) -> Buffer {
         let mut name = 0 as Buffer;
         unsafe{
