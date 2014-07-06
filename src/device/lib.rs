@@ -33,6 +33,13 @@ pub mod shade;
 pub mod target;
 #[cfg(gl)] mod gl;
 
+
+#[deriving(Show)]
+pub struct Capabilities {
+    shader_model: shade::ShaderModel,
+    max_color_attachments : uint,
+}
+
 pub type VertexCount = u16;
 pub type IndexCount = u16;
 pub type AttributeSlot = u8;

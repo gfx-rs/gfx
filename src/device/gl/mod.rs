@@ -31,12 +31,29 @@ pub type Sampler        = gl::types::GLuint;
 
 // We don't want this to be created without calling new(),
 // so we give it a private field
-pub struct Device(());
+pub struct Device(super::Capabilities);
 
 impl Device {
+    fn get_uint(what: gl::types::GLenum) -> uint {
+        let mut value = 0 as gl::types::GLint;
+        unsafe {
+            gl::GetIntegerv(what, &mut value);
+        }
+        value as uint
+    }
+
     pub fn new(provider: &super::GlProvider) -> Device {
         gl::load_with(|s| provider.get_proc_address(s));
-        Device(())
+        let caps = super::Capabilities {
+            shader_model: shade::get_model(),
+            max_color_attachments: Device::get_uint(gl::MAX_COLOR_ATTACHMENTS),
+        };
+        Device(caps)
+    }
+
+    pub fn get_capabilities<'a>(&'a self) -> &'a super::Capabilities {
+        let &Device(ref caps) = self;
+        caps
     }
 
     #[allow(dead_code)]
@@ -65,7 +82,7 @@ impl super::DeviceTask for Device {
     }
 
     fn create_shader(&mut self, stage: super::shade::Stage, code: super::shade::ShaderSource) -> Result<Shader, super::shade::CreateShaderError> {
-        let (name, info) = shade::create_shader(stage, code);
+        let (name, info) = shade::create_shader(stage, code, self.get_capabilities().shader_model);
         info.map(|info| {
             let level = if name.is_err() { log::ERROR } else { log::WARN };
             log!(level, "\tShader compile log: {}", info);
