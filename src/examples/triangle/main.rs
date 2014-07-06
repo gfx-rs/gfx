@@ -76,8 +76,14 @@ fn main() {
         let mut env = gfx::Environment::new();
         env.add_uniform("color", gfx::ValueF32Vec([0.1, 0.1, 0.1, 0.1]));
         let env = renderer.create_environment(env);
-        let data = vec![-0.0f32, 0.5, 0.5, -0.5, -0.5, -0.5];
-        let mesh = renderer.create_mesh(3, data, 2, 8);
+        let mesh = {
+            let data = vec![-0.0f32, 0.5, 0.5, -0.5, -0.5, -0.5];
+            let buf = renderer.create_vertex_buffer(data);
+            let mesh = gfx::Constructor::new(buf).
+                add("a_Pos", 2, "f32").
+                complete(3);
+            renderer.register_mesh(mesh)
+        };
         while !renderer.should_finish() {
             let cdata = gfx::ClearData {
                 color: Some(gfx::Color([0.3, 0.3, 0.3, 1.0])),

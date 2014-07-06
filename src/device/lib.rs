@@ -29,6 +29,7 @@ extern crate comm;
 
 use std::kinds::marker;
 
+pub mod attrib;
 pub mod shade;
 pub mod target;
 #[cfg(gl)] mod gl;
@@ -52,6 +53,7 @@ pub type TextureSlot = u8;
 pub enum BufferUsage {
     UsageStatic,
     UsageDynamic,
+    UsageStream,
 }
 
 #[deriving(Show)]

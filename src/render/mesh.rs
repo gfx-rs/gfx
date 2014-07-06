@@ -13,23 +13,26 @@
 // limitations under the License.
 
 use device::dev;
+use a = device::attrib;
 
 pub type MaterialHandle = int;  //placeholder
 pub type VertexCount = u16;
 pub type ElementCount = u16;
-
+pub type CountType = u8;    // only value 1 to 4 are supported
+pub type OffsetType = u32;  // can point in the middle of the buffer
+pub type StrideType = u8;   // I don't believe HW supports more
 
 /// Vertex attribute descriptor, goes into the vertex shader input
 #[deriving(Clone, Show)]
 pub struct Attribute {
     pub buffer: dev::Buffer,    // vertex buffer to contain the data
-    pub size: u8,               // number of components per vertex
-    pub offset: u32,            // offset in bytes to the first vertex
-    pub stride: u8,             // stride in bytes between consecutive vertices
-    pub is_normalized: bool,    // treat unsigned as fixed-point
-    pub is_interpolated: bool,  // allow shader interpolation
+    pub elem_count: CountType,  // number of elements per vertex
+    pub elem_type: a::AttribType,  // type of a single element
+    pub offset: OffsetType,     // offset in bytes to the first vertex
+    pub stride: StrideType,     // stride in bytes between consecutive vertices
     pub name: String,           // a name to match the shader input
 }
+
 
 #[deriving(Clone, Show)]
 pub enum PolygonType {
@@ -58,6 +61,80 @@ impl Mesh {
         }
     }
 }
+
+
+/// A helper class to populate Mesh attributes
+pub struct Constructor {
+    buffer: dev::Buffer,
+    offset: OffsetType,
+    attributes: Vec<Attribute>,
+}
+
+impl Constructor {
+    pub fn new(buf: dev::Buffer) -> Constructor {
+        Constructor {
+            buffer: buf,
+            offset: 0,
+            attributes: Vec::new(),
+        }
+    }
+
+    pub fn decode(format: &str) -> Result<(u8, a::AttribType), ()> {
+        match format {
+            "u8"    => Ok((1, a::AttribInt(a::SizeU8,  a::Unsigned, a::Unnormalized))),
+            "u8n"   => Ok((1, a::AttribInt(a::SizeU8,  a::Unsigned, a::Normalized))),
+            "i8"    => Ok((1, a::AttribInt(a::SizeU8,  a::Signed,   a::Unnormalized))),
+            "i8n"   => Ok((1, a::AttribInt(a::SizeU8,  a::Signed,   a::Normalized))),
+            "u16"   => Ok((2, a::AttribInt(a::SizeU16, a::Unsigned, a::Unnormalized))),
+            "u16n"  => Ok((2, a::AttribInt(a::SizeU16, a::Unsigned, a::Normalized))),
+            "i16"   => Ok((2, a::AttribInt(a::SizeU16, a::Signed,   a::Unnormalized))),
+            "i16n"  => Ok((2, a::AttribInt(a::SizeU16, a::Signed,   a::Normalized))),
+            "u32"   => Ok((4, a::AttribInt(a::SizeU32, a::Unsigned, a::Unnormalized))),
+            "u32n"  => Ok((4, a::AttribInt(a::SizeU32, a::Unsigned, a::Normalized))),
+            "i32"   => Ok((4, a::AttribInt(a::SizeU32, a::Signed,   a::Unnormalized))),
+            "i32n"  => Ok((4, a::AttribInt(a::SizeU32, a::Signed,   a::Normalized))),
+            "f16"   => Ok((2, a::AttribFloat(a::SizeF16))),
+            "f32"   => Ok((4, a::AttribFloat(a::SizeF32))),
+            "f64"   => Ok((8, a::AttribFloat(a::SizeF64))),
+            _ => Err(())
+        }
+    }
+
+    pub fn add(mut self, name: &str, count: CountType, format: &str) -> Constructor {
+        let (size, e_type) = Constructor::decode(format).unwrap();
+        self.attributes.push(Attribute {
+            buffer: self.buffer,
+            elem_count: count,
+            elem_type: e_type,
+            offset: self.offset,
+            stride: 0,
+            name: name.to_string(),
+        });
+        self.offset += (count as OffsetType) * (size as OffsetType);
+        self
+    }
+
+    fn finalize(&mut self) {
+        for at in self.attributes.mut_iter() {
+            at.stride = self.offset as StrideType;
+        }
+    }
+
+    pub fn embed_to(mut self, mesh: &mut Mesh) {
+        self.finalize();
+        mesh.attributes.push_all(self.attributes.as_slice());
+    }
+
+    pub fn complete(mut self, nv: VertexCount) -> Mesh {
+        self.finalize();
+        Mesh {
+            poly_type: TriangleList,
+            num_vertices: nv,
+            attributes: self.attributes,
+        }
+    }
+}
+
 
 
 #[deriving(Clone, Show)]

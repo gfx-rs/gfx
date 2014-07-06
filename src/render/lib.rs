@@ -170,25 +170,18 @@ impl Renderer {
         }
     }
 
-    pub fn create_mesh(&mut self, num_vert: mesh::VertexCount, data: Vec<f32>, count: u8, stride: u8) -> MeshHandle {
-        self.device_tx.send(device::CallNewVertexBuffer(data));
-        let buffer = match self.device_rx.recv() {
-            device::ReplyNewBuffer(name) => name,
-            _ => fail!("invalid device reply for CallNewVertexBuffer")
-        };
-        let mut mesh = mesh::Mesh::new(num_vert);
-        mesh.attributes.push(mesh::Attribute {
-            buffer: buffer,
-            size: count,
-            offset: 0,
-            stride: stride,
-            is_normalized: false,
-            is_interpolated: false,
-            name: "a_Pos".to_string(),
-        });
+    pub fn register_mesh(&mut self, mesh: mesh::Mesh) -> MeshHandle {
         let handle = self.cache.meshes.len();
         self.cache.meshes.push(mesh);
         handle
+    }
+
+    pub fn create_vertex_buffer(&self, data: Vec<f32>) -> BufferHandle {
+        self.device_tx.send(device::CallNewVertexBuffer(data));
+        match self.device_rx.recv() {
+            device::ReplyNewBuffer(name) => name,
+            _ => fail!("invalid device reply for CallNewVertexBuffer"),
+        }
     }
 
     pub fn create_index_buffer(&self, data: Vec<u16>) -> BufferHandle {
@@ -254,7 +247,7 @@ impl Renderer {
         for sat in prog.attributes.iter() {
             match mesh.attributes.iter().find(|a| a.name.as_slice() == sat.name.as_slice()) {
                 Some(vat) => self.device_tx.send(device::CastBindAttribute(sat.location as u8,
-                    vat.buffer, vat.size as u32, vat.offset as u32, vat.stride as u32)),
+                    vat.buffer, vat.elem_count as u32, vat.offset as u32, vat.stride as u32)),
                 None => return Err(())
             }
         }

@@ -117,8 +117,9 @@ impl super::DeviceTask for Device {
         let size = (data.len() * std::mem::size_of::<T>()) as gl::types::GLsizeiptr;
         let raw = data.as_ptr() as *const gl::types::GLvoid;
         let usage = match usage {
-            super::UsageStatic => gl::STATIC_DRAW,
+            super::UsageStatic  => gl::STATIC_DRAW,
             super::UsageDynamic => gl::DYNAMIC_DRAW,
+            super::UsageStream  => gl::STREAM_DRAW,
         };
         unsafe{
             gl::BufferData(gl::ARRAY_BUFFER, size, raw, usage);
