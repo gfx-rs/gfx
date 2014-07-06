@@ -260,3 +260,24 @@ pub enum CreateShaderError {
     NoSupportedShaderProvided,
     ShaderCompilationFailed
 }
+
+#[deriving(PartialEq, PartialOrd, Show)]
+pub enum ShaderModel {
+    ModelUnsupported,
+    Model30,
+    Model40,
+    Model41,
+    Model50,
+}
+
+impl ShaderModel {
+    pub fn to_number(&self) -> u8 {
+        match *self {
+            ModelUnsupported => 0,  //ModelAncient, ModelPreHistoric, ModelMyGrandpaLikes
+            Model30 => 30,
+            Model40 => 40,
+            Model41 => 41,
+            Model50 => 50,
+        }
+    }
+}

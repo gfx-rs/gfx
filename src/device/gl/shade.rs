@@ -15,49 +15,30 @@
 use s = super::super::shade;
 use super::gl;
 use std::cell::Cell;
+use std::str::raw;
 
-#[deriving(PartialEq, PartialOrd)]
-enum GLSLVersion {
-    GLSL110,
-    GLSL120,
-    GLSL130,
-    GLSL140,
-    GLSL150,
-    GLSL330,
-    GLSL400,
-    GLSL410,
-    GLSL420,
-    GLSL430,
-    GLSL440,
-}
 
-impl GLSLVersion {
-    fn is_supported(self) -> bool {
-        let s = gl::GetString(gl::SHADING_LANGUAGE_VERSION);
-        let c_s = unsafe { ::std::c_str::CString::new(s as *const _, false) };
-        // FIXME: Could be as_bytes_no_null after a compiler fix
-        let c_s_b = c_s.as_str().unwrap();
-        match c_s_b {
-            "1.10" => self <= GLSL110,
-            "1.20" => self <= GLSL120,
-            "1.30" => self <= GLSL130,
-            "1.40" => self <= GLSL140,
-            "1.50" => self <= GLSL150,
-            "3.30" => self <= GLSL330,
-            "4.00" => self <= GLSL400,
-            "4.10" => self <= GLSL410,
-            "4.20" => self <= GLSL420,
-            "4.30" => self <= GLSL430,
-            "4.40" => self <= GLSL440,
-            _ => {
-                warn!("OpenGL driver reported unknown GLSL language version: {}", c_s_b);
-                false
-            },
-        }
+pub fn get_model() -> s::ShaderModel {
+    let bytes = gl::GetString(gl::SHADING_LANGUAGE_VERSION);
+    let full = unsafe {
+        raw::c_str_to_static_slice(bytes as *const i8)
+    };
+    info!("GLSL version: {}", full);
+    let s = full.slice_to(4);
+    if s < "1.20" {
+        s::ModelUnsupported
+    }else if s < "1.50" {
+        s::Model30
+    }else if s < "3.00" {
+        s::Model40
+    }else if s < "4.30" {
+        s::Model41
+    }else {
+        s::Model50
     }
 }
 
-pub fn create_shader(stage: s::Stage, data: s::ShaderSource)
+pub fn create_shader(stage: s::Stage, data: s::ShaderSource, model: s::ShaderModel)
         -> (Result<super::Shader, s::CreateShaderError>, Option<String>) {
     let target = match stage {
         s::Vertex => gl::VERTEX_SHADER,
@@ -67,9 +48,9 @@ pub fn create_shader(stage: s::Stage, data: s::ShaderSource)
     let name = gl::CreateShader(target);
     let data = match data {
         s::ShaderSource { glsl_150: ref s, ..}
-            if s.is_provided() && GLSL150.is_supported() => s.as_ref().unwrap(),
+            if s.is_provided() && model >= s::Model40 => s.as_ref().unwrap(),
         s::ShaderSource { glsl_120: ref s, ..}
-            if s.is_provided() && GLSL120.is_supported() => s.as_ref().unwrap(),
+            if s.is_provided() && model >= s::Model30 => s.as_ref().unwrap(),
         _ => return (Err(s::NoSupportedShaderProvided),
                      Some("[gfx-rs] No supported GLSL shader provided!".to_string())),
     };

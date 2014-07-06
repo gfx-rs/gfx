@@ -29,14 +29,30 @@ pub type Surface        = gl::types::GLuint;
 pub type Texture        = gl::types::GLuint;
 pub type Sampler        = gl::types::GLuint;
 
-// We don't want this to be created without calling new(),
-// so we give it a private field
-pub struct Device(());
+pub struct Device {
+    caps: super::Capabilities,
+}
 
 impl Device {
+    fn get_uint(what: gl::types::GLenum) -> uint {
+        let mut value = 0 as gl::types::GLint;
+        unsafe {
+            gl::GetIntegerv(what, &mut value);
+        }
+        value as uint
+    }
+
     pub fn new(provider: &super::GlProvider) -> Device {
         gl::load_with(|s| provider.get_proc_address(s));
-        Device(())
+        let caps = super::Capabilities {
+            shader_model: shade::get_model(),
+            max_draw_buffers: Device::get_uint(gl::MAX_DRAW_BUFFERS),
+            max_texture_size: Device::get_uint(gl::MAX_TEXTURE_SIZE),
+            max_vertex_attributes: Device::get_uint(gl::MAX_VERTEX_ATTRIBS),
+        };
+        Device {
+            caps: caps,
+        }
     }
 
     #[allow(dead_code)]
@@ -46,6 +62,10 @@ impl Device {
 }
 
 impl super::DeviceTask for Device {
+    fn get_capabilities<'a>(&'a self) -> &'a super::Capabilities {
+        &self.caps
+    }
+
     fn create_buffer(&mut self) -> Buffer {
         let mut name = 0 as Buffer;
         unsafe{
@@ -65,7 +85,7 @@ impl super::DeviceTask for Device {
     }
 
     fn create_shader(&mut self, stage: super::shade::Stage, code: super::shade::ShaderSource) -> Result<Shader, super::shade::CreateShaderError> {
-        let (name, info) = shade::create_shader(stage, code);
+        let (name, info) = shade::create_shader(stage, code, self.get_capabilities().shader_model);
         info.map(|info| {
             let level = if name.is_err() { log::ERROR } else { log::WARN };
             log!(level, "\tShader compile log: {}", info);

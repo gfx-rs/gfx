@@ -33,6 +33,15 @@ pub mod shade;
 pub mod target;
 #[cfg(gl)] mod gl;
 
+
+#[deriving(Show)]
+pub struct Capabilities {
+    shader_model: shade::ShaderModel,
+    max_draw_buffers : uint,
+    max_texture_size : uint,
+    max_vertex_attributes: uint,
+}
+
 pub type VertexCount = u16;
 pub type IndexCount = u16;
 pub type AttributeSlot = u8;
@@ -82,6 +91,7 @@ pub enum Reply {
 }
 
 pub trait DeviceTask {
+    fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
     // calls
     fn create_buffer(&mut self) -> dev::Buffer;
     fn create_array_buffer(&mut self) -> dev::ArrayBuffer;
