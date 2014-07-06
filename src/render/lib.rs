@@ -20,7 +20,7 @@
 #![feature(macro_rules, phase)]
 
 #[phase(plugin, link)] extern crate log;
-
+extern crate comm;
 extern crate device;
 
 use std::sync::Future;
@@ -58,6 +58,7 @@ pub struct Renderer {
     device_tx: Sender<device::Request>,
     device_rx: Receiver<device::Reply>,
     swap_ack: Receiver<device::Ack>,
+    should_finish: comm::ShouldClose,
     /// a common VAO for mesh rendering
     common_array_buffer: device::dev::ArrayBuffer,
     /// a common FBO for drawing
@@ -72,7 +73,7 @@ pub struct Renderer {
 
 impl Renderer {
     pub fn new(device_tx: Sender<device::Request>, device_rx: Receiver<device::Reply>,
-            swap_rx: Receiver<device::Ack>) -> Future<Renderer> {
+            swap_rx: Receiver<device::Ack>, should_finish: comm::ShouldClose) -> Future<Renderer> {
         device_tx.send(device::CallNewArrayBuffer);
         device_tx.send(device::CallNewFrameBuffer);
         Future::from_fn(proc() {
@@ -88,6 +89,7 @@ impl Renderer {
                 device_tx: device_tx,
                 device_rx: device_rx,
                 swap_ack: swap_rx,
+                should_finish: should_finish,
                 common_array_buffer: array_buffer,
                 common_frame_buffer: frame_buffer,
                 default_frame_buffer: 0,
@@ -101,6 +103,10 @@ impl Renderer {
                 },
             }
         })
+    }
+
+    pub fn should_finish(&self) -> bool {
+        self.should_finish.check()
     }
 
     pub fn clear(&mut self, data: ClearData, frame: target::Frame) {

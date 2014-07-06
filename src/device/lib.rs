@@ -21,8 +21,9 @@
 
 #[phase(plugin, link)] extern crate log;
 extern crate libc;
+extern crate comm;
 
-#[cfg(gl)] pub use self::gl::Device;
+#[cfg(gl)] pub use gl::Device;
 #[cfg(gl)] pub use dev = self::gl;
 // #[cfg(d3d11)] ... // TODO
 
@@ -31,7 +32,6 @@ use std::kinds::marker;
 pub mod shade;
 pub mod target;
 #[cfg(gl)] mod gl;
-
 
 pub type VertexCount = u16;
 pub type IndexCount = u16;
@@ -44,7 +44,6 @@ pub enum BufferUsage {
     UsageStatic,
     UsageDynamic,
 }
-
 
 #[deriving(Show)]
 pub enum Request {
@@ -95,7 +94,6 @@ pub trait DeviceTask {
     fn process(&mut self, Request);
 }
 
-
 pub struct Ack;
 
 pub struct Server<P, D> {
@@ -105,16 +103,21 @@ pub struct Server<P, D> {
     graphics_context: P,
     device: D,
     swap_ack: Sender<Ack>,
+    close: comm::Close,
 }
 
 impl<Api, P: GraphicsContext<Api>, D: DeviceTask> Server<P, D> {
+    pub fn close(&self) {
+        self.close.now()
+    }
+
     pub fn make_current(&self) {
         self.graphics_context.make_current();
     }
 
     /// Update the platform. The client must manually update this on the main
     /// thread.
-    pub fn update(&mut self) -> bool {
+    pub fn update(&mut self) {
         // Get updates from the renderer and pass on results
         loop {
             match self.request_rx.recv_opt() {
@@ -154,13 +157,11 @@ impl<Api, P: GraphicsContext<Api>, D: DeviceTask> Server<P, D> {
                     self.reply_tx.send(ReplyNewFrameBuffer(name));
                 },
                 Ok(request) => self.device.process(request),
-                Err(()) => return false,
+                Err(()) => return,
             }
         }
-        true
     }
 }
-
 
 pub trait GraphicsContext<Api> {
     fn swap_buffers(&self);
@@ -180,10 +181,11 @@ pub struct Options<T>(pub T, pub QueueSize);
 
 #[allow(visible_private_types)]
 pub fn init<Api, P: GraphicsContext<Api>, T: GlProvider>(graphics_context: P, options: Options<T>)
-        -> Result<(Sender<Request>, Receiver<Reply>, Server<P, Device>, Receiver<Ack>), InitError> {
+        -> Result<(Sender<Request>, Receiver<Reply>, Server<P, Device>, Receiver<Ack>, comm::ShouldClose), InitError> {
     let (request_tx, request_rx) = channel();
     let (reply_tx, reply_rx) = channel();
     let (swap_tx, swap_rx) = channel();
+    let (close, should_close) = comm::close_stream();
 
     let Options(provider, queue_size) = options;
     for _ in range(0, queue_size) {
@@ -198,7 +200,8 @@ pub fn init<Api, P: GraphicsContext<Api>, T: GlProvider>(graphics_context: P, op
         graphics_context: graphics_context,
         device: dev,
         swap_ack: swap_tx,
+        close: close,
     };
 
-    Ok((request_tx, reply_rx, server, swap_rx))
+    Ok((request_tx, reply_rx, server, swap_rx, should_close))
 }
