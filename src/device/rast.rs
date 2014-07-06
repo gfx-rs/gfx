@@ -59,19 +59,19 @@ pub struct Primitive {
 
 
 #[deriving(Clone, PartialEq, Show)]
-enum LessFlag {
+pub enum LessFlag {
     Less,
     NoLess,
 }
 
 #[deriving(Clone, PartialEq, Show)]
-enum EqualFlag {
+pub enum EqualFlag {
     Equal,
     NoEqual,
 }
 
 #[deriving(Clone, PartialEq, Show)]
-enum GreaterFlag {
+pub enum GreaterFlag {
     Greater,
     NoGreater,
 }
@@ -85,7 +85,7 @@ pub struct Stencil;
 
 #[deriving(Clone, PartialEq, Show)]
 pub struct Depth {
-    fun: Comparison,
+    pub fun: Comparison,
 }
 
 //TODO
@@ -96,10 +96,11 @@ pub type StencilMask = super::target::Stencil;
 
 #[deriving(Clone, PartialEq, Show)]
 pub struct Mask {
-    stencil_cw: StencilMask,
-    stencil_ccw: StencilMask,
+    stencil_front: StencilMask,
+    stencil_back: StencilMask,
     depth: bool,
 }
+
 
 #[deriving(Clone, PartialEq, Show)]
 pub struct DrawState {

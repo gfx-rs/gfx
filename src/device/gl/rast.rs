@@ -56,7 +56,26 @@ pub fn bind_primitive(p: r::Primitive) {
 }
 
 
+fn map_comparison(cmp: r::Comparison) -> gl::types::GLenum {
+    match cmp {
+        r::Comparison(r::NoLess, r::NoEqual, r::NoGreater) => gl::NEVER,
+        r::Comparison(r::Less,   r::NoEqual, r::NoGreater) => gl::LESS,
+        r::Comparison(r::NoLess, r::Equal,   r::NoGreater) => gl::EQUAL,
+        r::Comparison(r::Less,   r::Equal,   r::NoGreater) => gl::LEQUAL,
+        r::Comparison(r::NoLess, r::NoEqual, r::Greater)   => gl::GREATER,
+        r::Comparison(r::Less,   r::NoEqual, r::Greater)   => gl::NOTEQUAL,
+        r::Comparison(r::NoLess, r::Equal,   r::Greater)   => gl::GEQUAL,
+        r::Comparison(r::Less,   r::Equal,   r::Greater)   => gl::ALWAYS,
+    }
+}
+
 pub fn bind_depth(depth: Option<r::Depth>) {
-    unimplemented!()
+    match depth {
+        Some(d) => {
+            gl::Enable(gl::DEPTH_TEST);
+            gl::DepthFunc(map_comparison(d.fun));
+        },
+        None => gl::Disable(gl::DEPTH_TEST),
+    }
 }
 
