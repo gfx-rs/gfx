@@ -13,35 +13,46 @@
 // limitations under the License.
 
 
+pub type Count = u8;    // only value 1 to 4 are supported
+pub type Offset = u32;  // can point in the middle of the buffer
+pub type Stride = u8;   // I don't believe HW supports more
+
 #[deriving(Clone, Show)]
 pub enum SignFlag {
     Signed,
     Unsigned,
 }
 
-#[deriving(Clone, Show)]
-pub enum NormalizeFlag {
-    Normalized,
-    Unnormalized,
+#[deriving(Clone, Eq, PartialEq, Show)]
+pub enum IntSubType {
+    IntRaw,         // un-processed integer
+    IntNormalized,  // normalized either to [0,1] or [-1,1] depending on the sign flag
+    IntAsFloat,     // converted to float on the fly by the hardware
 }
 
 #[deriving(Clone, Show)]
 pub enum IntSize {
-    SizeU8,
-    SizeU16,
-    SizeU32,
+    U8,
+    U16,
+    U32,
+}
+
+#[deriving(Clone, Eq, PartialEq, Show)]
+pub enum FloatSubType {
+    FloatDefault,    // 32-bit
+    FloatPrecision,  // 64-bit
 }
 
 #[deriving(Clone, Show)]
 pub enum FloatSize {
-    SizeF16,
-    SizeF32,
-    SizeF64,
+    F16,
+    F32,
+    F64,
 }
 
 #[deriving(Clone, Show)]
-pub enum AttribType {
-    AttribInt(IntSize, SignFlag, NormalizeFlag),
-    AttribFloat(FloatSize),
-    AttribSpecial,
+pub enum Type {
+    Int(IntSubType, IntSize, SignFlag),
+    Float(FloatSubType, FloatSize),
+    Special,
 }

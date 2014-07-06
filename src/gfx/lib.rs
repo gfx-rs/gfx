@@ -37,6 +37,7 @@ pub use Environment = render::envir::Storage;
 pub use render::envir::{BlockVar, UniformVar, TextureVar};
 pub use render::target::Frame;
 pub use Device = device::Server;
+pub use device::attrib;
 pub use device::target::{Color, ClearData, Plane, TextureLayer, TextureLevel};
 pub use device::target::{PlaneEmpty, PlaneSurface, PlaneTexture, PlaneTextureLayer};
 pub use device::{GraphicsContext, InitError, Options};

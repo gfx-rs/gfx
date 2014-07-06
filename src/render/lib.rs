@@ -246,8 +246,9 @@ impl Renderer {
     fn bind_mesh(&self, mesh: &mesh::Mesh, prog: &ProgramMeta) -> Result<(),()> {
         for sat in prog.attributes.iter() {
             match mesh.attributes.iter().find(|a| a.name.as_slice() == sat.name.as_slice()) {
-                Some(vat) => self.device_tx.send(device::CastBindAttribute(sat.location as u8,
-                    vat.buffer, vat.elem_count as u32, vat.offset as u32, vat.stride as u32)),
+                Some(vat) => self.device_tx.send(device::CastBindAttribute(
+                    sat.location as device::AttributeSlot, vat.buffer,
+                    vat.elem_count, vat.elem_type, vat.stride, vat.offset)),
                 None => return Err(())
             }
         }

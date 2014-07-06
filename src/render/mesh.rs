@@ -18,18 +18,16 @@ use a = device::attrib;
 pub type MaterialHandle = int;  //placeholder
 pub type VertexCount = u16;
 pub type ElementCount = u16;
-pub type CountType = u8;    // only value 1 to 4 are supported
-pub type OffsetType = u32;  // can point in the middle of the buffer
-pub type StrideType = u8;   // I don't believe HW supports more
+
 
 /// Vertex attribute descriptor, goes into the vertex shader input
 #[deriving(Clone, Show)]
 pub struct Attribute {
     pub buffer: dev::Buffer,    // vertex buffer to contain the data
-    pub elem_count: CountType,  // number of elements per vertex
-    pub elem_type: a::AttribType,  // type of a single element
-    pub offset: OffsetType,     // offset in bytes to the first vertex
-    pub stride: StrideType,     // stride in bytes between consecutive vertices
+    pub elem_count: a::Count,   // number of elements per vertex
+    pub elem_type: a::Type,     // type of a single element
+    pub offset: a::Offset,      // offset in bytes to the first vertex
+    pub stride: a::Stride,      // stride in bytes between consecutive vertices
     pub name: String,           // a name to match the shader input
 }
 
@@ -66,7 +64,7 @@ impl Mesh {
 /// A helper class to populate Mesh attributes
 pub struct Constructor {
     buffer: dev::Buffer,
-    offset: OffsetType,
+    offset: a::Offset,
     attributes: Vec<Attribute>,
 }
 
@@ -79,28 +77,35 @@ impl Constructor {
         }
     }
 
-    pub fn decode(format: &str) -> Result<(u8, a::AttribType), ()> {
+    pub fn decode(format: &str) -> Result<(u8, a::Type), ()> {
         match format {
-            "u8"    => Ok((1, a::AttribInt(a::SizeU8,  a::Unsigned, a::Unnormalized))),
-            "u8n"   => Ok((1, a::AttribInt(a::SizeU8,  a::Unsigned, a::Normalized))),
-            "i8"    => Ok((1, a::AttribInt(a::SizeU8,  a::Signed,   a::Unnormalized))),
-            "i8n"   => Ok((1, a::AttribInt(a::SizeU8,  a::Signed,   a::Normalized))),
-            "u16"   => Ok((2, a::AttribInt(a::SizeU16, a::Unsigned, a::Unnormalized))),
-            "u16n"  => Ok((2, a::AttribInt(a::SizeU16, a::Unsigned, a::Normalized))),
-            "i16"   => Ok((2, a::AttribInt(a::SizeU16, a::Signed,   a::Unnormalized))),
-            "i16n"  => Ok((2, a::AttribInt(a::SizeU16, a::Signed,   a::Normalized))),
-            "u32"   => Ok((4, a::AttribInt(a::SizeU32, a::Unsigned, a::Unnormalized))),
-            "u32n"  => Ok((4, a::AttribInt(a::SizeU32, a::Unsigned, a::Normalized))),
-            "i32"   => Ok((4, a::AttribInt(a::SizeU32, a::Signed,   a::Unnormalized))),
-            "i32n"  => Ok((4, a::AttribInt(a::SizeU32, a::Signed,   a::Normalized))),
-            "f16"   => Ok((2, a::AttribFloat(a::SizeF16))),
-            "f32"   => Ok((4, a::AttribFloat(a::SizeF32))),
-            "f64"   => Ok((8, a::AttribFloat(a::SizeF64))),
+            "u8"    => Ok((1, a::Int(a::IntRaw,        a::U8,  a::Unsigned))),
+            "u8n"   => Ok((1, a::Int(a::IntNormalized, a::U8,  a::Unsigned))),
+            "u8f"   => Ok((1, a::Int(a::IntAsFloat,    a::U8,  a::Unsigned))),
+            "i8"    => Ok((1, a::Int(a::IntRaw,        a::U8,  a::Signed))),
+            "i8n"   => Ok((1, a::Int(a::IntNormalized, a::U8,  a::Signed))),
+            "i8f"   => Ok((1, a::Int(a::IntAsFloat,    a::U8,  a::Signed))),
+            "u16"   => Ok((2, a::Int(a::IntRaw,        a::U16, a::Unsigned))),
+            "u16n"  => Ok((2, a::Int(a::IntNormalized, a::U16, a::Unsigned))),
+            "u16f"  => Ok((2, a::Int(a::IntAsFloat,    a::U16, a::Unsigned))),
+            "i16"   => Ok((2, a::Int(a::IntRaw,        a::U16, a::Signed))),
+            "i16n"  => Ok((2, a::Int(a::IntNormalized, a::U16, a::Signed))),
+            "i16f"  => Ok((2, a::Int(a::IntAsFloat,    a::U16, a::Signed))),
+            "u32"   => Ok((4, a::Int(a::IntRaw,        a::U32, a::Unsigned))),
+            "u32n"  => Ok((4, a::Int(a::IntNormalized, a::U32, a::Unsigned))),
+            "u32f"  => Ok((4, a::Int(a::IntAsFloat,    a::U32, a::Unsigned))),
+            "i32"   => Ok((4, a::Int(a::IntRaw,        a::U32, a::Signed))),
+            "i32n"  => Ok((4, a::Int(a::IntNormalized, a::U32, a::Signed))),
+            "i32f"  => Ok((4, a::Int(a::IntAsFloat,    a::U32, a::Signed))),
+            "f16"   => Ok((2, a::Float(a::FloatDefault,   a::F16))),
+            "f32"   => Ok((4, a::Float(a::FloatDefault,   a::F32))),
+            "f64"   => Ok((8, a::Float(a::FloatDefault,   a::F64))),
+            "f64d"  => Ok((8, a::Float(a::FloatPrecision, a::F64))),
             _ => Err(())
         }
     }
 
-    pub fn add(mut self, name: &str, count: CountType, format: &str) -> Constructor {
+    pub fn add(mut self, name: &str, count: a::Count, format: &str) -> Constructor {
         let (size, e_type) = Constructor::decode(format).unwrap();
         self.attributes.push(Attribute {
             buffer: self.buffer,
@@ -110,13 +115,13 @@ impl Constructor {
             stride: 0,
             name: name.to_string(),
         });
-        self.offset += (count as OffsetType) * (size as OffsetType);
+        self.offset += (count as a::Offset) * (size as a::Offset);
         self
     }
 
     fn finalize(&mut self) {
         for at in self.attributes.mut_iter() {
-            at.stride = self.offset as StrideType;
+            at.stride = self.offset as a::Stride;
         }
     }
 
