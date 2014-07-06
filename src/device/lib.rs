@@ -30,6 +30,7 @@ extern crate comm;
 use std::kinds::marker;
 
 pub mod attrib;
+pub mod rast;
 pub mod shade;
 pub mod target;
 #[cfg(gl)] mod gl;
@@ -80,6 +81,8 @@ pub enum Request {
     CastBindUniformBlock(dev::Program, u8, UniformBufferSlot, dev::Buffer),
     CastBindUniform(shade::Location, shade::UniformValue),
     //CastBindTexture(TextureSlot, dev::Texture, dev::Sampler),    //TODO
+    CastPrimitiveState(rast::Primitive),
+    CastDepthState(Option<rast::Depth>),
     CastUpdateBuffer(dev::Buffer, Vec<f32>),
     CastDraw(VertexCount, VertexCount),
     CastDrawIndexed(IndexCount, IndexCount),

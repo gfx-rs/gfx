@@ -21,6 +21,7 @@ use a = super::attrib;
 use std::str;
 use std::collections::HashSet;
 
+mod rast;
 mod shade;
 
 pub type Buffer         = gl::types::GLuint;
@@ -270,6 +271,12 @@ impl super::ApiBackEnd for GlBackEnd {
             },
             super::CastBindUniform(loc, uniform) => {
                 shade::bind_uniform(loc as gl::types::GLint, uniform);
+            },
+            super::CastPrimitiveState(prim) => {
+                rast::bind_primitive(prim);
+            },
+            super::CastDepthState(depth) => {
+                rast::bind_depth(depth);
             },
             super::CastUpdateBuffer(buffer, data) => {
                 self.update_buffer(buffer, data.as_slice(), super::UsageDynamic);
