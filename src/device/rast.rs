@@ -86,27 +86,9 @@ pub struct Stencil;
 #[deriving(Clone, PartialEq, Show)]
 pub struct Depth {
     pub fun: Comparison,
+    pub write: bool,
 }
 
 //TODO
 #[deriving(Clone, PartialEq, Show)]
 pub struct Blend;
-
-pub type StencilMask = super::target::Stencil;
-
-#[deriving(Clone, PartialEq, Show)]
-pub struct Mask {
-    stencil_front: StencilMask,
-    stencil_back: StencilMask,
-    depth: bool,
-}
-
-
-#[deriving(Clone, PartialEq, Show)]
-pub struct DrawState {
-    primitive: Primitive,
-    stencil: Option<Stencil>,
-    depth: Option<Depth>,
-    blend: Option<Blend>,
-    mask: Mask,
-}

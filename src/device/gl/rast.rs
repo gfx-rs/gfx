@@ -74,6 +74,7 @@ pub fn bind_depth(depth: Option<r::Depth>) {
         Some(d) => {
             gl::Enable(gl::DEPTH_TEST);
             gl::DepthFunc(map_comparison(d.fun));
+            gl::DepthMask(if d.write {gl::TRUE} else {gl::FALSE});
         },
         None => gl::Disable(gl::DEPTH_TEST),
     }

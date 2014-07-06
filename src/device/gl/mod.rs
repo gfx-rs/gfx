@@ -169,7 +169,8 @@ impl super::ApiBackEnd for GlBackEnd {
     fn process(&mut self, request: super::Request) {
         match request {
             super::CastClear(data) => {
-                let mut mask = match data.color {
+                let mut flags = match data.color {
+                    //gl::ColorMask(gl::TRUE, gl::TRUE, gl::TRUE, gl::TRUE);
                     Some(super::target::Color([r,g,b,a])) => {
                         gl::ClearColor(r, g, b, a);
                         gl::COLOR_BUFFER_BIT
@@ -177,14 +178,16 @@ impl super::ApiBackEnd for GlBackEnd {
                     None => 0 as gl::types::GLenum
                 };
                 data.depth.map(|value| {
+                    gl::DepthMask(gl::TRUE);
                     gl::ClearDepth(value as gl::types::GLclampd);
-                    mask |= gl::DEPTH_BUFFER_BIT;
+                    flags |= gl::DEPTH_BUFFER_BIT;
                 });
                 data.stencil.map(|value| {
+                    gl::StencilMask(-1);
                     gl::ClearStencil(value as gl::types::GLint);
-                    mask |= gl::STENCIL_BUFFER_BIT;
+                    flags |= gl::STENCIL_BUFFER_BIT;
                 });
-                gl::Clear(mask);
+                gl::Clear(flags);
             },
             super::CastBindProgram(program) => {
                 gl::UseProgram(program);
