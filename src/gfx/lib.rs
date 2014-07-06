@@ -29,7 +29,7 @@ extern crate render;
 use std::sync::Future;
 
 // public re-exports
-pub use render::{BufferHandle, MeshHandle, SurfaceHandle, TextureHandle, SamplerHandle, ProgramHandle, EnvirHandle};
+pub use render::{BufferHandle, SurfaceHandle, TextureHandle, SamplerHandle, ProgramHandle, EnvirHandle};
 pub use render::Renderer;
 pub use MeshSlice = render::mesh::Slice;
 pub use render::mesh::{VertexCount, ElementCount, VertexSlice, IndexSlice, Mesh, Constructor};

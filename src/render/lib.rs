@@ -30,7 +30,6 @@ use device::target::{ClearData, TargetColor, TargetDepth, TargetStencil};
 use envir::BindableStorage;
 pub use BufferHandle = device::dev::Buffer;
 
-pub type MeshHandle = uint;
 pub type SurfaceHandle = device::dev::Surface;
 pub type TextureHandle = device::dev::Texture;
 pub type SamplerHandle = uint;
@@ -43,7 +42,6 @@ pub mod target;
 
 /// Temporary cache system before we get the handle manager
 struct Cache {
-    pub meshes: Vec<mesh::Mesh>,
     pub programs: Vec<ProgramMeta>,
     pub environments: Vec<envir::Storage>,
 }
@@ -100,7 +98,6 @@ impl Renderer {
                 common_frame_buffer: frame_buffer,
                 default_frame_buffer: 0,
                 cache: Cache {
-                    meshes: Vec::new(),
                     programs: Vec::new(),
                     environments: Vec::new(),
                 },
@@ -120,7 +117,7 @@ impl Renderer {
         self.device_tx.send(device::CastClear(data));
     }
 
-    pub fn draw(&mut self, mesh_handle: MeshHandle, slice: mesh::Slice, frame: target::Frame, program_handle: ProgramHandle, env_handle: EnvirHandle) {
+    pub fn draw(&mut self, mesh: &mesh::Mesh, slice: mesh::Slice, frame: target::Frame, program_handle: ProgramHandle, env_handle: EnvirHandle) {
         // bind output frame
         self.bind_frame(&frame);
         // bind shaders
@@ -135,7 +132,6 @@ impl Renderer {
         }
         // bind vertex attributes
         self.device_tx.send(device::CastBindArrayBuffer(self.common_array_buffer));
-        let mesh = self.cache.meshes.get(mesh_handle);
         self.bind_mesh(mesh, program).unwrap();
         // draw
         match slice {
@@ -174,12 +170,6 @@ impl Renderer {
             device::ReplyNewProgram(Err(_)) => 0,
             _ => fail!("invalid device reply for CallNewProgram"),
         }
-    }
-
-    pub fn register_mesh(&mut self, mesh: mesh::Mesh) -> MeshHandle {
-        let handle = self.cache.meshes.len();
-        self.cache.meshes.push(mesh);
-        handle
     }
 
     pub fn create_vertex_buffer(&self, data: Vec<f32>) -> BufferHandle {
