@@ -89,6 +89,46 @@ pub struct Depth {
     pub write: bool,
 }
 
-//TODO
 #[deriving(Clone, PartialEq, Show)]
-pub struct Blend;
+pub enum Equation {
+    Add,
+    Sub,
+    RevSub,
+    Max,
+    Min,
+}
+
+#[deriving(Clone, PartialEq, Show)]
+pub enum InverseFlag {
+    Straight,
+    Inverse,
+}
+
+#[deriving(Clone, PartialEq, Show)]
+pub enum BlendValue {
+    Zero,
+    SourceColor,
+    SourceAlpha,
+    SourceAlphaSaturated,
+    DestColor,
+    DestAlpha,
+    ConstColor,
+    ConstAlpha,
+}
+
+#[deriving(Clone, PartialEq, Show)]
+pub struct Factor(InverseFlag, BlendValue);
+
+#[deriving(Clone, PartialEq, Show)]
+pub struct BlendChannel {
+    equation: Equation,
+    source: Factor,
+    destination: Factor,
+}
+
+#[deriving(Clone, PartialEq, Show)]
+pub struct Blend {
+    color: BlendChannel,
+    alpha: BlendChannel,
+    value: super::target::Color,
+}
