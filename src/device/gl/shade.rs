@@ -24,7 +24,11 @@ enum GLSLVersion {
     GLSL140,
     GLSL150,
     GLSL330,
+    GLSL400,
     GLSL410,
+    GLSL420,
+    GLSL430,
+    GLSL440,
 }
 
 impl GLSLVersion {
@@ -40,7 +44,11 @@ impl GLSLVersion {
             "1.40" => self <= GLSL140,
             "1.50" => self <= GLSL150,
             "3.30" => self <= GLSL330,
+            "4.00" => self <= GLSL400,
             "4.10" => self <= GLSL410,
+            "4.20" => self <= GLSL420,
+            "4.30" => self <= GLSL430,
+            "4.40" => self <= GLSL440,
             _ => {
                 warn!("OpenGL driver reported unknown GLSL language version: {}", c_s_b);
                 false
