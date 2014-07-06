@@ -18,6 +18,8 @@ extern crate libc;
 use log;
 use std;
 use a = super::attrib;
+use std::str;
+use std::collections::HashSet;
 
 mod shade;
 
@@ -30,8 +32,31 @@ pub type Surface        = gl::types::GLuint;
 pub type Texture        = gl::types::GLuint;
 pub type Sampler        = gl::types::GLuint;
 
+struct Extensions {
+    supported: HashSet<&'static str>,
+}
+
+impl Extensions {
+    fn new() -> Extensions {
+        let bytes = gl::GetString(gl::EXTENSIONS);
+        let extensions = unsafe {
+            str::raw::c_str_to_static_slice(bytes as *const i8)
+        };
+        Extensions {
+            supported: extensions.split(' ').collect()
+        }
+    }
+
+    fn is_supported(&self, s: &str) -> bool {
+        self.supported.contains_equiv(&s)
+    }
+}
+
+
+
 pub struct GlBackEnd {
     caps: super::Capabilities,
+    extensions: Extensions,
 }
 
 impl GlBackEnd {
@@ -45,20 +70,28 @@ impl GlBackEnd {
 
     pub fn new(provider: &super::GlProvider) -> GlBackEnd {
         gl::load_with(|s| provider.get_proc_address(s));
+        let exs = Extensions::new();
         let caps = super::Capabilities {
             shader_model: shade::get_model(),
             max_draw_buffers: GlBackEnd::get_uint(gl::MAX_DRAW_BUFFERS),
             max_texture_size: GlBackEnd::get_uint(gl::MAX_TEXTURE_SIZE),
             max_vertex_attributes: GlBackEnd::get_uint(gl::MAX_VERTEX_ATTRIBS),
+            uniform_block_supported: exs.is_supported("GL_ARB_uniform_buffer_object"),
+            array_buffer_supported: exs.is_supported("GL_ARB_vertex_array_object"),
         };
         GlBackEnd {
             caps: caps,
+            extensions: exs,
         }
     }
 
     #[allow(dead_code)]
     fn check(&mut self) {
         debug_assert_eq!(gl::GetError(), gl::NO_ERROR);
+    }
+
+    pub fn is_extension_supported(&self, s: &str) -> bool {
+        self.extensions.is_supported(s)
     }
 }
 
@@ -76,13 +109,18 @@ impl super::ApiBackEnd for GlBackEnd {
         name
     }
 
-    fn create_array_buffer(&mut self) -> ArrayBuffer {
-        let mut name = 0 as ArrayBuffer;
-        unsafe{
-            gl::GenVertexArrays(1, &mut name);
+    fn create_array_buffer(&mut self) -> Result<ArrayBuffer, ()> {
+        if self.caps.array_buffer_supported {
+            let mut name = 0 as ArrayBuffer;
+            unsafe{
+                gl::GenVertexArrays(1, &mut name);
+            }
+            info!("\tCreated array buffer {}", name);
+            Ok(name)
+        } else {
+            error!("\tarray buffer creation unsupported, ignored")
+            Err(())
         }
-        info!("\tCreated array buffer {}", name);
-        name
     }
 
     fn create_shader(&mut self, stage: super::shade::Stage, code: super::shade::ShaderSource) -> Result<Shader, super::shade::CreateShaderError> {
@@ -95,7 +133,7 @@ impl super::ApiBackEnd for GlBackEnd {
     }
 
     fn create_program(&mut self, shaders: &[Shader]) -> Result<super::shade::ProgramMeta, ()> {
-        let (meta, info) = shade::create_program(shaders);
+        let (meta, info) = shade::create_program(&self.caps, shaders);
         info.map(|info| {
             let level = if meta.is_err() { log::ERROR } else { log::WARN };
             log!(level, "\tProgram link log: {}", info);
@@ -151,7 +189,11 @@ impl super::ApiBackEnd for GlBackEnd {
                 gl::UseProgram(program);
             },
             super::CastBindArrayBuffer(array_buffer) => {
-                gl::BindVertexArray(array_buffer);
+                if self.caps.array_buffer_supported {
+                    gl::BindVertexArray(array_buffer);
+                } else {
+                    error!("Ignored unsupported GL Request: {}", request)
+                }
             },
             super::CastBindAttribute(slot, buffer, count, el_type, stride, offset) => {
                 let gl_type = match el_type {

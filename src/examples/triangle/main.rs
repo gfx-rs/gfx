@@ -50,9 +50,7 @@ fn start(argc: int, argv: *const *const u8) -> int {
 
 fn main() {
     let glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
-    glfw.window_hint(glfw::ContextVersion(3, 2));
-    glfw.window_hint(glfw::OpenglForwardCompat(true));
-    glfw.window_hint(glfw::OpenglProfile(glfw::OpenGlCoreProfile));
+    glfw.window_hint(glfw::ContextVersion(2, 1));
 
     let (mut window, events) = glfw
         .create_window(300, 300, "Hello this is window", glfw::Windowed)
