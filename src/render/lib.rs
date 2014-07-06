@@ -30,7 +30,6 @@ use device::target::{ClearData, TargetColor, TargetDepth, TargetStencil};
 use envir::BindableStorage;
 pub use BufferHandle = device::dev::Buffer;
 
-pub type MeshHandle = uint;
 pub type SurfaceHandle = device::dev::Surface;
 pub type TextureHandle = device::dev::Texture;
 pub type SamplerHandle = uint;
@@ -43,7 +42,6 @@ pub mod target;
 
 /// Temporary cache system before we get the handle manager
 struct Cache {
-    pub meshes: Vec<mesh::Mesh>,
     pub programs: Vec<ProgramMeta>,
     pub environments: Vec<envir::Storage>,
 }
@@ -51,6 +49,12 @@ struct Cache {
 /// Graphics state
 struct State {
     frame: target::Frame,
+}
+
+#[deriving(Show)]
+enum MeshError {
+    ErrorMissingAttribute,
+    ErrorAttributeType,
 }
 
 
@@ -94,7 +98,6 @@ impl Renderer {
                 common_frame_buffer: frame_buffer,
                 default_frame_buffer: 0,
                 cache: Cache {
-                    meshes: Vec::new(),
                     programs: Vec::new(),
                     environments: Vec::new(),
                 },
@@ -114,7 +117,7 @@ impl Renderer {
         self.device_tx.send(device::CastClear(data));
     }
 
-    pub fn draw(&mut self, mesh_handle: MeshHandle, slice: mesh::Slice, frame: target::Frame, program_handle: ProgramHandle, env_handle: EnvirHandle) {
+    pub fn draw(&mut self, mesh: &mesh::Mesh, slice: mesh::Slice, frame: target::Frame, program_handle: ProgramHandle, env_handle: EnvirHandle) {
         // bind output frame
         self.bind_frame(&frame);
         // bind shaders
@@ -129,7 +132,6 @@ impl Renderer {
         }
         // bind vertex attributes
         self.device_tx.send(device::CastBindArrayBuffer(self.common_array_buffer));
-        let mesh = self.cache.meshes.get(mesh_handle);
         self.bind_mesh(mesh, program).unwrap();
         // draw
         match slice {
@@ -170,25 +172,12 @@ impl Renderer {
         }
     }
 
-    pub fn create_mesh(&mut self, num_vert: mesh::VertexCount, data: Vec<f32>, count: u8, stride: u8) -> MeshHandle {
+    pub fn create_vertex_buffer(&self, data: Vec<f32>) -> BufferHandle {
         self.device_tx.send(device::CallNewVertexBuffer(data));
-        let buffer = match self.device_rx.recv() {
+        match self.device_rx.recv() {
             device::ReplyNewBuffer(name) => name,
-            _ => fail!("invalid device reply for CallNewVertexBuffer")
-        };
-        let mut mesh = mesh::Mesh::new(num_vert);
-        mesh.attributes.push(mesh::Attribute {
-            buffer: buffer,
-            size: count,
-            offset: 0,
-            stride: stride,
-            is_normalized: false,
-            is_interpolated: false,
-            name: "a_Pos".to_string(),
-        });
-        let handle = self.cache.meshes.len();
-        self.cache.meshes.push(mesh);
-        handle
+            _ => fail!("invalid device reply for CallNewVertexBuffer"),
+        }
     }
 
     pub fn create_index_buffer(&self, data: Vec<u16>) -> BufferHandle {
@@ -250,12 +239,16 @@ impl Renderer {
         }
     }
 
-    fn bind_mesh(&self, mesh: &mesh::Mesh, prog: &ProgramMeta) -> Result<(),()> {
+    fn bind_mesh(&self, mesh: &mesh::Mesh, prog: &ProgramMeta) -> Result<(),MeshError> {
         for sat in prog.attributes.iter() {
             match mesh.attributes.iter().find(|a| a.name.as_slice() == sat.name.as_slice()) {
-                Some(vat) => self.device_tx.send(device::CastBindAttribute(sat.location as u8,
-                    vat.buffer, vat.size as u32, vat.offset as u32, vat.stride as u32)),
-                None => return Err(())
+                Some(vat) => match vat.elem_type.is_compatible(sat.base_type) {
+                    Ok(_) => self.device_tx.send(device::CastBindAttribute(
+                        sat.location as device::AttributeSlot, vat.buffer,
+                        vat.elem_count, vat.elem_type, vat.stride, vat.offset)),
+                    Err(_) => return Err(ErrorAttributeType)
+                },
+                None => return Err(ErrorMissingAttribute)
             }
         }
         Ok(())

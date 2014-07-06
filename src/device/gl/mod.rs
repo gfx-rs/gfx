@@ -17,6 +17,7 @@ extern crate libc;
 
 use log;
 use std;
+use a = super::attrib;
 
 mod shade;
 
@@ -117,8 +118,9 @@ impl super::DeviceTask for Device {
         let size = (data.len() * std::mem::size_of::<T>()) as gl::types::GLsizeiptr;
         let raw = data.as_ptr() as *const gl::types::GLvoid;
         let usage = match usage {
-            super::UsageStatic => gl::STATIC_DRAW,
+            super::UsageStatic  => gl::STATIC_DRAW,
             super::UsageDynamic => gl::DYNAMIC_DRAW,
+            super::UsageStream  => gl::STREAM_DRAW,
         };
         unsafe{
             gl::BufferData(gl::ARRAY_BUFFER, size, raw, usage);
@@ -151,12 +153,47 @@ impl super::DeviceTask for Device {
             super::CastBindArrayBuffer(array_buffer) => {
                 gl::BindVertexArray(array_buffer);
             },
-            super::CastBindAttribute(slot, buffer, count, offset, stride) => {
+            super::CastBindAttribute(slot, buffer, count, el_type, stride, offset) => {
+                let gl_type = match el_type {
+                    a::Int(_, a::U8, a::Unsigned)  => gl::UNSIGNED_BYTE,
+                    a::Int(_, a::U8, a::Signed)    => gl::BYTE,
+                    a::Int(_, a::U16, a::Unsigned) => gl::UNSIGNED_SHORT,
+                    a::Int(_, a::U16, a::Signed)   => gl::SHORT,
+                    a::Int(_, a::U32, a::Unsigned) => gl::UNSIGNED_INT,
+                    a::Int(_, a::U32, a::Signed)   => gl::INT,
+                    a::Float(_, a::F16) => gl::HALF_FLOAT,
+                    a::Float(_, a::F32) => gl::FLOAT,
+                    a::Float(_, a::F64) => gl::DOUBLE,
+                    _ => {
+                        error!("Unsupported element type: {}", el_type);
+                        return
+                    }
+                };
                 gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
-                unsafe{
-                    gl::VertexAttribPointer(slot as gl::types::GLuint,
-                        count as gl::types::GLint, gl::FLOAT, gl::FALSE,
-                        stride as gl::types::GLint, offset as *const gl::types::GLvoid);
+                let offset = offset as *const gl::types::GLvoid;
+                match el_type {
+                    a::Int(a::IntRaw, _, _) => unsafe {
+                        gl::VertexAttribIPointer(slot as gl::types::GLuint,
+                            count as gl::types::GLint, gl_type,
+                            stride as gl::types::GLint, offset);
+                    },
+                    a::Int(sub, _, _) => unsafe {
+                        gl::VertexAttribPointer(slot as gl::types::GLuint,
+                            count as gl::types::GLint, gl_type,
+                            if sub == a::IntNormalized {gl::TRUE} else {gl::FALSE},
+                            stride as gl::types::GLint, offset);
+                    },
+                    a::Float(a::FloatDefault, _) => unsafe {
+                        gl::VertexAttribPointer(slot as gl::types::GLuint,
+                            count as gl::types::GLint, gl_type, gl::FALSE,
+                            stride as gl::types::GLint, offset);
+                    },
+                    a::Float(a::FloatPrecision, _) => unsafe {
+                        gl::VertexAttribLPointer(slot as gl::types::GLuint,
+                            count as gl::types::GLint, gl_type,
+                            stride as gl::types::GLint, offset);
+                    },
+                    _ => ()
                 }
                 gl::EnableVertexAttribArray(slot as gl::types::GLuint);
             },

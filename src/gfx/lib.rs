@@ -29,14 +29,15 @@ extern crate render;
 use std::sync::Future;
 
 // public re-exports
-pub use render::{BufferHandle, MeshHandle, SurfaceHandle, TextureHandle, SamplerHandle, ProgramHandle, EnvirHandle};
+pub use render::{BufferHandle, SurfaceHandle, TextureHandle, SamplerHandle, ProgramHandle, EnvirHandle};
 pub use render::Renderer;
 pub use MeshSlice = render::mesh::Slice;
-pub use render::mesh::{VertexCount, ElementCount, VertexSlice, IndexSlice};
+pub use render::mesh::{VertexCount, ElementCount, VertexSlice, IndexSlice, Mesh, Constructor};
 pub use Environment = render::envir::Storage;
 pub use render::envir::{BlockVar, UniformVar, TextureVar};
 pub use render::target::Frame;
 pub use Device = device::Server;
+pub use device::attrib;
 pub use device::target::{Color, ClearData, Plane, TextureLayer, TextureLevel};
 pub use device::target::{PlaneEmpty, PlaneSurface, PlaneTexture, PlaneTextureLayer};
 pub use device::{GraphicsContext, InitError, Options};

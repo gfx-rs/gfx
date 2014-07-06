@@ -29,6 +29,7 @@ extern crate comm;
 
 use std::kinds::marker;
 
+pub mod attrib;
 pub mod shade;
 pub mod target;
 #[cfg(gl)] mod gl;
@@ -52,6 +53,7 @@ pub type TextureSlot = u8;
 pub enum BufferUsage {
     UsageStatic,
     UsageDynamic,
+    UsageStream,
 }
 
 #[deriving(Show)]
@@ -68,7 +70,8 @@ pub enum Request {
     CastClear(target::ClearData),
     CastBindProgram(dev::Program),
     CastBindArrayBuffer(dev::ArrayBuffer),
-    CastBindAttribute(AttributeSlot, dev::Buffer, u32, u32, u32),
+    CastBindAttribute(AttributeSlot, dev::Buffer, attrib::Count,
+        attrib::Type, attrib::Stride, attrib::Offset),
     CastBindIndex(dev::Buffer),
     CastBindFrameBuffer(dev::FrameBuffer),
     CastBindTarget(target::Target, target::Plane),
