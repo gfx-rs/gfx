@@ -109,7 +109,7 @@ pub trait ApiBackEnd {
 
 pub struct Ack;
 
-pub struct Server<P, I> {
+pub struct Device<P, I> {
     no_share: marker::NoShare,
     request_rx: Receiver<Request>,
     reply_tx: Sender<Reply>,
@@ -119,7 +119,7 @@ pub struct Server<P, I> {
     close: comm::Close,
 }
 
-impl<Api, P: GraphicsContext<Api>, I: ApiBackEnd> Server<P, I> {
+impl<Api, P: GraphicsContext<Api>, I: ApiBackEnd> Device<P, I> {
     pub fn close(&self) {
         self.close.now()
     }
@@ -194,7 +194,7 @@ pub struct Options<T>(pub T, pub QueueSize);
 
 #[allow(visible_private_types)]
 pub fn init<Api, P: GraphicsContext<Api>, T: GlProvider>(graphics_context: P, options: Options<T>)
-        -> Result<(Sender<Request>, Receiver<Reply>, Server<P, GlBackEnd>, Receiver<Ack>, comm::ShouldClose), InitError> {
+        -> Result<(Sender<Request>, Receiver<Reply>, Device<P, GlBackEnd>, Receiver<Ack>, comm::ShouldClose), InitError> {
     let (request_tx, request_rx) = channel();
     let (reply_tx, reply_rx) = channel();
     let (swap_tx, swap_rx) = channel();
@@ -206,7 +206,7 @@ pub fn init<Api, P: GraphicsContext<Api>, T: GlProvider>(graphics_context: P, op
     }
 
     let gl = GlBackEnd::new(&provider); // TODO: Generalise for different back-ends
-    let server = Server {
+    let device = Device {
         no_share: marker::NoShare,
         request_rx: request_rx,
         reply_tx: reply_tx,
@@ -216,5 +216,5 @@ pub fn init<Api, P: GraphicsContext<Api>, T: GlProvider>(graphics_context: P, op
         close: close,
     };
 
-    Ok((request_tx, reply_rx, server, swap_rx, should_close))
+    Ok((request_tx, reply_rx, device, swap_rx, should_close))
 }

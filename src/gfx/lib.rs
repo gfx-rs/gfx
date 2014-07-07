@@ -36,11 +36,10 @@ pub use render::mesh::{VertexCount, ElementCount, VertexSlice, IndexSlice, Mesh,
 pub use Environment = render::envir::Storage;
 pub use render::envir::{BlockVar, UniformVar, TextureVar};
 pub use render::target::Frame;
-pub use Device = device::Server;
 pub use device::attrib;
 pub use device::target::{Color, ClearData, Plane, TextureLayer, TextureLevel};
 pub use device::target::{PlaneEmpty, PlaneSurface, PlaneTexture, PlaneTextureLayer};
-pub use device::{GraphicsContext, InitError, Options};
+pub use device::{Device, GraphicsContext, InitError, Options};
 pub use device::shade::{UniformValue, ValueI32, ValueF32, ValueI32Vec, ValueF32Vec, ValueF32Matrix};
 pub use device::shade::{ShaderSource, StaticBytes, NOT_PROVIDED};
 #[cfg(glfw)] pub use GlfwPlatform = platform::Glfw;
