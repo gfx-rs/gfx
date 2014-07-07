@@ -31,6 +31,3 @@ extern crate device;
 #[cfg(glfw)] mod glfw;
 // #[cfg(sdl2)] mod sdl2; // TODO
 // #[cfg(d3d)] mod d3d; // TODO
-
-pub enum GlApi {}
-pub enum D3dApi {}

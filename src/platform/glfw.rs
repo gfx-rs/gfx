@@ -19,7 +19,6 @@ use libc;
 use self::glfw::Context;
 use device;
 
-
 struct Wrap<'a>(&'a glfw::Glfw);
 
 impl<'a> device::GlProvider for Wrap<'a> {
@@ -46,7 +45,7 @@ impl<C: Context> GlfwGraphicsContext<C> {
     }
 }
 
-impl<C: Context> device::GraphicsContext<super::GlApi> for GlfwGraphicsContext<C> {
+impl<C: Context> device::GraphicsContext<device::GlBackEnd> for GlfwGraphicsContext<C> {
     fn make_current(&self) {
         self.context.make_current();
     }

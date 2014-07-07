@@ -30,11 +30,11 @@ pub type Surface        = gl::types::GLuint;
 pub type Texture        = gl::types::GLuint;
 pub type Sampler        = gl::types::GLuint;
 
-pub struct Device {
+pub struct GlBackEnd {
     caps: super::Capabilities,
 }
 
-impl Device {
+impl GlBackEnd {
     fn get_uint(what: gl::types::GLenum) -> uint {
         let mut value = 0 as gl::types::GLint;
         unsafe {
@@ -43,15 +43,15 @@ impl Device {
         value as uint
     }
 
-    pub fn new(provider: &super::GlProvider) -> Device {
+    pub fn new(provider: &super::GlProvider) -> GlBackEnd {
         gl::load_with(|s| provider.get_proc_address(s));
         let caps = super::Capabilities {
             shader_model: shade::get_model(),
-            max_draw_buffers: Device::get_uint(gl::MAX_DRAW_BUFFERS),
-            max_texture_size: Device::get_uint(gl::MAX_TEXTURE_SIZE),
-            max_vertex_attributes: Device::get_uint(gl::MAX_VERTEX_ATTRIBS),
+            max_draw_buffers: GlBackEnd::get_uint(gl::MAX_DRAW_BUFFERS),
+            max_texture_size: GlBackEnd::get_uint(gl::MAX_TEXTURE_SIZE),
+            max_vertex_attributes: GlBackEnd::get_uint(gl::MAX_VERTEX_ATTRIBS),
         };
-        Device {
+        GlBackEnd {
             caps: caps,
         }
     }
@@ -62,7 +62,7 @@ impl Device {
     }
 }
 
-impl super::DeviceTask for Device {
+impl super::ApiBackEnd for GlBackEnd {
     fn get_capabilities<'a>(&'a self) -> &'a super::Capabilities {
         &self.caps
     }

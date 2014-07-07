@@ -36,19 +36,18 @@ pub use render::mesh::{VertexCount, ElementCount, VertexSlice, IndexSlice, Mesh,
 pub use Environment = render::envir::Storage;
 pub use render::envir::{BlockVar, UniformVar, TextureVar};
 pub use render::target::Frame;
-pub use Device = device::Server;
 pub use device::attrib;
 pub use device::target::{Color, ClearData, Plane, TextureLayer, TextureLevel};
 pub use device::target::{PlaneEmpty, PlaneSurface, PlaneTexture, PlaneTextureLayer};
-pub use device::{GraphicsContext, InitError, Options};
+pub use device::{Device, GlBackEnd, GlProvider, GraphicsContext, InitError, QueueSize};
 pub use device::shade::{UniformValue, ValueI32, ValueF32, ValueI32Vec, ValueF32Vec, ValueF32Matrix};
 pub use device::shade::{ShaderSource, StaticBytes, NOT_PROVIDED};
 #[cfg(glfw)] pub use GlfwPlatform = platform::Glfw;
 
 #[allow(visible_private_types)]
-pub fn start<Api, P: GraphicsContext<Api>, T: device::GlProvider>(graphics_context: P, options: device::Options<T>)
-        -> Result<(Future<Renderer>, Device<P, device::Device>), InitError> {
-    device::init(graphics_context, options).map(|(tx, rx, server, ack, should_finish)| {
+pub fn start<C: GraphicsContext<GlBackEnd>, P: GlProvider>(graphics_context: C, provider: P, queue_size: QueueSize)
+        -> Result<(Future<Renderer>, Device<GlBackEnd, C>), InitError> {
+    device::init(graphics_context, provider, queue_size).map(|(tx, rx, server, ack, should_finish)| {
         (Renderer::new(tx, rx, ack, should_finish), server)
     })
 }

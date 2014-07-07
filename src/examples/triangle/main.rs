@@ -63,7 +63,7 @@ fn main() {
     // spawn render task
     let (renderer, mut device) = {
         let (platform, provider) = gfx::GlfwPlatform::new(window.render_context(), &glfw);
-        gfx::start(platform, gfx::Options(provider, 1)).unwrap()
+        gfx::start(platform, provider, 1).unwrap()
     };
 
     // spawn game task
