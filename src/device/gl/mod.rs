@@ -281,6 +281,9 @@ impl super::ApiBackEnd for GlBackEnd {
             super::CastDepthState(depth) => {
                 rast::bind_depth(depth);
             },
+            super::CastBlendState(blend) => {
+                rast::bind_blend(blend);
+            },
             super::CastUpdateBuffer(buffer, data) => {
                 self.update_buffer(buffer, data.as_slice(), super::UsageDynamic);
             },

@@ -124,6 +124,7 @@ impl Renderer {
         // bind state
         self.device_tx.send(device::CastPrimitiveState(state.primitive));
         self.device_tx.send(device::CastDepthState(state.depth));
+        self.device_tx.send(device::CastBlendState(state.blend));
         // bind output frame
         self.bind_frame(&frame);
         // bind shaders

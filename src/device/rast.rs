@@ -91,16 +91,16 @@ pub struct Depth {
 
 #[deriving(Clone, PartialEq, Show)]
 pub enum Equation {
-    Add,
-    Sub,
-    RevSub,
-    Max,
-    Min,
+    FuncAdd,
+    FuncSub,
+    FuncRevSub,
+    FuncMin,
+    FuncMax,
 }
 
 #[deriving(Clone, PartialEq, Show)]
 pub enum InverseFlag {
-    Straight,
+    Normal,
     Inverse,
 }
 
@@ -117,18 +117,18 @@ pub enum BlendValue {
 }
 
 #[deriving(Clone, PartialEq, Show)]
-pub struct Factor(InverseFlag, BlendValue);
+pub struct Factor(pub InverseFlag, pub BlendValue);
 
 #[deriving(Clone, PartialEq, Show)]
 pub struct BlendChannel {
-    equation: Equation,
-    source: Factor,
-    destination: Factor,
+    pub equation: Equation,
+    pub source: Factor,
+    pub destination: Factor,
 }
 
 #[deriving(Clone, PartialEq, Show)]
 pub struct Blend {
-    color: BlendChannel,
-    alpha: BlendChannel,
-    value: super::target::Color,
+    pub color: BlendChannel,
+    pub alpha: BlendChannel,
+    pub value: super::target::Color,
 }

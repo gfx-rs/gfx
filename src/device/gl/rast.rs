@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use r = super::super::rast;
+use super::super::target::Color;
 use super::gl;
 
 
@@ -80,3 +81,53 @@ pub fn bind_depth(depth: Option<r::Depth>) {
     }
 }
 
+
+fn map_equation(eq: r::Equation) -> gl::types::GLenum {
+    match eq {
+        r::FuncAdd    => gl::FUNC_ADD,
+        r::FuncSub    => gl::FUNC_SUBTRACT,
+        r::FuncRevSub => gl::FUNC_REVERSE_SUBTRACT,
+        r::FuncMin    => gl::MIN,
+        r::FuncMax    => gl::MAX,
+    }
+}
+
+fn map_factor(factor: r::Factor) -> gl::types::GLenum {
+    match factor {
+        r::Factor(r::Normal,  r::Zero)        => gl::ZERO,
+        r::Factor(r::Inverse, r::Zero)        => gl::ONE,
+        r::Factor(r::Normal,  r::SourceColor) => gl::SRC_COLOR,
+        r::Factor(r::Inverse, r::SourceColor) => gl::ONE_MINUS_SRC_COLOR,
+        r::Factor(r::Normal,  r::SourceAlpha) => gl::SRC_ALPHA,
+        r::Factor(r::Inverse, r::SourceAlpha) => gl::ONE_MINUS_SRC_ALPHA,
+        r::Factor(r::Normal,  r::DestColor)   => gl::DST_COLOR,
+        r::Factor(r::Inverse, r::DestColor)   => gl::ONE_MINUS_DST_COLOR,
+        r::Factor(r::Normal,  r::DestAlpha)   => gl::DST_ALPHA,
+        r::Factor(r::Inverse, r::DestAlpha)   => gl::ONE_MINUS_DST_ALPHA,
+        r::Factor(r::Normal,  r::ConstColor)  => gl::CONSTANT_COLOR,
+        r::Factor(r::Inverse, r::ConstColor)  => gl::ONE_MINUS_CONSTANT_COLOR,
+        r::Factor(r::Normal,  r::ConstAlpha)  => gl::CONSTANT_ALPHA,
+        r::Factor(r::Inverse, r::ConstAlpha)  => gl::ONE_MINUS_CONSTANT_ALPHA,
+        r::Factor(r::Normal,  r::SourceAlphaSaturated) => gl::SRC_ALPHA_SATURATE,
+        _ => fail!("Unsupported blend factor: {}", factor),
+    }
+}
+
+pub fn bind_blend(blend: Option<r::Blend>) {
+    match blend {
+        Some(b) => {
+            gl::Enable(gl::BLEND);
+            gl::BlendEquationSeparate(
+                map_equation(b.color.equation),
+                map_equation(b.alpha.equation));
+            gl::BlendFuncSeparate(
+                map_factor(b.color.source),
+                map_factor(b.color.destination),
+                map_factor(b.alpha.source),
+                map_factor(b.alpha.destination));
+            let Color([r, g, b, a]) = b.value;
+            gl::BlendColor(r, g, b, a);
+        },
+        None => gl::Disable(gl::BLEND),
+    }
+}
