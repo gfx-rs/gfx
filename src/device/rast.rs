@@ -30,22 +30,18 @@ pub enum OffsetType {
 }
 
 #[deriving(Clone, PartialEq, Show)]
-pub enum FrontFlag {
-    DrawFront,
+pub enum CullMode {
+    CullNothing,
     CullFront,
-}
-
-#[deriving(Clone, PartialEq, Show)]
-pub enum BackFlag {
-    DrawBack,
     CullBack,
 }
+
 
 #[deriving(Clone, PartialEq, Show)]
 pub enum RasterMethod {
     Point,
     Line(LineWidth),
-    Fill(FrontFlag, BackFlag),
+    Fill(CullMode),
 }
 
 /// Primitive rasterization state. Note that GL allows different raster

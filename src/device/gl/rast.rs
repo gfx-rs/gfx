@@ -29,17 +29,17 @@ pub fn bind_primitive(p: r::Primitive) {
             gl::LineWidth(width);
             (gl::LINE, gl::POLYGON_OFFSET_LINE)
         },
-        r::Fill(front, back) => {
-            if front == r::DrawFront && back == r::DrawBack {
-                gl::Disable(gl::CULL_FACE);
-            }else {
-                gl::Enable(gl::CULL_FACE);
-                gl::CullFace(match (front, back) {
-                    (r::DrawFront, r::CullBack) => gl::BACK,
-                    (r::CullFront, r::DrawBack) => gl::FRONT,
-                    (r::CullFront, r::CullBack) => gl::FRONT_AND_BACK,
-                    _ => unreachable!(),
-                });
+        r::Fill(cull) => {
+            match cull {
+                r::CullNothing => gl::Disable(gl::CULL_FACE),
+                r::CullFront => {
+                    gl::Enable(gl::CULL_FACE);
+                    gl::CullFace(gl::FRONT);
+                },
+                r::CullBack => {
+                    gl::Enable(gl::CULL_FACE);
+                    gl::CullFace(gl::BACK);
+                },
             }
             (gl::FILL, gl::POLYGON_OFFSET_FILL)
         },

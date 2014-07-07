@@ -37,7 +37,6 @@ pub use MeshSlice = render::mesh::Slice;
 pub use render::mesh::{VertexCount, ElementCount, VertexSlice, IndexSlice, Mesh, Constructor};
 pub use render::rast::{DrawState, BlendAdditive, BlendAlpha};
 pub use render::target::Frame;
-pub use Device = device::Server;
 pub use device::attrib;
 pub use device::target::{Color, ClearData, Plane, TextureLayer, TextureLevel};
 pub use device::target::{PlaneEmpty, PlaneSurface, PlaneTexture, PlaneTextureLayer};

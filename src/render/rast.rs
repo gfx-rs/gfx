@@ -35,19 +35,13 @@ impl DrawState {
         DrawState {
             primitive: r::Primitive {
                 front_face: r::Ccw,
-                method: r::Fill(r::DrawFront, r::DrawBack),
+                method: r::Fill(r::CullBack),
                 offset: r::NoOffset,
             },
             stencil: None,
             depth: None,
             blend: None,
         }
-    }
-
-    /// set the cull mode to back faces
-    pub fn cull(mut self) -> DrawState {
-        self.primitive.method = r::Fill(r::DrawFront, r::CullBack);
-        self
     }
 
     /// set the depth test with the mask
