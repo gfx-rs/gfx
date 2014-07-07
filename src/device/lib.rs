@@ -23,7 +23,7 @@
 extern crate libc;
 extern crate comm;
 
-#[cfg(gl)] pub use gl::Device;
+#[cfg(gl)] pub use gl::GlBackEnd;
 #[cfg(gl)] pub use dev = self::gl;
 // #[cfg(d3d11)] ... // TODO
 
@@ -93,7 +93,7 @@ pub enum Reply {
     ReplyNewFrameBuffer(dev::FrameBuffer),
 }
 
-pub trait DeviceTask {
+pub trait ApiBackEnd {
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
     // calls
     fn create_buffer(&mut self) -> dev::Buffer;
@@ -109,17 +109,17 @@ pub trait DeviceTask {
 
 pub struct Ack;
 
-pub struct Server<P, D> {
+pub struct Server<P, I> {
     no_share: marker::NoShare,
     request_rx: Receiver<Request>,
     reply_tx: Sender<Reply>,
     graphics_context: P,
-    device: D,
+    back_end: I,
     swap_ack: Sender<Ack>,
     close: comm::Close,
 }
 
-impl<Api, P: GraphicsContext<Api>, D: DeviceTask> Server<P, D> {
+impl<Api, P: GraphicsContext<Api>, I: ApiBackEnd> Server<P, I> {
     pub fn close(&self) {
         self.close.now()
     }
@@ -140,36 +140,36 @@ impl<Api, P: GraphicsContext<Api>, D: DeviceTask> Server<P, D> {
                     break;
                 },
                 Ok(CallNewVertexBuffer(data)) => {
-                    let name = self.device.create_buffer();
-                    self.device.update_buffer(name, data.as_slice(), UsageStatic);
+                    let name = self.back_end.create_buffer();
+                    self.back_end.update_buffer(name, data.as_slice(), UsageStatic);
                     self.reply_tx.send(ReplyNewBuffer(name));
                 },
                 Ok(CallNewIndexBuffer(data)) => {
-                    let name = self.device.create_buffer();
-                    self.device.update_buffer(name, data.as_slice(), UsageStatic);
+                    let name = self.back_end.create_buffer();
+                    self.back_end.update_buffer(name, data.as_slice(), UsageStatic);
                     self.reply_tx.send(ReplyNewBuffer(name));
                 },
                 Ok(CallNewRawBuffer) => {
-                    let name = self.device.create_buffer();
+                    let name = self.back_end.create_buffer();
                     self.reply_tx.send(ReplyNewBuffer(name));
                 },
                 Ok(CallNewArrayBuffer) => {
-                    let name = self.device.create_array_buffer();
+                    let name = self.back_end.create_array_buffer();
                     self.reply_tx.send(ReplyNewArrayBuffer(name));
                 },
                 Ok(CallNewShader(stage, code)) => {
-                    let name = self.device.create_shader(stage, code);
+                    let name = self.back_end.create_shader(stage, code);
                     self.reply_tx.send(ReplyNewShader(name));
                 },
                 Ok(CallNewProgram(code)) => {
-                    let name = self.device.create_program(code.as_slice());
+                    let name = self.back_end.create_program(code.as_slice());
                     self.reply_tx.send(ReplyNewProgram(name));
                 },
                 Ok(CallNewFrameBuffer) => {
-                    let name = self.device.create_frame_buffer();
+                    let name = self.back_end.create_frame_buffer();
                     self.reply_tx.send(ReplyNewFrameBuffer(name));
                 },
-                Ok(request) => self.device.process(request),
+                Ok(request) => self.back_end.process(request),
                 Err(()) => return,
             }
         }
@@ -194,7 +194,7 @@ pub struct Options<T>(pub T, pub QueueSize);
 
 #[allow(visible_private_types)]
 pub fn init<Api, P: GraphicsContext<Api>, T: GlProvider>(graphics_context: P, options: Options<T>)
-        -> Result<(Sender<Request>, Receiver<Reply>, Server<P, Device>, Receiver<Ack>, comm::ShouldClose), InitError> {
+        -> Result<(Sender<Request>, Receiver<Reply>, Server<P, GlBackEnd>, Receiver<Ack>, comm::ShouldClose), InitError> {
     let (request_tx, request_rx) = channel();
     let (reply_tx, reply_rx) = channel();
     let (swap_tx, swap_rx) = channel();
@@ -205,13 +205,13 @@ pub fn init<Api, P: GraphicsContext<Api>, T: GlProvider>(graphics_context: P, op
         swap_tx.send(Ack);
     }
 
-    let dev = Device::new(&provider);
+    let gl = GlBackEnd::new(&provider); // TODO: Generalise for different back-ends
     let server = Server {
         no_share: marker::NoShare,
         request_rx: request_rx,
         reply_tx: reply_tx,
         graphics_context: graphics_context,
-        device: dev,
+        back_end: gl,
         swap_ack: swap_tx,
         close: close,
     };

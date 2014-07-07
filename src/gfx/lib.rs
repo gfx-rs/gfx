@@ -47,7 +47,7 @@ pub use device::shade::{ShaderSource, StaticBytes, NOT_PROVIDED};
 
 #[allow(visible_private_types)]
 pub fn start<Api, P: GraphicsContext<Api>, T: device::GlProvider>(graphics_context: P, options: device::Options<T>)
-        -> Result<(Future<Renderer>, Device<P, device::Device>), InitError> {
+        -> Result<(Future<Renderer>, Device<P, device::GlBackEnd>), InitError> {
     device::init(graphics_context, options).map(|(tx, rx, server, ack, should_finish)| {
         (Renderer::new(tx, rx, ack, should_finish), server)
     })
