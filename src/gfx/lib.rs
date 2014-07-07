@@ -35,7 +35,7 @@ pub use Environment = render::envir::Storage;
 pub use render::envir::{BlockVar, UniformVar, TextureVar};
 pub use MeshSlice = render::mesh::Slice;
 pub use render::mesh::{VertexCount, ElementCount, VertexSlice, IndexSlice, Mesh, Constructor};
-pub use render::rast::DrawState;
+pub use render::rast::{DrawState, BlendAdditive, BlendAlpha};
 pub use render::target::Frame;
 pub use Device = device::Server;
 pub use device::attrib;

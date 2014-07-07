@@ -21,6 +21,12 @@ pub type Stencil = u8;
 
 pub struct Color(pub [f32, ..4]);
 
+impl Color {
+    pub fn new() -> Color {
+        Color([0.0, 0.0, 0.0, 0.0])
+    }
+}
+
 impl Clone for Color {
     fn clone(&self) -> Color {
         let Color(ref x) = *self;
