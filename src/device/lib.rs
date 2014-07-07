@@ -111,17 +111,17 @@ pub trait ApiBackEnd {
 pub struct Ack;
 
 /// An API-agnostic device that manages incoming draw calls
-pub struct Device<P, I> {
+pub struct Device<T, C> {
     no_share: marker::NoShare,
     request_rx: Receiver<Request>,
     reply_tx: Sender<Reply>,
-    graphics_context: P,
-    back_end: I,
+    graphics_context: C,
+    back_end: T,
     swap_ack: Sender<Ack>,
     close: comm::Close,
 }
 
-impl<Api, P: GraphicsContext<Api>, I: ApiBackEnd> Device<P, I> {
+impl<T: ApiBackEnd, C: GraphicsContext<T>> Device<T, C> {
     pub fn close(&self) {
         self.close.now()
     }
@@ -178,7 +178,7 @@ impl<Api, P: GraphicsContext<Api>, I: ApiBackEnd> Device<P, I> {
     }
 }
 
-pub trait GraphicsContext<Api> {
+pub trait GraphicsContext<T> {
     fn swap_buffers(&self);
     fn make_current(&self);
 }
@@ -192,22 +192,21 @@ pub trait GlProvider {
 pub enum InitError {}
 
 pub type QueueSize = u8;
-pub struct Options<T>(pub T, pub QueueSize);
 
+// TODO: Generalise for different back-ends
 #[allow(visible_private_types)]
-pub fn init<Api, P: GraphicsContext<Api>, T: GlProvider>(graphics_context: P, options: Options<T>)
-        -> Result<(Sender<Request>, Receiver<Reply>, Device<P, GlBackEnd>, Receiver<Ack>, comm::ShouldClose), InitError> {
+pub fn init<C: GraphicsContext<GlBackEnd>, P: GlProvider>(graphics_context: C, provider: P, queue_size: QueueSize)
+        -> Result<(Sender<Request>, Receiver<Reply>, Device<GlBackEnd, C>, Receiver<Ack>, comm::ShouldClose), InitError> {
     let (request_tx, request_rx) = channel();
     let (reply_tx, reply_rx) = channel();
     let (swap_tx, swap_rx) = channel();
     let (close, should_close) = comm::close_stream();
 
-    let Options(provider, queue_size) = options;
     for _ in range(0, queue_size) {
         swap_tx.send(Ack);
     }
 
-    let gl = GlBackEnd::new(&provider); // TODO: Generalise for different back-ends
+    let gl = GlBackEnd::new(&provider);
     let device = Device {
         no_share: marker::NoShare,
         request_rx: request_rx,
