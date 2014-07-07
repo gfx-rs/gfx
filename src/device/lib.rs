@@ -93,6 +93,7 @@ pub enum Reply {
     ReplyNewFrameBuffer(dev::FrameBuffer),
 }
 
+/// An interface for performing draw calls using a specific graphics API
 pub trait ApiBackEnd {
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
     // calls
@@ -109,6 +110,7 @@ pub trait ApiBackEnd {
 
 pub struct Ack;
 
+/// An API-agnostic device that manages incoming draw calls
 pub struct Device<P, I> {
     no_share: marker::NoShare,
     request_rx: Receiver<Request>,
