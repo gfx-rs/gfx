@@ -57,7 +57,6 @@ fn main() {
 
     glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
     window.set_key_polling(true);
-    println!("Selected context version: {}", window.get_context_version());
 
     // spawn render task
     let (renderer, mut device) = {

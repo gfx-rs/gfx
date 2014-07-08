@@ -87,18 +87,21 @@ pub fn create_window_default(
     mode: glfw::WindowMode
 ) -> Option<(glfw::Window, Receiver<(f64, glfw::WindowEvent)>)> {
     create_window(glfw, width, height, title, mode, |glfw| {
-        info!("[glfw_platform] Trying to initialize with OpenGL 3.2 core");
+        info!("[glfw_platform] Trying to initialize with context version 3.2 core");
         glfw.default_window_hints();
         glfw.window_hint(glfw::ContextVersion(3, 2));
         glfw.window_hint(glfw::OpenglForwardCompat(true));
         glfw.window_hint(glfw::OpenglProfile(glfw::OpenGlCoreProfile));
     })
     .fallback(|glfw| {
-        info!("[glfw_platform] Trying to initialize with OpenGL 2.1");
+        info!("[glfw_platform] Trying to initialize with context version 2.1");
         glfw.default_window_hints();
         glfw.window_hint(glfw::ContextVersion(2, 1));
     })
-    .apply()
+    .apply().map(|(window, events)| {
+        info!("[glfw_platform] Initialized with context version {}", window.get_context_version());
+        (window, events)
+    })
 }
 
 pub struct CreateWindow<'glfw, 'title, 'monitor, 'setup> {
