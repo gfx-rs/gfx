@@ -33,18 +33,25 @@ pub type Surface        = gl::types::GLuint;
 pub type Texture        = gl::types::GLuint;
 pub type Sampler        = gl::types::GLuint;
 
+fn get_uint(name: gl::types::GLenum) -> uint {
+    let mut value = 0 as gl::types::GLint;
+    unsafe { gl::GetIntegerv(name, &mut value) };
+    value as uint
+}
+
 struct Extensions {
     supported: HashSet<&'static str>,
 }
 
 impl Extensions {
     fn new() -> Extensions {
-        let bytes = gl::GetString(gl::EXTENSIONS);
-        let extensions = unsafe {
-            str::raw::c_str_to_static_slice(bytes as *const i8)
-        };
+        let num_exts = get_uint(gl::NUM_EXTENSIONS) as gl::types::GLuint;
         Extensions {
-            supported: extensions.split(' ').collect()
+            supported: range(0, num_exts).map(|i| unsafe {
+                str::raw::c_str_to_static_slice(
+                    gl::GetStringi(gl::EXTENSIONS, i) as *const i8,
+                )
+            }).inspect(|s| info!("Loaded OpenGL extension: {}", *s)).collect(),
         }
     }
 
@@ -53,30 +60,20 @@ impl Extensions {
     }
 }
 
-
-
 pub struct GlBackEnd {
     caps: super::Capabilities,
     extensions: Extensions,
 }
 
 impl GlBackEnd {
-    fn get_uint(what: gl::types::GLenum) -> uint {
-        let mut value = 0 as gl::types::GLint;
-        unsafe {
-            gl::GetIntegerv(what, &mut value);
-        }
-        value as uint
-    }
-
     pub fn new(provider: &super::GlProvider) -> GlBackEnd {
         gl::load_with(|s| provider.get_proc_address(s));
         let exs = Extensions::new();
         let caps = super::Capabilities {
             shader_model: shade::get_model(),
-            max_draw_buffers: GlBackEnd::get_uint(gl::MAX_DRAW_BUFFERS),
-            max_texture_size: GlBackEnd::get_uint(gl::MAX_TEXTURE_SIZE),
-            max_vertex_attributes: GlBackEnd::get_uint(gl::MAX_VERTEX_ATTRIBS),
+            max_draw_buffers: get_uint(gl::MAX_DRAW_BUFFERS),
+            max_texture_size: get_uint(gl::MAX_TEXTURE_SIZE),
+            max_vertex_attributes: get_uint(gl::MAX_VERTEX_ATTRIBS),
             uniform_block_supported: exs.is_supported("GL_ARB_uniform_buffer_object"),
             array_buffer_supported: exs.is_supported("GL_ARB_vertex_array_object"),
         };
