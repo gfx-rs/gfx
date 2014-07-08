@@ -26,7 +26,7 @@ SRC_DIR               = src
 DEPS_DIR              = deps
 COMM_FILE             = $(SRC_DIR)/comm/lib.rs
 DEVICE_FILE           = $(SRC_DIR)/device/lib.rs
-PLATFORM_FILE         = $(SRC_DIR)/platform/lib.rs
+GLFW_PLATFORM_FILE    = $(SRC_DIR)/glfw_platform/lib.rs
 RENDER_FILE           = $(SRC_DIR)/render/lib.rs
 EXAMPLE_FILES         = $(SRC_DIR)/examples/*/*.rs
 LIB_FILE              = $(SRC_DIR)/gfx/lib.rs
@@ -67,13 +67,13 @@ comm: libdir
 device: libdir comm
 	$(RUSTC) $(LIB_INCLUDE_FLAGS) --out-dir=$(LIB_DIR) $(DEVICE_CFG) -O $(DEVICE_FILE)
 
-platform: libdir device
-	$(RUSTC) $(LIB_INCLUDE_FLAGS) --out-dir=$(LIB_DIR) $(LIB_CFG) -O $(PLATFORM_FILE)
+glfw_platform: libdir device
+	$(RUSTC) $(LIB_INCLUDE_FLAGS) --out-dir=$(LIB_DIR) $(LIB_CFG) -O $(GLFW_PLATFORM_FILE)
 
 render: libdir device comm
 	$(RUSTC) $(LIB_INCLUDE_FLAGS) --out-dir=$(LIB_DIR) $(LIB_CFG) -O $(RENDER_FILE)
 
-lib: libdir device platform render
+lib: libdir device glfw_platform render
 	$(RUSTC) $(LIB_INCLUDE_FLAGS) --out-dir=$(LIB_DIR) $(LIB_CFG) -O $(LIB_FILE)
 
 doc:
@@ -101,6 +101,7 @@ clean:
 	submodule-update \
 	deps \
 	device \
+	glfw_platform \
 	lib \
 	doc \
 	examples \

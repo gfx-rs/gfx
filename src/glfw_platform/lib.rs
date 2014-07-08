@@ -12,12 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![crate_name = "glfw_platform"]
+#![comment = "A lightweight graphics device manager for Rust"]
+#![license = "ASL2"]
+#![crate_type = "lib"]
+
+#![feature(macro_rules, phase)]
+
 extern crate glfw;
+#[phase(plugin, link)]
+extern crate log;
+extern crate libc;
 
-use libc;
+extern crate device;
 
-use self::glfw::Context;
-use device;
+use glfw::Context;
 
 struct Wrap<'a>(&'a glfw::Glfw);
 
@@ -32,20 +41,19 @@ impl<'a> device::GlProvider for Wrap<'a> {
     }
 }
 
-
-pub struct GlfwGraphicsContext<C> {
+pub struct GlfwPlatform<C> {
     pub context: C,
 }
 
-impl<C: Context> GlfwGraphicsContext<C> {
+impl<C: Context> GlfwPlatform<C> {
     #[allow(visible_private_types)]
-    pub fn new<'a>(context: C, provider: &'a glfw::Glfw) -> (GlfwGraphicsContext<C>, Wrap<'a>)  {
+    pub fn new<'a>(context: C, provider: &'a glfw::Glfw) -> (GlfwPlatform<C>, Wrap<'a>)  {
         context.make_current();
-        (GlfwGraphicsContext { context: context }, Wrap(provider))
+        (GlfwPlatform { context: context }, Wrap(provider))
     }
 }
 
-impl<C: Context> device::GraphicsContext<device::GlBackEnd> for GlfwGraphicsContext<C> {
+impl<C: Context> device::GraphicsContext<device::GlBackEnd> for GlfwPlatform<C> {
     fn make_current(&self) {
         self.context.make_current();
     }
