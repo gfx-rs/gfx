@@ -82,7 +82,8 @@ impl Renderer {
         device_tx.send(device::CallNewFrameBuffer);
         Future::from_fn(proc() {
             let array_buffer = match device_rx.recv() {
-                device::ReplyNewArrayBuffer(array_buffer) => array_buffer,
+                // TODO: Find better way to handle a unsupported array buffer
+                device::ReplyNewArrayBuffer(array_buffer) => array_buffer.unwrap_or(0),
                 _ => fail!("invalid device reply for CallNewArrayBuffer"),
             };
             let frame_buffer = match device_rx.recv() {

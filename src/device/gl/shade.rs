@@ -17,7 +17,6 @@ use super::gl;
 use std::cell::Cell;
 use std::str::raw;
 
-
 pub fn get_model() -> s::ShaderModel {
     let bytes = gl::GetString(gl::SHADING_LANGUAGE_VERSION);
     let full = unsafe {
@@ -196,8 +195,13 @@ fn query_attributes(prog: super::Program) -> Vec<s::Attribute> {
     }).collect()
 }
 
-fn query_blocks(prog: super::Program) -> Vec<s::BlockVar> {
-    let num = get_program_iv(prog, gl::ACTIVE_UNIFORM_BLOCKS);
+fn query_blocks(caps: &super::super::Capabilities, prog: super::Program) -> Vec<s::BlockVar> {
+    let num = if caps.uniform_block_supported {
+        get_program_iv(prog, gl::ACTIVE_UNIFORM_BLOCKS)
+    } else {
+        error!("Uniform blocks are not supported, ignored");
+        0
+    };
     range(0, num as gl::types::GLuint).map(|i| {
         let mut size = 0;
         let mut tmp = 0;
@@ -286,7 +290,7 @@ fn query_parameters(prog: super::Program) -> (Vec<s::UniformVar>, Vec<s::Sampler
     (uniforms, textures)
 }
 
-pub fn create_program(shaders: &[super::Shader])
+pub fn create_program(caps: &super::super::Capabilities, shaders: &[super::Shader])
         -> (Result<s::ProgramMeta, ()>, Option<String>) {
     let name = gl::CreateProgram();
     for &sh in shaders.iter() {
@@ -317,7 +321,7 @@ pub fn create_program(shaders: &[super::Shader])
             name: name,
             attributes: query_attributes(name),
             uniforms: uniforms,
-            blocks: query_blocks(name),
+            blocks: query_blocks(caps, name),
             textures: textures,
         };
         Ok(meta)

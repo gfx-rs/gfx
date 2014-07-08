@@ -41,6 +41,8 @@ pub struct Capabilities {
     max_draw_buffers : uint,
     max_texture_size : uint,
     max_vertex_attributes: uint,
+    uniform_block_supported: bool,
+    array_buffer_supported: bool,
 }
 
 pub type VertexCount = u16;
@@ -87,7 +89,7 @@ pub enum Request {
 #[deriving(Show)]
 pub enum Reply {
     ReplyNewBuffer(dev::Buffer),
-    ReplyNewArrayBuffer(dev::ArrayBuffer),
+    ReplyNewArrayBuffer(Result<dev::ArrayBuffer, ()>),
     ReplyNewShader(Result<dev::Shader, shade::CreateShaderError>),
     ReplyNewProgram(Result<shade::ProgramMeta, ()>),
     ReplyNewFrameBuffer(dev::FrameBuffer),
@@ -98,7 +100,7 @@ pub trait ApiBackEnd {
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
     // calls
     fn create_buffer(&mut self) -> dev::Buffer;
-    fn create_array_buffer(&mut self) -> dev::ArrayBuffer;
+    fn create_array_buffer(&mut self) -> Result<dev::ArrayBuffer, ()>;
     fn create_shader(&mut self, shade::Stage, code: shade::ShaderSource) -> Result<dev::Shader, shade::CreateShaderError>;
     fn create_program(&mut self, shaders: &[dev::Shader]) -> Result<shade::ProgramMeta, ()>;
     fn create_frame_buffer(&mut self) -> dev::FrameBuffer;
