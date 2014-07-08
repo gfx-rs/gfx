@@ -46,14 +46,11 @@ unsafe fn get_static_string(name: gl::types::GLenum) -> &'static str {
     str::raw::c_str_to_static_slice(ptr)
 }
 
-#[deriving(Eq, PartialEq)]
-pub enum Version {
-    Version(uint, uint, Option<uint>, &'static str),
-    VersionUnknown(&'static str),
-}
+#[deriving(Eq, PartialEq, Ord, PartialOrd)]
+pub struct Version(uint, uint, Option<uint>, &'static str);
 
 impl Version {
-    fn parse(src: &'static str) -> Version {
+    fn parse(src: &'static str) -> Result<Version, &'static str> {
         let (version, vendor_info) = src.find(' ').map_or((src, ""), |i| {
             (src.slice_to(i), src.slice_from(i + 1))
         });
@@ -66,13 +63,9 @@ impl Version {
 
         match (major, minor, revision, tail) {
             (Some(major), Some(minor), revision, None) =>
-                Version(major, minor, revision, vendor_info),
-            _ => VersionUnknown(src),
+                Ok(Version(major, minor, revision, vendor_info)),
+            _ => Err(src),
         }
-    }
-
-    pub fn is_unknown(&self) -> bool {
-        match *self { VersionUnknown(_) => true, _ => false }
     }
 }
 
@@ -87,8 +80,6 @@ impl fmt::Show for Version {
                 write!(f, "Version({}.{}.{}, {})", major, minor, revision, vendor_info),
             Version(major, minor, None, vendor_info) =>
                 write!(f, "Version({}.{}, {})", major, minor, vendor_info),
-            VersionUnknown(data) =>
-                write!(f, "VersionUnknown({})", data),
         }
     }
 }
@@ -104,18 +95,30 @@ pub struct Info {
 
 impl Info {
     fn new() -> Info {
-        let num_exts = get_uint(gl::NUM_EXTENSIONS) as gl::types::GLuint;
         let info = unsafe {
-            Info {
-                vendor: get_static_string(gl::VENDOR),
-                renderer: get_static_string(gl::RENDERER),
-                version: Version::parse(get_static_string(gl::VERSION)),
-                shading_language: Version::parse(get_static_string(gl::SHADING_LANGUAGE_VERSION)),
-                extensions: range(0, num_exts).map(|i| {
+            let vendor = get_static_string(gl::VENDOR);
+            let renderer = get_static_string(gl::RENDERER);
+            let version = Version::parse(get_static_string(gl::VERSION)).unwrap();
+            let shading_language = Version::parse(get_static_string(gl::SHADING_LANGUAGE_VERSION)).unwrap();
+            let extensions = if version >= Version(3, 2, None, "") {
+                let num_exts = get_uint(gl::NUM_EXTENSIONS) as gl::types::GLuint;
+                range(0, num_exts).map(|i| {
                     str::raw::c_str_to_static_slice(
                         gl::GetStringi(gl::EXTENSIONS, i) as *const i8,
                     )
-                }).collect(),
+                }).collect()
+            } else {
+                // Fallback
+                let bytes = gl::GetString(gl::EXTENSIONS);
+                str::raw::c_str_to_static_slice(bytes as *const i8)
+                    .split(' ').collect()
+            };
+            Info {
+                vendor: vendor,
+                renderer: renderer,
+                version: version,
+                shading_language: shading_language,
+                extensions: extensions,
             }
         };
         info!("Vendor: {}", info.vendor);
