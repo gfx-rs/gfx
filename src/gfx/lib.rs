@@ -23,7 +23,8 @@
 extern crate libc;
 
 extern crate device;
-extern crate platform;
+#[cfg(glfw)]
+extern crate glfw_platform;
 extern crate render;
 
 use std::sync::Future;
@@ -43,7 +44,7 @@ pub use device::target::{PlaneEmpty, PlaneSurface, PlaneTexture, PlaneTextureLay
 pub use device::{Device, GlBackEnd, GlProvider, GraphicsContext, InitError, QueueSize};
 pub use device::shade::{UniformValue, ValueI32, ValueF32, ValueI32Vec, ValueF32Vec, ValueF32Matrix};
 pub use device::shade::{ShaderSource, StaticBytes, NOT_PROVIDED};
-#[cfg(glfw)] pub use GlfwPlatform = platform::Glfw;
+#[cfg(glfw)] pub use glfw_platform::GlfwPlatform;
 
 #[allow(visible_private_types)]
 pub fn start<C: GraphicsContext<GlBackEnd>, P: GlProvider>(graphics_context: C, provider: P, queue_size: QueueSize)
