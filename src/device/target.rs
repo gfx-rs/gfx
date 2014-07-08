@@ -21,6 +21,27 @@ pub type Stencil = u8;
 
 pub struct Color(pub [f32, ..4]);
 
+impl Color {
+    pub fn new() -> Color {
+        Color([0.0, 0.0, 0.0, 0.0])
+    }
+}
+
+impl Clone for Color {
+    fn clone(&self) -> Color {
+        let Color(ref x) = *self;
+        Color([x[0], x[1], x[2], x[3]])
+    }
+}
+
+impl PartialEq for Color {
+    fn eq(&self, other: &Color) -> bool {
+        let Color(ref x) = *self;
+        let Color(ref y) = *other;
+        x[0] == y[0] && x[1] == y[1] && x[2] == y[2] && x[3] == y[3]
+    }
+}
+
 impl fmt::Show for Color {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let Color([r,g,b,a]) = *self;

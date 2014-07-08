@@ -38,6 +38,7 @@ pub type EnvirHandle = uint;
 
 pub mod envir;
 pub mod mesh;
+pub mod rast;
 pub mod target;
 
 /// Temporary cache system before we get the handle manager
@@ -118,7 +119,12 @@ impl Renderer {
         self.device_tx.send(device::CastClear(data));
     }
 
-    pub fn draw(&mut self, mesh: &mesh::Mesh, slice: mesh::Slice, frame: target::Frame, program_handle: ProgramHandle, env_handle: EnvirHandle) {
+    pub fn draw(&mut self, mesh: &mesh::Mesh, slice: mesh::Slice, frame: target::Frame,
+            program_handle: ProgramHandle, env_handle: EnvirHandle, state: rast::DrawState) {
+        // bind state
+        self.device_tx.send(device::CastPrimitiveState(state.primitive));
+        self.device_tx.send(device::CastDepthState(state.depth));
+        self.device_tx.send(device::CastBlendState(state.blend));
         // bind output frame
         self.bind_frame(&frame);
         // bind shaders

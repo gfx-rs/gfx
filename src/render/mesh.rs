@@ -45,9 +45,9 @@ pub enum PolygonType {
 /// Mesh descriptor, as a collection of attributes
 #[deriving(Clone, Show)]
 pub struct Mesh {
-    pub poly_type       : PolygonType,
-    pub num_vertices    : VertexCount,
-    pub attributes      : Vec<Attribute>,
+    pub poly_type: PolygonType,
+    pub num_vertices: VertexCount,
+    pub attributes: Vec<Attribute>,
 }
 
 impl Mesh {

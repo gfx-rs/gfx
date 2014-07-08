@@ -74,8 +74,9 @@ fn main() {
         let mut env = gfx::Environment::new();
         env.add_uniform("color", gfx::ValueF32Vec([0.1, 0.1, 0.1, 0.1]));
         let env = renderer.create_environment(env);
+        let state = gfx::DrawState::new();
         let mesh = {
-            let data = vec![-0.0f32, 0.5, 0.5, -0.5, -0.5, -0.5];
+            let data = vec![-0.5f32, -0.5, 0.5, -0.5, 0.0, 0.5];
             let buf = renderer.create_vertex_buffer(data);
             gfx::Constructor::new(buf).
                 add("a_Pos", 2, "f32").
@@ -88,7 +89,7 @@ fn main() {
                 stencil: None,
             };
             renderer.clear(cdata, frame);
-            renderer.draw(&mesh, gfx::VertexSlice(0, 3), frame, program, env);
+            renderer.draw(&mesh, gfx::VertexSlice(0, 3), frame, program, env, state);
             renderer.end_frame();
         }
     });
