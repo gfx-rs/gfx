@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![crate_id = "github.com/bjz/gfx-rs#platform:0.1"]
+#![crate_name = "platform"]
 #![comment = "A lightweight graphics device manager for Rust"]
 #![license = "ASL2"]
 #![crate_type = "lib"]
