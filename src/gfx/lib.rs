@@ -44,7 +44,12 @@ pub use device::target::{PlaneEmpty, PlaneSurface, PlaneTexture, PlaneTextureLay
 pub use device::{Device, GlBackEnd, GlProvider, GraphicsContext, InitError, QueueSize};
 pub use device::shade::{UniformValue, ValueI32, ValueF32, ValueI32Vec, ValueF32Vec, ValueF32Matrix};
 pub use device::shade::{ShaderSource, StaticBytes, NOT_PROVIDED};
-#[cfg(glfw)] pub use glfw_platform::GlfwPlatform;
+#[cfg(glfw)]
+pub mod glfw {
+    pub use Platform = glfw_platform::GlfwPlatform;
+    pub use glfw_platform::create_window;
+    pub use glfw_platform::create_window_default;
+}
 
 #[allow(visible_private_types)]
 pub fn start<C: GraphicsContext<GlBackEnd>, P: GlProvider>(graphics_context: C, provider: P, queue_size: QueueSize)

@@ -62,3 +62,78 @@ impl<C: Context> device::GraphicsContext<device::GlBackEnd> for GlfwPlatform<C> 
         self.context.swap_buffers();
     }
 }
+
+pub fn create_window<'glfw, 'title, 'monitor, 'setup>(
+    glfw: &'glfw glfw::Glfw,
+    width: u32,
+    height: u32,
+    title: &'title str,
+    mode: glfw::WindowMode<'monitor>,
+    preferred_setup: |&glfw::Glfw|:'setup,
+) -> CreateWindow<'glfw, 'title, 'monitor, 'setup> {
+    CreateWindow {
+        glfw: glfw,
+        args: (width, height, title, mode),
+        setups: vec![preferred_setup],
+        finally: None,
+    }
+}
+
+pub fn create_window_default(
+    glfw: &glfw::Glfw,
+    width: u32,
+    height: u32,
+    title: &str,
+    mode: glfw::WindowMode
+) -> Option<(glfw::Window, Receiver<(f64, glfw::WindowEvent)>)> {
+    create_window(glfw, width, height, title, mode, |glfw| {
+        info!("[glfw_platform] Trying to initialize with OpenGL 3.2 core");
+        glfw.default_window_hints();
+        glfw.window_hint(glfw::ContextVersion(3, 2));
+        glfw.window_hint(glfw::OpenglForwardCompat(true));
+        glfw.window_hint(glfw::OpenglProfile(glfw::OpenGlCoreProfile));
+    })
+    .fallback(|glfw| {
+        info!("[glfw_platform] Trying to initialize with OpenGL 2.1");
+        glfw.default_window_hints();
+        glfw.window_hint(glfw::ContextVersion(2, 1));
+    })
+    .apply()
+}
+
+pub struct CreateWindow<'glfw, 'title, 'monitor, 'setup> {
+    glfw: &'glfw glfw::Glfw,
+    args: (u32, u32, &'title str, glfw::WindowMode<'monitor>),
+    setups: Vec<|&glfw::Glfw|:'setup>,
+    finally: Option<|&glfw::Glfw|:'setup>,
+}
+
+impl<'glfw, 'title, 'monitor, 'setup> CreateWindow<'glfw, 'title, 'monitor, 'setup> {
+    pub fn fallback(mut self, f: |&glfw::Glfw|:'setup)
+    -> CreateWindow<'glfw, 'title, 'monitor, 'setup> {
+        self.setups.push(f);
+        self
+    }
+    pub fn apply(self) -> Option<(glfw::Window, Receiver<(f64, glfw::WindowEvent)>)> {
+        let CreateWindow {
+            glfw,
+            mut setups,
+            finally,
+            args: (width, height, title, mode),
+        } = self;
+
+        glfw.set_error_callback::<()>(None);
+        for setup in setups.mut_iter() {
+            (*setup)(glfw);
+            let r = glfw.create_window(width, height, title, mode);
+            if r.is_some() {
+                match finally {
+                    Some(f) => f(glfw),
+                    None => (),
+                }
+                return r;
+            }
+        }
+        None
+    }
+}
