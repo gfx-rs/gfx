@@ -79,7 +79,7 @@ pub fn create_window<'glfw, 'title, 'monitor, 'setup>(
     }
 }
 
-pub fn create_window_default(
+pub fn create_default_window(
     glfw: &glfw::Glfw,
     width: u32,
     height: u32,

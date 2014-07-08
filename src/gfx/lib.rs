@@ -48,7 +48,7 @@ pub use device::shade::{ShaderSource, StaticBytes, NOT_PROVIDED};
 pub mod glfw {
     pub use Platform = glfw_platform::GlfwPlatform;
     pub use glfw_platform::create_window;
-    pub use glfw_platform::create_window_default;
+    pub use glfw_platform::create_default_window;
 }
 
 #[allow(visible_private_types)]
