@@ -18,6 +18,7 @@ extern crate libc;
 use log;
 use std;
 use a = super::attrib;
+use std::fmt;
 use std::str;
 use std::collections::HashSet;
 
@@ -39,47 +40,120 @@ fn get_uint(name: gl::types::GLenum) -> uint {
     value as uint
 }
 
-struct Extensions {
-    supported: HashSet<&'static str>,
+unsafe fn get_static_string(name: gl::types::GLenum) -> &'static str {
+    let ptr = gl::GetString(name) as *const i8;
+    debug_assert!(!ptr.is_null());
+    str::raw::c_str_to_static_slice(ptr)
 }
 
-impl Extensions {
-    fn new() -> Extensions {
-        let num_exts = get_uint(gl::NUM_EXTENSIONS) as gl::types::GLuint;
-        Extensions {
-            supported: range(0, num_exts).map(|i| unsafe {
-                str::raw::c_str_to_static_slice(
-                    gl::GetStringi(gl::EXTENSIONS, i) as *const i8,
-                )
-            }).inspect(|s| info!("Loaded OpenGL extension: {}", *s)).collect(),
+#[deriving(Eq, PartialEq)]
+pub enum Version {
+    Version(uint, uint, Option<uint>, &'static str),
+    VersionUnknown(&'static str),
+}
+
+impl Version {
+    fn parse(src: &'static str) -> Version {
+        let (version, vendor_info) = src.find(' ').map_or((src, ""), |i| {
+            (src.slice_to(i), src.slice_from(i + 1))
+        });
+
+        let mut it = version.split('.');
+        let major = it.next().and_then(|x| from_str(x));
+        let minor = it.next().and_then(|x| from_str(x));
+        let revision = it.next().and_then(|x| from_str(x));
+        let tail = it.next();
+
+        match (major, minor, revision, tail) {
+            (Some(major), Some(minor), revision, None) =>
+                Version(major, minor, revision, vendor_info),
+            _ => VersionUnknown(src),
         }
     }
 
-    fn is_supported(&self, s: &str) -> bool {
-        self.supported.contains_equiv(&s)
+    pub fn is_unknown(&self) -> bool {
+        match *self { VersionUnknown(_) => true, _ => false }
+    }
+}
+
+impl fmt::Show for Version {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Version(major, minor, Some(revision), "") =>
+                write!(f, "Version({}.{}.{})", major, minor, revision),
+            Version(major, minor, None, "") =>
+                write!(f, "Version({}.{})", major, minor),
+            Version(major, minor, Some(revision), vendor_info) =>
+                write!(f, "Version({}.{}.{}, {})", major, minor, revision, vendor_info),
+            Version(major, minor, None, vendor_info) =>
+                write!(f, "Version({}.{}, {})", major, minor, vendor_info),
+            VersionUnknown(data) =>
+                write!(f, "VersionUnknown({})", data),
+        }
+    }
+}
+
+#[deriving(Show)]
+pub struct Info {
+    pub vendor: &'static str,
+    pub renderer: &'static str,
+    pub version: Version,
+    pub shading_language: Version,
+    pub extensions: HashSet<&'static str>,
+}
+
+impl Info {
+    fn new() -> Info {
+        let num_exts = get_uint(gl::NUM_EXTENSIONS) as gl::types::GLuint;
+        let info = unsafe {
+            Info {
+                vendor: get_static_string(gl::VENDOR),
+                renderer: get_static_string(gl::RENDERER),
+                version: Version::parse(get_static_string(gl::VERSION)),
+                shading_language: Version::parse(get_static_string(gl::SHADING_LANGUAGE_VERSION)),
+                extensions: range(0, num_exts).map(|i| {
+                    str::raw::c_str_to_static_slice(
+                        gl::GetStringi(gl::EXTENSIONS, i) as *const i8,
+                    )
+                }).collect(),
+            }
+        };
+        info!("Vendor: {}", info.vendor);
+        info!("Renderer: {}", info.renderer);
+        info!("Version: {}", info.version);
+        info!("Shading Language: {}", info.shading_language);
+        info!("Loaded Extensions:")
+        for extension in info.extensions.iter() {
+            info!("- {}", *extension);
+        }
+        info
+    }
+
+    pub fn is_extension_supported(&self, s: &str) -> bool {
+        self.extensions.contains_equiv(&s)
     }
 }
 
 pub struct GlBackEnd {
     caps: super::Capabilities,
-    extensions: Extensions,
+    info: Info,
 }
 
 impl GlBackEnd {
     pub fn new(provider: &super::GlProvider) -> GlBackEnd {
         gl::load_with(|s| provider.get_proc_address(s));
-        let exs = Extensions::new();
+        let info = Info::new();
         let caps = super::Capabilities {
             shader_model: shade::get_model(),
             max_draw_buffers: get_uint(gl::MAX_DRAW_BUFFERS),
             max_texture_size: get_uint(gl::MAX_TEXTURE_SIZE),
             max_vertex_attributes: get_uint(gl::MAX_VERTEX_ATTRIBS),
-            uniform_block_supported: exs.is_supported("GL_ARB_uniform_buffer_object"),
-            array_buffer_supported: exs.is_supported("GL_ARB_vertex_array_object"),
+            uniform_block_supported: info.is_extension_supported("GL_ARB_uniform_buffer_object"),
+            array_buffer_supported: info.is_extension_supported("GL_ARB_vertex_array_object"),
         };
         GlBackEnd {
             caps: caps,
-            extensions: exs,
+            info: info,
         }
     }
 
@@ -88,8 +162,8 @@ impl GlBackEnd {
         debug_assert_eq!(gl::GetError(), gl::NO_ERROR);
     }
 
-    pub fn is_extension_supported(&self, s: &str) -> bool {
-        self.extensions.is_supported(s)
+    pub fn get_info<'a>(&'a self) -> &'a Info {
+        &self.info
     }
 }
 
