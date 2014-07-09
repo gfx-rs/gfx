@@ -48,34 +48,19 @@ fn start(argc: int, argv: *const *const u8) -> int {
      native::start(argc, argv, main)
 }
 
-#[cfg(not(target_os="macos"))]
-fn set_hints(glfw: &glfw::Glfw) {
-    glfw.window_hint(glfw::ContextVersion(2, 1));
-}
-
-// OS X doesn't support VAOs in 2.1 contexts
-#[cfg(target_os="macos")]
-fn set_hints(glfw: &glfw::Glfw) {
-    glfw.window_hint(glfw::ContextVersion(3, 2));
-    glfw.window_hint(glfw::OpenglForwardCompat(true));
-    glfw.window_hint(glfw::OpenglProfile(glfw::OpenGlCoreProfile));
-}
-
 fn main() {
     let glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
-    set_hints(&glfw);
-
-    let (mut window, events) = glfw
-        .create_window(300, 300, "Hello this is window", glfw::Windowed)
+    let (mut window, events) =
+        gfx::glfw::create_default_window(&glfw, 300, 300, "Hello this is window", glfw::Windowed)
         .expect("Failed to create GLFW window.");
 
+    glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
     window.set_key_polling(true);
-    println!("{}", window.get_context_version());
 
     // spawn render task
     let (renderer, mut device) = {
-        let (platform, provider) = gfx::GlfwPlatform::new(window.render_context(), &glfw);
+        let (platform, provider) = gfx::glfw::Platform::new(window.render_context(), &glfw);
         gfx::start(platform, provider, 1).unwrap()
     };
 
