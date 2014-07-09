@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt;
+use std::{default, fmt};
 
 pub type TextureLayer = u16;
 pub type TextureLevel = u8;
@@ -46,6 +46,12 @@ impl fmt::Show for Color {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let Color([r,g,b,a]) = *self;
         write!(f, "Color({}, {}, {}, {})", r, g, b, a)
+    }
+}
+
+impl default::Default for Color {
+    fn default() -> Color {
+        Color([0.0, 0.0, 0.0, 0.0])
     }
 }
 

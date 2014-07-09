@@ -87,9 +87,9 @@ fn map_operation(op: r::StencilOp) -> gl::types::GLenum {
         r::OpKeep          => gl::KEEP,
         r::OpZero          => gl::ZERO,
         r::OpReplace       => gl::REPLACE,
-        r::OpIncrement     => gl::INCR,
+        r::OpIncrementClamp=> gl::INCR,
         r::OpIncrementWrap => gl::INCR_WRAP,
-        r::OpDecrement     => gl::DECR,
+        r::OpDecrementClamp=> gl::DECR,
         r::OpDecrementWrap => gl::DECR_WRAP,
         r::OpInvert        => gl::INVERT,
     }

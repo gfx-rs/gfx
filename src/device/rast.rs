@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::default::Default;
 use StencilValue = super::target::Stencil;
 
 #[deriving(Clone, PartialEq, Show)]
@@ -63,6 +64,16 @@ impl Primitive {
     }
 }
 
+impl Default for Primitive {
+    fn default() -> Primitive {
+        Primitive {
+            front_face: Ccw,
+            method: Fill(CullNothing),
+            offset: NoOffset,
+        }
+    }
+}
+
 
 #[deriving(Clone, PartialEq, Show)]
 pub enum LessFlag {
@@ -90,9 +101,9 @@ pub enum StencilOp {
     OpKeep,
     OpZero,
     OpReplace,
-    OpIncrement,
+    OpIncrementClamp,
     OpIncrementWrap,
-    OpDecrement,
+    OpDecrementClamp,
     OpDecrementWrap,
     OpInvert,
 }
@@ -108,6 +119,20 @@ pub struct StencilSide {
     pub op_pass: StencilOp,
 }
 
+impl Default for StencilSide {
+    fn default() -> StencilSide {
+        StencilSide {
+            fun: Comparison(Less, Equal, Greater),
+            value: 0,
+            mask_read: -1,
+            mask_write: -1,
+            op_fail: OpKeep,
+            op_depth_fail: OpKeep,
+            op_pass: OpKeep,
+        }
+    }
+}
+
 #[deriving(Clone, PartialEq, Show)]
 pub struct Stencil {
     pub front: StencilSide,
@@ -118,6 +143,15 @@ pub struct Stencil {
 pub struct Depth {
     pub fun: Comparison,
     pub write: bool,
+}
+
+impl Default for Depth {
+    fn default() -> Depth {
+        Depth {
+            fun: Comparison(Less, Equal, Greater),
+            write: false,
+        }
+    }
 }
 
 #[deriving(Clone, PartialEq, Show)]
@@ -157,9 +191,29 @@ pub struct BlendChannel {
     pub destination: Factor,
 }
 
+impl Default for BlendChannel {
+    fn default() -> BlendChannel {
+        BlendChannel {
+            equation: FuncAdd,
+            source: Factor(Inverse, Zero),
+            destination: Factor(Normal, Zero),
+        }
+    }
+}
+
 #[deriving(Clone, PartialEq, Show)]
 pub struct Blend {
     pub color: BlendChannel,
     pub alpha: BlendChannel,
     pub value: super::target::Color,
+}
+
+impl Default for Blend {
+    fn default() -> Blend {
+        Blend {
+            color: Default::default(),
+            alpha: Default::default(),
+            value: Default::default(),
+        }
+    }
 }
