@@ -41,19 +41,19 @@ impl<'a> device::GlProvider for Wrap<'a> {
     }
 }
 
-pub struct GlfwPlatform<C> {
+pub struct Platform<C> {
     pub context: C,
 }
 
-impl<C: Context> GlfwPlatform<C> {
+impl<C: Context> Platform<C> {
     #[allow(visible_private_types)]
-    pub fn new<'a>(context: C, provider: &'a glfw::Glfw) -> (GlfwPlatform<C>, Wrap<'a>)  {
+    pub fn new<'a>(context: C, provider: &'a glfw::Glfw) -> (Platform<C>, Wrap<'a>)  {
         context.make_current();
-        (GlfwPlatform { context: context }, Wrap(provider))
+        (Platform { context: context }, Wrap(provider))
     }
 }
 
-impl<C: Context> device::GraphicsContext<device::GlBackEnd> for GlfwPlatform<C> {
+impl<C: Context> device::GraphicsContext<device::GlBackEnd> for Platform<C> {
     fn make_current(&self) {
         self.context.make_current();
     }
