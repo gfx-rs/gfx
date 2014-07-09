@@ -93,7 +93,7 @@ pub fn create_default_window(
     .fallback([
         glfw::ContextVersion(2, 1),
     ])
-    .apply().map(|(window, events)| {
+    .init().map(|(window, events)| {
         info!("[glfw_platform] Initialized with context version {}", window.get_context_version());
         (window, events)
     })
@@ -111,7 +111,7 @@ impl<'glfw, 'title, 'monitor, 'hints> CreateWindow<'glfw, 'title, 'monitor, 'hin
         self.hints.push(f);
         self
     }
-    pub fn apply(self) -> Option<(glfw::Window, Receiver<(f64, glfw::WindowEvent)>)> {
+    pub fn init(self) -> Option<(glfw::Window, Receiver<(f64, glfw::WindowEvent)>)> {
         let CreateWindow {
             glfw,
             mut hints,
