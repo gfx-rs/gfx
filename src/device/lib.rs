@@ -82,7 +82,7 @@ pub enum Request {
     CastBindUniform(shade::Location, shade::UniformValue),
     //CastBindTexture(TextureSlot, dev::Texture, dev::Sampler),    //TODO
     CastPrimitiveState(rast::Primitive),
-    CastDepthState(Option<rast::Depth>),
+    CastDepthStencilState(Option<rast::Depth>, Option<rast::Stencil>, rast::CullMode),
     CastBlendState(Option<rast::Blend>),
     CastUpdateBuffer(dev::Buffer, Vec<f32>),
     CastDraw(VertexCount, VertexCount),
