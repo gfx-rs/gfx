@@ -63,19 +63,18 @@ impl<C: Context> device::GraphicsContext<device::GlBackEnd> for Platform<C> {
     }
 }
 
-pub fn create_window<'glfw, 'title, 'monitor, 'setup>(
+pub fn create_window<'glfw, 'title, 'monitor, 'hints>(
     glfw: &'glfw glfw::Glfw,
     width: u32,
     height: u32,
     title: &'title str,
     mode: glfw::WindowMode<'monitor>,
-    preferred_setup: |&glfw::Glfw|:'setup,
-) -> CreateWindow<'glfw, 'title, 'monitor, 'setup> {
+    preferred_setup: &'hints [glfw::WindowHint],
+) -> CreateWindow<'glfw, 'title, 'monitor, 'hints> {
     CreateWindow {
         glfw: glfw,
         args: (width, height, title, mode),
-        setups: vec![preferred_setup],
-        finally: None,
+        hints: vec![preferred_setup],
     }
 }
 
@@ -86,54 +85,47 @@ pub fn create_default_window(
     title: &str,
     mode: glfw::WindowMode
 ) -> Option<(glfw::Window, Receiver<(f64, glfw::WindowEvent)>)> {
-    create_window(glfw, width, height, title, mode, |glfw| {
-        info!("[glfw_platform] Trying to initialize with context version 3.2 core");
-        glfw.default_window_hints();
-        glfw.window_hint(glfw::ContextVersion(3, 2));
-        glfw.window_hint(glfw::OpenglForwardCompat(true));
-        glfw.window_hint(glfw::OpenglProfile(glfw::OpenGlCoreProfile));
-    })
-    .fallback(|glfw| {
-        info!("[glfw_platform] Trying to initialize with context version 2.1");
-        glfw.default_window_hints();
-        glfw.window_hint(glfw::ContextVersion(2, 1));
-    })
+    create_window(glfw, width, height, title, mode, [
+        glfw::ContextVersion(3, 2),
+        glfw::OpenglForwardCompat(true),
+        glfw::OpenglProfile(glfw::OpenGlCoreProfile),
+    ])
+    .fallback([
+        glfw::ContextVersion(2, 1),
+    ])
     .apply().map(|(window, events)| {
         info!("[glfw_platform] Initialized with context version {}", window.get_context_version());
         (window, events)
     })
 }
 
-pub struct CreateWindow<'glfw, 'title, 'monitor, 'setup> {
+pub struct CreateWindow<'glfw, 'title, 'monitor, 'hints> {
     glfw: &'glfw glfw::Glfw,
     args: (u32, u32, &'title str, glfw::WindowMode<'monitor>),
-    setups: Vec<|&glfw::Glfw|:'setup>,
-    finally: Option<|&glfw::Glfw|:'setup>,
+    hints: Vec<&'hints [glfw::WindowHint]>,
 }
 
-impl<'glfw, 'title, 'monitor, 'setup> CreateWindow<'glfw, 'title, 'monitor, 'setup> {
-    pub fn fallback(mut self, f: |&glfw::Glfw|:'setup)
-    -> CreateWindow<'glfw, 'title, 'monitor, 'setup> {
-        self.setups.push(f);
+impl<'glfw, 'title, 'monitor, 'hints> CreateWindow<'glfw, 'title, 'monitor, 'hints> {
+    pub fn fallback(mut self, f: &'hints [glfw::WindowHint])
+    -> CreateWindow<'glfw, 'title, 'monitor, 'hints> {
+        self.hints.push(f);
         self
     }
     pub fn apply(self) -> Option<(glfw::Window, Receiver<(f64, glfw::WindowEvent)>)> {
         let CreateWindow {
             glfw,
-            mut setups,
-            finally,
+            mut hints,
             args: (width, height, title, mode),
         } = self;
 
         glfw.set_error_callback::<()>(None);
-        for setup in setups.mut_iter() {
-            (*setup)(glfw);
+        for setup in hints.mut_iter() {
+            glfw.default_window_hints();
+            for hint in setup.iter() {
+                glfw.window_hint(*hint);
+            }
             let r = glfw.create_window(width, height, title, mode);
             if r.is_some() {
-                match finally {
-                    Some(f) => f(glfw),
-                    None => (),
-                }
                 return r;
             }
         }
