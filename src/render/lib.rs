@@ -123,7 +123,8 @@ impl Renderer {
             program_handle: ProgramHandle, env_handle: EnvirHandle, state: rast::DrawState) {
         // bind state
         self.device_tx.send(device::CastPrimitiveState(state.primitive));
-        self.device_tx.send(device::CastDepthState(state.depth));
+        self.device_tx.send(device::CastDepthStencilState(state.depth, state.stencil,
+            state.primitive.get_cull_mode()));
         self.device_tx.send(device::CastBlendState(state.blend));
         // bind output frame
         self.bind_frame(&frame);

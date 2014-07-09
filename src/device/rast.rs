@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use StencilValue = super::target::Stencil;
 
 #[deriving(Clone, PartialEq, Show)]
 pub enum FrontType {
@@ -53,6 +54,15 @@ pub struct Primitive {
     pub offset: OffsetType,
 }
 
+impl Primitive {
+    pub fn get_cull_mode(&self) -> CullMode {
+        match self.method {
+            Fill(mode) => mode,
+            _ => CullNothing,
+        }
+    }
+}
+
 
 #[deriving(Clone, PartialEq, Show)]
 pub enum LessFlag {
@@ -75,9 +85,34 @@ pub enum GreaterFlag {
 #[deriving(Clone, PartialEq, Show)]
 pub struct Comparison(pub LessFlag, pub EqualFlag, pub GreaterFlag);
 
-//TODO
 #[deriving(Clone, PartialEq, Show)]
-pub struct Stencil;
+pub enum StencilOp {
+    OpKeep,
+    OpZero,
+    OpReplace,
+    OpIncrement,
+    OpIncrementWrap,
+    OpDecrement,
+    OpDecrementWrap,
+    OpInvert,
+}
+
+#[deriving(Clone, PartialEq, Show)]
+pub struct StencilSide {
+    pub fun: Comparison,
+    pub value: StencilValue,
+    pub mask_read: StencilValue,
+    pub mask_write: StencilValue,
+    pub op_fail: StencilOp,
+    pub op_depth_fail: StencilOp,
+    pub op_pass: StencilOp,
+}
+
+#[deriving(Clone, PartialEq, Show)]
+pub struct Stencil {
+    pub front: StencilSide,
+    pub back: StencilSide,
+}
 
 #[deriving(Clone, PartialEq, Show)]
 pub struct Depth {

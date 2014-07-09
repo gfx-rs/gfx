@@ -82,6 +82,41 @@ pub fn bind_depth(depth: Option<r::Depth>) {
 }
 
 
+fn map_operation(op: r::StencilOp) -> gl::types::GLenum {
+    match op {
+        r::OpKeep          => gl::KEEP,
+        r::OpZero          => gl::ZERO,
+        r::OpReplace       => gl::REPLACE,
+        r::OpIncrement     => gl::INCR,
+        r::OpIncrementWrap => gl::INCR_WRAP,
+        r::OpDecrement     => gl::DECR,
+        r::OpDecrementWrap => gl::DECR_WRAP,
+        r::OpInvert        => gl::INVERT,
+    }
+}
+
+pub fn bind_stencil(stencil: Option<r::Stencil>, cull: r::CullMode) {
+    fn bind_side(face: gl::types::GLenum, side: r::StencilSide) {
+        gl::StencilFuncSeparate(face, map_comparison(side.fun),
+            side.value as gl::types::GLint, side.mask_read as gl::types::GLuint);
+        gl::StencilOpSeparate(face, map_operation(side.op_fail),
+            map_operation(side.op_depth_fail), map_operation(side.op_pass));
+    }
+    match stencil {
+        Some(s) => {
+            gl::Enable(gl::STENCIL_TEST);
+            if cull != r::CullFront {
+                bind_side(gl::FRONT, s.front);
+            }
+            if cull != r::CullBack {
+                bind_side(gl::BACK, s.back);
+            }
+        }
+        None => gl::Disable(gl::STENCIL_TEST),
+    }
+}
+
+
 fn map_equation(eq: r::Equation) -> gl::types::GLenum {
     match eq {
         r::FuncAdd    => gl::FUNC_ADD,

@@ -13,8 +13,9 @@
 // limitations under the License.
 
 use r = device::rast;
-use device::target::Color;
+use device::target::{Color, Stencil};
 
+/// An assembly of states that affect regular draw calls
 #[deriving(Clone, PartialEq, Show)]
 pub struct DrawState {
     pub primitive: r::Primitive,
@@ -29,6 +30,19 @@ pub enum BlendPreset {
     BlendAlpha,
 }
 
+fn map_comparison(cmp: &str) -> r::Comparison {
+    match cmp {
+        "!"  => r::Comparison(r::NoLess, r::NoEqual, r::NoGreater),
+        "<"  => r::Comparison(r::Less,   r::NoEqual, r::NoGreater),
+        "==" => r::Comparison(r::NoLess, r::Equal,   r::NoGreater),
+        "<=" => r::Comparison(r::Less,   r::Equal,   r::NoGreater),
+        ">"  => r::Comparison(r::NoLess, r::NoEqual, r::Greater),
+        "!=" => r::Comparison(r::Less,   r::NoEqual, r::Greater),
+        ">=" => r::Comparison(r::NoLess, r::Equal,   r::Greater),
+        "*"  => r::Comparison(r::Less,   r::Equal,   r::Greater),
+        _    => fail!("Unknown comparison function: {}", cmp),
+    }
+}
 
 impl DrawState {
     pub fn new() -> DrawState {
@@ -44,27 +58,34 @@ impl DrawState {
         }
     }
 
+    /// set the stencil test to a simple expression
+    pub fn stencil(mut self, fun: &str, value: Stencil) -> DrawState {
+        let side = r::StencilSide {
+            fun: map_comparison(fun),
+            value: value,
+            mask_read: -1,
+            mask_write: -1,
+            op_fail: r::OpKeep,
+            op_depth_fail: r::OpKeep,
+            op_pass: r::OpKeep,
+        };
+        self.stencil = Some(r::Stencil {
+            front: side,
+            back: side,
+        });
+        self
+    }
+
     /// set the depth test with the mask
     pub fn depth(mut self, fun: &str, write: bool) -> DrawState {
-        let cmp = match fun {
-            "!"  => r::Comparison(r::NoLess, r::NoEqual, r::NoGreater),
-            "<"  => r::Comparison(r::Less,   r::NoEqual, r::NoGreater),
-            "==" => r::Comparison(r::NoLess, r::Equal,   r::NoGreater),
-            "<=" => r::Comparison(r::Less,   r::Equal,   r::NoGreater),
-            ">"  => r::Comparison(r::NoLess, r::NoEqual, r::Greater),
-            "!=" => r::Comparison(r::Less,   r::NoEqual, r::Greater),
-            ">=" => r::Comparison(r::NoLess, r::Equal,   r::Greater),
-            "*"  => r::Comparison(r::Less,   r::Equal,   r::Greater),
-            _    => fail!("Unknown depth func: {}", fun)
-        };
         self.depth = Some(r::Depth {
-            fun: cmp,
+            fun: map_comparison(fun),
             write: write,
         });
         self
     }
 
-    /// set the blend mode
+    /// set the blend mode to one of the presets
     pub fn blend(mut self, preset: BlendPreset) -> DrawState {
         self.blend = Some(match preset {
             BlendAdditive => r::Blend {

@@ -352,7 +352,8 @@ impl super::ApiBackEnd for GlBackEnd {
             super::CastPrimitiveState(prim) => {
                 rast::bind_primitive(prim);
             },
-            super::CastDepthState(depth) => {
+            super::CastDepthStencilState(depth, stencil, cull) => {
+                rast::bind_stencil(stencil, cull);
                 rast::bind_depth(depth);
             },
             super::CastBlendState(blend) => {
