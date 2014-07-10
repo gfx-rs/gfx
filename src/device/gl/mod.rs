@@ -151,8 +151,10 @@ impl GlBackEnd {
             max_draw_buffers: get_uint(gl::MAX_DRAW_BUFFERS),
             max_texture_size: get_uint(gl::MAX_TEXTURE_SIZE),
             max_vertex_attributes: get_uint(gl::MAX_VERTEX_ATTRIBS),
-            uniform_block_supported: info.is_extension_supported("GL_ARB_uniform_buffer_object"),
-            array_buffer_supported: info.is_extension_supported("GL_ARB_vertex_array_object"),
+            uniform_block_supported: info.version >= Version(3, 1, None, "")
+                || info.is_extension_supported("GL_ARB_uniform_buffer_object"),
+            array_buffer_supported: info.version >= Version(3, 0, None, "")
+                || info.is_extension_supported("GL_ARB_vertex_array_object"),
         };
         GlBackEnd {
             caps: caps,
