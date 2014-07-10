@@ -62,6 +62,7 @@ pub enum BufferUsage {
 #[deriving(Show)]
 pub enum Request {
     // Requests that require a reply:
+    CallAck(uint),
     CallNewVertexBuffer(Vec<f32>),
     CallNewIndexBuffer(Vec<u16>),
     CallNewRawBuffer,
@@ -92,6 +93,7 @@ pub enum Request {
 
 #[deriving(Show)]
 pub enum Reply {
+    ReplyAck(uint),
     ReplyNewBuffer(dev::Buffer),
     ReplyNewArrayBuffer(Result<dev::ArrayBuffer, ()>),
     ReplyNewShader(Result<dev::Shader, shade::CreateShaderError>),
@@ -145,6 +147,7 @@ impl<T: ApiBackEnd, C: GraphicsContext<T>> Device<T, C> {
         // Get updates from the renderer and pass on results
         loop {
             match self.request_rx.recv_opt() {
+                Ok(CallAck(id)) => self.reply_tx.send(ReplyAck(id)),
                 Ok(CastSwapBuffers) => {
                     self.graphics_context.swap_buffers();
                     self.swap_ack.send(Ack);
