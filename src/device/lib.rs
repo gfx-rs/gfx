@@ -101,6 +101,7 @@ pub enum Reply {
 
 /// An interface for performing draw calls using a specific graphics API
 pub trait ApiBackEnd {
+    /// Returns the capabilities available to the specific API implementation
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
     // calls
     fn create_buffer(&mut self) -> dev::Buffer;
@@ -108,9 +109,9 @@ pub trait ApiBackEnd {
     fn create_shader(&mut self, shade::Stage, code: shade::ShaderSource) -> Result<dev::Shader, shade::CreateShaderError>;
     fn create_program(&mut self, shaders: &[dev::Shader]) -> Result<shade::ProgramMeta, ()>;
     fn create_frame_buffer(&mut self) -> dev::FrameBuffer;
-    // helpers
+    /// Update the information stored in a specific buffer
     fn update_buffer<T>(&mut self, dev::Buffer, data: &[T], BufferUsage);
-    // casts
+    /// Process a request from a `Device`
     fn process(&mut self, Request);
 }
 
@@ -128,6 +129,8 @@ pub struct Device<T, C> {
 }
 
 impl<T: ApiBackEnd, C: GraphicsContext<T>> Device<T, C> {
+    /// Signal to connected client that the device wants to close, and block
+    /// until it has disconnected.
     pub fn close(&self) {
         self.close.now()
     }

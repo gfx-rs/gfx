@@ -189,6 +189,7 @@ impl Info {
     }
 }
 
+/// An OpenGL back-end with GLSL shaders
 pub struct GlBackEnd {
     caps: super::Capabilities,
     info: Info,
@@ -280,7 +281,6 @@ impl super::ApiBackEnd for GlBackEnd {
         info!("\tCreated frame buffer {}", name);
         name
     }
-
 
     fn update_buffer<T>(&mut self, buffer: Buffer, data: &[T], usage: super::BufferUsage) {
         gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
