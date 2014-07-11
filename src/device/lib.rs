@@ -60,16 +60,16 @@ pub enum BufferUsage {
 }
 
 #[deriving(Show)]
-pub enum Request {
+pub enum Request<T> {
     // Requests that require a reply:
-    CallAck(uint),
-    CallNewVertexBuffer(Vec<f32>),
-    CallNewIndexBuffer(Vec<u16>),
-    CallNewRawBuffer,
-    CallNewArrayBuffer,
-    CallNewShader(shade::Stage, shade::ShaderSource),
-    CallNewProgram(Vec<dev::Shader>),
-    CallNewFrameBuffer,
+    CallAck(T),
+    CallNewVertexBuffer(T, Vec<f32>),
+    CallNewIndexBuffer(T, Vec<u16>),
+    CallNewRawBuffer(T),
+    CallNewArrayBuffer(T),
+    CallNewShader(T, shade::Stage, shade::ShaderSource),
+    CallNewProgram(T, Vec<dev::Shader>),
+    CallNewFrameBuffer(T),
     // Requests that don't expect a reply:
     CastClear(target::ClearData),
     CastBindProgram(dev::Program),
@@ -92,13 +92,13 @@ pub enum Request {
 }
 
 #[deriving(Show)]
-pub enum Reply {
-    ReplyAck(uint),
-    ReplyNewBuffer(dev::Buffer),
-    ReplyNewArrayBuffer(Result<dev::ArrayBuffer, ()>),
-    ReplyNewShader(Result<dev::Shader, shade::CreateShaderError>),
-    ReplyNewProgram(Result<shade::ProgramMeta, ()>),
-    ReplyNewFrameBuffer(dev::FrameBuffer),
+pub enum Reply<T> {
+    ReplyAck(T),
+    ReplyNewBuffer(T, dev::Buffer),
+    ReplyNewArrayBuffer(T, Result<dev::ArrayBuffer, ()>),
+    ReplyNewShader(T, Result<dev::Shader, shade::CreateShaderError>),
+    ReplyNewProgram(T, Result<shade::ProgramMeta, ()>),
+    ReplyNewFrameBuffer(T, dev::FrameBuffer),
 }
 
 /// An interface for performing draw calls using a specific graphics API
@@ -120,17 +120,17 @@ pub trait ApiBackEnd {
 pub struct Ack;
 
 /// An API-agnostic device that manages incoming draw calls
-pub struct Device<T, C> {
+pub struct Device<T, B, C> {
     no_share: marker::NoShare,
-    request_rx: Receiver<Request>,
-    reply_tx: Sender<Reply>,
+    request_rx: Receiver<Request<T>>,
+    reply_tx: Sender<Reply<T>>,
     graphics_context: C,
-    back_end: T,
+    back_end: B,
     swap_ack: Sender<Ack>,
     close: comm::Close,
 }
 
-impl<T: ApiBackEnd, C: GraphicsContext<T>> Device<T, C> {
+impl<T, B: ApiBackEnd, C: GraphicsContext<B>> Device<B, C> {
     /// Signal to connected client that the device wants to close, and block
     /// until it has disconnected.
     pub fn close(&self) {
@@ -147,41 +147,41 @@ impl<T: ApiBackEnd, C: GraphicsContext<T>> Device<T, C> {
         // Get updates from the renderer and pass on results
         loop {
             match self.request_rx.recv_opt() {
-                Ok(CallAck(id)) => self.reply_tx.send(ReplyAck(id)),
+                Ok(CallAck(token)) => self.reply_tx.send(ReplyAck(token)),
                 Ok(CastSwapBuffers) => {
                     self.graphics_context.swap_buffers();
                     self.swap_ack.send(Ack);
                     break;
                 },
-                Ok(CallNewVertexBuffer(data)) => {
+                Ok(CallNewVertexBuffer(token, data)) => {
                     let name = self.back_end.create_buffer();
                     self.back_end.update_buffer(name, data.as_slice(), UsageStatic);
-                    self.reply_tx.send(ReplyNewBuffer(name));
+                    self.reply_tx.send(ReplyNewBuffer(token, name));
                 },
-                Ok(CallNewIndexBuffer(data)) => {
+                Ok(CallNewIndexBuffer(token, data)) => {
                     let name = self.back_end.create_buffer();
                     self.back_end.update_buffer(name, data.as_slice(), UsageStatic);
-                    self.reply_tx.send(ReplyNewBuffer(name));
+                    self.reply_tx.send(ReplyNewBuffer(token, name));
                 },
-                Ok(CallNewRawBuffer) => {
+                Ok(CallNewRawBuffer(token)) => {
                     let name = self.back_end.create_buffer();
-                    self.reply_tx.send(ReplyNewBuffer(name));
+                    self.reply_tx.send(ReplyNewBuffer(token, name));
                 },
-                Ok(CallNewArrayBuffer) => {
+                Ok(CallNewArrayBuffer(token)) => {
                     let name = self.back_end.create_array_buffer();
-                    self.reply_tx.send(ReplyNewArrayBuffer(name));
+                    self.reply_tx.send(ReplyNewArrayBuffer(token, name));
                 },
-                Ok(CallNewShader(stage, code)) => {
+                Ok(CallNewShader(token, stage, code)) => {
                     let name = self.back_end.create_shader(stage, code);
-                    self.reply_tx.send(ReplyNewShader(name));
+                    self.reply_tx.send(ReplyNewShader(token, name));
                 },
-                Ok(CallNewProgram(code)) => {
+                Ok(CallNewProgram(token, code)) => {
                     let name = self.back_end.create_program(code.as_slice());
-                    self.reply_tx.send(ReplyNewProgram(name));
+                    self.reply_tx.send(ReplyNewProgram(token, name));
                 },
-                Ok(CallNewFrameBuffer) => {
+                Ok(CallNewFrameBuffer(token)) => {
                     let name = self.back_end.create_frame_buffer();
-                    self.reply_tx.send(ReplyNewFrameBuffer(name));
+                    self.reply_tx.send(ReplyNewFrameBuffer(token, name));
                 },
                 Ok(request) => self.back_end.process(request),
                 Err(()) => return,

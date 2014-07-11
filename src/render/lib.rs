@@ -44,6 +44,7 @@ pub mod target;
 
 
 pub type ResourceVec<R, E> = Vec<Option<Result<R, E>>>;
+pub type Token = uint;
 
 /// Storage for all loaded objects
 struct ResourceCache {
@@ -68,8 +69,8 @@ enum MeshError {
 
 
 pub struct Renderer {
-    device_tx: Sender<device::Request>,
-    device_rx: Receiver<device::Reply>,
+    device_tx: Sender<device::Request<T>>,
+    device_rx: Receiver<device::Reply<T>>,
     swap_ack: Receiver<device::Ack>,
     should_finish: comm::ShouldClose,
     /// a common VAO for mesh rendering
@@ -80,7 +81,7 @@ pub struct Renderer {
     default_frame_buffer: backend::FrameBuffer,
     /// cached meta-data for meshes and programs
     resource: ResourceCache,
-    ack_count: uint,
+    ack_count: Token,
     /// current state
     state: State,
 }
@@ -89,20 +90,20 @@ pub struct Renderer {
 impl Renderer {
     fn process(&mut self, reply: device::Reply) {
         match reply {
-            device::ReplyAck(id) => assert!(id != self.ack_count),
-            device::ReplyNewBuffer(buf) => {
+            device::ReplyAck(token) => assert!(token != self.ack_count),
+            device::ReplyNewBuffer(token, buf) => {
 
             },
-            device::ReplyNewArrayBuffer(result) => {
+            device::ReplyNewArrayBuffer(token, result) => {
 
             },
-            device::ReplyNewShader(result) => {
+            device::ReplyNewShader(token, result) => {
 
             },
-            device::ReplyNewProgram(result) => {
+            device::ReplyNewProgram(token, result) => {
 
             },
-            device::ReplyNewFrameBuffer(result) => {
+            device::ReplyNewFrameBuffer(token, result) => {
 
             },
         }        
@@ -149,16 +150,16 @@ impl Renderer {
 impl Renderer {
     pub fn new(device_tx: Sender<device::Request>, device_rx: Receiver<device::Reply>,
             swap_rx: Receiver<device::Ack>, should_finish: comm::ShouldClose) -> Future<Renderer> {
-        device_tx.send(device::CallNewArrayBuffer);
-        device_tx.send(device::CallNewFrameBuffer);
+        device_tx.send(device::CallNewArrayBuffer(0));
+        device_tx.send(device::CallNewFrameBuffer(0));
         Future::from_fn(proc() {
             let array_buffer = match device_rx.recv() {
                 // TODO: Find better way to handle a unsupported array buffer
-                device::ReplyNewArrayBuffer(array_buffer) => array_buffer.unwrap_or(0),
+                device::ReplyNewArrayBuffer(_, array_buffer) => array_buffer.unwrap_or(0),
                 _ => fail!("invalid device reply for CallNewArrayBuffer"),
             };
             let frame_buffer = match device_rx.recv() {
-                device::ReplyNewFrameBuffer(frame_buffer) => frame_buffer,
+                device::ReplyNewFrameBuffer(_, frame_buffer) => frame_buffer,
                 _ => fail!("invalid device reply for CallNewFrameBuffer"),
             };
             Renderer {
@@ -234,8 +235,8 @@ impl Renderer {
     }
 
     pub fn create_program(&mut self, vs_src: ShaderSource, fs_src: ShaderSource) -> ProgramHandle {
-        self.device_tx.send(device::CallNewShader(Vertex, vs_src));
-        self.device_tx.send(device::CallNewShader(Fragment, fs_src));
+        self.device_tx.send(device::CallNewShader(0, Vertex, vs_src));
+        self.device_tx.send(device::CallNewShader(0, Fragment, fs_src));
         let h_vs = match self.device_rx.recv() {
             device::ReplyNewShader(name) => name.unwrap_or(0),
             msg => fail!("invalid device reply for CallNewShader: {}", msg)
@@ -244,27 +245,31 @@ impl Renderer {
             device::ReplyNewShader(name) => name.unwrap_or(0),
             msg => fail!("invalid device reply for CallNewShader: {}", msg)
         };
-        self.device_tx.send(device::CallNewProgram(vec![h_vs, h_fs]));
+        let token = self.resource.programs.len();
+        self.device_tx.send(device::CallNewProgram(token, vec![h_vs, h_fs]));
         self.resource.programs.push(None);
-        self.resource.programs.len() - 1
+        token
     }
 
     pub fn create_vertex_buffer(&self, data: Vec<f32>) -> BufferHandle {
-        self.device_tx.send(device::CallNewVertexBuffer(data));
+        let token = self.resource.buffers.len();
+        self.device_tx.send(device::CallNewVertexBuffer(token, data));
         self.resource.buffers.push(None);
-        self.resource.buffers.len() - 1
+        token
     }
 
     pub fn create_index_buffer(&self, data: Vec<u16>) -> BufferHandle {
-        self.device_tx.send(device::CallNewIndexBuffer(data));
+        let token = self.resource.buffers.len();
+        self.device_tx.send(device::CallNewIndexBuffer(token, data));
         self.resource.buffers.push(None);
-        self.resource.buffers.len() - 1
+        token
     }
 
     pub fn create_raw_buffer(&self) -> BufferHandle {
-        self.device_tx.send(device::CallNewRawBuffer);
+        let token = self.resource.buffers.len();
+        self.device_tx.send(device::CallNewRawBuffer(token));
         self.resource.buffers.push(None);
-        self.resource.buffers.len() - 1
+        token
     }
 
     pub fn create_environment(&mut self, storage: envir::Storage) -> EnvirHandle {
