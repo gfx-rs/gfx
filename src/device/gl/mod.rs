@@ -40,31 +40,62 @@ fn get_uint(name: gl::types::GLenum) -> uint {
     value as uint
 }
 
-unsafe fn get_static_string(name: gl::types::GLenum) -> &'static str {
+/// Get a statically allocated string from the implementation using
+/// `glGetString`. Fails if it `GLenum` cannot be handled by the
+/// implementation's `gl::GetString` function.
+fn get_string(name: gl::types::GLenum) -> &'static str {
     let ptr = gl::GetString(name) as *const i8;
-    debug_assert!(!ptr.is_null());
-    str::raw::c_str_to_static_slice(ptr)
+    if !ptr.is_null() {
+        // This should be safe to mark as statically allocated because
+        // GlGetString only returns static strings.
+        unsafe { str::raw::c_str_to_static_slice(ptr) }
+    } else {
+        fail!("Invalid GLenum passed to `get_string`: {:x}", name)
+    }
 }
 
+pub type VersionMajor = uint;
+pub type VersionMinor = uint;
+pub type Revision = uint;
+pub type VendorDetails = &'static str;
+
+/// A version number for a specific component of an OpenGL implementation
 #[deriving(Eq, PartialEq, Ord, PartialOrd)]
-pub struct Version(uint, uint, Option<uint>, &'static str);
+pub struct Version(VersionMajor, VersionMinor, Option<Revision>, VendorDetails);
 
 impl Version {
+    /// According to the OpenGL spec, the version information is expected to
+    /// follow the following syntax:
+    ///
+    /// ~~~bnf
+    /// <major>       ::= <number>
+    /// <minor>       ::= <number>
+    /// <revision>    ::= <number>
+    /// <vendor-info> ::= <string>
+    /// <release>     ::= <major> "." <minor> ["." <release>]
+    /// <version>     ::= <release> [" " <vendor-info>]
+    /// ~~~
+    ///
+    /// Note that this function is intentionally lenient in regards to parsing,
+    /// and will try to recover at least the first two version numbers without
+    /// resulting in an `Err`.
     fn parse(src: &'static str) -> Result<Version, &'static str> {
-        let (version, vendor_info) = src.find(' ').map_or((src, ""), |i| {
-            (src.slice_to(i), src.slice_from(i + 1))
-        });
+        let (version, vendor_info) = match src.find(' ') {
+            Some(i) => (src.slice_to(i), src.slice_from(i + 1)),
+            None => (src, ""),
+        };
 
+        // TODO: make this even more lenient so that we can also accept
+        // `<major> "." <minor> [<???>]`
         let mut it = version.split('.');
-        let major = it.next().and_then(|x| from_str(x));
-        let minor = it.next().and_then(|x| from_str(x));
-        let revision = it.next().and_then(|x| from_str(x));
-        let tail = it.next();
+        let major = it.next().and_then(from_str);
+        let minor = it.next().and_then(from_str);
+        let revision = it.next().and_then(from_str);
 
-        match (major, minor, revision, tail) {
-            (Some(major), Some(minor), revision, None) =>
+        match (major, minor, revision) {
+            (Some(major), Some(minor), revision) =>
                 Ok(Version(major, minor, revision, vendor_info)),
-            _ => Err(src),
+            (_, _, _) => Err(src),
         }
     }
 }
@@ -84,45 +115,65 @@ impl fmt::Show for Version {
     }
 }
 
+/// A unique platform identifier that does not change between releases
+#[deriving(Eq, PartialEq, Show)]
+pub struct PlatformName {
+    /// The company responsible for the OpenGL implementation
+    pub vendor: &'static str,
+    /// The name of the renderer
+    pub renderer: &'static str,
+}
+
+impl PlatformName {
+    fn get() -> PlatformName {
+        PlatformName {
+            vendor: get_string(gl::VENDOR),
+            renderer: get_string(gl::RENDERER),
+        }
+    }
+}
+
+/// OpenGL implementation information
 #[deriving(Show)]
 pub struct Info {
-    pub vendor: &'static str,
-    pub renderer: &'static str,
+    /// The platform identifier
+    pub platform_name: PlatformName,
+    /// The OpenGL API vesion number
     pub version: Version,
+    /// The GLSL vesion number
     pub shading_language: Version,
+    /// The extensions supported by the implementation
     pub extensions: HashSet<&'static str>,
 }
 
 impl Info {
-    fn new() -> Info {
-        let info = unsafe {
-            let vendor = get_static_string(gl::VENDOR);
-            let renderer = get_static_string(gl::RENDERER);
-            let version = Version::parse(get_static_string(gl::VERSION)).unwrap();
-            let shading_language = Version::parse(get_static_string(gl::SHADING_LANGUAGE_VERSION)).unwrap();
+    fn get() -> Info {
+        let info = {
+            let platform_name = PlatformName::get();
+            let version = Version::parse(get_string(gl::VERSION)).unwrap();
+            let shading_language = Version::parse(get_string(gl::SHADING_LANGUAGE_VERSION)).unwrap();
             let extensions = if version >= Version(3, 2, None, "") {
                 let num_exts = get_uint(gl::NUM_EXTENSIONS) as gl::types::GLuint;
                 range(0, num_exts).map(|i| {
-                    str::raw::c_str_to_static_slice(
-                        gl::GetStringi(gl::EXTENSIONS, i) as *const i8,
-                    )
+                    unsafe {
+                        str::raw::c_str_to_static_slice(
+                            gl::GetStringi(gl::EXTENSIONS, i) as *const i8,
+                        )
+                    }
                 }).collect()
             } else {
                 // Fallback
-                let bytes = gl::GetString(gl::EXTENSIONS);
-                str::raw::c_str_to_static_slice(bytes as *const i8)
-                    .split(' ').collect()
+                get_string(gl::EXTENSIONS).split(' ').collect()
             };
             Info {
-                vendor: vendor,
-                renderer: renderer,
+                platform_name: platform_name,
                 version: version,
                 shading_language: shading_language,
                 extensions: extensions,
             }
         };
-        info!("Vendor: {}", info.vendor);
-        info!("Renderer: {}", info.renderer);
+        info!("Vendor: {}", info.platform_name.vendor);
+        info!("Renderer: {}", info.platform_name.renderer);
         info!("Version: {}", info.version);
         info!("Shading Language: {}", info.shading_language);
         info!("Loaded Extensions:")
@@ -132,6 +183,7 @@ impl Info {
         info
     }
 
+    /// Returns `true` if the implementation supports the extension
     pub fn is_extension_supported(&self, s: &str) -> bool {
         self.extensions.contains_equiv(&s)
     }
@@ -143,9 +195,10 @@ pub struct GlBackEnd {
 }
 
 impl GlBackEnd {
+    /// Load OpenGL symbols and detect driver information
     pub fn new(provider: &super::GlProvider) -> GlBackEnd {
         gl::load_with(|s| provider.get_proc_address(s));
-        let info = Info::new();
+        let info = Info::get();
         let caps = super::Capabilities {
             shader_model: shade::get_model(),
             max_draw_buffers: get_uint(gl::MAX_DRAW_BUFFERS),
@@ -167,6 +220,7 @@ impl GlBackEnd {
         debug_assert_eq!(gl::GetError(), gl::NO_ERROR);
     }
 
+    /// Get the OpenGL-specific driver information
     pub fn get_info<'a>(&'a self) -> &'a Info {
         &self.info
     }
