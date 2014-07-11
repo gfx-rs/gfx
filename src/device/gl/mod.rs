@@ -353,10 +353,14 @@ impl super::ApiBackEnd for GlBackEnd {
                             count as gl::types::GLint, gl_type,
                             stride as gl::types::GLint, offset);
                     },
-                    a::Int(sub, _, _) => unsafe {
+                    a::Int(a::IntNormalized, _, _) => unsafe {
                         gl::VertexAttribPointer(slot as gl::types::GLuint,
-                            count as gl::types::GLint, gl_type,
-                            if sub == a::IntNormalized {gl::TRUE} else {gl::FALSE},
+                            count as gl::types::GLint, gl_type, gl::TRUE,
+                            stride as gl::types::GLint, offset);
+                    },
+                    a::Int(a::IntAsFloat, _, _) => unsafe {
+                        gl::VertexAttribPointer(slot as gl::types::GLuint,
+                            count as gl::types::GLint, gl_type, gl::FALSE,
                             stride as gl::types::GLint, offset);
                     },
                     a::Float(a::FloatDefault, _) => unsafe {
