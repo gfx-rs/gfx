@@ -31,10 +31,22 @@ RENDER_FILE           = $(SRC_DIR)/render/lib.rs
 EXAMPLE_FILES         = $(SRC_DIR)/examples/*/*.rs
 LIB_FILE              = $(SRC_DIR)/gfx/lib.rs
 
+COMM_INPUT            = $(SRC_DIR)/comm/*.rs
+DEVICE_INPUT          = $(SRC_DIR)/device/*.rs $(SRC_DIR)/device/gl/*.rs
+GLFW_PLATFORM_INPUT   = $(SRC_DIR)/glfw_platform/*.rs
+RENDER_INPUT          = $(SRC_DIR)/render/*.rs
+LIB_INPUT             = $(SRC_DIR)/gfx/*.rs
+
 DOC_DIR               = doc
 EXAMPLES_DIR          = examples
 LIB_DIR               = lib
 DEPS_LIB_DIRS         = $(wildcard $(DEPS_DIR)/*/lib)
+
+COMM_OUT              = $(LIB_DIR)/libcomm.rlib
+DEVICE_OUT            = $(LIB_DIR)/libdevice.rlib
+GLFW_PLATFORM_OUT     = $(LIB_DIR)/libglfw_platform.rlib
+RENDER_OUT            = $(LIB_DIR)/librender.rlib
+LIB_OUT               = $(LIB_DIR)/libgfx.rlib
 
 DEPS_INCLUDE_FLAGS    = $(patsubst %,-L %, $(DEPS_LIB_DIRS))
 LIB_INCLUDE_FLAGS     = -L $(LIB_DIR) $(DEPS_INCLUDE_FLAGS)
@@ -46,7 +58,7 @@ GFX_PLATFORM          ?= glfw
 DEVICE_CFG            = --cfg=$(GFX_API)
 LIB_CFG               = --cfg=$(GFX_PLATFORM)
 
-all: device lib examples doc
+all: lib examples doc
 
 submodule-update:
 	@git submodule init
@@ -57,33 +69,31 @@ $(DEPS_DIR)/gl-rs/README.md: submodule-update
 deps: $(DEPS_DIR)/gl-rs/README.md
 	$(MAKE) lib -C $(DEPS_DIR)/gl-rs
 	$(MAKE) lib -C $(DEPS_DIR)/glfw-rs
-
-libdir:
 	mkdir -p $(LIB_DIR)
 
-comm: libdir
+$(COMM_OUT): $(COMM_INPUT)
 	$(RUSTC) --out-dir=$(LIB_DIR) -O $(COMM_FILE)
 
-device: libdir comm
+$(DEVICE_OUT): $(COMM_OUT) $(DEVICE_INPUT)
 	$(RUSTC) $(LIB_INCLUDE_FLAGS) --out-dir=$(LIB_DIR) $(DEVICE_CFG) -O $(DEVICE_FILE)
 
-glfw_platform: libdir device
+$(GLFW_PLATFORM_OUT): $(DEVICE_OUT) $(GLFW_PLATFORM_INPUT)
 	$(RUSTC) $(LIB_INCLUDE_FLAGS) --out-dir=$(LIB_DIR) $(LIB_CFG) -O $(GLFW_PLATFORM_FILE)
 
-render: libdir device comm
+$(RENDER_OUT): $(DEVICE_OUT) $(COMM_OUT) $(RENDER_INPUT)
 	$(RUSTC) $(LIB_INCLUDE_FLAGS) --out-dir=$(LIB_DIR) $(LIB_CFG) -O $(RENDER_FILE)
 
-lib: libdir device glfw_platform render
+$(LIB_OUT): $(DEVICE_OUT) $(GLFW_PLATFORM_OUT) $(RENDER_OUT) $(LIB_INPUT)
 	$(RUSTC) $(LIB_INCLUDE_FLAGS) --out-dir=$(LIB_DIR) $(LIB_CFG) -O $(LIB_FILE)
+
+lib: $(LIB_OUT)
 
 doc:
 	mkdir -p $(DOC_DIR)
 	$(RUSTDOC) $(LIB_INCLUDE_FLAGS) $(GFX_CFG) -o $(DOC_DIR) $(LIB_FILE)
 
-examples-dir:
+$(EXAMPLE_FILES): lib
 	mkdir -p $(EXAMPLES_DIR)
-
-$(EXAMPLE_FILES): lib examples-dir
 	$(RUSTC) $(EXAMPLE_INCLUDE_FLAGS) --out-dir=$(EXAMPLES_DIR) $@
 
 examples: $(EXAMPLE_FILES)
@@ -100,11 +110,8 @@ clean:
 	all \
 	submodule-update \
 	deps \
-	device \
-	glfw_platform \
 	lib \
 	doc \
 	examples \
-	examples-dir \
 	$(EXAMPLE_FILES) \
 	clean
