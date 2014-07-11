@@ -296,9 +296,9 @@ impl super::ApiBackEnd for GlBackEnd {
         }
     }
 
-    fn process(&mut self, request: super::Request) {
+    fn process(&mut self, request: super::CastRequest) {
         match request {
-            super::CastClear(data) => {
+            super::Clear(data) => {
                 let mut flags = match data.color {
                     //gl::ColorMask(gl::TRUE, gl::TRUE, gl::TRUE, gl::TRUE);
                     Some(super::target::Color([r,g,b,a])) => {
@@ -319,17 +319,17 @@ impl super::ApiBackEnd for GlBackEnd {
                 });
                 gl::Clear(flags);
             },
-            super::CastBindProgram(program) => {
+            super::BindProgram(program) => {
                 gl::UseProgram(program);
             },
-            super::CastBindArrayBuffer(array_buffer) => {
+            super::BindArrayBuffer(array_buffer) => {
                 if self.caps.array_buffer_supported {
                     gl::BindVertexArray(array_buffer);
                 } else {
                     error!("Ignored unsupported GL Request: {}", request)
                 }
             },
-            super::CastBindAttribute(slot, buffer, count, el_type, stride, offset) => {
+            super::BindAttribute(slot, buffer, count, el_type, stride, offset) => {
                 let gl_type = match el_type {
                     a::Int(_, a::U8, a::Unsigned)  => gl::UNSIGNED_BYTE,
                     a::Int(_, a::U8, a::Signed)    => gl::BYTE,
@@ -377,13 +377,13 @@ impl super::ApiBackEnd for GlBackEnd {
                 }
                 gl::EnableVertexAttribArray(slot as gl::types::GLuint);
             },
-            super::CastBindIndex(buffer) => {
+            super::BindIndex(buffer) => {
                 gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer);
             },
-            super::CastBindFrameBuffer(frame_buffer) => {
+            super::BindFrameBuffer(frame_buffer) => {
                 gl::BindFramebuffer(gl::DRAW_FRAMEBUFFER, frame_buffer);
             },
-            super::CastBindTarget(target, plane) => {
+            super::BindTarget(target, plane) => {
                 let attachment = match target {
                     super::target::TargetColor(index) =>
                         gl::COLOR_ATTACHMENT0 + (index as gl::types::GLenum),
@@ -402,33 +402,33 @@ impl super::ApiBackEnd for GlBackEnd {
                         (gl::DRAW_FRAMEBUFFER, attachment, name, level as gl::types::GLint, layer as gl::types::GLint),
                 }
             },
-            super::CastBindUniformBlock(program, index, loc, buffer) => {
+            super::BindUniformBlock(program, index, loc, buffer) => {
                 gl::UniformBlockBinding(program, index as gl::types::GLuint, loc as gl::types::GLuint);
                 gl::BindBufferBase(gl::UNIFORM_BUFFER, loc as gl::types::GLuint, buffer);
             },
-            super::CastBindUniform(loc, uniform) => {
+            super::BindUniform(loc, uniform) => {
                 shade::bind_uniform(loc as gl::types::GLint, uniform);
             },
-            super::CastPrimitiveState(prim) => {
+            super::SetPrimitiveState(prim) => {
                 rast::bind_primitive(prim);
             },
-            super::CastDepthStencilState(depth, stencil, cull) => {
+            super::SetDepthStencilState(depth, stencil, cull) => {
                 rast::bind_stencil(stencil, cull);
                 rast::bind_depth(depth);
             },
-            super::CastBlendState(blend) => {
+            super::SetBlendState(blend) => {
                 rast::bind_blend(blend);
             },
-            super::CastUpdateBuffer(buffer, data) => {
+            super::UpdateBuffer(buffer, data) => {
                 self.update_buffer(buffer, data.as_slice(), super::UsageDynamic);
             },
-            super::CastDraw(start, count) => {
+            super::Draw(start, count) => {
                 gl::DrawArrays(gl::TRIANGLES,
                     start as gl::types::GLsizei,
                     count as gl::types::GLsizei);
                 self.check();
             },
-            super::CastDrawIndexed(start, count) => {
+            super::DrawIndexed(start, count) => {
                 let offset = start * (std::mem::size_of::<u16>() as u16);
                 unsafe {
                     gl::DrawElements(gl::TRIANGLES,
@@ -438,7 +438,6 @@ impl super::ApiBackEnd for GlBackEnd {
                 }
                 self.check();
             },
-            _ => fail!("Unknown GL request: {}", request)
         }
     }
 }

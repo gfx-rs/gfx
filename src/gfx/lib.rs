@@ -49,7 +49,7 @@ pub use glfw = glfw_platform;
 
 #[allow(visible_private_types)]
 pub fn start<C: GraphicsContext<GlBackEnd>, P: GlProvider>(graphics_context: C, provider: P, queue_size: QueueSize)
-        -> Result<(Future<Renderer>, Device<GlBackEnd, C>), InitError> {
+        -> Result<(Future<Renderer>, Device<render::Token, GlBackEnd, C>), InitError> {
     device::init(graphics_context, provider, queue_size).map(|(tx, rx, server, ack, should_finish)| {
         (Renderer::new(tx, rx, ack, should_finish), server)
     })
