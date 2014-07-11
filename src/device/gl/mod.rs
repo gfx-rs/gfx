@@ -234,7 +234,7 @@ impl super::ApiBackEnd for GlBackEnd {
 
     fn create_buffer(&mut self) -> Buffer {
         let mut name = 0 as Buffer;
-        unsafe{
+        unsafe {
             gl::GenBuffers(1, &mut name);
         }
         info!("\tCreated buffer {}", name);
@@ -244,7 +244,7 @@ impl super::ApiBackEnd for GlBackEnd {
     fn create_array_buffer(&mut self) -> Result<ArrayBuffer, ()> {
         if self.caps.array_buffer_supported {
             let mut name = 0 as ArrayBuffer;
-            unsafe{
+            unsafe {
                 gl::GenVertexArrays(1, &mut name);
             }
             info!("\tCreated array buffer {}", name);
@@ -275,7 +275,7 @@ impl super::ApiBackEnd for GlBackEnd {
 
     fn create_frame_buffer(&mut self) -> FrameBuffer {
         let mut name = 0 as FrameBuffer;
-        unsafe{
+        unsafe {
             gl::GenFramebuffers(1, &mut name);
         }
         info!("\tCreated frame buffer {}", name);
@@ -291,7 +291,7 @@ impl super::ApiBackEnd for GlBackEnd {
             super::UsageDynamic => gl::DYNAMIC_DRAW,
             super::UsageStream  => gl::STREAM_DRAW,
         };
-        unsafe{
+        unsafe {
             gl::BufferData(gl::ARRAY_BUFFER, size, raw, usage);
         }
     }
