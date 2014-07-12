@@ -51,8 +51,10 @@ fn start(argc: int, argv: *const *const u8) -> int {
 fn main() {
     let glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
-    let (mut window, events) =
-        gfx::glfw::create_default_window(&glfw, 300, 300, "Hello this is window", glfw::Windowed)
+    let (mut window, events) = gfx::glfw::WindowBuilder::new(&glfw)
+        .title("Hello this is window")
+        .try_modern_context_hints()
+        .create()
         .expect("Failed to create GLFW window.");
 
     glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
