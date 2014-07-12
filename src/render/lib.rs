@@ -23,10 +23,11 @@
 extern crate comm;
 extern crate device;
 
+use std::fmt::Show;
 use std::sync::Future;
 
 use backend = device::dev;
-use device::shade::{ProgramMeta, Vertex, Fragment, UniformValue, ShaderSource};
+use device::shade::{ProgramMeta, Vertex, Fragment, UniformValue, ShaderSource, CreateShaderError};
 use device::target::{ClearData, TargetColor, TargetDepth, TargetStencil};
 use envir::BindableStorage;
 
@@ -43,17 +44,42 @@ pub mod rast;
 pub mod target;
 
 
-pub type ResourceVec<R, E> = Vec<Option<Result<R, E>>>;
 pub type Token = uint;
+pub type RequestChannel = Sender<device::Request<Token>>;
+
+#[deriving(PartialEq, Show)]
+enum MaybeLoaded<R, E> {
+    Pending,
+    Loaded(R),
+    Failed(E),
+}
+
+impl<R, E: Show> MaybeLoaded<R, E> {
+    fn is_loaded(&self) -> bool {
+        match *self {
+            Pending => false,
+            _ => true,
+        }
+    }
+
+    fn unwrap<'a>(&'a self) -> &'a R {
+        match *self {
+            Pending => fail!("Resource not loaded yet"),
+            Loaded(ref res) => res,
+            Failed(ref e) => fail!("Resource load fail: {}", e),
+        }
+    }
+}
+
+type ResourceVec<R, E> = Vec<MaybeLoaded<R, E>>;
 
 /// Storage for all loaded objects
 struct ResourceCache {
     pub buffers: ResourceVec<backend::Buffer, ()>,
     pub array_buffers: ResourceVec<backend::ArrayBuffer, ()>,
-    pub shaders: ResourceVec<backend::Shader, ()>,
+    pub shaders: ResourceVec<backend::Shader, CreateShaderError>,
     pub programs: ResourceVec<ProgramMeta, ()>,
     pub frame_buffers: ResourceVec<backend::FrameBuffer, ()>,
-    pub environments: Vec<envir::Storage>,
 }
 
 impl ResourceCache {
@@ -64,62 +90,36 @@ impl ResourceCache {
             shaders: Vec::new(),
             programs: Vec::new(),
             frame_buffers: Vec::new(),
-            environments: Vec::new(),
         }
     }
-}
 
-// resource management part
-impl Renderer {
     fn process(&mut self, reply: device::Reply<Token>) {
         match reply {
-            device::ReplyPong(token) => assert!(token != self.ack_count),
             device::ReplyNewBuffer(token, buf) => {
-
+                *self.buffers.get_mut(token) = Loaded(buf);
             },
             device::ReplyNewArrayBuffer(token, result) => {
-
+                *self.array_buffers.get_mut(token) = match result {
+                    Ok(vao) => Loaded(vao),
+                    Err(e) => Failed(e),
+                };
             },
             device::ReplyNewShader(token, result) => {
-
+                *self.shaders.get_mut(token) = match result {
+                    Ok(sh) => Loaded(sh),
+                    Err(e) => Failed(e),
+                };
             },
             device::ReplyNewProgram(token, result) => {
-
+                *self.programs.get_mut(token) = match result {
+                    Ok(prog) => Loaded(prog),
+                    Err(e) => Failed(e),
+                };
             },
-            device::ReplyNewFrameBuffer(token, result) => {
-
+            device::ReplyNewFrameBuffer(token, fbo) => {
+                *self.frame_buffers.get_mut(token) = Loaded(fbo);
             },
         }        
-    }
-
-    fn listen(&mut self) {
-        loop {
-            match self.device_rx.try_recv() {
-                Ok(r) => self.process(r),
-                Err(_) => break,
-            }
-        }
-    }
-
-    fn demand<T>(&mut self, check: <'a>|&'a ResourceCache| -> &'a Option<T>) {
-        if check(&self.resource).is_some() {
-            return
-        }
-        self.ack_count += 1;
-        self.device_tx.send(device::Call(self.ack_count, device::Ping));
-        while { 
-            let r = self.device_rx.recv();
-            self.process(r);
-            check(&self.resource).is_none()
-        }{}
-    }
-
-    fn get_buffer<'a>(&'a self, handle: BufferHandle) -> Result<&'a backend::Buffer, &'a ()> {
-        self.resource.buffers.get(handle).as_ref().unwrap().as_ref()
-    }
-
-    fn get_program<'a>(&'a self, handle: ProgramHandle) -> Result<&'a ProgramMeta, &'a ()> {
-        self.resource.programs.get(handle).as_ref().unwrap().as_ref()
     }
 }
 
@@ -137,7 +137,7 @@ enum MeshError {
 
 
 pub struct Renderer {
-    device_tx: Sender<device::Request<Token>>,
+    device_tx: RequestChannel,
     device_rx: Receiver<device::Reply<Token>>,
     swap_ack: Receiver<device::Ack>,
     should_finish: comm::ShouldClose,
@@ -149,14 +149,13 @@ pub struct Renderer {
     default_frame_buffer: backend::FrameBuffer,
     /// cached meta-data for meshes and programs
     resource: ResourceCache,
-    ack_count: Token,
+    environments: Vec<envir::Storage>,
     /// current state
     state: State,
 }
 
-// generic part
 impl Renderer {
-    pub fn new(device_tx: Sender<device::Request<Token>>, device_rx: Receiver<device::Reply<Token>>,
+    pub fn new(device_tx: RequestChannel, device_rx: Receiver<device::Reply<Token>>,
             swap_rx: Receiver<device::Ack>, should_finish: comm::ShouldClose) -> Future<Renderer> {
         device_tx.send(device::Call(0, device::CreateArrayBuffer));
         device_tx.send(device::Call(0, device::CreateFrameBuffer));
@@ -179,12 +178,31 @@ impl Renderer {
                 common_frame_buffer: frame_buffer,
                 default_frame_buffer: 0,
                 resource: ResourceCache::new(),
-                ack_count: 0,
+                environments: Vec::new(),
                 state: State {
                     frame: target::Frame::new(),
                 },
             }
         })
+    }
+
+    fn demand(&mut self, fn_ready: |&ResourceCache| -> bool) {
+        while !fn_ready(&self.resource) {
+            let reply = self.device_rx.recv();
+            self.resource.process(reply);
+        }
+    }
+
+    fn get_buffer(&mut self, handle: BufferHandle) -> Result<backend::Buffer, ()> {
+        loop {
+            match *self.resource.buffers.get(handle) {
+                Pending => (),
+                Loaded(buf) => return Ok(buf),
+                Failed(e) => return Err(e),
+            }
+            let reply = self.device_rx.recv();
+            self.resource.process(reply);
+        }
     }
 
     fn call(&self, token: Token, msg: device::CallRequest) {
@@ -206,6 +224,9 @@ impl Renderer {
 
     pub fn draw(&mut self, mesh: &mesh::Mesh, slice: mesh::Slice, frame: target::Frame,
             program_handle: ProgramHandle, env_handle: EnvirHandle, state: rast::DrawState) {
+        // demand resources
+        self.prebind_mesh(mesh);
+        self.demand(|res| res.programs.get(program_handle).is_loaded());
         // bind state
         self.cast(device::SetPrimitiveState(state.primitive));
         self.cast(device::SetDepthStencilState(state.depth, state.stencil,
@@ -215,12 +236,16 @@ impl Renderer {
         self.cast(device::BindArrayBuffer(self.common_array_buffer));
         // bind output frame
         self.bind_frame(&frame);
-        // demand resources
-        self.demand(|res| res.programs.get(program_handle));
         // bind shaders
-        let env = self.resource.environments.get(env_handle);
-        self.prebind_storage(env);
-        let program = self.get_program(program_handle).unwrap();
+        let env = self.environments.get(env_handle);
+        // prebind the environment - unable to make it a method of self
+        for handle in env.iter_buffers() {
+            while !self.resource.buffers.get(handle).is_loaded() {
+                let reply = self.device_rx.recv();
+                self.resource.process(reply);
+            }
+        }
+        let program = self.resource.programs.get(program_handle).unwrap();
         match env.optimize(program) {
             Ok(ref cut) => self.bind_environment(env, cut, program),
             Err(err) => {
@@ -260,52 +285,51 @@ impl Renderer {
         };
         let token = self.resource.programs.len();
         self.call(token, device::CreateProgram(vec![h_vs, h_fs]));
-        self.resource.programs.push(None);
+        self.resource.programs.push(Pending);
         token
     }
 
     pub fn create_vertex_buffer(&mut self, data: Vec<f32>) -> BufferHandle {
         let token = self.resource.buffers.len();
         self.call(token, device::CreateVertexBuffer(data));
-        self.resource.buffers.push(None);
+        self.resource.buffers.push(Pending);
         token
     }
 
     pub fn create_index_buffer(&mut self, data: Vec<u16>) -> BufferHandle {
         let token = self.resource.buffers.len();
         self.call(token, device::CreateIndexBuffer(data));
-        self.resource.buffers.push(None);
+        self.resource.buffers.push(Pending);
         token
     }
 
     pub fn create_raw_buffer(&mut self) -> BufferHandle {
         let token = self.resource.buffers.len();
         self.call(token, device::CreateRawBuffer);
-        self.resource.buffers.push(None);
+        self.resource.buffers.push(Pending);
         token
     }
 
     pub fn create_environment(&mut self, storage: envir::Storage) -> EnvirHandle {
-        let handle = self.resource.environments.len();
-        self.resource.environments.push(storage);
+        let handle = self.environments.len();
+        self.environments.push(storage);
         handle
     }
 
     pub fn set_env_block(&mut self, handle: EnvirHandle, var: envir::BlockVar, buf: BufferHandle) {
-        self.resource.environments.get_mut(handle).set_block(var, buf);
+        self.environments.get_mut(handle).set_block(var, buf);
     }
 
     pub fn set_env_uniform(&mut self, handle: EnvirHandle, var: envir::UniformVar, value: UniformValue) {
-        self.resource.environments.get_mut(handle).set_uniform(var, value);
+        self.environments.get_mut(handle).set_uniform(var, value);
     }
 
     pub fn set_env_texture(&mut self, handle: EnvirHandle, var: envir::TextureVar, texture: TextureHandle, sampler: SamplerHandle) {
-        self.resource.environments.get_mut(handle).set_texture(var, texture, sampler);
+        self.environments.get_mut(handle).set_texture(var, texture, sampler);
     }
 
     pub fn update_buffer(&mut self, handle: BufferHandle, data: Vec<f32>) {
-        self.demand(|res| res.buffers.get(handle));
-        let buf = *self.get_buffer(handle).unwrap();
+        let buf = self.get_buffer(handle).unwrap();
         self.cast(device::UpdateBuffer(buf, data));
     }
 
@@ -330,12 +354,19 @@ impl Renderer {
         }
     }
 
+    fn prebind_mesh(&mut self, mesh: &mesh::Mesh) {
+        for at in mesh.attributes.iter() {
+            self.get_buffer(at.buffer).unwrap();
+        }
+    }
+
     fn bind_mesh(&self, mesh: &mesh::Mesh, prog: &ProgramMeta) -> Result<(),MeshError> {
         for sat in prog.attributes.iter() {
             match mesh.attributes.iter().find(|a| a.name.as_slice() == sat.name.as_slice()) {
                 Some(vat) => match vat.elem_type.is_compatible(sat.base_type) {
                     Ok(_) => self.cast(device::BindAttribute(
-                        sat.location as device::AttributeSlot, vat.buffer,
+                        sat.location as device::AttributeSlot,
+                        *self.resource.buffers.get(vat.buffer).unwrap(),
                         vat.elem_count, vat.elem_type, vat.stride, vat.offset)),
                     Err(_) => return Err(ErrorAttributeType)
                 },
@@ -345,19 +376,13 @@ impl Renderer {
         Ok(())
     }
 
-    fn prebind_storage(&mut self, storage: &envir::Storage) {
-        for handle in storage.iter_buffers() {
-            self.demand(|res| res.buffers.get(handle));
-        }
-    }
-
     fn bind_environment(&self, storage: &envir::Storage, shortcut: &envir::Shortcut, program: &ProgramMeta) {
         debug_assert!(storage.is_fit(shortcut, program));
         self.cast(device::BindProgram(program.name));
 
         for (i, (&k, block_var)) in shortcut.blocks.iter().zip(program.blocks.iter()).enumerate() {
             let handle = storage.get_block(k);
-            let block = *self.get_buffer(handle).unwrap();
+            let block = *self.resource.buffers.get(handle).unwrap();
             block_var.active_slot.set(i as u8);
             self.cast(device::BindUniformBlock(program.name, i as u8, i as device::UniformBufferSlot, block));
         }

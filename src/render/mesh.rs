@@ -23,7 +23,7 @@ pub type ElementCount = u16;
 /// Vertex attribute descriptor, goes into the vertex shader input
 #[deriving(Clone, Show)]
 pub struct Attribute {
-    pub buffer: dev::Buffer,    // vertex buffer to contain the data
+    pub buffer: super::BufferHandle, // vertex buffer to contain the data
     pub elem_count: a::Count,   // number of elements per vertex
     pub elem_type: a::Type,     // type of a single element
     pub offset: a::Offset,      // offset in bytes to the first vertex
@@ -63,15 +63,15 @@ impl Mesh {
 
 /// A helper class to populate Mesh attributes
 pub struct Constructor {
-    buffer: dev::Buffer,
+    buffer: super::BufferHandle,
     offset: a::Offset,
     attributes: Vec<Attribute>,
 }
 
 impl Constructor {
-    pub fn new(buf: dev::Buffer) -> Constructor {
+    pub fn new(handle: super::BufferHandle) -> Constructor {
         Constructor {
-            buffer: buf,
+            buffer: handle,
             offset: 0,
             attributes: Vec::new(),
         }

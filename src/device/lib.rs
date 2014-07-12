@@ -66,10 +66,9 @@ pub enum Request<T> {
     SwapBuffers,
 }
 
-// Requests that require a reply
+/// Requests that require a reply
 #[deriving(Show)]
 pub enum CallRequest {
-    Ping,
     CreateVertexBuffer(Vec<f32>),
     CreateIndexBuffer(Vec<u16>),
     CreateRawBuffer,
@@ -79,7 +78,7 @@ pub enum CallRequest {
     CreateFrameBuffer,
 }
 
-// Requests that don't expect a reply
+/// Requests that don't expect a reply
 #[deriving(Show)]
 pub enum CastRequest {
     Clear(target::ClearData),
@@ -103,7 +102,6 @@ pub enum CastRequest {
 
 #[deriving(Show)]
 pub enum Reply<T> {
-    ReplyPong(T),
     ReplyNewBuffer(T, dev::Buffer),
     ReplyNewArrayBuffer(T, Result<dev::ArrayBuffer, ()>),
     ReplyNewShader(T, Result<dev::Shader, shade::CreateShaderError>),
@@ -140,7 +138,7 @@ pub struct Device<T, B, C> {
     close: comm::Close,
 }
 
-impl<T, B: ApiBackEnd, C: GraphicsContext<T>> Device<B, C> {
+impl<T: Send, B: ApiBackEnd, C: GraphicsContext<B>> Device<T, B, C> {
     /// Signal to connected client that the device wants to close, and block
     /// until it has disconnected.
     pub fn close(&self) {
@@ -154,7 +152,6 @@ impl<T, B: ApiBackEnd, C: GraphicsContext<T>> Device<B, C> {
     /// Process a call request, return a single reply for it
     fn process(&mut self, token: T, call: CallRequest) -> Reply<T> {
         match call {
-            Ping => ReplyPong(token),
             CreateVertexBuffer(data) => {
                 let name = self.back_end.create_buffer();
                 self.back_end.update_buffer(name, data.as_slice(), UsageStatic);
@@ -204,37 +201,6 @@ impl<T, B: ApiBackEnd, C: GraphicsContext<T>> Device<B, C> {
                     self.swap_ack.send(Ack);
                     break;
                 },
-                Ok(CallNewVertexBuffer(token, data)) => {
-                    let name = self.back_end.create_buffer();
-                    self.back_end.update_buffer(name, data.as_slice(), UsageStatic);
-                    self.reply_tx.send(ReplyNewBuffer(token, name));
-                },
-                Ok(CallNewIndexBuffer(token, data)) => {
-                    let name = self.back_end.create_buffer();
-                    self.back_end.update_buffer(name, data.as_slice(), UsageStatic);
-                    self.reply_tx.send(ReplyNewBuffer(token, name));
-                },
-                Ok(CallNewRawBuffer(token)) => {
-                    let name = self.back_end.create_buffer();
-                    self.reply_tx.send(ReplyNewBuffer(token, name));
-                },
-                Ok(CallNewArrayBuffer(token)) => {
-                    let name = self.back_end.create_array_buffer();
-                    self.reply_tx.send(ReplyNewArrayBuffer(token, name));
-                },
-                Ok(CallNewShader(token, stage, code)) => {
-                    let name = self.back_end.create_shader(stage, code);
-                    self.reply_tx.send(ReplyNewShader(token, name));
-                },
-                Ok(CallNewProgram(token, code)) => {
-                    let name = self.back_end.create_program(code.as_slice());
-                    self.reply_tx.send(ReplyNewProgram(token, name));
-                },
-                Ok(CallNewFrameBuffer(token)) => {
-                    let name = self.back_end.create_frame_buffer();
-                    self.reply_tx.send(ReplyNewFrameBuffer(token, name));
-                },
-                Ok(request) => self.back_end.process(request),
                 Err(()) => return,
             }
         }
