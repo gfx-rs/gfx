@@ -26,9 +26,10 @@ extern crate device;
 use std::fmt::Show;
 
 use backend = device::dev;
-use device::shade::{ProgramMeta, Vertex, Fragment, UniformValue, ShaderSource, CreateShaderError};
+use device::shade::{ProgramMeta, Vertex, Fragment, UniformValue, ShaderSource};
 use device::target::{ClearData, TargetColor, TargetDepth, TargetStencil};
 use envir::BindableStorage;
+use resource::Pending;
 
 pub type BufferHandle = uint;
 pub type SurfaceHandle = backend::Surface;
@@ -41,88 +42,12 @@ pub type EnvirHandle = uint;
 pub mod envir;
 pub mod mesh;
 pub mod rast;
+pub mod resource;
 pub mod target;
 
 
 pub type Token = uint;
 pub type RequestChannel = Sender<device::Request<Token>>;
-
-#[deriving(PartialEq, Show)]
-enum MaybeLoaded<R, E> {
-    Pending,
-    Loaded(R),
-    Failed(E),
-}
-
-impl<R, E: Show> MaybeLoaded<R, E> {
-    fn is_loaded(&self) -> bool {
-        match *self {
-            Pending => false,
-            _ => true,
-        }
-    }
-
-    fn unwrap<'a>(&'a self) -> &'a R {
-        match *self {
-            Pending => fail!("Resource not loaded yet"),
-            Loaded(ref res) => res,
-            Failed(ref e) => fail!("Resource load fail: {}", e),
-        }
-    }
-}
-
-type ResourceVec<R, E> = Vec<MaybeLoaded<R, E>>;
-
-/// Storage for all loaded objects
-struct ResourceCache {
-    pub buffers: ResourceVec<backend::Buffer, ()>,
-    pub array_buffers: ResourceVec<backend::ArrayBuffer, ()>,
-    pub shaders: ResourceVec<backend::Shader, CreateShaderError>,
-    pub programs: ResourceVec<ProgramMeta, ()>,
-    pub frame_buffers: ResourceVec<backend::FrameBuffer, ()>,
-}
-
-impl ResourceCache {
-    fn new() -> ResourceCache {
-        ResourceCache {
-            buffers: Vec::new(),
-            array_buffers: Vec::new(),
-            shaders: Vec::new(),
-            programs: Vec::new(),
-            frame_buffers: Vec::new(),
-        }
-    }
-
-    fn process(&mut self, reply: device::Reply<Token>) {
-        match reply {
-            device::ReplyNewBuffer(token, buf) => {
-                *self.buffers.get_mut(token) = Loaded(buf);
-            },
-            device::ReplyNewArrayBuffer(token, result) => {
-                *self.array_buffers.get_mut(token) = match result {
-                    Ok(vao) => Loaded(vao),
-                    Err(e) => Failed(e),
-                };
-            },
-            device::ReplyNewShader(token, result) => {
-                *self.shaders.get_mut(token) = match result {
-                    Ok(sh) => Loaded(sh),
-                    Err(e) => Failed(e),
-                };
-            },
-            device::ReplyNewProgram(token, result) => {
-                *self.programs.get_mut(token) = match result {
-                    Ok(prog) => Loaded(prog),
-                    Err(e) => Failed(e),
-                };
-            },
-            device::ReplyNewFrameBuffer(token, fbo) => {
-                *self.frame_buffers.get_mut(token) = Loaded(fbo);
-            },
-        }        
-    }
-}
-
 
 /// Graphics state
 struct State {
@@ -144,7 +69,7 @@ pub struct Renderer {
     /// the default FBO for drawing
     default_frame_buffer: backend::FrameBuffer,
     /// cached meta-data for meshes and programs
-    resource: ResourceCache,
+    resource: resource::Cache,
     environments: Vec<envir::Storage>,
     /// current state
     state: State,
@@ -153,31 +78,32 @@ pub struct Renderer {
 /// Resource-oriented private methods
 impl Renderer {
     /// Make sure the resource is loaded
-    fn demand(&mut self, fn_ready: |&ResourceCache| -> bool) {
+    fn demand(&mut self, fn_ready: |&resource::Cache| -> bool) {
         while !fn_ready(&self.resource) {
             let reply = self.device_rx.recv();
             self.resource.process(reply);
         }
     }
 
+    fn get_any<R: Copy, E: Show>(&mut self, fun: <'a>|&'a resource::Cache| -> &'a resource::MaybeLoaded<R, E>) -> R {
+        self.demand(|res| fun(res).is_loaded());
+        *fun(&self.resource).unwrap()
+    }
+
     fn get_buffer(&mut self, handle: BufferHandle) -> backend::Buffer {
-        self.demand(|res| res.buffers.get(handle).is_loaded());
-        *self.resource.buffers.get(handle).unwrap()
+        self.get_any(|res| res.buffers.get(handle))
     }
 
     fn get_common_array_buffer(&mut self) -> backend::ArrayBuffer {
-        self.demand(|res| res.array_buffers.get(0).is_loaded());
-        *self.resource.array_buffers.get(0).unwrap()
+        self.get_any(|res| res.array_buffers.get(0))
     }
 
     fn get_shader(&mut self, handle: ShaderHandle) -> backend::Shader {
-        self.demand(|res| res.shaders.get(handle).is_loaded());
-        *self.resource.shaders.get(handle).unwrap()
+        self.get_any(|res| res.shaders.get(handle))
     }
 
     fn get_common_frame_buffer(&mut self) -> backend::FrameBuffer {
-        self.demand(|res| res.frame_buffers.get(0).is_loaded());
-        *self.resource.frame_buffers.get(0).unwrap()
+        self.get_any(|res| res.frame_buffers.get(0))
     }
 }
 
@@ -186,7 +112,7 @@ impl Renderer {
     pub fn new(device_tx: RequestChannel, device_rx: Receiver<device::Reply<Token>>,
             swap_rx: Receiver<device::Ack>, should_finish: comm::ShouldClose) -> Renderer {
         // Request the creation of the common array buffer and frame buffer
-        let mut res = ResourceCache::new();
+        let mut res = resource::Cache::new();
         res.array_buffers.push(Pending);
         res.frame_buffers.push(Pending);
         device_tx.send(device::Call(0, device::CreateArrayBuffer));
