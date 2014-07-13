@@ -13,7 +13,8 @@
 // limitations under the License.
 
 #![crate_name = "device"]
-#![comment = "A lightweight graphics device manager for Rust"]
+#![comment = "Back-ends to abstract over the differences between low-level, \
+              platform-specific graphics APIs"]
 #![license = "ASL2"]
 #![crate_type = "lib"]
 

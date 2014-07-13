@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #![crate_name = "render"]
-#![comment = "A lightweight graphics device manager for Rust"]
+#![comment = "A platform independent renderer for gfx-rs."]
 #![license = "ASL2"]
 #![crate_type = "lib"]
 

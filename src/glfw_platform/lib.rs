@@ -13,7 +13,8 @@
 // limitations under the License.
 
 #![crate_name = "glfw_platform"]
-#![comment = "A lightweight graphics device manager for Rust"]
+#![comment = "An adaptor for glfw-rs `Context`s that allows interoperability \
+              with gfx-rs."]
 #![license = "ASL2"]
 #![crate_type = "lib"]
 
