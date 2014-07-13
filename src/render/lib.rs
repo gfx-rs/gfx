@@ -77,7 +77,10 @@ pub struct Renderer {
 
 /// Resource-oriented private methods
 impl Renderer {
-    /// Make sure the resource is loaded
+    /// Make sure the resource is loaded. Optimally, we'd like this method to return
+    /// the resource reference, but there is a number of problems with it. One is that
+    /// the borrow checker doesn't like the match over `MaybeLoaded` inside the body.
+    /// Another one is that the returned reference will freeze `self` for its life time.
     fn demand(&mut self, fn_ready: |&resource::Cache| -> bool) {
         while !fn_ready(&self.resource) {
             let reply = self.device_rx.recv();
@@ -85,6 +88,7 @@ impl Renderer {
         }
     }
 
+    /// Get a guaranteed copy of a specific resource accessed by the function.
     fn get_any<R: Copy, E: Show>(&mut self, fun: <'a>|&'a resource::Cache| -> &'a resource::MaybeLoaded<R, E>) -> R {
         self.demand(|res| fun(res).is_loaded());
         *fun(&self.resource).unwrap()
@@ -132,10 +136,12 @@ impl Renderer {
         }
     }
 
+    /// Ask the device to create something for us
     fn call(&self, token: Token, msg: device::CallRequest) {
         self.device_tx.send(device::Call(token, msg));
     }
 
+    /// Ask the device to do something for us
     fn cast(&self, msg: device::CastRequest) {
         self.device_tx.send(device::Cast(msg));
     }
@@ -151,7 +157,8 @@ impl Renderer {
 
     pub fn draw(&mut self, mesh: &mesh::Mesh, slice: mesh::Slice, frame: target::Frame,
             program_handle: ProgramHandle, env_handle: EnvirHandle, state: rast::DrawState) {
-        // demand resources
+        // demand resources. This section needs the mutable self, so we are unable to do this
+        // after we get a reference to ether the `Environment` or the `ProgramMeta`
         self.prebind_mesh(mesh);
         self.demand(|res| res.programs.get(program_handle).is_loaded());
         // bind state
@@ -166,7 +173,7 @@ impl Renderer {
         self.bind_frame(&frame);
         // bind shaders
         let env = self.environments.get(env_handle);
-        // prebind the environment - unable to make it a method of self
+        // prebind the environment (unable to make it a method of self...)
         for handle in env.iter_buffers() {
             while !self.resource.buffers.get(handle).is_loaded() {
                 let reply = self.device_rx.recv();
@@ -280,6 +287,7 @@ impl Renderer {
         }
     }
 
+    /// Make sure all the mesh buffers are successfully created/loaded
     fn prebind_mesh(&mut self, mesh: &mesh::Mesh) {
         for at in mesh.attributes.iter() {
             self.get_buffer(at.buffer);

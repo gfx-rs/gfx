@@ -18,6 +18,7 @@ use device;
 use backend = device::dev;
 use device::shade::{CreateShaderError, ProgramMeta};
 
+/// Enumeration to present a deferred resource
 #[deriving(PartialEq, Show)]
 pub enum MaybeLoaded<R, E> {
     Pending,
@@ -26,6 +27,7 @@ pub enum MaybeLoaded<R, E> {
 }
 
 impl<R, E: Show> MaybeLoaded<R, E> {
+    /// Tell if the loading has finished by now
     pub fn is_loaded(&self) -> bool {
         match *self {
             Pending => false,
@@ -33,6 +35,7 @@ impl<R, E: Show> MaybeLoaded<R, E> {
         }
     }
 
+    /// Force extract the resource, assuming it's loaded successfully
     pub fn unwrap<'a>(&'a self) -> &'a R {
         match *self {
             Pending => fail!("Resource not loaded yet"),
@@ -44,7 +47,7 @@ impl<R, E: Show> MaybeLoaded<R, E> {
 
 pub type Vector<R, E> = Vec<MaybeLoaded<R, E>>;
 
-/// Storage for all loaded objects
+/// Storage for all loaded graphics objects
 pub struct Cache {
     pub buffers: Vector<backend::Buffer, ()>,
     pub array_buffers: Vector<backend::ArrayBuffer, ()>,
@@ -54,6 +57,7 @@ pub struct Cache {
 }
 
 impl Cache {
+    /// Create a new cache instance (to serve a single device)
     pub fn new() -> Cache {
         Cache {
             buffers: Vec::new(),
@@ -64,6 +68,7 @@ impl Cache {
         }
     }
 
+    /// Process a given device reply by updating the appropriate resource
     pub fn process(&mut self, reply: device::Reply<super::Token>) {
         match reply {
             device::ReplyNewBuffer(token, buf) => {
