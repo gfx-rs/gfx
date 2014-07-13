@@ -189,6 +189,16 @@ impl Info {
     }
 }
 
+#[deriving(Eq, PartialEq, Show)]
+pub enum ErrorType {
+    InvalidEnum,
+    InvalidValue,
+    InvalidOperation,
+    InvalidFramebufferOperation,
+    OutOfMemory,
+    UnknownError,
+}
+
 /// An OpenGL back-end with GLSL shaders
 pub struct GlBackEnd {
     caps: super::Capabilities,
@@ -217,8 +227,22 @@ impl GlBackEnd {
     }
 
     #[allow(dead_code)]
+    fn get_error(&mut self) -> Result<(), ErrorType> {
+        match gl::GetError() {
+            gl::NO_ERROR => Ok(()),
+            gl::INVALID_ENUM => Err(InvalidEnum),
+            gl::INVALID_VALUE => Err(InvalidValue),
+            gl::INVALID_OPERATION => Err(InvalidOperation),
+            gl::INVALID_FRAMEBUFFER_OPERATION => Err(InvalidFramebufferOperation),
+            gl::OUT_OF_MEMORY => Err(OutOfMemory),
+            _ => Err(UnknownError),
+        }
+    }
+
+    /// Fails during a debug build if the implementation's error flag was set.
+    #[allow(dead_code)]
     fn check(&mut self) {
-        debug_assert_eq!(gl::GetError(), gl::NO_ERROR);
+        debug_assert_eq!(self.get_error(), Ok(()));
     }
 
     /// Get the OpenGL-specific driver information
