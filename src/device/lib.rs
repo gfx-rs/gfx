@@ -35,7 +35,6 @@ pub mod shade;
 pub mod target;
 #[cfg(gl)] mod gl;
 
-
 #[deriving(Show)]
 pub struct Capabilities {
     shader_model: shade::ShaderModel,
@@ -91,7 +90,7 @@ pub enum CastRequest {
     BindTarget(target::Target, target::Plane),
     BindUniformBlock(dev::Program, u8, UniformBufferSlot, dev::Buffer),
     BindUniform(shade::Location, shade::UniformValue),
-    //BindTexture(TextureSlot, dev::Texture, dev::Sampler),    //TODO
+    // BindTexture(TextureSlot, dev::Texture, dev::Sampler),    // TODO
     SetPrimitiveState(rast::Primitive),
     SetDepthStencilState(Option<rast::Depth>, Option<rast::Stencil>, rast::CullMode),
     SetBlendState(Option<rast::Blend>),
@@ -160,7 +159,7 @@ impl<T: Send, B: ApiBackEnd, C: GraphicsContext<B>> Device<T, B, C> {
             CreateIndexBuffer(data) => {
                 let name = self.back_end.create_buffer();
                 self.back_end.update_buffer(name, data.as_slice(), UsageStatic);
-                ReplyNewBuffer(token, name)                        
+                ReplyNewBuffer(token, name)
             },
             CreateRawBuffer => {
                 let name = self.back_end.create_buffer();

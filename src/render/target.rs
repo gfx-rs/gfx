@@ -17,7 +17,6 @@ use device::target::{Plane, PlaneEmpty};
 
 static MAX_COLOR_TARGETS: uint = 4;
 
-
 pub struct Frame {
     pub colors: [Plane, ..MAX_COLOR_TARGETS],
     pub depth: Plane,

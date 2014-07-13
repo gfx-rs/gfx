@@ -19,7 +19,6 @@ pub type MaterialHandle = int;  //placeholder
 pub type VertexCount = u16;
 pub type ElementCount = u16;
 
-
 /// Vertex attribute descriptor, goes into the vertex shader input
 #[deriving(Clone, Show)]
 pub struct Attribute {
@@ -30,7 +29,6 @@ pub struct Attribute {
     pub stride: a::Stride,      // stride in bytes between consecutive vertices
     pub name: String,           // a name to match the shader input
 }
-
 
 #[deriving(Clone, Show)]
 pub enum PolygonType {
@@ -59,7 +57,6 @@ impl Mesh {
         }
     }
 }
-
 
 /// A helper class to populate Mesh attributes
 pub struct Constructor {
@@ -139,8 +136,6 @@ impl Constructor {
         }
     }
 }
-
-
 
 #[deriving(Clone, Show)]
 pub enum Slice  {
