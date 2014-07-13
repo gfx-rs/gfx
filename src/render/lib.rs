@@ -79,7 +79,7 @@ pub struct Renderer {
 impl Renderer {
     /// Make sure the resource is loaded. Optimally, we'd like this method to return
     /// the resource reference, but there is a number of problems with it. One is that
-    /// the borrow checker doesn't like the match over `MaybeLoaded` inside the body.
+    /// the borrow checker doesn't like the match over `Future` inside the body.
     /// Another one is that the returned reference will freeze `self` for its life time.
     fn demand(&mut self, fn_ready: |&resource::Cache| -> bool) {
         while !fn_ready(&self.resource) {
@@ -89,8 +89,8 @@ impl Renderer {
     }
 
     /// Get a guaranteed copy of a specific resource accessed by the function.
-    fn get_any<R: Copy, E: Show>(&mut self, fun: <'a>|&'a resource::Cache| -> &'a resource::MaybeLoaded<R, E>) -> R {
-        self.demand(|res| fun(res).is_loaded());
+    fn get_any<R: Copy, E: Show>(&mut self, fun: <'a>|&'a resource::Cache| -> &'a resource::Future<R, E>) -> R {
+        self.demand(|res| !fun(res).is_pending());
         *fun(&self.resource).unwrap()
     }
 
@@ -160,7 +160,7 @@ impl Renderer {
         // demand resources. This section needs the mutable self, so we are unable to do this
         // after we get a reference to ether the `Environment` or the `ProgramMeta`
         self.prebind_mesh(mesh);
-        self.demand(|res| res.programs.get(program_handle).is_loaded());
+        self.demand(|res| !res.programs.get(program_handle).is_pending());
         // bind state
         self.cast(device::SetPrimitiveState(state.primitive));
         self.cast(device::SetDepthStencilState(state.depth, state.stencil,
@@ -175,7 +175,7 @@ impl Renderer {
         let env = self.environments.get(env_handle);
         // prebind the environment (unable to make it a method of self...)
         for handle in env.iter_buffers() {
-            while !self.resource.buffers.get(handle).is_loaded() {
+            while self.resource.buffers.get(handle).is_pending() {
                 let reply = self.device_rx.recv();
                 self.resource.process(reply);
             }

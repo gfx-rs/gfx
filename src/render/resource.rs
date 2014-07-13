@@ -18,25 +18,23 @@ use device;
 use backend = device::dev;
 use device::shade::{CreateShaderError, ProgramMeta};
 
-/// Enumeration to present a deferred resource
+/// A deferred resource
 #[deriving(PartialEq, Show)]
-pub enum MaybeLoaded<R, E> {
+pub enum Future<T, E> {
     Pending,
-    Loaded(R),
+    Loaded(T),
     Failed(E),
 }
 
-impl<R, E: Show> MaybeLoaded<R, E> {
-    /// Tell if the loading has finished by now
-    pub fn is_loaded(&self) -> bool {
-        match *self {
-            Pending => false,
-            _ => true,
-        }
+impl<T, E: Show> Future<T, E> {
+    /// Returns `true` if the resource is still pending
+    pub fn is_pending(&self) -> bool {
+        match *self { Pending => true, _ => false }
     }
 
-    /// Force extract the resource, assuming it's loaded successfully
-    pub fn unwrap<'a>(&'a self) -> &'a R {
+    /// Get the resource, triggering a task failure if it is either `Pending`
+    /// or has `Failed`.
+    pub fn unwrap<'a>(&'a self) -> &'a T {
         match *self {
             Pending => fail!("Resource not loaded yet"),
             Loaded(ref res) => res,
@@ -45,15 +43,13 @@ impl<R, E: Show> MaybeLoaded<R, E> {
     }
 }
 
-pub type Vector<R, E> = Vec<MaybeLoaded<R, E>>;
-
 /// Storage for all loaded graphics objects
 pub struct Cache {
-    pub buffers: Vector<backend::Buffer, ()>,
-    pub array_buffers: Vector<backend::ArrayBuffer, ()>,
-    pub shaders: Vector<backend::Shader, CreateShaderError>,
-    pub programs: Vector<ProgramMeta, ()>,
-    pub frame_buffers: Vector<backend::FrameBuffer, ()>,
+    pub buffers: Vec<Future<backend::Buffer, ()>>,
+    pub array_buffers: Vec<Future<backend::ArrayBuffer, ()>>,
+    pub shaders: Vec<Future<backend::Shader, CreateShaderError>>,
+    pub programs: Vec<Future<ProgramMeta, ()>>,
+    pub frame_buffers: Vec<Future<backend::FrameBuffer, ()>>,
 }
 
 impl Cache {
