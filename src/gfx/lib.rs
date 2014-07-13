@@ -27,8 +27,6 @@ extern crate device;
 extern crate glfw_platform;
 extern crate render;
 
-use std::sync::Future;
-
 // public re-exports
 pub use render::{BufferHandle, SurfaceHandle, TextureHandle, SamplerHandle, ProgramHandle, EnvirHandle};
 pub use render::Renderer;
@@ -49,7 +47,7 @@ pub use glfw = glfw_platform;
 
 #[allow(visible_private_types)]
 pub fn start<C: GraphicsContext<GlBackEnd>, P: GlProvider>(graphics_context: C, provider: P, queue_size: QueueSize)
-        -> Result<(Future<Renderer>, Device<GlBackEnd, C>), InitError> {
+        -> Result<(Renderer, Device<render::Token, GlBackEnd, C>), InitError> {
     device::init(graphics_context, provider, queue_size).map(|(tx, rx, server, ack, should_finish)| {
         (Renderer::new(tx, rx, ack, should_finish), server)
     })

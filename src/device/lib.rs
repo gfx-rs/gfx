@@ -60,43 +60,53 @@ pub enum BufferUsage {
 }
 
 #[deriving(Show)]
-pub enum Request {
-    // Requests that require a reply:
-    CallNewVertexBuffer(Vec<f32>),
-    CallNewIndexBuffer(Vec<u16>),
-    CallNewRawBuffer,
-    CallNewArrayBuffer,
-    CallNewShader(shade::Stage, shade::ShaderSource),
-    CallNewProgram(Vec<dev::Shader>),
-    CallNewFrameBuffer,
-    // Requests that don't expect a reply:
-    CastClear(target::ClearData),
-    CastBindProgram(dev::Program),
-    CastBindArrayBuffer(dev::ArrayBuffer),
-    CastBindAttribute(AttributeSlot, dev::Buffer, attrib::Count,
+pub enum Request<T> {
+    Call(T, CallRequest),
+    Cast(CastRequest),
+    SwapBuffers,
+}
+
+/// Requests that require a reply
+#[deriving(Show)]
+pub enum CallRequest {
+    CreateVertexBuffer(Vec<f32>),
+    CreateIndexBuffer(Vec<u16>),
+    CreateRawBuffer,
+    CreateArrayBuffer,
+    CreateShader(shade::Stage, shade::ShaderSource),
+    CreateProgram(Vec<dev::Shader>),
+    CreateFrameBuffer,
+}
+
+/// Requests that don't expect a reply
+#[deriving(Show)]
+pub enum CastRequest {
+    Clear(target::ClearData),
+    BindProgram(dev::Program),
+    BindArrayBuffer(dev::ArrayBuffer),
+    BindAttribute(AttributeSlot, dev::Buffer, attrib::Count,
         attrib::Type, attrib::Stride, attrib::Offset),
-    CastBindIndex(dev::Buffer),
-    CastBindFrameBuffer(dev::FrameBuffer),
-    CastBindTarget(target::Target, target::Plane),
-    CastBindUniformBlock(dev::Program, u8, UniformBufferSlot, dev::Buffer),
-    CastBindUniform(shade::Location, shade::UniformValue),
-    //CastBindTexture(TextureSlot, dev::Texture, dev::Sampler),    //TODO
-    CastPrimitiveState(rast::Primitive),
-    CastDepthStencilState(Option<rast::Depth>, Option<rast::Stencil>, rast::CullMode),
-    CastBlendState(Option<rast::Blend>),
-    CastUpdateBuffer(dev::Buffer, Vec<f32>),
-    CastDraw(VertexCount, VertexCount),
-    CastDrawIndexed(IndexCount, IndexCount),
-    CastSwapBuffers,
+    BindIndex(dev::Buffer),
+    BindFrameBuffer(dev::FrameBuffer),
+    BindTarget(target::Target, target::Plane),
+    BindUniformBlock(dev::Program, u8, UniformBufferSlot, dev::Buffer),
+    BindUniform(shade::Location, shade::UniformValue),
+    //BindTexture(TextureSlot, dev::Texture, dev::Sampler),    //TODO
+    SetPrimitiveState(rast::Primitive),
+    SetDepthStencilState(Option<rast::Depth>, Option<rast::Stencil>, rast::CullMode),
+    SetBlendState(Option<rast::Blend>),
+    UpdateBuffer(dev::Buffer, Vec<f32>),
+    Draw(VertexCount, VertexCount),
+    DrawIndexed(IndexCount, IndexCount),
 }
 
 #[deriving(Show)]
-pub enum Reply {
-    ReplyNewBuffer(dev::Buffer),
-    ReplyNewArrayBuffer(Result<dev::ArrayBuffer, ()>),
-    ReplyNewShader(Result<dev::Shader, shade::CreateShaderError>),
-    ReplyNewProgram(Result<shade::ProgramMeta, ()>),
-    ReplyNewFrameBuffer(dev::FrameBuffer),
+pub enum Reply<T> {
+    ReplyNewBuffer(T, dev::Buffer),
+    ReplyNewArrayBuffer(T, Result<dev::ArrayBuffer, ()>),
+    ReplyNewShader(T, Result<dev::Shader, shade::CreateShaderError>),
+    ReplyNewProgram(T, Result<shade::ProgramMeta, ()>),
+    ReplyNewFrameBuffer(T, dev::FrameBuffer),
 }
 
 /// An interface for performing draw calls using a specific graphics API
@@ -112,23 +122,23 @@ pub trait ApiBackEnd {
     /// Update the information stored in a specific buffer
     fn update_buffer<T>(&mut self, dev::Buffer, data: &[T], BufferUsage);
     /// Process a request from a `Device`
-    fn process(&mut self, Request);
+    fn process(&mut self, CastRequest);
 }
 
 pub struct Ack;
 
 /// An API-agnostic device that manages incoming draw calls
-pub struct Device<T, C> {
+pub struct Device<T, B, C> {
     no_share: marker::NoShare,
-    request_rx: Receiver<Request>,
-    reply_tx: Sender<Reply>,
+    request_rx: Receiver<Request<T>>,
+    reply_tx: Sender<Reply<T>>,
     graphics_context: C,
-    back_end: T,
+    back_end: B,
     swap_ack: Sender<Ack>,
     close: comm::Close,
 }
 
-impl<T: ApiBackEnd, C: GraphicsContext<T>> Device<T, C> {
+impl<T: Send, B: ApiBackEnd, C: GraphicsContext<B>> Device<T, B, C> {
     /// Signal to connected client that the device wants to close, and block
     /// until it has disconnected.
     pub fn close(&self) {
@@ -139,48 +149,58 @@ impl<T: ApiBackEnd, C: GraphicsContext<T>> Device<T, C> {
         self.graphics_context.make_current();
     }
 
+    /// Process a call request, return a single reply for it
+    fn process(&mut self, token: T, call: CallRequest) -> Reply<T> {
+        match call {
+            CreateVertexBuffer(data) => {
+                let name = self.back_end.create_buffer();
+                self.back_end.update_buffer(name, data.as_slice(), UsageStatic);
+                ReplyNewBuffer(token, name)
+            },
+            CreateIndexBuffer(data) => {
+                let name = self.back_end.create_buffer();
+                self.back_end.update_buffer(name, data.as_slice(), UsageStatic);
+                ReplyNewBuffer(token, name)                        
+            },
+            CreateRawBuffer => {
+                let name = self.back_end.create_buffer();
+                ReplyNewBuffer(token, name)
+            },
+            CreateArrayBuffer => {
+                let name = self.back_end.create_array_buffer();
+                ReplyNewArrayBuffer(token, name)
+            },
+            CreateShader(stage, code) => {
+                let name = self.back_end.create_shader(stage, code);
+                ReplyNewShader(token, name)
+            },
+            CreateProgram(code) => {
+                let name = self.back_end.create_program(code.as_slice());
+                ReplyNewProgram(token, name)
+            },
+            CreateFrameBuffer => {
+                let name = self.back_end.create_frame_buffer();
+                ReplyNewFrameBuffer(token, name)
+            },
+        }
+    }
+
     /// Update the platform. The client must manually update this on the main
     /// thread.
     pub fn update(&mut self) {
         // Get updates from the renderer and pass on results
         loop {
             match self.request_rx.recv_opt() {
-                Ok(CastSwapBuffers) => {
+                Ok(Call(token, call)) => {
+                    let reply = self.process(token, call);
+                    self.reply_tx.send(reply);
+                },
+                Ok(Cast(cast)) => self.back_end.process(cast),
+                Ok(SwapBuffers) => {
                     self.graphics_context.swap_buffers();
                     self.swap_ack.send(Ack);
                     break;
                 },
-                Ok(CallNewVertexBuffer(data)) => {
-                    let name = self.back_end.create_buffer();
-                    self.back_end.update_buffer(name, data.as_slice(), UsageStatic);
-                    self.reply_tx.send(ReplyNewBuffer(name));
-                },
-                Ok(CallNewIndexBuffer(data)) => {
-                    let name = self.back_end.create_buffer();
-                    self.back_end.update_buffer(name, data.as_slice(), UsageStatic);
-                    self.reply_tx.send(ReplyNewBuffer(name));
-                },
-                Ok(CallNewRawBuffer) => {
-                    let name = self.back_end.create_buffer();
-                    self.reply_tx.send(ReplyNewBuffer(name));
-                },
-                Ok(CallNewArrayBuffer) => {
-                    let name = self.back_end.create_array_buffer();
-                    self.reply_tx.send(ReplyNewArrayBuffer(name));
-                },
-                Ok(CallNewShader(stage, code)) => {
-                    let name = self.back_end.create_shader(stage, code);
-                    self.reply_tx.send(ReplyNewShader(name));
-                },
-                Ok(CallNewProgram(code)) => {
-                    let name = self.back_end.create_program(code.as_slice());
-                    self.reply_tx.send(ReplyNewProgram(name));
-                },
-                Ok(CallNewFrameBuffer) => {
-                    let name = self.back_end.create_frame_buffer();
-                    self.reply_tx.send(ReplyNewFrameBuffer(name));
-                },
-                Ok(request) => self.back_end.process(request),
                 Err(()) => return,
             }
         }
@@ -204,8 +224,8 @@ pub type QueueSize = u8;
 
 // TODO: Generalise for different back-ends
 #[allow(visible_private_types)]
-pub fn init<C: GraphicsContext<GlBackEnd>, P: GlProvider>(graphics_context: C, provider: P, queue_size: QueueSize)
-        -> Result<(Sender<Request>, Receiver<Reply>, Device<GlBackEnd, C>, Receiver<Ack>, comm::ShouldClose), InitError> {
+pub fn init<T: Send, C: GraphicsContext<GlBackEnd>, P: GlProvider>(graphics_context: C, provider: P, queue_size: QueueSize)
+        -> Result<(Sender<Request<T>>, Receiver<Reply<T>>, Device<T, GlBackEnd, C>, Receiver<Ack>, comm::ShouldClose), InitError> {
     let (request_tx, request_rx) = channel();
     let (reply_tx, reply_rx) = channel();
     let (swap_tx, swap_rx) = channel();
