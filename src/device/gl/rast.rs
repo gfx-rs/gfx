@@ -16,7 +16,6 @@ use r = super::super::rast;
 use super::super::target::Color;
 use super::gl;
 
-
 pub fn bind_primitive(p: r::Primitive) {
     gl::FrontFace(match p.front_face {
         r::Cw => gl::CW,
@@ -56,7 +55,6 @@ pub fn bind_primitive(p: r::Primitive) {
     }
 }
 
-
 fn map_comparison(cmp: r::Comparison) -> gl::types::GLenum {
     match cmp {
         r::Comparison(r::NoLess, r::NoEqual, r::NoGreater) => gl::NEVER,
@@ -80,7 +78,6 @@ pub fn bind_depth(depth: Option<r::Depth>) {
         None => gl::Disable(gl::DEPTH_TEST),
     }
 }
-
 
 fn map_operation(op: r::StencilOp) -> gl::types::GLenum {
     match op {

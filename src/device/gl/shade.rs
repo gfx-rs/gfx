@@ -332,7 +332,6 @@ pub fn create_program(caps: &super::super::Capabilities, shaders: &[super::Shade
     (meta, info)
 }
 
-
 pub fn bind_uniform(loc: gl::types::GLint, uniform: s::UniformValue) {
     match uniform {
         s::ValueUninitialized => fail!("Non-initialized uniform value detected"),

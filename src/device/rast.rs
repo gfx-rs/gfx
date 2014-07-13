@@ -38,7 +38,6 @@ pub enum CullMode {
     CullBack,
 }
 
-
 #[deriving(Clone, PartialEq, Show)]
 pub enum RasterMethod {
     Point,
@@ -73,7 +72,6 @@ impl Default for Primitive {
         }
     }
 }
-
 
 #[deriving(Clone, PartialEq, Show)]
 pub enum LessFlag {

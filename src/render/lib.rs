@@ -45,7 +45,6 @@ pub mod rast;
 pub mod resource;
 pub mod target;
 
-
 pub type Token = uint;
 pub type RequestChannel = Sender<device::Request<Token>>;
 
@@ -59,7 +58,6 @@ enum MeshError {
     ErrorMissingAttribute,
     ErrorAttributeType,
 }
-
 
 pub struct Renderer {
     device_tx: RequestChannel,
@@ -211,10 +209,10 @@ impl Renderer {
         let id = self.resource.shaders.len();
         self.resource.shaders.push(Pending);
         self.resource.shaders.push(Pending);
-        self.call(id+0, device::CreateShader(Vertex, vs_src));
-        self.call(id+1, device::CreateShader(Fragment, fs_src));
-        let h_vs = self.get_shader(id+0);
-        let h_fs = self.get_shader(id+1);
+        self.call(id + 0, device::CreateShader(Vertex, vs_src));
+        self.call(id + 1, device::CreateShader(Fragment, fs_src));
+        let h_vs = self.get_shader(id + 0);
+        let h_fs = self.get_shader(id + 1);
         let token = self.resource.programs.len();
         self.call(token, device::CreateProgram(vec![h_vs, h_fs]));
         self.resource.programs.push(Pending);

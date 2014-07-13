@@ -29,7 +29,6 @@ pub struct BlockVar(BlockId, Mark);
 pub struct UniformVar(UniformId, Mark);
 pub struct TextureVar(TextureId, Mark);
 
-
 /// Environment storage structure, contains a set of parameters
 /// to be provided for shader programs
 pub struct Storage {
@@ -74,7 +73,7 @@ impl Storage {
         let &(_, ref mut block) = self.blocks.get_mut(id as uint);
         *block = buf;
     }
-    
+
     pub fn set_uniform(&mut self, var: UniformVar, value: UniformValue) {
         let UniformVar(id, mark) = var;
         debug_assert_eq!(mark, self.mark);
@@ -91,7 +90,6 @@ impl Storage {
         *sam = sampler;
     }
 }
-
 
 /// Environment shortcut - the acceleration structure used for
 /// binding shader program parameters. Each *Var serves as a

@@ -55,7 +55,6 @@ impl default::Default for Color {
     }
 }
 
-
 #[deriving(Show)]
 pub struct ClearData {
     pub color: Option<Color>,
