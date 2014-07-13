@@ -66,7 +66,7 @@ fn main() {
 
     // spawn game task
     spawn(proc() {
-        let mut renderer = renderer.unwrap();
+        let mut renderer = renderer;
         let program = renderer.create_program(
             VERTEX_SRC.clone(),
             FRAGMENT_SRC.clone());

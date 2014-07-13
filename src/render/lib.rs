@@ -24,7 +24,6 @@ extern crate comm;
 extern crate device;
 
 use std::fmt::Show;
-use std::sync::Future;
 
 use backend = device::dev;
 use device::shade::{ProgramMeta, Vertex, Fragment, UniformValue, ShaderSource, CreateShaderError};
@@ -35,6 +34,7 @@ pub type BufferHandle = uint;
 pub type SurfaceHandle = backend::Surface;
 pub type TextureHandle = backend::Texture;
 pub type SamplerHandle = uint;
+pub type ShaderHandle = uint;
 pub type ProgramHandle = uint;
 pub type EnvirHandle = uint;
 
@@ -141,10 +141,6 @@ pub struct Renderer {
     device_rx: Receiver<device::Reply<Token>>,
     swap_ack: Receiver<device::Ack>,
     should_finish: comm::ShouldClose,
-    /// a common VAO for mesh rendering
-    common_array_buffer: backend::ArrayBuffer,
-    /// a common FBO for drawing
-    common_frame_buffer: backend::FrameBuffer,
     /// the default FBO for drawing
     default_frame_buffer: backend::FrameBuffer,
     /// cached meta-data for meshes and programs
@@ -154,38 +150,9 @@ pub struct Renderer {
     state: State,
 }
 
+/// Resource-oriented private methods
 impl Renderer {
-    pub fn new(device_tx: RequestChannel, device_rx: Receiver<device::Reply<Token>>,
-            swap_rx: Receiver<device::Ack>, should_finish: comm::ShouldClose) -> Future<Renderer> {
-        device_tx.send(device::Call(0, device::CreateArrayBuffer));
-        device_tx.send(device::Call(0, device::CreateFrameBuffer));
-        Future::from_fn(proc() {
-            let array_buffer = match device_rx.recv() {
-                // TODO: Find better way to handle a unsupported array buffer
-                device::ReplyNewArrayBuffer(_, array_buffer) => array_buffer.unwrap_or(0),
-                _ => fail!("invalid device reply for CallNewArrayBuffer"),
-            };
-            let frame_buffer = match device_rx.recv() {
-                device::ReplyNewFrameBuffer(_, frame_buffer) => frame_buffer,
-                _ => fail!("invalid device reply for CallNewFrameBuffer"),
-            };
-            Renderer {
-                device_tx: device_tx,
-                device_rx: device_rx,
-                swap_ack: swap_rx,
-                should_finish: should_finish,
-                common_array_buffer: array_buffer,
-                common_frame_buffer: frame_buffer,
-                default_frame_buffer: 0,
-                resource: ResourceCache::new(),
-                environments: Vec::new(),
-                state: State {
-                    frame: target::Frame::new(),
-                },
-            }
-        })
-    }
-
+    /// Make sure the resource is loaded
     fn demand(&mut self, fn_ready: |&ResourceCache| -> bool) {
         while !fn_ready(&self.resource) {
             let reply = self.device_rx.recv();
@@ -193,15 +160,49 @@ impl Renderer {
         }
     }
 
-    fn get_buffer(&mut self, handle: BufferHandle) -> Result<backend::Buffer, ()> {
-        loop {
-            match *self.resource.buffers.get(handle) {
-                Pending => (),
-                Loaded(buf) => return Ok(buf),
-                Failed(e) => return Err(e),
-            }
-            let reply = self.device_rx.recv();
-            self.resource.process(reply);
+    fn get_buffer(&mut self, handle: BufferHandle) -> backend::Buffer {
+        self.demand(|res| res.buffers.get(handle).is_loaded());
+        *self.resource.buffers.get(handle).unwrap()
+    }
+
+    fn get_common_array_buffer(&mut self) -> backend::ArrayBuffer {
+        self.demand(|res| res.array_buffers.get(0).is_loaded());
+        *self.resource.array_buffers.get(0).unwrap()
+    }
+
+    fn get_shader(&mut self, handle: ShaderHandle) -> backend::Shader {
+        self.demand(|res| res.shaders.get(handle).is_loaded());
+        *self.resource.shaders.get(handle).unwrap()
+    }
+
+    fn get_common_frame_buffer(&mut self) -> backend::FrameBuffer {
+        self.demand(|res| res.frame_buffers.get(0).is_loaded());
+        *self.resource.frame_buffers.get(0).unwrap()
+    }
+}
+
+/// Graphics-oriented methods
+impl Renderer {
+    pub fn new(device_tx: RequestChannel, device_rx: Receiver<device::Reply<Token>>,
+            swap_rx: Receiver<device::Ack>, should_finish: comm::ShouldClose) -> Renderer {
+        // Request the creation of the common array buffer and frame buffer
+        let mut res = ResourceCache::new();
+        res.array_buffers.push(Pending);
+        res.frame_buffers.push(Pending);
+        device_tx.send(device::Call(0, device::CreateArrayBuffer));
+        device_tx.send(device::Call(0, device::CreateFrameBuffer));
+        // Return
+        Renderer {
+            device_tx: device_tx,
+            device_rx: device_rx,
+            swap_ack: swap_rx,
+            should_finish: should_finish,
+            default_frame_buffer: 0,
+            resource: res,
+            environments: Vec::new(),
+            state: State {
+                frame: target::Frame::new(),
+            },
         }
     }
 
@@ -233,7 +234,8 @@ impl Renderer {
             state.primitive.get_cull_mode()));
         self.cast(device::SetBlendState(state.blend));
         // bind array buffer
-        self.cast(device::BindArrayBuffer(self.common_array_buffer));
+        let vao = self.get_common_array_buffer();
+        self.cast(device::BindArrayBuffer(vao));
         // bind output frame
         self.bind_frame(&frame);
         // bind shaders
@@ -273,16 +275,13 @@ impl Renderer {
     }
 
     pub fn create_program(&mut self, vs_src: ShaderSource, fs_src: ShaderSource) -> ProgramHandle {
-        self.call(0, device::CreateShader(Vertex, vs_src));
-        self.call(0, device::CreateShader(Fragment, fs_src));
-        let h_vs = match self.device_rx.recv() {
-            device::ReplyNewShader(_, name) => name.unwrap_or(0),
-            msg => fail!("invalid device reply for CallNewShader: {}", msg)
-        };
-        let h_fs = match self.device_rx.recv() {
-            device::ReplyNewShader(_, name) => name.unwrap_or(0),
-            msg => fail!("invalid device reply for CallNewShader: {}", msg)
-        };
+        let id = self.resource.shaders.len();
+        self.resource.shaders.push(Pending);
+        self.resource.shaders.push(Pending);
+        self.call(id+0, device::CreateShader(Vertex, vs_src));
+        self.call(id+1, device::CreateShader(Fragment, fs_src));
+        let h_vs = self.get_shader(id+0);
+        let h_fs = self.get_shader(id+1);
         let token = self.resource.programs.len();
         self.call(token, device::CreateProgram(vec![h_vs, h_fs]));
         self.resource.programs.push(Pending);
@@ -329,7 +328,7 @@ impl Renderer {
     }
 
     pub fn update_buffer(&mut self, handle: BufferHandle, data: Vec<f32>) {
-        let buf = self.get_buffer(handle).unwrap();
+        let buf = self.get_buffer(handle);
         self.cast(device::UpdateBuffer(buf, data));
     }
 
@@ -338,7 +337,8 @@ impl Renderer {
             // binding the default FBO, not touching our common one
             self.cast(device::BindFrameBuffer(self.default_frame_buffer));
         } else {
-            self.cast(device::BindFrameBuffer(self.common_frame_buffer));
+            let fbo = self.get_common_frame_buffer();
+            self.cast(device::BindFrameBuffer(fbo));
             for (i, (cur, new)) in self.state.frame.colors.iter().zip(frame.colors.iter()).enumerate() {
                 if *cur != *new {
                     self.cast(device::BindTarget(TargetColor(i as u8), *new));
@@ -356,7 +356,7 @@ impl Renderer {
 
     fn prebind_mesh(&mut self, mesh: &mesh::Mesh) {
         for at in mesh.attributes.iter() {
-            self.get_buffer(at.buffer).unwrap();
+            self.get_buffer(at.buffer);
         }
     }
 
