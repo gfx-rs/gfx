@@ -34,7 +34,7 @@ impl DrawState {
     pub fn new() -> DrawState {
         DrawState {
             primitive: r::Primitive {
-                front_face: r::Ccw,
+                front_face: r::CounterClockwise,
                 method: r::Fill(r::CullBack),
                 offset: r::NoOffset,
             },

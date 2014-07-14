@@ -15,10 +15,13 @@
 use std::default::Default;
 use StencilValue = super::target::Stencil;
 
+/// The winding order of a set of vertices.
 #[deriving(Clone, PartialEq, Show)]
-pub enum FrontType {
-    Cw,
-    Ccw,
+pub enum WindingOrder {
+    /// Clockwise winding order.
+    Clockwise,
+    /// Counter-clockwise winding order.
+    CounterClockwise,
 }
 
 pub type LineWidth = f32;
@@ -49,7 +52,7 @@ pub enum RasterMethod {
 /// method to be used for front and back, while this abstraction does not.
 #[deriving(Clone, PartialEq, Show)]
 pub struct Primitive {
-    pub front_face: FrontType,
+    pub front_face: WindingOrder,
     pub method: RasterMethod,
     pub offset: OffsetType,
 }

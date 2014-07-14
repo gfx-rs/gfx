@@ -18,8 +18,8 @@ use super::gl;
 
 pub fn bind_primitive(p: r::Primitive) {
     gl::FrontFace(match p.front_face {
-        r::Cw => gl::CW,
-        r::Ccw => gl::CCW,
+        r::Clockwise => gl::CW,
+        r::CounterClockwise => gl::CCW,
     });
 
     let (gl_draw, gl_offset) = match p.method {
