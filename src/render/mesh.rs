@@ -56,6 +56,11 @@ impl Mesh {
             attributes: Vec::new(),
         }
     }
+
+    pub fn embed(&mut self, mut builder: Builder) {
+        builder.finalize();
+        self.attributes.push_all(builder.attributes.as_slice());
+    }
 }
 
 pub enum ComponentType {
@@ -146,11 +151,6 @@ impl Builder {
         for at in self.attributes.mut_iter() {
             at.stride = self.offset as a::Stride;
         }
-    }
-
-    pub fn embed_to(mut self, mesh: &mut Mesh) {
-        self.finalize();
-        mesh.attributes.push_all(self.attributes.as_slice());
     }
 
     pub fn complete(mut self, nv: VertexCount) -> Mesh {
