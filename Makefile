@@ -37,8 +37,8 @@ GLFW_PLATFORM_INPUT   = $(SRC_DIR)/glfw_platform/*.rs
 RENDER_INPUT          = $(SRC_DIR)/render/*.rs
 LIB_INPUT             = $(SRC_DIR)/gfx/*.rs
 
-DEPS_LIB_DIRS         = $(wildcard $(DEPS_DIR)/*/lib)
-DEPS_INCLUDE_FLAGS    = $(patsubst %,-L %, $(DEPS_LIB_DIRS))
+DEPS_LIB_SEARCH_PATHS = $(DEPS_DIR)/gl-rs/lib $(DEPS_DIR)/glfw-rs/lib
+DEPS_LIB_SEARCH_FLAGS = $(patsubst %,-L %, $(DEPS_LIB_SEARCH_PATHS))
 
 LIB_DIR               = lib
 COMM_OUT              = $(LIB_DIR)/$(shell $(RUSTC) --print-file-name $(COMM_FILE))
@@ -63,8 +63,8 @@ GLFW_PLATFORM_DOC_OUT = $(DOC_DIR)/$(shell $(RUSTC) --print-crate-name $(GLFW_PL
 RENDER_DOC_OUT        = $(DOC_DIR)/$(shell $(RUSTC) --print-crate-name $(RENDER_FILE))
 LIB_DOC_OUT           = $(DOC_DIR)/$(shell $(RUSTC) --print-crate-name $(LIB_FILE))
 
-LIB_INCLUDE_FLAGS     = -L $(LIB_DIR) $(DEPS_INCLUDE_FLAGS)
-EXAMPLE_INCLUDE_FLAGS = -L $(LIB_DIR) $(DEPS_INCLUDE_FLAGS)
+LIB_INCLUDE_FLAGS     = -L $(LIB_DIR) $(DEPS_LIB_SEARCH_FLAGS)
+EXAMPLE_INCLUDE_FLAGS = -L $(LIB_DIR) $(DEPS_LIB_SEARCH_FLAGS)
 
 GFX_API               ?= gl
 GFX_PLATFORM          ?= glfw
