@@ -77,6 +77,11 @@ LIB_CFG               = --cfg=$(GFX_PLATFORM)
 .PHONY: all
 all: lib examples doc
 
+# Friendly initialization
+
+.PHONY: init
+init: deps all
+
 # Dependency handling
 
 .PHONY: submodule-update

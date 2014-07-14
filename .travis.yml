@@ -40,8 +40,9 @@ install:
   - curl http://static.rust-lang.org/cargo-dist/cargo-nightly-linux.tar.gz |
     sudo tar --strip-components 1 -C /usr -xzf -
   - curl http://www.rust-lang.org/rustup.sh | sudo sh -
+  - rustc -v
 script:
-  - make deps
+  - make init
   - make test
   - make examples
   - sh -c "sleep 5; xdotool key --window \"$(xdotool search --name Hello)\" Escape" &
