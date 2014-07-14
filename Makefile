@@ -91,6 +91,11 @@ deps: $(DEPS_DIR)/gl-rs/README.md
 	$(MAKE) lib -C $(DEPS_DIR)/gl-rs
 	$(MAKE) lib -C $(DEPS_DIR)/glfw-rs
 
+.PHONY: clean-deps
+clean-deps:
+	$(MAKE) clean -C $(DEPS_DIR)/gl-rs
+	$(MAKE) clean -C $(DEPS_DIR)/glfw-rs
+
 # Library compilation
 
 $(COMM_OUT): $(COMM_INPUT)
@@ -115,6 +120,10 @@ $(LIB_OUT): $(DEVICE_OUT) $(GLFW_PLATFORM_OUT) $(RENDER_OUT) $(LIB_INPUT)
 
 .PHONY: lib
 lib: $(LIB_OUT)
+
+.PHONY: clean-lib
+clean-lib:
+	rm -rf $(LIB_DIR)
 
 # Tests
 
@@ -146,6 +155,10 @@ $(LIB_TEST_OUT): $(DEVICE_OUT) $(GLFW_PLATFORM_OUT) $(RENDER_OUT) $(LIB_INPUT)
 .PHONY: test
 test: $(COMM_TEST_OUT) $(DEVICE_TEST_OUT) $(GLFW_PLATFORM_TEST_OUT) $(RENDER_TEST_OUT) $(LIB_TEST_OUT)
 
+.PHONY: clean-test
+clean-test:
+	rm -rf $(TEST_DIR)
+
 # Documentation generation
 
 $(COMM_DOC_OUT): $(COMM_INPUT)
@@ -171,6 +184,10 @@ $(LIB_DOC_OUT): $(DEVICE_OUT) $(GLFW_PLATFORM_OUT) $(RENDER_OUT) $(LIB_INPUT)
 .PHONY: doc
 doc: $(COMM_DOC_OUT) $(DEVICE_DOC_OUT) $(GLFW_PLATFORM_DOC_OUT) $(RENDER_DOC_OUT) $(LIB_DOC_OUT)
 
+.PHONY: clean-doc
+clean-doc:
+	rm -rf $(DOC_DIR)
+
 # Example compilation
 
 $(EXAMPLE_FILES): lib
@@ -180,16 +197,11 @@ $(EXAMPLE_FILES): lib
 .PHONY: examples
 examples: $(EXAMPLE_FILES)
 
+.PHONY: clean-examples
+clean-examples:
+	rm -rf $(EXAMPLES_DIR)
+
 # Cleanup
 
-.PHONY: clean-deps
-clean-deps:
-	$(MAKE) clean -C $(DEPS_DIR)/gl-rs
-	$(MAKE) clean -C $(DEPS_DIR)/glfw-rs
-
 .PHONY: clean
-clean:
-	rm -rf $(LIB_DIR)
-	rm -rf $(TEST_DIR)
-	rm -rf $(EXAMPLES_DIR)
-	rm -rf $(DOC_DIR)
+clean: clean-lib clean-test clean-doc clean-examples
