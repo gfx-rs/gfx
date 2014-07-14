@@ -39,6 +39,6 @@ install:
   - curl http://www.rust-lang.org/rustup.sh | sudo sh -
 script:
   - make deps
-  - make
+  - make test
   - make clean
   - make clean deps
