@@ -465,3 +465,23 @@ impl super::ApiBackEnd for GlBackEnd {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Version;
+
+    #[test]
+    fn test_version_parse() {
+        assert_eq!(Version::parse("1"), Err("1"));
+        assert_eq!(Version::parse("1."), Err("1."));
+        assert_eq!(Version::parse("1 h3l1o. W0rld"), Err("1 h3l1o. W0rld"));
+        assert_eq!(Version::parse("1. h3l1o. W0rld"), Err("1. h3l1o. W0rld"));
+        assert_eq!(Version::parse("1.2.3"), Ok(Version(1, 2, Some(3), "")));
+        assert_eq!(Version::parse("1.2"), Ok(Version(1, 2, None, "")));
+        assert_eq!(Version::parse("1.2 h3l1o. W0rld"), Ok(Version(1, 2, None, "h3l1o. W0rld")));
+        assert_eq!(Version::parse("1.2.h3l1o. W0rld"), Ok(Version(1, 2, None, "W0rld")));
+        assert_eq!(Version::parse("1.2. h3l1o. W0rld"), Ok(Version(1, 2, None, "h3l1o. W0rld")));
+        assert_eq!(Version::parse("1.2.3.h3l1o. W0rld"), Ok(Version(1, 2, Some(3), "W0rld")));
+        assert_eq!(Version::parse("1.2.3 h3l1o. W0rld"), Ok(Version(1, 2, Some(3), "h3l1o. W0rld")));
+    }
+}
