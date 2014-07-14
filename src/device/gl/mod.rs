@@ -306,10 +306,10 @@ impl super::ApiBackEnd for GlBackEnd {
         name
     }
 
-    fn update_buffer<T>(&mut self, buffer: Buffer, data: &[T], usage: super::BufferUsage) {
+    fn update_buffer(&mut self, buffer: Buffer, data: &super::Blob, usage: super::BufferUsage) {
         gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
-        let size = (data.len() * std::mem::size_of::<T>()) as gl::types::GLsizeiptr;
-        let raw = data.as_ptr() as *const gl::types::GLvoid;
+        let size = data.get_size() as gl::types::GLsizeiptr;
+        let raw = data.get_address() as *const gl::types::GLvoid;
         let usage = match usage {
             super::UsageStatic  => gl::STATIC_DRAW,
             super::UsageDynamic => gl::DYNAMIC_DRAW,
@@ -444,7 +444,7 @@ impl super::ApiBackEnd for GlBackEnd {
                 rast::bind_blend(blend);
             },
             super::UpdateBuffer(buffer, data) => {
-                self.update_buffer(buffer, data.as_slice(), super::UsageDynamic);
+                self.update_buffer(buffer, data, super::UsageDynamic);
             },
             super::Draw(start, count) => {
                 gl::DrawArrays(gl::TRIANGLES,
