@@ -32,8 +32,7 @@ pub use render::{BufferHandle, SurfaceHandle, TextureHandle, SamplerHandle, Prog
 pub use render::Renderer;
 pub use Environment = render::envir::Storage;
 pub use render::envir::{BlockVar, UniformVar, TextureVar};
-pub use MeshSlice = render::mesh::Slice;
-pub use render::mesh::{VertexCount, ElementCount, VertexSlice, IndexSlice, Mesh, Constructor};
+pub use render::mesh;
 pub use render::rast::{DrawState, BlendAdditive, BlendAlpha};
 pub use render::target::Frame;
 pub use device::attrib;

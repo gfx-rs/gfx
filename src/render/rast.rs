@@ -30,20 +30,6 @@ pub enum BlendPreset {
     BlendAlpha,
 }
 
-fn parse_comparison(cmp: &str) -> r::Comparison {
-    match cmp {
-        "!"  => r::Never,
-        "<"  => r::Less,
-        "<=" => r::LessEqual,
-        "==" => r::Equal,
-        ">=" => r::GreaterEqual,
-        ">"  => r::Greater,
-        "!=" => r::NotEqual,
-        "*"  => r::Always,
-        _    => fail!("Unknown comparison function: {}", cmp),
-    }
-}
-
 impl DrawState {
     pub fn new() -> DrawState {
         DrawState {
@@ -59,9 +45,9 @@ impl DrawState {
     }
 
     /// set the stencil test to a simple expression
-    pub fn stencil(mut self, fun: &str, value: Stencil) -> DrawState {
+    pub fn stencil(mut self, fun: r::Comparison, value: Stencil) -> DrawState {
         let side = r::StencilSide {
-            fun: parse_comparison(fun),
+            fun: fun,
             value: value,
             mask_read: -1,
             mask_write: -1,
@@ -77,9 +63,9 @@ impl DrawState {
     }
 
     /// set the depth test with the mask
-    pub fn depth(mut self, fun: &str, write: bool) -> DrawState {
+    pub fn depth(mut self, fun: r::Comparison, write: bool) -> DrawState {
         self.depth = Some(r::Depth {
-            fun: parse_comparison(fun),
+            fun: fun,
             write: write,
         });
         self

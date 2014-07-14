@@ -58,6 +58,60 @@ impl Mesh {
     }
 }
 
+pub enum ComponentType {
+    U8,
+    U8n,
+    U8f,
+    I8,
+    I8n,
+    I8f,
+    U16,
+    U16n,
+    U16f,
+    I16,
+    I16n,
+    I16f,
+    U32,
+    U32n,
+    U32f,
+    I32,
+    I32n,
+    I32f,
+    F16,
+    F32,
+    F64,
+    F64d,
+}
+
+impl ComponentType {
+    pub fn decode(&self) -> (u8, a::Type) {
+        match *self {
+            U8     => (1, a::Int(a::IntRaw,        a::U8,  a::Unsigned)),
+            U8n    => (1, a::Int(a::IntNormalized, a::U8,  a::Unsigned)),
+            U8f    => (1, a::Int(a::IntAsFloat,    a::U8,  a::Unsigned)),
+            I8     => (1, a::Int(a::IntRaw,        a::U8,  a::Signed)),
+            I8n    => (1, a::Int(a::IntNormalized, a::U8,  a::Signed)),
+            I8f    => (1, a::Int(a::IntAsFloat,    a::U8,  a::Signed)),
+            U16    => (2, a::Int(a::IntRaw,        a::U16, a::Unsigned)),
+            U16n   => (2, a::Int(a::IntNormalized, a::U16, a::Unsigned)),
+            U16f   => (2, a::Int(a::IntAsFloat,    a::U16, a::Unsigned)),
+            I16    => (2, a::Int(a::IntRaw,        a::U16, a::Signed)),
+            I16n   => (2, a::Int(a::IntNormalized, a::U16, a::Signed)),
+            I16f   => (2, a::Int(a::IntAsFloat,    a::U16, a::Signed)),
+            U32    => (4, a::Int(a::IntRaw,        a::U32, a::Unsigned)),
+            U32n   => (4, a::Int(a::IntNormalized, a::U32, a::Unsigned)),
+            U32f   => (4, a::Int(a::IntAsFloat,    a::U32, a::Unsigned)),
+            I32    => (4, a::Int(a::IntRaw,        a::U32, a::Signed)),
+            I32n   => (4, a::Int(a::IntNormalized, a::U32, a::Signed)),
+            I32f   => (4, a::Int(a::IntAsFloat,    a::U32, a::Signed)),
+            F16    => (2, a::Float(a::FloatDefault,   a::F16)),
+            F32    => (4, a::Float(a::FloatDefault,   a::F32)),
+            F64    => (8, a::Float(a::FloatDefault,   a::F64)),
+            F64d   => (8, a::Float(a::FloatPrecision, a::F64)),
+        }
+    }
+}
+
 /// A helper class to populate Mesh attributes
 pub struct Constructor {
     buffer: super::BufferHandle,
@@ -74,36 +128,8 @@ impl Constructor {
         }
     }
 
-    pub fn decode(format: &str) -> Result<(u8, a::Type), ()> {
-        match format {
-            "u8"    => Ok((1, a::Int(a::IntRaw,        a::U8,  a::Unsigned))),
-            "u8n"   => Ok((1, a::Int(a::IntNormalized, a::U8,  a::Unsigned))),
-            "u8f"   => Ok((1, a::Int(a::IntAsFloat,    a::U8,  a::Unsigned))),
-            "i8"    => Ok((1, a::Int(a::IntRaw,        a::U8,  a::Signed))),
-            "i8n"   => Ok((1, a::Int(a::IntNormalized, a::U8,  a::Signed))),
-            "i8f"   => Ok((1, a::Int(a::IntAsFloat,    a::U8,  a::Signed))),
-            "u16"   => Ok((2, a::Int(a::IntRaw,        a::U16, a::Unsigned))),
-            "u16n"  => Ok((2, a::Int(a::IntNormalized, a::U16, a::Unsigned))),
-            "u16f"  => Ok((2, a::Int(a::IntAsFloat,    a::U16, a::Unsigned))),
-            "i16"   => Ok((2, a::Int(a::IntRaw,        a::U16, a::Signed))),
-            "i16n"  => Ok((2, a::Int(a::IntNormalized, a::U16, a::Signed))),
-            "i16f"  => Ok((2, a::Int(a::IntAsFloat,    a::U16, a::Signed))),
-            "u32"   => Ok((4, a::Int(a::IntRaw,        a::U32, a::Unsigned))),
-            "u32n"  => Ok((4, a::Int(a::IntNormalized, a::U32, a::Unsigned))),
-            "u32f"  => Ok((4, a::Int(a::IntAsFloat,    a::U32, a::Unsigned))),
-            "i32"   => Ok((4, a::Int(a::IntRaw,        a::U32, a::Signed))),
-            "i32n"  => Ok((4, a::Int(a::IntNormalized, a::U32, a::Signed))),
-            "i32f"  => Ok((4, a::Int(a::IntAsFloat,    a::U32, a::Signed))),
-            "f16"   => Ok((2, a::Float(a::FloatDefault,   a::F16))),
-            "f32"   => Ok((4, a::Float(a::FloatDefault,   a::F32))),
-            "f64"   => Ok((8, a::Float(a::FloatDefault,   a::F64))),
-            "f64d"  => Ok((8, a::Float(a::FloatPrecision, a::F64))),
-            _ => Err(())
-        }
-    }
-
-    pub fn add(mut self, name: &str, count: a::Count, format: &str) -> Constructor {
-        let (size, e_type) = Constructor::decode(format).unwrap();
+    pub fn add(mut self, name: &str, count: a::Count, format: ComponentType) -> Constructor {
+        let (size, e_type) = format.decode();
         self.attributes.push(Attribute {
             buffer: self.buffer,
             elem_count: count,

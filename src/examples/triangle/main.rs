@@ -80,9 +80,9 @@ fn main() {
         let mesh = {
             let data = vec![-0.5f32, -0.5, 0.5, -0.5, 0.0, 0.5];
             let buf = renderer.create_buffer(Some(data));
-            gfx::Constructor::new(buf).
-                add("a_Pos", 2, "f32").
-                complete(3)
+            gfx::Constructor::new(buf)
+                .add("a_Pos", 2, gfx::mesh::F32)
+                .complete(3)
         };
         while !renderer.should_finish() {
             let cdata = gfx::ClearData {
@@ -91,7 +91,7 @@ fn main() {
                 stencil: None,
             };
             renderer.clear(cdata, frame);
-            renderer.draw(&mesh, gfx::VertexSlice(0, 3), frame, program, env, state);
+            renderer.draw(&mesh, gfx::mesh::VertexSlice(0, 3), frame, program, env, state);
             renderer.end_frame();
         }
     });
