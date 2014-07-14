@@ -113,22 +113,22 @@ impl ComponentType {
 }
 
 /// A helper class to populate Mesh attributes
-pub struct Constructor {
+pub struct Builder {
     buffer: super::BufferHandle,
     offset: a::Offset,
     attributes: Vec<Attribute>,
 }
 
-impl Constructor {
-    pub fn new(handle: super::BufferHandle) -> Constructor {
-        Constructor {
+impl Builder {
+    pub fn new(handle: super::BufferHandle) -> Builder {
+        Builder {
             buffer: handle,
             offset: 0,
             attributes: Vec::new(),
         }
     }
 
-    pub fn add(mut self, name: &str, count: a::Count, format: ComponentType) -> Constructor {
+    pub fn add(mut self, name: &str, count: a::Count, format: ComponentType) -> Builder {
         let (size, e_type) = format.decode();
         self.attributes.push(Attribute {
             buffer: self.buffer,

@@ -80,7 +80,7 @@ fn main() {
         let mesh = {
             let data = vec![-0.5f32, -0.5, 0.5, -0.5, 0.0, 0.5];
             let buf = renderer.create_buffer(Some(data));
-            gfx::Constructor::new(buf)
+            gfx::mesh::Builder::new(buf)
                 .add("a_Pos", 2, gfx::mesh::F32)
                 .complete(3)
         };
