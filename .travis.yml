@@ -16,6 +16,7 @@
 env:
   global:
     - LD_LIBRARY_PATH: /usr/local/lib
+    - secure: PL3pHJ8JLZcrReIhYWxWIm6MKBECOrZzZgtDvEKdtS82gyLhExKWMf/wajPvUtfYgCf53Dx8x73i902RmnmIPOO4PwbGNITmI7TnI7vM5Q/DpVE/ZXR7ibo5Ko5Tvb3RzfWkkwdEnXQtKyG4nxxRz1uFtIrniiZJKufanSs6T4U=
 notifications:
   webhooks:
     urls:
@@ -49,3 +50,6 @@ script:
   - ./examples/main
   - make clean
   - make clean deps
+  - make doc
+after_script:
+  - curl http://www.rust-ci.org/artifacts/put?t=$RUSTCI_TOKEN | sh
