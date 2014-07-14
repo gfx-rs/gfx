@@ -79,7 +79,7 @@ all: lib examples doc
 
 # Dependency handling
 
-.PHONY: submodule
+.PHONY: submodule-update
 submodule-update:
 	@git submodule init
 	@git submodule update --recursive
