@@ -38,9 +38,7 @@ install:
   - sudo make install
   - cd ..
   # rustc
-  - curl http://static.rust-lang.org/cargo-dist/cargo-nightly-linux.tar.gz |
-    sudo tar --strip-components 1 -C /usr -xzf -
-  - curl http://www.rust-lang.org/rustup.sh | sudo sh -
+  - curl http://www.rust-lang.org/rustup.sh | sudo sh
   - rustc -v
 script:
   - make init
