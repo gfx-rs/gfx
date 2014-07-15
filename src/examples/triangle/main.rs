@@ -79,7 +79,7 @@ fn main() {
         let state = gfx::DrawState::new();
         let mesh = {
             let data = vec![-0.5f32, -0.5, 0.5, -0.5, 0.0, 0.5];
-            let buf = renderer.create_vertex_buffer(data);
+            let buf = renderer.create_buffer(Some(data));
             gfx::Constructor::new(buf).
                 add("a_Pos", 2, "f32").
                 complete(3)

@@ -28,7 +28,9 @@ extern crate comm;
 #[cfg(gl)] pub use dev = self::gl;
 // #[cfg(d3d11)] ... // TODO
 
+use std::fmt;
 use std::kinds::marker;
+use std::mem::size_of;
 
 pub mod attrib;
 pub mod rast;
@@ -52,6 +54,26 @@ pub type AttributeSlot = u8;
 pub type UniformBufferSlot = u8;
 pub type TextureSlot = u8;
 
+pub trait Blob {
+    fn get_address(&self) -> uint;
+    fn get_size(&self) -> uint;
+}
+
+impl<T: Send> Blob for Vec<T> {
+    fn get_address(&self) -> uint {
+        self.as_ptr() as uint
+    }
+    fn get_size(&self) -> uint {
+        self.len() * size_of::<T>()
+    }
+}
+
+impl fmt::Show for Box<Blob + Send> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Blob({:#x}, {})", self.get_address(), self.get_size())
+    }
+}
+
 #[deriving(Show)]
 pub enum BufferUsage {
     UsageStatic,
@@ -69,9 +91,7 @@ pub enum Request<T> {
 /// Requests that require a reply
 #[deriving(Show)]
 pub enum CallRequest {
-    CreateVertexBuffer(Vec<f32>),
-    CreateIndexBuffer(Vec<u16>),
-    CreateRawBuffer,
+    CreateBuffer(Option<Box<Blob + Send>>),
     CreateArrayBuffer,
     CreateShader(shade::Stage, shade::ShaderSource),
     CreateProgram(Vec<dev::Shader>),
@@ -95,7 +115,7 @@ pub enum CastRequest {
     SetPrimitiveState(rast::Primitive),
     SetDepthStencilState(Option<rast::Depth>, Option<rast::Stencil>, rast::CullMode),
     SetBlendState(Option<rast::Blend>),
-    UpdateBuffer(dev::Buffer, Vec<f32>),
+    UpdateBuffer(dev::Buffer, Box<Blob + Send>),
     Draw(VertexCount, VertexCount),
     DrawIndexed(IndexCount, IndexCount),
 }
@@ -120,7 +140,7 @@ pub trait ApiBackEnd {
     fn create_program(&mut self, shaders: &[dev::Shader]) -> Result<shade::ProgramMeta, ()>;
     fn create_frame_buffer(&mut self) -> dev::FrameBuffer;
     /// Update the information stored in a specific buffer
-    fn update_buffer<T>(&mut self, dev::Buffer, data: &[T], BufferUsage);
+    fn update_buffer(&mut self, dev::Buffer, data: &Blob, BufferUsage);
     /// Process a request from a `Device`
     fn process(&mut self, CastRequest);
 }
@@ -152,18 +172,12 @@ impl<T: Send, B: ApiBackEnd, C: GraphicsContext<B>> Device<T, B, C> {
     /// Process a call request, return a single reply for it
     fn process(&mut self, token: T, call: CallRequest) -> Reply<T> {
         match call {
-            CreateVertexBuffer(data) => {
+            CreateBuffer(data) => {
                 let name = self.back_end.create_buffer();
-                self.back_end.update_buffer(name, data.as_slice(), UsageStatic);
-                ReplyNewBuffer(token, name)
-            },
-            CreateIndexBuffer(data) => {
-                let name = self.back_end.create_buffer();
-                self.back_end.update_buffer(name, data.as_slice(), UsageStatic);
-                ReplyNewBuffer(token, name)
-            },
-            CreateRawBuffer => {
-                let name = self.back_end.create_buffer();
+                match data {
+                    Some(blob) => self.back_end.update_buffer(name, blob, UsageStatic),
+                    None => (),
+                }
                 ReplyNewBuffer(token, name)
             },
             CreateArrayBuffer => {

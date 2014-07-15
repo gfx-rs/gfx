@@ -219,23 +219,10 @@ impl Renderer {
         token
     }
 
-    pub fn create_vertex_buffer(&mut self, data: Vec<f32>) -> BufferHandle {
+    pub fn create_buffer<T: Send>(&mut self, data: Option<Vec<T>>) -> BufferHandle {
         let token = self.resource.buffers.len();
-        self.call(token, device::CreateVertexBuffer(data));
-        self.resource.buffers.push(Pending);
-        token
-    }
-
-    pub fn create_index_buffer(&mut self, data: Vec<u16>) -> BufferHandle {
-        let token = self.resource.buffers.len();
-        self.call(token, device::CreateIndexBuffer(data));
-        self.resource.buffers.push(Pending);
-        token
-    }
-
-    pub fn create_raw_buffer(&mut self) -> BufferHandle {
-        let token = self.resource.buffers.len();
-        self.call(token, device::CreateRawBuffer);
+        let blob = data.map(|v| (box v) as Box<device::Blob + Send>);
+        self.call(token, device::CreateBuffer(blob));
         self.resource.buffers.push(Pending);
         token
     }
@@ -258,9 +245,14 @@ impl Renderer {
         self.environments.get_mut(handle).set_texture(var, texture, sampler);
     }
 
-    pub fn update_buffer(&mut self, handle: BufferHandle, data: Vec<f32>) {
+    pub fn update_buffer_vec<T: Send>(&mut self, handle: BufferHandle, data: Vec<T>) {
         let buf = self.get_buffer(handle);
-        self.cast(device::UpdateBuffer(buf, data));
+        self.cast(device::UpdateBuffer(buf, (box data) as Box<device::Blob + Send>));
+    }
+
+    pub fn update_buffer_struct<T: device::Blob+Send>(&mut self, handle: BufferHandle, data: T) {
+        let buf = self.get_buffer(handle);
+        self.cast(device::UpdateBuffer(buf, (box data) as Box<device::Blob + Send>));
     }
 
     fn bind_frame(&mut self, frame: &target::Frame) {
