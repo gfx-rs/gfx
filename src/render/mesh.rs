@@ -63,56 +63,87 @@ impl Mesh {
     }
 }
 
+/// The numeric type of a vertex's components.
 pub enum ComponentType {
+    /// An 8-bit unsigned integer component.
     U8,
-    U8n,
-    U8f,
+    /// An 8-bit unsigned integer component normalized to `[0, 1]`.
+    U8N,
+    /// An 8-bit unsigned integer component that is converted to a 32-bit float
+    /// at runtime by the hardware.
+    U8F,
+    /// An 8-bit signed integer component.
     I8,
-    I8n,
-    I8f,
+    /// An 8-bit signed integer component normalized to `[-1, 1]`.
+    I8N,
+    /// An 8-bit signed integer component that is converted to a 32-bit float at
+    /// runtime by the hardware.
+    I8F,
+    /// A 16-bit unsigned integer component.
     U16,
-    U16n,
-    U16f,
+    /// A 16-bit unsigned integer component normalized to `[-1, 1]`.
+    U16N,
+    /// A 16-bit unsigned integer component that is converted to a 32-bit float
+    /// at runtime by the hardware.
+    U16F,
+    /// A 16-bit signed integer component.
     I16,
-    I16n,
-    I16f,
+    /// A 16-bit signed integer component normalized to `[-1, 1]`.
+    I16N,
+    /// A 16-bit signed integer component that is converted to a 32-bit float at
+    /// runtime by the hardware.
+    I16F,
+    /// A 32-bit unsigned integer component.
     U32,
-    U32n,
-    U32f,
+    /// A 32-bit unsigned integer component normalized to `[-1, 1]`.
+    U32N,
+    /// A 32-bit unsigned integer component that is converted to a 32-bit float
+    /// at runtime by the hardware.
+    U32F,
+    /// A 32-bit signed integer component.
     I32,
-    I32n,
-    I32f,
+    /// A 32-bit signed integer component normalized to `[-1, 1]`.
+    I32N,
+    /// A 32-bit signed integer component that is converted to a 32-bit float at
+    /// runtime by the hardware.
+    I32F,
+    /// A 16-bit (half precision) floating point component that is converted to
+    /// a 32-bit float at runtime by the hardware.
     F16,
+    /// A 32-bit (single precision) floating point component.
     F32,
+    /// A 64-bit (double precision) floating point componentthat is converted to
+    /// a 32-bit float at runtime by the hardware.
     F64,
-    F64d,
+    /// A 64-bit (double precision) floating point component.
+    F64P,
 }
 
 impl ComponentType {
     pub fn decode(&self) -> (u8, a::Type) {
         match *self {
             U8     => (1, a::Int(a::IntRaw,        a::U8,  a::Unsigned)),
-            U8n    => (1, a::Int(a::IntNormalized, a::U8,  a::Unsigned)),
-            U8f    => (1, a::Int(a::IntAsFloat,    a::U8,  a::Unsigned)),
+            U8N    => (1, a::Int(a::IntNormalized, a::U8,  a::Unsigned)),
+            U8F    => (1, a::Int(a::IntAsFloat,    a::U8,  a::Unsigned)),
             I8     => (1, a::Int(a::IntRaw,        a::U8,  a::Signed)),
-            I8n    => (1, a::Int(a::IntNormalized, a::U8,  a::Signed)),
-            I8f    => (1, a::Int(a::IntAsFloat,    a::U8,  a::Signed)),
+            I8N    => (1, a::Int(a::IntNormalized, a::U8,  a::Signed)),
+            I8F    => (1, a::Int(a::IntAsFloat,    a::U8,  a::Signed)),
             U16    => (2, a::Int(a::IntRaw,        a::U16, a::Unsigned)),
-            U16n   => (2, a::Int(a::IntNormalized, a::U16, a::Unsigned)),
-            U16f   => (2, a::Int(a::IntAsFloat,    a::U16, a::Unsigned)),
+            U16N   => (2, a::Int(a::IntNormalized, a::U16, a::Unsigned)),
+            U16F   => (2, a::Int(a::IntAsFloat,    a::U16, a::Unsigned)),
             I16    => (2, a::Int(a::IntRaw,        a::U16, a::Signed)),
-            I16n   => (2, a::Int(a::IntNormalized, a::U16, a::Signed)),
-            I16f   => (2, a::Int(a::IntAsFloat,    a::U16, a::Signed)),
+            I16N   => (2, a::Int(a::IntNormalized, a::U16, a::Signed)),
+            I16F   => (2, a::Int(a::IntAsFloat,    a::U16, a::Signed)),
             U32    => (4, a::Int(a::IntRaw,        a::U32, a::Unsigned)),
-            U32n   => (4, a::Int(a::IntNormalized, a::U32, a::Unsigned)),
-            U32f   => (4, a::Int(a::IntAsFloat,    a::U32, a::Unsigned)),
+            U32N   => (4, a::Int(a::IntNormalized, a::U32, a::Unsigned)),
+            U32F   => (4, a::Int(a::IntAsFloat,    a::U32, a::Unsigned)),
             I32    => (4, a::Int(a::IntRaw,        a::U32, a::Signed)),
-            I32n   => (4, a::Int(a::IntNormalized, a::U32, a::Signed)),
-            I32f   => (4, a::Int(a::IntAsFloat,    a::U32, a::Signed)),
+            I32N   => (4, a::Int(a::IntNormalized, a::U32, a::Signed)),
+            I32F   => (4, a::Int(a::IntAsFloat,    a::U32, a::Signed)),
             F16    => (2, a::Float(a::FloatDefault,   a::F16)),
             F32    => (4, a::Float(a::FloatDefault,   a::F32)),
             F64    => (8, a::Float(a::FloatDefault,   a::F64)),
-            F64d   => (8, a::Float(a::FloatPrecision, a::F64)),
+            F64P   => (8, a::Float(a::FloatPrecision, a::F64)),
         }
     }
 }
