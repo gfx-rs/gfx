@@ -80,9 +80,9 @@ struct Dispatcher {
     /// Channel to receive device messages
     channel: Receiver<device::Reply<Token>>,
     /// Asynchronous device error queue
-    pub errors: Vec<DeviceError>,
+    errors: Vec<DeviceError>,
     /// cached meta-data for meshes and programs
-    pub resource: resource::Cache,
+    resource: resource::Cache,
 }
 
 impl Dispatcher {

@@ -1,7 +1,8 @@
 # gfx-rs
 
 [![Build Status](https://travis-ci.org/bjz/gfx-rs.png?branch=master)](https://travis-ci.org/bjz/gfx-rs)
-[![Gitter chat](https://badges.gitter.im/bjz/gfx-rs.png)](https://gitter.im/bjz/gfx-rs)
+[![Gitter Chat](https://badges.gitter.im/bjz/gfx-rs.png)](https://gitter.im/bjz/gfx-rs)
+[![Stories in Ready](https://badge.waffle.io/bjz/gfx-rs.png?label=S-ready&title=issues)](https://waffle.io/bjz/gfx-rs)
 
 A lightweight buffer, shader and render queue manager for Rust.
 
