@@ -119,8 +119,11 @@ pub enum ComponentType {
     F64P,
 }
 
+/// The number of bytes in a vertex component.
+type ByteSize = u8;
+
 impl ComponentType {
-    pub fn decode(&self) -> (u8, a::Type) {
+    pub fn decode(&self) -> (ByteSize, a::Type) {
         match *self {
             U8     => (1, a::Int(a::IntRaw,        a::U8,  a::Unsigned)),
             U8N    => (1, a::Int(a::IntNormalized, a::U8,  a::Unsigned)),
