@@ -255,7 +255,7 @@ impl ShaderSource {
     }
 }
 
-#[deriving(Show)]
+#[deriving(Clone, Show)]
 pub enum CreateShaderError {
     NoSupportedShaderProvided,
     ShaderCompilationFailed

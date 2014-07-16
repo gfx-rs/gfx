@@ -27,7 +27,7 @@ use std::fmt::Show;
 use std::vec::MoveItems;
 
 use backend = device::dev;
-use device::shade::{ProgramMeta, Vertex, Fragment, UniformValue, ShaderSource};
+use device::shade::{CreateShaderError, ProgramMeta, Vertex, Fragment, UniformValue, ShaderSource};
 use device::target::{ClearData, TargetColor, TargetDepth, TargetStencil};
 use envir::BindableStorage;
 use resource::Pending;
@@ -48,6 +48,7 @@ pub mod target;
 
 pub type Token = uint;
 pub type RequestChannel = Sender<device::Request<Token>>;
+pub type ReceiveChannel = Receiver<device::Reply<Token>>;
 
 /// Graphics state
 struct State {
@@ -56,8 +57,13 @@ struct State {
 
 #[deriving(Clone, Show)]
 pub enum DeviceError {
-    Dummy,
+    ErrorNewBuffer(BufferHandle),
+    ErrorNewArrayBuffer,
+    ErrorNewShader(ShaderHandle, CreateShaderError),
+    ErrorNewProgram(ProgramHandle),
+    ErrorNewFrameBuffer,
 }
+
 
 #[deriving(Show)]
 pub enum DrawError<'a> {
@@ -68,13 +74,13 @@ pub enum DrawError<'a> {
 
 #[deriving(Show)]
 pub enum MeshError {
-    ErrorMissingAttribute,
+    ErrorAttributeMissing,
     ErrorAttributeType,
 }
 
 pub struct Renderer {
     device_tx: RequestChannel,
-    device_rx: Receiver<device::Reply<Token>>,
+    device_rx: ReceiveChannel,
     swap_ack: Receiver<device::Ack>,
     should_finish: comm::ShouldClose,
     device_errors: Vec<DeviceError>,
@@ -90,24 +96,26 @@ pub struct Renderer {
 /// Resource-oriented private methods
 impl Renderer {
     /// Make sure the resource is loaded. Optimally, we'd like this method to return
-    /// the resource reference, but there is a number of problems with it. One is that
-    /// the borrow checker doesn't like the match over `Future` inside the body.
-    /// Another one is that the returned reference will freeze `self` for its life time.
-    fn demand(&mut self, fn_ready: |&resource::Cache| -> bool) {
-        while !fn_ready(&self.resource) {
-            let reply = self.device_rx.recv();
-            self.resource.process(reply);
+    /// the resource reference, but the borrow checker doesn't like the match over `Future`
+    /// inside the body.
+    fn demand(channel: &ReceiveChannel, resource: &mut resource::Cache,
+            errors: &mut Vec<DeviceError>, fn_ready: |&resource::Cache| -> bool) {
+        while !fn_ready(resource) {
+            let reply = channel.recv();
+            match resource.process(reply) {
+                Ok(_) => (),
+                Err(e) => errors.push(e),
+            }
         }
     }
 
     /// Get a guaranteed copy of a specific resource accessed by the function.
     fn get_any<R: Copy, E: Show>(&mut self, fun: <'a>|&'a resource::Cache| -> &'a resource::Future<R, E>) -> R {
-        self.demand(|res| !fun(res).is_pending());
+        Renderer::demand(&self.device_rx, &mut self.resource, &mut self.device_errors, |res| !fun(res).is_pending());
         *fun(&self.resource).unwrap()
     }
 
     fn get_buffer(&mut self, handle: BufferHandle) -> backend::Buffer {
-        self.demand(|res| !fun(res).is_pending());
         self.get_any(|res| res.buffers.get(handle))
     }
 
@@ -126,7 +134,7 @@ impl Renderer {
 
 /// Graphics-oriented methods
 impl Renderer {
-    pub fn new(device_tx: RequestChannel, device_rx: Receiver<device::Reply<Token>>,
+    pub fn new(device_tx: RequestChannel, device_rx: ReceiveChannel,
             swap_rx: Receiver<device::Ack>, should_finish: comm::ShouldClose) -> Renderer {
         // Request the creation of the common array buffer and frame buffer
         let mut res = resource::Cache::new();
@@ -140,7 +148,7 @@ impl Renderer {
             device_rx: device_rx,
             swap_ack: swap_rx,
             should_finish: should_finish,
-            error_queue: Vec::new(),
+            device_errors: Vec::new(),
             default_frame_buffer: 0,
             resource: res,
             environments: Vec::new(),
@@ -165,8 +173,8 @@ impl Renderer {
     }
 
     pub fn iter_errors(&mut self) -> MoveItems<DeviceError> {
-        let errors = self.error_queue.clone();
-        self.error_queue.clear();
+        let errors = self.device_errors.clone();
+        self.device_errors.clear();
         errors.move_iter()
     }
 
@@ -181,7 +189,8 @@ impl Renderer {
         // demand resources. This section needs the mutable self, so we are unable to do this
         // after we get a reference to ether the `Environment` or the `ProgramMeta`
         self.prebind_mesh(mesh);
-        self.demand(|res| !res.programs.get(program_handle).is_pending());
+        Renderer::demand(&self.device_rx, &mut self.resource, &mut self.device_errors,
+            |res| !res.programs.get(program_handle).is_pending());
         // bind state
         self.cast(device::SetPrimitiveState(state.primitive));
         self.cast(device::SetDepthStencilState(state.depth, state.stencil,
@@ -196,10 +205,8 @@ impl Renderer {
         let env = self.environments.get(env_handle);
         // prebind the environment (unable to make it a method of self...)
         for handle in env.iter_buffers() {
-            while self.resource.buffers.get(handle).is_pending() {
-                let reply = self.device_rx.recv();
-                self.resource.process(reply);
-            }
+            Renderer::demand(&self.device_rx, &mut self.resource, &mut self.device_errors,
+                |res| !res.buffers.get(handle).is_pending());
         }
         let program = match *self.resource.programs.get(program_handle) {
             resource::Pending => fail!("Program is not loaded yet"),
@@ -322,7 +329,7 @@ impl Renderer {
                         vat.elem_count, vat.elem_type, vat.stride, vat.offset)),
                     Err(_) => return Err(ErrorAttributeType)
                 },
-                None => return Err(ErrorMissingAttribute)
+                None => return Err(ErrorAttributeMissing)
             }
         }
         Ok(())
