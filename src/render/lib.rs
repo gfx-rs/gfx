@@ -24,6 +24,7 @@ extern crate comm;
 extern crate device;
 
 use std::fmt::Show;
+use std::vec::MoveItems;
 
 use backend = device::dev;
 use device::shade::{ProgramMeta, Vertex, Fragment, UniformValue, ShaderSource};
@@ -53,8 +54,20 @@ struct State {
     frame: target::Frame,
 }
 
+#[deriving(Clone, Show)]
+pub enum DeviceError {
+    Dummy,
+}
+
 #[deriving(Show)]
-enum MeshError {
+pub enum DrawError<'a> {
+    ErrorMesh(MeshError),
+    ErrorProgram,
+    ErrorEnvironment(envir::OptimizeError<'a>),
+}
+
+#[deriving(Show)]
+pub enum MeshError {
     ErrorMissingAttribute,
     ErrorAttributeType,
 }
@@ -64,6 +77,7 @@ pub struct Renderer {
     device_rx: Receiver<device::Reply<Token>>,
     swap_ack: Receiver<device::Ack>,
     should_finish: comm::ShouldClose,
+    device_errors: Vec<DeviceError>,
     /// the default FBO for drawing
     default_frame_buffer: backend::FrameBuffer,
     /// cached meta-data for meshes and programs
@@ -93,6 +107,7 @@ impl Renderer {
     }
 
     fn get_buffer(&mut self, handle: BufferHandle) -> backend::Buffer {
+        self.demand(|res| !fun(res).is_pending());
         self.get_any(|res| res.buffers.get(handle))
     }
 
@@ -125,6 +140,7 @@ impl Renderer {
             device_rx: device_rx,
             swap_ack: swap_rx,
             should_finish: should_finish,
+            error_queue: Vec::new(),
             default_frame_buffer: 0,
             resource: res,
             environments: Vec::new(),
@@ -148,13 +164,20 @@ impl Renderer {
         self.should_finish.check()
     }
 
+    pub fn iter_errors(&mut self) -> MoveItems<DeviceError> {
+        let errors = self.error_queue.clone();
+        self.error_queue.clear();
+        errors.move_iter()
+    }
+
     pub fn clear(&mut self, data: ClearData, frame: target::Frame) {
         self.bind_frame(&frame);
         self.cast(device::Clear(data));
     }
 
-    pub fn draw(&mut self, mesh: &mesh::Mesh, slice: mesh::Slice, frame: target::Frame,
-            program_handle: ProgramHandle, env_handle: EnvirHandle, state: rast::DrawState) {
+    pub fn draw<'a>(&'a mut self, mesh: &mesh::Mesh, slice: mesh::Slice, frame: target::Frame,
+            program_handle: ProgramHandle, env_handle: EnvirHandle, state: rast::DrawState)
+            -> Result<(), DrawError<'a>> {
         // demand resources. This section needs the mutable self, so we are unable to do this
         // after we get a reference to ether the `Environment` or the `ProgramMeta`
         self.prebind_mesh(mesh);
@@ -178,16 +201,20 @@ impl Renderer {
                 self.resource.process(reply);
             }
         }
-        let program = self.resource.programs.get(program_handle).unwrap();
+        let program = match *self.resource.programs.get(program_handle) {
+            resource::Pending => fail!("Program is not loaded yet"),
+            resource::Loaded(ref p) => p,
+            resource::Failed(_) => return Err(ErrorProgram),
+        };
         match env.optimize(program) {
             Ok(ref cut) => self.bind_environment(env, cut, program),
-            Err(err) => {
-                error!("Failed to build environment shortcut {}", err);
-                return;
-            },
+            Err(err) => return Err(ErrorEnvironment(err)),
         }
         // bind vertex attributes
-        self.bind_mesh(mesh, program).unwrap();
+        match self.bind_mesh(mesh, program) {
+            Ok(_) => (),
+            Err(e) => return Err(ErrorMesh(e)),
+        }
         // draw
         match slice {
             mesh::VertexSlice(start, end) => {
@@ -198,6 +225,7 @@ impl Renderer {
                 self.cast(device::DrawIndexed(start, end));
             },
         }
+        Ok(())
     }
 
     pub fn end_frame(&self) {

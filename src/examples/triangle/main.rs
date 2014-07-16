@@ -91,8 +91,11 @@ fn main() {
                 stencil: None,
             };
             renderer.clear(cdata, frame);
-            renderer.draw(&mesh, gfx::mesh::VertexSlice(0, 3), frame, program, env, state);
+            renderer.draw(&mesh, gfx::mesh::VertexSlice(0, 3), frame, program, env, state).unwrap();
             renderer.end_frame();
+            for err in renderer.iter_errors() {
+                println!("Renderer error: {}", err);
+            }
         }
     });
 
