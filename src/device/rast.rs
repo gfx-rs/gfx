@@ -15,10 +15,13 @@
 use std::default::Default;
 use StencilValue = super::target::Stencil;
 
+/// The winding order of a set of vertices.
 #[deriving(Clone, PartialEq, Show)]
-pub enum FrontType {
-    Cw,
-    Ccw,
+pub enum WindingOrder {
+    /// Clockwise winding order.
+    Clockwise,
+    /// Counter-clockwise winding order.
+    CounterClockwise,
 }
 
 pub type LineWidth = f32;
@@ -49,7 +52,7 @@ pub enum RasterMethod {
 /// method to be used for front and back, while this abstraction does not.
 #[deriving(Clone, PartialEq, Show)]
 pub struct Primitive {
-    pub front_face: FrontType,
+    pub front_face: WindingOrder,
     pub method: RasterMethod,
     pub offset: OffsetType,
 }
@@ -66,33 +69,33 @@ impl Primitive {
 impl Default for Primitive {
     fn default() -> Primitive {
         Primitive {
-            front_face: Ccw,
+            front_face: CounterClockwise,
             method: Fill(CullNothing),
             offset: NoOffset,
         }
     }
 }
 
+/// A pixel-wise comparison function.
 #[deriving(Clone, PartialEq, Show)]
-pub enum LessFlag {
+pub enum Comparison {
+    /// `false`
+    Never,
+    /// `x < y`
     Less,
-    NoLess,
-}
-
-#[deriving(Clone, PartialEq, Show)]
-pub enum EqualFlag {
+    /// `x <= y`
+    LessEqual,
+    /// `x == y`
     Equal,
-    NoEqual,
-}
-
-#[deriving(Clone, PartialEq, Show)]
-pub enum GreaterFlag {
+    /// `x >= y`
+    GreaterEqual,
+    /// `x > y`
     Greater,
-    NoGreater,
+    /// `x != y`
+    NotEqual,
+    /// `true`
+    Always,
 }
-
-#[deriving(Clone, PartialEq, Show)]
-pub struct Comparison(pub LessFlag, pub EqualFlag, pub GreaterFlag);
 
 #[deriving(Clone, PartialEq, Show)]
 pub enum StencilOp {
@@ -120,7 +123,7 @@ pub struct StencilSide {
 impl Default for StencilSide {
     fn default() -> StencilSide {
         StencilSide {
-            fun: Comparison(Less, Equal, Greater),
+            fun: Always,
             value: 0,
             mask_read: -1,
             mask_write: -1,
@@ -146,7 +149,7 @@ pub struct Depth {
 impl Default for Depth {
     fn default() -> Depth {
         Depth {
-            fun: Comparison(Less, Equal, Greater),
+            fun: Always,
             write: false,
         }
     }

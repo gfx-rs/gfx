@@ -56,54 +56,119 @@ impl Mesh {
             attributes: Vec::new(),
         }
     }
+
+    pub fn embed(&mut self, mut builder: Builder) {
+        builder.finalize();
+        self.attributes.push_all(builder.attributes.as_slice());
+    }
+}
+
+/// The numeric type of a vertex's components.
+pub enum ComponentType {
+    /// An 8-bit unsigned integer component.
+    U8,
+    /// An 8-bit unsigned integer component normalized to `[0, 1]`.
+    U8N,
+    /// An 8-bit unsigned integer component that is converted to a 32-bit float
+    /// at runtime by the hardware.
+    U8F,
+    /// An 8-bit signed integer component.
+    I8,
+    /// An 8-bit signed integer component normalized to `[-1, 1]`.
+    I8N,
+    /// An 8-bit signed integer component that is converted to a 32-bit float at
+    /// runtime by the hardware.
+    I8F,
+    /// A 16-bit unsigned integer component.
+    U16,
+    /// A 16-bit unsigned integer component normalized to `[-1, 1]`.
+    U16N,
+    /// A 16-bit unsigned integer component that is converted to a 32-bit float
+    /// at runtime by the hardware.
+    U16F,
+    /// A 16-bit signed integer component.
+    I16,
+    /// A 16-bit signed integer component normalized to `[-1, 1]`.
+    I16N,
+    /// A 16-bit signed integer component that is converted to a 32-bit float at
+    /// runtime by the hardware.
+    I16F,
+    /// A 32-bit unsigned integer component.
+    U32,
+    /// A 32-bit unsigned integer component normalized to `[-1, 1]`.
+    U32N,
+    /// A 32-bit unsigned integer component that is converted to a 32-bit float
+    /// at runtime by the hardware.
+    U32F,
+    /// A 32-bit signed integer component.
+    I32,
+    /// A 32-bit signed integer component normalized to `[-1, 1]`.
+    I32N,
+    /// A 32-bit signed integer component that is converted to a 32-bit float at
+    /// runtime by the hardware.
+    I32F,
+    /// A 16-bit (half precision) floating point component that is converted to
+    /// a 32-bit float at runtime by the hardware.
+    F16,
+    /// A 32-bit (single precision) floating point component.
+    F32,
+    /// A 64-bit (double precision) floating point componentthat is converted to
+    /// a 32-bit float at runtime by the hardware.
+    F64,
+    /// A 64-bit (double precision) floating point component.
+    F64P,
+}
+
+/// The number of bytes in a vertex component.
+type ByteSize = u8;
+
+impl ComponentType {
+    pub fn decode(&self) -> (ByteSize, a::Type) {
+        match *self {
+            U8     => (1, a::Int(a::IntRaw,        a::U8,  a::Unsigned)),
+            U8N    => (1, a::Int(a::IntNormalized, a::U8,  a::Unsigned)),
+            U8F    => (1, a::Int(a::IntAsFloat,    a::U8,  a::Unsigned)),
+            I8     => (1, a::Int(a::IntRaw,        a::U8,  a::Signed)),
+            I8N    => (1, a::Int(a::IntNormalized, a::U8,  a::Signed)),
+            I8F    => (1, a::Int(a::IntAsFloat,    a::U8,  a::Signed)),
+            U16    => (2, a::Int(a::IntRaw,        a::U16, a::Unsigned)),
+            U16N   => (2, a::Int(a::IntNormalized, a::U16, a::Unsigned)),
+            U16F   => (2, a::Int(a::IntAsFloat,    a::U16, a::Unsigned)),
+            I16    => (2, a::Int(a::IntRaw,        a::U16, a::Signed)),
+            I16N   => (2, a::Int(a::IntNormalized, a::U16, a::Signed)),
+            I16F   => (2, a::Int(a::IntAsFloat,    a::U16, a::Signed)),
+            U32    => (4, a::Int(a::IntRaw,        a::U32, a::Unsigned)),
+            U32N   => (4, a::Int(a::IntNormalized, a::U32, a::Unsigned)),
+            U32F   => (4, a::Int(a::IntAsFloat,    a::U32, a::Unsigned)),
+            I32    => (4, a::Int(a::IntRaw,        a::U32, a::Signed)),
+            I32N   => (4, a::Int(a::IntNormalized, a::U32, a::Signed)),
+            I32F   => (4, a::Int(a::IntAsFloat,    a::U32, a::Signed)),
+            F16    => (2, a::Float(a::FloatDefault,   a::F16)),
+            F32    => (4, a::Float(a::FloatDefault,   a::F32)),
+            F64    => (8, a::Float(a::FloatDefault,   a::F64)),
+            F64P   => (8, a::Float(a::FloatPrecision, a::F64)),
+        }
+    }
 }
 
 /// A helper class to populate Mesh attributes
-pub struct Constructor {
+pub struct Builder {
     buffer: super::BufferHandle,
     offset: a::Offset,
     attributes: Vec<Attribute>,
 }
 
-impl Constructor {
-    pub fn new(handle: super::BufferHandle) -> Constructor {
-        Constructor {
+impl Builder {
+    pub fn new(handle: super::BufferHandle) -> Builder {
+        Builder {
             buffer: handle,
             offset: 0,
             attributes: Vec::new(),
         }
     }
 
-    pub fn decode(format: &str) -> Result<(u8, a::Type), ()> {
-        match format {
-            "u8"    => Ok((1, a::Int(a::IntRaw,        a::U8,  a::Unsigned))),
-            "u8n"   => Ok((1, a::Int(a::IntNormalized, a::U8,  a::Unsigned))),
-            "u8f"   => Ok((1, a::Int(a::IntAsFloat,    a::U8,  a::Unsigned))),
-            "i8"    => Ok((1, a::Int(a::IntRaw,        a::U8,  a::Signed))),
-            "i8n"   => Ok((1, a::Int(a::IntNormalized, a::U8,  a::Signed))),
-            "i8f"   => Ok((1, a::Int(a::IntAsFloat,    a::U8,  a::Signed))),
-            "u16"   => Ok((2, a::Int(a::IntRaw,        a::U16, a::Unsigned))),
-            "u16n"  => Ok((2, a::Int(a::IntNormalized, a::U16, a::Unsigned))),
-            "u16f"  => Ok((2, a::Int(a::IntAsFloat,    a::U16, a::Unsigned))),
-            "i16"   => Ok((2, a::Int(a::IntRaw,        a::U16, a::Signed))),
-            "i16n"  => Ok((2, a::Int(a::IntNormalized, a::U16, a::Signed))),
-            "i16f"  => Ok((2, a::Int(a::IntAsFloat,    a::U16, a::Signed))),
-            "u32"   => Ok((4, a::Int(a::IntRaw,        a::U32, a::Unsigned))),
-            "u32n"  => Ok((4, a::Int(a::IntNormalized, a::U32, a::Unsigned))),
-            "u32f"  => Ok((4, a::Int(a::IntAsFloat,    a::U32, a::Unsigned))),
-            "i32"   => Ok((4, a::Int(a::IntRaw,        a::U32, a::Signed))),
-            "i32n"  => Ok((4, a::Int(a::IntNormalized, a::U32, a::Signed))),
-            "i32f"  => Ok((4, a::Int(a::IntAsFloat,    a::U32, a::Signed))),
-            "f16"   => Ok((2, a::Float(a::FloatDefault,   a::F16))),
-            "f32"   => Ok((4, a::Float(a::FloatDefault,   a::F32))),
-            "f64"   => Ok((8, a::Float(a::FloatDefault,   a::F64))),
-            "f64d"  => Ok((8, a::Float(a::FloatPrecision, a::F64))),
-            _ => Err(())
-        }
-    }
-
-    pub fn add(mut self, name: &str, count: a::Count, format: &str) -> Constructor {
-        let (size, e_type) = Constructor::decode(format).unwrap();
+    pub fn add(mut self, name: &str, count: a::Count, format: ComponentType) -> Builder {
+        let (size, e_type) = format.decode();
         self.attributes.push(Attribute {
             buffer: self.buffer,
             elem_count: count,
@@ -120,11 +185,6 @@ impl Constructor {
         for at in self.attributes.mut_iter() {
             at.stride = self.offset as a::Stride;
         }
-    }
-
-    pub fn embed_to(mut self, mesh: &mut Mesh) {
-        self.finalize();
-        mesh.attributes.push_all(self.attributes.as_slice());
     }
 
     pub fn complete(mut self, nv: VertexCount) -> Mesh {

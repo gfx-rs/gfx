@@ -18,8 +18,8 @@ use super::gl;
 
 pub fn bind_primitive(p: r::Primitive) {
     gl::FrontFace(match p.front_face {
-        r::Cw => gl::CW,
-        r::Ccw => gl::CCW,
+        r::Clockwise => gl::CW,
+        r::CounterClockwise => gl::CCW,
     });
 
     let (gl_draw, gl_offset) = match p.method {
@@ -57,14 +57,14 @@ pub fn bind_primitive(p: r::Primitive) {
 
 fn map_comparison(cmp: r::Comparison) -> gl::types::GLenum {
     match cmp {
-        r::Comparison(r::NoLess, r::NoEqual, r::NoGreater) => gl::NEVER,
-        r::Comparison(r::Less,   r::NoEqual, r::NoGreater) => gl::LESS,
-        r::Comparison(r::NoLess, r::Equal,   r::NoGreater) => gl::EQUAL,
-        r::Comparison(r::Less,   r::Equal,   r::NoGreater) => gl::LEQUAL,
-        r::Comparison(r::NoLess, r::NoEqual, r::Greater)   => gl::GREATER,
-        r::Comparison(r::Less,   r::NoEqual, r::Greater)   => gl::NOTEQUAL,
-        r::Comparison(r::NoLess, r::Equal,   r::Greater)   => gl::GEQUAL,
-        r::Comparison(r::Less,   r::Equal,   r::Greater)   => gl::ALWAYS,
+        r::Never        => gl::NEVER,
+        r::Less         => gl::LESS,
+        r::LessEqual    => gl::LEQUAL,
+        r::Equal        => gl::EQUAL,
+        r::GreaterEqual => gl::GEQUAL,
+        r::Greater      => gl::GREATER,
+        r::NotEqual     => gl::NOTEQUAL,
+        r::Always       => gl::ALWAYS,
     }
 }
 

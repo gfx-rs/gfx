@@ -38,14 +38,14 @@ install:
   - sudo make install
   - cd ..
   # rustc
-  - curl http://www.rust-lang.org/rustup.sh | sudo sh
+  - curl http://www.rust-lang.org/rustup.sh | sudo -E sh
   - rustc -v
 script:
   - make init
   - make test
   - make examples
-  - sh -c "sleep 5; xdotool key --window \"$(xdotool search --name Hello)\" Escape" &
-  - ./examples/main
+# - sh -c "sleep 5; xdotool key --window \"$(xdotool search --name Hello)\" Escape" &
+# - ./examples/main
   - make clean
   - make clean deps
   - make doc
