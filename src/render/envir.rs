@@ -13,6 +13,8 @@
 // limitations under the License.
 
 extern crate time;
+extern crate syntax;
+
 
 use device::shade::{UniformValue, ProgramMeta, CompatibilityError};
 

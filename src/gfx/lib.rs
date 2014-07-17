@@ -15,9 +15,9 @@
 #![crate_name = "gfx"]
 #![comment = "A lightweight graphics device manager for Rust"]
 #![license = "ASL2"]
-#![crate_type = "lib"]
+#![crate_type = "dylib"]
 
-#![feature(macro_rules, phase)]
+#![feature(macro_rules, phase, plugin_registrar)]
 
 #[phase(plugin, link)] extern crate log;
 extern crate libc;
@@ -26,6 +26,8 @@ extern crate device;
 #[cfg(glfw)]
 extern crate glfw_platform;
 extern crate render;
+extern crate rustc;
+extern crate syntax;
 
 // public re-exports
 pub use render::{BufferHandle, SurfaceHandle, TextureHandle, SamplerHandle, ProgramHandle, EnvirHandle};
@@ -43,6 +45,8 @@ pub use device::shade::{UniformValue, ValueI32, ValueF32, ValueI32Vec, ValueF32V
 pub use device::shade::{ShaderSource, StaticBytes, NOT_PROVIDED};
 #[cfg(glfw)]
 pub use glfw = glfw_platform;
+
+pub mod plugin;
 
 #[allow(visible_private_types)]
 pub fn start<C: GraphicsContext<GlBackEnd>, P: GlProvider>(graphics_context: C, provider: P, queue_size: QueueSize)
