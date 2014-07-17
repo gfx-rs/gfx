@@ -18,6 +18,7 @@ use device;
 use backend = device::dev;
 use device::shade::{CreateShaderError, ProgramMeta};
 
+
 /// A deferred resource
 #[deriving(PartialEq, Show)]
 pub enum Future<T, E> {
@@ -65,7 +66,8 @@ impl Cache {
     }
 
     /// Process a given device reply by updating the appropriate resource
-    pub fn process(&mut self, reply: device::Reply<super::Token>) {
+    pub fn process(&mut self, reply: device::Reply<super::Token>) -> Result<(), super::DeviceError> {
+        let mut ret = Ok(());
         match reply {
             device::ReplyNewBuffer(token, buf) => {
                 *self.buffers.get_mut(token) = Loaded(buf);
@@ -73,24 +75,34 @@ impl Cache {
             device::ReplyNewArrayBuffer(token, result) => {
                 *self.array_buffers.get_mut(token) = match result {
                     Ok(vao) => Loaded(vao),
-                    Err(e) => Failed(e),
+                    Err(e) => {
+                        ret = Err(super::ErrorNewArrayBuffer);
+                        Failed(e)
+                    },
                 };
             },
             device::ReplyNewShader(token, result) => {
                 *self.shaders.get_mut(token) = match result {
                     Ok(sh) => Loaded(sh),
-                    Err(e) => Failed(e),
+                    Err(e) => {
+                        ret = Err(super::ErrorNewShader(token, e));
+                        Failed(e)
+                    },
                 };
             },
             device::ReplyNewProgram(token, result) => {
                 *self.programs.get_mut(token) = match result {
                     Ok(prog) => Loaded(prog),
-                    Err(e) => Failed(e),
+                    Err(e) => {
+                        ret = Err(super::ErrorNewProgram(token));
+                        Failed(e)
+                    },
                 };
             },
             device::ReplyNewFrameBuffer(token, fbo) => {
                 *self.frame_buffers.get_mut(token) = Loaded(fbo);
             },
         }
+        ret
     }
 }
