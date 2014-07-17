@@ -17,7 +17,7 @@
 #![license = "ASL2"]
 #![crate_type = "lib"]
 
-#![feature(macro_rules, phase)]
+#![feature(macro_rules, phase, plugin_registrar)]
 
 #[phase(plugin, link)] extern crate log;
 extern crate comm;
@@ -42,6 +42,7 @@ pub type EnvirHandle = uint;
 
 pub mod envir;
 pub mod mesh;
+pub mod plugin;
 pub mod rast;
 pub mod resource;
 pub mod target;

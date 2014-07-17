@@ -5,6 +5,11 @@
 extern crate gfx;
 extern crate glfw;
 
+#[shader_param]
+struct Params {
+    x: int,
+}
+
 static VERTEX_SRC: gfx::ShaderSource = shaders! {
 GLSL_120: b"
     #version 120
