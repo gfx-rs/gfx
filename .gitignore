@@ -1,4 +1,5 @@
 .dir-locals.el
+*.swp
 .DS_Store
 /doc/
 /examples/
