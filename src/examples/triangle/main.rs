@@ -1,4 +1,5 @@
 #![feature(phase)]
+#![crate_name = "triangle"]
 
 #[phase(link, plugin)]
 extern crate gfx;
