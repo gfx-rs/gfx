@@ -24,16 +24,29 @@ use self::syntax::parse::token;
 use self::rustc::plugin::Registry;
 
 
+static NAME_MODIFIER : &'static str = "shader_param";
+static NAME_DECORATOR: &'static str = "shader_param_impl";
+
+fn expand_modifier(cx: &mut ext::base::ExtCtxt, span: Span,
+        _meta_item: Gc<ast::MetaItem>, item: Gc<ast::Item>) -> Gc<ast::Item> {
+    let at = cx.attribute(span, cx.meta_word(span, token::InternedString::new(NAME_DECORATOR)));
+    cx.item(span, item.ident, item.attrs.clone().append_one(at), item.node.clone())
+}
+
 fn create_substructure(cx: &mut ext::base::ExtCtxt, span: Span, substr: &generic::Substructure) -> Gc<ast::Expr> {
     match *substr.fields {
-        generic::StaticStruct(definition, ref summary) => {
+        generic::StaticStruct(_definition, ref summary) => {
             match *summary {
                 generic::Named(ref fields) => {
-                    for f in fields.iter() {
-                        println!("Field {}", f);
-                    }
+                    //quote_expr!(cx, "::std::default::Default::default()");
+                    let default = cx.expr_call_global(span, vec![
+                            cx.ident_of("std"),
+                            cx.ident_of("default"),
+                            cx.ident_of("Default"),
+                            cx.ident_of("default")
+                        ], Vec::new());
                     let tmp = fields.iter().map(|&(ident, s)|
-                        cx.field_imm(s, ident, cx.expr_int(span, 1))
+                        cx.field_imm(s, ident, default)
                         ).collect();
                     cx.expr_struct_ident(span, substr.type_ident, tmp)
                 },
@@ -44,7 +57,7 @@ fn create_substructure(cx: &mut ext::base::ExtCtxt, span: Span, substr: &generic
     }
 }
 
-fn expand_shader_param(context: &mut ext::base::ExtCtxt, span: Span,
+fn expand_decorator(context: &mut ext::base::ExtCtxt, span: Span,
         meta_item: Gc<ast::MetaItem>, item: Gc<ast::Item>, push: |Gc<ast::Item>|) {
     let arg = generic::ty::Ptr(box generic::ty::Literal(
         generic::ty::Path::new(vec!["gfx", "ParameterSink"])),
@@ -73,6 +86,8 @@ fn expand_shader_param(context: &mut ext::base::ExtCtxt, span: Span,
 
 #[plugin_registrar]
 pub fn registrar(reg: &mut Registry) {
-    reg.register_syntax_extension(token::intern("shader_param"),
-        ext::base::ItemDecorator(expand_shader_param));
+    reg.register_syntax_extension(token::intern(NAME_MODIFIER),
+        ext::base::ItemModifier(expand_modifier));
+    reg.register_syntax_extension(token::intern(NAME_DECORATOR),
+        ext::base::ItemDecorator(expand_decorator));
 }
