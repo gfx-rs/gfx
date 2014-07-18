@@ -15,9 +15,9 @@
 #![crate_name = "gfx"]
 #![comment = "A lightweight graphics device manager for Rust"]
 #![license = "ASL2"]
-#![crate_type = "dylib"]
+#![crate_type = "lib"]
 
-#![feature(macro_rules, phase, plugin_registrar)]
+#![feature(phase)]
 
 #[phase(plugin, link)] extern crate log;
 extern crate libc;
@@ -26,14 +26,12 @@ extern crate device;
 #[cfg(glfw)]
 extern crate glfw_platform;
 extern crate render;
-extern crate rustc;
-extern crate syntax;
 
 // public re-exports
 pub use render::{BufferHandle, SurfaceHandle, TextureHandle, SamplerHandle, ProgramHandle, EnvirHandle};
 pub use render::Renderer;
 pub use Environment = render::envir::Storage;
-pub use render::envir::{BlockVar, UniformVar, TextureVar};
+pub use render::envir::{ParameterSink, Uploader, ShaderParam, BlockVar, UniformVar, TextureVar};
 pub use render::mesh;
 pub use render::rast::{DrawState, BlendAdditive, BlendAlpha};
 pub use render::target::Frame;
@@ -46,7 +44,6 @@ pub use device::shade::{ShaderSource, StaticBytes, NOT_PROVIDED};
 #[cfg(glfw)]
 pub use glfw = glfw_platform;
 
-pub mod plugin;
 
 #[allow(visible_private_types)]
 pub fn start<C: GraphicsContext<GlBackEnd>, P: GlProvider>(graphics_context: C, provider: P, queue_size: QueueSize)
@@ -54,24 +51,4 @@ pub fn start<C: GraphicsContext<GlBackEnd>, P: GlProvider>(graphics_context: C, 
     device::init(graphics_context, provider, queue_size).map(|(tx, rx, server, ack, should_finish)| {
         (Renderer::new(tx, rx, ack, should_finish), server)
     })
-}
-
-// This should live in `device`, but macro reexporting does not work yet.
-#[macro_export]
-macro_rules! shaders {
-    (GLSL_120: $v:expr $($t:tt)*) => {
-        ::gfx::ShaderSource {
-            glsl_120: ::gfx::StaticBytes($v),
-            ..shaders!($($t)*)
-        }
-    };
-    (GLSL_150: $v:expr $($t:tt)*) => {
-        ::gfx::ShaderSource {
-            glsl_150: ::gfx::StaticBytes($v),
-            ..shaders!($($t)*)
-        }
-    };
-    () => {
-        ::gfx::NOT_PROVIDED
-    }
 }

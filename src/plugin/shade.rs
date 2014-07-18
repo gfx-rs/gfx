@@ -12,32 +12,47 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 extern crate rustc;
 extern crate syntax;
 
 use std::gc::Gc;
 use self::syntax::{ast, ext};
+use self::syntax::ext::build::AstBuilder;
 use self::syntax::ext::deriving::generic;
 use self::syntax::codemap::Span;
 use self::syntax::parse::token;
 use self::rustc::plugin::Registry;
 
-use device::shade::ProgramMeta;
 
 fn create_substructure(cx: &mut ext::base::ExtCtxt, span: Span, substr: &generic::Substructure) -> Gc<ast::Expr> {
-
+    match *substr.fields {
+        generic::StaticStruct(definition, ref summary) => {
+            match *summary {
+                generic::Named(ref fields) => {
+                    for f in fields.iter() {
+                        println!("Field {}", f);
+                    }
+                    let tmp = fields.iter().map(|&(ident, s)|
+                        cx.field_imm(s, ident, cx.expr_int(span, 1))
+                        ).collect();
+                    cx.expr_struct_ident(span, substr.type_ident, tmp)
+                },
+                generic::Unnamed(_) => cx.bug("Unnamed structs are not allowed to derive ShaderParam"),
+            }
+        },
+        _ => cx.bug("Only free-standing named structs allowed to derive ShaderParam"),
+    }
 }
 
 fn expand_shader_param(context: &mut ext::base::ExtCtxt, span: Span,
         meta_item: Gc<ast::MetaItem>, item: Gc<ast::Item>, push: |Gc<ast::Item>|) {
     let arg = generic::ty::Ptr(box generic::ty::Literal(
-        generic::ty::Path::new(vec!["gfx", "ProgramMeta"])),
+        generic::ty::Path::new(vec!["gfx", "ParameterSink"])),
         generic::ty::Borrowed(None, ast::MutImmutable));
     let trait_def = generic::TraitDef {
         span: span,
         attributes: Vec::new(),
-        path: generic::ty::Path::new(vec!("gfx", "plugin", "ShaderParam")),
+        path: generic::ty::Path::new(vec!("gfx", "ShaderParam")),
         additional_bounds: Vec::new(),
         generics: generic::ty::LifetimeBounds::empty(),
         methods: vec![
@@ -60,20 +75,4 @@ fn expand_shader_param(context: &mut ext::base::ExtCtxt, span: Span,
 pub fn registrar(reg: &mut Registry) {
     reg.register_syntax_extension(token::intern("shader_param"),
         ext::base::ItemDecorator(expand_shader_param));
-}
-
-
-pub type UniformLoc = u16;
-
-struct Uploader;
-
-impl Uploader {
-    pub fn put_uniform_i32(&mut self, _loc: UniformLoc, _value: i32) {
-
-    }
-}
-
-trait ShaderParam {
-    fn create(meta: &ProgramMeta) -> Self;
-    //fn upload(&self, uploader: &mut Uploader);
 }
