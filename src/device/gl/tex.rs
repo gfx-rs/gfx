@@ -291,16 +291,14 @@ pub fn make_sampler(info: ::tex::SamplerInfo) -> Sampler {
         gl::GenSamplers(1, &mut name);
     }
 
-    fn tup<T: Copy>(v: T) -> (T, T) { (v, v) }
-
     let (min, mag) = match info.filtering {
-        Scale => tup(gl::NEAREST),
-        Mipmap => tup(gl::NEAREST_MIPMAP_NEAREST),
-        Bilinear => tup(gl::LINEAR_MIPMAP_NEAREST),
-        Trilinear => tup(gl::LINEAR_MIPMAP_LINEAR),
+        Scale => (gl::NEAREST, gl::NEAREST),
+        Mipmap => (gl::NEAREST_MIPMAP_NEAREST, gl::NEAREST),
+        Bilinear => (gl::LINEAR_MIPMAP_NEAREST, gl::LINEAR),
+        Trilinear => (gl::LINEAR_MIPMAP_LINEAR, gl::LINEAR),
         Anisotropic(fac) => {
             gl::SamplerParameterf(name, gl::TEXTURE_MAX_ANISOTROPY_EXT, fac as GLfloat);
-            tup(gl::LINEAR_MIPMAP_LINEAR)
+            (gl::LINEAR_MIPMAP_LINEAR, gl::LINEAR)
         }
     };
 
