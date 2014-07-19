@@ -18,7 +18,8 @@
 //! separate pieces of information: image storage description (which is
 //! immutable for a single texture object), and image data. To actually use a
 //! texture, a "sampler" is needed, which provides a way of accessing the
-//! texture data.
+//! image data.  Image data consists of an array of "texture elements", or
+//! texels.
 
 use std::default::Default;
 
@@ -56,11 +57,21 @@ pub enum FilterMethod {
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 #[repr(u8)]
 pub enum TextureKind {
+    /// A single row of texels.
     Texture1D,
+    /// An array of rows of texels. Equivalent to Texture2D except that texels in a different row
+    /// are not sampled.
     Texture1DArray,
+    /// A traditional 2D texture, with rows arranged contiguously.
     Texture2D,
+    /// An array of 2D textures. Equivalent to Texture3D except that texels in a different depth
+    /// level are not sampled.
     Texture2DArray,
+    /// A set of 6 2D textures, one for each face of a cube.
+    // TODO: implement this, and document it better. cmr doesn't really understand them well enough
+    // to explain without rambling.
     TextureCube,
+    /// A volume texture, with each 2D layer arranged contiguously.
     Texture3D
     // TODO: Multisampling?
 }
@@ -101,6 +112,7 @@ pub struct ImageInfo {
     pub width: u16,
     pub height: u16,
     pub depth: u16,
+    /// Format of each texel.
     pub format: TextureFormat,
     /// Which mipmap to select.
     pub mipmap: u8,
@@ -150,6 +162,7 @@ pub enum WrapMode {
 }
 
 /// Specifies how to sample from a texture.
+// TODO: document the details of sampling.
 #[deriving(PartialEq, PartialOrd, Clone, Show)]
 pub struct SamplerInfo {
     pub filtering: FilterMethod,
