@@ -272,10 +272,6 @@ fn make_texture(info: ::tex::TextureInfo) -> Texture {
     let k = kind_to_gl(info.kind);
     gl::BindTexture(k, name);
 
-    let (base, max) = info.mipmap_range;
-    gl::TexParameteri(k, gl::TEXTURE_BASE_LEVEL, base as GLint);
-    gl::TexParameteri(k, gl::TEXTURE_MAX_LEVEL, max as GLint);
-
     name
 }
 
