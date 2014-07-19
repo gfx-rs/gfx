@@ -209,6 +209,7 @@ pub struct GlBackEnd {
     /// to bind this texture to later. Yuck!
     // Doesn't use a SmallIntMap to avoid the overhead of Option
     texture_info: Vec<::tex::TextureInfo>,
+    samplers: Vec<::tex::SamplerInfo>,
 }
 
 impl GlBackEnd {
@@ -239,6 +240,7 @@ impl GlBackEnd {
                 tex::make_without_storage
             },
             texture_info: Vec::new(),
+            samplers: Vec::new(),
         }
     }
 
@@ -340,7 +342,12 @@ impl super::ApiBackEnd for GlBackEnd {
     }
 
     fn create_sampler(&mut self, info: ::tex::SamplerInfo) -> Sampler {
-        tex::make_sampler(info)
+        if self.caps.sampler_objects_supported {
+            tex::make_sampler(info)
+        } else {
+            self.samplers.push(info);
+            self.samplers.len() as Sampler - 1
+        }
     }
 
     fn update_buffer(&mut self, buffer: Buffer, data: &super::Blob, usage: super::BufferUsage) {
@@ -471,7 +478,7 @@ impl super::ApiBackEnd for GlBackEnd {
                 shade::bind_uniform(loc as gl::types::GLint, uniform);
             },
             super::BindTexture(loc, tex, sam) => {
-                tex::bind_texture(loc as gl::types::GLuint, tex, sam, self.texture_info[tex as uint]);
+                tex::bind_texture(loc as gl::types::GLuint, tex, sam, self);
             },
             super::SetPrimitiveState(prim) => {
                 rast::bind_primitive(prim);

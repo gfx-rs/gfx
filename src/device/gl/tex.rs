@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{gl, Texture, Sampler};
+use super::{gl, GlBackEnd, Texture, Sampler};
 use super::gl::types::{GLenum, GLuint, GLint, GLfloat, GLsizei, GLvoid};
 use tex::*;
 use Blob;
@@ -198,10 +198,40 @@ pub fn make_with_storage(info: ::tex::TextureInfo) -> Texture {
 }
 
 /// Bind a texture + sampler to a given slot.
-pub fn bind_texture(loc: GLuint, tex: Texture, sam: Sampler, info: ::tex::TextureInfo) {
+pub fn bind_texture(loc: GLuint, tex: Texture, sam: Sampler, backend: &GlBackEnd) {
+    let info = backend.samplers[sam as uint];
+    let kind = kind_to_gl(backend.texture_info[tex as uint].kind);
+
     gl::ActiveTexture(gl::TEXTURE0 + loc as GLenum);
-    gl::BindSampler(loc, sam);
-    gl::BindTexture(kind_to_gl(info.kind), tex);
+
+    gl::BindTexture(kind, tex);
+
+    if backend.caps.sampler_objects_supported {
+        gl::BindSampler(loc, sam);
+    } else {
+        let (min, mag) = filter_to_gl(info.filtering);
+        let target = kind;
+
+        match info.filtering {
+            Anisotropic(fac) =>
+                gl::TexParameterf(target, gl::TEXTURE_MAX_ANISOTROPY_EXT, fac as GLfloat),
+            _ => ()
+        }
+
+        gl::TexParameteri(target, gl::TEXTURE_MIN_FILTER, min as GLint);
+        gl::TexParameteri(target, gl::TEXTURE_MAG_FILTER, mag as GLint);
+
+        let (s, t, r) = info.wrap_mode;
+        gl::TexParameteri(target, gl::TEXTURE_WRAP_S, wrap_to_gl(s) as GLint);
+        gl::TexParameteri(target, gl::TEXTURE_WRAP_T, wrap_to_gl(t) as GLint);
+        gl::TexParameteri(target, gl::TEXTURE_WRAP_R, wrap_to_gl(r) as GLint);
+
+        gl::TexParameterf(target, gl::TEXTURE_LOD_BIAS, info.lod_bias);
+
+        let (base, max) = info.mipmap_range;
+        gl::TexParameteri(target, gl::TEXTURE_BASE_LEVEL, base as GLint);
+        gl::TexParameteri(target, gl::TEXTURE_MAX_LEVEL, max as GLint);
+    }
 }
 
 pub fn update_texture(tex: Texture, img: ::tex::ImageInfo, tex_info: ::tex::TextureInfo,
@@ -281,22 +311,31 @@ fn wrap_to_gl(w: WrapMode) -> GLenum {
     }
 }
 
+fn filter_to_gl(f: ::tex::FilterMethod) -> (GLenum, GLenum) {
+    match f {
+        Scale => (gl::NEAREST, gl::NEAREST),
+        Mipmap => (gl::NEAREST_MIPMAP_NEAREST, gl::NEAREST),
+        Bilinear => (gl::LINEAR_MIPMAP_NEAREST, gl::LINEAR),
+        Trilinear => (gl::LINEAR_MIPMAP_LINEAR, gl::LINEAR),
+        Anisotropic(..) => {
+            (gl::LINEAR_MIPMAP_LINEAR, gl::LINEAR)
+        }
+    }
+}
+
 pub fn make_sampler(info: ::tex::SamplerInfo) -> Sampler {
     let mut name = 0 as Sampler;
     unsafe {
         gl::GenSamplers(1, &mut name);
     }
 
-    let (min, mag) = match info.filtering {
-        Scale => (gl::NEAREST, gl::NEAREST),
-        Mipmap => (gl::NEAREST_MIPMAP_NEAREST, gl::NEAREST),
-        Bilinear => (gl::LINEAR_MIPMAP_NEAREST, gl::LINEAR),
-        Trilinear => (gl::LINEAR_MIPMAP_LINEAR, gl::LINEAR),
-        Anisotropic(fac) => {
-            gl::SamplerParameterf(name, gl::TEXTURE_MAX_ANISOTROPY_EXT, fac as GLfloat);
-            (gl::LINEAR_MIPMAP_LINEAR, gl::LINEAR)
-        }
-    };
+    let (min, mag) = filter_to_gl(info.filtering);
+
+    match info.filtering {
+        Anisotropic(fac) =>
+            gl::SamplerParameterf(name, gl::TEXTURE_MAX_ANISOTROPY_EXT, fac as GLfloat),
+        _ => ()
+    }
 
     gl::SamplerParameteri(name, gl::TEXTURE_MIN_FILTER, min as GLint);
     gl::SamplerParameteri(name, gl::TEXTURE_MAG_FILTER, mag as GLint);
