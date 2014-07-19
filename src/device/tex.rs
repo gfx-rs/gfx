@@ -49,23 +49,23 @@ pub enum FilterMethod {
     Anisotropic(u8)
 }
 
-/// Specifies how a given texture may be used. The available texture types are restricted by what
-/// Metal exposes, though this could conceivably be extended in the future. Note that a single
-/// texture can *only* ever be of one kind. A texture created as `Texture2D` will forever be
-/// `Texture2D`.
+/// Specifies how a given texture may be used. The available texture types are
+/// restricted by what Metal exposes, though this could conceivably be
+/// extended in the future. Note that a single texture can *only* ever be of
+/// one kind. A texture created as `Texture2D` will forever be `Texture2D`.
 // TODO: "Texture views" let you get around that limitation.
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 #[repr(u8)]
 pub enum TextureKind {
     /// A single row of texels.
     Texture1D,
-    /// An array of rows of texels. Equivalent to Texture2D except that texels in a different row
-    /// are not sampled.
+    /// An array of rows of texels. Equivalent to Texture2D except that texels
+    /// in a different row are not sampled.
     Texture1DArray,
     /// A traditional 2D texture, with rows arranged contiguously.
     Texture2D,
-    /// An array of 2D textures. Equivalent to Texture3D except that texels in a different depth
-    /// level are not sampled.
+    /// An array of 2D textures. Equivalent to Texture3D except that texels in
+    /// a different depth level are not sampled.
     Texture2DArray,
     /// A set of 6 2D textures, one for each face of a cube.
     // TODO: implement this, and document it better. cmr doesn't really understand them well enough
@@ -88,7 +88,8 @@ pub enum TextureFormat {
 ///
 /// # Portability note
 ///
-/// Textures larger than 1024px in any dimension are unlikely to be supported by mobile platforms.
+/// Textures larger than 1024px in any dimension are unlikely to be supported
+/// by mobile platforms.
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub struct TextureInfo {
     pub width: u16,
