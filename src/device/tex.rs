@@ -148,20 +148,19 @@ pub enum WrapMode {
 }
 
 /// Specifies how to sample from a texture.
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+#[deriving(PartialEq, PartialOrd, Clone, Show)]
 pub struct SamplerInfo {
     pub filtering: FilterMethod,
+    /// Wrapping mode for each of the U, V, and W axis (S, T, and R in OpenGL
+    /// speak)
+    pub wrap_mode: (WrapMode, WrapMode, WrapMode),
     /// This bias is added to every computed mipmap level (N + lod_bias). For
     /// example, if it would select mipmap level 2 and lod_bias is 1, it will
     /// use mipmap level 3.
-    pub lod_bias: u8,
+    pub lod_bias: f32,
     /// Mipmap levels outside of `[lo, hi]` will never be sampled. Defaults to
     /// `(0, -1)` (every mipmap available), but will be clamped to the
     /// texture's mipmap_range.
     pub mipmap_range: (u8, u8),
-    /// Wrapping mode for each of the U, V, and W axis (S, T, and R in OpenGL
-    /// speak)
-    pub wrap_mode: (WrapMode, WrapMode, WrapMode),
     // TODO: comparison mode
-    // TODO: Borders (we don't actually need this, afaik)
 }

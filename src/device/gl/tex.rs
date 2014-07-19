@@ -312,7 +312,7 @@ pub fn make_sampler(info: ::tex::SamplerInfo) -> Sampler {
     gl::SamplerParameteri(name, gl::TEXTURE_WRAP_T, wrap_to_gl(t) as GLint);
     gl::SamplerParameteri(name, gl::TEXTURE_WRAP_R, wrap_to_gl(r) as GLint);
 
-    gl::SamplerParameteri(name, gl::TEXTURE_LOD_BIAS, info.lod_bias as GLint);
+    gl::SamplerParameterf(name, gl::TEXTURE_LOD_BIAS, info.lod_bias);
 
     let (base, max) = info.mipmap_range;
     gl::SamplerParameteri(name, gl::TEXTURE_BASE_LEVEL, base as GLint);
