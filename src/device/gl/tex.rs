@@ -48,8 +48,6 @@ fn format_to_gltype(t: ::tex::TextureFormat) -> GLenum {
     }
 }
 
-
-
 /// Create a texture, assuming TexStorage* isn't available.
 pub fn make_without_storage(info: ::tex::TextureInfo) -> Texture {
     let name = make_texture(info);
