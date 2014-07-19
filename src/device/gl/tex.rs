@@ -48,21 +48,7 @@ fn format_to_gltype(t: ::tex::TextureFormat) -> GLenum {
     }
 }
 
-fn miplevel1(w: u16) -> u8 {
-    ((w as f32).log2() + 1.0) as u8
-}
 
-fn miplevel2(w: u16, h: u16) -> u8 {
-    ((w as f32).max(h as f32).log2() + 1.0) as u8
-}
-
-fn miplevel3(w: u16, h: u16, d: u16) -> u8 {
-    ((w as f32).max(h as f32).max(d as f32).log2() + 1.0) as u8
-}
-
-fn min(a: u8, b: u8) -> GLint {
-    ::std::cmp::min(a, b) as GLint
-}
 
 /// Create a texture, assuming TexStorage* isn't available.
 pub fn make_without_storage(info: ::tex::TextureInfo) -> Texture {
@@ -79,7 +65,7 @@ pub fn make_without_storage(info: ::tex::TextureInfo) -> Texture {
             Texture1D => {
                 gl::TexImage1D(
                     kind,
-                    min(info.mipmap_range.val1(), miplevel1(info.width)),
+                    0,
                     fmt,
                     info.width as GLsizei,
                     0,
@@ -91,7 +77,7 @@ pub fn make_without_storage(info: ::tex::TextureInfo) -> Texture {
             Texture1DArray => {
                 gl::TexImage2D(
                     kind,
-                    min(info.mipmap_range.val1(), miplevel1(info.width)),
+                    0,
                     fmt,
                     info.width as GLsizei,
                     info.height as GLsizei,
@@ -104,7 +90,7 @@ pub fn make_without_storage(info: ::tex::TextureInfo) -> Texture {
             Texture2D => {
                 gl::TexImage2D(
                     kind,
-                    min(info.mipmap_range.val1(), miplevel2(info.width, info.height)),
+                    0,
                     fmt,
                     info.width as GLsizei,
                     info.height as GLsizei,
@@ -118,7 +104,7 @@ pub fn make_without_storage(info: ::tex::TextureInfo) -> Texture {
             Texture2DArray => {
                 gl::TexImage3D(
                     kind,
-                    min(info.mipmap_range.val1(), miplevel2(info.width, info.height)),
+                    0,
                     fmt,
                     info.width as GLsizei,
                     info.height as GLsizei,
@@ -132,7 +118,7 @@ pub fn make_without_storage(info: ::tex::TextureInfo) -> Texture {
             Texture3D => {
                 gl::TexImage3D(
                     kind,
-                    min(info.mipmap_range.val1(), miplevel3(info.width, info.height, info.depth)),
+                    0,
                     fmt,
                     info.width as GLsizei,
                     info.height as GLsizei,
@@ -151,6 +137,24 @@ pub fn make_without_storage(info: ::tex::TextureInfo) -> Texture {
 
 /// Create a texture, assuming TexStorage is available.
 pub fn make_with_storage(info: ::tex::TextureInfo) -> Texture {
+    use std::cmp::max;
+
+    fn min(a: u8, b: u8) -> GLint {
+        ::std::cmp::min(a, b) as GLint
+    }
+
+    fn mip_level1(w: u16) -> u8 {
+        ((w as f32).log2() + 1.0) as u8
+    }
+
+    fn mip_level2(w: u16, h: u16) -> u8 {
+        ((max(w, h) as f32).log2() + 1.0) as u8
+    }
+
+    fn mip_level3(w: u16, h: u16, d: u16) -> u8 {
+        ((max(w, max(h, d)) as f32).log2() + 1.0) as u8
+    }
+
     let name = make_texture(info);
 
     let fmt = format_to_gl(info.format);
@@ -160,7 +164,7 @@ pub fn make_with_storage(info: ::tex::TextureInfo) -> Texture {
         Texture1D => {
             gl::TexStorage1D(
                 kind,
-                min(info.mipmap_range.val1(), miplevel1(info.width)),
+                min(info.mipmap_range.val1(), mip_level1(info.width)),
                 fmt,
                 info.width as GLsizei
             );
@@ -168,7 +172,7 @@ pub fn make_with_storage(info: ::tex::TextureInfo) -> Texture {
         Texture1DArray => {
             gl::TexStorage2D(
                 kind,
-                min(info.mipmap_range.val1(), miplevel1(info.width)),
+                min(info.mipmap_range.val1(), mip_level1(info.width)),
                 fmt,
                 info.width as GLsizei,
                 info.height as GLsizei,
@@ -177,7 +181,7 @@ pub fn make_with_storage(info: ::tex::TextureInfo) -> Texture {
         Texture2D => {
             gl::TexStorage2D(
                 kind,
-                min(info.mipmap_range.val1(), miplevel2(info.width, info.height)),
+                min(info.mipmap_range.val1(), mip_level2(info.width, info.height)),
                 fmt,
                 info.width as GLsizei,
                 info.height as GLsizei,
@@ -187,7 +191,7 @@ pub fn make_with_storage(info: ::tex::TextureInfo) -> Texture {
         Texture2DArray => {
             gl::TexStorage3D(
                 kind,
-                min(info.mipmap_range.val1(), miplevel2(info.width, info.height)),
+                min(info.mipmap_range.val1(), mip_level2(info.width, info.height)),
                 fmt,
                 info.width as GLsizei,
                 info.height as GLsizei,
@@ -197,7 +201,7 @@ pub fn make_with_storage(info: ::tex::TextureInfo) -> Texture {
         Texture3D => {
             gl::TexStorage3D(
                 kind,
-                min(info.mipmap_range.val1(), miplevel3(info.width, info.height, info.depth)),
+                min(info.mipmap_range.val1(), mip_level3(info.width, info.height, info.depth)),
                 fmt,
                 info.width as GLsizei,
                 info.height as GLsizei,
