@@ -24,6 +24,7 @@ use std::collections::HashSet;
 
 mod rast;
 mod shade;
+mod tex;
 
 pub type Buffer         = gl::types::GLuint;
 pub type ArrayBuffer    = gl::types::GLuint;
@@ -203,6 +204,11 @@ pub enum ErrorType {
 pub struct GlBackEnd {
     caps: super::Capabilities,
     info: Info,
+    make_texture: fn(::tex::TextureInfo) -> Texture,
+    /// Maps (by the index) from texture name to TextureInfo, so we can look up what texture target
+    /// to bind this texture to later. Yuck!
+    // Doesn't use a SmallIntMap to avoid the overhead of Option
+    texture_info: Vec<::tex::TextureInfo>,
 }
 
 impl GlBackEnd {
@@ -219,10 +225,20 @@ impl GlBackEnd {
                 || info.is_extension_supported("GL_ARB_uniform_buffer_object"),
             array_buffer_supported: info.version >= Version(3, 0, None, "")
                 || info.is_extension_supported("GL_ARB_vertex_array_object"),
+            immutable_storage_supported: info.version >= Version(4, 2, None, "")
+                || info.is_extension_supported("GL_ARB_texture_storage"),
+            sampler_objects_supported: info.version >= Version(3, 3, None, "")
+                || info.is_extension_supported("GL_ARB_sampler_objects"),
         };
         GlBackEnd {
             caps: caps,
             info: info,
+            make_texture: if caps.immutable_storage_supported {
+                tex::make_with_storage
+            } else {
+                tex::make_without_storage
+            },
+            texture_info: Vec::new(),
         }
     }
 
@@ -304,6 +320,27 @@ impl super::ApiBackEnd for GlBackEnd {
         }
         info!("\tCreated frame buffer {}", name);
         name
+    }
+
+    fn create_texture(&mut self, info: ::tex::TextureInfo) -> Texture {
+        let nm = (self.make_texture)(info);
+        let fill = nm - self.texture_info.len() as gl::types::GLuint;
+
+        if fill <= 0 {
+            fail!("INVARIANT BROKEN: A texture was created with a name smaller than \
+                   the most recently seen name")
+        } else {
+            for _ in range(0, fill) {
+                self.texture_info.push(unsafe { ::std::mem::zeroed() });
+            }
+        }
+
+        *self.texture_info.get_mut(nm as uint) = info;
+        nm
+    }
+
+    fn create_sampler(&mut self, info: ::tex::SamplerInfo) -> Sampler {
+        tex::make_sampler(info)
     }
 
     fn update_buffer(&mut self, buffer: Buffer, data: &super::Blob, usage: super::BufferUsage) {
@@ -433,6 +470,9 @@ impl super::ApiBackEnd for GlBackEnd {
             super::BindUniform(loc, uniform) => {
                 shade::bind_uniform(loc as gl::types::GLint, uniform);
             },
+            super::BindTexture(loc, tex, sam) => {
+                tex::bind_texture(loc as gl::types::GLuint, tex, sam, self.texture_info[tex as uint]);
+            },
             super::SetPrimitiveState(prim) => {
                 rast::bind_primitive(prim);
             },
@@ -445,6 +485,9 @@ impl super::ApiBackEnd for GlBackEnd {
             },
             super::UpdateBuffer(buffer, data) => {
                 self.update_buffer(buffer, data, super::UsageDynamic);
+            },
+            super::UpdateTexture(tex, image_info, data) => {
+                tex::update_texture(tex, image_info, self.texture_info[tex as uint], data);
             },
             super::Draw(start, count) => {
                 gl::DrawArrays(gl::TRIANGLES,

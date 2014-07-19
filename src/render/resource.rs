@@ -51,6 +51,8 @@ pub struct Cache {
     pub shaders: Vec<Future<backend::Shader, CreateShaderError>>,
     pub programs: Vec<Future<ProgramMeta, ()>>,
     pub frame_buffers: Vec<Future<backend::FrameBuffer, ()>>,
+    pub textures: Vec<Future<backend::Texture, ()>>,
+    pub samplers: Vec<Future<backend::Sampler, ()>>,
 }
 
 impl Cache {
@@ -62,6 +64,8 @@ impl Cache {
             shaders: Vec::new(),
             programs: Vec::new(),
             frame_buffers: Vec::new(),
+            textures: Vec::new(),
+            samplers: Vec::new(),
         }
     }
 
@@ -101,6 +105,12 @@ impl Cache {
             },
             device::ReplyNewFrameBuffer(token, fbo) => {
                 *self.frame_buffers.get_mut(token) = Loaded(fbo);
+            },
+            device::ReplyNewTexture(token, tex) => {
+                *self.textures.get_mut(token) = Loaded(tex);
+            },
+            device::ReplyNewSampler(token, sam) => {
+                *self.samplers.get_mut(token) = Loaded(sam);
             },
         }
         ret
