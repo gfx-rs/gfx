@@ -48,10 +48,11 @@ pub enum FilterMethod {
     Anisotropic(u8)
 }
 
-/// Specifies how a given texture may be used. This is mostly due to OpenGL
-/// and Metal being braindamaged and not allowing, for example, a texture
-/// previously used as Texture2D to be used as Texture3D. The available
-/// texture types are restricted by what Metal exposes.
+/// Specifies how a given texture may be used. The available texture types are restricted by what
+/// Metal exposes, though this could conceivably be extended in the future. Note that a single
+/// texture can *only* ever be of one kind. A texture created as `Texture2D` will forever be
+/// `Texture2D`.
+// TODO: "Texture views" let you get around that limitation.
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 #[repr(u8)]
 pub enum TextureKind {
