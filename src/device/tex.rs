@@ -111,8 +111,8 @@ impl Default for ImageInfo {
             yoffset: 0,
             zoffset: 0,
             width: 0,
-            height: 0,
-            depth: 0,
+            height: 1,
+            depth: 1,
             format: RGBA8,
             mipmap: 0
         }
@@ -123,8 +123,8 @@ impl Default for TextureInfo {
     fn default() -> TextureInfo {
         TextureInfo {
             width: 0,
-            height: 0,
-            depth: 0,
+            height: 1,
+            depth: 1,
             mipmap_range: (0, -1),
             kind: Texture2D,
             format: RGBA8,

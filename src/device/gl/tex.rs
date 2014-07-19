@@ -208,6 +208,8 @@ pub fn bind_texture(loc: GLuint, tex: Texture, sam: Sampler, info: ::tex::Textur
 
 pub fn update_texture(tex: Texture, img: ::tex::ImageInfo, tex_info: ::tex::TextureInfo,
                       data: Box<Blob + Send>) {
+    debug_assert!(img.width as u32 * img.height as u32 * img.depth as u32 == data.get_size() as u32);
+
     let data = data.get_address() as *const GLvoid;
     let pix = format_to_glpixel(tex_info.format);
     let typ = format_to_gltype(tex_info.format);
