@@ -133,6 +133,7 @@ impl Default for TextureInfo {
 }
 
 impl TextureInfo { pub fn new() -> TextureInfo { Default::default() } }
+impl ImageInfo { pub fn new() -> ImageInfo { Default::default() } }
 
 /// Specifies how texture coordinates outside the range `[0, 1]` are handled.
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]

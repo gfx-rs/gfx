@@ -331,7 +331,7 @@ impl super::ApiBackEnd for GlBackEnd {
                    the most recently seen name")
         } else {
             for _ in range(0, fill) {
-                self.texture_info.push(unsafe { ::std::mem::zeroed() });
+                self.texture_info.push(::tex::TextureInfo::new());
             }
         }
 
