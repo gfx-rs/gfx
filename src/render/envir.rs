@@ -34,11 +34,23 @@ pub trait ParameterSink {
 
 pub trait Uploader {
     fn put_uniform_i32(&mut self, UniformId, i32);
+    //...
 }
 
-pub trait ShaderParam {
-    fn create(&ParameterSink) -> Self;  //crate<S: ParameterSink>(&S)
-    //fn upload(&self, uploader: &mut Uploader);
+pub struct ParameterLinkError;
+
+pub trait ShaderParam<L> {
+    fn create_link<S: ParameterSink>(&S) -> Result<L, ParameterLinkError>;
+    //fn upload<U: Uploader>(&self, link: &L, uploader: &mut U);    //TODO
+}
+
+pub struct ShaderBundle<T, L> {
+    /// Shader program
+    program: super::ProgramHandle,
+    /// Global data in a user-provided struct
+    pub data: T,
+    /// Hidden link that provides parameter indices for user data
+    link: L,
 }
 
 

@@ -24,17 +24,11 @@ use self::syntax::parse::token;
 use self::rustc::plugin::Registry;
 
 
-static NAME_MODIFIER : &'static str = "shader_param";
-static NAME_DECORATOR: &'static str = "shader_param_impl";
+static INTERNAL_ERROR: &'static str = "Only free-standing named structs allowed to derive ShaderParam";
+static LINK_ERROR: &'static str = "ParameterLinkError";
 
-fn expand_modifier(cx: &mut ext::base::ExtCtxt, span: Span,
-        _meta_item: Gc<ast::MetaItem>, item: Gc<ast::Item>) -> Gc<ast::Item> {
-    let at = cx.attribute(span, cx.meta_word(span, token::InternedString::new(NAME_DECORATOR)));
-    cx.item(span, item.ident, item.attrs.clone().append_one(at), item.node.clone())
-}
-
-fn create_substructure(cx: &mut ext::base::ExtCtxt, span: Span, substr: &generic::Substructure) -> Gc<ast::Expr> {
-    match *substr.fields {
+fn create_sub(cx: &mut ext::base::ExtCtxt, span: Span, substr: &generic::Substructure) -> Gc<ast::Expr> {
+    /*match *substr.fields {
         generic::StaticStruct(_definition, ref summary) => {
             match *summary {
                 generic::Named(ref fields) => {
@@ -50,34 +44,90 @@ fn create_substructure(cx: &mut ext::base::ExtCtxt, span: Span, substr: &generic
                         ).collect();
                     cx.expr_struct_ident(span, substr.type_ident, tmp)
                 },
-                generic::Unnamed(_) => cx.bug("Unnamed structs are not allowed to derive ShaderParam"),
+                generic::Unnamed(_) => cx.bug(ERROR),
             }
         },
-        _ => cx.bug("Only free-standing named structs allowed to derive ShaderParam"),
-    }
+        _ => cx.bug(ERROR),
+    }*/
+    cx.expr_err(span, cx.expr_path(cx.path_global(span, vec![
+        ast::Ident::new(token::intern("gfx")),
+        ast::Ident::new(token::intern(LINK_ERROR)),
+    ])))
 }
 
-fn expand_decorator(context: &mut ext::base::ExtCtxt, span: Span,
+fn expand_shader_param(context: &mut ext::base::ExtCtxt, span: Span,
         meta_item: Gc<ast::MetaItem>, item: Gc<ast::Item>, push: |Gc<ast::Item>|) {
-    let arg = generic::ty::Ptr(box generic::ty::Literal(
-        generic::ty::Path::new(vec!["gfx", "ParameterSink"])),
-        generic::ty::Borrowed(None, ast::MutImmutable));
+    // constructing the Link struct
+    let link_def = match item.node {
+        ast::ItemStruct(ref definition, ref generics) => {
+            if generics.lifetimes.len() > 0 {
+                context.bug("Generics are not allowed in ShaderParam struct");
+            }
+            ast::StructDef {
+                fields: definition.fields.clone(),  //TODO
+                ctor_id: None,
+                super_struct: None,
+                is_virtual: false,
+            }
+        },
+        _ => {
+            context.span_warn(span, INTERNAL_ERROR);
+            return;
+        }
+    };
+    let link_name = format!("_{}Link", item.ident.as_str());
+    push(context.item_struct(span, ast::Ident::new(
+        token::intern(link_name.as_slice())
+        ), link_def));
+    // deriving ShaderParam
+    let arg = generic::ty::Ptr(
+        box generic::ty::Literal(generic::ty::Path::new_local("S")),
+        generic::ty::Borrowed(None, ast::MutImmutable)
+    );
+    let error_path = generic::ty::Path::new(vec!["gfx", LINK_ERROR]);
     let trait_def = generic::TraitDef {
         span: span,
         attributes: Vec::new(),
-        path: generic::ty::Path::new(vec!("gfx", "ShaderParam")),
+        path: generic::ty::Path {
+            path: vec!["gfx", "ShaderParam"],
+            lifetime: None,
+            params: vec![box generic::ty::Literal(
+                generic::ty::Path::new_local(link_name.as_slice())
+            )],
+            global: true,
+        },
         additional_bounds: Vec::new(),
-        generics: generic::ty::LifetimeBounds::empty(),
+        generics: generic::ty::LifetimeBounds {
+            lifetimes: Vec::new(),
+            bounds: Vec::new(),
+        },
         methods: vec![
             generic::MethodDef {
-                name: "create",
-                generics: generic::ty::LifetimeBounds::empty(),
+                name: "create_link",
+                generics: generic::ty::LifetimeBounds {
+                    lifetimes: Vec::new(),
+                    bounds: vec![("S", None, vec![
+                        generic::ty::Path::new(vec!["gfx", "ParameterSink"]),
+                    ])],
+                },
                 explicit_self: None,
                 args: vec![arg],
-                ret_ty: generic::ty::Self,
+                ret_ty: generic::ty::Literal(
+                    generic::ty::Path {
+                        path: vec!["Result"],
+                        lifetime: None,
+                        params: vec![
+                            box generic::ty::Literal(
+                                generic::ty::Path::new_local(link_name.as_slice())
+                            ),
+                            box generic::ty::Literal(error_path)
+                        ],
+                        global: false,
+                    },
+                ),
                 attributes: Vec::new(),
                 const_nonmatching: false,
-                combine_substructure: generic::combine_substructure(create_substructure),
+                combine_substructure: generic::combine_substructure(create_sub),
             },
         ],
     };
@@ -86,8 +136,6 @@ fn expand_decorator(context: &mut ext::base::ExtCtxt, span: Span,
 
 #[plugin_registrar]
 pub fn registrar(reg: &mut Registry) {
-    reg.register_syntax_extension(token::intern(NAME_MODIFIER),
-        ext::base::ItemModifier(expand_modifier));
-    reg.register_syntax_extension(token::intern(NAME_DECORATOR),
-        ext::base::ItemDecorator(expand_decorator));
+    reg.register_syntax_extension(token::intern("shader_param"),
+        ext::base::ItemDecorator(expand_shader_param));
 }
