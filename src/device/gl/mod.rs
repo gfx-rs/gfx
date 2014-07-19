@@ -32,8 +32,12 @@ pub type Shader         = gl::types::GLuint;
 pub type Program        = gl::types::GLuint;
 pub type FrameBuffer    = gl::types::GLuint;
 pub type Surface        = gl::types::GLuint;
-pub type Texture        = gl::types::GLuint;
 pub type Sampler        = gl::types::GLuint;
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+pub struct Texture {
+    name: gl::types::GLuint,
+    kind: gl::types::GLenum
+}
 
 fn get_uint(name: gl::types::GLenum) -> uint {
     let mut value = 0 as gl::types::GLint;
@@ -208,7 +212,6 @@ pub struct GlBackEnd {
     /// Maps (by the index) from texture name to TextureInfo, so we can look up what texture target
     /// to bind this texture to later. Yuck!
     // Doesn't use a SmallIntMap to avoid the overhead of Option
-    texture_info: Vec<::tex::TextureInfo>,
     samplers: Vec<::tex::SamplerInfo>,
 }
 
@@ -239,7 +242,6 @@ impl GlBackEnd {
             } else {
                 tex::make_without_storage
             },
-            texture_info: Vec::new(),
             samplers: Vec::new(),
         }
     }
@@ -325,20 +327,7 @@ impl super::ApiBackEnd for GlBackEnd {
     }
 
     fn create_texture(&mut self, info: ::tex::TextureInfo) -> Texture {
-        let nm = (self.make_texture)(info);
-        let fill = nm - self.texture_info.len() as gl::types::GLuint;
-
-        if fill <= 0 {
-            fail!("INVARIANT BROKEN: A texture was created with a name smaller than \
-                   the most recently seen name")
-        } else {
-            for _ in range(0, fill) {
-                self.texture_info.push(::tex::TextureInfo::new());
-            }
-        }
-
-        *self.texture_info.get_mut(nm as uint) = info;
-        nm
+        (self.make_texture)(info)
     }
 
     fn create_sampler(&mut self, info: ::tex::SamplerInfo) -> Sampler {
@@ -464,10 +453,10 @@ impl super::ApiBackEnd for GlBackEnd {
                         (gl::DRAW_FRAMEBUFFER, attachment, gl::RENDERBUFFER, 0),
                     super::target::PlaneSurface(name) => gl::FramebufferRenderbuffer
                         (gl::DRAW_FRAMEBUFFER, attachment, gl::RENDERBUFFER, name),
-                    super::target::PlaneTexture(name, level) => gl::FramebufferTexture
-                        (gl::DRAW_FRAMEBUFFER, attachment, name, level as gl::types::GLint),
-                    super::target::PlaneTextureLayer(name, level, layer) => gl::FramebufferTextureLayer
-                        (gl::DRAW_FRAMEBUFFER, attachment, name, level as gl::types::GLint, layer as gl::types::GLint),
+                    super::target::PlaneTexture(tex, level) => gl::FramebufferTexture
+                        (gl::DRAW_FRAMEBUFFER, attachment, tex.name, level as gl::types::GLint),
+                    super::target::PlaneTextureLayer(tex, level, layer) => gl::FramebufferTextureLayer
+                        (gl::DRAW_FRAMEBUFFER, attachment, tex.name, level as gl::types::GLint, layer as gl::types::GLint),
                 }
             },
             super::BindUniformBlock(program, index, loc, buffer) => {
@@ -494,7 +483,7 @@ impl super::ApiBackEnd for GlBackEnd {
                 self.update_buffer(buffer, data, super::UsageDynamic);
             },
             super::UpdateTexture(tex, image_info, data) => {
-                tex::update_texture(tex, image_info, self.texture_info[tex as uint], data);
+                tex::update_texture(tex, image_info, data);
             },
             super::Draw(start, count) => {
                 gl::DrawArrays(gl::TRIANGLES,

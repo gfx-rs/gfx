@@ -200,7 +200,8 @@ pub fn make_with_storage(info: ::tex::TextureInfo) -> Texture {
 /// Bind a texture + sampler to a given slot.
 pub fn bind_texture(loc: GLuint, tex: Texture, sam: Sampler, backend: &GlBackEnd) {
     let info = backend.samplers[sam as uint];
-    let kind = kind_to_gl(backend.texture_info[tex as uint].kind);
+    let kind = tex.kind;
+    let tex = tex.name;
 
     gl::ActiveTexture(gl::TEXTURE0 + loc as GLenum);
 
@@ -234,21 +235,21 @@ pub fn bind_texture(loc: GLuint, tex: Texture, sam: Sampler, backend: &GlBackEnd
     }
 }
 
-pub fn update_texture(tex: Texture, img: ::tex::ImageInfo, tex_info: ::tex::TextureInfo,
-                      data: Box<Blob + Send>) {
+pub fn update_texture(tex: Texture, img: ::tex::ImageInfo, data: Box<Blob + Send>) {
     debug_assert!(img.width as u32 * img.height as u32 * img.depth as u32 == data.get_size() as u32);
 
     let data = data.get_address() as *const GLvoid;
-    let pix = format_to_glpixel(tex_info.format);
-    let typ = format_to_gltype(tex_info.format);
+    let pix = format_to_glpixel(img.format);
+    let typ = format_to_gltype(img.format);
+    let kind = tex.kind;
 
-    gl::BindTexture(kind_to_gl(tex_info.kind), tex);
+    gl::BindTexture(kind, tex.name);
 
     unsafe {
-        match tex_info.kind {
-            Texture1D => {
+        match kind {
+            gl::TEXTURE_1D => {
                 gl::TexSubImage1D(
-                    kind_to_gl(tex_info.kind),
+                    kind,
                     img.mipmap as GLint,
                     img.xoffset as GLint,
                     img.width as GLint,
@@ -257,9 +258,9 @@ pub fn update_texture(tex: Texture, img: ::tex::ImageInfo, tex_info: ::tex::Text
                     data,
                 );
             },
-            Texture1DArray | Texture2D => {
+            gl::TEXTURE_1D_ARRAY | gl::TEXTURE_2D => {
                 gl::TexSubImage2D(
-                    kind_to_gl(tex_info.kind),
+                    kind,
                     img.mipmap as GLint,
                     img.xoffset as GLint,
                     img.yoffset as GLint,
@@ -270,10 +271,10 @@ pub fn update_texture(tex: Texture, img: ::tex::ImageInfo, tex_info: ::tex::Text
                     data,
                 );
             },
-            TextureCube => unimplemented!(),
-            Texture2DArray | Texture3D => {
+            gl::TEXTURE_CUBE_MAP => unimplemented!(),
+            gl::TEXTURE_2D_ARRAY | gl::TEXTURE_3D => {
                 gl::TexSubImage3D(
-                    kind_to_gl(tex_info.kind),
+                    kind,
                     img.mipmap as GLint,
                     img.xoffset as GLint,
                     img.yoffset as GLint,
@@ -285,14 +286,15 @@ pub fn update_texture(tex: Texture, img: ::tex::ImageInfo, tex_info: ::tex::Text
                     typ,
                     data,
                 );
-            }
+            },
+            _ => fail!("invalid target stored in texture {}", tex)
         }
     }
 }
 
-/// Common texture creation routine, just binds and sets mipmap ranges.
+/// Common texture creation routine, just creates and binds.
 fn make_texture(info: ::tex::TextureInfo) -> Texture {
-    let mut name = 0 as Texture;
+    let mut name = 0 as GLuint;
     unsafe {
         gl::GenTextures(1, &mut name);
     }
@@ -300,7 +302,7 @@ fn make_texture(info: ::tex::TextureInfo) -> Texture {
     let k = kind_to_gl(info.kind);
     gl::BindTexture(k, name);
 
-    name
+    Texture { name: name, kind: k }
 }
 
 fn wrap_to_gl(w: WrapMode) -> GLenum {
