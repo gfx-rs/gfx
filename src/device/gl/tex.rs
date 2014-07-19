@@ -101,21 +101,7 @@ pub fn make_without_storage(info: ::tex::TextureInfo) -> Texture {
                 );
             },
             TextureCube => unimplemented!(),
-            Texture2DArray => {
-                gl::TexImage3D(
-                    kind,
-                    0,
-                    fmt,
-                    info.width as GLsizei,
-                    info.height as GLsizei,
-                    info.depth as GLsizei,
-                    0,
-                    pix,
-                    typ,
-                    ::std::ptr::null(),
-                );
-            },
-            Texture3D => {
+            Texture2DArray | Texture3D => {
                 gl::TexImage3D(
                     kind,
                     0,
