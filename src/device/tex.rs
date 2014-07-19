@@ -75,8 +75,9 @@ pub enum TextureFormat {
 
 /// Describes the storage of a texture.
 ///
-/// Portability note: textures larger than 1024px in any dimension are
-/// unlikely to be supported by mobile platforms.
+/// # Portability note
+///
+/// Textures larger than 1024px in any dimension are unlikely to be supported by mobile platforms.
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub struct TextureInfo {
     pub width: u16,
