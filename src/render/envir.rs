@@ -125,17 +125,17 @@ pub trait BindableStorage {
 
 impl BindableStorage for Storage {
     fn get_block(&self, id: BlockId) -> super::BufferHandle {
-        let &(_, buf) = self.blocks.get(id as uint);
+        let (_, buf) = self.blocks[id as uint];
         buf
     }
 
     fn get_uniform(&self, id: UniformId) -> UniformValue {
-        let &(_, value) = self.uniforms.get(id as uint);
+        let (_, value) = self.uniforms[id as uint];
         value
     }
 
     fn get_texture(&self, id: TextureId) -> (super::TextureHandle, super::SamplerHandle) {
-        let &(_, texture, sampler) = self.textures.get(id as uint);
+        let (_, texture, sampler) = self.textures[id as uint];
         (texture, sampler)
     }
 
@@ -171,7 +171,7 @@ impl BindableStorage for Storage {
                 Some(p) => p,
                 None => return Err(ErrorUniformNotFound(uniform_var.name.as_slice()))
             };
-            match uniform_var.is_compatible(self.uniforms.get(pos).ref1()) {
+            match uniform_var.is_compatible(self.uniforms[pos].ref1()) {
                 Ok(_) => cut.uniforms.push(pos as UniformId),
                 Err(e) => return Err(ErrorUniformFormat(uniform_var.name.as_slice(), e)),
             }
