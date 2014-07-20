@@ -6,10 +6,12 @@ extern crate plugin;
 extern crate gfx;
 extern crate glfw;
 
+use gfx::ToUniform;
+
 #[shader_param]
 struct Params {
     b: gfx::BufferHandle,
-    x: int,
+    x: i32,
     t: gfx::TextureHandle,
 }
 

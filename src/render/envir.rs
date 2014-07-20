@@ -16,7 +16,7 @@ extern crate time;
 extern crate syntax;
 
 
-use device::shade::{UniformValue, ProgramMeta, CompatibilityError};
+use device::shade::{UniformValue, ValueI32, ProgramMeta, CompatibilityError};
 
 use std::iter::Map;
 use std::slice::Items;
@@ -31,10 +31,22 @@ pub trait ParameterSink {
     fn find_texture(&self, name: &str) -> Option<TextureVarId>;
 }
 
+//impl ParameterSink for ProgramMeta
+
 pub trait Uploader {
     fn set_block  (&mut self, BlockVarId, super::BufferHandle);
     fn set_uniform(&mut self, UniformVarId, UniformValue);
     fn set_texture(&mut self, TextureVarId, super::TextureHandle);
+}
+
+pub trait ToUniform {
+    fn to_uniform(&self) -> UniformValue;
+}
+
+impl ToUniform for i32 {
+    fn to_uniform(&self) -> UniformValue {
+        ValueI32(*self)
+    }
 }
 
 #[deriving(Clone, Show)]

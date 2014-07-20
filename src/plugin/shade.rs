@@ -104,11 +104,29 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
 }
 
 fn method_upload(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
-        substr: &generic::Substructure) -> Gc<ast::Expr> {
+        substr: &generic::Substructure, definition: Gc<ast::StructDef>) -> Gc<ast::Expr> {
     match *substr.fields {
         generic::Struct(ref fields) => {
-            let calls = fields.iter().map(|f| {
-                cx.stmt_expr(cx.expr_lit(span, ast::LitNil))
+            let calls = definition.fields.iter().zip(fields.iter()).map(|(def, f)| {
+                let (fun, value) = match classify(&def.node.ty.node) {
+                    ParamBlock   => {
+                        ("set_block", f.self_)
+                    },
+                    ParamUniform => {
+                        let value = cx.expr_method_call(span, f.self_, cx.ident_of("to_uniform"), Vec::new());
+                        ("set_uniform", value)
+                    },
+                    ParamTexture => {
+                        ("set_texture", f.self_)
+                    },
+                };
+                let expr_id = cx.expr_field_access(span, substr.nonself_args[0], f.name.unwrap());
+                cx.stmt_expr(cx.expr_method_call(
+                    span,
+                    substr.nonself_args[1],
+                    cx.ident_of(fun),
+                    vec![expr_id, value]
+                ))
             }).collect();
             cx.expr_block(cx.block(span, calls, None))
         },
@@ -146,12 +164,12 @@ fn node_to_var_path(span: codemap::Span, node: &ast::Ty_) -> ast::Path {
 fn expand_shader_param(context: &mut ext::base::ExtCtxt, span: codemap::Span,
         meta_item: Gc<ast::MetaItem>, item: Gc<ast::Item>, push: |Gc<ast::Item>|) {
     // constructing the Link struct
-    let link_def = match item.node {
-        ast::ItemStruct(ref definition, ref generics) => {
+    let (base_def, link_def) = match item.node {
+        ast::ItemStruct(definition, ref generics) => {
             if generics.lifetimes.len() > 0 {
                 context.bug("Generics are not allowed in ShaderParam struct");
             }
-            ast::StructDef {
+            (definition, ast::StructDef {
                 fields: definition.fields.
                     iter().map(|f| codemap::Spanned {
                         node: ast::StructField_ {
@@ -168,7 +186,7 @@ fn expand_shader_param(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                 ctor_id: None,
                 super_struct: None,
                 is_virtual: false,
-            }
+            })
         },
         _ => {
             context.span_warn(span, FATAL_ERROR);
@@ -258,7 +276,7 @@ fn expand_shader_param(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                 ret_ty: generic::ty::Tuple(Vec::new()),
                 attributes: Vec::new(),
                 combine_substructure: generic::combine_substructure(|cx, span, sub|
-                    method_upload(cx, span, sub)
+                    method_upload(cx, span, sub, base_def)
                 ),
             },
         ],
