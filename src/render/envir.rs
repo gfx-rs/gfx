@@ -31,10 +31,17 @@ pub trait ParameterSink {
     fn find_texture(&self, name: &str) -> Option<TextureVarId>;
 }
 
-pub struct ParameterLinkError;
+#[deriving(Clone, Show)]
+pub enum ParameterLinkError<'a> {
+    LinkBadProgram,
+    LinkInternalError,
+    LinkMissingBlock(&'a str),
+    LinkMissingUniform(&'a str),
+    LinkMissingTexture(&'a str),
+}
 
 pub trait ShaderParam<L> {
-    fn create_link<S: ParameterSink>(&S) -> Result<L, ParameterLinkError>;
+    fn create_link<S: ParameterSink>(&S) -> Result<L, ParameterLinkError<'static>>;
     //fn upload(&self, link: &L,
     //    |BlockVarId, super::BufferHandle|,
     //    |UniformVarId, UniformValue|,

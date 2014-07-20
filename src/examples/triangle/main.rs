@@ -8,7 +8,9 @@ extern crate glfw;
 
 #[shader_param]
 struct Params {
+    b: gfx::BufferHandle,
     x: int,
+    t: gfx::TextureHandle,
 }
 
 static VERTEX_SRC: gfx::ShaderSource = shaders! {
