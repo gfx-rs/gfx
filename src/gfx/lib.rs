@@ -31,7 +31,7 @@ extern crate render;
 pub use render::{BufferHandle, SurfaceHandle, TextureHandle, SamplerHandle, ProgramHandle, EnvirHandle};
 pub use render::Renderer;
 pub use Environment = render::envir::Storage;
-pub use render::envir::{ParameterSink, ParameterLinkError, Uploader, ShaderParam, BlockVarId, UniformVarId, TextureVarId};
+pub use render::envir::{ParameterSink, ParameterLinkError, ShaderParam, BlockVarId, UniformVarId, TextureVarId};
 pub	use render::envir::{BlockVar, UniformVar, TextureVar};	//TODO: remove
 pub use render::mesh;
 pub use render::rast::{DrawState, BlendAdditive, BlendAlpha};

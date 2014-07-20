@@ -31,16 +31,15 @@ pub trait ParameterSink {
     fn find_texture(&self, name: &str) -> Option<TextureVarId>;
 }
 
-pub trait Uploader {
-    fn put_uniform_i32(&mut self, UniformId, i32);
-    //...
-}
-
 pub struct ParameterLinkError;
 
 pub trait ShaderParam<L> {
     fn create_link<S: ParameterSink>(&S) -> Result<L, ParameterLinkError>;
-    //fn upload<U: Uploader>(&self, link: &L, uploader: &mut U);    //TODO
+    //fn upload(&self, link: &L,
+    //    |BlockVarId, super::BufferHandle|,
+    //    |UniformVarId, UniformValue|,
+    //    |TextureVarId, super::TextureHandle|
+    //    );    //TODO
 }
 
 pub struct ShaderBundle<T, L> {

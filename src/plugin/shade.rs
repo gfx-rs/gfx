@@ -25,48 +25,73 @@ use self::rustc::plugin::Registry;
 
 
 static INTERNAL_ERROR: &'static str = "Only free-standing named structs allowed to derive ShaderParam";
-static LINK_ERROR: &'static str = "ParameterLinkError";
+static LINK_RESULT_ERROR: &'static str = "ParameterLinkError";
 
-fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span, substr: &generic::Substructure) -> Gc<ast::Expr> {
-    /*match *substr.fields {
-        generic::StaticStruct(_definition, ref summary) => {
+enum ParamType {
+    ParamBlock,
+    ParamUniform,
+    ParamTexture,
+}
+
+fn classify(node: &ast::Ty_) -> ParamType {
+    match *node {
+        ast::TyPath(ref path, _, _) => match path.segments.last() {
+            Some(segment) => match segment.identifier.name.as_str() {
+                "BufferHandle" => ParamBlock,
+                "TextureHandle" => ParamTexture,
+                _ => ParamUniform,
+            },
+            None => ParamUniform,
+        },
+        _ => ParamUniform,
+    }
+}
+
+fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
+        substr: &generic::Substructure, link_name: &str) -> Gc<ast::Expr> {
+    let link_ident = cx.ident_of(link_name);
+    let error = cx.expr_path(cx.path_global(span, vec![
+        cx.ident_of("gfx"),
+        cx.ident_of(LINK_RESULT_ERROR),
+    ]));
+    match *substr.fields {
+        generic::StaticStruct(definition, ref summary) => {
             match *summary {
                 generic::Named(ref fields) => {
-                    //quote_expr!(cx, "::std::default::Default::default()");
-                    let default = cx.expr_call_global(span, vec![
-                            cx.ident_of("std"),
-                            cx.ident_of("default"),
-                            cx.ident_of("Default"),
-                            cx.ident_of("default")
-                        ], Vec::new());
-                    let tmp = fields.iter().map(|&(ident, s)|
-                        cx.field_imm(s, ident, default)
-                        ).collect();
-                    cx.expr_struct_ident(span, substr.type_ident, tmp)
+                    let out = definition.fields.iter().zip(fields.iter()).map(|(field, &(ident, s))| {
+                        let fun = match classify(&field.node.ty.node) {
+                            ParamBlock => "find_block",
+                            ParamUniform => "find_uniform",
+                            ParamTexture => "find_texture",
+                        };
+                        let value = cx.expr_method_call(
+                            span, substr.nonself_args[0], cx.ident_of(fun),
+                            vec![cx.expr_str(span, token::get_ident(ident))]
+                        );
+                        let unwrap = cx.expr_method_call(span, value,
+                            cx.ident_of("unwrap"), Vec::new());
+                        cx.field_imm(s, ident, unwrap)
+                    }).collect();
+                    cx.expr_ok(span, cx.expr_struct_ident(span, link_ident, out))
                 },
-                generic::Unnamed(_) => cx.bug(ERROR),
+                generic::Unnamed(_) => {
+                    cx.span_err(span, INTERNAL_ERROR);
+                    cx.expr_err(span, error)
+                },
             }
         },
-        _ => cx.bug(ERROR),
-    }*/
-    cx.expr_err(span, cx.expr_path(cx.path_global(span, vec![
-        ast::Ident::new(token::intern("gfx")),
-        ast::Ident::new(token::intern(LINK_ERROR)),
-    ])))
+        _ => {
+            cx.span_err(span, INTERNAL_ERROR);
+            cx.expr_err(span, error)
+        },
+    }
 }
 
 fn node_to_var_path(span: codemap::Span, node: &ast::Ty_) -> ast::Path {
-    let uniform = "UniformVarId";
-    let id = match *node {
-        ast::TyPath(ref path, _, _) => match path.segments.last() {
-            Some(segment) => match segment.identifier.name.as_str() {
-                "BufferHandle" => "BlockVarId",
-                "TextureHandle" => "TextureVarId",
-                _ => uniform,
-            },
-            None => uniform,
-        },
-        _ => uniform,
+    let id = match classify(node) {
+        ParamBlock => "BlockVarId",
+        ParamUniform => "UniformVarId",
+        ParamTexture => "TextureVarId",
     };
     ast::Path {
         span: span,
@@ -123,11 +148,11 @@ fn expand_shader_param(context: &mut ext::base::ExtCtxt, span: codemap::Span,
         token::intern(link_name.as_slice())
         ), link_def));
     // deriving ShaderParam
-    let arg = generic::ty::Ptr(
+    let method_arg = generic::ty::Ptr(
         box generic::ty::Literal(generic::ty::Path::new_local("S")),
         generic::ty::Borrowed(None, ast::MutImmutable)
     );
-    let error_path = generic::ty::Path::new(vec!["gfx", LINK_ERROR]);
+    let error_path = generic::ty::Path::new(vec!["gfx", LINK_RESULT_ERROR]);
     let trait_def = generic::TraitDef {
         span: span,
         attributes: Vec::new(),
@@ -154,7 +179,7 @@ fn expand_shader_param(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                     ])],
                 },
                 explicit_self: None,
-                args: vec![arg],
+                args: vec![method_arg],
                 ret_ty: generic::ty::Literal(
                     generic::ty::Path {
                         path: vec!["Result"],
@@ -169,7 +194,9 @@ fn expand_shader_param(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                     },
                 ),
                 attributes: Vec::new(),
-                combine_substructure: generic::combine_substructure(method_create),
+                combine_substructure: generic::combine_substructure(|cx, span, sub|
+                    method_create(cx, span, sub, link_name.as_slice())
+                ),
             },
         ],
     };
