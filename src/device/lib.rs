@@ -18,7 +18,7 @@
 #![license = "ASL2"]
 #![crate_type = "lib"]
 
-#![feature(phase)]
+#![feature(phase, globs)]
 
 #[phase(plugin, link)] extern crate log;
 extern crate libc;
@@ -36,6 +36,7 @@ pub mod attrib;
 pub mod rast;
 pub mod shade;
 pub mod target;
+pub mod tex;
 #[cfg(gl)] mod gl;
 
 #[deriving(Show)]
@@ -46,6 +47,8 @@ pub struct Capabilities {
     max_vertex_attributes: uint,
     uniform_block_supported: bool,
     array_buffer_supported: bool,
+    sampler_objects_supported: bool,
+    immutable_storage_supported: bool,
 }
 
 pub type VertexCount = u16;
@@ -95,6 +98,8 @@ pub enum CallRequest {
     CreateArrayBuffer,
     CreateShader(shade::Stage, shade::ShaderSource),
     CreateProgram(Vec<dev::Shader>),
+    CreateTexture(tex::TextureInfo),
+    CreateSampler(tex::SamplerInfo),
     CreateFrameBuffer,
 }
 
@@ -111,11 +116,12 @@ pub enum CastRequest {
     BindTarget(target::Target, target::Plane),
     BindUniformBlock(dev::Program, u8, UniformBufferSlot, dev::Buffer),
     BindUniform(shade::Location, shade::UniformValue),
-    // BindTexture(TextureSlot, dev::Texture, dev::Sampler),    // TODO
+    BindTexture(TextureSlot, dev::Texture, dev::Sampler),
     SetPrimitiveState(rast::Primitive),
     SetDepthStencilState(Option<rast::Depth>, Option<rast::Stencil>, rast::CullMode),
     SetBlendState(Option<rast::Blend>),
     UpdateBuffer(dev::Buffer, Box<Blob + Send>),
+    UpdateTexture(dev::Texture, tex::ImageInfo, Box<Blob + Send>),
     Draw(VertexCount, VertexCount),
     DrawIndexed(IndexCount, IndexCount),
 }
@@ -127,6 +133,8 @@ pub enum Reply<T> {
     ReplyNewShader(T, Result<dev::Shader, shade::CreateShaderError>),
     ReplyNewProgram(T, Result<shade::ProgramMeta, ()>),
     ReplyNewFrameBuffer(T, dev::FrameBuffer),
+    ReplyNewTexture(T, dev::Texture),
+    ReplyNewSampler(T, dev::Sampler),
 }
 
 /// An interface for performing draw calls using a specific graphics API
@@ -139,6 +147,8 @@ pub trait ApiBackEnd {
     fn create_shader(&mut self, shade::Stage, code: shade::ShaderSource) -> Result<dev::Shader, shade::CreateShaderError>;
     fn create_program(&mut self, shaders: &[dev::Shader]) -> Result<shade::ProgramMeta, ()>;
     fn create_frame_buffer(&mut self) -> dev::FrameBuffer;
+    fn create_texture(&mut self, info: tex::TextureInfo) -> dev::Texture;
+    fn create_sampler(&mut self, info: tex::SamplerInfo) -> dev::Sampler;
     /// Update the information stored in a specific buffer
     fn update_buffer(&mut self, dev::Buffer, data: &Blob, BufferUsage);
     /// Process a request from a `Device`
@@ -187,6 +197,14 @@ impl<T: Send, B: ApiBackEnd, C: GraphicsContext<B>> Device<T, B, C> {
             CreateShader(stage, code) => {
                 let name = self.back_end.create_shader(stage, code);
                 ReplyNewShader(token, name)
+            },
+            CreateTexture(info) => {
+                let name = self.back_end.create_texture(info);
+                ReplyNewTexture(token, name)
+            },
+            CreateSampler(info) => {
+                let name = self.back_end.create_sampler(info);
+                ReplyNewSampler(token, name)
             },
             CreateProgram(code) => {
                 let name = self.back_end.create_program(code.as_slice());

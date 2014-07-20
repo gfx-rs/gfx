@@ -106,19 +106,19 @@ impl Dispatcher {
     }
 
     fn get_buffer(&mut self, handle: BufferHandle) -> backend::Buffer {
-        self.get_any(|res| res.buffers.get(handle))
+        self.get_any(|res| &res.buffers[handle])
     }
 
     fn get_common_array_buffer(&mut self) -> backend::ArrayBuffer {
-        self.get_any(|res| res.array_buffers.get(0))
+        self.get_any(|res| &res.array_buffers[0])
     }
 
     fn get_shader(&mut self, handle: ShaderHandle) -> backend::Shader {
-        self.get_any(|res| res.shaders.get(handle))
+        self.get_any(|res| &res.shaders[handle])
     }
 
     fn get_common_frame_buffer(&mut self) -> backend::FrameBuffer {
-        self.get_any(|res| res.frame_buffers.get(0))
+        self.get_any(|res| &res.frame_buffers[0])
     }
 }
 
@@ -188,7 +188,7 @@ impl Renderer {
         // demand resources. This section needs the mutable self, so we are unable to do this
         // after we get a reference to ether the `Environment` or the `ProgramMeta`
         self.prebind_mesh(mesh);
-        self.dispatcher.demand(|res| !res.programs.get(program_handle).is_pending());
+        self.dispatcher.demand(|res| !res.programs[program_handle].is_pending());
         // bind state
         self.cast(device::SetPrimitiveState(state.primitive));
         self.cast(device::SetDepthStencilState(state.depth, state.stencil,
@@ -200,12 +200,12 @@ impl Renderer {
         // bind output frame
         self.bind_frame(&frame);
         // bind shaders
-        let env = self.environments.get(env_handle);
+        let env = &self.environments[env_handle];
         // prebind the environment (unable to make it a method of self...)
         for handle in env.iter_buffers() {
-            self.dispatcher.demand(|res| !res.buffers.get(handle).is_pending());
+            self.dispatcher.demand(|res| !res.buffers[handle].is_pending());
         }
-        let program = match *self.dispatcher.resource.programs.get(program_handle) {
+        let program = match self.dispatcher.resource.programs[program_handle] {
             resource::Pending => fail!("Program is not loaded yet"),
             resource::Loaded(ref p) => p,
             resource::Failed(_) => return Err(ErrorProgram),
@@ -324,7 +324,7 @@ impl Renderer {
                 Some(vat) => match vat.elem_type.is_compatible(sat.base_type) {
                     Ok(_) => self.cast(device::BindAttribute(
                         sat.location as device::AttributeSlot,
-                        *self.dispatcher.resource.buffers.get(vat.buffer).unwrap(),
+                        *self.dispatcher.resource.buffers[vat.buffer].unwrap(),
                         vat.elem_count, vat.elem_type, vat.stride, vat.offset)),
                     Err(_) => return Err(ErrorAttributeType)
                 },
@@ -340,7 +340,7 @@ impl Renderer {
 
         for (i, (&k, block_var)) in shortcut.blocks.iter().zip(program.blocks.iter()).enumerate() {
             let handle = storage.get_block(k);
-            let block = *self.dispatcher.resource.buffers.get(handle).unwrap();
+            let block = *self.dispatcher.resource.buffers[handle].unwrap();
             block_var.active_slot.set(i as u8);
             self.cast(device::BindUniformBlock(program.name, i as u8, i as device::UniformBufferSlot, block));
         }

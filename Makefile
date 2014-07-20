@@ -21,6 +21,7 @@ ifeq ($(OS), Windows_NT)
 endif
 
 LINK_ARGS             = $(shell sh etc/glfw-link-args.sh)
+GL_EXTENSIONS = GL_EXT_texture_filter_anisotropic
 
 SRC_DIR               = src
 DEPS_DIR              = deps
@@ -93,7 +94,7 @@ $(DEPS_DIR)/gl-rs/README.md: submodule-update
 
 .PHONY: deps
 deps: $(DEPS_DIR)/gl-rs/README.md
-	$(MAKE) lib -C $(DEPS_DIR)/gl-rs
+	$(MAKE) lib -C $(DEPS_DIR)/gl-rs GL_EXTENSIONS=$(GL_EXTENSIONS)
 	$(MAKE) lib -C $(DEPS_DIR)/glfw-rs
 
 .PHONY: clean-deps
