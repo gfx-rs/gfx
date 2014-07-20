@@ -68,8 +68,26 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                             span, substr.nonself_args[0], cx.ident_of(fun),
                             vec![cx.expr_str(span, token::get_ident(ident))]
                         );
-                        let unwrap = cx.expr_method_call(span, value,
-                            cx.ident_of("unwrap"), Vec::new());
+                        //let unwrap = cx.expr_method_call(span, value,
+                        //    cx.ident_of("unwrap"), Vec::new());
+                        let some_ident = cx.ident_of("_p");
+                        let unwrap = cx.expr_match(span, value, vec![
+                            cx.arm(span,
+                                vec![cx.pat_enum(span, cx.path_ident(span, cx.ident_of("Some")),
+                                    vec![cx.pat_ident(span, some_ident)])
+                                ],
+                                cx.expr_ident(span, some_ident)
+                            ),
+                            cx.arm(span,
+                                vec![cx.pat_enum(span,
+                                    cx.path_ident(span, cx.ident_of("None")),
+                                    Vec::new())
+                                ],
+                                cx.expr(span, ast::ExprRet(
+                                    Some(cx.expr_err(span, error))
+                                ))
+                            )
+                        ]);
                         cx.field_imm(s, ident, unwrap)
                     }).collect();
                     cx.expr_ok(span, cx.expr_struct_ident(span, link_ident, out))
