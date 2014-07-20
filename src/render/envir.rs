@@ -26,9 +26,15 @@ pub type UniformVarId = u16;
 pub type TextureVarId = u8;
 
 pub trait ParameterSink {
-    fn find_block(&self, name: &str) -> Option<BlockVarId>;
+    fn find_block  (&self, name: &str) -> Option<BlockVarId>;
     fn find_uniform(&self, name: &str) -> Option<UniformVarId>;
     fn find_texture(&self, name: &str) -> Option<TextureVarId>;
+}
+
+pub trait Uploader {
+    fn set_block  (&mut self, BlockVarId, super::BufferHandle);
+    fn set_uniform(&mut self, UniformVarId, UniformValue);
+    fn set_texture(&mut self, TextureVarId, super::TextureHandle);
 }
 
 #[deriving(Clone, Show)]
@@ -42,11 +48,7 @@ pub enum ParameterLinkError<'a> {
 
 pub trait ShaderParam<L> {
     fn create_link<S: ParameterSink>(&S) -> Result<L, ParameterLinkError<'static>>;
-    //fn upload(&self, link: &L,
-    //    |BlockVarId, super::BufferHandle|,
-    //    |UniformVarId, UniformValue|,
-    //    |TextureVarId, super::TextureHandle|
-    //    );    //TODO
+    fn upload<U: Uploader>(&self, &L, &mut U);
 }
 
 pub struct ShaderBundle<T, L> {

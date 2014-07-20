@@ -49,64 +49,73 @@ fn classify(node: &ast::Ty_) -> ParamType {
 fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
         substr: &generic::Substructure, link_name: &str) -> Gc<ast::Expr> {
     let link_ident = cx.ident_of(link_name);
-    let error_internal = cx.expr_path(cx.path_global(span, vec![
-        cx.ident_of("gfx"),
-        cx.ident_of("LinkInternalError"),
-    ]));
     match *substr.fields {
-        generic::StaticStruct(definition, ref summary) => {
-            match *summary {
-                generic::Named(ref fields) => {
-                    let out = definition.fields.iter().zip(fields.iter()).map(|(field, &(ident, s))| {
-                        let (fun, ret) = match classify(&field.node.ty.node) {
-                            ParamBlock   => ("find_block",   "LinkMissingBlock"),
-                            ParamUniform => ("find_uniform", "LinkMissingUniform"),
-                            ParamTexture => ("find_texture", "LinkMissingTexture"),
-                        };
-                        let id_ret = cx.ident_of(ret);
-                        let expr_field = cx.expr_str(span, token::get_ident(ident));
-                        let value = cx.expr_method_call(
-                            span, substr.nonself_args[0], cx.ident_of(fun),
-                            vec![expr_field.clone()]
-                        );
-                        let error = cx.expr_call(span,
-                            cx.expr_path(cx.path_global(span,
-                                vec![cx.ident_of("gfx"), id_ret])
-                            ),
-                            vec![expr_field]
-                        );
-                        let some_ident = cx.ident_of("_p");
-                        let unwrap = cx.expr_match(span, value, vec![
-                            cx.arm(span,
-                                vec![cx.pat_enum(span, cx.path_ident(span, cx.ident_of("Some")),
-                                    vec![cx.pat_ident(span, some_ident)])
-                                ],
-                                cx.expr_ident(span, some_ident)
-                            ),
-                            cx.arm(span,
-                                vec![cx.pat_enum(span,
-                                    cx.path_ident(span, cx.ident_of("None")),
-                                    Vec::new())
-                                ],
-                                cx.expr(span, ast::ExprRet(
-                                    Some(cx.expr_err(span, error))
-                                ))
-                            )
-                        ]);
-                        cx.field_imm(s, ident, unwrap)
-                    }).collect();
-                    cx.expr_ok(span, cx.expr_struct_ident(span, link_ident, out))
-                },
-                generic::Unnamed(_) => {
-                    cx.span_err(span, FATAL_ERROR);
-                    cx.expr_err(span, error_internal)
-                },
-            }
+        generic::StaticStruct(definition, generic::Named(ref fields)) => {
+            let out = definition.fields.iter().zip(fields.iter()).map(|(field, &(ident, s))| {
+                let (fun, ret) = match classify(&field.node.ty.node) {
+                    ParamBlock   => ("find_block",   "LinkMissingBlock"),
+                    ParamUniform => ("find_uniform", "LinkMissingUniform"),
+                    ParamTexture => ("find_texture", "LinkMissingTexture"),
+                };
+                let id_ret = cx.ident_of(ret);
+                let expr_field = cx.expr_str(span, token::get_ident(ident));
+                let value = cx.expr_method_call(
+                    span, substr.nonself_args[0], cx.ident_of(fun),
+                    vec![expr_field.clone()]
+                );
+                let error = cx.expr_call(span,
+                    cx.expr_path(cx.path_global(span,
+                        vec![cx.ident_of("gfx"), id_ret])
+                    ),
+                    vec![expr_field]
+                );
+                let some_ident = cx.ident_of("_p");
+                let unwrap = cx.expr_match(span, value, vec![
+                    cx.arm(span,
+                        vec![cx.pat_enum(span, cx.path_ident(span, cx.ident_of("Some")),
+                            vec![cx.pat_ident(span, some_ident)])
+                        ],
+                        cx.expr_ident(span, some_ident)
+                    ),
+                    cx.arm(span,
+                        vec![cx.pat_enum(span,
+                            cx.path_ident(span, cx.ident_of("None")),
+                            Vec::new())
+                        ],
+                        cx.expr(span, ast::ExprRet(
+                            Some(cx.expr_err(span, error))
+                        ))
+                    )
+                ]);
+                cx.field_imm(s, ident, unwrap)
+            }).collect();
+            cx.expr_ok(span, cx.expr_struct_ident(span, link_ident, out))
         },
         _ => {
             cx.span_err(span, FATAL_ERROR);
-            cx.expr_err(span, error_internal)
+            cx.expr_err(span, cx.expr_path(
+                cx.path_global(span, vec![
+                    cx.ident_of("gfx"),
+                    cx.ident_of("LinkInternalError"),
+                ])
+            ))
         },
+    }
+}
+
+fn method_upload(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
+        substr: &generic::Substructure) -> Gc<ast::Expr> {
+    match *substr.fields {
+        generic::Struct(ref fields) => {
+            let calls = fields.iter().map(|f| {
+                cx.stmt_expr(cx.expr_lit(span, ast::LitNil))
+            }).collect();
+            cx.expr_block(cx.block(span, calls, None))
+        },
+        _ => {
+            cx.span_err(span, FATAL_ERROR);
+            cx.expr_lit(span, ast::LitNil)
+        }
     }
 }
 
@@ -167,23 +176,20 @@ fn expand_shader_param(context: &mut ext::base::ExtCtxt, span: codemap::Span,
         }
     };
     let link_name = format!("_{}Link", item.ident.as_str());
+    let link_ty = box generic::ty::Literal(
+        generic::ty::Path::new_local(link_name.as_slice())
+        );
     push(context.item_struct(span, ast::Ident::new(
         token::intern(link_name.as_slice())
         ), link_def));
     // deriving ShaderParam
-    let method_arg = generic::ty::Ptr(
-        box generic::ty::Literal(generic::ty::Path::new_local("S")),
-        generic::ty::Borrowed(None, ast::MutImmutable)
-    );
     let trait_def = generic::TraitDef {
         span: span,
         attributes: Vec::new(),
         path: generic::ty::Path {
             path: vec!["gfx", "ShaderParam"],
             lifetime: None,
-            params: vec![box generic::ty::Literal(
-                generic::ty::Path::new_local(link_name.as_slice())
-            )],
+            params: vec![link_ty.clone()],
             global: true,
         },
         additional_bounds: Vec::new(),
@@ -201,15 +207,18 @@ fn expand_shader_param(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                     ])],
                 },
                 explicit_self: None,
-                args: vec![method_arg],
+                args: vec![
+                    generic::ty::Ptr(
+                        box generic::ty::Literal(generic::ty::Path::new_local("S")),
+                        generic::ty::Borrowed(None, ast::MutImmutable)
+                    )
+                ],
                 ret_ty: generic::ty::Literal(
                     generic::ty::Path {
                         path: vec!["Result"],
                         lifetime: None,
                         params: vec![
-                            box generic::ty::Literal(
-                                generic::ty::Path::new_local(link_name.as_slice())
-                            ),
+                            link_ty.clone(),
                             box generic::ty::Literal(generic::ty::Path {
                                 path: vec!["gfx", "ParameterLinkError"],
                                 lifetime: Some("'static"),
@@ -223,6 +232,33 @@ fn expand_shader_param(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                 attributes: Vec::new(),
                 combine_substructure: generic::combine_substructure(|cx, span, sub|
                     method_create(cx, span, sub, link_name.as_slice())
+                ),
+            },
+            generic::MethodDef {
+                name: "upload",
+                generics: generic::ty::LifetimeBounds {
+                    lifetimes: Vec::new(),
+                    bounds: vec![("U", None, vec![
+                        generic::ty::Path::new(vec!["gfx", "Uploader"])
+                    ])],
+                },
+                explicit_self: Some(Some(generic::ty::Borrowed(
+                    None, ast::MutImmutable
+                ))),
+                args: vec![
+                    generic::ty::Ptr(
+                        link_ty.clone(),
+                        generic::ty::Borrowed(None, ast::MutImmutable)
+                    ),
+                    generic::ty::Ptr(
+                        box generic::ty::Literal(generic::ty::Path::new_local("U")),
+                        generic::ty::Borrowed(None, ast::MutMutable)
+                    ),
+                ],
+                ret_ty: generic::ty::Tuple(Vec::new()),
+                attributes: Vec::new(),
+                combine_substructure: generic::combine_substructure(|cx, span, sub|
+                    method_upload(cx, span, sub)
                 ),
             },
         ],

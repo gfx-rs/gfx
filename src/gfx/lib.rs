@@ -31,7 +31,7 @@ extern crate render;
 pub use render::{BufferHandle, SurfaceHandle, TextureHandle, SamplerHandle, ProgramHandle, EnvirHandle};
 pub use render::Renderer;
 pub use Environment = render::envir::Storage;
-pub use render::envir::{ParameterSink, ShaderParam,
+pub use render::envir::{ParameterSink, Uploader, ShaderParam,
 		ParameterLinkError, LinkBadProgram, LinkInternalError, LinkMissingBlock, LinkMissingUniform, LinkMissingTexture, 
 		BlockVarId, UniformVarId, TextureVarId,
 		BlockVar, UniformVar, TextureVar};	//TODO: remove
