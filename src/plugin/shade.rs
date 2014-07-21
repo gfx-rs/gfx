@@ -113,7 +113,12 @@ fn method_upload(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                         ("set_block", f.self_)
                     },
                     ParamUniform => {
-                        let value = cx.expr_method_call(span, f.self_, cx.ident_of("to_uniform"), Vec::new());
+                        let value = cx.expr_method_call(
+                            span,
+                            f.self_,
+                            cx.ident_of("to_uniform"),
+                            Vec::new()
+                        );
                         ("set_uniform", value)
                     },
                     ParamTexture => {
@@ -128,7 +133,12 @@ fn method_upload(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     vec![expr_id, value]
                 ))
             }).collect();
-            cx.expr_block(cx.block(span, calls, None))
+            let view = cx.view_use_simple(
+                span,
+                ast::Inherited,
+                cx.path(span, vec![cx.ident_of("gfx"), cx.ident_of("ToUniform")])
+            );
+            cx.expr_block(cx.block_all(span, vec![view], calls, None))
         },
         _ => {
             cx.span_err(span, FATAL_ERROR);

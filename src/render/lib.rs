@@ -44,6 +44,7 @@ pub mod envir;
 pub mod mesh;
 pub mod rast;
 pub mod resource;
+pub mod shade;
 pub mod target;
 
 pub type Token = uint;

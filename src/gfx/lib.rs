@@ -31,12 +31,12 @@ extern crate render;
 pub use render::{BufferHandle, SurfaceHandle, TextureHandle, SamplerHandle, ProgramHandle, EnvirHandle};
 pub use render::Renderer;
 pub use Environment = render::envir::Storage;
-pub use render::envir::{ParameterSink, Uploader, ToUniform, ShaderParam,
-		ParameterLinkError, LinkBadProgram, LinkInternalError, LinkMissingBlock, LinkMissingUniform, LinkMissingTexture, 
-		BlockVarId, UniformVarId, TextureVarId,
-		BlockVar, UniformVar, TextureVar};	//TODO: remove
+pub use render::envir::{BlockVar, UniformVar, TextureVar};	//TODO: remove
 pub use render::mesh;
 pub use render::rast::{DrawState, BlendAdditive, BlendAlpha};
+pub use render::shade::{ParameterSink, Uploader, ToUniform, ShaderParam,
+		ParameterLinkError, LinkBadProgram, LinkInternalError, LinkMissingBlock, LinkMissingUniform, LinkMissingTexture, 
+		BlockVarId, UniformVarId, TextureVarId};
 pub use render::target::Frame;
 pub use device::attrib;
 pub use device::target::{Color, ClearData, Plane, TextureLayer, TextureLevel};
