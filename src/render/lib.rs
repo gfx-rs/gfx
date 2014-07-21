@@ -24,13 +24,11 @@ extern crate comm;
 extern crate device;
 
 use std::fmt::Show;
-use std::mem;
 use std::vec::MoveItems;
 
 use backend = device::dev;
 use device::shade::{CreateShaderError, ProgramMeta, Vertex, Fragment, UniformValue, ShaderSource};
 use device::target::{ClearData, TargetColor, TargetDepth, TargetStencil};
-use envir::BindableStorage;
 use shade::{BundleInternal, ShaderParam};
 use resource::{Loaded, Pending};
 
@@ -42,7 +40,6 @@ pub type ShaderHandle = uint;
 pub type ProgramHandle = uint;
 pub type EnvirHandle = uint;
 
-pub mod envir;
 pub mod mesh;
 pub mod rast;
 pub mod resource;
@@ -70,7 +67,6 @@ pub enum DeviceError {
 pub enum DrawError<'a> {
     ErrorMesh(MeshError),
     ErrorProgram,
-    ErrorEnvironment(envir::OptimizeError<'a>),
 }
 
 #[deriving(Show)]
@@ -149,7 +145,6 @@ pub struct Renderer {
     should_finish: comm::ShouldClose,
     /// the default FBO for drawing
     default_frame_buffer: backend::FrameBuffer,
-    environments: Vec<envir::Storage>,
     /// current state
     state: State,
 }
@@ -174,7 +169,6 @@ impl Renderer {
             swap_ack: swap_rx,
             should_finish: should_finish,
             default_frame_buffer: 0,
-            environments: Vec::new(),
             state: State {
                 frame: target::Frame::new(),
             },
@@ -218,9 +212,7 @@ impl Renderer {
         // bind output frame
         self.bind_frame(&frame);
         // bind shaders
-        //TODO
-        //let env = &self.environments[env_handle];
-        // prebind the environment (unable to make it a method of self...)
+        //TODO // prebind the environment (unable to make it a method of self...)
         //for handle in env.iter_buffers() {
         //    self.dispatcher.demand(|res| !res.buffers[handle].is_pending());
         //}
@@ -301,24 +293,6 @@ impl Renderer {
         }
     }
 
-    pub fn create_environment(&mut self, storage: envir::Storage) -> EnvirHandle {
-        let handle = self.environments.len();
-        self.environments.push(storage);
-        handle
-    }
-
-    pub fn set_env_block(&mut self, handle: EnvirHandle, var: envir::BlockVar, buf: BufferHandle) {
-        self.environments.get_mut(handle).set_block(var, buf);
-    }
-
-    pub fn set_env_uniform(&mut self, handle: EnvirHandle, var: envir::UniformVar, value: UniformValue) {
-        self.environments.get_mut(handle).set_uniform(var, value);
-    }
-
-    pub fn set_env_texture(&mut self, handle: EnvirHandle, var: envir::TextureVar, texture: TextureHandle, sampler: SamplerHandle) {
-        self.environments.get_mut(handle).set_texture(var, texture, sampler);
-    }
-
     pub fn update_buffer_vec<T: Send>(&mut self, handle: BufferHandle, data: Vec<T>) {
         let buf = self.dispatcher.get_buffer(handle);
         self.cast(device::UpdateBuffer(buf, (box data) as Box<device::Blob + Send>));
@@ -374,7 +348,7 @@ impl Renderer {
         Ok(())
     }
 
-    fn bind_environment(&self, storage: &envir::Storage, shortcut: &envir::Shortcut, program: &ProgramMeta) {
+    /*fn bind_environment(&self, storage: &envir::Storage, shortcut: &envir::Shortcut, program: &ProgramMeta) {
         debug_assert!(storage.is_fit(shortcut, program));
         self.cast(device::BindProgram(program.name));
 
@@ -394,5 +368,5 @@ impl Renderer {
         for (_i, (&_k, _texture)) in shortcut.textures.iter().zip(program.textures.iter()).enumerate() {
             unimplemented!()
         }
-    }
+    }*/
 }

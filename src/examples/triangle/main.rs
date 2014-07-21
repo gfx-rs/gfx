@@ -11,6 +11,7 @@ struct Params {
     b: gfx::BufferHandle,
     x: i32,
     //t: gfx::TextureHandle,
+    color: [f32, ..4],
 }
 
 static VERTEX_SRC: gfx::ShaderSource = shaders! {
@@ -82,9 +83,6 @@ fn main() {
             VERTEX_SRC.clone(),
             FRAGMENT_SRC.clone());
         let frame = gfx::Frame::new();
-        let mut env = gfx::Environment::new();
-        env.add_uniform("color", gfx::ValueF32Vec([0.1, 0.1, 0.1, 0.1]));
-        let env = renderer.create_environment(env);
         let state = gfx::DrawState::new();
         let mesh = {
             let data = vec![-0.5f32, -0.5, 0.5, -0.5, 0.0, 0.5];
@@ -95,6 +93,7 @@ fn main() {
         };
         let data = Params {
             b: 0, x: 0,
+            color: [0.1, 0.1, 0.1, 0.1],
         };
         let bundle = renderer.bundle_program(program, data).unwrap();
         while !renderer.should_finish() {

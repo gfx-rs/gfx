@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::mem::size_of;
-use device::shade::{UniformValue, ValueI32, ProgramMeta};
+use device::shade::{UniformValue, ValueI32, ValueF32Vec, ProgramMeta};
 
 pub type VarUniform = u16;
 pub type VarBlock = u8;
@@ -102,6 +102,12 @@ pub trait ToUniform {
 impl ToUniform for i32 {
     fn to_uniform(&self) -> UniformValue {
         ValueI32(*self)
+    }
+}
+
+impl ToUniform for [f32, ..4] {
+    fn to_uniform(&self) -> UniformValue {
+        ValueF32Vec(*self)
     }
 }
 

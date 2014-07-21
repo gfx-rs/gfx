@@ -30,8 +30,6 @@ extern crate render;
 // public re-exports
 pub use render::{BufferHandle, SurfaceHandle, TextureHandle, SamplerHandle, ProgramHandle, EnvirHandle};
 pub use render::Renderer;
-pub use Environment = render::envir::Storage;
-pub use render::envir::{BlockVar, UniformVar, TextureVar};	//TODO: remove
 pub use render::mesh;
 pub use render::rast::{DrawState, BlendAdditive, BlendAlpha};
 pub use render::shade::{ParameterSink, Uploader, ToUniform, ShaderParam,
