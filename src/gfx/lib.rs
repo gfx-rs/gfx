@@ -35,8 +35,8 @@ pub use render::envir::{BlockVar, UniformVar, TextureVar};	//TODO: remove
 pub use render::mesh;
 pub use render::rast::{DrawState, BlendAdditive, BlendAlpha};
 pub use render::shade::{ParameterSink, Uploader, ToUniform, ShaderParam,
-		ParameterLinkError, LinkBadProgram, LinkInternalError, LinkMissingBlock, LinkMissingUniform, LinkMissingTexture, 
-		BlockVarId, UniformVarId, TextureVarId};
+		ParameterLinkError, ParameterSideError, SideInternalError, MissingBlock, MissingUniform, MissingTexture, 
+		VarBlock, VarUniform, VarTexture};
 pub use render::target::Frame;
 pub use device::attrib;
 pub use device::target::{Color, ClearData, Plane, TextureLayer, TextureLevel};

@@ -24,13 +24,15 @@ extern crate comm;
 extern crate device;
 
 use std::fmt::Show;
+use std::mem;
 use std::vec::MoveItems;
 
 use backend = device::dev;
 use device::shade::{CreateShaderError, ProgramMeta, Vertex, Fragment, UniformValue, ShaderSource};
 use device::target::{ClearData, TargetColor, TargetDepth, TargetStencil};
 use envir::BindableStorage;
-use resource::Pending;
+use shade::{BundleInternal, ShaderParam};
+use resource::{Loaded, Pending};
 
 pub type BufferHandle = uint;
 pub type SurfaceHandle = backend::Surface;
@@ -123,6 +125,22 @@ impl Dispatcher {
     }
 }
 
+struct ParamLoader<'a> {
+    pub channel: &'a Sender<device::Request<Token>>,
+}
+
+impl<'a> shade::Uploader for ParamLoader<'a> {
+    fn set_uniform(&mut self, var: shade::VarUniform, value: UniformValue) {
+        self.channel.send(device::Cast(device::BindUniform(var as uint, value)));
+    }
+    fn set_block  (&mut self, _var: shade::VarBlock, _buf: BufferHandle) {
+        //TODO
+    }
+    fn set_texture(&mut self, _var: shade::VarTexture, _tex: TextureHandle) {
+        //TODO
+    }
+}
+
 
 pub struct Renderer {
     dispatcher: Dispatcher,
@@ -183,13 +201,12 @@ impl Renderer {
         self.cast(device::Clear(data));
     }
 
-    pub fn draw<'a>(&'a mut self, mesh: &mesh::Mesh, slice: mesh::Slice, frame: target::Frame,
-            program_handle: ProgramHandle, env_handle: EnvirHandle, state: rast::DrawState)
-            -> Result<(), DrawError<'a>> {
+    pub fn draw<'a, L, T: shade::ShaderParam<L>>(&'a mut self, mesh: &mesh::Mesh, slice: mesh::Slice, frame: target::Frame,
+            bundle: &shade::ShaderBundle<L, T>, state: rast::DrawState) -> Result<(), DrawError<'a>> {
         // demand resources. This section needs the mutable self, so we are unable to do this
         // after we get a reference to ether the `Environment` or the `ProgramMeta`
         self.prebind_mesh(mesh);
-        self.dispatcher.demand(|res| !res.programs[program_handle].is_pending());
+        self.dispatcher.demand(|res| !res.programs[bundle.get_program()].is_pending());
         // bind state
         self.cast(device::SetPrimitiveState(state.primitive));
         self.cast(device::SetDepthStencilState(state.depth, state.stencil,
@@ -201,20 +218,21 @@ impl Renderer {
         // bind output frame
         self.bind_frame(&frame);
         // bind shaders
-        let env = &self.environments[env_handle];
+        //TODO
+        //let env = &self.environments[env_handle];
         // prebind the environment (unable to make it a method of self...)
-        for handle in env.iter_buffers() {
-            self.dispatcher.demand(|res| !res.buffers[handle].is_pending());
-        }
-        let program = match self.dispatcher.resource.programs[program_handle] {
+        //for handle in env.iter_buffers() {
+        //    self.dispatcher.demand(|res| !res.buffers[handle].is_pending());
+        //}
+        let program = match self.dispatcher.resource.programs[bundle.get_program()] {
             resource::Pending => fail!("Program is not loaded yet"),
             resource::Loaded(ref p) => p,
             resource::Failed(_) => return Err(ErrorProgram),
         };
-        match env.optimize(program) {
-            Ok(ref cut) => self.bind_environment(env, cut, program),
-            Err(err) => return Err(ErrorEnvironment(err)),
-        }
+        self.cast(device::BindProgram(program.name));
+        bundle.bind(&mut ParamLoader{
+            channel: &self.device_tx,
+        });
         // bind vertex attributes
         match self.bind_mesh(mesh, program) {
             Ok(_) => (),
@@ -260,6 +278,27 @@ impl Renderer {
         self.device_tx.send(device::Call(token, device::CreateBuffer(blob)));
         bufs.push(Pending);
         token
+    }
+
+    pub fn bundle_program<L, T: shade::ShaderParam<L>>(&mut self, prog: ProgramHandle, data: T)
+            -> Result<shade::ShaderBundle<L, T>, shade::ParameterLinkError<'static>> {
+        self.dispatcher.demand(|res| !res.programs[prog].is_pending());
+        match self.dispatcher.resource.programs[prog] {
+            // lifetimes issue!
+            /*Loaded(ref m) => {
+                let mut sink = shade::MetaSink::new(m.clone());
+                match data.create_link(&mut sink) {
+                    Ok(link) => match sink.complete() {
+                        Ok(_) => Ok(BundleInternal::new(
+                            None::<&shade::ShaderBundle<L, T>>, // a workaround to specify the type
+                            prog, data, link)),
+                        Err(e) => Err(shade::ErrorShaderParam(e)),
+                    },
+                    Err(e) => Err(shade::ErrorProgramInfo(e)),
+                }
+            },*/
+            _ => Err(shade::ErrorBadProgram),
+        }
     }
 
     pub fn create_environment(&mut self, storage: envir::Storage) -> EnvirHandle {

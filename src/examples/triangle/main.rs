@@ -10,7 +10,7 @@ extern crate glfw;
 struct Params {
     b: gfx::BufferHandle,
     x: i32,
-    t: gfx::TextureHandle,
+    //t: gfx::TextureHandle,
 }
 
 static VERTEX_SRC: gfx::ShaderSource = shaders! {
@@ -93,6 +93,10 @@ fn main() {
                 .add("a_Pos", 2, gfx::mesh::F32)
                 .complete(3)
         };
+        let data = Params {
+            b: 0, x: 0,
+        };
+        let bundle = renderer.bundle_program(program, data).unwrap();
         while !renderer.should_finish() {
             let cdata = gfx::ClearData {
                 color: Some(gfx::Color([0.3, 0.3, 0.3, 1.0])),
@@ -100,7 +104,7 @@ fn main() {
                 stencil: None,
             };
             renderer.clear(cdata, frame);
-            renderer.draw(&mesh, gfx::mesh::VertexSlice(0, 3), frame, program, env, state).unwrap();
+            renderer.draw(&mesh, gfx::mesh::VertexSlice(0, 3), frame, &bundle, state).unwrap();
             renderer.end_frame();
             for err in renderer.iter_errors() {
                 println!("Renderer error: {}", err);
