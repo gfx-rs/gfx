@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![crate_name = "plugin"]
-#![comment = "Helper syntax extensions for gfx-rs"]
+#![crate_name = "macro"]
+#![comment = "Helper macros for gfx-rs"]
 #![license = "ASL2"]
 #![crate_type = "dylib"]
 

@@ -120,7 +120,7 @@ pub enum ComponentType {
 }
 
 /// The number of bytes in a vertex component.
-type ByteSize = u8;
+pub type ByteSize = u8;
 
 impl ComponentType {
     pub fn decode(&self) -> (ByteSize, a::Type) {

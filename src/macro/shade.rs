@@ -24,8 +24,6 @@ use self::syntax::parse::token;
 use self::rustc::plugin::Registry;
 
 
-static FATAL_ERROR: &'static str = "Only free-standing named structs allowed to derive ShaderParam";
-
 enum ParamType {
     ParamUniform,
     ParamBlock,
@@ -93,13 +91,8 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span, substr: &gene
             cx.expr_ok(span, cx.expr_struct_ident(span, link_ident, out))
         },
         _ => {
-            cx.span_err(span, FATAL_ERROR);
-            cx.expr_err(span, cx.expr_path(
-                cx.path_global(span, vec![
-                    cx.ident_of("gfx"),
-                    cx.ident_of("SideInternalError"),
-                ])
-            ))
+            cx.span_err(span, "Unable to implement `create_link()` on a non-structure");
+            cx.expr_lit(span, ast::LitNil)
         },
     }
 }
@@ -142,7 +135,7 @@ fn method_upload(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
             cx.expr_block(cx.block_all(span, vec![view], calls, None))
         },
         _ => {
-            cx.span_err(span, FATAL_ERROR);
+            cx.span_err(span, "Unable to implement `upload()` on a non-structure");
             cx.expr_lit(span, ast::LitNil)
         }
     }
@@ -184,7 +177,7 @@ fn expand_shader_param(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                 fields: definition.fields.
                     iter().map(|f| codemap::Spanned {
                         node: ast::StructField_ {
-                            kind: f.node.kind,  //TODO
+                            kind: f.node.kind,
                             id: f.node.id,
                             ty: context.ty_path(
                                 node_to_var_path(f.span, &f.node.ty.node),
@@ -200,7 +193,7 @@ fn expand_shader_param(context: &mut ext::base::ExtCtxt, span: codemap::Span,
             })
         },
         _ => {
-            context.span_warn(span, FATAL_ERROR);
+            context.span_warn(span, "Only free-standing named structs allowed to derive ShaderParam");
             return;
         }
     };

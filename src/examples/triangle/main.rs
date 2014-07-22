@@ -2,7 +2,7 @@
 #![crate_name = "triangle"]
 
 #[phase(plugin)]
-extern crate plugin;
+extern crate macro;
 extern crate gfx;
 extern crate glfw;
 
