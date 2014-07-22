@@ -272,12 +272,11 @@ impl Renderer {
         token
     }
 
-    pub fn bundle_program<L, T: shade::ShaderParam<L>>(&mut self, prog: ProgramHandle, data: T)
-            -> Result<shade::ShaderBundle<L, T>, shade::ParameterLinkError<'static>> {
+    pub fn bundle_program<'a, L, T: shade::ShaderParam<L>>(&'a mut self, prog: ProgramHandle, data: T)
+            -> Result<shade::ShaderBundle<L, T>, shade::ParameterLinkError<'a>> {
         self.dispatcher.demand(|res| !res.programs[prog].is_pending());
         match self.dispatcher.resource.programs[prog] {
-            // lifetimes issue!
-            /*Loaded(ref m) => {
+            Loaded(ref m) => {
                 let mut sink = shade::MetaSink::new(m.clone());
                 match data.create_link(&mut sink) {
                     Ok(link) => match sink.complete() {
@@ -288,7 +287,7 @@ impl Renderer {
                     },
                     Err(e) => Err(shade::ErrorProgramInfo(e)),
                 }
-            },*/
+            },
             _ => Err(shade::ErrorBadProgram),
         }
     }

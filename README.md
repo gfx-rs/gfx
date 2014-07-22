@@ -1,8 +1,8 @@
 # gfx-rs
 
-[![Build Status](https://travis-ci.org/bjz/gfx-rs.png?branch=master)](https://travis-ci.org/bjz/gfx-rs)
-[![Gitter Chat](https://badges.gitter.im/bjz/gfx-rs.png)](https://gitter.im/bjz/gfx-rs)
-[![Stories in Ready](https://badge.waffle.io/bjz/gfx-rs.png?label=S-ready&title=issues)](https://waffle.io/bjz/gfx-rs)
+[![Build Status](https://travis-ci.org/gfx-rs/gfx-rs.png?branch=master)](https://travis-ci.org/gfx-rs/gfx-rs)
+[![Gitter Chat](https://badges.gitter.im/gfx-rs/gfx-rs.png)](https://gitter.im/gfx-rs/gfx-rs)
+[![Stories in Ready](https://badge.waffle.io/gfx-rs/gfx-rs.png?label=S-ready&title=issues)](https://waffle.io/gfx-rs/gfx-rs)
 
 A lightweight buffer, shader and render queue manager for Rust.
 
@@ -75,5 +75,5 @@ pub type Matrix4x3<T> = [[T,..3],..4];
 gfx-rs is still in the early stages of development. Help is most appreciated.
 
 If you are interested in helping out, you can contact the developers on
-[Gitter](https://gitter.im/bjz/gfx-rs). They are also often reachable on
+[Gitter](https://gitter.im/gfx-rs/gfx-rs). They are also often reachable on
 `irc.mozilla.org #rust-gamedev`.
