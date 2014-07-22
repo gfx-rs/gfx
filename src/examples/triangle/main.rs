@@ -8,9 +8,6 @@ extern crate glfw;
 
 #[shader_param]
 struct Params {
-    //b: gfx::BufferHandle,
-    //x: i32,
-    //t: gfx::TextureHandle,
     blue: f32,
 }
 
@@ -94,7 +91,6 @@ fn main() {
                 .complete(3)
         };
         let data = Params {
-            //b: 0, x: 0,
             blue: 0.3,
         };
         let bundle = renderer.bundle_program(program, data).unwrap();

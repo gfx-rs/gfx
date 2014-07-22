@@ -195,21 +195,27 @@ impl Renderer {
         self.cast(device::BindArrayBuffer(vao));
         // bind output frame
         self.bind_frame(&frame);
+        // prepare shader blocks and textures
+        bundle.bind(|_, _| {
+        }, |_, buf| {
+            self.dispatcher.demand(|res| !res.buffers[buf].is_pending());
+        }, |_, _tex| { //TODO
+            //self.dispatcher.demand(|res| !res.textures[tex].is_pending());
+        });
         // bind shaders
-        //TODO // prebind the environment (unable to make it a method of self...)
-        //for handle in env.iter_buffers() {
-        //    self.dispatcher.demand(|res| !res.buffers[handle].is_pending());
-        //}
         let program = match self.dispatcher.resource.programs[bundle.get_program()] {
             resource::Pending => fail!("Program is not loaded yet"),
             resource::Loaded(ref p) => p,
             resource::Failed(_) => return Err(ErrorProgram),
         };
         self.cast(device::BindProgram(program.name));
+        let mut block_slot = 0u;
         bundle.bind(|uv, value| {
-            self.device_tx.send(device::Cast(device::BindUniform(uv as uint, value)));
-        }, |_bv, _block| {
-            //TODO
+            self.cast(device::BindUniform(uv as uint, value));
+        }, |bv, buf| {
+            let block = *self.dispatcher.resource.buffers[buf].unwrap();
+            self.cast(device::BindUniformBlock(program.name, bv as u8, block_slot as device::UniformBufferSlot, block));
+            block_slot += 1;
         }, |_tv, _tex| {
             //TODO
         });
@@ -334,26 +340,4 @@ impl Renderer {
         }
         Ok(())
     }
-
-    /*fn bind_environment(&self, storage: &envir::Storage, shortcut: &envir::Shortcut, program: &ProgramMeta) {
-        debug_assert!(storage.is_fit(shortcut, program));
-        self.cast(device::BindProgram(program.name));
-
-        for (i, (&k, block_var)) in shortcut.blocks.iter().zip(program.blocks.iter()).enumerate() {
-            let handle = storage.get_block(k);
-            let block = *self.dispatcher.resource.buffers[handle].unwrap();
-            block_var.active_slot.set(i as u8);
-            self.cast(device::BindUniformBlock(program.name, i as u8, i as device::UniformBufferSlot, block));
-        }
-
-        for (&k, uniform_var) in shortcut.uniforms.iter().zip(program.uniforms.iter()) {
-            let value = storage.get_uniform(k);
-            uniform_var.active_value.set(value);
-            self.cast(device::BindUniform(uniform_var.location, value));
-        }
-
-        for (_i, (&_k, _texture)) in shortcut.textures.iter().zip(program.textures.iter()).enumerate() {
-            unimplemented!()
-        }
-    }*/
 }
