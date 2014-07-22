@@ -19,6 +19,8 @@ pub type VarUniform = u16;
 pub type VarBlock = u8;
 pub type VarTexture = u8;
 
+/// Something that has information about program parameters,
+/// used to fill up a hidden Link structure for the `ShaderParam` implemntor
 pub trait ParameterSink {
     fn find_uniform(&mut self, name: &str) -> Option<VarUniform>;
     fn find_block  (&mut self, name: &str) -> Option<VarBlock>;
@@ -29,6 +31,8 @@ type MaskUniform = u64;
 type MaskBlock   = u8;
 type MaskTexture = u16;
 
+/// A `ProgramMeta` wrapper that keeps track of the queried variable indices.
+/// It returns an error if a shader parameter is not being asked for.
 pub struct MetaSink<'a> {
     prog: &'a dev::ProgramMeta,
     mask_uni: MaskUniform,
@@ -37,6 +41,7 @@ pub struct MetaSink<'a> {
 }
 
 impl<'a> MetaSink<'a> {
+    /// Creates a new wrapper
     pub fn new(meta: &'a dev::ProgramMeta) -> MetaSink<'a> {
         assert_eq!(0, meta.uniforms.len()>>(8*size_of::<MaskUniform>()));
         assert_eq!(0, meta.blocks  .len()>>(8*size_of::<MaskBlock  >()));
@@ -49,6 +54,7 @@ impl<'a> MetaSink<'a> {
         }
     }
 
+    /// Finalizes the wrapper, checking that all the parameters are used
     pub fn complete(self) -> Result<(), ParameterSideError<'a>> {
         match self.prog.uniforms.iter().enumerate().find(|&(i, _)| self.mask_uni & ((1u<<i) as MaskUniform) != 0) {
             Some((_, u)) => return Err(MissingUniform(u.name.as_slice())),
@@ -88,6 +94,7 @@ impl<'a> ParameterSink for MetaSink<'a>{
 }
 
 
+/// Helper trait to transform base types into their corresponding uniforms
 pub trait ToUniform {
     fn to_uniform(&self) -> dev::UniformValue;
 }
@@ -122,11 +129,13 @@ impl ToUniform for [[f32, ..4], ..4] {
     }
 }
 
+/// A closure provided for the `ShaderParam` implementor for uploading
 pub type FnUniform<'a> = |VarUniform, dev::UniformValue|: 'a;
 pub type FnBlock  <'a> = |VarBlock, super::BufferHandle|: 'a;
 pub type FnTexture<'a> = |VarTexture, super::TextureHandle|: 'a;
 
 
+/// An error type on either the parameter storage or the program side
 #[deriving(Clone, Show)]
 pub enum ParameterSideError<'a> {
     SideInternalError,
@@ -135,13 +144,18 @@ pub enum ParameterSideError<'a> {
     MissingTexture(&'a str),
 }
 
+/// An error type for the link cretion
 #[deriving(Clone, Show)]
 pub enum ParameterLinkError<'a> {
+    /// Program is not valid
     ErrorBadProgram,
+    /// A given parameter is not used by the program
     ErrorProgramInfo(ParameterSideError<'a>),
+    /// A program parameter that is not provided
     ErrorShaderParam(ParameterSideError<'a>),
 }
 
+/// Main trait that is generated for a user data structure with the `shader_param` attribute
 pub trait ShaderParam<L> {
     /// Creates a new link, self is passed as a workaround for Rust to not be lost in generics
     fn create_link<S: ParameterSink>(&self, &mut S) -> Result<L, ParameterSideError<'static>>;
@@ -149,6 +163,7 @@ pub trait ShaderParam<L> {
     fn upload<'a>(&self, &L, FnUniform<'a>, FnBlock<'a>, FnTexture<'a>);
 }
 
+/// A bundle that encapsulates a program, its data, and a hidden link between them
 #[deriving(Clone)]
 pub struct ShaderBundle<L, T> {
     /// Shader program
@@ -159,7 +174,7 @@ pub struct ShaderBundle<L, T> {
     link: L,
 }
 
-/// Exposing the constructor for internal use
+/// Helper trait to expose some abilities for internal use by the `Renderer`
 pub trait BundleInternal<L, T> {
     fn new(Option<&Self>, super::ProgramHandle, T, L) -> ShaderBundle<L, T>;
     fn get_program(&self) -> super::ProgramHandle;

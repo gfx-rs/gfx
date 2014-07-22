@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![crate_name = "macro"]
+#![crate_name = "gfx_macro"]
 #![comment = "Helper macros for gfx-rs"]
 #![license = "ASL2"]
 #![crate_type = "dylib"]
 
 #![feature(macro_rules, plugin_registrar)]
+
+//! Macro extensions crate.
+//! Implements `shaders!` macro as well as `shader_param` attribute
 
 pub mod shade;
 

@@ -30,6 +30,7 @@ enum ParamType {
     ParamTexture,
 }
 
+/// Classify variable types (`i32`, `TextureHandle`, etc) into the `ParamType`
 fn classify(node: &ast::Ty_) -> ParamType {
     match *node {
         ast::TyPath(ref path, _, _) => match path.segments.last() {
@@ -44,6 +45,7 @@ fn classify(node: &ast::Ty_) -> ParamType {
     }
 }
 
+/// `create_link()` method generating code
 fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span, substr: &generic::Substructure,
         definition: Gc<ast::StructDef>, link_name: &str) -> Gc<ast::Expr> {
     let link_ident = cx.ident_of(link_name);
@@ -97,6 +99,7 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span, substr: &gene
     }
 }
 
+/// `upload()` method generating code
 fn method_upload(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
         substr: &generic::Substructure, definition: Gc<ast::StructDef>) -> Gc<ast::Expr> {
     match *substr.fields {
@@ -136,6 +139,8 @@ fn method_upload(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
     }
 }
 
+/// A helper function that translates variable type (`i32`, `TextureHandle`, etc)
+/// into the corresponding shader var id type (`VarUniform`, `VarTexture`, etc)
 fn node_to_var_path(span: codemap::Span, node: &ast::Ty_) -> ast::Path {
     let id = match classify(node) {
         ParamUniform => "VarUniform",
@@ -160,6 +165,7 @@ fn node_to_var_path(span: codemap::Span, node: &ast::Ty_) -> ast::Path {
     }
 }
 
+/// Decorator for `shader_param` attribute
 fn expand_shader_param(context: &mut ext::base::ExtCtxt, span: codemap::Span,
         meta_item: Gc<ast::MetaItem>, item: Gc<ast::Item>, push: |Gc<ast::Item>|) {
     // constructing the Link struct
@@ -288,6 +294,7 @@ fn expand_shader_param(context: &mut ext::base::ExtCtxt, span: codemap::Span,
     trait_def.expand(context, meta_item, item, push);
 }
 
+/// Entry point for the plugin phase
 #[plugin_registrar]
 pub fn registrar(reg: &mut Registry) {
     reg.register_syntax_extension(token::intern("shader_param"),
