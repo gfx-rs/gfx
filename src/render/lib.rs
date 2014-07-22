@@ -27,7 +27,7 @@ use std::fmt::Show;
 use std::vec::MoveItems;
 
 use backend = device::dev;
-use device::shade::{CreateShaderError, ProgramMeta, Vertex, Fragment, UniformValue, ShaderSource};
+use device::shade::{CreateShaderError, ProgramMeta, Vertex, Fragment, ShaderSource};
 use device::target::{ClearData, TargetColor, TargetDepth, TargetStencil};
 use shade::{BundleInternal, ShaderParam};
 use resource::{Loaded, Pending};
@@ -121,22 +121,6 @@ impl Dispatcher {
     }
 }
 
-struct ParamLoader<'a> {
-    pub channel: &'a Sender<device::Request<Token>>,
-}
-
-impl<'a> shade::Uploader for ParamLoader<'a> {
-    fn set_uniform(&mut self, var: shade::VarUniform, value: UniformValue) {
-        self.channel.send(device::Cast(device::BindUniform(var as uint, value)));
-    }
-    fn set_block  (&mut self, _var: shade::VarBlock, _buf: BufferHandle) {
-        //TODO
-    }
-    fn set_texture(&mut self, _var: shade::VarTexture, _tex: TextureHandle) {
-        //TODO
-    }
-}
-
 
 pub struct Renderer {
     dispatcher: Dispatcher,
@@ -222,8 +206,12 @@ impl Renderer {
             resource::Failed(_) => return Err(ErrorProgram),
         };
         self.cast(device::BindProgram(program.name));
-        bundle.bind(&mut ParamLoader{
-            channel: &self.device_tx,
+        bundle.bind(|uv, value| {
+            self.device_tx.send(device::Cast(device::BindUniform(uv as uint, value)));
+        }, |_bv, _block| {
+            //TODO
+        }, |_tv, _tex| {
+            //TODO
         });
         // bind vertex attributes
         match self.bind_mesh(mesh, program) {

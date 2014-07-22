@@ -102,7 +102,7 @@ fn method_upload(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
     match *substr.fields {
         generic::Struct(ref fields) => {
             let calls = definition.fields.iter().zip(fields.iter()).map(|(def, f)| {
-                let (fun, value) = match classify(&def.node.ty.node) {
+                let (arg_id, value) = match classify(&def.node.ty.node) {
                     ParamUniform => {
                         let value = cx.expr_method_call(
                             span,
@@ -110,22 +110,17 @@ fn method_upload(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                             cx.ident_of("to_uniform"),
                             Vec::new()
                         );
-                        ("set_uniform", value)
+                        (1u, value)
                     },
                     ParamBlock   => {
-                        ("set_block", f.self_)
+                        (2u, f.self_)
                     },
                     ParamTexture => {
-                        ("set_texture", f.self_)
+                        (3u, f.self_)
                     },
                 };
                 let expr_id = cx.expr_field_access(span, substr.nonself_args[0], f.name.unwrap());
-                cx.stmt_expr(cx.expr_method_call(
-                    span,
-                    substr.nonself_args[1],
-                    cx.ident_of(fun),
-                    vec![expr_id, value]
-                ))
+                cx.stmt_expr(cx.expr_call(span, substr.nonself_args[arg_id], vec![expr_id, value]))
             }).collect();
             let view = cx.view_use_simple(
                 span,
@@ -261,10 +256,8 @@ fn expand_shader_param(context: &mut ext::base::ExtCtxt, span: codemap::Span,
             generic::MethodDef {
                 name: "upload",
                 generics: generic::ty::LifetimeBounds {
-                    lifetimes: Vec::new(),
-                    bounds: vec![("U", None, vec![
-                        generic::ty::Path::new(vec!["gfx", "Uploader"])
-                    ])],
+                    lifetimes: vec!["'a"],
+                    bounds: Vec::new(),
                 },
                 explicit_self: Some(Some(generic::ty::Borrowed(
                     None, ast::MutImmutable
@@ -274,9 +267,14 @@ fn expand_shader_param(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                         link_ty.clone(),
                         generic::ty::Borrowed(None, ast::MutImmutable)
                     ),
-                    generic::ty::Ptr(
-                        box generic::ty::Literal(generic::ty::Path::new_local("U")),
-                        generic::ty::Borrowed(None, ast::MutMutable)
+                    generic::ty::Literal(
+                        generic::ty::Path::new_(vec!["gfx", "FnUniform"], Some("'a"), Vec::new(), true),
+                    ),
+                    generic::ty::Literal(
+                        generic::ty::Path::new_(vec!["gfx", "FnBlock"],   Some("'a"), Vec::new(), true),
+                    ),
+                    generic::ty::Literal(
+                        generic::ty::Path::new_(vec!["gfx", "FnTexture"], Some("'a"), Vec::new(), true),
                     ),
                 ],
                 ret_ty: generic::ty::Tuple(Vec::new()),

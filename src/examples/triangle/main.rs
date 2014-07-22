@@ -8,10 +8,10 @@ extern crate glfw;
 
 #[shader_param]
 struct Params {
-    b: gfx::BufferHandle,
-    x: i32,
+    //b: gfx::BufferHandle,
+    //x: i32,
     //t: gfx::TextureHandle,
-    color: [f32, ..4],
+    blue: f32,
 }
 
 static VERTEX_SRC: gfx::ShaderSource = shaders! {
@@ -19,8 +19,9 @@ GLSL_120: b"
     #version 120
     attribute vec2 a_Pos;
     varying vec4 v_Color;
+    uniform float blue;
     void main() {
-        v_Color = vec4(a_Pos+0.5, 0.0, 1.0);
+        v_Color = vec4(a_Pos+0.5, blue, 1.0);
         gl_Position = vec4(a_Pos, 0.0, 1.0);
     }
 "
@@ -28,8 +29,9 @@ GLSL_150: b"
     #version 150 core
     in vec2 a_Pos;
     out vec4 v_Color;
+    uniform float blue;
     void main() {
-        v_Color = vec4(a_Pos+0.5, 0.0, 1.0);
+        v_Color = vec4(a_Pos+0.5, blue, 1.0);
         gl_Position = vec4(a_Pos, 0.0, 1.0);
     }
 "
@@ -92,8 +94,8 @@ fn main() {
                 .complete(3)
         };
         let data = Params {
-            b: 0, x: 0,
-            color: [0.1, 0.1, 0.1, 0.1],
+            //b: 0, x: 0,
+            blue: 0.3,
         };
         let bundle = renderer.bundle_program(program, data).unwrap();
         while !renderer.should_finish() {

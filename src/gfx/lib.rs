@@ -32,9 +32,9 @@ pub use render::{BufferHandle, SurfaceHandle, TextureHandle, SamplerHandle, Prog
 pub use render::Renderer;
 pub use render::mesh;
 pub use render::rast::{DrawState, BlendAdditive, BlendAlpha};
-pub use render::shade::{ParameterSink, Uploader, ToUniform, ShaderParam,
-		ParameterLinkError, ParameterSideError, SideInternalError, MissingBlock, MissingUniform, MissingTexture, 
-		VarBlock, VarUniform, VarTexture};
+pub use render::shade::{ParameterSink, ToUniform, ShaderParam,
+		ParameterLinkError, ParameterSideError, SideInternalError, MissingUniform, MissingBlock, MissingTexture, 
+		FnUniform, FnBlock, FnTexture, VarUniform, VarBlock, VarTexture};
 pub use render::target::Frame;
 pub use device::attrib;
 pub use device::target::{Color, ClearData, Plane, TextureLayer, TextureLevel};

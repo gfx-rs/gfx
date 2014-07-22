@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::mem::size_of;
-use device::shade::{UniformValue, ValueI32, ValueF32Vec, ProgramMeta};
+use dev = device::shade;
 
 pub type VarUniform = u16;
 pub type VarBlock = u8;
@@ -30,14 +30,14 @@ type MaskBlock   = u8;
 type MaskTexture = u16;
 
 pub struct MetaSink<'a> {
-    prog: &'a ProgramMeta,
+    prog: &'a dev::ProgramMeta,
     mask_uni: MaskUniform,
     mask_block: MaskBlock,
     mask_tex: MaskTexture,
 }
 
 impl<'a> MetaSink<'a> {
-    pub fn new(meta: &'a ProgramMeta) -> MetaSink<'a> {
+    pub fn new(meta: &'a dev::ProgramMeta) -> MetaSink<'a> {
         assert_eq!(0, meta.uniforms.len()>>(8*size_of::<MaskUniform>()));
         assert_eq!(0, meta.blocks  .len()>>(8*size_of::<MaskBlock  >()));
         assert_eq!(0, meta.textures.len()>>(8*size_of::<MaskTexture>()));
@@ -87,29 +87,45 @@ impl<'a> ParameterSink for MetaSink<'a>{
     }
 }
 
-//impl ParameterSink for ProgramMeta
-
-pub trait Uploader {
-    fn set_uniform(&mut self, VarUniform, UniformValue);
-    fn set_block  (&mut self, VarBlock,   super::BufferHandle);
-    fn set_texture(&mut self, VarTexture, super::TextureHandle);
-}
 
 pub trait ToUniform {
-    fn to_uniform(&self) -> UniformValue;
+    fn to_uniform(&self) -> dev::UniformValue;
 }
 
 impl ToUniform for i32 {
-    fn to_uniform(&self) -> UniformValue {
-        ValueI32(*self)
+    fn to_uniform(&self) -> dev::UniformValue {
+        dev::ValueI32(*self)
+    }
+}
+
+impl ToUniform for f32 {
+    fn to_uniform(&self) -> dev::UniformValue {
+        dev::ValueF32(*self)
+    }
+}
+
+impl ToUniform for [i32, ..4] {
+    fn to_uniform(&self) -> dev::UniformValue {
+        dev::ValueI32Vec(*self)
     }
 }
 
 impl ToUniform for [f32, ..4] {
-    fn to_uniform(&self) -> UniformValue {
-        ValueF32Vec(*self)
+    fn to_uniform(&self) -> dev::UniformValue {
+        dev::ValueF32Vec(*self)
     }
 }
+
+impl ToUniform for [[f32, ..4], ..4] {
+    fn to_uniform(&self) -> dev::UniformValue {
+        dev::ValueF32Matrix(*self)
+    }
+}
+
+pub type FnUniform<'a> = |VarUniform, dev::UniformValue|: 'a;
+pub type FnBlock  <'a> = |VarBlock, super::BufferHandle|: 'a;
+pub type FnTexture<'a> = |VarTexture, super::TextureHandle|: 'a;
+
 
 #[deriving(Clone, Show)]
 pub enum ParameterSideError<'a> {
@@ -129,10 +145,11 @@ pub enum ParameterLinkError<'a> {
 pub trait ShaderParam<L> {
     /// Creates a new link, self is passed as a workaround for Rust to not be lost in generics
     fn create_link<S: ParameterSink>(&self, &mut S) -> Result<L, ParameterSideError<'static>>;
-    /// Send the parameters to the device using the Uploader implementation
-    fn upload<U: Uploader>(&self, &L, &mut U);
+    /// Send the parameters to the device using the Uploader closures
+    fn upload<'a>(&self, &L, FnUniform<'a>, FnBlock<'a>, FnTexture<'a>);
 }
 
+#[deriving(Clone)]
 pub struct ShaderBundle<L, T> {
     /// Shader program
     program: super::ProgramHandle,
@@ -146,7 +163,7 @@ pub struct ShaderBundle<L, T> {
 pub trait BundleInternal<L, T> {
     fn new(Option<&Self>, super::ProgramHandle, T, L) -> ShaderBundle<L, T>;
     fn get_program(&self) -> super::ProgramHandle;
-    fn bind<U: Uploader>(&self, &mut U);
+    fn bind<'a>(&self, FnUniform<'a>, FnBlock<'a>, FnTexture<'a>);
 }
 
 impl<L, T: ShaderParam<L>> BundleInternal<L, T> for ShaderBundle<L, T> {
@@ -162,7 +179,7 @@ impl<L, T: ShaderParam<L>> BundleInternal<L, T> for ShaderBundle<L, T> {
         self.program
     }
 
-    fn bind<U: Uploader>(&self, up: &mut U) {
-        self.data.upload(&self.link, up);
+    fn bind<'a>(&self, fu: FnUniform<'a>, fb: FnBlock<'a>, ft: FnTexture<'a>) {
+        self.data.upload(&self.link, fu, fb, ft);
     }
 }
