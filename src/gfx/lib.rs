@@ -17,7 +17,7 @@
 #![license = "ASL2"]
 #![crate_type = "lib"]
 
-#![feature(macro_rules, phase)]
+#![feature(phase)]
 
 #[phase(plugin, link)] extern crate log;
 extern crate libc;
@@ -30,10 +30,11 @@ extern crate render;
 // public re-exports
 pub use render::{BufferHandle, SurfaceHandle, TextureHandle, SamplerHandle, ProgramHandle, EnvirHandle};
 pub use render::Renderer;
-pub use Environment = render::envir::Storage;
-pub use render::envir::{BlockVar, UniformVar, TextureVar};
 pub use render::mesh;
 pub use render::rast::{DrawState, BlendAdditive, BlendAlpha};
+pub use render::shade::{ParameterSink, ToUniform, ShaderParam,
+    ParameterLinkError, ParameterError, ErrorInternal, ErrorUniform, ErrorBlock, ErrorTexture,
+    FnUniform, FnBlock, FnTexture, VarUniform, VarBlock, VarTexture};
 pub use render::target::Frame;
 pub use device::attrib;
 pub use device::target::{Color, ClearData, Plane, TextureLayer, TextureLevel};
@@ -44,30 +45,11 @@ pub use device::shade::{ShaderSource, StaticBytes, NOT_PROVIDED};
 #[cfg(glfw)]
 pub use glfw = glfw_platform;
 
+
 #[allow(visible_private_types)]
 pub fn start<C: GraphicsContext<GlBackEnd>, P: GlProvider>(graphics_context: C, provider: P, queue_size: QueueSize)
         -> Result<(Renderer, Device<render::Token, GlBackEnd, C>), InitError> {
     device::init(graphics_context, provider, queue_size).map(|(tx, rx, server, ack, should_finish)| {
         (Renderer::new(tx, rx, ack, should_finish), server)
     })
-}
-
-// This should live in `device`, but macro reexporting does not work yet.
-#[macro_export]
-macro_rules! shaders {
-    (GLSL_120: $v:expr $($t:tt)*) => {
-        ::gfx::ShaderSource {
-            glsl_120: ::gfx::StaticBytes($v),
-            ..shaders!($($t)*)
-        }
-    };
-    (GLSL_150: $v:expr $($t:tt)*) => {
-        ::gfx::ShaderSource {
-            glsl_150: ::gfx::StaticBytes($v),
-            ..shaders!($($t)*)
-        }
-    };
-    () => {
-        ::gfx::NOT_PROVIDED
-    }
 }

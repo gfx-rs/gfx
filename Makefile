@@ -31,12 +31,14 @@ GLFW_PLATFORM_FILE    = $(SRC_DIR)/glfw_platform/lib.rs
 RENDER_FILE           = $(SRC_DIR)/render/lib.rs
 EXAMPLE_FILES         = $(SRC_DIR)/examples/*/*.rs
 LIB_FILE              = $(SRC_DIR)/gfx/lib.rs
+MACRO_FILE            = $(SRC_DIR)/macro/lib.rs
 
 COMM_INPUT            = $(SRC_DIR)/comm/*.rs
 DEVICE_INPUT          = $(SRC_DIR)/device/*.rs $(SRC_DIR)/device/gl/*.rs
 GLFW_PLATFORM_INPUT   = $(SRC_DIR)/glfw_platform/*.rs
 RENDER_INPUT          = $(SRC_DIR)/render/*.rs
 LIB_INPUT             = $(SRC_DIR)/gfx/*.rs
+MACRO_INPUT           = $(SRC_DIR)/macro/*.rs
 
 DEPS_LIB_SEARCH_PATHS = $(DEPS_DIR)/gl-rs/lib $(DEPS_DIR)/glfw-rs/lib
 DEPS_LIB_SEARCH_FLAGS = $(patsubst %,-L %, $(DEPS_LIB_SEARCH_PATHS))
@@ -47,6 +49,7 @@ DEVICE_OUT            = $(LIB_DIR)/$(shell $(RUSTC) --print-file-name $(DEVICE_F
 GLFW_PLATFORM_OUT     = $(LIB_DIR)/$(shell $(RUSTC) --print-file-name $(GLFW_PLATFORM_FILE))
 RENDER_OUT            = $(LIB_DIR)/$(shell $(RUSTC) --print-file-name $(RENDER_FILE))
 LIB_OUT               = $(LIB_DIR)/$(shell $(RUSTC) --print-file-name $(LIB_FILE))
+MACRO_OUT             = $(LIB_DIR)/$(shell $(RUSTC) --print-file-name $(MACRO_FILE))
 
 TEST_DIR              = test
 COMM_TEST_OUT         = $(TEST_DIR)/$(shell $(RUSTC) --print-file-name --test $(COMM_FILE))
@@ -54,6 +57,7 @@ DEVICE_TEST_OUT       = $(TEST_DIR)/$(shell $(RUSTC) --print-file-name --test $(
 GLFW_PLATFORM_TEST_OUT= $(TEST_DIR)/$(shell $(RUSTC) --print-file-name --test $(GLFW_PLATFORM_FILE))
 RENDER_TEST_OUT       = $(TEST_DIR)/$(shell $(RUSTC) --print-file-name --test $(RENDER_FILE))
 LIB_TEST_OUT          = $(TEST_DIR)/$(shell $(RUSTC) --print-file-name --test $(LIB_FILE))
+MACRO_TEST_OUT        = $(TEST_DIR)/$(shell $(RUSTC) --print-file-name --test $(MACRO_FILE))
 
 EXAMPLES_DIR          = examples
 
@@ -63,6 +67,7 @@ DEVICE_DOC_OUT        = $(DOC_DIR)/$(shell $(RUSTC) --print-crate-name $(DEVICE_
 GLFW_PLATFORM_DOC_OUT = $(DOC_DIR)/$(shell $(RUSTC) --print-crate-name $(GLFW_PLATFORM_FILE))
 RENDER_DOC_OUT        = $(DOC_DIR)/$(shell $(RUSTC) --print-crate-name $(RENDER_FILE))
 LIB_DOC_OUT           = $(DOC_DIR)/$(shell $(RUSTC) --print-crate-name $(LIB_FILE))
+MACRO_DOC_OUT         = $(DOC_DIR)/$(shell $(RUSTC) --print-crate-name $(MACRO_FILE))
 
 LIB_INCLUDE_FLAGS     = -L $(LIB_DIR) $(DEPS_LIB_SEARCH_FLAGS)
 EXAMPLE_INCLUDE_FLAGS = -L $(LIB_DIR) $(DEPS_LIB_SEARCH_FLAGS)
@@ -124,6 +129,10 @@ $(LIB_OUT): $(DEVICE_OUT) $(GLFW_PLATFORM_OUT) $(RENDER_OUT) $(LIB_INPUT)
 	mkdir -p $(LIB_DIR)
 	$(RUSTC) $(LIB_INCLUDE_FLAGS) --out-dir=$(LIB_DIR) $(LIB_CFG) -O $(LIB_FILE)
 
+$(MACRO_OUT): $(MACRO_INPUT)
+	mkdir -p $(LIB_DIR)
+	$(RUSTC) --out-dir=$(LIB_DIR) -O $(MACRO_FILE)
+
 .PHONY: lib
 lib: $(LIB_OUT)
 
@@ -158,8 +167,13 @@ $(LIB_TEST_OUT): $(DEVICE_OUT) $(GLFW_PLATFORM_OUT) $(RENDER_OUT) $(LIB_INPUT)
 	$(RUSTC) $(LIB_INCLUDE_FLAGS) --test --out-dir=$(TEST_DIR) $(LIB_CFG) -O $(LIB_FILE)
 	./$(LIB_TEST_OUT)
 
+$(MACRO_TEST_OUT): $(DEVICE_OUT) $(COMM_OUT) $(MACRO_INPUT)
+	mkdir -p $(TEST_DIR)
+	$(RUSTC) $(LIB_INCLUDE_FLAGS) --test --out-dir=$(TEST_DIR) $(LIB_CFG) -O $(MACRO_FILE)
+	./$(MACRO_TEST_OUT)
+
 .PHONY: test
-test: $(COMM_TEST_OUT) $(DEVICE_TEST_OUT) $(GLFW_PLATFORM_TEST_OUT) $(RENDER_TEST_OUT) $(LIB_TEST_OUT)
+test: $(COMM_TEST_OUT) $(DEVICE_TEST_OUT) $(GLFW_PLATFORM_TEST_OUT) $(RENDER_TEST_OUT) $(LIB_TEST_OUT) $(MACRO_TEST_OUT)
 
 .PHONY: clean-test
 clean-test:
@@ -187,8 +201,12 @@ $(LIB_DOC_OUT): $(DEVICE_OUT) $(GLFW_PLATFORM_OUT) $(RENDER_OUT) $(LIB_INPUT)
 	mkdir -p $(DOC_DIR)
 	$(RUSTDOC) $(LIB_INCLUDE_FLAGS) $(LIB_CFG) -o $(DOC_DIR) $(LIB_FILE)
 
+$(MACRO_DOC_OUT): $(MACRO_INPUT)
+	mkdir -p $(DOC_DIR)
+	$(RUSTDOC) -o $(DOC_DIR) $(MACRO_FILE)
+
 .PHONY: doc
-doc: $(COMM_DOC_OUT) $(DEVICE_DOC_OUT) $(GLFW_PLATFORM_DOC_OUT) $(RENDER_DOC_OUT) $(LIB_DOC_OUT)
+doc: $(COMM_DOC_OUT) $(DEVICE_DOC_OUT) $(GLFW_PLATFORM_DOC_OUT) $(RENDER_DOC_OUT) $(LIB_DOC_OUT) $(MACRO_DOC_OUT)
 
 .PHONY: clean-doc
 clean-doc:
@@ -196,7 +214,7 @@ clean-doc:
 
 # Example compilation
 
-$(EXAMPLE_FILES): lib
+$(EXAMPLE_FILES): lib $(MACRO_OUT)
 	mkdir -p $(EXAMPLES_DIR)
 	$(RUSTC) $(EXAMPLE_INCLUDE_FLAGS) --out-dir=$(EXAMPLES_DIR) $@
 

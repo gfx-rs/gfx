@@ -27,10 +27,10 @@ use std::fmt::Show;
 use std::vec::MoveItems;
 
 use backend = device::dev;
-use device::shade::{CreateShaderError, ProgramMeta, Vertex, Fragment, UniformValue, ShaderSource};
+use device::shade::{CreateShaderError, ProgramMeta, Vertex, Fragment, ShaderSource};
 use device::target::{ClearData, TargetColor, TargetDepth, TargetStencil};
-use envir::BindableStorage;
-use resource::Pending;
+use shade::{BundleInternal, ShaderParam};
+use resource::{Loaded, Pending};
 
 pub type BufferHandle = uint;
 pub type SurfaceHandle = backend::Surface;
@@ -40,10 +40,10 @@ pub type ShaderHandle = uint;
 pub type ProgramHandle = uint;
 pub type EnvirHandle = uint;
 
-pub mod envir;
 pub mod mesh;
 pub mod rast;
 pub mod resource;
+pub mod shade;
 pub mod target;
 
 pub type Token = uint;
@@ -67,7 +67,6 @@ pub enum DeviceError {
 pub enum DrawError<'a> {
     ErrorMesh(MeshError),
     ErrorProgram,
-    ErrorEnvironment(envir::OptimizeError<'a>),
 }
 
 #[deriving(Show)]
@@ -130,7 +129,6 @@ pub struct Renderer {
     should_finish: comm::ShouldClose,
     /// the default FBO for drawing
     default_frame_buffer: backend::FrameBuffer,
-    environments: Vec<envir::Storage>,
     /// current state
     state: State,
 }
@@ -155,7 +153,6 @@ impl Renderer {
             swap_ack: swap_rx,
             should_finish: should_finish,
             default_frame_buffer: 0,
-            environments: Vec::new(),
             state: State {
                 frame: target::Frame::new(),
             },
@@ -182,13 +179,12 @@ impl Renderer {
         self.cast(device::Clear(data));
     }
 
-    pub fn draw<'a>(&'a mut self, mesh: &mesh::Mesh, slice: mesh::Slice, frame: target::Frame,
-            program_handle: ProgramHandle, env_handle: EnvirHandle, state: rast::DrawState)
-            -> Result<(), DrawError<'a>> {
+    pub fn draw<'a, L, T: shade::ShaderParam<L>>(&'a mut self, mesh: &mesh::Mesh, slice: mesh::Slice, frame: target::Frame,
+            bundle: &shade::ShaderBundle<L, T>, state: rast::DrawState) -> Result<(), DrawError<'a>> {
         // demand resources. This section needs the mutable self, so we are unable to do this
         // after we get a reference to ether the `Environment` or the `ProgramMeta`
         self.prebind_mesh(mesh);
-        self.dispatcher.demand(|res| !res.programs[program_handle].is_pending());
+        self.dispatcher.demand(|res| !res.programs[bundle.get_program()].is_pending());
         // bind state
         self.cast(device::SetPrimitiveState(state.primitive));
         self.cast(device::SetDepthStencilState(state.depth, state.stencil,
@@ -199,21 +195,30 @@ impl Renderer {
         self.cast(device::BindArrayBuffer(vao));
         // bind output frame
         self.bind_frame(&frame);
+        // prepare shader blocks and textures
+        bundle.bind(|_, _| {
+        }, |_, buf| {
+            self.dispatcher.demand(|res| !res.buffers[buf].is_pending());
+        }, |_, _tex| { //TODO
+            //self.dispatcher.demand(|res| !res.textures[tex].is_pending());
+        });
         // bind shaders
-        let env = &self.environments[env_handle];
-        // prebind the environment (unable to make it a method of self...)
-        for handle in env.iter_buffers() {
-            self.dispatcher.demand(|res| !res.buffers[handle].is_pending());
-        }
-        let program = match self.dispatcher.resource.programs[program_handle] {
+        let program = match self.dispatcher.resource.programs[bundle.get_program()] {
             resource::Pending => fail!("Program is not loaded yet"),
             resource::Loaded(ref p) => p,
             resource::Failed(_) => return Err(ErrorProgram),
         };
-        match env.optimize(program) {
-            Ok(ref cut) => self.bind_environment(env, cut, program),
-            Err(err) => return Err(ErrorEnvironment(err)),
-        }
+        self.cast(device::BindProgram(program.name));
+        let mut block_slot = 0u;
+        bundle.bind(|uv, value| {
+            self.cast(device::BindUniform(uv as uint, value));
+        }, |bv, buf| {
+            let block = *self.dispatcher.resource.buffers[buf].unwrap();
+            self.cast(device::BindUniformBlock(program.name, bv as u8, block_slot as device::UniformBufferSlot, block));
+            block_slot += 1;
+        }, |_tv, _tex| {
+            //TODO
+        });
         // bind vertex attributes
         match self.bind_mesh(mesh, program) {
             Ok(_) => (),
@@ -261,22 +266,24 @@ impl Renderer {
         token
     }
 
-    pub fn create_environment(&mut self, storage: envir::Storage) -> EnvirHandle {
-        let handle = self.environments.len();
-        self.environments.push(storage);
-        handle
-    }
-
-    pub fn set_env_block(&mut self, handle: EnvirHandle, var: envir::BlockVar, buf: BufferHandle) {
-        self.environments.get_mut(handle).set_block(var, buf);
-    }
-
-    pub fn set_env_uniform(&mut self, handle: EnvirHandle, var: envir::UniformVar, value: UniformValue) {
-        self.environments.get_mut(handle).set_uniform(var, value);
-    }
-
-    pub fn set_env_texture(&mut self, handle: EnvirHandle, var: envir::TextureVar, texture: TextureHandle, sampler: SamplerHandle) {
-        self.environments.get_mut(handle).set_texture(var, texture, sampler);
+    pub fn bundle_program<'a, L, T: shade::ShaderParam<L>>(&'a mut self, prog: ProgramHandle, data: T)
+            -> Result<shade::ShaderBundle<L, T>, shade::ParameterLinkError<'a>> {
+        self.dispatcher.demand(|res| !res.programs[prog].is_pending());
+        match self.dispatcher.resource.programs[prog] {
+            Loaded(ref m) => {
+                let mut sink = shade::MetaSink::new(m.clone());
+                match data.create_link(&mut sink) {
+                    Ok(link) => match sink.complete() {
+                        Ok(_) => Ok(BundleInternal::new(
+                            None::<&shade::ShaderBundle<L, T>>, // a workaround to specify the type
+                            prog, data, link)),
+                        Err(e) => Err(shade::ErrorMissingParameter(e)),
+                    },
+                    Err(e) => Err(shade::ErrorUnusedParameter(e)),
+                }
+            },
+            _ => Err(shade::ErrorBadProgram),
+        }
     }
 
     pub fn update_buffer_vec<T: Send>(&mut self, handle: BufferHandle, data: Vec<T>) {
@@ -332,27 +339,5 @@ impl Renderer {
             }
         }
         Ok(())
-    }
-
-    fn bind_environment(&self, storage: &envir::Storage, shortcut: &envir::Shortcut, program: &ProgramMeta) {
-        debug_assert!(storage.is_fit(shortcut, program));
-        self.cast(device::BindProgram(program.name));
-
-        for (i, (&k, block_var)) in shortcut.blocks.iter().zip(program.blocks.iter()).enumerate() {
-            let handle = storage.get_block(k);
-            let block = *self.dispatcher.resource.buffers[handle].unwrap();
-            block_var.active_slot.set(i as u8);
-            self.cast(device::BindUniformBlock(program.name, i as u8, i as device::UniformBufferSlot, block));
-        }
-
-        for (&k, uniform_var) in shortcut.uniforms.iter().zip(program.uniforms.iter()) {
-            let value = storage.get_uniform(k);
-            uniform_var.active_value.set(value);
-            self.cast(device::BindUniform(uniform_var.location, value));
-        }
-
-        for (_i, (&_k, _texture)) in shortcut.textures.iter().zip(program.textures.iter()).enumerate() {
-            unimplemented!()
-        }
     }
 }
