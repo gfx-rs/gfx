@@ -31,19 +31,20 @@ make clean-deps         # clean up the dependencies
 
 ## The Problem
 
-- Graphics APIs (Especially OpenGL), require the liberal use of unsafe
-  operations and non-ideomatic code
-- Moving large amounts of data around is expensive
-- Syncing draw calls across tasks is difficult
-- Draw calls are most efficient when performed in bulk
-- Many rendering engines are sprawling frameworks that require applications to
-  be tightly coupled with their abstractions
+- Graphics APIs are difficult and diverse in nature. We've seen Mantle and
+  Metal popping out of nowhere. Even for OpenGL there are different profiles
+  that may need to be supported.
+- Communicating with the driver is considered expensive, thus feeding it should
+  be done in parallel with the user code.
+- Graphics programming is dangerous. Using Rust allows building a safer
+  abstraction without run-time overhead.
 
 ## Design Goals
 
+- Safe but non-limiting higher level interface
 - Simple, lightweight implementation
 - Low performance overhead
-- Graphics API agnostic (OpenGL/DirectX)
+- Graphics API agnostic (OpenGL/Direct3D/Metal)
 - Maths library agnostic
 - Composable (a library, not a framework)
 - Compatible with Rust's task-based concurrency model
@@ -51,20 +52,14 @@ make clean-deps         # clean up the dependencies
 
 ## Possible Solutions
 
-- Use a handle-based API to manage buffer and shader objects. This would allow
-  data to be packed in arrays as opposed to being distributed across
-  tree-based struct hierarchies. It would also make batch processing easier.
-  See `research.md` for more information on this data model. One issue with
-  this model could be the problem of 'handle lifetimes' - ie. what happens if
-  the data associated with a handle is removed? Using this model could negate
-  some of the advantages of using Rust in the first place.
-- Make use of 'draw call bucketing'. See `research.md` for more information.
+- Verify compatibility of the shader inputs with user-provided data.
+- Use Rust procedural macros to generate the code for querying and uploading
+  of shader parameters.
+- Make use of 'draw call bucketing'. See [research.md](wiki/research.md) for more information.
 - Leave scene and model management up to the client, and focus instead on
-  buffers and shaders. Provide ways of accessing the underlying rendering API,
-  to allow clients to make use of advanced, non-standard features if necessary.
+  buffers and shaders.
 - Provide structural data types (as opposed to nominal ones) in order to make
   interfacing with other maths libraries easier. For example:
-
 ~~~rust
 pub type Vertex4<T> = [T,..4];
 pub type Matrix4x3<T> = [[T,..3],..4];
@@ -75,5 +70,5 @@ pub type Matrix4x3<T> = [[T,..3],..4];
 gfx-rs is still in the early stages of development. Help is most appreciated.
 
 If you are interested in helping out, you can contact the developers on
-[Gitter](https://gitter.im/gfx-rs/gfx-rs). They are also often reachable on
-`irc.mozilla.org #rust-gamedev`.
+[Gitter](https://gitter.im/gfx-rs/gfx-rs). See [contrib.md](wiki/contrib.md) for contant
+information and contribution guidelines.
