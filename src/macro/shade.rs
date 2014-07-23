@@ -54,9 +54,9 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span, substr: &gene
         generic::Struct(ref fields) => {
             let out = definition.fields.iter().zip(fields.iter()).map(|(def, f)| {
                 let (fun, ret) = match classify(&def.node.ty.node) {
-                    ParamUniform => ("find_uniform", "MissingUniform"),
-                    ParamBlock   => ("find_block",   "MissingBlock"),
-                    ParamTexture => ("find_texture", "MissingTexture"),
+                    ParamUniform => ("find_uniform", "ErrorUniform"),
+                    ParamBlock   => ("find_block",   "ErrorBlock"),
+                    ParamTexture => ("find_texture", "ErrorTexture"),
                 };
                 let id_ret = cx.ident_of(ret);
                 let expr_field = cx.expr_str(span, token::get_ident(f.name.unwrap()));
@@ -245,7 +245,7 @@ fn expand_shader_param(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                         params: vec![
                             link_ty.clone(),
                             box generic::ty::Literal(generic::ty::Path {
-                                path: vec!["gfx", "ParameterSideError"],
+                                path: vec!["gfx", "ParameterError"],
                                 lifetime: Some("'static"),
                                 params: Vec::new(),
                                 global: true,

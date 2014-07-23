@@ -33,7 +33,7 @@ pub use render::Renderer;
 pub use render::mesh;
 pub use render::rast::{DrawState, BlendAdditive, BlendAlpha};
 pub use render::shade::{ParameterSink, ToUniform, ShaderParam,
-    ParameterLinkError, ParameterSideError, SideInternalError, MissingUniform, MissingBlock,    MissingTexture, 
+    ParameterLinkError, ParameterError, ErrorInternal, ErrorUniform, ErrorBlock, ErrorTexture,
     FnUniform, FnBlock, FnTexture, VarUniform, VarBlock, VarTexture};
 pub use render::target::Frame;
 pub use device::attrib;

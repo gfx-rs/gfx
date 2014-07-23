@@ -43,29 +43,29 @@ pub struct MetaSink<'a> {
 impl<'a> MetaSink<'a> {
     /// Creates a new wrapper
     pub fn new(meta: &'a dev::ProgramMeta) -> MetaSink<'a> {
-        assert_eq!(0, meta.uniforms.len()>>(8*size_of::<MaskUniform>()));
-        assert_eq!(0, meta.blocks  .len()>>(8*size_of::<MaskBlock  >()));
-        assert_eq!(0, meta.textures.len()>>(8*size_of::<MaskTexture>()));
+        debug_assert_eq!(0, meta.uniforms.len() >> (8 * size_of::<MaskUniform>()));
+        debug_assert_eq!(0, meta.blocks  .len() >> (8 * size_of::<MaskBlock  >()));
+        debug_assert_eq!(0, meta.textures.len() >> (8 * size_of::<MaskTexture>()));
         MetaSink {
             prog: meta,
-            mask_uni: ((1u<<meta.uniforms.len())-1u) as MaskUniform,
-            mask_block: ((1u<<meta.blocks.len())-1u) as MaskBlock,
-            mask_tex: ((1u<<meta.textures.len())-1u) as MaskTexture,
+            mask_uni: ((1u << meta.uniforms.len()) - 1u) as MaskUniform,
+            mask_block: ((1u << meta.blocks.len()) - 1u) as MaskBlock,
+            mask_tex: ((1u << meta.textures.len()) - 1u) as MaskTexture,
         }
     }
 
     /// Finalizes the wrapper, checking that all the parameters are used
-    pub fn complete(self) -> Result<(), ParameterSideError<'a>> {
-        match self.prog.uniforms.iter().enumerate().find(|&(i, _)| self.mask_uni & ((1u<<i) as MaskUniform) != 0) {
-            Some((_, u)) => return Err(MissingUniform(u.name.as_slice())),
+    pub fn complete(self) -> Result<(), ParameterError<'a>> {
+        match self.prog.uniforms.iter().enumerate().find(|&(i, _)| self.mask_uni & ((1u << i) as MaskUniform) != 0) {
+            Some((_, u)) => return Err(ErrorUniform(u.name.as_slice())),
             None => ()
         }
-        match self.prog.blocks.iter().enumerate().find(|&(i, _)| self.mask_block & ((1u<<i) as MaskBlock) != 0) {
-            Some((_, b)) => return Err(MissingBlock(b.name.as_slice())),
+        match self.prog.blocks.iter().enumerate().find(|&(i, _)| self.mask_block & ((1u << i) as MaskBlock) != 0) {
+            Some((_, b)) => return Err(ErrorBlock(b.name.as_slice())),
             None => ()
         }
-        match self.prog.textures.iter().enumerate().find(|&(i, _)| self.mask_tex & ((1u<<i) as MaskTexture) != 0) {
-            Some((_, t)) => return Err(MissingTexture(t.name.as_slice())),
+        match self.prog.textures.iter().enumerate().find(|&(i, _)| self.mask_tex & ((1u << i) as MaskTexture) != 0) {
+            Some((_, t)) => return Err(ErrorTexture(t.name.as_slice())),
             None => ()
         }
         Ok(())
@@ -75,19 +75,19 @@ impl<'a> MetaSink<'a> {
 impl<'a> ParameterSink for MetaSink<'a>{
     fn find_uniform(&mut self, name: &str) -> Option<VarUniform> {
         self.prog.uniforms.iter().position(|u| u.name.as_slice() == name).map(|i| {
-            self.mask_uni &= !(1u<<i) as MaskUniform;
+            self.mask_uni &= !(1u << i) as MaskUniform;
             i as VarUniform
         })
     }
     fn find_block(&mut self, name: &str) -> Option<VarBlock> {
         self.prog.blocks.iter().position(|u| u.name.as_slice() == name).map(|i| {
-            self.mask_block &= !(1u<<i) as MaskBlock;
+            self.mask_block &= !(1u << i) as MaskBlock;
             i as VarBlock
         })
     }
     fn find_texture(&mut self, name: &str) -> Option<VarTexture> {
         self.prog.textures.iter().position(|u| u.name.as_slice() == name).map(|i| {
-            self.mask_tex &= !(1u<<i) as MaskTexture;
+            self.mask_tex &= !(1u << i) as MaskTexture;
             i as VarTexture
         })
     }
@@ -137,11 +137,11 @@ pub type FnTexture<'a> = |VarTexture, super::TextureHandle|: 'a;
 
 /// An error type on either the parameter storage or the program side
 #[deriving(Clone, Show)]
-pub enum ParameterSideError<'a> {
-    SideInternalError,
-    MissingUniform(&'a str),
-    MissingBlock(&'a str),
-    MissingTexture(&'a str),
+pub enum ParameterError<'a> {
+    ErrorInternal,
+    ErrorUniform(&'a str),
+    ErrorBlock(&'a str),
+    ErrorTexture(&'a str),
 }
 
 /// An error type for the link cretion
@@ -150,15 +150,15 @@ pub enum ParameterLinkError<'a> {
     /// Program is not valid
     ErrorBadProgram,
     /// A given parameter is not used by the program
-    ErrorProgramInfo(ParameterSideError<'a>),
+    ErrorUnusedParameter(ParameterError<'a>),
     /// A program parameter that is not provided
-    ErrorShaderParam(ParameterSideError<'a>),
+    ErrorMissingParameter(ParameterError<'a>),
 }
 
 /// Main trait that is generated for a user data structure with the `shader_param` attribute
 pub trait ShaderParam<L> {
     /// Creates a new link, self is passed as a workaround for Rust to not be lost in generics
-    fn create_link<S: ParameterSink>(&self, &mut S) -> Result<L, ParameterSideError<'static>>;
+    fn create_link<S: ParameterSink>(&self, &mut S) -> Result<L, ParameterError<'static>>;
     /// Send the parameters to the device using the Uploader closures
     fn upload<'a>(&self, &L, FnUniform<'a>, FnBlock<'a>, FnTexture<'a>);
 }

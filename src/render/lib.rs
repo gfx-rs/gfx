@@ -277,9 +277,9 @@ impl Renderer {
                         Ok(_) => Ok(BundleInternal::new(
                             None::<&shade::ShaderBundle<L, T>>, // a workaround to specify the type
                             prog, data, link)),
-                        Err(e) => Err(shade::ErrorShaderParam(e)),
+                        Err(e) => Err(shade::ErrorMissingParameter(e)),
                     },
-                    Err(e) => Err(shade::ErrorProgramInfo(e)),
+                    Err(e) => Err(shade::ErrorUnusedParameter(e)),
                 }
             },
             _ => Err(shade::ErrorBadProgram),
