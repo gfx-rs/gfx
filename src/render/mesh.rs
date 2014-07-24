@@ -30,6 +30,13 @@ pub struct Attribute {
     pub name: String,           // a name to match the shader input
 }
 
+/// A trait implemented automatically for user vertex structure by
+/// `#[vertex_format] attribute
+pub trait VertexFormat {
+    fn generate(Option<Self>, super::BufferHandle) -> Vec<Attribute>;
+}
+
+
 #[deriving(Clone, Show)]
 pub enum PolygonType {
     Point,
@@ -57,11 +64,20 @@ impl Mesh {
         }
     }
 
+    pub fn from<V: VertexFormat>(buf: super::BufferHandle, nv: VertexCount) -> Mesh {
+        Mesh {
+            poly_type: TriangleList,
+            num_vertices: nv,
+            attributes: VertexFormat::generate(None::<V>, buf),
+        }
+    }
+
     pub fn embed(&mut self, mut builder: Builder) {
         builder.finalize();
         self.attributes.push_all(builder.attributes.as_slice());
     }
 }
+
 
 /// The numeric type of a vertex's components.
 pub enum ComponentType {

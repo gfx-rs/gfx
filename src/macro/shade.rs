@@ -12,16 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate rustc;
-extern crate syntax;
-
 use std::gc::Gc;
-use self::syntax::{ast, ext};
-use self::syntax::ext::build::AstBuilder;
-use self::syntax::ext::deriving::generic;
-use self::syntax::{codemap, owned_slice};
-use self::syntax::parse::token;
-use self::rustc::plugin::Registry;
+use syntax::{ast, ext};
+use syntax::ext::build::AstBuilder;
+use syntax::ext::deriving::generic;
+use syntax::{codemap, owned_slice};
+use syntax::parse::token;
 
 
 enum ParamType {
@@ -47,7 +43,7 @@ fn classify(node: &ast::Ty_) -> ParamType {
 
 /// `create_link()` method generating code
 fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span, substr: &generic::Substructure,
-        definition: Gc<ast::StructDef>, link_name: &str) -> Gc<ast::Expr> {
+                 definition: Gc<ast::StructDef>, link_name: &str) -> Gc<ast::Expr> {
     let link_ident = cx.ident_of(link_name);
     match *substr.fields {
         //generic::StaticStruct(definition, generic::Named(ref fields)) => {
@@ -101,7 +97,8 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span, substr: &gene
 
 /// `upload()` method generating code
 fn method_upload(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
-        substr: &generic::Substructure, definition: Gc<ast::StructDef>) -> Gc<ast::Expr> {
+                 substr: &generic::Substructure, definition: Gc<ast::StructDef>)
+                 -> Gc<ast::Expr> {
     match *substr.fields {
         generic::Struct(ref fields) => {
             let calls = definition.fields.iter().zip(fields.iter()).map(|(def, f)| {
@@ -166,8 +163,9 @@ fn node_to_var_path(span: codemap::Span, node: &ast::Ty_) -> ast::Path {
 }
 
 /// Decorator for `shader_param` attribute
-fn expand_shader_param(context: &mut ext::base::ExtCtxt, span: codemap::Span,
-        meta_item: Gc<ast::MetaItem>, item: Gc<ast::Item>, push: |Gc<ast::Item>|) {
+pub fn expand_shader_param(context: &mut ext::base::ExtCtxt, span: codemap::Span,
+                           meta_item: Gc<ast::MetaItem>, item: Gc<ast::Item>,
+                           push: |Gc<ast::Item>|) {
     // constructing the Link struct
     let (base_def, link_def) = match item.node {
         ast::ItemStruct(definition, ref generics) => {
@@ -216,10 +214,7 @@ fn expand_shader_param(context: &mut ext::base::ExtCtxt, span: codemap::Span,
             global: true,
         },
         additional_bounds: Vec::new(),
-        generics: generic::ty::LifetimeBounds {
-            lifetimes: Vec::new(),
-            bounds: Vec::new(),
-        },
+        generics: generic::ty::LifetimeBounds::empty(),
         methods: vec![
             generic::MethodDef {
                 name: "create_link",
@@ -292,11 +287,4 @@ fn expand_shader_param(context: &mut ext::base::ExtCtxt, span: codemap::Span,
         ],
     };
     trait_def.expand(context, meta_item, item, push);
-}
-
-/// Entry point for the plugin phase
-#[plugin_registrar]
-pub fn registrar(reg: &mut Registry) {
-    reg.register_syntax_extension(token::intern("shader_param"),
-        ext::base::ItemDecorator(expand_shader_param));
 }

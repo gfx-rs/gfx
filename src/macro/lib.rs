@@ -20,9 +20,25 @@
 #![feature(macro_rules, plugin_registrar)]
 
 //! Macro extensions crate.
-//! Implements `shaders!` macro as well as `shader_param` attribute
+//! Implements `shaders!` macro as well as `shader_param` and `vertex_format`
+//! attributes.
 
+extern crate rustc;
+extern crate syntax;
+
+pub mod mesh;
 pub mod shade;
+
+/// Entry point for the plugin phase
+#[plugin_registrar]
+pub fn registrar(reg: &mut rustc::plugin::Registry) {
+    use syntax::parse::token::intern;
+    reg.register_syntax_extension(intern("vertex_format"),
+        syntax::ext::base::ItemDecorator(mesh::expand_vertex_format));
+    reg.register_syntax_extension(intern("shader_param"),
+        syntax::ext::base::ItemDecorator(shade::expand_shader_param));
+}
+
 
 #[macro_export]
 macro_rules! shaders {
