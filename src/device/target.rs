@@ -14,12 +14,20 @@
 
 use std::{default, fmt};
 
+// TODO: Really tighten up the terminology here.
+
+/// A depth value, specifying which plane to select out of a 3D texture.
 pub type TextureLayer = u16;
+/// Mipmap level to select in a texture.
 pub type TextureLevel = u8;
+/// A single depth value from a depth buffer.
 pub type Depth = f32;
+/// A single value from a stencil stencstencil buffer.
 pub type Stencil = u8;
 
 pub struct Color(pub [f32, ..4]);
+
+// manual impls due to array...
 
 impl Color {
     pub fn new() -> Color {
@@ -56,24 +64,42 @@ impl default::Default for Color {
 }
 
 #[deriving(Show)]
+/// How to clear a frame.
 pub struct ClearData {
+    /// If set, the color buffer of the frame will be cleared to this.
     pub color: Option<Color>,
+    /// If set, the depth buffer of the frame will be cleared to this.
     pub depth: Option<Depth>,
+    /// If set, the stencil buffer of the frame will be cleared to this.
     pub stencil: Option<Stencil>,
 }
 
 #[deriving(Eq, PartialEq, Show)]
+/// A single 2D buffer, to be used as the destination of a certain piece of data in a `Frame`.
 pub enum Plane {
+    /// No buffer, the results will not be stored.
     PlaneEmpty,
+    /// Render to a `Surface` (corresponds to a FBO).
     PlaneSurface(super::dev::Surface),
+    /// Render to a texture at a specific mipmap level
     PlaneTexture(super::dev::Texture, TextureLevel),
+    /// Render to a layer of a 3D texture, at a specific mipmap level
     PlaneTextureLayer(super::dev::Texture, TextureLevel, TextureLayer),
 }
 
+/// A specific kind of data that can be rendered to a `Plane`.
 #[deriving(Show)]
 pub enum Target {
+    /// A buffer for color data.
+    ///
+    /// # Portability Note
+    ///
+    /// The device is only required to expose one color target.
     TargetColor(u8),
+    /// A buffer for depth data.
     TargetDepth,
+    /// A buffer for a stencil data.
     TargetStencil,
+    /// A buffer usable for storing both depth and stencil data.
     TargetDepthStencil,
 }

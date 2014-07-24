@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! High-level, platform independant, bindless rendering API.
+
 #![crate_name = "render"]
 #![comment = "A platform independent renderer for gfx-rs."]
 #![license = "ASL2"]
@@ -53,6 +55,8 @@ struct State {
     frame: target::Frame,
 }
 
+/// An error that can happen when sending commands to the device.
+// TODO: What do you do with the handle? Is it valid for use? Can it be reused?
 #[deriving(Clone, Show)]
 pub enum DeviceError {
     ErrorNewBuffer(BufferHandle),
@@ -63,12 +67,14 @@ pub enum DeviceError {
 }
 
 
+/// An error that can happen when trying to draw.
 #[deriving(Show)]
 pub enum DrawError<'a> {
     ErrorMesh(MeshError),
     ErrorProgram,
 }
 
+/// An error with a defined Mesh.
 #[deriving(Show)]
 pub enum MeshError {
     ErrorAttributeMissing,
@@ -121,7 +127,7 @@ impl Dispatcher {
     }
 }
 
-
+/// A renderer. Methods on this get translated into commands for the device.
 pub struct Renderer {
     dispatcher: Dispatcher,
     device_tx: Sender<device::Request<Token>>,
@@ -134,6 +140,8 @@ pub struct Renderer {
 }
 
 impl Renderer {
+    /// Create a new `Renderer` using given channels for communicating with the device. Generally,
+    /// you want to use `gfx::start` instead.
     pub fn new(device_tx: Sender<device::Request<Token>>, device_rx: Receiver<device::Reply<Token>>,
             swap_rx: Receiver<device::Ack>, should_finish: comm::ShouldClose) -> Renderer {
         // Request the creation of the common array buffer and frame buffer
@@ -164,21 +172,26 @@ impl Renderer {
         self.device_tx.send(device::Cast(msg));
     }
 
+    /// Whether rendering should stop completely.
     pub fn should_finish(&self) -> bool {
         self.should_finish.check()
     }
 
+    /// Iterate over any errors that have been raised by the device when trying to issue commands.
     pub fn errors(&mut self) -> MoveItems<DeviceError> {
         let errors = self.dispatcher.errors.clone();
         self.dispatcher.errors.clear();
         errors.move_iter()
     }
 
+    /// Clear the `Frame` as the `ClearData` specifies.
     pub fn clear(&mut self, data: ClearData, frame: target::Frame) {
         self.bind_frame(&frame);
         self.cast(device::Clear(data));
     }
 
+    /// Draw `slice` of `mesh` into `frame`, using a given `program_handle`, using shader
+    /// parameters `bundle`, and a given draw state.
     pub fn draw<'a, L, T: shade::ShaderParam<L>>(&'a mut self, mesh: &mesh::Mesh, slice: mesh::Slice, frame: target::Frame,
             bundle: &shade::ShaderBundle<L, T>, state: rast::DrawState) -> Result<(), DrawError<'a>> {
         // demand resources. This section needs the mutable self, so we are unable to do this
@@ -237,11 +250,13 @@ impl Renderer {
         Ok(())
     }
 
+    /// Finish rendering a frame, wait for it to be displayed.
     pub fn end_frame(&self) {
         self.device_tx.send(device::SwapBuffers);
         self.swap_ack.recv();  //wait for acknowlegement
     }
 
+    /// Create a new program from the given vertex and fragment shaders.
     pub fn create_program(&mut self, vs_src: ShaderSource, fs_src: ShaderSource) -> ProgramHandle {
         let ds = &mut self.dispatcher;
         let id = ds.resource.shaders.len();
@@ -257,6 +272,7 @@ impl Renderer {
         token
     }
 
+    /// Create a new buffer on the device.
     pub fn create_buffer<T: Send>(&mut self, data: Option<Vec<T>>) -> BufferHandle {
         let bufs = &mut self.dispatcher.resource.buffers;
         let token = bufs.len();
