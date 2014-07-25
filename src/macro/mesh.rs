@@ -16,18 +16,9 @@ use std::gc::Gc;
 use syntax::{ast, ext};
 use syntax::ext::build::AstBuilder;
 use syntax::ext::deriving::generic;
-use syntax::codemap;
+use syntax::{attr, codemap};
 use syntax::parse::token;
 
-
-pub static ATTRIB_NORMALIZED: &'static str = "normalized";
-pub static ATTRIB_AS_FLOAT  : &'static str = "as_float";
-pub static ATTRIB_AS_DOUBLE : &'static str = "as_double";
-
-pub fn attribute_modifier(_cx: &mut ext::base::ExtCtxt, _span: codemap::Span,
-                          _meta_item: Gc<ast::MetaItem>, item: Gc<ast::Item>) -> Gc<ast::Item> {
-    item
-}
 
 fn make_path_vec(cx: &mut ext::base::ExtCtxt, to: &str) -> Vec<ast::Ident> {
     vec![cx.ident_of("gfx"), cx.ident_of("attrib"), cx.ident_of(to)]
@@ -51,18 +42,25 @@ fn find_modifier(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                  attributes: &[ast::Attribute]) -> Modifier {
     attributes.iter().fold(ModNone, |md, at| {
         match at.node.value.node {
-            ast::MetaWord(ref s) => match (md, s.get()) {
-                (ModNone, ATTRIB_NORMALIZED) => ModNormalized,
-                (ModNone, ATTRIB_AS_FLOAT)   => ModAsFloat,
-                (ModNone, ATTRIB_AS_DOUBLE)  => ModAsDouble,
-                (_, ATTRIB_NORMALIZED) | (_, ATTRIB_AS_FLOAT) | (_, ATTRIB_AS_DOUBLE) => {
-                    cx.span_warn(span, format!(
-                        "Extra attribute modifier detected: {}",
-                        s.get()).as_slice()
+            ast::MetaWord(ref s) => {
+                let new_md = match s.get() {
+                    "normalized" => ModNormalized,
+                    "as_float"   => ModAsFloat,
+                    "as_double"  => ModAsDouble,
+                    _ => ModNone,
+                };
+                if new_md != ModNone {
+                    attr::mark_used(at);
+                    if md != ModNone {
+                        cx.span_warn(span, format!(
+                            "Extra attribute modifier detected: {}",
+                            s.get()).as_slice()
                         );
+                    }
+                    new_md
+                }else {
                     md
-                },
-                _ => md,
+                }
             },
             _ => md,
         }
@@ -76,7 +74,7 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
     let (type_vec, params) = match c0 {
         'f' => {
             let kind = match modifier {
-                ModNone => "FloatDefault",
+                ModNone | ModAsFloat => "FloatDefault",
                 ModAsDouble => "FloatPrecision",
                 _ => {
                     cx.span_warn(span, format!(
@@ -201,7 +199,11 @@ fn method_generate(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
         generic::StaticStruct(ref definition, generic::Named(ref fields)) => {
             let mut statements = Vec::new();
             let id_at = cx.ident_of("at");
-            statements.push(cx.stmt_let(span, true, id_at, cx.expr_vec_ng(span)));
+            let ex_new = cx.expr_call(span, cx.expr_path(cx.path(span,
+                    vec![cx.ident_of("Vec"), cx.ident_of("with_capacity")]
+                )), vec![cx.expr_uint(span, fields.len())]
+            );
+            statements.push(cx.stmt_let(span, true, id_at, ex_new));
             let path_stride = make_path_vec(cx, "Stride");
             let ex_stride = cx.expr_cast(span,
                 cx.expr_call(span,
