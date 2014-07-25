@@ -31,16 +31,16 @@ GLFW_PLATFORM_FILE    = $(SRC_DIR)/glfw_platform/lib.rs
 RENDER_FILE           = $(SRC_DIR)/render/lib.rs
 EXAMPLE_FILES         = $(SRC_DIR)/examples/*/*.rs
 LIB_FILE              = $(SRC_DIR)/gfx/lib.rs
-MACRO_FILE            = $(SRC_DIR)/macro/lib.rs
-MACRO_TEST_FILE       = $(SRC_DIR)/macro_test/lib.rs
+MACRO_FILE            = $(SRC_DIR)/gfx_macros/lib.rs
+MACRO_TEST_FILE       = $(SRC_DIR)/gfx_macros_test/lib.rs
 
 COMM_INPUT            = $(SRC_DIR)/comm/*.rs
 DEVICE_INPUT          = $(SRC_DIR)/device/*.rs $(SRC_DIR)/device/gl/*.rs
 GLFW_PLATFORM_INPUT   = $(SRC_DIR)/glfw_platform/*.rs
 RENDER_INPUT          = $(SRC_DIR)/render/*.rs
 LIB_INPUT             = $(SRC_DIR)/gfx/*.rs
-MACRO_INPUT           = $(SRC_DIR)/macro/*.rs
-MACRO_TEST_INPUT      = $(SRC_DIR)/macro_test/*.rs
+MACRO_INPUT           = $(SRC_DIR)/gfx_macros/*.rs
+MACRO_TEST_INPUT      = $(SRC_DIR)/gfx_macros_test/*.rs
 
 DEPS_LIB_SEARCH_PATHS = $(DEPS_DIR)/gl-rs/lib $(DEPS_DIR)/glfw-rs/lib
 DEPS_LIB_SEARCH_FLAGS = $(patsubst %,-L %, $(DEPS_LIB_SEARCH_PATHS))

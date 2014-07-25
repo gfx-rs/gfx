@@ -224,9 +224,9 @@ fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
 
 
 /// Derive a `gfx::VertexFormat` implementation for the `struct`
-pub fn expand_vertex_format(context: &mut ext::base::ExtCtxt, span: codemap::Span,
-                            meta_item: Gc<ast::MetaItem>, item: Gc<ast::Item>,
-                            push: |Gc<ast::Item>|) {
+pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
+              meta_item: Gc<ast::MetaItem>, item: Gc<ast::Item>,
+              push: |Gc<ast::Item>|) {
     // `impl gfx::VertexFormat for $item`
     generic::TraitDef {
         span: span,

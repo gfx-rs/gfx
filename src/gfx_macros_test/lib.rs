@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![crate_name = "gfx_macro_test"]
+#![crate_name = "gfx_macros_test"]
 
 #![feature(phase)]
 
 #[phase(plugin)]
-extern crate gfx_macro;
+extern crate gfx_macros;
 extern crate gfx;
 
 #[test]
