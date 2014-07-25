@@ -6,6 +6,11 @@ extern crate gfx_macro;
 extern crate gfx;
 extern crate glfw;
 
+#[vertex_format]
+struct Vertex {
+    a_Pos: [f32, ..2],
+}
+
 #[shader_param]
 struct Params {
     blue: f32,
@@ -83,17 +88,16 @@ fn main() {
             FRAGMENT_SRC.clone());
         let frame = gfx::Frame::new();
         let state = gfx::DrawState::new();
-        let mesh = {
-            let data = vec![-0.5f32, -0.5, 0.5, -0.5, 0.0, 0.5];
-            let buf = renderer.create_buffer(Some(data));
-            gfx::mesh::Builder::new(buf)
-                .add("a_Pos", 2, gfx::mesh::F32)
-                .complete(3)
-        };
-        let data = Params {
+        let data = vec![
+            Vertex{ a_Pos: [-0.5, -0.5] },
+            Vertex{ a_Pos: [0.5, -0.5] },
+            Vertex{ a_Pos: [0.0, 0.5] },
+        ];
+        let mesh = renderer.create_mesh(data);
+        let params = Params {
             blue: 0.3,
         };
-        let bundle = renderer.bundle_program(program, data).unwrap();
+        let bundle = renderer.bundle_program(program, params).unwrap();
         while !renderer.should_finish() {
             let cdata = gfx::ClearData {
                 color: Some(gfx::Color([0.3, 0.3, 0.3, 1.0])),
@@ -101,7 +105,7 @@ fn main() {
                 stencil: None,
             };
             renderer.clear(cdata, frame);
-            renderer.draw(&mesh, gfx::mesh::VertexSlice(0, 3), frame, &bundle, state).unwrap();
+            renderer.draw(&mesh, gfx::VertexSlice(0, 3), frame, &bundle, state).unwrap();
             renderer.end_frame();
             for err in renderer.errors() {
                 println!("Renderer error: {}", err);

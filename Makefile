@@ -32,6 +32,7 @@ RENDER_FILE           = $(SRC_DIR)/render/lib.rs
 EXAMPLE_FILES         = $(SRC_DIR)/examples/*/*.rs
 LIB_FILE              = $(SRC_DIR)/gfx/lib.rs
 MACRO_FILE            = $(SRC_DIR)/macro/lib.rs
+MACRO_TEST_FILE       = $(SRC_DIR)/macro_test/lib.rs
 
 COMM_INPUT            = $(SRC_DIR)/comm/*.rs
 DEVICE_INPUT          = $(SRC_DIR)/device/*.rs $(SRC_DIR)/device/gl/*.rs
@@ -39,6 +40,7 @@ GLFW_PLATFORM_INPUT   = $(SRC_DIR)/glfw_platform/*.rs
 RENDER_INPUT          = $(SRC_DIR)/render/*.rs
 LIB_INPUT             = $(SRC_DIR)/gfx/*.rs
 MACRO_INPUT           = $(SRC_DIR)/macro/*.rs
+MACRO_TEST_INPUT      = $(SRC_DIR)/macro_test/*.rs
 
 DEPS_LIB_SEARCH_PATHS = $(DEPS_DIR)/gl-rs/lib $(DEPS_DIR)/glfw-rs/lib
 DEPS_LIB_SEARCH_FLAGS = $(patsubst %,-L %, $(DEPS_LIB_SEARCH_PATHS))
@@ -57,7 +59,7 @@ DEVICE_TEST_OUT       = $(TEST_DIR)/$(shell $(RUSTC) --print-file-name --test $(
 GLFW_PLATFORM_TEST_OUT= $(TEST_DIR)/$(shell $(RUSTC) --print-file-name --test $(GLFW_PLATFORM_FILE))
 RENDER_TEST_OUT       = $(TEST_DIR)/$(shell $(RUSTC) --print-file-name --test $(RENDER_FILE))
 LIB_TEST_OUT          = $(TEST_DIR)/$(shell $(RUSTC) --print-file-name --test $(LIB_FILE))
-MACRO_TEST_OUT        = $(TEST_DIR)/$(shell $(RUSTC) --print-file-name --test $(MACRO_FILE))
+MACRO_TEST_OUT        = $(TEST_DIR)/$(shell $(RUSTC) --print-file-name --test $(MACRO_TEST_FILE))
 
 EXAMPLES_DIR          = examples
 
@@ -167,9 +169,9 @@ $(LIB_TEST_OUT): $(DEVICE_OUT) $(GLFW_PLATFORM_OUT) $(RENDER_OUT) $(LIB_INPUT)
 	$(RUSTC) $(LIB_INCLUDE_FLAGS) --test --out-dir=$(TEST_DIR) $(LIB_CFG) -O $(LIB_FILE)
 	./$(LIB_TEST_OUT)
 
-$(MACRO_TEST_OUT): $(DEVICE_OUT) $(COMM_OUT) $(MACRO_INPUT)
+$(MACRO_TEST_OUT): $(LIB_OUT) $(MACRO_OUT) $(MACRO_TEST_INPUT)
 	mkdir -p $(TEST_DIR)
-	$(RUSTC) $(LIB_INCLUDE_FLAGS) --test --out-dir=$(TEST_DIR) $(LIB_CFG) -O $(MACRO_FILE)
+	$(RUSTC) $(LIB_INCLUDE_FLAGS) --test --out-dir=$(TEST_DIR) $(LIB_CFG) -O $(MACRO_TEST_FILE)
 	./$(MACRO_TEST_OUT)
 
 .PHONY: test

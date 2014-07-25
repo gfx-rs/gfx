@@ -30,7 +30,7 @@ extern crate render;
 // public re-exports
 pub use render::{BufferHandle, SurfaceHandle, TextureHandle, SamplerHandle, ProgramHandle, EnvirHandle};
 pub use render::Renderer;
-pub use render::mesh;
+pub use render::mesh::{Attribute, Mesh, VertexFormat, Slice, VertexSlice, IndexSlice};
 pub use render::rast::{DrawState, BlendAdditive, BlendAlpha};
 pub use render::shade::{ParameterSink, ToUniform, ShaderParam,
     ParameterLinkError, ParameterError, ErrorInternal, ErrorUniform, ErrorBlock, ErrorTexture,

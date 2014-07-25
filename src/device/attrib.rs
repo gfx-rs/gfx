@@ -17,7 +17,7 @@ pub type Count = u8;    // only value 1 to 4 are supported
 pub type Offset = u32;  // can point in the middle of the buffer
 pub type Stride = u8;   // I don't believe HW supports more
 
-#[deriving(Clone, Show)]
+#[deriving(Clone, PartialEq, Show)]
 pub enum SignFlag {
     Signed,
     Unsigned,
@@ -30,7 +30,7 @@ pub enum IntSubType {
     IntAsFloat,     // converted to float on the fly by the hardware
 }
 
-#[deriving(Clone, Show)]
+#[deriving(Clone, PartialEq, Show)]
 pub enum IntSize {
     U8,
     U16,
@@ -43,14 +43,14 @@ pub enum FloatSubType {
     FloatPrecision,  // 64-bit
 }
 
-#[deriving(Clone, Show)]
+#[deriving(Clone, PartialEq, Show)]
 pub enum FloatSize {
     F16,
     F32,
     F64,
 }
 
-#[deriving(Clone, Show)]
+#[deriving(Clone, PartialEq, Show)]
 pub enum Type {
     Int(IntSubType, IntSize, SignFlag),
     Float(FloatSubType, FloatSize),
