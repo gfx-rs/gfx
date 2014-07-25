@@ -168,7 +168,7 @@ impl Renderer {
         self.should_finish.check()
     }
 
-    pub fn iter_errors(&mut self) -> MoveItems<DeviceError> {
+    pub fn errors(&mut self) -> MoveItems<DeviceError> {
         let errors = self.dispatcher.errors.clone();
         self.dispatcher.errors.clear();
         errors.move_iter()
