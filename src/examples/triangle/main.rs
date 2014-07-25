@@ -103,7 +103,7 @@ fn main() {
             renderer.clear(cdata, frame);
             renderer.draw(&mesh, gfx::mesh::VertexSlice(0, 3), frame, &bundle, state).unwrap();
             renderer.end_frame();
-            for err in renderer.iter_errors() {
+            for err in renderer.errors() {
                 println!("Renderer error: {}", err);
             }
         }
