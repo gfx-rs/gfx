@@ -20,8 +20,8 @@
 #![feature(macro_rules, plugin_registrar)]
 
 //! Macro extensions crate.
-//! Implements `shaders!` macro as well as `shader_param` and `vertex_format`
-//! attributes.
+//! Implements `shaders!` macro as well as `#[shader_param]` and
+//! `#[vertex_format]` attributes.
 
 extern crate rustc;
 extern crate syntax;
@@ -34,8 +34,10 @@ pub mod shade;
 pub fn registrar(reg: &mut rustc::plugin::Registry) {
     use syntax::parse::token::intern;
     use syntax::ext::base;
+    // Register the `#[vertex_format]` attribute.
     reg.register_syntax_extension(intern("vertex_format"),
         base::ItemDecorator(mesh::expand_vertex_format));
+    // Register the `#[shader_param]` attribute.
     reg.register_syntax_extension(intern("shader_param"),
         base::ItemDecorator(shade::expand_shader_param));
 }

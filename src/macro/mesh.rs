@@ -30,10 +30,21 @@ fn make_path_expr(cx: &mut ext::base::ExtCtxt, span: codemap::Span, to: &str) ->
     cx.expr_path(cx.path(span, vec))
 }
 
+/// A component modifier.
 #[deriving(PartialEq)]
 enum Modifier {
+    /// Corresponds to the `#[normalized]` attribute.
+    ///
+    /// Normalizes the component at runtime. Unsigned integers are normalized to
+    /// `[0, 1]`. Signed integers are normalized to `[-1, 1]`.
     Normalized,
+    /// Corresponds to the `#[as_float]` attribute.
+    ///
+    /// Casts the component to a float precision floating-point number at runtime.
     AsFloat,
+    /// Corresponds to the `#[as_double]` attribute.
+    ///
+    /// Casts the component to a double precision floating-point number at runtime.
     AsDouble,
 }
 
@@ -58,7 +69,9 @@ impl FromStr for Modifier {
     }
 }
 
-/// Scan through the field's attributes and extract a relevant modifier
+/// Scan through the field's attributes and extract a relevant modifier. If
+/// multiple modifier attributes are found, use the first modifier and emit a
+/// warning.
 fn find_modifier(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                  attributes: &[ast::Attribute]) -> Option<Modifier> {
     attributes.iter().fold(None, |modifier, attribute| {
@@ -80,7 +93,7 @@ fn find_modifier(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
     })
 }
 
-/// Find a gfx::attrib::Type that describes a given type
+/// Find a `gfx::attrib::Type` that describes the given type identifier.
 fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                ty_ident: &ast::Ident, modifier: Option<Modifier>) -> Gc<ast::Expr> {
     let ty_str = ty_ident.name.as_str();
@@ -162,7 +175,7 @@ fn decode_count_and_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
     }
 }
 
-/// Encode the following expression:
+/// Generate the following expression:
 /// `unsafe { &(*(0u as *const $id_struct)).$id_field as *const _ as uint }`
 fn make_offset_expr(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     id_struct: ast::Ident, id_field: ast::Ident) -> Gc<ast::Expr> {
@@ -199,8 +212,8 @@ fn make_offset_expr(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
     }))
 }
 
-/// `generate()` method generating code
-fn method_generate(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
+/// Generates the the method body for `gfx::VertexFormat::generate`.
+fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                    substr: &generic::Substructure) -> Gc<ast::Expr> {
     match *substr.fields {
         generic::StaticStruct(ref definition, generic::Named(ref fields)) => {
@@ -270,11 +283,12 @@ fn method_generate(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
 }
 
 
-/// Decorator for `vertex_format` attribute
+/// Derive a `gfx::VertexFormat` implementation for the `struct`
 pub fn expand_vertex_format(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                             meta_item: Gc<ast::MetaItem>, item: Gc<ast::Item>,
                             push: |Gc<ast::Item>|) {
-    let trait_def = generic::TraitDef {
+    // `impl gfx::VertexFormat for $item`
+    generic::TraitDef {
         span: span,
         attributes: Vec::new(),
         path: generic::ty::Path {
@@ -286,6 +300,7 @@ pub fn expand_vertex_format(context: &mut ext::base::ExtCtxt, span: codemap::Spa
         additional_bounds: Vec::new(),
         generics: generic::ty::LifetimeBounds::empty(),
         methods: vec![
+            // `fn generate(Option<Self>, gfx::BufferHandle) -> Vec<gfx::Attribute>`
             generic::MethodDef {
                 name: "generate",
                 generics: generic::ty::LifetimeBounds::empty(),
@@ -313,9 +328,9 @@ pub fn expand_vertex_format(context: &mut ext::base::ExtCtxt, span: codemap::Spa
                     },
                 ),
                 attributes: Vec::new(),
-                combine_substructure: generic::combine_substructure(method_generate),
+                // generate the method body
+                combine_substructure: generic::combine_substructure(method_body),
             },
         ],
-    };
-    trait_def.expand(context, meta_item, item, push);
+    }.expand(context, meta_item, item, push);
 }
