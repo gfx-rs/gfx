@@ -28,7 +28,7 @@ pub struct Frame {
 }
 
 impl Frame {
-    /// Create an empty `Frame`, which corresponds to the "default framebuffer", which for now
+    /// Create an empty `Frame`, which corresponds to the 'default framebuffer', which for now
     /// renders directly to the window that was created with the OpenGL context.
     pub fn new() -> Frame {
         Frame {
@@ -38,7 +38,8 @@ impl Frame {
         }
     }
 
-    /// An empty frame is considered to match the default framebuffer
+    /// Returns true if this framebuffer is associated with the main window (matches `Frame::new`
+    /// exactly).
     pub fn is_default(&self) -> bool {
         self.colors.iter().all(|&p| p==PlaneEmpty) &&
         self.depth == PlaneEmpty &&
