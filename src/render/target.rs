@@ -28,8 +28,8 @@ pub struct Frame {
 }
 
 impl Frame {
-    /// Create an empty `Frame`, which corresponds to rendering to the "default framebuffer", which
-    /// usually means the window that was opened.
+    /// Create an empty `Frame`, which corresponds to the "default framebuffer", which for now
+    /// renders directly to the window that was created with the OpenGL context.
     pub fn new() -> Frame {
         Frame {
             colors: [PlaneEmpty, ..MAX_COLOR_TARGETS],
