@@ -33,10 +33,15 @@ pub mod shade;
 #[plugin_registrar]
 pub fn registrar(reg: &mut rustc::plugin::Registry) {
     use syntax::parse::token::intern;
+    use syntax::ext::base;
     reg.register_syntax_extension(intern("vertex_format"),
-        syntax::ext::base::ItemDecorator(mesh::expand_vertex_format));
+        base::ItemDecorator(mesh::expand_vertex_format));
+    for s in [mesh::ATTRIB_NORMALIZED, mesh::ATTRIB_AS_FLOAT, mesh::ATTRIB_AS_DOUBLE].iter() {
+        reg.register_syntax_extension(intern(*s),
+            base::ItemModifier(mesh::attribute_modifier));
+    }
     reg.register_syntax_extension(intern("shader_param"),
-        syntax::ext::base::ItemDecorator(shade::expand_shader_param));
+        base::ItemDecorator(shade::expand_shader_param));
 }
 
 
