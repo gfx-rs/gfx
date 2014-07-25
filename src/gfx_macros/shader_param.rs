@@ -163,9 +163,9 @@ fn node_to_var_path(span: codemap::Span, node: &ast::Ty_) -> ast::Path {
 }
 
 /// Decorator for `shader_param` attribute
-pub fn expand_shader_param(context: &mut ext::base::ExtCtxt, span: codemap::Span,
-                           meta_item: Gc<ast::MetaItem>, item: Gc<ast::Item>,
-                           push: |Gc<ast::Item>|) {
+pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
+              meta_item: Gc<ast::MetaItem>, item: Gc<ast::Item>,
+              push: |Gc<ast::Item>|) {
     // constructing the Link struct
     let (base_def, link_def) = match item.node {
         ast::ItemStruct(definition, ref generics) => {

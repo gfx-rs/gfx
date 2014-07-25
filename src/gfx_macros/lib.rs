@@ -12,32 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![crate_name = "gfx_macro"]
+#![crate_name = "gfx_macros"]
 #![comment = "Helper macros for gfx-rs"]
 #![license = "ASL2"]
 #![crate_type = "dylib"]
 
-#![feature(macro_rules, plugin_registrar)]
+#![feature(macro_rules, quote, plugin_registrar)]
 
 //! Macro extensions crate.
-//! Implements `shaders!` macro as well as `shader_param` and `vertex_format`
-//! attributes.
+//! Implements `shaders!` macro as well as `#[shader_param]` and
+//! `#[vertex_format]` attributes.
 
 extern crate rustc;
 extern crate syntax;
 
-pub mod mesh;
-pub mod shade;
+pub mod shader_param;
+pub mod vertex_format;
 
 /// Entry point for the plugin phase
 #[plugin_registrar]
 pub fn registrar(reg: &mut rustc::plugin::Registry) {
     use syntax::parse::token::intern;
     use syntax::ext::base;
-    reg.register_syntax_extension(intern("vertex_format"),
-        base::ItemDecorator(mesh::expand_vertex_format));
+    // Register the `#[shader_param]` attribute.
     reg.register_syntax_extension(intern("shader_param"),
-        base::ItemDecorator(shade::expand_shader_param));
+        base::ItemDecorator(shader_param::expand));
+    // Register the `#[vertex_format]` attribute.
+    reg.register_syntax_extension(intern("vertex_format"),
+        base::ItemDecorator(vertex_format::expand));
 }
 
 
