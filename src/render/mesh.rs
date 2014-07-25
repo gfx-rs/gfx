@@ -20,7 +20,7 @@ pub type VertexCount = u16;
 pub type ElementCount = u16;
 
 /// Vertex attribute descriptor, goes into the vertex shader input
-#[deriving(Clone, Show)]
+#[deriving(Clone, PartialEq, Show)]
 pub struct Attribute {
     pub buffer: super::BufferHandle, // vertex buffer to contain the data
     pub elem_count: a::Count,   // number of elements per vertex
