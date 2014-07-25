@@ -191,8 +191,8 @@ impl Renderer {
         self.cast(device::Clear(data));
     }
 
-    /// Draw `slice` of `mesh` into `frame`, using shader program + inputs `bundle`, and a given
-    /// draw state.
+    /// Draw `slice` of `mesh` into `frame`, using a `bundle` of shader program and parameters, and
+    /// a given draw state.
     pub fn draw<'a, L, T: shade::ShaderParam<L>>(&'a mut self, mesh: &mesh::Mesh, slice: mesh::Slice, frame: target::Frame,
             bundle: &shade::ShaderBundle<L, T>, state: rast::DrawState) -> Result<(), DrawError<'a>> {
         // demand resources. This section needs the mutable self, so we are unable to do this
