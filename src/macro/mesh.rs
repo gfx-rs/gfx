@@ -157,19 +157,14 @@ fn decode_count_and_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 decode_type(cx, span, &p.segments[0].identifier, modifier)
             },
             _ => {
-                cx.span_err(span, format!(
-                    "Unsupported fixed vector sub-type: `{}`",
-                    pty.node).as_slice()
-                );
+                cx.span_err(span, format!("Unsupported fixed vector sub-type: \
+                                          `{}`",pty.node).as_slice());
                 cx.expr_lit(span, ast::LitNil)
             },
         }),
         _ => {
-            cx.span_err(span, format!(
-                    "Unsupported attribute type: `{}`",
-                    field.node.ty.node
-                ).as_slice()
-            );
+            cx.span_err(span, format!("Unsupported attribute type: `{}`",
+                                      field.node.ty.node).as_slice());
             (cx.expr_lit(span, ast::LitNil), cx.expr_lit(span, ast::LitNil))
         },
     }
@@ -266,14 +261,14 @@ fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     cx.expr_ident(span, id_at),
                     cx.ident_of("push"),
                     vec![ex_struct]
-                    )));
+                )));
             }
             cx.expr_block(cx.block_all(
                 span,
                 Vec::new(),
                 statements,
                 Some(cx.expr_ident(span, id_at))
-                ))
+            ))
         },
         _ => {
             cx.span_err(span, "Unable to implement `generate()` on a non-structure");
