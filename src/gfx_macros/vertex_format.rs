@@ -104,8 +104,8 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
             quote_expr!(cx, gfx::attrib::Float(gfx::attrib::$kind,
                                                gfx::attrib::$sub_type))
         },
-        "u8" | "u16" | "u32" | "u64" | "uint" |
-        "i8" | "i16" | "i32" | "i64" | "int" => {
+        "u8" | "u16" | "u32" | "u64" |
+        "i8" | "i16" | "i32" | "i64" => {
             let sign = cx.ident_of({
                 if ty_str.starts_with("i") { "Signed" } else { "Unsigned" }
             });
@@ -125,8 +125,16 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                                              gfx::attrib::$sub_type,
                                              gfx::attrib::$sign))
         },
+        "uint" | "int" => {
+            cx.span_err(span, format!("Pointer-sized integer components are \
+                                      not supported, but found: `{}`. Use an \
+                                      integer component with an explicit size \
+                                      instead.", ty_str).as_slice());
+            cx.expr_lit(span, ast::LitNil)
+        },
         ty_str => {
-            cx.span_err(span, format!("Unrecognized component type: `{}`", ty_str).as_slice());
+            cx.span_err(span, format!("Unrecognized component type: `{}`",
+                                      ty_str).as_slice());
             cx.expr_lit(span, ast::LitNil)
         },
     }
