@@ -158,65 +158,45 @@ fn decode_count_and_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
     }
 }
 
-fn offset_expr(cx: &mut ext::base::ExtCtxt, _: codemap::Span,
-                    struct_ident: ast::Ident, field_ident: ast::Ident) -> Gc<ast::Expr> {
-    quote_expr!(cx, unsafe {
-        &(*(0u as *const $struct_ident)).$field_ident as *const _ as gfx::attrib::Offset
-    })
-}
-
-fn stride_expr(cx: &mut ext::base::ExtCtxt, struct_ident: ast::Ident) -> Gc<ast::Expr> {
-    quote_expr!(cx, std::mem::size_of::<$struct_ident>() as gfx::attrib::Stride)
-}
+/// A hacky thing to get around 'moved value' errors when using `quote_expr!`
+/// with `ext::base::ExtCtxt`s.
+fn ugh<T, U>(x: &mut T, f: |&mut T| -> U) -> U { f(x) }
 
 /// Generates the the method body for `gfx::VertexFormat::generate`.
 fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                    substr: &generic::Substructure) -> Gc<ast::Expr> {
     match *substr.fields {
         generic::StaticStruct(ref definition, generic::Named(ref fields)) => {
-            let mut statements = Vec::new();
-            let id_at = cx.ident_of("at");
-            let ex_new = cx.expr_call(span, cx.expr_path(cx.path(span,
-                    vec![cx.ident_of("Vec"), cx.ident_of("with_capacity")]
-                )), vec![cx.expr_uint(span, fields.len())]
-            );
-            statements.push(cx.stmt_let(span, true, id_at, ex_new));
-            let ex_stride = stride_expr(cx, substr.type_ident);
-            for (def, &(ident, _)) in definition.fields.iter().zip(fields.iter()) {
-                let (ex_count, ex_type) = decode_count_and_type(cx, span, def);
-                let ex_offset = offset_expr(cx, span, substr.type_ident, ident);
-                let ex_struct = cx.expr_struct(span,
-                    cx.path(span, vec![
-                        cx.ident_of("gfx"),
-                        cx.ident_of("Attribute")
-                        ]),
-                    vec![
-                        cx.field_imm(span, cx.ident_of("buffer"), substr.nonself_args[1]),
-                        cx.field_imm(span, cx.ident_of("elem_count"), ex_count),
-                        cx.field_imm(span, cx.ident_of("elem_type"), ex_type),
-                        cx.field_imm(span, cx.ident_of("offset"), ex_offset),
-                        cx.field_imm(span, cx.ident_of("stride"), ex_stride),
-                        cx.field_imm(span, cx.ident_of("name"), cx.expr_method_call(span,
-                            cx.expr_str(span, token::get_ident(ident)),
-                            cx.ident_of("to_string"), Vec::new()))
-                    ]
-                );
-                statements.push(cx.stmt_expr(cx.expr_method_call(
-                    span,
-                    cx.expr_ident(span, id_at),
-                    cx.ident_of("push"),
-                    vec![ex_struct]
-                )));
-            }
-            cx.expr_block(cx.block_all(
-                span,
-                Vec::new(),
-                statements,
-                Some(cx.expr_ident(span, id_at))
-            ))
+            let attribute_pushes = definition.fields.iter().zip(fields.iter())
+                .map(|(def, &(ident, _))| {
+                    let struct_ident = substr.type_ident;
+                    let buffer_expr = substr.nonself_args[1];
+                    let (count_expr, type_expr) = decode_count_and_type(cx, span, def);
+                    let ident_str = token::get_ident(ident);
+                    let ident_str = ident_str.get();
+                    ugh(cx, |cx| quote_expr!(cx, {
+                        attributes.push(gfx::Attribute {
+                            buffer: $buffer_expr,
+                            elem_count: $count_expr,
+                            elem_type: $type_expr,
+                            offset: unsafe {
+                                &(*(0u as *const $struct_ident)).$ident as *const _ as gfx::attrib::Offset
+                            },
+                            stride: std::mem::size_of::<$struct_ident>() as gfx::attrib::Stride,
+                            name: $ident_str.to_string(),
+                        });
+                    }))
+                }).collect::<Vec<Gc<ast::Expr>>>();
+            let capacity = fields.len();
+            ugh(cx, |cx| quote_expr!(cx, {
+                let mut attributes = Vec::with_capacity($capacity);
+                $attribute_pushes;
+                attributes
+            }))
         },
         _ => {
-            cx.span_err(span, "Unable to implement `generate()` on a non-structure");
+            cx.span_err(span, "Unable to implement `gfx::VertexFormat::generate` \
+                              on a non-structure");
             cx.expr_lit(span, ast::LitNil)
         }
     }
