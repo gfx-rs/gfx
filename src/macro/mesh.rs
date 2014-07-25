@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
+use std::from_str::FromStr;
 use std::gc::Gc;
 use syntax::{ast, ext};
 use syntax::ext::build::AstBuilder;
 use syntax::ext::deriving::generic;
 use syntax::{attr, codemap};
 use syntax::parse::token;
-
 
 fn make_path_vec(cx: &mut ext::base::ExtCtxt, to: &str) -> Vec<ast::Ident> {
     vec![cx.ident_of("gfx"), cx.ident_of("attrib"), cx.ident_of(to)]
@@ -29,93 +30,101 @@ fn make_path_expr(cx: &mut ext::base::ExtCtxt, span: codemap::Span, to: &str) ->
     cx.expr_path(cx.path(span, vec))
 }
 
-#[deriving(PartialEq, Show)]
+#[deriving(PartialEq)]
 enum Modifier {
-    ModNone,
-    ModNormalized,
-    ModAsFloat,
-    ModAsDouble,
+    Normalized,
+    AsFloat,
+    AsDouble,
+}
+
+impl fmt::Show for Modifier {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Normalized => write!(f, "normalized"),
+            AsFloat => write!(f, "as_float"),
+            AsDouble => write!(f, "as_double"),
+        }
+    }
+}
+
+impl FromStr for Modifier {
+    fn from_str(src: &str) -> Option<Modifier> {
+        match src {
+            "normalized" => Some(Normalized),
+            "as_float" => Some(AsFloat),
+            "as_double" => Some(AsDouble),
+            _ => None,
+        }
+    }
 }
 
 /// Scan through the field's attributes and extract a relevant modifier
 fn find_modifier(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
-                 attributes: &[ast::Attribute]) -> Modifier {
-    attributes.iter().fold(ModNone, |md, at| {
-        match at.node.value.node {
-            ast::MetaWord(ref s) => {
-                let new_md = match s.get() {
-                    "normalized" => ModNormalized,
-                    "as_float"   => ModAsFloat,
-                    "as_double"  => ModAsDouble,
-                    _ => ModNone,
-                };
-                if new_md != ModNone {
-                    attr::mark_used(at);
-                    if md != ModNone {
+                 attributes: &[ast::Attribute]) -> Option<Modifier> {
+    attributes.iter().fold(None, |modifier, attribute| {
+        match attribute.node.value.node {
+            ast::MetaWord(ref word) => {
+                from_str(word.get()).and_then(|new_modifier| {
+                    attr::mark_used(attribute);
+                    modifier.map_or(Some(new_modifier), |modifier| {
                         cx.span_warn(span, format!(
-                            "Extra attribute modifier detected: {}",
-                            s.get()).as_slice()
-                        );
-                    }
-                    new_md
-                }else {
-                    md
-                }
+                            "Extra attribute modifier detected: `#[{}]` - \
+                            ignoring in favour of `#[{}]`.", new_modifier, modifier
+                        ).as_slice());
+                        None
+                    })
+                }).or(modifier)
             },
-            _ => md,
+            _ => modifier,
         }
     })
 }
 
 /// Find a gfx::attrib::Type that describes a given type
 fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
-               stype: &str, modifier: Modifier) -> Gc<ast::Expr> {
-    let c0 = stype.char_at(0);
-    let (type_vec, params) = match c0 {
-        'f' => {
+               ty_ident: &ast::Ident, modifier: Option<Modifier>) -> Gc<ast::Expr> {
+    let ty_str = ty_ident.name.as_str();
+    let (type_vec, params) = match ty_str {
+        "f32" | "f64" => {
             let kind = match modifier {
-                ModNone | ModAsFloat => "FloatDefault",
-                ModAsDouble => "FloatPrecision",
-                _ => {
+                None | Some(AsFloat) => "FloatDefault",
+                Some(AsDouble) => "FloatPrecision",
+                Some(Normalized) => {
                     cx.span_warn(span, format!(
-                        "Incompatible float modifier: {}",
-                        modifier).as_slice()
-                        );
+                        "Incompatible float modifier attribute: `#[{}]`", modifier
+                    ).as_slice());
                     ""
                 }
             };
-            let sub_type = format!("F{}", stype.slice_from(1));
+            let sub_type = format!("F{}", ty_str.slice_from(1));
             (make_path_vec(cx, "Float"), vec![
                 make_path_expr(cx, span, kind),
                 make_path_expr(cx, span, sub_type.as_slice())
             ])
         },
-        'u' | 'i' => {
-            let sign = if c0=='i' {"Signed"} else {"Unsigned"};
+        "u8" | "u16" | "u32" | "u64" | "uint" |
+        "i8" | "i16" | "i32" | "i64" | "int" => {
+            let sign = if ty_str.starts_with("i") { "Signed" } else { "Unsigned" };
             let kind = match modifier {
-                ModNone => "IntRaw",
-                ModNormalized => "IntNormalized",
-                ModAsFloat => "IntAsFloat",
-                _ => {
+                None => "IntRaw",
+                Some(Normalized) => "IntNormalized",
+                Some(AsFloat) => "IntAsFloat",
+                Some(AsDouble) => {
                     cx.span_warn(span, format!(
-                        "Incompatible int modifier: {}",
-                        modifier).as_slice()
-                        );
+                        "Incompatible int modifier attribute: `#[{}]`", modifier
+                    ).as_slice());
                     ""
                 }
             };
-            let sub_type = format!("U{}", stype.slice_from(1));
+            let sub_type = format!("U{}", ty_str.slice_from(1));
             (make_path_vec(cx, "Int"), vec![
                 make_path_expr(cx, span, kind),
                 make_path_expr(cx, span, sub_type.as_slice()),
                 make_path_expr(cx, span, sign)
             ])
         },
-        _ => {
-            cx.span_err(span, format!(
-                "Unrecognized element type: {}",
-                stype).as_slice()
-                );
+        ty_str => {
+            cx.span_err(span, format!("Unrecognized component type: `{}`", ty_str).as_slice());
             (Vec::new(), Vec::new())
         },
     };
@@ -128,17 +137,15 @@ fn decode_count_and_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
     match field.node.ty.node {
         ast::TyPath(ref p, _, _) => (
             cx.expr_lit(span, ast::LitIntUnsuffixed(1)),
-            decode_type(cx, span,
-                p.segments[0].identifier.name.as_str(),
-                modifier)
+            decode_type(cx, span, &p.segments[0].identifier, modifier),
         ),
         ast::TyFixedLengthVec(pty, expr) => (expr, match pty.node {
-            ast::TyPath(ref p, _, _) => decode_type(cx, span,
-                p.segments[0].identifier.name.as_str(),
-                modifier),
+            ast::TyPath(ref p, _, _) => {
+                decode_type(cx, span, &p.segments[0].identifier, modifier)
+            },
             _ => {
                 cx.span_err(span, format!(
-                    "Unsupported fixed vector sub-type: {}",
+                    "Unsupported fixed vector sub-type: `{}`",
                     pty.node).as_slice()
                 );
                 cx.expr_lit(span, ast::LitNil)
@@ -146,7 +153,7 @@ fn decode_count_and_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
         }),
         _ => {
             cx.span_err(span, format!(
-                    "Unsupported attribute type: {}",
+                    "Unsupported attribute type: `{}`",
                     field.node.ty.node
                 ).as_slice()
             );
