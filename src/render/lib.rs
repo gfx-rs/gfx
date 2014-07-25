@@ -266,6 +266,13 @@ impl Renderer {
         token
     }
 
+    pub fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh {
+        let nv = data.len();
+        debug_assert!(nv < 0x10000);
+        let buf = self.create_buffer(Some(data));
+        mesh::Mesh::from::<T>(buf, nv as mesh::VertexCount)
+    }
+
     pub fn bundle_program<'a, L, T: shade::ShaderParam<L>>(&'a mut self, prog: ProgramHandle, data: T)
             -> Result<shade::ShaderBundle<L, T>, shade::ParameterLinkError<'a>> {
         self.dispatcher.demand(|res| !res.programs[prog].is_pending());

@@ -88,15 +88,16 @@ fn main() {
             FRAGMENT_SRC.clone());
         let frame = gfx::Frame::new();
         let state = gfx::DrawState::new();
-        let mesh = {
-            let data = vec![-0.5f32, -0.5, 0.5, -0.5, 0.0, 0.5];
-            let buf = renderer.create_buffer(Some(data));
-            gfx::Mesh::from::<Vertex>(buf, 3)
-        };
-        let data = Params {
+        let data = vec![
+            Vertex{ a_Pos: [-0.5, -0.5] },
+            Vertex{ a_Pos: [0.5, -0.5] },
+            Vertex{ a_Pos: [0.0, 0.5] },
+        ];
+        let mesh = renderer.create_mesh(data);
+        let params = Params {
             blue: 0.3,
         };
-        let bundle = renderer.bundle_program(program, data).unwrap();
+        let bundle = renderer.bundle_program(program, params).unwrap();
         while !renderer.should_finish() {
             let cdata = gfx::ClearData {
                 color: Some(gfx::Color([0.3, 0.3, 0.3, 1.0])),
