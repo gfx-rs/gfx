@@ -35,7 +35,7 @@ enum Modifier {
     AsFloat,
     /// Corresponds to the `#[as_double]` attribute.
     ///
-    /// Casts the component to a double precision floating-point number at runtime.
+    /// Specifies a high-precision float.
     AsDouble,
 }
 
