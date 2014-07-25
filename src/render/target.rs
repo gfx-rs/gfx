@@ -17,13 +17,19 @@ use device::target::{Plane, PlaneEmpty};
 
 static MAX_COLOR_TARGETS: uint = 4;
 
+/// A complete `Frame`, which is the result of rendering.
 pub struct Frame {
+    /// Each color component has its own buffer.
     pub colors: [Plane, ..MAX_COLOR_TARGETS],
+    /// The depth buffer for this frame.
     pub depth: Plane,
+    /// The stencil buffer for this frame.
     pub stencil: Plane,
 }
 
 impl Frame {
+    /// Create an empty `Frame`, which corresponds to the 'default framebuffer', which for now
+    /// renders directly to the window that was created with the OpenGL context.
     pub fn new() -> Frame {
         Frame {
             colors: [PlaneEmpty, ..MAX_COLOR_TARGETS],
@@ -32,7 +38,8 @@ impl Frame {
         }
     }
 
-    // An empty frame is considered to match the default framebuffer
+    /// Returns true if this framebuffer is associated with the main window (matches `Frame::new`
+    /// exactly).
     pub fn is_default(&self) -> bool {
         self.colors.iter().all(|&p| p==PlaneEmpty) &&
         self.depth == PlaneEmpty &&

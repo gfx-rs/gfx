@@ -20,7 +20,7 @@ pub type VarBlock = u8;
 pub type VarTexture = u8;
 
 /// Something that has information about program parameters,
-/// used to fill up a hidden Link structure for the `ShaderParam` implemntor
+/// used to fill up a hidden Link structure for the `ShaderParam` implementor
 pub trait ParameterSink {
     fn find_uniform(&mut self, name: &str) -> Option<VarUniform>;
     fn find_block  (&mut self, name: &str) -> Option<VarBlock>;
@@ -144,7 +144,7 @@ pub enum ParameterError<'a> {
     ErrorTexture(&'a str),
 }
 
-/// An error type for the link cretion
+/// An error type for the link creation
 #[deriving(Clone, Show)]
 pub enum ParameterLinkError<'a> {
     /// Program is not valid
@@ -163,7 +163,7 @@ pub trait ShaderParam<L> {
     fn upload<'a>(&self, &L, FnUniform<'a>, FnBlock<'a>, FnTexture<'a>);
 }
 
-/// A bundle that encapsulates a program, its data, and a hidden link between them
+/// A bundle that encapsulates a program and input to that program.
 #[deriving(Clone)]
 pub struct ShaderBundle<L, T> {
     /// Shader program

@@ -19,15 +19,21 @@ pub type MaterialHandle = int;  //placeholder
 pub type VertexCount = u16;
 pub type ElementCount = u16;
 
-/// Vertex attribute descriptor, goes into the vertex shader input
+/// Describes a single attribute of a vertex buffer, including its type, name, etc.
 #[deriving(Clone, PartialEq, Show)]
 pub struct Attribute {
-    pub buffer: super::BufferHandle, // vertex buffer to contain the data
-    pub elem_count: a::Count,   // number of elements per vertex
-    pub elem_type: a::Type,     // type of a single element
-    pub offset: a::Offset,      // offset in bytes to the first vertex
-    pub stride: a::Stride,      // stride in bytes between consecutive vertices
-    pub name: String,           // a name to match the shader input
+    /// Vertex buffer to contain the data
+    pub buffer: super::BufferHandle,
+    /// Number of elements per vertex
+    pub elem_count: a::Count,
+    /// Type of a single element
+    pub elem_type: a::Type,
+    /// Offset in bytes to the first vertex
+    pub offset: a::Offset,
+    /// Stride in bytes between consecutive vertices
+    pub stride: a::Stride,
+    /// A name to match the shader input
+    pub name: String,
 }
 
 /// A trait implemented automatically for user vertex structure by
@@ -37,49 +43,76 @@ pub trait VertexFormat {
 }
 
 
+/// Describes what geometric primitives are created from vertex data.
 #[deriving(Clone, Show)]
-pub enum PolygonType {
+pub enum PrimitiveType {
+    /// Each vertex represents a single point.
     Point,
+    /// Each pair of vertices represent a single line segment. For example, with `[a, b, c, d,
+    /// e]`, `a` and `b` form a line, `c` and `d` form a line, and `e` is discarded.
     Line,
+    /// Every two consecutive vertices represent a single line segment. Visually forms a "path" of
+    /// lines, as they are all connected. For example, with `[a, b, c]`, `a` and `b` form a line
+    /// line, and `b` and `c` form a line.
     LineStrip,
+    /// Each triplet of vertices represent a single triangle. For example, with `[a, b, c, d, e]`,
+    /// `a`, `b`, and `c` form a triangle, `d` and `e` are discarded.
     TriangleList,
+    /// Every three consecutive vertices represent a single triangle. For example, with `[a, b, c,
+    /// d]`, `a`, `b`, and `c` form a triangle, and `b`, `c`, and `d` form a triangle.
     TriangleStrip,
     //Quad,
 }
 
-/// Mesh descriptor, as a collection of attributes
+/// Describes geometry to render.
+///
+/// The best way to create a `Mesh` is to use the `Builder` in this module.
 #[deriving(Clone, Show)]
 pub struct Mesh {
-    pub poly_type: PolygonType,
+    /// What primitives to form out of the vertex data.
+    pub prim_type: PrimitiveType,
+    /// Number of vertices in the mesh.
     pub num_vertices: VertexCount,
+    /// Vertex attributes to use.
     pub attributes: Vec<Attribute>,
 }
 
 impl Mesh {
+    /// Create a new mesh, which is a `TriangleList` with no attributes and `nv` vertices.
     pub fn new(nv: VertexCount) -> Mesh {
         Mesh {
-            poly_type: TriangleList,
+            prim_type: TriangleList,
             num_vertices: nv,
             attributes: Vec::new(),
         }
     }
 
+    /// Create a new `Mesh` from a struct that implements `VertexFormat` and a buffer.
     pub fn from<V: VertexFormat>(buf: super::BufferHandle, nv: VertexCount) -> Mesh {
         Mesh {
-            poly_type: TriangleList,
+            prim_type: TriangleList,
             num_vertices: nv,
             attributes: VertexFormat::generate(None::<V>, buf),
         }
     }
 }
 
+/// Description of a subset of `Mesh` data to render.
 #[deriving(Clone, Show)]
 pub enum Slice  {
+    /// Render vertex data directly from the `Mesh`'s buffer, using only the vertices between the two
+    /// endpoints.
     VertexSlice(VertexCount, VertexCount),
+    /// The `IndexSlice` buffer contains a list of indices into the `Mesh` data, so every vertex
+    /// attribute does not need to be duplicated, only its position in the `Mesh`.  For example,
+    /// when drawing a square, two triangles are needed.  Using only `VertexSlice`, one would need
+    /// 6 separate vertices, 3 for each triangle. However, two of the vertices will be identical,
+    /// wasting space for the duplicated attributes.  Instead, the `Mesh` can store 4 vertices and
+    /// an `IndexSlice` can be used instead.
     IndexSlice(dev::Buffer, ElementCount, ElementCount),
 }
 
-/// Slice descriptor with an assigned material
+/// A slice of a mesh, with a given material.
 #[deriving(Clone, Show)]
 pub struct SubMesh {
     pub mesh: Mesh,
