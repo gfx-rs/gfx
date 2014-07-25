@@ -75,11 +75,11 @@ pub struct ClearData {
 }
 
 #[deriving(Eq, PartialEq, Show)]
-/// A single 2D buffer, to be used as the destination of a certain piece of data in a `Frame`.
+/// A single buffer that can be bound to a render target.
 pub enum Plane {
     /// No buffer, the results will not be stored.
     PlaneEmpty,
-    /// Render to a `Surface` (corresponds to a FBO).
+    /// Render to a `Surface` (corresponds to a renderbuffer in GL).
     PlaneSurface(super::dev::Surface),
     /// Render to a texture at a specific mipmap level
     PlaneTexture(super::dev::Texture, TextureLevel),
@@ -87,19 +87,20 @@ pub enum Plane {
     PlaneTextureLayer(super::dev::Texture, TextureLevel, TextureLayer),
 }
 
-/// A specific kind of data that can be rendered to a `Plane`.
+/// When rendering, each "output" of the fragment shader goes to a specific target. A `Plane` can
+/// be bound to a target, causing writes to that target to affect the `Plane`.
 #[deriving(Show)]
 pub enum Target {
-    /// A buffer for color data.
+    /// Color data.
     ///
     /// # Portability Note
     ///
     /// The device is only required to expose one color target.
     TargetColor(u8),
-    /// A buffer for depth data.
+    /// Depth data.
     TargetDepth,
-    /// A buffer for a stencil data.
+    /// Stencil data.
     TargetStencil,
-    /// A buffer usable for storing both depth and stencil data.
+    /// A target for both depth and stencil data at once.
     TargetDepthStencil,
 }

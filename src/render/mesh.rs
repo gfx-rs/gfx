@@ -48,17 +48,17 @@ pub trait VertexFormat {
 pub enum PrimitiveType {
     /// Each vertex represents a single point.
     Point,
-    /// Each pair of vertices represents a single line segment. For example, with `[a, b, c, d,
+    /// Each pair of vertices represent a single line segment. For example, with `[a, b, c, d,
     /// e]`, `a` and `b` form a line, `c` and `d` form a line, and `e` is discarded.
     Line,
-    /// Every two consecutive vertices represents a single line segment. Visually forms a "path" of
+    /// Every two consecutive vertices represent a single line segment. Visually forms a "path" of
     /// lines, as they are all connected. For example, with `[a, b, c]`, `a` and `b` form a line
     /// line, and `b` and `c` form a line.
     LineStrip,
-    /// Each triplet of vertices represents a single triangle. For example, with `[a, b, c, d, e]`,
+    /// Each triplet of vertices represent a single triangle. For example, with `[a, b, c, d, e]`,
     /// `a`, `b`, and `c` form a triangle, `d` and `e` are discarded.
     TriangleList,
-    /// Every three consecutive vertices represents a single triangle. For example, with `[a, b, c,
+    /// Every three consecutive vertices represent a single triangle. For example, with `[a, b, c,
     /// d]`, `a`, `b`, and `c` form a triangle, and `b`, `c`, and `d` form a triangle.
     TriangleStrip,
     //Quad,
@@ -90,7 +90,7 @@ impl Mesh {
     /// Create a new `Mesh` from a struct that implements `VertexFormat` and a buffer.
     pub fn from<V: VertexFormat>(buf: super::BufferHandle, nv: VertexCount) -> Mesh {
         Mesh {
-            poly_type: TriangleList,
+            prim_type: TriangleList,
             num_vertices: nv,
             attributes: VertexFormat::generate(None::<V>, buf),
         }
@@ -100,8 +100,15 @@ impl Mesh {
 /// Description of a piece of a `Mesh` data to render.
 #[deriving(Clone, Show)]
 pub enum Slice  {
-    /// Render vertex data directly from the buffer,
+    /// Render vertex data directly from the `Mesh`'s buffer, using only the vertices between the two
+    /// endpoints.
     VertexSlice(VertexCount, VertexCount),
+    /// The `IndexSlice` buffer contains a list of indices into the `Mesh` data, so every vertex
+    /// attribute does not need to be duplicated, only its position in the `Mesh`.  For example,
+    /// when drawing a square, two triangles are needed.  Using only `VertexSlice`, one would need
+    /// 6 separate vertices, 3 for each triangle. However, two of the vertices will be identical,
+    /// wasting space for the duplicated attributes.  Instead, the `Mesh` can store 4 vertices and
+    /// an `IndexSlice` can be used instead.
     IndexSlice(dev::Buffer, ElementCount, ElementCount),
 }
 

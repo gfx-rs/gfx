@@ -113,7 +113,7 @@ pub enum CastRequest {
         attrib::Type, attrib::Stride, attrib::Offset),
     BindIndex(dev::Buffer),
     BindFrameBuffer(dev::FrameBuffer),
-    /// Bind a buffer to a specific render target.
+    /// Bind a `Plane` to a specific render target.
     BindTarget(target::Target, target::Plane),
     BindUniformBlock(dev::Program, u8, UniformBufferSlot, dev::Buffer),
     BindUniform(shade::Location, shade::UniformValue),

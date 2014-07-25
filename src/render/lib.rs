@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! High-level, platform independant, bindless rendering API.
+//! High-level, platform independent, bindless rendering API.
 
 #![crate_name = "render"]
 #![comment = "A platform independent renderer for gfx-rs."]
@@ -55,8 +55,8 @@ struct State {
     frame: target::Frame,
 }
 
-/// An error that can happen when sending commands to the device.
-// TODO: What do you do with the handle? Is it valid for use? Can it be reused?
+/// An error that can happen when sending commands to the device. Any attempt to use the handles
+/// returned here will fail.
 #[deriving(Clone, Show)]
 pub enum DeviceError {
     ErrorNewBuffer(BufferHandle),
@@ -177,7 +177,8 @@ impl Renderer {
         self.should_finish.check()
     }
 
-    /// Iterate over any errors that have been raised by the device when trying to issue commands.
+    /// Iterate over any errors that have been raised by the device when trying to issue commands
+    /// since the last time this method was called.
     pub fn errors(&mut self) -> MoveItems<DeviceError> {
         let errors = self.dispatcher.errors.clone();
         self.dispatcher.errors.clear();
@@ -190,8 +191,8 @@ impl Renderer {
         self.cast(device::Clear(data));
     }
 
-    /// Draw `slice` of `mesh` into `frame`, using a given `program_handle`, using shader
-    /// parameters `bundle`, and a given draw state.
+    /// Draw `slice` of `mesh` into `frame`, using shader program + inputs `bundle`, and a given
+    /// draw state.
     pub fn draw<'a, L, T: shade::ShaderParam<L>>(&'a mut self, mesh: &mesh::Mesh, slice: mesh::Slice, frame: target::Frame,
             bundle: &shade::ShaderBundle<L, T>, state: rast::DrawState) -> Result<(), DrawError<'a>> {
         // demand resources. This section needs the mutable self, so we are unable to do this
@@ -250,7 +251,8 @@ impl Renderer {
         Ok(())
     }
 
-    /// Finish rendering a frame, wait for it to be displayed.
+    /// Finish rendering a frame. Waits for a frame to be finished drawing, as specified by the
+    /// queue size passed to `gfx::start`.
     pub fn end_frame(&self) {
         self.device_tx.send(device::SwapBuffers);
         self.swap_ack.recv();  //wait for acknowlegement
@@ -272,7 +274,7 @@ impl Renderer {
         token
     }
 
-    /// Create a new buffer on the device.
+    /// Create a new buffer on the device, which can be used to store vertex or uniform data.
     pub fn create_buffer<T: Send>(&mut self, data: Option<Vec<T>>) -> BufferHandle {
         let bufs = &mut self.dispatcher.resource.buffers;
         let token = bufs.len();
