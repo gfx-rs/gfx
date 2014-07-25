@@ -226,7 +226,6 @@ fn method_generate(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 let ex_struct = cx.expr_struct(span,
                     cx.path(span, vec![
                         cx.ident_of("gfx"),
-                        cx.ident_of("mesh"),
                         cx.ident_of("Attribute")
                         ]),
                     vec![
@@ -270,7 +269,7 @@ pub fn expand_vertex_format(context: &mut ext::base::ExtCtxt, span: codemap::Spa
         span: span,
         attributes: Vec::new(),
         path: generic::ty::Path {
-            path: vec!["gfx", "mesh", "VertexFormat"],
+            path: vec!["gfx", "VertexFormat"],
             lifetime: None,
             params: Vec::new(),
             global: true,
@@ -299,7 +298,7 @@ pub fn expand_vertex_format(context: &mut ext::base::ExtCtxt, span: codemap::Spa
                         lifetime: None,
                         params: vec![
                             box generic::ty::Literal(generic::ty::Path::new(
-                                vec!["gfx", "mesh", "Attribute"])),
+                                vec!["gfx", "Attribute"])),
                         ],
                         global: false,
                     },

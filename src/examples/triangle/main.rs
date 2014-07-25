@@ -6,6 +6,11 @@ extern crate gfx_macro;
 extern crate gfx;
 extern crate glfw;
 
+#[vertex_format]
+struct Vertex {
+    a_Pos: [f32, ..2],
+}
+
 #[shader_param]
 struct Params {
     blue: f32,
@@ -86,9 +91,7 @@ fn main() {
         let mesh = {
             let data = vec![-0.5f32, -0.5, 0.5, -0.5, 0.0, 0.5];
             let buf = renderer.create_buffer(Some(data));
-            gfx::mesh::Builder::new(buf)
-                .add("a_Pos", 2, gfx::mesh::F32)
-                .complete(3)
+            gfx::Mesh::from::<Vertex>(buf, 3)
         };
         let data = Params {
             blue: 0.3,
@@ -101,7 +104,7 @@ fn main() {
                 stencil: None,
             };
             renderer.clear(cdata, frame);
-            renderer.draw(&mesh, gfx::mesh::VertexSlice(0, 3), frame, &bundle, state).unwrap();
+            renderer.draw(&mesh, gfx::VertexSlice(0, 3), frame, &bundle, state).unwrap();
             renderer.end_frame();
             for err in renderer.iter_errors() {
                 println!("Renderer error: {}", err);
