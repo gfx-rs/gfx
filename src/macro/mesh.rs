@@ -21,15 +21,6 @@ use syntax::ext::deriving::generic;
 use syntax::{attr, codemap};
 use syntax::parse::token;
 
-fn make_path_vec(cx: &mut ext::base::ExtCtxt, to: &str) -> Vec<ast::Ident> {
-    vec![cx.ident_of("gfx"), cx.ident_of("attrib"), cx.ident_of(to)]
-}
-
-fn make_path_expr(cx: &mut ext::base::ExtCtxt, span: codemap::Span, to: &str) -> Gc<ast::Expr> {
-    let vec = make_path_vec(cx, to);
-    cx.expr_path(cx.path(span, vec))
-}
-
 /// A component modifier.
 #[deriving(PartialEq)]
 enum Modifier {
@@ -97,9 +88,9 @@ fn find_modifier(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
 fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                ty_ident: &ast::Ident, modifier: Option<Modifier>) -> Gc<ast::Expr> {
     let ty_str = ty_ident.name.as_str();
-    let (type_vec, params) = match ty_str {
+    match ty_str {
         "f32" | "f64" => {
-            let kind = match modifier {
+            let kind = cx.ident_of(match modifier {
                 None | Some(AsFloat) => "FloatDefault",
                 Some(AsDouble) => "FloatPrecision",
                 Some(Normalized) => {
@@ -108,17 +99,17 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     ).as_slice());
                     ""
                 }
-            };
-            let sub_type = format!("F{}", ty_str.slice_from(1));
-            (make_path_vec(cx, "Float"), vec![
-                make_path_expr(cx, span, kind),
-                make_path_expr(cx, span, sub_type.as_slice())
-            ])
+            });
+            let sub_type = cx.ident_of(format!("F{}", ty_str.slice_from(1)).as_slice());
+            quote_expr!(cx, gfx::attrib::Float(gfx::attrib::$kind,
+                                               gfx::attrib::$sub_type))
         },
         "u8" | "u16" | "u32" | "u64" | "uint" |
         "i8" | "i16" | "i32" | "i64" | "int" => {
-            let sign = if ty_str.starts_with("i") { "Signed" } else { "Unsigned" };
-            let kind = match modifier {
+            let sign = cx.ident_of({
+                if ty_str.starts_with("i") { "Signed" } else { "Unsigned" }
+            });
+            let kind = cx.ident_of(match modifier {
                 None => "IntRaw",
                 Some(Normalized) => "IntNormalized",
                 Some(AsFloat) => "IntAsFloat",
@@ -128,20 +119,17 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     ).as_slice());
                     ""
                 }
-            };
-            let sub_type = format!("U{}", ty_str.slice_from(1));
-            (make_path_vec(cx, "Int"), vec![
-                make_path_expr(cx, span, kind),
-                make_path_expr(cx, span, sub_type.as_slice()),
-                make_path_expr(cx, span, sign)
-            ])
+            });
+            let sub_type = cx.ident_of(format!("U{}", ty_str.slice_from(1)).as_slice());
+            quote_expr!(cx, gfx::attrib::Int(gfx::attrib::$kind,
+                                             gfx::attrib::$sub_type,
+                                             gfx::attrib::$sign))
         },
         ty_str => {
             cx.span_err(span, format!("Unrecognized component type: `{}`", ty_str).as_slice());
-            (Vec::new(), Vec::new())
+            cx.expr_lit(span, ast::LitNil)
         },
-    };
-    cx.expr_call_global(span, type_vec, params)
+    }
 }
 
 fn decode_count_and_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
@@ -170,41 +158,15 @@ fn decode_count_and_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
     }
 }
 
-/// Generate the following expression:
-/// `unsafe { &(*(0u as *const $id_struct)).$id_field as *const _ as uint }`
-fn make_offset_expr(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
-                    id_struct: ast::Ident, id_field: ast::Ident) -> Gc<ast::Expr> {
-    let ex = cx.expr_cast(span,
-        cx.expr_uint(span, 0),
-        cx.ty(span, ast::TyPtr(ast::MutTy {
-            ty: cx.ty_ident(span, id_struct),
-            mutbl: ast::MutImmutable,
-        }))
-    );
-    let ex = cx.expr(span, ast::ExprParen(
-        cx.expr_deref(span, ex)
-    ));
-    let ex = cx.expr_addr_of(span,
-        cx.expr_field_access(span, ex, id_field)
-    );
-    let ex = cx.expr_cast(span, ex,
-        cx.ty(span, ast::TyPtr(ast::MutTy {
-            ty: cx.ty_infer(span),
-            mutbl: ast::MutImmutable
-        }))
-    );
-    let offset = make_path_vec(cx, "Offset");
-    let ex = cx.expr_cast(span, ex,
-        cx.ty_path(cx.path(span, offset), None)
-    );
-    cx.expr_block(ast::P(ast::Block {
-        view_items: Vec::new(),
-        stmts: Vec::new(),
-        expr: Some(ex),
-        id: ast::DUMMY_NODE_ID,
-        rules: ast::UnsafeBlock(ast::UserProvided),
-        span: span,
-    }))
+fn offset_expr(cx: &mut ext::base::ExtCtxt, _: codemap::Span,
+                    struct_ident: ast::Ident, field_ident: ast::Ident) -> Gc<ast::Expr> {
+    quote_expr!(cx, unsafe {
+        &(*(0u as *const $struct_ident)).$field_ident as *const _ as gfx::attrib::Offset
+    })
+}
+
+fn stride_expr(cx: &mut ext::base::ExtCtxt, struct_ident: ast::Ident) -> Gc<ast::Expr> {
+    quote_expr!(cx, std::mem::size_of::<$struct_ident>() as gfx::attrib::Stride)
 }
 
 /// Generates the the method body for `gfx::VertexFormat::generate`.
@@ -219,27 +181,10 @@ fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 )), vec![cx.expr_uint(span, fields.len())]
             );
             statements.push(cx.stmt_let(span, true, id_at, ex_new));
-            let path_stride = make_path_vec(cx, "Stride");
-            let ex_stride = cx.expr_cast(span,
-                cx.expr_call(span,
-                    cx.expr_path(cx.path_all(
-                        span,
-                        true,
-                        vec![
-                            cx.ident_of("std"),
-                            cx.ident_of("mem"),
-                            cx.ident_of("size_of")
-                        ],
-                        Vec::new(),
-                        vec![cx.ty_ident(span, substr.type_ident)]
-                    )),
-                    Vec::new()
-                ),
-                cx.ty_path(cx.path_global(span, path_stride), None)
-            );
+            let ex_stride = stride_expr(cx, substr.type_ident);
             for (def, &(ident, _)) in definition.fields.iter().zip(fields.iter()) {
                 let (ex_count, ex_type) = decode_count_and_type(cx, span, def);
-                let ex_offset = make_offset_expr(cx, span, substr.type_ident, ident);
+                let ex_offset = offset_expr(cx, span, substr.type_ident, ident);
                 let ex_struct = cx.expr_struct(span,
                     cx.path(span, vec![
                         cx.ident_of("gfx"),

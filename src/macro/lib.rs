@@ -17,7 +17,7 @@
 #![license = "ASL2"]
 #![crate_type = "dylib"]
 
-#![feature(macro_rules, plugin_registrar)]
+#![feature(macro_rules, quote, plugin_registrar)]
 
 //! Macro extensions crate.
 //! Implements `shaders!` macro as well as `#[shader_param]` and
