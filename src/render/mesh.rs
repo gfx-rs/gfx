@@ -97,7 +97,7 @@ impl Mesh {
     }
 }
 
-/// Description of a piece of a `Mesh` data to render.
+/// Description of a subset of `Mesh` data to render.
 #[deriving(Clone, Show)]
 pub enum Slice  {
     /// Render vertex data directly from the `Mesh`'s buffer, using only the vertices between the two
