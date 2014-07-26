@@ -46,10 +46,8 @@ pub fn create_shader(stage: s::Stage, data: s::ShaderSource, model: s::ShaderMod
     };
     let name = gl::CreateShader(target);
     let data = match data {
-        s::ShaderSource { glsl_150: ref s, ..}
-            if s.is_provided() && model >= s::Model40 => s.as_ref().unwrap(),
-        s::ShaderSource { glsl_120: ref s, ..}
-            if s.is_provided() && model >= s::Model30 => s.as_ref().unwrap(),
+        s::ShaderSource { glsl_150: Some(ref s), .. } if model >= s::Model40 => s.as_slice(),
+        s::ShaderSource { glsl_120: Some(ref s), .. } if model >= s::Model30 => s.as_slice(),
         _ => return (Err(s::NoSupportedShaderProvided),
                      Some("[gfx-rs] No supported GLSL shader provided!".to_string())),
     };

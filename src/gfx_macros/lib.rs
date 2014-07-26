@@ -47,17 +47,20 @@ pub fn registrar(reg: &mut rustc::plugin::Registry) {
 macro_rules! shaders {
     (GLSL_120: $v:expr $($t:tt)*) => {
         ::gfx::ShaderSource {
-            glsl_120: ::gfx::StaticBytes($v),
+            glsl_120: Some(::gfx::StaticBytes($v)),
             ..shaders!($($t)*)
         }
     };
     (GLSL_150: $v:expr $($t:tt)*) => {
         ::gfx::ShaderSource {
-            glsl_150: ::gfx::StaticBytes($v),
+            glsl_150: Some(::gfx::StaticBytes($v)),
             ..shaders!($($t)*)
         }
     };
     () => {
-        ::gfx::NOT_PROVIDED
+        ::gfx::ShaderSource {
+            glsl_120: None,
+            glsl_150: None,
+        }
     }
 }

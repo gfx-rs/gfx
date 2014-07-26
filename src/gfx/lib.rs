@@ -41,7 +41,7 @@ pub use device::target::{Color, ClearData, Plane, TextureLayer, TextureLevel};
 pub use device::target::{PlaneEmpty, PlaneSurface, PlaneTexture, PlaneTextureLayer};
 pub use device::{Blob, Device, GlBackEnd, GlProvider, GraphicsContext, InitError, QueueSize};
 pub use device::shade::{UniformValue, ValueI32, ValueF32, ValueI32Vec, ValueF32Vec, ValueF32Matrix};
-pub use device::shade::{ShaderSource, StaticBytes, NOT_PROVIDED};
+pub use device::shade::{ShaderSource, StaticBytes};
 #[cfg(glfw)]
 pub use glfw = glfw_platform;
 
