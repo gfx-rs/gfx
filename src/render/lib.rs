@@ -69,7 +69,10 @@ pub enum DeviceError {
 
 /// An error with an invalid texture or a uniform block.
 #[deriving(Show)]
-pub struct BundleError;
+pub enum BundleError {
+    ErrorBundleBlock(shade::VarBlock),
+    ErrorBundleTexture(shade::VarTexture),
+}
 
 /// An error with a defined Mesh.
 #[deriving(Show)]
@@ -390,21 +393,33 @@ impl Renderer {
         self.cast(device::BindProgram(program));
         let mut block_slot   = 0u as device::UniformBufferSlot;
         let mut texture_slot = 0u as device::TextureSlot;
-        //let mut block_fail   = None::<shade::VarBlock>;
-        //let mut texture_fail = None::<shade::VarTexture>;
+        let mut block_fail   = None::<shade::VarBlock>;
+        let mut texture_fail = None::<shade::VarTexture>;
         bundle.bind(|uv, value| {
             self.cast(device::BindUniform(uv as uint, value));
         }, |bv, handle| {
-            let block = *self.dispatcher.resource.buffers[handle].unwrap();
-            self.cast(device::BindUniformBlock(program, bv as u8, block_slot as device::UniformBufferSlot, block));
-            block_slot += 1;
+            match self.dispatcher.resource.buffers[handle] {
+                Loaded(block) => {
+                    self.cast(device::BindUniformBlock(program, bv as u8, block_slot as device::UniformBufferSlot, block));
+                    block_slot += 1;
+                },
+                _ => {block_fail = Some(bv)},
+            }
         }, |tv, handle| {
-            let tex = *self.dispatcher.resource.textures[handle].unwrap();
-            self.cast(device::BindUniform(tv as uint, device::shade::ValueI32(texture_slot as i32)));
-            self.cast(device::BindTexture(texture_slot, tex, None));    //TODO: sampler
-            texture_slot += 1;
+            match self.dispatcher.resource.textures[handle] {
+                Loaded(tex) => {
+                    self.cast(device::BindUniform(tv as uint, device::shade::ValueI32(texture_slot as i32)));
+                    self.cast(device::BindTexture(texture_slot, tex, None));    //TODO: sampler
+                    texture_slot += 1;
+                },
+                _ => {texture_fail = Some(tv)},
+            }
         });
-        Ok(())
+        match (block_fail, texture_fail) {
+            (Some(bv), _) => Err(ErrorBundleBlock(bv)),
+            (_, Some(tv)) => Err(ErrorBundleTexture(tv)),
+            (None, None)  => Ok(()),
+        }
     }
 
     fn bind_mesh(&self, mesh: &mesh::Mesh, prog: &ProgramMeta) -> Result<(), MeshError> {

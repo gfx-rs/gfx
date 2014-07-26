@@ -18,7 +18,7 @@
 #![license = "ASL2"]
 #![crate_type = "lib"]
 
-#![feature(phase, globs)]
+#![feature(phase)]
 
 #[phase(plugin, link)] extern crate log;
 extern crate libc;
