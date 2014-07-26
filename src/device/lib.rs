@@ -54,6 +54,7 @@ pub struct Capabilities {
 
 pub type VertexCount = u16;
 pub type IndexCount = u16;
+pub type UniformBlockIndex = u8;
 pub type AttributeSlot = u8;
 pub type UniformBufferSlot = u8;
 pub type TextureSlot = u8;
@@ -116,7 +117,7 @@ pub enum CastRequest {
     BindFrameBuffer(dev::FrameBuffer),
     /// Bind a `Plane` to a specific render target.
     BindTarget(target::Target, target::Plane),
-    BindUniformBlock(dev::Program, u8, UniformBufferSlot, dev::Buffer),
+    BindUniformBlock(dev::Program, UniformBufferSlot, UniformBlockIndex, dev::Buffer),
     BindUniform(shade::Location, shade::UniformValue),
     BindTexture(TextureSlot, dev::Texture, Option<dev::Sampler>),
     SetPrimitiveState(rast::Primitive),

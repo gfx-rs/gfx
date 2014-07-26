@@ -240,7 +240,6 @@ impl GlBackEnd {
         }
     }
 
-    #[allow(dead_code)]
     fn get_error(&mut self) -> Result<(), ErrorType> {
         match gl::GetError() {
             gl::NO_ERROR => Ok(()),
@@ -254,7 +253,6 @@ impl GlBackEnd {
     }
 
     /// Fails during a debug build if the implementation's error flag was set.
-    #[allow(dead_code)]
     fn check(&mut self) {
         debug_assert_eq!(self.get_error(), Ok(()));
     }
@@ -460,21 +458,22 @@ impl super::ApiBackEnd for GlBackEnd {
                         (gl::DRAW_FRAMEBUFFER, attachment, name, level as gl::types::GLint, layer as gl::types::GLint),
                 }
             },
-            super::BindUniformBlock(program, index, loc, buffer) => {
-                gl::UniformBlockBinding(program, index as gl::types::GLuint, loc as gl::types::GLuint);
+            super::BindUniformBlock(program, slot, loc, buffer) => {
+                gl::UniformBlockBinding(program, slot as gl::types::GLuint, loc as gl::types::GLuint);
                 gl::BindBufferBase(gl::UNIFORM_BUFFER, loc as gl::types::GLuint, buffer);
             },
             super::BindUniform(loc, uniform) => {
                 shade::bind_uniform(loc as gl::types::GLint, uniform);
             },
-            super::BindTexture(loc, tex, sam) => {
-                let loc = gl::TEXTURE0 + loc as gl::types::GLenum;
+            super::BindTexture(slot, tex, sam) => {
                 let tinfo = &self.textures[tex as uint];
-                let anchor = tex::bind_texture(loc, tex, tinfo);
+                let anchor = tex::bind_texture(
+                    gl::TEXTURE0 + slot as gl::types::GLenum,
+                    tex, tinfo);
                 match sam {
                     Some(sam) => {
                         if self.caps.sampler_objects_supported {
-                            gl::BindSampler(loc, sam);
+                            gl::BindSampler(slot as gl::types::GLenum, sam);
                         } else {
                             let sinfo = &self.samplers[sam as uint];
                             tex::bind_sampler(anchor, sinfo);

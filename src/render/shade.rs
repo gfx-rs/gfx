@@ -129,10 +129,12 @@ impl ToUniform for [[f32, ..4], ..4] {
     }
 }
 
+pub type TextureParam = (super::TextureHandle, Option<super::SamplerHandle>);
+
 /// A closure provided for the `ShaderParam` implementor for uploading
 pub type FnUniform<'a> = |VarUniform, dev::UniformValue|: 'a;
 pub type FnBlock  <'a> = |VarBlock, super::BufferHandle|: 'a;
-pub type FnTexture<'a> = |VarTexture, super::TextureHandle|: 'a;
+pub type FnTexture<'a> = |VarTexture, TextureParam|: 'a;
 
 
 /// An error type on either the parameter storage or the program side

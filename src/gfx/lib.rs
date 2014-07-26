@@ -32,11 +32,11 @@ pub use render::{BufferHandle, SurfaceHandle, TextureHandle, SamplerHandle, Prog
 pub use render::Renderer;
 pub use render::mesh::{Attribute, Mesh, VertexFormat, Slice, VertexSlice, IndexSlice};
 pub use render::rast::{DrawState, BlendAdditive, BlendAlpha};
-pub use render::shade::{ParameterSink, ToUniform, ShaderParam,
+pub use render::shade::{ParameterSink, ToUniform, ShaderParam, TextureParam,
     ParameterLinkError, ParameterError, ErrorInternal, ErrorUniform, ErrorBlock, ErrorTexture,
     FnUniform, FnBlock, FnTexture, VarUniform, VarBlock, VarTexture};
 pub use render::target::Frame;
-pub use device::{attrib, rast};
+pub use device::{attrib, rast, tex};
 pub use device::target::{Color, ClearData, Plane, TextureLayer, TextureLevel};
 pub use device::target::{PlaneEmpty, PlaneSurface, PlaneTexture, PlaneTextureLayer};
 pub use device::{Blob, Device, GlBackEnd, GlProvider, GraphicsContext, InitError, QueueSize};

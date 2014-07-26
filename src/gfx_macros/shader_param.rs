@@ -32,7 +32,7 @@ fn classify(node: &ast::Ty_) -> ParamType {
         ast::TyPath(ref path, _, _) => match path.segments.last() {
             Some(segment) => match segment.identifier.name.as_str() {
                 "BufferHandle" => ParamBlock,
-                "TextureHandle" => ParamTexture,
+                "TextureParam" => ParamTexture,
                 _ => ParamUniform,
             },
             None => ParamUniform,

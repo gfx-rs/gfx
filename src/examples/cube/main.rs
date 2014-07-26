@@ -12,6 +12,8 @@ use cgmath::point::Point3;
 use cgmath::transform::{Transform, AffineMatrix3};
 use cgmath::vector::Vector3;
 
+//----------------------------------------
+// Cube associated data
 
 #[vertex_format]
 struct Vertex {
@@ -33,6 +35,7 @@ impl Vertex {
 #[shader_param]
 struct Params {
     u_ModelViewProj: [[f32, ..4], ..4],
+    t_Color: gfx::TextureParam,
 }
 
 static VERTEX_SRC: gfx::ShaderSource = shaders! {
@@ -64,19 +67,28 @@ static FRAGMENT_SRC: gfx::ShaderSource = shaders! {
 GLSL_120: b"
     #version 120
     varying vec2 v_TexCoord;
+    uniform sampler2D t_Color;
     void main() {
-        gl_FragColor = vec4(v_TexCoord, 0.0, 1.0);
+        gl_FragColor = texture(t_Color, v_TexCoord);
     }
 "
 GLSL_150: b"
     #version 150 core
     in vec2 v_TexCoord;
     out vec4 o_Color;
+    uniform sampler2D t_Color;
     void main() {
-        o_Color = vec4(v_TexCoord, 0.0, 1.0);
+        o_Color = texture(t_Color, v_TexCoord);
     }
 "
 };
+
+//----------------------------------------
+// Off-screen render target data
+
+
+
+//----------------------------------------
 
 // We need to run on the main thread, so ensure we are using the `native` runtime. This is
 // technically not needed, since this is the default, but it's not guaranteed.
@@ -146,29 +158,50 @@ fn main() {
             Vertex::new([ 1, -1, -1], [0, 1]),
         ];
 
-        let index_data = vec![
-            0u16, 1, 2, 2, 3, 0,    //top
-            4, 5, 6, 6, 7, 4,       //bottom
-            8, 9, 10, 10, 11, 8,    //right
-            12, 13, 14, 14, 16, 12, //left
-            16, 17, 18, 18, 19, 16, //front
-            20, 21, 22, 22, 23, 20, //back
-        ];
-
-        let buf_index = renderer.create_buffer(Some(index_data));
-        let slice = gfx::IndexSlice(buf_index, 0, 36);
         let mesh = renderer.create_mesh(vertex_data);
 
-        let shader_data = Params {
-            u_ModelViewProj: [
-                [1.0, 0.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0, 0.0],
-                [0.0, 0.0, 1.0, 0.0],
-                [0.0, 0.0, 0.0, 1.0],
-            ],
+        let slice = {
+            let index_data = vec![
+                0u16, 1, 2, 2, 3, 0,    //top
+                4, 5, 6, 6, 7, 4,       //bottom
+                8, 9, 10, 10, 11, 8,    //right
+                12, 13, 14, 14, 16, 12, //left
+                16, 17, 18, 18, 19, 16, //front
+                20, 21, 22, 22, 23, 20, //back
+            ];
+
+            let buf_index = renderer.create_buffer(Some(index_data));
+            gfx::IndexSlice(buf_index, 0, 36)
         };
-        let program = renderer.create_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone());
-        let mut bundle = renderer.bundle_program(program, shader_data).unwrap(); // no shader parameters
+
+        let texture = renderer.create_texture(gfx::tex::TextureInfo {
+            width: 1,
+            height: 1,
+            depth: 0,
+            mipmap_range: (0, 1),
+            kind: gfx::tex::Texture2D,
+            format: gfx::tex::RGBA8,
+        });
+        let sampler = renderer.create_sampler(gfx::tex::SamplerInfo {
+            filtering: gfx::tex::Bilinear,
+            wrap_mode: (gfx::tex::Clamp, gfx::tex::Clamp, gfx::tex::Clamp),
+            lod_bias: 0.0,
+            mipmap_range: (0, 0),
+        });
+
+        let mut bundle = {
+            let data = Params {
+                u_ModelViewProj: [
+                    [1.0, 0.0, 0.0, 0.0],
+                    [0.0, 1.0, 0.0, 0.0],
+                    [0.0, 0.0, 1.0, 0.0],
+                    [0.0, 0.0, 0.0, 1.0],
+                ],
+                t_Color: (texture, Some(sampler)),
+            };
+            let program = renderer.create_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone());
+            renderer.bundle_program(program, data).unwrap()
+        };
 
         let clear = gfx::ClearData {
             color: Some(gfx::Color([0.3, 0.3, 0.3, 1.0])),
@@ -179,7 +212,7 @@ fn main() {
         let mut m_model = Matrix4::<f32>::identity();
         let m_viewproj = {
             let mv: AffineMatrix3<f32> = Transform::look_at(
-                &Point3::new(0f32, -5.0, 3.0),
+                &Point3::new(1.5f32, -5.0, 3.0),
                 &Point3::new(0f32, 0.0, 0.0),
                 &Vector3::unit_z()
                 );

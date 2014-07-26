@@ -228,7 +228,7 @@ impl Renderer {
             resource::Loaded(ref p) => p,
             resource::Failed(_) => return Err(ErrorProgram),
         };
-        match self.bind_shader_bundle(program.name, bundle) {
+        match self.bind_shader_bundle(program, bundle) {
             Ok(_) => (),
             Err(e) => return Err(ErrorBundle(e)),
         }
@@ -367,8 +367,12 @@ impl Renderer {
         // texture pass
         bundle.bind(|_, _| {
         }, |_, _| {
-        }, |_, tex| {
+        }, |_, (tex, sam)| {
             dp.demand(|res| !res.textures[tex].is_pending());
+            match sam {
+                Some(sam) => dp.demand(|res| !res.samplers[sam].is_pending()),
+                None => (),
+            }
         });
     }
 
@@ -394,28 +398,35 @@ impl Renderer {
         }
     }
 
-    fn bind_shader_bundle<L, T: shade::ShaderParam<L>>(&self, program: backend::Program,
+    fn bind_shader_bundle<L, T: shade::ShaderParam<L>>(&self, meta: &ProgramMeta,
             bundle: &shade::ShaderBundle<L, T>) -> Result<(), BundleError> {
-        self.cast(device::BindProgram(program));
+        self.cast(device::BindProgram(meta.name));
         let mut block_slot   = 0u as device::UniformBufferSlot;
         let mut texture_slot = 0u as device::TextureSlot;
         let mut block_fail   = None::<shade::VarBlock>;
         let mut texture_fail = None::<shade::VarTexture>;
         bundle.bind(|uv, value| {
-            self.cast(device::BindUniform(uv as uint, value));
+            self.cast(device::BindUniform(meta.uniforms[uv as uint].location, value));
         }, |bv, handle| {
             match self.dispatcher.resource.buffers[handle] {
                 Loaded(block) => {
-                    self.cast(device::BindUniformBlock(program, bv as u8, block_slot as device::UniformBufferSlot, block));
+                    self.cast(device::BindUniformBlock(meta.name,
+                        block_slot as device::UniformBufferSlot,
+                        bv as device::UniformBlockIndex,
+                        block));
                     block_slot += 1;
                 },
                 _ => {block_fail = Some(bv)},
             }
-        }, |tv, handle| {
-            match self.dispatcher.resource.textures[handle] {
+        }, |tv, (tex_handle, sampler)| {
+            let sam = sampler.map(|sam| *self.dispatcher.resource.samplers[sam].unwrap());
+            match self.dispatcher.resource.textures[tex_handle] {
                 Loaded(tex) => {
-                    self.cast(device::BindUniform(tv as uint, device::shade::ValueI32(texture_slot as i32)));
-                    self.cast(device::BindTexture(texture_slot, tex, None));    //TODO: sampler
+                    self.cast(device::BindUniform(
+                        meta.textures[tv as uint].location,
+                        device::shade::ValueI32(texture_slot as i32)
+                        ));
+                    self.cast(device::BindTexture(texture_slot, tex, sam));
                     texture_slot += 1;
                 },
                 _ => {texture_fail = Some(tv)},
