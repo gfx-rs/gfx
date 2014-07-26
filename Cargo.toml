@@ -1,0 +1,26 @@
+[package]
+
+name = "gfx"
+version = "0.1.0"
+authors = [
+    "Brendan Zabarauskas <bjzaba@yahoo.com.au>",
+    "Corey Richardson <corey@octayn.net>",
+    "Dzmitry Malyshau <kvarkus@gmail.com>",
+]
+
+[[lib]]
+name = "gfx"
+path = "src/gfx/lib.rs"
+
+[[lib]]
+name = "gfx_macros"
+path = "src/gfx_macros"
+
+[dependencies.device]
+path = "src/device/"
+
+[dependencies.render]
+path = "src/render/"
+
+[dependencies.glfw_platform]
+path = "src/glfw_platform"

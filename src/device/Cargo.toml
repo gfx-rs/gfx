@@ -1,0 +1,16 @@
+[package]
+
+name = "device"
+version = "0.1.0"
+authors = [
+]
+
+[[lib]]
+name = "device"
+path = "lib.rs"
+
+[dependencies.comm]
+path = "../comm/"
+
+[dependencies.gl]
+git = "https://github.com/bjz/gl-rs.git"

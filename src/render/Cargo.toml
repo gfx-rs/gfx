@@ -1,0 +1,13 @@
+[package]
+
+name = "render"
+version = "0.1.0"
+authors = [
+]
+
+[[lib]]
+name = "render"
+path = "lib.rs"
+
+[dependencies.device]
+path = "../device/"

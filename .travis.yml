@@ -49,5 +49,7 @@ script:
   - make clean
   - make clean deps
   - make doc
+# make sure cargo works
+  - cargo build
 after_script:
   - curl http://www.rust-ci.org/artifacts/put?t=$RUSTCI_TOKEN | sh
