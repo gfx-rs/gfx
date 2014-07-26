@@ -163,6 +163,14 @@ pub trait ShaderParam<L> {
     fn upload<'a>(&self, &L, FnUniform<'a>, FnBlock<'a>, FnTexture<'a>);
 }
 
+impl ShaderParam<()> for () {
+    fn create_link<S: ParameterSink>(&self, _arg0: &mut S) -> Result<(), ParameterError<'static>> {
+        Ok(())
+    }
+    fn upload<'a>(&self, _arg0: &(), _arg1: FnUniform<'a>,
+                  _arg2: FnBlock<'a>, _arg3: FnTexture<'a>) { }
+}
+
 /// A bundle that encapsulates a program and input to that program.
 #[deriving(Clone)]
 pub struct ShaderBundle<L, T> {
