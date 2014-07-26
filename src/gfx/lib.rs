@@ -23,8 +23,8 @@
 extern crate libc;
 
 extern crate device;
-#[cfg(glfw)]
-extern crate glfw_platform;
+// when cargo is ready, re-enable the cfg's
+/* #[cfg(glfw)] */ extern crate glfw_platform;
 extern crate render;
 
 // public re-exports
@@ -42,8 +42,7 @@ pub use device::target::{PlaneEmpty, PlaneSurface, PlaneTexture, PlaneTextureLay
 pub use device::{Blob, Device, GlBackEnd, GlProvider, GraphicsContext, InitError, QueueSize};
 pub use device::shade::{UniformValue, ValueI32, ValueF32, ValueI32Vec, ValueF32Vec, ValueF32Matrix};
 pub use device::shade::{ShaderSource, StaticBytes};
-#[cfg(glfw)]
-pub use glfw = glfw_platform;
+/* #[cfg(glfw)] */ pub use glfw = glfw_platform;
 
 
 #[allow(visible_private_types)]

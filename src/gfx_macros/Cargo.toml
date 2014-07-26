@@ -1,0 +1,10 @@
+[package]
+
+name = "gfx_macros"
+version = "0.1.0"
+authors = [
+]
+
+[[lib]]
+name = "gfx_macros"
+path = "lib.rs"

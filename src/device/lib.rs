@@ -24,8 +24,9 @@
 extern crate libc;
 extern crate comm;
 
-#[cfg(gl)] pub use gl::GlBackEnd;
-#[cfg(gl)] pub use dev = self::gl;
+// when cargo is ready, re-enable the cfg's
+/* #[cfg(gl)] */ pub use gl::GlBackEnd;
+/* #[cfg(gl)] */ pub use dev = self::gl;
 // #[cfg(d3d11)] ... // TODO
 
 use std::fmt;
@@ -37,7 +38,7 @@ pub mod rast;
 pub mod shade;
 pub mod target;
 pub mod tex;
-#[cfg(gl)] mod gl;
+/* #[cfg(gl)] */ mod gl;
 
 #[deriving(Show)]
 pub struct Capabilities {
