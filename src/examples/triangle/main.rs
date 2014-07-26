@@ -65,7 +65,7 @@ fn main() {
     let glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
     let (mut window, events) = gfx::glfw::WindowBuilder::new(&glfw)
-        .title("Welcome to gfx-rs!")
+        .title("Triangle example #gfx-rs!")
         .try_modern_context_hints()
         .create()
         .expect("Failed to create GLFW window.");
@@ -103,7 +103,7 @@ fn main() {
 
         while !renderer.should_finish() {
             renderer.clear(clear, frame);
-            renderer.draw(&mesh, gfx::VertexSlice(0, 3), frame, &bundle, state)
+            renderer.draw(&mesh, mesh.get_slice(), frame, &bundle, state)
                 .unwrap();
             renderer.end_frame();
             for err in renderer.errors() {

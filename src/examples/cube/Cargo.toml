@@ -1,0 +1,16 @@
+[package]
+
+name = "example-cube"
+version = "0.1.0"
+authors = [
+]
+
+[[bin]]
+name = "cube"
+path = "main.rs"
+
+[dependencies.cgmath]
+git = "https://github.com/bjz/cgmath-rs.git"
+
+[dependencies.gfx]
+path = "../../../"

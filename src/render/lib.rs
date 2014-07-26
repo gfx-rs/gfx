@@ -209,7 +209,7 @@ impl Renderer {
             bundle: &shade::ShaderBundle<L, T>, state: rast::DrawState) -> Result<(), DrawError<'a>> {
         // demand resources. This section needs the mutable self, so we are unable to do this
         // after we get a reference to ether the `Environment` or the `ProgramMeta`
-        self.prebind_mesh(mesh);
+        self.prebind_mesh(mesh, &slice);
         self.prebind_bundle(bundle);
         self.dispatcher.demand(|res| !res.programs[bundle.get_program()].is_pending());
         // bind state
@@ -242,7 +242,8 @@ impl Renderer {
             mesh::VertexSlice(start, end) => {
                 self.cast(device::Draw(start, end));
             },
-            mesh::IndexSlice(buf, start, end) => {
+            mesh::IndexSlice(handle, start, end) => {
+                let buf = *self.dispatcher.resource.buffers[handle].unwrap();
                 self.cast(device::BindIndex(buf));
                 self.cast(device::DrawIndexed(start, end));
             },
@@ -343,10 +344,15 @@ impl Renderer {
     }
 
     /// Make sure all the mesh buffers are successfully created/loaded
-    fn prebind_mesh(&mut self, mesh: &mesh::Mesh) {
+    fn prebind_mesh(&mut self, mesh: &mesh::Mesh, slice: &mesh::Slice) {
         for at in mesh.attributes.iter() {
             self.dispatcher.get_buffer(at.buffer);
         }
+        match *slice {
+            mesh::IndexSlice(handle, _, _) =>
+                self.dispatcher.get_buffer(handle),
+            _ => 0,
+        };
     }
 
     fn prebind_bundle<L, T: shade::ShaderParam<L>>(&mut self, bundle: &shade::ShaderBundle<L, T>) {
