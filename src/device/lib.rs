@@ -118,7 +118,7 @@ pub enum CastRequest {
     BindTarget(target::Target, target::Plane),
     BindUniformBlock(dev::Program, u8, UniformBufferSlot, dev::Buffer),
     BindUniform(shade::Location, shade::UniformValue),
-    BindTexture(TextureSlot, dev::Texture, dev::Sampler),
+    BindTexture(TextureSlot, dev::Texture, Option<dev::Sampler>),
     SetPrimitiveState(rast::Primitive),
     SetDepthStencilState(Option<rast::Depth>, Option<rast::Stencil>, rast::CullMode),
     SetBlendState(Option<rast::Blend>),

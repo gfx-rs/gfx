@@ -467,7 +467,20 @@ impl super::ApiBackEnd for GlBackEnd {
                 shade::bind_uniform(loc as gl::types::GLint, uniform);
             },
             super::BindTexture(loc, tex, sam) => {
-                tex::bind_texture(loc as gl::types::GLuint, tex, sam, self);
+                let loc = gl::TEXTURE0 + loc as gl::types::GLenum;
+                gl::ActiveTexture(loc);
+                gl::BindTexture(tex.kind, tex.name);
+                match sam {
+                    Some(sam) => {
+                        if self.caps.sampler_objects_supported {
+                            gl::BindSampler(loc, sam);
+                        } else {
+                            let info = self.samplers[sam as uint];
+                            tex::bind_sampler(tex.kind, info);
+                        }
+                    },
+                    None => ()
+                }
             },
             super::SetPrimitiveState(prim) => {
                 rast::bind_primitive(prim);
