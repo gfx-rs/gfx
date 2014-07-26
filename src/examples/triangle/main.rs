@@ -5,6 +5,7 @@
 extern crate gfx_macros;
 extern crate gfx;
 extern crate glfw;
+extern crate native;
 
 #[vertex_format]
 struct Vertex {
