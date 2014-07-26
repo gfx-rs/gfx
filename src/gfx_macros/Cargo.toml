@@ -8,3 +8,4 @@ authors = [
 [[lib]]
 name = "gfx_macros"
 path = "lib.rs"
+crate-type = [ "dylib" ]
