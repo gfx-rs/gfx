@@ -12,8 +12,7 @@ authors = [
 name = "gfx"
 path = "src/gfx/lib.rs"
 
-[[lib]]
-name = "gfx_macros"
+[dependencies.gfx_macros]
 path = "src/gfx_macros"
 
 [dependencies.device]
