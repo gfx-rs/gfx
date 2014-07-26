@@ -7,6 +7,12 @@ extern crate gfx;
 extern crate glfw;
 extern crate cgmath;
 
+use cgmath::matrix::{Matrix, Matrix4};
+use cgmath::point::Point3;
+use cgmath::transform::{Transform, AffineMatrix3};
+use cgmath::vector::Vector3;
+
+
 #[vertex_format]
 struct Vertex {
     #[as_float]
@@ -24,15 +30,21 @@ impl Vertex {
     }
 }
 
+#[shader_param]
+struct Params {
+    u_ModelViewProj: [[f32, ..4], ..4],
+}
+
 static VERTEX_SRC: gfx::ShaderSource = shaders! {
 GLSL_120: b"
     #version 120
     attribute vec3 a_Pos;
     attribute vec2 a_TexCoord;
     varying vec2 v_TexCoord;
+    uniform mat4 u_ModelViewProj;
     void main() {
         v_TexCoord = a_TexCoord;
-        gl_Position = vec4(a_Pos, 1.0);
+        gl_Position = u_ModelViewProj * vec4(a_Pos, 1.0);
     }
 "
 GLSL_150: b"
@@ -40,9 +52,10 @@ GLSL_150: b"
     in vec3 a_Pos;
     in vec2 a_TexCoord;
     out vec2 v_TexCoord;
+    uniform mat4 u_ModelViewProj;
     void main() {
         v_TexCoord = a_TexCoord;
-        gl_Position = vec4(a_Pos, 1.0);
+        gl_Position = u_ModelViewProj * vec4(a_Pos, 1.0);
     }
 "
 };
@@ -83,6 +96,10 @@ fn main() {
 
     glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
     window.set_key_polling(true); // so we can quit when Esc is pressed
+    let aspect = {
+        let (w, h) = window.get_size();
+        w as f32 / h as f32
+    };
 
     // spawn render task
     let (renderer, mut device) = {
@@ -141,8 +158,17 @@ fn main() {
         let buf_index = renderer.create_buffer(Some(index_data));
         let slice = gfx::IndexSlice(buf_index, 0, 36);
         let mesh = renderer.create_mesh(vertex_data);
+
+        let shader_data = Params {
+            u_ModelViewProj: [
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+        };
         let program = renderer.create_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone());
-        let bundle = renderer.bundle_program(program, ()).unwrap(); // no shader parameters
+        let mut bundle = renderer.bundle_program(program, shader_data).unwrap(); // no shader parameters
 
         let clear = gfx::ClearData {
             color: Some(gfx::Color([0.3, 0.3, 0.3, 1.0])),
@@ -150,8 +176,30 @@ fn main() {
             stencil: None,
         };
 
+        let mut m_model = Matrix4::<f32>::identity();
+        let m_viewproj = {
+            let mv: AffineMatrix3<f32> = Transform::look_at(
+                &Point3::new(0f32, -5.0, 3.0),
+                &Point3::new(0f32, 0.0, 0.0),
+                &Vector3::unit_z()
+                );
+            let mp = cgmath::projection::perspective(
+                cgmath::angle::deg(45f32), aspect, 1f32, 10f32);
+            mp.mul_m(&mv.mat)
+        };
+
         while !renderer.should_finish() {
             renderer.clear(clear, frame);
+            m_model.x.x = 1.0;
+            bundle.data.u_ModelViewProj = {
+                let m = m_viewproj.mul_m(&m_model);
+                [
+                    [m.x.x, m.x.y, m.x.z, m.x.w],
+                    [m.y.x, m.y.y, m.y.z, m.y.w],
+                    [m.z.x, m.z.y, m.z.z, m.z.w],
+                    [m.w.x, m.w.y, m.w.z, m.w.w]
+                ]
+            };
             renderer.draw(&mesh, slice, frame, &bundle, state)
                 .unwrap();
             renderer.end_frame();

@@ -44,8 +44,6 @@ pub use device::shade::{UniformValue, ValueI32, ValueF32, ValueI32Vec, ValueF32V
 pub use device::shade::{ShaderSource, StaticBytes};
 /* #[cfg(glfw)] */ pub use glfw = glfw_platform;
 
-
-#[allow(visible_private_types)]
 pub fn start<C: GraphicsContext<GlBackEnd>, P: GlProvider>(graphics_context: C, provider: P, queue_size: QueueSize)
         -> Result<(Renderer, Device<render::Token, GlBackEnd, C>), InitError> {
     device::init(graphics_context, provider, queue_size).map(|(tx, rx, server, ack, should_finish)| {

@@ -43,7 +43,7 @@ pub struct MetaSink<'a> {
 impl<'a> MetaSink<'a> {
     /// Creates a new wrapper
     pub fn new(meta: &'a dev::ProgramMeta) -> MetaSink<'a> {
-        debug_assert_eq!(0, meta.uniforms.len() >> (8 * size_of::<MaskUniform>()));
+        //debug_assert_eq!(0, meta.uniforms.len() >> (8 * size_of::<MaskUniform>()));
         debug_assert_eq!(0, meta.blocks  .len() >> (8 * size_of::<MaskBlock  >()));
         debug_assert_eq!(0, meta.textures.len() >> (8 * size_of::<MaskTexture>()));
         MetaSink {

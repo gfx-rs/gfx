@@ -257,7 +257,6 @@ pub enum InitError {}
 pub type QueueSize = u8;
 
 // TODO: Generalise for different back-ends
-#[allow(visible_private_types)]
 pub fn init<T: Send, C: GraphicsContext<GlBackEnd>, P: GlProvider>(graphics_context: C, provider: P, queue_size: QueueSize)
         -> Result<(Sender<Request<T>>, Receiver<Reply<T>>, Device<T, GlBackEnd, C>, Receiver<Ack>, comm::ShouldClose), InitError> {
     let (request_tx, request_rx) = channel();
