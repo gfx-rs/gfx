@@ -36,10 +36,6 @@ impl<'a> device::GlProvider for Wrap<'a> {
         let Wrap(provider) = *self;
         provider.get_proc_address(name)
     }
-    fn is_extension_supported(&self, name: &str) -> bool {
-        let Wrap(provider) = *self;
-        provider.extension_supported(name)
-    }
 }
 
 pub struct Platform<C> {
