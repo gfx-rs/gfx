@@ -67,7 +67,7 @@ pub enum DeviceError {
 }
 
 
-/// An error with an invalid texture or a uniform block.
+/// An error with an invalid texture or uniform block.
 #[deriving(Show)]
 pub enum BundleError {
     ErrorBundleBlock(shade::VarBlock),
