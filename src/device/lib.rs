@@ -18,7 +18,7 @@
 #![license = "ASL2"]
 #![crate_type = "lib"]
 
-#![feature(phase, globs)]
+#![feature(phase)]
 
 #[phase(plugin, link)] extern crate log;
 extern crate libc;
@@ -54,6 +54,7 @@ pub struct Capabilities {
 
 pub type VertexCount = u16;
 pub type IndexCount = u16;
+pub type UniformBlockIndex = u8;
 pub type AttributeSlot = u8;
 pub type UniformBufferSlot = u8;
 pub type TextureSlot = u8;
@@ -116,9 +117,9 @@ pub enum CastRequest {
     BindFrameBuffer(dev::FrameBuffer),
     /// Bind a `Plane` to a specific render target.
     BindTarget(target::Target, target::Plane),
-    BindUniformBlock(dev::Program, u8, UniformBufferSlot, dev::Buffer),
+    BindUniformBlock(dev::Program, UniformBufferSlot, UniformBlockIndex, dev::Buffer),
     BindUniform(shade::Location, shade::UniformValue),
-    BindTexture(TextureSlot, dev::Texture, dev::Sampler),
+    BindTexture(TextureSlot, dev::Texture, Option<dev::Sampler>),
     SetPrimitiveState(rast::Primitive),
     SetDepthStencilState(Option<rast::Depth>, Option<rast::Stencil>, rast::CullMode),
     SetBlendState(Option<rast::Blend>),
@@ -256,7 +257,6 @@ pub enum InitError {}
 pub type QueueSize = u8;
 
 // TODO: Generalise for different back-ends
-#[allow(visible_private_types)]
 pub fn init<T: Send, C: GraphicsContext<GlBackEnd>, P: GlProvider>(graphics_context: C, provider: P, queue_size: QueueSize)
         -> Result<(Sender<Request<T>>, Receiver<Reply<T>>, Device<T, GlBackEnd, C>, Receiver<Ack>, comm::ShouldClose), InitError> {
     let (request_tx, request_rx) = channel();

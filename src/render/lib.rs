@@ -35,8 +35,8 @@ use shade::{BundleInternal, ShaderParam};
 use resource::{Loaded, Pending};
 
 pub type BufferHandle = uint;
-pub type SurfaceHandle = backend::Surface;
-pub type TextureHandle = backend::Texture;
+pub type SurfaceHandle = uint;
+pub type TextureHandle = uint;
 pub type SamplerHandle = uint;
 pub type ShaderHandle = uint;
 pub type ProgramHandle = uint;
@@ -67,11 +67,11 @@ pub enum DeviceError {
 }
 
 
-/// An error that can happen when trying to draw.
+/// An error with an invalid texture or uniform block.
 #[deriving(Show)]
-pub enum DrawError<'a> {
-    ErrorMesh(MeshError),
-    ErrorProgram,
+pub enum BundleError {
+    ErrorBundleBlock(shade::VarBlock),
+    ErrorBundleTexture(shade::VarTexture),
 }
 
 /// An error with a defined Mesh.
@@ -79,6 +79,14 @@ pub enum DrawError<'a> {
 pub enum MeshError {
     ErrorAttributeMissing,
     ErrorAttributeType,
+}
+
+/// An error that can happen when trying to draw.
+#[deriving(Show)]
+pub enum DrawError<'a> {
+    ErrorProgram,
+    ErrorBundle(BundleError),
+    ErrorMesh(MeshError),
 }
 
 struct Dispatcher {
@@ -124,6 +132,10 @@ impl Dispatcher {
 
     fn get_common_frame_buffer(&mut self) -> backend::FrameBuffer {
         self.get_any(|res| &res.frame_buffers[0])
+    }
+
+    fn get_texture(&mut self, handle: TextureHandle) -> backend::Texture {
+        self.get_any(|res| &res.textures[handle])
     }
 }
 
@@ -197,7 +209,8 @@ impl Renderer {
             bundle: &shade::ShaderBundle<L, T>, state: rast::DrawState) -> Result<(), DrawError<'a>> {
         // demand resources. This section needs the mutable self, so we are unable to do this
         // after we get a reference to ether the `Environment` or the `ProgramMeta`
-        self.prebind_mesh(mesh);
+        self.prebind_mesh(mesh, &slice);
+        self.prebind_bundle(bundle);
         self.dispatcher.demand(|res| !res.programs[bundle.get_program()].is_pending());
         // bind state
         self.cast(device::SetPrimitiveState(state.primitive));
@@ -209,30 +222,16 @@ impl Renderer {
         self.cast(device::BindArrayBuffer(vao));
         // bind output frame
         self.bind_frame(&frame);
-        // prepare shader blocks and textures
-        bundle.bind(|_, _| {
-        }, |_, buf| {
-            self.dispatcher.demand(|res| !res.buffers[buf].is_pending());
-        }, |_, _tex| { //TODO
-            //self.dispatcher.demand(|res| !res.textures[tex].is_pending());
-        });
         // bind shaders
         let program = match self.dispatcher.resource.programs[bundle.get_program()] {
             resource::Pending => fail!("Program is not loaded yet"),
             resource::Loaded(ref p) => p,
             resource::Failed(_) => return Err(ErrorProgram),
         };
-        self.cast(device::BindProgram(program.name));
-        let mut block_slot = 0u;
-        bundle.bind(|uv, value| {
-            self.cast(device::BindUniform(uv as uint, value));
-        }, |bv, buf| {
-            let block = *self.dispatcher.resource.buffers[buf].unwrap();
-            self.cast(device::BindUniformBlock(program.name, bv as u8, block_slot as device::UniformBufferSlot, block));
-            block_slot += 1;
-        }, |_tv, _tex| {
-            //TODO
-        });
+        match self.bind_shader_bundle(program, bundle) {
+            Ok(_) => (),
+            Err(e) => return Err(ErrorBundle(e)),
+        }
         // bind vertex attributes
         match self.bind_mesh(mesh, program) {
             Ok(_) => (),
@@ -243,7 +242,8 @@ impl Renderer {
             mesh::VertexSlice(start, end) => {
                 self.cast(device::Draw(start, end));
             },
-            mesh::IndexSlice(buf, start, end) => {
+            mesh::IndexSlice(handle, start, end) => {
+                let buf = *self.dispatcher.resource.buffers[handle].unwrap();
                 self.cast(device::BindIndex(buf));
                 self.cast(device::DrawIndexed(start, end));
             },
@@ -291,6 +291,22 @@ impl Renderer {
         mesh::Mesh::from::<T>(buf, nv as mesh::VertexCount)
     }
 
+    pub fn create_texture(&mut self, info: device::tex::TextureInfo) -> TextureHandle {
+        let texs = &mut self.dispatcher.resource.textures;
+        let token = texs.len();
+        self.device_tx.send(device::Call(token, device::CreateTexture(info)));
+        texs.push(Pending);
+        token
+    }
+
+    pub fn create_sampler(&mut self, info: device::tex::SamplerInfo) -> SamplerHandle {
+        let sams = &mut self.dispatcher.resource.samplers;
+        let token = sams.len();
+        self.device_tx.send(device::Call(token, device::CreateSampler(info)));
+        sams.push(Pending);
+        token
+    }
+
     pub fn bundle_program<'a, L, T: shade::ShaderParam<L>>(&'a mut self, prog: ProgramHandle, data: T)
             -> Result<shade::ShaderBundle<L, T>, shade::ParameterLinkError<'a>> {
         self.dispatcher.demand(|res| !res.programs[prog].is_pending());
@@ -321,6 +337,45 @@ impl Renderer {
         self.cast(device::UpdateBuffer(buf, (box data) as Box<device::Blob + Send>));
     }
 
+    pub fn update_texture<T: Send>(&mut self, handle: TextureHandle,
+                                   info: device::tex::ImageInfo, data: Vec<T>) {
+        let tex = self.dispatcher.get_texture(handle);
+        self.cast(device::UpdateTexture(tex, info, (box data) as Box<device::Blob + Send>));
+    }
+
+    /// Make sure all the mesh buffers are successfully created/loaded
+    fn prebind_mesh(&mut self, mesh: &mesh::Mesh, slice: &mesh::Slice) {
+        for at in mesh.attributes.iter() {
+            self.dispatcher.get_buffer(at.buffer);
+        }
+        match *slice {
+            mesh::IndexSlice(handle, _, _) =>
+                self.dispatcher.get_buffer(handle),
+            _ => 0,
+        };
+    }
+
+    fn prebind_bundle<L, T: shade::ShaderParam<L>>(&mut self, bundle: &shade::ShaderBundle<L, T>) {
+        let dp = &mut self.dispatcher;
+        // buffers pass
+        bundle.bind(|_, _| {
+        }, |_, buf| {
+            dp.demand(|res| !res.buffers[buf].is_pending());
+        }, |_, _| {
+
+        });
+        // texture pass
+        bundle.bind(|_, _| {
+        }, |_, _| {
+        }, |_, (tex, sam)| {
+            dp.demand(|res| !res.textures[tex].is_pending());
+            match sam {
+                Some(sam) => dp.demand(|res| !res.samplers[sam].is_pending()),
+                None => (),
+            }
+        });
+    }
+
     fn bind_frame(&mut self, frame: &target::Frame) {
         if frame.is_default() {
             // binding the default FBO, not touching our common one
@@ -343,14 +398,48 @@ impl Renderer {
         }
     }
 
-    /// Make sure all the mesh buffers are successfully created/loaded
-    fn prebind_mesh(&mut self, mesh: &mesh::Mesh) {
-        for at in mesh.attributes.iter() {
-            self.dispatcher.get_buffer(at.buffer);
+    fn bind_shader_bundle<L, T: shade::ShaderParam<L>>(&self, meta: &ProgramMeta,
+            bundle: &shade::ShaderBundle<L, T>) -> Result<(), BundleError> {
+        self.cast(device::BindProgram(meta.name));
+        let mut block_slot   = 0u as device::UniformBufferSlot;
+        let mut texture_slot = 0u as device::TextureSlot;
+        let mut block_fail   = None::<shade::VarBlock>;
+        let mut texture_fail = None::<shade::VarTexture>;
+        bundle.bind(|uv, value| {
+            self.cast(device::BindUniform(meta.uniforms[uv as uint].location, value));
+        }, |bv, handle| {
+            match self.dispatcher.resource.buffers[handle] {
+                Loaded(block) => {
+                    self.cast(device::BindUniformBlock(meta.name,
+                        block_slot as device::UniformBufferSlot,
+                        bv as device::UniformBlockIndex,
+                        block));
+                    block_slot += 1;
+                },
+                _ => {block_fail = Some(bv)},
+            }
+        }, |tv, (tex_handle, sampler)| {
+            let sam = sampler.map(|sam| *self.dispatcher.resource.samplers[sam].unwrap());
+            match self.dispatcher.resource.textures[tex_handle] {
+                Loaded(tex) => {
+                    self.cast(device::BindUniform(
+                        meta.textures[tv as uint].location,
+                        device::shade::ValueI32(texture_slot as i32)
+                        ));
+                    self.cast(device::BindTexture(texture_slot, tex, sam));
+                    texture_slot += 1;
+                },
+                _ => {texture_fail = Some(tv)},
+            }
+        });
+        match (block_fail, texture_fail) {
+            (Some(bv), _) => Err(ErrorBundleBlock(bv)),
+            (_, Some(tv)) => Err(ErrorBundleTexture(tv)),
+            (None, None)  => Ok(()),
         }
     }
 
-    fn bind_mesh(&self, mesh: &mesh::Mesh, prog: &ProgramMeta) -> Result<(),MeshError> {
+    fn bind_mesh(&self, mesh: &mesh::Mesh, prog: &ProgramMeta) -> Result<(), MeshError> {
         for sat in prog.attributes.iter() {
             match mesh.attributes.iter().find(|a| a.name.as_slice() == sat.name.as_slice()) {
                 Some(vat) => match vat.elem_type.is_compatible(sat.base_type) {

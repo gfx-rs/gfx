@@ -12,40 +12,55 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{gl, GlBackEnd, Texture, Sampler};
+use super::{gl, Texture, Sampler};
 use super::gl::types::{GLenum, GLuint, GLint, GLfloat, GLsizei, GLvoid};
-use tex::*;
 use Blob;
+
+/// A token produced by the `bind_texture` that allows following up
+/// with a GL-compatibility sampler settings in `bind_sampler`
+pub struct BindAnchor(GLenum);
 
 fn kind_to_gl(t: ::tex::TextureKind) -> GLenum {
     match t {
-        Texture1D => gl::TEXTURE_1D,
-        Texture1DArray => gl::TEXTURE_1D_ARRAY,
-        Texture2D => gl::TEXTURE_2D,
-        Texture2DArray => gl::TEXTURE_2D_ARRAY,
-        TextureCube => gl::TEXTURE_CUBE_MAP,
-        Texture3D => gl::TEXTURE_3D,
+        ::tex::Texture1D => gl::TEXTURE_1D,
+        ::tex::Texture1DArray => gl::TEXTURE_1D_ARRAY,
+        ::tex::Texture2D => gl::TEXTURE_2D,
+        ::tex::Texture2DArray => gl::TEXTURE_2D_ARRAY,
+        ::tex::TextureCube => gl::TEXTURE_CUBE_MAP,
+        ::tex::Texture3D => gl::TEXTURE_3D,
     }
 }
 
 fn format_to_gl(t: ::tex::TextureFormat) -> GLenum {
     match t {
-        RGB8 => gl::RGB8,
-        RGBA8 => gl::RGBA8,
+        ::tex::RGB8 => gl::RGB8,
+        ::tex::RGBA8 => gl::RGBA8,
     }
 }
 
 fn format_to_glpixel(t: ::tex::TextureFormat) -> GLenum {
     match t {
-        RGB8 => gl::RGB,
-        RGBA8 => gl::RGBA
+        ::tex::RGB8 => gl::RGB,
+        ::tex::RGBA8 => gl::RGBA
     }
 }
 
 fn format_to_gltype(t: ::tex::TextureFormat) -> GLenum {
     match t {
-        RGB8 | RGBA8 => gl::UNSIGNED_BYTE,
+        ::tex::RGB8 | ::tex::RGBA8 => gl::UNSIGNED_BYTE,
     }
+}
+
+fn format_to_size(t: ::tex::TextureFormat) -> uint {
+    match t {
+        ::tex::RGB8 => 3,
+        ::tex::RGBA8 => 4,
+    }
+}
+
+fn set_mipmap_range(target: GLenum, (base, max): (u8, u8)) {
+    gl::TexParameteri(target, gl::TEXTURE_BASE_LEVEL, base as GLint);
+    gl::TexParameteri(target, gl::TEXTURE_MAX_LEVEL, max as GLint);
 }
 
 /// Create a texture, assuming TexStorage* isn't available.
@@ -56,13 +71,13 @@ pub fn make_without_storage(info: ::tex::TextureInfo) -> Texture {
     let pix = format_to_glpixel(info.format);
     let typ = format_to_gltype(info.format);
 
-    let kind = kind_to_gl(info.kind);
+    let target = kind_to_gl(info.kind);
 
     unsafe {
         match info.kind {
-            Texture1D => {
+            ::tex::Texture1D => {
                 gl::TexImage1D(
-                    kind,
+                    target,
                     0,
                     fmt,
                     info.width as GLsizei,
@@ -72,9 +87,9 @@ pub fn make_without_storage(info: ::tex::TextureInfo) -> Texture {
                     ::std::ptr::null(),
                 );
             },
-            Texture1DArray => {
+            ::tex::Texture1DArray => {
                 gl::TexImage2D(
-                    kind,
+                    target,
                     0,
                     fmt,
                     info.width as GLsizei,
@@ -85,9 +100,9 @@ pub fn make_without_storage(info: ::tex::TextureInfo) -> Texture {
                     ::std::ptr::null(),
                 );
             },
-            Texture2D => {
+            ::tex::Texture2D => {
                 gl::TexImage2D(
-                    kind,
+                    target,
                     0,
                     fmt,
                     info.width as GLsizei,
@@ -98,10 +113,10 @@ pub fn make_without_storage(info: ::tex::TextureInfo) -> Texture {
                     ::std::ptr::null(),
                 );
             },
-            TextureCube => unimplemented!(),
-            Texture2DArray | Texture3D => {
+            ::tex::TextureCube => unimplemented!(),
+            ::tex::Texture2DArray | ::tex::Texture3D => {
                 gl::TexImage3D(
-                    kind,
+                    target,
                     0,
                     fmt,
                     info.width as GLsizei,
@@ -115,6 +130,8 @@ pub fn make_without_storage(info: ::tex::TextureInfo) -> Texture {
             },
         }
     }
+
+    set_mipmap_range(target, info.mipmap_range);
 
     name
 }
@@ -142,39 +159,39 @@ pub fn make_with_storage(info: ::tex::TextureInfo) -> Texture {
     let name = make_texture(info);
 
     let fmt = format_to_gl(info.format);
-    let kind = kind_to_gl(info.kind);
+    let target = kind_to_gl(info.kind);
 
     match info.kind {
-        Texture1D => {
+        ::tex::Texture1D => {
             gl::TexStorage1D(
-                kind,
+                target,
                 min(info.mipmap_range.val1(), mip_level1(info.width)),
                 fmt,
                 info.width as GLsizei
             );
         },
-        Texture1DArray => {
+        ::tex::Texture1DArray => {
             gl::TexStorage2D(
-                kind,
+                target,
                 min(info.mipmap_range.val1(), mip_level1(info.width)),
                 fmt,
                 info.width as GLsizei,
                 info.height as GLsizei,
             );
         },
-        Texture2D => {
+        ::tex::Texture2D => {
             gl::TexStorage2D(
-                kind,
+                target,
                 min(info.mipmap_range.val1(), mip_level2(info.width, info.height)),
                 fmt,
                 info.width as GLsizei,
                 info.height as GLsizei,
             );
         },
-        TextureCube => unimplemented!(),
-        Texture2DArray => {
+        ::tex::TextureCube => unimplemented!(),
+        ::tex::Texture2DArray => {
             gl::TexStorage3D(
-                kind,
+                target,
                 min(info.mipmap_range.val1(), mip_level2(info.width, info.height)),
                 fmt,
                 info.width as GLsizei,
@@ -182,9 +199,9 @@ pub fn make_with_storage(info: ::tex::TextureInfo) -> Texture {
                 info.depth as GLsizei,
             );
         },
-        Texture3D => {
+        ::tex::Texture3D => {
             gl::TexStorage3D(
-                kind,
+                target,
                 min(info.mipmap_range.val1(), mip_level3(info.width, info.height, info.depth)),
                 fmt,
                 info.width as GLsizei,
@@ -194,62 +211,63 @@ pub fn make_with_storage(info: ::tex::TextureInfo) -> Texture {
         },
     }
 
+    set_mipmap_range(target, info.mipmap_range);
+
     name
 }
 
-/// Bind a texture + sampler to a given slot.
-pub fn bind_texture(loc: GLuint, tex: Texture, sam: Sampler, backend: &GlBackEnd) {
-    let info = backend.samplers[sam as uint];
-    let kind = tex.kind;
-    let tex = tex.name;
-
-    gl::ActiveTexture(gl::TEXTURE0 + loc as GLenum);
-
-    gl::BindTexture(kind, tex);
-
-    if backend.caps.sampler_objects_supported {
-        gl::BindSampler(loc, sam);
-    } else {
-        let (min, mag) = filter_to_gl(info.filtering);
-        let target = kind;
-
-        match info.filtering {
-            Anisotropic(fac) =>
-                gl::TexParameterf(target, gl::TEXTURE_MAX_ANISOTROPY_EXT, fac as GLfloat),
-            _ => ()
-        }
-
-        gl::TexParameteri(target, gl::TEXTURE_MIN_FILTER, min as GLint);
-        gl::TexParameteri(target, gl::TEXTURE_MAG_FILTER, mag as GLint);
-
-        let (s, t, r) = info.wrap_mode;
-        gl::TexParameteri(target, gl::TEXTURE_WRAP_S, wrap_to_gl(s) as GLint);
-        gl::TexParameteri(target, gl::TEXTURE_WRAP_T, wrap_to_gl(t) as GLint);
-        gl::TexParameteri(target, gl::TEXTURE_WRAP_R, wrap_to_gl(r) as GLint);
-
-        gl::TexParameterf(target, gl::TEXTURE_LOD_BIAS, info.lod_bias);
-
-        let (base, max) = info.mipmap_range;
-        gl::TexParameteri(target, gl::TEXTURE_BASE_LEVEL, base as GLint);
-        gl::TexParameteri(target, gl::TEXTURE_MAX_LEVEL, max as GLint);
-    }
+/// Bind a texture to the specified slot
+pub fn bind_texture(slot: GLenum, name: Texture, info: &::tex::TextureInfo) -> BindAnchor {
+    let target = kind_to_gl(info.kind);
+    gl::ActiveTexture(slot);
+    gl::BindTexture(target, name);
+    BindAnchor(target)
 }
 
-pub fn update_texture(tex: Texture, img: ::tex::ImageInfo, data: Box<Blob + Send>) {
-    debug_assert!(img.width as u32 * img.height as u32 * img.depth as u32 == data.get_size() as u32);
+/// Bind a sampler using a given binding anchor.
+/// Used for GL compatibility profile only. The core profile has sampler objects
+pub fn bind_sampler(anchor: BindAnchor, info: &::tex::SamplerInfo) {
+    let BindAnchor(target) = anchor;
+    let (min, mag) = filter_to_gl(info.filtering);
+
+    match info.filtering {
+        ::tex::Anisotropic(fac) =>
+            gl::TexParameterf(target, gl::TEXTURE_MAX_ANISOTROPY_EXT, fac as GLfloat),
+        _ => ()
+    }
+
+    gl::TexParameteri(target, gl::TEXTURE_MIN_FILTER, min as GLint);
+    gl::TexParameteri(target, gl::TEXTURE_MAG_FILTER, mag as GLint);
+
+    let (s, t, r) = info.wrap_mode;
+    gl::TexParameteri(target, gl::TEXTURE_WRAP_S, wrap_to_gl(s) as GLint);
+    gl::TexParameteri(target, gl::TEXTURE_WRAP_T, wrap_to_gl(t) as GLint);
+    gl::TexParameteri(target, gl::TEXTURE_WRAP_R, wrap_to_gl(r) as GLint);
+
+    gl::TexParameterf(target, gl::TEXTURE_LOD_BIAS, info.lod_bias);
+
+    let (min, max) = info.lod_range;
+    gl::TexParameterf(target, gl::TEXTURE_MIN_LOD, min);
+    gl::TexParameterf(target, gl::TEXTURE_MAX_LOD, max);
+}
+
+pub fn update_texture(name: Texture, info: &::tex::TextureInfo, img: &::tex::ImageInfo, data: Box<Blob + Send>) {
+    debug_assert!(info.contains(img));
+    debug_assert!(img.width as uint * img.height as uint * img.depth as uint *
+        format_to_size(img.format) == data.get_size());
 
     let data = data.get_address() as *const GLvoid;
     let pix = format_to_glpixel(img.format);
     let typ = format_to_gltype(img.format);
-    let kind = tex.kind;
+    let target = kind_to_gl(info.kind);
 
-    gl::BindTexture(kind, tex.name);
+    gl::BindTexture(target, name);
 
     unsafe {
-        match kind {
-            gl::TEXTURE_1D => {
+        match info.kind {
+            ::tex::Texture1D => {
                 gl::TexSubImage1D(
-                    kind,
+                    target,
                     img.mipmap as GLint,
                     img.xoffset as GLint,
                     img.width as GLint,
@@ -258,9 +276,9 @@ pub fn update_texture(tex: Texture, img: ::tex::ImageInfo, data: Box<Blob + Send
                     data,
                 );
             },
-            gl::TEXTURE_1D_ARRAY | gl::TEXTURE_2D => {
+            ::tex::Texture1DArray | ::tex::Texture2D => {
                 gl::TexSubImage2D(
-                    kind,
+                    target,
                     img.mipmap as GLint,
                     img.xoffset as GLint,
                     img.yoffset as GLint,
@@ -271,10 +289,10 @@ pub fn update_texture(tex: Texture, img: ::tex::ImageInfo, data: Box<Blob + Send
                     data,
                 );
             },
-            gl::TEXTURE_CUBE_MAP => unimplemented!(),
-            gl::TEXTURE_2D_ARRAY | gl::TEXTURE_3D => {
+            ::tex::TextureCube => unimplemented!(),
+            ::tex::Texture2DArray | ::tex::Texture3D => {
                 gl::TexSubImage3D(
-                    kind,
+                    target,
                     img.mipmap as GLint,
                     img.xoffset as GLint,
                     img.yoffset as GLint,
@@ -287,7 +305,6 @@ pub fn update_texture(tex: Texture, img: ::tex::ImageInfo, data: Box<Blob + Send
                     data,
                 );
             },
-            _ => fail!("invalid target stored in texture {}", tex)
         }
     }
 }
@@ -302,24 +319,24 @@ fn make_texture(info: ::tex::TextureInfo) -> Texture {
     let k = kind_to_gl(info.kind);
     gl::BindTexture(k, name);
 
-    Texture { name: name, kind: k }
+    name
 }
 
-fn wrap_to_gl(w: WrapMode) -> GLenum {
+fn wrap_to_gl(w: ::tex::WrapMode) -> GLenum {
     match w {
-        Tile => gl::REPEAT,
-        Mirror => gl::MIRRORED_REPEAT,
-        Clamp => gl::CLAMP_TO_EDGE
+        ::tex::Tile   => gl::REPEAT,
+        ::tex::Mirror => gl::MIRRORED_REPEAT,
+        ::tex::Clamp  => gl::CLAMP_TO_EDGE
     }
 }
 
 fn filter_to_gl(f: ::tex::FilterMethod) -> (GLenum, GLenum) {
     match f {
-        Scale => (gl::NEAREST, gl::NEAREST),
-        Mipmap => (gl::NEAREST_MIPMAP_NEAREST, gl::NEAREST),
-        Bilinear => (gl::LINEAR_MIPMAP_NEAREST, gl::LINEAR),
-        Trilinear => (gl::LINEAR_MIPMAP_LINEAR, gl::LINEAR),
-        Anisotropic(..) => {
+        ::tex::Scale => (gl::NEAREST, gl::NEAREST),
+        ::tex::Mipmap => (gl::NEAREST_MIPMAP_NEAREST, gl::NEAREST),
+        ::tex::Bilinear => (gl::LINEAR, gl::LINEAR),
+        ::tex::Trilinear => (gl::LINEAR_MIPMAP_LINEAR, gl::LINEAR),
+        ::tex::Anisotropic(..) => {
             (gl::LINEAR_MIPMAP_LINEAR, gl::LINEAR)
         }
     }
@@ -334,7 +351,7 @@ pub fn make_sampler(info: ::tex::SamplerInfo) -> Sampler {
     let (min, mag) = filter_to_gl(info.filtering);
 
     match info.filtering {
-        Anisotropic(fac) =>
+        ::tex::Anisotropic(fac) =>
             gl::SamplerParameterf(name, gl::TEXTURE_MAX_ANISOTROPY_EXT, fac as GLfloat),
         _ => ()
     }
@@ -349,9 +366,9 @@ pub fn make_sampler(info: ::tex::SamplerInfo) -> Sampler {
 
     gl::SamplerParameterf(name, gl::TEXTURE_LOD_BIAS, info.lod_bias);
 
-    let (base, max) = info.mipmap_range;
-    gl::SamplerParameteri(name, gl::TEXTURE_BASE_LEVEL, base as GLint);
-    gl::SamplerParameteri(name, gl::TEXTURE_MAX_LEVEL, max as GLint);
+    let (min, max) = info.lod_range;
+    gl::SamplerParameterf(name, gl::TEXTURE_MIN_LOD, min);
+    gl::SamplerParameterf(name, gl::TEXTURE_MAX_LOD, max);
 
     name
 }

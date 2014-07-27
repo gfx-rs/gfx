@@ -32,11 +32,11 @@ pub use render::{BufferHandle, SurfaceHandle, TextureHandle, SamplerHandle, Prog
 pub use render::Renderer;
 pub use render::mesh::{Attribute, Mesh, VertexFormat, Slice, VertexSlice, IndexSlice};
 pub use render::rast::{DrawState, BlendAdditive, BlendAlpha};
-pub use render::shade::{ParameterSink, ToUniform, ShaderParam,
+pub use render::shade::{ParameterSink, ToUniform, ShaderParam, TextureParam,
     ParameterLinkError, ParameterError, ErrorInternal, ErrorUniform, ErrorBlock, ErrorTexture,
     FnUniform, FnBlock, FnTexture, VarUniform, VarBlock, VarTexture};
 pub use render::target::Frame;
-pub use device::attrib;
+pub use device::{attrib, rast, tex};
 pub use device::target::{Color, ClearData, Plane, TextureLayer, TextureLevel};
 pub use device::target::{PlaneEmpty, PlaneSurface, PlaneTexture, PlaneTextureLayer};
 pub use device::{Blob, Device, GlBackEnd, GlProvider, GraphicsContext, InitError, QueueSize};
@@ -44,8 +44,6 @@ pub use device::shade::{UniformValue, ValueI32, ValueF32, ValueI32Vec, ValueF32V
 pub use device::shade::{ShaderSource, StaticBytes};
 /* #[cfg(glfw)] */ pub use glfw = glfw_platform;
 
-
-#[allow(visible_private_types)]
 pub fn start<C: GraphicsContext<GlBackEnd>, P: GlProvider>(graphics_context: C, provider: P, queue_size: QueueSize)
         -> Result<(Renderer, Device<render::Token, GlBackEnd, C>), InitError> {
     device::init(graphics_context, provider, queue_size).map(|(tx, rx, server, ack, should_finish)| {

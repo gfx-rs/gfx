@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use device::dev;
 use a = device::attrib;
 
 pub type MaterialHandle = int;  //placeholder
@@ -95,6 +94,11 @@ impl Mesh {
             attributes: VertexFormat::generate(None::<V>, buf),
         }
     }
+
+    /// Return a vertex slice of the whole mesh
+    pub fn get_slice(&self) -> Slice {
+        VertexSlice(0, self.num_vertices)
+    }
 }
 
 /// Description of a subset of `Mesh` data to render.
@@ -109,7 +113,7 @@ pub enum Slice  {
     /// 6 separate vertices, 3 for each triangle. However, two of the vertices will be identical,
     /// wasting space for the duplicated attributes.  Instead, the `Mesh` can store 4 vertices and
     /// an `IndexSlice` can be used instead.
-    IndexSlice(dev::Buffer, ElementCount, ElementCount),
+    IndexSlice(super::BufferHandle, ElementCount, ElementCount),
 }
 
 /// A slice of a mesh, with a given material.

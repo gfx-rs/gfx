@@ -43,9 +43,9 @@ pub struct MetaSink<'a> {
 impl<'a> MetaSink<'a> {
     /// Creates a new wrapper
     pub fn new(meta: &'a dev::ProgramMeta) -> MetaSink<'a> {
-        debug_assert_eq!(0, meta.uniforms.len() >> (8 * size_of::<MaskUniform>()));
-        debug_assert_eq!(0, meta.blocks  .len() >> (8 * size_of::<MaskBlock  >()));
-        debug_assert_eq!(0, meta.textures.len() >> (8 * size_of::<MaskTexture>()));
+        debug_assert!(meta.uniforms.len() <= (8 * size_of::<MaskUniform>()));
+        debug_assert!(meta.blocks  .len() <= (8 * size_of::<MaskBlock  >()));
+        debug_assert!(meta.textures.len() <= (8 * size_of::<MaskTexture>()));
         MetaSink {
             prog: meta,
             mask_uni: ((1u << meta.uniforms.len()) - 1u) as MaskUniform,
@@ -129,10 +129,12 @@ impl ToUniform for [[f32, ..4], ..4] {
     }
 }
 
+pub type TextureParam = (super::TextureHandle, Option<super::SamplerHandle>);
+
 /// A closure provided for the `ShaderParam` implementor for uploading
 pub type FnUniform<'a> = |VarUniform, dev::UniformValue|: 'a;
 pub type FnBlock  <'a> = |VarBlock, super::BufferHandle|: 'a;
-pub type FnTexture<'a> = |VarTexture, super::TextureHandle|: 'a;
+pub type FnTexture<'a> = |VarTexture, TextureParam|: 'a;
 
 
 /// An error type on either the parameter storage or the program side

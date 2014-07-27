@@ -1,5 +1,5 @@
 # Cube Example
 
-A very simple example showing how to render a colored cube using vertex, index
-and uniform buffers, and GLSL shaders. It could show demonstrate how vertex
-formats can be specified - ie. interleaved or otherwise.
+A simple example showing how to render a textured cube using vertex and index
+buffers, GLSL shaders, and uniform parameters. It is also using cgmath-rs to
+compute the view-projection matrix.

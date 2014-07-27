@@ -147,7 +147,37 @@ impl Default for TextureInfo {
     }
 }
 
-impl TextureInfo { pub fn new() -> TextureInfo { Default::default() } }
+impl TextureInfo {
+    /// Create a new empty texture info
+    pub fn new() -> TextureInfo {
+        Default::default()
+    }
+
+    /// Convert to a default ImageInfo that could be used
+    /// to update the contents of the whole texture
+    pub fn to_image_info(&self) -> ImageInfo {
+        ImageInfo {
+            xoffset: 0,
+            yoffset: 0,
+            zoffset: 0,
+            width: self.width,
+            height: self.height,
+            depth: self.depth,
+            format: self.format,
+            mipmap: self.mipmap_range.val0(),
+        }
+    }
+
+    /// Check if given ImageInfo is a part of the texture
+    pub fn contains(&self, img: &ImageInfo) -> bool {
+        self.width <= img.xoffset + img.width &&
+        self.height <= img.yoffset + img.height &&
+        self.depth <= img.zoffset + img.depth &&
+        self.format == img.format &&
+        self.mipmap_range.val0() <= img.mipmap && img.mipmap < self.mipmap_range.val1()
+    }
+}
+
 impl ImageInfo { pub fn new() -> ImageInfo { Default::default() } }
 
 /// Specifies how texture coordinates outside the range `[0, 1]` are handled.
@@ -174,9 +204,18 @@ pub struct SamplerInfo {
     /// example, if it would select mipmap level 2 and lod_bias is 1, it will
     /// use mipmap level 3.
     pub lod_bias: f32,
-    /// Mipmap levels outside of `[lo, hi]` will never be sampled. Defaults to
-    /// `(0, -1)` (every mipmap available), but will be clamped to the
-    /// texture's mipmap_range.
-    pub mipmap_range: (u8, u8),
+    /// This range is used to clamp LOD level used for sampling
+    pub lod_range: (f32, f32),
     // TODO: comparison mode
+}
+
+impl SamplerInfo {
+    pub fn new(filtering: FilterMethod, wrap: WrapMode) -> SamplerInfo {
+        SamplerInfo {
+            filtering: filtering,
+            wrap_mode: (wrap, wrap, wrap),
+            lod_bias: 0.0,
+            lod_range: (-1000.0, 1000.0),
+        }
+    }
 }
