@@ -25,6 +25,15 @@ pub type Depth = f32;
 /// A single value from a stencil stencstencil buffer.
 pub type Stencil = u8;
 
+/// A screen space rectangle
+#[deriving(Clone, PartialEq, Show)]
+pub struct Rect {
+    pub x: u16,
+    pub y: u16,
+    pub w: u16,
+    pub h: u16,
+}
+
 pub struct Color(pub [f32, ..4]);
 
 // manual impls due to array...

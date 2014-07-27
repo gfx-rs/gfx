@@ -16,11 +16,10 @@ extern crate gl;
 extern crate libc;
 
 use log;
-use std;
-use a = super::attrib;
-use std::fmt;
-use std::str;
+use std::{fmt, mem, str};
 use std::collections::HashSet;
+use std::default::Default;
+use a = super::attrib;
 
 mod shade;
 mod state;
@@ -32,9 +31,8 @@ pub type Shader         = gl::types::GLuint;
 pub type Program        = gl::types::GLuint;
 pub type FrameBuffer    = gl::types::GLuint;
 pub type Surface        = gl::types::GLuint;
-pub type Texture        = gl::types::GLuint;
 pub type Sampler        = gl::types::GLuint;
-
+pub type Texture        = gl::types::GLuint;
 
 fn get_uint(name: gl::types::GLenum) -> uint {
     let mut value = 0 as gl::types::GLint;
@@ -324,7 +322,7 @@ impl super::ApiBackEnd for GlBackEnd {
         } else {
             tex::make_without_storage(info)
         };
-        let filler = std::default::Default::default();
+        let filler = Default::default();
         self.textures.grow_set(name as uint, &filler, info);
         name
     }
@@ -482,6 +480,14 @@ impl super::ApiBackEnd for GlBackEnd {
                     None => ()
                 }
             },
+            super::SetViewport(rect) => {
+                gl::Viewport(
+                    rect.x as gl::types::GLint,
+                    rect.y as gl::types::GLint,
+                    rect.w as gl::types::GLint,
+                    rect.h as gl::types::GLint
+                );
+            },
             super::SetPrimitiveState(prim) => {
                 state::bind_primitive(prim);
             },
@@ -506,7 +512,7 @@ impl super::ApiBackEnd for GlBackEnd {
                 self.check();
             },
             super::DrawIndexed(start, count) => {
-                let offset = start * (std::mem::size_of::<u16>() as u16);
+                let offset = start * (mem::size_of::<u16>() as u16);
                 unsafe {
                     gl::DrawElements(gl::TRIANGLES,
                         count as gl::types::GLsizei,
