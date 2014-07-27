@@ -34,8 +34,8 @@ use std::kinds::marker;
 use std::mem::size_of;
 
 pub mod attrib;
-pub mod rast;
 pub mod shade;
+pub mod state;
 pub mod target;
 pub mod tex;
 /* #[cfg(gl)] */ mod gl;
@@ -119,10 +119,10 @@ pub enum CastRequest {
     BindTarget(target::Target, target::Plane),
     BindUniformBlock(dev::Program, UniformBufferSlot, UniformBlockIndex, dev::Buffer),
     BindUniform(shade::Location, shade::UniformValue),
-    BindTexture(TextureSlot, dev::Texture, Option<dev::Sampler>),
-    SetPrimitiveState(rast::Primitive),
-    SetDepthStencilState(Option<rast::Depth>, Option<rast::Stencil>, rast::CullMode),
-    SetBlendState(Option<rast::Blend>),
+    BindTexture(TextureSlot, dev::Texture, dev::Sampler),
+    SetPrimitiveState(state::Primitive),
+    SetDepthStencilState(Option<state::Depth>, Option<state::Stencil>, state::CullMode),
+    SetBlendState(Option<state::Blend>),
     UpdateBuffer(dev::Buffer, Box<Blob + Send>),
     UpdateTexture(dev::Texture, tex::ImageInfo, Box<Blob + Send>),
     Draw(VertexCount, VertexCount),

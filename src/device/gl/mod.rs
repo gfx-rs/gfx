@@ -22,8 +22,8 @@ use std::fmt;
 use std::str;
 use std::collections::HashSet;
 
-mod rast;
 mod shade;
+mod state;
 mod tex;
 
 pub type Buffer         = gl::types::GLuint;
@@ -483,14 +483,14 @@ impl super::ApiBackEnd for GlBackEnd {
                 }
             },
             super::SetPrimitiveState(prim) => {
-                rast::bind_primitive(prim);
+                state::bind_primitive(prim);
             },
             super::SetDepthStencilState(depth, stencil, cull) => {
-                rast::bind_stencil(stencil, cull);
-                rast::bind_depth(depth);
+                state::bind_stencil(stencil, cull);
+                state::bind_depth(depth);
             },
             super::SetBlendState(blend) => {
-                rast::bind_blend(blend);
+                state::bind_blend(blend);
             },
             super::UpdateBuffer(buffer, data) => {
                 self.update_buffer(buffer, data, super::UsageDynamic);

@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use r = device::rast;
+use s = device::state;
 use device::target::{Color, Stencil};
 
 /// An assembly of states that affect regular draw calls
 #[deriving(Clone, PartialEq, Show)]
 pub struct DrawState {
-    pub primitive: r::Primitive,
-    pub stencil: Option<r::Stencil>,
-    pub depth: Option<r::Depth>,
-    pub blend: Option<r::Blend>,
+    pub primitive: s::Primitive,
+    pub stencil: Option<s::Stencil>,
+    pub depth: Option<s::Depth>,
+    pub blend: Option<s::Blend>,
 }
 
 #[deriving(Clone, PartialEq, Show)]
@@ -33,10 +33,10 @@ pub enum BlendPreset {
 impl DrawState {
     pub fn new() -> DrawState {
         DrawState {
-            primitive: r::Primitive {
-                front_face: r::CounterClockwise,
-                method: r::Fill(r::CullBack),
-                offset: r::NoOffset,
+            primitive: s::Primitive {
+                front_face: s::CounterClockwise,
+                method: s::Fill(s::CullBack),
+                offset: s::NoOffset,
             },
             stencil: None,
             depth: None,
@@ -45,17 +45,17 @@ impl DrawState {
     }
 
     /// set the stencil test to a simple expression
-    pub fn stencil(mut self, fun: r::Comparison, value: Stencil) -> DrawState {
-        let side = r::StencilSide {
+    pub fn stencil(mut self, fun: s::Comparison, value: Stencil) -> DrawState {
+        let side = s::StencilSide {
             fun: fun,
             value: value,
             mask_read: -1,
             mask_write: -1,
-            op_fail: r::OpKeep,
-            op_depth_fail: r::OpKeep,
-            op_pass: r::OpKeep,
+            op_fail: s::OpKeep,
+            op_depth_fail: s::OpKeep,
+            op_pass: s::OpKeep,
         };
-        self.stencil = Some(r::Stencil {
+        self.stencil = Some(s::Stencil {
             front: side,
             back: side,
         });
@@ -63,8 +63,8 @@ impl DrawState {
     }
 
     /// set the depth test with the mask
-    pub fn depth(mut self, fun: r::Comparison, write: bool) -> DrawState {
-        self.depth = Some(r::Depth {
+    pub fn depth(mut self, fun: s::Comparison, write: bool) -> DrawState {
+        self.depth = Some(s::Depth {
             fun: fun,
             write: write,
         });
@@ -74,29 +74,29 @@ impl DrawState {
     /// set the blend mode to one of the presets
     pub fn blend(mut self, preset: BlendPreset) -> DrawState {
         self.blend = Some(match preset {
-            BlendAdditive => r::Blend {
-                color: r::BlendChannel {
-                    equation: r::FuncAdd,
-                    source: r::Factor(r::Inverse, r::Zero),
-                    destination: r::Factor(r::Inverse, r::Zero),
+            BlendAdditive => s::Blend {
+                color: s::BlendChannel {
+                    equation: s::FuncAdd,
+                    source: s::Factor(s::Inverse, s::Zero),
+                    destination: s::Factor(s::Inverse, s::Zero),
                 },
-                alpha: r::BlendChannel {
-                    equation: r::FuncAdd,
-                    source: r::Factor(r::Inverse, r::Zero),
-                    destination: r::Factor(r::Inverse, r::Zero),
+                alpha: s::BlendChannel {
+                    equation: s::FuncAdd,
+                    source: s::Factor(s::Inverse, s::Zero),
+                    destination: s::Factor(s::Inverse, s::Zero),
                 },
                 value: Color::new(),
             },
-            BlendAlpha => r::Blend {
-                color: r::BlendChannel {
-                    equation: r::FuncAdd,
-                    source: r::Factor(r::Normal, r::SourceAlpha),
-                    destination: r::Factor(r::Inverse, r::SourceAlpha),
+            BlendAlpha => s::Blend {
+                color: s::BlendChannel {
+                    equation: s::FuncAdd,
+                    source: s::Factor(s::Normal, s::SourceAlpha),
+                    destination: s::Factor(s::Inverse, s::SourceAlpha),
                 },
-                alpha: r::BlendChannel {
-                    equation: r::FuncAdd,
-                    source: r::Factor(r::Inverse, r::Zero),
-                    destination: r::Factor(r::Inverse, r::Zero),
+                alpha: s::BlendChannel {
+                    equation: s::FuncAdd,
+                    source: s::Factor(s::Inverse, s::Zero),
+                    destination: s::Factor(s::Inverse, s::Zero),
                 },
                 value: Color::new(),
             },

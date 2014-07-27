@@ -43,9 +43,9 @@ pub type ProgramHandle = uint;
 pub type EnvirHandle = uint;
 
 pub mod mesh;
-pub mod rast;
 pub mod resource;
 pub mod shade;
+pub mod state;
 pub mod target;
 
 pub type Token = uint;
@@ -206,7 +206,7 @@ impl Renderer {
     /// Draw `slice` of `mesh` into `frame`, using a `bundle` of shader program and parameters, and
     /// a given draw state.
     pub fn draw<'a, L, T: shade::ShaderParam<L>>(&'a mut self, mesh: &mesh::Mesh, slice: mesh::Slice, frame: target::Frame,
-            bundle: &shade::ShaderBundle<L, T>, state: rast::DrawState) -> Result<(), DrawError<'a>> {
+            bundle: &shade::ShaderBundle<L, T>, state: state::DrawState) -> Result<(), DrawError<'a>> {
         // demand resources. This section needs the mutable self, so we are unable to do this
         // after we get a reference to ether the `Environment` or the `ProgramMeta`
         self.prebind_mesh(mesh, &slice);

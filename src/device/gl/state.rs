@@ -12,30 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use r = super::super::rast;
+use s = super::super::state;
 use super::super::target::Color;
 use super::gl;
 
-pub fn bind_primitive(p: r::Primitive) {
+pub fn bind_primitive(p: s::Primitive) {
     gl::FrontFace(match p.front_face {
-        r::Clockwise => gl::CW,
-        r::CounterClockwise => gl::CCW,
+        s::Clockwise => gl::CW,
+        s::CounterClockwise => gl::CCW,
     });
 
     let (gl_draw, gl_offset) = match p.method {
-        r::Point => (gl::POINT, gl::POLYGON_OFFSET_POINT),
-        r::Line(width) => {
+        s::Point => (gl::POINT, gl::POLYGON_OFFSET_POINT),
+        s::Line(width) => {
             gl::LineWidth(width);
             (gl::LINE, gl::POLYGON_OFFSET_LINE)
         },
-        r::Fill(cull) => {
+        s::Fill(cull) => {
             match cull {
-                r::CullNothing => gl::Disable(gl::CULL_FACE),
-                r::CullFront => {
+                s::CullNothing => gl::Disable(gl::CULL_FACE),
+                s::CullFront => {
                     gl::Enable(gl::CULL_FACE);
                     gl::CullFace(gl::FRONT);
                 },
-                r::CullBack => {
+                s::CullBack => {
                     gl::Enable(gl::CULL_FACE);
                     gl::CullFace(gl::BACK);
                 },
@@ -47,28 +47,28 @@ pub fn bind_primitive(p: r::Primitive) {
     gl::PolygonMode(gl::FRONT_AND_BACK, gl_draw);
 
     match p.offset {
-        r::Offset(factor, units) => {
+        s::Offset(factor, units) => {
             gl::Enable(gl_offset);
             gl::PolygonOffset(factor, units as gl::types::GLfloat);
         },
-        r::NoOffset => gl::Disable(gl_offset),
+        s::NoOffset => gl::Disable(gl_offset),
     }
 }
 
-fn map_comparison(cmp: r::Comparison) -> gl::types::GLenum {
+fn map_comparison(cmp: s::Comparison) -> gl::types::GLenum {
     match cmp {
-        r::Never        => gl::NEVER,
-        r::Less         => gl::LESS,
-        r::LessEqual    => gl::LEQUAL,
-        r::Equal        => gl::EQUAL,
-        r::GreaterEqual => gl::GEQUAL,
-        r::Greater      => gl::GREATER,
-        r::NotEqual     => gl::NOTEQUAL,
-        r::Always       => gl::ALWAYS,
+        s::Never        => gl::NEVER,
+        s::Less         => gl::LESS,
+        s::LessEqual    => gl::LEQUAL,
+        s::Equal        => gl::EQUAL,
+        s::GreaterEqual => gl::GEQUAL,
+        s::Greater      => gl::GREATER,
+        s::NotEqual     => gl::NOTEQUAL,
+        s::Always       => gl::ALWAYS,
     }
 }
 
-pub fn bind_depth(depth: Option<r::Depth>) {
+pub fn bind_depth(depth: Option<s::Depth>) {
     match depth {
         Some(d) => {
             gl::Enable(gl::DEPTH_TEST);
@@ -79,21 +79,21 @@ pub fn bind_depth(depth: Option<r::Depth>) {
     }
 }
 
-fn map_operation(op: r::StencilOp) -> gl::types::GLenum {
+fn map_operation(op: s::StencilOp) -> gl::types::GLenum {
     match op {
-        r::OpKeep          => gl::KEEP,
-        r::OpZero          => gl::ZERO,
-        r::OpReplace       => gl::REPLACE,
-        r::OpIncrementClamp=> gl::INCR,
-        r::OpIncrementWrap => gl::INCR_WRAP,
-        r::OpDecrementClamp=> gl::DECR,
-        r::OpDecrementWrap => gl::DECR_WRAP,
-        r::OpInvert        => gl::INVERT,
+        s::OpKeep          => gl::KEEP,
+        s::OpZero          => gl::ZERO,
+        s::OpReplace       => gl::REPLACE,
+        s::OpIncrementClamp=> gl::INCR,
+        s::OpIncrementWrap => gl::INCR_WRAP,
+        s::OpDecrementClamp=> gl::DECR,
+        s::OpDecrementWrap => gl::DECR_WRAP,
+        s::OpInvert        => gl::INVERT,
     }
 }
 
-pub fn bind_stencil(stencil: Option<r::Stencil>, cull: r::CullMode) {
-    fn bind_side(face: gl::types::GLenum, side: r::StencilSide) {
+pub fn bind_stencil(stencil: Option<s::Stencil>, cull: s::CullMode) {
+    fn bind_side(face: gl::types::GLenum, side: s::StencilSide) {
         gl::StencilFuncSeparate(face, map_comparison(side.fun),
             side.value as gl::types::GLint, side.mask_read as gl::types::GLuint);
         gl::StencilOpSeparate(face, map_operation(side.op_fail),
@@ -102,10 +102,10 @@ pub fn bind_stencil(stencil: Option<r::Stencil>, cull: r::CullMode) {
     match stencil {
         Some(s) => {
             gl::Enable(gl::STENCIL_TEST);
-            if cull != r::CullFront {
+            if cull != s::CullFront {
                 bind_side(gl::FRONT, s.front);
             }
-            if cull != r::CullBack {
+            if cull != s::CullBack {
                 bind_side(gl::BACK, s.back);
             }
         }
@@ -114,38 +114,38 @@ pub fn bind_stencil(stencil: Option<r::Stencil>, cull: r::CullMode) {
 }
 
 
-fn map_equation(eq: r::Equation) -> gl::types::GLenum {
+fn map_equation(eq: s::Equation) -> gl::types::GLenum {
     match eq {
-        r::FuncAdd    => gl::FUNC_ADD,
-        r::FuncSub    => gl::FUNC_SUBTRACT,
-        r::FuncRevSub => gl::FUNC_REVERSE_SUBTRACT,
-        r::FuncMin    => gl::MIN,
-        r::FuncMax    => gl::MAX,
+        s::FuncAdd    => gl::FUNC_ADD,
+        s::FuncSub    => gl::FUNC_SUBTRACT,
+        s::FuncRevSub => gl::FUNC_REVERSE_SUBTRACT,
+        s::FuncMin    => gl::MIN,
+        s::FuncMax    => gl::MAX,
     }
 }
 
-fn map_factor(factor: r::Factor) -> gl::types::GLenum {
+fn map_factor(factor: s::Factor) -> gl::types::GLenum {
     match factor {
-        r::Factor(r::Normal,  r::Zero)        => gl::ZERO,
-        r::Factor(r::Inverse, r::Zero)        => gl::ONE,
-        r::Factor(r::Normal,  r::SourceColor) => gl::SRC_COLOR,
-        r::Factor(r::Inverse, r::SourceColor) => gl::ONE_MINUS_SRC_COLOR,
-        r::Factor(r::Normal,  r::SourceAlpha) => gl::SRC_ALPHA,
-        r::Factor(r::Inverse, r::SourceAlpha) => gl::ONE_MINUS_SRC_ALPHA,
-        r::Factor(r::Normal,  r::DestColor)   => gl::DST_COLOR,
-        r::Factor(r::Inverse, r::DestColor)   => gl::ONE_MINUS_DST_COLOR,
-        r::Factor(r::Normal,  r::DestAlpha)   => gl::DST_ALPHA,
-        r::Factor(r::Inverse, r::DestAlpha)   => gl::ONE_MINUS_DST_ALPHA,
-        r::Factor(r::Normal,  r::ConstColor)  => gl::CONSTANT_COLOR,
-        r::Factor(r::Inverse, r::ConstColor)  => gl::ONE_MINUS_CONSTANT_COLOR,
-        r::Factor(r::Normal,  r::ConstAlpha)  => gl::CONSTANT_ALPHA,
-        r::Factor(r::Inverse, r::ConstAlpha)  => gl::ONE_MINUS_CONSTANT_ALPHA,
-        r::Factor(r::Normal,  r::SourceAlphaSaturated) => gl::SRC_ALPHA_SATURATE,
+        s::Factor(s::Normal,  s::Zero)        => gl::ZERO,
+        s::Factor(s::Inverse, s::Zero)        => gl::ONE,
+        s::Factor(s::Normal,  s::SourceColor) => gl::SRC_COLOR,
+        s::Factor(s::Inverse, s::SourceColor) => gl::ONE_MINUS_SRC_COLOR,
+        s::Factor(s::Normal,  s::SourceAlpha) => gl::SRC_ALPHA,
+        s::Factor(s::Inverse, s::SourceAlpha) => gl::ONE_MINUS_SRC_ALPHA,
+        s::Factor(s::Normal,  s::DestColor)   => gl::DST_COLOR,
+        s::Factor(s::Inverse, s::DestColor)   => gl::ONE_MINUS_DST_COLOR,
+        s::Factor(s::Normal,  s::DestAlpha)   => gl::DST_ALPHA,
+        s::Factor(s::Inverse, s::DestAlpha)   => gl::ONE_MINUS_DST_ALPHA,
+        s::Factor(s::Normal,  s::ConstColor)  => gl::CONSTANT_COLOR,
+        s::Factor(s::Inverse, s::ConstColor)  => gl::ONE_MINUS_CONSTANT_COLOR,
+        s::Factor(s::Normal,  s::ConstAlpha)  => gl::CONSTANT_ALPHA,
+        s::Factor(s::Inverse, s::ConstAlpha)  => gl::ONE_MINUS_CONSTANT_ALPHA,
+        s::Factor(s::Normal,  s::SourceAlphaSaturated) => gl::SRC_ALPHA_SATURATE,
         _ => fail!("Unsupported blend factor: {}", factor),
     }
 }
 
-pub fn bind_blend(blend: Option<r::Blend>) {
+pub fn bind_blend(blend: Option<s::Blend>) {
     match blend {
         Some(b) => {
             gl::Enable(gl::BLEND);
