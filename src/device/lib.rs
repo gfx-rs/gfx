@@ -248,7 +248,6 @@ pub trait GraphicsContext<T> {
 
 pub trait GlProvider {
     fn get_proc_address(&self, &str) -> *const ::libc::c_void;
-    fn is_extension_supported(&self, &str) -> bool;
 }
 
 #[deriving(Show)]
