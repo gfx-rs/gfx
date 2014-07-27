@@ -29,7 +29,6 @@ COMM_FILE             = $(SRC_DIR)/comm/lib.rs
 DEVICE_FILE           = $(SRC_DIR)/device/lib.rs
 GLFW_PLATFORM_FILE    = $(SRC_DIR)/glfw_platform/lib.rs
 RENDER_FILE           = $(SRC_DIR)/render/lib.rs
-EXAMPLE_FILES         = $(SRC_DIR)/examples/*/*.rs
 LIB_FILE              = $(SRC_DIR)/gfx/lib.rs
 MACRO_FILE            = $(SRC_DIR)/gfx_macros/lib.rs
 MACRO_TEST_FILE       = $(SRC_DIR)/gfx_macros_test/lib.rs
@@ -61,8 +60,6 @@ RENDER_TEST_OUT       = $(TEST_DIR)/$(shell $(RUSTC) --print-file-name --test $(
 LIB_TEST_OUT          = $(TEST_DIR)/$(shell $(RUSTC) --print-file-name --test $(LIB_FILE))
 MACRO_TEST_OUT        = $(TEST_DIR)/$(shell $(RUSTC) --print-file-name --test $(MACRO_TEST_FILE))
 
-EXAMPLES_DIR          = examples
-
 DOC_DIR               = doc
 COMM_DOC_OUT          = $(DOC_DIR)/$(shell $(RUSTC) --print-crate-name $(COMM_FILE))
 DEVICE_DOC_OUT        = $(DOC_DIR)/$(shell $(RUSTC) --print-crate-name $(DEVICE_FILE))
@@ -72,7 +69,6 @@ LIB_DOC_OUT           = $(DOC_DIR)/$(shell $(RUSTC) --print-crate-name $(LIB_FIL
 MACRO_DOC_OUT         = $(DOC_DIR)/$(shell $(RUSTC) --print-crate-name $(MACRO_FILE))
 
 LIB_INCLUDE_FLAGS     = -L $(LIB_DIR) $(DEPS_LIB_SEARCH_FLAGS)
-EXAMPLE_INCLUDE_FLAGS = -L $(LIB_DIR) $(DEPS_LIB_SEARCH_FLAGS)
 
 GFX_API               ?= gl
 GFX_PLATFORM          ?= glfw
@@ -213,19 +209,6 @@ doc: $(COMM_DOC_OUT) $(DEVICE_DOC_OUT) $(GLFW_PLATFORM_DOC_OUT) $(RENDER_DOC_OUT
 .PHONY: clean-doc
 clean-doc:
 	rm -rf $(DOC_DIR)
-
-# Example compilation
-
-$(EXAMPLE_FILES): lib $(MACRO_OUT)
-	mkdir -p $(EXAMPLES_DIR)
-	$(RUSTC) $(EXAMPLE_INCLUDE_FLAGS) --out-dir=$(EXAMPLES_DIR) $@
-
-.PHONY: examples
-examples: $(EXAMPLE_FILES)
-
-.PHONY: clean-examples
-clean-examples:
-	rm -rf $(EXAMPLES_DIR)
 
 # Cleanup
 

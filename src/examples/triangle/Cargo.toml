@@ -1,16 +1,13 @@
 [package]
 
-name = "example-cube"
+name = "example-triangle"
 version = "0.1.0"
 authors = [
 ]
 
 [[bin]]
-name = "cube"
+name = "triangle"
 path = "main.rs"
-
-[dependencies.cgmath]
-git = "https://github.com/bjz/cgmath-rs.git"
 
 [dependencies.gfx]
 path = "../../../"
