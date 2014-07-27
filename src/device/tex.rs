@@ -204,9 +204,18 @@ pub struct SamplerInfo {
     /// example, if it would select mipmap level 2 and lod_bias is 1, it will
     /// use mipmap level 3.
     pub lod_bias: f32,
-    /// Mipmap levels outside of `[lo, hi]` will never be sampled. Defaults to
-    /// `(0, -1)` (every mipmap available), but will be clamped to the
-    /// texture's mipmap_range.
-    pub mipmap_range: (u8, u8),
+    /// This range is used to clamp LOD level used for sampling
+    pub lod_range: (f32, f32),
     // TODO: comparison mode
+}
+
+impl SamplerInfo {
+    pub fn new(filtering: FilterMethod, wrap: WrapMode) -> SamplerInfo {
+        SamplerInfo {
+            filtering: filtering,
+            wrap_mode: (wrap, wrap, wrap),
+            lod_bias: 0.0,
+            lod_range: (-1000.0, 1000.0),
+        }
+    }
 }

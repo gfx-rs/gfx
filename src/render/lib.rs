@@ -337,8 +337,8 @@ impl Renderer {
         self.cast(device::UpdateBuffer(buf, (box data) as Box<device::Blob + Send>));
     }
 
-    pub fn update_texture<T: device::Blob + Send>(&mut self, handle: TextureHandle,
-                                                  info: device::tex::ImageInfo, data: Vec<T>) {
+    pub fn update_texture<T: Send>(&mut self, handle: TextureHandle,
+                                   info: device::tex::ImageInfo, data: Vec<T>) {
         let tex = self.dispatcher.get_texture(handle);
         self.cast(device::UpdateTexture(tex, info, (box data) as Box<device::Blob + Send>));
     }

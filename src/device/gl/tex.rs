@@ -51,6 +51,18 @@ fn format_to_gltype(t: ::tex::TextureFormat) -> GLenum {
     }
 }
 
+fn format_to_size(t: ::tex::TextureFormat) -> uint {
+    match t {
+        ::tex::RGB8 => 3,
+        ::tex::RGBA8 => 4,
+    }
+}
+
+fn set_mipmap_range(target: GLenum, (base, max): (u8, u8)) {
+    gl::TexParameteri(target, gl::TEXTURE_BASE_LEVEL, base as GLint);
+    gl::TexParameteri(target, gl::TEXTURE_MAX_LEVEL, max as GLint);
+}
+
 /// Create a texture, assuming TexStorage* isn't available.
 pub fn make_without_storage(info: ::tex::TextureInfo) -> Texture {
     let name = make_texture(info);
@@ -59,13 +71,13 @@ pub fn make_without_storage(info: ::tex::TextureInfo) -> Texture {
     let pix = format_to_glpixel(info.format);
     let typ = format_to_gltype(info.format);
 
-    let kind = kind_to_gl(info.kind);
+    let target = kind_to_gl(info.kind);
 
     unsafe {
         match info.kind {
             ::tex::Texture1D => {
                 gl::TexImage1D(
-                    kind,
+                    target,
                     0,
                     fmt,
                     info.width as GLsizei,
@@ -77,7 +89,7 @@ pub fn make_without_storage(info: ::tex::TextureInfo) -> Texture {
             },
             ::tex::Texture1DArray => {
                 gl::TexImage2D(
-                    kind,
+                    target,
                     0,
                     fmt,
                     info.width as GLsizei,
@@ -90,7 +102,7 @@ pub fn make_without_storage(info: ::tex::TextureInfo) -> Texture {
             },
             ::tex::Texture2D => {
                 gl::TexImage2D(
-                    kind,
+                    target,
                     0,
                     fmt,
                     info.width as GLsizei,
@@ -104,7 +116,7 @@ pub fn make_without_storage(info: ::tex::TextureInfo) -> Texture {
             ::tex::TextureCube => unimplemented!(),
             ::tex::Texture2DArray | ::tex::Texture3D => {
                 gl::TexImage3D(
-                    kind,
+                    target,
                     0,
                     fmt,
                     info.width as GLsizei,
@@ -118,6 +130,8 @@ pub fn make_without_storage(info: ::tex::TextureInfo) -> Texture {
             },
         }
     }
+
+    set_mipmap_range(target, info.mipmap_range);
 
     name
 }
@@ -145,12 +159,12 @@ pub fn make_with_storage(info: ::tex::TextureInfo) -> Texture {
     let name = make_texture(info);
 
     let fmt = format_to_gl(info.format);
-    let kind = kind_to_gl(info.kind);
+    let target = kind_to_gl(info.kind);
 
     match info.kind {
         ::tex::Texture1D => {
             gl::TexStorage1D(
-                kind,
+                target,
                 min(info.mipmap_range.val1(), mip_level1(info.width)),
                 fmt,
                 info.width as GLsizei
@@ -158,7 +172,7 @@ pub fn make_with_storage(info: ::tex::TextureInfo) -> Texture {
         },
         ::tex::Texture1DArray => {
             gl::TexStorage2D(
-                kind,
+                target,
                 min(info.mipmap_range.val1(), mip_level1(info.width)),
                 fmt,
                 info.width as GLsizei,
@@ -167,7 +181,7 @@ pub fn make_with_storage(info: ::tex::TextureInfo) -> Texture {
         },
         ::tex::Texture2D => {
             gl::TexStorage2D(
-                kind,
+                target,
                 min(info.mipmap_range.val1(), mip_level2(info.width, info.height)),
                 fmt,
                 info.width as GLsizei,
@@ -177,7 +191,7 @@ pub fn make_with_storage(info: ::tex::TextureInfo) -> Texture {
         ::tex::TextureCube => unimplemented!(),
         ::tex::Texture2DArray => {
             gl::TexStorage3D(
-                kind,
+                target,
                 min(info.mipmap_range.val1(), mip_level2(info.width, info.height)),
                 fmt,
                 info.width as GLsizei,
@@ -187,7 +201,7 @@ pub fn make_with_storage(info: ::tex::TextureInfo) -> Texture {
         },
         ::tex::Texture3D => {
             gl::TexStorage3D(
-                kind,
+                target,
                 min(info.mipmap_range.val1(), mip_level3(info.width, info.height, info.depth)),
                 fmt,
                 info.width as GLsizei,
@@ -196,6 +210,8 @@ pub fn make_with_storage(info: ::tex::TextureInfo) -> Texture {
             );
         },
     }
+
+    set_mipmap_range(target, info.mipmap_range);
 
     name
 }
@@ -230,14 +246,15 @@ pub fn bind_sampler(anchor: BindAnchor, info: &::tex::SamplerInfo) {
 
     gl::TexParameterf(target, gl::TEXTURE_LOD_BIAS, info.lod_bias);
 
-    let (base, max) = info.mipmap_range;
-    gl::TexParameteri(target, gl::TEXTURE_BASE_LEVEL, base as GLint);
-    gl::TexParameteri(target, gl::TEXTURE_MAX_LEVEL, max as GLint);
+    let (min, max) = info.lod_range;
+    gl::TexParameterf(target, gl::TEXTURE_MIN_LOD, min);
+    gl::TexParameterf(target, gl::TEXTURE_MAX_LOD, max);
 }
 
 pub fn update_texture(name: Texture, info: &::tex::TextureInfo, img: &::tex::ImageInfo, data: Box<Blob + Send>) {
-    debug_assert!(img.width as u32 * img.height as u32 * img.depth as u32 == data.get_size() as u32);
     debug_assert!(info.contains(img));
+    debug_assert!(img.width as uint * img.height as uint * img.depth as uint *
+        format_to_size(img.format) == data.get_size());
 
     let data = data.get_address() as *const GLvoid;
     let pix = format_to_glpixel(img.format);
@@ -317,7 +334,7 @@ fn filter_to_gl(f: ::tex::FilterMethod) -> (GLenum, GLenum) {
     match f {
         ::tex::Scale => (gl::NEAREST, gl::NEAREST),
         ::tex::Mipmap => (gl::NEAREST_MIPMAP_NEAREST, gl::NEAREST),
-        ::tex::Bilinear => (gl::LINEAR_MIPMAP_NEAREST, gl::LINEAR),
+        ::tex::Bilinear => (gl::LINEAR, gl::LINEAR),
         ::tex::Trilinear => (gl::LINEAR_MIPMAP_LINEAR, gl::LINEAR),
         ::tex::Anisotropic(..) => {
             (gl::LINEAR_MIPMAP_LINEAR, gl::LINEAR)
@@ -349,9 +366,9 @@ pub fn make_sampler(info: ::tex::SamplerInfo) -> Sampler {
 
     gl::SamplerParameterf(name, gl::TEXTURE_LOD_BIAS, info.lod_bias);
 
-    let (base, max) = info.mipmap_range;
-    gl::SamplerParameteri(name, gl::TEXTURE_MIN_LOD, base as GLint);
-    gl::SamplerParameteri(name, gl::TEXTURE_MAX_LOD, max as GLint);
+    let (min, max) = info.lod_range;
+    gl::SamplerParameterf(name, gl::TEXTURE_MIN_LOD, min);
+    gl::SamplerParameterf(name, gl::TEXTURE_MAX_LOD, max);
 
     name
 }

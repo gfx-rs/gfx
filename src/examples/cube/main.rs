@@ -69,7 +69,9 @@ GLSL_120: b"
     varying vec2 v_TexCoord;
     uniform sampler2D t_Color;
     void main() {
-        gl_FragColor = texture(t_Color, v_TexCoord);
+        vec4 tex = texture2D(t_Color, v_TexCoord);
+        float blend = dot(v_TexCoord-vec2(0.5,0.5), v_TexCoord-vec2(0.5,0.5));
+        gl_FragColor = mix(tex, vec4(0.0,0.0,0.0,0.0), blend*1.0);
     }
 "
 GLSL_150: b"
@@ -78,15 +80,12 @@ GLSL_150: b"
     out vec4 o_Color;
     uniform sampler2D t_Color;
     void main() {
-        o_Color = texture(t_Color, v_TexCoord);
+        vec4 tex = texture(t_Color, v_TexCoord);
+        float blend = dot(v_TexCoord-vec2(0.5,0.5), v_TexCoord-vec2(0.5,0.5));
+        o_Color = mix(tex, vec4(0.0,0.0,0.0,0.0), blend*1.0);
     }
 "
 };
-
-//----------------------------------------
-// Off-screen render target data
-
-
 
 //----------------------------------------
 
@@ -174,20 +173,20 @@ fn main() {
             gfx::IndexSlice(buf_index, 0, 36)
         };
 
-        let texture = renderer.create_texture(gfx::tex::TextureInfo {
+        let tinfo = gfx::tex::TextureInfo {
             width: 1,
             height: 1,
-            depth: 0,
+            depth: 1,
             mipmap_range: (0, 1),
             kind: gfx::tex::Texture2D,
             format: gfx::tex::RGBA8,
-        });
-        let sampler = renderer.create_sampler(gfx::tex::SamplerInfo {
-            filtering: gfx::tex::Bilinear,
-            wrap_mode: (gfx::tex::Clamp, gfx::tex::Clamp, gfx::tex::Clamp),
-            lod_bias: 0.0,
-            mipmap_range: (0, 0),
-        });
+        };
+        let img_info = tinfo.to_image_info();
+        let texture = renderer.create_texture(tinfo);
+        renderer.update_texture(texture, img_info, vec![0x20u8, 0xA0u8, 0xC0u8, 0x00u8]);
+
+        let sampler = renderer.create_sampler(gfx::tex::SamplerInfo::new(
+            gfx::tex::Bilinear, gfx::tex::Clamp));
 
         let mut bundle = {
             let data = Params {
@@ -226,7 +225,7 @@ fn main() {
             m_model.x.x = 1.0;
             bundle.data.u_ModelViewProj = {
                 let m = m_viewproj.mul_m(&m_model);
-                [
+                [ //TODO: add raw convertion methods to cgmath
                     [m.x.x, m.x.y, m.x.z, m.x.w],
                     [m.y.x, m.y.y, m.y.z, m.y.w],
                     [m.z.x, m.z.y, m.z.z, m.z.w],
