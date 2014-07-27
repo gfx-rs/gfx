@@ -6,6 +6,7 @@ extern crate gfx_macros;
 extern crate gfx;
 extern crate glfw;
 extern crate cgmath;
+extern crate native;
 
 use cgmath::matrix::{Matrix, Matrix4};
 use cgmath::point::Point3;

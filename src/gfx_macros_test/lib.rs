@@ -81,7 +81,7 @@ fn test_shader_param() {
     struct MyParam {
         a: i32,
         b: [f32, ..4],
-        c: gfx::TextureHandle,
+        c: gfx::TextureParam,
         d: gfx::BufferHandle,
     }
 }

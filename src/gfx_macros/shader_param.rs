@@ -26,18 +26,25 @@ enum ParamType {
     ParamTexture,
 }
 
-/// Classify variable types (`i32`, `TextureHandle`, etc) into the `ParamType`
-fn classify(node: &ast::Ty_) -> ParamType {
+#[deriving(Show)]
+enum ParamError {
+    ErrorDeprecatedTexture,
+    ErrorUnknown,
+}
+
+/// Classify variable types (`i32`, `TextureParam`, etc) into the `ParamType`
+fn classify(node: &ast::Ty_) -> Result<ParamType, ParamError> {
     match *node {
         ast::TyPath(ref path, _, _) => match path.segments.last() {
             Some(segment) => match segment.identifier.name.as_str() {
-                "BufferHandle" => ParamBlock,
-                "TextureParam" => ParamTexture,
-                _ => ParamUniform,
+                "BufferHandle" => Ok(ParamBlock),
+                "TextureParam" => Ok(ParamTexture),
+                "TextureHandle" => Err(ErrorDeprecatedTexture),
+                _ => Ok(ParamUniform),
             },
-            None => ParamUniform,
+            None => Ok(ParamUniform),
         },
-        _ => ParamUniform,
+        _ => Ok(ParamUniform),
     }
 }
 
@@ -50,9 +57,17 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span, substr: &gene
         generic::Struct(ref fields) => {
             let out = definition.fields.iter().zip(fields.iter()).map(|(def, f)| {
                 let (fun, ret) = match classify(&def.node.ty.node) {
-                    ParamUniform => ("find_uniform", "ErrorUniform"),
-                    ParamBlock   => ("find_block",   "ErrorBlock"),
-                    ParamTexture => ("find_texture", "ErrorTexture"),
+                    Ok(ParamUniform) => ("find_uniform", "ErrorUniform"),
+                    Ok(ParamBlock)   => ("find_block",   "ErrorBlock"),
+                    Ok(ParamTexture) => ("find_texture", "ErrorTexture"),
+                    Err(_) => {
+                        cx.span_err(span, format!(
+                            "Invalid uniform: {}",
+                            f.name.unwrap().as_str(),
+                            ).as_slice()
+                        );
+                        return cx.field_imm(span, cx.ident_of("invalid"), cx.expr_uint(span, 0));
+                    },
                 };
                 let id_ret = cx.ident_of(ret);
                 let expr_field = cx.expr_str(span, token::get_ident(f.name.unwrap()));
@@ -103,7 +118,7 @@ fn method_upload(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
         generic::Struct(ref fields) => {
             let calls = definition.fields.iter().zip(fields.iter()).map(|(def, f)| {
                 let (arg_id, value) = match classify(&def.node.ty.node) {
-                    ParamUniform => {
+                    Ok(ParamUniform) => {
                         let value = cx.expr_method_call(
                             span,
                             f.self_,
@@ -112,11 +127,19 @@ fn method_upload(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                         );
                         (1u, value)
                     },
-                    ParamBlock   => {
+                    Ok(ParamBlock)   => {
                         (2u, f.self_)
                     },
-                    ParamTexture => {
+                    Ok(ParamTexture) => {
                         (3u, f.self_)
+                    },
+                    Err(_) => {
+                        cx.span_err(span, format!(
+                            "Invalid uniform: {}",
+                            f.name.unwrap().as_str(),
+                            ).as_slice()
+                        );
+                        return cx.stmt_expr(cx.expr_uint(span, 0))
                     },
                 };
                 let expr_id = cx.expr_field_access(span, substr.nonself_args[0], f.name.unwrap());
@@ -138,28 +161,38 @@ fn method_upload(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
 
 /// A helper function that translates variable type (`i32`, `TextureHandle`, etc)
 /// into the corresponding shader var id type (`VarUniform`, `VarTexture`, etc)
-fn node_to_var_path(span: codemap::Span, node: &ast::Ty_) -> ast::Path {
+fn node_to_var_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span, node: &ast::Ty_) -> Gc<ast::Ty> {
     let id = match classify(node) {
-        ParamUniform => "VarUniform",
-        ParamBlock   => "VarBlock",
-        ParamTexture => "VarTexture",
+        Ok(ParamUniform) => "VarUniform",
+        Ok(ParamBlock)   => "VarBlock",
+        Ok(ParamTexture) => "VarTexture",
+        Err(ErrorDeprecatedTexture) => {
+            cx.span_err(span, "Use gfx::TextureParam for texture vars instead of gfx::TextureHandle");
+            ""
+        },
+        Err(ErrorUnknown) => {
+            cx.span_err(span, format!("Unknown node: {}", node).as_slice());
+            ""
+        },
     };
-    ast::Path {
-        span: span,
-        global: true,
-        segments: vec![
-            ast::PathSegment {
-                identifier: ast::Ident::new(token::intern("gfx")),
-                lifetimes: Vec::new(),
-                types: owned_slice::OwnedSlice::empty(),
-            },
-            ast::PathSegment {
-                identifier: ast::Ident::new(token::intern(id)),
-                lifetimes: Vec::new(),
-                types: owned_slice::OwnedSlice::empty(),
-            },
-        ],
-    }
+    cx.ty_path(ast::Path {
+            span: span,
+            global: true,
+            segments: vec![
+                ast::PathSegment {
+                    identifier: ast::Ident::new(token::intern("gfx")),
+                    lifetimes: Vec::new(),
+                    types: owned_slice::OwnedSlice::empty(),
+                },
+                ast::PathSegment {
+                    identifier: ast::Ident::new(token::intern(id)),
+                    lifetimes: Vec::new(),
+                    types: owned_slice::OwnedSlice::empty(),
+                },
+            ],
+        },
+        None
+    )
 }
 
 /// Decorator for `shader_param` attribute
@@ -178,10 +211,7 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                         node: ast::StructField_ {
                             kind: f.node.kind,
                             id: f.node.id,
-                            ty: context.ty_path(
-                                node_to_var_path(f.span, &f.node.ty.node),
-                                None
-                            ),
+                            ty: node_to_var_type(context, f.span, &f.node.ty.node),
                             attrs: Vec::new(),
                         },
                         span: f.span,

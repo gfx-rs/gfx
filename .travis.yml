@@ -43,12 +43,14 @@ install:
 script:
   - make init
   - make test
-  - make examples
-# - sh -c "sleep 5; xdotool key --window \"$(xdotool search --name Hello)\" Escape" &
-# - ./examples/main
   - make clean
   - make clean deps
   - make doc
+# check examples
+  - (cd src/examples/triangle && cargo build)
+  - (cd src/examples/cube && cargo build)
+# - sh -c "sleep 5; xdotool key --window \"$(xdotool search --name Hello)\" Escape" &
+# - ./examples/main
 # make sure cargo works
   - cargo build
 after_script:

@@ -79,7 +79,7 @@ LIB_CFG               = --cfg=$(GFX_PLATFORM)
 # Default target
 
 .PHONY: all
-all: lib examples doc
+all: lib doc
 
 # Friendly initialization
 
@@ -213,4 +213,4 @@ clean-doc:
 # Cleanup
 
 .PHONY: clean
-clean: clean-lib clean-test clean-doc clean-examples
+clean: clean-lib clean-test clean-doc
