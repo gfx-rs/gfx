@@ -6,4 +6,4 @@
 /examples/*/target/
 /lib/
 /test/
-/target/
+target/
