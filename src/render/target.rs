@@ -12,13 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use device::target::Color;
-use device::target::{Plane, PlaneEmpty};
+use t = device::target;
 
 static MAX_COLOR_TARGETS: uint = 4;
 
+#[deriving(Eq, PartialEq, Show)]
+/// A single buffer that can be bound to a render target.
+pub enum Plane {
+    /// No buffer, the results will not be stored.
+    PlaneEmpty,
+    /// Render to a `Surface` (corresponds to a renderbuffer in GL).
+    PlaneSurface(super::SurfaceHandle),
+    /// Render to a texture at a specific mipmap level
+    /// If `Layer` is set, it is selecting a single 2D slice of a given 3D texture
+    PlaneTexture(super::TextureHandle, t::Level, Option<t::Layer>),
+}
+
 /// A complete `Frame`, which is the result of rendering.
 pub struct Frame {
+    /// Size of the viewport
+    pub size: [u16, ..2],
     /// Each color component has its own buffer.
     pub colors: [Plane, ..MAX_COLOR_TARGETS],
     /// The depth buffer for this frame.
@@ -30,8 +43,9 @@ pub struct Frame {
 impl Frame {
     /// Create an empty `Frame`, which corresponds to the 'default framebuffer', which for now
     /// renders directly to the window that was created with the OpenGL context.
-    pub fn new() -> Frame {
+    pub fn new(width: u16, height: u16) -> Frame {
         Frame {
+            size: [width, height],
             colors: [PlaneEmpty, ..MAX_COLOR_TARGETS],
             depth: PlaneEmpty,
             stencil: PlaneEmpty,

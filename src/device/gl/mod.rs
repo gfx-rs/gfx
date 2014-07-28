@@ -16,14 +16,12 @@ extern crate gl;
 extern crate libc;
 
 use log;
-use std;
-use a = super::attrib;
-use std::fmt;
-use std::str;
+use std::{fmt, mem, str};
 use std::collections::HashSet;
+use a = super::attrib;
 
-mod rast;
 mod shade;
+mod state;
 mod tex;
 
 pub type Buffer         = gl::types::GLuint;
@@ -32,9 +30,8 @@ pub type Shader         = gl::types::GLuint;
 pub type Program        = gl::types::GLuint;
 pub type FrameBuffer    = gl::types::GLuint;
 pub type Surface        = gl::types::GLuint;
-pub type Texture        = gl::types::GLuint;
 pub type Sampler        = gl::types::GLuint;
-
+pub type Texture        = gl::types::GLuint;
 
 fn get_uint(name: gl::types::GLenum) -> uint {
     let mut value = 0 as gl::types::GLint;
@@ -201,16 +198,21 @@ pub enum ErrorType {
     UnknownError,
 }
 
+
+fn target_to_gl(target: super::target::Target) -> gl::types::GLenum {
+    match target {
+        super::target::TargetColor(index) =>
+            gl::COLOR_ATTACHMENT0 + (index as gl::types::GLenum),
+        super::target::TargetDepth => gl::DEPTH_ATTACHMENT,
+        super::target::TargetStencil => gl::STENCIL_ATTACHMENT,
+        super::target::TargetDepthStencil => gl::DEPTH_STENCIL_ATTACHMENT,
+    }
+}
+
 /// An OpenGL back-end with GLSL shaders
 pub struct GlBackEnd {
     caps: super::Capabilities,
     info: Info,
-    /// Maps (by the index) from texture name to TextureInfo, so we can look up what texture target
-    /// to bind this texture to later. Yuck!
-    // Doesn't use a SmallIntMap to avoid the overhead of Option
-    textures: Vec<::tex::TextureInfo>,
-    /// Maps from sampler name to SamplerInfo for further lookups
-    samplers: Vec<::tex::SamplerInfo>,
 }
 
 impl GlBackEnd {
@@ -235,8 +237,6 @@ impl GlBackEnd {
         GlBackEnd {
             caps: caps,
             info: info,
-            textures: Vec::new(),
-            samplers: Vec::new(),
         }
     }
 
@@ -318,23 +318,24 @@ impl super::ApiBackEnd for GlBackEnd {
         name
     }
 
+    fn create_surface(&mut self, info: ::tex::SurfaceInfo) -> Surface {
+        tex::make_surface(&info)
+    }
+
     fn create_texture(&mut self, info: ::tex::TextureInfo) -> Texture {
         let name = if self.caps.immutable_storage_supported {
-            tex::make_with_storage(info)
+            tex::make_with_storage(&info)
         } else {
-            tex::make_without_storage(info)
+            tex::make_without_storage(&info)
         };
-        let filler = std::default::Default::default();
-        self.textures.grow_set(name as uint, &filler, info);
         name
     }
 
     fn create_sampler(&mut self, info: ::tex::SamplerInfo) -> Sampler {
         if self.caps.sampler_objects_supported {
-            tex::make_sampler(info)
+            tex::make_sampler(&info)
         } else {
-            self.samplers.push(info);
-            self.samplers.len() as Sampler - 1
+            0
         }
     }
 
@@ -439,23 +440,23 @@ impl super::ApiBackEnd for GlBackEnd {
             super::BindFrameBuffer(frame_buffer) => {
                 gl::BindFramebuffer(gl::DRAW_FRAMEBUFFER, frame_buffer);
             },
-            super::BindTarget(target, plane) => {
-                let attachment = match target {
-                    super::target::TargetColor(index) =>
-                        gl::COLOR_ATTACHMENT0 + (index as gl::types::GLenum),
-                    super::target::TargetDepth => gl::DEPTH_ATTACHMENT,
-                    super::target::TargetStencil => gl::STENCIL_ATTACHMENT,
-                    super::target::TargetDepthStencil => gl::DEPTH_STENCIL_ATTACHMENT,
-                };
-                match plane {
-                    super::target::PlaneEmpty => gl::FramebufferRenderbuffer
-                        (gl::DRAW_FRAMEBUFFER, attachment, gl::RENDERBUFFER, 0),
-                    super::target::PlaneSurface(name) => gl::FramebufferRenderbuffer
-                        (gl::DRAW_FRAMEBUFFER, attachment, gl::RENDERBUFFER, name),
-                    super::target::PlaneTexture(name, level) => gl::FramebufferTexture
-                        (gl::DRAW_FRAMEBUFFER, attachment, name, level as gl::types::GLint),
-                    super::target::PlaneTextureLayer(name, level, layer) => gl::FramebufferTextureLayer
-                        (gl::DRAW_FRAMEBUFFER, attachment, name, level as gl::types::GLint, layer as gl::types::GLint),
+            super::UnbindTarget(target) => {
+                let att = target_to_gl(target);
+                gl::FramebufferRenderbuffer(gl::DRAW_FRAMEBUFFER, att, gl::RENDERBUFFER, 0);
+            },
+            super::BindTargetSurface(target, name) => {
+                let att = target_to_gl(target);
+                gl::FramebufferRenderbuffer(gl::DRAW_FRAMEBUFFER, att, gl::RENDERBUFFER, name);
+            },
+            super::BindTargetTexture(target, name, level, layer) => {
+                let att = target_to_gl(target);
+                match layer {
+                    Some(layer) => gl::FramebufferTextureLayer(
+                        gl::DRAW_FRAMEBUFFER, att, name, level as gl::types::GLint,
+                        layer as gl::types::GLint),
+                    None => gl::FramebufferTexture(
+                        gl::DRAW_FRAMEBUFFER, att, name, level as gl::types::GLint
+                        ),
                 }
             },
             super::BindUniformBlock(program, slot, loc, buffer) => {
@@ -465,39 +466,46 @@ impl super::ApiBackEnd for GlBackEnd {
             super::BindUniform(loc, uniform) => {
                 shade::bind_uniform(loc as gl::types::GLint, uniform);
             },
-            super::BindTexture(slot, tex, sam) => {
-                let tinfo = &self.textures[tex as uint];
+            super::BindTexture(slot, kind, texture, sampler) => {
                 let anchor = tex::bind_texture(
                     gl::TEXTURE0 + slot as gl::types::GLenum,
-                    tex, tinfo);
-                match sam {
-                    Some(sam) => {
+                    kind, texture);
+                match sampler {
+                    Some((sam, ref info)) => {
                         if self.caps.sampler_objects_supported {
                             gl::BindSampler(slot as gl::types::GLenum, sam);
                         } else {
-                            let sinfo = &self.samplers[sam as uint];
-                            tex::bind_sampler(anchor, sinfo);
+                            debug_assert_eq!(sam, 0);
+                            tex::bind_sampler(anchor, info);
                         }
                     },
                     None => ()
                 }
             },
             super::SetPrimitiveState(prim) => {
-                rast::bind_primitive(prim);
+                state::bind_primitive(prim);
+            },
+            super::SetScissor(rect) => {
+                state::bind_scissor(rect);
+            },
+            super::SetViewport(rect) => {
+                state::bind_viewport(rect);
             },
             super::SetDepthStencilState(depth, stencil, cull) => {
-                rast::bind_stencil(stencil, cull);
-                rast::bind_depth(depth);
+                state::bind_stencil(stencil, cull);
+                state::bind_depth(depth);
             },
             super::SetBlendState(blend) => {
-                rast::bind_blend(blend);
+                state::bind_blend(blend);
+            },
+            super::SetColorMask(mask) => {
+                state::bind_color_mask(mask);
             },
             super::UpdateBuffer(buffer, data) => {
                 self.update_buffer(buffer, data, super::UsageDynamic);
             },
-            super::UpdateTexture(tex, image_info, data) => {
-                let tinfo = &self.textures[tex as uint];
-                tex::update_texture(tex, tinfo, &image_info, data);
+            super::UpdateTexture(kind, texture, image_info, data) => {
+                tex::update_texture(kind, texture, &image_info, data);
             },
             super::Draw(start, count) => {
                 gl::DrawArrays(gl::TRIANGLES,
@@ -506,7 +514,7 @@ impl super::ApiBackEnd for GlBackEnd {
                 self.check();
             },
             super::DrawIndexed(start, count) => {
-                let offset = start * (std::mem::size_of::<u16>() as u16);
+                let offset = start * (mem::size_of::<u16>() as u16);
                 unsafe {
                     gl::DrawElements(gl::TRIANGLES,
                         count as gl::types::GLsizei,

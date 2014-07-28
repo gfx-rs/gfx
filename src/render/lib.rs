@@ -26,11 +26,12 @@ extern crate comm;
 extern crate device;
 
 use std::fmt::Show;
+use std::mem::size_of;
 use std::vec::MoveItems;
 
 use backend = device::dev;
 use device::shade::{CreateShaderError, ProgramMeta, Vertex, Fragment, ShaderSource};
-use device::target::{ClearData, TargetColor, TargetDepth, TargetStencil};
+use device::target::{ClearData, Target, TargetColor, TargetDepth, TargetStencil};
 use shade::{BundleInternal, ShaderParam};
 use resource::{Loaded, Pending};
 
@@ -43,9 +44,9 @@ pub type ProgramHandle = uint;
 pub type EnvirHandle = uint;
 
 pub mod mesh;
-pub mod rast;
 pub mod resource;
 pub mod shade;
+pub mod state;
 pub mod target;
 
 pub type Token = uint;
@@ -133,10 +134,6 @@ impl Dispatcher {
     fn get_common_frame_buffer(&mut self) -> backend::FrameBuffer {
         self.get_any(|res| &res.frame_buffers[0])
     }
-
-    fn get_texture(&mut self, handle: TextureHandle) -> backend::Texture {
-        self.get_any(|res| &res.textures[handle])
-    }
 }
 
 /// A renderer. Methods on this get translated into commands for the device.
@@ -174,7 +171,7 @@ impl Renderer {
             should_finish: should_finish,
             default_frame_buffer: 0,
             state: State {
-                frame: target::Frame::new(),
+                frame: target::Frame::new(0, 0),
             },
         }
     }
@@ -206,7 +203,7 @@ impl Renderer {
     /// Draw `slice` of `mesh` into `frame`, using a `bundle` of shader program and parameters, and
     /// a given draw state.
     pub fn draw<'a, L, T: shade::ShaderParam<L>>(&'a mut self, mesh: &mesh::Mesh, slice: mesh::Slice, frame: target::Frame,
-            bundle: &shade::ShaderBundle<L, T>, state: rast::DrawState) -> Result<(), DrawError<'a>> {
+            bundle: &shade::ShaderBundle<L, T>, state: state::DrawState) -> Result<(), DrawError<'a>> {
         // demand resources. This section needs the mutable self, so we are unable to do this
         // after we get a reference to ether the `Environment` or the `ProgramMeta`
         self.prebind_mesh(mesh, &slice);
@@ -214,9 +211,11 @@ impl Renderer {
         self.dispatcher.demand(|res| !res.programs[bundle.get_program()].is_pending());
         // bind state
         self.cast(device::SetPrimitiveState(state.primitive));
+        self.cast(device::SetScissor(state.scissor));
         self.cast(device::SetDepthStencilState(state.depth, state.stencil,
             state.primitive.get_cull_mode()));
         self.cast(device::SetBlendState(state.blend));
+        self.cast(device::SetColorMask(state.color_mask));
         // bind array buffer
         let vao = self.dispatcher.get_common_array_buffer();
         self.cast(device::BindArrayBuffer(vao));
@@ -286,24 +285,32 @@ impl Renderer {
 
     pub fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh {
         let nv = data.len();
-        debug_assert!(nv < 0x10000);
+        debug_assert!(nv >> (8 * size_of::<mesh::VertexCount>()) == 0);
         let buf = self.create_buffer(Some(data));
         mesh::Mesh::from::<T>(buf, nv as mesh::VertexCount)
+    }
+
+    pub fn create_surface(&mut self, info: device::tex::SurfaceInfo) -> SurfaceHandle {
+        let sufs =  &mut self.dispatcher.resource.surfaces;
+        let token = sufs.len();
+        sufs.push((Pending, info.clone()));
+        self.device_tx.send(device::Call(token, device::CreateSurface(info)));
+        token
     }
 
     pub fn create_texture(&mut self, info: device::tex::TextureInfo) -> TextureHandle {
         let texs = &mut self.dispatcher.resource.textures;
         let token = texs.len();
+        texs.push((Pending, info.clone()));
         self.device_tx.send(device::Call(token, device::CreateTexture(info)));
-        texs.push(Pending);
         token
     }
 
     pub fn create_sampler(&mut self, info: device::tex::SamplerInfo) -> SamplerHandle {
         let sams = &mut self.dispatcher.resource.samplers;
         let token = sams.len();
+        sams.push((Pending, info.clone()));
         self.device_tx.send(device::Call(token, device::CreateSampler(info)));
-        sams.push(Pending);
         token
     }
 
@@ -338,9 +345,10 @@ impl Renderer {
     }
 
     pub fn update_texture<T: Send>(&mut self, handle: TextureHandle,
-                                   info: device::tex::ImageInfo, data: Vec<T>) {
-        let tex = self.dispatcher.get_texture(handle);
-        self.cast(device::UpdateTexture(tex, info, (box data) as Box<device::Blob + Send>));
+                                   img: device::tex::ImageInfo, data: Vec<T>) {
+        let name = self.dispatcher.get_any(|res| res.textures[handle].ref0());
+        let info = self.dispatcher.resource.textures[handle].ref1();
+        self.cast(device::UpdateTexture(info.kind, name, img, (box data) as Box<device::Blob + Send>));
     }
 
     /// Make sure all the mesh buffers are successfully created/loaded
@@ -368,15 +376,36 @@ impl Renderer {
         bundle.bind(|_, _| {
         }, |_, _| {
         }, |_, (tex, sam)| {
-            dp.demand(|res| !res.textures[tex].is_pending());
+            dp.demand(|res| !res.textures[tex].ref0().is_pending());
             match sam {
-                Some(sam) => dp.demand(|res| !res.samplers[sam].is_pending()),
+                Some(sam) => dp.demand(|res| !res.samplers[sam].ref0().
+                    is_pending()),
                 None => (),
             }
         });
     }
 
+    fn make_target_cast(dp: &mut Dispatcher, to: Target, plane: target::Plane) -> device::CastRequest {
+        match plane {
+            target::PlaneEmpty => device::UnbindTarget(to),
+            target::PlaneSurface(handle) => {
+                let name = dp.get_any(|res| res.surfaces[handle].ref0());
+                device::BindTargetSurface(to, name)
+            },
+            target::PlaneTexture(handle, level, layer) => {
+                let name = dp.get_any(|res| res.textures[handle].ref0());
+                device::BindTargetTexture(to, name, level, layer)
+            },
+        }
+    }
+
     fn bind_frame(&mut self, frame: &target::Frame) {
+        self.cast(device::SetViewport(device::target::Rect {
+            x: 0,
+            y: 0,
+            w: frame.size[0],
+            h: frame.size[1],
+        }));
         if frame.is_default() {
             // binding the default FBO, not touching our common one
             self.cast(device::BindFrameBuffer(self.default_frame_buffer));
@@ -385,14 +414,17 @@ impl Renderer {
             self.cast(device::BindFrameBuffer(fbo));
             for (i, (cur, new)) in self.state.frame.colors.iter().zip(frame.colors.iter()).enumerate() {
                 if *cur != *new {
-                    self.cast(device::BindTarget(TargetColor(i as u8), *new));
+                    let msg = Renderer::make_target_cast(&mut self.dispatcher, TargetColor(i as u8), *new);
+                    self.cast(msg);
                 }
             }
             if self.state.frame.depth != frame.depth {
-                self.cast(device::BindTarget(TargetDepth, frame.depth));
+                let msg = Renderer::make_target_cast(&mut self.dispatcher, TargetDepth, frame.depth);
+                self.cast(msg);
             }
             if self.state.frame.stencil != frame.stencil {
-                self.cast(device::BindTarget(TargetStencil, frame.stencil));
+                let msg = Renderer::make_target_cast(&mut self.dispatcher, TargetStencil, frame.stencil);
+                self.cast(msg);
             }
             self.state.frame = *frame;
         }
@@ -419,17 +451,19 @@ impl Renderer {
                 _ => {block_fail = Some(bv)},
             }
         }, |tv, (tex_handle, sampler)| {
-            let sam = sampler.map(|sam| *self.dispatcher.resource.samplers[sam].unwrap());
+            let sam = sampler.map(|sam| match self.dispatcher.resource.samplers[sam] {
+                (ref future, ref info) => (*future.unwrap(), info.clone())
+            });
             match self.dispatcher.resource.textures[tex_handle] {
-                Loaded(tex) => {
+                (Loaded(tex), ref info) => {
                     self.cast(device::BindUniform(
                         meta.textures[tv as uint].location,
                         device::shade::ValueI32(texture_slot as i32)
                         ));
-                    self.cast(device::BindTexture(texture_slot, tex, sam));
+                    self.cast(device::BindTexture(texture_slot, info.kind, tex, sam));
                     texture_slot += 1;
                 },
-                _ => {texture_fail = Some(tv)},
+                (_, _) => {texture_fail = Some(tv)},
             }
         });
         match (block_fail, texture_fail) {

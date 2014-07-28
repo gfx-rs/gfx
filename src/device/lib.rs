@@ -34,8 +34,8 @@ use std::kinds::marker;
 use std::mem::size_of;
 
 pub mod attrib;
-pub mod rast;
 pub mod shade;
+pub mod state;
 pub mod target;
 pub mod tex;
 /* #[cfg(gl)] */ mod gl;
@@ -100,9 +100,10 @@ pub enum CallRequest {
     CreateArrayBuffer,
     CreateShader(shade::Stage, shade::ShaderSource),
     CreateProgram(Vec<dev::Shader>),
+    CreateFrameBuffer,
+    CreateSurface(tex::SurfaceInfo),
     CreateTexture(tex::TextureInfo),
     CreateSampler(tex::SamplerInfo),
-    CreateFrameBuffer,
 }
 
 /// Requests that don't expect a reply
@@ -115,16 +116,23 @@ pub enum CastRequest {
         attrib::Type, attrib::Stride, attrib::Offset),
     BindIndex(dev::Buffer),
     BindFrameBuffer(dev::FrameBuffer),
-    /// Bind a `Plane` to a specific render target.
-    BindTarget(target::Target, target::Plane),
+    /// Unbind any surface from the specified target slot
+    UnbindTarget(target::Target),
+    /// Bind a surface to the specified target slot
+    BindTargetSurface(target::Target, dev::Surface),
+    /// Bind a level of the texture to the specified target slot
+    BindTargetTexture(target::Target, dev::Texture, target::Level, Option<target::Layer>),
     BindUniformBlock(dev::Program, UniformBufferSlot, UniformBlockIndex, dev::Buffer),
     BindUniform(shade::Location, shade::UniformValue),
-    BindTexture(TextureSlot, dev::Texture, Option<dev::Sampler>),
-    SetPrimitiveState(rast::Primitive),
-    SetDepthStencilState(Option<rast::Depth>, Option<rast::Stencil>, rast::CullMode),
-    SetBlendState(Option<rast::Blend>),
+    BindTexture(TextureSlot, tex::TextureKind, dev::Texture, Option<(dev::Sampler, tex::SamplerInfo)>),
+    SetPrimitiveState(state::Primitive),
+    SetViewport(target::Rect),
+    SetScissor(Option<target::Rect>),
+    SetDepthStencilState(Option<state::Depth>, Option<state::Stencil>, state::CullMode),
+    SetBlendState(Option<state::Blend>),
+    SetColorMask(state::ColorMask),
     UpdateBuffer(dev::Buffer, Box<Blob + Send>),
-    UpdateTexture(dev::Texture, tex::ImageInfo, Box<Blob + Send>),
+    UpdateTexture(tex::TextureKind, dev::Texture, tex::ImageInfo, Box<Blob + Send>),
     Draw(VertexCount, VertexCount),
     DrawIndexed(IndexCount, IndexCount),
 }
@@ -136,6 +144,7 @@ pub enum Reply<T> {
     ReplyNewShader(T, Result<dev::Shader, shade::CreateShaderError>),
     ReplyNewProgram(T, Result<shade::ProgramMeta, ()>),
     ReplyNewFrameBuffer(T, dev::FrameBuffer),
+    ReplyNewSurface(T, dev::Surface),
     ReplyNewTexture(T, dev::Texture),
     ReplyNewSampler(T, dev::Sampler),
 }
@@ -150,6 +159,7 @@ pub trait ApiBackEnd {
     fn create_shader(&mut self, shade::Stage, code: shade::ShaderSource) -> Result<dev::Shader, shade::CreateShaderError>;
     fn create_program(&mut self, shaders: &[dev::Shader]) -> Result<shade::ProgramMeta, ()>;
     fn create_frame_buffer(&mut self) -> dev::FrameBuffer;
+    fn create_surface(&mut self, info: tex::SurfaceInfo) -> dev::Surface;
     fn create_texture(&mut self, info: tex::TextureInfo) -> dev::Texture;
     fn create_sampler(&mut self, info: tex::SamplerInfo) -> dev::Sampler;
     /// Update the information stored in a specific buffer
@@ -201,14 +211,6 @@ impl<T: Send, B: ApiBackEnd, C: GraphicsContext<B>> Device<T, B, C> {
                 let name = self.back_end.create_shader(stage, code);
                 ReplyNewShader(token, name)
             },
-            CreateTexture(info) => {
-                let name = self.back_end.create_texture(info);
-                ReplyNewTexture(token, name)
-            },
-            CreateSampler(info) => {
-                let name = self.back_end.create_sampler(info);
-                ReplyNewSampler(token, name)
-            },
             CreateProgram(code) => {
                 let name = self.back_end.create_program(code.as_slice());
                 ReplyNewProgram(token, name)
@@ -216,6 +218,18 @@ impl<T: Send, B: ApiBackEnd, C: GraphicsContext<B>> Device<T, B, C> {
             CreateFrameBuffer => {
                 let name = self.back_end.create_frame_buffer();
                 ReplyNewFrameBuffer(token, name)
+            },
+            CreateSurface(info) => {
+                let name = self.back_end.create_surface(info);
+                ReplyNewSurface(token, name)
+            },
+            CreateTexture(info) => {
+                let name = self.back_end.create_texture(info);
+                ReplyNewTexture(token, name)
+            },
+            CreateSampler(info) => {
+                let name = self.back_end.create_sampler(info);
+                ReplyNewSampler(token, name)
             },
         }
     }
