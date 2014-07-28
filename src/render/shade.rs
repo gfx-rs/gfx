@@ -12,15 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Shader parameter handling.
+
 use std::mem::size_of;
 use dev = device::shade;
 
+/// Location of a uniform.
 pub type VarUniform = u16;
+/// Location of a uniform block.
 pub type VarBlock = u8;
+/// Location of a texture.
 pub type VarTexture = u8;
 
-/// Something that has information about program parameters,
-/// used to fill up a hidden Link structure for the `ShaderParam` implementor
+/// Something that has information about program parameters, used to fill up a hidden Link
+/// structure for the `ShaderParam` implementor. Not meant for users.
+#[experimental]
+#[allow(missing_doc)]
+#[doc(hidden)]
 pub trait ParameterSink {
     fn find_uniform(&mut self, name: &str) -> Option<VarUniform>;
     fn find_block  (&mut self, name: &str) -> Option<VarBlock>;
@@ -96,6 +104,7 @@ impl<'a> ParameterSink for MetaSink<'a>{
 
 /// Helper trait to transform base types into their corresponding uniforms
 pub trait ToUniform {
+    /// Create a `UniformValue` representing this value.
     fn to_uniform(&self) -> dev::UniformValue;
 }
 
@@ -129,20 +138,27 @@ impl ToUniform for [[f32, ..4], ..4] {
     }
 }
 
+/// A texture parameter: consists of a texture handle with an optional sampler.
 pub type TextureParam = (super::TextureHandle, Option<super::SamplerHandle>);
 
-/// A closure provided for the `ShaderParam` implementor for uploading
+/// A closure provided for the `ShaderParam` implementor for uploading uniforms.
 pub type FnUniform<'a> = |VarUniform, dev::UniformValue|: 'a;
+/// A closure provided for the `ShaderParam` implementor for uploading uniform blocks.
 pub type FnBlock  <'a> = |VarBlock, super::BufferHandle|: 'a;
+/// A closure provided for the `ShaderParam` implementor for uploading textures.
 pub type FnTexture<'a> = |VarTexture, TextureParam|: 'a;
 
 
 /// An error type on either the parameter storage or the program side
 #[deriving(Clone, Show)]
 pub enum ParameterError<'a> {
+    /// Internal error
     ErrorInternal,
+    /// Error with the named uniform
     ErrorUniform(&'a str),
+    /// Error with the named uniform block
     ErrorBlock(&'a str),
+    /// Error with the named texture.
     ErrorTexture(&'a str),
 }
 
@@ -184,7 +200,10 @@ pub struct ShaderBundle<L, T> {
     link: L,
 }
 
-/// Helper trait to expose some abilities for internal use by the `Renderer`
+/// Helper trait to expose some abilities for internal use by the `Renderer`. Not meant for users.
+#[experimental]
+#[allow(missing_doc)]
+#[doc(hidden)]
 pub trait BundleInternal<L, T> {
     fn new(Option<&Self>, super::ProgramHandle, T, L) -> ShaderBundle<L, T>;
     fn get_program(&self) -> super::ProgramHandle;

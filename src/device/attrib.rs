@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Vertex attribute types.
+//!
+//! Nothing interesting here for users.
+
+#![allow(missing_doc)]
 
 pub type Count = u8;    // only value 1 to 4 are supported
 pub type Offset = u32;  // can point in the middle of the buffer

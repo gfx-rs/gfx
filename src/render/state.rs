@@ -12,27 +12,46 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Rasterizer state.
+
 use s = device::state;
 use device::target::{Color, Rect, Stencil};
 
 /// An assembly of states that affect regular draw calls
 #[deriving(Clone, PartialEq, Show)]
 pub struct DrawState {
+    /// How to rasteriz geometric primitives.
     pub primitive: s::Primitive,
+    /// (Optional) scissor mask. No pixel outside of the rectangle, if specified, will be written
+    /// to as a result of rendering. If None, acts as if the scissor mask covers the entire
+    /// `Frame`.
     pub scissor: Option<Rect>,
+    /// Stencil mask to use. If None, no stencil testing is done.
     pub stencil: Option<s::Stencil>,
+    /// Depth test to use. If None, no depth testing is done.
     pub depth: Option<s::Depth>,
+    /// Blend function to use. If None, no blending is done.
     pub blend: Option<s::Blend>,
+    /// Color mask to use. Each flag indicates that the given color channel can be written to, and
+    /// they can be OR'd together.
     pub color_mask: s::ColorMask,
 }
 
+/// Blend function presets for ease of use.
 #[deriving(Clone, PartialEq, Show)]
 pub enum BlendPreset {
+    /// When combining two fragments, add their values together, saturating at 1.0
     BlendAdditive,
+    /// When combining two fragments, add the value of the source times its alpha channel with the
+    /// value of the destination multiplied by the inverse of the source alpha channel. Has the
+    /// usual transparency effect: mixes the two colors using a fraction of each one specified by
+    /// the alpha of the source.
     BlendAlpha,
 }
 
 impl DrawState {
+    /// Create a default `DrawState`. Uses counter-clockwise winding, culls the backface of each
+    /// primitive, and does no scissor/stencil/depth/blend/color masking.
     pub fn new() -> DrawState {
         DrawState {
             primitive: s::Primitive {
@@ -48,7 +67,7 @@ impl DrawState {
         }
     }
 
-    /// set the stencil test to a simple expression
+    /// Set the stencil test to a simple expression
     pub fn stencil(mut self, fun: s::Comparison, value: Stencil) -> DrawState {
         let side = s::StencilSide {
             fun: fun,
@@ -66,7 +85,7 @@ impl DrawState {
         self
     }
 
-    /// set the depth test with the mask
+    /// Set the depth test with the mask
     pub fn depth(mut self, fun: s::Comparison, write: bool) -> DrawState {
         self.depth = Some(s::Depth {
             fun: fun,
@@ -75,7 +94,7 @@ impl DrawState {
         self
     }
 
-    /// set the blend mode to one of the presets
+    /// Set the blend mode to one of the presets
     pub fn blend(mut self, preset: BlendPreset) -> DrawState {
         self.blend = Some(match preset {
             BlendAdditive => s::Blend {

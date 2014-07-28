@@ -18,7 +18,7 @@
 #![comment = "A platform independent renderer for gfx-rs."]
 #![license = "ASL2"]
 #![crate_type = "lib"]
-
+#![deny(missing_doc)]
 #![feature(macro_rules, phase)]
 
 #[phase(plugin, link)] extern crate log;
@@ -35,12 +35,19 @@ use device::target::{ClearData, Target, TargetColor, TargetDepth, TargetStencil}
 use shade::{BundleInternal, ShaderParam};
 use resource::{Loaded, Pending};
 
+/// Buffer handle
 pub type BufferHandle = uint;
+/// Surface handle
 pub type SurfaceHandle = uint;
+/// Texture handle
 pub type TextureHandle = uint;
+/// Sampler handle
 pub type SamplerHandle = uint;
+/// ShaderHandle handle
 pub type ShaderHandle = uint;
+/// Program handle
 pub type ProgramHandle = uint;
+/// Environment handle
 pub type EnvirHandle = uint;
 
 pub mod mesh;
@@ -49,6 +56,8 @@ pub mod shade;
 pub mod state;
 pub mod target;
 
+/// Used for sending/receiving handles to/from the device. Not meant for users.
+#[experimental]
 pub type Token = uint;
 
 /// Graphics state
@@ -60,10 +69,15 @@ struct State {
 /// returned here will fail.
 #[deriving(Clone, Show)]
 pub enum DeviceError {
+    /// Error creating a new buffer.
     ErrorNewBuffer(BufferHandle),
+    /// Error creating a new array buffer.
     ErrorNewArrayBuffer,
+    /// Error creating a new shader.
     ErrorNewShader(ShaderHandle, CreateShaderError),
+    /// Error creating a new program.
     ErrorNewProgram(ProgramHandle),
+    /// Error creating a new framebuffer.
     ErrorNewFrameBuffer,
 }
 
@@ -71,22 +85,29 @@ pub enum DeviceError {
 /// An error with an invalid texture or uniform block.
 #[deriving(Show)]
 pub enum BundleError {
+    /// Error from a uniform block.
     ErrorBundleBlock(shade::VarBlock),
+    /// Error from a texture.
     ErrorBundleTexture(shade::VarTexture),
 }
 
 /// An error with a defined Mesh.
 #[deriving(Show)]
 pub enum MeshError {
+    /// A required attribute was missing.
     ErrorAttributeMissing,
+    /// An attribute's type from the vertex format differed from the type used in the shader.
     ErrorAttributeType,
 }
 
 /// An error that can happen when trying to draw.
 #[deriving(Show)]
 pub enum DrawError<'a> {
+    /// Error with a program.
     ErrorProgram,
+    /// Error with the program bundle.
     ErrorBundle(BundleError),
+    /// Error with the mesh.
     ErrorMesh(MeshError),
 }
 
@@ -283,6 +304,9 @@ impl Renderer {
         token
     }
 
+    /// Create a new mesh from the given vertex data.
+    ///
+    /// Convenience function around `crate_buffer` and `Mesh::from`.
     pub fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh {
         let nv = data.len();
         debug_assert!(nv >> (8 * size_of::<mesh::VertexCount>()) == 0);
@@ -290,6 +314,7 @@ impl Renderer {
         mesh::Mesh::from::<T>(buf, nv as mesh::VertexCount)
     }
 
+    /// Create a new surface.
     pub fn create_surface(&mut self, info: device::tex::SurfaceInfo) -> SurfaceHandle {
         let sufs =  &mut self.dispatcher.resource.surfaces;
         let token = sufs.len();
@@ -298,6 +323,7 @@ impl Renderer {
         token
     }
 
+    /// Create a new texture.
     pub fn create_texture(&mut self, info: device::tex::TextureInfo) -> TextureHandle {
         let texs = &mut self.dispatcher.resource.textures;
         let token = texs.len();
@@ -306,6 +332,7 @@ impl Renderer {
         token
     }
 
+    /// Create a new sampler.
     pub fn create_sampler(&mut self, info: device::tex::SamplerInfo) -> SamplerHandle {
         let sams = &mut self.dispatcher.resource.samplers;
         let token = sams.len();
@@ -314,6 +341,7 @@ impl Renderer {
         token
     }
 
+    /// Bundle together a program with its parameters.
     pub fn bundle_program<'a, L, T: shade::ShaderParam<L>>(&'a mut self, prog: ProgramHandle, data: T)
             -> Result<shade::ShaderBundle<L, T>, shade::ParameterLinkError<'a>> {
         self.dispatcher.demand(|res| !res.programs[prog].is_pending());
@@ -334,16 +362,19 @@ impl Renderer {
         }
     }
 
+    /// Update a buffer with data from a vector.
     pub fn update_buffer_vec<T: Send>(&mut self, handle: BufferHandle, data: Vec<T>) {
         let buf = self.dispatcher.get_buffer(handle);
         self.cast(device::UpdateBuffer(buf, (box data) as Box<device::Blob + Send>));
     }
 
+    /// Update a buffer with data from a single type.
     pub fn update_buffer_struct<T: device::Blob+Send>(&mut self, handle: BufferHandle, data: T) {
         let buf = self.dispatcher.get_buffer(handle);
         self.cast(device::UpdateBuffer(buf, (box data) as Box<device::Blob + Send>));
     }
 
+    /// Update the contents of a texture.
     pub fn update_texture<T: Send>(&mut self, handle: TextureHandle,
                                    img: device::tex::ImageInfo, data: Vec<T>) {
         let name = self.dispatcher.get_any(|res| res.textures[handle].ref0());

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Render target specification.
+
 use t = device::target;
 
 static MAX_COLOR_TARGETS: uint = 4;

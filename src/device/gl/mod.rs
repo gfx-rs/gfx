@@ -12,6 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! OpenGL implementation of a device, striving to support OpenGL 2.0 with at least VAOs, but using
+//! newer extensions when available.
+
+#![allow(missing_doc)]
+#![experimental]
+
 extern crate gl;
 extern crate libc;
 

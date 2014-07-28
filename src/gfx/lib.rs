@@ -19,6 +19,9 @@
 
 #![feature(phase)]
 
+//! An efficient, low-level, bindless graphics API for Rust. See [the
+//! blog](http://gfx-rs.github.io/) for documention on how to best use it.
+
 #[phase(plugin, link)] extern crate log;
 extern crate libc;
 
@@ -44,6 +47,7 @@ pub use device::shade::{ShaderSource, StaticBytes};
 /* #[cfg(glfw)] */ pub use glfw = glfw_platform;
 
 
+/// Start up a renderer and device.
 pub fn start<C: GraphicsContext<GlBackEnd>, P: GlProvider>(graphics_context: C, provider: P, queue_size: QueueSize)
         -> Result<(Renderer, Device<render::Token, GlBackEnd, C>), InitError> {
     device::init(graphics_context, provider, queue_size).map(|(tx, rx, server, ack, should_finish)| {
