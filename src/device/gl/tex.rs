@@ -78,7 +78,7 @@ pub fn make_surface(info: &::tex::SurfaceInfo) -> Surface {
         target,
         fmt,
         info.width as GLsizei,
-        info.height as GLsizei
+        info.height as GLsizei,
     );
 
     name
@@ -188,7 +188,7 @@ pub fn make_with_storage(info: &::tex::TextureInfo) -> Texture {
                 target,
                 min(info.mipmap_range.val1(), mip_level1(info.width)),
                 fmt,
-                info.width as GLsizei
+                info.width as GLsizei,
             );
         },
         ::tex::Texture1DArray => {
@@ -346,7 +346,7 @@ fn wrap_to_gl(w: ::tex::WrapMode) -> GLenum {
     match w {
         ::tex::Tile   => gl::REPEAT,
         ::tex::Mirror => gl::MIRRORED_REPEAT,
-        ::tex::Clamp  => gl::CLAMP_TO_EDGE
+        ::tex::Clamp  => gl::CLAMP_TO_EDGE,
     }
 }
 
@@ -356,9 +356,7 @@ fn filter_to_gl(f: ::tex::FilterMethod) -> (GLenum, GLenum) {
         ::tex::Mipmap => (gl::NEAREST_MIPMAP_NEAREST, gl::NEAREST),
         ::tex::Bilinear => (gl::LINEAR, gl::LINEAR),
         ::tex::Trilinear => (gl::LINEAR_MIPMAP_LINEAR, gl::LINEAR),
-        ::tex::Anisotropic(..) => {
-            (gl::LINEAR_MIPMAP_LINEAR, gl::LINEAR)
-        }
+        ::tex::Anisotropic(..) => (gl::LINEAR_MIPMAP_LINEAR, gl::LINEAR),
     }
 }
 

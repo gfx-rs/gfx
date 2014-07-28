@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::default::Default;
+use std::fmt;
 use StencilValue = super::target::Stencil;
 
 /// The winding order of a set of vertices.
@@ -216,5 +217,22 @@ impl Default for Blend {
             alpha: Default::default(),
             value: Default::default(),
         }
+    }
+}
+
+#[deriving(Clone, PartialEq)]
+bitflags!(
+    flags ColorMask: u32 {  //u8 is preferred, but doesn't seem to work well
+        static Red     = 0x1,
+        static Green   = 0x2,
+        static Blue    = 0x4,
+        static Alpha   = 0x8,
+        static MaskAll = 0xF
+    }
+)
+
+impl fmt::Show for ColorMask {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ColorMask({})", *self)
     }
 }

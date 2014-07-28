@@ -72,6 +72,7 @@ fn main() {
 
     glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
     window.set_key_polling(true); // so we can quit when Esc is pressed
+    let (width, height) = window.get_size();
 
     // spawn render task
     let (renderer, mut device) = {
@@ -82,7 +83,7 @@ fn main() {
     // spawn game task
     spawn(proc() {
         let mut renderer = renderer;
-        let frame = gfx::Frame::new();
+        let frame = gfx::Frame::new(width as u16, height as u16);
         let state = gfx::DrawState::new();
 
         let vertex_data = vec![

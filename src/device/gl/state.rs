@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use s = super::super::state;
-use super::super::target::Color;
+use super::super::target::{Color, Rect};
 use super::gl;
 
 pub fn bind_primitive(p: s::Primitive) {
@@ -52,6 +52,30 @@ pub fn bind_primitive(p: s::Primitive) {
             gl::PolygonOffset(factor, units as gl::types::GLfloat);
         },
         s::NoOffset => gl::Disable(gl_offset),
+    }
+}
+
+pub fn bind_viewport(rect: Rect) {
+    gl::Viewport(
+        rect.x as gl::types::GLint,
+        rect.y as gl::types::GLint,
+        rect.w as gl::types::GLint,
+        rect.h as gl::types::GLint
+    );
+}
+
+pub fn bind_scissor(rect: Option<Rect>) {
+    match rect {
+        Some(r) => {
+            gl::Enable(gl::SCISSOR_TEST);
+            gl::Scissor(
+                r.x as gl::types::GLint,
+                r.y as gl::types::GLint,
+                r.w as gl::types::GLint,
+                r.h as gl::types::GLint
+            );
+        },
+        None => gl::Disable(gl::SCISSOR_TEST),
     }
 }
 
@@ -151,15 +175,26 @@ pub fn bind_blend(blend: Option<s::Blend>) {
             gl::Enable(gl::BLEND);
             gl::BlendEquationSeparate(
                 map_equation(b.color.equation),
-                map_equation(b.alpha.equation));
+                map_equation(b.alpha.equation),
+            );
             gl::BlendFuncSeparate(
                 map_factor(b.color.source),
                 map_factor(b.color.destination),
                 map_factor(b.alpha.source),
-                map_factor(b.alpha.destination));
+                map_factor(b.alpha.destination),
+            );
             let Color([r, g, b, a]) = b.value;
             gl::BlendColor(r, g, b, a);
         },
         None => gl::Disable(gl::BLEND),
     }
+}
+
+pub fn bind_color_mask(mask: s::ColorMask) {
+    gl::ColorMask(
+        if (mask & s::Red  ).is_empty() {gl::FALSE} else {gl::TRUE},
+        if (mask & s::Green).is_empty() {gl::FALSE} else {gl::TRUE},
+        if (mask & s::Blue ).is_empty() {gl::FALSE} else {gl::TRUE},
+        if (mask & s::Alpha).is_empty() {gl::FALSE} else {gl::TRUE},
+    );
 }

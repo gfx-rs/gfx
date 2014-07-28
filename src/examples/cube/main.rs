@@ -108,10 +108,7 @@ fn main() {
 
     glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
     window.set_key_polling(true); // so we can quit when Esc is pressed
-    let aspect = {
-        let (w, h) = window.get_size();
-        w as f32 / h as f32
-    };
+    let (width, height) = window.get_size();
 
     // spawn render task
     let (renderer, mut device) = {
@@ -122,8 +119,8 @@ fn main() {
     // spawn game task
     spawn(proc() {
         let mut renderer = renderer;
-        let frame = gfx::Frame::new();
-        let state = gfx::DrawState::new().depth(gfx::rast::LessEqual, true);
+        let frame = gfx::Frame::new(width as u16, height as u16);
+        let state = gfx::DrawState::new().depth(gfx::state::LessEqual, true);
 
         let vertex_data = vec![
             //top (0, 0, 1)
@@ -216,6 +213,7 @@ fn main() {
                 &Point3::new(0f32, 0.0, 0.0),
                 &Vector3::unit_z()
                 );
+            let aspect = width as f32 / height as f32;
             let mp = cgmath::projection::perspective(
                 cgmath::angle::deg(45f32), aspect, 1f32, 10f32);
             mp.mul_m(&mv.mat)

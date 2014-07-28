@@ -171,7 +171,7 @@ impl Renderer {
             should_finish: should_finish,
             default_frame_buffer: 0,
             state: State {
-                frame: target::Frame::new(),
+                frame: target::Frame::new(0, 0),
             },
         }
     }
@@ -211,9 +211,11 @@ impl Renderer {
         self.dispatcher.demand(|res| !res.programs[bundle.get_program()].is_pending());
         // bind state
         self.cast(device::SetPrimitiveState(state.primitive));
+        self.cast(device::SetScissor(state.scissor));
         self.cast(device::SetDepthStencilState(state.depth, state.stencil,
             state.primitive.get_cull_mode()));
         self.cast(device::SetBlendState(state.blend));
+        self.cast(device::SetColorMask(state.color_mask));
         // bind array buffer
         let vao = self.dispatcher.get_common_array_buffer();
         self.cast(device::BindArrayBuffer(vao));
@@ -398,6 +400,12 @@ impl Renderer {
     }
 
     fn bind_frame(&mut self, frame: &target::Frame) {
+        self.cast(device::SetViewport(device::target::Rect {
+            x: 0,
+            y: 0,
+            w: frame.size[0],
+            h: frame.size[1],
+        }));
         if frame.is_default() {
             // binding the default FBO, not touching our common one
             self.cast(device::BindFrameBuffer(self.default_frame_buffer));

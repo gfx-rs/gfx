@@ -13,15 +13,17 @@
 // limitations under the License.
 
 use s = device::state;
-use device::target::{Color, Stencil};
+use device::target::{Color, Rect, Stencil};
 
 /// An assembly of states that affect regular draw calls
 #[deriving(Clone, PartialEq, Show)]
 pub struct DrawState {
     pub primitive: s::Primitive,
+    pub scissor: Option<Rect>,
     pub stencil: Option<s::Stencil>,
     pub depth: Option<s::Depth>,
     pub blend: Option<s::Blend>,
+    pub color_mask: s::ColorMask,
 }
 
 #[deriving(Clone, PartialEq, Show)]
@@ -38,9 +40,11 @@ impl DrawState {
                 method: s::Fill(s::CullBack),
                 offset: s::NoOffset,
             },
+            scissor: None,
             stencil: None,
             depth: None,
             blend: None,
+            color_mask: s::MaskAll,
         }
     }
 

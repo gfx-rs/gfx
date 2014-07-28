@@ -482,16 +482,14 @@ impl super::ApiBackEnd for GlBackEnd {
                     None => ()
                 }
             },
-            super::SetViewport(rect) => {
-                gl::Viewport(
-                    rect.x as gl::types::GLint,
-                    rect.y as gl::types::GLint,
-                    rect.w as gl::types::GLint,
-                    rect.h as gl::types::GLint
-                );
-            },
             super::SetPrimitiveState(prim) => {
                 state::bind_primitive(prim);
+            },
+            super::SetScissor(rect) => {
+                state::bind_scissor(rect);
+            },
+            super::SetViewport(rect) => {
+                state::bind_viewport(rect);
             },
             super::SetDepthStencilState(depth, stencil, cull) => {
                 state::bind_stencil(stencil, cull);
@@ -499,6 +497,9 @@ impl super::ApiBackEnd for GlBackEnd {
             },
             super::SetBlendState(blend) => {
                 state::bind_blend(blend);
+            },
+            super::SetColorMask(mask) => {
+                state::bind_color_mask(mask);
             },
             super::UpdateBuffer(buffer, data) => {
                 self.update_buffer(buffer, data, super::UsageDynamic);
