@@ -18,7 +18,6 @@ extern crate libc;
 use log;
 use std::{fmt, mem, str};
 use std::collections::HashSet;
-use std::default::Default;
 use a = super::attrib;
 
 mod shade;
@@ -203,12 +202,6 @@ pub enum ErrorType {
 pub struct GlBackEnd {
     caps: super::Capabilities,
     info: Info,
-    /// Maps (by the index) from texture name to TextureInfo, so we can look up what texture target
-    /// to bind this texture to later. Yuck!
-    // Doesn't use a SmallIntMap to avoid the overhead of Option
-    textures: Vec<::tex::TextureInfo>,
-    /// Maps from sampler name to SamplerInfo for further lookups
-    samplers: Vec<::tex::SamplerInfo>,
 }
 
 impl GlBackEnd {
@@ -233,8 +226,6 @@ impl GlBackEnd {
         GlBackEnd {
             caps: caps,
             info: info,
-            textures: Vec::new(),
-            samplers: Vec::new(),
         }
     }
 
@@ -322,8 +313,6 @@ impl super::ApiBackEnd for GlBackEnd {
         } else {
             tex::make_without_storage(info)
         };
-        let filler = Default::default();
-        self.textures.grow_set(name as uint, &filler, info);
         name
     }
 
@@ -331,8 +320,7 @@ impl super::ApiBackEnd for GlBackEnd {
         if self.caps.sampler_objects_supported {
             tex::make_sampler(info)
         } else {
-            self.samplers.push(info);
-            self.samplers.len() as Sampler - 1
+            0
         }
     }
 
@@ -463,18 +451,16 @@ impl super::ApiBackEnd for GlBackEnd {
             super::BindUniform(loc, uniform) => {
                 shade::bind_uniform(loc as gl::types::GLint, uniform);
             },
-            super::BindTexture(slot, tex, sam) => {
-                let tinfo = &self.textures[tex as uint];
+            super::BindTexture(slot, kind, texture, sampler) => {
                 let anchor = tex::bind_texture(
                     gl::TEXTURE0 + slot as gl::types::GLenum,
-                    tex, tinfo);
-                match sam {
-                    Some(sam) => {
+                    kind, texture);
+                match sampler {
+                    Some((sam, ref info)) => {
                         if self.caps.sampler_objects_supported {
                             gl::BindSampler(slot as gl::types::GLenum, sam);
                         } else {
-                            let sinfo = &self.samplers[sam as uint];
-                            tex::bind_sampler(anchor, sinfo);
+                            tex::bind_sampler(anchor, info);
                         }
                     },
                     None => ()
@@ -501,9 +487,8 @@ impl super::ApiBackEnd for GlBackEnd {
             super::UpdateBuffer(buffer, data) => {
                 self.update_buffer(buffer, data, super::UsageDynamic);
             },
-            super::UpdateTexture(tex, image_info, data) => {
-                let tinfo = &self.textures[tex as uint];
-                tex::update_texture(tex, tinfo, &image_info, data);
+            super::UpdateTexture(kind, texture, image_info, data) => {
+                tex::update_texture(kind, texture, &image_info, data);
             },
             super::Draw(start, count) => {
                 gl::DrawArrays(gl::TRIANGLES,

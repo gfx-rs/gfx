@@ -217,8 +217,8 @@ pub fn make_with_storage(info: ::tex::TextureInfo) -> Texture {
 }
 
 /// Bind a texture to the specified slot
-pub fn bind_texture(slot: GLenum, name: Texture, info: &::tex::TextureInfo) -> BindAnchor {
-    let target = kind_to_gl(info.kind);
+pub fn bind_texture(slot: GLenum, kind: ::tex::TextureKind, name: Texture) -> BindAnchor {
+    let target = kind_to_gl(kind);
     gl::ActiveTexture(slot);
     gl::BindTexture(target, name);
     BindAnchor(target)
@@ -251,20 +251,19 @@ pub fn bind_sampler(anchor: BindAnchor, info: &::tex::SamplerInfo) {
     gl::TexParameterf(target, gl::TEXTURE_MAX_LOD, max);
 }
 
-pub fn update_texture(name: Texture, info: &::tex::TextureInfo, img: &::tex::ImageInfo, data: Box<Blob + Send>) {
-    debug_assert!(info.contains(img));
+pub fn update_texture(kind: ::tex::TextureKind, name: Texture, img: &::tex::ImageInfo, data: Box<Blob + Send>) {
     debug_assert!(img.width as uint * img.height as uint * img.depth as uint *
         format_to_size(img.format) == data.get_size());
 
     let data = data.get_address() as *const GLvoid;
     let pix = format_to_glpixel(img.format);
     let typ = format_to_gltype(img.format);
-    let target = kind_to_gl(info.kind);
+    let target = kind_to_gl(kind);
 
     gl::BindTexture(target, name);
 
     unsafe {
-        match info.kind {
+        match kind {
             ::tex::Texture1D => {
                 gl::TexSubImage1D(
                     target,

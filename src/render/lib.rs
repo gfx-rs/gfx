@@ -133,10 +133,6 @@ impl Dispatcher {
     fn get_common_frame_buffer(&mut self) -> backend::FrameBuffer {
         self.get_any(|res| &res.frame_buffers[0])
     }
-
-    fn get_texture(&mut self, handle: TextureHandle) -> backend::Texture {
-        self.get_any(|res| &res.textures[handle])
-    }
 }
 
 /// A renderer. Methods on this get translated into commands for the device.
@@ -294,16 +290,16 @@ impl Renderer {
     pub fn create_texture(&mut self, info: device::tex::TextureInfo) -> TextureHandle {
         let texs = &mut self.dispatcher.resource.textures;
         let token = texs.len();
+        texs.push((Pending, info.clone()));
         self.device_tx.send(device::Call(token, device::CreateTexture(info)));
-        texs.push(Pending);
         token
     }
 
     pub fn create_sampler(&mut self, info: device::tex::SamplerInfo) -> SamplerHandle {
         let sams = &mut self.dispatcher.resource.samplers;
         let token = sams.len();
+        sams.push((Pending, info.clone()));
         self.device_tx.send(device::Call(token, device::CreateSampler(info)));
-        sams.push(Pending);
         token
     }
 
@@ -338,9 +334,10 @@ impl Renderer {
     }
 
     pub fn update_texture<T: Send>(&mut self, handle: TextureHandle,
-                                   info: device::tex::ImageInfo, data: Vec<T>) {
-        let tex = self.dispatcher.get_texture(handle);
-        self.cast(device::UpdateTexture(tex, info, (box data) as Box<device::Blob + Send>));
+                                   img: device::tex::ImageInfo, data: Vec<T>) {
+        let name = self.dispatcher.get_any(|res| res.textures[handle].ref0());
+        let info = self.dispatcher.resource.textures[handle].ref1();
+        self.cast(device::UpdateTexture(info.kind, name, img, (box data) as Box<device::Blob + Send>));
     }
 
     /// Make sure all the mesh buffers are successfully created/loaded
@@ -368,9 +365,10 @@ impl Renderer {
         bundle.bind(|_, _| {
         }, |_, _| {
         }, |_, (tex, sam)| {
-            dp.demand(|res| !res.textures[tex].is_pending());
+            dp.demand(|res| !res.textures[tex].ref0().is_pending());
             match sam {
-                Some(sam) => dp.demand(|res| !res.samplers[sam].is_pending()),
+                Some(sam) => dp.demand(|res| !res.samplers[sam].ref0().
+                    is_pending()),
                 None => (),
             }
         });
@@ -419,17 +417,19 @@ impl Renderer {
                 _ => {block_fail = Some(bv)},
             }
         }, |tv, (tex_handle, sampler)| {
-            let sam = sampler.map(|sam| *self.dispatcher.resource.samplers[sam].unwrap());
+            let sam = sampler.map(|sam| match self.dispatcher.resource.samplers[sam] {
+                (ref future, ref info) => (*future.unwrap(), info.clone())
+            });
             match self.dispatcher.resource.textures[tex_handle] {
-                Loaded(tex) => {
+                (Loaded(tex), ref info) => {
                     self.cast(device::BindUniform(
                         meta.textures[tv as uint].location,
                         device::shade::ValueI32(texture_slot as i32)
                         ));
-                    self.cast(device::BindTexture(texture_slot, tex, sam));
+                    self.cast(device::BindTexture(texture_slot, info.kind, tex, sam));
                     texture_slot += 1;
                 },
-                _ => {texture_fail = Some(tv)},
+                (_, _) => {texture_fail = Some(tv)},
             }
         });
         match (block_fail, texture_fail) {

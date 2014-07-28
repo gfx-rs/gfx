@@ -17,6 +17,7 @@ use std::fmt::Show;
 use device;
 use backend = device::dev;
 use device::shade::{CreateShaderError, ProgramMeta};
+use device::tex::{SamplerInfo, TextureInfo};
 
 
 /// A deferred resource
@@ -51,8 +52,8 @@ pub struct Cache {
     pub shaders: Vec<Future<backend::Shader, CreateShaderError>>,
     pub programs: Vec<Future<ProgramMeta, ()>>,
     pub frame_buffers: Vec<Future<backend::FrameBuffer, ()>>,
-    pub textures: Vec<Future<backend::Texture, ()>>,
-    pub samplers: Vec<Future<backend::Sampler, ()>>,
+    pub textures: Vec<(Future<backend::Texture, ()>, TextureInfo)>,
+    pub samplers: Vec<(Future<backend::Sampler, ()>, SamplerInfo)>,
 }
 
 impl Cache {
@@ -107,10 +108,14 @@ impl Cache {
                 *self.frame_buffers.get_mut(token) = Loaded(fbo);
             },
             device::ReplyNewTexture(token, tex) => {
-                *self.textures.get_mut(token) = Loaded(tex);
+                match *self.textures.get_mut(token) {
+                    (ref mut future, _) => {*future = Loaded(tex)},
+                }
             },
             device::ReplyNewSampler(token, sam) => {
-                *self.samplers.get_mut(token) = Loaded(sam);
+                match *self.samplers.get_mut(token) {
+                    (ref mut future, _) => {*future = Loaded(sam)},
+                }
             },
         }
         ret
