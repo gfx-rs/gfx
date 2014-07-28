@@ -23,6 +23,23 @@
 
 use std::default::Default;
 
+/// Describes the layout of each texel within a surface/texture.
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+#[repr(u8)]
+pub enum Format {
+    RGB8,
+    RGBA8,
+}
+
+/// Describes the storage of a surface
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+pub struct SurfaceInfo {
+    pub width: u16,
+    pub height: u16,
+    pub format: Format,
+    // TODO: Multisampling
+}
+
 /// How to [filter](https://en.wikipedia.org/wiki/Texture_filtering) the
 /// texture when sampling. They correspond to increasing levels of quality,
 /// but also cost. They "layer" on top of each other: it is not possible to
@@ -72,16 +89,8 @@ pub enum TextureKind {
     // to explain without rambling.
     TextureCube,
     /// A volume texture, with each 2D layer arranged contiguously.
-    Texture3D
+    Texture3D,
     // TODO: Multisampling?
-}
-
-/// Describes the layout of each texel within a texture.
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
-#[repr(u8)]
-pub enum TextureFormat {
-    RGB8,
-    RGBA8,
 }
 
 /// Describes the storage of a texture.
@@ -101,7 +110,7 @@ pub struct TextureInfo {
     /// and every level after that shrinks each dimension by a factor of 2.
     pub mipmap_range: (u8, u8),
     pub kind: TextureKind,
-    pub format: TextureFormat,
+    pub format: Format,
 }
 
 /// Describes a subvolume of a texture, which image data can be uploaded into.
@@ -114,7 +123,7 @@ pub struct ImageInfo {
     pub height: u16,
     pub depth: u16,
     /// Format of each texel.
-    pub format: TextureFormat,
+    pub format: Format,
     /// Which mipmap to select.
     pub mipmap: u8,
 }

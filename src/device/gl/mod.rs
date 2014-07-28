@@ -318,18 +318,22 @@ impl super::ApiBackEnd for GlBackEnd {
         name
     }
 
+    fn create_surface(&mut self, info: ::tex::SurfaceInfo) -> Surface {
+        tex::make_surface(&info)
+    }
+
     fn create_texture(&mut self, info: ::tex::TextureInfo) -> Texture {
         let name = if self.caps.immutable_storage_supported {
-            tex::make_with_storage(info)
+            tex::make_with_storage(&info)
         } else {
-            tex::make_without_storage(info)
+            tex::make_without_storage(&info)
         };
         name
     }
 
     fn create_sampler(&mut self, info: ::tex::SamplerInfo) -> Sampler {
         if self.caps.sampler_objects_supported {
-            tex::make_sampler(info)
+            tex::make_sampler(&info)
         } else {
             0
         }
@@ -471,6 +475,7 @@ impl super::ApiBackEnd for GlBackEnd {
                         if self.caps.sampler_objects_supported {
                             gl::BindSampler(slot as gl::types::GLenum, sam);
                         } else {
+                            debug_assert_eq!(sam, 0);
                             tex::bind_sampler(anchor, info);
                         }
                     },

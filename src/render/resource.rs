@@ -17,7 +17,7 @@ use std::fmt::Show;
 use device;
 use backend = device::dev;
 use device::shade::{CreateShaderError, ProgramMeta};
-use device::tex::{SamplerInfo, TextureInfo};
+use device::tex::{SamplerInfo, SurfaceInfo, TextureInfo};
 
 
 /// A deferred resource
@@ -52,7 +52,7 @@ pub struct Cache {
     pub shaders: Vec<Future<backend::Shader, CreateShaderError>>,
     pub programs: Vec<Future<ProgramMeta, ()>>,
     pub frame_buffers: Vec<Future<backend::FrameBuffer, ()>>,
-    pub surfaces: Vec<(Future<backend::Surface, ()>, TextureInfo)>,
+    pub surfaces: Vec<(Future<backend::Surface, ()>, SurfaceInfo)>,
     pub textures: Vec<(Future<backend::Texture, ()>, TextureInfo)>,
     pub samplers: Vec<(Future<backend::Sampler, ()>, SamplerInfo)>,
 }
@@ -109,14 +109,19 @@ impl Cache {
             device::ReplyNewFrameBuffer(token, fbo) => {
                 *self.frame_buffers.get_mut(token) = Loaded(fbo);
             },
+            device::ReplyNewSurface(token, suf) => {
+                match *self.surfaces.get_mut(token) {
+                    (ref mut future, _) => *future = Loaded(suf),
+                }
+            },
             device::ReplyNewTexture(token, tex) => {
                 match *self.textures.get_mut(token) {
-                    (ref mut future, _) => {*future = Loaded(tex)},
+                    (ref mut future, _) => *future = Loaded(tex),
                 }
             },
             device::ReplyNewSampler(token, sam) => {
                 match *self.samplers.get_mut(token) {
-                    (ref mut future, _) => {*future = Loaded(sam)},
+                    (ref mut future, _) => *future = Loaded(sam),
                 }
             },
         }

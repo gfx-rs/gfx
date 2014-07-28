@@ -26,6 +26,7 @@ extern crate comm;
 extern crate device;
 
 use std::fmt::Show;
+use std::mem::size_of;
 use std::vec::MoveItems;
 
 use backend = device::dev;
@@ -282,9 +283,17 @@ impl Renderer {
 
     pub fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh {
         let nv = data.len();
-        debug_assert!(nv < 0x10000);
+        debug_assert!(nv >> (8 * size_of::<mesh::VertexCount>()) == 0);
         let buf = self.create_buffer(Some(data));
         mesh::Mesh::from::<T>(buf, nv as mesh::VertexCount)
+    }
+
+    pub fn create_surface(&mut self, info: device::tex::SurfaceInfo) -> SurfaceHandle {
+        let sufs =  &mut self.dispatcher.resource.surfaces;
+        let token = sufs.len();
+        sufs.push((Pending, info.clone()));
+        self.device_tx.send(device::Call(token, device::CreateSurface(info)));
+        token
     }
 
     pub fn create_texture(&mut self, info: device::tex::TextureInfo) -> TextureHandle {

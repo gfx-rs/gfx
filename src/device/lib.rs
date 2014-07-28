@@ -100,9 +100,10 @@ pub enum CallRequest {
     CreateArrayBuffer,
     CreateShader(shade::Stage, shade::ShaderSource),
     CreateProgram(Vec<dev::Shader>),
+    CreateFrameBuffer,
+    CreateSurface(tex::SurfaceInfo),
     CreateTexture(tex::TextureInfo),
     CreateSampler(tex::SamplerInfo),
-    CreateFrameBuffer,
 }
 
 /// Requests that don't expect a reply
@@ -141,6 +142,7 @@ pub enum Reply<T> {
     ReplyNewShader(T, Result<dev::Shader, shade::CreateShaderError>),
     ReplyNewProgram(T, Result<shade::ProgramMeta, ()>),
     ReplyNewFrameBuffer(T, dev::FrameBuffer),
+    ReplyNewSurface(T, dev::Surface),
     ReplyNewTexture(T, dev::Texture),
     ReplyNewSampler(T, dev::Sampler),
 }
@@ -155,6 +157,7 @@ pub trait ApiBackEnd {
     fn create_shader(&mut self, shade::Stage, code: shade::ShaderSource) -> Result<dev::Shader, shade::CreateShaderError>;
     fn create_program(&mut self, shaders: &[dev::Shader]) -> Result<shade::ProgramMeta, ()>;
     fn create_frame_buffer(&mut self) -> dev::FrameBuffer;
+    fn create_surface(&mut self, info: tex::SurfaceInfo) -> dev::Surface;
     fn create_texture(&mut self, info: tex::TextureInfo) -> dev::Texture;
     fn create_sampler(&mut self, info: tex::SamplerInfo) -> dev::Sampler;
     /// Update the information stored in a specific buffer
@@ -206,14 +209,6 @@ impl<T: Send, B: ApiBackEnd, C: GraphicsContext<B>> Device<T, B, C> {
                 let name = self.back_end.create_shader(stage, code);
                 ReplyNewShader(token, name)
             },
-            CreateTexture(info) => {
-                let name = self.back_end.create_texture(info);
-                ReplyNewTexture(token, name)
-            },
-            CreateSampler(info) => {
-                let name = self.back_end.create_sampler(info);
-                ReplyNewSampler(token, name)
-            },
             CreateProgram(code) => {
                 let name = self.back_end.create_program(code.as_slice());
                 ReplyNewProgram(token, name)
@@ -221,6 +216,18 @@ impl<T: Send, B: ApiBackEnd, C: GraphicsContext<B>> Device<T, B, C> {
             CreateFrameBuffer => {
                 let name = self.back_end.create_frame_buffer();
                 ReplyNewFrameBuffer(token, name)
+            },
+            CreateSurface(info) => {
+                let name = self.back_end.create_surface(info);
+                ReplyNewSurface(token, name)
+            },
+            CreateTexture(info) => {
+                let name = self.back_end.create_texture(info);
+                ReplyNewTexture(token, name)
+            },
+            CreateSampler(info) => {
+                let name = self.back_end.create_sampler(info);
+                ReplyNewSampler(token, name)
             },
         }
     }
