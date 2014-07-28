@@ -52,6 +52,7 @@ pub struct Cache {
     pub shaders: Vec<Future<backend::Shader, CreateShaderError>>,
     pub programs: Vec<Future<ProgramMeta, ()>>,
     pub frame_buffers: Vec<Future<backend::FrameBuffer, ()>>,
+    pub surfaces: Vec<(Future<backend::Surface, ()>, TextureInfo)>,
     pub textures: Vec<(Future<backend::Texture, ()>, TextureInfo)>,
     pub samplers: Vec<(Future<backend::Sampler, ()>, SamplerInfo)>,
 }
@@ -65,6 +66,7 @@ impl Cache {
             shaders: Vec::new(),
             programs: Vec::new(),
             frame_buffers: Vec::new(),
+            surfaces: Vec::new(),
             textures: Vec::new(),
             samplers: Vec::new(),
         }

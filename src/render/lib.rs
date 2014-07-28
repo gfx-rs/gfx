@@ -30,7 +30,7 @@ use std::vec::MoveItems;
 
 use backend = device::dev;
 use device::shade::{CreateShaderError, ProgramMeta, Vertex, Fragment, ShaderSource};
-use device::target::{ClearData, TargetColor, TargetDepth, TargetStencil};
+use device::target::{ClearData, Target, TargetColor, TargetDepth, TargetStencil};
 use shade::{BundleInternal, ShaderParam};
 use resource::{Loaded, Pending};
 
@@ -374,6 +374,20 @@ impl Renderer {
         });
     }
 
+    fn make_target_cast(dp: &mut Dispatcher, to: Target, plane: target::Plane) -> device::CastRequest {
+        match plane {
+            target::PlaneEmpty => device::UnbindTarget(to),
+            target::PlaneSurface(handle) => {
+                let name = dp.get_any(|res| res.surfaces[handle].ref0());
+                device::BindTargetSurface(to, name)
+            },
+            target::PlaneTexture(handle, level, layer) => {
+                let name = dp.get_any(|res| res.textures[handle].ref0());
+                device::BindTargetTexture(to, name, level, layer)
+            },
+        }
+    }
+
     fn bind_frame(&mut self, frame: &target::Frame) {
         if frame.is_default() {
             // binding the default FBO, not touching our common one
@@ -383,14 +397,17 @@ impl Renderer {
             self.cast(device::BindFrameBuffer(fbo));
             for (i, (cur, new)) in self.state.frame.colors.iter().zip(frame.colors.iter()).enumerate() {
                 if *cur != *new {
-                    self.cast(device::BindTarget(TargetColor(i as u8), *new));
+                    let msg = Renderer::make_target_cast(&mut self.dispatcher, TargetColor(i as u8), *new);
+                    self.cast(msg);
                 }
             }
             if self.state.frame.depth != frame.depth {
-                self.cast(device::BindTarget(TargetDepth, frame.depth));
+                let msg = Renderer::make_target_cast(&mut self.dispatcher, TargetDepth, frame.depth);
+                self.cast(msg);
             }
             if self.state.frame.stencil != frame.stencil {
-                self.cast(device::BindTarget(TargetStencil, frame.stencil));
+                let msg = Renderer::make_target_cast(&mut self.dispatcher, TargetStencil, frame.stencil);
+                self.cast(msg);
             }
             self.state.frame = *frame;
         }

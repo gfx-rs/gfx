@@ -115,8 +115,12 @@ pub enum CastRequest {
         attrib::Type, attrib::Stride, attrib::Offset),
     BindIndex(dev::Buffer),
     BindFrameBuffer(dev::FrameBuffer),
-    /// Bind a `Plane` to a specific render target.
-    BindTarget(target::Target, target::Plane),
+    /// Unbind any surface from the specified target slot
+    UnbindTarget(target::Target),
+    /// Bind a surface to the specified target slot
+    BindTargetSurface(target::Target, dev::Surface),
+    /// Bind a level of the texture to the specified target slot
+    BindTargetTexture(target::Target, dev::Texture, target::Level, Option<target::Layer>),
     BindUniformBlock(dev::Program, UniformBufferSlot, UniformBlockIndex, dev::Buffer),
     BindUniform(shade::Location, shade::UniformValue),
     BindTexture(TextureSlot, tex::TextureKind, dev::Texture, Option<(dev::Sampler, tex::SamplerInfo)>),

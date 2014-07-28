@@ -35,10 +35,9 @@ pub use render::state::{DrawState, BlendAdditive, BlendAlpha};
 pub use render::shade::{ParameterSink, ToUniform, ShaderParam, TextureParam,
     ParameterLinkError, ParameterError, ErrorInternal, ErrorUniform, ErrorBlock, ErrorTexture,
     FnUniform, FnBlock, FnTexture, VarUniform, VarBlock, VarTexture};
-pub use render::target::Frame;
+pub use render::target::{Frame, Plane, PlaneEmpty, PlaneSurface, PlaneTexture};
 pub use device::{attrib, state, tex};
-pub use device::target::{Color, ClearData, Plane, TextureLayer, TextureLevel};
-pub use device::target::{PlaneEmpty, PlaneSurface, PlaneTexture, PlaneTextureLayer};
+pub use device::target::{Color, ClearData, Layer, Level};
 pub use device::{Blob, Device, GlBackEnd, GlProvider, GraphicsContext, InitError, QueueSize};
 pub use device::shade::{UniformValue, ValueI32, ValueF32, ValueI32Vec, ValueF32Vec, ValueF32Matrix};
 pub use device::shade::{ShaderSource, StaticBytes};

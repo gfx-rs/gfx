@@ -17,9 +17,9 @@ use std::{default, fmt};
 // TODO: Really tighten up the terminology here.
 
 /// A depth value, specifying which plane to select out of a 3D texture.
-pub type TextureLayer = u16;
+pub type Layer = u16;
 /// Mipmap level to select in a texture.
-pub type TextureLevel = u8;
+pub type Level = u8;
 /// A single depth value from a depth buffer.
 pub type Depth = f32;
 /// A single value from a stencil stencstencil buffer.
@@ -81,19 +81,6 @@ pub struct ClearData {
     pub depth: Option<Depth>,
     /// If set, the stencil buffer of the frame will be cleared to this.
     pub stencil: Option<Stencil>,
-}
-
-#[deriving(Eq, PartialEq, Show)]
-/// A single buffer that can be bound to a render target.
-pub enum Plane {
-    /// No buffer, the results will not be stored.
-    PlaneEmpty,
-    /// Render to a `Surface` (corresponds to a renderbuffer in GL).
-    PlaneSurface(super::dev::Surface),
-    /// Render to a texture at a specific mipmap level
-    PlaneTexture(super::dev::Texture, TextureLevel),
-    /// Render to a layer of a 3D texture, at a specific mipmap level
-    PlaneTextureLayer(super::dev::Texture, TextureLevel, TextureLayer),
 }
 
 /// When rendering, each "output" of the fragment shader goes to a specific target. A `Plane` can

@@ -12,10 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use device::target::Color;
-use device::target::{Plane, PlaneEmpty};
+use t = device::target;
 
 static MAX_COLOR_TARGETS: uint = 4;
+
+#[deriving(Eq, PartialEq, Show)]
+/// A single buffer that can be bound to a render target.
+pub enum Plane {
+    /// No buffer, the results will not be stored.
+    PlaneEmpty,
+    /// Render to a `Surface` (corresponds to a renderbuffer in GL).
+    PlaneSurface(super::SurfaceHandle),
+    /// Render to a texture at a specific mipmap level
+    /// If `Layer` is set, it is selecting a single 2D slice of a given 3D texture
+    PlaneTexture(super::TextureHandle, t::Level, Option<t::Layer>),
+}
 
 /// A complete `Frame`, which is the result of rendering.
 pub struct Frame {

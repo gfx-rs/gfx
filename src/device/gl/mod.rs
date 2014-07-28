@@ -198,6 +198,17 @@ pub enum ErrorType {
     UnknownError,
 }
 
+
+fn target_to_gl(target: super::target::Target) -> gl::types::GLenum {
+    match target {
+        super::target::TargetColor(index) =>
+            gl::COLOR_ATTACHMENT0 + (index as gl::types::GLenum),
+        super::target::TargetDepth => gl::DEPTH_ATTACHMENT,
+        super::target::TargetStencil => gl::STENCIL_ATTACHMENT,
+        super::target::TargetDepthStencil => gl::DEPTH_STENCIL_ATTACHMENT,
+    }
+}
+
 /// An OpenGL back-end with GLSL shaders
 pub struct GlBackEnd {
     caps: super::Capabilities,
@@ -425,23 +436,23 @@ impl super::ApiBackEnd for GlBackEnd {
             super::BindFrameBuffer(frame_buffer) => {
                 gl::BindFramebuffer(gl::DRAW_FRAMEBUFFER, frame_buffer);
             },
-            super::BindTarget(target, plane) => {
-                let attachment = match target {
-                    super::target::TargetColor(index) =>
-                        gl::COLOR_ATTACHMENT0 + (index as gl::types::GLenum),
-                    super::target::TargetDepth => gl::DEPTH_ATTACHMENT,
-                    super::target::TargetStencil => gl::STENCIL_ATTACHMENT,
-                    super::target::TargetDepthStencil => gl::DEPTH_STENCIL_ATTACHMENT,
-                };
-                match plane {
-                    super::target::PlaneEmpty => gl::FramebufferRenderbuffer
-                        (gl::DRAW_FRAMEBUFFER, attachment, gl::RENDERBUFFER, 0),
-                    super::target::PlaneSurface(name) => gl::FramebufferRenderbuffer
-                        (gl::DRAW_FRAMEBUFFER, attachment, gl::RENDERBUFFER, name),
-                    super::target::PlaneTexture(name, level) => gl::FramebufferTexture
-                        (gl::DRAW_FRAMEBUFFER, attachment, name, level as gl::types::GLint),
-                    super::target::PlaneTextureLayer(name, level, layer) => gl::FramebufferTextureLayer
-                        (gl::DRAW_FRAMEBUFFER, attachment, name, level as gl::types::GLint, layer as gl::types::GLint),
+            super::UnbindTarget(target) => {
+                let att = target_to_gl(target);
+                gl::FramebufferRenderbuffer(gl::DRAW_FRAMEBUFFER, att, gl::RENDERBUFFER, 0);
+            },
+            super::BindTargetSurface(target, name) => {
+                let att = target_to_gl(target);
+                gl::FramebufferRenderbuffer(gl::DRAW_FRAMEBUFFER, att, gl::RENDERBUFFER, name);
+            },
+            super::BindTargetTexture(target, name, level, layer) => {
+                let att = target_to_gl(target);
+                match layer {
+                    Some(layer) => gl::FramebufferTextureLayer(
+                        gl::DRAW_FRAMEBUFFER, att, name, level as gl::types::GLint,
+                        layer as gl::types::GLint),
+                    None => gl::FramebufferTexture(
+                        gl::DRAW_FRAMEBUFFER, att, name, level as gl::types::GLint
+                        ),
                 }
             },
             super::BindUniformBlock(program, slot, loc, buffer) => {
