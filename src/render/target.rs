@@ -18,7 +18,7 @@ use t = device::target;
 
 static MAX_COLOR_TARGETS: uint = 4;
 
-#[deriving(Eq, PartialEq, Show)]
+#[deriving(Clone, PartialEq, Show)]
 /// A single buffer that can be bound to a render target.
 pub enum Plane {
     /// No buffer, the results will not be stored.
