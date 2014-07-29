@@ -56,9 +56,9 @@ pub struct Capabilities {
     immutable_storage_supported: bool,
 }
 
-/// Vertex count.
+/// Draw vertex count.
 pub type VertexCount = u16;
-/// Index count.
+/// Draw index count.
 pub type IndexCount = u16;
 /// Index of a uniform block.
 pub type UniformBlockIndex = u8;
@@ -113,7 +113,7 @@ pub enum BufferUsage {
 pub enum Request<T> {
     /// A request that requires a reply - has the device creating something.
     Call(T, CallRequest),
-    /// A request that does not require a reply - has the device modify something.
+    /// A request that does not require a reply - has the device modifying something.
     Cast(CastRequest),
     /// Swap the front and back buffers, displaying what has been drawn so far. Indicates the end
     /// of a frame.
@@ -270,8 +270,8 @@ impl<T: Send, B: ApiBackEnd, C: GraphicsContext<B>> Device<T, B, C> {
         }
     }
 
-    /// Process all requests received, including requests received while this method is excuting.
-    /// The client must manually update this on the main thread, or else the renderer will have no
+    /// Process all requests received, including requests received while this method is executing.
+    /// The client must manually call this on the main thread, or else the renderer will have no
     /// effect.
     pub fn update(&mut self) {
         // Get updates from the renderer and pass on results
@@ -315,7 +315,7 @@ pub enum InitError {}
 pub type QueueSize = u8;
 
 // TODO: Generalise for different back-ends
-/// Initialize a device for a given context and providerpair, with a given queue size.
+/// Initialize a device for a given context and provider pair, with a given queue size.
 pub fn init<T: Send, C: GraphicsContext<GlBackEnd>, P: GlProvider>(graphics_context: C, provider: P, queue_size: QueueSize)
         -> Result<(Sender<Request<T>>, Receiver<Reply<T>>, Device<T, GlBackEnd, C>, Receiver<Ack>, comm::ShouldClose), InitError> {
     let (request_tx, request_rx) = channel();

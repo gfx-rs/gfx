@@ -33,11 +33,14 @@ pub enum IsArray { Array, NoArray }
 #[deriving(Show)]
 pub enum IsShadow { Shadow, NoShadow }
 
-/// Whether the sampler samples a multisample (antialiased) texture.
+/// Whether the sampler samples a multisample texture.
 #[deriving(Show)]
 pub enum IsMultiSample { MultiSample, NoMultiSample }
 
 /// Whether the sampler samples a rectangle texture.
+///
+/// Rectangle textures are the same as 2D textures, but accessed with absolute texture coordinates
+/// (as opposed to the usual, normalized to [0, 1]).
 #[deriving(Show)]
 pub enum IsRect { Rect, NoRect }
 
@@ -45,7 +48,9 @@ pub enum IsRect { Rect, NoRect }
 #[deriving(Show)]
 pub enum MatrixFormat { ColumnMajor, RowMajor }
 
-/// What texture type this sampler can sample from.
+/// What texture type this sampler samples from.
+///
+/// A single sampler cannot be used with multiple texture types.
 #[deriving(Show)]
 pub enum SamplerType {
     /// Sample from a buffer.
@@ -170,7 +175,7 @@ impl fmt::Show for UniformValue {
     }
 }
 
-/// Variables that a program takes as input.
+/// Vertex information that a shader takes as input.
 #[deriving(Show)]
 pub struct Attribute {
     /// Name of this attribute.
@@ -222,12 +227,12 @@ pub struct SamplerVar {
     pub name: String,
     /// Location of this sampler in the program.
     pub location: Location,
-    /// Base type for the sampler. Always `BaseF32`
+    /// Base type for the sampler.
     pub base_type: BaseType,
     /// Type of this sampler.
     pub sampler_type: SamplerType,
     /// Texture unit this sampler is bound to.
-    pub active_slot: Cell<u8>, // Active texture binding
+    pub active_slot: Cell<u8>,
 }
 
 /// Metadata about a program.

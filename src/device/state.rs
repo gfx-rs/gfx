@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Rasterizer state.
+//! Fixed-function hardware state.
+//!
+//! Configures the primitive assembly (PA), rasterizer, and output merger (OM) blocks.
 
 use std::default::Default;
 use std::fmt;
@@ -34,7 +36,7 @@ pub type OffsetFactor = f32;
 #[allow(missing_doc)]
 pub type OffsetUnits = u32;
 
-/// How to offset vertices, if at all.
+/// How to offset vertices in screen space, if at all.
 #[allow(missing_doc)]
 #[deriving(Clone, PartialEq, Show)]
 pub enum OffsetType {
@@ -116,8 +118,6 @@ pub enum Comparison {
 }
 
 /// Stencil mask operation.
-///
-/// This operation is performed if the stencil test passes.
 #[allow(missing_doc)]
 #[deriving(Clone, PartialEq, Show)]
 pub enum StencilOp {
@@ -144,16 +144,16 @@ pub enum StencilOp {
 pub struct StencilSide {
     /// Comparison function to use to determine if the stencil test passes.
     pub fun: Comparison,
-    /// Reference value to set the stencil buffer to with `OpReplace`.
+    /// Reference value to compare the value in the stencil buffer with.
     pub value: StencilValue,
     /// A mask that is ANDd with both the stencil buffer value and the reference value when they
-    /// are read, after the stencil test.
+    /// are read before doing the stencil test.
     pub mask_read: StencilValue,
     /// This is unused!
     pub mask_write: StencilValue,
-    /// What operation to do if both the depth and stencil test.
+    /// What operation to do if the stencil test fails.
     pub op_fail: StencilOp,
-    /// What operation to do if only the depth test fails.
+    /// What operation to do if the stenil test passes but the depth test fails.
     pub op_depth_fail: StencilOp,
     /// What operation to do if both the depth and stencil test pass.
     pub op_pass: StencilOp,

@@ -17,11 +17,11 @@
 use std::mem::size_of;
 use dev = device::shade;
 
-/// Location of a uniform.
+/// Variable index of a uniform.
 pub type VarUniform = u16;
-/// Location of a uniform block.
+/// Variable index of a uniform block.
 pub type VarBlock = u8;
-/// Location of a texture.
+/// Variable index of a texture.
 pub type VarTexture = u8;
 
 /// Something that has information about program parameters, used to fill up a hidden Link

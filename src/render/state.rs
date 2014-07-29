@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Rasterizer state.
+//! Fixed-function hardware state.
+//!
+//! Configures primitive assembly (PA), rasterizer, and output merger (OM) blocks.
 
 use s = device::state;
 use device::target::{Color, Rect, Stencil};
@@ -20,13 +22,12 @@ use device::target::{Color, Rect, Stencil};
 /// An assembly of states that affect regular draw calls
 #[deriving(Clone, PartialEq, Show)]
 pub struct DrawState {
-    /// How to rasteriz geometric primitives.
+    /// How to rasterize geometric primitives.
     pub primitive: s::Primitive,
-    /// (Optional) scissor mask. No pixel outside of the rectangle, if specified, will be written
-    /// to as a result of rendering. If None, acts as if the scissor mask covers the entire
-    /// `Frame`.
+    /// Stencil mask to use. If set, no pixel outside of this rectangle (in screen space) will be
+    /// written to as a result of rendering.
     pub scissor: Option<Rect>,
-    /// Stencil mask to use. If None, no stencil testing is done.
+    /// Stencil test to use. If None, no stencil testing is done.
     pub stencil: Option<s::Stencil>,
     /// Depth test to use. If None, no depth testing is done.
     pub depth: Option<s::Depth>,

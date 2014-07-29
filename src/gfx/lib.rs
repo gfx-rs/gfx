@@ -20,7 +20,7 @@
 #![feature(phase)]
 
 //! An efficient, low-level, bindless graphics API for Rust. See [the
-//! blog](http://gfx-rs.github.io/) for documention on how to best use it.
+//! blog](http://gfx-rs.github.io/) for explanations and annotated examples.
 
 #[phase(plugin, link)] extern crate log;
 extern crate libc;
