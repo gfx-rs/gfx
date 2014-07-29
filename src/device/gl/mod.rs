@@ -529,6 +529,25 @@ impl super::ApiBackEnd for GlBackEnd {
                 }
                 self.check();
             },
+            // Resource deletion
+            super::DeleteBuffer(name) => unsafe {
+                gl::DeleteBuffers(1, &name);
+            },
+            super::DeleteShader(name) => {
+                gl::DeleteShader(name);
+            },
+            super::DeleteProgram(name) => {
+                gl::DeleteProgram(name);
+            },
+            super::DeleteSurface(name) => unsafe {
+                gl::DeleteRenderbuffers(1, &name);
+            },
+            super::DeleteTexture(name) => unsafe {
+                gl::DeleteTextures(1, &name);
+            },
+            super::DeleteSampler(name) => unsafe {
+                gl::DeleteSamplers(1, &name);
+            },
         }
     }
 }

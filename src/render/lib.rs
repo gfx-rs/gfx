@@ -287,6 +287,8 @@ impl Renderer {
         self.swap_ack.recv();  //wait for acknowlegement
     }
 
+    /// --- Resource creation --- ///
+
     /// Create a new program from the given vertex and fragment shaders.
     pub fn create_program(&mut self, vs_src: ShaderSource, fs_src: ShaderSource) -> ProgramHandle {
         let ds = &mut self.dispatcher;
@@ -342,9 +344,43 @@ impl Renderer {
         SamplerHandle(token)
     }
 
+    /// --- Resource deletion --- ///
+
+    pub fn delete_program(&mut self, handle: ProgramHandle) {
+        let ProgramHandle(h) = handle;
+        let v = self.dispatcher.resource.programs.remove(h).unwrap().unwrap().name;
+        self.cast(device::DeleteProgram(v));
+    }
+
+    pub fn delete_buffer(&mut self, handle: BufferHandle) {
+        let BufferHandle(h) = handle;
+        let v = *self.dispatcher.resource.buffers.remove(h).unwrap().unwrap();
+        self.cast(device::DeleteBuffer(v));
+    }
+
+    pub fn delete_surface(&mut self, handle: SurfaceHandle) {
+        let SurfaceHandle(h) = handle;
+        let v = *self.dispatcher.resource.surfaces.remove(h).unwrap().ref0().unwrap();
+        self.cast(device::DeleteSurface(v));
+    }
+
+    pub fn delete_texture(&mut self, handle: TextureHandle) {
+        let TextureHandle(h) = handle;
+        let v = *self.dispatcher.resource.textures.remove(h).unwrap().ref0().unwrap();
+        self.cast(device::DeleteTexture(v));
+    }
+
+    pub fn delete_sampler(&mut self, handle: SamplerHandle) {
+        let SamplerHandle(h) = handle;
+        let v = *self.dispatcher.resource.samplers.remove(h).unwrap().ref0().unwrap();
+        self.cast(device::DeleteSampler(v));
+    }
+
+    /// --- Resource modification --- ///
+
     /// Bundle together a program with its parameters.
     pub fn bundle_program<'a, L, T: shade::ShaderParam<L>>(&'a mut self, prog: ProgramHandle, data: T)
-            -> Result<shade::ShaderBundle<L, T>, shade::ParameterLinkError<'a>> {
+             -> Result<shade::ShaderBundle<L, T>, shade::ParameterLinkError<'a>> {
         let ProgramHandle(ph) = program;
         self.dispatcher.demand(|res| !res.programs.get(ph).unwrap().is_pending());
         match self.dispatcher.resource.programs.get(ph) {
@@ -384,6 +420,8 @@ impl Renderer {
         let info = self.dispatcher.resource.textures.get(tex).unwrap().ref1();
         self.cast(device::UpdateTexture(info.kind, name, img, (box data) as Box<device::Blob + Send>));
     }
+
+    /// --- Resource binding --- ///
 
     /// Make sure all the mesh buffers are successfully created/loaded
     fn prebind_mesh(&mut self, mesh: &mesh::Mesh, slice: &mesh::Slice) {

@@ -164,6 +164,13 @@ pub enum CastRequest {
     UpdateTexture(tex::TextureKind, dev::Texture, tex::ImageInfo, Box<Blob + Send>),
     Draw(VertexCount, VertexCount),
     DrawIndexed(IndexCount, IndexCount),
+    /// Resource deletion
+    DeleteBuffer(dev::Buffer),
+    DeleteShader(dev::Shader),
+    DeleteProgram(dev::Program),
+    DeleteSurface(dev::Surface),
+    DeleteTexture(dev::Texture),
+    DeleteSampler(dev::Sampler),
 }
 
 /// Reply to a `Call`
