@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Render target specification.
+
 use std::{default, fmt};
 
 // TODO: Really tighten up the terminology here.
@@ -26,6 +28,7 @@ pub type Depth = f32;
 pub type Stencil = u8;
 
 /// A screen space rectangle
+#[allow(missing_doc)]
 #[deriving(Clone, PartialEq, Show)]
 pub struct Rect {
     pub x: u16,
@@ -34,11 +37,13 @@ pub struct Rect {
     pub h: u16,
 }
 
+/// A color with floating-point components. Used for `ClearData`.
 pub struct Color(pub [f32, ..4]);
 
 // manual impls due to array...
 
 impl Color {
+    /// Returns black.
     pub fn new() -> Color {
         Color([0.0, 0.0, 0.0, 0.0])
     }

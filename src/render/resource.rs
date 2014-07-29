@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Resource management.
+#![allow(missing_doc)] // doc after kvark's patch lands
 use std::fmt::Show;
 
 use device;

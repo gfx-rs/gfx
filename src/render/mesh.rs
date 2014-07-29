@@ -12,6 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Mesh loading.
+//!
+//! A `Mesh` describes the geometry of an object. All or part of a `Mesh` can be drawn with a
+//! single draw call. A `Mesh` consists of a series of vertices, each with a certain amount of
+//! user-specified attributes. These attributes are fed into shader programs. The easiest way to
+//! create a mesh is to use the `#[vertex_format]` attribute on a struct, upload them into a
+//! `Buffer`, and then use `Mesh::from`.
+
 use a = device::attrib;
 
 pub type MaterialHandle = int;  //placeholder
@@ -38,7 +46,8 @@ pub struct Attribute {
 /// A trait implemented automatically for user vertex structure by
 /// `#[vertex_format] attribute
 pub trait VertexFormat {
-    fn generate(Option<Self>, super::BufferHandle) -> Vec<Attribute>;
+    /// Create the attributes for this type, using the given buffer.
+    fn generate(Option<Self>, buffer: super::BufferHandle) -> Vec<Attribute>;
 }
 
 
@@ -64,8 +73,6 @@ pub enum PrimitiveType {
 }
 
 /// Describes geometry to render.
-///
-/// The best way to create a `Mesh` is to use the `Builder` in this module.
 #[deriving(Clone, Show)]
 pub struct Mesh {
     /// What primitives to form out of the vertex data.
@@ -119,7 +126,10 @@ pub enum Slice  {
 /// A slice of a mesh, with a given material.
 #[deriving(Clone, Show)]
 pub struct SubMesh {
+    /// `Mesh` this `SubMesh` was created from.
     pub mesh: Mesh,
+    /// (Unimplemented!) Material to use for this submexsh.
     pub material: MaterialHandle,
+    /// Slice of the mesh to use.
     pub slice: Slice,
 }

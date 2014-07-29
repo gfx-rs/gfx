@@ -12,37 +12,61 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Shader handling.
+
+#![allow(missing_doc)]
+
 use std::cell::Cell;
 use std::fmt;
 
 // Describing shader parameters
+// TOOD: Remove GL-isms, especially in the documentation.
 
+/// Number of components in a container type (vectors/matrices)
 pub type Dimension = u8;
 
+/// Whether the sampler samples an array texture.
 #[deriving(Show)]
 pub enum IsArray { Array, NoArray }
 
+/// Whether the sampler samples a shadow texture (texture with a depth comparison)
 #[deriving(Show)]
 pub enum IsShadow { Shadow, NoShadow }
 
+/// Whether the sampler samples a multisample texture.
 #[deriving(Show)]
 pub enum IsMultiSample { MultiSample, NoMultiSample }
 
+/// Whether the sampler samples a rectangle texture.
+///
+/// Rectangle textures are the same as 2D textures, but accessed with absolute texture coordinates
+/// (as opposed to the usual, normalized to [0, 1]).
 #[deriving(Show)]
 pub enum IsRect { Rect, NoRect }
 
+/// Whether the matrix is column or row major.
 #[deriving(Show)]
 pub enum MatrixFormat { ColumnMajor, RowMajor }
 
+/// What texture type this sampler samples from.
+///
+/// A single sampler cannot be used with multiple texture types.
 #[deriving(Show)]
 pub enum SamplerType {
+    /// Sample from a buffer.
     SamplerBuffer,
+    /// Sample from a 1D texture
     Sampler1D(IsArray, IsShadow),
+    /// Sample from a 2D texture
     Sampler2D(IsArray, IsShadow, IsMultiSample, IsRect),
+    /// Sample from a 3D texture
     Sampler3D,
+    /// Sample from a cubemap.
     SamplerCube(IsShadow),
 }
 
+/// Base type of this shader parameter.
+#[allow(missing_doc)]
 #[deriving(Show)]
 pub enum BaseType {
     BaseF32,
@@ -52,15 +76,21 @@ pub enum BaseType {
     BaseBool,
 }
 
+/// Number of components this parameter represents.
 #[deriving(Show)]
 pub enum ContainerType {
+    /// Scalar value
     Single,
+    /// A vector with `Dimension` components.
     Vector(Dimension),
+    /// A matrix.
     Matrix(MatrixFormat, Dimension, Dimension),
 }
 
 // Describing object data
 
+/// Which program stage this shader represents.
+#[allow(missing_doc)]
 #[deriving(Show)]
 pub enum Stage {
     Vertex,
@@ -70,9 +100,12 @@ pub enum Stage {
 
 // Describing program data
 
+/// Location of a parameter in the program.
 pub type Location = uint;
 
 // unable to derive anything for fixed arrays
+/// A value that can be uploaded to the device as a uniform.
+#[allow(missing_doc)]
 pub enum UniformValue {
     ValueUninitialized,
     ValueI32(i32),
@@ -83,6 +116,7 @@ pub enum UniformValue {
 }
 
 impl UniformValue {
+    /// Whether this value contains valid data.
     pub fn is_valid(&self) -> bool {
         match *self {
             ValueUninitialized => false,
@@ -90,6 +124,7 @@ impl UniformValue {
         }
     }
 
+    /// Whether two `UniformValue`s have the same type.
     pub fn is_same_type(&self, other: &UniformValue) -> bool {
         match (*self, *other) {
             (ValueI32(_), ValueI32(_)) => true,
@@ -140,59 +175,96 @@ impl fmt::Show for UniformValue {
     }
 }
 
+/// Vertex information that a shader takes as input.
 #[deriving(Show)]
 pub struct Attribute {
+    /// Name of this attribute.
     pub name: String,
-    pub location: uint, // Vertex attribute binding
+    /// Vertex attribute binding.
+    pub location: uint,
+    /// Number of elements this attribute represents.
     pub count: uint,
+    /// Type that this attribute is composed of.
     pub base_type: BaseType,
+    /// "Scalarness" of this attribute.
     pub container: ContainerType,
 }
 
+/// Uniform, a type of shader parameter representing data passed to the program.
 #[deriving(Show)]
 pub struct UniformVar {
+    /// Name of this uniform.
     pub name: String,
+    /// Location of this uniform in the program.
     pub location: Location,
+    /// Number of elements this uniform represents.
     pub count: uint,
+    /// Type that this uniform is composed of
     pub base_type: BaseType,
+    /// "Scalarness" of this uniform.
     pub container: ContainerType,
+    /// The value of this uniform.
     pub active_value: Cell<UniformValue>,
 }
 
+/// A uniform block.
 #[deriving(Show)]
 pub struct BlockVar {
+    /// Name of this uniform block.
     pub name: String,
+    /// Size (in bytes) of this uniform block's data.
     pub size: uint,
-    pub usage: u8, // Bit flags for each shader stage
-    pub active_slot: Cell<u8>, // Active uniform block binding
+    /// What program stage this uniform block can be used in, as a bitflag.
+    pub usage: u8,
+    /// Active uniform block binding
+    pub active_slot: Cell<u8>,
 }
 
+/// Sampler, a type of shader parameter representing a texture that can be sampled.
 #[deriving(Show)]
 pub struct SamplerVar {
+    /// Name of this sampler variable.
     pub name: String,
+    /// Location of this sampler in the program.
     pub location: Location,
+    /// Base type for the sampler.
     pub base_type: BaseType,
+    /// Type of this sampler.
     pub sampler_type: SamplerType,
-    pub active_slot: Cell<u8>, // Active texture binding
+    /// Texture unit this sampler is bound to.
+    pub active_slot: Cell<u8>,
 }
 
+/// Metadata about a program.
 #[deriving(Show)]
 pub struct ProgramMeta {
+    /// Handle to the program.
     pub name: super::dev::Program,
+    /// Attributes in the program.
     pub attributes: Vec<Attribute>,
+    /// Uniforms in the program
     pub uniforms: Vec<UniformVar>,
+    /// Uniform blocks in the program
     pub blocks: Vec<BlockVar>,
+    /// Samplers in the program
     pub textures: Vec<SamplerVar>,
 }
 
+/// Error type for trying to store a UniformValue in a UniformVar.
 #[deriving(Show)]
 pub enum CompatibilityError {
+    /// Array sizes differ between the value and the var (trying to upload a vec2 as a vec4, etc)
     ErrorArraySize,
+    /// Base types differ between the value and the var (trying to upload a f32 as a u16, etc)
     ErrorBaseType,
+    /// Container-ness differs between the value and the var (trying to upload a scalar as a vec4,
+    /// etc)
     ErrorContainer,
 }
 
 impl UniformVar {
+    /// Whether a value is compatible with this variable. That is, whether the value can be stored
+    /// in this variable.
     pub fn is_compatible(&self, value: &UniformValue) -> Result<(), CompatibilityError> {
         if self.count != 1 {
             return Err(ErrorArraySize)
@@ -211,6 +283,8 @@ impl UniformVar {
     }
 }
 
+/// Like `MaybeOwned` but for u8.
+#[allow(missing_doc)]
 #[deriving(Show, Clone)]
 pub enum Bytes {
     StaticBytes(&'static [u8]),
@@ -218,6 +292,7 @@ pub enum Bytes {
 }
 
 impl Bytes {
+    /// Get the byte data as a slice.
     pub fn as_slice<'a>(&'a self) -> &'a [u8] {
         match *self {
             StaticBytes(ref b) => b.as_slice(),
@@ -226,6 +301,8 @@ impl Bytes {
     }
 }
 
+/// A type storing shader source for different graphics APIs and versions.
+#[allow(missing_doc)]
 #[deriving(Show, Clone)]
 pub struct ShaderSource {
     pub glsl_120: Option<Bytes>,
@@ -233,12 +310,17 @@ pub struct ShaderSource {
     // TODO: hlsl_sm_N...
 }
 
+/// An error type for creating programs.
 #[deriving(Clone, Show)]
 pub enum CreateShaderError {
+    /// The device does not support any of the shaders supplied.
     NoSupportedShaderProvided,
+    /// The shader failed to compile.
     ShaderCompilationFailed
 }
 
+/// Shader model supported by the device, corresponds to the HLSL shader models.
+#[allow(missing_doc)]
 #[deriving(PartialEq, PartialOrd, Show)]
 pub enum ShaderModel {
     ModelUnsupported,
@@ -249,6 +331,9 @@ pub enum ShaderModel {
 }
 
 impl ShaderModel {
+    /// Return the shader model as a numeric value.
+    ///
+    /// Model30 turns to 30, etc.
     pub fn to_number(&self) -> u8 {
         match *self {
             ModelUnsupported => 0,  //ModelAncient, ModelPreHistoric, ModelMyGrandpaLikes

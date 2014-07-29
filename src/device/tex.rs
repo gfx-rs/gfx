@@ -27,11 +27,14 @@ use std::default::Default;
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 #[repr(u8)]
 pub enum Format {
+    /// 3 components: red, green, and blue, each represented with 8 bits.
     RGB8,
+    /// 4 components: red, green, blue, and alpha, each represented with 8 bits.
     RGBA8,
 }
 
 /// Describes the storage of a surface
+#[allow(missing_doc)]
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub struct SurfaceInfo {
     pub width: u16,
@@ -99,6 +102,7 @@ pub enum TextureKind {
 ///
 /// Textures larger than 1024px in any dimension are unlikely to be supported
 /// by mobile platforms.
+#[allow(missing_doc)]
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub struct TextureInfo {
     pub width: u16,
@@ -114,6 +118,7 @@ pub struct TextureInfo {
 }
 
 /// Describes a subvolume of a texture, which image data can be uploaded into.
+#[allow(missing_doc)]
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub struct ImageInfo {
     pub xoffset: u16,
@@ -187,7 +192,10 @@ impl TextureInfo {
     }
 }
 
-impl ImageInfo { pub fn new() -> ImageInfo { Default::default() } }
+impl ImageInfo {
+    /// Create a new `ImageInfo`, using default values.
+    pub fn new() -> ImageInfo { Default::default() }
+}
 
 /// Specifies how texture coordinates outside the range `[0, 1]` are handled.
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
@@ -205,6 +213,7 @@ pub enum WrapMode {
 // TODO: document the details of sampling.
 #[deriving(PartialEq, PartialOrd, Clone, Show)]
 pub struct SamplerInfo {
+    /// Filter method to use.
     pub filtering: FilterMethod,
     /// Wrapping mode for each of the U, V, and W axis (S, T, and R in OpenGL
     /// speak)
@@ -219,6 +228,8 @@ pub struct SamplerInfo {
 }
 
 impl SamplerInfo {
+    /// Create a new sampler description with a given filter method and wrapping mode, using no LOD
+    /// modifications.
     pub fn new(filtering: FilterMethod, wrap: WrapMode) -> SamplerInfo {
         SamplerInfo {
             filtering: filtering,

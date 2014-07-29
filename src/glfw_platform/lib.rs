@@ -20,6 +20,8 @@
 
 #![feature(macro_rules, phase)]
 
+//! GLFW integration for `gfx-rs`
+
 extern crate glfw;
 #[phase(plugin, link)]
 extern crate log;

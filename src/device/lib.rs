@@ -19,6 +19,9 @@
 #![crate_type = "lib"]
 
 #![feature(phase)]
+#![deny(missing_doc)]
+
+//! Graphics device. Not meant for direct use.
 
 #[phase(plugin, link)] extern crate log;
 extern crate libc;
@@ -40,6 +43,7 @@ pub mod target;
 pub mod tex;
 /* #[cfg(gl)] */ mod gl;
 
+/// Features that the device supports.
 #[deriving(Show)]
 pub struct Capabilities {
     shader_model: shade::ShaderModel,
@@ -52,15 +56,24 @@ pub struct Capabilities {
     immutable_storage_supported: bool,
 }
 
+/// Draw vertex count.
 pub type VertexCount = u16;
+/// Draw index count.
 pub type IndexCount = u16;
+/// Index of a uniform block.
 pub type UniformBlockIndex = u8;
+/// Slot for an attribute.
 pub type AttributeSlot = u8;
+/// Slot for a uniform buffer object.
 pub type UniformBufferSlot = u8;
+/// Slot a texture can be bound to.
 pub type TextureSlot = u8;
 
+/// A trait that slice-like types implement.
 pub trait Blob {
+    /// Get the address to the data this `Blob` stores.
     fn get_address(&self) -> uint;
+    /// Get the number of bytes in this blob.
     fn get_size(&self) -> uint;
 }
 
@@ -79,21 +92,36 @@ impl fmt::Show for Box<Blob + Send> {
     }
 }
 
+/// A hint as to how this buffer will be used.
+///
+/// The nature of these hints make them very implementation specific. Different drivers on
+/// different hardware will handle them differently. Only careful profiling will tell which is the
+/// best to use for a specific buffer.
 #[deriving(Show)]
 pub enum BufferUsage {
+    /// Once uploaded, this buffer will rarely change, but will be read from often.
     UsageStatic,
+    /// This buffer will be updated "frequently", and will be read from multiple times between
+    /// updates.
     UsageDynamic,
+    /// This buffer always or almost always be updated after each read.
     UsageStream,
 }
 
+/// Device request.
 #[deriving(Show)]
 pub enum Request<T> {
+    /// A request that requires a reply - has the device creating something.
     Call(T, CallRequest),
+    /// A request that does not require a reply - has the device modifying something.
     Cast(CastRequest),
+    /// Swap the front and back buffers, displaying what has been drawn so far. Indicates the end
+    /// of a frame.
     SwapBuffers,
 }
 
 /// Requests that require a reply
+#[allow(missing_doc)]
 #[deriving(Show)]
 pub enum CallRequest {
     CreateBuffer(Option<Box<Blob + Send>>),
@@ -107,6 +135,7 @@ pub enum CallRequest {
 }
 
 /// Requests that don't expect a reply
+#[allow(missing_doc)]
 #[deriving(Show)]
 pub enum CastRequest {
     Clear(target::ClearData),
@@ -137,6 +166,8 @@ pub enum CastRequest {
     DrawIndexed(IndexCount, IndexCount),
 }
 
+/// Reply to a `Call`
+#[allow(missing_doc)]
 #[deriving(Show)]
 pub enum Reply<T> {
     ReplyNewBuffer(T, dev::Buffer),
@@ -150,6 +181,7 @@ pub enum Reply<T> {
 }
 
 /// An interface for performing draw calls using a specific graphics API
+#[allow(missing_doc)]
 pub trait ApiBackEnd {
     /// Returns the capabilities available to the specific API implementation
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
@@ -168,6 +200,7 @@ pub trait ApiBackEnd {
     fn process(&mut self, CastRequest);
 }
 
+/// Token used for buffer swap acknowledgement.
 pub struct Ack;
 
 /// An API-agnostic device that manages incoming draw calls
@@ -188,6 +221,9 @@ impl<T: Send, B: ApiBackEnd, C: GraphicsContext<B>> Device<T, B, C> {
         self.close.now()
     }
 
+    /// Make this device's context current for the thread.
+    ///
+    /// This is a GLism that might be removed, especially as multithreading support evolves.
     pub fn make_current(&self) {
         self.graphics_context.make_current();
     }
@@ -234,8 +270,9 @@ impl<T: Send, B: ApiBackEnd, C: GraphicsContext<B>> Device<T, B, C> {
         }
     }
 
-    /// Update the platform. The client must manually update this on the main
-    /// thread.
+    /// Process all requests received, including requests received while this method is executing.
+    /// The client must manually call this on the main thread, or else the renderer will have no
+    /// effect.
     pub fn update(&mut self) {
         // Get updates from the renderer and pass on results
         loop {
@@ -256,21 +293,29 @@ impl<T: Send, B: ApiBackEnd, C: GraphicsContext<B>> Device<T, B, C> {
     }
 }
 
+/// A trait that OpenGL contexts implement.
 pub trait GraphicsContext<T> {
+    /// Swap the front and back buffers, displaying what has been rendered.
     fn swap_buffers(&self);
+    /// Make this context active on the calling thread.
     fn make_current(&self);
 }
 
+/// A trait that OpenGL interfaces implement.
 pub trait GlProvider {
-    fn get_proc_address(&self, &str) -> *const ::libc::c_void;
+    /// Load the GL command with the given name.
+    fn get_proc_address(&self, function_name: &str) -> *const ::libc::c_void;
 }
 
+/// An error type for device initialization.
 #[deriving(Show)]
 pub enum InitError {}
 
+/// Type representing the number of frames to queue before the renderer blocks.
 pub type QueueSize = u8;
 
 // TODO: Generalise for different back-ends
+/// Initialize a device for a given context and provider pair, with a given queue size.
 pub fn init<T: Send, C: GraphicsContext<GlBackEnd>, P: GlProvider>(graphics_context: C, provider: P, queue_size: QueueSize)
         -> Result<(Sender<Request<T>>, Receiver<Reply<T>>, Device<T, GlBackEnd, C>, Receiver<Ack>, comm::ShouldClose), InitError> {
     let (request_tx, request_rx) = channel();
