@@ -318,6 +318,12 @@ impl Renderer {
         BufferHandle(token)
     }
 
+    /// A helper method that returns a buffer handle that can never be used.
+    /// It is needed for gfx_macros_test, which never actually accesses resources.
+    pub fn create_fake_buffer() -> BufferHandle {
+        BufferHandle(resource::Handle::new_fake())
+    }
+
     /// Create a new mesh from the given vertex data.
     ///
     /// Convenience function around `crate_buffer` and `Mesh::from`.

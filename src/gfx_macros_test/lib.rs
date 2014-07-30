@@ -19,6 +19,7 @@
 #[phase(plugin)]
 extern crate gfx_macros;
 extern crate gfx;
+extern crate render;
 
 #[test]
 fn test_vertex_format() {
@@ -35,7 +36,7 @@ fn test_vertex_format() {
          a3: f64,
     }
 
-    let buf = 0 as gfx::BufferHandle;
+    let buf = render::Renderer::create_fake_buffer();
     let mesh = gfx::Mesh::from::<MyVertex>(buf, 0);
     let stride = 22 as a::Stride;
 

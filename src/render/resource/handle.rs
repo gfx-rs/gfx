@@ -36,6 +36,16 @@ pub struct Handle {
     generation: Generation,
 }
 
+impl Handle {
+    /// A helper method for testing. Returns a handle that can not be used.
+    pub fn new_fake() -> Handle {
+        Handle {
+            index: 0,
+            generation: LAST_GENERATION,
+        }
+    }    
+}
+
 /// Resource access error
 #[deriving(Clone, PartialEq, Show)]
 pub enum StorageError {
