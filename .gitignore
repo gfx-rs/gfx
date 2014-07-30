@@ -3,7 +3,6 @@
 .DS_Store
 /doc/
 /examples/
-/examples/*/target/
 /lib/
 /test/
 target/
