@@ -100,7 +100,7 @@ fn start(argc: int, argv: *const *const u8) -> int {
 fn main() {
     let glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
-    let (mut window, events) = gfx::glfw::WindowBuilder::new(&glfw)
+    let (mut window, events) = gfx::GlfwWindowBuilder::new(&glfw)
         .title("Cube example #gfx-rs")
         .try_modern_context_hints()
         .create()
@@ -110,13 +110,12 @@ fn main() {
     window.set_key_polling(true); // so we can quit when Esc is pressed
     let (width, height) = window.get_size();
 
-    // spawn render task
-    let (renderer, mut device) = {
-        let (platform, provider) = gfx::glfw::Platform::new(window.render_context(), &glfw);
-        gfx::start(platform, provider, 1).unwrap()
-    };
+    let (renderer, mut device) = gfx::build()
+        .with_glfw(&glfw, window.render_context())
+        .with_queue_size(1)
+        .create()
+        .unwrap();
 
-    // spawn game task
     spawn(proc() {
         let mut renderer = renderer;
         let frame = gfx::Frame::new(width as u16, height as u16);
