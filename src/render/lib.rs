@@ -147,12 +147,12 @@ impl Dispatcher {
 
     fn get_buffer(&mut self, handle: BufferHandle) -> backend::Buffer {
         let BufferHandle(h) = handle;
-        self.get_any(|res| res.buffers.get(h).unwrap())
+        self.get_any(|res| &res.buffers[h])
     }
 
     fn get_shader(&mut self, handle: ShaderHandle) -> backend::Shader {
         let ShaderHandle(h) = handle;
-        self.get_any(|res| res.shaders.get(h).unwrap())
+        self.get_any(|res| &res.shaders[h])
     }
 }
 
@@ -242,7 +242,7 @@ impl Renderer {
         self.cast(device::SetColorMask(state.color_mask));
         // bind array buffer
         let h_vao = self.common_array_buffer;
-        let vao = self.dispatcher.get_any(|res| res.array_buffers.get(h_vao).unwrap());
+        let vao = self.dispatcher.get_any(|res| &res.array_buffers[h_vao]);
         self.cast(device::BindArrayBuffer(vao));
         // bind output frame
         self.bind_frame(&frame);
@@ -382,7 +382,7 @@ impl Renderer {
     pub fn bundle_program<'a, L, T: shade::ShaderParam<L>>(&'a mut self, prog: ProgramHandle, data: T)
              -> Result<shade::ShaderBundle<L, T>, shade::ParameterLinkError<'a>> {
         let ProgramHandle(ph) = program;
-        self.dispatcher.demand(|res| !res.programs.get(ph).unwrap().is_pending());
+        self.dispatcher.demand(|res| !res.programs[ph].is_pending());
         match self.dispatcher.resource.programs.get(ph) {
             Ok(&Loaded(ref m)) => {
                 let mut sink = shade::MetaSink::new(m.clone());
@@ -416,8 +416,8 @@ impl Renderer {
     pub fn update_texture<T: Send>(&mut self, handle: TextureHandle,
                                    img: device::tex::ImageInfo, data: Vec<T>) {
         let TextureHandle(tex) = handle;
-        let name = self.dispatcher.get_any(|res| res.textures.get(tex).unwrap().ref0());
-        let info = self.dispatcher.resource.textures.get(tex).unwrap().ref1();
+        let name = self.dispatcher.get_any(|res| res.textures[tex].ref0());
+        let info = self.dispatcher.resource.textures[tex].ref1();
         self.cast(device::UpdateTexture(info.kind, name, img, (box data) as Box<device::Blob + Send>));
     }
 
@@ -440,7 +440,7 @@ impl Renderer {
         // buffers pass
         bundle.bind(|_, _| {
         }, |_, BufferHandle(buf)| {
-            dp.demand(|res| !res.buffers.get(buf).unwrap().is_pending());
+            dp.demand(|res| !res.buffers[buf].is_pending());
         }, |_, _| {
 
         });
@@ -448,10 +448,10 @@ impl Renderer {
         bundle.bind(|_, _| {
         }, |_, _| {
         }, |_, (TextureHandle(tex), sampler)| {
-            dp.demand(|res| !res.textures.get(tex).unwrap().ref0().is_pending());
+            dp.demand(|res| !res.textures[tex].ref0().is_pending());
             match sampler {
                 Some(SamplerHandle(sam)) =>
-                    dp.demand(|res| !res.samplers.get(sam).unwrap().ref0().is_pending()),
+                    dp.demand(|res| !res.samplers[sam].ref0().is_pending()),
                 None => (),
             }
         });
@@ -461,11 +461,11 @@ impl Renderer {
         match plane {
             target::PlaneEmpty => device::UnbindTarget(to),
             target::PlaneSurface(SurfaceHandle(suf)) => {
-                let name = dp.get_any(|res| res.surfaces.get(suf).unwrap().ref0());
+                let name = dp.get_any(|res| res.surfaces[suf].ref0());
                 device::BindTargetSurface(to, name)
             },
             target::PlaneTexture(TextureHandle(tex), level, layer) => {
-                let name = dp.get_any(|res| res.textures.get(tex).unwrap().ref0());
+                let name = dp.get_any(|res| res.textures[tex].ref0());
                 device::BindTargetTexture(to, name, level, layer)
             },
         }
@@ -483,7 +483,7 @@ impl Renderer {
             self.cast(device::BindFrameBuffer(self.default_frame_buffer));
         } else {
             let h_fbo = self.common_frame_buffer;
-            let fbo = self.dispatcher.get_any(|res| res.frame_buffers.get(h_fbo).unwrap());
+            let fbo = self.dispatcher.get_any(|res| &res.frame_buffers[h_fbo]);
             self.cast(device::BindFrameBuffer(fbo));
             for (i, (cur, new)) in self.state.frame.colors.iter().zip(frame.colors.iter()).enumerate() {
                 if *cur != *new {
@@ -525,7 +525,7 @@ impl Renderer {
             }
         }, |tv, (TextureHandle(tex_handle), sampler)| {
             let sam = sampler.map(|SamplerHandle(sam)|
-                match *self.dispatcher.resource.samplers.get(sam).unwrap() {
+                match self.dispatcher.resource.samplers[sam] {
                     (ref future, ref info) => (*future.unwrap(), info.clone())
                 }
             );
@@ -556,7 +556,7 @@ impl Renderer {
                         let BufferHandle(buf) = vat.buffer;
                         self.cast(device::BindAttribute(
                             sat.location as device::AttributeSlot,
-                            *self.dispatcher.resource.buffers.get(buf).unwrap().unwrap(),
+                            *self.dispatcher.resource.buffers[buf].unwrap(),
                             vat.elem_count, vat.elem_type, vat.stride, vat.offset
                             ))
                     },
