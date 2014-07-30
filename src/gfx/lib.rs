@@ -26,7 +26,7 @@
 extern crate libc;
 
 extern crate device;
-// when cargo is ready, re-enable the cfg's
+// when cargo is ready, re-enable the `cfg`s
 /* #[cfg(glfw)] */ extern crate glfw;
 /* #[cfg(glfw)] */ extern crate glfw_platform;
 extern crate render;
