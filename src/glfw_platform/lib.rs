@@ -31,7 +31,7 @@ extern crate device;
 
 use glfw::Context;
 
-struct Wrap<'a>(&'a glfw::Glfw);
+pub struct Wrap<'a>(&'a glfw::Glfw);
 
 impl<'a> device::GlProvider for Wrap<'a> {
     fn get_proc_address(&self, name: &str) -> *const libc::c_void {
