@@ -57,10 +57,15 @@ pub struct TextureHandle(Token);
 #[deriving(Clone, PartialEq, Show)]
 pub struct SamplerHandle(Token);
 
+/// Meshes
 pub mod mesh;
+/// Resources
 pub mod resource;
+/// Shaders
 pub mod shade;
+/// Draw state
 pub mod state;
+/// Render targets
 pub mod target;
 
 /// Graphics state
@@ -287,7 +292,7 @@ impl Renderer {
         self.swap_ack.recv();  //wait for acknowlegement
     }
 
-    /// --- Resource creation --- ///
+    // --- Resource creation --- //
 
     /// Create a new program from the given vertex and fragment shaders.
     pub fn create_program(&mut self, vs_src: ShaderSource, fs_src: ShaderSource) -> ProgramHandle {
@@ -344,42 +349,47 @@ impl Renderer {
         SamplerHandle(token)
     }
 
-    /// --- Resource deletion --- ///
+    // --- Resource deletion --- //
 
+    /// Delete a program
     pub fn delete_program(&mut self, handle: ProgramHandle) {
         let ProgramHandle(h) = handle;
         let v = self.dispatcher.resource.programs.remove(h).unwrap().unwrap().name;
         self.cast(device::DeleteProgram(v));
     }
 
+    /// Delete a buffer
     pub fn delete_buffer(&mut self, handle: BufferHandle) {
         let BufferHandle(h) = handle;
         let v = *self.dispatcher.resource.buffers.remove(h).unwrap().unwrap();
         self.cast(device::DeleteBuffer(v));
     }
 
+    /// Delete a surface
     pub fn delete_surface(&mut self, handle: SurfaceHandle) {
         let SurfaceHandle(h) = handle;
         let v = *self.dispatcher.resource.surfaces.remove(h).unwrap().ref0().unwrap();
         self.cast(device::DeleteSurface(v));
     }
 
+    /// Delete a texture
     pub fn delete_texture(&mut self, handle: TextureHandle) {
         let TextureHandle(h) = handle;
         let v = *self.dispatcher.resource.textures.remove(h).unwrap().ref0().unwrap();
         self.cast(device::DeleteTexture(v));
     }
 
+    /// Delete a sampler
     pub fn delete_sampler(&mut self, handle: SamplerHandle) {
         let SamplerHandle(h) = handle;
         let v = *self.dispatcher.resource.samplers.remove(h).unwrap().ref0().unwrap();
         self.cast(device::DeleteSampler(v));
     }
 
-    /// --- Resource modification --- ///
+    // --- Resource modification --- //
 
     /// Bundle together a program with its parameters.
-    pub fn bundle_program<'a, L, T: shade::ShaderParam<L>>(&'a mut self, prog: ProgramHandle, data: T)
+    pub fn bundle_program<'a, L, T: shade::ShaderParam<L>>(&'a mut self, program: ProgramHandle, data: T)
              -> Result<shade::ShaderBundle<L, T>, shade::ParameterLinkError<'a>> {
         let ProgramHandle(ph) = program;
         self.dispatcher.demand(|res| !res.programs[ph].is_pending());
@@ -421,7 +431,7 @@ impl Renderer {
         self.cast(device::UpdateTexture(info.kind, name, img, (box data) as Box<device::Blob + Send>));
     }
 
-    /// --- Resource binding --- ///
+    // --- Resource binding --- //
 
     /// Make sure all the mesh buffers are successfully created/loaded
     fn prebind_mesh(&mut self, mesh: &mesh::Mesh, slice: &mesh::Slice) {

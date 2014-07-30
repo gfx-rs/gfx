@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+///! Resource management
+
 use std::fmt::Show;
 
 use device;
@@ -21,13 +23,17 @@ use device::tex::{SamplerInfo, SurfaceInfo, TextureInfo};
 
 pub use self::handle::Handle;
 
+///! Handle management
 pub mod handle;
 
 /// A deferred resource
 #[deriving(PartialEq, Show)]
 pub enum Future<T, E> {
+    /// Still loading
     Pending,
+    /// Successfully loaded
     Loaded(T),
+    /// Failed to load
     Failed(E),
 }
 
@@ -51,13 +57,21 @@ impl<T, E: Show> Future<T, E> {
 
 /// Storage for all loaded graphics objects
 pub struct Cache {
+    /// Buffer storage
     pub buffers: handle::Storage<Future<backend::Buffer, ()>>,
+    /// Array buffer storage
     pub array_buffers: handle::Storage<Future<backend::ArrayBuffer, ()>>,
+    /// Shader storage
     pub shaders: handle::Storage<Future<backend::Shader, CreateShaderError>>,
+    /// Program storage
     pub programs: handle::Storage<Future<ProgramMeta, ()>>,
+    /// Frame buffer storage
     pub frame_buffers: handle::Storage<Future<backend::FrameBuffer, ()>>,
+    /// Surface storage
     pub surfaces: handle::Storage<(Future<backend::Surface, ()>, SurfaceInfo)>,
+    /// Texture storage
     pub textures: handle::Storage<(Future<backend::Texture, ()>, TextureInfo)>,
+    /// Sampler storage
     pub samplers: handle::Storage<(Future<backend::Sampler, ()>, SamplerInfo)>,
 }
 

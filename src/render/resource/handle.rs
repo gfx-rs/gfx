@@ -12,12 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+///! Resource handle module
+
 use std;
 
 pub type Index = u16;
 pub type Generation = u16;
 
 static LAST_GENERATION: Generation = std::u16::MAX;
+
+// The generation logic works as follows. When a handle is created for the first
+// time, the room it is using is initialized with generation 0. However, the
+// handle may be freely cloned and copied, so that when the resource is later
+// freed via remove, handles can still refer to that slot. So the generation is
+// incremented, and if a handle with an older generation tries to access the
+// room, it is rejected, because that old handle is now invalid. If the handle
+// hits the max value, instead of overflowing, we just never reuse the room.
 
 /// A generic resource handle, exposed to the user
 #[deriving(Clone, PartialEq, Show)]
@@ -29,8 +39,11 @@ pub struct Handle {
 /// Resource access error
 #[deriving(Clone, PartialEq, Show)]
 pub enum StorageError {
+    /// The index is out of valid bounds
     InvalidIndex,
+    /// The generation is outdated
     InvalidGeneration,
+    /// The data is not there
     InvalidData,
 }
 
@@ -41,6 +54,7 @@ struct Room<T> {
 }
 
 impl<T> Room<T> {
+    /// Check if the room is available for a resource
     pub fn is_vacant(&self) -> bool {
         self.data.is_none() && self.generation < LAST_GENERATION
     }
@@ -53,6 +67,7 @@ pub struct Storage<T> {
 }
 
 impl<T> Storage<T> {
+    /// Create a new storage
     pub fn new() -> Storage<T> {
         Storage {
             rooms: Vec::new(),
@@ -60,6 +75,7 @@ impl<T> Storage<T> {
         }
     }
 
+    /// Try getting a resource reference by the handle
     pub fn get<'a>(&'a self, handle: Handle) -> Result<&'a T, StorageError> {
         let room = &self.rooms[handle.index as uint];
         if room.generation == handle.generation {
@@ -72,6 +88,7 @@ impl<T> Storage<T> {
         }
     }
 
+    /// Try getting a mutable reference to a resource
     pub fn get_mut<'a>(&'a mut self, handle: Handle) -> Result<&'a mut T, StorageError> {
         let room = self.rooms.get_mut(handle.index as uint);
         if room.generation == handle.generation {
@@ -84,6 +101,7 @@ impl<T> Storage<T> {
         }
     }
 
+    /// Add a new resource
     pub fn add(&mut self, data: T) -> Handle {
         match self.first_vacant {
             Some(index) => {
@@ -114,6 +132,7 @@ impl<T> Storage<T> {
         }
     }
 
+    /// Remove a resource by the handle
     pub fn remove(&mut self, handle: Handle) -> Result<T, StorageError> {
         let room = self.rooms.get_mut(handle.index as uint);
         if room.generation == handle.generation {
