@@ -108,7 +108,6 @@ fn render(mut renderer: gfx::Renderer, width: u16, height: u16) {
 
     let mesh = renderer.create_mesh(vertex_data);
     let program = renderer.create_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone());
-    let bundle = renderer.bundle_program(program, ()).unwrap(); // no shader parameters
 
     let clear = gfx::ClearData {
         color: Some(gfx::Color([0.3, 0.3, 0.3, 1.0])),
@@ -118,7 +117,7 @@ fn render(mut renderer: gfx::Renderer, width: u16, height: u16) {
 
     while !renderer.should_finish() {
         renderer.clear(clear, frame);
-        renderer.draw(&mesh, mesh.get_slice(), frame, &bundle, state)
+        renderer.draw(&mesh, mesh.get_slice(), frame, &program, state)
             .unwrap();
         renderer.end_frame();
         for err in renderer.errors() {

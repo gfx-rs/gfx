@@ -210,6 +210,13 @@ doc: $(COMM_DOC_OUT) $(DEVICE_DOC_OUT) $(GLFW_PLATFORM_DOC_OUT) $(RENDER_DOC_OUT
 clean-doc:
 	rm -rf $(DOC_DIR)
 
+# Cargo
+
+.PHONY: examples
+examples:
+	(cd src/examples/triangle && cargo build)
+	(cd src/examples/cube && cargo build)
+
 # Cleanup
 
 .PHONY: clean

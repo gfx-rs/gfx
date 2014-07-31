@@ -185,7 +185,7 @@ fn main() {
         let sampler = renderer.create_sampler(gfx::tex::SamplerInfo::new(
             gfx::tex::Bilinear, gfx::tex::Clamp));
 
-        let mut bundle = {
+        let mut prog = {
             let data = Params {
                 u_ModelViewProj: [
                     [1.0, 0.0, 0.0, 0.0],
@@ -195,8 +195,8 @@ fn main() {
                 ],
                 t_Color: (texture, Some(sampler)),
             };
-            let program = renderer.create_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone());
-            renderer.bundle_program(program, data).unwrap()
+            let handle = renderer.create_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone());
+            renderer.connect_program(handle, data).unwrap()
         };
 
         let clear = gfx::ClearData {
@@ -221,7 +221,7 @@ fn main() {
         while !renderer.should_finish() {
             renderer.clear(clear, frame);
             m_model.x.x = 1.0;
-            bundle.data.u_ModelViewProj = {
+            prog.data.u_ModelViewProj = {
                 let m = m_viewproj.mul_m(&m_model);
                 [ //TODO: add raw convertion methods to cgmath
                     [m.x.x, m.x.y, m.x.z, m.x.w],
@@ -230,7 +230,7 @@ fn main() {
                     [m.w.x, m.w.y, m.w.z, m.w.w]
                 ]
             };
-            renderer.draw(&mesh, slice, frame, &bundle, state)
+            renderer.draw(&mesh, slice, frame, &prog, state)
                 .unwrap();
             renderer.end_frame();
             for err in renderer.errors() {

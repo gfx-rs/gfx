@@ -32,7 +32,7 @@ use std::vec::MoveItems;
 use backend = device::dev;
 use device::shade::{CreateShaderError, ProgramMeta, Vertex, Fragment, ShaderSource};
 use device::target::{ClearData, Target, TargetColor, TargetDepth, TargetStencil};
-use shade::{BundleInternal, ShaderParam};
+use shade::{ProgramShell, ShaderParam};
 use resource::{Loaded, Pending};
 
 /// Used for sending/receiving handles to/from the device. Not meant for users.
@@ -92,11 +92,11 @@ pub enum DeviceError {
 
 /// An error with an invalid texture or uniform block.
 #[deriving(Show)]
-pub enum BundleError {
+pub enum ShellError {
     /// Error from a uniform block.
-    ErrorBundleBlock(shade::VarBlock),
+    ErrorShellBlock(shade::VarBlock),
     /// Error from a texture.
-    ErrorBundleTexture(shade::VarTexture),
+    ErrorShellTexture(shade::VarTexture),
 }
 
 /// An error with a defined Mesh.
@@ -114,7 +114,7 @@ pub enum DrawError<'a> {
     /// Error with a program.
     ErrorProgram,
     /// Error with the program bundle.
-    ErrorBundle(BundleError),
+    ErrorShell(ShellError),
     /// Error with the mesh.
     ErrorMesh(MeshError),
 	/// Error with the mesh slice
@@ -232,12 +232,13 @@ impl Renderer {
 
     /// Draw `slice` of `mesh` into `frame`, using a `bundle` of shader program and parameters, and
     /// a given draw state.
-    pub fn draw<'a, L, T: shade::ShaderParam<L>>(&'a mut self, mesh: &mesh::Mesh, slice: mesh::Slice, frame: target::Frame,
-            bundle: &shade::ShaderBundle<L, T>, state: state::DrawState) -> Result<(), DrawError<'a>> {
+    pub fn draw<'a, P: ProgramShell>(&'a mut self, mesh: &mesh::Mesh, slice: mesh::Slice,
+                                     frame: target::Frame, prog_shell: &P, state: state::DrawState)
+                                     -> Result<(), DrawError<'a>> {
         // demand resources. This section needs the mutable self, so we are unable to do this
         // after we get a reference to ether the `Environment` or the `ProgramMeta`
         self.prebind_mesh(mesh, &slice);
-        self.prebind_bundle(bundle);
+        self.prebind_shell(prog_shell);
         // bind state
         self.cast(device::SetPrimitiveState(state.primitive));
         self.cast(device::SetScissor(state.scissor));
@@ -252,15 +253,15 @@ impl Renderer {
         // bind output frame
         self.bind_frame(&frame);
         // bind shaders
-        let ProgramHandle(ph) = bundle.get_program();
+        let ProgramHandle(ph) = prog_shell.get_program();
         let program = match self.dispatcher.resource.programs.get(ph) {
             Ok(&resource::Pending) => fail!("Program is not loaded yet"),
             Ok(&resource::Loaded(ref p)) => p,
             _ => return Err(ErrorProgram),
         };
-        match self.bind_shader_bundle(program, bundle) {
+        match self.bind_shell(program, prog_shell) {
             Ok(_) => (),
-            Err(e) => return Err(ErrorBundle(e)),
+            Err(e) => return Err(ErrorShell(e)),
         }
         // bind vertex attributes
         match self.bind_mesh(mesh, program) {
@@ -394,9 +395,10 @@ impl Renderer {
 
     // --- Resource modification --- //
 
-    /// Bundle together a program with its parameters.
-    pub fn bundle_program<'a, L, T: shade::ShaderParam<L>>(&'a mut self, program: ProgramHandle, data: T)
-             -> Result<shade::ShaderBundle<L, T>, shade::ParameterLinkError<'a>> {
+    /// Connect a program together with its parameters.
+    pub fn connect_program<'a, L, T: ShaderParam<L>>(&'a mut self, program: ProgramHandle, data: T)
+                                                     -> Result<shade::CustomShell<L, T>,
+                                                     shade::ParameterLinkError<'a>> {
         let ProgramHandle(ph) = program;
         self.dispatcher.demand(|res| !res.programs[ph].is_pending());
         match self.dispatcher.resource.programs.get(ph) {
@@ -404,9 +406,7 @@ impl Renderer {
                 let mut sink = shade::MetaSink::new(m.clone());
                 match data.create_link(&mut sink) {
                     Ok(link) => match sink.complete() {
-                        Ok(_) => Ok(BundleInternal::new(
-                            None::<&shade::ShaderBundle<L, T>>, // a workaround to specify the type
-                            program, data, link)),
+                        Ok(_) => Ok(shade::CustomShell::new(program, link, data)),
                         Err(e) => Err(shade::ErrorMissingParameter(e)),
                     },
                     Err(e) => Err(shade::ErrorUnusedParameter(e)),
@@ -451,17 +451,17 @@ impl Renderer {
         };
     }
 
-    fn prebind_bundle<L, T: shade::ShaderParam<L>>(&mut self, bundle: &shade::ShaderBundle<L, T>) {
+    fn prebind_shell<P: ProgramShell>(&mut self, shell: &P) {
         let dp = &mut self.dispatcher;
         // buffers pass
-        bundle.bind(|_, _| {
+        shell.bind(|_, _| {
         }, |_, BufferHandle(buf)| {
             dp.demand(|res| !res.buffers[buf].is_pending());
         }, |_, _| {
 
         });
         // texture pass
-        bundle.bind(|_, _| {
+        shell.bind(|_, _| {
         }, |_, _| {
         }, |_, (TextureHandle(tex), sampler)| {
             dp.demand(|res| !res.textures[tex].ref0().is_pending());
@@ -519,14 +519,13 @@ impl Renderer {
         }
     }
 
-    fn bind_shader_bundle<L, T: shade::ShaderParam<L>>(&self, meta: &ProgramMeta,
-            bundle: &shade::ShaderBundle<L, T>) -> Result<(), BundleError> {
+    fn bind_shell<P: ProgramShell>(&self, meta: &ProgramMeta, shell: &P) -> Result<(), ShellError> {
         self.cast(device::BindProgram(meta.name));
         let mut block_slot   = 0u as device::UniformBufferSlot;
         let mut texture_slot = 0u as device::TextureSlot;
         let mut block_fail   = None::<shade::VarBlock>;
         let mut texture_fail = None::<shade::VarTexture>;
-        bundle.bind(|uv, value| {
+        shell.bind(|uv, value| {
             self.cast(device::BindUniform(meta.uniforms[uv as uint].location, value));
         }, |bv, BufferHandle(bh)| {
             match self.dispatcher.resource.buffers.get(bh) {
@@ -558,8 +557,8 @@ impl Renderer {
             }
         });
         match (block_fail, texture_fail) {
-            (Some(bv), _) => Err(ErrorBundleBlock(bv)),
-            (_, Some(tv)) => Err(ErrorBundleTexture(tv)),
+            (Some(bv), _) => Err(ErrorShellBlock(bv)),
+            (_, Some(tv)) => Err(ErrorShellTexture(tv)),
             (None, None)  => Ok(()),
         }
     }
