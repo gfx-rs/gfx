@@ -113,7 +113,7 @@ pub enum MeshError {
 pub enum DrawError<'a> {
     /// Error with a program.
     ErrorProgram,
-    /// Error with the program bundle.
+    /// Error with the program shell.
     ErrorShell(ShellError),
     /// Error with the mesh.
     ErrorMesh(MeshError),
@@ -235,8 +235,8 @@ impl Renderer {
     pub fn draw<'a, P: ProgramShell>(&'a mut self, mesh: &mesh::Mesh, slice: mesh::Slice,
                                      frame: target::Frame, prog_shell: &P, state: state::DrawState)
                                      -> Result<(), DrawError<'a>> {
-        // demand resources. This section needs the mutable self, so we are unable to do this
-        // after we get a reference to ether the `Environment` or the `ProgramMeta`
+        // demand resources. This section needs the mutable self, so we are
+        // unable to do this after we get a reference to any resource
         self.prebind_mesh(mesh, &slice);
         self.prebind_shell(prog_shell);
         // bind state

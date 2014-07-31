@@ -104,7 +104,7 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span, substr: &gene
             cx.expr_ok(span, cx.expr_struct_ident(span, link_ident, out))
         },
         _ => {
-            cx.span_err(span, "Unable to implement `create_link()` on a non-structure");
+            cx.span_err(span, "Unable to implement `ShaderParam::create_link()` on a non-structure");
             cx.expr_lit(span, ast::LitNil)
         },
     }
@@ -153,7 +153,7 @@ fn method_bind(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
             cx.expr_block(cx.block_all(span, vec![view], calls, None))
         },
         _ => {
-            cx.span_err(span, "Unable to implement `bind()` on a non-structure");
+            cx.span_err(span, "Unable to implement `ShaderParam::bind()` on a non-structure");
             cx.expr_lit(span, ast::LitNil)
         }
     }
