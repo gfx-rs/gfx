@@ -104,16 +104,16 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span, substr: &gene
             cx.expr_ok(span, cx.expr_struct_ident(span, link_ident, out))
         },
         _ => {
-            cx.span_err(span, "Unable to implement `create_link()` on a non-structure");
+            cx.span_err(span, "Unable to implement `ShaderParam::create_link()` on a non-structure");
             cx.expr_lit(span, ast::LitNil)
         },
     }
 }
 
-/// `upload()` method generating code
-fn method_upload(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
-                 substr: &generic::Substructure, definition: Gc<ast::StructDef>)
-                 -> Gc<ast::Expr> {
+/// `bind()` method generating code
+fn method_bind(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
+               substr: &generic::Substructure, definition: Gc<ast::StructDef>)
+               -> Gc<ast::Expr> {
     match *substr.fields {
         generic::Struct(ref fields) => {
             let calls = definition.fields.iter().zip(fields.iter()).map(|(def, f)| {
@@ -153,7 +153,7 @@ fn method_upload(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
             cx.expr_block(cx.block_all(span, vec![view], calls, None))
         },
         _ => {
-            cx.span_err(span, "Unable to implement `upload()` on a non-structure");
+            cx.span_err(span, "Unable to implement `ShaderParam::bind()` on a non-structure");
             cx.expr_lit(span, ast::LitNil)
         }
     }
@@ -285,7 +285,7 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                 ),
             },
             generic::MethodDef {
-                name: "upload",
+                name: "bind",
                 generics: generic::ty::LifetimeBounds {
                     lifetimes: vec!["'a"],
                     bounds: Vec::new(),
@@ -311,7 +311,7 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                 ret_ty: generic::ty::Tuple(Vec::new()),
                 attributes: Vec::new(),
                 combine_substructure: generic::combine_substructure(|cx, span, sub|
-                    method_upload(cx, span, sub, base_def)
+                    method_bind(cx, span, sub, base_def)
                 ),
             },
         ],
