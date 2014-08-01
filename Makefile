@@ -97,7 +97,7 @@ $(DEPS_DIR)/gl-rs/README.md: submodule-update
 
 .PHONY: deps
 deps: $(DEPS_DIR)/gl-rs/README.md
-	$(MAKE) lib -C $(DEPS_DIR)/gl-rs GL_EXTENSIONS=$(GL_EXTENSIONS)
+	$(MAKE) gl-lib -C $(DEPS_DIR)/gl-rs GL_EXTENSIONS=$(GL_EXTENSIONS)
 	$(MAKE) lib -C $(DEPS_DIR)/glfw-rs
 
 .PHONY: clean-deps
