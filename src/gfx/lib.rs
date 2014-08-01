@@ -33,7 +33,7 @@ pub use render::{BufferHandle, ShaderHandle, ProgramHandle, SurfaceHandle, Textu
 pub use render::Renderer;
 pub use render::mesh::{Attribute, Mesh, VertexFormat, Slice, VertexSlice, IndexSlice};
 pub use render::state::{DrawState, BlendAdditive, BlendAlpha};
-pub use render::shade::{ProgramShell, CustomShell, ParameterSink, ShaderParam, ToUniform, TextureParam,
+pub use render::shade::{ProgramShell, CustomShell, ShaderParam, ToUniform, TextureParam,
     ParameterLinkError, ParameterError, ErrorInternal, ErrorUniform, ErrorBlock, ErrorTexture,
     FnUniform, FnBlock, FnTexture, VarUniform, VarBlock, VarTexture};
 pub use render::target::{Frame, Plane, PlaneEmpty, PlaneSurface, PlaneTexture};

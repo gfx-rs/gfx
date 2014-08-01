@@ -403,12 +403,8 @@ impl Renderer {
         self.dispatcher.demand(|res| !res.programs[ph].is_pending());
         match self.dispatcher.resource.programs.get(ph) {
             Ok(&Loaded(ref m)) => {
-                let mut sink = shade::MetaSink::new(m.clone());
-                match data.create_link(&mut sink) {
-                    Ok(link) => match sink.complete() {
-                        Ok(_) => Ok(shade::CustomShell::new(program, link, data)),
-                        Err(e) => Err(shade::ErrorMissingParameter(e)),
-                    },
+                match data.create_link(m.uniforms.as_slice(), m.blocks.as_slice(), m.textures.as_slice()) {
+                    Ok(link) => Ok(shade::CustomShell::new(program, link, data)),
                     Err(e) => Err(shade::ErrorUnusedParameter(e)),
                 }
             },
