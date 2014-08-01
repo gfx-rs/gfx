@@ -29,6 +29,7 @@ extern crate device;
 // when cargo is ready, re-enable the `cfg`s
 /* #[cfg(glfw)] */ extern crate glfw;
 /* #[cfg(glfw)] */ extern crate glfw_platform;
+/* #[cfg(gl-init)] */ extern crate gl_init_platform;
 extern crate render;
 
 // public re-exports
@@ -48,6 +49,7 @@ pub use device::shade::{ShaderSource, StaticBytes};
 /* #[cfg(glfw)] */ pub use GlfwWindowBuilder = glfw_platform::WindowBuilder;
 /* #[cfg(glfw)] */ pub use GlfwContext = glfw_platform::Platform;
 /* #[cfg(glfw)] */ pub use GlfwProvider = glfw_platform::Wrap;
+/* #[cfg(gl-init)] */ pub use gl_init = gl_init_platform;
 
 /// The empty variant of a type-level option.
 ///
