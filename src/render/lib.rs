@@ -453,6 +453,8 @@ impl Renderer {
 
     fn prebind_shell<P: ProgramShell>(&mut self, shell: &P) {
         let dp = &mut self.dispatcher;
+        let ProgramHandle(ph) = shell.get_program();
+        dp.demand(|res| !res.programs[ph].is_pending());
         // buffers pass
         shell.bind(|_, _| {
         }, |_, BufferHandle(buf)| {
