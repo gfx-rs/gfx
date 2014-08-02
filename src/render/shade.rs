@@ -16,13 +16,6 @@
 
 use dev = device::shade;
 
-/// Variable index of a uniform.
-pub type VarUniform = u16;
-/// Variable index of a uniform block.
-pub type VarBlock = u8;
-/// Variable index of a texture.
-pub type VarTexture = u8;
-
 /// Helper trait to transform base types into their corresponding uniforms
 pub trait ToUniform {
     /// Create a `UniformValue` representing this value.
@@ -52,38 +45,42 @@ impl ToUniform for [f32, ..4] {
         dev::ValueF32Vec(*self)
     }
 }
-
 impl ToUniform for [[f32, ..4], ..4] {
     fn to_uniform(&self) -> dev::UniformValue {
         dev::ValueF32Matrix(*self)
+
     }
 }
 
+/// Variable index of a uniform.
+pub type VarUniform = u16;
+/// Variable index of a uniform block.
+pub type VarBlock = u8;
+/// Variable index of a texture.
+pub type VarTexture = u8;
 /// A texture parameter: consists of a texture handle with an optional sampler.
 pub type TextureParam = (super::TextureHandle, Option<super::SamplerHandle>);
-
-/// A closure provided for the `ShaderParam` implementor for uploading uniforms.
-pub type FnUniform<'a> = |VarUniform, dev::UniformValue|: 'a;
-/// A closure provided for the `ShaderParam` implementor for uploading uniform blocks.
-pub type FnBlock  <'a> = |VarBlock, super::BufferHandle|: 'a;
-/// A closure provided for the `ShaderParam` implementor for uploading textures.
-pub type FnTexture<'a> = |VarTexture, TextureParam|: 'a;
-
+/// A borrowed mutable storage for shader parameter values.
+pub type ParamValues<'a> = (
+    &'a mut [dev::UniformValue],
+    &'a mut [super::BufferHandle],
+    &'a mut [TextureParam]
+);
 
 /// Encloses a shader program with its parameter
 pub trait ProgramShell {
     /// Get the contained program
     fn get_program(&self) -> super::ProgramHandle;
-    /// Bind the parameters by invoking the corresponding closures
-    fn bind<'a>(&self, FnUniform<'a>, FnBlock<'a>, FnTexture<'a>);
+    /// Get all the contained parameter values
+    fn fill_params(&self, ParamValues);
 }
 
 impl ProgramShell for super::ProgramHandle {
     fn get_program(&self) -> super::ProgramHandle {
         self.clone()
     }
-    fn bind<'a>(&self, _: FnUniform<'a>, _: FnBlock<'a>, _: FnTexture<'a>) {
-        //empty
+    fn fill_params(&self, (pu, pb, pt): ParamValues) {
+        debug_assert!(pu.is_empty() && pb.is_empty() && pt.is_empty());
     }
 }
 
@@ -116,8 +113,8 @@ pub trait ShaderParam<L> {
     /// Creates a new link, self is passed as a workaround for Rust to not be lost in generics
     fn create_link(&self, &[dev::UniformVar], &[dev::BlockVar], &[dev::SamplerVar])
         -> Result<L, ParameterError<'static>>;
-    /// Bind the parameters by invoking the corresponding closures
-    fn bind<'a>(&self, &L, FnUniform<'a>, FnBlock<'a>, FnTexture<'a>);
+    /// Get all the contained parameter values, using a given link.
+    fn fill_params(&self, link: &L, ParamValues);
 }
 
 /// A bundle that encapsulates a program and a custom user-provided
@@ -151,8 +148,36 @@ impl<L, T: ShaderParam<L>> ProgramShell for CustomShell<L, T> {
     fn get_program(&self) -> super::ProgramHandle {
         self.program
     }
+    fn fill_params(&self, params: ParamValues) {
+        self.data.fill_params(&self.link, params);
+    }
+}
 
-    fn bind<'a>(&self, fu: FnUniform<'a>, fb: FnBlock<'a>, ft: FnTexture<'a>) {
-        self.data.bind(&self.link, fu, fb, ft);
+/// A serializable less-safe binding of a program with its parameters
+#[deriving(Clone)]
+pub struct SerialShell {
+    program: super::ProgramHandle,
+    uniforms: Vec<dev::UniformValue>,
+    blocks: Vec<super::BufferHandle>,
+    textures: Vec<TextureParam>,
+}
+
+impl ProgramShell for SerialShell {
+    fn get_program(&self) -> super::ProgramHandle {
+        self.program
+    }
+    fn fill_params(&self, (pu, pb, pt): ParamValues) {
+        debug_assert!(pu.len() == self.uniforms.len());
+        for (dst, src) in pu.mut_iter().zip(self.uniforms.iter()) {
+            *dst = *src;
+        }
+        debug_assert!(pb.len() == self.blocks.len());
+        for (dst, src) in pb.mut_iter().zip(self.blocks.iter()) {
+            *dst = *src;
+        }
+        debug_assert!(pt.len() == self.textures.len());
+        for (dst, src) in pt.mut_iter().zip(self.textures.iter()) {
+            *dst = *src;
+        }
     }
 }
