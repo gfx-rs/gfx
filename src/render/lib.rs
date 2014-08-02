@@ -90,16 +90,18 @@ pub enum DeviceError {
     ErrorNewFrameBuffer,
 }
 
-
 /// An error with an invalid texture or uniform block.
+//TODO: use slices when Rust allows
 #[deriving(Show)]
 pub enum ShellError {
+    /// Error from a uniform value
+    ErrorShellUniform(String),
     /// Error from a uniform block.
-    ErrorShellBlock(shade::VarBlock),
+    ErrorShellBlock(String),
     /// Error from a texture.
-    ErrorShellTexture(shade::VarTexture),
+    ErrorShellTexture(String),
     /// Error from a sampler
-    ErrorShellSampler(shade::VarTexture),
+    ErrorShellSampler(String),
 }
 
 /// An error with a defined Mesh.
@@ -237,15 +239,15 @@ impl Renderer {
 
     /// Draw `slice` of `mesh` into `frame`, using a `bundle` of shader program and parameters, and
     /// a given draw state.
-    pub fn draw<'a, P: ProgramShell>(&'a mut self, mesh: &mesh::Mesh, slice: mesh::Slice,
-                                     frame: target::Frame, prog_shell: &P, state: state::DrawState)
-                                     -> Result<(), DrawError> {
+    pub fn draw<P: ProgramShell>(&mut self, mesh: &mesh::Mesh, slice: mesh::Slice,
+                                 frame: target::Frame, prog_shell: &P, state: state::DrawState)
+                                 -> Result<(), DrawError> {
         // demand resources. This section needs the mutable self, so we are
         // unable to do this after we get a reference to any resource
         self.prebind_mesh(mesh, &slice);
         let ProgramHandle(ph) = prog_shell.get_program();
         self.dispatcher.demand(|res| !res.programs[ph].is_pending());
-        // obtain program parameter values/resources
+        // obtain program parameter values & resources
         let parameters = match self.prebind_shell(prog_shell) {
             Ok(params) => params,
             Err(e) => return Err(e),
@@ -454,7 +456,8 @@ impl Renderer {
         };
     }
 
-    fn prebind_shell<P: ProgramShell>(&mut self, shell: &P) -> Result<TempProgramResources, DrawError> {
+    fn prebind_shell<P: ProgramShell>(&mut self, shell: &P)
+            -> Result<TempProgramResources, DrawError> {
         let dp = &mut self.dispatcher;
         let parameters = {
             let ProgramHandle(ph) = shell.get_program();
@@ -462,8 +465,8 @@ impl Renderer {
                 Ok(&resource::Loaded(ref m)) => m,
                 _ => return Err(ErrorProgram),
             };
-            //TODO: pre-allocate these vectors and re-use them
             let fake = resource::Handle::new_fake();
+            //TODO: pre-allocate these vectors and re-use them
             let mut uniforms = Vec::from_elem(meta.uniforms.len(), device::shade::ValueUninitialized);
             let mut blocks   = Vec::from_elem(meta.blocks.len(), BufferHandle(fake));
             let mut textures = Vec::from_elem(meta.textures.len(), (TextureHandle(fake), None));
@@ -472,7 +475,19 @@ impl Renderer {
                 blocks: blocks.as_mut_slice(),
                 textures: textures.as_mut_slice(),
             });
-            //TODO: check that everything is in place
+            // verify that all the parameters were written
+            match uniforms.iter().zip(meta.uniforms.iter()).find(|&(u, _)| !u.is_valid()) {
+                Some((_, var)) => return Err(ErrorShell(ErrorShellUniform(var.name.clone()))),
+                None => (),
+            }
+            match blocks.iter().zip(meta.blocks.iter()).find(|&(&b, _)| b == BufferHandle(fake)) {
+                Some((_, var)) => return Err(ErrorShell(ErrorShellBlock(var.name.clone()))),
+                None => (),
+            }
+            match textures.iter().zip(meta.textures.iter()).find(|&(&(t, _), _)| t == TextureHandle(fake)) {
+                Some((_, var)) => return Err(ErrorShell(ErrorShellTexture(var.name.clone()))),
+                None => (),
+            }
             (uniforms, blocks, textures)
         };
         // buffers pass
@@ -553,7 +568,7 @@ impl Renderer {
                         i as device::UniformBufferSlot,
                         i as device::UniformBlockIndex,
                         block)),
-                _ => return Err(ErrorShellBlock(i as shade::VarBlock)),
+                _ => return Err(ErrorShellBlock(var.name.clone())),
             }
         }
         for (i, (var, value)) in meta.textures.iter().zip(textures.iter()).enumerate() {
@@ -561,7 +576,7 @@ impl Renderer {
             let sam = match sampler {
                 Some(SamplerHandle(sam)) => match self.dispatcher.resource.samplers[sam] {
                     (Loaded(sam), ref info) => Some((sam, info.clone())),
-                    _ => return Err(ErrorShellSampler(i as shade::VarTexture)),
+                    _ => return Err(ErrorShellSampler(var.name.clone())),
                 },
                 None => None,
             };
@@ -577,7 +592,7 @@ impl Renderer {
                         tex,
                         sam));
                 },
-                _ => return Err(ErrorShellTexture(i as shade::VarTexture)),
+                _ => return Err(ErrorShellTexture(var.name.clone())),
             }
         }
         Ok(())

@@ -62,20 +62,20 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span, substr: &gene
                     //TODO: verify the type match
                     Ok(ParamUniform) => super::ugh(cx, |cx| quote_expr!(cx,
                         match $input.val0().iter().position(|u| u.name.as_slice() == $name) {
-                            Some(p) => p as gfx::VarUniform,
-                            None => return Err(gfx::ErrorUniform($name)),
+                            Some(p) => p as gfx::shade::VarUniform,
+                            None => return Err(gfx::shade::ErrorUniform($name)),
                         }
                     )),
                     Ok(ParamBlock)   => super::ugh(cx, |cx| quote_expr!(cx,
                         match $input.val1().iter().position(|b| b.name.as_slice() == $name) {
-                            Some(p) => p as gfx::VarBlock,
-                            None => return Err(gfx::ErrorBlock($name)),
+                            Some(p) => p as gfx::shade::VarBlock,
+                            None => return Err(gfx::shade::ErrorBlock($name)),
                         }
                     )),
                     Ok(ParamTexture) => super::ugh(cx, |cx| quote_expr!(cx,
                         match $input.val2().iter().position(|t| t.name.as_slice() == $name) {
-                            Some(p) => p as gfx::VarTexture,
-                            None => return Err(gfx::ErrorTexture($name)),
+                            Some(p) => p as gfx::shade::VarTexture,
+                            None => return Err(gfx::shade::ErrorTexture($name)),
                         }
                     )),
                     Err(_) => {
@@ -138,7 +138,11 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
             let view = cx.view_use_simple(
                 span,
                 ast::Inherited,
-                cx.path(span, vec![cx.ident_of("gfx"), cx.ident_of("ToUniform")])
+                cx.path(span, vec![
+                    cx.ident_of("gfx"),
+                    cx.ident_of("shade"),
+                    cx.ident_of("ToUniform")
+                    ])
             );
             cx.expr_block(cx.block_all(span, vec![view], calls, None))
         },
@@ -150,7 +154,7 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
 }
 
 /// A helper function that translates variable type (`i32`, `TextureHandle`, etc)
-/// into the corresponding shader var id type (`VarUniform`, `VarTexture`, etc)
+/// into the corresponding shader var id type (`VarUniform`, `VarBlock`, or `VarTexture`)
 fn node_to_var_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span, node: &ast::Ty_) -> Gc<ast::Ty> {
     let id = match classify(node) {
         Ok(ParamUniform) => "VarUniform",
@@ -165,24 +169,11 @@ fn node_to_var_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span, node: &ast
             ""
         },
     };
-    cx.ty_path(ast::Path {
-            span: span,
-            global: true,
-            segments: vec![
-                ast::PathSegment {
-                    identifier: ast::Ident::new(token::intern("gfx")),
-                    lifetimes: Vec::new(),
-                    types: owned_slice::OwnedSlice::empty(),
-                },
-                ast::PathSegment {
-                    identifier: ast::Ident::new(token::intern(id)),
-                    lifetimes: Vec::new(),
-                    types: owned_slice::OwnedSlice::empty(),
-                },
-            ],
-        },
-        None
-    )
+    cx.ty_path(cx.path_global(span, vec![
+            cx.ident_of("gfx"),
+            cx.ident_of("shade"),
+            cx.ident_of(id)
+        ]), None)
 }
 
 /// Decorator for `shader_param` attribute
@@ -228,7 +219,7 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
         span: span,
         attributes: Vec::new(),
         path: generic::ty::Path {
-            path: vec!["gfx", "ShaderParam"],
+            path: vec!["gfx", "shade", "ShaderParam"],
             lifetime: None,
             params: vec![link_ty.clone()],
             global: true,
@@ -244,7 +235,7 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                 ))),
                 args: vec![
                     generic::ty::Literal(generic::ty::Path::new(
-                        vec!["gfx", "ParamLinkInput"])),
+                        vec!["gfx", "shade", "ParamLinkInput"])),
                 ],
                 ret_ty: generic::ty::Literal(
                     generic::ty::Path {
@@ -253,7 +244,7 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                         params: vec![
                             link_ty.clone(),
                             box generic::ty::Literal(generic::ty::Path {
-                                path: vec!["gfx", "ParameterError"],
+                                path: vec!["gfx", "shade", "ParameterError"],
                                 lifetime: Some("'static"),
                                 params: Vec::new(),
                                 global: true,
@@ -279,7 +270,7 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                         generic::ty::Borrowed(None, ast::MutImmutable)
                     ),
                     generic::ty::Literal(
-                        generic::ty::Path::new(vec!["gfx", "ParamValues"]),
+                        generic::ty::Path::new(vec!["gfx", "shade", "ParamValues"]),
                     ),
                 ],
                 ret_ty: generic::ty::Tuple(Vec::new()),
