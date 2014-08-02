@@ -31,16 +31,31 @@ use std::rc::Rc;
 
 pub struct Window(glinit::Window);
 
-#[inline]
-pub fn new_window(dimensions: Option<(uint, uint)>, title: &str,
-    hints: &glinit::Hints, monitor: Option<glinit::MonitorID>) -> Option<Window>
-{
-    let win = match glinit::Window::new(dimensions, title, hints, monitor) {
-        Err(_) => return None,
-        Ok(w) => w
-    };
+impl Window {
+    #[inline]
+    pub fn new() -> Option<Window> {
+        let win = match glinit::Window::new() {
+            Err(_) => return None,
+            Ok(w) => w
+        };
 
-    Some(Window(win))
+        Some(Window(win))
+    }
+
+    #[inline]
+    pub fn from_builder(builder: glinit::WindowBuilder) -> Option<Window> {
+        let win = match builder.build() {
+            Err(_) => return None,
+            Ok(w) => w
+        };
+
+        Some(Window(win))
+    }
+
+    #[inline]
+    pub fn from_existing(win: glinit::Window) -> Window {
+        Window(win)
+    }
 }
 
 impl<'a> device::GlProvider for &'a Window {
@@ -106,13 +121,13 @@ impl Window {
     }
 
     #[inline]
-    pub fn poll_events(&self) -> Vec<glinit::Event> {
+    pub fn poll_events(&self) -> glinit::PollEventsIterator {
         let &Window(ref win) = self;
         win.poll_events()
     }
 
     #[inline]
-    pub fn wait_events(&self) -> Vec<glinit::Event> {
+    pub fn wait_events(&self) -> glinit::WaitEventsIterator {
         let &Window(ref win) = self;
         win.wait_events()
     }

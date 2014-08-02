@@ -89,10 +89,7 @@ fn main() {
     };
 
     if use_glinit {
-        use std::default::Default;
-
-        let window = gfx::gl_init::new_window(None, "Hello world",
-            &Default::default(), None).unwrap();
+        let window = gfx::gl_init::Window::new().unwrap();
         window.set_title("[gl-init] Triangle example #gfx-rs!");
         unsafe { window.make_current() };
 
@@ -107,7 +104,7 @@ fn main() {
 
         'main: loop {
             // quit when Esc is pressed.
-            for event in window.poll_events().move_iter() {
+            for event in window.poll_events() {
                 match event {
                     glinit::Pressed(glinit::Escape) => break 'main,
                     glinit::Closed => break 'main,
