@@ -60,18 +60,21 @@ pub type VarBlock = u8;
 pub type VarTexture = u8;
 /// A texture parameter: consists of a texture handle with an optional sampler.
 pub type TextureParam = (super::TextureHandle, Option<super::SamplerHandle>);
-/// A borrowed mutable storage for shader parameter values.
-pub type ParamValues<'a> = (
-    &'a mut [dev::UniformValue],
-    &'a mut [super::BufferHandle],
-    &'a mut [TextureParam]
-);
 /// Borrowed parts of the `ProgramMeta`, used for data link construction
 pub type ParamLinkInput<'a> = (
     &'a [dev::UniformVar],
     &'a [dev::BlockVar],
     &'a [dev::SamplerVar]
 );
+/// A borrowed mutable storage for shader parameter values.
+pub struct ParamValues<'a> {
+    /// uniform values to be provided
+    pub uniforms: &'a mut [dev::UniformValue],
+    /// uniform buffers to be provided
+    pub blocks  : &'a mut [super::BufferHandle],
+    /// textures to be provided
+    pub textures: &'a mut [TextureParam]
+}
 
 /// Encloses a shader program with its parameter
 pub trait ProgramShell {
@@ -85,8 +88,12 @@ impl ProgramShell for super::ProgramHandle {
     fn get_program(&self) -> super::ProgramHandle {
         self.clone()
     }
-    fn fill_params(&self, (pu, pb, pt): ParamValues) {
-        debug_assert!(pu.is_empty() && pb.is_empty() && pt.is_empty());
+    fn fill_params(&self, params: ParamValues) {
+        debug_assert!(
+            params.uniforms.is_empty() &&
+            params.blocks.is_empty() &&
+            params.textures.is_empty()
+        );
     }
 }
 
@@ -171,17 +178,17 @@ impl ProgramShell for SerialShell {
     fn get_program(&self) -> super::ProgramHandle {
         self.program
     }
-    fn fill_params(&self, (pu, pb, pt): ParamValues) {
-        debug_assert!(pu.len() == self.uniforms.len());
-        for (dst, src) in pu.mut_iter().zip(self.uniforms.iter()) {
+    fn fill_params(&self, param: ParamValues) {
+        debug_assert!(param.uniforms.len() == self.uniforms.len());
+        for (dst, src) in param.uniforms.mut_iter().zip(self.uniforms.iter()) {
             *dst = *src;
         }
-        debug_assert!(pb.len() == self.blocks.len());
-        for (dst, src) in pb.mut_iter().zip(self.blocks.iter()) {
+        debug_assert!(param.blocks.len() == self.blocks.len());
+        for (dst, src) in param.blocks.mut_iter().zip(self.blocks.iter()) {
             *dst = *src;
         }
-        debug_assert!(pt.len() == self.textures.len());
-        for (dst, src) in pt.mut_iter().zip(self.textures.iter()) {
+        debug_assert!(param.textures.len() == self.textures.len());
+        for (dst, src) in param.textures.mut_iter().zip(self.textures.iter()) {
             *dst = *src;
         }
     }

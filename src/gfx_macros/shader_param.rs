@@ -107,7 +107,8 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                -> Gc<ast::Expr> {
     match *substr.fields {
         generic::Struct(ref fields) => {
-            let mut calls = definition.fields.iter().zip(fields.iter()).map(|(def, f)| {
+            let calls = definition.fields.iter().zip(fields.iter()).map(|(def, f)| {
+                let out = substr.nonself_args[1];
                 let value_id = f.self_;
                 let var_id = cx.expr_field_access(
                     span,
@@ -116,13 +117,13 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     );
                 match classify(&def.node.ty.node) {
                     Ok(ParamUniform) => super::ugh(cx, |cx| quote_stmt!(cx,
-                        vu[$var_id as uint] = $value_id.to_uniform();
+                        $out.uniforms[$var_id as uint] = $value_id.to_uniform();
                     )),
                     Ok(ParamBlock)   => super::ugh(cx, |cx| quote_stmt!(cx,
-                        vb[$var_id as uint] = $value_id .clone();
+                        $out.blocks[$var_id as uint] = $value_id.clone();
                     )),
                     Ok(ParamTexture) => super::ugh(cx, |cx| quote_stmt!(cx,
-                        vt[$var_id as uint] = $value_id .clone();
+                        $out.textures[$var_id as uint] = $value_id.clone();
                     )),
                     Err(_) => {
                         cx.span_err(span, format!(
@@ -133,11 +134,7 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                         cx.stmt_expr(cx.expr_uint(span, 0))
                     },
                 }
-            }).collect::<Vec<Gc<ast::Stmt>>>();
-            let out = substr.nonself_args[1];
-            calls.insert(0, super::ugh(cx, |cx| quote_stmt!(cx,
-                let (vu, vb, vt) = $out;
-            )));
+            }).collect();
             let view = cx.view_use_simple(
                 span,
                 ast::Inherited,

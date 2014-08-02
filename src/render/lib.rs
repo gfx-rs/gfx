@@ -113,7 +113,7 @@ pub enum MeshError {
 
 /// An error that can happen when trying to draw.
 #[deriving(Show)]
-pub enum DrawError<'a> {
+pub enum DrawError {
     /// Error with a program.
     ErrorProgram,
     /// Error with the program shell.
@@ -239,32 +239,17 @@ impl Renderer {
     /// a given draw state.
     pub fn draw<'a, P: ProgramShell>(&'a mut self, mesh: &mesh::Mesh, slice: mesh::Slice,
                                      frame: target::Frame, prog_shell: &P, state: state::DrawState)
-                                     -> Result<(), DrawError<'a>> {
+                                     -> Result<(), DrawError> {
         // demand resources. This section needs the mutable self, so we are
         // unable to do this after we get a reference to any resource
         self.prebind_mesh(mesh, &slice);
         let ProgramHandle(ph) = prog_shell.get_program();
         self.dispatcher.demand(|res| !res.programs[ph].is_pending());
         // obtain program parameter values/resources
-        let resources = {
-            let meta = match self.dispatcher.resource.programs.get(ph) {
-                Ok(&resource::Loaded(ref m)) => m,
-                _ => return Err(ErrorProgram),
-            };
-            //TODO: pre-allocate these vectors and re-use them
-            let fake = resource::Handle::new_fake();
-            let mut uniforms = Vec::from_elem(meta.uniforms.len(), device::shade::ValueUninitialized);
-            let mut blocks   = Vec::from_elem(meta.blocks.len(), BufferHandle(fake));
-            let mut textures = Vec::from_elem(meta.textures.len(), (TextureHandle(fake), None));
-            prog_shell.fill_params((
-                uniforms.as_mut_slice(),
-                blocks.as_mut_slice(),
-                textures.as_mut_slice()
-                ));
-            //TODO: check that everything is in place
-            (uniforms, blocks, textures)
+        let parameters = match self.prebind_shell(prog_shell) {
+            Ok(params) => params,
+            Err(e) => return Err(e),
         };
-        self.prebind_shell(&resources);
         // bind state
         self.cast(device::SetPrimitiveState(state.primitive));
         self.cast(device::SetScissor(state.scissor));
@@ -280,7 +265,7 @@ impl Renderer {
         self.bind_frame(&frame);
         // bind shaders
         let program = self.dispatcher.resource.programs[ph].unwrap();
-        match self.bind_shell(program, resources) {
+        match self.bind_shell(program, parameters) {
             Ok(_) => (),
             Err(e) => return Err(ErrorShell(e)),
         }
@@ -469,14 +454,33 @@ impl Renderer {
         };
     }
 
-    fn prebind_shell(&mut self, &(_, ref buffers, ref textures): &TempProgramResources) {
+    fn prebind_shell<P: ProgramShell>(&mut self, shell: &P) -> Result<TempProgramResources, DrawError> {
         let dp = &mut self.dispatcher;
+        let parameters = {
+            let ProgramHandle(ph) = shell.get_program();
+            let meta = match dp.resource.programs.get(ph) {
+                Ok(&resource::Loaded(ref m)) => m,
+                _ => return Err(ErrorProgram),
+            };
+            //TODO: pre-allocate these vectors and re-use them
+            let fake = resource::Handle::new_fake();
+            let mut uniforms = Vec::from_elem(meta.uniforms.len(), device::shade::ValueUninitialized);
+            let mut blocks   = Vec::from_elem(meta.blocks.len(), BufferHandle(fake));
+            let mut textures = Vec::from_elem(meta.textures.len(), (TextureHandle(fake), None));
+            shell.fill_params(shade::ParamValues {
+                uniforms: uniforms.as_mut_slice(),
+                blocks: blocks.as_mut_slice(),
+                textures: textures.as_mut_slice(),
+            });
+            //TODO: check that everything is in place
+            (uniforms, blocks, textures)
+        };
         // buffers pass
-        for &BufferHandle(buf) in buffers.iter() {
+        for &BufferHandle(buf) in parameters.ref1().iter() {
             dp.demand(|res| !res.buffers[buf].is_pending());
         }
         // texture pass
-        for &(TextureHandle(tex), sampler) in textures.iter() {
+        for &(TextureHandle(tex), sampler) in parameters.ref2().iter() {
             dp.demand(|res| !res.textures[tex].ref0().is_pending());
             match sampler {
                 Some(SamplerHandle(sam)) =>
@@ -484,6 +488,8 @@ impl Renderer {
                 None => (),
             }
         }
+        // done
+        Ok(parameters)
     }
 
     fn make_target_cast(dp: &mut Dispatcher, to: Target, plane: target::Plane) -> device::CastRequest {
