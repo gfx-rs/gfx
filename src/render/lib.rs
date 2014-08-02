@@ -424,7 +424,8 @@ impl Renderer {
         self.dispatcher.demand(|res| !res.programs[ph].is_pending());
         match self.dispatcher.resource.programs.get(ph) {
             Ok(&Loaded(ref m)) => {
-                match data.create_link(m.uniforms.as_slice(), m.blocks.as_slice(), m.textures.as_slice()) {
+                let input = (m.uniforms.as_slice(), m.blocks.as_slice(), m.textures.as_slice());
+                match data.create_link(input) {
                     Ok(link) => Ok(shade::CustomShell::new(program, link, data)),
                     Err(e) => Err(shade::ErrorUnusedParameter(e)),
                 }

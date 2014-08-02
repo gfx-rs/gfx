@@ -34,8 +34,8 @@ pub use render::Renderer;
 pub use render::mesh::{Attribute, Mesh, VertexFormat, Slice, VertexSlice, IndexSlice};
 pub use render::state::{DrawState, BlendAdditive, BlendAlpha};
 pub use render::shade::{ProgramShell, CustomShell, ShaderParam, ToUniform, TextureParam,
-    ParameterLinkError, ParameterError, ErrorInternal, ErrorUniform, ErrorBlock, ErrorTexture,
-    FnUniform, FnBlock, FnTexture, VarUniform, VarBlock, VarTexture};
+    ParamLinkInput, ParamValues, ParameterLinkError, ParameterError, ErrorInternal,
+    ErrorUniform, ErrorBlock, ErrorTexture, VarUniform, VarBlock, VarTexture};
 pub use render::target::{Frame, Plane, PlaneEmpty, PlaneSurface, PlaneTexture};
 pub use device::{attrib, state, tex};
 pub use device::target::{Color, ClearData, Layer, Level};

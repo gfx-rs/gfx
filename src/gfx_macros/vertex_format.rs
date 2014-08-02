@@ -166,10 +166,6 @@ fn decode_count_and_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
     }
 }
 
-/// A hacky thing to get around 'moved value' errors when using `quote_expr!`
-/// with `ext::base::ExtCtxt`s.
-fn ugh<T, U>(x: &mut T, f: |&mut T| -> U) -> U { f(x) }
-
 /// Generates the the method body for `gfx::VertexFormat::generate`.
 fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                    substr: &generic::Substructure) -> Gc<ast::Expr> {
@@ -182,7 +178,7 @@ fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     let (count_expr, type_expr) = decode_count_and_type(cx, span, def);
                     let ident_str = token::get_ident(ident);
                     let ident_str = ident_str.get();
-                    ugh(cx, |cx| quote_expr!(cx, {
+                    super::ugh(cx, |cx| quote_expr!(cx, {
                         attributes.push(gfx::Attribute {
                             buffer: $buffer_expr,
                             elem_count: $count_expr,
@@ -196,7 +192,7 @@ fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     }))
                 }).collect::<Vec<Gc<ast::Expr>>>();
             let capacity = fields.len();
-            ugh(cx, |cx| quote_expr!(cx, {
+            super::ugh(cx, |cx| quote_expr!(cx, {
                 let mut attributes = Vec::with_capacity($capacity);
                 $attribute_pushes;
                 attributes
