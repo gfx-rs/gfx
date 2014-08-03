@@ -40,18 +40,15 @@ install:
   # rustc
   - curl http://www.rust-lang.org/rustup.sh | sudo -E sh
   - rustc -v
+  - cargo -V
 script:
-  - make init
-  - make test
-  - make clean
-  - make clean deps
-  - make doc
-# check examples
-  - (cd src/examples/triangle && cargo build)
-  - (cd src/examples/cube && cargo build)
+  - cargo build
+  - cargo test
+  - make -C src/examples
+  - cargo doc
+  # the doc directory needs to be in the root for rust-ci
+  - ln -s target/doc doc
 # - sh -c "sleep 5; xdotool key --window \"$(xdotool search --name Hello)\" Escape" &
 # - ./examples/main
-# make sure cargo works
-  - cargo build
 after_script:
   - curl http://www.rust-ci.org/artifacts/put?t=$RUSTCI_TOKEN | sh

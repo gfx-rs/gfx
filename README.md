@@ -6,27 +6,19 @@
 
 A lightweight buffer, shader and render queue manager for Rust.
 
-## Getting Started
+## Using the library
 
-For the initial build of both gfx-rs and all its dependencies, use this incantation:
+Add this line to your project's `Cargo.toml`:
 
-~~~sh
-make init
+~~~toml
+[dependencies.gfx]
+git = "https://github.com/gfx-rs/gfx-rs.git"
 ~~~
 
-Afterwards, you can use these targets:
+## Building the examples
 
 ~~~sh
-make                    # build libraries, examples, and documentation
-make lib                # build libraries only
-make examples           # build the examples
-make test               # build and run the unit tests
-make doc                # generate documentation
-make clean              # clean up everything (except for the dependencies)
-
-make submodule-update   # initialise and update submodules
-make deps               # build the dependencies
-make clean-deps         # clean up the dependencies
+make -C src/examples
 ~~~
 
 ## The Problem
