@@ -1,0 +1,17 @@
+[package]
+
+name = "gfx-tests"
+version = "0.1.0"
+authors = [
+]
+
+[[lib]]
+name = "shader_param"
+path = "shader_param.rs"
+
+[[lib]]
+name = "vertex_format"
+path = "vertex_format.rs"
+
+[dependencies.gfx]
+path = "../../"
