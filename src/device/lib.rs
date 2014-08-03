@@ -57,9 +57,9 @@ pub struct Capabilities {
 }
 
 /// Draw vertex count.
-pub type VertexCount = u16;
+pub type VertexCount = u32;
 /// Draw index count.
-pub type IndexCount = u16;
+pub type IndexCount = u32;
 /// Index of a uniform block.
 pub type UniformBlockIndex = u8;
 /// Slot for an attribute.

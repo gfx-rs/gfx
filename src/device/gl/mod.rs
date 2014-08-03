@@ -520,7 +520,7 @@ impl super::ApiBackEnd for GlBackEnd {
                 self.check();
             },
             super::DrawIndexed(start, count) => {
-                let offset = start * (mem::size_of::<u16>() as u16);
+                let offset = start * (mem::size_of::<u16>() as u32);
                 unsafe {
                     gl::DrawElements(gl::TRIANGLES,
                         count as gl::types::GLsizei,
