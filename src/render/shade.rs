@@ -14,6 +14,8 @@
 
 //! Shader parameter handling.
 
+use std::cell::Cell;
+use std::rc::Rc;
 use dev = device::shade;
 
 /// Helper trait to transform base types into their corresponding uniforms
@@ -126,7 +128,7 @@ pub trait ShaderParam<L> {
     /// Creates a new link, self is passed as a workaround for Rust to not be lost in generics
     fn create_link(&self, ParamLinkInput) -> Result<L, ParameterError<'static>>;
     /// Get all the contained parameter values, using a given link.
-    fn fill_params(&self, link: &L, ParamValues);
+    fn fill_params(&self, &L, ParamValues);
 }
 
 /// A bundle that encapsulates a program and a custom user-provided
@@ -165,31 +167,66 @@ impl<L, T: ShaderParam<L>> ProgramShell for CustomShell<L, T> {
     }
 }
 
-/// A serializable less-safe binding of a program with its parameters
-#[deriving(Clone)]
-pub struct SerialShell {
-    program: super::ProgramHandle,
-    uniforms: Vec<dev::UniformValue>,
-    blocks: Vec<super::BufferHandle>,
-    textures: Vec<TextureParam>,
+/// A named cell containing arbitrary value
+pub struct NamedCell<T> {
+    /// Name
+    pub name: String,
+    /// Value
+    pub value: Cell<T>,
 }
 
-impl ProgramShell for SerialShell {
-    fn get_program(&self) -> super::ProgramHandle {
-        self.program
+/// A dictionary of parameters, meant to be shared between different programs
+pub struct ParamDictionary {
+    /// Uniform dictionary
+    pub uniforms: Vec<NamedCell<dev::UniformValue>>,
+    /// Block dictionary
+    pub blocks: Vec<NamedCell<super::BufferHandle>>,
+    /// Texture dictionary
+    pub textures: Vec<NamedCell<TextureParam>>,
+}
+
+/// Accelerating link structure for ParamDictionary
+pub struct ParamDictionaryLink {
+    uniforms: Vec<uint>,
+    blocks: Vec<uint>,
+    textures: Vec<uint>,
+}
+
+impl<'a> ShaderParam<ParamDictionaryLink> for &'a ParamDictionary {
+    fn create_link(&self, (in_uni, in_buf, in_tex): ParamLinkInput)
+                   -> Result<ParamDictionaryLink, ParameterError<'static>> {
+        Ok(ParamDictionaryLink {
+            uniforms: in_uni.iter().map(|var|
+                self.uniforms.iter().position(|c| c.name == var.name).unwrap()
+                ).collect(),
+            blocks: in_buf.iter().map(|var|
+                self.blocks  .iter().position(|c| c.name == var.name).unwrap()
+                ).collect(),
+            textures: in_tex.iter().map(|var|
+                self.textures.iter().position(|c| c.name == var.name).unwrap()
+                ).collect(),
+        })
     }
-    fn fill_params(&self, param: ParamValues) {
-        debug_assert!(param.uniforms.len() == self.uniforms.len());
-        for (dst, src) in param.uniforms.mut_iter().zip(self.uniforms.iter()) {
-            *dst = *src;
+
+    fn fill_params(&self, link: &ParamDictionaryLink, out: ParamValues) {
+        for (&id, var) in link.uniforms.iter().zip(out.uniforms.mut_iter()) {
+            *var = self.uniforms[id].value.get();
         }
-        debug_assert!(param.blocks.len() == self.blocks.len());
-        for (dst, src) in param.blocks.mut_iter().zip(self.blocks.iter()) {
-            *dst = *src;
+        for (&id, var) in link.blocks.iter().zip(out.blocks.mut_iter()) {
+            *var = self.blocks[id].value.get();
         }
-        debug_assert!(param.textures.len() == self.textures.len());
-        for (dst, src) in param.textures.mut_iter().zip(self.textures.iter()) {
-            *dst = *src;
+        for (&id, var) in link.textures.iter().zip(out.textures.mut_iter()) {
+            *var = self.textures[id].value.get();
         }
+    }
+}
+
+impl ShaderParam<ParamDictionaryLink> for Rc<ParamDictionary> {
+    fn create_link(&self, input: ParamLinkInput) -> Result<ParamDictionaryLink,
+                   ParameterError<'static>> {
+        self.deref().create_link(input)
+    }
+    fn fill_params(&self, link: &ParamDictionaryLink, out: ParamValues) {
+        self.deref().fill_params(link, out)
     }
 }
