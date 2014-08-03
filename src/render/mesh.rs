@@ -23,8 +23,8 @@
 use a = device::attrib;
 
 pub type MaterialHandle = int;  //placeholder
-pub type VertexCount = u16;
-pub type ElementCount = u16;
+pub type VertexCount = u32;
+pub type ElementCount = u32;
 
 /// Describes a single attribute of a vertex buffer, including its type, name, etc.
 #[deriving(Clone, PartialEq, Show)]
