@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![crate_name = "gfx_macros_test"]
+#![crate_name = "vertex_format"]
 
 #![feature(phase)]
 
@@ -21,21 +21,22 @@ extern crate gfx_macros;
 extern crate gfx;
 extern crate render;
 
+use a = gfx::attrib;
+
+#[packed]
+#[vertex_format]
+struct MyVertex {
+     a0: [f32, ..2],
+     #[normalized]
+     a1: i16,
+     #[as_float]
+     a2: [i8, ..4],
+     #[as_double]
+     a3: f64,
+}
+
 #[test]
 fn test_vertex_format() {
-    use a = gfx::attrib;
-    #[packed]
-    #[vertex_format]
-    struct MyVertex {
-         a0: [f32, ..2],
-         #[normalized]
-         a1: i16,
-         #[as_float]
-         a2: [i8, ..4],
-         #[as_double]
-         a3: f64,
-    }
-
     let buf = render::Renderer::create_fake_buffer();
     let mesh = gfx::Mesh::from::<MyVertex>(buf, 0);
     let stride = 22 as a::Stride;
@@ -74,15 +75,4 @@ fn test_vertex_format() {
             name: "a3".to_string(),
         }
     ]);
-}
-
-#[test]
-fn test_shader_param() {
-    #[shader_param]
-    struct MyParam {
-        a: i32,
-        b: [f32, ..4],
-        c: gfx::TextureParam,
-        d: gfx::BufferHandle,
-    }
 }

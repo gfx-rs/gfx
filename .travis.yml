@@ -44,6 +44,7 @@ install:
 script:
   - cargo build
   - cargo test
+  - make -C src/tests
   - make -C src/examples
   - cargo doc
   # the doc directory needs to be in the root for rust-ci
