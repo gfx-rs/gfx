@@ -6,8 +6,12 @@ extern crate gfx_macros;
 extern crate getopts;
 extern crate gfx;
 extern crate glfw;
+extern crate glfw_platform;
 extern crate glinit = "gl-init-rs";
+extern crate gl_init_platform;
 extern crate native;
+
+use glfw_platform::BuilderExtension;
 
 #[vertex_format]
 struct Vertex {
@@ -89,7 +93,7 @@ fn main() {
     };
 
     if use_glinit {
-        let window = gfx::gl_init::Window::new().unwrap();
+        let window = gl_init_platform::Window::new().unwrap();
         window.set_title("[gl-init] Triangle example #gfx-rs!");
         unsafe { window.make_current() };
 
@@ -121,7 +125,7 @@ fn main() {
     } else {
         let glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
-        let (mut window, events) = gfx::GlfwWindowBuilder::new(&glfw)
+        let (mut window, events) = glfw_platform::WindowBuilder::new(&glfw)
             .title("[GLFW] Triangle example #gfx-rs!")
             .try_modern_context_hints()
             .create()

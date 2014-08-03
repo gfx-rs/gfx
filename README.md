@@ -6,14 +6,30 @@
 
 A lightweight buffer, shader and render queue manager for Rust.
 
-## Using the library
+## Getting started
 
-Add this line to your project's `Cargo.toml`:
+Add the following to your `Cargo.toml`:
 
-~~~toml
+```toml
 [dependencies.gfx]
-git = "https://github.com/gfx-rs/gfx-rs.git"
-~~~
+git = "http://github.com/gfx-rs/gfx-rs"
+```
+
+To use [gl-init](https://github.com/tomaka/gl-init-rs/) with `gfx`, also add:
+
+```toml
+[dependencies.gl_init_platform]
+git = "http://github.com/gfx-rs/gfx-rs"
+```
+
+To use [glfw](https://github.com/bjz/glfw-rs/) with `gfx`, also add:
+
+```toml
+[dependencies.glfw_platform]
+git = "http://github.com/gfx-rs/gfx-rs"
+```
+
+See the [triangle example](./src/examples/triangle) for an example using both.
 
 ## Building the examples
 

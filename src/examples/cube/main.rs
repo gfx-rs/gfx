@@ -5,6 +5,7 @@
 extern crate gfx_macros;
 extern crate gfx;
 extern crate glfw;
+extern crate glfw_platform;
 extern crate cgmath;
 extern crate native;
 
@@ -12,6 +13,8 @@ use cgmath::matrix::{Matrix, Matrix4};
 use cgmath::point::Point3;
 use cgmath::transform::{Transform, AffineMatrix3};
 use cgmath::vector::Vector3;
+
+use glfw_platform::BuilderExtension;
 
 //----------------------------------------
 // Cube associated data
@@ -100,7 +103,7 @@ fn start(argc: int, argv: *const *const u8) -> int {
 fn main() {
     let glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
-    let (mut window, events) = gfx::GlfwWindowBuilder::new(&glfw)
+    let (mut window, events) = glfw_platform::WindowBuilder::new(&glfw)
         .title("Cube example #gfx-rs")
         .try_modern_context_hints()
         .create()

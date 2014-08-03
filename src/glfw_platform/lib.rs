@@ -27,9 +27,37 @@ extern crate glfw;
 extern crate log;
 extern crate libc;
 
+extern crate gfx;
 extern crate device;
 
 use glfw::Context;
+
+/// A builder for initializing gfx-rs using the GLFW library.
+pub type GlfwBuilder<'a, C> = gfx::Builder<
+    gfx::SomeT<Platform<C>>,
+    gfx::SomeT<Wrap<'a>>
+>;
+
+pub trait BuilderExtension {
+    fn with_glfw<'a, C: glfw::Context>(self, glfw: &'a glfw::Glfw, context: C) -> GlfwBuilder<'a, C>;
+    fn with_glfw_window<'a>(self, window: &'a mut glfw::Window) -> GlfwBuilder<'a, glfw::RenderContext>;
+}
+
+impl BuilderExtension for gfx::Builder<gfx::NoneT, gfx::NoneT> {
+    /// Use GLFW for the context and provider.
+    fn with_glfw<'a, C: glfw::Context>(self, glfw: &'a glfw::Glfw, context: C) -> GlfwBuilder<'a, C> {
+        let (platform, provider) = Platform::new(context, glfw);
+        self.with_context(platform)
+            .with_provider(provider)
+    }
+
+    /// Use GLFW for the context and provider, taking them from the supplied.
+    /// `glfw::Window`.
+    fn with_glfw_window<'a>(self, window: &'a mut glfw::Window) -> GlfwBuilder<'a, glfw::RenderContext> {
+        let context = window.render_context();
+        self.with_glfw(&window.glfw, context)
+    }
+}
 
 pub struct Wrap<'a>(&'a glfw::Glfw);
 
