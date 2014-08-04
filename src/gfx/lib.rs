@@ -26,10 +26,6 @@
 extern crate libc;
 
 extern crate device;
-// when cargo is ready, re-enable the `cfg`s
-/* #[cfg(glfw)] */ extern crate glfw;
-/* #[cfg(glfw)] */ extern crate glfw_platform;
-/* #[cfg(gl-init)] */ extern crate gl_init_platform;
 extern crate render;
 
 // public re-exports
@@ -46,10 +42,6 @@ pub use device::target::{Color, ClearData, Layer, Level};
 pub use device::{Blob, Device, GlBackEnd, GlProvider, GraphicsContext, InitError, QueueSize};
 pub use device::shade::{UniformValue, ValueI32, ValueF32, ValueI32Vec, ValueF32Vec, ValueF32Matrix};
 pub use device::shade::{ShaderSource, StaticBytes};
-/* #[cfg(glfw)] */ pub use GlfwWindowBuilder = glfw_platform::WindowBuilder;
-/* #[cfg(glfw)] */ pub use GlfwContext = glfw_platform::Platform;
-/* #[cfg(glfw)] */ pub use GlfwProvider = glfw_platform::Wrap;
-/* #[cfg(gl-init)] */ pub use gl_init = gl_init_platform;
 
 /// The empty variant of a type-level option.
 ///
@@ -67,13 +59,6 @@ pub struct Builder<C, P> {
     pub provider: P,
     pub queue_size: QueueSize,
 }
-
-/// A builder for initializing gfx-rs using the GLFW library.
-/* #[cfg(glfw)] */
-pub type GlfwBuilder<'a, C> = Builder<
-    SomeT<GlfwContext<C>>,
-    SomeT<GlfwProvider<'a>>
->;
 
 /// Create an empty builder object for initialising gfx-rs. The context and
 /// provider *must* be supplied before initialisation can occur.
@@ -112,22 +97,6 @@ impl<C, P> Builder<C, P> {
     pub fn with_queue_size(mut self, queue_size: QueueSize) -> Builder<C, P> {
         self.queue_size = queue_size;
         self
-    }
-
-    /// Use GLFW for the context and provider.
-    /* #[cfg(glfw)] */
-    pub fn with_glfw<'a, C: glfw::Context>(self, glfw: &'a glfw::Glfw, context: C) -> GlfwBuilder<'a, C> {
-        let (platform, provider) = glfw_platform::Platform::new(context, glfw);
-        self.with_context(platform)
-            .with_provider(provider)
-    }
-
-    /// Use GLFW for the context and provider, taking them from the supplied.
-    /// `glfw::Window`.
-    /* #[cfg(glfw)] */
-    pub fn with_glfw_window<'a>(self, window: &'a mut glfw::Window) -> GlfwBuilder<'a, glfw::RenderContext> {
-        let context = window.render_context();
-        self.with_glfw(&window.glfw, context)
     }
 }
 

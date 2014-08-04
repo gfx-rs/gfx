@@ -20,9 +20,3 @@ path = "src/device/"
 
 [dependencies.render]
 path = "src/render/"
-
-[dependencies.glfw_platform]
-path = "src/glfw_platform"
-
-[dependencies.gl_init_platform]
-path = "src/gl_init_platform"

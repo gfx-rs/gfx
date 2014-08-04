@@ -12,5 +12,8 @@ path = "lib.rs"
 [dependencies.glfw]
 git = "https://github.com/bjz/glfw-rs.git"
 
+[dependencies.gfx]
+path = "../../"
+
 [dependencies.device]
 path = "../device/"

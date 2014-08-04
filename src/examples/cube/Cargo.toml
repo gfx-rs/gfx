@@ -9,8 +9,11 @@ authors = [
 name = "cube"
 path = "main.rs"
 
-[dependencies.cgmath]
-git = "https://github.com/bjz/cgmath-rs.git"
-
 [dependencies.gfx]
 path = "../../../"
+
+[dependencies.glfw_platform]
+path = "../../glfw_platform"
+
+[dependencies.cgmath]
+git = "http://github.com/bjz/cgmath-rs"

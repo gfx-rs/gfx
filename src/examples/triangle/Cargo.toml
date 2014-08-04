@@ -11,3 +11,9 @@ path = "main.rs"
 
 [dependencies.gfx]
 path = "../../../"
+
+[dependencies.gl_init_platform]
+path = "../../gl_init_platform"
+
+[dependencies.glfw_platform]
+path = "../../glfw_platform"
