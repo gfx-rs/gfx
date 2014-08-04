@@ -186,7 +186,7 @@ fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                             offset: unsafe {
                                 &(*(0u as *const $struct_ident)).$ident as *const _ as gfx::attrib::Offset
                             },
-                            stride: std::mem::size_of::<$struct_ident>() as gfx::attrib::Stride,
+                            stride: { use std::mem; mem::size_of::<$struct_ident>() as gfx::attrib::Stride },
                             name: $ident_str.to_string(),
                         });
                     }))
