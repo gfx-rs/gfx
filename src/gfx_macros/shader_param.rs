@@ -48,7 +48,7 @@ fn classify(node: &ast::Ty_) -> Result<ParamType, ParamError> {
     }
 }
 
-/// `create_link()` method generating code
+/// Generates the the method body for `gfx::shade::ParamValues::create_link`
 fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span, substr: &generic::Substructure,
                  definition: Gc<ast::StructDef>, link_name: &str) -> Gc<ast::Expr> {
     let link_ident = cx.ident_of(link_name);
@@ -56,50 +56,41 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span, substr: &gene
         //generic::StaticStruct(definition, generic::Named(ref fields)) => {
         generic::Struct(ref fields) => {
             let out = definition.fields.iter().zip(fields.iter()).map(|(def, f)| {
-                let (fun, ret) = match classify(&def.node.ty.node) {
-                    Ok(ParamUniform) => ("find_uniform", "ErrorUniform"),
-                    Ok(ParamBlock)   => ("find_block",   "ErrorBlock"),
-                    Ok(ParamTexture) => ("find_texture", "ErrorTexture"),
+                let name = cx.expr_str(span, token::get_ident(f.name.unwrap()));
+                let input = substr.nonself_args[0];
+                let expr = match classify(&def.node.ty.node) {
+                    //TODO: verify the type match
+                    Ok(ParamUniform) => super::ugh(cx, |cx| quote_expr!(cx,
+                        match $input.val0().iter().position(|u| u.name.as_slice() == $name) {
+                            Some(p) => p as gfx::shade::VarUniform,
+                            None => return Err(gfx::shade::ErrorUniform($name)),
+                        }
+                    )),
+                    Ok(ParamBlock)   => super::ugh(cx, |cx| quote_expr!(cx,
+                        match $input.val1().iter().position(|b| b.name.as_slice() == $name) {
+                            Some(p) => p as gfx::shade::VarBlock,
+                            None => return Err(gfx::shade::ErrorBlock($name)),
+                        }
+                    )),
+                    Ok(ParamTexture) => super::ugh(cx, |cx| quote_expr!(cx,
+                        match $input.val2().iter().position(|t| t.name.as_slice() == $name) {
+                            Some(p) => p as gfx::shade::VarTexture,
+                            None => return Err(gfx::shade::ErrorTexture($name)),
+                        }
+                    )),
                     Err(_) => {
                         cx.span_err(span, format!(
                             "Invalid uniform: {}",
                             f.name.unwrap().as_str(),
                             ).as_slice()
                         );
-                        return cx.field_imm(span, cx.ident_of("invalid"), cx.expr_uint(span, 0));
+                        return cx.field_imm(span,
+                            cx.ident_of("invalid"),
+                            cx.expr_uint(span, 0)
+                            );
                     },
                 };
-                let id_ret = cx.ident_of(ret);
-                let expr_field = cx.expr_str(span, token::get_ident(f.name.unwrap()));
-                let value = cx.expr_method_call(
-                    span, substr.nonself_args[0], cx.ident_of(fun),
-                    vec![expr_field.clone()]
-                );
-                let error = cx.expr_call(span,
-                    cx.expr_path(cx.path_global(span,
-                        vec![cx.ident_of("gfx"), id_ret])
-                    ),
-                    vec![expr_field]
-                );
-                let some_ident = cx.ident_of("_p");
-                let unwrap = cx.expr_match(span, value, vec![
-                    cx.arm(span,
-                        vec![cx.pat_enum(span, cx.path_ident(span, cx.ident_of("Some")),
-                            vec![cx.pat_ident(span, some_ident)])
-                        ],
-                        cx.expr_ident(span, some_ident)
-                    ),
-                    cx.arm(span,
-                        vec![cx.pat_enum(span,
-                            cx.path_ident(span, cx.ident_of("None")),
-                            Vec::new())
-                        ],
-                        cx.expr(span, ast::ExprRet(
-                            Some(cx.expr_err(span, error))
-                        ))
-                    )
-                ]);
-                cx.field_imm(f.span, f.name.unwrap(), unwrap)
+                cx.field_imm(f.span, f.name.unwrap(), expr)
             }).collect();
             cx.expr_ok(span, cx.expr_struct_ident(span, link_ident, out))
         },
@@ -110,45 +101,48 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span, substr: &gene
     }
 }
 
-/// `bind()` method generating code
-fn method_bind(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
+/// Generates the the method body for `gfx::shade::ParamValues::fill_params`
+fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                substr: &generic::Substructure, definition: Gc<ast::StructDef>)
                -> Gc<ast::Expr> {
     match *substr.fields {
         generic::Struct(ref fields) => {
             let calls = definition.fields.iter().zip(fields.iter()).map(|(def, f)| {
-                let (arg_id, value) = match classify(&def.node.ty.node) {
-                    Ok(ParamUniform) => {
-                        let value = cx.expr_method_call(
-                            span,
-                            f.self_,
-                            cx.ident_of("to_uniform"),
-                            Vec::new()
-                        );
-                        (1u, value)
-                    },
-                    Ok(ParamBlock)   => {
-                        (2u, f.self_)
-                    },
-                    Ok(ParamTexture) => {
-                        (3u, f.self_)
-                    },
+                let out = substr.nonself_args[1];
+                let value_id = f.self_;
+                let var_id = cx.expr_field_access(
+                    span,
+                    substr.nonself_args[0],
+                    f.name.unwrap()
+                    );
+                match classify(&def.node.ty.node) {
+                    Ok(ParamUniform) => super::ugh(cx, |cx| quote_stmt!(cx,
+                        $out.uniforms[$var_id as uint] = Some($value_id.to_uniform());
+                    )),
+                    Ok(ParamBlock)   => super::ugh(cx, |cx| quote_stmt!(cx,
+                        $out.blocks[$var_id as uint] = Some $value_id;
+                    )),
+                    Ok(ParamTexture) => super::ugh(cx, |cx| quote_stmt!(cx,
+                        $out.textures[$var_id as uint] = Some $value_id;
+                    )),
                     Err(_) => {
                         cx.span_err(span, format!(
                             "Invalid uniform: {}",
                             f.name.unwrap().as_str(),
                             ).as_slice()
                         );
-                        return cx.stmt_expr(cx.expr_uint(span, 0))
+                        cx.stmt_expr(cx.expr_uint(span, 0))
                     },
-                };
-                let expr_id = cx.expr_field_access(span, substr.nonself_args[0], f.name.unwrap());
-                cx.stmt_expr(cx.expr_call(span, substr.nonself_args[arg_id], vec![expr_id, value]))
+                }
             }).collect();
             let view = cx.view_use_simple(
                 span,
                 ast::Inherited,
-                cx.path(span, vec![cx.ident_of("gfx"), cx.ident_of("ToUniform")])
+                cx.path(span, vec![
+                    cx.ident_of("gfx"),
+                    cx.ident_of("shade"),
+                    cx.ident_of("ToUniform"),
+                ])
             );
             cx.expr_block(cx.block_all(span, vec![view], calls, None))
         },
@@ -160,14 +154,14 @@ fn method_bind(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
 }
 
 /// A helper function that translates variable type (`i32`, `TextureHandle`, etc)
-/// into the corresponding shader var id type (`VarUniform`, `VarTexture`, etc)
+/// into the corresponding shader var id type (`VarUniform`, `VarBlock`, or `VarTexture`)
 fn node_to_var_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span, node: &ast::Ty_) -> Gc<ast::Ty> {
     let id = match classify(node) {
         Ok(ParamUniform) => "VarUniform",
         Ok(ParamBlock)   => "VarBlock",
         Ok(ParamTexture) => "VarTexture",
         Err(ErrorDeprecatedTexture) => {
-            cx.span_err(span, "Use gfx::TextureParam for texture vars instead of gfx::TextureHandle");
+            cx.span_err(span, "Use gfx::shade::TextureParam for texture vars instead of gfx::shade::TextureHandle");
             ""
         },
         Err(ErrorUnknown) => {
@@ -175,24 +169,11 @@ fn node_to_var_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span, node: &ast
             ""
         },
     };
-    cx.ty_path(ast::Path {
-            span: span,
-            global: true,
-            segments: vec![
-                ast::PathSegment {
-                    identifier: ast::Ident::new(token::intern("gfx")),
-                    lifetimes: Vec::new(),
-                    types: owned_slice::OwnedSlice::empty(),
-                },
-                ast::PathSegment {
-                    identifier: ast::Ident::new(token::intern(id)),
-                    lifetimes: Vec::new(),
-                    types: owned_slice::OwnedSlice::empty(),
-                },
-            ],
-        },
-        None
-    )
+    cx.ty_path(cx.path_global(span, vec![
+        cx.ident_of("gfx"),
+        cx.ident_of("shade"),
+        cx.ident_of(id),
+    ]), None)
 }
 
 /// Decorator for `shader_param` attribute
@@ -238,7 +219,7 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
         span: span,
         attributes: Vec::new(),
         path: generic::ty::Path {
-            path: vec!["gfx", "ShaderParam"],
+            path: vec!["gfx", "shade", "ShaderParam"],
             lifetime: None,
             params: vec![link_ty.clone()],
             global: true,
@@ -248,20 +229,13 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
         methods: vec![
             generic::MethodDef {
                 name: "create_link",
-                generics: generic::ty::LifetimeBounds {
-                    lifetimes: Vec::new(),
-                    bounds: vec![("S", None, vec![
-                        generic::ty::Path::new(vec!["gfx", "ParameterSink"])
-                    ])],
-                },
+                generics: generic::ty::LifetimeBounds::empty(),
                 explicit_self: Some(Some(generic::ty::Borrowed(
                     None, ast::MutImmutable
                 ))),
                 args: vec![
-                    generic::ty::Ptr(
-                        box generic::ty::Literal(generic::ty::Path::new_local("S")),
-                        generic::ty::Borrowed(None, ast::MutMutable)
-                    )
+                    generic::ty::Literal(generic::ty::Path::new(
+                        vec!["gfx", "shade", "ParamLinkInput"])),
                 ],
                 ret_ty: generic::ty::Literal(
                     generic::ty::Path {
@@ -270,7 +244,7 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                         params: vec![
                             link_ty.clone(),
                             box generic::ty::Literal(generic::ty::Path {
-                                path: vec!["gfx", "ParameterError"],
+                                path: vec!["gfx", "shade", "ParameterError"],
                                 lifetime: Some("'static"),
                                 params: Vec::new(),
                                 global: true,
@@ -285,11 +259,8 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                 ),
             },
             generic::MethodDef {
-                name: "bind",
-                generics: generic::ty::LifetimeBounds {
-                    lifetimes: vec!["'a"],
-                    bounds: Vec::new(),
-                },
+                name: "fill_params",
+                generics: generic::ty::LifetimeBounds::empty(),
                 explicit_self: Some(Some(generic::ty::Borrowed(
                     None, ast::MutImmutable
                 ))),
@@ -299,19 +270,13 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                         generic::ty::Borrowed(None, ast::MutImmutable)
                     ),
                     generic::ty::Literal(
-                        generic::ty::Path::new_(vec!["gfx", "FnUniform"], Some("'a"), Vec::new(), true),
-                    ),
-                    generic::ty::Literal(
-                        generic::ty::Path::new_(vec!["gfx", "FnBlock"],   Some("'a"), Vec::new(), true),
-                    ),
-                    generic::ty::Literal(
-                        generic::ty::Path::new_(vec!["gfx", "FnTexture"], Some("'a"), Vec::new(), true),
+                        generic::ty::Path::new(vec!["gfx", "shade", "ParamValues"]),
                     ),
                 ],
                 ret_ty: generic::ty::Tuple(Vec::new()),
                 attributes: Vec::new(),
                 combine_substructure: generic::combine_substructure(|cx, span, sub|
-                    method_bind(cx, span, sub, base_def)
+                    method_fill(cx, span, sub, base_def)
                 ),
             },
         ],

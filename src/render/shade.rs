@@ -14,93 +14,9 @@
 
 //! Shader parameter handling.
 
-use std::mem::size_of;
+use std::cell::Cell;
+use std::rc::Rc;
 use dev = device::shade;
-
-/// Variable index of a uniform.
-pub type VarUniform = u16;
-/// Variable index of a uniform block.
-pub type VarBlock = u8;
-/// Variable index of a texture.
-pub type VarTexture = u8;
-
-/// Something that has information about program parameters, used to fill up a hidden Link
-/// structure for the `ShaderParam` implementor. Not meant for users.
-#[experimental]
-#[allow(missing_doc)]
-#[doc(hidden)]
-pub trait ParameterSink {
-    fn find_uniform(&mut self, name: &str) -> Option<VarUniform>;
-    fn find_block  (&mut self, name: &str) -> Option<VarBlock>;
-    fn find_texture(&mut self, name: &str) -> Option<VarTexture>;
-}
-
-type MaskUniform = u64;
-type MaskBlock   = u8;
-type MaskTexture = u16;
-
-/// A `ProgramMeta` wrapper that keeps track of the queried variable indices.
-/// It returns an error if a shader parameter is not being asked for.
-pub struct MetaSink<'a> {
-    prog: &'a dev::ProgramMeta,
-    mask_uni: MaskUniform,
-    mask_block: MaskBlock,
-    mask_tex: MaskTexture,
-}
-
-impl<'a> MetaSink<'a> {
-    /// Creates a new wrapper
-    pub fn new(meta: &'a dev::ProgramMeta) -> MetaSink<'a> {
-        debug_assert!(meta.uniforms.len() <= (8 * size_of::<MaskUniform>()));
-        debug_assert!(meta.blocks  .len() <= (8 * size_of::<MaskBlock  >()));
-        debug_assert!(meta.textures.len() <= (8 * size_of::<MaskTexture>()));
-        MetaSink {
-            prog: meta,
-            mask_uni: ((1u << meta.uniforms.len()) - 1u) as MaskUniform,
-            mask_block: ((1u << meta.blocks.len()) - 1u) as MaskBlock,
-            mask_tex: ((1u << meta.textures.len()) - 1u) as MaskTexture,
-        }
-    }
-
-    /// Finalizes the wrapper, checking that all the parameters are used
-    pub fn complete(self) -> Result<(), ParameterError<'a>> {
-        match self.prog.uniforms.iter().enumerate().find(|&(i, _)| self.mask_uni & ((1u << i) as MaskUniform) != 0) {
-            Some((_, u)) => return Err(ErrorUniform(u.name.as_slice())),
-            None => ()
-        }
-        match self.prog.blocks.iter().enumerate().find(|&(i, _)| self.mask_block & ((1u << i) as MaskBlock) != 0) {
-            Some((_, b)) => return Err(ErrorBlock(b.name.as_slice())),
-            None => ()
-        }
-        match self.prog.textures.iter().enumerate().find(|&(i, _)| self.mask_tex & ((1u << i) as MaskTexture) != 0) {
-            Some((_, t)) => return Err(ErrorTexture(t.name.as_slice())),
-            None => ()
-        }
-        Ok(())
-    }
-}
-
-impl<'a> ParameterSink for MetaSink<'a>{
-    fn find_uniform(&mut self, name: &str) -> Option<VarUniform> {
-        self.prog.uniforms.iter().position(|u| u.name.as_slice() == name).map(|i| {
-            self.mask_uni &= !(1u << i) as MaskUniform;
-            i as VarUniform
-        })
-    }
-    fn find_block(&mut self, name: &str) -> Option<VarBlock> {
-        self.prog.blocks.iter().position(|u| u.name.as_slice() == name).map(|i| {
-            self.mask_block &= !(1u << i) as MaskBlock;
-            i as VarBlock
-        })
-    }
-    fn find_texture(&mut self, name: &str) -> Option<VarTexture> {
-        self.prog.textures.iter().position(|u| u.name.as_slice() == name).map(|i| {
-            self.mask_tex &= !(1u << i) as MaskTexture;
-            i as VarTexture
-        })
-    }
-}
-
 
 /// Helper trait to transform base types into their corresponding uniforms
 pub trait ToUniform {
@@ -131,38 +47,61 @@ impl ToUniform for [f32, ..4] {
         dev::ValueF32Vec(*self)
     }
 }
-
 impl ToUniform for [[f32, ..4], ..4] {
     fn to_uniform(&self) -> dev::UniformValue {
         dev::ValueF32Matrix(*self)
     }
 }
 
+/// Variable index of a uniform.
+pub type VarUniform = u16;
+
+/// Variable index of a uniform block.
+pub type VarBlock = u8;
+
+/// Variable index of a texture.
+pub type VarTexture = u8;
+
 /// A texture parameter: consists of a texture handle with an optional sampler.
 pub type TextureParam = (super::TextureHandle, Option<super::SamplerHandle>);
 
-/// A closure provided for the `ShaderParam` implementor for uploading uniforms.
-pub type FnUniform<'a> = |VarUniform, dev::UniformValue|: 'a;
-/// A closure provided for the `ShaderParam` implementor for uploading uniform blocks.
-pub type FnBlock  <'a> = |VarBlock, super::BufferHandle|: 'a;
-/// A closure provided for the `ShaderParam` implementor for uploading textures.
-pub type FnTexture<'a> = |VarTexture, TextureParam|: 'a;
+/// Borrowed parts of the `ProgramMeta`, used for data link construction
+pub type ParamLinkInput<'a> = (
+    &'a [dev::UniformVar],
+    &'a [dev::BlockVar],
+    &'a [dev::SamplerVar]
+);
 
+/// A borrowed mutable storage for shader parameter values.
+// Not sure if it's the best data structure to represent it.
+pub struct ParamValues<'a> {
+    /// uniform values to be provided
+    pub uniforms: &'a mut [Option<dev::UniformValue>],
+    /// uniform buffers to be provided
+    pub blocks  : &'a mut [Option<super::BufferHandle>],
+    /// textures to be provided
+    pub textures: &'a mut [Option<TextureParam>],
+}
 
 /// Encloses a shader program with its parameter
 pub trait ProgramShell {
     /// Get the contained program
     fn get_program(&self) -> super::ProgramHandle;
-    /// Bind the parameters by invoking the corresponding closures
-    fn bind<'a>(&self, FnUniform<'a>, FnBlock<'a>, FnTexture<'a>);
+    /// Get all the contained parameter values
+    fn fill_params(&self, ParamValues);
 }
 
 impl ProgramShell for super::ProgramHandle {
     fn get_program(&self) -> super::ProgramHandle {
         self.clone()
     }
-    fn bind<'a>(&self, _: FnUniform<'a>, _: FnBlock<'a>, _: FnTexture<'a>) {
-        //empty
+
+    fn fill_params(&self, params: ParamValues) {
+        debug_assert!(
+            params.uniforms.is_empty() &&
+            params.blocks.is_empty() &&
+            params.textures.is_empty()
+        );
     }
 }
 
@@ -193,9 +132,9 @@ pub enum ParameterLinkError<'a> {
 /// Abstracts the shader parameter structure, generated by the `shader_param` attribute
 pub trait ShaderParam<L> {
     /// Creates a new link, self is passed as a workaround for Rust to not be lost in generics
-    fn create_link<S: ParameterSink>(&self, &mut S) -> Result<L, ParameterError<'static>>;
-    /// Bind the parameters by invoking the corresponding closures
-    fn bind<'a>(&self, &L, FnUniform<'a>, FnBlock<'a>, FnTexture<'a>);
+    fn create_link(&self, ParamLinkInput) -> Result<L, ParameterError<'static>>;
+    /// Get all the contained parameter values, using a given link.
+    fn fill_params(&self, &L, ParamValues);
 }
 
 /// A bundle that encapsulates a program and a custom user-provided
@@ -230,7 +169,74 @@ impl<L, T: ShaderParam<L>> ProgramShell for CustomShell<L, T> {
         self.program
     }
 
-    fn bind<'a>(&self, fu: FnUniform<'a>, fb: FnBlock<'a>, ft: FnTexture<'a>) {
-        self.data.bind(&self.link, fu, fb, ft);
+    fn fill_params(&self, params: ParamValues) {
+        self.data.fill_params(&self.link, params);
+    }
+}
+
+/// A named cell containing arbitrary value
+pub struct NamedCell<T> {
+    /// Name
+    pub name: String,
+    /// Value
+    pub value: Cell<T>,
+}
+
+/// A dictionary of parameters, meant to be shared between different programs
+pub struct ParamDictionary {
+    /// Uniform dictionary
+    pub uniforms: Vec<NamedCell<dev::UniformValue>>,
+    /// Block dictionary
+    pub blocks: Vec<NamedCell<super::BufferHandle>>,
+    /// Texture dictionary
+    pub textures: Vec<NamedCell<TextureParam>>,
+}
+
+/// An associated link structure for `ParamDictionary` that redirects program
+/// input to the relevant dictionary cell.
+pub struct ParamDictionaryLink {
+    uniforms: Vec<uint>,
+    blocks: Vec<uint>,
+    textures: Vec<uint>,
+}
+
+impl<'a> ShaderParam<ParamDictionaryLink> for &'a ParamDictionary {
+    fn create_link(&self, (in_uni, in_buf, in_tex): ParamLinkInput)
+                   -> Result<ParamDictionaryLink, ParameterError<'static>> {
+        //TODO: proper error checks
+        Ok(ParamDictionaryLink {
+            uniforms: in_uni.iter().map(|var|
+                self.uniforms.iter().position(|c| c.name == var.name).unwrap()
+            ).collect(),
+            blocks: in_buf.iter().map(|var|
+                self.blocks  .iter().position(|c| c.name == var.name).unwrap()
+            ).collect(),
+            textures: in_tex.iter().map(|var|
+                self.textures.iter().position(|c| c.name == var.name).unwrap()
+            ).collect(),
+        })
+    }
+
+    fn fill_params(&self, link: &ParamDictionaryLink, out: ParamValues) {
+        for (&id, var) in link.uniforms.iter().zip(out.uniforms.mut_iter()) {
+            *var = Some(self.uniforms[id].value.get());
+        }
+        for (&id, var) in link.blocks.iter().zip(out.blocks.mut_iter()) {
+            *var = Some(self.blocks[id].value.get());
+        }
+        for (&id, var) in link.textures.iter().zip(out.textures.mut_iter()) {
+            *var = Some(self.textures[id].value.get());
+        }
+    }
+}
+
+impl ShaderParam<ParamDictionaryLink> for Rc<ParamDictionary> {
+    fn create_link(&self, input: ParamLinkInput) -> Result<ParamDictionaryLink,
+                   ParameterError<'static>> {
+        self.deref().create_link(input)
+    }
+
+    fn fill_params(&self, link: &ParamDictionaryLink, out: ParamValues) {
+        self.deref().fill_params(link, out)
     }
 }

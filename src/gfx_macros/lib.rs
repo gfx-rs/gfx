@@ -42,6 +42,9 @@ pub fn registrar(reg: &mut rustc::plugin::Registry) {
         base::ItemDecorator(vertex_format::expand));
 }
 
+/// A hacky thing to get around 'moved value' errors when using `quote_expr!`
+/// with `ext::base::ExtCtxt`s.
+fn ugh<T, U>(x: &mut T, f: |&mut T| -> U) -> U { f(x) }
 
 #[macro_export]
 macro_rules! shaders {

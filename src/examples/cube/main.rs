@@ -39,7 +39,7 @@ impl Vertex {
 #[shader_param]
 struct Params {
     u_ModelViewProj: [[f32, ..4], ..4],
-    t_Color: gfx::TextureParam,
+    t_Color: gfx::shade::TextureParam,
 }
 
 static VERTEX_SRC: gfx::ShaderSource = shaders! {

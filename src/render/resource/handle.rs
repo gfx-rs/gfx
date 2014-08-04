@@ -38,12 +38,13 @@ pub struct Handle {
 
 impl Handle {
     /// A helper method for testing. Returns a handle that can not be used.
+    #[cfg(test)]
     pub fn new_fake() -> Handle {
         Handle {
             index: 0,
             generation: LAST_GENERATION,
         }
-    }    
+    }
 }
 
 /// Resource access error
