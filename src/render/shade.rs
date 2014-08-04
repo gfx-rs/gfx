@@ -50,24 +50,28 @@ impl ToUniform for [f32, ..4] {
 impl ToUniform for [[f32, ..4], ..4] {
     fn to_uniform(&self) -> dev::UniformValue {
         dev::ValueF32Matrix(*self)
-
     }
 }
 
 /// Variable index of a uniform.
 pub type VarUniform = u16;
+
 /// Variable index of a uniform block.
 pub type VarBlock = u8;
+
 /// Variable index of a texture.
 pub type VarTexture = u8;
+
 /// A texture parameter: consists of a texture handle with an optional sampler.
 pub type TextureParam = (super::TextureHandle, Option<super::SamplerHandle>);
+
 /// Borrowed parts of the `ProgramMeta`, used for data link construction
 pub type ParamLinkInput<'a> = (
     &'a [dev::UniformVar],
     &'a [dev::BlockVar],
     &'a [dev::SamplerVar]
 );
+
 /// A borrowed mutable storage for shader parameter values.
 // Not sure if it's the best data structure to represent it.
 pub struct ParamValues<'a> {
@@ -91,6 +95,7 @@ impl ProgramShell for super::ProgramHandle {
     fn get_program(&self) -> super::ProgramHandle {
         self.clone()
     }
+
     fn fill_params(&self, params: ParamValues) {
         debug_assert!(
             params.uniforms.is_empty() &&
@@ -163,6 +168,7 @@ impl<L, T: ShaderParam<L>> ProgramShell for CustomShell<L, T> {
     fn get_program(&self) -> super::ProgramHandle {
         self.program
     }
+
     fn fill_params(&self, params: ParamValues) {
         self.data.fill_params(&self.link, params);
     }
@@ -186,7 +192,8 @@ pub struct ParamDictionary {
     pub textures: Vec<NamedCell<TextureParam>>,
 }
 
-/// Accelerating link structure for ParamDictionary
+/// An associated link structure for `ParamDictionary` that redirects program
+/// input to the relevant dictionary cell.
 pub struct ParamDictionaryLink {
     uniforms: Vec<uint>,
     blocks: Vec<uint>,
@@ -200,13 +207,13 @@ impl<'a> ShaderParam<ParamDictionaryLink> for &'a ParamDictionary {
         Ok(ParamDictionaryLink {
             uniforms: in_uni.iter().map(|var|
                 self.uniforms.iter().position(|c| c.name == var.name).unwrap()
-                ).collect(),
+            ).collect(),
             blocks: in_buf.iter().map(|var|
                 self.blocks  .iter().position(|c| c.name == var.name).unwrap()
-                ).collect(),
+            ).collect(),
             textures: in_tex.iter().map(|var|
                 self.textures.iter().position(|c| c.name == var.name).unwrap()
-                ).collect(),
+            ).collect(),
         })
     }
 
@@ -228,6 +235,7 @@ impl ShaderParam<ParamDictionaryLink> for Rc<ParamDictionary> {
                    ParameterError<'static>> {
         self.deref().create_link(input)
     }
+
     fn fill_params(&self, link: &ParamDictionaryLink, out: ParamValues) {
         self.deref().fill_params(link, out)
     }

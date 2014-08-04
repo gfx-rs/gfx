@@ -48,7 +48,7 @@ fn classify(node: &ast::Ty_) -> Result<ParamType, ParamError> {
     }
 }
 
-/// `create_link()` method generating code
+/// Generates the the method body for `gfx::shade::ParamValues::create_link`
 fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span, substr: &generic::Substructure,
                  definition: Gc<ast::StructDef>, link_name: &str) -> Gc<ast::Expr> {
     let link_ident = cx.ident_of(link_name);
@@ -101,7 +101,7 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span, substr: &gene
     }
 }
 
-/// `fill_params()` method generating code
+/// Generates the the method body for `gfx::shade::ParamValues::fill_params`
 fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                substr: &generic::Substructure, definition: Gc<ast::StructDef>)
                -> Gc<ast::Expr> {
@@ -141,8 +141,8 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 cx.path(span, vec![
                     cx.ident_of("gfx"),
                     cx.ident_of("shade"),
-                    cx.ident_of("ToUniform")
-                    ])
+                    cx.ident_of("ToUniform"),
+                ])
             );
             cx.expr_block(cx.block_all(span, vec![view], calls, None))
         },
@@ -170,10 +170,10 @@ fn node_to_var_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span, node: &ast
         },
     };
     cx.ty_path(cx.path_global(span, vec![
-            cx.ident_of("gfx"),
-            cx.ident_of("shade"),
-            cx.ident_of(id)
-        ]), None)
+        cx.ident_of("gfx"),
+        cx.ident_of("shade"),
+        cx.ident_of(id),
+    ]), None)
 }
 
 /// Decorator for `shader_param` attribute
