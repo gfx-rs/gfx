@@ -181,7 +181,11 @@ pub struct Renderer {
     state: State,
 }
 
-type TempProgramResources = (Vec<UniformValue>, Vec<BufferHandle>, Vec<shade::TextureParam>);
+type TempProgramResources = (
+    Vec<Option<UniformValue>>,
+    Vec<Option<BufferHandle>>,
+    Vec<Option<shade::TextureParam>>
+);
 
 impl Renderer {
     /// Create a new `Renderer` using given channels for communicating with the device. Generally,
@@ -329,6 +333,7 @@ impl Renderer {
 
     /// A helper method that returns a buffer handle that can never be used.
     /// It is needed for gfx_macros_test, which never actually accesses resources.
+    #[cfg(test)]
     pub fn create_fake_buffer() -> BufferHandle {
         BufferHandle(resource::Handle::new_fake())
     }
@@ -465,37 +470,38 @@ impl Renderer {
                 Ok(&resource::Loaded(ref m)) => m,
                 _ => return Err(ErrorProgram),
             };
-            let fake = resource::Handle::new_fake();
             //TODO: pre-allocate these vectors and re-use them
-            let mut uniforms = Vec::from_elem(meta.uniforms.len(), device::shade::ValueUninitialized);
-            let mut blocks   = Vec::from_elem(meta.blocks.len(), BufferHandle(fake));
-            let mut textures = Vec::from_elem(meta.textures.len(), (TextureHandle(fake), None));
+            let mut uniforms = Vec::from_elem(meta.uniforms.len(), None);
+            let mut blocks   = Vec::from_elem(meta.blocks.len(), None);
+            let mut textures = Vec::from_elem(meta.textures.len(), None);
             shell.fill_params(shade::ParamValues {
                 uniforms: uniforms.as_mut_slice(),
                 blocks: blocks.as_mut_slice(),
                 textures: textures.as_mut_slice(),
             });
             // verify that all the parameters were written
-            match uniforms.iter().zip(meta.uniforms.iter()).find(|&(u, _)| !u.is_valid()) {
+            match uniforms.iter().zip(meta.uniforms.iter()).find(|&(u, _)| u.is_none()) {
                 Some((_, var)) => return Err(ErrorShell(ErrorShellUniform(var.name.clone()))),
                 None => (),
             }
-            match blocks.iter().zip(meta.blocks.iter()).find(|&(&b, _)| b == BufferHandle(fake)) {
+            match blocks.iter().zip(meta.blocks.iter()).find(|&(b, _)| b.is_none()) {
                 Some((_, var)) => return Err(ErrorShell(ErrorShellBlock(var.name.clone()))),
                 None => (),
             }
-            match textures.iter().zip(meta.textures.iter()).find(|&(&(t, _), _)| t == TextureHandle(fake)) {
+            match textures.iter().zip(meta.textures.iter()).find(|&(t, _)| t.is_none()) {
                 Some((_, var)) => return Err(ErrorShell(ErrorShellTexture(var.name.clone()))),
                 None => (),
             }
             (uniforms, blocks, textures)
         };
         // buffers pass
-        for &BufferHandle(buf) in parameters.ref1().iter() {
+        for option in parameters.ref1().iter() {
+            let BufferHandle(buf) = option.unwrap();
             dp.demand(|res| !res.buffers[buf].is_pending());
         }
         // texture pass
-        for &(TextureHandle(tex), sampler) in parameters.ref2().iter() {
+        for option in parameters.ref2().iter() {
+            let (TextureHandle(tex), sampler) = option.unwrap();
             dp.demand(|res| !res.textures[tex].ref0().is_pending());
             match sampler {
                 Some(SamplerHandle(sam)) =>
@@ -558,9 +564,11 @@ impl Renderer {
                   -> Result<(), ShellError> {
         self.cast(device::BindProgram(meta.name));
         for (var, value) in meta.uniforms.iter().zip(uniforms.iter()) {
-            self.cast(device::BindUniform(var.location, *value));
+            // unwrap() is safe since the errors were caught in prebind_shell()
+            self.cast(device::BindUniform(var.location, value.unwrap()));
         }
-        for (i, (var, &BufferHandle(bh))) in meta.blocks.iter().zip(blocks.iter()).enumerate() {
+        for (i, (var, option)) in meta.blocks.iter().zip(blocks.iter()).enumerate() {
+            let BufferHandle(bh) = option.unwrap();
             match self.dispatcher.resource.buffers.get(bh) {
                 Ok(&Loaded(block)) =>
                     self.cast(device::BindUniformBlock(
@@ -571,8 +579,8 @@ impl Renderer {
                 _ => return Err(ErrorShellBlock(var.name.clone())),
             }
         }
-        for (i, (var, value)) in meta.textures.iter().zip(textures.iter()).enumerate() {
-            let (TextureHandle(tex_handle), sampler) = *value;
+        for (i, (var, option)) in meta.textures.iter().zip(textures.iter()).enumerate() {
+            let (TextureHandle(tex_handle), sampler) = option.unwrap();
             let sam = match sampler {
                 Some(SamplerHandle(sam)) => match self.dispatcher.resource.samplers[sam] {
                     (Loaded(sam), ref info) => Some((sam, info.clone())),

@@ -69,13 +69,14 @@ pub type ParamLinkInput<'a> = (
     &'a [dev::SamplerVar]
 );
 /// A borrowed mutable storage for shader parameter values.
+// Not sure if it's the best data structure to represent it.
 pub struct ParamValues<'a> {
     /// uniform values to be provided
-    pub uniforms: &'a mut [dev::UniformValue],
+    pub uniforms: &'a mut [Option<dev::UniformValue>],
     /// uniform buffers to be provided
-    pub blocks  : &'a mut [super::BufferHandle],
+    pub blocks  : &'a mut [Option<super::BufferHandle>],
     /// textures to be provided
-    pub textures: &'a mut [TextureParam]
+    pub textures: &'a mut [Option<TextureParam>],
 }
 
 /// Encloses a shader program with its parameter
@@ -195,6 +196,7 @@ pub struct ParamDictionaryLink {
 impl<'a> ShaderParam<ParamDictionaryLink> for &'a ParamDictionary {
     fn create_link(&self, (in_uni, in_buf, in_tex): ParamLinkInput)
                    -> Result<ParamDictionaryLink, ParameterError<'static>> {
+        //TODO: proper error checks
         Ok(ParamDictionaryLink {
             uniforms: in_uni.iter().map(|var|
                 self.uniforms.iter().position(|c| c.name == var.name).unwrap()
@@ -210,13 +212,13 @@ impl<'a> ShaderParam<ParamDictionaryLink> for &'a ParamDictionary {
 
     fn fill_params(&self, link: &ParamDictionaryLink, out: ParamValues) {
         for (&id, var) in link.uniforms.iter().zip(out.uniforms.mut_iter()) {
-            *var = self.uniforms[id].value.get();
+            *var = Some(self.uniforms[id].value.get());
         }
         for (&id, var) in link.blocks.iter().zip(out.blocks.mut_iter()) {
-            *var = self.blocks[id].value.get();
+            *var = Some(self.blocks[id].value.get());
         }
         for (&id, var) in link.textures.iter().zip(out.textures.mut_iter()) {
-            *var = self.textures[id].value.get();
+            *var = Some(self.textures[id].value.get());
         }
     }
 }

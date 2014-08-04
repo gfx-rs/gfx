@@ -24,6 +24,6 @@ extern crate gfx;
 struct MyParam {
     a: i32,
     b: [f32, ..4],
-    c: gfx::TextureParam,
+    c: gfx::shade::TextureParam,
     d: gfx::BufferHandle,
 }

@@ -117,13 +117,13 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     );
                 match classify(&def.node.ty.node) {
                     Ok(ParamUniform) => super::ugh(cx, |cx| quote_stmt!(cx,
-                        $out.uniforms[$var_id as uint] = $value_id.to_uniform();
+                        $out.uniforms[$var_id as uint] = Some($value_id.to_uniform());
                     )),
                     Ok(ParamBlock)   => super::ugh(cx, |cx| quote_stmt!(cx,
-                        $out.blocks[$var_id as uint] = $value_id.clone();
+                        $out.blocks[$var_id as uint] = Some $value_id;
                     )),
                     Ok(ParamTexture) => super::ugh(cx, |cx| quote_stmt!(cx,
-                        $out.textures[$var_id as uint] = $value_id.clone();
+                        $out.textures[$var_id as uint] = Some $value_id;
                     )),
                     Err(_) => {
                         cx.span_err(span, format!(
@@ -161,7 +161,7 @@ fn node_to_var_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span, node: &ast
         Ok(ParamBlock)   => "VarBlock",
         Ok(ParamTexture) => "VarTexture",
         Err(ErrorDeprecatedTexture) => {
-            cx.span_err(span, "Use gfx::TextureParam for texture vars instead of gfx::TextureHandle");
+            cx.span_err(span, "Use gfx::shade::TextureParam for texture vars instead of gfx::shade::TextureHandle");
             ""
         },
         Err(ErrorUnknown) => {
