@@ -343,7 +343,7 @@ impl Renderer {
     /// Convenience function around `crate_buffer` and `Mesh::from`.
     pub fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh {
         let nv = data.len();
-        debug_assert!(nv >> (8 * size_of::<mesh::VertexCount>()) == 0);
+        debug_assert!(nv < { use std::num::Bounded; let val: mesh::VertexCount = Bounded::max_value(); val as uint });
         let buf = self.create_buffer(Some(data));
         mesh::Mesh::from::<T>(buf, nv as mesh::VertexCount)
     }
