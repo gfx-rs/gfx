@@ -16,7 +16,7 @@ use std::gc::{Gc, GC};
 use syntax::{ast, ast_util, ext};
 use syntax::ext::build::AstBuilder;
 use syntax::ext::deriving::generic;
-use syntax::{codemap, owned_slice};
+use syntax::{attr, codemap};
 use syntax::parse::token;
 
 
@@ -48,6 +48,21 @@ fn classify(node: &ast::Ty_) -> Result<ParamType, ParamError> {
     }
 }
 
+/// Scan through the field's attributes and find out if it needs to be linked
+/// with the shader.
+/// #[unused] attribute prevents that
+fn is_field_used(field: &ast::StructField) -> bool {
+    field.node.attrs.iter().find(|attribute| {
+        match attribute.node.value.node {
+            ast::MetaWord(ref word) if word.get() == "unused" => {
+                attr::mark_used(*attribute);
+                true
+            },
+            _ => false,
+        }
+    }).is_none()
+}
+
 /// Generates the the method body for `gfx::shade::ParamValues::create_link`
 fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span, substr: &generic::Substructure,
                  definition: Gc<ast::StructDef>, link_name: &str) -> Gc<ast::Expr> {
@@ -55,7 +70,8 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span, substr: &gene
     match *substr.fields {
         //generic::StaticStruct(definition, generic::Named(ref fields)) => {
         generic::Struct(ref fields) => {
-            let out = definition.fields.iter().zip(fields.iter()).map(|(def, f)| {
+            let out = definition.fields.iter().zip(fields.iter())
+                .filter(|&(def, _)| is_field_used(def)).map(|(def, f)| {
                 let name = cx.expr_str(span, token::get_ident(f.name.unwrap()));
                 let input = substr.nonself_args[0];
                 let expr = match classify(&def.node.ty.node) {
@@ -107,7 +123,8 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                -> Gc<ast::Expr> {
     match *substr.fields {
         generic::Struct(ref fields) => {
-            let calls = definition.fields.iter().zip(fields.iter()).map(|(def, f)| {
+            let calls = definition.fields.iter().zip(fields.iter())
+            .filter(|&(def, _)| is_field_used(def)).map(|(def, f)| {
                 let out = substr.nonself_args[1];
                 let value_id = f.self_;
                 let var_id = cx.expr_field_access(
@@ -187,8 +204,9 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                 context.bug("Generics are not allowed in ShaderParam struct");
             }
             (definition, ast::StructDef {
-                fields: definition.fields.
-                    iter().map(|f| codemap::Spanned {
+                fields: definition.fields.iter()
+                    .filter(|&f| is_field_used(f))
+                    .map(|f| codemap::Spanned {
                         node: ast::StructField_ {
                             kind: f.node.kind,
                             id: f.node.id,
@@ -203,11 +221,10 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
             })
         },
         _ => {
-            context.span_warn(span, "Only free-standing named structs allowed to derive ShaderParam");
+            context.span_err(span, "Only free-standing named structs allowed to derive ShaderParam");
             return;
         }
     };
-
     let link_name = format!("_{}Link", item.ident.as_str());
     let link_ident = context.ident_of(link_name.as_slice());
     let link_ty = box generic::ty::Literal(
@@ -255,13 +272,13 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                 })
             },
             _ => {
-                context.span_warn(meta_item.span,
-                    "invalid arguments for `#[shader_param]`")
+                context.span_err(meta_item.span,
+                    "Invalid arguments for `#[shader_param]`")
             }
         },
         _ => {
-            context.span_warn(meta_item.span,
-                "invalid arguments for `#[shader_param]`")
+            context.span_err(meta_item.span,
+                "Invalid arguments for `#[shader_param]`")
         }
     }
     // deriving ShaderParam
