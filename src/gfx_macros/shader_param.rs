@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::gc::Gc;
-use syntax::{ast, ext};
+use std::gc::{Gc, GC};
+use syntax::{ast, ast_util, ext};
 use syntax::ext::build::AstBuilder;
 use syntax::ext::deriving::generic;
 use syntax::{codemap, owned_slice};
@@ -207,13 +207,63 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
             return;
         }
     };
+
     let link_name = format!("_{}Link", item.ident.as_str());
+    let link_ident = context.ident_of(link_name.as_slice());
     let link_ty = box generic::ty::Literal(
         generic::ty::Path::new_local(link_name.as_slice())
-        );
-    push(context.item_struct(span, ast::Ident::new(
-        token::intern(link_name.as_slice())
-        ), link_def));
+    );
+    // Almost `context.item_struct(span, link_ident, link_def)` but with visibility
+    push(box (GC) ast::Item {
+        ident: link_ident,
+        attrs: Vec::new(),
+        id: ast::DUMMY_NODE_ID,
+        node: ast::ItemStruct(
+            box(GC) link_def,
+            ast_util::empty_generics()
+        ),
+        vis: item.vis,
+        span: span,
+    });
+    // constructing the `CustomShell` typedef
+    match meta_item.node {
+        ast::MetaWord(_) => (),
+        ast::MetaList(_, ref items) if items.len() == 1 => match items[0].deref().node {
+            ast::MetaWord(ref shell_name) => {
+                // pub type $shell_ident = gfx::shade::CustomShell<$link_ident, $self_ident>
+                let path = context.ty_path(
+                    context.path_all(span, true,
+                        vec![
+                            context.ident_of("gfx"),
+                            context.ident_of("shade"),
+                            context.ident_of("CustomShell"),
+                        ],
+                        Vec::new(),
+                        vec![
+                            context.ty_ident(span, link_ident),
+                            context.ty_ident(span, item.ident)
+                        ]
+                    ), None
+                );
+                push(box(GC) ast::Item {
+                    ident: context.ident_of(shell_name.get()),
+                    attrs: Vec::new(),
+                    id: ast::DUMMY_NODE_ID,
+                    node: ast::ItemTy(path, ast_util::empty_generics()),
+                    vis: item.vis,
+                    span: span,
+                })
+            },
+            _ => {
+                context.span_warn(meta_item.span,
+                    "invalid arguments for `#[shader_param]`")
+            }
+        },
+        _ => {
+            context.span_warn(meta_item.span,
+                "invalid arguments for `#[shader_param]`")
+        }
+    }
     // deriving ShaderParam
     let trait_def = generic::TraitDef {
         span: span,
