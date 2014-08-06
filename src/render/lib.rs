@@ -26,7 +26,7 @@ extern crate comm;
 extern crate device;
 
 use std::fmt::Show;
-use std::mem::size_of;
+use std::mem;
 use std::vec::MoveItems;
 
 use backend = device::dev;
@@ -230,9 +230,7 @@ impl Renderer {
     /// Iterate over any errors that have been raised by the device when trying to issue commands
     /// since the last time this method was called.
     pub fn errors(&mut self) -> MoveItems<DeviceError> {
-        let errors = self.dispatcher.errors.clone();
-        self.dispatcher.errors.clear();
-        errors.move_iter()
+        mem::replace(&mut self.dispatcher.errors, Vec::new()).move_iter()
     }
 
     /// Clear the `Frame` as the `ClearData` specifies.
