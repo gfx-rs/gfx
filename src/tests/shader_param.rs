@@ -20,10 +20,12 @@
 extern crate gfx_macros;
 extern crate gfx;
 
-#[shader_param]
+#[shader_param(MyShell)]
 struct MyParam {
     a: i32,
     b: [f32, ..4],
     c: gfx::shade::TextureParam,
     d: gfx::BufferHandle,
+    #[unused]
+    e: f32,
 }
