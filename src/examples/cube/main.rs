@@ -233,7 +233,7 @@ fn main() {
                     [m.w.x, m.w.y, m.w.z, m.w.w]
                 ]
             };
-            renderer.draw(&mesh, slice, frame, &prog, state)
+            renderer.draw(&mesh, slice, &frame, &prog, &state)
                 .unwrap();
             renderer.end_frame();
             for err in renderer.errors() {

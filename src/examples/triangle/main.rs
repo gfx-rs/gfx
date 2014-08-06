@@ -179,7 +179,7 @@ fn render(mut renderer: gfx::Renderer, width: u16, height: u16) {
 
     while !renderer.should_finish() {
         renderer.clear(clear, frame);
-        renderer.draw(&mesh, mesh.get_slice(), frame, &program, state)
+        renderer.draw(&mesh, mesh.get_slice(), &frame, &program, &state)
             .unwrap();
         renderer.end_frame();
         for err in renderer.errors() {
