@@ -529,8 +529,8 @@ impl Renderer {
         self.cast(device::SetViewport(device::target::Rect {
             x: 0,
             y: 0,
-            w: frame.size[0],
-            h: frame.size[1],
+            w: frame.width,
+            h: frame.height,
         }));
         if frame.is_default() {
             // binding the default FBO, not touching our common one

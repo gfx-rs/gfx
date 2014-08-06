@@ -32,8 +32,10 @@ pub enum Plane {
 
 /// A complete `Frame`, which is the result of rendering.
 pub struct Frame {
-    /// Size of the viewport
-    pub size: [u16, ..2],
+    /// The width of the viewport.
+    pub width: u16,
+    /// The height of the viewport.
+    pub height: u16,
     /// Each color component has its own buffer.
     pub colors: [Plane, ..MAX_COLOR_TARGETS],
     /// The depth buffer for this frame.
@@ -47,7 +49,8 @@ impl Frame {
     /// renders directly to the window that was created with the OpenGL context.
     pub fn new(width: u16, height: u16) -> Frame {
         Frame {
-            size: [width, height],
+            width: width,
+            height: height,
             colors: [PlaneEmpty, ..MAX_COLOR_TARGETS],
             depth: PlaneEmpty,
             stencil: PlaneEmpty,
