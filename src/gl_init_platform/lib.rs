@@ -27,8 +27,6 @@ extern crate libc;
 
 extern crate device;
 
-use std::rc::Rc;
-
 pub struct Window(glinit::Window);
 
 impl Window {
@@ -77,64 +75,9 @@ impl<'a> device::GraphicsContext<device::GlBackEnd> for &'a Window {
     }
 }
 
-impl Window {
-    #[inline]
-    pub fn set_title(&self, title: &str) {
+impl Deref<glinit::Window> for Window {
+    fn deref(&self) -> &glinit::Window {
         let &Window(ref win) = self;
-        win.set_title(title)
-    }
-
-    #[inline]
-    pub fn get_position(&self) -> Option<(int, int)> {
-        let &Window(ref win) = self;
-        win.get_position()
-    }
-
-    #[inline]
-    pub fn set_position(&self, x: uint, y: uint) {
-        let &Window(ref win) = self;
-        win.set_position(x, y)
-    }
-
-    #[inline]
-    pub fn get_inner_size(&self) -> Option<(uint, uint)> {
-        let &Window(ref win) = self;
-        win.get_inner_size()
-    }
-
-    #[inline]
-    pub fn get_outer_size(&self) -> Option<(uint, uint)> {
-        let &Window(ref win) = self;
-        win.get_outer_size()
-    }
-
-    #[inline]
-    pub fn set_inner_size(&self, x: uint, y: uint) {
-        let &Window(ref win) = self;
-        win.set_inner_size(x, y)
-    }
-
-    #[inline]
-    pub fn is_closed(&self) -> bool {
-        let &Window(ref win) = self;
-        win.is_closed()
-    }
-
-    #[inline]
-    pub fn poll_events(&self) -> glinit::PollEventsIterator {
-        let &Window(ref win) = self;
-        win.poll_events()
-    }
-
-    #[inline]
-    pub fn wait_events(&self) -> glinit::WaitEventsIterator {
-        let &Window(ref win) = self;
-        win.wait_events()
-    }
-
-    #[inline]
-    pub unsafe fn make_current(&self) {
-        let &Window(ref win) = self;
-        win.make_current();
+        win
     }
 }
