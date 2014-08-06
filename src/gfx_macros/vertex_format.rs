@@ -145,7 +145,7 @@ fn decode_count_and_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
     let modifier = find_modifier(cx, span, field.node.attrs.as_slice());
     match field.node.ty.node {
         ast::TyPath(ref p, _, _) => (
-            cx.expr_lit(span, ast::LitIntUnsuffixed(1)),
+            cx.expr_lit(span, ast::LitInt(1, ast::UnsuffixedIntLit(ast::Plus))),
             decode_type(cx, span, &p.segments[0].identifier, modifier),
         ),
         ast::TyFixedLengthVec(pty, expr) => (expr, match pty.node {
