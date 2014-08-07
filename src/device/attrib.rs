@@ -22,40 +22,45 @@ pub type Count = u8;    // only value 1 to 4 are supported
 pub type Offset = u32;  // can point in the middle of the buffer
 pub type Stride = u8;   // I don't believe HW supports more
 
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+#[repr(u8)]
 pub enum SignFlag {
     Signed,
     Unsigned,
 }
 
-#[deriving(Clone, Eq, PartialEq, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+#[repr(u8)]
 pub enum IntSubType {
     IntRaw,         // un-processed integer
     IntNormalized,  // normalized either to [0,1] or [-1,1] depending on the sign flag
     IntAsFloat,     // converted to float on the fly by the hardware
 }
 
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+#[repr(u8)]
 pub enum IntSize {
     U8,
     U16,
     U32,
 }
 
-#[deriving(Clone, Eq, PartialEq, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+#[repr(u8)]
 pub enum FloatSubType {
     FloatDefault,    // 32-bit
     FloatPrecision,  // 64-bit
 }
 
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+#[repr(u8)]
 pub enum FloatSize {
     F16,
     F32,
     F64,
 }
 
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub enum Type {
     Int(IntSubType, IntSize, SignFlag),
     Float(FloatSubType, FloatSize),

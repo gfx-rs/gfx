@@ -31,30 +31,91 @@ fn kind_to_gl(t: ::tex::TextureKind) -> GLenum {
     }
 }
 
-fn format_to_gl(t: ::tex::Format) -> GLenum {
-    match t {
-        ::tex::RGB8 => gl::RGB8,
-        ::tex::RGBA8 => gl::RGBA8,
+fn format_to_gl(t: ::tex::Format) -> Result<GLenum, ()> {
+    Ok(match t {
+        // floating-point
+        ::tex::Float(::tex::R,    ::attrib::F16) => gl::R16F,
+        ::tex::Float(::tex::R,    ::attrib::F32) => gl::R32F,
+        ::tex::Float(::tex::RG,   ::attrib::F16) => gl::RG16F,
+        ::tex::Float(::tex::RG,   ::attrib::F32) => gl::RG32F,
+        ::tex::Float(::tex::RGB,  ::attrib::F16) => gl::RGB16F,
+        ::tex::Float(::tex::RGB,  ::attrib::F32) => gl::RGB32F,
+        ::tex::Float(::tex::RGBA, ::attrib::F16) => gl::RGBA16F,
+        ::tex::Float(::tex::RGBA, ::attrib::F32) => gl::RGBA32F,
+        ::tex::Float(_, ::attrib::F64) => return Err(()),
+        // integer
+        ::tex::Integer(_, _, _) => unimplemented!(),
+        // unsigned integer
+        ::tex::Unsigned(::tex::RGBA, 8, ::attrib::IntNormalized) => gl::RGBA8,
+        ::tex::Unsigned(_, _, _) => unimplemented!(),
+        // special
+        ::tex::R3G3B2       => gl::R3_G3_B2,
+        ::tex::RGB5A1       => gl::RGB5_A1,
+        ::tex::RGB10A2      => gl::RGB10_A2,
+        ::tex::RGB10A2UI    => gl::RGB10_A2UI,
+        ::tex::R11FG11FB10F => gl::R11F_G11F_B10F,
+        ::tex::RGB9E5       => gl::RGB9_E5,
+    })
+}
+
+fn components_to_glpixel(c: ::tex::Components) -> GLenum {
+    match c {
+        ::tex::R    => gl::RED,
+        ::tex::RG   => gl::RG,
+        ::tex::RGB  => gl::RGB,
+        ::tex::RGBA => gl::RGBA,
+    }
+}
+
+fn components_to_count(c: ::tex::Components) -> uint {
+    match c {
+        ::tex::R    => 1,
+        ::tex::RG   => 2,
+        ::tex::RGB  => 3,
+        ::tex::RGBA => 4,
     }
 }
 
 fn format_to_glpixel(t: ::tex::Format) -> GLenum {
     match t {
-        ::tex::RGB8 => gl::RGB,
-        ::tex::RGBA8 => gl::RGBA
+        ::tex::Float(c, _)       => components_to_glpixel(c),
+        ::tex::Integer(c, _, _)  => components_to_glpixel(c),
+        ::tex::Unsigned(c, _, _) => components_to_glpixel(c),
+        ::tex::R3G3B2       => gl::RGB,
+        ::tex::RGB5A1       => gl::RGBA,
+        ::tex::RGB10A2      => gl::RGBA,
+        ::tex::RGB10A2UI    => gl::RGBA,
+        ::tex::R11FG11FB10F => gl::RGB,
+        ::tex::RGB9E5       => gl::RGB,
     }
 }
 
-fn format_to_gltype(t: ::tex::Format) -> GLenum {
+fn format_to_gltype(t: ::tex::Format) -> Result<GLenum, ()> {
     match t {
-        ::tex::RGB8 | ::tex::RGBA8 => gl::UNSIGNED_BYTE,
+        ::tex::Float(_, ::attrib::F32) => Ok(gl::FLOAT),
+        ::tex::Integer(_, 8, _)   => Ok(gl::BYTE),
+        ::tex::Unsigned(_, 8, _)  => Ok(gl::UNSIGNED_BYTE),
+        ::tex::Integer(_, 16, _)  => Ok(gl::SHORT),
+        ::tex::Unsigned(_, 16, _) => Ok(gl::UNSIGNED_SHORT),
+        ::tex::Integer(_, 32, _)  => Ok(gl::INT),
+        ::tex::Unsigned(_, 32, _) => Ok(gl::UNSIGNED_INT),
+        _ => Err(()),
     }
 }
 
 fn format_to_size(t: ::tex::Format) -> uint {
     match t {
-        ::tex::RGB8 => 3,
-        ::tex::RGBA8 => 4,
+        ::tex::Float(c, ::attrib::F16) => 2 * components_to_count(c),
+        ::tex::Float(c, ::attrib::F32) => 4 * components_to_count(c),
+        ::tex::Float(c, ::attrib::F64) => 8 * components_to_count(c),
+        ::tex::Integer(c, bits, _)  => bits as uint * components_to_count(c) >> 3,
+        ::tex::Unsigned(c, bits, _) => bits as uint * components_to_count(c) >> 3,
+        ::tex::R3G3B2       => 1,
+        ::tex::RGB5A1       => 2,
+        ::tex::RGB10A2      => 4,
+        ::tex::RGB10A2UI    => 4,
+        ::tex::R11FG11FB10F => 4,
+        ::tex::RGB9E5       => 4,
     }
 }
 
@@ -64,14 +125,17 @@ fn set_mipmap_range(target: GLenum, (base, max): (u8, u8)) {
 }
 
 /// Create a render surface.
-pub fn make_surface(info: &::tex::SurfaceInfo) -> Surface {
+pub fn make_surface(info: &::tex::SurfaceInfo) -> Result<Surface, ::SurfaceError> {
     let mut name = 0 as GLuint;
     unsafe {
         gl::GenRenderbuffers(1, &mut name);
     }
 
     let target = gl::RENDERBUFFER;
-    let fmt = format_to_gl(info.format);
+    let fmt = match format_to_gl(info.format) {
+        Ok(f) => f,
+        Err(_) => return Err(::UnsupportedSurfaceFormat),
+    };
 
     gl::BindRenderbuffer(target, name);
     gl::RenderbufferStorage(
@@ -81,17 +145,22 @@ pub fn make_surface(info: &::tex::SurfaceInfo) -> Surface {
         info.height as GLsizei,
     );
 
-    name
+    Ok(name)
 }
 
 /// Create a texture, assuming TexStorage* isn't available.
-pub fn make_without_storage(info: &::tex::TextureInfo) -> Texture {
+pub fn make_without_storage(info: &::tex::TextureInfo) -> Result<Texture, ::TextureError> {
     let name = make_texture(info);
 
-    let fmt = format_to_gl(info.format) as GLint;
+    let fmt = match format_to_gl(info.format) {
+        Ok(f) => f as GLint,
+        Err(_) => return Err(::UnsupportedTextureFormat),
+    };
     let pix = format_to_glpixel(info.format);
-    let typ = format_to_gltype(info.format);
-
+    let typ = match format_to_gltype(info.format) {
+        Ok(t) => t,
+        Err(_) => return Err(::UnsupportedTextureFormat),
+    };
     let target = kind_to_gl(info.kind);
 
     unsafe {
@@ -154,11 +223,11 @@ pub fn make_without_storage(info: &::tex::TextureInfo) -> Texture {
 
     set_mipmap_range(target, info.mipmap_range);
 
-    name
+    Ok(name)
 }
 
 /// Create a texture, assuming TexStorage is available.
-pub fn make_with_storage(info: &::tex::TextureInfo) -> Texture {
+pub fn make_with_storage(info: &::tex::TextureInfo) -> Result<Texture, ::TextureError> {
     use std::cmp::max;
 
     fn min(a: u8, b: u8) -> GLint {
@@ -179,7 +248,10 @@ pub fn make_with_storage(info: &::tex::TextureInfo) -> Texture {
 
     let name = make_texture(info);
 
-    let fmt = format_to_gl(info.format);
+    let fmt = match format_to_gl(info.format) {
+        Ok(f) => f,
+        Err(_) => return Err(::UnsupportedTextureFormat),
+    };
     let target = kind_to_gl(info.kind);
 
     match info.kind {
@@ -234,7 +306,7 @@ pub fn make_with_storage(info: &::tex::TextureInfo) -> Texture {
 
     set_mipmap_range(target, info.mipmap_range);
 
-    name
+    Ok(name)
 }
 
 /// Bind a texture to the specified slot
@@ -272,13 +344,17 @@ pub fn bind_sampler(anchor: BindAnchor, info: &::tex::SamplerInfo) {
     gl::TexParameterf(target, gl::TEXTURE_MAX_LOD, max);
 }
 
-pub fn update_texture(kind: ::tex::TextureKind, name: Texture, img: &::tex::ImageInfo, data: Box<Blob + Send>) {
+pub fn update_texture(kind: ::tex::TextureKind, name: Texture, img: &::tex::ImageInfo,
+                      data: Box<Blob + Send>) -> Result<(), ::TextureError> {
     debug_assert!(img.width as uint * img.height as uint * img.depth as uint *
         format_to_size(img.format) == data.get_size());
 
     let data = data.get_address() as *const GLvoid;
     let pix = format_to_glpixel(img.format);
-    let typ = format_to_gltype(img.format);
+    let typ = match format_to_gltype(img.format) {
+        Ok(t) => t,
+        Err(_) => return Err(::UnsupportedTextureFormat),
+    };
     let target = kind_to_gl(kind);
 
     gl::BindTexture(target, name);
@@ -327,6 +403,8 @@ pub fn update_texture(kind: ::tex::TextureKind, name: Texture, img: &::tex::Imag
             },
         }
     }
+
+    Ok(())
 }
 
 /// Common texture creation routine, just creates and binds.

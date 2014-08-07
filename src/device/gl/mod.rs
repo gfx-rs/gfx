@@ -324,11 +324,11 @@ impl super::ApiBackEnd for GlBackEnd {
         name
     }
 
-    fn create_surface(&mut self, info: ::tex::SurfaceInfo) -> Surface {
+    fn create_surface(&mut self, info: ::tex::SurfaceInfo) -> Result<Surface, ::SurfaceError> {
         tex::make_surface(&info)
     }
 
-    fn create_texture(&mut self, info: ::tex::TextureInfo) -> Texture {
+    fn create_texture(&mut self, info: ::tex::TextureInfo) -> Result<Texture, ::TextureError> {
         let name = if self.caps.immutable_storage_supported {
             tex::make_with_storage(&info)
         } else {
@@ -511,7 +511,10 @@ impl super::ApiBackEnd for GlBackEnd {
                 self.update_buffer(buffer, data, super::UsageDynamic);
             },
             super::UpdateTexture(kind, texture, image_info, data) => {
-                tex::update_texture(kind, texture, &image_info, data);
+                match tex::update_texture(kind, texture, &image_info, data) {
+                    Ok(_) => (),
+                    Err(_) => unimplemented!(),
+                }
             },
             super::Draw(start, count) => {
                 gl::DrawArrays(gl::TRIANGLES,

@@ -23,15 +23,50 @@
 
 use std::default::Default;
 
-/// Describes the layout of each texel within a surface/texture.
+/// Number of bits per component
+pub type Bits = u8;
+
+/// Describes the component layout of each texel.
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 #[repr(u8)]
-pub enum Format {
-    /// 3 components: red, green, and blue, each represented with 8 bits.
-    RGB8,
-    /// 4 components: red, green, blue, and alpha, each represented with 8 bits.
-    RGBA8,
+pub enum Components {
+    /// Red only
+    R,
+    /// Red and green
+    RG,
+    /// Red, green, blue
+    RGB,
+    /// Red, green, blue, alpha
+    RGBA,
 }
+
+/// Describes the layout of each texel within a surface/texture.
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+pub enum Format {
+    /// Floating point.
+    Float(Components, ::attrib::FloatSize),
+    /// Signed integer.
+    Integer(Components, Bits, ::attrib::IntSubType),
+    /// Unsigned integer.
+    Unsigned(Components, Bits, ::attrib::IntSubType),
+    /// Normalized integer, with 3 bits for R and G, but only 2 for B.
+    R3G3B2,
+    /// 5 bits each for RGB, 1 for Alpha.
+    RGB5A1,
+    /// 10 bits each for RGB, 2 for Alpha.
+    RGB10A2,
+    /// 10 bits each for RGB, 2 for Alpha, as unsigned integers.
+    RGB10A2UI,
+    /// This uses special 11 and 10-bit floating-point values without sign bits.
+    R11FG11FB10F,
+    /// This s an RGB format of type floating-point. The 3 color values have
+    /// 9 bits of precision, and they share a single exponent.
+    RGB9E5,
+    // TODO: sRGB, compression
+}
+
+/// A commonly used RGBA8 format
+pub static RGBA8: Format = Unsigned(RGBA, 8, ::attrib::IntNormalized);
 
 /// Describes the storage of a surface
 #[allow(missing_doc)]
