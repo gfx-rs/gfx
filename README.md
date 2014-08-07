@@ -4,32 +4,83 @@
 [![Gitter Chat](https://badges.gitter.im/gfx-rs/gfx-rs.png)](https://gitter.im/gfx-rs/gfx-rs)
 [![Stories in Ready](https://badge.waffle.io/gfx-rs/gfx-rs.png?label=S-ready&title=issues)](https://waffle.io/gfx-rs/gfx-rs)
 
-A lightweight buffer, shader and render queue manager for Rust.
+`gfx-rs` is a high-performance, bindless, [retained mode]
+(http://en.wikipedia.org/wiki/Retained_mode) graphics API for the Rust
+programming language. It aims to be the default API for Rust graphics: for
+one-off applications, or higher level libraries or engines.
+
+## Why gfx-rs?
+
+- Graphics APIs are mostly designed with C and C++ in mind, and hence are
+  dangerous and error prone, with little static safety guarantees.
+- Providing type safe wrappers around platform-specific APIs is feasible, but
+  only pushes the problem of platform independence to a higher level of
+  abstraction, often to the game or rendering engine.
+- [Retained mode](http://en.wikipedia.org/wiki/Retained_mode) graphics APIs,
+  whilst providing a high level of performance, often have a much higher
+  barrier to entry for most developers than [immediate mode]
+  (http://en.wikipedia.org/wiki/Immediate_mode_%28computer_graphics%29) APIs.
+- Graphics APIs like OpenGL still [require the developer to 'bind' and 'unbind'
+  objects](http://www.arcsynthesis.org/gltut/Basics/Intro%20What%20is%20OpenGL.html#d0e887)
+  in order to perform operations on them. This results in a large amount of
+  boiler plate code, and brings with it the usual problems associated with
+  global state.
+
+## Goals
+
+`gfx-rs` aims to be:
+
+- type-safe and memory-safe
+- compatible with Rust's concurrency model
+- highly performant with minimal latency
+- extensible, with support for:
+    - device backends: OpenGL, Direct3D, Mantle, etc.
+    - context backends: GLFW, SDL2, gl-init-rs, etc.
+
+## Non-goals
+
+`gfx-rs` is not:
+
+- a rendering engine
+- a game engine
+- bound to a specific maths library
+
+`gfx-rs` will not handle:
+
+- window and input management
+- mathematics and transformations
+- lighting and shadows
+- visibility determination
+- draw call reordering
+- de-serializing of scene data formats
+- abstractions for platform-specific shaders
+- material abstractions
 
 ## Getting started
 
 Add the following to your `Cargo.toml`:
 
-```toml
+~~~toml
 [dependencies.gfx]
 git = "http://github.com/gfx-rs/gfx-rs"
-```
+~~~
 
 To use [gl-init](https://github.com/tomaka/gl-init-rs/) with `gfx`, also add:
 
-```toml
+~~~toml
 [dependencies.gl_init_platform]
 git = "http://github.com/gfx-rs/gfx-rs"
-```
+~~~
 
 To use [glfw](https://github.com/bjz/glfw-rs/) with `gfx`, also add:
 
-```toml
+~~~toml
 [dependencies.glfw_platform]
 git = "http://github.com/gfx-rs/gfx-rs"
-```
+~~~
 
-See the [triangle example](./src/examples/triangle) for an example using both.
+See the [triangle example](./src/examples/triangle) for an example that uses
+both.
 
 ## Building the examples
 
@@ -37,46 +88,10 @@ See the [triangle example](./src/examples/triangle) for an example using both.
 make -C src/examples
 ~~~
 
-## The Problem
-
-- Graphics APIs are difficult and diverse in nature. We've seen Mantle and
-  Metal popping out of nowhere. Even for OpenGL there are different profiles
-  that may need to be supported.
-- Communicating with the driver is considered expensive, thus feeding it should
-  be done in parallel with the user code.
-- Graphics programming is dangerous. Using Rust allows building a safer
-  abstraction without run-time overhead.
-
-## Design Goals
-
-- Safe but non-limiting higher level interface
-- Simple, lightweight implementation
-- Low performance overhead
-- Graphics API agnostic (OpenGL/Direct3D/Metal)
-- Maths library agnostic
-- Composable (a library, not a framework)
-- Compatible with Rust's task-based concurrency model
-- Clear documentation with examples
-
-## Possible Solutions
-
-- Verify compatibility of the shader inputs with user-provided data.
-- Use Rust procedural macros to generate the code for querying and uploading
-  of shader parameters.
-- Make use of 'draw call bucketing'. See [research.md](wiki/research.md) for more information.
-- Leave scene and model management up to the client, and focus instead on
-  buffers and shaders.
-- Provide structural data types (as opposed to nominal ones) in order to make
-  interfacing with other maths libraries easier. For example:
-~~~rust
-pub type Vertex4<T> = [T,..4];
-pub type Matrix4x3<T> = [[T,..3],..4];
-~~~
-
 ## Note
 
 gfx-rs is still in the early stages of development. Help is most appreciated.
 
 If you are interested in helping out, you can contact the developers on
-[Gitter](https://gitter.im/gfx-rs/gfx-rs). See [contrib.md](wiki/contrib.md) for contant
-information and contribution guidelines.
+[Gitter](https://gitter.im/gfx-rs/gfx-rs). See [contrib.md](wiki/contrib.md) for
+contant information and contribution guidelines.
