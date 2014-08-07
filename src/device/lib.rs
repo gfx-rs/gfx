@@ -97,7 +97,8 @@ impl fmt::Show for Box<Blob + Send> {
 /// The nature of these hints make them very implementation specific. Different drivers on
 /// different hardware will handle them differently. Only careful profiling will tell which is the
 /// best to use for a specific buffer.
-#[deriving(Show)]
+#[deriving(Clone, PartialEq, Show)]
+#[repr(u8)]
 pub enum BufferUsage {
     /// Once uploaded, this buffer will rarely change, but will be read from often.
     UsageStatic,
@@ -106,6 +107,20 @@ pub enum BufferUsage {
     UsageDynamic,
     /// This buffer always or almost always be updated after each read.
     UsageStream,
+}
+
+/// Surface creation/update error.
+#[deriving(Clone, PartialEq, Show)]
+pub enum SurfaceError {
+    /// Failed to map a given format to the device
+    UnsupportedSurfaceFormat,
+}
+
+/// Texture creation/update error.
+#[deriving(Clone, PartialEq, Show)]
+pub enum TextureError {
+    /// Failed to map a given format to the device
+    UnsupportedTextureFormat,
 }
 
 /// Device request.
@@ -198,8 +213,8 @@ pub trait ApiBackEnd {
     fn create_shader(&mut self, shade::Stage, code: shade::ShaderSource) -> Result<dev::Shader, shade::CreateShaderError>;
     fn create_program(&mut self, shaders: &[dev::Shader]) -> Result<shade::ProgramMeta, ()>;
     fn create_frame_buffer(&mut self) -> dev::FrameBuffer;
-    fn create_surface(&mut self, info: tex::SurfaceInfo) -> dev::Surface;
-    fn create_texture(&mut self, info: tex::TextureInfo) -> dev::Texture;
+    fn create_surface(&mut self, info: tex::SurfaceInfo) -> Result<dev::Surface, SurfaceError>;
+    fn create_texture(&mut self, info: tex::TextureInfo) -> Result<dev::Texture, TextureError>;
     fn create_sampler(&mut self, info: tex::SamplerInfo) -> dev::Sampler;
     /// Update the information stored in a specific buffer
     fn update_buffer(&mut self, dev::Buffer, data: &Blob, BufferUsage);
@@ -263,12 +278,16 @@ impl<T: Send, B: ApiBackEnd, C: GraphicsContext<B>> Device<T, B, C> {
                 ReplyNewFrameBuffer(token, name)
             },
             CreateSurface(info) => {
-                let name = self.back_end.create_surface(info);
-                ReplyNewSurface(token, name)
+                match self.back_end.create_surface(info) {
+                    Ok(name) => ReplyNewSurface(token, name),
+                    Err(_e) => unimplemented!(),
+                }
             },
             CreateTexture(info) => {
-                let name = self.back_end.create_texture(info);
-                ReplyNewTexture(token, name)
+                match self.back_end.create_texture(info) {
+                    Ok(name) => ReplyNewTexture(token, name),
+                    Err(_e) => unimplemented!(),
+                }
             },
             CreateSampler(info) => {
                 let name = self.back_end.create_sampler(info);
