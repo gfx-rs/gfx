@@ -232,7 +232,7 @@ pub struct Device<T, B, C> {
     reply_tx: Sender<Reply<T>>,
     graphics_context: C,
     back_end: B,
-    swap_ack: Sender<Ack>,
+    frame_done: Receiver<Ack>,
     close: comm::Close,
 }
 
@@ -310,7 +310,7 @@ impl<T: Send, B: ApiBackEnd, C: GraphicsContext<B>> Device<T, B, C> {
                 Ok(Cast(cast)) => self.back_end.process(cast),
                 Ok(SwapBuffers) => {
                     self.graphics_context.swap_buffers();
-                    self.swap_ack.send(Ack);
+                    self.frame_done.recv();
                     break;
                 },
                 Err(()) => return,
@@ -343,15 +343,11 @@ pub type QueueSize = u8;
 // TODO: Generalise for different back-ends
 /// Initialize a device for a given context and provider pair, with a given queue size.
 pub fn init<T: Send, C: GraphicsContext<GlBackEnd>, P: GlProvider>(graphics_context: C, provider: P, queue_size: QueueSize)
-        -> Result<(Sender<Request<T>>, Receiver<Reply<T>>, Device<T, GlBackEnd, C>, Receiver<Ack>, comm::ShouldClose), InitError> {
+        -> Result<(Sender<Request<T>>, Receiver<Reply<T>>, Device<T, GlBackEnd, C>, SyncSender<Ack>, comm::ShouldClose), InitError> {
     let (request_tx, request_rx) = channel();
     let (reply_tx, reply_rx) = channel();
-    let (swap_tx, swap_rx) = channel();
+    let (swap_tx, swap_rx) = sync_channel(queue_size as uint);
     let (close, should_close) = comm::close_stream();
-
-    for _ in range(0, queue_size) {
-        swap_tx.send(Ack);
-    }
 
     let gl = GlBackEnd::new(&provider);
     let device = Device {
@@ -360,9 +356,9 @@ pub fn init<T: Send, C: GraphicsContext<GlBackEnd>, P: GlProvider>(graphics_cont
         reply_tx: reply_tx,
         graphics_context: graphics_context,
         back_end: gl,
-        swap_ack: swap_tx,
+        frame_done: swap_rx,
         close: close,
     };
 
-    Ok((request_tx, reply_rx, device, swap_rx, should_close))
+    Ok((request_tx, reply_rx, device, swap_tx, should_close))
 }

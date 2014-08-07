@@ -170,7 +170,7 @@ impl Dispatcher {
 pub struct Renderer {
     dispatcher: Dispatcher,
     device_tx: Sender<device::Request<Token>>,
-    swap_ack: Receiver<device::Ack>,
+    frame_finished: SyncSender<device::Ack>,
     should_finish: comm::ShouldClose,
     /// the shared VAO and FBO
     common_array_buffer: Token,
@@ -191,7 +191,7 @@ impl Renderer {
     /// Create a new `Renderer` using given channels for communicating with the device. Generally,
     /// you want to use `gfx::start` instead.
     pub fn new(device_tx: Sender<device::Request<Token>>, device_rx: Receiver<device::Reply<Token>>,
-            swap_rx: Receiver<device::Ack>, should_finish: comm::ShouldClose) -> Renderer {
+            frame_finished: SyncSender<device::Ack>, should_finish: comm::ShouldClose) -> Renderer {
         // Request the creation of the common array buffer and frame buffer
         let mut res = resource::Cache::new();
         let c_vao = res.array_buffers.add(Pending);
@@ -206,7 +206,7 @@ impl Renderer {
                 resource: res,
             },
             device_tx: device_tx,
-            swap_ack: swap_rx,
+            frame_finished: frame_finished,
             should_finish: should_finish,
             common_array_buffer: c_vao,
             common_frame_buffer: c_fbo,
@@ -300,7 +300,7 @@ impl Renderer {
     /// queue size passed to `gfx::start`.
     pub fn end_frame(&self) {
         self.device_tx.send(device::SwapBuffers);
-        self.swap_ack.recv();  //wait for acknowlegement
+        self.frame_finished.send(device::Ack);  //wait for acknowlegement
     }
 
     // --- Resource creation --- //
