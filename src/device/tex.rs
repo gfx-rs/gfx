@@ -41,6 +41,7 @@ pub enum Components {
 }
 
 /// Describes the layout of each texel within a surface/texture.
+/// http://www.opengl.org/wiki/Image_Format
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub enum Format {
     /// Floating point.
@@ -62,7 +63,7 @@ pub enum Format {
     /// This s an RGB format of type floating-point. The 3 color values have
     /// 9 bits of precision, and they share a single exponent.
     RGB9E5,
-    // TODO: sRGB, compression
+    // TODO: sRGB, compression, depth, stencil
 }
 
 /// A commonly used RGBA8 format

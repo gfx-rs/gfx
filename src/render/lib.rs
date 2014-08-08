@@ -30,8 +30,8 @@ use std::mem;
 use std::vec::MoveItems;
 
 use backend = device::dev;
-use device::shade::{CreateShaderError, ProgramMeta, Vertex, Fragment, ShaderSource,
-    UniformValue, ValueUninitialized};
+use device::shade::{CreateShaderError, ProgramMeta, Vertex, Fragment,
+    ShaderSource, UniformValue};
 use device::target::{ClearData, Target, TargetColor, TargetDepth, TargetStencil};
 use shade::{ProgramShell, ShaderParam};
 use resource::{Loaded, Pending};
@@ -68,6 +68,8 @@ pub mod shade;
 pub mod state;
 /// Render targets
 pub mod target;
+/// Texture views
+pub mod tex;
 
 /// Graphics state
 struct State {
