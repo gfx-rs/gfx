@@ -16,7 +16,7 @@
 env:
   global:
     - LD_LIBRARY_PATH: /usr/local/lib
-    - secure: DhvEL7i2aup7391LdlDhqAWxylthkCXq+JVEfFRTJZnrgm0BOyqOt9kRld4haVjF0FFhFrUPf4gvvNMJ2kNsTQuEc1ADf3hSYWvY+GGEksuJesmKN/f4czyIN4IQJ4CMpbmqIIxf1TFLRniyIXkIbTnWdt25fpo3Bph+cJsqrxc=
+    - secure: X6P2Epmcc4RWq64OWMD0sWP8VkC4sapVStG33Cipn2G9mwQUKs0AQRSRl/g2oLXWgg0/HxxhJlHXmGMgj8UimQwKKYdAIYdhr/WmQ72lXx9ulve+jKVvZmneGiXaCtHTVHkMaU0Aahr5eqDCvNfsZSCnOhYlVXR+df8EAQMqdbo=
 notifications:
   webhooks:
     urls:
