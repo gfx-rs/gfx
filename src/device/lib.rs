@@ -227,7 +227,7 @@ pub struct Ack;
 
 /// An API-agnostic device that manages incoming draw calls
 pub struct Device<T, B, C> {
-    no_share: marker::NoShare,
+    no_share: marker::NoSync,
     request_rx: Receiver<Request<T>>,
     reply_tx: Sender<Reply<T>>,
     graphics_context: C,
@@ -355,7 +355,7 @@ pub fn init<T: Send, C: GraphicsContext<GlBackEnd>, P: GlProvider>(graphics_cont
 
     let gl = GlBackEnd::new(&provider);
     let device = Device {
-        no_share: marker::NoShare,
+        no_share: marker::NoSync,
         request_rx: request_rx,
         reply_tx: reply_tx,
         graphics_context: graphics_context,
