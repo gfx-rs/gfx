@@ -25,7 +25,6 @@
 
 #[phase(plugin, link)] extern crate log;
 extern crate libc;
-extern crate comm;
 
 // when cargo is ready, re-enable the cfg's
 /* #[cfg(gl)] */ pub use gl::GlBackEnd;
@@ -233,14 +232,12 @@ pub struct Device<T, B, C> {
     graphics_context: C,
     back_end: B,
     swap_ack: Sender<Ack>,
-    close: comm::Close,
 }
 
 impl<T: Send, B: ApiBackEnd, C: GraphicsContext<B>> Device<T, B, C> {
-    /// Signal to connected client that the device wants to close, and block
-    /// until it has disconnected.
-    pub fn close(&self) {
-        self.close.now()
+    /// Destroy the device
+    pub fn close(mut self) {
+        //empty
     }
 
     /// Make this device's context current for the thread.
@@ -343,11 +340,10 @@ pub type QueueSize = u8;
 // TODO: Generalise for different back-ends
 /// Initialize a device for a given context and provider pair, with a given queue size.
 pub fn init<T: Send, C: GraphicsContext<GlBackEnd>, P: GlProvider>(graphics_context: C, provider: P, queue_size: QueueSize)
-        -> Result<(Sender<Request<T>>, Receiver<Reply<T>>, Device<T, GlBackEnd, C>, Receiver<Ack>, comm::ShouldClose), InitError> {
+        -> Result<(Sender<Request<T>>, Receiver<Reply<T>>, Device<T, GlBackEnd, C>, Receiver<Ack>), InitError> {
     let (request_tx, request_rx) = channel();
     let (reply_tx, reply_rx) = channel();
     let (swap_tx, swap_rx) = channel();
-    let (close, should_close) = comm::close_stream();
 
     for _ in range(0, queue_size) {
         swap_tx.send(Ack);
@@ -361,8 +357,7 @@ pub fn init<T: Send, C: GraphicsContext<GlBackEnd>, P: GlProvider>(graphics_cont
         graphics_context: graphics_context,
         back_end: gl,
         swap_ack: swap_tx,
-        close: close,
     };
 
-    Ok((request_tx, reply_rx, device, swap_rx, should_close))
+    Ok((request_tx, reply_rx, device, swap_rx))
 }

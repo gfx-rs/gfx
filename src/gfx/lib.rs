@@ -104,8 +104,8 @@ impl<C: GraphicsContext<GlBackEnd>, P: GlProvider> Builder<SomeT<C>, SomeT<P>> {
     /// Create a `Renderer` and `Device`.
     pub fn create(self) -> Result<(Renderer, Device<render::Token, GlBackEnd, C>), InitError> {
         let Builder { context: SomeT(context), provider: SomeT(provider), queue_size } = self;
-        device::init(context, provider, queue_size).map(|(tx, rx, server, ack, should_finish)| {
-            (Renderer::new(tx, rx, ack, should_finish), server)
+        device::init(context, provider, queue_size).map(|(tx, rx, server, ack)| {
+            (Renderer::new(tx, rx, ack), server)
         })
     }
 

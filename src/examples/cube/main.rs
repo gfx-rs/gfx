@@ -248,12 +248,12 @@ fn main() {
         for (_, event) in glfw::flush_messages(&events) {
             match event {
                 glfw::KeyEvent(glfw::KeyEscape, _, glfw::Press, _) => {
-                    window.set_should_close(true);
+                    device.close();
+                    return
                 },
                 _ => {},
             }
         }
         device.update();
     }
-    device.close();
 }
