@@ -30,15 +30,18 @@ extern crate render;
 
 // public re-exports
 pub use render::{BufferHandle, ShaderHandle, ProgramHandle, SurfaceHandle, TextureHandle, SamplerHandle};
+pub use render::{TextureView};
 pub use render::Renderer;
 pub use render::mesh::{Attribute, Mesh, VertexFormat, Slice, VertexSlice, IndexSlice};
 pub use render::state::{DrawState, BlendAdditive, BlendAlpha};
 pub use render::shade;
 pub use render::target::{Frame, Plane, PlaneEmpty, PlaneSurface, PlaneTexture};
+pub use ttex = render::tex;
 pub use device::{attrib, state, tex};
 pub use device::target::{Color, ClearData, Layer, Level};
 pub use device::{Blob, Device, GlBackEnd, GlProvider, GraphicsContext, InitError, QueueSize};
 pub use device::shade::{UniformValue, ValueI32, ValueF32, ValueI32Vec, ValueF32Vec, ValueF32Matrix};
+pub use device::shade::{IsArray, Array, NoArray};
 pub use device::shade::{ShaderSource, StaticBytes};
 
 /// The empty variant of a type-level option.

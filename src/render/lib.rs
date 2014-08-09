@@ -58,6 +58,9 @@ pub struct TextureHandle(Token);
 #[deriving(Clone, PartialEq, Show)]
 pub struct SamplerHandle(Token);
 
+/// A type-safe wrapper for the texture handle
+pub struct TextureView<K, C, A, T>(TextureHandle);
+
 /// Meshes
 pub mod mesh;
 /// Resources
@@ -355,7 +358,16 @@ impl Renderer {
         SurfaceHandle(token)
     }
 
-    /// Create a new texture.
+    /// Create a new texture view, given the strongly-typed format
+    pub fn create_texture_view<K: tex::ToKind, C: tex::ToComponents, A, T: tex::ToFormat>
+    (&mut self, format: tex::Format<K, C, A, T>) -> TextureView<K, C, A, T> {
+        use tex::ToTextureInfo;
+        let info = format.into_texture_info();
+        let handle = self.create_texture(info);
+        TextureView(handle)
+    }
+
+    /// Create a new texture, given the raw TextureInfo.
     pub fn create_texture(&mut self, info: device::tex::TextureInfo) -> TextureHandle {
         let token = self.dispatcher.resource.textures.add((Pending, info.clone()));
         self.device_tx.send(device::Call(token, device::CreateTexture(info)));

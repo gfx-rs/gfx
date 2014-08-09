@@ -20,14 +20,15 @@ use Blob;
 /// with a GL-compatibility sampler settings in `bind_sampler`
 pub struct BindAnchor(GLenum);
 
-fn kind_to_gl(t: ::tex::TextureKind) -> GLenum {
-    match t {
+fn kind_to_gl(k: ::tex::TextureKind) -> GLenum {
+    match k {
         ::tex::Texture1D => gl::TEXTURE_1D,
         ::tex::Texture1DArray => gl::TEXTURE_1D_ARRAY,
         ::tex::Texture2D => gl::TEXTURE_2D,
         ::tex::Texture2DArray => gl::TEXTURE_2D_ARRAY,
-        ::tex::TextureCube => gl::TEXTURE_CUBE_MAP,
         ::tex::Texture3D => gl::TEXTURE_3D,
+        ::tex::TextureCube => gl::TEXTURE_CUBE_MAP,
+        ::tex::TextureCubeArray => gl::TEXTURE_CUBE_MAP_ARRAY,
     }
 }
 
@@ -92,7 +93,8 @@ fn format_to_glpixel(t: ::tex::Format) -> GLenum {
 }
 
 fn format_to_gltype(t: ::tex::Format) -> Result<GLenum, ()> {
-    use tex::{Float, Integer, Unsigned};
+    use
+    tex::{Float, Integer, Unsigned};
     match t {
         Float(_, ::attrib::F32) => Ok(gl::FLOAT),
         Integer(_, 8, _)   => Ok(gl::BYTE),
@@ -205,7 +207,6 @@ pub fn make_without_storage(info: &::tex::TextureInfo) -> Result<Texture, ::Text
                     ::std::ptr::null(),
                 );
             },
-            ::tex::TextureCube => unimplemented!(),
             ::tex::Texture2DArray | ::tex::Texture3D => {
                 gl::TexImage3D(
                     target,
@@ -220,6 +221,7 @@ pub fn make_without_storage(info: &::tex::TextureInfo) -> Result<Texture, ::Text
                     ::std::ptr::null(),
                 );
             },
+            ::tex::TextureCube | ::tex::TextureCubeArray => unimplemented!(),
         }
     }
 
@@ -283,7 +285,6 @@ pub fn make_with_storage(info: &::tex::TextureInfo) -> Result<Texture, ::Texture
                 info.height as GLsizei,
             );
         },
-        ::tex::TextureCube => unimplemented!(),
         ::tex::Texture2DArray => {
             gl::TexStorage3D(
                 target,
@@ -304,6 +305,7 @@ pub fn make_with_storage(info: &::tex::TextureInfo) -> Result<Texture, ::Texture
                 info.depth as GLsizei,
             );
         },
+        ::tex::TextureCube | ::tex::TextureCubeArray => unimplemented!(),
     }
 
     set_mipmap_range(target, info.mipmap_range);
@@ -387,7 +389,6 @@ pub fn update_texture(kind: ::tex::TextureKind, name: Texture, img: &::tex::Imag
                     data,
                 );
             },
-            ::tex::TextureCube => unimplemented!(),
             ::tex::Texture2DArray | ::tex::Texture3D => {
                 gl::TexSubImage3D(
                     target,
@@ -403,6 +404,7 @@ pub fn update_texture(kind: ::tex::TextureKind, name: Texture, img: &::tex::Imag
                     data,
                 );
             },
+            ::tex::TextureCube | ::tex::TextureCubeArray => unimplemented!(),
         }
     }
 
