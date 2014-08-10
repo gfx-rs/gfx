@@ -193,6 +193,16 @@ fn node_to_var_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span, node: &ast
     ]), None)
 }
 
+/// Extract all deriving() attributes into a separate array
+fn copy_deriving(attribs: &[ast::Attribute]) -> Vec<ast::Attribute> {
+    attribs.iter().filter(|at| {
+        match at.node.value.node {
+            ast::MetaList(ref s, _) => s.get() == "deriving",
+            _ => false,
+        }
+    }).map(|at| *at).collect()
+}
+
 /// Decorator for `shader_param` attribute
 pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
               meta_item: Gc<ast::MetaItem>, item: Gc<ast::Item>,
@@ -233,7 +243,7 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
     // Almost `context.item_struct(span, link_ident, link_def)` but with visibility
     push(box (GC) ast::Item {
         ident: link_ident,
-        attrs: Vec::new(),
+        attrs: copy_deriving(item.attrs.as_slice()),
         id: ast::DUMMY_NODE_ID,
         node: ast::ItemStruct(
             box(GC) link_def,
