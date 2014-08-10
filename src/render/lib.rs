@@ -281,16 +281,16 @@ impl Renderer {
         // draw
         match slice {
             mesh::VertexSlice(start, end) => {
-                self.cast(device::Draw(start, end));
+                self.cast(device::Draw(mesh.prim_type, start, end));
             },
-            mesh::IndexSlice(handle, start, end) => {
+            mesh::IndexSlice(handle, index, start, end) => {
                 let BufferHandle(bh) = handle;
                 let buf = match self.dispatcher.resource.buffers.get(bh) {
                     Ok(&Loaded(buf)) => buf,
                     _ => return Err(ErrorSlice),
                 };
                 self.cast(device::BindIndex(buf));
-                self.cast(device::DrawIndexed(start, end));
+                self.cast(device::DrawIndexed(mesh.prim_type, index, start, end));
             },
         }
         Ok(())
@@ -341,9 +341,9 @@ impl Renderer {
     /// Convenience function around `crate_buffer` and `Mesh::from`.
     pub fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh {
         let nv = data.len();
-        debug_assert!(nv < { use std::num::Bounded; let val: mesh::VertexCount = Bounded::max_value(); val as uint });
+        debug_assert!(nv < { use std::num::Bounded; let val: device::VertexCount = Bounded::max_value(); val as uint });
         let buf = self.create_buffer(Some(data));
-        mesh::Mesh::from::<T>(buf, nv as mesh::VertexCount)
+        mesh::Mesh::from::<T>(buf, nv as device::VertexCount)
     }
 
     /// Create a new surface.
@@ -453,7 +453,7 @@ impl Renderer {
             self.dispatcher.get_buffer(at.buffer);
         }
         match *slice {
-            mesh::IndexSlice(handle, _, _) =>
+            mesh::IndexSlice(handle, _, _, _) =>
                 self.dispatcher.get_buffer(handle),
             _ => 0,
         };

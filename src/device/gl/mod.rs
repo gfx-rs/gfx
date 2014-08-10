@@ -205,6 +205,17 @@ pub enum ErrorType {
 }
 
 
+fn primitive_to_gl(prim_type: super::PrimitiveType) -> gl::types::GLenum {
+    match prim_type {
+        super::Point => gl::POINTS,
+        super::Line => gl::LINES,
+        super::LineStrip => gl::LINE_STRIP,
+        super::TriangleList => gl::TRIANGLES,
+        super::TriangleStrip => gl::TRIANGLE_STRIP,
+        super::TriangleFan => gl::TRIANGLE_FAN,
+    }
+}
+
 fn target_to_gl(target: super::target::Target) -> gl::types::GLenum {
     match target {
         super::target::TargetColor(index) =>
@@ -516,19 +527,27 @@ impl super::ApiBackEnd for GlBackEnd {
                     Err(_) => unimplemented!(),
                 }
             },
-            super::Draw(start, count) => {
-                gl::DrawArrays(gl::TRIANGLES,
+            super::Draw(prim_type, start, count) => {
+                gl::DrawArrays(
+                    primitive_to_gl(prim_type),
                     start as gl::types::GLsizei,
-                    count as gl::types::GLsizei);
+                    count as gl::types::GLsizei
+                );
                 self.check();
             },
-            super::DrawIndexed(start, count) => {
-                let offset = start * (mem::size_of::<u16>() as u32);
+            super::DrawIndexed(prim_type, index_type, start, count) => {
+                let (offset, gl_index) = match index_type {
+                    a::U8  => (start * 1u32, gl::UNSIGNED_BYTE),
+                    a::U16 => (start * 2u32, gl::UNSIGNED_SHORT),
+                    a::U32 => (start * 4u32, gl::UNSIGNED_INT),
+                };
                 unsafe {
-                    gl::DrawElements(gl::TRIANGLES,
+                    gl::DrawElements(
+                        primitive_to_gl(prim_type),
                         count as gl::types::GLsizei,
-                        gl::UNSIGNED_SHORT,
-                        offset as *const gl::types::GLvoid);
+                        gl_index,
+                        offset as *const gl::types::GLvoid
+                    );
                 }
                 self.check();
             },

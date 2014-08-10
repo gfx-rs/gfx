@@ -92,6 +92,34 @@ impl fmt::Show for Box<Blob + Send> {
     }
 }
 
+/// Describes what geometric primitives are created from vertex data.
+#[deriving(Clone, PartialEq, Show)]
+#[repr(u8)]
+pub enum PrimitiveType {
+    /// Each vertex represents a single point.
+    Point,
+    /// Each pair of vertices represent a single line segment. For example, with `[a, b, c, d,
+    /// e]`, `a` and `b` form a line, `c` and `d` form a line, and `e` is discarded.
+    Line,
+    /// Every two consecutive vertices represent a single line segment. Visually forms a "path" of
+    /// lines, as they are all connected. For example, with `[a, b, c]`, `a` and `b` form a line
+    /// line, and `b` and `c` form a line.
+    LineStrip,
+    /// Each triplet of vertices represent a single triangle. For example, with `[a, b, c, d, e]`,
+    /// `a`, `b`, and `c` form a triangle, `d` and `e` are discarded.
+    TriangleList,
+    /// Every three consecutive vertices represent a single triangle. For example, with `[a, b, c,
+    /// d]`, `a`, `b`, and `c` form a triangle, and `b`, `c`, and `d` form a triangle.
+    TriangleStrip,
+    /// The first vertex with the last two are forming a triangle. For example, with `[a, b, c, d
+    /// ]`, `a` , `b`, and `c` form a triangle, and `a`, `c`, and `d` form a triangle.
+    TriangleFan,
+    //Quad,
+}
+
+/// A type of each index value in the mesh's index buffer
+pub type IndexType = attrib::IntSize;
+
 /// A hint as to how this buffer will be used.
 ///
 /// The nature of these hints make them very implementation specific. Different drivers on
@@ -177,8 +205,8 @@ pub enum CastRequest {
     SetColorMask(state::ColorMask),
     UpdateBuffer(dev::Buffer, Box<Blob + Send>),
     UpdateTexture(tex::TextureKind, dev::Texture, tex::ImageInfo, Box<Blob + Send>),
-    Draw(VertexCount, VertexCount),
-    DrawIndexed(IndexCount, IndexCount),
+    Draw(PrimitiveType, VertexCount, VertexCount),
+    DrawIndexed(PrimitiveType, IndexType, IndexCount, IndexCount),
     /// Resource deletion
     DeleteBuffer(dev::Buffer),
     DeleteShader(dev::Shader),
