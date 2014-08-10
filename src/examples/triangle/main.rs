@@ -115,13 +115,8 @@ fn main() {
                     _ => {},
                 }
             }
-
             device.update();
         }
-
-        device.update();
-        device.close();
-
     } else {
         let glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
@@ -141,20 +136,20 @@ fn main() {
             .spawn(proc(r) render(r, w as u16, h as u16))
             .unwrap();
 
-        while !window.should_close() {
+        'main: loop {
             glfw.poll_events();
+            if window.should_close() {
+                break 'main;
+            }
             // quit when Esc is pressed.
             for (_, event) in glfw::flush_messages(&events) {
                 match event {
-                    glfw::KeyEvent(glfw::KeyEscape, _, glfw::Press, _) => {
-                        window.set_should_close(true);
-                    },
+                    glfw::KeyEvent(glfw::KeyEscape, _, glfw::Press, _) => break 'main,
                     _ => {},
                 }
             }
             device.update();
         }
-        device.close();
     }
 }
 

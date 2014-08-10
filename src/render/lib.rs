@@ -22,9 +22,9 @@
 #![feature(macro_rules, phase)]
 
 #[phase(plugin, link)] extern crate log;
-extern crate comm;
 extern crate device;
 
+use std::cell::Cell;
 use std::fmt::Show;
 use std::mem;
 use std::vec::MoveItems;
@@ -129,6 +129,8 @@ pub enum DrawError {
 struct Dispatcher {
     /// Channel to receive device messages
     channel: Receiver<device::Reply<Token>>,
+    /// Alive status
+    is_alive: bool,
     /// Asynchronous device error queue
     errors: Vec<DeviceError>,
     /// cached meta-data for meshes and programs
@@ -141,7 +143,13 @@ impl Dispatcher {
     /// inside the body.
     fn demand(&mut self, fn_ready: |&resource::Cache| -> bool) {
         while !fn_ready(&self.resource) {
-            let reply = self.channel.recv();
+            let reply = match self.channel.recv_opt() {
+                Ok(r) => r,
+                Err(_) => {
+                    self.is_alive = false;
+                    return;
+                },
+            };
             match self.resource.process(reply) {
                 Ok(_) => (),
                 Err(e) => self.errors.push(e),
@@ -166,12 +174,27 @@ impl Dispatcher {
     }
 }
 
+struct DeviceSender {
+    chan: Sender<device::Request<Token>>,
+    alive: Cell<bool>,
+}
+
+impl DeviceSender {
+    fn send(&self, r: device::Request<Token>) {
+        self.chan.send_opt(r).map_err(|_| self.alive.set(false));
+    }
+
+    fn is_alive(&self) -> bool {
+        self.alive.get()
+    }
+}
+
 /// A renderer. Methods on this get translated into commands for the device.
 pub struct Renderer {
     dispatcher: Dispatcher,
-    device_tx: Sender<device::Request<Token>>,
+    device_tx: DeviceSender,
     swap_ack: Receiver<device::Ack>,
-    should_finish: comm::ShouldClose,
+    should_close: bool,
     /// the shared VAO and FBO
     common_array_buffer: Token,
     common_frame_buffer: Token,
@@ -191,7 +214,7 @@ impl Renderer {
     /// Create a new `Renderer` using given channels for communicating with the device. Generally,
     /// you want to use `gfx::start` instead.
     pub fn new(device_tx: Sender<device::Request<Token>>, device_rx: Receiver<device::Reply<Token>>,
-            swap_rx: Receiver<device::Ack>, should_finish: comm::ShouldClose) -> Renderer {
+            swap_rx: Receiver<device::Ack>) -> Renderer {
         // Request the creation of the common array buffer and frame buffer
         let mut res = resource::Cache::new();
         let c_vao = res.array_buffers.add(Pending);
@@ -202,12 +225,16 @@ impl Renderer {
         Renderer {
             dispatcher: Dispatcher {
                 channel: device_rx,
+                is_alive: true,
                 errors: Vec::new(),
                 resource: res,
             },
-            device_tx: device_tx,
+            device_tx: DeviceSender {
+                chan: device_tx,
+                alive: Cell::new(true),
+            },
             swap_ack: swap_rx,
-            should_finish: should_finish,
+            should_close: false,
             common_array_buffer: c_vao,
             common_frame_buffer: c_fbo,
             default_frame_buffer: 0,
@@ -224,7 +251,7 @@ impl Renderer {
 
     /// Whether rendering should stop completely.
     pub fn should_finish(&self) -> bool {
-        self.should_finish.check()
+        self.should_close || !self.device_tx.is_alive() || !self.dispatcher.is_alive
     }
 
     /// Iterate over any errors that have been raised by the device when trying to issue commands
@@ -298,9 +325,12 @@ impl Renderer {
 
     /// Finish rendering a frame. Waits for a frame to be finished drawing, as specified by the
     /// queue size passed to `gfx::start`.
-    pub fn end_frame(&self) {
+    pub fn end_frame(&mut self) {
         self.device_tx.send(device::SwapBuffers);
-        self.swap_ack.recv();  //wait for acknowlegement
+        //wait for acknowlegement
+        self.swap_ack.recv_opt().map_err(|_| {
+            self.should_close = true; // the channel has disconnected, so it is time to close
+        });
     }
 
     // --- Resource creation --- //
