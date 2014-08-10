@@ -235,11 +235,6 @@ pub struct Device<T, B, C> {
 }
 
 impl<T: Send, B: ApiBackEnd, C: GraphicsContext<B>> Device<T, B, C> {
-    /// Destroy the device
-    pub fn close(mut self) {
-        //empty
-    }
-
     /// Make this device's context current for the thread.
     ///
     /// This is a GLism that might be removed, especially as multithreading support evolves.

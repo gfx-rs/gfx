@@ -242,15 +242,15 @@ fn main() {
         }
     });
 
-    while !window.should_close() {
+    'main: loop {
         glfw.poll_events();
+        if window.should_close() {
+            break 'main;
+        }
         // quit when Esc is pressed.
         for (_, event) in glfw::flush_messages(&events) {
             match event {
-                glfw::KeyEvent(glfw::KeyEscape, _, glfw::Press, _) => {
-                    device.close();
-                    return
-                },
+                glfw::KeyEvent(glfw::KeyEscape, _, glfw::Press, _) => break 'main,
                 _ => {},
             }
         }

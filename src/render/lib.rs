@@ -147,7 +147,7 @@ impl Dispatcher {
                 Ok(r) => r,
                 Err(_) => {
                     self.is_alive = false;
-                    return
+                    return;
                 },
             };
             match self.resource.process(reply) {
@@ -174,12 +174,12 @@ impl Dispatcher {
     }
 }
 
-struct DevSender {
+struct DeviceSender {
     chan: Sender<device::Request<Token>>,
     alive: Cell<bool>,
 }
 
-impl DevSender {
+impl DeviceSender {
     fn send(&self, r: device::Request<Token>) {
         self.chan.send_opt(r).map_err(|_| self.alive.set(false));
     }
@@ -192,7 +192,7 @@ impl DevSender {
 /// A renderer. Methods on this get translated into commands for the device.
 pub struct Renderer {
     dispatcher: Dispatcher,
-    device_tx: DevSender,
+    device_tx: DeviceSender,
     swap_ack: Receiver<device::Ack>,
     should_close: bool,
     /// the shared VAO and FBO
@@ -229,7 +229,7 @@ impl Renderer {
                 errors: Vec::new(),
                 resource: res,
             },
-            device_tx: DevSender {
+            device_tx: DeviceSender {
                 chan: device_tx,
                 alive: Cell::new(true),
             },
@@ -328,7 +328,9 @@ impl Renderer {
     pub fn end_frame(&mut self) {
         self.device_tx.send(device::SwapBuffers);
         //wait for acknowlegement
-        self.swap_ack.recv_opt().map_err(|_| self.should_close = true);
+        self.swap_ack.recv_opt().map_err(|_| {
+            self.should_close = true; // the channel has disconnected, so it is time to close
+        });
     }
 
     // --- Resource creation --- //
