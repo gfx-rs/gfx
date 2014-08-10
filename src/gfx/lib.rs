@@ -36,10 +36,12 @@ pub use render::state::{DrawState, BlendAdditive, BlendAlpha};
 pub use render::shade;
 pub use render::target::{Frame, Plane, PlaneEmpty, PlaneSurface, PlaneTexture};
 pub use device::{attrib, state, tex};
-pub use device::target::{Color, ClearData, Layer, Level};
+pub use device::{VertexCount, IndexCount};
+pub use device::{Point, Line, LineStrip, TriangleList, TriangleStrip, TriangleFan};
 pub use device::{Blob, Device, GlBackEnd, GlProvider, GraphicsContext, InitError, QueueSize};
 pub use device::shade::{UniformValue, ValueI32, ValueF32, ValueI32Vec, ValueF32Vec, ValueF32Matrix};
 pub use device::shade::{ShaderSource, StaticBytes};
+pub use device::target::{Color, ClearData, Layer, Level};
 
 /// The empty variant of a type-level option.
 ///

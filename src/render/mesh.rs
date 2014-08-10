@@ -20,11 +20,8 @@
 //! create a mesh is to use the `#[vertex_format]` attribute on a struct, upload them into a
 //! `Buffer`, and then use `Mesh::from`.
 
+use d = device;
 use a = device::attrib;
-
-pub type MaterialHandle = int;  //placeholder
-pub type VertexCount = u32;
-pub type ElementCount = u32;
 
 /// Describes a single attribute of a vertex buffer, including its type, name, etc.
 #[deriving(Clone, PartialEq, Show)]
@@ -50,53 +47,31 @@ pub trait VertexFormat {
     fn generate(Option<Self>, buffer: super::BufferHandle) -> Vec<Attribute>;
 }
 
-
-/// Describes what geometric primitives are created from vertex data.
-#[deriving(Clone, Show)]
-pub enum PrimitiveType {
-    /// Each vertex represents a single point.
-    Point,
-    /// Each pair of vertices represent a single line segment. For example, with `[a, b, c, d,
-    /// e]`, `a` and `b` form a line, `c` and `d` form a line, and `e` is discarded.
-    Line,
-    /// Every two consecutive vertices represent a single line segment. Visually forms a "path" of
-    /// lines, as they are all connected. For example, with `[a, b, c]`, `a` and `b` form a line
-    /// line, and `b` and `c` form a line.
-    LineStrip,
-    /// Each triplet of vertices represent a single triangle. For example, with `[a, b, c, d, e]`,
-    /// `a`, `b`, and `c` form a triangle, `d` and `e` are discarded.
-    TriangleList,
-    /// Every three consecutive vertices represent a single triangle. For example, with `[a, b, c,
-    /// d]`, `a`, `b`, and `c` form a triangle, and `b`, `c`, and `d` form a triangle.
-    TriangleStrip,
-    //Quad,
-}
-
 /// Describes geometry to render.
 #[deriving(Clone, Show)]
 pub struct Mesh {
     /// What primitives to form out of the vertex data.
-    pub prim_type: PrimitiveType,
+    pub prim_type: d::PrimitiveType,
     /// Number of vertices in the mesh.
-    pub num_vertices: VertexCount,
+    pub num_vertices: d::VertexCount,
     /// Vertex attributes to use.
     pub attributes: Vec<Attribute>,
 }
 
 impl Mesh {
     /// Create a new mesh, which is a `TriangleList` with no attributes and `nv` vertices.
-    pub fn new(nv: VertexCount) -> Mesh {
+    pub fn new(nv: d::VertexCount) -> Mesh {
         Mesh {
-            prim_type: TriangleList,
+            prim_type: d::TriangleList,
             num_vertices: nv,
             attributes: Vec::new(),
         }
     }
 
     /// Create a new `Mesh` from a struct that implements `VertexFormat` and a buffer.
-    pub fn from<V: VertexFormat>(buf: super::BufferHandle, nv: VertexCount) -> Mesh {
+    pub fn from<V: VertexFormat>(buf: super::BufferHandle, nv: d::VertexCount) -> Mesh {
         Mesh {
-            prim_type: TriangleList,
+            prim_type: d::TriangleList,
             num_vertices: nv,
             attributes: VertexFormat::generate(None::<V>, buf),
         }
@@ -113,14 +88,14 @@ impl Mesh {
 pub enum Slice  {
     /// Render vertex data directly from the `Mesh`'s buffer, using only the vertices between the two
     /// endpoints.
-    VertexSlice(VertexCount, VertexCount),
+    VertexSlice(d::VertexCount, d::VertexCount),
     /// The `IndexSlice` buffer contains a list of indices into the `Mesh` data, so every vertex
     /// attribute does not need to be duplicated, only its position in the `Mesh`.  For example,
     /// when drawing a square, two triangles are needed.  Using only `VertexSlice`, one would need
     /// 6 separate vertices, 3 for each triangle. However, two of the vertices will be identical,
     /// wasting space for the duplicated attributes.  Instead, the `Mesh` can store 4 vertices and
     /// an `IndexSlice` can be used instead.
-    IndexSlice(super::BufferHandle, ElementCount, ElementCount),
+    IndexSlice(super::BufferHandle, d::IndexCount, d::IndexCount),
 }
 
 /// A slice of a mesh, with a given material.
@@ -128,8 +103,6 @@ pub enum Slice  {
 pub struct SubMesh {
     /// `Mesh` this `SubMesh` was created from.
     pub mesh: Mesh,
-    /// (Unimplemented!) Material to use for this submexsh.
-    pub material: MaterialHandle,
     /// Slice of the mesh to use.
     pub slice: Slice,
 }
