@@ -117,6 +117,9 @@ pub enum PrimitiveType {
     //Quad,
 }
 
+/// A type of each index value in the mesh's index buffer
+pub type IndexType = attrib::IntSize;
+
 /// A hint as to how this buffer will be used.
 ///
 /// The nature of these hints make them very implementation specific. Different drivers on
@@ -203,7 +206,7 @@ pub enum CastRequest {
     UpdateBuffer(dev::Buffer, Box<Blob + Send>),
     UpdateTexture(tex::TextureKind, dev::Texture, tex::ImageInfo, Box<Blob + Send>),
     Draw(PrimitiveType, VertexCount, VertexCount),
-    DrawIndexed(PrimitiveType, IndexCount, IndexCount),
+    DrawIndexed(PrimitiveType, IndexType, IndexCount, IndexCount),
     /// Resource deletion
     DeleteBuffer(dev::Buffer),
     DeleteShader(dev::Shader),

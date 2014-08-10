@@ -95,7 +95,7 @@ pub enum Slice  {
     /// 6 separate vertices, 3 for each triangle. However, two of the vertices will be identical,
     /// wasting space for the duplicated attributes.  Instead, the `Mesh` can store 4 vertices and
     /// an `IndexSlice` can be used instead.
-    IndexSlice(super::BufferHandle, d::IndexCount, d::IndexCount),
+    IndexSlice(super::BufferHandle, d::IndexType, d::IndexCount, d::IndexCount),
 }
 
 /// A slice of a mesh, with a given material.

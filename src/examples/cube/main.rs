@@ -161,7 +161,7 @@ fn main() {
 
         let slice = {
             let index_data = vec![
-                0u16, 1, 2, 2, 3, 0,    //top
+                0u8, 1, 2, 2, 3, 0,    //top
                 4, 5, 6, 6, 7, 4,       //bottom
                 8, 9, 10, 10, 11, 8,    //right
                 12, 13, 14, 14, 16, 12, //left
@@ -170,7 +170,7 @@ fn main() {
             ];
 
             let buf_index = renderer.create_buffer(Some(index_data));
-            gfx::IndexSlice(buf_index, 0, 36)
+            gfx::IndexSlice(buf_index, gfx::attrib::U8, 0, 36)
         };
 
         let tinfo = gfx::tex::TextureInfo {

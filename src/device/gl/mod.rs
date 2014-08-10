@@ -535,13 +535,17 @@ impl super::ApiBackEnd for GlBackEnd {
                 );
                 self.check();
             },
-            super::DrawIndexed(prim_type, start, count) => {
-                let offset = start * (mem::size_of::<u16>() as u32);
+            super::DrawIndexed(prim_type, index_type, start, count) => {
+                let (offset, gl_index) = match index_type {
+                    a::U8  => (start * 1u32, gl::UNSIGNED_BYTE),
+                    a::U16 => (start * 2u32, gl::UNSIGNED_SHORT),
+                    a::U32 => (start * 4u32, gl::UNSIGNED_INT),
+                };
                 unsafe {
                     gl::DrawElements(
                         primitive_to_gl(prim_type),
                         count as gl::types::GLsizei,
-                        gl::UNSIGNED_SHORT,
+                        gl_index,
                         offset as *const gl::types::GLvoid
                     );
                 }

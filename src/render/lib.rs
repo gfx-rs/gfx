@@ -283,14 +283,14 @@ impl Renderer {
             mesh::VertexSlice(start, end) => {
                 self.cast(device::Draw(mesh.prim_type, start, end));
             },
-            mesh::IndexSlice(handle, start, end) => {
+            mesh::IndexSlice(handle, index, start, end) => {
                 let BufferHandle(bh) = handle;
                 let buf = match self.dispatcher.resource.buffers.get(bh) {
                     Ok(&Loaded(buf)) => buf,
                     _ => return Err(ErrorSlice),
                 };
                 self.cast(device::BindIndex(buf));
-                self.cast(device::DrawIndexed(mesh.prim_type, start, end));
+                self.cast(device::DrawIndexed(mesh.prim_type, index, start, end));
             },
         }
         Ok(())
@@ -453,7 +453,7 @@ impl Renderer {
             self.dispatcher.get_buffer(at.buffer);
         }
         match *slice {
-            mesh::IndexSlice(handle, _, _) =>
+            mesh::IndexSlice(handle, _, _, _) =>
                 self.dispatcher.get_buffer(handle),
             _ => 0,
         };
