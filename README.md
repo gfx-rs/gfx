@@ -4,8 +4,7 @@
 [![Gitter Chat](https://badges.gitter.im/gfx-rs/gfx-rs.png)](https://gitter.im/gfx-rs/gfx-rs)
 [![Stories in Ready](https://badge.waffle.io/gfx-rs/gfx-rs.png?label=S-ready&title=issues)](https://waffle.io/gfx-rs/gfx-rs)
 
-`gfx-rs` is a high-performance, bindless, [retained mode]
-(http://en.wikipedia.org/wiki/Retained_mode) graphics API for the Rust
+`gfx-rs` is a high-performance, bindless graphics API for the Rust
 programming language. It aims to be the default API for Rust graphics: for
 one-off applications, or higher level libraries or engines.
 
@@ -16,10 +15,9 @@ one-off applications, or higher level libraries or engines.
 - Providing type safe wrappers around platform-specific APIs is feasible, but
   only pushes the problem of platform independence to a higher level of
   abstraction, often to the game or rendering engine.
-- [Retained mode](http://en.wikipedia.org/wiki/Retained_mode) graphics APIs,
-  whilst providing a high level of performance, often have a much higher
-  barrier to entry for most developers than [immediate mode]
-  (http://en.wikipedia.org/wiki/Immediate_mode_%28computer_graphics%29) APIs.
+- Modern graphics APIs, whilst providing a great degree of flexibility and a
+  high level of performance, often have a much higher barrier to entry than
+  traditional [fixed-function](http://en.wikipedia.org/wiki/Fixed-function) APIs.
 - Graphics APIs like OpenGL still [require the developer to 'bind' and 'unbind'
   objects](http://www.arcsynthesis.org/gltut/Basics/Intro%20What%20is%20OpenGL.html#d0e887)
   in order to perform operations on them. This results in a large amount of
