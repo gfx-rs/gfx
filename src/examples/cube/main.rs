@@ -111,7 +111,7 @@ fn main() {
 
     glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
     window.set_key_polling(true); // so we can quit when Esc is pressed
-    let (width, height) = window.get_size();
+    let (width, height) = window.get_framebuffer_size();
 
     let (renderer, mut device) = gfx::build()
         .with_glfw(&glfw, window.render_context())
