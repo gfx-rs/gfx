@@ -29,6 +29,7 @@ extern crate libc;
 // when cargo is ready, re-enable the cfg's
 /* #[cfg(gl)] */ pub use gl::GlBackEnd;
 /* #[cfg(gl)] */ pub use dev = self::gl;
+/* #[cfg(gl)] */ pub use gl::DrawList;
 // #[cfg(d3d11)] ... // TODO
 
 use std::fmt;

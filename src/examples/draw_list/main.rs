@@ -95,6 +95,7 @@ impl App {
 		for err in renderer.errors() {
 			println!("Renderer error: {}", err);
 		}*/
+		device.swap_buffers();
 	}
 }
 

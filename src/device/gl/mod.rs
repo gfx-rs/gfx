@@ -25,6 +25,7 @@ use log;
 use std::{fmt, str};
 use std::collections::HashSet;
 use a = super::attrib;
+
 pub use self::draw::DrawList;
 
 mod draw;

@@ -58,6 +58,8 @@ pub struct TextureHandle(Token);
 #[deriving(Clone, PartialEq, Show)]
 pub struct SamplerHandle(Token);
 
+/// Frontend
+mod front;
 /// Meshes
 pub mod mesh;
 /// Resources
