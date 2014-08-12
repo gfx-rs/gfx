@@ -22,10 +22,12 @@ extern crate gl;
 extern crate libc;
 
 use log;
-use std::{fmt, mem, str};
+use std::{fmt, str};
 use std::collections::HashSet;
 use a = super::attrib;
+pub use self::draw::DrawList;
 
+mod draw;
 mod shade;
 mod state;
 mod tex;
@@ -280,7 +282,7 @@ impl GlBackEnd {
     }
 }
 
-impl super::ApiBackEnd for GlBackEnd {
+impl super::ApiBackEnd<DrawList> for GlBackEnd {
     fn get_capabilities<'a>(&'a self) -> &'a super::Capabilities {
         &self.caps
     }
@@ -570,6 +572,13 @@ impl super::ApiBackEnd for GlBackEnd {
             super::DeleteSampler(name) => unsafe {
                 gl::DeleteSamplers(1, &name);
             },
+        }
+    }
+
+    fn submit(&mut self, list: &DrawList) {
+        //TODO: clear state, when we have caching
+        for &com in list.iter() {
+            self.process(com);
         }
     }
 }

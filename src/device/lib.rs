@@ -36,6 +36,7 @@ use std::kinds::marker;
 use std::mem::size_of;
 
 pub mod attrib;
+pub mod draw;
 pub mod shade;
 pub mod state;
 pub mod target;
@@ -231,7 +232,7 @@ pub enum Reply<T> {
 
 /// An interface for performing draw calls using a specific graphics API
 #[allow(missing_doc)]
-pub trait ApiBackEnd {
+pub trait ApiBackEnd<D> {
     /// Returns the capabilities available to the specific API implementation
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
     // calls
@@ -247,6 +248,8 @@ pub trait ApiBackEnd {
     fn update_buffer(&mut self, dev::Buffer, data: &Blob, BufferUsage);
     /// Process a request from a `Device`
     fn process(&mut self, CastRequest);
+    /// Submit a draw list. TODO: enforce `draw::DrawList` trait here
+    fn submit(&mut self, list: &D);
 }
 
 /// Token used for buffer swap acknowledgement.
@@ -262,7 +265,7 @@ pub struct Device<T, B, C> {
     swap_ack: Sender<Ack>,
 }
 
-impl<T: Send, B: ApiBackEnd, C: GraphicsContext<B>> Device<T, B, C> {
+impl<T: Send, D: draw::DrawList, B: ApiBackEnd<D>, C: GraphicsContext<B>> Device<T, B, C> {
     /// Make this device's context current for the thread.
     ///
     /// This is a GLism that might be removed, especially as multithreading support evolves.
@@ -316,6 +319,17 @@ impl<T: Send, B: ApiBackEnd, C: GraphicsContext<B>> Device<T, B, C> {
         }
     }
 
+    /// Swap back and front buffers, showing what we've been rendering
+    pub fn swap_buffers(&mut self) {
+        self.graphics_context.swap_buffers();
+        self.swap_ack.send(Ack);
+    }
+
+    /// Submit a draw list for execution
+    pub fn submit(&mut self, list: &D) {
+        self.back_end.submit(list);
+    }
+
     /// Process all requests received, including requests received while this method is executing.
     /// The client must manually call this on the main thread, or else the renderer will have no
     /// effect.
@@ -329,8 +343,7 @@ impl<T: Send, B: ApiBackEnd, C: GraphicsContext<B>> Device<T, B, C> {
                 },
                 Ok(Cast(cast)) => self.back_end.process(cast),
                 Ok(SwapBuffers) => {
-                    self.graphics_context.swap_buffers();
-                    self.swap_ack.send(Ack);
+                    self.swap_buffers();
                     break;
                 },
                 Err(()) => return,

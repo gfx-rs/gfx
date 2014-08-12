@@ -5,7 +5,7 @@ version = "0.1.0"
 authors = [
     "Brendan Zabarauskas <bjzaba@yahoo.com.au>",
     "Corey Richardson <corey@octayn.net>",
-    "Dzmitry Malyshau <kvarkus@gmail.com>",
+    "kvark",
 ]
 
 [[lib]]

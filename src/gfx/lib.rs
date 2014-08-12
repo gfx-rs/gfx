@@ -100,11 +100,14 @@ impl<C, P> Builder<C, P> {
     }
 }
 
+/// A type wrapper that hides `render::Token` and `Backend` from the user
+pub type DeviceType<Context> = Device<render::Token, device::gl::GlBackEnd, Context>;
+
 /// Terminal builder methods. These can only be called once both the context
 /// and provider have been supplied.
 impl<C: GraphicsContext<GlBackEnd>, P: GlProvider> Builder<SomeT<C>, SomeT<P>> {
     /// Create a `Renderer` and `Device`.
-    pub fn create(self) -> Result<(Renderer, Device<render::Token, GlBackEnd, C>), InitError> {
+    pub fn create(self) -> Result<(Renderer, DeviceType<C>), InitError> {
         let Builder { context: SomeT(context), provider: SomeT(provider), queue_size } = self;
         device::init(context, provider, queue_size).map(|(tx, rx, server, ack)| {
             (Renderer::new(tx, rx, ack), server)
