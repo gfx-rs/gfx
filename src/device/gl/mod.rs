@@ -359,6 +359,38 @@ impl super::ApiBackEnd<DrawList> for GlBackEnd {
         }
     }
 
+    fn delete_buffer(&mut self, name: Buffer) {
+        unsafe {
+            gl::DeleteBuffers(1, &name);
+        }
+    }
+
+    fn delete_shader(&mut self, name: Shader) {
+        gl::DeleteShader(name);
+    }
+
+    fn delete_program(&mut self, name: Program) {
+        gl::DeleteProgram(name);
+    }
+
+    fn delete_surface(&mut self, name: Surface) {
+        unsafe {
+            gl::DeleteRenderbuffers(1, &name);
+        }
+    }
+
+    fn delete_texture(&mut self, name: Texture) {
+        unsafe {
+            gl::DeleteTextures(1, &name);
+        }
+    }
+
+    fn delete_sampler(&mut self, name: Sampler) {
+        unsafe {
+            gl::DeleteSamplers(1, &name);
+        }
+    }
+
     fn update_buffer(&mut self, buffer: Buffer, data: &super::Blob, usage: super::BufferUsage) {
         gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
         let size = data.get_size() as gl::types::GLsizeiptr;
@@ -553,25 +585,6 @@ impl super::ApiBackEnd<DrawList> for GlBackEnd {
                     );
                 }
                 self.check();
-            },
-            // Resource deletion
-            super::DeleteBuffer(name) => unsafe {
-                gl::DeleteBuffers(1, &name);
-            },
-            super::DeleteShader(name) => {
-                gl::DeleteShader(name);
-            },
-            super::DeleteProgram(name) => {
-                gl::DeleteProgram(name);
-            },
-            super::DeleteSurface(name) => unsafe {
-                gl::DeleteRenderbuffers(1, &name);
-            },
-            super::DeleteTexture(name) => unsafe {
-                gl::DeleteTextures(1, &name);
-            },
-            super::DeleteSampler(name) => unsafe {
-                gl::DeleteSamplers(1, &name);
             },
         }
     }

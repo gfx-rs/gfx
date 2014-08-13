@@ -36,18 +36,17 @@ use device::target::{ClearData, Target, TargetColor, TargetDepth, TargetStencil}
 use shade::{ProgramShell, ShaderParam};
 use resource::{Loaded, Pending};
 
+pub type SamplerHandle = (backend::Sampler, device::tex::SamplerInfo);
+
 /// Used for sending/receiving handles to/from the device. Not meant for users.
 #[experimental]
 pub type Token = resource::Handle;
-/// Shader handle
-#[deriving(Clone, PartialEq, Show)]
-pub struct ShaderHandle(Token);
 /// Program handle
 #[deriving(Clone, PartialEq, Show)]
 pub struct ProgramHandle(Token);
-/// Sampler handle
+/// Shader handle
 #[deriving(Clone, PartialEq, Show)]
-pub struct SamplerHandle(Token);
+pub struct ShaderHandle(Token);
 
 /// Frontend
 mod front;
@@ -192,81 +191,6 @@ impl Renderer {
         BufferHandle(token)
     }*/
 
-    /*/// A helper method that returns a buffer handle that can never be used.
-    /// It is needed for gfx_macros_test, which never actually accesses resources.
-    #[cfg(test)]
-    pub fn create_fake_buffer() -> BufferHandle {
-        BufferHandle(resource::Handle::new_fake())
-    }*/
-
-    /*/// Create a new mesh from the given vertex data.
-    ///
-    /// Convenience function around `crate_buffer` and `Mesh::from`.
-    pub fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh {
-        let nv = data.len();
-        debug_assert!(nv < { use std::num::Bounded; let val: device::VertexCount = Bounded::max_value(); val as uint });
-        let buf = self.create_buffer(Some(data));
-        mesh::Mesh::from::<T>(buf, nv as device::VertexCount)
-    }*/
-
-    /*/// Create a new surface.
-    pub fn create_surface(&mut self, info: device::tex::SurfaceInfo) -> SurfaceHandle {
-        let token = self.dispatcher.resource.surfaces.add((Pending, info.clone()));
-        self.device_tx.send(device::Call(token, device::CreateSurface(info)));
-        SurfaceHandle(token)
-    }*/
-
-    /*/// Create a new texture.
-    pub fn create_texture(&mut self, info: device::tex::TextureInfo) -> TextureHandle {
-        let token = self.dispatcher.resource.textures.add((Pending, info.clone()));
-        self.device_tx.send(device::Call(token, device::CreateTexture(info)));
-        TextureHandle(token)
-    }*/
-
-    /*/// Create a new sampler.
-    pub fn create_sampler(&mut self, info: device::tex::SamplerInfo) -> SamplerHandle {
-        let token = self.dispatcher.resource.samplers.add((Pending, info.clone()));
-        self.device_tx.send(device::Call(token, device::CreateSampler(info)));
-        SamplerHandle(token)
-    }*/
-
-    // --- Resource deletion --- //
-
-    /*/// Delete a program
-    pub fn delete_program(&mut self, handle: ProgramHandle) {
-        let ProgramHandle(h) = handle;
-        let v = self.dispatcher.resource.programs.remove(h).unwrap().unwrap().name;
-        self.cast(device::DeleteProgram(v));
-    }*/
-
-    /*/// Delete a buffer
-    pub fn delete_buffer(&mut self, handle: BufferHandle) {
-        let BufferHandle(h) = handle;
-        let v = *self.dispatcher.resource.buffers.remove(h).unwrap().unwrap();
-        self.cast(device::DeleteBuffer(v));
-    }*/
-
-    /*/// Delete a surface
-    pub fn delete_surface(&mut self, handle: SurfaceHandle) {
-        let SurfaceHandle(h) = handle;
-        let v = *self.dispatcher.resource.surfaces.remove(h).unwrap().ref0().unwrap();
-        self.cast(device::DeleteSurface(v));
-    }*/
-
-    /*/// Delete a texture
-    pub fn delete_texture(&mut self, handle: TextureHandle) {
-        let TextureHandle(h) = handle;
-        let v = *self.dispatcher.resource.textures.remove(h).unwrap().ref0().unwrap();
-        self.cast(device::DeleteTexture(v));
-    }*/
-
-    /*/// Delete a sampler
-    pub fn delete_sampler(&mut self, handle: SamplerHandle) {
-        let SamplerHandle(h) = handle;
-        let v = *self.dispatcher.resource.samplers.remove(h).unwrap().ref0().unwrap();
-        self.cast(device::DeleteSampler(v));
-    }*/
-
     // --- Resource modification --- //
 
     /*/// Connect a program together with its parameters.
@@ -285,26 +209,5 @@ impl Renderer {
             },
             _ => Err(shade::ErrorBadProgram),
         }
-    }*/
-
-    /*/// Update a buffer with data from a vector.
-    pub fn update_buffer_vec<T: Send>(&mut self, handle: BufferHandle, data: Vec<T>) {
-        let buf = self.dispatcher.get_buffer(handle);
-        self.cast(device::UpdateBuffer(buf, (box data) as Box<device::Blob + Send>));
-    }*/
-
-    /*/// Update a buffer with data from a single type.
-    pub fn update_buffer_struct<T: device::Blob+Send>(&mut self, handle: BufferHandle, data: T) {
-        let buf = self.dispatcher.get_buffer(handle);
-        self.cast(device::UpdateBuffer(buf, (box data) as Box<device::Blob + Send>));
-    }*/
-
-    /*/// Update the contents of a texture.
-    pub fn update_texture<T: Send>(&mut self, tex: backend::Texture,
-                                   img: device::tex::ImageInfo, data: Vec<T>) {
-        let TextureHandle(tex) = handle;
-        let name = *self.dispatcher.get_any(|res| res.textures[tex].ref0());
-        let info = self.dispatcher.resource.textures[tex].ref1();
-        self.cast(device::UpdateTexture(info.kind, name, img, (box data) as Box<device::Blob + Send>));
     }*/
 }

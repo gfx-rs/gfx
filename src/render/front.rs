@@ -14,10 +14,12 @@
 
 //! Rendering front-end
 
+use device;
 use backend = device::dev;
 use device::draw::DrawList;
-use device;
+use device::shade::{ProgramMeta, ShaderSource, Vertex, Fragment, CreateShaderError};
 use mesh;
+use shade;
 use shade::{ProgramShell, ShaderParam};
 use state;
 use target;
@@ -71,19 +73,88 @@ pub struct Manager {
 	default_frame_buffer: backend::FrameBuffer,
 }
 
-impl Manager {
+#[repr(u8)]
+#[deriving(Clone, PartialEq, Show)]
+pub enum InitError {
+	ErrorArrayBuffer,
+	ErrorFramebuffer,
+}
+
+#[deriving(Clone, PartialEq, Show)]
+pub enum ProgramError {
+	ErrorVertex(CreateShaderError),
+	ErrorFragment(CreateShaderError),
+	ErrorLink(()),
+}
+
+
+impl<D, B: device::ApiBackEnd<D>> Manager {
+	pub fn new(backend: &mut B) -> Result<Manager, InitError> {
+		Ok(Manager {
+			common_array_buffer: match backend.create_array_buffer() {
+				Ok(vao) => vao,
+				Err(_) => return Err(ErrorArrayBuffer),
+			},
+			common_frame_buffer: backend.create_frame_buffer(),
+			default_frame_buffer: 0,
+		})
+	}
+
 	/// Create a new render front-end
 	pub fn spawn(&self) -> FrontEnd {
 		FrontEnd {
 			list: device::DrawList::new(),
 			common_array_buffer: self.common_array_buffer,
 			common_frame_buffer: self.common_frame_buffer,
-			default_frame_buffer: 0,
+			default_frame_buffer: self.default_frame_buffer,
 			state: State {
 				frame: target::Frame::new(0, 0),
-				//care: this doesn't match the HW state
+				//TODO: force this to match the default HW state
 				fixed_function: state::DrawState::new(),
 			},
+		}
+	}
+
+	/// Create a new mesh from the given vertex data.
+	/// Convenience function around `create_buffer` and `Mesh::from`.
+	pub fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>,
+					  backend: &mut B) -> mesh::Mesh {
+		let nv = data.len();
+		debug_assert!(nv < {
+			use std::num::Bounded;
+			let val: device::VertexCount = Bounded::max_value();
+			val as uint
+		});
+		let buf = backend.create_buffer();
+		backend.update_buffer(buf, &data, device::UsageStatic);
+		mesh::Mesh::from::<T>(buf, nv as device::VertexCount)
+	}
+
+	/// Create a simple program given a vertex shader with a fragment one
+	pub fn link_program(&mut self, vs_src: ShaderSource, fs_src: ShaderSource,
+						backend: &mut B) -> Result<ProgramMeta, ProgramError> {
+		//TODO: integrate connect_program here
+		let vs = match backend.create_shader(Vertex, vs_src) {
+			Ok(name) => name,
+			Err(e) => return Err(ErrorVertex(e)),
+		};
+		let fs = match backend.create_shader(Fragment, fs_src) {
+			Ok(name) => name,
+			Err(e) => return Err(ErrorFragment(e)),
+		};
+		backend.create_program([vs, fs]).map_err(|e| ErrorLink(e))
+	}
+
+	/// Connect a shader program with a parameter structure
+	pub fn connect_program<'a, L, T: ShaderParam<L>>
+						  (&'a mut self, meta: ProgramMeta, data: T)
+						  -> Result<shade::CustomShell<L, T>,
+						  shade::ParameterLinkError<'a>> {
+		let input = (meta.uniforms.as_slice(), meta.blocks.as_slice(),
+			meta.textures.as_slice());
+		match data.create_link(input) {	//TODO: no clone
+			Ok(link) => Ok(shade::CustomShell::new(meta.clone(), link, data)),
+			Err(e) => Err(shade::ErrorUnusedParameter(e)),
 		}
 	}
 }
@@ -113,8 +184,7 @@ impl FrontEnd {
 		self.list.call_clear(data);
 	}
 
-	/// Draw `slice` of `mesh` into `frame`, using a `bundle` of shader program and parameters, and
-	/// a given draw state.
+	/// Draw `slice` of `mesh` into `frame`, using a program shell, and a given draw state.
 	pub fn draw<P: ProgramShell>(&mut self, mesh: &mesh::Mesh, slice: mesh::Slice,
 								frame: &target::Frame, prog_shell: &P, state: &state::DrawState)
 								-> Result<(), DrawError> {
@@ -126,11 +196,11 @@ impl FrontEnd {
 		// bind fixed-function states
 		self.list.set_primitive(state.primitive);
 		self.list.set_scissor(state.scissor);
-		self.list.set_depth_stencil(state.depth, state.stencil, state.primitive.get_cull_mode());
+		self.list.set_depth_stencil(state.depth, state.stencil,
+			state.primitive.get_cull_mode());
 		self.list.set_blend(state.blend);
 		self.list.set_color_mask(state.color_mask);
 		// bind mesh data
-		self.list.bind_array_buffer(self.common_array_buffer);
 		match self.bind_mesh(mesh, prog_shell.get_program()) {
 			Ok(_) => (),
 			Err(e) => return Err(ErrorMesh(e)),
@@ -148,15 +218,31 @@ impl FrontEnd {
 		Ok(())
 	}
 
+	/// Update a buffer with data from a vector.
+	pub fn update_buffer_vec<T: Send>(&mut self, buf: backend::Buffer, data: Vec<T>) {
+		self.list.update_buffer(buf, (box data) as Box<device::Blob + Send>);
+	}
+
+	/// Update a buffer with data from a single type.
+	pub fn update_buffer_struct<T: device::Blob+Send>(&mut self, buf: backend::Buffer, data: T) {
+		self.list.update_buffer(buf, (box data) as Box<device::Blob + Send>);
+	}
+
+	/// Update the contents of a texture.
+	pub fn update_texture<T: Send>(&mut self, tex: backend::Texture,
+								   img: device::tex::ImageInfo, data: Vec<T>) {
+		let kind = device::tex::Texture2D;	//FIXME
+		self.list.update_texture(kind, tex, img, (box data) as Box<device::Blob + Send>);
+	}
+
 	fn bind_target(list: &mut device::DrawList, to: device::target::Target, plane: target::Plane) {
 		match plane {
-			target::PlaneEmpty => list.unbind_target(to),
-			target::PlaneSurface(suf) => {
-				list.bind_target_surface(to, suf);
-			},
-			target::PlaneTexture(tex, level, layer) => {
-				list.bind_target_texture(to, tex, level, layer);
-			},
+			target::PlaneEmpty =>
+				list.unbind_target(to),
+			target::PlaneSurface(suf) =>
+				list.bind_target_surface(to, suf),
+			target::PlaneTexture(tex, level, layer) =>
+				list.bind_target_texture(to, tex, level, layer),
 		}
 	}
 
@@ -190,52 +276,51 @@ impl FrontEnd {
 	fn bind_shell<P: ProgramShell>(&mut self, shell: &P) -> Result<(), ShellError> {
 		let meta = shell.get_program();
 		self.list.bind_program(meta.name);
-		/* TODO:
-		for (var, value) in meta.uniforms.iter().zip(uniforms.iter()) {
-			// unwrap() is safe since the errors were caught in prebind_shell()
-			self.cast(device::BindUniform(var.location, value.unwrap()));
-		}
-		for (i, (var, option)) in meta.blocks.iter().zip(blocks.iter()).enumerate() {
-			let BufferHandle(bh) = option.unwrap();
-			match self.dispatcher.resource.buffers.get(bh) {
-				Ok(&Loaded(block)) =>
-					self.cast(device::BindUniformBlock(
-						meta.name,
-						i as device::UniformBufferSlot,
-						i as device::UniformBlockIndex,
-						block)),
-				_ => return Err(ErrorShellBlock(var.name.clone())),
+		// gather parameters
+		// this is a bit ugly, need to re-think the interface with `#[shader_program]`
+		let mut uniforms = Vec::from_elem(meta.uniforms.len(), None);
+		let mut blocks   = Vec::from_elem(meta.blocks  .len(), None);
+		let mut textures = Vec::from_elem(meta.textures.len(), None);
+		shell.fill_params(shade::ParamValues {
+			uniforms: uniforms.as_mut_slice(),
+			blocks: blocks.as_mut_slice(),
+			textures: textures.as_mut_slice(),
+		});
+		// bind uniforms
+		for (var, option) in meta.uniforms.iter().zip(uniforms.move_iter()) {
+			match option {
+				Some(v) => self.list.bind_uniform(var.location, v),
+				None => return Err(ErrorShellUniform(var.name.clone())),
 			}
 		}
-		for (i, (var, option)) in meta.textures.iter().zip(textures.iter()).enumerate() {
-			let (TextureHandle(tex_handle), sampler) = option.unwrap();
-			let sam = match sampler {
-				Some(SamplerHandle(sam)) => match self.dispatcher.resource.samplers[sam] {
-					(Loaded(sam), ref info) => Some((sam, info.clone())),
-					_ => return Err(ErrorShellSampler(var.name.clone())),
-				},
-				None => None,
-			};
-			match self.dispatcher.resource.textures.get(tex_handle) {
-				Ok(&(Loaded(tex), ref info)) => {
-					self.cast(device::BindUniform(
-						var.location,
-						device::shade::ValueI32(i as i32)
-						));
-					self.cast(device::BindTexture(
-						i as device::TextureSlot,
-						info.kind,
-						tex,
-						sam));
-				},
-				_ => return Err(ErrorShellTexture(var.name.clone())),
+		// bind uniform blocks
+		for (i, (var, option)) in meta.blocks.iter().zip(blocks.move_iter()).enumerate() {
+			match option {
+				Some(buf) => self.list.bind_uniform_block(
+					meta.name,
+					i as device::UniformBufferSlot,
+					i as device::UniformBlockIndex,
+					buf),
+				None => return Err(ErrorShellBlock(var.name.clone())),
 			}
-		}*/
+		}
+		// bind textures and samplers
+		for (i, (var, option)) in meta.textures.iter().zip(textures.move_iter()).enumerate() {
+			match option {
+				Some((tex, sampler)) => {
+					let kind = device::tex::Texture2D;	//FIXME
+					self.list.bind_uniform(var.location, device::shade::ValueI32(i as i32));
+					self.list.bind_texture(i as device::TextureSlot, kind, tex, sampler);
+				},
+				None => return Err(ErrorShellTexture(var.name.clone())),
+			}
+		}
 		Ok(())
 	}
 
-	fn bind_mesh(&mut self, mesh: &mesh::Mesh, prog: &device::shade::ProgramMeta)
+	fn bind_mesh(&mut self, mesh: &mesh::Mesh, prog: &ProgramMeta)
 				 -> Result<(), MeshError> {
+		self.list.bind_array_buffer(self.common_array_buffer);
 		for sat in prog.attributes.iter() {
 			match mesh.attributes.iter().find(|a| a.name.as_slice() == sat.name.as_slice()) {
 				Some(vat) => match vat.elem_type.is_compatible(sat.base_type) {

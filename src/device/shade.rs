@@ -217,6 +217,7 @@ pub struct SamplerVar {
     pub sampler_type: SamplerType,
 }
 
+//TODO: rename to ProgramInfo, exclude the handle
 /// Metadata about a program.
 #[deriving(Clone, Show)]
 pub struct ProgramMeta {

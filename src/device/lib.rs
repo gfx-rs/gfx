@@ -182,7 +182,6 @@ pub enum CallRequest {
 #[allow(missing_doc)]
 #[deriving(Show)]
 pub enum CastRequest {
-    Clear(target::ClearData),
     BindProgram(dev::Program),
     BindArrayBuffer(dev::ArrayBuffer),
     BindAttribute(AttributeSlot, dev::Buffer, attrib::Count,
@@ -206,15 +205,10 @@ pub enum CastRequest {
     SetColorMask(state::ColorMask),
     UpdateBuffer(dev::Buffer, Box<Blob + Send>),
     UpdateTexture(tex::TextureKind, dev::Texture, tex::ImageInfo, Box<Blob + Send>),
+    // drawing
+    Clear(target::ClearData),
     Draw(PrimitiveType, VertexCount, VertexCount),
     DrawIndexed(PrimitiveType, IndexType, IndexCount, IndexCount),
-    /// Resource deletion
-    DeleteBuffer(dev::Buffer),
-    DeleteShader(dev::Shader),
-    DeleteProgram(dev::Program),
-    DeleteSurface(dev::Surface),
-    DeleteTexture(dev::Texture),
-    DeleteSampler(dev::Sampler),
 }
 
 /// Reply to a `Call`
@@ -236,15 +230,23 @@ pub enum Reply<T> {
 pub trait ApiBackEnd<D> {
     /// Returns the capabilities available to the specific API implementation
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
-    // calls
+    // resource creation
     fn create_buffer(&mut self) -> dev::Buffer;
     fn create_array_buffer(&mut self) -> Result<dev::ArrayBuffer, ()>;
-    fn create_shader(&mut self, shade::Stage, code: shade::ShaderSource) -> Result<dev::Shader, shade::CreateShaderError>;
+    fn create_shader(&mut self, stage: shade::Stage, code: shade::ShaderSource) ->
+                     Result<dev::Shader, shade::CreateShaderError>;
     fn create_program(&mut self, shaders: &[dev::Shader]) -> Result<shade::ProgramMeta, ()>;
     fn create_frame_buffer(&mut self) -> dev::FrameBuffer;
     fn create_surface(&mut self, info: tex::SurfaceInfo) -> Result<dev::Surface, SurfaceError>;
     fn create_texture(&mut self, info: tex::TextureInfo) -> Result<dev::Texture, TextureError>;
     fn create_sampler(&mut self, info: tex::SamplerInfo) -> dev::Sampler;
+    // resource deletion
+    fn delete_buffer(&mut self, dev::Buffer);
+    fn delete_shader(&mut self, dev::Shader);
+    fn delete_program(&mut self, dev::Program);
+    fn delete_surface(&mut self, dev::Surface);
+    fn delete_texture(&mut self, dev::Texture);
+    fn delete_sampler(&mut self, dev::Sampler);
     /// Update the information stored in a specific buffer
     fn update_buffer(&mut self, dev::Buffer, data: &Blob, BufferUsage);
     /// Process a request from a `Device`

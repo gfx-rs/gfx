@@ -108,8 +108,6 @@ pub enum ParameterError<'a> {
 /// An error type for the link creation
 #[deriving(Clone, Show)]
 pub enum ParameterLinkError<'a> {
-    /// Program is not valid
-    ErrorBadProgram,
     /// A given parameter is not used by the program
     ErrorUnusedParameter(ParameterError<'a>),
     /// A program parameter that is not provided
