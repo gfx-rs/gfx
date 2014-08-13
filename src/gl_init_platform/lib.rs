@@ -20,19 +20,19 @@
 
 #![feature(macro_rules, phase)]
 
-extern crate glinit = "gl-init-rs";
+extern crate gl_init;
 #[phase(plugin, link)]
 extern crate log;
 extern crate libc;
 
 extern crate device;
 
-pub struct Window(glinit::Window);
+pub struct Window(gl_init::Window);
 
 impl Window {
     #[inline]
     pub fn new() -> Option<Window> {
-        let win = match glinit::Window::new() {
+        let win = match gl_init::Window::new() {
             Err(_) => return None,
             Ok(w) => w
         };
@@ -41,7 +41,7 @@ impl Window {
     }
 
     #[inline]
-    pub fn from_builder(builder: glinit::WindowBuilder) -> Option<Window> {
+    pub fn from_builder(builder: gl_init::WindowBuilder) -> Option<Window> {
         let win = match builder.build() {
             Err(_) => return None,
             Ok(w) => w
@@ -51,7 +51,7 @@ impl Window {
     }
 
     #[inline]
-    pub fn from_existing(win: glinit::Window) -> Window {
+    pub fn from_existing(win: gl_init::Window) -> Window {
         Window(win)
     }
 }
@@ -75,8 +75,8 @@ impl<'a> device::GraphicsContext<device::GlBackEnd> for &'a Window {
     }
 }
 
-impl Deref<glinit::Window> for Window {
-    fn deref(&self) -> &glinit::Window {
+impl Deref<gl_init::Window> for Window {
+    fn deref(&self) -> &gl_init::Window {
         let &Window(ref win) = self;
         win
     }
