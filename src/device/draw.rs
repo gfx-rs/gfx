@@ -14,7 +14,7 @@
 
 //! Draw List device interface
 
-use {attrib, dev, shade, state, target, tex};
+use {attrib, back, shade, state, target, tex};
 use {AttributeSlot, UniformBufferSlot, UniformBlockIndex, TextureSlot,
 	Blob, PrimitiveType, VertexCount, IndexType, IndexCount};
 
@@ -22,24 +22,24 @@ use {AttributeSlot, UniformBufferSlot, UniformBlockIndex, TextureSlot,
 pub trait DrawList {
 	/// Clear the draw list contents, retain the allocated storage
 	fn clear(&mut self);
-	fn bind_program(&mut self, dev::Program);
-	fn bind_array_buffer(&mut self, dev::ArrayBuffer);
-	fn bind_attribute(&mut self, AttributeSlot, dev::Buffer, attrib::Count,
+	fn bind_program(&mut self, back::Program);
+	fn bind_array_buffer(&mut self, back::ArrayBuffer);
+	fn bind_attribute(&mut self, AttributeSlot, back::Buffer, attrib::Count,
 					  attrib::Type, attrib::Stride, attrib::Offset);
-	fn bind_index(&mut self, dev::Buffer);
-	fn bind_frame_buffer(&mut self, dev::FrameBuffer);
+	fn bind_index(&mut self, back::Buffer);
+	fn bind_frame_buffer(&mut self, back::FrameBuffer);
 	/// Unbind any surface from the specified target slot
 	fn unbind_target(&mut self, target::Target);
 	/// Bind a surface to the specified target slot
-	fn bind_target_surface(&mut self, target::Target, dev::Surface);
+	fn bind_target_surface(&mut self, target::Target, back::Surface);
 	/// Bind a level of the texture to the specified target slot
-	fn bind_target_texture(&mut self, target::Target, dev::Texture,
+	fn bind_target_texture(&mut self, target::Target, back::Texture,
 						   target::Level, Option<target::Layer>);
-	fn bind_uniform_block(&mut self, dev::Program, UniformBufferSlot,
-						  UniformBlockIndex, dev::Buffer);
+	fn bind_uniform_block(&mut self, back::Program, UniformBufferSlot,
+						  UniformBlockIndex, back::Buffer);
 	fn bind_uniform(&mut self, shade::Location, shade::UniformValue);
-	fn bind_texture(&mut self, TextureSlot, tex::TextureKind, dev::Texture,
-					Option<(dev::Sampler, tex::SamplerInfo)>);
+	fn bind_texture(&mut self, TextureSlot, tex::TextureKind, back::Texture,
+					Option<(back::Sampler, tex::SamplerInfo)>);
 	fn set_primitive(&mut self, state::Primitive);
 	fn set_viewport(&mut self, target::Rect);
 	fn set_scissor(&mut self, Option<target::Rect>);
@@ -47,8 +47,8 @@ pub trait DrawList {
 						 Option<state::Stencil>, state::CullMode);
 	fn set_blend(&mut self, Option<state::Blend>);
 	fn set_color_mask(&mut self, state::ColorMask);
-	fn update_buffer(&mut self, dev::Buffer, Box<Blob + Send>);
-	fn update_texture(&mut self, tex::TextureKind, dev::Texture, tex::ImageInfo,
+	fn update_buffer(&mut self, back::Buffer, Box<Blob + Send>);
+	fn update_texture(&mut self, tex::TextureKind, back::Texture, tex::ImageInfo,
 		 			  Box<Blob + Send>);
 	fn call_clear(&mut self, target::ClearData);
 	fn call_draw(&mut self, PrimitiveType, VertexCount, VertexCount);

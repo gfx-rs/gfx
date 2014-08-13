@@ -22,7 +22,7 @@
 
 use d = device;
 use a = device::attrib;
-use device::dev::Buffer;
+use device::back::Buffer;
 
 /// Describes a single attribute of a vertex buffer, including its type, name, etc.
 #[deriving(Clone, PartialEq, Show)]

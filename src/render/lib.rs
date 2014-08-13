@@ -29,8 +29,8 @@ use std::fmt::Show;
 use std::mem;
 use std::vec::MoveItems;
 
-use backend = device::dev;
-use device::shade::{CreateShaderError, ProgramMeta, Vertex, Fragment, ShaderSource,
+use backend = device::back;
+use device::shade::{CreateShaderError, Vertex, Fragment, ShaderSource,
     UniformValue};
 use device::target::{ClearData, Target, TargetColor, TargetDepth, TargetStencil};
 use shade::{ProgramShell, ShaderParam};
@@ -164,50 +164,4 @@ impl Renderer {
             self.should_close = true; // the channel has disconnected, so it is time to close
         });
     }
-
-    // --- Resource creation --- //
-
-    /*/// Create a new program from the given vertex and fragment shaders.
-    pub fn create_program(&mut self, vs_src: ShaderSource, fs_src: ShaderSource) -> ProgramHandle {
-        let ds = &mut self.dispatcher;
-        let h_vs = ds.resource.shaders.add(Pending);
-        let h_fs = ds.resource.shaders.add(Pending);
-        self.device_tx.send(device::Call(h_vs, device::CreateShader(Vertex, vs_src)));
-        self.device_tx.send(device::Call(h_fs, device::CreateShader(Fragment, fs_src)));
-        let token = ds.resource.programs.add(Pending);
-        let shaders = vec![
-            ds.get_shader(ShaderHandle(h_vs)),
-            ds.get_shader(ShaderHandle(h_fs))
-        ];
-        self.device_tx.send(device::Call(token, device::CreateProgram(shaders)));
-        ProgramHandle(token)
-    }*/
-
-    /*/// Create a new buffer on the device, which can be used to store vertex or uniform data.
-    pub fn create_buffer<T: Send>(&mut self, data: Option<Vec<T>>) -> BufferHandle {
-        let blob = data.map(|v| (box v) as Box<device::Blob + Send>);
-        let token = self.dispatcher.resource.buffers.add(Pending);
-        self.device_tx.send(device::Call(token, device::CreateBuffer(blob)));
-        BufferHandle(token)
-    }*/
-
-    // --- Resource modification --- //
-
-    /*/// Connect a program together with its parameters.
-    pub fn connect_program<'a, L, T: ShaderParam<L>>(&'a mut self, program: ProgramHandle, data: T)
-                                                     -> Result<shade::CustomShell<L, T>,
-                                                     shade::ParameterLinkError<'a>> {
-        let ProgramHandle(ph) = program;
-        self.dispatcher.demand(|res| !res.programs[ph].is_pending());
-        match self.dispatcher.resource.programs.get(ph) {
-            Ok(&Loaded(ref m)) => {
-                let input = (m.uniforms.as_slice(), m.blocks.as_slice(), m.textures.as_slice());
-                match data.create_link(input) {
-                    Ok(link) => Ok(shade::CustomShell::new(program, link, data)),
-                    Err(e) => Err(shade::ErrorUnusedParameter(e)),
-                }
-            },
-            _ => Err(shade::ErrorBadProgram),
-        }
-    }*/
 }

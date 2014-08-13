@@ -217,12 +217,9 @@ pub struct SamplerVar {
     pub sampler_type: SamplerType,
 }
 
-//TODO: rename to ProgramInfo, exclude the handle
 /// Metadata about a program.
 #[deriving(Clone, Show)]
-pub struct ProgramMeta {
-    /// Handle to the program.
-    pub name: super::dev::Program,
+pub struct ProgramInfo {
     /// Attributes in the program.
     pub attributes: Vec<Attribute>,
     /// Uniforms in the program

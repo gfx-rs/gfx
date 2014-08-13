@@ -320,13 +320,13 @@ impl super::ApiBackEnd<DrawList> for GlBackEnd {
         name
     }
 
-    fn create_program(&mut self, shaders: &[Shader]) -> Result<super::shade::ProgramMeta, ()> {
-        let (meta, info) = shade::create_program(&self.caps, shaders);
-        info.map(|info| {
-            let level = if meta.is_err() { log::ERROR } else { log::WARN };
-            log!(level, "\tProgram link log: {}", info);
+    fn create_program(&mut self, shaders: &[Shader]) -> Result<::ProgramHandle, ()> {
+        let (prog, log) = shade::create_program(&self.caps, shaders);
+        log.map(|log| {
+            let level = if prog.is_err() { log::ERROR } else { log::WARN };
+            log!(level, "\tProgram link log: {}", log);
         });
-        meta
+        prog
     }
 
     fn create_frame_buffer(&mut self) -> FrameBuffer {

@@ -17,7 +17,8 @@
 use std::cell::Cell;
 use std::rc::Rc;
 use s = device::shade;
-use device::dev::{Buffer, Texture};
+use device::ProgramHandle;
+use device::back::{Buffer, Texture};
 
 /// Helper trait to transform base types into their corresponding uniforms
 pub trait ToUniform {
@@ -87,7 +88,7 @@ pub struct ParamValues<'a> {
 /// Encloses a shader program with its parameter
 pub trait ProgramShell {
     /// Get the contained program
-    fn get_program(&self) -> &s::ProgramMeta;
+    fn get_program(&self) -> &ProgramHandle;
     /// Get all the contained parameter values
     fn fill_params(&self, ParamValues);
 }
@@ -130,8 +131,8 @@ pub trait ShaderParam<L> {
 /// * `T` - user-provided structure containing actual parameter values
 #[deriving(Clone)]
 pub struct CustomShell<L, T> {
-    /// Shader program meta-data
-    meta: s::ProgramMeta, //TODO: move name out of PrograMeta
+    /// Shader program handle
+    program: ProgramHandle,
     /// Hidden link that provides parameter indices for user data
     link: L,
     /// Global data in a user-provided struct
@@ -140,9 +141,9 @@ pub struct CustomShell<L, T> {
 
 impl<L, T: ShaderParam<L>> CustomShell<L, T> {
     /// Create a new custom shell
-    pub fn new(meta: s::ProgramMeta, link: L, data: T) -> CustomShell<L, T> {
+    pub fn new(program: ProgramHandle, link: L, data: T) -> CustomShell<L, T> {
         CustomShell {
-            meta: meta,
+            program: program,
             link: link,
             data: data,
         }
@@ -150,8 +151,8 @@ impl<L, T: ShaderParam<L>> CustomShell<L, T> {
 }
 
 impl<L, T: ShaderParam<L>> ProgramShell for CustomShell<L, T> {
-    fn get_program(&self) -> &s::ProgramMeta {
-        &self.meta
+    fn get_program(&self) -> &ProgramHandle {
+        &self.program
     }
 
     fn fill_params(&self, params: ParamValues) {

@@ -28,7 +28,7 @@ extern crate libc;
 
 // when cargo is ready, re-enable the cfg's
 /* #[cfg(gl)] */ pub use gl::GlBackEnd;
-/* #[cfg(gl)] */ pub use dev = self::gl;
+/* #[cfg(gl)] */ pub use back = self::gl;
 /* #[cfg(gl)] */ pub use gl::DrawList;
 // #[cfg(d3d11)] ... // TODO
 
@@ -44,19 +44,6 @@ pub mod target;
 pub mod tex;
 /* #[cfg(gl)] */ mod gl;
 
-/// Features that the device supports.
-#[deriving(Show)]
-pub struct Capabilities {
-    shader_model: shade::ShaderModel,
-    max_draw_buffers : uint,
-    max_texture_size : uint,
-    max_vertex_attributes: uint,
-    uniform_block_supported: bool,
-    array_buffer_supported: bool,
-    sampler_objects_supported: bool,
-    immutable_storage_supported: bool,
-}
-
 /// Draw vertex count.
 pub type VertexCount = u32;
 /// Draw index count.
@@ -69,6 +56,37 @@ pub type AttributeSlot = u8;
 pub type UniformBufferSlot = u8;
 /// Slot a texture can be bound to.
 pub type TextureSlot = u8;
+
+/// Program Handle
+#[deriving(Clone, Show)]
+pub struct ProgramHandle(back::Program, shade::ProgramInfo);
+
+impl ProgramHandle {
+    /// Get the program internal handle
+    pub fn get_name(&self) -> back::Program {
+        let ProgramHandle(name, _) = *self;
+        name
+    }
+
+    /// Get the info reference,
+    pub fn get_info(&self) -> &shade::ProgramInfo {
+        let ProgramHandle(_, ref info) = *self;
+        info
+    }
+}
+
+/// Features that the device supports.
+#[deriving(Show)]
+pub struct Capabilities {
+    shader_model: shade::ShaderModel,
+    max_draw_buffers : uint,
+    max_texture_size : uint,
+    max_vertex_attributes: uint,
+    uniform_block_supported: bool,
+    array_buffer_supported: bool,
+    sampler_objects_supported: bool,
+    immutable_storage_supported: bool,
+}
 
 /// A trait that slice-like types implement.
 pub trait Blob {
@@ -171,7 +189,7 @@ pub enum CallRequest {
     CreateBuffer(Option<Box<Blob + Send>>),
     CreateArrayBuffer,
     CreateShader(shade::Stage, shade::ShaderSource),
-    CreateProgram(Vec<dev::Shader>),
+    CreateProgram(Vec<back::Shader>),
     CreateFrameBuffer,
     CreateSurface(tex::SurfaceInfo),
     CreateTexture(tex::TextureInfo),
@@ -182,29 +200,29 @@ pub enum CallRequest {
 #[allow(missing_doc)]
 #[deriving(Show)]
 pub enum CastRequest {
-    BindProgram(dev::Program),
-    BindArrayBuffer(dev::ArrayBuffer),
-    BindAttribute(AttributeSlot, dev::Buffer, attrib::Count,
+    BindProgram(back::Program),
+    BindArrayBuffer(back::ArrayBuffer),
+    BindAttribute(AttributeSlot, back::Buffer, attrib::Count,
         attrib::Type, attrib::Stride, attrib::Offset),
-    BindIndex(dev::Buffer),
-    BindFrameBuffer(dev::FrameBuffer),
+    BindIndex(back::Buffer),
+    BindFrameBuffer(back::FrameBuffer),
     /// Unbind any surface from the specified target slot
     UnbindTarget(target::Target),
     /// Bind a surface to the specified target slot
-    BindTargetSurface(target::Target, dev::Surface),
+    BindTargetSurface(target::Target, back::Surface),
     /// Bind a level of the texture to the specified target slot
-    BindTargetTexture(target::Target, dev::Texture, target::Level, Option<target::Layer>),
-    BindUniformBlock(dev::Program, UniformBufferSlot, UniformBlockIndex, dev::Buffer),
+    BindTargetTexture(target::Target, back::Texture, target::Level, Option<target::Layer>),
+    BindUniformBlock(back::Program, UniformBufferSlot, UniformBlockIndex, back::Buffer),
     BindUniform(shade::Location, shade::UniformValue),
-    BindTexture(TextureSlot, tex::TextureKind, dev::Texture, Option<(dev::Sampler, tex::SamplerInfo)>),
+    BindTexture(TextureSlot, tex::TextureKind, back::Texture, Option<(back::Sampler, tex::SamplerInfo)>),
     SetPrimitiveState(state::Primitive),
     SetViewport(target::Rect),
     SetScissor(Option<target::Rect>),
     SetDepthStencilState(Option<state::Depth>, Option<state::Stencil>, state::CullMode),
     SetBlendState(Option<state::Blend>),
     SetColorMask(state::ColorMask),
-    UpdateBuffer(dev::Buffer, Box<Blob + Send>),
-    UpdateTexture(tex::TextureKind, dev::Texture, tex::ImageInfo, Box<Blob + Send>),
+    UpdateBuffer(back::Buffer, Box<Blob + Send>),
+    UpdateTexture(tex::TextureKind, back::Texture, tex::ImageInfo, Box<Blob + Send>),
     // drawing
     Clear(target::ClearData),
     Draw(PrimitiveType, VertexCount, VertexCount),
@@ -215,14 +233,14 @@ pub enum CastRequest {
 #[allow(missing_doc)]
 #[deriving(Show)]
 pub enum Reply<T> {
-    ReplyNewBuffer(T, dev::Buffer),
-    ReplyNewArrayBuffer(T, Result<dev::ArrayBuffer, ()>),
-    ReplyNewShader(T, Result<dev::Shader, shade::CreateShaderError>),
-    ReplyNewProgram(T, Result<shade::ProgramMeta, ()>),
-    ReplyNewFrameBuffer(T, dev::FrameBuffer),
-    ReplyNewSurface(T, dev::Surface),
-    ReplyNewTexture(T, dev::Texture),
-    ReplyNewSampler(T, dev::Sampler),
+    ReplyNewBuffer(T, back::Buffer),
+    ReplyNewArrayBuffer(T, Result<back::ArrayBuffer, ()>),
+    ReplyNewShader(T, Result<back::Shader, shade::CreateShaderError>),
+    ReplyNewProgram(T, Result<ProgramHandle, ()>),
+    ReplyNewFrameBuffer(T, back::FrameBuffer),
+    ReplyNewSurface(T, back::Surface),
+    ReplyNewTexture(T, back::Texture),
+    ReplyNewSampler(T, back::Sampler),
 }
 
 /// An interface for performing draw calls using a specific graphics API
@@ -231,24 +249,24 @@ pub trait ApiBackEnd<D> {
     /// Returns the capabilities available to the specific API implementation
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
     // resource creation
-    fn create_buffer(&mut self) -> dev::Buffer;
-    fn create_array_buffer(&mut self) -> Result<dev::ArrayBuffer, ()>;
+    fn create_buffer(&mut self) -> back::Buffer;
+    fn create_array_buffer(&mut self) -> Result<back::ArrayBuffer, ()>;
     fn create_shader(&mut self, stage: shade::Stage, code: shade::ShaderSource) ->
-                     Result<dev::Shader, shade::CreateShaderError>;
-    fn create_program(&mut self, shaders: &[dev::Shader]) -> Result<shade::ProgramMeta, ()>;
-    fn create_frame_buffer(&mut self) -> dev::FrameBuffer;
-    fn create_surface(&mut self, info: tex::SurfaceInfo) -> Result<dev::Surface, SurfaceError>;
-    fn create_texture(&mut self, info: tex::TextureInfo) -> Result<dev::Texture, TextureError>;
-    fn create_sampler(&mut self, info: tex::SamplerInfo) -> dev::Sampler;
+                     Result<back::Shader, shade::CreateShaderError>;
+    fn create_program(&mut self, shaders: &[back::Shader]) -> Result<ProgramHandle, ()>;
+    fn create_frame_buffer(&mut self) -> back::FrameBuffer;
+    fn create_surface(&mut self, info: tex::SurfaceInfo) -> Result<back::Surface, SurfaceError>;
+    fn create_texture(&mut self, info: tex::TextureInfo) -> Result<back::Texture, TextureError>;
+    fn create_sampler(&mut self, info: tex::SamplerInfo) -> back::Sampler;
     // resource deletion
-    fn delete_buffer(&mut self, dev::Buffer);
-    fn delete_shader(&mut self, dev::Shader);
-    fn delete_program(&mut self, dev::Program);
-    fn delete_surface(&mut self, dev::Surface);
-    fn delete_texture(&mut self, dev::Texture);
-    fn delete_sampler(&mut self, dev::Sampler);
+    fn delete_buffer(&mut self, back::Buffer);
+    fn delete_shader(&mut self, back::Shader);
+    fn delete_program(&mut self, back::Program);
+    fn delete_surface(&mut self, back::Surface);
+    fn delete_texture(&mut self, back::Texture);
+    fn delete_sampler(&mut self, back::Sampler);
     /// Update the information stored in a specific buffer
-    fn update_buffer(&mut self, dev::Buffer, data: &Blob, BufferUsage);
+    fn update_buffer(&mut self, back::Buffer, data: &Blob, BufferUsage);
     /// Process a request from a `Device`
     fn process(&mut self, CastRequest);
     /// Submit a draw list. TODO: enforce `draw::DrawList` trait here

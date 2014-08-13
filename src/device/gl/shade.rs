@@ -62,22 +62,26 @@ pub fn create_shader(stage: s::Stage, data: s::ShaderSource, model: s::ShaderMod
     let status = get_shader_iv(name, gl::COMPILE_STATUS);
     let mut length = get_shader_iv(name, gl::INFO_LOG_LENGTH);
 
-    let info = if length > 0 {
-        let mut info = String::with_capacity(length as uint);
-        info.grow(length as uint, '\0');
+    let log = if length > 0 {
+        let mut log = String::with_capacity(length as uint);
+        log.grow(length as uint, '\0');
         unsafe {
             gl::GetShaderInfoLog(name, length, &mut length,
-                info.as_slice().as_ptr() as *mut gl::types::GLchar);
+                log.as_slice().as_ptr() as *mut gl::types::GLchar);
         }
-        info.truncate(length as uint);
-        Some(info)
+        log.truncate(length as uint);
+        Some(log)
     } else {
         None
     };
 
-    let name = if status != 0 { Ok(name) } else { Err(s::ShaderCompilationFailed) };
+    let name = if status != 0 {
+        Ok(name)
+    }else {
+        Err(s::ShaderCompilationFailed)
+    };
 
-    (name, info)
+    (name, log)
 }
 
 fn get_shader_iv(shader: super::Shader, query: gl::types::GLenum) -> gl::types::GLint {
@@ -286,7 +290,7 @@ fn query_parameters(prog: super::Program) -> (Vec<s::UniformVar>, Vec<s::Sampler
 }
 
 pub fn create_program(caps: &super::super::Capabilities, shaders: &[super::Shader])
-        -> (Result<s::ProgramMeta, ()>, Option<String>) {
+        -> (Result<::ProgramHandle, ()>, Option<String>) {
     let name = gl::CreateProgram();
     for &sh in shaders.iter() {
         gl::AttachShader(name, sh);
@@ -297,34 +301,33 @@ pub fn create_program(caps: &super::super::Capabilities, shaders: &[super::Shade
     // get info message
     let status = get_program_iv(name, gl::LINK_STATUS);
     let mut length  = get_program_iv(name, gl::INFO_LOG_LENGTH);
-    let info = if length > 0 {
-        let mut info = String::with_capacity(length as uint);
-        info.grow(length as uint, '\0');
+    let log = if length > 0 {
+        let mut log = String::with_capacity(length as uint);
+        log.grow(length as uint, '\0');
         unsafe {
             gl::GetProgramInfoLog(name, length, &mut length,
-                info.as_slice().as_ptr() as *mut gl::types::GLchar);
+                log.as_slice().as_ptr() as *mut gl::types::GLchar);
         }
-        info.truncate(length as uint);
-        Some(info)
+        log.truncate(length as uint);
+        Some(log)
     } else {
         None
     };
 
-    let meta = if status != 0 {
+    let prog = if status != 0 {
         let (uniforms, textures) = query_parameters(name);
-        let meta = s::ProgramMeta {
-            name: name,
+        let info = s::ProgramInfo {
             attributes: query_attributes(name),
             uniforms: uniforms,
             blocks: query_blocks(caps, name),
             textures: textures,
         };
-        Ok(meta)
+        Ok(::ProgramHandle(name, info))
     } else {
         Err(())
     };
 
-    (meta, info)
+    (prog, log)
 }
 
 pub fn bind_uniform(loc: gl::types::GLint, uniform: s::UniformValue) {

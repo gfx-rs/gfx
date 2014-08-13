@@ -17,8 +17,8 @@
 use std::fmt::Show;
 
 use device;
-use backend = device::dev;
-use device::shade::{CreateShaderError, ProgramMeta};
+use backend = device::back;
+use device::shade::{CreateShaderError, ProgramInfo};
 use device::tex::{SamplerInfo, SurfaceInfo, TextureInfo};
 
 pub use self::handle::Handle;
@@ -64,7 +64,7 @@ pub struct Cache {
     /// Shader storage
     pub shaders: handle::Storage<Future<backend::Shader, CreateShaderError>>,
     /// Program storage
-    pub programs: handle::Storage<Future<ProgramMeta, ()>>,
+    pub programs: handle::Storage<Future<device::ProgramHandle, ()>>,
     /// Frame buffer storage
     pub frame_buffers: handle::Storage<Future<backend::FrameBuffer, ()>>,
     /// Surface storage

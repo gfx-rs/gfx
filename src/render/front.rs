@@ -15,9 +15,9 @@
 //! Rendering front-end
 
 use device;
-use backend = device::dev;
+use backend = device::back;
 use device::draw::DrawList;
-use device::shade::{ProgramMeta, ShaderSource, Vertex, Fragment, CreateShaderError};
+use device::shade::{ProgramInfo, ShaderSource, Vertex, Fragment, CreateShaderError};
 use mesh;
 use shade;
 use shade::{ProgramShell, ShaderParam};
@@ -132,7 +132,7 @@ impl<D, B: device::ApiBackEnd<D>> Manager {
 
 	/// Create a simple program given a vertex shader with a fragment one
 	pub fn link_program(&mut self, vs_src: ShaderSource, fs_src: ShaderSource,
-						backend: &mut B) -> Result<ProgramMeta, ProgramError> {
+						backend: &mut B) -> Result<device::ProgramHandle, ProgramError> {
 		//TODO: integrate connect_program here
 		let vs = match backend.create_shader(Vertex, vs_src) {
 			Ok(name) => name,
@@ -147,13 +147,14 @@ impl<D, B: device::ApiBackEnd<D>> Manager {
 
 	/// Connect a shader program with a parameter structure
 	pub fn connect_program<'a, L, T: ShaderParam<L>>
-						  (&'a mut self, meta: ProgramMeta, data: T)
+						  (&'a mut self, prog: device::ProgramHandle, data: T)
 						  -> Result<shade::CustomShell<L, T>,
 						  shade::ParameterLinkError<'a>> {
-		let input = (meta.uniforms.as_slice(), meta.blocks.as_slice(),
-			meta.textures.as_slice());
+		let info = prog.get_info();
+		let input = (info.uniforms.as_slice(), info.blocks.as_slice(),
+			info.textures.as_slice());
 		match data.create_link(input) {	//TODO: no clone
-			Ok(link) => Ok(shade::CustomShell::new(meta.clone(), link, data)),
+			Ok(link) => Ok(shade::CustomShell::new(prog.clone(), link, data)),
 			Err(e) => Err(shade::ErrorUnusedParameter(e)),
 		}
 	}
@@ -201,7 +202,7 @@ impl FrontEnd {
 		self.list.set_blend(state.blend);
 		self.list.set_color_mask(state.color_mask);
 		// bind mesh data
-		match self.bind_mesh(mesh, prog_shell.get_program()) {
+		match self.bind_mesh(mesh, prog_shell.get_program().get_info()) {
 			Ok(_) => (),
 			Err(e) => return Err(ErrorMesh(e)),
 		}
@@ -274,30 +275,31 @@ impl FrontEnd {
 	}
 
 	fn bind_shell<P: ProgramShell>(&mut self, shell: &P) -> Result<(), ShellError> {
-		let meta = shell.get_program();
-		self.list.bind_program(meta.name);
+		let prog = shell.get_program();
+		self.list.bind_program(prog.get_name());
+		let pinfo = prog.get_info();
 		// gather parameters
 		// this is a bit ugly, need to re-think the interface with `#[shader_program]`
-		let mut uniforms = Vec::from_elem(meta.uniforms.len(), None);
-		let mut blocks   = Vec::from_elem(meta.blocks  .len(), None);
-		let mut textures = Vec::from_elem(meta.textures.len(), None);
+		let mut uniforms = Vec::from_elem(pinfo.uniforms.len(), None);
+		let mut blocks   = Vec::from_elem(pinfo.blocks  .len(), None);
+		let mut textures = Vec::from_elem(pinfo.textures.len(), None);
 		shell.fill_params(shade::ParamValues {
 			uniforms: uniforms.as_mut_slice(),
 			blocks: blocks.as_mut_slice(),
 			textures: textures.as_mut_slice(),
 		});
 		// bind uniforms
-		for (var, option) in meta.uniforms.iter().zip(uniforms.move_iter()) {
+		for (var, option) in pinfo.uniforms.iter().zip(uniforms.move_iter()) {
 			match option {
 				Some(v) => self.list.bind_uniform(var.location, v),
 				None => return Err(ErrorShellUniform(var.name.clone())),
 			}
 		}
 		// bind uniform blocks
-		for (i, (var, option)) in meta.blocks.iter().zip(blocks.move_iter()).enumerate() {
+		for (i, (var, option)) in pinfo.blocks.iter().zip(blocks.move_iter()).enumerate() {
 			match option {
 				Some(buf) => self.list.bind_uniform_block(
-					meta.name,
+					prog.get_name(),
 					i as device::UniformBufferSlot,
 					i as device::UniformBlockIndex,
 					buf),
@@ -305,7 +307,7 @@ impl FrontEnd {
 			}
 		}
 		// bind textures and samplers
-		for (i, (var, option)) in meta.textures.iter().zip(textures.move_iter()).enumerate() {
+		for (i, (var, option)) in pinfo.textures.iter().zip(textures.move_iter()).enumerate() {
 			match option {
 				Some((tex, sampler)) => {
 					let kind = device::tex::Texture2D;	//FIXME
@@ -318,10 +320,10 @@ impl FrontEnd {
 		Ok(())
 	}
 
-	fn bind_mesh(&mut self, mesh: &mesh::Mesh, prog: &ProgramMeta)
+	fn bind_mesh(&mut self, mesh: &mesh::Mesh, info: &ProgramInfo)
 				 -> Result<(), MeshError> {
 		self.list.bind_array_buffer(self.common_array_buffer);
-		for sat in prog.attributes.iter() {
+		for sat in info.attributes.iter() {
 			match mesh.attributes.iter().find(|a| a.name.as_slice() == sat.name.as_slice()) {
 				Some(vat) => match vat.elem_type.is_compatible(sat.base_type) {
 					Ok(_) => {
