@@ -26,32 +26,32 @@ use std::fmt;
 pub type Dimension = u8;
 
 /// Whether the sampler samples an array texture.
-#[deriving(Show)]
+#[deriving(Clone, PartialEq, Show)]
 pub enum IsArray { Array, NoArray }
 
 /// Whether the sampler samples a shadow texture (texture with a depth comparison)
-#[deriving(Show)]
+#[deriving(Clone, PartialEq, Show)]
 pub enum IsShadow { Shadow, NoShadow }
 
 /// Whether the sampler samples a multisample texture.
-#[deriving(Show)]
+#[deriving(Clone, PartialEq, Show)]
 pub enum IsMultiSample { MultiSample, NoMultiSample }
 
 /// Whether the sampler samples a rectangle texture.
 ///
 /// Rectangle textures are the same as 2D textures, but accessed with absolute texture coordinates
 /// (as opposed to the usual, normalized to [0, 1]).
-#[deriving(Show)]
+#[deriving(Clone, PartialEq, Show)]
 pub enum IsRect { Rect, NoRect }
 
 /// Whether the matrix is column or row major.
-#[deriving(Show)]
+#[deriving(Clone, PartialEq, Show)]
 pub enum MatrixFormat { ColumnMajor, RowMajor }
 
 /// What texture type this sampler samples from.
 ///
 /// A single sampler cannot be used with multiple texture types.
-#[deriving(Show)]
+#[deriving(Clone, PartialEq, Show)]
 pub enum SamplerType {
     /// Sample from a buffer.
     SamplerBuffer,
@@ -67,7 +67,7 @@ pub enum SamplerType {
 
 /// Base type of this shader parameter.
 #[allow(missing_doc)]
-#[deriving(Show)]
+#[deriving(Clone, PartialEq, Show)]
 pub enum BaseType {
     BaseF32,
     BaseF64,
@@ -77,7 +77,7 @@ pub enum BaseType {
 }
 
 /// Number of components this parameter represents.
-#[deriving(Show)]
+#[deriving(Clone, PartialEq, Show)]
 pub enum ContainerType {
     /// Scalar value
     Single,
@@ -107,7 +107,6 @@ pub type Location = uint;
 /// A value that can be uploaded to the device as a uniform.
 #[allow(missing_doc)]
 pub enum UniformValue {
-    ValueUninitialized,
     ValueI32(i32),
     ValueF32(f32),
     ValueI32Vec([i32, ..4]),
@@ -116,14 +115,6 @@ pub enum UniformValue {
 }
 
 impl UniformValue {
-    /// Whether this value contains valid data.
-    pub fn is_valid(&self) -> bool {
-        match *self {
-            ValueUninitialized => false,
-            _ => true,
-        }
-    }
-
     /// Whether two `UniformValue`s have the same type.
     pub fn is_same_type(&self, other: &UniformValue) -> bool {
         match (*self, *other) {
@@ -140,7 +131,6 @@ impl UniformValue {
 impl Clone for UniformValue {
     fn clone(&self) -> UniformValue {
         match *self {
-            ValueUninitialized  => ValueUninitialized,
             ValueI32(val)       => ValueI32(val),
             ValueF32(val)       => ValueF32(val),
             ValueI32Vec(v)      => ValueI32Vec([v[0], v[1], v[2], v[3]]),
@@ -158,7 +148,6 @@ impl Clone for UniformValue {
 impl fmt::Show for UniformValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            ValueUninitialized    => write!(f, "ValueUninitialized"),
             ValueI32(x)           => write!(f, "ValueI32({})", x),
             ValueF32(x)           => write!(f, "ValueF32({})", x),
             ValueI32Vec(ref v)    => write!(f, "ValueI32Vec({})", v.as_slice()),
@@ -175,7 +164,7 @@ impl fmt::Show for UniformValue {
 }
 
 /// Vertex information that a shader takes as input.
-#[deriving(Show)]
+#[deriving(Clone, Show)]
 pub struct Attribute {
     /// Name of this attribute.
     pub name: String,
@@ -190,7 +179,7 @@ pub struct Attribute {
 }
 
 /// Uniform, a type of shader parameter representing data passed to the program.
-#[deriving(Show)]
+#[deriving(Clone, Show)]
 pub struct UniformVar {
     /// Name of this uniform.
     pub name: String,
@@ -202,12 +191,10 @@ pub struct UniformVar {
     pub base_type: BaseType,
     /// "Scalarness" of this uniform.
     pub container: ContainerType,
-    /// The value of this uniform.
-    pub active_value: Cell<UniformValue>,
 }
 
 /// A uniform block.
-#[deriving(Show)]
+#[deriving(Clone, Show)]
 pub struct BlockVar {
     /// Name of this uniform block.
     pub name: String,
@@ -215,12 +202,10 @@ pub struct BlockVar {
     pub size: uint,
     /// What program stage this uniform block can be used in, as a bitflag.
     pub usage: u8,
-    /// Active uniform block binding
-    pub active_slot: Cell<u8>,
 }
 
 /// Sampler, a type of shader parameter representing a texture that can be sampled.
-#[deriving(Show)]
+#[deriving(Clone, Show)]
 pub struct SamplerVar {
     /// Name of this sampler variable.
     pub name: String,
@@ -230,12 +215,10 @@ pub struct SamplerVar {
     pub base_type: BaseType,
     /// Type of this sampler.
     pub sampler_type: SamplerType,
-    /// Texture unit this sampler is bound to.
-    pub active_slot: Cell<u8>,
 }
 
 /// Metadata about a program.
-#[deriving(Show)]
+#[deriving(Clone, Show)]
 pub struct ProgramMeta {
     /// Handle to the program.
     pub name: super::dev::Program,
@@ -284,7 +267,7 @@ impl UniformVar {
 
 /// Like `MaybeOwned` but for u8.
 #[allow(missing_doc)]
-#[deriving(Show, Clone)]
+#[deriving(Show, PartialEq, Clone)]
 pub enum Bytes {
     StaticBytes(&'static [u8]),
     OwnedBytes(Vec<u8>),
@@ -302,7 +285,7 @@ impl Bytes {
 
 /// A type storing shader source for different graphics APIs and versions.
 #[allow(missing_doc)]
-#[deriving(Show, Clone)]
+#[deriving(Clone, PartialEq, Show)]
 pub struct ShaderSource {
     pub glsl_120: Option<Bytes>,
     pub glsl_150: Option<Bytes>,
@@ -310,7 +293,7 @@ pub struct ShaderSource {
 }
 
 /// An error type for creating programs.
-#[deriving(Clone, Show)]
+#[deriving(Clone, PartialEq, Show)]
 pub enum CreateShaderError {
     /// The device does not support any of the shaders supplied.
     NoSupportedShaderProvided,
@@ -320,7 +303,7 @@ pub enum CreateShaderError {
 
 /// Shader model supported by the device, corresponds to the HLSL shader models.
 #[allow(missing_doc)]
-#[deriving(PartialEq, PartialOrd, Show)]
+#[deriving(Clone, PartialEq, PartialOrd, Show)]
 pub enum ShaderModel {
     ModelUnsupported,
     Model30,

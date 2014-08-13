@@ -15,6 +15,7 @@
 //! Render target specification.
 
 use t = device::target;
+use backend = device::dev;
 
 static MAX_COLOR_TARGETS: uint = 4;
 
@@ -24,10 +25,10 @@ pub enum Plane {
     /// No buffer, the results will not be stored.
     PlaneEmpty,
     /// Render to a `Surface` (corresponds to a renderbuffer in GL).
-    PlaneSurface(super::SurfaceHandle),
+    PlaneSurface(backend::Surface),
     /// Render to a texture at a specific mipmap level
     /// If `Layer` is set, it is selecting a single 2D slice of a given 3D texture
-    PlaneTexture(super::TextureHandle, t::Level, Option<t::Layer>),
+    PlaneTexture(backend::Texture, t::Level, Option<t::Layer>),
 }
 
 /// A complete `Frame`, which is the result of rendering.

@@ -22,12 +22,13 @@
 
 use d = device;
 use a = device::attrib;
+use device::dev::Buffer;
 
 /// Describes a single attribute of a vertex buffer, including its type, name, etc.
 #[deriving(Clone, PartialEq, Show)]
 pub struct Attribute {
     /// Vertex buffer to contain the data
-    pub buffer: super::BufferHandle,
+    pub buffer: Buffer,
     /// Number of elements per vertex
     pub elem_count: a::Count,
     /// Type of a single element
@@ -44,7 +45,7 @@ pub struct Attribute {
 /// `#[vertex_format] attribute
 pub trait VertexFormat {
     /// Create the attributes for this type, using the given buffer.
-    fn generate(Option<Self>, buffer: super::BufferHandle) -> Vec<Attribute>;
+    fn generate(Option<Self>, buffer: Buffer) -> Vec<Attribute>;
 }
 
 /// Describes geometry to render.
@@ -69,7 +70,7 @@ impl Mesh {
     }
 
     /// Create a new `Mesh` from a struct that implements `VertexFormat` and a buffer.
-    pub fn from<V: VertexFormat>(buf: super::BufferHandle, nv: d::VertexCount) -> Mesh {
+    pub fn from<V: VertexFormat>(buf: Buffer, nv: d::VertexCount) -> Mesh {
         Mesh {
             prim_type: d::TriangleList,
             num_vertices: nv,
@@ -95,7 +96,7 @@ pub enum Slice  {
     /// 6 separate vertices, 3 for each triangle. However, two of the vertices will be identical,
     /// wasting space for the duplicated attributes.  Instead, the `Mesh` can store 4 vertices and
     /// an `IndexSlice` can be used instead.
-    IndexSlice(super::BufferHandle, d::IndexType, d::IndexCount, d::IndexCount),
+    IndexSlice(Buffer, d::IndexType, d::IndexCount, d::IndexCount),
 }
 
 /// A slice of a mesh, with a given material.

@@ -16,40 +16,41 @@
 
 use std::cell::Cell;
 use std::rc::Rc;
-use dev = device::shade;
+use s = device::shade;
+use device::dev::{Buffer, Texture};
 
 /// Helper trait to transform base types into their corresponding uniforms
 pub trait ToUniform {
     /// Create a `UniformValue` representing this value.
-    fn to_uniform(&self) -> dev::UniformValue;
+    fn to_uniform(&self) -> s::UniformValue;
 }
 
 impl ToUniform for i32 {
-    fn to_uniform(&self) -> dev::UniformValue {
-        dev::ValueI32(*self)
+    fn to_uniform(&self) -> s::UniformValue {
+        s::ValueI32(*self)
     }
 }
 
 impl ToUniform for f32 {
-    fn to_uniform(&self) -> dev::UniformValue {
-        dev::ValueF32(*self)
+    fn to_uniform(&self) -> s::UniformValue {
+        s::ValueF32(*self)
     }
 }
 
 impl ToUniform for [i32, ..4] {
-    fn to_uniform(&self) -> dev::UniformValue {
-        dev::ValueI32Vec(*self)
+    fn to_uniform(&self) -> s::UniformValue {
+        s::ValueI32Vec(*self)
     }
 }
 
 impl ToUniform for [f32, ..4] {
-    fn to_uniform(&self) -> dev::UniformValue {
-        dev::ValueF32Vec(*self)
+    fn to_uniform(&self) -> s::UniformValue {
+        s::ValueF32Vec(*self)
     }
 }
 impl ToUniform for [[f32, ..4], ..4] {
-    fn to_uniform(&self) -> dev::UniformValue {
-        dev::ValueF32Matrix(*self)
+    fn to_uniform(&self) -> s::UniformValue {
+        s::ValueF32Matrix(*self)
     }
 }
 
@@ -63,22 +64,22 @@ pub type VarBlock = u8;
 pub type VarTexture = u8;
 
 /// A texture parameter: consists of a texture handle with an optional sampler.
-pub type TextureParam = (super::TextureHandle, Option<super::SamplerHandle>);
+pub type TextureParam = (Texture, Option<super::SamplerHandle>);
 
 /// Borrowed parts of the `ProgramMeta`, used for data link construction
 pub type ParamLinkInput<'a> = (
-    &'a [dev::UniformVar],
-    &'a [dev::BlockVar],
-    &'a [dev::SamplerVar]
+    &'a [s::UniformVar],
+    &'a [s::BlockVar],
+    &'a [s::SamplerVar]
 );
 
 /// A borrowed mutable storage for shader parameter values.
 // Not sure if it's the best data structure to represent it.
 pub struct ParamValues<'a> {
     /// uniform values to be provided
-    pub uniforms: &'a mut [Option<dev::UniformValue>],
+    pub uniforms: &'a mut [Option<s::UniformValue>],
     /// uniform buffers to be provided
-    pub blocks  : &'a mut [Option<super::BufferHandle>],
+    pub blocks  : &'a mut [Option<Buffer>],
     /// textures to be provided
     pub textures: &'a mut [Option<TextureParam>],
 }
@@ -86,24 +87,9 @@ pub struct ParamValues<'a> {
 /// Encloses a shader program with its parameter
 pub trait ProgramShell {
     /// Get the contained program
-    fn get_program(&self) -> super::ProgramHandle;
+    fn get_program(&self) -> &s::ProgramMeta;
     /// Get all the contained parameter values
     fn fill_params(&self, ParamValues);
-}
-
-impl ProgramShell for super::ProgramHandle {
-    fn get_program(&self) -> super::ProgramHandle {
-        self.clone()
-    }
-
-    fn fill_params(&self, params: ParamValues) {
-        debug_assert!(
-            params.uniforms.is_empty() &&
-            params.blocks.is_empty() &&
-            params.textures.is_empty(),
-            "trying to bind a program that has uniforms ; please call renderer.connect_program first"
-        );
-    }
 }
 
 /// An error type on either the parameter storage or the program side
@@ -146,19 +132,19 @@ pub trait ShaderParam<L> {
 /// * `T` - user-provided structure containing actual parameter values
 #[deriving(Clone)]
 pub struct CustomShell<L, T> {
-    /// Shader program
-    program: super::ProgramHandle,
+    /// Shader program meta-data
+    meta: s::ProgramMeta, //TODO: move name out of PrograMeta
     /// Hidden link that provides parameter indices for user data
     link: L,
     /// Global data in a user-provided struct
-    pub data: T,
+    pub data: T,    //TODO: move data out of the shell
 }
 
 impl<L, T: ShaderParam<L>> CustomShell<L, T> {
     /// Create a new custom shell
-    pub fn new(program: super::ProgramHandle, link: L, data: T) -> CustomShell<L, T> {
+    pub fn new(meta: s::ProgramMeta, link: L, data: T) -> CustomShell<L, T> {
         CustomShell {
-            program: program,
+            meta: meta,
             link: link,
             data: data,
         }
@@ -166,8 +152,8 @@ impl<L, T: ShaderParam<L>> CustomShell<L, T> {
 }
 
 impl<L, T: ShaderParam<L>> ProgramShell for CustomShell<L, T> {
-    fn get_program(&self) -> super::ProgramHandle {
-        self.program
+    fn get_program(&self) -> &s::ProgramMeta {
+        &self.meta
     }
 
     fn fill_params(&self, params: ParamValues) {
@@ -186,9 +172,9 @@ pub struct NamedCell<T> {
 /// A dictionary of parameters, meant to be shared between different programs
 pub struct ParamDictionary {
     /// Uniform dictionary
-    pub uniforms: Vec<NamedCell<dev::UniformValue>>,
+    pub uniforms: Vec<NamedCell<s::UniformValue>>,
     /// Block dictionary
-    pub blocks: Vec<NamedCell<super::BufferHandle>>,
+    pub blocks: Vec<NamedCell<Buffer>>,
     /// Texture dictionary
     pub textures: Vec<NamedCell<TextureParam>>,
 }

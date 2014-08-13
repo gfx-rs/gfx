@@ -29,7 +29,7 @@ extern crate device;
 extern crate render;
 
 // public re-exports
-pub use render::{BufferHandle, ShaderHandle, ProgramHandle, SurfaceHandle, TextureHandle, SamplerHandle};
+pub use render::{ShaderHandle, ProgramHandle, SamplerHandle};
 pub use render::Renderer;
 pub use render::mesh::{Attribute, Mesh, VertexFormat, Slice, VertexSlice, IndexSlice};
 pub use render::state::{DrawState, BlendAdditive, BlendAlpha};

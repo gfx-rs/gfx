@@ -226,7 +226,6 @@ fn query_blocks(caps: &super::super::Capabilities, prog: super::Program) -> Vec<
             name: name,
             size: size as uint,
             usage: usage,
-            active_slot: Cell::new(0),
         }
     }).collect()
 }
@@ -267,7 +266,6 @@ fn query_parameters(prog: super::Program) -> (Vec<s::UniformVar>, Vec<s::Sampler
                     count: size as uint,
                     base_type: base,
                     container: container,
-                    active_value: Cell::new(s::ValueUninitialized),
                 });
             },
             Sampler(base, sam_type) => {
@@ -277,7 +275,6 @@ fn query_parameters(prog: super::Program) -> (Vec<s::UniformVar>, Vec<s::Sampler
                     location: loc as uint,
                     base_type: base,
                     sampler_type: sam_type,
-                    active_slot: Cell::new(0),
                 });
             },
             Unknown => {
@@ -332,7 +329,6 @@ pub fn create_program(caps: &super::super::Capabilities, shaders: &[super::Shade
 
 pub fn bind_uniform(loc: gl::types::GLint, uniform: s::UniformValue) {
     match uniform {
-        s::ValueUninitialized => fail!("Non-initialized uniform value detected"),
         s::ValueI32(val) => gl::Uniform1i(loc, val),
         s::ValueF32(val) => gl::Uniform1f(loc, val),
         s::ValueI32Vec(val) => unsafe { gl::Uniform4iv(loc, 1, val.as_ptr()) },
