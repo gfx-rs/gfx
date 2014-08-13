@@ -100,7 +100,8 @@ impl ProgramShell for super::ProgramHandle {
         debug_assert!(
             params.uniforms.is_empty() &&
             params.blocks.is_empty() &&
-            params.textures.is_empty()
+            params.textures.is_empty(),
+            "trying to bind a program that has uniforms ; please call renderer.connect_program first"
         );
     }
 }
