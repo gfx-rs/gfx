@@ -110,7 +110,7 @@ fn main() {
             // quit when Esc is pressed.
             for event in window.poll_events() {
                 match event {
-                    gl_init::Pressed(gl_init::Escape) => break 'main,
+                    gl_init::KeyboardInput(_, _, Some(gl_init::Escape), _) => break 'main,
                     gl_init::Closed => break 'main,
                     _ => {},
                 }
