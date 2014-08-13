@@ -7,7 +7,7 @@ extern crate getopts;
 extern crate gfx;
 extern crate glfw;
 extern crate glfw_platform;
-extern crate glinit = "gl-init-rs";
+extern crate gl_init;
 extern crate gl_init_platform;
 extern crate native;
 
@@ -69,7 +69,7 @@ fn start(argc: int, argv: *const *const u8) -> int {
 
 fn main() {
     // checking for the --gl-init flag
-    let use_glinit = {
+    let use_gl_init = {
         use std::os;
         use getopts::{optflag, getopts};
 
@@ -92,7 +92,7 @@ fn main() {
         matches.opt_present("i")
     };
 
-    if use_glinit {
+    if use_gl_init {
         let window = gl_init_platform::Window::new().unwrap();
         window.set_title("[gl-init] Triangle example #gfx-rs!");
         unsafe { window.make_current() };
@@ -110,8 +110,8 @@ fn main() {
             // quit when Esc is pressed.
             for event in window.poll_events() {
                 match event {
-                    glinit::Pressed(glinit::Escape) => break 'main,
-                    glinit::Closed => break 'main,
+                    gl_init::Pressed(gl_init::Escape) => break 'main,
+                    gl_init::Closed => break 'main,
                     _ => {},
                 }
             }

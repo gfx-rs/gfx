@@ -9,7 +9,7 @@ authors = [
 name = "gl_init_platform"
 path = "lib.rs"
 
-[dependencies.gl-init-rs]
+[dependencies.gl_init]
 git = "https://github.com/tomaka/gl-init-rs.git"
 
 [dependencies.device]
