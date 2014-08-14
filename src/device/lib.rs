@@ -57,23 +57,33 @@ pub type UniformBufferSlot = u8;
 /// Slot a texture can be bound to.
 pub type TextureSlot = u8;
 
-/// Program Handle
+/// A generic handle struct
 #[deriving(Clone, Show)]
-pub struct ProgramHandle(back::Program, shade::ProgramInfo);
+pub struct Handle<T, I>(T, I);
 
-impl ProgramHandle {
-    /// Get the program internal handle
-    pub fn get_name(&self) -> back::Program {
-        let ProgramHandle(name, _) = *self;
+#[deriving(Clone, Show)]
+impl<T: Copy, I> Handle<T, I> {
+    /// Get the internal name
+    pub fn get_name(&self) -> T {
+        let Handle(name, _) = *self;
         name
     }
 
     /// Get the info reference,
-    pub fn get_info(&self) -> &shade::ProgramInfo {
-        let ProgramHandle(_, ref info) = *self;
+    pub fn get_info(&self) -> &I {
+        let Handle(_, ref info) = *self;
         info
     }
 }
+
+/// Program Handle
+pub type ProgramHandle = Handle<back::Program, shade::ProgramInfo>;
+/// Surface Handle
+pub type SurfaceHandle = Handle<back::Surface, tex::SurfaceInfo>;
+/// Texture Handle
+pub type TextureHandle = Handle<back::Texture, tex::TextureInfo>;
+/// Sampler Handle
+pub type SamplerHandle = Handle<back::Sampler, tex::SamplerInfo>;
 
 /// Features that the device supports.
 #[deriving(Show)]
@@ -170,36 +180,10 @@ pub enum TextureError {
     UnsupportedTextureFormat,
 }
 
-/// Device request.
-#[deriving(Show)]
-pub enum Request<T> {
-    /// A request that requires a reply - has the device creating something.
-    Call(T, CallRequest),
-    /// A request that does not require a reply - has the device modifying something.
-    Cast(CastRequest),
-    /// Swap the front and back buffers, displaying what has been drawn so far. Indicates the end
-    /// of a frame.
-    SwapBuffers,
-}
-
-/// Requests that require a reply
+/// Serialized device command
 #[allow(missing_doc)]
 #[deriving(Show)]
-pub enum CallRequest {
-    CreateBuffer(Option<Box<Blob + Send>>),
-    CreateArrayBuffer,
-    CreateShader(shade::Stage, shade::ShaderSource),
-    CreateProgram(Vec<back::Shader>),
-    CreateFrameBuffer,
-    CreateSurface(tex::SurfaceInfo),
-    CreateTexture(tex::TextureInfo),
-    CreateSampler(tex::SamplerInfo),
-}
-
-/// Requests that don't expect a reply
-#[allow(missing_doc)]
-#[deriving(Show)]
-pub enum CastRequest {
+pub enum Command {
     BindProgram(back::Program),
     BindArrayBuffer(back::ArrayBuffer),
     BindAttribute(AttributeSlot, back::Buffer, attrib::Count,
@@ -214,7 +198,7 @@ pub enum CastRequest {
     BindTargetTexture(target::Target, back::Texture, target::Level, Option<target::Layer>),
     BindUniformBlock(back::Program, UniformBufferSlot, UniformBlockIndex, back::Buffer),
     BindUniform(shade::Location, shade::UniformValue),
-    BindTexture(TextureSlot, tex::TextureKind, back::Texture, Option<(back::Sampler, tex::SamplerInfo)>),
+    BindTexture(TextureSlot, tex::TextureKind, back::Texture, Option<SamplerHandle>),
     SetPrimitiveState(state::Primitive),
     SetViewport(target::Rect),
     SetScissor(Option<target::Rect>),
@@ -229,20 +213,6 @@ pub enum CastRequest {
     DrawIndexed(PrimitiveType, IndexType, IndexCount, IndexCount),
 }
 
-/// Reply to a `Call`
-#[allow(missing_doc)]
-#[deriving(Show)]
-pub enum Reply<T> {
-    ReplyNewBuffer(T, back::Buffer),
-    ReplyNewArrayBuffer(T, Result<back::ArrayBuffer, ()>),
-    ReplyNewShader(T, Result<back::Shader, shade::CreateShaderError>),
-    ReplyNewProgram(T, Result<ProgramHandle, ()>),
-    ReplyNewFrameBuffer(T, back::FrameBuffer),
-    ReplyNewSurface(T, back::Surface),
-    ReplyNewTexture(T, back::Texture),
-    ReplyNewSampler(T, back::Sampler),
-}
-
 /// An interface for performing draw calls using a specific graphics API
 #[allow(missing_doc)]
 pub trait ApiBackEnd<D> {
@@ -255,122 +225,22 @@ pub trait ApiBackEnd<D> {
                      Result<back::Shader, shade::CreateShaderError>;
     fn create_program(&mut self, shaders: &[back::Shader]) -> Result<ProgramHandle, ()>;
     fn create_frame_buffer(&mut self) -> back::FrameBuffer;
-    fn create_surface(&mut self, info: tex::SurfaceInfo) -> Result<back::Surface, SurfaceError>;
-    fn create_texture(&mut self, info: tex::TextureInfo) -> Result<back::Texture, TextureError>;
-    fn create_sampler(&mut self, info: tex::SamplerInfo) -> back::Sampler;
+    fn create_surface(&mut self, info: tex::SurfaceInfo) -> Result<SurfaceHandle, SurfaceError>;
+    fn create_texture(&mut self, info: tex::TextureInfo) -> Result<TextureHandle, TextureError>;
+    fn create_sampler(&mut self, info: tex::SamplerInfo) -> SamplerHandle;
     // resource deletion
     fn delete_buffer(&mut self, back::Buffer);
     fn delete_shader(&mut self, back::Shader);
-    fn delete_program(&mut self, back::Program);
-    fn delete_surface(&mut self, back::Surface);
-    fn delete_texture(&mut self, back::Texture);
-    fn delete_sampler(&mut self, back::Sampler);
+    fn delete_program(&mut self, ProgramHandle);
+    fn delete_surface(&mut self, SurfaceHandle);
+    fn delete_texture(&mut self, TextureHandle);
+    fn delete_sampler(&mut self, SamplerHandle);
     /// Update the information stored in a specific buffer
     fn update_buffer(&mut self, back::Buffer, data: &Blob, BufferUsage);
-    /// Process a request from a `Device`
-    fn process(&mut self, CastRequest);
+    /// Process a single command
+    fn process(&mut self, Command);
     /// Submit a draw list. TODO: enforce `draw::DrawList` trait here
     fn submit(&mut self, list: &D);
-}
-
-/// Token used for buffer swap acknowledgement.
-pub struct Ack;
-
-/// An API-agnostic device that manages incoming draw calls
-pub struct Device<T, B, C> {
-    no_share: marker::NoSync,
-    request_rx: Receiver<Request<T>>,
-    reply_tx: Sender<Reply<T>>,
-    graphics_context: C,
-    back_end: B,
-    swap_ack: Sender<Ack>,
-}
-
-impl<T: Send, D: draw::DrawList, B: ApiBackEnd<D>, C: GraphicsContext<B>> Device<T, B, C> {
-    /// Make this device's context current for the thread.
-    ///
-    /// This is a GLism that might be removed, especially as multithreading support evolves.
-    pub fn make_current(&self) {
-        self.graphics_context.make_current();
-    }
-
-    /// Process a call request, return a single reply for it
-    fn process(&mut self, token: T, call: CallRequest) -> Reply<T> {
-        match call {
-            CreateBuffer(data) => {
-                let name = self.back_end.create_buffer();
-                match data {
-                    Some(blob) => self.back_end.update_buffer(name, blob, UsageStatic),
-                    None => (),
-                }
-                ReplyNewBuffer(token, name)
-            },
-            CreateArrayBuffer => {
-                let name = self.back_end.create_array_buffer();
-                ReplyNewArrayBuffer(token, name)
-            },
-            CreateShader(stage, code) => {
-                let name = self.back_end.create_shader(stage, code);
-                ReplyNewShader(token, name)
-            },
-            CreateProgram(code) => {
-                let name = self.back_end.create_program(code.as_slice());
-                ReplyNewProgram(token, name)
-            },
-            CreateFrameBuffer => {
-                let name = self.back_end.create_frame_buffer();
-                ReplyNewFrameBuffer(token, name)
-            },
-            CreateSurface(info) => {
-                match self.back_end.create_surface(info) {
-                    Ok(name) => ReplyNewSurface(token, name),
-                    Err(_e) => unimplemented!(),
-                }
-            },
-            CreateTexture(info) => {
-                match self.back_end.create_texture(info) {
-                    Ok(name) => ReplyNewTexture(token, name),
-                    Err(_e) => unimplemented!(),
-                }
-            },
-            CreateSampler(info) => {
-                let name = self.back_end.create_sampler(info);
-                ReplyNewSampler(token, name)
-            },
-        }
-    }
-
-    /// Swap back and front buffers, showing what we've been rendering
-    pub fn swap_buffers(&mut self) {
-        self.graphics_context.swap_buffers();
-        self.swap_ack.send(Ack);
-    }
-
-    /// Submit a draw list for execution
-    pub fn submit(&mut self, list: &D) {
-        self.back_end.submit(list);
-    }
-
-    /// Process all requests received, including requests received while this method is executing.
-    /// The client must manually call this on the main thread, or else the renderer will have no
-    /// effect.
-    pub fn update(&mut self) {
-        // Get updates from the renderer and pass on results
-        loop {
-            match self.request_rx.recv_opt() {
-                Ok(Call(token, call)) => {
-                    let reply = self.process(token, call);
-                    self.reply_tx.send(reply);
-                },
-                Ok(Cast(cast)) => self.back_end.process(cast),
-                Ok(SwapBuffers) => {
-                    self.swap_buffers();
-                    break;
-                },
-                Err(()) => return,
-            }
-        }
-    }
 }
 
 /// A trait that OpenGL contexts implement.
@@ -385,36 +255,4 @@ pub trait GraphicsContext<T> {
 pub trait GlProvider {
     /// Load the GL command with the given name.
     fn get_proc_address(&self, function_name: &str) -> *const ::libc::c_void;
-}
-
-/// An error type for device initialization.
-#[deriving(Show)]
-pub enum InitError {}
-
-/// Type representing the number of frames to queue before the renderer blocks.
-pub type QueueSize = u8;
-
-// TODO: Generalise for different back-ends
-/// Initialize a device for a given context and provider pair, with a given queue size.
-pub fn init<T: Send, C: GraphicsContext<GlBackEnd>, P: GlProvider>(graphics_context: C, provider: P, queue_size: QueueSize)
-        -> Result<(Sender<Request<T>>, Receiver<Reply<T>>, Device<T, GlBackEnd, C>, Receiver<Ack>), InitError> {
-    let (request_tx, request_rx) = channel();
-    let (reply_tx, reply_rx) = channel();
-    let (swap_tx, swap_rx) = channel();
-
-    for _ in range(0, queue_size) {
-        swap_tx.send(Ack);
-    }
-
-    let gl = GlBackEnd::new(&provider);
-    let device = Device {
-        no_share: marker::NoSync,
-        request_rx: request_rx,
-        reply_tx: reply_tx,
-        graphics_context: graphics_context,
-        back_end: gl,
-        swap_ack: swap_tx,
-    };
-
-    Ok((request_tx, reply_rx, device, swap_rx))
 }

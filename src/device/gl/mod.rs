@@ -338,25 +338,26 @@ impl super::ApiBackEnd<DrawList> for GlBackEnd {
         name
     }
 
-    fn create_surface(&mut self, info: ::tex::SurfaceInfo) -> Result<Surface, ::SurfaceError> {
-        tex::make_surface(&info)
+    fn create_surface(&mut self, info: ::tex::SurfaceInfo) -> Result<::SurfaceHandle, ::SurfaceError> {
+        tex::make_surface(&info).map(|suf| ::Handle(suf, info))
     }
 
-    fn create_texture(&mut self, info: ::tex::TextureInfo) -> Result<Texture, ::TextureError> {
+    fn create_texture(&mut self, info: ::tex::TextureInfo) -> Result<::TextureHandle, ::TextureError> {
         let name = if self.caps.immutable_storage_supported {
             tex::make_with_storage(&info)
         } else {
             tex::make_without_storage(&info)
         };
-        name
+        name.map(|tex| ::Handle(tex, info))
     }
 
-    fn create_sampler(&mut self, info: ::tex::SamplerInfo) -> Sampler {
-        if self.caps.sampler_objects_supported {
+    fn create_sampler(&mut self, info: ::tex::SamplerInfo) -> ::SamplerHandle {
+        let sam = if self.caps.sampler_objects_supported {
             tex::make_sampler(&info)
         } else {
             0
-        }
+        };
+        ::Handle(sam, info)
     }
 
     fn delete_buffer(&mut self, name: Buffer) {
@@ -369,23 +370,26 @@ impl super::ApiBackEnd<DrawList> for GlBackEnd {
         gl::DeleteShader(name);
     }
 
-    fn delete_program(&mut self, name: Program) {
-        gl::DeleteProgram(name);
+    fn delete_program(&mut self, handle: ::ProgramHandle) {
+        gl::DeleteProgram(handle.get_name());
     }
 
-    fn delete_surface(&mut self, name: Surface) {
+    fn delete_surface(&mut self, handle: ::SurfaceHandle) {
+        let name = handle.get_name();
         unsafe {
             gl::DeleteRenderbuffers(1, &name);
         }
     }
 
-    fn delete_texture(&mut self, name: Texture) {
+    fn delete_texture(&mut self, handle: ::TextureHandle) {
+        let name = handle.get_name();
         unsafe {
             gl::DeleteTextures(1, &name);
         }
     }
 
-    fn delete_sampler(&mut self, name: Sampler) {
+    fn delete_sampler(&mut self, handle: ::SamplerHandle) {
+        let name = handle.get_name();
         unsafe {
             gl::DeleteSamplers(1, &name);
         }
@@ -405,8 +409,8 @@ impl super::ApiBackEnd<DrawList> for GlBackEnd {
         }
     }
 
-    fn process(&mut self, request: super::CastRequest) {
-        match request {
+    fn process(&mut self, cmd: super::Command) {
+        match cmd {
             super::Clear(data) => {
                 let mut flags = match data.color {
                     //gl::ColorMask(gl::TRUE, gl::TRUE, gl::TRUE, gl::TRUE);
@@ -435,7 +439,7 @@ impl super::ApiBackEnd<DrawList> for GlBackEnd {
                 if self.caps.array_buffer_supported {
                     gl::BindVertexArray(array_buffer);
                 } else {
-                    error!("Ignored unsupported GL Request: {}", request)
+                    error!("Ignored VAO bind command: {}", array_buffer)
                 }
             },
             super::BindAttribute(slot, buffer, count, el_type, stride, offset) => {
@@ -523,7 +527,7 @@ impl super::ApiBackEnd<DrawList> for GlBackEnd {
                     gl::TEXTURE0 + slot as gl::types::GLenum,
                     kind, texture);
                 match sampler {
-                    Some((sam, ref info)) => {
+                    Some(::Handle(sam, ref info)) => {
                         if self.caps.sampler_objects_supported {
                             gl::BindSampler(slot as gl::types::GLenum, sam);
                         } else {

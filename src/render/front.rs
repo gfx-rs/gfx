@@ -230,10 +230,10 @@ impl FrontEnd {
 	}
 
 	/// Update the contents of a texture.
-	pub fn update_texture<T: Send>(&mut self, tex: backend::Texture,
+	pub fn update_texture<T: Send>(&mut self, tex: device::TextureHandle,
 								   img: device::tex::ImageInfo, data: Vec<T>) {
-		let kind = device::tex::Texture2D;	//FIXME
-		self.list.update_texture(kind, tex, img, (box data) as Box<device::Blob + Send>);
+		self.list.update_texture(tex.get_info().kind, tex.get_name(), img,
+								 (box data) as Box<device::Blob + Send>);
 	}
 
 	fn bind_target(list: &mut device::DrawList, to: device::target::Target, plane: target::Plane) {
@@ -310,9 +310,9 @@ impl FrontEnd {
 		for (i, (var, option)) in pinfo.textures.iter().zip(textures.move_iter()).enumerate() {
 			match option {
 				Some((tex, sampler)) => {
-					let kind = device::tex::Texture2D;	//FIXME
 					self.list.bind_uniform(var.location, device::shade::ValueI32(i as i32));
-					self.list.bind_texture(i as device::TextureSlot, kind, tex, sampler);
+					self.list.bind_texture(i as device::TextureSlot,
+						tex.get_info().kind, tex.get_name(), sampler);
 				},
 				None => return Err(ErrorShellTexture(var.name.clone())),
 			}

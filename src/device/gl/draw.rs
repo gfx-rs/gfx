@@ -16,11 +16,8 @@
 
 use std::slice;
 
-// temporary
-type Command = super::super::CastRequest;
-
 pub struct DrawList {
-	buf: Vec<Command>,
+	buf: Vec<::Command>,
 }
 
 impl DrawList {
@@ -30,7 +27,7 @@ impl DrawList {
 		}
 	}
 
-	pub fn iter<'a>(&'a self) -> slice::Items<'a, Command> {
+	pub fn iter<'a>(&'a self) -> slice::Items<'a, ::Command> {
 		self.buf.iter()
 	}
 }
@@ -84,7 +81,7 @@ impl ::draw::DrawList for DrawList {
 		self.buf.push(::BindUniform(loc, value));
 	}
 	fn bind_texture(&mut self, slot: ::TextureSlot, kind: ::tex::TextureKind,
-					tex: super::Texture, sampler: Option<(super::Sampler, ::tex::SamplerInfo)>) {
+					tex: super::Texture, sampler: Option<::SamplerHandle>) {
 		self.buf.push(::BindTexture(slot, kind, tex, sampler));
 	}
 

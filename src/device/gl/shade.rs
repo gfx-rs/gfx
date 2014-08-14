@@ -322,7 +322,7 @@ pub fn create_program(caps: &super::super::Capabilities, shaders: &[super::Shade
             blocks: query_blocks(caps, name),
             textures: textures,
         };
-        Ok(::ProgramHandle(name, info))
+        Ok(::Handle(name, info))
     } else {
         Err(())
     };
