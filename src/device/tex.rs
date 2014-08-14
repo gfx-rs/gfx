@@ -23,6 +23,8 @@
 
 use std::default::Default;
 
+pub use attrib::{FloatSize, F16, F32, IntSubType, IntRaw, IntNormalized, IntAsFloat};
+
 /// Number of bits per component
 pub type Bits = u8;
 
@@ -41,14 +43,15 @@ pub enum Components {
 }
 
 /// Describes the layout of each texel within a surface/texture.
+/// http://www.opengl.org/wiki/Image_Format
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub enum Format {
     /// Floating point.
-    Float(Components, ::attrib::FloatSize),
+    Float(Components, FloatSize),
     /// Signed integer.
-    Integer(Components, Bits, ::attrib::IntSubType),
+    Integer(Components, Bits, IntSubType),
     /// Unsigned integer.
-    Unsigned(Components, Bits, ::attrib::IntSubType),
+    Unsigned(Components, Bits, IntSubType),
     /// Normalized integer, with 3 bits for R and G, but only 2 for B.
     R3G3B2,
     /// 5 bits each for RGB, 1 for Alpha.
@@ -62,7 +65,7 @@ pub enum Format {
     /// This s an RGB format of type floating-point. The 3 color values have
     /// 9 bits of precision, and they share a single exponent.
     RGB9E5,
-    // TODO: sRGB, compression
+    // TODO: sRGB, compression, depth, stencil
 }
 
 /// A commonly used RGBA8 format
@@ -122,12 +125,14 @@ pub enum TextureKind {
     /// An array of 2D textures. Equivalent to Texture3D except that texels in
     /// a different depth level are not sampled.
     Texture2DArray,
+    /// A volume texture, with each 2D layer arranged contiguously.
+    Texture3D,
     /// A set of 6 2D textures, one for each face of a cube.
     // TODO: implement this, and document it better. cmr doesn't really understand them well enough
     // to explain without rambling.
     TextureCube,
-    /// A volume texture, with each 2D layer arranged contiguously.
-    Texture3D,
+    /// An array of Cube textures.
+    TextureCubeArray,
     // TODO: Multisampling?
 }
 

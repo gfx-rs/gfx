@@ -20,34 +20,36 @@ use Blob;
 /// with a GL-compatibility sampler settings in `bind_sampler`
 pub struct BindAnchor(GLenum);
 
-fn kind_to_gl(t: ::tex::TextureKind) -> GLenum {
-    match t {
+fn kind_to_gl(k: ::tex::TextureKind) -> GLenum {
+    match k {
         ::tex::Texture1D => gl::TEXTURE_1D,
         ::tex::Texture1DArray => gl::TEXTURE_1D_ARRAY,
         ::tex::Texture2D => gl::TEXTURE_2D,
         ::tex::Texture2DArray => gl::TEXTURE_2D_ARRAY,
-        ::tex::TextureCube => gl::TEXTURE_CUBE_MAP,
         ::tex::Texture3D => gl::TEXTURE_3D,
+        ::tex::TextureCube => gl::TEXTURE_CUBE_MAP,
+        ::tex::TextureCubeArray => gl::TEXTURE_CUBE_MAP_ARRAY,
     }
 }
 
 fn format_to_gl(t: ::tex::Format) -> Result<GLenum, ()> {
+    use tex::{Float, Integer, Unsigned, R, RG, RGB, RGBA};
     Ok(match t {
         // floating-point
-        ::tex::Float(::tex::R,    ::attrib::F16) => gl::R16F,
-        ::tex::Float(::tex::R,    ::attrib::F32) => gl::R32F,
-        ::tex::Float(::tex::RG,   ::attrib::F16) => gl::RG16F,
-        ::tex::Float(::tex::RG,   ::attrib::F32) => gl::RG32F,
-        ::tex::Float(::tex::RGB,  ::attrib::F16) => gl::RGB16F,
-        ::tex::Float(::tex::RGB,  ::attrib::F32) => gl::RGB32F,
-        ::tex::Float(::tex::RGBA, ::attrib::F16) => gl::RGBA16F,
-        ::tex::Float(::tex::RGBA, ::attrib::F32) => gl::RGBA32F,
-        ::tex::Float(_, ::attrib::F64) => return Err(()),
+        Float(R,    ::attrib::F16) => gl::R16F,
+        Float(R,    ::attrib::F32) => gl::R32F,
+        Float(RG,   ::attrib::F16) => gl::RG16F,
+        Float(RG,   ::attrib::F32) => gl::RG32F,
+        Float(RGB,  ::attrib::F16) => gl::RGB16F,
+        Float(RGB,  ::attrib::F32) => gl::RGB32F,
+        Float(RGBA, ::attrib::F16) => gl::RGBA16F,
+        Float(RGBA, ::attrib::F32) => gl::RGBA32F,
+        Float(_, ::attrib::F64) => return Err(()),
         // integer
-        ::tex::Integer(_, _, _) => unimplemented!(),
+        Integer(_, _, _) => unimplemented!(),
         // unsigned integer
-        ::tex::Unsigned(::tex::RGBA, 8, ::attrib::IntNormalized) => gl::RGBA8,
-        ::tex::Unsigned(_, _, _) => unimplemented!(),
+        Unsigned(RGBA, 8, ::attrib::IntNormalized) => gl::RGBA8,
+        Unsigned(_, _, _) => unimplemented!(),
         // special
         ::tex::R3G3B2       => gl::R3_G3_B2,
         ::tex::RGB5A1       => gl::RGB5_A1,
@@ -91,14 +93,16 @@ fn format_to_glpixel(t: ::tex::Format) -> GLenum {
 }
 
 fn format_to_gltype(t: ::tex::Format) -> Result<GLenum, ()> {
+    use
+    tex::{Float, Integer, Unsigned};
     match t {
-        ::tex::Float(_, ::attrib::F32) => Ok(gl::FLOAT),
-        ::tex::Integer(_, 8, _)   => Ok(gl::BYTE),
-        ::tex::Unsigned(_, 8, _)  => Ok(gl::UNSIGNED_BYTE),
-        ::tex::Integer(_, 16, _)  => Ok(gl::SHORT),
-        ::tex::Unsigned(_, 16, _) => Ok(gl::UNSIGNED_SHORT),
-        ::tex::Integer(_, 32, _)  => Ok(gl::INT),
-        ::tex::Unsigned(_, 32, _) => Ok(gl::UNSIGNED_INT),
+        Float(_, ::attrib::F32) => Ok(gl::FLOAT),
+        Integer(_, 8, _)   => Ok(gl::BYTE),
+        Unsigned(_, 8, _)  => Ok(gl::UNSIGNED_BYTE),
+        Integer(_, 16, _)  => Ok(gl::SHORT),
+        Unsigned(_, 16, _) => Ok(gl::UNSIGNED_SHORT),
+        Integer(_, 32, _)  => Ok(gl::INT),
+        Unsigned(_, 32, _) => Ok(gl::UNSIGNED_INT),
         _ => Err(()),
     }
 }
@@ -203,7 +207,6 @@ pub fn make_without_storage(info: &::tex::TextureInfo) -> Result<Texture, ::Text
                     ::std::ptr::null(),
                 );
             },
-            ::tex::TextureCube => unimplemented!(),
             ::tex::Texture2DArray | ::tex::Texture3D => {
                 gl::TexImage3D(
                     target,
@@ -218,6 +221,7 @@ pub fn make_without_storage(info: &::tex::TextureInfo) -> Result<Texture, ::Text
                     ::std::ptr::null(),
                 );
             },
+            ::tex::TextureCube | ::tex::TextureCubeArray => unimplemented!(),
         }
     }
 
@@ -281,7 +285,6 @@ pub fn make_with_storage(info: &::tex::TextureInfo) -> Result<Texture, ::Texture
                 info.height as GLsizei,
             );
         },
-        ::tex::TextureCube => unimplemented!(),
         ::tex::Texture2DArray => {
             gl::TexStorage3D(
                 target,
@@ -302,6 +305,7 @@ pub fn make_with_storage(info: &::tex::TextureInfo) -> Result<Texture, ::Texture
                 info.depth as GLsizei,
             );
         },
+        ::tex::TextureCube | ::tex::TextureCubeArray => unimplemented!(),
     }
 
     set_mipmap_range(target, info.mipmap_range);
@@ -385,7 +389,6 @@ pub fn update_texture(kind: ::tex::TextureKind, name: Texture, img: &::tex::Imag
                     data,
                 );
             },
-            ::tex::TextureCube => unimplemented!(),
             ::tex::Texture2DArray | ::tex::Texture3D => {
                 gl::TexSubImage3D(
                     target,
@@ -401,6 +404,7 @@ pub fn update_texture(kind: ::tex::TextureKind, name: Texture, img: &::tex::Imag
                     data,
                 );
             },
+            ::tex::TextureCube | ::tex::TextureCubeArray => unimplemented!(),
         }
     }
 
