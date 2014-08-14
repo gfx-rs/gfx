@@ -63,7 +63,7 @@ pub enum DrawError {
 /// Graphics state
 struct State {
 	frame: target::Frame,
-	fixed_function: state::DrawState,
+	//fixed_function: state::DrawState,
 }
 
 /// Front-end manager
@@ -73,22 +73,30 @@ pub struct Manager {
 	default_frame_buffer: backend::FrameBuffer,
 }
 
+/// Manager initialization error
 #[repr(u8)]
 #[deriving(Clone, PartialEq, Show)]
 pub enum InitError {
+	/// Unable to create a common array buffer
 	ErrorArrayBuffer,
+	/// Unable to create a common frame buffer
 	ErrorFramebuffer,
 }
 
+/// Program linking error
 #[deriving(Clone, PartialEq, Show)]
 pub enum ProgramError {
+	/// Unable to compile the vertex shader
 	ErrorVertex(CreateShaderError),
+	/// Unable to compile the fragment shader
 	ErrorFragment(CreateShaderError),
+	/// Unable to link
 	ErrorLink(()),
 }
 
 
 impl<D, B: device::ApiBackEnd<D>> Manager {
+	/// Create a new front-end manager
 	pub fn new(backend: &mut B) -> Result<Manager, InitError> {
 		Ok(Manager {
 			common_array_buffer: match backend.create_array_buffer() {
@@ -110,7 +118,7 @@ impl<D, B: device::ApiBackEnd<D>> Manager {
 			state: State {
 				frame: target::Frame::new(0, 0),
 				//TODO: force this to match the default HW state
-				fixed_function: state::DrawState::new(),
+				//fixed_function: state::DrawState::new(),
 			},
 		}
 	}
@@ -126,7 +134,7 @@ impl<D, B: device::ApiBackEnd<D>> Manager {
 			val as uint
 		});
 		let buf = backend.create_buffer();
-		backend.update_buffer(buf, &data, device::UsageStatic);
+		backend.update_buffer(buf.get_name(), &data, device::UsageStatic);
 		mesh::Mesh::from::<T>(buf, nv as device::VertexCount)
 	}
 
@@ -135,11 +143,11 @@ impl<D, B: device::ApiBackEnd<D>> Manager {
 						backend: &mut B) -> Result<device::ProgramHandle, ProgramError> {
 		//TODO: integrate connect_program here
 		let vs = match backend.create_shader(Vertex, vs_src) {
-			Ok(name) => name,
+			Ok(s) => s,
 			Err(e) => return Err(ErrorVertex(e)),
 		};
 		let fs = match backend.create_shader(Fragment, fs_src) {
-			Ok(name) => name,
+			Ok(s) => s,
 			Err(e) => return Err(ErrorFragment(e)),
 		};
 		backend.create_program([vs, fs]).map_err(|e| ErrorLink(e))
@@ -160,6 +168,7 @@ impl<D, B: device::ApiBackEnd<D>> Manager {
 	}
 }
 
+/// Renderer front-end
 pub struct FrontEnd {
 	list: device::DrawList,
 	common_array_buffer: backend::ArrayBuffer,
@@ -212,7 +221,7 @@ impl FrontEnd {
 				self.list.call_draw(mesh.prim_type, start, end);
 			},
 			mesh::IndexSlice(buf, index, start, end) => {
-				self.list.bind_index(buf);
+				self.list.bind_index(buf.get_name());
 				self.list.call_draw_indexed(mesh.prim_type, index, start, end);
 			},
 		}
@@ -220,13 +229,13 @@ impl FrontEnd {
 	}
 
 	/// Update a buffer with data from a vector.
-	pub fn update_buffer_vec<T: Send>(&mut self, buf: backend::Buffer, data: Vec<T>) {
-		self.list.update_buffer(buf, (box data) as Box<device::Blob + Send>);
+	pub fn update_buffer_vec<T: Send>(&mut self, buf: device::BufferHandle, data: Vec<T>) {
+		self.list.update_buffer(buf.get_name(), (box data) as Box<device::Blob + Send>);
 	}
 
 	/// Update a buffer with data from a single type.
-	pub fn update_buffer_struct<T: device::Blob+Send>(&mut self, buf: backend::Buffer, data: T) {
-		self.list.update_buffer(buf, (box data) as Box<device::Blob + Send>);
+	pub fn update_buffer_struct<T: device::Blob+Send>(&mut self, buf: device::BufferHandle, data: T) {
+		self.list.update_buffer(buf.get_name(), (box data) as Box<device::Blob + Send>);
 	}
 
 	/// Update the contents of a texture.
@@ -329,7 +338,7 @@ impl FrontEnd {
 					Ok(_) => {
 						self.list.bind_attribute(
 							sat.location as device::AttributeSlot,
-							vat.buffer, vat.elem_count, vat.elem_type,
+							vat.buffer.get_name(), vat.elem_count, vat.elem_type,
 							vat.stride, vat.offset);
 					},
 					Err(_) => return Err(ErrorAttributeType)

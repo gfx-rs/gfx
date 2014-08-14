@@ -288,13 +288,13 @@ impl super::ApiBackEnd<DrawList> for GlBackEnd {
         &self.caps
     }
 
-    fn create_buffer(&mut self) -> Buffer {
+    fn create_buffer(&mut self) -> ::BufferHandle {
         let mut name = 0 as Buffer;
         unsafe {
             gl::GenBuffers(1, &mut name);
         }
         info!("\tCreated buffer {}", name);
-        name
+        ::Handle(name, ())
     }
 
     fn create_array_buffer(&mut self) -> Result<ArrayBuffer, ()> {
@@ -311,16 +311,17 @@ impl super::ApiBackEnd<DrawList> for GlBackEnd {
         }
     }
 
-    fn create_shader(&mut self, stage: super::shade::Stage, code: super::shade::ShaderSource) -> Result<Shader, super::shade::CreateShaderError> {
+    fn create_shader(&mut self, stage: super::shade::Stage, code: super::shade::ShaderSource)
+                     -> Result<::ShaderHandle, super::shade::CreateShaderError> {
         let (name, info) = shade::create_shader(stage, code, self.get_capabilities().shader_model);
         info.map(|info| {
             let level = if name.is_err() { log::ERROR } else { log::WARN };
             log!(level, "\tShader compile log: {}", info);
         });
-        name
+        name.map(|sh| ::Handle(sh, stage))
     }
 
-    fn create_program(&mut self, shaders: &[Shader]) -> Result<::ProgramHandle, ()> {
+    fn create_program(&mut self, shaders: &[::ShaderHandle]) -> Result<::ProgramHandle, ()> {
         let (prog, log) = shade::create_program(&self.caps, shaders);
         log.map(|log| {
             let level = if prog.is_err() { log::ERROR } else { log::WARN };
@@ -360,14 +361,15 @@ impl super::ApiBackEnd<DrawList> for GlBackEnd {
         ::Handle(sam, info)
     }
 
-    fn delete_buffer(&mut self, name: Buffer) {
+    fn delete_buffer(&mut self, handle: ::BufferHandle) {
+        let name = handle.get_name();
         unsafe {
             gl::DeleteBuffers(1, &name);
         }
     }
 
-    fn delete_shader(&mut self, name: Shader) {
-        gl::DeleteShader(name);
+    fn delete_shader(&mut self, handle: ::ShaderHandle) {
+        gl::DeleteShader(handle.get_name());
     }
 
     fn delete_program(&mut self, handle: ::ProgramHandle) {
@@ -395,7 +397,8 @@ impl super::ApiBackEnd<DrawList> for GlBackEnd {
         }
     }
 
-    fn update_buffer(&mut self, buffer: Buffer, data: &super::Blob, usage: super::BufferUsage) {
+    fn update_buffer(&mut self, buffer: Buffer, data: &super::Blob,
+                     usage: super::BufferUsage) {
         gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
         let size = data.get_size() as gl::types::GLsizeiptr;
         let raw = data.get_address() as *const gl::types::GLvoid;

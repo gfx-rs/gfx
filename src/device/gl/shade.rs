@@ -197,7 +197,7 @@ fn query_attributes(prog: super::Program) -> Vec<s::Attribute> {
     }).collect()
 }
 
-fn query_blocks(caps: &super::super::Capabilities, prog: super::Program) -> Vec<s::BlockVar> {
+fn query_blocks(caps: &::Capabilities, prog: super::Program) -> Vec<s::BlockVar> {
     let num = if caps.uniform_block_supported {
         get_program_iv(prog, gl::ACTIVE_UNIFORM_BLOCKS)
     } else {
@@ -289,11 +289,11 @@ fn query_parameters(prog: super::Program) -> (Vec<s::UniformVar>, Vec<s::Sampler
     (uniforms, textures)
 }
 
-pub fn create_program(caps: &super::super::Capabilities, shaders: &[super::Shader])
+pub fn create_program(caps: &::Capabilities, shaders: &[::ShaderHandle])
         -> (Result<::ProgramHandle, ()>, Option<String>) {
     let name = gl::CreateProgram();
-    for &sh in shaders.iter() {
-        gl::AttachShader(name, sh);
+    for sh in shaders.iter() {
+        gl::AttachShader(name, sh.get_name());
     }
     gl::LinkProgram(name);
     info!("\tLinked program {}", name);

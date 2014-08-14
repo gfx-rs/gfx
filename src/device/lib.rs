@@ -76,6 +76,16 @@ impl<T: Copy, I> Handle<T, I> {
     }
 }
 
+impl<T: Copy + PartialEq, I: PartialEq> PartialEq for Handle<T, I> {
+    fn eq(&self, other: &Handle<T,I>) -> bool {
+        self.get_name().eq(&other.get_name()) && self.get_info().eq(other.get_info())
+    }
+}
+
+/// Buffer Handle
+pub type BufferHandle  = Handle<back::Buffer, ()>;
+/// Shader Handle
+pub type ShaderHandle  = Handle<back::Shader, shade::Stage>;
 /// Program Handle
 pub type ProgramHandle = Handle<back::Program, shade::ProgramInfo>;
 /// Surface Handle
@@ -219,18 +229,18 @@ pub trait ApiBackEnd<D> {
     /// Returns the capabilities available to the specific API implementation
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
     // resource creation
-    fn create_buffer(&mut self) -> back::Buffer;
+    fn create_buffer(&mut self) -> BufferHandle;
     fn create_array_buffer(&mut self) -> Result<back::ArrayBuffer, ()>;
     fn create_shader(&mut self, stage: shade::Stage, code: shade::ShaderSource) ->
-                     Result<back::Shader, shade::CreateShaderError>;
-    fn create_program(&mut self, shaders: &[back::Shader]) -> Result<ProgramHandle, ()>;
+                     Result<ShaderHandle, shade::CreateShaderError>;
+    fn create_program(&mut self, shaders: &[ShaderHandle]) -> Result<ProgramHandle, ()>;
     fn create_frame_buffer(&mut self) -> back::FrameBuffer;
     fn create_surface(&mut self, info: tex::SurfaceInfo) -> Result<SurfaceHandle, SurfaceError>;
     fn create_texture(&mut self, info: tex::TextureInfo) -> Result<TextureHandle, TextureError>;
     fn create_sampler(&mut self, info: tex::SamplerInfo) -> SamplerHandle;
     // resource deletion
-    fn delete_buffer(&mut self, back::Buffer);
-    fn delete_shader(&mut self, back::Shader);
+    fn delete_buffer(&mut self, BufferHandle);
+    fn delete_shader(&mut self, ShaderHandle);
     fn delete_program(&mut self, ProgramHandle);
     fn delete_surface(&mut self, SurfaceHandle);
     fn delete_texture(&mut self, TextureHandle);

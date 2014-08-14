@@ -25,7 +25,7 @@
 extern crate device;
 
 /// Frontend
-mod front;
+pub mod front;
 /// Meshes
 pub mod mesh;
 /// Resources (deprecated)
