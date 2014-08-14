@@ -30,7 +30,7 @@ extern crate render;
 
 // public re-exports
 pub use render::front;
-//pub use render::front::{Manager, FrontEnd};
+pub use render::front::{Manager, DrawList};
 pub use render::mesh::{Attribute, Mesh, VertexFormat, Slice, VertexSlice, IndexSlice};
 pub use render::state::{DrawState, BlendAdditive, BlendAlpha};
 pub use render::shade;

@@ -141,7 +141,7 @@ impl<D, B: device::ApiBackEnd<D>> Manager {
 
 	/// Connect a shader program with a parameter structure
 	pub fn connect_program<'a, L, T: ShaderParam<L>>
-						  (&'a self, prog: device::ProgramHandle, data: T)
+						  (prog: &'a device::ProgramHandle, data: T)
 						  -> Result<shade::CustomShell<L, T>,
 						  shade::ParameterLinkError<'a>> {
 		let info = prog.get_info();
@@ -156,8 +156,8 @@ impl<D, B: device::ApiBackEnd<D>> Manager {
 
 impl Manager {
 	/// Create a new render front-end
-	pub fn spawn(&self) -> FrontEnd {
-		FrontEnd {
+	pub fn spawn(&self) -> DrawList {
+		DrawList {
 			list: device::DrawList::new(),
 			common_array_buffer: self.common_array_buffer,
 			common_frame_buffer: self.common_frame_buffer,
@@ -177,7 +177,7 @@ impl Manager {
 }
 
 /// Renderer front-end
-pub struct FrontEnd {
+pub struct DrawList {
 	list: device::DrawList,
 	common_array_buffer: backend::ArrayBuffer,
 	common_frame_buffer: backend::FrameBuffer,
@@ -185,7 +185,7 @@ pub struct FrontEnd {
 	state: State,
 }
 
-impl FrontEnd {
+impl DrawList {
 	/// Reset all commands for draw list re-usal.
 	pub fn reset(&mut self) {
 		self.list.clear();
@@ -278,14 +278,14 @@ impl FrontEnd {
 			self.list.bind_frame_buffer(self.common_frame_buffer);
 			for (i, (cur, new)) in self.state.frame.colors.iter().zip(frame.colors.iter()).enumerate() {
 				if *cur != *new {
-					FrontEnd::bind_target(&mut self.list, device::target::TargetColor(i as u8), *new);
+					DrawList::bind_target(&mut self.list, device::target::TargetColor(i as u8), *new);
 				}
 			}
 			if self.state.frame.depth != frame.depth {
-				FrontEnd::bind_target(&mut self.list, device::target::TargetDepth, frame.depth);
+				DrawList::bind_target(&mut self.list, device::target::TargetDepth, frame.depth);
 			}
 			if self.state.frame.stencil != frame.stencil {
-				FrontEnd::bind_target(&mut self.list, device::target::TargetStencil, frame.stencil);
+				DrawList::bind_target(&mut self.list, device::target::TargetStencil, frame.stencil);
 			}
 			self.state.frame = *frame;
 		}

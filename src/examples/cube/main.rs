@@ -1,20 +1,31 @@
 #![feature(phase)]
 #![crate_name = "cube"]
 
+extern crate libc;
+extern crate native;
+extern crate time;
+extern crate cgmath;
+extern crate glfw;
+extern crate gfx;
 #[phase(plugin)]
 extern crate gfx_macros;
-extern crate gfx;
-extern crate glfw;
-extern crate glfw_platform;
-extern crate cgmath;
-extern crate native;
+extern crate device;
 
 use cgmath::matrix::{Matrix, Matrix4};
 use cgmath::point::Point3;
 use cgmath::transform::{Transform, AffineMatrix3};
 use cgmath::vector::Vector3;
+use glfw::Context;
+use device::ApiBackEnd;
 
-use glfw_platform::BuilderExtension;
+pub struct Provider<'a>(&'a glfw::Glfw);
+
+impl<'a> device::GlProvider for Provider<'a> {
+    fn get_proc_address(&self, name: &str) -> *const libc::c_void {
+        let Provider(provider) = *self;
+        provider.get_proc_address(name)
+    }
+}
 
 //----------------------------------------
 // Cube associated data
@@ -36,7 +47,7 @@ impl Vertex {
     }
 }
 
-#[shader_param]
+#[shader_param(Program)]
 struct Params {
     u_ModelViewProj: [[f32, ..4], ..4],
     t_Color: gfx::shade::TextureParam,
@@ -103,144 +114,114 @@ fn start(argc: int, argv: *const *const u8) -> int {
 fn main() {
     let glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
-    let (mut window, events) = glfw_platform::WindowBuilder::new(&glfw)
-        .title("Cube example #gfx-rs")
-        .try_modern_context_hints()
-        .create()
+    let (window, events) = glfw.create_window(640, 480, "Cube example #gfx-rs", glfw::Windowed)
         .expect("Failed to create GLFW window.");
 
+    window.make_current();
     glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
     window.set_key_polling(true); // so we can quit when Esc is pressed
-    let (width, height) = window.get_framebuffer_size();
+    let (w, h) = window.get_framebuffer_size();
 
-    let (renderer, mut device) = gfx::build()
-        .with_glfw(&glfw, window.render_context())
-        .with_queue_size(1)
-        .create()
-        .unwrap();
+    let mut backend = device::gl::GlBackEnd::new(&Provider(&glfw));
+    let man = gfx::Manager::new(&mut backend, w as u16, h as u16).unwrap();
 
-    spawn(proc() {
-        let mut renderer = renderer;
-        let frame = gfx::Frame::new(width as u16, height as u16);
-        let state = gfx::DrawState::new().depth(gfx::state::LessEqual, true);
+    let frame = *man.get_main_frame();
+    let state = gfx::DrawState::new().depth(gfx::state::LessEqual, true);
 
-        let vertex_data = vec![
-            //top (0, 0, 1)
-            Vertex::new([-1, -1,  1], [0, 0]),
-            Vertex::new([ 1, -1,  1], [1, 0]),
-            Vertex::new([ 1,  1,  1], [1, 1]),
-            Vertex::new([-1,  1,  1], [0, 1]),
-            //bottom (0, 0, -1)
-            Vertex::new([ 1,  1, -1], [0, 0]),
-            Vertex::new([-1,  1, -1], [1, 0]),
-            Vertex::new([-1, -1, -1], [1, 1]),
-            Vertex::new([ 1, -1, -1], [0, 1]),
-            //right (1, 0, 0)
-            Vertex::new([ 1, -1, -1], [0, 0]),
-            Vertex::new([ 1,  1, -1], [1, 0]),
-            Vertex::new([ 1,  1,  1], [1, 1]),
-            Vertex::new([ 1, -1,  1], [0, 1]),
-            //left (-1, 0, 0)
-            Vertex::new([-1,  1,  1], [0, 0]),
-            Vertex::new([-1, -1,  1], [1, 0]),
-            Vertex::new([-1, -1, -1], [1, 1]),
-            Vertex::new([-1,  1, -1], [0, 1]),
-            //front (0, 1, 0)
-            Vertex::new([-1,  1, -1], [0, 0]),
-            Vertex::new([ 1,  1, -1], [1, 0]),
-            Vertex::new([ 1,  1,  1], [1, 1]),
-            Vertex::new([-1,  1,  1], [0, 1]),
-            //back (0, -1, 0)
-            Vertex::new([ 1, -1,  1], [0, 0]),
-            Vertex::new([-1, -1,  1], [1, 0]),
-            Vertex::new([-1, -1, -1], [1, 1]),
-            Vertex::new([ 1, -1, -1], [0, 1]),
+    let vertex_data = vec![
+        //top (0, 0, 1)
+        Vertex::new([-1, -1,  1], [0, 0]),
+        Vertex::new([ 1, -1,  1], [1, 0]),
+        Vertex::new([ 1,  1,  1], [1, 1]),
+        Vertex::new([-1,  1,  1], [0, 1]),
+        //bottom (0, 0, -1)
+        Vertex::new([ 1,  1, -1], [0, 0]),
+        Vertex::new([-1,  1, -1], [1, 0]),
+        Vertex::new([-1, -1, -1], [1, 1]),
+        Vertex::new([ 1, -1, -1], [0, 1]),
+        //right (1, 0, 0)
+        Vertex::new([ 1, -1, -1], [0, 0]),
+        Vertex::new([ 1,  1, -1], [1, 0]),
+        Vertex::new([ 1,  1,  1], [1, 1]),
+        Vertex::new([ 1, -1,  1], [0, 1]),
+        //left (-1, 0, 0)
+        Vertex::new([-1,  1,  1], [0, 0]),
+        Vertex::new([-1, -1,  1], [1, 0]),
+        Vertex::new([-1, -1, -1], [1, 1]),
+        Vertex::new([-1,  1, -1], [0, 1]),
+        //front (0, 1, 0)
+        Vertex::new([-1,  1, -1], [0, 0]),
+        Vertex::new([ 1,  1, -1], [1, 0]),
+        Vertex::new([ 1,  1,  1], [1, 1]),
+        Vertex::new([-1,  1,  1], [0, 1]),
+        //back (0, -1, 0)
+        Vertex::new([ 1, -1,  1], [0, 0]),
+        Vertex::new([-1, -1,  1], [1, 0]),
+        Vertex::new([-1, -1, -1], [1, 1]),
+        Vertex::new([ 1, -1, -1], [0, 1]),
+    ];
+
+    let mesh = man.create_mesh(vertex_data, &mut backend);
+
+    let slice = {
+        let index_data = vec![
+            0u8, 1, 2, 2, 3, 0,    //top
+            4, 5, 6, 6, 7, 4,       //bottom
+            8, 9, 10, 10, 11, 8,    //right
+            12, 13, 14, 14, 16, 12, //left
+            16, 17, 18, 18, 19, 16, //front
+            20, 21, 22, 22, 23, 20, //back
         ];
 
-        let mesh = renderer.create_mesh(vertex_data);
+        let buf = backend.create_buffer();
+        backend.update_buffer(buf.get_name(), &index_data, device::UsageStatic);
+        gfx::IndexSlice(buf, gfx::attrib::U8, 0, 36)
+    };
 
-        let slice = {
-            let index_data = vec![
-                0u8, 1, 2, 2, 3, 0,    //top
-                4, 5, 6, 6, 7, 4,       //bottom
-                8, 9, 10, 10, 11, 8,    //right
-                12, 13, 14, 14, 16, 12, //left
-                16, 17, 18, 18, 19, 16, //front
-                20, 21, 22, 22, 23, 20, //back
-            ];
+    let tinfo = gfx::tex::TextureInfo {
+        width: 1,
+        height: 1,
+        depth: 1,
+        mipmap_range: (0, 1),
+        kind: gfx::tex::Texture2D,
+        format: gfx::tex::RGBA8,
+    };
+    let img_info = tinfo.to_image_info();
+    let texture = backend.create_texture(tinfo).unwrap();
 
-            let buf_index = renderer.create_buffer(Some(index_data));
-            gfx::IndexSlice(buf_index, gfx::attrib::U8, 0, 36)
+    let sampler = backend.create_sampler(gfx::tex::SamplerInfo::new(
+        gfx::tex::Bilinear, gfx::tex::Clamp));
+
+    let mut prog = {
+        let data = Params {
+            u_ModelViewProj: [
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+            t_Color: (texture, Some(sampler)),
         };
+        let handle = man.create_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone(),
+            &mut backend).unwrap();
+        let x: Program = gfx::Manager::connect_program(&handle, data).unwrap();
+        x   //cannot determine a type for this bounded type parameter: unconstrained type
+    };
 
-        let tinfo = gfx::tex::TextureInfo {
-            width: 1,
-            height: 1,
-            depth: 1,
-            mipmap_range: (0, 1),
-            kind: gfx::tex::Texture2D,
-            format: gfx::tex::RGBA8,
-        };
-        let img_info = tinfo.to_image_info();
-        let texture = renderer.create_texture(tinfo);
-        renderer.update_texture(texture, img_info, vec![0x20u8, 0xA0u8, 0xC0u8, 0x00u8]);
+    let mut m_model = Matrix4::<f32>::identity();
+    let m_viewproj = {
+        let mv: AffineMatrix3<f32> = Transform::look_at(
+            &Point3::new(1.5f32, -5.0, 3.0),
+            &Point3::new(0f32, 0.0, 0.0),
+            &Vector3::unit_z()
+            );
+        let aspect = w as f32 / h as f32;
+        let mp = cgmath::projection::perspective(
+            cgmath::angle::deg(45f32), aspect, 1f32, 10f32);
+        mp.mul_m(&mv.mat)
+    };
 
-        let sampler = renderer.create_sampler(gfx::tex::SamplerInfo::new(
-            gfx::tex::Bilinear, gfx::tex::Clamp));
-
-        let mut prog = {
-            let data = Params {
-                u_ModelViewProj: [
-                    [1.0, 0.0, 0.0, 0.0],
-                    [0.0, 1.0, 0.0, 0.0],
-                    [0.0, 0.0, 1.0, 0.0],
-                    [0.0, 0.0, 0.0, 1.0],
-                ],
-                t_Color: (texture, Some(sampler)),
-            };
-            let handle = renderer.create_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone());
-            renderer.connect_program(handle, data).unwrap()
-        };
-
-        let clear = gfx::ClearData {
-            color: Some(gfx::Color([0.3, 0.3, 0.3, 1.0])),
-            depth: Some(1.0),
-            stencil: None,
-        };
-
-        let mut m_model = Matrix4::<f32>::identity();
-        let m_viewproj = {
-            let mv: AffineMatrix3<f32> = Transform::look_at(
-                &Point3::new(1.5f32, -5.0, 3.0),
-                &Point3::new(0f32, 0.0, 0.0),
-                &Vector3::unit_z()
-                );
-            let aspect = width as f32 / height as f32;
-            let mp = cgmath::projection::perspective(
-                cgmath::angle::deg(45f32), aspect, 1f32, 10f32);
-            mp.mul_m(&mv.mat)
-        };
-
-        while !renderer.should_finish() {
-            renderer.clear(clear, frame);
-            m_model.x.x = 1.0;
-            prog.data.u_ModelViewProj = {
-                let m = m_viewproj.mul_m(&m_model);
-                [ //TODO: add raw convertion methods to cgmath
-                    [m.x.x, m.x.y, m.x.z, m.x.w],
-                    [m.y.x, m.y.y, m.y.z, m.y.w],
-                    [m.z.x, m.z.y, m.z.z, m.z.w],
-                    [m.w.x, m.w.y, m.w.z, m.w.w]
-                ]
-            };
-            renderer.draw(&mesh, slice, &frame, &prog, &state)
-                .unwrap();
-            renderer.end_frame();
-            for err in renderer.errors() {
-                println!("Renderer error: {}", err);
-            }
-        }
-    });
+    let mut list = man.spawn();
 
     'main: loop {
         glfw.poll_events();
@@ -254,6 +235,30 @@ fn main() {
                 _ => {},
             }
         }
-        device.update();
+        // render
+        list.reset();
+        list.update_texture(texture, img_info, vec![0x20u8, 0xA0u8, 0xC0u8, 0x00u8]);
+        list.clear(
+            gfx::ClearData {
+                color: Some(gfx::Color([0.3, 0.3, 0.3, 1.0])),
+                depth: Some(1.0),
+                stencil: None,
+            },
+            &frame
+        );
+        m_model.x.x = 1.0;
+        prog.data.u_ModelViewProj = {
+            let m = m_viewproj.mul_m(&m_model);
+            [ //TODO: add raw convertion methods to cgmath
+                [m.x.x, m.x.y, m.x.z, m.x.w],
+                [m.y.x, m.y.y, m.y.z, m.y.w],
+                [m.z.x, m.z.y, m.z.z, m.z.w],
+                [m.w.x, m.w.y, m.w.z, m.w.w]
+            ]
+        };
+        list.draw(&mesh, slice, &frame, &prog, &state)
+            .unwrap();
+        backend.submit(list.as_slice());
+        window.swap_buffers();
     }
 }

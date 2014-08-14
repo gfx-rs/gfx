@@ -16,7 +16,7 @@ struct Provider<'a>(&'a gl_init::Window);
 
 impl<'a> device::GlProvider for Provider<'a> {
     fn get_proc_address(&self, name: &str) -> *const libc::c_void {
-        let Provider(ref win) = *self;
+        let Provider(win) = *self;
         win.get_proc_address(name)
     }
 }
@@ -82,7 +82,7 @@ fn main() {
     let (w, h) = window.get_inner_size().unwrap();
 
     let mut backend = device::gl::GlBackEnd::new(&Provider(&window));
-    let man = gfx::front::Manager::new(&mut backend, w as u16, h as u16).unwrap();
+    let man = gfx::Manager::new(&mut backend, w as u16, h as u16).unwrap();
 
     let state = gfx::DrawState::new();
     let vertex_data = vec![
@@ -94,7 +94,7 @@ fn main() {
     let program = man.create_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone(),
         &mut backend).unwrap();
 
-    let mut list: gfx::front::FrontEnd = man.spawn();
+    let mut list = man.spawn();
     list.clear(
         gfx::ClearData {
             color: Some(gfx::Color([0.3, 0.3, 0.3, 1.0])),
