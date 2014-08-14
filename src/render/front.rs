@@ -311,7 +311,8 @@ impl FrontEnd {
 					prog.get_name(),
 					i as device::UniformBufferSlot,
 					i as device::UniformBlockIndex,
-					buf),
+					buf.get_name()
+				),
 				None => return Err(ErrorShellBlock(var.name.clone())),
 			}
 		}

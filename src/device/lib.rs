@@ -95,6 +95,12 @@ pub type TextureHandle = Handle<back::Texture, tex::TextureInfo>;
 /// Sampler Handle
 pub type SamplerHandle = Handle<back::Sampler, tex::SamplerInfo>;
 
+/// A helper method to test `#[vertex_format]` without GL context
+//#[cfg(test)]
+pub fn make_fake_buffer() -> BufferHandle {
+    Handle(0, ())
+}
+
 /// Features that the device supports.
 #[deriving(Show)]
 pub struct Capabilities {

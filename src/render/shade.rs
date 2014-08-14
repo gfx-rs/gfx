@@ -17,8 +17,7 @@
 use std::cell::Cell;
 use std::rc::Rc;
 use s = device::shade;
-use device::{ProgramHandle, SamplerHandle, TextureHandle};
-use device::back::{Buffer};
+use device::{BufferHandle, ProgramHandle, SamplerHandle, TextureHandle};
 
 /// Helper trait to transform base types into their corresponding uniforms
 pub trait ToUniform {
@@ -80,7 +79,7 @@ pub struct ParamValues<'a> {
     /// uniform values to be provided
     pub uniforms: &'a mut [Option<s::UniformValue>],
     /// uniform buffers to be provided
-    pub blocks  : &'a mut [Option<Buffer>],
+    pub blocks  : &'a mut [Option<BufferHandle>],
     /// textures to be provided
     pub textures: &'a mut [Option<TextureParam>],
 }
@@ -173,7 +172,7 @@ pub struct ParamDictionary {
     /// Uniform dictionary
     pub uniforms: Vec<NamedCell<s::UniformValue>>,
     /// Block dictionary
-    pub blocks: Vec<NamedCell<Buffer>>,
+    pub blocks: Vec<NamedCell<BufferHandle>>,
     /// Texture dictionary
     pub textures: Vec<NamedCell<TextureParam>>,
 }
