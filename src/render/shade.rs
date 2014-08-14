@@ -92,6 +92,21 @@ pub trait ProgramShell {
     fn fill_params(&self, ParamValues);
 }
 
+impl ProgramShell for ProgramHandle {
+    fn get_program(&self) -> &ProgramHandle {
+        self
+    }
+
+    fn fill_params(&self, params: ParamValues) {
+        debug_assert!(
+            params.uniforms.is_empty() &&
+            params.blocks.is_empty() &&
+            params.textures.is_empty(),
+            "trying to bind a program that has uniforms ; please call renderer.connect_program first"
+        );
+    }
+}
+
 /// An error type on either the parameter storage or the program side
 #[deriving(Clone, Show)]
 pub enum ParameterError<'a> {

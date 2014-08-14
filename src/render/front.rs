@@ -71,6 +71,7 @@ pub struct Manager {
 	common_array_buffer: backend::ArrayBuffer,
 	common_frame_buffer: backend::FrameBuffer,
 	default_frame_buffer: backend::FrameBuffer,
+	main_frame: target::Frame,
 }
 
 /// Manager initialization error
@@ -94,10 +95,9 @@ pub enum ProgramError {
 	ErrorLink(()),
 }
 
-
 impl<D, B: device::ApiBackEnd<D>> Manager {
 	/// Create a new front-end manager
-	pub fn new(backend: &mut B) -> Result<Manager, InitError> {
+	pub fn new(backend: &mut B, width: u16, height: u16) -> Result<Manager, InitError> {
 		Ok(Manager {
 			common_array_buffer: match backend.create_array_buffer() {
 				Ok(vao) => vao,
@@ -105,27 +105,13 @@ impl<D, B: device::ApiBackEnd<D>> Manager {
 			},
 			common_frame_buffer: backend.create_frame_buffer(),
 			default_frame_buffer: 0,
+			main_frame: target::Frame::new(width, height),
 		})
-	}
-
-	/// Create a new render front-end
-	pub fn spawn(&self) -> FrontEnd {
-		FrontEnd {
-			list: device::DrawList::new(),
-			common_array_buffer: self.common_array_buffer,
-			common_frame_buffer: self.common_frame_buffer,
-			default_frame_buffer: self.default_frame_buffer,
-			state: State {
-				frame: target::Frame::new(0, 0),
-				//TODO: force this to match the default HW state
-				//fixed_function: state::DrawState::new(),
-			},
-		}
 	}
 
 	/// Create a new mesh from the given vertex data.
 	/// Convenience function around `create_buffer` and `Mesh::from`.
-	pub fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>,
+	pub fn create_mesh<T: mesh::VertexFormat + Send>(&self, data: Vec<T>,
 					  backend: &mut B) -> mesh::Mesh {
 		let nv = data.len();
 		debug_assert!(nv < {
@@ -139,7 +125,7 @@ impl<D, B: device::ApiBackEnd<D>> Manager {
 	}
 
 	/// Create a simple program given a vertex shader with a fragment one
-	pub fn link_program(&mut self, vs_src: ShaderSource, fs_src: ShaderSource,
+	pub fn create_program(&self, vs_src: ShaderSource, fs_src: ShaderSource,
 						backend: &mut B) -> Result<device::ProgramHandle, ProgramError> {
 		//TODO: integrate connect_program here
 		let vs = match backend.create_shader(Vertex, vs_src) {
@@ -155,7 +141,7 @@ impl<D, B: device::ApiBackEnd<D>> Manager {
 
 	/// Connect a shader program with a parameter structure
 	pub fn connect_program<'a, L, T: ShaderParam<L>>
-						  (&'a mut self, prog: device::ProgramHandle, data: T)
+						  (&'a self, prog: device::ProgramHandle, data: T)
 						  -> Result<shade::CustomShell<L, T>,
 						  shade::ParameterLinkError<'a>> {
 		let info = prog.get_info();
@@ -165,6 +151,28 @@ impl<D, B: device::ApiBackEnd<D>> Manager {
 			Ok(link) => Ok(shade::CustomShell::new(prog.clone(), link, data)),
 			Err(e) => Err(shade::ErrorUnusedParameter(e)),
 		}
+	}
+}
+
+impl Manager {
+	/// Create a new render front-end
+	pub fn spawn(&self) -> FrontEnd {
+		FrontEnd {
+			list: device::DrawList::new(),
+			common_array_buffer: self.common_array_buffer,
+			common_frame_buffer: self.common_frame_buffer,
+			default_frame_buffer: self.default_frame_buffer,
+			state: State {
+				frame: self.main_frame,
+				//TODO: force this to match the default HW state
+				//fixed_function: state::DrawState::new(),
+			},
+		}
+	}
+
+	/// Return a reference to the main frame buffer
+	pub fn get_main_frame(&self) -> &target::Frame {
+		&self.main_frame
 	}
 }
 
