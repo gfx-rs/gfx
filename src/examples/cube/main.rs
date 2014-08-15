@@ -8,15 +8,13 @@ extern crate glfw;
 extern crate gfx;
 #[phase(plugin)]
 extern crate gfx_macros;
-extern crate device;
 
 use cgmath::matrix::{Matrix, Matrix4};
 use cgmath::point::Point3;
 use cgmath::transform::{Transform, AffineMatrix3};
 use cgmath::vector::Vector3;
+use gfx::{Device, DeviceHelper};
 use glfw::Context;
-use gfx::BackEndHelper;
-use device::ApiBackEnd;
 
 //----------------------------------------
 // Cube associated data
@@ -113,8 +111,8 @@ fn main() {
     window.set_key_polling(true); // so we can quit when Esc is pressed
     let (w, h) = window.get_framebuffer_size();
 
-    let mut backend = device::gl::GlBackEnd::new(|s| glfw.get_proc_address(s));
-    let frontend = backend.create_frontend(w as u16, h as u16).unwrap();
+    let mut device = gfx::GlDevice::new(|s| glfw.get_proc_address(s));
+    let frontend = device.create_frontend(w as u16, h as u16).unwrap();
 
     let frame = *frontend.get_main_frame();
     let state = gfx::DrawState::new().depth(gfx::state::LessEqual, true);
@@ -152,7 +150,7 @@ fn main() {
         Vertex::new([ 1, -1, -1], [0, 1]),
     ];
 
-    let mesh = backend.create_mesh(vertex_data);
+    let mesh = device.create_mesh(vertex_data);
 
     let slice = {
         let index_data = vec![
@@ -164,8 +162,8 @@ fn main() {
             20, 21, 22, 22, 23, 20, //back
         ];
 
-        let buf = backend.create_buffer();
-        backend.update_buffer(buf, &index_data, device::UsageStatic);
+        let buf = device.create_buffer();
+        device.update_buffer(buf, &index_data, gfx::UsageStatic);
         gfx::IndexSlice(buf, gfx::attrib::U8, 0, 36)
     };
 
@@ -178,12 +176,12 @@ fn main() {
         format: gfx::tex::RGBA8,
     };
     let img_info = tinfo.to_image_info();
-    let texture = backend.create_texture(tinfo).unwrap();
-    backend.update_texture(&texture, &img_info,
-                           &vec![0x20u8, 0xA0u8, 0xC0u8, 0x00u8])
+    let texture = device.create_texture(tinfo).unwrap();
+    device.update_texture(&texture, &img_info,
+                          &vec![0x20u8, 0xA0u8, 0xC0u8, 0x00u8])
            .unwrap();
 
-    let sampler = backend.create_sampler(gfx::tex::SamplerInfo::new(
+    let sampler = device.create_sampler(gfx::tex::SamplerInfo::new(
         gfx::tex::Bilinear, gfx::tex::Clamp));
 
     let mut prog = {
@@ -196,7 +194,7 @@ fn main() {
             ],
             t_Color: (texture, Some(sampler)),
         };
-        backend.link_program(data, VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
+        device.link_program(data, VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
                .unwrap()
     };
 
@@ -249,7 +247,7 @@ fn main() {
         };
         list.draw(&mesh, slice, &frame, &prog, &state)
             .unwrap();
-        backend.submit(list.as_slice());
+        device.submit(list.as_slice());
         window.swap_buffers();
     }
 }

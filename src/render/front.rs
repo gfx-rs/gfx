@@ -134,7 +134,7 @@ impl FrontEnd {
 }
 
 /// Backend extension trait for convenience methods
-pub trait BackEndHelper {
+pub trait DeviceHelper {
     /// Create a new front-end manager.
     fn create_frontend(&mut self, width: u16, height: u16) -> Result<FrontEnd, InitError>;
     /// Create a new mesh from the given vertex data.
@@ -145,7 +145,7 @@ pub trait BackEndHelper {
                    fs_src: ShaderSource) -> Result<shade::CustomShell<L, T>, ProgramError>;
 }
 
-impl<D, B: device::ApiBackEnd<D>> BackEndHelper for B {
+impl<D, B: device::Device<D>> DeviceHelper for B {
     fn create_frontend(&mut self, width: u16, height: u16) -> Result<FrontEnd, InitError> {
         Ok(FrontEnd {
             common_array_buffer: match self.create_array_buffer() {
