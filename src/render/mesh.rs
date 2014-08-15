@@ -27,7 +27,7 @@ use a = device::attrib;
 #[deriving(Clone, PartialEq, Show)]
 pub struct Attribute {
     /// Vertex buffer to contain the data
-    pub buffer: d::BufferHandle,
+    pub buffer: d::RawBufferHandle,
     /// Number of elements per vertex
     pub elem_count: a::Count,
     /// Type of a single element
@@ -44,7 +44,7 @@ pub struct Attribute {
 /// `#[vertex_format] attribute
 pub trait VertexFormat {
     /// Create the attributes for this type, using the given buffer.
-    fn generate(Option<Self>, buffer: d::BufferHandle) -> Vec<Attribute>;
+    fn generate(Option<Self>, buffer: d::RawBufferHandle) -> Vec<Attribute>;
 }
 
 /// Describes geometry to render.
@@ -69,11 +69,11 @@ impl Mesh {
     }
 
     /// Create a new `Mesh` from a struct that implements `VertexFormat` and a buffer.
-    pub fn from<V: VertexFormat>(buf: d::BufferHandle, nv: d::VertexCount) -> Mesh {
+    pub fn from<V: VertexFormat>(buf: d::BufferHandle<V>, nv: d::VertexCount) -> Mesh {
         Mesh {
             prim_type: d::TriangleList,
             num_vertices: nv,
-            attributes: VertexFormat::generate(None::<V>, buf),
+            attributes: VertexFormat::generate(None::<V>, buf.raw()),
         }
     }
 
@@ -89,13 +89,17 @@ pub enum Slice  {
     /// Render vertex data directly from the `Mesh`'s buffer, using only the vertices between the two
     /// endpoints.
     VertexSlice(d::VertexCount, d::VertexCount),
-    /// The `IndexSlice` buffer contains a list of indices into the `Mesh` data, so every vertex
+    /// The `IndexSlice*` buffer contains a list of indices into the `Mesh` data, so every vertex
     /// attribute does not need to be duplicated, only its position in the `Mesh`.  For example,
     /// when drawing a square, two triangles are needed.  Using only `VertexSlice`, one would need
     /// 6 separate vertices, 3 for each triangle. However, two of the vertices will be identical,
     /// wasting space for the duplicated attributes.  Instead, the `Mesh` can store 4 vertices and
-    /// an `IndexSlice` can be used instead.
-    IndexSlice(d::BufferHandle, d::IndexType, d::IndexCount, d::IndexCount),
+    /// an `IndexSlice8` can be used instead.
+    IndexSlice8(d::BufferHandle<u8>, d::IndexCount, d::IndexCount),
+    /// As `IndexSlice8` but with `u16` indices
+    IndexSlice16(d::BufferHandle<u16>, d::IndexCount, d::IndexCount),
+    /// As `IndexSlice8` but with `u32` indices
+    IndexSlice32(d::BufferHandle<u32>, d::IndexCount, d::IndexCount),
 }
 
 /// A slice of a mesh, with a given material.

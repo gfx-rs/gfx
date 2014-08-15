@@ -18,6 +18,8 @@ use device;
 use backend = device::back;
 use device::draw::DrawList;
 use device::shade::{ProgramInfo, ShaderSource, Vertex, Fragment, CreateShaderError};
+use device::attrib::{U8, U16, U32};
+use device::BoxBlobCast;
 use mesh;
 use shade;
 use shade::{ProgramShell, ShaderParam};
@@ -243,29 +245,37 @@ impl DrawList {
             mesh::VertexSlice(start, end) => {
                 self.list.call_draw(mesh.prim_type, start, end);
             },
-            mesh::IndexSlice(buf, index, start, end) => {
+            mesh::IndexSlice8(buf, start, end) => {
                 self.list.bind_index(buf.get_name());
-                self.list.call_draw_indexed(mesh.prim_type, index, start, end);
+                self.list.call_draw_indexed(mesh.prim_type, U8, start, end);
+            },
+            mesh::IndexSlice16(buf, start, end) => {
+                self.list.bind_index(buf.get_name());
+                self.list.call_draw_indexed(mesh.prim_type, U16, start, end);
+            },
+            mesh::IndexSlice32(buf, start, end) => {
+                self.list.bind_index(buf.get_name());
+                self.list.call_draw_indexed(mesh.prim_type, U32, start, end);
             },
         }
         Ok(())
     }
 
     /// Update a buffer with data from a vector.
-    pub fn update_buffer_vec<T: Send>(&mut self, buf: device::BufferHandle, data: Vec<T>) {
-        self.list.update_buffer(buf.get_name(), (box data) as Box<device::Blob + Send>);
+    pub fn update_buffer_vec<T: Send>(&mut self, buf: device::BufferHandle<T>, data: Vec<T>) {
+        self.list.update_buffer(buf.get_name(), (box data) as Box<device::Blob<T> + Send>);
     }
 
     /// Update a buffer with data from a single type.
-    pub fn update_buffer_struct<T: device::Blob+Send>(&mut self, buf: device::BufferHandle, data: T) {
-        self.list.update_buffer(buf.get_name(), (box data) as Box<device::Blob + Send>);
+    pub fn update_buffer_struct<U, T: device::Blob<U>+Send>(&mut self, buf: device::BufferHandle<U>, data: T) {
+        self.list.update_buffer(buf.get_name(), (box data) as Box<device::Blob<U> + Send>);
     }
 
     /// Update the contents of a texture.
     pub fn update_texture<T: Send>(&mut self, tex: device::TextureHandle,
                                    img: device::tex::ImageInfo, data: Vec<T>) {
         self.list.update_texture(tex.get_info().kind, tex.get_name(), img,
-                                 (box data) as Box<device::Blob + Send>);
+                                 (box data) as Box<device::Blob<T> + Send>);
     }
 
     fn bind_target(list: &mut device::DrawList, to: device::target::Target, plane: target::Plane) {

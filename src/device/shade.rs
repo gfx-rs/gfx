@@ -16,7 +16,6 @@
 
 #![allow(missing_doc)]
 
-use std::cell::Cell;
 use std::fmt;
 
 // Describing shader parameters

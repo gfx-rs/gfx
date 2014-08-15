@@ -37,7 +37,7 @@ fn classify(node: &ast::Ty_) -> Result<ParamType, ParamError> {
     match *node {
         ast::TyPath(ref path, _, _) => match path.segments.last() {
             Some(segment) => match segment.identifier.name.as_str() {
-                "BufferHandle" => Ok(ParamBlock),
+                "RawBufferHandle" => Ok(ParamBlock),
                 "TextureParam" => Ok(ParamTexture),
                 "TextureHandle" => Err(ErrorDeprecatedTexture),
                 _ => Ok(ParamUniform),

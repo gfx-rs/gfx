@@ -169,7 +169,7 @@ fn main() {
 
         let buf = device.create_buffer();
         device.update_buffer(buf, &index_data, gfx::UsageStatic);
-        gfx::IndexSlice(buf, gfx::attrib::U8, 0, 36)
+        gfx::IndexSlice8(buf, 0, 36)
     };
 
     let tinfo = gfx::tex::TextureInfo {

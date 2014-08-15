@@ -82,8 +82,38 @@ impl<T: Copy + PartialEq, I: PartialEq> PartialEq for Handle<T, I> {
     }
 }
 
-/// Buffer Handle
-pub type BufferHandle  = Handle<back::Buffer, ()>;
+/// Type-safe buffer handle
+#[deriving(Show, Clone)]
+pub struct BufferHandle<T> {
+    raw: RawBufferHandle,
+}
+
+impl<T> BufferHandle<T> {
+    /// Create a type-safe BufferHandle from a RawBufferHandle
+    pub fn from_raw(handle: RawBufferHandle) -> BufferHandle<T> {
+        BufferHandle {
+            raw: handle,
+        }
+    }
+
+    /// Cast the type this BufferHandle references
+    pub fn cast<U>(self) -> BufferHandle<U> {
+        BufferHandle::from_raw(self.raw)
+    }
+
+    /// Get the underlying GL name for this BufferHandle
+    pub fn get_name(&self) -> back::Buffer {
+        self.raw.get_name()
+    }
+
+    /// Get the underlying raw Handle
+    pub fn raw(&self) -> RawBufferHandle {
+        self.raw
+    }
+}
+
+
+pub type RawBufferHandle = Handle<back::Buffer, ()>;
 /// Shader Handle
 pub type ShaderHandle  = Handle<back::Shader, shade::Stage>;
 /// Program Handle
@@ -97,8 +127,8 @@ pub type SamplerHandle = Handle<back::Sampler, tex::SamplerInfo>;
 
 /// A helper method to test `#[vertex_format]` without GL context
 //#[cfg(test)]
-pub fn make_fake_buffer() -> BufferHandle {
-    Handle(0, ())
+pub fn make_fake_buffer<T>() -> BufferHandle<T> {
+    BufferHandle::from_raw(Handle(0, ()))
 }
 
 /// Features that the device supports.
@@ -115,14 +145,38 @@ pub struct Capabilities {
 }
 
 /// A trait that slice-like types implement.
-pub trait Blob {
+pub trait Blob<T> {
     /// Get the address to the data this `Blob` stores.
     fn get_address(&self) -> uint;
     /// Get the number of bytes in this blob.
     fn get_size(&self) -> uint;
 }
 
-impl<T: Send> Blob for Vec<T> {
+/// Helper trait for casting &Blob
+pub trait RefBlobCast<'a> {
+    /// Cast the type the blob references
+    fn cast<U>(self) -> &'a Blob<U>;
+}
+
+/// Helper trait for casting Box<Blob>
+pub trait BoxBlobCast {
+    /// Cast the type the blob references
+    fn cast<U>(self) -> Box<Blob<U> + Send>;
+}
+
+impl<'a, T> RefBlobCast<'a> for &'a Blob<T> {
+    fn cast<U>(self) -> &'a Blob<U> {
+        unsafe { std::mem::transmute(self) }
+    }
+}
+
+impl<T> BoxBlobCast for Box<Blob<T> + Send> {
+    fn cast<U>(self) -> Box<Blob<U> + Send> {
+        unsafe { std::mem::transmute(self) }
+    }
+}
+
+impl<T: Send> Blob<T> for Vec<T> {
     fn get_address(&self) -> uint {
         self.as_ptr() as uint
     }
@@ -131,7 +185,7 @@ impl<T: Send> Blob for Vec<T> {
     }
 }
 
-impl fmt::Show for Box<Blob + Send> {
+impl<T> fmt::Show for Box<Blob<T> + Send> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Blob({:#x}, {})", self.get_address(), self.get_size())
     }
@@ -224,8 +278,8 @@ enum Command {
     SetDepthStencilState(Option<state::Depth>, Option<state::Stencil>, state::CullMode),
     SetBlendState(Option<state::Blend>),
     SetColorMask(state::ColorMask),
-    UpdateBuffer(back::Buffer, Box<Blob + Send>),
-    UpdateTexture(tex::TextureKind, back::Texture, tex::ImageInfo, Box<Blob + Send>),
+    UpdateBuffer(back::Buffer, Box<Blob<()> + Send>),
+    UpdateTexture(tex::TextureKind, back::Texture, tex::ImageInfo, Box<Blob<()> + Send>),
     // drawing
     Clear(target::ClearData),
     Draw(PrimitiveType, VertexCount, VertexCount),
@@ -238,7 +292,7 @@ pub trait Device<D> {
     /// Returns the capabilities available to the specific API implementation
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
     // resource creation
-    fn create_buffer(&mut self) -> BufferHandle;
+    fn create_buffer<T>(&mut self) -> BufferHandle<T>;
     fn create_array_buffer(&mut self) -> Result<back::ArrayBuffer, ()>;
     fn create_shader(&mut self, stage: shade::Stage, code: shade::ShaderSource) ->
                      Result<ShaderHandle, shade::CreateShaderError>;
@@ -248,16 +302,16 @@ pub trait Device<D> {
     fn create_texture(&mut self, info: tex::TextureInfo) -> Result<TextureHandle, TextureError>;
     fn create_sampler(&mut self, info: tex::SamplerInfo) -> SamplerHandle;
     // resource deletion
-    fn delete_buffer(&mut self, BufferHandle);
+    fn delete_buffer<T>(&mut self, BufferHandle<T>);
     fn delete_shader(&mut self, ShaderHandle);
     fn delete_program(&mut self, ProgramHandle);
     fn delete_surface(&mut self, SurfaceHandle);
     fn delete_texture(&mut self, TextureHandle);
     fn delete_sampler(&mut self, SamplerHandle);
     /// Update the information stored in a specific buffer
-    fn update_buffer(&mut self, BufferHandle, &Blob, BufferUsage);
+    fn update_buffer<T>(&mut self, BufferHandle<T>, &Blob<T>, BufferUsage);
     /// Update the information stored in a texture
-    fn update_texture(&mut self, &TextureHandle, &tex::ImageInfo, &Blob)
+    fn update_texture<T>(&mut self, &TextureHandle, &tex::ImageInfo, &Blob<T>)
                       -> Result<(), TextureError>;
     /// Submit a draw list. TODO: enforce `draw::DrawList` trait here
     fn submit(&mut self, list: &D);

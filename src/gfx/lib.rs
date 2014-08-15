@@ -31,7 +31,8 @@ extern crate render;
 // public re-exports
 pub use render::front;
 pub use render::front::{DeviceHelper, FrontEnd, DrawList};
-pub use render::mesh::{Attribute, Mesh, VertexFormat, Slice, VertexSlice, IndexSlice};
+pub use render::mesh::{Attribute, Mesh, VertexFormat, Slice, VertexSlice,
+    IndexSlice8, IndexSlice16, IndexSlice32};
 pub use render::state::{DrawState, BlendAdditive, BlendAlpha};
 pub use render::shade;
 pub use render::target::{Frame, Plane, PlaneEmpty, PlaneSurface, PlaneTexture};
@@ -39,7 +40,7 @@ pub use device::Device;
 // when cargo is ready, re-enable the cfgs
 /* #[cfg(gl)] */ pub use device::GlDevice;
 pub use device::{attrib, state, tex};
-pub use device::{BufferHandle, ShaderHandle, SurfaceHandle, TextureHandle, SurfaceHandle};
+pub use device::{BufferHandle, RawBufferHandle, ShaderHandle, SurfaceHandle, TextureHandle, SurfaceHandle};
 pub use device::{BufferUsage, UsageStatic, UsageDynamic, UsageStream};
 pub use device::{Blob, VertexCount, IndexCount};
 pub use device::{Point, Line, LineStrip, TriangleList, TriangleStrip, TriangleFan};
