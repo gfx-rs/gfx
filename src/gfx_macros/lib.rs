@@ -26,6 +26,9 @@
 extern crate rustc;
 extern crate syntax;
 
+use syntax::{ast, attr, ext, codemap};
+use syntax::parse::token;
+
 pub mod shader_param;
 pub mod vertex_format;
 
@@ -45,6 +48,32 @@ pub fn registrar(reg: &mut rustc::plugin::Registry) {
 /// A hacky thing to get around 'moved value' errors when using `quote_expr!`
 /// with `ext::base::ExtCtxt`s.
 fn ugh<T, U>(x: &mut T, f: |&mut T| -> U) -> U { f(x) }
+
+/// Scan through the field's attributes and extract the field vertex name. If
+/// multiple names are found, use the first name and emit a warning.
+fn find_name(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
+             attributes: &[ast::Attribute]) -> Option<token::InternedString> {
+    attributes.iter().fold(None, |name, attribute| {
+        match attribute.node.value.node {
+            ast::MetaNameValue(ref attr_name, ref attr_value) => {
+                match (attr_name.get(), &attr_value.node) {
+                    ("name", &ast::LitStr(ref new_name, _)) => {
+                        attr::mark_used(attribute);
+                        name.map_or(Some(new_name.clone()), |name| {
+                            cx.span_warn(span, format!(
+                                "Extra field name detected: {} - \
+                                ignoring in favour of: {}", new_name, name
+                            ).as_slice());
+                            None
+                        })
+                    }
+                    _ => None,
+                }
+            }
+            _ => name,
+        }
+    })
+}
 
 #[macro_export]
 macro_rules! shaders {

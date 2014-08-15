@@ -84,24 +84,6 @@ fn find_modifier(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
     })
 }
 
-fn find_name(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
-             attributes: &[ast::Attribute]) -> Option<token::InternedString> {
-    attributes.iter().fold(None, |name, attribute| {
-        match attribute.node.value.node {
-            ast::MetaNameValue(ref attr_name, ref attr_value) => {
-                match (attr_name.get(), &attr_value.node) {
-                    ("name", &ast::LitStr(ref name, _)) => {
-                        attr::mark_used(attribute);
-                        Some(name.clone())
-                    }
-                    _ => None,
-                }
-            }
-            _ => name,
-        }
-    })
-}
-
 /// Find a `gfx::attrib::Type` that describes the given type identifier.
 fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                ty_ident: &ast::Ident, modifier: Option<Modifier>) -> Gc<ast::Expr> {
@@ -194,7 +176,7 @@ fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     let struct_ident = substr.type_ident;
                     let buffer_expr = substr.nonself_args[1];
                     let (count_expr, type_expr) = decode_count_and_type(cx, span, def);
-                    let ident_str = match find_name(cx, span, def.node.attrs.as_slice()) {
+                    let ident_str = match super::find_name(cx, span, def.node.attrs.as_slice()) {
                         Some(name) => name,
                         None => token::get_ident(ident),
                     };
