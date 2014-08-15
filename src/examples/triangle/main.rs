@@ -105,15 +105,13 @@ fn main() {
     list.draw(&mesh, mesh.get_slice(), frontend.get_main_frame(), &program, &state)
         .unwrap();
 
-    'main: loop {
+    while !window.should_close() {
         glfw.poll_events();
-        if window.should_close() {
-            break 'main;
-        }
         // quit when Esc is pressed.
         for (_, event) in glfw::flush_messages(&events) {
             match event {
-                glfw::KeyEvent(glfw::KeyEscape, _, glfw::Press, _) => break 'main,
+                glfw::KeyEvent(glfw::KeyEscape, _, glfw::Press, _) =>
+                    window.set_should_close(true),
                 _ => {},
             }
         }
