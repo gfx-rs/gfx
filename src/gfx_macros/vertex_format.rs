@@ -224,7 +224,7 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
         additional_bounds: Vec::new(),
         generics: generic::ty::LifetimeBounds::empty(),
         methods: vec![
-            // `fn generate(Option<Self>, gfx::BufferHandle) -> Vec<gfx::Attribute>`
+            // `fn generate(Option<Self>, gfx::RawBufferHandle) -> Vec<gfx::Attribute>`
             generic::MethodDef {
                 name: "generate",
                 generics: generic::ty::LifetimeBounds::empty(),
@@ -237,7 +237,7 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                         global: false,
                     }),
                     generic::ty::Literal(generic::ty::Path::new(
-                        vec!["gfx", "BufferHandle"]
+                        vec!["gfx", "RawBufferHandle"]
                     )),
                 ],
                 ret_ty: generic::ty::Literal(

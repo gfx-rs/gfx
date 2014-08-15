@@ -15,6 +15,7 @@
 //! OpenGL implementation of the `DrawList`
 
 use std::slice;
+use BoxBlobCast;
 
 pub struct DrawList {
     buf: Vec<::Command>,
@@ -110,13 +111,13 @@ impl ::draw::DrawList for DrawList {
         self.buf.push(::SetColorMask(mask));
     }
 
-    fn update_buffer(&mut self, buf: super::Buffer, data: Box<::Blob + Send>) {
-        self.buf.push(::UpdateBuffer(buf, data));
+    fn update_buffer<T>(&mut self, buf: super::Buffer, data: Box<::Blob<T> + Send>) {
+        self.buf.push(::UpdateBuffer(buf, data.cast()));
     }
 
-    fn update_texture(&mut self, kind: ::tex::TextureKind, tex: super::Texture,
-                      info: ::tex::ImageInfo, data: Box<::Blob + Send>) {
-        self.buf.push(::UpdateTexture(kind, tex, info, data));
+    fn update_texture<T>(&mut self, kind: ::tex::TextureKind, tex: super::Texture,
+                      info: ::tex::ImageInfo, data: Box<::Blob<T> + Send>) {
+        self.buf.push(::UpdateTexture(kind, tex, info, data.cast()));
     }
 
     fn call_clear(&mut self, data: ::target::ClearData) {

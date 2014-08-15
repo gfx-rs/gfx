@@ -25,7 +25,7 @@ struct MyParam {
     a: i32,
     b: [f32, ..4],
     c: gfx::shade::TextureParam,
-    d: gfx::BufferHandle,
+    d: gfx::RawBufferHandle,
     #[unused]
     e: f32,
 }

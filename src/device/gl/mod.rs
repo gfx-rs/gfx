@@ -25,6 +25,7 @@ use log;
 use std::{fmt, str};
 use std::collections::HashSet;
 use a = super::attrib;
+use RefBlobCast;
 
 pub use self::draw::DrawList;
 
@@ -282,7 +283,7 @@ impl GlDevice {
         &self.info
     }
 
-    fn update_buffer_internal(&mut self, buffer: Buffer, data: &super::Blob,
+    fn update_buffer_internal(&mut self, buffer: Buffer, data: &super::Blob<()>,
                               usage: super::BufferUsage) {
         gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
         let size = data.get_size() as gl::types::GLsizeiptr;
@@ -487,13 +488,13 @@ impl super::Device<DrawList> for GlDevice {
         &self.caps
     }
 
-    fn create_buffer(&mut self) -> ::BufferHandle {
+    fn create_buffer<T>(&mut self) -> ::BufferHandle<T> {
         let mut name = 0 as Buffer;
         unsafe {
             gl::GenBuffers(1, &mut name);
         }
         info!("\tCreated buffer {}", name);
-        ::Handle(name, ())
+        ::BufferHandle::from_raw(::Handle(name, ()))
     }
 
     fn create_array_buffer(&mut self) -> Result<ArrayBuffer, ()> {
@@ -560,7 +561,7 @@ impl super::Device<DrawList> for GlDevice {
         ::Handle(sam, info)
     }
 
-    fn delete_buffer(&mut self, handle: ::BufferHandle) {
+    fn delete_buffer<T>(&mut self, handle: ::BufferHandle<T>) {
         let name = handle.get_name();
         unsafe {
             gl::DeleteBuffers(1, &name);
@@ -596,13 +597,13 @@ impl super::Device<DrawList> for GlDevice {
         }
     }
 
-    fn update_buffer(&mut self, buffer: ::BufferHandle, data: &super::Blob,
+    fn update_buffer<T>(&mut self, buffer: ::BufferHandle<T>, data: &super::Blob<T>,
                      usage: super::BufferUsage) {
-        self.update_buffer_internal(buffer.get_name(), data, usage);
+        self.update_buffer_internal(buffer.get_name(), data.cast(), usage);
     }
 
-    fn update_texture(&mut self, texture: &::TextureHandle, img: &::tex::ImageInfo,
-                      data: &super::Blob) -> Result<(), ::TextureError> {
+    fn update_texture<T>(&mut self, texture: &::TextureHandle, img: &::tex::ImageInfo,
+                      data: &super::Blob<T>) -> Result<(), ::TextureError> {
         tex::update_texture(texture.get_info().kind, texture.get_name(), img, data)
     }
 
