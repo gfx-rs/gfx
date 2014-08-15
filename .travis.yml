@@ -42,11 +42,7 @@ install:
   - rustc -v
   - cargo -V
 script:
-  - cargo build
-  - cargo test
-  - make -C src/tests
-  - make -C src/examples
-  - cargo doc
+  - make all
 # - sh -c "sleep 5; xdotool key --window \"$(xdotool search --name Hello)\" Escape" &
 # - ./examples/main
 after_script:
