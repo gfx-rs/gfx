@@ -1,7 +1,6 @@
 #![feature(phase)]
 #![crate_name = "cube"]
 
-extern crate libc;
 extern crate native;
 extern crate time;
 extern crate cgmath;
@@ -18,15 +17,6 @@ use cgmath::vector::Vector3;
 use glfw::Context;
 use gfx::BackEndHelper;
 use device::ApiBackEnd;
-
-pub struct Provider<'a>(&'a glfw::Glfw);
-
-impl<'a> device::GlProvider for Provider<'a> {
-    fn get_proc_address(&self, name: &str) -> *const libc::c_void {
-        let Provider(provider) = *self;
-        provider.get_proc_address(name)
-    }
-}
 
 //----------------------------------------
 // Cube associated data
@@ -123,7 +113,7 @@ fn main() {
     window.set_key_polling(true); // so we can quit when Esc is pressed
     let (w, h) = window.get_framebuffer_size();
 
-    let mut backend = device::gl::GlBackEnd::new(&Provider(&glfw));
+    let mut backend = device::gl::GlBackEnd::new(|s| glfw.get_proc_address(s));
     let frontend = backend.create_frontend(w as u16, h as u16).unwrap();
 
     let frame = *frontend.get_main_frame();

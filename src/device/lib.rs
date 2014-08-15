@@ -202,7 +202,7 @@ pub enum TextureError {
 /// such as OpenGL (prior to GLNG) and DirectX (prior to DX12)
 #[allow(missing_doc)]
 #[deriving(Show)]
-pub enum Command {
+enum Command {
     BindProgram(back::Program),
     BindArrayBuffer(back::ArrayBuffer),
     BindAttribute(AttributeSlot, back::Buffer, attrib::Count,

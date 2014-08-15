@@ -1,8 +1,6 @@
 #![feature(phase)]
 #![crate_name = "triangle"]
 
-extern crate libc;
-
 extern crate native;
 extern crate gl_init;
 extern crate gfx;
@@ -12,15 +10,6 @@ extern crate device;
 
 use device::ApiBackEnd;
 use gfx::BackEndHelper;
-
-struct Provider<'a>(&'a gl_init::Window);
-
-impl<'a> device::GlProvider for Provider<'a> {
-    fn get_proc_address(&self, name: &str) -> *const libc::c_void {
-        let Provider(win) = *self;
-        win.get_proc_address(name)
-    }
-}
 
 #[vertex_format]
 struct Vertex {
@@ -82,7 +71,7 @@ fn main() {
     unsafe { window.make_current() };
     let (w, h) = window.get_inner_size().unwrap();
 
-    let mut backend = device::gl::GlBackEnd::new(&Provider(&window));
+    let mut backend = device::gl::GlBackEnd::new(|s| window.get_proc_address(s));
     let frontend = backend.create_frontend(w as u16, h as u16).unwrap();
 
     let state = gfx::DrawState::new();

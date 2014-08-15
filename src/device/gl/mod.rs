@@ -237,8 +237,8 @@ pub struct GlBackEnd {
 
 impl GlBackEnd {
     /// Load OpenGL symbols and detect driver information
-    pub fn new(provider: &super::GlProvider) -> GlBackEnd {
-        gl::load_with(|s| provider.get_proc_address(s));
+    pub fn new(fn_proc: |&str| -> *const ::libc::c_void) -> GlBackEnd {
+        gl::load_with(fn_proc);
         let info = Info::get();
         let caps = super::Capabilities {
             shader_model: shade::get_model(),
