@@ -1,13 +1,13 @@
 #![feature(phase)]
 #![crate_name = "cube"]
 
-extern crate native;
-extern crate time;
 extern crate cgmath;
-extern crate glfw;
 extern crate gfx;
 #[phase(plugin)]
 extern crate gfx_macros;
+extern crate glfw;
+extern crate native;
+extern crate time;
 
 use cgmath::matrix::{Matrix, Matrix4};
 use cgmath::point::Point3;
@@ -103,7 +103,8 @@ fn start(argc: int, argv: *const *const u8) -> int {
 fn main() {
     let glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
-    let (window, events) = glfw.create_window(640, 480, "Cube example #gfx-rs", glfw::Windowed)
+    let (window, events) = glfw
+        .create_window(640, 480, "Cube example", glfw::Windowed)
         .expect("Failed to create GLFW window.");
 
     window.make_current();
