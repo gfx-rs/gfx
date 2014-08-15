@@ -8,8 +8,8 @@ extern crate gfx;
 extern crate gfx_macros;
 extern crate device;
 
-use device::ApiBackEnd;
-use gfx::BackEndHelper;
+use device::Device;
+use gfx::DeviceHelper;
 
 #[vertex_format]
 struct Vertex {
@@ -71,8 +71,8 @@ fn main() {
     unsafe { window.make_current() };
     let (w, h) = window.get_inner_size().unwrap();
 
-    let mut backend = device::gl::GlBackEnd::new(|s| window.get_proc_address(s));
-    let frontend = backend.create_frontend(w as u16, h as u16).unwrap();
+    let mut device = device::gl::GlDevice::new(|s| window.get_proc_address(s));
+    let frontend = device.create_frontend(w as u16, h as u16).unwrap();
 
     let state = gfx::DrawState::new();
     let vertex_data = vec![
@@ -80,9 +80,9 @@ fn main() {
         Vertex { pos: [ 0.5, -0.5 ], color: [0.0, 1.0, 0.0]  },
         Vertex { pos: [ 0.0, 0.5 ], color: [0.0, 0.0, 1.0]  }
     ];
-    let mesh = backend.create_mesh(vertex_data);
-    let program = backend.link_program((), VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
-                         .unwrap();
+    let mesh = device.create_mesh(vertex_data);
+    let program = device.link_program((), VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
+                        .unwrap();
 
     let mut list = frontend.create_drawlist();
     list.clear(
@@ -105,7 +105,7 @@ fn main() {
                 _ => {},
             }
         }
-        backend.submit(list.as_slice());
+        device.submit(list.as_slice());
         window.swap_buffers();
     }
 }

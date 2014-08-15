@@ -229,15 +229,15 @@ fn target_to_gl(target: super::target::Target) -> gl::types::GLenum {
     }
 }
 
-/// An OpenGL back-end with GLSL shaders
-pub struct GlBackEnd {
+/// An OpenGL device with GLSL shaders
+pub struct GlDevice {
     caps: super::Capabilities,
     info: Info,
 }
 
-impl GlBackEnd {
+impl GlDevice {
     /// Load OpenGL symbols and detect driver information
-    pub fn new(fn_proc: |&str| -> *const ::libc::c_void) -> GlBackEnd {
+    pub fn new(fn_proc: |&str| -> *const ::libc::c_void) -> GlDevice {
         gl::load_with(fn_proc);
         let info = Info::get();
         let caps = super::Capabilities {
@@ -254,7 +254,7 @@ impl GlBackEnd {
             sampler_objects_supported: info.version >= Version(3, 3, None, "")
                 || info.is_extension_supported("GL_ARB_sampler_objects"),
         };
-        GlBackEnd {
+        GlDevice {
             caps: caps,
             info: info,
         }
@@ -482,7 +482,7 @@ impl GlBackEnd {
     }
 }
 
-impl super::ApiBackEnd<DrawList> for GlBackEnd {
+impl super::Device<DrawList> for GlDevice {
     fn get_capabilities<'a>(&'a self) -> &'a super::Capabilities {
         &self.caps
     }

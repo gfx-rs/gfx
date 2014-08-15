@@ -27,7 +27,7 @@
 extern crate libc;
 
 // when cargo is ready, re-enable the cfg's
-/* #[cfg(gl)] */ pub use gl::GlBackEnd;
+/* #[cfg(gl)] */ pub use gl::GlDevice;
 /* #[cfg(gl)] */ pub use back = self::gl;
 /* #[cfg(gl)] */ pub use gl::DrawList;
 // #[cfg(d3d11)] ... // TODO
@@ -234,7 +234,7 @@ enum Command {
 
 /// An interface for performing draw calls using a specific graphics API
 #[allow(missing_doc)]
-pub trait ApiBackEnd<D> {
+pub trait Device<D> {
     /// Returns the capabilities available to the specific API implementation
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
     // resource creation
