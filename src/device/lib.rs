@@ -26,7 +26,7 @@
 #[phase(plugin, link)] extern crate log;
 extern crate libc;
 
-// when cargo is ready, re-enable the cfg's
+// when cargo is ready, re-enable the cfgs
 /* #[cfg(gl)] */ pub use gl::GlDevice;
 /* #[cfg(gl)] */ pub use back = self::gl;
 /* #[cfg(gl)] */ pub use gl::DrawList;
