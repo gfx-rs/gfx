@@ -39,7 +39,7 @@ pub use device::{attrib, state, tex};
 pub use device::{BufferHandle, ShaderHandle, SurfaceHandle, TextureHandle, SurfaceHandle};
 pub use device::{VertexCount, IndexCount};
 pub use device::{Point, Line, LineStrip, TriangleList, TriangleStrip, TriangleFan};
-pub use device::{Blob, GlBackEnd, GlProvider, GraphicsContext};
+pub use device::{Blob, GlBackEnd, GraphicsContext};
 pub use device::shade::{UniformValue, ValueI32, ValueF32, ValueI32Vec, ValueF32Vec, ValueF32Matrix};
 pub use device::shade::{ShaderSource, StaticBytes};
 pub use device::target::{Color, ClearData, Layer, Level};

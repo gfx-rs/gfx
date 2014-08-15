@@ -270,9 +270,3 @@ pub trait GraphicsContext<T> {
     /// Make this context active on the calling thread.
     fn make_current(&self);
 }
-
-/// A trait that OpenGL interfaces implement.
-pub trait GlProvider {
-    /// Load the GL command with the given name.
-    fn get_proc_address(&self, function_name: &str) -> *const ::libc::c_void;
-}
