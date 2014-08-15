@@ -345,7 +345,7 @@ pub fn bind_sampler(anchor: BindAnchor, info: &::tex::SamplerInfo) {
 }
 
 pub fn update_texture(kind: ::tex::TextureKind, name: Texture, img: &::tex::ImageInfo,
-                      data: Box<Blob + Send>) -> Result<(), ::TextureError> {
+                      data: &Blob) -> Result<(), ::TextureError> {
     debug_assert!(img.width as uint * img.height as uint * img.depth as uint *
         format_to_size(img.format) == data.get_size());
 

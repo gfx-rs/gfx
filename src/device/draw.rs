@@ -18,40 +18,40 @@ use a = attrib;
 use b = back;
 use t = target;
 
-#[allow(missing_doc)]	//TODO
+#[allow(missing_doc)]    //TODO
 pub trait DrawList {
-	/// Clear the draw list contents, retain the allocated storage
-	fn clear(&mut self);
-	fn bind_program(&mut self, b::Program);
-	fn bind_array_buffer(&mut self, b::ArrayBuffer);
-	fn bind_attribute(&mut self, ::AttributeSlot, b::Buffer, a::Count,
-					  a::Type, a::Stride, a::Offset);
-	fn bind_index(&mut self, b::Buffer);
-	fn bind_frame_buffer(&mut self, b::FrameBuffer);
-	/// Unbind any surface from the specified target slot
-	fn unbind_target(&mut self, t::Target);
-	/// Bind a surface to the specified target slot
-	fn bind_target_surface(&mut self, t::Target, b::Surface);
-	/// Bind a level of the texture to the specified target slot
-	fn bind_target_texture(&mut self, t::Target, b::Texture,
-						   t::Level, Option<t::Layer>);
-	fn bind_uniform_block(&mut self, b::Program, ::UniformBufferSlot,
-						  ::UniformBlockIndex, b::Buffer);
-	fn bind_uniform(&mut self, ::shade::Location, ::shade::UniformValue);
-	fn bind_texture(&mut self, ::TextureSlot, ::tex::TextureKind, b::Texture,
-					Option<::SamplerHandle>);
-	fn set_primitive(&mut self, ::state::Primitive);
-	fn set_viewport(&mut self, t::Rect);
-	fn set_scissor(&mut self, Option<t::Rect>);
-	fn set_depth_stencil(&mut self, Option<::state::Depth>,
-						 Option<::state::Stencil>, ::state::CullMode);
-	fn set_blend(&mut self, Option<::state::Blend>);
-	fn set_color_mask(&mut self, ::state::ColorMask);
-	fn update_buffer(&mut self, b::Buffer, Box<::Blob + Send>);
-	fn update_texture(&mut self, ::tex::TextureKind, b::Texture,
-					  ::tex::ImageInfo, Box<::Blob + Send>);
-	fn call_clear(&mut self, t::ClearData);
-	fn call_draw(&mut self, ::PrimitiveType, ::VertexCount, ::VertexCount);
-	fn call_draw_indexed(&mut self, ::PrimitiveType, ::IndexType, ::IndexCount,
-						 ::IndexCount);
+    /// Clear the draw list contents, retain the allocated storage
+    fn clear(&mut self);
+    fn bind_program(&mut self, b::Program);
+    fn bind_array_buffer(&mut self, b::ArrayBuffer);
+    fn bind_attribute(&mut self, ::AttributeSlot, b::Buffer, a::Count,
+                      a::Type, a::Stride, a::Offset);
+    fn bind_index(&mut self, b::Buffer);
+    fn bind_frame_buffer(&mut self, b::FrameBuffer);
+    /// Unbind any surface from the specified target slot
+    fn unbind_target(&mut self, t::Target);
+    /// Bind a surface to the specified target slot
+    fn bind_target_surface(&mut self, t::Target, b::Surface);
+    /// Bind a level of the texture to the specified target slot
+    fn bind_target_texture(&mut self, t::Target, b::Texture,
+                           t::Level, Option<t::Layer>);
+    fn bind_uniform_block(&mut self, b::Program, ::UniformBufferSlot,
+                          ::UniformBlockIndex, b::Buffer);
+    fn bind_uniform(&mut self, ::shade::Location, ::shade::UniformValue);
+    fn bind_texture(&mut self, ::TextureSlot, ::tex::TextureKind, b::Texture,
+                    Option<::SamplerHandle>);
+    fn set_primitive(&mut self, ::state::Primitive);
+    fn set_viewport(&mut self, t::Rect);
+    fn set_scissor(&mut self, Option<t::Rect>);
+    fn set_depth_stencil(&mut self, Option<::state::Depth>,
+                         Option<::state::Stencil>, ::state::CullMode);
+    fn set_blend(&mut self, Option<::state::Blend>);
+    fn set_color_mask(&mut self, ::state::ColorMask);
+    fn update_buffer(&mut self, b::Buffer, Box<::Blob + Send>);
+    fn update_texture(&mut self, ::tex::TextureKind, b::Texture,
+                      ::tex::ImageInfo, Box<::Blob + Send>);
+    fn call_clear(&mut self, t::ClearData);
+    fn call_draw(&mut self, ::PrimitiveType, ::VertexCount, ::VertexCount);
+    fn call_draw_indexed(&mut self, ::PrimitiveType, ::IndexType, ::IndexCount,
+                         ::IndexCount);
 }

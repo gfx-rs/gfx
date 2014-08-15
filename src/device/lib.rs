@@ -69,7 +69,7 @@ impl<T: Copy, I> Handle<T, I> {
         name
     }
 
-    /// Get the info reference,
+    /// Get the info reference
     pub fn get_info(&self) -> &I {
         let Handle(_, ref info) = *self;
         info
@@ -252,7 +252,10 @@ pub trait ApiBackEnd<D> {
     fn delete_texture(&mut self, TextureHandle);
     fn delete_sampler(&mut self, SamplerHandle);
     /// Update the information stored in a specific buffer
-    fn update_buffer(&mut self, back::Buffer, data: &Blob, BufferUsage);
+    fn update_buffer(&mut self, BufferHandle, &Blob, BufferUsage);
+    /// Update the information stored in a texture
+    fn update_texture(&mut self, &TextureHandle, &tex::ImageInfo, &Blob)
+                      -> Result<(), TextureError>;
     /// Process a single command
     fn process(&mut self, Command);
     /// Submit a draw list. TODO: enforce `draw::DrawList` trait here

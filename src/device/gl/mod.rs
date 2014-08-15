@@ -281,6 +281,21 @@ impl GlBackEnd {
     pub fn get_info<'a>(&'a self) -> &'a Info {
         &self.info
     }
+
+    fn update_buffer_internal(&mut self, buffer: Buffer, data: &super::Blob,
+                              usage: super::BufferUsage) {
+        gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
+        let size = data.get_size() as gl::types::GLsizeiptr;
+        let raw = data.get_address() as *const gl::types::GLvoid;
+        let usage = match usage {
+            super::UsageStatic  => gl::STATIC_DRAW,
+            super::UsageDynamic => gl::DYNAMIC_DRAW,
+            super::UsageStream  => gl::STREAM_DRAW,
+        };
+        unsafe {
+            gl::BufferData(gl::ARRAY_BUFFER, size, raw, usage);
+        }
+    }
 }
 
 impl super::ApiBackEnd<DrawList> for GlBackEnd {
@@ -397,19 +412,14 @@ impl super::ApiBackEnd<DrawList> for GlBackEnd {
         }
     }
 
-    fn update_buffer(&mut self, buffer: Buffer, data: &super::Blob,
+    fn update_buffer(&mut self, buffer: ::BufferHandle, data: &super::Blob,
                      usage: super::BufferUsage) {
-        gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
-        let size = data.get_size() as gl::types::GLsizeiptr;
-        let raw = data.get_address() as *const gl::types::GLvoid;
-        let usage = match usage {
-            super::UsageStatic  => gl::STATIC_DRAW,
-            super::UsageDynamic => gl::DYNAMIC_DRAW,
-            super::UsageStream  => gl::STREAM_DRAW,
-        };
-        unsafe {
-            gl::BufferData(gl::ARRAY_BUFFER, size, raw, usage);
-        }
+        self.update_buffer_internal(buffer.get_name(), data, usage);
+    }
+
+    fn update_texture(&mut self, texture: &::TextureHandle, img: &::tex::ImageInfo,
+                      data: &super::Blob) -> Result<(), ::TextureError> {
+        tex::update_texture(texture.get_info().kind, texture.get_name(), img, data)
     }
 
     fn process(&mut self, cmd: super::Command) {
@@ -561,7 +571,7 @@ impl super::ApiBackEnd<DrawList> for GlBackEnd {
                 state::bind_color_mask(mask);
             },
             super::UpdateBuffer(buffer, data) => {
-                self.update_buffer(buffer, data, super::UsageDynamic);
+                self.update_buffer_internal(buffer, data, super::UsageDynamic);
             },
             super::UpdateTexture(kind, texture, image_info, data) => {
                 match tex::update_texture(kind, texture, &image_info, data) {

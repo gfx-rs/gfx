@@ -11,6 +11,7 @@ extern crate gfx_macros;
 extern crate device;
 
 use device::ApiBackEnd;
+use gfx::BackEndHelper;
 
 struct Provider<'a>(&'a gl_init::Window);
 
@@ -82,7 +83,7 @@ fn main() {
     let (w, h) = window.get_inner_size().unwrap();
 
     let mut backend = device::gl::GlBackEnd::new(&Provider(&window));
-    let man = gfx::Manager::new(&mut backend, w as u16, h as u16).unwrap();
+    let frontend = backend.create_frontend(w as u16, h as u16).unwrap();
 
     let state = gfx::DrawState::new();
     let vertex_data = vec![
@@ -90,20 +91,20 @@ fn main() {
         Vertex { pos: [ 0.5, -0.5 ], color: [0.0, 1.0, 0.0]  },
         Vertex { pos: [ 0.0, 0.5 ], color: [0.0, 0.0, 1.0]  }
     ];
-    let mesh = man.create_mesh(vertex_data, &mut backend);
-    let program = man.create_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone(),
-        &mut backend).unwrap();
+    let mesh = backend.create_mesh(vertex_data);
+    let program = backend.link_program((), VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
+                         .unwrap();
 
-    let mut list = man.spawn();
+    let mut list = frontend.spawn();
     list.clear(
         gfx::ClearData {
             color: Some(gfx::Color([0.3, 0.3, 0.3, 1.0])),
             depth: None,
             stencil: None,
         },
-        man.get_main_frame()
+        frontend.get_main_frame()
     );
-    list.draw(&mesh, mesh.get_slice(), man.get_main_frame(), &program, &state)
+    list.draw(&mesh, mesh.get_slice(), frontend.get_main_frame(), &program, &state)
         .unwrap();
 
     'main: loop {

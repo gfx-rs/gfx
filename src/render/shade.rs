@@ -108,7 +108,7 @@ impl ProgramShell for ProgramHandle {
 }
 
 /// An error type on either the parameter storage or the program side
-#[deriving(Clone, Show)]
+#[deriving(Clone, PartialEq, Show)]
 pub enum ParameterError<'a> {
     /// Internal error
     ErrorInternal,
@@ -121,7 +121,7 @@ pub enum ParameterError<'a> {
 }
 
 /// An error type for the link creation
-#[deriving(Clone, Show)]
+#[deriving(Clone, PartialEq, Show)]
 pub enum ParameterLinkError<'a> {
     /// A given parameter is not used by the program
     ErrorUnusedParameter(ParameterError<'a>),
@@ -135,6 +135,29 @@ pub trait ShaderParam<L> {
     fn create_link(&self, ParamLinkInput) -> Result<L, ParameterError<'static>>;
     /// Get all the contained parameter values, using a given link.
     fn fill_params(&self, &L, ParamValues);
+}
+
+impl ShaderParam<()> for () {
+    fn create_link(&self, (uniforms, blocks, textures): ParamLinkInput)
+                   -> Result<(), ParameterError<'static>> {
+        match uniforms.head() {
+            Some(_) => return Err(ErrorUniform("_")),
+            None => (),
+        }
+        match blocks.head() {
+            Some(_) => return Err(ErrorBlock("_")),
+            None => (),
+        }
+        match textures.head() {
+            Some(_) => return Err(ErrorTexture("_")),
+            None => (),
+        }
+        Ok(())
+    }
+
+    fn fill_params(&self, _: &(), _: ParamValues) {
+        //empty
+    }
 }
 
 /// A bundle that encapsulates a program and a custom user-provided

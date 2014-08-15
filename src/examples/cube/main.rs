@@ -16,6 +16,7 @@ use cgmath::point::Point3;
 use cgmath::transform::{Transform, AffineMatrix3};
 use cgmath::vector::Vector3;
 use glfw::Context;
+use gfx::BackEndHelper;
 use device::ApiBackEnd;
 
 pub struct Provider<'a>(&'a glfw::Glfw);
@@ -123,9 +124,9 @@ fn main() {
     let (w, h) = window.get_framebuffer_size();
 
     let mut backend = device::gl::GlBackEnd::new(&Provider(&glfw));
-    let man = gfx::Manager::new(&mut backend, w as u16, h as u16).unwrap();
+    let frontend = backend.create_frontend(w as u16, h as u16).unwrap();
 
-    let frame = *man.get_main_frame();
+    let frame = *frontend.get_main_frame();
     let state = gfx::DrawState::new().depth(gfx::state::LessEqual, true);
 
     let vertex_data = vec![
@@ -161,7 +162,7 @@ fn main() {
         Vertex::new([ 1, -1, -1], [0, 1]),
     ];
 
-    let mesh = man.create_mesh(vertex_data, &mut backend);
+    let mesh = backend.create_mesh(vertex_data);
 
     let slice = {
         let index_data = vec![
@@ -174,7 +175,7 @@ fn main() {
         ];
 
         let buf = backend.create_buffer();
-        backend.update_buffer(buf.get_name(), &index_data, device::UsageStatic);
+        backend.update_buffer(buf, &index_data, device::UsageStatic);
         gfx::IndexSlice(buf, gfx::attrib::U8, 0, 36)
     };
 
@@ -188,6 +189,9 @@ fn main() {
     };
     let img_info = tinfo.to_image_info();
     let texture = backend.create_texture(tinfo).unwrap();
+    backend.update_texture(&texture, &img_info,
+                           &vec![0x20u8, 0xA0u8, 0xC0u8, 0x00u8])
+           .unwrap();
 
     let sampler = backend.create_sampler(gfx::tex::SamplerInfo::new(
         gfx::tex::Bilinear, gfx::tex::Clamp));
@@ -202,10 +206,8 @@ fn main() {
             ],
             t_Color: (texture, Some(sampler)),
         };
-        let handle = man.create_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone(),
-            &mut backend).unwrap();
-        let x: Program = gfx::Manager::connect_program(&handle, data).unwrap();
-        x   //cannot determine a type for this bounded type parameter: unconstrained type
+        backend.link_program(data, VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
+               .unwrap()
     };
 
     let mut m_model = Matrix4::<f32>::identity();
@@ -221,7 +223,7 @@ fn main() {
         mp.mul_m(&mv.mat)
     };
 
-    let mut list = man.spawn();
+    let mut list = frontend.spawn();
 
     'main: loop {
         glfw.poll_events();
@@ -237,7 +239,6 @@ fn main() {
         }
         // render
         list.reset();
-        list.update_texture(texture, img_info, vec![0x20u8, 0xA0u8, 0xC0u8, 0x00u8]);
         list.clear(
             gfx::ClearData {
                 color: Some(gfx::Color([0.3, 0.3, 0.3, 1.0])),
