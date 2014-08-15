@@ -1,17 +1,26 @@
 #![feature(phase)]
 #![crate_name = "triangle"]
 
+extern crate libc;
+
+extern crate native;
+extern crate gl_init;
+extern crate gfx;
 #[phase(plugin)]
 extern crate gfx_macros;
-extern crate getopts;
-extern crate gfx;
-extern crate glfw;
-extern crate glfw_platform;
-extern crate gl_init;
-extern crate gl_init_platform;
-extern crate native;
+extern crate device;
 
-use glfw_platform::BuilderExtension;
+use device::ApiBackEnd;
+use gfx::BackEndHelper;
+
+struct Provider<'a>(&'a gl_init::Window);
+
+impl<'a> device::GlProvider for Provider<'a> {
+    fn get_proc_address(&self, name: &str) -> *const libc::c_void {
+        let Provider(win) = *self;
+        win.get_proc_address(name)
+    }
+}
 
 #[vertex_format]
 struct Vertex {
@@ -68,117 +77,46 @@ fn start(argc: int, argv: *const *const u8) -> int {
 }
 
 fn main() {
-    // checking for the --gl-init flag
-    let use_gl_init = {
-        use std::os;
-        use getopts::{optflag, getopts};
+    let window = gl_init::Window::new().unwrap();
+    window.set_title("[gl-init] Triangle example #gfx-rs!");
+    unsafe { window.make_current() };
+    let (w, h) = window.get_inner_size().unwrap();
 
-        let args: Vec<String> = os::args();
+    let mut backend = device::gl::GlBackEnd::new(&Provider(&window));
+    let frontend = backend.create_frontend(w as u16, h as u16).unwrap();
 
-        let options = [
-            optflag("i", "gl-init", "use gl-init instead of glfw")
-        ];
-
-        let matches = match getopts(args.tail(), options) {
-            Ok(m) => { m }
-            Err(f) => {
-                println!("{}", f.to_string());
-                println!("Usage: {} [options]", args[0]);
-                println!("--gl-init\t\tUse gl-init instead of glfw");
-                return
-            }
-        };
-
-        matches.opt_present("i")
-    };
-
-    if use_gl_init {
-        let window = gl_init_platform::Window::new().unwrap();
-        window.set_title("[gl-init] Triangle example #gfx-rs!");
-        unsafe { window.make_current() };
-
-        let (w, h) = window.get_inner_size().unwrap();
-
-        let mut device = gfx::build()
-            .with_context(&window)
-            .with_provider(&window)
-            .with_queue_size(1)
-            .spawn(proc(r) render(r, w as u16, h as u16))
-            .unwrap();
-
-        'main: loop {
-            // quit when Esc is pressed.
-            for event in window.poll_events() {
-                match event {
-                    gl_init::KeyboardInput(_, _, Some(gl_init::Escape), _) => break 'main,
-                    gl_init::Closed => break 'main,
-                    _ => {},
-                }
-            }
-            device.update();
-        }
-    } else {
-        let glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
-
-        let (mut window, events) = glfw_platform::WindowBuilder::new(&glfw)
-            .title("[GLFW] Triangle example #gfx-rs!")
-            .try_modern_context_hints()
-            .create()
-            .expect("Failed to create GLFW window.");
-
-        glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
-        window.set_key_polling(true); // so we can quit when Esc is pressed
-        let (w, h) = window.get_framebuffer_size();
-
-        let mut device = gfx::build()
-            .with_glfw_window(&mut window)
-            .with_queue_size(1)
-            .spawn(proc(r) render(r, w as u16, h as u16))
-            .unwrap();
-
-        'main: loop {
-            glfw.poll_events();
-            if window.should_close() {
-                break 'main;
-            }
-            // quit when Esc is pressed.
-            for (_, event) in glfw::flush_messages(&events) {
-                match event {
-                    glfw::KeyEvent(glfw::KeyEscape, _, glfw::Press, _) => break 'main,
-                    _ => {},
-                }
-            }
-            device.update();
-        }
-    }
-}
-
-fn render(mut renderer: gfx::Renderer, width: u16, height: u16) {
-    let frame = gfx::Frame::new(width as u16, height as u16);
     let state = gfx::DrawState::new();
-
     let vertex_data = vec![
         Vertex { pos: [ -0.5, -0.5 ], color: [1.0, 0.0, 0.0] },
         Vertex { pos: [ 0.5, -0.5 ], color: [0.0, 1.0, 0.0]  },
         Vertex { pos: [ 0.0, 0.5 ], color: [0.0, 0.0, 1.0]  }
     ];
+    let mesh = backend.create_mesh(vertex_data);
+    let program = backend.link_program((), VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
+                         .unwrap();
 
-    let mesh = renderer.create_mesh(vertex_data);
-    let program = renderer.create_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone());
+    let mut list = frontend.create_drawlist();
+    list.clear(
+        gfx::ClearData {
+            color: Some(gfx::Color([0.3, 0.3, 0.3, 1.0])),
+            depth: None,
+            stencil: None,
+        },
+        frontend.get_main_frame()
+    );
+    list.draw(&mesh, mesh.get_slice(), frontend.get_main_frame(), &program, &state)
+        .unwrap();
 
-    let clear = gfx::ClearData {
-        color: Some(gfx::Color([0.3, 0.3, 0.3, 1.0])),
-        depth: None,
-        stencil: None,
-    };
-
-    while !renderer.should_finish() {
-        renderer.clear(clear, frame);
-        renderer.draw(&mesh, mesh.get_slice(), &frame, &program, &state)
-            .unwrap();
-        renderer.end_frame();
-        for err in renderer.errors() {
-            println!("Renderer error: {}", err);
+    'main: loop {
+        // quit when Esc is pressed.
+        for event in window.poll_events() {
+            match event {
+                gl_init::KeyboardInput(_, _, Some(gl_init::Escape), _) => break 'main,
+                gl_init::Closed => break 'main,
+                _ => {},
+            }
         }
+        backend.submit(list.as_slice());
+        window.swap_buffers();
     }
 }

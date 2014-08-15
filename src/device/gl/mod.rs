@@ -22,10 +22,13 @@ extern crate gl;
 extern crate libc;
 
 use log;
-use std::{fmt, mem, str};
+use std::{fmt, str};
 use std::collections::HashSet;
 use a = super::attrib;
 
+pub use self::draw::DrawList;
+
+mod draw;
 mod shade;
 mod state;
 mod tex;
@@ -278,85 +281,9 @@ impl GlBackEnd {
     pub fn get_info<'a>(&'a self) -> &'a Info {
         &self.info
     }
-}
 
-impl super::ApiBackEnd for GlBackEnd {
-    fn get_capabilities<'a>(&'a self) -> &'a super::Capabilities {
-        &self.caps
-    }
-
-    fn create_buffer(&mut self) -> Buffer {
-        let mut name = 0 as Buffer;
-        unsafe {
-            gl::GenBuffers(1, &mut name);
-        }
-        info!("\tCreated buffer {}", name);
-        name
-    }
-
-    fn create_array_buffer(&mut self) -> Result<ArrayBuffer, ()> {
-        if self.caps.array_buffer_supported {
-            let mut name = 0 as ArrayBuffer;
-            unsafe {
-                gl::GenVertexArrays(1, &mut name);
-            }
-            info!("\tCreated array buffer {}", name);
-            Ok(name)
-        } else {
-            error!("\tarray buffer creation unsupported, ignored")
-            Err(())
-        }
-    }
-
-    fn create_shader(&mut self, stage: super::shade::Stage, code: super::shade::ShaderSource) -> Result<Shader, super::shade::CreateShaderError> {
-        let (name, info) = shade::create_shader(stage, code, self.get_capabilities().shader_model);
-        info.map(|info| {
-            let level = if name.is_err() { log::ERROR } else { log::WARN };
-            log!(level, "\tShader compile log: {}", info);
-        });
-        name
-    }
-
-    fn create_program(&mut self, shaders: &[Shader]) -> Result<super::shade::ProgramMeta, ()> {
-        let (meta, info) = shade::create_program(&self.caps, shaders);
-        info.map(|info| {
-            let level = if meta.is_err() { log::ERROR } else { log::WARN };
-            log!(level, "\tProgram link log: {}", info);
-        });
-        meta
-    }
-
-    fn create_frame_buffer(&mut self) -> FrameBuffer {
-        let mut name = 0 as FrameBuffer;
-        unsafe {
-            gl::GenFramebuffers(1, &mut name);
-        }
-        info!("\tCreated frame buffer {}", name);
-        name
-    }
-
-    fn create_surface(&mut self, info: ::tex::SurfaceInfo) -> Result<Surface, ::SurfaceError> {
-        tex::make_surface(&info)
-    }
-
-    fn create_texture(&mut self, info: ::tex::TextureInfo) -> Result<Texture, ::TextureError> {
-        let name = if self.caps.immutable_storage_supported {
-            tex::make_with_storage(&info)
-        } else {
-            tex::make_without_storage(&info)
-        };
-        name
-    }
-
-    fn create_sampler(&mut self, info: ::tex::SamplerInfo) -> Sampler {
-        if self.caps.sampler_objects_supported {
-            tex::make_sampler(&info)
-        } else {
-            0
-        }
-    }
-
-    fn update_buffer(&mut self, buffer: Buffer, data: &super::Blob, usage: super::BufferUsage) {
+    fn update_buffer_internal(&mut self, buffer: Buffer, data: &super::Blob,
+                              usage: super::BufferUsage) {
         gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
         let size = data.get_size() as gl::types::GLsizeiptr;
         let raw = data.get_address() as *const gl::types::GLvoid;
@@ -370,9 +297,9 @@ impl super::ApiBackEnd for GlBackEnd {
         }
     }
 
-    fn process(&mut self, request: super::CastRequest) {
-        match request {
-            super::Clear(data) => {
+    fn process(&mut self, cmd: &super::Command) {
+        match *cmd {
+            super::Clear(ref data) => {
                 let mut flags = match data.color {
                     //gl::ColorMask(gl::TRUE, gl::TRUE, gl::TRUE, gl::TRUE);
                     Some(super::target::Color([r,g,b,a])) => {
@@ -400,7 +327,7 @@ impl super::ApiBackEnd for GlBackEnd {
                 if self.caps.array_buffer_supported {
                     gl::BindVertexArray(array_buffer);
                 } else {
-                    error!("Ignored unsupported GL Request: {}", request)
+                    error!("Ignored VAO bind command: {}", array_buffer)
                 }
             },
             super::BindAttribute(slot, buffer, count, el_type, stride, offset) => {
@@ -488,7 +415,7 @@ impl super::ApiBackEnd for GlBackEnd {
                     gl::TEXTURE0 + slot as gl::types::GLenum,
                     kind, texture);
                 match sampler {
-                    Some((sam, ref info)) => {
+                    Some(::Handle(sam, ref info)) => {
                         if self.caps.sampler_objects_supported {
                             gl::BindSampler(slot as gl::types::GLenum, sam);
                         } else {
@@ -518,11 +445,11 @@ impl super::ApiBackEnd for GlBackEnd {
             super::SetColorMask(mask) => {
                 state::bind_color_mask(mask);
             },
-            super::UpdateBuffer(buffer, data) => {
-                self.update_buffer(buffer, data, super::UsageDynamic);
+            super::UpdateBuffer(buffer, ref data) => {
+                self.update_buffer_internal(buffer, *data, super::UsageDynamic);
             },
-            super::UpdateTexture(kind, texture, image_info, data) => {
-                match tex::update_texture(kind, texture, &image_info, data) {
+            super::UpdateTexture(kind, texture, image_info, ref data) => {
+                match tex::update_texture(kind, texture, &image_info, *data) {
                     Ok(_) => (),
                     Err(_) => unimplemented!(),
                 }
@@ -551,25 +478,138 @@ impl super::ApiBackEnd for GlBackEnd {
                 }
                 self.check();
             },
-            // Resource deletion
-            super::DeleteBuffer(name) => unsafe {
-                gl::DeleteBuffers(1, &name);
-            },
-            super::DeleteShader(name) => {
-                gl::DeleteShader(name);
-            },
-            super::DeleteProgram(name) => {
-                gl::DeleteProgram(name);
-            },
-            super::DeleteSurface(name) => unsafe {
-                gl::DeleteRenderbuffers(1, &name);
-            },
-            super::DeleteTexture(name) => unsafe {
-                gl::DeleteTextures(1, &name);
-            },
-            super::DeleteSampler(name) => unsafe {
-                gl::DeleteSamplers(1, &name);
-            },
+        }
+    }
+}
+
+impl super::ApiBackEnd<DrawList> for GlBackEnd {
+    fn get_capabilities<'a>(&'a self) -> &'a super::Capabilities {
+        &self.caps
+    }
+
+    fn create_buffer(&mut self) -> ::BufferHandle {
+        let mut name = 0 as Buffer;
+        unsafe {
+            gl::GenBuffers(1, &mut name);
+        }
+        info!("\tCreated buffer {}", name);
+        ::Handle(name, ())
+    }
+
+    fn create_array_buffer(&mut self) -> Result<ArrayBuffer, ()> {
+        if self.caps.array_buffer_supported {
+            let mut name = 0 as ArrayBuffer;
+            unsafe {
+                gl::GenVertexArrays(1, &mut name);
+            }
+            info!("\tCreated array buffer {}", name);
+            Ok(name)
+        } else {
+            error!("\tarray buffer creation unsupported, ignored")
+            Err(())
+        }
+    }
+
+    fn create_shader(&mut self, stage: super::shade::Stage, code: super::shade::ShaderSource)
+                     -> Result<::ShaderHandle, super::shade::CreateShaderError> {
+        let (name, info) = shade::create_shader(stage, code, self.get_capabilities().shader_model);
+        info.map(|info| {
+            let level = if name.is_err() { log::ERROR } else { log::WARN };
+            log!(level, "\tShader compile log: {}", info);
+        });
+        name.map(|sh| ::Handle(sh, stage))
+    }
+
+    fn create_program(&mut self, shaders: &[::ShaderHandle]) -> Result<::ProgramHandle, ()> {
+        let (prog, log) = shade::create_program(&self.caps, shaders);
+        log.map(|log| {
+            let level = if prog.is_err() { log::ERROR } else { log::WARN };
+            log!(level, "\tProgram link log: {}", log);
+        });
+        prog
+    }
+
+    fn create_frame_buffer(&mut self) -> FrameBuffer {
+        let mut name = 0 as FrameBuffer;
+        unsafe {
+            gl::GenFramebuffers(1, &mut name);
+        }
+        info!("\tCreated frame buffer {}", name);
+        name
+    }
+
+    fn create_surface(&mut self, info: ::tex::SurfaceInfo) -> Result<::SurfaceHandle, ::SurfaceError> {
+        tex::make_surface(&info).map(|suf| ::Handle(suf, info))
+    }
+
+    fn create_texture(&mut self, info: ::tex::TextureInfo) -> Result<::TextureHandle, ::TextureError> {
+        let name = if self.caps.immutable_storage_supported {
+            tex::make_with_storage(&info)
+        } else {
+            tex::make_without_storage(&info)
+        };
+        name.map(|tex| ::Handle(tex, info))
+    }
+
+    fn create_sampler(&mut self, info: ::tex::SamplerInfo) -> ::SamplerHandle {
+        let sam = if self.caps.sampler_objects_supported {
+            tex::make_sampler(&info)
+        } else {
+            0
+        };
+        ::Handle(sam, info)
+    }
+
+    fn delete_buffer(&mut self, handle: ::BufferHandle) {
+        let name = handle.get_name();
+        unsafe {
+            gl::DeleteBuffers(1, &name);
+        }
+    }
+
+    fn delete_shader(&mut self, handle: ::ShaderHandle) {
+        gl::DeleteShader(handle.get_name());
+    }
+
+    fn delete_program(&mut self, handle: ::ProgramHandle) {
+        gl::DeleteProgram(handle.get_name());
+    }
+
+    fn delete_surface(&mut self, handle: ::SurfaceHandle) {
+        let name = handle.get_name();
+        unsafe {
+            gl::DeleteRenderbuffers(1, &name);
+        }
+    }
+
+    fn delete_texture(&mut self, handle: ::TextureHandle) {
+        let name = handle.get_name();
+        unsafe {
+            gl::DeleteTextures(1, &name);
+        }
+    }
+
+    fn delete_sampler(&mut self, handle: ::SamplerHandle) {
+        let name = handle.get_name();
+        unsafe {
+            gl::DeleteSamplers(1, &name);
+        }
+    }
+
+    fn update_buffer(&mut self, buffer: ::BufferHandle, data: &super::Blob,
+                     usage: super::BufferUsage) {
+        self.update_buffer_internal(buffer.get_name(), data, usage);
+    }
+
+    fn update_texture(&mut self, texture: &::TextureHandle, img: &::tex::ImageInfo,
+                      data: &super::Blob) -> Result<(), ::TextureError> {
+        tex::update_texture(texture.get_info().kind, texture.get_name(), img, data)
+    }
+
+    fn submit(&mut self, list: &DrawList) {
+        //TODO: clear state, when we have caching
+        for com in list.iter() {
+            self.process(com);
         }
     }
 }
