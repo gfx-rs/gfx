@@ -99,8 +99,8 @@ pub struct FrontEnd {
 }
 
 impl FrontEnd {
-    /// Create a new render front-end
-    pub fn spawn(&self) -> DrawList {
+    /// Create a new draw list
+    pub fn create_drawlist(&self) -> DrawList {
         DrawList {
             list: device::DrawList::new(),
             common_array_buffer: self.common_array_buffer,
@@ -141,7 +141,6 @@ pub trait BackEndHelper {
     /// Convenience function around `create_buffer` and `Mesh::from`.
     fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh;
     /// Create a simple program given a vertex shader with a fragment one.
-    /// Connect it with a given parameter structure.
     fn link_program<'a, L, T: ShaderParam<L>>(&mut self, data: T, vs_src: ShaderSource,
                    fs_src: ShaderSource) -> Result<shade::CustomShell<L, T>, ProgramError>;
 }
@@ -175,6 +174,7 @@ impl<D, B: device::ApiBackEnd<D>> BackEndHelper for B {
     fn link_program<'a, L, T: ShaderParam<L>>(&mut self, data: T,
                    vs_src: ShaderSource, fs_src: ShaderSource)
                    -> Result<shade::CustomShell<L, T>, ProgramError> {
+        //TODO: integrate connect_program here
         let vs = match self.create_shader(Vertex, vs_src) {
             Ok(s) => s,
             Err(e) => return Err(ErrorVertex(e)),

@@ -223,7 +223,7 @@ fn main() {
         mp.mul_m(&mv.mat)
     };
 
-    let mut list = frontend.spawn();
+    let mut list = frontend.create_drawlist();
 
     'main: loop {
         glfw.poll_events();

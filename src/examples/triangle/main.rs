@@ -95,7 +95,7 @@ fn main() {
     let program = backend.link_program((), VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
                          .unwrap();
 
-    let mut list = frontend.spawn();
+    let mut list = frontend.create_drawlist();
     list.clear(
         gfx::ClearData {
             color: Some(gfx::Color([0.3, 0.3, 0.3, 1.0])),

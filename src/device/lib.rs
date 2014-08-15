@@ -196,7 +196,10 @@ pub enum TextureError {
     UnsupportedTextureFormat,
 }
 
-/// Serialized device command
+/// Serialized device command.
+/// While this is supposed to be an internal detail of a device,
+/// this particular representation may be used by different backends,
+/// such as OpenGL (prior to GLNG) and DirectX (prior to DX12)
 #[allow(missing_doc)]
 #[deriving(Show)]
 pub enum Command {
@@ -256,8 +259,6 @@ pub trait ApiBackEnd<D> {
     /// Update the information stored in a texture
     fn update_texture(&mut self, &TextureHandle, &tex::ImageInfo, &Blob)
                       -> Result<(), TextureError>;
-    /// Process a single command
-    fn process(&mut self, Command);
     /// Submit a draw list. TODO: enforce `draw::DrawList` trait here
     fn submit(&mut self, list: &D);
 }
