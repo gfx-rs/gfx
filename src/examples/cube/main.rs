@@ -1,13 +1,13 @@
 #![feature(phase)]
 #![crate_name = "cube"]
 
-extern crate native;
-extern crate time;
 extern crate cgmath;
-extern crate glfw;
 extern crate gfx;
 #[phase(plugin)]
 extern crate gfx_macros;
+extern crate glfw;
+extern crate native;
+extern crate time;
 
 use cgmath::matrix::{Matrix, Matrix4};
 use cgmath::point::Point3;
@@ -103,7 +103,12 @@ fn start(argc: int, argv: *const *const u8) -> int {
 fn main() {
     let glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
-    let (window, events) = glfw.create_window(640, 480, "Cube example #gfx-rs", glfw::Windowed)
+    glfw.window_hint(glfw::ContextVersion(3, 2));
+    glfw.window_hint(glfw::OpenglForwardCompat(true));
+    glfw.window_hint(glfw::OpenglProfile(glfw::OpenGlCoreProfile));
+
+    let (window, events) = glfw
+        .create_window(640, 480, "Cube example", glfw::Windowed)
         .expect("Failed to create GLFW window.");
 
     window.make_current();
@@ -213,15 +218,13 @@ fn main() {
 
     let mut list = frontend.create_drawlist();
 
-    'main: loop {
+    while !window.should_close() {
         glfw.poll_events();
-        if window.should_close() {
-            break 'main;
-        }
         // quit when Esc is pressed.
         for (_, event) in glfw::flush_messages(&events) {
             match event {
-                glfw::KeyEvent(glfw::KeyEscape, _, glfw::Press, _) => break 'main,
+                glfw::KeyEvent(glfw::KeyEscape, _, glfw::Press, _) =>
+                    window.set_should_close(true),
                 _ => {},
             }
         }

@@ -1,14 +1,14 @@
 #![feature(phase)]
 #![crate_name = "triangle"]
 
-extern crate native;
-extern crate gl_init;
 extern crate gfx;
 #[phase(plugin)]
 extern crate gfx_macros;
-extern crate device;
+extern crate glfw;
+extern crate native;
 
 use gfx::{Device, DeviceHelper};
+use glfw::Context;
 
 #[vertex_format]
 struct Vertex {
@@ -65,12 +65,22 @@ fn start(argc: int, argv: *const *const u8) -> int {
 }
 
 fn main() {
-    let window = gl_init::Window::new().unwrap();
-    window.set_title("[gl-init] Triangle example #gfx-rs!");
-    unsafe { window.make_current() };
-    let (w, h) = window.get_inner_size().unwrap();
+    let glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
-    let mut device = gfx::GlDevice::new(|s| window.get_proc_address(s));
+    glfw.window_hint(glfw::ContextVersion(3, 2));
+    glfw.window_hint(glfw::OpenglForwardCompat(true));
+    glfw.window_hint(glfw::OpenglProfile(glfw::OpenGlCoreProfile));
+
+    let (window, events) = glfw
+        .create_window(640, 480, "Triangle example.", glfw::Windowed)
+        .expect("Failed to create GLFW window.");
+
+    window.make_current();
+    glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
+    window.set_key_polling(true); // so we can quit when Esc is pressed
+    let (w, h) = window.get_framebuffer_size();
+
+    let mut device = gfx::GlDevice::new(|s| glfw.get_proc_address(s));
     let frontend = device.create_frontend(w as u16, h as u16).unwrap();
 
     let state = gfx::DrawState::new();
@@ -95,12 +105,13 @@ fn main() {
     list.draw(&mesh, mesh.get_slice(), frontend.get_main_frame(), &program, &state)
         .unwrap();
 
-    'main: loop {
+    while !window.should_close() {
+        glfw.poll_events();
         // quit when Esc is pressed.
-        for event in window.poll_events() {
+        for (_, event) in glfw::flush_messages(&events) {
             match event {
-                gl_init::KeyboardInput(_, _, Some(gl_init::Escape), _) => break 'main,
-                gl_init::Closed => break 'main,
+                glfw::KeyEvent(glfw::KeyEscape, _, glfw::Press, _) =>
+                    window.set_should_close(true),
                 _ => {},
             }
         }
