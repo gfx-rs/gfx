@@ -8,8 +8,7 @@ extern crate gfx;
 extern crate gfx_macros;
 extern crate device;
 
-use device::Device;
-use gfx::DeviceHelper;
+use gfx::{Device, DeviceHelper};
 
 #[vertex_format]
 struct Vertex {
@@ -71,7 +70,7 @@ fn main() {
     unsafe { window.make_current() };
     let (w, h) = window.get_inner_size().unwrap();
 
-    let mut device = device::gl::GlDevice::new(|s| window.get_proc_address(s));
+    let mut device = gfx::GlDevice::new(|s| window.get_proc_address(s));
     let frontend = device.create_frontend(w as u16, h as u16).unwrap();
 
     let state = gfx::DrawState::new();

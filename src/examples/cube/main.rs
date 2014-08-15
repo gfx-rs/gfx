@@ -8,15 +8,13 @@ extern crate glfw;
 extern crate gfx;
 #[phase(plugin)]
 extern crate gfx_macros;
-extern crate device;
 
 use cgmath::matrix::{Matrix, Matrix4};
 use cgmath::point::Point3;
 use cgmath::transform::{Transform, AffineMatrix3};
 use cgmath::vector::Vector3;
+use gfx::{Device, DeviceHelper};
 use glfw::Context;
-use gfx::DeviceHelper;
-use device::Device;
 
 //----------------------------------------
 // Cube associated data
@@ -113,7 +111,7 @@ fn main() {
     window.set_key_polling(true); // so we can quit when Esc is pressed
     let (w, h) = window.get_framebuffer_size();
 
-    let mut device = device::gl::GlDevice::new(|s| glfw.get_proc_address(s));
+    let mut device = gfx::GlDevice::new(|s| glfw.get_proc_address(s));
     let frontend = device.create_frontend(w as u16, h as u16).unwrap();
 
     let frame = *frontend.get_main_frame();
@@ -165,7 +163,7 @@ fn main() {
         ];
 
         let buf = device.create_buffer();
-        device.update_buffer(buf, &index_data, device::UsageStatic);
+        device.update_buffer(buf, &index_data, gfx::UsageStatic);
         gfx::IndexSlice(buf, gfx::attrib::U8, 0, 36)
     };
 
