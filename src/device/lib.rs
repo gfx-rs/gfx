@@ -262,11 +262,3 @@ pub trait Device<D> {
     /// Submit a draw list. TODO: enforce `draw::DrawList` trait here
     fn submit(&mut self, list: &D);
 }
-
-/// A trait that OpenGL contexts implement.
-pub trait GraphicsContext<T> {
-    /// Swap the front and back buffers, displaying what has been rendered.
-    fn swap_buffers(&self);
-    /// Make this context active on the calling thread.
-    fn make_current(&self);
-}
