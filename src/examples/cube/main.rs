@@ -103,6 +103,10 @@ fn start(argc: int, argv: *const *const u8) -> int {
 fn main() {
     let glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
+    glfw.window_hint(glfw::ContextVersion(3, 2));
+    glfw.window_hint(glfw::OpenglForwardCompat(true));
+    glfw.window_hint(glfw::OpenglProfile(glfw::OpenGlCoreProfile));
+
     let (window, events) = glfw
         .create_window(640, 480, "Cube example", glfw::Windowed)
         .expect("Failed to create GLFW window.");
