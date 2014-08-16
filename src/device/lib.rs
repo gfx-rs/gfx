@@ -306,7 +306,7 @@ enum Command {
 
 /// An interface for performing draw calls using a specific graphics API
 #[allow(missing_doc)]
-pub trait Device<D> {
+pub trait Device<D: draw::DrawList> {
     /// Returns the capabilities available to the specific API implementation
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
     // resource creation
@@ -332,6 +332,6 @@ pub trait Device<D> {
     /// Update the information stored in a texture
     fn update_texture<T>(&mut self, &TextureHandle, &tex::ImageInfo, &Blob<T>)
                       -> Result<(), TextureError>;
-    /// Submit a draw list. TODO: enforce `draw::DrawList` trait here
+    /// Submit a draw list for execution
     fn submit(&mut self, list: &D);
 }
