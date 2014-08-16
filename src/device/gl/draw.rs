@@ -111,8 +111,9 @@ impl ::draw::DrawList for DrawList {
         self.buf.push(::SetColorMask(mask));
     }
 
-    fn update_buffer<T>(&mut self, buf: super::Buffer, data: Box<::Blob<T> + Send>) {
-        self.buf.push(::UpdateBuffer(buf, data.cast()));
+    fn update_buffer<T>(&mut self, buf: super::Buffer, data: Box<::Blob<T> + Send>,
+                        usage: ::BufferUsage) {
+        self.buf.push(::UpdateBuffer(buf, data.cast(), usage));
     }
 
     fn update_texture<T>(&mut self, kind: ::tex::TextureKind, tex: super::Texture,

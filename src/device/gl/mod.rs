@@ -22,7 +22,7 @@ extern crate gl;
 extern crate libc;
 
 use log;
-use std::{fmt, str};
+use std::{fmt, mem, str};
 use std::collections::HashSet;
 use a = super::attrib;
 use RefBlobCast;
@@ -42,6 +42,19 @@ pub type FrameBuffer    = gl::types::GLuint;
 pub type Surface        = gl::types::GLuint;
 pub type Sampler        = gl::types::GLuint;
 pub type Texture        = gl::types::GLuint;
+
+struct AllocBlob(uint);
+
+impl ::Blob<()> for AllocBlob {
+    fn get_address(&self) -> uint {
+        0
+    }
+
+    fn get_size(&self) -> uint {
+        let AllocBlob(size) = *self;
+        size
+    }
+}
 
 fn get_uint(name: gl::types::GLenum) -> uint {
     let mut value = 0 as gl::types::GLint;
@@ -209,30 +222,30 @@ pub enum ErrorType {
 }
 
 
-fn primitive_to_gl(prim_type: super::PrimitiveType) -> gl::types::GLenum {
+fn primitive_to_gl(prim_type: ::PrimitiveType) -> gl::types::GLenum {
     match prim_type {
-        super::Point => gl::POINTS,
-        super::Line => gl::LINES,
-        super::LineStrip => gl::LINE_STRIP,
-        super::TriangleList => gl::TRIANGLES,
-        super::TriangleStrip => gl::TRIANGLE_STRIP,
-        super::TriangleFan => gl::TRIANGLE_FAN,
+        ::Point => gl::POINTS,
+        ::Line => gl::LINES,
+        ::LineStrip => gl::LINE_STRIP,
+        ::TriangleList => gl::TRIANGLES,
+        ::TriangleStrip => gl::TRIANGLE_STRIP,
+        ::TriangleFan => gl::TRIANGLE_FAN,
     }
 }
 
-fn target_to_gl(target: super::target::Target) -> gl::types::GLenum {
+fn target_to_gl(target: ::target::Target) -> gl::types::GLenum {
     match target {
-        super::target::TargetColor(index) =>
+        ::target::TargetColor(index) =>
             gl::COLOR_ATTACHMENT0 + (index as gl::types::GLenum),
-        super::target::TargetDepth => gl::DEPTH_ATTACHMENT,
-        super::target::TargetStencil => gl::STENCIL_ATTACHMENT,
-        super::target::TargetDepthStencil => gl::DEPTH_STENCIL_ATTACHMENT,
+        ::target::TargetDepth => gl::DEPTH_ATTACHMENT,
+        ::target::TargetStencil => gl::STENCIL_ATTACHMENT,
+        ::target::TargetDepthStencil => gl::DEPTH_STENCIL_ATTACHMENT,
     }
 }
 
 /// An OpenGL device with GLSL shaders
 pub struct GlDevice {
-    caps: super::Capabilities,
+    caps: ::Capabilities,
     info: Info,
 }
 
@@ -241,7 +254,7 @@ impl GlDevice {
     pub fn new(fn_proc: |&str| -> *const ::libc::c_void) -> GlDevice {
         gl::load_with(fn_proc);
         let info = Info::get();
-        let caps = super::Capabilities {
+        let caps = ::Capabilities {
             shader_model: shade::get_model(),
             max_draw_buffers: get_uint(gl::MAX_DRAW_BUFFERS),
             max_texture_size: get_uint(gl::MAX_TEXTURE_SIZE),
@@ -283,27 +296,36 @@ impl GlDevice {
         &self.info
     }
 
-    fn update_buffer_internal(&mut self, buffer: Buffer, data: &super::Blob<()>,
-                              usage: super::BufferUsage) {
+    fn create_buffer_internal(&mut self) -> Buffer {
+        let mut name = 0 as Buffer;
+        unsafe {
+            gl::GenBuffers(1, &mut name);
+        }
+        info!("\tCreated buffer {}", name);
+        name
+    }
+
+    fn update_buffer_internal(&mut self, buffer: Buffer, data: &::Blob<()>,
+                              usage: ::BufferUsage) {
         gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
         let size = data.get_size() as gl::types::GLsizeiptr;
         let raw = data.get_address() as *const gl::types::GLvoid;
         let usage = match usage {
-            super::UsageStatic  => gl::STATIC_DRAW,
-            super::UsageDynamic => gl::DYNAMIC_DRAW,
-            super::UsageStream  => gl::STREAM_DRAW,
+            ::UsageStatic  => gl::STATIC_DRAW,
+            ::UsageDynamic => gl::DYNAMIC_DRAW,
+            ::UsageStream  => gl::STREAM_DRAW,
         };
         unsafe {
             gl::BufferData(gl::ARRAY_BUFFER, size, raw, usage);
         }
     }
 
-    fn process(&mut self, cmd: &super::Command) {
+    fn process(&mut self, cmd: &::Command) {
         match *cmd {
-            super::Clear(ref data) => {
+            ::Clear(ref data) => {
                 let mut flags = match data.color {
                     //gl::ColorMask(gl::TRUE, gl::TRUE, gl::TRUE, gl::TRUE);
-                    Some(super::target::Color([r,g,b,a])) => {
+                    Some(::target::Color([r,g,b,a])) => {
                         gl::ClearColor(r, g, b, a);
                         gl::COLOR_BUFFER_BIT
                     },
@@ -321,17 +343,17 @@ impl GlDevice {
                 });
                 gl::Clear(flags);
             },
-            super::BindProgram(program) => {
+            ::BindProgram(program) => {
                 gl::UseProgram(program);
             },
-            super::BindArrayBuffer(array_buffer) => {
+            ::BindArrayBuffer(array_buffer) => {
                 if self.caps.array_buffer_supported {
                     gl::BindVertexArray(array_buffer);
                 } else {
                     error!("Ignored VAO bind command: {}", array_buffer)
                 }
             },
-            super::BindAttribute(slot, buffer, count, el_type, stride, offset) => {
+            ::BindAttribute(slot, buffer, count, el_type, stride, offset) => {
                 let gl_type = match el_type {
                     a::Int(_, a::U8, a::Unsigned)  => gl::UNSIGNED_BYTE,
                     a::Int(_, a::U8, a::Signed)    => gl::BYTE,
@@ -379,21 +401,21 @@ impl GlDevice {
                 }
                 gl::EnableVertexAttribArray(slot as gl::types::GLuint);
             },
-            super::BindIndex(buffer) => {
+            ::BindIndex(buffer) => {
                 gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer);
             },
-            super::BindFrameBuffer(frame_buffer) => {
+            ::BindFrameBuffer(frame_buffer) => {
                 gl::BindFramebuffer(gl::DRAW_FRAMEBUFFER, frame_buffer);
             },
-            super::UnbindTarget(target) => {
+            ::UnbindTarget(target) => {
                 let att = target_to_gl(target);
                 gl::FramebufferRenderbuffer(gl::DRAW_FRAMEBUFFER, att, gl::RENDERBUFFER, 0);
             },
-            super::BindTargetSurface(target, name) => {
+            ::BindTargetSurface(target, name) => {
                 let att = target_to_gl(target);
                 gl::FramebufferRenderbuffer(gl::DRAW_FRAMEBUFFER, att, gl::RENDERBUFFER, name);
             },
-            super::BindTargetTexture(target, name, level, layer) => {
+            ::BindTargetTexture(target, name, level, layer) => {
                 let att = target_to_gl(target);
                 match layer {
                     Some(layer) => gl::FramebufferTextureLayer(
@@ -404,14 +426,14 @@ impl GlDevice {
                         ),
                 }
             },
-            super::BindUniformBlock(program, slot, loc, buffer) => {
+            ::BindUniformBlock(program, slot, loc, buffer) => {
                 gl::UniformBlockBinding(program, slot as gl::types::GLuint, loc as gl::types::GLuint);
                 gl::BindBufferBase(gl::UNIFORM_BUFFER, loc as gl::types::GLuint, buffer);
             },
-            super::BindUniform(loc, uniform) => {
+            ::BindUniform(loc, uniform) => {
                 shade::bind_uniform(loc as gl::types::GLint, uniform);
             },
-            super::BindTexture(slot, kind, texture, sampler) => {
+            ::BindTexture(slot, kind, texture, sampler) => {
                 let anchor = tex::bind_texture(
                     gl::TEXTURE0 + slot as gl::types::GLenum,
                     kind, texture);
@@ -427,35 +449,35 @@ impl GlDevice {
                     None => ()
                 }
             },
-            super::SetPrimitiveState(prim) => {
+            ::SetPrimitiveState(prim) => {
                 state::bind_primitive(prim);
             },
-            super::SetScissor(rect) => {
+            ::SetScissor(rect) => {
                 state::bind_scissor(rect);
             },
-            super::SetViewport(rect) => {
+            ::SetViewport(rect) => {
                 state::bind_viewport(rect);
             },
-            super::SetDepthStencilState(depth, stencil, cull) => {
+            ::SetDepthStencilState(depth, stencil, cull) => {
                 state::bind_stencil(stencil, cull);
                 state::bind_depth(depth);
             },
-            super::SetBlendState(blend) => {
+            ::SetBlendState(blend) => {
                 state::bind_blend(blend);
             },
-            super::SetColorMask(mask) => {
+            ::SetColorMask(mask) => {
                 state::bind_color_mask(mask);
             },
-            super::UpdateBuffer(buffer, ref data) => {
-                self.update_buffer_internal(buffer, *data, super::UsageDynamic);
+            ::UpdateBuffer(buffer, ref data, usage) => {
+                self.update_buffer_internal(buffer, *data, usage);
             },
-            super::UpdateTexture(kind, texture, image_info, ref data) => {
+            ::UpdateTexture(kind, texture, image_info, ref data) => {
                 match tex::update_texture(kind, texture, &image_info, *data) {
                     Ok(_) => (),
                     Err(_) => unimplemented!(),
                 }
             },
-            super::Draw(prim_type, start, count) => {
+            ::Draw(prim_type, start, count) => {
                 gl::DrawArrays(
                     primitive_to_gl(prim_type),
                     start as gl::types::GLsizei,
@@ -463,7 +485,7 @@ impl GlDevice {
                 );
                 self.check();
             },
-            super::DrawIndexed(prim_type, index_type, start, count) => {
+            ::DrawIndexed(prim_type, index_type, start, count) => {
                 let (offset, gl_index) = match index_type {
                     a::U8  => (start * 1u32, gl::UNSIGNED_BYTE),
                     a::U16 => (start * 2u32, gl::UNSIGNED_SHORT),
@@ -483,18 +505,29 @@ impl GlDevice {
     }
 }
 
-impl super::Device<DrawList> for GlDevice {
-    fn get_capabilities<'a>(&'a self) -> &'a super::Capabilities {
+impl ::Device<DrawList> for GlDevice {
+    fn get_capabilities<'a>(&'a self) -> &'a ::Capabilities {
         &self.caps
     }
 
-    fn create_buffer<T>(&mut self) -> ::BufferHandle<T> {
-        let mut name = 0 as Buffer;
-        unsafe {
-            gl::GenBuffers(1, &mut name);
-        }
-        info!("\tCreated buffer {}", name);
-        ::BufferHandle::from_raw(::Handle(name, ()))
+    fn create_buffer<T>(&mut self, num: uint, usage: ::BufferUsage) -> ::BufferHandle<T> {
+        let name = self.create_buffer_internal();
+        let info = ::BufferInfo {
+            usage: usage,
+            size: num * mem::size_of::<T>(),
+        };
+        self.update_buffer_internal(name, &AllocBlob(info.size), info.usage);
+        ::BufferHandle::from_raw(::Handle(name, info))
+    }
+
+    fn create_buffer_static<T>(&mut self, data: &::Blob<T>) -> ::BufferHandle<T> {
+        let name = self.create_buffer_internal();
+        let info = ::BufferInfo {
+            usage: ::UsageStatic,
+            size: data.get_size(),
+        };
+        self.update_buffer_internal(name, data.cast(), info.usage);
+        ::BufferHandle::from_raw(::Handle(name, info))
     }
 
     fn create_array_buffer(&mut self) -> Result<ArrayBuffer, ()> {
@@ -511,8 +544,8 @@ impl super::Device<DrawList> for GlDevice {
         }
     }
 
-    fn create_shader(&mut self, stage: super::shade::Stage, code: super::shade::ShaderSource)
-                     -> Result<::ShaderHandle, super::shade::CreateShaderError> {
+    fn create_shader(&mut self, stage: ::shade::Stage, code: ::shade::ShaderSource)
+                     -> Result<::ShaderHandle, ::shade::CreateShaderError> {
         let (name, info) = shade::create_shader(stage, code, self.get_capabilities().shader_model);
         info.map(|info| {
             let level = if name.is_err() { log::ERROR } else { log::WARN };
@@ -597,13 +630,13 @@ impl super::Device<DrawList> for GlDevice {
         }
     }
 
-    fn update_buffer<T>(&mut self, buffer: ::BufferHandle<T>, data: &super::Blob<T>,
-                     usage: super::BufferUsage) {
-        self.update_buffer_internal(buffer.get_name(), data.cast(), usage);
+    fn update_buffer<T>(&mut self, buffer: ::BufferHandle<T>, data: &::Blob<T>) {
+        debug_assert_eq!(buffer.get_info().size, data.get_size());
+        self.update_buffer_internal(buffer.get_name(), data.cast(), buffer.get_info().usage);
     }
 
     fn update_texture<T>(&mut self, texture: &::TextureHandle, img: &::tex::ImageInfo,
-                      data: &super::Blob<T>) -> Result<(), ::TextureError> {
+                      data: &::Blob<T>) -> Result<(), ::TextureError> {
         tex::update_texture(texture.get_info().kind, texture.get_name(), img, data)
     }
 

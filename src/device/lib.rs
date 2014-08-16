@@ -106,6 +106,11 @@ impl<T> BufferHandle<T> {
         self.raw.get_name()
     }
 
+    /// Get the associated information about the buffer
+    pub fn get_info(&self) -> &BufferInfo {
+        self.raw.get_info()
+    }
+
     /// Get the underlying raw Handle
     pub fn raw(&self) -> RawBufferHandle {
         self.raw
@@ -113,7 +118,7 @@ impl<T> BufferHandle<T> {
 }
 
 
-pub type RawBufferHandle = Handle<back::Buffer, ()>;
+pub type RawBufferHandle = Handle<back::Buffer, BufferInfo>;
 /// Shader Handle
 pub type ShaderHandle  = Handle<back::Shader, shade::Stage>;
 /// Program Handle
@@ -128,7 +133,11 @@ pub type SamplerHandle = Handle<back::Sampler, tex::SamplerInfo>;
 /// A helper method to test `#[vertex_format]` without GL context
 //#[cfg(test)]
 pub fn make_fake_buffer<T>() -> BufferHandle<T> {
-    BufferHandle::from_raw(Handle(0, ()))
+    let info = BufferInfo {
+        usage: UsageStatic,
+        size: 0,
+    };
+    BufferHandle::from_raw(Handle(0, info))
 }
 
 /// Features that the device supports.
@@ -236,6 +245,15 @@ pub enum BufferUsage {
     UsageStream,
 }
 
+/// An information block that is immutable and associated with each buffer
+#[deriving(Clone, PartialEq, Show)]
+pub struct BufferInfo {
+    /// Usage hint
+    pub usage: BufferUsage,
+    /// Size in bytes
+    pub size: uint,
+}
+
 /// Surface creation/update error.
 #[deriving(Clone, PartialEq, Show)]
 pub enum SurfaceError {
@@ -278,7 +296,7 @@ enum Command {
     SetDepthStencilState(Option<state::Depth>, Option<state::Stencil>, state::CullMode),
     SetBlendState(Option<state::Blend>),
     SetColorMask(state::ColorMask),
-    UpdateBuffer(back::Buffer, Box<Blob<()> + Send>),
+    UpdateBuffer(back::Buffer, Box<Blob<()> + Send>, BufferUsage),
     UpdateTexture(tex::TextureKind, back::Texture, tex::ImageInfo, Box<Blob<()> + Send>),
     // drawing
     Clear(target::ClearData),
@@ -292,7 +310,8 @@ pub trait Device<D> {
     /// Returns the capabilities available to the specific API implementation
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
     // resource creation
-    fn create_buffer<T>(&mut self) -> BufferHandle<T>;
+    fn create_buffer<T>(&mut self, num: uint, usage: BufferUsage) -> BufferHandle<T>;
+    fn create_buffer_static<T>(&mut self, &Blob<T>) -> BufferHandle<T>;
     fn create_array_buffer(&mut self) -> Result<back::ArrayBuffer, ()>;
     fn create_shader(&mut self, stage: shade::Stage, code: shade::ShaderSource) ->
                      Result<ShaderHandle, shade::CreateShaderError>;
@@ -309,7 +328,7 @@ pub trait Device<D> {
     fn delete_texture(&mut self, TextureHandle);
     fn delete_sampler(&mut self, SamplerHandle);
     /// Update the information stored in a specific buffer
-    fn update_buffer<T>(&mut self, BufferHandle<T>, &Blob<T>, BufferUsage);
+    fn update_buffer<T>(&mut self, BufferHandle<T>, &Blob<T>);
     /// Update the information stored in a texture
     fn update_texture<T>(&mut self, &TextureHandle, &tex::ImageInfo, &Blob<T>)
                       -> Result<(), TextureError>;

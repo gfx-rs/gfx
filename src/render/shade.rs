@@ -84,15 +84,15 @@ pub struct ParamValues<'a> {
     pub textures: &'a mut [Option<TextureParam>],
 }
 
-/// Encloses a shader program with its parameter
-pub trait ProgramShell {
+/// Encloses a shader program handle with its parameter
+pub trait Program {
     /// Get the contained program
     fn get_program(&self) -> &ProgramHandle;
     /// Get all the contained parameter values
     fn fill_params(&self, ParamValues);
 }
 
-impl ProgramShell for ProgramHandle {
+impl Program for ProgramHandle {
     fn get_program(&self) -> &ProgramHandle {
         self
     }
@@ -167,7 +167,7 @@ impl ShaderParam<()> for () {
 /// * `L` - auto-generated structure that has a variable index for every field of T
 /// * `T` - user-provided structure containing actual parameter values
 #[deriving(Clone)]
-pub struct CustomShell<L, T> {
+pub struct UserProgram<L, T> {
     /// Shader program handle
     program: ProgramHandle,
     /// Hidden link that provides parameter indices for user data
@@ -176,10 +176,10 @@ pub struct CustomShell<L, T> {
     pub data: T,    //TODO: move data out of the shell
 }
 
-impl<L, T: ShaderParam<L>> CustomShell<L, T> {
-    /// Create a new custom shell
-    pub fn new(program: ProgramHandle, link: L, data: T) -> CustomShell<L, T> {
-        CustomShell {
+impl<L, T: ShaderParam<L>> UserProgram<L, T> {
+    /// Create a new user program
+    pub fn new(program: ProgramHandle, link: L, data: T) -> UserProgram<L, T> {
+        UserProgram {
             program: program,
             link: link,
             data: data,
@@ -187,7 +187,7 @@ impl<L, T: ShaderParam<L>> CustomShell<L, T> {
     }
 }
 
-impl<L, T: ShaderParam<L>> ProgramShell for CustomShell<L, T> {
+impl<L, T: ShaderParam<L>> Program for UserProgram<L, T> {
     fn get_program(&self) -> &ProgramHandle {
         &self.program
     }

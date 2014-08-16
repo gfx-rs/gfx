@@ -22,7 +22,7 @@ use device::attrib::{U8, U16, U32};
 use device::BoxBlobCast;
 use mesh;
 use shade;
-use shade::{ProgramShell, ShaderParam};
+use shade::{Program, ShaderParam};
 use state;
 use target;
 
@@ -62,16 +62,6 @@ pub enum DrawError {
     ErrorSlice,
 }
 
-/// Manager initialization error
-#[repr(u8)]
-#[deriving(Clone, PartialEq, Show)]
-pub enum InitError {
-    /// Unable to create a common array buffer
-    ErrorArrayBuffer,
-    /// Unable to create a common frame buffer
-    ErrorFramebuffer,
-}
-
 /// Program linking error
 #[deriving(Clone, PartialEq, Show)]
 pub enum ProgramError<'a> {
@@ -85,80 +75,51 @@ pub enum ProgramError<'a> {
     ErrorParameters(shade::ParameterLinkError<'a>),
 }
 
+/// Connect a shader program with a parameter structure
+pub fn connect_program<'a, L, T: ShaderParam<L>>
+                    (prog: device::ProgramHandle, data: T)
+                    -> Result<shade::UserProgram<L, T>,
+                    shade::ParameterLinkError<'a>> {
+    let info = prog.get_info();
+    let input = (info.uniforms.as_slice(), info.blocks.as_slice(),
+        info.textures.as_slice());
+    match data.create_link(input) {    //TODO: no clone
+        Ok(link) => Ok(shade::UserProgram::new(prog.clone(), link, data)),
+        Err(e) => Err(shade::ErrorUnusedParameter(e)),
+    }
+}
+
 /// Graphics state
 struct State {
     frame: target::Frame,
     draw_state: state::DrawState,
 }
 
-/// Frontend, the draw list manager
-pub struct FrontEnd {
-    common_array_buffer: backend::ArrayBuffer,
-    common_frame_buffer: backend::FrameBuffer,
-    default_frame_buffer: backend::FrameBuffer,
-    main_frame: target::Frame,
-    default_state: state::DrawState,
-}
-
-impl FrontEnd {
-    /// Create a new draw list
-    pub fn create_drawlist(&self) -> DrawList {
-        DrawList {
-            list: device::DrawList::new(),
-            common_array_buffer: self.common_array_buffer,
-            common_frame_buffer: self.common_frame_buffer,
-            default_frame_buffer: self.default_frame_buffer,
-            state: State {
-                frame: self.main_frame,
-                draw_state: self.default_state,
-            },
-        }
-    }
-
-    /// Return a reference to the main frame buffer
-    pub fn get_main_frame(&self) -> &target::Frame {
-        &self.main_frame
-    }
-
-    /// Connect a shader program with a parameter structure
-    pub fn connect_program<'a, L, T: ShaderParam<L>>
-                        (prog: device::ProgramHandle, data: T)
-                        -> Result<shade::CustomShell<L, T>,
-                        shade::ParameterLinkError<'a>> {
-        let info = prog.get_info();
-        let input = (info.uniforms.as_slice(), info.blocks.as_slice(),
-            info.textures.as_slice());
-        match data.create_link(input) {    //TODO: no clone
-            Ok(link) => Ok(shade::CustomShell::new(prog.clone(), link, data)),
-            Err(e) => Err(shade::ErrorUnusedParameter(e)),
-        }
-    }
-}
-
 /// Backend extension trait for convenience methods
 pub trait DeviceHelper {
-    /// Create a new front-end manager.
-    fn create_frontend(&mut self, width: u16, height: u16) -> Result<FrontEnd, InitError>;
+    /// Create a new draw list
+    fn create_draw_list(&mut self) -> DrawList;
     /// Create a new mesh from the given vertex data.
     /// Convenience function around `create_buffer` and `Mesh::from`.
     fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh;
     /// Create a simple program given a vertex shader with a fragment one.
     fn link_program<'a, L, T: ShaderParam<L>>(&mut self, data: T, vs_src: ShaderSource,
-                   fs_src: ShaderSource) -> Result<shade::CustomShell<L, T>, ProgramError>;
+                   fs_src: ShaderSource) -> Result<shade::UserProgram<L, T>, ProgramError>;
 }
 
 impl<D, B: device::Device<D>> DeviceHelper for B {
-    fn create_frontend(&mut self, width: u16, height: u16) -> Result<FrontEnd, InitError> {
-        Ok(FrontEnd {
-            common_array_buffer: match self.create_array_buffer() {
-                Ok(vao) => vao,
-                Err(_) => return Err(ErrorArrayBuffer),
-            },
+    fn create_draw_list(&mut self) -> DrawList {
+        DrawList {
+            list: device::DrawList::new(),
+            common_array_buffer: self.create_array_buffer(),
             common_frame_buffer: self.create_frame_buffer(),
             default_frame_buffer: 0,
-            main_frame: target::Frame::new(width, height),
-            default_state: state::DrawState::new(),    //TODO: make sure this is HW default
-        })
+            //TODO: make sure this is HW default
+            state: State {
+                frame: target::Frame::new(0,0),
+                draw_state: state::DrawState::new(),
+            },
+        }
     }
 
     fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh {
@@ -168,15 +129,13 @@ impl<D, B: device::Device<D>> DeviceHelper for B {
             let val: device::VertexCount = Bounded::max_value();
             val as uint
         });
-        let buf = self.create_buffer();
-        self.update_buffer(buf, &data, device::UsageStatic);
+        let buf = self.create_buffer_static(&data);
         mesh::Mesh::from::<T>(buf, nv as device::VertexCount)
     }
 
     fn link_program<'a, L, T: ShaderParam<L>>(&mut self, data: T,
-                   vs_src: ShaderSource, fs_src: ShaderSource)
-                   -> Result<shade::CustomShell<L, T>, ProgramError> {
-        //TODO: integrate connect_program here
+                    vs_src: ShaderSource, fs_src: ShaderSource)
+                    -> Result<shade::UserProgram<L, T>, ProgramError> {
         let vs = match self.create_shader(Vertex, vs_src) {
             Ok(s) => s,
             Err(e) => return Err(ErrorVertex(e)),
@@ -189,14 +148,14 @@ impl<D, B: device::Device<D>> DeviceHelper for B {
             Ok(p) => p,
             Err(e) => return Err(ErrorLink(e)),
         };
-        FrontEnd::connect_program(prog, data).map_err(|e| ErrorParameters(e))
+        connect_program(prog, data).map_err(|e| ErrorParameters(e))
     }
 }
 
 /// Renderer front-end
 pub struct DrawList {
     list: device::DrawList,
-    common_array_buffer: backend::ArrayBuffer,
+    common_array_buffer: Result<backend::ArrayBuffer, ()>,
     common_frame_buffer: backend::FrameBuffer,
     default_frame_buffer: backend::FrameBuffer,
     state: State,
@@ -213,6 +172,20 @@ impl DrawList {
         &self.list
     }
 
+    /// Clone the draw list shared data but ignore the commands
+    pub fn clone_empty(&self) -> DrawList {
+        DrawList {
+            list: device::DrawList::new(),
+            common_array_buffer: self.common_array_buffer,
+            common_frame_buffer: self.common_frame_buffer,
+            default_frame_buffer: self.default_frame_buffer,
+            state: State {
+                frame: target::Frame::new(0,0),
+                draw_state: state::DrawState::new(),
+            },
+        }
+    }
+
     /// Clear the `Frame` as the `ClearData` specifies.
     pub fn clear(&mut self, data: device::target::ClearData, frame: &target::Frame) {
         self.bind_frame(frame);
@@ -220,9 +193,9 @@ impl DrawList {
     }
 
     /// Draw `slice` of `mesh` into `frame`, using a program shell, and a given draw state.
-    pub fn draw<P: ProgramShell>(&mut self, mesh: &mesh::Mesh, slice: mesh::Slice,
-                                frame: &target::Frame, prog_shell: &P, state: &state::DrawState)
-                                -> Result<(), DrawError> {
+    pub fn draw<P: Program>(&mut self, mesh: &mesh::Mesh, slice: mesh::Slice,
+                            frame: &target::Frame, prog_shell: &P, state: &state::DrawState)
+                            -> Result<(), DrawError> {
         self.bind_frame(frame);
         match self.bind_shell(prog_shell) {
             Ok(_) => (),
@@ -262,13 +235,23 @@ impl DrawList {
     }
 
     /// Update a buffer with data from a vector.
-    pub fn update_buffer_vec<T: Send>(&mut self, buf: device::BufferHandle<T>, data: Vec<T>) {
-        self.list.update_buffer(buf.get_name(), (box data) as Box<device::Blob<T> + Send>);
+    pub fn update_buffer_vec<T: Send>(&mut self, buf: device::BufferHandle<T>,
+                             data: Vec<T>) {
+        self.list.update_buffer(
+            buf.get_name(),
+            (box data) as Box<device::Blob<T> + Send>,
+            buf.get_info().usage
+        );
     }
 
     /// Update a buffer with data from a single type.
-    pub fn update_buffer_struct<U, T: device::Blob<U>+Send>(&mut self, buf: device::BufferHandle<U>, data: T) {
-        self.list.update_buffer(buf.get_name(), (box data) as Box<device::Blob<U> + Send>);
+    pub fn update_buffer_struct<U, T: device::Blob<U>+Send>(&mut self,
+                                buf: device::BufferHandle<U>, data: T) {
+        self.list.update_buffer(
+            buf.get_name(),
+            (box data) as Box<device::Blob<U> + Send>,
+            buf.get_info().usage
+        );
     }
 
     /// Update the contents of a texture.
@@ -278,7 +261,8 @@ impl DrawList {
                                  (box data) as Box<device::Blob<T> + Send>);
     }
 
-    fn bind_target(list: &mut device::DrawList, to: device::target::Target, plane: target::Plane) {
+    fn bind_target(list: &mut device::DrawList, to: device::target::Target,
+                   plane: target::Plane) {
         match plane {
             target::PlaneEmpty =>
                 list.unbind_target(to),
@@ -316,7 +300,7 @@ impl DrawList {
         }
     }
 
-    fn bind_shell<P: ProgramShell>(&mut self, shell: &P) -> Result<(), ShellError> {
+    fn bind_shell<P: Program>(&mut self, shell: &P) -> Result<(), ShellError> {
         let prog = shell.get_program();
         self.list.bind_program(prog.get_name());
         let pinfo = prog.get_info();
@@ -365,7 +349,8 @@ impl DrawList {
 
     fn bind_mesh(&mut self, mesh: &mesh::Mesh, info: &ProgramInfo)
                  -> Result<(), MeshError> {
-        self.list.bind_array_buffer(self.common_array_buffer);
+        // It's Ok the array buffer is not supported. If so we just ignore it.
+        self.common_array_buffer.map(|ab| self.list.bind_array_buffer(ab));
         for sat in info.attributes.iter() {
             match mesh.attributes.iter().find(|a| a.name.as_slice() == sat.name.as_slice()) {
                 Some(vat) => match vat.elem_type.is_compatible(sat.base_type) {
