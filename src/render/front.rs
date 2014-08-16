@@ -62,16 +62,6 @@ pub enum DrawError {
     ErrorSlice,
 }
 
-/// Manager initialization error
-#[repr(u8)]
-#[deriving(Clone, PartialEq, Show)]
-pub enum InitError {
-    /// Unable to create a common array buffer
-    ErrorArrayBuffer,
-    /// Unable to create a common frame buffer
-    ErrorFramebuffer,
-}
-
 /// Program linking error
 #[deriving(Clone, PartialEq, Show)]
 pub enum ProgramError<'a> {
@@ -108,7 +98,7 @@ struct State {
 /// Backend extension trait for convenience methods
 pub trait DeviceHelper {
     /// Create a new draw list
-    fn create_drawlist(&mut self) -> Result<DrawList, InitError>;
+    fn create_drawlist(&mut self) -> DrawList;
     /// Create a new mesh from the given vertex data.
     /// Convenience function around `create_buffer` and `Mesh::from`.
     fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh;
@@ -118,13 +108,10 @@ pub trait DeviceHelper {
 }
 
 impl<D, B: device::Device<D>> DeviceHelper for B {
-    fn create_drawlist(&mut self) -> Result<DrawList, InitError> {
-        Ok(DrawList {
+    fn create_drawlist(&mut self) -> DrawList {
+        DrawList {
             list: device::DrawList::new(),
-            common_array_buffer: match self.create_array_buffer() {
-                Ok(vao) => vao,
-                Err(_) => return Err(ErrorArrayBuffer),
-            },
+            common_array_buffer: self.create_array_buffer(),
             common_frame_buffer: self.create_frame_buffer(),
             default_frame_buffer: 0,
             //TODO: make sure this is HW default
@@ -132,7 +119,7 @@ impl<D, B: device::Device<D>> DeviceHelper for B {
                 frame: target::Frame::new(0,0),
                 draw_state: state::DrawState::new(),
             },
-        })
+        }
     }
 
     fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh {
@@ -169,7 +156,7 @@ impl<D, B: device::Device<D>> DeviceHelper for B {
 /// Renderer front-end
 pub struct DrawList {
     list: device::DrawList,
-    common_array_buffer: backend::ArrayBuffer,
+    common_array_buffer: Result<backend::ArrayBuffer, ()>,
     common_frame_buffer: backend::FrameBuffer,
     default_frame_buffer: backend::FrameBuffer,
     state: State,
@@ -352,7 +339,7 @@ impl DrawList {
 
     fn bind_mesh(&mut self, mesh: &mesh::Mesh, info: &ProgramInfo)
                  -> Result<(), MeshError> {
-        self.list.bind_array_buffer(self.common_array_buffer);
+        self.common_array_buffer.map(|ab| self.list.bind_array_buffer(ab));
         for sat in info.attributes.iter() {
             match mesh.attributes.iter().find(|a| a.name.as_slice() == sat.name.as_slice()) {
                 Some(vat) => match vat.elem_type.is_compatible(sat.base_type) {
