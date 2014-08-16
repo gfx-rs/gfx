@@ -77,7 +77,6 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span, substr: &gene
                     None => token::get_ident(f.name.unwrap()),
                 };
                 let name = cx.expr_str(span, name);
-                // let name = cx.expr_str(span, token::get_ident(f.name.unwrap()));
                 let input = substr.nonself_args[0];
                 let expr = match classify(&def.node.ty.node) {
                     //TODO: verify the type match
