@@ -132,14 +132,9 @@ impl Clone for UniformValue {
         match *self {
             ValueI32(val)       => ValueI32(val),
             ValueF32(val)       => ValueF32(val),
-            ValueI32Vec(v)      => ValueI32Vec([v[0], v[1], v[2], v[3]]),
-            ValueF32Vec(v)      => ValueF32Vec([v[0], v[1], v[2], v[3]]),
-            ValueF32Matrix(v)   => ValueF32Matrix([
-                [v[0][0], v[0][1], v[0][2], v[0][3]],
-                [v[1][0], v[1][1], v[1][2], v[1][3]],
-                [v[2][0], v[2][1], v[2][2], v[2][3]],
-                [v[3][0], v[3][1], v[3][2], v[3][3]],
-            ]),
+            ValueI32Vec(v)      => ValueI32Vec(v),
+            ValueF32Vec(v)      => ValueF32Vec(v),
+            ValueF32Matrix(m)   => ValueF32Matrix(m),
         }
     }
 }
