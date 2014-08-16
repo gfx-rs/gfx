@@ -129,8 +129,7 @@ impl<D, B: device::Device<D>> DeviceHelper for B {
             let val: device::VertexCount = Bounded::max_value();
             val as uint
         });
-        let buf = self.create_buffer();
-        self.update_buffer(buf, &data, device::UsageStatic);
+        let buf = self.create_buffer_static(&data);
         mesh::Mesh::from::<T>(buf, nv as device::VertexCount)
     }
 
@@ -236,13 +235,23 @@ impl DrawList {
     }
 
     /// Update a buffer with data from a vector.
-    pub fn update_buffer_vec<T: Send>(&mut self, buf: device::BufferHandle<T>, data: Vec<T>) {
-        self.list.update_buffer(buf.get_name(), (box data) as Box<device::Blob<T> + Send>);
+    pub fn update_buffer_vec<T: Send>(&mut self, buf: device::BufferHandle<T>,
+                             data: Vec<T>) {
+        self.list.update_buffer(
+            buf.get_name(),
+            (box data) as Box<device::Blob<T> + Send>,
+            buf.get_info().usage
+        );
     }
 
     /// Update a buffer with data from a single type.
-    pub fn update_buffer_struct<U, T: device::Blob<U>+Send>(&mut self, buf: device::BufferHandle<U>, data: T) {
-        self.list.update_buffer(buf.get_name(), (box data) as Box<device::Blob<U> + Send>);
+    pub fn update_buffer_struct<U, T: device::Blob<U>+Send>(&mut self,
+                                buf: device::BufferHandle<U>, data: T) {
+        self.list.update_buffer(
+            buf.get_name(),
+            (box data) as Box<device::Blob<U> + Send>,
+            buf.get_info().usage
+        );
     }
 
     /// Update the contents of a texture.
@@ -252,7 +261,8 @@ impl DrawList {
                                  (box data) as Box<device::Blob<T> + Send>);
     }
 
-    fn bind_target(list: &mut device::DrawList, to: device::target::Target, plane: target::Plane) {
+    fn bind_target(list: &mut device::DrawList, to: device::target::Target,
+                   plane: target::Plane) {
         match plane {
             target::PlaneEmpty =>
                 list.unbind_target(to),
@@ -339,6 +349,7 @@ impl DrawList {
 
     fn bind_mesh(&mut self, mesh: &mesh::Mesh, info: &ProgramInfo)
                  -> Result<(), MeshError> {
+        // it's OK for array buffers to be unsupported, we just ignore it then
         self.common_array_buffer.map(|ab| self.list.bind_array_buffer(ab));
         for sat in info.attributes.iter() {
             match mesh.attributes.iter().find(|a| a.name.as_slice() == sat.name.as_slice()) {

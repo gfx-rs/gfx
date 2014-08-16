@@ -47,7 +47,7 @@ pub trait DrawList {
                          Option<::state::Stencil>, ::state::CullMode);
     fn set_blend(&mut self, Option<::state::Blend>);
     fn set_color_mask(&mut self, ::state::ColorMask);
-    fn update_buffer<T>(&mut self, b::Buffer, Box<::Blob<T> + Send>);
+    fn update_buffer<T>(&mut self, b::Buffer, Box<::Blob<T> + Send>, ::BufferUsage);
     fn update_texture<T>(&mut self, ::tex::TextureKind, b::Texture,
                       ::tex::ImageInfo, Box<::Blob<T> + Send>);
     fn call_clear(&mut self, t::ClearData);

@@ -167,8 +167,7 @@ fn main() {
             20, 21, 22, 22, 23, 20, //back
         ];
 
-        let buf = device.create_buffer();
-        device.update_buffer(buf, &index_data, gfx::UsageStatic);
+        let buf = device.create_buffer_static(&index_data);
         gfx::IndexSlice8(buf, 0, 36)
     };
 
