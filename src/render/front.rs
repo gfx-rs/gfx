@@ -85,60 +85,30 @@ pub enum ProgramError<'a> {
     ErrorParameters(shade::ParameterLinkError<'a>),
 }
 
+/// Connect a shader program with a parameter structure
+pub fn connect_program<'a, L, T: ShaderParam<L>>
+                    (prog: device::ProgramHandle, data: T)
+                    -> Result<shade::CustomShell<L, T>,
+                    shade::ParameterLinkError<'a>> {
+    let info = prog.get_info();
+    let input = (info.uniforms.as_slice(), info.blocks.as_slice(),
+        info.textures.as_slice());
+    match data.create_link(input) {    //TODO: no clone
+        Ok(link) => Ok(shade::CustomShell::new(prog.clone(), link, data)),
+        Err(e) => Err(shade::ErrorUnusedParameter(e)),
+    }
+}
+
 /// Graphics state
 struct State {
     frame: target::Frame,
     draw_state: state::DrawState,
 }
 
-/// Frontend, the draw list manager
-pub struct FrontEnd {
-    common_array_buffer: backend::ArrayBuffer,
-    common_frame_buffer: backend::FrameBuffer,
-    default_frame_buffer: backend::FrameBuffer,
-    main_frame: target::Frame,
-    default_state: state::DrawState,
-}
-
-impl FrontEnd {
-    /// Create a new draw list
-    pub fn create_drawlist(&self) -> DrawList {
-        DrawList {
-            list: device::DrawList::new(),
-            common_array_buffer: self.common_array_buffer,
-            common_frame_buffer: self.common_frame_buffer,
-            default_frame_buffer: self.default_frame_buffer,
-            state: State {
-                frame: self.main_frame,
-                draw_state: self.default_state,
-            },
-        }
-    }
-
-    /// Return a reference to the main frame buffer
-    pub fn get_main_frame(&self) -> &target::Frame {
-        &self.main_frame
-    }
-
-    /// Connect a shader program with a parameter structure
-    pub fn connect_program<'a, L, T: ShaderParam<L>>
-                        (prog: device::ProgramHandle, data: T)
-                        -> Result<shade::CustomShell<L, T>,
-                        shade::ParameterLinkError<'a>> {
-        let info = prog.get_info();
-        let input = (info.uniforms.as_slice(), info.blocks.as_slice(),
-            info.textures.as_slice());
-        match data.create_link(input) {    //TODO: no clone
-            Ok(link) => Ok(shade::CustomShell::new(prog.clone(), link, data)),
-            Err(e) => Err(shade::ErrorUnusedParameter(e)),
-        }
-    }
-}
-
 /// Backend extension trait for convenience methods
 pub trait DeviceHelper {
-    /// Create a new front-end manager.
-    fn create_frontend(&mut self, width: u16, height: u16) -> Result<FrontEnd, InitError>;
+    /// Create a new draw list
+    fn create_drawlist(&mut self) -> Result<DrawList, InitError>;
     /// Create a new mesh from the given vertex data.
     /// Convenience function around `create_buffer` and `Mesh::from`.
     fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh;
@@ -148,16 +118,20 @@ pub trait DeviceHelper {
 }
 
 impl<D, B: device::Device<D>> DeviceHelper for B {
-    fn create_frontend(&mut self, width: u16, height: u16) -> Result<FrontEnd, InitError> {
-        Ok(FrontEnd {
+    fn create_drawlist(&mut self) -> Result<DrawList, InitError> {
+        Ok(DrawList {
+            list: device::DrawList::new(),
             common_array_buffer: match self.create_array_buffer() {
                 Ok(vao) => vao,
                 Err(_) => return Err(ErrorArrayBuffer),
             },
             common_frame_buffer: self.create_frame_buffer(),
             default_frame_buffer: 0,
-            main_frame: target::Frame::new(width, height),
-            default_state: state::DrawState::new(),    //TODO: make sure this is HW default
+            //TODO: make sure this is HW default
+            state: State {
+                frame: target::Frame::new(0,0),
+                draw_state: state::DrawState::new(),
+            },
         })
     }
 
@@ -176,7 +150,6 @@ impl<D, B: device::Device<D>> DeviceHelper for B {
     fn link_program<'a, L, T: ShaderParam<L>>(&mut self, data: T,
                    vs_src: ShaderSource, fs_src: ShaderSource)
                    -> Result<shade::CustomShell<L, T>, ProgramError> {
-        //TODO: integrate connect_program here
         let vs = match self.create_shader(Vertex, vs_src) {
             Ok(s) => s,
             Err(e) => return Err(ErrorVertex(e)),
@@ -189,7 +162,7 @@ impl<D, B: device::Device<D>> DeviceHelper for B {
             Ok(p) => p,
             Err(e) => return Err(ErrorLink(e)),
         };
-        FrontEnd::connect_program(prog, data).map_err(|e| ErrorParameters(e))
+        connect_program(prog, data).map_err(|e| ErrorParameters(e))
     }
 }
 
@@ -211,6 +184,20 @@ impl DrawList {
     /// Get the draw list to be submitted.
     pub fn as_slice(&self) -> &device::DrawList {
         &self.list
+    }
+
+    /// Clone the draw list shared data but ignore the commands
+    pub fn clone_empty(&self) -> DrawList {
+        DrawList {
+            list: device::DrawList::new(),
+            common_array_buffer: self.common_array_buffer,
+            common_frame_buffer: self.common_frame_buffer,
+            default_frame_buffer: self.default_frame_buffer,
+            state: State {
+                frame: target::Frame::new(0,0),
+                draw_state: state::DrawState::new(),
+            },
+        }
     }
 
     /// Clear the `Frame` as the `ClearData` specifies.

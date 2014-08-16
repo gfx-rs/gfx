@@ -77,7 +77,7 @@ impl default::Default for Color {
     }
 }
 
-#[deriving(Show)]
+#[deriving(Clone, Show)]
 /// How to clear a frame.
 pub struct ClearData {
     /// If set, the color buffer of the frame will be cleared to this.
@@ -90,7 +90,7 @@ pub struct ClearData {
 
 /// When rendering, each "output" of the fragment shader goes to a specific target. A `Plane` can
 /// be bound to a target, causing writes to that target to affect the `Plane`.
-#[deriving(Show)]
+#[deriving(Clone, Show)]
 pub enum Target {
     /// Color data.
     ///

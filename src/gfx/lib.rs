@@ -30,7 +30,7 @@ extern crate render;
 
 // public re-exports
 pub use render::front;
-pub use render::front::{DeviceHelper, FrontEnd, DrawList};
+pub use render::front::{DeviceHelper, DrawList, connect_program};
 pub use render::mesh::{Attribute, Mesh, VertexFormat, Slice, VertexSlice,
     IndexSlice8, IndexSlice16, IndexSlice32};
 pub use render::state::{DrawState, BlendAdditive, BlendAlpha};

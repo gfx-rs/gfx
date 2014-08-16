@@ -115,11 +115,11 @@ fn main() {
     glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
     window.set_key_polling(true); // so we can quit when Esc is pressed
     let (w, h) = window.get_framebuffer_size();
+    let frame = gfx::Frame::new(w as u16, h as u16);
 
     let mut device = gfx::GlDevice::new(|s| glfw.get_proc_address(s));
-    let frontend = device.create_frontend(w as u16, h as u16).unwrap();
+    let mut list = device.create_drawlist().unwrap();
 
-    let frame = *frontend.get_main_frame();
     let state = gfx::DrawState::new().depth(gfx::state::LessEqual, true);
 
     let vertex_data = vec![
@@ -215,8 +215,6 @@ fn main() {
             cgmath::angle::deg(45f32), aspect, 1f32, 10f32);
         mp.mul_m(&mv.mat)
     };
-
-    let mut list = frontend.create_drawlist();
 
     while !window.should_close() {
         glfw.poll_events();

@@ -25,16 +25,15 @@ fn main() {
     let (w, h) = window.get_inner_size().unwrap();
 
     let mut device = gfx::GlDevice::new(|s| window.get_proc_address(s));
-    let frontend = device.create_frontend(w as u16, h as u16).unwrap();
+    let mut list = device.create_drawlist().unwrap();
 
-    let mut list = frontend.create_drawlist();
     list.clear(
         gfx::ClearData {
             color: Some(gfx::Color([0.3, 0.3, 0.3, 1.0])),
             depth: None,
             stencil: None,
         },
-        frontend.get_main_frame()
+        &gfx::Frame::new(w as u16, h as u16)
     );
 
     'main: loop {

@@ -79,9 +79,10 @@ fn main() {
     glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
     window.set_key_polling(true); // so we can quit when Esc is pressed
     let (w, h) = window.get_framebuffer_size();
+    let frame = gfx::Frame::new(w as u16, h as u16);
 
     let mut device = gfx::GlDevice::new(|s| glfw.get_proc_address(s));
-    let frontend = device.create_frontend(w as u16, h as u16).unwrap();
+    let mut list = device.create_drawlist().unwrap();
 
     let state = gfx::DrawState::new();
     let vertex_data = vec![
@@ -93,16 +94,15 @@ fn main() {
     let program = device.link_program((), VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
                         .unwrap();
 
-    let mut list = frontend.create_drawlist();
     list.clear(
         gfx::ClearData {
             color: Some(gfx::Color([0.3, 0.3, 0.3, 1.0])),
             depth: None,
             stencil: None,
         },
-        frontend.get_main_frame()
+        &frame
     );
-    list.draw(&mesh, mesh.get_slice(), frontend.get_main_frame(), &program, &state)
+    list.draw(&mesh, mesh.get_slice(), &frame, &program, &state)
         .unwrap();
 
     while !window.should_close() {
