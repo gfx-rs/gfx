@@ -9,8 +9,11 @@ extern crate glfw;
 extern crate native;
 extern crate time;
 
+use cgmath::angle;
+use cgmath::array::FixedArray;
 use cgmath::matrix::{Matrix, Matrix4};
 use cgmath::point::Point3;
+use cgmath::projection;
 use cgmath::transform::{Transform, AffineMatrix3};
 use cgmath::vector::Vector3;
 use gfx::{Device, DeviceHelper};
@@ -190,12 +193,7 @@ fn main() {
 
     let mut prog = {
         let data = Params {
-            u_ModelViewProj: [
-                [1.0, 0.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0, 0.0],
-                [0.0, 0.0, 1.0, 0.0],
-                [0.0, 0.0, 0.0, 1.0],
-            ],
+            u_ModelViewProj: Matrix4::identity().into_fixed(),
             t_Color: (texture, Some(sampler)),
         };
         device.link_program(data, VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
@@ -208,10 +206,10 @@ fn main() {
             &Point3::new(1.5f32, -5.0, 3.0),
             &Point3::new(0f32, 0.0, 0.0),
             &Vector3::unit_z()
-            );
+        );
         let aspect = w as f32 / h as f32;
-        let mp = cgmath::projection::perspective(
-            cgmath::angle::deg(45f32), aspect, 1f32, 10f32);
+        let mp = projection::perspective(angle::deg(45f32), aspect,
+                                         1f32, 10f32);
         mp.mul_m(&mv.mat)
     };
 
@@ -236,17 +234,8 @@ fn main() {
             &frame
         );
         m_model.x.x = 1.0;
-        prog.data.u_ModelViewProj = {
-            let m = m_viewproj.mul_m(&m_model);
-            [ //TODO: add raw convertion methods to cgmath
-                [m.x.x, m.x.y, m.x.z, m.x.w],
-                [m.y.x, m.y.y, m.y.z, m.y.w],
-                [m.z.x, m.z.y, m.z.z, m.z.w],
-                [m.w.x, m.w.y, m.w.z, m.w.w]
-            ]
-        };
-        list.draw(&mesh, slice, &frame, &prog, &state)
-            .unwrap();
+        prog.data.u_ModelViewProj = m_viewproj.mul_m(&m_model).into_fixed();
+        list.draw(&mesh, slice, &frame, &prog, &state).unwrap();
         device.submit(list.as_slice());
         window.swap_buffers();
     }
