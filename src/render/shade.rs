@@ -166,7 +166,6 @@ impl ShaderParam<()> for () {
 ///
 /// * `L` - auto-generated structure that has a variable index for every field of T
 /// * `T` - user-provided structure containing actual parameter values
-#[deriving(Clone)]
 pub struct UserProgram<L, T> {
     /// Shader program handle
     program: ProgramHandle,
@@ -174,6 +173,16 @@ pub struct UserProgram<L, T> {
     link: L,
     /// Global data in a user-provided struct
     pub data: T,    //TODO: move data out of the shell
+}
+
+impl<L: Copy, T: Copy> Clone for UserProgram<L, T> {
+    fn clone(&self) -> UserProgram<L, T> {
+        UserProgram {
+            program: self.program.clone(),
+            link: self.link,
+            data: self.data,
+        }
+    }
 }
 
 impl<L, T: ShaderParam<L>> UserProgram<L, T> {
