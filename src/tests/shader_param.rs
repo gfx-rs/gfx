@@ -28,4 +28,7 @@ struct MyParam {
     d: gfx::RawBufferHandle,
     #[unused]
     e: f32,
+    #[name = "a_f"]
+    f: [f32, ..4],
 }
+

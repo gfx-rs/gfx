@@ -33,6 +33,8 @@ struct MyVertex {
      a2: [i8, ..4],
      #[as_double]
      a3: f64,
+     #[name = "a_a4"]
+     a4: [f32, ..3],
 }
 
 #[test]
@@ -73,6 +75,14 @@ fn test_vertex_format() {
             offset: 14,
             stride: stride,
             name: "a3".to_string(),
-        }
+        },
+        gfx::Attribute {
+            buffer: buf,
+            elem_count: 3,
+            elem_type: a::Float(a::FloatDefault, a::F32),
+            offset: 22,
+            stride: stride,
+            name: "a_a4".to_string(),
+        },
     ]);
 }

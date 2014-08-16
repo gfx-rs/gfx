@@ -176,7 +176,10 @@ fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     let struct_ident = substr.type_ident;
                     let buffer_expr = substr.nonself_args[1];
                     let (count_expr, type_expr) = decode_count_and_type(cx, span, def);
-                    let ident_str = token::get_ident(ident);
+                    let ident_str = match super::find_name(cx, span, def.node.attrs.as_slice()) {
+                        Some(name) => name,
+                        None => token::get_ident(ident),
+                    };
                     let ident_str = ident_str.get();
                     super::ugh(cx, |cx| quote_expr!(cx, {
                         attributes.push(gfx::Attribute {

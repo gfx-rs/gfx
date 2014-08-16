@@ -72,7 +72,11 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span, substr: &gene
         generic::Struct(ref fields) => {
             let out = definition.fields.iter().zip(fields.iter())
                 .filter(|&(def, _)| is_field_used(def)).map(|(def, f)| {
-                let name = cx.expr_str(span, token::get_ident(f.name.unwrap()));
+                let name = match super::find_name(cx, span, def.node.attrs.as_slice()) {
+                    Some(name) => name,
+                    None => token::get_ident(f.name.unwrap()),
+                };
+                let name = cx.expr_str(span, name);
                 let input = substr.nonself_args[0];
                 let expr = match classify(&def.node.ty.node) {
                     //TODO: verify the type match
