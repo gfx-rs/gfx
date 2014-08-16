@@ -45,6 +45,10 @@ pub use device::{BufferHandle, BufferInfo, RawBufferHandle, ShaderHandle,
 pub use device::{BufferUsage, UsageStatic, UsageDynamic, UsageStream};
 pub use device::{Blob, VertexCount, IndexCount};
 pub use device::{Point, Line, LineStrip, TriangleList, TriangleStrip, TriangleFan};
-pub use device::shade::{UniformValue, ValueI32, ValueF32, ValueI32Vec, ValueF32Vec, ValueF32Matrix};
+pub use device::shade::{UniformValue,
+    ValueI32, ValueF32,
+    ValueI32Vector2, ValueI32Vector3, ValueI32Vector4,
+    ValueF32Vector2, ValueF32Vector3, ValueF32Vector4,
+    ValueF32Matrix2, ValueF32Matrix3, ValueF32Matrix4};
 pub use device::shade::{ShaderSource, StaticBytes};
 pub use device::target::{Color, ClearData, Layer, Level};
