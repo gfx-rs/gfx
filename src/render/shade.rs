@@ -25,34 +25,30 @@ pub trait ToUniform {
     fn to_uniform(&self) -> s::UniformValue;
 }
 
-impl ToUniform for i32 {
-    fn to_uniform(&self) -> s::UniformValue {
-        s::ValueI32(*self)
-    }
-}
+macro_rules! impl_ToUniform(
+    ($srcty:ty, $dstty:expr) => (
+        impl ToUniform for $srcty {
+            fn to_uniform(&self) -> s::UniformValue {
+                $dstty(*self)
+            }
+        }
+    );
+)
 
-impl ToUniform for f32 {
-    fn to_uniform(&self) -> s::UniformValue {
-        s::ValueF32(*self)
-    }
-}
+impl_ToUniform!(i32, s::ValueI32)
+impl_ToUniform!(f32, s::ValueF32)
 
-impl ToUniform for [i32, ..4] {
-    fn to_uniform(&self) -> s::UniformValue {
-        s::ValueI32Vec(*self)
-    }
-}
+impl_ToUniform!([i32, ..2], s::ValueI32Vector2)
+impl_ToUniform!([i32, ..3], s::ValueI32Vector3)
+impl_ToUniform!([i32, ..4], s::ValueI32Vector4)
 
-impl ToUniform for [f32, ..4] {
-    fn to_uniform(&self) -> s::UniformValue {
-        s::ValueF32Vec(*self)
-    }
-}
-impl ToUniform for [[f32, ..4], ..4] {
-    fn to_uniform(&self) -> s::UniformValue {
-        s::ValueF32Matrix(*self)
-    }
-}
+impl_ToUniform!([f32, ..2], s::ValueF32Vector2)
+impl_ToUniform!([f32, ..3], s::ValueF32Vector3)
+impl_ToUniform!([f32, ..4], s::ValueF32Vector4)
+
+impl_ToUniform!([[f32, ..2], ..2], s::ValueF32Matrix2)
+impl_ToUniform!([[f32, ..3], ..3], s::ValueF32Matrix3)
+impl_ToUniform!([[f32, ..4], ..4], s::ValueF32Matrix4)
 
 /// Variable index of a uniform.
 pub type VarUniform = u16;
