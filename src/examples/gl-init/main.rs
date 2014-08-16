@@ -25,7 +25,7 @@ fn main() {
     let (w, h) = window.get_inner_size().unwrap();
 
     let mut device = gfx::GlDevice::new(|s| window.get_proc_address(s));
-    let mut list = device.create_drawlist();
+    let mut list = device.create_draw_list();
 
     list.clear(
         gfx::ClearData {

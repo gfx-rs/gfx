@@ -40,7 +40,8 @@ pub use device::Device;
 // when cargo is ready, re-enable the cfgs
 /* #[cfg(gl)] */ pub use device::GlDevice;
 pub use device::{attrib, state, tex};
-pub use device::{BufferHandle, RawBufferHandle, ShaderHandle, SurfaceHandle, TextureHandle, SurfaceHandle};
+pub use device::{BufferHandle, BufferInfo, RawBufferHandle, ShaderHandle,
+    SurfaceHandle, TextureHandle, SurfaceHandle};
 pub use device::{BufferUsage, UsageStatic, UsageDynamic, UsageStream};
 pub use device::{Blob, VertexCount, IndexCount};
 pub use device::{Point, Line, LineStrip, TriangleList, TriangleStrip, TriangleFan};

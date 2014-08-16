@@ -118,7 +118,7 @@ fn main() {
     let frame = gfx::Frame::new(w as u16, h as u16);
 
     let mut device = gfx::GlDevice::new(|s| glfw.get_proc_address(s));
-    let mut list = device.create_drawlist();
+    let mut list = device.create_draw_list();
 
     let state = gfx::DrawState::new().depth(gfx::state::LessEqual, true);
 

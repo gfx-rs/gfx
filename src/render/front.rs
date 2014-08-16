@@ -22,7 +22,7 @@ use device::attrib::{U8, U16, U32};
 use device::BoxBlobCast;
 use mesh;
 use shade;
-use shade::{ProgramShell, ShaderParam};
+use shade::{Program, ShaderParam};
 use state;
 use target;
 
@@ -78,13 +78,13 @@ pub enum ProgramError<'a> {
 /// Connect a shader program with a parameter structure
 pub fn connect_program<'a, L, T: ShaderParam<L>>
                     (prog: device::ProgramHandle, data: T)
-                    -> Result<shade::CustomShell<L, T>,
+                    -> Result<shade::UserProgram<L, T>,
                     shade::ParameterLinkError<'a>> {
     let info = prog.get_info();
     let input = (info.uniforms.as_slice(), info.blocks.as_slice(),
         info.textures.as_slice());
     match data.create_link(input) {    //TODO: no clone
-        Ok(link) => Ok(shade::CustomShell::new(prog.clone(), link, data)),
+        Ok(link) => Ok(shade::UserProgram::new(prog.clone(), link, data)),
         Err(e) => Err(shade::ErrorUnusedParameter(e)),
     }
 }
@@ -98,17 +98,17 @@ struct State {
 /// Backend extension trait for convenience methods
 pub trait DeviceHelper {
     /// Create a new draw list
-    fn create_drawlist(&mut self) -> DrawList;
+    fn create_draw_list(&mut self) -> DrawList;
     /// Create a new mesh from the given vertex data.
     /// Convenience function around `create_buffer` and `Mesh::from`.
     fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh;
     /// Create a simple program given a vertex shader with a fragment one.
     fn link_program<'a, L, T: ShaderParam<L>>(&mut self, data: T, vs_src: ShaderSource,
-                   fs_src: ShaderSource) -> Result<shade::CustomShell<L, T>, ProgramError>;
+                   fs_src: ShaderSource) -> Result<shade::UserProgram<L, T>, ProgramError>;
 }
 
 impl<D, B: device::Device<D>> DeviceHelper for B {
-    fn create_drawlist(&mut self) -> DrawList {
+    fn create_draw_list(&mut self) -> DrawList {
         DrawList {
             list: device::DrawList::new(),
             common_array_buffer: self.create_array_buffer(),
@@ -134,8 +134,8 @@ impl<D, B: device::Device<D>> DeviceHelper for B {
     }
 
     fn link_program<'a, L, T: ShaderParam<L>>(&mut self, data: T,
-                   vs_src: ShaderSource, fs_src: ShaderSource)
-                   -> Result<shade::CustomShell<L, T>, ProgramError> {
+                    vs_src: ShaderSource, fs_src: ShaderSource)
+                    -> Result<shade::UserProgram<L, T>, ProgramError> {
         let vs = match self.create_shader(Vertex, vs_src) {
             Ok(s) => s,
             Err(e) => return Err(ErrorVertex(e)),
@@ -193,9 +193,9 @@ impl DrawList {
     }
 
     /// Draw `slice` of `mesh` into `frame`, using a program shell, and a given draw state.
-    pub fn draw<P: ProgramShell>(&mut self, mesh: &mesh::Mesh, slice: mesh::Slice,
-                                frame: &target::Frame, prog_shell: &P, state: &state::DrawState)
-                                -> Result<(), DrawError> {
+    pub fn draw<P: Program>(&mut self, mesh: &mesh::Mesh, slice: mesh::Slice,
+                            frame: &target::Frame, prog_shell: &P, state: &state::DrawState)
+                            -> Result<(), DrawError> {
         self.bind_frame(frame);
         match self.bind_shell(prog_shell) {
             Ok(_) => (),
@@ -300,7 +300,7 @@ impl DrawList {
         }
     }
 
-    fn bind_shell<P: ProgramShell>(&mut self, shell: &P) -> Result<(), ShellError> {
+    fn bind_shell<P: Program>(&mut self, shell: &P) -> Result<(), ShellError> {
         let prog = shell.get_program();
         self.list.bind_program(prog.get_name());
         let pinfo = prog.get_info();
@@ -349,7 +349,7 @@ impl DrawList {
 
     fn bind_mesh(&mut self, mesh: &mesh::Mesh, info: &ProgramInfo)
                  -> Result<(), MeshError> {
-        // it's OK for array buffers to be unsupported, we just ignore it then
+        // It's Ok the array buffer is not supported. If so we just ignore it.
         self.common_array_buffer.map(|ab| self.list.bind_array_buffer(ab));
         for sat in info.attributes.iter() {
             match mesh.attributes.iter().find(|a| a.name.as_slice() == sat.name.as_slice()) {
