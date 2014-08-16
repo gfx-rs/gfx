@@ -37,7 +37,7 @@ fn classify(node: &ast::Ty_) -> Result<ParamType, ParamError> {
     match *node {
         ast::TyPath(ref path, _, _) => match path.segments.last() {
             Some(segment) => match segment.identifier.name.as_str() {
-                "BufferHandle" => Ok(ParamBlock),
+                "RawBufferHandle" => Ok(ParamBlock),
                 "TextureParam" => Ok(ParamTexture),
                 "TextureHandle" => Err(ErrorDeprecatedTexture),
                 _ => Ok(ParamUniform),
@@ -257,18 +257,18 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
         vis: item.vis,
         span: span,
     });
-    // constructing the `CustomShell` typedef
+    // constructing the `UserProgram` typedef
     match meta_item.node {
         ast::MetaWord(_) => (),
         ast::MetaList(_, ref items) if items.len() == 1 => match items[0].deref().node {
             ast::MetaWord(ref shell_name) => {
-                // pub type $shell_ident = gfx::shade::CustomShell<$link_ident, $self_ident>
+                // pub type $shell_ident = gfx::shade::UserProgram<$link_ident, $self_ident>
                 let path = context.ty_path(
                     context.path_all(span, true,
                         vec![
                             context.ident_of("gfx"),
                             context.ident_of("shade"),
-                            context.ident_of("CustomShell"),
+                            context.ident_of("UserProgram"),
                         ],
                         Vec::new(),
                         vec![

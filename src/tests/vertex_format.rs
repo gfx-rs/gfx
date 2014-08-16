@@ -19,7 +19,7 @@
 #[phase(plugin)]
 extern crate gfx_macros;
 extern crate gfx;
-extern crate render;
+extern crate device;
 
 use a = gfx::attrib;
 
@@ -37,7 +37,7 @@ struct MyVertex {
 
 #[test]
 fn test_vertex_format() {
-    let buf = render::Renderer::create_fake_buffer();
+    let buf = device::make_fake_buffer();
     let mesh = gfx::Mesh::from::<MyVertex>(buf, 0);
     let stride = 22 as a::Stride;
 

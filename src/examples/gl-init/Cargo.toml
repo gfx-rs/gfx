@@ -1,6 +1,6 @@
 [package]
 
-name = "example-triangle"
+name = "gl-init"
 version = "0.1.0"
 authors = [
 ]
@@ -12,5 +12,5 @@ path = "main.rs"
 [dependencies.gfx]
 path = "../../../"
 
-[dependencies.glfw]
-git = "https://github.com/bjz/glfw-rs.git"
+[dependencies.gl_init]
+git = "https://github.com/tomaka/gl-init-rs.git"

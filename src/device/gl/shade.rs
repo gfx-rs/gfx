@@ -62,22 +62,26 @@ pub fn create_shader(stage: s::Stage, data: s::ShaderSource, model: s::ShaderMod
     let status = get_shader_iv(name, gl::COMPILE_STATUS);
     let mut length = get_shader_iv(name, gl::INFO_LOG_LENGTH);
 
-    let info = if length > 0 {
-        let mut info = String::with_capacity(length as uint);
-        info.grow(length as uint, '\0');
+    let log = if length > 0 {
+        let mut log = String::with_capacity(length as uint);
+        log.grow(length as uint, '\0');
         unsafe {
             gl::GetShaderInfoLog(name, length, &mut length,
-                info.as_slice().as_ptr() as *mut gl::types::GLchar);
+                log.as_slice().as_ptr() as *mut gl::types::GLchar);
         }
-        info.truncate(length as uint);
-        Some(info)
+        log.truncate(length as uint);
+        Some(log)
     } else {
         None
     };
 
-    let name = if status != 0 { Ok(name) } else { Err(s::ShaderCompilationFailed) };
+    let name = if status != 0 {
+        Ok(name)
+    }else {
+        Err(s::ShaderCompilationFailed)
+    };
 
-    (name, info)
+    (name, log)
 }
 
 fn get_shader_iv(shader: super::Shader, query: gl::types::GLenum) -> gl::types::GLint {
@@ -193,7 +197,7 @@ fn query_attributes(prog: super::Program) -> Vec<s::Attribute> {
     }).collect()
 }
 
-fn query_blocks(caps: &super::super::Capabilities, prog: super::Program) -> Vec<s::BlockVar> {
+fn query_blocks(caps: &::Capabilities, prog: super::Program) -> Vec<s::BlockVar> {
     let num = if caps.uniform_block_supported {
         get_program_iv(prog, gl::ACTIVE_UNIFORM_BLOCKS)
     } else {
@@ -226,7 +230,6 @@ fn query_blocks(caps: &super::super::Capabilities, prog: super::Program) -> Vec<
             name: name,
             size: size as uint,
             usage: usage,
-            active_slot: Cell::new(0),
         }
     }).collect()
 }
@@ -267,7 +270,6 @@ fn query_parameters(prog: super::Program) -> (Vec<s::UniformVar>, Vec<s::Sampler
                     count: size as uint,
                     base_type: base,
                     container: container,
-                    active_value: Cell::new(s::ValueUninitialized),
                 });
             },
             Sampler(base, sam_type) => {
@@ -277,7 +279,6 @@ fn query_parameters(prog: super::Program) -> (Vec<s::UniformVar>, Vec<s::Sampler
                     location: loc as uint,
                     base_type: base,
                     sampler_type: sam_type,
-                    active_slot: Cell::new(0),
                 });
             },
             Unknown => {
@@ -288,11 +289,11 @@ fn query_parameters(prog: super::Program) -> (Vec<s::UniformVar>, Vec<s::Sampler
     (uniforms, textures)
 }
 
-pub fn create_program(caps: &super::super::Capabilities, shaders: &[super::Shader])
-        -> (Result<s::ProgramMeta, ()>, Option<String>) {
+pub fn create_program(caps: &::Capabilities, shaders: &[::ShaderHandle])
+        -> (Result<::ProgramHandle, ()>, Option<String>) {
     let name = gl::CreateProgram();
-    for &sh in shaders.iter() {
-        gl::AttachShader(name, sh);
+    for sh in shaders.iter() {
+        gl::AttachShader(name, sh.get_name());
     }
     gl::LinkProgram(name);
     info!("\tLinked program {}", name);
@@ -300,39 +301,37 @@ pub fn create_program(caps: &super::super::Capabilities, shaders: &[super::Shade
     // get info message
     let status = get_program_iv(name, gl::LINK_STATUS);
     let mut length  = get_program_iv(name, gl::INFO_LOG_LENGTH);
-    let info = if length > 0 {
-        let mut info = String::with_capacity(length as uint);
-        info.grow(length as uint, '\0');
+    let log = if length > 0 {
+        let mut log = String::with_capacity(length as uint);
+        log.grow(length as uint, '\0');
         unsafe {
             gl::GetProgramInfoLog(name, length, &mut length,
-                info.as_slice().as_ptr() as *mut gl::types::GLchar);
+                log.as_slice().as_ptr() as *mut gl::types::GLchar);
         }
-        info.truncate(length as uint);
-        Some(info)
+        log.truncate(length as uint);
+        Some(log)
     } else {
         None
     };
 
-    let meta = if status != 0 {
+    let prog = if status != 0 {
         let (uniforms, textures) = query_parameters(name);
-        let meta = s::ProgramMeta {
-            name: name,
+        let info = s::ProgramInfo {
             attributes: query_attributes(name),
             uniforms: uniforms,
             blocks: query_blocks(caps, name),
             textures: textures,
         };
-        Ok(meta)
+        Ok(::Handle(name, info))
     } else {
         Err(())
     };
 
-    (meta, info)
+    (prog, log)
 }
 
 pub fn bind_uniform(loc: gl::types::GLint, uniform: s::UniformValue) {
     match uniform {
-        s::ValueUninitialized => fail!("Non-initialized uniform value detected"),
         s::ValueI32(val) => gl::Uniform1i(loc, val),
         s::ValueF32(val) => gl::Uniform1f(loc, val),
         s::ValueI32Vec(val) => unsafe { gl::Uniform4iv(loc, 1, val.as_ptr()) },
