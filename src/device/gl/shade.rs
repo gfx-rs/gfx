@@ -201,7 +201,6 @@ fn query_blocks(caps: &::Capabilities, prog: super::Program) -> Vec<s::BlockVar>
     let num = if caps.uniform_block_supported {
         get_program_iv(prog, gl::ACTIVE_UNIFORM_BLOCKS)
     } else {
-        error!("Uniform blocks are not supported, ignored");
         0
     };
     range(0, num as gl::types::GLuint).map(|i| {
@@ -234,16 +233,18 @@ fn query_blocks(caps: &::Capabilities, prog: super::Program) -> Vec<s::BlockVar>
     }).collect()
 }
 
-fn query_parameters(prog: super::Program) -> (Vec<s::UniformVar>, Vec<s::SamplerVar>) {
+fn query_parameters(caps: &::Capabilities, prog: super::Program) -> (Vec<s::UniformVar>, Vec<s::SamplerVar>) {
     let mut uniforms = Vec::new();
     let mut textures = Vec::new();
     let total_num = get_program_iv(prog, gl::ACTIVE_UNIFORMS);
     let indices: Vec<_> = range(0, total_num as gl::types::GLuint).collect();
-    let mut block_indices = Vec::from_elem(total_num as uint, 0 as gl::types::GLint);
-    unsafe {
-        gl::GetActiveUniformsiv(prog, total_num as gl::types::GLsizei,
-            indices.as_slice().as_ptr(), gl::UNIFORM_BLOCK_INDEX,
-            block_indices.as_mut_slice().as_mut_ptr());
+    let mut block_indices = Vec::from_elem(total_num as uint, -1 as gl::types::GLint);
+    if caps.uniform_block_supported {
+        unsafe {
+            gl::GetActiveUniformsiv(prog, total_num as gl::types::GLsizei,
+                indices.as_slice().as_ptr(), gl::UNIFORM_BLOCK_INDEX,
+                block_indices.as_mut_slice().as_mut_ptr());
+        }
         //TODO: UNIFORM_IS_ROW_MAJOR
     }
     // prepare the name string
@@ -315,7 +316,7 @@ pub fn create_program(caps: &::Capabilities, shaders: &[::ShaderHandle])
     };
 
     let prog = if status != 0 {
-        let (uniforms, textures) = query_parameters(name);
+        let (uniforms, textures) = query_parameters(caps, name);
         let info = s::ProgramInfo {
             attributes: query_attributes(name),
             uniforms: uniforms,

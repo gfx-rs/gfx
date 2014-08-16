@@ -107,7 +107,7 @@ pub trait DeviceHelper {
                    fs_src: ShaderSource) -> Result<shade::UserProgram<L, T>, ProgramError>;
 }
 
-impl<D, B: device::Device<D>> DeviceHelper for B {
+impl<D: device::draw::DrawList, B: device::Device<D>> DeviceHelper for B {
     fn create_draw_list(&mut self) -> DrawList {
         DrawList {
             list: device::DrawList::new(),
