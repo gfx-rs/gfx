@@ -9,13 +9,9 @@ extern crate glfw;
 extern crate native;
 extern crate time;
 
-use cgmath::angle;
-use cgmath::array::FixedArray;
-use cgmath::matrix::{Matrix, Matrix4};
-use cgmath::point::Point3;
-use cgmath::projection;
-use cgmath::transform::{Transform, AffineMatrix3};
-use cgmath::vector::Vector3;
+use cgmath::FixedArray;
+use cgmath::{Matrix, Matrix4, Point3, Vector3};
+use cgmath::{Transform, AffineMatrix3};
 use gfx::{Device, DeviceHelper};
 use glfw::Context;
 
@@ -208,8 +204,8 @@ fn main() {
             &Vector3::unit_z()
         );
         let aspect = w as f32 / h as f32;
-        let mp = projection::perspective(angle::deg(45f32), aspect,
-                                         1f32, 10f32);
+        let mp = cgmath::perspective(cgmath::deg(45f32),
+                                     aspect, 1f32, 10f32);
         mp.mul_m(&mv.mat)
     };
 
