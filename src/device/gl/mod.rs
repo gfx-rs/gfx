@@ -27,9 +27,7 @@ use std::collections::HashSet;
 use a = super::attrib;
 use RefBlobCast;
 
-pub use self::draw::DrawList;
-
-mod draw;
+pub mod draw;
 mod shade;
 mod state;
 mod tex;
@@ -505,7 +503,7 @@ impl GlDevice {
     }
 }
 
-impl ::Device<DrawList> for GlDevice {
+impl ::Device for GlDevice {
     fn get_capabilities<'a>(&'a self) -> &'a ::Capabilities {
         &self.caps
     }
@@ -640,9 +638,9 @@ impl ::Device<DrawList> for GlDevice {
         tex::update_texture(texture.get_info().kind, texture.get_name(), img, data)
     }
 
-    fn submit(&mut self, list: &DrawList) {
+    fn submit(&mut self, cb: &draw::GlCommandBuffer) {
         //TODO: clear state, when we have caching
-        for com in list.iter() {
+        for com in cb.iter() {
             self.process(com);
         }
     }

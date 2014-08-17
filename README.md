@@ -31,7 +31,7 @@ one-off applications, or higher level libraries or engines.
 - type-safe and memory-safe
 - compatible with Rust's concurrency model
 - highly performant with minimal latency
-- multi-API abstraction: OpenGL, Direct3D, Mantle, etc.
+- an abstraction over multiple graphics APIs: OpenGL, Direct3D, Mantle, etc.
 - orthogonal to context backends: GLFW, SDL2, gl-init-rs, etc.
 
 ## Non-goals
