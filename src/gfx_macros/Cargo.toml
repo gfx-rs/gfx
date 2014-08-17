@@ -5,7 +5,7 @@ version = "0.1.0"
 authors = [
 ]
 
-[[lib]]
+[lib]
 name = "gfx_macros"
 path = "lib.rs"
 crate-type = [ "dylib" ]

@@ -8,7 +8,7 @@ authors = [
     "kvark",
 ]
 
-[[lib]]
+[lib]
 name = "gfx"
 path = "src/gfx/lib.rs"
 
