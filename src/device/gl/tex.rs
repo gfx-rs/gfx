@@ -55,6 +55,7 @@ fn format_to_gl(t: ::tex::Format) -> Result<GLenum, ()> {
         ::tex::RGB10A2UI    => gl::RGB10_A2UI,
         ::tex::R11FG11FB10F => gl::R11F_G11F_B10F,
         ::tex::RGB9E5       => gl::RGB9_E5,
+        ::tex::DEPTH24_STENCIL8 => gl::DEPTH24_STENCIL8,
     })
 }
 
@@ -87,6 +88,7 @@ fn format_to_glpixel(t: ::tex::Format) -> GLenum {
         ::tex::RGB10A2UI    => gl::RGBA,
         ::tex::R11FG11FB10F => gl::RGB,
         ::tex::RGB9E5       => gl::RGB,
+        ::tex::DEPTH24_STENCIL8 => gl::DEPTH_STENCIL,
     }
 }
 
@@ -99,6 +101,7 @@ fn format_to_gltype(t: ::tex::Format) -> Result<GLenum, ()> {
         ::tex::Unsigned(_, 16, _) => Ok(gl::UNSIGNED_SHORT),
         ::tex::Integer(_, 32, _)  => Ok(gl::INT),
         ::tex::Unsigned(_, 32, _) => Ok(gl::UNSIGNED_INT),
+        ::tex::DEPTH24_STENCIL8   => Ok(gl::UNSIGNED_INT_24_8),
         _ => Err(()),
     }
 }
@@ -116,6 +119,7 @@ fn format_to_size(t: ::tex::Format) -> uint {
         ::tex::RGB10A2UI    => 4,
         ::tex::R11FG11FB10F => 4,
         ::tex::RGB9E5       => 4,
+        ::tex::DEPTH24_STENCIL8 => 4,
     }
 }
 
