@@ -27,14 +27,15 @@
 extern crate libc;
 
 // when cargo is ready, re-enable the cfgs
-/* #[cfg(gl)] */ pub use gl::GlDevice;
 /* #[cfg(gl)] */ pub use back = self::gl;
-/* #[cfg(gl)] */ pub use gl::DrawList;
+/* #[cfg(gl)] */ pub use gl::GlDevice;
+/* #[cfg(gl)] */ pub use gl::draw::GlCommandBuffer;
 // #[cfg(d3d11)] ... // TODO
 
 use std::fmt;
-use std::kinds::marker;
 use std::mem::size_of;
+
+/* #[cfg(gl)] */ pub type ActualCommandBuffer = GlCommandBuffer;
 
 pub mod attrib;
 pub mod draw;
@@ -304,9 +305,11 @@ enum Command {
     DrawIndexed(PrimitiveType, IndexType, IndexCount, IndexCount),
 }
 
+// CommandBuffer is really an associated type, so will look much better when
+// Rust supports this natively.
 /// An interface for performing draw calls using a specific graphics API
 #[allow(missing_doc)]
-pub trait Device<D: draw::DrawList> {
+pub trait Device {
     /// Returns the capabilities available to the specific API implementation
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
     // resource creation
@@ -332,6 +335,6 @@ pub trait Device<D: draw::DrawList> {
     /// Update the information stored in a texture
     fn update_texture<T>(&mut self, &TextureHandle, &tex::ImageInfo, &Blob<T>)
                       -> Result<(), TextureError>;
-    /// Submit a draw list for execution
-    fn submit(&mut self, list: &D);
+    /// Submit a command buffer for execution
+    fn submit(&mut self, cb: &ActualCommandBuffer);
 }

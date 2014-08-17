@@ -16,7 +16,7 @@
 
 use device;
 use backend = device::back;
-use device::draw::DrawList;
+use device::draw::CommandBuffer;
 use device::shade::{ProgramInfo, ShaderSource, Vertex, Fragment, CreateShaderError};
 use device::attrib::{U8, U16, U32};
 use device::BoxBlobCast;
@@ -107,10 +107,10 @@ pub trait DeviceHelper {
                    fs_src: ShaderSource) -> Result<shade::UserProgram<L, T>, ProgramError>;
 }
 
-impl<D: device::draw::DrawList, B: device::Device<D>> DeviceHelper for B {
+impl<D: device::Device> DeviceHelper for D {
     fn create_draw_list(&mut self) -> DrawList {
         DrawList {
-            list: device::DrawList::new(),
+            buf: CommandBuffer::new(),
             common_array_buffer: self.create_array_buffer(),
             common_frame_buffer: self.create_frame_buffer(),
             default_frame_buffer: 0,
@@ -154,7 +154,7 @@ impl<D: device::draw::DrawList, B: device::Device<D>> DeviceHelper for B {
 
 /// Renderer front-end
 pub struct DrawList {
-    list: device::DrawList,
+    buf: device::ActualCommandBuffer,
     common_array_buffer: Result<backend::ArrayBuffer, ()>,
     common_frame_buffer: backend::FrameBuffer,
     default_frame_buffer: backend::FrameBuffer,
@@ -164,18 +164,18 @@ pub struct DrawList {
 impl DrawList {
     /// Reset all commands for draw list re-usal.
     pub fn reset(&mut self) {
-        self.list.clear();
+        self.buf.clear();
     }
 
     /// Get the draw list to be submitted.
-    pub fn as_slice(&self) -> &device::DrawList {
-        &self.list
+    pub fn as_slice(&self) -> &device::ActualCommandBuffer {
+        &self.buf
     }
 
     /// Clone the draw list shared data but ignore the commands
     pub fn clone_empty(&self) -> DrawList {
         DrawList {
-            list: device::DrawList::new(),
+            buf: CommandBuffer::new(),
             common_array_buffer: self.common_array_buffer,
             common_frame_buffer: self.common_frame_buffer,
             default_frame_buffer: self.default_frame_buffer,
@@ -189,7 +189,7 @@ impl DrawList {
     /// Clear the `Frame` as the `ClearData` specifies.
     pub fn clear(&mut self, data: device::target::ClearData, frame: &target::Frame) {
         self.bind_frame(frame);
-        self.list.call_clear(data);
+        self.buf.call_clear(data);
     }
 
     /// Draw `slice` of `mesh` into `frame`, using a program shell, and a given draw state.
@@ -202,12 +202,12 @@ impl DrawList {
             Err(e) => return Err(ErrorShell(e)),
         }
         // bind fixed-function states
-        self.list.set_primitive(state.primitive);
-        self.list.set_scissor(state.scissor);
-        self.list.set_depth_stencil(state.depth, state.stencil,
+        self.buf.set_primitive(state.primitive);
+        self.buf.set_scissor(state.scissor);
+        self.buf.set_depth_stencil(state.depth, state.stencil,
             state.primitive.get_cull_mode());
-        self.list.set_blend(state.blend);
-        self.list.set_color_mask(state.color_mask);
+        self.buf.set_blend(state.blend);
+        self.buf.set_color_mask(state.color_mask);
         // bind mesh data
         match self.bind_mesh(mesh, prog_shell.get_program().get_info()) {
             Ok(_) => (),
@@ -216,19 +216,19 @@ impl DrawList {
         // draw
         match slice {
             mesh::VertexSlice(start, end) => {
-                self.list.call_draw(mesh.prim_type, start, end);
+                self.buf.call_draw(mesh.prim_type, start, end);
             },
             mesh::IndexSlice8(buf, start, end) => {
-                self.list.bind_index(buf.get_name());
-                self.list.call_draw_indexed(mesh.prim_type, U8, start, end);
+                self.buf.bind_index(buf.get_name());
+                self.buf.call_draw_indexed(mesh.prim_type, U8, start, end);
             },
             mesh::IndexSlice16(buf, start, end) => {
-                self.list.bind_index(buf.get_name());
-                self.list.call_draw_indexed(mesh.prim_type, U16, start, end);
+                self.buf.bind_index(buf.get_name());
+                self.buf.call_draw_indexed(mesh.prim_type, U16, start, end);
             },
             mesh::IndexSlice32(buf, start, end) => {
-                self.list.bind_index(buf.get_name());
-                self.list.call_draw_indexed(mesh.prim_type, U32, start, end);
+                self.buf.bind_index(buf.get_name());
+                self.buf.call_draw_indexed(mesh.prim_type, U32, start, end);
             },
         }
         Ok(())
@@ -237,7 +237,7 @@ impl DrawList {
     /// Update a buffer with data from a vector.
     pub fn update_buffer_vec<T: Send>(&mut self, buf: device::BufferHandle<T>,
                              data: Vec<T>) {
-        self.list.update_buffer(
+        self.buf.update_buffer(
             buf.get_name(),
             (box data) as Box<device::Blob<T> + Send>,
             buf.get_info().usage
@@ -247,7 +247,7 @@ impl DrawList {
     /// Update a buffer with data from a single type.
     pub fn update_buffer_struct<U, T: device::Blob<U>+Send>(&mut self,
                                 buf: device::BufferHandle<U>, data: T) {
-        self.list.update_buffer(
+        self.buf.update_buffer(
             buf.get_name(),
             (box data) as Box<device::Blob<U> + Send>,
             buf.get_info().usage
@@ -257,24 +257,24 @@ impl DrawList {
     /// Update the contents of a texture.
     pub fn update_texture<T: Send>(&mut self, tex: device::TextureHandle,
                                    img: device::tex::ImageInfo, data: Vec<T>) {
-        self.list.update_texture(tex.get_info().kind, tex.get_name(), img,
+        self.buf.update_texture(tex.get_info().kind, tex.get_name(), img,
                                  (box data) as Box<device::Blob<T> + Send>);
     }
 
-    fn bind_target(list: &mut device::DrawList, to: device::target::Target,
-                   plane: target::Plane) {
+    fn bind_target(buf: &mut device::ActualCommandBuffer,
+                   to: device::target::Target, plane: target::Plane) {
         match plane {
             target::PlaneEmpty =>
-                list.unbind_target(to),
+                buf.unbind_target(to),
             target::PlaneSurface(suf) =>
-                list.bind_target_surface(to, suf),
+                buf.bind_target_surface(to, suf),
             target::PlaneTexture(tex, level, layer) =>
-                list.bind_target_texture(to, tex, level, layer),
+                buf.bind_target_texture(to, tex, level, layer),
         }
     }
 
     fn bind_frame(&mut self, frame: &target::Frame) {
-        self.list.set_viewport(device::target::Rect {
+        self.buf.set_viewport(device::target::Rect {
             x: 0,
             y: 0,
             w: frame.width,
@@ -282,19 +282,19 @@ impl DrawList {
         });
         if frame.is_default() {
             // binding the default FBO, not touching our common one
-            self.list.bind_frame_buffer(self.default_frame_buffer);
+            self.buf.bind_frame_buffer(self.default_frame_buffer);
         } else {
-            self.list.bind_frame_buffer(self.common_frame_buffer);
+            self.buf.bind_frame_buffer(self.common_frame_buffer);
             for (i, (cur, new)) in self.state.frame.colors.iter().zip(frame.colors.iter()).enumerate() {
                 if *cur != *new {
-                    DrawList::bind_target(&mut self.list, device::target::TargetColor(i as u8), *new);
+                    DrawList::bind_target(&mut self.buf, device::target::TargetColor(i as u8), *new);
                 }
             }
             if self.state.frame.depth != frame.depth {
-                DrawList::bind_target(&mut self.list, device::target::TargetDepth, frame.depth);
+                DrawList::bind_target(&mut self.buf, device::target::TargetDepth, frame.depth);
             }
             if self.state.frame.stencil != frame.stencil {
-                DrawList::bind_target(&mut self.list, device::target::TargetStencil, frame.stencil);
+                DrawList::bind_target(&mut self.buf, device::target::TargetStencil, frame.stencil);
             }
             self.state.frame = *frame;
         }
@@ -302,7 +302,7 @@ impl DrawList {
 
     fn bind_shell<P: Program>(&mut self, shell: &P) -> Result<(), ShellError> {
         let prog = shell.get_program();
-        self.list.bind_program(prog.get_name());
+        self.buf.bind_program(prog.get_name());
         let pinfo = prog.get_info();
         // gather parameters
         // this is a bit ugly, need to re-think the interface with `#[shader_program]`
@@ -317,14 +317,14 @@ impl DrawList {
         // bind uniforms
         for (var, option) in pinfo.uniforms.iter().zip(uniforms.move_iter()) {
             match option {
-                Some(v) => self.list.bind_uniform(var.location, v),
+                Some(v) => self.buf.bind_uniform(var.location, v),
                 None => return Err(ErrorShellUniform(var.name.clone())),
             }
         }
         // bind uniform blocks
         for (i, (var, option)) in pinfo.blocks.iter().zip(blocks.move_iter()).enumerate() {
             match option {
-                Some(buf) => self.list.bind_uniform_block(
+                Some(buf) => self.buf.bind_uniform_block(
                     prog.get_name(),
                     i as device::UniformBufferSlot,
                     i as device::UniformBlockIndex,
@@ -337,8 +337,8 @@ impl DrawList {
         for (i, (var, option)) in pinfo.textures.iter().zip(textures.move_iter()).enumerate() {
             match option {
                 Some((tex, sampler)) => {
-                    self.list.bind_uniform(var.location, device::shade::ValueI32(i as i32));
-                    self.list.bind_texture(i as device::TextureSlot,
+                    self.buf.bind_uniform(var.location, device::shade::ValueI32(i as i32));
+                    self.buf.bind_texture(i as device::TextureSlot,
                         tex.get_info().kind, tex.get_name(), sampler);
                 },
                 None => return Err(ErrorShellTexture(var.name.clone())),
@@ -350,12 +350,12 @@ impl DrawList {
     fn bind_mesh(&mut self, mesh: &mesh::Mesh, info: &ProgramInfo)
                  -> Result<(), MeshError> {
         // It's Ok the array buffer is not supported. If so we just ignore it.
-        self.common_array_buffer.map(|ab| self.list.bind_array_buffer(ab));
+        self.common_array_buffer.map(|ab| self.buf.bind_array_buffer(ab));
         for sat in info.attributes.iter() {
             match mesh.attributes.iter().find(|a| a.name.as_slice() == sat.name.as_slice()) {
                 Some(vat) => match vat.elem_type.is_compatible(sat.base_type) {
                     Ok(_) => {
-                        self.list.bind_attribute(
+                        self.buf.bind_attribute(
                             sat.location as device::AttributeSlot,
                             vat.buffer.get_name(), vat.elem_count, vat.elem_type,
                             vat.stride, vat.offset);

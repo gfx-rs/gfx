@@ -31,9 +31,8 @@ one-off applications, or higher level libraries or engines.
 - type-safe and memory-safe
 - compatible with Rust's concurrency model
 - highly performant with minimal latency
-- extensible, with support for:
-    - device backends: OpenGL, Direct3D, Mantle, etc.
-    - context backends: GLFW, SDL2, gl-init-rs, etc.
+- an abstraction over multiple graphics APIs: OpenGL, Direct3D, Mantle, etc.
+- orthogonal to context backends: GLFW, SDL2, gl-init-rs, etc.
 
 ## Non-goals
 
@@ -63,22 +62,9 @@ Add the following to your `Cargo.toml`:
 git = "http://github.com/gfx-rs/gfx-rs"
 ~~~
 
-To use [gl-init](https://github.com/tomaka/gl-init-rs/) with `gfx`, also add:
-
-~~~toml
-[dependencies.gl_init_platform]
-git = "http://github.com/gfx-rs/gfx-rs"
-~~~
-
-To use [glfw](https://github.com/bjz/glfw-rs/) with `gfx`, also add:
-
-~~~toml
-[dependencies.glfw_platform]
-git = "http://github.com/gfx-rs/gfx-rs"
-~~~
-
-See the [triangle example](./src/examples/triangle) for an example that uses
-both.
+See the [triangle example](./src/examples/triangle) for a typical context
+initialization with [glfw](https://github.com/bjz/glfw-rs/), or
+[gl-init example](./src/examples/gl-init) for [gl-init](https://github.com/tomaka/gl-init-rs/).
 
 ## Building the examples
 

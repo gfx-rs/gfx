@@ -12,28 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! OpenGL implementation of the `DrawList`
+//! OpenGL implementation of the Command Buffer
 
 use std::slice;
 use BoxBlobCast;
 
-pub struct DrawList {
+pub struct GlCommandBuffer {
     buf: Vec<::Command>,
 }
 
-impl DrawList {
-    pub fn new() -> DrawList {
-        DrawList {
-            buf: Vec::new(),
-        }
-    }
-
+impl GlCommandBuffer {
     pub fn iter<'a>(&'a self) -> slice::Items<'a, ::Command> {
         self.buf.iter()
     }
 }
 
-impl ::draw::DrawList for DrawList {
+impl ::draw::CommandBuffer for GlCommandBuffer {
+    fn new() -> GlCommandBuffer {
+        GlCommandBuffer {
+            buf: Vec::new(),
+        }
+    }
+
     fn clear(&mut self) {
         self.buf.clear();
     }

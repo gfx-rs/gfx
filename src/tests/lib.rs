@@ -12,16 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use gfx;
+#![crate_name = "tests"]
+#![feature(phase)]
 
-#[shader_param(MyShell)]
-struct MyParam {
-    a: i32,
-    b: [f32, ..4],
-    c: gfx::shade::TextureParam,
-    d: gfx::RawBufferHandle,
-    #[unused]
-    e: f32,
-    #[name = "a_f"]
-    f: [f32, ..4],
-}
+#[phase(plugin)]
+extern crate gfx_macros;
+extern crate gfx;
+
+pub mod shader_param;
+pub mod vertex_format;

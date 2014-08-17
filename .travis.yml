@@ -38,7 +38,7 @@ install:
   - sudo make install
   - cd ..
   # rustc
-  - curl http://www.rust-lang.org/rustup.sh | sudo -E sh
+  - curl https://static.rust-lang.org/rustup.sh | sudo -E sh
   - rustc -v
   - cargo -V
 script:

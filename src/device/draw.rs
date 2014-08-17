@@ -12,15 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Draw List device interface
+//! Command Buffer device interface
 
 use a = attrib;
 use b = back;
 use t = target;
 
 #[allow(missing_doc)]    //TODO
-pub trait DrawList {
-    /// Clear the draw list contents, retain the allocated storage
+pub trait CommandBuffer {
+    /// An empty constructor
+    fn new() -> Self;
+    /// Clear the command buffer contents, retain the allocated storage
     fn clear(&mut self);
     fn bind_program(&mut self, b::Program);
     fn bind_array_buffer(&mut self, b::ArrayBuffer);
