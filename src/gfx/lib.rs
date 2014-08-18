@@ -41,7 +41,7 @@ pub use device::Device;
 /* #[cfg(gl)] */ pub use device::GlDevice;
 pub use device::{attrib, state, tex};
 pub use device::{BufferHandle, BufferInfo, RawBufferHandle, ShaderHandle,
-    ProgramHandle, SurfaceHandle, TextureHandle, SurfaceHandle};
+    ProgramHandle, SurfaceHandle, TextureHandle};
 pub use device::{BufferUsage, UsageStatic, UsageDynamic, UsageStream};
 pub use device::{Blob, VertexCount, IndexCount};
 pub use device::{Point, Line, LineStrip, TriangleList, TriangleStrip, TriangleFan};
