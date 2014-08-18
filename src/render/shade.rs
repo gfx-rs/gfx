@@ -92,7 +92,9 @@ impl Program for ProgramHandle {
             params.uniforms.is_empty() &&
             params.blocks.is_empty() &&
             params.textures.is_empty(),
-            "trying to bind a program that has uniforms ; please call renderer.connect_program first"
+            "trying to bind a program handle that has uniforms;\n
+            please link with `DeviceHelper::link_program` instead,\n
+            or connect with `UserProgram::connect` after construction"
         );
     }
 }
@@ -228,43 +230,51 @@ pub struct ParamDictionaryLink {
     textures: Vec<uint>,
 }
 
-impl<'a> ShaderParam<ParamDictionaryLink> for &'a ParamDictionary {
-    fn create_link<'a>(&self, info: &'a s::ProgramInfo)
-                   -> Result<ParamDictionaryLink, ParameterError<'a>> {
-        //TODO: proper error checks
-        Ok(ParamDictionaryLink {
-            uniforms: info.uniforms.iter().map(|var|
-                self.uniforms.iter().position(|c| c.name == var.name).unwrap()
-            ).collect(),
-            blocks: info.blocks.iter().map(|var|
-                self.blocks  .iter().position(|c| c.name == var.name).unwrap()
-            ).collect(),
-            textures: info.textures.iter().map(|var|
-                self.textures.iter().position(|c| c.name == var.name).unwrap()
-            ).collect(),
-        })
-    }
+/// A shader program with dictionary of parameters
+pub struct DictionaryProgram {
+    program: ProgramHandle,
+    link: ParamDictionaryLink,
+    data: Rc<ParamDictionary>,
+}
 
-    fn fill_params(&self, link: &ParamDictionaryLink, out: ParamValues) {
-        for (&id, var) in link.uniforms.iter().zip(out.uniforms.mut_iter()) {
-            *var = Some(self.uniforms[id].value.get());
-        }
-        for (&id, var) in link.blocks.iter().zip(out.blocks.mut_iter()) {
-            *var = Some(self.blocks[id].value.get());
-        }
-        for (&id, var) in link.textures.iter().zip(out.textures.mut_iter()) {
-            *var = Some(self.textures[id].value.get());
-        }
+impl DictionaryProgram {
+    /// Connect a shader program with a parameter structure
+    pub fn connect(prog: ProgramHandle, data: Rc<ParamDictionary>)
+                   -> Result<DictionaryProgram, ParameterError<'static>> {
+        //TODO: proper error checks
+        let link = ParamDictionaryLink {
+            uniforms: prog.get_info().uniforms.iter().map(|var|
+                data.uniforms.iter().position(|c| c.name == var.name).unwrap()
+            ).collect(),
+            blocks: prog.get_info().blocks.iter().map(|var|
+                data.blocks  .iter().position(|c| c.name == var.name).unwrap()
+            ).collect(),
+            textures: prog.get_info().textures.iter().map(|var|
+                data.textures.iter().position(|c| c.name == var.name).unwrap()
+            ).collect(),
+        };
+        Ok(DictionaryProgram {
+            program: prog,
+            link: link,
+            data: data,
+        })
     }
 }
 
-impl ShaderParam<ParamDictionaryLink> for Rc<ParamDictionary> {
-    fn create_link<'a>(&self, info: &'a s::ProgramInfo) ->
-                   Result<ParamDictionaryLink, ParameterError<'a>> {
-        self.deref().create_link(info)
+impl Program for DictionaryProgram {
+    fn get_handle(&self) -> &ProgramHandle {
+        &self.program
     }
 
-    fn fill_params(&self, link: &ParamDictionaryLink, out: ParamValues) {
-        self.deref().fill_params(link, out)
+    fn fill_params(&self, params: ParamValues) {
+        for (&id, var) in self.link.uniforms.iter().zip(params.uniforms.mut_iter()) {
+            *var = Some(self.data.uniforms[id].value.get());
+        }
+        for (&id, var) in self.link.blocks.iter().zip(params.blocks.mut_iter()) {
+            *var = Some(self.data.blocks[id].value.get());
+        }
+        for (&id, var) in self.link.textures.iter().zip(params.textures.mut_iter()) {
+            *var = Some(self.data.textures[id].value.get());
+        }
     }
 }
