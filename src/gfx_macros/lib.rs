@@ -78,21 +78,39 @@ fn find_name(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
 #[macro_export]
 macro_rules! shaders {
     (GLSL_120: $v:expr $($t:tt)*) => {
-        ::gfx::ShaderSource {
-            glsl_120: Some(::gfx::StaticBytes($v)),
-            ..shaders!($($t)*)
+        {
+            mod foo {
+                extern crate gfx;
+                pub use gfx as g;
+            }
+            foo::g::ShaderSource {
+                glsl_120: Some(::gfx::StaticBytes($v)),
+                ..shaders!($($t)*)
+            }
         }
     };
     (GLSL_150: $v:expr $($t:tt)*) => {
-        ::gfx::ShaderSource {
-            glsl_150: Some(::gfx::StaticBytes($v)),
-            ..shaders!($($t)*)
+        {
+            mod foo {
+                extern crate gfx;
+                pub use gfx as g;
+            }
+            foo::g::ShaderSource {
+                glsl_150: Some(::gfx::StaticBytes($v)),
+                ..shaders!($($t)*)
+            }
         }
     };
     () => {
-        ::gfx::ShaderSource {
-            glsl_120: None,
-            glsl_150: None,
+        {
+            mod foo {
+                extern crate gfx;
+                pub use gfx as g;
+            }
+            foo::g::ShaderSource {
+                glsl_120: None,
+                glsl_150: None,
+            }
         }
     }
 }
