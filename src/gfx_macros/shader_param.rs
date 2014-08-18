@@ -257,7 +257,6 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
     });
     // constructing the `UserProgram` typedef
     match meta_item.node {
-        ast::MetaWord(_) => (),
         ast::MetaList(_, ref items) if items.len() == 1 => match items[0].deref().node {
             ast::MetaWord(ref shell_name) => {
                 // pub type $shell_ident = gfx::shade::UserProgram<$link_ident, $self_ident>
@@ -286,12 +285,14 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
             },
             _ => {
                 context.span_err(meta_item.span,
-                    "Invalid arguments for `#[shader_param]`")
+                    "Invalid argument. Please specify the typedef for your `Program`\n\
+                    as `#[shader_param(MyProgram)]`")
             }
         },
         _ => {
             context.span_err(meta_item.span,
-                "Invalid arguments for `#[shader_param]`")
+                "Invalid argument. Please specify the typedef for your `Program`\n\
+                as `#[shader_param(MyProgram)]`")
         }
     }
     // deriving ShaderParam

@@ -173,6 +173,9 @@ impl<L, T: ShaderParam<L>> UserProgram<L, T> {
     }
 }
 
+// Tuple of references `(&MyProgram, &Data)` is the standard way of providing
+// a program with its parameters for the draw call.
+
 impl<'a, L, T: ShaderParam<L>> Program for (&'a UserProgram<L, T>, &'a T) {
     fn get_handle(&self) -> &ProgramHandle {
         &self.val0().program
