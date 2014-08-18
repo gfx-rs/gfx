@@ -187,14 +187,8 @@ fn main() {
     let sampler = device.create_sampler(gfx::tex::SamplerInfo::new(
         gfx::tex::Bilinear, gfx::tex::Clamp));
 
-    let mut prog = {
-        let data = Params {
-            u_ModelViewProj: Matrix4::identity().into_fixed(),
-            t_Color: (texture, Some(sampler)),
-        };
-        device.link_program(data, VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
-               .unwrap()
-    };
+    let prog: Program = device.link_program(VERTEX_SRC.clone(),
+        FRAGMENT_SRC.clone()).unwrap();
 
     let mut m_model = Matrix4::<f32>::identity();
     let m_viewproj = {
@@ -207,6 +201,11 @@ fn main() {
         let mp = cgmath::perspective(cgmath::deg(45f32),
                                      aspect, 1f32, 10f32);
         mp.mul_m(&mv.mat)
+    };
+
+    let mut data = Params {
+        u_ModelViewProj: Matrix4::identity().into_fixed(),
+        t_Color: (texture, Some(sampler)),
     };
 
     while !window.should_close() {
@@ -230,8 +229,8 @@ fn main() {
             &frame
         );
         m_model.x.x = 1.0;
-        prog.data.u_ModelViewProj = m_viewproj.mul_m(&m_model).into_fixed();
-        list.draw(&mesh, slice, &frame, &prog, &state).unwrap();
+        data.u_ModelViewProj = m_viewproj.mul_m(&m_model).into_fixed();
+        list.draw(&mesh, slice, &frame, (&prog, &data), &state).unwrap();
         device.submit(list.as_slice());
         window.swap_buffers();
     }

@@ -82,23 +82,6 @@ pub trait Program {
     fn fill_params(&self, ParamValues);
 }
 
-impl Program for ProgramHandle {
-    fn get_handle(&self) -> &ProgramHandle {
-        self
-    }
-
-    fn fill_params(&self, params: ParamValues) {
-        debug_assert!(
-            params.uniforms.is_empty() &&
-            params.blocks.is_empty() &&
-            params.textures.is_empty(),
-            "trying to bind a program handle that has uniforms;\n
-            please link with `DeviceHelper::link_program` instead,\n
-            or connect with `UserProgram::connect` after construction"
-        );
-    }
-}
-
 /// An error type on either the parameter storage or the program side
 #[deriving(Clone, PartialEq, Show)]
 pub enum ParameterError<'a> {
@@ -165,44 +148,61 @@ pub struct UserProgram<L, T> {
     program: ProgramHandle,
     /// Hidden link that provides parameter indices for user data
     link: L,
-    /// Global data in a user-provided struct
-    pub data: T,    //TODO: move data out of the shell
 }
 
-impl<L: Copy, T: Copy> Clone for UserProgram<L, T> {
+impl<L: Copy, T> Clone for UserProgram<L, T> {
     fn clone(&self) -> UserProgram<L, T> {
         UserProgram {
             program: self.program.clone(),
             link: self.link,
-            data: self.data,
         }
     }
 }
 
 impl<L, T: ShaderParam<L>> UserProgram<L, T> {
     /// Connect a shader program with a parameter structure
-    pub fn connect(prog: ProgramHandle, data: T)
-                   -> Result<UserProgram<L, T>, ParameterError<'static>> {
+    pub fn connect(prog: ProgramHandle) ->
+                   Result<UserProgram<L, T>, ParameterError<'static>> {
         match ShaderParam::create_link(None::<T>, prog.get_info()) {
             Ok(link) => Ok(UserProgram {
                 program: prog.clone(),
                 link: link,
-                data: data,
             }),
             Err(e) => Err(e.into_owned()),
         }
     }
 }
 
-impl<L, T: ShaderParam<L>> Program for UserProgram<L, T> {
+impl<'a, L, T: ShaderParam<L>> Program for (&'a UserProgram<L, T>, &'a T) {
+    fn get_handle(&self) -> &ProgramHandle {
+        &self.val0().program
+    }
+
+    fn fill_params(&self, params: ParamValues) {
+        self.val1().fill_params(&self.val0().link, params);
+    }
+}
+
+
+pub type EmptyProgram = UserProgram<(), ()>;
+
+impl<'a> Program for &'a EmptyProgram {
     fn get_handle(&self) -> &ProgramHandle {
         &self.program
     }
 
     fn fill_params(&self, params: ParamValues) {
-        self.data.fill_params(&self.link, params);
+        debug_assert!(
+            params.uniforms.is_empty() &&
+            params.blocks.is_empty() &&
+            params.textures.is_empty(),
+            "trying to bind a program handle that has uniforms;\n
+            please link with `DeviceHelper::link_program` instead,\n
+            or connect with `UserProgram::connect` after construction"
+        );
     }
 }
+
 
 /// A named cell containing arbitrary value
 pub struct NamedCell<T> {
@@ -261,7 +261,7 @@ impl DictionaryProgram {
     }
 }
 
-impl Program for DictionaryProgram {
+impl<'a> Program for &'a DictionaryProgram {
     fn get_handle(&self) -> &ProgramHandle {
         &self.program
     }

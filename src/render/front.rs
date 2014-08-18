@@ -88,8 +88,8 @@ pub trait DeviceHelper {
     /// Convenience function around `create_buffer` and `Mesh::from`.
     fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh;
     /// Create a simple program given a vertex shader with a fragment one.
-    fn link_program<'a, L, T: ShaderParam<L>>(&mut self, data: T, vs_src: ShaderSource,
-                   fs_src: ShaderSource) -> Result<shade::UserProgram<L, T>, ProgramError>;
+    fn link_program<'a, L, T: ShaderParam<L>>(&mut self, vs_src: ShaderSource,
+                   fs_src: ShaderSource) -> Result<shade::UserProgram<L, T>, ProgramError<'a>>;
 }
 
 impl<D: device::Device> DeviceHelper for D {
@@ -118,9 +118,9 @@ impl<D: device::Device> DeviceHelper for D {
         mesh::Mesh::from::<T>(buf, nv as device::VertexCount)
     }
 
-    fn link_program<'a, L, T: ShaderParam<L>>(&mut self, data: T,
+    fn link_program<'a, L, T: ShaderParam<L>>(&mut self,
                     vs_src: ShaderSource, fs_src: ShaderSource)
-                    -> Result<shade::UserProgram<L, T>, ProgramError> {
+                    -> Result<shade::UserProgram<L, T>, ProgramError<'a>> {
         let vs = match self.create_shader(Vertex, vs_src) {
             Ok(s) => s,
             Err(e) => return Err(ErrorVertex(e)),
@@ -133,7 +133,7 @@ impl<D: device::Device> DeviceHelper for D {
             Ok(p) => p,
             Err(e) => return Err(ErrorLink(e)),
         };
-        shade::UserProgram::connect(prog, data).map_err(|e| ErrorParameters(e))
+        shade::UserProgram::connect(prog).map_err(|e| ErrorParameters(e))
     }
 }
 
@@ -178,9 +178,9 @@ impl DrawList {
     }
 
     /// Draw `slice` of `mesh` into `frame`, using a program shell, and a given draw state.
-    pub fn draw<P: Program>(&mut self, mesh: &mesh::Mesh, slice: mesh::Slice,
-                            frame: &target::Frame, program: &P, state: &state::DrawState)
-                            -> Result<(), DrawError> {
+    pub fn draw<P: Copy + Program>(&mut self, mesh: &mesh::Mesh, slice: mesh::Slice,
+                frame: &target::Frame, program: P, state: &state::DrawState)
+                -> Result<(), DrawError> {
         self.bind_frame(frame);
         match self.bind_program(program) {
             Ok(_) => (),
@@ -285,7 +285,7 @@ impl DrawList {
         }
     }
 
-    fn bind_program<P: Program>(&mut self, prog: &P) -> Result<(), ParameterError> {
+    fn bind_program<P: Program>(&mut self, prog: P) -> Result<(), ParameterError> {
         let handle = prog.get_handle();
         self.buf.bind_program(handle.get_name());
         let pinfo = handle.get_info();
