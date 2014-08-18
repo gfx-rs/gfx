@@ -129,7 +129,8 @@ fn set_mipmap_range(target: GLenum, (base, max): (u8, u8)) {
 }
 
 /// Create a render surface.
-pub fn make_surface(info: &::tex::SurfaceInfo) -> Result<Surface, ::SurfaceError> {
+pub fn make_surface(info: &::tex::SurfaceInfo) ->
+                    Result<Surface, ::tex::SurfaceError> {
     let mut name = 0 as GLuint;
     unsafe {
         gl::GenRenderbuffers(1, &mut name);
@@ -138,7 +139,7 @@ pub fn make_surface(info: &::tex::SurfaceInfo) -> Result<Surface, ::SurfaceError
     let target = gl::RENDERBUFFER;
     let fmt = match format_to_gl(info.format) {
         Ok(f) => f,
-        Err(_) => return Err(::UnsupportedSurfaceFormat),
+        Err(_) => return Err(::tex::UnsupportedSurfaceFormat),
     };
 
     gl::BindRenderbuffer(target, name);
@@ -153,17 +154,18 @@ pub fn make_surface(info: &::tex::SurfaceInfo) -> Result<Surface, ::SurfaceError
 }
 
 /// Create a texture, assuming TexStorage* isn't available.
-pub fn make_without_storage(info: &::tex::TextureInfo) -> Result<Texture, ::TextureError> {
+pub fn make_without_storage(info: &::tex::TextureInfo) ->
+                            Result<Texture, ::tex::TextureError> {
     let name = make_texture(info);
 
     let fmt = match format_to_gl(info.format) {
         Ok(f) => f as GLint,
-        Err(_) => return Err(::UnsupportedTextureFormat),
+        Err(_) => return Err(::tex::UnsupportedTextureFormat),
     };
     let pix = format_to_glpixel(info.format);
     let typ = match format_to_gltype(info.format) {
         Ok(t) => t,
-        Err(_) => return Err(::UnsupportedTextureFormat),
+        Err(_) => return Err(::tex::UnsupportedTextureFormat),
     };
     let target = kind_to_gl(info.kind);
 
@@ -231,7 +233,8 @@ pub fn make_without_storage(info: &::tex::TextureInfo) -> Result<Texture, ::Text
 }
 
 /// Create a texture, assuming TexStorage is available.
-pub fn make_with_storage(info: &::tex::TextureInfo) -> Result<Texture, ::TextureError> {
+pub fn make_with_storage(info: &::tex::TextureInfo) ->
+                         Result<Texture, ::tex::TextureError> {
     use std::cmp::max;
 
     fn min(a: u8, b: u8) -> GLint {
@@ -254,7 +257,7 @@ pub fn make_with_storage(info: &::tex::TextureInfo) -> Result<Texture, ::Texture
 
     let fmt = match format_to_gl(info.format) {
         Ok(f) => f,
-        Err(_) => return Err(::UnsupportedTextureFormat),
+        Err(_) => return Err(::tex::UnsupportedTextureFormat),
     };
     let target = kind_to_gl(info.kind);
 
@@ -349,7 +352,7 @@ pub fn bind_sampler(anchor: BindAnchor, info: &::tex::SamplerInfo) {
 }
 
 pub fn update_texture<T>(kind: ::tex::TextureKind, name: Texture, img: &::tex::ImageInfo,
-                      data: &Blob<T>) -> Result<(), ::TextureError> {
+                      data: &Blob<T>) -> Result<(), ::tex::TextureError> {
     debug_assert!(img.width as uint * img.height as uint * img.depth as uint *
         format_to_size(img.format) == data.get_size());
 
@@ -357,7 +360,7 @@ pub fn update_texture<T>(kind: ::tex::TextureKind, name: Texture, img: &::tex::I
     let pix = format_to_glpixel(img.format);
     let typ = match format_to_gltype(img.format) {
         Ok(t) => t,
-        Err(_) => return Err(::UnsupportedTextureFormat),
+        Err(_) => return Err(::tex::UnsupportedTextureFormat),
     };
     let target = kind_to_gl(kind);
 

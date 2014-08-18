@@ -23,6 +23,20 @@
 
 use std::default::Default;
 
+/// Surface creation/update error.
+#[deriving(Clone, PartialEq, Show)]
+pub enum SurfaceError {
+    /// Failed to map a given format to the device
+    UnsupportedSurfaceFormat,
+}
+
+/// Texture creation/update error.
+#[deriving(Clone, PartialEq, Show)]
+pub enum TextureError {
+    /// Failed to map a given format to the device
+    UnsupportedTextureFormat,
+}
+
 /// Number of bits per component
 pub type Bits = u8;
 
