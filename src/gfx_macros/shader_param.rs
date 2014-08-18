@@ -65,52 +65,51 @@ fn is_field_used(field: &ast::StructField) -> bool {
 
 /// Generates the the method body for `gfx::shade::ParamValues::create_link`
 fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span, substr: &generic::Substructure,
-                 definition: Gc<ast::StructDef>, link_name: &str) -> Gc<ast::Expr> {
+                 link_name: &str) -> Gc<ast::Expr> {
     let link_ident = cx.ident_of(link_name);
     match *substr.fields {
-        //generic::StaticStruct(definition, generic::Named(ref fields)) => {
-        generic::Struct(ref fields) => {
+        generic::StaticStruct(definition, generic::Named(ref fields)) => {
             let out = definition.fields.iter().zip(fields.iter())
-                .filter(|&(def, _)| is_field_used(def)).map(|(def, f)| {
+                .filter(|&(def, _)| is_field_used(def)).map(|(def, &(fname,fspan))| {
                 let name = match super::find_name(cx, span, def.node.attrs.as_slice()) {
                     Some(name) => name,
-                    None => token::get_ident(f.name.unwrap()),
+                    None => token::get_ident(fname),
                 };
-                let name = cx.expr_str(span, name);
-                let input = substr.nonself_args[0];
+                let name = cx.expr_str(fspan, name);
+                let input = substr.nonself_args[1];
                 let expr = match classify(&def.node.ty.node) {
                     //TODO: verify the type match
                     Ok(ParamUniform) => super::ugh(cx, |cx| quote_expr!(cx,
-                        match $input.val0().iter().position(|u| u.name.as_slice() == $name) {
+                        match $input.uniforms.iter().position(|u| u.name.as_slice() == $name) {
                             Some(p) => p as gfx::shade::VarUniform,
-                            None => return Err(gfx::shade::ErrorUniform($name)),
+                            None => return Err(gfx::shade::ErrorUniform($name.into_maybe_owned())),
                         }
                     )),
                     Ok(ParamBlock)   => super::ugh(cx, |cx| quote_expr!(cx,
-                        match $input.val1().iter().position(|b| b.name.as_slice() == $name) {
+                        match $input.blocks.iter().position(|b| b.name.as_slice() == $name) {
                             Some(p) => p as gfx::shade::VarBlock,
-                            None => return Err(gfx::shade::ErrorBlock($name)),
+                            None => return Err(gfx::shade::ErrorBlock($name.into_maybe_owned())),
                         }
                     )),
                     Ok(ParamTexture) => super::ugh(cx, |cx| quote_expr!(cx,
-                        match $input.val2().iter().position(|t| t.name.as_slice() == $name) {
+                        match $input.textures.iter().position(|t| t.name.as_slice() == $name) {
                             Some(p) => p as gfx::shade::VarTexture,
-                            None => return Err(gfx::shade::ErrorTexture($name)),
+                            None => return Err(gfx::shade::ErrorTexture($name.into_maybe_owned())),
                         }
                     )),
                     Err(_) => {
-                        cx.span_err(span, format!(
+                        cx.span_err(fspan, format!(
                             "Invalid uniform: {}",
-                            f.name.unwrap().as_str(),
+                            fname.as_str(),
                             ).as_slice()
                         );
-                        return cx.field_imm(span,
+                        return cx.field_imm(fspan,
                             cx.ident_of("invalid"),
-                            cx.expr_uint(span, 0)
+                            cx.expr_uint(fspan, 0)
                             );
                     },
                 };
-                cx.field_imm(f.span, f.name.unwrap(), expr)
+                cx.field_imm(fspan, fname, expr)
             }).collect();
             cx.expr_ok(span, cx.expr_struct_ident(span, link_ident, out))
         },
@@ -258,7 +257,6 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
     });
     // constructing the `UserProgram` typedef
     match meta_item.node {
-        ast::MetaWord(_) => (),
         ast::MetaList(_, ref items) if items.len() == 1 => match items[0].deref().node {
             ast::MetaWord(ref shell_name) => {
                 // pub type $shell_ident = gfx::shade::UserProgram<$link_ident, $self_ident>
@@ -287,12 +285,14 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
             },
             _ => {
                 context.span_err(meta_item.span,
-                    "Invalid arguments for `#[shader_param]`")
+                    "Invalid argument. Please specify the typedef for your `Program`\n\
+                    as `#[shader_param(MyProgram)]`")
             }
         },
         _ => {
             context.span_err(meta_item.span,
-                "Invalid arguments for `#[shader_param]`")
+                "Invalid argument. Please specify the typedef for your `Program`\n\
+                as `#[shader_param(MyProgram)]`")
         }
     }
     // deriving ShaderParam
@@ -310,13 +310,23 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
         methods: vec![
             generic::MethodDef {
                 name: "create_link",
-                generics: generic::ty::LifetimeBounds::empty(),
-                explicit_self: Some(Some(generic::ty::Borrowed(
-                    None, ast::MutImmutable
-                ))),
+                generics: generic::ty::LifetimeBounds {
+                    lifetimes: vec![("'a", Vec::new())],
+                    bounds: Vec::new(),
+                },
+                explicit_self: None,
                 args: vec![
-                    generic::ty::Literal(generic::ty::Path::new(
-                        vec!["gfx", "shade", "ParamLinkInput"])),
+                    generic::ty::Literal(generic::ty::Path {
+                        path: vec!["Option"],
+                        lifetime: None,
+                        params: vec![box generic::ty::Self],
+                        global: false,
+                    }),
+                    generic::ty::Ptr(
+                        box generic::ty::Literal(generic::ty::Path::new(
+                            vec!["gfx", "ProgramInfo"])),
+                        generic::ty::Borrowed(Some("'a"), ast::MutImmutable)
+                    ),
                 ],
                 ret_ty: generic::ty::Literal(
                     generic::ty::Path {
@@ -326,7 +336,7 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                             link_ty.clone(),
                             box generic::ty::Literal(generic::ty::Path {
                                 path: vec!["gfx", "shade", "ParameterError"],
-                                lifetime: Some("'static"),
+                                lifetime: Some("'a"),
                                 params: Vec::new(),
                                 global: true,
                             })
@@ -336,7 +346,7 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                 ),
                 attributes: Vec::new(),
                 combine_substructure: generic::combine_substructure(|cx, span, sub|
-                    method_create(cx, span, sub, base_def, link_name.as_slice())
+                    method_create(cx, span, sub, link_name.as_slice())
                 ),
             },
             generic::MethodDef {

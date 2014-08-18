@@ -30,7 +30,7 @@ extern crate render;
 
 // public re-exports
 pub use render::front;
-pub use render::front::{DeviceHelper, DrawList, connect_program};
+pub use render::front::{DeviceHelper, DrawList};
 pub use render::mesh::{Attribute, Mesh, VertexFormat, Slice, VertexSlice,
     IndexSlice8, IndexSlice16, IndexSlice32};
 pub use render::state::{DrawState, BlendAdditive, BlendAlpha};
@@ -41,7 +41,7 @@ pub use device::Device;
 /* #[cfg(gl)] */ pub use device::GlDevice;
 pub use device::{attrib, state, tex};
 pub use device::{BufferHandle, BufferInfo, RawBufferHandle, ShaderHandle,
-    SurfaceHandle, TextureHandle, SurfaceHandle};
+    ProgramHandle, SurfaceHandle, TextureHandle, SurfaceHandle};
 pub use device::{BufferUsage, UsageStatic, UsageDynamic, UsageStream};
 pub use device::{Blob, VertexCount, IndexCount};
 pub use device::{Point, Line, LineStrip, TriangleList, TriangleStrip, TriangleFan};
@@ -50,5 +50,5 @@ pub use device::shade::{UniformValue,
     ValueI32Vector2, ValueI32Vector3, ValueI32Vector4,
     ValueF32Vector2, ValueF32Vector3, ValueF32Vector4,
     ValueF32Matrix2, ValueF32Matrix3, ValueF32Matrix4};
-pub use device::shade::{ShaderSource, StaticBytes};
+pub use device::shade::{ShaderSource, StaticBytes, ProgramInfo};
 pub use device::target::{Color, ClearData, Layer, Level};
