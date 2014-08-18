@@ -570,11 +570,13 @@ impl ::Device for GlDevice {
         name
     }
 
-    fn create_surface(&mut self, info: ::tex::SurfaceInfo) -> Result<::SurfaceHandle, ::SurfaceError> {
+    fn create_surface(&mut self, info: ::tex::SurfaceInfo) ->
+                      Result<::SurfaceHandle, ::tex::SurfaceError> {
         tex::make_surface(&info).map(|suf| ::Handle(suf, info))
     }
 
-    fn create_texture(&mut self, info: ::tex::TextureInfo) -> Result<::TextureHandle, ::TextureError> {
+    fn create_texture(&mut self, info: ::tex::TextureInfo) ->
+                      Result<::TextureHandle, ::tex::TextureError> {
         let name = if self.caps.immutable_storage_supported {
             tex::make_with_storage(&info)
         } else {
@@ -634,7 +636,7 @@ impl ::Device for GlDevice {
     }
 
     fn update_texture<T>(&mut self, texture: &::TextureHandle, img: &::tex::ImageInfo,
-                      data: &::Blob<T>) -> Result<(), ::TextureError> {
+                      data: &::Blob<T>) -> Result<(), ::tex::TextureError> {
         tex::update_texture(texture.get_info().kind, texture.get_name(), img, data)
     }
 

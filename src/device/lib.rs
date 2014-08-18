@@ -255,20 +255,6 @@ pub struct BufferInfo {
     pub size: uint,
 }
 
-/// Surface creation/update error.
-#[deriving(Clone, PartialEq, Show)]
-pub enum SurfaceError {
-    /// Failed to map a given format to the device
-    UnsupportedSurfaceFormat,
-}
-
-/// Texture creation/update error.
-#[deriving(Clone, PartialEq, Show)]
-pub enum TextureError {
-    /// Failed to map a given format to the device
-    UnsupportedTextureFormat,
-}
-
 /// Serialized device command.
 /// While this is supposed to be an internal detail of a device,
 /// this particular representation may be used by different backends,
@@ -320,8 +306,8 @@ pub trait Device {
                      Result<ShaderHandle, shade::CreateShaderError>;
     fn create_program(&mut self, shaders: &[ShaderHandle]) -> Result<ProgramHandle, ()>;
     fn create_frame_buffer(&mut self) -> back::FrameBuffer;
-    fn create_surface(&mut self, info: tex::SurfaceInfo) -> Result<SurfaceHandle, SurfaceError>;
-    fn create_texture(&mut self, info: tex::TextureInfo) -> Result<TextureHandle, TextureError>;
+    fn create_surface(&mut self, info: tex::SurfaceInfo) -> Result<SurfaceHandle, tex::SurfaceError>;
+    fn create_texture(&mut self, info: tex::TextureInfo) -> Result<TextureHandle, tex::TextureError>;
     fn create_sampler(&mut self, info: tex::SamplerInfo) -> SamplerHandle;
     // resource deletion
     fn delete_buffer<T>(&mut self, BufferHandle<T>);
@@ -334,7 +320,7 @@ pub trait Device {
     fn update_buffer<T>(&mut self, BufferHandle<T>, &Blob<T>);
     /// Update the information stored in a texture
     fn update_texture<T>(&mut self, &TextureHandle, &tex::ImageInfo, &Blob<T>)
-                      -> Result<(), TextureError>;
+                      -> Result<(), tex::TextureError>;
     /// Submit a command buffer for execution
     fn submit(&mut self, cb: &ActualCommandBuffer);
 }
