@@ -81,21 +81,21 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span, substr: &gene
                 let expr = match classify(&def.node.ty.node) {
                     //TODO: verify the type match
                     Ok(ParamUniform) => super::ugh(cx, |cx| quote_expr!(cx,
-                        match $input.val0().iter().position(|u| u.name.as_slice() == $name) {
+                        match $input.uniforms.iter().position(|u| u.name.as_slice() == $name) {
                             Some(p) => p as gfx::shade::VarUniform,
-                            None => return Err(gfx::shade::ErrorUniform($name)),
+                            None => return Err(gfx::shade::ErrorUniform($name.into_maybe_owned())),
                         }
                     )),
                     Ok(ParamBlock)   => super::ugh(cx, |cx| quote_expr!(cx,
-                        match $input.val1().iter().position(|b| b.name.as_slice() == $name) {
+                        match $input.blocks.iter().position(|b| b.name.as_slice() == $name) {
                             Some(p) => p as gfx::shade::VarBlock,
-                            None => return Err(gfx::shade::ErrorBlock($name)),
+                            None => return Err(gfx::shade::ErrorBlock($name.into_maybe_owned())),
                         }
                     )),
                     Ok(ParamTexture) => super::ugh(cx, |cx| quote_expr!(cx,
-                        match $input.val2().iter().position(|t| t.name.as_slice() == $name) {
+                        match $input.textures.iter().position(|t| t.name.as_slice() == $name) {
                             Some(p) => p as gfx::shade::VarTexture,
-                            None => return Err(gfx::shade::ErrorTexture($name)),
+                            None => return Err(gfx::shade::ErrorTexture($name.into_maybe_owned())),
                         }
                     )),
                     Err(_) => {
@@ -310,13 +310,19 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
         methods: vec![
             generic::MethodDef {
                 name: "create_link",
-                generics: generic::ty::LifetimeBounds::empty(),
+                generics: generic::ty::LifetimeBounds {
+                    lifetimes: vec![("'a", Vec::new())],
+                    bounds: Vec::new(),
+                },
                 explicit_self: Some(Some(generic::ty::Borrowed(
                     None, ast::MutImmutable
                 ))),
                 args: vec![
-                    generic::ty::Literal(generic::ty::Path::new(
-                        vec!["gfx", "shade", "ParamLinkInput"])),
+                    generic::ty::Ptr(
+                        box generic::ty::Literal(generic::ty::Path::new(
+                            vec!["gfx", "ProgramInfo"])),
+                        generic::ty::Borrowed(Some("'a"), ast::MutImmutable)
+                    ),
                 ],
                 ret_ty: generic::ty::Literal(
                     generic::ty::Path {
@@ -326,7 +332,7 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                             link_ty.clone(),
                             box generic::ty::Literal(generic::ty::Path {
                                 path: vec!["gfx", "shade", "ParameterError"],
-                                lifetime: Some("'static"),
+                                lifetime: Some("'a"),
                                 params: Vec::new(),
                                 global: true,
                             })
