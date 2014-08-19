@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use s = super::super::shade;
+use super::super::shade as s;
 use super::gl;
 use std::cell::Cell;
 use std::str::raw;

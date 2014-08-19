@@ -69,7 +69,7 @@ pub enum Type {
 
 impl Type {
     pub fn is_compatible(&self, bt: super::shade::BaseType) -> Result<(), ()> {
-        use s = super::shade;
+        use super::shade as s;
         match (*self, bt) {
             (Int(IntRaw, _, _), s::BaseI32) => Ok(()),
             (Int(IntRaw, _, Unsigned), s::BaseU32) => Ok(()),

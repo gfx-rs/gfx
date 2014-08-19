@@ -18,7 +18,7 @@
 
 use std::default::Default;
 use std::fmt;
-use StencilValue = super::target::Stencil;
+use super::target::Stencil as StencilValue;
 
 /// The winding order of a set of vertices.
 #[deriving(Clone, PartialEq, Show)]

@@ -14,8 +14,8 @@
 
 //! Render target specification.
 
-use t = device::target;
-use backend = device::back;
+use device::target as t;
+use device::back as backend;
 
 static MAX_COLOR_TARGETS: uint = 4;
 

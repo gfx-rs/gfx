@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use s = super::super::state;
+use super::super::state as s;
 use super::super::target::{Color, Rect};
 use super::gl;
 

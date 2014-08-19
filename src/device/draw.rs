@@ -14,9 +14,9 @@
 
 //! Command Buffer device interface
 
-use a = attrib;
-use b = back;
-use t = target;
+use attrib as a;
+use back as b;
+use target as t;
 
 #[allow(missing_doc)]    //TODO
 pub trait CommandBuffer {

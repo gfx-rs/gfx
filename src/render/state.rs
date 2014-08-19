@@ -16,7 +16,7 @@
 //!
 //! Configures primitive assembly (PA), rasterizer, and output merger (OM) blocks.
 
-use s = device::state;
+use device::state as s;
 use device::target::{Color, Rect, Stencil};
 
 /// An assembly of states that affect regular draw calls

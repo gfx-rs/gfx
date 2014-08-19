@@ -20,8 +20,8 @@
 //! create a mesh is to use the `#[vertex_format]` attribute on a struct, upload them into a
 //! `Buffer`, and then use `Mesh::from`.
 
-use d = device;
-use a = device::attrib;
+use device as d;
+use device::attrib as a;
 
 /// Describes a single attribute of a vertex buffer, including its type, name, etc.
 #[deriving(Clone, PartialEq, Show)]
