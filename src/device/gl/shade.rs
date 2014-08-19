@@ -17,26 +17,6 @@ use super::gl;
 use std::cell::Cell;
 use std::str::raw;
 
-pub fn get_model() -> s::ShaderModel {
-    let bytes = gl::GetString(gl::SHADING_LANGUAGE_VERSION);
-    let full = unsafe {
-        raw::c_str_to_static_slice(bytes as *const i8)
-    };
-    info!("GLSL version: {}", full);
-    let s = full.slice_to(4);
-    if s < "1.20" {
-        s::ModelUnsupported
-    }else if s < "1.50" {
-        s::Model30
-    }else if s < "3.00" {
-        s::Model40
-    }else if s < "4.30" {
-        s::Model41
-    }else {
-        s::Model50
-    }
-}
-
 pub fn create_shader(stage: s::Stage, data: s::ShaderSource, model: s::ShaderModel)
         -> (Result<super::Shader, s::CreateShaderError>, Option<String>) {
     let target = match stage {

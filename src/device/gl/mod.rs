@@ -27,10 +27,13 @@ use std::collections::HashSet;
 use super::attrib as a;
 use RefBlobCast;
 
+pub use self::info::{Info, PlatformName, Version};
+
 pub mod draw;
 mod shade;
 mod state;
 mod tex;
+mod info;
 
 pub type Buffer         = gl::types::GLuint;
 pub type ArrayBuffer    = gl::types::GLuint;
@@ -54,161 +57,6 @@ impl ::Blob<()> for AllocBlob {
     }
 }
 
-fn get_uint(name: gl::types::GLenum) -> uint {
-    let mut value = 0 as gl::types::GLint;
-    unsafe { gl::GetIntegerv(name, &mut value) };
-    value as uint
-}
-
-/// Get a statically allocated string from the implementation using
-/// `glGetString`. Fails if it `GLenum` cannot be handled by the
-/// implementation's `gl::GetString` function.
-fn get_string(name: gl::types::GLenum) -> &'static str {
-    let ptr = gl::GetString(name) as *const i8;
-    if !ptr.is_null() {
-        // This should be safe to mark as statically allocated because
-        // GlGetString only returns static strings.
-        unsafe { str::raw::c_str_to_static_slice(ptr) }
-    } else {
-        fail!("Invalid GLenum passed to `get_string`: {:x}", name)
-    }
-}
-
-pub type VersionMajor = uint;
-pub type VersionMinor = uint;
-pub type Revision = uint;
-pub type VendorDetails = &'static str;
-
-/// A version number for a specific component of an OpenGL implementation
-#[deriving(Eq, PartialEq, Ord, PartialOrd)]
-pub struct Version(VersionMajor, VersionMinor, Option<Revision>, VendorDetails);
-
-impl Version {
-    /// According to the OpenGL spec, the version information is expected to
-    /// follow the following syntax:
-    ///
-    /// ~~~bnf
-    /// <major>       ::= <number>
-    /// <minor>       ::= <number>
-    /// <revision>    ::= <number>
-    /// <vendor-info> ::= <string>
-    /// <release>     ::= <major> "." <minor> ["." <release>]
-    /// <version>     ::= <release> [" " <vendor-info>]
-    /// ~~~
-    ///
-    /// Note that this function is intentionally lenient in regards to parsing,
-    /// and will try to recover at least the first two version numbers without
-    /// resulting in an `Err`.
-    fn parse(src: &'static str) -> Result<Version, &'static str> {
-        let (version, vendor_info) = match src.find(' ') {
-            Some(i) => (src.slice_to(i), src.slice_from(i + 1)),
-            None => (src, ""),
-        };
-
-        // TODO: make this even more lenient so that we can also accept
-        // `<major> "." <minor> [<???>]`
-        let mut it = version.split('.');
-        let major = it.next().and_then(from_str);
-        let minor = it.next().and_then(from_str);
-        let revision = it.next().and_then(from_str);
-
-        match (major, minor, revision) {
-            (Some(major), Some(minor), revision) =>
-                Ok(Version(major, minor, revision, vendor_info)),
-            (_, _, _) => Err(src),
-        }
-    }
-}
-
-impl fmt::Show for Version {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Version(major, minor, Some(revision), "") =>
-                write!(f, "Version({}.{}.{})", major, minor, revision),
-            Version(major, minor, None, "") =>
-                write!(f, "Version({}.{})", major, minor),
-            Version(major, minor, Some(revision), vendor_info) =>
-                write!(f, "Version({}.{}.{}, {})", major, minor, revision, vendor_info),
-            Version(major, minor, None, vendor_info) =>
-                write!(f, "Version({}.{}, {})", major, minor, vendor_info),
-        }
-    }
-}
-
-/// A unique platform identifier that does not change between releases
-#[deriving(Eq, PartialEq, Show)]
-pub struct PlatformName {
-    /// The company responsible for the OpenGL implementation
-    pub vendor: &'static str,
-    /// The name of the renderer
-    pub renderer: &'static str,
-}
-
-impl PlatformName {
-    fn get() -> PlatformName {
-        PlatformName {
-            vendor: get_string(gl::VENDOR),
-            renderer: get_string(gl::RENDERER),
-        }
-    }
-}
-
-/// OpenGL implementation information
-#[deriving(Show)]
-pub struct Info {
-    /// The platform identifier
-    pub platform_name: PlatformName,
-    /// The OpenGL API vesion number
-    pub version: Version,
-    /// The GLSL vesion number
-    pub shading_language: Version,
-    /// The extensions supported by the implementation
-    pub extensions: HashSet<&'static str>,
-}
-
-impl Info {
-    fn get() -> Info {
-        let info = {
-            let platform_name = PlatformName::get();
-            let version = Version::parse(get_string(gl::VERSION)).unwrap();
-            let shading_language = Version::parse(get_string(gl::SHADING_LANGUAGE_VERSION)).unwrap();
-            let extensions = if version >= Version(3, 2, None, "") {
-                let num_exts = get_uint(gl::NUM_EXTENSIONS) as gl::types::GLuint;
-                range(0, num_exts).map(|i| {
-                    unsafe {
-                        str::raw::c_str_to_static_slice(
-                            gl::GetStringi(gl::EXTENSIONS, i) as *const i8,
-                        )
-                    }
-                }).collect()
-            } else {
-                // Fallback
-                get_string(gl::EXTENSIONS).split(' ').collect()
-            };
-            Info {
-                platform_name: platform_name,
-                version: version,
-                shading_language: shading_language,
-                extensions: extensions,
-            }
-        };
-        info!("Vendor: {}", info.platform_name.vendor);
-        info!("Renderer: {}", info.platform_name.renderer);
-        info!("Version: {}", info.version);
-        info!("Shading Language: {}", info.shading_language);
-        info!("Loaded Extensions:")
-        for extension in info.extensions.iter() {
-            info!("- {}", *extension);
-        }
-        info
-    }
-
-    /// Returns `true` if the implementation supports the extension
-    pub fn is_extension_supported(&self, s: &str) -> bool {
-        self.extensions.contains_equiv(&s)
-    }
-}
-
 #[deriving(Eq, PartialEq, Show)]
 pub enum ErrorType {
     InvalidEnum,
@@ -218,7 +66,6 @@ pub enum ErrorType {
     OutOfMemory,
     UnknownError,
 }
-
 
 fn primitive_to_gl(prim_type: ::PrimitiveType) -> gl::types::GLenum {
     match prim_type {
@@ -243,32 +90,29 @@ fn target_to_gl(target: ::target::Target) -> gl::types::GLenum {
 
 /// An OpenGL device with GLSL shaders
 pub struct GlDevice {
-    caps: ::Capabilities,
     info: Info,
+    caps: ::Capabilities,
 }
 
 impl GlDevice {
     /// Load OpenGL symbols and detect driver information
     pub fn new(fn_proc: |&str| -> *const ::libc::c_void) -> GlDevice {
         gl::load_with(fn_proc);
-        let info = Info::get();
-        let caps = ::Capabilities {
-            shader_model: shade::get_model(),
-            max_draw_buffers: get_uint(gl::MAX_DRAW_BUFFERS),
-            max_texture_size: get_uint(gl::MAX_TEXTURE_SIZE),
-            max_vertex_attributes: get_uint(gl::MAX_VERTEX_ATTRIBS),
-            uniform_block_supported: info.version >= Version(3, 1, None, "")
-                || info.is_extension_supported("GL_ARB_uniform_buffer_object"),
-            array_buffer_supported: info.version >= Version(3, 0, None, "")
-                || info.is_extension_supported("GL_ARB_vertex_array_object"),
-            immutable_storage_supported: info.version >= Version(4, 2, None, "")
-                || info.is_extension_supported("GL_ARB_texture_storage"),
-            sampler_objects_supported: info.version >= Version(3, 3, None, "")
-                || info.is_extension_supported("GL_ARB_sampler_objects"),
-        };
+
+        let (info, caps) = info::get();
+
+        info!("Vendor: {}", info.platform_name.vendor);
+        info!("Renderer: {}", info.platform_name.renderer);
+        info!("Version: {}", info.version);
+        info!("Shading Language: {}", info.shading_language);
+        info!("Loaded Extensions:");
+        for extension in info.extensions.iter() {
+            info!("- {}", *extension);
+        }
+
         GlDevice {
-            caps: caps,
             info: info,
+            caps: caps,
         }
     }
 
@@ -645,25 +489,5 @@ impl ::Device for GlDevice {
         for com in cb.iter() {
             self.process(com);
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Version;
-
-    #[test]
-    fn test_version_parse() {
-        assert_eq!(Version::parse("1"), Err("1"));
-        assert_eq!(Version::parse("1."), Err("1."));
-        assert_eq!(Version::parse("1 h3l1o. W0rld"), Err("1 h3l1o. W0rld"));
-        assert_eq!(Version::parse("1. h3l1o. W0rld"), Err("1. h3l1o. W0rld"));
-        assert_eq!(Version::parse("1.2.3"), Ok(Version(1, 2, Some(3), "")));
-        assert_eq!(Version::parse("1.2"), Ok(Version(1, 2, None, "")));
-        assert_eq!(Version::parse("1.2 h3l1o. W0rld"), Ok(Version(1, 2, None, "h3l1o. W0rld")));
-        assert_eq!(Version::parse("1.2.h3l1o. W0rld"), Ok(Version(1, 2, None, "W0rld")));
-        assert_eq!(Version::parse("1.2. h3l1o. W0rld"), Ok(Version(1, 2, None, "h3l1o. W0rld")));
-        assert_eq!(Version::parse("1.2.3.h3l1o. W0rld"), Ok(Version(1, 2, Some(3), "W0rld")));
-        assert_eq!(Version::parse("1.2.3 h3l1o. W0rld"), Ok(Version(1, 2, Some(3), "h3l1o. W0rld")));
     }
 }
