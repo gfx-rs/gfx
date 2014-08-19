@@ -32,7 +32,7 @@ struct MyVertex {
 
 #[test]
 fn test_vertex_format() {
-    use a = gfx::attrib;
+    use gfx::attrib as a;
 
     let buf = device::make_fake_buffer();
     let mesh = gfx::Mesh::from::<MyVertex>(buf, 0);

@@ -81,7 +81,7 @@ macro_rules! shaders {
         {
             mod foo {
                 extern crate gfx;
-                pub use gfx as g;
+                pub use self::gfx as g;
             }
             foo::g::ShaderSource {
                 glsl_120: Some(::gfx::StaticBytes($v)),
@@ -93,7 +93,7 @@ macro_rules! shaders {
         {
             mod foo {
                 extern crate gfx;
-                pub use gfx as g;
+                pub use self::gfx as g;
             }
             foo::g::ShaderSource {
                 glsl_150: Some(::gfx::StaticBytes($v)),
@@ -105,7 +105,7 @@ macro_rules! shaders {
         {
             mod foo {
                 extern crate gfx;
-                pub use gfx as g;
+                pub use self::gfx as g;
             }
             foo::g::ShaderSource {
                 glsl_120: None,
