@@ -28,10 +28,6 @@ extern crate device;
 pub mod front;
 /// Meshes
 pub mod mesh;
-/// Resources (deprecated)
-mod resource {
-    mod handle;
-}
 /// Shaders
 pub mod shade;
 /// Draw state
