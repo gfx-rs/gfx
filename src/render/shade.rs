@@ -16,7 +16,7 @@
 
 use std::cell::Cell;
 use std::rc::Rc;
-use s = device::shade;
+use device::shade as s;
 use device::{RawBufferHandle, ProgramHandle, SamplerHandle, TextureHandle};
 
 /// Helper trait to transform base types into their corresponding uniforms

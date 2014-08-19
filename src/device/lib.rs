@@ -27,7 +27,7 @@
 extern crate libc;
 
 // when cargo is ready, re-enable the cfgs
-/* #[cfg(gl)] */ pub use back = self::gl;
+/* #[cfg(gl)] */ pub use self::gl as back;
 /* #[cfg(gl)] */ pub use gl::GlDevice;
 /* #[cfg(gl)] */ pub use gl::draw::GlCommandBuffer;
 // #[cfg(d3d11)] ... // TODO
