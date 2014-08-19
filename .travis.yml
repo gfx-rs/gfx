@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+language: rust
 env:
   global:
     - LD_LIBRARY_PATH: /usr/local/lib
@@ -37,10 +38,6 @@ install:
   - make
   - sudo make install
   - cd ..
-  # rustc
-  - curl https://static.rust-lang.org/rustup.sh | sudo -E sh
-  - rustc -v
-  - cargo -V
 script:
   - make all
 # - sh -c "sleep 5; xdotool key --window \"$(xdotool search --name Hello)\" Escape" &
