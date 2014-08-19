@@ -82,19 +82,19 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span, substr: &gene
                     Ok(ParamUniform) => super::ugh(cx, |cx| quote_expr!(cx,
                         match $input.uniforms.iter().position(|u| u.name.as_slice() == $name) {
                             Some(p) => p as gfx::shade::VarUniform,
-                            None => return Err(gfx::shade::ErrorUniform($name.into_maybe_owned())),
+                            None => return Err(gfx::shade::ErrorUniform($name.to_string())),
                         }
                     )),
                     Ok(ParamBlock)   => super::ugh(cx, |cx| quote_expr!(cx,
                         match $input.blocks.iter().position(|b| b.name.as_slice() == $name) {
                             Some(p) => p as gfx::shade::VarBlock,
-                            None => return Err(gfx::shade::ErrorBlock($name.into_maybe_owned())),
+                            None => return Err(gfx::shade::ErrorBlock($name.to_string())),
                         }
                     )),
                     Ok(ParamTexture) => super::ugh(cx, |cx| quote_expr!(cx,
                         match $input.textures.iter().position(|t| t.name.as_slice() == $name) {
                             Some(p) => p as gfx::shade::VarTexture,
-                            None => return Err(gfx::shade::ErrorTexture($name.into_maybe_owned())),
+                            None => return Err(gfx::shade::ErrorTexture($name.to_string())),
                         }
                     )),
                     Err(_) => {
@@ -310,10 +310,7 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
         methods: vec![
             generic::MethodDef {
                 name: "create_link",
-                generics: generic::ty::LifetimeBounds {
-                    lifetimes: vec![("'a", Vec::new())],
-                    bounds: Vec::new(),
-                },
+                generics: generic::ty::LifetimeBounds::empty(),
                 explicit_self: None,
                 args: vec![
                     generic::ty::Literal(generic::ty::Path {
@@ -325,7 +322,7 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                     generic::ty::Ptr(
                         box generic::ty::Literal(generic::ty::Path::new(
                             vec!["gfx", "ProgramInfo"])),
-                        generic::ty::Borrowed(Some("'a"), ast::MutImmutable)
+                        generic::ty::Borrowed(None, ast::MutImmutable)
                     ),
                 ],
                 ret_ty: generic::ty::Literal(
@@ -334,12 +331,9 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                         lifetime: None,
                         params: vec![
                             link_ty.clone(),
-                            box generic::ty::Literal(generic::ty::Path {
-                                path: vec!["gfx", "shade", "ParameterError"],
-                                lifetime: Some("'a"),
-                                params: Vec::new(),
-                                global: true,
-                            })
+                            box generic::ty::Literal(generic::ty::Path::new(
+                                vec!["gfx", "shade", "ParameterError"]
+                            ))
                         ],
                         global: false,
                     },
