@@ -15,7 +15,6 @@
 //! Rendering front-end
 
 use device;
-use backend = device::back;
 use device::draw::CommandBuffer;
 use device::shade::{ProgramInfo, ShaderSource, Vertex, Fragment, CreateShaderError};
 use device::attrib::{U8, U16, U32};
@@ -107,7 +106,7 @@ impl<D: device::Device> DeviceHelper for D {
             buf: CommandBuffer::new(),
             common_array_buffer: self.create_array_buffer(),
             common_frame_buffer: self.create_frame_buffer(),
-            default_frame_buffer: 0,
+            default_frame_buffer: device::get_main_frame_buffer(),
             //TODO: make sure this is HW default
             state: State {
                 frame: target::Frame::new(0,0),
@@ -149,9 +148,9 @@ impl<D: device::Device> DeviceHelper for D {
 /// Renderer front-end
 pub struct DrawList {
     buf: device::ActualCommandBuffer,
-    common_array_buffer: Result<backend::ArrayBuffer, ()>,
-    common_frame_buffer: backend::FrameBuffer,
-    default_frame_buffer: backend::FrameBuffer,
+    common_array_buffer: Result<device::ArrayBufferHandle, ()>,
+    common_frame_buffer: device::FrameBufferHandle,
+    default_frame_buffer: device::FrameBufferHandle,
     state: State,
 }
 
@@ -276,9 +275,9 @@ impl DrawList {
         });
         if frame.is_default() {
             // binding the default FBO, not touching our common one
-            self.buf.bind_frame_buffer(self.default_frame_buffer);
+            self.buf.bind_frame_buffer(self.default_frame_buffer.get_name());
         } else {
-            self.buf.bind_frame_buffer(self.common_frame_buffer);
+            self.buf.bind_frame_buffer(self.common_frame_buffer.get_name());
             for (i, (cur, new)) in self.state.frame.colors.iter().zip(frame.colors.iter()).enumerate() {
                 if *cur != *new {
                     DrawList::bind_target(&mut self.buf, device::target::TargetColor(i as u8), *new);
@@ -344,7 +343,7 @@ impl DrawList {
     fn bind_mesh(&mut self, mesh: &mesh::Mesh, info: &ProgramInfo)
                  -> Result<(), MeshError> {
         // It's Ok the array buffer is not supported. If so we just ignore it.
-        self.common_array_buffer.map(|ab| self.buf.bind_array_buffer(ab));
+        self.common_array_buffer.map(|ab| self.buf.bind_array_buffer(ab.get_name()));
         for sat in info.attributes.iter() {
             match mesh.attributes.iter().find(|a| a.name.as_slice() == sat.name.as_slice()) {
                 Some(vat) => match vat.elem_type.is_compatible(sat.base_type) {

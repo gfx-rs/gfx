@@ -528,14 +528,14 @@ impl ::Device for GlDevice {
         ::BufferHandle::from_raw(::Handle(name, info))
     }
 
-    fn create_array_buffer(&mut self) -> Result<ArrayBuffer, ()> {
+    fn create_array_buffer(&mut self) -> Result<::ArrayBufferHandle, ()> {
         if self.caps.array_buffer_supported {
             let mut name = 0 as ArrayBuffer;
             unsafe {
                 gl::GenVertexArrays(1, &mut name);
             }
             info!("\tCreated array buffer {}", name);
-            Ok(name)
+            Ok(::Handle(name, ()))
         } else {
             error!("\tarray buffer creation unsupported, ignored")
             Err(())
@@ -561,13 +561,13 @@ impl ::Device for GlDevice {
         prog
     }
 
-    fn create_frame_buffer(&mut self) -> FrameBuffer {
+    fn create_frame_buffer(&mut self) -> ::FrameBufferHandle {
         let mut name = 0 as FrameBuffer;
         unsafe {
             gl::GenFramebuffers(1, &mut name);
         }
         info!("\tCreated frame buffer {}", name);
-        name
+        ::Handle(name, ())
     }
 
     fn create_surface(&mut self, info: ::tex::SurfaceInfo) ->
