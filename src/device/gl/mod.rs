@@ -508,13 +508,13 @@ impl ::Device for GlDevice {
         &self.caps
     }
 
-    fn create_buffer<T>(&mut self, num: uint, usage: ::BufferUsage) -> ::BufferHandle<T> {
+    fn create_buffer_raw(&mut self, size: uint, usage: ::BufferUsage) -> ::BufferHandle<()> {
         let name = self.create_buffer_internal();
+        self.update_buffer_internal(name, &AllocBlob(size), usage);
         let info = ::BufferInfo {
             usage: usage,
-            size: num * mem::size_of::<T>(),
+            size: size,
         };
-        self.update_buffer_internal(name, &AllocBlob(info.size), info.usage);
         ::BufferHandle::from_raw(::Handle(name, info))
     }
 
@@ -528,14 +528,14 @@ impl ::Device for GlDevice {
         ::BufferHandle::from_raw(::Handle(name, info))
     }
 
-    fn create_array_buffer(&mut self) -> Result<ArrayBuffer, ()> {
+    fn create_array_buffer(&mut self) -> Result<::ArrayBufferHandle, ()> {
         if self.caps.array_buffer_supported {
             let mut name = 0 as ArrayBuffer;
             unsafe {
                 gl::GenVertexArrays(1, &mut name);
             }
             info!("\tCreated array buffer {}", name);
-            Ok(name)
+            Ok(::Handle(name, ()))
         } else {
             error!("\tarray buffer creation unsupported, ignored")
             Err(())
@@ -561,13 +561,13 @@ impl ::Device for GlDevice {
         prog
     }
 
-    fn create_frame_buffer(&mut self) -> FrameBuffer {
+    fn create_frame_buffer(&mut self) -> ::FrameBufferHandle {
         let mut name = 0 as FrameBuffer;
         unsafe {
             gl::GenFramebuffers(1, &mut name);
         }
         info!("\tCreated frame buffer {}", name);
-        name
+        ::Handle(name, ())
     }
 
     fn create_surface(&mut self, info: ::tex::SurfaceInfo) ->
@@ -594,7 +594,7 @@ impl ::Device for GlDevice {
         ::Handle(sam, info)
     }
 
-    fn delete_buffer<T>(&mut self, handle: ::BufferHandle<T>) {
+    fn delete_buffer_raw(&mut self, handle: ::BufferHandle<()>) {
         let name = handle.get_name();
         unsafe {
             gl::DeleteBuffers(1, &name);
@@ -630,13 +630,13 @@ impl ::Device for GlDevice {
         }
     }
 
-    fn update_buffer<T>(&mut self, buffer: ::BufferHandle<T>, data: &::Blob<T>) {
+    fn update_buffer_raw(&mut self, buffer: ::BufferHandle<()>, data: &::Blob<()>) {
         debug_assert_eq!(buffer.get_info().size, data.get_size());
-        self.update_buffer_internal(buffer.get_name(), data.cast(), buffer.get_info().usage);
+        self.update_buffer_internal(buffer.get_name(), data, buffer.get_info().usage)
     }
 
-    fn update_texture<T>(&mut self, texture: &::TextureHandle, img: &::tex::ImageInfo,
-                      data: &::Blob<T>) -> Result<(), ::tex::TextureError> {
+    fn update_texture_raw(&mut self, texture: &::TextureHandle, img: &::tex::ImageInfo,
+                          data: &::Blob<()>) -> Result<(), ::tex::TextureError> {
         tex::update_texture(texture.get_info().kind, texture.get_name(), img, data)
     }
 

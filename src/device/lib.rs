@@ -118,12 +118,16 @@ impl<T> BufferHandle<T> {
     }
 }
 
-
+/// Raw (untyped) Buffer Handle
 pub type RawBufferHandle = Handle<back::Buffer, BufferInfo>;
+/// Array Buffer Handle
+pub type ArrayBufferHandle = Handle<back::ArrayBuffer, ()>;
 /// Shader Handle
 pub type ShaderHandle  = Handle<back::Shader, shade::Stage>;
 /// Program Handle
 pub type ProgramHandle = Handle<back::Program, shade::ProgramInfo>;
+/// Frame Buffer Handle
+pub type FrameBufferHandle = Handle<back::FrameBuffer, ()>;
 /// Surface Handle
 pub type SurfaceHandle = Handle<back::Surface, tex::SurfaceInfo>;
 /// Texture Handle
@@ -139,6 +143,11 @@ pub fn make_fake_buffer<T>() -> BufferHandle<T> {
         size: 0,
     };
     BufferHandle::from_raw(Handle(0, info))
+}
+
+/// Return the framebuffer handle for the screen
+pub fn get_main_frame_buffer() -> FrameBufferHandle {
+    Handle(0, ())
 }
 
 /// Features that the device supports.
@@ -299,28 +308,41 @@ pub trait Device {
     /// Returns the capabilities available to the specific API implementation
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
     // resource creation
-    fn create_buffer<T>(&mut self, num: uint, usage: BufferUsage) -> BufferHandle<T>;
+    fn create_buffer_raw(&mut self, size: uint, usage: BufferUsage) -> BufferHandle<()>;
+    fn create_buffer<T>(&mut self, num: uint, usage: BufferUsage) -> BufferHandle<T> {
+        self.create_buffer_raw(num * size_of::<T>(), usage).cast()
+    }
     fn create_buffer_static<T>(&mut self, &Blob<T>) -> BufferHandle<T>;
-    fn create_array_buffer(&mut self) -> Result<back::ArrayBuffer, ()>;
+    fn create_array_buffer(&mut self) -> Result<ArrayBufferHandle, ()>;
     fn create_shader(&mut self, stage: shade::Stage, code: shade::ShaderSource) ->
                      Result<ShaderHandle, shade::CreateShaderError>;
     fn create_program(&mut self, shaders: &[ShaderHandle]) -> Result<ProgramHandle, ()>;
-    fn create_frame_buffer(&mut self) -> back::FrameBuffer;
+    fn create_frame_buffer(&mut self) -> FrameBufferHandle;
     fn create_surface(&mut self, info: tex::SurfaceInfo) -> Result<SurfaceHandle, tex::SurfaceError>;
     fn create_texture(&mut self, info: tex::TextureInfo) -> Result<TextureHandle, tex::TextureError>;
     fn create_sampler(&mut self, info: tex::SamplerInfo) -> SamplerHandle;
     // resource deletion
-    fn delete_buffer<T>(&mut self, BufferHandle<T>);
+    fn delete_buffer_raw(&mut self, buf: BufferHandle<()>);
+    fn delete_buffer<T>(&mut self, buf: BufferHandle<T>) {
+        self.delete_buffer_raw(buf.cast());
+    }
     fn delete_shader(&mut self, ShaderHandle);
     fn delete_program(&mut self, ProgramHandle);
     fn delete_surface(&mut self, SurfaceHandle);
     fn delete_texture(&mut self, TextureHandle);
     fn delete_sampler(&mut self, SamplerHandle);
     /// Update the information stored in a specific buffer
-    fn update_buffer<T>(&mut self, BufferHandle<T>, &Blob<T>);
+    fn update_buffer_raw(&mut self, buf: BufferHandle<()>, data: &Blob<()>);
+    fn update_buffer<T>(&mut self, buf: BufferHandle<T>, data: &Blob<T>) {
+        self.update_buffer_raw(buf.cast(), data.cast());
+    }
     /// Update the information stored in a texture
-    fn update_texture<T>(&mut self, &TextureHandle, &tex::ImageInfo, &Blob<T>)
-                      -> Result<(), tex::TextureError>;
+    fn update_texture_raw(&mut self, tex: &TextureHandle, img: &tex::ImageInfo,
+                          data: &Blob<()>) -> Result<(), tex::TextureError>;
+    fn update_texture<T>(&mut self, tex: &TextureHandle, img: &tex::ImageInfo,
+                      data: &Blob<T>) -> Result<(), tex::TextureError> {
+        self.update_texture_raw(tex, img, data.cast())
+    }
     /// Submit a command buffer for execution
     fn submit(&mut self, cb: &ActualCommandBuffer);
 }
