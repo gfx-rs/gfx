@@ -12,6 +12,8 @@ use glfw::Context;
 
 #[vertex_format]
 struct Vertex {
+    // The attributes in here should match up with the attribute/in arguments of
+    // the vertex shader.
     pos: [f32, ..2],
     color: [f32, ..3],
 }
