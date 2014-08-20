@@ -20,6 +20,8 @@ use glfw::Context;
 
 #[vertex_format]
 struct Vertex {
+    // The attributes in here should match up with the attribute/in arguments of
+    // the vertex shader.
     #[as_float]
     a_Pos: [i8, ..3],
     #[as_float]
