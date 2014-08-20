@@ -81,8 +81,8 @@ struct State {
 
 /// Backend extension trait for convenience methods
 pub trait DeviceHelper {
-    /// Create a new draw list
-    fn create_draw_list(&mut self) -> DrawList;
+    /// Create a new renderer
+    fn create_renderer(&mut self) -> Renderer;
     /// Create a new mesh from the given vertex data.
     /// Convenience function around `create_buffer` and `Mesh::from`.
     fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh;
@@ -101,8 +101,8 @@ pub trait DeviceHelper {
 }
 
 impl<D: device::Device> DeviceHelper for D {
-    fn create_draw_list(&mut self) -> DrawList {
-        DrawList {
+    fn create_renderer(&mut self) -> Renderer {
+        Renderer {
             buf: CommandBuffer::new(),
             common_array_buffer: self.create_array_buffer(),
             common_frame_buffer: self.create_frame_buffer(),
@@ -146,7 +146,7 @@ impl<D: device::Device> DeviceHelper for D {
 }
 
 /// Renderer front-end
-pub struct DrawList {
+pub struct Renderer {
     buf: device::ActualCommandBuffer,
     common_array_buffer: Result<device::ArrayBufferHandle, ()>,
     common_frame_buffer: device::FrameBufferHandle,
@@ -154,20 +154,20 @@ pub struct DrawList {
     state: State,
 }
 
-impl DrawList {
-    /// Reset all commands for draw list re-usal.
+impl Renderer {
+    /// Reset all commands for the command buffer re-usal.
     pub fn reset(&mut self) {
         self.buf.clear();
     }
 
-    /// Get the draw list to be submitted.
-    pub fn as_slice(&self) -> &device::ActualCommandBuffer {
+    /// Get a command buffer to be submitted
+    pub fn as_buffer(&self) -> &device::ActualCommandBuffer {
         &self.buf
     }
 
-    /// Clone the draw list shared data but ignore the commands
-    pub fn clone_empty(&self) -> DrawList {
-        DrawList {
+    /// Clone the renderer shared data but ignore the commands
+    pub fn clone_empty(&self) -> Renderer {
+        Renderer {
             buf: CommandBuffer::new(),
             common_array_buffer: self.common_array_buffer,
             common_frame_buffer: self.common_frame_buffer,
@@ -280,14 +280,14 @@ impl DrawList {
             self.buf.bind_frame_buffer(self.common_frame_buffer.get_name());
             for (i, (cur, new)) in self.state.frame.colors.iter().zip(frame.colors.iter()).enumerate() {
                 if *cur != *new {
-                    DrawList::bind_target(&mut self.buf, device::target::TargetColor(i as u8), *new);
+                    Renderer::bind_target(&mut self.buf, device::target::TargetColor(i as u8), *new);
                 }
             }
             if self.state.frame.depth != frame.depth {
-                DrawList::bind_target(&mut self.buf, device::target::TargetDepth, frame.depth);
+                Renderer::bind_target(&mut self.buf, device::target::TargetDepth, frame.depth);
             }
             if self.state.frame.stencil != frame.stencil {
-                DrawList::bind_target(&mut self.buf, device::target::TargetStencil, frame.stencil);
+                Renderer::bind_target(&mut self.buf, device::target::TargetStencil, frame.stencil);
             }
             self.state.frame = *frame;
         }

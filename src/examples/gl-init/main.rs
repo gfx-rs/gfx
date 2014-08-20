@@ -25,9 +25,9 @@ fn main() {
     let (w, h) = window.get_inner_size().unwrap();
 
     let mut device = gfx::GlDevice::new(|s| window.get_proc_address(s));
-    let mut list = device.create_draw_list();
+    let mut renderer = device.create_renderer();
 
-    list.clear(
+    renderer.clear(
         gfx::ClearData {
             color: Some(gfx::Color([0.3, 0.3, 0.3, 1.0])),
             depth: None,
@@ -45,7 +45,7 @@ fn main() {
                 _ => {},
             }
         }
-        device.submit(list.as_slice());
+        device.submit(renderer.as_buffer());
         window.swap_buffers();
     }
 }

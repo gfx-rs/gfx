@@ -82,7 +82,7 @@ fn main() {
     let frame = gfx::Frame::new(w as u16, h as u16);
 
     let mut device = gfx::GlDevice::new(|s| glfw.get_proc_address(s));
-    let mut list = device.create_draw_list();
+    let mut renderer = device.create_renderer();
 
     let state = gfx::DrawState::new();
     let vertex_data = vec![
@@ -94,7 +94,7 @@ fn main() {
     let program: gfx::shade::EmptyProgram = device.link_program(
         VERTEX_SRC.clone(), FRAGMENT_SRC.clone()).unwrap();
 
-    list.clear(
+    renderer.clear(
         gfx::ClearData {
             color: Some(gfx::Color([0.3, 0.3, 0.3, 1.0])),
             depth: None,
@@ -102,7 +102,7 @@ fn main() {
         },
         &frame
     );
-    list.draw(&mesh, mesh.get_slice(), &frame, &program, &state)
+    renderer.draw(&mesh, mesh.get_slice(), &frame, &program, &state)
         .unwrap();
 
     while !window.should_close() {
@@ -115,7 +115,7 @@ fn main() {
                 _ => {},
             }
         }
-        device.submit(list.as_slice());
+        device.submit(renderer.as_buffer());
         window.swap_buffers();
     }
 }
