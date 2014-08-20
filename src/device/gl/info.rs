@@ -98,9 +98,9 @@ impl fmt::Show for Version {
 
 /// Get a statically allocated string from the implementation using
 /// `glGetString`. Fails if it `GLenum` cannot be handled by the
-/// implementation's `gl::GetString` function.
-fn get_string(name: gl::types::GLenum) -> &'static str {
-    let ptr = gl::GetString(name) as *const i8;
+/// implementation's `gl.GetString` function.
+fn get_string(gl: &gl::Gl, name: gl::types::GLenum) -> &'static str {
+    let ptr = gl.GetString(name) as *const i8;
     if !ptr.is_null() {
         // This should be safe to mark as statically allocated because
         // GlGetString only returns static strings.
@@ -110,9 +110,9 @@ fn get_string(name: gl::types::GLenum) -> &'static str {
     }
 }
 
-fn get_uint(name: gl::types::GLenum) -> uint {
+fn get_uint(gl: &gl::Gl, name: gl::types::GLenum) -> uint {
     let mut value = 0 as gl::types::GLint;
-    unsafe { gl::GetIntegerv(name, &mut value) };
+    unsafe { gl.GetIntegerv(name, &mut value) };
     value as uint
 }
 
@@ -126,10 +126,10 @@ pub struct PlatformName {
 }
 
 impl PlatformName {
-    fn get() -> PlatformName {
+    fn get(gl: &gl::Gl) -> PlatformName {
         PlatformName {
-            vendor: get_string(gl::VENDOR),
-            renderer: get_string(gl::RENDERER),
+            vendor: get_string(gl, gl::VENDOR),
+            renderer: get_string(gl, gl::RENDERER),
         }
     }
 }
@@ -148,22 +148,22 @@ pub struct Info {
 }
 
 impl Info {
-    fn get() -> Info {
-        let platform_name = PlatformName::get();
-        let version = Version::parse(get_string(gl::VERSION)).unwrap();
-        let shading_language = Version::parse(get_string(gl::SHADING_LANGUAGE_VERSION)).unwrap();
+    fn get(gl: &gl::Gl) -> Info {
+        let platform_name = PlatformName::get(gl);
+        let version = Version::parse(get_string(gl, gl::VERSION)).unwrap();
+        let shading_language = Version::parse(get_string(gl, gl::SHADING_LANGUAGE_VERSION)).unwrap();
         let extensions = if version >= Version::new(3, 2, None, "") {
-            let num_exts = get_uint(gl::NUM_EXTENSIONS) as gl::types::GLuint;
+            let num_exts = get_uint(gl, gl::NUM_EXTENSIONS) as gl::types::GLuint;
             range(0, num_exts).map(|i| {
                 unsafe {
                     str::raw::c_str_to_static_slice(
-                        gl::GetStringi(gl::EXTENSIONS, i) as *const i8,
+                        gl.GetStringi(gl::EXTENSIONS, i) as *const i8,
                     )
                 }
             }).collect()
         } else {
             // Fallback
-            get_string(gl::EXTENSIONS).split(' ').collect()
+            get_string(gl, gl::EXTENSIONS).split(' ').collect()
         };
         Info {
             platform_name: platform_name,
@@ -191,13 +191,13 @@ fn to_shader_model(v: &Version) -> shade::ShaderModel {
 
 /// Load the information pertaining to the driver and the corresponding device
 /// capabilities.
-pub fn get() -> (Info, Capabilities) {
-    let info = Info::get();
+pub fn get(gl: &gl::Gl) -> (Info, Capabilities) {
+    let info = Info::get(gl);
     let caps = Capabilities {
         shader_model: to_shader_model(&info.shading_language),
-        max_draw_buffers: get_uint(gl::MAX_DRAW_BUFFERS),
-        max_texture_size: get_uint(gl::MAX_TEXTURE_SIZE),
-        max_vertex_attributes: get_uint(gl::MAX_VERTEX_ATTRIBS),
+        max_draw_buffers: get_uint(gl, gl::MAX_DRAW_BUFFERS),
+        max_texture_size: get_uint(gl, gl::MAX_TEXTURE_SIZE),
+        max_vertex_attributes: get_uint(gl, gl::MAX_VERTEX_ATTRIBS),
         uniform_block_supported: info.version >= Version::new(3, 1, None, "")
             || info.is_extension_supported("GL_ARB_uniform_buffer_object"),
         array_buffer_supported: info.version >= Version::new(3, 0, None, "")
