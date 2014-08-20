@@ -117,7 +117,7 @@ fn main() {
     let frame = gfx::Frame::new(w as u16, h as u16);
 
     let mut device = gfx::GlDevice::new(|s| glfw.get_proc_address(s));
-    let mut list = device.create_draw_list();
+    let mut renderer = device.create_renderer();
 
     let state = gfx::DrawState::new().depth(gfx::state::LessEqual, true);
 
@@ -219,8 +219,8 @@ fn main() {
             }
         }
         // render
-        list.reset();
-        list.clear(
+        renderer.reset();
+        renderer.clear(
             gfx::ClearData {
                 color: Some(gfx::Color([0.3, 0.3, 0.3, 1.0])),
                 depth: Some(1.0),
@@ -230,8 +230,8 @@ fn main() {
         );
         m_model.x.x = 1.0;
         data.u_ModelViewProj = m_viewproj.mul_m(&m_model).into_fixed();
-        list.draw(&mesh, slice, &frame, (&prog, &data), &state).unwrap();
-        device.submit(list.as_slice());
+        renderer.draw(&mesh, slice, &frame, (&prog, &data), &state).unwrap();
+        device.submit(renderer.as_buffer());
         window.swap_buffers();
     }
 }
