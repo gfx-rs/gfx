@@ -123,7 +123,7 @@ impl<D: device::Device> DeviceHelper for D {
             val as uint
         });
         let buf = self.create_buffer_static(&data);
-        mesh::Mesh::from::<T>(buf, nv as device::VertexCount)
+        mesh::Mesh::from::<T>(buf, nv as device::VertexCount, device::TriangleList)
     }
 
     fn link_program<L, T: ShaderParam<L>>(&mut self,

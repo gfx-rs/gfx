@@ -69,9 +69,9 @@ impl Mesh {
     }
 
     /// Create a new `Mesh` from a struct that implements `VertexFormat` and a buffer.
-    pub fn from<V: VertexFormat>(buf: d::BufferHandle<V>, nv: d::VertexCount) -> Mesh {
+    pub fn from<V: VertexFormat>(buf: d::BufferHandle<V>, nv: d::VertexCount, prim_type: d::PrimitiveType) -> Mesh {
         Mesh {
-            prim_type: d::TriangleList,
+            prim_type: prim_type,
             num_vertices: nv,
             attributes: VertexFormat::generate(None::<V>, buf.raw()),
         }
