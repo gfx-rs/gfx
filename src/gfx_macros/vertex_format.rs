@@ -86,7 +86,8 @@ fn find_modifier(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
 
 /// Find a `gfx::attrib::Type` that describes the given type identifier.
 fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
-               ty_ident: &ast::Ident, modifier: Option<Modifier>) -> Gc<ast::Expr> {
+               ty_ident: &ast::Ident, modifier: Option<Modifier>,
+               path_root: ast::Ident) -> Gc<ast::Expr> {
     let ty_str = ty_ident.name.as_str();
     match ty_str {
         "f32" | "f64" => {
@@ -101,8 +102,8 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 }
             });
             let sub_type = cx.ident_of(format!("F{}", ty_str.slice_from(1)).as_slice());
-            quote_expr!(cx, gfx::attrib::Float(gfx::attrib::$kind,
-                                               gfx::attrib::$sub_type))
+            quote_expr!(cx, $path_root::gfx::attrib::Float($path_root::gfx::attrib::$kind,
+                                                           $path_root::gfx::attrib::$sub_type))
         },
         "u8" | "u16" | "u32" | "u64" |
         "i8" | "i16" | "i32" | "i64" => {
@@ -121,9 +122,9 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 }
             });
             let sub_type = cx.ident_of(format!("U{}", ty_str.slice_from(1)).as_slice());
-            quote_expr!(cx, gfx::attrib::Int(gfx::attrib::$kind,
-                                             gfx::attrib::$sub_type,
-                                             gfx::attrib::$sign))
+            quote_expr!(cx, $path_root::gfx::attrib::Int($path_root::gfx::attrib::$kind,
+                                                         $path_root::gfx::attrib::$sub_type,
+                                                         $path_root::gfx::attrib::$sign))
         },
         "uint" | "int" => {
             cx.span_err(span, format!("Pointer-sized integer components are \
@@ -141,16 +142,17 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
 }
 
 fn decode_count_and_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
-                         field: &ast::StructField) -> (Gc<ast::Expr>, Gc<ast::Expr>) {
+                         field: &ast::StructField,
+                         path_root: ast::Ident) -> (Gc<ast::Expr>, Gc<ast::Expr>) {
     let modifier = find_modifier(cx, span, field.node.attrs.as_slice());
     match field.node.ty.node {
         ast::TyPath(ref p, _, _) => (
             cx.expr_lit(span, ast::LitInt(1, ast::UnsuffixedIntLit(ast::Plus))),
-            decode_type(cx, span, &p.segments[0].identifier, modifier),
+            decode_type(cx, span, &p.segments[0].identifier, modifier, path_root),
         ),
         ast::TyFixedLengthVec(pty, expr) => (expr, match pty.node {
             ast::TyPath(ref p, _, _) => {
-                decode_type(cx, span, &p.segments[0].identifier, modifier)
+                decode_type(cx, span, &p.segments[0].identifier, modifier, path_root)
             },
             _ => {
                 cx.span_err(span, format!("Unsupported fixed vector sub-type: \
@@ -168,28 +170,29 @@ fn decode_count_and_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
 
 /// Generates the the method body for `gfx::VertexFormat::generate`.
 fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
-                   substr: &generic::Substructure) -> Gc<ast::Expr> {
+                   substr: &generic::Substructure,
+                   path_root: ast::Ident) -> Gc<ast::Expr> {
     match *substr.fields {
         generic::StaticStruct(ref definition, generic::Named(ref fields)) => {
             let attribute_pushes = definition.fields.iter().zip(fields.iter())
                 .map(|(def, &(ident, _))| {
                     let struct_ident = substr.type_ident;
                     let buffer_expr = substr.nonself_args[1];
-                    let (count_expr, type_expr) = decode_count_and_type(cx, span, def);
+                    let (count_expr, type_expr) = decode_count_and_type(cx, span, def, path_root);
                     let ident_str = match super::find_name(cx, span, def.node.attrs.as_slice()) {
                         Some(name) => name,
                         None => token::get_ident(ident),
                     };
                     let ident_str = ident_str.get();
                     super::ugh(cx, |cx| quote_expr!(cx, {
-                        attributes.push(gfx::Attribute {
+                        attributes.push($path_root::gfx::Attribute {
                             buffer: $buffer_expr,
                             elem_count: $count_expr,
                             elem_type: $type_expr,
                             offset: unsafe {
-                                &(*(0u as *const $struct_ident)).$ident as *const _ as gfx::attrib::Offset
+                                &(*(0u as *const $struct_ident)).$ident as *const _ as $path_root::gfx::attrib::Offset
                             },
-                            stride: { use std::mem; mem::size_of::<$struct_ident>() as gfx::attrib::Stride },
+                            stride: { use std::mem; mem::size_of::<$struct_ident>() as $path_root::gfx::attrib::Stride },
                             name: $ident_str.to_string(),
                         });
                     }))
@@ -214,12 +217,18 @@ fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
 pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
               meta_item: Gc<ast::MetaItem>, item: Gc<ast::Item>,
               push: |Gc<ast::Item>|) {
+    // Insert the `gfx` reexport module
+    let path_root = super::extern_crate_hack(context, span, |i| push(i));
+    let fixup = |item| {
+        push(super::fixup_extern_crate_paths(item, path_root))
+    };
+
     // `impl gfx::VertexFormat for $item`
     generic::TraitDef {
         span: span,
         attributes: Vec::new(),
         path: generic::ty::Path {
-            path: vec!["gfx", "VertexFormat"],
+            path: vec![super::EXTERN_CRATE_HACK, "gfx", "VertexFormat"],
             lifetime: None,
             params: Vec::new(),
             global: true,
@@ -240,7 +249,7 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                         global: false,
                     }),
                     generic::ty::Literal(generic::ty::Path::new(
-                        vec!["gfx", "RawBufferHandle"]
+                        vec![super::EXTERN_CRATE_HACK, "gfx", "RawBufferHandle"]
                     )),
                 ],
                 ret_ty: generic::ty::Literal(
@@ -249,15 +258,16 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                         lifetime: None,
                         params: vec![
                             box generic::ty::Literal(generic::ty::Path::new(
-                                vec!["gfx", "Attribute"])),
+                                vec![super::EXTERN_CRATE_HACK, "gfx", "Attribute"])),
                         ],
                         global: false,
                     },
                 ),
                 attributes: Vec::new(),
                 // generate the method body
-                combine_substructure: generic::combine_substructure(method_body),
+                combine_substructure: generic::combine_substructure(
+                    |c, s, ss| method_body(c, s, ss, path_root)),
             },
         ],
-    }.expand(context, meta_item, item, push);
+    }.expand(context, meta_item, item, fixup);
 }

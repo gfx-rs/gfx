@@ -12,27 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate device;
-
-use gfx;
-
+// Test all features
 #[packed]
 #[vertex_format]
 struct MyVertex {
-     a0: [f32, ..2],
-     #[normalized]
-     a1: i16,
-     #[as_float]
-     a2: [i8, ..4],
-     #[as_double]
-     a3: f64,
-     #[name = "a_a4"]
-     a4: [f32, ..3],
+    a0: [f32, ..2],
+    #[normalized]
+    a1: i16,
+    #[as_float]
+    a2: [i8, ..4],
+    #[as_double]
+    a3: f64,
+    #[name = "a_a4"]
+    a4: [f32, ..3],
+}
+
+// Test that there are no conflicts between the two reexport modules
+#[packed]
+#[vertex_format]
+struct MyVertex2 {
+    a0: [f32, ..2],
 }
 
 #[test]
 fn test_vertex_format() {
-    use gfx::attrib as a;
+    use secret_lib::gfx::attrib as a;
+    use secret_lib::gfx;
+    use secret_lib::device;
 
     let buf = device::make_fake_buffer();
     let mesh = gfx::Mesh::from::<MyVertex>(buf, 0, gfx::TriangleList);
