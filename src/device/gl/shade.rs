@@ -17,14 +17,14 @@ use super::gl;
 use std::cell::Cell;
 use std::str::raw;
 
-pub fn create_shader(stage: s::Stage, data: s::ShaderSource, model: s::ShaderModel)
+pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: s::ShaderSource, model: s::ShaderModel)
         -> (Result<super::Shader, s::CreateShaderError>, Option<String>) {
     let target = match stage {
         s::Vertex => gl::VERTEX_SHADER,
         s::Geometry => gl::GEOMETRY_SHADER,
         s::Fragment => gl::FRAGMENT_SHADER,
     };
-    let name = gl::CreateShader(target);
+    let name = gl.CreateShader(target);
     let data = match data {
         s::ShaderSource { glsl_150: Some(ref s), .. } if model >= s::Model40 => s.as_slice(),
         s::ShaderSource { glsl_120: Some(ref s), .. } if model >= s::Model30 => s.as_slice(),
@@ -32,21 +32,21 @@ pub fn create_shader(stage: s::Stage, data: s::ShaderSource, model: s::ShaderMod
                      Some("[gfx-rs] No supported GLSL shader provided!".to_string())),
     };
     unsafe {
-        gl::ShaderSource(name, 1,
+        gl.ShaderSource(name, 1,
             &(data.as_ptr() as *const gl::types::GLchar),
             &(data.len() as gl::types::GLint));
     }
-    gl::CompileShader(name);
+    gl.CompileShader(name);
     info!("\tCompiled shader {}", name);
 
-    let status = get_shader_iv(name, gl::COMPILE_STATUS);
-    let mut length = get_shader_iv(name, gl::INFO_LOG_LENGTH);
+    let status = get_shader_iv(gl, name, gl::COMPILE_STATUS);
+    let mut length = get_shader_iv(gl, name, gl::INFO_LOG_LENGTH);
 
     let log = if length > 0 {
         let mut log = String::with_capacity(length as uint);
         log.grow(length as uint, '\0');
         unsafe {
-            gl::GetShaderInfoLog(name, length, &mut length,
+            gl.GetShaderInfoLog(name, length, &mut length,
                 log.as_slice().as_ptr() as *mut gl::types::GLchar);
         }
         log.truncate(length as uint);
@@ -64,15 +64,15 @@ pub fn create_shader(stage: s::Stage, data: s::ShaderSource, model: s::ShaderMod
     (name, log)
 }
 
-fn get_shader_iv(shader: super::Shader, query: gl::types::GLenum) -> gl::types::GLint {
+fn get_shader_iv(gl: &gl::Gl, shader: super::Shader, query: gl::types::GLenum) -> gl::types::GLint {
     let mut iv = 0;
-    unsafe { gl::GetShaderiv(shader, query, &mut iv) };
+    unsafe { gl.GetShaderiv(shader, query, &mut iv) };
     iv
 }
 
-fn get_program_iv(program: super::Program, query: gl::types::GLenum) -> gl::types::GLint {
+fn get_program_iv(gl: &gl::Gl, program: super::Program, query: gl::types::GLenum) -> gl::types::GLint {
     let mut iv = 0;
-    unsafe { gl::GetProgramiv(program, query, &mut iv) };
+    unsafe { gl.GetProgramiv(program, query, &mut iv) };
     iv
 }
 
@@ -144,9 +144,9 @@ impl StorageType {
     }
 }
 
-fn query_attributes(prog: super::Program) -> Vec<s::Attribute> {
-    let num = get_program_iv(prog, gl::ACTIVE_ATTRIBUTES);
-    let max_len = get_program_iv(prog, gl::ACTIVE_ATTRIBUTE_MAX_LENGTH);
+fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::Attribute> {
+    let num = get_program_iv(gl, prog, gl::ACTIVE_ATTRIBUTES);
+    let max_len = get_program_iv(gl, prog, gl::ACTIVE_ATTRIBUTE_MAX_LENGTH);
     let mut name = String::with_capacity(max_len as uint);
     name.grow(max_len as uint, '\0');
     range(0, num as gl::types::GLuint).map(|i| {
@@ -155,8 +155,8 @@ fn query_attributes(prog: super::Program) -> Vec<s::Attribute> {
         let mut storage = 0 as gl::types::GLenum;
         let loc = unsafe {
             let raw = name.as_slice().as_ptr() as *mut gl::types::GLchar;
-            gl::GetActiveAttrib(prog, i, max_len, &mut length, &mut size, &mut storage, raw);
-            gl::GetAttribLocation(prog, raw as *const gl::types::GLchar)
+            gl.GetActiveAttrib(prog, i, max_len, &mut length, &mut size, &mut storage, raw);
+            gl.GetAttribLocation(prog, raw as *const gl::types::GLchar)
         };
         let real_name = name.as_slice().slice_to(length as uint).to_string();
         let (base, container) = match StorageType::new(storage) {
@@ -177,9 +177,9 @@ fn query_attributes(prog: super::Program) -> Vec<s::Attribute> {
     }).collect()
 }
 
-fn query_blocks(caps: &::Capabilities, prog: super::Program) -> Vec<s::BlockVar> {
+fn query_blocks(gl: &gl::Gl, caps: &::Capabilities, prog: super::Program) -> Vec<s::BlockVar> {
     let num = if caps.uniform_block_supported {
-        get_program_iv(prog, gl::ACTIVE_UNIFORM_BLOCKS)
+        get_program_iv(gl, prog, gl::ACTIVE_UNIFORM_BLOCKS)
     } else {
         0
     };
@@ -188,10 +188,10 @@ fn query_blocks(caps: &::Capabilities, prog: super::Program) -> Vec<s::BlockVar>
         let mut tmp = 0;
         let mut usage = 0;
         unsafe {
-            gl::GetActiveUniformBlockiv(prog, i, gl::UNIFORM_BLOCK_NAME_LENGTH, &mut size);
+            gl.GetActiveUniformBlockiv(prog, i, gl::UNIFORM_BLOCK_NAME_LENGTH, &mut size);
             for (stage, &eval) in [gl::UNIFORM_BLOCK_REFERENCED_BY_VERTEX_SHADER,
                     gl::UNIFORM_BLOCK_REFERENCED_BY_FRAGMENT_SHADER].iter().enumerate() {
-                gl::GetActiveUniformBlockiv(prog, i, eval, &mut tmp);
+                gl.GetActiveUniformBlockiv(prog, i, eval, &mut tmp);
                 if tmp != 0 {usage |= 1<<stage;}
             }
         }
@@ -199,9 +199,9 @@ fn query_blocks(caps: &::Capabilities, prog: super::Program) -> Vec<s::BlockVar>
         name.grow(size as uint, '\0');
         let mut actual_name_size = 0;
         unsafe {
-            gl::GetActiveUniformBlockName(prog, i, size, &mut actual_name_size,
+            gl.GetActiveUniformBlockName(prog, i, size, &mut actual_name_size,
                 name.as_slice().as_ptr() as *mut gl::types::GLchar);
-            gl::GetActiveUniformBlockiv(prog, i, gl::UNIFORM_BLOCK_DATA_SIZE, &mut size);
+            gl.GetActiveUniformBlockiv(prog, i, gl::UNIFORM_BLOCK_DATA_SIZE, &mut size);
         }
         name.truncate(actual_name_size as uint);
         info!("\t\tBlock '{}' of size {}", name, size);
@@ -213,22 +213,22 @@ fn query_blocks(caps: &::Capabilities, prog: super::Program) -> Vec<s::BlockVar>
     }).collect()
 }
 
-fn query_parameters(caps: &::Capabilities, prog: super::Program) -> (Vec<s::UniformVar>, Vec<s::SamplerVar>) {
+fn query_parameters(gl: &gl::Gl, caps: &::Capabilities, prog: super::Program) -> (Vec<s::UniformVar>, Vec<s::SamplerVar>) {
     let mut uniforms = Vec::new();
     let mut textures = Vec::new();
-    let total_num = get_program_iv(prog, gl::ACTIVE_UNIFORMS);
+    let total_num = get_program_iv(gl, prog, gl::ACTIVE_UNIFORMS);
     let indices: Vec<_> = range(0, total_num as gl::types::GLuint).collect();
     let mut block_indices = Vec::from_elem(total_num as uint, -1 as gl::types::GLint);
     if caps.uniform_block_supported {
         unsafe {
-            gl::GetActiveUniformsiv(prog, total_num as gl::types::GLsizei,
+            gl.GetActiveUniformsiv(prog, total_num as gl::types::GLsizei,
                 indices.as_slice().as_ptr(), gl::UNIFORM_BLOCK_INDEX,
                 block_indices.as_mut_slice().as_mut_ptr());
         }
         //TODO: UNIFORM_IS_ROW_MAJOR
     }
     // prepare the name string
-    let max_len = get_program_iv(prog, gl::ACTIVE_UNIFORM_MAX_LENGTH);
+    let max_len = get_program_iv(gl, prog, gl::ACTIVE_UNIFORM_MAX_LENGTH);
     let mut name = String::with_capacity(max_len as uint);
     name.grow(max_len as uint, '\0');
     // walk the indices
@@ -238,8 +238,8 @@ fn query_parameters(caps: &::Capabilities, prog: super::Program) -> (Vec<s::Unif
         let mut storage = 0;
         let loc = unsafe {
             let raw = name.as_slice().as_ptr() as *mut gl::types::GLchar;
-            gl::GetActiveUniform(prog, i, max_len, &mut length, &mut size, &mut storage, raw);
-            gl::GetUniformLocation(prog, raw as *const gl::types::GLchar)
+            gl.GetActiveUniform(prog, i, max_len, &mut length, &mut size, &mut storage, raw);
+            gl.GetUniformLocation(prog, raw as *const gl::types::GLchar)
         };
         let real_name = name.as_slice().slice_to(length as uint).to_string();
         match StorageType::new(storage) {
@@ -270,23 +270,23 @@ fn query_parameters(caps: &::Capabilities, prog: super::Program) -> (Vec<s::Unif
     (uniforms, textures)
 }
 
-pub fn create_program(caps: &::Capabilities, shaders: &[::ShaderHandle])
+pub fn create_program(gl: &gl::Gl, caps: &::Capabilities, shaders: &[::ShaderHandle])
         -> (Result<::ProgramHandle, ()>, Option<String>) {
-    let name = gl::CreateProgram();
+    let name = gl.CreateProgram();
     for sh in shaders.iter() {
-        gl::AttachShader(name, sh.get_name());
+        gl.AttachShader(name, sh.get_name());
     }
-    gl::LinkProgram(name);
+    gl.LinkProgram(name);
     info!("\tLinked program {}", name);
 
     // get info message
-    let status = get_program_iv(name, gl::LINK_STATUS);
-    let mut length  = get_program_iv(name, gl::INFO_LOG_LENGTH);
+    let status = get_program_iv(gl, name, gl::LINK_STATUS);
+    let mut length  = get_program_iv(gl, name, gl::INFO_LOG_LENGTH);
     let log = if length > 0 {
         let mut log = String::with_capacity(length as uint);
         log.grow(length as uint, '\0');
         unsafe {
-            gl::GetProgramInfoLog(name, length, &mut length,
+            gl.GetProgramInfoLog(name, length, &mut length,
                 log.as_slice().as_ptr() as *mut gl::types::GLchar);
         }
         log.truncate(length as uint);
@@ -296,11 +296,11 @@ pub fn create_program(caps: &::Capabilities, shaders: &[::ShaderHandle])
     };
 
     let prog = if status != 0 {
-        let (uniforms, textures) = query_parameters(caps, name);
+        let (uniforms, textures) = query_parameters(gl, caps, name);
         let info = s::ProgramInfo {
-            attributes: query_attributes(name),
+            attributes: query_attributes(gl, name),
             uniforms: uniforms,
-            blocks: query_blocks(caps, name),
+            blocks: query_blocks(gl, caps, name),
             textures: textures,
         };
         Ok(::Handle(name, info))
@@ -311,21 +311,21 @@ pub fn create_program(caps: &::Capabilities, shaders: &[::ShaderHandle])
     (prog, log)
 }
 
-pub fn bind_uniform(loc: gl::types::GLint, uniform: s::UniformValue) {
+pub fn bind_uniform(gl: &gl::Gl, loc: gl::types::GLint, uniform: s::UniformValue) {
     match uniform {
-        s::ValueI32(val) => gl::Uniform1i(loc, val),
-        s::ValueF32(val) => gl::Uniform1f(loc, val),
+        s::ValueI32(val) => gl.Uniform1i(loc, val),
+        s::ValueF32(val) => gl.Uniform1f(loc, val),
 
-        s::ValueI32Vector2(val) => unsafe { gl::Uniform2iv(loc, 1, val.as_ptr()) },
-        s::ValueI32Vector3(val) => unsafe { gl::Uniform3iv(loc, 1, val.as_ptr()) },
-        s::ValueI32Vector4(val) => unsafe { gl::Uniform4iv(loc, 1, val.as_ptr()) },
+        s::ValueI32Vector2(val) => unsafe { gl.Uniform2iv(loc, 1, val.as_ptr()) },
+        s::ValueI32Vector3(val) => unsafe { gl.Uniform3iv(loc, 1, val.as_ptr()) },
+        s::ValueI32Vector4(val) => unsafe { gl.Uniform4iv(loc, 1, val.as_ptr()) },
 
-        s::ValueF32Vector2(val) => unsafe { gl::Uniform2fv(loc, 1, val.as_ptr()) },
-        s::ValueF32Vector3(val) => unsafe { gl::Uniform3fv(loc, 1, val.as_ptr()) },
-        s::ValueF32Vector4(val) => unsafe { gl::Uniform4fv(loc, 1, val.as_ptr()) },
+        s::ValueF32Vector2(val) => unsafe { gl.Uniform2fv(loc, 1, val.as_ptr()) },
+        s::ValueF32Vector3(val) => unsafe { gl.Uniform3fv(loc, 1, val.as_ptr()) },
+        s::ValueF32Vector4(val) => unsafe { gl.Uniform4fv(loc, 1, val.as_ptr()) },
 
-        s::ValueF32Matrix2(val) => unsafe{ gl::UniformMatrix2fv(loc, 1, gl::FALSE, val[0].as_ptr()) },
-        s::ValueF32Matrix3(val) => unsafe{ gl::UniformMatrix3fv(loc, 1, gl::FALSE, val[0].as_ptr()) },
-        s::ValueF32Matrix4(val) => unsafe{ gl::UniformMatrix4fv(loc, 1, gl::FALSE, val[0].as_ptr()) },
+        s::ValueF32Matrix2(val) => unsafe{ gl.UniformMatrix2fv(loc, 1, gl::FALSE, val[0].as_ptr()) },
+        s::ValueF32Matrix3(val) => unsafe{ gl.UniformMatrix3fv(loc, 1, gl::FALSE, val[0].as_ptr()) },
+        s::ValueF32Matrix4(val) => unsafe{ gl.UniformMatrix4fv(loc, 1, gl::FALSE, val[0].as_ptr()) },
     }
 }

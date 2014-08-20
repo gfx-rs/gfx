@@ -16,8 +16,8 @@ use super::super::state as s;
 use super::super::target::{Color, Rect};
 use super::gl;
 
-pub fn bind_primitive(p: s::Primitive) {
-    gl::FrontFace(match p.front_face {
+pub fn bind_primitive(gl: &gl::Gl, p: s::Primitive) {
+    gl.FrontFace(match p.front_face {
         s::Clockwise => gl::CW,
         s::CounterClockwise => gl::CCW,
     });
@@ -25,38 +25,38 @@ pub fn bind_primitive(p: s::Primitive) {
     let (gl_draw, gl_offset) = match p.method {
         s::Point => (gl::POINT, gl::POLYGON_OFFSET_POINT),
         s::Line(width) => {
-            gl::LineWidth(width);
+            gl.LineWidth(width);
             (gl::LINE, gl::POLYGON_OFFSET_LINE)
         },
         s::Fill(cull) => {
             match cull {
-                s::CullNothing => gl::Disable(gl::CULL_FACE),
+                s::CullNothing => gl.Disable(gl::CULL_FACE),
                 s::CullFront => {
-                    gl::Enable(gl::CULL_FACE);
-                    gl::CullFace(gl::FRONT);
+                    gl.Enable(gl::CULL_FACE);
+                    gl.CullFace(gl::FRONT);
                 },
                 s::CullBack => {
-                    gl::Enable(gl::CULL_FACE);
-                    gl::CullFace(gl::BACK);
+                    gl.Enable(gl::CULL_FACE);
+                    gl.CullFace(gl::BACK);
                 },
             }
             (gl::FILL, gl::POLYGON_OFFSET_FILL)
         },
     };
 
-    gl::PolygonMode(gl::FRONT_AND_BACK, gl_draw);
+    gl.PolygonMode(gl::FRONT_AND_BACK, gl_draw);
 
     match p.offset {
         s::Offset(factor, units) => {
-            gl::Enable(gl_offset);
-            gl::PolygonOffset(factor, units as gl::types::GLfloat);
+            gl.Enable(gl_offset);
+            gl.PolygonOffset(factor, units as gl::types::GLfloat);
         },
-        s::NoOffset => gl::Disable(gl_offset),
+        s::NoOffset => gl.Disable(gl_offset),
     }
 }
 
-pub fn bind_viewport(rect: Rect) {
-    gl::Viewport(
+pub fn bind_viewport(gl: &gl::Gl, rect: Rect) {
+    gl.Viewport(
         rect.x as gl::types::GLint,
         rect.y as gl::types::GLint,
         rect.w as gl::types::GLint,
@@ -64,18 +64,18 @@ pub fn bind_viewport(rect: Rect) {
     );
 }
 
-pub fn bind_scissor(rect: Option<Rect>) {
+pub fn bind_scissor(gl: &gl::Gl, rect: Option<Rect>) {
     match rect {
         Some(r) => {
-            gl::Enable(gl::SCISSOR_TEST);
-            gl::Scissor(
+            gl.Enable(gl::SCISSOR_TEST);
+            gl.Scissor(
                 r.x as gl::types::GLint,
                 r.y as gl::types::GLint,
                 r.w as gl::types::GLint,
                 r.h as gl::types::GLint
             );
         },
-        None => gl::Disable(gl::SCISSOR_TEST),
+        None => gl.Disable(gl::SCISSOR_TEST),
     }
 }
 
@@ -92,14 +92,14 @@ fn map_comparison(cmp: s::Comparison) -> gl::types::GLenum {
     }
 }
 
-pub fn bind_depth(depth: Option<s::Depth>) {
+pub fn bind_depth(gl: &gl::Gl, depth: Option<s::Depth>) {
     match depth {
         Some(d) => {
-            gl::Enable(gl::DEPTH_TEST);
-            gl::DepthFunc(map_comparison(d.fun));
-            gl::DepthMask(if d.write {gl::TRUE} else {gl::FALSE});
+            gl.Enable(gl::DEPTH_TEST);
+            gl.DepthFunc(map_comparison(d.fun));
+            gl.DepthMask(if d.write {gl::TRUE} else {gl::FALSE});
         },
-        None => gl::Disable(gl::DEPTH_TEST),
+        None => gl.Disable(gl::DEPTH_TEST),
     }
 }
 
@@ -116,24 +116,24 @@ fn map_operation(op: s::StencilOp) -> gl::types::GLenum {
     }
 }
 
-pub fn bind_stencil(stencil: Option<s::Stencil>, cull: s::CullMode) {
-    fn bind_side(face: gl::types::GLenum, side: s::StencilSide) {
-        gl::StencilFuncSeparate(face, map_comparison(side.fun),
+pub fn bind_stencil(gl: &gl::Gl, stencil: Option<s::Stencil>, cull: s::CullMode) {
+    fn bind_side(gl: &gl::Gl, face: gl::types::GLenum, side: s::StencilSide) {
+        gl.StencilFuncSeparate(face, map_comparison(side.fun),
             side.value as gl::types::GLint, side.mask_read as gl::types::GLuint);
-        gl::StencilOpSeparate(face, map_operation(side.op_fail),
+        gl.StencilOpSeparate(face, map_operation(side.op_fail),
             map_operation(side.op_depth_fail), map_operation(side.op_pass));
     }
     match stencil {
         Some(s) => {
-            gl::Enable(gl::STENCIL_TEST);
+            gl.Enable(gl::STENCIL_TEST);
             if cull != s::CullFront {
-                bind_side(gl::FRONT, s.front);
+                bind_side(gl, gl::FRONT, s.front);
             }
             if cull != s::CullBack {
-                bind_side(gl::BACK, s.back);
+                bind_side(gl, gl::BACK, s.back);
             }
         }
-        None => gl::Disable(gl::STENCIL_TEST),
+        None => gl.Disable(gl::STENCIL_TEST),
     }
 }
 
@@ -169,32 +169,32 @@ fn map_factor(factor: s::Factor) -> gl::types::GLenum {
     }
 }
 
-pub fn bind_blend(blend: Option<s::Blend>) {
+pub fn bind_blend(gl: &gl::Gl, blend: Option<s::Blend>) {
     match blend {
         Some(b) => {
-            gl::Enable(gl::BLEND);
-            gl::BlendEquationSeparate(
+            gl.Enable(gl::BLEND);
+            gl.BlendEquationSeparate(
                 map_equation(b.color.equation),
-                map_equation(b.alpha.equation),
+                map_equation(b.alpha.equation)
             );
-            gl::BlendFuncSeparate(
+            gl.BlendFuncSeparate(
                 map_factor(b.color.source),
                 map_factor(b.color.destination),
                 map_factor(b.alpha.source),
-                map_factor(b.alpha.destination),
+                map_factor(b.alpha.destination)
             );
             let Color([r, g, b, a]) = b.value;
-            gl::BlendColor(r, g, b, a);
+            gl.BlendColor(r, g, b, a);
         },
-        None => gl::Disable(gl::BLEND),
+        None => gl.Disable(gl::BLEND),
     }
 }
 
-pub fn bind_color_mask(mask: s::ColorMask) {
-    gl::ColorMask(
+pub fn bind_color_mask(gl: &gl::Gl, mask: s::ColorMask) {
+    gl.ColorMask(
         if (mask & s::Red  ).is_empty() {gl::FALSE} else {gl::TRUE},
         if (mask & s::Green).is_empty() {gl::FALSE} else {gl::TRUE},
         if (mask & s::Blue ).is_empty() {gl::FALSE} else {gl::TRUE},
-        if (mask & s::Alpha).is_empty() {gl::FALSE} else {gl::TRUE},
+        if (mask & s::Alpha).is_empty() {gl::FALSE} else {gl::TRUE}
     );
 }
