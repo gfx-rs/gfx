@@ -85,7 +85,7 @@ pub trait DeviceHelper {
     fn create_renderer(&mut self) -> Renderer;
     /// Create a new mesh from the given vertex data.
     /// Convenience function around `create_buffer` and `Mesh::from`.
-    fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh;
+    fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>, prim_type: device::PrimitiveType) -> mesh::Mesh;
     /// Create a simple program given a vertex shader with a fragment one.
     /// The return type can not be derived from the arguments, so you need to
     /// provide it explicitly:
@@ -115,7 +115,7 @@ impl<D: device::Device> DeviceHelper for D {
         }
     }
 
-    fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh {
+    fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>, prim_type: device::PrimitiveType) -> mesh::Mesh {
         let nv = data.len();
         debug_assert!(nv < {
             use std::num::Bounded;
@@ -123,7 +123,7 @@ impl<D: device::Device> DeviceHelper for D {
             val as uint
         });
         let buf = self.create_buffer_static(&data);
-        mesh::Mesh::from::<T>(buf, nv as device::VertexCount, device::TriangleList)
+        mesh::Mesh::from::<T>(buf, nv as device::VertexCount, prim_type)
     }
 
     fn link_program<L, T: ShaderParam<L>>(&mut self,

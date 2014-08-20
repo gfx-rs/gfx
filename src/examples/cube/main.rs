@@ -154,7 +154,7 @@ fn main() {
         Vertex::new([ 1, -1, -1], [0, 1]),
     ];
 
-    let mesh = device.create_mesh(vertex_data);
+    let mesh = device.create_mesh(vertex_data, gfx::TriangleList);
 
     let slice = {
         let index_data = vec![
