@@ -76,6 +76,8 @@ pub enum ProgramError {
 }
 
 /// Graphics state
+#[allow(dead_code)]
+// This is going to be used to do minimal state transfers between draw calls. Not yet implemented!
 struct State {
     frame: target::Frame,
     draw_state: state::DrawState,
@@ -354,7 +356,7 @@ impl Renderer {
     fn bind_mesh(&mut self, mesh: &mesh::Mesh, info: &ProgramInfo)
                  -> Result<(), MeshError> {
         // It's Ok the array buffer is not supported. If so we just ignore it.
-        self.common_array_buffer.map(|ab| self.buf.bind_array_buffer(ab.get_name()));
+        self.common_array_buffer.map(|ab| self.buf.bind_array_buffer(ab.get_name())).is_ok();
         for sat in info.attributes.iter() {
             match mesh.attributes.iter().find(|a| a.name.as_slice() == sat.name.as_slice()) {
                 Some(vat) => match vat.elem_type.is_compatible(sat.base_type) {

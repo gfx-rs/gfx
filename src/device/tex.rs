@@ -56,7 +56,6 @@ pub enum Components {
 
 /// Describes the layout of each texel within a surface/texture.
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
-#[allow(non_camel_case_types)]
 pub enum Format {
     /// Floating point.
     Float(Components, ::attrib::FloatSize),
@@ -78,7 +77,7 @@ pub enum Format {
     /// 9 bits of precision, and they share a single exponent.
     RGB9E5,
     /// 24 bits for depth, 8 for stencil
-    DEPTH24_STENCIL8,
+    DEPTH24STENCIL8,
     // TODO: sRGB, compression
 }
 
