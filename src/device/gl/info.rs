@@ -181,11 +181,11 @@ impl Info {
 
 fn to_shader_model(v: &Version) -> shade::ShaderModel {
     match *v {
-        v if v < Version::new(1, 2, None, "") => shade::ModelUnsupported,
-        v if v < Version::new(1, 5, None, "") => shade::Model30,
-        v if v < Version::new(3, 0, None, "") => shade::Model40,
-        v if v < Version::new(4, 3, None, "") => shade::Model41,
-        _                                     => shade::Model50,
+        v if v < Version::new(1, 20, None, "") => shade::ModelUnsupported,
+        v if v < Version::new(1, 50, None, "") => shade::Model30,
+        v if v < Version::new(3,  0, None, "") => shade::Model40,
+        v if v < Version::new(4, 30, None, "") => shade::Model41,
+        _                                      => shade::Model50,
     }
 }
 
@@ -213,6 +213,8 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities) {
 #[cfg(test)]
 mod tests {
     use super::Version;
+    use super::to_shader_model;
+    use shade;
 
     #[test]
     fn test_version_parse() {
@@ -220,12 +222,21 @@ mod tests {
         assert_eq!(Version::parse("1."), Err("1."));
         assert_eq!(Version::parse("1 h3l1o. W0rld"), Err("1 h3l1o. W0rld"));
         assert_eq!(Version::parse("1. h3l1o. W0rld"), Err("1. h3l1o. W0rld"));
-        assert_eq!(Version::parse("1.2.3"), Ok(Version(1, 2, Some(3), "")));
-        assert_eq!(Version::parse("1.2"), Ok(Version(1, 2, None, "")));
-        assert_eq!(Version::parse("1.2 h3l1o. W0rld"), Ok(Version(1, 2, None, "h3l1o. W0rld")));
-        assert_eq!(Version::parse("1.2.h3l1o. W0rld"), Ok(Version(1, 2, None, "W0rld")));
-        assert_eq!(Version::parse("1.2. h3l1o. W0rld"), Ok(Version(1, 2, None, "h3l1o. W0rld")));
-        assert_eq!(Version::parse("1.2.3.h3l1o. W0rld"), Ok(Version(1, 2, Some(3), "W0rld")));
-        assert_eq!(Version::parse("1.2.3 h3l1o. W0rld"), Ok(Version(1, 2, Some(3), "h3l1o. W0rld")));
+        assert_eq!(Version::parse("1.2.3"), Ok(Version::new(1, 2, Some(3), "")));
+        assert_eq!(Version::parse("1.2"), Ok(Version::new(1, 2, None, "")));
+        assert_eq!(Version::parse("1.2 h3l1o. W0rld"), Ok(Version::new(1, 2, None, "h3l1o. W0rld")));
+        assert_eq!(Version::parse("1.2.h3l1o. W0rld"), Ok(Version::new(1, 2, None, "W0rld")));
+        assert_eq!(Version::parse("1.2. h3l1o. W0rld"), Ok(Version::new(1, 2, None, "h3l1o. W0rld")));
+        assert_eq!(Version::parse("1.2.3.h3l1o. W0rld"), Ok(Version::new(1, 2, Some(3), "W0rld")));
+        assert_eq!(Version::parse("1.2.3 h3l1o. W0rld"), Ok(Version::new(1, 2, Some(3), "h3l1o. W0rld")));
+    }
+
+    #[test]
+    fn test_shader_model() {
+        assert_eq!(to_shader_model(&Version::parse("1.10").unwrap()), shade::ModelUnsupported);
+        assert_eq!(to_shader_model(&Version::parse("1.20").unwrap()), shade::Model30);
+        assert_eq!(to_shader_model(&Version::parse("1.50").unwrap()), shade::Model40);
+        assert_eq!(to_shader_model(&Version::parse("3.00").unwrap()), shade::Model41);
+        assert_eq!(to_shader_model(&Version::parse("4.30").unwrap()), shade::Model50);
     }
 }
