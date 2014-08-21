@@ -56,6 +56,7 @@ pub enum Components {
 
 /// Describes the layout of each texel within a surface/texture.
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+#[allow(non_camel_case_types)]
 pub enum Format {
     /// Floating point.
     Float(Components, ::attrib::FloatSize),

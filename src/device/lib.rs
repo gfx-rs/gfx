@@ -271,7 +271,7 @@ pub struct BufferInfo {
 /// such as OpenGL (prior to GLNG) and DirectX (prior to DX12)
 #[allow(missing_doc)]
 #[deriving(Show)]
-enum Command {
+pub enum Command {
     BindProgram(back::Program),
     BindArrayBuffer(back::ArrayBuffer),
     BindAttribute(AttributeSlot, back::Buffer, attrib::Count,

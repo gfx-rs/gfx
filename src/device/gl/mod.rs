@@ -22,8 +22,6 @@
 extern crate libc;
 
 use log;
-use std::{fmt, mem, str};
-use std::collections::HashSet;
 use super::attrib as a;
 use RefBlobCast;
 
