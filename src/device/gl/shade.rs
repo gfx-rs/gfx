@@ -14,8 +14,6 @@
 
 use super::super::shade as s;
 use super::gl;
-use std::cell::Cell;
-use std::str::raw;
 
 pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: s::ShaderSource, model: s::ShaderModel)
         -> (Result<super::Shader, s::CreateShaderError>, Option<String>) {
