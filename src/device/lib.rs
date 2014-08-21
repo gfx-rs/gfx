@@ -152,15 +152,16 @@ pub fn get_main_frame_buffer() -> FrameBufferHandle {
 
 /// Features that the device supports.
 #[deriving(Show)]
+#[allow(missing_doc)] // pretty self-explanatory fields!
 pub struct Capabilities {
-    shader_model: shade::ShaderModel,
-    max_draw_buffers : uint,
-    max_texture_size : uint,
-    max_vertex_attributes: uint,
-    uniform_block_supported: bool,
-    array_buffer_supported: bool,
-    sampler_objects_supported: bool,
-    immutable_storage_supported: bool,
+    pub shader_model: shade::ShaderModel,
+    pub max_draw_buffers : uint,
+    pub max_texture_size : uint,
+    pub max_vertex_attributes: uint,
+    pub uniform_block_supported: bool,
+    pub array_buffer_supported: bool,
+    pub sampler_objects_supported: bool,
+    pub immutable_storage_supported: bool,
 }
 
 /// A trait that slice-like types implement.
