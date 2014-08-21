@@ -19,7 +19,6 @@ use syntax::ext::deriving::generic;
 use syntax::{attr, codemap};
 use syntax::parse::token;
 
-
 enum ParamType {
     ParamUniform,
     ParamBlock,
@@ -64,8 +63,10 @@ fn is_field_used(field: &ast::StructField) -> bool {
 }
 
 /// Generates the the method body for `gfx::shade::ParamValues::create_link`
-fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span, substr: &generic::Substructure,
-                 link_name: &str) -> Gc<ast::Expr> {
+fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
+                 substr: &generic::Substructure,
+                 link_name: &str,
+                 path_root: ast::Ident) -> Gc<ast::Expr> {
     let link_ident = cx.ident_of(link_name);
     match *substr.fields {
         generic::StaticStruct(definition, generic::Named(ref fields)) => {
@@ -81,20 +82,20 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span, substr: &gene
                     //TODO: verify the type match
                     Ok(ParamUniform) => super::ugh(cx, |cx| quote_expr!(cx,
                         match $input.uniforms.iter().position(|u| u.name.as_slice() == $name) {
-                            Some(p) => p as gfx::shade::VarUniform,
-                            None => return Err(gfx::shade::ErrorUniform($name.to_string())),
+                            Some(p) => p as $path_root::gfx::shade::VarUniform,
+                            None => return Err($path_root::gfx::shade::ErrorUniform($name.to_string())),
                         }
                     )),
                     Ok(ParamBlock)   => super::ugh(cx, |cx| quote_expr!(cx,
                         match $input.blocks.iter().position(|b| b.name.as_slice() == $name) {
-                            Some(p) => p as gfx::shade::VarBlock,
-                            None => return Err(gfx::shade::ErrorBlock($name.to_string())),
+                            Some(p) => p as $path_root::gfx::shade::VarBlock,
+                            None => return Err($path_root::gfx::shade::ErrorBlock($name.to_string())),
                         }
                     )),
                     Ok(ParamTexture) => super::ugh(cx, |cx| quote_expr!(cx,
                         match $input.textures.iter().position(|t| t.name.as_slice() == $name) {
-                            Some(p) => p as gfx::shade::VarTexture,
-                            None => return Err(gfx::shade::ErrorTexture($name.to_string())),
+                            Some(p) => p as $path_root::gfx::shade::VarTexture,
+                            None => return Err($path_root::gfx::shade::ErrorTexture($name.to_string())),
                         }
                     )),
                     Err(_) => {
@@ -122,7 +123,9 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span, substr: &gene
 
 /// Generates the the method body for `gfx::shade::ParamValues::fill_params`
 fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
-               substr: &generic::Substructure, definition: Gc<ast::StructDef>)
+               substr: &generic::Substructure,
+               definition: Gc<ast::StructDef>,
+               path_root: ast::Ident)
                -> Gc<ast::Expr> {
     match *substr.fields {
         generic::Struct(ref fields) => {
@@ -159,6 +162,8 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 span,
                 ast::Inherited,
                 cx.path(span, vec![
+                    cx.ident_of("self"),
+                    path_root,
                     cx.ident_of("gfx"),
                     cx.ident_of("shade"),
                     cx.ident_of("ToUniform"),
@@ -175,7 +180,9 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
 
 /// A helper function that translates variable type (`i32`, `TextureHandle`, etc)
 /// into the corresponding shader var id type (`VarUniform`, `VarBlock`, or `VarTexture`)
-fn node_to_var_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span, node: &ast::Ty_) -> Gc<ast::Ty> {
+fn node_to_var_type(cx: &mut ext::base::ExtCtxt,
+                    span: codemap::Span, node: &ast::Ty_,
+                    path_root: ast::Ident) -> Gc<ast::Ty> {
     let id = match classify(node) {
         Ok(ParamUniform) => "VarUniform",
         Ok(ParamBlock)   => "VarBlock",
@@ -189,7 +196,8 @@ fn node_to_var_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span, node: &ast
             ""
         },
     };
-    cx.ty_path(cx.path_global(span, vec![
+    cx.ty_path(cx.path(span, vec![
+        path_root,
         cx.ident_of("gfx"),
         cx.ident_of("shade"),
         cx.ident_of(id),
@@ -210,6 +218,9 @@ fn copy_deriving(attribs: &[ast::Attribute]) -> Vec<ast::Attribute> {
 pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
               meta_item: Gc<ast::MetaItem>, item: Gc<ast::Item>,
               push: |Gc<ast::Item>|) {
+    // Insert the `gfx` reexport module
+    let path_root = super::extern_crate_hack(context, span, |i| push(i));
+
     // constructing the Link struct
     let (base_def, link_def) = match item.node {
         ast::ItemStruct(definition, ref generics) => {
@@ -223,7 +234,7 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                         node: ast::StructField_ {
                             kind: f.node.kind,
                             id: f.node.id,
-                            ty: node_to_var_type(context, f.span, &f.node.ty.node),
+                            ty: node_to_var_type(context, f.span, &f.node.ty.node, path_root),
                             attrs: Vec::new(),
                         },
                         span: f.span,
@@ -259,10 +270,11 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
     match meta_item.node {
         ast::MetaList(_, ref items) if items.len() == 1 => match items[0].deref().node {
             ast::MetaWord(ref shell_name) => {
-                // pub type $shell_ident = gfx::shade::UserProgram<$link_ident, $self_ident>
+                // pub type $shell_ident = hack::gfx::shade::UserProgram<$link_ident, $self_ident>
                 let path = context.ty_path(
-                    context.path_all(span, true,
+                    context.path_all(span, false,
                         vec![
+                            path_root,
                             context.ident_of("gfx"),
                             context.ident_of("shade"),
                             context.ident_of("UserProgram"),
@@ -300,10 +312,10 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
         span: span,
         attributes: Vec::new(),
         path: generic::ty::Path {
-            path: vec!["gfx", "shade", "ShaderParam"],
+            path: vec![super::EXTERN_CRATE_HACK, "gfx", "shade", "ShaderParam"],
             lifetime: None,
             params: vec![link_ty.clone()],
-            global: true,
+            global: false,
         },
         additional_bounds: Vec::new(),
         generics: generic::ty::LifetimeBounds::empty(),
@@ -321,7 +333,7 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                     }),
                     generic::ty::Ptr(
                         box generic::ty::Literal(generic::ty::Path::new(
-                            vec!["gfx", "ProgramInfo"])),
+                            vec![super::EXTERN_CRATE_HACK, "gfx", "ProgramInfo"])),
                         generic::ty::Borrowed(None, ast::MutImmutable)
                     ),
                 ],
@@ -332,7 +344,7 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                         params: vec![
                             link_ty.clone(),
                             box generic::ty::Literal(generic::ty::Path::new(
-                                vec!["gfx", "shade", "ParameterError"]
+                                vec![super::EXTERN_CRATE_HACK, "gfx", "shade", "ParameterError"]
                             ))
                         ],
                         global: false,
@@ -340,7 +352,7 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                 ),
                 attributes: Vec::new(),
                 combine_substructure: generic::combine_substructure(|cx, span, sub|
-                    method_create(cx, span, sub, link_name.as_slice())
+                    method_create(cx, span, sub, link_name.as_slice(), path_root)
                 ),
             },
             generic::MethodDef {
@@ -355,16 +367,19 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                         generic::ty::Borrowed(None, ast::MutImmutable)
                     ),
                     generic::ty::Literal(
-                        generic::ty::Path::new(vec!["gfx", "shade", "ParamValues"]),
+                        generic::ty::Path::new(vec![super::EXTERN_CRATE_HACK, "gfx", "shade", "ParamValues"]),
                     ),
                 ],
                 ret_ty: generic::ty::Tuple(Vec::new()),
                 attributes: Vec::new(),
                 combine_substructure: generic::combine_substructure(|cx, span, sub|
-                    method_fill(cx, span, sub, base_def)
+                    method_fill(cx, span, sub, base_def, path_root)
                 ),
             },
         ],
     };
-    trait_def.expand(context, meta_item, item, push);
+    let fixup = |item| {
+        push(super::fixup_extern_crate_paths(item, path_root))
+    };
+    trait_def.expand(context, meta_item, item, fixup);
 }

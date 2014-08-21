@@ -17,7 +17,14 @@
 
 #[phase(plugin)]
 extern crate gfx_macros;
-extern crate gfx;
 
+mod secret_lib {
+    extern crate gfx_ = "gfx";
+    extern crate device_ = "device";
+    pub use self::gfx_ as gfx;
+    pub use self::device_ as device;
+}
+
+pub mod shaders_macro;
 pub mod shader_param;
 pub mod vertex_format;
