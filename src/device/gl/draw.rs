@@ -111,14 +111,14 @@ impl ::draw::CommandBuffer for GlCommandBuffer {
         self.buf.push(::SetColorMask(mask));
     }
 
-    fn update_buffer<T>(&mut self, buf: super::Buffer, data: Box<::Blob<T> + Send>,
-                        usage: ::BufferUsage) {
-        self.buf.push(::UpdateBuffer(buf, data.cast(), usage));
+    fn update_buffer(&mut self, buf: super::Buffer, data: Box<::Blob<()> + Send>,
+                        offset_bytes: uint) {
+        self.buf.push(::UpdateBuffer(buf, data.cast(), offset_bytes));
     }
 
-    fn update_texture<T>(&mut self, kind: ::tex::TextureKind, tex: super::Texture,
-                      info: ::tex::ImageInfo, data: Box<::Blob<T> + Send>) {
-        self.buf.push(::UpdateTexture(kind, tex, info, data.cast()));
+    fn update_texture(&mut self, kind: ::tex::TextureKind, tex: super::Texture,
+                      info: ::tex::ImageInfo, data: Box<::Blob<()> + Send>) {
+        self.buf.push(::UpdateTexture(kind, tex, info, data));
     }
 
     fn call_clear(&mut self, data: ::target::ClearData) {

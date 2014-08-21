@@ -14,7 +14,9 @@
 
 //! Rendering front-end
 
+use std::mem::size_of;
 use device;
+use device::BoxBlobCast;
 use device::draw::CommandBuffer;
 use device::shade::{ProgramInfo, ShaderSource, Vertex, Fragment, CreateShaderError};
 use device::attrib::{U8, U16, U32};
@@ -229,29 +231,38 @@ impl Renderer {
 
     /// Update a buffer with data from a vector.
     pub fn update_buffer_vec<T: Send>(&mut self, buf: device::BufferHandle<T>,
-                             data: Vec<T>) {
+                             data: Vec<T>, offset_elements: uint) {
+        let esize = size_of::<T>();
+        let offset_bytes = esize * offset_elements;
+        debug_assert!(data.len() * esize + offset_bytes <= buf.get_info().size);
         self.buf.update_buffer(
             buf.get_name(),
-            (box data) as Box<device::Blob<T> + Send>,
-            buf.get_info().usage
+            ((box data) as Box<device::Blob<T> + Send>).cast(),
+            offset_bytes
         );
     }
 
     /// Update a buffer with data from a single type.
     pub fn update_buffer_struct<U, T: device::Blob<U>+Send>(&mut self,
                                 buf: device::BufferHandle<U>, data: T) {
+        debug_assert!(size_of::<T>() <= buf.get_info().size);
         self.buf.update_buffer(
             buf.get_name(),
-            (box data) as Box<device::Blob<U> + Send>,
-            buf.get_info().usage
+            ((box data) as Box<device::Blob<U> + Send>).cast(),
+            0
         );
     }
 
     /// Update the contents of a texture.
     pub fn update_texture<T: Send>(&mut self, tex: device::TextureHandle,
                                    img: device::tex::ImageInfo, data: Vec<T>) {
-        self.buf.update_texture(tex.get_info().kind, tex.get_name(), img,
-                                 (box data) as Box<device::Blob<T> + Send>);
+        debug_assert!(tex.get_info().contains(&img));
+        self.buf.update_texture(
+            tex.get_info().kind,
+            tex.get_name(),
+            img,
+            ((box data) as Box<device::Blob<T> + Send>).cast()
+        );
     }
 
     fn bind_target(buf: &mut device::ActualCommandBuffer,

@@ -292,7 +292,7 @@ enum Command {
     SetDepthStencilState(Option<state::Depth>, Option<state::Stencil>, state::CullMode),
     SetBlendState(Option<state::Blend>),
     SetColorMask(state::ColorMask),
-    UpdateBuffer(back::Buffer, Box<Blob<()> + Send>, BufferUsage),
+    UpdateBuffer(back::Buffer, Box<Blob<()> + Send>, uint),
     UpdateTexture(tex::TextureKind, back::Texture, tex::ImageInfo, Box<Blob<()> + Send>),
     // drawing
     Clear(target::ClearData),
@@ -332,9 +332,9 @@ pub trait Device {
     fn delete_texture(&mut self, TextureHandle);
     fn delete_sampler(&mut self, SamplerHandle);
     /// Update the information stored in a specific buffer
-    fn update_buffer_raw(&mut self, buf: BufferHandle<()>, data: &Blob<()>);
-    fn update_buffer<T>(&mut self, buf: BufferHandle<T>, data: &Blob<T>) {
-        self.update_buffer_raw(buf.cast(), data.cast());
+    fn update_buffer_raw(&mut self, buf: BufferHandle<()>, data: &Blob<()>, offset_bytes: uint);
+    fn update_buffer<T>(&mut self, buf: BufferHandle<T>, data: &Blob<T>, offset_elements: uint) {
+        self.update_buffer_raw(buf.cast(), data.cast(), size_of::<T>() * offset_elements);
     }
     /// Update the information stored in a texture
     fn update_texture_raw(&mut self, tex: &TextureHandle, img: &tex::ImageInfo,

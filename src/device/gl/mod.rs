@@ -48,19 +48,6 @@ pub type Surface        = gl::types::GLuint;
 pub type Sampler        = gl::types::GLuint;
 pub type Texture        = gl::types::GLuint;
 
-struct AllocBlob(uint);
-
-impl ::Blob<()> for AllocBlob {
-    fn get_address(&self) -> uint {
-        0
-    }
-
-    fn get_size(&self) -> uint {
-        let AllocBlob(size) = *self;
-        size
-    }
-}
-
 #[deriving(Eq, PartialEq, Show)]
 pub enum ErrorType {
     InvalidEnum,
@@ -153,18 +140,30 @@ impl GlDevice {
         name
     }
 
-    fn update_buffer_internal(&mut self, buffer: Buffer, data: &::Blob<()>,
-                              usage: ::BufferUsage) {
+    fn init_buffer(&mut self, buffer: Buffer, info: &::BufferInfo) {
         self.gl.BindBuffer(gl::ARRAY_BUFFER, buffer);
-        let size = data.get_size() as gl::types::GLsizeiptr;
-        let raw = data.get_address() as *const gl::types::GLvoid;
-        let usage = match usage {
+        let usage = match info.usage {
             ::UsageStatic  => gl::STATIC_DRAW,
             ::UsageDynamic => gl::DYNAMIC_DRAW,
             ::UsageStream  => gl::STREAM_DRAW,
         };
         unsafe {
-            self.gl.BufferData(gl::ARRAY_BUFFER, size, raw, usage);
+            self.gl.BufferData(gl::ARRAY_BUFFER,
+                info.size as gl::types::GLsizeiptr,
+                0 as *const gl::types::GLvoid,
+                usage
+            );
+        }
+    }
+
+    fn update_sub_buffer(&mut self, buffer: Buffer, data: &::Blob<()>, offset: uint) {
+        self.gl.BindBuffer(gl::ARRAY_BUFFER, buffer);
+        unsafe {
+            self.gl.BufferSubData(gl::ARRAY_BUFFER,
+                offset as gl::types::GLintptr,
+                data.get_size() as gl::types::GLsizeiptr,
+                data.get_address() as *const gl::types::GLvoid
+            );
         }
     }
 
@@ -282,7 +281,7 @@ impl GlDevice {
                 shade::bind_uniform(&self.gl, loc as gl::types::GLint, uniform);
             },
             ::BindTexture(slot, kind, texture, sampler) => {
-                let anchor = tex::bind_texture(&self.gl, 
+                let anchor = tex::bind_texture(&self.gl,
                     gl::TEXTURE0 + slot as gl::types::GLenum,
                     kind, texture);
                 match sampler {
@@ -316,8 +315,8 @@ impl GlDevice {
             ::SetColorMask(mask) => {
                 state::bind_color_mask(&self.gl, mask);
             },
-            ::UpdateBuffer(buffer, ref data, usage) => {
-                self.update_buffer_internal(buffer, *data, usage);
+            ::UpdateBuffer(buffer, ref data, offset) => {
+                self.update_sub_buffer(buffer, *data, offset);
             },
             ::UpdateTexture(kind, texture, image_info, ref data) => {
                 match tex::update_texture(&self.gl, kind, texture, &image_info, *data) {
@@ -360,11 +359,11 @@ impl ::Device for GlDevice {
 
     fn create_buffer_raw(&mut self, size: uint, usage: ::BufferUsage) -> ::BufferHandle<()> {
         let name = self.create_buffer_internal();
-        self.update_buffer_internal(name, &AllocBlob(size), usage);
         let info = ::BufferInfo {
             usage: usage,
             size: size,
         };
+        self.init_buffer(name, &info);
         ::BufferHandle::from_raw(::Handle(name, info))
     }
 
@@ -374,7 +373,8 @@ impl ::Device for GlDevice {
             usage: ::UsageStatic,
             size: data.get_size(),
         };
-        self.update_buffer_internal(name, data.cast(), info.usage);
+        self.init_buffer(name, &info);
+        self.update_sub_buffer(name, data.cast(), 0);
         ::BufferHandle::from_raw(::Handle(name, info))
     }
 
@@ -480,9 +480,10 @@ impl ::Device for GlDevice {
         }
     }
 
-    fn update_buffer_raw(&mut self, buffer: ::BufferHandle<()>, data: &::Blob<()>) {
-        debug_assert_eq!(buffer.get_info().size, data.get_size());
-        self.update_buffer_internal(buffer.get_name(), data, buffer.get_info().usage)
+    fn update_buffer_raw(&mut self, buffer: ::BufferHandle<()>, data: &::Blob<()>,
+                         offset_bytes: uint) {
+        debug_assert!(offset_bytes + data.get_size() <= buffer.get_info().size);
+        self.update_sub_buffer(buffer.get_name(), data, offset_bytes);
     }
 
     fn update_texture_raw(&mut self, texture: &::TextureHandle, img: &::tex::ImageInfo,
