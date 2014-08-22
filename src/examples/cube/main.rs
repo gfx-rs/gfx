@@ -37,6 +37,10 @@ impl Vertex {
     }
 }
 
+// The shader_param attribute makes sure the following struct can be used to
+// pass parameters to a shader. Its argument is the name of the type that will
+// be generated to represent your the program. Search for link_program below, to
+// see how it's used.
 #[shader_param(MyProgram)]
 struct Params {
     u_ModelViewProj: [[f32, ..4], ..4],
