@@ -478,3 +478,9 @@ pub fn make_sampler(gl: &gl::Gl, info: &tex::SamplerInfo) -> Sampler {
 
     name
 }
+
+pub fn generate_mipmap(gl: &gl::Gl, kind: tex::TextureKind, name: Texture) {
+    let target = kind_to_gl(kind);
+    gl.BindTexture(target, name);
+    gl.GenerateMipmap(target);
+}

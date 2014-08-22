@@ -489,6 +489,10 @@ impl ::Device for GlDevice {
         tex::update_texture(&self.gl, texture.get_info().kind, texture.get_name(), img, data)
     }
 
+    fn generate_mipmap(&mut self, texture: &::TextureHandle) {
+        tex::generate_mipmap(&self.gl, texture.get_info().kind, texture.get_name());
+    }
+
     fn submit(&mut self, cb: &draw::GlCommandBuffer) {
         //TODO: clear state, when we have caching
         for com in cb.iter() {
