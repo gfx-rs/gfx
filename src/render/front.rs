@@ -44,7 +44,7 @@ pub enum ParameterError {
 #[deriving(Show)]
 pub enum MeshError {
     /// A required attribute was missing.
-    ErrorAttributeMissing,
+    ErrorAttributeMissing(String),
     /// An attribute's type from the vertex format differed from the type used in the shader.
     ErrorAttributeType,
 }
@@ -368,7 +368,7 @@ impl Renderer {
                     },
                     Err(_) => return Err(ErrorAttributeType)
                 },
-                None => return Err(ErrorAttributeMissing)
+                None => return Err(ErrorAttributeMissing(sat.name.clone()))
             }
         }
         Ok(())
