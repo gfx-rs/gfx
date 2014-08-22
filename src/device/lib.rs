@@ -205,6 +205,15 @@ impl<T: Send> Blob<T> for Vec<T> {
     }
 }
 
+impl<'a, T> Blob<T> for &'a [T] {
+    fn get_address(&self) -> uint {
+        self.as_ptr() as uint
+    }
+    fn get_size(&self) -> uint {
+        self.len() * size_of::<T>()
+    }
+}
+
 impl<T> fmt::Show for Box<Blob<T> + Send> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Blob({:#x}, {})", self.get_address(), self.get_size())
