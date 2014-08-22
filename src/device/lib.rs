@@ -344,6 +344,7 @@ pub trait Device {
                       data: &Blob<T>) -> Result<(), tex::TextureError> {
         self.update_texture_raw(tex, img, data.cast())
     }
+    fn generate_mipmap(&mut self, tex: &TextureHandle);
     /// Submit a command buffer for execution
     fn submit(&mut self, cb: &ActualCommandBuffer);
 }
