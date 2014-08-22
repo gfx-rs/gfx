@@ -159,11 +159,11 @@ pub struct TextureInfo {
     pub width: u16,
     pub height: u16,
     pub depth: u16,
-    /// Mipmap levels outside the range of `[lo, hi]` will never be used for
-    /// this texture. Defaults to `(0, -1)`, that is, every mipmap level
-    /// available. 0 is the base mipmap level, with the full-sized texture,
-    /// and every level after that shrinks each dimension by a factor of 2.
-    pub mipmap_range: (u8, u8),
+    /// Number of mipmap levels. Defaults to -1, which stands for unlimited.
+    /// Mipmap levels at equal or above `levels` can not be loaded or sampled
+    /// by the shader. width and height of each consecutive mipmap level is
+    /// halved, starting from level 0.
+    pub levels: u8,
     pub kind: TextureKind,
     pub format: Format,
 }
@@ -205,7 +205,7 @@ impl Default for TextureInfo {
             width: 0,
             height: 1,
             depth: 1,
-            mipmap_range: (0, -1),
+            levels: -1,
             kind: Texture2D,
             format: RGBA8,
         }
@@ -229,7 +229,7 @@ impl TextureInfo {
             height: self.height,
             depth: self.depth,
             format: self.format,
-            mipmap: self.mipmap_range.val0(),
+            mipmap: 0,
         }
     }
 
@@ -239,7 +239,7 @@ impl TextureInfo {
         self.height <= img.yoffset + img.height &&
         self.depth <= img.zoffset + img.depth &&
         self.format == img.format &&
-        self.mipmap_range.val0() <= img.mipmap && img.mipmap < self.mipmap_range.val1()
+        img.mipmap < self.levels
     }
 }
 
