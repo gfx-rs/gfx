@@ -37,7 +37,11 @@ impl Vertex {
     }
 }
 
-#[shader_param(Program)]
+// The shader_param attribute makes sure the following struct can be used to
+// pass parameters to a shader. Its argument is the name of the type that will
+// be generated to represent your the program. Search for link_program below, to
+// see how it's used.
+#[shader_param(MyProgram)]
 struct Params {
     u_ModelViewProj: [[f32, ..4], ..4],
     t_Color: gfx::shade::TextureParam,
@@ -189,7 +193,7 @@ fn main() {
     let sampler = device.create_sampler(gfx::tex::SamplerInfo::new(
         gfx::tex::Bilinear, gfx::tex::Clamp));
 
-    let prog: Program = device.link_program(VERTEX_SRC.clone(),
+    let prog: MyProgram = device.link_program(VERTEX_SRC.clone(),
         FRAGMENT_SRC.clone()).unwrap();
 
     let mut m_model = Matrix4::<f32>::identity();
