@@ -229,7 +229,7 @@ pub fn make_without_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
         }
     }
 
-    set_mipmap_range(gl, target, info.mipmap_range);
+    set_mipmap_range(gl, target, (0, info.levels));
 
     Ok(name)
 }
@@ -267,7 +267,7 @@ pub fn make_with_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
         tex::Texture1D => {
             gl.TexStorage1D(
                 target,
-                min(info.mipmap_range.val1(), mip_level1(info.width)),
+                min(info.levels, mip_level1(info.width)),
                 fmt,
                 info.width as GLsizei
             );
@@ -275,7 +275,7 @@ pub fn make_with_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
         tex::Texture1DArray => {
             gl.TexStorage2D(
                 target,
-                min(info.mipmap_range.val1(), mip_level1(info.width)),
+                min(info.levels, mip_level1(info.width)),
                 fmt,
                 info.width as GLsizei,
                 info.height as GLsizei
@@ -284,7 +284,7 @@ pub fn make_with_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
         tex::Texture2D => {
             gl.TexStorage2D(
                 target,
-                min(info.mipmap_range.val1(), mip_level2(info.width, info.height)),
+                min(info.levels, mip_level2(info.width, info.height)),
                 fmt,
                 info.width as GLsizei,
                 info.height as GLsizei
@@ -294,7 +294,7 @@ pub fn make_with_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
         tex::Texture2DArray => {
             gl.TexStorage3D(
                 target,
-                min(info.mipmap_range.val1(), mip_level2(info.width, info.height)),
+                min(info.levels, mip_level2(info.width, info.height)),
                 fmt,
                 info.width as GLsizei,
                 info.height as GLsizei,
@@ -304,7 +304,7 @@ pub fn make_with_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
         tex::Texture3D => {
             gl.TexStorage3D(
                 target,
-                min(info.mipmap_range.val1(), mip_level3(info.width, info.height, info.depth)),
+                min(info.levels, mip_level3(info.width, info.height, info.depth)),
                 fmt,
                 info.width as GLsizei,
                 info.height as GLsizei,
@@ -313,7 +313,7 @@ pub fn make_with_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
         },
     }
 
-    set_mipmap_range(gl, target, info.mipmap_range);
+    set_mipmap_range(gl, target, (0, info.levels));
 
     Ok(name)
 }

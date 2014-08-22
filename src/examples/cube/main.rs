@@ -176,7 +176,7 @@ fn main() {
         width: 1,
         height: 1,
         depth: 1,
-        mipmap_range: (0, 1),
+        levels: 1,
         kind: gfx::tex::Texture2D,
         format: gfx::tex::RGBA8,
     };

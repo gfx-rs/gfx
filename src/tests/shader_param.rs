@@ -15,7 +15,7 @@
 use secret_lib;
 
 // Test all features
-#[shader_param(MyShell)]
+#[shader_param(MyProgram)]
 struct MyParam {
     a: i32,
     b: [f32, ..4],
@@ -28,7 +28,7 @@ struct MyParam {
 }
 
 // Test that there are no conflicts between the two reexport modules
-#[shader_param(MyShell2)]
+#[shader_param(MyProgram2)]
 struct MyParam2 {
     a: i32,
     b: secret_lib::gfx::shade::TextureParam,
