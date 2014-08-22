@@ -52,7 +52,7 @@ impl Clone for Vertex {
     }
 }
 
-#[shader_param(Program)]
+#[shader_param(MyProgram)]
 struct Params {
     u_ModelViewProj: [[f32, ..4], ..4],
 }
@@ -160,7 +160,7 @@ fn main() {
     let mesh = device.create_mesh(vertex_data, gfx::TriangleList);
     let slice = mesh.get_slice();
 
-    let prog: Program = device.link_program(VERTEX_SRC.clone(),
+    let prog: MyProgram = device.link_program(VERTEX_SRC.clone(),
         FRAGMENT_SRC.clone()).unwrap();
 
     let mut data = Params {

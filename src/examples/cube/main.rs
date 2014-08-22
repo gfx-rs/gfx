@@ -37,7 +37,7 @@ impl Vertex {
     }
 }
 
-#[shader_param(Program)]
+#[shader_param(MyProgram)]
 struct Params {
     u_ModelViewProj: [[f32, ..4], ..4],
     t_Color: gfx::shade::TextureParam,
@@ -189,7 +189,7 @@ fn main() {
     let sampler = device.create_sampler(gfx::tex::SamplerInfo::new(
         gfx::tex::Bilinear, gfx::tex::Clamp));
 
-    let prog: Program = device.link_program(VERTEX_SRC.clone(),
+    let prog: MyProgram = device.link_program(VERTEX_SRC.clone(),
         FRAGMENT_SRC.clone()).unwrap();
 
     let mut m_model = Matrix4::<f32>::identity();
