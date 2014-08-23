@@ -12,31 +12,36 @@ use glfw::Context;
 
 #[vertex_format]
 struct Vertex {
-    // The attributes in here should match up with the attribute/in arguments of
-    // the vertex shader.
+    #[name = "a_Pos"]
     pos: [f32, ..2],
+
+    #[name = "a_Color"]
     color: [f32, ..3],
 }
 
 static VERTEX_SRC: gfx::ShaderSource = shaders! {
 GLSL_120: b"
     #version 120
-    attribute vec2 pos;
-    attribute vec3 color;
+
+    attribute vec2 a_Pos;
+    attribute vec3 a_Color;
     varying vec4 v_Color;
+
     void main() {
-        v_Color = vec4(color, 1.0);
-        gl_Position = vec4(pos, 0.0, 1.0);
+        v_Color = vec4(a_Color, 1.0);
+        gl_Position = vec4(a_Pos, 0.0, 1.0);
     }
 "
 GLSL_150: b"
     #version 150 core
-    in vec2 pos;
-    in vec3 color;
+
+    in vec2 a_Pos;
+    in vec3 a_Color;
     out vec4 v_Color;
+
     void main() {
-        v_Color = vec4(color, 1.0);
-        gl_Position = vec4(pos, 0.0, 1.0);
+        v_Color = vec4(a_Color, 1.0);
+        gl_Position = vec4(a_Pos, 0.0, 1.0);
     }
 "
 };
@@ -44,15 +49,19 @@ GLSL_150: b"
 static FRAGMENT_SRC: gfx::ShaderSource = shaders! {
 GLSL_120: b"
     #version 120
+
     varying vec4 v_Color;
+
     void main() {
         gl_FragColor = v_Color;
     }
 "
 GLSL_150: b"
     #version 150 core
+
     in vec4 v_Color;
     out vec4 o_Color;
+
     void main() {
         o_Color = v_Color;
     }
@@ -79,7 +88,8 @@ fn main() {
 
     window.make_current();
     glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
-    window.set_key_polling(true); // so we can quit when Esc is pressed
+    window.set_key_polling(true);
+
     let (w, h) = window.get_framebuffer_size();
     let frame = gfx::Frame::new(w as u16, h as u16);
 
@@ -87,15 +97,18 @@ fn main() {
     let mut renderer = device.create_renderer();
 
     let state = gfx::DrawState::new();
+
     let vertex_data = vec![
         Vertex { pos: [ -0.5, -0.5 ], color: [1.0, 0.0, 0.0] },
-        Vertex { pos: [ 0.5, -0.5 ], color: [0.0, 1.0, 0.0]  },
-        Vertex { pos: [ 0.0, 0.5 ], color: [0.0, 0.0, 1.0]  }
+        Vertex { pos: [  0.5, -0.5 ], color: [0.0, 1.0, 0.0] },
+        Vertex { pos: [  0.0,  0.5 ], color: [0.0, 0.0, 1.0] },
     ];
     let mesh = device.create_mesh(vertex_data);
     let slice = mesh.get_slice(gfx::TriangleList);
-    let program: gfx::shade::EmptyProgram = device.link_program(
-        VERTEX_SRC.clone(), FRAGMENT_SRC.clone()).unwrap();
+
+    let program: gfx::shade::EmptyProgram = device
+        .link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
+        .unwrap();
 
     renderer.clear(
         gfx::ClearData {
@@ -105,12 +118,11 @@ fn main() {
         },
         &frame
     );
-    renderer.draw(&mesh, slice, &frame, &program, &state)
-        .unwrap();
+
+    renderer.draw(&mesh, slice, &frame, &program, &state).unwrap();
 
     while !window.should_close() {
         glfw.poll_events();
-        // quit when Esc is pressed.
         for (_, event) in glfw::flush_messages(&events) {
             match event {
                 glfw::KeyEvent(glfw::KeyEscape, _, glfw::Press, _) =>
@@ -118,7 +130,9 @@ fn main() {
                 _ => {},
             }
         }
+
         device.submit(renderer.as_buffer());
+
         window.swap_buffers();
     }
 }
