@@ -164,7 +164,7 @@ fn main() {
                 color: calculate_color(h),
             }
         })
-        .triangluate()
+        .triangulate()
         .vertices()
         .collect();
 
