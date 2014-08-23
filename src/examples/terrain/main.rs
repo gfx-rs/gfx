@@ -161,8 +161,8 @@ fn main() {
         .collect();
 
 
-    let mesh = device.create_mesh(vertex_data, gfx::TriangleList);
-    let slice = mesh.get_slice();
+    let mesh = device.create_mesh(vertex_data);
+    let slice = mesh.get_slice(gfx::TriangleList);
 
     let prog: MyProgram = device.link_program(VERTEX_SRC.clone(),
         FRAGMENT_SRC.clone()).unwrap();

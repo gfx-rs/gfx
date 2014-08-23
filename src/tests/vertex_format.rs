@@ -41,7 +41,7 @@ fn test_vertex_format() {
     use secret_lib::device;
 
     let buf = device::make_fake_buffer();
-    let mesh = gfx::Mesh::from::<MyVertex>(buf, 0, gfx::TriangleList);
+    let mesh = gfx::Mesh::from::<MyVertex>(buf, 0);
     let stride = 34 as a::Stride;
 
     assert_eq!(mesh.attributes, vec![

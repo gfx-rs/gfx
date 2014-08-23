@@ -50,8 +50,6 @@ pub trait VertexFormat {
 /// Describes geometry to render.
 #[deriving(Clone, Show)]
 pub struct Mesh {
-    /// What primitives to form out of the vertex data.
-    pub prim_type: d::PrimitiveType,
     /// Number of vertices in the mesh.
     pub num_vertices: d::VertexCount,
     /// Vertex attributes to use.
@@ -62,44 +60,45 @@ impl Mesh {
     /// Create a new mesh, which is a `TriangleList` with no attributes and `nv` vertices.
     pub fn new(nv: d::VertexCount) -> Mesh {
         Mesh {
-            prim_type: d::TriangleList,
             num_vertices: nv,
             attributes: Vec::new(),
         }
     }
 
     /// Create a new `Mesh` from a struct that implements `VertexFormat` and a buffer.
-    pub fn from<V: VertexFormat>(buf: d::BufferHandle<V>, nv: d::VertexCount, prim_type: d::PrimitiveType) -> Mesh {
+    pub fn from<V: VertexFormat>(buf: d::BufferHandle<V>, nv: d::VertexCount) -> Mesh {
         Mesh {
-            prim_type: prim_type,
             num_vertices: nv,
             attributes: VertexFormat::generate(None::<V>, buf.raw()),
         }
     }
 
     /// Return a vertex slice of the whole mesh
-    pub fn get_slice(&self) -> Slice {
-        VertexSlice(0, self.num_vertices)
+    pub fn get_slice(&self, pt: d::PrimitiveType) -> Slice {
+        VertexSlice(pt, 0, self.num_vertices)
     }
 }
 
 /// Description of a subset of `Mesh` data to render.
+/// We provide a primitive type in a slice because it is how we interpret mesh
+/// contents. For example, we can have a `Point` typed vertex slice to do shape
+/// blending, while still rendereing it as an indexed `TriangleList`.
 #[deriving(Clone, Show)]
 pub enum Slice  {
     /// Render vertex data directly from the `Mesh`'s buffer, using only the vertices between the two
     /// endpoints.
-    VertexSlice(d::VertexCount, d::VertexCount),
+    VertexSlice(d::PrimitiveType, d::VertexCount, d::VertexCount),
     /// The `IndexSlice*` buffer contains a list of indices into the `Mesh` data, so every vertex
     /// attribute does not need to be duplicated, only its position in the `Mesh`.  For example,
     /// when drawing a square, two triangles are needed.  Using only `VertexSlice`, one would need
     /// 6 separate vertices, 3 for each triangle. However, two of the vertices will be identical,
     /// wasting space for the duplicated attributes.  Instead, the `Mesh` can store 4 vertices and
     /// an `IndexSlice8` can be used instead.
-    IndexSlice8(d::BufferHandle<u8>, d::IndexCount, d::IndexCount),
+    IndexSlice8(d::PrimitiveType, d::BufferHandle<u8>, d::IndexCount, d::IndexCount),
     /// As `IndexSlice8` but with `u16` indices
-    IndexSlice16(d::BufferHandle<u16>, d::IndexCount, d::IndexCount),
+    IndexSlice16(d::PrimitiveType, d::BufferHandle<u16>, d::IndexCount, d::IndexCount),
     /// As `IndexSlice8` but with `u32` indices
-    IndexSlice32(d::BufferHandle<u32>, d::IndexCount, d::IndexCount),
+    IndexSlice32(d::PrimitiveType, d::BufferHandle<u32>, d::IndexCount, d::IndexCount),
 }
 
 /// A slice of a mesh, with a given material.
