@@ -17,3 +17,6 @@ git = "https://github.com/bjz/glfw-rs.git"
 
 [dependencies.cgmath]
 git = "http://github.com/bjz/cgmath-rs"
+
+[dependencies.vertex]
+git = "https://github.com/csherratt/vertex-rs.git"

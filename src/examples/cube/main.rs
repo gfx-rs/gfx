@@ -8,12 +8,16 @@ extern crate gfx_macros;
 extern crate glfw;
 extern crate native;
 extern crate time;
+extern crate vertex;
 
 use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
 use gfx::{Device, DeviceHelper};
 use glfw::Context;
+use vertex::generators::Cube;
+use vertex::{Vertices, MapToVertices, Triangulate};
+use vertex::{Quad, Indexer, LruIndexer};
 
 #[vertex_format]
 struct Vertex {
@@ -24,6 +28,22 @@ struct Vertex {
     #[as_float]
     #[name = "a_TexCoord"]
     tex_coord: [u8, ..2],
+}
+
+impl Clone for Vertex {
+    fn clone(&self) -> Vertex {
+        Vertex {
+            pos: self.pos,
+            tex_coord: self.tex_coord
+        }
+    }
+}
+
+impl PartialEq for Vertex {
+    fn eq(&self, other: &Vertex) -> bool {
+        self.pos.as_slice() == other.pos.as_slice() &&
+        self.tex_coord.as_slice() == other.tex_coord.as_slice()
+    }
 }
 
 // The shader_param attribute makes sure the following struct can be used to
@@ -130,53 +150,31 @@ fn main() {
 
     let state = gfx::DrawState::new().depth(gfx::state::LessEqual, true);
 
-    let vertex_data = vec![
-        // top (0, 0, 1)
-        Vertex { pos: [-1, -1,  1], tex_coord: [0, 0] },
-        Vertex { pos: [ 1, -1,  1], tex_coord: [1, 0] },
-        Vertex { pos: [ 1,  1,  1], tex_coord: [1, 1] },
-        Vertex { pos: [-1,  1,  1], tex_coord: [0, 1] },
-        // bottom (0, 0, -1)
-        Vertex { pos: [ 1,  1, -1], tex_coord: [0, 0] },
-        Vertex { pos: [-1,  1, -1], tex_coord: [1, 0] },
-        Vertex { pos: [-1, -1, -1], tex_coord: [1, 1] },
-        Vertex { pos: [ 1, -1, -1], tex_coord: [0, 1] },
-        // right (1, 0, 0)
-        Vertex { pos: [ 1, -1, -1], tex_coord: [0, 0] },
-        Vertex { pos: [ 1,  1, -1], tex_coord: [1, 0] },
-        Vertex { pos: [ 1,  1,  1], tex_coord: [1, 1] },
-        Vertex { pos: [ 1, -1,  1], tex_coord: [0, 1] },
-        // left (-1, 0, 0)
-        Vertex { pos: [-1,  1,  1], tex_coord: [0, 0] },
-        Vertex { pos: [-1, -1,  1], tex_coord: [1, 0] },
-        Vertex { pos: [-1, -1, -1], tex_coord: [1, 1] },
-        Vertex { pos: [-1,  1, -1], tex_coord: [0, 1] },
-        // front (0, 1, 0)
-        Vertex { pos: [-1,  1, -1], tex_coord: [0, 0] },
-        Vertex { pos: [ 1,  1, -1], tex_coord: [1, 0] },
-        Vertex { pos: [ 1,  1,  1], tex_coord: [1, 1] },
-        Vertex { pos: [-1,  1,  1], tex_coord: [0, 1] },
-        // back (0, -1, 0)
-        Vertex { pos: [ 1, -1,  1], tex_coord: [0, 0] },
-        Vertex { pos: [-1, -1,  1], tex_coord: [1, 0] },
-        Vertex { pos: [-1, -1, -1], tex_coord: [1, 1] },
-        Vertex { pos: [ 1, -1, -1], tex_coord: [0, 1] },
-    ];
+    let mut vertex_data: Vec<Vertex> = Vec::new();
+    let index_data: Vec<u8> = {
+        let mut indexer = LruIndexer::new(8, |_, v| vertex_data.push(v));
+        Cube::new().map(|p| {
+            let (ax, ay, az) = p.x;
+            let (bx, by, bz) = p.y;
+            let (cx, cy, cz) = p.z;
+            let (dx, dy, dz) = p.w;
+
+            Quad::new(
+                Vertex {pos: [ax as i8, ay as i8, az as i8], tex_coord: [0, 0]},
+                Vertex {pos: [bx as i8, by as i8, bz as i8], tex_coord: [1, 0]},
+                Vertex {pos: [cx as i8, cy as i8, cz as i8], tex_coord: [1, 1]},
+                Vertex {pos: [dx as i8, dy as i8, dz as i8], tex_coord: [0, 1]}
+            )
+        }).vertex(|v| indexer.index(v) as u8)
+          .triangulate()
+          .vertices()
+          .collect()
+    };
 
     let mesh = device.create_mesh(vertex_data);
-
-    let index_data: Vec<u8> = vec![
-         0,  1,  2,  2,  3,  0, // top
-         4,  5,  6,  6,  7,  4, // bottom
-         8,  9, 10, 10, 11,  8, // right
-        12, 13, 14, 14, 16, 12, // left
-        16, 17, 18, 18, 19, 16, // front
-        20, 21, 22, 22, 23, 20, // back
-    ];
-
     let slice = {
         let buf = device.create_buffer_static(&index_data);
-        gfx::IndexSlice8(gfx::TriangleList, buf, 0, 36)
+        gfx::IndexSlice8(gfx::TriangleList, buf, 0, index_data.len() as u32)
     };
 
     let texture_info = gfx::tex::TextureInfo {
