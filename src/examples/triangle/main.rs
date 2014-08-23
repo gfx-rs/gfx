@@ -99,7 +99,7 @@ fn main() {
 
     renderer.clear(
         gfx::ClearData {
-            color: Some(gfx::Color([0.3, 0.3, 0.3, 1.0])),
+            color: Some([0.3, 0.3, 0.3, 1.0]),
             depth: None,
             stencil: None,
         },

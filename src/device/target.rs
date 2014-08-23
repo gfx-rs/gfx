@@ -37,47 +37,9 @@ pub struct Rect {
     pub h: u16,
 }
 
-/// A color with floating-point components. Used for `ClearData`.
-pub struct Color(pub [f32, ..4]);
+/// A color with floating-point components.
+pub type Color = [f32, ..4];
 
-// manual impls due to array...
-
-impl Color {
-    /// Returns black.
-    pub fn new() -> Color {
-        Color([0.0, 0.0, 0.0, 0.0])
-    }
-}
-
-impl Clone for Color {
-    fn clone(&self) -> Color {
-        let Color(ref x) = *self;
-        Color([x[0], x[1], x[2], x[3]])
-    }
-}
-
-impl PartialEq for Color {
-    fn eq(&self, other: &Color) -> bool {
-        let Color(ref x) = *self;
-        let Color(ref y) = *other;
-        x[0] == y[0] && x[1] == y[1] && x[2] == y[2] && x[3] == y[3]
-    }
-}
-
-impl fmt::Show for Color {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let Color([r,g,b,a]) = *self;
-        write!(f, "Color({}, {}, {}, {})", r, g, b, a)
-    }
-}
-
-impl default::Default for Color {
-    fn default() -> Color {
-        Color([0.0, 0.0, 0.0, 0.0])
-    }
-}
-
-#[deriving(Clone, Show)]
 /// How to clear a frame.
 pub struct ClearData {
     /// If set, the color buffer of the frame will be cleared to this.
@@ -86,6 +48,27 @@ pub struct ClearData {
     pub depth: Option<Depth>,
     /// If set, the stencil buffer of the frame will be cleared to this.
     pub stencil: Option<Stencil>,
+}
+
+impl Clone for ClearData {
+    fn clone(&self) -> ClearData {
+        ClearData {
+            color: self.color,
+            depth: self.depth,
+            stencil: self.stencil,
+        }
+    }
+}
+
+impl fmt::Show for ClearData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        try!(write!(f, "ClearData {{ color: "));
+        match self.color {
+            Some(ref c) => try!(write!(f, "Some({})", c.as_slice())),
+            None => try!(write!(f, "None")),
+        }
+        write!(f, ", depth: {}, stencil: {} }}", self.depth, self.stencil)
+    }
 }
 
 /// When rendering, each "output" of the fragment shader goes to a specific target. A `Plane` can

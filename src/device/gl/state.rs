@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use super::super::state as s;
-use super::super::target::{Color, Rect};
+use super::super::target::Rect;
 use super::gl;
 
 pub fn bind_primitive(gl: &gl::Gl, p: s::Primitive) {
@@ -183,7 +183,7 @@ pub fn bind_blend(gl: &gl::Gl, blend: Option<s::Blend>) {
                 map_factor(b.alpha.source),
                 map_factor(b.alpha.destination)
             );
-            let Color([r, g, b, a]) = b.value;
+            let [r, g, b, a] = b.value;
             gl.BlendColor(r, g, b, a);
         },
         None => gl.Disable(gl::BLEND),

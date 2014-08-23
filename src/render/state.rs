@@ -109,7 +109,7 @@ impl DrawState {
                     source: s::Factor(s::Inverse, s::Zero),
                     destination: s::Factor(s::Inverse, s::Zero),
                 },
-                value: Color::new(),
+                value: [0.0, 0.0, 0.0, 0.0],
             },
             BlendAlpha => s::Blend {
                 color: s::BlendChannel {
@@ -122,7 +122,7 @@ impl DrawState {
                     source: s::Factor(s::Inverse, s::Zero),
                     destination: s::Factor(s::Inverse, s::Zero),
                 },
-                value: Color::new(),
+                value: [0.0, 0.0, 0.0, 0.0],
             },
         });
         self

@@ -170,7 +170,7 @@ impl GlDevice {
             ::Clear(ref data) => {
                 let mut flags = match data.color {
                     //self.gl.ColorMask(gl::TRUE, gl::TRUE, gl::TRUE, gl::TRUE);
-                    Some(::target::Color([r,g,b,a])) => {
+                    Some([r, g, b, a]) => {
                         self.gl.ClearColor(r, g, b, a);
                         gl::COLOR_BUFFER_BIT
                     },
