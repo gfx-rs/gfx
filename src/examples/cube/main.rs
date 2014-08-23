@@ -10,7 +10,7 @@ extern crate native;
 extern crate time;
 
 use cgmath::FixedArray;
-use cgmath::{Matrix4, Point3, Vector3};
+use cgmath::{Matrix, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
 use gfx::{Device, DeviceHelper};
 use glfw::Context;
@@ -32,14 +32,8 @@ struct Vertex {
 // see how it's used.
 #[shader_param(MyProgram)]
 struct Params {
-    #[name = "u_Model"]
-    model: [[f32, ..4], ..4],
-
-    #[name = "u_View"]
-    view: [[f32, ..4], ..4],
-
-    #[name = "u_Proj"]
-    proj: [[f32, ..4], ..4],
+    #[name = "u_Transform"]
+    transform: [[f32, ..4], ..4],
 
     #[name = "t_Color"]
     color: gfx::shade::TextureParam,
@@ -53,13 +47,11 @@ GLSL_120: b"
     attribute vec2 a_TexCoord;
     varying vec2 v_TexCoord;
 
-    uniform mat4 u_Model;
-    uniform mat4 u_View;
-    uniform mat4 u_Proj;
+    uniform mat4 u_Transform;
 
     void main() {
         v_TexCoord = a_TexCoord;
-        gl_Position = u_Proj * u_View * u_Model * vec4(a_Pos, 1.0);
+        gl_Position = u_Transform * vec4(a_Pos, 1.0);
     }
 "
 GLSL_150: b"
@@ -69,13 +61,11 @@ GLSL_150: b"
     in vec2 a_TexCoord;
     out vec2 v_TexCoord;
 
-    uniform mat4 u_Model;
-    uniform mat4 u_View;
-    uniform mat4 u_Proj;
+    uniform mat4 u_Transform;
 
     void main() {
         v_TexCoord = a_TexCoord;
-        gl_Position = u_Proj * u_View * u_Model * vec4(a_Pos, 1.0);
+        gl_Position = u_Transform * vec4(a_Pos, 1.0);
     }
 "
 };
@@ -217,13 +207,11 @@ fn main() {
         &Point3::new(0f32, 0.0, 0.0),
         &Vector3::unit_z(),
     );
-
     let aspect = w as f32 / h as f32;
+    let proj = cgmath::perspective(cgmath::deg(45.0f32), aspect, 1.0, 10.0);
+
     let data = Params {
-        model: Matrix4::identity().into_fixed(),
-        view: view.mat.into_fixed(),
-        proj: cgmath::perspective(cgmath::deg(45.0f32), aspect,
-                                  1.0, 10.0).into_fixed(),
+        transform: proj.mul_m(&view.mat).into_fixed(),
         color: (texture, Some(sampler)),
     };
 
