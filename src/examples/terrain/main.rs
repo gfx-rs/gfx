@@ -8,7 +8,7 @@ extern crate gfx_macros;
 extern crate glfw;
 extern crate native;
 extern crate time;
-extern crate vertex;
+extern crate genmesh;
 extern crate noise;
 
 use cgmath::FixedArray;
@@ -16,8 +16,8 @@ use cgmath::{Matrix4, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
 use gfx::{Device, DeviceHelper};
 use glfw::Context;
-use vertex::{Vertices, MapToVertices, Triangulate};
-use vertex::generators::Plane;
+use genmesh::{Vertices, MapToVertices, Triangulate};
+use genmesh::generators::Plane;
 use time::precise_time_s;
 
 use noise::source::Perlin;
