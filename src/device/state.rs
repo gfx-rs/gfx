@@ -252,7 +252,6 @@ impl Default for BlendChannel {
 }
 
 #[allow(missing_doc)]
-#[deriving(Clone, PartialEq, Show)]
 pub struct Blend {
     pub color: BlendChannel,
     pub alpha: BlendChannel,
@@ -264,8 +263,33 @@ impl Default for Blend {
         Blend {
             color: Default::default(),
             alpha: Default::default(),
-            value: Default::default(),
+            value: [0.0, 0.0, 0.0, 0.0],
         }
+    }
+}
+
+impl PartialEq for Blend {
+    fn eq(&self, other: &Blend) -> bool {
+        self.color == other.color &&
+        self.alpha == other.alpha &&
+        self.value == other.value
+    }
+}
+
+impl Clone for Blend {
+    fn clone(&self) -> Blend {
+        Blend {
+            color: self.color.clone(),
+            alpha: self.alpha.clone(),
+            value: self.value,
+        }
+    }
+}
+
+impl fmt::Show for Blend {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Blend {{ color: {}, alpha: {}, value: {} }}",
+               self.color, self.alpha, self.value.as_slice())
     }
 }
 
