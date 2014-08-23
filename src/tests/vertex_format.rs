@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // Test all features
-#[packed]
+#[repr(packed)]
 #[vertex_format]
 struct MyVertex {
     a0: [f32, ..2],
@@ -28,7 +28,7 @@ struct MyVertex {
 }
 
 // Test that there are no conflicts between the two reexport modules
-#[packed]
+#[repr(packed)]
 #[vertex_format]
 struct MyVertex2 {
     a0: [f32, ..2],
