@@ -16,7 +16,7 @@ use cgmath::{Matrix, Matrix4, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
 use gfx::{Device, DeviceHelper};
 use glfw::Context;
-use vertex::{QuadPipeline, ToTriangles, TrianglePipeline};
+use vertex::{Vertices, MapToVertices, Triangulate};
 use vertex::generators::Plane;
 use time::precise_time_s;
 
@@ -151,12 +151,12 @@ fn main() {
     let noise = Perlin::new();
 
     let vertex_data: Vec<Vertex> = Plane::subdivide(128, 128)
-        .vertex(|vertex::Vector2([x, y])| {
+        .vertex(|(x, y)| {
             let h = noise.get(x, y, 0.)*32.;
             Vertex::new([-25. * x, 25.* y, h],
                          calculate_color(h))
         })
-        .to_triangles()
+        .triangluate()
         .vertices()
         .collect();
 
