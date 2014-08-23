@@ -160,7 +160,7 @@ fn main() {
         Vertex::new([ 1, -1, -1], [0, 1]),
     ];
 
-    let mesh = device.create_mesh(vertex_data, gfx::TriangleList);
+    let mesh = device.create_mesh(vertex_data);
 
     let slice = {
         let index_data = vec![
@@ -173,7 +173,7 @@ fn main() {
         ];
 
         let buf = device.create_buffer_static(&index_data);
-        gfx::IndexSlice8(buf, 0, 36)
+        gfx::IndexSlice8(gfx::TriangleList, buf, 0, 36)
     };
 
     let tinfo = gfx::tex::TextureInfo {

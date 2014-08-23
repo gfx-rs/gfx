@@ -89,7 +89,7 @@ pub trait DeviceHelper {
     fn create_renderer(&mut self) -> Renderer;
     /// Create a new mesh from the given vertex data.
     /// Convenience function around `create_buffer` and `Mesh::from`.
-    fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>, prim_type: device::PrimitiveType) -> mesh::Mesh;
+    fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh;
     /// Create a simple program given a vertex shader with a fragment one.
     /// The return type can not be derived from the arguments, so you need to
     /// provide it explicitly:
@@ -119,7 +119,7 @@ impl<D: device::Device> DeviceHelper for D {
         }
     }
 
-    fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>, prim_type: device::PrimitiveType) -> mesh::Mesh {
+    fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh {
         let nv = data.len();
         debug_assert!(nv < {
             use std::num::Bounded;
@@ -127,7 +127,7 @@ impl<D: device::Device> DeviceHelper for D {
             val as uint
         });
         let buf = self.create_buffer_static(&data);
-        mesh::Mesh::from::<T>(buf, nv as device::VertexCount, prim_type)
+        mesh::Mesh::from::<T>(buf, nv as device::VertexCount)
     }
 
     fn link_program<L, T: ShaderParam<L>>(&mut self,
@@ -210,24 +210,7 @@ impl Renderer {
             Ok(_) => (),
             Err(e) => return Err(ErrorMesh(e)),
         }
-        // draw
-        match slice {
-            mesh::VertexSlice(start, end) => {
-                self.buf.call_draw(mesh.prim_type, start, end);
-            },
-            mesh::IndexSlice8(buf, start, end) => {
-                self.buf.bind_index(buf.get_name());
-                self.buf.call_draw_indexed(mesh.prim_type, U8, start, end);
-            },
-            mesh::IndexSlice16(buf, start, end) => {
-                self.buf.bind_index(buf.get_name());
-                self.buf.call_draw_indexed(mesh.prim_type, U16, start, end);
-            },
-            mesh::IndexSlice32(buf, start, end) => {
-                self.buf.bind_index(buf.get_name());
-                self.buf.call_draw_indexed(mesh.prim_type, U32, start, end);
-            },
-        }
+        self.draw_slice(slice);
         Ok(())
     }
 
@@ -372,5 +355,25 @@ impl Renderer {
             }
         }
         Ok(())
+    }
+
+    fn draw_slice(&mut self, slice: mesh::Slice) {
+        match slice {
+            mesh::VertexSlice(prim_type, start, end) => {
+                self.buf.call_draw(prim_type, start, end);
+            },
+            mesh::IndexSlice8(prim_type, buf, start, end) => {
+                self.buf.bind_index(buf.get_name());
+                self.buf.call_draw_indexed(prim_type, U8, start, end);
+            },
+            mesh::IndexSlice16(prim_type, buf, start, end) => {
+                self.buf.bind_index(buf.get_name());
+                self.buf.call_draw_indexed(prim_type, U16, start, end);
+            },
+            mesh::IndexSlice32(prim_type, buf, start, end) => {
+                self.buf.bind_index(buf.get_name());
+                self.buf.call_draw_indexed(prim_type, U32, start, end);
+            },
+        }
     }
 }
