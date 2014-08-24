@@ -73,9 +73,31 @@ impl Mesh {
         }
     }
 
-    /// Return a vertex slice of the whole mesh
-    pub fn get_slice(&self, pt: d::PrimitiveType) -> Slice {
-        VertexSlice(pt, 0, self.num_vertices)
+    /// Return a slice of all the vertices in the mesh.
+    pub fn slice_all(&self, pt: d::PrimitiveType) -> Slice {
+        self.slice(pt, 0, self.num_vertices)
+    }
+
+    /// Return a slice from the specified index to the last vertex in the mesh.
+    pub fn slice_from(&self, pt: d::PrimitiveType, from: d::VertexCount) -> Slice {
+        self.slice(pt, from, self.num_vertices)
+    }
+
+    /// Return a slice from the first vertex to the specified index in the mesh.
+    pub fn slice_to(&self, pt: d::PrimitiveType, to: d::VertexCount) -> Slice {
+        self.slice(pt, 0, to)
+    }
+
+    /// Return a slice between the specified vertex indices.
+    pub fn slice(&self, pt: d::PrimitiveType, from: d::VertexCount, to: d::VertexCount) -> Slice {
+        assert!(to <= self.num_vertices);
+        assert!(from <= to);
+        unsafe { self.unchecked_slice(pt, from, to) }
+    }
+
+    /// Return a slice between the specified vertex indices without bounds checking.
+    pub unsafe fn unchecked_slice(&self, pt: d::PrimitiveType, from: d::VertexCount, to: d::VertexCount) -> Slice {
+        VertexSlice(pt, from, to)
     }
 }
 
