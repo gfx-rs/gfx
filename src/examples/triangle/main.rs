@@ -104,7 +104,7 @@ fn main() {
         Vertex { pos: [  0.0,  0.5 ], color: [0.0, 0.0, 1.0] },
     ];
     let mesh = device.create_mesh(vertex_data);
-    let slice = mesh.get_slice(gfx::TriangleList);
+    let slice = mesh.slice_all(gfx::TriangleList);
 
     let program: gfx::shade::EmptyProgram = device
         .link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())

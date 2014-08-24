@@ -170,7 +170,7 @@ fn main() {
 
 
     let mesh = device.create_mesh(vertex_data);
-    let slice = mesh.get_slice(gfx::TriangleList);
+    let slice = mesh.slice_all(gfx::TriangleList);
 
     let prog: MyProgram = device
         .link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
