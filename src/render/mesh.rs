@@ -100,12 +100,3 @@ pub enum Slice  {
     /// As `IndexSlice8` but with `u32` indices
     IndexSlice32(d::PrimitiveType, d::BufferHandle<u32>, d::IndexCount, d::IndexCount),
 }
-
-/// A slice of a mesh, with a given material.
-#[deriving(Clone, Show)]
-pub struct SubMesh {
-    /// `Mesh` this `SubMesh` was created from.
-    pub mesh: Mesh,
-    /// Slice of the mesh to use.
-    pub slice: Slice,
-}
