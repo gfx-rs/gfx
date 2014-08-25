@@ -18,7 +18,8 @@ use std::mem::size_of;
 use device;
 use device::BoxBlobCast;
 use device::draw::CommandBuffer;
-use device::shade::{ProgramInfo, ShaderSource, Vertex, Fragment, CreateShaderError};
+use device::shade::{ProgramInfo, UniformValue, ShaderSource,
+    Vertex, Fragment, CreateShaderError};
 use device::attrib::{U8, U16, U32};
 use mesh;
 use shade;
@@ -199,13 +200,7 @@ impl Renderer {
             Ok(_) => (),
             Err(e) => return Err(ErrorParameter(e)),
         }
-        // bind fixed-function states
-        self.buf.set_primitive(state.primitive);
-        self.buf.set_scissor(state.scissor);
-        self.buf.set_depth_stencil(state.depth, state.stencil,
-            state.primitive.get_cull_mode());
-        self.buf.set_blend(state.blend);
-        self.buf.set_color_mask(state.color_mask);
+        self.bind_state(state);
         // bind mesh data
         match self.bind_mesh(mesh, program.get_handle().get_info()) {
             Ok(_) => (),
@@ -213,6 +208,29 @@ impl Renderer {
         }
         self.draw_slice(slice);
         Ok(())
+    }
+
+    /// Draw a light batch using the `context`
+    pub fn draw_batch<L, T: ShaderParam<L>>(&mut self, b: &::batch::LightBatch<L, T>,
+                      frame: &target::Frame, ctx: &::batch::Context) {
+        self.bind_frame(frame);
+        let (mesh, program, state) = ctx.get(b);
+        // bind parameters
+        self.buf.bind_program(program.get_name());
+        let pinfo = program.get_info();
+        let mut uniforms = Vec::from_elem(pinfo.uniforms.len(), None);
+        let mut blocks   = Vec::from_elem(pinfo.blocks  .len(), None);
+        let mut textures = Vec::from_elem(pinfo.textures.len(), None);
+        b.fill_params(shade::ParamValues {
+            uniforms: uniforms.as_mut_slice(),
+            blocks: blocks.as_mut_slice(),
+            textures: textures.as_mut_slice(),
+        });
+        self.upload_parameters(program, uniforms, blocks, textures).unwrap();
+        // bind everything else and draw
+        self.bind_state(state);
+        self.bind_mesh(mesh, pinfo).unwrap();  //TODO: mesh link
+        self.draw_slice(b.slice);
     }
 
     /// Update a buffer with data from a vector.
@@ -290,6 +308,56 @@ impl Renderer {
         }
     }
 
+    fn bind_state(&mut self, state: &state::DrawState) {
+        self.buf.set_primitive(state.primitive);
+        self.buf.set_scissor(state.scissor);
+        self.buf.set_depth_stencil(state.depth, state.stencil,
+            state.primitive.get_cull_mode());
+        self.buf.set_blend(state.blend);
+        self.buf.set_color_mask(state.color_mask);
+    }
+
+    fn upload_parameters(&mut self, program: &device::ProgramHandle,
+                         uniforms: Vec<Option<UniformValue>>,
+                         blocks: Vec<Option<device::RawBufferHandle>>,
+                         textures: Vec<Option<shade::TextureParam>>)
+                         -> Result<(), ParameterError> {
+        // bind uniforms
+        for (var, option) in program.get_info().uniforms.iter()
+            .zip(uniforms.move_iter()) {
+            match option {
+                Some(v) => self.buf.bind_uniform(var.location, v),
+                None => return Err(ErrorParamUniform(var.name.clone())),
+            }
+        }
+        // bind uniform blocks
+        for (i, (var, option)) in program.get_info().blocks.iter()
+            .zip(blocks.move_iter()).enumerate() {
+            match option {
+                Some(buf) => self.buf.bind_uniform_block(
+                    program.get_name(),
+                    i as device::UniformBufferSlot,
+                    i as device::UniformBlockIndex,
+                    buf.get_name()
+                ),
+                None => return Err(ErrorParamBlock(var.name.clone())),
+            }
+        }
+        // bind textures and samplers
+        for (i, (var, option)) in program.get_info().textures.iter()
+            .zip(textures.move_iter()).enumerate() {
+            match option {
+                Some((tex, sampler)) => {
+                    self.buf.bind_uniform(var.location, device::shade::ValueI32(i as i32));
+                    self.buf.bind_texture(i as device::TextureSlot,
+                        tex.get_info().kind, tex.get_name(), sampler);
+                },
+                None => return Err(ErrorParamTexture(var.name.clone())),
+            }
+        }
+        Ok(())
+    }
+
     fn bind_program<P: Program>(&mut self, prog: P) -> Result<(), ParameterError> {
         let handle = prog.get_handle();
         self.buf.bind_program(handle.get_name());
@@ -304,37 +372,7 @@ impl Renderer {
             blocks: blocks.as_mut_slice(),
             textures: textures.as_mut_slice(),
         });
-        // bind uniforms
-        for (var, option) in pinfo.uniforms.iter().zip(uniforms.move_iter()) {
-            match option {
-                Some(v) => self.buf.bind_uniform(var.location, v),
-                None => return Err(ErrorParamUniform(var.name.clone())),
-            }
-        }
-        // bind uniform blocks
-        for (i, (var, option)) in pinfo.blocks.iter().zip(blocks.move_iter()).enumerate() {
-            match option {
-                Some(buf) => self.buf.bind_uniform_block(
-                    handle.get_name(),
-                    i as device::UniformBufferSlot,
-                    i as device::UniformBlockIndex,
-                    buf.get_name()
-                ),
-                None => return Err(ErrorParamBlock(var.name.clone())),
-            }
-        }
-        // bind textures and samplers
-        for (i, (var, option)) in pinfo.textures.iter().zip(textures.move_iter()).enumerate() {
-            match option {
-                Some((tex, sampler)) => {
-                    self.buf.bind_uniform(var.location, device::shade::ValueI32(i as i32));
-                    self.buf.bind_texture(i as device::TextureSlot,
-                        tex.get_info().kind, tex.get_name(), sampler);
-                },
-                None => return Err(ErrorParamTexture(var.name.clone())),
-            }
-        }
-        Ok(())
+        self.upload_parameters(handle, uniforms, blocks, textures)
     }
 
     fn bind_mesh(&mut self, mesh: &mesh::Mesh, info: &ProgramInfo)

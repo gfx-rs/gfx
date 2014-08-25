@@ -71,11 +71,26 @@ pub struct LightBatch<L, T> {
     state_id: Id<DrawState>,
 }
 
+impl<L, T: ShaderParam<L>> LightBatch<L, T> {
+    pub fn fill_params(&self, values: ::shade::ParamValues) {
+        self.param.fill_params(&self.param_link, values);
+    }
+}
+
 /// Factory of light batches
 pub struct Context {
     meshes: Array<Mesh>,
     programs: Array<ProgramHandle>,
     states: Array<DrawState>,
+}
+
+impl Context {
+    pub fn get<L, T>(&self, b: &LightBatch<L, T>)
+               -> (&Mesh, &ProgramHandle, &DrawState) {
+        (self.meshes.get(b.mesh_id),
+        self.programs.get(b.program_id),
+        self.states.get(b.state_id))
+    }
 }
 
 pub enum BatchError {
