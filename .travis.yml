@@ -39,10 +39,6 @@ install:
   - sudo make install
   - cd ..
 script:
-  - make all
-# - sh -c "sleep 5; xdotool key --window \"$(xdotool search --name Hello)\" Escape" &
-# - ./examples/main
+  - make travis
 after_script:
-  # the doc directory needs to be in the root for rust-ci
-  - mv target/doc doc
   - curl http://www.rust-ci.org/artifacts/put?t=$RUSTCI_TOKEN | sh

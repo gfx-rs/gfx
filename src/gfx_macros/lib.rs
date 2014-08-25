@@ -26,11 +26,11 @@
 extern crate rustc;
 extern crate syntax;
 
-use syntax::{ast, attr, ext, codemap, fold};
+use syntax::{ast, attr, ext, codemap};
 use syntax::ext::build::AstBuilder;
 use syntax::parse::token;
 use syntax::fold::Folder;
-use std::gc::{Gc, GC};
+use std::gc::Gc;
 
 pub mod shader_param;
 pub mod vertex_format;
@@ -135,7 +135,7 @@ struct ExternCrateHackFolder {
 
 impl Folder for ExternCrateHackFolder {
     fn fold_path(&mut self, p: &ast::Path) -> ast::Path {
-        let mut p = syntax::fold::noop_fold_path(p, self);
+        let p = syntax::fold::noop_fold_path(p, self);
         let needs_fix = p.segments.as_slice().get(0)
                          .map(|s| s.identifier.as_str() == EXTERN_CRATE_HACK)
                          .unwrap_or(false);
