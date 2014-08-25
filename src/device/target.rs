@@ -14,7 +14,7 @@
 
 //! Render target specification.
 
-use std::{default, fmt};
+use std::fmt;
 
 // TODO: Really tighten up the terminology here.
 
