@@ -1,51 +1,59 @@
-#![allow(dead_code)]
-#![allow(missing_doc)]
-#![allow(unused_variable)]
+// Copyright 2014 The Gfx-rs Developers.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! Batches are structures containing all the data required for the draw call,
+//! except for the target frame. Here we define the `Batch` trait as well as
+//! `LightBatch` and `HeavyBatch` implementations.
 
 use device::ProgramHandle;
 use mesh::{Mesh, Slice};
 use shade::{ParameterError, ShaderParam};
 use state::DrawState;
 
+struct MeshLink; //TODO
 
-/*-----------
-Needs:
-* light-weight, POD
-* self-contained, safe
-Variants:
-1. Include ProgramInfo (pod?)
-    1. Make it POD (how?)
-    2. Clone instead (no pod)
-2. Share ProgramInfo (no safe?)
-    - context is required
-    - also share the mesh
------------*/
-
-struct MeshLink;    //TODO
-
+/// An error occurring at batch creation
 #[deriving(Clone, Show)]
 pub enum BatchError {
+    /// Error connecting shader parameters
     ErrorParameters(ParameterError),
 }
 
+/// Abstract batch trait
 pub trait Batch {
+    /// Obtain information about the mesh, program, and state
     fn get_data(&self) -> (&Mesh, Slice, &ProgramHandle, &DrawState);
+    /// Fill shader parameter values
     fn fill_params(&self, ::shade::ParamValues);
 }
 
-/// Heavy Batch - self-contained
+/// Heavy Batch - self-contained, but has heap-allocated data
 pub struct HeavyBatch<L, T> {
     mesh: Mesh,
     mesh_link: MeshLink,
+    /// Mesh slice
     pub slice: Slice,
     program: ProgramHandle,
     param: T,
     param_link: L,
+    /// Draw state
     pub state: DrawState,
 }
 
 impl<L, T: ShaderParam<L>> HeavyBatch<L, T> {
-    fn new(mesh: Mesh, program: ProgramHandle, param: T, state: DrawState)
+    /// Create a new heavy batch
+    pub fn new(mesh: Mesh, program: ProgramHandle, param: T)
            -> Result<HeavyBatch<L, T>, BatchError> {
         let slice = mesh.get_slice(::device::TriangleList);
         let link = match ShaderParam::create_link(None::<T>, program.get_info()) {
@@ -75,17 +83,19 @@ impl<'a, L, T: ShaderParam<L>> Batch for &'a HeavyBatch<L, T> {
 }
 
 type Index = u16;
+
 struct Id<T>(Index);
+
 struct Array<T> {
     data: Vec<T>,
-    generation: u16,
+    //generation: u16,
 }
 
 impl<T> Array<T> {
     fn new() -> Array<T> {
         Array {
             data: Vec::new(),
-            generation: 0,
+            //generation: 0,
         }
     }
 
@@ -107,7 +117,7 @@ impl<T: Clone + PartialEq> Array<T> {
 }
 
 
-/// Light Batch - copyable and smaller
+/// Light Batch - copyable and smaller, but depends on the Context
 pub struct LightBatch<L, T> {
     mesh_id: Id<Mesh>,
     mesh_link: MeshLink,
@@ -117,7 +127,7 @@ pub struct LightBatch<L, T> {
     state_id: Id<DrawState>,
 }
 
-/// Factory of light batches
+/// Factory of light batches, requires to always be used with them.
 pub struct Context {
     meshes: Array<Mesh>,
     programs: Array<ProgramHandle>,
@@ -125,6 +135,7 @@ pub struct Context {
 }
 
 impl Context {
+    /// Create a new empty Context
     pub fn new() -> Context {
         Context {
             meshes: Array::new(),
@@ -135,6 +146,7 @@ impl Context {
 }
 
 impl Context {
+    /// Produce a new light batch
     pub fn batch<L, T: ShaderParam<L>>(&mut self, mesh: &Mesh, slice: Slice,
                 program: &ProgramHandle, state: &DrawState)
                 -> Result<LightBatch<L, T>, BatchError> {
