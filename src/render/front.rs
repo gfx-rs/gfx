@@ -24,7 +24,6 @@ use device::attrib::{U8, U16, U32};
 use batch::Batch;
 use mesh;
 use shade;
-use shade::{Program, ShaderParam};
 use state;
 use target;
 
@@ -175,27 +174,8 @@ impl Renderer {
         self.buf.call_clear(data);
     }
 
-    /// Draw `slice` of `mesh` into `frame`, using a program shell, and a given draw state.
-    pub fn draw<P: Copy + Program>(&mut self, mesh: &mesh::Mesh, slice: mesh::Slice,
-                frame: &target::Frame, program: P, state: &state::DrawState)
-                -> Result<(), DrawError> {
-        self.bind_frame(frame);
-        match self.bind_program(program) {
-            Ok(_) => (),
-            Err(e) => return Err(ErrorParameter(e)),
-        }
-        self.bind_state(state);
-        // bind mesh data
-        match self.bind_mesh(mesh, program.get_handle().get_info()) {
-            Ok(_) => (),
-            Err(e) => return Err(ErrorMesh(e)),
-        }
-        self.draw_slice(slice);
-        Ok(())
-    }
-
-    /// Draw a light batch using the `context`
-    pub fn draw_batch<B: Batch>(&mut self, batch: B, frame: &target::Frame) {
+    /// Draw a `batch` into the specified `frame`
+    pub fn draw<B: Batch>(&mut self, batch: B, frame: &target::Frame) {
         self.bind_frame(frame);
         let (mesh, slice, program, state) = batch.get_data();
         // bind parameters
@@ -339,23 +319,6 @@ impl Renderer {
             }
         }
         Ok(())
-    }
-
-    fn bind_program<P: Program>(&mut self, prog: P) -> Result<(), ParameterError> {
-        let handle = prog.get_handle();
-        self.buf.bind_program(handle.get_name());
-        let pinfo = handle.get_info();
-        // gather parameters
-        // this is a bit ugly, not sure how to make it more sound
-        let mut uniforms = Vec::from_elem(pinfo.uniforms.len(), None);
-        let mut blocks   = Vec::from_elem(pinfo.blocks  .len(), None);
-        let mut textures = Vec::from_elem(pinfo.textures.len(), None);
-        prog.fill_params(shade::ParamValues {
-            uniforms: uniforms.as_mut_slice(),
-            blocks: blocks.as_mut_slice(),
-            textures: textures.as_mut_slice(),
-        });
-        self.upload_parameters(handle, uniforms, blocks, textures)
     }
 
     fn bind_mesh(&mut self, mesh: &mesh::Mesh, info: &ProgramInfo)

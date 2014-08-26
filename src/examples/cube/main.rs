@@ -28,8 +28,8 @@ struct Vertex {
 
 // The shader_param attribute makes sure the following struct can be used to
 // pass parameters to a shader. Its argument is the name of the type that will
-// be generated to represent your the program. Search for MyBatch below, to see
-// how it's used.
+// be generated to represent your the program. Search for `MyBatch` below, to
+// see how it's used.
 #[shader_param(MyBatch)]
 struct Params {
     #[name = "u_Transform"]
@@ -234,7 +234,7 @@ fn main() {
 
         renderer.reset();
         renderer.clear(clear_data, &frame);
-        renderer.draw_batch((&batch, &data, &context), &frame);
+        renderer.draw((&batch, &data, &context), &frame);
         device.submit(renderer.as_buffer());
 
         window.swap_buffers();

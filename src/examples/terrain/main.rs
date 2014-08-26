@@ -226,7 +226,7 @@ fn main() {
 
         renderer.reset();
         renderer.clear(clear_data, &frame);
-        renderer.draw_batch((&batch, &data, &context), &frame);
+        renderer.draw((&batch, &data, &context), &frame);
         device.submit(renderer.as_buffer());
 
         window.swap_buffers();

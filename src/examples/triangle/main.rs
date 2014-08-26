@@ -120,7 +120,7 @@ fn main() {
         &frame
     );
 
-    renderer.draw_batch((&batch, &(), &context), &frame);
+    renderer.draw((&batch, &(), &context), &frame);
 
     while !window.should_close() {
         glfw.poll_events();

@@ -33,3 +33,8 @@ struct MyParam2 {
     a: i32,
     b: secret_lib::gfx::shade::TextureParam,
 }
+
+#[test]
+fn test_shader_param() {
+    //empty
+}

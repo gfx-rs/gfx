@@ -74,14 +74,6 @@ pub struct ParamValues<'a> {
     pub textures: &'a mut [Option<TextureParam>],
 }
 
-/// Encloses a shader program handle with its parameter
-pub trait Program {
-    /// Get the contained program handle
-    fn get_handle(&self) -> &ProgramHandle;
-    /// Get all the contained parameter values
-    fn fill_params(&self, ParamValues);
-}
-
 /// An error type on either the parameter storage or the program side
 #[deriving(Clone, PartialEq)]
 pub enum ParameterError {
@@ -148,74 +140,6 @@ impl ShaderParam<()> for () {
     }
 }
 
-/// A bundle that encapsulates a program and a custom user-provided
-/// structure containing the program parameters.
-/// # Type parameters:
-///
-/// * `L` - auto-generated structure that has a variable index for every field of T
-/// * `T` - user-provided structure containing actual parameter values
-pub struct UserProgram<L, T> {
-    /// Shader program handle
-    program: ProgramHandle,
-    /// Hidden link that provides parameter indices for user data
-    link: L,
-}
-
-impl<L: Copy, T> Clone for UserProgram<L, T> {
-    fn clone(&self) -> UserProgram<L, T> {
-        UserProgram {
-            program: self.program.clone(),
-            link: self.link,
-        }
-    }
-}
-
-impl<L, T: ShaderParam<L>> UserProgram<L, T> {
-    /// Connect a shader program with a parameter structure
-    pub fn connect(prog: ProgramHandle) ->
-                   Result<UserProgram<L, T>, ParameterError> {
-        ShaderParam::create_link(None::<T>, prog.get_info())
-            .map(|link| UserProgram {
-                program: prog.clone(),
-                link: link,
-        })
-    }
-}
-
-// Tuple of references `(&MyProgram, &Data)` is the standard way of providing
-// a program with its parameters for the draw call.
-
-impl<'a, L, T: ShaderParam<L>> Program for (&'a UserProgram<L, T>, &'a T) {
-    fn get_handle(&self) -> &ProgramHandle {
-        &self.val0().program
-    }
-
-    fn fill_params(&self, params: ParamValues) {
-        self.val1().fill_params(&self.val0().link, params);
-    }
-}
-
-
-pub type EmptyProgram = UserProgram<(), ()>;
-
-impl<'a> Program for &'a EmptyProgram {
-    fn get_handle(&self) -> &ProgramHandle {
-        &self.program
-    }
-
-    fn fill_params(&self, params: ParamValues) {
-        debug_assert!(
-            params.uniforms.is_empty() &&
-            params.blocks.is_empty() &&
-            params.textures.is_empty(),
-            "trying to bind a program handle that has uniforms;\n
-            please link with `DeviceHelper::link_program` instead,\n
-            or connect with `UserProgram::connect` after construction"
-        );
-    }
-}
-
-
 /// A named cell containing arbitrary value
 pub struct NamedCell<T> {
     /// Name
@@ -271,14 +195,9 @@ impl DictionaryProgram {
             data: data,
         })
     }
-}
 
-impl<'a> Program for &'a DictionaryProgram {
-    fn get_handle(&self) -> &ProgramHandle {
-        &self.program
-    }
-
-    fn fill_params(&self, params: ParamValues) {
+    /// Set the parameter values
+    pub fn fill_params(&self, params: ParamValues) {
         for (&id, var) in self.link.uniforms.iter().zip(params.uniforms.mut_iter()) {
             *var = Some(self.data.uniforms[id].value.get());
         }

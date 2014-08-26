@@ -41,6 +41,7 @@ pub trait Batch {
 /// Heavy Batch - self-contained, but has heap-allocated data
 pub struct HeavyBatch<L, T> {
     mesh: Mesh,
+    #[allow(dead_code)]
     mesh_link: MeshLink,
     /// Mesh slice
     pub slice: Slice,
@@ -117,9 +118,12 @@ impl<T: Clone + PartialEq> Array<T> {
 }
 
 
-/// Light Batch - copyable and smaller, but depends on the Context
+/// Light Batch - copyable and smaller, but depends on the `Context`.
+/// It has references to the resources (mesh, program, state), that are held
+/// by the context that created the batch, so these have to be used together.
 pub struct LightBatch<L, T> {
     mesh_id: Id<Mesh>,
+    #[allow(dead_code)]
     mesh_link: MeshLink,
     slice: Slice,
     program_id: Id<ProgramHandle>,
@@ -135,7 +139,7 @@ pub struct Context {
 }
 
 impl Context {
-    /// Create a new empty Context
+    /// Create a new empty `Context`
     pub fn new() -> Context {
         Context {
             meshes: Array::new(),

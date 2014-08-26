@@ -24,7 +24,7 @@
 #[phase(plugin, link)] extern crate log;
 extern crate device;
 
-/// Batch experiments
+/// Batches
 pub mod batch;
 /// Frontend
 pub mod front;
