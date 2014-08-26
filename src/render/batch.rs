@@ -23,6 +23,7 @@ Variants:
 
 struct MeshLink;    //TODO
 
+#[deriving(Clone, Show)]
 pub enum BatchError {
     ErrorParameters(ParameterError),
 }
@@ -107,7 +108,7 @@ impl<T: Clone + PartialEq> Array<T> {
 
 
 /// Light Batch - copyable and smaller
-pub struct LightBatch<L> {
+pub struct LightBatch<L, T> {
     mesh_id: Id<Mesh>,
     mesh_link: MeshLink,
     slice: Slice,
@@ -136,7 +137,7 @@ impl Context {
 impl Context {
     pub fn batch<L, T: ShaderParam<L>>(&mut self, mesh: &Mesh, slice: Slice,
                 program: &ProgramHandle, state: &DrawState)
-                -> Result<LightBatch<L>, BatchError> {
+                -> Result<LightBatch<L, T>, BatchError> {
         let link = match ShaderParam::create_link(None::<T>, program.get_info()) {
             Ok(l) => l,
             Err(e) => return Err(ErrorParameters(e))
@@ -152,7 +153,7 @@ impl Context {
     }
 }
 
-impl<'a, L, T: ShaderParam<L>> Batch for (&'a LightBatch<L>, &'a T, &'a Context) {
+impl<'a, L, T: ShaderParam<L>> Batch for (&'a LightBatch<L, T>, &'a T, &'a Context) {
     fn get_data(&self) -> (&Mesh, Slice, &ProgramHandle, &DrawState) {
         let (b, _, ctx) = *self;
         (ctx.meshes.get(b.mesh_id),

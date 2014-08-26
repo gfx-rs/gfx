@@ -266,18 +266,18 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
         vis: item.vis,
         span: span,
     });
-    // constructing the `UserProgram` typedef
+    // constructing the `LightBatch` typedef
     match meta_item.node {
         ast::MetaList(_, ref items) if items.len() == 1 => match items[0].deref().node {
             ast::MetaWord(ref shell_name) => {
-                // pub type $shell_ident = hack::gfx::shade::UserProgram<$link_ident, $self_ident>
+                // pub type $shell_ident = hack::gfx::batch::LightBatch<$link_ident, $self_ident>
                 let path = context.ty_path(
                     context.path_all(span, false,
                         vec![
                             path_root,
                             context.ident_of("gfx"),
-                            context.ident_of("shade"),
-                            context.ident_of("UserProgram"),
+                            context.ident_of("batch"),
+                            context.ident_of("LightBatch"),
                         ],
                         Vec::new(),
                         vec![

@@ -96,8 +96,6 @@ fn main() {
     let mut device = gfx::GlDevice::new(|s| glfw.get_proc_address(s));
     let mut renderer = device.create_renderer();
 
-    let state = gfx::DrawState::new();
-
     let vertex_data = vec![
         Vertex { pos: [ -0.5, -0.5 ], color: [1.0, 0.0, 0.0] },
         Vertex { pos: [  0.5, -0.5 ], color: [0.0, 1.0, 0.0] },
@@ -106,9 +104,12 @@ fn main() {
     let mesh = device.create_mesh(vertex_data);
     let slice = mesh.get_slice(gfx::TriangleList);
 
-    let program: gfx::shade::EmptyProgram = device
-        .link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
-        .unwrap();
+    let program = device.link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
+                        .unwrap();
+
+    let mut context = gfx::batch::Context::new();
+    let batch: gfx::batch::LightBatch<(), ()> = context.batch(&mesh, slice, &program,
+        &gfx::DrawState::new()).unwrap();
 
     renderer.clear(
         gfx::ClearData {
@@ -119,7 +120,7 @@ fn main() {
         &frame
     );
 
-    renderer.draw(&mesh, slice, &frame, &program, &state).unwrap();
+    renderer.draw_batch((&batch, &(), &context), &frame);
 
     while !window.should_close() {
         glfw.poll_events();
