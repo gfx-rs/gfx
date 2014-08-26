@@ -282,13 +282,8 @@ fn create_gbuffer(width: u16, height: u16, renderer: &mut gfx::GlDevice) -> (gfx
     let texture_color = renderer.create_texture(texture_info_float).unwrap();
     let texture_depth = renderer.create_texture(texture_info_depth).unwrap();
 
-    frame.colors = [
-        PlaneTexture(texture_color.get_name(), 0 as Level, None),
-        PlaneEmpty,
-        PlaneEmpty,
-        PlaneEmpty,
-    ];
-    frame.depth   = PlaneTexture(texture_depth.get_name(), 0, None);
-    frame.stencil = frame.depth;
+    frame.colors[0] = PlaneTexture(texture_color.get_name(), 0 as Level, None);
+    frame.depth     = PlaneTexture(texture_depth.get_name(), 0, None);
+
     (frame, texture_color)
 }
