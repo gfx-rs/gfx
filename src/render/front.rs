@@ -21,6 +21,7 @@ use device::draw::CommandBuffer;
 use device::shade::{ProgramInfo, UniformValue, ShaderSource,
     Vertex, Fragment, CreateShaderError};
 use device::attrib::{U8, U16, U32};
+use batch::Batch;
 use mesh;
 use shade;
 use shade::{Program, ShaderParam};
@@ -211,17 +212,16 @@ impl Renderer {
     }
 
     /// Draw a light batch using the `context`
-    pub fn draw_batch<L, T: ShaderParam<L>>(&mut self, b: &::batch::LightBatch<L, T>,
-                      frame: &target::Frame, ctx: &::batch::Context) {
+    pub fn draw_batch<B: Batch>(&mut self, batch: B, frame: &target::Frame) {
         self.bind_frame(frame);
-        let (mesh, program, state) = ctx.get(b);
+        let (mesh, slice, program, state) = batch.get_data();
         // bind parameters
         self.buf.bind_program(program.get_name());
         let pinfo = program.get_info();
         let mut uniforms = Vec::from_elem(pinfo.uniforms.len(), None);
         let mut blocks   = Vec::from_elem(pinfo.blocks  .len(), None);
         let mut textures = Vec::from_elem(pinfo.textures.len(), None);
-        b.fill_params(shade::ParamValues {
+        batch.fill_params(shade::ParamValues {
             uniforms: uniforms.as_mut_slice(),
             blocks: blocks.as_mut_slice(),
             textures: textures.as_mut_slice(),
@@ -230,7 +230,7 @@ impl Renderer {
         // bind everything else and draw
         self.bind_state(state);
         self.bind_mesh(mesh, pinfo).unwrap();  //TODO: mesh link
-        self.draw_slice(b.slice);
+        self.draw_slice(slice);
     }
 
     /// Update a buffer with data from a vector.

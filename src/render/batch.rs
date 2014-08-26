@@ -23,6 +23,15 @@ Variants:
 
 struct MeshLink;    //TODO
 
+pub enum BatchError {
+    ErrorParameters(ParameterError),
+}
+
+pub trait Batch {
+    fn get_data(&self) -> (&Mesh, Slice, &ProgramHandle, &DrawState);
+    fn fill_params(&self, ::shade::ParamValues);
+}
+
 /// Heavy Batch - self-contained
 pub struct HeavyBatch<L, T> {
     mesh: Mesh,
@@ -34,6 +43,36 @@ pub struct HeavyBatch<L, T> {
     pub state: DrawState,
 }
 
+impl<L, T: ShaderParam<L>> HeavyBatch<L, T> {
+    fn new(mesh: Mesh, program: ProgramHandle, param: T, state: DrawState)
+           -> Result<HeavyBatch<L, T>, BatchError> {
+        let slice = mesh.get_slice(::device::TriangleList);
+        let link = match ShaderParam::create_link(None::<T>, program.get_info()) {
+            Ok(l) => l,
+            Err(e) => return Err(ErrorParameters(e))
+        };
+        Ok(HeavyBatch {
+            mesh: mesh,
+            mesh_link: MeshLink,
+            slice: slice,
+            program: program,
+            param: param,
+            param_link: link,
+            state: DrawState::new(),
+        })
+    }
+}
+
+impl<'a, L, T: ShaderParam<L>> Batch for &'a HeavyBatch<L, T> {
+    fn get_data(&self) -> (&Mesh, Slice, &ProgramHandle, &DrawState) {
+        (&self.mesh, self.slice, &self.program, &self.state)
+    }
+
+    fn fill_params(&self, values: ::shade::ParamValues) {
+        self.param.fill_params(&self.param_link, values);
+    }
+}
+
 type Index = u16;
 struct Id<T>(Index);
 struct Array<T> {
@@ -42,6 +81,13 @@ struct Array<T> {
 }
 
 impl<T> Array<T> {
+    fn new() -> Array<T> {
+        Array {
+            data: Vec::new(),
+            generation: 0,
+        }
+    }
+
     fn get(&self, id: Id<T>) -> &T {
         let Id(i) = id;
         &self.data[i as uint]
@@ -61,20 +107,13 @@ impl<T: Clone + PartialEq> Array<T> {
 
 
 /// Light Batch - copyable and smaller
-pub struct LightBatch<L, T> {
+pub struct LightBatch<L> {
     mesh_id: Id<Mesh>,
     mesh_link: MeshLink,
-    pub slice: Slice,
+    slice: Slice,
     program_id: Id<ProgramHandle>,
-    pub param: T,
     param_link: L,
     state_id: Id<DrawState>,
-}
-
-impl<L, T: ShaderParam<L>> LightBatch<L, T> {
-    pub fn fill_params(&self, values: ::shade::ParamValues) {
-        self.param.fill_params(&self.param_link, values);
-    }
 }
 
 /// Factory of light batches
@@ -85,22 +124,19 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn get<L, T>(&self, b: &LightBatch<L, T>)
-               -> (&Mesh, &ProgramHandle, &DrawState) {
-        (self.meshes.get(b.mesh_id),
-        self.programs.get(b.program_id),
-        self.states.get(b.state_id))
+    pub fn new() -> Context {
+        Context {
+            meshes: Array::new(),
+            programs: Array::new(),
+            states: Array::new(),
+        }
     }
-}
-
-pub enum BatchError {
-    ErrorParameters(ParameterError),
 }
 
 impl Context {
     pub fn batch<L, T: ShaderParam<L>>(&mut self, mesh: &Mesh, slice: Slice,
-                program: &ProgramHandle, param: T, state: &DrawState)
-                -> Result<LightBatch<L, T>, BatchError> {
+                program: &ProgramHandle, state: &DrawState)
+                -> Result<LightBatch<L>, BatchError> {
         let link = match ShaderParam::create_link(None::<T>, program.get_info()) {
             Ok(l) => l,
             Err(e) => return Err(ErrorParameters(e))
@@ -110,9 +146,23 @@ impl Context {
             mesh_link: MeshLink,
             slice: slice,
             program_id: self.programs.find_or_insert(program),
-            param: param,
             param_link: link,
             state_id: self.states.find_or_insert(state),
         })
+    }
+}
+
+impl<'a, L, T: ShaderParam<L>> Batch for (&'a LightBatch<L>, &'a T, &'a Context) {
+    fn get_data(&self) -> (&Mesh, Slice, &ProgramHandle, &DrawState) {
+        let (b, _, ctx) = *self;
+        (ctx.meshes.get(b.mesh_id),
+        b.slice,
+        ctx.programs.get(b.program_id),
+        ctx.states.get(b.state_id))
+    }
+
+    fn fill_params(&self, values: ::shade::ParamValues) {
+        let (b, data, _) = *self;
+        data.fill_params(&b.param_link, values);
     }
 }
