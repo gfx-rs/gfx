@@ -12,7 +12,7 @@ extern crate time;
 use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
-use gfx::{Device, DeviceHelper};
+use gfx::{Device, DeviceHelper, TextureHandle, PlaneEmpty, PlaneTexture, Level};
 use glfw::Context;
 
 #[vertex_format]
@@ -130,6 +130,8 @@ fn main() {
 
     let state = gfx::DrawState::new().depth(gfx::state::LessEqual, true);
 
+    let (gbuffer, texture_color) = create_gbuffer(w as u16, h as u16, &mut device);
+
     let vertex_data = vec![
         // top (0, 0, 1)
         Vertex { pos: [-1, -1,  1], tex_coord: [0, 0] },
@@ -180,8 +182,8 @@ fn main() {
     };
 
     let texture_info = gfx::tex::TextureInfo {
-        width: 1,
-        height: 1,
+        width: 2,
+        height: 2,
         depth: 1,
         levels: 1,
         kind: gfx::tex::Texture2D,
@@ -190,11 +192,14 @@ fn main() {
     let image_info = texture_info.to_image_info();
     let texture = device.create_texture(texture_info).unwrap();
     device.update_texture(&texture, &image_info,
-                          &vec![0x20u8, 0xA0u8, 0xC0u8, 0x00u8])
+                          &vec![0xFFu8, 0x00u8, 0x00u8, 0x00u8,
+                                0x00u8, 0xFFu8, 0x00u8, 0x00u8,
+                                0x00u8, 0x00u8, 0xFFu8, 0x00u8,
+                                0xFFu8, 0xFFu8, 0xFFu8, 0x00u8])
         .unwrap();
 
     let sampler = device.create_sampler(
-        gfx::tex::SamplerInfo::new(gfx::tex::Bilinear,
+        gfx::tex::SamplerInfo::new(gfx::tex::Scale,
                                    gfx::tex::Clamp)
     );
 
@@ -203,7 +208,7 @@ fn main() {
         .unwrap();
 
     let view: AffineMatrix3<f32> = Transform::look_at(
-        &Point3::new(1.5f32, -5.0, 3.0),
+        &Point3::new(2.5f32, -5.0, 3.0),
         &Point3::new(0f32, 0.0, 0.0),
         &Vector3::unit_z(),
     );
@@ -212,11 +217,22 @@ fn main() {
 
     let data = Params {
         transform: proj.mul_m(&view.mat).into_fixed(),
+        color: (texture_color, Some(sampler)),
+    };
+
+  let data_gbuffer_pass = Params {
+        transform: proj.mul_m(&view.mat).into_fixed(),
         color: (texture, Some(sampler)),
     };
 
     let clear_data = gfx::ClearData {
         color: Some([0.3, 0.3, 0.3, 1.0]),
+        depth: Some(1.0),
+        stencil: None,
+    };
+
+    let clear_data_gbuffer = gfx::ClearData {
+        color: Some([0.3, 0.7, 0.7, 1.0]),
         depth: Some(1.0),
         stencil: None,
     };
@@ -233,9 +249,46 @@ fn main() {
 
         renderer.reset();
         renderer.clear(clear_data, &frame);
+        renderer.clear(clear_data_gbuffer, &gbuffer);
+        renderer.draw(&mesh, slice, &gbuffer, (&prog, &data_gbuffer_pass), &state).unwrap();
         renderer.draw(&mesh, slice, &frame, (&prog, &data), &state).unwrap();
         device.submit(renderer.as_buffer());
 
         window.swap_buffers();
     }
+}
+
+
+
+fn create_gbuffer(width: u16, height: u16, renderer: &mut gfx::GlDevice) -> (gfx::Frame, TextureHandle) {
+    let mut frame = gfx::Frame::new(width as u16, height as u16);
+
+    let texture_info_float = gfx::tex::TextureInfo {
+        width: width,
+        height: height,
+        depth: 1,
+        levels: 1,
+        kind: gfx::tex::Texture2D,
+        format: gfx::tex::Float(gfx::tex::RGBA, gfx::attrib::F16),
+    };
+    let texture_info_depth = gfx::tex::TextureInfo {
+        width: width,
+        height: height,
+        depth: 1,
+        levels: 1,
+        kind: gfx::tex::Texture2D,
+        format: gfx::tex::DEPTH24STENCIL8,
+    };
+    let texture_color = renderer.create_texture(texture_info_float).unwrap();
+    let texture_depth = renderer.create_texture(texture_info_depth).unwrap();
+
+    frame.colors = [
+        PlaneTexture(texture_color.get_name(), 0 as Level, None),
+        PlaneEmpty,
+        PlaneEmpty,
+        PlaneEmpty,
+    ];
+    frame.depth   = PlaneTexture(texture_depth.get_name(), 0, None);
+    frame.stencil = frame.depth;
+    (frame, texture_color)
 }
