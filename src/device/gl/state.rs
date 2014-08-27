@@ -120,6 +120,7 @@ pub fn bind_stencil(gl: &gl::Gl, stencil: Option<s::Stencil>, cull: s::CullMode)
     fn bind_side(gl: &gl::Gl, face: gl::types::GLenum, side: s::StencilSide) {
         gl.StencilFuncSeparate(face, map_comparison(side.fun),
             side.value as gl::types::GLint, side.mask_read as gl::types::GLuint);
+        gl.StencilMaskSeparate(face, side.mask_write as gl::types::GLuint);
         gl.StencilOpSeparate(face, map_operation(side.op_fail),
             map_operation(side.op_depth_fail), map_operation(side.op_pass));
     }
