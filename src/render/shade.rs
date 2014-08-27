@@ -16,7 +16,6 @@
 
 use std::cell::Cell;
 use std::fmt;
-use std::rc::Rc;
 use device::shade as s;
 use device::{RawBufferHandle, ProgramHandle, SamplerHandle, TextureHandle};
 
@@ -166,46 +165,34 @@ pub struct ParamDictionaryLink {
     textures: Vec<uint>,
 }
 
-/// A shader program with dictionary of parameters
-pub struct DictionaryProgram {
-    program: ProgramHandle,
-    link: ParamDictionaryLink,
-    data: Rc<ParamDictionary>,
-}
-
-impl DictionaryProgram {
+impl ParamDictionary {
     /// Connect a shader program with a parameter structure
-    pub fn connect(prog: ProgramHandle, data: Rc<ParamDictionary>)
-                   -> Result<DictionaryProgram, ParameterError> {
+    pub fn connect(&self, prog: &ProgramHandle)
+               -> Result<ParamDictionaryLink, ParameterError> {
         //TODO: proper error checks
-        let link = ParamDictionaryLink {
+        Ok(ParamDictionaryLink {
             uniforms: prog.get_info().uniforms.iter().map(|var|
-                data.uniforms.iter().position(|c| c.name == var.name).unwrap()
+                self.uniforms.iter().position(|c| c.name == var.name).unwrap()
             ).collect(),
             blocks: prog.get_info().blocks.iter().map(|var|
-                data.blocks  .iter().position(|c| c.name == var.name).unwrap()
+                self.blocks  .iter().position(|c| c.name == var.name).unwrap()
             ).collect(),
             textures: prog.get_info().textures.iter().map(|var|
-                data.textures.iter().position(|c| c.name == var.name).unwrap()
+                self.textures.iter().position(|c| c.name == var.name).unwrap()
             ).collect(),
-        };
-        Ok(DictionaryProgram {
-            program: prog,
-            link: link,
-            data: data,
         })
     }
 
     /// Set the parameter values
-    pub fn fill_params(&self, params: ParamValues) {
-        for (&id, var) in self.link.uniforms.iter().zip(params.uniforms.mut_iter()) {
-            *var = Some(self.data.uniforms[id].value.get());
+    pub fn fill_params(&self, link: &ParamDictionaryLink, params: ParamValues) {
+        for (&id, var) in link.uniforms.iter().zip(params.uniforms.mut_iter()) {
+            *var = Some(self.uniforms[id].value.get());
         }
-        for (&id, var) in self.link.blocks.iter().zip(params.blocks.mut_iter()) {
-            *var = Some(self.data.blocks[id].value.get());
+        for (&id, var) in link.blocks.iter().zip(params.blocks.mut_iter()) {
+            *var = Some(self.blocks[id].value.get());
         }
-        for (&id, var) in self.link.textures.iter().zip(params.textures.mut_iter()) {
-            *var = Some(self.data.textures[id].value.get());
+        for (&id, var) in link.textures.iter().zip(params.textures.mut_iter()) {
+            *var = Some(self.textures[id].value.get());
         }
     }
 }

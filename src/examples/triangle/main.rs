@@ -7,7 +7,7 @@ extern crate gfx_macros;
 extern crate glfw;
 extern crate native;
 
-use gfx::{Device, DeviceHelper};
+use gfx::DeviceHelper;
 use glfw::Context;
 
 #[vertex_format]
@@ -94,7 +94,6 @@ fn main() {
     let frame = gfx::Frame::new(w as u16, h as u16);
 
     let mut device = gfx::GlDevice::new(|s| glfw.get_proc_address(s));
-    let mut renderer = device.create_renderer();
 
     let vertex_data = vec![
         Vertex { pos: [ -0.5, -0.5 ], color: [1.0, 0.0, 0.0] },
@@ -107,11 +106,11 @@ fn main() {
     let program = device.link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
                         .unwrap();
 
-    let mut context = gfx::batch::Context::new();
-    let batch: gfx::batch::LightBatch<(), ()> = context.batch(&mesh, slice, &program,
-        &gfx::DrawState::new()).unwrap();
+    let mut graphics = gfx::Graphics::new(device);
+    let batch: gfx::batch::LightBatch<(), ()> = graphics.make_batch(
+        &mesh, slice, &program, &gfx::DrawState::new()).unwrap();
 
-    renderer.clear(
+    graphics.clear(
         gfx::ClearData {
             color: Some([0.3, 0.3, 0.3, 1.0]),
             depth: None,
@@ -119,8 +118,6 @@ fn main() {
         },
         &frame
     );
-
-    renderer.draw((&batch, &(), &context), &frame);
 
     while !window.should_close() {
         glfw.poll_events();
@@ -132,7 +129,8 @@ fn main() {
             }
         }
 
-        device.submit(renderer.as_buffer());
+        graphics.draw(&batch, &(), &frame);
+        graphics.end_frame();
 
         window.swap_buffers();
     }

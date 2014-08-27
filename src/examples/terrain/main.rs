@@ -15,7 +15,7 @@ use std::fmt;
 use cgmath::FixedArray;
 use cgmath::{Matrix4, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
-use gfx::{Device, DeviceHelper};
+use gfx::DeviceHelper;
 use glfw::Context;
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
@@ -47,7 +47,7 @@ impl fmt::Show for Vertex {
 
 // The shader_param attribute makes sure the following struct can be used to
 // pass parameters to a shader. Its argument is the name of the type that will
-// be generated to represent your the batch. Search for MyBatch below, to see
+// be generated to represent your the batch. Search for `MyBatch` below, to see
 // how it's used.
 #[shader_param(MyBatch)]
 struct Params {
@@ -157,7 +157,6 @@ fn main() {
     let frame = gfx::Frame::new(w as u16, h as u16);
 
     let mut device = gfx::GlDevice::new(|s| glfw.get_proc_address(s));
-    let mut renderer = device.create_renderer();
 
     let noise = Perlin::new();
     let plane = Plane::subdivide(256, 256);
@@ -187,8 +186,8 @@ fn main() {
                         .unwrap();
     let state = gfx::DrawState::new().depth(gfx::state::LessEqual, true);
 
-    let mut context = gfx::batch::Context::new();
-    let batch: MyBatch = context.batch(&mesh, slice, &program, &state).unwrap();
+    let mut graphics = gfx::Graphics::new(device);
+    let batch: MyBatch = graphics.make_batch(&mesh, slice, &program, &state).unwrap();
 
     let aspect = w as f32 / h as f32;
     let mut data = Params {
@@ -224,10 +223,9 @@ fn main() {
         );
         data.view = view.mat.into_fixed();
 
-        renderer.reset();
-        renderer.clear(clear_data, &frame);
-        renderer.draw((&batch, &data, &context), &frame);
-        device.submit(renderer.as_buffer());
+        graphics.clear(clear_data, &frame);
+        graphics.draw(&batch, &data, &frame);
+        graphics.end_frame();
 
         window.swap_buffers();
     }

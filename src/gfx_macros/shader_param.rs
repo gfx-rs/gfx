@@ -268,43 +268,47 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
     });
     // constructing the `LightBatch` typedef
     match meta_item.node {
-        ast::MetaList(_, ref items) if items.len() == 1 => match items[0].deref().node {
-            ast::MetaWord(ref shell_name) => {
-                // pub type $shell_ident = hack::gfx::batch::LightBatch<$link_ident, $self_ident>
-                let path = context.ty_path(
-                    context.path_all(span, false,
-                        vec![
-                            path_root,
-                            context.ident_of("gfx"),
-                            context.ident_of("batch"),
-                            context.ident_of("LightBatch"),
-                        ],
-                        Vec::new(),
-                        vec![
-                            context.ty_ident(span, link_ident),
-                            context.ty_ident(span, item.ident)
-                        ]
-                    ), None
-                );
-                push(box(GC) ast::Item {
-                    ident: context.ident_of(shell_name.get()),
-                    attrs: Vec::new(),
-                    id: ast::DUMMY_NODE_ID,
-                    node: ast::ItemTy(path, ast_util::empty_generics()),
-                    vis: item.vis,
-                    span: span,
-                })
-            },
-            _ => {
-                context.span_err(meta_item.span,
-                    "Invalid argument. Please specify the typedef for your `Program`\n\
-                    as `#[shader_param(MyProgram)]`")
+        ast::MetaList(_, ref items) if items.len() <= 2 => {
+            let batch_names = ["LightBatch", "HeavyBatch"];
+            for (&batch, param) in batch_names.iter().zip(items.iter()) {
+                match param.node {
+                    ast::MetaWord(ref shell_name) => {
+                        // pub type $shell_ident = hack::gfx::batch::LightBatch<$link_ident, $self_ident>
+                        let path = context.ty_path(
+                            context.path_all(span, false,
+                                vec![
+                                    path_root,
+                                    context.ident_of("gfx"),
+                                    context.ident_of("batch"),
+                                    context.ident_of(batch),
+                                ],
+                                Vec::new(),
+                                vec![
+                                    context.ty_ident(span, link_ident),
+                                    context.ty_ident(span, item.ident)
+                                ]
+                            ), None
+                        );
+                        push(box(GC) ast::Item {
+                            ident: context.ident_of(shell_name.get()),
+                            attrs: Vec::new(),
+                            id: ast::DUMMY_NODE_ID,
+                            node: ast::ItemTy(path, ast_util::empty_generics()),
+                            vis: item.vis,
+                            span: span,
+                        })
+                    },
+                    _ => {
+                        context.span_err(meta_item.span,
+                            "The new batch name has to be a word")
+                    }
+                }
             }
         },
         _ => {
             context.span_err(meta_item.span,
                 "Invalid argument. Please specify the typedef for your `Program`\n\
-                as `#[shader_param(MyProgram)]`")
+                as `#[shader_param(MyLightBatch, MyHeavyBatch)]`")
         }
     }
     // deriving ShaderParam

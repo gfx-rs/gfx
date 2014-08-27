@@ -28,7 +28,7 @@ struct MyParam {
 }
 
 // Test that there are no conflicts between the two reexport modules
-#[shader_param(MyBatch2)]
+#[shader_param(MyLightBatch, MyHeavyBatch)]
 struct MyParam2 {
     a: i32,
     b: secret_lib::gfx::shade::TextureParam,

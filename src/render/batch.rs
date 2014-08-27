@@ -131,7 +131,7 @@ pub struct LightBatch<L, T> {
     state_id: Id<DrawState>,
 }
 
-/// Factory of light batches, requires to always be used with them.
+/// Factory of light batches, required to always be used with them.
 pub struct Context {
     meshes: Array<Mesh>,
     programs: Array<ProgramHandle>,
