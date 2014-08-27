@@ -220,7 +220,10 @@ fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                             elem_count: $count_expr,
                             elem_type: $type_expr,
                             offset: unsafe {
-                                &(*(0u as *const $struct_ident)).$ident as *const _ as $path_root::gfx::attrib::Offset
+                                let x: $struct_ident = ::std::mem::uninitialized();
+                                let offset = (&x.$ident as *const _ as uint) - (&x as *const _ as uint);
+                                ::std::mem::forget(x);
+                                offset as $path_root::gfx::attrib::Offset
                             },
                             stride: { use std::mem; mem::size_of::<$struct_ident>() as $path_root::gfx::attrib::Stride },
                             name: $ident_str.to_string(),
