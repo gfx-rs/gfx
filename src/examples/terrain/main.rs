@@ -155,19 +155,17 @@ fn main() {
     let state = gfx::DrawState::new().depth(gfx::state::LessEqual, true);
 
     let noise = Perlin::new();
-
     let vertex_data: Vec<Vertex> = Plane::subdivide(256, 256)
         .vertex(|(x, y)| {
             let h = noise.get(x, y, 0.0) * 32.0;
             Vertex {
-                pos: [-25.0 * x, 25.0 * y, h],
+                pos: [25.0 * x, 25.0 * y, h],
                 color: calculate_color(h),
             }
         })
         .triangulate()
         .vertices()
         .collect();
-
 
     let mesh = device.create_mesh(vertex_data);
     let slice = mesh.get_slice(gfx::TriangleList);
