@@ -24,6 +24,8 @@
 #[phase(plugin, link)] extern crate log;
 extern crate device;
 
+/// Batches
+pub mod batch;
 /// Frontend
 pub mod front;
 /// Meshes
@@ -34,3 +36,51 @@ pub mod shade;
 pub mod state;
 /// Render targets
 pub mod target;
+
+/// A convenient wrapper suitable for single-threaded operation
+pub struct Graphics<D> {
+    /// Graphics device
+    pub device: D,
+    /// Renderer front-end
+    pub renderer: front::Renderer,
+    /// Hidden batch context
+    context: batch::Context,
+}
+
+impl<D: device::Device> Graphics<D> {
+    /// Create a new graphics wrapper
+    pub fn new(mut device: D) -> Graphics<D> {
+        use front::DeviceHelper;
+        let rend = device.create_renderer();
+        Graphics {
+            device: device,
+            renderer: rend,
+            context: batch::Context::new(),
+        }
+    }
+
+    /// Create a new ref batch
+    pub fn make_batch<L, T: shade::ShaderParam<L>>(&mut self, mesh: &mesh::Mesh,
+                      slice: mesh::Slice, program: &device::ProgramHandle,
+                      state: &state::DrawState)
+                      -> Result<batch::RefBatch<L, T>, batch::BatchError> {
+        self.context.batch(mesh, slice, program, state)
+    }
+
+    /// Clear the `Frame` as the `ClearData` specifies.
+    pub fn clear(&mut self, data: device::target::ClearData, frame: &target::Frame) {
+        self.renderer.clear(data, frame)
+    }
+
+    /// Draw a ref batch
+    pub fn draw<'a, L, T: shade::ShaderParam<L>>(&'a mut self,
+        batch: &'a batch::RefBatch<L, T>, data: &'a T, frame: &target::Frame) {
+        self.renderer.draw((batch, data, &self.context), frame)
+    }
+
+    /// Submit the internal command buffer and reset for the next frame
+    pub fn end_frame(&mut self) {
+        self.device.submit(self.renderer.as_buffer());
+        self.renderer.reset();
+    }
+}

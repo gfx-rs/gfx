@@ -11,6 +11,7 @@ extern crate time;
 extern crate genmesh;
 extern crate noise;
 
+use std::fmt;
 use cgmath::FixedArray;
 use cgmath::{Matrix4, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
@@ -38,11 +39,17 @@ impl Clone for Vertex {
     }
 }
 
+impl fmt::Show for Vertex {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Pos({}, {}, {})", self.pos[0], self.pos[1], self.pos[2])
+    }
+}
+
 // The shader_param attribute makes sure the following struct can be used to
 // pass parameters to a shader. Its argument is the name of the type that will
-// be generated to represent your the program. Search for link_program below, to
-// see how it's used.
-#[shader_param(MyProgram)]
+// be generated to represent your the batch. Search for `Terrain` below, to see
+// how it's used.
+#[shader_param(Terrain)]
 struct Params {
     #[name = "u_Model"]
     model: [[f32, ..4], ..4],
@@ -150,9 +157,6 @@ fn main() {
     let frame = gfx::Frame::new(w as u16, h as u16);
 
     let mut device = gfx::GlDevice::new(|s| glfw.get_proc_address(s));
-    let mut renderer = device.create_renderer();
-
-    let state = gfx::DrawState::new().depth(gfx::state::LessEqual, true);
 
     let noise = Perlin::new();
     let plane = Plane::subdivide(256, 256);
@@ -178,10 +182,12 @@ fn main() {
     };
 
     let mesh = device.create_mesh(vertex_data);
+    let program = device.link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
+                        .unwrap();
+    let state = gfx::DrawState::new().depth(gfx::state::LessEqual, true);
 
-    let prog: MyProgram = device
-        .link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
-        .unwrap();
+    let mut graphics = gfx::Graphics::new(device);
+    let batch: Terrain = graphics.make_batch(&mesh, slice, &program, &state).unwrap();
 
     let aspect = w as f32 / h as f32;
     let mut data = Params {
@@ -217,10 +223,9 @@ fn main() {
         );
         data.view = view.mat.into_fixed();
 
-        renderer.reset();
-        renderer.clear(clear_data, &frame);
-        renderer.draw(&mesh, slice, &frame, (&prog, &data), &state).unwrap();
-        device.submit(renderer.as_buffer());
+        graphics.clear(clear_data, &frame);
+        graphics.draw(&batch, &data, &frame);
+        graphics.end_frame();
 
         window.swap_buffers();
     }

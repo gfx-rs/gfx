@@ -28,9 +28,9 @@ struct Vertex {
 
 // The shader_param attribute makes sure the following struct can be used to
 // pass parameters to a shader. Its argument is the name of the type that will
-// be generated to represent your the program. Search for link_program below, to
+// be generated to represent your the program. Search for `CubeBatch` below, to
 // see how it's used.
-#[shader_param(MyProgram)]
+#[shader_param(CubeBatch)]
 struct Params {
     #[name = "u_Transform"]
     transform: [[f32, ..4], ..4],
@@ -126,9 +126,6 @@ fn main() {
     let frame = gfx::Frame::new(w as u16, h as u16);
 
     let mut device = gfx::GlDevice::new(|s| glfw.get_proc_address(s));
-    let mut renderer = device.create_renderer();
-
-    let state = gfx::DrawState::new().depth(gfx::state::LessEqual, true);
 
     let vertex_data = vec![
         // top (0, 0, 1)
@@ -198,9 +195,12 @@ fn main() {
                                    gfx::tex::Clamp)
     );
 
-    let prog: MyProgram = device
-        .link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
-        .unwrap();
+    let program = device.link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
+                        .unwrap();
+    let state = gfx::DrawState::new().depth(gfx::state::LessEqual, true);
+
+    let mut graphics = gfx::Graphics::new(device);
+    let batch: CubeBatch = graphics.make_batch(&mesh, slice, &program, &state).unwrap();
 
     let view: AffineMatrix3<f32> = Transform::look_at(
         &Point3::new(1.5f32, -5.0, 3.0),
@@ -231,10 +231,9 @@ fn main() {
             }
         }
 
-        renderer.reset();
-        renderer.clear(clear_data, &frame);
-        renderer.draw(&mesh, slice, &frame, (&prog, &data), &state).unwrap();
-        device.submit(renderer.as_buffer());
+        graphics.clear(clear_data, &frame);
+        graphics.draw(&batch, &data, &frame);
+        graphics.end_frame();
 
         window.swap_buffers();
     }

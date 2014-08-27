@@ -207,7 +207,7 @@ impl fmt::Show for UniformValue {
 }
 
 /// Vertex information that a shader takes as input.
-#[deriving(Clone, Show)]
+#[deriving(Clone, PartialEq, Show)]
 pub struct Attribute {
     /// Name of this attribute.
     pub name: String,
@@ -222,7 +222,7 @@ pub struct Attribute {
 }
 
 /// Uniform, a type of shader parameter representing data passed to the program.
-#[deriving(Clone, Show)]
+#[deriving(Clone, PartialEq, Show)]
 pub struct UniformVar {
     /// Name of this uniform.
     pub name: String,
@@ -237,7 +237,7 @@ pub struct UniformVar {
 }
 
 /// A uniform block.
-#[deriving(Clone, Show)]
+#[deriving(Clone, PartialEq, Show)]
 pub struct BlockVar {
     /// Name of this uniform block.
     pub name: String,
@@ -248,7 +248,7 @@ pub struct BlockVar {
 }
 
 /// Sampler, a type of shader parameter representing a texture that can be sampled.
-#[deriving(Clone, Show)]
+#[deriving(Clone, PartialEq, Show)]
 pub struct SamplerVar {
     /// Name of this sampler variable.
     pub name: String,
@@ -261,7 +261,7 @@ pub struct SamplerVar {
 }
 
 /// Metadata about a program.
-#[deriving(Clone, Show)]
+#[deriving(Clone, PartialEq, Show)]
 pub struct ProgramInfo {
     /// Attributes in the program.
     pub attributes: Vec<Attribute>,

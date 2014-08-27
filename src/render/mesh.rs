@@ -48,7 +48,7 @@ pub trait VertexFormat {
 }
 
 /// Describes geometry to render.
-#[deriving(Clone, Show)]
+#[deriving(Clone, PartialEq, Show)]
 pub struct Mesh {
     /// Number of vertices in the mesh.
     pub num_vertices: d::VertexCount,
