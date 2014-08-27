@@ -162,6 +162,7 @@ pub struct Capabilities {
     pub array_buffer_supported: bool,
     pub sampler_objects_supported: bool,
     pub immutable_storage_supported: bool,
+    pub instancing_supported: bool,
 }
 
 /// A trait that slice-like types implement.
@@ -284,7 +285,7 @@ pub enum Command {
     BindProgram(back::Program),
     BindArrayBuffer(back::ArrayBuffer),
     BindAttribute(AttributeSlot, back::Buffer, attrib::Count,
-        attrib::Type, attrib::Stride, attrib::Offset),
+        attrib::Type, attrib::Stride, attrib::Offset, attrib::InstanceRate),
     BindIndex(back::Buffer),
     BindFrameBuffer(back::FrameBuffer),
     /// Unbind any surface from the specified target slot

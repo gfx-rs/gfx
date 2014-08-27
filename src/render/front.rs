@@ -332,7 +332,7 @@ impl Renderer {
                         self.buf.bind_attribute(
                             sat.location as device::AttributeSlot,
                             vat.buffer.get_name(), vat.elem_count, vat.elem_type,
-                            vat.stride, vat.offset);
+                            vat.stride, vat.offset, vat.instance_rate);
                     },
                     Err(_) => return Err(ErrorAttributeType)
                 },

@@ -27,7 +27,7 @@ pub trait CommandBuffer {
     fn bind_program(&mut self, b::Program);
     fn bind_array_buffer(&mut self, b::ArrayBuffer);
     fn bind_attribute(&mut self, ::AttributeSlot, b::Buffer, a::Count,
-                      a::Type, a::Stride, a::Offset);
+                      a::Type, a::Stride, a::Offset, a::InstanceRate);
     fn bind_index(&mut self, b::Buffer);
     fn bind_frame_buffer(&mut self, b::FrameBuffer);
     /// Unbind any surface from the specified target slot

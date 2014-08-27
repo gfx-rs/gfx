@@ -206,6 +206,8 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities) {
             || info.is_extension_supported("GL_ARB_texture_storage"),
         sampler_objects_supported: info.version >= Version::new(3, 3, None, "")
             || info.is_extension_supported("GL_ARB_sampler_objects"),
+        instancing_supported: info.version >= Version::new(3, 1, None, "")
+            || info.is_extension_supported("GL_ARB_draw_instanced"),
     };
     (info, caps)
 }
