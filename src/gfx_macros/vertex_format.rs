@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{fmt, from_str};
+use std::fmt;
+use std::from_str::FromStr;
 use std::gc::Gc;
 use syntax::{ast, ext};
 use syntax::ext::build::AstBuilder;
@@ -48,7 +49,7 @@ impl fmt::Show for Modifier {
     }
 }
 
-impl from_str::FromStr for Modifier {
+impl FromStr for Modifier {
     fn from_str(src: &str) -> Option<Modifier> {
         match src {
             "normalized" => Some(Normalized),
@@ -89,8 +90,12 @@ fn get_instance_rate(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
     for attribute in attributes.iter() {
         match attribute.node.value.node {
             ast::MetaNameValue(ref name, ref value) => match (name.get(), &value.node) {
+                ("instance_rate", &ast::LitInt(value, _)) => {
+                    attr::mark_used(attribute);
+                    return cx.expr_u8(span, value as u8);
+                },
                 ("instance_rate", &ast::LitStr(ref value_str, _)) => {
-                    match from_str::from_str(value_str.get()) {
+                    match from_str(value_str.get()) {
                         Some(value) => {
                             attr::mark_used(attribute);
                             return cx.expr_u8(span, value);

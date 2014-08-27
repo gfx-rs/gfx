@@ -25,7 +25,7 @@ pub type Stride = u8;
 /// The number of instances between each subsequent attribute value
 pub type InstanceRate = u8;
 
-/// Signness of the attribute
+/// The signedness of an attribute.
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 #[repr(u8)]
 pub enum SignFlag {
@@ -33,7 +33,7 @@ pub enum SignFlag {
     Unsigned,
 }
 
-/// How integer values are interpreted for the shader
+/// Describes how an integer value is interpreted by the shader.
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 #[repr(u8)]
 pub enum IntSubType {
@@ -42,7 +42,7 @@ pub enum IntSubType {
     IntAsFloat,     // converted to float on the fly by the hardware
 }
 
-/// Size of an integer attribute, in bits
+/// The size of an integer attribute, in bits.
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 #[repr(u8)]
 pub enum IntSize {
@@ -51,7 +51,7 @@ pub enum IntSize {
     U32,
 }
 
-/// Type of a floating-point attribute on the shader side.
+/// Type of a floating point attribute on the shader side.
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 #[repr(u8)]
 pub enum FloatSubType {
@@ -59,7 +59,7 @@ pub enum FloatSubType {
     FloatPrecision,  // 64-bit
 }
 
-/// Size of a floating point attribute, in bits
+/// The size of a floating point attribute, in bits.
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 #[repr(u8)]
 pub enum FloatSize {
@@ -68,7 +68,7 @@ pub enum FloatSize {
     F64,
 }
 
-/// Type of an attribute
+/// The type of an attribute.
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub enum Type {
     Int(IntSubType, IntSize, SignFlag),
@@ -77,7 +77,7 @@ pub enum Type {
 }
 
 impl Type {
-    /// Check if the attribute is compatible with a particular shader type
+    /// Check if the attribute is compatible with a particular shader type.
     pub fn is_compatible(&self, bt: super::shade::BaseType) -> Result<(), ()> {
         use super::shade as s;
         match (*self, bt) {

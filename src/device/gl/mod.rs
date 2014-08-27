@@ -215,39 +215,39 @@ impl GlDevice {
                     }
                 };
                 self.gl.BindBuffer(gl::ARRAY_BUFFER, buffer);
-                let slot = slot as gl::types::GLuint;
                 let offset = offset as *const gl::types::GLvoid;
                 match el_type {
                     a::Int(a::IntRaw, _, _) => unsafe {
-                        self.gl.VertexAttribIPointer(slot,
+                        self.gl.VertexAttribIPointer(slot as gl::types::GLuint,
                             count as gl::types::GLint, gl_type,
                             stride as gl::types::GLint, offset);
                     },
                     a::Int(a::IntNormalized, _, _) => unsafe {
-                        self.gl.VertexAttribPointer(slot,
+                        self.gl.VertexAttribPointer(slot as gl::types::GLuint,
                             count as gl::types::GLint, gl_type, gl::TRUE,
                             stride as gl::types::GLint, offset);
                     },
                     a::Int(a::IntAsFloat, _, _) => unsafe {
-                        self.gl.VertexAttribPointer(slot,
+                        self.gl.VertexAttribPointer(slot as gl::types::GLuint,
                             count as gl::types::GLint, gl_type, gl::FALSE,
                             stride as gl::types::GLint, offset);
                     },
                     a::Float(a::FloatDefault, _) => unsafe {
-                        self.gl.VertexAttribPointer(slot,
+                        self.gl.VertexAttribPointer(slot as gl::types::GLuint,
                             count as gl::types::GLint, gl_type, gl::FALSE,
                             stride as gl::types::GLint, offset);
                     },
                     a::Float(a::FloatPrecision, _) => unsafe {
-                        self.gl.VertexAttribLPointer(slot,
+                        self.gl.VertexAttribLPointer(slot as gl::types::GLuint,
                             count as gl::types::GLint, gl_type,
                             stride as gl::types::GLint, offset);
                     },
                     _ => ()
                 }
-                self.gl.EnableVertexAttribArray(slot);
+                self.gl.EnableVertexAttribArray(slot as gl::types::GLuint);
                 if self.caps.instance_rate_supported {
-                    self.gl.VertexAttribDivisor(slot, divisor as gl::types::GLuint);
+                    self.gl.VertexAttribDivisor(slot as gl::types::GLuint,
+                        divisor as gl::types::GLuint);
                 }else if divisor != 0 {
                     error!("Instanced arrays are not supported");
                 }
