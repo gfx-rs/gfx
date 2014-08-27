@@ -127,12 +127,13 @@ impl ::draw::CommandBuffer for GlCommandBuffer {
     }
 
     fn call_draw(&mut self, ptype: ::PrimitiveType, start: ::VertexCount,
-                 count: ::VertexCount) {
-        self.buf.push(::Draw(ptype, start, count));
+                 count: ::VertexCount, instances: Option<::InstanceCount>) {
+        self.buf.push(::Draw(ptype, start, count, instances));
     }
 
     fn call_draw_indexed(&mut self, ptype: ::PrimitiveType, itype: ::IndexType,
-                         start: ::IndexCount, count: ::IndexCount) {
-        self.buf.push(::DrawIndexed(ptype, itype, start, count));
+                         start: ::IndexCount, count: ::IndexCount,
+                         instances: Option<::InstanceCount>) {
+        self.buf.push(::DrawIndexed(ptype, itype, start, count, instances));
     }
 }

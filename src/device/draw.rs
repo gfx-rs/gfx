@@ -53,7 +53,8 @@ pub trait CommandBuffer {
     fn update_texture(&mut self, ::tex::TextureKind, b::Texture,
                       ::tex::ImageInfo, Box<::Blob<()> + Send>);
     fn call_clear(&mut self, t::ClearData);
-    fn call_draw(&mut self, ::PrimitiveType, ::VertexCount, ::VertexCount);
+    fn call_draw(&mut self, ::PrimitiveType, ::VertexCount, ::VertexCount,
+                 Option<::InstanceCount>);
     fn call_draw_indexed(&mut self, ::PrimitiveType, ::IndexType, ::IndexCount,
-                         ::IndexCount);
+                         ::IndexCount, Option<::InstanceCount>);
 }

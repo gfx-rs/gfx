@@ -246,10 +246,10 @@ impl GlDevice {
                     _ => ()
                 }
                 self.gl.EnableVertexAttribArray(slot);
-                if self.caps.instancing_supported {
+                if self.caps.instance_rate_supported {
                     self.gl.VertexAttribDivisor(slot, divisor as gl::types::GLuint);
                 }else if divisor != 0 {
-                    error!("Setting up instance_rate is not supported by the device");
+                    error!("Instanced arrays are not supported");
                 }
             },
             ::BindIndex(buffer) => {
@@ -328,27 +328,56 @@ impl GlDevice {
                     Err(_) => unimplemented!(),
                 }
             },
-            ::Draw(prim_type, start, count) => {
-                self.gl.DrawArrays(
-                    primitive_to_gl(prim_type),
-                    start as gl::types::GLsizei,
-                    count as gl::types::GLsizei
-                );
+            ::Draw(prim_type, start, count, instances) => {
+                match instances {
+                    Some(num) if self.caps.instance_call_supported => {
+                        self.gl.DrawArraysInstanced(
+                            primitive_to_gl(prim_type),
+                            start as gl::types::GLsizei,
+                            count as gl::types::GLsizei,
+                            num as gl::types::GLsizei
+                        );
+                    },
+                    Some(_) => {
+                        error!("Instanced draw calls are not supported");
+                    },
+                    None => {
+                        self.gl.DrawArrays(
+                            primitive_to_gl(prim_type),
+                            start as gl::types::GLsizei,
+                            count as gl::types::GLsizei
+                        );
+                    },
+                }
                 self.check();
             },
-            ::DrawIndexed(prim_type, index_type, start, count) => {
+            ::DrawIndexed(prim_type, index_type, start, count, instances) => {
                 let (offset, gl_index) = match index_type {
                     a::U8  => (start * 1u32, gl::UNSIGNED_BYTE),
                     a::U16 => (start * 2u32, gl::UNSIGNED_SHORT),
                     a::U32 => (start * 4u32, gl::UNSIGNED_INT),
                 };
-                unsafe {
-                    self.gl.DrawElements(
-                        primitive_to_gl(prim_type),
-                        count as gl::types::GLsizei,
-                        gl_index,
-                        offset as *const gl::types::GLvoid
-                    );
+                match instances {
+                    Some(num) if self.caps.instance_call_supported => unsafe {
+                        self.gl.DrawElementsInstanced(
+                            primitive_to_gl(prim_type),
+                            count as gl::types::GLsizei,
+                            gl_index,
+                            offset as *const gl::types::GLvoid,
+                            num as gl::types::GLsizei
+                        );
+                    },
+                    Some(_) => {
+                        error!("Instanced draw calls are not supported");
+                    },
+                    None => unsafe {
+                        self.gl.DrawElements(
+                            primitive_to_gl(prim_type),
+                            count as gl::types::GLsizei,
+                            gl_index,
+                            offset as *const gl::types::GLvoid
+                        );
+                    },
                 }
                 self.check();
             },
