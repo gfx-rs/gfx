@@ -38,6 +38,8 @@ pub struct Attribute {
     pub stride: a::Stride,
     /// A name to match the shader input
     pub name: String,
+    /// Instance rate per vertex
+    pub instance_rate: a::InstanceRate,
 }
 
 /// A trait implemented automatically for user vertex structure by
