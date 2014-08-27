@@ -13,15 +13,19 @@
 // limitations under the License.
 
 //! Vertex attribute types.
-//!
-//! Nothing interesting here for users.
 
 #![allow(missing_doc)]
 
-pub type Count = u8;    // only value 1 to 4 are supported
-pub type Offset = u32;  // can point in the middle of the buffer
-pub type Stride = u8;   // I don't believe HW supports more
+/// Number of elements per attribute, only 1 to 4 are supported
+pub type Count = u8;
+/// Offset of an attribute from the start of the buffer, in bytes
+pub type Offset = u32;
+/// Offset between attribute values, in bytes
+pub type Stride = u8;
+/// The number of instances between each subsequent attribute value
+pub type InstanceRate = u8;
 
+/// The signedness of an attribute.
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 #[repr(u8)]
 pub enum SignFlag {
@@ -29,6 +33,7 @@ pub enum SignFlag {
     Unsigned,
 }
 
+/// Describes how an integer value is interpreted by the shader.
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 #[repr(u8)]
 pub enum IntSubType {
@@ -37,6 +42,7 @@ pub enum IntSubType {
     IntAsFloat,     // converted to float on the fly by the hardware
 }
 
+/// The size of an integer attribute, in bits.
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 #[repr(u8)]
 pub enum IntSize {
@@ -45,6 +51,7 @@ pub enum IntSize {
     U32,
 }
 
+/// Type of a floating point attribute on the shader side.
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 #[repr(u8)]
 pub enum FloatSubType {
@@ -52,6 +59,7 @@ pub enum FloatSubType {
     FloatPrecision,  // 64-bit
 }
 
+/// The size of a floating point attribute, in bits.
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 #[repr(u8)]
 pub enum FloatSize {
@@ -60,6 +68,7 @@ pub enum FloatSize {
     F64,
 }
 
+/// The type of an attribute.
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub enum Type {
     Int(IntSubType, IntSize, SignFlag),
@@ -68,6 +77,7 @@ pub enum Type {
 }
 
 impl Type {
+    /// Check if the attribute is compatible with a particular shader type.
     pub fn is_compatible(&self, bt: super::shade::BaseType) -> Result<(), ()> {
         use super::shade as s;
         match (*self, bt) {

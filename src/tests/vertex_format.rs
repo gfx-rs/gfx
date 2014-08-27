@@ -16,6 +16,7 @@
 #[repr(packed)]
 #[vertex_format]
 struct MyVertex {
+    #[instance_rate = "2"]
     a0: [f32, ..2],
     #[normalized]
     a1: i16,
@@ -52,6 +53,7 @@ fn test_vertex_format() {
             offset: 0,
             stride: stride,
             name: "a0".to_string(),
+            instance_rate: 2,
         },
         gfx::Attribute {
             buffer: buf.raw(),
@@ -60,6 +62,7 @@ fn test_vertex_format() {
             offset: 8,
             stride: stride,
             name: "a1".to_string(),
+            instance_rate: 0,
         },
         gfx::Attribute {
             buffer: buf.raw(),
@@ -68,6 +71,7 @@ fn test_vertex_format() {
             offset: 10,
             stride: stride,
             name: "a2".to_string(),
+            instance_rate: 0,
         },
         gfx::Attribute {
             buffer: buf.raw(),
@@ -76,6 +80,7 @@ fn test_vertex_format() {
             offset: 14,
             stride: stride,
             name: "a3".to_string(),
+            instance_rate: 0,
         },
         gfx::Attribute {
             buffer: buf.raw(),
@@ -84,6 +89,7 @@ fn test_vertex_format() {
             offset: 22,
             stride: stride,
             name: "a_a4".to_string(),
+            instance_rate: 0,
         },
     ]);
 }

@@ -84,6 +84,35 @@ fn find_modifier(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
     })
 }
 
+/// Scan through attributes to find the instance rate, if specified
+fn get_instance_rate(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
+                     attributes: &[ast::Attribute]) -> Gc<ast::Expr> {
+    for attribute in attributes.iter() {
+        match attribute.node.value.node {
+            ast::MetaNameValue(ref name, ref value) => match (name.get(), &value.node) {
+                ("instance_rate", &ast::LitInt(value, _)) => {
+                    attr::mark_used(attribute);
+                    return cx.expr_u8(span, value as u8);
+                },
+                ("instance_rate", &ast::LitStr(ref value_str, _)) => {
+                    match from_str(value_str.get()) {
+                        Some(value) => {
+                            attr::mark_used(attribute);
+                            return cx.expr_u8(span, value);
+                        },
+                        None => {
+                            cx.span_err(span, "Invalid argument for #[instance_rate = ...]");
+                        },
+                    }
+                },
+                _ => (),
+            },
+            _ => ()
+        }
+    }
+    cx.expr_u8(span, 0)
+}
+
 /// Find a `gfx::attrib::Type` that describes the given type identifier.
 fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                ty_ident: &ast::Ident, modifier: Option<Modifier>,
@@ -184,6 +213,7 @@ fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                         None => token::get_ident(ident),
                     };
                     let ident_str = ident_str.get();
+                    let instance_expr = get_instance_rate(cx, span, def.node.attrs.as_slice());
                     super::ugh(cx, |cx| quote_expr!(cx, {
                         attributes.push($path_root::gfx::Attribute {
                             buffer: $buffer_expr,
@@ -194,6 +224,7 @@ fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                             },
                             stride: { use std::mem; mem::size_of::<$struct_ident>() as $path_root::gfx::attrib::Stride },
                             name: $ident_str.to_string(),
+                            instance_rate: $instance_expr,
                         });
                     }))
                 }).collect::<Vec<Gc<ast::Expr>>>();

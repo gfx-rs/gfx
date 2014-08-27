@@ -49,6 +49,8 @@ pub mod tex;
 pub type VertexCount = u32;
 /// Draw index count.
 pub type IndexCount = u32;
+/// Draw number of instances
+pub type InstanceCount = u32;
 /// Index of a uniform block.
 pub type UniformBlockIndex = u8;
 /// Slot for an attribute.
@@ -162,6 +164,8 @@ pub struct Capabilities {
     pub array_buffer_supported: bool,
     pub sampler_objects_supported: bool,
     pub immutable_storage_supported: bool,
+    pub instance_call_supported: bool,
+    pub instance_rate_supported: bool,
 }
 
 /// A trait that slice-like types implement.
@@ -284,7 +288,7 @@ pub enum Command {
     BindProgram(back::Program),
     BindArrayBuffer(back::ArrayBuffer),
     BindAttribute(AttributeSlot, back::Buffer, attrib::Count,
-        attrib::Type, attrib::Stride, attrib::Offset),
+        attrib::Type, attrib::Stride, attrib::Offset, attrib::InstanceRate),
     BindIndex(back::Buffer),
     BindFrameBuffer(back::FrameBuffer),
     /// Unbind any surface from the specified target slot
@@ -306,8 +310,8 @@ pub enum Command {
     UpdateTexture(tex::TextureKind, back::Texture, tex::ImageInfo, Box<Blob<()> + Send>),
     // drawing
     Clear(target::ClearData),
-    Draw(PrimitiveType, VertexCount, VertexCount),
-    DrawIndexed(PrimitiveType, IndexType, IndexCount, IndexCount),
+    Draw(PrimitiveType, VertexCount, VertexCount, Option<InstanceCount>),
+    DrawIndexed(PrimitiveType, IndexType, IndexCount, IndexCount, Option<InstanceCount>),
 }
 
 // CommandBuffer is really an associated type, so will look much better when
