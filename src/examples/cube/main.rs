@@ -220,7 +220,7 @@ fn main() {
         color: (texture_color, Some(sampler)),
     };
 
-  let data_gbuffer_pass = Params {
+    let data_gbuffer_pass = Params {
         transform: proj.mul_m(&view.mat).into_fixed(),
         color: (texture, Some(sampler)),
     };
