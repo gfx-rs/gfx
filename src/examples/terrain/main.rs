@@ -16,8 +16,8 @@ use cgmath::{Matrix4, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
 use gfx::{Device, DeviceHelper};
 use glfw::Context;
-use genmesh::{Vertices, MapToVertices, Triangulate};
-use genmesh::generators::Plane;
+use genmesh::{Vertices, Triangulate};
+use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
 use time::precise_time_s;
 
 use noise::source::Perlin;
@@ -155,22 +155,29 @@ fn main() {
     let state = gfx::DrawState::new().depth(gfx::state::LessEqual, true);
 
     let noise = Perlin::new();
-
-    let vertex_data: Vec<Vertex> = Plane::subdivide(256, 256)
-        .vertex(|(x, y)| {
+    let plane = Plane::subdivide(256, 256);
+    let vertex_data: Vec<Vertex> = plane.shared_vertex_iter()
+        .map(|(x, y)| {
             let h = noise.get(x, y, 0.0) * 32.0;
             Vertex {
-                pos: [-25.0 * x, 25.0 * y, h],
+                pos: [25.0 * x, 25.0 * y, h],
                 color: calculate_color(h),
             }
         })
-        .triangulate()
-        .vertices()
         .collect();
 
+    let index_data: Vec<u32> = plane.indexed_polygon_iter()
+        .triangulate()
+        .vertices()
+        .map(|i| i as u32)
+        .collect();
+
+    let slice = {
+        let buf = device.create_buffer_static(&index_data);
+        gfx::IndexSlice32(gfx::TriangleList, buf, 0, index_data.len() as u32)
+    };
 
     let mesh = device.create_mesh(vertex_data);
-    let slice = mesh.get_slice(gfx::TriangleList);
 
     let prog: MyProgram = device
         .link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
