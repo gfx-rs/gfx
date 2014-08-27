@@ -178,22 +178,21 @@ impl Renderer {
     pub fn draw<B: Batch>(&mut self, batch: B, frame: &target::Frame) {
         self.bind_frame(frame);
         let (mesh, slice, program, state) = batch.get_data();
-        // bind parameters
-        self.buf.bind_program(program.get_name());
-        let pinfo = program.get_info();
-        let mut uniforms = Vec::from_elem(pinfo.uniforms.len(), None);
-        let mut blocks   = Vec::from_elem(pinfo.blocks  .len(), None);
-        let mut textures = Vec::from_elem(pinfo.textures.len(), None);
-        batch.fill_params(shade::ParamValues {
-            uniforms: uniforms.as_mut_slice(),
-            blocks: blocks.as_mut_slice(),
-            textures: textures.as_mut_slice(),
-        });
-        self.upload_parameters(program, uniforms, blocks, textures).unwrap();
-        // bind everything else and draw
+        self.bind_program(&batch, program);
         self.bind_state(state);
-        self.bind_mesh(mesh, pinfo).unwrap();  //TODO: mesh link
-        self.draw_slice(slice);
+        self.bind_mesh(mesh, program.get_info()).unwrap();  //TODO: mesh link
+        self.draw_slice(slice, None);
+    }
+
+    /// Draw a `batch` multiple times using instancing
+    pub fn draw_instanced<B: Batch>(&mut self, batch: B,
+                          count: device::InstanceCount, frame: &target::Frame) {
+        self.bind_frame(frame);
+        let (mesh, slice, program, state) = batch.get_data();
+        self.bind_program(&batch, program);
+        self.bind_state(state);
+        self.bind_mesh(mesh, program.get_info()).unwrap();  //TODO: mesh link
+        self.draw_slice(slice, Some(count));
     }
 
     /// Update a buffer with data from a vector.
@@ -280,6 +279,20 @@ impl Renderer {
         self.buf.set_color_mask(state.color_mask);
     }
 
+    fn bind_program<B: Batch>(&mut self, batch: &B, program: &device::ProgramHandle) {
+        self.buf.bind_program(program.get_name());
+        let pinfo = program.get_info();
+        let mut uniforms = Vec::from_elem(pinfo.uniforms.len(), None);
+        let mut blocks   = Vec::from_elem(pinfo.blocks  .len(), None);
+        let mut textures = Vec::from_elem(pinfo.textures.len(), None);
+        batch.fill_params(shade::ParamValues {
+            uniforms: uniforms.as_mut_slice(),
+            blocks: blocks.as_mut_slice(),
+            textures: textures.as_mut_slice(),
+        });
+        self.upload_parameters(program, uniforms, blocks, textures).unwrap();
+    }
+
     fn upload_parameters(&mut self, program: &device::ProgramHandle,
                          uniforms: Vec<Option<UniformValue>>,
                          blocks: Vec<Option<device::RawBufferHandle>>,
@@ -342,22 +355,23 @@ impl Renderer {
         Ok(())
     }
 
-    fn draw_slice(&mut self, slice: mesh::Slice) {
+    fn draw_slice(&mut self, slice: mesh::Slice,
+                  instances: Option<device::InstanceCount>) {
         match slice {
             mesh::VertexSlice(prim_type, start, end) => {
-                self.buf.call_draw(prim_type, start, end);
+                self.buf.call_draw(prim_type, start, end, instances);
             },
             mesh::IndexSlice8(prim_type, buf, start, end) => {
                 self.buf.bind_index(buf.get_name());
-                self.buf.call_draw_indexed(prim_type, U8, start, end);
+                self.buf.call_draw_indexed(prim_type, U8, start, end, instances);
             },
             mesh::IndexSlice16(prim_type, buf, start, end) => {
                 self.buf.bind_index(buf.get_name());
-                self.buf.call_draw_indexed(prim_type, U16, start, end);
+                self.buf.call_draw_indexed(prim_type, U16, start, end, instances);
             },
             mesh::IndexSlice32(prim_type, buf, start, end) => {
                 self.buf.bind_index(buf.get_name());
-                self.buf.call_draw_indexed(prim_type, U32, start, end);
+                self.buf.call_draw_indexed(prim_type, U32, start, end, instances);
             },
         }
     }
