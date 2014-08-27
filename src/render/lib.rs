@@ -59,11 +59,11 @@ impl<D: device::Device> Graphics<D> {
         }
     }
 
-    /// Create a new light batch
+    /// Create a new ref batch
     pub fn make_batch<L, T: shade::ShaderParam<L>>(&mut self, mesh: &mesh::Mesh,
                       slice: mesh::Slice, program: &device::ProgramHandle,
                       state: &state::DrawState)
-                      -> Result<batch::LightBatch<L, T>, batch::BatchError> {
+                      -> Result<batch::RefBatch<L, T>, batch::BatchError> {
         self.context.batch(mesh, slice, program, state)
     }
 
@@ -72,9 +72,9 @@ impl<D: device::Device> Graphics<D> {
         self.renderer.clear(data, frame)
     }
 
-    /// Draw a light batch
+    /// Draw a ref batch
     pub fn draw<'a, L, T: shade::ShaderParam<L>>(&'a mut self,
-        batch: &'a batch::LightBatch<L, T>, data: &'a T, frame: &target::Frame) {
+        batch: &'a batch::RefBatch<L, T>, data: &'a T, frame: &target::Frame) {
         self.renderer.draw((batch, data, &self.context), frame)
     }
 

@@ -266,14 +266,14 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
         vis: item.vis,
         span: span,
     });
-    // constructing the `LightBatch` typedef
+    // constructing the `Batch` implementation typedef
     match meta_item.node {
         ast::MetaList(_, ref items) if items.len() <= 2 => {
-            let batch_names = ["LightBatch", "HeavyBatch"];
+            let batch_names = ["RefBatch", "OwnedBatch"];
             for (&batch, param) in batch_names.iter().zip(items.iter()) {
                 match param.node {
                     ast::MetaWord(ref shell_name) => {
-                        // pub type $shell_ident = hack::gfx::batch::LightBatch<$link_ident, $self_ident>
+                        // pub type $shell_ident = hack::gfx::batch::RefBatch<$link_ident, $self_ident>
                         let path = context.ty_path(
                             context.path_all(span, false,
                                 vec![

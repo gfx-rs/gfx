@@ -107,7 +107,7 @@ fn main() {
                         .unwrap();
 
     let mut graphics = gfx::Graphics::new(device);
-    let batch: gfx::batch::LightBatch<(), ()> = graphics.make_batch(
+    let batch: gfx::batch::RefBatch<(), ()> = graphics.make_batch(
         &mesh, slice, &program, &gfx::DrawState::new()).unwrap();
 
     graphics.clear(

@@ -14,7 +14,7 @@
 
 //! Batches are structures containing all the data required for the draw call,
 //! except for the target frame. Here we define the `Batch` trait as well as
-//! `LightBatch` and `HeavyBatch` implementations.
+//! `RefBatch` and `OwnedBatch` implementations.
 
 use device::ProgramHandle;
 use mesh::{Mesh, Slice};
@@ -38,8 +38,8 @@ pub trait Batch {
     fn fill_params(&self, ::shade::ParamValues);
 }
 
-/// Heavy Batch - self-contained, but has heap-allocated data
-pub struct HeavyBatch<L, T> {
+/// Owned batch - self-contained, but has heap-allocated data
+pub struct OwnedBatch<L, T> {
     mesh: Mesh,
     #[allow(dead_code)]
     mesh_link: MeshLink,
@@ -52,16 +52,16 @@ pub struct HeavyBatch<L, T> {
     pub state: DrawState,
 }
 
-impl<L, T: ShaderParam<L>> HeavyBatch<L, T> {
-    /// Create a new heavy batch
+impl<L, T: ShaderParam<L>> OwnedBatch<L, T> {
+    /// Create a new owned batch
     pub fn new(mesh: Mesh, program: ProgramHandle, param: T)
-           -> Result<HeavyBatch<L, T>, BatchError> {
+           -> Result<OwnedBatch<L, T>, BatchError> {
         let slice = mesh.get_slice(::device::TriangleList);
         let link = match ShaderParam::create_link(None::<T>, program.get_info()) {
             Ok(l) => l,
             Err(e) => return Err(ErrorParameters(e))
         };
-        Ok(HeavyBatch {
+        Ok(OwnedBatch {
             mesh: mesh,
             mesh_link: MeshLink,
             slice: slice,
@@ -73,7 +73,7 @@ impl<L, T: ShaderParam<L>> HeavyBatch<L, T> {
     }
 }
 
-impl<'a, L, T: ShaderParam<L>> Batch for &'a HeavyBatch<L, T> {
+impl<'a, L, T: ShaderParam<L>> Batch for &'a OwnedBatch<L, T> {
     fn get_data(&self) -> (&Mesh, Slice, &ProgramHandle, &DrawState) {
         (&self.mesh, self.slice, &self.program, &self.state)
     }
@@ -118,10 +118,10 @@ impl<T: Clone + PartialEq> Array<T> {
 }
 
 
-/// Light Batch - copyable and smaller, but depends on the `Context`.
+/// Ref batch - copyable and smaller, but depends on the `Context`.
 /// It has references to the resources (mesh, program, state), that are held
 /// by the context that created the batch, so these have to be used together.
-pub struct LightBatch<L, T> {
+pub struct RefBatch<L, T> {
     mesh_id: Id<Mesh>,
     #[allow(dead_code)]
     mesh_link: MeshLink,
@@ -131,7 +131,7 @@ pub struct LightBatch<L, T> {
     state_id: Id<DrawState>,
 }
 
-/// Factory of light batches, required to always be used with them.
+/// Factory of ref batches, required to always be used with them.
 pub struct Context {
     meshes: Array<Mesh>,
     programs: Array<ProgramHandle>,
@@ -150,15 +150,15 @@ impl Context {
 }
 
 impl Context {
-    /// Produce a new light batch
+    /// Produce a new ref batch
     pub fn batch<L, T: ShaderParam<L>>(&mut self, mesh: &Mesh, slice: Slice,
                 program: &ProgramHandle, state: &DrawState)
-                -> Result<LightBatch<L, T>, BatchError> {
+                -> Result<RefBatch<L, T>, BatchError> {
         let link = match ShaderParam::create_link(None::<T>, program.get_info()) {
             Ok(l) => l,
             Err(e) => return Err(ErrorParameters(e))
         };
-        Ok(LightBatch {
+        Ok(RefBatch {
             mesh_id: self.meshes.find_or_insert(mesh),
             mesh_link: MeshLink,
             slice: slice,
@@ -169,7 +169,7 @@ impl Context {
     }
 }
 
-impl<'a, L, T: ShaderParam<L>> Batch for (&'a LightBatch<L, T>, &'a T, &'a Context) {
+impl<'a, L, T: ShaderParam<L>> Batch for (&'a RefBatch<L, T>, &'a T, &'a Context) {
     fn get_data(&self) -> (&Mesh, Slice, &ProgramHandle, &DrawState) {
         let (b, _, ctx) = *self;
         (ctx.meshes.get(b.mesh_id),
