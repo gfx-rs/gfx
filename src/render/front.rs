@@ -41,28 +41,6 @@ pub enum ParameterError {
     ErrorParamSampler(String),
 }
 
-/// An error with a defined Mesh.
-#[deriving(Show)]
-pub enum MeshError {
-    /// A required attribute was missing.
-    ErrorAttributeMissing(String),
-    /// An attribute's type from the vertex format differed from the type used in the shader.
-    ErrorAttributeType,
-}
-
-/// An error that can happen when trying to draw.
-#[deriving(Show)]
-pub enum DrawError {
-    /// Error with a program.
-    ErrorProgram,
-    /// Error with the program shell.
-    ErrorParameter(ParameterError),
-    /// Error with the mesh.
-    ErrorMesh(MeshError),
-    /// Error with the mesh slice
-    ErrorSlice,
-}
-
 /// Program linking error
 #[deriving(Clone, PartialEq, Show)]
 pub enum ProgramError {
@@ -160,10 +138,10 @@ impl Renderer {
     /// Draw a `batch` into the specified `frame`
     pub fn draw<B: Batch>(&mut self, batch: B, frame: &target::Frame) {
         self.bind_frame(frame);
-        let (mesh, slice, program, state) = batch.get_data();
+        let (mesh, link, slice, program, state) = batch.get_data();
         self.bind_program(&batch, program);
         self.bind_state(state);
-        self.bind_mesh(mesh, program.get_info()).unwrap();  //TODO: mesh link
+        self.bind_mesh(mesh, link, program.get_info());
         self.draw_slice(slice, None);
     }
 
@@ -171,10 +149,10 @@ impl Renderer {
     pub fn draw_instanced<B: Batch>(&mut self, batch: B,
                           count: device::InstanceCount, frame: &target::Frame) {
         self.bind_frame(frame);
-        let (mesh, slice, program, state) = batch.get_data();
+        let (mesh, link, slice, program, state) = batch.get_data();
         self.bind_program(&batch, program);
         self.bind_state(state);
-        self.bind_mesh(mesh, program.get_info()).unwrap();  //TODO: mesh link
+        self.bind_mesh(mesh, link, program.get_info());
         self.draw_slice(slice, Some(count));
     }
 
@@ -308,30 +286,21 @@ impl Renderer {
         Ok(())
     }
 
-    fn bind_mesh(&mut self, mesh: &mesh::Mesh, info: &ProgramInfo)
-                 -> Result<(), MeshError> {
-        // It's Ok the array buffer is not supported. If so we just ignore it.
+    fn bind_mesh(&mut self, mesh: &mesh::Mesh, link: &mesh::Link, info: &ProgramInfo) {
+        // It's Ok if the array buffer is not supported. We can just ignore it.
         self.common_array_buffer.map(|ab| self.buf.bind_array_buffer(ab.get_name())).is_ok();
-        for sat in info.attributes.iter() {
-            match mesh.attributes.iter().find(|a| a.name.as_slice() == sat.name.as_slice()) {
-                Some(vat) => match vat.elem_type.is_compatible(sat.base_type) {
-                    Ok(_) => {
-                        self.buf.bind_attribute(
-                            sat.location as device::AttributeSlot,
-                            vat.buffer.get_name(), vat.elem_count, vat.elem_type,
-                            vat.stride, vat.offset, vat.instance_rate);
-                    },
-                    Err(_) => return Err(ErrorAttributeType)
-                },
-                None => return Err(ErrorAttributeMissing(sat.name.clone()))
-            }
+        for (attrib_id, sat) in link.to_iter().zip(info.attributes.iter()) {
+            let vat = &mesh.attributes[attrib_id];
+            self.buf.bind_attribute(
+                sat.location as device::AttributeSlot,
+                vat.buffer.get_name(), vat.elem_count, vat.elem_type,
+                vat.stride, vat.offset, vat.instance_rate);
         }
-        Ok(())
     }
 
-    fn draw_slice(&mut self, slice: mesh::Slice,
+    fn draw_slice(&mut self, slice: &mesh::Slice,
                   instances: Option<device::InstanceCount>) {
-        match slice {
+        match *slice {
             mesh::VertexSlice(prim_type, start, end) => {
                 self.buf.call_draw(prim_type, start, end, instances);
             },
