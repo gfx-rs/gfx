@@ -102,3 +102,60 @@ pub enum Slice  {
     /// As `IndexSlice8` but with `u32` indices
     IndexSlice32(d::PrimitiveType, d::BufferHandle<u32>, d::IndexCount, d::IndexCount),
 }
+
+/// Describes kinds of errors that may occur in the mesh linking
+#[deriving(Clone, Show)]
+pub enum LinkError {
+    /// An attribute index is out of supported bounds
+    ErrorMeshAttribute(uint),
+    /// An input index is out of supported bounds
+    ErrorShaderInput(uint),
+}
+
+static BITS_PER_ATTRIBUTE: uint = 4;
+static MAX_SHADER_INPUTS: uint = 64 / BITS_PER_ATTRIBUTE;
+static MESH_ATTRIBUTE_MASK: uint = (1u << BITS_PER_ATTRIBUTE) - 1;
+
+/// Iterates over mesh attributes in a specific order
+pub struct AttributeIterator {
+    value: u64,
+}
+
+impl Iterator<uint> for AttributeIterator {
+    fn next(&mut self) -> Option<uint> {
+        let id = (self.value as uint) & MESH_ATTRIBUTE_MASK;
+        self.value >>= BITS_PER_ATTRIBUTE;
+        Some(id)
+    }
+}
+
+/// The strcture holding remapping table from shader inputs to mesh attributes
+pub struct Link {
+    table: u64,
+}
+
+impl Link {
+    /// Construct a new link from an iterator over attribute indices
+    pub fn from_iter<I: Iterator<uint>>(iter: I) -> Result<Link, LinkError> {
+        let mut table = 0u64;
+        for (input, attrib) in iter.enumerate() {
+            if input >= MAX_SHADER_INPUTS {
+                return Err(ErrorShaderInput(input))
+            }else if attrib > MESH_ATTRIBUTE_MASK {
+                return Err(ErrorMeshAttribute(attrib))
+            }else {
+                table |= attrib as u64 << (input * BITS_PER_ATTRIBUTE);
+            }
+        }
+        Ok(Link {
+            table: table,
+        })
+    }
+
+    /// Convert to an iterator returning attribute indices
+    pub fn to_iter(&self) -> AttributeIterator {
+        AttributeIterator {
+            value: self.table,
+        }
+    }
+}
