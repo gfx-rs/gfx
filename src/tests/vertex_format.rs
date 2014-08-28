@@ -16,7 +16,6 @@
 #[repr(packed)]
 #[vertex_format]
 struct MyVertex {
-    #[instance_rate = "2"]
     a0: [f32, ..2],
     #[normalized]
     a1: i16,
@@ -31,7 +30,7 @@ struct MyVertex {
 // Test that there are no conflicts between the two reexport modules
 #[repr(packed)]
 #[vertex_format]
-struct MyVertex2 {
+struct MyInstance {
     a0: [f32, ..2],
 }
 
@@ -41,55 +40,66 @@ fn test_vertex_format() {
     use secret_lib::gfx;
     use secret_lib::device;
 
-    let buf = device::make_fake_buffer();
-    let mesh = gfx::Mesh::from::<MyVertex>(buf, 0);
-    let stride = 34 as a::Stride;
+    let buf_vert = device::make_fake_buffer();
+    let buf_inst = device::make_fake_buffer();
+    let mesh = gfx::Mesh::from_format_instanced::<MyVertex, MyInstance>(buf_vert, 0, buf_inst);
+    let stride_vert = 34 as a::Stride;
+    let stride_inst = 8 as a::Stride;
 
     assert_eq!(mesh.attributes, vec![
         gfx::Attribute {
-            buffer: buf.raw(),
+            buffer: buf_vert.raw(),
             elem_count: 2,
             elem_type: a::Float(a::FloatDefault, a::F32),
             offset: 0,
-            stride: stride,
+            stride: stride_vert,
             name: "a0".to_string(),
-            instance_rate: 2,
+            instance_rate: 0,
         },
         gfx::Attribute {
-            buffer: buf.raw(),
+            buffer: buf_vert.raw(),
             elem_count: 1,
             elem_type: a::Int(a::IntNormalized, a::U16, a::Signed),
             offset: 8,
-            stride: stride,
+            stride: stride_vert,
             name: "a1".to_string(),
             instance_rate: 0,
         },
         gfx::Attribute {
-            buffer: buf.raw(),
+            buffer: buf_vert.raw(),
             elem_count: 4,
             elem_type: a::Int(a::IntAsFloat, a::U8, a::Signed),
             offset: 10,
-            stride: stride,
+            stride: stride_vert,
             name: "a2".to_string(),
             instance_rate: 0,
         },
         gfx::Attribute {
-            buffer: buf.raw(),
+            buffer: buf_vert.raw(),
             elem_count: 1,
             elem_type: a::Float(a::FloatPrecision, a::F64),
             offset: 14,
-            stride: stride,
+            stride: stride_vert,
             name: "a3".to_string(),
             instance_rate: 0,
         },
         gfx::Attribute {
-            buffer: buf.raw(),
+            buffer: buf_vert.raw(),
             elem_count: 3,
             elem_type: a::Float(a::FloatDefault, a::F32),
             offset: 22,
-            stride: stride,
+            stride: stride_vert,
             name: "a_a4".to_string(),
             instance_rate: 0,
+        },
+        gfx::Attribute {
+            buffer: buf_vert.raw(),
+            elem_count: 2,
+            elem_type: a::Float(a::FloatDefault, a::F32),
+            offset: 0,
+            stride: stride_inst,
+            name: "a0".to_string(),
+            instance_rate: 1,
         },
     ]);
 }
