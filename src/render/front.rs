@@ -82,55 +82,36 @@ struct State {
     draw_state: state::DrawState,
 }
 
-/// Backend extension trait for convenience methods
-pub trait DeviceHelper {
-    /// Create a new renderer
-    fn create_renderer(&mut self) -> Renderer;
-    /// Create a new mesh from the given vertex data.
-    /// Convenience function around `create_buffer` and `Mesh::from`.
-    fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh;
-    /// Create a simple program given a vertex shader with a fragment one.
-    fn link_program(&mut self, vs_src: ShaderSource, fs_src: ShaderSource)
-                    -> Result<device::ProgramHandle, ProgramError>;
+struct ParamStorage {
+    uniforms: Vec<Option<UniformValue>>,
+    blocks  : Vec<Option<device::RawBufferHandle>>,
+    textures: Vec<Option<shade::TextureParam>>,
 }
 
-impl<D: device::Device> DeviceHelper for D {
-    fn create_renderer(&mut self) -> Renderer {
-        Renderer {
-            buf: CommandBuffer::new(),
-            common_array_buffer: self.create_array_buffer(),
-            common_frame_buffer: self.create_frame_buffer(),
-            default_frame_buffer: device::get_main_frame_buffer(),
-            //TODO: make sure this is HW default
-            state: State {
-                frame: target::Frame::new(0,0),
-                draw_state: state::DrawState::new(),
-            },
+impl ParamStorage{
+    fn new() -> ParamStorage {
+        ParamStorage {
+            uniforms: Vec::new(),
+            blocks: Vec::new(),
+            textures: Vec::new(),
         }
     }
 
-    fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh {
-        let nv = data.len();
-        debug_assert!(nv < {
-            use std::num::Bounded;
-            let val: device::VertexCount = Bounded::max_value();
-            val as uint
-        });
-        let buf = self.create_buffer_static(&data);
-        mesh::Mesh::from::<T>(buf, nv as device::VertexCount)
+    fn resize(&mut self, nu: uint, nb: uint, nt: uint) {
+        self.uniforms.truncate(0);
+        self.uniforms.grow(nu, &None);
+        self.blocks.truncate(0);
+        self.blocks.grow(nb, &None);
+        self.textures.truncate(0);
+        self.textures.grow(nt, &None);
     }
 
-    fn link_program(&mut self, vs_src: ShaderSource, fs_src: ShaderSource)
-                    -> Result<device::ProgramHandle, ProgramError> {
-        let vs = match self.create_shader(Vertex, vs_src) {
-            Ok(s) => s,
-            Err(e) => return Err(ErrorVertex(e)),
-        };
-        let fs = match self.create_shader(Fragment, fs_src) {
-            Ok(s) => s,
-            Err(e) => return Err(ErrorFragment(e)),
-        };
-        self.create_program([vs, fs]).map_err(|e| ErrorLink(e))
+    fn as_mut_slice(&mut self) -> shade::ParamValues {
+        shade::ParamValues {
+            uniforms: self.uniforms.as_mut_slice(),
+            blocks: self.blocks.as_mut_slice(),
+            textures: self.textures.as_mut_slice(),
+        }
     }
 }
 
@@ -141,6 +122,7 @@ pub struct Renderer {
     common_frame_buffer: device::FrameBufferHandle,
     default_frame_buffer: device::FrameBufferHandle,
     state: State,
+    parameters: ParamStorage,
 }
 
 impl Renderer {
@@ -165,6 +147,7 @@ impl Renderer {
                 frame: target::Frame::new(0,0),
                 draw_state: state::DrawState::new(),
             },
+            parameters: ParamStorage::new(),
         }
     }
 
@@ -282,33 +265,24 @@ impl Renderer {
     fn bind_program<B: Batch>(&mut self, batch: &B, program: &device::ProgramHandle) {
         self.buf.bind_program(program.get_name());
         let pinfo = program.get_info();
-        let mut uniforms = Vec::from_elem(pinfo.uniforms.len(), None);
-        let mut blocks   = Vec::from_elem(pinfo.blocks  .len(), None);
-        let mut textures = Vec::from_elem(pinfo.textures.len(), None);
-        batch.fill_params(shade::ParamValues {
-            uniforms: uniforms.as_mut_slice(),
-            blocks: blocks.as_mut_slice(),
-            textures: textures.as_mut_slice(),
-        });
-        self.upload_parameters(program, uniforms, blocks, textures).unwrap();
+        self.parameters.resize(pinfo.uniforms.len(), pinfo.blocks.len(),
+            pinfo.textures.len());
+        batch.fill_params(self.parameters.as_mut_slice());
+        self.upload_parameters(program).unwrap();
     }
 
-    fn upload_parameters(&mut self, program: &device::ProgramHandle,
-                         uniforms: Vec<Option<UniformValue>>,
-                         blocks: Vec<Option<device::RawBufferHandle>>,
-                         textures: Vec<Option<shade::TextureParam>>)
-                         -> Result<(), ParameterError> {
+    fn upload_parameters(&mut self, program: &device::ProgramHandle) -> Result<(), ParameterError> {
         // bind uniforms
-        for (var, option) in program.get_info().uniforms.iter()
-            .zip(uniforms.move_iter()) {
+        for (var, &option) in program.get_info().uniforms.iter()
+            .zip(self.parameters.uniforms.iter()) {
             match option {
                 Some(v) => self.buf.bind_uniform(var.location, v),
                 None => return Err(ErrorParamUniform(var.name.clone())),
             }
         }
         // bind uniform blocks
-        for (i, (var, option)) in program.get_info().blocks.iter()
-            .zip(blocks.move_iter()).enumerate() {
+        for (i, (var, &option)) in program.get_info().blocks.iter()
+            .zip(self.parameters.blocks.iter()).enumerate() {
             match option {
                 Some(buf) => self.buf.bind_uniform_block(
                     program.get_name(),
@@ -320,8 +294,8 @@ impl Renderer {
             }
         }
         // bind textures and samplers
-        for (i, (var, option)) in program.get_info().textures.iter()
-            .zip(textures.move_iter()).enumerate() {
+        for (i, (var, &option)) in program.get_info().textures.iter()
+            .zip(self.parameters.textures.iter()).enumerate() {
             match option {
                 Some((tex, sampler)) => {
                     self.buf.bind_uniform(var.location, device::shade::ValueI32(i as i32));
@@ -374,5 +348,59 @@ impl Renderer {
                 self.buf.call_draw_indexed(prim_type, U32, start, end, instances);
             },
         }
+    }
+}
+
+
+/// Backend extension trait for convenience methods
+pub trait DeviceHelper {
+    /// Create a new renderer
+    fn create_renderer(&mut self) -> Renderer;
+    /// Create a new mesh from the given vertex data.
+    /// Convenience function around `create_buffer` and `Mesh::from`.
+    fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh;
+    /// Create a simple program given a vertex shader with a fragment one.
+    fn link_program(&mut self, vs_src: ShaderSource, fs_src: ShaderSource)
+                    -> Result<device::ProgramHandle, ProgramError>;
+}
+
+impl<D: device::Device> DeviceHelper for D {
+    fn create_renderer(&mut self) -> Renderer {
+        Renderer {
+            buf: CommandBuffer::new(),
+            common_array_buffer: self.create_array_buffer(),
+            common_frame_buffer: self.create_frame_buffer(),
+            default_frame_buffer: device::get_main_frame_buffer(),
+            //TODO: make sure this is HW default
+            state: State {
+                frame: target::Frame::new(0,0),
+                draw_state: state::DrawState::new(),
+            },
+            parameters: ParamStorage::new(),
+        }
+    }
+
+    fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh {
+        let nv = data.len();
+        debug_assert!(nv < {
+            use std::num::Bounded;
+            let val: device::VertexCount = Bounded::max_value();
+            val as uint
+        });
+        let buf = self.create_buffer_static(&data);
+        mesh::Mesh::from::<T>(buf, nv as device::VertexCount)
+    }
+
+    fn link_program(&mut self, vs_src: ShaderSource, fs_src: ShaderSource)
+                    -> Result<device::ProgramHandle, ProgramError> {
+        let vs = match self.create_shader(Vertex, vs_src) {
+            Ok(s) => s,
+            Err(e) => return Err(ErrorVertex(e)),
+        };
+        let fs = match self.create_shader(Fragment, fs_src) {
+            Ok(s) => s,
+            Err(e) => return Err(ErrorFragment(e)),
+        };
+        self.create_program([vs, fs]).map_err(|e| ErrorLink(e))
     }
 }
