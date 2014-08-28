@@ -326,7 +326,7 @@ pub trait DeviceHelper {
     /// Create a new renderer
     fn create_renderer(&mut self) -> Renderer;
     /// Create a new mesh from the given vertex data.
-    /// Convenience function around `create_buffer` and `Mesh::from`.
+    /// Convenience function around `create_buffer` and `Mesh::from_format`.
     fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh;
     /// Create a simple program given a vertex shader with a fragment one.
     fn link_program(&mut self, vs_src: ShaderSource, fs_src: ShaderSource)
@@ -357,7 +357,7 @@ impl<D: device::Device> DeviceHelper for D {
             val as uint
         });
         let buf = self.create_buffer_static(&data);
-        mesh::Mesh::from::<T>(buf, nv as device::VertexCount)
+        mesh::Mesh::from_format(buf, nv as device::VertexCount)
     }
 
     fn link_program(&mut self, vs_src: ShaderSource, fs_src: ShaderSource)

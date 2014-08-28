@@ -68,10 +68,29 @@ impl Mesh {
     }
 
     /// Create a new `Mesh` from a struct that implements `VertexFormat` and a buffer.
-    pub fn from<V: VertexFormat>(buf: d::BufferHandle<V>, nv: d::VertexCount) -> Mesh {
+    pub fn from_format<V: VertexFormat>(buf: d::BufferHandle<V>, nv: d::VertexCount) -> Mesh {
         Mesh {
             num_vertices: nv,
             attributes: VertexFormat::generate(None::<V>, buf.raw()),
+        }
+    }
+
+    /// Create a new intanced `Mesh` given a vertex buffer and an instance buffer.
+    pub fn from_format_instanced<V: VertexFormat, U: VertexFormat>(
+                                 buf: d::BufferHandle<V>, nv: d::VertexCount,
+                                 inst: d::BufferHandle<U>) -> Mesh {
+        let per_vertex   = VertexFormat::generate(None::<V>, buf.raw());
+        let per_instance = VertexFormat::generate(None::<U>, inst.raw());
+
+        let mut attributes = per_vertex;
+        for mut at in per_instance.move_iter() {
+            at.instance_rate = 1;
+            attributes.push(at);
+        }
+
+        Mesh {
+            num_vertices: nv,
+            attributes: attributes,
         }
     }
 
