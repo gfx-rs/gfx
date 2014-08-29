@@ -12,6 +12,7 @@ extern crate genmesh;
 extern crate noise;
 
 use std::fmt;
+use std::rand::Rng;
 use cgmath::FixedArray;
 use cgmath::{Matrix4, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
@@ -158,7 +159,8 @@ fn main() {
 
     let mut device = gfx::GlDevice::new(|s| glfw.get_proc_address(s));
 
-    let noise = Perlin::new();
+    let rand_seed = std::rand::task_rng().gen();
+    let noise = Perlin::new().seed(rand_seed);
     let plane = Plane::subdivide(256, 256);
     let vertex_data: Vec<Vertex> = plane.shared_vertex_iter()
         .map(|(x, y)| {
