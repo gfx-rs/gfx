@@ -316,12 +316,13 @@ impl GlDevice {
             ::BindUniform(loc, uniform) => {
                 shade::bind_uniform(&self.gl, loc as gl::types::GLint, uniform);
             },
-            ::BindTexture(slot, kind, texture, sampler) => {
+            ::BindTexture(slot, kind, texture, shader_input) => {
                 let anchor = tex::bind_texture(&self.gl,
                     gl::TEXTURE0 + slot as gl::types::GLenum,
-                    kind, texture);
-                match sampler {
-                    Some(::Handle(sam, ref info)) => {
+                    kind, shader_input.to_flag(), texture);
+                match (anchor, shader_input) {
+                    (Err(e), _) => error!("Invalid texture bind: {}", e),
+                    (Ok(anchor), ::TextureFiltered(::Handle(sam, ref info))) => {
                         if self.caps.sampler_objects_supported {
                             self.gl.BindSampler(slot as gl::types::GLenum, sam);
                         } else {
@@ -329,7 +330,7 @@ impl GlDevice {
                             tex::bind_sampler(&self.gl, anchor, info);
                         }
                     },
-                    None => ()
+                    (Ok(_), _) => (),
                 }
             },
             ::SetPrimitiveState(prim) => {

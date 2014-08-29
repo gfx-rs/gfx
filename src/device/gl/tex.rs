@@ -17,20 +17,25 @@ use super::gl::types::{GLenum, GLuint, GLint, GLfloat, GLsizei, GLvoid};
 use blob::Blob;
 use tex;
 use attrib;
+use shade::{IsMultiSample, MultiSample, NoMultiSample};
 
 /// A token produced by the `bind_texture` that allows following up
 /// with a GL-compatibility sampler settings in `bind_sampler`
 pub struct BindAnchor(GLenum);
 
-fn kind_to_gl(t: tex::TextureKind) -> GLenum {
-    match t {
-        tex::Texture1D => gl::TEXTURE_1D,
-        tex::Texture1DArray => gl::TEXTURE_1D_ARRAY,
-        tex::Texture2D => gl::TEXTURE_2D,
-        tex::Texture2DArray => gl::TEXTURE_2D_ARRAY,
-        tex::TextureCube => gl::TEXTURE_CUBE_MAP,
-        tex::Texture3D => gl::TEXTURE_3D,
-    }
+fn kind_to_gl(kind: tex::TextureKind, multisample: IsMultiSample)
+              -> Result<GLenum, ()> {
+    Ok(match (multisample, kind) {
+        (NoMultiSample, tex::Texture1D) => gl::TEXTURE_1D,
+        (NoMultiSample, tex::Texture1DArray) => gl::TEXTURE_1D_ARRAY,
+        (NoMultiSample, tex::Texture2D) => gl::TEXTURE_2D,
+        (NoMultiSample, tex::Texture2DArray) => gl::TEXTURE_2D_ARRAY,
+        (NoMultiSample, tex::TextureCube) => gl::TEXTURE_CUBE_MAP,
+        (NoMultiSample, tex::Texture3D) => gl::TEXTURE_3D,
+        (MultiSample, tex::Texture2D) => gl::TEXTURE_2D_MULTISAMPLE,
+        (MultiSample, tex::Texture2DArray) => gl::TEXTURE_2D_MULTISAMPLE_ARRAY,
+        (MultiSample, _) => return Err(()),
+    })
 }
 
 fn format_to_gl(t: tex::Format) -> Result<GLenum, ()> {
@@ -145,12 +150,26 @@ pub fn make_surface(gl: &gl::Gl, info: &tex::SurfaceInfo) ->
     };
 
     gl.BindRenderbuffer(target, name);
-    gl.RenderbufferStorage(
-        target,
-        fmt,
-        info.width as GLsizei,
-        info.height as GLsizei
-    );
+    match info.aa {
+        tex::NoAa => {
+            gl.RenderbufferStorage(
+                target,
+                fmt,
+                info.width as GLsizei,
+                info.height as GLsizei
+            );
+        },
+        tex::Msaa(samples) => {
+            gl.RenderbufferStorageMultisample(
+                target,
+                samples as GLsizei,
+                fmt,
+                info.width as GLsizei,
+                info.height as GLsizei
+            );
+        },
+        tex::Eqaa(_, _) => return Err(tex::UnsupportedSurfaceFormat),
+    }
 
     Ok(name)
 }
@@ -158,7 +177,10 @@ pub fn make_surface(gl: &gl::Gl, info: &tex::SurfaceInfo) ->
 /// Create a texture, assuming TexStorage* isn't available.
 pub fn make_without_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
                             Result<Texture, tex::TextureError> {
-    let name = make_texture(gl, info);
+    let (name, target) = match make_texture(gl, info) {
+        Ok((n, t)) => (n, t),
+        Err(_) => return Err(tex::UnsupportedTextureSampling),
+    };
 
     let fmt = match format_to_gl(info.format) {
         Ok(f) => f as GLint,
@@ -169,64 +191,86 @@ pub fn make_without_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
         Ok(t) => t,
         Err(_) => return Err(tex::UnsupportedTextureFormat),
     };
-    let target = kind_to_gl(info.kind);
 
-    unsafe {
-        match info.kind {
-            tex::Texture1D => {
-                gl.TexImage1D(
-                    target,
-                    0,
-                    fmt,
-                    info.width as GLsizei,
-                    0,
-                    pix,
-                    typ,
-                    ::std::ptr::null()
-                );
-            },
-            tex::Texture1DArray => {
-                gl.TexImage2D(
-                    target,
-                    0,
-                    fmt,
-                    info.width as GLsizei,
-                    info.height as GLsizei,
-                    0,
-                    pix,
-                    typ,
-                    ::std::ptr::null()
-                );
-            },
-            tex::Texture2D => {
-                gl.TexImage2D(
-                    target,
-                    0,
-                    fmt,
-                    info.width as GLsizei,
-                    info.height as GLsizei,
-                    0,
-                    pix,
-                    typ,
-                    ::std::ptr::null()
-                );
-            },
-            tex::TextureCube => unimplemented!(),
-            tex::Texture2DArray | tex::Texture3D => {
-                gl.TexImage3D(
-                    target,
-                    0,
-                    fmt,
-                    info.width as GLsizei,
-                    info.height as GLsizei,
-                    info.depth as GLsizei,
-                    0,
-                    pix,
-                    typ,
-                    ::std::ptr::null()
-                );
-            },
-        }
+    // since it's a texture, we want to read from it
+    let fixedSampleLocations = gl::TRUE;
+
+    match (info.aa, info.kind) {
+        (tex::NoAa, tex::Texture1D) => unsafe {
+            gl.TexImage1D(
+                target,
+                0,
+                fmt,
+                info.width as GLsizei,
+                0,
+                pix,
+                typ,
+                ::std::ptr::null()
+            );
+        },
+        (tex::NoAa, tex::Texture1DArray) => unsafe {
+            gl.TexImage2D(
+                target,
+                0,
+                fmt,
+                info.width as GLsizei,
+                info.height as GLsizei,
+                0,
+                pix,
+                typ,
+                ::std::ptr::null()
+            );
+        },
+        (tex::NoAa, tex::Texture2D) => unsafe {
+            gl.TexImage2D(
+                target,
+                0,
+                fmt,
+                info.width as GLsizei,
+                info.height as GLsizei,
+                0,
+                pix,
+                typ,
+                ::std::ptr::null()
+            );
+        },
+        (tex::Msaa(samples), tex::Texture2D) => {
+            gl.TexImage2DMultisample(
+                target,
+                samples as GLsizei,
+                fmt as GLenum,  //GL spec bug
+                info.width as GLsizei,
+                info.height as GLsizei,
+                fixedSampleLocations
+            );
+        },
+        (tex::NoAa, tex::TextureCube) => unimplemented!(),
+        (tex::NoAa, tex::Texture2DArray) | (tex::NoAa, tex::Texture3D) => unsafe {
+            gl.TexImage3D(
+                target,
+                0,
+                fmt,
+                info.width as GLsizei,
+                info.height as GLsizei,
+                info.depth as GLsizei,
+                0,
+                pix,
+                typ,
+                ::std::ptr::null()
+            );
+        },
+        (tex::Msaa(samples), tex::Texture2DArray) => {
+            gl.TexImage3DMultisample(
+                target,
+                samples as GLsizei,
+                fmt as GLenum,  //GL spec bug
+                info.width as GLsizei,
+                info.height as GLsizei,
+                info.depth as GLsizei,
+                fixedSampleLocations
+            );
+        },
+        _ => return Err(tex::UnsupportedTextureSampling),
     }
 
     set_mipmap_range(gl, target, (0, info.levels));
@@ -255,16 +299,18 @@ pub fn make_with_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
         ((max(w, max(h, d)) as f32).log2() + 1.0) as u8
     }
 
-    let name = make_texture(gl, info);
+    let (name, target) = match make_texture(gl, info) {
+        Ok((n, t)) => (n, t),
+        Err(_) => return Err(tex::UnsupportedTextureSampling),
+    };
 
     let fmt = match format_to_gl(info.format) {
         Ok(f) => f,
         Err(_) => return Err(tex::UnsupportedTextureFormat),
     };
-    let target = kind_to_gl(info.kind);
 
-    match info.kind {
-        tex::Texture1D => {
+    match (info.aa, info.kind) {
+        (tex::NoAa, tex::Texture1D) => {
             gl.TexStorage1D(
                 target,
                 min(info.levels, mip_level1(info.width)),
@@ -272,7 +318,7 @@ pub fn make_with_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
                 info.width as GLsizei
             );
         },
-        tex::Texture1DArray => {
+        (tex::NoAa, tex::Texture1DArray) => {
             gl.TexStorage2D(
                 target,
                 min(info.levels, mip_level1(info.width)),
@@ -281,7 +327,7 @@ pub fn make_with_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
                 info.height as GLsizei
             );
         },
-        tex::Texture2D => {
+        (tex::NoAa, tex::Texture2D) => {
             gl.TexStorage2D(
                 target,
                 min(info.levels, mip_level2(info.width, info.height)),
@@ -290,8 +336,7 @@ pub fn make_with_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
                 info.height as GLsizei
             );
         },
-        tex::TextureCube => unimplemented!(),
-        tex::Texture2DArray => {
+        (tex::NoAa, tex::Texture2DArray) => {
             gl.TexStorage3D(
                 target,
                 min(info.levels, mip_level2(info.width, info.height)),
@@ -301,7 +346,8 @@ pub fn make_with_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
                 info.depth as GLsizei
             );
         },
-        tex::Texture3D => {
+        (tex::NoAa, tex::TextureCube) => unimplemented!(),
+        (tex::NoAa, tex::Texture3D) => {
             gl.TexStorage3D(
                 target,
                 min(info.levels, mip_level3(info.width, info.height, info.depth)),
@@ -311,6 +357,7 @@ pub fn make_with_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
                 info.depth as GLsizei
             );
         },
+        _ => return Err(tex::UnsupportedTextureSampling),
     }
 
     set_mipmap_range(gl, target, (0, info.levels));
@@ -320,11 +367,17 @@ pub fn make_with_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
 
 /// Bind a texture to the specified slot
 pub fn bind_texture(gl: &gl::Gl, slot: GLenum, kind: tex::TextureKind,
-                    name: Texture) -> BindAnchor {
-    let target = kind_to_gl(kind);
-    gl.ActiveTexture(slot);
-    gl.BindTexture(target, name);
-    BindAnchor(target)
+                    multi: IsMultiSample, name: Texture)
+                    -> Result<BindAnchor, tex::TextureError> {
+    match kind_to_gl(kind, multi) {
+        Ok(target) => {
+            gl.ActiveTexture(slot);
+            gl.BindTexture(target, name);
+            Ok(BindAnchor(target))
+        },
+        Err(_) => Err(tex::UnsupportedTextureSampling),
+    }
+
 }
 
 /// Bind a sampler using a given binding anchor.
@@ -365,7 +418,10 @@ pub fn update_texture(gl: &gl::Gl, kind: tex::TextureKind, name: Texture, img: &
         Ok(t) => t,
         Err(_) => return Err(tex::UnsupportedTextureFormat),
     };
-    let target = kind_to_gl(kind);
+    let target = match kind_to_gl(kind, NoMultiSample) {
+        Ok(t) => t,
+        Err(_) => return Err(tex::UnsupportedTextureSampling),
+    };
 
     gl.BindTexture(target, name);
 
@@ -418,16 +474,17 @@ pub fn update_texture(gl: &gl::Gl, kind: tex::TextureKind, name: Texture, img: &
 }
 
 /// Common texture creation routine, just creates and binds.
-fn make_texture(gl: &gl::Gl, info: &tex::TextureInfo) -> Texture {
+fn make_texture(gl: &gl::Gl, info: &tex::TextureInfo)
+                -> Result<(Texture, GLuint), ()> {
     let mut name = 0 as GLuint;
     unsafe {
         gl.GenTextures(1, &mut name);
     }
 
-    let k = kind_to_gl(info.kind);
-    gl.BindTexture(k, name);
-
-    name
+    kind_to_gl(info.kind, info.aa.to_flag()).map(|k| {
+        gl.BindTexture(k, name);
+        (name, k)
+    })
 }
 
 fn wrap_to_gl(w: tex::WrapMode) -> GLenum {
@@ -480,7 +537,8 @@ pub fn make_sampler(gl: &gl::Gl, info: &tex::SamplerInfo) -> Sampler {
 }
 
 pub fn generate_mipmap(gl: &gl::Gl, kind: tex::TextureKind, name: Texture) {
-    let target = kind_to_gl(kind);
+    //can't fail here, but we need to check for integer formats too
+    let target = kind_to_gl(kind, NoMultiSample).unwrap();
     gl.BindTexture(target, name);
     gl.GenerateMipmap(target);
 }

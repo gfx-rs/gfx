@@ -44,7 +44,7 @@ pub trait CommandBuffer {
                           ::UniformBlockIndex, back::Buffer);
     fn bind_uniform(&mut self, shade::Location, shade::UniformValue);
     fn bind_texture(&mut self, ::TextureSlot, tex::TextureKind, back::Texture,
-                    Option<::SamplerHandle>);
+                    ::ShaderTexture);
     fn set_primitive(&mut self, ::state::Primitive);
     fn set_viewport(&mut self, target::Rect);
     fn set_scissor(&mut self, Option<target::Rect>);

@@ -35,10 +35,37 @@ pub enum SurfaceError {
 pub enum TextureError {
     /// Failed to map a given format to the device
     UnsupportedTextureFormat,
+    /// Failed to map a given multisampled kind to the device
+    UnsupportedTextureSampling,
 }
 
 /// Number of bits per component
 pub type Bits = u8;
+/// Number of MSAA samples
+pub type NumSamples = u8;
+/// Number of EQAA fragments
+pub type NumFragments = u8;
+
+/// Describes the configuration of samples inside each texel.
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+pub enum AaMode {
+    /// Single sampled, no Anti-Aliasing
+    NoAa,
+    /// MultiSampled Anti-Aliasing
+    Msaa(NumSamples),
+    /// Enhanced Quality Anti-Aliasing
+    Eqaa(NumSamples, NumFragments),
+}
+
+impl AaMode {
+    /// Convert to boolean Msaa flag
+    pub fn to_flag(&self) -> ::shade::IsMultiSample {
+        match *self {
+            NoAa => ::shade::NoMultiSample,
+            _ => ::shade::MultiSample,
+        }
+    }
+}
 
 /// Describes the component layout of each texel.
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
@@ -91,7 +118,7 @@ pub struct SurfaceInfo {
     pub width: u16,
     pub height: u16,
     pub format: Format,
-    // TODO: Multisampling
+    pub aa: AaMode,
 }
 
 /// How to [filter](https://en.wikipedia.org/wiki/Texture_filtering) the
@@ -144,7 +171,6 @@ pub enum TextureKind {
     TextureCube,
     /// A volume texture, with each 2D layer arranged contiguously.
     Texture3D,
-    // TODO: Multisampling?
 }
 
 /// Describes the storage of a texture.
@@ -166,6 +192,7 @@ pub struct TextureInfo {
     pub levels: u8,
     pub kind: TextureKind,
     pub format: Format,
+    pub aa: AaMode,
 }
 
 /// Describes a subvolume of a texture, which image data can be uploaded into.
@@ -208,6 +235,7 @@ impl Default for TextureInfo {
             levels: -1,
             kind: Texture2D,
             format: RGBA8,
+            aa: NoAa,
         }
     }
 }
@@ -239,7 +267,8 @@ impl TextureInfo {
         self.height <= img.yoffset + img.height &&
         self.depth <= img.zoffset + img.depth &&
         self.format == img.format &&
-        img.mipmap < self.levels
+        img.mipmap < self.levels &&
+        self.aa == NoAa
     }
 }
 
