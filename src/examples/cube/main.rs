@@ -183,6 +183,7 @@ fn main() {
         levels: 1,
         kind: gfx::tex::Texture2D,
         format: gfx::tex::RGBA8,
+        aa: gfx::tex::NoAa,
     };
     let image_info = texture_info.to_image_info();
     let texture = device.create_texture(texture_info).unwrap();
@@ -212,7 +213,7 @@ fn main() {
 
     let data = Params {
         transform: proj.mul_m(&view.mat).into_fixed(),
-        color: (texture, Some(sampler)),
+        color: (texture, gfx::TextureFiltered(sampler)),
     };
 
     let clear_data = gfx::ClearData {

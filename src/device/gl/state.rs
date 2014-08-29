@@ -55,6 +55,13 @@ pub fn bind_primitive(gl: &gl::Gl, p: s::Primitive) {
     }
 }
 
+pub fn bind_multi_sample(gl: &gl::Gl, ms: Option<s::MultiSample>) {
+    match ms {
+        Some(_) => gl.Enable(gl::MULTISAMPLE),
+        None => gl.Disable(gl::MULTISAMPLE),
+    }
+}
+
 pub fn bind_viewport(gl: &gl::Gl, rect: Rect) {
     gl.Viewport(
         rect.x as gl::types::GLint,

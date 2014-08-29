@@ -267,6 +267,9 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
         if self.state.draw.primitive != state.primitive {
             self.buf.set_primitive(state.primitive);
         }
+		if self.state.draw.multi_sample != state.multi_sample {
+			self.buf.set_multi_sample(state.multi_sample);
+        }
         if self.state.draw.scissor != state.scissor {
             self.buf.set_scissor(state.scissor);
         }

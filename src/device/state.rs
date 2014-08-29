@@ -97,6 +97,12 @@ impl Default for Primitive {
     }
 }
 
+/// Multi-sampling rasterization mode
+#[deriving(Clone, PartialEq, Show)]
+pub struct MultiSample;
+    //sample_mask: u16,
+    //alpha_to_coverage: bool,
+
 /// A pixel-wise comparison function.
 #[deriving(Clone, PartialEq, Show)]
 pub enum Comparison {

@@ -336,11 +336,14 @@ impl GlDevice {
             ::SetPrimitiveState(prim) => {
                 state::bind_primitive(&self.gl, prim);
             },
-            ::SetScissor(rect) => {
-                state::bind_scissor(&self.gl, rect);
-            },
             ::SetViewport(rect) => {
                 state::bind_viewport(&self.gl, rect);
+            },
+            ::SetMultiSampleState(ms) => {
+                state::bind_multi_sample(&self.gl, ms);
+            },
+            ::SetScissor(rect) => {
+                state::bind_scissor(&self.gl, rect);
             },
             ::SetDepthStencilState(depth, stencil, cull) => {
                 state::bind_stencil(&self.gl, stencil, cull);
