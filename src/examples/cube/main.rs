@@ -12,7 +12,7 @@ extern crate time;
 use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
-use gfx::{Device, DeviceHelper, TextureHandle, PlaneEmpty, PlaneTexture, Level};
+use gfx::{Device, DeviceHelper, TextureHandle, PlaneTexture, Level};
 use glfw::Context;
 
 #[vertex_format]
@@ -28,9 +28,9 @@ struct Vertex {
 
 // The shader_param attribute makes sure the following struct can be used to
 // pass parameters to a shader. Its argument is the name of the type that will
-// be generated to represent your the program. Search for link_program below, to
+// be generated to represent your the program. Search for `CubeBatch` below, to
 // see how it's used.
-#[shader_param(MyProgram)]
+#[shader_param(CubeBatch)]
 struct Params {
     #[name = "u_Transform"]
     transform: [[f32, ..4], ..4],
@@ -126,9 +126,6 @@ fn main() {
     let frame = gfx::Frame::new(w as u16, h as u16);
 
     let mut device = gfx::GlDevice::new(|s| glfw.get_proc_address(s));
-    let mut renderer = device.create_renderer();
-
-    let state = gfx::DrawState::new().depth(gfx::state::LessEqual, true);
 
     let (gbuffer, texture_color) = create_gbuffer(w as u16, h as u16, &mut device);
 
@@ -203,9 +200,12 @@ fn main() {
                                    gfx::tex::Clamp)
     );
 
-    let prog: MyProgram = device
-        .link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
-        .unwrap();
+    let program = device.link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
+                        .unwrap();
+    let state = gfx::DrawState::new().depth(gfx::state::LessEqual, true);
+
+    let mut graphics = gfx::Graphics::new(device);
+    let batch: CubeBatch = graphics.make_batch(&mesh, slice, &program, &state).unwrap();
 
     let view: AffineMatrix3<f32> = Transform::look_at(
         &Point3::new(2.5f32, -5.0, 3.0),
@@ -247,18 +247,15 @@ fn main() {
             }
         }
 
-        renderer.reset();
-        renderer.clear(clear_data, &frame);
-        renderer.clear(clear_data_gbuffer, &gbuffer);
-        renderer.draw(&mesh, slice, &gbuffer, (&prog, &data_gbuffer_pass), &state).unwrap();
-        renderer.draw(&mesh, slice, &frame, (&prog, &data), &state).unwrap();
-        device.submit(renderer.as_buffer());
+        graphics.clear(clear_data_gbuffer, &gbuffer);
+        graphics.clear(clear_data, &frame);
+        graphics.draw(&batch, &data_gbuffer_pass, &gbuffer);
+        graphics.draw(&batch, &data, &frame);
+        graphics.end_frame();
 
         window.swap_buffers();
     }
 }
-
-
 
 fn create_gbuffer(width: u16, height: u16, renderer: &mut gfx::GlDevice) -> (gfx::Frame, TextureHandle) {
     let mut frame = gfx::Frame::new(width as u16, height as u16);

@@ -27,7 +27,7 @@ pub trait CommandBuffer {
     fn bind_program(&mut self, b::Program);
     fn bind_array_buffer(&mut self, b::ArrayBuffer);
     fn bind_attribute(&mut self, ::AttributeSlot, b::Buffer, a::Count,
-                      a::Type, a::Stride, a::Offset);
+                      a::Type, a::Stride, a::Offset, a::InstanceRate);
     fn bind_index(&mut self, b::Buffer);
     fn bind_frame_buffer(&mut self, b::FrameBuffer);
     /// Unbind any surface from the specified target slot
@@ -53,7 +53,8 @@ pub trait CommandBuffer {
     fn update_texture(&mut self, ::tex::TextureKind, b::Texture,
                       ::tex::ImageInfo, Box<::Blob<()> + Send>);
     fn call_clear(&mut self, t::ClearData);
-    fn call_draw(&mut self, ::PrimitiveType, ::VertexCount, ::VertexCount);
+    fn call_draw(&mut self, ::PrimitiveType, ::VertexCount, ::VertexCount,
+                 Option<::InstanceCount>);
     fn call_draw_indexed(&mut self, ::PrimitiveType, ::IndexType, ::IndexCount,
-                         ::IndexCount);
+                         ::IndexCount, Option<::InstanceCount>);
 }

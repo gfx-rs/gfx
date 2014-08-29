@@ -149,7 +149,7 @@ pub struct StencilSide {
     /// A mask that is ANDd with both the stencil buffer value and the reference value when they
     /// are read before doing the stencil test.
     pub mask_read: StencilValue,
-    /// This is unused!
+    /// A mask that is ANDd with the stencil value before writing to the stencil buffer.
     pub mask_write: StencilValue,
     /// What operation to do if the stencil test fails.
     pub op_fail: StencilOp,

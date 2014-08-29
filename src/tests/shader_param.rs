@@ -15,8 +15,8 @@
 use secret_lib;
 
 // Test all features
-#[shader_param(MyProgram)]
-struct MyParam {
+#[shader_param(TestBatch)]
+struct TestParam {
     a: i32,
     b: [f32, ..4],
     c: secret_lib::gfx::shade::TextureParam,
@@ -28,8 +28,15 @@ struct MyParam {
 }
 
 // Test that there are no conflicts between the two reexport modules
-#[shader_param(MyProgram2)]
-struct MyParam2 {
+#[shader_param(TestRefBatch, TestOwnedBatch)]
+struct TestParam2 {
     a: i32,
     b: secret_lib::gfx::shade::TextureParam,
+}
+
+#[test]
+fn test_shader_param() {
+    // testing if the types are visible
+    let _ref: |&TestRefBatch|;
+    let _owned: |&TestOwnedBatch|;
 }
