@@ -52,5 +52,5 @@ pub use device::shade::{UniformValue,
     ValueI32Vector2, ValueI32Vector3, ValueI32Vector4,
     ValueF32Vector2, ValueF32Vector3, ValueF32Vector4,
     ValueF32Matrix2, ValueF32Matrix3, ValueF32Matrix4};
-pub use device::shade::{ShaderSource, StaticBytes, ProgramInfo};
+pub use device::shade::{ShaderSource, StaticBytes, OwnedBytes, ProgramInfo};
 pub use device::target::{Color, ClearData, Layer, Level};
