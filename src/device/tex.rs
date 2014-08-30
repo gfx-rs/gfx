@@ -49,22 +49,10 @@ pub type NumFragments = u8;
 /// Describes the configuration of samples inside each texel.
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub enum AaMode {
-    /// Single sampled, no Anti-Aliasing
-    NoAa,
     /// MultiSampled Anti-Aliasing
     Msaa(NumSamples),
     /// Enhanced Quality Anti-Aliasing
     Eqaa(NumSamples, NumFragments),
-}
-
-impl AaMode {
-    /// Convert to boolean Msaa flag
-    pub fn to_flag(&self) -> ::shade::IsMultiSample {
-        match *self {
-            NoAa => ::shade::NoMultiSample,
-            _ => ::shade::MultiSample,
-        }
-    }
 }
 
 /// Describes the component layout of each texel.
@@ -118,7 +106,7 @@ pub struct SurfaceInfo {
     pub width: u16,
     pub height: u16,
     pub format: Format,
-    pub aa: AaMode,
+    pub aa_mode: Option<AaMode>,
 }
 
 /// How to [filter](https://en.wikipedia.org/wiki/Texture_filtering) the
@@ -153,7 +141,6 @@ pub enum FilterMethod {
 /// one kind. A texture created as `Texture2D` will forever be `Texture2D`.
 // TODO: "Texture views" let you get around that limitation.
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
-#[repr(u8)]
 pub enum TextureKind {
     /// A single row of texels.
     Texture1D,
@@ -165,12 +152,28 @@ pub enum TextureKind {
     /// An array of 2D textures. Equivalent to Texture3D except that texels in
     /// a different depth level are not sampled.
     Texture2DArray,
+    /// A multi-sampled 2D texture. Each pixel may have more than one data value
+    /// (sample) associated with it.
+    Texture2DMultiSample(AaMode),
+    /// A array of multi-sampled 2D textures.
+    Texture2DMultiSampleArray(AaMode),
     /// A set of 6 2D textures, one for each face of a cube.
     // TODO: implement this, and document it better. cmr doesn't really understand them well enough
     // to explain without rambling.
     TextureCube,
     /// A volume texture, with each 2D layer arranged contiguously.
     Texture3D,
+}
+
+impl TextureKind {
+    /// Return the anti-aliasing mode of the texture
+    pub fn get_aa_mode(&self) -> Option<AaMode> {
+        match *self {
+            Texture2DMultiSample(aa) => Some(aa),
+            Texture2DMultiSampleArray(aa) => Some(aa),
+            _ => None,
+        }
+    }
 }
 
 /// Describes the storage of a texture.
@@ -192,7 +195,6 @@ pub struct TextureInfo {
     pub levels: u8,
     pub kind: TextureKind,
     pub format: Format,
-    pub aa: AaMode,
 }
 
 /// Describes a subvolume of a texture, which image data can be uploaded into.
@@ -235,7 +237,6 @@ impl Default for TextureInfo {
             levels: -1,
             kind: Texture2D,
             format: RGBA8,
-            aa: NoAa,
         }
     }
 }
@@ -268,7 +269,7 @@ impl TextureInfo {
         self.depth <= img.zoffset + img.depth &&
         self.format == img.format &&
         img.mipmap < self.levels &&
-        self.aa == NoAa
+        self.kind.get_aa_mode().is_none()
     }
 }
 

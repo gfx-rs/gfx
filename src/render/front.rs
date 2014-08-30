@@ -326,6 +326,8 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
         for (i, (var, &option)) in program.get_info().textures.iter()
             .zip(self.parameters.textures.iter()).enumerate() {
             match option {
+                Some((tex, Some(_))) if tex.get_info().kind.get_aa_mode().is_some() =>
+                    return Err(ErrorParamSampler(var.name.clone())),
                 Some((tex, sampler)) => {
                     self.buf.bind_uniform(var.location, device::shade::ValueI32(i as i32));
                     self.buf.bind_texture(i as device::TextureSlot,

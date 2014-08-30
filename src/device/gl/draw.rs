@@ -81,8 +81,8 @@ impl ::draw::CommandBuffer for GlCommandBuffer {
         self.buf.push(::BindUniform(loc, value));
     }
     fn bind_texture(&mut self, slot: ::TextureSlot, kind: ::tex::TextureKind,
-                    tex: super::Texture, shader_tex: ::ShaderTexture) {
-        self.buf.push(::BindTexture(slot, kind, tex, shader_tex));
+                    tex: super::Texture, sampler: Option<::SamplerHandle>) {
+        self.buf.push(::BindTexture(slot, kind, tex, sampler));
     }
 
     fn set_primitive(&mut self, prim: ::state::Primitive) {

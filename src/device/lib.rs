@@ -236,7 +236,7 @@ pub enum Command {
     BindTargetTexture(target::Target, back::Texture, target::Level, Option<target::Layer>),
     BindUniformBlock(back::Program, UniformBufferSlot, UniformBlockIndex, back::Buffer),
     BindUniform(shade::Location, shade::UniformValue),
-    BindTexture(TextureSlot, tex::TextureKind, back::Texture, ShaderTexture),
+    BindTexture(TextureSlot, tex::TextureKind, back::Texture, Option<SamplerHandle>),
     SetPrimitiveState(state::Primitive),
     SetViewport(target::Rect),
     SetMultiSampleState(Option<state::MultiSample>),

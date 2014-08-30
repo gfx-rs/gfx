@@ -45,7 +45,6 @@ pub use device::{attrib, state, tex};
 pub use device::{BufferHandle, BufferInfo, RawBufferHandle, ShaderHandle,
     ProgramHandle, SurfaceHandle, TextureHandle};
 pub use device::{BufferUsage, UsageStatic, UsageDynamic, UsageStream};
-pub use device::{ShaderTexture, TextureFiltered, TextureUnfiltered, TextureMultiSampled};
 pub use device::{VertexCount, IndexCount, InstanceCount};
 pub use device::{Point, Line, LineStrip, TriangleList, TriangleStrip, TriangleFan};
 pub use device::blob::Blob;

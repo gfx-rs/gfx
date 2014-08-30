@@ -17,7 +17,7 @@
 use std::cell::Cell;
 use std::fmt;
 use device::shade;
-use device::{RawBufferHandle, ProgramHandle, ShaderTexture, TextureHandle};
+use device::{RawBufferHandle, ProgramHandle, TextureHandle, SamplerHandle};
 
 /// Helper trait to transform base types into their corresponding uniforms
 pub trait ToUniform {
@@ -60,7 +60,7 @@ pub type VarBlock = u8;
 pub type VarTexture = u8;
 
 /// A texture parameter: consists of a texture handle with an optional sampler.
-pub type TextureParam = (TextureHandle, ShaderTexture);
+pub type TextureParam = (TextureHandle, Option<SamplerHandle>);
 
 /// A borrowed mutable storage for shader parameter values.
 // Not sure if it's the best data structure to represent it.
