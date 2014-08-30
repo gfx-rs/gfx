@@ -175,7 +175,7 @@ pub trait Blob<T> {
 /// Helper trait for casting &Blob
 pub trait RefBlobCast<'a> {
     /// Cast the type the blob references
-    fn cast<U>(self) -> &'a Blob<U>;
+    fn cast<U>(self) -> &'a Blob<U>+'a;
 }
 
 /// Helper trait for casting Box<Blob>
@@ -184,8 +184,8 @@ pub trait BoxBlobCast {
     fn cast<U>(self) -> Box<Blob<U> + Send>;
 }
 
-impl<'a, T> RefBlobCast<'a> for &'a Blob<T> {
-    fn cast<U>(self) -> &'a Blob<U> {
+impl<'a, T> RefBlobCast<'a> for &'a Blob<T>+'a {
+    fn cast<U>(self) -> &'a Blob<U>+'a {
         unsafe { std::mem::transmute(self) }
     }
 }
