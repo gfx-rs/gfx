@@ -157,7 +157,8 @@ impl<T: Clone + PartialEq> Array<T> {
 pub struct RefBatch<L, T> {
     mesh_id: Id<mesh::Mesh>,
     mesh_link: mesh::Link,
-    slice: mesh::Slice,
+    /// Mesh slice
+    pub slice: mesh::Slice,
     program_id: Id<ProgramHandle>,
     param_link: L,
     state_id: Id<DrawState>,

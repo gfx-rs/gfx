@@ -52,12 +52,10 @@ pub enum ProgramError {
     ErrorLink(()),
 }
 
-/// Graphics state
-#[allow(dead_code)]
-// This is going to be used to do minimal state transfers between draw calls. Not yet implemented!
+/// Graphics state. Used as a cache to figure out redundant state changes.
 struct State {
     frame: target::Frame,
-    draw_state: state::DrawState,
+    draw: state::DrawState,
 }
 
 struct ParamStorage {
@@ -123,7 +121,7 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
             default_frame_buffer: self.default_frame_buffer,
             state: State {
                 frame: target::Frame::new(0,0),
-                draw_state: state::DrawState::new(),
+                draw: state::DrawState::new(),
             },
             parameters: ParamStorage::new(),
         }
@@ -208,12 +206,16 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
     }
 
     fn bind_frame(&mut self, frame: &target::Frame) {
-        self.buf.set_viewport(device::target::Rect {
-            x: 0,
-            y: 0,
-            w: frame.width,
-            h: frame.height,
-        });
+        if self.state.frame.width != frame.width || self.state.frame.height != frame.height {
+            self.buf.set_viewport(device::target::Rect {
+                x: 0,
+                y: 0,
+                w: frame.width,
+                h: frame.height,
+            });
+            self.state.frame.width = frame.width;
+            self.state.frame.height = frame.height;
+        }
         if frame.is_default() {
             // binding the default FBO, not touching our common one
             self.buf.bind_frame_buffer(self.default_frame_buffer.get_name());
@@ -235,12 +237,24 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
     }
 
     fn bind_state(&mut self, state: &state::DrawState) {
-        self.buf.set_primitive(state.primitive);
-        self.buf.set_scissor(state.scissor);
-        self.buf.set_depth_stencil(state.depth, state.stencil,
-            state.primitive.get_cull_mode());
-        self.buf.set_blend(state.blend);
-        self.buf.set_color_mask(state.color_mask);
+        if self.state.draw.primitive != state.primitive {
+            self.buf.set_primitive(state.primitive);
+        }
+        if self.state.draw.scissor != state.scissor {
+            self.buf.set_scissor(state.scissor);
+        }
+        if self.state.draw.depth != state.depth || self.state.draw.stencil != state.stencil ||
+                self.state.draw.primitive.get_cull_mode() != state.primitive.get_cull_mode() {
+            self.buf.set_depth_stencil(state.depth, state.stencil,
+                state.primitive.get_cull_mode());
+        }
+        if self.state.draw.blend != state.blend {
+            self.buf.set_blend(state.blend);
+        }
+        if self.state.draw.color_mask != state.color_mask {
+            self.buf.set_color_mask(state.color_mask);
+        }
+        self.state.draw = *state;
     }
 
     fn bind_program<B: Batch>(&mut self, batch: &B, program: &device::ProgramHandle) {
@@ -347,7 +361,7 @@ impl<D: device::Device<C>,
             //TODO: make sure this is HW default
             state: State {
                 frame: target::Frame::new(0,0),
-                draw_state: state::DrawState::new(),
+                draw: state::DrawState::new(),
             },
             parameters: ParamStorage::new(),
         }
