@@ -319,6 +319,10 @@ pub enum Command {
 pub trait Device<C: draw::CommandBuffer> {
     /// Returns the capabilities available to the specific API implementation
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
+    /// Reset all the states to disabled/default
+    fn reset_state(&mut self);
+    /// Submit a command buffer for execution
+    fn submit(&mut self, cb: &C);
     // resource creation
     fn create_buffer_raw(&mut self, size: uint, usage: BufferUsage) -> BufferHandle<()>;
     fn create_buffer<T>(&mut self, num: uint, usage: BufferUsage) -> BufferHandle<T> {
@@ -356,6 +360,4 @@ pub trait Device<C: draw::CommandBuffer> {
         self.update_texture_raw(tex, img, data.cast())
     }
     fn generate_mipmap(&mut self, tex: &TextureHandle);
-    /// Submit a command buffer for execution
-    fn submit(&mut self, cb: &C);
 }

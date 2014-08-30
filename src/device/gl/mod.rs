@@ -23,7 +23,7 @@ extern crate libc;
 
 use log;
 use super::attrib as a;
-use RefBlobCast;
+use {Device, RefBlobCast};
 
 pub use self::info::{Info, PlatformName, Version};
 
@@ -55,6 +55,28 @@ pub enum ErrorType {
     OutOfMemory,
     UnknownError,
 }
+
+static RESET_CB: &'static [::Command] = &[
+    ::BindProgram(0),
+    ::BindArrayBuffer(0),
+    //BindAttribute
+    ::BindIndex(0),
+    ::BindFrameBuffer(0),
+    //UnbindTarget
+    //BindUniformBlock
+    //BindUniform
+    //BindTexture
+    ::SetPrimitiveState(::state::Primitive {
+        front_face: ::state::CounterClockwise,
+        method: ::state::Fill(::state::CullNothing),
+        offset: ::state::NoOffset,
+    }),
+    ::SetViewport(::target::Rect{x: 0, y: 0, w: 0, h: 0}),
+    ::SetScissor(None),
+    ::SetDepthStencilState(None, None, ::state::CullNothing),
+    ::SetBlendState(None),
+    ::SetColorMask(::state::MaskAll),
+];
 
 fn primitive_to_gl(prim_type: ::PrimitiveType) -> gl::types::GLenum {
     match prim_type {
@@ -107,7 +129,14 @@ impl GlDevice {
         }
     }
 
-    fn get_error(&mut self) -> Result<(), ErrorType> {
+    /// Access the GL directly using a closure
+    pub fn with_gl(&mut self, fun: |&gl::Gl|) {
+        self.reset_state();
+        fun(&self.gl);
+    }
+
+    /// Check for GL error and return gfx-rs equivalent
+    pub fn get_error(&mut self) -> Result<(), ErrorType> {
         match self.gl.GetError() {
             gl::NO_ERROR => Ok(()),
             gl::INVALID_ENUM => Err(InvalidEnum),
@@ -385,9 +414,22 @@ impl GlDevice {
     }
 }
 
-impl ::Device<draw::GlCommandBuffer> for GlDevice {
+impl Device<draw::GlCommandBuffer> for GlDevice {
     fn get_capabilities<'a>(&'a self) -> &'a ::Capabilities {
         &self.caps
+    }
+
+    fn reset_state(&mut self) {
+        for com in RESET_CB.iter() {
+            self.process(com);
+        }
+    }
+
+    fn submit(&mut self, cb: &draw::GlCommandBuffer) {
+        self.reset_state();
+        for com in cb.iter() {
+            self.process(com);
+        }
     }
 
     fn create_buffer_raw(&mut self, size: uint, usage: ::BufferUsage) -> ::BufferHandle<()> {
@@ -526,12 +568,5 @@ impl ::Device<draw::GlCommandBuffer> for GlDevice {
 
     fn generate_mipmap(&mut self, texture: &::TextureHandle) {
         tex::generate_mipmap(&self.gl, texture.get_info().kind, texture.get_name());
-    }
-
-    fn submit(&mut self, cb: &draw::GlCommandBuffer) {
-        //TODO: clear state, when we have caching
-        for com in cb.iter() {
-            self.process(com);
-        }
     }
 }
