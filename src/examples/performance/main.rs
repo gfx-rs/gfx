@@ -35,7 +35,7 @@ struct Vertex {
 // pass parameters to a shader. Its argument is the name of the type that will
 // be generated to represent your the program. Search for link_program below, to
 // see how it's used.
-#[shader_param(MyProgram)]
+#[shader_param(TriangleBatch)]
 struct Params {
     #[name = "u_Transform"]
     transform: [[f32, ..4], ..4],
@@ -81,7 +81,6 @@ fn gfx_main(glfw: glfw::Glfw,
     let frame = gfx::Frame::new(w as u16, h as u16);
 
     let mut device = gfx::GlDevice::new(|s| glfw.get_proc_address(s));
-    let mut renderer = device.create_renderer();
 
     let state = gfx::DrawState::new().depth(gfx::state::LessEqual, true);
 
@@ -109,10 +108,8 @@ fn gfx_main(glfw: glfw::Glfw,
                           &vec![0x20u8, 0xA0u8, 0xC0u8, 0x00u8].as_slice())
         .unwrap();
 
-    let prog: MyProgram = device
-        .link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
-        .unwrap();
-
+    let program = device.link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
+                        .unwrap();
     let view: AffineMatrix3<f32> = Transform::look_at(
         &Point3::new(0f32, -5.0, 0.0),
         &Point3::new(0f32, 0.0, 0.0),
@@ -127,6 +124,9 @@ fn gfx_main(glfw: glfw::Glfw,
         stencil: None,
     };
 
+    let mut graphics = gfx::Graphics::new(device);
+    let batch: TriangleBatch = graphics.make_batch(&mesh, slice, &program, &state).unwrap();
+
     while !window.should_close() {
         glfw.poll_events();
         for (_, event) in glfw::flush_messages(&events) {
@@ -138,8 +138,7 @@ fn gfx_main(glfw: glfw::Glfw,
         }
 
         let start = precise_time_s() * 1000.;
-        renderer.reset();
-        renderer.clear(clear_data, &frame);
+        graphics.clear(clear_data, &frame);
 
         for x in range(-dimension, dimension) {
             for y in range(-dimension, dimension) {
@@ -153,12 +152,12 @@ fn gfx_main(glfw: glfw::Glfw,
                     transform: proj.mul_m(&view.mat)
                                    .mul_m(&model).into_fixed(),
                 };
-                renderer.draw(&mesh, slice, &frame, (&prog, &data), &state).unwrap();
+                graphics.draw(&batch, &data, &frame);
             }
         }
 
         let pre_submit = precise_time_s() * 1000.;
-        device.submit(renderer.as_buffer());
+        graphics.end_frame();
         let post_submit = precise_time_s() * 1000.;
         window.swap_buffers();
         let swap = precise_time_s() * 1000.;
@@ -359,7 +358,9 @@ fn main() {
         FromStr::from_str(args[2].as_slice())
     } else {
         None
-    }.unwrap_or(100);
+    }.unwrap_or(10000);
+
+    let count = ((count as f64).sqrt() / 2.) as int;
 
     let glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
@@ -376,6 +377,7 @@ fn main() {
     glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
     window.set_key_polling(true);
 
+    println!("count is {}", count*count*4);
     match mode.as_slice() {
         "gfx" => gfx_main(glfw, window, events, count),
         "gl" => gl_main(glfw, window, events, count),
