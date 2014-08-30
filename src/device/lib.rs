@@ -35,8 +35,6 @@ extern crate libc;
 use std::fmt;
 use std::mem::size_of;
 
-/* #[cfg(gl)] */ pub type ActualCommandBuffer = GlCommandBuffer;
-
 pub mod attrib;
 pub mod draw;
 pub mod shade;
@@ -318,7 +316,7 @@ pub enum Command {
 // Rust supports this natively.
 /// An interface for performing draw calls using a specific graphics API
 #[allow(missing_doc)]
-pub trait Device {
+pub trait Device<C: draw::CommandBuffer> {
     /// Returns the capabilities available to the specific API implementation
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
     // resource creation
@@ -359,5 +357,5 @@ pub trait Device {
     }
     fn generate_mipmap(&mut self, tex: &TextureHandle);
     /// Submit a command buffer for execution
-    fn submit(&mut self, cb: &ActualCommandBuffer);
+    fn submit(&mut self, cb: &C);
 }

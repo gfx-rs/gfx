@@ -38,18 +38,19 @@ pub mod state;
 pub mod target;
 
 /// A convenient wrapper suitable for single-threaded operation
-pub struct Graphics<D> {
+pub struct Graphics<D, C: device::draw::CommandBuffer> {
     /// Graphics device
     pub device: D,
     /// Renderer front-end
-    pub renderer: front::Renderer,
+    pub renderer: front::Renderer<C>,
     /// Hidden batch context
     context: batch::Context,
 }
 
-impl<D: device::Device> Graphics<D> {
+impl<D: device::Device<C>,
+     C: device::draw::CommandBuffer> Graphics<D, C> {
     /// Create a new graphics wrapper
-    pub fn new(mut device: D) -> Graphics<D> {
+    pub fn new(mut device: D) -> Graphics<D, C> {
         use front::DeviceHelper;
         let rend = device.create_renderer();
         Graphics {
