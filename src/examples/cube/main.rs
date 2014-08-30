@@ -172,7 +172,7 @@ fn main() {
     ];
 
     let slice = {
-        let buf = device.create_buffer_static(&index_data);
+        let buf = device.create_buffer_static(&index_data.as_slice());
         gfx::IndexSlice8(gfx::TriangleList, buf, 0, 36)
     };
 
@@ -187,7 +187,7 @@ fn main() {
     let image_info = texture_info.to_image_info();
     let texture = device.create_texture(texture_info).unwrap();
     device.update_texture(&texture, &image_info,
-                          &vec![0x20u8, 0xA0u8, 0xC0u8, 0x00u8])
+                          &vec![0x20u8, 0xA0u8, 0xC0u8, 0x00u8].as_slice())
         .unwrap();
 
     let sampler = device.create_sampler(

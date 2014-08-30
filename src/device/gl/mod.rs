@@ -400,7 +400,7 @@ impl ::Device for GlDevice {
         ::BufferHandle::from_raw(::Handle(name, info))
     }
 
-    fn create_buffer_static<T>(&mut self, data: &::Blob<T>) -> ::BufferHandle<T> {
+    fn create_buffer_static<'a, T>(&mut self, data: &::Blob<T>+'a) -> ::BufferHandle<T> {
         let name = self.create_buffer_internal();
         let info = ::BufferInfo {
             usage: ::UsageStatic,
