@@ -347,8 +347,8 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
             ).is_ok();
             self.state.is_array_buffer_set = true;
         }
-        for (attrib_id, sat) in link.to_iter().zip(info.attributes.iter()) {
-            let vat = &mesh.attributes[attrib_id];
+        for (attr_index, sat) in link.attribute_indices().zip(info.attributes.iter()) {
+            let vat = &mesh.attributes[attr_index];
             let loc = sat.location as uint;
             let need_update = loc >= self.state.attributes.len() ||
                 match self.state.attributes[loc] {
