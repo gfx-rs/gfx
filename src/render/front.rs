@@ -20,7 +20,7 @@ use device::BoxBlobCast;
 use device::draw::CommandBuffer;
 use device::shade::{ProgramInfo, UniformValue, ShaderSource,
     Vertex, Fragment, CreateShaderError};
-use device::attrib::{U8, U16, U32};
+use device::attrib as a;
 use batch::Batch;
 use mesh;
 use shade;
@@ -52,10 +52,31 @@ pub enum ProgramError {
     ErrorLink(()),
 }
 
+static TRACKED_ATTRIBUTES: uint = 8;
+type CachedAttribute = (device::RawBufferHandle, a::Format);
+
 /// Graphics state. Used as a cache to figure out redundant state changes.
 struct State {
+    is_frame_buffer_set: bool,
     frame: target::Frame,
+    is_array_buffer_set: bool,
+    index: Option<device::RawBufferHandle>,
+    attributes: [Option<CachedAttribute>, .. TRACKED_ATTRIBUTES],
     draw: state::DrawState,
+}
+
+impl State {
+    /// Generate the initial state matching `Device::reset_state`
+    fn new() -> State {
+        State {
+            is_frame_buffer_set: false,
+            frame: target::Frame::new(0,0),
+            is_array_buffer_set: false,
+            index: None,
+            attributes: [None, ..TRACKED_ATTRIBUTES],
+            draw: state::DrawState::new(),
+        }
+    }
 }
 
 struct ParamStorage {
@@ -119,10 +140,7 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
             common_array_buffer: self.common_array_buffer,
             common_frame_buffer: self.common_frame_buffer,
             default_frame_buffer: self.default_frame_buffer,
-            state: State {
-                frame: target::Frame::new(0,0),
-                draw: state::DrawState::new(),
-            },
+            state: State::new(),
             parameters: ParamStorage::new(),
         }
     }
@@ -192,7 +210,7 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
 
     fn bind_target<C: device::draw::CommandBuffer>(
         buf: &mut C,
-        to: device::target::Target, 
+        to: device::target::Target,
         plane: target::Plane
     ) {
         match plane {
@@ -217,10 +235,16 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
             self.state.frame.height = frame.height;
         }
         if frame.is_default() {
-            // binding the default FBO, not touching our common one
-            self.buf.bind_frame_buffer(self.default_frame_buffer.get_name());
+            if self.state.is_frame_buffer_set {
+                // binding the default FBO, not touching our common one
+                self.buf.bind_frame_buffer(self.default_frame_buffer.get_name());
+                self.state.is_frame_buffer_set = false;
+            }
         } else {
-            self.buf.bind_frame_buffer(self.common_frame_buffer.get_name());
+            if !self.state.is_frame_buffer_set {
+                self.buf.bind_frame_buffer(self.common_frame_buffer.get_name());
+                self.state.is_frame_buffer_set = true;
+            }
             for (i, (cur, new)) in self.state.frame.colors.iter().zip(frame.colors.iter()).enumerate() {
                 if *cur != *new {
                     Renderer::<C>::bind_target(&mut self.buf, device::target::TargetColor(i as u8), *new);
@@ -304,14 +328,35 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
     }
 
     fn bind_mesh(&mut self, mesh: &mesh::Mesh, link: &mesh::Link, info: &ProgramInfo) {
-        // It's Ok if the array buffer is not supported. We can just ignore it.
-        self.common_array_buffer.map(|ab| self.buf.bind_array_buffer(ab.get_name())).is_ok();
+        if !self.state.is_array_buffer_set {
+            // It's Ok if the array buffer is not supported. We can just ignore it.
+            self.common_array_buffer.map(|ab|
+                self.buf.bind_array_buffer(ab.get_name())
+            ).is_ok();
+            self.state.is_array_buffer_set = true;
+        }
         for (attrib_id, sat) in link.to_iter().zip(info.attributes.iter()) {
             let vat = &mesh.attributes[attrib_id];
-            self.buf.bind_attribute(
-                sat.location as device::AttributeSlot,
-                vat.buffer.get_name(), vat.elem_count, vat.elem_type,
-                vat.stride, vat.offset, vat.instance_rate);
+            let loc = sat.location as uint;
+            let need_update = loc >= self.state.attributes.len() ||
+                match self.state.attributes[loc] {
+                    Some((buf, fmt)) => buf != vat.buffer || fmt != vat.format,
+                    None => true,
+                };
+            if need_update {
+                self.buf.bind_attribute(loc as device::AttributeSlot,
+                    vat.buffer.get_name(), vat.format);
+                if loc < self.state.attributes.len() {
+                    self.state.attributes[loc] = Some((vat.buffer, vat.format));
+                }
+            }
+        }
+    }
+
+    fn bind_index<T>(&mut self, buf: device::BufferHandle<T>) {
+        if self.state.index != Some(buf.raw()) {
+            self.buf.bind_index(buf.get_name());
+            self.state.index = Some(buf.raw());
         }
     }
 
@@ -322,16 +367,16 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
                 self.buf.call_draw(prim_type, start, end, instances);
             },
             mesh::IndexSlice8(prim_type, buf, start, end) => {
-                self.buf.bind_index(buf.get_name());
-                self.buf.call_draw_indexed(prim_type, U8, start, end, instances);
+                self.bind_index(buf);
+                self.buf.call_draw_indexed(prim_type, a::U8, start, end, instances);
             },
             mesh::IndexSlice16(prim_type, buf, start, end) => {
-                self.buf.bind_index(buf.get_name());
-                self.buf.call_draw_indexed(prim_type, U16, start, end, instances);
+                self.bind_index(buf);
+                self.buf.call_draw_indexed(prim_type, a::U16, start, end, instances);
             },
             mesh::IndexSlice32(prim_type, buf, start, end) => {
-                self.buf.bind_index(buf.get_name());
-                self.buf.call_draw_indexed(prim_type, U32, start, end, instances);
+                self.bind_index(buf);
+                self.buf.call_draw_indexed(prim_type, a::U32, start, end, instances);
             },
         }
     }
@@ -350,7 +395,7 @@ pub trait DeviceHelper<C: device::draw::CommandBuffer> {
                     -> Result<device::ProgramHandle, ProgramError>;
 }
 
-impl<D: device::Device<C>, 
+impl<D: device::Device<C>,
      C: device::draw::CommandBuffer> DeviceHelper<C> for D {
     fn create_renderer(&mut self) -> Renderer<C> {
         Renderer {
@@ -358,11 +403,7 @@ impl<D: device::Device<C>,
             common_array_buffer: self.create_array_buffer(),
             common_frame_buffer: self.create_frame_buffer(),
             default_frame_buffer: device::get_main_frame_buffer(),
-            //TODO: make sure this is HW default
-            state: State {
-                frame: target::Frame::new(0,0),
-                draw: state::DrawState::new(),
-            },
+            state: State::new(),
             parameters: ParamStorage::new(),
         }
     }

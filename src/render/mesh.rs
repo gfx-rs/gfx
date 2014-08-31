@@ -26,20 +26,12 @@ use device::attrib as a;
 /// Describes a single attribute of a vertex buffer, including its type, name, etc.
 #[deriving(Clone, PartialEq, Show)]
 pub struct Attribute {
-    /// Vertex buffer to contain the data
-    pub buffer: d::RawBufferHandle,
-    /// Number of elements per vertex
-    pub elem_count: a::Count,
-    /// Type of a single element
-    pub elem_type: a::Type,
-    /// Offset in bytes to the first vertex
-    pub offset: a::Offset,
-    /// Stride in bytes between consecutive vertices
-    pub stride: a::Stride,
     /// A name to match the shader input
     pub name: String,
-    /// Instance rate per vertex
-    pub instance_rate: a::InstanceRate,
+    /// Vertex buffer to contain the data
+    pub buffer: d::RawBufferHandle,
+    /// Format of the attribute
+    pub format: a::Format,
 }
 
 /// A trait implemented automatically for user vertex structure by
@@ -84,7 +76,7 @@ impl Mesh {
 
         let mut attributes = per_vertex;
         for mut at in per_instance.move_iter() {
-            at.instance_rate = 1;
+            at.format.instance_rate = 1;
             attributes.push(at);
         }
 

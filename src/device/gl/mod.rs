@@ -227,8 +227,8 @@ impl GlDevice {
                     error!("Ignored VAO bind command: {}", array_buffer)
                 }
             },
-            ::BindAttribute(slot, buffer, count, el_type, stride, offset, divisor) => {
-                let gl_type = match el_type {
+            ::BindAttribute(slot, buffer, format) => {
+                let gl_type = match format.elem_type {
                     a::Int(_, a::U8, a::Unsigned)  => gl::UNSIGNED_BYTE,
                     a::Int(_, a::U8, a::Signed)    => gl::BYTE,
                     a::Int(_, a::U16, a::Unsigned) => gl::UNSIGNED_SHORT,
@@ -239,45 +239,45 @@ impl GlDevice {
                     a::Float(_, a::F32) => gl::FLOAT,
                     a::Float(_, a::F64) => gl::DOUBLE,
                     _ => {
-                        error!("Unsupported element type: {}", el_type);
+                        error!("Unsupported element type: {}", format.elem_type);
                         return
                     }
                 };
                 self.gl.BindBuffer(gl::ARRAY_BUFFER, buffer);
-                let offset = offset as *const gl::types::GLvoid;
-                match el_type {
+                let offset = format.offset as *const gl::types::GLvoid;
+                match format.elem_type {
                     a::Int(a::IntRaw, _, _) => unsafe {
                         self.gl.VertexAttribIPointer(slot as gl::types::GLuint,
-                            count as gl::types::GLint, gl_type,
-                            stride as gl::types::GLint, offset);
+                            format.elem_count as gl::types::GLint, gl_type,
+                            format.stride as gl::types::GLint, offset);
                     },
                     a::Int(a::IntNormalized, _, _) => unsafe {
                         self.gl.VertexAttribPointer(slot as gl::types::GLuint,
-                            count as gl::types::GLint, gl_type, gl::TRUE,
-                            stride as gl::types::GLint, offset);
+                            format.elem_count as gl::types::GLint, gl_type, gl::TRUE,
+                            format.stride as gl::types::GLint, offset);
                     },
                     a::Int(a::IntAsFloat, _, _) => unsafe {
                         self.gl.VertexAttribPointer(slot as gl::types::GLuint,
-                            count as gl::types::GLint, gl_type, gl::FALSE,
-                            stride as gl::types::GLint, offset);
+                            format.elem_count as gl::types::GLint, gl_type, gl::FALSE,
+                            format.stride as gl::types::GLint, offset);
                     },
                     a::Float(a::FloatDefault, _) => unsafe {
                         self.gl.VertexAttribPointer(slot as gl::types::GLuint,
-                            count as gl::types::GLint, gl_type, gl::FALSE,
-                            stride as gl::types::GLint, offset);
+                            format.elem_count as gl::types::GLint, gl_type, gl::FALSE,
+                            format.stride as gl::types::GLint, offset);
                     },
                     a::Float(a::FloatPrecision, _) => unsafe {
                         self.gl.VertexAttribLPointer(slot as gl::types::GLuint,
-                            count as gl::types::GLint, gl_type,
-                            stride as gl::types::GLint, offset);
+                            format.elem_count as gl::types::GLint, gl_type,
+                            format.stride as gl::types::GLint, offset);
                     },
                     _ => ()
                 }
                 self.gl.EnableVertexAttribArray(slot as gl::types::GLuint);
                 if self.caps.instance_rate_supported {
                     self.gl.VertexAttribDivisor(slot as gl::types::GLuint,
-                        divisor as gl::types::GLuint);
-                }else if divisor != 0 {
+                        format.instance_rate as gl::types::GLuint);
+                }else if format.instance_rate != 0 {
                     error!("Instanced arrays are not supported");
                 }
             },

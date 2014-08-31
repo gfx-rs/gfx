@@ -49,7 +49,7 @@ pub fn link_mesh(mesh: &mesh::Mesh, pinfo: &ProgramInfo) -> Result<mesh::Link, M
     for sat in pinfo.attributes.iter() {
         match mesh.attributes.iter().enumerate()
                   .find(|&(_, a)| a.name.as_slice() == sat.name.as_slice()) {
-            Some((attrib_id, vat)) => match vat.elem_type.is_compatible(sat.base_type) {
+            Some((attrib_id, vat)) => match vat.format.elem_type.is_compatible(sat.base_type) {
                 Ok(_) => indices.push(attrib_id),
                 Err(_) => return Err(ErrorAttributeType),
             },

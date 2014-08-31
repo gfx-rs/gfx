@@ -285,8 +285,7 @@ pub struct BufferInfo {
 pub enum Command {
     BindProgram(back::Program),
     BindArrayBuffer(back::ArrayBuffer),
-    BindAttribute(AttributeSlot, back::Buffer, attrib::Count,
-        attrib::Type, attrib::Stride, attrib::Offset, attrib::InstanceRate),
+    BindAttribute(AttributeSlot, back::Buffer, attrib::Format),
     BindIndex(back::Buffer),
     BindFrameBuffer(back::FrameBuffer),
     /// Unbind any surface from the specified target slot
