@@ -140,13 +140,13 @@ impl Iterator<uint> for AttributeIndices {
     }
 }
 
-/// The strcture holding remapping table from shader inputs to mesh attributes
+/// Holds a remapping table from shader inputs to mesh attributes.
 pub struct Link {
     table: u64,
 }
 
 impl Link {
-    /// Construct a new link from an iterator over attribute indices
+    /// Construct a new link from an iterator over attribute indices.
     pub fn from_iter<I: Iterator<uint>>(iter: I) -> Result<Link, LinkError> {
         let mut table = 0u64;
         for (input, attrib) in iter.enumerate() {
