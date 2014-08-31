@@ -127,12 +127,12 @@ static BITS_PER_ATTRIBUTE: uint = 4;
 static MAX_SHADER_INPUTS: uint = 64 / BITS_PER_ATTRIBUTE;
 static MESH_ATTRIBUTE_MASK: uint = (1u << BITS_PER_ATTRIBUTE) - 1;
 
-/// Iterates over mesh attributes in a specific order
-pub struct AttributeIterator {
+/// An iterator over mesh attributes.
+pub struct AttributeIndices {
     value: u64,
 }
 
-impl Iterator<uint> for AttributeIterator {
+impl Iterator<uint> for AttributeIndices {
     fn next(&mut self) -> Option<uint> {
         let id = (self.value as uint) & MESH_ATTRIBUTE_MASK;
         self.value >>= BITS_PER_ATTRIBUTE;
@@ -140,21 +140,21 @@ impl Iterator<uint> for AttributeIterator {
     }
 }
 
-/// The strcture holding remapping table from shader inputs to mesh attributes
+/// Holds a remapping table from shader inputs to mesh attributes.
 pub struct Link {
     table: u64,
 }
 
 impl Link {
-    /// Construct a new link from an iterator over attribute indices
+    /// Construct a new link from an iterator over attribute indices.
     pub fn from_iter<I: Iterator<uint>>(iter: I) -> Result<Link, LinkError> {
         let mut table = 0u64;
         for (input, attrib) in iter.enumerate() {
             if input >= MAX_SHADER_INPUTS {
                 return Err(ErrorShaderInput(input))
-            }else if attrib > MESH_ATTRIBUTE_MASK {
+            } else if attrib > MESH_ATTRIBUTE_MASK {
                 return Err(ErrorMeshAttribute(attrib))
-            }else {
+            } else {
                 table |= attrib as u64 << (input * BITS_PER_ATTRIBUTE);
             }
         }
@@ -164,8 +164,8 @@ impl Link {
     }
 
     /// Convert to an iterator returning attribute indices
-    pub fn to_iter(&self) -> AttributeIterator {
-        AttributeIterator {
+    pub fn attribute_indices(&self) -> AttributeIndices {
+        AttributeIndices {
             value: self.table,
         }
     }
