@@ -60,6 +60,7 @@ struct State {
     is_frame_buffer_set: bool,
     frame: target::Frame,
     is_array_buffer_set: bool,
+    program_name: device::back::Program,
     index: Option<device::RawBufferHandle>,
     attributes: [Option<CachedAttribute>, .. TRACKED_ATTRIBUTES],
     draw: state::DrawState,
@@ -72,6 +73,7 @@ impl State {
             is_frame_buffer_set: false,
             frame: target::Frame::new(0,0),
             is_array_buffer_set: false,
+            program_name: 0,
             index: None,
             attributes: [None, ..TRACKED_ATTRIBUTES],
             draw: state::DrawState::new(),
@@ -283,7 +285,11 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
     }
 
     fn bind_program<B: Batch>(&mut self, batch: &B, program: &device::ProgramHandle) {
-        self.buf.bind_program(program.get_name());
+        //Warning: this is not protected against deleted resources in single-threaded mode
+        if self.state.program_name != program.get_name() {
+            self.buf.bind_program(program.get_name());
+            self.state.program_name = program.get_name();
+        }
         let pinfo = program.get_info();
         self.parameters.resize(pinfo.uniforms.len(), pinfo.blocks.len(),
             pinfo.textures.len());
