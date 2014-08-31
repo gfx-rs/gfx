@@ -17,7 +17,6 @@ use super::gl::types::{GLenum, GLuint, GLint, GLfloat, GLsizei, GLvoid};
 use blob::Blob;
 use tex;
 use attrib;
-use shade::{IsMultiSample, MultiSample, NoMultiSample};
 
 /// A token produced by the `bind_texture` that allows following up
 /// with a GL-compatibility sampler settings in `bind_sampler`
@@ -192,7 +191,7 @@ pub fn make_without_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
     };
 
     // since it's a texture, we want to read from it
-    let fixedSampleLocations = gl::TRUE;
+    let fixed_sample_locations = gl::TRUE;
 
     match info.kind {
         tex::Texture1D => unsafe {
@@ -240,7 +239,7 @@ pub fn make_without_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
                 fmt as GLenum,  //GL spec bug
                 info.width as GLsizei,
                 info.height as GLsizei,
-                fixedSampleLocations
+                fixed_sample_locations
             );
         },
         tex::TextureCube => unimplemented!(),
@@ -266,7 +265,7 @@ pub fn make_without_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
                 info.width as GLsizei,
                 info.height as GLsizei,
                 info.depth as GLsizei,
-                fixedSampleLocations
+                fixed_sample_locations
             );
         },
         _ => return Err(tex::UnsupportedTextureSampling),
@@ -309,7 +308,7 @@ pub fn make_with_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
     };
 
     // since it's a texture, we want to read from it
-    let fixedSampleLocations = gl::TRUE;
+    let fixed_sample_locations = gl::TRUE;
 
     match info.kind {
         tex::Texture1D => {
@@ -355,7 +354,7 @@ pub fn make_with_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
                 fmt as GLenum,
                 info.width as GLsizei,
                 info.height as GLsizei,
-                fixedSampleLocations
+                fixed_sample_locations
             );
         },
         tex::Texture2DMultiSampleArray(tex::Msaa(samples)) => {
@@ -366,7 +365,7 @@ pub fn make_with_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
                 info.width as GLsizei,
                 info.height as GLsizei,
                 info.depth as GLsizei,
-                fixedSampleLocations
+                fixed_sample_locations
             );
         },
         tex::TextureCube => unimplemented!(),
