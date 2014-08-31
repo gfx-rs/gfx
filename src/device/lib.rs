@@ -32,7 +32,7 @@ extern crate libc;
 /* #[cfg(gl)] */ pub use gl::draw::GlCommandBuffer;
 // #[cfg(d3d11)] ... // TODO
 
-use std::mem::size_of;
+use std::mem;
 
 use blob::{Blob, RefBlobCast};
 
@@ -265,7 +265,7 @@ pub trait Device<C: draw::CommandBuffer> {
     // resource creation
     fn create_buffer_raw(&mut self, size: uint, usage: BufferUsage) -> BufferHandle<()>;
     fn create_buffer<T>(&mut self, num: uint, usage: BufferUsage) -> BufferHandle<T> {
-        self.create_buffer_raw(num * size_of::<T>(), usage).cast()
+        self.create_buffer_raw(num * mem::size_of::<T>(), usage).cast()
     }
     fn create_buffer_static<T>(&mut self, &Blob<T>) -> BufferHandle<T>;
     fn create_array_buffer(&mut self) -> Result<ArrayBufferHandle, ()>;
@@ -289,7 +289,7 @@ pub trait Device<C: draw::CommandBuffer> {
     /// Update the information stored in a specific buffer
     fn update_buffer_raw(&mut self, buf: BufferHandle<()>, data: &Blob<()>, offset_bytes: uint);
     fn update_buffer<T>(&mut self, buf: BufferHandle<T>, data: &Blob<T>, offset_elements: uint) {
-        self.update_buffer_raw(buf.cast(), data.cast(), size_of::<T>() * offset_elements);
+        self.update_buffer_raw(buf.cast(), data.cast(), mem::size_of::<T>() * offset_elements);
     }
     /// Update the information stored in a texture
     fn update_texture_raw(&mut self, tex: &TextureHandle, img: &tex::ImageInfo,
