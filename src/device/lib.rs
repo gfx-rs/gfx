@@ -32,10 +32,12 @@ extern crate libc;
 /* #[cfg(gl)] */ pub use gl::draw::GlCommandBuffer;
 // #[cfg(d3d11)] ... // TODO
 
-use std::fmt;
-use std::mem::size_of;
+use std::mem;
+
+use blob::{Blob, RefBlobCast};
 
 pub mod attrib;
+pub mod blob;
 pub mod draw;
 pub mod shade;
 pub mod state;
@@ -59,7 +61,7 @@ pub type UniformBufferSlot = u8;
 pub type TextureSlot = u8;
 
 /// A generic handle struct
-#[deriving(Clone, Show)]
+#[deriving(Clone, Show, PartialEq)]
 pub struct Handle<T, I>(T, I);
 
 #[deriving(Clone, Show)]
@@ -74,12 +76,6 @@ impl<T: Copy, I> Handle<T, I> {
     pub fn get_info(&self) -> &I {
         let Handle(_, ref info) = *self;
         info
-    }
-}
-
-impl<T: Copy + PartialEq, I: PartialEq> PartialEq for Handle<T, I> {
-    fn eq(&self, other: &Handle<T,I>) -> bool {
-        self.get_name().eq(&other.get_name()) && self.get_info().eq(other.get_info())
     }
 }
 
@@ -164,64 +160,6 @@ pub struct Capabilities {
     pub immutable_storage_supported: bool,
     pub instance_call_supported: bool,
     pub instance_rate_supported: bool,
-}
-
-/// A trait that slice-like types implement.
-pub trait Blob<T> {
-    /// Get the address to the data this `Blob` stores.
-    fn get_address(&self) -> *const T;
-    /// Get the number of bytes in this blob.
-    fn get_size(&self) -> uint;
-}
-
-/// Helper trait for casting &Blob
-pub trait RefBlobCast<'a> {
-    /// Cast the type the blob references
-    fn cast<U>(self) -> &'a Blob<U>+'a;
-}
-
-/// Helper trait for casting Box<Blob>
-pub trait BoxBlobCast {
-    /// Cast the type the blob references
-    fn cast<U>(self) -> Box<Blob<U> + Send>;
-}
-
-impl<'a, T> RefBlobCast<'a> for &'a Blob<T>+'a {
-    fn cast<U>(self) -> &'a Blob<U>+'a {
-        unsafe { std::mem::transmute(self) }
-    }
-}
-
-impl<T> BoxBlobCast for Box<Blob<T> + Send> {
-    fn cast<U>(self) -> Box<Blob<U> + Send> {
-        unsafe { std::mem::transmute(self) }
-    }
-}
-
-impl<T: Send> Blob<T> for Vec<T> {
-    fn get_address(&self) -> *const T {
-        self.as_ptr()
-    }
-
-    fn get_size(&self) -> uint {
-        self.len() * size_of::<T>()
-    }
-}
-
-impl<'a, T> Blob<T> for &'a [T] {
-    fn get_address(&self) -> *const T {
-        self.as_ptr()
-    }
-
-    fn get_size(&self) -> uint {
-        self.len() * size_of::<T>()
-    }
-}
-
-impl<T> fmt::Show for Box<Blob<T> + Send> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Blob({:#p}, {})", self.get_address(), self.get_size())
-    }
 }
 
 /// Describes what geometric primitives are created from vertex data.
@@ -327,7 +265,7 @@ pub trait Device<C: draw::CommandBuffer> {
     // resource creation
     fn create_buffer_raw(&mut self, size: uint, usage: BufferUsage) -> BufferHandle<()>;
     fn create_buffer<T>(&mut self, num: uint, usage: BufferUsage) -> BufferHandle<T> {
-        self.create_buffer_raw(num * size_of::<T>(), usage).cast()
+        self.create_buffer_raw(num * mem::size_of::<T>(), usage).cast()
     }
     fn create_buffer_static<T>(&mut self, &Blob<T>) -> BufferHandle<T>;
     fn create_array_buffer(&mut self) -> Result<ArrayBufferHandle, ()>;
@@ -351,7 +289,7 @@ pub trait Device<C: draw::CommandBuffer> {
     /// Update the information stored in a specific buffer
     fn update_buffer_raw(&mut self, buf: BufferHandle<()>, data: &Blob<()>, offset_bytes: uint);
     fn update_buffer<T>(&mut self, buf: BufferHandle<T>, data: &Blob<T>, offset_elements: uint) {
-        self.update_buffer_raw(buf.cast(), data.cast(), size_of::<T>() * offset_elements);
+        self.update_buffer_raw(buf.cast(), data.cast(), mem::size_of::<T>() * offset_elements);
     }
     /// Update the information stored in a texture
     fn update_texture_raw(&mut self, tex: &TextureHandle, img: &tex::ImageInfo,

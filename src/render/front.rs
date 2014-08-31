@@ -16,11 +16,11 @@
 
 use std::mem::size_of;
 use device;
-use device::BoxBlobCast;
+use device::blob::{Blob, BoxBlobCast};
 use device::draw::CommandBuffer;
 use device::shade::{ProgramInfo, UniformValue, ShaderSource,
     Vertex, Fragment, CreateShaderError};
-use device::attrib as a;
+use device::attrib;
 use batch::Batch;
 use mesh;
 use shade;
@@ -53,7 +53,7 @@ pub enum ProgramError {
 }
 
 static TRACKED_ATTRIBUTES: uint = 8;
-type CachedAttribute = (device::RawBufferHandle, a::Format);
+type CachedAttribute = (device::RawBufferHandle, attrib::Format);
 
 /// Graphics state. Used as a cache to figure out redundant state changes.
 struct State {
@@ -183,18 +183,18 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
         debug_assert!(data.len() * esize + offset_bytes <= buf.get_info().size);
         self.buf.update_buffer(
             buf.get_name(),
-            ((box data) as Box<device::Blob<T> + Send>).cast(),
+            ((box data) as Box<Blob<T> + Send>).cast(),
             offset_bytes
         );
     }
 
     /// Update a buffer with data from a single type.
-    pub fn update_buffer_struct<U, T: device::Blob<U>+Send>(&mut self,
+    pub fn update_buffer_struct<U, T: Blob<U>+Send>(&mut self,
                                 buf: device::BufferHandle<U>, data: T) {
         debug_assert!(size_of::<T>() <= buf.get_info().size);
         self.buf.update_buffer(
             buf.get_name(),
-            ((box data) as Box<device::Blob<U> + Send>).cast(),
+            ((box data) as Box<Blob<U> + Send>).cast(),
             0
         );
     }
@@ -207,7 +207,7 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
             tex.get_info().kind,
             tex.get_name(),
             img,
-            ((box data) as Box<device::Blob<T> + Send>).cast()
+            ((box data) as Box<Blob<T> + Send>).cast()
         );
     }
 
@@ -375,15 +375,15 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
             },
             mesh::IndexSlice8(prim_type, buf, start, end) => {
                 self.bind_index(buf);
-                self.buf.call_draw_indexed(prim_type, a::U8, start, end, instances);
+                self.buf.call_draw_indexed(prim_type, attrib::U8, start, end, instances);
             },
             mesh::IndexSlice16(prim_type, buf, start, end) => {
                 self.bind_index(buf);
-                self.buf.call_draw_indexed(prim_type, a::U16, start, end, instances);
+                self.buf.call_draw_indexed(prim_type, attrib::U16, start, end, instances);
             },
             mesh::IndexSlice32(prim_type, buf, start, end) => {
                 self.bind_index(buf);
-                self.buf.call_draw_indexed(prim_type, a::U32, start, end, instances);
+                self.buf.call_draw_indexed(prim_type, attrib::U32, start, end, instances);
             },
         }
     }

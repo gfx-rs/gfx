@@ -18,7 +18,8 @@
 
 use std::default::Default;
 use std::fmt;
-use super::target::Stencil as StencilValue;
+
+use target;
 
 /// The winding order of a set of vertices.
 #[deriving(Clone, PartialEq, Show)]
@@ -145,12 +146,12 @@ pub struct StencilSide {
     /// Comparison function to use to determine if the stencil test passes.
     pub fun: Comparison,
     /// Reference value to compare the value in the stencil buffer with.
-    pub value: StencilValue,
+    pub value: target::Stencil,
     /// A mask that is ANDd with both the stencil buffer value and the reference value when they
     /// are read before doing the stencil test.
-    pub mask_read: StencilValue,
+    pub mask_read: target::Stencil,
     /// A mask that is ANDd with the stencil value before writing to the stencil buffer.
-    pub mask_write: StencilValue,
+    pub mask_write: target::Stencil,
     /// What operation to do if the stencil test fails.
     pub op_fail: StencilOp,
     /// What operation to do if the stenil test passes but the depth test fails.
