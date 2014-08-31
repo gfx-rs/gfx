@@ -152,9 +152,9 @@ impl Link {
         for (input, attrib) in iter.enumerate() {
             if input >= MAX_SHADER_INPUTS {
                 return Err(ErrorShaderInput(input))
-            }else if attrib > MESH_ATTRIBUTE_MASK {
+            } else if attrib > MESH_ATTRIBUTE_MASK {
                 return Err(ErrorMeshAttribute(attrib))
-            }else {
+            } else {
                 table |= attrib as u64 << (input * BITS_PER_ATTRIBUTE);
             }
         }
