@@ -61,7 +61,7 @@ pub type UniformBufferSlot = u8;
 pub type TextureSlot = u8;
 
 /// A generic handle struct
-#[deriving(Clone, Show)]
+#[deriving(Clone, Show, PartialEq)]
 pub struct Handle<T, I>(T, I);
 
 #[deriving(Clone, Show)]
@@ -76,12 +76,6 @@ impl<T: Copy, I> Handle<T, I> {
     pub fn get_info(&self) -> &I {
         let Handle(_, ref info) = *self;
         info
-    }
-}
-
-impl<T: Copy + PartialEq, I: PartialEq> PartialEq for Handle<T, I> {
-    fn eq(&self, other: &Handle<T,I>) -> bool {
-        self.get_name().eq(&other.get_name()) && self.get_info().eq(other.get_info())
     }
 }
 
