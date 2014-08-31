@@ -94,8 +94,8 @@ impl ParamStorage{
 }
 
 /// Renderer front-end
-pub struct Renderer {
-    buf: device::ActualCommandBuffer,
+pub struct Renderer<C: device::draw::CommandBuffer> {
+    buf: C,
     common_array_buffer: Result<device::ArrayBufferHandle, ()>,
     common_frame_buffer: device::FrameBufferHandle,
     default_frame_buffer: device::FrameBufferHandle,
@@ -103,19 +103,19 @@ pub struct Renderer {
     parameters: ParamStorage,
 }
 
-impl Renderer {
+impl<C: device::draw::CommandBuffer> Renderer<C> {
     /// Reset all commands for the command buffer re-usal.
     pub fn reset(&mut self) {
         self.buf.clear();
     }
 
     /// Get a command buffer to be submitted
-    pub fn as_buffer(&self) -> &device::ActualCommandBuffer {
+    pub fn as_buffer(&self) -> &C {
         &self.buf
     }
 
     /// Clone the renderer shared data but ignore the commands
-    pub fn clone_empty(&self) -> Renderer {
+    pub fn clone_empty(&self) -> Renderer<C> {
         Renderer {
             buf: CommandBuffer::new(),
             common_array_buffer: self.common_array_buffer,
@@ -192,8 +192,11 @@ impl Renderer {
         );
     }
 
-    fn bind_target(buf: &mut device::ActualCommandBuffer,
-                   to: device::target::Target, plane: target::Plane) {
+    fn bind_target<C: device::draw::CommandBuffer>(
+        buf: &mut C,
+        to: device::target::Target, 
+        plane: target::Plane
+    ) {
         match plane {
             target::PlaneEmpty =>
                 buf.unbind_target(to),
@@ -218,14 +221,14 @@ impl Renderer {
             self.buf.bind_frame_buffer(self.common_frame_buffer.get_name());
             for (i, (cur, new)) in self.state.frame.colors.iter().zip(frame.colors.iter()).enumerate() {
                 if *cur != *new {
-                    Renderer::bind_target(&mut self.buf, device::target::TargetColor(i as u8), *new);
+                    Renderer::<C>::bind_target(&mut self.buf, device::target::TargetColor(i as u8), *new);
                 }
             }
             if self.state.frame.depth != frame.depth {
-                Renderer::bind_target(&mut self.buf, device::target::TargetDepth, frame.depth);
+                Renderer::<C>::bind_target(&mut self.buf, device::target::TargetDepth, frame.depth);
             }
             if self.state.frame.stencil != frame.stencil {
-                Renderer::bind_target(&mut self.buf, device::target::TargetStencil, frame.stencil);
+                Renderer::<C>::bind_target(&mut self.buf, device::target::TargetStencil, frame.stencil);
             }
             self.state.frame = *frame;
         }
@@ -322,9 +325,9 @@ impl Renderer {
 
 
 /// Backend extension trait for convenience methods
-pub trait DeviceHelper {
+pub trait DeviceHelper<C: device::draw::CommandBuffer> {
     /// Create a new renderer
-    fn create_renderer(&mut self) -> Renderer;
+    fn create_renderer(&mut self) -> Renderer<C>;
     /// Create a new mesh from the given vertex data.
     /// Convenience function around `create_buffer` and `Mesh::from_format`.
     fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh;
@@ -333,8 +336,9 @@ pub trait DeviceHelper {
                     -> Result<device::ProgramHandle, ProgramError>;
 }
 
-impl<D: device::Device> DeviceHelper for D {
-    fn create_renderer(&mut self) -> Renderer {
+impl<D: device::Device<C>, 
+     C: device::draw::CommandBuffer> DeviceHelper<C> for D {
+    fn create_renderer(&mut self) -> Renderer<C> {
         Renderer {
             buf: CommandBuffer::new(),
             common_array_buffer: self.create_array_buffer(),

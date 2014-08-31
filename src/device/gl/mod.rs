@@ -385,7 +385,7 @@ impl GlDevice {
     }
 }
 
-impl ::Device for GlDevice {
+impl ::Device<draw::GlCommandBuffer> for GlDevice {
     fn get_capabilities<'a>(&'a self) -> &'a ::Capabilities {
         &self.caps
     }
