@@ -126,6 +126,7 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
     /// Reset all commands for the command buffer re-usal.
     pub fn reset(&mut self) {
         self.buf.clear();
+        self.state = State::new();
     }
 
     /// Get a command buffer to be submitted
