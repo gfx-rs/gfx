@@ -16,6 +16,8 @@
 
 #![allow(missing_doc)]
 
+use shade;
+
 /// Number of elements per attribute, only 1 to 4 are supported
 pub type Count = u8;
 /// Offset of an attribute from the start of the buffer, in bytes
@@ -79,18 +81,17 @@ pub enum Type {
 impl Type {
     /// Check if the attribute is compatible with a particular shader type.
     pub fn is_compatible(&self, bt: super::shade::BaseType) -> Result<(), ()> {
-        use super::shade as s;
         match (*self, bt) {
-            (Int(IntRaw, _, _), s::BaseI32) => Ok(()),
-            (Int(IntRaw, _, Unsigned), s::BaseU32) => Ok(()),
+            (Int(IntRaw, _, _), shade::BaseI32) => Ok(()),
+            (Int(IntRaw, _, Unsigned), shade::BaseU32) => Ok(()),
             (Int(IntRaw, _, _), _) => Err(()),
-            (Int(_, _, _), s::BaseF32) => Ok(()),
+            (Int(_, _, _), shade::BaseF32) => Ok(()),
             (Int(_, _, _), _) => Err(()),
-            (Float(_, _), s::BaseF32) => Ok(()),
-            (Float(FloatPrecision, F64), s::BaseF64) => Ok(()),
+            (Float(_, _), shade::BaseF32) => Ok(()),
+            (Float(FloatPrecision, F64), shade::BaseF64) => Ok(()),
             (Float(_, _), _) => Err(()),
-            (_, s::BaseF64) => Err(()),
-            (_, s::BaseBool) => Err(()),
+            (_, shade::BaseF64) => Err(()),
+            (_, shade::BaseBool) => Err(()),
             _ => Err(()),
         }
     }

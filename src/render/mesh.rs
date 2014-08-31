@@ -20,8 +20,8 @@
 //! create a mesh is to use the `#[vertex_format]` attribute on a struct, upload them into a
 //! `Buffer`, and then use `Mesh::from`.
 
-use device as d;
-use device::attrib as a;
+use device;
+use device::attrib;
 
 /// Describes a single attribute of a vertex buffer, including its type, name, etc.
 #[deriving(Clone, PartialEq, Show)]
@@ -29,30 +29,30 @@ pub struct Attribute {
     /// A name to match the shader input
     pub name: String,
     /// Vertex buffer to contain the data
-    pub buffer: d::RawBufferHandle,
+    pub buffer: device::RawBufferHandle,
     /// Format of the attribute
-    pub format: a::Format,
+    pub format: attrib::Format,
 }
 
 /// A trait implemented automatically for user vertex structure by
 /// `#[vertex_format] attribute
 pub trait VertexFormat {
     /// Create the attributes for this type, using the given buffer.
-    fn generate(Option<Self>, buffer: d::RawBufferHandle) -> Vec<Attribute>;
+    fn generate(Option<Self>, buffer: device::RawBufferHandle) -> Vec<Attribute>;
 }
 
 /// Describes geometry to render.
 #[deriving(Clone, PartialEq, Show)]
 pub struct Mesh {
     /// Number of vertices in the mesh.
-    pub num_vertices: d::VertexCount,
+    pub num_vertices: device::VertexCount,
     /// Vertex attributes to use.
     pub attributes: Vec<Attribute>,
 }
 
 impl Mesh {
     /// Create a new mesh, which is a `TriangleList` with no attributes and `nv` vertices.
-    pub fn new(nv: d::VertexCount) -> Mesh {
+    pub fn new(nv: device::VertexCount) -> Mesh {
         Mesh {
             num_vertices: nv,
             attributes: Vec::new(),
@@ -60,7 +60,7 @@ impl Mesh {
     }
 
     /// Create a new `Mesh` from a struct that implements `VertexFormat` and a buffer.
-    pub fn from_format<V: VertexFormat>(buf: d::BufferHandle<V>, nv: d::VertexCount) -> Mesh {
+    pub fn from_format<V: VertexFormat>(buf: device::BufferHandle<V>, nv: device::VertexCount) -> Mesh {
         Mesh {
             num_vertices: nv,
             attributes: VertexFormat::generate(None::<V>, buf.raw()),
@@ -69,8 +69,8 @@ impl Mesh {
 
     /// Create a new intanced `Mesh` given a vertex buffer and an instance buffer.
     pub fn from_format_instanced<V: VertexFormat, U: VertexFormat>(
-                                 buf: d::BufferHandle<V>, nv: d::VertexCount,
-                                 inst: d::BufferHandle<U>) -> Mesh {
+                                 buf: device::BufferHandle<V>, nv: device::VertexCount,
+                                 inst: device::BufferHandle<U>) -> Mesh {
         let per_vertex   = VertexFormat::generate(None::<V>, buf.raw());
         let per_instance = VertexFormat::generate(None::<U>, inst.raw());
 
@@ -87,7 +87,7 @@ impl Mesh {
     }
 
     /// Return a vertex slice of the whole mesh
-    pub fn get_slice(&self, pt: d::PrimitiveType) -> Slice {
+    pub fn get_slice(&self, pt: device::PrimitiveType) -> Slice {
         VertexSlice(pt, 0, self.num_vertices)
     }
 }
@@ -100,18 +100,18 @@ impl Mesh {
 pub enum Slice  {
     /// Render vertex data directly from the `Mesh`'s buffer, using only the vertices between the two
     /// endpoints.
-    VertexSlice(d::PrimitiveType, d::VertexCount, d::VertexCount),
+    VertexSlice(device::PrimitiveType, device::VertexCount, device::VertexCount),
     /// The `IndexSlice*` buffer contains a list of indices into the `Mesh` data, so every vertex
     /// attribute does not need to be duplicated, only its position in the `Mesh`.  For example,
     /// when drawing a square, two triangles are needed.  Using only `VertexSlice`, one would need
     /// 6 separate vertices, 3 for each triangle. However, two of the vertices will be identical,
     /// wasting space for the duplicated attributes.  Instead, the `Mesh` can store 4 vertices and
     /// an `IndexSlice8` can be used instead.
-    IndexSlice8(d::PrimitiveType, d::BufferHandle<u8>, d::IndexCount, d::IndexCount),
+    IndexSlice8(device::PrimitiveType, device::BufferHandle<u8>, device::IndexCount, device::IndexCount),
     /// As `IndexSlice8` but with `u16` indices
-    IndexSlice16(d::PrimitiveType, d::BufferHandle<u16>, d::IndexCount, d::IndexCount),
+    IndexSlice16(device::PrimitiveType, device::BufferHandle<u16>, device::IndexCount, device::IndexCount),
     /// As `IndexSlice8` but with `u32` indices
-    IndexSlice32(d::PrimitiveType, d::BufferHandle<u32>, d::IndexCount, d::IndexCount),
+    IndexSlice32(device::PrimitiveType, device::BufferHandle<u32>, device::IndexCount, device::IndexCount),
 }
 
 /// Describes kinds of errors that may occur in the mesh linking

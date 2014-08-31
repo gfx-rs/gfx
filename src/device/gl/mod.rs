@@ -23,7 +23,7 @@ extern crate libc;
 
 use log;
 
-use attrib as a;
+use attrib;
 
 use Device;
 use blob::{Blob, RefBlobCast};
@@ -232,15 +232,15 @@ impl GlDevice {
             },
             ::BindAttribute(slot, buffer, format) => {
                 let gl_type = match format.elem_type {
-                    a::Int(_, a::U8, a::Unsigned)  => gl::UNSIGNED_BYTE,
-                    a::Int(_, a::U8, a::Signed)    => gl::BYTE,
-                    a::Int(_, a::U16, a::Unsigned) => gl::UNSIGNED_SHORT,
-                    a::Int(_, a::U16, a::Signed)   => gl::SHORT,
-                    a::Int(_, a::U32, a::Unsigned) => gl::UNSIGNED_INT,
-                    a::Int(_, a::U32, a::Signed)   => gl::INT,
-                    a::Float(_, a::F16) => gl::HALF_FLOAT,
-                    a::Float(_, a::F32) => gl::FLOAT,
-                    a::Float(_, a::F64) => gl::DOUBLE,
+                    attrib::Int(_, attrib::U8, attrib::Unsigned)  => gl::UNSIGNED_BYTE,
+                    attrib::Int(_, attrib::U8, attrib::Signed)    => gl::BYTE,
+                    attrib::Int(_, attrib::U16, attrib::Unsigned) => gl::UNSIGNED_SHORT,
+                    attrib::Int(_, attrib::U16, attrib::Signed)   => gl::SHORT,
+                    attrib::Int(_, attrib::U32, attrib::Unsigned) => gl::UNSIGNED_INT,
+                    attrib::Int(_, attrib::U32, attrib::Signed)   => gl::INT,
+                    attrib::Float(_, attrib::F16) => gl::HALF_FLOAT,
+                    attrib::Float(_, attrib::F32) => gl::FLOAT,
+                    attrib::Float(_, attrib::F64) => gl::DOUBLE,
                     _ => {
                         error!("Unsupported element type: {}", format.elem_type);
                         return
@@ -249,27 +249,27 @@ impl GlDevice {
                 self.gl.BindBuffer(gl::ARRAY_BUFFER, buffer);
                 let offset = format.offset as *const gl::types::GLvoid;
                 match format.elem_type {
-                    a::Int(a::IntRaw, _, _) => unsafe {
+                    attrib::Int(attrib::IntRaw, _, _) => unsafe {
                         self.gl.VertexAttribIPointer(slot as gl::types::GLuint,
                             format.elem_count as gl::types::GLint, gl_type,
                             format.stride as gl::types::GLint, offset);
                     },
-                    a::Int(a::IntNormalized, _, _) => unsafe {
+                    attrib::Int(attrib::IntNormalized, _, _) => unsafe {
                         self.gl.VertexAttribPointer(slot as gl::types::GLuint,
                             format.elem_count as gl::types::GLint, gl_type, gl::TRUE,
                             format.stride as gl::types::GLint, offset);
                     },
-                    a::Int(a::IntAsFloat, _, _) => unsafe {
+                    attrib::Int(attrib::IntAsFloat, _, _) => unsafe {
                         self.gl.VertexAttribPointer(slot as gl::types::GLuint,
                             format.elem_count as gl::types::GLint, gl_type, gl::FALSE,
                             format.stride as gl::types::GLint, offset);
                     },
-                    a::Float(a::FloatDefault, _) => unsafe {
+                    attrib::Float(attrib::FloatDefault, _) => unsafe {
                         self.gl.VertexAttribPointer(slot as gl::types::GLuint,
                             format.elem_count as gl::types::GLint, gl_type, gl::FALSE,
                             format.stride as gl::types::GLint, offset);
                     },
-                    a::Float(a::FloatPrecision, _) => unsafe {
+                    attrib::Float(attrib::FloatPrecision, _) => unsafe {
                         self.gl.VertexAttribLPointer(slot as gl::types::GLuint,
                             format.elem_count as gl::types::GLint, gl_type,
                             format.stride as gl::types::GLint, offset);
@@ -385,9 +385,9 @@ impl GlDevice {
             },
             ::DrawIndexed(prim_type, index_type, start, count, instances) => {
                 let (offset, gl_index) = match index_type {
-                    a::U8  => (start * 1u32, gl::UNSIGNED_BYTE),
-                    a::U16 => (start * 2u32, gl::UNSIGNED_SHORT),
-                    a::U32 => (start * 4u32, gl::UNSIGNED_INT),
+                    attrib::U8  => (start * 1u32, gl::UNSIGNED_BYTE),
+                    attrib::U16 => (start * 2u32, gl::UNSIGNED_SHORT),
+                    attrib::U32 => (start * 4u32, gl::UNSIGNED_INT),
                 };
                 match instances {
                     Some(num) if self.caps.instance_call_supported => unsafe {
