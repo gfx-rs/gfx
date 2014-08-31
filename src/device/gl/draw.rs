@@ -47,10 +47,8 @@ impl ::draw::CommandBuffer for GlCommandBuffer {
     }
 
     fn bind_attribute(&mut self, slot: ::AttributeSlot, buf: super::Buffer,
-                      count: ::attrib::Count, atype: ::attrib::Type,
-                      stride: ::attrib::Stride, offset: ::attrib::Offset,
-                      divisor: ::attrib::InstanceRate) {
-        self.buf.push(::BindAttribute(slot, buf, count, atype, stride, offset, divisor));
+                      format: ::attrib::Format) {
+        self.buf.push(::BindAttribute(slot, buf, format));
     }
 
     fn bind_index(&mut self, buf: super::Buffer) {

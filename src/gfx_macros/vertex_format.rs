@@ -187,18 +187,24 @@ fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     let instance_expr = cx.expr_u8(span, 0); // not supposed to be set by the macro
                     super::ugh(cx, |cx| quote_expr!(cx, {
                         attributes.push($path_root::gfx::Attribute {
-                            buffer: $buffer_expr,
-                            elem_count: $count_expr,
-                            elem_type: $type_expr,
-                            offset: unsafe {
-                                let x: $struct_ident = ::std::mem::uninitialized();
-                                let offset = (&x.$ident as *const _ as uint) - (&x as *const _ as uint);
-                                ::std::mem::forget(x);
-                                offset as $path_root::gfx::attrib::Offset
-                            },
-                            stride: { use std::mem; mem::size_of::<$struct_ident>() as $path_root::gfx::attrib::Stride },
                             name: $ident_str.to_string(),
-                            instance_rate: $instance_expr,
+                            buffer: $buffer_expr,
+                            format: $path_root::gfx::attrib::Format {
+                                elem_count: $count_expr,
+                                elem_type: $type_expr,
+                                offset: unsafe {
+                                    let x: $struct_ident = ::std::mem::uninitialized();
+                                    let offset = (&x.$ident as *const _ as uint) -
+                                        (&x as *const _ as uint);
+                                    ::std::mem::forget(x);
+                                    offset as $path_root::gfx::attrib::Offset
+                                },
+                                stride: { use std::mem;
+                                    mem::size_of::<$struct_ident>() as
+                                        $path_root::gfx::attrib::Stride
+                                },
+                                instance_rate: $instance_expr,
+                            }
                         });
                     }))
                 }).collect::<Vec<Gc<ast::Expr>>>();

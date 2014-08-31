@@ -95,3 +95,18 @@ impl Type {
         }
     }
 }
+
+/// Complete format of a vertex attribute.
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+pub struct Format {
+    /// Number of elements per vertex
+    pub elem_count: Count,
+    /// Type of a single element
+    pub elem_type: Type,
+    /// Offset in bytes to the first vertex
+    pub offset: Offset,
+    /// Stride in bytes between consecutive vertices
+    pub stride: Stride,
+    /// Instance rate per vertex
+    pub instance_rate: InstanceRate,
+}

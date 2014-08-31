@@ -49,7 +49,7 @@ pub fn link_mesh(mesh: &mesh::Mesh, pinfo: &ProgramInfo) -> Result<mesh::Link, M
     for sat in pinfo.attributes.iter() {
         match mesh.attributes.iter().enumerate()
                   .find(|&(_, a)| a.name.as_slice() == sat.name.as_slice()) {
-            Some((attrib_id, vat)) => match vat.elem_type.is_compatible(sat.base_type) {
+            Some((attrib_id, vat)) => match vat.format.elem_type.is_compatible(sat.base_type) {
                 Ok(_) => indices.push(attrib_id),
                 Err(_) => return Err(ErrorAttributeType),
             },
@@ -157,7 +157,8 @@ impl<T: Clone + PartialEq> Array<T> {
 pub struct RefBatch<L, T> {
     mesh_id: Id<mesh::Mesh>,
     mesh_link: mesh::Link,
-    slice: mesh::Slice,
+    /// Mesh slice
+    pub slice: mesh::Slice,
     program_id: Id<ProgramHandle>,
     param_link: L,
     state_id: Id<DrawState>,
