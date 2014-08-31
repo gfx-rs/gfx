@@ -16,7 +16,7 @@
 
 use std::mem::size_of;
 use device;
-use device::BoxBlobCast;
+use device::blob::{Blob, BoxBlobCast};
 use device::draw::CommandBuffer;
 use device::shade::{ProgramInfo, UniformValue, ShaderSource,
     Vertex, Fragment, CreateShaderError};
@@ -183,18 +183,18 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
         debug_assert!(data.len() * esize + offset_bytes <= buf.get_info().size);
         self.buf.update_buffer(
             buf.get_name(),
-            ((box data) as Box<device::Blob<T> + Send>).cast(),
+            ((box data) as Box<Blob<T> + Send>).cast(),
             offset_bytes
         );
     }
 
     /// Update a buffer with data from a single type.
-    pub fn update_buffer_struct<U, T: device::Blob<U>+Send>(&mut self,
+    pub fn update_buffer_struct<U, T: Blob<U>+Send>(&mut self,
                                 buf: device::BufferHandle<U>, data: T) {
         debug_assert!(size_of::<T>() <= buf.get_info().size);
         self.buf.update_buffer(
             buf.get_name(),
-            ((box data) as Box<device::Blob<U> + Send>).cast(),
+            ((box data) as Box<Blob<U> + Send>).cast(),
             0
         );
     }
@@ -207,7 +207,7 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
             tex.get_info().kind,
             tex.get_name(),
             img,
-            ((box data) as Box<device::Blob<T> + Send>).cast()
+            ((box data) as Box<Blob<T> + Send>).cast()
         );
     }
 

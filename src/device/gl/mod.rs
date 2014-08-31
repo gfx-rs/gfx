@@ -22,8 +22,11 @@
 extern crate libc;
 
 use log;
-use super::attrib as a;
-use {Device, RefBlobCast};
+
+use attrib as a;
+
+use Device;
+use blob::{Blob, RefBlobCast};
 
 pub use self::info::{Info, PlatformName, Version};
 
@@ -183,7 +186,7 @@ impl GlDevice {
         }
     }
 
-    fn update_sub_buffer(&mut self, buffer: Buffer, data: &::Blob<()>, offset: uint) {
+    fn update_sub_buffer(&mut self, buffer: Buffer, data: &Blob<()>, offset: uint) {
         self.gl.BindBuffer(gl::ARRAY_BUFFER, buffer);
         unsafe {
             self.gl.BufferSubData(gl::ARRAY_BUFFER,
@@ -442,7 +445,7 @@ impl Device<draw::GlCommandBuffer> for GlDevice {
         ::BufferHandle::from_raw(::Handle(name, info))
     }
 
-    fn create_buffer_static<'a, T>(&mut self, data: &::Blob<T>+'a) -> ::BufferHandle<T> {
+    fn create_buffer_static<'a, T>(&mut self, data: &Blob<T>+'a) -> ::BufferHandle<T> {
         let name = self.create_buffer_internal();
         let info = ::BufferInfo {
             usage: ::UsageStatic,
@@ -555,14 +558,14 @@ impl Device<draw::GlCommandBuffer> for GlDevice {
         }
     }
 
-    fn update_buffer_raw(&mut self, buffer: ::BufferHandle<()>, data: &::Blob<()>,
+    fn update_buffer_raw(&mut self, buffer: ::BufferHandle<()>, data: &Blob<()>,
                          offset_bytes: uint) {
         debug_assert!(offset_bytes + data.get_size() <= buffer.get_info().size);
         self.update_sub_buffer(buffer.get_name(), data, offset_bytes);
     }
 
     fn update_texture_raw(&mut self, texture: &::TextureHandle, img: &::tex::ImageInfo,
-                          data: &::Blob<()>) -> Result<(), ::tex::TextureError> {
+                          data: &Blob<()>) -> Result<(), ::tex::TextureError> {
         tex::update_texture(&self.gl, texture.get_info().kind, texture.get_name(), img, data)
     }
 

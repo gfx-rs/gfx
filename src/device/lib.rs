@@ -32,10 +32,12 @@ extern crate libc;
 /* #[cfg(gl)] */ pub use gl::draw::GlCommandBuffer;
 // #[cfg(d3d11)] ... // TODO
 
-use std::fmt;
 use std::mem::size_of;
 
+use blob::{Blob, RefBlobCast};
+
 pub mod attrib;
+pub mod blob;
 pub mod draw;
 pub mod shade;
 pub mod state;
@@ -164,64 +166,6 @@ pub struct Capabilities {
     pub immutable_storage_supported: bool,
     pub instance_call_supported: bool,
     pub instance_rate_supported: bool,
-}
-
-/// A trait that slice-like types implement.
-pub trait Blob<T> {
-    /// Get the address to the data this `Blob` stores.
-    fn get_address(&self) -> *const T;
-    /// Get the number of bytes in this blob.
-    fn get_size(&self) -> uint;
-}
-
-/// Helper trait for casting &Blob
-pub trait RefBlobCast<'a> {
-    /// Cast the type the blob references
-    fn cast<U>(self) -> &'a Blob<U>+'a;
-}
-
-/// Helper trait for casting Box<Blob>
-pub trait BoxBlobCast {
-    /// Cast the type the blob references
-    fn cast<U>(self) -> Box<Blob<U> + Send>;
-}
-
-impl<'a, T> RefBlobCast<'a> for &'a Blob<T>+'a {
-    fn cast<U>(self) -> &'a Blob<U>+'a {
-        unsafe { std::mem::transmute(self) }
-    }
-}
-
-impl<T> BoxBlobCast for Box<Blob<T> + Send> {
-    fn cast<U>(self) -> Box<Blob<U> + Send> {
-        unsafe { std::mem::transmute(self) }
-    }
-}
-
-impl<T: Send> Blob<T> for Vec<T> {
-    fn get_address(&self) -> *const T {
-        self.as_ptr()
-    }
-
-    fn get_size(&self) -> uint {
-        self.len() * size_of::<T>()
-    }
-}
-
-impl<'a, T> Blob<T> for &'a [T] {
-    fn get_address(&self) -> *const T {
-        self.as_ptr()
-    }
-
-    fn get_size(&self) -> uint {
-        self.len() * size_of::<T>()
-    }
-}
-
-impl<T> fmt::Show for Box<Blob<T> + Send> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Blob({:#p}, {})", self.get_address(), self.get_size())
-    }
 }
 
 /// Describes what geometric primitives are created from vertex data.

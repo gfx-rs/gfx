@@ -15,7 +15,7 @@
 //! OpenGL implementation of the Command Buffer
 
 use std::slice;
-use BoxBlobCast;
+use blob::{Blob, BoxBlobCast};
 
 pub struct GlCommandBuffer {
     buf: Vec<::Command>,
@@ -110,13 +110,13 @@ impl ::draw::CommandBuffer for GlCommandBuffer {
         self.buf.push(::SetColorMask(mask));
     }
 
-    fn update_buffer(&mut self, buf: super::Buffer, data: Box<::Blob<()> + Send>,
+    fn update_buffer(&mut self, buf: super::Buffer, data: Box<Blob<()> + Send>,
                         offset_bytes: uint) {
         self.buf.push(::UpdateBuffer(buf, data.cast(), offset_bytes));
     }
 
     fn update_texture(&mut self, kind: ::tex::TextureKind, tex: super::Texture,
-                      info: ::tex::ImageInfo, data: Box<::Blob<()> + Send>) {
+                      info: ::tex::ImageInfo, data: Box<Blob<()> + Send>) {
         self.buf.push(::UpdateTexture(kind, tex, info, data));
     }
 

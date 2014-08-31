@@ -14,7 +14,7 @@
 
 use super::{gl, Surface, Texture, Sampler};
 use super::gl::types::{GLenum, GLuint, GLint, GLfloat, GLsizei, GLvoid};
-use Blob;
+use blob::Blob;
 use tex;
 use attrib;
 
