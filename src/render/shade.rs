@@ -17,7 +17,7 @@
 use std::cell::Cell;
 use std::fmt;
 use device::shade;
-use device::{RawBufferHandle, ProgramHandle, SamplerHandle, TextureHandle};
+use device::{RawBufferHandle, ProgramHandle, TextureHandle, SamplerHandle};
 
 /// Helper trait to transform base types into their corresponding uniforms
 pub trait ToUniform {

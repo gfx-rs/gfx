@@ -24,7 +24,9 @@ use device::target::{Rect, Stencil};
 pub struct DrawState {
     /// How to rasterize geometric primitives.
     pub primitive: state::Primitive,
-    /// Stencil mask to use. If set, no pixel outside of this rectangle (in screen space) will be
+    /// Multi-sampling mode
+    pub multi_sample: Option<state::MultiSample>,
+    /// Scissor mask to use. If set, no pixel outside of this rectangle (in screen space) will be
     /// written to as a result of rendering.
     pub scissor: Option<Rect>,
     /// Stencil test to use. If None, no stencil testing is done.
@@ -60,12 +62,19 @@ impl DrawState {
                 method: state::Fill(state::CullBack),
                 offset: state::NoOffset,
             },
+            multi_sample: None,
             scissor: None,
             stencil: None,
             depth: None,
             blend: None,
             color_mask: state::MaskAll,
         }
+    }
+
+    /// Enable multi-sampled rasterization
+    pub fn multi_sample(mut self) -> DrawState {
+        self.multi_sample = Some(state::MultiSample);
+        self
     }
 
     /// Set the stencil test to a simple expression

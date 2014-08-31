@@ -239,6 +239,7 @@ pub enum Command {
     BindTexture(TextureSlot, tex::TextureKind, back::Texture, Option<SamplerHandle>),
     SetPrimitiveState(state::Primitive),
     SetViewport(target::Rect),
+    SetMultiSampleState(Option<state::MultiSample>),
     SetScissor(Option<target::Rect>),
     SetDepthStencilState(Option<state::Depth>, Option<state::Stencil>, state::CullMode),
     SetBlendState(Option<state::Blend>),

@@ -320,8 +320,9 @@ impl GlDevice {
                 let anchor = tex::bind_texture(&self.gl,
                     gl::TEXTURE0 + slot as gl::types::GLenum,
                     kind, texture);
-                match sampler {
-                    Some(::Handle(sam, ref info)) => {
+                match (anchor, kind.get_aa_mode(), sampler) {
+                    (Err(e), _, _) => error!("Invalid texture bind: {}", e),
+                    (Ok(anchor), None, Some(::Handle(sam, ref info))) => {
                         if self.caps.sampler_objects_supported {
                             self.gl.BindSampler(slot as gl::types::GLenum, sam);
                         } else {
@@ -329,17 +330,22 @@ impl GlDevice {
                             tex::bind_sampler(&self.gl, anchor, info);
                         }
                     },
-                    None => ()
+                    (Ok(_), Some(_), Some(_)) =>
+                        error!("Unable to bind a multi-sampled texture with a sampler"),
+                    (Ok(_), _, _) => (),
                 }
             },
             ::SetPrimitiveState(prim) => {
                 state::bind_primitive(&self.gl, prim);
             },
-            ::SetScissor(rect) => {
-                state::bind_scissor(&self.gl, rect);
-            },
             ::SetViewport(rect) => {
                 state::bind_viewport(&self.gl, rect);
+            },
+            ::SetMultiSampleState(ms) => {
+                state::bind_multi_sample(&self.gl, ms);
+            },
+            ::SetScissor(rect) => {
+                state::bind_scissor(&self.gl, rect);
             },
             ::SetDepthStencilState(depth, stencil, cull) => {
                 state::bind_stencil(&self.gl, stencil, cull);

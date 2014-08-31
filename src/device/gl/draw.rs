@@ -93,6 +93,10 @@ impl ::draw::CommandBuffer for GlCommandBuffer {
         self.buf.push(::SetViewport(view));
     }
 
+    fn set_multi_sample(&mut self, ms: Option<::state::MultiSample>) {
+        self.buf.push(::SetMultiSampleState(ms));
+    }
+
     fn set_scissor(&mut self, rect: Option<::target::Rect>) {
         self.buf.push(::SetScissor(rect));
     }

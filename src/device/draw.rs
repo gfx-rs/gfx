@@ -47,6 +47,7 @@ pub trait CommandBuffer {
                     Option<::SamplerHandle>);
     fn set_primitive(&mut self, ::state::Primitive);
     fn set_viewport(&mut self, target::Rect);
+    fn set_multi_sample(&mut self, Option<::state::MultiSample>);
     fn set_scissor(&mut self, Option<target::Rect>);
     fn set_depth_stencil(&mut self, Option<::state::Depth>,
                          Option<::state::Stencil>, ::state::CullMode);
