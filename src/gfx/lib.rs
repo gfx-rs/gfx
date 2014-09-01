@@ -40,7 +40,7 @@ pub use render::shade;
 pub use render::target::{Frame, Plane, PlaneEmpty, PlaneSurface, PlaneTexture};
 pub use device::Device;
 // when cargo is ready, re-enable the cfgs
-/* #[cfg(gl)] */ pub use device::GlDevice;
+/* #[cfg(gl)] */ pub use device::{GlDevice, GlCommandBuffer};
 pub use device::{attrib, state, tex};
 pub use device::{BufferHandle, BufferInfo, RawBufferHandle, ShaderHandle,
     ProgramHandle, SurfaceHandle, TextureHandle};
