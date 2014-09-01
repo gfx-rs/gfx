@@ -72,8 +72,9 @@ pub enum ProgramError {
 static TRACKED_ATTRIBUTES: uint = 8;
 type CachedAttribute = (device::RawBufferHandle, attrib::Format);
 
-/// Graphics state. Used as a cache to figure out redundant state changes.
-struct State {
+/// The internal state of the renderer. This is used as a cache to eliminate
+/// redundant state changes.
+struct RenderState {
     is_frame_buffer_set: bool,
     frame: target::Frame,
     is_array_buffer_set: bool,
@@ -83,10 +84,10 @@ struct State {
     draw: state::DrawState,
 }
 
-impl State {
+impl RenderState {
     /// Generate the initial state matching `Device::reset_state`
-    fn new() -> State {
-        State {
+    fn new() -> RenderState {
+        RenderState {
             is_frame_buffer_set: false,
             frame: target::Frame::new(0,0),
             is_array_buffer_set: false,
@@ -137,7 +138,7 @@ pub struct Renderer<C: device::draw::CommandBuffer> {
     common_array_buffer: Result<device::ArrayBufferHandle, ()>,
     common_frame_buffer: device::FrameBufferHandle,
     default_frame_buffer: device::FrameBufferHandle,
-    state: State,
+    render_state: RenderState,
     parameters: ParamStorage,
 }
 
@@ -145,7 +146,7 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
     /// Reset all commands for the command buffer re-usal.
     pub fn reset(&mut self) {
         self.buf.clear();
-        self.state = State::new();
+        self.render_state = RenderState::new();
     }
 
     /// Get a command buffer to be submitted
@@ -160,7 +161,7 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
             common_array_buffer: self.common_array_buffer,
             common_frame_buffer: self.common_frame_buffer,
             default_frame_buffer: self.default_frame_buffer,
-            state: State::new(),
+            render_state: RenderState::new(),
             parameters: ParamStorage::new(),
         }
     }
@@ -244,71 +245,72 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
     }
 
     fn bind_frame(&mut self, frame: &target::Frame) {
-        if self.state.frame.width != frame.width || self.state.frame.height != frame.height {
+        if self.render_state.frame.width != frame.width ||
+                self.render_state.frame.height != frame.height {
             self.buf.set_viewport(device::target::Rect {
                 x: 0,
                 y: 0,
                 w: frame.width,
                 h: frame.height,
             });
-            self.state.frame.width = frame.width;
-            self.state.frame.height = frame.height;
+            self.render_state.frame.width = frame.width;
+            self.render_state.frame.height = frame.height;
         }
         if frame.is_default() {
-            if self.state.is_frame_buffer_set {
+            if self.render_state.is_frame_buffer_set {
                 // binding the default FBO, not touching our common one
                 self.buf.bind_frame_buffer(self.default_frame_buffer.get_name());
-                self.state.is_frame_buffer_set = false;
+                self.render_state.is_frame_buffer_set = false;
             }
         } else {
-            if !self.state.is_frame_buffer_set {
+            if !self.render_state.is_frame_buffer_set {
                 self.buf.bind_frame_buffer(self.common_frame_buffer.get_name());
-                self.state.is_frame_buffer_set = true;
+                self.render_state.is_frame_buffer_set = true;
             }
-            for (i, (cur, new)) in self.state.frame.colors.iter().zip(frame.colors.iter()).enumerate() {
+            for (i, (cur, new)) in self.render_state.frame.colors.iter().zip(frame.colors.iter()).enumerate() {
                 if *cur != *new {
                     Renderer::<C>::bind_target(&mut self.buf, device::target::TargetColor(i as u8), *new);
                 }
             }
-            if self.state.frame.depth != frame.depth {
+            if self.render_state.frame.depth != frame.depth {
                 Renderer::<C>::bind_target(&mut self.buf, device::target::TargetDepth, frame.depth);
             }
-            if self.state.frame.stencil != frame.stencil {
+            if self.render_state.frame.stencil != frame.stencil {
                 Renderer::<C>::bind_target(&mut self.buf, device::target::TargetStencil, frame.stencil);
             }
-            self.state.frame = *frame;
+            self.render_state.frame = *frame;
         }
     }
 
     fn bind_state(&mut self, state: &state::DrawState) {
-        if self.state.draw.primitive != state.primitive {
+        if self.render_state.draw.primitive != state.primitive {
             self.buf.set_primitive(state.primitive);
         }
-        if self.state.draw.multi_sample != state.multi_sample {
+        if self.render_state.draw.multi_sample != state.multi_sample {
             self.buf.set_multi_sample(state.multi_sample);
         }
-        if self.state.draw.scissor != state.scissor {
+        if self.render_state.draw.scissor != state.scissor {
             self.buf.set_scissor(state.scissor);
         }
-        if self.state.draw.depth != state.depth || self.state.draw.stencil != state.stencil ||
-                self.state.draw.primitive.get_cull_mode() != state.primitive.get_cull_mode() {
+        if self.render_state.draw.depth != state.depth || self.render_state.draw.stencil != state.stencil ||
+                self.render_state.draw.primitive.get_cull_mode() != state.primitive.get_cull_mode() {
             self.buf.set_depth_stencil(state.depth, state.stencil,
                 state.primitive.get_cull_mode());
         }
-        if self.state.draw.blend != state.blend {
+        if self.render_state.draw.blend != state.blend {
             self.buf.set_blend(state.blend);
         }
-        if self.state.draw.color_mask != state.color_mask {
+        if self.render_state.draw.color_mask != state.color_mask {
             self.buf.set_color_mask(state.color_mask);
         }
-        self.state.draw = *state;
+        self.render_state.draw = *state;
     }
 
     fn bind_program<B: Batch>(&mut self, batch: &B, program: &device::ProgramHandle) {
         //Warning: this is not protected against deleted resources in single-threaded mode
-        if self.state.program_name != program.get_name() {
+        if self.render_state.program_name != program.get_name() {
             self.buf.bind_program(program.get_name());
-            self.state.program_name = program.get_name();
+            self.render_state.program_name = program.get_name();
         }
         let pinfo = program.get_info();
         self.parameters.resize(pinfo.uniforms.len(), pinfo.blocks.len(),
@@ -357,35 +359,35 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
     }
 
     fn bind_mesh(&mut self, mesh: &mesh::Mesh, link: &mesh::Link, info: &ProgramInfo) {
-        if !self.state.is_array_buffer_set {
+        if !self.render_state.is_array_buffer_set {
             // It's Ok if the array buffer is not supported. We can just ignore it.
             self.common_array_buffer.map(|ab|
                 self.buf.bind_array_buffer(ab.get_name())
             ).is_ok();
-            self.state.is_array_buffer_set = true;
+            self.render_state.is_array_buffer_set = true;
         }
         for (attr_index, sat) in link.attribute_indices().zip(info.attributes.iter()) {
             let vat = &mesh.attributes[attr_index];
             let loc = sat.location as uint;
-            let need_update = loc >= self.state.attributes.len() ||
-                match self.state.attributes[loc] {
+            let need_update = loc >= self.render_state.attributes.len() ||
+                match self.render_state.attributes[loc] {
                     Some((buf, fmt)) => buf != vat.buffer || fmt != vat.format,
                     None => true,
                 };
             if need_update {
                 self.buf.bind_attribute(loc as device::AttributeSlot,
                     vat.buffer.get_name(), vat.format);
-                if loc < self.state.attributes.len() {
-                    self.state.attributes[loc] = Some((vat.buffer, vat.format));
+                if loc < self.render_state.attributes.len() {
+                    self.render_state.attributes[loc] = Some((vat.buffer, vat.format));
                 }
             }
         }
     }
 
     fn bind_index<T>(&mut self, buf: device::BufferHandle<T>) {
-        if self.state.index != Some(buf.raw()) {
+        if self.render_state.index != Some(buf.raw()) {
             self.buf.bind_index(buf.get_name());
-            self.state.index = Some(buf.raw());
+            self.render_state.index = Some(buf.raw());
         }
     }
 
@@ -430,7 +432,7 @@ impl<D: device::Device<C>, C: device::draw::CommandBuffer> DeviceHelper<C> for D
             common_array_buffer: self.create_array_buffer(),
             common_frame_buffer: self.create_frame_buffer(),
             default_frame_buffer: device::get_main_frame_buffer(),
-            state: State::new(),
+            render_state: RenderState::new(),
             parameters: ParamStorage::new(),
         }
     }
