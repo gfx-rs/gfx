@@ -19,6 +19,7 @@
 use device::ProgramHandle;
 use device::shade::ProgramInfo;
 use mesh;
+use mesh::ToSlice;
 use shade::{ParameterError, ShaderParam};
 use state::DrawState;
 
@@ -85,7 +86,7 @@ impl<L, T: ShaderParam<L>> OwnedBatch<L, T> {
     /// Create a new owned batch
     pub fn new(mesh: mesh::Mesh, program: ProgramHandle, param: T)
            -> Result<OwnedBatch<L, T>, BatchError> {
-        let slice = mesh.get_slice(::device::TriangleList);
+        let slice = mesh.to_slice(::device::TriangleList);
         let mesh_link = match link_mesh(&mesh, program.get_info()) {
             Ok(l) => l,
             Err(e) => return Err(ErrorMesh(e)),

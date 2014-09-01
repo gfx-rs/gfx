@@ -21,6 +21,7 @@
 //! `Buffer`, and then use `Mesh::from`.
 
 use device;
+use device::{PrimitiveType, BufferHandle, VertexCount, IndexCount};
 use device::attrib;
 
 /// Describes a single attribute of a vertex buffer, including its type, name, etc.
@@ -85,11 +86,6 @@ impl Mesh {
             attributes: attributes,
         }
     }
-
-    /// Return a vertex slice of the whole mesh
-    pub fn get_slice(&self, pt: device::PrimitiveType) -> Slice {
-        VertexSlice(pt, 0, self.num_vertices)
-    }
 }
 
 /// Description of a subset of `Mesh` data to render.
@@ -97,21 +93,55 @@ impl Mesh {
 /// contents. For example, we can have a `Point` typed vertex slice to do shape
 /// blending, while still rendereing it as an indexed `TriangleList`.
 #[deriving(Clone, Show)]
-pub enum Slice  {
+pub enum Slice {
     /// Render vertex data directly from the `Mesh`'s buffer, using only the vertices between the two
     /// endpoints.
-    VertexSlice(device::PrimitiveType, device::VertexCount, device::VertexCount),
+    VertexSlice(PrimitiveType, VertexCount, VertexCount),
     /// The `IndexSlice*` buffer contains a list of indices into the `Mesh` data, so every vertex
     /// attribute does not need to be duplicated, only its position in the `Mesh`.  For example,
     /// when drawing a square, two triangles are needed.  Using only `VertexSlice`, one would need
     /// 6 separate vertices, 3 for each triangle. However, two of the vertices will be identical,
     /// wasting space for the duplicated attributes.  Instead, the `Mesh` can store 4 vertices and
     /// an `IndexSlice8` can be used instead.
-    IndexSlice8(device::PrimitiveType, device::BufferHandle<u8>, device::IndexCount, device::IndexCount),
+    IndexSlice8(PrimitiveType, BufferHandle<u8>, IndexCount, IndexCount),
     /// As `IndexSlice8` but with `u16` indices
-    IndexSlice16(device::PrimitiveType, device::BufferHandle<u16>, device::IndexCount, device::IndexCount),
+    IndexSlice16(PrimitiveType, BufferHandle<u16>, IndexCount, IndexCount),
     /// As `IndexSlice8` but with `u32` indices
-    IndexSlice32(device::PrimitiveType, device::BufferHandle<u32>, device::IndexCount, device::IndexCount),
+    IndexSlice32(PrimitiveType, BufferHandle<u32>, IndexCount, IndexCount),
+}
+
+/// Helper methods for cleanly getting the slice of a type.
+pub trait ToSlice {
+    /// Get the slice of a type.
+    fn to_slice(&self, pt: PrimitiveType) -> Slice;
+}
+
+impl ToSlice for Mesh {
+    /// Return a vertex slice of the whole mesh.
+    fn to_slice(&self, ty: PrimitiveType) -> Slice {
+        VertexSlice(ty, 0, self.num_vertices)
+    }
+}
+
+impl ToSlice for BufferHandle<u8> {
+    /// Return an index slice of the whole buffer.
+    fn to_slice(&self, ty: PrimitiveType) -> Slice {
+        IndexSlice8(ty, *self, 0, self.len() as IndexCount)
+    }
+}
+
+impl ToSlice for BufferHandle<u16> {
+    /// Return an index slice of the whole buffer.
+    fn to_slice(&self, ty: PrimitiveType) -> Slice {
+        IndexSlice16(ty, *self, 0, self.len() as IndexCount)
+    }
+}
+
+impl ToSlice for BufferHandle<u32> {
+    /// Return an index slice of the whole buffer.
+    fn to_slice(&self, ty: PrimitiveType) -> Slice {
+        IndexSlice32(ty, *self, 0, self.len() as IndexCount)
+    }
 }
 
 /// Describes kinds of errors that may occur in the mesh linking

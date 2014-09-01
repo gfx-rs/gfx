@@ -12,7 +12,7 @@ extern crate time;
 use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
-use gfx::{Device, DeviceHelper};
+use gfx::{Device, DeviceHelper, ToSlice};
 use glfw::Context;
 
 #[vertex_format]
@@ -171,10 +171,9 @@ fn main() {
         20, 21, 22, 22, 23, 20, // back
     ];
 
-    let slice = {
-        let buf = device.create_buffer_static(&index_data.as_slice());
-        gfx::IndexSlice8(gfx::TriangleList, buf, 0, 36)
-    };
+    let slice = device
+        .create_buffer_static::<u8>(&index_data.as_slice())
+        .to_slice(gfx::TriangleList);
 
     let texture_info = gfx::tex::TextureInfo {
         width: 1,

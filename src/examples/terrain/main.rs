@@ -16,7 +16,7 @@ use std::rand::Rng;
 use cgmath::FixedArray;
 use cgmath::{Matrix4, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
-use gfx::{Device, DeviceHelper};
+use gfx::{Device, DeviceHelper, ToSlice};
 use glfw::Context;
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
@@ -178,10 +178,9 @@ fn main() {
         .map(|i| i as u32)
         .collect();
 
-    let slice = {
-        let buf = device.create_buffer_static(&index_data);
-        gfx::IndexSlice32(gfx::TriangleList, buf, 0, index_data.len() as u32)
-    };
+    let slice = device
+        .create_buffer_static::<u32>(&index_data)
+        .to_slice(gfx::TriangleList);
 
     let mesh = device.create_mesh(vertex_data);
     let program = device.link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
