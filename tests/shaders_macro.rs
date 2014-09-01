@@ -12,7 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(phase)]
+
+#[phase(plugin)]
+extern crate gfx_macros;
+
 use secret_lib::gfx::ShaderSource;
+
+mod secret_lib;
 
 static _SRC1: ShaderSource = shaders! {
 GLSL_120: b"

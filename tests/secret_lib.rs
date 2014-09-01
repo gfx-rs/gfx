@@ -12,19 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![crate_name = "tests"]
-#![feature(phase)]
-
-#[phase(plugin)]
-extern crate gfx_macros;
-
-mod secret_lib {
-    extern crate gfx_ = "gfx";
-    extern crate device_ = "device";
-    pub use self::gfx_ as gfx;
-    pub use self::device_ as device;
-}
-
-pub mod shaders_macro;
-pub mod shader_param;
-pub mod vertex_format;
+extern crate gfx_ = "gfx";
+extern crate device_ = "device";
+pub use self::gfx_ as gfx;
+pub use self::device_ as device;

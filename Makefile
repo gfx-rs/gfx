@@ -18,7 +18,6 @@ test:
 	(cd src/render && cargo test)
 	(cd src/gfx_macros && cargo test)
 	cargo test
-	(cd src/tests && cargo test)
 
 .PHONY: doc
 doc:

@@ -12,7 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use secret_lib;
+#![feature(phase)]
+
+#[phase(plugin)]
+extern crate gfx_macros;
+
+mod secret_lib;
 
 // Test all features
 #[shader_param(TestBatch)]
