@@ -1,5 +1,5 @@
 #![feature(phase)]
-#![crate_name = "triangle"]
+#![crate_name = "gl-init"]
 
 //! Demonstrates how to initialize gfx-rs using the gl-init-rs library.
 

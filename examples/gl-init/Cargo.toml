@@ -6,7 +6,7 @@ authors = [
 ]
 
 [[bin]]
-name = "triangle"
+name = "gl-init"
 path = "main.rs"
 
 [dependencies.gfx]
