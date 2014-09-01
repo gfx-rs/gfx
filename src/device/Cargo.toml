@@ -9,5 +9,5 @@ authors = [
 name = "device"
 path = "lib.rs"
 
-[dependencies.gl]
-path = "../gl_device/gl/"
+[dependencies.gfx_gl]
+path = "../gl_device/gfx_gl/"
