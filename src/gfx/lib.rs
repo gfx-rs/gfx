@@ -39,17 +39,17 @@ pub use render::shade;
 pub use render::target::{Frame, Plane, PlaneEmpty, PlaneSurface, PlaneTexture};
 pub use device::Device;
 pub use device::{attrib, state, tex};
-pub use device::{BufferHandle, BufferInfo, RawBufferHandle, ShaderHandle,
-    ProgramHandle, SurfaceHandle, TextureHandle};
+pub use device::{BufferHandle, BufferInfo, RawBufferHandle, ShaderHandle};
+pub use device::{ProgramHandle, SurfaceHandle, TextureHandle};
 pub use device::{BufferUsage, UsageStatic, UsageDynamic, UsageStream};
 pub use device::{VertexCount, IndexCount, InstanceCount};
 pub use device::{Point, Line, LineStrip, TriangleList, TriangleStrip, TriangleFan};
 pub use device::blob::Blob;
-pub use device::shade::{UniformValue,
-    ValueI32, ValueF32,
-    ValueI32Vector2, ValueI32Vector3, ValueI32Vector4,
-    ValueF32Vector2, ValueF32Vector3, ValueF32Vector4,
-    ValueF32Matrix2, ValueF32Matrix3, ValueF32Matrix4};
+pub use device::shade::UniformValue;
+pub use device::shade::{ValueI32, ValueF32};
+pub use device::shade::{ValueI32Vector2, ValueI32Vector3, ValueI32Vector4};
+pub use device::shade::{ValueF32Vector2, ValueF32Vector3, ValueF32Vector4};
+pub use device::shade::{ValueF32Matrix2, ValueF32Matrix3, ValueF32Matrix4};
 pub use device::shade::{ShaderSource, StaticBytes, OwnedBytes, ProgramInfo};
 pub use device::target::{Color, ClearData, Layer, Level};
 
