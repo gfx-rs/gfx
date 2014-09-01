@@ -61,8 +61,10 @@ impl<D: device::Device<C>,
     }
 
     /// Create a new ref batch
-    pub fn make_batch<L, T: shade::ShaderParam<L>>(&mut self, mesh: &mesh::Mesh,
-                      slice: mesh::Slice, program: &device::ProgramHandle,
+    pub fn make_batch<L, T: shade::ShaderParam<L>>(&mut self,
+                      program: &device::ProgramHandle,
+                      mesh: &mesh::Mesh,
+                      slice: mesh::Slice,
                       state: &state::DrawState)
                       -> Result<batch::RefBatch<L, T>, batch::BatchError> {
         self.context.batch(mesh, slice, program, state)

@@ -200,7 +200,7 @@ fn main() {
     let state = gfx::DrawState::new().depth(gfx::state::LessEqual, true);
 
     let mut graphics = gfx::Graphics::new(device);
-    let batch: CubeBatch = graphics.make_batch(&mesh, slice, &program, &state).unwrap();
+    let batch: CubeBatch = graphics.make_batch(&program, &mesh, slice, &state).unwrap();
 
     let view: AffineMatrix3<f32> = Transform::look_at(
         &Point3::new(1.5f32, -5.0, 3.0),
