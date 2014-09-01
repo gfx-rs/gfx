@@ -189,7 +189,7 @@ fn main() {
     let state = gfx::DrawState::new().depth(gfx::state::LessEqual, true);
 
     let mut graphics = gfx::Graphics::new(device);
-    let batch: Terrain = graphics.make_batch(&mesh, slice, &program, &state).unwrap();
+    let batch: Terrain = graphics.make_batch(&program, &mesh, slice, &state).unwrap();
 
     let aspect = w as f32 / h as f32;
     let mut data = Params {

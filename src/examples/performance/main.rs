@@ -125,7 +125,7 @@ fn gfx_main(glfw: glfw::Glfw,
     };
 
     let mut graphics = gfx::Graphics::new(device);
-    let batch: TriangleBatch = graphics.make_batch(&mesh, slice, &program, &state).unwrap();
+    let batch: TriangleBatch = graphics.make_batch(&program, &mesh, slice, &state).unwrap();
 
     while !window.should_close() {
         glfw.poll_events();
