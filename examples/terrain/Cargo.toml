@@ -1,22 +1,25 @@
 [package]
 
-name = "gfx-perf"
+name = "example-terrain"
 version = "0.1.0"
 authors = [
 ]
 
 [[bin]]
-name = "gfx-perf"
+name = "terrain"
 path = "main.rs"
 
 [dependencies.gfx]
-path = "../../../"
+path = "../../"
 
 [dependencies.glfw]
 git = "https://github.com/bjz/glfw-rs.git"
 
-[dependencies.gl]
-git = "https://github.com/bjz/gl-rs.git"
-
 [dependencies.cgmath]
 git = "http://github.com/bjz/cgmath-rs"
+
+[dependencies.genmesh]
+git = "https://github.com/csherratt/genmesh.git"
+
+[dependencies.noise-rs]
+git = "https://github.com/bjz/noise-rs.git"

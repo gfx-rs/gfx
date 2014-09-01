@@ -10,7 +10,7 @@ name = "triangle"
 path = "main.rs"
 
 [dependencies.gfx]
-path = "../../../"
+path = "../../"
 
 [dependencies.gl_init]
 git = "https://github.com/tomaka/gl-init-rs.git"

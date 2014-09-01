@@ -10,7 +10,7 @@ name = "cube"
 path = "main.rs"
 
 [dependencies.gfx]
-path = "../../../"
+path = "../../"
 
 [dependencies.glfw]
 git = "https://github.com/bjz/glfw-rs.git"
