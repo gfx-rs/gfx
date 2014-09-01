@@ -29,7 +29,7 @@ extern crate device;
 extern crate render;
 
 // public re-exports
-pub use render::{Graphics, DeviceHelper, Renderer};
+pub use render::{DeviceHelper, Renderer};
 pub use render::batch;
 pub use render::mesh::{Attribute, Mesh, VertexFormat};
 pub use render::mesh::{Slice, ToSlice};
@@ -55,3 +55,55 @@ pub use device::target::{Color, ClearData, Layer, Level};
 
 // TODO: Remove this re-export once `gl_device` becomes a separate crate.
 pub use device::gl_device::{GlDevice, GlCommandBuffer};
+
+use render::batch::Context as BatchContext;
+use render::batch::RefBatch;
+
+/// A convenient wrapper suitable for single-threaded operation.
+pub struct Graphics<D, C: device::draw::CommandBuffer> {
+    /// Graphics device.
+    pub device: D,
+    /// Renderer front-end.
+    pub renderer: Renderer<C>,
+    /// Hidden batch context.
+    context: BatchContext,
+}
+
+impl<D: device::Device<C>, C: device::draw::CommandBuffer> Graphics<D, C> {
+    /// Create a new graphics wrapper.
+    pub fn new(mut device: D) -> Graphics<D, C> {
+        let rend = device.create_renderer();
+        Graphics {
+            device: device,
+            renderer: rend,
+            context: BatchContext::new(),
+        }
+    }
+
+    /// Create a new ref batch.
+    pub fn make_batch<L, T: shade::ShaderParam<L>>(&mut self,
+                      program: &ProgramHandle,
+                      mesh: &Mesh,
+                      slice: Slice,
+                      state: &DrawState)
+                      -> Result<RefBatch<L, T>, batch::BatchError> {
+        self.context.batch(mesh, slice, program, state)
+    }
+
+    /// Clear the `Frame` as the `ClearData` specifies.
+    pub fn clear(&mut self, data: ClearData, frame: &Frame) {
+        self.renderer.clear(data, frame)
+    }
+
+    /// Draw a ref batch.
+    pub fn draw<'a, L, T: shade::ShaderParam<L>>(&'a mut self,
+        batch: &'a RefBatch<L, T>, data: &'a T, frame: &Frame) {
+        self.renderer.draw((batch, data, &self.context), frame)
+    }
+
+    /// Submit the internal command buffer and reset for the next frame.
+    pub fn end_frame(&mut self) {
+        self.device.submit(self.renderer.as_buffer());
+        self.renderer.reset();
+    }
+}
