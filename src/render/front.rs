@@ -23,7 +23,6 @@ use device::shade::{ProgramInfo, UniformValue, ShaderSource,
 use device::attrib;
 use batch::Batch;
 use mesh;
-use mesh::ToSlice;
 use shade;
 use state;
 use target;
