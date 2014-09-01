@@ -112,6 +112,14 @@ impl<T> BufferHandle<T> {
     pub fn raw(&self) -> RawBufferHandle {
         self.raw
     }
+
+    /// Get the number of elements in the buffer.
+    ///
+    /// Fails if `T` is zero-sized.
+    pub fn len(&self) -> uint {
+        assert!(mem::size_of::<T>() != 0, "Cannot determine the length of zero-sized buffers.");
+        self.get_info().size / mem::size_of::<T>()
+    }
 }
 
 /// Raw (untyped) Buffer Handle
@@ -300,4 +308,35 @@ pub trait Device<C: draw::CommandBuffer> {
         self.update_texture_raw(tex, img, data.cast())
     }
     fn generate_mipmap(&mut self, tex: &TextureHandle);
+}
+
+#[cfg(test)]
+mod test {
+    use std::mem;
+    use super::{BufferHandle, Handle};
+    use super::{BufferInfo, BufferUsage, UsageStatic};
+
+    fn mock_buffer<T>(usage: BufferUsage, len: uint) -> BufferHandle<T> {
+        BufferHandle {
+            raw: Handle(
+                0,
+                BufferInfo {
+                    usage: usage,
+                    size: mem::size_of::<T>() * len,
+                },
+            ),
+        }
+    }
+
+    #[test]
+    fn test_buffer_len() {
+        assert_eq!(mock_buffer::<u8>(UsageStatic, 8).len(), 8);
+        assert_eq!(mock_buffer::<u16>(UsageStatic, 8).len(), 8);
+    }
+
+    #[test]
+    #[should_fail]
+    fn test_buffer_zero_len() {
+        let _ = mock_buffer::<()>(UsageStatic, 0).len();
+    }
 }

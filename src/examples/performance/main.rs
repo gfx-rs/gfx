@@ -15,7 +15,7 @@ use time::precise_time_s;
 use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3, Matrix3, ToMatrix4};
 use cgmath::{Transform, AffineMatrix3, Vector4, Array1};
-use gfx::{Device, DeviceHelper};
+use gfx::{Device, DeviceHelper, ToSlice};
 use glfw::Context;
 use gl::types::*;
 use std::mem;
@@ -92,7 +92,7 @@ fn gfx_main(glfw: glfw::Glfw,
     ];
 
     let mesh = device.create_mesh(vertex_data);
-    let slice = mesh.get_slice(gfx::TriangleList);
+    let slice = mesh.to_slice(gfx::TriangleList);
 
     let texture_info = gfx::tex::TextureInfo {
         width: 1,

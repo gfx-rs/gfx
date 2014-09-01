@@ -33,8 +33,9 @@ pub use render::Graphics;
 pub use render::batch;
 pub use render::front;
 pub use render::front::{DeviceHelper, Renderer};
-pub use render::mesh::{Attribute, Mesh, VertexFormat, Slice, VertexSlice,
-    IndexSlice8, IndexSlice16, IndexSlice32};
+pub use render::mesh::{Attribute, Mesh, VertexFormat};
+pub use render::mesh::{Slice, ToSlice};
+pub use render::mesh::{VertexSlice, IndexSlice8, IndexSlice16, IndexSlice32};
 pub use render::state::{DrawState, BlendAdditive, BlendAlpha};
 pub use render::shade;
 pub use render::target::{Frame, Plane, PlaneEmpty, PlaneSurface, PlaneTexture};
