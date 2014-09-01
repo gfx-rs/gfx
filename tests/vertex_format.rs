@@ -12,6 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(phase)]
+
+#[phase(plugin)]
+extern crate gfx_macros;
+
+mod secret_lib;
+
 // Test all features
 #[repr(packed)]
 #[vertex_format]
