@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! OpenGL implementation of a device, striving to support OpenGL 2.0 with at least VAOs, but using
-//! newer extensions when available.
+//! OpenGL implementation of a device, striving to support OpenGL 2.0 with at
+//! least VAOs, but using newer extensions when available.
 
 #![allow(missing_doc)]
 #![experimental]
@@ -28,9 +28,10 @@ use attrib;
 use Device;
 use blob::{Blob, RefBlobCast};
 
+pub use self::draw::GlCommandBuffer;
 pub use self::info::{Info, PlatformName, Version};
 
-pub mod draw;
+mod draw;
 mod shade;
 mod state;
 mod tex;
@@ -420,7 +421,7 @@ impl GlDevice {
     }
 }
 
-impl Device<draw::GlCommandBuffer> for GlDevice {
+impl Device<GlCommandBuffer> for GlDevice {
     fn get_capabilities<'a>(&'a self) -> &'a ::Capabilities {
         &self.caps
     }
@@ -431,7 +432,7 @@ impl Device<draw::GlCommandBuffer> for GlDevice {
         }
     }
 
-    fn submit(&mut self, cb: &draw::GlCommandBuffer) {
+    fn submit(&mut self, cb: &GlCommandBuffer) {
         self.reset_state();
         for com in cb.iter() {
             self.process(com);

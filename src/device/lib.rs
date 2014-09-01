@@ -26,11 +26,8 @@
 #[phase(plugin, link)] extern crate log;
 extern crate libc;
 
-// when cargo is ready, re-enable the cfgs
-/* #[cfg(gl)] */ pub use self::gl as back;
-/* #[cfg(gl)] */ pub use gl::GlDevice;
-/* #[cfg(gl)] */ pub use gl::draw::GlCommandBuffer;
-// #[cfg(d3d11)] ... // TODO
+// TODO: Remove these exports once `gl_device` becomes a separate crate.
+pub use self::gl_device as back;
 
 use std::mem;
 
@@ -43,7 +40,10 @@ pub mod shade;
 pub mod state;
 pub mod target;
 pub mod tex;
-/* #[cfg(gl)] */ mod gl;
+
+// TODO: This will become a separate crate once associated items are implemented
+// in rustc and subsequently used in the `Device` trait.
+/* #[cfg(gl)] */ #[path = "../gl_device/lib.rs"] pub mod gl_device;
 
 /// Draw vertex count.
 pub type VertexCount = u32;

@@ -10,4 +10,4 @@ name = "device"
 path = "lib.rs"
 
 [dependencies.gl]
-path = "../gl/"
+path = "../gl_device/gl/"

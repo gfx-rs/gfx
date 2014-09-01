@@ -40,8 +40,6 @@ pub use render::state::{DrawState, BlendAdditive, BlendAlpha};
 pub use render::shade;
 pub use render::target::{Frame, Plane, PlaneEmpty, PlaneSurface, PlaneTexture};
 pub use device::Device;
-// when cargo is ready, re-enable the cfgs
-/* #[cfg(gl)] */ pub use device::{GlDevice, GlCommandBuffer};
 pub use device::{attrib, state, tex};
 pub use device::{BufferHandle, BufferInfo, RawBufferHandle, ShaderHandle,
     ProgramHandle, SurfaceHandle, TextureHandle};
@@ -56,3 +54,6 @@ pub use device::shade::{UniformValue,
     ValueF32Matrix2, ValueF32Matrix3, ValueF32Matrix4};
 pub use device::shade::{ShaderSource, StaticBytes, OwnedBytes, ProgramInfo};
 pub use device::target::{Color, ClearData, Layer, Level};
+
+// TODO: Remove this re-export once `gl_device` becomes a separate crate.
+pub use device::gl_device::{GlDevice, GlCommandBuffer};
