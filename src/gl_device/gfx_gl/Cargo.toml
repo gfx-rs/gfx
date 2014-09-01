@@ -1,12 +1,12 @@
 [package]
 
-name = "gl"
+name = "gfx_gl"
 version = "0.1.0"
 authors = [
 ]
 
 [lib]
-name = "gl"
+name = "gfx_gl"
 path = "lib.rs"
 
 [dependencies.gl_generator]

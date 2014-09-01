@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![crate_name = "gl"]
+#![crate_name = "gfx_gl"]
 #![comment = "An OpenGL loader tailored to gfx-rs's needs."]
 #![license = "ASL2"]
 #![crate_type = "lib"]
