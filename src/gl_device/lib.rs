@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! OpenGL implementation of a device, striving to support OpenGL 2.0 with at least VAOs, but using
-//! newer extensions when available.
+//! OpenGL implementation of a device, striving to support OpenGL 2.0 with at
+//! least VAOs, but using newer extensions when available.
 
 #![allow(missing_doc)]
 #![experimental]
 
-#[phase(plugin)] extern crate gl_generator;
 extern crate libc;
+extern crate gl;
 
 use log;
 
@@ -28,17 +28,14 @@ use attrib;
 use Device;
 use blob::{Blob, RefBlobCast};
 
+pub use self::draw::GlCommandBuffer;
 pub use self::info::{Info, PlatformName, Version};
 
-pub mod draw;
+mod draw;
 mod shade;
 mod state;
 mod tex;
 mod info;
-
-mod gl {
-    generate_gl_bindings!("gl", "core", "4.5", "struct", [ "GL_EXT_texture_filter_anisotropic" ])
-}
 
 pub type Buffer         = gl::types::GLuint;
 pub type ArrayBuffer    = gl::types::GLuint;
@@ -132,8 +129,9 @@ impl GlDevice {
         }
     }
 
-    /// Access the GL directly using a closure
-    pub fn with_gl(&mut self, fun: |&gl::Gl|) {
+    /// Access the OpenGL directly via a closure. OpenGL types and enumerations
+    /// can be found in the `gl` crate.
+    pub unsafe fn with_gl(&mut self, fun: |&gl::Gl|) {
         self.reset_state();
         fun(&self.gl);
     }
@@ -423,7 +421,7 @@ impl GlDevice {
     }
 }
 
-impl Device<draw::GlCommandBuffer> for GlDevice {
+impl Device<GlCommandBuffer> for GlDevice {
     fn get_capabilities<'a>(&'a self) -> &'a ::Capabilities {
         &self.caps
     }
@@ -434,7 +432,7 @@ impl Device<draw::GlCommandBuffer> for GlDevice {
         }
     }
 
-    fn submit(&mut self, cb: &draw::GlCommandBuffer) {
+    fn submit(&mut self, cb: &GlCommandBuffer) {
         self.reset_state();
         for com in cb.iter() {
             self.process(com);

@@ -9,5 +9,5 @@ authors = [
 name = "device"
 path = "lib.rs"
 
-[dependencies.gl_generator]
-git = "https://github.com/bjz/gl-rs.git"
+[dependencies.gl]
+path = "../gl_device/gl/"
