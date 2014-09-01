@@ -18,8 +18,8 @@
 #![allow(missing_doc)]
 #![experimental]
 
-#[phase(plugin)] extern crate gl_generator;
 extern crate libc;
+extern crate gl;
 
 use log;
 
@@ -35,10 +35,6 @@ mod shade;
 mod state;
 mod tex;
 mod info;
-
-mod gl {
-    generate_gl_bindings!("gl", "core", "4.5", "struct", [ "GL_EXT_texture_filter_anisotropic" ])
-}
 
 pub type Buffer         = gl::types::GLuint;
 pub type ArrayBuffer    = gl::types::GLuint;
@@ -132,8 +128,9 @@ impl GlDevice {
         }
     }
 
-    /// Access the GL directly using a closure
-    pub fn with_gl(&mut self, fun: |&gl::Gl|) {
+    /// Access the OpenGL directly via a closure. OpenGL types and enumerations
+    /// can be found in the `gl` crate.
+    pub unsafe fn with_gl(&mut self, fun: |&gl::Gl|) {
         self.reset_state();
         fun(&self.gl);
     }

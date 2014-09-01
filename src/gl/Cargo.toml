@@ -1,0 +1,13 @@
+[package]
+
+name = "gl"
+version = "0.1.0"
+authors = [
+]
+
+[lib]
+name = "gl"
+path = "lib.rs"
+
+[dependencies.gl_generator]
+git = "https://github.com/bjz/gl-rs.git"
