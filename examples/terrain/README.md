@@ -5,6 +5,10 @@ Perlin Noise, and scatter some entities around - for example houses and trees.
 This will demonstrate the initialisation of buffers and shaders, and how the
 library can be composed with other external dependencies.
 
+## Screenshot
+
+![Terrain Example](screenshot.png)
+
 ## Useful libraries
 
 - [glfw-rs](https://github.com/bjz/glfw-rs)
