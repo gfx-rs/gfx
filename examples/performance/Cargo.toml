@@ -15,8 +15,5 @@ path = "../../"
 [dependencies.glfw]
 git = "https://github.com/bjz/glfw-rs.git"
 
-[dependencies.gl]
-git = "https://github.com/bjz/gl-rs.git"
-
 [dependencies.cgmath]
 git = "http://github.com/bjz/cgmath-rs"

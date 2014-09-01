@@ -17,6 +17,7 @@ use cgmath::{Matrix, Point3, Vector3, Matrix3, ToMatrix4};
 use cgmath::{Transform, AffineMatrix3, Vector4, Array1};
 use gfx::{Device, DeviceHelper, ToSlice};
 use glfw::Context;
+use gl::Gl;
 use gl::types::*;
 use std::mem;
 use std::ptr;
@@ -190,45 +191,45 @@ static FS_SRC: &'static str = "
 ";
 
 
-fn compile_shader(src: &str, ty: GLenum) -> GLuint {
-    let shader = gl::CreateShader(ty);
+fn compile_shader(gl: &Gl, src: &str, ty: GLenum) -> GLuint {
+    let shader = gl.CreateShader(ty);
     unsafe {
         // Attempt to compile the shader
-        src.with_c_str(|ptr| gl::ShaderSource(shader, 1, &ptr, ptr::null()));
-        gl::CompileShader(shader);
+        src.with_c_str(|ptr| gl.ShaderSource(shader, 1, &ptr, ptr::null()));
+        gl.CompileShader(shader);
 
         // Get the compile status
         let mut status = gl::FALSE as GLint;
-        gl::GetShaderiv(shader, gl::COMPILE_STATUS, &mut status);
+        gl.GetShaderiv(shader, gl::COMPILE_STATUS, &mut status);
 
         // Fail on error
         if status != (gl::TRUE as GLint) {
             let mut len = 0;
-            gl::GetShaderiv(shader, gl::INFO_LOG_LENGTH, &mut len);
+            gl.GetShaderiv(shader, gl::INFO_LOG_LENGTH, &mut len);
             let mut buf = Vec::from_elem(len as uint - 1, 0u8);     // subtract 1 to skip the trailing null character
-            gl::GetShaderInfoLog(shader, len, ptr::mut_null(), buf.as_mut_ptr() as *mut GLchar);
+            gl.GetShaderInfoLog(shader, len, ptr::mut_null(), buf.as_mut_ptr() as *mut GLchar);
             fail!("{}", str::from_utf8(buf.as_slice()).expect("ShaderInfoLog not valid utf8"));
         }
     }
     shader
 }
 
-fn link_program(vs: GLuint, fs: GLuint) -> GLuint {
-    let program = gl::CreateProgram();
-    gl::AttachShader(program, vs);
-    gl::AttachShader(program, fs);
-    gl::LinkProgram(program);
+fn link_program(gl: &Gl, vs: GLuint, fs: GLuint) -> GLuint {
+    let program = gl.CreateProgram();
+    gl.AttachShader(program, vs);
+    gl.AttachShader(program, fs);
+    gl.LinkProgram(program);
     unsafe {
         // Get the link status
         let mut status = gl::FALSE as GLint;
-        gl::GetProgramiv(program, gl::LINK_STATUS, &mut status);
+        gl.GetProgramiv(program, gl::LINK_STATUS, &mut status);
 
         // Fail on error
         if status != (gl::TRUE as GLint) {
             let mut len: GLint = 0;
-            gl::GetProgramiv(program, gl::INFO_LOG_LENGTH, &mut len);
+            gl.GetProgramiv(program, gl::INFO_LOG_LENGTH, &mut len);
             let mut buf = Vec::from_elem(len as uint - 1, 0u8);     // subtract 1 to skip the trailing null character
-            gl::GetProgramInfoLog(program, len, ptr::mut_null(), buf.as_mut_ptr() as *mut GLchar);
+            gl.GetProgramInfoLog(program, len, ptr::mut_null(), buf.as_mut_ptr() as *mut GLchar);
             fail!("{}", str::from_utf8(buf.as_slice()).expect("ProgramInfoLog not valid utf8"));
         }
     }
@@ -239,22 +240,24 @@ fn gl_main(glfw: glfw::Glfw,
            window: glfw::Window,
            _: Receiver<(f64, glfw::WindowEvent),>,
            dimension: int) {
+    let gl = Gl::load_with(|s| glfw.get_proc_address(s));
+
     // Create GLSL shaders
-    let vs = compile_shader(VS_SRC, gl::VERTEX_SHADER);
-    let fs = compile_shader(FS_SRC, gl::FRAGMENT_SHADER);
-    let program = link_program(vs, fs);
+    let vs = compile_shader(&gl, VS_SRC, gl::VERTEX_SHADER);
+    let fs = compile_shader(&gl, FS_SRC, gl::FRAGMENT_SHADER);
+    let program = link_program(&gl, vs, fs);
 
     let mut vao = 0;
     let mut vbo = 0;
 
     let trans_uniform = unsafe {
         // Create Vertex Array Object
-        gl::GenVertexArrays(1, &mut vao);
-        gl::BindVertexArray(vao);
+        gl.GenVertexArrays(1, &mut vao);
+        gl.BindVertexArray(vao);
 
         // Create a Vertex Buffer Object and copy the vertex data to it
-        gl::GenBuffers(1, &mut vbo);
-        gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
+        gl.GenBuffers(1, &mut vbo);
+        gl.BindBuffer(gl::ARRAY_BUFFER, vbo);
 
         let vertex_data = vec![
             // front (0, 1, 0)
@@ -263,24 +266,24 @@ fn gl_main(glfw: glfw::Glfw,
             Vertex { pos: [ 1,  1,  1] },
         ];
 
-        gl::BufferData(gl::ARRAY_BUFFER,
-                       (vertex_data.len() * mem::size_of::<Vertex>()) as GLsizeiptr,
-                       mem::transmute(&vertex_data[0]),
-                       gl::STATIC_DRAW);
+        gl.BufferData(gl::ARRAY_BUFFER,
+                      (vertex_data.len() * mem::size_of::<Vertex>()) as GLsizeiptr,
+                      mem::transmute(&vertex_data[0]),
+                      gl::STATIC_DRAW);
 
         // Use shader program
-        gl::UseProgram(program);
-        "o_Color".with_c_str(|ptr| gl::BindFragDataLocation(program, 0, ptr));
+        gl.UseProgram(program);
+        "o_Color".with_c_str(|ptr| gl.BindFragDataLocation(program, 0, ptr));
 
         // Specify the layout of the vertex data
-        let pos_attr = "a_Pos".with_c_str(|ptr| gl::GetAttribLocation(program, ptr));
-        gl::EnableVertexAttribArray(pos_attr as GLuint);
-        gl::VertexAttribPointer(pos_attr as GLuint, 3, gl::BYTE,
+        let pos_attr = "a_Pos".with_c_str(|ptr| gl.GetAttribLocation(program, ptr));
+        gl.EnableVertexAttribArray(pos_attr as GLuint);
+        gl.VertexAttribPointer(pos_attr as GLuint, 3, gl::BYTE,
                                 gl::FALSE as GLboolean, 0, ptr::null());
 
 
         "u_Transform".with_c_str(|ptr|
-            gl::GetUniformLocation(program, ptr)
+            gl.GetUniformLocation(program, ptr)
         )
     };
 
@@ -300,8 +303,8 @@ fn gl_main(glfw: glfw::Glfw,
         let start = precise_time_s() * 1000.;
 
         // Clear the screen to black
-        gl::ClearColor(0.3, 0.3, 0.3, 1.0);
-        gl::Clear(gl::COLOR_BUFFER_BIT);
+        gl.ClearColor(0.3, 0.3, 0.3, 1.0);
+        gl.Clear(gl::COLOR_BUFFER_BIT);
 
         for x in range(-dimension, dimension) {
             for y in range(-dimension, dimension) {
@@ -314,13 +317,13 @@ fn gl_main(glfw: glfw::Glfw,
                 let mat = proj.mul_m(&view.mat).mul_m(&model);
 
                 unsafe {
-                    gl::UniformMatrix4fv(trans_uniform,
-                                         1,
-                                         gl::FALSE,
-                                         mat.x.ptr());
+                    gl.UniformMatrix4fv(trans_uniform,
+                                        1,
+                                        gl::FALSE,
+                                        mat.x.ptr());
                 }
 
-                gl::DrawArrays(gl::TRIANGLES, 0, 3);
+                gl.DrawArrays(gl::TRIANGLES, 0, 3);
             }
         }
 
@@ -337,12 +340,12 @@ fn gl_main(glfw: glfw::Glfw,
     }
 
     // Cleanup
-    gl::DeleteProgram(program);
-    gl::DeleteShader(fs);
-    gl::DeleteShader(vs);
+    gl.DeleteProgram(program);
+    gl.DeleteShader(fs);
+    gl.DeleteShader(vs);
     unsafe {
-        gl::DeleteBuffers(1, &vbo);
-        gl::DeleteVertexArrays(1, &vao);
+        gl.DeleteBuffers(1, &vbo);
+        gl.DeleteVertexArrays(1, &vao);
     }
 }
 
@@ -373,7 +376,6 @@ fn main() {
         .expect("Failed to create GLFW window.");
 
     window.make_current();
-    gl::load_with(|s| glfw.get_proc_address(s));
     glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
     window.set_key_polling(true);
 
