@@ -48,10 +48,76 @@ fn format_to_gl(t: tex::Format) -> Result<GLenum, ()> {
         tex::Float(tex::RGBA, attrib::F16) => gl::RGBA16F,
         tex::Float(tex::RGBA, attrib::F32) => gl::RGBA32F,
         tex::Float(_, attrib::F64) => return Err(()),
-        // integer
+
+        // signed normalized
+        tex::Integer(tex::R, 8, attrib::IntNormalized) => gl::R8_SNORM,
+        tex::Integer(tex::RG, 8, attrib::IntNormalized) => gl::RG8_SNORM,
+        tex::Integer(tex::RGB, 8, attrib::IntNormalized) => gl::RGB8_SNORM,
+        tex::Integer(tex::RGBA, 8, attrib::IntNormalized) => gl::RGBA8_SNORM,
+
+        tex::Integer(tex::R, 16, attrib::IntNormalized) => gl::R16_SNORM,
+        tex::Integer(tex::RG, 16, attrib::IntNormalized) => gl::RG16_SNORM,
+        tex::Integer(tex::RGB, 16, attrib::IntNormalized) => gl::RGB16_SNORM,
+        tex::Integer(tex::RGBA, 16, attrib::IntNormalized) => gl::RGBA16_SNORM,
+
+        // signed integral
+        tex::Integer(tex::R, 8, attrib::IntRaw) => gl::R8I,
+        tex::Integer(tex::RG, 8, attrib::IntRaw) => gl::RG8I,
+        tex::Integer(tex::RGB, 8, attrib::IntRaw) => gl::RGB8I,
+        tex::Integer(tex::RGBA, 8, attrib::IntRaw) => gl::RGBA8I,
+
+        tex::Integer(tex::R, 16, attrib::IntRaw) => gl::R16I,
+        tex::Integer(tex::RG, 16, attrib::IntRaw) => gl::RG16I,
+        tex::Integer(tex::RGB, 16, attrib::IntRaw) => gl::RGB16I,
+        tex::Integer(tex::RGBA, 16, attrib::IntRaw) => gl::RGBA16I,
+
+        tex::Integer(tex::R, 32, attrib::IntRaw) => gl::R32I,
+        tex::Integer(tex::RG, 32, attrib::IntRaw) => gl::RG32I,
+        tex::Integer(tex::RGB, 32, attrib::IntRaw) => gl::RGB32I,
+        tex::Integer(tex::RGBA, 32, attrib::IntRaw) => gl::RGBA32I,
+
         tex::Integer(_, _, _) => unimplemented!(),
-        // unsigned integer
+
+        // unsigned normalized
+        tex::Unsigned(tex::RGBA, 2, attrib::IntNormalized) => gl::RGBA2,
+
+        tex::Unsigned(tex::RGB, 4, attrib::IntNormalized) => gl::RGB4,
+        tex::Unsigned(tex::RGBA, 4, attrib::IntNormalized) => gl::RGBA4,
+
+        tex::Unsigned(tex::RGB, 5, attrib::IntNormalized) => gl::RGB5,
+        //tex::Unsigned(tex::RGBA, 5, attrib::IntNormalized) => gl::RGBA5,
+
+        tex::Unsigned(tex::R, 8, attrib::IntNormalized) => gl::R8,
+        tex::Unsigned(tex::RG, 8, attrib::IntNormalized) => gl::RG8,
+        tex::Unsigned(tex::RGB, 8, attrib::IntNormalized) => gl::RGB8,
         tex::Unsigned(tex::RGBA, 8, attrib::IntNormalized) => gl::RGBA8,
+
+        tex::Unsigned(tex::RGB, 10, attrib::IntNormalized) => gl::RGB10,
+
+        tex::Unsigned(tex::RGB, 12, attrib::IntNormalized) => gl::RGB12,
+        tex::Unsigned(tex::RGBA, 12, attrib::IntNormalized) => gl::RGBA12,
+
+        tex::Unsigned(tex::R, 16, attrib::IntNormalized) => gl::R16,
+        tex::Unsigned(tex::RG, 16, attrib::IntNormalized) => gl::RG16,
+        tex::Unsigned(tex::RGB, 16, attrib::IntNormalized) => gl::RGB16,
+        tex::Unsigned(tex::RGBA, 16, attrib::IntNormalized) => gl::RGBA16,
+
+        // unsigned integral
+        tex::Unsigned(tex::R, 8, attrib::IntRaw) => gl::R8UI,
+        tex::Unsigned(tex::RG, 8, attrib::IntRaw) => gl::RG8UI,
+        tex::Unsigned(tex::RGB, 8, attrib::IntRaw) => gl::RGB8UI,
+        tex::Unsigned(tex::RGBA, 8, attrib::IntRaw) => gl::RGBA8UI,
+
+        tex::Unsigned(tex::R, 16, attrib::IntRaw) => gl::R16UI,
+        tex::Unsigned(tex::RG, 16, attrib::IntRaw) => gl::RG16UI,
+        tex::Unsigned(tex::RGB, 16, attrib::IntRaw) => gl::RGB16UI,
+        tex::Unsigned(tex::RGBA, 16, attrib::IntRaw) => gl::RGBA16UI,
+
+        tex::Unsigned(tex::R, 32, attrib::IntRaw) => gl::R32UI,
+        tex::Unsigned(tex::RG, 32, attrib::IntRaw) => gl::RG32UI,
+        tex::Unsigned(tex::RGB, 32, attrib::IntRaw) => gl::RGB32UI,
+        tex::Unsigned(tex::RGBA, 32, attrib::IntRaw) => gl::RGBA32UI,
+
         tex::Unsigned(_, _, _) => unimplemented!(),
         // special
         tex::R3G3B2       => gl::R3_G3_B2,
