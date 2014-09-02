@@ -45,6 +45,7 @@ pub use device::{BufferUsage, UsageStatic, UsageDynamic, UsageStream};
 pub use device::{VertexCount, IndexCount, InstanceCount};
 pub use device::{Point, Line, LineStrip, TriangleList, TriangleStrip, TriangleFan};
 pub use device::blob::Blob;
+pub use device::draw::CommandBuffer;
 pub use device::shade::UniformValue;
 pub use device::shade::{ValueI32, ValueF32};
 pub use device::shade::{ValueI32Vector2, ValueI32Vector3, ValueI32Vector4};
