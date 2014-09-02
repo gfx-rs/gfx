@@ -1,3 +1,6 @@
+DIAGRAMS_IN_GV = $(wildcard diagrams/gv/*.gv)
+DIAGRAMS_OUT_PNG = $(patsubst diagrams/gv/%.gv,diagrams/png/%.png,$(DIAGRAMS_IN_GV))
+
 .PHONY: all
 all:
 	cargo build
@@ -22,8 +25,19 @@ test:
 doc:
 	cargo doc
 
+$(DIAGRAMS_OUT_PNG): $(DIAGRAMS_IN_GV)
+	@mkdir -p diagrams/png
+	dot -Tpng -o $@ -Gsize=6,6 -Gdpi=100 $<
+
+.PHONY: diagrams
+diagrams: $(DIAGRAMS_OUT_PNG)
+
+.PHONY: clean-diagrams
+clean-diagrams:
+	rm -rf diagrams/png
+
 .PHONY: clean
-clean:
+clean: clean-diagrams
 	(cd src/device && cargo clean)
 	(cd src/render && cargo clean)
 	(cd src/gfx_macros && cargo clean)
