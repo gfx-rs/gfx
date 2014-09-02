@@ -119,7 +119,35 @@ impl<'a, L, T: ShaderParam<L>> Batch for &'a OwnedBatch<L, T> {
 
 type Index = u16;
 
+//#[deriving(PartialEq, Eq, PartialOrd, Ord, Show)]
 struct Id<T>(Index);
+
+impl<T> Id<T> {
+    fn unwrap(&self) -> Index {
+        let Id(i) = *self;
+        i
+    }
+}
+
+impl<T> PartialEq for Id<T> {
+    fn eq(&self, other: &Id<T>) -> bool {
+        self.unwrap() == other.unwrap()
+    }
+}
+
+impl<T> Eq for Id<T> {}
+
+impl<T> PartialOrd for Id<T> {
+    fn partial_cmp(&self, other: &Id<T>) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<T> Ord for Id<T> {
+    fn cmp(&self, other: &Id<T>) -> Ordering {
+        self.unwrap().cmp(&other.unwrap())
+    }
+}
 
 struct Array<T> {
     data: Vec<T>,
@@ -163,6 +191,29 @@ pub struct RefBatch<L, T> {
     program_id: Id<ProgramHandle>,
     param_link: L,
     state_id: Id<DrawState>,
+}
+
+impl<L, T> PartialEq for RefBatch<L, T> {
+    fn eq(&self, other: &RefBatch<L, T>) -> bool {
+        self.program_id == other.program_id &&
+        self.state_id == other.state_id &&
+        self.mesh_id == other.mesh_id
+    }
+}
+
+impl<L, T> Eq for RefBatch<L, T> {}
+
+impl<L, T> PartialOrd for RefBatch<L, T> {
+    fn partial_cmp(&self, other: &RefBatch<L, T>) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<L, T> Ord for RefBatch<L, T> {
+    fn cmp(&self, other: &RefBatch<L, T>) -> Ordering {
+        (self.program_id, self.state_id, self.mesh_id).cmp(
+        &(other.program_id, other.state_id, other.mesh_id))
+    }
 }
 
 /// Factory of ref batches, required to always be used with them.
