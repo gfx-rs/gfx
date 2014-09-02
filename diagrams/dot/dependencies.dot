@@ -1,0 +1,25 @@
+digraph gfx {
+    rankdir=BT;
+
+    # Main gfx-rs crates
+    subgraph cluster_gfx {
+        style=filled;
+        color=gray80;
+
+        node [shape=box, style=filled, color=white];
+        "gfx" -> "render";
+        "gfx" -> "device";
+        "render" -> "device";
+        "device" -> "gl_device";
+    }
+
+    # Examples and external dependencies
+    node [shape=none];
+
+    "gl_device" -> "gfx_gl";
+    "cube" -> "gfx";
+    "terrain" -> "gfx";
+    "gl-init" -> "gfx";
+    "performance" -> "gfx";
+    "performance" -> "gfx_gl";
+}
