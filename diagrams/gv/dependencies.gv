@@ -1,6 +1,7 @@
 digraph gfx {
     rankdir=BT;
 
+    # Main gfx-rs crates
     subgraph cluster_gfx {
         style=filled;
         color=gray80;
@@ -12,26 +13,13 @@ digraph gfx {
         "device" -> "gl_device";
     }
 
+    # Examples and external dependencies
     node [shape=none];
 
     "gl_device" -> "gfx_gl";
-
     "cube" -> "gfx";
-    "cube" -> "glfw";
-    "cube" -> "cgmath";
-
     "terrain" -> "gfx";
-    "terrain" -> "glfw";
-    "terrain" -> "cgmath";
-    "terrain" -> "genmesh";
-    "terrain" -> "noise";
-
     "gl-init" -> "gfx";
-    "gl-init" -> "gl_init";
-
     "performance" -> "gfx";
-    "performance" -> "glfw";
     "performance" -> "gfx_gl";
-    "performance" -> "cgmath";
-
 }
