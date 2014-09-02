@@ -1,5 +1,5 @@
-DIAGRAMS_IN_GV = $(wildcard diagrams/gv/*.gv)
-DIAGRAMS_OUT_PNG = $(patsubst diagrams/gv/%.gv,diagrams/png/%.png,$(DIAGRAMS_IN_GV))
+DIAGRAMS_IN_DOT = $(wildcard diagrams/dot/*.dot)
+DIAGRAMS_OUT_PNG = $(patsubst diagrams/dot/%.dot,diagrams/png/%.png,$(DIAGRAMS_IN_DOT))
 
 .PHONY: all
 all:
@@ -25,7 +25,7 @@ test:
 doc:
 	cargo doc
 
-$(DIAGRAMS_OUT_PNG): $(DIAGRAMS_IN_GV)
+$(DIAGRAMS_OUT_PNG): $(DIAGRAMS_IN_DOT)
 	@mkdir -p diagrams/png
 	dot -Tpng -o $@ -Gsize=6,6 -Gdpi=100 $<
 
