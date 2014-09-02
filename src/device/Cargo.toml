@@ -10,4 +10,4 @@ name = "device"
 path = "lib.rs"
 
 [dependencies.gfx_gl]
-path = "../gl_device/gfx_gl/"
+git = "https://github.com/gfx-rs/gfx_gl.git"

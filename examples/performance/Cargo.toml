@@ -12,11 +12,11 @@ path = "main.rs"
 [dependencies.gfx]
 path = "../../"
 
-[dependencies.gfx_gl]
-path = "../../"
-
 [dependencies.glfw]
 git = "https://github.com/bjz/glfw-rs.git"
+
+[dependencies.gfx_gl]
+git = "https://github.com/gfx-rs/gfx_gl.git"
 
 [dependencies.cgmath]
 git = "http://github.com/bjz/cgmath-rs"
