@@ -61,7 +61,7 @@ pub type UniformBufferSlot = u8;
 pub type TextureSlot = u8;
 
 /// A generic handle struct
-#[deriving(Clone, Show, PartialEq)]
+#[deriving(Clone, PartialEq, Show)]
 pub struct Handle<T, I>(T, I);
 
 #[deriving(Clone, Show)]
@@ -80,7 +80,7 @@ impl<T: Copy, I> Handle<T, I> {
 }
 
 /// Type-safe buffer handle
-#[deriving(Show, Clone)]
+#[deriving(Show, PartialEq, Clone)]
 pub struct BufferHandle<T> {
     raw: RawBufferHandle,
 }
