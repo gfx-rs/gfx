@@ -17,9 +17,14 @@ digraph gfx {
     node [shape=none];
 
     "gl_device" -> "gfx_gl";
+
     "cube" -> "gfx";
+    "cube" -> "glfw";
     "terrain" -> "gfx";
+    "terrain" -> "glfw";
     "gl-init" -> "gfx";
+    "gl-init" -> "gl_init";
     "performance" -> "gfx";
+    "performance" -> "glfw";
     "performance" -> "gfx_gl";
 }
