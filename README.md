@@ -8,6 +8,21 @@
 programming language. It aims to be the default API for Rust graphics: for
 one-off applications, or higher level libraries or engines.
 
+The API provides a common abstraction over various GPU features, including:
+
+- shaders
+- shader parameters
+- vertex and index buffers
+- vertex attributes
+- textures
+- color masks
+- scissor masks
+- stencil masks
+- depth tests
+- blend functions
+- multisampling
+- draw instancing
+
 ## Why gfx-rs?
 
 - Graphics APIs are mostly designed with C and C++ in mind, and hence are
