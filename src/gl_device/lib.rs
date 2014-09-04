@@ -356,10 +356,10 @@ impl GlDevice {
                 state::bind_color_mask(&self.gl, mask);
             },
             ::UpdateBuffer(buffer, ref data, offset) => {
-                self.update_sub_buffer(buffer, *data, offset);
+                self.update_sub_buffer(buffer, &**data, offset);
             },
             ::UpdateTexture(kind, texture, image_info, ref data) => {
-                match tex::update_texture(&self.gl, kind, texture, &image_info, *data) {
+                match tex::update_texture(&self.gl, kind, texture, &image_info, &**data) {
                     Ok(_) => (),
                     Err(_) => unimplemented!(),
                 }
