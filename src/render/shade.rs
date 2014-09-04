@@ -19,6 +19,8 @@ use std::fmt;
 use device::shade;
 use device::{RawBufferHandle, ProgramHandle, TextureHandle, SamplerHandle};
 
+pub use device::shade::{Stage, CreateShaderError, Vertex, Geometry, Fragment};
+
 /// Helper trait to transform base types into their corresponding uniforms
 pub trait ToUniform {
     /// Create a `UniformValue` representing this value.
