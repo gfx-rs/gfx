@@ -110,14 +110,11 @@ fn main() {
     let batch: gfx::batch::RefBatch<(), ()> = graphics.make_batch(
         &program, &mesh, slice, &gfx::DrawState::new()).unwrap();
 
-    graphics.clear(
-        gfx::ClearData {
-            color: Some([0.3, 0.3, 0.3, 1.0]),
-            depth: None,
-            stencil: None,
-        },
-        &frame
-    );
+    let clear_data = gfx::ClearData {
+        color: Some([0.3, 0.3, 0.3, 1.0]),
+        depth: None,
+        stencil: None,
+    };
 
     while !window.should_close() {
         glfw.poll_events();
@@ -129,6 +126,7 @@ fn main() {
             }
         }
 
+        graphics.clear(clear_data, &frame);
         graphics.draw(&batch, &(), &frame);
         graphics.end_frame();
 
