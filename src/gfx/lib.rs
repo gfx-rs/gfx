@@ -43,7 +43,8 @@ pub use device::{BufferHandle, BufferInfo, RawBufferHandle, ShaderHandle};
 pub use device::{ProgramHandle, SurfaceHandle, TextureHandle};
 pub use device::{BufferUsage, UsageStatic, UsageDynamic, UsageStream};
 pub use device::{VertexCount, IndexCount, InstanceCount};
-pub use device::{Point, Line, LineStrip, TriangleList, TriangleStrip, TriangleFan};
+pub use device::{PrimitiveType, Point, Line, LineStrip,
+    TriangleList, TriangleStrip, TriangleFan};
 pub use device::blob::Blob;
 pub use device::draw::CommandBuffer;
 pub use device::shade::UniformValue;
