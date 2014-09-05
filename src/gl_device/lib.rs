@@ -61,7 +61,8 @@ static RESET_CB: &'static [::Command] = &[
     ::BindArrayBuffer(0),
     //BindAttribute
     ::BindIndex(0),
-    ::BindFrameBuffer(0),
+    ::BindFrameBuffer(::target::Draw, 0),
+    ::BindFrameBuffer(::target::Read, 0),
     //UnbindTarget
     //BindUniformBlock
     //BindUniform
@@ -86,6 +87,13 @@ fn primitive_to_gl(prim_type: ::PrimitiveType) -> gl::types::GLenum {
         ::TriangleList => gl::TRIANGLES,
         ::TriangleStrip => gl::TRIANGLE_STRIP,
         ::TriangleFan => gl::TRIANGLE_FAN,
+    }
+}
+
+fn access_to_gl(access: ::target::Access) -> gl::types::GLenum {
+    match access {
+        ::target::Draw => gl::DRAW_FRAMEBUFFER,
+        ::target::Read => gl::READ_FRAMEBUFFER,
     }
 }
 
@@ -285,26 +293,29 @@ impl GlDevice {
             ::BindIndex(buffer) => {
                 self.gl.BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer);
             },
-            ::BindFrameBuffer(frame_buffer) => {
-                self.gl.BindFramebuffer(gl::DRAW_FRAMEBUFFER, frame_buffer);
+            ::BindFrameBuffer(access, frame_buffer) => {
+                let point = access_to_gl(access);
+                self.gl.BindFramebuffer(point, frame_buffer);
             },
-            ::UnbindTarget(target) => {
+            ::UnbindTarget(access, target) => {
+                let point = access_to_gl(access);
                 let att = target_to_gl(target);
-                self.gl.FramebufferRenderbuffer(gl::DRAW_FRAMEBUFFER, att, gl::RENDERBUFFER, 0);
+                self.gl.FramebufferRenderbuffer(point, att, gl::RENDERBUFFER, 0);
             },
-            ::BindTargetSurface(target, name) => {
+            ::BindTargetSurface(access, target, name) => {
+                let point = access_to_gl(access);
                 let att = target_to_gl(target);
-                self.gl.FramebufferRenderbuffer(gl::DRAW_FRAMEBUFFER, att, gl::RENDERBUFFER, name);
+                self.gl.FramebufferRenderbuffer(point, att, gl::RENDERBUFFER, name);
             },
-            ::BindTargetTexture(target, name, level, layer) => {
+            ::BindTargetTexture(access, target, name, level, layer) => {
+                let point = access_to_gl(access);
                 let att = target_to_gl(target);
                 match layer {
                     Some(layer) => self.gl.FramebufferTextureLayer(
-                        gl::DRAW_FRAMEBUFFER, att, name, level as gl::types::GLint,
+                        point, att, name, level as gl::types::GLint,
                         layer as gl::types::GLint),
                     None => self.gl.FramebufferTexture(
-                        gl::DRAW_FRAMEBUFFER, att, name, level as gl::types::GLint
-                        ),
+                        point, att, name, level as gl::types::GLint),
                 }
             },
             ::BindUniformBlock(program, slot, loc, buffer) => {

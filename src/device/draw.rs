@@ -32,13 +32,13 @@ pub trait CommandBuffer {
     fn bind_array_buffer(&mut self, back::ArrayBuffer);
     fn bind_attribute(&mut self, ::AttributeSlot, back::Buffer, attrib::Format);
     fn bind_index(&mut self, back::Buffer);
-    fn bind_frame_buffer(&mut self, back::FrameBuffer);
+    fn bind_frame_buffer(&mut self, target::Access, back::FrameBuffer);
     /// Unbind any surface from the specified target slot
-    fn unbind_target(&mut self, target::Target);
+    fn unbind_target(&mut self, target::Access, target::Target);
     /// Bind a surface to the specified target slot
-    fn bind_target_surface(&mut self, target::Target, back::Surface);
+    fn bind_target_surface(&mut self, target::Access, target::Target, back::Surface);
     /// Bind a level of the texture to the specified target slot
-    fn bind_target_texture(&mut self, target::Target, back::Texture,
+    fn bind_target_texture(&mut self, target::Access, target::Target, back::Texture,
                            target::Level, Option<target::Layer>);
     fn bind_uniform_block(&mut self, back::Program, ::UniformBufferSlot,
                           ::UniformBlockIndex, back::Buffer);

@@ -71,9 +71,19 @@ impl fmt::Show for ClearData {
     }
 }
 
+/// Type of the frame buffer access
+#[repr(u8)]
+#[deriving(Clone, PartialEq, Show)]
+pub enum Access {
+    /// Draw access
+    Draw,
+    /// Read access
+    Read,
+}
+
 /// When rendering, each "output" of the fragment shader goes to a specific target. A `Plane` can
 /// be bound to a target, causing writes to that target to affect the `Plane`.
-#[deriving(Clone, Show)]
+#[deriving(Clone, PartialEq, Show)]
 pub enum Target {
     /// Color data.
     ///
