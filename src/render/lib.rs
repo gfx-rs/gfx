@@ -218,11 +218,25 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
     }
 
     /// Blit one frame onto another
+    #[experimental]
     pub fn blit(&mut self, source: &target::Frame, source_rect: Rect,
                 destination: &target::Frame, dest_rect: Rect, mask: Mask) {
+        // verify as much as possible here
+        if mask.intersects(device::target::Color) {
+            debug_assert!(source.is_default() || !source.colors.is_empty());
+            debug_assert!(destination.is_default() || !destination.colors.is_empty());
+        }
+        if mask.intersects(device::target::Depth) {
+            debug_assert!(source.is_default() || source.depth.is_some());
+            debug_assert!(destination.is_default() || destination.depth.is_some());
+        }
+        if mask.intersects(device::target::Stencil) {
+            debug_assert!(source.is_default() || source.stencil.is_some());
+            debug_assert!(destination.is_default() || destination.stencil.is_some());
+        }
+        // actually blit
         self.bind_frame(destination);
         self.bind_read_frame(source);
-        //TODO: verify all the states
         self.buf.call_blit(source_rect, dest_rect, mask);
     }
 

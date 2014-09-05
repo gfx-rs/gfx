@@ -27,6 +27,16 @@ pub enum Plane {
                  Option<device::target::Layer>),
 }
 
+impl Plane {
+    /// Get the surface info
+    pub fn get_surface_info(&self) -> device::tex::SurfaceInfo {
+        match *self {
+            PlaneSurface(ref suf) => *suf.get_info(),
+            PlaneTexture(ref tex, _, _) => tex.get_info().to_surface_info(),
+        }
+    }
+}
+
 /// A complete `Frame`, which is the result of rendering.
 #[deriving(Clone, PartialEq, Show)]
 pub struct Frame {

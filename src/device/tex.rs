@@ -242,13 +242,13 @@ impl Default for TextureInfo {
 }
 
 impl TextureInfo {
-    /// Create a new empty texture info
+    /// Create a new empty texture info.
     pub fn new() -> TextureInfo {
         Default::default()
     }
 
     /// Convert to a default ImageInfo that could be used
-    /// to update the contents of the whole texture
+    /// to update the contents of the whole texture.
     pub fn to_image_info(&self) -> ImageInfo {
         ImageInfo {
             xoffset: 0,
@@ -262,7 +262,18 @@ impl TextureInfo {
         }
     }
 
-    /// Check if given ImageInfo is a part of the texture
+    /// Convert to a `SurfaceInfo`, used as a common denominator between
+    /// surfaces and textures.
+    pub fn to_surface_info(&self) -> SurfaceInfo {
+        SurfaceInfo {
+            width: self.width,
+            height: self.height,
+            format: self.format,
+            aa_mode: self.kind.get_aa_mode(),
+        }
+    }
+
+    /// Check if given ImageInfo is a part of the texture.
     pub fn contains(&self, img: &ImageInfo) -> bool {
         self.width <= img.xoffset + img.width &&
         self.height <= img.yoffset + img.height &&

@@ -459,6 +459,7 @@ impl GlDevice {
                     flags,
                     filter
                 );
+                self.check();
             },
         }
     }
