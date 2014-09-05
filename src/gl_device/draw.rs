@@ -55,21 +55,23 @@ impl ::draw::CommandBuffer for GlCommandBuffer {
         self.buf.push(::BindIndex(buf));
     }
 
-    fn bind_frame_buffer(&mut self, fbo: super::FrameBuffer) {
-        self.buf.push(::BindFrameBuffer(fbo));
+    fn bind_frame_buffer(&mut self, access: ::target::Access, fbo: super::FrameBuffer) {
+        self.buf.push(::BindFrameBuffer(access, fbo));
     }
 
-    fn unbind_target(&mut self, tar: ::target::Target) {
-        self.buf.push(::UnbindTarget(tar));
+    fn unbind_target(&mut self, access: ::target::Access, tar: ::target::Target) {
+        self.buf.push(::UnbindTarget(access, tar));
     }
 
-    fn bind_target_surface(&mut self, tar: ::target::Target, suf: super::Surface) {
-        self.buf.push(::BindTargetSurface(tar, suf));
+    fn bind_target_surface(&mut self, access: ::target::Access,
+                           tar: ::target::Target, suf: super::Surface) {
+        self.buf.push(::BindTargetSurface(access, tar, suf));
     }
 
-    fn bind_target_texture(&mut self, tar: ::target::Target, tex: super::Texture,
+    fn bind_target_texture(&mut self, access: ::target::Access,
+                           tar: ::target::Target, tex: super::Texture,
                            level: ::target::Level, layer: Option<::target::Layer>) {
-        self.buf.push(::BindTargetTexture(tar, tex, level, layer));
+        self.buf.push(::BindTargetTexture(access, tar, tex, level, layer));
     }
 
     fn bind_uniform_block(&mut self, prog: super::Program, slot: ::UniformBufferSlot,
@@ -124,8 +126,8 @@ impl ::draw::CommandBuffer for GlCommandBuffer {
         self.buf.push(::UpdateTexture(kind, tex, info, data));
     }
 
-    fn call_clear(&mut self, data: ::target::ClearData) {
-        self.buf.push(::Clear(data));
+    fn call_clear(&mut self, data: ::target::ClearData, mask: ::target::Mask) {
+        self.buf.push(::Clear(data, mask));
     }
 
     fn call_draw(&mut self, ptype: ::PrimitiveType, start: ::VertexCount,
@@ -137,5 +139,10 @@ impl ::draw::CommandBuffer for GlCommandBuffer {
                          start: ::IndexCount, count: ::IndexCount,
                          instances: Option<::InstanceCount>) {
         self.buf.push(::DrawIndexed(ptype, itype, start, count, instances));
+    }
+
+    fn call_blit(&mut self, s_rect: ::target::Rect, d_rect: ::target::Rect,
+                 mask: ::target::Mask) {
+        self.buf.push(::Blit(s_rect, d_rect, mask));
     }
 }

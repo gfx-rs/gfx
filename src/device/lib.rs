@@ -235,13 +235,14 @@ pub enum Command {
     BindArrayBuffer(back::ArrayBuffer),
     BindAttribute(AttributeSlot, back::Buffer, attrib::Format),
     BindIndex(back::Buffer),
-    BindFrameBuffer(back::FrameBuffer),
+    BindFrameBuffer(target::Access, back::FrameBuffer),
     /// Unbind any surface from the specified target slot
-    UnbindTarget(target::Target),
+    UnbindTarget(target::Access, target::Target),
     /// Bind a surface to the specified target slot
-    BindTargetSurface(target::Target, back::Surface),
+    BindTargetSurface(target::Access, target::Target, back::Surface),
     /// Bind a level of the texture to the specified target slot
-    BindTargetTexture(target::Target, back::Texture, target::Level, Option<target::Layer>),
+    BindTargetTexture(target::Access, target::Target, back::Texture,
+                      target::Level, Option<target::Layer>),
     BindUniformBlock(back::Program, UniformBufferSlot, UniformBlockIndex, back::Buffer),
     BindUniform(shade::Location, shade::UniformValue),
     BindTexture(TextureSlot, tex::TextureKind, back::Texture, Option<SamplerHandle>),
@@ -255,9 +256,10 @@ pub enum Command {
     UpdateBuffer(back::Buffer, Box<Blob<()> + Send>, uint),
     UpdateTexture(tex::TextureKind, back::Texture, tex::ImageInfo, Box<Blob<()> + Send>),
     // drawing
-    Clear(target::ClearData),
+    Clear(target::ClearData, target::Mask),
     Draw(PrimitiveType, VertexCount, VertexCount, Option<InstanceCount>),
     DrawIndexed(PrimitiveType, IndexType, IndexCount, IndexCount, Option<InstanceCount>),
+    Blit(target::Rect, target::Rect, target::Mask),
 }
 
 // CommandBuffer is really an associated type, so will look much better when

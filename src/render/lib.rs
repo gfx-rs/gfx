@@ -26,11 +26,13 @@ extern crate device;
 
 use std::mem;
 
+use device::attrib;
 use device::blob::{Blob, BoxBlobCast};
 use device::draw::CommandBuffer;
 use device::shade::{ProgramInfo, UniformValue, ShaderSource};
 use device::shade::{Vertex, Fragment, CreateShaderError};
-use device::attrib;
+use device::target::{Rect, ClearData, Mask, Access, Draw, Read,
+    Target, TargetColor, TargetDepth, TargetStencil};
 use batch::Batch;
 
 /// Batches
@@ -132,11 +134,32 @@ impl ParamStorage{
     }
 }
 
+/// Helper routines for the command buffer
+/// Useful when Renderer is borrowed, and we need to issue commands.
+trait CommandBufferHelper {
+    /// Bind a plane to some target
+    fn bind_target(&mut self, Access, Target, Option<&target::Plane>);
+}
+
+impl<C: device::draw::CommandBuffer> CommandBufferHelper for C {
+    fn bind_target(&mut self, access: Access, to: Target,
+                   plane: Option<&target::Plane>) {
+        match plane {
+            None => self.unbind_target(access, to),
+            Some(&target::PlaneSurface(ref suf)) =>
+                self.bind_target_surface(access, to, suf.get_name()),
+            Some(&target::PlaneTexture(ref tex, level, layer)) =>
+                self.bind_target_texture(access, to, tex.get_name(), level, layer),
+        }
+    }
+}
+
 /// Renderer front-end
 pub struct Renderer<C: device::draw::CommandBuffer> {
     buf: C,
     common_array_buffer: Result<device::ArrayBufferHandle, ()>,
-    common_frame_buffer: device::FrameBufferHandle,
+    draw_frame_buffer: device::FrameBufferHandle,
+    read_frame_buffer: device::FrameBufferHandle,
     default_frame_buffer: device::FrameBufferHandle,
     render_state: RenderState,
     parameters: ParamStorage,
@@ -159,7 +182,8 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
         Renderer {
             buf: CommandBuffer::new(),
             common_array_buffer: self.common_array_buffer,
-            common_frame_buffer: self.common_frame_buffer,
+            draw_frame_buffer: self.draw_frame_buffer,
+            read_frame_buffer: self.read_frame_buffer,
             default_frame_buffer: self.default_frame_buffer,
             render_state: RenderState::new(),
             parameters: ParamStorage::new(),
@@ -167,9 +191,9 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
     }
 
     /// Clear the `Frame` as the `ClearData` specifies.
-    pub fn clear(&mut self, data: device::target::ClearData, frame: &target::Frame) {
+    pub fn clear(&mut self, data: ClearData, mask: Mask, frame: &target::Frame) {
         self.bind_frame(frame);
-        self.buf.call_clear(data);
+        self.buf.call_clear(data, mask);
     }
 
     /// Draw a `batch` into the specified `frame`
@@ -191,6 +215,29 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
         self.bind_state(state);
         self.bind_mesh(mesh, link, program.get_info());
         self.draw_slice(slice, Some(count));
+    }
+
+    /// Blit one frame onto another
+    #[experimental]
+    pub fn blit(&mut self, source: &target::Frame, source_rect: Rect,
+                destination: &target::Frame, dest_rect: Rect, mask: Mask) {
+        // verify as much as possible here
+        if mask.intersects(device::target::Color) {
+            debug_assert!(source.is_default() || !source.colors.is_empty());
+            debug_assert!(destination.is_default() || !destination.colors.is_empty());
+        }
+        if mask.intersects(device::target::Depth) {
+            debug_assert!(source.is_default() || source.depth.is_some());
+            debug_assert!(destination.is_default() || destination.depth.is_some());
+        }
+        if mask.intersects(device::target::Stencil) {
+            debug_assert!(source.is_default() || source.stencil.is_some());
+            debug_assert!(destination.is_default() || destination.stencil.is_some());
+        }
+        // actually blit
+        self.bind_frame(destination);
+        self.bind_read_frame(source);
+        self.buf.call_blit(source_rect, dest_rect, mask);
     }
 
     /// Update a buffer with data from a vector.
@@ -229,25 +276,10 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
         );
     }
 
-    fn bind_target<C: device::draw::CommandBuffer>(
-        buf: &mut C,
-        to: device::target::Target,
-        plane: target::Plane
-    ) {
-        match plane {
-            target::PlaneEmpty =>
-                buf.unbind_target(to),
-            target::PlaneSurface(suf) =>
-                buf.bind_target_surface(to, suf),
-            target::PlaneTexture(tex, level, layer) =>
-                buf.bind_target_texture(to, tex, level, layer),
-        }
-    }
-
     fn bind_frame(&mut self, frame: &target::Frame) {
         if self.render_state.frame.width != frame.width ||
                 self.render_state.frame.height != frame.height {
-            self.buf.set_viewport(device::target::Rect {
+            self.buf.set_viewport(Rect {
                 x: 0,
                 y: 0,
                 w: frame.width,
@@ -259,27 +291,63 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
         if frame.is_default() {
             if self.render_state.is_frame_buffer_set {
                 // binding the default FBO, not touching our common one
-                self.buf.bind_frame_buffer(self.default_frame_buffer.get_name());
+                self.buf.bind_frame_buffer(Draw, self.default_frame_buffer.get_name());
                 self.render_state.is_frame_buffer_set = false;
             }
         } else {
             if !self.render_state.is_frame_buffer_set {
-                self.buf.bind_frame_buffer(self.common_frame_buffer.get_name());
+                self.buf.bind_frame_buffer(Draw, self.draw_frame_buffer.get_name());
                 self.render_state.is_frame_buffer_set = true;
             }
-            for (i, (cur, new)) in self.render_state.frame.colors.iter().zip(frame.colors.iter()).enumerate() {
+            // cut off excess color planes
+            for (i, cur) in self.render_state.frame.colors.iter().enumerate()
+                                .skip(frame.colors.len()) {
+                self.buf.unbind_target(Draw, TargetColor(i as u8));
+            }
+            self.render_state.frame.colors.truncate(frame.colors.len());
+            // bind intersecting subsets
+            for (i, (cur, new)) in self.render_state.frame.colors.mut_iter()
+                                       .zip(frame.colors.iter()).enumerate() {
                 if *cur != *new {
-                    Renderer::<C>::bind_target(&mut self.buf, device::target::TargetColor(i as u8), *new);
+                    self.buf.bind_target(Draw, TargetColor(i as u8), Some(new));
+                    *cur = *new;
                 }
             }
+            // append new planes
+            for (i, new) in frame.colors.iter().enumerate()
+                                 .skip(self.render_state.frame.colors.len()) {
+                self.buf.bind_target(Draw, TargetColor(i as u8), Some(new));
+                self.render_state.frame.colors.push(*new);
+            }
+            // set depth
             if self.render_state.frame.depth != frame.depth {
-                Renderer::<C>::bind_target(&mut self.buf, device::target::TargetDepth, frame.depth);
+                self.buf.bind_target(Draw, TargetDepth, frame.depth.as_ref());
+                self.render_state.frame.depth = frame.depth;
             }
+            // set stencil
             if self.render_state.frame.stencil != frame.stencil {
-                Renderer::<C>::bind_target(&mut self.buf, device::target::TargetStencil, frame.stencil);
+                self.buf.bind_target(Draw, TargetStencil, frame.stencil.as_ref());
+                self.render_state.frame.stencil = frame.stencil;
             }
-            self.render_state.frame = *frame;
         }
+    }
+
+    fn bind_read_frame(&mut self, frame: &target::Frame) {
+        let fbo = if frame.is_default() {
+            &self.default_frame_buffer
+        } else {
+            &self.read_frame_buffer
+        };
+        self.buf.bind_frame_buffer(Read, self.read_frame_buffer.get_name());
+        // color
+        if frame.colors.is_empty() {
+            self.buf.unbind_target(Read, TargetColor(0));
+        }else {
+            self.buf.bind_target(Read, TargetColor(0), Some(&frame.colors[0]));
+        }
+        // depth/stencil
+        self.buf.bind_target(Read, TargetDepth, frame.depth.as_ref());
+        self.buf.bind_target(Read, TargetStencil, frame.stencil.as_ref());
     }
 
     fn bind_state(&mut self, state: &state::DrawState) {
@@ -430,7 +498,8 @@ impl<D: device::Device<C>, C: device::draw::CommandBuffer> DeviceHelper<C> for D
         Renderer {
             buf: CommandBuffer::new(),
             common_array_buffer: self.create_array_buffer(),
-            common_frame_buffer: self.create_frame_buffer(),
+            draw_frame_buffer: self.create_frame_buffer(),
+            read_frame_buffer: self.create_frame_buffer(),
             default_frame_buffer: device::get_main_frame_buffer(),
             render_state: RenderState::new(),
             parameters: ParamStorage::new(),

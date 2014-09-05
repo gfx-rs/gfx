@@ -215,9 +215,9 @@ fn main() {
     };
 
     let clear_data = gfx::ClearData {
-        color: Some([0.3, 0.3, 0.3, 1.0]),
-        depth: Some(1.0),
-        stencil: None,
+        color: [0.3, 0.3, 0.3, 1.0],
+        depth: 1.0,
+        stencil: 0,
     };
 
     while !window.should_close() {
@@ -230,7 +230,7 @@ fn main() {
             }
         }
 
-        graphics.clear(clear_data, &frame);
+        graphics.clear(clear_data, gfx::Color | gfx::Depth, &frame);
         graphics.draw(&batch, &data, &frame);
         graphics.end_frame();
 

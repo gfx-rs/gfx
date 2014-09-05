@@ -120,9 +120,9 @@ fn gfx_main(glfw: glfw::Glfw,
     let proj = cgmath::perspective(cgmath::deg(45.0f32), aspect, 1.0, 10.0);
 
     let clear_data = gfx::ClearData {
-        color: Some([0.3, 0.3, 0.3, 1.0]),
-        depth: Some(1.0),
-        stencil: None,
+        color: [0.3, 0.3, 0.3, 1.0],
+        depth: 1.0,
+        stencil: 0,
     };
 
     let mut graphics = gfx::Graphics::new(device);
@@ -139,7 +139,7 @@ fn gfx_main(glfw: glfw::Glfw,
         }
 
         let start = precise_time_s() * 1000.;
-        graphics.clear(clear_data, &frame);
+        graphics.clear(clear_data, gfx::Color | gfx::Depth, &frame);
 
         for x in range(-dimension, dimension) {
             for y in range(-dimension, dimension) {

@@ -32,13 +32,13 @@ pub trait CommandBuffer {
     fn bind_array_buffer(&mut self, back::ArrayBuffer);
     fn bind_attribute(&mut self, ::AttributeSlot, back::Buffer, attrib::Format);
     fn bind_index(&mut self, back::Buffer);
-    fn bind_frame_buffer(&mut self, back::FrameBuffer);
+    fn bind_frame_buffer(&mut self, target::Access, back::FrameBuffer);
     /// Unbind any surface from the specified target slot
-    fn unbind_target(&mut self, target::Target);
+    fn unbind_target(&mut self, target::Access, target::Target);
     /// Bind a surface to the specified target slot
-    fn bind_target_surface(&mut self, target::Target, back::Surface);
+    fn bind_target_surface(&mut self, target::Access, target::Target, back::Surface);
     /// Bind a level of the texture to the specified target slot
-    fn bind_target_texture(&mut self, target::Target, back::Texture,
+    fn bind_target_texture(&mut self, target::Access, target::Target, back::Texture,
                            target::Level, Option<target::Layer>);
     fn bind_uniform_block(&mut self, back::Program, ::UniformBufferSlot,
                           ::UniformBlockIndex, back::Buffer);
@@ -56,9 +56,10 @@ pub trait CommandBuffer {
     fn update_buffer(&mut self, back::Buffer, Box<Blob<()> + Send>, uint);
     fn update_texture(&mut self, tex::TextureKind, back::Texture,
                       tex::ImageInfo, Box<Blob<()> + Send>);
-    fn call_clear(&mut self, target::ClearData);
+    fn call_clear(&mut self, target::ClearData, target::Mask);
     fn call_draw(&mut self, ::PrimitiveType, ::VertexCount, ::VertexCount,
                  Option<::InstanceCount>);
     fn call_draw_indexed(&mut self, ::PrimitiveType, ::IndexType, ::IndexCount,
                          ::IndexCount, Option<::InstanceCount>);
+    fn call_blit(&mut self, target::Rect, target::Rect, target::Mask);
 }

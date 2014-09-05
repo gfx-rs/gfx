@@ -14,55 +14,62 @@
 
 //! Render target specification.
 
-use device::target;
-use device::back;
-
-static MAX_COLOR_TARGETS: uint = 4;
+use device;
 
 #[deriving(Clone, PartialEq, Show)]
 /// A single buffer that can be bound to a render target.
 pub enum Plane {
-    /// No buffer, the results will not be stored.
-    PlaneEmpty,
     /// Render to a `Surface` (corresponds to a renderbuffer in GL).
-    PlaneSurface(back::Surface),
+    PlaneSurface(device::SurfaceHandle),
     /// Render to a texture at a specific mipmap level
     /// If `Layer` is set, it is selecting a single 2D slice of a given 3D texture
-    PlaneTexture(back::Texture, target::Level, Option<target::Layer>),
+    PlaneTexture(device::TextureHandle, device::target::Level,
+                 Option<device::target::Layer>),
+}
+
+impl Plane {
+    /// Get the surface info
+    pub fn get_surface_info(&self) -> device::tex::SurfaceInfo {
+        match *self {
+            PlaneSurface(ref suf) => *suf.get_info(),
+            PlaneTexture(ref tex, _, _) => tex.get_info().to_surface_info(),
+        }
+    }
 }
 
 /// A complete `Frame`, which is the result of rendering.
+#[deriving(Clone, PartialEq, Show)]
 pub struct Frame {
     /// The width of the viewport.
     pub width: u16,
     /// The height of the viewport.
     pub height: u16,
     /// Each color component has its own buffer.
-    pub colors: [Plane, ..MAX_COLOR_TARGETS],
+    pub colors: Vec<Plane>,
     /// The depth buffer for this frame.
-    pub depth: Plane,
+    pub depth: Option<Plane>,
     /// The stencil buffer for this frame.
-    pub stencil: Plane,
+    pub stencil: Option<Plane>,
 }
 
 impl Frame {
-    /// Create an empty `Frame`, which corresponds to the 'default framebuffer', which for now
-    /// renders directly to the window that was created with the OpenGL context.
+    /// Create an empty `Frame`, which corresponds to the 'default framebuffer',
+    /// which renders directly to the window that was created with the OpenGL context.
     pub fn new(width: u16, height: u16) -> Frame {
         Frame {
             width: width,
             height: height,
-            colors: [PlaneEmpty, ..MAX_COLOR_TARGETS],
-            depth: PlaneEmpty,
-            stencil: PlaneEmpty,
+            colors: Vec::new(),
+            depth: None,
+            stencil: None,
         }
     }
 
-    /// Returns true if this framebuffer is associated with the main window (matches `Frame::new`
-    /// exactly).
+    /// Returns true if this framebuffer is associated with the main window
+    /// (matches `Frame::new` exactly).
     pub fn is_default(&self) -> bool {
-        self.colors.iter().all(|&p| p==PlaneEmpty) &&
-        self.depth == PlaneEmpty &&
-        self.stencil == PlaneEmpty
+        self.colors.is_empty() &&
+        self.depth.is_none() &&
+        self.stencil.is_none()
     }
 }

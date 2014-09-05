@@ -36,7 +36,7 @@ pub use render::mesh::{Slice, ToSlice};
 pub use render::mesh::{VertexSlice, IndexSlice8, IndexSlice16, IndexSlice32};
 pub use render::state::{DrawState, BlendAdditive, BlendAlpha};
 pub use render::shade;
-pub use render::target::{Frame, Plane, PlaneEmpty, PlaneSurface, PlaneTexture};
+pub use render::target::{Frame, Plane, PlaneSurface, PlaneTexture};
 pub use device::Device;
 pub use device::{attrib, state, tex};
 pub use device::{BufferHandle, BufferInfo, RawBufferHandle, ShaderHandle};
@@ -53,7 +53,8 @@ pub use device::shade::{ValueI32Vector2, ValueI32Vector3, ValueI32Vector4};
 pub use device::shade::{ValueF32Vector2, ValueF32Vector3, ValueF32Vector4};
 pub use device::shade::{ValueF32Matrix2, ValueF32Matrix3, ValueF32Matrix4};
 pub use device::shade::{ShaderSource, StaticBytes, OwnedBytes, ProgramInfo};
-pub use device::target::{Color, ClearData, Layer, Level};
+pub use device::target::{ColorValue, ClearData, Mask, Layer, Level, Rect, Target};
+pub use device::target::{Color, Depth, Stencil};
 
 // TODO: Remove this re-export once `gl_device` becomes a separate crate.
 pub use device::gl_device::{GlDevice, GlCommandBuffer};
@@ -93,8 +94,8 @@ impl<D: device::Device<C>, C: device::draw::CommandBuffer> Graphics<D, C> {
     }
 
     /// Clear the `Frame` as the `ClearData` specifies.
-    pub fn clear(&mut self, data: ClearData, frame: &Frame) {
-        self.renderer.clear(data, frame)
+    pub fn clear(&mut self, data: ClearData, mask: Mask, frame: &Frame) {
+        self.renderer.clear(data, mask, frame)
     }
 
     /// Draw a ref batch.

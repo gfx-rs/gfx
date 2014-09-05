@@ -61,7 +61,8 @@ static RESET_CB: &'static [::Command] = &[
     ::BindArrayBuffer(0),
     //BindAttribute
     ::BindIndex(0),
-    ::BindFrameBuffer(0),
+    ::BindFrameBuffer(::target::Draw, 0),
+    ::BindFrameBuffer(::target::Read, 0),
     //UnbindTarget
     //BindUniformBlock
     //BindUniform
@@ -86,6 +87,13 @@ fn primitive_to_gl(prim_type: ::PrimitiveType) -> gl::types::GLenum {
         ::TriangleList => gl::TRIANGLES,
         ::TriangleStrip => gl::TRIANGLE_STRIP,
         ::TriangleFan => gl::TRIANGLE_FAN,
+    }
+}
+
+fn access_to_gl(access: ::target::Access) -> gl::types::GLenum {
+    match access {
+        ::target::Draw => gl::DRAW_FRAMEBUFFER,
+        ::target::Read => gl::READ_FRAMEBUFFER,
     }
 }
 
@@ -197,25 +205,24 @@ impl GlDevice {
 
     fn process(&mut self, cmd: &::Command) {
         match *cmd {
-            ::Clear(ref data) => {
-                let mut flags = match data.color {
-                    //self.gl.ColorMask(gl::TRUE, gl::TRUE, gl::TRUE, gl::TRUE);
-                    Some([r, g, b, a]) => {
-                        self.gl.ClearColor(r, g, b, a);
-                        gl::COLOR_BUFFER_BIT
-                    },
-                    None => 0 as gl::types::GLenum
-                };
-                data.depth.map(|value| {
-                    self.gl.DepthMask(gl::TRUE);
-                    self.gl.ClearDepth(value as gl::types::GLclampd);
+            ::Clear(ref data, mask) => {
+                let mut flags = 0;
+                if mask.intersects(::target::Color) {
+                    flags |= gl::COLOR_BUFFER_BIT;
+                    state::bind_color_mask(&self.gl, ::state::MaskAll);
+                    let [r, g, b, a] = data.color;
+                    self.gl.ClearColor(r, g, b, a);
+                }
+                if mask.intersects(::target::Depth) {
                     flags |= gl::DEPTH_BUFFER_BIT;
-                });
-                data.stencil.map(|value| {
-                    self.gl.StencilMask(-1);
-                    self.gl.ClearStencil(value as gl::types::GLint);
+                    self.gl.DepthMask(gl::TRUE);
+                    self.gl.ClearDepth(data.depth as gl::types::GLclampd);
+                }
+                if mask.intersects(::target::Stencil) {
                     flags |= gl::STENCIL_BUFFER_BIT;
-                });
+                    self.gl.StencilMask(-1);
+                    self.gl.ClearStencil(data.stencil as gl::types::GLint);
+                }
                 self.gl.Clear(flags);
             },
             ::BindProgram(program) => {
@@ -285,26 +292,29 @@ impl GlDevice {
             ::BindIndex(buffer) => {
                 self.gl.BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer);
             },
-            ::BindFrameBuffer(frame_buffer) => {
-                self.gl.BindFramebuffer(gl::DRAW_FRAMEBUFFER, frame_buffer);
+            ::BindFrameBuffer(access, frame_buffer) => {
+                let point = access_to_gl(access);
+                self.gl.BindFramebuffer(point, frame_buffer);
             },
-            ::UnbindTarget(target) => {
+            ::UnbindTarget(access, target) => {
+                let point = access_to_gl(access);
                 let att = target_to_gl(target);
-                self.gl.FramebufferRenderbuffer(gl::DRAW_FRAMEBUFFER, att, gl::RENDERBUFFER, 0);
+                self.gl.FramebufferRenderbuffer(point, att, gl::RENDERBUFFER, 0);
             },
-            ::BindTargetSurface(target, name) => {
+            ::BindTargetSurface(access, target, name) => {
+                let point = access_to_gl(access);
                 let att = target_to_gl(target);
-                self.gl.FramebufferRenderbuffer(gl::DRAW_FRAMEBUFFER, att, gl::RENDERBUFFER, name);
+                self.gl.FramebufferRenderbuffer(point, att, gl::RENDERBUFFER, name);
             },
-            ::BindTargetTexture(target, name, level, layer) => {
+            ::BindTargetTexture(access, target, name, level, layer) => {
+                let point = access_to_gl(access);
                 let att = target_to_gl(target);
                 match layer {
                     Some(layer) => self.gl.FramebufferTextureLayer(
-                        gl::DRAW_FRAMEBUFFER, att, name, level as gl::types::GLint,
+                        point, att, name, level as gl::types::GLint,
                         layer as gl::types::GLint),
                     None => self.gl.FramebufferTexture(
-                        gl::DRAW_FRAMEBUFFER, att, name, level as gl::types::GLint
-                        ),
+                        point, att, name, level as gl::types::GLint),
                 }
             },
             ::BindUniformBlock(program, slot, loc, buffer) => {
@@ -415,6 +425,40 @@ impl GlDevice {
                         );
                     },
                 }
+                self.check();
+            },
+            ::Blit(s_rect, d_rect, mask) => {
+                type GLint = gl::types::GLint;
+                // build mask
+                let mut flags = 0;
+                if mask.intersects(::target::Color) {
+                    flags |= gl::COLOR_BUFFER_BIT;
+                }
+                if mask.intersects(::target::Depth) {
+                    flags |= gl::DEPTH_BUFFER_BIT;
+                }
+                if mask.intersects(::target::Stencil) {
+                    flags |= gl::STENCIL_BUFFER_BIT;
+                }
+                // build filter
+                let filter = if s_rect.w == d_rect.w && s_rect.h == d_rect.h {
+                    gl::NEAREST
+                }else {
+                    gl::LINEAR
+                };
+                // blit
+                self.gl.BlitFramebuffer(
+                    s_rect.x as GLint,
+                    s_rect.y as GLint,
+                    (s_rect.x + s_rect.w) as GLint,
+                    (s_rect.y + s_rect.h) as GLint,
+                    d_rect.x as GLint,
+                    d_rect.y as GLint,
+                    (d_rect.x + d_rect.w) as GLint,
+                    (d_rect.y + d_rect.h) as GLint,
+                    flags,
+                    filter
+                );
                 self.check();
             },
         }

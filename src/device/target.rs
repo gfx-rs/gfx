@@ -38,16 +38,36 @@ pub struct Rect {
 }
 
 /// A color with floating-point components.
-pub type Color = [f32, ..4];
+pub type ColorValue = [f32, ..4];
+
+#[deriving(Clone, PartialEq)]
+bitflags!(
+    #[allow(missing_doc)]
+    flags Mask: u32 {  //u8 is preferred, but doesn't seem to work well
+        static Color     = 0x01,
+        static Color0    = 0x01,
+        static Color1    = 0x02,
+        static Color2    = 0x04,
+        static Color3    = 0x08,
+        static Depth     = 0x40,
+        static Stencil   = 0x80
+    }
+)
+
+impl fmt::Show for Mask {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Mask({})", self.bits())
+    }
+}
 
 /// How to clear a frame.
 pub struct ClearData {
-    /// If set, the color buffer of the frame will be cleared to this.
-    pub color: Option<Color>,
-    /// If set, the depth buffer of the frame will be cleared to this.
-    pub depth: Option<Depth>,
-    /// If set, the stencil buffer of the frame will be cleared to this.
-    pub stencil: Option<Stencil>,
+    /// The color to clear the frame with
+    pub color: ColorValue,
+    /// The depth value to clear the frame with
+    pub depth: Depth,
+    /// The stencil value to clear the frame with
+    pub stencil: Stencil,
 }
 
 impl Clone for ClearData {
@@ -62,18 +82,25 @@ impl Clone for ClearData {
 
 impl fmt::Show for ClearData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        try!(write!(f, "ClearData {{ color: "));
-        match self.color {
-            Some(ref c) => try!(write!(f, "Some({})", c.as_slice())),
-            None => try!(write!(f, "None")),
-        }
-        write!(f, ", depth: {}, stencil: {} }}", self.depth, self.stencil)
+        write!(f,
+            "ClearData {{ color: {}, depth: {}, stencil: {} }}",
+            self.color.as_slice(), self.depth, self.stencil)
     }
+}
+
+/// Type of the frame buffer access
+#[repr(u8)]
+#[deriving(Clone, PartialEq, Show)]
+pub enum Access {
+    /// Draw access
+    Draw,
+    /// Read access
+    Read,
 }
 
 /// When rendering, each "output" of the fragment shader goes to a specific target. A `Plane` can
 /// be bound to a target, causing writes to that target to affect the `Plane`.
-#[deriving(Clone, Show)]
+#[deriving(Clone, PartialEq, Show)]
 pub enum Target {
     /// Color data.
     ///
