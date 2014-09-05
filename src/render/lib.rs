@@ -26,11 +26,12 @@ extern crate device;
 
 use std::mem;
 
+use device::attrib;
 use device::blob::{Blob, BoxBlobCast};
 use device::draw::CommandBuffer;
 use device::shade::{ProgramInfo, UniformValue, ShaderSource};
 use device::shade::{Vertex, Fragment, CreateShaderError};
-use device::attrib;
+use device::target::{Rect, Target, TargetColor, TargetDepth, TargetStencil};
 use batch::Batch;
 
 /// Batches
@@ -193,6 +194,12 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
         self.draw_slice(slice, Some(count));
     }
 
+    /// Copy one frame over another
+    pub fn blit(&mut self, source: &target::Plane, sourceRect: Rect,
+                destination: &target::Plane, destRect: Rect, what: Target) {
+        unimplemented!()
+    }
+
     /// Update a buffer with data from a vector.
     pub fn update_buffer_vec<T: Send>(&mut self, buf: device::BufferHandle<T>,
                              data: Vec<T>, offset_elements: uint) {
@@ -229,18 +236,12 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
         );
     }
 
-    fn bind_target<C: device::draw::CommandBuffer>(
-        buf: &mut C,
-        to: device::target::Target,
-        plane: target::Plane
-    ) {
-        match plane {
-            target::PlaneEmpty =>
-                buf.unbind_target(to),
-            target::PlaneSurface(suf) =>
-                buf.bind_target_surface(to, suf),
-            target::PlaneTexture(tex, level, layer) =>
-                buf.bind_target_texture(to, tex, level, layer),
+    fn bind_target(buf: &mut C, to: device::target::Target, plane: &target::Plane) {
+        match *plane {
+            target::PlaneSurface(ref suf) =>
+                buf.bind_target_surface(to, suf.get_name()),
+            target::PlaneTexture(ref tex, level, layer) =>
+                buf.bind_target_texture(to, tex.get_name(), level, layer),
         }
     }
 
@@ -267,18 +268,42 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
                 self.buf.bind_frame_buffer(self.common_frame_buffer.get_name());
                 self.render_state.is_frame_buffer_set = true;
             }
-            for (i, (cur, new)) in self.render_state.frame.colors.iter().zip(frame.colors.iter()).enumerate() {
+            // cut off excess color planes
+            for (i, cur) in self.render_state.frame.colors.iter().enumerate()
+                                .skip(frame.colors.len()) {
+                self.buf.unbind_target(TargetColor(i as u8));
+            }
+            self.render_state.frame.colors.truncate(frame.colors.len());
+            // bind intersecting subsets
+            for (i, (cur, new)) in self.render_state.frame.colors.mut_iter()
+                                       .zip(frame.colors.iter()).enumerate() {
                 if *cur != *new {
-                    Renderer::<C>::bind_target(&mut self.buf, device::target::TargetColor(i as u8), *new);
+                    Renderer::<C>::bind_target(&mut self.buf, TargetColor(i as u8), new);
+                    *cur = *new;
                 }
             }
+            // append new planes
+            for (i, new) in frame.colors.iter().enumerate()
+                                 .skip(self.render_state.frame.colors.len()) {
+                Renderer::<C>::bind_target(&mut self.buf, TargetColor(i as u8), new);
+                self.render_state.frame.colors.push(*new);
+            }
+            // set depth
             if self.render_state.frame.depth != frame.depth {
-                Renderer::<C>::bind_target(&mut self.buf, device::target::TargetDepth, frame.depth);
+                match frame.depth {
+                    Some(ref p) => Renderer::<C>::bind_target(&mut self.buf, TargetDepth, p),
+                    None => self.buf.unbind_target(TargetDepth),
+                }
+                self.render_state.frame.depth = frame.depth;
             }
+            // set stencil
             if self.render_state.frame.stencil != frame.stencil {
-                Renderer::<C>::bind_target(&mut self.buf, device::target::TargetStencil, frame.stencil);
+                match frame.stencil {
+                    Some(ref p) => Renderer::<C>::bind_target(&mut self.buf, TargetStencil, p),
+                    None => self.buf.unbind_target(TargetStencil),
+                }
+                self.render_state.frame.stencil = frame.stencil;
             }
-            self.render_state.frame = *frame;
         }
     }
 
