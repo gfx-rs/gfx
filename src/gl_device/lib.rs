@@ -427,6 +427,39 @@ impl GlDevice {
                 }
                 self.check();
             },
+            ::Blit(s_rect, d_rect, mask) => {
+                type GLint = gl::types::GLint;
+                // build mask
+                let mut flags = 0;
+                if mask.intersects(::target::Color) {
+                    flags |= gl::COLOR_BUFFER_BIT;
+                }
+                if mask.intersects(::target::Depth) {
+                    flags |= gl::DEPTH_BUFFER_BIT;
+                }
+                if mask.intersects(::target::Stencil) {
+                    flags |= gl::STENCIL_BUFFER_BIT;
+                }
+                // build filter
+                let filter = if s_rect.w == d_rect.w && s_rect.h == d_rect.h {
+                    gl::NEAREST
+                }else {
+                    gl::LINEAR
+                };
+                // blit
+                self.gl.BlitFramebuffer(
+                    s_rect.x as GLint,
+                    s_rect.y as GLint,
+                    (s_rect.x + s_rect.w) as GLint,
+                    (s_rect.y + s_rect.h) as GLint,
+                    d_rect.x as GLint,
+                    d_rect.y as GLint,
+                    (d_rect.x + d_rect.w) as GLint,
+                    (d_rect.y + d_rect.h) as GLint,
+                    flags,
+                    filter
+                );
+            },
         }
     }
 }

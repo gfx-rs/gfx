@@ -61,4 +61,5 @@ pub trait CommandBuffer {
                  Option<::InstanceCount>);
     fn call_draw_indexed(&mut self, ::PrimitiveType, ::IndexType, ::IndexCount,
                          ::IndexCount, Option<::InstanceCount>);
+    fn call_blit(&mut self, target::Rect, target::Rect, target::Mask);
 }

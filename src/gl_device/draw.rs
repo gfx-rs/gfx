@@ -140,4 +140,9 @@ impl ::draw::CommandBuffer for GlCommandBuffer {
                          instances: Option<::InstanceCount>) {
         self.buf.push(::DrawIndexed(ptype, itype, start, count, instances));
     }
+
+    fn call_blit(&mut self, s_rect: ::target::Rect, d_rect: ::target::Rect,
+                 mask: ::target::Mask) {
+        self.buf.push(::Blit(s_rect, d_rect, mask));
+    }
 }

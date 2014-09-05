@@ -259,6 +259,7 @@ pub enum Command {
     Clear(target::ClearData, target::Mask),
     Draw(PrimitiveType, VertexCount, VertexCount, Option<InstanceCount>),
     DrawIndexed(PrimitiveType, IndexType, IndexCount, IndexCount, Option<InstanceCount>),
+    Blit(target::Rect, target::Rect, target::Mask),
 }
 
 // CommandBuffer is really an associated type, so will look much better when

@@ -134,6 +134,26 @@ impl ParamStorage{
     }
 }
 
+/// Helper routines for the command buffer
+/// Useful when Renderer is borrowed, and we need to issue commands.
+trait CommandBufferHelper {
+    /// Bind a plane to some target
+    fn bind_target(&mut self, Access, Target, Option<&target::Plane>);
+}
+
+impl<C: device::draw::CommandBuffer> CommandBufferHelper for C {
+    fn bind_target(&mut self, access: Access, to: Target,
+                   plane: Option<&target::Plane>) {
+        match plane {
+            None => self.unbind_target(access, to),
+            Some(&target::PlaneSurface(ref suf)) =>
+                self.bind_target_surface(access, to, suf.get_name()),
+            Some(&target::PlaneTexture(ref tex, level, layer)) =>
+                self.bind_target_texture(access, to, tex.get_name(), level, layer),
+        }
+    }
+}
+
 /// Renderer front-end
 pub struct Renderer<C: device::draw::CommandBuffer> {
     buf: C,
@@ -172,13 +192,13 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
 
     /// Clear the `Frame` as the `ClearData` specifies.
     pub fn clear(&mut self, data: ClearData, mask: Mask, frame: &target::Frame) {
-        self.bind_frame(Draw, frame);
+        self.bind_frame(frame);
         self.buf.call_clear(data, mask);
     }
 
     /// Draw a `batch` into the specified `frame`
     pub fn draw<B: Batch>(&mut self, batch: B, frame: &target::Frame) {
-        self.bind_frame(Draw, frame);
+        self.bind_frame(frame);
         let (mesh, link, slice, program, state) = batch.get_data();
         self.bind_program(&batch, program);
         self.bind_state(state);
@@ -189,7 +209,7 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
     /// Draw a `batch` multiple times using instancing
     pub fn draw_instanced<B: Batch>(&mut self, batch: B,
                           count: device::InstanceCount, frame: &target::Frame) {
-        self.bind_frame(Draw, frame);
+        self.bind_frame(frame);
         let (mesh, link, slice, program, state) = batch.get_data();
         self.bind_program(&batch, program);
         self.bind_state(state);
@@ -198,11 +218,12 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
     }
 
     /// Blit one frame onto another
-    pub fn blit(&mut self, source: &target::Frame, sourceRect: Rect,
-                destination: &target::Frame, destRect: Rect, mask: Mask) {
-        self.bind_frame(Read, source);
-        self.bind_frame(Draw, destination);
-        unimplemented!()
+    pub fn blit(&mut self, source: &target::Frame, source_rect: Rect,
+                destination: &target::Frame, dest_rect: Rect, mask: Mask) {
+        self.bind_frame(destination);
+        self.bind_read_frame(source);
+        //TODO: verify all the states
+        self.buf.call_blit(source_rect, dest_rect, mask);
     }
 
     /// Update a buffer with data from a vector.
@@ -241,16 +262,7 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
         );
     }
 
-    fn bind_target(buf: &mut C, access: Access, to: Target, plane: &target::Plane) {
-        match *plane {
-            target::PlaneSurface(ref suf) =>
-                buf.bind_target_surface(access, to, suf.get_name()),
-            target::PlaneTexture(ref tex, level, layer) =>
-                buf.bind_target_texture(access, to, tex.get_name(), level, layer),
-        }
-    }
-
-    fn bind_frame(&mut self, access: Access, frame: &target::Frame) {
+    fn bind_frame(&mut self, frame: &target::Frame) {
         if self.render_state.frame.width != frame.width ||
                 self.render_state.frame.height != frame.height {
             self.buf.set_viewport(Rect {
@@ -263,62 +275,65 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
             self.render_state.frame.height = frame.height;
         }
         if frame.is_default() {
-            if self.render_state.is_frame_buffer_set || access == Read {
+            if self.render_state.is_frame_buffer_set {
                 // binding the default FBO, not touching our common one
-                self.buf.bind_frame_buffer(access, self.default_frame_buffer.get_name());
-            }
-            if access == Draw {
+                self.buf.bind_frame_buffer(Draw, self.default_frame_buffer.get_name());
                 self.render_state.is_frame_buffer_set = false;
             }
         } else {
-            match access {
-                Draw => if !self.render_state.is_frame_buffer_set {
-                    self.buf.bind_frame_buffer(access, self.draw_frame_buffer.get_name());
-                    self.render_state.is_frame_buffer_set = true;
-                },
-                Read => self.buf.bind_frame_buffer(access, self.read_frame_buffer.get_name()),
+            if !self.render_state.is_frame_buffer_set {
+                self.buf.bind_frame_buffer(Draw, self.draw_frame_buffer.get_name());
+                self.render_state.is_frame_buffer_set = true;
             }
             // cut off excess color planes
             for (i, cur) in self.render_state.frame.colors.iter().enumerate()
                                 .skip(frame.colors.len()) {
-                self.buf.unbind_target(access, TargetColor(i as u8));
+                self.buf.unbind_target(Draw, TargetColor(i as u8));
             }
             self.render_state.frame.colors.truncate(frame.colors.len());
             // bind intersecting subsets
             for (i, (cur, new)) in self.render_state.frame.colors.mut_iter()
                                        .zip(frame.colors.iter()).enumerate() {
                 if *cur != *new {
-                    Renderer::<C>::bind_target(&mut self.buf, access,
-                                               TargetColor(i as u8), new);
+                    self.buf.bind_target(Draw, TargetColor(i as u8), Some(new));
                     *cur = *new;
                 }
             }
             // append new planes
             for (i, new) in frame.colors.iter().enumerate()
                                  .skip(self.render_state.frame.colors.len()) {
-                Renderer::<C>::bind_target(&mut self.buf, access,
-                                           TargetColor(i as u8), new);
+                self.buf.bind_target(Draw, TargetColor(i as u8), Some(new));
                 self.render_state.frame.colors.push(*new);
             }
             // set depth
             if self.render_state.frame.depth != frame.depth {
-                match frame.depth {
-                    Some(ref p) => Renderer::<C>::bind_target(&mut self.buf,
-                        access, TargetDepth, p),
-                    None => self.buf.unbind_target(access, TargetDepth),
-                }
+                self.buf.bind_target(Draw, TargetDepth, frame.depth.as_ref());
                 self.render_state.frame.depth = frame.depth;
             }
             // set stencil
             if self.render_state.frame.stencil != frame.stencil {
-                match frame.stencil {
-                    Some(ref p) => Renderer::<C>::bind_target(&mut self.buf,
-                        access, TargetStencil, p),
-                    None => self.buf.unbind_target(access, TargetStencil),
-                }
+                self.buf.bind_target(Draw, TargetStencil, frame.stencil.as_ref());
                 self.render_state.frame.stencil = frame.stencil;
             }
         }
+    }
+
+    fn bind_read_frame(&mut self, frame: &target::Frame) {
+        let fbo = if frame.is_default() {
+            &self.default_frame_buffer
+        } else {
+            &self.read_frame_buffer
+        };
+        self.buf.bind_frame_buffer(Read, self.read_frame_buffer.get_name());
+        // color
+        if frame.colors.is_empty() {
+            self.buf.unbind_target(Read, TargetColor(0));
+        }else {
+            self.buf.bind_target(Read, TargetColor(0), Some(&frame.colors[0]));
+        }
+        // depth/stencil
+        self.buf.bind_target(Read, TargetDepth, frame.depth.as_ref());
+        self.buf.bind_target(Read, TargetStencil, frame.stencil.as_ref());
     }
 
     fn bind_state(&mut self, state: &state::DrawState) {
