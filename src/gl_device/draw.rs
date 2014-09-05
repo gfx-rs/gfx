@@ -126,8 +126,8 @@ impl ::draw::CommandBuffer for GlCommandBuffer {
         self.buf.push(::UpdateTexture(kind, tex, info, data));
     }
 
-    fn call_clear(&mut self, data: ::target::ClearData) {
-        self.buf.push(::Clear(data));
+    fn call_clear(&mut self, data: ::target::ClearData, mask: ::target::Mask) {
+        self.buf.push(::Clear(data, mask));
     }
 
     fn call_draw(&mut self, ptype: ::PrimitiveType, start: ::VertexCount,

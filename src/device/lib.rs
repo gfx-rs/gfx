@@ -256,7 +256,7 @@ pub enum Command {
     UpdateBuffer(back::Buffer, Box<Blob<()> + Send>, uint),
     UpdateTexture(tex::TextureKind, back::Texture, tex::ImageInfo, Box<Blob<()> + Send>),
     // drawing
-    Clear(target::ClearData),
+    Clear(target::ClearData, target::Mask),
     Draw(PrimitiveType, VertexCount, VertexCount, Option<InstanceCount>),
     DrawIndexed(PrimitiveType, IndexType, IndexCount, IndexCount, Option<InstanceCount>),
 }

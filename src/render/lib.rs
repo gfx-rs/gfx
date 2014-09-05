@@ -31,7 +31,7 @@ use device::blob::{Blob, BoxBlobCast};
 use device::draw::CommandBuffer;
 use device::shade::{ProgramInfo, UniformValue, ShaderSource};
 use device::shade::{Vertex, Fragment, CreateShaderError};
-use device::target::{Rect, ClearData, Access, Draw, Read,
+use device::target::{Rect, ClearData, Mask, Access, Draw, Read,
     Target, TargetColor, TargetDepth, TargetStencil};
 use batch::Batch;
 
@@ -171,9 +171,9 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
     }
 
     /// Clear the `Frame` as the `ClearData` specifies.
-    pub fn clear(&mut self, data: ClearData, frame: &target::Frame) {
+    pub fn clear(&mut self, data: ClearData, mask: Mask, frame: &target::Frame) {
         self.bind_frame(Draw, frame);
-        self.buf.call_clear(data);
+        self.buf.call_clear(data, mask);
     }
 
     /// Draw a `batch` into the specified `frame`
@@ -199,7 +199,7 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
 
     /// Blit one frame onto another
     pub fn blit(&mut self, source: &target::Frame, sourceRect: Rect,
-                destination: &target::Frame, destRect: Rect) {
+                destination: &target::Frame, destRect: Rect, mask: Mask) {
         self.bind_frame(Read, source);
         self.bind_frame(Draw, destination);
         unimplemented!()

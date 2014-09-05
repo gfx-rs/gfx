@@ -205,25 +205,24 @@ impl GlDevice {
 
     fn process(&mut self, cmd: &::Command) {
         match *cmd {
-            ::Clear(ref data) => {
-                let mut flags = match data.color {
-                    //self.gl.ColorMask(gl::TRUE, gl::TRUE, gl::TRUE, gl::TRUE);
-                    Some([r, g, b, a]) => {
-                        self.gl.ClearColor(r, g, b, a);
-                        gl::COLOR_BUFFER_BIT
-                    },
-                    None => 0 as gl::types::GLenum
-                };
-                data.depth.map(|value| {
-                    self.gl.DepthMask(gl::TRUE);
-                    self.gl.ClearDepth(value as gl::types::GLclampd);
+            ::Clear(ref data, mask) => {
+                let mut flags = 0;
+                if mask.intersects(::target::Color) {
+                    flags |= gl::COLOR_BUFFER_BIT;
+                    state::bind_color_mask(&self.gl, ::state::MaskAll);
+                    let [r, g, b, a] = data.color;
+                    self.gl.ClearColor(r, g, b, a);
+                }
+                if mask.intersects(::target::Depth) {
                     flags |= gl::DEPTH_BUFFER_BIT;
-                });
-                data.stencil.map(|value| {
-                    self.gl.StencilMask(-1);
-                    self.gl.ClearStencil(value as gl::types::GLint);
+                    self.gl.DepthMask(gl::TRUE);
+                    self.gl.ClearDepth(data.depth as gl::types::GLclampd);
+                }
+                if mask.intersects(::target::Stencil) {
                     flags |= gl::STENCIL_BUFFER_BIT;
-                });
+                    self.gl.StencilMask(-1);
+                    self.gl.ClearStencil(data.stencil as gl::types::GLint);
+                }
                 self.gl.Clear(flags);
             },
             ::BindProgram(program) => {
