@@ -262,7 +262,7 @@ impl Default for BlendChannel {
 pub struct Blend {
     pub color: BlendChannel,
     pub alpha: BlendChannel,
-    pub value: super::target::Color,
+    pub value: ::target::ColorValue,
 }
 
 impl Default for Blend {

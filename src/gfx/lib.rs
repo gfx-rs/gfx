@@ -53,7 +53,8 @@ pub use device::shade::{ValueI32Vector2, ValueI32Vector3, ValueI32Vector4};
 pub use device::shade::{ValueF32Vector2, ValueF32Vector3, ValueF32Vector4};
 pub use device::shade::{ValueF32Matrix2, ValueF32Matrix3, ValueF32Matrix4};
 pub use device::shade::{ShaderSource, StaticBytes, OwnedBytes, ProgramInfo};
-pub use device::target::{Color, ClearData, Mask, Layer, Level, Rect, Target};
+pub use device::target::{ColorValue, ClearData, Mask, Layer, Level, Rect, Target};
+pub use device::target::{Color, Depth, Stencil};
 
 // TODO: Remove this re-export once `gl_device` becomes a separate crate.
 pub use device::gl_device::{GlDevice, GlCommandBuffer};

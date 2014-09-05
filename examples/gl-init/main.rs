@@ -29,10 +29,11 @@ fn main() {
 
     renderer.clear(
         gfx::ClearData {
-            color: Some([0.3, 0.3, 0.3, 1.0]),
-            depth: None,
-            stencil: None,
+            color: [0.3, 0.3, 0.3, 1.0],
+            depth: 1.0,
+            stencil: 0,
         },
+        gfx::Color,
         &gfx::Frame::new(w as u16, h as u16)
     );
 

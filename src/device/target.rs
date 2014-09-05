@@ -38,7 +38,7 @@ pub struct Rect {
 }
 
 /// A color with floating-point components.
-pub type Color = [f32, ..4];
+pub type ColorValue = [f32, ..4];
 
 #[deriving(Clone, PartialEq)]
 bitflags!(
@@ -63,7 +63,7 @@ impl fmt::Show for Mask {
 /// How to clear a frame.
 pub struct ClearData {
     /// The color to clear the frame with
-    pub color: Color,
+    pub color: ColorValue,
     /// The depth value to clear the frame with
     pub depth: Depth,
     /// The stencil value to clear the frame with
