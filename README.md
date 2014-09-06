@@ -4,6 +4,9 @@
 [![Gitter Chat](https://badges.gitter.im/gfx-rs/gfx-rs.png)](https://gitter.im/gfx-rs/gfx-rs)
 [![Stories in Ready](https://badge.waffle.io/gfx-rs/gfx-rs.png?label=S-ready&title=issues)](https://waffle.io/gfx-rs/gfx-rs)
 
+[Documentation](http://rust-ci.org/gfx-rs/gfx-rs/doc/gfx/index.html) is hosted
+on [`rust-ci`](http://rust-ci.org/).
+
 `gfx-rs` is a high-performance, bindless graphics API for the Rust
 programming language. It aims to be the default API for Rust graphics: for
 one-off applications, or higher level libraries or engines.
