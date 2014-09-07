@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #![feature(phase)]
-#![crate_name = "gfx-perf"]
+#![crate_name = "performance"]
 #![feature(globs)]
 
 extern crate cgmath;

@@ -22,6 +22,7 @@ authors = [
     "kvark",
 ]
 
+
 [lib]
 name = "gfx"
 path = "src/gfx/lib.rs"
@@ -34,3 +35,61 @@ path = "src/device/"
 
 [dependencies.render]
 path = "src/render/"
+
+
+[[example]]
+name = "triangle"
+path = "examples/triangle/main.rs"
+
+[dev_dependencies.glfw]
+git = "https://github.com/bjz/glfw-rs.git"
+
+
+[[example]]
+name = "cube"
+path = "examples/cube/main.rs"
+
+# [dev_dependencies.glfw]
+# git = "https://github.com/bjz/glfw-rs.git"
+
+[dev_dependencies.cgmath]
+git = "http://github.com/bjz/cgmath-rs"
+
+
+[[example]]
+name = "terrain"
+path = "examples/terrain/main.rs"
+
+# [dev_dependencies.glfw]
+# git = "https://github.com/bjz/glfw-rs.git"
+
+# [dev_dependencies.cgmath]
+# git = "http://github.com/bjz/cgmath-rs"
+
+[dev_dependencies.genmesh]
+git = "https://github.com/csherratt/genmesh.git"
+
+[dev_dependencies.noise-rs]
+git = "https://github.com/bjz/noise-rs.git"
+
+
+[[example]]
+name = "gl-init"
+path = "examples/gl-init/main.rs"
+
+[dev_dependencies.gl_init]
+git = "https://github.com/tomaka/gl-init-rs.git"
+
+
+[[example]]
+name = "performance"
+path = "examples/performance/main.rs"
+
+# [dev_dependencies.glfw]
+# git = "https://github.com/bjz/glfw-rs.git"
+
+[dev_dependencies.gfx_gl]
+git = "https://github.com/gfx-rs/gfx_gl.git"
+
+# [dev_dependencies.cgmath]
+# git = "http://github.com/bjz/cgmath-rs"
