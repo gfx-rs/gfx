@@ -19,7 +19,7 @@
 #![experimental]
 
 extern crate libc;
-extern crate gl = "gfx_gl";
+extern crate "gfx_gl" as gl;
 
 use log;
 

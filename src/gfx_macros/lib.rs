@@ -178,7 +178,7 @@ macro_rules! shaders {
     (GLSL_120: $v:expr $($t:tt)*) => {
         {
             mod __gfx_extern_crate_hack {
-                extern crate gfx_ = "gfx";
+                extern crate "gfx" as gfx_;
                 pub use self::gfx_ as gfx;
             }
             __gfx_extern_crate_hack::gfx::ShaderSource {
@@ -190,7 +190,7 @@ macro_rules! shaders {
     (GLSL_150: $v:expr $($t:tt)*) => {
         {
             mod __gfx_extern_crate_hack {
-                extern crate gfx_ = "gfx";
+                extern crate "gfx" as gfx_;
                 pub use self::gfx_ as gfx;
             }
             __gfx_extern_crate_hack::gfx::ShaderSource {
@@ -202,7 +202,7 @@ macro_rules! shaders {
     () => {
         {
             mod __gfx_extern_crate_hack {
-                extern crate gfx_ = "gfx";
+                extern crate "gfx" as gfx_;
                 pub use self::gfx_ as gfx;
             }
             __gfx_extern_crate_hack::gfx::ShaderSource {

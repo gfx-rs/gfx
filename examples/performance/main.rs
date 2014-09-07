@@ -9,7 +9,7 @@ extern crate gfx_macros;
 extern crate glfw;
 extern crate native;
 extern crate time;
-extern crate gl = "gfx_gl";
+extern crate "gfx_gl" as gl;
 
 use time::precise_time_s;
 use cgmath::FixedArray;

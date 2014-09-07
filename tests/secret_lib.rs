@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate gfx_ = "gfx";
-extern crate device_ = "device";
+extern crate "gfx" as gfx_;
+extern crate "device" as device_;
 pub use self::gfx_ as gfx;
 pub use self::device_ as device;
