@@ -11,7 +11,6 @@ update:
 	(cd src/render && cargo update)
 	(cd src/gfx_macros && cargo update)
 	cargo update
-	make -C examples update
 	rm -rf doc
 
 .PHONY: test
@@ -42,11 +41,9 @@ clean: clean-diagrams
 	(cd src/render && cargo clean)
 	(cd src/gfx_macros && cargo clean)
 	cargo clean
-	make -C examples clean
 	rm -rf doc
 
 .PHONY: travis
 travis: test doc
-	make -C examples
 	# the doc directory needs to be in the root for rust-ci
 	mv target/doc doc
