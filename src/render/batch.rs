@@ -75,8 +75,9 @@ pub struct OwnedBatch<L, T> {
     mesh_link: mesh::Link,
     /// Mesh slice
     pub slice: mesh::Slice,
+    /// Parameter data.
+    pub param: T,
     program: ProgramHandle,
-    param: T,
     param_link: L,
     /// Draw state
     pub state: DrawState,
