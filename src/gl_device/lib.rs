@@ -158,8 +158,14 @@ impl GlDevice {
     }
 
     /// Fails during a debug build if the implementation's error flag was set.
-    fn check(&mut self) {
-        debug_assert_eq!(self.get_error(), Ok(()));
+    fn check(&mut self, cmd: &::Command) {
+        if cfg!(not(ndebug)) {
+            match self.get_error() {
+                Ok(())   => (),
+                Err(err) =>
+                    fail!("Error after executing command {}: {}", cmd, err)
+            }
+        }
     }
 
     /// Get the OpenGL-specific driver information
@@ -459,7 +465,7 @@ impl GlDevice {
                 );
             },
         }
-        self.check();
+        self.check(cmd);
     }
 }
 
