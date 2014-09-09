@@ -558,6 +558,11 @@ impl Device<GlCommandBuffer> for GlDevice {
 
     fn create_texture(&mut self, info: ::tex::TextureInfo) ->
                       Result<::TextureHandle, ::tex::TextureError> {
+
+        if info.width == 0 || info.height == 0 || info.levels == 0 {
+            return Err(::tex::InvalidTextureInfo(info))
+        }
+
         let name = if self.caps.immutable_storage_supported {
             tex::make_with_storage(&self.gl, &info)
         } else {

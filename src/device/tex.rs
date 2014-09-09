@@ -37,6 +37,8 @@ pub enum TextureError {
     UnsupportedTextureFormat,
     /// Failed to map a given multisampled kind to the device
     UnsupportedTextureSampling,
+    /// The given TextureInfo contains invalid values
+    InvalidTextureInfo(TextureInfo),
 }
 
 /// Number of bits per component
