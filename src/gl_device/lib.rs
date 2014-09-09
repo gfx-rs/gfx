@@ -631,3 +631,122 @@ impl Device<GlCommandBuffer> for GlDevice {
         tex::generate_mipmap(&self.gl, texture.get_info().kind, texture.get_name());
     }
 }
+
+
+impl ::draw::CommandBuffer for GlDevice {
+    fn new() -> GlDevice {
+        unimplemented!()
+    }
+
+    fn clear(&mut self) {}
+
+    fn bind_program(&mut self, prog: Program) {
+        self.process(&::BindProgram(prog));
+    }
+
+    fn bind_array_buffer(&mut self, vao: ArrayBuffer) {
+        self.process(&::BindArrayBuffer(vao));
+    }
+
+    fn bind_attribute(&mut self, slot: ::AttributeSlot, buf: Buffer,
+                      format: ::attrib::Format) {
+        self.process(&::BindAttribute(slot, buf, format));
+    }
+
+    fn bind_index(&mut self, buf: Buffer) {
+        self.process(&::BindIndex(buf));
+    }
+
+    fn bind_frame_buffer(&mut self, access: ::target::Access, fbo: FrameBuffer) {
+        self.process(&::BindFrameBuffer(access, fbo));
+    }
+
+    fn unbind_target(&mut self, access: ::target::Access, tar: ::target::Target) {
+        self.process(&::UnbindTarget(access, tar));
+    }
+
+    fn bind_target_surface(&mut self, access: ::target::Access,
+                           tar: ::target::Target, suf: Surface) {
+        self.process(&::BindTargetSurface(access, tar, suf));
+    }
+
+    fn bind_target_texture(&mut self, access: ::target::Access,
+                           tar: ::target::Target, tex: Texture,
+                           level: ::target::Level, layer: Option<::target::Layer>) {
+        self.process(&::BindTargetTexture(access, tar, tex, level, layer));
+    }
+
+    fn bind_uniform_block(&mut self, prog: Program, slot: ::UniformBufferSlot,
+                          index: ::UniformBlockIndex, buf: Buffer) {
+        self.process(&::BindUniformBlock(prog, slot, index, buf));
+    }
+
+    fn bind_uniform(&mut self, loc: ::shade::Location, value: ::shade::UniformValue) {
+        self.process(&::BindUniform(loc, value));
+    }
+    fn bind_texture(&mut self, slot: ::TextureSlot, kind: ::tex::TextureKind,
+                    tex: Texture, sampler: Option<::SamplerHandle>) {
+        self.process(&::BindTexture(slot, kind, tex, sampler));
+    }
+
+    fn set_primitive(&mut self, prim: ::state::Primitive) {
+        self.process(&::SetPrimitiveState(prim));
+    }
+
+    fn set_viewport(&mut self, view: ::target::Rect) {
+        self.process(&::SetViewport(view));
+    }
+
+    fn set_multi_sample(&mut self, ms: Option<::state::MultiSample>) {
+        self.process(&::SetMultiSampleState(ms));
+    }
+
+    fn set_scissor(&mut self, rect: Option<::target::Rect>) {
+        self.process(&::SetScissor(rect));
+    }
+
+    fn set_depth_stencil(&mut self, depth: Option<::state::Depth>,
+                         stencil: Option<::state::Stencil>, cull: ::state::CullMode) {
+        self.process(&::SetDepthStencilState(depth, stencil, cull));
+    }
+
+    fn set_blend(&mut self, blend: Option<::state::Blend>) {
+        self.process(&::SetBlendState(blend));
+    }
+
+    fn set_color_mask(&mut self, mask: ::state::ColorMask) {
+        self.process(&::SetColorMask(mask));
+    }
+
+    fn update_buffer(&mut self, buf: Buffer, data: Box<Blob<()> + Send>,
+                        offset_bytes: uint) {
+        use blob::{Blob, BoxBlobCast};
+        
+        self.process(&::UpdateBuffer(buf, data.cast(), offset_bytes));
+    }
+
+    fn update_texture(&mut self, kind: ::tex::TextureKind, tex: Texture,
+                      info: ::tex::ImageInfo, data: Box<Blob<()> + Send>) {
+        self.process(&::UpdateTexture(kind, tex, info, data));
+    }
+
+    fn call_clear(&mut self, data: ::target::ClearData, mask: ::target::Mask) {
+        self.process(&::Clear(data, mask));
+    }
+
+    fn call_draw(&mut self, ptype: ::PrimitiveType, start: ::VertexCount,
+                 count: ::VertexCount, instances: Option<::InstanceCount>) {
+        self.process(&::Draw(ptype, start, count, instances));
+    }
+
+    fn call_draw_indexed(&mut self, ptype: ::PrimitiveType, itype: ::IndexType,
+                         start: ::IndexCount, count: ::IndexCount,
+                         instances: Option<::InstanceCount>) {
+        self.process(&::DrawIndexed(ptype, itype, start, count, instances));
+    }
+
+    fn call_blit(&mut self, s_rect: ::target::Rect, d_rect: ::target::Rect,
+                 mask: ::target::Mask) {
+        self.process(&::Blit(s_rect, d_rect, mask));
+    }
+}
