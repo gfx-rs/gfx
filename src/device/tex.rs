@@ -22,6 +22,7 @@
 //! texels.
 
 use std::default::Default;
+use std::fmt;
 
 /// Surface creation/update error.
 #[deriving(Clone, PartialEq, Show)]
@@ -31,12 +32,37 @@ pub enum SurfaceError {
 }
 
 /// Texture creation/update error.
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Clone, PartialEq)]
 pub enum TextureError {
     /// Failed to map a given format to the device
     UnsupportedTextureFormat,
     /// Failed to map a given multisampled kind to the device
     UnsupportedTextureSampling,
+    /// The given TextureInfo contains invalid values
+    InvalidTextureInfo(TextureInfo),
+}
+
+impl fmt::Show for TextureError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            &UnsupportedTextureFormat =>
+                write!(f, "Failed to map a given format to the device"),
+
+            &UnsupportedTextureSampling =>
+                write!(
+                    f,
+                    "Failed to map a given multisampled kind to the device"
+                ),
+
+            &InvalidTextureInfo(info) =>
+                write!(
+                    f,
+                    "Invalid TextureInfo (width, height, and levels must not \
+                    be zero): {}\n",
+                    info
+                ),
+        }
+    }
 }
 
 /// Number of bits per component
