@@ -395,7 +395,6 @@ impl GlDevice {
                         );
                     },
                 }
-                self.check();
             },
             ::DrawIndexed(prim_type, index_type, start, count, instances) => {
                 let (offset, gl_index) = match index_type {
@@ -425,7 +424,6 @@ impl GlDevice {
                         );
                     },
                 }
-                self.check();
             },
             ::Blit(s_rect, d_rect, mask) => {
                 type GLint = gl::types::GLint;
@@ -459,9 +457,9 @@ impl GlDevice {
                     flags,
                     filter
                 );
-                self.check();
             },
         }
+        self.check();
     }
 }
 
