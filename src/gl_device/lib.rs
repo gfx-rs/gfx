@@ -48,6 +48,7 @@ pub type Texture        = gl::types::GLuint;
 
 #[deriving(Eq, PartialEq, Show)]
 pub enum GlError {
+    NoError,
     InvalidEnum,
     InvalidValue,
     InvalidOperation,
@@ -145,25 +146,24 @@ impl GlDevice {
     }
 
     /// Check for GL error and return gfx-rs equivalent
-    pub fn get_error(&mut self) -> Result<(), GlError> {
+    pub fn get_error(&mut self) -> GlError {
         match self.gl.GetError() {
-            gl::NO_ERROR => Ok(()),
-            gl::INVALID_ENUM => Err(InvalidEnum),
-            gl::INVALID_VALUE => Err(InvalidValue),
-            gl::INVALID_OPERATION => Err(InvalidOperation),
-            gl::INVALID_FRAMEBUFFER_OPERATION => Err(InvalidFramebufferOperation),
-            gl::OUT_OF_MEMORY => Err(OutOfMemory),
-            _ => Err(UnknownError),
+            gl::NO_ERROR => NoError,
+            gl::INVALID_ENUM => InvalidEnum,
+            gl::INVALID_VALUE => InvalidValue,
+            gl::INVALID_OPERATION => InvalidOperation,
+            gl::INVALID_FRAMEBUFFER_OPERATION => InvalidFramebufferOperation,
+            gl::OUT_OF_MEMORY => OutOfMemory,
+            _ => UnknownError,
         }
     }
 
     /// Fails during a debug build if the implementation's error flag was set.
     fn check(&mut self, cmd: &::Command) {
         if cfg!(not(ndebug)) {
-            match self.get_error() {
-                Ok(())   => (),
-                Err(err) =>
-                    fail!("Error after executing command {}: {}", cmd, err)
+            let err = self.get_error();
+            if err != NoError {
+                fail!("Error after executing command {}: {}", cmd, err);
             }
         }
     }
