@@ -158,8 +158,14 @@ impl GlDevice {
     }
 
     /// Fails during a debug build if the implementation's error flag was set.
-    fn check(&mut self) {
-        debug_assert_eq!(self.get_error(), Ok(()));
+    fn check(&mut self, cmd: &::Command) {
+        if cfg!(not(ndebug)) {
+            match self.get_error() {
+                Ok(())   => (),
+                Err(err) =>
+                    fail!("Error after executing command {}: {}", cmd, err)
+            }
+        }
     }
 
     /// Get the OpenGL-specific driver information
@@ -395,7 +401,6 @@ impl GlDevice {
                         );
                     },
                 }
-                self.check();
             },
             ::DrawIndexed(prim_type, index_type, start, count, instances) => {
                 let (offset, gl_index) = match index_type {
@@ -425,7 +430,6 @@ impl GlDevice {
                         );
                     },
                 }
-                self.check();
             },
             ::Blit(s_rect, d_rect, mask) => {
                 type GLint = gl::types::GLint;
@@ -459,9 +463,9 @@ impl GlDevice {
                     flags,
                     filter
                 );
-                self.check();
             },
         }
+        self.check(cmd);
     }
 }
 
