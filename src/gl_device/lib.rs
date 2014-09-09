@@ -57,6 +57,20 @@ pub enum GlError {
     UnknownError,
 }
 
+impl GlError {
+    pub fn from_error_code(error_code: gl::types::GLenum) -> GlError {
+        match error_code {
+            gl::NO_ERROR                      => NoError,
+            gl::INVALID_ENUM                  => InvalidEnum,
+            gl::INVALID_VALUE                 => InvalidValue,
+            gl::INVALID_OPERATION             => InvalidOperation,
+            gl::INVALID_FRAMEBUFFER_OPERATION => InvalidFramebufferOperation,
+            gl::OUT_OF_MEMORY                 => OutOfMemory,
+            _                                 => UnknownError,
+        }
+    }
+}
+
 static RESET_CB: &'static [::Command] = &[
     ::BindProgram(0),
     ::BindArrayBuffer(0),
@@ -145,23 +159,10 @@ impl GlDevice {
         fun(&self.gl);
     }
 
-    /// Check for GL error and return gfx-rs equivalent
-    pub fn get_error(&mut self) -> GlError {
-        match self.gl.GetError() {
-            gl::NO_ERROR => NoError,
-            gl::INVALID_ENUM => InvalidEnum,
-            gl::INVALID_VALUE => InvalidValue,
-            gl::INVALID_OPERATION => InvalidOperation,
-            gl::INVALID_FRAMEBUFFER_OPERATION => InvalidFramebufferOperation,
-            gl::OUT_OF_MEMORY => OutOfMemory,
-            _ => UnknownError,
-        }
-    }
-
     /// Fails during a debug build if the implementation's error flag was set.
     fn check(&mut self, cmd: &::Command) {
         if cfg!(not(ndebug)) {
-            let err = self.get_error();
+            let err = GlError::from_error_code(self.gl.GetError());
             if err != NoError {
                 fail!("Error after executing command {}: {}", cmd, err);
             }
