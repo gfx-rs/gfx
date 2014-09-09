@@ -47,7 +47,7 @@ pub type Sampler        = gl::types::GLuint;
 pub type Texture        = gl::types::GLuint;
 
 #[deriving(Eq, PartialEq, Show)]
-pub enum ErrorType {
+pub enum GlError {
     InvalidEnum,
     InvalidValue,
     InvalidOperation,
@@ -145,7 +145,7 @@ impl GlDevice {
     }
 
     /// Check for GL error and return gfx-rs equivalent
-    pub fn get_error(&mut self) -> Result<(), ErrorType> {
+    pub fn get_error(&mut self) -> Result<(), GlError> {
         match self.gl.GetError() {
             gl::NO_ERROR => Ok(()),
             gl::INVALID_ENUM => Err(InvalidEnum),
