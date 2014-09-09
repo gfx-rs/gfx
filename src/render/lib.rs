@@ -156,13 +156,41 @@ impl<C: device::draw::CommandBuffer> CommandBufferHelper for C {
 
 /// Renderer front-end
 pub struct Renderer<C: device::draw::CommandBuffer> {
-    buf: C,
+    /// The command buffer.
+    pub buf: C,
     common_array_buffer: Result<device::ArrayBufferHandle, ()>,
     draw_frame_buffer: device::FrameBufferHandle,
     read_frame_buffer: device::FrameBufferHandle,
     default_frame_buffer: device::FrameBufferHandle,
     render_state: RenderState,
     parameters: ParamStorage,
+}
+
+impl<D: device::Device<C> + device::draw::CommandBuffer,
+     C: device::draw::CommandBuffer> Renderer<D> {
+    /// Creates an unbuffered main renderer.
+    ///
+    /// Returns a Renderer that processes all commands directly on the device.
+    /// This Renderer does not need to be reset.
+    ///
+    /// To submit another Renderer do the following:
+    /// ```
+    /// renderer.buf.submit(otherRenderer.as_buffer());
+    /// ```
+    pub fn new(mut device: D) -> Renderer<D> {
+        let common_array_buffer = device.create_array_buffer();
+        let draw_frame_buffer = device.create_frame_buffer();
+        let read_frame_buffer = device.create_frame_buffer();
+        Renderer {
+            buf: device,
+            common_array_buffer: common_array_buffer,
+            draw_frame_buffer: draw_frame_buffer,
+            read_frame_buffer: read_frame_buffer,
+            default_frame_buffer: device::get_main_frame_buffer(),
+            render_state: RenderState::new(),
+            parameters: ParamStorage::new(),
+        }
+    }
 }
 
 impl<C: device::draw::CommandBuffer> Renderer<C> {
