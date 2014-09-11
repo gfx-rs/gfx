@@ -171,7 +171,7 @@ fn main() {
     let (w, h) = window.get_framebuffer_size();
     let frame = gfx::Frame::new(w as u16, h as u16);
 
-    let mut device = gfx::GlDevice::new(|s| glfw.get_proc_address(s));
+    let mut device = gfx::GlDevice::new(|s| window.get_proc_address(s));
 
     let rand_seed = std::rand::task_rng().gen();
     let noise = Perlin::new().seed(rand_seed);
