@@ -107,7 +107,7 @@ fn main() {
     let (w, h) = window.get_framebuffer_size();
     let frame = gfx::Frame::new(w as u16, h as u16);
 
-    let mut device = gfx::GlDevice::new(|s| glfw.get_proc_address(s));
+    let mut device = gfx::GlDevice::new(|s| window.get_proc_address(s));
 
     let vertex_data = vec![
         Vertex { pos: [ -0.5, -0.5 ], color: [1.0, 0.0, 0.0] },
