@@ -91,8 +91,13 @@ initialization with [glfw](https://github.com/bjz/glfw-rs/), or
 
 ## Building the examples
 
+To build the examples run `cargo test`. The executables will be in the `target` directory.
+
 ~~~sh
-make -C examples
+# Build all Examples
+cargo test
+# Run Cube Example
+target/cube
 ~~~
 
 ## Note
