@@ -26,7 +26,6 @@ use log;
 use attrib;
 
 use Device;
-use blob::{Blob, RefBlobCast};
 
 pub use self::draw::GlCommandBuffer;
 pub use self::info::{Info, PlatformName, Version};
@@ -503,14 +502,15 @@ impl Device<GlCommandBuffer> for GlDevice {
         ::BufferHandle::from_raw(::Handle(name, info))
     }
 
-    fn create_buffer_static<'a, T>(&mut self, data: &Blob<T>+'a) -> ::BufferHandle<T> {
+    fn create_buffer_static_raw(&mut self, data: &[u8]) -> ::BufferHandle<()> {
         let name = self.create_buffer_internal();
+
         let info = ::BufferInfo {
             usage: ::UsageStatic,
-            size: data.get_size(),
+            size: data.len(),
         };
         self.init_buffer(name, &info);
-        self.update_sub_buffer(name, data.cast().get_address(), data.get_size(), 0);
+        self.update_sub_buffer(name, data.as_ptr(), data.len(), 0);
         ::BufferHandle::from_raw(::Handle(name, info))
     }
 
@@ -621,18 +621,18 @@ impl Device<GlCommandBuffer> for GlDevice {
         }
     }
 
-    fn update_buffer_raw(&mut self, buffer: ::BufferHandle<()>, data: &Blob<()>,
+    fn update_buffer_raw(&mut self, buffer: ::BufferHandle<()>, data: &[u8],
                          offset_bytes: uint) {
-        debug_assert!(offset_bytes + data.get_size() <= buffer.get_info().size);
-        self.update_sub_buffer(buffer.get_name(), data.cast().get_address(),
-                               data.get_size(), offset_bytes);
+        debug_assert!(offset_bytes + data.len() <= buffer.get_info().size);
+        self.update_sub_buffer(buffer.get_name(), data.as_ptr(), data.len(),
+                               offset_bytes)
     }
 
-    fn update_texture_raw(&mut self, texture: &::TextureHandle, img: &::tex::ImageInfo,
-                          data: &Blob<()>) -> Result<(), ::tex::TextureError> {
+    fn update_texture_raw(&mut self, texture: &::TextureHandle,
+                          img: &::tex::ImageInfo, data: &[u8])
+                          -> Result<(), ::tex::TextureError> {
         tex::update_texture(&self.gl, texture.get_info().kind,
-                            texture.get_name(), img, data.cast().get_address(),
-                            data.get_size())
+                            texture.get_name(), img, data.as_ptr(), data.len())
     }
 
     fn generate_mipmap(&mut self, texture: &::TextureHandle) {

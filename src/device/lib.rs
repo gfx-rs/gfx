@@ -31,10 +31,7 @@ pub use self::gl_device as back;
 
 use std::mem;
 
-use blob::{Blob, RefBlobCast};
-
 pub mod attrib;
-pub mod blob;
 pub mod draw;
 pub mod shade;
 pub mod state;
@@ -149,9 +146,19 @@ pub fn make_fake_buffer<T>() -> BufferHandle<T> {
     BufferHandle::from_raw(Handle(0, info))
 }
 
-/// Return the framebuffer handle for the screen
+/// Return the framebuffer handle for the screen.
 pub fn get_main_frame_buffer() -> FrameBufferHandle {
     Handle(0, ())
+}
+
+/// Treat a given slice as `&[u8]` for the given function call
+pub fn with_slice<T: Copy, R>(slice: &[T], fun: |&[u8]| -> R) -> R {
+    use std::{mem, slice};
+    let size = mem::size_of::<T>() * slice.len();
+    //TODO: would be nice to execute `fun` out of unsafe block
+    unsafe {
+        slice::raw::buf_as_slice(slice.as_ptr() as *const u8, size, fun)
+    }
 }
 
 /// Features that the device supports.
@@ -278,7 +285,10 @@ pub trait Device<C: draw::CommandBuffer> {
     fn create_buffer<T>(&mut self, num: uint, usage: BufferUsage) -> BufferHandle<T> {
         self.create_buffer_raw(num * mem::size_of::<T>(), usage).cast()
     }
-    fn create_buffer_static<T>(&mut self, &Blob<T>) -> BufferHandle<T>;
+    fn create_buffer_static_raw(&mut self, data: &[u8]) -> BufferHandle<()>;
+    fn create_buffer_static<T: Copy>(&mut self, data: &[T]) -> BufferHandle<T> {
+        with_slice(data, |s| self.create_buffer_static_raw(s)).cast()
+    }
     fn create_array_buffer(&mut self) -> Result<ArrayBufferHandle, ()>;
     fn create_shader(&mut self, stage: shade::Stage, code: shade::ShaderSource) ->
                      Result<ShaderHandle, shade::CreateShaderError>;
@@ -298,16 +308,23 @@ pub trait Device<C: draw::CommandBuffer> {
     fn delete_texture(&mut self, TextureHandle);
     fn delete_sampler(&mut self, SamplerHandle);
     /// Update the information stored in a specific buffer
-    fn update_buffer_raw(&mut self, buf: BufferHandle<()>, data: &Blob<()>, offset_bytes: uint);
-    fn update_buffer<T>(&mut self, buf: BufferHandle<T>, data: &Blob<T>, offset_elements: uint) {
-        self.update_buffer_raw(buf.cast(), data.cast(), mem::size_of::<T>() * offset_elements);
+    fn update_buffer_raw(&mut self, buf: BufferHandle<()>, data: &[u8],
+                         offset_bytes: uint);
+    fn update_buffer<T: Copy>(&mut self, buf: BufferHandle<T>, data: &[T],
+                     offset_elements: uint) {
+        with_slice(data, |s| self.update_buffer_raw(
+            buf.cast(),
+            s,
+            mem::size_of::<T>() * offset_elements
+        ));
     }
     /// Update the information stored in a texture
     fn update_texture_raw(&mut self, tex: &TextureHandle, img: &tex::ImageInfo,
-                          data: &Blob<()>) -> Result<(), tex::TextureError>;
-    fn update_texture<T>(&mut self, tex: &TextureHandle, img: &tex::ImageInfo,
-                      data: &Blob<T>) -> Result<(), tex::TextureError> {
-        self.update_texture_raw(tex, img, data.cast())
+                          data: &[u8]) -> Result<(), tex::TextureError>;
+    fn update_texture<T: Copy>(&mut self, tex: &TextureHandle,
+                      img: &tex::ImageInfo, data: &[T])
+                      -> Result<(), tex::TextureError> {
+        with_slice(data, |s| self.update_texture_raw(tex, img, s))
     }
     fn generate_mipmap(&mut self, tex: &TextureHandle);
 }

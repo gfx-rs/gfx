@@ -27,7 +27,6 @@ extern crate device;
 use std::mem;
 
 use device::attrib;
-use device::blob::{Blob, BoxBlobCast};
 use device::draw::CommandBuffer;
 use device::shade::{ProgramInfo, UniformValue, ShaderSource};
 use device::shade::{Vertex, Fragment, CreateShaderError};
@@ -480,7 +479,7 @@ pub trait DeviceHelper<C: CommandBuffer> {
     fn create_renderer(&mut self) -> Renderer<C>;
     /// Create a new mesh from the given vertex data.
     /// Convenience function around `create_buffer` and `Mesh::from_format`.
-    fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh;
+    fn create_mesh<T: mesh::VertexFormat + Copy>(&mut self, data: &[T]) -> mesh::Mesh;
     /// Create a simple program given a vertex shader with a fragment one.
     fn link_program(&mut self, vs_src: ShaderSource, fs_src: ShaderSource)
                     -> Result<device::ProgramHandle, ProgramError>;
@@ -500,14 +499,14 @@ impl<D: device::Device<C>, C: CommandBuffer> DeviceHelper<C> for D {
         }
     }
 
-    fn create_mesh<T: mesh::VertexFormat + Send>(&mut self, data: Vec<T>) -> mesh::Mesh {
+    fn create_mesh<T: mesh::VertexFormat + Copy>(&mut self, data: &[T]) -> mesh::Mesh {
         let nv = data.len();
         debug_assert!(nv < {
             use std::num::Bounded;
             let val: device::VertexCount = Bounded::max_value();
             val as uint
         });
-        let buf = self.create_buffer_static(&data);
+        let buf = self.create_buffer_static(data);
         mesh::Mesh::from_format(buf, nv as device::VertexCount)
     }
 

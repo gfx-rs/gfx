@@ -20,8 +20,6 @@ use shade;
 use target;
 use tex;
 
-use std::mem;
-
 /// The place of some data in the data buffer.
 #[deriving(PartialEq, Show)]
 pub struct DataPointer(u16, u16);
@@ -60,6 +58,7 @@ impl DataBuffer {
 
     /// Copy a given vector slice into the buffer
     pub fn add_vec<T: Copy>(&mut self, v: &[T]) -> DataPointer {
+        use std::mem;
         let offset = self.buf.len();
         let size = mem::size_of::<T>() * v.len();
         self.buf.reserve_additional(size);
