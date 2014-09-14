@@ -42,10 +42,10 @@ pub fn registrar(reg: &mut rustc::plugin::Registry) {
     use syntax::ext::base;
     // Register the `#[shader_param]` attribute.
     reg.register_syntax_extension(intern("shader_param"),
-        base::ItemDecorator(shader_param::expand));
+        base::ItemDecorator(box shader_param::expand));
     // Register the `#[vertex_format]` attribute.
     reg.register_syntax_extension(intern("vertex_format"),
-        base::ItemDecorator(vertex_format::expand));
+        base::ItemDecorator(box vertex_format::expand));
 }
 
 /// A hacky thing to get around 'moved value' errors when using `quote_expr!`
