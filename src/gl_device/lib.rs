@@ -199,18 +199,19 @@ impl GlDevice {
         }
     }
 
-    fn update_sub_buffer(&mut self, buffer: Buffer, data: &Blob<()>, offset: uint) {
+    fn update_sub_buffer(&mut self, buffer: Buffer, address: *const u8,
+                         size: uint, offset: uint) {
         self.gl.BindBuffer(gl::ARRAY_BUFFER, buffer);
         unsafe {
             self.gl.BufferSubData(gl::ARRAY_BUFFER,
                 offset as gl::types::GLintptr,
-                data.get_size() as gl::types::GLsizeiptr,
-                data.get_address() as *const gl::types::GLvoid
+                size as gl::types::GLsizeiptr,
+                address as *const gl::types::GLvoid
             );
         }
     }
 
-    fn process(&mut self, cmd: &::Command) {
+    fn process(&mut self, cmd: &::Command, data_buf: &::draw::DataBuffer) {
         match *cmd {
             ::Clear(ref data, mask) => {
                 let mut flags = 0;
@@ -372,11 +373,14 @@ impl GlDevice {
             ::SetColorMask(mask) => {
                 state::bind_color_mask(&self.gl, mask);
             },
-            ::UpdateBuffer(buffer, ref data, offset) => {
-                self.update_sub_buffer(buffer, &**data, offset);
+            ::UpdateBuffer(buffer, pointer, offset) => {
+                let data = data_buf.get_ref(pointer);
+                self.update_sub_buffer(buffer, data.as_ptr(), data.len(), offset);
             },
-            ::UpdateTexture(kind, texture, image_info, ref data) => {
-                match tex::update_texture(&self.gl, kind, texture, &image_info, &**data) {
+            ::UpdateTexture(kind, texture, image_info, pointer) => {
+                let data = data_buf.get_ref(pointer);
+                match tex::update_texture(&self.gl, kind, texture, &image_info,
+                                          data.as_ptr(), data.len()) {
                     Ok(_) => (),
                     Err(_) => unimplemented!(),
                 }
@@ -476,15 +480,16 @@ impl Device<GlCommandBuffer> for GlDevice {
     }
 
     fn reset_state(&mut self) {
+        let data = ::draw::DataBuffer::new();
         for com in RESET_CB.iter() {
-            self.process(com);
+            self.process(com, &data);
         }
     }
 
-    fn submit(&mut self, cb: &GlCommandBuffer) {
+    fn submit(&mut self, (cb, db): (&GlCommandBuffer, &::draw::DataBuffer)) {
         self.reset_state();
         for com in cb.iter() {
-            self.process(com);
+            self.process(com, db);
         }
     }
 
@@ -505,7 +510,7 @@ impl Device<GlCommandBuffer> for GlDevice {
             size: data.get_size(),
         };
         self.init_buffer(name, &info);
-        self.update_sub_buffer(name, data.cast(), 0);
+        self.update_sub_buffer(name, data.cast().get_address(), data.get_size(), 0);
         ::BufferHandle::from_raw(::Handle(name, info))
     }
 
@@ -619,12 +624,15 @@ impl Device<GlCommandBuffer> for GlDevice {
     fn update_buffer_raw(&mut self, buffer: ::BufferHandle<()>, data: &Blob<()>,
                          offset_bytes: uint) {
         debug_assert!(offset_bytes + data.get_size() <= buffer.get_info().size);
-        self.update_sub_buffer(buffer.get_name(), data, offset_bytes);
+        self.update_sub_buffer(buffer.get_name(), data.cast().get_address(),
+                               data.get_size(), offset_bytes);
     }
 
     fn update_texture_raw(&mut self, texture: &::TextureHandle, img: &::tex::ImageInfo,
                           data: &Blob<()>) -> Result<(), ::tex::TextureError> {
-        tex::update_texture(&self.gl, texture.get_info().kind, texture.get_name(), img, data)
+        tex::update_texture(&self.gl, texture.get_info().kind,
+                            texture.get_name(), img, data.cast().get_address(),
+                            data.get_size())
     }
 
     fn generate_mipmap(&mut self, texture: &::TextureHandle) {

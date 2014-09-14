@@ -141,7 +141,7 @@ trait CommandBufferHelper {
     fn bind_target(&mut self, Access, Target, Option<&target::Plane>);
 }
 
-impl<C: device::draw::CommandBuffer> CommandBufferHelper for C {
+impl<C: CommandBuffer> CommandBufferHelper for C {
     fn bind_target(&mut self, access: Access, to: Target,
                    plane: Option<&target::Plane>) {
         match plane {
@@ -155,8 +155,9 @@ impl<C: device::draw::CommandBuffer> CommandBufferHelper for C {
 }
 
 /// Renderer front-end
-pub struct Renderer<C: device::draw::CommandBuffer> {
+pub struct Renderer<C: CommandBuffer> {
     buf: C,
+    data: device::draw::DataBuffer,
     common_array_buffer: Result<device::ArrayBufferHandle, ()>,
     draw_frame_buffer: device::FrameBufferHandle,
     read_frame_buffer: device::FrameBufferHandle,
@@ -165,22 +166,24 @@ pub struct Renderer<C: device::draw::CommandBuffer> {
     parameters: ParamStorage,
 }
 
-impl<C: device::draw::CommandBuffer> Renderer<C> {
+impl<C: CommandBuffer> Renderer<C> {
     /// Reset all commands for the command buffer re-usal.
     pub fn reset(&mut self) {
         self.buf.clear();
+        self.data.clear();
         self.render_state = RenderState::new();
     }
 
-    /// Get a command buffer to be submitted
-    pub fn as_buffer(&self) -> &C {
-        &self.buf
+    /// Get a command buffer to be submitted to the device.
+    pub fn as_buffer(&self) -> (&C, &device::draw::DataBuffer) {
+        (&self.buf, &self.data)
     }
 
-    /// Clone the renderer shared data but ignore the commands
+    /// Clone the renderer shared data but ignore the commands.
     pub fn clone_empty(&self) -> Renderer<C> {
         Renderer {
             buf: CommandBuffer::new(),
+            data: device::draw::DataBuffer::new(),
             common_array_buffer: self.common_array_buffer,
             draw_frame_buffer: self.draw_frame_buffer,
             read_frame_buffer: self.read_frame_buffer,
@@ -241,39 +244,29 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
     }
 
     /// Update a buffer with data from a vector.
-    pub fn update_buffer_vec<T: Send>(&mut self, buf: device::BufferHandle<T>,
-                             data: Vec<T>, offset_elements: uint) {
+    pub fn update_buffer_vec<T: Copy>(&mut self, buf: device::BufferHandle<T>,
+                             data: &[T], offset_elements: uint) {
         let esize = mem::size_of::<T>();
         let offset_bytes = esize * offset_elements;
         debug_assert!(data.len() * esize + offset_bytes <= buf.get_info().size);
-        self.buf.update_buffer(
-            buf.get_name(),
-            ((box data) as Box<Blob<T> + Send>).cast(),
-            offset_bytes
-        );
+        let pointer = self.data.add_vec(data);
+        self.buf.update_buffer(buf.get_name(), pointer, offset_bytes);
     }
 
     /// Update a buffer with data from a single type.
-    pub fn update_buffer_struct<U, T: Blob<U>+Send>(&mut self,
-                                buf: device::BufferHandle<U>, data: T) {
+    pub fn update_buffer_struct<U, T: Copy>(&mut self,
+                                buf: device::BufferHandle<U>, data: &T) {
         debug_assert!(mem::size_of::<T>() <= buf.get_info().size);
-        self.buf.update_buffer(
-            buf.get_name(),
-            ((box data) as Box<Blob<U> + Send>).cast(),
-            0
-        );
+        let pointer = self.data.add_struct(data);
+        self.buf.update_buffer(buf.get_name(), pointer, 0);
     }
 
     /// Update the contents of a texture.
-    pub fn update_texture<T: Send>(&mut self, tex: device::TextureHandle,
-                                   img: device::tex::ImageInfo, data: Vec<T>) {
+    pub fn update_texture<T: Copy>(&mut self, tex: device::TextureHandle,
+                          img: device::tex::ImageInfo, data: &[T]) {
         debug_assert!(tex.get_info().contains(&img));
-        self.buf.update_texture(
-            tex.get_info().kind,
-            tex.get_name(),
-            img,
-            ((box data) as Box<Blob<T> + Send>).cast()
-        );
+        let pointer = self.data.add_vec(data);
+        self.buf.update_texture(tex.get_info().kind, tex.get_name(), img, pointer);
     }
 
     fn bind_frame(&mut self, frame: &target::Frame) {
@@ -482,7 +475,7 @@ impl<C: device::draw::CommandBuffer> Renderer<C> {
 }
 
 /// Backend extension trait for convenience methods
-pub trait DeviceHelper<C: device::draw::CommandBuffer> {
+pub trait DeviceHelper<C: CommandBuffer> {
     /// Create a new renderer
     fn create_renderer(&mut self) -> Renderer<C>;
     /// Create a new mesh from the given vertex data.
@@ -493,10 +486,11 @@ pub trait DeviceHelper<C: device::draw::CommandBuffer> {
                     -> Result<device::ProgramHandle, ProgramError>;
 }
 
-impl<D: device::Device<C>, C: device::draw::CommandBuffer> DeviceHelper<C> for D {
+impl<D: device::Device<C>, C: CommandBuffer> DeviceHelper<C> for D {
     fn create_renderer(&mut self) -> Renderer<C> {
         Renderer {
             buf: CommandBuffer::new(),
+            data: device::draw::DataBuffer::new(),
             common_array_buffer: self.create_array_buffer(),
             draw_frame_buffer: self.create_frame_buffer(),
             read_frame_buffer: self.create_frame_buffer(),

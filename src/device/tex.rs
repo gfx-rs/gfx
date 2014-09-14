@@ -34,12 +34,14 @@ pub enum SurfaceError {
 /// Texture creation/update error.
 #[deriving(Clone, PartialEq)]
 pub enum TextureError {
-    /// Failed to map a given format to the device
+    /// Failed to map a given format to the device.
     UnsupportedTextureFormat,
-    /// Failed to map a given multisampled kind to the device
+    /// Failed to map a given multisampled kind to the device.
     UnsupportedTextureSampling,
-    /// The given TextureInfo contains invalid values
+    /// The given TextureInfo contains invalid values.
     InvalidTextureInfo(TextureInfo),
+    /// The given data has a different size than the target texture slice.
+    IncorrectTextureSize(uint),
 }
 
 impl fmt::Show for TextureError {
@@ -60,6 +62,13 @@ impl fmt::Show for TextureError {
                     "Invalid TextureInfo (width, height, and levels must not \
                     be zero): {}\n",
                     info
+                ),
+            &IncorrectTextureSize(expected) =>
+                write!(
+                    f,
+                    "Invalid data size provided to update the texture, \
+                    expected size {}",
+                    expected
                 ),
         }
     }

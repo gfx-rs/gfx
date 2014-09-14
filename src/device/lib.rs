@@ -253,8 +253,8 @@ pub enum Command {
     SetDepthStencilState(Option<state::Depth>, Option<state::Stencil>, state::CullMode),
     SetBlendState(Option<state::Blend>),
     SetColorMask(state::ColorMask),
-    UpdateBuffer(back::Buffer, Box<Blob<()> + Send>, uint),
-    UpdateTexture(tex::TextureKind, back::Texture, tex::ImageInfo, Box<Blob<()> + Send>),
+    UpdateBuffer(back::Buffer, draw::DataPointer, uint),
+    UpdateTexture(tex::TextureKind, back::Texture, tex::ImageInfo, draw::DataPointer),
     // drawing
     Clear(target::ClearData, target::Mask),
     Draw(PrimitiveType, VertexCount, VertexCount, Option<InstanceCount>),
@@ -272,7 +272,7 @@ pub trait Device<C: draw::CommandBuffer> {
     /// Reset all the states to disabled/default
     fn reset_state(&mut self);
     /// Submit a command buffer for execution
-    fn submit(&mut self, cb: &C);
+    fn submit(&mut self, buffer: (&C, &draw::DataBuffer));
     // resource creation
     fn create_buffer_raw(&mut self, size: uint, usage: BufferUsage) -> BufferHandle<()>;
     fn create_buffer<T>(&mut self, num: uint, usage: BufferUsage) -> BufferHandle<T> {

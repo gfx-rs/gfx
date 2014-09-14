@@ -20,7 +20,62 @@ use shade;
 use target;
 use tex;
 
-use blob::Blob;
+use std::mem;
+
+/// The place of some data in the data buffer.
+#[deriving(PartialEq, Show)]
+pub struct DataPointer(u16, u16);
+
+/// A buffer of data accompanying the commands. It can be vertex data, texture
+/// updates, uniform blocks, or even some draw states.
+pub struct DataBuffer {
+    buf: Vec<u8>,
+}
+
+impl DataBuffer {
+    /// Create a fresh new data buffer.
+    pub fn new() -> DataBuffer {
+        DataBuffer {
+            buf: Vec::new(),
+        }
+    }
+
+    /// Clear all the data but retain the allocated storage.
+    pub fn clear(&mut self) {
+        self.buf.clear();
+    }
+
+    /// Copy a given structure into the buffer, return the offset and the size.
+    pub fn add_struct<T: Copy>(&mut self, v: &T) -> DataPointer {
+        use std::mem;
+        let offset = self.buf.len();
+        let size = mem::size_of::<T>();
+        self.buf.reserve_additional(size);
+        unsafe {
+            self.buf.set_len(offset + size);
+            *mem::transmute::<&mut u8, *mut T>(self.buf.get_mut(offset)) = *v;
+        }
+        DataPointer(offset as u16, size as u16)
+    }
+
+    /// Copy a given vector slice into the buffer
+    pub fn add_vec<T: Copy>(&mut self, v: &[T]) -> DataPointer {
+        let offset = self.buf.len();
+        let size = mem::size_of::<T>() * v.len();
+        self.buf.reserve_additional(size);
+        unsafe {
+            self.buf.set_len(offset + size);
+            self.buf.mut_slice_from(offset).copy_memory(mem::transmute(v));
+        }
+        DataPointer(offset as u16, size as u16)
+    }
+
+    /// Return a reference to a stored data object.
+    pub fn get_ref(&self, data: DataPointer) -> &[u8] {
+        let DataPointer(offset, size) = data;
+        self.buf.slice(offset as uint, offset as uint + size as uint)
+    }
+}
 
 #[allow(missing_doc)]    //TODO
 pub trait CommandBuffer {
@@ -53,13 +108,22 @@ pub trait CommandBuffer {
                          Option<::state::Stencil>, ::state::CullMode);
     fn set_blend(&mut self, Option<::state::Blend>);
     fn set_color_mask(&mut self, ::state::ColorMask);
-    fn update_buffer(&mut self, back::Buffer, Box<Blob<()> + Send>, uint);
+    fn update_buffer(&mut self, back::Buffer, DataPointer, uint);
     fn update_texture(&mut self, tex::TextureKind, back::Texture,
-                      tex::ImageInfo, Box<Blob<()> + Send>);
+                      tex::ImageInfo, DataPointer);
     fn call_clear(&mut self, target::ClearData, target::Mask);
     fn call_draw(&mut self, ::PrimitiveType, ::VertexCount, ::VertexCount,
                  Option<::InstanceCount>);
     fn call_draw_indexed(&mut self, ::PrimitiveType, ::IndexType, ::IndexCount,
                          ::IndexCount, Option<::InstanceCount>);
     fn call_blit(&mut self, target::Rect, target::Rect, target::Mask);
+}
+
+#[cfg(test)]
+mod tests {
+    fn test_data_buffer() {
+        let mut buf = super::DataBuffer::new();
+        assert_eq!(buf.add_struct(&(0u, false)), super::DataPointer(0, 16));
+        assert_eq!(buf.add_vec(&[5i, 6i]), super::DataPointer(16, 16));
+    }
 }
