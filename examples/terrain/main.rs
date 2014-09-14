@@ -193,10 +193,10 @@ fn main() {
         .collect();
 
     let slice = device
-        .create_buffer_static::<u32>(&index_data)
+        .create_buffer_static::<u32>(index_data.as_slice())
         .to_slice(gfx::TriangleList);
 
-    let mesh = device.create_mesh(vertex_data);
+    let mesh = device.create_mesh(vertex_data.as_slice());
     let program = device.link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
                         .unwrap();
     let state = gfx::DrawState::new().depth(gfx::state::LessEqual, true);

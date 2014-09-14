@@ -141,7 +141,7 @@ fn main() {
 
     let mut device = gfx::GlDevice::new(|s| window.get_proc_address(s));
 
-    let vertex_data = vec![
+    let vertex_data = [
         // top (0, 0, 1)
         Vertex { pos: [-1, -1,  1], tex_coord: [0, 0] },
         Vertex { pos: [ 1, -1,  1], tex_coord: [1, 0] },
@@ -176,7 +176,7 @@ fn main() {
 
     let mesh = device.create_mesh(vertex_data);
 
-    let index_data: Vec<u8> = vec![
+    let index_data: &[u8] = [
          0,  1,  2,  2,  3,  0, // top
          4,  5,  6,  6,  7,  4, // bottom
          8,  9, 10, 10, 11,  8, // right
@@ -186,7 +186,7 @@ fn main() {
     ];
 
     let slice = device
-        .create_buffer_static::<u8>(&index_data.as_slice())
+        .create_buffer_static::<u8>(index_data)
         .to_slice(gfx::TriangleList);
 
     let texture_info = gfx::tex::TextureInfo {
@@ -200,7 +200,7 @@ fn main() {
     let image_info = texture_info.to_image_info();
     let texture = device.create_texture(texture_info).unwrap();
     device.update_texture(&texture, &image_info,
-                          &vec![0x20u8, 0xA0u8, 0xC0u8, 0x00u8].as_slice())
+                          [0x20u8, 0xA0u8, 0xC0u8, 0x00u8])
         .unwrap();
 
     let sampler = device.create_sampler(

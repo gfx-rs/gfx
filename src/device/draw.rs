@@ -20,9 +20,12 @@ use shade;
 use target;
 use tex;
 
+type Offset = u32;
+type Size = u32;
+
 /// The place of some data in the data buffer.
 #[deriving(PartialEq, Show)]
-pub struct DataPointer(u16, u16);
+pub struct DataPointer(Offset, Size);
 
 /// A buffer of data accompanying the commands. It can be vertex data, texture
 /// updates, uniform blocks, or even some draw states.
@@ -53,7 +56,7 @@ impl DataBuffer {
             self.buf.set_len(offset + size);
             *mem::transmute::<&mut u8, *mut T>(self.buf.get_mut(offset)) = *v;
         }
-        DataPointer(offset as u16, size as u16)
+        DataPointer(offset as Offset, size as Size)
     }
 
     /// Copy a given vector slice into the buffer
@@ -66,7 +69,7 @@ impl DataBuffer {
             self.buf.set_len(offset + size);
             self.buf.mut_slice_from(offset).copy_memory(mem::transmute(v));
         }
-        DataPointer(offset as u16, size as u16)
+        DataPointer(offset as Offset, size as Size)
     }
 
     /// Return a reference to a stored data object.
