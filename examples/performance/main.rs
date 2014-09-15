@@ -99,7 +99,7 @@ fn gfx_main(glfw: glfw::Glfw,
 
     let state = gfx::DrawState::new().depth(gfx::state::LessEqual, true);
 
-    let vertex_data = vec![
+    let vertex_data = [
         // front (0, 1, 0)
         Vertex { pos: [-1,  1, -1] },
         Vertex { pos: [ 1,  1, -1] },
@@ -120,7 +120,7 @@ fn gfx_main(glfw: glfw::Glfw,
     let image_info = texture_info.to_image_info();
     let texture = device.create_texture(texture_info).unwrap();
     device.update_texture(&texture, &image_info,
-                          &vec![0x20u8, 0xA0u8, 0xC0u8, 0x00u8].as_slice())
+                          [0x20u8, 0xA0u8, 0xC0u8, 0x00u8])
         .unwrap();
 
     let program = device.link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())

@@ -39,13 +39,13 @@ pub use render::shade;
 pub use render::target::{Frame, Plane, PlaneSurface, PlaneTexture};
 pub use device::Device;
 pub use device::{attrib, state, tex};
+pub use device::with_slice;
 pub use device::{BufferHandle, BufferInfo, RawBufferHandle, ShaderHandle};
 pub use device::{ProgramHandle, SurfaceHandle, TextureHandle};
 pub use device::{BufferUsage, UsageStatic, UsageDynamic, UsageStream};
 pub use device::{VertexCount, IndexCount, InstanceCount};
 pub use device::{PrimitiveType, Point, Line, LineStrip,
     TriangleList, TriangleStrip, TriangleFan};
-pub use device::blob::Blob;
 pub use device::draw::CommandBuffer;
 pub use device::shade::UniformValue;
 pub use device::shade::{ValueI32, ValueF32};

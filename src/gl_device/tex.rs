@@ -14,7 +14,6 @@
 
 use super::{gl, Surface, Texture, Sampler};
 use super::gl::types::{GLenum, GLuint, GLint, GLfloat, GLsizei, GLvoid};
-use blob::Blob;
 use tex;
 use attrib;
 
@@ -494,12 +493,16 @@ pub fn bind_sampler(gl: &gl::Gl, anchor: BindAnchor, info: &tex::SamplerInfo) {
     gl.TexParameterf(target, gl::TEXTURE_MAX_LOD, max);
 }
 
-pub fn update_texture(gl: &gl::Gl, kind: tex::TextureKind, name: Texture, img: &tex::ImageInfo,
-                      data: &Blob<()>) -> Result<(), tex::TextureError> {
-    debug_assert!(img.width as uint * img.height as uint * img.depth as uint *
-        format_to_size(img.format) == data.get_size());
+pub fn update_texture(gl: &gl::Gl, kind: tex::TextureKind, name: Texture,
+                      img: &tex::ImageInfo, address: *const u8, size: uint)
+                      -> Result<(), tex::TextureError> {
+    let expected_size = img.width as uint * img.height as uint *
+                        img.depth as uint * format_to_size(img.format);
+    if size != expected_size {
+        return Err(tex::IncorrectTextureSize(expected_size));
+    }
 
-    let data = data.get_address() as *const GLvoid;
+    let data = address as *const GLvoid;
     let pix = format_to_glpixel(img.format);
     let typ = match format_to_gltype(img.format) {
         Ok(t) => t,
