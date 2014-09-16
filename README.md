@@ -85,7 +85,7 @@ See the [triangle example](./examples/triangle) for a typical context
 initialization with [glfw](https://github.com/bjz/glfw-rs/), or
 [gl-init example](./examples/gl-init) for [gl-init](https://github.com/tomaka/gl-init-rs/).
 
-## Crate heirachy
+## Crate hierarchy
 
 ![Dependency graph](diagrams/png/dependencies.png)
 
