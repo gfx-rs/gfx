@@ -26,11 +26,10 @@
 extern crate rustc;
 extern crate syntax;
 
-use syntax::{ast, attr, ext, codemap};
+use syntax::{ast, attr, ext, codemap, ptr};
 use syntax::ext::build::AstBuilder;
 use syntax::parse::token;
 use syntax::fold::Folder;
-use std::gc::Gc;
 
 pub mod shader_param;
 pub mod vertex_format;
@@ -42,10 +41,10 @@ pub fn registrar(reg: &mut rustc::plugin::Registry) {
     use syntax::ext::base;
     // Register the `#[shader_param]` attribute.
     reg.register_syntax_extension(intern("shader_param"),
-        base::ItemDecorator(shader_param::expand));
+        base::ItemDecorator(box shader_param::expand));
     // Register the `#[vertex_format]` attribute.
     reg.register_syntax_extension(intern("vertex_format"),
-        base::ItemDecorator(vertex_format::expand));
+        base::ItemDecorator(box vertex_format::expand));
 }
 
 /// A hacky thing to get around 'moved value' errors when using `quote_expr!`
@@ -85,7 +84,7 @@ static EXTERN_CRATE_HACK: &'static str = "__gfx_extern_crate_hack";
 /// The `gfx` crate, and returns that identifier
 fn extern_crate_hack(context: &mut ext::base::ExtCtxt,
                      span: codemap::Span,
-                     push: |Gc<ast::Item>|) -> ast::Ident {
+                     push: |ptr::P<ast::Item>|) -> ast::Ident {
     let extern_crate_hack = token::gensym_ident(EXTERN_CRATE_HACK);
     // mod $EXTERN_CRATE_HACK {
     //     extern crate gfx_ = "gfx";
@@ -134,7 +133,7 @@ struct ExternCrateHackFolder {
 }
 
 impl Folder for ExternCrateHackFolder {
-    fn fold_path(&mut self, p: &ast::Path) -> ast::Path {
+    fn fold_path(&mut self, p: ast::Path) -> ast::Path {
         let p = syntax::fold::noop_fold_path(p, self);
         let needs_fix = p.segments.as_slice().get(0)
                          .map(|s| s.identifier.as_str() == EXTERN_CRATE_HACK)
@@ -164,7 +163,7 @@ impl Folder for ExternCrateHackFolder {
 }
 
 /// Simply applies the `ExternCrateHackFolder`
-fn fixup_extern_crate_paths(item: Gc<ast::Item>, path_root: ast::Ident) -> Gc<ast::Item> {
+fn fixup_extern_crate_paths(item: ptr::P<ast::Item>, path_root: ast::Ident) -> ptr::P<ast::Item> {
     ExternCrateHackFolder {
         path_root: path_root
     }.fold_item(item).move_iter().next().unwrap()

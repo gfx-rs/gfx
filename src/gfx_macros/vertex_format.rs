@@ -14,8 +14,7 @@
 
 use std::fmt;
 use std::from_str::FromStr;
-use std::gc::Gc;
-use syntax::{ast, ext};
+use syntax::{ast, ext, ptr};
 use syntax::ext::build::AstBuilder;
 use syntax::ext::deriving::generic;
 use syntax::{attr, codemap};
@@ -87,7 +86,7 @@ fn find_modifier(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
 /// Find a `gfx::attrib::Type` that describes the given type identifier.
 fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                ty_ident: &ast::Ident, modifier: Option<Modifier>,
-               path_root: ast::Ident) -> Gc<ast::Expr> {
+               path_root: ast::Ident) -> ptr::P<ast::Expr> {
     let ty_str = ty_ident.name.as_str();
     match ty_str {
         "f32" | "f64" => {
@@ -143,14 +142,14 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
 
 fn decode_count_and_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                          field: &ast::StructField,
-                         path_root: ast::Ident) -> (Gc<ast::Expr>, Gc<ast::Expr>) {
+                         path_root: ast::Ident) -> (ptr::P<ast::Expr>, ptr::P<ast::Expr>) {
     let modifier = find_modifier(cx, span, field.node.attrs.as_slice());
     match field.node.ty.node {
         ast::TyPath(ref p, _, _) => (
             cx.expr_lit(span, ast::LitInt(1, ast::UnsuffixedIntLit(ast::Plus))),
             decode_type(cx, span, &p.segments[0].identifier, modifier, path_root),
         ),
-        ast::TyFixedLengthVec(pty, expr) => (expr, match pty.node {
+        ast::TyFixedLengthVec(ref pty, ref expr) => (expr.clone(), match pty.node {
             ast::TyPath(ref p, _, _) => {
                 decode_type(cx, span, &p.segments[0].identifier, modifier, path_root)
             },
@@ -171,13 +170,13 @@ fn decode_count_and_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
 /// Generates the the method body for `gfx::VertexFormat::generate`.
 fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                    substr: &generic::Substructure,
-                   path_root: ast::Ident) -> Gc<ast::Expr> {
+                   path_root: ast::Ident) -> ptr::P<ast::Expr> {
     match *substr.fields {
         generic::StaticStruct(ref definition, generic::Named(ref fields)) => {
             let attribute_pushes = definition.fields.iter().zip(fields.iter())
                 .map(|(def, &(ident, _))| {
                     let struct_ident = substr.type_ident;
-                    let buffer_expr = substr.nonself_args[1];
+                    let ref buffer_expr = substr.nonself_args[1];
                     let (count_expr, type_expr) = decode_count_and_type(cx, span, def, path_root);
                     let ident_str = match super::find_name(cx, span, def.node.attrs.as_slice()) {
                         Some(name) => name,
@@ -207,7 +206,7 @@ fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                             }
                         });
                     }))
-                }).collect::<Vec<Gc<ast::Expr>>>();
+                }).collect::<Vec<ptr::P<ast::Expr>>>();
             let capacity = fields.len();
             super::ugh(cx, |cx| quote_expr!(cx, {
                 let mut attributes = Vec::with_capacity($capacity);
@@ -226,8 +225,8 @@ fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
 
 /// Derive a `gfx::VertexFormat` implementation for the `struct`
 pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
-              meta_item: Gc<ast::MetaItem>, item: Gc<ast::Item>,
-              push: |Gc<ast::Item>|) {
+              meta_item: &ast::MetaItem, item: &ast::Item,
+              push: |ptr::P<ast::Item>|) {
     // Insert the `gfx` reexport module
     let path_root = super::extern_crate_hack(context, span, |i| push(i));
     let fixup = |item| {

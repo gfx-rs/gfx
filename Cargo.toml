@@ -27,6 +27,11 @@ authors = [
 name = "gfx"
 path = "src/gfx/lib.rs"
 
+
+################################################################################
+# Subpackages
+################################################################################
+
 [dependencies.gfx_macros]
 path = "src/gfx_macros"
 
@@ -37,34 +42,15 @@ path = "src/device/"
 path = "src/render/"
 
 
-[[example]]
-name = "triangle"
-path = "examples/triangle/main.rs"
+################################################################################
+# Private dependencies
+################################################################################
 
 [dev_dependencies.glfw]
 git = "https://github.com/bjz/glfw-rs.git"
 
-
-[[example]]
-name = "cube"
-path = "examples/cube/main.rs"
-
-# [dev_dependencies.glfw]
-# git = "https://github.com/bjz/glfw-rs.git"
-
 [dev_dependencies.cgmath]
 git = "http://github.com/bjz/cgmath-rs"
-
-
-[[example]]
-name = "terrain"
-path = "examples/terrain/main.rs"
-
-# [dev_dependencies.glfw]
-# git = "https://github.com/bjz/glfw-rs.git"
-
-# [dev_dependencies.cgmath]
-# git = "http://github.com/bjz/cgmath-rs"
 
 [dev_dependencies.genmesh]
 git = "https://github.com/csherratt/genmesh.git"
@@ -72,24 +58,69 @@ git = "https://github.com/csherratt/genmesh.git"
 [dev_dependencies.noise-rs]
 git = "https://github.com/bjz/noise-rs.git"
 
+[dev_dependencies.gl_init]
+git = "https://github.com/tomaka/gl-init-rs.git"
+
+[dev_dependencies.gfx_gl]
+git = "https://github.com/gfx-rs/gfx_gl.git"
+
+
+################################################################################
+# Unit tests
+################################################################################
+
+[[test]]
+name = "device"
+path = "src/device/lib.rs"
+
+[[test]]
+name = "render"
+path = "src/render/lib.rs"
+
+[[test]]
+name = "gfx_macros"
+path = "src/gfx_macros/lib.rs"
+
+# FIXME - doc tests are not run!
+
+
+################################################################################
+# Integration tests
+################################################################################
+
+[[test]]
+name = "shader_param"
+path = "tests/shader_param.rs"
+
+[[test]]
+name = "shaders_macro"
+path = "tests/shaders_macro.rs"
+
+[[test]]
+name = "vertex_format"
+path = "tests/vertex_format.rs"
+
+
+################################################################################
+# Examples
+################################################################################
+
+[[example]]
+name = "triangle"
+path = "examples/triangle/main.rs"
+
+[[example]]
+name = "cube"
+path = "examples/cube/main.rs"
+
+[[example]]
+name = "terrain"
+path = "examples/terrain/main.rs"
 
 [[example]]
 name = "gl-init"
 path = "examples/gl-init/main.rs"
 
-[dev_dependencies.gl_init]
-git = "https://github.com/tomaka/gl-init-rs.git"
-
-
 [[example]]
 name = "performance"
 path = "examples/performance/main.rs"
-
-# [dev_dependencies.glfw]
-# git = "https://github.com/bjz/glfw-rs.git"
-
-[dev_dependencies.gfx_gl]
-git = "https://github.com/gfx-rs/gfx_gl.git"
-
-# [dev_dependencies.cgmath]
-# git = "http://github.com/bjz/cgmath-rs"
