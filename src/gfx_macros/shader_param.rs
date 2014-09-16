@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::gc::{Gc, GC};
 use syntax::{ast, ast_util, ext};
 use syntax::ext::build::AstBuilder;
 use syntax::ext::deriving::generic;
 use syntax::{attr, codemap};
 use syntax::parse::token;
+use syntax::ptr::P;
 
 enum ParamType {
     ParamUniform,
@@ -66,10 +66,11 @@ fn is_field_used(field: &ast::StructField) -> bool {
 fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                  substr: &generic::Substructure,
                  link_name: &str,
-                 path_root: ast::Ident) -> Gc<ast::Expr> {
+                 path_root: ast::Ident) -> P<ast::Expr> {
     let link_ident = cx.ident_of(link_name);
     match *substr.fields {
         generic::StaticStruct(definition, generic::Named(ref fields)) => {
+            let input = substr.nonself_args[1].clone();
             let out = definition.fields.iter().zip(fields.iter())
                 .filter(|&(def, _)| is_field_used(def)).map(|(def, &(fname,fspan))| {
                 let name = match super::find_name(cx, span, def.node.attrs.as_slice()) {
@@ -77,7 +78,6 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     None => token::get_ident(fname),
                 };
                 let name = cx.expr_str(fspan, name);
-                let input = substr.nonself_args[1];
                 let expr = match classify(&def.node.ty.node) {
                     //TODO: verify the type match
                     Ok(ParamUniform) => super::ugh(cx, |cx| quote_expr!(cx,
@@ -124,18 +124,18 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
 /// Generates the the method body for `gfx::shade::ParamValues::fill_params`
 fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                substr: &generic::Substructure,
-               definition: Gc<ast::StructDef>,
+               definition: &ast::StructDef,
                path_root: ast::Ident)
-               -> Gc<ast::Expr> {
+               -> P<ast::Expr> {
     match *substr.fields {
         generic::Struct(ref fields) => {
             let calls = definition.fields.iter().zip(fields.iter())
             .filter(|&(def, _)| is_field_used(def)).map(|(def, f)| {
-                let out = substr.nonself_args[1];
-                let value_id = f.self_;
+                let out = substr.nonself_args[1].clone();
+                let value_id = &f.self_;
                 let var_id = cx.expr_field_access(
                     span,
-                    substr.nonself_args[0],
+                    substr.nonself_args[0].clone(),
                     f.name.unwrap()
                     );
                 match classify(&def.node.ty.node) {
@@ -182,7 +182,7 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
 /// into the corresponding shader var id type (`VarUniform`, `VarBlock`, or `VarTexture`)
 fn node_to_var_type(cx: &mut ext::base::ExtCtxt,
                     span: codemap::Span, node: &ast::Ty_,
-                    path_root: ast::Ident) -> Gc<ast::Ty> {
+                    path_root: ast::Ident) -> P<ast::Ty> {
     let id = match classify(node) {
         Ok(ParamUniform) => "VarUniform",
         Ok(ParamBlock)   => "VarBlock",
@@ -211,19 +211,18 @@ fn copy_deriving(attribs: &[ast::Attribute]) -> Vec<ast::Attribute> {
             ast::MetaList(ref s, _) => s.get() == "deriving",
             _ => false,
         }
-    }).map(|at| *at).collect()
+    }).map(|at| at.clone()).collect()
 }
 
-/// Decorator for `shader_param` attribute
-pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
-              meta_item: Gc<ast::MetaItem>, item: Gc<ast::Item>,
-              push: |Gc<ast::Item>|) {
+fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
+              meta_item: &ast::MetaItem, item: &ast::Item,
+              push: |P<ast::Item>|) {
     // Insert the `gfx` reexport module
     let path_root = super::extern_crate_hack(context, span, |i| push(i));
 
     // constructing the Link struct
     let (base_def, link_def) = match item.node {
-        ast::ItemStruct(definition, ref generics) => {
+        ast::ItemStruct(ref definition, ref generics) => {
             if generics.lifetimes.len() > 0 {
                 context.bug("Generics are not allowed in ShaderParam struct");
             }
@@ -255,17 +254,17 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
         generic::ty::Path::new_local(link_name.as_slice())
     );
     // Almost `context.item_struct(span, link_ident, link_def)` but with visibility
-    push(box (GC) ast::Item {
+    push(P(ast::Item {
         ident: link_ident,
         attrs: copy_deriving(item.attrs.as_slice()),
         id: ast::DUMMY_NODE_ID,
         node: ast::ItemStruct(
-            box(GC) link_def,
+            P(link_def),
             ast_util::empty_generics()
         ),
         vis: item.vis,
         span: span,
-    });
+    }));
     // constructing the `Batch` implementation typedef
     match meta_item.node {
         ast::MetaList(_, ref items) if items.len() <= 2 => {
@@ -289,14 +288,14 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                                 ]
                             ), None
                         );
-                        push(box(GC) ast::Item {
+                        push(P(ast::Item {
                             ident: context.ident_of(shell_name.get()),
                             attrs: Vec::new(),
                             id: ast::DUMMY_NODE_ID,
                             node: ast::ItemTy(path, ast_util::empty_generics()),
                             vis: item.vis,
                             span: span,
-                        })
+                        }))
                     },
                     _ => {
                         context.span_err(meta_item.span,
@@ -377,7 +376,7 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                 ret_ty: generic::ty::Tuple(Vec::new()),
                 attributes: Vec::new(),
                 combine_substructure: generic::combine_substructure(|cx, span, sub|
-                    method_fill(cx, span, sub, base_def, path_root)
+                    method_fill(cx, span, sub, base_def.deref(), path_root)
                 ),
             },
         ],
@@ -386,4 +385,14 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
         push(super::fixup_extern_crate_paths(item, path_root))
     };
     trait_def.expand(context, meta_item, item, fixup);
+}
+
+/// An empty struct implementing `shader_param` decorator
+pub struct Decorator;
+
+impl ext::base::ItemDecorator for Decorator {
+    fn expand(&self, ecx: &mut ext::base::ExtCtxt, sp: codemap::Span,
+              meta_item: &ast::MetaItem, item: &ast::Item, push: |P<ast::Item>|) {
+        expand(ecx, sp, meta_item, item, push)
+    }
 }
