@@ -81,9 +81,9 @@ Add the following to your `Cargo.toml`:
 git = "http://github.com/gfx-rs/gfx-rs"
 ~~~
 
-See the [triangle example](./src/examples/triangle) for a typical context
+See the [triangle example](./examples/triangle) for a typical context
 initialization with [glfw](https://github.com/bjz/glfw-rs/), or
-[gl-init example](./src/examples/gl-init) for [gl-init](https://github.com/tomaka/gl-init-rs/).
+[gl-init example](./examples/gl-init) for [gl-init](https://github.com/tomaka/gl-init-rs/).
 
 ## Crate heirachy
 
