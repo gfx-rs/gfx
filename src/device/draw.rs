@@ -67,7 +67,7 @@ impl DataBuffer {
         self.buf.reserve_additional(size);
         unsafe {
             self.buf.set_len(offset + size);
-            self.buf.mut_slice_from(offset).copy_memory(mem::transmute(v));
+            self.buf.slice_from_mut(offset).copy_memory(mem::transmute(v));
         }
         DataPointer(offset as Offset, size as Size)
     }
@@ -123,6 +123,7 @@ pub trait CommandBuffer {
 
 #[cfg(test)]
 mod tests {
+    #[test]
     fn test_data_buffer() {
         let mut buf = super::DataBuffer::new();
         assert_eq!(buf.add_struct(&(0u, false)), super::DataPointer(0, 16));

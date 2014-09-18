@@ -76,7 +76,7 @@ impl Mesh {
         let per_instance = VertexFormat::generate(None::<U>, inst.raw());
 
         let mut attributes = per_vertex;
-        for mut at in per_instance.move_iter() {
+        for mut at in per_instance.into_iter() {
             at.format.instance_rate = 1;
             attributes.push(at);
         }

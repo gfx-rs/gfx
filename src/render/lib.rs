@@ -292,13 +292,13 @@ impl<C: CommandBuffer> Renderer<C> {
                 self.render_state.is_frame_buffer_set = true;
             }
             // cut off excess color planes
-            for (i, cur) in self.render_state.frame.colors.iter().enumerate()
+            for (i, _) in self.render_state.frame.colors.iter().enumerate()
                                 .skip(frame.colors.len()) {
                 self.buf.unbind_target(Draw, TargetColor(i as u8));
             }
             self.render_state.frame.colors.truncate(frame.colors.len());
             // bind intersecting subsets
-            for (i, (cur, new)) in self.render_state.frame.colors.mut_iter()
+            for (i, (cur, new)) in self.render_state.frame.colors.iter_mut()
                                        .zip(frame.colors.iter()).enumerate() {
                 if *cur != *new {
                     self.buf.bind_target(Draw, TargetColor(i as u8), Some(new));
@@ -325,11 +325,6 @@ impl<C: CommandBuffer> Renderer<C> {
     }
 
     fn bind_read_frame(&mut self, frame: &target::Frame) {
-        let fbo = if frame.is_default() {
-            &self.default_frame_buffer
-        } else {
-            &self.read_frame_buffer
-        };
         self.buf.bind_frame_buffer(Read, self.read_frame_buffer.get_name());
         // color
         if frame.colors.is_empty() {
