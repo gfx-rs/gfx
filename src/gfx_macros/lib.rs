@@ -167,7 +167,7 @@ impl Folder for ExternCrateHackFolder {
 fn fixup_extern_crate_paths(item: P<ast::Item>, path_root: ast::Ident) -> P<ast::Item> {
     ExternCrateHackFolder {
         path_root: path_root
-    }.fold_item(item).move_iter().next().unwrap()
+    }.fold_item(item).into_iter().next().unwrap()
 }
 
 // The `gfx` reexport module here does not need a unique name,

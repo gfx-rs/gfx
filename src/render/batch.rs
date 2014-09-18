@@ -57,7 +57,7 @@ pub fn link_mesh(mesh: &mesh::Mesh, pinfo: &ProgramInfo) -> Result<mesh::Link, M
             None => return Err(ErrorAttributeMissing(sat.name.clone())),
         }
     }
-    mesh::Link::from_iter(indices.move_iter())
+    mesh::Link::from_iter(indices.into_iter())
         .map_err(|e| ErrorMeshLink(e))
 }
 

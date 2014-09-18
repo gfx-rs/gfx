@@ -187,13 +187,13 @@ impl ParamDictionary {
 
     /// Set the parameter values
     pub fn fill_params(&self, link: &ParamDictionaryLink, params: ParamValues) {
-        for (&id, var) in link.uniforms.iter().zip(params.uniforms.mut_iter()) {
+        for (&id, var) in link.uniforms.iter().zip(params.uniforms.iter_mut()) {
             *var = Some(self.uniforms[id].value.get());
         }
-        for (&id, var) in link.blocks.iter().zip(params.blocks.mut_iter()) {
+        for (&id, var) in link.blocks.iter().zip(params.blocks.iter_mut()) {
             *var = Some(self.blocks[id].value.get());
         }
-        for (&id, var) in link.textures.iter().zip(params.textures.mut_iter()) {
+        for (&id, var) in link.textures.iter().zip(params.textures.iter_mut()) {
             *var = Some(self.textures[id].value.get());
         }
     }
