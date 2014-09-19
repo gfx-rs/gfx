@@ -47,21 +47,6 @@ fn classify(node: &ast::Ty_) -> Result<ParamType, ParamError> {
     }
 }
 
-/// Scan through the field's attributes and find out if it needs to be linked
-/// with the shader.
-/// #[unused] attribute prevents that
-fn is_field_used(field: &ast::StructField) -> bool {
-    field.node.attrs.iter().find(|attribute| {
-        match attribute.node.value.node {
-            ast::MetaWord(ref word) if word.get() == "unused" => {
-                attr::mark_used(*attribute);
-                true
-            },
-            _ => false,
-        }
-    }).is_none()
-}
-
 /// Generates the the method body for `gfx::shade::ParamValues::create_link`
 fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                  substr: &generic::Substructure,
@@ -71,7 +56,7 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
     match *substr.fields {
         generic::StaticStruct(definition, generic::Named(ref fields)) => {
             let out = definition.fields.iter().zip(fields.iter())
-                .filter(|&(def, _)| is_field_used(def)).map(|(def, &(fname,fspan))| {
+                                       .map(|(def, &(fname, fspan))| {
                 let name = match super::find_name(cx, span, def.node.attrs.as_slice()) {
                     Some(name) => name,
                     None => token::get_ident(fname),
@@ -80,24 +65,18 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 let input = &substr.nonself_args[1];
                 let expr = match classify(&def.node.ty.node) {
                     //TODO: verify the type match
-                    Ok(ParamUniform) => super::ugh(cx, |cx| quote_expr!(cx,
-                        match $input.uniforms.iter().position(|u| u.name.as_slice() == $name) {
-                            Some(p) => p as $path_root::gfx::shade::VarUniform,
-                            None => return Err($path_root::gfx::shade::ErrorUniform($name.to_string())),
-                        }
-                    )),
-                    Ok(ParamBlock)   => super::ugh(cx, |cx| quote_expr!(cx,
-                        match $input.blocks.iter().position(|b| b.name.as_slice() == $name) {
-                            Some(p) => p as $path_root::gfx::shade::VarBlock,
-                            None => return Err($path_root::gfx::shade::ErrorBlock($name.to_string())),
-                        }
-                    )),
-                    Ok(ParamTexture) => super::ugh(cx, |cx| quote_expr!(cx,
-                        match $input.textures.iter().position(|t| t.name.as_slice() == $name) {
-                            Some(p) => p as $path_root::gfx::shade::VarTexture,
-                            None => return Err($path_root::gfx::shade::ErrorTexture($name.to_string())),
-                        }
-                    )),
+                    Ok(ParamUniform) => quote_expr!(cx,
+                        $input.uniforms.iter().position(|u| u.name.as_slice() == $name)
+                                       .map(|p| p as $path_root::gfx::shade::VarUniform)
+                    ),
+                    Ok(ParamBlock)   => quote_expr!(cx,
+                        $input.blocks.iter().position(|b| b.name.as_slice() == $name)
+                                     .map(|p| p as $path_root::gfx::shade::VarBlock)
+                    ),
+                    Ok(ParamTexture) => quote_expr!(cx,
+                        $input.textures.iter().position(|t| t.name.as_slice() == $name)
+                                       .map(|p| p as $path_root::gfx::shade::VarTexture)
+                    ),
                     Err(_) => {
                         cx.span_err(fspan, format!(
                             "Invalid uniform: {}",
@@ -129,9 +108,15 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                -> P<ast::Expr> {
     match *substr.fields {
         generic::Struct(ref fields) => {
-            let calls = definition.fields.iter().zip(fields.iter())
-            .filter(|&(def, _)| is_field_used(def)).map(|(def, f)| {
-                let out = &substr.nonself_args[1];
+            let out = &substr.nonself_args[1];
+            let max_num = cx.expr_uint(span, fields.len());
+            let mut calls = vec![
+                quote_stmt!(cx, $out.uniforms.reserve($max_num);),
+                quote_stmt!(cx, $out.blocks.reserve($max_num);),
+                quote_stmt!(cx, $out.textures.reserve($max_num);),
+            ];
+            calls.push_all_move(definition.fields.iter().zip(fields.iter())
+                                .map(|(def, f)| {
                 let value_id = &f.self_;
                 let var_id = cx.expr_field_access(
                     span,
@@ -139,15 +124,30 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     f.name.unwrap()
                     );
                 match classify(&def.node.ty.node) {
-                    Ok(ParamUniform) => super::ugh(cx, |cx| quote_stmt!(cx,
-                        $out.uniforms[$var_id as uint] = Some($value_id.to_uniform());
-                    )),
-                    Ok(ParamBlock)   => super::ugh(cx, |cx| quote_stmt!(cx,
-                        $out.blocks[$var_id as uint] = Some $value_id;
-                    )),
-                    Ok(ParamTexture) => super::ugh(cx, |cx| quote_stmt!(cx,
-                        $out.textures[$var_id as uint] = Some $value_id;
-                    )),
+                    Ok(ParamUniform) => quote_stmt!(cx,
+                        $var_id.map_or((), |id| {
+                            if $out.uniforms.len() <= id as uint {
+                                unsafe { $out.uniforms.set_len(id as uint + 1) }
+                            }
+                            *$out.uniforms.get_mut(id as uint) = $value_id.to_uniform()
+                        })
+                    ),
+                    Ok(ParamBlock)   => quote_stmt!(cx,
+                        $var_id.map_or((), |id| {
+                            if $out.blocks.len() <= id as uint {
+                                unsafe { $out.blocks.set_len(id as uint + 1) }
+                            }
+                            *$out.blocks.get_mut(id as uint) = {$value_id}
+                        })
+                    ),
+                    Ok(ParamTexture) => quote_stmt!(cx,
+                        $var_id.map_or((), |id| {
+                            if $out.textures.len() <= id as uint {
+                                unsafe { $out.textures.set_len(id as uint + 1) }
+                            }
+                            *$out.textures.get_mut(id as uint) = {$value_id}
+                        })
+                    ),
                     Err(_) => {
                         cx.span_err(span, format!(
                             "Invalid uniform: {}",
@@ -157,7 +157,7 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                         cx.stmt_expr(cx.expr_uint(span, 0))
                     },
                 }
-            }).collect();
+            }).collect());
             let view = cx.view_use_simple(
                 span,
                 ast::Inherited,
@@ -196,12 +196,15 @@ fn node_to_var_type(cx: &mut ext::base::ExtCtxt,
             ""
         },
     };
-    cx.ty_path(cx.path(span, vec![
-        path_root,
-        cx.ident_of("gfx"),
-        cx.ident_of("shade"),
-        cx.ident_of(id),
-    ]), None)
+    cx.ty_option(cx.ty_path(
+        cx.path(span, vec![
+            path_root,
+            cx.ident_of("gfx"),
+            cx.ident_of("shade"),
+            cx.ident_of(id),
+        ]),
+        None
+    ))
 }
 
 /// Extract all deriving() attributes into a separate array
@@ -229,7 +232,6 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
             }
             (definition, ast::StructDef {
                 fields: definition.fields.iter()
-                    .filter(|&f| is_field_used(f))
                     .map(|f| codemap::Spanned {
                         node: ast::StructField_ {
                             kind: f.node.kind,
@@ -332,7 +334,12 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                     generic::ty::Literal(generic::ty::Path {
                         path: vec!["Option"],
                         lifetime: None,
-                        params: vec![box generic::ty::Self],
+                        params: vec![
+                            box generic::ty::Ptr(
+                                box generic::ty::Self,
+                                generic::ty::Borrowed(None, ast::MutImmutable)
+                            ),
+                        ],
                         global: false,
                     }),
                     generic::ty::Ptr(
