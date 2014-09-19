@@ -155,7 +155,7 @@ impl<C: CommandBuffer> CommandBufferHelper for C {
 
 /// Renderer front-end
 pub struct Renderer<C: CommandBuffer> {
-    buf: C,
+    command_buffer: C,
     data: device::draw::DataBuffer,
     common_array_buffer: Result<device::ArrayBufferHandle, ()>,
     draw_frame_buffer: device::FrameBufferHandle,
@@ -168,20 +168,20 @@ pub struct Renderer<C: CommandBuffer> {
 impl<C: CommandBuffer> Renderer<C> {
     /// Reset all commands for the command buffer re-usal.
     pub fn reset(&mut self) {
-        self.buf.clear();
+        self.command_buffer.clear();
         self.data.clear();
         self.render_state = RenderState::new();
     }
 
     /// Get a command buffer to be submitted to the device.
     pub fn as_buffer(&self) -> (&C, &device::draw::DataBuffer) {
-        (&self.buf, &self.data)
+        (&self.command_buffer, &self.data)
     }
 
     /// Clone the renderer shared data but ignore the commands.
     pub fn clone_empty(&self) -> Renderer<C> {
         Renderer {
-            buf: CommandBuffer::new(),
+            command_buffer: CommandBuffer::new(),
             data: device::draw::DataBuffer::new(),
             common_array_buffer: self.common_array_buffer,
             draw_frame_buffer: self.draw_frame_buffer,
@@ -195,7 +195,7 @@ impl<C: CommandBuffer> Renderer<C> {
     /// Clear the `Frame` as the `ClearData` specifies.
     pub fn clear(&mut self, data: ClearData, mask: Mask, frame: &target::Frame) {
         self.bind_frame(frame);
-        self.buf.call_clear(data, mask);
+        self.command_buffer.call_clear(data, mask);
     }
 
     /// Draw a `batch` into the specified `frame`
@@ -239,7 +239,7 @@ impl<C: CommandBuffer> Renderer<C> {
         // actually blit
         self.bind_frame(destination);
         self.bind_read_frame(source);
-        self.buf.call_blit(source_rect, dest_rect, mask);
+        self.command_buffer.call_blit(source_rect, dest_rect, mask);
     }
 
     /// Update a buffer with data from a vector.
@@ -249,7 +249,7 @@ impl<C: CommandBuffer> Renderer<C> {
         let offset_bytes = esize * offset_elements;
         debug_assert!(data.len() * esize + offset_bytes <= buf.get_info().size);
         let pointer = self.data.add_vec(data);
-        self.buf.update_buffer(buf.get_name(), pointer, offset_bytes);
+        self.command_buffer.update_buffer(buf.get_name(), pointer, offset_bytes);
     }
 
     /// Update a buffer with data from a single type.
@@ -257,7 +257,7 @@ impl<C: CommandBuffer> Renderer<C> {
                                 buf: device::BufferHandle<U>, data: &T) {
         debug_assert!(mem::size_of::<T>() <= buf.get_info().size);
         let pointer = self.data.add_struct(data);
-        self.buf.update_buffer(buf.get_name(), pointer, 0);
+        self.command_buffer.update_buffer(buf.get_name(), pointer, 0);
     }
 
     /// Update the contents of a texture.
@@ -265,13 +265,13 @@ impl<C: CommandBuffer> Renderer<C> {
                           img: device::tex::ImageInfo, data: &[T]) {
         debug_assert!(tex.get_info().contains(&img));
         let pointer = self.data.add_vec(data);
-        self.buf.update_texture(tex.get_info().kind, tex.get_name(), img, pointer);
+        self.command_buffer.update_texture(tex.get_info().kind, tex.get_name(), img, pointer);
     }
 
     fn bind_frame(&mut self, frame: &target::Frame) {
         if self.render_state.frame.width != frame.width ||
                 self.render_state.frame.height != frame.height {
-            self.buf.set_viewport(Rect {
+            self.command_buffer.set_viewport(Rect {
                 x: 0,
                 y: 0,
                 w: frame.width,
@@ -283,80 +283,80 @@ impl<C: CommandBuffer> Renderer<C> {
         if frame.is_default() {
             if self.render_state.is_frame_buffer_set {
                 // binding the default FBO, not touching our common one
-                self.buf.bind_frame_buffer(Draw, self.default_frame_buffer.get_name());
+                self.command_buffer.bind_frame_buffer(Draw, self.default_frame_buffer.get_name());
                 self.render_state.is_frame_buffer_set = false;
             }
         } else {
             if !self.render_state.is_frame_buffer_set {
-                self.buf.bind_frame_buffer(Draw, self.draw_frame_buffer.get_name());
+                self.command_buffer.bind_frame_buffer(Draw, self.draw_frame_buffer.get_name());
                 self.render_state.is_frame_buffer_set = true;
             }
             // cut off excess color planes
             for (i, _) in self.render_state.frame.colors.iter().enumerate()
                                 .skip(frame.colors.len()) {
-                self.buf.unbind_target(Draw, TargetColor(i as u8));
+                self.command_buffer.unbind_target(Draw, TargetColor(i as u8));
             }
             self.render_state.frame.colors.truncate(frame.colors.len());
             // bind intersecting subsets
             for (i, (cur, new)) in self.render_state.frame.colors.iter_mut()
                                        .zip(frame.colors.iter()).enumerate() {
                 if *cur != *new {
-                    self.buf.bind_target(Draw, TargetColor(i as u8), Some(new));
+                    self.command_buffer.bind_target(Draw, TargetColor(i as u8), Some(new));
                     *cur = *new;
                 }
             }
             // append new planes
             for (i, new) in frame.colors.iter().enumerate()
                                  .skip(self.render_state.frame.colors.len()) {
-                self.buf.bind_target(Draw, TargetColor(i as u8), Some(new));
+                self.command_buffer.bind_target(Draw, TargetColor(i as u8), Some(new));
                 self.render_state.frame.colors.push(*new);
             }
             // set depth
             if self.render_state.frame.depth != frame.depth {
-                self.buf.bind_target(Draw, TargetDepth, frame.depth.as_ref());
+                self.command_buffer.bind_target(Draw, TargetDepth, frame.depth.as_ref());
                 self.render_state.frame.depth = frame.depth;
             }
             // set stencil
             if self.render_state.frame.stencil != frame.stencil {
-                self.buf.bind_target(Draw, TargetStencil, frame.stencil.as_ref());
+                self.command_buffer.bind_target(Draw, TargetStencil, frame.stencil.as_ref());
                 self.render_state.frame.stencil = frame.stencil;
             }
         }
     }
 
     fn bind_read_frame(&mut self, frame: &target::Frame) {
-        self.buf.bind_frame_buffer(Read, self.read_frame_buffer.get_name());
+        self.command_buffer.bind_frame_buffer(Read, self.read_frame_buffer.get_name());
         // color
         if frame.colors.is_empty() {
-            self.buf.unbind_target(Read, TargetColor(0));
+            self.command_buffer.unbind_target(Read, TargetColor(0));
         }else {
-            self.buf.bind_target(Read, TargetColor(0), Some(&frame.colors[0]));
+            self.command_buffer.bind_target(Read, TargetColor(0), Some(&frame.colors[0]));
         }
         // depth/stencil
-        self.buf.bind_target(Read, TargetDepth, frame.depth.as_ref());
-        self.buf.bind_target(Read, TargetStencil, frame.stencil.as_ref());
+        self.command_buffer.bind_target(Read, TargetDepth, frame.depth.as_ref());
+        self.command_buffer.bind_target(Read, TargetStencil, frame.stencil.as_ref());
     }
 
     fn bind_state(&mut self, state: &state::DrawState) {
         if self.render_state.draw.primitive != state.primitive {
-            self.buf.set_primitive(state.primitive);
+            self.command_buffer.set_primitive(state.primitive);
         }
         if self.render_state.draw.multi_sample != state.multi_sample {
-            self.buf.set_multi_sample(state.multi_sample);
+            self.command_buffer.set_multi_sample(state.multi_sample);
         }
         if self.render_state.draw.scissor != state.scissor {
-            self.buf.set_scissor(state.scissor);
+            self.command_buffer.set_scissor(state.scissor);
         }
         if self.render_state.draw.depth != state.depth || self.render_state.draw.stencil != state.stencil ||
                 self.render_state.draw.primitive.get_cull_mode() != state.primitive.get_cull_mode() {
-            self.buf.set_depth_stencil(state.depth, state.stencil,
+            self.command_buffer.set_depth_stencil(state.depth, state.stencil,
                 state.primitive.get_cull_mode());
         }
         if self.render_state.draw.blend != state.blend {
-            self.buf.set_blend(state.blend);
+            self.command_buffer.set_blend(state.blend);
         }
         if self.render_state.draw.color_mask != state.color_mask {
-            self.buf.set_color_mask(state.color_mask);
+            self.command_buffer.set_color_mask(state.color_mask);
         }
         self.render_state.draw = *state;
     }
@@ -364,7 +364,7 @@ impl<C: CommandBuffer> Renderer<C> {
     fn bind_program<B: Batch>(&mut self, batch: &B, program: &device::ProgramHandle) {
         //Warning: this is not protected against deleted resources in single-threaded mode
         if self.render_state.program_name != program.get_name() {
-            self.buf.bind_program(program.get_name());
+            self.command_buffer.bind_program(program.get_name());
             self.render_state.program_name = program.get_name();
         }
         let pinfo = program.get_info();
@@ -379,7 +379,7 @@ impl<C: CommandBuffer> Renderer<C> {
         for (var, &option) in program.get_info().uniforms.iter()
             .zip(self.parameters.uniforms.iter()) {
             match option {
-                Some(v) => self.buf.bind_uniform(var.location, v),
+                Some(v) => self.command_buffer.bind_uniform(var.location, v),
                 None => return Err(ErrorParamUniform(var.name.clone())),
             }
         }
@@ -387,7 +387,7 @@ impl<C: CommandBuffer> Renderer<C> {
         for (i, (var, &option)) in program.get_info().blocks.iter()
             .zip(self.parameters.blocks.iter()).enumerate() {
             match option {
-                Some(buf) => self.buf.bind_uniform_block(
+                Some(buf) => self.command_buffer.bind_uniform_block(
                     program.get_name(),
                     i as device::UniformBufferSlot,
                     i as device::UniformBlockIndex,
@@ -403,8 +403,8 @@ impl<C: CommandBuffer> Renderer<C> {
                 Some((tex, Some(_))) if tex.get_info().kind.get_aa_mode().is_some() =>
                     return Err(ErrorParamSampler(var.name.clone())),
                 Some((tex, sampler)) => {
-                    self.buf.bind_uniform(var.location, device::shade::ValueI32(i as i32));
-                    self.buf.bind_texture(i as device::TextureSlot,
+                    self.command_buffer.bind_uniform(var.location, device::shade::ValueI32(i as i32));
+                    self.command_buffer.bind_texture(i as device::TextureSlot,
                         tex.get_info().kind, tex.get_name(), sampler);
                 },
                 None => return Err(ErrorParamTexture(var.name.clone())),
@@ -417,7 +417,7 @@ impl<C: CommandBuffer> Renderer<C> {
         if !self.render_state.is_array_buffer_set {
             // It's Ok if the array buffer is not supported. We can just ignore it.
             self.common_array_buffer.map(|ab|
-                self.buf.bind_array_buffer(ab.get_name())
+                self.command_buffer.bind_array_buffer(ab.get_name())
             ).is_ok();
             self.render_state.is_array_buffer_set = true;
         }
@@ -430,7 +430,7 @@ impl<C: CommandBuffer> Renderer<C> {
                     None => true,
                 };
             if need_update {
-                self.buf.bind_attribute(loc as device::AttributeSlot,
+                self.command_buffer.bind_attribute(loc as device::AttributeSlot,
                     vat.buffer.get_name(), vat.format);
                 if loc < self.render_state.attributes.len() {
                     self.render_state.attributes[loc] = Some((vat.buffer, vat.format));
@@ -441,7 +441,7 @@ impl<C: CommandBuffer> Renderer<C> {
 
     fn bind_index<T>(&mut self, buf: device::BufferHandle<T>) {
         if self.render_state.index != Some(buf.raw()) {
-            self.buf.bind_index(buf.get_name());
+            self.command_buffer.bind_index(buf.get_name());
             self.render_state.index = Some(buf.raw());
         }
     }
@@ -450,19 +450,19 @@ impl<C: CommandBuffer> Renderer<C> {
                   instances: Option<device::InstanceCount>) {
         match *slice {
             mesh::VertexSlice(prim_type, start, end) => {
-                self.buf.call_draw(prim_type, start, end, instances);
+                self.command_buffer.call_draw(prim_type, start, end, instances);
             },
             mesh::IndexSlice8(prim_type, buf, start, end) => {
                 self.bind_index(buf);
-                self.buf.call_draw_indexed(prim_type, attrib::U8, start, end, instances);
+                self.command_buffer.call_draw_indexed(prim_type, attrib::U8, start, end, instances);
             },
             mesh::IndexSlice16(prim_type, buf, start, end) => {
                 self.bind_index(buf);
-                self.buf.call_draw_indexed(prim_type, attrib::U16, start, end, instances);
+                self.command_buffer.call_draw_indexed(prim_type, attrib::U16, start, end, instances);
             },
             mesh::IndexSlice32(prim_type, buf, start, end) => {
                 self.bind_index(buf);
-                self.buf.call_draw_indexed(prim_type, attrib::U32, start, end, instances);
+                self.command_buffer.call_draw_indexed(prim_type, attrib::U32, start, end, instances);
             },
         }
     }
@@ -483,7 +483,7 @@ pub trait DeviceHelper<C: CommandBuffer> {
 impl<D: device::Device<C>, C: CommandBuffer> DeviceHelper<C> for D {
     fn create_renderer(&mut self) -> Renderer<C> {
         Renderer {
-            buf: CommandBuffer::new(),
+            command_buffer: CommandBuffer::new(),
             data: device::draw::DataBuffer::new(),
             common_array_buffer: self.create_array_buffer(),
             draw_frame_buffer: self.create_frame_buffer(),
