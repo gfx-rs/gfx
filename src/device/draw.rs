@@ -62,12 +62,16 @@ impl DataBuffer {
     /// Copy a given vector slice into the buffer
     pub fn add_vec<T: Copy>(&mut self, v: &[T]) -> DataPointer {
         use std::mem;
+        use std::slice::raw::buf_as_slice;
         let offset = self.buf.len();
         let size = mem::size_of::<T>() * v.len();
         self.buf.reserve_additional(size);
         unsafe {
             self.buf.set_len(offset + size);
-            self.buf.slice_from_mut(offset).copy_memory(mem::transmute(v));
+            buf_as_slice(v.as_ptr() as *const u8, size,
+                |slice|
+                self.buf.slice_from_mut(offset).copy_memory(slice)
+            );
         }
         DataPointer(offset as Offset, size as Size)
     }
