@@ -19,6 +19,7 @@ use syntax::{attr, codemap};
 use syntax::parse::token;
 use syntax::ptr::P;
 
+#[deriving(PartialEq, Show)]
 enum ParamType {
     ParamUniform,
     ParamBlock,
@@ -55,43 +56,70 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
     let link_ident = cx.ident_of(link_name);
     match *substr.fields {
         generic::StaticStruct(definition, generic::Named(ref fields)) => {
-            let out = definition.fields.iter().zip(fields.iter())
-                                       .map(|(def, &(fname, fspan))| {
-                let name = match super::find_name(cx, span, def.node.attrs.as_slice()) {
-                    Some(name) => name,
-                    None => token::get_ident(fname),
-                };
-                let name = cx.expr_str(fspan, name);
-                let input = &substr.nonself_args[1];
-                let expr = match classify(&def.node.ty.node) {
-                    //TODO: verify the type match
-                    Ok(ParamUniform) => quote_expr!(cx,
-                        $input.uniforms.iter().position(|u| u.name.as_slice() == $name)
-                                       .map(|p| p as $path_root::gfx::shade::VarUniform)
-                    ),
-                    Ok(ParamBlock)   => quote_expr!(cx,
-                        $input.blocks.iter().position(|b| b.name.as_slice() == $name)
-                                     .map(|p| p as $path_root::gfx::shade::VarBlock)
-                    ),
-                    Ok(ParamTexture) => quote_expr!(cx,
-                        $input.textures.iter().position(|t| t.name.as_slice() == $name)
-                                       .map(|p| p as $path_root::gfx::shade::VarTexture)
-                    ),
-                    Err(_) => {
+            let init_expr = cx.expr_struct_ident(
+                span, link_ident,
+                fields.iter().map(|&(fname, fspan)| {
+                    cx.field_imm(fspan, fname, cx.expr_none(fspan))
+                }).collect()
+            );
+            let class_info: Vec<(ParamType, P<ast::Expr>)> = definition.fields.iter()
+                    .zip(fields.iter()).scan((), |_, (def, &(fname, fspan))|
+                match classify(&def.node.ty.node) {
+                    Ok(c) => {
+                        let name = match super::find_name(cx, span, def.node.attrs.as_slice()) {
+                            Some(name) => name,
+                            None => token::get_ident(fname),
+                        };
+                        Some((c, cx.expr_str(fspan, name)))
+                    },
+                    Err(e) => {
                         cx.span_err(fspan, format!(
-                            "Invalid uniform: {}",
-                            fname.as_str(),
+                            "Unrecognized parameter ({}) type {}",
+                            fname.as_str(), e
                             ).as_slice()
                         );
-                        return cx.field_imm(fspan,
-                            cx.ident_of("invalid"),
-                            cx.expr_uint(fspan, 0)
-                            );
+                        None
                     },
-                };
-                cx.field_imm(fspan, fname, expr)
-            }).collect();
-            cx.expr_ok(span, cx.expr_struct_ident(span, link_ident, out))
+                }
+            ).collect();
+            let gen_arms = |ptype: ParamType, var: ast::Ident| -> Vec<ast::Arm> {
+                class_info.iter().zip(fields.iter())
+                          .filter(|&(&(class, _), _)| class == ptype)
+                          .map(|(&(_, ref name_expr), &(fname, fspan))|
+                    cx.arm(fspan,
+                        vec![cx.pat_lit(fspan, name_expr.clone())],
+                        quote_expr!(cx,
+                            out.$fname = Some(i as $path_root::gfx::shade::$var)
+                        )
+                    )
+                ).collect()
+            };
+            let uniform_arms = gen_arms(ParamUniform, cx.ident_of("VarUniform"));
+            let block_arms = gen_arms(ParamBlock, cx.ident_of("VarBlock"));
+            let texture_arms = gen_arms(ParamTexture, cx.ident_of("VarTexture"));
+            let input = &substr.nonself_args[1];
+            quote_expr!(cx, {
+                let mut out = $init_expr;
+                for (i, u) in $input.uniforms.iter().enumerate() {
+                    match u.name.as_slice() {
+                        $uniform_arms
+                        _ => return Err($path_root::gfx::shade::MissingUniform(u.name.clone())),
+                    }
+                }
+                for (i, b) in $input.blocks.iter().enumerate() {
+                    match b.name.as_slice() {
+                        $block_arms
+                        _ => return Err($path_root::gfx::shade::MissingBlock(b.name.clone())),
+                    }
+                }
+                for (i, t) in $input.textures.iter().enumerate() {
+                    match t.name.as_slice() {
+                        $texture_arms
+                        _ => return Err($path_root::gfx::shade::MissingTexture(t.name.clone())),
+                    }
+                }
+                Ok(out)
+            })
         },
         _ => {
             cx.span_err(span, "Unable to implement `ShaderParam::create_link()` on a non-structure");
