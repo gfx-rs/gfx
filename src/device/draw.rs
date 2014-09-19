@@ -47,16 +47,10 @@ impl DataBuffer {
     }
 
     /// Copy a given structure into the buffer, return the offset and the size.
+    #[inline(always)]
     pub fn add_struct<T: Copy>(&mut self, v: &T) -> DataPointer {
-        use std::mem;
-        let offset = self.buf.len();
-        let size = mem::size_of::<T>();
-        self.buf.reserve_additional(size);
-        unsafe {
-            self.buf.set_len(offset + size);
-            *mem::transmute::<&mut u8, *mut T>(self.buf.get_mut(offset)) = *v;
-        }
-        DataPointer(offset as Offset, size as Size)
+        use std::slice::ref_slice;
+        self.add_vec(ref_slice(v))
     }
 
     /// Copy a given vector slice into the buffer
