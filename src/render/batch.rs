@@ -16,6 +16,7 @@
 //! except for the target frame. Here we define the `Batch` trait as well as
 //! `RefBatch` and `OwnedBatch` implementations.
 
+use std::fmt;
 use device::ProgramHandle;
 use device::shade::ProgramInfo;
 use mesh;
@@ -130,6 +131,13 @@ impl<T> Id<T> {
     }
 }
 
+impl<T> fmt::Show for Id<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let Id(i) = *self;
+        write!(f, "Id({})", i)
+    }
+}
+
 impl<T> PartialEq for Id<T> {
     fn eq(&self, other: &Id<T>) -> bool {
         self.unwrap() == other.unwrap()
@@ -192,6 +200,13 @@ pub struct RefBatch<L, T> {
     program_id: Id<ProgramHandle>,
     param_link: L,
     state_id: Id<DrawState>,
+}
+
+impl<L, T> fmt::Show for RefBatch<L, T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "RefBatch(mesh: {}, slice: {}, program: {}, state: {})",
+            self.mesh_id, self.slice, self.program_id, self.state_id)
+    }
 }
 
 impl<L, T> PartialEq for RefBatch<L, T> {
