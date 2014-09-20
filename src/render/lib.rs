@@ -344,24 +344,32 @@ impl<C: CommandBuffer> Renderer<C> {
     fn bind_program<B: Batch>(&mut self, batch: &B, program: &device::ProgramHandle) {
         //Warning: this is not protected against deleted resources in single-threaded mode
         if self.render_state.program_name != program.get_name() {
-            self.buf.bind_program(program.get_name());
+            self.command_buffer.bind_program(program.get_name());
             self.render_state.program_name = program.get_name();
         }
-        let pinfo = program.get_info();
-        self.parameters.resize(pinfo.uniforms.len(), pinfo.blocks.len(),
-            pinfo.textures.len());
-        batch.fill_params(self.parameters.as_mut_slice());
-        self.upload_parameters(program).unwrap();
+        batch.fill_params(self.parameters.get_mut());
+        self.upload_parameters(program);
     }
 
-    fn upload_parameters(&mut self, program: &device::ProgramHandle) -> Result<(), ParameterError> {
+    fn upload_parameters(&mut self, program: &device::ProgramHandle) {
+        let info = program.get_info();
+        if self.parameters.uniforms.len() != info.uniforms.len() ||
+            self.parameters.blocks.len() != info.blocks.len() ||
+            self.parameters.textures.len() != info.textures.len() {
+            error!("Mismatching number of uniforms ({}), blocks ({}), or \
+                    textures ({}) in `upload_parameters` for program: {}",
+                    self.parameters.uniforms.len(),
+                    self.parameters.blocks.len(),
+                    self.parameters.textures.len(),
+                    info);
+        }
         // bind uniforms
-        for (var, &option) in program.get_info().uniforms.iter()
+        for (var, value) in info.uniforms.iter()
             .zip(self.parameters.uniforms.iter()) {
             self.command_buffer.bind_uniform(var.location, *value);
         }
         // bind uniform blocks
-        for (i, (var, buf)) in program.get_info().blocks.iter()
+        for (i, (var, buf)) in info.blocks.iter()
             .zip(self.parameters.blocks.iter()).enumerate() {
             self.command_buffer.bind_uniform_block(
                 program.get_name(),
@@ -371,7 +379,7 @@ impl<C: CommandBuffer> Renderer<C> {
             );
         }
         // bind textures and samplers
-        for (i, (var, &(tex, sampler))) in program.get_info().textures.iter()
+        for (i, (var, &(tex, sampler))) in info.textures.iter()
             .zip(self.parameters.textures.iter()).enumerate() {
             if sampler.is_some() && tex.get_info().kind.get_aa_mode().is_some() {
                 error!("A sampler provided for an AA texture: {}", var.name.clone());
@@ -380,7 +388,6 @@ impl<C: CommandBuffer> Renderer<C> {
             self.command_buffer.bind_texture(i as device::TextureSlot,
                 tex.get_info().kind, tex.get_name(), sampler);
         }
-        Ok(())
     }
 
     fn bind_mesh(&mut self, mesh: &mesh::Mesh, link: &mesh::Link, info: &ProgramInfo) {
