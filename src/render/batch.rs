@@ -93,7 +93,7 @@ impl<L, T: ShaderParam<L>> OwnedBatch<L, T> {
             Ok(l) => l,
             Err(e) => return Err(ErrorMesh(e)),
         };
-        let param_link = match ShaderParam::create_link(None::<T>, program.get_info()) {
+        let param_link = match ShaderParam::create_link(None::<&T>, program.get_info()) {
             Ok(l) => l,
             Err(e) => return Err(ErrorParameters(e)),
         };
@@ -259,7 +259,7 @@ impl Context {
             Ok(l) => l,
             Err(e) => return Err(ErrorMesh(e)),
         };
-        let link = match ShaderParam::create_link(None::<T>, program.get_info()) {
+        let link = match ShaderParam::create_link(None::<&T>, program.get_info()) {
             Ok(l) => l,
             Err(e) => return Err(ErrorParameters(e))
         };

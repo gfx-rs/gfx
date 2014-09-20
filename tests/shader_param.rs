@@ -26,7 +26,6 @@ struct TestParam {
     b: [f32, ..4],
     c: secret_lib::gfx::shade::TextureParam,
     d: secret_lib::gfx::RawBufferHandle,
-    #[unused]
     e: f32,
     #[name = "a_f"]
     f: [f32, ..4],

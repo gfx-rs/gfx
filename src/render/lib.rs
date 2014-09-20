@@ -45,20 +45,6 @@ pub mod state;
 /// Render targets
 pub mod target;
 
-/// An error with an invalid texture or uniform block.
-//TODO: use slices when Rust allows
-#[deriving(Show)]
-pub enum ParameterError {
-    /// Error from a uniform value
-    ErrorParamUniform(String),
-    /// Error from a uniform block.
-    ErrorParamBlock(String),
-    /// Error from a texture.
-    ErrorParamTexture(String),
-    /// Error from a sampler
-    ErrorParamSampler(String),
-}
-
 /// Program linking error
 #[deriving(Clone, PartialEq, Show)]
 pub enum ProgramError {
@@ -101,9 +87,9 @@ impl RenderState {
 }
 
 struct ParamStorage {
-    uniforms: Vec<Option<UniformValue>>,
-    blocks  : Vec<Option<device::RawBufferHandle>>,
-    textures: Vec<Option<shade::TextureParam>>,
+    uniforms: Vec<UniformValue>,
+    blocks  : Vec<device::RawBufferHandle>,
+    textures: Vec<shade::TextureParam>,
 }
 
 impl ParamStorage{
@@ -115,20 +101,14 @@ impl ParamStorage{
         }
     }
 
-    fn resize(&mut self, nu: uint, nb: uint, nt: uint) {
+    fn get_mut(&mut self) -> shade::ParamValues {
         self.uniforms.truncate(0);
-        self.uniforms.grow(nu, &None);
         self.blocks.truncate(0);
-        self.blocks.grow(nb, &None);
         self.textures.truncate(0);
-        self.textures.grow(nt, &None);
-    }
-
-    fn as_mut_slice(&mut self) -> shade::ParamValues {
         shade::ParamValues {
-            uniforms: self.uniforms.as_mut_slice(),
-            blocks: self.blocks.as_mut_slice(),
-            textures: self.textures.as_mut_slice(),
+            uniforms: &mut self.uniforms,
+            blocks: &mut self.blocks,
+            textures: &mut self.textures,
         }
     }
 }
@@ -367,50 +347,47 @@ impl<C: CommandBuffer> Renderer<C> {
             self.command_buffer.bind_program(program.get_name());
             self.render_state.program_name = program.get_name();
         }
-        let pinfo = program.get_info();
-        self.parameters.resize(pinfo.uniforms.len(), pinfo.blocks.len(),
-            pinfo.textures.len());
-        batch.fill_params(self.parameters.as_mut_slice());
-        self.upload_parameters(program).unwrap();
+        batch.fill_params(self.parameters.get_mut());
+        self.upload_parameters(program);
     }
 
-    fn upload_parameters(&mut self, program: &device::ProgramHandle) -> Result<(), ParameterError> {
+    fn upload_parameters(&mut self, program: &device::ProgramHandle) {
+        let info = program.get_info();
+        if self.parameters.uniforms.len() != info.uniforms.len() ||
+            self.parameters.blocks.len() != info.blocks.len() ||
+            self.parameters.textures.len() != info.textures.len() {
+            error!("Mismatching number of uniforms ({}), blocks ({}), or \
+                    textures ({}) in `upload_parameters` for program: {}",
+                    self.parameters.uniforms.len(),
+                    self.parameters.blocks.len(),
+                    self.parameters.textures.len(),
+                    info);
+        }
         // bind uniforms
-        for (var, &option) in program.get_info().uniforms.iter()
+        for (var, value) in info.uniforms.iter()
             .zip(self.parameters.uniforms.iter()) {
-            match option {
-                Some(v) => self.command_buffer.bind_uniform(var.location, v),
-                None => return Err(ErrorParamUniform(var.name.clone())),
-            }
+            self.command_buffer.bind_uniform(var.location, *value);
         }
         // bind uniform blocks
-        for (i, (var, &option)) in program.get_info().blocks.iter()
+        for (i, (var, buf)) in info.blocks.iter()
             .zip(self.parameters.blocks.iter()).enumerate() {
-            match option {
-                Some(buf) => self.command_buffer.bind_uniform_block(
-                    program.get_name(),
-                    i as device::UniformBufferSlot,
-                    i as device::UniformBlockIndex,
-                    buf.get_name()
-                ),
-                None => return Err(ErrorParamBlock(var.name.clone())),
-            }
+            self.command_buffer.bind_uniform_block(
+                program.get_name(),
+                i as device::UniformBufferSlot,
+                i as device::UniformBlockIndex,
+                buf.get_name()
+            );
         }
         // bind textures and samplers
-        for (i, (var, &option)) in program.get_info().textures.iter()
+        for (i, (var, &(tex, sampler))) in info.textures.iter()
             .zip(self.parameters.textures.iter()).enumerate() {
-            match option {
-                Some((tex, Some(_))) if tex.get_info().kind.get_aa_mode().is_some() =>
-                    return Err(ErrorParamSampler(var.name.clone())),
-                Some((tex, sampler)) => {
-                    self.command_buffer.bind_uniform(var.location, device::shade::ValueI32(i as i32));
-                    self.command_buffer.bind_texture(i as device::TextureSlot,
-                        tex.get_info().kind, tex.get_name(), sampler);
-                },
-                None => return Err(ErrorParamTexture(var.name.clone())),
+            if sampler.is_some() && tex.get_info().kind.get_aa_mode().is_some() {
+                error!("A sampler provided for an AA texture: {}", var.name.clone());
             }
+            self.command_buffer.bind_uniform(var.location, device::shade::ValueI32(i as i32));
+            self.command_buffer.bind_texture(i as device::TextureSlot,
+                tex.get_info().kind, tex.get_name(), sampler);
         }
-        Ok(())
     }
 
     fn bind_mesh(&mut self, mesh: &mesh::Mesh, link: &mesh::Link, info: &ProgramInfo) {

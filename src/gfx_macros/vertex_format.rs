@@ -185,7 +185,7 @@ fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     };
                     let ident_str = ident_str.get();
                     let instance_expr = cx.expr_u8(span, 0); // not supposed to be set by the macro
-                    super::ugh(cx, |cx| quote_expr!(cx, {
+                    quote_expr!(cx, {
                         attributes.push($path_root::gfx::Attribute {
                             name: $ident_str.to_string(),
                             buffer: $buffer_expr,
@@ -206,14 +206,14 @@ fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                                 instance_rate: $instance_expr,
                             }
                         });
-                    }))
+                    })
                 }).collect::<Vec<P<ast::Expr>>>();
             let capacity = fields.len();
-            super::ugh(cx, |cx| quote_expr!(cx, {
+            quote_expr!(cx, {
                 let mut attributes = Vec::with_capacity($capacity);
                 $attribute_pushes;
                 attributes
-            }))
+            })
         },
         _ => {
             cx.span_err(span, "Unable to implement `gfx::VertexFormat::generate` \

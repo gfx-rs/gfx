@@ -48,10 +48,6 @@ pub fn registrar(reg: &mut rustc::plugin::Registry) {
         base::ItemDecorator(box vertex_format::expand));
 }
 
-/// A hacky thing to get around 'moved value' errors when using `quote_expr!`
-/// with `ext::base::ExtCtxt`s.
-fn ugh<T, U>(x: &mut T, f: |&mut T| -> U) -> U { f(x) }
-
 /// Scan through the field's attributes and extract the field vertex name. If
 /// multiple names are found, use the first name and emit a warning.
 fn find_name(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
