@@ -109,7 +109,7 @@ impl<L, T: ShaderParam<L>> OwnedBatch<L, T> {
     }
 }
 
-impl<'a, L, T: ShaderParam<L>> Batch for &'a OwnedBatch<L, T> {
+impl<L, T: ShaderParam<L>> Batch for OwnedBatch<L, T> {
     fn get_data(&self) -> (&mesh::Mesh, &mesh::Link, &mesh::Slice, &ProgramHandle, &DrawState) {
         (&self.mesh, &self.mesh_link, &self.slice, &self.program, &self.state)
     }
