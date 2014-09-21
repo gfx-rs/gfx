@@ -42,10 +42,10 @@ pub fn registrar(reg: &mut rustc::plugin::Registry) {
     use syntax::ext::base;
     // Register the `#[shader_param]` attribute.
     reg.register_syntax_extension(intern("shader_param"),
-        base::ItemDecorator(box shader_param::expand));
+        base::Decorator(box shader_param::expand));
     // Register the `#[vertex_format]` attribute.
     reg.register_syntax_extension(intern("vertex_format"),
-        base::ItemDecorator(box vertex_format::expand));
+        base::Decorator(box vertex_format::expand));
 }
 
 /// Scan through the field's attributes and extract the field vertex name. If
