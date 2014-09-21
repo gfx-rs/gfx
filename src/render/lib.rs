@@ -179,10 +179,10 @@ impl<C: CommandBuffer> Renderer<C> {
     }
 
     /// Draw a `batch` into the specified `frame`
-    pub fn draw<B: Batch>(&mut self, batch: B, frame: &target::Frame) {
+    pub fn draw<B: Batch>(&mut self, batch: &B, frame: &target::Frame) {
         self.bind_frame(frame);
         let (mesh, link, slice, program, state) = batch.get_data();
-        self.bind_program(&batch, program);
+        self.bind_program(batch, program);
         self.bind_state(state);
         self.bind_mesh(mesh, link, program.get_info());
         self.draw_slice(slice, None);

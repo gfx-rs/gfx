@@ -101,7 +101,7 @@ impl<D: device::Device<C>, C: device::draw::CommandBuffer> Graphics<D, C> {
     /// Draw a ref batch.
     pub fn draw<'a, L, T: shade::ShaderParam<L>>(&'a mut self,
         batch: &'a RefBatch<L, T>, data: &'a T, frame: &Frame) {
-        self.renderer.draw((batch, data, &self.context), frame)
+        self.renderer.draw(&(batch, data, &self.context), frame)
     }
 
     /// Submit the internal command buffer and reset for the next frame.
