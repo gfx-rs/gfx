@@ -136,7 +136,7 @@ impl<C: CommandBuffer> CommandBufferHelper for C {
 /// Renderer front-end
 pub struct Renderer<C: CommandBuffer> {
     command_buffer: C,
-    data: device::draw::DataBuffer,
+    data_buffer: device::draw::DataBuffer,
     common_array_buffer: Result<device::ArrayBufferHandle, ()>,
     draw_frame_buffer: device::FrameBufferHandle,
     read_frame_buffer: device::FrameBufferHandle,
@@ -149,20 +149,20 @@ impl<C: CommandBuffer> Renderer<C> {
     /// Reset all commands for the command buffer re-usal.
     pub fn reset(&mut self) {
         self.command_buffer.clear();
-        self.data.clear();
+        self.data_buffer.clear();
         self.render_state = RenderState::new();
     }
 
     /// Get a command buffer to be submitted to the device.
     pub fn as_buffer(&self) -> (&C, &device::draw::DataBuffer) {
-        (&self.command_buffer, &self.data)
+        (&self.command_buffer, &self.data_buffer)
     }
 
     /// Clone the renderer shared data but ignore the commands.
     pub fn clone_empty(&self) -> Renderer<C> {
         Renderer {
             command_buffer: CommandBuffer::new(),
-            data: device::draw::DataBuffer::new(),
+            data_buffer: device::draw::DataBuffer::new(),
             common_array_buffer: self.common_array_buffer,
             draw_frame_buffer: self.draw_frame_buffer,
             read_frame_buffer: self.read_frame_buffer,
@@ -228,7 +228,7 @@ impl<C: CommandBuffer> Renderer<C> {
         let esize = mem::size_of::<T>();
         let offset_bytes = esize * offset_elements;
         debug_assert!(data.len() * esize + offset_bytes <= buf.get_info().size);
-        let pointer = self.data.add_vec(data);
+        let pointer = self.data_buffer.add_vec(data);
         self.command_buffer.update_buffer(buf.get_name(), pointer, offset_bytes);
     }
 
@@ -236,7 +236,7 @@ impl<C: CommandBuffer> Renderer<C> {
     pub fn update_buffer_struct<U, T: Copy>(&mut self,
                                 buf: device::BufferHandle<U>, data: &T) {
         debug_assert!(mem::size_of::<T>() <= buf.get_info().size);
-        let pointer = self.data.add_struct(data);
+        let pointer = self.data_buffer.add_struct(data);
         self.command_buffer.update_buffer(buf.get_name(), pointer, 0);
     }
 
@@ -244,7 +244,7 @@ impl<C: CommandBuffer> Renderer<C> {
     pub fn update_texture<T: Copy>(&mut self, tex: device::TextureHandle,
                           img: device::tex::ImageInfo, data: &[T]) {
         debug_assert!(tex.get_info().contains(&img));
-        let pointer = self.data.add_vec(data);
+        let pointer = self.data_buffer.add_vec(data);
         self.command_buffer.update_texture(tex.get_info().kind, tex.get_name(), img, pointer);
     }
 
@@ -461,7 +461,7 @@ impl<D: device::Device<C>, C: CommandBuffer> DeviceHelper<C> for D {
     fn create_renderer(&mut self) -> Renderer<C> {
         Renderer {
             command_buffer: CommandBuffer::new(),
-            data: device::draw::DataBuffer::new(),
+            data_buffer: device::draw::DataBuffer::new(),
             common_array_buffer: self.create_array_buffer(),
             draw_frame_buffer: self.create_frame_buffer(),
             read_frame_buffer: self.create_frame_buffer(),
