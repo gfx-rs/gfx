@@ -15,7 +15,7 @@
 use syntax::{ast, ast_util, ext};
 use syntax::ext::build::AstBuilder;
 use syntax::ext::deriving::generic;
-use syntax::{attr, codemap};
+use syntax::codemap;
 use syntax::parse::token;
 use syntax::ptr::P;
 
