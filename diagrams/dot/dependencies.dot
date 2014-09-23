@@ -36,8 +36,8 @@ digraph gfx {
     "cube" -> "glfw";
     "terrain" -> "gfx";
     "terrain" -> "glfw";
-    "gl-init" -> "gfx";
-    "gl-init" -> "gl_init";
+    "glutin" -> "gfx";
+    "glutin" -> "glutin";
     "performance" -> "gfx";
     "performance" -> "glfw";
     "performance" -> "gfx_gl";
