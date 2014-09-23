@@ -74,10 +74,10 @@ git = "https://github.com/bjz/noise-rs.git"
 
 
 [[example]]
-name = "gl-init"
-path = "examples/gl-init/main.rs"
+name = "glutin"
+path = "examples/glutin/main.rs"
 
-[dev_dependencies.gl_init]
+[dev_dependencies.glutin]
 git = "https://github.com/tomaka/gl-init-rs.git"
 
 

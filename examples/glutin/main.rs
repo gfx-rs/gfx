@@ -13,14 +13,14 @@
 // limitations under the License.
 
 #![feature(phase)]
-#![crate_name = "gl-init"]
+#![crate_name = "glutin"]
 
 //! Demonstrates how to initialize gfx-rs using the gl-init-rs library.
 
 extern crate gfx;
 #[phase(plugin)]
 extern crate gfx_macros;
-extern crate gl_init;
+extern crate glutin;
 extern crate native;
 
 use gfx::{Device, DeviceHelper};
@@ -33,8 +33,8 @@ fn start(argc: int, argv: *const *const u8) -> int {
 }
 
 fn main() {
-    let window = gl_init::Window::new().unwrap();
-    window.set_title("gl-init-rs initialization example");
+    let window = glutin::Window::new().unwrap();
+    window.set_title("glutin initialization example");
     unsafe { window.make_current() };
     let (w, h) = window.get_inner_size().unwrap();
 
@@ -55,8 +55,8 @@ fn main() {
         // quit when Esc is pressed.
         for event in window.poll_events() {
             match event {
-                gl_init::KeyboardInput(_, _, Some(gl_init::Escape), _) => break 'main,
-                gl_init::Closed => break 'main,
+                glutin::KeyboardInput(_, _, Some(glutin::Escape), _) => break 'main,
+                glutin::Closed => break 'main,
                 _ => {},
             }
         }
