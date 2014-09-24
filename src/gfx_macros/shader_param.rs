@@ -15,7 +15,7 @@
 use syntax::{ast, ast_util, ext};
 use syntax::ext::build::AstBuilder;
 use syntax::ext::deriving::generic;
-use syntax::{attr, codemap};
+use syntax::codemap;
 use syntax::parse::token;
 use syntax::ptr::P;
 
@@ -101,18 +101,21 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
             quote_expr!(cx, {
                 let mut out = $init_expr;
                 for (i, u) in $input.uniforms.iter().enumerate() {
+                    let _ = i; // suppress warning about unused i
                     match u.name.as_slice() {
                         $uniform_arms
                         _ => return Err($path_root::gfx::shade::MissingUniform(u.name.clone())),
                     }
                 }
                 for (i, b) in $input.blocks.iter().enumerate() {
+                    let _ = i; // suppress warning about unused i
                     match b.name.as_slice() {
                         $block_arms
                         _ => return Err($path_root::gfx::shade::MissingBlock(b.name.clone())),
                     }
                 }
                 for (i, t) in $input.textures.iter().enumerate() {
+                    let _ = i; // suppress warning about unused i
                     match t.name.as_slice() {
                         $texture_arms
                         _ => return Err($path_root::gfx::shade::MissingTexture(t.name.clone())),
