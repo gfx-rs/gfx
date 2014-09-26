@@ -17,6 +17,7 @@
 //! `RefBatch` and `OwnedBatch` implementations.
 
 use std::fmt;
+use std::num::from_uint;
 use device::ProgramHandle;
 use device::shade::ProgramInfo;
 use mesh;
@@ -42,6 +43,8 @@ pub enum BatchError {
     ErrorMesh(MeshError),
     /// Error connecting shader parameters
     ErrorParameters(ParameterError),
+    /// Error context is full
+    ErrorContextFull,
 }
 
 /// Match mesh attributes against shader inputs, produce a mesh link.
@@ -178,13 +181,16 @@ impl<T> Array<T> {
 }
 
 impl<T: Clone + PartialEq> Array<T> {
-    fn find_or_insert(&mut self, value: &T) -> Id<T> {
-        let i = self.data.iter().position(|v| v == value).unwrap_or_else(|| {
-            let i = self.data.len();
-            self.data.push(value.clone());
-            i
-        });
-        Id(i as Index)
+    fn find_or_insert(&mut self, value: &T) -> Option<Id<T>> {
+        match self.data.iter().position(|v| v == value) {
+            Some(i) => from_uint::<Index>(i).map(|id| Id(id)),
+            None => {
+                from_uint::<Index>(self.data.len()).map(|id| {
+                    self.data.push(value.clone());
+                    Id(id)
+                })
+            },
+        }
     }
 }
 
@@ -263,13 +269,26 @@ impl Context {
             Ok(l) => l,
             Err(e) => return Err(ErrorParameters(e))
         };
+        let mesh_id = match self.meshes.find_or_insert(mesh) {
+            Some(id) => id,
+            None => return Err(ErrorContextFull),
+        };
+        let program_id = match self.programs.find_or_insert(program) {
+            Some(id) => id,
+            None => return Err(ErrorContextFull),
+        };
+        let state_id = match self.states.find_or_insert(state) {
+            Some(id) => id,
+            None => return Err(ErrorContextFull),
+        };
+
         Ok(RefBatch {
-            mesh_id: self.meshes.find_or_insert(mesh),
+            mesh_id: mesh_id,
             mesh_link: mesh_link,
             slice: slice,
-            program_id: self.programs.find_or_insert(program),
+            program_id: program_id,
             param_link: link,
-            state_id: self.states.find_or_insert(state),
+            state_id: state_id,
         })
     }
 }
