@@ -530,7 +530,7 @@ impl Device<GlCommandBuffer> for GlDevice {
 
     fn create_shader(&mut self, stage: ::shade::Stage, code: ::shade::ShaderSource)
                      -> Result<::ShaderHandle, ::shade::CreateShaderError> {
-        let (name, info) = shade::create_shader(&self.gl, stage, code, self.get_capabilities().shader_model);
+        let (name, info) = shade::create_shader(&self.gl, stage, code, self.info.shading_language);
         info.map(|info| {
             let level = if name.is_err() { log::ERROR } else { log::WARN };
             log!(level, "\tShader compile log: {}", info);
