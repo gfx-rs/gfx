@@ -15,9 +15,8 @@
 //! Shader parameter handling.
 
 use std::cell::Cell;
-use std::fmt;
 use device::shade;
-use device::{RawBufferHandle, ProgramHandle, TextureHandle, SamplerHandle};
+use device::{RawBufferHandle, TextureHandle, SamplerHandle};
 
 pub use device::shade::{Stage, CreateShaderError, Vertex, Geometry, Fragment};
 

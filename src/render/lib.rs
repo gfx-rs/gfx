@@ -369,7 +369,7 @@ impl<C: CommandBuffer> Renderer<C> {
             self.command_buffer.bind_uniform(var.location, *value);
         }
         // bind uniform blocks
-        for (i, (var, buf)) in info.blocks.iter()
+        for (i, (_, buf)) in info.blocks.iter()
             .zip(self.parameters.blocks.iter()).enumerate() {
             self.command_buffer.bind_uniform_block(
                 program.get_name(),
