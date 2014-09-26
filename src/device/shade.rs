@@ -336,6 +336,8 @@ impl Bytes {
 #[deriving(Clone, PartialEq, Show)]
 pub struct ShaderSource {
     pub glsl_120: Option<Bytes>,
+    pub glsl_130: Option<Bytes>,
+    pub glsl_140: Option<Bytes>,
     pub glsl_150: Option<Bytes>,
     // TODO: hlsl_sm_N...
 }

@@ -14,8 +14,9 @@
 
 use super::super::shade as s;
 use super::gl;
+use super::info::Version;
 
-pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: s::ShaderSource, model: s::ShaderModel)
+pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: s::ShaderSource, lang: Version)
         -> (Result<super::Shader, s::CreateShaderError>, Option<String>) {
     let target = match stage {
         s::Vertex => gl::VERTEX_SHADER,
@@ -24,8 +25,10 @@ pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: s::ShaderSource, model:
     };
     let name = gl.CreateShader(target);
     let data = match data {
-        s::ShaderSource { glsl_150: Some(ref s), .. } if model >= s::Model40 => s.as_slice(),
-        s::ShaderSource { glsl_120: Some(ref s), .. } if model >= s::Model30 => s.as_slice(),
+        s::ShaderSource { glsl_150: Some(ref s), .. } if lang >= Version::new(1, 50, None, "") => s.as_slice(),
+        s::ShaderSource { glsl_140: Some(ref s), .. } if lang >= Version::new(1, 40, None, "") => s.as_slice(),
+        s::ShaderSource { glsl_130: Some(ref s), .. } if lang >= Version::new(1, 30, None, "") => s.as_slice(),
+        s::ShaderSource { glsl_120: Some(ref s), .. } if lang >= Version::new(1, 20, None, "") => s.as_slice(),
         _ => return (Err(s::NoSupportedShaderProvided),
                      Some("[gfx-rs] No supported GLSL shader provided!".to_string())),
     };
