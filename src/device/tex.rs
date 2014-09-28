@@ -24,6 +24,8 @@
 use std::default::Default;
 use std::fmt;
 
+use state;
+
 /// Surface creation/update error.
 #[deriving(Clone, PartialEq, Show)]
 pub enum SurfaceError {
@@ -336,6 +338,15 @@ pub enum WrapMode {
     Clamp,
 }
 
+/// Specified how the Comparison operator should be used when sampling
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+pub enum ComparsionMode {
+    /// the default, don't use this feature.
+    NoComparsion,
+    /// Compare Reference to Texture
+    CompareRefToTexture(state::Comparison)
+}
+
 /// Specifies how to sample from a texture.
 // TODO: document the details of sampling.
 #[deriving(PartialEq, PartialOrd, Clone, Show)]
@@ -351,7 +362,8 @@ pub struct SamplerInfo {
     pub lod_bias: f32,
     /// This range is used to clamp LOD level used for sampling
     pub lod_range: (f32, f32),
-    // TODO: comparison mode
+    /// comparison mode, used primary for a shadow map
+    pub comparison: ComparsionMode
 }
 
 impl SamplerInfo {
@@ -363,6 +375,7 @@ impl SamplerInfo {
             wrap_mode: (wrap, wrap, wrap),
             lod_bias: 0.0,
             lod_range: (-1000.0, 1000.0),
+            comparison: NoComparsion
         }
     }
 }
