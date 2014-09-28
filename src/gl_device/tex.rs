@@ -14,6 +14,7 @@
 
 use super::{gl, Surface, Texture, Sampler};
 use super::gl::types::{GLenum, GLuint, GLint, GLfloat, GLsizei, GLvoid};
+use super::state;
 use tex;
 use attrib;
 
@@ -491,6 +492,14 @@ pub fn bind_sampler(gl: &gl::Gl, anchor: BindAnchor, info: &tex::SamplerInfo) {
     let (min, max) = info.lod_range;
     gl.TexParameterf(target, gl::TEXTURE_MIN_LOD, min);
     gl.TexParameterf(target, gl::TEXTURE_MAX_LOD, max);
+
+    match info.comparison {
+        tex::NoComparsion => gl.TexParameteri(target, gl::TEXTURE_COMPARE_MODE, gl::NONE as GLint),
+        tex::CompareRefToTexture(cmp) => {
+            gl.TexParameteri(target, gl::TEXTURE_COMPARE_MODE, gl::COMPARE_REF_TO_TEXTURE as GLint);
+            gl.TexParameteri(target, gl::TEXTURE_COMPARE_FUNC, state::map_comparison(cmp) as GLint);
+        }
+    }
 }
 
 pub fn update_texture(gl: &gl::Gl, kind: tex::TextureKind, name: Texture,
@@ -624,6 +633,14 @@ pub fn make_sampler(gl: &gl::Gl, info: &tex::SamplerInfo) -> Sampler {
     let (min, max) = info.lod_range;
     gl.SamplerParameterf(name, gl::TEXTURE_MIN_LOD, min);
     gl.SamplerParameterf(name, gl::TEXTURE_MAX_LOD, max);
+
+    match info.comparison {
+        tex::NoComparsion => gl.SamplerParameteri(name, gl::TEXTURE_COMPARE_MODE, gl::NONE as GLint),
+        tex::CompareRefToTexture(cmp) => {
+            gl.SamplerParameteri(name, gl::TEXTURE_COMPARE_MODE, gl::COMPARE_REF_TO_TEXTURE as GLint);
+            gl.SamplerParameteri(name, gl::TEXTURE_COMPARE_FUNC, state::map_comparison(cmp) as GLint);
+        }
+    }
 
     name
 }

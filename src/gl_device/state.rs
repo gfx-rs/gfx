@@ -86,7 +86,7 @@ pub fn bind_scissor(gl: &gl::Gl, rect: Option<Rect>) {
     }
 }
 
-fn map_comparison(cmp: s::Comparison) -> gl::types::GLenum {
+pub fn map_comparison(cmp: s::Comparison) -> gl::types::GLenum {
     match cmp {
         s::Never        => gl::NEVER,
         s::Less         => gl::LESS,
