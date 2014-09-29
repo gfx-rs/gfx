@@ -22,7 +22,7 @@ use std::fmt;
 use target;
 
 /// The winding order of a set of vertices.
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub enum WindingOrder {
     /// Clockwise winding order.
     Clockwise,
@@ -98,13 +98,13 @@ impl Default for Primitive {
 }
 
 /// Multi-sampling rasterization mode
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Clone, Show)]
 pub struct MultiSample;
     //sample_mask: u16,
     //alpha_to_coverage: bool,
 
 /// A pixel-wise comparison function.
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub enum Comparison {
     /// `false`
     Never,
@@ -126,7 +126,7 @@ pub enum Comparison {
 
 /// Stencil mask operation.
 #[allow(missing_doc)]
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub enum StencilOp {
     /// Keep the current value in the stencil buffer (no change).
     OpKeep,
@@ -147,7 +147,7 @@ pub enum StencilOp {
 }
 
 /// Complete stencil state for a given side of a face.
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub struct StencilSide {
     /// Comparison function to use to determine if the stencil test passes.
     pub fun: Comparison,
@@ -182,14 +182,14 @@ impl Default for StencilSide {
 
 /// Complete stencil state, specifying how to handle the front and back side of a face.
 #[allow(missing_doc)]
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub struct Stencil {
     pub front: StencilSide,
     pub back: StencilSide,
 }
 
 /// Depth test state.
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub struct Depth {
     /// Comparison function to use.
     pub fun: Comparison,
@@ -207,7 +207,7 @@ impl Default for Depth {
 }
 
 #[allow(missing_doc)]
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub enum Equation {
     FuncAdd,
     FuncSub,
@@ -217,14 +217,14 @@ pub enum Equation {
 }
 
 #[allow(missing_doc)]
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub enum InverseFlag {
     Normal,
     Inverse,
 }
 
 #[allow(missing_doc)]
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub enum BlendValue {
     Zero,
     SourceColor,
@@ -237,11 +237,11 @@ pub enum BlendValue {
 }
 
 #[allow(missing_doc)]
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub struct Factor(pub InverseFlag, pub BlendValue);
 
 #[allow(missing_doc)]
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub struct BlendChannel {
     pub equation: Equation,
     pub source: Factor,
