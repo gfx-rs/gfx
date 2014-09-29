@@ -43,7 +43,7 @@ impl DataBuffer {
 
     /// Clear all the data but retain the allocated storage.
     pub fn clear(&mut self) {
-        self.buf.clear();
+        unsafe { self.buf.set_len(0); }
     }
 
     /// Copy a given structure into the buffer, return the offset and the size.
