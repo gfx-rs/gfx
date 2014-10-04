@@ -29,7 +29,6 @@ enum ParamType {
 #[deriving(Show)]
 enum ParamError {
     ErrorDeprecatedTexture,
-    ErrorUnknown,
 }
 
 /// Classify variable types (`i32`, `TextureParam`, etc) into the `ParamType`
@@ -146,8 +145,8 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 quote_stmt!(cx, $out.blocks.reserve($max_num);),
                 quote_stmt!(cx, $out.textures.reserve($max_num);),
             ];
-            calls.push_all_move(definition.fields.iter().zip(fields.iter())
-                                .map(|(def, f)| {
+            calls.extend(definition.fields.iter().zip(fields.iter())
+                                   .map(|(def, f)| {
                 let value_id = &f.self_;
                 let var_id = cx.expr_field_access(
                     span,
@@ -188,7 +187,7 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                         cx.stmt_expr(cx.expr_uint(span, 0))
                     },
                 }
-            }).collect());
+            }));
             let view = cx.view_use_simple(
                 span,
                 ast::Inherited,
@@ -220,10 +219,6 @@ fn node_to_var_type(cx: &mut ext::base::ExtCtxt,
         Ok(ParamTexture) => "VarTexture",
         Err(ErrorDeprecatedTexture) => {
             cx.span_err(span, "Use gfx::shade::TextureParam for texture vars instead of gfx::shade::TextureHandle");
-            ""
-        },
-        Err(ErrorUnknown) => {
-            cx.span_err(span, format!("Unknown node: {}", node).as_slice());
             ""
         },
     };
