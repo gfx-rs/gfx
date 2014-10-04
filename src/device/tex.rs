@@ -92,7 +92,7 @@ pub enum AaMode {
     Eqaa(NumSamples, NumFragments),
 }
 
-/// Describes the component layout of each texel.
+/// Describes the color components of each texel.
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 #[repr(u8)]
 pub enum Components {
@@ -131,6 +131,20 @@ pub enum Format {
     /// 24 bits for depth, 8 for stencil
     DEPTH24STENCIL8,
     // TODO: sRGB, compression
+}
+
+impl Format {
+    /// Extract the components format
+    pub fn get_components(&self) -> Option<Components> {
+        Some(match *self {
+            Float(c, _) => c,
+            Integer(c, _, _) => c,
+            Unsigned(c, _, _) => c,
+            R3G3B2 | R11FG11FB10F | RGB9E5 => RGB,
+            RGB5A1 | RGB10A2 | RGB10A2UI => RGBA,
+            DEPTH24STENCIL8 => return None,
+        })
+    }
 }
 
 /// A commonly used RGBA8 format
