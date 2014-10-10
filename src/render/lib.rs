@@ -56,7 +56,7 @@ pub enum ProgramError {
     ErrorLink(()),
 }
 
-static TRACKED_ATTRIBUTES: uint = 8;
+const TRACKED_ATTRIBUTES: uint = 8;
 type CachedAttribute = (device::RawBufferHandle, attrib::Format);
 
 /// The internal state of the renderer. This is used as a cache to eliminate
