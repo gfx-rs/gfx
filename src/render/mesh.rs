@@ -153,9 +153,9 @@ pub enum LinkError {
     ErrorShaderInput(uint),
 }
 
-static BITS_PER_ATTRIBUTE: uint = 4;
-static MAX_SHADER_INPUTS: uint = 64 / BITS_PER_ATTRIBUTE;
-static MESH_ATTRIBUTE_MASK: uint = (1u << BITS_PER_ATTRIBUTE) - 1;
+const BITS_PER_ATTRIBUTE: uint = 4;
+const MAX_SHADER_INPUTS: uint = 64 / BITS_PER_ATTRIBUTE;
+const MESH_ATTRIBUTE_MASK: uint = (1u << BITS_PER_ATTRIBUTE) - 1;
 
 /// An iterator over mesh attributes.
 pub struct AttributeIndices {

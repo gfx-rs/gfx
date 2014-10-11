@@ -44,13 +44,13 @@ pub type ColorValue = [f32, ..4];
 bitflags!(
     #[allow(missing_doc)]
     flags Mask: u32 {  //u8 is preferred, but doesn't seem to work well
-        static Color     = 0x01,
-        static Color0    = 0x01,
-        static Color1    = 0x02,
-        static Color2    = 0x04,
-        static Color3    = 0x08,
-        static Depth     = 0x40,
-        static Stencil   = 0x80
+        const Color     = 0x01,
+        const Color0    = 0x01,
+        const Color1    = 0x02,
+        const Color2    = 0x04,
+        const Color3    = 0x08,
+        const Depth     = 0x40,
+        const Stencil   = 0x80
     }
 )
 
