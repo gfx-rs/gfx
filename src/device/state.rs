@@ -304,21 +304,21 @@ impl fmt::Show for Blend {
 bitflags!(
     #[allow(missing_doc)]
     flags ColorMask: u32 {  //u8 is preferred, but doesn't seem to work well
-        const Red     = 0x1,
-        const Green   = 0x2,
-        const Blue    = 0x4,
-        const Alpha   = 0x8,
-        const MaskAll = 0xF
+        const RED     = 0x1,
+        const GREEN   = 0x2,
+        const BLUE    = 0x4,
+        const ALPHA   = 0x8,
+        const MASK_ALL = 0xF
     }
 )
 
 impl fmt::Show for ColorMask {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let values = [
-            (Red,   "Red"  ),
-            (Green, "Green"),
-            (Blue,  "Blue" ),
-            (Alpha, "Alpha"),
+            (RED,   "Red"  ),
+            (GREEN, "Green"),
+            (BLUE,  "Blue" ),
+            (ALPHA, "Alpha"),
         ];
 
         try!(write!(f, "ColorMask("));

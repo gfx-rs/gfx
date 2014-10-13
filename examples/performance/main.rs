@@ -153,7 +153,7 @@ fn gfx_main(glfw: glfw::Glfw,
         }
 
         let start = precise_time_s() * 1000.;
-        graphics.clear(clear_data, gfx::Color | gfx::Depth, &frame);
+        graphics.clear(clear_data, gfx::COLOR | gfx::DEPTH, &frame);
 
         for x in range(-dimension, dimension) {
             for y in range(-dimension, dimension) {

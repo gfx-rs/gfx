@@ -268,8 +268,6 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                         span: f.span,
                     }).collect(),
                 ctor_id: None,
-                super_struct: None,
-                is_virtual: false,
             })
         },
         _ => {

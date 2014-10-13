@@ -140,7 +140,7 @@ fn main() {
             }
         }
 
-        graphics.clear(clear_data, gfx::Color, &frame);
+        graphics.clear(clear_data, gfx::COLOR, &frame);
         graphics.draw(&batch, &(), &frame);
         graphics.end_frame();
 

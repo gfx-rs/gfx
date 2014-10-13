@@ -204,15 +204,15 @@ impl<C: CommandBuffer> Renderer<C> {
     pub fn blit(&mut self, source: &target::Frame, source_rect: Rect,
                 destination: &target::Frame, dest_rect: Rect, mask: Mask) {
         // verify as much as possible here
-        if mask.intersects(device::target::Color) {
+        if mask.intersects(device::target::COLOR) {
             debug_assert!(source.is_default() || !source.colors.is_empty());
             debug_assert!(destination.is_default() || !destination.colors.is_empty());
         }
-        if mask.intersects(device::target::Depth) {
+        if mask.intersects(device::target::DEPTH) {
             debug_assert!(source.is_default() || source.depth.is_some());
             debug_assert!(destination.is_default() || destination.depth.is_some());
         }
-        if mask.intersects(device::target::Stencil) {
+        if mask.intersects(device::target::STENCIL) {
             debug_assert!(source.is_default() || source.stencil.is_some());
             debug_assert!(destination.is_default() || destination.stencil.is_some());
         }

@@ -67,7 +67,7 @@ impl DrawState {
             stencil: None,
             depth: None,
             blend: None,
-            color_mask: state::MaskAll,
+            color_mask: state::MASK_ALL,
         }
     }
 
