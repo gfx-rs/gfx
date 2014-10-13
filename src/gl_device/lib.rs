@@ -90,7 +90,7 @@ static RESET_CB: &'static [::Command] = &[
     ::SetScissor(None),
     ::SetDepthStencilState(None, None, ::state::CullNothing),
     ::SetBlendState(None),
-    ::SetColorMask(::state::MaskAll),
+    ::SetColorMask(::state::MASK_ALL),
 ];
 
 fn primitive_to_gl(prim_type: ::PrimitiveType) -> gl::types::GLenum {
@@ -214,18 +214,18 @@ impl GlDevice {
         match *cmd {
             ::Clear(ref data, mask) => {
                 let mut flags = 0;
-                if mask.intersects(::target::Color) {
+                if mask.intersects(::target::COLOR) {
                     flags |= gl::COLOR_BUFFER_BIT;
-                    state::bind_color_mask(&self.gl, ::state::MaskAll);
+                    state::bind_color_mask(&self.gl, ::state::MASK_ALL);
                     let [r, g, b, a] = data.color;
                     self.gl.ClearColor(r, g, b, a);
                 }
-                if mask.intersects(::target::Depth) {
+                if mask.intersects(::target::DEPTH) {
                     flags |= gl::DEPTH_BUFFER_BIT;
                     self.gl.DepthMask(gl::TRUE);
                     self.gl.ClearDepth(data.depth as gl::types::GLclampd);
                 }
-                if mask.intersects(::target::Stencil) {
+                if mask.intersects(::target::STENCIL) {
                     flags |= gl::STENCIL_BUFFER_BIT;
                     self.gl.StencilMask(-1);
                     self.gl.ClearStencil(data.stencil as gl::types::GLint);
@@ -439,13 +439,13 @@ impl GlDevice {
                 type GLint = gl::types::GLint;
                 // build mask
                 let mut flags = 0;
-                if mask.intersects(::target::Color) {
+                if mask.intersects(::target::COLOR) {
                     flags |= gl::COLOR_BUFFER_BIT;
                 }
-                if mask.intersects(::target::Depth) {
+                if mask.intersects(::target::DEPTH) {
                     flags |= gl::DEPTH_BUFFER_BIT;
                 }
-                if mask.intersects(::target::Stencil) {
+                if mask.intersects(::target::STENCIL) {
                     flags |= gl::STENCIL_BUFFER_BIT;
                 }
                 // build filter

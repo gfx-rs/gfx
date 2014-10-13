@@ -238,7 +238,7 @@ fn main() {
         );
         data.view = view.mat.into_fixed();
 
-        graphics.clear(clear_data, gfx::Color | gfx::Depth, &frame);
+        graphics.clear(clear_data, gfx::COLOR | gfx::DEPTH, &frame);
         graphics.draw(&batch, &data, &frame);
         graphics.end_frame();
 

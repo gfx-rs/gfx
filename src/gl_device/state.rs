@@ -200,9 +200,9 @@ pub fn bind_blend(gl: &gl::Gl, blend: Option<s::Blend>) {
 
 pub fn bind_color_mask(gl: &gl::Gl, mask: s::ColorMask) {
     gl.ColorMask(
-        if (mask & s::Red  ).is_empty() {gl::FALSE} else {gl::TRUE},
-        if (mask & s::Green).is_empty() {gl::FALSE} else {gl::TRUE},
-        if (mask & s::Blue ).is_empty() {gl::FALSE} else {gl::TRUE},
-        if (mask & s::Alpha).is_empty() {gl::FALSE} else {gl::TRUE}
+        if (mask & s::RED  ).is_empty() {gl::FALSE} else {gl::TRUE},
+        if (mask & s::GREEN).is_empty() {gl::FALSE} else {gl::TRUE},
+        if (mask & s::BLUE ).is_empty() {gl::FALSE} else {gl::TRUE},
+        if (mask & s::ALPHA).is_empty() {gl::FALSE} else {gl::TRUE}
     );
 }

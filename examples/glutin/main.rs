@@ -47,7 +47,7 @@ fn main() {
             depth: 1.0,
             stencil: 0,
         },
-        gfx::Color,
+        gfx::COLOR,
         &gfx::Frame::new(w as u16, h as u16)
     );
 
