@@ -163,7 +163,7 @@ impl GlDevice {
         if cfg!(not(ndebug)) {
             let err = GlError::from_error_code(self.gl.GetError());
             if err != NoError {
-                fail!("Error after executing command {}: {}", cmd, err);
+                panic!("Error after executing command {}: {}", cmd, err);
             }
         }
     }
