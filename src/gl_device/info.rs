@@ -106,7 +106,7 @@ fn get_string(gl: &gl::Gl, name: gl::types::GLenum) -> &'static str {
         // GlGetString only returns static strings.
         unsafe { str::raw::c_str_to_static_slice(ptr) }
     } else {
-        fail!("Invalid GLenum passed to `get_string`: {:x}", name)
+        panic!("Invalid GLenum passed to `get_string`: {:x}", name)
     }
 }
 
