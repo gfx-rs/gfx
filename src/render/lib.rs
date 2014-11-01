@@ -18,7 +18,7 @@
 #![comment = "A platform independent renderer for gfx-rs."]
 #![license = "ASL2"]
 #![crate_type = "lib"]
-#![deny(missing_doc)]
+#![deny(missing_docs)]
 #![feature(macro_rules, phase)]
 
 #[phase(plugin, link)] extern crate log;

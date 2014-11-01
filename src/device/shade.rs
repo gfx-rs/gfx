@@ -14,7 +14,7 @@
 
 //! Shader handling.
 
-#![allow(missing_doc)]
+#![allow(missing_docs)]
 
 use std::fmt;
 
@@ -65,7 +65,7 @@ pub enum SamplerType {
 }
 
 /// Base type of this shader parameter.
-#[allow(missing_doc)]
+#[allow(missing_docs)]
 #[deriving(Clone, PartialEq, Show)]
 pub enum BaseType {
     BaseF32,
@@ -89,7 +89,7 @@ pub enum ContainerType {
 // Describing object data
 
 /// Which program stage this shader represents.
-#[allow(missing_doc)]
+#[allow(missing_docs)]
 #[deriving(Clone, PartialEq, Show)]
 pub enum Stage {
     Vertex,
@@ -104,7 +104,7 @@ pub type Location = uint;
 
 // unable to derive anything for fixed arrays
 /// A value that can be uploaded to the device as a uniform.
-#[allow(missing_doc)]
+#[allow(missing_docs)]
 pub enum UniformValue {
     ValueI32(i32),
     ValueF32(f32),
@@ -314,7 +314,7 @@ impl UniformVar {
 }
 
 /// Like `MaybeOwned` but for u8.
-#[allow(missing_doc)]
+#[allow(missing_docs)]
 #[deriving(Show, PartialEq, Clone)]
 pub enum Bytes {
     StaticBytes(&'static [u8]),
@@ -332,7 +332,7 @@ impl Bytes {
 }
 
 /// A type storing shader source for different graphics APIs and versions.
-#[allow(missing_doc)]
+#[allow(missing_docs)]
 #[deriving(Clone, PartialEq, Show)]
 pub struct ShaderSource {
     pub glsl_120: Option<Bytes>,
@@ -352,7 +352,7 @@ pub enum CreateShaderError {
 }
 
 /// Shader model supported by the device, corresponds to the HLSL shader models.
-#[allow(missing_doc)]
+#[allow(missing_docs)]
 #[deriving(Clone, PartialEq, PartialOrd, Show)]
 pub enum ShaderModel {
     ModelUnsupported,
