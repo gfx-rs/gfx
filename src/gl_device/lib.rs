@@ -15,7 +15,7 @@
 //! OpenGL implementation of a device, striving to support OpenGL 2.0 with at
 //! least VAOs, but using newer extensions when available.
 
-#![allow(missing_doc)]
+#![allow(missing_docs)]
 #![experimental]
 
 extern crate libc;

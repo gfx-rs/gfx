@@ -14,7 +14,7 @@
 
 //! Vertex attribute types.
 
-#![allow(missing_doc)]
+#![allow(missing_docs)]
 
 use shade;
 

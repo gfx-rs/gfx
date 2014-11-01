@@ -28,7 +28,7 @@ pub type Depth = f32;
 pub type Stencil = u8;
 
 /// A screen space rectangle
-#[allow(missing_doc)]
+#[allow(missing_docs)]
 #[deriving(Clone, PartialEq, Show)]
 pub struct Rect {
     pub x: u16,
@@ -42,7 +42,7 @@ pub type ColorValue = [f32, ..4];
 
 #[deriving(Clone, PartialEq)]
 bitflags!(
-    #[allow(missing_doc)]
+    #[allow(missing_docs)]
     flags Mask: u32 {  //u8 is preferred, but doesn't seem to work well
         const COLOR     = 0x01,
         const COLOR0    = 0x01,

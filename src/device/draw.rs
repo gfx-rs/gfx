@@ -76,7 +76,7 @@ impl DataBuffer {
     }
 }
 
-#[allow(missing_doc)]    //TODO
+#[allow(missing_docs)]    //TODO
 pub trait CommandBuffer {
     /// An empty constructor
     fn new() -> Self;

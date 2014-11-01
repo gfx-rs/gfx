@@ -19,7 +19,7 @@
 #![crate_type = "lib"]
 
 #![feature(phase)]
-#![deny(missing_doc)]
+#![deny(missing_docs)]
 
 //! Graphics device. Not meant for direct use.
 
@@ -163,7 +163,7 @@ pub fn with_slice<T: Copy, R>(slice: &[T], fun: |&[u8]| -> R) -> R {
 
 /// Features that the device supports.
 #[deriving(Show)]
-#[allow(missing_doc)] // pretty self-explanatory fields!
+#[allow(missing_docs)] // pretty self-explanatory fields!
 pub struct Capabilities {
     pub shader_model: shade::ShaderModel,
     pub max_draw_buffers : uint,
@@ -235,7 +235,7 @@ pub struct BufferInfo {
 /// While this is supposed to be an internal detail of a device,
 /// this particular representation may be used by different backends,
 /// such as OpenGL (prior to GLNG) and DirectX (prior to DX12)
-#[allow(missing_doc)]
+#[allow(missing_docs)]
 #[deriving(Show)]
 pub enum Command {
     BindProgram(back::Program),
@@ -272,7 +272,7 @@ pub enum Command {
 // CommandBuffer is really an associated type, so will look much better when
 // Rust supports this natively.
 /// An interface for performing draw calls using a specific graphics API
-#[allow(missing_doc)]
+#[allow(missing_docs)]
 pub trait Device<C: draw::CommandBuffer> {
     /// Returns the capabilities available to the specific API implementation
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;

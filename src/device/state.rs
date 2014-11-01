@@ -32,13 +32,13 @@ pub enum WindingOrder {
 
 /// Width of a line.
 pub type LineWidth = f32;
-#[allow(missing_doc)]
+#[allow(missing_docs)]
 pub type OffsetFactor = f32;
-#[allow(missing_doc)]
+#[allow(missing_docs)]
 pub type OffsetUnits = u32;
 
 /// How to offset vertices in screen space, if at all.
-#[allow(missing_doc)]
+#[allow(missing_docs)]
 #[deriving(Clone, PartialEq, Show)]
 pub enum OffsetType {
     NoOffset,
@@ -46,7 +46,7 @@ pub enum OffsetType {
 }
 
 /// Which face, if any, to cull.
-#[allow(missing_doc)]
+#[allow(missing_docs)]
 #[deriving(Clone, PartialEq, Show)]
 pub enum CullMode {
     CullNothing,
@@ -125,7 +125,7 @@ pub enum Comparison {
 }
 
 /// Stencil mask operation.
-#[allow(missing_doc)]
+#[allow(missing_docs)]
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub enum StencilOp {
     /// Keep the current value in the stencil buffer (no change).
@@ -181,7 +181,7 @@ impl Default for StencilSide {
 }
 
 /// Complete stencil state, specifying how to handle the front and back side of a face.
-#[allow(missing_doc)]
+#[allow(missing_docs)]
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub struct Stencil {
     pub front: StencilSide,
@@ -206,7 +206,7 @@ impl Default for Depth {
     }
 }
 
-#[allow(missing_doc)]
+#[allow(missing_docs)]
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub enum Equation {
     FuncAdd,
@@ -216,14 +216,14 @@ pub enum Equation {
     FuncMax,
 }
 
-#[allow(missing_doc)]
+#[allow(missing_docs)]
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub enum InverseFlag {
     Normal,
     Inverse,
 }
 
-#[allow(missing_doc)]
+#[allow(missing_docs)]
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub enum BlendValue {
     Zero,
@@ -236,11 +236,11 @@ pub enum BlendValue {
     ConstAlpha,
 }
 
-#[allow(missing_doc)]
+#[allow(missing_docs)]
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub struct Factor(pub InverseFlag, pub BlendValue);
 
-#[allow(missing_doc)]
+#[allow(missing_docs)]
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub struct BlendChannel {
     pub equation: Equation,
@@ -258,7 +258,7 @@ impl Default for BlendChannel {
     }
 }
 
-#[allow(missing_doc)]
+#[allow(missing_docs)]
 pub struct Blend {
     pub color: BlendChannel,
     pub alpha: BlendChannel,
@@ -302,7 +302,7 @@ impl fmt::Show for Blend {
 
 #[deriving(Clone, PartialEq)]
 bitflags!(
-    #[allow(missing_doc)]
+    #[allow(missing_docs)]
     flags ColorMask: u32 {  //u8 is preferred, but doesn't seem to work well
         const RED     = 0x1,
         const GREEN   = 0x2,

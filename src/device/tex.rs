@@ -151,7 +151,7 @@ impl Format {
 pub static RGBA8: Format = Unsigned(RGBA, 8, ::attrib::IntNormalized);
 
 /// Describes the storage of a surface
-#[allow(missing_doc)]
+#[allow(missing_docs)]
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub struct SurfaceInfo {
     pub width: u16,
@@ -233,7 +233,7 @@ impl TextureKind {
 ///
 /// Textures larger than 1024px in any dimension are unlikely to be supported
 /// by mobile platforms.
-#[allow(missing_doc)]
+#[allow(missing_docs)]
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub struct TextureInfo {
     pub width: u16,
@@ -249,7 +249,7 @@ pub struct TextureInfo {
 }
 
 /// Describes a subvolume of a texture, which image data can be uploaded into.
-#[allow(missing_doc)]
+#[allow(missing_docs)]
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub struct ImageInfo {
     pub xoffset: u16,
