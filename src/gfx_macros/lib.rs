@@ -144,12 +144,12 @@ impl Folder for ExternCrateHackFolder {
 
         if needs_fix {
             let mut p = p.clone();
-            p.segments.get_mut(0).identifier = self.path_root;
+            p.segments[0].identifier = self.path_root;
             p.global = false;
             p
         } else if needs_fix_self {
             let mut p = p.clone();
-            p.segments.get_mut(1).identifier = self.path_root;
+            p.segments[1].identifier = self.path_root;
             p.global = false;
             p
         } else {
