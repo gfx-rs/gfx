@@ -26,6 +26,8 @@ use log;
 use attrib;
 
 use Device;
+use {MapAccess, MapReadable, MapWritable, MapRW, ReadableMapping, WritableMapping, RWMapping,
+    BufferHandle};
 
 pub use self::draw::GlCommandBuffer;
 pub use self::info::{Info, PlatformName, Version};
@@ -35,6 +37,11 @@ mod shade;
 mod state;
 mod tex;
 mod info;
+
+pub struct RawMapping {
+    pub pointer: *mut libc::c_void,
+    target: gl::types::GLenum,
+}
 
 pub type Buffer         = gl::types::GLuint;
 pub type ArrayBuffer    = gl::types::GLuint;
@@ -637,5 +644,50 @@ impl Device<GlCommandBuffer> for GlDevice {
 
     fn generate_mipmap(&mut self, texture: &::TextureHandle) {
         tex::generate_mipmap(&self.gl, texture.get_info().kind, texture.get_name());
+    }
+
+    fn map_buffer_raw(&mut self, buf: BufferHandle<()>, access: MapAccess) -> RawMapping {
+        let ptr;
+        self.gl.BindBuffer(gl::ARRAY_BUFFER, buf.get_name());
+        ptr = self.gl.MapBuffer(gl::ARRAY_BUFFER, match access {
+            MapReadable => gl::READ_ONLY,
+            MapWritable => gl::WRITE_ONLY,
+            MapRW => gl::READ_WRITE
+        }) as *mut libc::c_void;
+        RawMapping {
+            pointer: ptr,
+            target: gl::ARRAY_BUFFER
+        }
+    }
+
+    fn unmap_buffer_raw(&mut self, map: RawMapping) {
+        self.gl.UnmapBuffer(map.target);
+    }
+
+    fn map_buffer_readable<T: Copy>(&mut self, buf: BufferHandle<T>) -> ReadableMapping<T, GlCommandBuffer, GlDevice> {
+        let map = self.map_buffer_raw(buf.cast(), MapReadable);
+        ReadableMapping {
+            raw: map,
+            len: buf.len(),
+            device: self
+        }
+    }
+
+    fn map_buffer_writable<T: Copy>(&mut self, buf: BufferHandle<T>) -> WritableMapping<T, GlCommandBuffer, GlDevice> {
+        let map = self.map_buffer_raw(buf.cast(), MapWritable);
+        WritableMapping {
+            raw: map,
+            len: buf.len(),
+            device: self
+        }
+    }
+
+    fn map_buffer_rw<T: Copy>(&mut self, buf: BufferHandle<T>) -> RWMapping<T, GlCommandBuffer, GlDevice> {
+        let map = self.map_buffer_raw(buf.cast(), MapRW);
+        RWMapping {
+            raw: map,
+            len: buf.len(),
+            device: self
+        }
     }
 }
