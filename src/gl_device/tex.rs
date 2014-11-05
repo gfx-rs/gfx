@@ -194,10 +194,10 @@ fn format_to_size(t: tex::Format) -> uint {
     }
 }
 
-fn set_mipmap_range(gl: &gl::Gl, target: GLenum, (base, max): (u8, u8)) {
+fn set_mipmap_range(gl: &gl::Gl, target: GLenum, (base, max): (u8, u8)) { unsafe {
     gl.TexParameteri(target, gl::TEXTURE_BASE_LEVEL, base as GLint);
     gl.TexParameteri(target, gl::TEXTURE_MAX_LEVEL, max as GLint);
-}
+}}
 
 /// Create a render surface.
 pub fn make_surface(gl: &gl::Gl, info: &tex::SurfaceInfo) ->
@@ -213,17 +213,19 @@ pub fn make_surface(gl: &gl::Gl, info: &tex::SurfaceInfo) ->
         Err(_) => return Err(tex::UnsupportedSurfaceFormat),
     };
 
-    gl.BindRenderbuffer(target, name);
+    unsafe {
+        gl.BindRenderbuffer(target, name);
+    }
     match info.aa_mode {
-        None => {
+        None => { unsafe {
             gl.RenderbufferStorage(
                 target,
                 fmt,
                 info.width as GLsizei,
                 info.height as GLsizei
             );
-        },
-        Some(tex::Msaa(samples)) => {
+        }},
+        Some(tex::Msaa(samples)) => { unsafe {
             gl.RenderbufferStorageMultisample(
                 target,
                 samples as GLsizei,
@@ -231,7 +233,7 @@ pub fn make_surface(gl: &gl::Gl, info: &tex::SurfaceInfo) ->
                 info.width as GLsizei,
                 info.height as GLsizei
             );
-        },
+        }},
         Some(_) => return Err(tex::UnsupportedSurfaceFormat),
     }
 
@@ -298,7 +300,7 @@ pub fn make_without_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
                 ::std::ptr::null()
             );
         },
-        tex::Texture2DMultiSample(tex::Msaa(samples)) => {
+        tex::Texture2DMultiSample(tex::Msaa(samples)) => { unsafe {
             gl.TexImage2DMultisample(
                 target,
                 samples as GLsizei,
@@ -307,7 +309,7 @@ pub fn make_without_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
                 info.height as GLsizei,
                 fixed_sample_locations
             );
-        },
+        }},
         tex::TextureCube => unimplemented!(),
         tex::Texture2DArray | tex::Texture3D => unsafe {
             gl.TexImage3D(
@@ -323,7 +325,7 @@ pub fn make_without_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
                 ::std::ptr::null()
             );
         },
-        tex::Texture2DMultiSampleArray(tex::Msaa(samples)) => {
+        tex::Texture2DMultiSampleArray(tex::Msaa(samples)) => { unsafe {
             gl.TexImage3DMultisample(
                 target,
                 samples as GLsizei,
@@ -333,7 +335,7 @@ pub fn make_without_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
                 info.depth as GLsizei,
                 fixed_sample_locations
             );
-        },
+        }},
         _ => return Err(tex::UnsupportedTextureSampling),
     }
 
@@ -377,15 +379,15 @@ pub fn make_with_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
     let fixed_sample_locations = gl::TRUE;
 
     match info.kind {
-        tex::Texture1D => {
+        tex::Texture1D => { unsafe {
             gl.TexStorage1D(
                 target,
                 min(info.levels, mip_level1(info.width)),
                 fmt,
                 info.width as GLsizei
             );
-        },
-        tex::Texture1DArray => {
+        }},
+        tex::Texture1DArray => { unsafe {
             gl.TexStorage2D(
                 target,
                 min(info.levels, mip_level1(info.width)),
@@ -393,8 +395,8 @@ pub fn make_with_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
                 info.width as GLsizei,
                 info.height as GLsizei
             );
-        },
-        tex::Texture2D => {
+        }},
+        tex::Texture2D => { unsafe {
             gl.TexStorage2D(
                 target,
                 min(info.levels, mip_level2(info.width, info.height)),
@@ -402,8 +404,8 @@ pub fn make_with_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
                 info.width as GLsizei,
                 info.height as GLsizei
             );
-        },
-        tex::Texture2DArray => {
+        }},
+        tex::Texture2DArray => { unsafe {
             gl.TexStorage3D(
                 target,
                 min(info.levels, mip_level2(info.width, info.height)),
@@ -412,8 +414,8 @@ pub fn make_with_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
                 info.height as GLsizei,
                 info.depth as GLsizei
             );
-        },
-        tex::Texture2DMultiSample(tex::Msaa(samples)) => {
+        }},
+        tex::Texture2DMultiSample(tex::Msaa(samples)) => { unsafe {
             gl.TexStorage2DMultisample(
                 target,
                 samples as GLsizei,
@@ -422,8 +424,8 @@ pub fn make_with_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
                 info.height as GLsizei,
                 fixed_sample_locations
             );
-        },
-        tex::Texture2DMultiSampleArray(tex::Msaa(samples)) => {
+        }},
+        tex::Texture2DMultiSampleArray(tex::Msaa(samples)) => { unsafe {
             gl.TexStorage3DMultisample(
                 target,
                 samples as GLsizei,
@@ -433,9 +435,9 @@ pub fn make_with_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
                 info.depth as GLsizei,
                 fixed_sample_locations
             );
-        },
+        }},
         tex::TextureCube => unimplemented!(),
-        tex::Texture3D => {
+        tex::Texture3D => { unsafe {
             gl.TexStorage3D(
                 target,
                 min(info.levels, mip_level3(info.width, info.height, info.depth)),
@@ -444,7 +446,7 @@ pub fn make_with_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
                 info.height as GLsizei,
                 info.depth as GLsizei
             );
-        },
+        }},
         _ => return Err(tex::UnsupportedTextureSampling),
     }
 
@@ -457,11 +459,11 @@ pub fn make_with_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
 pub fn bind_texture(gl: &gl::Gl, slot: GLenum, kind: tex::TextureKind,
                     name: Texture) -> Result<BindAnchor, tex::TextureError> {
     match kind_to_gl(kind) {
-        Ok(target) => {
+        Ok(target) => { unsafe {
             gl.ActiveTexture(slot);
             gl.BindTexture(target, name);
             Ok(BindAnchor(target))
-        },
+        }},
         Err(_) => Err(tex::UnsupportedTextureSampling),
     }
 
@@ -469,7 +471,7 @@ pub fn bind_texture(gl: &gl::Gl, slot: GLenum, kind: tex::TextureKind,
 
 /// Bind a sampler using a given binding anchor.
 /// Used for GL compatibility profile only. The core profile has sampler objects
-pub fn bind_sampler(gl: &gl::Gl, anchor: BindAnchor, info: &tex::SamplerInfo) {
+pub fn bind_sampler(gl: &gl::Gl, anchor: BindAnchor, info: &tex::SamplerInfo) { unsafe {
     let BindAnchor(target) = anchor;
     let (min, mag) = filter_to_gl(info.filtering);
 
@@ -500,7 +502,7 @@ pub fn bind_sampler(gl: &gl::Gl, anchor: BindAnchor, info: &tex::SamplerInfo) {
             gl.TexParameteri(target, gl::TEXTURE_COMPARE_FUNC, state::map_comparison(cmp) as GLint);
         }
     }
-}
+}}
 
 pub fn update_texture(gl: &gl::Gl, kind: tex::TextureKind, name: Texture,
                       img: &tex::ImageInfo, address: *const u8, size: uint)
@@ -522,7 +524,7 @@ pub fn update_texture(gl: &gl::Gl, kind: tex::TextureKind, name: Texture,
         Err(_) => return Err(tex::UnsupportedTextureSampling),
     };
 
-    gl.BindTexture(target, name);
+    unsafe { gl.BindTexture(target, name) };
 
     unsafe {
         match kind {
@@ -583,7 +585,7 @@ fn make_texture(gl: &gl::Gl, info: &tex::TextureInfo)
     }
 
     kind_to_gl(info.kind).map(|k| {
-        gl.BindTexture(k, name);
+        unsafe { gl.BindTexture(k, name) };
         (name, k)
     })
 }
@@ -606,11 +608,9 @@ fn filter_to_gl(f: tex::FilterMethod) -> (GLenum, GLenum) {
     }
 }
 
-pub fn make_sampler(gl: &gl::Gl, info: &tex::SamplerInfo) -> Sampler {
+pub fn make_sampler(gl: &gl::Gl, info: &tex::SamplerInfo) -> Sampler { unsafe {
     let mut name = 0 as Sampler;
-    unsafe {
-        gl.GenSamplers(1, &mut name);
-    }
+    gl.GenSamplers(1, &mut name);
 
     let (min, mag) = filter_to_gl(info.filtering);
 
@@ -643,12 +643,12 @@ pub fn make_sampler(gl: &gl::Gl, info: &tex::SamplerInfo) -> Sampler {
     }
 
     name
-}
+}}
 
-pub fn generate_mipmap(gl: &gl::Gl, kind: tex::TextureKind, name: Texture) {
+pub fn generate_mipmap(gl: &gl::Gl, kind: tex::TextureKind, name: Texture) { unsafe {
     //can't fail here, but we need to check for integer formats too
     debug_assert!(kind.get_aa_mode().is_none());
     let target = kind_to_gl(kind).unwrap();
     gl.BindTexture(target, name);
     gl.GenerateMipmap(target);
-}
+}}

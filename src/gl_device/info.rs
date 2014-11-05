@@ -100,7 +100,7 @@ impl fmt::Show for Version {
 /// `glGetString`. Fails if it `GLenum` cannot be handled by the
 /// implementation's `gl.GetString` function.
 fn get_string(gl: &gl::Gl, name: gl::types::GLenum) -> &'static str {
-    let ptr = gl.GetString(name) as *const i8;
+    let ptr = unsafe { gl.GetString(name) } as *const i8;
     if !ptr.is_null() {
         // This should be safe to mark as statically allocated because
         // GlGetString only returns static strings.
