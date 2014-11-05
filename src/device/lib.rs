@@ -406,10 +406,21 @@ pub trait Device<C: draw::CommandBuffer> {
     /// Update the information stored in a texture
     fn update_texture_raw(&mut self, tex: &TextureHandle, img: &tex::ImageInfo,
                           data: &[u8]) -> Result<(), tex::TextureError>;
+    fn update_texture_compressed_raw(&mut self, tex: &TextureHandle, img: &tex::ImageInfo,
+                                 data: &[u8]) -> Result<(), tex::TextureError>;
     fn update_texture<T: Copy>(&mut self, tex: &TextureHandle,
                       img: &tex::ImageInfo, data: &[T])
                       -> Result<(), tex::TextureError> {
-        with_slice(data, |s| self.update_texture_raw(tex, img, s))
+        match tex.get_info().format {
+            tex::Compressed(_) =>
+                with_slice(data, |s| self.update_texture_compressed_raw(tex, img, s)),
+            _ => with_slice(data, |s| self.update_texture_raw(tex, img, s))
+        }
+    }
+    fn update_texture_compressed<T: Copy>(&mut self, tex: &TextureHandle,
+                      img: &tex::ImageInfo, data: &[T])
+                      -> Result<(), tex::TextureError> {
+        with_slice(data, |s| self.update_texture_compressed_raw(tex, img, s))
     }
     fn generate_mipmap(&mut self, tex: &TextureHandle);
 }

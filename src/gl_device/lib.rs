@@ -646,6 +646,11 @@ impl Device<GlCommandBuffer> for GlDevice {
                             texture.get_name(), img, data.as_ptr(), data.len())
     }
 
+    fn update_texture_compressed_raw(&mut self, texture: &::TextureHandle, img: &::tex::ImageInfo, data: &[u8])
+            -> Result<(), ::tex::TextureError> {
+        tex::update_texture_compressed(&self.gl, texture.get_info().kind,
+            texture.get_name(), img, data.as_ptr(), data.len())
+    }
     fn generate_mipmap(&mut self, texture: &::TextureHandle) {
         tex::generate_mipmap(&self.gl, texture.get_info().kind, texture.get_name());
     }

@@ -131,6 +131,9 @@ fn format_to_gl(t: tex::Format) -> Result<GLenum, ()> {
 
         tex::Unsigned(_, _, _) => unimplemented!(),
         // special
+        tex::Compressed(tex::ETC2_RGB) => gl::COMPRESSED_RGB8_ETC2,
+        tex::Compressed(tex::ETC2_SRGB) => gl::COMPRESSED_SRGB8_ETC2,
+        tex::Compressed(tex::ETC2_EAC_RGBA8) => gl::COMPRESSED_RGBA8_ETC2_EAC,
         tex::R3G3B2       => gl::R3_G3_B2,
         tex::RGB5A1       => gl::RGB5_A1,
         tex::RGB10A2      => gl::RGB10_A2,
@@ -164,6 +167,8 @@ fn format_to_glpixel(t: tex::Format) -> GLenum {
         tex::Float(c, _)       => components_to_glpixel(c),
         tex::Integer(c, _, _)  => components_to_glpixel(c),
         tex::Unsigned(c, _, _) => components_to_glpixel(c),
+        // this is wrong, but it's not used anyway
+        tex::Compressed(_)     => panic!("Tried to get components of a compressed texel!"),
         tex::R3G3B2       => gl::RGB,
         tex::RGB5A1       => gl::RGBA,
         tex::RGB10A2      => gl::RGBA,
@@ -195,6 +200,7 @@ fn format_to_size(t: tex::Format) -> uint {
         tex::Float(c, attrib::F64) => 8 * components_to_count(c),
         tex::Integer(c, bits, _)  => bits as uint * components_to_count(c) >> 3,
         tex::Unsigned(c, bits, _) => bits as uint * components_to_count(c) >> 3,
+        tex::Compressed(_) => panic!("Tried to get size of a compressed texel!"),
         tex::R3G3B2       => 1,
         tex::RGB5A1       => 2,
         tex::RGB10A2      => 4,
@@ -255,6 +261,11 @@ pub fn make_surface(gl: &gl::Gl, info: &tex::SurfaceInfo) ->
 pub fn make_without_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
                             Result<Texture, tex::TextureError> {
     let (name, target) = make_texture(gl, info);
+
+    if let tex::Compressed(_) = info.format {
+        // I'm slightly lazy... but every opengl driver should support texture_storage.
+        return Err(tex::UnsupportedTextureFormat);
+    }
 
     let fmt = match format_to_gl(info.format) {
         Ok(f) => f as GLint,
@@ -604,6 +615,81 @@ pub fn update_texture(gl: &gl::Gl, kind: tex::TextureKind, name: Texture,
     Ok(())
 }
 
+pub fn update_texture_compressed(gl: &gl::Gl, kind: tex::TextureKind, name: Texture,
+                      img: &tex::ImageInfo, address: *const u8, size: uint)
+                      -> Result<(), tex::TextureError> {
+    let data = address as *const GLvoid;
+    let typ = match format_to_gltype(img.format) {
+        Ok(t) if if let tex::Compressed(_) = img.format { true } else { false } => t,
+        _ => return Err(tex::UnsupportedTextureFormat),
+    };
+    let target = bind_kind_to_gl(kind);
+
+    unsafe { gl.BindTexture(target, name) };
+
+    unsafe {
+        match kind {
+            tex::Texture1D => {
+                gl.CompressedTexSubImage1D(
+                    target,
+                    img.mipmap as GLint,
+                    img.xoffset as GLint,
+                    img.width as GLint,
+                    typ,
+                    size as GLint,
+                    data
+                );
+            },
+            tex::Texture1DArray | tex::Texture2D => {
+                gl.CompressedTexSubImage2D(
+                    target,
+                    img.mipmap as GLint,
+                    img.xoffset as GLint,
+                    img.yoffset as GLint,
+                    img.width as GLint,
+                    img.height as GLint,
+                    typ,
+                    size as GLint,
+                    data
+                );
+            },
+            tex::TextureCube(_) => {
+                // get specific face target
+                let target = create_kind_to_gl(kind);
+                gl.CompressedTexSubImage2D(
+                    target,
+                    img.mipmap as GLint,
+                    img.xoffset as GLint,
+                    img.yoffset as GLint,
+                    img.width as GLint,
+                    img.height as GLint,
+                    typ,
+                    size as GLint,
+                    data
+                );
+            },
+            tex::Texture2DArray | tex::Texture3D => {
+                gl.CompressedTexSubImage3D(
+                    target,
+                    img.mipmap as GLint,
+                    img.xoffset as GLint,
+                    img.yoffset as GLint,
+                    img.zoffset as GLint,
+                    img.width as GLint,
+                    img.height as GLint,
+                    img.depth as GLint,
+                    typ,
+                    size as GLint,
+                    data
+                );
+            },
+            tex::Texture2DMultiSample(_) | tex::Texture2DMultiSampleArray(_) =>
+                return Err(tex::UnsupportedTextureSampling),
+        }
+    }
+
+    Ok(())
+}
 /// Common texture creation routine, just creates and binds.
 fn make_texture(gl: &gl::Gl, info: &tex::TextureInfo) -> (Texture, GLuint) {
     let mut name = 0 as GLuint;

@@ -115,6 +115,8 @@ pub enum Format {
     Integer(Components, Bits, ::attrib::IntSubType),
     /// Unsigned integer.
     Unsigned(Components, Bits, ::attrib::IntSubType),
+    /// Compressed data.
+    Compressed(Compression),
     /// Normalized integer, with 3 bits for R and G, but only 2 for B.
     R3G3B2,
     /// 5 bits each for RGB, 1 for Alpha.
@@ -130,7 +132,19 @@ pub enum Format {
     RGB9E5,
     /// 24 bits for depth, 8 for stencil
     DEPTH24STENCIL8,
-    // TODO: sRGB, compression
+    // TODO: sRGB
+}
+
+/// Codec used to compress image data.
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+#[allow(non_camel_case_types)]
+pub enum Compression {
+    /// Use the EXT2 algorithm on 3 components.
+    ETC2_RGB,
+    /// Use the EXT2 algorithm on 4 components (RGBA) in the sRGB color space.
+    ETC2_SRGB,
+    /// Use the EXT2 EAC algorithm on 4 components.
+    ETC2_EAC_RGBA8,
 }
 
 impl Format {
@@ -140,6 +154,7 @@ impl Format {
             Float(c, _) => c,
             Integer(c, _, _) => c,
             Unsigned(c, _, _) => c,
+            Compressed(_) => panic!("Tried to get components of compressed texel!"),
             R3G3B2 | R11FG11FB10F | RGB9E5 => RGB,
             RGB5A1 | RGB10A2 | RGB10A2UI => RGBA,
             DEPTH24STENCIL8 => return None,
