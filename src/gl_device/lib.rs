@@ -347,8 +347,7 @@ impl GlDevice {
                     gl::TEXTURE0 + slot as gl::types::GLenum,
                     kind, texture);
                 match (anchor, kind.get_aa_mode(), sampler) {
-                    (Err(e), _, _) => error!("Invalid texture bind: {}", e),
-                    (Ok(anchor), None, Some(::Handle(sam, ref info))) => {
+                    (anchor, None, Some(::Handle(sam, ref info))) => {
                         if self.caps.sampler_objects_supported {
                             unsafe { self.gl.BindSampler(slot as gl::types::GLenum, sam) };
                         } else {
@@ -356,9 +355,9 @@ impl GlDevice {
                             tex::bind_sampler(&self.gl, anchor, info);
                         }
                     },
-                    (Ok(_), Some(_), Some(_)) =>
+                    (_, Some(_), Some(_)) =>
                         error!("Unable to bind a multi-sampled texture with a sampler"),
-                    (Ok(_), _, _) => (),
+                    (_, _, _) => (),
                 }
             },
             ::SetPrimitiveState(prim) => {

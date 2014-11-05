@@ -209,11 +209,24 @@ pub enum TextureKind {
     /// A array of multi-sampled 2D textures.
     Texture2DMultiSampleArray(AaMode),
     /// A set of 6 2D textures, one for each face of a cube.
-    // TODO: implement this, and document it better. cmr doesn't really understand them well enough
-    // to explain without rambling.
-    TextureCube,
+    ///
+    /// When creating a cube texture, the face is ignored, and storage for all 6 faces is created.
+    /// When updating, only the face specified is updated.
+    TextureCube(CubeFace),
     /// A volume texture, with each 2D layer arranged contiguously.
     Texture3D,
+}
+
+/// The face of a cube texture to do an operation on.
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+#[allow(missing_docs)]
+pub enum CubeFace {
+    PosZ,
+    NegZ,
+    PosX,
+    NegX,
+    PosY,
+    NegY
 }
 
 impl TextureKind {

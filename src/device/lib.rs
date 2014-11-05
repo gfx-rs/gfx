@@ -18,7 +18,7 @@
 #![license = "ASL2"]
 #![crate_type = "lib"]
 
-#![feature(phase, unsafe_destructor)]
+#![feature(phase, unsafe_destructor, if_let)]
 #![deny(missing_docs)]
 
 //! Graphics device. Not meant for direct use.
