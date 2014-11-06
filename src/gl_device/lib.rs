@@ -311,20 +311,32 @@ impl GlDevice {
                 unsafe { self.gl.BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer) };
             },
             ::BindFrameBuffer(access, frame_buffer) => {
+                if !self.caps.render_targets_supported {
+                    panic!("Tried to do something with an FBO without FBO support!")
+                }
                 let point = access_to_gl(access);
                 unsafe { self.gl.BindFramebuffer(point, frame_buffer) };
             },
             ::UnbindTarget(access, target) => {
+                if !self.caps.render_targets_supported {
+                    panic!("Tried to do something with an FBO without FBO support!")
+                }
                 let point = access_to_gl(access);
                 let att = target_to_gl(target);
                 unsafe { self.gl.FramebufferRenderbuffer(point, att, gl::RENDERBUFFER, 0) };
             },
             ::BindTargetSurface(access, target, name) => {
+                if !self.caps.render_targets_supported {
+                    panic!("Tried to do something with an FBO without FBO support!")
+                }
                 let point = access_to_gl(access);
                 let att = target_to_gl(target);
                 unsafe { self.gl.FramebufferRenderbuffer(point, att, gl::RENDERBUFFER, name) };
             },
             ::BindTargetTexture(access, target, name, level, layer) => {
+                if !self.caps.render_targets_supported {
+                    panic!("Tried to do something with an FBO without FBO support!")
+                }
                 let point = access_to_gl(access);
                 let att = target_to_gl(target);
                 match layer {
@@ -559,6 +571,10 @@ impl Device<GlCommandBuffer> for GlDevice {
     }
 
     fn create_frame_buffer(&mut self) -> ::FrameBufferHandle {
+        if !self.caps.render_targets_supported {
+            panic!("No framebuffer objects, can't make a new one!");
+        }
+
         let mut name = 0 as FrameBuffer;
         unsafe {
             self.gl.GenFramebuffers(1, &mut name);

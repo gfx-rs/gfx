@@ -255,6 +255,7 @@ pub struct Capabilities {
     pub immutable_storage_supported: bool,
     pub instance_call_supported: bool,
     pub instance_rate_supported: bool,
+    pub render_targets_supported: bool,
 }
 
 /// Describes what geometric primitives are created from vertex data.
