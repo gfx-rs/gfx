@@ -21,7 +21,7 @@ use secret_lib::gfx::ShaderSource;
 
 mod secret_lib;
 
-static _SRC1: ShaderSource = shaders! {
+static _SRC1: ShaderSource<'static> = shaders! {
 GLSL_120: b"
     #version 120
     attribute vec3 a_Pos;
@@ -46,7 +46,7 @@ GLSL_150: b"
 "
 };
 
-static _SRC2: ShaderSource = shaders! {
+static _SRC2: ShaderSource<'static> = shaders! {
 GLSL_120: b"
     #version 120
     attribute vec3 a_Pos;
@@ -60,7 +60,7 @@ GLSL_120: b"
 "
 };
 
-static _SRC3: ShaderSource = shaders! {
+static _SRC3: ShaderSource<'static> = shaders! {
 GLSL_150: b"
     #version 150 core
     in vec3 a_Pos;
@@ -74,5 +74,5 @@ GLSL_150: b"
 "
 };
 
-static _SRC4: ShaderSource = shaders! {
+static _SRC4: ShaderSource<'static> = shaders! {
 };

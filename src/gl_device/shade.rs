@@ -25,10 +25,10 @@ pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: s::ShaderSource, lang: 
     };
     let name = unsafe { gl.CreateShader(target) };
     let data = match data {
-        s::ShaderSource { glsl_150: Some(ref s), .. } if lang >= Version::new(1, 50, None, "") => s.as_slice(),
-        s::ShaderSource { glsl_140: Some(ref s), .. } if lang >= Version::new(1, 40, None, "") => s.as_slice(),
-        s::ShaderSource { glsl_130: Some(ref s), .. } if lang >= Version::new(1, 30, None, "") => s.as_slice(),
-        s::ShaderSource { glsl_120: Some(ref s), .. } if lang >= Version::new(1, 20, None, "") => s.as_slice(),
+        s::ShaderSource { glsl_150: Some(s), .. } if lang >= Version::new(1, 50, None, "") => s,
+        s::ShaderSource { glsl_140: Some(s), .. } if lang >= Version::new(1, 40, None, "") => s,
+        s::ShaderSource { glsl_130: Some(s), .. } if lang >= Version::new(1, 30, None, "") => s,
+        s::ShaderSource { glsl_120: Some(s), .. } if lang >= Version::new(1, 20, None, "") => s,
         _ => return (Err(s::NoSupportedShaderProvided),
                      Some("[gfx-rs] No supported GLSL shader provided!".to_string())),
     };
