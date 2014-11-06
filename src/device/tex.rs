@@ -160,6 +160,14 @@ impl Format {
             DEPTH24STENCIL8 => return None,
         })
     }
+
+    /// Check if it's a compressed format
+    pub fn is_compressed(&self) -> bool {
+        match *self {
+            Compressed(_) => true,
+            _ => false
+        }
+    }
 }
 
 /// A commonly used RGBA8 format

@@ -206,6 +206,7 @@ static FS_SRC: &'static str = "
 
 
 fn compile_shader(gl: &Gl, src: &str, ty: GLenum) -> GLuint { unsafe {
+    use std::num::Saturating;
     let shader = gl.CreateShader(ty);
     // Attempt to compile the shader
     src.with_c_str(|ptr| gl.ShaderSource(shader, 1, &ptr, ptr::null()));
@@ -219,7 +220,7 @@ fn compile_shader(gl: &Gl, src: &str, ty: GLenum) -> GLuint { unsafe {
     if status != (gl::TRUE as GLint) {
         let mut len = 0;
         gl.GetShaderiv(shader, gl::INFO_LOG_LENGTH, &mut len);
-        let mut buf = Vec::from_elem(len as uint - 1, 0u8);     // subtract 1 to skip the trailing null character
+        let mut buf = Vec::from_elem((len as uint).saturating_sub(1), 0u8);     // subtract 1 to skip the trailing null character
         gl.GetShaderInfoLog(shader, len, ptr::null_mut(), buf.as_mut_ptr() as *mut GLchar);
         panic!("{}", str::from_utf8(buf.as_slice()).expect("ShaderInfoLog not valid utf8"));
     }

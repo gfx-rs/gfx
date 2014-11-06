@@ -262,8 +262,10 @@ pub fn make_without_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
                             Result<Texture, tex::TextureError> {
     let (name, target) = make_texture(gl, info);
 
-    if let tex::Compressed(_) = info.format {
-        // I'm slightly lazy... but every opengl driver should support texture_storage.
+    if info.format.is_compressed() {
+        // TODO: will need to do something annoying to work around lack of texture_storage. In
+        // particular, you can't create texture storage without knowing the size, which you
+        // generally don't know without the image data... bleh!
         return Err(tex::UnsupportedTextureFormat);
     }
 
@@ -430,7 +432,10 @@ pub fn make_with_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
         tex::Texture2D | tex::TextureCube(_) => { unsafe {
             gl.TexStorage2D(
                 // to create storage for a texture cube, we don't do individual faces
-                if let tex::TextureCube(_) = info.kind { gl::TEXTURE_CUBE_MAP } else { target },
+                match info.kind {
+                    tex::TextureCube(_) => gl::TEXTURE_CUBE_MAP,
+                    _ => target
+                },
                 min(info.levels, mip_level2(info.width, info.height)),
                 fmt,
                 info.width as GLsizei,
@@ -620,7 +625,7 @@ pub fn update_texture_compressed(gl: &gl::Gl, kind: tex::TextureKind, name: Text
                       -> Result<(), tex::TextureError> {
     let data = address as *const GLvoid;
     let typ = match format_to_gltype(img.format) {
-        Ok(t) if if let tex::Compressed(_) = img.format { true } else { false } => t,
+        Ok(t) if img.format.is_compressed() => t,
         _ => return Err(tex::UnsupportedTextureFormat),
     };
     let target = bind_kind_to_gl(kind);

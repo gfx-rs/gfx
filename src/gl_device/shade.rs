@@ -239,8 +239,8 @@ fn query_parameters(gl: &gl::Gl, caps: &::Capabilities, prog: super::Program) ->
         let mut storage = 0;
         let loc = unsafe {
             let raw = name.as_slice().as_ptr() as *mut gl::types::GLchar;
-                gl.GetActiveUniform(prog, i, max_len, &mut length, &mut size, &mut storage, raw);
-                gl.GetUniformLocation(prog, raw as *const gl::types::GLchar)
+            gl.GetActiveUniform(prog, i, max_len, &mut length, &mut size, &mut storage, raw);
+            gl.GetUniformLocation(prog, raw as *const gl::types::GLchar)
         };
         let real_name = name.as_slice().slice_to(length as uint).to_string();
         match StorageType::new(storage) {
