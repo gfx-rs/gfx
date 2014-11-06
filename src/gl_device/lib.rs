@@ -26,6 +26,8 @@ use log;
 use attrib;
 
 use Device;
+use {MapAccess, MapReadable, MapWritable, MapRW, ReadableMapping, WritableMapping, RWMapping,
+    BufferHandle};
 
 pub use self::draw::GlCommandBuffer;
 pub use self::info::{Info, PlatformName, Version};
@@ -35,6 +37,11 @@ mod shade;
 mod state;
 mod tex;
 mod info;
+
+pub struct RawMapping {
+    pub pointer: *mut libc::c_void,
+    target: gl::types::GLenum,
+}
 
 pub type Buffer         = gl::types::GLuint;
 pub type ArrayBuffer    = gl::types::GLuint;
@@ -161,7 +168,7 @@ impl GlDevice {
     /// Fails during a debug build if the implementation's error flag was set.
     fn check(&mut self, cmd: &::Command) {
         if cfg!(not(ndebug)) {
-            let err = GlError::from_error_code(self.gl.GetError());
+            let err = GlError::from_error_code(unsafe { self.gl.GetError() });
             if err != NoError {
                 panic!("Error after executing command {}: {}", cmd, err);
             }
@@ -183,7 +190,7 @@ impl GlDevice {
     }
 
     fn init_buffer(&mut self, buffer: Buffer, info: &::BufferInfo) {
-        self.gl.BindBuffer(gl::ARRAY_BUFFER, buffer);
+        unsafe { self.gl.BindBuffer(gl::ARRAY_BUFFER, buffer) };
         let usage = match info.usage {
             ::UsageStatic  => gl::STATIC_DRAW,
             ::UsageDynamic => gl::DYNAMIC_DRAW,
@@ -200,7 +207,7 @@ impl GlDevice {
 
     fn update_sub_buffer(&mut self, buffer: Buffer, address: *const u8,
                          size: uint, offset: uint) {
-        self.gl.BindBuffer(gl::ARRAY_BUFFER, buffer);
+        unsafe { self.gl.BindBuffer(gl::ARRAY_BUFFER, buffer) };
         unsafe {
             self.gl.BufferSubData(gl::ARRAY_BUFFER,
                 offset as gl::types::GLintptr,
@@ -218,26 +225,30 @@ impl GlDevice {
                     flags |= gl::COLOR_BUFFER_BIT;
                     state::bind_color_mask(&self.gl, ::state::MASK_ALL);
                     let [r, g, b, a] = data.color;
-                    self.gl.ClearColor(r, g, b, a);
+                    unsafe { self.gl.ClearColor(r, g, b, a) };
                 }
                 if mask.intersects(::target::DEPTH) {
                     flags |= gl::DEPTH_BUFFER_BIT;
-                    self.gl.DepthMask(gl::TRUE);
-                    self.gl.ClearDepth(data.depth as gl::types::GLclampd);
+                    unsafe {
+                        self.gl.DepthMask(gl::TRUE);
+                        self.gl.ClearDepth(data.depth as gl::types::GLclampd);
+                    }
                 }
                 if mask.intersects(::target::STENCIL) {
                     flags |= gl::STENCIL_BUFFER_BIT;
-                    self.gl.StencilMask(-1);
-                    self.gl.ClearStencil(data.stencil as gl::types::GLint);
+                    unsafe {
+                        self.gl.StencilMask(-1);
+                        self.gl.ClearStencil(data.stencil as gl::types::GLint);
+                    }
                 }
-                self.gl.Clear(flags);
+                unsafe { self.gl.Clear(flags) };
             },
             ::BindProgram(program) => {
-                self.gl.UseProgram(program);
+                unsafe { self.gl.UseProgram(program) };
             },
             ::BindArrayBuffer(array_buffer) => {
                 if self.caps.array_buffer_supported {
-                    self.gl.BindVertexArray(array_buffer);
+                    unsafe { self.gl.BindVertexArray(array_buffer) };
                 } else {
                     error!("Ignored VAO bind command: {}", array_buffer)
                 }
@@ -258,7 +269,7 @@ impl GlDevice {
                         return
                     }
                 };
-                self.gl.BindBuffer(gl::ARRAY_BUFFER, buffer);
+                unsafe { self.gl.BindBuffer(gl::ARRAY_BUFFER, buffer) };
                 let offset = format.offset as *const gl::types::GLvoid;
                 match format.elem_type {
                     attrib::Int(attrib::IntRaw, _, _) => unsafe {
@@ -288,46 +299,46 @@ impl GlDevice {
                     },
                     _ => ()
                 }
-                self.gl.EnableVertexAttribArray(slot as gl::types::GLuint);
+                unsafe { self.gl.EnableVertexAttribArray(slot as gl::types::GLuint) };
                 if self.caps.instance_rate_supported {
-                    self.gl.VertexAttribDivisor(slot as gl::types::GLuint,
-                        format.instance_rate as gl::types::GLuint);
+                    unsafe { self.gl.VertexAttribDivisor(slot as gl::types::GLuint,
+                        format.instance_rate as gl::types::GLuint) };
                 }else if format.instance_rate != 0 {
                     error!("Instanced arrays are not supported");
                 }
             },
             ::BindIndex(buffer) => {
-                self.gl.BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer);
+                unsafe { self.gl.BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer) };
             },
             ::BindFrameBuffer(access, frame_buffer) => {
                 let point = access_to_gl(access);
-                self.gl.BindFramebuffer(point, frame_buffer);
+                unsafe { self.gl.BindFramebuffer(point, frame_buffer) };
             },
             ::UnbindTarget(access, target) => {
                 let point = access_to_gl(access);
                 let att = target_to_gl(target);
-                self.gl.FramebufferRenderbuffer(point, att, gl::RENDERBUFFER, 0);
+                unsafe { self.gl.FramebufferRenderbuffer(point, att, gl::RENDERBUFFER, 0) };
             },
             ::BindTargetSurface(access, target, name) => {
                 let point = access_to_gl(access);
                 let att = target_to_gl(target);
-                self.gl.FramebufferRenderbuffer(point, att, gl::RENDERBUFFER, name);
+                unsafe { self.gl.FramebufferRenderbuffer(point, att, gl::RENDERBUFFER, name) };
             },
             ::BindTargetTexture(access, target, name, level, layer) => {
                 let point = access_to_gl(access);
                 let att = target_to_gl(target);
                 match layer {
-                    Some(layer) => self.gl.FramebufferTextureLayer(
+                    Some(layer) => unsafe { self.gl.FramebufferTextureLayer(
                         point, att, name, level as gl::types::GLint,
-                        layer as gl::types::GLint),
-                    None => self.gl.FramebufferTexture(
-                        point, att, name, level as gl::types::GLint),
+                        layer as gl::types::GLint) },
+                    None => unsafe { self.gl.FramebufferTexture(
+                        point, att, name, level as gl::types::GLint) },
                 }
             },
-            ::BindUniformBlock(program, slot, loc, buffer) => {
+            ::BindUniformBlock(program, slot, loc, buffer) => { unsafe {
                 self.gl.UniformBlockBinding(program, slot as gl::types::GLuint, loc as gl::types::GLuint);
                 self.gl.BindBufferBase(gl::UNIFORM_BUFFER, loc as gl::types::GLuint, buffer);
-            },
+            }},
             ::BindUniform(loc, uniform) => {
                 shade::bind_uniform(&self.gl, loc as gl::types::GLint, uniform);
             },
@@ -336,18 +347,17 @@ impl GlDevice {
                     gl::TEXTURE0 + slot as gl::types::GLenum,
                     kind, texture);
                 match (anchor, kind.get_aa_mode(), sampler) {
-                    (Err(e), _, _) => error!("Invalid texture bind: {}", e),
-                    (Ok(anchor), None, Some(::Handle(sam, ref info))) => {
+                    (anchor, None, Some(::Handle(sam, ref info))) => {
                         if self.caps.sampler_objects_supported {
-                            self.gl.BindSampler(slot as gl::types::GLenum, sam);
+                            unsafe { self.gl.BindSampler(slot as gl::types::GLenum, sam) };
                         } else {
                             debug_assert_eq!(sam, 0);
                             tex::bind_sampler(&self.gl, anchor, info);
                         }
                     },
-                    (Ok(_), Some(_), Some(_)) =>
+                    (_, Some(_), Some(_)) =>
                         error!("Unable to bind a multi-sampled texture with a sampler"),
-                    (Ok(_), _, _) => (),
+                    (_, _, _) => (),
                 }
             },
             ::SetPrimitiveState(prim) => {
@@ -386,24 +396,24 @@ impl GlDevice {
             },
             ::Draw(prim_type, start, count, instances) => {
                 match instances {
-                    Some(num) if self.caps.instance_call_supported => {
+                    Some(num) if self.caps.instance_call_supported => { unsafe {
                         self.gl.DrawArraysInstanced(
                             primitive_to_gl(prim_type),
                             start as gl::types::GLsizei,
                             count as gl::types::GLsizei,
                             num as gl::types::GLsizei
                         );
-                    },
+                    }},
                     Some(_) => {
                         error!("Instanced draw calls are not supported");
                     },
-                    None => {
+                    None => { unsafe {
                         self.gl.DrawArrays(
                             primitive_to_gl(prim_type),
                             start as gl::types::GLsizei,
                             count as gl::types::GLsizei
                         );
-                    },
+                    }},
                 }
             },
             ::DrawIndexed(prim_type, index_type, start, count, instances) => {
@@ -455,7 +465,8 @@ impl GlDevice {
                     gl::LINEAR
                 };
                 // blit
-                self.gl.BlitFramebuffer(
+
+                unsafe { self.gl.BlitFramebuffer(
                     s_rect.x as GLint,
                     s_rect.y as GLint,
                     (s_rect.x + s_rect.w) as GLint,
@@ -466,7 +477,7 @@ impl GlDevice {
                     (d_rect.y + d_rect.h) as GLint,
                     flags,
                     filter
-                );
+                ) };
             },
         }
         self.check(cmd);
@@ -593,11 +604,11 @@ impl Device<GlCommandBuffer> for GlDevice {
     }
 
     fn delete_shader(&mut self, handle: ::ShaderHandle) {
-        self.gl.DeleteShader(handle.get_name());
+        unsafe { self.gl.DeleteShader(handle.get_name()) };
     }
 
     fn delete_program(&mut self, handle: ::ProgramHandle) {
-        self.gl.DeleteProgram(handle.get_name());
+        unsafe { self.gl.DeleteProgram(handle.get_name()) };
     }
 
     fn delete_surface(&mut self, handle: ::SurfaceHandle) {
@@ -635,7 +646,57 @@ impl Device<GlCommandBuffer> for GlDevice {
                             texture.get_name(), img, data.as_ptr(), data.len())
     }
 
+    fn update_texture_compressed_raw(&mut self, texture: &::TextureHandle, img: &::tex::ImageInfo, data: &[u8])
+            -> Result<(), ::tex::TextureError> {
+        tex::update_texture_compressed(&self.gl, texture.get_info().kind,
+            texture.get_name(), img, data.as_ptr(), data.len())
+    }
     fn generate_mipmap(&mut self, texture: &::TextureHandle) {
         tex::generate_mipmap(&self.gl, texture.get_info().kind, texture.get_name());
+    }
+
+    fn map_buffer_raw(&mut self, buf: BufferHandle<()>, access: MapAccess) -> RawMapping {
+        let ptr;
+        unsafe { self.gl.BindBuffer(gl::ARRAY_BUFFER, buf.get_name()) };
+        ptr = unsafe { self.gl.MapBuffer(gl::ARRAY_BUFFER, match access {
+            MapReadable => gl::READ_ONLY,
+            MapWritable => gl::WRITE_ONLY,
+            MapRW => gl::READ_WRITE
+        }) } as *mut libc::c_void;
+        RawMapping {
+            pointer: ptr,
+            target: gl::ARRAY_BUFFER
+        }
+    }
+
+    fn unmap_buffer_raw(&mut self, map: RawMapping) {
+        unsafe { self.gl.UnmapBuffer(map.target) };
+    }
+
+    fn map_buffer_readable<T: Copy>(&mut self, buf: BufferHandle<T>) -> ReadableMapping<T, GlCommandBuffer, GlDevice> {
+        let map = self.map_buffer_raw(buf.cast(), MapReadable);
+        ReadableMapping {
+            raw: map,
+            len: buf.len(),
+            device: self
+        }
+    }
+
+    fn map_buffer_writable<T: Copy>(&mut self, buf: BufferHandle<T>) -> WritableMapping<T, GlCommandBuffer, GlDevice> {
+        let map = self.map_buffer_raw(buf.cast(), MapWritable);
+        WritableMapping {
+            raw: map,
+            len: buf.len(),
+            device: self
+        }
+    }
+
+    fn map_buffer_rw<T: Copy>(&mut self, buf: BufferHandle<T>) -> RWMapping<T, GlCommandBuffer, GlDevice> {
+        let map = self.map_buffer_raw(buf.cast(), MapRW);
+        RWMapping {
+            raw: map,
+            len: buf.len(),
+            device: self
+        }
     }
 }

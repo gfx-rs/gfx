@@ -18,7 +18,7 @@
 #![license = "ASL2"]
 #![crate_type = "lib"]
 
-#![feature(phase)]
+#![feature(phase, unsafe_destructor)]
 #![deny(missing_docs)]
 
 //! Graphics device. Not meant for direct use.
@@ -56,6 +56,86 @@ pub type AttributeSlot = u8;
 pub type UniformBufferSlot = u8;
 /// Slot a texture can be bound to.
 pub type TextureSlot = u8;
+
+/// Specifies the access allowed to a buffer mapping.
+pub enum MapAccess {
+    /// Only allow reads.
+    MapReadable,
+    /// Only allow writes.
+    MapWritable,
+    /// Allow full access.
+    MapRW
+}
+
+/// A handle to a readable map, which can be sliced.
+pub struct ReadableMapping<'a, T: Copy, C: draw::CommandBuffer, D: 'a + Device<C>> {
+    raw: back::RawMapping,
+    len: uint,
+    device: &'a mut D,
+}
+
+impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Deref<[T]> for ReadableMapping<'a, T, C, D> {
+    fn deref(&self) -> &[T] {
+        unsafe { std::slice::raw::buf_as_slice(self.raw.pointer as *const T, self.len, |x| std::mem::transmute(x)) }
+    }
+}
+
+#[unsafe_destructor]
+impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Drop for ReadableMapping<'a, T, C, D> {
+    fn drop(&mut self) {
+        self.device.unmap_buffer_raw(self.raw)
+    }
+}
+
+/// A handle to a writable map, which only allows setting elements.
+pub struct WritableMapping<'a, T: Copy, C: draw::CommandBuffer, D: 'a + Device<C>> {
+    raw: back::RawMapping,
+    len: uint,
+    device: &'a mut D,
+}
+
+impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> WritableMapping<'a, T, C, D> {
+    /// Set a value in the buffer
+    pub fn set(&mut self, idx: uint, val: T) {
+        if idx >= self.len {
+            panic!("Tried to write out of bounds to a WritableMapping!")
+        }
+        unsafe { *(std::mem::transmute::<_, *mut T>(self.raw.pointer).offset(idx as int)) = val }
+    }
+}
+
+#[unsafe_destructor]
+impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Drop for WritableMapping<'a, T, C, D> {
+    fn drop(&mut self) {
+        self.device.unmap_buffer_raw(self.raw)
+    }
+}
+
+/// A handle to a complete readable/writable map, which can be sliced both ways.
+pub struct RWMapping<'a, T: Copy, C: draw::CommandBuffer, D: 'a + Device<C>> {
+    raw: back::RawMapping,
+    len: uint,
+    device: &'a mut D,
+}
+
+impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Deref<[T]> for RWMapping<'a, T, C, D> {
+    fn deref(&self) -> &[T] {
+        unsafe { std::slice::raw::buf_as_slice(self.raw.pointer as *const T, self.len, |x| std::mem::transmute(x)) }
+    }
+}
+
+impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> DerefMut<[T]> for RWMapping<'a, T, C, D> {
+    fn deref_mut(&mut self) -> &mut [T] {
+        unsafe { std::slice::raw::mut_buf_as_slice(self.raw.pointer, self.len, |x| std::mem::transmute(x)) }
+    }
+}
+
+#[unsafe_destructor]
+impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Drop for RWMapping<'a, T, C, D> {
+    fn drop(&mut self) {
+        self.device.unmap_buffer_raw(self.raw)
+    }
+}
 
 /// A generic handle struct
 #[deriving(Clone, PartialEq, Show)]
@@ -318,13 +398,29 @@ pub trait Device<C: draw::CommandBuffer> {
             mem::size_of::<T>() * offset_elements
         ));
     }
+    fn map_buffer_raw(&mut self, buf: BufferHandle<()>, access: MapAccess) -> back::RawMapping;
+    fn unmap_buffer_raw(&mut self, map: back::RawMapping);
+    fn map_buffer_readable<T: Copy>(&mut self, buf: BufferHandle<T>) -> ReadableMapping<T, C, Self>;
+    fn map_buffer_writable<T: Copy>(&mut self, buf: BufferHandle<T>) -> WritableMapping<T, C, Self>;
+    fn map_buffer_rw<T: Copy>(&mut self, buf: BufferHandle<T>) -> RWMapping<T, C, Self>;
     /// Update the information stored in a texture
     fn update_texture_raw(&mut self, tex: &TextureHandle, img: &tex::ImageInfo,
                           data: &[u8]) -> Result<(), tex::TextureError>;
+    fn update_texture_compressed_raw(&mut self, tex: &TextureHandle, img: &tex::ImageInfo,
+                                 data: &[u8]) -> Result<(), tex::TextureError>;
     fn update_texture<T: Copy>(&mut self, tex: &TextureHandle,
                       img: &tex::ImageInfo, data: &[T])
                       -> Result<(), tex::TextureError> {
-        with_slice(data, |s| self.update_texture_raw(tex, img, s))
+        match tex.get_info().format {
+            tex::Compressed(_) =>
+                with_slice(data, |s| self.update_texture_compressed_raw(tex, img, s)),
+            _ => with_slice(data, |s| self.update_texture_raw(tex, img, s))
+        }
+    }
+    fn update_texture_compressed<T: Copy>(&mut self, tex: &TextureHandle,
+                      img: &tex::ImageInfo, data: &[T])
+                      -> Result<(), tex::TextureError> {
+        with_slice(data, |s| self.update_texture_compressed_raw(tex, img, s))
     }
     fn generate_mipmap(&mut self, tex: &TextureHandle);
 }

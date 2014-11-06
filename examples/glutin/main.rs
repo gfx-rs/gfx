@@ -55,7 +55,7 @@ fn main() {
         // quit when Esc is pressed.
         for event in window.poll_events() {
             match event {
-                glutin::KeyboardInput(_, _, Some(glutin::Escape), _) => break 'main,
+                glutin::KeyboardInput(_, _, Some(glutin::Escape)) => break 'main,
                 glutin::Closed => break 'main,
                 _ => {},
             }

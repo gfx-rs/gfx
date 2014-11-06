@@ -23,7 +23,7 @@ pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: s::ShaderSource, lang: 
         s::Geometry => gl::GEOMETRY_SHADER,
         s::Fragment => gl::FRAGMENT_SHADER,
     };
-    let name = gl.CreateShader(target);
+    let name = unsafe { gl.CreateShader(target) };
     let data = match data {
         s::ShaderSource { glsl_150: Some(ref s), .. } if lang >= Version::new(1, 50, None, "") => s.as_slice(),
         s::ShaderSource { glsl_140: Some(ref s), .. } if lang >= Version::new(1, 40, None, "") => s.as_slice(),
@@ -36,8 +36,8 @@ pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: s::ShaderSource, lang: 
         gl.ShaderSource(name, 1,
             &(data.as_ptr() as *const gl::types::GLchar),
             &(data.len() as gl::types::GLint));
+        gl.CompileShader(name);
     }
-    gl.CompileShader(name);
     info!("\tCompiled shader {}", name);
 
     let status = get_shader_iv(gl, name, gl::COMPILE_STATUS);
@@ -273,11 +273,11 @@ fn query_parameters(gl: &gl::Gl, caps: &::Capabilities, prog: super::Program) ->
 
 pub fn create_program(gl: &gl::Gl, caps: &::Capabilities, shaders: &[::ShaderHandle])
         -> (Result<::ProgramHandle, ()>, Option<String>) {
-    let name = gl.CreateProgram();
+    let name = unsafe { gl.CreateProgram() };
     for sh in shaders.iter() {
-        gl.AttachShader(name, sh.get_name());
+        unsafe { gl.AttachShader(name, sh.get_name()) };
     }
-    gl.LinkProgram(name);
+    unsafe { gl.LinkProgram(name) };
     info!("\tLinked program {}", name);
 
     // get info message
@@ -314,8 +314,8 @@ pub fn create_program(gl: &gl::Gl, caps: &::Capabilities, shaders: &[::ShaderHan
 
 pub fn bind_uniform(gl: &gl::Gl, loc: gl::types::GLint, uniform: s::UniformValue) {
     match uniform {
-        s::ValueI32(val) => gl.Uniform1i(loc, val),
-        s::ValueF32(val) => gl.Uniform1f(loc, val),
+        s::ValueI32(val) => unsafe { gl.Uniform1i(loc, val) },
+        s::ValueF32(val) => unsafe { gl.Uniform1f(loc, val) },
 
         s::ValueI32Vector2(val) => unsafe { gl.Uniform2iv(loc, 1, val.as_ptr()) },
         s::ValueI32Vector3(val) => unsafe { gl.Uniform3iv(loc, 1, val.as_ptr()) },

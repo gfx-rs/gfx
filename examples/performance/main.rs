@@ -205,50 +205,47 @@ static FS_SRC: &'static str = "
 ";
 
 
-fn compile_shader(gl: &Gl, src: &str, ty: GLenum) -> GLuint {
+fn compile_shader(gl: &Gl, src: &str, ty: GLenum) -> GLuint { unsafe {
+    use std::num::Saturating;
     let shader = gl.CreateShader(ty);
-    unsafe {
-        // Attempt to compile the shader
-        src.with_c_str(|ptr| gl.ShaderSource(shader, 1, &ptr, ptr::null()));
-        gl.CompileShader(shader);
+    // Attempt to compile the shader
+    src.with_c_str(|ptr| gl.ShaderSource(shader, 1, &ptr, ptr::null()));
+    gl.CompileShader(shader);
 
-        // Get the compile status
-        let mut status = gl::FALSE as GLint;
-        gl.GetShaderiv(shader, gl::COMPILE_STATUS, &mut status);
+    // Get the compile status
+    let mut status = gl::FALSE as GLint;
+    gl.GetShaderiv(shader, gl::COMPILE_STATUS, &mut status);
 
-        // Fail on error
-        if status != (gl::TRUE as GLint) {
-            let mut len = 0;
-            gl.GetShaderiv(shader, gl::INFO_LOG_LENGTH, &mut len);
-            let mut buf = Vec::from_elem(len as uint - 1, 0u8);     // subtract 1 to skip the trailing null character
-            gl.GetShaderInfoLog(shader, len, ptr::null_mut(), buf.as_mut_ptr() as *mut GLchar);
-            panic!("{}", str::from_utf8(buf.as_slice()).expect("ShaderInfoLog not valid utf8"));
-        }
+    // Fail on error
+    if status != (gl::TRUE as GLint) {
+        let mut len = 0;
+        gl.GetShaderiv(shader, gl::INFO_LOG_LENGTH, &mut len);
+        let mut buf = Vec::from_elem((len as uint).saturating_sub(1), 0u8);     // subtract 1 to skip the trailing null character
+        gl.GetShaderInfoLog(shader, len, ptr::null_mut(), buf.as_mut_ptr() as *mut GLchar);
+        panic!("{}", str::from_utf8(buf.as_slice()).expect("ShaderInfoLog not valid utf8"));
     }
     shader
-}
+}}
 
-fn link_program(gl: &Gl, vs: GLuint, fs: GLuint) -> GLuint {
+fn link_program(gl: &Gl, vs: GLuint, fs: GLuint) -> GLuint { unsafe {
     let program = gl.CreateProgram();
     gl.AttachShader(program, vs);
     gl.AttachShader(program, fs);
     gl.LinkProgram(program);
-    unsafe {
-        // Get the link status
-        let mut status = gl::FALSE as GLint;
-        gl.GetProgramiv(program, gl::LINK_STATUS, &mut status);
+    // Get the link status
+    let mut status = gl::FALSE as GLint;
+    gl.GetProgramiv(program, gl::LINK_STATUS, &mut status);
 
-        // Fail on error
-        if status != (gl::TRUE as GLint) {
-            let mut len: GLint = 0;
-            gl.GetProgramiv(program, gl::INFO_LOG_LENGTH, &mut len);
-            let mut buf = Vec::from_elem(len as uint - 1, 0u8);     // subtract 1 to skip the trailing null character
-            gl.GetProgramInfoLog(program, len, ptr::null_mut(), buf.as_mut_ptr() as *mut GLchar);
-            panic!("{}", str::from_utf8(buf.as_slice()).expect("ProgramInfoLog not valid utf8"));
-        }
+    // Fail on error
+    if status != (gl::TRUE as GLint) {
+        let mut len: GLint = 0;
+        gl.GetProgramiv(program, gl::INFO_LOG_LENGTH, &mut len);
+        let mut buf = Vec::from_elem(len as uint - 1, 0u8);     // subtract 1 to skip the trailing null character
+        gl.GetProgramInfoLog(program, len, ptr::null_mut(), buf.as_mut_ptr() as *mut GLchar);
+        panic!("{}", str::from_utf8(buf.as_slice()).expect("ProgramInfoLog not valid utf8"));
     }
     program
-}
+}}
 
 fn gl_main(glfw: glfw::Glfw,
            window: glfw::Window,
@@ -317,8 +314,10 @@ fn gl_main(glfw: glfw::Glfw,
         let start = precise_time_s() * 1000.;
 
         // Clear the screen to black
-        gl.ClearColor(0.3, 0.3, 0.3, 1.0);
-        gl.Clear(gl::COLOR_BUFFER_BIT);
+        unsafe {
+            gl.ClearColor(0.3, 0.3, 0.3, 1.0);
+            gl.Clear(gl::COLOR_BUFFER_BIT);
+        }
 
         for x in range(-dimension, dimension) {
             for y in range(-dimension, dimension) {
@@ -335,9 +334,9 @@ fn gl_main(glfw: glfw::Glfw,
                                         1,
                                         gl::FALSE,
                                         mat.x.ptr());
+                    gl.DrawArrays(gl::TRIANGLES, 0, 3);
                 }
 
-                gl.DrawArrays(gl::TRIANGLES, 0, 3);
             }
         }
 
@@ -354,10 +353,10 @@ fn gl_main(glfw: glfw::Glfw,
     }
 
     // Cleanup
-    gl.DeleteProgram(program);
-    gl.DeleteShader(fs);
-    gl.DeleteShader(vs);
     unsafe {
+        gl.DeleteProgram(program);
+        gl.DeleteShader(fs);
+        gl.DeleteShader(vs);
         gl.DeleteBuffers(1, &vbo);
         gl.DeleteVertexArrays(1, &vao);
     }
