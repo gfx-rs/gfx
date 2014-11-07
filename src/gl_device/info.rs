@@ -24,9 +24,9 @@ use shade;
 /// A version number for a specific component of an OpenGL implementation
 #[deriving(Eq, PartialEq)]
 pub struct Version {
-    pub major: uint,
-    pub minor: uint,
-    pub revision: Option<uint>,
+    pub major: u32,
+    pub minor: u32,
+    pub revision: Option<u32>,
     pub vendor_info: &'static str,
 }
 
@@ -60,7 +60,7 @@ impl cmp::Ord for Version {
 
 impl Version {
     /// Create a new OpenGL version number
-    pub fn new(major: uint, minor: uint, revision: Option<uint>,
+    pub fn new(major: u32, minor: u32, revision: Option<u32>,
                vendor_info: &'static str) -> Version {
         Version {
             major: major,
@@ -206,6 +206,10 @@ impl Info {
     pub fn is_extension_supported(&self, s: &str) -> bool {
         self.extensions.contains_equiv(s)
     }
+
+    pub fn is_version_or_extension_supported(&self, major: u32, minor: u32, ext: &str) -> bool {
+        self.version >= Version::new(major, minor, None, "") || self.is_extension_supported(ext)
+    }
 }
 
 fn to_shader_model(v: &Version) -> shade::ShaderModel {
@@ -227,24 +231,24 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities) {
         max_draw_buffers: get_uint(gl, gl::MAX_DRAW_BUFFERS),
         max_texture_size: get_uint(gl, gl::MAX_TEXTURE_SIZE),
         max_vertex_attributes: get_uint(gl, gl::MAX_VERTEX_ATTRIBS),
-        uniform_block_supported: info.version >= Version::new(3, 1, None, "")
-            || info.is_extension_supported("GL_ARB_uniform_buffer_object"),
-        array_buffer_supported: info.version >= Version::new(3, 0, None, "")
-            || info.is_extension_supported("GL_ARB_vertex_array_object"),
-        immutable_storage_supported: info.version >= Version::new(4, 2, None, "")
-            || info.is_extension_supported("GL_ARB_texture_storage"),
-        sampler_objects_supported: info.version >= Version::new(3, 3, None, "")
-            || info.is_extension_supported("GL_ARB_sampler_objects"),
-        instance_call_supported: info.version >= Version::new(3, 1, None, "")
-            || info.is_extension_supported("GL_ARB_draw_instanced"),
-        instance_rate_supported: info.version >= Version::new(3, 3, None, "")
-            || info.is_extension_supported("GL_ARB_instanced_arrays"),
-        render_targets_supported: info.version >= Version::new(3, 0, None, "")
-            || info.is_extension_supported("GL_ARB_framebuffer_object"),
-        vertex_base_supported: info.version >= Version::new(3, 2, None, "")
-            || info.is_extension_supported("GL_ARB_draw_elements_base_vertex"),
-        instance_base_supported: info.version >= Version::new(4, 2, None, "")
-            || info.is_extension_supported("GL_ARB_base_instance"),
+        uniform_block_supported:
+            info.is_version_or_extension_supported(3, 0, "GL_ARB_uniform_buffer_object"),
+        array_buffer_supported:
+            info.is_version_or_extension_supported(3, 0, "GL_ARB_vertex_array_object"),
+        immutable_storage_supported:
+            info.is_version_or_extension_supported(4, 2, "GL_ARB_texture_storage"),
+        sampler_objects_supported:
+            info.is_version_or_extension_supported(3, 3, "GL_ARB_sampler_objects"),
+        instance_call_supported:
+            info.is_version_or_extension_supported(3, 1, "GL_ARB_draw_instanced"),
+        instance_rate_supported:
+            info.is_version_or_extension_supported(3, 3, "GL_ARB_instanced_arrays"),
+        render_targets_supported:
+            info.is_version_or_extension_supported(3, 0, "GL_ARB_framebuffer_object"),
+        vertex_base_supported:
+            info.is_version_or_extension_supported(3, 2, "GL_ARB_draw_elements_base_vertex"),
+        instance_base_supported:
+            info.is_version_or_extension_supported(4, 2, "GL_ARB_base_instance"),
     };
     (info, caps)
 }
