@@ -428,7 +428,7 @@ impl GlDevice {
                     }},
                 }
             },
-            ::DrawIndexed(prim_type, index_type, start, count, instances) => {
+            ::DrawIndexed(prim_type, index_type, start, count, base, instances) => {
                 let (offset, gl_index) = match index_type {
                     attrib::U8  => (start * 1u32, gl::UNSIGNED_BYTE),
                     attrib::U16 => (start * 2u32, gl::UNSIGNED_SHORT),
@@ -436,24 +436,45 @@ impl GlDevice {
                 };
                 match instances {
                     Some(num) if self.caps.instance_call_supported => unsafe {
-                        self.gl.DrawElementsInstanced(
-                            primitive_to_gl(prim_type),
-                            count as gl::types::GLsizei,
-                            gl_index,
-                            offset as *const gl::types::GLvoid,
-                            num as gl::types::GLsizei
-                        );
+                        if !self.caps.vertex_base_supported {
+                            self.adjust_ebo_for_base(base, |this| this.gl.DrawElementsInstanced(
+                                primitive_to_gl(prim_type),
+                                count as gl::types::GLsizei,
+                                gl_index,
+                                offset as *const gl::types::GLvoid,
+                                num as gl::types::GLsizei,
+                            ));
+                        } else {
+                            self.gl.DrawElementsInstancedBaseVertex(
+                                primitive_to_gl(prim_type),
+                                count as gl::types::GLsizei,
+                                gl_index,
+                                offset as *const gl::types::GLvoid,
+                                num as gl::types::GLsizei,
+                                base as gl::types::GLint,
+                            );
+                        }
                     },
                     Some(_) => {
                         error!("Instanced draw calls are not supported");
                     },
                     None => unsafe {
-                        self.gl.DrawElements(
-                            primitive_to_gl(prim_type),
-                            count as gl::types::GLsizei,
-                            gl_index,
-                            offset as *const gl::types::GLvoid
-                        );
+                        if !self.caps.vertex_base_supported {
+                            self.adjust_ebo_for_base(base, |this| this.gl.DrawElements(
+                                primitive_to_gl(prim_type),
+                                count as gl::types::GLsizei,
+                                gl_index,
+                                offset as *const gl::types::GLvoid,
+                            );
+                        } else {
+                            self.gl.DrawElementsBaseVertex(
+                                primitive_to_gl(prim_type),
+                                count as gl::types::GLsizei,
+                                gl_index,
+                                offset as *const gl::types::GLvoid,
+                                base as gl::types::GLint,
+                            );
+                        }
                     },
                 }
             },

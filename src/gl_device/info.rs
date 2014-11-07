@@ -15,18 +15,47 @@
 use std::collections::HashSet;
 use std::fmt;
 use std::str;
+use std::cmp;
 use super::gl;
 
 use Capabilities;
 use shade;
 
 /// A version number for a specific component of an OpenGL implementation
-#[deriving(Eq, PartialEq, Ord, PartialOrd)]
+#[deriving(Eq, PartialEq)]
 pub struct Version {
     pub major: uint,
     pub minor: uint,
     pub revision: Option<uint>,
     pub vendor_info: &'static str,
+}
+
+// FIXME https://github.com/rust-lang/rust/issues/18738
+// derive PartialOrd, Ord
+
+impl cmp::PartialOrd for Version {
+    fn partial_cmp(&self, other: &Version) -> Option<cmp::Ordering> {
+        if self.eq(other) {
+            Some(cmp::Equal)
+        } else {
+            let lt =
+                self.major < other.major
+             || self.minor < other.minor
+             || self.revision < other.revision
+             || self.vendor_info < other.vendor_info;
+            if lt {
+                Some(cmp::Less)
+            } else {
+                Some(cmp::Greater)
+            }
+        }
+    }
+}
+
+impl cmp::Ord for Version {
+    fn cmp(&self, other: &Version) -> cmp::Ordering {
+        self.partial_cmp(other).unwrap()
+    }
 }
 
 impl Version {
@@ -212,6 +241,8 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities) {
             || info.is_extension_supported("GL_ARB_instanced_arrays"),
         render_targets_supported: info.version >= Version::new(3, 0, None, "")
             || info.is_extension_supported("GL_ARB_framebuffer_object"),
+        vertex_base_supported: info.version >= Version::new(3, 2, None, "")
+            || info.is_extension_supported("GL_ARB_draw_elements_base_vertex"),
     };
     (info, caps)
 }

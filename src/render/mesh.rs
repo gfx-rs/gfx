@@ -21,7 +21,7 @@
 //! `Buffer`, and then use `Mesh::from`.
 
 use device;
-use device::{PrimitiveType, BufferHandle, VertexCount, IndexCount};
+use device::{PrimitiveType, BufferHandle, VertexCount};
 use device::attrib;
 
 /// Describes a single attribute of a vertex buffer, including its type, name, etc.
@@ -89,25 +89,44 @@ impl Mesh {
 }
 
 /// Description of a subset of `Mesh` data to render.
-/// We provide a primitive type in a slice because it is how we interpret mesh
-/// contents. For example, we can have a `Point` typed vertex slice to do shape
+///
+/// Only vertices between `start` and `end` are rendered. The
+/// source of the vertex data is dependent on the `kind` value.
+///
+/// The `prim_type` defines how the mesh contents are interpreted.
+/// For example,  `Point` typed vertex slice can be used to do shape
 /// blending, while still rendereing it as an indexed `TriangleList`.
 #[deriving(Clone, Show)]
-pub enum Slice {
-    /// Render vertex data directly from the `Mesh`'s buffer, using only the vertices between the two
-    /// endpoints.
-    VertexSlice(PrimitiveType, VertexCount, VertexCount),
-    /// The `IndexSlice*` buffer contains a list of indices into the `Mesh` data, so every vertex
-    /// attribute does not need to be duplicated, only its position in the `Mesh`.  For example,
-    /// when drawing a square, two triangles are needed.  Using only `VertexSlice`, one would need
-    /// 6 separate vertices, 3 for each triangle. However, two of the vertices will be identical,
-    /// wasting space for the duplicated attributes.  Instead, the `Mesh` can store 4 vertices and
-    /// an `IndexSlice8` can be used instead.
-    IndexSlice8(PrimitiveType, BufferHandle<u8>, IndexCount, IndexCount),
+pub struct Slice {
+    /// Start index of vertices to draw.
+    pub start: VertexCount,
+    /// End index of vertices to draw.
+    pub end: VertexCount,
+    /// Primitive type to render collections of vertices as.
+    pub prim_type: PrimitiveType,
+    /// Source of the vertex ordering when drawing.
+    pub kind: SliceKind,
+}
+
+/// Source of vertex ordering for a slice
+#[deriving(Clone, Show)]
+pub enum SliceKind {
+    /// Render vertex data directly from the `Mesh`'s buffer.
+    VertexSlice,
+    /// The `IndexSlice*` buffer contains a list of indices into the `Mesh`
+    /// data, so every vertex attribute does not need to be duplicated, only
+    /// its position in the `Mesh`. The base index is added to this index
+    /// before fetching the vertex from the buffer.  For example, when drawing
+    /// a square, two triangles are needed.  Using only `VertexSlice`, one
+    /// would need 6 separate vertices, 3 for each triangle. However, two of
+    /// the vertices will be identical, wasting space for the duplicated
+    /// attributes.  Instead, the `Mesh` can store 4 vertices and an
+    /// `IndexSlice8` can be used instead.
+    IndexSlice8(BufferHandle<u8>, VertexCount),
     /// As `IndexSlice8` but with `u16` indices
-    IndexSlice16(PrimitiveType, BufferHandle<u16>, IndexCount, IndexCount),
+    IndexSlice16(BufferHandle<u16>, VertexCount),
     /// As `IndexSlice8` but with `u32` indices
-    IndexSlice32(PrimitiveType, BufferHandle<u32>, IndexCount, IndexCount),
+    IndexSlice32(BufferHandle<u32>, VertexCount),
 }
 
 /// Helper methods for cleanly getting the slice of a type.
@@ -119,28 +138,48 @@ pub trait ToSlice {
 impl ToSlice for Mesh {
     /// Return a vertex slice of the whole mesh.
     fn to_slice(&self, ty: PrimitiveType) -> Slice {
-        VertexSlice(ty, 0, self.num_vertices)
+        Slice {
+            start: 0,
+            end: self.num_vertices,
+            prim_type: ty,
+            kind: VertexSlice
+        }
     }
 }
 
 impl ToSlice for BufferHandle<u8> {
     /// Return an index slice of the whole buffer.
     fn to_slice(&self, ty: PrimitiveType) -> Slice {
-        IndexSlice8(ty, *self, 0, self.len() as IndexCount)
+        Slice {
+            start: 0,
+            end: self.len() as VertexCount,
+            prim_type: ty,
+            kind: IndexSlice8(*self, 0)
+        }
     }
 }
 
 impl ToSlice for BufferHandle<u16> {
     /// Return an index slice of the whole buffer.
     fn to_slice(&self, ty: PrimitiveType) -> Slice {
-        IndexSlice16(ty, *self, 0, self.len() as IndexCount)
+        Slice {
+            start: 0,
+            end: self.len() as VertexCount,
+            prim_type: ty,
+            kind: IndexSlice16(*self, 0)
+        }
     }
 }
 
 impl ToSlice for BufferHandle<u32> {
     /// Return an index slice of the whole buffer.
     fn to_slice(&self, ty: PrimitiveType) -> Slice {
-        IndexSlice32(ty, *self, 0, self.len() as IndexCount)
+        Slice {
+            start: 0,
+            end: self.len() as VertexCount,
+            prim_type: ty,
+            kind: IndexSlice32(*self, 0)
+        }
     }
 }
 

@@ -113,8 +113,8 @@ pub trait CommandBuffer {
     fn call_clear(&mut self, target::ClearData, target::Mask);
     fn call_draw(&mut self, ::PrimitiveType, ::VertexCount, ::VertexCount,
                  Option<::InstanceCount>);
-    fn call_draw_indexed(&mut self, ::PrimitiveType, ::IndexType, ::IndexCount,
-                         ::IndexCount, Option<::InstanceCount>);
+    fn call_draw_indexed(&mut self, ::PrimitiveType, ::IndexType, ::VertexCount,
+                         ::VertexCount, ::VertexCount, Option<::InstanceCount>);
     fn call_blit(&mut self, target::Rect, target::Rect, target::Mask);
 }
 

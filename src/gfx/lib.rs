@@ -43,7 +43,7 @@ pub use device::with_slice;
 pub use device::{BufferHandle, BufferInfo, RawBufferHandle, ShaderHandle};
 pub use device::{ProgramHandle, SurfaceHandle, TextureHandle};
 pub use device::{BufferUsage, UsageStatic, UsageDynamic, UsageStream};
-pub use device::{VertexCount, IndexCount, InstanceCount};
+pub use device::{VertexCount, InstanceCount};
 pub use device::{PrimitiveType, Point, Line, LineStrip,
     TriangleList, TriangleStrip, TriangleFan};
 pub use device::draw::CommandBuffer;

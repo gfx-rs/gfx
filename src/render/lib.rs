@@ -425,21 +425,22 @@ impl<C: CommandBuffer> Renderer<C> {
 
     fn draw_slice(&mut self, slice: &mesh::Slice,
                   instances: Option<device::InstanceCount>) {
-        match *slice {
-            mesh::VertexSlice(prim_type, start, end) => {
+        let mesh::Slice { start, end, prim_type, kind } = *slice;
+        match kind {
+            mesh::VertexSlice => {
                 self.command_buffer.call_draw(prim_type, start, end, instances);
             },
-            mesh::IndexSlice8(prim_type, buf, start, end) => {
+            mesh::IndexSlice8(buf, base) => {
                 self.bind_index(buf);
-                self.command_buffer.call_draw_indexed(prim_type, attrib::U8, start, end, instances);
+                self.command_buffer.call_draw_indexed(prim_type, attrib::U8, start, end, base, instances);
             },
-            mesh::IndexSlice16(prim_type, buf, start, end) => {
+            mesh::IndexSlice16(buf, base) => {
                 self.bind_index(buf);
-                self.command_buffer.call_draw_indexed(prim_type, attrib::U16, start, end, instances);
+                self.command_buffer.call_draw_indexed(prim_type, attrib::U16, start, end, base, instances);
             },
-            mesh::IndexSlice32(prim_type, buf, start, end) => {
+            mesh::IndexSlice32(buf, base) => {
                 self.bind_index(buf);
-                self.command_buffer.call_draw_indexed(prim_type, attrib::U32, start, end, instances);
+                self.command_buffer.call_draw_indexed(prim_type, attrib::U32, start, end, base, instances);
             },
         }
     }
