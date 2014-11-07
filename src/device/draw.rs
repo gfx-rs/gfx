@@ -58,7 +58,7 @@ impl DataBuffer {
         use std::{mem, slice};
         let offset = self.buf.len();
         let size = mem::size_of::<T>() * v.len();
-        self.buf.reserve_additional(size);
+        self.buf.reserve(size);
         unsafe {
             self.buf.set_len(offset + size);
             slice::raw::buf_as_slice(v.as_ptr() as *const u8, size,
