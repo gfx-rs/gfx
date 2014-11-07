@@ -243,6 +243,8 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities) {
             || info.is_extension_supported("GL_ARB_framebuffer_object"),
         vertex_base_supported: info.version >= Version::new(3, 2, None, "")
             || info.is_extension_supported("GL_ARB_draw_elements_base_vertex"),
+        instance_base_supported: info.version >= Version::new(4, 2, None, "")
+            || info.is_extension_supported("GL_ARB_base_instance"),
     };
     (info, caps)
 }
