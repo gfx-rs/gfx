@@ -313,32 +313,14 @@ impl UniformVar {
     }
 }
 
-/// Like `MaybeOwned` but for u8.
-#[allow(missing_docs)]
-#[deriving(Show, PartialEq, Clone)]
-pub enum Bytes {
-    StaticBytes(&'static [u8]),
-    OwnedBytes(Vec<u8>),
-}
-
-impl Bytes {
-    /// Get the byte data as a slice.
-    pub fn as_slice<'a>(&'a self) -> &'a [u8] {
-        match *self {
-            StaticBytes(ref b) => b.as_slice(),
-            OwnedBytes(ref b) => b.as_slice(),
-        }
-    }
-}
-
 /// A type storing shader source for different graphics APIs and versions.
 #[allow(missing_docs)]
 #[deriving(Clone, PartialEq, Show)]
-pub struct ShaderSource {
-    pub glsl_120: Option<Bytes>,
-    pub glsl_130: Option<Bytes>,
-    pub glsl_140: Option<Bytes>,
-    pub glsl_150: Option<Bytes>,
+pub struct ShaderSource<'a> {
+    pub glsl_120: Option<&'a [u8]>,
+    pub glsl_130: Option<&'a [u8]>,
+    pub glsl_140: Option<&'a [u8]>,
+    pub glsl_150: Option<&'a [u8]>,
     // TODO: hlsl_sm_N...
 }
 

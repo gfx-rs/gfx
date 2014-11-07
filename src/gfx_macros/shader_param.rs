@@ -159,7 +159,7 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                             if $out.uniforms.len() <= id as uint {
                                 unsafe { $out.uniforms.set_len(id as uint + 1) }
                             }
-                            *$out.uniforms.get_mut(id as uint) = $value_id.to_uniform()
+                            *$out.uniforms.get_mut(id as uint).unwrap() = $value_id.to_uniform()
                         })
                     ),
                     Ok(ParamBlock)   => quote_stmt!(cx,
@@ -167,7 +167,7 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                             if $out.blocks.len() <= id as uint {
                                 unsafe { $out.blocks.set_len(id as uint + 1) }
                             }
-                            *$out.blocks.get_mut(id as uint) = {$value_id}
+                            *$out.blocks.get_mut(id as uint).unwrap() = {$value_id}
                         })
                     ),
                     Ok(ParamTexture) => quote_stmt!(cx,
@@ -175,7 +175,7 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                             if $out.textures.len() <= id as uint {
                                 unsafe { $out.textures.set_len(id as uint + 1) }
                             }
-                            *$out.textures.get_mut(id as uint) = {$value_id}
+                            *$out.textures.get_mut(id as uint).unwrap() = {$value_id}
                         })
                     ),
                     Err(_) => {

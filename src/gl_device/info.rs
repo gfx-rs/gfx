@@ -21,17 +21,117 @@ use Capabilities;
 use shade;
 
 /// A version number for a specific component of an OpenGL implementation
-#[deriving(Eq, PartialEq, Ord, PartialOrd)]
+#[deriving(Eq, PartialEq)]
 pub struct Version {
-    pub major: uint,
-    pub minor: uint,
-    pub revision: Option<uint>,
+    pub major: u32,
+    pub minor: u32,
+    pub revision: Option<u32>,
     pub vendor_info: &'static str,
+}
+
+// FIXME https://github.com/rust-lang/rust/issues/18738
+// derive PartialOrd, Ord
+
+#[automatically_derived]
+impl ::std::cmp::Ord for Version {
+    #[inline]
+    fn cmp(&self, __arg_0: &Version) -> ::std::cmp::Ordering {
+        match *__arg_0 {
+            Version {
+                major: ref __self_1_0,
+                minor: ref __self_1_1,
+                revision: ref __self_1_2,
+                vendor_info: ref __self_1_3 } =>
+                    match *self {
+                        Version {
+                            major: ref __self_0_0,
+                            minor: ref __self_0_1,
+                            revision: ref __self_0_2,
+                            vendor_info: ref __self_0_3 } => {
+                                let __test = (*__self_0_0).cmp(&(*__self_1_0));
+                                if __test == ::std::cmp::Equal {
+                                    {
+                                        let __test =
+                                            (*__self_0_1).cmp(&(*__self_1_1));
+                                        if __test == ::std::cmp::Equal {
+                                            {
+                                                let __test =
+                                                    (*__self_0_2).cmp(&(*__self_1_2));
+                                                if __test == ::std::cmp::Equal {
+                                                    {
+                                                        let __test =
+                                                            (*__self_0_3).cmp(*__self_1_3);
+                                                        if __test ==
+                                                            ::std::cmp::Equal {
+                                                                ::std::cmp::Equal
+                                                            } else { __test }
+                                                    }
+                                                } else { __test }
+                                            }
+                                        } else { __test }
+                                    }
+                                } else { __test }
+                            }
+                    },
+        }
+    }
+}
+#[automatically_derived]
+impl ::std::cmp::PartialOrd for Version {
+    #[inline]
+    fn partial_cmp(&self, __arg_0: &Version) ->
+        ::std::option::Option<::std::cmp::Ordering> {
+            match *__arg_0 {
+                Version {
+                    major: ref __self_1_0,
+                    minor: ref __self_1_1,
+                    revision: ref __self_1_2,
+                    vendor_info: ref __self_1_3 } =>
+                        match *self {
+                            Version {
+                                major: ref __self_0_0,
+                                minor: ref __self_0_1,
+                                revision: ref __self_0_2,
+                                vendor_info: ref __self_0_3 } => {
+                                    let __test =
+                                        (*__self_0_0).partial_cmp(&(*__self_1_0));
+                                    if __test ==
+                                        ::std::option::Some(::std::cmp::Equal) {
+                                            {
+                                                let __test =
+                                                    (*__self_0_1).partial_cmp(&(*__self_1_1));
+                                                if __test ==
+                                                    ::std::option::Some(::std::cmp::Equal)
+                                                    {
+                                                        {
+                                                            let __test =
+                                                                (*__self_0_2).partial_cmp(&(*__self_1_2));
+                                                            if __test ==
+                                                                ::std::option::Some(::std::cmp::Equal)
+                                                                {
+                                                                    {
+                                                                        let __test =
+                                                                            (*__self_0_3).partial_cmp(*__self_1_3);
+                                                                        if __test ==
+                                                                            ::std::option::Some(::std::cmp::Equal)
+                                                                            {
+                                                                                ::std::option::Some(::std::cmp::Equal)
+                                                                            } else { __test }
+                                                                    }
+                                                                } else { __test }
+                                                        }
+                                                    } else { __test }
+                                            }
+                                        } else { __test }
+                                }
+                        },
+            }
+        }
 }
 
 impl Version {
     /// Create a new OpenGL version number
-    pub fn new(major: uint, minor: uint, revision: Option<uint>,
+    pub fn new(major: u32, minor: u32, revision: Option<u32>,
                vendor_info: &'static str) -> Version {
         Version {
             major: major,
@@ -177,6 +277,10 @@ impl Info {
     pub fn is_extension_supported(&self, s: &str) -> bool {
         self.extensions.contains_equiv(s)
     }
+
+    pub fn is_version_or_extension_supported(&self, major: u32, minor: u32, ext: &str) -> bool {
+        self.version >= Version::new(major, minor, None, "") || self.is_extension_supported(ext)
+    }
 }
 
 fn to_shader_model(v: &Version) -> shade::ShaderModel {
@@ -198,18 +302,24 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities) {
         max_draw_buffers: get_uint(gl, gl::MAX_DRAW_BUFFERS),
         max_texture_size: get_uint(gl, gl::MAX_TEXTURE_SIZE),
         max_vertex_attributes: get_uint(gl, gl::MAX_VERTEX_ATTRIBS),
-        uniform_block_supported: info.version >= Version::new(3, 1, None, "")
-            || info.is_extension_supported("GL_ARB_uniform_buffer_object"),
-        array_buffer_supported: info.version >= Version::new(3, 0, None, "")
-            || info.is_extension_supported("GL_ARB_vertex_array_object"),
-        immutable_storage_supported: info.version >= Version::new(4, 2, None, "")
-            || info.is_extension_supported("GL_ARB_texture_storage"),
-        sampler_objects_supported: info.version >= Version::new(3, 3, None, "")
-            || info.is_extension_supported("GL_ARB_sampler_objects"),
-        instance_call_supported: info.version >= Version::new(3, 1, None, "")
-            || info.is_extension_supported("GL_ARB_draw_instanced"),
-        instance_rate_supported: info.version >= Version::new(3, 3, None, "")
-            || info.is_extension_supported("GL_ARB_instanced_arrays"),
+        uniform_block_supported:
+            info.is_version_or_extension_supported(3, 0, "GL_ARB_uniform_buffer_object"),
+        array_buffer_supported:
+            info.is_version_or_extension_supported(3, 0, "GL_ARB_vertex_array_object"),
+        immutable_storage_supported:
+            info.is_version_or_extension_supported(4, 2, "GL_ARB_texture_storage"),
+        sampler_objects_supported:
+            info.is_version_or_extension_supported(3, 3, "GL_ARB_sampler_objects"),
+        instance_call_supported:
+            info.is_version_or_extension_supported(3, 1, "GL_ARB_draw_instanced"),
+        instance_rate_supported:
+            info.is_version_or_extension_supported(3, 3, "GL_ARB_instanced_arrays"),
+        render_targets_supported:
+            info.is_version_or_extension_supported(3, 0, "GL_ARB_framebuffer_object"),
+        vertex_base_supported:
+            info.is_version_or_extension_supported(3, 2, "GL_ARB_draw_elements_base_vertex"),
+        instance_base_supported:
+            info.is_version_or_extension_supported(4, 2, "GL_ARB_base_instance"),
     };
     (info, caps)
 }

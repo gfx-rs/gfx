@@ -43,7 +43,7 @@ pub use device::with_slice;
 pub use device::{BufferHandle, BufferInfo, RawBufferHandle, ShaderHandle};
 pub use device::{ProgramHandle, SurfaceHandle, TextureHandle};
 pub use device::{BufferUsage, UsageStatic, UsageDynamic, UsageStream};
-pub use device::{VertexCount, IndexCount, InstanceCount};
+pub use device::{VertexCount, InstanceCount};
 pub use device::{PrimitiveType, Point, Line, LineStrip,
     TriangleList, TriangleStrip, TriangleFan};
 pub use device::draw::CommandBuffer;
@@ -52,7 +52,7 @@ pub use device::shade::{ValueI32, ValueF32};
 pub use device::shade::{ValueI32Vector2, ValueI32Vector3, ValueI32Vector4};
 pub use device::shade::{ValueF32Vector2, ValueF32Vector3, ValueF32Vector4};
 pub use device::shade::{ValueF32Matrix2, ValueF32Matrix3, ValueF32Matrix4};
-pub use device::shade::{ShaderSource, StaticBytes, OwnedBytes, ProgramInfo};
+pub use device::shade::{ShaderSource, ProgramInfo};
 pub use device::target::{ColorValue, ClearData, Mask, Layer, Level, Rect, Target};
 pub use device::target::{COLOR, DEPTH, STENCIL};
 
@@ -95,18 +95,19 @@ impl<D: device::Device<C>, C: device::draw::CommandBuffer> Graphics<D, C> {
 
     /// Clear the `Frame` as the `ClearData` specifies.
     pub fn clear(&mut self, data: ClearData, mask: Mask, frame: &Frame) {
-        self.renderer.clear(data, mask, frame)
+        self.renderer.clear(data, mask, frame);
+        self.device.submit(self.renderer.as_buffer());
+        self.renderer.reset();
     }
 
     /// Draw a ref batch.
     pub fn draw<'a, L, T: shade::ShaderParam<L>>(&'a mut self,
         batch: &'a RefBatch<L, T>, data: &'a T, frame: &Frame) {
-        self.renderer.draw(&(batch, data, &self.context), frame)
-    }
-
-    /// Submit the internal command buffer and reset for the next frame.
-    pub fn end_frame(&mut self) {
+        self.renderer.draw(&(batch, data, &self.context), frame);
         self.device.submit(self.renderer.as_buffer());
         self.renderer.reset();
     }
+
+    /// Submit the internal command buffer and reset for the next frame.
+    pub fn end_frame(&mut self) { }
 }

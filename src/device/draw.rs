@@ -58,7 +58,7 @@ impl DataBuffer {
         use std::{mem, slice};
         let offset = self.buf.len();
         let size = mem::size_of::<T>() * v.len();
-        self.buf.reserve_additional(size);
+        self.buf.reserve(size);
         unsafe {
             self.buf.set_len(offset + size);
             slice::raw::buf_as_slice(v.as_ptr() as *const u8, size,
@@ -112,9 +112,9 @@ pub trait CommandBuffer {
                       tex::ImageInfo, DataPointer);
     fn call_clear(&mut self, target::ClearData, target::Mask);
     fn call_draw(&mut self, ::PrimitiveType, ::VertexCount, ::VertexCount,
-                 Option<::InstanceCount>);
-    fn call_draw_indexed(&mut self, ::PrimitiveType, ::IndexType, ::IndexCount,
-                         ::IndexCount, Option<::InstanceCount>);
+                 Option<(::InstanceCount, ::VertexCount)>);
+    fn call_draw_indexed(&mut self, ::PrimitiveType, ::IndexType, ::VertexCount,
+                         ::VertexCount, ::VertexCount, Option<(::InstanceCount, ::VertexCount)>);
     fn call_blit(&mut self, target::Rect, target::Rect, target::Mask);
 }
 

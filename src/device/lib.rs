@@ -44,8 +44,6 @@ pub mod tex;
 
 /// Draw vertex count.
 pub type VertexCount = u32;
-/// Draw index count.
-pub type IndexCount = u32;
 /// Draw number of instances
 pub type InstanceCount = u32;
 /// Index of a uniform block.
@@ -255,6 +253,9 @@ pub struct Capabilities {
     pub immutable_storage_supported: bool,
     pub instance_call_supported: bool,
     pub instance_rate_supported: bool,
+    pub render_targets_supported: bool,
+    pub vertex_base_supported: bool,
+    pub instance_base_supported: bool,
 }
 
 /// Describes what geometric primitives are created from vertex data.
@@ -344,8 +345,8 @@ pub enum Command {
     UpdateTexture(tex::TextureKind, back::Texture, tex::ImageInfo, draw::DataPointer),
     // drawing
     Clear(target::ClearData, target::Mask),
-    Draw(PrimitiveType, VertexCount, VertexCount, Option<InstanceCount>),
-    DrawIndexed(PrimitiveType, IndexType, IndexCount, IndexCount, Option<InstanceCount>),
+    Draw(PrimitiveType, VertexCount, VertexCount, Option<(InstanceCount, VertexCount)>),
+    DrawIndexed(PrimitiveType, IndexType, VertexCount, VertexCount, VertexCount, Option<(InstanceCount, VertexCount)>),
     Blit(target::Rect, target::Rect, target::Mask),
 }
 

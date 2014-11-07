@@ -178,7 +178,7 @@ macro_rules! shaders {
                 pub use self::gfx_ as gfx;
             }
             __gfx_extern_crate_hack::gfx::ShaderSource {
-                glsl_120: Some(__gfx_extern_crate_hack::gfx::StaticBytes($v)),
+                glsl_120: Some($v),
                 ..shaders!($($t)*)
             }
         }
@@ -190,7 +190,7 @@ macro_rules! shaders {
                 pub use self::gfx_ as gfx;
             }
             __gfx_extern_crate_hack::gfx::ShaderSource {
-                glsl_130: Some(__gfx_extern_crate_hack::gfx::StaticBytes($v)),
+                glsl_130: Some($v),
                 ..shaders!($($t)*)
             }
         }
@@ -202,7 +202,7 @@ macro_rules! shaders {
                 pub use self::gfx_ as gfx;
             }
             __gfx_extern_crate_hack::gfx::ShaderSource {
-                glsl_140: Some(__gfx_extern_crate_hack::gfx::StaticBytes($v)),
+                glsl_140: Some($v),
                 ..shaders!($($t)*)
             }
         }
@@ -214,7 +214,7 @@ macro_rules! shaders {
                 pub use self::gfx_ as gfx;
             }
             __gfx_extern_crate_hack::gfx::ShaderSource {
-                glsl_150: Some(__gfx_extern_crate_hack::gfx::StaticBytes($v)),
+                glsl_150: Some($v),
                 ..shaders!($($t)*)
             }
         }

@@ -21,17 +21,11 @@ all:
 
 .PHONY: update
 update:
-	(cd src/device && cargo update)
-	(cd src/render && cargo update)
-	(cd src/gfx_macros && cargo update)
 	cargo update
 	rm -rf doc
 
 .PHONY: test
 test:
-	(cd src/device && cargo test)
-	(cd src/render && cargo test)
-	(cd src/gfx_macros && cargo test)
 	cargo test
 
 .PHONY: doc
@@ -51,9 +45,6 @@ clean-diagrams:
 
 .PHONY: clean
 clean: clean-diagrams
-	(cd src/device && cargo clean)
-	(cd src/render && cargo clean)
-	(cd src/gfx_macros && cargo clean)
 	cargo clean
 	rm -rf doc
 

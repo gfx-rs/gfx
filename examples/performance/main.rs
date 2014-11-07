@@ -56,7 +56,7 @@ struct Params {
     transform: [[f32, ..4], ..4],
 }
 
-static VERTEX_SRC: gfx::ShaderSource = shaders! {
+static VERTEX_SRC: gfx::ShaderSource<'static> = shaders! {
 GLSL_150: b"
     #version 150 core
     in vec3 a_Pos;
@@ -68,7 +68,7 @@ GLSL_150: b"
 "
 };
 
-static FRAGMENT_SRC: gfx::ShaderSource = shaders! {
+static FRAGMENT_SRC: gfx::ShaderSource<'static> = shaders! {
 GLSL_150: b"
     #version 150 core
     out vec4 o_Color;
