@@ -95,18 +95,19 @@ impl<D: device::Device<C>, C: device::draw::CommandBuffer> Graphics<D, C> {
 
     /// Clear the `Frame` as the `ClearData` specifies.
     pub fn clear(&mut self, data: ClearData, mask: Mask, frame: &Frame) {
-        self.renderer.clear(data, mask, frame)
+        self.renderer.clear(data, mask, frame);
+        self.device.submit(self.renderer.as_buffer());
+        self.renderer.reset();
     }
 
     /// Draw a ref batch.
     pub fn draw<'a, L, T: shade::ShaderParam<L>>(&'a mut self,
         batch: &'a RefBatch<L, T>, data: &'a T, frame: &Frame) {
-        self.renderer.draw(&(batch, data, &self.context), frame)
-    }
-
-    /// Submit the internal command buffer and reset for the next frame.
-    pub fn end_frame(&mut self) {
+        self.renderer.draw(&(batch, data, &self.context), frame);
         self.device.submit(self.renderer.as_buffer());
         self.renderer.reset();
     }
+
+    /// Submit the internal command buffer and reset for the next frame.
+    pub fn end_frame(&mut self) { }
 }
