@@ -90,7 +90,7 @@ static RESET_CB: &'static [::Command] = &[
     //BindTexture
     ::SetPrimitiveState(::state::Primitive {
         front_face: ::state::CounterClockwise,
-        method: ::state::Fill(::state::CullNothing),
+        method: ::state::Fill(::state::CullBack),
         offset: ::state::NoOffset,
     }),
     ::SetViewport(::target::Rect{x: 0, y: 0, w: 0, h: 0}),
