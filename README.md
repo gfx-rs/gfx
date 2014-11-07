@@ -97,7 +97,7 @@ To build the examples run `cargo test`. The executables will be in the `target` 
 # Build all Examples
 cargo test
 # Run Cube Example
-target/cube
+target/examples/cube
 ~~~
 
 ## Note
