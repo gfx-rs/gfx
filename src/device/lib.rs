@@ -361,6 +361,7 @@ pub trait Device<C: draw::CommandBuffer> {
     fn reset_state(&mut self);
     /// Submit a command buffer for execution
     fn submit(&mut self, buffer: (&C, &draw::DataBuffer));
+
     // resource creation
     fn create_buffer_raw(&mut self, size: uint, usage: BufferUsage) -> BufferHandle<()>;
     fn create_buffer<T>(&mut self, num: uint, usage: BufferUsage) -> BufferHandle<T> {
@@ -378,6 +379,7 @@ pub trait Device<C: draw::CommandBuffer> {
     fn create_surface(&mut self, info: tex::SurfaceInfo) -> Result<SurfaceHandle, tex::SurfaceError>;
     fn create_texture(&mut self, info: tex::TextureInfo) -> Result<TextureHandle, tex::TextureError>;
     fn create_sampler(&mut self, info: tex::SamplerInfo) -> SamplerHandle;
+
     // resource deletion
     fn delete_buffer_raw(&mut self, buf: BufferHandle<()>);
     fn delete_buffer<T>(&mut self, buf: BufferHandle<T>) {
@@ -388,6 +390,7 @@ pub trait Device<C: draw::CommandBuffer> {
     fn delete_surface(&mut self, SurfaceHandle);
     fn delete_texture(&mut self, TextureHandle);
     fn delete_sampler(&mut self, SamplerHandle);
+
     /// Update the information stored in a specific buffer
     fn update_buffer_raw(&mut self, buf: BufferHandle<()>, data: &[u8],
                          offset_bytes: uint);
@@ -404,24 +407,14 @@ pub trait Device<C: draw::CommandBuffer> {
     fn map_buffer_readable<T: Copy>(&mut self, buf: BufferHandle<T>) -> ReadableMapping<T, C, Self>;
     fn map_buffer_writable<T: Copy>(&mut self, buf: BufferHandle<T>) -> WritableMapping<T, C, Self>;
     fn map_buffer_rw<T: Copy>(&mut self, buf: BufferHandle<T>) -> RWMapping<T, C, Self>;
+
     /// Update the information stored in a texture
     fn update_texture_raw(&mut self, tex: &TextureHandle, img: &tex::ImageInfo,
                           data: &[u8]) -> Result<(), tex::TextureError>;
-    fn update_texture_compressed_raw(&mut self, tex: &TextureHandle, img: &tex::ImageInfo,
-                                 data: &[u8]) -> Result<(), tex::TextureError>;
     fn update_texture<T: Copy>(&mut self, tex: &TextureHandle,
                       img: &tex::ImageInfo, data: &[T])
                       -> Result<(), tex::TextureError> {
-        match tex.get_info().format {
-            tex::Compressed(_) =>
-                with_slice(data, |s| self.update_texture_compressed_raw(tex, img, s)),
-            _ => with_slice(data, |s| self.update_texture_raw(tex, img, s))
-        }
-    }
-    fn update_texture_compressed<T: Copy>(&mut self, tex: &TextureHandle,
-                      img: &tex::ImageInfo, data: &[T])
-                      -> Result<(), tex::TextureError> {
-        with_slice(data, |s| self.update_texture_compressed_raw(tex, img, s))
+        with_slice(data, |s| self.update_texture_raw(tex, img, s))
     }
     fn generate_mipmap(&mut self, tex: &TextureHandle);
 }
