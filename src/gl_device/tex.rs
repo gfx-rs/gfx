@@ -262,13 +262,6 @@ pub fn make_without_storage(gl: &gl::Gl, info: &tex::TextureInfo) ->
                             Result<Texture, tex::TextureError> {
     let (name, target) = make_texture(gl, info);
 
-    if info.format.is_compressed() {
-        // TODO: will need to do something annoying to work around lack of texture_storage. In
-        // particular, you can't create texture storage without knowing the size, which you
-        // generally don't know without the image data... bleh!
-        return Err(tex::UnsupportedTextureFormat);
-    }
-
     let fmt = match format_to_gl(info.format) {
         Ok(f) => f as GLint,
         Err(_) => return Err(tex::UnsupportedTextureFormat),
@@ -540,10 +533,13 @@ pub fn bind_sampler(gl: &gl::Gl, anchor: BindAnchor, info: &tex::SamplerInfo) { 
 pub fn update_texture(gl: &gl::Gl, kind: tex::TextureKind, name: Texture,
                       img: &tex::ImageInfo, address: *const u8, size: uint)
                       -> Result<(), tex::TextureError> {
-    let expected_size = img.width as uint * img.height as uint *
-                        img.depth as uint * format_to_size(img.format);
-    if size != expected_size {
-        return Err(tex::IncorrectTextureSize(expected_size));
+    if !img.format.is_compressed() {
+        // TODO: can we compute the expected size for compressed formats?
+        let expected_size = img.width as uint * img.height as uint *
+                            img.depth as uint * format_to_size(img.format);
+        if size != expected_size {
+            return Err(tex::IncorrectTextureSize(expected_size));
+        }
     }
 
     let data = address as *const GLvoid;
@@ -555,6 +551,10 @@ pub fn update_texture(gl: &gl::Gl, kind: tex::TextureKind, name: Texture,
     let target = bind_kind_to_gl(kind);
 
     unsafe { gl.BindTexture(target, name) };
+
+    if img.format.is_compressed() {
+        return compressed_update(gl, kind, target, img, data, typ, size as GLint);
+    }
 
     unsafe {
         match kind {
@@ -620,18 +620,9 @@ pub fn update_texture(gl: &gl::Gl, kind: tex::TextureKind, name: Texture,
     Ok(())
 }
 
-pub fn update_texture_compressed(gl: &gl::Gl, kind: tex::TextureKind, name: Texture,
-                      img: &tex::ImageInfo, address: *const u8, size: uint)
-                      -> Result<(), tex::TextureError> {
-    let data = address as *const GLvoid;
-    let typ = match format_to_gltype(img.format) {
-        Ok(t) if img.format.is_compressed() => t,
-        _ => return Err(tex::UnsupportedTextureFormat),
-    };
-    let target = bind_kind_to_gl(kind);
-
-    unsafe { gl.BindTexture(target, name) };
-
+pub fn compressed_update(gl: &gl::Gl, kind: tex::TextureKind, target: GLenum, img: &tex::ImageInfo,
+                         data: *const GLvoid, typ: GLenum, size: GLint)
+                         -> Result<(), tex::TextureError> {
     unsafe {
         match kind {
             tex::Texture1D => {
