@@ -18,6 +18,8 @@ use super::state;
 use tex;
 use attrib;
 
+use std::num::Float;
+
 /// A token produced by the `bind_texture` that allows following up
 /// with a GL-compatibility sampler settings in `bind_sampler`
 pub struct BindAnchor(GLenum);
