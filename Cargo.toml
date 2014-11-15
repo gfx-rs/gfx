@@ -78,7 +78,7 @@ name = "glutin"
 path = "examples/glutin/main.rs"
 
 [dev_dependencies.glutin]
-git = "https://github.com/tomaka/gl-init-rs.git"
+git = "https://github.com/tomaka/glutin.git"
 
 
 [[example]]
