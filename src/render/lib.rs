@@ -477,8 +477,8 @@ impl<D: device::Device<C>, C: CommandBuffer> DeviceHelper<C> for D {
     fn create_mesh<T: mesh::VertexFormat + Copy>(&mut self, data: &[T]) -> mesh::Mesh {
         let nv = data.len();
         debug_assert!(nv < {
-            use std::num::Bounded;
-            let val: device::VertexCount = Bounded::max_value();
+            use std::num::Int;
+            let val: device::VertexCount = Int::max_value();
             val as uint
         });
         let buf = self.create_buffer_static(data);
