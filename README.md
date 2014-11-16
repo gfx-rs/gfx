@@ -106,4 +106,4 @@ gfx-rs is still in the early stages of development. Help is most appreciated.
 
 If you are interested in helping out, you can contact the developers on
 [Gitter](https://gitter.im/gfx-rs/gfx-rs). See [contrib.md](wiki/contrib.md) for
-contant information and contribution guidelines.
+contact information and contribution guidelines.
