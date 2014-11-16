@@ -206,7 +206,7 @@ static FS_SRC: &'static str = "
 
 
 fn compile_shader(gl: &Gl, src: &str, ty: GLenum) -> GLuint { unsafe {
-    use std::num::Saturating;
+    use std::num::Int;
     let shader = gl.CreateShader(ty);
     // Attempt to compile the shader
     src.with_c_str(|ptr| gl.ShaderSource(shader, 1, &ptr, ptr::null()));
@@ -363,6 +363,8 @@ fn gl_main(glfw: glfw::Glfw,
 }
 
 fn main() {
+    use std::num::Float;
+
     let args = os::args();
     if args.len() == 1 {
         println!("gfx-perf [gl|gfx] <size>");

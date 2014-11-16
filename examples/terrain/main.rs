@@ -154,6 +154,8 @@ fn calculate_color(height: f32) -> [f32, ..3] {
 }
 
 fn main() {
+    use std::num::FloatMath;
+
     let glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
     glfw.window_hint(glfw::ContextVersion(3, 2));
