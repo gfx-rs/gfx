@@ -21,7 +21,6 @@ extern crate gfx;
 extern crate gfx_macros;
 extern crate glfw;
 extern crate native;
-extern crate time;
 
 use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3};
