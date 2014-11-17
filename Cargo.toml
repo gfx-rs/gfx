@@ -91,5 +91,8 @@ path = "examples/performance/main.rs"
 [dev_dependencies.gfx_gl]
 git = "https://github.com/gfx-rs/gfx_gl.git"
 
+[dev_dependencies.time]
+git = "https://github.com/rust-lang/time"
+
 # [dev_dependencies.cgmath]
 # git = "http://github.com/bjz/cgmath-rs"
