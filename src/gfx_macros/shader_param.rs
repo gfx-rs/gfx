@@ -125,7 +125,7 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
         },
         _ => {
             cx.span_err(span, "Unable to implement `ShaderParam::create_link()` on a non-structure");
-            cx.expr_lit(span, ast::LitNil)
+            cx.expr_tuple(span, vec![])
         },
     }
 }
@@ -203,7 +203,7 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
         },
         _ => {
             cx.span_err(span, "Unable to implement `ShaderParam::bind()` on a non-structure");
-            cx.expr_lit(span, ast::LitNil)
+            cx.expr_tuple(span, vec![])
         }
     }
 }
