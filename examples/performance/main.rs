@@ -37,7 +37,7 @@ use std::mem;
 use std::ptr;
 use std::str;
 use std::os;
-use std::from_str::FromStr;
+use std::str::FromStr;
 
 #[vertex_format]
 struct Vertex {

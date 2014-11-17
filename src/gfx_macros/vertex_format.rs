@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::fmt;
-use std::from_str::FromStr;
+use std::str::FromStr;
 use syntax::{ast, ext};
 use syntax::ext::build::AstBuilder;
 use syntax::ext::deriving::generic;
@@ -131,12 +131,12 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                                       not supported, but found: `{}`. Use an \
                                       integer component with an explicit size \
                                       instead.", ty_str).as_slice());
-            cx.expr_lit(span, ast::LitNil)
+            cx.expr_tuple(span, vec![])
         },
         ty_str => {
             cx.span_err(span, format!("Unrecognized component type: `{}`",
                                       ty_str).as_slice());
-            cx.expr_lit(span, ast::LitNil)
+            cx.expr_tuple(span, vec![])
         },
     }
 }
@@ -157,13 +157,13 @@ fn decode_count_and_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
             _ => {
                 cx.span_err(span, format!("Unsupported fixed vector sub-type: \
                                           `{}`",pty.node).as_slice());
-                cx.expr_lit(span, ast::LitNil)
+                cx.expr_tuple(span, vec![])
             },
         }),
         _ => {
             cx.span_err(span, format!("Unsupported attribute type: `{}`",
                                       field.node.ty.node).as_slice());
-            (cx.expr_lit(span, ast::LitNil), cx.expr_lit(span, ast::LitNil))
+            (cx.expr_tuple(span, vec![]), cx.expr_tuple(span, vec![]))
         },
     }
 }
@@ -218,7 +218,7 @@ fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
         _ => {
             cx.span_err(span, "Unable to implement `gfx::VertexFormat::generate` \
                               on a non-structure");
-            cx.expr_lit(span, ast::LitNil)
+            cx.expr_tuple(span, vec![])
         }
     }
 }
