@@ -16,6 +16,7 @@
 
 use std::cell::Cell;
 use device::shade;
+use device::shade::UniformValue;
 use device::{RawBufferHandle, TextureHandle, SamplerHandle};
 
 pub use device::shade::{Stage, CreateShaderError, Vertex, Geometry, Fragment};
@@ -36,20 +37,20 @@ macro_rules! impl_ToUniform(
     );
 )
 
-impl_ToUniform!(i32, shade::ValueI32)
-impl_ToUniform!(f32, shade::ValueF32)
+impl_ToUniform!(i32, UniformValue::I32)
+impl_ToUniform!(f32, UniformValue::F32)
 
-impl_ToUniform!([i32, ..2], shade::ValueI32Vector2)
-impl_ToUniform!([i32, ..3], shade::ValueI32Vector3)
-impl_ToUniform!([i32, ..4], shade::ValueI32Vector4)
+impl_ToUniform!([i32, ..2], UniformValue::I32Vector2)
+impl_ToUniform!([i32, ..3], UniformValue::I32Vector3)
+impl_ToUniform!([i32, ..4], UniformValue::I32Vector4)
 
-impl_ToUniform!([f32, ..2], shade::ValueF32Vector2)
-impl_ToUniform!([f32, ..3], shade::ValueF32Vector3)
-impl_ToUniform!([f32, ..4], shade::ValueF32Vector4)
+impl_ToUniform!([f32, ..2], UniformValue::F32Vector2)
+impl_ToUniform!([f32, ..3], UniformValue::F32Vector3)
+impl_ToUniform!([f32, ..4], UniformValue::F32Vector4)
 
-impl_ToUniform!([[f32, ..2], ..2], shade::ValueF32Matrix2)
-impl_ToUniform!([[f32, ..3], ..3], shade::ValueF32Matrix3)
-impl_ToUniform!([[f32, ..4], ..4], shade::ValueF32Matrix4)
+impl_ToUniform!([[f32, ..2], ..2], UniformValue::F32Matrix2)
+impl_ToUniform!([[f32, ..3], ..3], UniformValue::F32Matrix3)
+impl_ToUniform!([[f32, ..4], ..4], UniformValue::F32Matrix4)
 
 /// Variable index of a uniform.
 pub type VarUniform = u16;
@@ -67,7 +68,7 @@ pub type TextureParam = (TextureHandle, Option<SamplerHandle>);
 // Not sure if it's the best data structure to represent it.
 pub struct ParamValues<'a> {
     /// uniform values to be provided
-    pub uniforms: &'a mut Vec<shade::UniformValue>,
+    pub uniforms: &'a mut Vec<UniformValue>,
     /// uniform buffers to be provided
     pub blocks  : &'a mut Vec<RawBufferHandle>,
     /// textures to be provided
@@ -98,15 +99,15 @@ pub trait ShaderParam<L> {
 impl ShaderParam<()> for () {
     fn create_link(_: Option<&()>, info: &shade::ProgramInfo) -> Result<(), ParameterError> {
         match info.uniforms.as_slice().head() {
-            Some(u) => return Err(MissingUniform(u.name.clone())),
+            Some(u) => return Err(ParameterError::MissingUniform(u.name.clone())),
             None => (),
         }
         match info.blocks.as_slice().head() {
-            Some(b) => return Err(MissingBlock(b.name.clone())),
+            Some(b) => return Err(ParameterError::MissingBlock(b.name.clone())),
             None => (),
         }
         match info.textures.as_slice().head() {
-            Some(t) => return Err(MissingTexture(t.name.clone())),
+            Some(t) => return Err(ParameterError::MissingTexture(t.name.clone())),
             None => (),
         }
         Ok(())
@@ -148,7 +149,7 @@ impl ShaderParam<ParamDictionaryLink> for ParamDictionary {
                    -> Result<ParamDictionaryLink, ParameterError> {
         let this = match this {
             Some(d) => d,
-            None => return Err(ParameterGeneralMismatch),
+            None => return Err(ParameterError::ParameterGeneralMismatch),
         };
         //TODO: proper error checks
         Ok(ParamDictionaryLink {

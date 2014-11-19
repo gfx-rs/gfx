@@ -20,10 +20,10 @@ use device;
 /// A single buffer that can be bound to a render target.
 pub enum Plane {
     /// Render to a `Surface` (corresponds to a renderbuffer in GL).
-    PlaneSurface(device::SurfaceHandle),
+    Surface(device::SurfaceHandle),
     /// Render to a texture at a specific mipmap level
     /// If `Layer` is set, it is selecting a single 2D slice of a given 3D texture
-    PlaneTexture(device::TextureHandle, device::target::Level,
+    Texture(device::TextureHandle, device::target::Level,
                  Option<device::target::Layer>),
 }
 
@@ -31,8 +31,8 @@ impl Plane {
     /// Get the surface info
     pub fn get_surface_info(&self) -> device::tex::SurfaceInfo {
         match *self {
-            PlaneSurface(ref suf) => *suf.get_info(),
-            PlaneTexture(ref tex, _, _) => tex.get_info().to_surface_info(),
+            Plane::Surface(ref suf) => *suf.get_info(),
+            Plane::Texture(ref tex, _, _) => tex.get_info().to_surface_info(),
         }
     }
 }

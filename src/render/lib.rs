@@ -28,11 +28,12 @@ use std::mem;
 
 use device::attrib;
 use device::draw::CommandBuffer;
-use device::shade::{ProgramInfo, UniformValue, ShaderSource};
-use device::shade::{Vertex, Fragment, CreateShaderError};
+use device::shade::{ProgramInfo, UniformValue, ShaderSource, Stage, CreateShaderError};
 use device::target::{Rect, ClearData, Mask, Access, Draw, Read,
     Target, TargetColor, TargetDepth, TargetStencil};
 use batch::Batch;
+use mesh::SliceKind;
+use target::Plane;
 
 /// Batches
 pub mod batch;
@@ -49,11 +50,11 @@ pub mod target;
 #[deriving(Clone, PartialEq, Show)]
 pub enum ProgramError {
     /// Unable to compile the vertex shader
-    ErrorVertex(CreateShaderError),
+    Vertex(CreateShaderError),
     /// Unable to compile the fragment shader
-    ErrorFragment(CreateShaderError),
+    Fragment(CreateShaderError),
     /// Unable to link
-    ErrorLink(()),
+    Link(()),
 }
 
 const TRACKED_ATTRIBUTES: uint = 8;
@@ -117,17 +118,17 @@ impl ParamStorage{
 /// Useful when Renderer is borrowed, and we need to issue commands.
 trait CommandBufferHelper {
     /// Bind a plane to some target
-    fn bind_target(&mut self, Access, Target, Option<&target::Plane>);
+    fn bind_target(&mut self, Access, Target, Option<&Plane>);
 }
 
 impl<C: CommandBuffer> CommandBufferHelper for C {
     fn bind_target(&mut self, access: Access, to: Target,
-                   plane: Option<&target::Plane>) {
+                   plane: Option<&Plane>) {
         match plane {
             None => self.unbind_target(access, to),
-            Some(&target::PlaneSurface(ref suf)) =>
+            Some(&Plane::Surface(ref suf)) =>
                 self.bind_target_surface(access, to, suf.get_name()),
-            Some(&target::PlaneTexture(ref tex, level, layer)) =>
+            Some(&Plane::Texture(ref tex, level, layer)) =>
                 self.bind_target_texture(access, to, tex.get_name(), level, layer),
         }
     }
@@ -386,7 +387,7 @@ impl<C: CommandBuffer> Renderer<C> {
             if sampler.is_some() && tex.get_info().kind.get_aa_mode().is_some() {
                 error!("A sampler provided for an AA texture: {}", var.name.clone());
             }
-            self.command_buffer.bind_uniform(var.location, device::shade::ValueI32(i as i32));
+            self.command_buffer.bind_uniform(var.location, UniformValue::I32(i as i32));
             self.command_buffer.bind_texture(i as device::TextureSlot,
                 tex.get_info().kind, tex.get_name(), sampler);
         }
@@ -429,18 +430,18 @@ impl<C: CommandBuffer> Renderer<C> {
                   instances: Option<(device::InstanceCount, device::VertexCount)>) {
         let mesh::Slice { start, end, prim_type, kind } = *slice;
         match kind {
-            mesh::VertexSlice => {
+            SliceKind::Vertex => {
                 self.command_buffer.call_draw(prim_type, start, end, instances);
             },
-            mesh::IndexSlice8(buf, base) => {
+            SliceKind::Index8(buf, base) => {
                 self.bind_index(buf);
                 self.command_buffer.call_draw_indexed(prim_type, attrib::U8, start, end, base, instances);
             },
-            mesh::IndexSlice16(buf, base) => {
+            SliceKind::Index16(buf, base) => {
                 self.bind_index(buf);
                 self.command_buffer.call_draw_indexed(prim_type, attrib::U16, start, end, base, instances);
             },
-            mesh::IndexSlice32(buf, base) => {
+            SliceKind::Index32(buf, base) => {
                 self.bind_index(buf);
                 self.command_buffer.call_draw_indexed(prim_type, attrib::U32, start, end, base, instances);
             },
@@ -487,14 +488,14 @@ impl<D: device::Device<C>, C: CommandBuffer> DeviceHelper<C> for D {
 
     fn link_program(&mut self, vs_src: ShaderSource, fs_src: ShaderSource)
                     -> Result<device::ProgramHandle, ProgramError> {
-        let vs = match self.create_shader(Vertex, vs_src) {
+        let vs = match self.create_shader(Stage::Vertex, vs_src) {
             Ok(s) => s,
-            Err(e) => return Err(ErrorVertex(e)),
+            Err(e) => return Err(ProgramError::Vertex(e)),
         };
-        let fs = match self.create_shader(Fragment, fs_src) {
+        let fs = match self.create_shader(Stage::Fragment, fs_src) {
             Ok(s) => s,
-            Err(e) => return Err(ErrorFragment(e)),
+            Err(e) => return Err(ProgramError::Fragment(e)),
         };
-        self.create_program([vs, fs]).map_err(|e| ErrorLink(e))
+        self.create_program([vs, fs]).map_err(|e| ProgramError::Link(e))
     }
 }

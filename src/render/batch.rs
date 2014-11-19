@@ -29,22 +29,22 @@ use state::DrawState;
 #[deriving(Clone, Show)]
 pub enum MeshError {
     /// A required attribute was missing.
-    ErrorAttributeMissing(String),
+    AttributeMissing(String),
     /// An attribute's type from the vertex format differed from the type used in the shader.
-    ErrorAttributeType,
+    AttributeType,
     /// Internal error due to mesh link limitations
-    ErrorMeshLink(mesh::LinkError),
+    MeshLink(mesh::LinkError),
 }
 
 /// An error occurring at batch creation
 #[deriving(Clone, Show)]
 pub enum BatchError {
     /// Error connecting mesh attributes
-    ErrorMesh(MeshError),
+    Mesh(MeshError),
     /// Error connecting shader parameters
-    ErrorParameters(ParameterError),
+    Parameters(ParameterError),
     /// Error context is full
-    ErrorContextFull,
+    ContextFull,
 }
 
 /// Match mesh attributes against shader inputs, produce a mesh link.
@@ -56,13 +56,13 @@ pub fn link_mesh(mesh: &mesh::Mesh, pinfo: &ProgramInfo) -> Result<mesh::Link, M
                   .find(|&(_, a)| a.name.as_slice() == sat.name.as_slice()) {
             Some((attrib_id, vat)) => match vat.format.elem_type.is_compatible(sat.base_type) {
                 Ok(_) => indices.push(attrib_id),
-                Err(_) => return Err(ErrorAttributeType),
+                Err(_) => return Err(MeshError::AttributeType),
             },
-            None => return Err(ErrorAttributeMissing(sat.name.clone())),
+            None => return Err(MeshError::AttributeMissing(sat.name.clone())),
         }
     }
     mesh::Link::from_iter(indices.into_iter())
-        .map_err(|e| ErrorMeshLink(e))
+        .map_err(|e| MeshError::MeshLink(e))
 }
 
 /// Abstract batch trait
@@ -94,11 +94,11 @@ impl<L, T: ShaderParam<L>> OwnedBatch<L, T> {
         let slice = mesh.to_slice(::device::TriangleList);
         let mesh_link = match link_mesh(&mesh, program.get_info()) {
             Ok(l) => l,
-            Err(e) => return Err(ErrorMesh(e)),
+            Err(e) => return Err(BatchError::Mesh(e)),
         };
         let param_link = match ShaderParam::create_link(None::<&T>, program.get_info()) {
             Ok(l) => l,
-            Err(e) => return Err(ErrorParameters(e)),
+            Err(e) => return Err(BatchError::Parameters(e)),
         };
         Ok(OwnedBatch {
             mesh: mesh,
@@ -263,23 +263,23 @@ impl Context {
                 -> Result<RefBatch<L, T>, BatchError> {
         let mesh_link = match link_mesh(mesh, program.get_info()) {
             Ok(l) => l,
-            Err(e) => return Err(ErrorMesh(e)),
+            Err(e) => return Err(BatchError::Mesh(e)),
         };
         let link = match ShaderParam::create_link(None::<&T>, program.get_info()) {
             Ok(l) => l,
-            Err(e) => return Err(ErrorParameters(e))
+            Err(e) => return Err(BatchError::Parameters(e))
         };
         let mesh_id = match self.meshes.find_or_insert(mesh) {
             Some(id) => id,
-            None => return Err(ErrorContextFull),
+            None => return Err(BatchError::ContextFull),
         };
         let program_id = match self.programs.find_or_insert(program) {
             Some(id) => id,
-            None => return Err(ErrorContextFull),
+            None => return Err(BatchError::ContextFull),
         };
         let state_id = match self.states.find_or_insert(state) {
             Some(id) => id,
-            None => return Err(ErrorContextFull),
+            None => return Err(BatchError::ContextFull),
         };
 
         Ok(RefBatch {
