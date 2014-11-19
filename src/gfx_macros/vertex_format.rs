@@ -92,8 +92,8 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
     match ty_str {
         "f32" | "f64" => {
             let kind = cx.ident_of(match modifier {
-                None | Some(Modifier::AsFloat) => "FloatSubType::Default",
-                Some(Modifier::AsDouble) => "FloatSubType::Precision",
+                None | Some(Modifier::AsFloat) => "Default",
+                Some(Modifier::AsDouble) => "Precision",
                 Some(Modifier::Normalized) => {
                     cx.span_warn(span, format!(
                         "Incompatible float modifier attribute: `#[{}]`", modifier
@@ -102,18 +102,18 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 }
             });
             let sub_type = cx.ident_of(format!("F{}", ty_str.slice_from(1)).as_slice());
-            quote_expr!(cx, $path_root::gfx::attrib::Type::Float($path_root::gfx::attrib::$kind,
+            quote_expr!(cx, $path_root::gfx::attrib::Type::Float($path_root::gfx::attrib::FloatSubType::$kind,
                                                                  $path_root::gfx::attrib::$sub_type))
         },
         "u8" | "u16" | "u32" | "u64" |
         "i8" | "i16" | "i32" | "i64" => {
             let sign = cx.ident_of({
-                if ty_str.starts_with("i") { "SignFlag::Signed" } else { "SignFlag::Unsigned" }
+                if ty_str.starts_with("i") { "Signed" } else { "Unsigned" }
             });
             let kind = cx.ident_of(match modifier {
                 None => "IntSubType::Raw",
-                Some(Modifier::Normalized) => "IntSubType::Normalized",
-                Some(Modifier::AsFloat) => "IntSubType::AsFloat",
+                Some(Modifier::Normalized) => "Normalized",
+                Some(Modifier::AsFloat) => "AsFloat",
                 Some(Modifier::AsDouble) => {
                     cx.span_warn(span, format!(
                         "Incompatible int modifier attribute: `#[{}]`", modifier
@@ -122,9 +122,9 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 }
             });
             let sub_type = cx.ident_of(format!("U{}", ty_str.slice_from(1)).as_slice());
-            quote_expr!(cx, $path_root::gfx::attrib::Int($path_root::gfx::attrib::$kind,
+            quote_expr!(cx, $path_root::gfx::attrib::Int($path_root::gfx::attrib::IntSubType::$kind,
                                                          $path_root::gfx::attrib::$sub_type,
-                                                         $path_root::gfx::attrib::$sign))
+                                                         $path_root::gfx::attrib::SignFlag::$sign))
         },
         "uint" | "int" => {
             cx.span_err(span, format!("Pointer-sized integer components are \
