@@ -106,7 +106,7 @@ fn gfx_main(glfw: glfw::Glfw,
         Vertex { pos: [ 1,  1,  1] },
     ];
 
-    let mesh = device.create_mesh(vertex_data);
+    let mesh = device.create_mesh(&vertex_data);
     let slice = mesh.to_slice(gfx::TriangleList);
 
     let texture_info = gfx::tex::TextureInfo {
@@ -120,7 +120,7 @@ fn gfx_main(glfw: glfw::Glfw,
     let image_info = texture_info.to_image_info();
     let texture = device.create_texture(texture_info).unwrap();
     device.update_texture(&texture, &image_info,
-                          [0x20u8, 0xA0u8, 0xC0u8, 0x00u8])
+                          &[0x20u8, 0xA0u8, 0xC0u8, 0x00u8])
         .unwrap();
 
     let program = device.link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
