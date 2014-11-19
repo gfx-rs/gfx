@@ -13,29 +13,31 @@
 // limitations under the License.
 
 use super::super::state as s;
+use super::super::state::{BlendValue, Comparison, CullMode, Equation, InverseFlag,
+                          OffsetType, RasterMethod, StencilOp, WindingOrder};
 use super::super::target::Rect;
 use super::gl;
 
 pub fn bind_primitive(gl: &gl::Gl, p: s::Primitive) {
     unsafe { gl.FrontFace(match p.front_face {
-        s::Clockwise => gl::CW,
-        s::CounterClockwise => gl::CCW,
+        WindingOrder::Clockwise => gl::CW,
+        WindingOrder::CounterClockwise => gl::CCW,
     }) };
 
     let (gl_draw, gl_offset) = match p.method {
-        s::Point => (gl::POINT, gl::POLYGON_OFFSET_POINT),
-        s::Line(width) => {
+        RasterMethod::Point => (gl::POINT, gl::POLYGON_OFFSET_POINT),
+        RasterMethod::Line(width) => {
             unsafe { gl.LineWidth(width) };
             (gl::LINE, gl::POLYGON_OFFSET_LINE)
         },
-        s::Fill(cull) => {
+        RasterMethod::Fill(cull) => {
             match cull {
-                s::CullNothing => unsafe { gl.Disable(gl::CULL_FACE) },
-                s::CullFront => { unsafe {
+                CullMode::Nothing => unsafe { gl.Disable(gl::CULL_FACE) },
+                CullMode::Front => { unsafe {
                     gl.Enable(gl::CULL_FACE);
                     gl.CullFace(gl::FRONT);
                 }},
-                s::CullBack => { unsafe {
+                CullMode::Back => { unsafe {
                     gl.Enable(gl::CULL_FACE);
                     gl.CullFace(gl::BACK);
                 }},
@@ -47,11 +49,11 @@ pub fn bind_primitive(gl: &gl::Gl, p: s::Primitive) {
     unsafe { gl.PolygonMode(gl::FRONT_AND_BACK, gl_draw) };
 
     match p.offset {
-        s::Offset(factor, units) => { unsafe {
+        OffsetType::Offset(factor, units) => { unsafe {
             gl.Enable(gl_offset);
             gl.PolygonOffset(factor, units as gl::types::GLfloat);
         }},
-        s::NoOffset => unsafe { gl.Disable(gl_offset) },
+        OffsetType::NoOffset => unsafe { gl.Disable(gl_offset) },
     }
 }
 
@@ -86,16 +88,16 @@ pub fn bind_scissor(gl: &gl::Gl, rect: Option<Rect>) {
     }
 }
 
-pub fn map_comparison(cmp: s::Comparison) -> gl::types::GLenum {
+pub fn map_comparison(cmp: Comparison) -> gl::types::GLenum {
     match cmp {
-        s::Never        => gl::NEVER,
-        s::Less         => gl::LESS,
-        s::LessEqual    => gl::LEQUAL,
-        s::Equal        => gl::EQUAL,
-        s::GreaterEqual => gl::GEQUAL,
-        s::Greater      => gl::GREATER,
-        s::NotEqual     => gl::NOTEQUAL,
-        s::Always       => gl::ALWAYS,
+        Comparison::Never        => gl::NEVER,
+        Comparison::Less         => gl::LESS,
+        Comparison::LessEqual    => gl::LEQUAL,
+        Comparison::Equal        => gl::EQUAL,
+        Comparison::GreaterEqual => gl::GEQUAL,
+        Comparison::Greater      => gl::GREATER,
+        Comparison::NotEqual     => gl::NOTEQUAL,
+        Comparison::Always       => gl::ALWAYS,
     }
 }
 
@@ -110,16 +112,16 @@ pub fn bind_depth(gl: &gl::Gl, depth: Option<s::Depth>) {
     }
 }
 
-fn map_operation(op: s::StencilOp) -> gl::types::GLenum {
+fn map_operation(op: StencilOp) -> gl::types::GLenum {
     match op {
-        s::OpKeep          => gl::KEEP,
-        s::OpZero          => gl::ZERO,
-        s::OpReplace       => gl::REPLACE,
-        s::OpIncrementClamp=> gl::INCR,
-        s::OpIncrementWrap => gl::INCR_WRAP,
-        s::OpDecrementClamp=> gl::DECR,
-        s::OpDecrementWrap => gl::DECR_WRAP,
-        s::OpInvert        => gl::INVERT,
+        StencilOp::Keep          => gl::KEEP,
+        StencilOp::Zero          => gl::ZERO,
+        StencilOp::Replace       => gl::REPLACE,
+        StencilOp::IncrementClamp=> gl::INCR,
+        StencilOp::IncrementWrap => gl::INCR_WRAP,
+        StencilOp::DecrementClamp=> gl::DECR,
+        StencilOp::DecrementWrap => gl::DECR_WRAP,
+        StencilOp::Invert        => gl::INVERT,
     }
 }
 
@@ -134,10 +136,10 @@ pub fn bind_stencil(gl: &gl::Gl, stencil: Option<s::Stencil>, cull: s::CullMode)
     match stencil {
         Some(s) => {
             unsafe { gl.Enable(gl::STENCIL_TEST) };
-            if cull != s::CullFront {
+            if cull != CullMode::Front {
                 bind_side(gl, gl::FRONT, s.front);
             }
-            if cull != s::CullBack {
+            if cull != CullMode::Back {
                 bind_side(gl, gl::BACK, s.back);
             }
         }
@@ -146,33 +148,33 @@ pub fn bind_stencil(gl: &gl::Gl, stencil: Option<s::Stencil>, cull: s::CullMode)
 }
 
 
-fn map_equation(eq: s::Equation) -> gl::types::GLenum {
+fn map_equation(eq: Equation) -> gl::types::GLenum {
     match eq {
-        s::FuncAdd    => gl::FUNC_ADD,
-        s::FuncSub    => gl::FUNC_SUBTRACT,
-        s::FuncRevSub => gl::FUNC_REVERSE_SUBTRACT,
-        s::FuncMin    => gl::MIN,
-        s::FuncMax    => gl::MAX,
+        Equation::FuncAdd    => gl::FUNC_ADD,
+        Equation::FuncSub    => gl::FUNC_SUBTRACT,
+        Equation::FuncRevSub => gl::FUNC_REVERSE_SUBTRACT,
+        Equation::FuncMin    => gl::MIN,
+        Equation::FuncMax    => gl::MAX,
     }
 }
 
 fn map_factor(factor: s::Factor) -> gl::types::GLenum {
     match factor {
-        s::Factor(s::Normal,  s::Zero)        => gl::ZERO,
-        s::Factor(s::Inverse, s::Zero)        => gl::ONE,
-        s::Factor(s::Normal,  s::SourceColor) => gl::SRC_COLOR,
-        s::Factor(s::Inverse, s::SourceColor) => gl::ONE_MINUS_SRC_COLOR,
-        s::Factor(s::Normal,  s::SourceAlpha) => gl::SRC_ALPHA,
-        s::Factor(s::Inverse, s::SourceAlpha) => gl::ONE_MINUS_SRC_ALPHA,
-        s::Factor(s::Normal,  s::DestColor)   => gl::DST_COLOR,
-        s::Factor(s::Inverse, s::DestColor)   => gl::ONE_MINUS_DST_COLOR,
-        s::Factor(s::Normal,  s::DestAlpha)   => gl::DST_ALPHA,
-        s::Factor(s::Inverse, s::DestAlpha)   => gl::ONE_MINUS_DST_ALPHA,
-        s::Factor(s::Normal,  s::ConstColor)  => gl::CONSTANT_COLOR,
-        s::Factor(s::Inverse, s::ConstColor)  => gl::ONE_MINUS_CONSTANT_COLOR,
-        s::Factor(s::Normal,  s::ConstAlpha)  => gl::CONSTANT_ALPHA,
-        s::Factor(s::Inverse, s::ConstAlpha)  => gl::ONE_MINUS_CONSTANT_ALPHA,
-        s::Factor(s::Normal,  s::SourceAlphaSaturated) => gl::SRC_ALPHA_SATURATE,
+        s::Factor(InverseFlag::Normal,  BlendValue::Zero)        => gl::ZERO,
+        s::Factor(InverseFlag::Inverse, BlendValue::Zero)        => gl::ONE,
+        s::Factor(InverseFlag::Normal,  BlendValue::SourceColor) => gl::SRC_COLOR,
+        s::Factor(InverseFlag::Inverse, BlendValue::SourceColor) => gl::ONE_MINUS_SRC_COLOR,
+        s::Factor(InverseFlag::Normal,  BlendValue::SourceAlpha) => gl::SRC_ALPHA,
+        s::Factor(InverseFlag::Inverse, BlendValue::SourceAlpha) => gl::ONE_MINUS_SRC_ALPHA,
+        s::Factor(InverseFlag::Normal,  BlendValue::DestColor)   => gl::DST_COLOR,
+        s::Factor(InverseFlag::Inverse, BlendValue::DestColor)   => gl::ONE_MINUS_DST_COLOR,
+        s::Factor(InverseFlag::Normal,  BlendValue::DestAlpha)   => gl::DST_ALPHA,
+        s::Factor(InverseFlag::Inverse, BlendValue::DestAlpha)   => gl::ONE_MINUS_DST_ALPHA,
+        s::Factor(InverseFlag::Normal,  BlendValue::ConstColor)  => gl::CONSTANT_COLOR,
+        s::Factor(InverseFlag::Inverse, BlendValue::ConstColor)  => gl::ONE_MINUS_CONSTANT_COLOR,
+        s::Factor(InverseFlag::Normal,  BlendValue::ConstAlpha)  => gl::CONSTANT_ALPHA,
+        s::Factor(InverseFlag::Inverse, BlendValue::ConstAlpha)  => gl::ONE_MINUS_CONSTANT_ALPHA,
+        s::Factor(InverseFlag::Normal,  BlendValue::SourceAlphaSaturated) => gl::SRC_ALPHA_SATURATE,
         _ => panic!("Unsupported blend factor: {}", factor),
     }
 }

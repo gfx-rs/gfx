@@ -23,10 +23,14 @@ extern crate "gfx_gl" as gl;
 
 use log;
 
-use attrib;
+use attrib::{SignFlag, IntSubType, IntSize, FloatSubType, FloatSize, Type};
+use state::{OffsetType, CullMode, RasterMethod, WindingOrder};
+use target::{Access, Target};
 
+use BufferUsage;
+use Command;
 use Device;
-use {MapAccess, ReadableMapping, WritableMapping, RWMapping, BufferHandle};
+use {MapAccess, ReadableMapping, WritableMapping, RWMapping, BufferHandle, PrimitiveType};
 
 pub use self::draw::GlCommandBuffer;
 pub use self::info::{Info, PlatformName, Version};
@@ -65,65 +69,65 @@ pub enum GlError {
 impl GlError {
     pub fn from_error_code(error_code: gl::types::GLenum) -> GlError {
         match error_code {
-            gl::NO_ERROR                      => NoError,
-            gl::INVALID_ENUM                  => InvalidEnum,
-            gl::INVALID_VALUE                 => InvalidValue,
-            gl::INVALID_OPERATION             => InvalidOperation,
-            gl::INVALID_FRAMEBUFFER_OPERATION => InvalidFramebufferOperation,
-            gl::OUT_OF_MEMORY                 => OutOfMemory,
-            _                                 => UnknownError,
+            gl::NO_ERROR                      => GlError::NoError,
+            gl::INVALID_ENUM                  => GlError::InvalidEnum,
+            gl::INVALID_VALUE                 => GlError::InvalidValue,
+            gl::INVALID_OPERATION             => GlError::InvalidOperation,
+            gl::INVALID_FRAMEBUFFER_OPERATION => GlError::InvalidFramebufferOperation,
+            gl::OUT_OF_MEMORY                 => GlError::OutOfMemory,
+            _                                 => GlError::UnknownError,
         }
     }
 }
 
-static RESET_CB: &'static [::Command] = &[
-    ::BindProgram(0),
-    ::BindArrayBuffer(0),
+static RESET_CB: &'static [Command] = &[
+    Command::BindProgram(0),
+    Command::BindArrayBuffer(0),
     //BindAttribute
-    ::BindIndex(0),
-    ::BindFrameBuffer(::target::Draw, 0),
-    ::BindFrameBuffer(::target::Read, 0),
+    Command::BindIndex(0),
+    Command::BindFrameBuffer(Access::Draw, 0),
+    Command::BindFrameBuffer(Access::Read, 0),
     //UnbindTarget
     //BindUniformBlock
     //BindUniform
     //BindTexture
-    ::SetPrimitiveState(::state::Primitive {
-        front_face: ::state::CounterClockwise,
-        method: ::state::Fill(::state::CullBack),
-        offset: ::state::NoOffset,
+    Command::SetPrimitiveState(::state::Primitive {
+        front_face: WindingOrder::CounterClockwise,
+        method: RasterMethod::Fill(CullMode::Back),
+        offset: OffsetType::NoOffset,
     }),
-    ::SetViewport(::target::Rect{x: 0, y: 0, w: 0, h: 0}),
-    ::SetScissor(None),
-    ::SetDepthStencilState(None, None, ::state::CullNothing),
-    ::SetBlendState(None),
-    ::SetColorMask(::state::MASK_ALL),
+    Command::SetViewport(::target::Rect{x: 0, y: 0, w: 0, h: 0}),
+    Command::SetScissor(None),
+    Command::SetDepthStencilState(None, None, CullMode::Nothing),
+    Command::SetBlendState(None),
+    Command::SetColorMask(::state::MASK_ALL),
 ];
 
 fn primitive_to_gl(prim_type: ::PrimitiveType) -> gl::types::GLenum {
     match prim_type {
-        ::Point => gl::POINTS,
-        ::Line => gl::LINES,
-        ::LineStrip => gl::LINE_STRIP,
-        ::TriangleList => gl::TRIANGLES,
-        ::TriangleStrip => gl::TRIANGLE_STRIP,
-        ::TriangleFan => gl::TRIANGLE_FAN,
+        PrimitiveType::Point => gl::POINTS,
+        PrimitiveType::Line => gl::LINES,
+        PrimitiveType::LineStrip => gl::LINE_STRIP,
+        PrimitiveType::TriangleList => gl::TRIANGLES,
+        PrimitiveType::TriangleStrip => gl::TRIANGLE_STRIP,
+        PrimitiveType::TriangleFan => gl::TRIANGLE_FAN,
     }
 }
 
-fn access_to_gl(access: ::target::Access) -> gl::types::GLenum {
+fn access_to_gl(access: Access) -> gl::types::GLenum {
     match access {
-        ::target::Draw => gl::DRAW_FRAMEBUFFER,
-        ::target::Read => gl::READ_FRAMEBUFFER,
+        Access::Draw => gl::DRAW_FRAMEBUFFER,
+        Access::Read => gl::READ_FRAMEBUFFER,
     }
 }
 
-fn target_to_gl(target: ::target::Target) -> gl::types::GLenum {
+fn target_to_gl(target: Target) -> gl::types::GLenum {
     match target {
-        ::target::TargetColor(index) =>
+        Target::TargetColor(index) =>
             gl::COLOR_ATTACHMENT0 + (index as gl::types::GLenum),
-        ::target::TargetDepth => gl::DEPTH_ATTACHMENT,
-        ::target::TargetStencil => gl::STENCIL_ATTACHMENT,
-        ::target::TargetDepthStencil => gl::DEPTH_STENCIL_ATTACHMENT,
+        Target::TargetDepth => gl::DEPTH_ATTACHMENT,
+        Target::TargetStencil => gl::STENCIL_ATTACHMENT,
+        Target::TargetDepthStencil => gl::DEPTH_STENCIL_ATTACHMENT,
     }
 }
 
@@ -168,7 +172,7 @@ impl GlDevice {
     fn check(&mut self, cmd: &::Command) {
         if cfg!(not(ndebug)) {
             let err = GlError::from_error_code(unsafe { self.gl.GetError() });
-            if err != NoError {
+            if err != GlError::NoError {
                 panic!("Error after executing command {}: {}", cmd, err);
             }
         }
@@ -191,9 +195,9 @@ impl GlDevice {
     fn init_buffer(&mut self, buffer: Buffer, info: &::BufferInfo) {
         unsafe { self.gl.BindBuffer(gl::ARRAY_BUFFER, buffer) };
         let usage = match info.usage {
-            ::UsageStatic  => gl::STATIC_DRAW,
-            ::UsageDynamic => gl::DYNAMIC_DRAW,
-            ::UsageStream  => gl::STREAM_DRAW,
+            BufferUsage::Static  => gl::STATIC_DRAW,
+            BufferUsage::Dynamic => gl::DYNAMIC_DRAW,
+            BufferUsage::Stream  => gl::STREAM_DRAW,
         };
         unsafe {
             self.gl.BufferData(gl::ARRAY_BUFFER,
@@ -218,7 +222,7 @@ impl GlDevice {
 
     fn process(&mut self, cmd: &::Command, data_buf: &::draw::DataBuffer) {
         match *cmd {
-            ::Clear(ref data, mask) => {
+            Command::Clear(ref data, mask) => {
                 let mut flags = 0;
                 if mask.intersects(::target::COLOR) {
                     flags |= gl::COLOR_BUFFER_BIT;
@@ -242,27 +246,27 @@ impl GlDevice {
                 }
                 unsafe { self.gl.Clear(flags) };
             },
-            ::BindProgram(program) => {
+            Command::BindProgram(program) => {
                 unsafe { self.gl.UseProgram(program) };
             },
-            ::BindArrayBuffer(array_buffer) => {
+            Command::BindArrayBuffer(array_buffer) => {
                 if self.caps.array_buffer_supported {
                     unsafe { self.gl.BindVertexArray(array_buffer) };
                 } else {
                     error!("Ignored VAO bind command: {}", array_buffer)
                 }
             },
-            ::BindAttribute(slot, buffer, format) => {
+            Command::BindAttribute(slot, buffer, format) => {
                 let gl_type = match format.elem_type {
-                    attrib::Int(_, attrib::U8, attrib::Unsigned)  => gl::UNSIGNED_BYTE,
-                    attrib::Int(_, attrib::U8, attrib::Signed)    => gl::BYTE,
-                    attrib::Int(_, attrib::U16, attrib::Unsigned) => gl::UNSIGNED_SHORT,
-                    attrib::Int(_, attrib::U16, attrib::Signed)   => gl::SHORT,
-                    attrib::Int(_, attrib::U32, attrib::Unsigned) => gl::UNSIGNED_INT,
-                    attrib::Int(_, attrib::U32, attrib::Signed)   => gl::INT,
-                    attrib::Float(_, attrib::F16) => gl::HALF_FLOAT,
-                    attrib::Float(_, attrib::F32) => gl::FLOAT,
-                    attrib::Float(_, attrib::F64) => gl::DOUBLE,
+                    Type::Int(_, IntSize::U8, SignFlag::Unsigned)  => gl::UNSIGNED_BYTE,
+                    Type::Int(_, IntSize::U8, SignFlag::Signed)    => gl::BYTE,
+                    Type::Int(_, IntSize::U16, SignFlag::Unsigned) => gl::UNSIGNED_SHORT,
+                    Type::Int(_, IntSize::U16, SignFlag::Signed)   => gl::SHORT,
+                    Type::Int(_, IntSize::U32, SignFlag::Unsigned) => gl::UNSIGNED_INT,
+                    Type::Int(_, IntSize::U32, SignFlag::Signed)   => gl::INT,
+                    Type::Float(_, FloatSize::F16) => gl::HALF_FLOAT,
+                    Type::Float(_, FloatSize::F32) => gl::FLOAT,
+                    Type::Float(_, FloatSize::F64) => gl::DOUBLE,
                     _ => {
                         error!("Unsupported element type: {}", format.elem_type);
                         return
@@ -271,27 +275,27 @@ impl GlDevice {
                 unsafe { self.gl.BindBuffer(gl::ARRAY_BUFFER, buffer) };
                 let offset = format.offset as *const gl::types::GLvoid;
                 match format.elem_type {
-                    attrib::Int(attrib::IntRaw, _, _) => unsafe {
+                    Type::Int(IntSubType::Raw, _, _) => unsafe {
                         self.gl.VertexAttribIPointer(slot as gl::types::GLuint,
                             format.elem_count as gl::types::GLint, gl_type,
                             format.stride as gl::types::GLint, offset);
                     },
-                    attrib::Int(attrib::IntNormalized, _, _) => unsafe {
+                    Type::Int(IntSubType::Normalized, _, _) => unsafe {
                         self.gl.VertexAttribPointer(slot as gl::types::GLuint,
                             format.elem_count as gl::types::GLint, gl_type, gl::TRUE,
                             format.stride as gl::types::GLint, offset);
                     },
-                    attrib::Int(attrib::IntAsFloat, _, _) => unsafe {
+                    Type::Int(IntSubType::AsFloat, _, _) => unsafe {
                         self.gl.VertexAttribPointer(slot as gl::types::GLuint,
                             format.elem_count as gl::types::GLint, gl_type, gl::FALSE,
                             format.stride as gl::types::GLint, offset);
                     },
-                    attrib::Float(attrib::FloatDefault, _) => unsafe {
+                    Type::Float(FloatSubType::Default, _) => unsafe {
                         self.gl.VertexAttribPointer(slot as gl::types::GLuint,
                             format.elem_count as gl::types::GLint, gl_type, gl::FALSE,
                             format.stride as gl::types::GLint, offset);
                     },
-                    attrib::Float(attrib::FloatPrecision, _) => unsafe {
+                    Type::Float(FloatSubType::Precision, _) => unsafe {
                         self.gl.VertexAttribLPointer(slot as gl::types::GLuint,
                             format.elem_count as gl::types::GLint, gl_type,
                             format.stride as gl::types::GLint, offset);
@@ -306,17 +310,17 @@ impl GlDevice {
                     error!("Instanced arrays are not supported");
                 }
             },
-            ::BindIndex(buffer) => {
+            Command::BindIndex(buffer) => {
                 unsafe { self.gl.BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer) };
             },
-            ::BindFrameBuffer(access, frame_buffer) => {
+            Command::BindFrameBuffer(access, frame_buffer) => {
                 if !self.caps.render_targets_supported {
                     panic!("Tried to do something with an FBO without FBO support!")
                 }
                 let point = access_to_gl(access);
                 unsafe { self.gl.BindFramebuffer(point, frame_buffer) };
             },
-            ::UnbindTarget(access, target) => {
+            Command::UnbindTarget(access, target) => {
                 if !self.caps.render_targets_supported {
                     panic!("Tried to do something with an FBO without FBO support!")
                 }
@@ -324,7 +328,7 @@ impl GlDevice {
                 let att = target_to_gl(target);
                 unsafe { self.gl.FramebufferRenderbuffer(point, att, gl::RENDERBUFFER, 0) };
             },
-            ::BindTargetSurface(access, target, name) => {
+            Command::BindTargetSurface(access, target, name) => {
                 if !self.caps.render_targets_supported {
                     panic!("Tried to do something with an FBO without FBO support!")
                 }
@@ -332,7 +336,7 @@ impl GlDevice {
                 let att = target_to_gl(target);
                 unsafe { self.gl.FramebufferRenderbuffer(point, att, gl::RENDERBUFFER, name) };
             },
-            ::BindTargetTexture(access, target, name, level, layer) => {
+            Command::BindTargetTexture(access, target, name, level, layer) => {
                 if !self.caps.render_targets_supported {
                     panic!("Tried to do something with an FBO without FBO support!")
                 }
@@ -346,14 +350,14 @@ impl GlDevice {
                         point, att, name, level as gl::types::GLint) },
                 }
             },
-            ::BindUniformBlock(program, slot, loc, buffer) => { unsafe {
+            Command::BindUniformBlock(program, slot, loc, buffer) => { unsafe {
                 self.gl.UniformBlockBinding(program, slot as gl::types::GLuint, loc as gl::types::GLuint);
                 self.gl.BindBufferBase(gl::UNIFORM_BUFFER, loc as gl::types::GLuint, buffer);
             }},
-            ::BindUniform(loc, uniform) => {
+            Command::BindUniform(loc, uniform) => {
                 shade::bind_uniform(&self.gl, loc as gl::types::GLint, uniform);
             },
-            ::BindTexture(slot, kind, texture, sampler) => {
+            Command::BindTexture(slot, kind, texture, sampler) => {
                 let anchor = tex::bind_texture(&self.gl,
                     gl::TEXTURE0 + slot as gl::types::GLenum,
                     kind, texture);
@@ -371,33 +375,33 @@ impl GlDevice {
                     (_, _, _) => (),
                 }
             },
-            ::SetPrimitiveState(prim) => {
+            Command::SetPrimitiveState(prim) => {
                 state::bind_primitive(&self.gl, prim);
             },
-            ::SetViewport(rect) => {
+            Command::SetViewport(rect) => {
                 state::bind_viewport(&self.gl, rect);
             },
-            ::SetMultiSampleState(ms) => {
+            Command::SetMultiSampleState(ms) => {
                 state::bind_multi_sample(&self.gl, ms);
             },
-            ::SetScissor(rect) => {
+            Command::SetScissor(rect) => {
                 state::bind_scissor(&self.gl, rect);
             },
-            ::SetDepthStencilState(depth, stencil, cull) => {
+            Command::SetDepthStencilState(depth, stencil, cull) => {
                 state::bind_stencil(&self.gl, stencil, cull);
                 state::bind_depth(&self.gl, depth);
             },
-            ::SetBlendState(blend) => {
+            Command::SetBlendState(blend) => {
                 state::bind_blend(&self.gl, blend);
             },
-            ::SetColorMask(mask) => {
+            Command::SetColorMask(mask) => {
                 state::bind_color_mask(&self.gl, mask);
             },
-            ::UpdateBuffer(buffer, pointer, offset) => {
+            Command::UpdateBuffer(buffer, pointer, offset) => {
                 let data = data_buf.get_ref(pointer);
                 self.update_sub_buffer(buffer, data.as_ptr(), data.len(), offset);
             },
-            ::UpdateTexture(kind, texture, image_info, pointer) => {
+            Command::UpdateTexture(kind, texture, image_info, pointer) => {
                 let data = data_buf.get_ref(pointer);
                 match tex::update_texture(&self.gl, kind, texture, &image_info,
                                           data.as_ptr(), data.len()) {
@@ -405,7 +409,7 @@ impl GlDevice {
                     Err(_) => unimplemented!(),
                 }
             },
-            ::Draw(prim_type, start, count, instances) => {
+            Command::Draw(prim_type, start, count, instances) => {
                 match instances {
                     Some((num, base)) if self.caps.instance_call_supported => { unsafe {
                         self.gl.DrawArraysInstancedBaseInstance(
@@ -428,11 +432,11 @@ impl GlDevice {
                     }},
                 }
             },
-            ::DrawIndexed(prim_type, index_type, start, count, basevertex, instances) => {
+            Command::DrawIndexed(prim_type, index_type, start, count, basevertex, instances) => {
                 let (offset, gl_index) = match index_type {
-                    attrib::U8  => (start * 1u32, gl::UNSIGNED_BYTE),
-                    attrib::U16 => (start * 2u32, gl::UNSIGNED_SHORT),
-                    attrib::U32 => (start * 4u32, gl::UNSIGNED_INT),
+                    IntSize::U8  => (start * 1u32, gl::UNSIGNED_BYTE),
+                    IntSize::U16 => (start * 2u32, gl::UNSIGNED_SHORT),
+                    IntSize::U32 => (start * 4u32, gl::UNSIGNED_INT),
                 };
                 match instances {
                     Some((num, baseinstance)) if self.caps.instance_call_supported => unsafe {
@@ -509,7 +513,7 @@ impl GlDevice {
                     },
                 }
             },
-            ::Blit(s_rect, d_rect, mask) => {
+            Command::Blit(s_rect, d_rect, mask) => {
                 type GLint = gl::types::GLint;
                 // build mask
                 let mut flags = 0;
@@ -567,7 +571,7 @@ impl Device<GlCommandBuffer> for GlDevice {
         }
     }
 
-    fn create_buffer_raw(&mut self, size: uint, usage: ::BufferUsage) -> ::BufferHandle<()> {
+    fn create_buffer_raw(&mut self, size: uint, usage: BufferUsage) -> ::BufferHandle<()> {
         let name = self.create_buffer_internal();
         let info = ::BufferInfo {
             usage: usage,
@@ -581,7 +585,7 @@ impl Device<GlCommandBuffer> for GlDevice {
         let name = self.create_buffer_internal();
 
         let info = ::BufferInfo {
-            usage: ::UsageStatic,
+            usage: BufferUsage::Static,
             size: data.len(),
         };
         self.init_buffer(name, &info);
@@ -642,9 +646,8 @@ impl Device<GlCommandBuffer> for GlDevice {
 
     fn create_texture(&mut self, info: ::tex::TextureInfo) ->
                       Result<::TextureHandle, ::tex::TextureError> {
-
         if info.width == 0 || info.height == 0 || info.levels == 0 {
-            return Err(::tex::InvalidTextureInfo(info))
+            return Err(::tex::TextureError::InvalidTextureInfo(info))
         }
 
         let name = if self.caps.immutable_storage_supported {
