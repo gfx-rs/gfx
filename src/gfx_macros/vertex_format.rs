@@ -42,9 +42,9 @@ enum Modifier {
 impl fmt::Show for Modifier {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Normalized => write!(f, "normalized"),
-            AsFloat => write!(f, "as_float"),
-            AsDouble => write!(f, "as_double"),
+            Modifier::Normalized => write!(f, "normalized"),
+            Modifier::AsFloat => write!(f, "as_float"),
+            Modifier::AsDouble => write!(f, "as_double"),
         }
     }
 }
@@ -52,9 +52,9 @@ impl fmt::Show for Modifier {
 impl FromStr for Modifier {
     fn from_str(src: &str) -> Option<Modifier> {
         match src {
-            "normalized" => Some(Normalized),
-            "as_float" => Some(AsFloat),
-            "as_double" => Some(AsDouble),
+            "normalized" => Some(Modifier::Normalized),
+            "as_float" => Some(Modifier::AsFloat),
+            "as_double" => Some(Modifier::AsDouble),
             _ => None,
         }
     }
@@ -92,9 +92,9 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
     match ty_str {
         "f32" | "f64" => {
             let kind = cx.ident_of(match modifier {
-                None | Some(AsFloat) => "FloatDefault",
-                Some(AsDouble) => "FloatPrecision",
-                Some(Normalized) => {
+                None | Some(Modifier::AsFloat) => "FloatDefault",
+                Some(Modifier::AsDouble) => "FloatPrecision",
+                Some(Modifier::Normalized) => {
                     cx.span_warn(span, format!(
                         "Incompatible float modifier attribute: `#[{}]`", modifier
                     ).as_slice());
@@ -112,9 +112,9 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
             });
             let kind = cx.ident_of(match modifier {
                 None => "IntRaw",
-                Some(Normalized) => "IntNormalized",
-                Some(AsFloat) => "IntAsFloat",
-                Some(AsDouble) => {
+                Some(Modifier::Normalized) => "IntNormalized",
+                Some(Modifier::AsFloat) => "IntAsFloat",
+                Some(Modifier::AsDouble) => {
                     cx.span_warn(span, format!(
                         "Incompatible int modifier attribute: `#[{}]`", modifier
                     ).as_slice());

@@ -26,8 +26,7 @@ use log;
 use attrib;
 
 use Device;
-use {MapAccess, MapReadable, MapWritable, MapRW, ReadableMapping, WritableMapping, RWMapping,
-    BufferHandle};
+use {MapAccess, ReadableMapping, WritableMapping, RWMapping, BufferHandle};
 
 pub use self::draw::GlCommandBuffer;
 pub use self::info::{Info, PlatformName, Version};
@@ -723,9 +722,9 @@ impl Device<GlCommandBuffer> for GlDevice {
         let ptr;
         unsafe { self.gl.BindBuffer(gl::ARRAY_BUFFER, buf.get_name()) };
         ptr = unsafe { self.gl.MapBuffer(gl::ARRAY_BUFFER, match access {
-            MapReadable => gl::READ_ONLY,
-            MapWritable => gl::WRITE_ONLY,
-            MapRW => gl::READ_WRITE
+            MapAccess::Readable => gl::READ_ONLY,
+            MapAccess::Writable => gl::WRITE_ONLY,
+            MapAccess::RW => gl::READ_WRITE
         }) } as *mut libc::c_void;
         RawMapping {
             pointer: ptr,
@@ -738,7 +737,7 @@ impl Device<GlCommandBuffer> for GlDevice {
     }
 
     fn map_buffer_readable<T: Copy>(&mut self, buf: BufferHandle<T>) -> ReadableMapping<T, GlCommandBuffer, GlDevice> {
-        let map = self.map_buffer_raw(buf.cast(), MapReadable);
+        let map = self.map_buffer_raw(buf.cast(), MapAccess::Readable);
         ReadableMapping {
             raw: map,
             len: buf.len(),
@@ -747,7 +746,7 @@ impl Device<GlCommandBuffer> for GlDevice {
     }
 
     fn map_buffer_writable<T: Copy>(&mut self, buf: BufferHandle<T>) -> WritableMapping<T, GlCommandBuffer, GlDevice> {
-        let map = self.map_buffer_raw(buf.cast(), MapWritable);
+        let map = self.map_buffer_raw(buf.cast(), MapAccess::Writable);
         WritableMapping {
             raw: map,
             len: buf.len(),
@@ -756,7 +755,7 @@ impl Device<GlCommandBuffer> for GlDevice {
     }
 
     fn map_buffer_rw<T: Copy>(&mut self, buf: BufferHandle<T>) -> RWMapping<T, GlCommandBuffer, GlDevice> {
-        let map = self.map_buffer_raw(buf.cast(), MapRW);
+        let map = self.map_buffer_raw(buf.cast(), MapAccess::RW);
         RWMapping {
             raw: map,
             len: buf.len(),

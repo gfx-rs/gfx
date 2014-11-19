@@ -58,11 +58,11 @@ pub type TextureSlot = u8;
 /// Specifies the access allowed to a buffer mapping.
 pub enum MapAccess {
     /// Only allow reads.
-    MapReadable,
+    Readable,
     /// Only allow writes.
-    MapWritable,
+    Writable,
     /// Allow full access.
-    MapRW
+    RW
 }
 
 /// A handle to a readable map, which can be sliced.
