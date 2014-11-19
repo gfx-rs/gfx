@@ -20,30 +20,30 @@ use syntax::parse::token;
 use syntax::ptr::P;
 
 #[deriving(PartialEq, Show)]
-enum ParamType {
-    ParamUniform,
-    ParamBlock,
-    ParamTexture,
+enum Param {
+    Uniform,
+    Block,
+    Texture,
 }
 
 #[deriving(Show)]
 enum ParamError {
-    ErrorDeprecatedTexture,
+    DeprecatedTexture,
 }
 
-/// Classify variable types (`i32`, `TextureParam`, etc) into the `ParamType`
-fn classify(node: &ast::Ty_) -> Result<ParamType, ParamError> {
+/// Classify variable types (`i32`, `TextureParam`, etc) into the `Param`
+fn classify(node: &ast::Ty_) -> Result<Param, ParamError> {
     match *node {
         ast::TyPath(ref path, _, _) => match path.segments.last() {
             Some(segment) => match segment.identifier.name.as_str() {
-                "RawBufferHandle" => Ok(ParamBlock),
-                "TextureParam" => Ok(ParamTexture),
-                "TextureHandle" => Err(ErrorDeprecatedTexture),
-                _ => Ok(ParamUniform),
+                "RawBufferHandle" => Ok(Param::Block),
+                "TextureParam" => Ok(Param::Texture),
+                "TextureHandle" => Err(ParamError::DeprecatedTexture),
+                _ => Ok(Param::Uniform),
             },
-            None => Ok(ParamUniform),
+            None => Ok(Param::Uniform),
         },
-        _ => Ok(ParamUniform),
+        _ => Ok(Param::Uniform),
     }
 }
 
@@ -61,7 +61,7 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     cx.field_imm(fspan, fname, cx.expr_none(fspan))
                 }).collect()
             );
-            let class_info: Vec<(ParamType, P<ast::Expr>)> = definition.fields.iter()
+            let class_info: Vec<(Param, P<ast::Expr>)> = definition.fields.iter()
                     .zip(fields.iter()).scan((), |_, (def, &(fname, fspan))|
                 match classify(&def.node.ty.node) {
                     Ok(c) => {
@@ -81,7 +81,7 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     },
                 }
             ).collect();
-            let gen_arms = |ptype: ParamType, var: ast::Ident| -> Vec<ast::Arm> {
+            let gen_arms = |ptype: Param, var: ast::Ident| -> Vec<ast::Arm> {
                 class_info.iter().zip(fields.iter())
                           .filter(|&(&(class, _), _)| class == ptype)
                           .map(|(&(_, ref name_expr), &(fname, fspan))|
@@ -93,9 +93,9 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     )
                 ).collect()
             };
-            let uniform_arms = gen_arms(ParamUniform, cx.ident_of("VarUniform"));
-            let block_arms = gen_arms(ParamBlock, cx.ident_of("VarBlock"));
-            let texture_arms = gen_arms(ParamTexture, cx.ident_of("VarTexture"));
+            let uniform_arms = gen_arms(Param::Uniform, cx.ident_of("VarUniform"));
+            let block_arms = gen_arms(Param::Block, cx.ident_of("VarBlock"));
+            let texture_arms = gen_arms(Param::Texture, cx.ident_of("VarTexture"));
             let input = &substr.nonself_args[1];
             quote_expr!(cx, {
                 let mut out = $init_expr;
@@ -154,7 +154,7 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     f.name.unwrap()
                     );
                 match classify(&def.node.ty.node) {
-                    Ok(ParamUniform) => quote_stmt!(cx,
+                    Ok(Param::Uniform) => quote_stmt!(cx,
                         $var_id.map_or((), |id| {
                             if $out.uniforms.len() <= id as uint {
                                 unsafe { $out.uniforms.set_len(id as uint + 1) }
@@ -162,7 +162,7 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                             *$out.uniforms.get_mut(id as uint).unwrap() = $value_id.to_uniform()
                         })
                     ),
-                    Ok(ParamBlock)   => quote_stmt!(cx,
+                    Ok(Param::Block)   => quote_stmt!(cx,
                         $var_id.map_or((), |id| {
                             if $out.blocks.len() <= id as uint {
                                 unsafe { $out.blocks.set_len(id as uint + 1) }
@@ -170,7 +170,7 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                             *$out.blocks.get_mut(id as uint).unwrap() = {$value_id}
                         })
                     ),
-                    Ok(ParamTexture) => quote_stmt!(cx,
+                    Ok(Param::Texture) => quote_stmt!(cx,
                         $var_id.map_or((), |id| {
                             if $out.textures.len() <= id as uint {
                                 unsafe { $out.textures.set_len(id as uint + 1) }
@@ -214,10 +214,10 @@ fn node_to_var_type(cx: &mut ext::base::ExtCtxt,
                     span: codemap::Span, node: &ast::Ty_,
                     path_root: ast::Ident) -> P<ast::Ty> {
     let id = match classify(node) {
-        Ok(ParamUniform) => "VarUniform",
-        Ok(ParamBlock)   => "VarBlock",
-        Ok(ParamTexture) => "VarTexture",
-        Err(ErrorDeprecatedTexture) => {
+        Ok(Param::Uniform) => "VarUniform",
+        Ok(Param::Block)   => "VarBlock",
+        Ok(Param::Texture) => "VarTexture",
+        Err(ParamError::DeprecatedTexture) => {
             cx.span_err(span, "Use gfx::shade::TextureParam for texture vars instead of gfx::shade::TextureHandle");
             ""
         },
