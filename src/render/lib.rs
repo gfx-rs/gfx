@@ -496,6 +496,6 @@ impl<D: device::Device<C>, C: CommandBuffer> DeviceHelper<C> for D {
             Ok(s) => s,
             Err(e) => return Err(ProgramError::Fragment(e)),
         };
-        self.create_program([vs, fs]).map_err(|e| ProgramError::Link(e))
+        self.create_program(&[vs, fs]).map_err(|e| ProgramError::Link(e))
     }
 }
