@@ -275,7 +275,7 @@ impl Info {
 
     /// Returns `true` if the implementation supports the extension
     pub fn is_extension_supported(&self, s: &str) -> bool {
-        self.extensions.contains_equiv(s)
+        self.extensions.contains(s)
     }
 
     pub fn is_version_or_extension_supported(&self, major: u32, minor: u32, ext: &str) -> bool {
