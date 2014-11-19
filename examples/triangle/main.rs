@@ -94,7 +94,7 @@ fn main() {
 
     glfw.window_hint(glfw::ContextVersion(3, 2));
     glfw.window_hint(glfw::OpenglForwardCompat(true));
-    glfw.window_hint(glfw::OpenglProfile(glfw::OpenGlCoreProfile));
+    glfw.window_hint(glfw::OpenglProfile(glfw::OpenGlProfileHint::Core));
 
     let (window, events) = glfw
         .create_window(640, 480, "Triangle example.", glfw::Windowed)
@@ -134,7 +134,7 @@ fn main() {
         glfw.poll_events();
         for (_, event) in glfw::flush_messages(&events) {
             match event {
-                glfw::KeyEvent(glfw::KeyEscape, _, glfw::Press, _) =>
+                glfw::KeyEvent(glfw::Key::Escape, _, glfw::Press, _) =>
                     window.set_should_close(true),
                 _ => {},
             }
