@@ -49,9 +49,9 @@ pub enum OffsetType {
 #[allow(missing_docs)]
 #[deriving(Clone, PartialEq, Show)]
 pub enum CullMode {
-    CullNothing,
-    CullFront,
-    CullBack,
+    Nothing,
+    Front,
+    Back,
 }
 
 /// How to rasterize a primitive.
@@ -81,8 +81,8 @@ impl Primitive {
     /// Get the cull mode, if any, for this primitive state.
     pub fn get_cull_mode(&self) -> CullMode {
         match self.method {
-            Fill(mode) => mode,
-            _ => CullNothing,
+            RasterMethod::Fill(mode) => mode,
+            _ => CullMode::Nothing,
         }
     }
 }
@@ -90,9 +90,9 @@ impl Primitive {
 impl Default for Primitive {
     fn default() -> Primitive {
         Primitive {
-            front_face: CounterClockwise,
-            method: Fill(CullNothing),
-            offset: NoOffset,
+            front_face: WindingOrder::CounterClockwise,
+            method: RasterMethod::Fill(CullMode::Nothing),
+            offset: OffsetType::NoOffset,
         }
     }
 }
@@ -129,21 +129,21 @@ pub enum Comparison {
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub enum StencilOp {
     /// Keep the current value in the stencil buffer (no change).
-    OpKeep,
+    Keep,
     /// Set the value in the stencil buffer to zero.
-    OpZero,
+    Zero,
     /// Set the stencil buffer value to `value` from `StencilSide`
-    OpReplace,
+    Replace,
     /// Increment the stencil buffer value, clamping to its maximum value.
-    OpIncrementClamp,
+    IncrementClamp,
     /// Increment the stencil buffer value, wrapping around to 0 on overflow.
-    OpIncrementWrap,
+    IncrementWrap,
     /// Decrement the stencil buffer value, clamping to its minimum value.
-    OpDecrementClamp,
+    DecrementClamp,
     /// Decrement the stencil buffer value, wrapping around to the maximum value on overflow.
-    OpDecrementWrap,
+    DecrementWrap,
     /// Bitwise invert the current value in the stencil buffer.
-    OpInvert,
+    Invert,
 }
 
 /// Complete stencil state for a given side of a face.
@@ -169,13 +169,13 @@ pub struct StencilSide {
 impl Default for StencilSide {
     fn default() -> StencilSide {
         StencilSide {
-            fun: Always,
+            fun: Comparison::Always,
             value: 0,
             mask_read: -1,
             mask_write: -1,
-            op_fail: OpKeep,
-            op_depth_fail: OpKeep,
-            op_pass: OpKeep,
+            op_fail: StencilOp::Keep,
+            op_depth_fail: StencilOp::Keep,
+            op_pass: StencilOp::Keep,
         }
     }
 }
@@ -200,7 +200,7 @@ pub struct Depth {
 impl Default for Depth {
     fn default() -> Depth {
         Depth {
-            fun: Always,
+            fun: Comparison::Always,
             write: false,
         }
     }
@@ -251,9 +251,9 @@ pub struct BlendChannel {
 impl Default for BlendChannel {
     fn default() -> BlendChannel {
         BlendChannel {
-            equation: FuncAdd,
-            source: Factor(Inverse, Zero),
-            destination: Factor(Normal, Zero),
+            equation: Equation::FuncAdd,
+            source: Factor(InverseFlag::Inverse, BlendValue::Zero),
+            destination: Factor(InverseFlag::Normal, BlendValue::Zero),
         }
     }
 }

@@ -13,15 +13,23 @@
 // limitations under the License.
 
 use super::super::shade as s;
+use super::super::shade::{BaseType, ContainerType, CreateShaderError, IsArray, IsShadow, IsRect,
+                          IsMultiSample, MatrixFormat, SamplerType, Stage, UniformValue};
 use super::gl;
 use super::info::Version;
+
+use self::StorageType::{
+    Var,
+    Sampler,
+    Unknown,
+};
 
 pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: s::ShaderSource, lang: Version)
         -> (Result<super::Shader, s::CreateShaderError>, Option<String>) {
     let target = match stage {
-        s::Vertex => gl::VERTEX_SHADER,
-        s::Geometry => gl::GEOMETRY_SHADER,
-        s::Fragment => gl::FRAGMENT_SHADER,
+        Stage::Vertex => gl::VERTEX_SHADER,
+        Stage::Geometry => gl::GEOMETRY_SHADER,
+        Stage::Fragment => gl::FRAGMENT_SHADER,
     };
     let name = unsafe { gl.CreateShader(target) };
     let data = match data {
@@ -29,7 +37,7 @@ pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: s::ShaderSource, lang: 
         s::ShaderSource { glsl_140: Some(s), .. } if lang >= Version::new(1, 40, None, "") => s,
         s::ShaderSource { glsl_130: Some(s), .. } if lang >= Version::new(1, 30, None, "") => s,
         s::ShaderSource { glsl_120: Some(s), .. } if lang >= Version::new(1, 20, None, "") => s,
-        _ => return (Err(s::NoSupportedShaderProvided),
+        _ => return (Err(CreateShaderError::NoSupportedShaderProvided),
                      Some("[gfx-rs] No supported GLSL shader provided!".to_string())),
     };
     unsafe {
@@ -59,7 +67,7 @@ pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: s::ShaderSource, lang: 
     let name = if status != 0 {
         Ok(name)
     }else {
-        Err(s::ShaderCompilationFailed)
+        Err(CreateShaderError::ShaderCompilationFailed)
     };
 
     (name, log)
@@ -78,63 +86,63 @@ fn get_program_iv(gl: &gl::Gl, program: super::Program, query: gl::types::GLenum
 }
 
 enum StorageType {
-    Var(s::BaseType, s::ContainerType),
-    Sampler(s::BaseType, s::SamplerType),
+    Var(BaseType, s::ContainerType),
+    Sampler(BaseType, s::SamplerType),
     Unknown,
 }
 
 impl StorageType {
     fn new(storage: gl::types::GLenum) -> StorageType {
         match storage {
-            gl::FLOAT                        => Var(s::BaseF32, s::Single),
-            gl::FLOAT_VEC2                   => Var(s::BaseF32, s::Vector(2)),
-            gl::FLOAT_VEC3                   => Var(s::BaseF32, s::Vector(3)),
-            gl::FLOAT_VEC4                   => Var(s::BaseF32, s::Vector(4)),
+            gl::FLOAT                        => Var(BaseType::F32,  ContainerType::Single),
+            gl::FLOAT_VEC2                   => Var(BaseType::F32,  ContainerType::Vector(2)),
+            gl::FLOAT_VEC3                   => Var(BaseType::F32,  ContainerType::Vector(3)),
+            gl::FLOAT_VEC4                   => Var(BaseType::F32,  ContainerType::Vector(4)),
 
-            gl::INT                          => Var(s::BaseI32, s::Single),
-            gl::INT_VEC2                     => Var(s::BaseI32, s::Vector(2)),
-            gl::INT_VEC3                     => Var(s::BaseI32, s::Vector(3)),
-            gl::INT_VEC4                     => Var(s::BaseI32, s::Vector(4)),
+            gl::INT                          => Var(BaseType::I32,  ContainerType::Single),
+            gl::INT_VEC2                     => Var(BaseType::I32,  ContainerType::Vector(2)),
+            gl::INT_VEC3                     => Var(BaseType::I32,  ContainerType::Vector(3)),
+            gl::INT_VEC4                     => Var(BaseType::I32,  ContainerType::Vector(4)),
 
-            gl::UNSIGNED_INT                 => Var(s::BaseU32, s::Single),
-            gl::UNSIGNED_INT_VEC2            => Var(s::BaseU32, s::Vector(2)),
-            gl::UNSIGNED_INT_VEC3            => Var(s::BaseU32, s::Vector(3)),
-            gl::UNSIGNED_INT_VEC4            => Var(s::BaseU32, s::Vector(4)),
+            gl::UNSIGNED_INT                 => Var(BaseType::U32,  ContainerType::Single),
+            gl::UNSIGNED_INT_VEC2            => Var(BaseType::U32,  ContainerType::Vector(2)),
+            gl::UNSIGNED_INT_VEC3            => Var(BaseType::U32,  ContainerType::Vector(3)),
+            gl::UNSIGNED_INT_VEC4            => Var(BaseType::U32,  ContainerType::Vector(4)),
 
-            gl::BOOL                         => Var(s::BaseBool, s::Single),
-            gl::BOOL_VEC2                    => Var(s::BaseBool, s::Vector(2)),
-            gl::BOOL_VEC3                    => Var(s::BaseBool, s::Vector(3)),
-            gl::BOOL_VEC4                    => Var(s::BaseBool, s::Vector(4)),
+            gl::BOOL                         => Var(BaseType::Bool, ContainerType::Single),
+            gl::BOOL_VEC2                    => Var(BaseType::Bool, ContainerType::Vector(2)),
+            gl::BOOL_VEC3                    => Var(BaseType::Bool, ContainerType::Vector(3)),
+            gl::BOOL_VEC4                    => Var(BaseType::Bool, ContainerType::Vector(4)),
 
-            gl::FLOAT_MAT2                   => Var(s::BaseF32, s::Matrix(s::ColumnMajor, 2, 2)),
-            gl::FLOAT_MAT3                   => Var(s::BaseF32, s::Matrix(s::ColumnMajor, 3, 3)),
-            gl::FLOAT_MAT4                   => Var(s::BaseF32, s::Matrix(s::ColumnMajor, 4, 4)),
-            gl::FLOAT_MAT2x3                 => Var(s::BaseF32, s::Matrix(s::ColumnMajor, 2, 3)),
-            gl::FLOAT_MAT2x4                 => Var(s::BaseF32, s::Matrix(s::ColumnMajor, 2, 4)),
-            gl::FLOAT_MAT3x2                 => Var(s::BaseF32, s::Matrix(s::ColumnMajor, 3, 2)),
-            gl::FLOAT_MAT3x4                 => Var(s::BaseF32, s::Matrix(s::ColumnMajor, 3, 4)),
-            gl::FLOAT_MAT4x2                 => Var(s::BaseF32, s::Matrix(s::ColumnMajor, 4, 2)),
-            gl::FLOAT_MAT4x3                 => Var(s::BaseF32, s::Matrix(s::ColumnMajor, 4, 3)),
+            gl::FLOAT_MAT2                   => Var(BaseType::F32,  ContainerType::Matrix(MatrixFormat::ColumnMajor, 2, 2)),
+            gl::FLOAT_MAT3                   => Var(BaseType::F32,  ContainerType::Matrix(MatrixFormat::ColumnMajor, 3, 3)),
+            gl::FLOAT_MAT4                   => Var(BaseType::F32,  ContainerType::Matrix(MatrixFormat::ColumnMajor, 4, 4)),
+            gl::FLOAT_MAT2x3                 => Var(BaseType::F32,  ContainerType::Matrix(MatrixFormat::ColumnMajor, 2, 3)),
+            gl::FLOAT_MAT2x4                 => Var(BaseType::F32,  ContainerType::Matrix(MatrixFormat::ColumnMajor, 2, 4)),
+            gl::FLOAT_MAT3x2                 => Var(BaseType::F32,  ContainerType::Matrix(MatrixFormat::ColumnMajor, 3, 2)),
+            gl::FLOAT_MAT3x4                 => Var(BaseType::F32,  ContainerType::Matrix(MatrixFormat::ColumnMajor, 3, 4)),
+            gl::FLOAT_MAT4x2                 => Var(BaseType::F32,  ContainerType::Matrix(MatrixFormat::ColumnMajor, 4, 2)),
+            gl::FLOAT_MAT4x3                 => Var(BaseType::F32,  ContainerType::Matrix(MatrixFormat::ColumnMajor, 4, 3)),
 
             // TODO: double matrices
 
-            gl::SAMPLER_1D                   => Sampler(s::BaseF32, s::Sampler1D(s::NoArray, s::NoShadow)),
-            gl::SAMPLER_1D_ARRAY             => Sampler(s::BaseF32, s::Sampler1D(s::Array,   s::NoShadow)),
-            gl::SAMPLER_1D_SHADOW            => Sampler(s::BaseF32, s::Sampler1D(s::NoArray, s::Shadow)),
-            gl::SAMPLER_1D_ARRAY_SHADOW      => Sampler(s::BaseF32, s::Sampler1D(s::Array,   s::Shadow)),
+            gl::SAMPLER_1D                   => Sampler(BaseType::F32, SamplerType::Sampler1D(IsArray::NoArray, IsShadow::NoShadow)),
+            gl::SAMPLER_1D_ARRAY             => Sampler(BaseType::F32, SamplerType::Sampler1D(IsArray::Array,   IsShadow::NoShadow)),
+            gl::SAMPLER_1D_SHADOW            => Sampler(BaseType::F32, SamplerType::Sampler1D(IsArray::NoArray, IsShadow::Shadow)),
+            gl::SAMPLER_1D_ARRAY_SHADOW      => Sampler(BaseType::F32, SamplerType::Sampler1D(IsArray::Array,   IsShadow::Shadow)),
 
-            gl::SAMPLER_2D                   => Sampler(s::BaseF32, s::Sampler2D(s::NoArray, s::NoShadow, s::NoMultiSample, s::NoRect)),
-            gl::SAMPLER_2D_ARRAY             => Sampler(s::BaseF32, s::Sampler2D(s::Array,   s::NoShadow, s::NoMultiSample, s::NoRect)),
-            gl::SAMPLER_2D_SHADOW            => Sampler(s::BaseF32, s::Sampler2D(s::NoArray, s::Shadow,   s::NoMultiSample, s::NoRect)),
-            gl::SAMPLER_2D_MULTISAMPLE       => Sampler(s::BaseF32, s::Sampler2D(s::NoArray, s::NoShadow, s::MultiSample,   s::NoRect)),
-            gl::SAMPLER_2D_RECT              => Sampler(s::BaseF32, s::Sampler2D(s::NoArray, s::NoShadow, s::NoMultiSample, s::Rect)),
-            gl::SAMPLER_2D_ARRAY_SHADOW      => Sampler(s::BaseF32, s::Sampler2D(s::Array,   s::Shadow,   s::NoMultiSample, s::NoRect)),
-            gl::SAMPLER_2D_MULTISAMPLE_ARRAY => Sampler(s::BaseF32, s::Sampler2D(s::Array,   s::NoShadow, s::MultiSample,   s::NoRect)),
-            gl::SAMPLER_2D_RECT_SHADOW       => Sampler(s::BaseF32, s::Sampler2D(s::NoArray, s::Shadow,   s::NoMultiSample, s::Rect)),
+            gl::SAMPLER_2D                   => Sampler(BaseType::F32, SamplerType::Sampler2D(IsArray::NoArray, IsShadow::NoShadow, IsMultiSample::NoMultiSample, IsRect::NoRect)),
+            gl::SAMPLER_2D_ARRAY             => Sampler(BaseType::F32, SamplerType::Sampler2D(IsArray::Array,   IsShadow::NoShadow, IsMultiSample::NoMultiSample, IsRect::NoRect)),
+            gl::SAMPLER_2D_SHADOW            => Sampler(BaseType::F32, SamplerType::Sampler2D(IsArray::NoArray, IsShadow::Shadow,   IsMultiSample::NoMultiSample, IsRect::NoRect)),
+            gl::SAMPLER_2D_MULTISAMPLE       => Sampler(BaseType::F32, SamplerType::Sampler2D(IsArray::NoArray, IsShadow::NoShadow, IsMultiSample::MultiSample,   IsRect::NoRect)),
+            gl::SAMPLER_2D_RECT              => Sampler(BaseType::F32, SamplerType::Sampler2D(IsArray::NoArray, IsShadow::NoShadow, IsMultiSample::NoMultiSample, IsRect::Rect)),
+            gl::SAMPLER_2D_ARRAY_SHADOW      => Sampler(BaseType::F32, SamplerType::Sampler2D(IsArray::Array,   IsShadow::Shadow,   IsMultiSample::NoMultiSample, IsRect::NoRect)),
+            gl::SAMPLER_2D_MULTISAMPLE_ARRAY => Sampler(BaseType::F32, SamplerType::Sampler2D(IsArray::Array,   IsShadow::NoShadow, IsMultiSample::MultiSample,   IsRect::NoRect)),
+            gl::SAMPLER_2D_RECT_SHADOW       => Sampler(BaseType::F32, SamplerType::Sampler2D(IsArray::NoArray, IsShadow::Shadow,   IsMultiSample::NoMultiSample, IsRect::Rect)),
 
-            gl::SAMPLER_3D                   => Sampler(s::BaseF32, s::Sampler3D),
-            gl::SAMPLER_CUBE                 => Sampler(s::BaseF32, s::SamplerCube(s::NoShadow)),
-            gl::SAMPLER_CUBE_SHADOW          => Sampler(s::BaseF32, s::SamplerCube(s::Shadow)),
+            gl::SAMPLER_3D                   => Sampler(BaseType::F32, SamplerType::Sampler3D),
+            gl::SAMPLER_CUBE                 => Sampler(BaseType::F32, SamplerType::SamplerCube(IsShadow::NoShadow)),
+            gl::SAMPLER_CUBE_SHADOW          => Sampler(BaseType::F32, SamplerType::SamplerCube(IsShadow::Shadow)),
 
             // TODO: int samplers
 
@@ -164,7 +172,7 @@ fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::Attribute> {
             Var(b, c) => (b, c),
             _ => {
                 error!("Unrecognized attribute storage: {}", storage);
-                (s::BaseF32, s::Single)
+                (BaseType::F32, ContainerType::Single)
             }
         };
         info!("\t\tAttrib[{}] = '{}'\t{}\t{}", loc, real_name, base, container);
@@ -312,21 +320,21 @@ pub fn create_program(gl: &gl::Gl, caps: &::Capabilities, shaders: &[::ShaderHan
     (prog, log)
 }
 
-pub fn bind_uniform(gl: &gl::Gl, loc: gl::types::GLint, uniform: s::UniformValue) {
+pub fn bind_uniform(gl: &gl::Gl, loc: gl::types::GLint, uniform: UniformValue) {
     match uniform {
-        s::ValueI32(val) => unsafe { gl.Uniform1i(loc, val) },
-        s::ValueF32(val) => unsafe { gl.Uniform1f(loc, val) },
+        UniformValue::I32(val) => unsafe { gl.Uniform1i(loc, val) },
+        UniformValue::F32(val) => unsafe { gl.Uniform1f(loc, val) },
 
-        s::ValueI32Vector2(val) => unsafe { gl.Uniform2iv(loc, 1, val.as_ptr()) },
-        s::ValueI32Vector3(val) => unsafe { gl.Uniform3iv(loc, 1, val.as_ptr()) },
-        s::ValueI32Vector4(val) => unsafe { gl.Uniform4iv(loc, 1, val.as_ptr()) },
+        UniformValue::I32Vector2(val) => unsafe { gl.Uniform2iv(loc, 1, val.as_ptr()) },
+        UniformValue::I32Vector3(val) => unsafe { gl.Uniform3iv(loc, 1, val.as_ptr()) },
+        UniformValue::I32Vector4(val) => unsafe { gl.Uniform4iv(loc, 1, val.as_ptr()) },
 
-        s::ValueF32Vector2(val) => unsafe { gl.Uniform2fv(loc, 1, val.as_ptr()) },
-        s::ValueF32Vector3(val) => unsafe { gl.Uniform3fv(loc, 1, val.as_ptr()) },
-        s::ValueF32Vector4(val) => unsafe { gl.Uniform4fv(loc, 1, val.as_ptr()) },
+        UniformValue::F32Vector2(val) => unsafe { gl.Uniform2fv(loc, 1, val.as_ptr()) },
+        UniformValue::F32Vector3(val) => unsafe { gl.Uniform3fv(loc, 1, val.as_ptr()) },
+        UniformValue::F32Vector4(val) => unsafe { gl.Uniform4fv(loc, 1, val.as_ptr()) },
 
-        s::ValueF32Matrix2(val) => unsafe{ gl.UniformMatrix2fv(loc, 1, gl::FALSE, val[0].as_ptr()) },
-        s::ValueF32Matrix3(val) => unsafe{ gl.UniformMatrix3fv(loc, 1, gl::FALSE, val[0].as_ptr()) },
-        s::ValueF32Matrix4(val) => unsafe{ gl.UniformMatrix4fv(loc, 1, gl::FALSE, val[0].as_ptr()) },
+        UniformValue::F32Matrix2(val) => unsafe{ gl.UniformMatrix2fv(loc, 1, gl::FALSE, val[0].as_ptr()) },
+        UniformValue::F32Matrix3(val) => unsafe{ gl.UniformMatrix3fv(loc, 1, gl::FALSE, val[0].as_ptr()) },
+        UniformValue::F32Matrix4(val) => unsafe{ gl.UniformMatrix4fv(loc, 1, gl::FALSE, val[0].as_ptr()) },
     }
 }

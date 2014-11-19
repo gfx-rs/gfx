@@ -44,22 +44,25 @@ struct MyInstance {
 #[test]
 fn test_vertex_format() {
     use secret_lib::gfx::attrib as a;
+    use secret_lib::gfx::attrib::{Type, IntSubType, FloatSubType,
+                                  IntSize, FloatSize, SignFlag,
+                                  Format, Stride};
     use secret_lib::gfx;
     use secret_lib::device;
 
     let buf_vert = device::make_fake_buffer();
     let buf_inst = device::make_fake_buffer();
     let mesh = gfx::Mesh::from_format_instanced::<MyVertex, MyInstance>(buf_vert, 0, buf_inst);
-    let stride_vert = 34 as a::Stride;
-    let stride_inst = 8 as a::Stride;
+    let stride_vert = 34 as Stride;
+    let stride_inst = 8 as Stride;
 
     assert_eq!(mesh.attributes, vec![
         gfx::Attribute {
             name: "a0".to_string(),
             buffer: buf_vert.raw(),
-            format: a::Format {
+            format: Format {
                 elem_count: 2,
-                elem_type: a::Float(a::FloatDefault, a::F32),
+                elem_type: Type::Float(FloatSubType::Default, FloatSize::F32),
                 offset: 0,
                 stride: stride_vert,
                 instance_rate: 0,
@@ -68,9 +71,9 @@ fn test_vertex_format() {
         gfx::Attribute {
             name: "a1".to_string(),
             buffer: buf_vert.raw(),
-            format: a::Format {
+            format: Format {
                 elem_count: 1,
-                elem_type: a::Int(a::IntNormalized, a::U16, a::Signed),
+                elem_type: Type::Int(IntSubType::Normalized, IntSize::U16, SignFlag::Signed),
                 offset: 8,
                 stride: stride_vert,
                 instance_rate: 0,
@@ -79,9 +82,9 @@ fn test_vertex_format() {
         gfx::Attribute {
             name: "a2".to_string(),
             buffer: buf_vert.raw(),
-            format: a::Format {
+            format: Format {
                 elem_count: 4,
-                elem_type: a::Int(a::IntAsFloat, a::U8, a::Signed),
+                elem_type: Type::Int(IntSubType::AsFloat, IntSize::U8, SignFlag::Signed),
                 offset: 10,
                 stride: stride_vert,
                 instance_rate: 0,
@@ -90,9 +93,9 @@ fn test_vertex_format() {
         gfx::Attribute {
             name: "a3".to_string(),
             buffer: buf_vert.raw(),
-            format: a::Format {
+            format: Format {
                 elem_count: 1,
-                elem_type: a::Float(a::FloatPrecision, a::F64),
+                elem_type: Type::Float(FloatSubType::Precision, FloatSize::F64),
                 offset: 14,
                 stride: stride_vert,
                 instance_rate: 0,
@@ -101,9 +104,9 @@ fn test_vertex_format() {
         gfx::Attribute {
             name: "a_a4".to_string(),
             buffer: buf_vert.raw(),
-            format: a::Format {
+            format: Format {
                 elem_count: 3,
-                elem_type: a::Float(a::FloatDefault, a::F32),
+                elem_type: Type::Float(FloatSubType::Default, FloatSize::F32),
                 offset: 22,
                 stride: stride_vert,
                 instance_rate: 0,
@@ -112,9 +115,9 @@ fn test_vertex_format() {
         gfx::Attribute {
             name: "a0".to_string(),
             buffer: buf_vert.raw(),
-            format: a::Format {
+            format: Format {
                 elem_count: 2,
-                elem_type: a::Float(a::FloatDefault, a::F32),
+                elem_type: Type::Float(FloatSubType::Default, FloatSize::F32),
                 offset: 0,
                 stride: stride_inst,
                 instance_rate: 1,

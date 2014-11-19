@@ -112,21 +112,21 @@ pub struct Slice {
 #[deriving(Clone, Show)]
 pub enum SliceKind {
     /// Render vertex data directly from the `Mesh`'s buffer.
-    VertexSlice,
-    /// The `IndexSlice*` buffer contains a list of indices into the `Mesh`
+    Vertex,
+    /// The `Index*` buffer contains a list of indices into the `Mesh`
     /// data, so every vertex attribute does not need to be duplicated, only
     /// its position in the `Mesh`. The base index is added to this index
     /// before fetching the vertex from the buffer.  For example, when drawing
-    /// a square, two triangles are needed.  Using only `VertexSlice`, one
+    /// a square, two triangles are needed.  Using only `Vertex`, one
     /// would need 6 separate vertices, 3 for each triangle. However, two of
     /// the vertices will be identical, wasting space for the duplicated
     /// attributes.  Instead, the `Mesh` can store 4 vertices and an
-    /// `IndexSlice8` can be used instead.
-    IndexSlice8(BufferHandle<u8>, VertexCount),
-    /// As `IndexSlice8` but with `u16` indices
-    IndexSlice16(BufferHandle<u16>, VertexCount),
-    /// As `IndexSlice8` but with `u32` indices
-    IndexSlice32(BufferHandle<u32>, VertexCount),
+    /// `Index8` can be used instead.
+    Index8(BufferHandle<u8>, VertexCount),
+    /// As `Index8` but with `u16` indices
+    Index16(BufferHandle<u16>, VertexCount),
+    /// As `Index8` but with `u32` indices
+    Index32(BufferHandle<u32>, VertexCount),
 }
 
 /// Helper methods for cleanly getting the slice of a type.
@@ -142,7 +142,7 @@ impl ToSlice for Mesh {
             start: 0,
             end: self.num_vertices,
             prim_type: ty,
-            kind: VertexSlice
+            kind: SliceKind::Vertex
         }
     }
 }
@@ -154,7 +154,7 @@ impl ToSlice for BufferHandle<u8> {
             start: 0,
             end: self.len() as VertexCount,
             prim_type: ty,
-            kind: IndexSlice8(*self, 0)
+            kind: SliceKind::Index8(*self, 0)
         }
     }
 }
@@ -166,7 +166,7 @@ impl ToSlice for BufferHandle<u16> {
             start: 0,
             end: self.len() as VertexCount,
             prim_type: ty,
-            kind: IndexSlice16(*self, 0)
+            kind: SliceKind::Index16(*self, 0)
         }
     }
 }
@@ -178,7 +178,7 @@ impl ToSlice for BufferHandle<u32> {
             start: 0,
             end: self.len() as VertexCount,
             prim_type: ty,
-            kind: IndexSlice32(*self, 0)
+            kind: SliceKind::Index32(*self, 0)
         }
     }
 }
@@ -187,9 +187,9 @@ impl ToSlice for BufferHandle<u32> {
 #[deriving(Clone, Show)]
 pub enum LinkError {
     /// An attribute index is out of supported bounds
-    ErrorMeshAttribute(uint),
+    MeshAttribute(uint),
     /// An input index is out of supported bounds
-    ErrorShaderInput(uint),
+    ShaderInput(uint),
 }
 
 const BITS_PER_ATTRIBUTE: uint = 4;
@@ -220,9 +220,9 @@ impl Link {
         let mut table = 0u64;
         for (input, attrib) in iter.enumerate() {
             if input >= MAX_SHADER_INPUTS {
-                return Err(ErrorShaderInput(input))
+                return Err(LinkError::ShaderInput(input))
             } else if attrib > MESH_ATTRIBUTE_MASK {
-                return Err(ErrorMeshAttribute(attrib))
+                return Err(LinkError::MeshAttribute(attrib))
             } else {
                 table |= attrib as u64 << (input * BITS_PER_ATTRIBUTE);
             }

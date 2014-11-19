@@ -218,7 +218,7 @@ pub type SamplerHandle = Handle<back::Sampler, tex::SamplerInfo>;
 //#[cfg(test)]
 pub fn make_fake_buffer<T>() -> BufferHandle<T> {
     let info = BufferInfo {
-        usage: UsageStatic,
+        usage: BufferUsage::Static,
         size: 0,
     };
     BufferHandle::from_raw(Handle(0, info))
@@ -295,12 +295,12 @@ pub type IndexType = attrib::IntSize;
 #[repr(u8)]
 pub enum BufferUsage {
     /// Once uploaded, this buffer will rarely change, but will be read from often.
-    UsageStatic,
+    Static,
     /// This buffer will be updated "frequently", and will be read from multiple times between
     /// updates.
-    UsageDynamic,
+    Dynamic,
     /// This buffer always or almost always be updated after each read.
-    UsageStream,
+    Stream,
 }
 
 /// An information block that is immutable and associated with each buffer
@@ -423,7 +423,7 @@ pub trait Device<C: draw::CommandBuffer> {
 mod test {
     use std::mem;
     use super::{BufferHandle, Handle};
-    use super::{BufferInfo, BufferUsage, UsageStatic};
+    use super::{BufferInfo, BufferUsage};
 
     fn mock_buffer<T>(usage: BufferUsage, len: uint) -> BufferHandle<T> {
         BufferHandle {
@@ -439,13 +439,13 @@ mod test {
 
     #[test]
     fn test_buffer_len() {
-        assert_eq!(mock_buffer::<u8>(UsageStatic, 8).len(), 8);
-        assert_eq!(mock_buffer::<u16>(UsageStatic, 8).len(), 8);
+        assert_eq!(mock_buffer::<u8>(BufferUsage::Static, 8).len(), 8);
+        assert_eq!(mock_buffer::<u16>(BufferUsage::Static, 8).len(), 8);
     }
 
     #[test]
     #[should_fail]
     fn test_buffer_zero_len() {
-        let _ = mock_buffer::<()>(UsageStatic, 0).len();
+        let _ = mock_buffer::<()>(BufferUsage::Static, 0).len();
     }
 }

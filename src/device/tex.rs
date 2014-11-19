@@ -21,6 +21,7 @@
 //! image data.  Image data consists of an array of "texture elements", or
 //! texels.
 
+use attrib::IntSubType;
 use std::default::Default;
 use std::fmt;
 
@@ -49,23 +50,23 @@ pub enum TextureError {
 impl fmt::Show for TextureError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &UnsupportedTextureFormat =>
+            &TextureError::UnsupportedTextureFormat =>
                 write!(f, "Failed to map a given format to the device"),
 
-            &UnsupportedTextureSampling =>
+            &TextureError::UnsupportedTextureSampling =>
                 write!(
                     f,
                     "Failed to map a given multisampled kind to the device"
                 ),
 
-            &InvalidTextureInfo(info) =>
+            &TextureError::InvalidTextureInfo(info) =>
                 write!(
                     f,
                     "Invalid TextureInfo (width, height, and levels must not \
                     be zero): {}\n",
                     info
                 ),
-            &IncorrectTextureSize(expected) =>
+            &TextureError::IncorrectTextureSize(expected) =>
                 write!(
                     f,
                     "Invalid data size provided to update the texture, \
@@ -151,27 +152,27 @@ impl Format {
     /// Extract the components format
     pub fn get_components(&self) -> Option<Components> {
         Some(match *self {
-            Float(c, _) => c,
-            Integer(c, _, _) => c,
-            Unsigned(c, _, _) => c,
-            Compressed(_) => panic!("Tried to get components of compressed texel!"),
-            R3G3B2 | R11FG11FB10F | RGB9E5 => RGB,
-            RGB5A1 | RGB10A2 | RGB10A2UI => RGBA,
-            DEPTH24STENCIL8 => return None,
+            Format::Float(c, _) => c,
+            Format::Integer(c, _, _) => c,
+            Format::Unsigned(c, _, _) => c,
+            Format::Compressed(_) => panic!("Tried to get components of compressed texel!"),
+            Format::R3G3B2 | Format::R11FG11FB10F | Format::RGB9E5    => Components::RGB,
+            Format::RGB5A1 | Format::RGB10A2      | Format::RGB10A2UI => Components::RGBA,
+            Format::DEPTH24STENCIL8 => return None,
         })
     }
 
     /// Check if it's a compressed format
     pub fn is_compressed(&self) -> bool {
         match *self {
-            Compressed(_) => true,
+            Format::Compressed(_) => true,
             _ => false
         }
     }
 }
 
 /// A commonly used RGBA8 format
-pub static RGBA8: Format = Unsigned(RGBA, 8, ::attrib::IntNormalized);
+pub static RGBA8: Format = Format::Unsigned(Components::RGBA, 8, IntSubType::Normalized);
 
 /// Describes the storage of a surface
 #[allow(missing_docs)]
@@ -256,8 +257,8 @@ impl TextureKind {
     /// Return the anti-aliasing mode of the texture
     pub fn get_aa_mode(&self) -> Option<AaMode> {
         match *self {
-            Texture2DMultiSample(aa) => Some(aa),
-            Texture2DMultiSampleArray(aa) => Some(aa),
+            TextureKind::Texture2DMultiSample(aa) => Some(aa),
+            TextureKind::Texture2DMultiSampleArray(aa) => Some(aa),
             _ => None,
         }
     }
@@ -322,7 +323,7 @@ impl Default for TextureInfo {
             height: 1,
             depth: 1,
             levels: -1,
-            kind: Texture2D,
+            kind: TextureKind::Texture2D,
             format: RGBA8,
         }
     }
@@ -390,9 +391,9 @@ pub enum WrapMode {
 
 /// Specified how the Comparison operator should be used when sampling
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
-pub enum ComparsionMode {
+pub enum ComparisonMode {
     /// the default, don't use this feature.
-    NoComparsion,
+    NoComparison,
     /// Compare Reference to Texture
     CompareRefToTexture(state::Comparison)
 }
@@ -413,7 +414,7 @@ pub struct SamplerInfo {
     /// This range is used to clamp LOD level used for sampling
     pub lod_range: (f32, f32),
     /// comparison mode, used primary for a shadow map
-    pub comparison: ComparsionMode
+    pub comparison: ComparisonMode
 }
 
 impl SamplerInfo {
@@ -425,7 +426,7 @@ impl SamplerInfo {
             wrap_mode: (wrap, wrap, wrap),
             lod_bias: 0.0,
             lod_range: (-1000.0, 1000.0),
-            comparison: NoComparsion
+            comparison: ComparisonMode::NoComparison
         }
     }
 }

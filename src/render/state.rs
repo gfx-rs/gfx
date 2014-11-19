@@ -17,6 +17,7 @@
 //! Configures primitive assembly (PA), rasterizer, and output merger (OM) blocks.
 
 use device::state;
+use device::state::StencilOp;
 use device::target::{Rect, Stencil};
 
 /// An assembly of states that affect regular draw calls
@@ -44,12 +45,12 @@ pub struct DrawState {
 #[deriving(Clone, PartialEq, Show)]
 pub enum BlendPreset {
     /// When combining two fragments, add their values together, saturating at 1.0
-    BlendAdditive,
+    Additive,
     /// When combining two fragments, add the value of the source times its alpha channel with the
     /// value of the destination multiplied by the inverse of the source alpha channel. Has the
     /// usual transparency effect: mixes the two colors using a fraction of each one specified by
     /// the alpha of the source.
-    BlendAlpha,
+    Alpha,
 }
 
 impl DrawState {
@@ -59,7 +60,7 @@ impl DrawState {
         DrawState {
             primitive: state::Primitive {
                 front_face: state::CounterClockwise,
-                method: state::Fill(state::CullBack),
+                method: state::Fill(state::CullMode::Back),
                 offset: state::NoOffset,
             },
             multi_sample: None,
@@ -84,9 +85,9 @@ impl DrawState {
             value: value,
             mask_read: -1,
             mask_write: -1,
-            op_fail: state::OpKeep,
-            op_depth_fail: state::OpKeep,
-            op_pass: state::OpKeep,
+            op_fail: StencilOp::Keep,
+            op_depth_fail: StencilOp::Keep,
+            op_pass: StencilOp::Keep,
         };
         self.stencil = Some(state::Stencil {
             front: side,
@@ -107,7 +108,7 @@ impl DrawState {
     /// Set the blend mode to one of the presets
     pub fn blend(mut self, preset: BlendPreset) -> DrawState {
         self.blend = Some(match preset {
-            BlendAdditive => state::Blend {
+            BlendPreset::Additive => state::Blend {
                 color: state::BlendChannel {
                     equation: state::FuncAdd,
                     source: state::Factor(state::Inverse, state::Zero),
@@ -120,7 +121,7 @@ impl DrawState {
                 },
                 value: [0.0, 0.0, 0.0, 0.0],
             },
-            BlendAlpha => state::Blend {
+            BlendPreset::Alpha => state::Blend {
                 color: state::BlendChannel {
                     equation: state::FuncAdd,
                     source: state::Factor(state::Normal, state::SourceAlpha),
