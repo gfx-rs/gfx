@@ -111,7 +111,7 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 if ty_str.starts_with("i") { "Signed" } else { "Unsigned" }
             });
             let kind = cx.ident_of(match modifier {
-                None => "IntSubType::Raw",
+                None => "Raw",
                 Some(Modifier::Normalized) => "Normalized",
                 Some(Modifier::AsFloat) => "AsFloat",
                 Some(Modifier::AsDouble) => {
