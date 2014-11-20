@@ -300,7 +300,6 @@ impl fmt::Show for Blend {
     }
 }
 
-#[deriving(Clone, PartialEq)]
 bitflags!(
     #[allow(missing_docs)]
     flags ColorMask: u32 {  //u8 is preferred, but doesn't seem to work well

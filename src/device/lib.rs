@@ -139,7 +139,6 @@ impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Drop for RWMapping<'a, T
 #[deriving(Clone, PartialEq, Show)]
 pub struct Handle<T, I>(T, I);
 
-#[deriving(Clone, Show)]
 impl<T: Copy, I> Handle<T, I> {
     /// Get the internal name
     pub fn get_name(&self) -> T {

@@ -40,7 +40,6 @@ pub struct Rect {
 /// A color with floating-point components.
 pub type ColorValue = [f32, ..4];
 
-#[deriving(Clone, PartialEq)]
 bitflags!(
     #[allow(missing_docs)]
     flags Mask: u32 {  //u8 is preferred, but doesn't seem to work well
