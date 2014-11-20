@@ -53,7 +53,7 @@ path = "examples/cube/main.rs"
 # git = "https://github.com/bjz/glfw-rs.git"
 
 [dev_dependencies.cgmath]
-git = "http://github.com/bjz/cgmath-rs"
+git = "https://github.com/bjz/cgmath-rs"
 
 
 [[example]]
@@ -64,7 +64,7 @@ path = "examples/terrain/main.rs"
 # git = "https://github.com/bjz/glfw-rs.git"
 
 # [dev_dependencies.cgmath]
-# git = "http://github.com/bjz/cgmath-rs"
+# git = "https://github.com/bjz/cgmath-rs"
 
 [dev_dependencies.genmesh]
 git = "https://github.com/csherratt/genmesh.git"
@@ -95,4 +95,4 @@ git = "https://github.com/gfx-rs/gfx_gl.git"
 git = "https://github.com/rust-lang/time"
 
 # [dev_dependencies.cgmath]
-# git = "http://github.com/bjz/cgmath-rs"
+# git = "https://github.com/bjz/cgmath-rs"
