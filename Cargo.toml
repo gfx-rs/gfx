@@ -69,7 +69,7 @@ path = "examples/terrain/main.rs"
 [dev_dependencies.genmesh]
 git = "https://github.com/csherratt/genmesh.git"
 
-[dev_dependencies.noise-rs]
+[dev_dependencies.noise]
 git = "https://github.com/bjz/noise-rs.git"
 
 
