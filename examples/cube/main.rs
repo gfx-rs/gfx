@@ -20,7 +20,6 @@ extern crate gfx;
 #[phase(plugin)]
 extern crate gfx_macros;
 extern crate glfw;
-extern crate native;
 
 use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3};
@@ -112,13 +111,6 @@ GLSL_150: b"
 };
 
 //----------------------------------------
-
-// We need to run on the main thread, so ensure we are using the `native` runtime. This is
-// technically not needed, since this is the default, but it's not guaranteed.
-#[start]
-fn start(argc: int, argv: *const *const u8) -> int {
-     native::start(argc, argv, main)
-}
 
 fn main() {
     let glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
