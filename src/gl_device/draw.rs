@@ -87,6 +87,10 @@ impl ::draw::CommandBuffer for GlCommandBuffer {
         self.buf.push(Command::BindTexture(slot, kind, tex, sampler));
     }
 
+    fn set_draw_color_buffers(&mut self, num: uint) {
+        self.buf.push(Command::SetDrawColorBuffers(num));
+    }
+
     fn set_primitive(&mut self, prim: ::state::Primitive) {
         self.buf.push(Command::SetPrimitiveState(prim));
     }

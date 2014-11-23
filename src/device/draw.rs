@@ -99,6 +99,7 @@ pub trait CommandBuffer {
     fn bind_uniform(&mut self, shade::Location, shade::UniformValue);
     fn bind_texture(&mut self, ::TextureSlot, tex::TextureKind, back::Texture,
                     Option<::SamplerHandle>);
+    fn set_draw_color_buffers(&mut self, uint);
     fn set_primitive(&mut self, ::state::Primitive);
     fn set_viewport(&mut self, target::Rect);
     fn set_multi_sample(&mut self, Option<::state::MultiSample>);

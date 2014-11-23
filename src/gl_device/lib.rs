@@ -375,6 +375,9 @@ impl GlDevice {
                     (_, _, _) => (),
                 }
             },
+            Command::SetDrawColorBuffers(num) => {
+                state::bind_draw_color_buffers(&self.gl, num);
+            },
             Command::SetPrimitiveState(prim) => {
                 state::bind_primitive(&self.gl, prim);
             },
