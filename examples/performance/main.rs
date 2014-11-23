@@ -21,7 +21,6 @@ extern crate gfx;
 #[phase(plugin)]
 extern crate gfx_macros;
 extern crate glfw;
-extern crate native;
 extern crate time;
 extern crate "gfx_gl" as gl;
 
@@ -80,13 +79,6 @@ GLSL_150: b"
 };
 
 //----------------------------------------
-
-// We need to run on the main thread, so ensure we are using the `native` runtime. This is
-// technically not needed, since this is the default, but it's not guaranteed.
-#[start]
-fn start(argc: int, argv: *const *const u8) -> int {
-     native::start(argc, argv, main)
-}
 
 fn gfx_main(glfw: glfw::Glfw,
             window: glfw::Window,
@@ -177,10 +169,10 @@ fn gfx_main(glfw: glfw::Glfw,
         window.swap_buffers();
         let swap = precise_time_s() * 1000.;
 
-        println!("total time:\t\t{0:4.2f}ms", swap - start);
-        println!("\tcreate list:\t{0:4.2f}ms", pre_submit - start);
-        println!("\tsubmit:\t\t{0:4.2f}ms", post_submit - pre_submit);
-        println!("\tgpu wait:\t{0:4.2f}ms", swap - post_submit)
+        println!("total time:\t\t{0:4.2}ms", swap - start);
+        println!("\tcreate list:\t{0:4.2}ms", pre_submit - start);
+        println!("\tsubmit:\t\t{0:4.2}ms", post_submit - pre_submit);
+        println!("\tgpu wait:\t{0:4.2}ms", swap - post_submit)
     }
 }
 
@@ -346,9 +338,9 @@ fn gl_main(glfw: glfw::Glfw,
         window.swap_buffers();
         let swap = precise_time_s() * 1000.;
 
-        println!("total time:\t\t{0:4.2f}ms", swap - start);
-        println!("\tsubmit:\t\t{0:4.2f}ms", submit - start);
-        println!("\tgpu wait:\t{0:4.2f}ms", swap - submit)
+        println!("total time:\t\t{0:4.2}ms", swap - start);
+        println!("\tsubmit:\t\t{0:4.2}ms", submit - start);
+        println!("\tgpu wait:\t{0:4.2}ms", swap - submit)
 
     }
 
