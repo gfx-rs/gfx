@@ -431,19 +431,19 @@ impl<C: CommandBuffer> Renderer<C> {
         let mesh::Slice { start, end, prim_type, kind } = *slice;
         match kind {
             SliceKind::Vertex => {
-                self.command_buffer.call_draw(prim_type, start, end, instances);
+                self.command_buffer.call_draw(prim_type, start, end - start, instances);
             },
             SliceKind::Index8(buf, base) => {
                 self.bind_index(buf);
-                self.command_buffer.call_draw_indexed(prim_type, attrib::U8, start, end, base, instances);
+                self.command_buffer.call_draw_indexed(prim_type, attrib::U8, start, end - start, base, instances);
             },
             SliceKind::Index16(buf, base) => {
                 self.bind_index(buf);
-                self.command_buffer.call_draw_indexed(prim_type, attrib::U16, start, end, base, instances);
+                self.command_buffer.call_draw_indexed(prim_type, attrib::U16, start, end - start, base, instances);
             },
             SliceKind::Index32(buf, base) => {
                 self.bind_index(buf);
-                self.command_buffer.call_draw_indexed(prim_type, attrib::U32, start, end, base, instances);
+                self.command_buffer.call_draw_indexed(prim_type, attrib::U32, start, end - start, base, instances);
             },
         }
     }
