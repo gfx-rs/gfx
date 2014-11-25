@@ -64,6 +64,18 @@ pub fn bind_multi_sample(gl: &gl::Gl, ms: Option<s::MultiSample>) {
     }
 }
 
+pub fn bind_draw_color_buffers(gl: &gl::Gl, num: uint) {
+    unsafe { gl.DrawBuffers(
+        num as i32,
+        [gl::COLOR_ATTACHMENT0,  gl::COLOR_ATTACHMENT1,  gl::COLOR_ATTACHMENT2,
+         gl::COLOR_ATTACHMENT3,  gl::COLOR_ATTACHMENT4,  gl::COLOR_ATTACHMENT5,
+         gl::COLOR_ATTACHMENT6,  gl::COLOR_ATTACHMENT7,  gl::COLOR_ATTACHMENT8,
+         gl::COLOR_ATTACHMENT9,  gl::COLOR_ATTACHMENT10, gl::COLOR_ATTACHMENT11,
+         gl::COLOR_ATTACHMENT12, gl::COLOR_ATTACHMENT13, gl::COLOR_ATTACHMENT14,
+         gl::COLOR_ATTACHMENT15].as_ptr()
+    )};
+}
+
 pub fn bind_viewport(gl: &gl::Gl, rect: Rect) {
     unsafe { gl.Viewport(
         rect.x as gl::types::GLint,

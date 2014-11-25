@@ -333,6 +333,7 @@ pub enum Command {
     BindUniformBlock(back::Program, UniformBufferSlot, UniformBlockIndex, back::Buffer),
     BindUniform(shade::Location, shade::UniformValue),
     BindTexture(TextureSlot, tex::TextureKind, back::Texture, Option<SamplerHandle>),
+    SetDrawColorBuffers(uint),
     SetPrimitiveState(state::Primitive),
     SetViewport(target::Rect),
     SetMultiSampleState(Option<state::MultiSample>),

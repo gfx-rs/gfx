@@ -288,6 +288,8 @@ impl<C: CommandBuffer> Renderer<C> {
                     *cur = *new;
                 }
             }
+            // activate the color targets that were just bound
+            self.command_buffer.set_draw_color_buffers(frame.colors.len());
             // append new planes
             for (i, new) in frame.colors.iter().enumerate()
                                  .skip(self.render_state.frame.colors.len()) {
