@@ -229,7 +229,7 @@ fn main() {
         glfw.poll_events();
         for (_, event) in glfw::flush_messages(&events) {
             match event {
-                glfw::KeyEvent(glfw::Key::Escape, _, glfw::Press, _) =>
+                glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Press, _) =>
                     window.set_should_close(true),
                 _ => {},
             }
