@@ -494,6 +494,7 @@ impl<D: device::Device<C>, C: CommandBuffer> DeviceHelper<C> for D {
             Ok(s) => s,
             Err(e) => return Err(ProgramError::Fragment(e)),
         };
-        self.create_program(&[vs, fs]).map_err(|e| ProgramError::Link(e))
+        let outputs = self.shader_outputs(&fs_src);
+        self.create_program(&[vs, fs], outputs.as_slice()).map_err(|e| ProgramError::Link(e))
     }
 }
