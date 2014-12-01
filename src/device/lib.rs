@@ -374,7 +374,8 @@ pub trait Device<C: draw::CommandBuffer> {
     fn create_array_buffer(&mut self) -> Result<ArrayBufferHandle, ()>;
     fn create_shader(&mut self, stage: shade::Stage, code: shade::ShaderSource) ->
                      Result<ShaderHandle, shade::CreateShaderError>;
-    fn create_program(&mut self, shaders: &[ShaderHandle]) -> Result<ProgramHandle, ()>;
+    fn shader_outputs<'a>(&mut self, code: &'a ::shade::ShaderSource) -> Vec<&'a str>;
+    fn create_program(&mut self, shaders: &[ShaderHandle], outputs: &[&str]) -> Result<ProgramHandle, ()>;
     fn create_frame_buffer(&mut self) -> FrameBufferHandle;
     fn create_surface(&mut self, info: tex::SurfaceInfo) -> Result<SurfaceHandle, tex::SurfaceError>;
     fn create_texture(&mut self, info: tex::TextureInfo) -> Result<TextureHandle, tex::TextureError>;

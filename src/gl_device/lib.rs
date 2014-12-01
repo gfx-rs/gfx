@@ -620,8 +620,12 @@ impl Device<GlCommandBuffer> for GlDevice {
         name.map(|sh| ::Handle(sh, stage))
     }
 
-    fn create_program(&mut self, shaders: &[::ShaderHandle]) -> Result<::ProgramHandle, ()> {
-        let (prog, log) = shade::create_program(&self.gl, &self.caps, shaders);
+    fn shader_outputs<'a>(&mut self, code: &'a ::shade::ShaderSource) -> Vec<&'a str> {
+        shade::shader_outputs(code, self.info.shading_language)
+    }
+
+    fn create_program(&mut self, shaders: &[::ShaderHandle], outputs: &[&str]) -> Result<::ProgramHandle, ()> {
+        let (prog, log) = shade::create_program(&self.gl, &self.caps, shaders, outputs);
         log.map(|log| {
             let level = if prog.is_err() { log::ERROR } else { log::WARN };
             log!(level, "\tProgram link log: {}", log);

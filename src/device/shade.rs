@@ -322,6 +322,7 @@ pub struct ShaderSource<'a> {
     pub glsl_140: Option<&'a [u8]>,
     pub glsl_150: Option<&'a [u8]>,
     // TODO: hlsl_sm_N...
+    pub glsl_130plus_outputs: Option<[&'a str, ..4]>,
 }
 
 /// An error type for creating programs.
