@@ -30,6 +30,7 @@ extern crate libc;
 pub use self::gl_device as back;
 
 use std::mem;
+use std::slice;
 
 pub mod attrib;
 pub mod draw;
@@ -74,7 +75,7 @@ pub struct ReadableMapping<'a, T: Copy, C: draw::CommandBuffer, D: 'a + Device<C
 
 impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Deref<[T]> for ReadableMapping<'a, T, C, D> {
     fn deref(&self) -> &[T] {
-        unsafe { std::slice::raw::buf_as_slice(self.raw.pointer as *const T, self.len, |x| std::mem::transmute(x)) }
+        unsafe { mem::transmute(slice::from_raw_buf(&(self.raw.pointer as *const T), self.len)) }
     }
 }
 
@@ -118,13 +119,13 @@ pub struct RWMapping<'a, T: Copy, C: draw::CommandBuffer, D: 'a + Device<C>> {
 
 impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Deref<[T]> for RWMapping<'a, T, C, D> {
     fn deref(&self) -> &[T] {
-        unsafe { std::slice::raw::buf_as_slice(self.raw.pointer as *const T, self.len, |x| std::mem::transmute(x)) }
+        unsafe { mem::transmute(slice::from_raw_buf(&(self.raw.pointer as *const T), self.len)) }
     }
 }
 
 impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> DerefMut<[T]> for RWMapping<'a, T, C, D> {
     fn deref_mut(&mut self) -> &mut [T] {
-        unsafe { std::slice::raw::mut_buf_as_slice(self.raw.pointer, self.len, |x| std::mem::transmute(x)) }
+        unsafe { mem::transmute(slice::from_raw_mut_buf(&self.raw.pointer, self.len)) }
     }
 }
 
@@ -229,13 +230,10 @@ pub fn get_main_frame_buffer() -> FrameBufferHandle {
 }
 
 /// Treat a given slice as `&[u8]` for the given function call
-pub fn with_slice<T: Copy, R>(slice: &[T], fun: |&[u8]| -> R) -> R {
-    use std::{mem, slice};
-    let size = mem::size_of::<T>() * slice.len();
-    //TODO: would be nice to execute `fun` out of unsafe block
-    unsafe {
-        slice::raw::buf_as_slice(slice.as_ptr() as *const u8, size, fun)
-    }
+pub fn as_byte_slice<T>(slice: &[T]) -> &[u8] {
+    let len = mem::size_of::<T>() * slice.len();
+    let slice = std::raw::Slice { data: slice.as_ptr(), len: len };
+    unsafe { mem::transmute(slice) }
 }
 
 /// Features that the device supports.
@@ -369,7 +367,7 @@ pub trait Device<C: draw::CommandBuffer> {
     }
     fn create_buffer_static_raw(&mut self, data: &[u8]) -> BufferHandle<()>;
     fn create_buffer_static<T: Copy>(&mut self, data: &[T]) -> BufferHandle<T> {
-        with_slice(data, |s| self.create_buffer_static_raw(s)).cast()
+        self.create_buffer_static_raw(as_byte_slice(data)).cast()
     }
     fn create_array_buffer(&mut self) -> Result<ArrayBufferHandle, ()>;
     fn create_shader(&mut self, stage: shade::Stage, code: shade::ShaderSource) ->
@@ -396,11 +394,7 @@ pub trait Device<C: draw::CommandBuffer> {
                          offset_bytes: uint);
     fn update_buffer<T: Copy>(&mut self, buf: BufferHandle<T>, data: &[T],
                      offset_elements: uint) {
-        with_slice(data, |s| self.update_buffer_raw(
-            buf.cast(),
-            s,
-            mem::size_of::<T>() * offset_elements
-        ));
+        self.update_buffer_raw(buf.cast(), as_byte_slice(data), mem::size_of::<T>() * offset_elements)
     }
     fn map_buffer_raw(&mut self, buf: BufferHandle<()>, access: MapAccess) -> back::RawMapping;
     fn unmap_buffer_raw(&mut self, map: back::RawMapping);
@@ -414,7 +408,7 @@ pub trait Device<C: draw::CommandBuffer> {
     fn update_texture<T: Copy>(&mut self, tex: &TextureHandle,
                       img: &tex::ImageInfo, data: &[T])
                       -> Result<(), tex::TextureError> {
-        with_slice(data, |s| self.update_texture_raw(tex, img, s))
+        self.update_texture_raw(tex, img, as_byte_slice(data))
     }
     fn generate_mipmap(&mut self, tex: &TextureHandle);
 }

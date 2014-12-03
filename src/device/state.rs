@@ -38,12 +38,8 @@ pub type OffsetFactor = f32;
 pub type OffsetUnits = u32;
 
 /// How to offset vertices in screen space, if at all.
-#[allow(missing_docs)]
 #[deriving(Clone, PartialEq, Show)]
-pub enum OffsetType {
-    NoOffset,
-    Offset(OffsetFactor, OffsetUnits),
-}
+pub struct Offset(pub OffsetFactor, pub OffsetUnits);
 
 /// Which face, if any, to cull.
 #[allow(missing_docs)]
@@ -74,7 +70,7 @@ pub struct Primitive {
     /// How to rasterize this primitive.
     pub method: RasterMethod,
     /// Any polygon offset to apply.
-    pub offset: OffsetType,
+    pub offset: Option<Offset>,
 }
 
 impl Primitive {
@@ -92,7 +88,7 @@ impl Default for Primitive {
         Primitive {
             front_face: WindingOrder::CounterClockwise,
             method: RasterMethod::Fill(CullMode::Nothing),
-            offset: OffsetType::NoOffset,
+            offset: None,
         }
     }
 }
@@ -209,11 +205,11 @@ impl Default for Depth {
 #[allow(missing_docs)]
 #[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
 pub enum Equation {
-    FuncAdd,
-    FuncSub,
-    FuncRevSub,
-    FuncMin,
-    FuncMax,
+    Add,
+    Sub,
+    RevSub,
+    Min,
+    Max,
 }
 
 #[allow(missing_docs)]
@@ -251,7 +247,7 @@ pub struct BlendChannel {
 impl Default for BlendChannel {
     fn default() -> BlendChannel {
         BlendChannel {
-            equation: Equation::FuncAdd,
+            equation: Equation::Add,
             source: Factor(InverseFlag::Inverse, BlendValue::Zero),
             destination: Factor(InverseFlag::Normal, BlendValue::Zero),
         }

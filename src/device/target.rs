@@ -106,11 +106,11 @@ pub enum Target {
     /// # Portability Note
     ///
     /// The device is only required to expose one color target.
-    TargetColor(u8),
+    Color(u8),
     /// Depth data.
-    TargetDepth,
+    Depth,
     /// Stencil data.
-    TargetStencil,
+    Stencil,
     /// A target for both depth and stencil data at once.
-    TargetDepthStencil,
+    DepthStencil,
 }

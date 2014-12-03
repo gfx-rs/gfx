@@ -17,7 +17,7 @@
 //! Configures primitive assembly (PA), rasterizer, and output merger (OM) blocks.
 
 use device::state;
-use device::state::StencilOp;
+use device::state::{BlendValue, CullMode, Equation, InverseFlag, RasterMethod, StencilOp, WindingOrder};
 use device::target::{Rect, Stencil};
 
 /// An assembly of states that affect regular draw calls
@@ -59,9 +59,9 @@ impl DrawState {
     pub fn new() -> DrawState {
         DrawState {
             primitive: state::Primitive {
-                front_face: state::CounterClockwise,
-                method: state::Fill(state::CullMode::Back),
-                offset: state::NoOffset,
+                front_face: WindingOrder::CounterClockwise,
+                method: RasterMethod::Fill(CullMode::Back),
+                offset: None,
             },
             multi_sample: None,
             scissor: None,
@@ -110,27 +110,27 @@ impl DrawState {
         self.blend = Some(match preset {
             BlendPreset::Additive => state::Blend {
                 color: state::BlendChannel {
-                    equation: state::FuncAdd,
-                    source: state::Factor(state::Inverse, state::Zero),
-                    destination: state::Factor(state::Inverse, state::Zero),
+                    equation: Equation::Add,
+                    source: state::Factor(InverseFlag::Inverse, BlendValue::Zero),
+                    destination: state::Factor(InverseFlag::Inverse, BlendValue::Zero),
                 },
                 alpha: state::BlendChannel {
-                    equation: state::FuncAdd,
-                    source: state::Factor(state::Inverse, state::Zero),
-                    destination: state::Factor(state::Inverse, state::Zero),
+                    equation: Equation::Add,
+                    source: state::Factor(InverseFlag::Inverse, BlendValue::Zero),
+                    destination: state::Factor(InverseFlag::Inverse, BlendValue::Zero),
                 },
                 value: [0.0, 0.0, 0.0, 0.0],
             },
             BlendPreset::Alpha => state::Blend {
                 color: state::BlendChannel {
-                    equation: state::FuncAdd,
-                    source: state::Factor(state::Normal, state::SourceAlpha),
-                    destination: state::Factor(state::Inverse, state::SourceAlpha),
+                    equation: Equation::Add,
+                    source: state::Factor(InverseFlag::Normal, BlendValue::SourceAlpha),
+                    destination: state::Factor(InverseFlag::Inverse, BlendValue::SourceAlpha),
                 },
                 alpha: state::BlendChannel {
-                    equation: state::FuncAdd,
-                    source: state::Factor(state::Inverse, state::Zero),
-                    destination: state::Factor(state::Inverse, state::Zero),
+                    equation: Equation::Add,
+                    source: state::Factor(InverseFlag::Inverse, BlendValue::Zero),
+                    destination: state::Factor(InverseFlag::Inverse, BlendValue::Zero),
                 },
                 value: [0.0, 0.0, 0.0, 0.0],
             },

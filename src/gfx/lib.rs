@@ -47,7 +47,7 @@ pub use render::target::Plane::Surface as PlaneSurface;
 pub use render::target::Plane::Texture as PlaneTexture;
 pub use device::Device;
 pub use device::{attrib, state, tex};
-pub use device::with_slice;
+pub use device::as_byte_slice;
 pub use device::{BufferHandle, BufferInfo, RawBufferHandle, ShaderHandle};
 pub use device::{ProgramHandle, SurfaceHandle, TextureHandle};
 pub use device::BufferUsage;
@@ -55,8 +55,7 @@ pub use device::BufferUsage::Static as UsageStatic;
 pub use device::BufferUsage::Dynamic as UsageDynamic;
 pub use device::BufferUsage::Stream as UsageStream;
 pub use device::{VertexCount, InstanceCount};
-pub use device::{PrimitiveType, Point, Line, LineStrip,
-    TriangleList, TriangleStrip, TriangleFan};
+pub use device::PrimitiveType;
 pub use device::draw::CommandBuffer;
 pub use device::shade::UniformValue;
 pub use device::shade::UniformValue::I32 as ValueI32;

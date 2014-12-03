@@ -27,10 +27,10 @@ extern crate device;
 use std::mem;
 
 use device::attrib;
+use device::attrib::IntSize;
 use device::draw::CommandBuffer;
 use device::shade::{ProgramInfo, UniformValue, ShaderSource, Stage, CreateShaderError};
-use device::target::{Rect, ClearData, Mask, Access, Draw, Read,
-    Target, TargetColor, TargetDepth, TargetStencil};
+use device::target::{Rect, ClearData, Mask, Access, Target};
 use batch::Batch;
 use mesh::SliceKind;
 use target::Plane;
@@ -266,25 +266,25 @@ impl<C: CommandBuffer> Renderer<C> {
         if frame.is_default() {
             if self.render_state.is_frame_buffer_set {
                 // binding the default FBO, not touching our common one
-                self.command_buffer.bind_frame_buffer(Draw, self.default_frame_buffer.get_name());
+                self.command_buffer.bind_frame_buffer(Access::Draw, self.default_frame_buffer.get_name());
                 self.render_state.is_frame_buffer_set = false;
             }
         } else {
             if !self.render_state.is_frame_buffer_set {
-                self.command_buffer.bind_frame_buffer(Draw, self.draw_frame_buffer.get_name());
+                self.command_buffer.bind_frame_buffer(Access::Draw, self.draw_frame_buffer.get_name());
                 self.render_state.is_frame_buffer_set = true;
             }
             // cut off excess color planes
             for (i, _) in self.render_state.frame.colors.iter().enumerate()
                                 .skip(frame.colors.len()) {
-                self.command_buffer.unbind_target(Draw, TargetColor(i as u8));
+                self.command_buffer.unbind_target(Access::Draw, Target::Color(i as u8));
             }
             self.render_state.frame.colors.truncate(frame.colors.len());
             // bind intersecting subsets
             for (i, (cur, new)) in self.render_state.frame.colors.iter_mut()
                                        .zip(frame.colors.iter()).enumerate() {
                 if *cur != *new {
-                    self.command_buffer.bind_target(Draw, TargetColor(i as u8), Some(new));
+                    self.command_buffer.bind_target(Access::Draw, Target::Color(i as u8), Some(new));
                     *cur = *new;
                 }
             }
@@ -293,33 +293,33 @@ impl<C: CommandBuffer> Renderer<C> {
             // append new planes
             for (i, new) in frame.colors.iter().enumerate()
                                  .skip(self.render_state.frame.colors.len()) {
-                self.command_buffer.bind_target(Draw, TargetColor(i as u8), Some(new));
+                self.command_buffer.bind_target(Access::Draw, Target::Color(i as u8), Some(new));
                 self.render_state.frame.colors.push(*new);
             }
             // set depth
             if self.render_state.frame.depth != frame.depth {
-                self.command_buffer.bind_target(Draw, TargetDepth, frame.depth.as_ref());
+                self.command_buffer.bind_target(Access::Draw, Target::Depth, frame.depth.as_ref());
                 self.render_state.frame.depth = frame.depth;
             }
             // set stencil
             if self.render_state.frame.stencil != frame.stencil {
-                self.command_buffer.bind_target(Draw, TargetStencil, frame.stencil.as_ref());
+                self.command_buffer.bind_target(Access::Draw, Target::Stencil, frame.stencil.as_ref());
                 self.render_state.frame.stencil = frame.stencil;
             }
         }
     }
 
     fn bind_read_frame(&mut self, frame: &target::Frame) {
-        self.command_buffer.bind_frame_buffer(Read, self.read_frame_buffer.get_name());
+        self.command_buffer.bind_frame_buffer(Access::Read, self.read_frame_buffer.get_name());
         // color
         if frame.colors.is_empty() {
-            self.command_buffer.unbind_target(Read, TargetColor(0));
+            self.command_buffer.unbind_target(Access::Read, Target::Color(0));
         }else {
-            self.command_buffer.bind_target(Read, TargetColor(0), Some(&frame.colors[0]));
+            self.command_buffer.bind_target(Access::Read, Target::Color(0), Some(&frame.colors[0]));
         }
         // depth/stencil
-        self.command_buffer.bind_target(Read, TargetDepth, frame.depth.as_ref());
-        self.command_buffer.bind_target(Read, TargetStencil, frame.stencil.as_ref());
+        self.command_buffer.bind_target(Access::Read, Target::Depth, frame.depth.as_ref());
+        self.command_buffer.bind_target(Access::Read, Target::Stencil, frame.stencil.as_ref());
     }
 
     fn bind_state(&mut self, state: &state::DrawState) {
@@ -437,15 +437,15 @@ impl<C: CommandBuffer> Renderer<C> {
             },
             SliceKind::Index8(buf, base) => {
                 self.bind_index(buf);
-                self.command_buffer.call_draw_indexed(prim_type, attrib::U8, start, end - start, base, instances);
+                self.command_buffer.call_draw_indexed(prim_type, IntSize::U8, start, end - start, base, instances);
             },
             SliceKind::Index16(buf, base) => {
                 self.bind_index(buf);
-                self.command_buffer.call_draw_indexed(prim_type, attrib::U16, start, end - start, base, instances);
+                self.command_buffer.call_draw_indexed(prim_type, IntSize::U16, start, end - start, base, instances);
             },
             SliceKind::Index32(buf, base) => {
                 self.bind_index(buf);
-                self.command_buffer.call_draw_indexed(prim_type, attrib::U32, start, end - start, base, instances);
+                self.command_buffer.call_draw_indexed(prim_type, IntSize::U32, start, end - start, base, instances);
             },
         }
     }
