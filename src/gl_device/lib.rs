@@ -24,7 +24,7 @@ extern crate "gfx_gl" as gl;
 use log;
 
 use attrib::{SignFlag, IntSubType, IntSize, FloatSubType, FloatSize, Type};
-use state::{OffsetType, CullMode, RasterMethod, WindingOrder};
+use state::{CullMode, RasterMethod, WindingOrder};
 use target::{Access, Target};
 
 use BufferUsage;
@@ -94,7 +94,7 @@ static RESET_CB: &'static [Command] = &[
     Command::SetPrimitiveState(::state::Primitive {
         front_face: WindingOrder::CounterClockwise,
         method: RasterMethod::Fill(CullMode::Back),
-        offset: OffsetType::NoOffset,
+        offset: None,
     }),
     Command::SetViewport(::target::Rect{x: 0, y: 0, w: 0, h: 0}),
     Command::SetScissor(None),
@@ -123,11 +123,10 @@ fn access_to_gl(access: Access) -> gl::types::GLenum {
 
 fn target_to_gl(target: Target) -> gl::types::GLenum {
     match target {
-        Target::TargetColor(index) =>
-            gl::COLOR_ATTACHMENT0 + (index as gl::types::GLenum),
-        Target::TargetDepth => gl::DEPTH_ATTACHMENT,
-        Target::TargetStencil => gl::STENCIL_ATTACHMENT,
-        Target::TargetDepthStencil => gl::DEPTH_STENCIL_ATTACHMENT,
+        Target::Color(index) => gl::COLOR_ATTACHMENT0 + (index as gl::types::GLenum),
+        Target::Depth => gl::DEPTH_ATTACHMENT,
+        Target::Stencil => gl::STENCIL_ATTACHMENT,
+        Target::DepthStencil => gl::DEPTH_STENCIL_ATTACHMENT,
     }
 }
 

@@ -204,7 +204,7 @@ fn get_string(gl: &gl::Gl, name: gl::types::GLenum) -> &'static str {
     if !ptr.is_null() {
         // This should be safe to mark as statically allocated because
         // GlGetString only returns static strings.
-        unsafe { str::raw::c_str_to_static_slice(ptr) }
+        unsafe { str::from_c_str(ptr) }
     } else {
         panic!("Invalid GLenum passed to `get_string`: {:x}", name)
     }
@@ -254,13 +254,9 @@ impl Info {
         let shading_language = Version::parse(get_string(gl, gl::SHADING_LANGUAGE_VERSION)).unwrap();
         let extensions = if version >= Version::new(3, 2, None, "") {
             let num_exts = get_uint(gl, gl::NUM_EXTENSIONS) as gl::types::GLuint;
-            range(0, num_exts).map(|i| {
-                unsafe {
-                    str::raw::c_str_to_static_slice(
-                        gl.GetStringi(gl::EXTENSIONS, i) as *const i8,
-                    )
-                }
-            }).collect()
+            range(0, num_exts)
+                .map(|i| unsafe { str::from_c_str(gl.GetStringi(gl::EXTENSIONS, i) as *const i8) })
+                .collect()
         } else {
             // Fallback
             get_string(gl, gl::EXTENSIONS).split(' ').collect()

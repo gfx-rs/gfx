@@ -19,7 +19,7 @@ use device::shade;
 use device::shade::UniformValue;
 use device::{RawBufferHandle, TextureHandle, SamplerHandle};
 
-pub use device::shade::{Stage, CreateShaderError, Vertex, Geometry, Fragment};
+pub use device::shade::{Stage, CreateShaderError};
 
 /// Helper trait to transform base types into their corresponding uniforms
 pub trait ToUniform {

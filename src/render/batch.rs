@@ -18,7 +18,7 @@
 
 use std::fmt;
 use std::num::from_uint;
-use device::ProgramHandle;
+use device::{PrimitiveType, ProgramHandle};
 use device::shade::ProgramInfo;
 use mesh;
 use mesh::ToSlice;
@@ -91,7 +91,7 @@ impl<L, T: ShaderParam<L>> OwnedBatch<L, T> {
     /// Create a new owned batch
     pub fn new(mesh: mesh::Mesh, program: ProgramHandle, param: T)
            -> Result<OwnedBatch<L, T>, BatchError> {
-        let slice = mesh.to_slice(::device::TriangleList);
+        let slice = mesh.to_slice(PrimitiveType::TriangleList);
         let mesh_link = match link_mesh(&mesh, program.get_info()) {
             Ok(l) => l,
             Err(e) => return Err(BatchError::Mesh(e)),

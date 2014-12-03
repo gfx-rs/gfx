@@ -14,7 +14,7 @@
 
 use super::super::state as s;
 use super::super::state::{BlendValue, Comparison, CullMode, Equation, InverseFlag,
-                          OffsetType, RasterMethod, StencilOp, WindingOrder};
+                          Offset, RasterMethod, StencilOp, WindingOrder};
 use super::super::target::Rect;
 use super::gl;
 
@@ -49,11 +49,13 @@ pub fn bind_primitive(gl: &gl::Gl, p: s::Primitive) {
     unsafe { gl.PolygonMode(gl::FRONT_AND_BACK, gl_draw) };
 
     match p.offset {
-        OffsetType::Offset(factor, units) => { unsafe {
+        Some(Offset(factor, units)) => unsafe {
             gl.Enable(gl_offset);
             gl.PolygonOffset(factor, units as gl::types::GLfloat);
-        }},
-        OffsetType::NoOffset => unsafe { gl.Disable(gl_offset) },
+        },
+        None => unsafe {
+            gl.Disable(gl_offset)
+        },
     }
 }
 
@@ -162,11 +164,11 @@ pub fn bind_stencil(gl: &gl::Gl, stencil: Option<s::Stencil>, cull: s::CullMode)
 
 fn map_equation(eq: Equation) -> gl::types::GLenum {
     match eq {
-        Equation::FuncAdd    => gl::FUNC_ADD,
-        Equation::FuncSub    => gl::FUNC_SUBTRACT,
-        Equation::FuncRevSub => gl::FUNC_REVERSE_SUBTRACT,
-        Equation::FuncMin    => gl::MIN,
-        Equation::FuncMax    => gl::MAX,
+        Equation::Add    => gl::FUNC_ADD,
+        Equation::Sub    => gl::FUNC_SUBTRACT,
+        Equation::RevSub => gl::FUNC_REVERSE_SUBTRACT,
+        Equation::Min    => gl::MIN,
+        Equation::Max    => gl::MAX,
     }
 }
 

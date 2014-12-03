@@ -101,9 +101,9 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     ""
                 }
             });
-            let sub_type = cx.ident_of(format!("F{}", ty_str.slice_from(1)).as_slice());
+            let size = cx.ident_of(format!("F{}", ty_str.slice_from(1)).as_slice());
             quote_expr!(cx, $path_root::gfx::attrib::Type::Float($path_root::gfx::attrib::FloatSubType::$kind,
-                                                                 $path_root::gfx::attrib::$sub_type))
+                                                                 $path_root::gfx::attrib::FloatSize::$size))
         },
         "u8" | "u16" | "u32" | "u64" |
         "i8" | "i16" | "i32" | "i64" => {
@@ -121,10 +121,10 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     ""
                 }
             });
-            let sub_type = cx.ident_of(format!("U{}", ty_str.slice_from(1)).as_slice());
-            quote_expr!(cx, $path_root::gfx::attrib::Int($path_root::gfx::attrib::IntSubType::$kind,
-                                                         $path_root::gfx::attrib::$sub_type,
-                                                         $path_root::gfx::attrib::SignFlag::$sign))
+            let size = cx.ident_of(format!("U{}", ty_str.slice_from(1)).as_slice());
+            quote_expr!(cx, $path_root::gfx::attrib::Type::Int($path_root::gfx::attrib::IntSubType::$kind,
+                                                               $path_root::gfx::attrib::IntSize::$size,
+                                                               $path_root::gfx::attrib::SignFlag::$sign))
         },
         "uint" | "int" => {
             cx.span_err(span, format!("Pointer-sized integer components are \
@@ -146,12 +146,12 @@ fn decode_count_and_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                          path_root: ast::Ident) -> (P<ast::Expr>, P<ast::Expr>) {
     let modifier = find_modifier(cx, span, field.node.attrs.as_slice());
     match field.node.ty.node {
-        ast::TyPath(ref p, _, _) => (
+        ast::TyPath(ref p, _) => (
             cx.expr_lit(span, ast::LitInt(1, ast::UnsuffixedIntLit(ast::Plus))),
             decode_type(cx, span, &p.segments[0].identifier, modifier, path_root),
         ),
         ast::TyFixedLengthVec(ref pty, ref expr) => (expr.clone(), match pty.node {
-            ast::TyPath(ref p, _, _) => {
+            ast::TyPath(ref p, _) => {
                 decode_type(cx, span, &p.segments[0].identifier, modifier, path_root)
             },
             _ => {

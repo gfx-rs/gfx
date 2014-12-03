@@ -89,7 +89,7 @@ fn gfx_main(glfw: glfw::Glfw,
 
     let mut device = gfx::GlDevice::new(|s| window.get_proc_address(s));
 
-    let state = gfx::DrawState::new().depth(gfx::state::LessEqual, true);
+    let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
     let vertex_data = [
         // front (0, 1, 0)
@@ -99,14 +99,14 @@ fn gfx_main(glfw: glfw::Glfw,
     ];
 
     let mesh = device.create_mesh(&vertex_data);
-    let slice = mesh.to_slice(gfx::TriangleList);
+    let slice = mesh.to_slice(gfx::PrimitiveType::TriangleList);
 
     let texture_info = gfx::tex::TextureInfo {
         width: 1,
         height: 1,
         depth: 1,
         levels: 1,
-        kind: gfx::tex::Texture2D,
+        kind: gfx::tex::TextureKind::Texture2D,
         format: gfx::tex::RGBA8,
     };
     let image_info = texture_info.to_image_info();
@@ -138,7 +138,7 @@ fn gfx_main(glfw: glfw::Glfw,
         glfw.poll_events();
         for (_, event) in glfw::flush_messages(&events) {
             match event {
-                glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Press, _) =>
+                glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Action::Press, _) =>
                     window.set_should_close(true),
                 _ => {},
             }
@@ -374,12 +374,12 @@ fn main() {
 
     let glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
-    glfw.window_hint(glfw::ContextVersion(3, 2));
-    glfw.window_hint(glfw::OpenglForwardCompat(true));
-    glfw.window_hint(glfw::OpenglProfile(glfw::OpenGlProfileHint::Core));
+    glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
+    glfw.window_hint(glfw::WindowHint::OpenglForwardCompat(true));
+    glfw.window_hint(glfw::WindowHint::OpenglProfile(glfw::OpenGlProfileHint::Core));
 
     let (window, events) = glfw
-        .create_window(640, 480, "Cube example", glfw::Windowed)
+        .create_window(640, 480, "Cube example", glfw::WindowMode::Windowed)
         .expect("Failed to create GLFW window.");
 
     window.make_current();

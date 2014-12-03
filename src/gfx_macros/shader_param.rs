@@ -34,7 +34,7 @@ enum ParamError {
 /// Classify variable types (`i32`, `TextureParam`, etc) into the `Param`
 fn classify(node: &ast::Ty_) -> Result<Param, ParamError> {
     match *node {
-        ast::TyPath(ref path, _, _) => match path.segments.last() {
+        ast::TyPath(ref path, _) => match path.segments.last() {
             Some(segment) => match segment.identifier.name.as_str() {
                 "RawBufferHandle" => Ok(Param::Block),
                 "TextureParam" => Ok(Param::Texture),
@@ -103,21 +103,24 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     let _ = i; // suppress warning about unused i
                     match u.name.as_slice() {
                         $uniform_arms
-                        _ => return Err($path_root::gfx::shade::MissingUniform(u.name.clone())),
+                        _ => return Err($path_root::gfx::shade::
+                            ParameterError::MissingUniform(u.name.clone())),
                     }
                 }
                 for (i, b) in $input.blocks.iter().enumerate() {
                     let _ = i; // suppress warning about unused i
                     match b.name.as_slice() {
                         $block_arms
-                        _ => return Err($path_root::gfx::shade::MissingBlock(b.name.clone())),
+                        _ => return Err($path_root::gfx::shade::
+                            ParameterError::MissingBlock(b.name.clone())),
                     }
                 }
                 for (i, t) in $input.textures.iter().enumerate() {
                     let _ = i; // suppress warning about unused i
                     match t.name.as_slice() {
                         $texture_arms
-                        _ => return Err($path_root::gfx::shade::MissingTexture(t.name.clone())),
+                        _ => return Err($path_root::gfx::shade::
+                            ParameterError::MissingTexture(t.name.clone())),
                     }
                 }
                 Ok(out)
@@ -229,7 +232,6 @@ fn node_to_var_type(cx: &mut ext::base::ExtCtxt,
             cx.ident_of("shade"),
             cx.ident_of(id),
         ]),
-        None
     ))
 }
 
@@ -313,7 +315,7 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                                     context.ty_ident(span, link_ident),
                                     context.ty_ident(span, item.ident)
                                 ]
-                            ), None
+                            ),
                         );
                         push(P(ast::Item {
                             ident: context.ident_of(shell_name.get()),

@@ -115,12 +115,12 @@ GLSL_150: b"
 fn main() {
     let glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
-    glfw.window_hint(glfw::ContextVersion(3, 2));
-    glfw.window_hint(glfw::OpenglForwardCompat(true));
-    glfw.window_hint(glfw::OpenglProfile(glfw::OpenGlProfileHint::Core));
+    glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
+    glfw.window_hint(glfw::WindowHint::OpenglForwardCompat(true));
+    glfw.window_hint(glfw::WindowHint::OpenglProfile(glfw::OpenGlProfileHint::Core));
 
     let (window, events) = glfw
-        .create_window(640, 480, "Cube example", glfw::Windowed)
+        .create_window(640, 480, "Cube example", glfw::WindowMode::Windowed)
         .expect("Failed to create GLFW window.");
 
     window.make_current();
@@ -178,14 +178,14 @@ fn main() {
 
     let slice = device
         .create_buffer_static::<u8>(index_data)
-        .to_slice(gfx::TriangleList);
+        .to_slice(gfx::PrimitiveType::TriangleList);
 
     let texture_info = gfx::tex::TextureInfo {
         width: 1,
         height: 1,
         depth: 1,
         levels: 1,
-        kind: gfx::tex::Texture2D,
+        kind: gfx::tex::TextureKind::Texture2D,
         format: gfx::tex::RGBA8,
     };
     let image_info = texture_info.to_image_info();
@@ -195,13 +195,13 @@ fn main() {
         .unwrap();
 
     let sampler = device.create_sampler(
-        gfx::tex::SamplerInfo::new(gfx::tex::Bilinear,
-                                   gfx::tex::Clamp)
+        gfx::tex::SamplerInfo::new(gfx::tex::FilterMethod::Bilinear,
+                                   gfx::tex::WrapMode::Clamp)
     );
 
     let program = device.link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
                         .unwrap();
-    let state = gfx::DrawState::new().depth(gfx::state::LessEqual, true);
+    let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
     let mut graphics = gfx::Graphics::new(device);
     let batch: CubeBatch = graphics.make_batch(&program, &mesh, slice, &state).unwrap();
@@ -229,7 +229,7 @@ fn main() {
         glfw.poll_events();
         for (_, event) in glfw::flush_messages(&events) {
             match event {
-                glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Press, _) =>
+                glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Action::Press, _) =>
                     window.set_should_close(true),
                 _ => {},
             }

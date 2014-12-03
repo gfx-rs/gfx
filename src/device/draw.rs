@@ -61,10 +61,8 @@ impl DataBuffer {
         self.buf.reserve(size);
         unsafe {
             self.buf.set_len(offset + size);
-            slice::raw::buf_as_slice(v.as_ptr() as *const u8, size,
-                |slice|
-                slice::bytes::copy_memory(self.buf.slice_from_mut(offset), slice)
-            );
+            slice::bytes::copy_memory(self.buf.slice_from_mut(offset),
+                                      slice::from_raw_buf(&(v.as_ptr() as *const u8), size));
         }
         DataPointer(offset as Offset, size as Size)
     }
