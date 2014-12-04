@@ -75,7 +75,7 @@ pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: s::ShaderSource, lang: 
 
 pub fn shader_outputs<'a>(code: &'a ::shade::ShaderSource, lang: Version) -> Vec<&'a str> {
     match *code {
-        s::ShaderSource { glsl_130plus_outputs: Some(a), .. }
+        s::ShaderSource { targets: Some(a), .. }
             if lang >= Version::new(1, 30, None, "") => a.iter().map(|&x| x).filter(|&x| x != "").collect(),
         _ => vec![]
     }
@@ -287,21 +287,22 @@ fn query_parameters(gl: &gl::Gl, caps: &::Capabilities, prog: super::Program) ->
     (uniforms, textures)
 }
 
-pub fn create_program(gl: &gl::Gl, caps: &::Capabilities, shaders: &[::ShaderHandle], outputs: &[&str])
+pub fn create_program(gl: &gl::Gl, caps: &::Capabilities, shaders: &[::ShaderHandle], targets: &[&str])
         -> (Result<::ProgramHandle, ()>, Option<String>) {
     let name = unsafe { gl.CreateProgram() };
     for sh in shaders.iter() {
         unsafe { gl.AttachShader(name, sh.get_name()) };
     }
-    for (i, output) in range(0, outputs.len()).zip(outputs.iter()) {
-        unsafe { output.with_c_str(|ptr| gl.BindFragDataLocation(name, i as u32, ptr)); };
+
+    for (i, target) in range(0, targets.len()).zip(targets.iter()) {
+        unsafe { target.with_c_str(|ptr| gl.BindFragDataLocation(name, i as u32, ptr)); };
     }
 
     unsafe { gl.LinkProgram(name) };
     info!("\tLinked program {}", name);
 
-    for output in outputs.iter() {
-        info!("\t\tOutput[{}] = '{}'", unsafe { gl.GetFragDataLocation(name, output.to_c_str().as_ptr()) }, output);
+    for target in targets.iter() {
+        info!("\t\tOutput[{}] = '{}'", unsafe { gl.GetFragDataLocation(name, target.to_c_str().as_ptr()) }, target);
     }
 
     // get info message
