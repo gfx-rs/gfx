@@ -620,7 +620,14 @@ impl Device<GlCommandBuffer> for GlDevice {
     }
 
     fn shader_outputs<'a>(&mut self, code: &'a ::shade::ShaderSource) -> Vec<&'a str> {
-        shade::shader_outputs(code, self.info.shading_language)
+        match *code {
+            ::shade::ShaderSource { targets, .. }
+                if self.info.shading_language >= Version::new(1, 30, None, "") =>
+            {
+                targets.iter().map(|&x| x).filter(|&x| x != "").collect()
+            },
+            _ => vec![]
+        }
     }
 
     fn create_program(&mut self, shaders: &[::ShaderHandle], targets: &[&str]) -> Result<::ProgramHandle, ()> {
