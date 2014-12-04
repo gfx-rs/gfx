@@ -221,7 +221,7 @@ macro_rules! shaders {
                 pub use self::gfx_ as gfx;
             }
             __gfx_extern_crate_hack::gfx::ShaderSource {
-                targets: Some($v),
+                targets: $v,
                 ..shaders!($($t)*)
             }
         }
@@ -237,7 +237,7 @@ macro_rules! shaders {
                 glsl_130: None,
                 glsl_140: None,
                 glsl_150: None,
-                targets: None,
+                targets: &[],
             }
         }
     }

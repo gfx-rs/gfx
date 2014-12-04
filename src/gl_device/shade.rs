@@ -75,8 +75,9 @@ pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: s::ShaderSource, lang: 
 
 pub fn shader_outputs<'a>(code: &'a ::shade::ShaderSource, lang: Version) -> Vec<&'a str> {
     match *code {
-        s::ShaderSource { targets: Some(a), .. }
-            if lang >= Version::new(1, 30, None, "") => a.iter().map(|&x| x).filter(|&x| x != "").collect(),
+        s::ShaderSource { targets, .. } if lang >= Version::new(1, 30, None, "") => {
+            targets.iter().map(|&x| x).filter(|&x| x != "").collect()
+        },
         _ => vec![]
     }
 }
