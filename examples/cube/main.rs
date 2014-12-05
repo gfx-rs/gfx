@@ -25,6 +25,7 @@ use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
 use gfx::{Device, DeviceHelper, ToSlice};
+use gfx::batch;
 use glfw::Context;
 
 #[vertex_format]
@@ -131,6 +132,8 @@ fn main() {
     let frame = gfx::Frame::new(w as u16, h as u16);
 
     let mut device = gfx::GlDevice::new(|s| window.get_proc_address(s));
+    let mut renderer = device.create_renderer();
+    let mut context = batch::Context::new();
 
     let vertex_data = [
         // top (0, 0, 1)
@@ -203,8 +206,7 @@ fn main() {
                         .unwrap();
     let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
-    let mut graphics = gfx::Graphics::new(device);
-    let batch: CubeBatch = graphics.make_batch(&program, &mesh, slice, &state).unwrap();
+    let batch: CubeBatch = context.make_batch(&program, &mesh, slice, &state).unwrap();
 
     let view: AffineMatrix3<f32> = Transform::look_at(
         &Point3::new(1.5f32, -5.0, 3.0),
@@ -235,9 +237,10 @@ fn main() {
             }
         }
 
-        graphics.clear(clear_data, gfx::COLOR | gfx::DEPTH, &frame);
-        graphics.draw(&batch, &data, &frame);
-        graphics.end_frame();
+        renderer.clear(clear_data, gfx::COLOR | gfx::DEPTH, &frame);
+        renderer.draw((&batch, &data, &context), &frame);
+        device.submit(renderer.as_buffer());
+        renderer.reset();
 
         window.swap_buffers();
     }
