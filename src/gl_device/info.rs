@@ -283,10 +283,10 @@ fn to_shader_model(v: &Version) -> shade::ShaderModel {
     use shade::ShaderModel;
     match *v {
         v if v < Version::new(1, 20, None, "") => ShaderModel::Unsupported,
-        v if v < Version::new(1, 50, None, "") => ShaderModel::Model30,
-        v if v < Version::new(3,  0, None, "") => ShaderModel::Model40,
-        v if v < Version::new(4, 30, None, "") => ShaderModel::Model41,
-        _                                      => ShaderModel::Model50,
+        v if v < Version::new(1, 50, None, "") => ShaderModel::Version30,
+        v if v < Version::new(3,  0, None, "") => ShaderModel::Version40,
+        v if v < Version::new(4, 30, None, "") => ShaderModel::Version41,
+        _                                      => ShaderModel::Version50,
     }
 }
 
@@ -295,28 +295,19 @@ fn to_shader_model(v: &Version) -> shade::ShaderModel {
 pub fn get(gl: &gl::Gl) -> (Info, Capabilities) {
     let info = Info::get(gl);
     let caps = Capabilities {
-        shader_model: to_shader_model(&info.shading_language),
-        max_draw_buffers: get_uint(gl, gl::MAX_DRAW_BUFFERS),
-        max_texture_size: get_uint(gl, gl::MAX_TEXTURE_SIZE),
-        max_vertex_attributes: get_uint(gl, gl::MAX_VERTEX_ATTRIBS),
-        uniform_block_supported:
-            info.is_version_or_extension_supported(3, 0, "GL_ARB_uniform_buffer_object"),
-        array_buffer_supported:
-            info.is_version_or_extension_supported(3, 0, "GL_ARB_vertex_array_object"),
-        immutable_storage_supported:
-            info.is_version_or_extension_supported(4, 2, "GL_ARB_texture_storage"),
-        sampler_objects_supported:
-            info.is_version_or_extension_supported(3, 3, "GL_ARB_sampler_objects"),
-        instance_call_supported:
-            info.is_version_or_extension_supported(3, 1, "GL_ARB_draw_instanced"),
-        instance_rate_supported:
-            info.is_version_or_extension_supported(3, 3, "GL_ARB_instanced_arrays"),
-        render_targets_supported:
-            info.is_version_or_extension_supported(3, 0, "GL_ARB_framebuffer_object"),
-        vertex_base_supported:
-            info.is_version_or_extension_supported(3, 2, "GL_ARB_draw_elements_base_vertex"),
-        instance_base_supported:
-            info.is_version_or_extension_supported(4, 2, "GL_ARB_base_instance"),
+        shader_model:                   to_shader_model(&info.shading_language),
+        max_draw_buffers:               get_uint(gl, gl::MAX_DRAW_BUFFERS),
+        max_texture_size:               get_uint(gl, gl::MAX_TEXTURE_SIZE),
+        max_vertex_attributes:          get_uint(gl, gl::MAX_VERTEX_ATTRIBS),
+        uniform_block_supported:        info.is_version_or_extension_supported(3, 0, "GL_ARB_uniform_buffer_object"),
+        array_buffer_supported:         info.is_version_or_extension_supported(3, 0, "GL_ARB_vertex_array_object"),
+        immutable_storage_supported:    info.is_version_or_extension_supported(4, 2, "GL_ARB_texture_storage"),
+        sampler_objects_supported:      info.is_version_or_extension_supported(3, 3, "GL_ARB_sampler_objects"),
+        instance_call_supported:        info.is_version_or_extension_supported(3, 1, "GL_ARB_draw_instanced"),
+        instance_rate_supported:        info.is_version_or_extension_supported(3, 3, "GL_ARB_instanced_arrays"),
+        render_targets_supported:       info.is_version_or_extension_supported(3, 0, "GL_ARB_framebuffer_object"),
+        vertex_base_supported:          info.is_version_or_extension_supported(3, 2, "GL_ARB_draw_elements_base_vertex"),
+        instance_base_supported:        info.is_version_or_extension_supported(4, 2, "GL_ARB_base_instance"),
     };
     (info, caps)
 }
@@ -325,7 +316,6 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities) {
 mod tests {
     use super::Version;
     use super::to_shader_model;
-    use shade;
 
     #[test]
     fn test_version_parse() {
@@ -344,10 +334,10 @@ mod tests {
 
     #[test]
     fn test_shader_model() {
-        assert_eq!(to_shader_model(&Version::parse("1.10").unwrap()), shade::ModelUnsupported);
-        assert_eq!(to_shader_model(&Version::parse("1.20").unwrap()), shade::Model30);
-        assert_eq!(to_shader_model(&Version::parse("1.50").unwrap()), shade::Model40);
-        assert_eq!(to_shader_model(&Version::parse("3.00").unwrap()), shade::Model41);
-        assert_eq!(to_shader_model(&Version::parse("4.30").unwrap()), shade::Model50);
+        assert_eq!(to_shader_model(&Version::parse("1.10").unwrap()), ShaderModel::Unsupported);
+        assert_eq!(to_shader_model(&Version::parse("1.20").unwrap()), ShaderModel::Version30);
+        assert_eq!(to_shader_model(&Version::parse("1.50").unwrap()), ShaderModel::Version40);
+        assert_eq!(to_shader_model(&Version::parse("3.00").unwrap()), ShaderModel::Version41);
+        assert_eq!(to_shader_model(&Version::parse("4.30").unwrap()), ShaderModel::Version50);
     }
 }

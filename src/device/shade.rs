@@ -338,10 +338,10 @@ pub enum CreateShaderError {
 #[deriving(Clone, PartialEq, PartialOrd, Show)]
 pub enum ShaderModel {
     Unsupported,
-    Model30,
-    Model40,
-    Model41,
-    Model50,
+    Version30,
+    Version40,
+    Version41,
+    Version50,
 }
 
 impl ShaderModel {
@@ -351,10 +351,10 @@ impl ShaderModel {
     pub fn to_number(&self) -> u8 {
         match *self {
             ShaderModel::Unsupported => 0,  //ModelAncient, ModelPreHistoric, ModelMyGrandpaLikes
-            ShaderModel::Model30 => 30,
-            ShaderModel::Model40 => 40,
-            ShaderModel::Model41 => 41,
-            ShaderModel::Model50 => 50,
+            ShaderModel::Version30 => 30,
+            ShaderModel::Version40 => 40,
+            ShaderModel::Version41 => 41,
+            ShaderModel::Version50 => 50,
         }
     }
 }
