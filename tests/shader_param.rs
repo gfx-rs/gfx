@@ -21,6 +21,7 @@ mod secret_lib;
 
 // Test all features
 #[shader_param(TestBatch)]
+#[allow(dead_code)]
 struct TestParam {
     a: i32,
     b: [f32, ..4],

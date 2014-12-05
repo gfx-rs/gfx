@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #![feature(phase)]
-#![crate_name = "glutin"]
 
 //! Demonstrates how to initialize gfx-rs using the gl-init-rs library.
 

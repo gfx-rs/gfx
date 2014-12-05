@@ -12,12 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![crate_name = "device"]
-#![comment = "Back-ends to abstract over the differences between low-level, \
-              platform-specific graphics APIs"]
-#![license = "ASL2"]
-#![crate_type = "lib"]
-
 #![feature(phase, unsafe_destructor)]
 #![deny(missing_docs)]
 

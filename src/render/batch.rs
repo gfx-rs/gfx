@@ -258,9 +258,12 @@ impl Context {
 
 impl Context {
     /// Produce a new ref batch
-    pub fn batch<L, T: ShaderParam<L>>(&mut self, mesh: &mesh::Mesh,
-                slice: mesh::Slice, program: &ProgramHandle, state: &DrawState)
-                -> Result<RefBatch<L, T>, BatchError> {
+    pub fn make_batch<L, T: ShaderParam<L>>(&mut self,
+                      program: &ProgramHandle,
+                      mesh: &mesh::Mesh,
+                      slice: mesh::Slice,
+                      state: &DrawState)
+                      -> Result<RefBatch<L, T>, BatchError> {
         let mesh_link = match link_mesh(mesh, program.get_info()) {
             Ok(l) => l,
             Err(e) => return Err(BatchError::Mesh(e)),

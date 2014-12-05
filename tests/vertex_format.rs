@@ -43,7 +43,6 @@ struct MyInstance {
 
 #[test]
 fn test_vertex_format() {
-    use secret_lib::gfx::attrib as a;
     use secret_lib::gfx::attrib::{Type, IntSubType, FloatSubType,
                                   IntSize, FloatSize, SignFlag,
                                   Format, Stride};
