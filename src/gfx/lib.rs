@@ -76,9 +76,6 @@ pub use device::target::{COLOR, DEPTH, STENCIL};
 // TODO: Remove this re-export once `gl_device` becomes a separate crate.
 pub use device::gl_device::{GlDevice, GlCommandBuffer};
 
-use render::batch::Context as BatchContext;
-use render::batch::RefBatch;
-
 /// A convenient wrapper suitable for single-threaded operation.
 pub struct Graphics<D, C: device::draw::CommandBuffer> {
     /// Graphics device.
@@ -86,7 +83,7 @@ pub struct Graphics<D, C: device::draw::CommandBuffer> {
     /// Renderer front-end.
     pub renderer: Renderer<C>,
     /// Hidden batch context.
-    context: BatchContext,
+    context: batch::Context,
 }
 
 impl<D: device::Device<C>, C: device::draw::CommandBuffer> Graphics<D, C> {
@@ -96,7 +93,7 @@ impl<D: device::Device<C>, C: device::draw::CommandBuffer> Graphics<D, C> {
         Graphics {
             device: device,
             renderer: rend,
-            context: BatchContext::new(),
+            context: batch::Context::new(),
         }
     }
 
@@ -106,7 +103,7 @@ impl<D: device::Device<C>, C: device::draw::CommandBuffer> Graphics<D, C> {
                       mesh: &Mesh,
                       slice: Slice,
                       state: &DrawState)
-                      -> Result<RefBatch<L, T>, batch::BatchError> {
+                      -> Result<batch::RefBatch<L, T>, batch::BatchError> {
         self.context.make_batch(program, mesh, slice, state)
     }
 
@@ -117,7 +114,7 @@ impl<D: device::Device<C>, C: device::draw::CommandBuffer> Graphics<D, C> {
 
     /// Draw a ref batch.
     pub fn draw<'a, L, T: shade::ShaderParam<L>>(&'a mut self,
-        batch: &'a RefBatch<L, T>, data: &'a T, frame: &Frame) {
+        batch: &'a batch::RefBatch<L, T>, data: &'a T, frame: &Frame) {
         self.renderer.draw((batch, data, &self.context), frame)
     }
 
