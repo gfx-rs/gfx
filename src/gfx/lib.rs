@@ -107,7 +107,7 @@ impl<D: device::Device<C>, C: device::draw::CommandBuffer> Graphics<D, C> {
                       slice: Slice,
                       state: &DrawState)
                       -> Result<RefBatch<L, T>, batch::BatchError> {
-        self.context.batch(mesh, slice, program, state)
+        self.context.make_batch(program, mesh, slice, state)
     }
 
     /// Clear the `Frame` as the `ClearData` specifies.
