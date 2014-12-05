@@ -16,11 +16,14 @@
 
 name = "gfx"
 version = "0.1.0"
-authors = [
-    "Brendan Zabarauskas <bjzaba@yahoo.com.au>",
-    "Corey Richardson <corey@octayn.net>",
-    "kvark",
-]
+description = "A high-performance, bindless graphics API"
+
+homepage = "https://github.com/bjz/noise-rs"
+repository = "https://github.com/bjz/noise-rs"
+keywords = ["graphics", "gamedev"]
+
+license = "Apache-2.0"
+authors = ["The Gfx-rs Developers"]
 
 
 [lib]
@@ -29,6 +32,7 @@ path = "src/gfx/lib.rs"
 
 [dependencies.gfx_macros]
 path = "src/gfx_macros"
+plugin = true
 
 [dependencies.device]
 path = "src/device/"

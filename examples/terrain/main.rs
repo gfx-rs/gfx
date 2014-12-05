@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #![feature(phase)]
-#![crate_name = "terrain"]
 
 extern crate cgmath;
 extern crate gfx;

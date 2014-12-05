@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![crate_name = "gfx"]
-#![comment = "A lightweight graphics device manager for Rust"]
-#![license = "ASL2"]
-#![crate_type = "lib"]
-
 #![feature(phase)]
 
 //! An efficient, low-level, bindless graphics API for Rust. See [the

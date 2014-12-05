@@ -14,10 +14,6 @@
 
 //! High-level, platform independent, bindless rendering API.
 
-#![crate_name = "render"]
-#![comment = "A platform independent renderer for gfx-rs."]
-#![license = "ASL2"]
-#![crate_type = "lib"]
 #![deny(missing_docs)]
 #![feature(macro_rules, phase)]
 

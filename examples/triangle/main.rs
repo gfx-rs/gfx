@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #![feature(phase)]
-#![crate_name = "triangle"]
 
 extern crate gfx;
 #[phase(plugin)]
