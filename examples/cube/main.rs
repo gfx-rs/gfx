@@ -237,7 +237,7 @@ fn main() {
         }
 
         renderer.clear(clear_data, gfx::COLOR | gfx::DEPTH, &frame);
-        renderer.draw((&batch, &data, &context), &frame);
+        renderer.draw(&(&batch, &data, &context), &frame);
         device.submit(renderer.as_buffer());
         renderer.reset();
 
