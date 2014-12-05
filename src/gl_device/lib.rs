@@ -619,14 +619,15 @@ impl Device<GlCommandBuffer> for GlDevice {
         name.map(|sh| ::Handle(sh, stage))
     }
 
-    fn shader_outputs<'a>(&mut self, code: &'a ::shade::ShaderSource) -> Vec<&'a str> {
-        match self.info.shading_language {
-            Version { major, minor, .. } if (major, minor) < (1, 30) => vec![],
-            _ => code.targets.iter().map(|&x| x).filter(|&x| x != "").collect(),
+    fn shader_targets<'a>(&mut self, code: &'a ::shade::ShaderSource) -> Option<Vec<&'a str>> {
+        if self.caps.fragment_output_supported {
+            Some(code.targets.iter().map(|&x| x).filter(|&x| x != "").collect())
+        } else {
+            None
         }
     }
 
-    fn create_program(&mut self, shaders: &[::ShaderHandle], targets: &[&str]) -> Result<::ProgramHandle, ()> {
+    fn create_program(&mut self, shaders: &[::ShaderHandle], targets: Option<&[&str]>) -> Result<::ProgramHandle, ()> {
         let (prog, log) = shade::create_program(&self.gl, &self.caps, shaders, targets);
         log.map(|log| {
             let level = if prog.is_err() { log::ERROR } else { log::WARN };

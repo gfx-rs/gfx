@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(phase, if_let)]
 #![feature(phase, unsafe_destructor)]
 #![deny(missing_docs)]
 
@@ -235,18 +236,21 @@ pub fn as_byte_slice<T>(slice: &[T]) -> &[u8] {
 #[allow(missing_docs)] // pretty self-explanatory fields!
 pub struct Capabilities {
     pub shader_model: shade::ShaderModel,
-    pub max_draw_buffers : uint,
-    pub max_texture_size : uint,
+
+    pub max_draw_buffers: uint,
+    pub max_texture_size: uint,
     pub max_vertex_attributes: uint,
-    pub uniform_block_supported: bool,
+
     pub array_buffer_supported: bool,
-    pub sampler_objects_supported: bool,
+    pub fragment_output_supported: bool,
     pub immutable_storage_supported: bool,
+    pub instance_base_supported: bool,
     pub instance_call_supported: bool,
     pub instance_rate_supported: bool,
     pub render_targets_supported: bool,
+    pub sampler_objects_supported: bool,
+    pub uniform_block_supported: bool,
     pub vertex_base_supported: bool,
-    pub instance_base_supported: bool,
 }
 
 /// Describes what geometric primitives are created from vertex data.
@@ -366,8 +370,8 @@ pub trait Device<C: draw::CommandBuffer> {
     fn create_array_buffer(&mut self) -> Result<ArrayBufferHandle, ()>;
     fn create_shader(&mut self, stage: shade::Stage, code: shade::ShaderSource) ->
                      Result<ShaderHandle, shade::CreateShaderError>;
-    fn shader_outputs<'a>(&mut self, code: &'a ::shade::ShaderSource) -> Vec<&'a str>;
-    fn create_program(&mut self, shaders: &[ShaderHandle], outputs: &[&str]) -> Result<ProgramHandle, ()>;
+    fn shader_targets<'a>(&mut self, code: &'a ::shade::ShaderSource) -> Option<Vec<&'a str>>;
+    fn create_program(&mut self, shaders: &[ShaderHandle], targets: Option<&[&str]>) -> Result<ProgramHandle, ()>;
     fn create_frame_buffer(&mut self) -> FrameBufferHandle;
     fn create_surface(&mut self, info: tex::SurfaceInfo) -> Result<SurfaceHandle, tex::SurfaceError>;
     fn create_texture(&mut self, info: tex::TextureInfo) -> Result<TextureHandle, tex::TextureError>;
