@@ -214,6 +214,18 @@ macro_rules! shaders {
             }
         }
     };
+    (TARGETS: $v:expr $($t:tt)*) => {
+        {
+            mod __gfx_extern_crate_hack {
+                extern crate "gfx" as gfx_;
+                pub use self::gfx_ as gfx;
+            }
+            __gfx_extern_crate_hack::gfx::ShaderSource {
+                targets: $v,
+                ..shaders!($($t)*)
+            }
+        }
+    };
     () => {
         {
             mod __gfx_extern_crate_hack {
@@ -225,6 +237,7 @@ macro_rules! shaders {
                 glsl_130: None,
                 glsl_140: None,
                 glsl_150: None,
+                targets: &[],
             }
         }
     }

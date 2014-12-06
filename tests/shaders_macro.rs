@@ -75,4 +75,8 @@ GLSL_150: b"
 };
 
 static _SRC4: ShaderSource<'static> = shaders! {
+TARGETS: &["o_Color", "o_Foo"]
+};
+
+static _SRC5: ShaderSource<'static> = shaders! {
 };

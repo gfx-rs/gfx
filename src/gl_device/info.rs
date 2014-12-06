@@ -216,18 +216,21 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities) {
     let info = Info::get(gl);
     let caps = Capabilities {
         shader_model:                   to_shader_model(&info.shading_language),
+
         max_draw_buffers:               get_uint(gl, gl::MAX_DRAW_BUFFERS),
         max_texture_size:               get_uint(gl, gl::MAX_TEXTURE_SIZE),
         max_vertex_attributes:          get_uint(gl, gl::MAX_VERTEX_ATTRIBS),
-        uniform_block_supported:        info.is_version_or_extension_supported(3, 0, "GL_ARB_uniform_buffer_object"),
+
         array_buffer_supported:         info.is_version_or_extension_supported(3, 0, "GL_ARB_vertex_array_object"),
+        fragment_output_supported:      info.is_version_or_extension_supported(3, 0, "GL_ARB_gpu_shader4"),
         immutable_storage_supported:    info.is_version_or_extension_supported(4, 2, "GL_ARB_texture_storage"),
-        sampler_objects_supported:      info.is_version_or_extension_supported(3, 3, "GL_ARB_sampler_objects"),
+        instance_base_supported:        info.is_version_or_extension_supported(4, 2, "GL_ARB_base_instance"),
         instance_call_supported:        info.is_version_or_extension_supported(3, 1, "GL_ARB_draw_instanced"),
         instance_rate_supported:        info.is_version_or_extension_supported(3, 3, "GL_ARB_instanced_arrays"),
         render_targets_supported:       info.is_version_or_extension_supported(3, 0, "GL_ARB_framebuffer_object"),
+        sampler_objects_supported:      info.is_version_or_extension_supported(3, 3, "GL_ARB_sampler_objects"),
+        uniform_block_supported:        info.is_version_or_extension_supported(3, 0, "GL_ARB_uniform_buffer_object"),
         vertex_base_supported:          info.is_version_or_extension_supported(3, 2, "GL_ARB_draw_elements_base_vertex"),
-        instance_base_supported:        info.is_version_or_extension_supported(4, 2, "GL_ARB_base_instance"),
     };
     (info, caps)
 }

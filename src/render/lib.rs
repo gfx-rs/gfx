@@ -494,6 +494,11 @@ impl<D: device::Device<C>, C: CommandBuffer> DeviceHelper<C> for D {
             Ok(s) => s,
             Err(e) => return Err(ProgramError::Fragment(e)),
         };
-        self.create_program(&[vs, fs]).map_err(|e| ProgramError::Link(e))
+
+        // I would map on this, but I get a lifetime error
+        match self.shader_targets(&fs_src) {
+            Some(targets) => self.create_program(&[vs, fs], Some(targets.as_slice())),
+            None          => self.create_program(&[vs, fs], None),
+        }.map_err(|e| ProgramError::Link(e))
     }
 }

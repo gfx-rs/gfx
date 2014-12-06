@@ -279,14 +279,34 @@ fn query_parameters(gl: &gl::Gl, caps: &::Capabilities, prog: super::Program) ->
     (uniforms, textures)
 }
 
-pub fn create_program(gl: &gl::Gl, caps: &::Capabilities, shaders: &[::ShaderHandle])
+pub fn create_program(gl: &gl::Gl, caps: &::Capabilities, shaders: &[::ShaderHandle], targets: Option<&[&str]>)
         -> (Result<::ProgramHandle, ()>, Option<String>) {
     let name = unsafe { gl.CreateProgram() };
     for sh in shaders.iter() {
         unsafe { gl.AttachShader(name, sh.get_name()) };
     }
+
+    if let Some(targets) = targets {
+        for (i, target) in targets.iter().enumerate() {
+            unsafe { target.with_c_str(|ptr| gl.BindFragDataLocation(name, i as u32, ptr)); };
+        }
+    }
+
     unsafe { gl.LinkProgram(name) };
     info!("\tLinked program {}", name);
+
+    if let Some(targets) = targets {
+        match targets.iter()
+            .map(|target| (unsafe { gl.GetFragDataLocation(name, target.to_c_str().as_ptr()) }, target))
+            .inspect(|&(loc, target)| info!("\t\tOutput[{}] = '{}'", loc, target))
+            .filter(|&(loc, _)| loc == -1)
+            .collect::<Vec<_>>()
+            .as_slice()
+        {
+            [] => {},
+            unbound => return (Err(()), Some(format!("Unbound targets: {}", unbound))),
+        };
+    }
 
     // get info message
     let status = get_program_iv(gl, name, gl::LINK_STATUS);

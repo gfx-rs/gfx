@@ -619,8 +619,16 @@ impl Device<GlCommandBuffer> for GlDevice {
         name.map(|sh| ::Handle(sh, stage))
     }
 
-    fn create_program(&mut self, shaders: &[::ShaderHandle]) -> Result<::ProgramHandle, ()> {
-        let (prog, log) = shade::create_program(&self.gl, &self.caps, shaders);
+    fn shader_targets<'a>(&mut self, code: &'a ::shade::ShaderSource) -> Option<Vec<&'a str>> {
+        if self.caps.fragment_output_supported {
+            Some(code.targets.iter().map(|&x| x).filter(|&x| x != "").collect())
+        } else {
+            None
+        }
+    }
+
+    fn create_program(&mut self, shaders: &[::ShaderHandle], targets: Option<&[&str]>) -> Result<::ProgramHandle, ()> {
+        let (prog, log) = shade::create_program(&self.gl, &self.caps, shaders, targets);
         log.map(|log| {
             let level = if prog.is_err() { log::ERROR } else { log::WARN };
             log!(level, "\tProgram link log: {}", log);
