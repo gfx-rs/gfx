@@ -30,103 +30,23 @@ pub struct Version {
 }
 
 // FIXME https://github.com/rust-lang/rust/issues/18738
-// derive PartialOrd, Ord
+// derive
 
 #[automatically_derived]
 impl ::std::cmp::Ord for Version {
     #[inline]
-    fn cmp(&self, __arg_0: &Version) -> ::std::cmp::Ordering {
-        match *__arg_0 {
-            Version {
-                major: ref __self_1_0,
-                minor: ref __self_1_1,
-                revision: ref __self_1_2,
-                vendor_info: ref __self_1_3 } =>
-                    match *self {
-                        Version {
-                            major: ref __self_0_0,
-                            minor: ref __self_0_1,
-                            revision: ref __self_0_2,
-                            vendor_info: ref __self_0_3 } => {
-                                let __test = (*__self_0_0).cmp(&(*__self_1_0));
-                                if __test == ::std::cmp::Equal {
-                                    {
-                                        let __test =
-                                            (*__self_0_1).cmp(&(*__self_1_1));
-                                        if __test == ::std::cmp::Equal {
-                                            {
-                                                let __test =
-                                                    (*__self_0_2).cmp(&(*__self_1_2));
-                                                if __test == ::std::cmp::Equal {
-                                                    {
-                                                        let __test =
-                                                            (*__self_0_3).cmp(*__self_1_3);
-                                                        if __test ==
-                                                            ::std::cmp::Equal {
-                                                                ::std::cmp::Equal
-                                                            } else { __test }
-                                                    }
-                                                } else { __test }
-                                            }
-                                        } else { __test }
-                                    }
-                                } else { __test }
-                            }
-                    },
-        }
+    fn cmp(&self, other: &Version) -> ::std::cmp::Ordering {
+        (&self.major, &self.minor, &self.revision, self.vendor_info)
+            .cmp(&(&other.major, &other.minor, &other.revision, other.vendor_info))
     }
 }
 #[automatically_derived]
 impl ::std::cmp::PartialOrd for Version {
     #[inline]
-    fn partial_cmp(&self, __arg_0: &Version) ->
-        ::std::option::Option<::std::cmp::Ordering> {
-            match *__arg_0 {
-                Version {
-                    major: ref __self_1_0,
-                    minor: ref __self_1_1,
-                    revision: ref __self_1_2,
-                    vendor_info: ref __self_1_3 } =>
-                        match *self {
-                            Version {
-                                major: ref __self_0_0,
-                                minor: ref __self_0_1,
-                                revision: ref __self_0_2,
-                                vendor_info: ref __self_0_3 } => {
-                                    let __test =
-                                        (*__self_0_0).partial_cmp(&(*__self_1_0));
-                                    if __test ==
-                                        ::std::option::Some(::std::cmp::Equal) {
-                                            {
-                                                let __test =
-                                                    (*__self_0_1).partial_cmp(&(*__self_1_1));
-                                                if __test ==
-                                                    ::std::option::Some(::std::cmp::Equal)
-                                                    {
-                                                        {
-                                                            let __test =
-                                                                (*__self_0_2).partial_cmp(&(*__self_1_2));
-                                                            if __test ==
-                                                                ::std::option::Some(::std::cmp::Equal)
-                                                                {
-                                                                    {
-                                                                        let __test =
-                                                                            (*__self_0_3).partial_cmp(*__self_1_3);
-                                                                        if __test ==
-                                                                            ::std::option::Some(::std::cmp::Equal)
-                                                                            {
-                                                                                ::std::option::Some(::std::cmp::Equal)
-                                                                            } else { __test }
-                                                                    }
-                                                                } else { __test }
-                                                        }
-                                                    } else { __test }
-                                            }
-                                        } else { __test }
-                                }
-                        },
-            }
-        }
+    fn partial_cmp(&self, other: &Version) -> ::std::option::Option<::std::cmp::Ordering> {
+        (&self.major, &self.minor, &self.revision, self.vendor_info)
+            .partial_cmp(&(&other.major, &other.minor, &other.revision, other.vendor_info))
+    }
 }
 
 impl Version {
