@@ -175,6 +175,10 @@ fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::Attribute> {
                 (BaseType::F32, ContainerType::Single)
             }
         };
+        // we expect only built-ins to have location -1
+        if loc == -1 && !real_name.starts_with("gl_") {
+            error!("Invalid location {} for attribute {}", loc, real_name);
+        }
         info!("\t\tAttrib[{}] = '{}'\t{}\t{}", loc, real_name, base, container);
         s::Attribute {
             name: real_name,
@@ -183,7 +187,7 @@ fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::Attribute> {
             base_type: base,
             container: container,
         }
-    }).filter(|attrib| attrib.name != "gl_InstanceID")
+    }).filter(|a| a.location != -1) // remove built-ins
     .collect()
 }
 
