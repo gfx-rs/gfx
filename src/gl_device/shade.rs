@@ -183,7 +183,8 @@ fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::Attribute> {
             base_type: base,
             container: container,
         }
-    }).collect()
+    }).filter(|attrib| attrib.name != "gl_InstanceID")
+    .collect()
 }
 
 fn query_blocks(gl: &gl::Gl, caps: &::Capabilities, prog: super::Program) -> Vec<s::BlockVar> {
