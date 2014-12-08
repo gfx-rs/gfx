@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(phase, if_let)]
+#![feature(phase)]
 #![feature(phase, unsafe_destructor)]
 #![deny(missing_docs)]
 
