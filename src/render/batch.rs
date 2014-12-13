@@ -125,6 +125,7 @@ impl<L, T: ShaderParam<L>> Batch for OwnedBatch<L, T> {
 type Index = u16;
 
 //#[deriving(PartialEq, Eq, PartialOrd, Ord, Show)]
+#[deriving(Copy)]
 struct Id<T>(Index);
 
 impl<T> Id<T> {

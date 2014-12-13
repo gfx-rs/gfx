@@ -28,14 +28,14 @@ use std::fmt;
 use state;
 
 /// Surface creation/update error.
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Copy, Clone, PartialEq, Show)]
 pub enum SurfaceError {
     /// Failed to map a given format to the device
     UnsupportedSurfaceFormat,
 }
 
 /// Texture creation/update error.
-#[deriving(Clone, PartialEq)]
+#[deriving(Copy, Clone, PartialEq)]
 pub enum TextureError {
     /// Failed to map a given format to the device.
     UnsupportedTextureFormat,
@@ -85,7 +85,7 @@ pub type NumSamples = u8;
 pub type NumFragments = u8;
 
 /// Describes the configuration of samples inside each texel.
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 pub enum AaMode {
     /// MultiSampled Anti-Aliasing
     Msaa(NumSamples),
@@ -94,7 +94,7 @@ pub enum AaMode {
 }
 
 /// Describes the color components of each texel.
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 #[repr(u8)]
 pub enum Components {
     /// Red only
@@ -108,7 +108,7 @@ pub enum Components {
 }
 
 /// Describes the layout of each texel within a surface/texture.
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 pub enum Format {
     /// Floating point.
     Float(Components, ::attrib::FloatSize),
@@ -137,7 +137,7 @@ pub enum Format {
 }
 
 /// Codec used to compress image data.
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 #[allow(non_camel_case_types)]
 pub enum Compression {
     /// Use the EXT2 algorithm on 3 components.
@@ -176,7 +176,7 @@ pub static RGBA8: Format = Format::Unsigned(Components::RGBA, 8, IntSubType::Nor
 
 /// Describes the storage of a surface
 #[allow(missing_docs)]
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 pub struct SurfaceInfo {
     pub width: u16,
     pub height: u16,
@@ -194,7 +194,7 @@ pub struct SurfaceInfo {
 /// textures. Similarly for trilinear, it is really Quadralinear(?) for 3D
 /// textures. Alas, these names are simple, and match certain intuitions
 /// ingrained by many years of public use of inaccurate terminology.
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 pub enum FilterMethod {
     /// The dumbest filtering possible, nearest-neighbor interpolation.
     Scale,
@@ -215,7 +215,7 @@ pub enum FilterMethod {
 /// extended in the future. Note that a single texture can *only* ever be of
 /// one kind. A texture created as `Texture2D` will forever be `Texture2D`.
 // TODO: "Texture views" let you get around that limitation.
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 pub enum TextureKind {
     /// A single row of texels.
     Texture1D,
@@ -242,7 +242,7 @@ pub enum TextureKind {
 }
 
 /// The face of a cube texture to do an operation on.
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 #[allow(missing_docs)]
 pub enum CubeFace {
     PosZ,
@@ -271,7 +271,7 @@ impl TextureKind {
 /// Textures larger than 1024px in any dimension are unlikely to be supported
 /// by mobile platforms.
 #[allow(missing_docs)]
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 pub struct TextureInfo {
     pub width: u16,
     pub height: u16,
@@ -287,7 +287,7 @@ pub struct TextureInfo {
 
 /// Describes a subvolume of a texture, which image data can be uploaded into.
 #[allow(missing_docs)]
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 pub struct ImageInfo {
     pub xoffset: u16,
     pub yoffset: u16,
@@ -378,7 +378,7 @@ impl ImageInfo {
 }
 
 /// Specifies how texture coordinates outside the range `[0, 1]` are handled.
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 pub enum WrapMode {
     /// Tile the texture. That is, sample the coordinate modulo `1.0`. This is
     /// the default.
@@ -390,7 +390,7 @@ pub enum WrapMode {
 }
 
 /// Specified how the Comparison operator should be used when sampling
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Clone, Show)]
+#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 pub enum ComparisonMode {
     /// the default, don't use this feature.
     NoComparison,
@@ -400,7 +400,7 @@ pub enum ComparisonMode {
 
 /// Specifies how to sample from a texture.
 // TODO: document the details of sampling.
-#[deriving(PartialEq, PartialOrd, Clone, Show)]
+#[deriving(PartialEq, PartialOrd, Copy, Clone, Show)]
 pub struct SamplerInfo {
     /// Filter method to use.
     pub filtering: FilterMethod,

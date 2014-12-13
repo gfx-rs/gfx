@@ -19,14 +19,14 @@ use syntax::codemap;
 use syntax::parse::token;
 use syntax::ptr::P;
 
-#[deriving(PartialEq, Show)]
+#[deriving(Copy, PartialEq, Show)]
 enum Param {
     Uniform,
     Block,
     Texture,
 }
 
-#[deriving(Show)]
+#[deriving(Copy, Show)]
 enum ParamError {
     DeprecatedTexture,
 }

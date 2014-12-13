@@ -21,7 +21,7 @@ use Capabilities;
 use shade;
 
 /// A version number for a specific component of an OpenGL implementation
-#[deriving(Eq, PartialEq)]
+#[deriving(Copy, Eq, PartialEq)]
 pub struct Version {
     pub major: u32,
     pub minor: u32,
@@ -137,7 +137,7 @@ fn get_uint(gl: &gl::Gl, name: gl::types::GLenum) -> uint {
 }
 
 /// A unique platform identifier that does not change between releases
-#[deriving(Eq, PartialEq, Show)]
+#[deriving(Copy, Eq, PartialEq, Show)]
 pub struct PlatformName {
     /// The company responsible for the OpenGL implementation
     pub vendor: &'static str,

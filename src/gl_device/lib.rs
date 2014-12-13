@@ -17,6 +17,7 @@
 
 #![allow(missing_docs)]
 #![experimental]
+#![deny(missing_copy_implementations)]
 
 extern crate libc;
 extern crate "gfx_gl" as gl;
@@ -41,6 +42,7 @@ mod state;
 mod tex;
 mod info;
 
+#[deriving(Copy)]
 pub struct RawMapping {
     pub pointer: *mut libc::c_void,
     target: gl::types::GLenum,
@@ -55,7 +57,7 @@ pub type Surface        = gl::types::GLuint;
 pub type Sampler        = gl::types::GLuint;
 pub type Texture        = gl::types::GLuint;
 
-#[deriving(Eq, PartialEq, Show)]
+#[deriving(Copy, Eq, PartialEq, Show)]
 pub enum GlError {
     NoError,
     InvalidEnum,
