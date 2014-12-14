@@ -201,12 +201,12 @@ impl Info {
 
 fn to_shader_model(v: &Version) -> shade::ShaderModel {
     use shade::ShaderModel;
-    match *v {
-        v if v < Version::new(1, 20, None, "") => ShaderModel::Unsupported,
-        v if v < Version::new(1, 50, None, "") => ShaderModel::Version30,
-        v if v < Version::new(3,  0, None, "") => ShaderModel::Version40,
-        v if v < Version::new(4, 30, None, "") => ShaderModel::Version41,
-        _                                      => ShaderModel::Version50,
+    match v {
+        v if *v < Version::new(1, 20, None, "") => ShaderModel::Unsupported,
+        v if *v < Version::new(1, 50, None, "") => ShaderModel::Version30,
+        v if *v < Version::new(3,  0, None, "") => ShaderModel::Version40,
+        v if *v < Version::new(4, 30, None, "") => ShaderModel::Version41,
+        _                                       => ShaderModel::Version50,
     }
 }
 

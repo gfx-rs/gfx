@@ -125,8 +125,9 @@ impl<L, T: ShaderParam<L>> Batch for OwnedBatch<L, T> {
 type Index = u16;
 
 //#[deriving(PartialEq, Eq, PartialOrd, Ord, Show)]
-#[deriving(Copy)]
 struct Id<T>(Index);
+
+impl<T> Copy for Id<T> {}
 
 impl<T> Id<T> {
     fn unwrap(&self) -> Index {
@@ -234,8 +235,8 @@ impl<L, T> PartialOrd for RefBatch<L, T> {
 
 impl<L, T> Ord for RefBatch<L, T> {
     fn cmp(&self, other: &RefBatch<L, T>) -> Ordering {
-        (self.program_id, self.state_id, self.mesh_id).cmp(
-        &(other.program_id, other.state_id, other.mesh_id))
+        (&self.program_id, &self.state_id, &self.mesh_id).cmp(
+        &(&other.program_id, &other.state_id, &other.mesh_id))
     }
 }
 
@@ -301,10 +302,10 @@ impl<'a, L, T: ShaderParam<L>> Batch for (&'a RefBatch<L, T>, &'a T, &'a Context
     fn get_data(&self) -> (&mesh::Mesh, &mesh::Link, &mesh::Slice, &ProgramHandle, &DrawState) {
         let (b, _, ctx) = *self;
         (ctx.meshes.get(b.mesh_id),
-        &b.mesh_link,
-        &b.slice,
-        ctx.programs.get(b.program_id),
-        ctx.states.get(b.state_id))
+         &b.mesh_link,
+         &b.slice,
+         ctx.programs.get(b.program_id),
+         ctx.states.get(b.state_id))
     }
 
     fn fill_params(&self, values: ::shade::ParamValues) {
