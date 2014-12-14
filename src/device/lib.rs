@@ -15,6 +15,7 @@
 #![feature(phase)]
 #![feature(phase, unsafe_destructor)]
 #![deny(missing_docs)]
+#![deny(missing_copy_implementations)]
 
 //! Graphics device. Not meant for direct use.
 
@@ -52,6 +53,7 @@ pub type UniformBufferSlot = u8;
 pub type TextureSlot = u8;
 
 /// Specifies the access allowed to a buffer mapping.
+#[deriving(Copy)]
 pub enum MapAccess {
     /// Only allow reads.
     Readable,
@@ -132,7 +134,7 @@ impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Drop for RWMapping<'a, T
 }
 
 /// A generic handle struct
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Copy, Clone, PartialEq, Show)]
 pub struct Handle<T, I>(T, I);
 
 impl<T: Copy, I> Handle<T, I> {
@@ -150,7 +152,7 @@ impl<T: Copy, I> Handle<T, I> {
 }
 
 /// Type-safe buffer handle
-#[deriving(Show, PartialEq, Clone)]
+#[deriving(Copy, Show, PartialEq, Clone)]
 pub struct BufferHandle<T> {
     raw: RawBufferHandle,
 }
@@ -232,7 +234,7 @@ pub fn as_byte_slice<T>(slice: &[T]) -> &[u8] {
 }
 
 /// Features that the device supports.
-#[deriving(Show)]
+#[deriving(Copy, Show)]
 #[allow(missing_docs)] // pretty self-explanatory fields!
 pub struct Capabilities {
     pub shader_model: shade::ShaderModel,
@@ -254,7 +256,7 @@ pub struct Capabilities {
 }
 
 /// Describes what geometric primitives are created from vertex data.
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Copy, Clone, PartialEq, Show)]
 #[repr(u8)]
 pub enum PrimitiveType {
     /// Each vertex represents a single point.
@@ -286,7 +288,7 @@ pub type IndexType = attrib::IntSize;
 /// The nature of these hints make them very implementation specific. Different drivers on
 /// different hardware will handle them differently. Only careful profiling will tell which is the
 /// best to use for a specific buffer.
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Copy, Clone, PartialEq, Show)]
 #[repr(u8)]
 pub enum BufferUsage {
     /// Once uploaded, this buffer will rarely change, but will be read from often.
@@ -299,7 +301,7 @@ pub enum BufferUsage {
 }
 
 /// An information block that is immutable and associated with each buffer
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Copy, Clone, PartialEq, Show)]
 pub struct BufferInfo {
     /// Usage hint
     pub usage: BufferUsage,
@@ -312,7 +314,7 @@ pub struct BufferInfo {
 /// this particular representation may be used by different backends,
 /// such as OpenGL (prior to GLNG) and DirectX (prior to DX12)
 #[allow(missing_docs)]
-#[deriving(Show)]
+#[deriving(Copy, Show)]
 pub enum Command {
     BindProgram(back::Program),
     BindArrayBuffer(back::ArrayBuffer),

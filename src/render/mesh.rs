@@ -96,7 +96,7 @@ impl Mesh {
 /// The `prim_type` defines how the mesh contents are interpreted.
 /// For example,  `Point` typed vertex slice can be used to do shape
 /// blending, while still rendereing it as an indexed `TriangleList`.
-#[deriving(Clone, Show)]
+#[deriving(Copy, Clone, Show)]
 pub struct Slice {
     /// Start index of vertices to draw.
     pub start: VertexCount,
@@ -109,7 +109,7 @@ pub struct Slice {
 }
 
 /// Source of vertex ordering for a slice
-#[deriving(Clone, Show)]
+#[deriving(Copy, Clone, Show)]
 pub enum SliceKind {
     /// Render vertex data directly from the `Mesh`'s buffer.
     Vertex,

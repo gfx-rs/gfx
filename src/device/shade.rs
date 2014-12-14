@@ -25,32 +25,32 @@ use std::fmt;
 pub type Dimension = u8;
 
 /// Whether the sampler samples an array texture.
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Copy, Clone, PartialEq, Show)]
 pub enum IsArray { Array, NoArray }
 
 /// Whether the sampler samples a shadow texture (texture with a depth comparison)
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Copy, Clone, PartialEq, Show)]
 pub enum IsShadow { Shadow, NoShadow }
 
 /// Whether the sampler samples a multisample texture.
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Copy, Clone, PartialEq, Show)]
 pub enum IsMultiSample { MultiSample, NoMultiSample }
 
 /// Whether the sampler samples a rectangle texture.
 ///
 /// Rectangle textures are the same as 2D textures, but accessed with absolute texture coordinates
 /// (as opposed to the usual, normalized to [0, 1]).
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Copy, Clone, PartialEq, Show)]
 pub enum IsRect { Rect, NoRect }
 
 /// Whether the matrix is column or row major.
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Copy, Clone, PartialEq, Show)]
 pub enum MatrixFormat { ColumnMajor, RowMajor }
 
 /// What texture type this sampler samples from.
 ///
 /// A single sampler cannot be used with multiple texture types.
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Copy, Clone, PartialEq, Show)]
 pub enum SamplerType {
     /// Sample from a buffer.
     SamplerBuffer,
@@ -66,7 +66,7 @@ pub enum SamplerType {
 
 /// Base type of this shader parameter.
 #[allow(missing_docs)]
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Copy, Clone, PartialEq, Show)]
 pub enum BaseType {
     F32,
     F64,
@@ -76,7 +76,7 @@ pub enum BaseType {
 }
 
 /// Number of components this parameter represents.
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Copy, Clone, PartialEq, Show)]
 pub enum ContainerType {
     /// Scalar value
     Single,
@@ -90,7 +90,7 @@ pub enum ContainerType {
 
 /// Which program stage this shader represents.
 #[allow(missing_docs)]
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Copy, Clone, PartialEq, Show)]
 pub enum Stage {
     Vertex,
     Geometry,
@@ -105,6 +105,7 @@ pub type Location = uint;
 // unable to derive anything for fixed arrays
 /// A value that can be uploaded to the device as a uniform.
 #[allow(missing_docs)]
+#[deriving(Copy)]
 pub enum UniformValue {
     I32(i32),
     F32(f32),
@@ -274,7 +275,7 @@ pub struct ProgramInfo {
 }
 
 /// Error type for trying to store a UniformValue in a UniformVar.
-#[deriving(Show)]
+#[deriving(Copy, Show)]
 pub enum CompatibilityError {
     /// Array sizes differ between the value and the var (trying to upload a vec2 as a vec4, etc)
     ErrorArraySize,
@@ -315,7 +316,7 @@ impl UniformVar {
 
 /// A type storing shader source for different graphics APIs and versions.
 #[allow(missing_docs)]
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Copy, Clone, PartialEq, Show)]
 pub struct ShaderSource<'a> {
     pub glsl_120: Option<&'a [u8]>,
     pub glsl_130: Option<&'a [u8]>,
@@ -326,7 +327,7 @@ pub struct ShaderSource<'a> {
 }
 
 /// An error type for creating programs.
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Copy, Clone, PartialEq, Show)]
 pub enum CreateShaderError {
     /// The device does not support any of the shaders supplied.
     NoSupportedShaderProvided,
@@ -336,7 +337,7 @@ pub enum CreateShaderError {
 
 /// Shader model supported by the device, corresponds to the HLSL shader models.
 #[allow(missing_docs)]
-#[deriving(Clone, PartialEq, PartialOrd, Show)]
+#[deriving(Copy, Clone, PartialEq, PartialOrd, Show)]
 pub enum ShaderModel {
     Unsupported,
     Version30,

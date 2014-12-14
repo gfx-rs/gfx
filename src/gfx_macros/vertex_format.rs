@@ -22,7 +22,7 @@ use syntax::parse::token;
 use syntax::ptr::P;
 
 /// A component modifier.
-#[deriving(PartialEq)]
+#[deriving(Copy, PartialEq)]
 enum Modifier {
     /// Corresponds to the `#[normalized]` attribute.
     ///

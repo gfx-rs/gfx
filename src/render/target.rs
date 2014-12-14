@@ -16,7 +16,7 @@
 
 use device;
 
-#[deriving(Clone, PartialEq, Show)]
+#[deriving(Copy, Clone, PartialEq, Show)]
 /// A single buffer that can be bound to a render target.
 pub enum Plane {
     /// Render to a `Surface` (corresponds to a renderbuffer in GL).

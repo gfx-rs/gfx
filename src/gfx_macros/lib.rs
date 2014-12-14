@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![feature(macro_rules, plugin_registrar, quote)]
+#![deny(missing_copy_implementations)]
 
 //! Macro extensions crate.
 //! Implements `shaders!` macro as well as `#[shader_param]` and
