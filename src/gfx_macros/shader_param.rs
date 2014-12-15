@@ -314,7 +314,8 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                                 vec![
                                     context.ty_ident(span, link_ident),
                                     context.ty_ident(span, item.ident)
-                                ]
+                                ],
+                                Vec::new()
                             ),
                         );
                         push(P(ast::Item {
