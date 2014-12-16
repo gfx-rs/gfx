@@ -83,7 +83,7 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
             ).collect();
             let gen_arms = |ptype: Param, var: ast::Ident| -> Vec<ast::Arm> {
                 class_info.iter().zip(fields.iter())
-                          .filter(|&(&(class, _), _)| class == ptype)
+                          .filter(|&(&(ref class, _), _)| *class == ptype)
                           .map(|(&(_, ref name_expr), &(fname, fspan))|
                     cx.arm(fspan,
                         vec![cx.pat_lit(fspan, name_expr.clone())],
@@ -314,7 +314,8 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
                                 vec![
                                     context.ty_ident(span, link_ident),
                                     context.ty_ident(span, item.ident)
-                                ]
+                                ],
+                                Vec::new(),
                             ),
                         );
                         push(P(ast::Item {
