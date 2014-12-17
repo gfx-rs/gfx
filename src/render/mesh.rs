@@ -184,7 +184,7 @@ impl ToSlice for BufferHandle<u32> {
 }
 
 /// Describes kinds of errors that may occur in the mesh linking
-#[deriving(Clone, Show)]
+#[deriving(Clone, Copy, Show)]
 pub enum LinkError {
     /// An attribute index is out of supported bounds
     MeshAttribute(uint),
@@ -197,6 +197,7 @@ const MAX_SHADER_INPUTS: uint = 64 / BITS_PER_ATTRIBUTE;
 const MESH_ATTRIBUTE_MASK: uint = (1u << BITS_PER_ATTRIBUTE) - 1;
 
 /// An iterator over mesh attributes.
+#[deriving(Copy)]
 pub struct AttributeIndices {
     value: u64,
 }
@@ -210,6 +211,7 @@ impl Iterator<uint> for AttributeIndices {
 }
 
 /// Holds a remapping table from shader inputs to mesh attributes.
+#[deriving(Copy)]
 pub struct Link {
     table: u64,
 }

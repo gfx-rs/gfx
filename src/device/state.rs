@@ -299,7 +299,6 @@ impl fmt::Show for Blend {
 
 bitflags!(
     #[allow(missing_docs)]
-    #[deriving(Copy)]
     flags ColorMask: u32 {  //u8 is preferred, but doesn't seem to work well
         const RED     = 0x1,
         const GREEN   = 0x2,

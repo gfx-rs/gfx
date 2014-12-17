@@ -42,7 +42,6 @@ pub type ColorValue = [f32, ..4];
 
 bitflags!(
     #[allow(missing_docs)]
-    #[deriving(Copy)]
     flags Mask: u32 {  //u8 is preferred, but doesn't seem to work well
         const COLOR     = 0x01,
         const COLOR0    = 0x01,
