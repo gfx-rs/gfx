@@ -416,7 +416,7 @@ pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
             },
         ],
     };
-    let fixup = |item| {
+    let fixup = |: item| {
         push(super::fixup_extern_crate_paths(item, path_root))
     };
     trait_def.expand(context, meta_item, item, fixup);

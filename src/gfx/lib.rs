@@ -62,7 +62,7 @@ pub struct Graphics<D, C: device::draw::CommandBuffer> {
 impl<D: device::Device<C>, C: device::draw::CommandBuffer> Graphics<D, C> {
     /// Create a new graphics wrapper.
     pub fn new(mut device: D) -> Graphics<D, C> {
-        let rend = Renderer::new(&mut device);
+        let rend = device.create_renderer();
         Graphics {
             device: device,
             renderer: rend,
