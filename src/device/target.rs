@@ -51,7 +51,7 @@ bitflags!(
         const DEPTH     = 0x40,
         const STENCIL   = 0x80
     }
-)
+);
 
 impl fmt::Show for Mask {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
