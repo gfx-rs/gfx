@@ -306,7 +306,7 @@ bitflags!(
         const ALPHA   = 0x8,
         const MASK_ALL = 0xF
     }
-)
+);
 
 impl fmt::Show for ColorMask {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

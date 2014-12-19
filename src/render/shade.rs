@@ -35,22 +35,22 @@ macro_rules! impl_ToUniform(
             }
         }
     );
-)
+);
 
-impl_ToUniform!(i32, UniformValue::I32)
-impl_ToUniform!(f32, UniformValue::F32)
+impl_ToUniform!(i32, UniformValue::I32);
+impl_ToUniform!(f32, UniformValue::F32);
 
-impl_ToUniform!([i32, ..2], UniformValue::I32Vector2)
-impl_ToUniform!([i32, ..3], UniformValue::I32Vector3)
-impl_ToUniform!([i32, ..4], UniformValue::I32Vector4)
+impl_ToUniform!([i32, ..2], UniformValue::I32Vector2);
+impl_ToUniform!([i32, ..3], UniformValue::I32Vector3);
+impl_ToUniform!([i32, ..4], UniformValue::I32Vector4);
 
-impl_ToUniform!([f32, ..2], UniformValue::F32Vector2)
-impl_ToUniform!([f32, ..3], UniformValue::F32Vector3)
-impl_ToUniform!([f32, ..4], UniformValue::F32Vector4)
+impl_ToUniform!([f32, ..2], UniformValue::F32Vector2);
+impl_ToUniform!([f32, ..3], UniformValue::F32Vector3);
+impl_ToUniform!([f32, ..4], UniformValue::F32Vector4);
 
-impl_ToUniform!([[f32, ..2], ..2], UniformValue::F32Matrix2)
-impl_ToUniform!([[f32, ..3], ..3], UniformValue::F32Matrix3)
-impl_ToUniform!([[f32, ..4], ..4], UniformValue::F32Matrix4)
+impl_ToUniform!([[f32, ..2], ..2], UniformValue::F32Matrix2);
+impl_ToUniform!([[f32, ..3], ..3], UniformValue::F32Matrix3);
+impl_ToUniform!([[f32, ..4], ..4], UniformValue::F32Matrix4);
 
 /// Variable index of a uniform.
 pub type VarUniform = u16;

@@ -606,7 +606,7 @@ impl Device<GlCommandBuffer> for GlDevice {
             info!("\tCreated array buffer {}", name);
             Ok(::Handle(name, ()))
         } else {
-            error!("\tarray buffer creation unsupported, ignored")
+            error!("\tarray buffer creation unsupported, ignored");
             Err(())
         }
     }
