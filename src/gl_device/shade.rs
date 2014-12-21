@@ -188,7 +188,7 @@ fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::Attribute> {
             base_type: base,
             container: container,
         }
-    }).filter(|a| a.location != -1) // remove built-ins
+    }).filter(|a| !a.name.starts_with("gl_")) // remove built-ins
     .collect()
 }
 
