@@ -41,6 +41,11 @@ path = "src/device/"
 path = "src/render/"
 
 
+# Technically this is a dev_dependencies but rustc gets Confused as to which
+# time crate to use if we specifiy it as such.
+[dependencies]
+time = "*"
+
 [[example]]
 name = "triangle"
 path = "examples/triangle/main.rs"
@@ -94,9 +99,6 @@ path = "examples/performance/main.rs"
 
 [dev_dependencies.gfx_gl]
 git = "https://github.com/gfx-rs/gfx_gl.git"
-
-[dev_dependencies.time]
-git = "https://github.com/rust-lang/time"
 
 # [dev_dependencies.cgmath]
 # git = "https://github.com/bjz/cgmath-rs"
