@@ -83,6 +83,11 @@ git = "https://github.com/bjz/noise-rs.git"
 
 
 [[example]]
+name = "deferred"
+path = "examples/deferred/main.rs"
+
+
+[[example]]
 name = "glutin"
 path = "examples/glutin/main.rs"
 
