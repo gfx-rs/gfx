@@ -129,7 +129,6 @@ struct EmitterParams {
 }
 
 #[shader_param(BlitBatch)]
-#[deriving(Copy)]
 struct BlitParams {
     #[name = "u_Tex"]
     tex: gfx::shade::TextureParam,
@@ -716,9 +715,6 @@ fn main() {
     };
 
     let mut debug_buf: Option<TextureHandle> = None;
-
-    let mut next_check = (precise_time_s() as f32) + 1.0f32;
-    let mut frames = 0i;
 
     let mut light_pos_vec: Vec<[f32, ..4]> = range(0, NUM_LIGHTS).map(|_| {
         [0.0, 0.0, 0.0, 0.0]
