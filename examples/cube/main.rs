@@ -28,6 +28,7 @@ use gfx::batch;
 use glfw::Context;
 
 #[vertex_format]
+#[deriving(Copy)]
 struct Vertex {
     #[as_float]
     #[name = "a_Pos"]

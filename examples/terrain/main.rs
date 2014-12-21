@@ -38,6 +38,7 @@ use noise::source::Perlin;
 use noise::source::Source;
 
 #[vertex_format]
+#[deriving(Copy)]
 struct Vertex {
     #[name = "a_Pos"]
     pos: [f32, ..3],
