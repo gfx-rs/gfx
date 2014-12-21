@@ -38,6 +38,7 @@ use std::os;
 use std::str::FromStr;
 
 #[vertex_format]
+#[deriving(Copy)]
 struct Vertex {
     #[as_float]
     #[name = "a_Pos"]

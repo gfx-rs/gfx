@@ -22,6 +22,7 @@ mod secret_lib;
 // Test all features
 #[repr(packed)]
 #[vertex_format]
+#[deriving(Copy)]
 struct MyVertex {
     a0: [f32, ..2],
     #[normalized]
@@ -37,6 +38,7 @@ struct MyVertex {
 // Test that there are no conflicts between the two reexport modules
 #[repr(packed)]
 #[vertex_format]
+#[deriving(Copy)]
 struct MyInstance {
     a0: [f32, ..2],
 }
