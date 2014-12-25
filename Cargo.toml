@@ -40,10 +40,8 @@ path = "src/device/"
 [dependencies.render]
 path = "src/render/"
 
-
-# Technically this is a dev_dependencies but rustc gets Confused as to which
-# time crate to use if we specifiy it as such.
 [dependencies]
+log = "*"
 time = "*"
 
 [[example]]
@@ -52,7 +50,6 @@ path = "examples/triangle/main.rs"
 
 [dev_dependencies.glfw]
 git = "https://github.com/bjz/glfw-rs.git"
-
 
 [[example]]
 name = "cube"
@@ -86,7 +83,6 @@ git = "https://github.com/bjz/noise-rs.git"
 name = "deferred"
 path = "examples/deferred/main.rs"
 
-
 [[example]]
 name = "glutin"
 path = "examples/glutin/main.rs"
@@ -107,3 +103,4 @@ git = "https://github.com/gfx-rs/gfx_gl.git"
 
 # [dev_dependencies.cgmath]
 # git = "https://github.com/bjz/cgmath-rs"
+
