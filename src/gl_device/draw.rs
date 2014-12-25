@@ -22,7 +22,7 @@ pub struct GlCommandBuffer {
 }
 
 impl GlCommandBuffer {
-    pub fn iter<'a>(&'a self) -> slice::Items<'a, ::Command> {
+    pub fn iter<'a>(&'a self) -> slice::Iter<'a, ::Command> {
         self.buf.iter()
     }
 }
