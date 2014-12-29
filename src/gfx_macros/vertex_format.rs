@@ -68,7 +68,7 @@ fn find_modifier(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
     attributes.iter().fold(None, |modifier, attribute| {
         match attribute.node.value.node {
             ast::MetaWord(ref word) => {
-                from_str(word.get()).and_then(|new_modifier| {
+                word.get().parse().and_then(|new_modifier| {
                     attr::mark_used(attribute);
                     modifier.map_or(Some(new_modifier), |modifier| {
                         cx.span_warn(span, format!(
