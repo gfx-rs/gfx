@@ -91,6 +91,16 @@ impl<D: device::Device<C>, C: device::draw::CommandBuffer> Graphics<D, C> {
         self.renderer.draw(&(batch, data, &self.context), frame)
     }
 
+    /// Draw a ref batch with instancing
+    pub fn draw_instanced<'a, L, T: shade::ShaderParam<L>>(&'a mut self,
+                          batch: &'a batch::RefBatch<L, T>,
+                          data: &'a T,
+                          count: u32,
+                          vertex_offset: u32,
+                          frame: &Frame) {
+        self.renderer.draw_instanced((batch, data, &self.context), count, vertex_offset, frame)
+    }
+
     /// Submit the internal command buffer and reset for the next frame.
     pub fn end_frame(&mut self) {
         self.device.submit(self.renderer.as_buffer());
