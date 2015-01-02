@@ -546,7 +546,7 @@ fn main() {
     let (res_buffer, texture_frame, _)  = create_res_buffer(w as u16, h as u16, &mut device, texture_depth);
 
     let noise = {
-        let rand_seed = std::rand::task_rng().gen();
+        let rand_seed = std::rand::thread_rng().gen();
         Perlin::new().seed(rand_seed).octaves(4).quality(Quality::Best)
     };
 

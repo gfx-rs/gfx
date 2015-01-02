@@ -167,7 +167,7 @@ fn main() {
 
     let mut device = gfx::GlDevice::new(|s| window.get_proc_address(s));
 
-    let rand_seed = std::rand::task_rng().gen();
+    let rand_seed = std::rand::thread_rng().gen();
     let noise = Perlin::new().seed(rand_seed);
     let plane = Plane::subdivide(256, 256);
     let vertex_data: Vec<Vertex> = plane.shared_vertex_iter()
