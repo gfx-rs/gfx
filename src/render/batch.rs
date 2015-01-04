@@ -18,6 +18,7 @@
 
 use std::fmt;
 use std::num::from_uint;
+use std::cmp::Ordering;
 use device::{PrimitiveType, ProgramHandle};
 use device::shade::ProgramInfo;
 use mesh;

@@ -20,6 +20,7 @@ use syntax::ext::deriving::generic;
 use syntax::{attr, codemap};
 use syntax::parse::token;
 use syntax::ptr::P;
+use syntax::ext::base::ItemDecorator;   
 
 /// A component modifier.
 #[deriving(Copy, PartialEq)]
@@ -223,62 +224,66 @@ fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
     }
 }
 
+#[deriving(Copy)]
+pub struct VertexFormat;
 
-/// Derive a `gfx::VertexFormat` implementation for the `struct`
-pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
+impl ItemDecorator for VertexFormat {
+    /// Derive a `gfx::VertexFormat` implementation for the `struct`
+    fn expand(&self, context: &mut ext::base::ExtCtxt, span: codemap::Span,
               meta_item: &ast::MetaItem, item: &ast::Item,
-              push: |P<ast::Item>|) {
-    // Insert the `gfx` reexport module
-    let path_root = super::extern_crate_hack(context, span, |i| push(i));
-    let fixup = |: item| {
-        push(super::fixup_extern_crate_paths(item, path_root))
-    };
+              mut push: Box<FnMut(P<ast::Item>)>) {
+        // Insert the `gfx` reexport module
+        let path_root = super::extern_crate_hack(context, span, |i| (*push)(i));
+        let fixup = |: item| {
+            (*push)(super::fixup_extern_crate_paths(item, path_root))
+        };
 
-    // `impl gfx::VertexFormat for $item`
-    generic::TraitDef {
-        span: span,
-        attributes: Vec::new(),
-        path: generic::ty::Path {
-            path: vec![super::EXTERN_CRATE_HACK, "gfx", "VertexFormat"],
-            lifetime: None,
-            params: Vec::new(),
-            global: true,
-        },
-        additional_bounds: Vec::new(),
-        generics: generic::ty::LifetimeBounds::empty(),
-        methods: vec![
-            // `fn generate(Option<Self>, gfx::RawBufferHandle) -> Vec<gfx::Attribute>`
-            generic::MethodDef {
-                name: "generate",
-                generics: generic::ty::LifetimeBounds::empty(),
-                explicit_self: None,
-                args: vec![
-                    generic::ty::Literal(generic::ty::Path {
-                        path: vec!["Option"],
-                        lifetime: None,
-                        params: vec![box generic::ty::Self],
-                        global: false,
-                    }),
-                    generic::ty::Literal(generic::ty::Path::new(
-                        vec![super::EXTERN_CRATE_HACK, "gfx", "RawBufferHandle"]
-                    )),
-                ],
-                ret_ty: generic::ty::Literal(
-                    generic::ty::Path {
-                        path: vec!["Vec"],
-                        lifetime: None,
-                        params: vec![
-                            box generic::ty::Literal(generic::ty::Path::new(
-                                vec![super::EXTERN_CRATE_HACK, "gfx", "Attribute"])),
-                        ],
-                        global: false,
-                    },
-                ),
-                attributes: Vec::new(),
-                // generate the method body
-                combine_substructure: generic::combine_substructure(
-                    |c, s, ss| method_body(c, s, ss, path_root)),
+        // `impl gfx::VertexFormat for $item`
+        generic::TraitDef {
+            span: span,
+            attributes: Vec::new(),
+            path: generic::ty::Path {
+                path: vec![super::EXTERN_CRATE_HACK, "gfx", "VertexFormat"],
+                lifetime: None,
+                params: Vec::new(),
+                global: true,
             },
-        ],
-    }.expand(context, meta_item, item, fixup);
+            additional_bounds: Vec::new(),
+            generics: generic::ty::LifetimeBounds::empty(),
+            methods: vec![
+                // `fn generate(Option<Self>, gfx::RawBufferHandle) -> Vec<gfx::Attribute>`
+                generic::MethodDef {
+                    name: "generate",
+                    generics: generic::ty::LifetimeBounds::empty(),
+                    explicit_self: None,
+                    args: vec![
+                        generic::ty::Literal(generic::ty::Path {
+                            path: vec!["Option"],
+                            lifetime: None,
+                            params: vec![box generic::ty::Self],
+                            global: false,
+                        }),
+                        generic::ty::Literal(generic::ty::Path::new(
+                            vec![super::EXTERN_CRATE_HACK, "gfx", "RawBufferHandle"]
+                        )),
+                    ],
+                    ret_ty: generic::ty::Literal(
+                        generic::ty::Path {
+                            path: vec!["Vec"],
+                            lifetime: None,
+                            params: vec![
+                                box generic::ty::Literal(generic::ty::Path::new(
+                                    vec![super::EXTERN_CRATE_HACK, "gfx", "Attribute"])),
+                            ],
+                            global: false,
+                        },
+                    ),
+                    attributes: Vec::new(),
+                    // generate the method body
+                    combine_substructure: generic::combine_substructure(
+                        |c, s, ss| method_body(c, s, ss, path_root)),
+                },
+            ],
+        }.expand(context, meta_item, item, fixup);
+    }
 }

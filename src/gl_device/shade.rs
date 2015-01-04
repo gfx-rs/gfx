@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
+use std::c_str::ToCStr;
 use super::super::shade as s;
 use super::super::shade::{BaseType, ContainerType, CreateShaderError, IsArray, IsShadow, IsRect,
                           IsMultiSample, MatrixFormat, SamplerType, Stage, UniformValue};

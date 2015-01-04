@@ -226,7 +226,7 @@ impl Link {
             } else if attrib > MESH_ATTRIBUTE_MASK {
                 return Err(LinkError::MeshAttribute(attrib))
             } else {
-                table |= attrib as u64 << (input * BITS_PER_ATTRIBUTE);
+                table |= (attrib as u64) << (input * BITS_PER_ATTRIBUTE);
             }
         }
         Ok(Link {

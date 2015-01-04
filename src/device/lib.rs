@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(phase)]
-#![feature(phase, unsafe_destructor)]
+#![feature(phase, unsafe_destructor, associated_types)]
 #![deny(missing_docs)]
 #![deny(missing_copy_implementations)]
 
@@ -27,6 +26,7 @@ pub use self::gl_device as back;
 
 use std::mem;
 use std::slice;
+use std::ops::{Deref, DerefMut};
 
 pub mod attrib;
 pub mod draw;
@@ -70,7 +70,9 @@ pub struct ReadableMapping<'a, T: Copy, C: draw::CommandBuffer, D: 'a + Device<C
     device: &'a mut D,
 }
 
-impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Deref<[T]> for ReadableMapping<'a, T, C, D> {
+impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Deref for ReadableMapping<'a, T, C, D> {
+    type Target = [T];
+
     fn deref(&self) -> &[T] {
         unsafe { mem::transmute(slice::from_raw_buf(&(self.raw.pointer as *const T), self.len)) }
     }
@@ -114,13 +116,15 @@ pub struct RWMapping<'a, T: Copy, C: draw::CommandBuffer, D: 'a + Device<C>> {
     device: &'a mut D,
 }
 
-impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Deref<[T]> for RWMapping<'a, T, C, D> {
+impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Deref for RWMapping<'a, T, C, D> {
+    type Target = [T];
+
     fn deref(&self) -> &[T] {
         unsafe { mem::transmute(slice::from_raw_buf(&(self.raw.pointer as *const T), self.len)) }
     }
 }
 
-impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> DerefMut<[T]> for RWMapping<'a, T, C, D> {
+impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> DerefMut for RWMapping<'a, T, C, D> {
     fn deref_mut(&mut self) -> &mut [T] {
         unsafe { mem::transmute(slice::from_raw_mut_buf(&self.raw.pointer, self.len)) }
     }

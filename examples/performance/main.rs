@@ -36,13 +36,16 @@ use std::ptr;
 use std::str;
 use std::os;
 use std::str::FromStr;
+use std::sync::mpsc::Receiver;
+use std::c_str::ToCStr;
+
 
 #[vertex_format]
 #[deriving(Copy)]
 struct Vertex {
     #[as_float]
     #[name = "a_Pos"]
-    pos: [i8, ..3],
+    pos: [i8; 3],
 }
 
 // The shader_param attribute makes sure the following struct can be used to
@@ -52,7 +55,7 @@ struct Vertex {
 #[shader_param(TriangleBatch)]
 struct Params {
     #[name = "u_Transform"]
-    transform: [[f32, ..4], ..4],
+    transform: [[f32; 4]; 4],
 }
 
 static VERTEX_SRC: gfx::ShaderSource<'static> = shaders! {

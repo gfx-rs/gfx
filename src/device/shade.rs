@@ -110,17 +110,17 @@ pub enum UniformValue {
     I32(i32),
     F32(f32),
 
-    I32Vector2([i32, ..2]),
-    I32Vector3([i32, ..3]),
-    I32Vector4([i32, ..4]),
+    I32Vector2([i32; 2]),
+    I32Vector3([i32; 3]),
+    I32Vector4([i32; 4]),
 
-    F32Vector2([f32, ..2]),
-    F32Vector3([f32, ..3]),
-    F32Vector4([f32, ..4]),
+    F32Vector2([f32; 2]),
+    F32Vector3([f32; 3]),
+    F32Vector4([f32; 4]),
 
-    F32Matrix2([[f32, ..2], ..2]),
-    F32Matrix3([[f32, ..3], ..3]),
-    F32Matrix4([[f32, ..4], ..4]),
+    F32Matrix2([[f32; 2]; 2]),
+    F32Matrix3([[f32; 3]; 3]),
+    F32Matrix4([[f32; 4]; 4]),
 }
 
 impl UniformValue {

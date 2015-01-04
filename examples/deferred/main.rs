@@ -60,11 +60,11 @@ const NUM_LIGHTS: uint = 250;
 #[deriving(Copy)]
 struct TerrainVertex {
     #[name = "a_Pos"]
-    pos: [f32, ..3],
+    pos: [f32; 3],
     #[name = "a_Normal"]
-    normal: [f32, ..3],
+    normal: [f32; 3],
     #[name = "a_Color"]
-    color: [f32, ..3],
+    color: [f32; 3],
 }
 
 #[vertex_format]
@@ -72,10 +72,10 @@ struct TerrainVertex {
 struct BlitVertex {
     #[as_float]
     #[name = "a_Pos"]
-    pos: [i8, ..3],
+    pos: [i8; 3],
     #[as_float]
     #[name = "a_TexCoord"]
-    tex_coord: [u8, ..2],
+    tex_coord: [u8; 2],
 }
 
 #[vertex_format]
@@ -83,33 +83,33 @@ struct BlitVertex {
 struct CubeVertex {
     #[as_float]
     #[name = "a_Pos"]
-    pos: [i8, ..3],
+    pos: [i8; 3],
 }
 
 #[shader_param(TerrainBatch)]
 struct TerrainParams {
     #[name = "u_Model"]
-    model: [[f32, ..4], ..4],
+    model: [[f32; 4]; 4],
     #[name = "u_View"]
-    view: [[f32, ..4], ..4],
+    view: [[f32; 4]; 4],
     #[name = "u_Proj"]
-    proj: [[f32, ..4], ..4],
+    proj: [[f32; 4]; 4],
     #[name = "u_CameraPos"]
-    cam_pos: [f32, ..3],
+    cam_pos: [f32; 3],
 }
 
 #[shader_param(LightBatch)]
 struct LightParams {
     #[name = "u_Transform"]
-    transform: [[f32, ..4], ..4],
+    transform: [[f32; 4]; 4],
     #[name = "u_LightPosBlock"]
     light_pos_buf: gfx::RawBufferHandle,
     #[name = "u_Radius"]
     radius: f32,
     #[name = "u_CameraPos"]
-    cam_pos: [f32, ..3],
+    cam_pos: [f32; 3],
     #[name = "u_FrameRes"]
-    frame_res: [f32, ..2],
+    frame_res: [f32; 2],
     #[name = "u_TexPos"]
     tex_pos: gfx::shade::TextureParam,
     #[name = "u_TexNormal"]
@@ -121,7 +121,7 @@ struct LightParams {
 #[shader_param(EmitterBatch)]
 struct EmitterParams {
     #[name = "u_Transform"]
-    transform: [[f32, ..4], ..4],
+    transform: [[f32; 4]; 4],
     #[name = "u_LightPosBlock"]
     light_pos_buf: gfx::RawBufferHandle,
     #[name = "u_Radius"]
@@ -439,7 +439,7 @@ GLSL_150: b"
 "
 };
 
-fn calculate_normal(noise: &Perlin, x: f32, y: f32)-> [f32, ..3] {
+fn calculate_normal(noise: &Perlin, x: f32, y: f32)-> [f32; 3] {
     // determine sample points
     let s_x0 = x - 0.001;
     let s_x1 = x + 0.001;
@@ -456,7 +456,7 @@ fn calculate_normal(noise: &Perlin, x: f32, y: f32)-> [f32, ..3] {
     return normal.into_fixed();
 }
 
-fn calculate_color(height: f32) -> [f32, ..3] {
+fn calculate_color(height: f32) -> [f32; 3] {
     if height > 8.0 {
         [0.9, 0.9, 0.9] // white
     } else if height > 0.0 {
@@ -690,7 +690,7 @@ fn main() {
     );
 
 
-    let light_pos_buffer = device.create_buffer::<[f32, ..4]>(NUM_LIGHTS, gfx::BufferUsage::Stream);
+    let light_pos_buffer = device.create_buffer::<[f32; 4]>(NUM_LIGHTS, gfx::BufferUsage::Stream);
 
     let mut light_data = LightParams {
         transform: Matrix4::identity().into_fixed(),
@@ -716,7 +716,7 @@ fn main() {
 
     let mut debug_buf: Option<TextureHandle> = None;
 
-    let mut light_pos_vec: Vec<[f32, ..4]> = range(0, NUM_LIGHTS).map(|_| {
+    let mut light_pos_vec: Vec<[f32; 4]> = range(0, NUM_LIGHTS).map(|_| {
         [0.0, 0.0, 0.0, 0.0]
     }).collect();
 

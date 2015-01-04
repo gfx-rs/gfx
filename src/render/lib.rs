@@ -64,7 +64,7 @@ struct RenderState {
     is_array_buffer_set: bool,
     program_name: device::back::Program,
     index: Option<device::RawBufferHandle>,
-    attributes: [Option<CachedAttribute>, .. TRACKED_ATTRIBUTES],
+    attributes: [Option<CachedAttribute>; TRACKED_ATTRIBUTES],
     draw: state::DrawState,
 }
 
@@ -77,7 +77,7 @@ impl RenderState {
             is_array_buffer_set: false,
             program_name: 0,
             index: None,
-            attributes: [None, ..TRACKED_ATTRIBUTES],
+            attributes: [None; TRACKED_ATTRIBUTES],
             draw: state::DrawState::new(),
         }
     }

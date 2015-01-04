@@ -41,10 +41,10 @@ use noise::source::Source;
 #[deriving(Copy)]
 struct Vertex {
     #[name = "a_Pos"]
-    pos: [f32, ..3],
+    pos: [f32; 3],
 
     #[name = "a_Color"]
-    color: [f32, ..3],
+    color: [f32; 3],
 }
 
 impl Clone for Vertex {
@@ -66,13 +66,13 @@ impl fmt::Show for Vertex {
 #[shader_param(Terrain)]
 struct Params {
     #[name = "u_Model"]
-    model: [[f32, ..4], ..4],
+    model: [[f32; 4]; 4],
 
     #[name = "u_View"]
-    view: [[f32, ..4], ..4],
+    view: [[f32; 4]; 4],
 
     #[name = "u_Proj"]
-    proj: [[f32, ..4], ..4],
+    proj: [[f32; 4]; 4],
 }
 
 static VERTEX_SRC: gfx::ShaderSource<'static> = shaders! {
@@ -133,7 +133,7 @@ GLSL_150: b"
 "
 };
 
-fn calculate_color(height: f32) -> [f32, ..3] {
+fn calculate_color(height: f32) -> [f32; 3] {
     if height > 8.0 {
         [0.9, 0.9, 0.9] // white
     } else if height > 0.0 {

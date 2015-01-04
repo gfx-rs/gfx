@@ -38,7 +38,7 @@ pub struct Rect {
 }
 
 /// A color with floating-point components.
-pub type ColorValue = [f32, ..4];
+pub type ColorValue = [f32; 4];
 
 bitflags!(
     #[allow(missing_docs)]

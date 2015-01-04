@@ -24,15 +24,15 @@ mod secret_lib;
 #[vertex_format]
 #[deriving(Copy)]
 struct MyVertex {
-    a0: [f32, ..2],
+    a0: [f32; 2],
     #[normalized]
     a1: i16,
     #[as_float]
-    a2: [i8, ..4],
+    a2: [i8; 4],
     #[as_double]
     a3: f64,
     #[name = "a_a4"]
-    a4: [f32, ..3],
+    a4: [f32; 3],
 }
 
 // Test that there are no conflicts between the two reexport modules
@@ -40,7 +40,7 @@ struct MyVertex {
 #[vertex_format]
 #[deriving(Copy)]
 struct MyInstance {
-    a0: [f32, ..2],
+    a0: [f32; 2],
 }
 
 #[test]
