@@ -43,7 +43,7 @@ pub mod state;
 pub mod target;
 
 /// Program linking error
-#[deriving(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Show)]
 pub enum ProgramError {
     /// Unable to compile the vertex shader
     Vertex(CreateShaderError),
@@ -64,7 +64,7 @@ struct RenderState {
     is_array_buffer_set: bool,
     program_name: device::back::Program,
     index: Option<device::RawBufferHandle>,
-    attributes: [Option<CachedAttribute>, .. TRACKED_ATTRIBUTES],
+    attributes: [Option<CachedAttribute>; TRACKED_ATTRIBUTES],
     draw: state::DrawState,
 }
 
@@ -77,7 +77,7 @@ impl RenderState {
             is_array_buffer_set: false,
             program_name: 0,
             index: None,
-            attributes: [None, ..TRACKED_ATTRIBUTES],
+            attributes: [None; TRACKED_ATTRIBUTES],
             draw: state::DrawState::new(),
         }
     }

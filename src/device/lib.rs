@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(phase)]
-#![feature(phase, unsafe_destructor)]
+#![feature(phase, unsafe_destructor, associated_types)]
 #![deny(missing_docs)]
 #![deny(missing_copy_implementations)]
 
@@ -27,6 +26,7 @@ pub use self::gl_device as back;
 
 use std::mem;
 use std::slice;
+use std::ops::{Deref, DerefMut};
 
 pub mod attrib;
 pub mod draw;
@@ -53,7 +53,7 @@ pub type UniformBufferSlot = u8;
 pub type TextureSlot = u8;
 
 /// Specifies the access allowed to a buffer mapping.
-#[deriving(Copy)]
+#[derive(Copy)]
 pub enum MapAccess {
     /// Only allow reads.
     Readable,
@@ -70,7 +70,9 @@ pub struct ReadableMapping<'a, T: Copy, C: draw::CommandBuffer, D: 'a + Device<C
     device: &'a mut D,
 }
 
-impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Deref<[T]> for ReadableMapping<'a, T, C, D> {
+impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Deref for ReadableMapping<'a, T, C, D> {
+    type Target = [T];
+
     fn deref(&self) -> &[T] {
         unsafe { mem::transmute(slice::from_raw_buf(&(self.raw.pointer as *const T), self.len)) }
     }
@@ -114,13 +116,15 @@ pub struct RWMapping<'a, T: Copy, C: draw::CommandBuffer, D: 'a + Device<C>> {
     device: &'a mut D,
 }
 
-impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Deref<[T]> for RWMapping<'a, T, C, D> {
+impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Deref for RWMapping<'a, T, C, D> {
+    type Target = [T];
+
     fn deref(&self) -> &[T] {
         unsafe { mem::transmute(slice::from_raw_buf(&(self.raw.pointer as *const T), self.len)) }
     }
 }
 
-impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> DerefMut<[T]> for RWMapping<'a, T, C, D> {
+impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> DerefMut for RWMapping<'a, T, C, D> {
     fn deref_mut(&mut self) -> &mut [T] {
         unsafe { mem::transmute(slice::from_raw_mut_buf(&self.raw.pointer, self.len)) }
     }
@@ -134,7 +138,7 @@ impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Drop for RWMapping<'a, T
 }
 
 /// A generic handle struct
-#[deriving(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Show)]
 pub struct Handle<T, I>(T, I);
 
 impl<T: Copy, I> Handle<T, I> {
@@ -152,7 +156,7 @@ impl<T: Copy, I> Handle<T, I> {
 }
 
 /// Type-safe buffer handle
-#[deriving(Copy, Show, PartialEq, Clone)]
+#[derive(Copy, Show, PartialEq, Clone)]
 pub struct BufferHandle<T> {
     raw: RawBufferHandle,
 }
@@ -234,7 +238,7 @@ pub fn as_byte_slice<T>(slice: &[T]) -> &[u8] {
 }
 
 /// Features that the device supports.
-#[deriving(Copy, Show)]
+#[derive(Copy, Show)]
 #[allow(missing_docs)] // pretty self-explanatory fields!
 pub struct Capabilities {
     pub shader_model: shade::ShaderModel,
@@ -256,7 +260,7 @@ pub struct Capabilities {
 }
 
 /// Describes what geometric primitives are created from vertex data.
-#[deriving(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Show)]
 #[repr(u8)]
 pub enum PrimitiveType {
     /// Each vertex represents a single point.
@@ -288,7 +292,7 @@ pub type IndexType = attrib::IntSize;
 /// The nature of these hints make them very implementation specific. Different drivers on
 /// different hardware will handle them differently. Only careful profiling will tell which is the
 /// best to use for a specific buffer.
-#[deriving(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Show)]
 #[repr(u8)]
 pub enum BufferUsage {
     /// Once uploaded, this buffer will rarely change, but will be read from often.
@@ -301,7 +305,7 @@ pub enum BufferUsage {
 }
 
 /// An information block that is immutable and associated with each buffer
-#[deriving(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Show)]
 pub struct BufferInfo {
     /// Usage hint
     pub usage: BufferUsage,
@@ -314,7 +318,7 @@ pub struct BufferInfo {
 /// this particular representation may be used by different backends,
 /// such as OpenGL (prior to GLNG) and DirectX (prior to DX12)
 #[allow(missing_docs)]
-#[deriving(Copy, Show)]
+#[derive(Copy, Show)]
 pub enum Command {
     BindProgram(back::Program),
     BindArrayBuffer(back::ArrayBuffer),

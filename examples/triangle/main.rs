@@ -23,13 +23,13 @@ use gfx::{DeviceHelper, ToSlice};
 use glfw::Context;
 
 #[vertex_format]
-#[deriving(Copy)]
+#[derive(Copy)]
 struct Vertex {
     #[name = "a_Pos"]
-    pos: [f32, ..2],
+    pos: [f32; 2],
 
     #[name = "a_Color"]
-    color: [f32, ..3],
+    color: [f32; 3],
 }
 
 static VERTEX_SRC: gfx::ShaderSource<'static> = shaders! {

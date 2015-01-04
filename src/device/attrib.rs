@@ -28,7 +28,7 @@ pub type Stride = u8;
 pub type InstanceRate = u8;
 
 /// The signedness of an attribute.
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 #[repr(u8)]
 pub enum SignFlag {
     Signed,
@@ -36,7 +36,7 @@ pub enum SignFlag {
 }
 
 /// Describes how an integer value is interpreted by the shader.
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 #[repr(u8)]
 pub enum IntSubType {
     Raw,         // un-processed integer
@@ -45,7 +45,7 @@ pub enum IntSubType {
 }
 
 /// The size of an integer attribute, in bits.
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 #[repr(u8)]
 pub enum IntSize {
     U8,
@@ -54,7 +54,7 @@ pub enum IntSize {
 }
 
 /// Type of a floating point attribute on the shader side.
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 #[repr(u8)]
 pub enum FloatSubType {
     Default,    // 32-bit
@@ -62,7 +62,7 @@ pub enum FloatSubType {
 }
 
 /// The size of a floating point attribute, in bits.
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 #[repr(u8)]
 pub enum FloatSize {
     F16,
@@ -71,7 +71,7 @@ pub enum FloatSize {
 }
 
 /// The type of an attribute.
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 pub enum Type {
     Int(IntSubType, IntSize, SignFlag),
     Float(FloatSubType, FloatSize),
@@ -98,7 +98,7 @@ impl Type {
 }
 
 /// Complete format of a vertex attribute.
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 pub struct Format {
     /// Number of elements per vertex
     pub elem_count: Count,

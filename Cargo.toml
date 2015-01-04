@@ -90,7 +90,6 @@ path = "examples/glutin/main.rs"
 [dev_dependencies.glutin]
 git = "https://github.com/tomaka/glutin.git"
 
-
 [[example]]
 name = "performance"
 path = "examples/performance/main.rs"

@@ -21,7 +21,7 @@ use device::state::{BlendValue, CullMode, Equation, InverseFlag, RasterMethod, S
 use device::target::{Rect, Stencil};
 
 /// An assembly of states that affect regular draw calls
-#[deriving(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Show)]
 pub struct DrawState {
     /// How to rasterize geometric primitives.
     pub primitive: state::Primitive,
@@ -42,7 +42,7 @@ pub struct DrawState {
 }
 
 /// Blend function presets for ease of use.
-#[deriving(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Show)]
 pub enum BlendPreset {
     /// When combining two fragments, add their values together, saturating at 1.0
     Additive,

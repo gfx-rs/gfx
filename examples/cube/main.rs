@@ -28,15 +28,15 @@ use gfx::batch;
 use glfw::Context;
 
 #[vertex_format]
-#[deriving(Copy)]
+#[derive(Copy)]
 struct Vertex {
     #[as_float]
     #[name = "a_Pos"]
-    pos: [i8, ..3],
+    pos: [i8; 3],
 
     #[as_float]
     #[name = "a_TexCoord"]
-    tex_coord: [u8, ..2],
+    tex_coord: [u8; 2],
 }
 
 // The shader_param attribute makes sure the following struct can be used to
@@ -46,7 +46,7 @@ struct Vertex {
 #[shader_param(CubeBatch)]
 struct Params {
     #[name = "u_Transform"]
-    transform: [[f32, ..4], ..4],
+    transform: [[f32; 4]; 4],
 
     #[name = "t_Color"]
     color: gfx::shade::TextureParam,

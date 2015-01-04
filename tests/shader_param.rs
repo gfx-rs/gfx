@@ -24,12 +24,12 @@ mod secret_lib;
 #[allow(dead_code)]
 struct TestParam {
     a: i32,
-    b: [f32, ..4],
+    b: [f32; 4],
     c: secret_lib::gfx::shade::TextureParam,
     d: secret_lib::gfx::RawBufferHandle,
     e: f32,
     #[name = "a_f"]
-    f: [f32, ..4],
+    f: [f32; 4],
 }
 
 // Test that there are no conflicts between the two reexport modules

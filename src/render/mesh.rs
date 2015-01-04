@@ -25,7 +25,7 @@ use device::{PrimitiveType, BufferHandle, VertexCount};
 use device::attrib;
 
 /// Describes a single attribute of a vertex buffer, including its type, name, etc.
-#[deriving(Clone, PartialEq, Show)]
+#[derive(Clone, PartialEq, Show)]
 pub struct Attribute {
     /// A name to match the shader input
     pub name: String,
@@ -43,7 +43,7 @@ pub trait VertexFormat {
 }
 
 /// Describes geometry to render.
-#[deriving(Clone, PartialEq, Show)]
+#[derive(Clone, PartialEq, Show)]
 pub struct Mesh {
     /// Number of vertices in the mesh.
     pub num_vertices: device::VertexCount,
@@ -96,7 +96,7 @@ impl Mesh {
 /// The `prim_type` defines how the mesh contents are interpreted.
 /// For example,  `Point` typed vertex slice can be used to do shape
 /// blending, while still rendereing it as an indexed `TriangleList`.
-#[deriving(Copy, Clone, Show)]
+#[derive(Copy, Clone, Show)]
 pub struct Slice {
     /// Start index of vertices to draw.
     pub start: VertexCount,
@@ -109,7 +109,7 @@ pub struct Slice {
 }
 
 /// Source of vertex ordering for a slice
-#[deriving(Copy, Clone, Show)]
+#[derive(Copy, Clone, Show)]
 pub enum SliceKind {
     /// Render vertex data directly from the `Mesh`'s buffer.
     Vertex,
@@ -184,7 +184,7 @@ impl ToSlice for BufferHandle<u32> {
 }
 
 /// Describes kinds of errors that may occur in the mesh linking
-#[deriving(Clone, Copy, Show)]
+#[derive(Clone, Copy, Show)]
 pub enum LinkError {
     /// An attribute index is out of supported bounds
     MeshAttribute(uint),
@@ -197,7 +197,7 @@ const MAX_SHADER_INPUTS: uint = 64 / BITS_PER_ATTRIBUTE;
 const MESH_ATTRIBUTE_MASK: uint = (1u << BITS_PER_ATTRIBUTE) - 1;
 
 /// An iterator over mesh attributes.
-#[deriving(Copy)]
+#[derive(Copy)]
 pub struct AttributeIndices {
     value: u64,
 }
@@ -211,7 +211,7 @@ impl Iterator<uint> for AttributeIndices {
 }
 
 /// Holds a remapping table from shader inputs to mesh attributes.
-#[deriving(Copy)]
+#[derive(Copy)]
 pub struct Link {
     table: u64,
 }
@@ -226,7 +226,7 @@ impl Link {
             } else if attrib > MESH_ATTRIBUTE_MASK {
                 return Err(LinkError::MeshAttribute(attrib))
             } else {
-                table |= attrib as u64 << (input * BITS_PER_ATTRIBUTE);
+                table |= (attrib as u64) << (input * BITS_PER_ATTRIBUTE);
             }
         }
         Ok(Link {

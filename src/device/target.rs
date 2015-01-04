@@ -29,7 +29,7 @@ pub type Stencil = u8;
 
 /// A screen space rectangle
 #[allow(missing_docs)]
-#[deriving(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Show)]
 pub struct Rect {
     pub x: u16,
     pub y: u16,
@@ -38,7 +38,7 @@ pub struct Rect {
 }
 
 /// A color with floating-point components.
-pub type ColorValue = [f32, ..4];
+pub type ColorValue = [f32; 4];
 
 bitflags!(
     #[allow(missing_docs)]
@@ -60,7 +60,7 @@ impl fmt::Show for Mask {
 }
 
 /// How to clear a frame.
-#[deriving(Copy)]
+#[derive(Copy)]
 pub struct ClearData {
     /// The color to clear the frame with
     pub color: ColorValue,
@@ -90,7 +90,7 @@ impl fmt::Show for ClearData {
 
 /// Type of the frame buffer access
 #[repr(u8)]
-#[deriving(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Show)]
 pub enum Access {
     /// Draw access
     Draw,
@@ -100,7 +100,7 @@ pub enum Access {
 
 /// When rendering, each "output" of the fragment shader goes to a specific target. A `Plane` can
 /// be bound to a target, causing writes to that target to affect the `Plane`.
-#[deriving(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Show)]
 pub enum Target {
     /// Color data.
     ///

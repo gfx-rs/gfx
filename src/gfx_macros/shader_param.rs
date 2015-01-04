@@ -18,15 +18,16 @@ use syntax::ext::deriving::generic;
 use syntax::codemap;
 use syntax::parse::token;
 use syntax::ptr::P;
+use syntax::ext::base::ItemDecorator;   
 
-#[deriving(Copy, PartialEq, Show)]
+#[derive(Copy, PartialEq, Show)]
 enum Param {
     Uniform,
     Block,
     Texture,
 }
 
-#[deriving(Copy, Show)]
+#[derive(Copy, Show)]
 enum ParamError {
     DeprecatedTexture,
 }
@@ -235,189 +236,194 @@ fn node_to_var_type(cx: &mut ext::base::ExtCtxt,
     ))
 }
 
-/// Extract all deriving() attributes into a separate array
-fn copy_deriving(attribs: &[ast::Attribute]) -> Vec<ast::Attribute> {
+/// Extract all derive() attributes into a separate array
+fn copy_derive(attribs: &[ast::Attribute]) -> Vec<ast::Attribute> {
     attribs.iter().filter(|at| {
         match at.node.value.node {
-            ast::MetaList(ref s, _) => s.get() == "deriving",
+            ast::MetaList(ref s, _) => s.get() == "derive" || s.get() == "deriving",
             _ => false,
         }
     }).map(|at| at.clone()).collect()
 }
 
-/// Decorator for `shader_param` attribute
-pub fn expand(context: &mut ext::base::ExtCtxt, span: codemap::Span,
-              meta_item: &ast::MetaItem, item: &ast::Item,
-              push: |P<ast::Item>|) {
-    // Insert the `gfx` reexport module
-    let path_root = super::extern_crate_hack(context, span, |i| push(i));
+#[derive(Copy)]
+pub struct ShaderParam;
 
-    // constructing the Link struct
-    let (base_def, link_def) = match item.node {
-        ast::ItemStruct(ref definition, ref generics) => {
-            if generics.lifetimes.len() > 0 {
-                context.bug("Generics are not allowed in ShaderParam struct");
+impl ItemDecorator for ShaderParam {
+    /// Decorator for `shader_param` attribute
+    fn expand(&self, context: &mut ext::base::ExtCtxt, span: codemap::Span,
+              meta_item: &ast::MetaItem, item: &ast::Item,
+              mut push: Box<FnMut(P<ast::Item>)>) {
+        // Insert the `gfx` reexport module
+        let path_root = super::extern_crate_hack(context, span, |i| (*push)(i));
+
+        // constructing the Link struct
+        let (base_def, link_def) = match item.node {
+            ast::ItemStruct(ref definition, ref generics) => {
+                if generics.lifetimes.len() > 0 {
+                    context.bug("Generics are not allowed in ShaderParam struct");
+                }
+                (definition, ast::StructDef {
+                    fields: definition.fields.iter()
+                        .map(|f| codemap::Spanned {
+                            node: ast::StructField_ {
+                                kind: f.node.kind,
+                                id: f.node.id,
+                                ty: node_to_var_type(context, f.span, &f.node.ty.node, path_root),
+                                attrs: Vec::new(),
+                            },
+                            span: f.span,
+                        }).collect(),
+                    ctor_id: None,
+                })
+            },
+            _ => {
+                context.span_err(span, "Only free-standing named structs allowed to derive ShaderParam");
+                return;
             }
-            (definition, ast::StructDef {
-                fields: definition.fields.iter()
-                    .map(|f| codemap::Spanned {
-                        node: ast::StructField_ {
-                            kind: f.node.kind,
-                            id: f.node.id,
-                            ty: node_to_var_type(context, f.span, &f.node.ty.node, path_root),
-                            attrs: Vec::new(),
+        };
+        let link_name = format!("_{}Link", item.ident.as_str());
+        let link_ident = context.ident_of(link_name.as_slice());
+        let link_ty = box generic::ty::Literal(
+            generic::ty::Path::new_local(link_name.as_slice())
+        );
+        // Almost `context.item_struct(span, link_ident, link_def)` but with visibility
+        (*push)(P(ast::Item {
+            ident: link_ident,
+            attrs: copy_derive(item.attrs.as_slice()),
+            id: ast::DUMMY_NODE_ID,
+            node: ast::ItemStruct(
+                P(link_def),
+                ast_util::empty_generics()
+            ),
+            vis: item.vis,
+            span: span,
+        }));
+        // constructing the `Batch` implementation typedef
+        match meta_item.node {
+            ast::MetaList(_, ref items) if items.len() <= 2 => {
+                let batch_names = ["RefBatch", "OwnedBatch"];
+                for (&batch, param) in batch_names.iter().zip(items.iter()) {
+                    match param.node {
+                        ast::MetaWord(ref shell_name) => {
+                            // pub type $shell_ident = hack::gfx::batch::RefBatch<$link_ident, $self_ident>
+                            let path = context.ty_path(
+                                context.path_all(span, false,
+                                    vec![
+                                        path_root,
+                                        context.ident_of("gfx"),
+                                        context.ident_of("batch"),
+                                        context.ident_of(batch),
+                                    ],
+                                    Vec::new(),
+                                    vec![
+                                        context.ty_ident(span, link_ident),
+                                        context.ty_ident(span, item.ident)
+                                    ],
+                                    Vec::new(),
+                                ),
+                            );
+                            (*push)(P(ast::Item {
+                                ident: context.ident_of(shell_name.get()),
+                                attrs: Vec::new(),
+                                id: ast::DUMMY_NODE_ID,
+                                node: ast::ItemTy(path, ast_util::empty_generics()),
+                                vis: item.vis,
+                                span: span,
+                            }))
                         },
-                        span: f.span,
-                    }).collect(),
-                ctor_id: None,
-            })
-        },
-        _ => {
-            context.span_err(span, "Only free-standing named structs allowed to derive ShaderParam");
-            return;
-        }
-    };
-    let link_name = format!("_{}Link", item.ident.as_str());
-    let link_ident = context.ident_of(link_name.as_slice());
-    let link_ty = box generic::ty::Literal(
-        generic::ty::Path::new_local(link_name.as_slice())
-    );
-    // Almost `context.item_struct(span, link_ident, link_def)` but with visibility
-    push(P(ast::Item {
-        ident: link_ident,
-        attrs: copy_deriving(item.attrs.as_slice()),
-        id: ast::DUMMY_NODE_ID,
-        node: ast::ItemStruct(
-            P(link_def),
-            ast_util::empty_generics()
-        ),
-        vis: item.vis,
-        span: span,
-    }));
-    // constructing the `Batch` implementation typedef
-    match meta_item.node {
-        ast::MetaList(_, ref items) if items.len() <= 2 => {
-            let batch_names = ["RefBatch", "OwnedBatch"];
-            for (&batch, param) in batch_names.iter().zip(items.iter()) {
-                match param.node {
-                    ast::MetaWord(ref shell_name) => {
-                        // pub type $shell_ident = hack::gfx::batch::RefBatch<$link_ident, $self_ident>
-                        let path = context.ty_path(
-                            context.path_all(span, false,
-                                vec![
-                                    path_root,
-                                    context.ident_of("gfx"),
-                                    context.ident_of("batch"),
-                                    context.ident_of(batch),
-                                ],
-                                Vec::new(),
-                                vec![
-                                    context.ty_ident(span, link_ident),
-                                    context.ty_ident(span, item.ident)
-                                ],
-                                Vec::new(),
-                            ),
-                        );
-                        push(P(ast::Item {
-                            ident: context.ident_of(shell_name.get()),
-                            attrs: Vec::new(),
-                            id: ast::DUMMY_NODE_ID,
-                            node: ast::ItemTy(path, ast_util::empty_generics()),
-                            vis: item.vis,
-                            span: span,
-                        }))
-                    },
-                    _ => {
-                        context.span_err(meta_item.span,
-                            "The new batch name has to be a word")
+                        _ => {
+                            context.span_err(meta_item.span,
+                                "The new batch name has to be a word")
+                        }
                     }
                 }
+            },
+            _ => {
+                context.span_err(meta_item.span,
+                    "Invalid argument. Please specify the typedef for your `Program`\n\
+                    as `#[shader_param(MyLightBatch, MyHeavyBatch)]`")
             }
-        },
-        _ => {
-            context.span_err(meta_item.span,
-                "Invalid argument. Please specify the typedef for your `Program`\n\
-                as `#[shader_param(MyLightBatch, MyHeavyBatch)]`")
         }
-    }
-    // deriving ShaderParam
-    let trait_def = generic::TraitDef {
-        span: span,
-        attributes: Vec::new(),
-        path: generic::ty::Path {
-            path: vec![super::EXTERN_CRATE_HACK, "gfx", "shade", "ShaderParam"],
-            lifetime: None,
-            params: vec![link_ty.clone()],
-            global: false,
-        },
-        additional_bounds: Vec::new(),
-        generics: generic::ty::LifetimeBounds::empty(),
-        methods: vec![
-            generic::MethodDef {
-                name: "create_link",
-                generics: generic::ty::LifetimeBounds::empty(),
-                explicit_self: None,
-                args: vec![
-                    generic::ty::Literal(generic::ty::Path {
-                        path: vec!["Option"],
-                        lifetime: None,
-                        params: vec![
-                            box generic::ty::Ptr(
-                                box generic::ty::Self,
-                                generic::ty::Borrowed(None, ast::MutImmutable)
-                            ),
-                        ],
-                        global: false,
-                    }),
-                    generic::ty::Ptr(
-                        box generic::ty::Literal(generic::ty::Path::new(
-                            vec![super::EXTERN_CRATE_HACK, "gfx", "ProgramInfo"])),
-                        generic::ty::Borrowed(None, ast::MutImmutable)
-                    ),
-                ],
-                ret_ty: generic::ty::Literal(
-                    generic::ty::Path {
-                        path: vec!["Result"],
-                        lifetime: None,
-                        params: vec![
-                            link_ty.clone(),
+        // #[derive ShaderParam
+        let trait_def = generic::TraitDef {
+            span: span,
+            attributes: Vec::new(),
+            path: generic::ty::Path {
+                path: vec![super::EXTERN_CRATE_HACK, "gfx", "shade", "ShaderParam"],
+                lifetime: None,
+                params: vec![link_ty.clone()],
+                global: false,
+            },
+            additional_bounds: Vec::new(),
+            generics: generic::ty::LifetimeBounds::empty(),
+            methods: vec![
+                generic::MethodDef {
+                    name: "create_link",
+                    generics: generic::ty::LifetimeBounds::empty(),
+                    explicit_self: None,
+                    args: vec![
+                        generic::ty::Literal(generic::ty::Path {
+                            path: vec!["Option"],
+                            lifetime: None,
+                            params: vec![
+                                box generic::ty::Ptr(
+                                    box generic::ty::Self,
+                                    generic::ty::Borrowed(None, ast::MutImmutable)
+                                ),
+                            ],
+                            global: false,
+                        }),
+                        generic::ty::Ptr(
                             box generic::ty::Literal(generic::ty::Path::new(
-                                vec![super::EXTERN_CRATE_HACK, "gfx", "shade", "ParameterError"]
-                            ))
-                        ],
-                        global: false,
-                    },
-                ),
-                attributes: Vec::new(),
-                combine_substructure: generic::combine_substructure(|cx, span, sub|
-                    method_create(cx, span, sub, link_name.as_slice(), path_root)
-                ),
-            },
-            generic::MethodDef {
-                name: "fill_params",
-                generics: generic::ty::LifetimeBounds::empty(),
-                explicit_self: Some(Some(generic::ty::Borrowed(
-                    None, ast::MutImmutable
-                ))),
-                args: vec![
-                    generic::ty::Ptr(
-                        link_ty.clone(),
-                        generic::ty::Borrowed(None, ast::MutImmutable)
+                                vec![super::EXTERN_CRATE_HACK, "gfx", "ProgramInfo"])),
+                            generic::ty::Borrowed(None, ast::MutImmutable)
+                        ),
+                    ],
+                    ret_ty: generic::ty::Literal(
+                        generic::ty::Path {
+                            path: vec!["Result"],
+                            lifetime: None,
+                            params: vec![
+                                link_ty.clone(),
+                                box generic::ty::Literal(generic::ty::Path::new(
+                                    vec![super::EXTERN_CRATE_HACK, "gfx", "shade", "ParameterError"]
+                                ))
+                            ],
+                            global: false,
+                        },
                     ),
-                    generic::ty::Literal(
-                        generic::ty::Path::new(vec![super::EXTERN_CRATE_HACK, "gfx", "shade", "ParamValues"]),
+                    attributes: Vec::new(),
+                    combine_substructure: generic::combine_substructure(|cx, span, sub|
+                        method_create(cx, span, sub, link_name.as_slice(), path_root)
                     ),
-                ],
-                ret_ty: generic::ty::Tuple(Vec::new()),
-                attributes: Vec::new(),
-                combine_substructure: generic::combine_substructure(|cx, span, sub|
-                    method_fill(cx, span, sub, base_def.clone(), path_root)
-                ),
-            },
-        ],
-    };
-    let fixup = |: item| {
-        push(super::fixup_extern_crate_paths(item, path_root))
-    };
-    trait_def.expand(context, meta_item, item, fixup);
+                },
+                generic::MethodDef {
+                    name: "fill_params",
+                    generics: generic::ty::LifetimeBounds::empty(),
+                    explicit_self: Some(Some(generic::ty::Borrowed(
+                        None, ast::MutImmutable
+                    ))),
+                    args: vec![
+                        generic::ty::Ptr(
+                            link_ty.clone(),
+                            generic::ty::Borrowed(None, ast::MutImmutable)
+                        ),
+                        generic::ty::Literal(
+                            generic::ty::Path::new(vec![super::EXTERN_CRATE_HACK, "gfx", "shade", "ParamValues"]),
+                        ),
+                    ],
+                    ret_ty: generic::ty::Tuple(Vec::new()),
+                    attributes: Vec::new(),
+                    combine_substructure: generic::combine_substructure(|cx, span, sub|
+                        method_fill(cx, span, sub, base_def.clone(), path_root)
+                    ),
+                },
+            ],
+        };
+        let fixup = |: item| {
+            (*push)(super::fixup_extern_crate_paths(item, path_root))
+        };
+        trait_def.expand(context, meta_item, item, fixup);
+    }
 }
