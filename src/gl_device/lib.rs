@@ -42,7 +42,7 @@ mod state;
 mod tex;
 mod info;
 
-#[deriving(Copy)]
+#[derive(Copy)]
 pub struct RawMapping {
     pub pointer: *mut libc::c_void,
     target: gl::types::GLenum,
@@ -57,7 +57,7 @@ pub type Surface        = gl::types::GLuint;
 pub type Sampler        = gl::types::GLuint;
 pub type Texture        = gl::types::GLuint;
 
-#[deriving(Copy, Eq, PartialEq, Show)]
+#[derive(Copy, Eq, PartialEq, Show)]
 pub enum GlError {
     NoError,
     InvalidEnum,

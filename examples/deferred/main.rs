@@ -57,7 +57,7 @@ use noise::Quality;
 const NUM_LIGHTS: uint = 250;
 
 #[vertex_format]
-#[deriving(Copy)]
+#[derive(Copy)]
 struct TerrainVertex {
     #[name = "a_Pos"]
     pos: [f32; 3],
@@ -68,7 +68,7 @@ struct TerrainVertex {
 }
 
 #[vertex_format]
-#[deriving(Copy)]
+#[derive(Copy)]
 struct BlitVertex {
     #[as_float]
     #[name = "a_Pos"]
@@ -79,7 +79,7 @@ struct BlitVertex {
 }
 
 #[vertex_format]
-#[deriving(Copy)]
+#[derive(Copy)]
 struct CubeVertex {
     #[as_float]
     #[name = "a_Pos"]

@@ -16,7 +16,7 @@
 
 use device;
 
-#[deriving(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Show)]
 /// A single buffer that can be bound to a render target.
 pub enum Plane {
     /// Render to a `Surface` (corresponds to a renderbuffer in GL).
@@ -38,7 +38,7 @@ impl Plane {
 }
 
 /// A complete `Frame`, which is the result of rendering.
-#[deriving(Clone, PartialEq, Show)]
+#[derive(Clone, PartialEq, Show)]
 pub struct Frame {
     /// The width of the viewport.
     pub width: u16,

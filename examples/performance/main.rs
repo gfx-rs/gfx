@@ -41,7 +41,7 @@ use std::c_str::ToCStr;
 
 
 #[vertex_format]
-#[deriving(Copy)]
+#[derive(Copy)]
 struct Vertex {
     #[as_float]
     #[name = "a_Pos"]

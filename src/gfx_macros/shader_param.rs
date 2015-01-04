@@ -20,14 +20,14 @@ use syntax::parse::token;
 use syntax::ptr::P;
 use syntax::ext::base::ItemDecorator;   
 
-#[deriving(Copy, PartialEq, Show)]
+#[derive(Copy, PartialEq, Show)]
 enum Param {
     Uniform,
     Block,
     Texture,
 }
 
-#[deriving(Copy, Show)]
+#[derive(Copy, Show)]
 enum ParamError {
     DeprecatedTexture,
 }
@@ -236,17 +236,17 @@ fn node_to_var_type(cx: &mut ext::base::ExtCtxt,
     ))
 }
 
-/// Extract all deriving() attributes into a separate array
-fn copy_deriving(attribs: &[ast::Attribute]) -> Vec<ast::Attribute> {
+/// Extract all derive() attributes into a separate array
+fn copy_derive(attribs: &[ast::Attribute]) -> Vec<ast::Attribute> {
     attribs.iter().filter(|at| {
         match at.node.value.node {
-            ast::MetaList(ref s, _) => s.get() == "deriving",
+            ast::MetaList(ref s, _) => s.get() == "derive" || s.get() == "deriving",
             _ => false,
         }
     }).map(|at| at.clone()).collect()
 }
 
-#[deriving(Copy)]
+#[derive(Copy)]
 pub struct ShaderParam;
 
 impl ItemDecorator for ShaderParam {
@@ -290,7 +290,7 @@ impl ItemDecorator for ShaderParam {
         // Almost `context.item_struct(span, link_ident, link_def)` but with visibility
         (*push)(P(ast::Item {
             ident: link_ident,
-            attrs: copy_deriving(item.attrs.as_slice()),
+            attrs: copy_derive(item.attrs.as_slice()),
             id: ast::DUMMY_NODE_ID,
             node: ast::ItemStruct(
                 P(link_def),
@@ -345,7 +345,7 @@ impl ItemDecorator for ShaderParam {
                     as `#[shader_param(MyLightBatch, MyHeavyBatch)]`")
             }
         }
-        // deriving ShaderParam
+        // #[derive ShaderParam
         let trait_def = generic::TraitDef {
             span: span,
             attributes: Vec::new(),

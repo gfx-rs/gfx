@@ -25,7 +25,7 @@ use std::num::Float;
 
 /// A token produced by the `bind_texture` that allows following up
 /// with a GL-compatibility sampler settings in `bind_sampler`
-#[deriving(Copy)]
+#[derive(Copy)]
 pub struct BindAnchor(GLenum);
 
 fn create_kind_to_gl(kind: TextureKind) -> GLenum {

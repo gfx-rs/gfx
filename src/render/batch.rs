@@ -27,7 +27,7 @@ use shade::{ParameterError, ShaderParam};
 use state::DrawState;
 
 /// An error with a defined Mesh.
-#[deriving(Clone, Show)]
+#[derive(Clone, Show)]
 pub enum MeshError {
     /// A required attribute was missing.
     AttributeMissing(String),
@@ -38,7 +38,7 @@ pub enum MeshError {
 }
 
 /// An error occurring at batch creation
-#[deriving(Clone, Show)]
+#[derive(Clone, Show)]
 pub enum BatchError {
     /// Error connecting mesh attributes
     Mesh(MeshError),
@@ -125,7 +125,7 @@ impl<L, T: ShaderParam<L>> Batch for OwnedBatch<L, T> {
 
 type Index = u16;
 
-//#[deriving(PartialEq, Eq, PartialOrd, Ord, Show)]
+//#[derive(PartialEq, Eq, PartialOrd, Ord, Show)]
 struct Id<T>(Index);
 
 impl<T> Copy for Id<T> {}

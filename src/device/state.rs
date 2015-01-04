@@ -22,7 +22,7 @@ use std::fmt;
 use target;
 
 /// The winding order of a set of vertices.
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 pub enum WindingOrder {
     /// Clockwise winding order.
     Clockwise,
@@ -38,12 +38,12 @@ pub type OffsetFactor = f32;
 pub type OffsetUnits = u32;
 
 /// How to offset vertices in screen space, if at all.
-#[deriving(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Show)]
 pub struct Offset(pub OffsetFactor, pub OffsetUnits);
 
 /// Which face, if any, to cull.
 #[allow(missing_docs)]
-#[deriving(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Show)]
 pub enum CullMode {
     Nothing,
     Front,
@@ -51,7 +51,7 @@ pub enum CullMode {
 }
 
 /// How to rasterize a primitive.
-#[deriving(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Show)]
 pub enum RasterMethod {
     /// Rasterize as a point.
     Point,
@@ -63,7 +63,7 @@ pub enum RasterMethod {
 
 /// Primitive rasterization state. Note that GL allows different raster
 /// method to be used for front and back, while this abstraction does not.
-#[deriving(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Show)]
 pub struct Primitive {
     /// Which vertex winding is considered to be the front face for culling.
     pub front_face: WindingOrder,
@@ -94,13 +94,13 @@ impl Default for Primitive {
 }
 
 /// Multi-sampling rasterization mode
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Copy, Clone, Show)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Copy, Clone, Show)]
 pub struct MultiSample;
     //sample_mask: u16,
     //alpha_to_coverage: bool,
 
 /// A pixel-wise comparison function.
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 pub enum Comparison {
     /// `false`
     Never,
@@ -122,7 +122,7 @@ pub enum Comparison {
 
 /// Stencil mask operation.
 #[allow(missing_docs)]
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 pub enum StencilOp {
     /// Keep the current value in the stencil buffer (no change).
     Keep,
@@ -143,7 +143,7 @@ pub enum StencilOp {
 }
 
 /// Complete stencil state for a given side of a face.
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 pub struct StencilSide {
     /// Comparison function to use to determine if the stencil test passes.
     pub fun: Comparison,
@@ -178,14 +178,14 @@ impl Default for StencilSide {
 
 /// Complete stencil state, specifying how to handle the front and back side of a face.
 #[allow(missing_docs)]
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 pub struct Stencil {
     pub front: StencilSide,
     pub back: StencilSide,
 }
 
 /// Depth test state.
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 pub struct Depth {
     /// Comparison function to use.
     pub fun: Comparison,
@@ -203,7 +203,7 @@ impl Default for Depth {
 }
 
 #[allow(missing_docs)]
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 pub enum Equation {
     Add,
     Sub,
@@ -213,14 +213,14 @@ pub enum Equation {
 }
 
 #[allow(missing_docs)]
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 pub enum InverseFlag {
     Normal,
     Inverse,
 }
 
 #[allow(missing_docs)]
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 pub enum BlendValue {
     Zero,
     SourceColor,
@@ -233,11 +233,11 @@ pub enum BlendValue {
 }
 
 #[allow(missing_docs)]
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 pub struct Factor(pub InverseFlag, pub BlendValue);
 
 #[allow(missing_docs)]
-#[deriving(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Show)]
 pub struct BlendChannel {
     pub equation: Equation,
     pub source: Factor,
@@ -255,7 +255,7 @@ impl Default for BlendChannel {
 }
 
 #[allow(missing_docs)]
-#[deriving(Copy)]
+#[derive(Copy)]
 pub struct Blend {
     pub color: BlendChannel,
     pub alpha: BlendChannel,

@@ -76,7 +76,7 @@ pub struct ParamValues<'a> {
 }
 
 /// An error type on either the parameter storage or the program side
-#[deriving(Clone, PartialEq, Show)]
+#[derive(Clone, PartialEq, Show)]
 pub enum ParameterError {
     /// Internal error
     ParameterGeneralMismatch,

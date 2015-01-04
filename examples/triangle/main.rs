@@ -23,7 +23,7 @@ use gfx::{DeviceHelper, ToSlice};
 use glfw::Context;
 
 #[vertex_format]
-#[deriving(Copy)]
+#[derive(Copy)]
 struct Vertex {
     #[name = "a_Pos"]
     pos: [f32; 2],
