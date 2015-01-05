@@ -98,15 +98,15 @@ pub trait ShaderParam<L> {
 
 impl ShaderParam<()> for () {
     fn create_link(_: Option<&()>, info: &shade::ProgramInfo) -> Result<(), ParameterError> {
-        match info.uniforms.as_slice().head() {
+        match info.uniforms.as_slice().first() {
             Some(u) => return Err(ParameterError::MissingUniform(u.name.clone())),
             None => (),
         }
-        match info.blocks.as_slice().head() {
+        match info.blocks.as_slice().first() {
             Some(b) => return Err(ParameterError::MissingBlock(b.name.clone())),
             None => (),
         }
-        match info.textures.as_slice().head() {
+        match info.textures.as_slice().first() {
             Some(t) => return Err(ParameterError::MissingTexture(t.name.clone())),
             None => (),
         }
