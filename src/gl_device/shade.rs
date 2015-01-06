@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use std::c_str::ToCStr;
+use std::iter::repeat;
 use super::super::shade as s;
 use super::super::shade::{BaseType, ContainerType, CreateShaderError, IsArray, IsShadow, IsRect,
                           IsMultiSample, MatrixFormat, SamplerType, Stage, UniformValue};
@@ -53,7 +54,7 @@ pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: s::ShaderSource, lang: 
 
     let log = if length > 0 {
         let mut log = String::with_capacity(length as uint);
-        log.grow(length as uint, '\0');
+        log.extend(repeat('\0').take(length as uint));
         unsafe {
             gl.GetShaderInfoLog(name, length, &mut length,
                 log.as_slice().as_ptr() as *mut gl::types::GLchar);
@@ -158,7 +159,7 @@ fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::Attribute> {
     let num = get_program_iv(gl, prog, gl::ACTIVE_ATTRIBUTES);
     let max_len = get_program_iv(gl, prog, gl::ACTIVE_ATTRIBUTE_MAX_LENGTH);
     let mut name = String::with_capacity(max_len as uint);
-    name.grow(max_len as uint, '\0');
+    name.extend(repeat('\0').take(max_len as uint));
     range(0, num as gl::types::GLuint).map(|i| {
         let mut length = 0 as gl::types::GLint;
         let mut size = 0 as gl::types::GLint;
@@ -211,7 +212,7 @@ fn query_blocks(gl: &gl::Gl, caps: &::Capabilities, prog: super::Program) -> Vec
             }
         }
         let mut name = String::with_capacity(size as uint); //includes terminating null
-        name.grow(size as uint, '\0');
+        name.extend(repeat('\0').take(size as uint));
         let mut actual_name_size = 0;
         unsafe {
             gl.GetActiveUniformBlockName(prog, i, size, &mut actual_name_size,
@@ -233,7 +234,7 @@ fn query_parameters(gl: &gl::Gl, caps: &::Capabilities, prog: super::Program) ->
     let mut textures = Vec::new();
     let total_num = get_program_iv(gl, prog, gl::ACTIVE_UNIFORMS);
     let indices: Vec<_> = range(0, total_num as gl::types::GLuint).collect();
-    let mut block_indices = Vec::from_elem(total_num as uint, -1 as gl::types::GLint);
+    let mut block_indices: Vec<gl::types::GLint> = repeat(-1 as gl::types::GLint).take(total_num as uint).collect();
     if caps.uniform_block_supported {
         unsafe {
             gl.GetActiveUniformsiv(prog, total_num as gl::types::GLsizei,
@@ -245,7 +246,7 @@ fn query_parameters(gl: &gl::Gl, caps: &::Capabilities, prog: super::Program) ->
     // prepare the name string
     let max_len = get_program_iv(gl, prog, gl::ACTIVE_UNIFORM_MAX_LENGTH);
     let mut name = String::with_capacity(max_len as uint);
-    name.grow(max_len as uint, '\0');
+    name.extend(repeat('\0').take(max_len as uint));
     // walk the indices
     for (&i, _) in indices.iter().zip(block_indices.iter()).filter(|&(_, &b)| b<0) {
         let mut length = 0;
@@ -319,7 +320,7 @@ pub fn create_program(gl: &gl::Gl, caps: &::Capabilities, shaders: &[::ShaderHan
     let mut length  = get_program_iv(gl, name, gl::INFO_LOG_LENGTH);
     let log = if length > 0 {
         let mut log = String::with_capacity(length as uint);
-        log.grow(length as uint, '\0');
+        log.extend(repeat('\0').take(length as uint));
         unsafe {
             gl.GetProgramInfoLog(name, length, &mut length,
                 log.as_slice().as_ptr() as *mut gl::types::GLchar);

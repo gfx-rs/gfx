@@ -202,7 +202,9 @@ pub struct AttributeIndices {
     value: u64,
 }
 
-impl Iterator<uint> for AttributeIndices {
+impl Iterator for AttributeIndices {
+    type Item = uint;
+
     fn next(&mut self) -> Option<uint> {
         let id = (self.value as uint) & MESH_ATTRIBUTE_MASK;
         self.value >>= BITS_PER_ATTRIBUTE;
@@ -218,7 +220,7 @@ pub struct Link {
 
 impl Link {
     /// Construct a new link from an iterator over attribute indices.
-    pub fn from_iter<I: Iterator<uint>>(iter: I) -> Result<Link, LinkError> {
+    pub fn from_iter<I: Iterator<Item=uint>>(iter: I) -> Result<Link, LinkError> {
         let mut table = 0u64;
         for (input, attrib) in iter.enumerate() {
             if input >= MAX_SHADER_INPUTS {
