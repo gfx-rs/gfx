@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use std::collections::HashSet;
+use std::ffi;
 use std::fmt;
+use std::mem;
 use std::str;
 use super::gl;
 
@@ -124,7 +126,7 @@ fn get_string(gl: &gl::Gl, name: gl::types::GLenum) -> &'static str {
     if !ptr.is_null() {
         // This should be safe to mark as statically allocated because
         // GlGetString only returns static strings.
-        unsafe { str::from_c_str(ptr) }
+        unsafe { c_str_as_static_str(ptr) }
     } else {
         panic!("Invalid GLenum passed to `get_string`: {:x}", name)
     }
@@ -134,6 +136,10 @@ fn get_uint(gl: &gl::Gl, name: gl::types::GLenum) -> uint {
     let mut value = 0 as gl::types::GLint;
     unsafe { gl.GetIntegerv(name, &mut value) };
     value as uint
+}
+
+unsafe fn c_str_as_static_str(c_str: *const i8) -> &'static str {
+    mem::transmute(str::from_utf8(ffi::c_str_to_bytes(&c_str)).unwrap()) 
 }
 
 /// A unique platform identifier that does not change between releases
@@ -175,7 +181,7 @@ impl Info {
         let extensions = if version >= Version::new(3, 2, None, "") {
             let num_exts = get_uint(gl, gl::NUM_EXTENSIONS) as gl::types::GLuint;
             range(0, num_exts)
-                .map(|i| unsafe { str::from_c_str(gl.GetStringi(gl::EXTENSIONS, i) as *const i8) })
+                .map(|i| unsafe { c_str_as_static_str(gl.GetStringi(gl::EXTENSIONS, i) as *const i8) })
                 .collect()
         } else {
             // Fallback

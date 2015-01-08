@@ -26,11 +26,9 @@
 //
 // Press 1-4 to show the immediate buffers. Press 0 to show the final result.
 
-#![feature(phase)]
-
 extern crate cgmath;
 extern crate gfx;
-#[phase(plugin)]
+#[macro_use]
 extern crate gfx_macros;
 extern crate glfw;
 extern crate time;

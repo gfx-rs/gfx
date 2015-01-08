@@ -141,7 +141,7 @@ pub struct GlDevice {
 
 impl GlDevice {
     /// Load OpenGL symbols and detect driver information
-    pub fn new(fn_proc: |&str| -> *const ::libc::c_void) -> GlDevice {
+    pub fn new<F>(fn_proc: F) -> GlDevice where F: Fn(&str) -> *const ::libc::c_void {
         let gl = gl::Gl::load_with(fn_proc);
 
         let (info, caps) = info::get(&gl);
@@ -164,7 +164,7 @@ impl GlDevice {
 
     /// Access the OpenGL directly via a closure. OpenGL types and enumerations
     /// can be found in the `gl` crate.
-    pub unsafe fn with_gl(&mut self, fun: |&gl::Gl|) {
+    pub unsafe fn with_gl<F>(&mut self, fun: F) where F: FnOnce(&gl::Gl) {
         self.reset_state();
         fun(&self.gl);
     }

@@ -82,7 +82,7 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     },
                 }
             ).collect();
-            let gen_arms = |ptype: Param, var: ast::Ident| -> Vec<ast::Arm> {
+            let gen_arms = |&: ptype: Param, var: ast::Ident| -> Vec<ast::Arm> {
                 class_info.iter().zip(fields.iter())
                           .filter(|&(&(ref class, _), _)| *class == ptype)
                           .map(|(&(_, ref name_expr), &(fname, fspan))|
@@ -255,7 +255,7 @@ impl ItemDecorator for ShaderParam {
               meta_item: &ast::MetaItem, item: &ast::Item,
               mut push: Box<FnMut(P<ast::Item>)>) {
         // Insert the `gfx` reexport module
-        let path_root = super::extern_crate_hack(context, span, |i| (*push)(i));
+        let path_root = super::extern_crate_hack(context, span, |&mut: i| (*push)(i));
 
         // constructing the Link struct
         let (base_def, link_def) = match item.node {
@@ -394,7 +394,7 @@ impl ItemDecorator for ShaderParam {
                         },
                     ),
                     attributes: Vec::new(),
-                    combine_substructure: generic::combine_substructure(|cx, span, sub|
+                    combine_substructure: generic::combine_substructure(box |cx, span, sub|
                         method_create(cx, span, sub, link_name.as_slice(), path_root)
                     ),
                 },
@@ -415,7 +415,7 @@ impl ItemDecorator for ShaderParam {
                     ],
                     ret_ty: generic::ty::Tuple(Vec::new()),
                     attributes: Vec::new(),
-                    combine_substructure: generic::combine_substructure(|cx, span, sub|
+                    combine_substructure: generic::combine_substructure(box |cx, span, sub|
                         method_fill(cx, span, sub, base_def.clone(), path_root)
                     ),
                 },

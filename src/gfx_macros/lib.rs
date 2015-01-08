@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(macro_rules, plugin_registrar, quote)]
+#![feature(plugin_registrar, quote)]
 #![deny(missing_copy_implementations)]
 
 //! Macro extensions crate.
@@ -75,9 +75,9 @@ static EXTERN_CRATE_HACK: &'static str = "__gfx_extern_crate_hack";
 
 /// Inserts a module with a unique identifier that reexports
 /// The `gfx` crate, and returns that identifier
-fn extern_crate_hack(context: &mut ext::base::ExtCtxt,
+fn extern_crate_hack<PF>(context: &mut ext::base::ExtCtxt,
                      span: codemap::Span,
-                     push: |P<ast::Item>|) -> ast::Ident {
+                     mut push: PF) -> ast::Ident where PF: FnMut(P<ast::Item>) {
     let extern_crate_hack = token::gensym_ident(EXTERN_CRATE_HACK);
     // mod $EXTERN_CRATE_HACK {
     //     extern crate gfx_ = "gfx";

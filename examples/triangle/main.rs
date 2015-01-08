@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(phase)]
 
 extern crate gfx;
-#[phase(plugin)]
+#[macro_use]
 extern crate gfx_macros;
 extern crate glfw;
 

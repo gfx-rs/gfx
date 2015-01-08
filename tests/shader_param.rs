@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(phase)]
+#![feature(plugin)]
 
-#[phase(plugin)]
+#[plugin]
 extern crate gfx_macros;
 
 mod secret_lib;
@@ -42,6 +42,6 @@ struct TestParam2 {
 #[test]
 fn test_shader_param() {
     // testing if the types are visible
-    let _ref: |&TestRefBatch|;
-    let _owned: |&TestOwnedBatch|;
+    let _ref: TestRefBatch;
+    let _owned: TestOwnedBatch;
 }

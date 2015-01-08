@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use std::c_str::ToCStr;
+use std::ffi::CString;
 use std::iter::repeat;
 use super::super::shade as s;
 use super::super::shade::{BaseType, ContainerType, CreateShaderError, IsArray, IsShadow, IsRect,
@@ -293,18 +293,22 @@ pub fn create_program(gl: &gl::Gl, caps: &::Capabilities, shaders: &[::ShaderHan
         unsafe { gl.AttachShader(name, sh.get_name()) };
     }
 
-    if let Some(targets) = targets {
+    let targets = targets.map(|targets| {
+        let targets: Vec<CString> = targets.iter().map(|s| CString::from_slice(s.as_bytes())).collect();
+
         for (i, target) in targets.iter().enumerate() {
-            unsafe { target.with_c_str(|ptr| gl.BindFragDataLocation(name, i as u32, ptr)); };
+            unsafe { gl.BindFragDataLocation(name, i as u32, target.as_slice_with_nul().as_ptr()) };
         }
-    }
+
+        targets
+    });
 
     unsafe { gl.LinkProgram(name) };
     info!("\tLinked program {}", name);
 
     if let Some(targets) = targets {
         match targets.iter()
-            .map(|target| (unsafe { gl.GetFragDataLocation(name, target.to_c_str().as_ptr()) }, target))
+            .map(|target| (unsafe { gl.GetFragDataLocation(name, target.as_slice_with_nul().as_ptr()) }, target))
             .inspect(|&(loc, target)| info!("\t\tOutput[{}] = '{}'", loc, target))
             .filter(|&(loc, _)| loc == -1)
             .collect::<Vec<_>>()
