@@ -42,8 +42,6 @@ struct TestParam2 {
 #[test]
 fn test_shader_param() {
     // testing if the types are visible
-    let _ref: Vec<TestRefBatch> = Vec::new();
-    let _owned: Vec<TestOwnedBatch> = Vec::new();
-    drop(_owned);
-    drop(_ref);
+    let _ref: TestRefBatch;
+    let _owned: TestOwnedBatch;
 }

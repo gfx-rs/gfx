@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(macro_rules, plugin_registrar, quote)]
+#![feature(plugin_registrar, quote)]
 #![deny(missing_copy_implementations)]
 
 //! Macro extensions crate.

@@ -15,7 +15,6 @@
 //! High-level, platform independent, bindless rendering API.
 
 #![deny(missing_docs)]
-#![feature(phase)]
 
 #[macro_use]
 extern crate log;

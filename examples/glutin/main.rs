@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(phase)]
 #![feature(plugin)]
 
 //! Demonstrates how to initialize gfx-rs using the gl-init-rs library.

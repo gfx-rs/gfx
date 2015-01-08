@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 use std::iter::repeat;
 use std::ffi::CString;
 
@@ -294,20 +295,22 @@ pub fn create_program(gl: &gl::Gl, caps: &::Capabilities, shaders: &[::ShaderHan
         unsafe { gl.AttachShader(name, sh.get_name()) };
     }
 
-    if let Some(targets) = targets {
+    let targets = targets.map(|targets| {
+        let targets: Vec<CString> = targets.iter().map(|s| CString::from_slice(s.as_bytes())).collect();
+
         for (i, target) in targets.iter().enumerate() {
-            let target = CString::from_slice(target.as_bytes());
-            unsafe { gl.BindFragDataLocation(name, i as u32, target.as_ptr()); };
+            unsafe { gl.BindFragDataLocation(name, i as u32, target.as_slice_with_nul().as_ptr()) };
         }
-    }
+
+        targets
+    });
 
     unsafe { gl.LinkProgram(name) };
     info!("\tLinked program {}", name);
 
     if let Some(targets) = targets {
         match targets.iter()
-            .map(|target| (CString::from_slice(target.as_bytes()), target))
-            .map(|(t, target)| (unsafe { gl.GetFragDataLocation(name, t.as_ptr()) }, target))
+            .map(|target| (unsafe { gl.GetFragDataLocation(name, target.as_slice_with_nul().as_ptr()) }, target))
             .inspect(|&(loc, target)| info!("\t\tOutput[{}] = '{}'", loc, target))
             .filter(|&(loc, _)| loc == -1)
             .collect::<Vec<_>>()

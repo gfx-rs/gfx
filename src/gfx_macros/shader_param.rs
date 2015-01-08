@@ -255,7 +255,7 @@ impl ItemDecorator for ShaderParam {
               meta_item: &ast::MetaItem, item: &ast::Item,
               mut push: Box<FnMut(P<ast::Item>)>) {
         // Insert the `gfx` reexport module
-        let path_root = super::extern_crate_hack(context, span, |i| (*push)(i));
+        let path_root = super::extern_crate_hack(context, span, |&mut: i| (*push)(i));
 
         // constructing the Link struct
         let (base_def, link_def) = match item.node {
