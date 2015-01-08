@@ -11,8 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use std::c_str::ToCStr;
 use std::iter::repeat;
+use std::ffi::CString;
+
 use super::super::shade as s;
 use super::super::shade::{BaseType, ContainerType, CreateShaderError, IsArray, IsShadow, IsRect,
                           IsMultiSample, MatrixFormat, SamplerType, Stage, UniformValue};
@@ -295,7 +296,8 @@ pub fn create_program(gl: &gl::Gl, caps: &::Capabilities, shaders: &[::ShaderHan
 
     if let Some(targets) = targets {
         for (i, target) in targets.iter().enumerate() {
-            unsafe { target.with_c_str(|ptr| gl.BindFragDataLocation(name, i as u32, ptr)); };
+            let target = CString::from_slice(target.as_bytes());
+            unsafe { gl.BindFragDataLocation(name, i as u32, target.as_ptr()); };
         }
     }
 
@@ -304,7 +306,8 @@ pub fn create_program(gl: &gl::Gl, caps: &::Capabilities, shaders: &[::ShaderHan
 
     if let Some(targets) = targets {
         match targets.iter()
-            .map(|target| (unsafe { gl.GetFragDataLocation(name, target.to_c_str().as_ptr()) }, target))
+            .map(|target| (CString::from_slice(target.as_bytes()), target))
+            .map(|(t, target)| (unsafe { gl.GetFragDataLocation(name, t.as_ptr()) }, target))
             .inspect(|&(loc, target)| info!("\t\tOutput[{}] = '{}'", loc, target))
             .filter(|&(loc, _)| loc == -1)
             .collect::<Vec<_>>()

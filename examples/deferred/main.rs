@@ -27,10 +27,12 @@
 // Press 1-4 to show the immediate buffers. Press 0 to show the final result.
 
 #![feature(phase)]
+#![feature(plugin)]
 
 extern crate cgmath;
 extern crate gfx;
-#[phase(plugin)]
+#[macro_use]
+#[plugin]
 extern crate gfx_macros;
 extern crate glfw;
 extern crate time;
@@ -38,7 +40,7 @@ extern crate genmesh;
 extern crate noise;
 
 use std::rand::Rng;
-use std::num::FloatMath;
+use std::num::Float;
 use cgmath::FixedArray;
 use cgmath::{Matrix, Matrix4, Point3, Vector3, EuclideanVector};
 use cgmath::{Transform, AffineMatrix3};
@@ -49,9 +51,7 @@ use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{SharedVertex, IndexedPolygon};
 use time::precise_time_s;
 
-use noise::source::Perlin;
-use noise::source::Source;
-use noise::Quality;
+use noise::{Seed, perlin2};
 
 // Remember to also change the constants in the shaders
 const NUM_LIGHTS: uint = 250;
@@ -439,7 +439,7 @@ GLSL_150: b"
 "
 };
 
-fn calculate_normal(noise: &Perlin, x: f32, y: f32)-> [f32; 3] {
+fn calculate_normal(seed: &Seed, x: f32, y: f32)-> [f32; 3] {
     // determine sample points
     let s_x0 = x - 0.001;
     let s_x1 = x + 0.001;
@@ -447,8 +447,8 @@ fn calculate_normal(noise: &Perlin, x: f32, y: f32)-> [f32; 3] {
     let s_y1 = y + 0.001;
 
     // calculate gradient in point
-    let dzdx = (noise.get(s_x1, y, 0.0) - noise.get(s_x0, y, 0.0))/(s_x1 - s_x0);
-    let dzdy = (noise.get(x, s_y1, 0.0) - noise.get(x, s_y0, 0.0))/(s_y1 - s_y0);
+    let dzdx = (perlin2(seed, &[s_x1, y]) - perlin2(seed, &[s_x0, y]))/(s_x1 - s_x0);
+    let dzdy = (perlin2(seed, &[x, s_y1]) - perlin2(seed, &[x, s_y0]))/(s_y1 - s_y0);
 
     // cross gradient vectors to get normal
     let normal = Vector3::new(1.0, 0.0, dzdx).cross(&Vector3::new(0.0, 1.0, dzdy)).normalize();
@@ -545,9 +545,9 @@ fn main() {
     let (g_buffer, texture_pos, texture_normal, texture_diffuse, texture_depth)  = create_g_buffer(w as u16, h as u16, &mut device);
     let (res_buffer, texture_frame, _)  = create_res_buffer(w as u16, h as u16, &mut device, texture_depth);
 
-    let noise = {
+    let seed = {
         let rand_seed = std::rand::thread_rng().gen();
-        Perlin::new().seed(rand_seed).octaves(4).quality(Quality::Best)
+        Seed::new(rand_seed)
     };
 
     let terrain_scale = Vector3::new(25.0, 25.0, 25.0);
@@ -555,10 +555,10 @@ fn main() {
         let plane = genmesh::generators::Plane::subdivide(256, 256);
         let vertex_data: Vec<TerrainVertex> = plane.shared_vertex_iter()
             .map(|(x, y)| {
-                let h = terrain_scale.z * noise.get(x, y, 0.0);
+                let h = terrain_scale.z * perlin2(&seed, &[x, y]);
                 TerrainVertex {
                     pos: [terrain_scale.x * x, terrain_scale.y * y, h],
-                    normal: calculate_normal(&noise, x, y),
+                    normal: calculate_normal(&seed, x, y),
                     color: calculate_color(h),
                 }
             })
@@ -772,7 +772,7 @@ fn main() {
                 let r = 1.0 - (fi*fi) / ((NUM_LIGHTS*NUM_LIGHTS) as f32);
                 (r * (0.2*time + i as f32).cos(), r * (0.2*time + i as f32).sin())
             };
-            let h = noise.get(x, y, 0.0);
+            let h = perlin2(&seed, &[x, y]);
 
             p[0] = terrain_scale.x * x;
             p[1] = terrain_scale.y * y;

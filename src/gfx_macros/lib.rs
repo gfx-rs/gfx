@@ -75,9 +75,9 @@ static EXTERN_CRATE_HACK: &'static str = "__gfx_extern_crate_hack";
 
 /// Inserts a module with a unique identifier that reexports
 /// The `gfx` crate, and returns that identifier
-fn extern_crate_hack(context: &mut ext::base::ExtCtxt,
-                     span: codemap::Span,
-                     push: |P<ast::Item>|) -> ast::Ident {
+fn extern_crate_hack<F>(context: &mut ext::base::ExtCtxt,
+                        span: codemap::Span,
+                        mut push: F) -> ast::Ident where F: FnMut(P<ast::Item>) {
     let extern_crate_hack = token::gensym_ident(EXTERN_CRATE_HACK);
     // mod $EXTERN_CRATE_HACK {
     //     extern crate gfx_ = "gfx";
@@ -169,11 +169,8 @@ fn fixup_extern_crate_paths(item: P<ast::Item>, path_root: ast::Ident) -> P<ast:
 macro_rules! shaders {
     (GLSL_120: $v:expr $($t:tt)*) => {
         {
-            mod __gfx_extern_crate_hack {
-                extern crate "gfx" as gfx_;
-                pub use self::gfx_ as gfx;
-            }
-            __gfx_extern_crate_hack::gfx::ShaderSource {
+            use gfx;
+            gfx::ShaderSource {
                 glsl_120: Some($v),
                 ..shaders!($($t)*)
             }
@@ -181,11 +178,8 @@ macro_rules! shaders {
     };
     (GLSL_130: $v:expr $($t:tt)*) => {
         {
-            mod __gfx_extern_crate_hack {
-                extern crate "gfx" as gfx_;
-                pub use self::gfx_ as gfx;
-            }
-            __gfx_extern_crate_hack::gfx::ShaderSource {
+            use gfx;
+            gfx::ShaderSource {
                 glsl_130: Some($v),
                 ..shaders!($($t)*)
             }
@@ -193,11 +187,8 @@ macro_rules! shaders {
     };
     (GLSL_140: $v:expr $($t:tt)*) => {
         {
-            mod __gfx_extern_crate_hack {
-                extern crate "gfx" as gfx_;
-                pub use self::gfx_ as gfx;
-            }
-            __gfx_extern_crate_hack::gfx::ShaderSource {
+            use gfx;
+            gfx::ShaderSource {
                 glsl_140: Some($v),
                 ..shaders!($($t)*)
             }
@@ -205,11 +196,8 @@ macro_rules! shaders {
     };
     (GLSL_150: $v:expr $($t:tt)*) => {
         {
-            mod __gfx_extern_crate_hack {
-                extern crate "gfx" as gfx_;
-                pub use self::gfx_ as gfx;
-            }
-            __gfx_extern_crate_hack::gfx::ShaderSource {
+            use gfx;
+            gfx::ShaderSource {
                 glsl_150: Some($v),
                 ..shaders!($($t)*)
             }
@@ -217,11 +205,8 @@ macro_rules! shaders {
     };
     (TARGETS: $v:expr $($t:tt)*) => {
         {
-            mod __gfx_extern_crate_hack {
-                extern crate "gfx" as gfx_;
-                pub use self::gfx_ as gfx;
-            }
-            __gfx_extern_crate_hack::gfx::ShaderSource {
+            use gfx;
+            gfx::ShaderSource {
                 targets: $v,
                 ..shaders!($($t)*)
             }
@@ -229,11 +214,8 @@ macro_rules! shaders {
     };
     () => {
         {
-            mod __gfx_extern_crate_hack {
-                extern crate "gfx" as gfx_;
-                pub use self::gfx_ as gfx;
-            }
-            __gfx_extern_crate_hack::gfx::ShaderSource {
+            use gfx;
+            gfx::ShaderSource {
                 glsl_120: None,
                 glsl_130: None,
                 glsl_140: None,

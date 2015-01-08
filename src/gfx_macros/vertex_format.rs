@@ -281,7 +281,7 @@ impl ItemDecorator for VertexFormat {
                     attributes: Vec::new(),
                     // generate the method body
                     combine_substructure: generic::combine_substructure(
-                        |c, s, ss| method_body(c, s, ss, path_root)),
+                        box |c, s, ss| method_body(c, s, ss, path_root)),
                 },
             ],
         }.expand(context, meta_item, item, fixup);

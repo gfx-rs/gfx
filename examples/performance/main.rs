@@ -13,11 +13,12 @@
 // limitations under the License.
 
 #![feature(phase)]
-#![feature(globs)]
+#![feature(plugin)]
 
 extern crate cgmath;
 extern crate gfx;
-#[phase(plugin)]
+#[macro_use]
+#[plugin]
 extern crate gfx_macros;
 extern crate glfw;
 extern crate time;
@@ -37,8 +38,9 @@ use std::str;
 use std::os;
 use std::str::FromStr;
 use std::sync::mpsc::Receiver;
-use std::c_str::ToCStr;
-
+use std::iter::repeat;
+use std::ffi::CString;
+use std::num::Int;
 
 #[vertex_format]
 #[derive(Copy)]
@@ -204,7 +206,8 @@ fn compile_shader(gl: &Gl, src: &str, ty: GLenum) -> GLuint { unsafe {
     use std::num::Int;
     let shader = gl.CreateShader(ty);
     // Attempt to compile the shader
-    src.with_c_str(|ptr| gl.ShaderSource(shader, 1, &ptr, ptr::null()));
+    let src = CString::from_slice(src.as_bytes());
+    gl.ShaderSource(shader, 1, &src.as_ptr(), ptr::null());
     gl.CompileShader(shader);
 
     // Get the compile status
@@ -213,9 +216,9 @@ fn compile_shader(gl: &Gl, src: &str, ty: GLenum) -> GLuint { unsafe {
 
     // Fail on error
     if status != (gl::TRUE as GLint) {
-        let mut len = 0;
+        let mut len: GLint = 0;
         gl.GetShaderiv(shader, gl::INFO_LOG_LENGTH, &mut len);
-        let mut buf = Vec::from_elem((len as uint).saturating_sub(1), 0u8);     // subtract 1 to skip the trailing null character
+        let mut buf: Vec<u8> = repeat(0u8).take((len as int).saturating_sub(1) as uint).collect();     // subtract 1 to skip the trailing null character
         gl.GetShaderInfoLog(shader, len, ptr::null_mut(), buf.as_mut_ptr() as *mut GLchar);
         panic!("{}", str::from_utf8(buf.as_slice()).ok().expect("ShaderInfoLog not valid utf8"));
     }
@@ -235,7 +238,7 @@ fn link_program(gl: &Gl, vs: GLuint, fs: GLuint) -> GLuint { unsafe {
     if status != (gl::TRUE as GLint) {
         let mut len: GLint = 0;
         gl.GetProgramiv(program, gl::INFO_LOG_LENGTH, &mut len);
-        let mut buf = Vec::from_elem(len as uint - 1, 0u8);     // subtract 1 to skip the trailing null character
+        let mut buf: Vec<u8> = repeat(0u8).take((len as int).saturating_sub(1) as uint).collect();     // subtract 1 to skip the trailing null character
         gl.GetProgramInfoLog(program, len, ptr::null_mut(), buf.as_mut_ptr() as *mut GLchar);
         panic!("{}", str::from_utf8(buf.as_slice()).ok().expect("ProgramInfoLog not valid utf8"));
     }
@@ -279,18 +282,21 @@ fn gl_main(glfw: glfw::Glfw,
 
         // Use shader program
         gl.UseProgram(program);
-        "o_Color".with_c_str(|ptr| gl.BindFragDataLocation(program, 0, ptr));
+        let o_color = CString::from_slice("o_Color".as_bytes());
+        gl.BindFragDataLocation(program, 0, o_color.as_ptr());
 
         // Specify the layout of the vertex data
-        let pos_attr = "a_Pos".with_c_str(|ptr| gl.GetAttribLocation(program, ptr));
+        let a_pos = CString::from_slice("a_Pos".as_bytes());
+        gl.BindFragDataLocation(program, 0, a_pos.as_ptr());
+
+        let pos_attr = gl.GetAttribLocation(program, a_pos.as_ptr());
         gl.EnableVertexAttribArray(pos_attr as GLuint);
         gl.VertexAttribPointer(pos_attr as GLuint, 3, gl::BYTE,
                                 gl::FALSE as GLboolean, 0, ptr::null());
 
 
-        "u_Transform".with_c_str(|ptr|
-            gl.GetUniformLocation(program, ptr)
-        )
+        let u_transform = CString::from_slice("u_Transform".as_bytes());
+        gl.GetUniformLocation(program, u_transform.as_ptr())
     };
 
     let (w, h) = window.get_framebuffer_size();

@@ -15,9 +15,10 @@
 //! High-level, platform independent, bindless rendering API.
 
 #![deny(missing_docs)]
-#![feature(macro_rules, phase, associated_types)]
+#![feature(phase)]
 
-#[phase(plugin, link)] extern crate log;
+#[macro_use]
+extern crate log;
 extern crate device;
 
 use std::mem;
