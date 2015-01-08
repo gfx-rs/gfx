@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(phase, unsafe_destructor, associated_types)]
+#![feature(unsafe_destructor)]
 #![deny(missing_docs)]
 #![deny(missing_copy_implementations)]
 
 //! Graphics device. Not meant for direct use.
 
-#[phase(plugin, link)] extern crate log;
+#[macro_use]
+extern crate log;
 extern crate libc;
 
 // TODO: Remove these exports once `gl_device` becomes a separate crate.

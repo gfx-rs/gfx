@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(phase)]
+#![feature(plugin)]
 
-#[phase(plugin)]
+extern crate gfx;
+#[macro_use]
 extern crate gfx_macros;
 
 use secret_lib::gfx::ShaderSource;

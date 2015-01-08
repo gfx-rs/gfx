@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(phase)]
+#![feature(plugin)]
 
 extern crate cgmath;
 extern crate gfx;
-#[phase(plugin)]
+#[macro_use]
+#[plugin]
 extern crate gfx_macros;
 extern crate glfw;
 extern crate time;
@@ -34,8 +35,7 @@ use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
 use time::precise_time_s;
 
-use noise::source::Perlin;
-use noise::source::Source;
+use noise::{Seed, perlin2};
 
 #[vertex_format]
 #[derive(Copy)]
@@ -146,7 +146,7 @@ fn calculate_color(height: f32) -> [f32; 3] {
 }
 
 fn main() {
-    use std::num::FloatMath;
+    use std::num::Float;
 
     let glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
@@ -168,11 +168,11 @@ fn main() {
     let mut device = gfx::GlDevice::new(|s| window.get_proc_address(s));
 
     let rand_seed = std::rand::thread_rng().gen();
-    let noise = Perlin::new().seed(rand_seed);
+    let seed = Seed::new(rand_seed);
     let plane = Plane::subdivide(256, 256);
     let vertex_data: Vec<Vertex> = plane.shared_vertex_iter()
         .map(|(x, y)| {
-            let h = noise.get(x, y, 0.0) * 32.0;
+            let h = perlin2(&seed, &[x, y]) * 32.0;
             Vertex {
                 pos: [25.0 * x, 25.0 * y, h],
                 color: calculate_color(h),

@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(phase)]
-
 //! An efficient, low-level, bindless graphics API for Rust. See [the
 //! blog](http://gfx-rs.github.io/) for explanations and annotated examples.
 
-#[phase(plugin, link)] extern crate log;
+#[macro_use]
+extern crate log;
 extern crate libc;
 
 extern crate device;
