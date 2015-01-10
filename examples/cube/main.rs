@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(phase)]
 #![feature(plugin)]
 
 extern crate cgmath;
@@ -68,7 +67,7 @@ GLSL_120: b"
         v_TexCoord = a_TexCoord;
         gl_Position = u_Transform * vec4(a_Pos, 1.0);
     }
-"
+",
 GLSL_150: b"
     #version 150 core
 
@@ -82,7 +81,7 @@ GLSL_150: b"
         v_TexCoord = a_TexCoord;
         gl_Position = u_Transform * vec4(a_Pos, 1.0);
     }
-"
+",
 };
 
 static FRAGMENT_SRC: gfx::ShaderSource<'static> = shaders! {
@@ -97,7 +96,7 @@ GLSL_120: b"
         float blend = dot(v_TexCoord-vec2(0.5,0.5), v_TexCoord-vec2(0.5,0.5));
         gl_FragColor = mix(tex, vec4(0.0,0.0,0.0,0.0), blend*1.0);
     }
-"
+",
 GLSL_150: b"
     #version 150 core
 
@@ -110,7 +109,7 @@ GLSL_150: b"
         float blend = dot(v_TexCoord-vec2(0.5,0.5), v_TexCoord-vec2(0.5,0.5));
         o_Color = mix(tex, vec4(0.0,0.0,0.0,0.0), blend*1.0);
     }
-"
+",
 };
 
 //----------------------------------------

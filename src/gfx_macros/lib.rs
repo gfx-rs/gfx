@@ -11,8 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-#![feature(plugin_registrar, quote)]
+#![feature(plugin_registrar, quote, box_syntax)]
 #![deny(missing_copy_implementations)]
 
 //! Macro extensions crate.
@@ -56,8 +55,8 @@ fn find_name(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                         attr::mark_used(attribute);
                         name.map_or(Some(new_name.clone()), |name| {
                             cx.span_warn(span, format!(
-                                "Extra field name detected: {} - \
-                                ignoring in favour of: {}", new_name, name
+                                "Extra field name detected: {:?} - \
+                                ignoring in favour of: {:?}", new_name, name
                             ).as_slice());
                             None
                         })
@@ -167,7 +166,7 @@ fn fixup_extern_crate_paths(item: P<ast::Item>, path_root: ast::Ident) -> P<ast:
 // any names outside its lexical scope.
 #[macro_export]
 macro_rules! shaders {
-    (GLSL_120: $v:expr $($t:tt)*) => {
+    (GLSL_120: $v:expr, $($t:tt)*) => {
         {
             use gfx;
             gfx::ShaderSource {
@@ -176,7 +175,7 @@ macro_rules! shaders {
             }
         }
     };
-    (GLSL_130: $v:expr $($t:tt)*) => {
+    (GLSL_130: $v:expr, $($t:tt)*) => {
         {
             use gfx;
             gfx::ShaderSource {
@@ -185,7 +184,7 @@ macro_rules! shaders {
             }
         }
     };
-    (GLSL_140: $v:expr $($t:tt)*) => {
+    (GLSL_140: $v:expr, $($t:tt)*) => {
         {
             use gfx;
             gfx::ShaderSource {
@@ -194,7 +193,7 @@ macro_rules! shaders {
             }
         }
     };
-    (GLSL_150: $v:expr $($t:tt)*) => {
+    (GLSL_150: $v:expr, $($t:tt)*) => {
         {
             use gfx;
             gfx::ShaderSource {
@@ -203,7 +202,7 @@ macro_rules! shaders {
             }
         }
     };
-    (TARGETS: $v:expr $($t:tt)*) => {
+    (TARGETS: $v:expr, $($t:tt)*) => {
         {
             use gfx;
             gfx::ShaderSource {

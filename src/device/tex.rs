@@ -63,14 +63,14 @@ impl fmt::Show for TextureError {
                 write!(
                     f,
                     "Invalid TextureInfo (width, height, and levels must not \
-                    be zero): {}\n",
+                    be zero): {:?}\n",
                     info
                 ),
             &TextureError::IncorrectTextureSize(expected) =>
                 write!(
                     f,
                     "Invalid data size provided to update the texture, \
-                    expected size {}",
+                    expected size {:?}",
                     expected
                 ),
         }

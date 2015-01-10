@@ -83,7 +83,7 @@ impl Clone for ClearData {
 impl fmt::Show for ClearData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f,
-            "ClearData {{ color: {}, depth: {}, stencil: {} }}",
+            "ClearData {{ color: {:?}, depth: {:?}, stencil: {:?} }}",
             self.color.as_slice(), self.depth, self.stencil)
     }
 }

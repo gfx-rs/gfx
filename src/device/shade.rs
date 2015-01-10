@@ -171,35 +171,35 @@ impl Clone for UniformValue {
 impl fmt::Show for UniformValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            UniformValue::I32(x)            => write!(f, "ValueI32({})", x),
-            UniformValue::F32(x)            => write!(f, "ValueF32({})", x),
+            UniformValue::I32(x)            => write!(f, "ValueI32({:?})", x),
+            UniformValue::F32(x)            => write!(f, "ValueF32({:?})", x),
 
-            UniformValue::I32Vector2(ref v) => write!(f, "ValueI32Vector2({})", v.as_slice()),
-            UniformValue::I32Vector3(ref v) => write!(f, "ValueI32Vector3({})", v.as_slice()),
-            UniformValue::I32Vector4(ref v) => write!(f, "ValueI32Vector4({})", v.as_slice()),
+            UniformValue::I32Vector2(ref v) => write!(f, "ValueI32Vector2({:?})", v.as_slice()),
+            UniformValue::I32Vector3(ref v) => write!(f, "ValueI32Vector3({:?})", v.as_slice()),
+            UniformValue::I32Vector4(ref v) => write!(f, "ValueI32Vector4({:?})", v.as_slice()),
 
-            UniformValue::F32Vector2(ref v) => write!(f, "ValueF32Vector2({})", v.as_slice()),
-            UniformValue::F32Vector3(ref v) => write!(f, "ValueF32Vector3({})", v.as_slice()),
-            UniformValue::F32Vector4(ref v) => write!(f, "ValueF32Vector4({})", v.as_slice()),
+            UniformValue::F32Vector2(ref v) => write!(f, "ValueF32Vector2({:?})", v.as_slice()),
+            UniformValue::F32Vector3(ref v) => write!(f, "ValueF32Vector3({:?})", v.as_slice()),
+            UniformValue::F32Vector4(ref v) => write!(f, "ValueF32Vector4({:?})", v.as_slice()),
 
             UniformValue::F32Matrix2(ref m) => {
                 try!(write!(f, "ValueF32Matrix2("));
                 for v in m.iter() {
-                    try!(write!(f, "{}", v.as_slice()));
+                    try!(write!(f, "{:?}", v.as_slice()));
                 }
                 write!(f, ")")
             },
             UniformValue::F32Matrix3(ref m) => {
                 try!(write!(f, "ValueF32Matrix3("));
                 for v in m.iter() {
-                    try!(write!(f, "{}", v.as_slice()));
+                    try!(write!(f, "{:?}", v.as_slice()));
                 }
                 write!(f, ")")
             },
             UniformValue::F32Matrix4(ref m) => {
                 try!(write!(f, "ValueF32Matrix4("));
                 for v in m.iter() {
-                    try!(write!(f, "{}", v.as_slice()));
+                    try!(write!(f, "{:?}", v.as_slice()));
                 }
                 write!(f, ")")
             },

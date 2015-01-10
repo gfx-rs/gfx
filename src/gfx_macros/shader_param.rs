@@ -74,7 +74,7 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     },
                     Err(e) => {
                         cx.span_err(fspan, format!(
-                            "Unrecognized parameter ({}) type {}",
+                            "Unrecognized parameter ({:?}) type {:?}",
                             fname.as_str(), e
                             ).as_slice()
                         );
@@ -184,7 +184,7 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     ),
                     Err(_) => {
                         cx.span_err(span, format!(
-                            "Invalid uniform: {}",
+                            "Invalid uniform: {:?}",
                             f.name.unwrap().as_str(),
                             ).as_slice()
                         );
@@ -282,7 +282,7 @@ impl ItemDecorator for ShaderParam {
                 return;
             }
         };
-        let link_name = format!("_{}Link", item.ident.as_str());
+        let link_name = format!("_{:?}Link", item.ident.as_str());
         let link_ident = context.ident_of(link_name.as_slice());
         let link_ty = box generic::ty::Literal(
             generic::ty::Path::new_local(link_name.as_slice())

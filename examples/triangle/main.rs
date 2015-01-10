@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(phase)]
 #![feature(plugin)]
 
 extern crate gfx;
@@ -46,7 +45,7 @@ GLSL_120: b"
         v_Color = vec4(a_Color, 1.0);
         gl_Position = vec4(a_Pos, 0.0, 1.0);
     }
-"
+",
 GLSL_150: b"
     #version 150 core
 
@@ -58,7 +57,7 @@ GLSL_150: b"
         v_Color = vec4(a_Color, 1.0);
         gl_Position = vec4(a_Pos, 0.0, 1.0);
     }
-"
+",
 };
 
 static FRAGMENT_SRC: gfx::ShaderSource<'static> = shaders! {
@@ -70,7 +69,7 @@ GLSL_120: b"
     void main() {
         gl_FragColor = v_Color;
     }
-"
+",
 GLSL_150: b"
     #version 150 core
 
@@ -80,7 +79,7 @@ GLSL_150: b"
     void main() {
         o_Color = v_Color;
     }
-"
+",
 };
 
 fn main() {

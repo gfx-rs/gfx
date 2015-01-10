@@ -91,7 +91,7 @@ GLSL_120: b"
         v_Color = a_Color;
         gl_Position = u_Proj * u_View * u_Model * vec4(a_Pos, 1.0);
     }
-"
+",
 GLSL_150: b"
     #version 150 core
 
@@ -107,7 +107,7 @@ GLSL_150: b"
         v_Color = a_Color;
         gl_Position = u_Proj * u_View * u_Model * vec4(a_Pos, 1.0);
     }
-"
+",
 };
 
 static FRAGMENT_SRC: gfx::ShaderSource<'static> = shaders! {
@@ -120,7 +120,7 @@ GLSL_120: b"
     void main() {
         o_Color = vec4(v_Color, 1.0);
     }
-"
+",
 GLSL_150: b"
     #version 150 core
 
@@ -130,7 +130,7 @@ GLSL_150: b"
     void main() {
         o_Color = vec4(v_Color, 1.0);
     }
-"
+",
 };
 
 fn calculate_color(height: f32) -> [f32; 3] {

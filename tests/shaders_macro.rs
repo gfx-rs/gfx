@@ -33,7 +33,7 @@ GLSL_120: b"
         v_TexCoord = a_TexCoord;
         gl_Position = u_ModelViewProj * vec4(a_Pos, 1.0);
     }
-"
+",
 GLSL_150: b"
     #version 150 core
     in vec3 a_Pos;
@@ -44,7 +44,7 @@ GLSL_150: b"
         v_TexCoord = a_TexCoord;
         gl_Position = u_ModelViewProj * vec4(a_Pos, 1.0);
     }
-"
+",
 };
 
 static _SRC2: ShaderSource<'static> = shaders! {
@@ -58,7 +58,7 @@ GLSL_120: b"
         v_TexCoord = a_TexCoord;
         gl_Position = u_ModelViewProj * vec4(a_Pos, 1.0);
     }
-"
+",
 };
 
 static _SRC3: ShaderSource<'static> = shaders! {
@@ -72,11 +72,11 @@ GLSL_150: b"
         v_TexCoord = a_TexCoord;
         gl_Position = u_ModelViewProj * vec4(a_Pos, 1.0);
     }
-"
+",
 };
 
 static _SRC4: ShaderSource<'static> = shaders! {
-TARGETS: &["o_Color", "o_Foo"]
+TARGETS: &["o_Color", "o_Foo"],
 };
 
 static _SRC5: ShaderSource<'static> = shaders! {

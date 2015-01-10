@@ -68,7 +68,7 @@ GLSL_150: b"
     void main() {
         gl_Position = u_Transform * vec4(a_Pos, 1.0);
     }
-"
+",
 };
 
 static FRAGMENT_SRC: gfx::ShaderSource<'static> = shaders! {
@@ -79,7 +79,7 @@ GLSL_150: b"
     void main() {
         o_Color = vec4(1., 0., 0., 1.);
     }
-"
+",
 };
 
 //----------------------------------------
