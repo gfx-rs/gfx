@@ -189,7 +189,7 @@ fn map_factor(factor: s::Factor) -> gl::types::GLenum {
         s::Factor(InverseFlag::Normal,  BlendValue::ConstAlpha)  => gl::CONSTANT_ALPHA,
         s::Factor(InverseFlag::Inverse, BlendValue::ConstAlpha)  => gl::ONE_MINUS_CONSTANT_ALPHA,
         s::Factor(InverseFlag::Normal,  BlendValue::SourceAlphaSaturated) => gl::SRC_ALPHA_SATURATE,
-        _ => panic!("Unsupported blend factor: {}", factor),
+        _ => panic!("Unsupported blend factor: {:?}", factor),
     }
 }
 

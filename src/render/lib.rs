@@ -357,8 +357,8 @@ impl<C: CommandBuffer> Renderer<C> {
         if self.parameters.uniforms.len() != info.uniforms.len() ||
             self.parameters.blocks.len() != info.blocks.len() ||
             self.parameters.textures.len() != info.textures.len() {
-            error!("Mismatching number of uniforms ({}), blocks ({}), or \
-                    textures ({}) in `upload_parameters` for program: {}",
+            error!("Mismatching number of uniforms ({:?}), blocks ({:?}), or \
+                    textures ({:?}) in `upload_parameters` for program: {:?}",
                     self.parameters.uniforms.len(),
                     self.parameters.blocks.len(),
                     self.parameters.textures.len(),

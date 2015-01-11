@@ -20,7 +20,7 @@ use syntax::ext::deriving::generic;
 use syntax::{attr, codemap};
 use syntax::parse::token;
 use syntax::ptr::P;
-use syntax::ext::base::ItemDecorator;   
+use syntax::ext::base::ItemDecorator;
 
 /// A component modifier.
 #[derive(Copy, PartialEq)]
@@ -73,8 +73,8 @@ fn find_modifier(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     attr::mark_used(attribute);
                     modifier.map_or(Some(new_modifier), |modifier| {
                         cx.span_warn(span, format!(
-                            "Extra attribute modifier detected: `#[{}]` - \
-                            ignoring in favour of `#[{}]`.", new_modifier, modifier
+                            "Extra attribute modifier detected: `#[{:?}]` - \
+                            ignoring in favour of `#[{:?}]`.", new_modifier, modifier
                         ).as_slice());
                         None
                     })
@@ -97,7 +97,7 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 Some(Modifier::AsDouble) => "Precision",
                 Some(Modifier::Normalized) => {
                     cx.span_warn(span, format!(
-                        "Incompatible float modifier attribute: `#[{}]`", modifier
+                        "Incompatible float modifier attribute: `#[{:?}]`", modifier
                     ).as_slice());
                     ""
                 }
@@ -117,7 +117,7 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 Some(Modifier::AsFloat) => "AsFloat",
                 Some(Modifier::AsDouble) => {
                     cx.span_warn(span, format!(
-                        "Incompatible int modifier attribute: `#[{}]`", modifier
+                        "Incompatible int modifier attribute: `#[{:?}]`", modifier
                     ).as_slice());
                     ""
                 }
@@ -129,13 +129,13 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
         },
         "uint" | "int" => {
             cx.span_err(span, format!("Pointer-sized integer components are \
-                                      not supported, but found: `{}`. Use an \
+                                      not supported, but found: `{:?}`. Use an \
                                       integer component with an explicit size \
                                       instead.", ty_str).as_slice());
             cx.expr_tuple(span, vec![])
         },
         ty_str => {
-            cx.span_err(span, format!("Unrecognized component type: `{}`",
+            cx.span_err(span, format!("Unrecognized component type: `{:?}`",
                                       ty_str).as_slice());
             cx.expr_tuple(span, vec![])
         },
@@ -157,12 +157,12 @@ fn decode_count_and_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
             },
             _ => {
                 cx.span_err(span, format!("Unsupported fixed vector sub-type: \
-                                          `{}`",pty.node).as_slice());
+                                          `{:?}`",pty.node).as_slice());
                 cx.expr_tuple(span, vec![])
             },
         }),
         _ => {
-            cx.span_err(span, format!("Unsupported attribute type: `{}`",
+            cx.span_err(span, format!("Unsupported attribute type: `{:?}`",
                                       field.node.ty.node).as_slice());
             (cx.expr_tuple(span, vec![]), cx.expr_tuple(span, vec![]))
         },

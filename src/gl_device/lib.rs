@@ -146,13 +146,13 @@ impl GlDevice {
 
         let (info, caps) = info::get(&gl);
 
-        info!("Vendor: {}", info.platform_name.vendor);
-        info!("Renderer: {}", info.platform_name.renderer);
-        info!("Version: {}", info.version);
-        info!("Shading Language: {}", info.shading_language);
+        info!("Vendor: {:?}", info.platform_name.vendor);
+        info!("Renderer: {:?}", info.platform_name.renderer);
+        info!("Version: {:?}", info.version);
+        info!("Shading Language: {:?}", info.shading_language);
         info!("Loaded Extensions:");
         for extension in info.extensions.iter() {
-            info!("- {}", *extension);
+            info!("- {:?}", *extension);
         }
 
         GlDevice {
@@ -174,7 +174,7 @@ impl GlDevice {
         if cfg!(not(ndebug)) {
             let err = GlError::from_error_code(unsafe { self.gl.GetError() });
             if err != GlError::NoError {
-                panic!("Error after executing command {}: {}", cmd, err);
+                panic!("Error after executing command {:?}: {:?}", cmd, err);
             }
         }
     }
@@ -189,7 +189,7 @@ impl GlDevice {
         unsafe {
             self.gl.GenBuffers(1, &mut name);
         }
-        info!("\tCreated buffer {}", name);
+        info!("\tCreated buffer {:?}", name);
         name
     }
 
@@ -254,7 +254,7 @@ impl GlDevice {
                 if self.caps.array_buffer_supported {
                     unsafe { self.gl.BindVertexArray(array_buffer) };
                 } else {
-                    error!("Ignored VAO bind command: {}", array_buffer)
+                    error!("Ignored VAO bind command: {:?}", array_buffer)
                 }
             },
             Command::BindAttribute(slot, buffer, format) => {
@@ -269,7 +269,7 @@ impl GlDevice {
                     Type::Float(_, FloatSize::F32) => gl::FLOAT,
                     Type::Float(_, FloatSize::F64) => gl::DOUBLE,
                     _ => {
-                        error!("Unsupported element type: {}", format.elem_type);
+                        error!("Unsupported element type: {:?}", format.elem_type);
                         return
                     }
                 };

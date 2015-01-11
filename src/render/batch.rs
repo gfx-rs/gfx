@@ -213,7 +213,7 @@ pub struct RefBatch<L, T> {
 
 impl<L, T> fmt::Show for RefBatch<L, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "RefBatch(mesh: {}, slice: {}, program: {}, state: {})",
+        write!(f, "RefBatch(mesh: {:?}, slice: {:?}, program: {:?}, state: {:?})",
             self.mesh_id, self.slice, self.program_id, self.state_id)
     }
 }

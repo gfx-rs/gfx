@@ -26,7 +26,6 @@
 //
 // Press 1-4 to show the immediate buffers. Press 0 to show the final result.
 
-#![feature(phase)]
 #![feature(plugin)]
 
 extern crate cgmath;
@@ -135,7 +134,7 @@ struct BlitParams {
 }
 
 static TERRAIN_VERTEX_SRC: gfx::ShaderSource<'static> = shaders! {
-GLSL_120: b"
+glsl_120: b"
     #version 120
 
     uniform mat4 u_Model;
@@ -154,8 +153,8 @@ GLSL_120: b"
         v_Color = a_Color;
         gl_Position = u_Proj * u_View * u_Model * vec4(a_Pos, 1.0);
     }
-"
-GLSL_150: b"
+",
+glsl_150: b"
     #version 150 core
 
     uniform mat4 u_Model;
@@ -178,7 +177,7 @@ GLSL_150: b"
 };
 
 static TERRAIN_FRAGMENT_SRC: gfx::ShaderSource<'static> = shaders! {
-GLSL_120: b"
+glsl_120: b"
     #version 120
 
     varying vec3 v_FragPos;
@@ -192,8 +191,8 @@ GLSL_120: b"
         gl_FragData[1] = vec4(n, 0.0);
         gl_FragData[2] = vec4(v_Color, 1.0);
     }
-"
-GLSL_150: b"
+",
+glsl_150: b"
     #version 150 core
 
     in vec3 v_FragPos;
@@ -210,12 +209,12 @@ GLSL_150: b"
         o_Normal  = vec4(n, 0.0);
         o_Diffuse = vec4(v_Color, 1.0);
     }
-"
-TARGETS: &["o_Pos", "o_Normal", "o_Diffuse"]
+",
+targets: &["o_Pos", "o_Normal", "o_Diffuse"],
 };
 
 static BLIT_VERTEX_SRC: gfx::ShaderSource<'static> = shaders! {
-GLSL_120: b"
+glsl_120: b"
     #version 120
 
     attribute vec3 a_Pos;
@@ -226,8 +225,8 @@ GLSL_120: b"
         v_TexCoord = a_TexCoord;
         gl_Position = vec4(a_Pos, 1.0);
     }
-"
-GLSL_150: b"
+",
+glsl_150: b"
     #version 150 core
 
     in vec3 a_Pos;
@@ -242,7 +241,7 @@ GLSL_150: b"
 };
 
 static BLIT_FRAGMENT_SRC: gfx::ShaderSource<'static> = shaders! {
-GLSL_120: b"
+glsl_120: b"
     #version 120
 
     uniform sampler2D u_Tex;
@@ -252,8 +251,8 @@ GLSL_120: b"
         vec4 tex = texture2D(u_Tex, v_TexCoord);
         gl_FragColor = tex;
     }
-"
-GLSL_150: b"
+",
+glsl_150: b"
     #version 150 core
 
     uniform sampler2D u_Tex;
@@ -264,12 +263,12 @@ GLSL_150: b"
         vec4 tex = texture(u_Tex, v_TexCoord);
         o_Color = tex;
     }
-"
-TARGETS: &["o_Color"]
+",
+targets: &["o_Color"],
 };
 
 static LIGHT_VERTEX_SRC: gfx::ShaderSource<'static> = shaders! {
-GLSL_120: b"
+glsl_120: b"
     #version 120
     #extension GL_EXT_draw_instanced : enable
     #extension GL_ARB_uniform_buffer_object : enable
@@ -289,8 +288,8 @@ GLSL_120: b"
         v_LightPos = offs[gl_InstanceID].xyz;
         gl_Position = u_Transform * vec4(u_Radius * a_Pos + offs[gl_InstanceID].xyz, 1.0);
     }
-"
-GLSL_150: b"
+",
+glsl_150: b"
     #version 150 core
 
     uniform mat4 u_Transform;
@@ -312,7 +311,7 @@ GLSL_150: b"
 };
 
 static LIGHT_FRAGMENT_SRC: gfx::ShaderSource<'static> = shaders! {
-GLSL_120: b"
+glsl_120: b"
     #version 120
 
     uniform float u_Radius;
@@ -344,8 +343,8 @@ GLSL_120: b"
 
         gl_FragColor = vec4(scale*res_color, 1.0);
     }
-"
-GLSL_150: b"
+",
+glsl_150: b"
     #version 150 core
 
     uniform float u_Radius;
@@ -382,7 +381,7 @@ GLSL_150: b"
 };
 
 static EMITTER_VERTEX_SRC: gfx::ShaderSource<'static> = shaders! {
-GLSL_120: b"
+glsl_120: b"
     #version 120
     #extension GL_EXT_draw_instanced : enable
     #extension GL_ARB_uniform_buffer_object : enable
@@ -400,8 +399,8 @@ GLSL_120: b"
     void main() {
         gl_Position = u_Transform * vec4(u_Radius * a_Pos + offs[gl_InstanceID].xyz, 1.0);
     }
-"
-GLSL_150: b"
+",
+glsl_150: b"
     #version 150 core
 
     uniform mat4 u_Transform;
@@ -421,14 +420,14 @@ GLSL_150: b"
 };
 
 static EMITTER_FRAGMENT_SRC: gfx::ShaderSource<'static> = shaders! {
-GLSL_120: b"
+glsl_120: b"
     #version 120
 
     void main() {
         gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
     }
-"
-GLSL_150: b"
+",
+glsl_150: b"
     #version 150 core
 
     out vec4 o_Color;
