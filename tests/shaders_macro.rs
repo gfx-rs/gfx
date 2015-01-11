@@ -23,7 +23,7 @@ use secret_lib::gfx::ShaderSource;
 mod secret_lib;
 
 static _SRC1: ShaderSource<'static> = shaders! {
-GLSL_120: b"
+glsl_120: b"
     #version 120
     attribute vec3 a_Pos;
     attribute vec2 a_TexCoord;
@@ -34,7 +34,7 @@ GLSL_120: b"
         gl_Position = u_ModelViewProj * vec4(a_Pos, 1.0);
     }
 ",
-GLSL_150: b"
+glsl_150: b"
     #version 150 core
     in vec3 a_Pos;
     in vec2 a_TexCoord;
@@ -44,11 +44,11 @@ GLSL_150: b"
         v_TexCoord = a_TexCoord;
         gl_Position = u_ModelViewProj * vec4(a_Pos, 1.0);
     }
-",
+"
 };
 
 static _SRC2: ShaderSource<'static> = shaders! {
-GLSL_120: b"
+glsl_120: b"
     #version 120
     attribute vec3 a_Pos;
     attribute vec2 a_TexCoord;
@@ -58,11 +58,11 @@ GLSL_120: b"
         v_TexCoord = a_TexCoord;
         gl_Position = u_ModelViewProj * vec4(a_Pos, 1.0);
     }
-",
+"
 };
 
 static _SRC3: ShaderSource<'static> = shaders! {
-GLSL_150: b"
+glsl_150: b"
     #version 150 core
     in vec3 a_Pos;
     in vec2 a_TexCoord;
@@ -72,11 +72,11 @@ GLSL_150: b"
         v_TexCoord = a_TexCoord;
         gl_Position = u_ModelViewProj * vec4(a_Pos, 1.0);
     }
-",
+"
 };
 
 static _SRC4: ShaderSource<'static> = shaders! {
-TARGETS: &["o_Color", "o_Foo"],
+targets: &["o_Color", "o_Foo"],
 };
 
 static _SRC5: ShaderSource<'static> = shaders! {

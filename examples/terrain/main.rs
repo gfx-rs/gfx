@@ -76,7 +76,7 @@ struct Params {
 }
 
 static VERTEX_SRC: gfx::ShaderSource<'static> = shaders! {
-GLSL_120: b"
+glsl_120: b"
     #version 120
 
     attribute vec3 a_Pos;
@@ -92,7 +92,7 @@ GLSL_120: b"
         gl_Position = u_Proj * u_View * u_Model * vec4(a_Pos, 1.0);
     }
 ",
-GLSL_150: b"
+glsl_150: b"
     #version 150 core
 
     in vec3 a_Pos;
@@ -107,11 +107,11 @@ GLSL_150: b"
         v_Color = a_Color;
         gl_Position = u_Proj * u_View * u_Model * vec4(a_Pos, 1.0);
     }
-",
+"
 };
 
 static FRAGMENT_SRC: gfx::ShaderSource<'static> = shaders! {
-GLSL_120: b"
+glsl_120: b"
     #version 120
 
     varying vec3 v_Color;
@@ -121,7 +121,7 @@ GLSL_120: b"
         o_Color = vec4(v_Color, 1.0);
     }
 ",
-GLSL_150: b"
+glsl_150: b"
     #version 150 core
 
     in vec3 v_Color;
@@ -130,7 +130,7 @@ GLSL_150: b"
     void main() {
         o_Color = vec4(v_Color, 1.0);
     }
-",
+"
 };
 
 fn calculate_color(height: f32) -> [f32; 3] {

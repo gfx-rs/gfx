@@ -54,7 +54,7 @@ struct Params {
 }
 
 static VERTEX_SRC: gfx::ShaderSource<'static> = shaders! {
-GLSL_120: b"
+glsl_120: b"
     #version 120
 
     attribute vec3 a_Pos;
@@ -68,7 +68,7 @@ GLSL_120: b"
         gl_Position = u_Transform * vec4(a_Pos, 1.0);
     }
 ",
-GLSL_150: b"
+glsl_150: b"
     #version 150 core
 
     in vec3 a_Pos;
@@ -81,11 +81,10 @@ GLSL_150: b"
         v_TexCoord = a_TexCoord;
         gl_Position = u_Transform * vec4(a_Pos, 1.0);
     }
-",
-};
+"};
 
 static FRAGMENT_SRC: gfx::ShaderSource<'static> = shaders! {
-GLSL_120: b"
+glsl_120: b"
     #version 120
 
     varying vec2 v_TexCoord;
@@ -97,7 +96,7 @@ GLSL_120: b"
         gl_FragColor = mix(tex, vec4(0.0,0.0,0.0,0.0), blend*1.0);
     }
 ",
-GLSL_150: b"
+glsl_150: b"
     #version 150 core
 
     in vec2 v_TexCoord;
@@ -109,7 +108,7 @@ GLSL_150: b"
         float blend = dot(v_TexCoord-vec2(0.5,0.5), v_TexCoord-vec2(0.5,0.5));
         o_Color = mix(tex, vec4(0.0,0.0,0.0,0.0), blend*1.0);
     }
-",
+"
 };
 
 //----------------------------------------

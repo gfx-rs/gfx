@@ -167,47 +167,38 @@ fn fixup_extern_crate_paths(item: P<ast::Item>, path_root: ast::Ident) -> P<ast:
 // any names outside its lexical scope.
 #[macro_export]
 macro_rules! shaders {
-    (GLSL_120: $v:expr, $($t:tt),*) => {
-        {
-            use gfx;
-            gfx::ShaderSource {
-                glsl_120: Some($v),
-                ..shaders!($($t)*)
-            }
-        }
-    };
-    (GLSL_130: $v:expr, $($t:tt),*) => {
-        {
-            use gfx;
-            gfx::ShaderSource {
-                glsl_130: Some($v),
-                ..shaders!($($t)*)
-            }
-        }
-    };
-    (GLSL_140: $v:expr, $($t:tt),*) => {
-        {
-            use gfx;
-            gfx::ShaderSource {
-                glsl_140: Some($v),
-                ..shaders!($($t)*)
-            }
-        }
-    };
-    (GLSL_150: $v:expr, $($t:tt),*) => {
-        {
-            use gfx;
-            gfx::ShaderSource {
-                glsl_150: Some($v),
-                ..shaders!($($t)*)
-            }
-        }
-    };
-    (TARGETS: $v:expr, $($t:tt),*) => {
+    (targets : $v:expr) => {
         {
             use gfx;
             gfx::ShaderSource {
                 targets: $v,
+                ..shaders!()
+            }
+        }
+    };
+    (targets : $v:expr, $($t:tt)*) => {
+        {
+            use gfx;
+            gfx::ShaderSource {
+                targets: $v,
+                ..shaders!($($t)*)
+            }
+        }
+    };
+    ($i:ident : $v:expr) => {
+        {
+            use gfx;
+            gfx::ShaderSource {
+                $i: Some($v),
+                ..shaders!()
+            }
+        }
+    };
+    ($i:ident : $v:expr, $($t:tt)*) => {
+        {
+            use gfx;
+            gfx::ShaderSource {
+                $i: Some($v),
                 ..shaders!($($t)*)
             }
         }
