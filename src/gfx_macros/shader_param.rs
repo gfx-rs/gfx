@@ -18,7 +18,7 @@ use syntax::ext::deriving::generic;
 use syntax::codemap;
 use syntax::parse::token;
 use syntax::ptr::P;
-use syntax::ext::base::ItemDecorator;   
+use syntax::ext::base::ItemDecorator;
 
 #[derive(Copy, PartialEq, Show)]
 enum Param {
@@ -74,7 +74,7 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     },
                     Err(e) => {
                         cx.span_err(fspan, format!(
-                            "Unrecognized parameter ({}) type {}",
+                            "Unrecognized parameter ({:?}) type {:?}",
                             fname.as_str(), e
                             ).as_slice()
                         );

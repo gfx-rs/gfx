@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(plugin_registrar, quote)]
+#![feature(plugin_registrar, quote, box_syntax)]
 #![deny(missing_copy_implementations)]
+#![allow(unstable)]
 
 //! Macro extensions crate.
 //! Implements `shaders!` macro as well as `#[shader_param]` and
@@ -167,7 +168,7 @@ fn fixup_extern_crate_paths(item: P<ast::Item>, path_root: ast::Ident) -> P<ast:
 // any names outside its lexical scope.
 #[macro_export]
 macro_rules! shaders {
-    (GLSL_120: $v:expr $($t:tt)*) => {
+    (GLSL_120: $v:expr, $($t:tt),*) => {
         {
             use gfx;
             gfx::ShaderSource {
@@ -176,7 +177,7 @@ macro_rules! shaders {
             }
         }
     };
-    (GLSL_130: $v:expr $($t:tt)*) => {
+    (GLSL_130: $v:expr, $($t:tt),*) => {
         {
             use gfx;
             gfx::ShaderSource {
@@ -185,7 +186,7 @@ macro_rules! shaders {
             }
         }
     };
-    (GLSL_140: $v:expr $($t:tt)*) => {
+    (GLSL_140: $v:expr, $($t:tt),*) => {
         {
             use gfx;
             gfx::ShaderSource {
@@ -194,7 +195,7 @@ macro_rules! shaders {
             }
         }
     };
-    (GLSL_150: $v:expr $($t:tt)*) => {
+    (GLSL_150: $v:expr, $($t:tt),*) => {
         {
             use gfx;
             gfx::ShaderSource {
@@ -203,7 +204,7 @@ macro_rules! shaders {
             }
         }
     };
-    (TARGETS: $v:expr $($t:tt)*) => {
+    (TARGETS: $v:expr, $($t:tt),*) => {
         {
             use gfx;
             gfx::ShaderSource {
