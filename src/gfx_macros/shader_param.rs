@@ -18,7 +18,7 @@ use syntax::ext::deriving::generic;
 use syntax::codemap;
 use syntax::parse::token;
 use syntax::ptr::P;
-use syntax::ext::base::ItemDecorator;   
+use syntax::ext::base::ItemDecorator;
 
 #[derive(Copy, PartialEq, Show)]
 enum Param {

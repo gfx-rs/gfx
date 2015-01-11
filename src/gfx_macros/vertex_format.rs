@@ -20,7 +20,7 @@ use syntax::ext::deriving::generic;
 use syntax::{attr, codemap};
 use syntax::parse::token;
 use syntax::ptr::P;
-use syntax::ext::base::ItemDecorator;   
+use syntax::ext::base::ItemDecorator;
 
 /// A component modifier.
 #[derive(Copy, PartialEq)]
