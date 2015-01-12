@@ -98,15 +98,15 @@ pub trait ShaderParam<L> {
 
 impl ShaderParam<()> for () {
     fn create_link(_: Option<&()>, info: &shade::ProgramInfo) -> Result<(), ParameterError> {
-        match info.uniforms.as_slice().first() {
+        match info.uniforms[].first() {
             Some(u) => return Err(ParameterError::MissingUniform(u.name.clone())),
             None => (),
         }
-        match info.blocks.as_slice().first() {
+        match info.blocks[].first() {
             Some(b) => return Err(ParameterError::MissingBlock(b.name.clone())),
             None => (),
         }
-        match info.textures.as_slice().first() {
+        match info.textures[].first() {
             Some(t) => return Err(ParameterError::MissingTexture(t.name.clone())),
             None => (),
         }
@@ -139,9 +139,9 @@ pub struct ParamDictionary {
 /// An associated link structure for `ParamDictionary` that redirects program
 /// input to the relevant dictionary cell.
 pub struct ParamDictionaryLink {
-    uniforms: Vec<uint>,
-    blocks: Vec<uint>,
-    textures: Vec<uint>,
+    uniforms: Vec<usize>,
+    blocks: Vec<usize>,
+    textures: Vec<usize>,
 }
 
 impl ShaderParam<ParamDictionaryLink> for ParamDictionary {

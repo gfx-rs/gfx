@@ -55,10 +55,10 @@ fn find_name(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     ("name", &ast::LitStr(ref new_name, _)) => {
                         attr::mark_used(attribute);
                         name.map_or(Some(new_name.clone()), |name| {
-                            cx.span_warn(span, format!(
+                            cx.span_warn(span, &format!(
                                 "Extra field name detected: {:?} - \
                                 ignoring in favour of: {:?}", new_name, name
-                            ).as_slice());
+                            )[]);
                             None
                         })
                     }
@@ -128,13 +128,13 @@ struct ExternCrateHackFolder {
 impl Folder for ExternCrateHackFolder {
     fn fold_path(&mut self, p: ast::Path) -> ast::Path {
         let p = syntax::fold::noop_fold_path(p, self);
-        let needs_fix = p.segments.as_slice().get(0)
+        let needs_fix = (&p.segments[]).get(0)
                          .map(|s| s.identifier.as_str() == EXTERN_CRATE_HACK)
                          .unwrap_or(false);
-        let needs_fix_self = p.segments.as_slice().get(0)
+        let needs_fix_self = (&p.segments[]).get(0)
                               .map(|s| s.identifier.as_str() == "self")
                               .unwrap_or(false) &&
-                             p.segments.as_slice().get(1)
+                             (&p.segments[]).get(1)
                               .map(|s| s.identifier.as_str() == EXTERN_CRATE_HACK)
                               .unwrap_or(false);
 

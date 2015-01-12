@@ -293,7 +293,7 @@ impl Clone for Blend {
 impl fmt::Show for Blend {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Blend {{ color: {:?}, alpha: {:?}, value: {:?} }}",
-               self.color, self.alpha, self.value.as_slice())
+               self.color, self.alpha, &self.value[])
     }
 }
 

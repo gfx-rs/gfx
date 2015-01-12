@@ -55,13 +55,13 @@ pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: s::ShaderSource, lang: 
     let mut length = get_shader_iv(gl, name, gl::INFO_LOG_LENGTH);
 
     let log = if length > 0 {
-        let mut log = String::with_capacity(length as uint);
-        log.extend(repeat('\0').take(length as uint));
+        let mut log = String::with_capacity(length as usize);
+        log.extend(repeat('\0').take(length as usize));
         unsafe {
             gl.GetShaderInfoLog(name, length, &mut length,
-                log.as_slice().as_ptr() as *mut gl::types::GLchar);
+                (&log[]).as_ptr() as *mut gl::types::GLchar);
         }
-        log.truncate(length as uint);
+        log.truncate(length as usize);
         Some(log)
     } else {
         None
@@ -160,18 +160,18 @@ impl StorageType {
 fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::Attribute> {
     let num = get_program_iv(gl, prog, gl::ACTIVE_ATTRIBUTES);
     let max_len = get_program_iv(gl, prog, gl::ACTIVE_ATTRIBUTE_MAX_LENGTH);
-    let mut name = String::with_capacity(max_len as uint);
-    name.extend(repeat('\0').take(max_len as uint));
-    range(0, num as gl::types::GLuint).map(|i| {
+    let mut name = String::with_capacity(max_len as usize);
+    name.extend(repeat('\0').take(max_len as usize));
+    (0..num as gl::types::GLuint).map(|i| {
         let mut length = 0 as gl::types::GLint;
         let mut size = 0 as gl::types::GLint;
         let mut storage = 0 as gl::types::GLenum;
         let loc = unsafe {
-            let raw = name.as_slice().as_ptr() as *mut gl::types::GLchar;
+            let raw = (&name[]).as_ptr() as *mut gl::types::GLchar;
             gl.GetActiveAttrib(prog, i, max_len, &mut length, &mut size, &mut storage, raw);
             gl.GetAttribLocation(prog, raw as *const gl::types::GLchar)
         };
-        let real_name = name.as_slice().slice_to(length as uint).to_string();
+        let real_name = name[..length as usize].to_string();
         let (base, container) = match StorageType::new(storage) {
             Var(b, c) => (b, c),
             _ => {
@@ -186,8 +186,8 @@ fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::Attribute> {
         info!("\t\tAttrib[{:?}] = '{:?}'\t{:?}\t{:?}", loc, real_name, base, container);
         s::Attribute {
             name: real_name,
-            location: loc as uint,
-            count: size as uint,
+            location: loc as usize,
+            count: size as usize,
             base_type: base,
             container: container,
         }
@@ -201,7 +201,7 @@ fn query_blocks(gl: &gl::Gl, caps: &::Capabilities, prog: super::Program) -> Vec
     } else {
         0
     };
-    range(0, num as gl::types::GLuint).map(|i| {
+    (0..num as gl::types::GLuint).map(|i| {
         let mut size = 0;
         let mut tmp = 0;
         let mut usage = 0;
@@ -213,19 +213,19 @@ fn query_blocks(gl: &gl::Gl, caps: &::Capabilities, prog: super::Program) -> Vec
                 if tmp != 0 {usage |= 1<<stage;}
             }
         }
-        let mut name = String::with_capacity(size as uint); //includes terminating null
-        name.extend(repeat('\0').take(size as uint));
+        let mut name = String::with_capacity(size as usize); //includes terminating null
+        name.extend(repeat('\0').take(size as usize));
         let mut actual_name_size = 0;
         unsafe {
             gl.GetActiveUniformBlockName(prog, i, size, &mut actual_name_size,
-                name.as_slice().as_ptr() as *mut gl::types::GLchar);
+                (&name[]).as_ptr() as *mut gl::types::GLchar);
             gl.GetActiveUniformBlockiv(prog, i, gl::UNIFORM_BLOCK_DATA_SIZE, &mut size);
         }
-        name.truncate(actual_name_size as uint);
+        name.truncate(actual_name_size as usize);
         info!("\t\tBlock '{}' of size {}", name, size);
         s::BlockVar {
             name: name,
-            size: size as uint,
+            size: size as usize,
             usage: usage,
         }
     }).collect()
@@ -235,38 +235,38 @@ fn query_parameters(gl: &gl::Gl, caps: &::Capabilities, prog: super::Program) ->
     let mut uniforms = Vec::new();
     let mut textures = Vec::new();
     let total_num = get_program_iv(gl, prog, gl::ACTIVE_UNIFORMS);
-    let indices: Vec<_> = range(0, total_num as gl::types::GLuint).collect();
-    let mut block_indices: Vec<gl::types::GLint> = repeat(-1 as gl::types::GLint).take(total_num as uint).collect();
+    let indices: Vec<_> = (0..total_num as gl::types::GLuint).collect();
+    let mut block_indices: Vec<gl::types::GLint> = repeat(-1 as gl::types::GLint).take(total_num as usize).collect();
     if caps.uniform_block_supported {
         unsafe {
             gl.GetActiveUniformsiv(prog, total_num as gl::types::GLsizei,
-                indices.as_slice().as_ptr(), gl::UNIFORM_BLOCK_INDEX,
+                (&indices[]).as_ptr(), gl::UNIFORM_BLOCK_INDEX,
                 block_indices.as_mut_slice().as_mut_ptr());
         }
         //TODO: UNIFORM_IS_ROW_MAJOR
     }
     // prepare the name string
     let max_len = get_program_iv(gl, prog, gl::ACTIVE_UNIFORM_MAX_LENGTH);
-    let mut name = String::with_capacity(max_len as uint);
-    name.extend(repeat('\0').take(max_len as uint));
+    let mut name = String::with_capacity(max_len as usize);
+    name.extend(repeat('\0').take(max_len as usize));
     // walk the indices
     for (&i, _) in indices.iter().zip(block_indices.iter()).filter(|&(_, &b)| b<0) {
         let mut length = 0;
         let mut size = 0;
         let mut storage = 0;
         let loc = unsafe {
-            let raw = name.as_slice().as_ptr() as *mut gl::types::GLchar;
+            let raw = (&name[]).as_ptr() as *mut gl::types::GLchar;
             gl.GetActiveUniform(prog, i, max_len, &mut length, &mut size, &mut storage, raw);
             gl.GetUniformLocation(prog, raw as *const gl::types::GLchar)
         };
-        let real_name = name.as_slice().slice_to(length as uint).to_string();
+        let real_name = (&name[]).slice_to(length as usize).to_string();
         match StorageType::new(storage) {
             Var(base, container) => {
                 info!("\t\tUniform[{:?}] = '{:?}'\t{:?}\t{:?}", loc, real_name, base, container);
                 uniforms.push(s::UniformVar {
                     name: real_name,
-                    location: loc as uint,
-                    count: size as uint,
+                    location: loc as usize,
+                    count: size as usize,
                     base_type: base,
                     container: container,
                 });
@@ -275,7 +275,7 @@ fn query_parameters(gl: &gl::Gl, caps: &::Capabilities, prog: super::Program) ->
                 info!("\t\tSampler[{:?}] = '{:?}'\t{:?}\t{:?}", loc, real_name, base, sam_type);
                 textures.push(s::SamplerVar {
                     name: real_name,
-                    location: loc as uint,
+                    location: loc as usize,
                     base_type: base,
                     sampler_type: sam_type,
                 });
@@ -309,12 +309,11 @@ pub fn create_program(gl: &gl::Gl, caps: &::Capabilities, shaders: &[::ShaderHan
     info!("\tLinked program {:?}", name);
 
     if let Some(targets) = targets {
-        match targets.iter()
+        match &targets.iter()
             .map(|target| (unsafe { gl.GetFragDataLocation(name, target.as_slice_with_nul().as_ptr()) }, target))
             .inspect(|&(loc, target)| info!("\t\tOutput[{:?}] = '{:?}'", loc, target))
             .filter(|&(loc, _)| loc == -1)
-            .collect::<Vec<_>>()
-            .as_slice()
+            .collect::<Vec<_>>()[]
         {
             [] => {},
             unbound => return (Err(()), Some(format!("Unbound targets: {:?}", unbound))),
@@ -325,13 +324,13 @@ pub fn create_program(gl: &gl::Gl, caps: &::Capabilities, shaders: &[::ShaderHan
     let status = get_program_iv(gl, name, gl::LINK_STATUS);
     let mut length  = get_program_iv(gl, name, gl::INFO_LOG_LENGTH);
     let log = if length > 0 {
-        let mut log = String::with_capacity(length as uint);
-        log.extend(repeat('\0').take(length as uint));
+        let mut log = String::with_capacity(length as usize);
+        log.extend(repeat('\0').take(length as usize));
         unsafe {
             gl.GetProgramInfoLog(name, length, &mut length,
-                log.as_slice().as_ptr() as *mut gl::types::GLchar);
+                (&log[]).as_ptr() as *mut gl::types::GLchar);
         }
-        log.truncate(length as uint);
+        log.truncate(length as usize);
         Some(log)
     } else {
         None

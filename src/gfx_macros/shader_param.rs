@@ -66,17 +66,17 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     .zip(fields.iter()).scan((), |_, (def, &(fname, fspan))|
                 match classify(&def.node.ty.node) {
                     Ok(c) => {
-                        let name = match super::find_name(cx, span, def.node.attrs.as_slice()) {
+                        let name = match super::find_name(cx, span, &def.node.attrs[]) {
                             Some(name) => name,
                             None => token::get_ident(fname),
                         };
                         Some((c, cx.expr_str(fspan, name)))
                     },
                     Err(e) => {
-                        cx.span_err(fspan, format!(
+                        cx.span_err(fspan, &format!(
                             "Unrecognized parameter ({:?}) type {:?}",
                             fname.as_str(), e
-                            ).as_slice()
+                            )[]
                         );
                         None
                     },
@@ -102,7 +102,7 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 let mut out = $init_expr;
                 for (i, u) in $input.uniforms.iter().enumerate() {
                     let _ = i; // suppress warning about unused i
-                    match u.name.as_slice() {
+                    match &u.name[] {
                         $uniform_arms
                         _ => return Err($path_root::gfx::shade::
                             ParameterError::MissingUniform(u.name.clone())),
@@ -110,7 +110,7 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 }
                 for (i, b) in $input.blocks.iter().enumerate() {
                     let _ = i; // suppress warning about unused i
-                    match b.name.as_slice() {
+                    match &b.name[] {
                         $block_arms
                         _ => return Err($path_root::gfx::shade::
                             ParameterError::MissingBlock(b.name.clone())),
@@ -118,7 +118,7 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 }
                 for (i, t) in $input.textures.iter().enumerate() {
                     let _ = i; // suppress warning about unused i
-                    match t.name.as_slice() {
+                    match &t.name[] {
                         $texture_arms
                         _ => return Err($path_root::gfx::shade::
                             ParameterError::MissingTexture(t.name.clone())),
@@ -160,33 +160,33 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 match classify(&def.node.ty.node) {
                     Ok(Param::Uniform) => quote_stmt!(cx,
                         $var_id.map_or((), |id| {
-                            if $out.uniforms.len() <= id as uint {
-                                unsafe { $out.uniforms.set_len(id as uint + 1) }
+                            if $out.uniforms.len() <= id as usize {
+                                unsafe { $out.uniforms.set_len(id as usize + 1) }
                             }
-                            *$out.uniforms.get_mut(id as uint).unwrap() = $value_id.to_uniform()
+                            *$out.uniforms.get_mut(id as usize).unwrap() = $value_id.to_uniform()
                         })
                     ),
                     Ok(Param::Block)   => quote_stmt!(cx,
                         $var_id.map_or((), |id| {
-                            if $out.blocks.len() <= id as uint {
-                                unsafe { $out.blocks.set_len(id as uint + 1) }
+                            if $out.blocks.len() <= id as usize {
+                                unsafe { $out.blocks.set_len(id as usize + 1) }
                             }
-                            *$out.blocks.get_mut(id as uint).unwrap() = {$value_id}
+                            *$out.blocks.get_mut(id as usize).unwrap() = {$value_id}
                         })
                     ),
                     Ok(Param::Texture) => quote_stmt!(cx,
                         $var_id.map_or((), |id| {
-                            if $out.textures.len() <= id as uint {
-                                unsafe { $out.textures.set_len(id as uint + 1) }
+                            if $out.textures.len() <= id as usize {
+                                unsafe { $out.textures.set_len(id as usize + 1) }
                             }
-                            *$out.textures.get_mut(id as uint).unwrap() = {$value_id}
+                            *$out.textures.get_mut(id as usize).unwrap() = {$value_id}
                         })
                     ),
                     Err(_) => {
-                        cx.span_err(span, format!(
+                        cx.span_err(span, &format!(
                             "Invalid uniform: {:?}",
                             f.name.unwrap().as_str(),
-                            ).as_slice()
+                            )[]
                         );
                         cx.stmt_expr(cx.expr_uint(span, 0))
                     },
@@ -283,14 +283,14 @@ impl ItemDecorator for ShaderParam {
             }
         };
         let link_name = format!("_{:?}Link", item.ident.as_str());
-        let link_ident = context.ident_of(link_name.as_slice());
+        let link_ident = context.ident_of(&link_name[]);
         let link_ty = box generic::ty::Literal(
-            generic::ty::Path::new_local(link_name.as_slice())
+            generic::ty::Path::new_local(&link_name[])
         );
         // Almost `context.item_struct(span, link_ident, link_def)` but with visibility
         (*push)(P(ast::Item {
             ident: link_ident,
-            attrs: copy_derive(item.attrs.as_slice()),
+            attrs: copy_derive(&item.attrs[]),
             id: ast::DUMMY_NODE_ID,
             node: ast::ItemStruct(
                 P(link_def),
@@ -395,7 +395,7 @@ impl ItemDecorator for ShaderParam {
                     ),
                     attributes: Vec::new(),
                     combine_substructure: generic::combine_substructure(box |cx, span, sub|
-                        method_create(cx, span, sub, link_name.as_slice(), path_root)
+                        method_create(cx, span, sub, &link_name[], path_root)
                     ),
                 },
                 generic::MethodDef {

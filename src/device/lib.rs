@@ -15,6 +15,7 @@
 #![feature(unsafe_destructor)]
 #![deny(missing_docs)]
 #![deny(missing_copy_implementations)]
+#![allow(unstable)]
 
 //! Graphics device. Not meant for direct use.
 
@@ -67,7 +68,7 @@ pub enum MapAccess {
 /// A handle to a readable map, which can be sliced.
 pub struct ReadableMapping<'a, T: Copy, C: draw::CommandBuffer, D: 'a + Device<C>> {
     raw: back::RawMapping,
-    len: uint,
+    len: usize,
     device: &'a mut D,
 }
 
@@ -89,17 +90,17 @@ impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Drop for ReadableMapping
 /// A handle to a writable map, which only allows setting elements.
 pub struct WritableMapping<'a, T: Copy, C: draw::CommandBuffer, D: 'a + Device<C>> {
     raw: back::RawMapping,
-    len: uint,
+    len: usize,
     device: &'a mut D,
 }
 
 impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> WritableMapping<'a, T, C, D> {
     /// Set a value in the buffer
-    pub fn set(&mut self, idx: uint, val: T) {
+    pub fn set(&mut self, idx: usize, val: T) {
         if idx >= self.len {
             panic!("Tried to write out of bounds to a WritableMapping!")
         }
-        unsafe { *(std::mem::transmute::<_, *mut T>(self.raw.pointer).offset(idx as int)) = val }
+        unsafe { *(std::mem::transmute::<_, *mut T>(self.raw.pointer).offset(idx as isize)) = val }
     }
 }
 
@@ -113,7 +114,7 @@ impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Drop for WritableMapping
 /// A handle to a complete readable/writable map, which can be sliced both ways.
 pub struct RWMapping<'a, T: Copy, C: draw::CommandBuffer, D: 'a + Device<C>> {
     raw: back::RawMapping,
-    len: uint,
+    len: usize,
     device: &'a mut D,
 }
 
@@ -193,7 +194,7 @@ impl<T> BufferHandle<T> {
     /// Get the number of elements in the buffer.
     ///
     /// Fails if `T` is zero-sized.
-    pub fn len(&self) -> uint {
+    pub fn len(&self) -> usize {
         assert!(mem::size_of::<T>() != 0, "Cannot determine the length of zero-sized buffers.");
         self.get_info().size / mem::size_of::<T>()
     }
@@ -244,9 +245,9 @@ pub fn as_byte_slice<T>(slice: &[T]) -> &[u8] {
 pub struct Capabilities {
     pub shader_model: shade::ShaderModel,
 
-    pub max_draw_buffers: uint,
-    pub max_texture_size: uint,
-    pub max_vertex_attributes: uint,
+    pub max_draw_buffers: usize,
+    pub max_texture_size: usize,
+    pub max_vertex_attributes: usize,
 
     pub array_buffer_supported: bool,
     pub fragment_output_supported: bool,
@@ -311,7 +312,7 @@ pub struct BufferInfo {
     /// Usage hint
     pub usage: BufferUsage,
     /// Size in bytes
-    pub size: uint,
+    pub size: usize,
 }
 
 /// Serialized device command.
@@ -336,7 +337,7 @@ pub enum Command {
     BindUniformBlock(back::Program, UniformBufferSlot, UniformBlockIndex, back::Buffer),
     BindUniform(shade::Location, shade::UniformValue),
     BindTexture(TextureSlot, tex::TextureKind, back::Texture, Option<SamplerHandle>),
-    SetDrawColorBuffers(uint),
+    SetDrawColorBuffers(usize),
     SetPrimitiveState(state::Primitive),
     SetViewport(target::Rect),
     SetMultiSampleState(Option<state::MultiSample>),
@@ -344,7 +345,7 @@ pub enum Command {
     SetDepthStencilState(Option<state::Depth>, Option<state::Stencil>, state::CullMode),
     SetBlendState(Option<state::Blend>),
     SetColorMask(state::ColorMask),
-    UpdateBuffer(back::Buffer, draw::DataPointer, uint),
+    UpdateBuffer(back::Buffer, draw::DataPointer, usize),
     UpdateTexture(tex::TextureKind, back::Texture, tex::ImageInfo, draw::DataPointer),
     // drawing
     Clear(target::ClearData, target::Mask),
@@ -366,8 +367,8 @@ pub trait Device<C: draw::CommandBuffer> {
     fn submit(&mut self, buffer: (&C, &draw::DataBuffer));
 
     // resource creation
-    fn create_buffer_raw(&mut self, size: uint, usage: BufferUsage) -> BufferHandle<()>;
-    fn create_buffer<T>(&mut self, num: uint, usage: BufferUsage) -> BufferHandle<T> {
+    fn create_buffer_raw(&mut self, size: usize, usage: BufferUsage) -> BufferHandle<()>;
+    fn create_buffer<T>(&mut self, num: usize, usage: BufferUsage) -> BufferHandle<T> {
         self.create_buffer_raw(num * mem::size_of::<T>(), usage).cast()
     }
     fn create_buffer_static_raw(&mut self, data: &[u8]) -> BufferHandle<()>;
@@ -397,9 +398,9 @@ pub trait Device<C: draw::CommandBuffer> {
 
     /// Update the information stored in a specific buffer
     fn update_buffer_raw(&mut self, buf: BufferHandle<()>, data: &[u8],
-                         offset_bytes: uint);
+                         offset_bytes: usize);
     fn update_buffer<T: Copy>(&mut self, buf: BufferHandle<T>, data: &[T],
-                     offset_elements: uint) {
+                     offset_elements: usize) {
         self.update_buffer_raw(buf.cast(), as_byte_slice(data), mem::size_of::<T>() * offset_elements)
     }
     fn map_buffer_raw(&mut self, buf: BufferHandle<()>, access: MapAccess) -> back::RawMapping;
@@ -425,7 +426,7 @@ mod test {
     use super::{BufferHandle, Handle};
     use super::{BufferInfo, BufferUsage};
 
-    fn mock_buffer<T>(usage: BufferUsage, len: uint) -> BufferHandle<T> {
+    fn mock_buffer<T>(usage: BufferUsage, len: usize) -> BufferHandle<T> {
         BufferHandle {
             raw: Handle(
                 0,

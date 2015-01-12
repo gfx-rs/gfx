@@ -70,7 +70,7 @@ impl DataBuffer {
     /// Return a reference to a stored data object.
     pub fn get_ref(&self, data: DataPointer) -> &[u8] {
         let DataPointer(offset, size) = data;
-        self.buf.slice(offset as uint, offset as uint + size as uint)
+        self.buf.slice(offset as usize, offset as usize + size as usize)
     }
 }
 
@@ -97,7 +97,7 @@ pub trait CommandBuffer {
     fn bind_uniform(&mut self, shade::Location, shade::UniformValue);
     fn bind_texture(&mut self, ::TextureSlot, tex::TextureKind, back::Texture,
                     Option<::SamplerHandle>);
-    fn set_draw_color_buffers(&mut self, uint);
+    fn set_draw_color_buffers(&mut self, usize);
     fn set_primitive(&mut self, ::state::Primitive);
     fn set_viewport(&mut self, target::Rect);
     fn set_multi_sample(&mut self, Option<::state::MultiSample>);
@@ -106,7 +106,7 @@ pub trait CommandBuffer {
                          Option<::state::Stencil>, ::state::CullMode);
     fn set_blend(&mut self, Option<::state::Blend>);
     fn set_color_mask(&mut self, ::state::ColorMask);
-    fn update_buffer(&mut self, back::Buffer, DataPointer, uint);
+    fn update_buffer(&mut self, back::Buffer, DataPointer, usize);
     fn update_texture(&mut self, tex::TextureKind, back::Texture,
                       tex::ImageInfo, DataPointer);
     fn call_clear(&mut self, target::ClearData, target::Mask);

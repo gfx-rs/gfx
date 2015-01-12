@@ -15,6 +15,7 @@
 //! High-level, platform independent, bindless rendering API.
 
 #![deny(missing_docs)]
+#![allow(unstable)]
 
 #[macro_use]
 extern crate log;
@@ -53,7 +54,7 @@ pub enum ProgramError {
     Link(()),
 }
 
-const TRACKED_ATTRIBUTES: uint = 8;
+const TRACKED_ATTRIBUTES: usize = 8;
 type CachedAttribute = (device::RawBufferHandle, attrib::Format);
 
 /// The internal state of the renderer. This is used as a cache to eliminate
@@ -223,7 +224,7 @@ impl<C: CommandBuffer> Renderer<C> {
 
     /// Update a buffer with data from a vector.
     pub fn update_buffer_vec<T: Copy>(&mut self, buf: device::BufferHandle<T>,
-                             data: &[T], offset_elements: uint) {
+                             data: &[T], offset_elements: usize) {
         let esize = mem::size_of::<T>();
         let offset_bytes = esize * offset_elements;
         debug_assert!(data.len() * esize + offset_bytes <= buf.get_info().size);
@@ -401,7 +402,7 @@ impl<C: CommandBuffer> Renderer<C> {
         }
         for (attr_index, sat) in link.attribute_indices().zip(info.attributes.iter()) {
             let vat = &mesh.attributes[attr_index];
-            let loc = sat.location as uint;
+            let loc = sat.location as usize;
             let need_update = loc >= self.render_state.attributes.len() ||
                 match self.render_state.attributes[loc] {
                     Some((buf, fmt)) => buf != vat.buffer || fmt != vat.format,
@@ -478,7 +479,7 @@ impl<D: device::Device<C>, C: CommandBuffer> DeviceHelper<C> for D {
         debug_assert!(nv < {
             use std::num::Int;
             let val: device::VertexCount = Int::max_value();
-            val as uint
+            val as usize
         });
         let buf = self.create_buffer_static(data);
         mesh::Mesh::from_format(buf, nv as device::VertexCount)
@@ -497,7 +498,7 @@ impl<D: device::Device<C>, C: CommandBuffer> DeviceHelper<C> for D {
 
         // I would map on this, but I get a lifetime error
         match self.shader_targets(&fs_src) {
-            Some(targets) => self.create_program(&[vs, fs], Some(targets.as_slice())),
+            Some(targets) => self.create_program(&[vs, fs], Some(&targets[])),
             None          => self.create_program(&[vs, fs], None),
         }.map_err(|e| ProgramError::Link(e))
     }

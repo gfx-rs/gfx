@@ -187,14 +187,14 @@ impl ToSlice for BufferHandle<u32> {
 #[derive(Clone, Copy, Show)]
 pub enum LinkError {
     /// An attribute index is out of supported bounds
-    MeshAttribute(uint),
+    MeshAttribute(usize),
     /// An input index is out of supported bounds
-    ShaderInput(uint),
+    ShaderInput(usize),
 }
 
-const BITS_PER_ATTRIBUTE: uint = 4;
-const MAX_SHADER_INPUTS: uint = 64 / BITS_PER_ATTRIBUTE;
-const MESH_ATTRIBUTE_MASK: uint = (1u << BITS_PER_ATTRIBUTE) - 1;
+const BITS_PER_ATTRIBUTE: usize = 4;
+const MAX_SHADER_INPUTS: usize = 64 / BITS_PER_ATTRIBUTE;
+const MESH_ATTRIBUTE_MASK: usize = (1 << BITS_PER_ATTRIBUTE) - 1;
 
 /// An iterator over mesh attributes.
 #[derive(Copy)]
@@ -203,10 +203,10 @@ pub struct AttributeIndices {
 }
 
 impl Iterator for AttributeIndices {
-    type Item = uint;
+    type Item = usize;
 
-    fn next(&mut self) -> Option<uint> {
-        let id = (self.value as uint) & MESH_ATTRIBUTE_MASK;
+    fn next(&mut self) -> Option<usize> {
+        let id = (self.value as usize) & MESH_ATTRIBUTE_MASK;
         self.value >>= BITS_PER_ATTRIBUTE;
         Some(id)
     }
@@ -220,7 +220,7 @@ pub struct Link {
 
 impl Link {
     /// Construct a new link from an iterator over attribute indices.
-    pub fn from_iter<I: Iterator<Item=uint>>(iter: I) -> Result<Link, LinkError> {
+    pub fn from_iter<I: Iterator<Item=usize>>(iter: I) -> Result<Link, LinkError> {
         let mut table = 0u64;
         for (input, attrib) in iter.enumerate() {
             if input >= MAX_SHADER_INPUTS {

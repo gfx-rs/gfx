@@ -87,7 +87,7 @@ impl ::draw::CommandBuffer for GlCommandBuffer {
         self.buf.push(Command::BindTexture(slot, kind, tex, sampler));
     }
 
-    fn set_draw_color_buffers(&mut self, num: uint) {
+    fn set_draw_color_buffers(&mut self, num: usize) {
         self.buf.push(Command::SetDrawColorBuffers(num));
     }
 
@@ -121,7 +121,7 @@ impl ::draw::CommandBuffer for GlCommandBuffer {
     }
 
     fn update_buffer(&mut self, buf: super::Buffer, data: ::draw::DataPointer,
-                        offset_bytes: uint) {
+                        offset_bytes: usize) {
         self.buf.push(Command::UpdateBuffer(buf, data, offset_bytes));
     }
 
