@@ -44,7 +44,7 @@ pub enum TextureError {
     /// The given TextureInfo contains invalid values.
     InvalidTextureInfo(TextureInfo),
     /// The given data has a different size than the target texture slice.
-    IncorrectTextureSize(uint),
+    IncorrectTextureSize(usize),
 }
 
 impl fmt::Show for TextureError {

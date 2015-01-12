@@ -13,22 +13,22 @@
 # limitations under the License.
 
 [package]
-
 name = "gfx"
 version = "0.1.0"
 description = "A high-performance, bindless graphics API"
-
 homepage = "https://github.com/bjz/noise-rs"
 repository = "https://github.com/bjz/noise-rs"
 keywords = ["graphics", "gamedev"]
-
 license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
-
 
 [lib]
 name = "gfx"
 path = "src/gfx/lib.rs"
+
+[dependencies]
+log = "*"
+time = "*"
 
 [dependencies.gfx_macros]
 path = "src/gfx_macros"
@@ -40,37 +40,11 @@ path = "src/device/"
 [dependencies.render]
 path = "src/render/"
 
-[dependencies]
-log = "*"
-time = "*"
-
-[[example]]
-name = "triangle"
-path = "examples/triangle/main.rs"
-
 [dev_dependencies.glfw]
 git = "https://github.com/bjz/glfw-rs.git"
 
-[[example]]
-name = "cube"
-path = "examples/cube/main.rs"
-
-# [dev_dependencies.glfw]
-# git = "https://github.com/bjz/glfw-rs.git"
-
 [dev_dependencies.cgmath]
 git = "https://github.com/bjz/cgmath-rs"
-
-
-[[example]]
-name = "terrain"
-path = "examples/terrain/main.rs"
-
-# [dev_dependencies.glfw]
-# git = "https://github.com/bjz/glfw-rs.git"
-
-# [dev_dependencies.cgmath]
-# git = "https://github.com/bjz/cgmath-rs"
 
 [dev_dependencies.genmesh]
 git = "https://github.com/csherratt/genmesh.git"
@@ -78,6 +52,19 @@ git = "https://github.com/csherratt/genmesh.git"
 [dev_dependencies.noise]
 git = "https://github.com/bjz/noise-rs.git"
 
+[dev_dependencies.glutin]
+git = "https://github.com/tomaka/glutin.git"
+
+[dev_dependencies.gfx_gl]
+git = "https://github.com/gfx-rs/gfx_gl.git"
+
+[[example]]
+name = "cube"
+path = "examples/cube/main.rs"
+
+[[example]]
+name = "terrain"
+path = "examples/terrain/main.rs"
 
 [[example]]
 name = "deferred"
@@ -87,19 +74,10 @@ path = "examples/deferred/main.rs"
 name = "glutin"
 path = "examples/glutin/main.rs"
 
-[dev_dependencies.glutin]
-git = "https://github.com/tomaka/glutin.git"
-
 [[example]]
 name = "performance"
 path = "examples/performance/main.rs"
 
-# [dev_dependencies.glfw]
-# git = "https://github.com/bjz/glfw-rs.git"
-
-[dev_dependencies.gfx_gl]
-git = "https://github.com/gfx-rs/gfx_gl.git"
-
-# [dev_dependencies.cgmath]
-# git = "https://github.com/bjz/cgmath-rs"
-
+[[example]]
+name = "triangle"
+path = "examples/triangle/main.rs"

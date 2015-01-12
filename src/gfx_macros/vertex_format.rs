@@ -72,10 +72,10 @@ fn find_modifier(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 word.get().parse().and_then(|new_modifier| {
                     attr::mark_used(attribute);
                     modifier.map_or(Some(new_modifier), |modifier| {
-                        cx.span_warn(span, format!(
+                        cx.span_warn(span, &format!(
                             "Extra attribute modifier detected: `#[{:?}]` - \
                             ignoring in favour of `#[{:?}]`.", new_modifier, modifier
-                        ).as_slice());
+                        )[]);
                         None
                     })
                 }).or(modifier)
@@ -96,13 +96,13 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 None | Some(Modifier::AsFloat) => "Default",
                 Some(Modifier::AsDouble) => "Precision",
                 Some(Modifier::Normalized) => {
-                    cx.span_warn(span, format!(
+                    cx.span_warn(span, &format!(
                         "Incompatible float modifier attribute: `#[{:?}]`", modifier
-                    ).as_slice());
+                    )[]);
                     ""
                 }
             });
-            let size = cx.ident_of(format!("F{}", ty_str.slice_from(1)).as_slice());
+            let size = cx.ident_of(&format!("F{}", ty_str.slice_from(1))[]);
             quote_expr!(cx, $path_root::gfx::attrib::Type::Float($path_root::gfx::attrib::FloatSubType::$kind,
                                                                  $path_root::gfx::attrib::FloatSize::$size))
         },
@@ -116,27 +116,20 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 Some(Modifier::Normalized) => "Normalized",
                 Some(Modifier::AsFloat) => "AsFloat",
                 Some(Modifier::AsDouble) => {
-                    cx.span_warn(span, format!(
+                    cx.span_warn(span, &format!(
                         "Incompatible int modifier attribute: `#[{:?}]`", modifier
-                    ).as_slice());
+                    )[]);
                     ""
                 }
             });
-            let size = cx.ident_of(format!("U{}", ty_str.slice_from(1)).as_slice());
+            let size = cx.ident_of(&format!("U{}", ty_str.slice_from(1))[]);
             quote_expr!(cx, $path_root::gfx::attrib::Type::Int($path_root::gfx::attrib::IntSubType::$kind,
                                                                $path_root::gfx::attrib::IntSize::$size,
                                                                $path_root::gfx::attrib::SignFlag::$sign))
         },
-        "uint" | "int" => {
-            cx.span_err(span, format!("Pointer-sized integer components are \
-                                      not supported, but found: `{:?}`. Use an \
-                                      integer component with an explicit size \
-                                      instead.", ty_str).as_slice());
-            cx.expr_tuple(span, vec![])
-        },
         ty_str => {
-            cx.span_err(span, format!("Unrecognized component type: `{:?}`",
-                                      ty_str).as_slice());
+            cx.span_err(span, &format!("Unrecognized component type: `{:?}`",
+                                      ty_str)[]);
             cx.expr_tuple(span, vec![])
         },
     }
@@ -145,7 +138,7 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
 fn decode_count_and_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                          field: &ast::StructField,
                          path_root: ast::Ident) -> (P<ast::Expr>, P<ast::Expr>) {
-    let modifier = find_modifier(cx, span, field.node.attrs.as_slice());
+    let modifier = find_modifier(cx, span, &field.node.attrs[]);
     match field.node.ty.node {
         ast::TyPath(ref p, _) => (
             cx.expr_lit(span, ast::LitInt(1, ast::UnsuffixedIntLit(ast::Plus))),
@@ -156,14 +149,14 @@ fn decode_count_and_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 decode_type(cx, span, &p.segments[0].identifier, modifier, path_root)
             },
             _ => {
-                cx.span_err(span, format!("Unsupported fixed vector sub-type: \
-                                          `{:?}`",pty.node).as_slice());
+                cx.span_err(span, &format!("Unsupported fixed vector sub-type: \
+                                          `{:?}`",pty.node)[]);
                 cx.expr_tuple(span, vec![])
             },
         }),
         _ => {
-            cx.span_err(span, format!("Unsupported attribute type: `{:?}`",
-                                      field.node.ty.node).as_slice());
+            cx.span_err(span, &format!("Unsupported attribute type: `{:?}`",
+                                      field.node.ty.node)[]);
             (cx.expr_tuple(span, vec![]), cx.expr_tuple(span, vec![]))
         },
     }
@@ -180,7 +173,7 @@ fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     let struct_ident = substr.type_ident;
                     let buffer_expr = &substr.nonself_args[1];
                     let (count_expr, type_expr) = decode_count_and_type(cx, span, def, path_root);
-                    let ident_str = match super::find_name(cx, span, def.node.attrs.as_slice()) {
+                    let ident_str = match super::find_name(cx, span, &def.node.attrs[]) {
                         Some(name) => name,
                         None => token::get_ident(ident),
                     };
@@ -195,8 +188,8 @@ fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                                 elem_type: $type_expr,
                                 offset: unsafe {
                                     let x: $struct_ident = ::std::mem::uninitialized();
-                                    let offset = (&x.$ident as *const _ as uint) -
-                                        (&x as *const _ as uint);
+                                    let offset = (&x.$ident as *const _ as usize) -
+                                        (&x as *const _ as usize);
                                     ::std::mem::forget(x);
                                     offset as $path_root::gfx::attrib::Offset
                                 },

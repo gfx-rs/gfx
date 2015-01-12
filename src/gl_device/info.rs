@@ -132,10 +132,10 @@ fn get_string(gl: &gl::Gl, name: gl::types::GLenum) -> &'static str {
     }
 }
 
-fn get_uint(gl: &gl::Gl, name: gl::types::GLenum) -> uint {
+fn get_usize(gl: &gl::Gl, name: gl::types::GLenum) -> usize {
     let mut value = 0 as gl::types::GLint;
     unsafe { gl.GetIntegerv(name, &mut value) };
-    value as uint
+    value as usize
 }
 
 unsafe fn c_str_as_static_str(c_str: *const i8) -> &'static str {
@@ -179,8 +179,8 @@ impl Info {
         let version = Version::parse(get_string(gl, gl::VERSION)).unwrap();
         let shading_language = Version::parse(get_string(gl, gl::SHADING_LANGUAGE_VERSION)).unwrap();
         let extensions = if version >= Version::new(3, 2, None, "") {
-            let num_exts = get_uint(gl, gl::NUM_EXTENSIONS) as gl::types::GLuint;
-            range(0, num_exts)
+            let num_exts = get_usize(gl, gl::NUM_EXTENSIONS) as gl::types::GLuint;
+            (0..num_exts)
                 .map(|i| unsafe { c_str_as_static_str(gl.GetStringi(gl::EXTENSIONS, i) as *const i8) })
                 .collect()
         } else {
@@ -223,9 +223,9 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities) {
     let caps = Capabilities {
         shader_model:                   to_shader_model(&info.shading_language),
 
-        max_draw_buffers:               get_uint(gl, gl::MAX_DRAW_BUFFERS),
-        max_texture_size:               get_uint(gl, gl::MAX_TEXTURE_SIZE),
-        max_vertex_attributes:          get_uint(gl, gl::MAX_VERTEX_ATTRIBS),
+        max_draw_buffers:               get_usize(gl, gl::MAX_DRAW_BUFFERS),
+        max_texture_size:               get_usize(gl, gl::MAX_TEXTURE_SIZE),
+        max_vertex_attributes:          get_usize(gl, gl::MAX_VERTEX_ATTRIBS),
 
         array_buffer_supported:         info.is_version_or_extension_supported(3, 0, "GL_ARB_vertex_array_object"),
         fragment_output_supported:      info.is_version_or_extension_supported(3, 0, "GL_ARB_gpu_shader4"),

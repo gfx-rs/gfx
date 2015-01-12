@@ -16,6 +16,7 @@
 //! least VAOs, but using newer extensions when available.
 
 #![allow(missing_docs)]
+#![allow(unstable)]
 #![experimental]
 #![deny(missing_copy_implementations)]
 
@@ -42,6 +43,7 @@ mod state;
 mod tex;
 mod info;
 
+#[allow(raw_pointer_derive)]
 #[derive(Copy)]
 pub struct RawMapping {
     pub pointer: *mut libc::c_void,
@@ -210,7 +212,7 @@ impl GlDevice {
     }
 
     fn update_sub_buffer(&mut self, buffer: Buffer, address: *const u8,
-                         size: uint, offset: uint) {
+                         size: usize, offset: usize) {
         unsafe { self.gl.BindBuffer(gl::ARRAY_BUFFER, buffer) };
         unsafe {
             self.gl.BufferSubData(gl::ARRAY_BUFFER,
@@ -575,7 +577,7 @@ impl Device<GlCommandBuffer> for GlDevice {
         }
     }
 
-    fn create_buffer_raw(&mut self, size: uint, usage: BufferUsage) -> ::BufferHandle<()> {
+    fn create_buffer_raw(&mut self, size: usize, usage: BufferUsage) -> ::BufferHandle<()> {
         let name = self.create_buffer_internal();
         let info = ::BufferInfo {
             usage: usage,
@@ -716,7 +718,7 @@ impl Device<GlCommandBuffer> for GlDevice {
     }
 
     fn update_buffer_raw(&mut self, buffer: ::BufferHandle<()>, data: &[u8],
-                         offset_bytes: uint) {
+                         offset_bytes: usize) {
         debug_assert!(offset_bytes + data.len() <= buffer.get_info().size);
         self.update_sub_buffer(buffer.get_name(), data.as_ptr(), data.len(),
                                offset_bytes)

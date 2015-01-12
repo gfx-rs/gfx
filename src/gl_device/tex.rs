@@ -159,7 +159,7 @@ fn components_to_glpixel(c: Components) -> GLenum {
     }
 }
 
-fn components_to_count(c: Components) -> uint {
+fn components_to_count(c: Components) -> usize {
     match c {
         Components::R    => 1,
         Components::RG   => 2,
@@ -199,13 +199,13 @@ fn format_to_gltype(t: Format) -> Result<GLenum, ()> {
     }
 }
 
-fn format_to_size(t: tex::Format) -> uint {
+fn format_to_size(t: tex::Format) -> usize {
     match t {
         Format::Float(c, FloatSize::F16) => 2 * components_to_count(c),
         Format::Float(c, FloatSize::F32) => 4 * components_to_count(c),
         Format::Float(c, FloatSize::F64) => 8 * components_to_count(c),
-        Format::Integer(c, bits, _)  => bits as uint * components_to_count(c) >> 3,
-        Format::Unsigned(c, bits, _) => bits as uint * components_to_count(c) >> 3,
+        Format::Integer(c, bits, _)  => bits as usize * components_to_count(c) >> 3,
+        Format::Unsigned(c, bits, _) => bits as usize * components_to_count(c) >> 3,
         Format::Compressed(_) => panic!("Tried to get size of a compressed texel!"),
         Format::R3G3B2       => 1,
         Format::RGB5A1       => 2,
@@ -537,12 +537,12 @@ pub fn bind_sampler(gl: &gl::Gl, anchor: BindAnchor, info: &tex::SamplerInfo) { 
 }}
 
 pub fn update_texture(gl: &gl::Gl, kind: TextureKind, name: Texture,
-                      img: &tex::ImageInfo, address: *const u8, size: uint)
+                      img: &tex::ImageInfo, address: *const u8, size: usize)
                       -> Result<(), TextureError> {
     if !img.format.is_compressed() {
         // TODO: can we compute the expected size for compressed formats?
-        let expected_size = img.width as uint * img.height as uint *
-                            img.depth as uint * format_to_size(img.format);
+        let expected_size = img.width as usize * img.height as usize *
+                            img.depth as usize * format_to_size(img.format);
         if size != expected_size {
             return Err(TextureError::IncorrectTextureSize(expected_size));
         }

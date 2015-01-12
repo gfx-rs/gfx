@@ -100,7 +100,7 @@ pub enum Stage {
 // Describing program data
 
 /// Location of a parameter in the program.
-pub type Location = uint;
+pub type Location = usize;
 
 // unable to derive anything for fixed arrays
 /// A value that can be uploaded to the device as a uniform.
@@ -174,32 +174,32 @@ impl fmt::Show for UniformValue {
             UniformValue::I32(x)            => write!(f, "ValueI32({:?})", x),
             UniformValue::F32(x)            => write!(f, "ValueF32({:?})", x),
 
-            UniformValue::I32Vector2(ref v) => write!(f, "ValueI32Vector2({:?})", v.as_slice()),
-            UniformValue::I32Vector3(ref v) => write!(f, "ValueI32Vector3({:?})", v.as_slice()),
-            UniformValue::I32Vector4(ref v) => write!(f, "ValueI32Vector4({:?})", v.as_slice()),
+            UniformValue::I32Vector2(ref v) => write!(f, "ValueI32Vector2({:?})", &v[]),
+            UniformValue::I32Vector3(ref v) => write!(f, "ValueI32Vector3({:?})", &v[]),
+            UniformValue::I32Vector4(ref v) => write!(f, "ValueI32Vector4({:?})", &v[]),
 
-            UniformValue::F32Vector2(ref v) => write!(f, "ValueF32Vector2({:?})", v.as_slice()),
-            UniformValue::F32Vector3(ref v) => write!(f, "ValueF32Vector3({:?})", v.as_slice()),
-            UniformValue::F32Vector4(ref v) => write!(f, "ValueF32Vector4({:?})", v.as_slice()),
+            UniformValue::F32Vector2(ref v) => write!(f, "ValueF32Vector2({:?})", &v[]),
+            UniformValue::F32Vector3(ref v) => write!(f, "ValueF32Vector3({:?})", &v[]),
+            UniformValue::F32Vector4(ref v) => write!(f, "ValueF32Vector4({:?})", &v[]),
 
             UniformValue::F32Matrix2(ref m) => {
                 try!(write!(f, "ValueF32Matrix2("));
                 for v in m.iter() {
-                    try!(write!(f, "{:?}", v.as_slice()));
+                    try!(write!(f, "{:?}", &v[]));
                 }
                 write!(f, ")")
             },
             UniformValue::F32Matrix3(ref m) => {
                 try!(write!(f, "ValueF32Matrix3("));
                 for v in m.iter() {
-                    try!(write!(f, "{:?}", v.as_slice()));
+                    try!(write!(f, "{:?}", &v[]));
                 }
                 write!(f, ")")
             },
             UniformValue::F32Matrix4(ref m) => {
                 try!(write!(f, "ValueF32Matrix4("));
                 for v in m.iter() {
-                    try!(write!(f, "{:?}", v.as_slice()));
+                    try!(write!(f, "{:?}", &v[]));
                 }
                 write!(f, ")")
             },
@@ -213,9 +213,9 @@ pub struct Attribute {
     /// Name of this attribute.
     pub name: String,
     /// Vertex attribute binding.
-    pub location: uint,
+    pub location: usize,
     /// Number of elements this attribute represents.
-    pub count: uint,
+    pub count: usize,
     /// Type that this attribute is composed of.
     pub base_type: BaseType,
     /// "Scalarness" of this attribute.
@@ -230,7 +230,7 @@ pub struct UniformVar {
     /// Location of this uniform in the program.
     pub location: Location,
     /// Number of elements this uniform represents.
-    pub count: uint,
+    pub count: usize,
     /// Type that this uniform is composed of
     pub base_type: BaseType,
     /// "Scalarness" of this uniform.
@@ -243,7 +243,7 @@ pub struct BlockVar {
     /// Name of this uniform block.
     pub name: String,
     /// Size (in bytes) of this uniform block's data.
-    pub size: uint,
+    pub size: usize,
     /// What program stage this uniform block can be used in, as a bitflag.
     pub usage: u8,
 }

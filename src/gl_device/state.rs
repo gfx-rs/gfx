@@ -66,7 +66,7 @@ pub fn bind_multi_sample(gl: &gl::Gl, ms: Option<s::MultiSample>) {
     }
 }
 
-pub fn bind_draw_color_buffers(gl: &gl::Gl, num: uint) {
+pub fn bind_draw_color_buffers(gl: &gl::Gl, num: usize) {
     unsafe { gl.DrawBuffers(
         num as i32,
         [gl::COLOR_ATTACHMENT0,  gl::COLOR_ATTACHMENT1,  gl::COLOR_ATTACHMENT2,

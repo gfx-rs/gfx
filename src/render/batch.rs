@@ -54,7 +54,7 @@ pub fn link_mesh(mesh: &mesh::Mesh, pinfo: &ProgramInfo) -> Result<mesh::Link, M
     let mut indices = Vec::new();
     for sat in pinfo.attributes.iter() {
         match mesh.attributes.iter().enumerate()
-                  .find(|&(_, a)| a.name.as_slice() == sat.name.as_slice()) {
+                  .find(|&(_, a)| a.name == sat.name) {
             Some((attrib_id, vat)) => match vat.format.elem_type.is_compatible(sat.base_type) {
                 Ok(_) => indices.push(attrib_id),
                 Err(_) => return Err(MeshError::AttributeType),
@@ -179,7 +179,7 @@ impl<T> Array<T> {
 
     fn get(&self, id: Id<T>) -> &T {
         let Id(i) = id;
-        &self.data[i as uint]
+        &self.data[i as usize]
     }
 }
 
