@@ -84,10 +84,10 @@ glsl_150: b"
 
 //----------------------------------------
 
-fn gfx_main(glfw: glfw::Glfw,
-            window: glfw::Window,
+fn gfx_main(mut glfw: glfw::Glfw,
+            mut window: glfw::Window,
             events: Receiver<(f64, glfw::WindowEvent)>,
-            dimension: int) {
+            dimension: i16) {
     let (w, h) = window.get_framebuffer_size();
     let frame = gfx::Frame::new(w as u16, h as u16);
 
@@ -217,7 +217,7 @@ fn compile_shader(gl: &Gl, src: &str, ty: GLenum) -> GLuint { unsafe {
     if status != (gl::TRUE as GLint) {
         let mut len: GLint = 0;
         gl.GetShaderiv(shader, gl::INFO_LOG_LENGTH, &mut len);
-        let mut buf: Vec<u8> = repeat(0u8).take((len as int).saturating_sub(1) as uint).collect();     // subtract 1 to skip the trailing null character
+        let mut buf: Vec<u8> = repeat(0u8).take((len as isize).saturating_sub(1) as usize).collect();     // subtract 1 to skip the trailing null character
         gl.GetShaderInfoLog(shader, len, ptr::null_mut(), buf.as_mut_ptr() as *mut GLchar);
         panic!("{}", str::from_utf8(buf.as_slice()).ok().expect("ShaderInfoLog not valid utf8"));
     }
@@ -237,17 +237,17 @@ fn link_program(gl: &Gl, vs: GLuint, fs: GLuint) -> GLuint { unsafe {
     if status != (gl::TRUE as GLint) {
         let mut len: GLint = 0;
         gl.GetProgramiv(program, gl::INFO_LOG_LENGTH, &mut len);
-        let mut buf: Vec<u8> = repeat(0u8).take((len as int).saturating_sub(1) as uint).collect();     // subtract 1 to skip the trailing null character
+        let mut buf: Vec<u8> = repeat(0u8).take((len as isize).saturating_sub(1) as usize).collect();     // subtract 1 to skip the trailing null character
         gl.GetProgramInfoLog(program, len, ptr::null_mut(), buf.as_mut_ptr() as *mut GLchar);
         panic!("{}", str::from_utf8(buf.as_slice()).ok().expect("ProgramInfoLog not valid utf8"));
     }
     program
 }}
 
-fn gl_main(glfw: glfw::Glfw,
-           window: glfw::Window,
+fn gl_main(mut glfw: glfw::Glfw,
+           mut window: glfw::Window,
            _: Receiver<(f64, glfw::WindowEvent),>,
-           dimension: int) {
+           dimension: i16) {
     let gl = Gl::load_with(|s| window.get_proc_address(s));
 
     // Create GLSL shaders
@@ -372,21 +372,21 @@ fn main() {
     }
 
     let mode = &args[1];
-    let count: int = if args.len() >= 2 {
+    let count: i16 = if args.len() >= 2 {
         FromStr::from_str(args[2].as_slice())
     } else {
         None
     }.unwrap_or(10000);
 
-    let count = ((count as f64).sqrt() / 2.) as int;
+    let count = ((count as f64).sqrt() / 2.) as i16;
 
-    let glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
+    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
     glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
     glfw.window_hint(glfw::WindowHint::OpenglForwardCompat(true));
     glfw.window_hint(glfw::WindowHint::OpenglProfile(glfw::OpenGlProfileHint::Core));
 
-    let (window, events) = glfw
+    let (mut window, events) = glfw
         .create_window(640, 480, "Cube example", glfw::WindowMode::Windowed)
         .expect("Failed to create GLFW window.");
 

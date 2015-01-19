@@ -21,6 +21,8 @@
 
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate rustc_bitflags;
 extern crate libc;
 
 // TODO: Remove these exports once `gl_device` becomes a separate crate.
