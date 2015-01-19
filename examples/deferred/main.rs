@@ -53,7 +53,7 @@ use time::precise_time_s;
 use noise::{Seed, perlin2};
 
 // Remember to also change the constants in the shaders
-const NUM_LIGHTS: uint = 250;
+const NUM_LIGHTS: usize = 250;
 
 #[vertex_format]
 #[derive(Copy)]
@@ -520,13 +520,13 @@ fn create_res_buffer(width: u16, height: u16, device: &mut gfx::GlDevice, textur
 }
 
 fn main() {
-    let glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
+    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
     glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
     glfw.window_hint(glfw::WindowHint::OpenglForwardCompat(true));
     glfw.window_hint(glfw::WindowHint::OpenglProfile(glfw::OpenGlProfileHint::Core));
 
-    let (window, events) = glfw
+    let (mut window, events) = glfw
         .create_window(800, 600, "", glfw::WindowMode::Windowed)
         .expect("Failed to create GLFW window.");
 
@@ -810,4 +810,3 @@ fn main() {
         window.swap_buffers();
     }
 }
-
