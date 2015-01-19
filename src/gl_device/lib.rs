@@ -143,7 +143,7 @@ pub struct GlDevice {
 
 impl GlDevice {
     /// Load OpenGL symbols and detect driver information
-    pub fn new<F>(fn_proc: F) -> GlDevice where F: Fn(&str) -> *const ::libc::c_void {
+    pub fn new<F>(fn_proc: F) -> GlDevice where F: FnMut(&str) -> *const ::libc::c_void {
         let gl = gl::Gl::load_with(fn_proc);
 
         let (info, caps) = info::get(&gl);
