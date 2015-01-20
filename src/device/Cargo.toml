@@ -28,3 +28,4 @@ git = "https://github.com/gfx-rs/gfx_gl.git"
 
 [dependencies]
 log = "*"
+bitflags = "*"
