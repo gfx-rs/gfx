@@ -201,6 +201,7 @@ impl<T: Clone + PartialEq> Array<T> {
 /// Ref batch - copyable and smaller, but depends on the `Context`.
 /// It has references to the resources (mesh, program, state), that are held
 /// by the context that created the batch, so these have to be used together.
+#[derive(Copy)]
 pub struct RefBatch<L, T> {
     mesh_id: Id<mesh::Mesh>,
     mesh_link: mesh::Link,
