@@ -72,12 +72,12 @@ impl<D: device::Device> Graphics<D> {
     }
 
     /// Create a new ref batch.
-    pub fn make_batch<L, T: shade::ShaderParam<L>>(&mut self,
+    pub fn make_batch<T: shade::ShaderParam>(&mut self,
                       program: &ProgramHandle,
                       mesh: &Mesh,
                       slice: Slice,
                       state: &DrawState)
-                      -> Result<batch::RefBatch<L, T>, batch::BatchError> {
+                      -> Result<batch::RefBatch<T>, batch::BatchError> {
         self.context.make_batch(program, mesh, slice, state)
     }
 
@@ -87,14 +87,14 @@ impl<D: device::Device> Graphics<D> {
     }
 
     /// Draw a ref batch.
-    pub fn draw<'a, L, T: shade::ShaderParam<L>>(&'a mut self,
-        batch: &'a batch::RefBatch<L, T>, data: &'a T, frame: &Frame) {
+    pub fn draw<'a, T: shade::ShaderParam>(&'a mut self,
+        batch: &'a batch::RefBatch<T>, data: &'a T, frame: &Frame) {
         self.renderer.draw(&(batch, data, &self.context), frame)
     }
 
     /// Draw a ref batch with instancing
-    pub fn draw_instanced<'a, L, T: shade::ShaderParam<L>>(&'a mut self,
-                          batch: &'a batch::RefBatch<L, T>,
+    pub fn draw_instanced<'a, T: shade::ShaderParam>(&'a mut self,
+                          batch: &'a batch::RefBatch<T>,
                           data: &'a T,
                           count: u32,
                           vertex_offset: u32,

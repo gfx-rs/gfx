@@ -261,7 +261,7 @@ impl ItemDecorator for ShaderParam {
         let (base_def, link_def) = match item.node {
             ast::ItemStruct(ref definition, ref generics) => {
                 if generics.lifetimes.len() > 0 {
-                    context.bug("Generics are not allowed in ShaderParam struct");
+                    context.bug("Lifetimes are not allowed in ShaderParam struct");
                 }
                 (definition, ast::StructDef {
                     fields: definition.fields.iter()
@@ -317,7 +317,7 @@ impl ItemDecorator for ShaderParam {
                                     ],
                                     Vec::new(),
                                     vec![
-                                        context.ty_ident(span, link_ident),
+                                        //context.ty_ident(span, link_ident), //TODO
                                         context.ty_ident(span, item.ident)
                                     ],
                                     Vec::new(),
@@ -345,7 +345,7 @@ impl ItemDecorator for ShaderParam {
                     as `#[shader_param(MyLightBatch, MyHeavyBatch)]`")
             }
         }
-        // #[derive ShaderParam
+        // #[derive ShaderParam]
         let trait_def = generic::TraitDef {
             span: span,
             attributes: Vec::new(),
