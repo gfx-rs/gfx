@@ -114,7 +114,8 @@ glsl_150: b"
 //----------------------------------------
 
 fn main() {
-    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
+    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS)
+        .ok().expect("Failed to initialize glfs-rs");
 
     glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
     glfw.window_hint(glfw::WindowHint::OpenglForwardCompat(true));
@@ -192,10 +193,11 @@ fn main() {
         format: gfx::tex::RGBA8,
     };
     let image_info = texture_info.to_image_info();
-    let texture = device.create_texture(texture_info).unwrap();
+    let texture = device.create_texture(texture_info)
+        .ok().expect("Failed to create texture");
     device.update_texture(&texture, &image_info,
                           &[0x20u8, 0xA0u8, 0xC0u8, 0x00u8])
-        .unwrap();
+        .ok().expect("Failed to update texture");
 
     let sampler = device.create_sampler(
         gfx::tex::SamplerInfo::new(gfx::tex::FilterMethod::Bilinear,
@@ -203,10 +205,12 @@ fn main() {
     );
 
     let program = device.link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
-                        .unwrap();
+                        .ok().expect("Failed to link program.");
+
     let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
-    let batch: CubeBatch = context.make_batch(&program, &mesh, slice, &state).unwrap();
+    let batch: CubeBatch = context.make_batch(&program, &mesh, slice, &state)
+                                  .ok().expect("Failed to make batch.");;
 
     let view: AffineMatrix3<f32> = Transform::look_at(
         &Point3::new(1.5f32, -5.0, 3.0),

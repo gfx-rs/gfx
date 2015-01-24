@@ -143,8 +143,19 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
     match *substr.fields {
         generic::Struct(ref fields) => {
             let out = &substr.nonself_args[1];
-            let max_num = cx.expr_uint(span, fields.len());
+            let max_num = cx.expr_usize(span, fields.len());
             let mut calls = vec![
+                cx.stmt_item(span, cx.item_use_simple(
+                    span,
+                    ast::Inherited,
+                    cx.path(span, vec![
+                        cx.ident_of("self"),
+                        path_root,
+                        cx.ident_of("gfx"),
+                        cx.ident_of("shade"),
+                        cx.ident_of("ToUniform"),
+                    ])
+                )),
                 quote_stmt!(cx, $out.uniforms.reserve($max_num);),
                 quote_stmt!(cx, $out.blocks.reserve($max_num);),
                 quote_stmt!(cx, $out.textures.reserve($max_num);),
@@ -188,22 +199,11 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                             f.name.unwrap().as_str(),
                             )[]
                         );
-                        cx.stmt_expr(cx.expr_uint(span, 0))
+                        cx.stmt_expr(cx.expr_usize(span, 0))
                     },
                 }
             }));
-            let view = cx.view_use_simple(
-                span,
-                ast::Inherited,
-                cx.path(span, vec![
-                    cx.ident_of("self"),
-                    path_root,
-                    cx.ident_of("gfx"),
-                    cx.ident_of("shade"),
-                    cx.ident_of("ToUniform"),
-                ])
-            );
-            cx.expr_block(cx.block_all(span, vec![view], calls, None))
+            cx.expr_block(cx.block_all(span, calls, None))
         },
         _ => {
             cx.span_err(span, "Unable to implement `ShaderParam::bind()` on a non-structure");

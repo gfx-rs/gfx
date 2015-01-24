@@ -83,7 +83,8 @@ glsl_150: b"
 };
 
 fn main() {
-    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
+    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS)
+                        .ok().expect("failed to init glfw");
 
     glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
     glfw.window_hint(glfw::WindowHint::OpenglForwardCompat(true));
@@ -111,11 +112,11 @@ fn main() {
     let slice = mesh.to_slice(gfx::PrimitiveType::TriangleList);
 
     let program = device.link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
-                        .unwrap();
+                        .ok().expect("Failed to link program");
 
     let mut graphics = gfx::Graphics::new(device);
     let batch: gfx::batch::RefBatch<(), ()> = graphics.make_batch(
-        &program, &mesh, slice, &gfx::DrawState::new()).unwrap();
+        &program, &mesh, slice, &gfx::DrawState::new()).ok().expect("Failed to make batch");
 
     let clear_data = gfx::ClearData {
         color: [0.3, 0.3, 0.3, 1.0],

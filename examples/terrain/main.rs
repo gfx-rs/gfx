@@ -148,7 +148,8 @@ fn calculate_color(height: f32) -> [f32; 3] {
 fn main() {
     use std::num::Float;
 
-    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
+    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS)
+        .ok().expect("Failed to initialize glfs-rs");
 
     glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
     glfw.window_hint(glfw::WindowHint::OpenglForwardCompat(true));
@@ -192,11 +193,12 @@ fn main() {
 
     let mesh = device.create_mesh(vertex_data.as_slice());
     let program = device.link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
-                        .unwrap();
+                        .ok().expect("Failed to link shaders.");
     let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
     let mut graphics = gfx::Graphics::new(device);
-    let batch: Terrain = graphics.make_batch(&program, &mesh, slice, &state).unwrap();
+    let batch: Terrain = graphics.make_batch(&program, &mesh, slice, &state)
+                                 .ok().expect("Failed to make batch.");
 
     let aspect = w as f32 / h as f32;
     let mut data = Params {

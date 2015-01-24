@@ -486,10 +486,14 @@ fn create_g_buffer(width: u16, height: u16, device: &mut gfx::GlDevice) -> (gfx:
         kind: gfx::tex::TextureKind::Texture2D,
         format: gfx::tex::Format::DEPTH24STENCIL8,
     };
-    let texture_pos     = device.create_texture(texture_info_float).unwrap();
-    let texture_normal  = device.create_texture(texture_info_float).unwrap();
-    let texture_diffuse = device.create_texture(texture_info_float).unwrap();
-    let texture_depth   = device.create_texture(texture_info_depth).unwrap();
+    let texture_pos     = device.create_texture(texture_info_float)
+                                .ok().expect("failed to create texture.");
+    let texture_normal  = device.create_texture(texture_info_float)
+                                .ok().expect("failed to create texture.");
+    let texture_diffuse = device.create_texture(texture_info_float)
+                                .ok().expect("failed to create texture.");
+    let texture_depth   = device.create_texture(texture_info_depth)
+                                .ok().expect("failed to create texture.");
 
     frame.colors.push(Plane::Texture(texture_pos,     0, None));
     frame.colors.push(Plane::Texture(texture_normal,  0, None));
@@ -511,7 +515,9 @@ fn create_res_buffer(width: u16, height: u16, device: &mut gfx::GlDevice, textur
         format: gfx::tex::Format::Float(gfx::tex::Components::RGBA, gfx::attrib::FloatSize::F32),
     };
 
-    let texture_frame = device.create_texture(texture_info_float).unwrap();
+    let texture_frame = device.create_texture(texture_info_float)
+                              .ok().expect("failed to create texture.");
+;
 
     frame.colors.push(Plane::Texture(texture_frame, 0, None));
     frame.depth = Some(Plane::Texture(texture_depth, 0, None));
@@ -520,7 +526,8 @@ fn create_res_buffer(width: u16, height: u16, device: &mut gfx::GlDevice, textur
 }
 
 fn main() {
-    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
+    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS)
+                        .ok().expect("Failed to initialize glfw.");
 
     glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
     glfw.window_hint(glfw::WindowHint::OpenglForwardCompat(true));
@@ -576,10 +583,11 @@ fn main() {
             .to_slice(gfx::PrimitiveType::TriangleList);
 
         let program = device.link_program(TERRAIN_VERTEX_SRC.clone(), TERRAIN_FRAGMENT_SRC.clone())
-                            .unwrap();
+                            .ok().expect("Failed to link program");
         let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
-        context.make_batch(&program, &mesh, slice, &state).unwrap()
+        context.make_batch(&program, &mesh, slice, &state)
+               .ok().expect("Failed to match back")
     };
 
     let blit_batch: BlitBatch = {
@@ -594,10 +602,12 @@ fn main() {
         let mesh = device.create_mesh(&vertex_data);
         let slice = mesh.to_slice(gfx::PrimitiveType::TriangleList);
 
-        let program = device.link_program(BLIT_VERTEX_SRC.clone(), BLIT_FRAGMENT_SRC.clone()).unwrap();
+        let program = device.link_program(BLIT_VERTEX_SRC.clone(), BLIT_FRAGMENT_SRC.clone())
+                            .ok().expect("Failed to link program");
         let state = gfx::DrawState::new();
 
-        context.make_batch(&program, &mesh, slice, &state).unwrap()
+        context.make_batch(&program, &mesh, slice, &state)
+               .ok().expect("Failed to create batch")
     };
 
     let (light_batch, emitter_batch) = {
@@ -653,15 +663,19 @@ fn main() {
             .blend(gfx::BlendPreset::Additive);
 
         let light_batch: LightBatch = {
-            let program = device.link_program(LIGHT_VERTEX_SRC.clone(), LIGHT_FRAGMENT_SRC.clone()).unwrap();
+            let program = device.link_program(LIGHT_VERTEX_SRC.clone(), LIGHT_FRAGMENT_SRC.clone())
+                                .ok().expect("Failed to link program.");
 
-            context.make_batch(&program, &mesh, slice, &state).unwrap()
+            context.make_batch(&program, &mesh, slice, &state)
+                   .ok().expect("Failed to create batch")
         };
 
         let emitter_batch: EmitterBatch = {
-            let program = device.link_program(EMITTER_VERTEX_SRC.clone(), EMITTER_FRAGMENT_SRC.clone()).unwrap();
+            let program = device.link_program(EMITTER_VERTEX_SRC.clone(), EMITTER_FRAGMENT_SRC.clone())
+                                .ok().expect("Failed to link program.");
 
-            context.make_batch(&program, &mesh, slice, &state).unwrap()
+            context.make_batch(&program, &mesh, slice, &state)
+                   .ok().expect("Failed to create batch")
         };
 
         (light_batch, emitter_batch)

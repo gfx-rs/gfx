@@ -89,20 +89,20 @@ fn extern_crate_hack<F>(context: &mut ext::base::ExtCtxt,
         extern_crate_hack,
         vec![],
         vec![
-            ast::ViewItem {
+            P(ast::Item {
                 span: span,
                 vis: ast::Inherited,
                 attrs: vec![],
-                node: ast::ViewItemExternCrate(
-                    context.ident_of("gfx_"),
+                node: ast::ItemExternCrate(
                     Some((
                         token::InternedString::new("gfx"),
                         ast::CookedStr
                     )),
-                    ast::DUMMY_NODE_ID
-                )
-            },
-            context.view_use_simple_(
+                ),
+                id: ast::DUMMY_NODE_ID,
+                ident: token::str_to_ident("gfx_")
+            }),
+            context.item_use_simple_(
                 span,
                 ast::Public,
                 context.ident_of("gfx"),
@@ -111,8 +111,7 @@ fn extern_crate_hack<F>(context: &mut ext::base::ExtCtxt,
                     context.ident_of("gfx_")
                 ])
             )
-        ],
-        vec![]
+        ]
     );
     push(item);
     extern_crate_hack
