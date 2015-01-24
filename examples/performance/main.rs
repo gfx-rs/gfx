@@ -114,13 +114,14 @@ fn gfx_main(mut glfw: glfw::Glfw,
         format: gfx::tex::RGBA8,
     };
     let image_info = texture_info.to_image_info();
-    let texture = device.create_texture(texture_info).unwrap();
+    let texture = device.create_texture(texture_info)
+        .ok().expect("Failed to create texture");
     device.update_texture(&texture, &image_info,
                           &[0x20u8, 0xA0u8, 0xC0u8, 0x00u8])
-        .unwrap();
+        .ok().expect("Failed to update texture");
 
     let program = device.link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
-                        .unwrap();
+                        .ok().expect("Failed to link shaders");
     let view: AffineMatrix3<f32> = Transform::look_at(
         &Point3::new(0f32, -5.0, 0.0),
         &Point3::new(0f32, 0.0, 0.0),
@@ -136,7 +137,8 @@ fn gfx_main(mut glfw: glfw::Glfw,
     };
 
     let mut graphics = gfx::Graphics::new(device);
-    let batch: TriangleBatch = graphics.make_batch(&program, &mesh, slice, &state).unwrap();
+    let batch: TriangleBatch = graphics.make_batch(&program, &mesh, slice, &state)
+                                       .ok().expect("Failed to make batch");
 
     while !window.should_close() {
         glfw.poll_events();
@@ -380,7 +382,8 @@ fn main() {
 
     let count = ((count as f64).sqrt() / 2.) as i16;
 
-    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
+    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS)
+        .ok().expect("Failed to initialize glfs-rs");
 
     glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
     glfw.window_hint(glfw::WindowHint::OpenglForwardCompat(true));
