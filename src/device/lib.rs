@@ -68,13 +68,13 @@ pub enum MapAccess {
 }
 
 /// A handle to a readable map, which can be sliced.
-pub struct ReadableMapping<'a, T: Copy, C: draw::CommandBuffer, D: 'a + Device<C>> {
+pub struct ReadableMapping<'a, T: Copy, D: 'a + Device> {
     raw: back::RawMapping,
     len: usize,
     device: &'a mut D,
 }
 
-impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Deref for ReadableMapping<'a, T, C, D> {
+impl<'a, T: Copy, D: Device> Deref for ReadableMapping<'a, T, D> {
     type Target = [T];
 
     fn deref(&self) -> &[T] {
@@ -83,20 +83,20 @@ impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Deref for ReadableMappin
 }
 
 #[unsafe_destructor]
-impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Drop for ReadableMapping<'a, T, C, D> {
+impl<'a, T: Copy, D: Device> Drop for ReadableMapping<'a, T, D> {
     fn drop(&mut self) {
         self.device.unmap_buffer_raw(self.raw)
     }
 }
 
 /// A handle to a writable map, which only allows setting elements.
-pub struct WritableMapping<'a, T: Copy, C: draw::CommandBuffer, D: 'a + Device<C>> {
+pub struct WritableMapping<'a, T: Copy, D: 'a + Device> {
     raw: back::RawMapping,
     len: usize,
     device: &'a mut D,
 }
 
-impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> WritableMapping<'a, T, C, D> {
+impl<'a, T: Copy, D: Device> WritableMapping<'a, T, D> {
     /// Set a value in the buffer
     pub fn set(&mut self, idx: usize, val: T) {
         if idx >= self.len {
@@ -107,20 +107,20 @@ impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> WritableMapping<'a, T, C
 }
 
 #[unsafe_destructor]
-impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Drop for WritableMapping<'a, T, C, D> {
+impl<'a, T: Copy, D: Device> Drop for WritableMapping<'a, T, D> {
     fn drop(&mut self) {
         self.device.unmap_buffer_raw(self.raw)
     }
 }
 
 /// A handle to a complete readable/writable map, which can be sliced both ways.
-pub struct RWMapping<'a, T: Copy, C: draw::CommandBuffer, D: 'a + Device<C>> {
+pub struct RWMapping<'a, T: Copy, D: 'a + Device> {
     raw: back::RawMapping,
     len: usize,
     device: &'a mut D,
 }
 
-impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Deref for RWMapping<'a, T, C, D> {
+impl<'a, T: Copy, D: Device> Deref for RWMapping<'a, T, D> {
     type Target = [T];
 
     fn deref(&self) -> &[T] {
@@ -128,14 +128,14 @@ impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Deref for RWMapping<'a, 
     }
 }
 
-impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> DerefMut for RWMapping<'a, T, C, D> {
+impl<'a, T: Copy, D: Device> DerefMut for RWMapping<'a, T, D> {
     fn deref_mut(&mut self) -> &mut [T] {
         unsafe { mem::transmute(slice::from_raw_mut_buf(&self.raw.pointer, self.len)) }
     }
 }
 
 #[unsafe_destructor]
-impl<'a, T: Copy, C: draw::CommandBuffer, D: Device<C>> Drop for RWMapping<'a, T, C, D> {
+impl<'a, T: Copy, D: Device> Drop for RWMapping<'a, T, D> {
     fn drop(&mut self) {
         self.device.unmap_buffer_raw(self.raw)
     }
@@ -356,17 +356,18 @@ pub enum Command {
     Blit(target::Rect, target::Rect, target::Mask),
 }
 
-// CommandBuffer is really an associated type, so will look much better when
-// Rust supports this natively.
 /// An interface for performing draw calls using a specific graphics API
 #[allow(missing_docs)]
-pub trait Device<C: draw::CommandBuffer> {
+pub trait Device {
+
+    type CommandBuffer: draw::CommandBuffer;
+
     /// Returns the capabilities available to the specific API implementation
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
     /// Reset all the states to disabled/default
     fn reset_state(&mut self);
     /// Submit a command buffer for execution
-    fn submit(&mut self, buffer: (&C, &draw::DataBuffer));
+    fn submit(&mut self, buffer: (&Self::CommandBuffer, &draw::DataBuffer));
 
     // resource creation
     fn create_buffer_raw(&mut self, size: usize, usage: BufferUsage) -> BufferHandle<()>;
@@ -407,9 +408,9 @@ pub trait Device<C: draw::CommandBuffer> {
     }
     fn map_buffer_raw(&mut self, buf: BufferHandle<()>, access: MapAccess) -> back::RawMapping;
     fn unmap_buffer_raw(&mut self, map: back::RawMapping);
-    fn map_buffer_readable<T: Copy>(&mut self, buf: BufferHandle<T>) -> ReadableMapping<T, C, Self>;
-    fn map_buffer_writable<T: Copy>(&mut self, buf: BufferHandle<T>) -> WritableMapping<T, C, Self>;
-    fn map_buffer_rw<T: Copy>(&mut self, buf: BufferHandle<T>) -> RWMapping<T, C, Self>;
+    fn map_buffer_readable<T: Copy>(&mut self, buf: BufferHandle<T>) -> ReadableMapping<T, Self>;
+    fn map_buffer_writable<T: Copy>(&mut self, buf: BufferHandle<T>) -> WritableMapping<T, Self>;
+    fn map_buffer_rw<T: Copy>(&mut self, buf: BufferHandle<T>) -> RWMapping<T, Self>;
 
     /// Update the information stored in a texture
     fn update_texture_raw(&mut self, tex: &TextureHandle, img: &tex::ImageInfo,

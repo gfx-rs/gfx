@@ -449,9 +449,9 @@ impl<C: CommandBuffer> Renderer<C> {
 }
 
 /// Backend extension trait for convenience methods
-pub trait DeviceHelper<C: CommandBuffer> {
+pub trait DeviceHelper: device::Device {
     /// Create a new renderer
-    fn create_renderer(&mut self) -> Renderer<C>;
+    fn create_renderer(&mut self) -> Renderer<<Self as device::Device>::CommandBuffer>;
     /// Create a new mesh from the given vertex data.
     /// Convenience function around `create_buffer` and `Mesh::from_format`.
     fn create_mesh<T: mesh::VertexFormat + Copy>(&mut self, data: &[T]) -> mesh::Mesh;
@@ -460,8 +460,8 @@ pub trait DeviceHelper<C: CommandBuffer> {
                     -> Result<device::ProgramHandle, ProgramError>;
 }
 
-impl<D: device::Device<C>, C: CommandBuffer> DeviceHelper<C> for D {
-    fn create_renderer(&mut self) -> Renderer<C> {
+impl<D: device::Device> DeviceHelper for D {
+    fn create_renderer(&mut self) -> Renderer<<D as device::Device>::CommandBuffer> {
         Renderer {
             command_buffer: CommandBuffer::new(),
             data_buffer: device::draw::DataBuffer::new(),
