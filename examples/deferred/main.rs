@@ -729,7 +729,7 @@ fn main() {
 
     let mut debug_buf: Option<TextureHandle> = None;
 
-    let mut light_pos_vec: Vec<[f32; 4]> = range(0, NUM_LIGHTS).map(|_| {
+    let mut light_pos_vec: Vec<[f32; 4]> = (0 ..NUM_LIGHTS).map(|_| {
         [0.0, 0.0, 0.0, 0.0]
     }).collect();
 

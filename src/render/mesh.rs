@@ -25,7 +25,7 @@ use device::{PrimitiveType, BufferHandle, VertexCount};
 use device::attrib;
 
 /// Describes a single attribute of a vertex buffer, including its type, name, etc.
-#[derive(Clone, PartialEq, Show)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Attribute {
     /// A name to match the shader input
     pub name: String,
@@ -43,7 +43,7 @@ pub trait VertexFormat {
 }
 
 /// Describes geometry to render.
-#[derive(Clone, PartialEq, Show)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Mesh {
     /// Number of vertices in the mesh.
     pub num_vertices: device::VertexCount,
@@ -96,7 +96,7 @@ impl Mesh {
 /// The `prim_type` defines how the mesh contents are interpreted.
 /// For example,  `Point` typed vertex slice can be used to do shape
 /// blending, while still rendereing it as an indexed `TriangleList`.
-#[derive(Copy, Clone, Show)]
+#[derive(Copy, Clone, Debug)]
 pub struct Slice {
     /// Start index of vertices to draw.
     pub start: VertexCount,
@@ -109,7 +109,7 @@ pub struct Slice {
 }
 
 /// Source of vertex ordering for a slice
-#[derive(Copy, Clone, Show)]
+#[derive(Copy, Clone, Debug)]
 pub enum SliceKind {
     /// Render vertex data directly from the `Mesh`'s buffer.
     Vertex,
@@ -184,7 +184,7 @@ impl ToSlice for BufferHandle<u32> {
 }
 
 /// Describes kinds of errors that may occur in the mesh linking
-#[derive(Clone, Copy, Show)]
+#[derive(Clone, Copy, Debug)]
 pub enum LinkError {
     /// An attribute index is out of supported bounds
     MeshAttribute(usize),

@@ -24,7 +24,7 @@ type Offset = u32;
 type Size = u32;
 
 /// The place of some data in the data buffer.
-#[derive(Copy, PartialEq, Show)]
+#[derive(Copy, PartialEq, Debug)]
 pub struct DataPointer(Offset, Size);
 
 /// A buffer of data accompanying the commands. It can be vertex data, texture
@@ -61,7 +61,7 @@ impl DataBuffer {
         self.buf.reserve(size);
         unsafe {
             self.buf.set_len(offset + size);
-            slice::bytes::copy_memory(self.buf.slice_from_mut(offset),
+            slice::bytes::copy_memory(&mut self.buf[offset ..],
                                       slice::from_raw_buf(&(v.as_ptr() as *const u8), size));
         }
         DataPointer(offset as Offset, size as Size)
@@ -70,7 +70,7 @@ impl DataBuffer {
     /// Return a reference to a stored data object.
     pub fn get_ref(&self, data: DataPointer) -> &[u8] {
         let DataPointer(offset, size) = data;
-        self.buf.slice(offset as usize, offset as usize + size as usize)
+        &self.buf[offset as usize ..offset as usize + size as usize]
     }
 }
 

@@ -44,7 +44,7 @@ pub mod state;
 pub mod target;
 
 /// Program linking error
-#[derive(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum ProgramError {
     /// Unable to compile the vertex shader
     Vertex(CreateShaderError),

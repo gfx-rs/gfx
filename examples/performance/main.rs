@@ -153,8 +153,8 @@ fn gfx_main(mut glfw: glfw::Glfw,
         let start = precise_time_s() * 1000.;
         graphics.clear(clear_data, gfx::COLOR | gfx::DEPTH, &frame);
 
-        for x in range(-dimension, dimension) {
-            for y in range(-dimension, dimension) {
+        for x in (-dimension) ..dimension {
+            for y in (-dimension) ..dimension {
                 let mut model = Matrix3::identity().mul_s(0.01f32).to_matrix4();
                 model.w = Vector4::new(x as f32 * 0.05,
                                        0f32,
@@ -321,8 +321,8 @@ fn gl_main(mut glfw: glfw::Glfw,
             gl.Clear(gl::COLOR_BUFFER_BIT);
         }
 
-        for x in range(-dimension, dimension) {
-            for y in range(-dimension, dimension) {
+        for x in (-dimension) ..dimension {
+            for y in (-dimension) ..dimension {
                 let mut model = Matrix3::identity().mul_s(0.01f32).to_matrix4();
                 model.w = Vector4::new(x as f32 * 0.05,
                                        0f32,
