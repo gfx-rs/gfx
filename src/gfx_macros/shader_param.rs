@@ -236,16 +236,6 @@ fn node_to_var_type(cx: &mut ext::base::ExtCtxt,
     ))
 }
 
-/// Extract all derive() attributes into a separate array
-fn copy_derive(attribs: &[ast::Attribute]) -> Vec<ast::Attribute> {
-    attribs.iter().filter(|at| {
-        match at.node.value.node {
-            ast::MetaList(ref s, _) => s.get() == "derive" || s.get() == "deriving",
-            _ => false,
-        }
-    }).map(|at| at.clone()).collect()
-}
-
 #[derive(Copy)]
 pub struct ShaderParam;
 
@@ -282,23 +272,12 @@ impl ItemDecorator for ShaderParam {
                 return;
             }
         };
-        let link_name = format!("_{:?}Link", item.ident.as_str());
+        let link_name = format!("_{}Link", item.ident.as_str());
         let link_ident = context.ident_of(&link_name[]);
-        let link_ty = box generic::ty::Literal(
+        let link_ty = generic::ty::Literal(
             generic::ty::Path::new_local(&link_name[])
         );
-        // Almost `context.item_struct(span, link_ident, link_def)` but with visibility
-        (*push)(P(ast::Item {
-            ident: link_ident,
-            attrs: copy_derive(&item.attrs[]),
-            id: ast::DUMMY_NODE_ID,
-            node: ast::ItemStruct(
-                P(link_def),
-                ast_util::empty_generics()
-            ),
-            vis: item.vis,
-            span: span,
-        }));
+        (*push)(context.item_struct(span, link_ident, link_def));
         // constructing the `Batch` implementation typedef
         match meta_item.node {
             ast::MetaList(_, ref items) if items.len() <= 2 => {
@@ -317,7 +296,6 @@ impl ItemDecorator for ShaderParam {
                                     ],
                                     Vec::new(),
                                     vec![
-                                        //context.ty_ident(span, link_ident), //TODO
                                         context.ty_ident(span, item.ident)
                                     ],
                                     Vec::new(),
@@ -352,7 +330,7 @@ impl ItemDecorator for ShaderParam {
             path: generic::ty::Path {
                 path: vec![super::EXTERN_CRATE_HACK, "gfx", "shade", "ShaderParam"],
                 lifetime: None,
-                params: vec![link_ty.clone()],
+                params: Vec::new(),
                 global: false,
             },
             additional_bounds: Vec::new(),
@@ -385,7 +363,7 @@ impl ItemDecorator for ShaderParam {
                             path: vec!["Result"],
                             lifetime: None,
                             params: vec![
-                                link_ty.clone(),
+                                box link_ty.clone(),
                                 box generic::ty::Literal(generic::ty::Path::new(
                                     vec![super::EXTERN_CRATE_HACK, "gfx", "shade", "ParameterError"]
                                 ))
@@ -406,7 +384,7 @@ impl ItemDecorator for ShaderParam {
                     ))),
                     args: vec![
                         generic::ty::Ptr(
-                            link_ty.clone(),
+                            box link_ty.clone(),
                             generic::ty::Borrowed(None, ast::MutImmutable)
                         ),
                         generic::ty::Literal(
@@ -419,6 +397,9 @@ impl ItemDecorator for ShaderParam {
                         method_fill(cx, span, sub, base_def.clone(), path_root)
                     ),
                 },
+            ],
+            associated_types: vec![
+                (context.ident_of("Link"), link_ty),
             ],
         };
         let fixup = |: item| {

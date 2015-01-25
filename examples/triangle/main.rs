@@ -115,7 +115,7 @@ fn main() {
                         .ok().expect("Failed to link program");
 
     let mut graphics = gfx::Graphics::new(device);
-    let batch: gfx::batch::RefBatch<(), ()> = graphics.make_batch(
+    let batch: gfx::batch::RefBatch<()> = graphics.make_batch(
         &program, &mesh, slice, &gfx::DrawState::new()).ok().expect("Failed to make batch");
 
     let clear_data = gfx::ClearData {

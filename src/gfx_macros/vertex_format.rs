@@ -277,6 +277,7 @@ impl ItemDecorator for VertexFormat {
                         box |c, s, ss| method_body(c, s, ss, path_root)),
                 },
             ],
+            associated_types: Vec::new(),
         }.expand(context, meta_item, item, fixup);
     }
 }

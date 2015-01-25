@@ -140,15 +140,13 @@ pub struct ParamDictionary {
     pub textures: Vec<NamedCell<TextureParam>>,
 }
 
-/// An associated parameter link for ParamDictionary
+/// Redirects program input to the relevant ParamDictionary cell
 pub struct ParamDictionaryLink {
     uniforms: Vec<usize>,
     blocks: Vec<usize>,
     textures: Vec<usize>,
 }
 
-/// An associated link structure for `ParamDictionary` that redirects program
-/// input to the relevant dictionary cell.
 impl ShaderParam for ParamDictionary {
     type Link = ParamDictionaryLink;
 
