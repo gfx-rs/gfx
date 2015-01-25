@@ -259,7 +259,7 @@ fn query_parameters(gl: &gl::Gl, caps: &::Capabilities, prog: super::Program) ->
             gl.GetActiveUniform(prog, i, max_len, &mut length, &mut size, &mut storage, raw);
             gl.GetUniformLocation(prog, raw as *const gl::types::GLchar)
         };
-        let real_name = (&name[]).slice_to(length as usize).to_string();
+        let real_name = name[..length as usize].to_string();
         match StorageType::new(storage) {
             Var(base, container) => {
                 info!("\t\tUniform[{:?}] = '{:?}'\t{:?}\t{:?}", loc, real_name, base, container);

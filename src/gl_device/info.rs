@@ -80,7 +80,7 @@ impl Version {
     /// resulting in an `Err`.
     pub fn parse(src: &'static str) -> Result<Version, &'static str> {
         let (version, vendor_info) = match src.find(' ') {
-            Some(i) => (src.slice_to(i), src.slice_from(i + 1)),
+            Some(i) => (&src[..i], &src[(i + 1)..]),
             None => (src, ""),
         };
 
