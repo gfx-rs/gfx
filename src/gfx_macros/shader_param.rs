@@ -20,14 +20,14 @@ use syntax::parse::token;
 use syntax::ptr::P;
 use syntax::ext::base::ItemDecorator;
 
-#[derive(Copy, PartialEq, Show)]
+#[derive(Copy, PartialEq, Debug)]
 enum Param {
     Uniform,
     Block,
     Texture,
 }
 
-#[derive(Copy, Show)]
+#[derive(Copy, Debug)]
 enum ParamError {
     DeprecatedTexture,
 }

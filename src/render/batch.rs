@@ -27,7 +27,7 @@ use shade::{ParameterError, ShaderParam};
 use state::DrawState;
 
 /// An error with a defined Mesh.
-#[derive(Clone, Show)]
+#[derive(Clone, Debug)]
 pub enum MeshError {
     /// A required attribute was missing.
     AttributeMissing(String),
@@ -38,7 +38,7 @@ pub enum MeshError {
 }
 
 /// An error occurring at batch creation
-#[derive(Clone, Show)]
+#[derive(Clone, Debug)]
 pub enum BatchError {
     /// Error connecting mesh attributes
     Mesh(MeshError),
@@ -125,7 +125,7 @@ impl<L, T: ShaderParam<L>> Batch for OwnedBatch<L, T> {
 
 type Index = u16;
 
-//#[derive(PartialEq, Eq, PartialOrd, Ord, Show)]
+//#[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
 struct Id<T>(Index);
 
 impl<T> Copy for Id<T> {}
@@ -137,7 +137,7 @@ impl<T> Id<T> {
     }
 }
 
-impl<T> fmt::Show for Id<T> {
+impl<T> fmt::Debug for Id<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let Id(i) = *self;
         write!(f, "Id({})", i)
@@ -212,7 +212,7 @@ pub struct RefBatch<L, T> {
     state_id: Id<DrawState>,
 }
 
-impl<L, T> fmt::Show for RefBatch<L, T> {
+impl<L, T> fmt::Debug for RefBatch<L, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "RefBatch(mesh: {:?}, slice: {:?}, program: {:?}, state: {:?})",
             self.mesh_id, self.slice, self.program_id, self.state_id)

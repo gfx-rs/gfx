@@ -40,7 +40,7 @@ enum Modifier {
     AsDouble,
 }
 
-impl fmt::Show for Modifier {
+impl fmt::Debug for Modifier {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Modifier::Normalized => write!(f, "normalized"),

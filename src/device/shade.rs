@@ -25,32 +25,32 @@ use std::fmt;
 pub type Dimension = u8;
 
 /// Whether the sampler samples an array texture.
-#[derive(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum IsArray { Array, NoArray }
 
 /// Whether the sampler samples a shadow texture (texture with a depth comparison)
-#[derive(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum IsShadow { Shadow, NoShadow }
 
 /// Whether the sampler samples a multisample texture.
-#[derive(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum IsMultiSample { MultiSample, NoMultiSample }
 
 /// Whether the sampler samples a rectangle texture.
 ///
 /// Rectangle textures are the same as 2D textures, but accessed with absolute texture coordinates
 /// (as opposed to the usual, normalized to [0, 1]).
-#[derive(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum IsRect { Rect, NoRect }
 
 /// Whether the matrix is column or row major.
-#[derive(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum MatrixFormat { ColumnMajor, RowMajor }
 
 /// What texture type this sampler samples from.
 ///
 /// A single sampler cannot be used with multiple texture types.
-#[derive(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum SamplerType {
     /// Sample from a buffer.
     SamplerBuffer,
@@ -66,7 +66,7 @@ pub enum SamplerType {
 
 /// Base type of this shader parameter.
 #[allow(missing_docs)]
-#[derive(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum BaseType {
     F32,
     F64,
@@ -76,7 +76,7 @@ pub enum BaseType {
 }
 
 /// Number of components this parameter represents.
-#[derive(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum ContainerType {
     /// Scalar value
     Single,
@@ -90,7 +90,7 @@ pub enum ContainerType {
 
 /// Which program stage this shader represents.
 #[allow(missing_docs)]
-#[derive(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Stage {
     Vertex,
     Geometry,
@@ -168,7 +168,7 @@ impl Clone for UniformValue {
     }
 }
 
-impl fmt::Show for UniformValue {
+impl fmt::Debug for UniformValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             UniformValue::I32(x)            => write!(f, "ValueI32({:?})", x),
@@ -208,7 +208,7 @@ impl fmt::Show for UniformValue {
 }
 
 /// Vertex information that a shader takes as input.
-#[derive(Clone, PartialEq, Show)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Attribute {
     /// Name of this attribute.
     pub name: String,
@@ -223,7 +223,7 @@ pub struct Attribute {
 }
 
 /// Uniform, a type of shader parameter representing data passed to the program.
-#[derive(Clone, PartialEq, Show)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct UniformVar {
     /// Name of this uniform.
     pub name: String,
@@ -238,7 +238,7 @@ pub struct UniformVar {
 }
 
 /// A uniform block.
-#[derive(Clone, PartialEq, Show)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct BlockVar {
     /// Name of this uniform block.
     pub name: String,
@@ -249,7 +249,7 @@ pub struct BlockVar {
 }
 
 /// Sampler, a type of shader parameter representing a texture that can be sampled.
-#[derive(Clone, PartialEq, Show)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct SamplerVar {
     /// Name of this sampler variable.
     pub name: String,
@@ -262,7 +262,7 @@ pub struct SamplerVar {
 }
 
 /// Metadata about a program.
-#[derive(Clone, PartialEq, Show)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct ProgramInfo {
     /// Attributes in the program.
     pub attributes: Vec<Attribute>,
@@ -275,7 +275,7 @@ pub struct ProgramInfo {
 }
 
 /// Error type for trying to store a UniformValue in a UniformVar.
-#[derive(Copy, Show)]
+#[derive(Copy, Debug)]
 pub enum CompatibilityError {
     /// Array sizes differ between the value and the var (trying to upload a vec2 as a vec4, etc)
     ErrorArraySize,
@@ -316,7 +316,7 @@ impl UniformVar {
 
 /// A type storing shader source for different graphics APIs and versions.
 #[allow(missing_docs)]
-#[derive(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct ShaderSource<'a> {
     pub glsl_120: Option<&'a [u8]>,
     pub glsl_130: Option<&'a [u8]>,
@@ -327,7 +327,7 @@ pub struct ShaderSource<'a> {
 }
 
 /// An error type for creating programs.
-#[derive(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum CreateShaderError {
     /// The device does not support any of the shaders supplied.
     NoSupportedShaderProvided,
@@ -337,7 +337,7 @@ pub enum CreateShaderError {
 
 /// Shader model supported by the device, corresponds to the HLSL shader models.
 #[allow(missing_docs)]
-#[derive(Copy, Clone, PartialEq, PartialOrd, Show)]
+#[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
 pub enum ShaderModel {
     Unsupported,
     Version30,

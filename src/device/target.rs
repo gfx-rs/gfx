@@ -29,7 +29,7 @@ pub type Stencil = u8;
 
 /// A screen space rectangle
 #[allow(missing_docs)]
-#[derive(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct Rect {
     pub x: u16,
     pub y: u16,
@@ -53,7 +53,7 @@ bitflags!(
     }
 );
 
-impl fmt::Show for Mask {
+impl fmt::Debug for Mask {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Mask({})", self.bits())
     }
@@ -80,7 +80,7 @@ impl Clone for ClearData {
     }
 }
 
-impl fmt::Show for ClearData {
+impl fmt::Debug for ClearData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f,
             "ClearData {{ color: {:?}, depth: {:?}, stencil: {:?} }}",
@@ -90,7 +90,7 @@ impl fmt::Show for ClearData {
 
 /// Type of the frame buffer access
 #[repr(u8)]
-#[derive(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Access {
     /// Draw access
     Draw,
@@ -100,7 +100,7 @@ pub enum Access {
 
 /// When rendering, each "output" of the fragment shader goes to a specific target. A `Plane` can
 /// be bound to a target, causing writes to that target to affect the `Plane`.
-#[derive(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Target {
     /// Color data.
     ///

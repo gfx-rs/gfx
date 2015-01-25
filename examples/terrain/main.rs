@@ -53,7 +53,7 @@ impl Clone for Vertex {
     }
 }
 
-impl fmt::Show for Vertex {
+impl fmt::Debug for Vertex {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Pos({}, {}, {})", self.pos[0], self.pos[1], self.pos[2])
     }

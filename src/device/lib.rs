@@ -142,7 +142,7 @@ impl<'a, T: Copy, D: Device> Drop for RWMapping<'a, T, D> {
 }
 
 /// A generic handle struct
-#[derive(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct Handle<T, I>(T, I);
 
 impl<T: Copy, I> Handle<T, I> {
@@ -160,7 +160,7 @@ impl<T: Copy, I> Handle<T, I> {
 }
 
 /// Type-safe buffer handle
-#[derive(Copy, Show, PartialEq, Clone)]
+#[derive(Copy, Debug, PartialEq, Clone)]
 pub struct BufferHandle<T> {
     raw: RawBufferHandle,
 }
@@ -242,7 +242,7 @@ pub fn as_byte_slice<T>(slice: &[T]) -> &[u8] {
 }
 
 /// Features that the device supports.
-#[derive(Copy, Show)]
+#[derive(Copy, Debug)]
 #[allow(missing_docs)] // pretty self-explanatory fields!
 pub struct Capabilities {
     pub shader_model: shade::ShaderModel,
@@ -264,7 +264,7 @@ pub struct Capabilities {
 }
 
 /// Describes what geometric primitives are created from vertex data.
-#[derive(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 #[repr(u8)]
 pub enum PrimitiveType {
     /// Each vertex represents a single point.
@@ -296,7 +296,7 @@ pub type IndexType = attrib::IntSize;
 /// The nature of these hints make them very implementation specific. Different drivers on
 /// different hardware will handle them differently. Only careful profiling will tell which is the
 /// best to use for a specific buffer.
-#[derive(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 #[repr(u8)]
 pub enum BufferUsage {
     /// Once uploaded, this buffer will rarely change, but will be read from often.
@@ -309,7 +309,7 @@ pub enum BufferUsage {
 }
 
 /// An information block that is immutable and associated with each buffer
-#[derive(Copy, Clone, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct BufferInfo {
     /// Usage hint
     pub usage: BufferUsage,
@@ -322,7 +322,7 @@ pub struct BufferInfo {
 /// this particular representation may be used by different backends,
 /// such as OpenGL (prior to GLNG) and DirectX (prior to DX12)
 #[allow(missing_docs)]
-#[derive(Copy, Show)]
+#[derive(Copy, Debug)]
 pub enum Command {
     BindProgram(back::Program),
     BindArrayBuffer(back::ArrayBuffer),

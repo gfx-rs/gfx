@@ -59,7 +59,7 @@ pub type Surface        = gl::types::GLuint;
 pub type Sampler        = gl::types::GLuint;
 pub type Texture        = gl::types::GLuint;
 
-#[derive(Copy, Eq, PartialEq, Show)]
+#[derive(Copy, Eq, PartialEq, Debug)]
 pub enum GlError {
     NoError,
     InvalidEnum,

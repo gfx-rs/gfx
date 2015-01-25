@@ -103,7 +103,7 @@ impl Version {
     }
 }
 
-impl fmt::Show for Version {
+impl fmt::Debug for Version {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match (self.major, self.minor, self.revision, self.vendor_info) {
             (major, minor, Some(revision), "") =>
@@ -139,11 +139,11 @@ fn get_usize(gl: &gl::Gl, name: gl::types::GLenum) -> usize {
 }
 
 unsafe fn c_str_as_static_str(c_str: *const i8) -> &'static str {
-    mem::transmute(str::from_utf8(ffi::c_str_to_bytes(&c_str)).unwrap()) 
+    mem::transmute(str::from_utf8(ffi::c_str_to_bytes(&c_str)).unwrap())
 }
 
 /// A unique platform identifier that does not change between releases
-#[derive(Copy, Eq, PartialEq, Show)]
+#[derive(Copy, Eq, PartialEq, Debug)]
 pub struct PlatformName {
     /// The company responsible for the OpenGL implementation
     pub vendor: &'static str,
@@ -161,7 +161,7 @@ impl PlatformName {
 }
 
 /// OpenGL implementation information
-#[derive(Show)]
+#[derive(Debug)]
 pub struct Info {
     /// The platform identifier
     pub platform_name: PlatformName,
