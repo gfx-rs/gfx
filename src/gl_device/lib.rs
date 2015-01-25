@@ -558,7 +558,9 @@ impl GlDevice {
     }
 }
 
-impl Device<GlCommandBuffer> for GlDevice {
+impl Device for GlDevice {
+    type CommandBuffer = GlCommandBuffer;
+
     fn get_capabilities<'a>(&'a self) -> &'a ::Capabilities {
         &self.caps
     }
@@ -753,7 +755,7 @@ impl Device<GlCommandBuffer> for GlDevice {
         unsafe { self.gl.UnmapBuffer(map.target) };
     }
 
-    fn map_buffer_readable<T: Copy>(&mut self, buf: BufferHandle<T>) -> ReadableMapping<T, GlCommandBuffer, GlDevice> {
+    fn map_buffer_readable<T: Copy>(&mut self, buf: BufferHandle<T>) -> ReadableMapping<T, GlDevice> {
         let map = self.map_buffer_raw(buf.cast(), MapAccess::Readable);
         ReadableMapping {
             raw: map,
@@ -762,7 +764,7 @@ impl Device<GlCommandBuffer> for GlDevice {
         }
     }
 
-    fn map_buffer_writable<T: Copy>(&mut self, buf: BufferHandle<T>) -> WritableMapping<T, GlCommandBuffer, GlDevice> {
+    fn map_buffer_writable<T: Copy>(&mut self, buf: BufferHandle<T>) -> WritableMapping<T, GlDevice> {
         let map = self.map_buffer_raw(buf.cast(), MapAccess::Writable);
         WritableMapping {
             raw: map,
@@ -771,7 +773,7 @@ impl Device<GlCommandBuffer> for GlDevice {
         }
     }
 
-    fn map_buffer_rw<T: Copy>(&mut self, buf: BufferHandle<T>) -> RWMapping<T, GlCommandBuffer, GlDevice> {
+    fn map_buffer_rw<T: Copy>(&mut self, buf: BufferHandle<T>) -> RWMapping<T, GlDevice> {
         let map = self.map_buffer_raw(buf.cast(), MapAccess::RW);
         RWMapping {
             raw: map,

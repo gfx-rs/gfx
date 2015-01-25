@@ -51,18 +51,18 @@ pub use device::target::{COLOR, DEPTH, STENCIL};
 pub use device::gl_device::{GlDevice, GlCommandBuffer};
 
 /// A convenient wrapper suitable for single-threaded operation.
-pub struct Graphics<D, C: device::draw::CommandBuffer> {
+pub struct Graphics<D: device::Device> {
     /// Graphics device.
     pub device: D,
     /// Renderer front-end.
-    pub renderer: Renderer<C>,
+    pub renderer: Renderer<<D as device::Device>::CommandBuffer>,
     /// Hidden batch context.
     context: batch::Context,
 }
 
-impl<D: device::Device<C>, C: device::draw::CommandBuffer> Graphics<D, C> {
+impl<D: device::Device> Graphics<D> {
     /// Create a new graphics wrapper.
-    pub fn new(mut device: D) -> Graphics<D, C> {
+    pub fn new(mut device: D) -> Graphics<D> {
         let rend = device.create_renderer();
         Graphics {
             device: device,
