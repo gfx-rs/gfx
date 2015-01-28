@@ -23,7 +23,7 @@
 extern crate libc;
 extern crate "gfx_gl" as gl;
 
-use log;
+use log::LogLevel;
 
 use attrib::{SignFlag, IntSubType, IntSize, FloatSubType, FloatSize, Type};
 use state::{CullMode, RasterMethod, WindingOrder};
@@ -619,7 +619,7 @@ impl Device for GlDevice {
                      -> Result<::ShaderHandle, ::shade::CreateShaderError> {
         let (name, info) = shade::create_shader(&self.gl, stage, code, self.info.shading_language);
         info.map(|info| {
-            let level = if name.is_err() { log::ERROR } else { log::WARN };
+            let level = if name.is_err() { LogLevel::Error } else { LogLevel::Warn };
             log!(level, "\tShader compile log: {}", info);
         });
         name.map(|sh| ::Handle(sh, stage))
@@ -636,7 +636,7 @@ impl Device for GlDevice {
     fn create_program(&mut self, shaders: &[::ShaderHandle], targets: Option<&[&str]>) -> Result<::ProgramHandle, ()> {
         let (prog, log) = shade::create_program(&self.gl, &self.caps, shaders, targets);
         log.map(|log| {
-            let level = if prog.is_err() { log::ERROR } else { log::WARN };
+            let level = if prog.is_err() { LogLevel::Error } else { LogLevel::Warn };
             log!(level, "\tProgram link log: {}", log);
         });
         prog
