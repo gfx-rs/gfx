@@ -75,7 +75,7 @@ pub trait Batch {
 }
 
 /// Owned batch - self-contained, but has heap-allocated data
-pub struct OwnedBatch<L, T> {
+pub struct OwnedBatch<T: ShaderParam> {
     mesh: mesh::Mesh,
     mesh_link: mesh::Link,
     /// Mesh slice
@@ -83,15 +83,15 @@ pub struct OwnedBatch<L, T> {
     /// Parameter data.
     pub param: T,
     program: ProgramHandle,
-    param_link: L,
+    param_link: T::Link,
     /// Draw state
     pub state: DrawState,
 }
 
-impl<L, T: ShaderParam<L>> OwnedBatch<L, T> {
+impl<T: ShaderParam> OwnedBatch<T> {
     /// Create a new owned batch
     pub fn new(mesh: mesh::Mesh, program: ProgramHandle, param: T)
-           -> Result<OwnedBatch<L, T>, BatchError> {
+           -> Result<OwnedBatch<T>, BatchError> {
         let slice = mesh.to_slice(PrimitiveType::TriangleList);
         let mesh_link = match link_mesh(&mesh, program.get_info()) {
             Ok(l) => l,
@@ -113,7 +113,7 @@ impl<L, T: ShaderParam<L>> OwnedBatch<L, T> {
     }
 }
 
-impl<L, T: ShaderParam<L>> Batch for OwnedBatch<L, T> {
+impl<T: ShaderParam> Batch for OwnedBatch<T> {
     fn get_data(&self) -> (&mesh::Mesh, &mesh::Link, &mesh::Slice, &ProgramHandle, &DrawState) {
         (&self.mesh, &self.mesh_link, &self.slice, &self.program, &self.state)
     }
@@ -201,42 +201,43 @@ impl<T: Clone + PartialEq> Array<T> {
 /// Ref batch - copyable and smaller, but depends on the `Context`.
 /// It has references to the resources (mesh, program, state), that are held
 /// by the context that created the batch, so these have to be used together.
-#[derive(Copy)]
-pub struct RefBatch<L, T> {
+pub struct RefBatch<T: ShaderParam> {
     mesh_id: Id<mesh::Mesh>,
     mesh_link: mesh::Link,
     /// Mesh slice
     pub slice: mesh::Slice,
     program_id: Id<ProgramHandle>,
-    param_link: L,
+    param_link: T::Link,
     state_id: Id<DrawState>,
 }
 
-impl<L, T> fmt::Debug for RefBatch<L, T> {
+impl<T: ShaderParam> Copy for RefBatch<T> where T::Link: Copy {}
+
+impl<T> fmt::Debug for RefBatch<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "RefBatch(mesh: {:?}, slice: {:?}, program: {:?}, state: {:?})",
             self.mesh_id, self.slice, self.program_id, self.state_id)
     }
 }
 
-impl<L, T> PartialEq for RefBatch<L, T> {
-    fn eq(&self, other: &RefBatch<L, T>) -> bool {
+impl<T> PartialEq for RefBatch<T> {
+    fn eq(&self, other: &RefBatch<T>) -> bool {
         self.program_id == other.program_id &&
         self.state_id == other.state_id &&
         self.mesh_id == other.mesh_id
     }
 }
 
-impl<L, T> Eq for RefBatch<L, T> {}
+impl<T> Eq for RefBatch<T> {}
 
-impl<L, T> PartialOrd for RefBatch<L, T> {
-    fn partial_cmp(&self, other: &RefBatch<L, T>) -> Option<Ordering> {
+impl<T> PartialOrd for RefBatch<T> {
+    fn partial_cmp(&self, other: &RefBatch<T>) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<L, T> Ord for RefBatch<L, T> {
-    fn cmp(&self, other: &RefBatch<L, T>) -> Ordering {
+impl<T> Ord for RefBatch<T> {
+    fn cmp(&self, other: &RefBatch<T>) -> Ordering {
         (&self.program_id, &self.state_id, &self.mesh_id).cmp(
         &(&other.program_id, &other.state_id, &other.mesh_id))
     }
@@ -262,12 +263,12 @@ impl Context {
 
 impl Context {
     /// Produce a new ref batch
-    pub fn make_batch<L, T: ShaderParam<L>>(&mut self,
+    pub fn make_batch<T: ShaderParam>(&mut self,
                       program: &ProgramHandle,
                       mesh: &mesh::Mesh,
                       slice: mesh::Slice,
                       state: &DrawState)
-                      -> Result<RefBatch<L, T>, BatchError> {
+                      -> Result<RefBatch<T>, BatchError> {
         let mesh_link = match link_mesh(mesh, program.get_info()) {
             Ok(l) => l,
             Err(e) => return Err(BatchError::Mesh(e)),
@@ -300,7 +301,7 @@ impl Context {
     }
 }
 
-impl<'a, L, T: ShaderParam<L>> Batch for (&'a RefBatch<L, T>, &'a T, &'a Context) {
+impl<'a, T: ShaderParam> Batch for (&'a RefBatch<T>, &'a T, &'a Context) {
     fn get_data(&self) -> (&mesh::Mesh, &mesh::Link, &mesh::Slice, &ProgramHandle, &DrawState) {
         let (b, _, ctx) = *self;
         (ctx.meshes.get(b.mesh_id),
