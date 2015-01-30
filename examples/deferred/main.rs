@@ -44,7 +44,7 @@ use cgmath::FixedArray;
 use cgmath::{Matrix, Matrix4, Point3, Vector3, EuclideanVector};
 use cgmath::{Transform, AffineMatrix3};
 use gfx::{Device, DeviceHelper, TextureHandle, Plane, ToSlice, RawBufferHandle};
-use gfx::batch;
+use gfx::batch::RefBatch;
 use glfw::Context;
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{SharedVertex, IndexedPolygon};
@@ -85,7 +85,7 @@ struct CubeVertex {
     pos: [i8; 3],
 }
 
-#[shader_param(TerrainBatch)]
+#[shader_param]
 struct TerrainParams {
     #[name = "u_Model"]
     model: [[f32; 4]; 4],
@@ -97,7 +97,7 @@ struct TerrainParams {
     cam_pos: [f32; 3],
 }
 
-#[shader_param(LightBatch)]
+#[shader_param]
 struct LightParams {
     #[name = "u_Transform"]
     transform: [[f32; 4]; 4],
@@ -117,7 +117,7 @@ struct LightParams {
     tex_diffuse: gfx::shade::TextureParam,
 }
 
-#[shader_param(EmitterBatch)]
+#[shader_param]
 struct EmitterParams {
     #[name = "u_Transform"]
     transform: [[f32; 4]; 4],
@@ -127,7 +127,7 @@ struct EmitterParams {
     radius: f32,
 }
 
-#[shader_param(BlitBatch)]
+#[shader_param]
 struct BlitParams {
     #[name = "u_Tex"]
     tex: gfx::shade::TextureParam,
@@ -546,7 +546,7 @@ fn main() {
 
     let mut device = gfx::GlDevice::new(|s| window.get_proc_address(s));
     let mut renderer = device.create_renderer();
-    let mut context = batch::Context::new();
+    let mut context = gfx::batch::Context::new();
 
     let (g_buffer, texture_pos, texture_normal, texture_diffuse, texture_depth)  = create_g_buffer(w as u16, h as u16, &mut device);
     let (res_buffer, texture_frame, _)  = create_res_buffer(w as u16, h as u16, &mut device, texture_depth);
@@ -557,7 +557,7 @@ fn main() {
     };
 
     let terrain_scale = Vector3::new(25.0, 25.0, 25.0);
-    let terrain_batch: TerrainBatch = {
+    let terrain_batch: RefBatch<TerrainParams> = {
         let plane = genmesh::generators::Plane::subdivide(256, 256);
         let vertex_data: Vec<TerrainVertex> = plane.shared_vertex_iter()
             .map(|(x, y)| {
@@ -590,7 +590,7 @@ fn main() {
                .ok().expect("Failed to match back")
     };
 
-    let blit_batch: BlitBatch = {
+    let blit_batch: RefBatch<BlitParams> = {
         let vertex_data = [
             BlitVertex { pos: [-1, -1, 0], tex_coord: [0, 0] },
             BlitVertex { pos: [ 1, -1, 0], tex_coord: [1, 0] },
@@ -662,7 +662,7 @@ fn main() {
             .depth(gfx::state::Comparison::LessEqual, false)
             .blend(gfx::BlendPreset::Additive);
 
-        let light_batch: LightBatch = {
+        let light_batch: RefBatch<LightParams> = {
             let program = device.link_program(LIGHT_VERTEX_SRC.clone(), LIGHT_FRAGMENT_SRC.clone())
                                 .ok().expect("Failed to link program.");
 
@@ -670,7 +670,7 @@ fn main() {
                    .ok().expect("Failed to create batch")
         };
 
-        let emitter_batch: EmitterBatch = {
+        let emitter_batch: RefBatch<EmitterParams> = {
             let program = device.link_program(EMITTER_VERTEX_SRC.clone(), EMITTER_FRAGMENT_SRC.clone())
                                 .ok().expect("Failed to link program.");
 

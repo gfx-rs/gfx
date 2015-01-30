@@ -11,9 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#![feature(plugin_registrar, quote, box_syntax)]
+#![feature(core, plugin_registrar, quote, box_syntax, rustc_private)]
 #![deny(missing_copy_implementations)]
-#![allow(unstable)]
 
 //! Macro extensions crate.
 //! Implements `shaders!` macro as well as `#[shader_param]` and

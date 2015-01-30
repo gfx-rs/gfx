@@ -28,6 +28,7 @@ use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3, Matrix3, ToMatrix4};
 use cgmath::{Transform, AffineMatrix3, Vector4, Array1};
 use gfx::{Device, DeviceHelper, ToSlice};
+use gfx::batch::RefBatch;
 use glfw::Context;
 use gl::Gl;
 use gl::types::*;
@@ -50,10 +51,8 @@ struct Vertex {
 }
 
 // The shader_param attribute makes sure the following struct can be used to
-// pass parameters to a shader. Its argument is the name of the type that will
-// be generated to represent your the program. Search for link_program below, to
-// see how it's used.
-#[shader_param(TriangleBatch)]
+// pass parameters to a shader.
+#[shader_param]
 struct Params {
     #[name = "u_Transform"]
     transform: [[f32; 4]; 4],
@@ -137,8 +136,8 @@ fn gfx_main(mut glfw: glfw::Glfw,
     };
 
     let mut graphics = gfx::Graphics::new(device);
-    let batch: TriangleBatch = graphics.make_batch(&program, &mesh, slice, &state)
-                                       .ok().expect("Failed to make batch");
+    let batch: RefBatch<Params> = graphics.make_batch(&program, &mesh, slice, &state)
+                                          .ok().expect("Failed to make batch");
 
     while !window.should_close() {
         glfw.poll_events();

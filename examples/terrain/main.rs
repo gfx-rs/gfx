@@ -30,6 +30,7 @@ use cgmath::FixedArray;
 use cgmath::{Matrix4, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
 use gfx::{Device, DeviceHelper, ToSlice};
+use gfx::batch::RefBatch;
 use glfw::Context;
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
@@ -60,10 +61,8 @@ impl fmt::Debug for Vertex {
 }
 
 // The shader_param attribute makes sure the following struct can be used to
-// pass parameters to a shader. Its argument is the name of the type that will
-// be generated to represent your the batch. Search for `Terrain` below, to see
-// how it's used.
-#[shader_param(Terrain)]
+// pass parameters to a shader.
+#[shader_param]
 struct Params {
     #[name = "u_Model"]
     model: [[f32; 4]; 4],
@@ -197,8 +196,8 @@ fn main() {
     let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
     let mut graphics = gfx::Graphics::new(device);
-    let batch: Terrain = graphics.make_batch(&program, &mesh, slice, &state)
-                                 .ok().expect("Failed to make batch.");
+    let batch: RefBatch<Params> = graphics.make_batch(&program, &mesh, slice, &state)
+                                          .ok().expect("Failed to make batch.");
 
     let aspect = w as f32 / h as f32;
     let mut data = Params {

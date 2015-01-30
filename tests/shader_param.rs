@@ -20,7 +20,7 @@ extern crate gfx_macros;
 mod secret_lib;
 
 // Test all features
-#[shader_param(TestBatch)]
+#[shader_param]
 #[allow(dead_code)]
 struct TestParam {
     a: i32,
@@ -32,16 +32,9 @@ struct TestParam {
     f: [f32; 4],
 }
 
-// Test that there are no conflicts between the two reexport modules
-#[shader_param(TestRefBatch, TestOwnedBatch)]
-struct TestParam2 {
-    a: i32,
-    b: secret_lib::gfx::shade::TextureParam,
-}
-
 #[test]
 fn test_shader_param() {
     // testing if the types are visible
-    let _ref: TestRefBatch;
-    let _owned: TestOwnedBatch;
+    let _ref: secret_lib::gfx::batch::RefBatch<TestParam>;
+    let _owned: secret_lib::gfx::batch::OwnedBatch<TestParam>;
 }

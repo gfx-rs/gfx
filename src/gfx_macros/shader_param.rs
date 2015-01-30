@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use syntax::{ast, ast_util, ext};
+use syntax::{ast, ext};
 use syntax::ext::build::AstBuilder;
 use syntax::ext::deriving::generic;
 use syntax::codemap;
@@ -278,49 +278,12 @@ impl ItemDecorator for ShaderParam {
             generic::ty::Path::new_local(&link_name[])
         );
         (*push)(context.item_struct(span, link_ident, link_def));
-        // constructing the `Batch` implementation typedef
+        // process meta parameters
         match meta_item.node {
-            ast::MetaList(_, ref items) if items.len() <= 2 => {
-                let batch_names = ["RefBatch", "OwnedBatch"];
-                for (&batch, param) in batch_names.iter().zip(items.iter()) {
-                    match param.node {
-                        ast::MetaWord(ref shell_name) => {
-                            // pub type $shell_ident = hack::gfx::batch::RefBatch<$link_ident, $self_ident>
-                            let path = context.ty_path(
-                                context.path_all(span, false,
-                                    vec![
-                                        path_root,
-                                        context.ident_of("gfx"),
-                                        context.ident_of("batch"),
-                                        context.ident_of(batch),
-                                    ],
-                                    Vec::new(),
-                                    vec![
-                                        context.ty_ident(span, item.ident)
-                                    ],
-                                    Vec::new(),
-                                ),
-                            );
-                            (*push)(P(ast::Item {
-                                ident: context.ident_of(shell_name.get()),
-                                attrs: Vec::new(),
-                                id: ast::DUMMY_NODE_ID,
-                                node: ast::ItemTy(path, ast_util::empty_generics()),
-                                vis: item.vis,
-                                span: span,
-                            }))
-                        },
-                        _ => {
-                            context.span_err(meta_item.span,
-                                "The new batch name has to be a word")
-                        }
-                    }
-                }
-            },
+            ast::MetaWord(_) => (), //expected
             _ => {
-                context.span_err(meta_item.span,
-                    "Invalid argument. Please specify the typedef for your `Program`\n\
-                    as `#[shader_param(MyLightBatch, MyHeavyBatch)]`")
+                context.span_warn(meta_item.span,
+                    "No arguments are expected for #[shader_param]")
             }
         }
         // #[derive ShaderParam]
