@@ -25,7 +25,7 @@ use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
 use gfx::{Device, DeviceHelper, ToSlice};
-use gfx::batch;
+use gfx::batch::RefBatch;
 use glfw::Context;
 
 #[vertex_format]
@@ -41,10 +41,8 @@ struct Vertex {
 }
 
 // The shader_param attribute makes sure the following struct can be used to
-// pass parameters to a shader. Its argument is the name of the type that will
-// be generated to represent your the program. Search for `CubeBatch` below, to
-// see how it's used.
-#[shader_param(CubeBatch)]
+// pass parameters to a shader.
+#[shader_param]
 struct Params {
     #[name = "u_Transform"]
     transform: [[f32; 4]; 4],
@@ -134,7 +132,7 @@ fn main() {
 
     let mut device = gfx::GlDevice::new(|s| window.get_proc_address(s));
     let mut renderer = device.create_renderer();
-    let mut context = batch::Context::new();
+    let mut context = gfx::batch::Context::new();
 
     let vertex_data = [
         // top (0, 0, 1)
@@ -209,8 +207,8 @@ fn main() {
 
     let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
-    let batch: CubeBatch = context.make_batch(&program, &mesh, slice, &state)
-                                  .ok().expect("Failed to make batch.");;
+    let batch: RefBatch<Params> = context.make_batch(&program, &mesh, slice, &state)
+                                         .ok().expect("Failed to make batch.");
 
     let view: AffineMatrix3<f32> = Transform::look_at(
         &Point3::new(1.5f32, -5.0, 3.0),
