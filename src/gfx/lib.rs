@@ -21,8 +21,7 @@
 extern crate log;
 extern crate libc;
 
-extern crate device;
-extern crate render;
+extern crate "gfx_device_gl" as device;
 
 // public re-exports
 pub use render::{DeviceHelper, Renderer};
@@ -49,6 +48,8 @@ pub use device::target::{COLOR, DEPTH, STENCIL};
 
 // TODO: Remove this re-export once `gl_device` becomes a separate crate.
 pub use device::gl_device::{GlDevice, GlCommandBuffer};
+
+#[path = "../render/lib.rs"] pub mod render;
 
 /// A convenient wrapper suitable for single-threaded operation.
 pub struct Graphics<D: device::Device> {

@@ -21,10 +21,10 @@ use std::num::from_uint;
 use std::cmp::Ordering;
 use device::{PrimitiveType, ProgramHandle};
 use device::shade::ProgramInfo;
-use mesh;
-use mesh::ToSlice;
+use render::mesh;
+use render::mesh::ToSlice;
 use shade::{ParameterError, ShaderParam};
-use state::DrawState;
+use render::state::DrawState;
 
 /// An error with a defined Mesh.
 #[derive(Clone, Debug)]

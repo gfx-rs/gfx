@@ -17,9 +17,9 @@
 #![deny(missing_docs)]
 #![allow(unstable)]
 
-#[macro_use]
-extern crate log;
-extern crate device;
+//#[macro_use]
+//extern crate log;
+extern crate "gfx_device_gl" as device;
 
 use std::mem;
 
@@ -28,12 +28,11 @@ use device::attrib::IntSize;
 use device::draw::CommandBuffer;
 use device::shade::{ProgramInfo, UniformValue, ShaderSource, Stage, CreateShaderError};
 use device::target::{Rect, ClearData, Mask, Access, Target};
-use batch::Batch;
-use mesh::SliceKind;
-use target::Plane;
+use render::batch::Batch;
+use render::mesh::SliceKind;
+use render::target::Plane;
 
-/// Batches
-pub mod batch;
+
 /// Meshes
 pub mod mesh;
 /// Shaders
@@ -42,6 +41,8 @@ pub mod shade;
 pub mod state;
 /// Render targets
 pub mod target;
+/// Batches
+pub mod batch;
 
 /// Program linking error
 #[derive(Copy, Clone, PartialEq, Debug)]

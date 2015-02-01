@@ -16,8 +16,8 @@
 name = "gfx"
 version = "0.1.0"
 description = "A high-performance, bindless graphics API"
-homepage = "https://github.com/bjz/noise-rs"
-repository = "https://github.com/bjz/noise-rs"
+homepage = "https://github.com/gfx/gfx-rs"
+repository = "https://github.com/gfx/gfx-rs"
 keywords = ["graphics", "gamedev"]
 license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
@@ -34,29 +34,16 @@ time = "*"
 path = "src/gfx_macros"
 plugin = true
 
-[dependencies.device]
-path = "src/device/"
+[dependencies.gfx_device_gl]
+path = "src/device"
 
-[dependencies.render]
-path = "src/render/"
-
-[dev_dependencies.glfw]
-git = "https://github.com/bjz/glfw-rs.git"
-
-[dev_dependencies.cgmath]
-git = "https://github.com/bjz/cgmath-rs"
-
-[dev_dependencies.genmesh]
-git = "https://github.com/csherratt/genmesh.git"
-
-[dev_dependencies.noise]
-git = "https://github.com/bjz/noise-rs.git"
-
-[dev_dependencies.glutin]
-git = "https://github.com/tomaka/glutin.git"
-
-[dev_dependencies.gfx_gl]
-git = "https://github.com/gfx-rs/gfx_gl.git"
+[dev_dependencies]
+glfw = "*"
+cgmath = "*"
+genmesh = "*"
+gfx_gl = "*"
+noise = "*"
+#glutin = "*"
 
 [[example]]
 name = "cube"
@@ -70,9 +57,9 @@ path = "examples/terrain/main.rs"
 name = "deferred"
 path = "examples/deferred/main.rs"
 
-[[example]]
-name = "glutin"
-path = "examples/glutin/main.rs"
+#[[example]]
+#name = "glutin"
+#path = "examples/glutin/main.rs"
 
 [[example]]
 name = "performance"
