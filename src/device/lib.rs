@@ -41,7 +41,7 @@ pub mod tex;
 
 // TODO: This will become a separate crate once associated items are implemented
 // in rustc and subsequently used in the `Device` trait.
-/* #[cfg(gl)] */ #[path = "../gl_device/lib.rs"] pub mod gl_device;
+/* #[cfg(gl)] */ #[path = "gl_device/lib.rs"] pub mod gl_device;
 
 /// Draw vertex count.
 pub type VertexCount = u32;

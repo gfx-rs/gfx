@@ -14,18 +14,20 @@
 
 [package]
 
-name = "device"
+name = "gfx_device_gl"
 version = "0.1.0"
-authors = [
-]
+description = "OpenGL device for gfx-rs"
+homepage = "https://github.com/gfx/gfx-rs"
+repository = "https://github.com/gfx/gfx-rs"
+keywords = ["graphics", "gamedev"]
+license = "Apache-2.0"
+authors = ["The Gfx-rs Developers"]
 
 [lib]
-name = "device"
+name = "gfx_device_gl"
 path = "lib.rs"
-
-[dependencies.gfx_gl]
-git = "https://github.com/gfx-rs/gfx_gl.git"
 
 [dependencies]
 log = "*"
 bitflags = "*"
+gfx_gl = "*"
