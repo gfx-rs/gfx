@@ -25,7 +25,7 @@ extern crate device;
 extern crate render;
 
 // public re-exports
-pub use render::{DeviceHelper, Renderer};
+pub use render::{DeviceHelper, ProgramError, Renderer};
 pub use render::batch;
 pub use render::mesh::{Attribute, Mesh, VertexFormat};
 pub use render::mesh::{Slice, ToSlice};
