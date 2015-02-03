@@ -48,7 +48,6 @@ pub struct RawMapping {
     target: gl::types::GLenum,
 }
 
-pub type Buffer         = gl::types::GLuint;
 pub type ArrayBuffer    = gl::types::GLuint;
 pub type Shader         = gl::types::GLuint;
 pub type Program        = gl::types::GLuint;
@@ -567,6 +566,7 @@ impl GlDevice {
 }
 
 impl Device for GlDevice {
+    type Buffer = gl::types::GLuint;
     type CommandBuffer = GlCommandBuffer;
 
     fn get_capabilities<'a>(&'a self) -> &'a ::Capabilities {
@@ -587,7 +587,8 @@ impl Device for GlDevice {
         }
     }
 
-    fn create_buffer_raw(&mut self, size: usize, usage: BufferUsage) -> ::BufferHandle<()> {
+    fn create_buffer_raw(&mut self, size: usize, usage: BufferUsage)
+                         -> ::BufferHandle<<Self as Device>::Buffer, ()> {
         let name = self.create_buffer_internal();
         let info = ::BufferInfo {
             usage: usage,

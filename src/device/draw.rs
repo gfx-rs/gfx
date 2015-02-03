@@ -76,7 +76,7 @@ impl DataBuffer {
 
 /// An interface of the abstract command buffer. It collects commands in an
 /// efficient API-specific manner, to be ready for execution on the device.
-pub trait CommandBuffer {
+pub trait CommandBuffer<B> {
     /// An empty constructor
     fn new() -> Self;
     /// Clear the command buffer contents, retain the allocated storage
@@ -86,9 +86,9 @@ pub trait CommandBuffer {
     /// Bind an array buffer object
     fn bind_array_buffer(&mut self, back::ArrayBuffer);
     /// Bind a vertex attribute
-    fn bind_attribute(&mut self, ::AttributeSlot, back::Buffer, attrib::Format);
+    fn bind_attribute(&mut self, ::AttributeSlot, B, attrib::Format);
     /// Bind an index buffer
-    fn bind_index(&mut self, back::Buffer);
+    fn bind_index(&mut self, B);
     /// Bind a frame buffer object
     fn bind_frame_buffer(&mut self, target::Access, back::FrameBuffer);
     /// Unbind any surface from the specified target slot
@@ -100,7 +100,7 @@ pub trait CommandBuffer {
                            target::Level, Option<target::Layer>);
     /// Bind a uniform block
     fn bind_uniform_block(&mut self, back::Program, ::UniformBufferSlot,
-                          ::UniformBlockIndex, back::Buffer);
+                          ::UniformBlockIndex, B);
     /// Bind a single uniform in the default block
     fn bind_uniform(&mut self, shade::Location, shade::UniformValue);
     /// Bind a texture
@@ -124,7 +124,7 @@ pub trait CommandBuffer {
     /// Set output color mask for all targets
     fn set_color_mask(&mut self, ::state::ColorMask);
     /// Update a vertex/index/uniform buffer
-    fn update_buffer(&mut self, back::Buffer, DataPointer, usize);
+    fn update_buffer(&mut self, B, DataPointer, usize);
     /// Update a texture region
     fn update_texture(&mut self, tex::TextureKind, back::Texture,
                       tex::ImageInfo, DataPointer);

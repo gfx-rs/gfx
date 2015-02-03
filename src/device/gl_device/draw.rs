@@ -17,8 +17,10 @@
 use Command;
 use std::slice;
 
+type Buffer = <super::GlDevice as ::Device>::Buffer;
+
 pub struct GlCommandBuffer {
-    buf: Vec<::Command>,
+    buf: Vec<::Command<Buffer>>,
 }
 
 impl GlCommandBuffer {
@@ -27,7 +29,7 @@ impl GlCommandBuffer {
     }
 }
 
-impl ::draw::CommandBuffer for GlCommandBuffer {
+impl ::draw::CommandBuffer<Buffer> for GlCommandBuffer {
     fn new() -> GlCommandBuffer {
         GlCommandBuffer {
             buf: Vec::new(),
@@ -46,12 +48,12 @@ impl ::draw::CommandBuffer for GlCommandBuffer {
         self.buf.push(Command::BindArrayBuffer(vao));
     }
 
-    fn bind_attribute(&mut self, slot: ::AttributeSlot, buf: super::Buffer,
+    fn bind_attribute(&mut self, slot: ::AttributeSlot, buf: Buffer,
                       format: ::attrib::Format) {
         self.buf.push(Command::BindAttribute(slot, buf, format));
     }
 
-    fn bind_index(&mut self, buf: super::Buffer) {
+    fn bind_index(&mut self, buf: Buffer) {
         self.buf.push(Command::BindIndex(buf));
     }
 
@@ -75,7 +77,7 @@ impl ::draw::CommandBuffer for GlCommandBuffer {
     }
 
     fn bind_uniform_block(&mut self, prog: super::Program, slot: ::UniformBufferSlot,
-                          index: ::UniformBlockIndex, buf: super::Buffer) {
+                          index: ::UniformBlockIndex, buf: Buffer) {
         self.buf.push(Command::BindUniformBlock(prog, slot, index, buf));
     }
 
@@ -120,7 +122,7 @@ impl ::draw::CommandBuffer for GlCommandBuffer {
         self.buf.push(Command::SetColorMask(mask));
     }
 
-    fn update_buffer(&mut self, buf: super::Buffer, data: ::draw::DataPointer,
+    fn update_buffer(&mut self, buf: Buffer, data: ::draw::DataPointer,
                         offset_bytes: usize) {
         self.buf.push(Command::UpdateBuffer(buf, data, offset_bytes));
     }
