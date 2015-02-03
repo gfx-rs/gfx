@@ -15,7 +15,6 @@
 //! High-level, platform independent, bindless rendering API.
 
 #![deny(missing_docs)]
-#![allow(unstable)]
 
 //#[macro_use]
 //extern crate log;
@@ -201,7 +200,6 @@ impl<C: CommandBuffer> Renderer<C> {
     }
 
     /// Blit one frame onto another
-    #[experimental]
     pub fn blit(&mut self, source: &target::Frame, source_rect: Rect,
                 destination: &target::Frame, dest_rect: Rect, mask: Mask) {
         // verify as much as possible here

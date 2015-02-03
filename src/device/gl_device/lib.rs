@@ -16,8 +16,6 @@
 //! least VAOs, but using newer extensions when available.
 
 #![allow(missing_docs)]
-#![allow(unstable)]
-#![experimental]
 #![deny(missing_copy_implementations)]
 
 extern crate libc;
