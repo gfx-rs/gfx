@@ -26,7 +26,7 @@
 //
 // Press 1-4 to show the immediate buffers. Press 0 to show the final result.
 
-#![feature(plugin)]
+#![feature(core, plugin, rand)]
 
 extern crate cgmath;
 extern crate gfx;
