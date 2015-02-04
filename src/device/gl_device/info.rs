@@ -87,9 +87,9 @@ impl Version {
         // TODO: make this even more lenient so that we can also accept
         // `<major> "." <minor> [<???>]`
         let mut it = version.split('.');
-        let major = it.next().and_then(|s| s.parse());
-        let minor = it.next().and_then(|s| s.parse());
-        let revision = it.next().and_then(|s| s.parse());
+        let major = it.next().and_then(|s| s.parse().ok());
+        let minor = it.next().and_then(|s| s.parse().ok());
+        let revision = it.next().and_then(|s| s.parse().ok());
 
         match (major, minor, revision) {
             (Some(major), Some(minor), revision) => Ok(Version {
