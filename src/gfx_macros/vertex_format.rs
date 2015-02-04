@@ -51,12 +51,14 @@ impl fmt::Debug for Modifier {
 }
 
 impl FromStr for Modifier {
-    fn from_str(src: &str) -> Option<Modifier> {
+    type Err = ();
+
+    fn from_str(src: &str) -> Result<Modifier, ()> {
         match src {
-            "normalized" => Some(Modifier::Normalized),
-            "as_float" => Some(Modifier::AsFloat),
-            "as_double" => Some(Modifier::AsDouble),
-            _ => None,
+            "normalized" => Ok(Modifier::Normalized),
+            "as_float" => Ok(Modifier::AsFloat),
+            "as_double" => Ok(Modifier::AsDouble),
+            _ => Err(()),
         }
     }
 }
@@ -69,7 +71,7 @@ fn find_modifier(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
     attributes.iter().fold(None, |modifier, attribute| {
         match attribute.node.value.node {
             ast::MetaWord(ref word) => {
-                word.get().parse().and_then(|new_modifier| {
+                word.get().parse().ok().and_then(|new_modifier| {
                     attr::mark_used(attribute);
                     modifier.map_or(Some(new_modifier), |modifier| {
                         cx.span_warn(span, &format!(
