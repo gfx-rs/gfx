@@ -15,7 +15,7 @@
 [package]
 
 name = "gfx_macros"
-version = "0.1.1"
+version = "0.1.2"
 description = "Utility macros for use gfx"
 homepage = "https://github.com/gfx/gfx-rs"
 repository = "https://github.com/gfx/gfx-rs"
