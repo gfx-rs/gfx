@@ -351,7 +351,7 @@ pub enum Command {
     Clear(target::ClearData, target::Mask),
     Draw(PrimitiveType, VertexCount, VertexCount, Option<(InstanceCount, VertexCount)>),
     DrawIndexed(PrimitiveType, IndexType, VertexCount, VertexCount, VertexCount, Option<(InstanceCount, VertexCount)>),
-    Blit(target::Rect, target::Rect, target::Mask),
+    Blit(target::Rect, target::Rect, target::Mirror, target::Mask),
 }
 
 /// An interface for performing draw calls using a specific graphics API

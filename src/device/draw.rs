@@ -137,7 +137,7 @@ pub trait CommandBuffer {
     fn call_draw_indexed(&mut self, ::PrimitiveType, ::IndexType, ::VertexCount,
                          ::VertexCount, ::VertexCount, Option<(::InstanceCount, ::VertexCount)>);
     /// Blit from one target to another
-    fn call_blit(&mut self, target::Rect, target::Rect, target::Mask);
+    fn call_blit(&mut self, target::Rect, target::Rect, target::Mirror, target::Mask);
 }
 
 #[cfg(test)]
