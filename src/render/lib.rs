@@ -151,7 +151,7 @@ impl<C: CommandBuffer> Renderer<C> {
         self.render_state = RenderState::new();
     }
 
-    /// Get a command buffer to be submitted to the device.
+    /// Get command and data buffers to be submitted to the device.
     pub fn as_buffer(&self) -> (&C, &device::draw::DataBuffer) {
         (&self.command_buffer, &self.data_buffer)
     }
