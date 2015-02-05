@@ -28,7 +28,6 @@ path = "src/gfx/lib.rs"
 
 [dependencies]
 log = "*"
-time = "*"
 
 [dependencies.gfx_macros]
 path = "src/gfx_macros"
@@ -45,6 +44,7 @@ cgmath = "*"
 genmesh = "*"
 gfx_gl = "*"
 noise = "*"
+time = "*"
 #glutin = "*"
 
 [[example]]
