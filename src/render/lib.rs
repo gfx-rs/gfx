@@ -26,10 +26,9 @@ use device::attrib;
 use device::attrib::IntSize;
 use device::draw::CommandBuffer;
 use device::shade::{ProgramInfo, UniformValue, ShaderSource, Stage, CreateShaderError};
-use device::target::{Rect, ClearData, Mask, Access, Target};
+use device::target::{Rect, ClearData, Mirror, Mask, Access, Target};
 use render::batch::Batch;
 use render::mesh::SliceKind;
-use render::target::Plane;
 
 
 /// Meshes
@@ -115,17 +114,17 @@ impl ParamStorage{
 /// Useful when Renderer is borrowed, and we need to issue commands.
 trait CommandBufferHelper {
     /// Bind a plane to some target
-    fn bind_target(&mut self, Access, Target, Option<&Plane>);
+    fn bind_target(&mut self, Access, Target, Option<&target::Plane>);
 }
 
 impl<C: CommandBuffer> CommandBufferHelper for C {
     fn bind_target(&mut self, access: Access, to: Target,
-                   plane: Option<&Plane>) {
+                   plane: Option<&target::Plane>) {
         match plane {
             None => self.unbind_target(access, to),
-            Some(&Plane::Surface(ref suf)) =>
+            Some(&target::Plane::Surface(ref suf)) =>
                 self.bind_target_surface(access, to, suf.get_name()),
-            Some(&Plane::Texture(ref tex, level, layer)) =>
+            Some(&target::Plane::Texture(ref tex, level, layer)) =>
                 self.bind_target_texture(access, to, tex.get_name(), level, layer),
         }
     }
@@ -201,7 +200,8 @@ impl<C: CommandBuffer> Renderer<C> {
 
     /// Blit one frame onto another
     pub fn blit(&mut self, source: &target::Frame, source_rect: Rect,
-                destination: &target::Frame, dest_rect: Rect, mask: Mask) {
+                destination: &target::Frame, dest_rect: Rect,
+                mirror: Mirror, mask: Mask) {
         // verify as much as possible here
         if mask.intersects(device::target::COLOR) {
             debug_assert!(source.is_default() || !source.colors.is_empty());
@@ -218,7 +218,7 @@ impl<C: CommandBuffer> Renderer<C> {
         // actually blit
         self.bind_frame(destination);
         self.bind_read_frame(source);
-        self.command_buffer.call_blit(source_rect, dest_rect, mask);
+        self.command_buffer.call_blit(source_rect, dest_rect, mirror, mask);
     }
 
     /// Update a buffer with data from a vector.

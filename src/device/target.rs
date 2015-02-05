@@ -41,8 +41,8 @@ pub struct Rect {
 pub type ColorValue = [f32; 4];
 
 bitflags!(
-    #[allow(missing_docs)]
-    flags Mask: u32 {  //u8 is preferred, but doesn't seem to work well
+    /// Output mask, used for blitting and clearing
+    flags Mask: u8 {
         const COLOR     = 0x01,
         const COLOR0    = 0x01,
         const COLOR1    = 0x02,
@@ -58,6 +58,15 @@ impl fmt::Debug for Mask {
         write!(f, "Mask({})", self.bits())
     }
 }
+
+bitflags!(
+    /// Mirroring flags, used for blitting
+    #[derive(Debug)]
+    flags Mirror: u8 {
+        const MIRROR_X  = 0x01,
+        const MIRROR_Y  = 0x02,
+    }
+);
 
 /// How to clear a frame.
 #[derive(Copy)]

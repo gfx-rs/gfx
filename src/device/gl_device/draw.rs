@@ -146,7 +146,7 @@ impl ::draw::CommandBuffer for GlCommandBuffer {
     }
 
     fn call_blit(&mut self, s_rect: ::target::Rect, d_rect: ::target::Rect,
-                 mask: ::target::Mask) {
-        self.buf.push(Command::Blit(s_rect, d_rect, mask));
+                 mirror: ::target::Mirror, mask: ::target::Mask) {
+        self.buf.push(Command::Blit(s_rect, d_rect, mirror, mask));
     }
 }

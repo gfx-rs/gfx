@@ -517,8 +517,19 @@ impl GlDevice {
                     },
                 }
             },
-            Command::Blit(s_rect, d_rect, mask) => {
+            Command::Blit(mut s_rect, d_rect, mirror, mask) => {
                 type GLint = gl::types::GLint;
+                // mirror
+                let mut s_end_x = s_rect.x + s_rect.w;
+                let mut s_end_y = s_rect.y + s_rect.h;
+                if mirror.intersects(::target::MIRROR_X) {
+                    s_end_x = s_rect.x;
+                    s_rect.x += s_rect.w;
+                }
+                if mirror.intersects(::target::MIRROR_Y) {
+                    s_end_y = s_rect.y;
+                    s_rect.y += s_rect.h;
+                }
                 // build mask
                 let mut flags = 0;
                 if mask.intersects(::target::COLOR) {
@@ -537,12 +548,11 @@ impl GlDevice {
                     gl::LINEAR
                 };
                 // blit
-
                 unsafe { self.gl.BlitFramebuffer(
                     s_rect.x as GLint,
                     s_rect.y as GLint,
-                    (s_rect.x + s_rect.w) as GLint,
-                    (s_rect.y + s_rect.h) as GLint,
+                    s_end_x as GLint,
+                    s_end_y as GLint,
                     d_rect.x as GLint,
                     d_rect.y as GLint,
                     (d_rect.x + d_rect.w) as GLint,
