@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(plugin)]
+#![feature(core, plugin)]
 
 extern crate gfx;
 #[macro_use]

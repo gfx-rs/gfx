@@ -374,7 +374,7 @@ fn main() {
 
     let mode = &args[1];
     let count: i16 = if args.len() >= 2 {
-        FromStr::from_str(args[2].as_slice())
+        FromStr::from_str(args[2].as_slice()).ok()
     } else {
         None
     }.unwrap_or(10000);
