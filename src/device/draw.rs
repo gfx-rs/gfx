@@ -74,16 +74,22 @@ impl DataBuffer {
     }
 }
 
-#[allow(missing_docs)]    //TODO
+/// An interface of the abstract command buffer. It collects commands in an
+/// efficient API-specific manner, to be ready for execution on the device.
 pub trait CommandBuffer {
     /// An empty constructor
     fn new() -> Self;
     /// Clear the command buffer contents, retain the allocated storage
     fn clear(&mut self);
+    /// Bind a shader program
     fn bind_program(&mut self, back::Program);
+    /// Bind an array buffer object
     fn bind_array_buffer(&mut self, back::ArrayBuffer);
+    /// Bind a vertex attribute
     fn bind_attribute(&mut self, ::AttributeSlot, back::Buffer, attrib::Format);
+    /// Bind an index buffer
     fn bind_index(&mut self, back::Buffer);
+    /// Bind a frame buffer object
     fn bind_frame_buffer(&mut self, target::Access, back::FrameBuffer);
     /// Unbind any surface from the specified target slot
     fn unbind_target(&mut self, target::Access, target::Target);
@@ -92,28 +98,45 @@ pub trait CommandBuffer {
     /// Bind a level of the texture to the specified target slot
     fn bind_target_texture(&mut self, target::Access, target::Target, back::Texture,
                            target::Level, Option<target::Layer>);
+    /// Bind a uniform block
     fn bind_uniform_block(&mut self, back::Program, ::UniformBufferSlot,
                           ::UniformBlockIndex, back::Buffer);
+    /// Bind a single uniform in the default block
     fn bind_uniform(&mut self, shade::Location, shade::UniformValue);
+    /// Bind a texture
     fn bind_texture(&mut self, ::TextureSlot, tex::TextureKind, back::Texture,
                     Option<::SamplerHandle>);
+    /// Select, which color buffers are going to be targetted by the shader
     fn set_draw_color_buffers(&mut self, usize);
+    /// Set primitive topology
     fn set_primitive(&mut self, ::state::Primitive);
+    /// Set viewport rectangle
     fn set_viewport(&mut self, target::Rect);
+    /// Set multi-sampling state
     fn set_multi_sample(&mut self, Option<::state::MultiSample>);
+    /// Set scissor test
     fn set_scissor(&mut self, Option<target::Rect>);
+    /// Set depth and stencil states
     fn set_depth_stencil(&mut self, Option<::state::Depth>,
                          Option<::state::Stencil>, ::state::CullMode);
+    /// Set blend state
     fn set_blend(&mut self, Option<::state::Blend>);
+    /// Set output color mask for all targets
     fn set_color_mask(&mut self, ::state::ColorMask);
+    /// Update a vertex/index/uniform buffer
     fn update_buffer(&mut self, back::Buffer, DataPointer, usize);
+    /// Update a texture region
     fn update_texture(&mut self, tex::TextureKind, back::Texture,
                       tex::ImageInfo, DataPointer);
+    /// Clear target surfaces
     fn call_clear(&mut self, target::ClearData, target::Mask);
+    /// Draw a primitive
     fn call_draw(&mut self, ::PrimitiveType, ::VertexCount, ::VertexCount,
                  Option<(::InstanceCount, ::VertexCount)>);
+    /// Draw a primitive with index buffer
     fn call_draw_indexed(&mut self, ::PrimitiveType, ::IndexType, ::VertexCount,
                          ::VertexCount, ::VertexCount, Option<(::InstanceCount, ::VertexCount)>);
+    /// Blit from one target to another
     fn call_blit(&mut self, target::Rect, target::Rect, target::Mask);
 }
 
