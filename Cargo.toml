@@ -28,7 +28,6 @@ path = "src/gfx/lib.rs"
 
 [dependencies]
 log = "*"
-time = "*"
 
 [dependencies.gfx_macros]
 path = "src/gfx_macros"
