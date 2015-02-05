@@ -19,22 +19,34 @@ extern crate gfx_macros;
 
 mod secret_lib;
 
+use secret_lib::gfx;
+
 // Test all features
 #[shader_param]
 #[allow(dead_code)]
 struct TestParam {
     a: i32,
     b: [f32; 4],
-    c: secret_lib::gfx::shade::TextureParam,
-    d: secret_lib::gfx::RawBufferHandle,
+    c: gfx::shade::TextureParam,
+    d: gfx::RawBufferHandle,
     e: f32,
     #[name = "a_f"]
     f: [f32; 4],
 }
 
 #[test]
+fn test_link_copy() {
+    // testing if RefBatch is copyable
+    fn _is_copy<T: Copy>(_t: T) {}
+    fn _ref_copy(batch: gfx::batch::RefBatch<TestParam>) {
+        _is_copy(batch)
+    }
+}
+
+#[test]
 fn test_shader_param() {
-    // testing if the types are visible
-    let _ref: secret_lib::gfx::batch::RefBatch<TestParam>;
-    let _owned: secret_lib::gfx::batch::OwnedBatch<TestParam>;
+    // testing if RefBatch can be constructed
+    let _ref: gfx::batch::RefBatch<TestParam>;
+    // testing if OwnedBatch can be constructed
+    let _owned: gfx::batch::OwnedBatch<TestParam>;
 }

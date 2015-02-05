@@ -277,8 +277,19 @@ impl ItemDecorator for ShaderParam {
         let link_ty = generic::ty::Literal(
             generic::ty::Path::new_local(&link_name[])
         );
-        (*push)(context.item_struct(span, link_ident, link_def));
-        // process meta parameters
+        let link_item = context.item_struct(span, link_ident, link_def)
+                               .map(|mut item| {
+            item.attrs.push(context.attribute(span,
+                context.meta_list(span, token::InternedString::new("derive"), vec![
+                        context.meta_word(span, token::InternedString::new("Copy")),
+                        context.meta_word(span, token::InternedString::new("Debug")),
+                ])
+            ));
+            item
+        });
+        (*push)(link_item);
+
+        // process meta parameters (expecting none)
         match meta_item.node {
             ast::MetaWord(_) => (), //expected
             _ => {
@@ -286,6 +297,7 @@ impl ItemDecorator for ShaderParam {
                     "No arguments are expected for #[shader_param]")
             }
         }
+
         // #[derive ShaderParam]
         let trait_def = generic::TraitDef {
             span: span,
