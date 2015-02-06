@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(core, hash, libc, std_misc, unsafe_destructor)]
+#![feature(core, hash, std_misc, unsafe_destructor)]
 #![deny(missing_docs, missing_copy_implementations)]
 
 //! Graphics device. Not meant for direct use.

@@ -135,7 +135,7 @@ fn main() {
         }
 
         graphics.clear(clear_data, gfx::COLOR, &frame);
-        graphics.draw(&batch, &(), &frame);
+        graphics.draw(&batch, &(), &frame).unwrap();
         graphics.end_frame();
 
         window.swap_buffers();

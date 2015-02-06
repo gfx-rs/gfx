@@ -55,6 +55,7 @@ pub enum ProgramError {
 
 const TRACKED_ATTRIBUTES: usize = 8;
 type CachedAttribute = (device::RawBufferHandle, attrib::Format);
+type Instancing = (device::InstanceCount, device::VertexCount);
 
 /// The internal state of the renderer. This is used as a cache to eliminate
 /// redundant state changes.
@@ -130,6 +131,20 @@ impl<C: CommandBuffer> CommandBufferHelper for C {
     }
 }
 
+/// Draw-time error, showing inconsistencies in draw parameters and data
+#[derive(Copy, Debug)]
+pub enum DrawError {
+    /// The `DrawState` interacts with a target that does not present in the
+    /// frame. For example, the depth test is enabled while there is no depth.
+    MissingTarget(Mask),
+    /// The viewport either covers zero space or exceeds HW limitations.
+    BadViewport,
+    /// Vertex count exceeds HW limitations.
+    BadVertexCount,
+    /// Index count exceeds HW limitations.
+    BadIndexCount,
+}
+
 /// Renderer front-end
 pub struct Renderer<C: CommandBuffer> {
     command_buffer: C,
@@ -176,26 +191,34 @@ impl<C: CommandBuffer> Renderer<C> {
     }
 
     /// Draw a `batch` into the specified `frame`
-    pub fn draw<B: Batch>(&mut self, batch: &B, frame: &target::Frame) {
-        self.bind_frame(frame);
-        let (mesh, link, slice, program, state) = batch.get_data();
-        self.bind_program(batch, program);
-        self.bind_state(state);
-        self.bind_mesh(mesh, link, program.get_info());
-        self.draw_slice(slice, None);
+    pub fn draw<B: Batch>(&mut self, batch: &B, frame: &target::Frame)
+                -> Result<(), DrawError> {
+        self.draw_all(batch, None, frame)
     }
 
     /// Draw a `batch` multiple times using instancing
-    pub fn draw_instanced<B: Batch>(&mut self, batch: B,
+    pub fn draw_instanced<B: Batch>(&mut self, batch: &B,
                           count: device::InstanceCount,
                           base: device::VertexCount,
-                          frame: &target::Frame) {
-        self.bind_frame(frame);
+                          frame: &target::Frame)
+                          -> Result<(), DrawError> {
+        self.draw_all(batch, Some((count, base)), frame)
+    }
+
+    /// Draw a 'batch' with all known parameters specified, internal use only.
+    fn draw_all<B: Batch>(&mut self, batch: &B, instances: Option<Instancing>,
+                frame: &target::Frame) -> Result<(), DrawError> {
         let (mesh, link, slice, program, state) = batch.get_data();
-        self.bind_program(&batch, program);
+        let target_missing = state.get_target_mask() - frame.get_mask();
+        if !target_missing.is_empty() {
+            return Err(DrawError::MissingTarget(target_missing))
+        }
+        self.bind_frame(frame);
+        self.bind_program(batch, program);
         self.bind_state(state);
         self.bind_mesh(mesh, link, program.get_info());
-        self.draw_slice(slice, Some((count, base)));
+        self.draw_slice(slice, instances);
+        Ok(())
     }
 
     /// Blit one frame onto another

@@ -24,7 +24,7 @@ extern crate libc;
 extern crate "gfx_device_gl" as device;
 
 // public re-exports
-pub use render::{DeviceHelper, ProgramError, Renderer};
+pub use render::{DeviceHelper, ProgramError, Renderer, DrawError};
 pub use render::batch;
 pub use render::mesh::{Attribute, Mesh, VertexFormat};
 pub use render::mesh::{Slice, ToSlice};
@@ -89,18 +89,9 @@ impl<D: device::Device> Graphics<D> {
 
     /// Draw a ref batch.
     pub fn draw<'a, T: shade::ShaderParam>(&'a mut self,
-        batch: &'a batch::RefBatch<T>, data: &'a T, frame: &Frame) {
+                batch: &'a batch::RefBatch<T>, data: &'a T, frame: &Frame)
+                -> Result<(), DrawError> {
         self.renderer.draw(&(batch, data, &self.context), frame)
-    }
-
-    /// Draw a ref batch with instancing
-    pub fn draw_instanced<'a, T: shade::ShaderParam>(&'a mut self,
-                          batch: &'a batch::RefBatch<T>,
-                          data: &'a T,
-                          count: u32,
-                          vertex_offset: u32,
-                          frame: &Frame) {
-        self.renderer.draw_instanced((batch, data, &self.context), count, vertex_offset, frame)
     }
 
     /// Submit the internal command buffer and reset for the next frame.

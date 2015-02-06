@@ -15,6 +15,7 @@
 //! Render target specification.
 
 use device;
+use device::target::{Level, Layer, Mask};
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 /// A single buffer that can be bound to a render target.
@@ -23,8 +24,7 @@ pub enum Plane {
     Surface(device::SurfaceHandle),
     /// Render to a texture at a specific mipmap level
     /// If `Layer` is set, it is selecting a single 2D slice of a given 3D texture
-    Texture(device::TextureHandle, device::target::Level,
-                 Option<device::target::Layer>),
+    Texture(device::TextureHandle, Level, Option<Layer>),
 }
 
 impl Plane {
@@ -65,11 +65,26 @@ impl Frame {
         }
     }
 
-    /// Returns true if this framebuffer is associated with the main window
+    /// Return true if this framebuffer is associated with the main window
     /// (matches `Frame::new` exactly).
     pub fn is_default(&self) -> bool {
         self.colors.is_empty() &&
         self.depth.is_none() &&
         self.stencil.is_none()
+    }
+
+    /// Return a mask of contained planes.
+    pub fn get_mask(&self) -> Mask {
+        use device::target as t;
+        let mut mask = [t::COLOR0, t::COLOR1, t::COLOR2, t::COLOR3]
+            .iter().zip(self.colors.iter())
+            .fold(Mask::empty(), |u, (&m, _)| (u | m));
+        if self.depth.is_some() {
+            mask.insert(t::DEPTH);
+        }
+        if self.stencil.is_some() {
+            mask.insert(t::STENCIL);
+        }
+        mask
     }
 }
