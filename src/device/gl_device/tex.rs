@@ -146,6 +146,7 @@ fn format_to_gl(t: Format) -> Result<GLenum, ()> {
         Format::RGB10A2UI    => gl::RGB10_A2UI,
         Format::R11FG11FB10F => gl::R11F_G11F_B10F,
         Format::RGB9E5       => gl::RGB9_E5,
+        Format::BGRA8        => gl::RGBA8,
         Format::DEPTH24STENCIL8 => gl::DEPTH24_STENCIL8,
     })
 }
@@ -181,6 +182,7 @@ fn format_to_glpixel(t: Format) -> GLenum {
         Format::RGB10A2UI    => gl::RGBA,
         Format::R11FG11FB10F => gl::RGB,
         Format::RGB9E5       => gl::RGB,
+        Format::BGRA8        => gl::BGRA,
         Format::DEPTH24STENCIL8 => gl::DEPTH_STENCIL,
     }
 }
@@ -194,7 +196,8 @@ fn format_to_gltype(t: Format) -> Result<GLenum, ()> {
         Format::Unsigned(_, 16, _) => Ok(gl::UNSIGNED_SHORT),
         Format::Integer(_, 32, _)  => Ok(gl::INT),
         Format::Unsigned(_, 32, _) => Ok(gl::UNSIGNED_INT),
-        Format::DEPTH24STENCIL8   => Ok(gl::UNSIGNED_INT_24_8),
+        Format::BGRA8              => Ok(gl::UNSIGNED_BYTE),
+        Format::DEPTH24STENCIL8    => Ok(gl::UNSIGNED_INT_24_8),
         _ => Err(()),
     }
 }
@@ -213,6 +216,7 @@ fn format_to_size(t: tex::Format) -> usize {
         Format::RGB10A2UI    => 4,
         Format::R11FG11FB10F => 4,
         Format::RGB9E5       => 4,
+        Format::BGRA8        => 4,
         Format::DEPTH24STENCIL8 => 4,
     }
 }

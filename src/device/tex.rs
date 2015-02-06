@@ -107,6 +107,18 @@ pub enum Components {
     RGBA,
 }
 
+/// Codec used to compress image data.
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+#[allow(non_camel_case_types)]
+pub enum Compression {
+    /// Use the EXT2 algorithm on 3 components.
+    ETC2_RGB,
+    /// Use the EXT2 algorithm on 4 components (RGBA) in the sRGB color space.
+    ETC2_SRGB,
+    /// Use the EXT2 EAC algorithm on 4 components.
+    ETC2_EAC_RGBA8,
+}
+
 /// Describes the layout of each texel within a surface/texture.
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 pub enum Format {
@@ -131,33 +143,28 @@ pub enum Format {
     /// This s an RGB format of type floating-point. The 3 color values have
     /// 9 bits of precision, and they share a single exponent.
     RGB9E5,
+    /// Swizzled RGBA color format, used for interaction with Windows DIBs
+    BGRA8,
     /// 24 bits for depth, 8 for stencil
     DEPTH24STENCIL8,
     // TODO: sRGB
-}
-
-/// Codec used to compress image data.
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
-#[allow(non_camel_case_types)]
-pub enum Compression {
-    /// Use the EXT2 algorithm on 3 components.
-    ETC2_RGB,
-    /// Use the EXT2 algorithm on 4 components (RGBA) in the sRGB color space.
-    ETC2_SRGB,
-    /// Use the EXT2 EAC algorithm on 4 components.
-    ETC2_EAC_RGBA8,
 }
 
 impl Format {
     /// Extract the components format
     pub fn get_components(&self) -> Option<Components> {
         Some(match *self {
-            Format::Float(c, _) => c,
-            Format::Integer(c, _, _) => c,
+            Format::Float(c, _)       => c,
+            Format::Integer(c, _, _)  => c,
             Format::Unsigned(c, _, _) => c,
-            Format::Compressed(_) => panic!("Tried to get components of compressed texel!"),
-            Format::R3G3B2 | Format::R11FG11FB10F | Format::RGB9E5    => Components::RGB,
-            Format::RGB5A1 | Format::RGB10A2      | Format::RGB10A2UI => Components::RGBA,
+            Format::Compressed(_)   => panic!("Tried to get components of compressed texel!"),
+            Format::R3G3B2          |
+            Format::R11FG11FB10F    |
+            Format::RGB9E5          => Components::RGB,
+            Format::RGB5A1          |
+            Format::RGB10A2         |
+            Format::RGB10A2UI       |
+            Format::BGRA8           => Components::RGBA,
             Format::DEPTH24STENCIL8 => return None,
         })
     }
