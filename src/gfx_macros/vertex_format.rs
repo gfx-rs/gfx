@@ -229,7 +229,7 @@ impl ItemDecorator for VertexFormat {
               mut push: Box<FnMut(P<ast::Item>)>) {
         // Insert the `gfx` reexport module
         let path_root = super::extern_crate_hack(context, span, |i| (*push)(i));
-        let fixup = |: item| {
+        let fixup = |item| {
             (*push)(super::fixup_extern_crate_paths(item, path_root))
         };
 
