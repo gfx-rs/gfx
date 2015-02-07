@@ -795,27 +795,42 @@ fn main() {
 
         // Render the terrain to the geometry buffer
         renderer.clear(clear_data, gfx::COLOR|gfx::DEPTH, &g_buffer);
-        renderer.draw(&(&terrain_batch, &terrain_data, &context), &g_buffer);
+        renderer.draw(
+            &(&terrain_batch, &terrain_data, &context),
+            &g_buffer)
+            .unwrap();
 
         match debug_buf {
             Some(tex) => {
                 // Show one of the immediate buffers
                 blit_data.tex = (tex, Some(sampler));
                 renderer.clear(clear_data, gfx::COLOR | gfx::DEPTH, &frame);
-                renderer.draw(&(&blit_batch, &blit_data, &context), &frame);
+                renderer.draw(
+                    &(&blit_batch, &blit_data, &context),
+                    &frame)
+                    .unwrap();
             },
             None => {
                 renderer.clear(clear_data, gfx::COLOR, &res_buffer);
 
                 // Apply light
-                renderer.draw_instanced((&light_batch, &light_data, &context), NUM_LIGHTS as u32, 0, &res_buffer);
+                renderer.draw_instanced(
+                    &(&light_batch, &light_data, &context),
+                    NUM_LIGHTS as u32, 0, &res_buffer)
+                    .unwrap();
                 // Draw light emitters
-                renderer.draw_instanced((&emitter_batch, &emitter_data, &context), NUM_LIGHTS as u32, 0, &res_buffer);
+                renderer.draw_instanced(
+                    &(&emitter_batch, &emitter_data, &context),
+                    NUM_LIGHTS as u32, 0, &res_buffer)
+                    .unwrap();
 
                 // Show the result
                 renderer.clear(clear_data, gfx::COLOR | gfx::DEPTH, &frame);
                 blit_data.tex = (texture_frame, Some(sampler));
-                renderer.draw(&(&blit_batch, &blit_data, &context), &frame);
+                renderer.draw(
+                    &(&blit_batch, &blit_data, &context),
+                    &frame)
+                    .unwrap();
             }
         }
         device.submit(renderer.as_buffer());

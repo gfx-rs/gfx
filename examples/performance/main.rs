@@ -164,7 +164,7 @@ fn gfx_main(mut glfw: glfw::Glfw,
                     transform: proj.mul_m(&view.mat)
                                    .mul_m(&model).into_fixed(),
                 };
-                graphics.draw(&batch, &data, &frame);
+                graphics.draw(&batch, &data, &frame).unwrap();
             }
         }
 

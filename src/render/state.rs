@@ -18,7 +18,7 @@
 
 use device::state;
 use device::state::{BlendValue, CullMode, Equation, InverseFlag, RasterMethod, StencilOp, WindingOrder};
-use device::target::{Rect, Stencil};
+use device::target::{Mask, Rect, Stencil};
 
 /// An assembly of states that affect regular draw calls
 #[derive(Copy, Clone, PartialEq, Debug)]
@@ -70,6 +70,14 @@ impl DrawState {
             blend: None,
             color_mask: state::MASK_ALL,
         }
+    }
+
+    /// Return a target mask that contains all the planes required by this state.
+    pub fn get_target_mask(&self) -> Mask {
+        use device::target as t;
+        (if self.stencil.is_some() {t::STENCIL} else {Mask::empty()}) |
+        (if self.depth.is_some()   {t::DEPTH}   else {Mask::empty()}) |
+        (if self.blend.is_some()   {t::COLOR}   else {Mask::empty()})
     }
 
     /// Enable multi-sampled rasterization

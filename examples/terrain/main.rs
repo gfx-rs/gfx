@@ -234,7 +234,7 @@ fn main() {
         data.view = view.mat.into_fixed();
 
         graphics.clear(clear_data, gfx::COLOR | gfx::DEPTH, &frame);
-        graphics.draw(&batch, &data, &frame);
+        graphics.draw(&batch, &data, &frame).unwrap();
         graphics.end_frame();
 
         window.swap_buffers();
