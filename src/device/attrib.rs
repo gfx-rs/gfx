@@ -95,6 +95,19 @@ impl Type {
             _ => Err(()),
         }
     }
+
+    /// Return the size of the type in bytes.
+    pub fn get_size(&self) -> u8 {
+        match *self {
+            Type::Int(_, IntSize::U8, _) => 1,
+            Type::Int(_, IntSize::U16, _) => 2,
+            Type::Int(_, IntSize::U32, _) => 4,
+            Type::Float(_, FloatSize::F16) => 2,
+            Type::Float(_, FloatSize::F32) => 4,
+            Type::Float(_, FloatSize::F64) => 8,
+            Type::Special => 0,
+        }
+    }
 }
 
 /// Complete format of a vertex attribute.
