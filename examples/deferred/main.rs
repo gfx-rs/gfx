@@ -26,7 +26,7 @@
 //
 // Press 1-4 to show the immediate buffers. Press 0 to show the final result.
 
-#![feature(core, plugin, rand)]
+#![feature(core, plugin)]
 
 extern crate cgmath;
 extern crate gfx;
@@ -35,10 +35,11 @@ extern crate gfx;
 extern crate gfx_macros;
 extern crate glfw;
 extern crate time;
+extern crate rand;
 extern crate genmesh;
 extern crate noise;
 
-use std::rand::Rng;
+use rand::Rng;
 use std::num::Float;
 use cgmath::FixedArray;
 use cgmath::{Matrix, Matrix4, Point3, Vector3, EuclideanVector};
@@ -552,7 +553,7 @@ fn main() {
     let (res_buffer, texture_frame, _)  = create_res_buffer(w as u16, h as u16, &mut device, texture_depth);
 
     let seed = {
-        let rand_seed = std::rand::thread_rng().gen();
+        let rand_seed = rand::thread_rng().gen();
         Seed::new(rand_seed)
     };
 

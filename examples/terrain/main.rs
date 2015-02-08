@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(core, plugin, rand)]
+#![feature(core, plugin)]
 
 extern crate cgmath;
 extern crate gfx;
@@ -21,11 +21,12 @@ extern crate gfx;
 extern crate gfx_macros;
 extern crate glfw;
 extern crate time;
+extern crate rand;
 extern crate genmesh;
 extern crate noise;
 
 use std::fmt;
-use std::rand::Rng;
+use rand::Rng;
 use cgmath::FixedArray;
 use cgmath::{Matrix4, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
@@ -167,7 +168,7 @@ fn main() {
 
     let mut device = gfx::GlDevice::new(|s| window.get_proc_address(s));
 
-    let rand_seed = std::rand::thread_rng().gen();
+    let rand_seed = rand::thread_rng().gen();
     let seed = Seed::new(rand_seed);
     let plane = Plane::subdivide(256, 256);
     let vertex_data: Vec<Vertex> = plane.shared_vertex_iter()
