@@ -76,7 +76,7 @@ impl<'a, T: Copy, D: Device> Deref for ReadableMapping<'a, T, D> {
     type Target = [T];
 
     fn deref(&self) -> &[T] {
-        unsafe { mem::transmute(slice::from_raw_buf(&(self.raw.pointer as *const T), self.len)) }
+        unsafe { mem::transmute(slice::from_raw_parts(self.raw.pointer as *const T, self.len)) }
     }
 }
 
@@ -122,13 +122,13 @@ impl<'a, T: Copy, D: Device> Deref for RWMapping<'a, T, D> {
     type Target = [T];
 
     fn deref(&self) -> &[T] {
-        unsafe { mem::transmute(slice::from_raw_buf(&(self.raw.pointer as *const T), self.len)) }
+        unsafe { mem::transmute(slice::from_raw_parts(self.raw.pointer as *const T, self.len)) }
     }
 }
 
 impl<'a, T: Copy, D: Device> DerefMut for RWMapping<'a, T, D> {
     fn deref_mut(&mut self) -> &mut [T] {
-        unsafe { mem::transmute(slice::from_raw_mut_buf(&self.raw.pointer, self.len)) }
+        unsafe { mem::transmute(slice::from_raw_parts_mut(self.raw.pointer, self.len)) }
     }
 }
 

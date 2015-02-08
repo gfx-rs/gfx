@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(core, os, plugin, std_misc)]
+#![feature(core, os, env, plugin, std_misc)]
 
 extern crate cgmath;
 extern crate gfx;
@@ -35,7 +35,7 @@ use gl::types::*;
 use std::mem;
 use std::ptr;
 use std::str;
-use std::os;
+use std::env;
 use std::str::FromStr;
 use std::sync::mpsc::Receiver;
 use std::iter::repeat;
@@ -366,15 +366,16 @@ fn gl_main(mut glfw: glfw::Glfw,
 fn main() {
     use std::num::Float;
 
-    let args = os::args();
-    if args.len() == 1 {
+    let ref mut args = env::args();
+    let args_count = env::args().count();
+    if args_count == 1 {
         println!("gfx-perf [gl|gfx] <size>");
         return;
     }
 
-    let mode = &args[1];
-    let count: i16 = if args.len() >= 2 {
-        FromStr::from_str(args[2].as_slice()).ok()
+    let mode = args.nth(1).unwrap().into_string().unwrap();
+    let count: i16 = if args_count == 3 {
+        FromStr::from_str(&args.next().unwrap().into_string().unwrap()).ok()
     } else {
         None
     }.unwrap_or(10000);

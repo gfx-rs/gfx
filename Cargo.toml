@@ -45,6 +45,7 @@ genmesh = "*"
 gfx_gl = "*"
 noise = "*"
 time = "*"
+rand = "*"
 #glutin = "*"
 
 [[example]]
