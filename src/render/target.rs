@@ -85,6 +85,11 @@ impl Frame {
         if self.stencil.is_some() {
             mask.insert(t::STENCIL);
         }
-        mask
+        if mask.is_empty() {
+            // hack: assuming the default FBO has all planes
+            t::COLOR | t::DEPTH | t::STENCIL
+        }else {
+            mask
+        }
     }
 }
