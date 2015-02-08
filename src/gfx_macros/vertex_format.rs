@@ -71,7 +71,7 @@ fn find_modifier(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
     attributes.iter().fold(None, |modifier, attribute| {
         match attribute.node.value.node {
             ast::MetaWord(ref word) => {
-                word.get().parse().ok().and_then(|new_modifier| {
+                word.parse().ok().and_then(|new_modifier| {
                     attr::mark_used(attribute);
                     modifier.map_or(Some(new_modifier), |modifier| {
                         cx.span_warn(span, &format!(
@@ -179,7 +179,7 @@ fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                         Some(name) => name,
                         None => token::get_ident(ident),
                     };
-                    let ident_str = ident_str.get();
+                    let ident_str = &ident_str[];
                     let instance_expr = cx.expr_u8(span, 0); // not supposed to be set by the macro
                     quote_expr!(cx, {
                         attributes.push($path_root::gfx::Attribute {

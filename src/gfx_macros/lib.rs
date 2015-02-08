@@ -50,7 +50,7 @@ fn find_name(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
     attributes.iter().fold(None, |name, attribute| {
         match attribute.node.value.node {
             ast::MetaNameValue(ref attr_name, ref attr_value) => {
-                match (attr_name.get(), &attr_value.node) {
+                match (&attr_name[], &attr_value.node) {
                     ("name", &ast::LitStr(ref new_name, _)) => {
                         attr::mark_used(attribute);
                         name.map_or(Some(new_name.clone()), |name| {
