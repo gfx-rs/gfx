@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx"
-version = "0.1.4"
+version = "0.1.5"
 description = "A high-performance, bindless graphics API"
 homepage = "https://github.com/gfx/gfx-rs"
 repository = "https://github.com/gfx/gfx-rs"
@@ -32,7 +32,7 @@ log = "*"
 [dependencies.gfx_macros]
 path = "src/gfx_macros"
 plugin = true
-version = "0.1.4"
+version = "0.1.5"
 
 [dependencies.gfx_device_gl]
 path = "src/device"
