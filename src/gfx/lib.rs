@@ -43,8 +43,7 @@ pub use device::PrimitiveType;
 pub use device::draw::CommandBuffer;
 pub use device::shade::UniformValue;
 pub use device::shade::{ShaderSource, ProgramInfo};
-pub use device::target::{ColorValue, ClearData, Mask, Layer, Level, Rect, Target};
-pub use device::target::{COLOR, DEPTH, STENCIL};
+pub use device::target::*;
 
 // TODO: Remove this re-export once `gl_device` becomes a separate crate.
 pub use device::gl_device::{GlDevice, GlCommandBuffer};
