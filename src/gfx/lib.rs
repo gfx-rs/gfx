@@ -24,7 +24,7 @@ extern crate libc;
 extern crate "gfx_device_gl" as device;
 
 // public re-exports
-pub use render::{DeviceHelper, ProgramError, Renderer, DrawError};
+pub use render::{DeviceExt, ProgramError, Renderer, DrawError};
 pub use render::batch;
 pub use render::mesh::{Attribute, Mesh, VertexFormat};
 pub use render::mesh::{Slice, ToSlice};

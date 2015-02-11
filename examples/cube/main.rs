@@ -24,7 +24,7 @@ extern crate glfw;
 use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
-use gfx::{Device, DeviceHelper, ToSlice};
+use gfx::{Device, DeviceExt, ToSlice};
 use gfx::batch::RefBatch;
 use glfw::Context;
 
