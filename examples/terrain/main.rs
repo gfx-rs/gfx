@@ -30,7 +30,7 @@ use rand::Rng;
 use cgmath::FixedArray;
 use cgmath::{Matrix4, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
-use gfx::{Device, DeviceHelper, ToSlice};
+use gfx::{Device, DeviceExt, ToSlice};
 use gfx::batch::RefBatch;
 use glfw::Context;
 use genmesh::{Vertices, Triangulate};

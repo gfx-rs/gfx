@@ -44,7 +44,7 @@ use std::num::Float;
 use cgmath::FixedArray;
 use cgmath::{Matrix, Matrix4, Point3, Vector3, EuclideanVector};
 use cgmath::{Transform, AffineMatrix3};
-use gfx::{Device, DeviceHelper, TextureHandle, Plane, ToSlice, RawBufferHandle};
+use gfx::{Device, DeviceExt, TextureHandle, Plane, ToSlice, RawBufferHandle};
 use gfx::batch::RefBatch;
 use glfw::Context;
 use genmesh::{Vertices, Triangulate};

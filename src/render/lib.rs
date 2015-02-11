@@ -471,7 +471,7 @@ impl<C: CommandBuffer> Renderer<C> {
 }
 
 /// Backend extension trait for convenience methods
-pub trait DeviceHelper: device::Device {
+pub trait DeviceExt: device::Device {
     /// Create a new renderer
     fn create_renderer(&mut self) -> Renderer<<Self as device::Device>::CommandBuffer>;
     /// Create a new mesh from the given vertex data.
@@ -482,7 +482,7 @@ pub trait DeviceHelper: device::Device {
                     -> Result<device::ProgramHandle, ProgramError>;
 }
 
-impl<D: device::Device> DeviceHelper for D {
+impl<D: device::Device> DeviceExt for D {
     fn create_renderer(&mut self) -> Renderer<<D as device::Device>::CommandBuffer> {
         Renderer {
             command_buffer: CommandBuffer::new(),

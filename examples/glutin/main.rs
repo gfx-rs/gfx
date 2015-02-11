@@ -22,7 +22,7 @@ extern crate gfx;
 extern crate gfx_macros;
 extern crate glutin;
 
-use gfx::{Device, DeviceHelper};
+use gfx::{Device, DeviceExt};
 
 fn main() {
     let window = glutin::Window::new().unwrap();
