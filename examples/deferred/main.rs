@@ -27,12 +27,10 @@
 // Press 1-4 to show the immediate buffers. Press 0 to show the final result.
 
 #![feature(core, plugin)]
+#![plugin(gfx_macros)]
 
 extern crate cgmath;
 extern crate gfx;
-#[macro_use]
-#[plugin]
-extern crate gfx_macros;
 extern crate glfw;
 extern crate time;
 extern crate rand;
@@ -134,8 +132,7 @@ struct BlitParams {
     tex: gfx::shade::TextureParam,
 }
 
-static TERRAIN_VERTEX_SRC: gfx::ShaderSource<'static> = shaders! {
-glsl_120: b"
+static TERRAIN_VERTEX_SRC: &'static [u8] = b"
     #version 120
 
     uniform mat4 u_Model;
@@ -154,32 +151,10 @@ glsl_120: b"
         v_Color = a_Color;
         gl_Position = u_Proj * u_View * u_Model * vec4(a_Pos, 1.0);
     }
-",
-glsl_150: b"
-    #version 150 core
+";
 
-    uniform mat4 u_Model;
-    uniform mat4 u_View;
-    uniform mat4 u_Proj;
-    in vec3 a_Pos;
-    in vec3 a_Normal;
-    in vec3 a_Color;
-    out vec3 v_FragPos;
-    out vec3 v_Normal;
-    out vec3 v_Color;
-
-    void main() {
-        v_FragPos = (u_Model * vec4(a_Pos, 1.0)).xyz;
-        v_Normal = a_Normal;
-        v_Color = a_Color;
-        gl_Position = u_Proj * u_View * u_Model * vec4(a_Pos, 1.0);
-    }
-"
-};
-
-static TERRAIN_FRAGMENT_SRC: gfx::ShaderSource<'static> = shaders! {
-glsl_120: b"
-    #version 120
+static TERRAIN_FRAGMENT_SRC: &'static [u8] = b"
+    #version 130
 
     varying vec3 v_FragPos;
     varying vec3 v_Normal;
@@ -192,30 +167,9 @@ glsl_120: b"
         gl_FragData[1] = vec4(n, 0.0);
         gl_FragData[2] = vec4(v_Color, 1.0);
     }
-",
-glsl_150: b"
-    #version 150 core
+";
 
-    in vec3 v_FragPos;
-    in vec3 v_Normal;
-    in vec3 v_Color;
-    out vec4 o_Pos;
-    out vec4 o_Normal;
-    out vec4 o_Diffuse;
-
-    void main() {
-        vec3 n = normalize(v_Normal);
-
-        o_Pos     = vec4(v_FragPos, 0.0);
-        o_Normal  = vec4(n, 0.0);
-        o_Diffuse = vec4(v_Color, 1.0);
-    }
-",
-targets: &["o_Pos", "o_Normal", "o_Diffuse"],
-};
-
-static BLIT_VERTEX_SRC: gfx::ShaderSource<'static> = shaders! {
-glsl_120: b"
+static BLIT_VERTEX_SRC: &'static [u8] = b"
     #version 120
 
     attribute vec3 a_Pos;
@@ -226,23 +180,9 @@ glsl_120: b"
         v_TexCoord = a_TexCoord;
         gl_Position = vec4(a_Pos, 1.0);
     }
-",
-glsl_150: b"
-    #version 150 core
+";
 
-    in vec3 a_Pos;
-    in vec2 a_TexCoord;
-    out vec2 v_TexCoord;
-
-    void main() {
-        v_TexCoord = a_TexCoord;
-        gl_Position = vec4(a_Pos, 1.0);
-    }
-"
-};
-
-static BLIT_FRAGMENT_SRC: gfx::ShaderSource<'static> = shaders! {
-glsl_120: b"
+static BLIT_FRAGMENT_SRC: &'static [u8] = b"
     #version 120
 
     uniform sampler2D u_Tex;
@@ -252,25 +192,10 @@ glsl_120: b"
         vec4 tex = texture2D(u_Tex, v_TexCoord);
         gl_FragColor = tex;
     }
-",
-glsl_150: b"
-    #version 150 core
+";
 
-    uniform sampler2D u_Tex;
-    in vec2 v_TexCoord;
-    out vec4 o_Color;
-
-    void main() {
-        vec4 tex = texture(u_Tex, v_TexCoord);
-        o_Color = tex;
-    }
-",
-targets: &["o_Color"],
-};
-
-static LIGHT_VERTEX_SRC: gfx::ShaderSource<'static> = shaders! {
-glsl_120: b"
-    #version 120
+static LIGHT_VERTEX_SRC: &'static [u8] = b"
+    #version 140
     #extension GL_EXT_draw_instanced : enable
     #extension GL_ARB_uniform_buffer_object : enable
 
@@ -289,30 +214,9 @@ glsl_120: b"
         v_LightPos = offs[gl_InstanceID].xyz;
         gl_Position = u_Transform * vec4(u_Radius * a_Pos + offs[gl_InstanceID].xyz, 1.0);
     }
-",
-glsl_150: b"
-    #version 150 core
+";
 
-    uniform mat4 u_Transform;
-    uniform float u_Radius;
-    in vec3 a_Pos;
-    out vec3 v_LightPos;
-
-    const int NUM_LIGHTS = 250;
-    layout(std140)
-    uniform u_LightPosBlock {
-        vec4 offs[NUM_LIGHTS];
-    };
-
-    void main() {
-        v_LightPos = offs[gl_InstanceID].xyz;
-        gl_Position = u_Transform * vec4(u_Radius * a_Pos + offs[gl_InstanceID].xyz, 1.0);
-    }
-"
-};
-
-static LIGHT_FRAGMENT_SRC: gfx::ShaderSource<'static> = shaders! {
-glsl_120: b"
+static LIGHT_FRAGMENT_SRC: &'static [u8] = b"
     #version 120
 
     uniform float u_Radius;
@@ -344,46 +248,10 @@ glsl_120: b"
 
         gl_FragColor = vec4(scale*res_color, 1.0);
     }
-",
-glsl_150: b"
-    #version 150 core
+";
 
-    uniform float u_Radius;
-    uniform vec3 u_CameraPos;
-    uniform vec2 u_FrameRes;
-    uniform sampler2D u_TexPos;
-    uniform sampler2D u_TexNormal;
-    uniform sampler2D u_TexDiffuse;
-    in vec3 v_LightPos;
-    out vec4 o_Color;
-
-    void main() {
-        vec2 texCoord = gl_FragCoord.xy / u_FrameRes;
-        vec3 pos     = texture(u_TexPos,     texCoord).xyz;
-        vec3 normal  = texture(u_TexNormal,  texCoord).xyz;
-        vec3 diffuse = texture(u_TexDiffuse, texCoord).xyz;
-
-        vec3 light    = v_LightPos;
-        vec3 to_light = normalize(light - pos);
-        vec3 to_cam   = normalize(u_CameraPos - pos);
-
-        vec3 n = normalize(normal);
-        float s = pow(max(0.0, dot(to_cam, reflect(-to_light, n))), 20.0);
-        float d = max(0.0, dot(n, to_light));
-
-        float dist_sq = dot(light - pos, light - pos);
-        float scale = max(0.0, 1.0-dist_sq/(u_Radius*u_Radius));
-
-        vec3 res_color = d*vec3(diffuse) + vec3(s);
-
-        o_Color = vec4(scale*res_color, 1.0);
-    }
-"
-};
-
-static EMITTER_VERTEX_SRC: gfx::ShaderSource<'static> = shaders! {
-glsl_120: b"
-    #version 120
+static EMITTER_VERTEX_SRC: &'static [u8] = b"
+    #version 140
     #extension GL_EXT_draw_instanced : enable
     #extension GL_ARB_uniform_buffer_object : enable
 
@@ -400,44 +268,15 @@ glsl_120: b"
     void main() {
         gl_Position = u_Transform * vec4(u_Radius * a_Pos + offs[gl_InstanceID].xyz, 1.0);
     }
-",
-glsl_150: b"
-    #version 150 core
+";
 
-    uniform mat4 u_Transform;
-    uniform float u_Radius;
-    in vec3 a_Pos;
-
-    const int NUM_LIGHTS = 250;
-    layout(std140)
-    uniform u_LightPosBlock {
-        vec4 offs[NUM_LIGHTS];
-    };
-
-    void main() {
-        gl_Position = u_Transform * vec4(u_Radius * a_Pos + offs[gl_InstanceID].xyz, 1.0);
-    }
-"
-};
-
-static EMITTER_FRAGMENT_SRC: gfx::ShaderSource<'static> = shaders! {
-glsl_120: b"
+static EMITTER_FRAGMENT_SRC: &'static [u8] = b"
     #version 120
 
     void main() {
         gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
     }
-",
-glsl_150: b"
-    #version 150 core
-
-    out vec4 o_Color;
-
-    void main() {
-        o_Color = vec4(1.0, 1.0, 1.0, 1.0);
-    }
-"
-};
+";
 
 fn calculate_normal(seed: &Seed, x: f32, y: f32)-> [f32; 3] {
     // determine sample points
@@ -583,7 +422,7 @@ fn main() {
             .create_buffer_static::<u32>(index_data.as_slice())
             .to_slice(gfx::PrimitiveType::TriangleList);
 
-        let program = device.link_program(TERRAIN_VERTEX_SRC.clone(), TERRAIN_FRAGMENT_SRC.clone())
+        let program = device.link_program(TERRAIN_VERTEX_SRC, TERRAIN_FRAGMENT_SRC)
                             .ok().expect("Failed to link program");
         let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
@@ -603,7 +442,7 @@ fn main() {
         let mesh = device.create_mesh(&vertex_data);
         let slice = mesh.to_slice(gfx::PrimitiveType::TriangleList);
 
-        let program = device.link_program(BLIT_VERTEX_SRC.clone(), BLIT_FRAGMENT_SRC.clone())
+        let program = device.link_program(BLIT_VERTEX_SRC, BLIT_FRAGMENT_SRC)
                             .ok().expect("Failed to link program");
         let state = gfx::DrawState::new();
 
@@ -664,7 +503,7 @@ fn main() {
             .blend(gfx::BlendPreset::Additive);
 
         let light_batch: RefBatch<LightParams> = {
-            let program = device.link_program(LIGHT_VERTEX_SRC.clone(), LIGHT_FRAGMENT_SRC.clone())
+            let program = device.link_program(LIGHT_VERTEX_SRC, LIGHT_FRAGMENT_SRC)
                                 .ok().expect("Failed to link program.");
 
             context.make_batch(&program, &mesh, slice, &state)
@@ -672,7 +511,7 @@ fn main() {
         };
 
         let emitter_batch: RefBatch<EmitterParams> = {
-            let program = device.link_program(EMITTER_VERTEX_SRC.clone(), EMITTER_FRAGMENT_SRC.clone())
+            let program = device.link_program(EMITTER_VERTEX_SRC, EMITTER_FRAGMENT_SRC)
                                 .ok().expect("Failed to link program.");
 
             context.make_batch(&program, &mesh, slice, &state)

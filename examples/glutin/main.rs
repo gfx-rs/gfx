@@ -13,13 +13,11 @@
 // limitations under the License.
 
 #![feature(plugin)]
+#![plugin(gfx_macros)]
 
 //! Demonstrates how to initialize gfx-rs using the gl-init-rs library.
 
 extern crate gfx;
-#[macro_use]
-#[plugin]
-extern crate gfx_macros;
 extern crate glutin;
 
 use gfx::{Device, DeviceExt};

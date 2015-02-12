@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(core, plugin)]
+#![feature(plugin)]
+#![plugin(gfx_macros)]
 
 extern crate gfx;
-#[macro_use]
-#[plugin]
-extern crate gfx_macros;
 extern crate glfw;
 
 use gfx::{DeviceExt, ToSlice};
@@ -33,8 +31,7 @@ struct Vertex {
     color: [f32; 3],
 }
 
-static VERTEX_SRC: gfx::ShaderSource<'static> = shaders! {
-glsl_120: b"
+static VERTEX_SRC: &'static [u8] = b"
     #version 120
 
     attribute vec2 a_Pos;
@@ -45,23 +42,9 @@ glsl_120: b"
         v_Color = vec4(a_Color, 1.0);
         gl_Position = vec4(a_Pos, 0.0, 1.0);
     }
-",
-glsl_150: b"
-    #version 150 core
+";
 
-    in vec2 a_Pos;
-    in vec3 a_Color;
-    out vec4 v_Color;
-
-    void main() {
-        v_Color = vec4(a_Color, 1.0);
-        gl_Position = vec4(a_Pos, 0.0, 1.0);
-    }
-"
-};
-
-static FRAGMENT_SRC: gfx::ShaderSource<'static> = shaders! {
-glsl_120: b"
+static FRAGMENT_SRC: &'static [u8] = b"
     #version 120
 
     varying vec4 v_Color;
@@ -69,26 +52,11 @@ glsl_120: b"
     void main() {
         gl_FragColor = v_Color;
     }
-",
-glsl_150: b"
-    #version 150 core
-
-    in vec4 v_Color;
-    out vec4 o_Color;
-
-    void main() {
-        o_Color = v_Color;
-    }
-"
-};
+";
 
 fn main() {
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS)
                         .ok().expect("failed to init glfw");
-
-    glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
-    glfw.window_hint(glfw::WindowHint::OpenglForwardCompat(true));
-    glfw.window_hint(glfw::WindowHint::OpenglProfile(glfw::OpenGlProfileHint::Core));
 
     let (mut window, events) = glfw
         .create_window(640, 480, "Triangle example.", glfw::WindowMode::Windowed)
@@ -111,7 +79,7 @@ fn main() {
     let mesh = device.create_mesh(&vertex_data);
     let slice = mesh.to_slice(gfx::PrimitiveType::TriangleList);
 
-    let program = device.link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
+    let program = device.link_program(VERTEX_SRC, FRAGMENT_SRC)
                         .ok().expect("Failed to link program");
 
     let mut graphics = gfx::Graphics::new(device);
