@@ -13,12 +13,10 @@
 // limitations under the License.
 
 #![feature(core, plugin)]
+#![plugin(gfx_macros)]
 
 extern crate cgmath;
 extern crate gfx;
-#[macro_use]
-#[plugin]
-extern crate gfx_macros;
 extern crate glfw;
 extern crate time;
 extern crate rand;
@@ -75,8 +73,7 @@ struct Params {
     proj: [[f32; 4]; 4],
 }
 
-static VERTEX_SRC: gfx::ShaderSource<'static> = shaders! {
-glsl_120: b"
+static VERTEX_SRC: &'static [u8] = b"
     #version 120
 
     attribute vec3 a_Pos;
@@ -91,47 +88,17 @@ glsl_120: b"
         v_Color = a_Color;
         gl_Position = u_Proj * u_View * u_Model * vec4(a_Pos, 1.0);
     }
-",
-glsl_150: b"
-    #version 150 core
+";
 
-    in vec3 a_Pos;
-    in vec3 a_Color;
-    out vec3 v_Color;
-
-    uniform mat4 u_Model;
-    uniform mat4 u_View;
-    uniform mat4 u_Proj;
-
-    void main() {
-        v_Color = a_Color;
-        gl_Position = u_Proj * u_View * u_Model * vec4(a_Pos, 1.0);
-    }
-"
-};
-
-static FRAGMENT_SRC: gfx::ShaderSource<'static> = shaders! {
-glsl_120: b"
+static FRAGMENT_SRC: &'static [u8] = b"
     #version 120
 
     varying vec3 v_Color;
-    out vec4 o_Color;
 
     void main() {
-        o_Color = vec4(v_Color, 1.0);
+        gl_FragColor = vec4(v_Color, 1.0);
     }
-",
-glsl_150: b"
-    #version 150 core
-
-    in vec3 v_Color;
-    out vec4 o_Color;
-
-    void main() {
-        o_Color = vec4(v_Color, 1.0);
-    }
-"
-};
+";
 
 fn calculate_color(height: f32) -> [f32; 3] {
     if height > 8.0 {
@@ -150,10 +117,6 @@ fn main() {
 
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS)
         .ok().expect("Failed to initialize glfs-rs");
-
-    glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
-    glfw.window_hint(glfw::WindowHint::OpenglForwardCompat(true));
-    glfw.window_hint(glfw::WindowHint::OpenglProfile(glfw::OpenGlProfileHint::Core));
 
     let (mut window, events) = glfw
         .create_window(800, 600, "Terrain example", glfw::WindowMode::Windowed)
@@ -192,7 +155,7 @@ fn main() {
         .to_slice(gfx::PrimitiveType::TriangleList);
 
     let mesh = device.create_mesh(vertex_data.as_slice());
-    let program = device.link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
+    let program = device.link_program(VERTEX_SRC, FRAGMENT_SRC)
                         .ok().expect("Failed to link shaders.");
     let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 

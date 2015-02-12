@@ -13,9 +13,7 @@
 // limitations under the License.
 
 #![feature(plugin)]
-
-#[plugin]
-extern crate gfx_macros;
+#![plugin(gfx_macros)]
 
 mod secret_lib;
 

@@ -13,12 +13,10 @@
 // limitations under the License.
 
 #![feature(core, os, env, plugin, std_misc)]
+#![plugin(gfx_macros)]
 
 extern crate cgmath;
 extern crate gfx;
-#[macro_use]
-#[plugin]
-extern crate gfx_macros;
 extern crate glfw;
 extern crate time;
 extern crate "gfx_gl" as gl;
@@ -58,8 +56,7 @@ struct Params {
     transform: [[f32; 4]; 4],
 }
 
-static VERTEX_SRC: gfx::ShaderSource<'static> = shaders! {
-glsl_150: b"
+static VERTEX_SRC: &'static [u8] = b"
     #version 150 core
     in vec3 a_Pos;
     uniform mat4 u_Transform;
@@ -67,19 +64,16 @@ glsl_150: b"
     void main() {
         gl_Position = u_Transform * vec4(a_Pos, 1.0);
     }
-"
-};
+";
 
-static FRAGMENT_SRC: gfx::ShaderSource<'static> = shaders! {
-glsl_150: b"
+static FRAGMENT_SRC: &'static [u8] = b"
     #version 150 core
     out vec4 o_Color;
 
     void main() {
         o_Color = vec4(1., 0., 0., 1.);
     }
-"
-};
+";
 
 //----------------------------------------
 
@@ -119,7 +113,7 @@ fn gfx_main(mut glfw: glfw::Glfw,
                           &[0x20u8, 0xA0u8, 0xC0u8, 0x00u8])
         .ok().expect("Failed to update texture");
 
-    let program = device.link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
+    let program = device.link_program(VERTEX_SRC, FRAGMENT_SRC)
                         .ok().expect("Failed to link shaders");
     let view: AffineMatrix3<f32> = Transform::look_at(
         &Point3::new(0f32, -5.0, 0.0),

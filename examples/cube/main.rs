@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(core, plugin)]
+#![feature(plugin)]
+#![plugin(gfx_macros)]
 
 extern crate cgmath;
 extern crate gfx;
-#[macro_use]
-#[plugin]
-extern crate gfx_macros;
 extern crate glfw;
 
 use cgmath::FixedArray;
@@ -51,8 +49,7 @@ struct Params {
     color: gfx::shade::TextureParam,
 }
 
-static VERTEX_SRC: gfx::ShaderSource<'static> = shaders! {
-glsl_120: b"
+static VERTEX_SRC: &'static [u8] = b"
     #version 120
 
     attribute vec3 a_Pos;
@@ -65,24 +62,9 @@ glsl_120: b"
         v_TexCoord = a_TexCoord;
         gl_Position = u_Transform * vec4(a_Pos, 1.0);
     }
-",
-glsl_150: b"
-    #version 150 core
+";
 
-    in vec3 a_Pos;
-    in vec2 a_TexCoord;
-    out vec2 v_TexCoord;
-
-    uniform mat4 u_Transform;
-
-    void main() {
-        v_TexCoord = a_TexCoord;
-        gl_Position = u_Transform * vec4(a_Pos, 1.0);
-    }
-"};
-
-static FRAGMENT_SRC: gfx::ShaderSource<'static> = shaders! {
-glsl_120: b"
+static FRAGMENT_SRC: &'static [u8] = b"
     #version 120
 
     varying vec2 v_TexCoord;
@@ -93,31 +75,13 @@ glsl_120: b"
         float blend = dot(v_TexCoord-vec2(0.5,0.5), v_TexCoord-vec2(0.5,0.5));
         gl_FragColor = mix(tex, vec4(0.0,0.0,0.0,0.0), blend*1.0);
     }
-",
-glsl_150: b"
-    #version 150 core
-
-    in vec2 v_TexCoord;
-    out vec4 o_Color;
-
-    uniform sampler2D t_Color;
-    void main() {
-        vec4 tex = texture(t_Color, v_TexCoord);
-        float blend = dot(v_TexCoord-vec2(0.5,0.5), v_TexCoord-vec2(0.5,0.5));
-        o_Color = mix(tex, vec4(0.0,0.0,0.0,0.0), blend*1.0);
-    }
-"
-};
+";
 
 //----------------------------------------
 
 fn main() {
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS)
         .ok().expect("Failed to initialize glfs-rs");
-
-    glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
-    glfw.window_hint(glfw::WindowHint::OpenglForwardCompat(true));
-    glfw.window_hint(glfw::WindowHint::OpenglProfile(glfw::OpenGlProfileHint::Core));
 
     let (mut window, events) = glfw
         .create_window(640, 480, "Cube example", glfw::WindowMode::Windowed)
@@ -202,7 +166,7 @@ fn main() {
                                    gfx::tex::WrapMode::Clamp)
     );
 
-    let program = device.link_program(VERTEX_SRC.clone(), FRAGMENT_SRC.clone())
+    let program = device.link_program(VERTEX_SRC, FRAGMENT_SRC)
                         .ok().expect("Failed to link program.");
 
     let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);

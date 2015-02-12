@@ -24,8 +24,9 @@ extern crate libc;
 extern crate "gfx_device_gl" as device;
 
 // public re-exports
-pub use render::{DeviceExt, ProgramError, Renderer, DrawError};
+pub use render::{Renderer, DrawError};
 pub use render::batch;
+pub use render::device_ext::{DeviceExt, ShaderSource, ProgramError};
 pub use render::mesh::{Attribute, Mesh, VertexFormat};
 pub use render::mesh::{Slice, ToSlice};
 pub use render::mesh::SliceKind;
@@ -41,8 +42,7 @@ pub use device::BufferUsage;
 pub use device::{VertexCount, InstanceCount};
 pub use device::PrimitiveType;
 pub use device::draw::CommandBuffer;
-pub use device::shade::UniformValue;
-pub use device::shade::{ShaderSource, ProgramInfo};
+pub use device::shade::{ProgramInfo, UniformValue};
 pub use device::target::*;
 
 // TODO: Remove this re-export once `gl_device` becomes a separate crate.

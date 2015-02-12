@@ -623,22 +623,14 @@ impl Device for GlDevice {
         }
     }
 
-    fn create_shader(&mut self, stage: ::shade::Stage, code: ::shade::ShaderSource)
+    fn create_shader(&mut self, stage: ::shade::Stage, code: &[u8])
                      -> Result<::ShaderHandle, ::shade::CreateShaderError> {
-        let (name, info) = shade::create_shader(&self.gl, stage, code, self.info.shading_language);
+        let (name, info) = shade::create_shader(&self.gl, stage, code);
         info.map(|info| {
             let level = if name.is_err() { LogLevel::Error } else { LogLevel::Warn };
             log!(level, "\tShader compile log: {}", info);
         });
         name.map(|sh| ::Handle(sh, stage))
-    }
-
-    fn shader_targets<'a>(&mut self, code: &'a ::shade::ShaderSource) -> Option<Vec<&'a str>> {
-        if self.caps.fragment_output_supported {
-            Some(code.targets.iter().map(|&x| x).filter(|&x| x != "").collect())
-        } else {
-            None
-        }
     }
 
     fn create_program(&mut self, shaders: &[::ShaderHandle], targets: Option<&[&str]>) -> Result<::ProgramHandle, ()> {
