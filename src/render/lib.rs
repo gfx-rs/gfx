@@ -25,7 +25,7 @@ use std::mem;
 use device::attrib;
 use device::attrib::IntSize;
 use device::draw::CommandBuffer;
-use device::shade::{ProgramInfo, UniformValue, ShaderSource, Stage, CreateShaderError};
+use device::shade::{ProgramInfo, UniformValue, Stage, CreateShaderError, ShaderModel};
 use device::target::{Rect, ClearData, Mirror, Mask, Access, Target};
 use render::batch::Batch;
 use render::mesh::SliceKind;
@@ -42,16 +42,6 @@ pub mod target;
 /// Batches
 pub mod batch;
 
-/// Program linking error
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub enum ProgramError {
-    /// Unable to compile the vertex shader
-    Vertex(CreateShaderError),
-    /// Unable to compile the fragment shader
-    Fragment(CreateShaderError),
-    /// Unable to link
-    Link(()),
-}
 
 const TRACKED_ATTRIBUTES: usize = 8;
 type CachedAttribute = (device::RawBufferHandle, attrib::Format);
@@ -470,6 +460,47 @@ impl<C: CommandBuffer> Renderer<C> {
     }
 }
 
+
+/// Program linking error
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub enum ProgramError {
+    /// Unable to compile the vertex shader
+    Vertex(CreateShaderError),
+    /// Unable to compile the fragment shader
+    Fragment(CreateShaderError),
+    /// Unable to link
+    Link(()),
+}
+
+/// A type storing shader source for different graphics APIs and versions.
+#[allow(missing_docs)]
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub struct ShaderSource<'a> {
+    pub glsl_120: Option<&'a [u8]>,
+    pub glsl_130: Option<&'a [u8]>,
+    pub glsl_140: Option<&'a [u8]>,
+    pub glsl_150: Option<&'a [u8]>,
+    pub glsl_430: Option<&'a [u8]>,
+    // TODO: hlsl_sm_N...
+    pub targets: &'a [&'a str],
+}
+
+impl<'a> ShaderSource<'a> {
+    /// Pick one of the stored versions that is the highest supported by the device.
+    pub fn choose(&self, model: ShaderModel) -> Result<&'a [u8], ()> {
+        // following https://www.opengl.org/wiki/Detecting_the_Shader_Model
+        let version = model.to_number();
+        Ok(match *self {
+            ShaderSource { glsl_430: Some(s), .. } if version >= 50 => s,
+            ShaderSource { glsl_150: Some(s), .. } if version >= 40 => s,
+            ShaderSource { glsl_130: Some(s), .. } if version >= 30 => s,
+            ShaderSource { glsl_120: Some(s), .. } if version >= 20 => s,
+            _ => return Err(()),
+        })
+    }
+}
+
+
 /// Backend extension trait for convenience methods
 pub trait DeviceExt: device::Device {
     /// Create a new renderer
@@ -478,8 +509,12 @@ pub trait DeviceExt: device::Device {
     /// Convenience function around `create_buffer` and `Mesh::from_format`.
     fn create_mesh<T: mesh::VertexFormat + Copy>(&mut self, data: &[T]) -> mesh::Mesh;
     /// Create a simple program given a vertex shader with a fragment one.
-    fn link_program(&mut self, vs_src: ShaderSource, fs_src: ShaderSource)
+    fn link_program(&mut self, vs_code: &[u8], fs_code: &[u8])
                     -> Result<device::ProgramHandle, ProgramError>;
+    /// Create a simple program given `ShaderSource` versions of vertex and
+    /// fragment shaders, chooss the matching versions for the device.
+    fn link_program_source(&mut self, vs_src: ShaderSource, fs_src: ShaderSource)
+                           -> Result<device::ProgramHandle, ProgramError>;
 }
 
 impl<D: device::Device> DeviceExt for D {
@@ -507,21 +542,43 @@ impl<D: device::Device> DeviceExt for D {
         mesh::Mesh::from_format(buf, nv as device::VertexCount)
     }
 
-    fn link_program(&mut self, vs_src: ShaderSource, fs_src: ShaderSource)
+    fn link_program(&mut self, vs_code: &[u8], fs_code: &[u8])
                     -> Result<device::ProgramHandle, ProgramError> {
-        let vs = match self.create_shader(Stage::Vertex, vs_src) {
+        let vs = match self.create_shader(Stage::Vertex, vs_code) {
             Ok(s) => s,
             Err(e) => return Err(ProgramError::Vertex(e)),
         };
-        let fs = match self.create_shader(Stage::Fragment, fs_src) {
+        let fs = match self.create_shader(Stage::Fragment, fs_code) {
             Ok(s) => s,
             Err(e) => return Err(ProgramError::Fragment(e)),
         };
 
-        // I would map on this, but I get a lifetime error
-        match self.shader_targets(&fs_src) {
-            Some(targets) => self.create_program(&[vs, fs], Some(&targets[])),
-            None          => self.create_program(&[vs, fs], None),
-        }.map_err(|e| ProgramError::Link(e))
+        self.create_program(&[vs, fs], None)
+            .map_err(|e| ProgramError::Link(e))
+    }
+
+    fn link_program_source(&mut self, vs_src: ShaderSource, fs_src: ShaderSource)
+                           -> Result<device::ProgramHandle, ProgramError> {
+        let model = self.get_capabilities().shader_model;
+        let err_model = CreateShaderError::ModelNotSupported;
+
+        let vs = match vs_src.choose(model) {
+            Ok(code) => match self.create_shader(Stage::Vertex, code) {
+                Ok(s) => s,
+                Err(e) => return Err(ProgramError::Vertex(e)),
+            },
+            Err(_) => return Err(ProgramError::Vertex(err_model))
+        };
+
+        let fs = match fs_src.choose(model) {
+            Ok(code) => match self.create_shader(Stage::Fragment, code) {
+                Ok(s) => s,
+                Err(e) => return Err(ProgramError::Fragment(e)),
+            },
+            Err(_) => return Err(ProgramError::Fragment(err_model))
+        };
+
+        self.create_program(&[vs, fs], Some(fs_src.targets))
+            .map_err(|e| ProgramError::Link(e))
     }
 }

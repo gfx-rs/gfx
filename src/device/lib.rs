@@ -377,9 +377,8 @@ pub trait Device {
         self.create_buffer_static_raw(as_byte_slice(data)).cast()
     }
     fn create_array_buffer(&mut self) -> Result<ArrayBufferHandle, ()>;
-    fn create_shader(&mut self, stage: shade::Stage, code: shade::ShaderSource) ->
+    fn create_shader(&mut self, stage: shade::Stage, code: &[u8]) ->
                      Result<ShaderHandle, shade::CreateShaderError>;
-    fn shader_targets<'a>(&mut self, code: &'a ::shade::ShaderSource) -> Option<Vec<&'a str>>;
     fn create_program(&mut self, shaders: &[ShaderHandle], targets: Option<&[&str]>) -> Result<ProgramHandle, ()>;
     fn create_frame_buffer(&mut self) -> FrameBufferHandle;
     fn create_surface(&mut self, info: tex::SurfaceInfo) -> Result<SurfaceHandle, tex::SurfaceError>;

@@ -314,23 +314,11 @@ impl UniformVar {
     }
 }
 
-/// A type storing shader source for different graphics APIs and versions.
-#[allow(missing_docs)]
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub struct ShaderSource<'a> {
-    pub glsl_120: Option<&'a [u8]>,
-    pub glsl_130: Option<&'a [u8]>,
-    pub glsl_140: Option<&'a [u8]>,
-    pub glsl_150: Option<&'a [u8]>,
-    // TODO: hlsl_sm_N...
-    pub targets: &'a [&'a str],
-}
-
 /// An error type for creating programs.
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum CreateShaderError {
-    /// The device does not support any of the shaders supplied.
-    NoSupportedShaderProvided,
+    /// The device does not support the requested shader model.
+    ModelNotSupported,
     /// The shader failed to compile.
     ShaderCompilationFailed
 }
@@ -352,7 +340,7 @@ impl ShaderModel {
     /// Model30 turns to 30, etc.
     pub fn to_number(&self) -> u8 {
         match *self {
-            ShaderModel::Unsupported => 0,  //ModelAncient, ModelPreHistoric, ModelMyGrandpaLikes
+            ShaderModel::Unsupported => 0,  // before this age
             ShaderModel::Version30 => 30,
             ShaderModel::Version40 => 40,
             ShaderModel::Version41 => 41,

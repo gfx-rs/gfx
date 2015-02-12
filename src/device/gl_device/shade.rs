@@ -19,7 +19,6 @@ use super::super::shade as s;
 use super::super::shade::{BaseType, ContainerType, CreateShaderError, IsArray, IsShadow, IsRect,
                           IsMultiSample, MatrixFormat, SamplerType, Stage, UniformValue};
 use super::gl;
-use super::info::Version;
 
 use self::StorageType::{
     Var,
@@ -27,7 +26,7 @@ use self::StorageType::{
     Unknown,
 };
 
-pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: s::ShaderSource, lang: Version)
+pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: &[u8])
         -> (Result<super::Shader, s::CreateShaderError>, Option<String>) {
     let target = match stage {
         Stage::Vertex => gl::VERTEX_SHADER,
@@ -35,14 +34,6 @@ pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: s::ShaderSource, lang: 
         Stage::Fragment => gl::FRAGMENT_SHADER,
     };
     let name = unsafe { gl.CreateShader(target) };
-    let data = match data {
-        s::ShaderSource { glsl_150: Some(s), .. } if lang >= Version::new(1, 50, None, "") => s,
-        s::ShaderSource { glsl_140: Some(s), .. } if lang >= Version::new(1, 40, None, "") => s,
-        s::ShaderSource { glsl_130: Some(s), .. } if lang >= Version::new(1, 30, None, "") => s,
-        s::ShaderSource { glsl_120: Some(s), .. } if lang >= Version::new(1, 20, None, "") => s,
-        _ => return (Err(CreateShaderError::NoSupportedShaderProvided),
-                     Some("[gfx-rs] No supported GLSL shader provided!".to_string())),
-    };
     unsafe {
         gl.ShaderSource(name, 1,
             &(data.as_ptr() as *const gl::types::GLchar),
