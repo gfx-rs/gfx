@@ -66,12 +66,44 @@ pub fn link_mesh(mesh: &mesh::Mesh, pinfo: &ProgramInfo) -> Result<mesh::Link, M
         .map_err(|e| MeshError::MeshLink(e))
 }
 
+/// Return type for `Batch::get_data()``
+pub type BatchData<'a> = (&'a mesh::Mesh, mesh::AttributeIter, &'a mesh::Slice,
+                          &'a DrawState);
+
 /// Abstract batch trait
 pub trait Batch {
+    /// Possible errors occurring at batch access
+    type Error: fmt::Debug;
     /// Obtain information about the mesh, program, and state
-    fn get_data(&self) -> (&mesh::Mesh, &mesh::Link, &mesh::Slice, &ProgramHandle, &DrawState);
+    fn get_data(&self) -> Result<BatchData, Self::Error>;
     /// Fill shader parameter values
-    fn fill_params(&self, ::shade::ParamValues);
+    fn fill_params(&self, ::shade::ParamValues)
+                   -> Result<&ProgramHandle, Self::Error>;
+}
+
+impl<'a, T: ShaderParam> Batch for (&'a mesh::Mesh, mesh::Slice,
+                                    &'a ProgramHandle, &'a T, &'a DrawState) {
+    type Error = BatchError;
+
+    fn get_data(&self) -> Result<BatchData, BatchError> {
+        let (mesh, ref slice, program, _, state) = *self;
+        match link_mesh(mesh, program.get_info()) {
+            Ok(link) => Ok((mesh, link.to_iter(), &slice, state)),
+            Err(e) => Err(BatchError::Mesh(e)),
+        }
+    }
+
+    fn fill_params(&self, values: ::shade::ParamValues)
+                   -> Result<&ProgramHandle, BatchError> {
+        let (_, _, program, params, _) = *self;
+        match ShaderParam::create_link(None::<&T>, program.get_info()) {
+            Ok(link) => {
+                params.fill_params(&link, values);
+                Ok(program)
+            },
+            Err(e) => return Err(BatchError::Parameters(e)),
+        }
+    }
 }
 
 /// Owned batch - self-contained, but has heap-allocated data
@@ -114,12 +146,16 @@ impl<T: ShaderParam> OwnedBatch<T> {
 }
 
 impl<T: ShaderParam> Batch for OwnedBatch<T> {
-    fn get_data(&self) -> (&mesh::Mesh, &mesh::Link, &mesh::Slice, &ProgramHandle, &DrawState) {
-        (&self.mesh, &self.mesh_link, &self.slice, &self.program, &self.state)
+    type Error = ();
+
+    fn get_data(&self) -> Result<BatchData, ()> {
+        Ok((&self.mesh, self.mesh_link.to_iter(), &self.slice, &self.state))
     }
 
-    fn fill_params(&self, values: ::shade::ParamValues) {
+    fn fill_params(&self, values: ::shade::ParamValues)
+                   -> Result<&ProgramHandle, ()> {
         self.param.fill_params(&self.param_link, values);
+        Ok(&self.program)
     }
 }
 
@@ -169,6 +205,10 @@ struct Array<T> {
     //generation: u16,
 }
 
+/// Error accessing outside of the array
+#[derive(Debug)]
+pub struct OutOfBounds(pub usize);
+
 impl<T> Array<T> {
     fn new() -> Array<T> {
         Array {
@@ -177,9 +217,13 @@ impl<T> Array<T> {
         }
     }
 
-    fn get(&self, id: Id<T>) -> &T {
+    fn get(&self, id: Id<T>) -> Result<&T, OutOfBounds> {
         let Id(i) = id;
-        &self.data[i as usize]
+        if (i as usize) < self.data.len() {
+            Ok(&self.data[i as usize])
+        }else {
+            Err(OutOfBounds(i as usize))
+        }
     }
 }
 
@@ -302,17 +346,21 @@ impl Context {
 }
 
 impl<'a, T: ShaderParam> Batch for (&'a RefBatch<T>, &'a T, &'a Context) {
-    fn get_data(&self) -> (&mesh::Mesh, &mesh::Link, &mesh::Slice, &ProgramHandle, &DrawState) {
+    type Error = OutOfBounds;
+
+    fn get_data(&self) -> Result<BatchData, OutOfBounds> {
         let (b, _, ctx) = *self;
-        (ctx.meshes.get(b.mesh_id),
-         &b.mesh_link,
-         &b.slice,
-         ctx.programs.get(b.program_id),
-         ctx.states.get(b.state_id))
+        Ok((try!(ctx.meshes.get(b.mesh_id)),
+            b.mesh_link.to_iter(),
+            &b.slice,
+            try!(ctx.states.get(b.state_id))
+        ))
     }
 
-    fn fill_params(&self, values: ::shade::ParamValues) {
-        let (b, data, _) = *self;
+    fn fill_params(&self, values: ::shade::ParamValues)
+                   -> Result<&ProgramHandle, OutOfBounds> {
+        let (b, data, ctx) = *self;
         data.fill_params(&b.param_link, values);
+        ctx.programs.get(b.program_id)
     }
 }

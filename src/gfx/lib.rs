@@ -89,7 +89,7 @@ impl<D: device::Device> Graphics<D> {
     /// Draw a ref batch.
     pub fn draw<'a, T: shade::ShaderParam>(&'a mut self,
                 batch: &'a batch::RefBatch<T>, data: &'a T, frame: &Frame)
-                -> Result<(), DrawError> {
+                -> Result<(), DrawError<batch::OutOfBounds>> {
         self.renderer.draw(&(batch, data, &self.context), frame)
     }
 

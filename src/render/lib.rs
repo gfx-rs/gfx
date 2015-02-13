@@ -126,7 +126,9 @@ impl<C: CommandBuffer> CommandBufferHelper for C {
 
 /// Draw-time error, showing inconsistencies in draw parameters and data
 #[derive(Copy, Debug)]
-pub enum DrawError {
+pub enum DrawError<E> {
+    /// Tha batch is not valid
+    InvalidBatch(E),
     /// The `DrawState` interacts with a target that does not present in the
     /// frame. For example, the depth test is enabled while there is no depth.
     MissingTarget(Mask),
@@ -185,7 +187,7 @@ impl<C: CommandBuffer> Renderer<C> {
 
     /// Draw a `batch` into the specified `frame`
     pub fn draw<B: Batch>(&mut self, batch: &B, frame: &target::Frame)
-                -> Result<(), DrawError> {
+                -> Result<(), DrawError<B::Error>> {
         self.draw_all(batch, None, frame)
     }
 
@@ -194,22 +196,28 @@ impl<C: CommandBuffer> Renderer<C> {
                           count: device::InstanceCount,
                           base: device::VertexCount,
                           frame: &target::Frame)
-                          -> Result<(), DrawError> {
+                          -> Result<(), DrawError<B::Error>> {
         self.draw_all(batch, Some((count, base)), frame)
     }
 
     /// Draw a 'batch' with all known parameters specified, internal use only.
     fn draw_all<B: Batch>(&mut self, batch: &B, instances: Option<Instancing>,
-                frame: &target::Frame) -> Result<(), DrawError> {
-        let (mesh, link, slice, program, state) = batch.get_data();
+                frame: &target::Frame) -> Result<(), DrawError<B::Error>> {
+        let (mesh, attrib_iter, slice, state) = match batch.get_data() {
+            Ok(data) => data,
+            Err(e) => return Err(DrawError::InvalidBatch(e)),
+        };
         let target_missing = state.get_target_mask() - frame.get_mask();
         if !target_missing.is_empty() {
             return Err(DrawError::MissingTarget(target_missing))
         }
         self.bind_frame(frame);
-        self.bind_program(batch, program);
+        let program = match self.bind_program(batch) {
+            Ok(p) => p,
+            Err(e) => return Err(DrawError::InvalidBatch(e)),
+        };
         self.bind_state(state);
-        self.bind_mesh(mesh, link, program.get_info());
+        self.bind_mesh(mesh, attrib_iter, program.get_info());
         self.draw_slice(slice, instances);
         Ok(())
     }
@@ -358,14 +366,19 @@ impl<C: CommandBuffer> Renderer<C> {
         self.render_state.draw = *state;
     }
 
-    fn bind_program<B: Batch>(&mut self, batch: &B, program: &device::ProgramHandle) {
+    fn bind_program<'a, B: Batch>(&mut self, batch: &'a B)
+                    -> Result<&'a device::ProgramHandle, B::Error> {
+        let program = match batch.fill_params(self.parameters.get_mut()) {
+            Ok(p) => p,
+            Err(e) => return Err(e),
+        };
         //Warning: this is not protected against deleted resources in single-threaded mode
         if self.render_state.program_name != program.get_name() {
             self.command_buffer.bind_program(program.get_name());
             self.render_state.program_name = program.get_name();
         }
-        batch.fill_params(self.parameters.get_mut());
         self.upload_parameters(program);
+        Ok(program)
     }
 
     fn upload_parameters(&mut self, program: &device::ProgramHandle) {
@@ -407,7 +420,8 @@ impl<C: CommandBuffer> Renderer<C> {
         }
     }
 
-    fn bind_mesh(&mut self, mesh: &mesh::Mesh, link: &mesh::Link, info: &ProgramInfo) {
+    fn bind_mesh<I: Iterator<Item = mesh::AttributeIndex>>(&mut self,
+                 mesh: &mesh::Mesh, attrib_iter: I, info: &ProgramInfo) {
         if !self.render_state.is_array_buffer_set {
             // It's Ok if the array buffer is not supported. We can just ignore it.
             self.common_array_buffer.map(|ab|
@@ -415,8 +429,8 @@ impl<C: CommandBuffer> Renderer<C> {
             ).is_ok();
             self.render_state.is_array_buffer_set = true;
         }
-        for (attr_index, sat) in link.attribute_indices().zip(info.attributes.iter()) {
-            let vat = &mesh.attributes[attr_index];
+        for (attr_index, sat) in attrib_iter.zip(info.attributes.iter()) {
+            let vat = &mesh.attributes[attr_index as usize];
             let loc = sat.location as usize;
             let need_update = loc >= self.render_state.attributes.len() ||
                 match self.render_state.attributes[loc] {
