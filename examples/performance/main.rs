@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(core, os, env, plugin, std_misc)]
+#![feature(core, env, plugin, std_misc)]
 #![plugin(gfx_macros)]
 
 extern crate cgmath;
@@ -367,9 +367,9 @@ fn main() {
         return;
     }
 
-    let mode = args.nth(1).unwrap().into_string().unwrap();
+    let mode = args.nth(1).unwrap();
     let count: i16 = if args_count == 3 {
-        FromStr::from_str(&args.next().unwrap().into_string().unwrap()).ok()
+        FromStr::from_str(&args.next().unwrap()).ok()
     } else {
         None
     }.unwrap_or(10000);
