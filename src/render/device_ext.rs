@@ -59,7 +59,7 @@ impl<'a> ShaderSource<'a> {
 /// Backend extension trait for convenience methods
 pub trait DeviceExt: device::Device {
     /// Create a new renderer
-    fn create_renderer(&mut self) -> ::Renderer<<Self as device::Device>::CommandBuffer>;
+    fn create_renderer(&mut self) -> ::Renderer<Self>;
     /// Create a new mesh from the given vertex data.
     /// Convenience function around `create_buffer` and `Mesh::from_format`.
     fn create_mesh<T: VertexFormat + Copy>(&mut self, data: &[T]) -> Mesh;
@@ -73,7 +73,7 @@ pub trait DeviceExt: device::Device {
 }
 
 impl<D: device::Device> DeviceExt for D {
-    fn create_renderer(&mut self) -> ::Renderer<D::CommandBuffer> {
+    fn create_renderer(&mut self) -> ::Renderer<D> {
         ::Renderer {
             command_buffer: device::draw::CommandBuffer::new(),
             data_buffer: device::draw::DataBuffer::new(),

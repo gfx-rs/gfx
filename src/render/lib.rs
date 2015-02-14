@@ -22,6 +22,7 @@ extern crate "gfx_device_gl" as device;
 
 use std::mem;
 
+use device::Device;
 use device::attrib;
 use device::attrib::IntSize;
 use device::draw::CommandBuffer;
@@ -141,8 +142,8 @@ pub enum DrawError<E> {
 }
 
 /// Renderer front-end
-pub struct Renderer<C: CommandBuffer> {
-    command_buffer: C,
+pub struct Renderer<D: Device> {
+    command_buffer: D::CommandBuffer,
     data_buffer: device::draw::DataBuffer,
     common_array_buffer: Result<device::ArrayBufferHandle, ()>,
     draw_frame_buffer: device::FrameBufferHandle,
@@ -152,7 +153,7 @@ pub struct Renderer<C: CommandBuffer> {
     parameters: ParamStorage,
 }
 
-impl<C: CommandBuffer> Renderer<C> {
+impl<D: Device> Renderer<D> {
     /// Reset all commands for the command buffer re-usal.
     pub fn reset(&mut self) {
         self.command_buffer.clear();
@@ -161,12 +162,12 @@ impl<C: CommandBuffer> Renderer<C> {
     }
 
     /// Get command and data buffers to be submitted to the device.
-    pub fn as_buffer(&self) -> (&C, &device::draw::DataBuffer) {
+    pub fn as_buffer(&self) -> (&D::CommandBuffer, &device::draw::DataBuffer) {
         (&self.command_buffer, &self.data_buffer)
     }
 
     /// Clone the renderer shared data but ignore the commands.
-    pub fn clone_empty(&self) -> Renderer<C> {
+    pub fn clone_empty(&self) -> Renderer<D> {
         Renderer {
             command_buffer: CommandBuffer::new(),
             data_buffer: device::draw::DataBuffer::new(),
