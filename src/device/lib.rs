@@ -315,45 +315,6 @@ pub struct BufferInfo {
     pub size: usize,
 }
 
-/// Serialized device command.
-/// While this is supposed to be an internal detail of a device,
-/// this particular representation may be used by different backends,
-/// such as OpenGL (prior to GLNG) and DirectX (prior to DX12)
-#[allow(missing_docs)]
-#[derive(Copy, Debug)]
-pub enum Command {
-    BindProgram(back::Program),
-    BindArrayBuffer(back::ArrayBuffer),
-    BindAttribute(AttributeSlot, back::Buffer, attrib::Format),
-    BindIndex(back::Buffer),
-    BindFrameBuffer(target::Access, back::FrameBuffer),
-    /// Unbind any surface from the specified target slot
-    UnbindTarget(target::Access, target::Target),
-    /// Bind a surface to the specified target slot
-    BindTargetSurface(target::Access, target::Target, back::Surface),
-    /// Bind a level of the texture to the specified target slot
-    BindTargetTexture(target::Access, target::Target, back::Texture,
-                      target::Level, Option<target::Layer>),
-    BindUniformBlock(back::Program, UniformBufferSlot, UniformBlockIndex, back::Buffer),
-    BindUniform(shade::Location, shade::UniformValue),
-    BindTexture(TextureSlot, tex::TextureKind, back::Texture, Option<SamplerHandle>),
-    SetDrawColorBuffers(usize),
-    SetPrimitiveState(state::Primitive),
-    SetViewport(target::Rect),
-    SetMultiSampleState(Option<state::MultiSample>),
-    SetScissor(Option<target::Rect>),
-    SetDepthStencilState(Option<state::Depth>, Option<state::Stencil>, state::CullMode),
-    SetBlendState(Option<state::Blend>),
-    SetColorMask(state::ColorMask),
-    UpdateBuffer(back::Buffer, draw::DataPointer, usize),
-    UpdateTexture(tex::TextureKind, back::Texture, tex::ImageInfo, draw::DataPointer),
-    // drawing
-    Clear(target::ClearData, target::Mask),
-    Draw(PrimitiveType, VertexCount, VertexCount, Option<(InstanceCount, VertexCount)>),
-    DrawIndexed(PrimitiveType, IndexType, VertexCount, VertexCount, VertexCount, Option<(InstanceCount, VertexCount)>),
-    Blit(target::Rect, target::Rect, target::Mirror, target::Mask),
-}
-
 /// An interface for performing draw calls using a specific graphics API
 #[allow(missing_docs)]
 pub trait Device {
