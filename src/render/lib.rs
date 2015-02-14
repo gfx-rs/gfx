@@ -105,14 +105,14 @@ impl ParamStorage{
     }
 }
 
-/// Helper routines for the command buffer
+/// Extension methods for the command buffer.
 /// Useful when Renderer is borrowed, and we need to issue commands.
-trait CommandBufferHelper {
+trait CommandBufferExt {
     /// Bind a plane to some target
     fn bind_target(&mut self, Access, Target, Option<&target::Plane>);
 }
 
-impl<C: CommandBuffer> CommandBufferHelper for C {
+impl<C: CommandBuffer> CommandBufferExt for C {
     fn bind_target(&mut self, access: Access, to: Target,
                    plane: Option<&target::Plane>) {
         match plane {
