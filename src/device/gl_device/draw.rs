@@ -14,15 +14,49 @@
 
 //! OpenGL implementation of the Command Buffer
 
-use Command;
 use std::slice;
 
+use {attrib, draw, target, tex, shade, state};
+use {AttributeSlot, IndexType, InstanceCount, PrimitiveType, TextureSlot, UniformBlockIndex, UniformBufferSlot, VertexCount};
+use super::{ArrayBuffer, Buffer, FrameBuffer, Program, Surface, Texture};
+
+/// Serialized device command.
+#[derive(Copy, Debug)]
+pub enum Command {
+    BindProgram(Program),
+    BindArrayBuffer(ArrayBuffer),
+    BindAttribute(AttributeSlot, Buffer, attrib::Format),
+    BindIndex(Buffer),
+    BindFrameBuffer(target::Access, FrameBuffer),
+    UnbindTarget(target::Access, target::Target),
+    BindTargetSurface(target::Access, target::Target, Surface),
+    BindTargetTexture(target::Access, target::Target, Texture, target::Level, Option<target::Layer>),
+    BindUniformBlock(Program, UniformBufferSlot, UniformBlockIndex, Buffer),
+    BindUniform(shade::Location, shade::UniformValue),
+    BindTexture(TextureSlot, tex::TextureKind, Texture, Option<::SamplerHandle>),
+    SetDrawColorBuffers(usize),
+    SetPrimitiveState(state::Primitive),
+    SetViewport(target::Rect),
+    SetMultiSampleState(Option<state::MultiSample>),
+    SetScissor(Option<target::Rect>),
+    SetDepthStencilState(Option<state::Depth>, Option<state::Stencil>, state::CullMode),
+    SetBlendState(Option<state::Blend>),
+    SetColorMask(state::ColorMask),
+    UpdateBuffer(Buffer, draw::DataPointer, usize),
+    UpdateTexture(tex::TextureKind, Texture, tex::ImageInfo, draw::DataPointer),
+    // drawing
+    Clear(target::ClearData, target::Mask),
+    Draw(PrimitiveType, VertexCount, VertexCount, Option<(InstanceCount, VertexCount)>),
+    DrawIndexed(PrimitiveType, IndexType, VertexCount, VertexCount, VertexCount, Option<(InstanceCount, VertexCount)>),
+    Blit(target::Rect, target::Rect, target::Mirror, target::Mask),
+}
+
 pub struct GlCommandBuffer {
-    buf: Vec<::Command>,
+    buf: Vec<Command>,
 }
 
 impl GlCommandBuffer {
-    pub fn iter<'a>(&'a self) -> slice::Iter<'a, ::Command> {
+    pub fn iter<'a>(&'a self) -> slice::Iter<'a, Command> {
         self.buf.iter()
     }
 }
@@ -38,44 +72,44 @@ impl ::draw::CommandBuffer for GlCommandBuffer {
         self.buf.clear();
     }
 
-    fn bind_program(&mut self, prog: super::Program) {
+    fn bind_program(&mut self, prog: Program) {
         self.buf.push(Command::BindProgram(prog));
     }
 
-    fn bind_array_buffer(&mut self, vao: super::ArrayBuffer) {
+    fn bind_array_buffer(&mut self, vao: ArrayBuffer) {
         self.buf.push(Command::BindArrayBuffer(vao));
     }
 
-    fn bind_attribute(&mut self, slot: ::AttributeSlot, buf: super::Buffer,
+    fn bind_attribute(&mut self, slot: ::AttributeSlot, buf: Buffer,
                       format: ::attrib::Format) {
         self.buf.push(Command::BindAttribute(slot, buf, format));
     }
 
-    fn bind_index(&mut self, buf: super::Buffer) {
+    fn bind_index(&mut self, buf: Buffer) {
         self.buf.push(Command::BindIndex(buf));
     }
 
-    fn bind_frame_buffer(&mut self, access: ::target::Access, fbo: super::FrameBuffer) {
+    fn bind_frame_buffer(&mut self, access: target::Access, fbo: FrameBuffer) {
         self.buf.push(Command::BindFrameBuffer(access, fbo));
     }
 
-    fn unbind_target(&mut self, access: ::target::Access, tar: ::target::Target) {
+    fn unbind_target(&mut self, access: target::Access, tar: target::Target) {
         self.buf.push(Command::UnbindTarget(access, tar));
     }
 
-    fn bind_target_surface(&mut self, access: ::target::Access,
-                           tar: ::target::Target, suf: super::Surface) {
+    fn bind_target_surface(&mut self, access: target::Access,
+                           tar: target::Target, suf: Surface) {
         self.buf.push(Command::BindTargetSurface(access, tar, suf));
     }
 
-    fn bind_target_texture(&mut self, access: ::target::Access,
-                           tar: ::target::Target, tex: super::Texture,
-                           level: ::target::Level, layer: Option<::target::Layer>) {
+    fn bind_target_texture(&mut self, access: target::Access,
+                           tar: target::Target, tex: Texture,
+                           level: target::Level, layer: Option<target::Layer>) {
         self.buf.push(Command::BindTargetTexture(access, tar, tex, level, layer));
     }
 
-    fn bind_uniform_block(&mut self, prog: super::Program, slot: ::UniformBufferSlot,
-                          index: ::UniformBlockIndex, buf: super::Buffer) {
+    fn bind_uniform_block(&mut self, prog: Program, slot: ::UniformBufferSlot,
+                          index: ::UniformBlockIndex, buf: Buffer) {
         self.buf.push(Command::BindUniformBlock(prog, slot, index, buf));
     }
 
@@ -83,7 +117,7 @@ impl ::draw::CommandBuffer for GlCommandBuffer {
         self.buf.push(Command::BindUniform(loc, value));
     }
     fn bind_texture(&mut self, slot: ::TextureSlot, kind: ::tex::TextureKind,
-                    tex: super::Texture, sampler: Option<::SamplerHandle>) {
+                    tex: Texture, sampler: Option<::SamplerHandle>) {
         self.buf.push(Command::BindTexture(slot, kind, tex, sampler));
     }
 
@@ -91,46 +125,46 @@ impl ::draw::CommandBuffer for GlCommandBuffer {
         self.buf.push(Command::SetDrawColorBuffers(num));
     }
 
-    fn set_primitive(&mut self, prim: ::state::Primitive) {
+    fn set_primitive(&mut self, prim: state::Primitive) {
         self.buf.push(Command::SetPrimitiveState(prim));
     }
 
-    fn set_viewport(&mut self, view: ::target::Rect) {
+    fn set_viewport(&mut self, view: target::Rect) {
         self.buf.push(Command::SetViewport(view));
     }
 
-    fn set_multi_sample(&mut self, ms: Option<::state::MultiSample>) {
+    fn set_multi_sample(&mut self, ms: Option<state::MultiSample>) {
         self.buf.push(Command::SetMultiSampleState(ms));
     }
 
-    fn set_scissor(&mut self, rect: Option<::target::Rect>) {
+    fn set_scissor(&mut self, rect: Option<target::Rect>) {
         self.buf.push(Command::SetScissor(rect));
     }
 
-    fn set_depth_stencil(&mut self, depth: Option<::state::Depth>,
-                         stencil: Option<::state::Stencil>, cull: ::state::CullMode) {
+    fn set_depth_stencil(&mut self, depth: Option<state::Depth>,
+                         stencil: Option<state::Stencil>, cull: state::CullMode) {
         self.buf.push(Command::SetDepthStencilState(depth, stencil, cull));
     }
 
-    fn set_blend(&mut self, blend: Option<::state::Blend>) {
+    fn set_blend(&mut self, blend: Option<state::Blend>) {
         self.buf.push(Command::SetBlendState(blend));
     }
 
-    fn set_color_mask(&mut self, mask: ::state::ColorMask) {
+    fn set_color_mask(&mut self, mask: state::ColorMask) {
         self.buf.push(Command::SetColorMask(mask));
     }
 
-    fn update_buffer(&mut self, buf: super::Buffer, data: ::draw::DataPointer,
+    fn update_buffer(&mut self, buf: Buffer, data: ::draw::DataPointer,
                         offset_bytes: usize) {
         self.buf.push(Command::UpdateBuffer(buf, data, offset_bytes));
     }
 
-    fn update_texture(&mut self, kind: ::tex::TextureKind, tex: super::Texture,
+    fn update_texture(&mut self, kind: ::tex::TextureKind, tex: Texture,
                       info: ::tex::ImageInfo, data: ::draw::DataPointer) {
         self.buf.push(Command::UpdateTexture(kind, tex, info, data));
     }
 
-    fn call_clear(&mut self, data: ::target::ClearData, mask: ::target::Mask) {
+    fn call_clear(&mut self, data: target::ClearData, mask: target::Mask) {
         self.buf.push(Command::Clear(data, mask));
     }
 
@@ -145,8 +179,8 @@ impl ::draw::CommandBuffer for GlCommandBuffer {
         self.buf.push(Command::DrawIndexed(ptype, itype, start, count, base, instances));
     }
 
-    fn call_blit(&mut self, s_rect: ::target::Rect, d_rect: ::target::Rect,
-                 mirror: ::target::Mirror, mask: ::target::Mask) {
+    fn call_blit(&mut self, s_rect: target::Rect, d_rect: target::Rect,
+                 mirror: target::Mirror, mask: target::Mask) {
         self.buf.push(Command::Blit(s_rect, d_rect, mirror, mask));
     }
 }

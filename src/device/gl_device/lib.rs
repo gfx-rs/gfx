@@ -28,9 +28,9 @@ use state::{CullMode, RasterMethod, WindingOrder};
 use target::{Access, Target};
 
 use BufferUsage;
-use Command;
 use Device;
 use {MapAccess, ReadableMapping, WritableMapping, RWMapping, BufferHandle, PrimitiveType};
+use self::draw::Command;
 
 pub use self::draw::GlCommandBuffer;
 pub use self::info::{Info, PlatformName, Version};
@@ -170,7 +170,7 @@ impl GlDevice {
     }
 
     /// Fails during a debug build if the implementation's error flag was set.
-    fn check(&mut self, cmd: &::Command) {
+    fn check(&mut self, cmd: &Command) {
         if cfg!(not(ndebug)) {
             let err = GlError::from_error_code(unsafe { self.gl.GetError() });
             if err != GlError::NoError {
@@ -221,7 +221,7 @@ impl GlDevice {
         }
     }
 
-    fn process(&mut self, cmd: &::Command, data_buf: &::draw::DataBuffer) {
+    fn process(&mut self, cmd: &Command, data_buf: &::draw::DataBuffer) {
         match *cmd {
             Command::Clear(ref data, mask) => {
                 let mut flags = 0;
