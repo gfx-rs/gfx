@@ -30,9 +30,7 @@ use target::{Access, Target};
 use BufferUsage;
 use Device;
 use {MapAccess, ReadableMapping, WritableMapping, RWMapping, BufferHandle, PrimitiveType};
-use self::draw::Command;
-
-pub use self::draw::GlCommandBuffer;
+use self::draw::{Command, CommandBuffer};
 pub use self::info::{Info, PlatformName, Version};
 
 mod draw;
@@ -567,7 +565,7 @@ impl GlDevice {
 }
 
 impl Device for GlDevice {
-    type CommandBuffer = GlCommandBuffer;
+    type CommandBuffer = CommandBuffer;
 
     fn get_capabilities<'a>(&'a self) -> &'a ::Capabilities {
         &self.caps
@@ -580,7 +578,7 @@ impl Device for GlDevice {
         }
     }
 
-    fn submit(&mut self, (cb, db): (&GlCommandBuffer, &::draw::DataBuffer)) {
+    fn submit(&mut self, (cb, db): (&CommandBuffer, &::draw::DataBuffer)) {
         self.reset_state();
         for com in cb.iter() {
             self.process(com, db);

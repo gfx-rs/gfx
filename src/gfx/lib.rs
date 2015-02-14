@@ -46,7 +46,7 @@ pub use device::shade::{ProgramInfo, UniformValue};
 pub use device::target::*;
 
 // TODO: Remove this re-export once `gl_device` becomes a separate crate.
-pub use device::gl_device::{GlDevice, GlCommandBuffer};
+pub use device::gl_device::GlDevice;
 
 #[path = "../render/lib.rs"] pub mod render;
 

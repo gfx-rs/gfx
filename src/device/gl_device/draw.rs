@@ -51,19 +51,19 @@ pub enum Command {
     Blit(target::Rect, target::Rect, target::Mirror, target::Mask),
 }
 
-pub struct GlCommandBuffer {
+pub struct CommandBuffer {
     buf: Vec<Command>,
 }
 
-impl GlCommandBuffer {
+impl CommandBuffer {
     pub fn iter<'a>(&'a self) -> slice::Iter<'a, Command> {
         self.buf.iter()
     }
 }
 
-impl ::draw::CommandBuffer for GlCommandBuffer {
-    fn new() -> GlCommandBuffer {
-        GlCommandBuffer {
+impl draw::CommandBuffer for CommandBuffer {
+    fn new() -> CommandBuffer {
+        CommandBuffer {
             buf: Vec::new(),
         }
     }
@@ -154,13 +154,13 @@ impl ::draw::CommandBuffer for GlCommandBuffer {
         self.buf.push(Command::SetColorMask(mask));
     }
 
-    fn update_buffer(&mut self, buf: Buffer, data: ::draw::DataPointer,
+    fn update_buffer(&mut self, buf: Buffer, data: draw::DataPointer,
                         offset_bytes: usize) {
         self.buf.push(Command::UpdateBuffer(buf, data, offset_bytes));
     }
 
     fn update_texture(&mut self, kind: ::tex::TextureKind, tex: Texture,
-                      info: ::tex::ImageInfo, data: ::draw::DataPointer) {
+                      info: ::tex::ImageInfo, data: draw::DataPointer) {
         self.buf.push(Command::UpdateTexture(kind, tex, info, data));
     }
 
