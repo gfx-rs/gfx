@@ -565,7 +565,16 @@ impl GlDevice {
 }
 
 impl Device for GlDevice {
-    type CommandBuffer = CommandBuffer;
+    type CommandBuffer  = CommandBuffer;
+
+    type Buffer         = Buffer;
+    type ArrayBuffer    = ArrayBuffer;
+    type Shader         = Shader;
+    type Program        = Program;
+    type FrameBuffer    = FrameBuffer;
+    type Surface        = Surface;
+    type Texture        = Texture;
+    type Sampler        = Sampler;
 
     fn get_capabilities<'a>(&'a self) -> &'a ::Capabilities {
         &self.caps
