@@ -183,30 +183,33 @@ impl ToSlice for BufferHandle<u32> {
     }
 }
 
+/// Index of a vertex attribute inside the mesh
+pub type AttributeIndex = usize;
+
 /// Describes kinds of errors that may occur in the mesh linking
 #[derive(Clone, Copy, Debug)]
 pub enum LinkError {
     /// An attribute index is out of supported bounds
-    MeshAttribute(usize),
+    MeshAttribute(AttributeIndex),
     /// An input index is out of supported bounds
     ShaderInput(usize),
 }
 
-const BITS_PER_ATTRIBUTE: usize = 4;
+const BITS_PER_ATTRIBUTE: AttributeIndex = 4;
+const MESH_ATTRIBUTE_MASK: AttributeIndex = (1 << BITS_PER_ATTRIBUTE) - 1;
 const MAX_SHADER_INPUTS: usize = 64 / BITS_PER_ATTRIBUTE;
-const MESH_ATTRIBUTE_MASK: usize = (1 << BITS_PER_ATTRIBUTE) - 1;
 
 /// An iterator over mesh attributes.
 #[derive(Copy)]
-pub struct AttributeIndices {
+pub struct AttributeIter {
     value: u64,
 }
 
-impl Iterator for AttributeIndices {
-    type Item = usize;
+impl Iterator for AttributeIter {
+    type Item = AttributeIndex;
 
-    fn next(&mut self) -> Option<usize> {
-        let id = (self.value as usize) & MESH_ATTRIBUTE_MASK;
+    fn next(&mut self) -> Option<AttributeIndex> {
+        let id = (self.value as AttributeIndex) & MESH_ATTRIBUTE_MASK;
         self.value >>= BITS_PER_ATTRIBUTE;
         Some(id)
     }
@@ -220,7 +223,8 @@ pub struct Link {
 
 impl Link {
     /// Construct a new link from an iterator over attribute indices.
-    pub fn from_iter<I: Iterator<Item=usize>>(iter: I) -> Result<Link, LinkError> {
+    pub fn from_iter<I: Iterator<Item = AttributeIndex>>(iter: I)
+                     -> Result<Link, LinkError> {
         let mut table = 0u64;
         for (input, attrib) in iter.enumerate() {
             if input >= MAX_SHADER_INPUTS {
@@ -237,8 +241,8 @@ impl Link {
     }
 
     /// Convert to an iterator returning attribute indices
-    pub fn attribute_indices(&self) -> AttributeIndices {
-        AttributeIndices {
+    pub fn to_iter(&self) -> AttributeIter {
+        AttributeIter {
             value: self.table,
         }
     }

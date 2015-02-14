@@ -18,7 +18,7 @@
 extern crate gfx;
 extern crate glfw;
 
-use gfx::{DeviceExt, ToSlice};
+use gfx::{Device, DeviceExt, ToSlice};
 use glfw::Context;
 
 #[vertex_format]
@@ -82,15 +82,14 @@ fn main() {
     let program = device.link_program(VERTEX_SRC, FRAGMENT_SRC)
                         .ok().expect("Failed to link program");
 
-    let mut graphics = gfx::Graphics::new(device);
-    let batch: gfx::batch::RefBatch<()> = graphics.make_batch(
-        &program, &mesh, slice, &gfx::DrawState::new()).ok().expect("Failed to make batch");
+    let mut renderer = device.create_renderer();
 
     let clear_data = gfx::ClearData {
         color: [0.3, 0.3, 0.3, 1.0],
         depth: 1.0,
         stencil: 0,
     };
+    let state = gfx::DrawState::new();
 
     while !window.should_close() {
         glfw.poll_events();
@@ -102,9 +101,10 @@ fn main() {
             }
         }
 
-        graphics.clear(clear_data, gfx::COLOR, &frame);
-        graphics.draw(&batch, &(), &frame).unwrap();
-        graphics.end_frame();
+        renderer.reset();
+        renderer.clear(clear_data, gfx::COLOR, &frame);
+        renderer.draw(&(&mesh, slice, &program, &(), &state), &frame).unwrap();
+        device.submit(renderer.as_buffer());
 
         window.swap_buffers();
     }
