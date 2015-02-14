@@ -26,6 +26,7 @@ extern crate libc;
 // TODO: Remove these exports once `gl_device` becomes a separate crate.
 pub use self::gl_device as back;
 
+use std::fmt;
 use std::mem;
 use std::slice;
 use std::ops::{Deref, DerefMut};
@@ -201,21 +202,21 @@ impl<T> BufferHandle<T> {
 }
 
 /// Raw (untyped) Buffer Handle
-pub type RawBufferHandle = Handle<back::Buffer, BufferInfo>;
+pub type RawBufferHandle = Handle<<back::GlDevice as Device>::Buffer, BufferInfo>;
 /// Array Buffer Handle
-pub type ArrayBufferHandle = Handle<back::ArrayBuffer, ()>;
+pub type ArrayBufferHandle = Handle<<back::GlDevice as Device>::ArrayBuffer, ()>;
 /// Shader Handle
-pub type ShaderHandle  = Handle<back::Shader, shade::Stage>;
+pub type ShaderHandle = Handle<<back::GlDevice as Device>::Shader, shade::Stage>;
 /// Program Handle
-pub type ProgramHandle = Handle<back::Program, shade::ProgramInfo>;
+pub type ProgramHandle = Handle<<back::GlDevice as Device>::Program, shade::ProgramInfo>;
 /// Frame Buffer Handle
-pub type FrameBufferHandle = Handle<back::FrameBuffer, ()>;
+pub type FrameBufferHandle = Handle<<back::GlDevice as Device>::FrameBuffer, ()>;
 /// Surface Handle
-pub type SurfaceHandle = Handle<back::Surface, tex::SurfaceInfo>;
+pub type SurfaceHandle = Handle<<back::GlDevice as Device>::Surface, tex::SurfaceInfo>;
 /// Texture Handle
-pub type TextureHandle = Handle<back::Texture, tex::TextureInfo>;
+pub type TextureHandle = Handle<<back::GlDevice as Device>::Texture, tex::TextureInfo>;
 /// Sampler Handle
-pub type SamplerHandle = Handle<back::Sampler, tex::SamplerInfo>;
+pub type SamplerHandle = Handle<<back::GlDevice as Device>::Sampler, tex::SamplerInfo>;
 
 /// A helper method to test `#[vertex_format]` without GL context
 //#[cfg(test)]
@@ -320,23 +321,23 @@ pub struct BufferInfo {
 /// this particular representation may be used by different backends,
 /// such as OpenGL (prior to GLNG) and DirectX (prior to DX12)
 #[allow(missing_docs)]
-#[derive(Copy, Debug)]
-pub enum Command {
-    BindProgram(back::Program),
-    BindArrayBuffer(back::ArrayBuffer),
-    BindAttribute(AttributeSlot, back::Buffer, attrib::Format),
-    BindIndex(back::Buffer),
-    BindFrameBuffer(target::Access, back::FrameBuffer),
+#[derive(Debug)]
+pub enum Command<D: Device> {
+    BindProgram(<D as Device>::Program),
+    BindArrayBuffer(<D as Device>::ArrayBuffer),
+    BindAttribute(AttributeSlot, <D as Device>::Buffer, attrib::Format),
+    BindIndex(<D as Device>::Buffer),
+    BindFrameBuffer(target::Access, <D as Device>::FrameBuffer),
     /// Unbind any surface from the specified target slot
     UnbindTarget(target::Access, target::Target),
     /// Bind a surface to the specified target slot
-    BindTargetSurface(target::Access, target::Target, back::Surface),
+    BindTargetSurface(target::Access, target::Target, <D as Device>::Surface),
     /// Bind a level of the texture to the specified target slot
-    BindTargetTexture(target::Access, target::Target, back::Texture,
+    BindTargetTexture(target::Access, target::Target, <D as Device>::Texture,
                       target::Level, Option<target::Layer>),
-    BindUniformBlock(back::Program, UniformBufferSlot, UniformBlockIndex, back::Buffer),
+    BindUniformBlock(<D as Device>::Program, UniformBufferSlot, UniformBlockIndex, <D as Device>::Buffer),
     BindUniform(shade::Location, shade::UniformValue),
-    BindTexture(TextureSlot, tex::TextureKind, back::Texture, Option<SamplerHandle>),
+    BindTexture(TextureSlot, tex::TextureKind, <D as Device>::Texture, Option<SamplerHandle>),
     SetDrawColorBuffers(usize),
     SetPrimitiveState(state::Primitive),
     SetViewport(target::Rect),
@@ -345,8 +346,8 @@ pub enum Command {
     SetDepthStencilState(Option<state::Depth>, Option<state::Stencil>, state::CullMode),
     SetBlendState(Option<state::Blend>),
     SetColorMask(state::ColorMask),
-    UpdateBuffer(back::Buffer, draw::DataPointer, usize),
-    UpdateTexture(tex::TextureKind, back::Texture, tex::ImageInfo, draw::DataPointer),
+    UpdateBuffer(<D as Device>::Buffer, draw::DataPointer, usize),
+    UpdateTexture(tex::TextureKind, <D as Device>::Texture, tex::ImageInfo, draw::DataPointer),
     // drawing
     Clear(target::ClearData, target::Mask),
     Draw(PrimitiveType, VertexCount, VertexCount, Option<(InstanceCount, VertexCount)>),
@@ -359,6 +360,15 @@ pub enum Command {
 pub trait Device {
 
     type CommandBuffer: draw::CommandBuffer;
+
+    type Buffer: fmt::Debug;
+    type ArrayBuffer: fmt::Debug;
+    type Shader: fmt::Debug;
+    type Program: fmt::Debug;
+    type FrameBuffer: fmt::Debug;
+    type Surface: fmt::Debug;
+    type Texture: fmt::Debug;
+    type Sampler: fmt::Debug;
 
     /// Returns the capabilities available to the specific API implementation
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;

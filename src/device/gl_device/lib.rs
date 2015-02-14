@@ -22,6 +22,7 @@ extern crate libc;
 extern crate "gfx_gl" as gl;
 
 use log::LogLevel;
+use std::fmt;
 
 use attrib::{SignFlag, IntSubType, IntSize, FloatSubType, FloatSize, Type};
 use state::{CullMode, RasterMethod, WindingOrder};
@@ -82,29 +83,6 @@ impl GlError {
     }
 }
 
-static RESET_CB: &'static [Command] = &[
-    Command::BindProgram(0),
-    Command::BindArrayBuffer(0),
-    //BindAttribute
-    Command::BindIndex(0),
-    Command::BindFrameBuffer(Access::Draw, 0),
-    Command::BindFrameBuffer(Access::Read, 0),
-    //UnbindTarget
-    //BindUniformBlock
-    //BindUniform
-    //BindTexture
-    Command::SetPrimitiveState(::state::Primitive {
-        front_face: WindingOrder::CounterClockwise,
-        method: RasterMethod::Fill(CullMode::Back),
-        offset: None,
-    }),
-    Command::SetViewport(::target::Rect{x: 0, y: 0, w: 0, h: 0}),
-    Command::SetScissor(None),
-    Command::SetDepthStencilState(None, None, CullMode::Nothing),
-    Command::SetBlendState(None),
-    Command::SetColorMask(::state::MASK_ALL),
-];
-
 fn primitive_to_gl(prim_type: ::PrimitiveType) -> gl::types::GLenum {
     match prim_type {
         PrimitiveType::Point => gl::POINTS,
@@ -139,6 +117,12 @@ pub struct GlDevice {
     gl: gl::Gl,
 }
 
+impl fmt::Debug for GlDevice {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "GlDevice {{ info: {:?}, caps: {:?}, gl: Gl {{ ... }} }}", self.info, self.caps)
+    }
+}
+
 impl GlDevice {
     /// Load OpenGL symbols and detect driver information
     pub fn new<F>(fn_proc: F) -> GlDevice where F: FnMut(&str) -> *const ::libc::c_void {
@@ -170,7 +154,7 @@ impl GlDevice {
     }
 
     /// Fails during a debug build if the implementation's error flag was set.
-    fn check(&mut self, cmd: &::Command) {
+    fn check(&mut self, cmd: &::Command<GlDevice>) {
         if cfg!(not(ndebug)) {
             let err = GlError::from_error_code(unsafe { self.gl.GetError() });
             if err != GlError::NoError {
@@ -221,7 +205,7 @@ impl GlDevice {
         }
     }
 
-    fn process(&mut self, cmd: &::Command, data_buf: &::draw::DataBuffer) {
+    fn process(&mut self, cmd: &::Command<GlDevice>, data_buf: &::draw::DataBuffer) {
         match *cmd {
             Command::Clear(ref data, mask) => {
                 let mut flags = 0;
@@ -569,15 +553,41 @@ impl GlDevice {
 impl Device for GlDevice {
     type CommandBuffer = GlCommandBuffer;
 
+    type Buffer = Buffer;
+    type ArrayBuffer = ArrayBuffer;
+    type Shader = Shader;
+    type Program = Program;
+    type FrameBuffer = FrameBuffer;
+    type Surface = Surface;
+    type Texture = Texture;
+    type Sampler = Sampler;
+
     fn get_capabilities<'a>(&'a self) -> &'a ::Capabilities {
         &self.caps
     }
 
     fn reset_state(&mut self) {
         let data = ::draw::DataBuffer::new();
-        for com in RESET_CB.iter() {
-            self.process(com, &data);
-        }
+        self.process(&Command::BindProgram(0), &data);
+        self.process(&Command::BindArrayBuffer(0), &data);
+        // self.process(&command::BindAttribute, &data);
+        self.process(&Command::BindIndex(0), &data);
+        self.process(&Command::BindFrameBuffer(Access::Draw, 0), &data);
+        self.process(&Command::BindFrameBuffer(Access::Read, 0), &data);
+        // self.process(&command::UnbindTarget, &data);
+        // self.process(&command::BindUniformBlock, &data);
+        // self.process(&command::BindUniform, &data);
+        // self.process(&command::BindTexture, &data);
+        self.process(&Command::SetPrimitiveState(::state::Primitive {
+            front_face: WindingOrder::CounterClockwise,
+            method: RasterMethod::Fill(CullMode::Back),
+            offset: None,
+        }), &data);
+        self.process(&Command::SetViewport(::target::Rect{x: 0, y: 0, w: 0, h: 0}), &data);
+        self.process(&Command::SetScissor(None), &data);
+        self.process(&Command::SetDepthStencilState(None, None, CullMode::Nothing), &data);
+        self.process(&Command::SetBlendState(None), &data);
+        self.process(&Command::SetColorMask(::state::MASK_ALL), &data);
     }
 
     fn submit(&mut self, (cb, db): (&GlCommandBuffer, &::draw::DataBuffer)) {

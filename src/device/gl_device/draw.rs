@@ -18,11 +18,11 @@ use Command;
 use std::slice;
 
 pub struct GlCommandBuffer {
-    buf: Vec<::Command>,
+    buf: Vec<::Command<super::GlDevice>>,
 }
 
 impl GlCommandBuffer {
-    pub fn iter<'a>(&'a self) -> slice::Iter<'a, ::Command> {
+    pub fn iter<'a>(&'a self) -> slice::Iter<'a, ::Command<super::GlDevice>> {
         self.buf.iter()
     }
 }
