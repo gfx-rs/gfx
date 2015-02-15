@@ -258,9 +258,13 @@ impl ItemDecorator for VertexFormat {
                             params: vec![box generic::ty::Self_],
                             global: false,
                         }),
-                        generic::ty::Literal(generic::ty::Path::new(
-                            vec![super::EXTERN_CRATE_HACK, "gfx", "RawBufferHandle"]
-                        )),
+                        generic::ty::Literal(generic::ty::Path {
+                            path: vec![super::EXTERN_CRATE_HACK, "gfx", "RawBufferHandle"],
+                            lifetime: None,
+                            params: vec![box generic::ty::Literal(generic::ty::Path::new(
+                                             vec![super::EXTERN_CRATE_HACK, "gfx", "GlDevice"]))],
+                            global: false,
+                        }),
                     ],
                     ret_ty: generic::ty::Literal(
                         generic::ty::Path {

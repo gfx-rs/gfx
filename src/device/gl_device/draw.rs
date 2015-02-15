@@ -16,7 +16,7 @@
 
 use std::slice;
 
-use {attrib, draw, target, tex, shade, state};
+use {attrib, back, draw, target, tex, shade, state};
 use {AttributeSlot, IndexType, InstanceCount, PrimitiveType, TextureSlot, UniformBlockIndex, UniformBufferSlot, VertexCount};
 use super::{ArrayBuffer, Buffer, FrameBuffer, Program, Sampler, Surface, Texture};
 
@@ -33,7 +33,7 @@ pub enum Command {
     BindTargetTexture(target::Access, target::Target, Texture, target::Level, Option<target::Layer>),
     BindUniformBlock(Program, UniformBufferSlot, UniformBlockIndex, Buffer),
     BindUniform(shade::Location, shade::UniformValue),
-    BindTexture(TextureSlot, tex::TextureKind, Texture, Option<::SamplerHandle>),
+    BindTexture(TextureSlot, tex::TextureKind, Texture, Option<::SamplerHandle<back::GlDevice>>),
     SetDrawColorBuffers(usize),
     SetPrimitiveState(state::Primitive),
     SetViewport(target::Rect),
@@ -125,7 +125,7 @@ impl draw::CommandBuffer for CommandBuffer {
         self.buf.push(Command::BindUniform(loc, value));
     }
     fn bind_texture(&mut self, slot: ::TextureSlot, kind: ::tex::TextureKind,
-                    tex: Texture, sampler: Option<::SamplerHandle>) {
+                    tex: Texture, sampler: Option<::SamplerHandle<back::GlDevice>>) {
         self.buf.push(Command::BindTexture(slot, kind, tex, sampler));
     }
 

@@ -15,7 +15,7 @@
 //! Shader parameter handling.
 
 use std::cell::Cell;
-use device::shade;
+use device::{back, shade};
 use device::shade::UniformValue;
 use device::{RawBufferHandle, TextureHandle, SamplerHandle};
 
@@ -62,7 +62,7 @@ pub type VarBlock = u8;
 pub type VarTexture = u8;
 
 /// A texture parameter: consists of a texture handle with an optional sampler.
-pub type TextureParam = (TextureHandle, Option<SamplerHandle>);
+pub type TextureParam = (TextureHandle<back::GlDevice>, Option<SamplerHandle<back::GlDevice>>);
 
 /// A borrowed mutable storage for shader parameter values.
 // Not sure if it's the best data structure to represent it.
@@ -70,7 +70,7 @@ pub struct ParamValues<'a> {
     /// uniform values to be provided
     pub uniforms: &'a mut Vec<UniformValue>,
     /// uniform buffers to be provided
-    pub blocks  : &'a mut Vec<RawBufferHandle>,
+    pub blocks  : &'a mut Vec<RawBufferHandle<back::GlDevice>>,
     /// textures to be provided
     pub textures: &'a mut Vec<TextureParam>,
 }
@@ -135,7 +135,7 @@ pub struct ParamDictionary {
     /// Uniform dictionary
     pub uniforms: Vec<NamedCell<shade::UniformValue>>,
     /// Block dictionary
-    pub blocks: Vec<NamedCell<RawBufferHandle>>,
+    pub blocks: Vec<NamedCell<RawBufferHandle<back::GlDevice>>>,
     /// Texture dictionary
     pub textures: Vec<NamedCell<TextureParam>>,
 }

@@ -14,6 +14,8 @@
 
 //! Command Buffer device interface
 
+use std::fmt;
+
 use attrib;
 use back;
 use shade;
@@ -77,13 +79,13 @@ impl DataBuffer {
 /// An interface of the abstract command buffer. It collects commands in an
 /// efficient API-specific manner, to be ready for execution on the device.
 pub trait CommandBuffer {
-    type Buffer;
-    type ArrayBuffer;
-    type Program;
-    type FrameBuffer;
-    type Surface;
-    type Texture;
-    type Sampler;
+    type Buffer:        Copy + fmt::Debug + PartialEq + Clone;
+    type ArrayBuffer:   Copy + fmt::Debug + PartialEq + Clone;
+    type Program:       Copy + fmt::Debug + PartialEq + Clone;
+    type FrameBuffer:   Copy + fmt::Debug + PartialEq + Clone;
+    type Surface:       Copy + fmt::Debug + PartialEq + Clone;
+    type Texture:       Copy + fmt::Debug + PartialEq + Clone;
+    type Sampler:       Copy + fmt::Debug + PartialEq + Clone;
 
     /// An empty constructor
     fn new() -> Self;
@@ -113,7 +115,7 @@ pub trait CommandBuffer {
     fn bind_uniform(&mut self, shade::Location, shade::UniformValue);
     /// Bind a texture
     fn bind_texture(&mut self, ::TextureSlot, tex::TextureKind, back::Texture,
-                    Option<::SamplerHandle>);
+                    Option<::SamplerHandle<back::GlDevice>>);
     /// Select, which color buffers are going to be targetted by the shader
     fn set_draw_color_buffers(&mut self, usize);
     /// Set primitive topology

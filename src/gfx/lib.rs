@@ -73,7 +73,7 @@ impl<D: device::Device> Graphics<D> {
 
     /// Create a new ref batch.
     pub fn make_batch<T: shade::ShaderParam>(&mut self,
-                      program: &ProgramHandle,
+                      program: &ProgramHandle<GlDevice>,
                       mesh: &Mesh,
                       slice: Slice,
                       state: &DrawState)
