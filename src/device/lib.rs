@@ -207,13 +207,11 @@ impl<D: Device, T> BufferHandle<D, T> {
     pub fn raw(&self) -> RawBufferHandle<D> {
         self.raw
     }
-}
 
-// FIXME: These should be implemented over a generic `Device`, but we get a lifetime error
-impl<T> BufferHandle<back::GlDevice, T> {
     /// Get the associated information about the buffer
     pub fn get_info(&self) -> &BufferInfo {
-        self.raw.get_info()
+        let Handle(_, ref info) = self.raw;
+        info
     }
 
     /// Get the number of elements in the buffer.
