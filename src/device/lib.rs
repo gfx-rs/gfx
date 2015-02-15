@@ -318,7 +318,16 @@ pub struct BufferInfo {
 /// An interface for performing draw calls using a specific graphics API
 #[allow(missing_docs)]
 pub trait Device {
-    type CommandBuffer: draw::CommandBuffer;
+    type CommandBuffer:
+        draw::CommandBuffer<
+            Buffer          = Self::Buffer,
+            ArrayBuffer     = Self::ArrayBuffer,
+            Program         = Self::Program,
+            FrameBuffer     = Self::FrameBuffer,
+            Surface         = Self::Surface,
+            Texture         = Self::Texture,
+            Sampler         = Self::Sampler,
+        >;
 
     type Buffer;
     type ArrayBuffer;

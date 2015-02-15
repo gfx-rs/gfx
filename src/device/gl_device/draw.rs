@@ -18,7 +18,7 @@ use std::slice;
 
 use {attrib, draw, target, tex, shade, state};
 use {AttributeSlot, IndexType, InstanceCount, PrimitiveType, TextureSlot, UniformBlockIndex, UniformBufferSlot, VertexCount};
-use super::{ArrayBuffer, Buffer, FrameBuffer, Program, Surface, Texture};
+use super::{ArrayBuffer, Buffer, FrameBuffer, Program, Sampler, Surface, Texture};
 
 /// Serialized device command.
 #[derive(Copy, Debug)]
@@ -62,6 +62,14 @@ impl CommandBuffer {
 }
 
 impl draw::CommandBuffer for CommandBuffer {
+    type Buffer         = Buffer;
+    type ArrayBuffer    = ArrayBuffer;
+    type Program        = Program;
+    type FrameBuffer    = FrameBuffer;
+    type Surface        = Surface;
+    type Texture        = Texture;
+    type Sampler        = Sampler;
+
     fn new() -> CommandBuffer {
         CommandBuffer {
             buf: Vec::new(),

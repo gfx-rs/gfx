@@ -77,6 +77,14 @@ impl DataBuffer {
 /// An interface of the abstract command buffer. It collects commands in an
 /// efficient API-specific manner, to be ready for execution on the device.
 pub trait CommandBuffer {
+    type Buffer;
+    type ArrayBuffer;
+    type Program;
+    type FrameBuffer;
+    type Surface;
+    type Texture;
+    type Sampler;
+
     /// An empty constructor
     fn new() -> Self;
     /// Clear the command buffer contents, retain the allocated storage
