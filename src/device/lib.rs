@@ -185,32 +185,35 @@ impl<D: Device, T> fmt::Debug for BufferHandle<D, T> {
     }
 }
 
-impl<T> BufferHandle<back::GlDevice, T> {
+impl<D: Device, T> BufferHandle<D, T> {
     /// Create a type-safe BufferHandle from a RawBufferHandle
-    pub fn from_raw(handle: RawBufferHandle<back::GlDevice>) -> BufferHandle<back::GlDevice, T> {
+    pub fn from_raw(handle: RawBufferHandle<D>) -> BufferHandle<D, T> {
         BufferHandle {
             raw: handle,
         }
     }
 
     /// Cast the type this BufferHandle references
-    pub fn cast<U>(self) -> BufferHandle<back::GlDevice, U> {
+    pub fn cast<U>(self) -> BufferHandle<D, U> {
         BufferHandle::from_raw(self.raw)
     }
 
-    /// Get the underlying GL name for this BufferHandle
-    pub fn get_name(&self) -> back::Buffer {
+    /// Get the underlying name for this BufferHandle
+    pub fn get_name(&self) -> <D as Device>::Buffer {
         self.raw.get_name()
     }
 
+    /// Get the underlying raw Handle
+    pub fn raw(&self) -> RawBufferHandle<D> {
+        self.raw
+    }
+}
+
+// FIXME: These should be implemented over a generic `Device`, but we get a lifetime error
+impl<T> BufferHandle<back::GlDevice, T> {
     /// Get the associated information about the buffer
     pub fn get_info(&self) -> &BufferInfo {
         self.raw.get_info()
-    }
-
-    /// Get the underlying raw Handle
-    pub fn raw(&self) -> RawBufferHandle<back::GlDevice> {
-        self.raw
     }
 
     /// Get the number of elements in the buffer.
