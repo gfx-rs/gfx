@@ -30,7 +30,7 @@ pub struct Attribute {
     /// A name to match the shader input
     pub name: String,
     /// Vertex buffer to contain the data
-    pub buffer: device::RawBufferHandle<back::GlDevice>,
+    pub buffer: device::RawBufferHandle<back::GlResources>,
     /// Format of the attribute
     pub format: attrib::Format,
 }
@@ -39,7 +39,7 @@ pub struct Attribute {
 /// `#[vertex_format] attribute
 pub trait VertexFormat {
     /// Create the attributes for this type, using the given buffer.
-    fn generate(Option<Self>, buffer: device::RawBufferHandle<back::GlDevice>) -> Vec<Attribute>;
+    fn generate(Option<Self>, buffer: device::RawBufferHandle<back::GlResources>) -> Vec<Attribute>;
 }
 
 /// Describes geometry to render.
@@ -61,7 +61,7 @@ impl Mesh {
     }
 
     /// Create a new `Mesh` from a struct that implements `VertexFormat` and a buffer.
-    pub fn from_format<V: VertexFormat>(buf: device::BufferHandle<back::GlDevice, V>, nv: device::VertexCount) -> Mesh {
+    pub fn from_format<V: VertexFormat>(buf: device::BufferHandle<back::GlResources, V>, nv: device::VertexCount) -> Mesh {
         Mesh {
             num_vertices: nv,
             attributes: VertexFormat::generate(None::<V>, buf.raw()),
@@ -70,8 +70,8 @@ impl Mesh {
 
     /// Create a new intanced `Mesh` given a vertex buffer and an instance buffer.
     pub fn from_format_instanced<V: VertexFormat, U: VertexFormat>(
-                                 buf: device::BufferHandle<back::GlDevice, V>, nv: device::VertexCount,
-                                 inst: device::BufferHandle<back::GlDevice, U>) -> Mesh {
+                                 buf: device::BufferHandle<back::GlResources, V>, nv: device::VertexCount,
+                                 inst: device::BufferHandle<back::GlResources, U>) -> Mesh {
         let per_vertex   = VertexFormat::generate(None::<V>, buf.raw());
         let per_instance = VertexFormat::generate(None::<U>, inst.raw());
 
@@ -122,11 +122,11 @@ pub enum SliceKind {
     /// the vertices will be identical, wasting space for the duplicated
     /// attributes.  Instead, the `Mesh` can store 4 vertices and an
     /// `Index8` can be used instead.
-    Index8(BufferHandle<back::GlDevice, u8>, VertexCount),
+    Index8(BufferHandle<back::GlResources, u8>, VertexCount),
     /// As `Index8` but with `u16` indices
-    Index16(BufferHandle<back::GlDevice, u16>, VertexCount),
+    Index16(BufferHandle<back::GlResources, u16>, VertexCount),
     /// As `Index8` but with `u32` indices
-    Index32(BufferHandle<back::GlDevice, u32>, VertexCount),
+    Index32(BufferHandle<back::GlResources, u32>, VertexCount),
 }
 
 /// Helper methods for cleanly getting the slice of a type.
@@ -147,7 +147,7 @@ impl ToSlice for Mesh {
     }
 }
 
-impl ToSlice for BufferHandle<back::GlDevice, u8> {
+impl ToSlice for BufferHandle<back::GlResources, u8> {
     /// Return an index slice of the whole buffer.
     fn to_slice(&self, ty: PrimitiveType) -> Slice {
         Slice {
@@ -159,7 +159,7 @@ impl ToSlice for BufferHandle<back::GlDevice, u8> {
     }
 }
 
-impl ToSlice for BufferHandle<back::GlDevice, u16> {
+impl ToSlice for BufferHandle<back::GlResources, u16> {
     /// Return an index slice of the whole buffer.
     fn to_slice(&self, ty: PrimitiveType) -> Slice {
         Slice {
@@ -171,7 +171,7 @@ impl ToSlice for BufferHandle<back::GlDevice, u16> {
     }
 }
 
-impl ToSlice for BufferHandle<back::GlDevice, u32> {
+impl ToSlice for BufferHandle<back::GlResources, u32> {
     /// Return an index slice of the whole buffer.
     fn to_slice(&self, ty: PrimitiveType) -> Slice {
         Slice {

@@ -22,10 +22,10 @@ use device::target::{Level, Layer, Mask};
 /// A single buffer that can be bound to a render target.
 pub enum Plane {
     /// Render to a `Surface` (corresponds to a renderbuffer in GL).
-    Surface(device::SurfaceHandle<back::GlDevice>),
+    Surface(device::SurfaceHandle<back::GlResources>),
     /// Render to a texture at a specific mipmap level
     /// If `Layer` is set, it is selecting a single 2D slice of a given 3D texture
-    Texture(device::TextureHandle<back::GlDevice>, Level, Option<Layer>),
+    Texture(device::TextureHandle<back::GlResources>, Level, Option<Layer>),
 }
 
 impl Plane {

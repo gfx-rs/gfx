@@ -47,7 +47,7 @@ pub mod target;
 
 
 const TRACKED_ATTRIBUTES: usize = 8;
-type CachedAttribute = (device::RawBufferHandle<back::GlDevice>, attrib::Format);
+type CachedAttribute = (device::RawBufferHandle<back::GlResources>, attrib::Format);
 type Instancing = (device::InstanceCount, device::VertexCount);
 
 /// The internal state of the renderer.
@@ -57,7 +57,7 @@ struct RenderState {
     frame: target::Frame,
     is_array_buffer_set: bool,
     program_name: device::back::Program,
-    index: Option<device::RawBufferHandle<back::GlDevice>>,
+    index: Option<device::RawBufferHandle<back::GlResources>>,
     attributes: [Option<CachedAttribute>; TRACKED_ATTRIBUTES],
     draw: state::DrawState,
 }
@@ -80,7 +80,7 @@ impl RenderState {
 /// Temporary parameter storage, used for shader activation.
 struct ParamStorage {
     uniforms: Vec<UniformValue>,
-    blocks  : Vec<device::RawBufferHandle<back::GlDevice>>,
+    blocks  : Vec<device::RawBufferHandle<back::GlResources>>,
     textures: Vec<shade::TextureParam>,
 }
 
@@ -146,10 +146,10 @@ pub enum DrawError<E> {
 pub struct Renderer<D: Device> {
     command_buffer: D::CommandBuffer,
     data_buffer: device::draw::DataBuffer,
-    common_array_buffer: Result<device::ArrayBufferHandle<back::GlDevice>, ()>,
-    draw_frame_buffer: device::FrameBufferHandle<back::GlDevice>,
-    read_frame_buffer: device::FrameBufferHandle<back::GlDevice>,
-    default_frame_buffer: device::FrameBufferHandle<back::GlDevice>,
+    common_array_buffer: Result<device::ArrayBufferHandle<back::GlResources>, ()>,
+    draw_frame_buffer: device::FrameBufferHandle<back::GlResources>,
+    read_frame_buffer: device::FrameBufferHandle<back::GlResources>,
+    default_frame_buffer: device::FrameBufferHandle<back::GlResources>,
     render_state: RenderState,
     parameters: ParamStorage,
 }
@@ -248,7 +248,7 @@ impl<D: Device> Renderer<D> {
     }
 
     /// Update a buffer with data from a vector.
-    pub fn update_buffer_vec<T: Copy>(&mut self, buf: device::BufferHandle<back::GlDevice, T>,
+    pub fn update_buffer_vec<T: Copy>(&mut self, buf: device::BufferHandle<back::GlResources, T>,
                              data: &[T], offset_elements: usize) {
         let esize = mem::size_of::<T>();
         let offset_bytes = esize * offset_elements;
@@ -259,14 +259,14 @@ impl<D: Device> Renderer<D> {
 
     /// Update a buffer with data from a single type.
     pub fn update_buffer_struct<U, T: Copy>(&mut self,
-                                buf: device::BufferHandle<back::GlDevice, U>, data: &T) {
+                                buf: device::BufferHandle<back::GlResources, U>, data: &T) {
         debug_assert!(mem::size_of::<T>() <= buf.get_info().size);
         let pointer = self.data_buffer.add_struct(data);
         self.command_buffer.update_buffer(buf.get_name(), pointer, 0);
     }
 
     /// Update the contents of a texture.
-    pub fn update_texture<T: Copy>(&mut self, tex: device::TextureHandle<back::GlDevice>,
+    pub fn update_texture<T: Copy>(&mut self, tex: device::TextureHandle<back::GlResources>,
                           img: device::tex::ImageInfo, data: &[T]) {
         debug_assert!(tex.get_info().contains(&img));
         let pointer = self.data_buffer.add_vec(data);
@@ -369,7 +369,7 @@ impl<D: Device> Renderer<D> {
     }
 
     fn bind_program<'a, B: Batch>(&mut self, batch: &'a B)
-                    -> Result<&'a device::ProgramHandle<back::GlDevice>, B::Error> {
+                    -> Result<&'a device::ProgramHandle<back::GlResources>, B::Error> {
         let program = match batch.fill_params(self.parameters.get_mut()) {
             Ok(p) => p,
             Err(e) => return Err(e),
@@ -383,7 +383,7 @@ impl<D: Device> Renderer<D> {
         Ok(program)
     }
 
-    fn upload_parameters(&mut self, program: &device::ProgramHandle<back::GlDevice>) {
+    fn upload_parameters(&mut self, program: &device::ProgramHandle<back::GlResources>) {
         let info = program.get_info();
         if self.parameters.uniforms.len() != info.uniforms.len() ||
             self.parameters.blocks.len() != info.blocks.len() ||
@@ -449,7 +449,7 @@ impl<D: Device> Renderer<D> {
         }
     }
 
-    fn bind_index<T>(&mut self, buf: device::BufferHandle<back::GlDevice, T>) {
+    fn bind_index<T>(&mut self, buf: device::BufferHandle<back::GlResources, T>) {
         if self.render_state.index != Some(buf.raw()) {
             self.command_buffer.bind_index(buf.get_name());
             self.render_state.index = Some(buf.raw());

@@ -18,7 +18,7 @@ use std::slice;
 
 use {attrib, back, draw, target, tex, shade, state};
 use {AttributeSlot, IndexType, InstanceCount, PrimitiveType, TextureSlot, UniformBlockIndex, UniformBufferSlot, VertexCount};
-use super::{ArrayBuffer, Buffer, FrameBuffer, Program, Sampler, Surface, Texture};
+use super::{ArrayBuffer, Buffer, FrameBuffer, Program, Surface, Texture};
 
 /// Serialized device command.
 #[derive(Copy, Debug)]
@@ -33,7 +33,7 @@ pub enum Command {
     BindTargetTexture(target::Access, target::Target, Texture, target::Level, Option<target::Layer>),
     BindUniformBlock(Program, UniformBufferSlot, UniformBlockIndex, Buffer),
     BindUniform(shade::Location, shade::UniformValue),
-    BindTexture(TextureSlot, tex::TextureKind, Texture, Option<::SamplerHandle<back::GlDevice>>),
+    BindTexture(TextureSlot, tex::TextureKind, Texture, Option<::SamplerHandle<back::GlResources>>),
     SetDrawColorBuffers(usize),
     SetPrimitiveState(state::Primitive),
     SetViewport(target::Rect),
@@ -62,13 +62,7 @@ impl CommandBuffer {
 }
 
 impl draw::CommandBuffer for CommandBuffer {
-    type Buffer         = Buffer;
-    type ArrayBuffer    = ArrayBuffer;
-    type Program        = Program;
-    type FrameBuffer    = FrameBuffer;
-    type Surface        = Surface;
-    type Texture        = Texture;
-    type Sampler        = Sampler;
+    type Resources = super::GlResources;
 
     fn new() -> CommandBuffer {
         CommandBuffer {
@@ -125,7 +119,7 @@ impl draw::CommandBuffer for CommandBuffer {
         self.buf.push(Command::BindUniform(loc, value));
     }
     fn bind_texture(&mut self, slot: ::TextureSlot, kind: ::tex::TextureKind,
-                    tex: Texture, sampler: Option<::SamplerHandle<back::GlDevice>>) {
+                    tex: Texture, sampler: Option<::SamplerHandle<back::GlResources>>) {
         self.buf.push(Command::BindTexture(slot, kind, tex, sampler));
     }
 

@@ -101,7 +101,7 @@ struct LightParams {
     #[name = "u_Transform"]
     transform: [[f32; 4]; 4],
     #[name = "u_LightPosBlock"]
-    light_pos_buf: gfx::RawBufferHandle<gfx::GlDevice>,
+    light_pos_buf: gfx::RawBufferHandle<gfx::GlResources>,
     #[name = "u_Radius"]
     radius: f32,
     #[name = "u_CameraPos"]
@@ -121,7 +121,7 @@ struct EmitterParams {
     #[name = "u_Transform"]
     transform: [[f32; 4]; 4],
     #[name = "u_LightPosBlock"]
-    light_pos_buf: gfx::RawBufferHandle<gfx::GlDevice>,
+    light_pos_buf: gfx::RawBufferHandle<gfx::GlResources>,
     #[name = "u_Radius"]
     radius: f32,
 }
@@ -308,8 +308,8 @@ fn calculate_color(height: f32) -> [f32; 3] {
 }
 
 fn create_g_buffer(width: u16, height: u16, device: &mut gfx::GlDevice)
-        -> (gfx::Frame, TextureHandle<gfx::GlDevice>, TextureHandle<gfx::GlDevice>,
-            TextureHandle<gfx::GlDevice>, TextureHandle<gfx::GlDevice>) {
+        -> (gfx::Frame, TextureHandle<gfx::GlResources>, TextureHandle<gfx::GlResources>,
+            TextureHandle<gfx::GlResources>, TextureHandle<gfx::GlResources>) {
     let mut frame = gfx::Frame::new(width, height);
 
     let texture_info_float = gfx::tex::TextureInfo {
@@ -345,8 +345,8 @@ fn create_g_buffer(width: u16, height: u16, device: &mut gfx::GlDevice)
     (frame, texture_pos, texture_normal, texture_diffuse, texture_depth)
 }
 
-fn create_res_buffer(width: u16, height: u16, device: &mut gfx::GlDevice, texture_depth: TextureHandle<gfx::GlDevice>)
-        -> (gfx::Frame, TextureHandle<gfx::GlDevice>, TextureHandle<gfx::GlDevice>) {
+fn create_res_buffer(width: u16, height: u16, device: &mut gfx::GlDevice, texture_depth: TextureHandle<gfx::GlResources>)
+        -> (gfx::Frame, TextureHandle<gfx::GlResources>, TextureHandle<gfx::GlResources>) {
     let mut frame = gfx::Frame::new(width, height);
 
     let texture_info_float = gfx::tex::TextureInfo {
@@ -570,7 +570,7 @@ fn main() {
         tex: (texture_pos, Some(sampler)),
     };
 
-    let mut debug_buf: Option<TextureHandle<gfx::GlDevice>> = None;
+    let mut debug_buf: Option<TextureHandle<gfx::GlResources>> = None;
 
     let mut light_pos_vec: Vec<[f32; 4]> = (0 ..NUM_LIGHTS).map(|_| {
         [0.0, 0.0, 0.0, 0.0]

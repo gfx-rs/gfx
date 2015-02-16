@@ -79,11 +79,11 @@ pub trait Batch {
     fn get_data(&self) -> Result<BatchData, Self::Error>;
     /// Fill shader parameter values
     fn fill_params(&self, ::shade::ParamValues)
-                   -> Result<&ProgramHandle<back::GlDevice>, Self::Error>;
+                   -> Result<&ProgramHandle<back::GlResources>, Self::Error>;
 }
 
 impl<'a, T: ShaderParam> Batch for (&'a mesh::Mesh, mesh::Slice,
-                                    &'a ProgramHandle<back::GlDevice>, &'a T, &'a DrawState) {
+                                    &'a ProgramHandle<back::GlResources>, &'a T, &'a DrawState) {
     type Error = BatchError;
 
     fn get_data(&self) -> Result<BatchData, BatchError> {
@@ -95,7 +95,7 @@ impl<'a, T: ShaderParam> Batch for (&'a mesh::Mesh, mesh::Slice,
     }
 
     fn fill_params(&self, values: ::shade::ParamValues)
-                   -> Result<&ProgramHandle<back::GlDevice>, BatchError> {
+                   -> Result<&ProgramHandle<back::GlResources>, BatchError> {
         let (_, _, program, params, _) = *self;
         match ShaderParam::create_link(None::<&T>, program.get_info()) {
             Ok(link) => {
@@ -115,7 +115,7 @@ pub struct OwnedBatch<T: ShaderParam> {
     pub slice: mesh::Slice,
     /// Parameter data.
     pub param: T,
-    program: ProgramHandle<back::GlDevice>,
+    program: ProgramHandle<back::GlResources>,
     param_link: T::Link,
     /// Draw state
     pub state: DrawState,
@@ -123,7 +123,7 @@ pub struct OwnedBatch<T: ShaderParam> {
 
 impl<T: ShaderParam> OwnedBatch<T> {
     /// Create a new owned batch
-    pub fn new(mesh: mesh::Mesh, program: ProgramHandle<back::GlDevice>, param: T)
+    pub fn new(mesh: mesh::Mesh, program: ProgramHandle<back::GlResources>, param: T)
            -> Result<OwnedBatch<T>, BatchError> {
         let slice = mesh.to_slice(PrimitiveType::TriangleList);
         let mesh_link = match link_mesh(&mesh, program.get_info()) {
@@ -154,7 +154,7 @@ impl<T: ShaderParam> Batch for OwnedBatch<T> {
     }
 
     fn fill_params(&self, values: ::shade::ParamValues)
-                   -> Result<&ProgramHandle<back::GlDevice>, ()> {
+                   -> Result<&ProgramHandle<back::GlResources>, ()> {
         self.param.fill_params(&self.param_link, values);
         Ok(&self.program)
     }
@@ -251,7 +251,7 @@ pub struct RefBatch<T: ShaderParam> {
     mesh_link: mesh::Link,
     /// Mesh slice
     pub slice: mesh::Slice,
-    program_id: Id<ProgramHandle<back::GlDevice>>,
+    program_id: Id<ProgramHandle<back::GlResources>>,
     param_link: T::Link,
     state_id: Id<DrawState>,
 }
@@ -291,7 +291,7 @@ impl<T> Ord for RefBatch<T> {
 /// Factory of ref batches, required to always be used with them.
 pub struct Context {
     meshes: Array<mesh::Mesh>,
-    programs: Array<ProgramHandle<back::GlDevice>>,
+    programs: Array<ProgramHandle<back::GlResources>>,
     states: Array<DrawState>,
 }
 
@@ -309,7 +309,7 @@ impl Context {
 impl Context {
     /// Produce a new ref batch
     pub fn make_batch<T: ShaderParam>(&mut self,
-                      program: &ProgramHandle<back::GlDevice>,
+                      program: &ProgramHandle<back::GlResources>,
                       mesh: &mesh::Mesh,
                       slice: mesh::Slice,
                       state: &DrawState)
@@ -359,7 +359,7 @@ impl<'a, T: ShaderParam> Batch for (&'a RefBatch<T>, &'a T, &'a Context) {
     }
 
     fn fill_params(&self, values: ::shade::ParamValues)
-                   -> Result<&ProgramHandle<back::GlDevice>, OutOfBounds> {
+                   -> Result<&ProgramHandle<back::GlResources>, OutOfBounds> {
         let (b, data, ctx) = *self;
         data.fill_params(&b.param_link, values);
         ctx.programs.get(b.program_id)

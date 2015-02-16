@@ -66,11 +66,11 @@ pub trait DeviceExt: device::Device {
     fn create_mesh<T: VertexFormat + Copy>(&mut self, data: &[T]) -> Mesh;
     /// Create a simple program given a vertex shader with a fragment one.
     fn link_program(&mut self, vs_code: &[u8], fs_code: &[u8])
-                    -> Result<device::ProgramHandle<back::GlDevice>, ProgramError>;
+                    -> Result<device::ProgramHandle<back::GlResources>, ProgramError>;
     /// Create a simple program given `ShaderSource` versions of vertex and
     /// fragment shaders, chooss the matching versions for the device.
     fn link_program_source(&mut self, vs_src: ShaderSource, fs_src: ShaderSource)
-                           -> Result<device::ProgramHandle<back::GlDevice>, ProgramError>;
+                           -> Result<device::ProgramHandle<back::GlResources>, ProgramError>;
 }
 
 impl<D: device::Device> DeviceExt for D {
@@ -99,7 +99,7 @@ impl<D: device::Device> DeviceExt for D {
     }
 
     fn link_program(&mut self, vs_code: &[u8], fs_code: &[u8])
-                    -> Result<device::ProgramHandle<back::GlDevice>, ProgramError> {
+                    -> Result<device::ProgramHandle<back::GlResources>, ProgramError> {
         let vs = match self.create_shader(Stage::Vertex, vs_code) {
             Ok(s) => s,
             Err(e) => return Err(ProgramError::Vertex(e)),
@@ -114,7 +114,7 @@ impl<D: device::Device> DeviceExt for D {
     }
 
     fn link_program_source(&mut self, vs_src: ShaderSource, fs_src: ShaderSource)
-                           -> Result<device::ProgramHandle<back::GlDevice>, ProgramError> {
+                           -> Result<device::ProgramHandle<back::GlResources>, ProgramError> {
         let model = self.get_capabilities().shader_model;
         let err_model = CreateShaderError::ModelNotSupported;
 

@@ -26,7 +26,7 @@ struct TestParam {
     a: i32,
     b: [f32; 4],
     c: gfx::shade::TextureParam,
-    d: gfx::RawBufferHandle<gfx::GlDevice>,
+    d: gfx::RawBufferHandle<gfx::GlResources>,
     e: f32,
     #[name = "a_f"]
     f: [f32; 4],

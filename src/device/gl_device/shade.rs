@@ -279,8 +279,8 @@ fn query_parameters(gl: &gl::Gl, caps: &::Capabilities, prog: super::Program) ->
     (uniforms, textures)
 }
 
-pub fn create_program(gl: &gl::Gl, caps: &::Capabilities, shaders: &[::ShaderHandle<super::GlDevice>], targets: Option<&[&str]>)
-        -> (Result<::ProgramHandle<super::GlDevice>, ()>, Option<String>) {
+pub fn create_program(gl: &gl::Gl, caps: &::Capabilities, shaders: &[::ShaderHandle<super::GlResources>], targets: Option<&[&str]>)
+        -> (Result<::ProgramHandle<super::GlResources>, ()>, Option<String>) {
     let name = unsafe { gl.CreateProgram() };
     for sh in shaders.iter() {
         unsafe { gl.AttachShader(name, sh.get_name()) };

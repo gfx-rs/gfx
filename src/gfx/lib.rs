@@ -46,7 +46,7 @@ pub use device::shade::{ProgramInfo, UniformValue};
 pub use device::target::*;
 
 // TODO: Remove this re-export once `gl_device` becomes a separate crate.
-pub use device::gl_device::GlDevice;
+pub use device::gl_device::{GlDevice, GlResources};
 
 #[path = "../render/lib.rs"] pub mod render;
 
@@ -73,7 +73,7 @@ impl<D: device::Device> Graphics<D> {
 
     /// Create a new ref batch.
     pub fn make_batch<T: shade::ShaderParam>(&mut self,
-                      program: &ProgramHandle<GlDevice>,
+                      program: &ProgramHandle<GlResources>,
                       mesh: &Mesh,
                       slice: Slice,
                       state: &DrawState)
