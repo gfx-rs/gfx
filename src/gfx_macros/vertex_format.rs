@@ -255,7 +255,7 @@ impl ItemDecorator for VertexFormat {
                         generic::ty::Literal(generic::ty::Path {
                             path: vec!["Option"],
                             lifetime: None,
-                            params: vec![box generic::ty::Self],
+                            params: vec![box generic::ty::Self_],
                             global: false,
                         }),
                         generic::ty::Literal(generic::ty::Path::new(
