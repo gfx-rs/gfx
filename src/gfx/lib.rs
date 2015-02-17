@@ -37,7 +37,7 @@ pub use device::Device;
 pub use device::{attrib, state, tex};
 pub use device::as_byte_slice;
 pub use device::{BufferHandle, BufferInfo, RawBufferHandle, ShaderHandle};
-pub use device::{ProgramHandle, SurfaceHandle, TextureHandle};
+pub use device::{ProgramHandle, SurfaceHandle, TextureHandle, SamplerHandle};
 pub use device::BufferUsage;
 pub use device::{VertexCount, InstanceCount};
 pub use device::PrimitiveType;
