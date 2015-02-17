@@ -46,7 +46,7 @@ gfx_gl = "*"
 noise = "*"
 time = "*"
 rand = "*"
-#glutin = "*"
+glutin = "*"
 
 [[example]]
 name = "cube"
@@ -60,9 +60,9 @@ path = "examples/terrain/main.rs"
 name = "deferred"
 path = "examples/deferred/main.rs"
 
-#[[example]]
-#name = "glutin"
-#path = "examples/glutin/main.rs"
+[[example]]
+name = "glutin"
+path = "examples/glutin/main.rs"
 
 [[example]]
 name = "performance"
