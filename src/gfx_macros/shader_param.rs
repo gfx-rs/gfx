@@ -321,7 +321,7 @@ impl ItemDecorator for ShaderParam {
                             lifetime: None,
                             params: vec![
                                 box generic::ty::Ptr(
-                                    box generic::ty::Self,
+                                    box generic::ty::Self_,
                                     generic::ty::Borrowed(None, ast::MutImmutable)
                                 ),
                             ],
