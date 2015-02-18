@@ -18,11 +18,11 @@ use Command;
 use std::slice;
 
 pub struct GlCommandBuffer {
-    buf: Vec<::Command>,
+    buf: Vec<::Command<super::GlDevice>>,
 }
 
 impl GlCommandBuffer {
-    pub fn iter<'a>(&'a self) -> slice::Iter<'a, ::Command> {
+    pub fn iter<'a>(&'a self) -> slice::Iter<'a, ::Command<super::GlDevice>> {
         self.buf.iter()
     }
 }
@@ -83,7 +83,7 @@ impl ::draw::CommandBuffer for GlCommandBuffer {
         self.buf.push(Command::BindUniform(loc, value));
     }
     fn bind_texture(&mut self, slot: ::TextureSlot, kind: ::tex::TextureKind,
-                    tex: super::Texture, sampler: Option<::SamplerHandle>) {
+                    tex: super::Texture, sampler: Option<::SamplerHandle<super::GlDevice>>) {
         self.buf.push(Command::BindTexture(slot, kind, tex, sampler));
     }
 

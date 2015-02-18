@@ -105,7 +105,7 @@ pub trait CommandBuffer {
     fn bind_uniform(&mut self, shade::Location, shade::UniformValue);
     /// Bind a texture
     fn bind_texture(&mut self, ::TextureSlot, tex::TextureKind, back::Texture,
-                    Option<::SamplerHandle>);
+                    Option<::SamplerHandle<back::GlDevice>>);
     /// Select, which color buffers are going to be targetted by the shader
     fn set_draw_color_buffers(&mut self, usize);
     /// Set primitive topology
