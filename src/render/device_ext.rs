@@ -1,4 +1,5 @@
 use device;
+use device::back;
 use device::shade::{Stage, CreateShaderError, ShaderModel};
 use super::mesh::{Mesh, VertexFormat};
 
@@ -59,21 +60,21 @@ impl<'a> ShaderSource<'a> {
 /// Backend extension trait for convenience methods
 pub trait DeviceExt: device::Device {
     /// Create a new renderer
-    fn create_renderer(&mut self) -> ::Renderer<<Self as device::Device>::CommandBuffer>;
+    fn create_renderer(&mut self) -> ::Renderer<Self>;
     /// Create a new mesh from the given vertex data.
     /// Convenience function around `create_buffer` and `Mesh::from_format`.
     fn create_mesh<T: VertexFormat + Copy>(&mut self, data: &[T]) -> Mesh;
     /// Create a simple program given a vertex shader with a fragment one.
     fn link_program(&mut self, vs_code: &[u8], fs_code: &[u8])
-                    -> Result<device::ProgramHandle, ProgramError>;
+                    -> Result<device::ProgramHandle<back::GlResources>, ProgramError>;
     /// Create a simple program given `ShaderSource` versions of vertex and
     /// fragment shaders, chooss the matching versions for the device.
     fn link_program_source(&mut self, vs_src: ShaderSource, fs_src: ShaderSource)
-                           -> Result<device::ProgramHandle, ProgramError>;
+                           -> Result<device::ProgramHandle<back::GlResources>, ProgramError>;
 }
 
 impl<D: device::Device> DeviceExt for D {
-    fn create_renderer(&mut self) -> ::Renderer<D::CommandBuffer> {
+    fn create_renderer(&mut self) -> ::Renderer<D> {
         ::Renderer {
             command_buffer: device::draw::CommandBuffer::new(),
             data_buffer: device::draw::DataBuffer::new(),
@@ -98,7 +99,7 @@ impl<D: device::Device> DeviceExt for D {
     }
 
     fn link_program(&mut self, vs_code: &[u8], fs_code: &[u8])
-                    -> Result<device::ProgramHandle, ProgramError> {
+                    -> Result<device::ProgramHandle<back::GlResources>, ProgramError> {
         let vs = match self.create_shader(Stage::Vertex, vs_code) {
             Ok(s) => s,
             Err(e) => return Err(ProgramError::Vertex(e)),
@@ -113,7 +114,7 @@ impl<D: device::Device> DeviceExt for D {
     }
 
     fn link_program_source(&mut self, vs_src: ShaderSource, fs_src: ShaderSource)
-                           -> Result<device::ProgramHandle, ProgramError> {
+                           -> Result<device::ProgramHandle<back::GlResources>, ProgramError> {
         let model = self.get_capabilities().shader_model;
         let err_model = CreateShaderError::ModelNotSupported;
 

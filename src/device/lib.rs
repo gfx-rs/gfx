@@ -26,6 +26,7 @@ extern crate libc;
 // TODO: Remove these exports once `gl_device` becomes a separate crate.
 pub use self::gl_device as back;
 
+use std::fmt;
 use std::mem;
 use std::slice;
 use std::ops::{Deref, DerefMut};
@@ -149,7 +150,9 @@ impl<T: Copy, I> Handle<T, I> {
         let Handle(name, _) = *self;
         name
     }
+}
 
+impl<T, I> Handle<T, I> {
     /// Get the info reference
     pub fn get_info(&self) -> &I {
         let Handle(_, ref info) = *self;
@@ -158,37 +161,57 @@ impl<T: Copy, I> Handle<T, I> {
 }
 
 /// Type-safe buffer handle
-#[derive(Copy, Debug, PartialEq, Clone)]
-pub struct BufferHandle<T> {
-    raw: RawBufferHandle,
+pub struct BufferHandle<R: Resources, T> {
+    raw: RawBufferHandle<R>,
 }
 
-impl<T> BufferHandle<T> {
+impl<R: Resources, T> Copy for BufferHandle<R, T> {}
+
+impl<R: Resources, T> Clone for BufferHandle<R, T> {
+    fn clone(&self) -> BufferHandle<R, T> {
+        BufferHandle { raw: self.raw }
+    }
+}
+
+impl<R: Resources, T> PartialEq for BufferHandle<R, T> {
+    fn eq(&self, other: &BufferHandle<R, T>) -> bool {
+        self.raw == other.raw
+    }
+}
+
+impl<R: Resources, T> fmt::Debug for BufferHandle<R, T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "BufferHandle {{ raw: {:?} }}", self.raw)
+    }
+}
+
+impl<R: Resources, T> BufferHandle<R, T> {
     /// Create a type-safe BufferHandle from a RawBufferHandle
-    pub fn from_raw(handle: RawBufferHandle) -> BufferHandle<T> {
+    pub fn from_raw(handle: RawBufferHandle<R>) -> BufferHandle<R, T> {
         BufferHandle {
             raw: handle,
         }
     }
 
     /// Cast the type this BufferHandle references
-    pub fn cast<U>(self) -> BufferHandle<U> {
+    pub fn cast<U>(self) -> BufferHandle<R, U> {
         BufferHandle::from_raw(self.raw)
     }
 
-    /// Get the underlying GL name for this BufferHandle
-    pub fn get_name(&self) -> back::Buffer {
+    /// Get the underlying name for this BufferHandle
+    pub fn get_name(&self) -> <R as Resources>::Buffer {
         self.raw.get_name()
+    }
+
+    /// Get the underlying raw Handle
+    pub fn raw(&self) -> RawBufferHandle<R> {
+        self.raw
     }
 
     /// Get the associated information about the buffer
     pub fn get_info(&self) -> &BufferInfo {
-        self.raw.get_info()
-    }
-
-    /// Get the underlying raw Handle
-    pub fn raw(&self) -> RawBufferHandle {
-        self.raw
+        let Handle(_, ref info) = self.raw;
+        info
     }
 
     /// Get the number of elements in the buffer.
@@ -201,25 +224,25 @@ impl<T> BufferHandle<T> {
 }
 
 /// Raw (untyped) Buffer Handle
-pub type RawBufferHandle = Handle<back::Buffer, BufferInfo>;
+pub type RawBufferHandle<R: Resources> = Handle<<R as Resources>::Buffer, BufferInfo>;
 /// Array Buffer Handle
-pub type ArrayBufferHandle = Handle<back::ArrayBuffer, ()>;
+pub type ArrayBufferHandle<R: Resources> = Handle<<R as Resources>::ArrayBuffer, ()>;
 /// Shader Handle
-pub type ShaderHandle  = Handle<back::Shader, shade::Stage>;
+pub type ShaderHandle<R: Resources>  = Handle<<R as Resources>::Shader, shade::Stage>;
 /// Program Handle
-pub type ProgramHandle = Handle<back::Program, shade::ProgramInfo>;
+pub type ProgramHandle<R: Resources> = Handle<<R as Resources>::Program, shade::ProgramInfo>;
 /// Frame Buffer Handle
-pub type FrameBufferHandle = Handle<back::FrameBuffer, ()>;
+pub type FrameBufferHandle<R: Resources> = Handle<<R as Resources>::FrameBuffer, ()>;
 /// Surface Handle
-pub type SurfaceHandle = Handle<back::Surface, tex::SurfaceInfo>;
+pub type SurfaceHandle<R: Resources> = Handle<<R as Resources>::Surface, tex::SurfaceInfo>;
 /// Texture Handle
-pub type TextureHandle = Handle<back::Texture, tex::TextureInfo>;
+pub type TextureHandle<R: Resources> = Handle<<R as Resources>::Texture, tex::TextureInfo>;
 /// Sampler Handle
-pub type SamplerHandle = Handle<back::Sampler, tex::SamplerInfo>;
+pub type SamplerHandle<R: Resources> = Handle<<R as Resources>::Sampler, tex::SamplerInfo>;
 
 /// A helper method to test `#[vertex_format]` without GL context
 //#[cfg(test)]
-pub fn make_fake_buffer<T>() -> BufferHandle<T> {
+pub fn make_fake_buffer<T>() -> BufferHandle<back::GlResources, T> {
     let info = BufferInfo {
         usage: BufferUsage::Static,
         size: 0,
@@ -228,7 +251,7 @@ pub fn make_fake_buffer<T>() -> BufferHandle<T> {
 }
 
 /// Return the framebuffer handle for the screen.
-pub fn get_main_frame_buffer() -> FrameBufferHandle {
+pub fn get_main_frame_buffer() -> FrameBufferHandle<back::GlResources> {
     Handle(0, ())
 }
 
@@ -315,50 +338,23 @@ pub struct BufferInfo {
     pub size: usize,
 }
 
-/// Serialized device command.
-/// While this is supposed to be an internal detail of a device,
-/// this particular representation may be used by different backends,
-/// such as OpenGL (prior to GLNG) and DirectX (prior to DX12)
-#[allow(missing_docs)]
-#[derive(Copy, Debug)]
-pub enum Command {
-    BindProgram(back::Program),
-    BindArrayBuffer(back::ArrayBuffer),
-    BindAttribute(AttributeSlot, back::Buffer, attrib::Format),
-    BindIndex(back::Buffer),
-    BindFrameBuffer(target::Access, back::FrameBuffer),
-    /// Unbind any surface from the specified target slot
-    UnbindTarget(target::Access, target::Target),
-    /// Bind a surface to the specified target slot
-    BindTargetSurface(target::Access, target::Target, back::Surface),
-    /// Bind a level of the texture to the specified target slot
-    BindTargetTexture(target::Access, target::Target, back::Texture,
-                      target::Level, Option<target::Layer>),
-    BindUniformBlock(back::Program, UniformBufferSlot, UniformBlockIndex, back::Buffer),
-    BindUniform(shade::Location, shade::UniformValue),
-    BindTexture(TextureSlot, tex::TextureKind, back::Texture, Option<SamplerHandle>),
-    SetDrawColorBuffers(usize),
-    SetPrimitiveState(state::Primitive),
-    SetViewport(target::Rect),
-    SetMultiSampleState(Option<state::MultiSample>),
-    SetScissor(Option<target::Rect>),
-    SetDepthStencilState(Option<state::Depth>, Option<state::Stencil>, state::CullMode),
-    SetBlendState(Option<state::Blend>),
-    SetColorMask(state::ColorMask),
-    UpdateBuffer(back::Buffer, draw::DataPointer, usize),
-    UpdateTexture(tex::TextureKind, back::Texture, tex::ImageInfo, draw::DataPointer),
-    // drawing
-    Clear(target::ClearData, target::Mask),
-    Draw(PrimitiveType, VertexCount, VertexCount, Option<(InstanceCount, VertexCount)>),
-    DrawIndexed(PrimitiveType, IndexType, VertexCount, VertexCount, VertexCount, Option<(InstanceCount, VertexCount)>),
-    Blit(target::Rect, target::Rect, target::Mirror, target::Mask),
+/// Resources pertaining to a specific API
+pub trait Resources {
+    type Buffer:        Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
+    type ArrayBuffer:   Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
+    type Shader:        Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
+    type Program:       Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
+    type FrameBuffer:   Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
+    type Surface:       Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
+    type Texture:       Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
+    type Sampler:       Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
 }
 
 /// An interface for performing draw calls using a specific graphics API
 #[allow(missing_docs)]
 pub trait Device {
-
-    type CommandBuffer: draw::CommandBuffer;
+    type Resources: Resources;
+    type CommandBuffer: draw::CommandBuffer<Resources = Self::Resources>;
 
     /// Returns the capabilities available to the specific API implementation
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
@@ -368,56 +364,56 @@ pub trait Device {
     fn submit(&mut self, buffer: (&Self::CommandBuffer, &draw::DataBuffer));
 
     // resource creation
-    fn create_buffer_raw(&mut self, size: usize, usage: BufferUsage) -> BufferHandle<()>;
-    fn create_buffer<T>(&mut self, num: usize, usage: BufferUsage) -> BufferHandle<T> {
+    fn create_buffer_raw(&mut self, size: usize, usage: BufferUsage) -> BufferHandle<back::GlResources, ()>;
+    fn create_buffer<T>(&mut self, num: usize, usage: BufferUsage) -> BufferHandle<back::GlResources, T> {
         self.create_buffer_raw(num * mem::size_of::<T>(), usage).cast()
     }
-    fn create_buffer_static_raw(&mut self, data: &[u8]) -> BufferHandle<()>;
-    fn create_buffer_static<T: Copy>(&mut self, data: &[T]) -> BufferHandle<T> {
+    fn create_buffer_static_raw(&mut self, data: &[u8]) -> BufferHandle<back::GlResources, ()>;
+    fn create_buffer_static<T: Copy>(&mut self, data: &[T]) -> BufferHandle<back::GlResources, T> {
         self.create_buffer_static_raw(as_byte_slice(data)).cast()
     }
-    fn create_array_buffer(&mut self) -> Result<ArrayBufferHandle, ()>;
+    fn create_array_buffer(&mut self) -> Result<ArrayBufferHandle<back::GlResources>, ()>;
     fn create_shader(&mut self, stage: shade::Stage, code: &[u8]) ->
-                     Result<ShaderHandle, shade::CreateShaderError>;
-    fn create_program(&mut self, shaders: &[ShaderHandle], targets: Option<&[&str]>) -> Result<ProgramHandle, ()>;
-    fn create_frame_buffer(&mut self) -> FrameBufferHandle;
-    fn create_surface(&mut self, info: tex::SurfaceInfo) -> Result<SurfaceHandle, tex::SurfaceError>;
-    fn create_texture(&mut self, info: tex::TextureInfo) -> Result<TextureHandle, tex::TextureError>;
-    fn create_sampler(&mut self, info: tex::SamplerInfo) -> SamplerHandle;
+                     Result<ShaderHandle<back::GlResources>, shade::CreateShaderError>;
+    fn create_program(&mut self, shaders: &[ShaderHandle<back::GlResources>], targets: Option<&[&str]>) -> Result<ProgramHandle<back::GlResources>, ()>;
+    fn create_frame_buffer(&mut self) -> FrameBufferHandle<back::GlResources>;
+    fn create_surface(&mut self, info: tex::SurfaceInfo) -> Result<SurfaceHandle<back::GlResources>, tex::SurfaceError>;
+    fn create_texture(&mut self, info: tex::TextureInfo) -> Result<TextureHandle<back::GlResources>, tex::TextureError>;
+    fn create_sampler(&mut self, info: tex::SamplerInfo) -> SamplerHandle<back::GlResources>;
 
     // resource deletion
-    fn delete_buffer_raw(&mut self, buf: BufferHandle<()>);
-    fn delete_buffer<T>(&mut self, buf: BufferHandle<T>) {
+    fn delete_buffer_raw(&mut self, buf: BufferHandle<back::GlResources, ()>);
+    fn delete_buffer<T>(&mut self, buf: BufferHandle<back::GlResources, T>) {
         self.delete_buffer_raw(buf.cast());
     }
-    fn delete_shader(&mut self, ShaderHandle);
-    fn delete_program(&mut self, ProgramHandle);
-    fn delete_surface(&mut self, SurfaceHandle);
-    fn delete_texture(&mut self, TextureHandle);
-    fn delete_sampler(&mut self, SamplerHandle);
+    fn delete_shader(&mut self, ShaderHandle<back::GlResources>);
+    fn delete_program(&mut self, ProgramHandle<back::GlResources>);
+    fn delete_surface(&mut self, SurfaceHandle<back::GlResources>);
+    fn delete_texture(&mut self, TextureHandle<back::GlResources>);
+    fn delete_sampler(&mut self, SamplerHandle<back::GlResources>);
 
     /// Update the information stored in a specific buffer
-    fn update_buffer_raw(&mut self, buf: BufferHandle<()>, data: &[u8],
+    fn update_buffer_raw(&mut self, buf: BufferHandle<back::GlResources, ()>, data: &[u8],
                          offset_bytes: usize);
-    fn update_buffer<T: Copy>(&mut self, buf: BufferHandle<T>, data: &[T],
+    fn update_buffer<T: Copy>(&mut self, buf: BufferHandle<back::GlResources, T>, data: &[T],
                      offset_elements: usize) {
         self.update_buffer_raw(buf.cast(), as_byte_slice(data), mem::size_of::<T>() * offset_elements)
     }
-    fn map_buffer_raw(&mut self, buf: BufferHandle<()>, access: MapAccess) -> back::RawMapping;
+    fn map_buffer_raw(&mut self, buf: BufferHandle<back::GlResources, ()>, access: MapAccess) -> back::RawMapping;
     fn unmap_buffer_raw(&mut self, map: back::RawMapping);
-    fn map_buffer_readable<T: Copy>(&mut self, buf: BufferHandle<T>) -> ReadableMapping<T, Self>;
-    fn map_buffer_writable<T: Copy>(&mut self, buf: BufferHandle<T>) -> WritableMapping<T, Self>;
-    fn map_buffer_rw<T: Copy>(&mut self, buf: BufferHandle<T>) -> RWMapping<T, Self>;
+    fn map_buffer_readable<T: Copy>(&mut self, buf: BufferHandle<back::GlResources, T>) -> ReadableMapping<T, Self>;
+    fn map_buffer_writable<T: Copy>(&mut self, buf: BufferHandle<back::GlResources, T>) -> WritableMapping<T, Self>;
+    fn map_buffer_rw<T: Copy>(&mut self, buf: BufferHandle<back::GlResources, T>) -> RWMapping<T, Self>;
 
     /// Update the information stored in a texture
-    fn update_texture_raw(&mut self, tex: &TextureHandle, img: &tex::ImageInfo,
+    fn update_texture_raw(&mut self, tex: &TextureHandle<back::GlResources>, img: &tex::ImageInfo,
                           data: &[u8]) -> Result<(), tex::TextureError>;
-    fn update_texture<T: Copy>(&mut self, tex: &TextureHandle,
+    fn update_texture<T: Copy>(&mut self, tex: &TextureHandle<back::GlResources>,
                       img: &tex::ImageInfo, data: &[T])
                       -> Result<(), tex::TextureError> {
         self.update_texture_raw(tex, img, as_byte_slice(data))
     }
-    fn generate_mipmap(&mut self, tex: &TextureHandle);
+    fn generate_mipmap(&mut self, tex: &TextureHandle<back::GlResources>);
 }
 
 #[cfg(test)]
@@ -425,8 +421,9 @@ mod test {
     use std::mem;
     use super::{BufferHandle, Handle};
     use super::{BufferInfo, BufferUsage};
+    use super::back;
 
-    fn mock_buffer<T>(usage: BufferUsage, len: usize) -> BufferHandle<T> {
+    fn mock_buffer<T>(usage: BufferUsage, len: usize) -> BufferHandle<back::GlResources, T> {
         BufferHandle {
             raw: Handle(
                 0,

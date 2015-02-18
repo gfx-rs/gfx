@@ -19,6 +19,7 @@ use back;
 use shade;
 use target;
 use tex;
+use Resources;
 
 type Offset = u32;
 type Size = u32;
@@ -77,6 +78,8 @@ impl DataBuffer {
 /// An interface of the abstract command buffer. It collects commands in an
 /// efficient API-specific manner, to be ready for execution on the device.
 pub trait CommandBuffer {
+    type Resources: Resources;
+
     /// An empty constructor
     fn new() -> Self;
     /// Clear the command buffer contents, retain the allocated storage
@@ -105,7 +108,7 @@ pub trait CommandBuffer {
     fn bind_uniform(&mut self, shade::Location, shade::UniformValue);
     /// Bind a texture
     fn bind_texture(&mut self, ::TextureSlot, tex::TextureKind, back::Texture,
-                    Option<::SamplerHandle>);
+                    Option<::SamplerHandle<back::GlResources>>);
     /// Select, which color buffers are going to be targetted by the shader
     fn set_draw_color_buffers(&mut self, usize);
     /// Set primitive topology

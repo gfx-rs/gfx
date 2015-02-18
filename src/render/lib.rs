@@ -22,8 +22,10 @@ extern crate "gfx_device_gl" as device;
 
 use std::mem;
 
+use device::Device;
 use device::attrib;
 use device::attrib::IntSize;
+use device::back;
 use device::draw::CommandBuffer;
 use device::shade::{ProgramInfo, UniformValue};
 use device::target::{Rect, ClearData, Mirror, Mask, Access, Target};
@@ -45,7 +47,7 @@ pub mod target;
 
 
 const TRACKED_ATTRIBUTES: usize = 8;
-type CachedAttribute = (device::RawBufferHandle, attrib::Format);
+type CachedAttribute = (device::RawBufferHandle<back::GlResources>, attrib::Format);
 type Instancing = (device::InstanceCount, device::VertexCount);
 
 /// The internal state of the renderer.
@@ -55,7 +57,7 @@ struct RenderState {
     frame: target::Frame,
     is_array_buffer_set: bool,
     program_name: device::back::Program,
-    index: Option<device::RawBufferHandle>,
+    index: Option<device::RawBufferHandle<back::GlResources>>,
     attributes: [Option<CachedAttribute>; TRACKED_ATTRIBUTES],
     draw: state::DrawState,
 }
@@ -78,7 +80,7 @@ impl RenderState {
 /// Temporary parameter storage, used for shader activation.
 struct ParamStorage {
     uniforms: Vec<UniformValue>,
-    blocks  : Vec<device::RawBufferHandle>,
+    blocks  : Vec<device::RawBufferHandle<back::GlResources>>,
     textures: Vec<shade::TextureParam>,
 }
 
@@ -104,14 +106,14 @@ impl ParamStorage{
     }
 }
 
-/// Helper routines for the command buffer
+/// Extension methods for the command buffer.
 /// Useful when Renderer is borrowed, and we need to issue commands.
-trait CommandBufferHelper {
+trait CommandBufferExt {
     /// Bind a plane to some target
     fn bind_target(&mut self, Access, Target, Option<&target::Plane>);
 }
 
-impl<C: CommandBuffer> CommandBufferHelper for C {
+impl<C: CommandBuffer> CommandBufferExt for C {
     fn bind_target(&mut self, access: Access, to: Target,
                    plane: Option<&target::Plane>) {
         match plane {
@@ -141,18 +143,18 @@ pub enum DrawError<E> {
 }
 
 /// Renderer front-end
-pub struct Renderer<C: CommandBuffer> {
-    command_buffer: C,
+pub struct Renderer<D: Device> {
+    command_buffer: D::CommandBuffer,
     data_buffer: device::draw::DataBuffer,
-    common_array_buffer: Result<device::ArrayBufferHandle, ()>,
-    draw_frame_buffer: device::FrameBufferHandle,
-    read_frame_buffer: device::FrameBufferHandle,
-    default_frame_buffer: device::FrameBufferHandle,
+    common_array_buffer: Result<device::ArrayBufferHandle<back::GlResources>, ()>,
+    draw_frame_buffer: device::FrameBufferHandle<back::GlResources>,
+    read_frame_buffer: device::FrameBufferHandle<back::GlResources>,
+    default_frame_buffer: device::FrameBufferHandle<back::GlResources>,
     render_state: RenderState,
     parameters: ParamStorage,
 }
 
-impl<C: CommandBuffer> Renderer<C> {
+impl<D: Device> Renderer<D> {
     /// Reset all commands for the command buffer re-usal.
     pub fn reset(&mut self) {
         self.command_buffer.clear();
@@ -161,12 +163,12 @@ impl<C: CommandBuffer> Renderer<C> {
     }
 
     /// Get command and data buffers to be submitted to the device.
-    pub fn as_buffer(&self) -> (&C, &device::draw::DataBuffer) {
+    pub fn as_buffer(&self) -> (&D::CommandBuffer, &device::draw::DataBuffer) {
         (&self.command_buffer, &self.data_buffer)
     }
 
     /// Clone the renderer shared data but ignore the commands.
-    pub fn clone_empty(&self) -> Renderer<C> {
+    pub fn clone_empty(&self) -> Renderer<D> {
         Renderer {
             command_buffer: CommandBuffer::new(),
             data_buffer: device::draw::DataBuffer::new(),
@@ -246,7 +248,7 @@ impl<C: CommandBuffer> Renderer<C> {
     }
 
     /// Update a buffer with data from a vector.
-    pub fn update_buffer_vec<T: Copy>(&mut self, buf: device::BufferHandle<T>,
+    pub fn update_buffer_vec<T: Copy>(&mut self, buf: device::BufferHandle<back::GlResources, T>,
                              data: &[T], offset_elements: usize) {
         let esize = mem::size_of::<T>();
         let offset_bytes = esize * offset_elements;
@@ -257,14 +259,14 @@ impl<C: CommandBuffer> Renderer<C> {
 
     /// Update a buffer with data from a single type.
     pub fn update_buffer_struct<U, T: Copy>(&mut self,
-                                buf: device::BufferHandle<U>, data: &T) {
+                                buf: device::BufferHandle<back::GlResources, U>, data: &T) {
         debug_assert!(mem::size_of::<T>() <= buf.get_info().size);
         let pointer = self.data_buffer.add_struct(data);
         self.command_buffer.update_buffer(buf.get_name(), pointer, 0);
     }
 
     /// Update the contents of a texture.
-    pub fn update_texture<T: Copy>(&mut self, tex: device::TextureHandle,
+    pub fn update_texture<T: Copy>(&mut self, tex: device::TextureHandle<back::GlResources>,
                           img: device::tex::ImageInfo, data: &[T]) {
         debug_assert!(tex.get_info().contains(&img));
         let pointer = self.data_buffer.add_vec(data);
@@ -367,7 +369,7 @@ impl<C: CommandBuffer> Renderer<C> {
     }
 
     fn bind_program<'a, B: Batch>(&mut self, batch: &'a B)
-                    -> Result<&'a device::ProgramHandle, B::Error> {
+                    -> Result<&'a device::ProgramHandle<back::GlResources>, B::Error> {
         let program = match batch.fill_params(self.parameters.get_mut()) {
             Ok(p) => p,
             Err(e) => return Err(e),
@@ -381,7 +383,7 @@ impl<C: CommandBuffer> Renderer<C> {
         Ok(program)
     }
 
-    fn upload_parameters(&mut self, program: &device::ProgramHandle) {
+    fn upload_parameters(&mut self, program: &device::ProgramHandle<back::GlResources>) {
         let info = program.get_info();
         if self.parameters.uniforms.len() != info.uniforms.len() ||
             self.parameters.blocks.len() != info.blocks.len() ||
@@ -447,7 +449,7 @@ impl<C: CommandBuffer> Renderer<C> {
         }
     }
 
-    fn bind_index<T>(&mut self, buf: device::BufferHandle<T>) {
+    fn bind_index<T>(&mut self, buf: device::BufferHandle<back::GlResources, T>) {
         if self.render_state.index != Some(buf.raw()) {
             self.command_buffer.bind_index(buf.get_name());
             self.render_state.index = Some(buf.raw());
