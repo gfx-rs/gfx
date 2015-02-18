@@ -94,6 +94,29 @@ impl GlError {
     }
 }
 
+const RESET_CB: [Command; 11] = [
+    Command::BindProgram(0),
+    Command::BindArrayBuffer(0),
+    // BindAttribute
+    Command::BindIndex(0),
+    Command::BindFrameBuffer(Access::Draw, 0),
+    Command::BindFrameBuffer(Access::Read, 0),
+    // UnbindTarget
+    // BindUniformBlock
+    // BindUniform
+    // BindTexture
+    Command::SetPrimitiveState(::state::Primitive {
+        front_face: WindingOrder::CounterClockwise,
+        method: RasterMethod::Fill(CullMode::Back),
+        offset: None,
+    }),
+    Command::SetViewport(::target::Rect{x: 0, y: 0, w: 0, h: 0}),
+    Command::SetScissor(None),
+    Command::SetDepthStencilState(None, None, CullMode::Nothing),
+    Command::SetBlendState(None),
+    Command::SetColorMask(::state::MASK_ALL),
+];
+
 fn primitive_to_gl(prim_type: ::PrimitiveType) -> gl::types::GLenum {
     match prim_type {
         PrimitiveType::Point => gl::POINTS,
@@ -565,26 +588,9 @@ impl Device for GlDevice {
 
     fn reset_state(&mut self) {
         let data = ::draw::DataBuffer::new();
-        self.process(&Command::BindProgram(0), &data);
-        self.process(&Command::BindArrayBuffer(0), &data);
-        // self.process(&command::BindAttribute, &data);
-        self.process(&Command::BindIndex(0), &data);
-        self.process(&Command::BindFrameBuffer(Access::Draw, 0), &data);
-        self.process(&Command::BindFrameBuffer(Access::Read, 0), &data);
-        // self.process(&command::UnbindTarget, &data);
-        // self.process(&command::BindUniformBlock, &data);
-        // self.process(&command::BindUniform, &data);
-        // self.process(&command::BindTexture, &data);
-        self.process(&Command::SetPrimitiveState(::state::Primitive {
-            front_face: WindingOrder::CounterClockwise,
-            method: RasterMethod::Fill(CullMode::Back),
-            offset: None,
-        }), &data);
-        self.process(&Command::SetViewport(::target::Rect{x: 0, y: 0, w: 0, h: 0}), &data);
-        self.process(&Command::SetScissor(None), &data);
-        self.process(&Command::SetDepthStencilState(None, None, CullMode::Nothing), &data);
-        self.process(&Command::SetBlendState(None), &data);
-        self.process(&Command::SetColorMask(::state::MASK_ALL), &data);
+        for com in RESET_CB.iter() {
+            self.process(com, &data);
+        }
     }
 
     fn submit(&mut self, (cb, db): (&CommandBuffer, &::draw::DataBuffer)) {

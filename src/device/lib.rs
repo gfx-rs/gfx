@@ -340,14 +340,14 @@ pub struct BufferInfo {
 
 /// Resources pertaining to a specific API
 pub trait Resources {
-    type Buffer:        Copy + fmt::Debug + PartialEq + Clone;
-    type ArrayBuffer:   Copy + fmt::Debug + PartialEq + Clone;
-    type Shader:        Copy + fmt::Debug + PartialEq + Clone;
-    type Program:       Copy + fmt::Debug + PartialEq + Clone;
-    type FrameBuffer:   Copy + fmt::Debug + PartialEq + Clone;
-    type Surface:       Copy + fmt::Debug + PartialEq + Clone;
-    type Texture:       Copy + fmt::Debug + PartialEq + Clone;
-    type Sampler:       Copy + fmt::Debug + PartialEq + Clone;
+    type Buffer:        Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
+    type ArrayBuffer:   Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
+    type Shader:        Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
+    type Program:       Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
+    type FrameBuffer:   Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
+    type Surface:       Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
+    type Texture:       Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
+    type Sampler:       Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
 }
 
 /// An interface for performing draw calls using a specific graphics API
