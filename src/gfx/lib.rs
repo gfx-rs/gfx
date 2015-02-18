@@ -33,7 +33,7 @@ pub use render::mesh::SliceKind;
 pub use render::state::{BlendPreset, DrawState};
 pub use render::shade;
 pub use render::target::{Frame, Plane};
-pub use device::Device;
+pub use device::{Device, Resources};
 pub use device::{attrib, state, tex};
 pub use device::as_byte_slice;
 pub use device::{BufferHandle, BufferInfo, RawBufferHandle, ShaderHandle};
