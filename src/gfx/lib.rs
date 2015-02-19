@@ -82,13 +82,13 @@ impl<D: device::Device> Graphics<D> {
     }
 
     /// Clear the `Frame` as the `ClearData` specifies.
-    pub fn clear(&mut self, data: ClearData, mask: Mask, frame: &Frame) {
+    pub fn clear(&mut self, data: ClearData, mask: Mask, frame: &Frame<GlResources>) {
         self.renderer.clear(data, mask, frame)
     }
 
     /// Draw a ref batch.
     pub fn draw<'a, T: shade::ShaderParam>(&'a mut self,
-                batch: &'a batch::RefBatch<T>, data: &'a T, frame: &Frame)
+                batch: &'a batch::RefBatch<T>, data: &'a T, frame: &Frame<GlResources>)
                 -> Result<(), DrawError<batch::OutOfBounds>> {
         self.renderer.draw(&(batch, data, &self.context), frame)
     }

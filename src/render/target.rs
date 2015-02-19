@@ -15,20 +15,20 @@
 //! Render target specification.
 
 use device;
-use device::back;
+use device::Resources;
 use device::target::{Level, Layer, Mask};
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 /// A single buffer that can be bound to a render target.
-pub enum Plane {
+pub enum Plane<R: Resources> {
     /// Render to a `Surface` (corresponds to a renderbuffer in GL).
-    Surface(device::SurfaceHandle<back::GlResources>),
+    Surface(device::SurfaceHandle<R>),
     /// Render to a texture at a specific mipmap level
     /// If `Layer` is set, it is selecting a single 2D slice of a given 3D texture
-    Texture(device::TextureHandle<back::GlResources>, Level, Option<Layer>),
+    Texture(device::TextureHandle<R>, Level, Option<Layer>),
 }
 
-impl Plane {
+impl<R: Resources> Plane<R> {
     /// Get the surface info
     pub fn get_surface_info(&self) -> device::tex::SurfaceInfo {
         match *self {
@@ -40,23 +40,23 @@ impl Plane {
 
 /// A complete `Frame`, which is the result of rendering.
 #[derive(Clone, PartialEq, Debug)]
-pub struct Frame {
+pub struct Frame<R: Resources> {
     /// The width of the viewport.
     pub width: u16,
     /// The height of the viewport.
     pub height: u16,
     /// Each color component has its own buffer.
-    pub colors: Vec<Plane>,
+    pub colors: Vec<Plane<R>>,
     /// The depth buffer for this frame.
-    pub depth: Option<Plane>,
+    pub depth: Option<Plane<R>>,
     /// The stencil buffer for this frame.
-    pub stencil: Option<Plane>,
+    pub stencil: Option<Plane<R>>,
 }
 
-impl Frame {
+impl<R: Resources> Frame<R> {
     /// Create an empty `Frame`, which corresponds to the 'default framebuffer',
     /// which renders directly to the window that was created with the OpenGL context.
-    pub fn new(width: u16, height: u16) -> Frame {
+    pub fn new(width: u16, height: u16) -> Frame<R> {
         Frame {
             width: width,
             height: height,

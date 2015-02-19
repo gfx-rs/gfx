@@ -308,8 +308,9 @@ fn calculate_color(height: f32) -> [f32; 3] {
 }
 
 fn create_g_buffer(width: u16, height: u16, device: &mut gfx::GlDevice)
-        -> (gfx::Frame, TextureHandle<gfx::GlResources>, TextureHandle<gfx::GlResources>,
-            TextureHandle<gfx::GlResources>, TextureHandle<gfx::GlResources>) {
+        -> (gfx::Frame<gfx::GlResources>, TextureHandle<gfx::GlResources>,
+            TextureHandle<gfx::GlResources>, TextureHandle<gfx::GlResources>,
+            TextureHandle<gfx::GlResources>) {
     let mut frame = gfx::Frame::new(width, height);
 
     let texture_info_float = gfx::tex::TextureInfo {
@@ -346,7 +347,7 @@ fn create_g_buffer(width: u16, height: u16, device: &mut gfx::GlDevice)
 }
 
 fn create_res_buffer(width: u16, height: u16, device: &mut gfx::GlDevice, texture_depth: TextureHandle<gfx::GlResources>)
-        -> (gfx::Frame, TextureHandle<gfx::GlResources>, TextureHandle<gfx::GlResources>) {
+        -> (gfx::Frame<gfx::GlResources>, TextureHandle<gfx::GlResources>, TextureHandle<gfx::GlResources>) {
     let mut frame = gfx::Frame::new(width, height);
 
     let texture_info_float = gfx::tex::TextureInfo {

@@ -54,7 +54,7 @@ type Instancing = (device::InstanceCount, device::VertexCount);
 /// This is used as a cache to eliminate redundant state changes.
 struct RenderState {
     is_frame_buffer_set: bool,
-    frame: target::Frame,
+    frame: target::Frame<back::GlResources>,
     is_array_buffer_set: bool,
     program_name: device::back::Program,
     index: Option<device::RawBufferHandle<back::GlResources>>,
@@ -110,12 +110,12 @@ impl ParamStorage{
 /// Useful when Renderer is borrowed, and we need to issue commands.
 trait CommandBufferExt {
     /// Bind a plane to some target
-    fn bind_target(&mut self, Access, Target, Option<&target::Plane>);
+    fn bind_target(&mut self, Access, Target, Option<&target::Plane<back::GlResources>>);
 }
 
 impl<C: CommandBuffer> CommandBufferExt for C {
     fn bind_target(&mut self, access: Access, to: Target,
-                   plane: Option<&target::Plane>) {
+                   plane: Option<&target::Plane<back::GlResources>>) {
         match plane {
             None => self.unbind_target(access, to),
             Some(&target::Plane::Surface(ref suf)) =>
@@ -182,13 +182,13 @@ impl<D: Device> Renderer<D> {
     }
 
     /// Clear the `Frame` as the `ClearData` specifies.
-    pub fn clear(&mut self, data: ClearData, mask: Mask, frame: &target::Frame) {
+    pub fn clear(&mut self, data: ClearData, mask: Mask, frame: &target::Frame<back::GlResources>) {
         self.bind_frame(frame);
         self.command_buffer.call_clear(data, mask);
     }
 
     /// Draw a `batch` into the specified `frame`
-    pub fn draw<B: Batch>(&mut self, batch: &B, frame: &target::Frame)
+    pub fn draw<B: Batch>(&mut self, batch: &B, frame: &target::Frame<back::GlResources>)
                 -> Result<(), DrawError<B::Error>> {
         self.draw_all(batch, None, frame)
     }
@@ -197,14 +197,14 @@ impl<D: Device> Renderer<D> {
     pub fn draw_instanced<B: Batch>(&mut self, batch: &B,
                           count: device::InstanceCount,
                           base: device::VertexCount,
-                          frame: &target::Frame)
+                          frame: &target::Frame<back::GlResources>)
                           -> Result<(), DrawError<B::Error>> {
         self.draw_all(batch, Some((count, base)), frame)
     }
 
     /// Draw a 'batch' with all known parameters specified, internal use only.
     fn draw_all<B: Batch>(&mut self, batch: &B, instances: Option<Instancing>,
-                frame: &target::Frame) -> Result<(), DrawError<B::Error>> {
+                frame: &target::Frame<back::GlResources>) -> Result<(), DrawError<B::Error>> {
         let (mesh, attrib_iter, slice, state) = match batch.get_data() {
             Ok(data) => data,
             Err(e) => return Err(DrawError::InvalidBatch(e)),
@@ -225,8 +225,8 @@ impl<D: Device> Renderer<D> {
     }
 
     /// Blit one frame onto another
-    pub fn blit(&mut self, source: &target::Frame, source_rect: Rect,
-                destination: &target::Frame, dest_rect: Rect,
+    pub fn blit(&mut self, source: &target::Frame<back::GlResources>, source_rect: Rect,
+                destination: &target::Frame<back::GlResources>, dest_rect: Rect,
                 mirror: Mirror, mask: Mask) {
         // verify as much as possible here
         if mask.intersects(device::target::COLOR) {
@@ -273,7 +273,7 @@ impl<D: Device> Renderer<D> {
         self.command_buffer.update_texture(tex.get_info().kind, tex.get_name(), img, pointer);
     }
 
-    fn bind_frame(&mut self, frame: &target::Frame) {
+    fn bind_frame(&mut self, frame: &target::Frame<back::GlResources>) {
         if self.render_state.frame.width != frame.width ||
                 self.render_state.frame.height != frame.height {
             self.command_buffer.set_viewport(Rect {
@@ -331,7 +331,7 @@ impl<D: Device> Renderer<D> {
         }
     }
 
-    fn bind_read_frame(&mut self, frame: &target::Frame) {
+    fn bind_read_frame(&mut self, frame: &target::Frame<back::GlResources>) {
         self.command_buffer.bind_frame_buffer(Access::Read, self.read_frame_buffer.get_name());
         // color
         if frame.colors.is_empty() {
