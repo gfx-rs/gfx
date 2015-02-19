@@ -165,32 +165,10 @@ impl<T, I> Handle<T, I> {
 }
 
 /// Type-safe buffer handle
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct BufferHandle<R: Resources, T> {
     raw: RawBufferHandle<R>,
-    phantom_t: PhantomData<T>
-}
-
-impl<R: Resources, T> Copy for BufferHandle<R, T> {}
-
-impl<R: Resources, T> Clone for BufferHandle<R, T> {
-    fn clone(&self) -> BufferHandle<R, T> {
-        BufferHandle {
-            raw: self.raw,
-            phantom_t: PhantomData
-        }
-    }
-}
-
-impl<R: Resources, T> PartialEq for BufferHandle<R, T> {
-    fn eq(&self, other: &BufferHandle<R, T>) -> bool {
-        self.raw == other.raw
-    }
-}
-
-impl<R: Resources, T> fmt::Debug for BufferHandle<R, T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "BufferHandle {{ raw: {:?} }}", self.raw)
-    }
+    phantom_t: PhantomData<T>,
 }
 
 impl<R: Resources, T> BufferHandle<R, T> {
@@ -198,7 +176,7 @@ impl<R: Resources, T> BufferHandle<R, T> {
     pub fn from_raw(handle: RawBufferHandle<R>) -> BufferHandle<R, T> {
         BufferHandle {
             raw: handle,
-            phantom_t: PhantomData
+            phantom_t: PhantomData,
         }
     }
 
@@ -347,8 +325,8 @@ pub struct BufferInfo {
     pub size: usize,
 }
 
-/// Resources pertaining to a specific API
-pub trait Resources: PhantomFn<Self> {
+/// Resources pertaining to a specific API.
+pub trait Resources: PhantomFn<Self> + Copy + Clone + PartialEq + fmt::Debug {
     type Buffer:        Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
     type ArrayBuffer:   Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
     type Shader:        Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
