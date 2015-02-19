@@ -243,7 +243,7 @@ impl ItemDecorator for ShaderParam {
     /// Decorator for `shader_param` attribute
     fn expand(&self, context: &mut ext::base::ExtCtxt, span: codemap::Span,
               meta_item: &ast::MetaItem, item: &ast::Item,
-              mut push: Box<FnMut(P<ast::Item>)>) {
+              push: &mut FnMut(P<ast::Item>)) {
         // Insert the `gfx` reexport module
         let path_root = super::extern_crate_hack(context, span, |i| (*push)(i));
 
