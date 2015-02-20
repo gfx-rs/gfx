@@ -14,7 +14,6 @@
 
 #![feature(plugin)]
 #![plugin(gfx_macros)]
-#![feature(custom_attribute)]
 
 //! Demonstrates how to initialize gfx-rs using the gl-init-rs library.
 
