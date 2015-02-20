@@ -28,6 +28,7 @@
 
 #![feature(core, plugin)]
 #![plugin(gfx_macros)]
+#![feature(custom_attribute)]
 
 extern crate cgmath;
 extern crate gfx;

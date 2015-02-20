@@ -14,6 +14,7 @@
 
 #![feature(plugin)]
 #![plugin(gfx_macros)]
+#![feature(custom_attribute)]
 
 extern crate gfx;
 extern crate glfw;
