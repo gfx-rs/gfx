@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(core, plugin)]
+#![feature(core, plugin, custom_attribute)]
 #![plugin(gfx_macros)]
 
 extern crate cgmath;
