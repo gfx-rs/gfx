@@ -26,7 +26,7 @@
 //
 // Press 1-4 to show the immediate buffers. Press 0 to show the final result.
 
-#![feature(core, plugin)]
+#![feature(core, plugin, custom_attribute)]
 #![plugin(gfx_macros)]
 
 extern crate cgmath;
