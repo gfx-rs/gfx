@@ -66,7 +66,7 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     .zip(fields.iter()).scan((), |_, (def, &(fname, fspan))|
                 match classify(&def.node.ty.node) {
                     Ok(c) => {
-                        let name = match super::find_name(cx, span, &def.node.attrs[]) {
+                        let name = match super::find_name(cx, span, &def.node.attrs) {
                             Some(name) => name,
                             None => token::get_ident(fname),
                         };
@@ -76,7 +76,7 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                         cx.span_err(fspan, &format!(
                             "Unrecognized parameter ({:?}) type {:?}",
                             fname.as_str(), e
-                            )[]
+                            )
                         );
                         None
                     },
@@ -197,7 +197,7 @@ fn method_fill(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                         cx.span_err(span, &format!(
                             "Invalid uniform: {:?}",
                             f.name.unwrap().as_str(),
-                            )[]
+                            )
                         );
                         cx.stmt_expr(cx.expr_usize(span, 0))
                     },
@@ -273,9 +273,9 @@ impl ItemDecorator for ShaderParam {
             }
         };
         let link_name = format!("_{}Link", item.ident.as_str());
-        let link_ident = context.ident_of(&link_name[]);
+        let link_ident = context.ident_of(&link_name);
         let link_ty = generic::ty::Literal(
-            generic::ty::Path::new_local(&link_name[])
+            generic::ty::Path::new_local(&link_name)
         );
         let link_item = context.item_struct(span, link_ident, link_def)
                                .map(|mut item| {
@@ -348,7 +348,7 @@ impl ItemDecorator for ShaderParam {
                     ),
                     attributes: Vec::new(),
                     combine_substructure: generic::combine_substructure(box |cx, span, sub|
-                        method_create(cx, span, sub, &link_name[], path_root)
+                        method_create(cx, span, sub, &link_name, path_root)
                     ),
                 },
                 generic::MethodDef {

@@ -77,7 +77,7 @@ fn find_modifier(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                         cx.span_warn(span, &format!(
                             "Extra attribute modifier detected: `#[{:?}]` - \
                             ignoring in favour of `#[{:?}]`.", new_modifier, modifier
-                        )[]);
+                        ));
                         None
                     })
                 }).or(modifier)
@@ -100,11 +100,11 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 Some(Modifier::Normalized) => {
                     cx.span_warn(span, &format!(
                         "Incompatible float modifier attribute: `#[{:?}]`", modifier
-                    )[]);
+                    ));
                     ""
                 }
             });
-            let size = cx.ident_of(&format!("F{}", ty_str.slice_from(1))[]);
+            let size = cx.ident_of(&format!("F{}", ty_str.slice_from(1)));
             quote_expr!(cx, $path_root::gfx::attrib::Type::Float($path_root::gfx::attrib::FloatSubType::$kind,
                                                                  $path_root::gfx::attrib::FloatSize::$size))
         },
@@ -120,18 +120,18 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 Some(Modifier::AsDouble) => {
                     cx.span_warn(span, &format!(
                         "Incompatible int modifier attribute: `#[{:?}]`", modifier
-                    )[]);
+                    ));
                     ""
                 }
             });
-            let size = cx.ident_of(&format!("U{}", ty_str.slice_from(1))[]);
+            let size = cx.ident_of(&format!("U{}", ty_str.slice_from(1)));
             quote_expr!(cx, $path_root::gfx::attrib::Type::Int($path_root::gfx::attrib::IntSubType::$kind,
                                                                $path_root::gfx::attrib::IntSize::$size,
                                                                $path_root::gfx::attrib::SignFlag::$sign))
         },
         ty_str => {
             cx.span_err(span, &format!("Unrecognized component type: `{:?}`",
-                                      ty_str)[]);
+                                      ty_str));
             cx.expr_tuple(span, vec![])
         },
     }
@@ -140,7 +140,7 @@ fn decode_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
 fn decode_count_and_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                          field: &ast::StructField,
                          path_root: ast::Ident) -> (P<ast::Expr>, P<ast::Expr>) {
-    let modifier = find_modifier(cx, span, &field.node.attrs[]);
+    let modifier = find_modifier(cx, span, &field.node.attrs);
     match field.node.ty.node {
         ast::TyPath(ref p, _) => (
             cx.expr_lit(span, ast::LitInt(1, ast::UnsuffixedIntLit(ast::Plus))),
@@ -152,13 +152,13 @@ fn decode_count_and_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
             },
             _ => {
                 cx.span_err(span, &format!("Unsupported fixed vector sub-type: \
-                                          `{:?}`",pty.node)[]);
+                                          `{:?}`",pty.node));
                 cx.expr_tuple(span, vec![])
             },
         }),
         _ => {
             cx.span_err(span, &format!("Unsupported attribute type: `{:?}`",
-                                      field.node.ty.node)[]);
+                                      field.node.ty.node));
             (cx.expr_tuple(span, vec![]), cx.expr_tuple(span, vec![]))
         },
     }
@@ -175,11 +175,11 @@ fn method_body(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                     let struct_ident = substr.type_ident;
                     let buffer_expr = &substr.nonself_args[1];
                     let (count_expr, type_expr) = decode_count_and_type(cx, span, def, path_root);
-                    let ident_str = match super::find_name(cx, span, &def.node.attrs[]) {
+                    let ident_str = match super::find_name(cx, span, &def.node.attrs) {
                         Some(name) => name,
                         None => token::get_ident(ident),
                     };
-                    let ident_str = &ident_str[];
+                    let ident_str = &ident_str[..];
                     let instance_expr = cx.expr_u8(span, 0); // not supposed to be set by the macro
                     quote_expr!(cx, {
                         attributes.push($path_root::gfx::Attribute {
