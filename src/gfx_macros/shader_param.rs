@@ -102,7 +102,7 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 let mut out = $init_expr;
                 for (i, u) in $input.uniforms.iter().enumerate() {
                     let _ = i; // suppress warning about unused i
-                    match &u.name[] {
+                    match &u.name[..] {
                         $uniform_arms
                         _ => return Err($path_root::gfx::shade::
                             ParameterError::MissingUniform(u.name.clone())),
@@ -110,7 +110,7 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 }
                 for (i, b) in $input.blocks.iter().enumerate() {
                     let _ = i; // suppress warning about unused i
-                    match &b.name[] {
+                    match &b.name[..] {
                         $block_arms
                         _ => return Err($path_root::gfx::shade::
                             ParameterError::MissingBlock(b.name.clone())),
@@ -118,7 +118,7 @@ fn method_create(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                 }
                 for (i, t) in $input.textures.iter().enumerate() {
                     let _ = i; // suppress warning about unused i
-                    match &t.name[] {
+                    match &t.name[..] {
                         $texture_arms
                         _ => return Err($path_root::gfx::shade::
                             ParameterError::MissingTexture(t.name.clone())),

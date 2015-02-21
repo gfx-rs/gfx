@@ -93,7 +93,7 @@ impl fmt::Debug for ClearData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f,
             "ClearData {{ color: {:?}, depth: {:?}, stencil: {:?} }}",
-            &self.color[], self.depth, self.stencil)
+            &self.color[..], self.depth, self.stencil)
     }
 }
 
