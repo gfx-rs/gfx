@@ -139,7 +139,7 @@ fn get_usize(gl: &gl::Gl, name: gl::types::GLenum) -> usize {
 }
 
 unsafe fn c_str_as_static_str(c_str: *const i8) -> &'static str {
-    mem::transmute(str::from_utf8(ffi::c_str_to_bytes(&c_str)).unwrap())
+    mem::transmute(str::from_utf8(ffi::CStr::from_ptr(c_str).to_bytes()).unwrap())
 }
 
 /// A unique platform identifier that does not change between releases

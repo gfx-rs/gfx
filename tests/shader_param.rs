@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(plugin)]
+#![feature(plugin, custom_attribute)]
 #![plugin(gfx_macros)]
 
 mod secret_lib;

@@ -174,32 +174,32 @@ impl fmt::Debug for UniformValue {
             UniformValue::I32(x)            => write!(f, "ValueI32({:?})", x),
             UniformValue::F32(x)            => write!(f, "ValueF32({:?})", x),
 
-            UniformValue::I32Vector2(ref v) => write!(f, "ValueI32Vector2({:?})", &v[]),
-            UniformValue::I32Vector3(ref v) => write!(f, "ValueI32Vector3({:?})", &v[]),
-            UniformValue::I32Vector4(ref v) => write!(f, "ValueI32Vector4({:?})", &v[]),
+            UniformValue::I32Vector2(ref v) => write!(f, "ValueI32Vector2({:?})", &v[..]),
+            UniformValue::I32Vector3(ref v) => write!(f, "ValueI32Vector3({:?})", &v[..]),
+            UniformValue::I32Vector4(ref v) => write!(f, "ValueI32Vector4({:?})", &v[..]),
 
-            UniformValue::F32Vector2(ref v) => write!(f, "ValueF32Vector2({:?})", &v[]),
-            UniformValue::F32Vector3(ref v) => write!(f, "ValueF32Vector3({:?})", &v[]),
-            UniformValue::F32Vector4(ref v) => write!(f, "ValueF32Vector4({:?})", &v[]),
+            UniformValue::F32Vector2(ref v) => write!(f, "ValueF32Vector2({:?})", &v[..]),
+            UniformValue::F32Vector3(ref v) => write!(f, "ValueF32Vector3({:?})", &v[..]),
+            UniformValue::F32Vector4(ref v) => write!(f, "ValueF32Vector4({:?})", &v[..]),
 
             UniformValue::F32Matrix2(ref m) => {
                 try!(write!(f, "ValueF32Matrix2("));
                 for v in m.iter() {
-                    try!(write!(f, "{:?}", &v[]));
+                    try!(write!(f, "{:?}", &v[..]));
                 }
                 write!(f, ")")
             },
             UniformValue::F32Matrix3(ref m) => {
                 try!(write!(f, "ValueF32Matrix3("));
                 for v in m.iter() {
-                    try!(write!(f, "{:?}", &v[]));
+                    try!(write!(f, "{:?}", &v[..]));
                 }
                 write!(f, ")")
             },
             UniformValue::F32Matrix4(ref m) => {
                 try!(write!(f, "ValueF32Matrix4("));
                 for v in m.iter() {
-                    try!(write!(f, "{:?}", &v[]));
+                    try!(write!(f, "{:?}", &v[..]));
                 }
                 write!(f, ")")
             },

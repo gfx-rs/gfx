@@ -102,15 +102,15 @@ impl ShaderParam for () {
     type Link = ();
 
     fn create_link(_: Option<&()>, info: &shade::ProgramInfo) -> Result<(), ParameterError> {
-        match info.uniforms[].first() {
+        match info.uniforms[..].first() {
             Some(u) => return Err(ParameterError::MissingUniform(u.name.clone())),
             None => (),
         }
-        match info.blocks[].first() {
+        match info.blocks[..].first() {
             Some(b) => return Err(ParameterError::MissingBlock(b.name.clone())),
             None => (),
         }
-        match info.textures[].first() {
+        match info.textures[..].first() {
             Some(t) => return Err(ParameterError::MissingTexture(t.name.clone())),
             None => (),
         }

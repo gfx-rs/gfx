@@ -21,6 +21,7 @@
 extern crate libc;
 extern crate "gfx_gl" as gl;
 
+use std::marker::PhantomData;
 use log::LogLevel;
 
 use attrib::{SignFlag, IntSubType, IntSize, FloatSubType, FloatSize, Type};
@@ -773,7 +774,8 @@ impl Device for GlDevice {
         ReadableMapping {
             raw: map,
             len: buf.len(),
-            device: self
+            device: self,
+            phantom_t: PhantomData
         }
     }
 
@@ -782,7 +784,8 @@ impl Device for GlDevice {
         WritableMapping {
             raw: map,
             len: buf.len(),
-            device: self
+            device: self,
+            phantom_t: PhantomData
         }
     }
 
@@ -791,7 +794,8 @@ impl Device for GlDevice {
         RWMapping {
             raw: map,
             len: buf.len(),
-            device: self
+            device: self,
+            phantom_t: PhantomData
         }
     }
 }

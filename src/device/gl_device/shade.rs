@@ -50,7 +50,7 @@ pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: &[u8])
         log.extend(repeat('\0').take(length as usize));
         unsafe {
             gl.GetShaderInfoLog(name, length, &mut length,
-                (&log[]).as_ptr() as *mut gl::types::GLchar);
+                (&log[..]).as_ptr() as *mut gl::types::GLchar);
         }
         log.truncate(length as usize);
         Some(log)
@@ -158,7 +158,7 @@ fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::Attribute> {
         let mut size = 0 as gl::types::GLint;
         let mut storage = 0 as gl::types::GLenum;
         let loc = unsafe {
-            let raw = (&name[]).as_ptr() as *mut gl::types::GLchar;
+            let raw = (&name[..]).as_ptr() as *mut gl::types::GLchar;
             gl.GetActiveAttrib(prog, i, max_len, &mut length, &mut size, &mut storage, raw);
             gl.GetAttribLocation(prog, raw as *const gl::types::GLchar)
         };
@@ -209,7 +209,7 @@ fn query_blocks(gl: &gl::Gl, caps: &::Capabilities, prog: super::Program) -> Vec
         let mut actual_name_size = 0;
         unsafe {
             gl.GetActiveUniformBlockName(prog, i, size, &mut actual_name_size,
-                (&name[]).as_ptr() as *mut gl::types::GLchar);
+                (&name[..]).as_ptr() as *mut gl::types::GLchar);
             gl.GetActiveUniformBlockiv(prog, i, gl::UNIFORM_BLOCK_DATA_SIZE, &mut size);
         }
         name.truncate(actual_name_size as usize);
@@ -231,7 +231,7 @@ fn query_parameters(gl: &gl::Gl, caps: &::Capabilities, prog: super::Program) ->
     if caps.uniform_block_supported {
         unsafe {
             gl.GetActiveUniformsiv(prog, total_num as gl::types::GLsizei,
-                (&indices[]).as_ptr(), gl::UNIFORM_BLOCK_INDEX,
+                (&indices[..]).as_ptr(), gl::UNIFORM_BLOCK_INDEX,
                 block_indices.as_mut_slice().as_mut_ptr());
         }
         //TODO: UNIFORM_IS_ROW_MAJOR
@@ -246,7 +246,7 @@ fn query_parameters(gl: &gl::Gl, caps: &::Capabilities, prog: super::Program) ->
         let mut size = 0;
         let mut storage = 0;
         let loc = unsafe {
-            let raw = (&name[]).as_ptr() as *mut gl::types::GLchar;
+            let raw = (&name[..]).as_ptr() as *mut gl::types::GLchar;
             gl.GetActiveUniform(prog, i, max_len, &mut length, &mut size, &mut storage, raw);
             gl.GetUniformLocation(prog, raw as *const gl::types::GLchar)
         };
@@ -287,10 +287,10 @@ pub fn create_program(gl: &gl::Gl, caps: &::Capabilities, shaders: &[::ShaderHan
     }
 
     let targets = targets.map(|targets| {
-        let targets: Vec<CString> = targets.iter().map(|s| CString::from_slice(s.as_bytes())).collect();
+        let targets: Vec<CString> = targets.iter().map(|&s| CString::new(s).unwrap()).collect();
 
         for (i, target) in targets.iter().enumerate() {
-            unsafe { gl.BindFragDataLocation(name, i as u32, target.as_slice_with_nul().as_ptr()) };
+            unsafe { gl.BindFragDataLocation(name, i as u32, target.as_bytes_with_nul().as_ptr() as *const i8) };
         }
 
         targets
@@ -301,10 +301,10 @@ pub fn create_program(gl: &gl::Gl, caps: &::Capabilities, shaders: &[::ShaderHan
 
     if let Some(targets) = targets {
         match &targets.iter()
-            .map(|target| (unsafe { gl.GetFragDataLocation(name, target.as_slice_with_nul().as_ptr()) }, target))
+            .map(|target| (unsafe { gl.GetFragDataLocation(name, target.as_bytes_with_nul().as_ptr() as *const i8) }, target))
             .inspect(|&(loc, target)| info!("\t\tOutput[{:?}] = '{:?}'", loc, target))
             .filter(|&(loc, _)| loc == -1)
-            .collect::<Vec<_>>()[]
+            .collect::<Vec<_>>()[..]
         {
             [] => {},
             unbound => return (Err(()), Some(format!("Unbound targets: {:?}", unbound))),
@@ -319,7 +319,7 @@ pub fn create_program(gl: &gl::Gl, caps: &::Capabilities, shaders: &[::ShaderHan
         log.extend(repeat('\0').take(length as usize));
         unsafe {
             gl.GetProgramInfoLog(name, length, &mut length,
-                (&log[]).as_ptr() as *mut gl::types::GLchar);
+                (&log[..]).as_ptr() as *mut gl::types::GLchar);
         }
         log.truncate(length as usize);
         Some(log)
