@@ -287,7 +287,7 @@ pub fn create_program(gl: &gl::Gl, caps: &::Capabilities, shaders: &[::ShaderHan
     }
 
     let targets = targets.map(|targets| {
-        let targets: Vec<CString> = targets.iter().map(|s| CString::from_slice(s.as_bytes())).collect();
+        let targets: Vec<CString> = targets.iter().map(|&s| CString::new(s).unwrap()).collect();
 
         for (i, target) in targets.iter().enumerate() {
             unsafe { gl.BindFragDataLocation(name, i as u32, target.as_bytes_with_nul().as_ptr() as *const i8) };

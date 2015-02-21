@@ -200,8 +200,8 @@ fn compile_shader(gl: &Gl, src: &str, ty: GLenum) -> GLuint { unsafe {
     use std::num::Int;
     let shader = gl.CreateShader(ty);
     // Attempt to compile the shader
-    let src = CString::from_slice(src.as_bytes());
-    gl.ShaderSource(shader, 1, &src.as_ptr(), ptr::null());
+    let src = CString::new(src).unwrap();
+    gl.ShaderSource(shader, 1, &(src.as_bytes_with_nul().as_ptr() as *const i8), ptr::null());
     gl.CompileShader(shader);
 
     // Get the compile status
@@ -276,12 +276,12 @@ fn gl_main(mut glfw: glfw::Glfw,
 
         // Use shader program
         gl.UseProgram(program);
-        let o_color = CString::from_slice("o_Color".as_bytes());
-        gl.BindFragDataLocation(program, 0, o_color.as_ptr());
+        let o_color = CString::new("o_Color").unwrap();
+        gl.BindFragDataLocation(program, 0, o_color.as_bytes_with_nul().as_ptr() as *const i8);
 
         // Specify the layout of the vertex data
-        let a_pos = CString::from_slice("a_Pos".as_bytes());
-        gl.BindFragDataLocation(program, 0, a_pos.as_ptr());
+        let a_pos = CString::new("a_Pos").unwrap();
+        gl.BindFragDataLocation(program, 0, a_pos.as_bytes_with_nul().as_ptr() as *const i8);
 
         let pos_attr = gl.GetAttribLocation(program, a_pos.as_ptr());
         gl.EnableVertexAttribArray(pos_attr as GLuint);
@@ -289,8 +289,8 @@ fn gl_main(mut glfw: glfw::Glfw,
                                 gl::FALSE as GLboolean, 0, ptr::null());
 
 
-        let u_transform = CString::from_slice("u_Transform".as_bytes());
-        gl.GetUniformLocation(program, u_transform.as_ptr())
+        let u_transform = CString::new("u_Transform").unwrap();
+        gl.GetUniformLocation(program, u_transform.as_bytes_with_nul().as_ptr() as *const i8)
     };
 
     let (w, h) = window.get_framebuffer_size();
