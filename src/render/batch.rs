@@ -19,6 +19,7 @@
 use std::fmt;
 use std::num::from_uint;
 use std::cmp::Ordering;
+use std::marker::PhantomData;
 use device::back;
 use device::{PrimitiveType, ProgramHandle};
 use device::shade::ProgramInfo;
@@ -163,20 +164,20 @@ impl<T: ShaderParam> Batch for OwnedBatch<T> {
 type Index = u16;
 
 //#[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
-struct Id<T>(Index);
+struct Id<T>(Index, PhantomData<T>);
 
 impl<T> Copy for Id<T> {}
 
 impl<T> Id<T> {
     fn unwrap(&self) -> Index {
-        let Id(i) = *self;
+        let Id(i, _) = *self;
         i
     }
 }
 
 impl<T> fmt::Debug for Id<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let Id(i) = *self;
+        let Id(i, _) = *self;
         write!(f, "Id({})", i)
     }
 }
@@ -219,7 +220,7 @@ impl<T> Array<T> {
     }
 
     fn get(&self, id: Id<T>) -> Result<&T, OutOfBounds> {
-        let Id(i) = id;
+        let Id(i, _) = id;
         if (i as usize) < self.data.len() {
             Ok(&self.data[i as usize])
         }else {
@@ -231,11 +232,11 @@ impl<T> Array<T> {
 impl<T: Clone + PartialEq> Array<T> {
     fn find_or_insert(&mut self, value: &T) -> Option<Id<T>> {
         match self.data.iter().position(|v| v == value) {
-            Some(i) => from_uint::<Index>(i).map(|id| Id(id)),
+            Some(i) => from_uint::<Index>(i).map(|id| Id(id, PhantomData)),
             None => {
                 from_uint::<Index>(self.data.len()).map(|id| {
                     self.data.push(value.clone());
-                    Id(id)
+                    Id(id, PhantomData)
                 })
             },
         }
@@ -258,14 +259,14 @@ pub struct RefBatch<T: ShaderParam> {
 
 impl<T: ShaderParam> Copy for RefBatch<T> where T::Link: Copy {}
 
-impl<T> fmt::Debug for RefBatch<T> {
+impl<T: ShaderParam> fmt::Debug for RefBatch<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "RefBatch(mesh: {:?}, slice: {:?}, program: {:?}, state: {:?})",
             self.mesh_id, self.slice, self.program_id, self.state_id)
     }
 }
 
-impl<T> PartialEq for RefBatch<T> {
+impl<T: ShaderParam> PartialEq for RefBatch<T> {
     fn eq(&self, other: &RefBatch<T>) -> bool {
         self.program_id == other.program_id &&
         self.state_id == other.state_id &&
@@ -273,15 +274,15 @@ impl<T> PartialEq for RefBatch<T> {
     }
 }
 
-impl<T> Eq for RefBatch<T> {}
+impl<T: ShaderParam> Eq for RefBatch<T> {}
 
-impl<T> PartialOrd for RefBatch<T> {
+impl<T: ShaderParam> PartialOrd for RefBatch<T> {
     fn partial_cmp(&self, other: &RefBatch<T>) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<T> Ord for RefBatch<T> {
+impl<T: ShaderParam> Ord for RefBatch<T> {
     fn cmp(&self, other: &RefBatch<T>) -> Ordering {
         (&self.program_id, &self.state_id, &self.mesh_id).cmp(
         &(&other.program_id, &other.state_id, &other.mesh_id))

@@ -290,7 +290,7 @@ pub fn create_program(gl: &gl::Gl, caps: &::Capabilities, shaders: &[::ShaderHan
         let targets: Vec<CString> = targets.iter().map(|s| CString::from_slice(s.as_bytes())).collect();
 
         for (i, target) in targets.iter().enumerate() {
-            unsafe { gl.BindFragDataLocation(name, i as u32, target.as_slice_with_nul().as_ptr()) };
+            unsafe { gl.BindFragDataLocation(name, i as u32, target.as_bytes_with_nul().as_ptr() as *const i8) };
         }
 
         targets
@@ -301,7 +301,7 @@ pub fn create_program(gl: &gl::Gl, caps: &::Capabilities, shaders: &[::ShaderHan
 
     if let Some(targets) = targets {
         match &targets.iter()
-            .map(|target| (unsafe { gl.GetFragDataLocation(name, target.as_slice_with_nul().as_ptr()) }, target))
+            .map(|target| (unsafe { gl.GetFragDataLocation(name, target.as_bytes_with_nul().as_ptr() as *const i8) }, target))
             .inspect(|&(loc, target)| info!("\t\tOutput[{:?}] = '{:?}'", loc, target))
             .filter(|&(loc, _)| loc == -1)
             .collect::<Vec<_>>()[]

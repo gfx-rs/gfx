@@ -30,6 +30,7 @@ use std::fmt;
 use std::mem;
 use std::slice;
 use std::ops::{Deref, DerefMut};
+use std::marker::{PhantomData, PhantomFn};
 
 pub mod attrib;
 pub mod draw;
@@ -71,6 +72,7 @@ pub struct ReadableMapping<'a, T: Copy, D: 'a + Device> {
     raw: back::RawMapping,
     len: usize,
     device: &'a mut D,
+    phantom_t: PhantomData<T>
 }
 
 impl<'a, T: Copy, D: Device> Deref for ReadableMapping<'a, T, D> {
@@ -93,6 +95,7 @@ pub struct WritableMapping<'a, T: Copy, D: 'a + Device> {
     raw: back::RawMapping,
     len: usize,
     device: &'a mut D,
+    phantom_t: PhantomData<T>
 }
 
 impl<'a, T: Copy, D: Device> WritableMapping<'a, T, D> {
@@ -117,6 +120,7 @@ pub struct RWMapping<'a, T: Copy, D: 'a + Device> {
     raw: back::RawMapping,
     len: usize,
     device: &'a mut D,
+    phantom_t: PhantomData<T>
 }
 
 impl<'a, T: Copy, D: Device> Deref for RWMapping<'a, T, D> {
@@ -163,13 +167,17 @@ impl<T, I> Handle<T, I> {
 /// Type-safe buffer handle
 pub struct BufferHandle<R: Resources, T> {
     raw: RawBufferHandle<R>,
+    phantom_t: PhantomData<T>
 }
 
 impl<R: Resources, T> Copy for BufferHandle<R, T> {}
 
 impl<R: Resources, T> Clone for BufferHandle<R, T> {
     fn clone(&self) -> BufferHandle<R, T> {
-        BufferHandle { raw: self.raw }
+        BufferHandle {
+            raw: self.raw,
+            phantom_t: PhantomData
+        }
     }
 }
 
@@ -190,6 +198,7 @@ impl<R: Resources, T> BufferHandle<R, T> {
     pub fn from_raw(handle: RawBufferHandle<R>) -> BufferHandle<R, T> {
         BufferHandle {
             raw: handle,
+            phantom_t: PhantomData
         }
     }
 
@@ -339,7 +348,7 @@ pub struct BufferInfo {
 }
 
 /// Resources pertaining to a specific API
-pub trait Resources {
+pub trait Resources: PhantomFn<Self> {
     type Buffer:        Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
     type ArrayBuffer:   Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
     type Shader:        Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
