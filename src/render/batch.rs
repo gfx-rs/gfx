@@ -29,7 +29,7 @@ use shade::{ParameterError, ShaderParam};
 use render::state::DrawState;
 
 /// An error with a defined Mesh.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum MeshError {
     /// A required attribute was missing.
     AttributeMissing(String),
@@ -40,7 +40,7 @@ pub enum MeshError {
 }
 
 /// An error occurring at batch creation
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum BatchError {
     /// Error connecting mesh attributes
     Mesh(MeshError),
