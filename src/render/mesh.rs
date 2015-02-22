@@ -107,12 +107,12 @@ pub struct Slice {
     /// Primitive type to render collections of vertices as.
     pub prim_type: PrimitiveType,
     /// Source of the vertex ordering when drawing.
-    pub kind: SliceKind,
+    pub kind: SliceKind<back::GlResources>,
 }
 
 /// Source of vertex ordering for a slice
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum SliceKind {
+pub enum SliceKind<R: Resources> {
     /// Render vertex data directly from the `Mesh`'s buffer.
     Vertex,
     /// The `Index*` buffer contains a list of indices into the `Mesh`
@@ -124,11 +124,11 @@ pub enum SliceKind {
     /// the vertices will be identical, wasting space for the duplicated
     /// attributes.  Instead, the `Mesh` can store 4 vertices and an
     /// `Index8` can be used instead.
-    Index8(BufferHandle<back::GlResources, u8>, VertexCount),
+    Index8(BufferHandle<R, u8>, VertexCount),
     /// As `Index8` but with `u16` indices
-    Index16(BufferHandle<back::GlResources, u16>, VertexCount),
+    Index16(BufferHandle<R, u16>, VertexCount),
     /// As `Index8` but with `u32` indices
-    Index32(BufferHandle<back::GlResources, u32>, VertexCount),
+    Index32(BufferHandle<R, u32>, VertexCount),
 }
 
 /// Helper methods for cleanly getting the slice of a type.
