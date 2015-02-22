@@ -21,7 +21,7 @@ use std::num::from_uint;
 use std::cmp::Ordering;
 use std::marker::PhantomData;
 use device::back;
-use device::{PrimitiveType, ProgramHandle};
+use device::{Resources, PrimitiveType, ProgramHandle};
 use device::shade::ProgramInfo;
 use render::mesh;
 use render::mesh::ToSlice;
@@ -74,17 +74,19 @@ pub type BatchData<'a> = (&'a mesh::Mesh<back::GlResources>, mesh::AttributeIter
 
 /// Abstract batch trait
 pub trait Batch {
+    type Resources: Resources;
     /// Possible errors occurring at batch access
     type Error: fmt::Debug;
     /// Obtain information about the mesh, program, and state
     fn get_data(&self) -> Result<BatchData, Self::Error>;
     /// Fill shader parameter values
     fn fill_params(&self, ::shade::ParamValues)
-                   -> Result<&ProgramHandle<back::GlResources>, Self::Error>;
+                   -> Result<&ProgramHandle<Self::Resources>, Self::Error>;
 }
 
 impl<'a, T: ShaderParam> Batch for (&'a mesh::Mesh<back::GlResources>, mesh::Slice<back::GlResources>,
                                     &'a ProgramHandle<back::GlResources>, &'a T, &'a DrawState) {
+    type Resources = back::GlResources;
     type Error = BatchError;
 
     fn get_data(&self) -> Result<BatchData, BatchError> {
@@ -148,6 +150,7 @@ impl<T: ShaderParam> OwnedBatch<T> {
 }
 
 impl<T: ShaderParam> Batch for OwnedBatch<T> {
+    type Resources = back::GlResources;
     type Error = ();
 
     fn get_data(&self) -> Result<BatchData, ()> {
@@ -363,6 +366,7 @@ impl Context {
 }
 
 impl<'a, T: ShaderParam> Batch for (&'a RefBatch<T>, &'a T, &'a Context) {
+    type Resources = back::GlResources;
     type Error = OutOfBounds;
 
     fn get_data(&self) -> Result<BatchData, OutOfBounds> {
