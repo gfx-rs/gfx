@@ -423,7 +423,7 @@ impl<D: Device> Renderer<D> {
     }
 
     fn bind_mesh<I: Iterator<Item = mesh::AttributeIndex>>(&mut self,
-                 mesh: &mesh::Mesh, attrib_iter: I, info: &ProgramInfo) {
+                 mesh: &mesh::Mesh<back::GlResources>, attrib_iter: I, info: &ProgramInfo) {
         if !self.render_state.is_array_buffer_set {
             // It's Ok if the array buffer is not supported. We can just ignore it.
             self.common_array_buffer.map(|ab|

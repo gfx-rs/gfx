@@ -44,24 +44,26 @@ pub trait VertexFormat {
 
 /// Describes geometry to render.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Mesh {
+pub struct Mesh<R: Resources> {
     /// Number of vertices in the mesh.
     pub num_vertices: device::VertexCount,
     /// Vertex attributes to use.
-    pub attributes: Vec<Attribute<back::GlResources>>,
+    pub attributes: Vec<Attribute<R>>,
 }
 
-impl Mesh {
+impl<R: Resources> Mesh<R> {
     /// Create a new mesh, which is a `TriangleList` with no attributes and `nv` vertices.
-    pub fn new(nv: device::VertexCount) -> Mesh {
+    pub fn new(nv: device::VertexCount) -> Mesh<R> {
         Mesh {
             num_vertices: nv,
             attributes: Vec::new(),
         }
     }
+}
 
+impl Mesh<back::GlResources> {
     /// Create a new `Mesh` from a struct that implements `VertexFormat` and a buffer.
-    pub fn from_format<V: VertexFormat>(buf: device::BufferHandle<back::GlResources, V>, nv: device::VertexCount) -> Mesh {
+    pub fn from_format<V: VertexFormat>(buf: device::BufferHandle<back::GlResources, V>, nv: device::VertexCount) -> Mesh<back::GlResources> {
         Mesh {
             num_vertices: nv,
             attributes: VertexFormat::generate(None::<V>, buf.raw()),
@@ -71,7 +73,7 @@ impl Mesh {
     /// Create a new intanced `Mesh` given a vertex buffer and an instance buffer.
     pub fn from_format_instanced<V: VertexFormat, U: VertexFormat>(
                                  buf: device::BufferHandle<back::GlResources, V>, nv: device::VertexCount,
-                                 inst: device::BufferHandle<back::GlResources, U>) -> Mesh {
+                                 inst: device::BufferHandle<back::GlResources, U>) -> Mesh<back::GlResources> {
         let per_vertex   = VertexFormat::generate(None::<V>, buf.raw());
         let per_instance = VertexFormat::generate(None::<U>, inst.raw());
 
@@ -135,7 +137,7 @@ pub trait ToSlice {
     fn to_slice(&self, pt: PrimitiveType) -> Slice;
 }
 
-impl ToSlice for Mesh {
+impl ToSlice for Mesh<back::GlResources> {
     /// Return a vertex slice of the whole mesh.
     fn to_slice(&self, ty: PrimitiveType) -> Slice {
         Slice {
