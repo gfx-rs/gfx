@@ -289,6 +289,21 @@ impl<T: ShaderParam> Ord for RefBatch<T> {
     }
 }
 
+impl<T: ShaderParam> RefBatch<T> {
+    /// Compare meshes by Id
+    pub fn cmp_mesh(&self, other: &RefBatch<T>) -> Ordering {
+        self.mesh_id.cmp(&other.mesh_id)
+    }
+    /// Compare programs by Id
+    pub fn cmp_program(&self, other: &RefBatch<T>) -> Ordering {
+        self.program_id.cmp(&other.program_id)
+    }
+    /// Compare draw states by Id
+    pub fn cmp_state(&self, other: &RefBatch<T>) -> Ordering {
+        self.state_id.cmp(&other.state_id)
+    }
+}
+
 /// Factory of ref batches, required to always be used with them.
 pub struct Context {
     meshes: Array<mesh::Mesh>,
