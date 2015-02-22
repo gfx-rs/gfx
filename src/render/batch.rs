@@ -52,7 +52,7 @@ pub enum BatchError {
 
 /// Match mesh attributes against shader inputs, produce a mesh link.
 /// Exposed to public to allow external `Batch` implementations to use it.
-pub fn link_mesh(mesh: &mesh::Mesh<back::GlResources>, pinfo: &ProgramInfo) -> Result<mesh::Link, MeshError> {
+pub fn link_mesh<R: Resources>(mesh: &mesh::Mesh<R>, pinfo: &ProgramInfo) -> Result<mesh::Link, MeshError> {
     let mut indices = Vec::new();
     for sat in pinfo.attributes.iter() {
         match mesh.attributes.iter().enumerate()
