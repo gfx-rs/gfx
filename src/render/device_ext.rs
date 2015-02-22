@@ -63,7 +63,8 @@ pub trait DeviceExt: device::Device {
     fn create_renderer(&mut self) -> ::Renderer<Self>;
     /// Create a new mesh from the given vertex data.
     /// Convenience function around `create_buffer` and `Mesh::from_format`.
-    fn create_mesh<T: VertexFormat + Copy>(&mut self, data: &[T]) -> Mesh<back::GlResources>;
+    fn create_mesh<T>(&mut self, data: &[T]) -> Mesh<back::GlResources> where
+        T: VertexFormat<Resources = back::GlResources> + Copy;
     /// Create a simple program given a vertex shader with a fragment one.
     fn link_program(&mut self, vs_code: &[u8], fs_code: &[u8])
                     -> Result<device::ProgramHandle<back::GlResources>, ProgramError>;
@@ -87,7 +88,9 @@ impl<D: device::Device> DeviceExt for D {
         }
     }
 
-    fn create_mesh<T: VertexFormat + Copy>(&mut self, data: &[T]) -> Mesh<back::GlResources> {
+    fn create_mesh<T>(&mut self, data: &[T]) -> Mesh<back::GlResources> where
+        T: VertexFormat<Resources = back::GlResources> + Copy,
+    {
         let nv = data.len();
         debug_assert!(nv < {
             use std::num::Int;

@@ -288,7 +288,10 @@ impl ItemDecorator for VertexFormat {
                         box |c, s, ss| method_body(c, s, ss, path_root)),
                 },
             ],
-            associated_types: Vec::new(),
+            associated_types: vec![
+                (context.ident_of("Resources"), generic::ty::Literal(generic::ty::Path::new(
+                    vec![super::EXTERN_CRATE_HACK, "gfx", "GlResources"]))),
+            ],
         }.expand(context, meta_item, item, fixup);
     }
 }
