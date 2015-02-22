@@ -99,7 +99,7 @@ impl Mesh<back::GlResources> {
 /// For example,  `Point` typed vertex slice can be used to do shape
 /// blending, while still rendereing it as an indexed `TriangleList`.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Slice {
+pub struct Slice<R: Resources> {
     /// Start index of vertices to draw.
     pub start: VertexCount,
     /// End index of vertices to draw.
@@ -107,7 +107,7 @@ pub struct Slice {
     /// Primitive type to render collections of vertices as.
     pub prim_type: PrimitiveType,
     /// Source of the vertex ordering when drawing.
-    pub kind: SliceKind<back::GlResources>,
+    pub kind: SliceKind<R>,
 }
 
 /// Source of vertex ordering for a slice
@@ -132,14 +132,14 @@ pub enum SliceKind<R: Resources> {
 }
 
 /// Helper methods for cleanly getting the slice of a type.
-pub trait ToSlice {
+pub trait ToSlice<R: Resources> {
     /// Get the slice of a type.
-    fn to_slice(&self, pt: PrimitiveType) -> Slice;
+    fn to_slice(&self, pt: PrimitiveType) -> Slice<R>;
 }
 
-impl ToSlice for Mesh<back::GlResources> {
+impl<R: Resources> ToSlice<R> for Mesh<R> {
     /// Return a vertex slice of the whole mesh.
-    fn to_slice(&self, ty: PrimitiveType) -> Slice {
+    fn to_slice(&self, ty: PrimitiveType) -> Slice<R> {
         Slice {
             start: 0,
             end: self.num_vertices,
@@ -149,9 +149,9 @@ impl ToSlice for Mesh<back::GlResources> {
     }
 }
 
-impl ToSlice for BufferHandle<back::GlResources, u8> {
+impl<R: Resources> ToSlice<R> for BufferHandle<R, u8> {
     /// Return an index slice of the whole buffer.
-    fn to_slice(&self, ty: PrimitiveType) -> Slice {
+    fn to_slice(&self, ty: PrimitiveType) -> Slice<R> {
         Slice {
             start: 0,
             end: self.len() as VertexCount,
@@ -161,9 +161,9 @@ impl ToSlice for BufferHandle<back::GlResources, u8> {
     }
 }
 
-impl ToSlice for BufferHandle<back::GlResources, u16> {
+impl<R: Resources> ToSlice<R> for BufferHandle<R, u16> {
     /// Return an index slice of the whole buffer.
-    fn to_slice(&self, ty: PrimitiveType) -> Slice {
+    fn to_slice(&self, ty: PrimitiveType) -> Slice<R> {
         Slice {
             start: 0,
             end: self.len() as VertexCount,
@@ -173,9 +173,9 @@ impl ToSlice for BufferHandle<back::GlResources, u16> {
     }
 }
 
-impl ToSlice for BufferHandle<back::GlResources, u32> {
+impl<R: Resources> ToSlice<R> for BufferHandle<R, u32> {
     /// Return an index slice of the whole buffer.
-    fn to_slice(&self, ty: PrimitiveType) -> Slice {
+    fn to_slice(&self, ty: PrimitiveType) -> Slice<R> {
         Slice {
             start: 0,
             end: self.len() as VertexCount,

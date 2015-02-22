@@ -456,7 +456,7 @@ impl<D: Device> Renderer<D> {
         }
     }
 
-    fn draw_slice(&mut self, slice: &mesh::Slice,
+    fn draw_slice(&mut self, slice: &mesh::Slice<back::GlResources>,
                   instances: Option<(device::InstanceCount, device::VertexCount)>) {
         let mesh::Slice { start, end, prim_type, kind } = slice.clone();
         match kind {
