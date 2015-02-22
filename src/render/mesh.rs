@@ -21,16 +21,16 @@
 //! `Buffer`, and then use `Mesh::from`.
 
 use device;
-use device::{PrimitiveType, BufferHandle, VertexCount};
+use device::{PrimitiveType, BufferHandle, Resources, VertexCount};
 use device::{attrib, back};
 
 /// Describes a single attribute of a vertex buffer, including its type, name, etc.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Attribute {
+pub struct Attribute<R: Resources> {
     /// A name to match the shader input
     pub name: String,
     /// Vertex buffer to contain the data
-    pub buffer: device::RawBufferHandle<back::GlResources>,
+    pub buffer: device::RawBufferHandle<R>,
     /// Format of the attribute
     pub format: attrib::Format,
 }
@@ -39,7 +39,7 @@ pub struct Attribute {
 /// `#[vertex_format] attribute
 pub trait VertexFormat {
     /// Create the attributes for this type, using the given buffer.
-    fn generate(Option<Self>, buffer: device::RawBufferHandle<back::GlResources>) -> Vec<Attribute>;
+    fn generate(Option<Self>, buffer: device::RawBufferHandle<back::GlResources>) -> Vec<Attribute<back::GlResources>>;
 }
 
 /// Describes geometry to render.
@@ -48,7 +48,7 @@ pub struct Mesh {
     /// Number of vertices in the mesh.
     pub num_vertices: device::VertexCount,
     /// Vertex attributes to use.
-    pub attributes: Vec<Attribute>,
+    pub attributes: Vec<Attribute<back::GlResources>>,
 }
 
 impl Mesh {
