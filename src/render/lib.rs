@@ -127,7 +127,7 @@ impl<C: CommandBuffer> CommandBufferExt for C {
 }
 
 /// Draw-time error, showing inconsistencies in draw parameters and data
-#[derive(Copy, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum DrawError<E> {
     /// Tha batch is not valid
     InvalidBatch(E),
