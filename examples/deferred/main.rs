@@ -42,7 +42,7 @@ use std::num::Float;
 use cgmath::FixedArray;
 use cgmath::{Matrix, Matrix4, Point3, Vector3, EuclideanVector};
 use cgmath::{Transform, AffineMatrix3};
-use gfx::{Device, DeviceExt, TextureHandle, Plane, ToSlice, RawBufferHandle};
+use gfx::{Device, DeviceExt, Plane, ToSlice, RawBufferHandle};
 use gfx::batch::RefBatch;
 use glfw::Context;
 use genmesh::{Vertices, Triangulate};
@@ -307,10 +307,11 @@ fn calculate_color(height: f32) -> [f32; 3] {
     }
 }
 
+type Frame = gfx::Frame<gfx::GlResources>;
+type Texture = gfx::TextureHandle<gfx::GlResources>;
+
 fn create_g_buffer(width: u16, height: u16, device: &mut gfx::GlDevice)
-        -> (gfx::Frame<gfx::GlResources>, TextureHandle<gfx::GlResources>,
-            TextureHandle<gfx::GlResources>, TextureHandle<gfx::GlResources>,
-            TextureHandle<gfx::GlResources>) {
+        -> (Frame, Texture, Texture, Texture, Texture) {
     let mut frame = gfx::Frame::new(width, height);
 
     let texture_info_float = gfx::tex::TextureInfo {
@@ -346,8 +347,8 @@ fn create_g_buffer(width: u16, height: u16, device: &mut gfx::GlDevice)
     (frame, texture_pos, texture_normal, texture_diffuse, texture_depth)
 }
 
-fn create_res_buffer(width: u16, height: u16, device: &mut gfx::GlDevice, texture_depth: TextureHandle<gfx::GlResources>)
-        -> (gfx::Frame<gfx::GlResources>, TextureHandle<gfx::GlResources>, TextureHandle<gfx::GlResources>) {
+fn create_res_buffer(width: u16, height: u16, device: &mut gfx::GlDevice, texture_depth: Texture)
+        -> (Frame, Texture, Texture) {
     let mut frame = gfx::Frame::new(width, height);
 
     let texture_info_float = gfx::tex::TextureInfo {
@@ -571,7 +572,7 @@ fn main() {
         tex: (texture_pos, Some(sampler)),
     };
 
-    let mut debug_buf: Option<TextureHandle<gfx::GlResources>> = None;
+    let mut debug_buf: Option<Texture> = None;
 
     let mut light_pos_vec: Vec<[f32; 4]> = (0 ..NUM_LIGHTS).map(|_| {
         [0.0, 0.0, 0.0, 0.0]
