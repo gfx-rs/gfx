@@ -52,7 +52,7 @@ pub enum BatchError {
 
 /// Match mesh attributes against shader inputs, produce a mesh link.
 /// Exposed to public to allow external `Batch` implementations to use it.
-pub fn link_mesh(mesh: &mesh::Mesh, pinfo: &ProgramInfo) -> Result<mesh::Link, MeshError> {
+pub fn link_mesh(mesh: &mesh::Mesh<back::GlResources>, pinfo: &ProgramInfo) -> Result<mesh::Link, MeshError> {
     let mut indices = Vec::new();
     for sat in pinfo.attributes.iter() {
         match mesh.attributes.iter().enumerate()
@@ -69,8 +69,8 @@ pub fn link_mesh(mesh: &mesh::Mesh, pinfo: &ProgramInfo) -> Result<mesh::Link, M
 }
 
 /// Return type for `Batch::get_data()``
-pub type BatchData<'a> = (&'a mesh::Mesh, mesh::AttributeIter, &'a mesh::Slice,
-                          &'a DrawState);
+pub type BatchData<'a> = (&'a mesh::Mesh<back::GlResources>, mesh::AttributeIter,
+                          &'a mesh::Slice<back::GlResources>, &'a DrawState);
 
 /// Abstract batch trait
 pub trait Batch {
@@ -83,7 +83,7 @@ pub trait Batch {
                    -> Result<&ProgramHandle<back::GlResources>, Self::Error>;
 }
 
-impl<'a, T: ShaderParam> Batch for (&'a mesh::Mesh, mesh::Slice,
+impl<'a, T: ShaderParam> Batch for (&'a mesh::Mesh<back::GlResources>, mesh::Slice<back::GlResources>,
                                     &'a ProgramHandle<back::GlResources>, &'a T, &'a DrawState) {
     type Error = BatchError;
 
@@ -110,10 +110,10 @@ impl<'a, T: ShaderParam> Batch for (&'a mesh::Mesh, mesh::Slice,
 
 /// Owned batch - self-contained, but has heap-allocated data
 pub struct OwnedBatch<T: ShaderParam> {
-    mesh: mesh::Mesh,
+    mesh: mesh::Mesh<back::GlResources>,
     mesh_link: mesh::Link,
     /// Mesh slice
-    pub slice: mesh::Slice,
+    pub slice: mesh::Slice<back::GlResources>,
     /// Parameter data.
     pub param: T,
     program: ProgramHandle<back::GlResources>,
@@ -124,7 +124,7 @@ pub struct OwnedBatch<T: ShaderParam> {
 
 impl<T: ShaderParam> OwnedBatch<T> {
     /// Create a new owned batch
-    pub fn new(mesh: mesh::Mesh, program: ProgramHandle<back::GlResources>, param: T)
+    pub fn new(mesh: mesh::Mesh<back::GlResources>, program: ProgramHandle<back::GlResources>, param: T)
            -> Result<OwnedBatch<T>, BatchError> {
         let slice = mesh.to_slice(PrimitiveType::TriangleList);
         let mesh_link = match link_mesh(&mesh, program.get_info()) {
@@ -248,10 +248,10 @@ impl<T: Clone + PartialEq> Array<T> {
 /// It has references to the resources (mesh, program, state), that are held
 /// by the context that created the batch, so these have to be used together.
 pub struct RefBatch<T: ShaderParam> {
-    mesh_id: Id<mesh::Mesh>,
+    mesh_id: Id<mesh::Mesh<back::GlResources>>,
     mesh_link: mesh::Link,
     /// Mesh slice
-    pub slice: mesh::Slice,
+    pub slice: mesh::Slice<back::GlResources>,
     program_id: Id<ProgramHandle<back::GlResources>>,
     param_link: T::Link,
     state_id: Id<DrawState>,
@@ -306,7 +306,7 @@ impl<T: ShaderParam> RefBatch<T> {
 
 /// Factory of ref batches, required to always be used with them.
 pub struct Context {
-    meshes: Array<mesh::Mesh>,
+    meshes: Array<mesh::Mesh<back::GlResources>>,
     programs: Array<ProgramHandle<back::GlResources>>,
     states: Array<DrawState>,
 }
@@ -326,8 +326,8 @@ impl Context {
     /// Produce a new ref batch
     pub fn make_batch<T: ShaderParam>(&mut self,
                       program: &ProgramHandle<back::GlResources>,
-                      mesh: &mesh::Mesh,
-                      slice: mesh::Slice,
+                      mesh: &mesh::Mesh<back::GlResources>,
+                      slice: mesh::Slice<back::GlResources>,
                       state: &DrawState)
                       -> Result<RefBatch<T>, BatchError> {
         let mesh_link = match link_mesh(mesh, program.get_info()) {

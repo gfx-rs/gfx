@@ -21,16 +21,16 @@
 //! `Buffer`, and then use `Mesh::from`.
 
 use device;
-use device::{PrimitiveType, BufferHandle, VertexCount};
-use device::{attrib, back};
+use device::{PrimitiveType, BufferHandle, Resources, VertexCount};
+use device::attrib;
 
 /// Describes a single attribute of a vertex buffer, including its type, name, etc.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Attribute {
+pub struct Attribute<R: Resources> {
     /// A name to match the shader input
     pub name: String,
     /// Vertex buffer to contain the data
-    pub buffer: device::RawBufferHandle<back::GlResources>,
+    pub buffer: device::RawBufferHandle<R>,
     /// Format of the attribute
     pub format: attrib::Format,
 }
@@ -38,22 +38,23 @@ pub struct Attribute {
 /// A trait implemented automatically for user vertex structure by
 /// `#[vertex_format] attribute
 pub trait VertexFormat {
+    type Resources: Resources;
     /// Create the attributes for this type, using the given buffer.
-    fn generate(Option<Self>, buffer: device::RawBufferHandle<back::GlResources>) -> Vec<Attribute>;
+    fn generate(Option<Self>, buffer: device::RawBufferHandle<Self::Resources>) -> Vec<Attribute<Self::Resources>>;
 }
 
 /// Describes geometry to render.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Mesh {
+pub struct Mesh<R: Resources> {
     /// Number of vertices in the mesh.
     pub num_vertices: device::VertexCount,
     /// Vertex attributes to use.
-    pub attributes: Vec<Attribute>,
+    pub attributes: Vec<Attribute<R>>,
 }
 
-impl Mesh {
+impl<R: Resources> Mesh<R> {
     /// Create a new mesh, which is a `TriangleList` with no attributes and `nv` vertices.
-    pub fn new(nv: device::VertexCount) -> Mesh {
+    pub fn new(nv: device::VertexCount) -> Mesh<R> {
         Mesh {
             num_vertices: nv,
             attributes: Vec::new(),
@@ -61,7 +62,9 @@ impl Mesh {
     }
 
     /// Create a new `Mesh` from a struct that implements `VertexFormat` and a buffer.
-    pub fn from_format<V: VertexFormat>(buf: device::BufferHandle<back::GlResources, V>, nv: device::VertexCount) -> Mesh {
+    pub fn from_format<V>(buf: device::BufferHandle<R, V>, nv: device::VertexCount) -> Mesh<R> where
+        V: VertexFormat<Resources = R>,
+    {
         Mesh {
             num_vertices: nv,
             attributes: VertexFormat::generate(None::<V>, buf.raw()),
@@ -69,9 +72,11 @@ impl Mesh {
     }
 
     /// Create a new intanced `Mesh` given a vertex buffer and an instance buffer.
-    pub fn from_format_instanced<V: VertexFormat, U: VertexFormat>(
-                                 buf: device::BufferHandle<back::GlResources, V>, nv: device::VertexCount,
-                                 inst: device::BufferHandle<back::GlResources, U>) -> Mesh {
+    pub fn from_format_instanced<V, U>(buf: device::BufferHandle<R, V>, nv: device::VertexCount,
+                                       inst: device::BufferHandle<R, U>) -> Mesh<R> where
+        V: VertexFormat<Resources = R>,
+        U: VertexFormat<Resources = R>,
+    {
         let per_vertex   = VertexFormat::generate(None::<V>, buf.raw());
         let per_instance = VertexFormat::generate(None::<U>, inst.raw());
 
@@ -97,7 +102,7 @@ impl Mesh {
 /// For example,  `Point` typed vertex slice can be used to do shape
 /// blending, while still rendereing it as an indexed `TriangleList`.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Slice {
+pub struct Slice<R: Resources> {
     /// Start index of vertices to draw.
     pub start: VertexCount,
     /// End index of vertices to draw.
@@ -105,12 +110,12 @@ pub struct Slice {
     /// Primitive type to render collections of vertices as.
     pub prim_type: PrimitiveType,
     /// Source of the vertex ordering when drawing.
-    pub kind: SliceKind,
+    pub kind: SliceKind<R>,
 }
 
 /// Source of vertex ordering for a slice
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum SliceKind {
+pub enum SliceKind<R: Resources> {
     /// Render vertex data directly from the `Mesh`'s buffer.
     Vertex,
     /// The `Index*` buffer contains a list of indices into the `Mesh`
@@ -122,22 +127,22 @@ pub enum SliceKind {
     /// the vertices will be identical, wasting space for the duplicated
     /// attributes.  Instead, the `Mesh` can store 4 vertices and an
     /// `Index8` can be used instead.
-    Index8(BufferHandle<back::GlResources, u8>, VertexCount),
+    Index8(BufferHandle<R, u8>, VertexCount),
     /// As `Index8` but with `u16` indices
-    Index16(BufferHandle<back::GlResources, u16>, VertexCount),
+    Index16(BufferHandle<R, u16>, VertexCount),
     /// As `Index8` but with `u32` indices
-    Index32(BufferHandle<back::GlResources, u32>, VertexCount),
+    Index32(BufferHandle<R, u32>, VertexCount),
 }
 
 /// Helper methods for cleanly getting the slice of a type.
-pub trait ToSlice {
+pub trait ToSlice<R: Resources> {
     /// Get the slice of a type.
-    fn to_slice(&self, pt: PrimitiveType) -> Slice;
+    fn to_slice(&self, pt: PrimitiveType) -> Slice<R>;
 }
 
-impl ToSlice for Mesh {
+impl<R: Resources> ToSlice<R> for Mesh<R> {
     /// Return a vertex slice of the whole mesh.
-    fn to_slice(&self, ty: PrimitiveType) -> Slice {
+    fn to_slice(&self, ty: PrimitiveType) -> Slice<R> {
         Slice {
             start: 0,
             end: self.num_vertices,
@@ -147,9 +152,9 @@ impl ToSlice for Mesh {
     }
 }
 
-impl ToSlice for BufferHandle<back::GlResources, u8> {
+impl<R: Resources> ToSlice<R> for BufferHandle<R, u8> {
     /// Return an index slice of the whole buffer.
-    fn to_slice(&self, ty: PrimitiveType) -> Slice {
+    fn to_slice(&self, ty: PrimitiveType) -> Slice<R> {
         Slice {
             start: 0,
             end: self.len() as VertexCount,
@@ -159,9 +164,9 @@ impl ToSlice for BufferHandle<back::GlResources, u8> {
     }
 }
 
-impl ToSlice for BufferHandle<back::GlResources, u16> {
+impl<R: Resources> ToSlice<R> for BufferHandle<R, u16> {
     /// Return an index slice of the whole buffer.
-    fn to_slice(&self, ty: PrimitiveType) -> Slice {
+    fn to_slice(&self, ty: PrimitiveType) -> Slice<R> {
         Slice {
             start: 0,
             end: self.len() as VertexCount,
@@ -171,9 +176,9 @@ impl ToSlice for BufferHandle<back::GlResources, u16> {
     }
 }
 
-impl ToSlice for BufferHandle<back::GlResources, u32> {
+impl<R: Resources> ToSlice<R> for BufferHandle<R, u32> {
     /// Return an index slice of the whole buffer.
-    fn to_slice(&self, ty: PrimitiveType) -> Slice {
+    fn to_slice(&self, ty: PrimitiveType) -> Slice<R> {
         Slice {
             start: 0,
             end: self.len() as VertexCount,
