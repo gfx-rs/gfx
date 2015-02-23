@@ -47,29 +47,29 @@ pub mod target;
 
 
 const TRACKED_ATTRIBUTES: usize = 8;
-type CachedAttribute = (device::RawBufferHandle<back::GlResources>, attrib::Format);
+type CachedAttribute<R: Resources> = (device::RawBufferHandle<R>, attrib::Format);
 type Instancing = (device::InstanceCount, device::VertexCount);
 
 /// The internal state of the renderer.
 /// This is used as a cache to eliminate redundant state changes.
-struct RenderState {
+struct RenderState<R: Resources> {
     is_frame_buffer_set: bool,
-    frame: target::Frame<back::GlResources>,
+    frame: target::Frame<R>,
     is_array_buffer_set: bool,
-    program_name: device::back::Program,
-    index: Option<device::RawBufferHandle<back::GlResources>>,
-    attributes: [Option<CachedAttribute>; TRACKED_ATTRIBUTES],
+    program_name: Option<R::Program>,
+    index: Option<device::RawBufferHandle<R>>,
+    attributes: [Option<CachedAttribute<R>>; TRACKED_ATTRIBUTES],
     draw: state::DrawState,
 }
 
-impl RenderState {
+impl<R: Resources> RenderState<R> {
     /// Generate the initial state matching `Device::reset_state`
-    fn new() -> RenderState {
+    fn new() -> RenderState<R> {
         RenderState {
             is_frame_buffer_set: false,
             frame: target::Frame::new(0,0),
             is_array_buffer_set: false,
-            program_name: 0,
+            program_name: None,
             index: None,
             attributes: [None; TRACKED_ATTRIBUTES],
             draw: state::DrawState::new(),
@@ -150,7 +150,7 @@ pub struct Renderer<D: Device> {
     draw_frame_buffer: device::FrameBufferHandle<back::GlResources>,
     read_frame_buffer: device::FrameBufferHandle<back::GlResources>,
     default_frame_buffer: device::FrameBufferHandle<back::GlResources>,
-    render_state: RenderState,
+    render_state: RenderState<back::GlResources>,
     parameters: ParamStorage<back::GlResources>,
 }
 
@@ -375,9 +375,9 @@ impl<D: Device> Renderer<D> {
             Err(e) => return Err(e),
         };
         //Warning: this is not protected against deleted resources in single-threaded mode
-        if self.render_state.program_name != program.get_name() {
+        if self.render_state.program_name != Some(program.get_name()) {
             self.command_buffer.bind_program(program.get_name());
-            self.render_state.program_name = program.get_name();
+            self.render_state.program_name = Some(program.get_name());
         }
         self.upload_parameters(program);
         Ok(program)
