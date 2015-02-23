@@ -22,6 +22,7 @@ extern crate libc;
 extern crate "gfx_gl" as gl;
 
 use std::marker::PhantomData;
+use std::slice;
 use log::LogLevel;
 
 use attrib::{SignFlag, IntSubType, IntSize, FloatSubType, FloatSize, Type};
@@ -41,10 +42,24 @@ mod tex;
 mod info;
 
 #[allow(raw_pointer_derive)]
-#[derive(Copy)]
+#[derive(Copy, Clone)]
 pub struct RawMapping {
     pub pointer: *mut libc::c_void,
     target: gl::types::GLenum,
+}
+
+impl ::RawMapping for RawMapping {
+    unsafe fn set<T>(&self, index: usize, val: T) {
+        *(self.pointer as *mut T).offset(index as isize) = val;
+    }
+
+    unsafe fn to_slice<T>(&self, len: usize) -> &[T] {
+        slice::from_raw_parts(self.pointer as *const T, len)
+    }
+
+    unsafe fn to_mut_slice<T>(&self, len: usize) -> &mut [T] {
+        slice::from_raw_parts_mut(self.pointer as *mut T, len)
+    }
 }
 
 pub type Buffer         = gl::types::GLuint;
@@ -60,6 +75,7 @@ pub type Texture        = gl::types::GLuint;
 pub enum GlResources {}
 
 impl Resources for GlResources {
+    type RawMapping     = RawMapping;
     type Buffer         = Buffer;
     type ArrayBuffer    = ArrayBuffer;
     type Shader         = Shader;
@@ -68,6 +84,10 @@ impl Resources for GlResources {
     type Surface        = Surface;
     type Texture        = Texture;
     type Sampler        = Sampler;
+
+    fn get_main_frame_buffer() -> ::FrameBufferHandle<GlResources> {
+        ::Handle(0, ())
+    }
 }
 
 #[derive(Copy, Eq, PartialEq, Debug)]

@@ -57,7 +57,7 @@ pub struct Graphics<D: device::Device> {
     /// Renderer front-end.
     pub renderer: Renderer<D>,
     /// Hidden batch context.
-    context: batch::Context<GlResources>,
+    context: batch::Context<D::Resources>,
 }
 
 impl<D: device::Device> Graphics<D> {
@@ -72,23 +72,23 @@ impl<D: device::Device> Graphics<D> {
     }
 
     /// Create a new ref batch.
-    pub fn make_batch<T: shade::ShaderParam>(&mut self,
-                      program: &ProgramHandle<GlResources>,
-                      mesh: &Mesh<GlResources>,
-                      slice: Slice<GlResources>,
+    pub fn make_batch<T: shade::ShaderParam<Resources = D::Resources>>(&mut self,
+                      program: &ProgramHandle<D::Resources>,
+                      mesh: &Mesh<D::Resources>,
+                      slice: Slice<D::Resources>,
                       state: &DrawState)
-                      -> Result<batch::RefBatch<T, GlResources>, batch::BatchError> {
+                      -> Result<batch::RefBatch<T>, batch::BatchError> {
         self.context.make_batch(program, mesh, slice, state)
     }
 
     /// Clear the `Frame` as the `ClearData` specifies.
-    pub fn clear(&mut self, data: ClearData, mask: Mask, frame: &Frame<GlResources>) {
+    pub fn clear(&mut self, data: ClearData, mask: Mask, frame: &Frame<D::Resources>) {
         self.renderer.clear(data, mask, frame)
     }
 
     /// Draw a ref batch.
-    pub fn draw<'a, T: shade::ShaderParam>(&'a mut self,
-                batch: &'a batch::RefBatch<T, GlResources>, data: &'a T, frame: &Frame<GlResources>)
+    pub fn draw<'a, T: shade::ShaderParam<Resources = D::Resources>>(&'a mut self,
+                batch: &'a batch::RefBatch<T>, data: &'a T, frame: &Frame<D::Resources>)
                 -> Result<(), DrawError<batch::OutOfBounds>> {
         self.renderer.draw(&(batch, data, &self.context), frame)
     }

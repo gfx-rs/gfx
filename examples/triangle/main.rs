@@ -103,7 +103,7 @@ fn main() {
 
         renderer.reset();
         renderer.clear(clear_data, gfx::COLOR, &frame);
-        renderer.draw(&(&mesh, slice.clone(), &program, &(), &state), &frame).unwrap();
+        renderer.draw(&(&mesh, slice.clone(), &program, &None, &state), &frame).unwrap();
         device.submit(renderer.as_buffer());
 
         window.swap_buffers();

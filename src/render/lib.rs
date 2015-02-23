@@ -22,10 +22,9 @@ extern crate "gfx_device_gl" as device;
 
 use std::mem;
 
-use device::Device;
+use device::{Device, Resources};
 use device::attrib;
 use device::attrib::IntSize;
-use device::back;
 use device::draw::CommandBuffer;
 use device::shade::{ProgramInfo, UniformValue};
 use device::target::{Rect, ClearData, Mirror, Mask, Access, Target};
@@ -47,29 +46,29 @@ pub mod target;
 
 
 const TRACKED_ATTRIBUTES: usize = 8;
-type CachedAttribute = (device::RawBufferHandle<back::GlResources>, attrib::Format);
+type CachedAttribute<R: Resources> = (device::RawBufferHandle<R>, attrib::Format);
 type Instancing = (device::InstanceCount, device::VertexCount);
 
 /// The internal state of the renderer.
 /// This is used as a cache to eliminate redundant state changes.
-struct RenderState {
+struct RenderState<R: Resources> {
     is_frame_buffer_set: bool,
-    frame: target::Frame<back::GlResources>,
+    frame: target::Frame<R>,
     is_array_buffer_set: bool,
-    program_name: device::back::Program,
-    index: Option<device::RawBufferHandle<back::GlResources>>,
-    attributes: [Option<CachedAttribute>; TRACKED_ATTRIBUTES],
+    program_name: Option<R::Program>,
+    index: Option<device::RawBufferHandle<R>>,
+    attributes: [Option<CachedAttribute<R>>; TRACKED_ATTRIBUTES],
     draw: state::DrawState,
 }
 
-impl RenderState {
+impl<R: Resources> RenderState<R> {
     /// Generate the initial state matching `Device::reset_state`
-    fn new() -> RenderState {
+    fn new() -> RenderState<R> {
         RenderState {
             is_frame_buffer_set: false,
             frame: target::Frame::new(0,0),
             is_array_buffer_set: false,
-            program_name: 0,
+            program_name: None,
             index: None,
             attributes: [None; TRACKED_ATTRIBUTES],
             draw: state::DrawState::new(),
@@ -78,15 +77,15 @@ impl RenderState {
 }
 
 /// Temporary parameter storage, used for shader activation.
-struct ParamStorage {
+struct ParamStorage<R: Resources> {
     uniforms: Vec<UniformValue>,
-    blocks  : Vec<device::RawBufferHandle<back::GlResources>>,
-    textures: Vec<shade::TextureParam>,
+    blocks  : Vec<device::RawBufferHandle<R>>,
+    textures: Vec<shade::TextureParam<R>>,
 }
 
-impl ParamStorage{
+impl<R: Resources> ParamStorage<R> {
     /// Create an empty parameter storage.
-    fn new() -> ParamStorage {
+    fn new() -> ParamStorage<R> {
         ParamStorage {
             uniforms: Vec::new(),
             blocks: Vec::new(),
@@ -94,7 +93,7 @@ impl ParamStorage{
         }
     }
 
-    fn get_mut(&mut self) -> shade::ParamValues {
+    fn get_mut(&mut self) -> shade::ParamValues<R> {
         self.uniforms.truncate(0);
         self.blocks.truncate(0);
         self.textures.truncate(0);
@@ -108,14 +107,14 @@ impl ParamStorage{
 
 /// Extension methods for the command buffer.
 /// Useful when Renderer is borrowed, and we need to issue commands.
-trait CommandBufferExt {
+trait CommandBufferExt: CommandBuffer {
     /// Bind a plane to some target
-    fn bind_target(&mut self, Access, Target, Option<&target::Plane<back::GlResources>>);
+    fn bind_target(&mut self, Access, Target, Option<&target::Plane<Self::Resources>>);
 }
 
 impl<C: CommandBuffer> CommandBufferExt for C {
     fn bind_target(&mut self, access: Access, to: Target,
-                   plane: Option<&target::Plane<back::GlResources>>) {
+                   plane: Option<&target::Plane<C::Resources>>) {
         match plane {
             None => self.unbind_target(access, to),
             Some(&target::Plane::Surface(ref suf)) =>
@@ -146,12 +145,12 @@ pub enum DrawError<E> {
 pub struct Renderer<D: Device> {
     command_buffer: D::CommandBuffer,
     data_buffer: device::draw::DataBuffer,
-    common_array_buffer: Result<device::ArrayBufferHandle<back::GlResources>, ()>,
-    draw_frame_buffer: device::FrameBufferHandle<back::GlResources>,
-    read_frame_buffer: device::FrameBufferHandle<back::GlResources>,
-    default_frame_buffer: device::FrameBufferHandle<back::GlResources>,
-    render_state: RenderState,
-    parameters: ParamStorage,
+    common_array_buffer: Result<device::ArrayBufferHandle<D::Resources>, ()>,
+    draw_frame_buffer: device::FrameBufferHandle<D::Resources>,
+    read_frame_buffer: device::FrameBufferHandle<D::Resources>,
+    default_frame_buffer: device::FrameBufferHandle<D::Resources>,
+    render_state: RenderState<D::Resources>,
+    parameters: ParamStorage<D::Resources>,
 }
 
 impl<D: Device> Renderer<D> {
@@ -182,29 +181,29 @@ impl<D: Device> Renderer<D> {
     }
 
     /// Clear the `Frame` as the `ClearData` specifies.
-    pub fn clear(&mut self, data: ClearData, mask: Mask, frame: &target::Frame<back::GlResources>) {
+    pub fn clear(&mut self, data: ClearData, mask: Mask, frame: &target::Frame<D::Resources>) {
         self.bind_frame(frame);
         self.command_buffer.call_clear(data, mask);
     }
 
     /// Draw a `batch` into the specified `frame`
-    pub fn draw<B: Batch<Resources = back::GlResources>>(&mut self, batch: &B, frame: &target::Frame<back::GlResources>)
+    pub fn draw<B: Batch<Resources = D::Resources>>(&mut self, batch: &B, frame: &target::Frame<D::Resources>)
                 -> Result<(), DrawError<B::Error>> {
         self.draw_all(batch, None, frame)
     }
 
     /// Draw a `batch` multiple times using instancing
-    pub fn draw_instanced<B: Batch<Resources = back::GlResources>>(&mut self, batch: &B,
+    pub fn draw_instanced<B: Batch<Resources = D::Resources>>(&mut self, batch: &B,
                           count: device::InstanceCount,
                           base: device::VertexCount,
-                          frame: &target::Frame<back::GlResources>)
+                          frame: &target::Frame<D::Resources>)
                           -> Result<(), DrawError<B::Error>> {
         self.draw_all(batch, Some((count, base)), frame)
     }
 
     /// Draw a 'batch' with all known parameters specified, internal use only.
-    fn draw_all<B: Batch<Resources = back::GlResources>>(&mut self, batch: &B, instances: Option<Instancing>,
-                frame: &target::Frame<back::GlResources>) -> Result<(), DrawError<B::Error>> {
+    fn draw_all<B: Batch<Resources = D::Resources>>(&mut self, batch: &B, instances: Option<Instancing>,
+                frame: &target::Frame<D::Resources>) -> Result<(), DrawError<B::Error>> {
         let (mesh, attrib_iter, slice, state) = match batch.get_data() {
             Ok(data) => data,
             Err(e) => return Err(DrawError::InvalidBatch(e)),
@@ -225,8 +224,8 @@ impl<D: Device> Renderer<D> {
     }
 
     /// Blit one frame onto another
-    pub fn blit(&mut self, source: &target::Frame<back::GlResources>, source_rect: Rect,
-                destination: &target::Frame<back::GlResources>, dest_rect: Rect,
+    pub fn blit(&mut self, source: &target::Frame<D::Resources>, source_rect: Rect,
+                destination: &target::Frame<D::Resources>, dest_rect: Rect,
                 mirror: Mirror, mask: Mask) {
         // verify as much as possible here
         if mask.intersects(device::target::COLOR) {
@@ -248,7 +247,7 @@ impl<D: Device> Renderer<D> {
     }
 
     /// Update a buffer with data from a vector.
-    pub fn update_buffer_vec<T: Copy>(&mut self, buf: device::BufferHandle<back::GlResources, T>,
+    pub fn update_buffer_vec<T: Copy>(&mut self, buf: device::BufferHandle<D::Resources, T>,
                              data: &[T], offset_elements: usize) {
         let esize = mem::size_of::<T>();
         let offset_bytes = esize * offset_elements;
@@ -259,21 +258,21 @@ impl<D: Device> Renderer<D> {
 
     /// Update a buffer with data from a single type.
     pub fn update_buffer_struct<U, T: Copy>(&mut self,
-                                buf: device::BufferHandle<back::GlResources, U>, data: &T) {
+                                buf: device::BufferHandle<D::Resources, U>, data: &T) {
         debug_assert!(mem::size_of::<T>() <= buf.get_info().size);
         let pointer = self.data_buffer.add_struct(data);
         self.command_buffer.update_buffer(buf.get_name(), pointer, 0);
     }
 
     /// Update the contents of a texture.
-    pub fn update_texture<T: Copy>(&mut self, tex: device::TextureHandle<back::GlResources>,
+    pub fn update_texture<T: Copy>(&mut self, tex: device::TextureHandle<D::Resources>,
                           img: device::tex::ImageInfo, data: &[T]) {
         debug_assert!(tex.get_info().contains(&img));
         let pointer = self.data_buffer.add_vec(data);
         self.command_buffer.update_texture(tex.get_info().kind, tex.get_name(), img, pointer);
     }
 
-    fn bind_frame(&mut self, frame: &target::Frame<back::GlResources>) {
+    fn bind_frame(&mut self, frame: &target::Frame<D::Resources>) {
         if self.render_state.frame.width != frame.width ||
                 self.render_state.frame.height != frame.height {
             self.command_buffer.set_viewport(Rect {
@@ -331,7 +330,7 @@ impl<D: Device> Renderer<D> {
         }
     }
 
-    fn bind_read_frame(&mut self, frame: &target::Frame<back::GlResources>) {
+    fn bind_read_frame(&mut self, frame: &target::Frame<D::Resources>) {
         self.command_buffer.bind_frame_buffer(Access::Read, self.read_frame_buffer.get_name());
         // color
         if frame.colors.is_empty() {
@@ -368,22 +367,22 @@ impl<D: Device> Renderer<D> {
         self.render_state.draw = *state;
     }
 
-    fn bind_program<'a, B: Batch<Resources = back::GlResources>>(&mut self, batch: &'a B)
-                    -> Result<&'a device::ProgramHandle<back::GlResources>, B::Error> {
+    fn bind_program<'a, B: Batch<Resources = D::Resources>>(&mut self, batch: &'a B)
+                    -> Result<&'a device::ProgramHandle<D::Resources>, B::Error> {
         let program = match batch.fill_params(self.parameters.get_mut()) {
             Ok(p) => p,
             Err(e) => return Err(e),
         };
         //Warning: this is not protected against deleted resources in single-threaded mode
-        if self.render_state.program_name != program.get_name() {
+        if self.render_state.program_name != Some(program.get_name()) {
             self.command_buffer.bind_program(program.get_name());
-            self.render_state.program_name = program.get_name();
+            self.render_state.program_name = Some(program.get_name());
         }
         self.upload_parameters(program);
         Ok(program)
     }
 
-    fn upload_parameters(&mut self, program: &device::ProgramHandle<back::GlResources>) {
+    fn upload_parameters(&mut self, program: &device::ProgramHandle<D::Resources>) {
         let info = program.get_info();
         if self.parameters.uniforms.len() != info.uniforms.len() ||
             self.parameters.blocks.len() != info.blocks.len() ||
@@ -423,7 +422,7 @@ impl<D: Device> Renderer<D> {
     }
 
     fn bind_mesh<I: Iterator<Item = mesh::AttributeIndex>>(&mut self,
-                 mesh: &mesh::Mesh<back::GlResources>, attrib_iter: I, info: &ProgramInfo) {
+                 mesh: &mesh::Mesh<D::Resources>, attrib_iter: I, info: &ProgramInfo) {
         if !self.render_state.is_array_buffer_set {
             // It's Ok if the array buffer is not supported. We can just ignore it.
             self.common_array_buffer.map(|ab|
@@ -449,14 +448,14 @@ impl<D: Device> Renderer<D> {
         }
     }
 
-    fn bind_index<T>(&mut self, buf: device::BufferHandle<back::GlResources, T>) {
+    fn bind_index<T>(&mut self, buf: device::BufferHandle<D::Resources, T>) {
         if self.render_state.index != Some(buf.raw()) {
             self.command_buffer.bind_index(buf.get_name());
             self.render_state.index = Some(buf.raw());
         }
     }
 
-    fn draw_slice(&mut self, slice: &mesh::Slice<back::GlResources>,
+    fn draw_slice(&mut self, slice: &mesh::Slice<D::Resources>,
                   instances: Option<(device::InstanceCount, device::VertexCount)>) {
         let mesh::Slice { start, end, prim_type, kind } = slice.clone();
         match kind {
