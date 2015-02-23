@@ -71,6 +71,16 @@ pub type Surface        = gl::types::GLuint;
 pub type Sampler        = gl::types::GLuint;
 pub type Texture        = gl::types::GLuint;
 
+/// A helper method to test `#[vertex_format]` without GL context
+//#[cfg(test)]
+pub fn make_dummy_buffer<T>() -> BufferHandle<GlResources, T> {
+    let info = ::BufferInfo {
+        usage: BufferUsage::Static,
+        size: 0,
+    };
+    BufferHandle::from_raw(::Handle(0, info))
+}
+
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum GlResources {}
 

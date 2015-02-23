@@ -55,7 +55,7 @@ pub struct Graphics<D: device::Device> {
     /// Graphics device.
     pub device: D,
     /// Renderer front-end.
-    pub renderer: Renderer<D>,
+    pub renderer: Renderer<D::CommandBuffer>,
     /// Hidden batch context.
     context: batch::Context<D::Resources>,
 }
