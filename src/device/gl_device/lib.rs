@@ -68,6 +68,10 @@ impl Resources for GlResources {
     type Surface        = Surface;
     type Texture        = Texture;
     type Sampler        = Sampler;
+
+    fn get_main_frame_buffer() -> ::FrameBufferHandle<GlResources> {
+        ::Handle(0, ())
+    }
 }
 
 #[derive(Copy, Eq, PartialEq, Debug)]

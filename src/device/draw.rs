@@ -15,7 +15,6 @@
 //! Command Buffer device interface
 
 use attrib;
-use back;
 use shade;
 use target;
 use tex;
@@ -85,30 +84,30 @@ pub trait CommandBuffer {
     /// Clear the command buffer contents, retain the allocated storage
     fn clear(&mut self);
     /// Bind a shader program
-    fn bind_program(&mut self, back::Program);
+    fn bind_program(&mut self, <Self::Resources as Resources>::Program);
     /// Bind an array buffer object
-    fn bind_array_buffer(&mut self, back::ArrayBuffer);
+    fn bind_array_buffer(&mut self, <Self::Resources as Resources>::ArrayBuffer);
     /// Bind a vertex attribute
-    fn bind_attribute(&mut self, ::AttributeSlot, back::Buffer, attrib::Format);
+    fn bind_attribute(&mut self, ::AttributeSlot, <Self::Resources as Resources>::Buffer, attrib::Format);
     /// Bind an index buffer
-    fn bind_index(&mut self, back::Buffer);
+    fn bind_index(&mut self, <Self::Resources as Resources>::Buffer);
     /// Bind a frame buffer object
-    fn bind_frame_buffer(&mut self, target::Access, back::FrameBuffer);
+    fn bind_frame_buffer(&mut self, target::Access, <Self::Resources as Resources>::FrameBuffer);
     /// Unbind any surface from the specified target slot
     fn unbind_target(&mut self, target::Access, target::Target);
     /// Bind a surface to the specified target slot
-    fn bind_target_surface(&mut self, target::Access, target::Target, back::Surface);
+    fn bind_target_surface(&mut self, target::Access, target::Target, <Self::Resources as Resources>::Surface);
     /// Bind a level of the texture to the specified target slot
-    fn bind_target_texture(&mut self, target::Access, target::Target, back::Texture,
+    fn bind_target_texture(&mut self, target::Access, target::Target, <Self::Resources as Resources>::Texture,
                            target::Level, Option<target::Layer>);
     /// Bind a uniform block
-    fn bind_uniform_block(&mut self, back::Program, ::UniformBufferSlot,
-                          ::UniformBlockIndex, back::Buffer);
+    fn bind_uniform_block(&mut self, <Self::Resources as Resources>::Program, ::UniformBufferSlot,
+                          ::UniformBlockIndex, <Self::Resources as Resources>::Buffer);
     /// Bind a single uniform in the default block
     fn bind_uniform(&mut self, shade::Location, shade::UniformValue);
     /// Bind a texture
-    fn bind_texture(&mut self, ::TextureSlot, tex::TextureKind, back::Texture,
-                    Option<::SamplerHandle<back::GlResources>>);
+    fn bind_texture(&mut self, ::TextureSlot, tex::TextureKind, <Self::Resources as Resources>::Texture,
+                    Option<::SamplerHandle<Self::Resources>>);
     /// Select, which color buffers are going to be targetted by the shader
     fn set_draw_color_buffers(&mut self, usize);
     /// Set primitive topology
@@ -127,9 +126,9 @@ pub trait CommandBuffer {
     /// Set output color mask for all targets
     fn set_color_mask(&mut self, ::state::ColorMask);
     /// Update a vertex/index/uniform buffer
-    fn update_buffer(&mut self, back::Buffer, DataPointer, usize);
+    fn update_buffer(&mut self, <Self::Resources as Resources>::Buffer, DataPointer, usize);
     /// Update a texture region
-    fn update_texture(&mut self, tex::TextureKind, back::Texture,
+    fn update_texture(&mut self, tex::TextureKind, <Self::Resources as Resources>::Texture,
                       tex::ImageInfo, DataPointer);
     /// Clear target surfaces
     fn call_clear(&mut self, target::ClearData, target::Mask);
