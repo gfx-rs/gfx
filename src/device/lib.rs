@@ -28,7 +28,6 @@ pub use self::gl_device as back;
 
 use std::fmt;
 use std::mem;
-use std::slice;
 use std::ops::{Deref, DerefMut};
 use std::marker::{PhantomData, PhantomFn};
 
@@ -67,32 +66,46 @@ pub enum MapAccess {
     RW
 }
 
+/// Unsafe operations for a buffer mapping
+pub trait RawMapping {
+    /// Set the element at `index` to `val`. Not bounds-checked.
+    unsafe fn set<T>(&self, index: usize, val: T);
+    /// Returns a slice of the specified length.
+    unsafe fn to_slice<T>(&self, len: usize) -> &[T];
+    /// Returns a mutable slice of the specified length.
+    unsafe fn to_mut_slice<T>(&self, len: usize) -> &mut [T];
+}
+
 /// A handle to a readable map, which can be sliced.
 pub struct ReadableMapping<'a, T: Copy, D: 'a + Device> {
-    raw: back::RawMapping,
+    raw: <D::Resources as Resources>::RawMapping,
     len: usize,
     device: &'a mut D,
     phantom_t: PhantomData<T>
 }
 
-impl<'a, T: Copy, D: Device> Deref for ReadableMapping<'a, T, D> {
+impl<'a, T: Copy, D: Device> Deref for ReadableMapping<'a, T, D> where
+    <D::Resources as Resources>::RawMapping: 'a,
+{
     type Target = [T];
 
     fn deref(&self) -> &[T] {
-        unsafe { mem::transmute(slice::from_raw_parts(self.raw.pointer as *const T, self.len)) }
+        unsafe { self.raw.to_slice(self.len) }
     }
 }
 
 #[unsafe_destructor]
-impl<'a, T: Copy, D: Device> Drop for ReadableMapping<'a, T, D> {
+impl<'a, T: Copy, D: Device> Drop for ReadableMapping<'a, T, D> where
+    <D::Resources as Resources>::RawMapping: 'a,
+{
     fn drop(&mut self) {
-        self.device.unmap_buffer_raw(self.raw)
+        self.device.unmap_buffer_raw(self.raw.clone())
     }
 }
 
 /// A handle to a writable map, which only allows setting elements.
 pub struct WritableMapping<'a, T: Copy, D: 'a + Device> {
-    raw: back::RawMapping,
+    raw: <D::Resources as Resources>::RawMapping,
     len: usize,
     device: &'a mut D,
     phantom_t: PhantomData<T>
@@ -104,43 +117,51 @@ impl<'a, T: Copy, D: Device> WritableMapping<'a, T, D> {
         if idx >= self.len {
             panic!("Tried to write out of bounds to a WritableMapping!")
         }
-        unsafe { *(std::mem::transmute::<_, *mut T>(self.raw.pointer).offset(idx as isize)) = val }
+        unsafe { self.raw.set(idx, val); }
     }
 }
 
 #[unsafe_destructor]
-impl<'a, T: Copy, D: Device> Drop for WritableMapping<'a, T, D> {
+impl<'a, T: Copy, D: Device> Drop for WritableMapping<'a, T, D> where
+    <D::Resources as Resources>::RawMapping: 'a,
+{
     fn drop(&mut self) {
-        self.device.unmap_buffer_raw(self.raw)
+        self.device.unmap_buffer_raw(self.raw.clone())
     }
 }
 
 /// A handle to a complete readable/writable map, which can be sliced both ways.
 pub struct RWMapping<'a, T: Copy, D: 'a + Device> {
-    raw: back::RawMapping,
+    raw: <D::Resources as Resources>::RawMapping,
     len: usize,
     device: &'a mut D,
     phantom_t: PhantomData<T>
 }
 
-impl<'a, T: Copy, D: Device> Deref for RWMapping<'a, T, D> {
+impl<'a, T: Copy, D: Device> Deref for RWMapping<'a, T, D> where
+    <D::Resources as Resources>::RawMapping: 'a,
+{
     type Target = [T];
 
     fn deref(&self) -> &[T] {
-        unsafe { mem::transmute(slice::from_raw_parts(self.raw.pointer as *const T, self.len)) }
+        unsafe { self.raw.to_slice(self.len) }
     }
 }
 
-impl<'a, T: Copy, D: Device> DerefMut for RWMapping<'a, T, D> {
+impl<'a, T: Copy, D: Device> DerefMut for RWMapping<'a, T, D> where
+    <D::Resources as Resources>::RawMapping: 'a,
+{
     fn deref_mut(&mut self) -> &mut [T] {
-        unsafe { mem::transmute(slice::from_raw_parts_mut(self.raw.pointer, self.len)) }
+        unsafe { self.raw.to_mut_slice(self.len) }
     }
 }
 
 #[unsafe_destructor]
-impl<'a, T: Copy, D: Device> Drop for RWMapping<'a, T, D> {
+impl<'a, T: Copy, D: Device> Drop for RWMapping<'a, T, D> where
+    <D::Resources as Resources>::RawMapping: 'a,
+{
     fn drop(&mut self) {
-        self.device.unmap_buffer_raw(self.raw)
+        self.device.unmap_buffer_raw(self.raw.clone())
     }
 }
 
@@ -322,6 +343,7 @@ pub struct BufferInfo {
 
 /// Resources pertaining to a specific API.
 pub trait Resources: PhantomFn<Self> + Copy + Clone + PartialEq + fmt::Debug {
+    type RawMapping:    Clone + RawMapping;
     type Buffer:        Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
     type ArrayBuffer:   Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
     type Shader:        Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
@@ -384,8 +406,8 @@ pub trait Device {
                      offset_elements: usize) {
         self.update_buffer_raw(buf.cast(), as_byte_slice(data), mem::size_of::<T>() * offset_elements)
     }
-    fn map_buffer_raw(&mut self, buf: BufferHandle<Self::Resources, ()>, access: MapAccess) -> back::RawMapping;
-    fn unmap_buffer_raw(&mut self, map: back::RawMapping);
+    fn map_buffer_raw(&mut self, buf: BufferHandle<Self::Resources, ()>, access: MapAccess) -> <Self::Resources as Resources>::RawMapping;
+    fn unmap_buffer_raw(&mut self, map: <Self::Resources as Resources>::RawMapping);
     fn map_buffer_readable<T: Copy>(&mut self, buf: BufferHandle<Self::Resources, T>) -> ReadableMapping<T, Self>;
     fn map_buffer_writable<T: Copy>(&mut self, buf: BufferHandle<Self::Resources, T>) -> WritableMapping<T, Self>;
     fn map_buffer_rw<T: Copy>(&mut self, buf: BufferHandle<Self::Resources, T>) -> RWMapping<T, Self>;
