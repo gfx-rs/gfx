@@ -163,8 +163,10 @@ fn main() {
     let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
     let mut graphics = gfx::Graphics::new(device);
-    let batch: RefBatch<Params> = graphics.make_batch(&program, &mesh, slice, &state)
-                                          .ok().expect("Failed to make batch.");
+    let batch: RefBatch<Params, gfx::GlResources> = {
+        graphics.make_batch(&program, &mesh, slice, &state)
+                .ok().expect("Failed to make batch.")
+    };
 
     let aspect = w as f32 / h as f32;
     let mut data = Params {

@@ -174,8 +174,10 @@ fn main() {
 
     let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
-    let batch: RefBatch<Params> = context.make_batch(&program, &mesh, slice, &state)
-                                         .ok().expect("Failed to make batch.");
+    let batch: RefBatch<Params, gfx::GlResources> = {
+        context.make_batch(&program, &mesh, slice, &state)
+               .ok().expect("Failed to make batch.")
+    };
 
     let view: AffineMatrix3<f32> = Transform::look_at(
         &Point3::new(1.5f32, -5.0, 3.0),

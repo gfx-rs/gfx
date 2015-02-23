@@ -36,7 +36,7 @@ struct TestParam {
 fn test_link_copy() {
     // testing if RefBatch is copyable
     fn _is_copy<T: Copy>(_t: T) {}
-    fn _ref_copy(batch: gfx::batch::RefBatch<TestParam>) {
+    fn _ref_copy(batch: gfx::batch::RefBatch<TestParam, gfx::GlResources>) {
         _is_copy(batch)
     }
 }
@@ -44,7 +44,7 @@ fn test_link_copy() {
 #[test]
 fn test_shader_param() {
     // testing if RefBatch can be constructed
-    let _ref: gfx::batch::RefBatch<TestParam>;
+    let _ref: gfx::batch::RefBatch<TestParam, gfx::GlResources>;
     // testing if OwnedBatch can be constructed
-    let _owned: gfx::batch::OwnedBatch<TestParam>;
+    let _owned: gfx::batch::OwnedBatch<TestParam, gfx::GlResources>;
 }

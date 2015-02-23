@@ -57,7 +57,7 @@ pub struct Graphics<D: device::Device> {
     /// Renderer front-end.
     pub renderer: Renderer<D>,
     /// Hidden batch context.
-    context: batch::Context,
+    context: batch::Context<GlResources>,
 }
 
 impl<D: device::Device> Graphics<D> {
@@ -77,7 +77,7 @@ impl<D: device::Device> Graphics<D> {
                       mesh: &Mesh<GlResources>,
                       slice: Slice<GlResources>,
                       state: &DrawState)
-                      -> Result<batch::RefBatch<T>, batch::BatchError> {
+                      -> Result<batch::RefBatch<T, GlResources>, batch::BatchError> {
         self.context.make_batch(program, mesh, slice, state)
     }
 
@@ -88,7 +88,7 @@ impl<D: device::Device> Graphics<D> {
 
     /// Draw a ref batch.
     pub fn draw<'a, T: shade::ShaderParam>(&'a mut self,
-                batch: &'a batch::RefBatch<T>, data: &'a T, frame: &Frame<GlResources>)
+                batch: &'a batch::RefBatch<T, GlResources>, data: &'a T, frame: &Frame<GlResources>)
                 -> Result<(), DrawError<batch::OutOfBounds>> {
         self.renderer.draw(&(batch, data, &self.context), frame)
     }
