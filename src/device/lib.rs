@@ -23,9 +23,6 @@ extern crate log;
 extern crate bitflags;
 extern crate libc;
 
-// TODO: Remove these exports once `gl_device` becomes a separate crate.
-pub use self::gl_device as back;
-
 use std::fmt;
 use std::mem;
 use std::ops::{Deref, DerefMut};
@@ -247,16 +244,6 @@ pub type SurfaceHandle<R: Resources> = Handle<<R as Resources>::Surface, tex::Su
 pub type TextureHandle<R: Resources> = Handle<<R as Resources>::Texture, tex::TextureInfo>;
 /// Sampler Handle
 pub type SamplerHandle<R: Resources> = Handle<<R as Resources>::Sampler, tex::SamplerInfo>;
-
-/// A helper method to test `#[vertex_format]` without GL context
-//#[cfg(test)]
-pub fn make_fake_buffer<T>() -> BufferHandle<back::GlResources, T> {
-    let info = BufferInfo {
-        usage: BufferUsage::Static,
-        size: 0,
-    };
-    BufferHandle::from_raw(Handle(0, info))
-}
 
 /// Treat a given slice as `&[u8]` for the given function call
 pub fn as_byte_slice<T>(slice: &[T]) -> &[u8] {
