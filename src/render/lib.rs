@@ -22,7 +22,7 @@ extern crate "gfx_device_gl" as device;
 
 use std::mem;
 
-use device::Device;
+use device::{Device, Resources};
 use device::attrib;
 use device::attrib::IntSize;
 use device::back;
@@ -78,15 +78,15 @@ impl RenderState {
 }
 
 /// Temporary parameter storage, used for shader activation.
-struct ParamStorage {
+struct ParamStorage<R: Resources> {
     uniforms: Vec<UniformValue>,
-    blocks  : Vec<device::RawBufferHandle<back::GlResources>>,
-    textures: Vec<shade::TextureParam<back::GlResources>>,
+    blocks  : Vec<device::RawBufferHandle<R>>,
+    textures: Vec<shade::TextureParam<R>>,
 }
 
-impl ParamStorage {
+impl<R: Resources> ParamStorage<R> {
     /// Create an empty parameter storage.
-    fn new() -> ParamStorage {
+    fn new() -> ParamStorage<R> {
         ParamStorage {
             uniforms: Vec::new(),
             blocks: Vec::new(),
@@ -94,7 +94,7 @@ impl ParamStorage {
         }
     }
 
-    fn get_mut(&mut self) -> shade::ParamValues<back::GlResources> {
+    fn get_mut(&mut self) -> shade::ParamValues<R> {
         self.uniforms.truncate(0);
         self.blocks.truncate(0);
         self.textures.truncate(0);
@@ -151,7 +151,7 @@ pub struct Renderer<D: Device> {
     read_frame_buffer: device::FrameBufferHandle<back::GlResources>,
     default_frame_buffer: device::FrameBufferHandle<back::GlResources>,
     render_state: RenderState,
-    parameters: ParamStorage,
+    parameters: ParamStorage<back::GlResources>,
 }
 
 impl<D: Device> Renderer<D> {
