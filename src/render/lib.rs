@@ -81,10 +81,10 @@ impl RenderState {
 struct ParamStorage {
     uniforms: Vec<UniformValue>,
     blocks  : Vec<device::RawBufferHandle<back::GlResources>>,
-    textures: Vec<shade::TextureParam>,
+    textures: Vec<shade::TextureParam<back::GlResources>>,
 }
 
-impl ParamStorage{
+impl ParamStorage {
     /// Create an empty parameter storage.
     fn new() -> ParamStorage {
         ParamStorage {
@@ -94,7 +94,7 @@ impl ParamStorage{
         }
     }
 
-    fn get_mut(&mut self) -> shade::ParamValues {
+    fn get_mut(&mut self) -> shade::ParamValues<back::GlResources> {
         self.uniforms.truncate(0);
         self.blocks.truncate(0);
         self.textures.truncate(0);

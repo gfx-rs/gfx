@@ -46,7 +46,7 @@ struct Params {
     transform: [[f32; 4]; 4],
 
     #[name = "t_Color"]
-    color: gfx::shade::TextureParam,
+    color: gfx::shade::TextureParam<gfx::GlResources>,
 }
 
 static VERTEX_SRC: &'static [u8] = b"
@@ -174,7 +174,7 @@ fn main() {
 
     let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
-    let batch: RefBatch<Params, gfx::GlResources> = {
+    let batch: RefBatch<Params> = {
         context.make_batch(&program, &mesh, slice, &state)
                .ok().expect("Failed to make batch.")
     };

@@ -20,7 +20,6 @@ use std::fmt;
 use std::num::from_uint;
 use std::cmp::Ordering;
 use std::marker::PhantomData;
-use device::back;
 use device::{Resources, PrimitiveType, ProgramHandle};
 use device::shade::ProgramInfo;
 use render::mesh;
@@ -69,8 +68,8 @@ pub fn link_mesh<R: Resources>(mesh: &mesh::Mesh<R>, pinfo: &ProgramInfo) -> Res
 }
 
 /// Return type for `Batch::get_data()``
-pub type BatchData<'a> = (&'a mesh::Mesh<back::GlResources>, mesh::AttributeIter,
-                          &'a mesh::Slice<back::GlResources>, &'a DrawState);
+pub type BatchData<'a, R: Resources> = (&'a mesh::Mesh<R>, mesh::AttributeIter,
+                                        &'a mesh::Slice<R>, &'a DrawState);
 
 /// Abstract batch trait
 pub trait Batch {
@@ -78,18 +77,18 @@ pub trait Batch {
     /// Possible errors occurring at batch access
     type Error: fmt::Debug;
     /// Obtain information about the mesh, program, and state
-    fn get_data(&self) -> Result<BatchData, Self::Error>;
+    fn get_data(&self) -> Result<BatchData<Self::Resources>, Self::Error>;
     /// Fill shader parameter values
-    fn fill_params(&self, ::shade::ParamValues)
+    fn fill_params(&self, ::shade::ParamValues<Self::Resources>)
                    -> Result<&ProgramHandle<Self::Resources>, Self::Error>;
 }
 
-impl<'a, T: ShaderParam> Batch for (&'a mesh::Mesh<back::GlResources>, mesh::Slice<back::GlResources>,
-                                    &'a ProgramHandle<back::GlResources>, &'a T, &'a DrawState) {
-    type Resources = back::GlResources;
+impl<'a, T: ShaderParam> Batch for (&'a mesh::Mesh<T::Resources>, mesh::Slice<T::Resources>,
+                                    &'a ProgramHandle<T::Resources>, &'a T, &'a DrawState) {
+    type Resources = T::Resources;
     type Error = BatchError;
 
-    fn get_data(&self) -> Result<BatchData, BatchError> {
+    fn get_data(&self) -> Result<BatchData<T::Resources>, BatchError> {
         let (mesh, ref slice, program, _, state) = *self;
         match link_mesh(mesh, program.get_info()) {
             Ok(link) => Ok((mesh, link.to_iter(), &slice, state)),
@@ -97,8 +96,8 @@ impl<'a, T: ShaderParam> Batch for (&'a mesh::Mesh<back::GlResources>, mesh::Sli
         }
     }
 
-    fn fill_params(&self, values: ::shade::ParamValues)
-                   -> Result<&ProgramHandle<back::GlResources>, BatchError> {
+    fn fill_params(&self, values: ::shade::ParamValues<T::Resources>)
+                   -> Result<&ProgramHandle<T::Resources>, BatchError> {
         let (_, _, program, params, _) = *self;
         match ShaderParam::create_link(None::<&T>, program.get_info()) {
             Ok(link) => {
@@ -111,23 +110,23 @@ impl<'a, T: ShaderParam> Batch for (&'a mesh::Mesh<back::GlResources>, mesh::Sli
 }
 
 /// Owned batch - self-contained, but has heap-allocated data
-pub struct OwnedBatch<T: ShaderParam, R: Resources> {
-    mesh: mesh::Mesh<R>,
+pub struct OwnedBatch<T: ShaderParam> {
+    mesh: mesh::Mesh<T::Resources>,
     mesh_link: mesh::Link,
     /// Mesh slice
-    pub slice: mesh::Slice<R>,
+    pub slice: mesh::Slice<T::Resources>,
     /// Parameter data.
     pub param: T,
-    program: ProgramHandle<R>,
+    program: ProgramHandle<T::Resources>,
     param_link: T::Link,
     /// Draw state
     pub state: DrawState,
 }
 
-impl<T: ShaderParam, R: Resources> OwnedBatch<T, R> {
+impl<T: ShaderParam> OwnedBatch<T> {
     /// Create a new owned batch
-    pub fn new(mesh: mesh::Mesh<R>, program: ProgramHandle<R>, param: T)
-           -> Result<OwnedBatch<T, R>, BatchError> {
+    pub fn new(mesh: mesh::Mesh<T::Resources>, program: ProgramHandle<T::Resources>, param: T)
+           -> Result<OwnedBatch<T>, BatchError> {
         let slice = mesh.to_slice(PrimitiveType::TriangleList);
         let mesh_link = match link_mesh(&mesh, program.get_info()) {
             Ok(l) => l,
@@ -149,16 +148,16 @@ impl<T: ShaderParam, R: Resources> OwnedBatch<T, R> {
     }
 }
 
-impl<T: ShaderParam> Batch for OwnedBatch<T, back::GlResources> {
-    type Resources = back::GlResources;
+impl<T: ShaderParam> Batch for OwnedBatch<T> {
+    type Resources = T::Resources;
     type Error = ();
 
-    fn get_data(&self) -> Result<BatchData, ()> {
+    fn get_data(&self) -> Result<BatchData<T::Resources>, ()> {
         Ok((&self.mesh, self.mesh_link.to_iter(), &self.slice, &self.state))
     }
 
-    fn fill_params(&self, values: ::shade::ParamValues)
-                   -> Result<&ProgramHandle<back::GlResources>, ()> {
+    fn fill_params(&self, values: ::shade::ParamValues<T::Resources>)
+                   -> Result<&ProgramHandle<T::Resources>, ()> {
         self.param.fill_params(&self.param_link, values);
         Ok(&self.program)
     }
@@ -250,59 +249,59 @@ impl<T: Clone + PartialEq> Array<T> {
 /// Ref batch - copyable and smaller, but depends on the `Context`.
 /// It has references to the resources (mesh, program, state), that are held
 /// by the context that created the batch, so these have to be used together.
-pub struct RefBatch<T: ShaderParam, R: Resources> {
-    mesh_id: Id<mesh::Mesh<R>>,
+pub struct RefBatch<T: ShaderParam> {
+    mesh_id: Id<mesh::Mesh<T::Resources>>,
     mesh_link: mesh::Link,
     /// Mesh slice
-    pub slice: mesh::Slice<R>,
-    program_id: Id<ProgramHandle<R>>,
+    pub slice: mesh::Slice<T::Resources>,
+    program_id: Id<ProgramHandle<T::Resources>>,
     param_link: T::Link,
     state_id: Id<DrawState>,
 }
 
-impl<T: ShaderParam, R: Resources> Copy for RefBatch<T, R> where T::Link: Copy {}
+impl<T: ShaderParam> Copy for RefBatch<T> where T::Link: Copy {}
 
-impl<T: ShaderParam, R: Resources> fmt::Debug for RefBatch<T, R> {
+impl<T: ShaderParam> fmt::Debug for RefBatch<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "RefBatch(mesh: {:?}, slice: {:?}, program: {:?}, state: {:?})",
             self.mesh_id, self.slice, self.program_id, self.state_id)
     }
 }
 
-impl<T: ShaderParam, R: Resources> PartialEq for RefBatch<T, R> {
-    fn eq(&self, other: &RefBatch<T, R>) -> bool {
+impl<T: ShaderParam> PartialEq for RefBatch<T> {
+    fn eq(&self, other: &RefBatch<T>) -> bool {
         self.program_id == other.program_id &&
         self.state_id == other.state_id &&
         self.mesh_id == other.mesh_id
     }
 }
 
-impl<T: ShaderParam, R: Resources> Eq for RefBatch<T, R> {}
+impl<T: ShaderParam> Eq for RefBatch<T> {}
 
-impl<T: ShaderParam, R: Resources> PartialOrd for RefBatch<T, R> {
-    fn partial_cmp(&self, other: &RefBatch<T, R>) -> Option<Ordering> {
+impl<T: ShaderParam> PartialOrd for RefBatch<T> {
+    fn partial_cmp(&self, other: &RefBatch<T>) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<T: ShaderParam, R: Resources> Ord for RefBatch<T, R> {
-    fn cmp(&self, other: &RefBatch<T, R>) -> Ordering {
+impl<T: ShaderParam> Ord for RefBatch<T> {
+    fn cmp(&self, other: &RefBatch<T>) -> Ordering {
         (&self.program_id, &self.state_id, &self.mesh_id).cmp(
         &(&other.program_id, &other.state_id, &other.mesh_id))
     }
 }
 
-impl<T: ShaderParam, R: Resources> RefBatch<T, R> {
+impl<T: ShaderParam> RefBatch<T> {
     /// Compare meshes by Id
-    pub fn cmp_mesh(&self, other: &RefBatch<T, R>) -> Ordering {
+    pub fn cmp_mesh(&self, other: &RefBatch<T>) -> Ordering {
         self.mesh_id.cmp(&other.mesh_id)
     }
     /// Compare programs by Id
-    pub fn cmp_program(&self, other: &RefBatch<T, R>) -> Ordering {
+    pub fn cmp_program(&self, other: &RefBatch<T>) -> Ordering {
         self.program_id.cmp(&other.program_id)
     }
     /// Compare draw states by Id
-    pub fn cmp_state(&self, other: &RefBatch<T, R>) -> Ordering {
+    pub fn cmp_state(&self, other: &RefBatch<T>) -> Ordering {
         self.state_id.cmp(&other.state_id)
     }
 }
@@ -327,12 +326,12 @@ impl<R: Resources> Context<R> {
 
 impl<R: Resources> Context<R> {
     /// Produce a new ref batch
-    pub fn make_batch<T: ShaderParam>(&mut self,
+    pub fn make_batch<T: ShaderParam<Resources = R>>(&mut self,
                       program: &ProgramHandle<R>,
                       mesh: &mesh::Mesh<R>,
                       slice: mesh::Slice<R>,
                       state: &DrawState)
-                      -> Result<RefBatch<T, R>, BatchError> {
+                      -> Result<RefBatch<T>, BatchError> {
         let mesh_link = match link_mesh(mesh, program.get_info()) {
             Ok(l) => l,
             Err(e) => return Err(BatchError::Mesh(e)),
@@ -365,11 +364,11 @@ impl<R: Resources> Context<R> {
     }
 }
 
-impl<'a, T: ShaderParam> Batch for (&'a RefBatch<T, back::GlResources>, &'a T, &'a Context<back::GlResources>) {
-    type Resources = back::GlResources;
+impl<'a, T: ShaderParam> Batch for (&'a RefBatch<T>, &'a T, &'a Context<T::Resources>) {
+    type Resources = T::Resources;
     type Error = OutOfBounds;
 
-    fn get_data(&self) -> Result<BatchData, OutOfBounds> {
+    fn get_data(&self) -> Result<BatchData<T::Resources>, OutOfBounds> {
         let (b, _, ctx) = *self;
         Ok((try!(ctx.meshes.get(b.mesh_id)),
             b.mesh_link.to_iter(),
@@ -378,8 +377,8 @@ impl<'a, T: ShaderParam> Batch for (&'a RefBatch<T, back::GlResources>, &'a T, &
         ))
     }
 
-    fn fill_params(&self, values: ::shade::ParamValues)
-                   -> Result<&ProgramHandle<back::GlResources>, OutOfBounds> {
+    fn fill_params(&self, values: ::shade::ParamValues<T::Resources>)
+                   -> Result<&ProgramHandle<T::Resources>, OutOfBounds> {
         let (b, data, ctx) = *self;
         data.fill_params(&b.param_link, values);
         ctx.programs.get(b.program_id)

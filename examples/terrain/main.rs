@@ -163,7 +163,7 @@ fn main() {
     let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
     let mut graphics = gfx::Graphics::new(device);
-    let batch: RefBatch<Params, gfx::GlResources> = {
+    let batch: RefBatch<Params> = {
         graphics.make_batch(&program, &mesh, slice, &state)
                 .ok().expect("Failed to make batch.")
     };

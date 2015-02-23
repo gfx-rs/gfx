@@ -72,12 +72,12 @@ impl<D: device::Device> Graphics<D> {
     }
 
     /// Create a new ref batch.
-    pub fn make_batch<T: shade::ShaderParam>(&mut self,
+    pub fn make_batch<T: shade::ShaderParam<Resources = GlResources>>(&mut self,
                       program: &ProgramHandle<GlResources>,
                       mesh: &Mesh<GlResources>,
                       slice: Slice<GlResources>,
                       state: &DrawState)
-                      -> Result<batch::RefBatch<T, GlResources>, batch::BatchError> {
+                      -> Result<batch::RefBatch<T>, batch::BatchError> {
         self.context.make_batch(program, mesh, slice, state)
     }
 
@@ -87,8 +87,8 @@ impl<D: device::Device> Graphics<D> {
     }
 
     /// Draw a ref batch.
-    pub fn draw<'a, T: shade::ShaderParam>(&'a mut self,
-                batch: &'a batch::RefBatch<T, GlResources>, data: &'a T, frame: &Frame<GlResources>)
+    pub fn draw<'a, T: shade::ShaderParam<Resources = GlResources>>(&'a mut self,
+                batch: &'a batch::RefBatch<T>, data: &'a T, frame: &Frame<GlResources>)
                 -> Result<(), DrawError<batch::OutOfBounds>> {
         self.renderer.draw(&(batch, data, &self.context), frame)
     }

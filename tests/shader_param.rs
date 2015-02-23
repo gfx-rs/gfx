@@ -25,7 +25,7 @@ use secret_lib::gfx;
 struct TestParam {
     a: i32,
     b: [f32; 4],
-    c: gfx::shade::TextureParam,
+    c: gfx::shade::TextureParam<gfx::GlResources>,
     d: gfx::RawBufferHandle<gfx::GlResources>,
     e: f32,
     #[name = "a_f"]
@@ -36,7 +36,7 @@ struct TestParam {
 fn test_link_copy() {
     // testing if RefBatch is copyable
     fn _is_copy<T: Copy>(_t: T) {}
-    fn _ref_copy(batch: gfx::batch::RefBatch<TestParam, gfx::GlResources>) {
+    fn _ref_copy(batch: gfx::batch::RefBatch<TestParam>) {
         _is_copy(batch)
     }
 }
@@ -44,7 +44,7 @@ fn test_link_copy() {
 #[test]
 fn test_shader_param() {
     // testing if RefBatch can be constructed
-    let _ref: gfx::batch::RefBatch<TestParam, gfx::GlResources>;
+    let _ref: gfx::batch::RefBatch<TestParam>;
     // testing if OwnedBatch can be constructed
-    let _owned: gfx::batch::OwnedBatch<TestParam, gfx::GlResources>;
+    let _owned: gfx::batch::OwnedBatch<TestParam>;
 }

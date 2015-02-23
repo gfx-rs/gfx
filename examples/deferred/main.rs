@@ -109,11 +109,11 @@ struct LightParams {
     #[name = "u_FrameRes"]
     frame_res: [f32; 2],
     #[name = "u_TexPos"]
-    tex_pos: gfx::shade::TextureParam,
+    tex_pos: gfx::shade::TextureParam<gfx::GlResources>,
     #[name = "u_TexNormal"]
-    tex_normal: gfx::shade::TextureParam,
+    tex_normal: gfx::shade::TextureParam<gfx::GlResources>,
     #[name = "u_TexDiffuse"]
-    tex_diffuse: gfx::shade::TextureParam,
+    tex_diffuse: gfx::shade::TextureParam<gfx::GlResources>,
 }
 
 #[shader_param]
@@ -129,7 +129,7 @@ struct EmitterParams {
 #[shader_param]
 struct BlitParams {
     #[name = "u_Tex"]
-    tex: gfx::shade::TextureParam,
+    tex: gfx::shade::TextureParam<gfx::GlResources>,
 }
 
 static TERRAIN_VERTEX_SRC: &'static [u8] = b"
@@ -402,7 +402,7 @@ fn main() {
     };
 
     let terrain_scale = Vector3::new(25.0, 25.0, 25.0);
-    let terrain_batch: RefBatch<TerrainParams, gfx::GlResources> = {
+    let terrain_batch: RefBatch<TerrainParams> = {
         let plane = genmesh::generators::Plane::subdivide(256, 256);
         let vertex_data: Vec<TerrainVertex> = plane.shared_vertex_iter()
             .map(|(x, y)| {
@@ -435,7 +435,7 @@ fn main() {
                .ok().expect("Failed to match back")
     };
 
-    let blit_batch: RefBatch<BlitParams, gfx::GlResources> = {
+    let blit_batch: RefBatch<BlitParams> = {
         let vertex_data = [
             BlitVertex { pos: [-1, -1, 0], tex_coord: [0, 0] },
             BlitVertex { pos: [ 1, -1, 0], tex_coord: [1, 0] },
@@ -507,7 +507,7 @@ fn main() {
             .depth(gfx::state::Comparison::LessEqual, false)
             .blend(gfx::BlendPreset::Additive);
 
-        let light_batch: RefBatch<LightParams, gfx::GlResources> = {
+        let light_batch: RefBatch<LightParams> = {
             let program = device.link_program(LIGHT_VERTEX_SRC, LIGHT_FRAGMENT_SRC)
                                 .ok().expect("Failed to link program.");
 
@@ -515,7 +515,7 @@ fn main() {
                    .ok().expect("Failed to create batch")
         };
 
-        let emitter_batch: RefBatch<EmitterParams, gfx::GlResources> = {
+        let emitter_batch: RefBatch<EmitterParams> = {
             let program = device.link_program(EMITTER_VERTEX_SRC, EMITTER_FRAGMENT_SRC)
                                 .ok().expect("Failed to link program.");
 
