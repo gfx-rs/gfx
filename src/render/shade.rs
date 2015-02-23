@@ -17,7 +17,7 @@
 use std::cell::Cell;
 use device::{back, shade};
 use device::shade::UniformValue;
-use device::{RawBufferHandle, TextureHandle, SamplerHandle};
+use device::{Resources, RawBufferHandle, TextureHandle, SamplerHandle};
 
 pub use device::shade::{Stage, CreateShaderError};
 
@@ -131,11 +131,11 @@ pub struct NamedCell<T> {
 }
 
 /// A dictionary of parameters, meant to be shared between different programs
-pub struct ParamDictionary {
+pub struct ParamDictionary<R: Resources> {
     /// Uniform dictionary
     pub uniforms: Vec<NamedCell<shade::UniformValue>>,
     /// Block dictionary
-    pub blocks: Vec<NamedCell<RawBufferHandle<back::GlResources>>>,
+    pub blocks: Vec<NamedCell<RawBufferHandle<R>>>,
     /// Texture dictionary
     pub textures: Vec<NamedCell<TextureParam>>,
 }
@@ -147,10 +147,10 @@ pub struct ParamDictionaryLink {
     textures: Vec<usize>,
 }
 
-impl ShaderParam for ParamDictionary {
+impl ShaderParam for ParamDictionary<back::GlResources> {
     type Link = ParamDictionaryLink;
 
-    fn create_link(this: Option<&ParamDictionary>, info: &shade::ProgramInfo)
+    fn create_link(this: Option<&ParamDictionary<back::GlResources>>, info: &shade::ProgramInfo)
                    -> Result<ParamDictionaryLink, ParameterError> {
         let this = match this {
             Some(d) => d,

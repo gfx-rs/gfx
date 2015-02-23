@@ -188,13 +188,13 @@ impl<D: Device> Renderer<D> {
     }
 
     /// Draw a `batch` into the specified `frame`
-    pub fn draw<B: Batch>(&mut self, batch: &B, frame: &target::Frame<back::GlResources>)
+    pub fn draw<B: Batch<Resources = back::GlResources>>(&mut self, batch: &B, frame: &target::Frame<back::GlResources>)
                 -> Result<(), DrawError<B::Error>> {
         self.draw_all(batch, None, frame)
     }
 
     /// Draw a `batch` multiple times using instancing
-    pub fn draw_instanced<B: Batch>(&mut self, batch: &B,
+    pub fn draw_instanced<B: Batch<Resources = back::GlResources>>(&mut self, batch: &B,
                           count: device::InstanceCount,
                           base: device::VertexCount,
                           frame: &target::Frame<back::GlResources>)
@@ -203,7 +203,7 @@ impl<D: Device> Renderer<D> {
     }
 
     /// Draw a 'batch' with all known parameters specified, internal use only.
-    fn draw_all<B: Batch>(&mut self, batch: &B, instances: Option<Instancing>,
+    fn draw_all<B: Batch<Resources = back::GlResources>>(&mut self, batch: &B, instances: Option<Instancing>,
                 frame: &target::Frame<back::GlResources>) -> Result<(), DrawError<B::Error>> {
         let (mesh, attrib_iter, slice, state) = match batch.get_data() {
             Ok(data) => data,
@@ -368,7 +368,7 @@ impl<D: Device> Renderer<D> {
         self.render_state.draw = *state;
     }
 
-    fn bind_program<'a, B: Batch>(&mut self, batch: &'a B)
+    fn bind_program<'a, B: Batch<Resources = back::GlResources>>(&mut self, batch: &'a B)
                     -> Result<&'a device::ProgramHandle<back::GlResources>, B::Error> {
         let program = match batch.fill_params(self.parameters.get_mut()) {
             Ok(p) => p,
