@@ -402,7 +402,7 @@ fn main() {
     };
 
     let terrain_scale = Vector3::new(25.0, 25.0, 25.0);
-    let terrain_batch: RefBatch<TerrainParams> = {
+    let terrain_batch: RefBatch<TerrainParams, gfx::GlResources> = {
         let plane = genmesh::generators::Plane::subdivide(256, 256);
         let vertex_data: Vec<TerrainVertex> = plane.shared_vertex_iter()
             .map(|(x, y)| {
@@ -435,7 +435,7 @@ fn main() {
                .ok().expect("Failed to match back")
     };
 
-    let blit_batch: RefBatch<BlitParams> = {
+    let blit_batch: RefBatch<BlitParams, gfx::GlResources> = {
         let vertex_data = [
             BlitVertex { pos: [-1, -1, 0], tex_coord: [0, 0] },
             BlitVertex { pos: [ 1, -1, 0], tex_coord: [1, 0] },
@@ -507,7 +507,7 @@ fn main() {
             .depth(gfx::state::Comparison::LessEqual, false)
             .blend(gfx::BlendPreset::Additive);
 
-        let light_batch: RefBatch<LightParams> = {
+        let light_batch: RefBatch<LightParams, gfx::GlResources> = {
             let program = device.link_program(LIGHT_VERTEX_SRC, LIGHT_FRAGMENT_SRC)
                                 .ok().expect("Failed to link program.");
 
@@ -515,7 +515,7 @@ fn main() {
                    .ok().expect("Failed to create batch")
         };
 
-        let emitter_batch: RefBatch<EmitterParams> = {
+        let emitter_batch: RefBatch<EmitterParams, gfx::GlResources> = {
             let program = device.link_program(EMITTER_VERTEX_SRC, EMITTER_FRAGMENT_SRC)
                                 .ok().expect("Failed to link program.");
 

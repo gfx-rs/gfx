@@ -130,8 +130,10 @@ fn gfx_main(mut glfw: glfw::Glfw,
     };
 
     let mut graphics = gfx::Graphics::new(device);
-    let batch: RefBatch<Params> = graphics.make_batch(&program, &mesh, slice, &state)
-                                          .ok().expect("Failed to make batch");
+    let batch: RefBatch<Params, gfx::GlResources> = {
+        graphics.make_batch(&program, &mesh, slice, &state)
+                .ok().expect("Failed to make batch")
+    };
 
     while !window.should_close() {
         glfw.poll_events();
