@@ -77,9 +77,13 @@ impl<R: Resources> Frame<R> {
     /// Return a mask of contained planes.
     pub fn get_mask(&self) -> Mask {
         use device::target as t;
-        let mut mask = [t::COLOR0, t::COLOR1, t::COLOR2, t::COLOR3]
-            .iter().zip(self.colors.iter())
-            .fold(Mask::empty(), |u, (&m, _)| (u | m));
+        let mut mask = match self.colors.len() {
+            0 => Mask::empty(),
+            1 => t::COLOR0,
+            2 => t::COLOR0 | t::COLOR1,
+            3 => t::COLOR0 | t::COLOR1 | t::COLOR2,
+            _ => t::COLOR0 | t::COLOR1 | t::COLOR2 | t::COLOR3,
+        };
         if self.depth.is_some() {
             mask.insert(t::DEPTH);
         }
@@ -89,7 +93,7 @@ impl<R: Resources> Frame<R> {
         if mask.is_empty() {
             // hack: assuming the default FBO has all planes
             t::COLOR | t::DEPTH | t::STENCIL
-        }else {
+        } else {
             mask
         }
     }
