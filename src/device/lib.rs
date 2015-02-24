@@ -215,8 +215,7 @@ impl<R: Resources, T> BufferHandle<R, T> {
 
     /// Get the associated information about the buffer
     pub fn get_info(&self) -> &BufferInfo {
-        let Handle(_, ref info) = self.raw;
-        info
+        self.raw.get_info()
     }
 
     /// Get the number of elements in the buffer.
