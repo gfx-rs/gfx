@@ -12,19 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(core, std_misc, unsafe_destructor)]
 #![deny(missing_docs, missing_copy_implementations)]
 
 //! Graphics device. Not meant for direct use.
 
-#[macro_use]
-extern crate log;
-#[macro_use]
-extern crate bitflags;
-extern crate libc;
-
-use std::fmt;
-use std::mem;
+use std::{fmt, mem, raw};
 use std::ops::{Deref, DerefMut};
 use std::marker::{PhantomData, PhantomFn};
 
@@ -34,10 +26,6 @@ pub mod shade;
 pub mod state;
 pub mod target;
 pub mod tex;
-
-// TODO: This will become a separate crate once associated items are implemented
-// in rustc and subsequently used in the `Device` trait.
-/* #[cfg(gl)] */ #[path = "gl_device/lib.rs"] pub mod gl_device;
 
 /// Draw vertex count.
 pub type VertexCount = u32;
@@ -247,7 +235,7 @@ pub type SamplerHandle<R: Resources> = Handle<<R as Resources>::Sampler, tex::Sa
 /// Treat a given slice as `&[u8]` for the given function call
 pub fn as_byte_slice<T>(slice: &[T]) -> &[u8] {
     let len = mem::size_of::<T>() * slice.len();
-    let slice = std::raw::Slice { data: slice.as_ptr(), len: len };
+    let slice = raw::Slice { data: slice.as_ptr(), len: len };
     unsafe { mem::transmute(slice) }
 }
 

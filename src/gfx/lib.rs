@@ -15,13 +15,13 @@
 //! An efficient, low-level, bindless graphics API for Rust. See [the
 //! blog](http://gfx-rs.github.io/) for explanations and annotated examples.
 
-#![feature(core, libc)]
+#![feature(core, libc, unsafe_destructor)]
 
+#[macro_use]
+extern crate bitflags;
 #[macro_use]
 extern crate log;
 extern crate libc;
-
-extern crate "gfx_device_gl" as device;
 
 // public re-exports
 pub use render::{Renderer, DrawError};
@@ -45,10 +45,8 @@ pub use device::draw::CommandBuffer;
 pub use device::shade::{ProgramInfo, UniformValue};
 pub use device::target::*;
 
-// TODO: Remove this re-export once `gl_device` becomes a separate crate.
-pub use device::gl_device::{GlDevice, GlResources};
-
 #[path = "../render/lib.rs"] pub mod render;
+#[path = "../device/lib.rs"] pub mod device;
 
 /// A convenient wrapper suitable for single-threaded operation.
 pub struct Graphics<D: device::Device> {

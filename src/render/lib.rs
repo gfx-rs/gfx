@@ -16,12 +16,9 @@
 
 #![deny(missing_docs)]
 
-//#[macro_use]
-//extern crate log;
-extern crate "gfx_device_gl" as device;
-
 use std::mem;
 
+use device;
 use device::{Device, Resources};
 use device::attrib;
 use device::attrib::IntSize;
