@@ -153,7 +153,7 @@ mod tests {
     #[test]
     fn test_data_buffer() {
         let mut buf = super::DataBuffer::new();
-        assert_eq!(buf.add_struct(&(0u, false)), super::DataPointer(0, 16));
-        assert_eq!(buf.add_vec(&[5i, 6i]), super::DataPointer(16, 16));
+        assert_eq!(buf.add_struct(&(0u8, false)), super::DataPointer(0, 16));
+        assert_eq!(buf.add_vec(&[5i32, 6i32]), super::DataPointer(16, 16));
     }
 }

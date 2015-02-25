@@ -40,7 +40,8 @@ pub struct Attribute<R: Resources> {
 pub trait VertexFormat {
     type Resources: Resources;
     /// Create the attributes for this type, using the given buffer.
-    fn generate(Option<Self>, buffer: device::RawBufferHandle<Self::Resources>) -> Vec<Attribute<Self::Resources>>;
+    fn generate(Option<Self>, buffer: device::RawBufferHandle<Self::Resources>)
+                -> Vec<Attribute<Self::Resources>>;
 }
 
 /// Describes geometry to render.

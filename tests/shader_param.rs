@@ -25,8 +25,8 @@ use secret_lib::gfx;
 struct TestParam {
     a: i32,
     b: [f32; 4],
-    c: gfx::shade::TextureParam<gfx::GlResources>,
-    d: gfx::RawBufferHandle<gfx::GlResources>,
+    c: gfx::shade::TextureParam<()>,
+    d: gfx::RawBufferHandle<()>,
     e: f32,
     #[name = "a_f"]
     f: [f32; 4],

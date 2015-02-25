@@ -61,6 +61,12 @@ pub trait RawMapping {
     unsafe fn to_mut_slice<T>(&self, len: usize) -> &mut [T];
 }
 
+impl RawMapping for () {
+    unsafe fn set<T>(&self, _: usize, _: T) { unimplemented!() }
+    unsafe fn to_slice<T>(&self, _: usize) -> &[T] { unimplemented!() }
+    unsafe fn to_mut_slice<T>(&self, _: usize) -> &mut [T] { unimplemented!() }
+}
+
 /// A handle to a readable map, which can be sliced.
 pub struct ReadableMapping<'a, T: Copy, D: 'a + Device> {
     raw: <D::Resources as Resources>::RawMapping,
@@ -341,6 +347,18 @@ pub trait Resources: PhantomFn<Self> + Copy + Clone + PartialEq + fmt::Debug {
     type Sampler:       Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
 }
 
+impl Resources for () {
+    type RawMapping = ();
+    type Buffer = ();
+    type ArrayBuffer = ();
+    type Shader = ();
+    type Program = ();
+    type FrameBuffer = ();
+    type Surface = ();
+    type Texture = ();
+    type Sampler = ();
+}
+
 /// An interface for performing draw calls using a specific graphics API
 #[allow(missing_docs)]
 pub trait Device {
@@ -466,31 +484,32 @@ impl<D: Device> DeviceInternal for D {
 #[cfg(test)]
 mod test {
     use std::mem;
+    use std::marker::PhantomData;
     use super::{BufferHandle, Handle};
     use super::{BufferInfo, BufferUsage};
-    use super::back;
 
-    fn mock_buffer<T>(usage: BufferUsage, len: usize) -> BufferHandle<back::GlResources, T> {
+    fn mock_buffer<T>(len: usize) -> BufferHandle<(), T> {
         BufferHandle {
             raw: Handle(
-                0,
+                (),
                 BufferInfo {
-                    usage: usage,
+                    usage: BufferUsage::Static,
                     size: mem::size_of::<T>() * len,
                 },
             ),
+            phantom_t: PhantomData,
         }
     }
 
     #[test]
     fn test_buffer_len() {
-        assert_eq!(mock_buffer::<u8>(BufferUsage::Static, 8).len(), 8);
-        assert_eq!(mock_buffer::<u16>(BufferUsage::Static, 8).len(), 8);
+        assert_eq!(mock_buffer::<u8>(8).len(), 8);
+        assert_eq!(mock_buffer::<u16>(8).len(), 8);
     }
 
     #[test]
     #[should_fail]
     fn test_buffer_zero_len() {
-        let _ = mock_buffer::<()>(BufferUsage::Static, 0).len();
+        let _ = mock_buffer::<()>(0).len();
     }
 }
