@@ -1,5 +1,4 @@
 use device;
-use device::Resources;
 use device::shade::{Stage, CreateShaderError, ShaderModel};
 use super::mesh::{Mesh, VertexFormat};
 
@@ -82,7 +81,7 @@ impl<D: device::Device> DeviceExt for D {
             common_array_buffer: self.create_array_buffer(),
             draw_frame_buffer: self.create_frame_buffer(),
             read_frame_buffer: self.create_frame_buffer(),
-            default_frame_buffer: <D::Resources as Resources>::get_main_frame_buffer(),
+            default_frame_buffer: self.get_main_frame_buffer(),
             render_state: super::RenderState::new(),
             parameters: super::ParamStorage::new(),
         }

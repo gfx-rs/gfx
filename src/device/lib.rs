@@ -215,6 +215,19 @@ impl<R: Resources, T> BufferHandle<R, T> {
     }
 }
 
+/// A helper method to test `#[vertex_format]` without GL context
+/// Not to be used by user code!
+/// Will be replaced by a proper dummy device in the future.
+//#[cfg(test)]
+pub fn make_dummy_buffer<R: Resources, T>(value: R::Buffer)
+                         -> BufferHandle<R, T> {
+    let info = BufferInfo {
+        usage: BufferUsage::Static,
+        size: 0,
+    };
+    BufferHandle::from_raw(Handle(value, info))
+}
+
 /// Raw (untyped) Buffer Handle
 pub type RawBufferHandle<R: Resources> = Handle<<R as Resources>::Buffer, BufferInfo>;
 /// Array Buffer Handle
@@ -326,9 +339,6 @@ pub trait Resources: PhantomFn<Self> + Copy + Clone + PartialEq + fmt::Debug {
     type Surface:       Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
     type Texture:       Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
     type Sampler:       Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
-
-    /// Return the framebuffer handle for the screen.
-    fn get_main_frame_buffer() -> FrameBufferHandle<Self>;
 }
 
 /// An interface for performing draw calls using a specific graphics API
@@ -361,6 +371,9 @@ pub trait Device {
     fn create_surface(&mut self, info: tex::SurfaceInfo) -> Result<SurfaceHandle<Self::Resources>, tex::SurfaceError>;
     fn create_texture(&mut self, info: tex::TextureInfo) -> Result<TextureHandle<Self::Resources>, tex::TextureError>;
     fn create_sampler(&mut self, info: tex::SamplerInfo) -> SamplerHandle<Self::Resources>;
+
+    /// Return the framebuffer handle for the screen.
+    fn get_main_frame_buffer(&self) -> FrameBufferHandle<Self::Resources>;
 
     // resource deletion
     fn delete_buffer_raw(&mut self, buf: BufferHandle<Self::Resources, ()>);
@@ -395,6 +408,59 @@ pub trait Device {
         self.update_texture_raw(tex, img, as_byte_slice(data))
     }
     fn generate_mipmap(&mut self, tex: &TextureHandle<Self::Resources>);
+}
+
+/// A service trait with methods for handle creation already implemented.
+/// To be used by device back ends.
+#[allow(missing_docs)]
+pub trait DeviceInternal {
+    type RawMapping: RawMapping;
+
+    fn make_handle<T, I>(&self, T, I) -> Handle<T, I>;
+    fn map_readable<T: Copy>(&mut self, Self::RawMapping, usize)
+                    -> ReadableMapping<T, Self>;
+    fn map_writable<T: Copy>(&mut self, Self::RawMapping, usize)
+                    -> WritableMapping<T, Self>;
+    fn map_read_write<T: Copy>(&mut self, Self::RawMapping, usize)
+                      -> RWMapping<T, Self>;
+}
+
+impl<D: Device> DeviceInternal for D {
+    type RawMapping = <D::Resources as Resources>::RawMapping;
+
+    fn make_handle<T, I>(&self, value: T, info: I) -> Handle<T, I> {
+        Handle(value, info)
+    }
+
+    fn map_readable<T: Copy>(&mut self, map: <Self as DeviceInternal>::RawMapping,
+                    length: usize) -> ReadableMapping<T, Self> {
+        ReadableMapping {
+            raw: map,
+            len: length,
+            device: self,
+            phantom_t: PhantomData,
+        }
+    }
+
+    fn map_writable<T: Copy>(&mut self, map: <Self as DeviceInternal>::RawMapping,
+                    length: usize) -> WritableMapping<T, Self> {
+        WritableMapping {
+            raw: map,
+            len: length,
+            device: self,
+            phantom_t: PhantomData,
+        }
+    }
+
+    fn map_read_write<T: Copy>(&mut self, map: <Self as DeviceInternal>::RawMapping,
+                      length: usize) -> RWMapping<T, Self> {
+        RWMapping {
+            raw: map,
+            len: length,
+            device: self,
+            phantom_t: PhantomData,
+        }
+    }
 }
 
 #[cfg(test)]
