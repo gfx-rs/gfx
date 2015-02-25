@@ -429,12 +429,23 @@ pub trait Device {
 }
 
 /// A service trait with methods for handle creation already implemented.
+/// To be used by device back ends and some tests.
+pub trait HandleFactory {
+    /// Create a handle
+    fn make_handle<T, I>(&self, value: T, info: I) -> Handle<T, I> {
+        Handle(value, info)
+    }
+}
+
+impl HandleFactory for () {}
+impl<D: Device> HandleFactory for D {}
+
+/// A service trait with methods for mapping already implemented.
 /// To be used by device back ends.
 #[allow(missing_docs)]
-pub trait DeviceInternal {
+pub trait MapFactory {
     type RawMapping: RawMapping;
 
-    fn make_handle<T, I>(&self, T, I) -> Handle<T, I>;
     fn map_readable<T: Copy>(&mut self, Self::RawMapping, usize)
                     -> ReadableMapping<T, Self>;
     fn map_writable<T: Copy>(&mut self, Self::RawMapping, usize)
@@ -443,14 +454,11 @@ pub trait DeviceInternal {
                       -> RWMapping<T, Self>;
 }
 
-impl<D: Device> DeviceInternal for D {
+
+impl<D: Device> MapFactory for D {
     type RawMapping = <D::Resources as Resources>::RawMapping;
 
-    fn make_handle<T, I>(&self, value: T, info: I) -> Handle<T, I> {
-        Handle(value, info)
-    }
-
-    fn map_readable<T: Copy>(&mut self, map: <Self as DeviceInternal>::RawMapping,
+    fn map_readable<T: Copy>(&mut self, map: <Self as MapFactory>::RawMapping,
                     length: usize) -> ReadableMapping<T, Self> {
         ReadableMapping {
             raw: map,
@@ -460,7 +468,7 @@ impl<D: Device> DeviceInternal for D {
         }
     }
 
-    fn map_writable<T: Copy>(&mut self, map: <Self as DeviceInternal>::RawMapping,
+    fn map_writable<T: Copy>(&mut self, map: <Self as MapFactory>::RawMapping,
                     length: usize) -> WritableMapping<T, Self> {
         WritableMapping {
             raw: map,
@@ -470,7 +478,7 @@ impl<D: Device> DeviceInternal for D {
         }
     }
 
-    fn map_read_write<T: Copy>(&mut self, map: <Self as DeviceInternal>::RawMapping,
+    fn map_read_write<T: Copy>(&mut self, map: <Self as MapFactory>::RawMapping,
                       length: usize) -> RWMapping<T, Self> {
         RWMapping {
             raw: map,

@@ -31,6 +31,7 @@
 
 extern crate cgmath;
 extern crate gfx;
+extern crate gfx_device_gl;
 extern crate glfw;
 extern crate time;
 extern crate rand;
@@ -310,7 +311,7 @@ fn calculate_color(height: f32) -> [f32; 3] {
 type Frame = gfx::Frame<gfx::GlResources>;
 type Texture = gfx::TextureHandle<gfx::GlResources>;
 
-fn create_g_buffer(width: u16, height: u16, device: &mut gfx::GlDevice)
+fn create_g_buffer(width: u16, height: u16, device: &mut gfx_device_gl::GlDevice)
         -> (Frame, Texture, Texture, Texture, Texture) {
     let mut frame = gfx::Frame::new(width, height);
 
@@ -347,7 +348,7 @@ fn create_g_buffer(width: u16, height: u16, device: &mut gfx::GlDevice)
     (frame, texture_pos, texture_normal, texture_diffuse, texture_depth)
 }
 
-fn create_res_buffer(width: u16, height: u16, device: &mut gfx::GlDevice, texture_depth: Texture)
+fn create_res_buffer(width: u16, height: u16, device: &mut gfx_device_gl::GlDevice, texture_depth: Texture)
         -> (Frame, Texture, Texture) {
     let mut frame = gfx::Frame::new(width, height);
 
@@ -389,7 +390,7 @@ fn main() {
     let (w, h) = window.get_framebuffer_size();
     let frame = gfx::Frame::new(w as u16, h as u16);
 
-    let mut device = gfx::GlDevice::new(|s| window.get_proc_address(s));
+    let mut device = gfx_device_gl::GlDevice::new(|s| window.get_proc_address(s));
     let mut renderer = device.create_renderer();
     let mut context = gfx::batch::Context::new();
 

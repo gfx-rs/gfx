@@ -48,9 +48,10 @@ fn test_vertex_format() {
                                   Format, Stride};
     use secret_lib::gfx;
     use secret_lib::device;
+    use secret_lib::gfx::device::HandleFactory;
 
-    let buf_vert = device::gl_device::make_dummy_buffer();
-    let buf_inst = device::gl_device::make_dummy_buffer();
+    let buf_vert = ().make_buffer((),());
+    let buf_inst = ().make_buffer((), ());
     let mesh = gfx::Mesh::from_format_instanced::<MyVertex, MyInstance>(buf_vert, 0, buf_inst);
     let stride_vert = 34 as Stride;
     let stride_inst = 8 as Stride;

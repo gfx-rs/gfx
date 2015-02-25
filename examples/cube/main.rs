@@ -16,8 +16,9 @@
 #![plugin(gfx_macros)]
 
 extern crate cgmath;
-extern crate gfx;
 extern crate glfw;
+extern crate gfx;
+extern crate gfx_device_gl;
 
 use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3};
@@ -46,7 +47,7 @@ struct Params {
     transform: [[f32; 4]; 4],
 
     #[name = "t_Color"]
-    color: gfx::shade::TextureParam<gfx::GlResources>,
+    color: gfx::shade::TextureParam<gfx_device_gl::GlResources>,
 }
 
 static VERTEX_SRC: &'static [u8] = b"
@@ -97,7 +98,7 @@ fn main() {
     let (w, h) = window.get_framebuffer_size();
     let frame = gfx::Frame::new(w as u16, h as u16);
 
-    let mut device = gfx::GlDevice::new(|s| window.get_proc_address(s));
+    let mut device = gfx_device_gl::GlDevice::new(|s| window.get_proc_address(s));
     let mut renderer = device.create_renderer();
     let mut context = gfx::batch::Context::new();
 

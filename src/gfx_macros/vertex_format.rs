@@ -233,7 +233,7 @@ impl ItemDecorator for VertexFormat {
             (*push)(super::fixup_extern_crate_paths(item, path_root))
         };
 
-        // `impl<R: gfx::Resources> gfx::VertexFormat<R> for $item`
+        // `impl<R: gfx::Resources> gfx::VertexFormat for $item`
         generic::TraitDef {
             span: span,
             attributes: Vec::new(),

@@ -30,7 +30,7 @@ path = "src/gfx/lib.rs"
 bitflags = "*"
 log = "*"
 
-[dependencies.gfx_macros]
+[dev_dependencies.gfx_macros]
 path = "src/gfx_macros"
 plugin = true
 version = "0.1.6"
@@ -41,6 +41,7 @@ version = "0.2.0"
 
 [dev_dependencies]
 glfw = "*"
+gfx_gl = "*"
 cgmath = "*"
 genmesh = "*"
 noise = "*"

@@ -18,6 +18,7 @@
 //! Demonstrates how to initialize gfx-rs using the gl-init-rs library.
 
 extern crate gfx;
+extern crate gfx_device_gl;
 extern crate glutin;
 
 use gfx::{Device, DeviceExt};
@@ -28,7 +29,7 @@ fn main() {
     unsafe { window.make_current() };
     let (w, h) = window.get_inner_size().unwrap();
 
-    let mut device = gfx::GlDevice::new(|s| window.get_proc_address(s));
+    let mut device = gfx_device_gl::GlDevice::new(|s| window.get_proc_address(s));
     let mut renderer = device.create_renderer();
 
     renderer.clear(
