@@ -27,9 +27,8 @@ authors = ["The Gfx-rs Developers"]
 name = "gfx_device_gl"
 
 [dependencies.gfx]
-path = "../gfx-rs"
-#git = "https://github.com/gfx-rs/gfx-rs"
-#version = "0.2.0"
+git = "https://github.com/gfx-rs/gfx-rs"
+version = "0.2.0"
 
 [dependencies]
 log = "*"
