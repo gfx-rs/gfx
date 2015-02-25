@@ -22,7 +22,7 @@ use device;
 use device::{Device, Resources};
 use device::attrib;
 use device::attrib::IntSize;
-use device::draw::CommandBuffer;
+use device::draw::{CommandBuffer, InstanceOption);
 use device::shade::{ProgramInfo, UniformValue};
 use device::target::{Rect, ClearData, Mirror, Mask, Access, Target};
 use render::batch::Batch;
@@ -44,7 +44,6 @@ pub mod target;
 
 const TRACKED_ATTRIBUTES: usize = 8;
 type CachedAttribute<R: Resources> = (device::RawBufferHandle<R>, attrib::Format);
-type Instancing = (device::InstanceCount, device::VertexCount);
 
 /// The internal state of the renderer.
 /// This is used as a cache to eliminate redundant state changes.
@@ -199,8 +198,9 @@ impl<C: CommandBuffer> Renderer<C> {
     }
 
     /// Draw a 'batch' with all known parameters specified, internal use only.
-    fn draw_all<B: Batch<Resources = C::Resources>>(&mut self, batch: &B, instances: Option<Instancing>,
-                frame: &target::Frame<C::Resources>) -> Result<(), DrawError<B::Error>> {
+    fn draw_all<B: Batch<Resources = C::Resources>>(&mut self, batch: &B,
+                instances: InstanceOption, frame: &target::Frame<C::Resources>)
+                -> Result<(), DrawError<B::Error>> {
         let (mesh, attrib_iter, slice, state) = match batch.get_data() {
             Ok(data) => data,
             Err(e) => return Err(DrawError::InvalidBatch(e)),
@@ -452,8 +452,7 @@ impl<C: CommandBuffer> Renderer<C> {
         }
     }
 
-    fn draw_slice(&mut self, slice: &mesh::Slice<C::Resources>,
-                  instances: Option<(device::InstanceCount, device::VertexCount)>) {
+    fn draw_slice(&mut self, slice: &mesh::Slice<C::Resources>, instances: InstanceOption) {
         let mesh::Slice { start, end, prim_type, kind } = slice.clone();
         match kind {
             SliceKind::Vertex => {
