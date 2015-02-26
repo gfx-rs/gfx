@@ -142,12 +142,12 @@ fn decode_count_and_type(cx: &mut ext::base::ExtCtxt, span: codemap::Span,
                          path_root: ast::Ident) -> (P<ast::Expr>, P<ast::Expr>) {
     let modifier = find_modifier(cx, span, &field.node.attrs);
     match field.node.ty.node {
-        ast::TyPath(ref p, _) => (
+        ast::TyPath(_,ref p) => (
             cx.expr_lit(span, ast::LitInt(1, ast::UnsuffixedIntLit(ast::Plus))),
             decode_type(cx, span, &p.segments[0].identifier, modifier, path_root),
         ),
         ast::TyFixedLengthVec(ref pty, ref expr) => (expr.clone(), match pty.node {
-            ast::TyPath(ref p, _) => {
+            ast::TyPath(_,ref p) => {
                 decode_type(cx, span, &p.segments[0].identifier, modifier, path_root)
             },
             _ => {
