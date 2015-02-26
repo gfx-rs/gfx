@@ -19,14 +19,15 @@ mod secret_lib;
 
 use secret_lib::gfx;
 
+type R = ();
 // Test all features
-#[shader_param]
+#[shader_param(R)]
 #[allow(dead_code)]
 struct TestParam {
     a: i32,
     b: [f32; 4],
-    c: gfx::shade::TextureParam<()>,
-    d: gfx::RawBufferHandle<()>,
+    c: gfx::shade::TextureParam<R>,
+    d: gfx::RawBufferHandle<R>,
     e: f32,
     #[name = "a_f"]
     f: [f32; 4],

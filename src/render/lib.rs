@@ -207,6 +207,9 @@ impl<C: CommandBuffer> Renderer<C> {
         };
         let target_missing = state.get_target_mask() - frame.get_mask();
         if !target_missing.is_empty() {
+            error!("Error drawing to frame {:?}. ", frame);
+            error!("Frame mask: {:?}, State mask: {:?}, difference: {:?}",
+                frame.get_mask(), state.get_target_mask(), target_missing);
             return Err(DrawError::MissingTarget(target_missing))
         }
         self.bind_frame(frame);

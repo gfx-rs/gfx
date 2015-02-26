@@ -32,6 +32,7 @@ use cgmath::{Transform, AffineMatrix3};
 use gfx::{Device, DeviceExt, ToSlice};
 use gfx::batch::RefBatch;
 use glfw::Context;
+use gfx_device_gl::GlResources as R;
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
 use time::precise_time_s;
@@ -62,7 +63,7 @@ impl fmt::Debug for Vertex {
 
 // The shader_param attribute makes sure the following struct can be used to
 // pass parameters to a shader.
-#[shader_param]
+#[shader_param(R)]
 struct Params {
     #[name = "u_Model"]
     model: [[f32; 4]; 4],

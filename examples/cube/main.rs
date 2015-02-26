@@ -26,6 +26,7 @@ use cgmath::{Transform, AffineMatrix3};
 use gfx::{Device, DeviceExt, ToSlice};
 use gfx::batch::RefBatch;
 use glfw::Context;
+use gfx_device_gl::GlResources as R;
 
 #[vertex_format]
 #[derive(Copy)]
@@ -41,13 +42,13 @@ struct Vertex {
 
 // The shader_param attribute makes sure the following struct can be used to
 // pass parameters to a shader.
-#[shader_param]
+#[shader_param(R)]
 struct Params {
     #[name = "u_Transform"]
     transform: [[f32; 4]; 4],
 
     #[name = "t_Color"]
-    color: gfx::shade::TextureParam<gfx_device_gl::GlResources>,
+    color: gfx::shade::TextureParam<R>,
 }
 
 static VERTEX_SRC: &'static [u8] = b"

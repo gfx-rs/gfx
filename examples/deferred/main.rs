@@ -46,6 +46,7 @@ use cgmath::{Transform, AffineMatrix3};
 use gfx::{Device, DeviceExt, Plane, ToSlice, RawBufferHandle};
 use gfx::batch::RefBatch;
 use glfw::Context;
+use gfx_device_gl::GlResources as R;
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{SharedVertex, IndexedPolygon};
 use time::precise_time_s;
@@ -85,7 +86,7 @@ struct CubeVertex {
     pos: [i8; 3],
 }
 
-#[shader_param]
+#[shader_param(R)]
 struct TerrainParams {
     #[name = "u_Model"]
     model: [[f32; 4]; 4],
@@ -97,12 +98,12 @@ struct TerrainParams {
     cam_pos: [f32; 3],
 }
 
-#[shader_param]
+#[shader_param(R)]
 struct LightParams {
     #[name = "u_Transform"]
     transform: [[f32; 4]; 4],
     #[name = "u_LightPosBlock"]
-    light_pos_buf: gfx::RawBufferHandle<gfx::GlResources>,
+    light_pos_buf: gfx::RawBufferHandle<R>,
     #[name = "u_Radius"]
     radius: f32,
     #[name = "u_CameraPos"]
@@ -110,27 +111,27 @@ struct LightParams {
     #[name = "u_FrameRes"]
     frame_res: [f32; 2],
     #[name = "u_TexPos"]
-    tex_pos: gfx::shade::TextureParam<gfx::GlResources>,
+    tex_pos: gfx::shade::TextureParam<R>,
     #[name = "u_TexNormal"]
-    tex_normal: gfx::shade::TextureParam<gfx::GlResources>,
+    tex_normal: gfx::shade::TextureParam<R>,
     #[name = "u_TexDiffuse"]
-    tex_diffuse: gfx::shade::TextureParam<gfx::GlResources>,
+    tex_diffuse: gfx::shade::TextureParam<R>,
 }
 
-#[shader_param]
+#[shader_param(R)]
 struct EmitterParams {
     #[name = "u_Transform"]
     transform: [[f32; 4]; 4],
     #[name = "u_LightPosBlock"]
-    light_pos_buf: gfx::RawBufferHandle<gfx::GlResources>,
+    light_pos_buf: gfx::RawBufferHandle<R>,
     #[name = "u_Radius"]
     radius: f32,
 }
 
-#[shader_param]
+#[shader_param(R)]
 struct BlitParams {
     #[name = "u_Tex"]
-    tex: gfx::shade::TextureParam<gfx::GlResources>,
+    tex: gfx::shade::TextureParam<R>,
 }
 
 static TERRAIN_VERTEX_SRC: &'static [u8] = b"
@@ -308,11 +309,10 @@ fn calculate_color(height: f32) -> [f32; 3] {
     }
 }
 
-type Frame = gfx::Frame<gfx::GlResources>;
-type Texture = gfx::TextureHandle<gfx::GlResources>;
+type Texture = gfx::TextureHandle<R>;
 
 fn create_g_buffer(width: u16, height: u16, device: &mut gfx_device_gl::GlDevice)
-        -> (Frame, Texture, Texture, Texture, Texture) {
+        -> (gfx::Frame<R>, Texture, Texture, Texture, Texture) {
     let mut frame = gfx::Frame::new(width, height);
 
     let texture_info_float = gfx::tex::TextureInfo {
@@ -349,7 +349,7 @@ fn create_g_buffer(width: u16, height: u16, device: &mut gfx_device_gl::GlDevice
 }
 
 fn create_res_buffer(width: u16, height: u16, device: &mut gfx_device_gl::GlDevice, texture_depth: Texture)
-        -> (Frame, Texture, Texture) {
+        -> (gfx::Frame<R>, Texture, Texture) {
     let mut frame = gfx::Frame::new(width, height);
 
     let texture_info_float = gfx::tex::TextureInfo {
@@ -373,7 +373,7 @@ fn create_res_buffer(width: u16, height: u16, device: &mut gfx_device_gl::GlDevi
 
 fn main() {
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS)
-                        .ok().expect("Failed to initialize glfw.");
+                        .unwrap();
 
     glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
     glfw.window_hint(glfw::WindowHint::OpenglForwardCompat(true));
@@ -429,11 +429,11 @@ fn main() {
             .to_slice(gfx::PrimitiveType::TriangleList);
 
         let program = device.link_program(TERRAIN_VERTEX_SRC, TERRAIN_FRAGMENT_SRC)
-                            .ok().expect("Failed to link program");
+                            .unwrap();
         let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
         context.make_batch(&program, &mesh, slice, &state)
-               .ok().expect("Failed to match back")
+               .unwrap()
     };
 
     let blit_batch: RefBatch<BlitParams> = {
@@ -449,11 +449,11 @@ fn main() {
         let slice = mesh.to_slice(gfx::PrimitiveType::TriangleList);
 
         let program = device.link_program(BLIT_VERTEX_SRC, BLIT_FRAGMENT_SRC)
-                            .ok().expect("Failed to link program");
+                            .unwrap();
         let state = gfx::DrawState::new();
 
         context.make_batch(&program, &mesh, slice, &state)
-               .ok().expect("Failed to create batch")
+               .unwrap()
     };
 
     let (light_batch, emitter_batch) = {
@@ -510,18 +510,18 @@ fn main() {
 
         let light_batch: RefBatch<LightParams> = {
             let program = device.link_program(LIGHT_VERTEX_SRC, LIGHT_FRAGMENT_SRC)
-                                .ok().expect("Failed to link program.");
+                                .unwrap();
 
             context.make_batch(&program, &mesh, slice, &state)
-                   .ok().expect("Failed to create batch")
+                   .unwrap()
         };
 
         let emitter_batch: RefBatch<EmitterParams> = {
             let program = device.link_program(EMITTER_VERTEX_SRC, EMITTER_FRAGMENT_SRC)
-                                .ok().expect("Failed to link program.");
+                                .unwrap();
 
             context.make_batch(&program, &mesh, slice, &state)
-                   .ok().expect("Failed to create batch")
+                   .unwrap()
         };
 
         (light_batch, emitter_batch)
