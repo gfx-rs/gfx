@@ -61,22 +61,16 @@ pub trait RawMapping {
     unsafe fn to_mut_slice<T>(&self, len: usize) -> &mut [T];
 }
 
-impl RawMapping for () {
-    unsafe fn set<T>(&self, _: usize, _: T) { unimplemented!() }
-    unsafe fn to_slice<T>(&self, _: usize) -> &[T] { unimplemented!() }
-    unsafe fn to_mut_slice<T>(&self, _: usize) -> &mut [T] { unimplemented!() }
-}
-
 /// A handle to a readable map, which can be sliced.
 pub struct ReadableMapping<'a, T: Copy, D: 'a + Device> {
-    raw: <D::Resources as Resources>::RawMapping,
+    raw: D::Mapper,
     len: usize,
     device: &'a mut D,
     phantom_t: PhantomData<T>
 }
 
 impl<'a, T: Copy, D: Device> Deref for ReadableMapping<'a, T, D> where
-    <D::Resources as Resources>::RawMapping: 'a,
+    D::Mapper: 'a,
 {
     type Target = [T];
 
@@ -87,7 +81,7 @@ impl<'a, T: Copy, D: Device> Deref for ReadableMapping<'a, T, D> where
 
 #[unsafe_destructor]
 impl<'a, T: Copy, D: Device> Drop for ReadableMapping<'a, T, D> where
-    <D::Resources as Resources>::RawMapping: 'a,
+    D::Mapper: 'a,
 {
     fn drop(&mut self) {
         self.device.unmap_buffer_raw(self.raw.clone())
@@ -96,7 +90,7 @@ impl<'a, T: Copy, D: Device> Drop for ReadableMapping<'a, T, D> where
 
 /// A handle to a writable map, which only allows setting elements.
 pub struct WritableMapping<'a, T: Copy, D: 'a + Device> {
-    raw: <D::Resources as Resources>::RawMapping,
+    raw: D::Mapper,
     len: usize,
     device: &'a mut D,
     phantom_t: PhantomData<T>
@@ -114,7 +108,7 @@ impl<'a, T: Copy, D: Device> WritableMapping<'a, T, D> {
 
 #[unsafe_destructor]
 impl<'a, T: Copy, D: Device> Drop for WritableMapping<'a, T, D> where
-    <D::Resources as Resources>::RawMapping: 'a,
+    D::Mapper: 'a,
 {
     fn drop(&mut self) {
         self.device.unmap_buffer_raw(self.raw.clone())
@@ -123,15 +117,13 @@ impl<'a, T: Copy, D: Device> Drop for WritableMapping<'a, T, D> where
 
 /// A handle to a complete readable/writable map, which can be sliced both ways.
 pub struct RWMapping<'a, T: Copy, D: 'a + Device> {
-    raw: <D::Resources as Resources>::RawMapping,
+    raw: D::Mapper,
     len: usize,
     device: &'a mut D,
     phantom_t: PhantomData<T>
 }
 
-impl<'a, T: Copy, D: Device> Deref for RWMapping<'a, T, D> where
-    <D::Resources as Resources>::RawMapping: 'a,
-{
+impl<'a, T: Copy, D: Device> Deref for RWMapping<'a, T, D> where D::Mapper: 'a {
     type Target = [T];
 
     fn deref(&self) -> &[T] {
@@ -139,18 +131,14 @@ impl<'a, T: Copy, D: Device> Deref for RWMapping<'a, T, D> where
     }
 }
 
-impl<'a, T: Copy, D: Device> DerefMut for RWMapping<'a, T, D> where
-    <D::Resources as Resources>::RawMapping: 'a,
-{
+impl<'a, T: Copy, D: Device> DerefMut for RWMapping<'a, T, D> where D::Mapper: 'a {
     fn deref_mut(&mut self) -> &mut [T] {
         unsafe { self.raw.to_mut_slice(self.len) }
     }
 }
 
 #[unsafe_destructor]
-impl<'a, T: Copy, D: Device> Drop for RWMapping<'a, T, D> where
-    <D::Resources as Resources>::RawMapping: 'a,
-{
+impl<'a, T: Copy, D: Device> Drop for RWMapping<'a, T, D> where D::Mapper: 'a {
     fn drop(&mut self) {
         self.device.unmap_buffer_raw(self.raw.clone())
     }
@@ -219,19 +207,6 @@ impl<R: Resources, T> BufferHandle<R, T> {
         assert!(mem::size_of::<T>() != 0, "Cannot determine the length of zero-sized buffers.");
         self.get_info().size / mem::size_of::<T>()
     }
-}
-
-/// A helper method to test `#[vertex_format]` without GL context
-/// Not to be used by user code!
-/// Will be replaced by a proper dummy device in the future.
-//#[cfg(test)]
-pub fn make_dummy_buffer<R: Resources, T>(value: R::Buffer)
-                         -> BufferHandle<R, T> {
-    let info = BufferInfo {
-        usage: BufferUsage::Static,
-        size: 0,
-    };
-    BufferHandle::from_raw(Handle(value, info))
 }
 
 /// Raw (untyped) Buffer Handle
@@ -336,7 +311,6 @@ pub struct BufferInfo {
 
 /// Resources pertaining to a specific API.
 pub trait Resources: PhantomFn<Self> + Copy + Clone + PartialEq + fmt::Debug {
-    type RawMapping:    Clone + RawMapping;
     type Buffer:        Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
     type ArrayBuffer:   Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
     type Shader:        Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
@@ -348,7 +322,6 @@ pub trait Resources: PhantomFn<Self> + Copy + Clone + PartialEq + fmt::Debug {
 }
 
 impl Resources for () {
-    type RawMapping = ();
     type Buffer = ();
     type ArrayBuffer = ();
     type Shader = ();
@@ -363,6 +336,7 @@ impl Resources for () {
 #[allow(missing_docs)]
 pub trait Device {
     type Resources: Resources;
+    type Mapper: Clone + RawMapping;
     type CommandBuffer: draw::CommandBuffer<Resources = Self::Resources>;
 
     /// Returns the capabilities available to the specific API implementation
@@ -411,8 +385,8 @@ pub trait Device {
                      offset_elements: usize) {
         self.update_buffer_raw(buf.cast(), as_byte_slice(data), mem::size_of::<T>() * offset_elements)
     }
-    fn map_buffer_raw(&mut self, buf: BufferHandle<Self::Resources, ()>, access: MapAccess) -> <Self::Resources as Resources>::RawMapping;
-    fn unmap_buffer_raw(&mut self, map: <Self::Resources as Resources>::RawMapping);
+    fn map_buffer_raw(&mut self, buf: BufferHandle<Self::Resources, ()>, access: MapAccess) -> Self::Mapper;
+    fn unmap_buffer_raw(&mut self, map: Self::Mapper);
     fn map_buffer_readable<T: Copy>(&mut self, buf: BufferHandle<Self::Resources, T>) -> ReadableMapping<T, Self>;
     fn map_buffer_writable<T: Copy>(&mut self, buf: BufferHandle<Self::Resources, T>) -> WritableMapping<T, Self>;
     fn map_buffer_rw<T: Copy>(&mut self, buf: BufferHandle<Self::Resources, T>) -> RWMapping<T, Self>;
@@ -456,7 +430,7 @@ pub trait MapFactory {
 
 
 impl<D: Device> MapFactory for D {
-    type RawMapping = <D::Resources as Resources>::RawMapping;
+    type RawMapping = D::Mapper;
 
     fn map_readable<T: Copy>(&mut self, map: <Self as MapFactory>::RawMapping,
                     length: usize) -> ReadableMapping<T, Self> {
