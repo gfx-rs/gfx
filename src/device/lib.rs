@@ -328,6 +328,7 @@ pub struct BufferInfo {
 }
 
 /// Resources pertaining to a specific API.
+#[allow(missing_docs)]
 pub trait Resources: PhantomFn<Self> + Copy + Clone + PartialEq + fmt::Debug {
     type RawMapping:    Clone + RawMapping;
     type Buffer:        Copy + Clone + fmt::Debug + PartialEq + Send + Sync;

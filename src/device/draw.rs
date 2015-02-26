@@ -76,6 +76,7 @@ impl DataBuffer {
 
 /// An interface of the abstract command buffer. It collects commands in an
 /// efficient API-specific manner, to be ready for execution on the device.
+#[allow(missing_docs)]
 pub trait CommandBuffer {
     type Resources: Resources;
 

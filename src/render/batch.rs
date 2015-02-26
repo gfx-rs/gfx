@@ -72,6 +72,7 @@ pub type BatchData<'a, R: Resources> = (&'a mesh::Mesh<R>, mesh::AttributeIter,
                                         &'a mesh::Slice<R>, &'a DrawState);
 
 /// Abstract batch trait
+#[allow(missing_docs)]
 pub trait Batch {
     type Resources: Resources;
     /// Possible errors occurring at batch access
