@@ -37,6 +37,7 @@ pub struct Attribute<R: Resources> {
 
 /// A trait implemented automatically for user vertex structure by
 /// `#[vertex_format] attribute
+#[allow(missing_docs)]
 pub trait VertexFormat {
     type Resources: Resources;
     /// Create the attributes for this type, using the given buffer.
