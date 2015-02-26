@@ -22,7 +22,7 @@ use device;
 use device::{Device, Resources};
 use device::attrib;
 use device::attrib::IntSize;
-use device::draw::{CommandBuffer, InstanceOption);
+use device::draw::{CommandBuffer, InstanceOption};
 use device::shade::{ProgramInfo, UniformValue};
 use device::target::{Rect, ClearData, Mirror, Mask, Access, Target};
 use render::batch::Batch;

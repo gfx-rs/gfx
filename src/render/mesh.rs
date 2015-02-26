@@ -38,10 +38,9 @@ pub struct Attribute<R: Resources> {
 /// A trait implemented automatically for user vertex structure by
 /// `#[vertex_format] attribute
 pub trait VertexFormat {
-    type Resources: Resources;
     /// Create the attributes for this type, using the given buffer.
-    fn generate(Option<Self>, buffer: device::RawBufferHandle<Self::Resources>)
-                -> Vec<Attribute<Self::Resources>>;
+    fn generate<R: Resources>(Option<&Self>, buffer: device::RawBufferHandle<R>)
+                -> Vec<Attribute<R>>;
 }
 
 /// Describes geometry to render.
@@ -63,23 +62,21 @@ impl<R: Resources> Mesh<R> {
     }
 
     /// Create a new `Mesh` from a struct that implements `VertexFormat` and a buffer.
-    pub fn from_format<V>(buf: device::BufferHandle<R, V>, nv: device::VertexCount) -> Mesh<R> where
-        V: VertexFormat<Resources = R>,
-    {
+    pub fn from_format<V: VertexFormat>(buf: device::BufferHandle<R, V>, nv: device::VertexCount)
+                       -> Mesh<R> {
         Mesh {
             num_vertices: nv,
-            attributes: VertexFormat::generate(None::<V>, buf.raw()),
+            attributes: VertexFormat::generate(None::<&V>, buf.raw()),
         }
     }
 
     /// Create a new intanced `Mesh` given a vertex buffer and an instance buffer.
-    pub fn from_format_instanced<V, U>(buf: device::BufferHandle<R, V>, nv: device::VertexCount,
-                                       inst: device::BufferHandle<R, U>) -> Mesh<R> where
-        V: VertexFormat<Resources = R>,
-        U: VertexFormat<Resources = R>,
-    {
-        let per_vertex   = VertexFormat::generate(None::<V>, buf.raw());
-        let per_instance = VertexFormat::generate(None::<U>, inst.raw());
+    pub fn from_format_instanced<V: VertexFormat, U: VertexFormat>(
+                                 buf: device::BufferHandle<R, V>,
+                                 nv: device::VertexCount,
+                                 inst: device::BufferHandle<R, U>) -> Mesh<R> {
+        let per_vertex   = VertexFormat::generate(None::<&V>, buf.raw());
+        let per_instance = VertexFormat::generate(None::<&U>, inst.raw());
 
         let mut attributes = per_vertex;
         for mut at in per_instance.into_iter() {

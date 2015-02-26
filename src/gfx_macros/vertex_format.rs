@@ -241,27 +241,30 @@ impl ItemDecorator for VertexFormat {
                 vec![super::EXTERN_CRATE_HACK, "gfx", "VertexFormat"],
             ),
             additional_bounds: Vec::new(),
-            generics: generic::ty::LifetimeBounds {
-                lifetimes: Vec::new(),
-                bounds: vec![
-                    ("R", vec![
-                        generic::ty::Path::new(vec![
-                            super::EXTERN_CRATE_HACK, "gfx", "Resources"
-                        ]),
-                    ]),
-                ],
-            },
+            generics: generic::ty::LifetimeBounds::empty(),
             methods: vec![
                 // `fn generate(Option<Self>, gfx::RawBufferHandle) -> Vec<gfx::Attribute>`
                 generic::MethodDef {
                     name: "generate",
-                    generics: generic::ty::LifetimeBounds::empty(),
+                    generics: generic::ty::LifetimeBounds {
+                        lifetimes: Vec::new(),
+                        bounds: vec![
+                            ("R", vec![
+                                generic::ty::Path::new(vec![
+                                    super::EXTERN_CRATE_HACK, "gfx", "Resources"
+                                ]),
+                            ]),
+                        ],
+                    },
                     explicit_self: None,
                     args: vec![
                         generic::ty::Literal(generic::ty::Path {
                             path: vec!["Option"],
                             lifetime: None,
-                            params: vec![box generic::ty::Self_],
+                            params: vec![box generic::ty::Ptr(
+                                box generic::ty::Self_,
+                                generic::ty::PtrTy::Borrowed(None, ast::Mutability::MutImmutable)
+                            )],
                             global: false,
                         }),
                         generic::ty::Literal(generic::ty::Path {
@@ -294,11 +297,7 @@ impl ItemDecorator for VertexFormat {
                         box |c, s, ss| method_body(c, s, ss, path_root)),
                 },
             ],
-            associated_types: vec![
-                (context.ident_of("Resources"), generic::ty::Literal(
-                    generic::ty::Path::new_local("R")
-                )),
-            ],
+            associated_types: Vec::new(),
         }.expand(context, meta_item, item, fixup);
     }
 }
