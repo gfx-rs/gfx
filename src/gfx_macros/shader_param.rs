@@ -35,7 +35,7 @@ enum ParamError {
 /// Classify variable types (`i32`, `TextureParam`, etc) into the `Param`
 fn classify(node: &ast::Ty_) -> Result<Param, ParamError> {
     match *node {
-        ast::TyPath(ref path, _) => match path.segments.last() {
+        ast::TyPath(_,ref path) => match path.segments.last() {
             Some(segment) => match segment.identifier.name.as_str() {
                 "RawBufferHandle" => Ok(Param::Block),
                 "TextureParam" => Ok(Param::Texture),
