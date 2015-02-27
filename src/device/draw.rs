@@ -14,11 +14,7 @@
 
 //! Command Buffer device interface
 
-use attrib;
-use shade;
-use target;
-use tex;
-use Resources;
+use super::{attrib, shade, target, tex, Resources};
 
 type Offset = u32;
 type Size = u32;
@@ -74,6 +70,9 @@ impl DataBuffer {
     }
 }
 
+/// Optional instance parameters
+pub type InstanceOption = Option<(super::InstanceCount, super::VertexCount)>;
+
 /// An interface of the abstract command buffer. It collects commands in an
 /// efficient API-specific manner, to be ready for execution on the device.
 #[allow(missing_docs)]
@@ -89,25 +88,31 @@ pub trait CommandBuffer {
     /// Bind an array buffer object
     fn bind_array_buffer(&mut self, <Self::Resources as Resources>::ArrayBuffer);
     /// Bind a vertex attribute
-    fn bind_attribute(&mut self, ::AttributeSlot, <Self::Resources as Resources>::Buffer, attrib::Format);
+    fn bind_attribute(&mut self, super::AttributeSlot,
+                      <Self::Resources as Resources>::Buffer, attrib::Format);
     /// Bind an index buffer
     fn bind_index(&mut self, <Self::Resources as Resources>::Buffer);
     /// Bind a frame buffer object
-    fn bind_frame_buffer(&mut self, target::Access, <Self::Resources as Resources>::FrameBuffer);
+    fn bind_frame_buffer(&mut self, target::Access,
+                         <Self::Resources as Resources>::FrameBuffer);
     /// Unbind any surface from the specified target slot
     fn unbind_target(&mut self, target::Access, target::Target);
     /// Bind a surface to the specified target slot
-    fn bind_target_surface(&mut self, target::Access, target::Target, <Self::Resources as Resources>::Surface);
+    fn bind_target_surface(&mut self, target::Access, target::Target,
+                           <Self::Resources as Resources>::Surface);
     /// Bind a level of the texture to the specified target slot
-    fn bind_target_texture(&mut self, target::Access, target::Target, <Self::Resources as Resources>::Texture,
+    fn bind_target_texture(&mut self, target::Access, target::Target,
+                           <Self::Resources as Resources>::Texture,
                            target::Level, Option<target::Layer>);
     /// Bind a uniform block
-    fn bind_uniform_block(&mut self, <Self::Resources as Resources>::Program, ::UniformBufferSlot,
-                          ::UniformBlockIndex, <Self::Resources as Resources>::Buffer);
+    fn bind_uniform_block(&mut self, <Self::Resources as Resources>::Program,
+                          super::UniformBufferSlot, super::UniformBlockIndex,
+                          <Self::Resources as Resources>::Buffer);
     /// Bind a single uniform in the default block
     fn bind_uniform(&mut self, shade::Location, shade::UniformValue);
     /// Bind a texture
-    fn bind_texture(&mut self, ::TextureSlot, tex::TextureKind, <Self::Resources as Resources>::Texture,
+    fn bind_texture(&mut self, super::TextureSlot, tex::TextureKind,
+                    <Self::Resources as Resources>::Texture,
                     Option<::SamplerHandle<Self::Resources>>);
     /// Select, which color buffers are going to be targetted by the shader
     fn set_draw_color_buffers(&mut self, usize);
@@ -134,11 +139,12 @@ pub trait CommandBuffer {
     /// Clear target surfaces
     fn call_clear(&mut self, target::ClearData, target::Mask);
     /// Draw a primitive
-    fn call_draw(&mut self, ::PrimitiveType, ::VertexCount, ::VertexCount,
-                 Option<(::InstanceCount, ::VertexCount)>);
+    fn call_draw(&mut self, super::PrimitiveType, super::VertexCount,
+                 super::VertexCount, InstanceOption);
     /// Draw a primitive with index buffer
-    fn call_draw_indexed(&mut self, ::PrimitiveType, ::IndexType, ::VertexCount,
-                         ::VertexCount, ::VertexCount, Option<(::InstanceCount, ::VertexCount)>);
+    fn call_draw_indexed(&mut self, super::PrimitiveType, super::IndexType,
+                         super::VertexCount, super::VertexCount,
+                         super::VertexCount, InstanceOption);
     /// Blit from one target to another
     fn call_blit(&mut self, target::Rect, target::Rect, target::Mirror, target::Mask);
 }
@@ -148,7 +154,7 @@ mod tests {
     #[test]
     fn test_data_buffer() {
         let mut buf = super::DataBuffer::new();
-        assert_eq!(buf.add_struct(&(0u, false)), super::DataPointer(0, 16));
-        assert_eq!(buf.add_vec(&[5i, 6i]), super::DataPointer(16, 16));
+        assert_eq!(buf.add_struct(&(0u8, false)), super::DataPointer(0, 2));
+        assert_eq!(buf.add_vec(&[5i32, 6i32]), super::DataPointer(2, 8));
     }
 }

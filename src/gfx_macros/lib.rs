@@ -22,7 +22,6 @@ extern crate rustc;
 extern crate syntax;
 
 use syntax::{ast, attr, ext, codemap};
-use syntax::ext::build::AstBuilder;
 use syntax::parse::token;
 use syntax::fold::Folder;
 use syntax::ptr::P;
@@ -77,11 +76,12 @@ static EXTERN_CRATE_HACK: &'static str = "__gfx_extern_crate_hack";
 fn extern_crate_hack<F>(context: &mut ext::base::ExtCtxt,
                         span: codemap::Span,
                         mut push: F) -> ast::Ident where F: FnMut(P<ast::Item>) {
+    use syntax::ext::build::AstBuilder;
     let extern_crate_hack = token::gensym_ident(EXTERN_CRATE_HACK);
-    // mod $EXTERN_CRATE_HACK {
-    //     extern crate gfx_ = "gfx";
-    //     pub use gfx_ as gfx;
-    // }
+    //let item = quote_item!(context, span, mod $extern_crate_hack {
+    //    extern crate gfx_ = "gfx";
+    //    pub use gfx_ as gfx;
+    //}).unwrap();
     let item = context.item_mod(
         span,
         span,
@@ -109,7 +109,7 @@ fn extern_crate_hack<F>(context: &mut ext::base::ExtCtxt,
                     context.ident_of("self"),
                     context.ident_of("gfx_")
                 ])
-            )
+            ),
         ]
     );
     push(item);

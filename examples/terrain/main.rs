@@ -17,6 +17,7 @@
 
 extern crate cgmath;
 extern crate gfx;
+extern crate gfx_device_gl;
 extern crate glfw;
 extern crate time;
 extern crate rand;
@@ -31,6 +32,7 @@ use cgmath::{Transform, AffineMatrix3};
 use gfx::{Device, DeviceExt, ToSlice};
 use gfx::batch::RefBatch;
 use glfw::Context;
+use gfx_device_gl::GlResources as R;
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
 use time::precise_time_s;
@@ -61,7 +63,7 @@ impl fmt::Debug for Vertex {
 
 // The shader_param attribute makes sure the following struct can be used to
 // pass parameters to a shader.
-#[shader_param]
+#[shader_param(R)]
 struct Params {
     #[name = "u_Model"]
     model: [[f32; 4]; 4],
@@ -132,7 +134,7 @@ fn main() {
     let (w, h) = window.get_framebuffer_size();
     let frame = gfx::Frame::new(w as u16, h as u16);
 
-    let mut device = gfx::GlDevice::new(|s| window.get_proc_address(s));
+    let mut device = gfx_device_gl::GlDevice::new(|s| window.get_proc_address(s));
 
     let rand_seed = rand::thread_rng().gen();
     let seed = Seed::new(rand_seed);

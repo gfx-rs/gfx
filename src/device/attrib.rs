@@ -16,7 +16,7 @@
 
 #![allow(missing_docs)]
 
-use shade::BaseType;
+use super::shade::BaseType;
 
 /// Number of elements per attribute, only 1 to 4 are supported
 pub type Count = u8;

@@ -12,19 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(core, std_misc, unsafe_destructor)]
 #![deny(missing_docs, missing_copy_implementations)]
 
 //! Graphics device. Not meant for direct use.
 
-#[macro_use]
-extern crate log;
-#[macro_use]
-extern crate bitflags;
-extern crate libc;
-
-use std::fmt;
-use std::mem;
+use std::{fmt, mem, raw};
 use std::ops::{Deref, DerefMut};
 use std::marker::{PhantomData, PhantomFn};
 
@@ -34,10 +26,6 @@ pub mod shade;
 pub mod state;
 pub mod target;
 pub mod tex;
-
-// TODO: This will become a separate crate once associated items are implemented
-// in rustc and subsequently used in the `Device` trait.
-/* #[cfg(gl)] */ #[path = "gl_device/lib.rs"] pub mod gl_device;
 
 /// Draw vertex count.
 pub type VertexCount = u32;
@@ -75,14 +63,14 @@ pub trait RawMapping {
 
 /// A handle to a readable map, which can be sliced.
 pub struct ReadableMapping<'a, T: Copy, D: 'a + Device> {
-    raw: <D::Resources as Resources>::RawMapping,
+    raw: D::Mapper,
     len: usize,
     device: &'a mut D,
     phantom_t: PhantomData<T>
 }
 
 impl<'a, T: Copy, D: Device> Deref for ReadableMapping<'a, T, D> where
-    <D::Resources as Resources>::RawMapping: 'a,
+    D::Mapper: 'a,
 {
     type Target = [T];
 
@@ -93,7 +81,7 @@ impl<'a, T: Copy, D: Device> Deref for ReadableMapping<'a, T, D> where
 
 #[unsafe_destructor]
 impl<'a, T: Copy, D: Device> Drop for ReadableMapping<'a, T, D> where
-    <D::Resources as Resources>::RawMapping: 'a,
+    D::Mapper: 'a,
 {
     fn drop(&mut self) {
         self.device.unmap_buffer_raw(self.raw.clone())
@@ -102,7 +90,7 @@ impl<'a, T: Copy, D: Device> Drop for ReadableMapping<'a, T, D> where
 
 /// A handle to a writable map, which only allows setting elements.
 pub struct WritableMapping<'a, T: Copy, D: 'a + Device> {
-    raw: <D::Resources as Resources>::RawMapping,
+    raw: D::Mapper,
     len: usize,
     device: &'a mut D,
     phantom_t: PhantomData<T>
@@ -120,7 +108,7 @@ impl<'a, T: Copy, D: Device> WritableMapping<'a, T, D> {
 
 #[unsafe_destructor]
 impl<'a, T: Copy, D: Device> Drop for WritableMapping<'a, T, D> where
-    <D::Resources as Resources>::RawMapping: 'a,
+    D::Mapper: 'a,
 {
     fn drop(&mut self) {
         self.device.unmap_buffer_raw(self.raw.clone())
@@ -129,15 +117,13 @@ impl<'a, T: Copy, D: Device> Drop for WritableMapping<'a, T, D> where
 
 /// A handle to a complete readable/writable map, which can be sliced both ways.
 pub struct RWMapping<'a, T: Copy, D: 'a + Device> {
-    raw: <D::Resources as Resources>::RawMapping,
+    raw: D::Mapper,
     len: usize,
     device: &'a mut D,
     phantom_t: PhantomData<T>
 }
 
-impl<'a, T: Copy, D: Device> Deref for RWMapping<'a, T, D> where
-    <D::Resources as Resources>::RawMapping: 'a,
-{
+impl<'a, T: Copy, D: Device> Deref for RWMapping<'a, T, D> where D::Mapper: 'a {
     type Target = [T];
 
     fn deref(&self) -> &[T] {
@@ -145,18 +131,14 @@ impl<'a, T: Copy, D: Device> Deref for RWMapping<'a, T, D> where
     }
 }
 
-impl<'a, T: Copy, D: Device> DerefMut for RWMapping<'a, T, D> where
-    <D::Resources as Resources>::RawMapping: 'a,
-{
+impl<'a, T: Copy, D: Device> DerefMut for RWMapping<'a, T, D> where D::Mapper: 'a {
     fn deref_mut(&mut self) -> &mut [T] {
         unsafe { self.raw.to_mut_slice(self.len) }
     }
 }
 
 #[unsafe_destructor]
-impl<'a, T: Copy, D: Device> Drop for RWMapping<'a, T, D> where
-    <D::Resources as Resources>::RawMapping: 'a,
-{
+impl<'a, T: Copy, D: Device> Drop for RWMapping<'a, T, D> where D::Mapper: 'a {
     fn drop(&mut self) {
         self.device.unmap_buffer_raw(self.raw.clone())
     }
@@ -247,7 +229,7 @@ pub type SamplerHandle<R: Resources> = Handle<<R as Resources>::Sampler, tex::Sa
 /// Treat a given slice as `&[u8]` for the given function call
 pub fn as_byte_slice<T>(slice: &[T]) -> &[u8] {
     let len = mem::size_of::<T>() * slice.len();
-    let slice = std::raw::Slice { data: slice.as_ptr(), len: len };
+    let slice = raw::Slice { data: slice.as_ptr(), len: len };
     unsafe { mem::transmute(slice) }
 }
 
@@ -330,7 +312,6 @@ pub struct BufferInfo {
 /// Resources pertaining to a specific API.
 #[allow(missing_docs)]
 pub trait Resources: PhantomFn<Self> + Copy + Clone + PartialEq + fmt::Debug {
-    type RawMapping:    Clone + RawMapping;
     type Buffer:        Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
     type ArrayBuffer:   Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
     type Shader:        Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
@@ -339,15 +320,24 @@ pub trait Resources: PhantomFn<Self> + Copy + Clone + PartialEq + fmt::Debug {
     type Surface:       Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
     type Texture:       Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
     type Sampler:       Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
+}
 
-    /// Return the framebuffer handle for the screen.
-    fn get_main_frame_buffer() -> FrameBufferHandle<Self>;
+impl Resources for () {
+    type Buffer = ();
+    type ArrayBuffer = ();
+    type Shader = ();
+    type Program = ();
+    type FrameBuffer = ();
+    type Surface = ();
+    type Texture = ();
+    type Sampler = ();
 }
 
 /// An interface for performing draw calls using a specific graphics API
 #[allow(missing_docs)]
 pub trait Device {
     type Resources: Resources;
+    type Mapper: Clone + RawMapping;
     type CommandBuffer: draw::CommandBuffer<Resources = Self::Resources>;
 
     /// Returns the capabilities available to the specific API implementation
@@ -375,6 +365,9 @@ pub trait Device {
     fn create_texture(&mut self, info: tex::TextureInfo) -> Result<TextureHandle<Self::Resources>, tex::TextureError>;
     fn create_sampler(&mut self, info: tex::SamplerInfo) -> SamplerHandle<Self::Resources>;
 
+    /// Return the framebuffer handle for the screen.
+    fn get_main_frame_buffer(&self) -> FrameBufferHandle<Self::Resources>;
+
     // resource deletion
     fn delete_buffer_raw(&mut self, buf: BufferHandle<Self::Resources, ()>);
     fn delete_buffer<T>(&mut self, buf: BufferHandle<Self::Resources, T>) {
@@ -393,8 +386,8 @@ pub trait Device {
                      offset_elements: usize) {
         self.update_buffer_raw(buf.cast(), as_byte_slice(data), mem::size_of::<T>() * offset_elements)
     }
-    fn map_buffer_raw(&mut self, buf: BufferHandle<Self::Resources, ()>, access: MapAccess) -> <Self::Resources as Resources>::RawMapping;
-    fn unmap_buffer_raw(&mut self, map: <Self::Resources as Resources>::RawMapping);
+    fn map_buffer_raw(&mut self, buf: BufferHandle<Self::Resources, ()>, access: MapAccess) -> Self::Mapper;
+    fn unmap_buffer_raw(&mut self, map: Self::Mapper);
     fn map_buffer_readable<T: Copy>(&mut self, buf: BufferHandle<Self::Resources, T>) -> ReadableMapping<T, Self>;
     fn map_buffer_writable<T: Copy>(&mut self, buf: BufferHandle<Self::Resources, T>) -> WritableMapping<T, Self>;
     fn map_buffer_rw<T: Copy>(&mut self, buf: BufferHandle<Self::Resources, T>) -> RWMapping<T, Self>;
@@ -410,34 +403,96 @@ pub trait Device {
     fn generate_mipmap(&mut self, tex: &TextureHandle<Self::Resources>);
 }
 
+/// A service trait with methods for handle creation already implemented.
+/// To be used by device back ends and some tests.
+pub trait HandleFactory {
+    /// Create a handle
+    fn make_handle<T, I>(&self, value: T, info: I) -> Handle<T, I> {
+        Handle(value, info)
+    }
+}
+
+impl HandleFactory for () {}
+impl<D: Device> HandleFactory for D {}
+
+/// A service trait with methods for mapping already implemented.
+/// To be used by device back ends.
+#[allow(missing_docs)]
+pub trait MapFactory {
+    type RawMapping: RawMapping;
+
+    fn map_readable<T: Copy>(&mut self, Self::RawMapping, usize)
+                    -> ReadableMapping<T, Self>;
+    fn map_writable<T: Copy>(&mut self, Self::RawMapping, usize)
+                    -> WritableMapping<T, Self>;
+    fn map_read_write<T: Copy>(&mut self, Self::RawMapping, usize)
+                      -> RWMapping<T, Self>;
+}
+
+
+impl<D: Device> MapFactory for D {
+    type RawMapping = D::Mapper;
+
+    fn map_readable<T: Copy>(&mut self, map: <Self as MapFactory>::RawMapping,
+                    length: usize) -> ReadableMapping<T, Self> {
+        ReadableMapping {
+            raw: map,
+            len: length,
+            device: self,
+            phantom_t: PhantomData,
+        }
+    }
+
+    fn map_writable<T: Copy>(&mut self, map: <Self as MapFactory>::RawMapping,
+                    length: usize) -> WritableMapping<T, Self> {
+        WritableMapping {
+            raw: map,
+            len: length,
+            device: self,
+            phantom_t: PhantomData,
+        }
+    }
+
+    fn map_read_write<T: Copy>(&mut self, map: <Self as MapFactory>::RawMapping,
+                      length: usize) -> RWMapping<T, Self> {
+        RWMapping {
+            raw: map,
+            len: length,
+            device: self,
+            phantom_t: PhantomData,
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use std::mem;
+    use std::marker::PhantomData;
     use super::{BufferHandle, Handle};
     use super::{BufferInfo, BufferUsage};
-    use super::back;
 
-    fn mock_buffer<T>(usage: BufferUsage, len: usize) -> BufferHandle<back::GlResources, T> {
+    fn mock_buffer<T>(len: usize) -> BufferHandle<(), T> {
         BufferHandle {
             raw: Handle(
-                0,
+                (),
                 BufferInfo {
-                    usage: usage,
+                    usage: BufferUsage::Static,
                     size: mem::size_of::<T>() * len,
                 },
             ),
+            phantom_t: PhantomData,
         }
     }
 
     #[test]
     fn test_buffer_len() {
-        assert_eq!(mock_buffer::<u8>(BufferUsage::Static, 8).len(), 8);
-        assert_eq!(mock_buffer::<u16>(BufferUsage::Static, 8).len(), 8);
+        assert_eq!(mock_buffer::<u8>(8).len(), 8);
+        assert_eq!(mock_buffer::<u16>(8).len(), 8);
     }
 
     #[test]
     #[should_fail]
     fn test_buffer_zero_len() {
-        let _ = mock_buffer::<()>(BufferUsage::Static, 0).len();
+        let _ = mock_buffer::<()>(0).len();
     }
 }

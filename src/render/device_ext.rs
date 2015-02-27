@@ -1,5 +1,4 @@
 use device;
-use device::Resources;
 use device::shade::{Stage, CreateShaderError, ShaderModel};
 use super::mesh::{Mesh, VertexFormat};
 
@@ -63,8 +62,7 @@ pub trait DeviceExt: device::Device {
     fn create_renderer(&mut self) -> ::Renderer<Self::CommandBuffer>;
     /// Create a new mesh from the given vertex data.
     /// Convenience function around `create_buffer` and `Mesh::from_format`.
-    fn create_mesh<T>(&mut self, data: &[T]) -> Mesh<Self::Resources> where
-        T: VertexFormat<Resources = Self::Resources> + Copy;
+    fn create_mesh<T: VertexFormat + Copy>(&mut self, data: &[T]) -> Mesh<Self::Resources>;
     /// Create a simple program given a vertex shader with a fragment one.
     fn link_program(&mut self, vs_code: &[u8], fs_code: &[u8])
                     -> Result<device::ProgramHandle<Self::Resources>, ProgramError>;
@@ -82,15 +80,13 @@ impl<D: device::Device> DeviceExt for D {
             common_array_buffer: self.create_array_buffer(),
             draw_frame_buffer: self.create_frame_buffer(),
             read_frame_buffer: self.create_frame_buffer(),
-            default_frame_buffer: <D::Resources as Resources>::get_main_frame_buffer(),
+            default_frame_buffer: self.get_main_frame_buffer(),
             render_state: super::RenderState::new(),
             parameters: super::ParamStorage::new(),
         }
     }
 
-    fn create_mesh<T>(&mut self, data: &[T]) -> Mesh<D::Resources> where
-        T: VertexFormat<Resources = D::Resources> + Copy,
-    {
+    fn create_mesh<T: VertexFormat + Copy>(&mut self, data: &[T]) -> Mesh<D::Resources> {
         let nv = data.len();
         debug_assert!(nv < {
             use std::num::Int;

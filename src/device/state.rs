@@ -19,7 +19,7 @@
 use std::default::Default;
 use std::fmt;
 
-use target;
+use super::target;
 
 /// The winding order of a set of vertices.
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
@@ -259,7 +259,7 @@ impl Default for BlendChannel {
 pub struct Blend {
     pub color: BlendChannel,
     pub alpha: BlendChannel,
-    pub value: ::target::ColorValue,
+    pub value: super::target::ColorValue,
 }
 
 impl Default for Blend {

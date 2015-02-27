@@ -290,26 +290,33 @@ impl ItemDecorator for ShaderParam {
         (*push)(link_item);
 
         // process meta parameters (expecting none)
-        match meta_item.node {
-            ast::MetaWord(_) => (), //expected
+        let resources = match meta_item.node {
+            ast::MetaList(_, ref list) if list.len() == 1 => {
+                use std::old_path::BytesContainer;
+                match list[0].node {
+                    ast::MetaWord(ref r) => r.container_as_str().unwrap(),
+                    _ => {
+                        context.span_err(list[0].span, "Invalid parameter");
+                        ""
+                    }
+                }
+            },
             _ => {
-                context.span_warn(meta_item.span,
-                    "No arguments are expected for #[shader_param]")
+                context.span_err(meta_item.span,
+                    "Use as #[shader_param(<ResourcesType>)]");
+                ""
             }
-        }
+        };
 
         // #[derive ShaderParam]
         let trait_def = generic::TraitDef {
             span: span,
             attributes: Vec::new(),
-            path: generic::ty::Path {
-                path: vec![super::EXTERN_CRATE_HACK, "gfx", "shade", "ShaderParam"],
-                lifetime: None,
-                params: Vec::new(),
-                global: false,
-            },
+            path: generic::ty::Path::new(
+                vec![super::EXTERN_CRATE_HACK, "gfx", "shade", "ShaderParam"],
+            ),
             additional_bounds: Vec::new(),
-            generics: generic::ty::LifetimeBounds::empty(),
+            generics: generic::ty::LifetimeBounds::empty(), //TODO
             methods: vec![
                 generic::MethodDef {
                     name: "create_link",
@@ -366,11 +373,9 @@ impl ItemDecorator for ShaderParam {
                             generic::ty::Path {
                                 path: vec![super::EXTERN_CRATE_HACK, "gfx", "shade", "ParamValues"],
                                 lifetime: None,
-                                params: vec![
-                                    box generic::ty::Literal(generic::ty::Path::new(
-                                        vec![super::EXTERN_CRATE_HACK, "gfx", "GlResources"]
-                                    )),
-                                ],
+                                params: vec![box generic::ty::Literal(
+                                    generic::ty::Path::new_local(resources)
+                                )],
                                 global: false,
                             },
                         ),
@@ -384,7 +389,7 @@ impl ItemDecorator for ShaderParam {
             ],
             associated_types: vec![
                 (context.ident_of("Resources"), generic::ty::Literal(
-                    generic::ty::Path::new(vec![super::EXTERN_CRATE_HACK, "gfx", "GlResources"]),
+                    generic::ty::Path::new_local(resources)
                 )),
                 (context.ident_of("Link"), link_ty),
             ],

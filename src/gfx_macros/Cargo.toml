@@ -17,8 +17,8 @@
 name = "gfx_macros"
 version = "0.1.6"
 description = "Utility macros for use gfx"
-homepage = "https://github.com/gfx/gfx-rs"
-repository = "https://github.com/gfx/gfx-rs"
+homepage = "https://github.com/gfx-rs/gfx-rs"
+repository = "https://github.com/gfx-rs/gfx-rs"
 keywords = ["graphics", "gamedev"]
 license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
