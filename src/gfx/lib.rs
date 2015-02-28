@@ -45,8 +45,8 @@ pub use device::draw::CommandBuffer;
 pub use device::shade::{ProgramInfo, UniformValue};
 pub use device::target::*;
 
-#[path = "../render/lib.rs"] pub mod render;
-#[path = "../device/lib.rs"] pub mod device;
+pub mod render;
+pub mod device;
 
 /// A convenient wrapper suitable for single-threaded operation.
 pub struct Graphics<D: device::Device> {
