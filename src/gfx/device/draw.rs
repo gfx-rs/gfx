@@ -14,7 +14,7 @@
 
 //! Command Buffer device interface
 
-use super::{attrib, shade, target, tex, Resources};
+use device::{attrib, shade, target, tex, Resources};
 
 type Offset = u32;
 type Size = u32;

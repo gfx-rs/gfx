@@ -1,6 +1,6 @@
 use device;
 use device::shade::{Stage, CreateShaderError, ShaderModel};
-use super::mesh::{Mesh, VertexFormat};
+use render::mesh::{Mesh, VertexFormat};
 
 /// Program linking error
 #[derive(Copy, Clone, PartialEq, Debug)]

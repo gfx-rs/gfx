@@ -19,7 +19,7 @@
 use std::default::Default;
 use std::fmt;
 
-use super::target;
+use device::target;
 
 /// The winding order of a set of vertices.
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
