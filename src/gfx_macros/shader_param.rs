@@ -87,7 +87,7 @@ fn method_create(cx: &mut ext::base::ExtCtxt,
             },
         }
     ).collect();
-    let gen_arms = |&: ptype: Param, var: ast::Ident| -> Vec<ast::Arm> {
+    let gen_arms = |ptype: Param, var: ast::Ident| -> Vec<ast::Arm> {
         class_info.iter().zip(definition.fields.iter())
                   .filter(|&(&(ref class, _), _)| *class == ptype)
                   .scan((), |_, (&(_, ref name_expr), field)|
