@@ -32,7 +32,6 @@ use cgmath::{Transform, AffineMatrix3};
 use gfx::{Device, DeviceExt, ToSlice};
 use gfx::batch::RefBatch;
 use glfw::Context;
-use gfx_device_gl::GlResources as R;
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
 use time::precise_time_s;
@@ -63,8 +62,8 @@ impl fmt::Debug for Vertex {
 
 // The shader_param attribute makes sure the following struct can be used to
 // pass parameters to a shader.
-#[shader_param(R)]
-struct Params {
+#[shader_param]
+struct Params<R: gfx::Resources> {
     #[name = "u_Model"]
     model: [[f32; 4]; 4],
 
@@ -73,6 +72,8 @@ struct Params {
 
     #[name = "u_Proj"]
     proj: [[f32; 4]; 4],
+
+    _dummy: std::marker::PhantomData<R>,
 }
 
 static VERTEX_SRC: &'static [u8] = b"
@@ -118,7 +119,7 @@ fn main() {
     use std::num::Float;
 
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS)
-        .ok().expect("Failed to initialize glfs-rs");
+        .ok().expect("Failed to initialize glfw-rs");
     glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
     glfw.window_hint(glfw::WindowHint::OpenglForwardCompat(true));
     glfw.window_hint(glfw::WindowHint::OpenglProfile(glfw::OpenGlProfileHint::Core));
@@ -160,15 +161,12 @@ fn main() {
         .to_slice(gfx::PrimitiveType::TriangleList);
 
     let mesh = device.create_mesh(vertex_data.as_slice());
-    let program = device.link_program(VERTEX_SRC, FRAGMENT_SRC)
-                        .ok().expect("Failed to link shaders.");
+    let program = device.link_program(VERTEX_SRC, FRAGMENT_SRC).unwrap();
     let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
     let mut graphics = gfx::Graphics::new(device);
-    let batch: RefBatch<Params> = {
-        graphics.make_batch(&program, &mesh, slice, &state)
-                .ok().expect("Failed to make batch.")
-    };
+    let batch: RefBatch<Params<gfx_device_gl::GlResources>> = 
+        graphics.make_batch(&program, &mesh, slice, &state).unwrap();
 
     let aspect = w as f32 / h as f32;
     let mut data = Params {
@@ -176,6 +174,7 @@ fn main() {
         view: Matrix4::identity().into_fixed(),
         proj: cgmath::perspective(cgmath::deg(60.0f32), aspect,
                                   0.1, 1000.0).into_fixed(),
+        _dummy: std::marker::PhantomData,
     };
 
     let clear_data = gfx::ClearData {

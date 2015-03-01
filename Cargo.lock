@@ -81,7 +81,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "gfx"
 version = "0.2.0"
-source = "git+https://github.com/gfx-rs/gfx-rs#79e00b2e9354aa34d04cb59efa8a49d9681443c3"
+source = "git+https://github.com/gfx-rs/gfx-rs#3af683a93169b5b5788b532f6bd11e98b7cc535c"
 dependencies = [
  "bitflags 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -112,7 +112,7 @@ dependencies = [
 [[package]]
 name = "gfx_macros"
 version = "0.1.6"
-source = "git+https://github.com/gfx-rs/gfx-rs#79e00b2e9354aa34d04cb59efa8a49d9681443c3"
+source = "git+https://github.com/gfx-rs/gfx-rs#3af683a93169b5b5788b532f6bd11e98b7cc535c"
 
 [[package]]
 name = "gl_common"

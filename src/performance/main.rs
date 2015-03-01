@@ -29,7 +29,6 @@ use cgmath::{Transform, AffineMatrix3, Vector4, Array1};
 use gfx::{Device, DeviceExt, ToSlice};
 use gfx::batch::RefBatch;
 use glfw::Context;
-use gfx_device_gl::GlResources as R;
 use gl::Gl;
 use gl::types::*;
 use std::mem;
@@ -52,10 +51,11 @@ struct Vertex {
 
 // The shader_param attribute makes sure the following struct can be used to
 // pass parameters to a shader.
-#[shader_param(R)]
-struct Params {
+#[shader_param]
+struct Params<R: gfx::Resources> {
     #[name = "u_Transform"]
     transform: [[f32; 4]; 4],
+    _dummy: std::marker::PhantomData<R>,
 }
 
 static VERTEX_SRC: &'static [u8] = b"
@@ -109,14 +109,12 @@ fn gfx_main(mut glfw: glfw::Glfw,
         format: gfx::tex::RGBA8,
     };
     let image_info = texture_info.to_image_info();
-    let texture = device.create_texture(texture_info)
-        .ok().expect("Failed to create texture");
+    let texture = device.create_texture(texture_info).unwrap();
     device.update_texture(&texture, &image_info,
                           &[0x20u8, 0xA0u8, 0xC0u8, 0x00u8])
-        .ok().expect("Failed to update texture");
+          .unwrap();
 
-    let program = device.link_program(VERTEX_SRC, FRAGMENT_SRC)
-                        .ok().expect("Failed to link shaders");
+    let program = device.link_program(VERTEX_SRC, FRAGMENT_SRC).unwrap();
     let view: AffineMatrix3<f32> = Transform::look_at(
         &Point3::new(0f32, -5.0, 0.0),
         &Point3::new(0f32, 0.0, 0.0),
@@ -132,10 +130,8 @@ fn gfx_main(mut glfw: glfw::Glfw,
     };
 
     let mut graphics = gfx::Graphics::new(device);
-    let batch: RefBatch<Params> = {
-        graphics.make_batch(&program, &mesh, slice, &state)
-                .ok().expect("Failed to make batch")
-    };
+    let batch: RefBatch<Params<gfx_device_gl::GlResources>> = 
+        graphics.make_batch(&program, &mesh, slice, &state).unwrap();
 
     while !window.should_close() {
         glfw.poll_events();
@@ -161,6 +157,7 @@ fn gfx_main(mut glfw: glfw::Glfw,
                 let data = Params {
                     transform: proj.mul_m(&view.mat)
                                    .mul_m(&model).into_fixed(),
+                    _dummy: std::marker::PhantomData,
                 };
                 graphics.draw(&batch, &data, &frame).unwrap();
             }
@@ -381,7 +378,7 @@ fn main() {
     let count = ((count as f64).sqrt() / 2.) as i16;
 
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS)
-        .ok().expect("Failed to initialize glfs-rs");
+        .ok().expect("Failed to initialize glfw-rs");
 
     glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
     glfw.window_hint(glfw::WindowHint::OpenglForwardCompat(true));
