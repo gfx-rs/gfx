@@ -34,7 +34,7 @@ use gfx::device::{HandleFactory, MapFactory};
 use gfx::device::attrib::*;
 use gfx::device::state::{CullMode, RasterMethod, WindingOrder};
 use gfx::device::target::{Access, Target};
-use self::draw::{Command, CommandBuffer};
+pub use self::draw::{Command, CommandBuffer};
 pub use self::info::{Info, PlatformName, Version};
 
 mod draw;
