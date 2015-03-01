@@ -46,7 +46,6 @@ use cgmath::{Transform, AffineMatrix3};
 use gfx::{Device, DeviceExt, Plane, ToSlice, RawBufferHandle};
 use gfx::batch::RefBatch;
 use glfw::Context;
-use gfx_device_gl::GlResources as R;
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{SharedVertex, IndexedPolygon};
 use time::precise_time_s;
@@ -86,8 +85,8 @@ struct CubeVertex {
     pos: [i8; 3],
 }
 
-#[shader_param(R)]
-struct TerrainParams {
+#[shader_param]
+struct TerrainParams<R: gfx::Resources> {
     #[name = "u_Model"]
     model: [[f32; 4]; 4],
     #[name = "u_View"]
@@ -96,10 +95,11 @@ struct TerrainParams {
     proj: [[f32; 4]; 4],
     #[name = "u_CameraPos"]
     cam_pos: [f32; 3],
+    _dummy: std::marker::PhantomData<R>,
 }
 
-#[shader_param(R)]
-struct LightParams {
+#[shader_param]
+struct LightParams<R: gfx::Resources> {
     #[name = "u_Transform"]
     transform: [[f32; 4]; 4],
     #[name = "u_LightPosBlock"]
@@ -118,8 +118,8 @@ struct LightParams {
     tex_diffuse: gfx::shade::TextureParam<R>,
 }
 
-#[shader_param(R)]
-struct EmitterParams {
+#[shader_param]
+struct EmitterParams<R: gfx::Resources> {
     #[name = "u_Transform"]
     transform: [[f32; 4]; 4],
     #[name = "u_LightPosBlock"]
@@ -128,8 +128,8 @@ struct EmitterParams {
     radius: f32,
 }
 
-#[shader_param(R)]
-struct BlitParams {
+#[shader_param]
+struct BlitParams<R: gfx::Resources> {
     #[name = "u_Tex"]
     tex: gfx::shade::TextureParam<R>,
 }
@@ -309,10 +309,10 @@ fn calculate_color(height: f32) -> [f32; 3] {
     }
 }
 
-type Texture = gfx::TextureHandle<R>;
+type Texture<D: gfx::Device> = gfx::TextureHandle<D::Resources>;
 
-fn create_g_buffer(width: u16, height: u16, device: &mut gfx_device_gl::GlDevice)
-        -> (gfx::Frame<R>, Texture, Texture, Texture, Texture) {
+fn create_g_buffer<D: gfx::Device>(width: u16, height: u16, device: &mut D)
+                   -> (gfx::Frame<D::Resources>, Texture<D>, Texture<D>, Texture<D>, Texture<D>) {
     let mut frame = gfx::Frame::new(width, height);
 
     let texture_info_float = gfx::tex::TextureInfo {
@@ -331,25 +331,21 @@ fn create_g_buffer(width: u16, height: u16, device: &mut gfx_device_gl::GlDevice
         kind: gfx::tex::TextureKind::Texture2D,
         format: gfx::tex::Format::DEPTH24STENCIL8,
     };
-    let texture_pos     = device.create_texture(texture_info_float)
-                                .ok().expect("failed to create texture.");
-    let texture_normal  = device.create_texture(texture_info_float)
-                                .ok().expect("failed to create texture.");
-    let texture_diffuse = device.create_texture(texture_info_float)
-                                .ok().expect("failed to create texture.");
-    let texture_depth   = device.create_texture(texture_info_depth)
-                                .ok().expect("failed to create texture.");
+    let texture_pos     = device.create_texture(texture_info_float).unwrap();
+    let texture_normal  = device.create_texture(texture_info_float).unwrap();
+    let texture_diffuse = device.create_texture(texture_info_float).unwrap();
+    let texture_depth   = device.create_texture(texture_info_depth).unwrap();
 
     frame.colors.push(Plane::Texture(texture_pos,     0, None));
     frame.colors.push(Plane::Texture(texture_normal,  0, None));
     frame.colors.push(Plane::Texture(texture_diffuse, 0, None));
-    frame.depth = Some(Plane::Texture(texture_depth, 0, None));
+    frame.depth = Some(Plane::Texture(texture_depth,  0, None));
 
     (frame, texture_pos, texture_normal, texture_diffuse, texture_depth)
 }
 
-fn create_res_buffer(width: u16, height: u16, device: &mut gfx_device_gl::GlDevice, texture_depth: Texture)
-        -> (gfx::Frame<R>, Texture, Texture) {
+fn create_res_buffer<D: gfx::Device>(width: u16, height: u16, device: &mut D, texture_depth: Texture<D>)
+                     -> (gfx::Frame<D::Resources>, Texture<D>, Texture<D>) {
     let mut frame = gfx::Frame::new(width, height);
 
     let texture_info_float = gfx::tex::TextureInfo {
@@ -361,9 +357,7 @@ fn create_res_buffer(width: u16, height: u16, device: &mut gfx_device_gl::GlDevi
         format: gfx::tex::Format::Float(gfx::tex::Components::RGBA, gfx::attrib::FloatSize::F32),
     };
 
-    let texture_frame = device.create_texture(texture_info_float)
-                              .ok().expect("failed to create texture.");
-;
+    let texture_frame = device.create_texture(texture_info_float).unwrap();
 
     frame.colors.push(Plane::Texture(texture_frame, 0, None));
     frame.depth = Some(Plane::Texture(texture_depth, 0, None));
@@ -393,6 +387,7 @@ fn main() {
     let mut device = gfx_device_gl::GlDevice::new(|s| window.get_proc_address(s));
     let mut renderer = device.create_renderer();
     let mut context = gfx::batch::Context::new();
+    type R = gfx_device_gl::GlResources;
 
     let (g_buffer, texture_pos, texture_normal, texture_diffuse, texture_depth)  = create_g_buffer(w as u16, h as u16, &mut device);
     let (res_buffer, texture_frame, _)  = create_res_buffer(w as u16, h as u16, &mut device, texture_depth);
@@ -403,7 +398,7 @@ fn main() {
     };
 
     let terrain_scale = Vector3::new(25.0, 25.0, 25.0);
-    let terrain_batch: RefBatch<TerrainParams> = {
+    let terrain_batch: RefBatch<TerrainParams<R>> = {
         let plane = genmesh::generators::Plane::subdivide(256, 256);
         let vertex_data: Vec<TerrainVertex> = plane.shared_vertex_iter()
             .map(|(x, y)| {
@@ -436,7 +431,7 @@ fn main() {
                .unwrap()
     };
 
-    let blit_batch: RefBatch<BlitParams> = {
+    let blit_batch: RefBatch<BlitParams<R>> = {
         let vertex_data = [
             BlitVertex { pos: [-1, -1, 0], tex_coord: [0, 0] },
             BlitVertex { pos: [ 1, -1, 0], tex_coord: [1, 0] },
@@ -508,7 +503,7 @@ fn main() {
             .depth(gfx::state::Comparison::LessEqual, false)
             .blend(gfx::BlendPreset::Additive);
 
-        let light_batch: RefBatch<LightParams> = {
+        let light_batch: RefBatch<LightParams<R>> = {
             let program = device.link_program(LIGHT_VERTEX_SRC, LIGHT_FRAGMENT_SRC)
                                 .unwrap();
 
@@ -516,7 +511,7 @@ fn main() {
                    .unwrap()
         };
 
-        let emitter_batch: RefBatch<EmitterParams> = {
+        let emitter_batch: RefBatch<EmitterParams<R>> = {
             let program = device.link_program(EMITTER_VERTEX_SRC, EMITTER_FRAGMENT_SRC)
                                 .unwrap();
 
@@ -541,6 +536,7 @@ fn main() {
         view: Matrix4::identity().into_fixed(),
         proj: proj.into_fixed(),
         cam_pos: Vector3::new(0.0, 0.0, 0.0).into_fixed(),
+        _dummy: std::marker::PhantomData,
     };
 
     let sampler = device.create_sampler(
@@ -573,7 +569,7 @@ fn main() {
         tex: (texture_pos, Some(sampler)),
     };
 
-    let mut debug_buf: Option<Texture> = None;
+    let mut debug_buf: Option<gfx::TextureHandle<R>> = None;
 
     let mut light_pos_vec: Vec<[f32; 4]> = (0 ..NUM_LIGHTS).map(|_| {
         [0.0, 0.0, 0.0, 0.0]
