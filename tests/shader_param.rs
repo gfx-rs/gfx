@@ -21,9 +21,9 @@ use secret_lib::gfx;
 
 type R = ();
 // Test all features
-#[shader_param(R)]
+#[shader_param]
 #[allow(dead_code)]
-struct TestParam {
+struct TestParam<R: gfx::Resources> {
     a: i32,
     b: [f32; 4],
     c: gfx::shade::TextureParam<R>,
@@ -37,7 +37,7 @@ struct TestParam {
 fn test_link_copy() {
     // testing if RefBatch is copyable
     fn _is_copy<T: Copy>(_t: T) {}
-    fn _ref_copy(batch: gfx::batch::RefBatch<TestParam>) {
+    fn _ref_copy(batch: gfx::batch::RefBatch<TestParam<R>>) {
         _is_copy(batch)
     }
 }
@@ -45,7 +45,7 @@ fn test_link_copy() {
 #[test]
 fn test_shader_param() {
     // testing if RefBatch can be constructed
-    let _ref: gfx::batch::RefBatch<TestParam>;
+    let _ref: gfx::batch::RefBatch<TestParam<R>>;
     // testing if OwnedBatch can be constructed
-    let _owned: gfx::batch::OwnedBatch<TestParam>;
+    let _owned: gfx::batch::OwnedBatch<TestParam<R>>;
 }
