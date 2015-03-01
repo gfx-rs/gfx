@@ -13,6 +13,4 @@
 // limitations under the License.
 
 extern crate "gfx" as gfx_;
-extern crate "gfx_device_gl" as device_;
 pub use self::gfx_ as gfx;
-pub use self::device_ as device;
