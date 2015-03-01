@@ -1,8 +1,0 @@
-#!/bin/sh
-
-(cd cube && cargo build)
-(cd deferred && cargo build)
-(cd glutin && cargo build)
-(cd performance && cargo build)
-(cd terrain && cargo build)
-(cd triangle && cargo build)

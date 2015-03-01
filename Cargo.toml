@@ -1,12 +1,29 @@
 [package]
-name = "gfx-gl-deferred"
+name = "gfx-examples"
 version = "0.0.1"
 
 [[bin]]
-name = "gfx-gl-deferred"
-path = "src/main.rs"
+name = "cube"
+path = "src/cube/main.rs"
+
+[[bin]]
+name = "deferred"
+path = "src/deferred/main.rs"
+
+[[bin]]
+name = "performance"
+path = "src/performance/main.rs"
+
+[[bin]]
+name = "terrain"
+path = "src/terrain/main.rs"
+
+[[bin]]
+name = "triangle"
+path = "src/triangle/main.rs"
 
 [dependencies]
+gfx_gl = "*"
 glfw = "*"
 cgmath = "*"
 rand = "*"
@@ -26,3 +43,6 @@ version = "*"
 git = "https://github.com/gfx-rs/gfx-rs"
 plugin = true
 version = "*"
+
+[dependencies.glutin]
+git = "https://github.com/tomaka/glutin"
