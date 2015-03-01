@@ -1,0 +1,26 @@
+[package]
+name = "gfx-gl-performance"
+version = "0.0.1"
+
+[[bin]]
+name = "gfx-gl-performance"
+path = "src/main.rs"
+
+[dependencies]
+glfw = "*"
+cgmath = "*"
+time = "*"
+gfx_gl = "*"
+
+[dependencies.gfx]
+git = "https://github.com/gfx-rs/gfx-rs"
+version = "*"
+
+[dependencies.gfx_device_gl]
+git = "https://github.com/gfx-rs/gfx_device_gl"
+version = "*"
+
+[dependencies.gfx_macros]
+git = "https://github.com/gfx-rs/gfx-rs"
+plugin = true
+version = "*"

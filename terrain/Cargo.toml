@@ -1,0 +1,28 @@
+[package]
+name = "gfx-gl-terrain"
+version = "0.0.1"
+
+[[bin]]
+name = "gfx-gl-terrain"
+path = "src/main.rs"
+
+[dependencies]
+glfw = "*"
+cgmath = "*"
+rand = "*"
+time = "*"
+genmesh = "*"
+noise = "*"
+
+[dependencies.gfx]
+git = "https://github.com/gfx-rs/gfx-rs"
+version = "*"
+
+[dependencies.gfx_device_gl]
+git = "https://github.com/gfx-rs/gfx_device_gl"
+version = "*"
+
+[dependencies.gfx_macros]
+git = "https://github.com/gfx-rs/gfx-rs"
+plugin = true
+version = "*"
