@@ -287,12 +287,12 @@ impl<C: CommandBuffer> Renderer<C> {
         if frame.is_default() {
             if self.render_state.is_frame_buffer_set {
                 // binding the default FBO, not touching our common one
-                self.command_buffer.bind_frame_buffer(Access::Draw, self.default_frame_buffer.get_name());
+                self.command_buffer.bind_frame_buffer(Access::Draw, self.default_frame_buffer.name);
                 self.render_state.is_frame_buffer_set = false;
             }
         } else {
             if !self.render_state.is_frame_buffer_set {
-                self.command_buffer.bind_frame_buffer(Access::Draw, self.draw_frame_buffer.get_name());
+                self.command_buffer.bind_frame_buffer(Access::Draw, self.draw_frame_buffer.name);
                 self.render_state.is_frame_buffer_set = true;
             }
             // cut off excess color planes
@@ -331,7 +331,7 @@ impl<C: CommandBuffer> Renderer<C> {
     }
 
     fn bind_read_frame(&mut self, frame: &target::Frame<C::Resources>) {
-        self.command_buffer.bind_frame_buffer(Access::Read, self.read_frame_buffer.get_name());
+        self.command_buffer.bind_frame_buffer(Access::Read, self.read_frame_buffer.name);
         // color
         if frame.colors.is_empty() {
             self.command_buffer.unbind_target(Access::Read, Target::Color(0));

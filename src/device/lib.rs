@@ -218,7 +218,11 @@ pub type ShaderHandle<R: Resources>  = Handle<<R as Resources>::Shader, shade::S
 /// Program Handle
 pub type ProgramHandle<R: Resources> = Handle<<R as Resources>::Program, shade::ProgramInfo>;
 /// Frame Buffer Handle
-pub type FrameBufferHandle<R: Resources> = Handle<<R as Resources>::FrameBuffer, ()>;
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub struct FrameBufferHandle<R: Resources> {
+    /// Name of frame buffer.
+    pub name: <R as Resources>::FrameBuffer,
+}
 /// Surface Handle
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct SurfaceHandle<R: Resources> {
