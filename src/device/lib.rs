@@ -187,7 +187,7 @@ impl<R: Resources, T> BufferHandle<R, T> {
 
     /// Get the underlying name for this BufferHandle
     pub fn get_name(&self) -> <R as Resources>::Buffer {
-        self.raw.get_name()
+        self.raw.name
     }
 
     /// Get the underlying raw Handle
@@ -197,7 +197,7 @@ impl<R: Resources, T> BufferHandle<R, T> {
 
     /// Get the associated information about the buffer
     pub fn get_info(&self) -> &BufferInfo {
-        self.raw.get_info()
+        &self.raw.info
     }
 
     /// Get the number of elements in the buffer.
@@ -210,7 +210,13 @@ impl<R: Resources, T> BufferHandle<R, T> {
 }
 
 /// Raw (untyped) Buffer Handle
-pub type RawBufferHandle<R: Resources> = Handle<<R as Resources>::Buffer, BufferInfo>;
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub struct RawBufferHandle<R: Resources> {
+    /// The name of the raw buffer.
+    pub name: <R as Resources>::Buffer,
+    /// Info about the raw buffer.
+    pub info: BufferInfo
+}
 /// Array Buffer Handle
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct ArrayBufferHandle<R: Resources> {
