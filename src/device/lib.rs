@@ -224,7 +224,13 @@ pub type SurfaceHandle<R: Resources> = Handle<<R as Resources>::Surface, tex::Su
 /// Texture Handle
 pub type TextureHandle<R: Resources> = Handle<<R as Resources>::Texture, tex::TextureInfo>;
 /// Sampler Handle
-pub type SamplerHandle<R: Resources> = Handle<<R as Resources>::Sampler, tex::SamplerInfo>;
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub struct SamplerHandle<R: Resources> {
+    /// Name of the sampler.
+    pub name: <R as Resources>::Sampler,
+    /// Info about the sampler.
+    pub info: tex::SamplerInfo,
+}
 
 /// Treat a given slice as `&[u8]` for the given function call
 pub fn as_byte_slice<T>(slice: &[T]) -> &[u8] {
