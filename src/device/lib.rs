@@ -144,26 +144,6 @@ impl<'a, T: Copy, D: Device> Drop for RWMapping<'a, T, D> where D::Mapper: 'a {
     }
 }
 
-/// A generic handle struct
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub struct Handle<T, I>(T, I);
-
-impl<T: Copy, I> Handle<T, I> {
-    /// Get the internal name
-    pub fn get_name(&self) -> T {
-        let Handle(name, _) = *self;
-        name
-    }
-}
-
-impl<T, I> Handle<T, I> {
-    /// Get the info reference
-    pub fn get_info(&self) -> &I {
-        let Handle(_, ref info) = *self;
-        info
-    }
-}
-
 /// Type-safe buffer handle
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct BufferHandle<R: Resources, T> {
@@ -447,18 +427,6 @@ pub trait Device {
     fn generate_mipmap(&mut self, tex: &TextureHandle<Self::Resources>);
 }
 
-/// A service trait with methods for handle creation already implemented.
-/// To be used by device back ends and some tests.
-pub trait HandleFactory {
-    /// Create a handle
-    fn make_handle<T, I>(&self, value: T, info: I) -> Handle<T, I> {
-        Handle(value, info)
-    }
-}
-
-impl HandleFactory for () {}
-impl<D: Device> HandleFactory for D {}
-
 /// A service trait with methods for mapping already implemented.
 /// To be used by device back ends.
 #[allow(missing_docs)]
@@ -512,18 +480,18 @@ impl<D: Device> MapFactory for D {
 mod test {
     use std::mem;
     use std::marker::PhantomData;
-    use super::{BufferHandle, Handle};
+    use super::{BufferHandle, RawBufferHandle};
     use super::{BufferInfo, BufferUsage};
 
     fn mock_buffer<T>(len: usize) -> BufferHandle<(), T> {
         BufferHandle {
-            raw: Handle(
-                (),
-                BufferInfo {
+            raw: RawBufferHandle {
+                name: (),
+                info: BufferInfo {
                     usage: BufferUsage::Static,
                     size: mem::size_of::<T>() * len,
                 },
-            ),
+            },
             phantom_t: PhantomData,
         }
     }
