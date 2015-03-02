@@ -426,7 +426,7 @@ impl<C: CommandBuffer> Renderer<C> {
         if !self.render_state.is_array_buffer_set {
             // It's Ok if the array buffer is not supported. We can just ignore it.
             self.common_array_buffer.map(|ab|
-                self.command_buffer.bind_array_buffer(ab.get_name())
+                self.command_buffer.bind_array_buffer(ab.name)
             ).is_ok();
             self.render_state.is_array_buffer_set = true;
         }

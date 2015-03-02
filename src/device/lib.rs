@@ -212,7 +212,11 @@ impl<R: Resources, T> BufferHandle<R, T> {
 /// Raw (untyped) Buffer Handle
 pub type RawBufferHandle<R: Resources> = Handle<<R as Resources>::Buffer, BufferInfo>;
 /// Array Buffer Handle
-pub type ArrayBufferHandle<R: Resources> = Handle<<R as Resources>::ArrayBuffer, ()>;
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub struct ArrayBufferHandle<R: Resources> {
+    /// Name of array buffer.
+    pub name: <R as Resources>::ArrayBuffer,
+}
 /// Shader Handle
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct ShaderHandle<R: Resources> {
