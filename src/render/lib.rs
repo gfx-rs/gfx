@@ -114,7 +114,7 @@ impl<C: CommandBuffer> CommandBufferExt for C {
         match plane {
             None => self.unbind_target(access, to),
             Some(&target::Plane::Surface(ref suf)) =>
-                self.bind_target_surface(access, to, suf.get_name()),
+                self.bind_target_surface(access, to, suf.name),
             Some(&target::Plane::Texture(ref tex, level, layer)) =>
                 self.bind_target_texture(access, to, tex.name, level, layer),
         }

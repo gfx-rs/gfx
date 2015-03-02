@@ -220,7 +220,13 @@ pub type ProgramHandle<R: Resources> = Handle<<R as Resources>::Program, shade::
 /// Frame Buffer Handle
 pub type FrameBufferHandle<R: Resources> = Handle<<R as Resources>::FrameBuffer, ()>;
 /// Surface Handle
-pub type SurfaceHandle<R: Resources> = Handle<<R as Resources>::Surface, tex::SurfaceInfo>;
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub struct SurfaceHandle<R: Resources> {
+    /// Name of surface.
+    pub name: <R as Resources>::Surface,
+    /// Info about surface.
+    pub info: tex::SurfaceInfo,
+}
 /// Texture Handle
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct TextureHandle<R: Resources> {
