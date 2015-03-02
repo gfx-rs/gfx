@@ -218,7 +218,7 @@ impl<C: CommandBuffer> Renderer<C> {
             Err(e) => return Err(DrawError::InvalidBatch(e)),
         };
         self.bind_state(state);
-        self.bind_mesh(mesh, attrib_iter, program.get_info());
+        self.bind_mesh(mesh, attrib_iter, &program.info);
         self.draw_slice(slice, instances);
         Ok(())
     }
@@ -374,16 +374,16 @@ impl<C: CommandBuffer> Renderer<C> {
             Err(e) => return Err(e),
         };
         //Warning: this is not protected against deleted resources in single-threaded mode
-        if self.render_state.program_name != Some(program.get_name()) {
-            self.command_buffer.bind_program(program.get_name());
-            self.render_state.program_name = Some(program.get_name());
+        if self.render_state.program_name != Some(program.name) {
+            self.command_buffer.bind_program(program.name);
+            self.render_state.program_name = Some(program.name);
         }
         self.upload_parameters(program);
         Ok(program)
     }
 
     fn upload_parameters(&mut self, program: &device::ProgramHandle<C::Resources>) {
-        let info = program.get_info();
+        let info = &program.info;
         if self.parameters.uniforms.len() != info.uniforms.len() ||
             self.parameters.blocks.len() != info.blocks.len() ||
             self.parameters.textures.len() != info.textures.len() {
@@ -403,7 +403,7 @@ impl<C: CommandBuffer> Renderer<C> {
         for (i, (_, buf)) in info.blocks.iter()
             .zip(self.parameters.blocks.iter()).enumerate() {
             self.command_buffer.bind_uniform_block(
-                program.get_name(),
+                program.name,
                 i as device::UniformBufferSlot,
                 i as device::UniformBlockIndex,
                 buf.get_name()
