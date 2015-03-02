@@ -288,7 +288,7 @@ pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities,
                       -> (Result<(::Program, s::ProgramInfo), ()>, Option<String>) {
     let name = unsafe { gl.CreateProgram() };
     for sh in shaders.iter() {
-        unsafe { gl.AttachShader(name, sh.get_name()) };
+        unsafe { gl.AttachShader(name, sh.name) };
     }
 
     let targets = targets.map(|targets| {
