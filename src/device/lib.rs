@@ -214,7 +214,13 @@ pub type RawBufferHandle<R: Resources> = Handle<<R as Resources>::Buffer, Buffer
 /// Array Buffer Handle
 pub type ArrayBufferHandle<R: Resources> = Handle<<R as Resources>::ArrayBuffer, ()>;
 /// Shader Handle
-pub type ShaderHandle<R: Resources>  = Handle<<R as Resources>::Shader, shade::Stage>;
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub struct ShaderHandle<R: Resources> {
+    /// Name of shader.
+    pub name: <R as Resources>::Shader,
+    /// Info about shader.
+    pub info: shade::Stage,
+}
 /// Program Handle
 #[derive(Clone, PartialEq, Debug)]
 pub struct ProgramHandle<R: Resources> {
