@@ -116,7 +116,7 @@ impl<C: CommandBuffer> CommandBufferExt for C {
             Some(&target::Plane::Surface(ref suf)) =>
                 self.bind_target_surface(access, to, suf.get_name()),
             Some(&target::Plane::Texture(ref tex, level, layer)) =>
-                self.bind_target_texture(access, to, tex.get_name(), level, layer),
+                self.bind_target_texture(access, to, tex.name, level, layer),
         }
     }
 }
@@ -267,9 +267,9 @@ impl<C: CommandBuffer> Renderer<C> {
     /// Update the contents of a texture.
     pub fn update_texture<T: Copy>(&mut self, tex: device::TextureHandle<C::Resources>,
                           img: device::tex::ImageInfo, data: &[T]) {
-        debug_assert!(tex.get_info().contains(&img));
+        debug_assert!(tex.info.contains(&img));
         let pointer = self.data_buffer.add_vec(data);
-        self.command_buffer.update_texture(tex.get_info().kind, tex.get_name(), img, pointer);
+        self.command_buffer.update_texture(tex.info.kind, tex.name, img, pointer);
     }
 
     fn bind_frame(&mut self, frame: &target::Frame<C::Resources>) {
@@ -412,12 +412,12 @@ impl<C: CommandBuffer> Renderer<C> {
         // bind textures and samplers
         for (i, (var, &(tex, sampler))) in info.textures.iter()
             .zip(self.parameters.textures.iter()).enumerate() {
-            if sampler.is_some() && tex.get_info().kind.get_aa_mode().is_some() {
+            if sampler.is_some() && tex.info.kind.get_aa_mode().is_some() {
                 error!("A sampler provided for an AA texture: {}", var.name.clone());
             }
             self.command_buffer.bind_uniform(var.location, UniformValue::I32(i as i32));
             self.command_buffer.bind_texture(i as device::TextureSlot,
-                tex.get_info().kind, tex.get_name(), sampler);
+                tex.info.kind, tex.name, sampler);
         }
     }
 
