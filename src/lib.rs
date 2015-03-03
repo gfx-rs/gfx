@@ -404,7 +404,7 @@ impl GlDevice {
                             unsafe { self.gl.BindSampler(slot as gl::types::GLenum, handle.get_name()) };
                         } else {
                             debug_assert_eq!(handle.get_name(), 0);
-                            tex::bind_sampler(&self.gl, anchor, &handle.get_info());
+                            tex::bind_sampler(&self.gl, anchor, handle.get_info());
                         }
                     },
                     (_, Some(_), Some(_)) =>
