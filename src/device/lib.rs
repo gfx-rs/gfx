@@ -212,141 +212,122 @@ impl<R: Resources> RawBufferHandle<R> {
 
 /// Array Buffer Handle
 #[derive(Copy, Clone, PartialEq, Debug)]
-pub struct ArrayBufferHandle<R: Resources> {
-    /// Name of array buffer.
-    name: <R as Resources>::ArrayBuffer,
-}
+pub struct ArrayBufferHandle<R: Resources>(<R as Resources>::ArrayBuffer);
 
 impl<R: Resources> ArrayBufferHandle<R> {
     /// Creates a new array buffer (used by device)
     pub unsafe fn new(name: <R as Resources>::ArrayBuffer)
         -> ArrayBufferHandle<R> {
-        ArrayBufferHandle { name: name }
+        ArrayBufferHandle(name)
     }
     /// Get array buffer name
-    pub fn get_name(&self) -> <R as Resources>::ArrayBuffer { self.name }
+    pub fn get_name(&self) -> <R as Resources>::ArrayBuffer { self.0 }
 }
 
 /// Shader Handle
 #[derive(Copy, Clone, PartialEq, Debug)]
-pub struct ShaderHandle<R: Resources> {
-    /// Name of shader.
-    name: <R as Resources>::Shader,
-    /// Info about shader.
-    info: shade::Stage,
-}
+pub struct ShaderHandle<R: Resources>(<R as Resources>::Shader, shade::Stage);
 
 impl<R: Resources> ShaderHandle<R> {
     /// Creates a new shader (used by device)
     pub unsafe fn new(name: <R as Resources>::Shader, info: shade::Stage)
         -> ShaderHandle<R> {
-        ShaderHandle { name: name, info: info }
+        ShaderHandle(name, info)
     }
     /// Get shader name
-    pub fn get_name(&self) -> <R as Resources>::Shader { self.name }
+    pub fn get_name(&self) -> <R as Resources>::Shader { self.0 }
     /// Get shader info
-    pub fn get_info(&self) -> &shade::Stage { &self.info }
+    pub fn get_info(&self) -> &shade::Stage { &self.1 }
 }
 
 /// Program Handle
 #[derive(Clone, PartialEq, Debug)]
-pub struct ProgramHandle<R: Resources> {
-    /// Name of program.
-    name: <R as Resources>::Program,
-    /// Info about the program.
-    info: shade::ProgramInfo,
-}
+pub struct ProgramHandle<R: Resources>(
+    <R as Resources>::Program,
+    shade::ProgramInfo,
+);
 
 impl<R: Resources> ProgramHandle<R> {
     /// Creates a new program (used by device)
     pub unsafe fn new(name: <R as Resources>::Program, info: shade::ProgramInfo)
         -> ProgramHandle<R> {
-        ProgramHandle { name: name, info: info }
+        ProgramHandle(name, info)
     }
     /// Get program name
-    pub fn get_name(&self) -> <R as Resources>::Program { self.name }
+    pub fn get_name(&self) -> <R as Resources>::Program { self.0 }
     /// Get program info
-    pub fn get_info(&self) -> &shade::ProgramInfo { &self.info }
+    pub fn get_info(&self) -> &shade::ProgramInfo { &self.1 }
 }
 
 /// Frame Buffer Handle
 #[derive(Copy, Clone, PartialEq, Debug)]
-pub struct FrameBufferHandle<R: Resources> {
-    /// Name of frame buffer.
-    name: <R as Resources>::FrameBuffer,
-}
+pub struct FrameBufferHandle<R: Resources>(<R as Resources>::FrameBuffer);
 
 impl<R: Resources> FrameBufferHandle<R> {
     /// Creates a new frame buffer (used by device)
     pub unsafe fn new(name: <R as Resources>::FrameBuffer)
         -> FrameBufferHandle<R> {
-        FrameBufferHandle { name: name }
+        FrameBufferHandle(name)
     }
     /// Get frame buffer name
-    pub fn get_name(&self) -> <R as Resources>::FrameBuffer { self.name }
+    pub fn get_name(&self) -> <R as Resources>::FrameBuffer { self.0 }
 }
 
 /// Surface Handle
 #[derive(Copy, Clone, PartialEq, Debug)]
-pub struct SurfaceHandle<R: Resources> {
-    /// Name of surface.
-    name: <R as Resources>::Surface,
-    /// Info about surface.
-    info: tex::SurfaceInfo,
-}
+pub struct SurfaceHandle<R: Resources>(
+    <R as Resources>::Surface,
+    tex::SurfaceInfo,
+);
 
 impl<R: Resources> SurfaceHandle<R> {
     /// Creates a new surface (used by device)
     pub unsafe fn new(name: <R as Resources>::Surface, info: tex::SurfaceInfo)
         -> SurfaceHandle<R> {
-        SurfaceHandle { name: name, info: info }
+        SurfaceHandle(name, info)
     }
     /// Get surface name
-    pub fn get_name(&self) -> <R as Resources>::Surface { self.name }
+    pub fn get_name(&self) -> <R as Resources>::Surface { self.0 }
     /// Get surface info
-    pub fn get_info(&self) -> &tex::SurfaceInfo { &self.info }
+    pub fn get_info(&self) -> &tex::SurfaceInfo { &self.1 }
 }
 
 /// Texture Handle
 #[derive(Copy, Clone, PartialEq, Debug)]
-pub struct TextureHandle<R: Resources> {
-    /// Name of texture.
-    name: <R as Resources>::Texture,
-    /// Info about texture.
-    info: tex::TextureInfo,
-}
+pub struct TextureHandle<R: Resources>(
+    <R as Resources>::Texture,
+    tex::TextureInfo,
+);
 
 impl<R: Resources> TextureHandle<R> {
     /// Creates a new texture (used by device)
     pub unsafe fn new(name: <R as Resources>::Texture, info: tex::TextureInfo)
         -> TextureHandle<R> {
-        TextureHandle { name: name, info: info }
+        TextureHandle(name, info)
     }
     /// Get texture name
-    pub fn get_name(&self) -> <R as Resources>::Texture { self.name }
+    pub fn get_name(&self) -> <R as Resources>::Texture { self.0 }
     /// Get texture info
-    pub fn get_info(&self) -> &tex::TextureInfo { &self.info }
+    pub fn get_info(&self) -> &tex::TextureInfo { &self.1 }
 }
 
 /// Sampler Handle
 #[derive(Copy, Clone, PartialEq, Debug)]
-pub struct SamplerHandle<R: Resources> {
-    /// Name of the sampler.
-    name: <R as Resources>::Sampler,
-    /// Info about the sampler.
-    info: tex::SamplerInfo,
-}
+pub struct SamplerHandle<R: Resources>(
+    <R as Resources>::Sampler,
+    tex::SamplerInfo,
+);
 
 impl<R: Resources> SamplerHandle<R> {
     /// Creates a new sampler (used by device)
     pub unsafe fn new(name: <R as Resources>::Sampler, info: tex::SamplerInfo)
         -> SamplerHandle<R> {
-        SamplerHandle { name: name, info: info }
+        SamplerHandle(name, info)
     }
     /// Get sampler name
-    pub fn get_name(&self) -> <R as Resources>::Sampler { self.name }
+    pub fn get_name(&self) -> <R as Resources>::Sampler { self.0 }
     /// Get sampler info
-    pub fn get_info(&self) -> &tex::SamplerInfo { &self.info }
+    pub fn get_info(&self) -> &tex::SamplerInfo { &self.1 }
 }
 
 /// Treat a given slice as `&[u8]` for the given function call
