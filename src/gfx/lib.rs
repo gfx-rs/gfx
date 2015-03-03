@@ -28,8 +28,8 @@ pub use render::{Renderer, DrawError};
 pub use render::batch;
 pub use render::device_ext::{DeviceExt, ShaderSource, ProgramError};
 pub use render::mesh::{Attribute, Mesh, VertexFormat};
-pub use render::mesh::{Slice, ToSlice};
-pub use render::mesh::SliceKind;
+pub use render::mesh::Error as MeshError;
+pub use render::mesh::{Slice, ToSlice, SliceKind};
 pub use render::state::{BlendPreset, DrawState};
 pub use render::shade;
 pub use render::target::{Frame, Plane};
@@ -75,7 +75,7 @@ impl<D: device::Device> Graphics<D> {
                       mesh: &Mesh<D::Resources>,
                       slice: Slice<D::Resources>,
                       state: &DrawState)
-                      -> Result<batch::RefBatch<T>, batch::BatchError> {
+                      -> Result<batch::RefBatch<T>, batch::Error> {
         self.context.make_batch(program, mesh, slice, state)
     }
 
