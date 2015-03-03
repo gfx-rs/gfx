@@ -401,10 +401,10 @@ impl GlDevice {
                 match (anchor, kind.get_aa_mode(), sampler) {
                     (anchor, None, Some(handle)) => {
                         if self.caps.sampler_objects_supported {
-                            unsafe { self.gl.BindSampler(slot as gl::types::GLenum, handle.name) };
+                            unsafe { self.gl.BindSampler(slot as gl::types::GLenum, handle.get_name()) };
                         } else {
-                            debug_assert_eq!(handle.name, 0);
-                            tex::bind_sampler(&self.gl, anchor, &handle.info);
+                            debug_assert_eq!(handle.get_name(), 0);
+                            tex::bind_sampler(&self.gl, anchor, &handle.get_info());
                         }
                     },
                     (_, Some(_), Some(_)) =>
@@ -655,7 +655,7 @@ impl Device for GlDevice {
                 self.gl.GenVertexArrays(1, &mut name);
             }
             info!("\tCreated array buffer {}", name);
-            Ok(ArrayBufferHandle { name: name })
+            Ok(unsafe { ArrayBufferHandle::new(name) })
         } else {
             error!("\tarray buffer creation unsupported, ignored");
             Err(())
@@ -669,7 +669,7 @@ impl Device for GlDevice {
             let level = if name.is_err() { LogLevel::Error } else { LogLevel::Warn };
             log!(level, "\tShader compile log: {}", info);
         });
-        name.map(|sh| ShaderHandle { name: sh, info: stage })
+        name.map(|sh| unsafe { ShaderHandle::new(sh, stage) })
     }
 
     fn create_program(&mut self, shaders: &[d::ShaderHandle<GlResources>],
@@ -680,7 +680,7 @@ impl Device for GlDevice {
             let level = if prog.is_err() { LogLevel::Error } else { LogLevel::Warn };
             log!(level, "\tProgram link log: {}", log);
         });
-        prog.map(|(name, info)| ProgramHandle { name: name, info: info })
+        prog.map(|(name, info)| unsafe { ProgramHandle::new(name, info) })
     }
 
     fn create_frame_buffer(&mut self) -> d::FrameBufferHandle<GlResources> {
@@ -693,13 +693,13 @@ impl Device for GlDevice {
             self.gl.GenFramebuffers(1, &mut name);
         }
         info!("\tCreated frame buffer {}", name);
-        FrameBufferHandle { name: name }
+        unsafe { FrameBufferHandle::new(name) }
     }
 
     fn create_surface(&mut self, info: d::tex::SurfaceInfo) ->
                       Result<d::SurfaceHandle<GlResources>, d::tex::SurfaceError> {
         tex::make_surface(&self.gl, &info)
-            .map(|suf| SurfaceHandle { name: suf, info: info })
+            .map(|suf| unsafe { SurfaceHandle::new(suf, info) })
     }
 
     fn create_texture(&mut self, info: d::tex::TextureInfo) ->
@@ -713,7 +713,7 @@ impl Device for GlDevice {
         } else {
             tex::make_without_storage(&self.gl, &info)
         };
-        name.map(|tex| TextureHandle { name: tex, info: info })
+        name.map(|tex| unsafe { TextureHandle::new(tex, info) })
     }
 
     fn create_sampler(&mut self, info: d::tex::SamplerInfo)
@@ -723,11 +723,11 @@ impl Device for GlDevice {
         } else {
             0
         };
-        SamplerHandle { name: sam, info: info }
+        unsafe { SamplerHandle::new(sam, info) }
     }
 
     fn get_main_frame_buffer(&self) -> d::FrameBufferHandle<GlResources> {
-        FrameBufferHandle { name: 0 }
+        unsafe { FrameBufferHandle::new(0) }
     }
 
     fn delete_buffer_raw(&mut self, handle: BufferHandle<()>) {
@@ -738,29 +738,29 @@ impl Device for GlDevice {
     }
 
     fn delete_shader(&mut self, handle: d::ShaderHandle<GlResources>) {
-        unsafe { self.gl.DeleteShader(handle.name) };
+        unsafe { self.gl.DeleteShader(handle.get_name()) };
     }
 
     fn delete_program(&mut self, handle: d::ProgramHandle<GlResources>) {
-        unsafe { self.gl.DeleteProgram(handle.name) };
+        unsafe { self.gl.DeleteProgram(handle.get_name()) };
     }
 
     fn delete_surface(&mut self, handle: d::SurfaceHandle<GlResources>) {
-        let name = handle.name;
+        let name = handle.get_name();
         unsafe {
             self.gl.DeleteRenderbuffers(1, &name);
         }
     }
 
     fn delete_texture(&mut self, handle: d::TextureHandle<GlResources>) {
-        let name = handle.name;
+        let name = handle.get_name();
         unsafe {
             self.gl.DeleteTextures(1, &name);
         }
     }
 
     fn delete_sampler(&mut self, handle: d::SamplerHandle<GlResources>) {
-        let name = handle.name;
+        let name = handle.get_name();
         unsafe {
             self.gl.DeleteSamplers(1, &name);
         }
@@ -776,12 +776,12 @@ impl Device for GlDevice {
     fn update_texture_raw(&mut self, texture: &d::TextureHandle<GlResources>,
                           img: &d::tex::ImageInfo, data: &[u8])
                           -> Result<(), d::tex::TextureError> {
-        tex::update_texture(&self.gl, texture.info.kind,
-                            texture.name, img, data.as_ptr(), data.len())
+        tex::update_texture(&self.gl, texture.get_info().kind,
+                            texture.get_name(), img, data.as_ptr(), data.len())
     }
 
     fn generate_mipmap(&mut self, texture: &d::TextureHandle<GlResources>) {
-        tex::generate_mipmap(&self.gl, texture.info.kind, texture.name);
+        tex::generate_mipmap(&self.gl, texture.get_info().kind, texture.get_name());
     }
 
     fn map_buffer_raw(&mut self, buf: BufferHandle<()>, access: d::MapAccess)
