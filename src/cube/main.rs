@@ -206,7 +206,7 @@ fn main() {
         }
 
         renderer.clear(clear_data, gfx::COLOR | gfx::DEPTH, &frame);
-        renderer.draw(&(&batch, &data, &context), &frame).unwrap();
+        renderer.draw(&context.bind(&batch, &data), &frame).unwrap();
         device.submit(renderer.as_buffer());
         renderer.reset();
 
