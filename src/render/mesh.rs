@@ -191,12 +191,16 @@ impl<R: Resources> ToSlice<R> for BufferHandle<R, u32> {
 pub type AttributeIndex = usize;
 
 /// Describes kinds of errors that may occur in the mesh linking
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum LinkError {
+#[derive(Clone, Debug, PartialEq)]
+pub enum Error {
+    /// A required attribute was missing.
+    AttributeMissing(String),
+    /// An attribute's type from the vertex format differed from the type used in the shader.
+    AttributeType(String, device::shade::BaseType),
     /// An attribute index is out of supported bounds
-    MeshAttribute(AttributeIndex),
+    AttributeIndex(AttributeIndex),
     /// An input index is out of supported bounds
-    ShaderInput(usize),
+    ShaderInputIndex(usize),
 }
 
 const BITS_PER_ATTRIBUTE: AttributeIndex = 4;
@@ -226,15 +230,33 @@ pub struct Link {
 }
 
 impl Link {
+    /// Match mesh attributes against shader inputs, produce a mesh link.
+    /// Exposed to public to allow external `Batch` implementations to use it.
+    pub fn new<R: Resources>(mesh: &Mesh<R>, pinfo: &device::shade::ProgramInfo)
+                             -> Result<Link, Error> {
+        let mut indices = Vec::new();
+        for sat in pinfo.attributes.iter() {
+            match mesh.attributes.iter().enumerate()
+                      .find(|&(_, a)| a.name == sat.name) {
+                Some((attrib_id, vat)) => match vat.format.elem_type.is_compatible(sat.base_type) {
+                    Ok(_) => indices.push(attrib_id),
+                    Err(_) => return Err(Error::AttributeType(sat.name.clone(), sat.base_type)),
+                },
+                None => return Err(Error::AttributeMissing(sat.name.clone())),
+            }
+        }
+        Link::from_iter(indices.into_iter())
+    }
+
     /// Construct a new link from an iterator over attribute indices.
     pub fn from_iter<I: Iterator<Item = AttributeIndex>>(iter: I)
-                     -> Result<Link, LinkError> {
+                     -> Result<Link, Error> {
         let mut table = 0u64;
         for (input, attrib) in iter.enumerate() {
             if input >= MAX_SHADER_INPUTS {
-                return Err(LinkError::ShaderInput(input))
+                return Err(Error::ShaderInputIndex(input))
             } else if attrib > MESH_ATTRIBUTE_MASK {
-                return Err(LinkError::MeshAttribute(attrib))
+                return Err(Error::AttributeIndex(attrib))
             } else {
                 table |= (attrib as u64) << (input * BITS_PER_ATTRIBUTE);
             }

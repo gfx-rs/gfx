@@ -21,50 +21,20 @@ use std::num::from_uint;
 use std::cmp::Ordering;
 use std::marker::PhantomData;
 use device::{Resources, PrimitiveType, ProgramHandle};
-use device::shade::ProgramInfo;
 use render::mesh;
 use render::mesh::ToSlice;
 use shade::{ParameterError, ShaderParam};
 use render::state::DrawState;
 
-/// An error with a defined Mesh.
-#[derive(Clone, Debug, PartialEq)]
-pub enum MeshError {
-    /// A required attribute was missing.
-    AttributeMissing(String),
-    /// An attribute's type from the vertex format differed from the type used in the shader.
-    AttributeType,
-    /// Internal error due to mesh link limitations
-    MeshLink(mesh::LinkError),
-}
-
 /// An error occurring at batch creation
 #[derive(Clone, Debug, PartialEq)]
-pub enum BatchError {
+pub enum Error {
     /// Error connecting mesh attributes
-    Mesh(MeshError),
+    Mesh(mesh::Error),
     /// Error connecting shader parameters
     Parameters(ParameterError),
     /// Error context is full
     ContextFull,
-}
-
-/// Match mesh attributes against shader inputs, produce a mesh link.
-/// Exposed to public to allow external `Batch` implementations to use it.
-pub fn link_mesh<R: Resources>(mesh: &mesh::Mesh<R>, pinfo: &ProgramInfo) -> Result<mesh::Link, MeshError> {
-    let mut indices = Vec::new();
-    for sat in pinfo.attributes.iter() {
-        match mesh.attributes.iter().enumerate()
-                  .find(|&(_, a)| a.name == sat.name) {
-            Some((attrib_id, vat)) => match vat.format.elem_type.is_compatible(sat.base_type) {
-                Ok(_) => indices.push(attrib_id),
-                Err(_) => return Err(MeshError::AttributeType),
-            },
-            None => return Err(MeshError::AttributeMissing(sat.name.clone())),
-        }
-    }
-    mesh::Link::from_iter(indices.into_iter())
-        .map_err(|e| MeshError::MeshLink(e))
 }
 
 /// Return type for `Batch::get_data()``
@@ -84,28 +54,48 @@ pub trait Batch {
                    -> Result<&ProgramHandle<Self::Resources>, Self::Error>;
 }
 
-impl<'a, T: ShaderParam> Batch for (&'a mesh::Mesh<T::Resources>, mesh::Slice<T::Resources>,
-                                    &'a ProgramHandle<T::Resources>, &'a T, &'a DrawState) {
-    type Resources = T::Resources;
-    type Error = BatchError;
+/// A batch that is constructed on the fly when rendering.
+/// Meant to be a struct, blocked by #614
+pub type ImplicitBatch<'a, T: ShaderParam> = (
+    &'a mesh::Mesh<T::Resources>,
+    mesh::Slice<T::Resources>,
+    &'a ProgramHandle<T::Resources>,
+    &'a T,
+    &'a DrawState
+);
 
-    fn get_data(&self) -> Result<BatchData<T::Resources>, BatchError> {
+impl DrawState {
+    /// Create an implicit batch
+    pub fn bind<'a, T: ShaderParam>(&'a self,
+                 mesh: &'a mesh::Mesh<T::Resources>,
+                 slice: mesh::Slice<T::Resources>,
+                 program: &'a ProgramHandle<T::Resources>,
+                 data: &'a T) -> ImplicitBatch<'a, T> {
+        (mesh, slice, program, data, self)
+    }
+}
+
+impl<'a, T: ShaderParam> Batch for ImplicitBatch<'a, T> {
+    type Resources = T::Resources;
+    type Error = Error;
+
+    fn get_data(&self) -> Result<BatchData<T::Resources>, Error> {
         let (mesh, ref slice, program, _, state) = *self;
-        match link_mesh(mesh, program.get_info()) {
+        match mesh::Link::new(mesh, program.get_info()) {
             Ok(link) => Ok((mesh, link.to_iter(), &slice, state)),
-            Err(e) => Err(BatchError::Mesh(e)),
+            Err(e) => Err(Error::Mesh(e)),
         }
     }
 
     fn fill_params(&self, values: ::shade::ParamValues<T::Resources>)
-                   -> Result<&ProgramHandle<T::Resources>, BatchError> {
+                   -> Result<&ProgramHandle<T::Resources>, Error> {
         let (_, _, program, params, _) = *self;
         match ShaderParam::create_link(None::<&T>, program.get_info()) {
             Ok(link) => {
                 params.fill_params(&link, values);
                 Ok(program)
             },
-            Err(e) => return Err(BatchError::Parameters(e)),
+            Err(e) => return Err(Error::Parameters(e)),
         }
     }
 }
@@ -127,15 +117,15 @@ pub struct OwnedBatch<T: ShaderParam> {
 impl<T: ShaderParam> OwnedBatch<T> {
     /// Create a new owned batch
     pub fn new(mesh: mesh::Mesh<T::Resources>, program: ProgramHandle<T::Resources>, param: T)
-           -> Result<OwnedBatch<T>, BatchError> {
+           -> Result<OwnedBatch<T>, Error> {
         let slice = mesh.to_slice(PrimitiveType::TriangleList);
-        let mesh_link = match link_mesh(&mesh, program.get_info()) {
+        let mesh_link = match mesh::Link::new(&mesh, program.get_info()) {
             Ok(l) => l,
-            Err(e) => return Err(BatchError::Mesh(e)),
+            Err(e) => return Err(Error::Mesh(e)),
         };
         let param_link = match ShaderParam::create_link(None::<&T>, program.get_info()) {
             Ok(l) => l,
-            Err(e) => return Err(BatchError::Parameters(e)),
+            Err(e) => return Err(Error::Parameters(e)),
         };
         Ok(OwnedBatch {
             mesh: mesh,
@@ -314,6 +304,16 @@ pub struct Context<R: Resources> {
     states: Array<DrawState>,
 }
 
+/// A RefBatch completed by the shader parameters and a context
+/// Implements `Batch` thus can be drawn.
+/// It is meant to be a struct, but we have lots of lifetime issues
+/// with associated resources, binding which looks nasty (#614)
+pub type RefBatchFull<'a, T: ShaderParam> = (
+    &'a RefBatch<T>,
+    &'a T,
+    &'a Context<T::Resources>
+);
+
 impl<R: Resources> Context<R> {
     /// Create a new empty `Context`
     pub fn new() -> Context<R> {
@@ -332,26 +332,26 @@ impl<R: Resources> Context<R> {
                       mesh: &mesh::Mesh<R>,
                       slice: mesh::Slice<R>,
                       state: &DrawState)
-                      -> Result<RefBatch<T>, BatchError> {
-        let mesh_link = match link_mesh(mesh, program.get_info()) {
+                      -> Result<RefBatch<T>, Error> {
+        let mesh_link = match mesh::Link::new(mesh, program.get_info()) {
             Ok(l) => l,
-            Err(e) => return Err(BatchError::Mesh(e)),
+            Err(e) => return Err(Error::Mesh(e)),
         };
         let link = match ShaderParam::create_link(None::<&T>, program.get_info()) {
             Ok(l) => l,
-            Err(e) => return Err(BatchError::Parameters(e))
+            Err(e) => return Err(Error::Parameters(e))
         };
         let mesh_id = match self.meshes.find_or_insert(mesh) {
             Some(id) => id,
-            None => return Err(BatchError::ContextFull),
+            None => return Err(Error::ContextFull),
         };
         let program_id = match self.programs.find_or_insert(program) {
             Some(id) => id,
-            None => return Err(BatchError::ContextFull),
+            None => return Err(Error::ContextFull),
         };
         let state_id = match self.states.find_or_insert(state) {
             Some(id) => id,
-            None => return Err(BatchError::ContextFull),
+            None => return Err(Error::ContextFull),
         };
 
         Ok(RefBatch {
@@ -363,9 +363,15 @@ impl<R: Resources> Context<R> {
             state_id: state_id,
         })
     }
+
+    /// Complete a RefBatch temporarily by turning it into RefBatchFull
+    pub fn bind<'a, T: ShaderParam<Resources = R> + 'a>(&'a self,
+                 batch: &'a RefBatch<T>, data: &'a T) -> RefBatchFull<'a, T> {
+        (batch, data, self)
+    }
 }
 
-impl<'a, T: ShaderParam> Batch for (&'a RefBatch<T>, &'a T, &'a Context<T::Resources>) {
+impl<'a, T: ShaderParam + 'a> Batch for RefBatchFull<'a, T> {
     type Resources = T::Resources;
     type Error = OutOfBounds;
 
