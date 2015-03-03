@@ -193,9 +193,9 @@ impl<R: Resources, T> BufferHandle<R, T> {
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct RawBufferHandle<R: Resources> {
     /// The name of the raw buffer.
-    pub name: <R as Resources>::Buffer,
+    name: <R as Resources>::Buffer,
     /// Info about the raw buffer.
-    pub info: BufferInfo
+    info: BufferInfo
 }
 
 impl<R: Resources> RawBufferHandle<R> {

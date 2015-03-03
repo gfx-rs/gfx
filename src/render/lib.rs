@@ -440,7 +440,7 @@ impl<C: CommandBuffer> Renderer<C> {
                 };
             if need_update {
                 self.command_buffer.bind_attribute(loc as device::AttributeSlot,
-                    vat.buffer.name, vat.format);
+                    vat.buffer.get_name(), vat.format);
                 if loc < self.render_state.attributes.len() {
                     self.render_state.attributes[loc] = Some((vat.buffer, vat.format));
                 }
