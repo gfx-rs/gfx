@@ -199,6 +199,11 @@ pub struct RawBufferHandle<R: Resources> {
 }
 
 impl<R: Resources> RawBufferHandle<R> {
+    /// Creates a new raw buffer handle (used by device)
+    pub unsafe fn new(name: <R as Resources>::Buffer, info: BufferInfo)
+        -> RawBufferHandle<R> {
+        RawBufferHandle { name: name, info: info }
+    }
     /// Get raw buffer name
     pub fn get_name(&self) -> <R as Resources>::Buffer { self.name }
     /// Get raw buffer info
@@ -213,6 +218,11 @@ pub struct ArrayBufferHandle<R: Resources> {
 }
 
 impl<R: Resources> ArrayBufferHandle<R> {
+    /// Creates a new array buffer (used by device)
+    pub unsafe fn new(name: <R as Resources>::ArrayBuffer)
+        -> ArrayBufferHandle<R> {
+        ArrayBufferHandle { name: name }
+    }
     /// Get array buffer name
     pub fn get_name(&self) -> <R as Resources>::ArrayBuffer { self.name }
 }
@@ -227,6 +237,11 @@ pub struct ShaderHandle<R: Resources> {
 }
 
 impl<R: Resources> ShaderHandle<R> {
+    /// Creates a new shader (used by device)
+    pub unsafe fn new(name: <R as Resources>::Shader, info: shade::Stage)
+        -> ShaderHandle<R> {
+        ShaderHandle { name: name, info: info }
+    }
     /// Get shader name
     pub fn get_name(&self) -> <R as Resources>::Shader { self.name }
     /// Get shader info
@@ -243,6 +258,11 @@ pub struct ProgramHandle<R: Resources> {
 }
 
 impl<R: Resources> ProgramHandle<R> {
+    /// Creates a new program (used by device)
+    pub unsafe fn new(name: <R as Resources>::Program, info: shade::ProgramInfo)
+        -> ProgramHandle<R> {
+        ProgramHandle { name: name, info: info }
+    }
     /// Get program name
     pub fn get_name(&self) -> <R as Resources>::Program { self.name }
     /// Get program info
@@ -257,6 +277,11 @@ pub struct FrameBufferHandle<R: Resources> {
 }
 
 impl<R: Resources> FrameBufferHandle<R> {
+    /// Creates a new frame buffer (used by device)
+    pub unsafe fn new(name: <R as Resources>::FrameBuffer)
+        -> FrameBufferHandle<R> {
+        FrameBufferHandle { name: name }
+    }
     /// Get frame buffer name
     pub fn get_name(&self) -> <R as Resources>::FrameBuffer { self.name }
 }
@@ -271,6 +296,11 @@ pub struct SurfaceHandle<R: Resources> {
 }
 
 impl<R: Resources> SurfaceHandle<R> {
+    /// Creates a new surface (used by device)
+    pub unsafe fn new(name: <R as Resources>::Surface, info: tex::SurfaceInfo)
+        -> SurfaceHandle<R> {
+        SurfaceHandle { name: name, info: info }
+    }
     /// Get surface name
     pub fn get_name(&self) -> <R as Resources>::Surface { self.name }
     /// Get surface info
@@ -287,6 +317,11 @@ pub struct TextureHandle<R: Resources> {
 }
 
 impl<R: Resources> TextureHandle<R> {
+    /// Creates a new texture (used by device)
+    pub unsafe fn new(name: <R as Resources>::Texture, info: tex::TextureInfo)
+        -> TextureHandle<R> {
+        TextureHandle { name: name, info: info }
+    }
     /// Get texture name
     pub fn get_name(&self) -> <R as Resources>::Texture { self.name }
     /// Get texture info
@@ -303,6 +338,11 @@ pub struct SamplerHandle<R: Resources> {
 }
 
 impl<R: Resources> SamplerHandle<R> {
+    /// Creates a new sampler (used by device)
+    pub unsafe fn new(name: <R as Resources>::Sampler, info: tex::SamplerInfo)
+        -> SamplerHandle<R> {
+        SamplerHandle { name: name, info: info }
+    }
     /// Get sampler name
     pub fn get_name(&self) -> <R as Resources>::Sampler { self.name }
     /// Get sampler info
