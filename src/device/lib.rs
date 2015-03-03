@@ -167,7 +167,7 @@ impl<R: Resources, T> BufferHandle<R, T> {
 
     /// Get the underlying name for this BufferHandle
     pub fn get_name(&self) -> <R as Resources>::Buffer {
-        self.raw.name
+        self.raw.get_name()
     }
 
     /// Get the underlying raw Handle
@@ -177,7 +177,7 @@ impl<R: Resources, T> BufferHandle<R, T> {
 
     /// Get the associated information about the buffer
     pub fn get_info(&self) -> &BufferInfo {
-        &self.raw.info
+        self.raw.get_info()
     }
 
     /// Get the number of elements in the buffer.
@@ -191,23 +191,21 @@ impl<R: Resources, T> BufferHandle<R, T> {
 
 /// Raw (untyped) Buffer Handle
 #[derive(Copy, Clone, PartialEq, Debug)]
-pub struct RawBufferHandle<R: Resources> {
-    /// The name of the raw buffer.
-    name: <R as Resources>::Buffer,
-    /// Info about the raw buffer.
-    info: BufferInfo
-}
+pub struct RawBufferHandle<R: Resources>(
+    <R as Resources>::Buffer,
+    BufferInfo
+);
 
 impl<R: Resources> RawBufferHandle<R> {
     /// Creates a new raw buffer handle (used by device)
     pub unsafe fn new(name: <R as Resources>::Buffer, info: BufferInfo)
         -> RawBufferHandle<R> {
-        RawBufferHandle { name: name, info: info }
+        RawBufferHandle(name, info)
     }
     /// Get raw buffer name
-    pub fn get_name(&self) -> <R as Resources>::Buffer { self.name }
+    pub fn get_name(&self) -> <R as Resources>::Buffer { self.0 }
     /// Get raw buffer info
-    pub fn get_info(&self) -> &BufferInfo { &self.info }
+    pub fn get_info(&self) -> &BufferInfo { &self.1 }
 }
 
 /// Array Buffer Handle
