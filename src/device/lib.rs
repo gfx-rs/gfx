@@ -144,26 +144,6 @@ impl<'a, T: Copy, D: Device> Drop for RWMapping<'a, T, D> where D::Mapper: 'a {
     }
 }
 
-/// A generic handle struct
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub struct Handle<T, I>(T, I);
-
-impl<T: Copy, I> Handle<T, I> {
-    /// Get the internal name
-    pub fn get_name(&self) -> T {
-        let Handle(name, _) = *self;
-        name
-    }
-}
-
-impl<T, I> Handle<T, I> {
-    /// Get the info reference
-    pub fn get_info(&self) -> &I {
-        let Handle(_, ref info) = *self;
-        info
-    }
-}
-
 /// Type-safe buffer handle
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct BufferHandle<R: Resources, T> {
@@ -210,21 +190,143 @@ impl<R: Resources, T> BufferHandle<R, T> {
 }
 
 /// Raw (untyped) Buffer Handle
-pub type RawBufferHandle<R: Resources> = Handle<<R as Resources>::Buffer, BufferInfo>;
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub struct RawBufferHandle<R: Resources>(
+    <R as Resources>::Buffer,
+    BufferInfo
+);
+
+impl<R: Resources> RawBufferHandle<R> {
+    /// Creates a new raw buffer handle (used by device)
+    pub unsafe fn new(name: <R as Resources>::Buffer, info: BufferInfo)
+        -> RawBufferHandle<R> {
+        RawBufferHandle(name, info)
+    }
+    /// Get raw buffer name
+    pub fn get_name(&self) -> <R as Resources>::Buffer { self.0 }
+    /// Get raw buffer info
+    pub fn get_info(&self) -> &BufferInfo { &self.1 }
+}
+
 /// Array Buffer Handle
-pub type ArrayBufferHandle<R: Resources> = Handle<<R as Resources>::ArrayBuffer, ()>;
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub struct ArrayBufferHandle<R: Resources>(<R as Resources>::ArrayBuffer);
+
+impl<R: Resources> ArrayBufferHandle<R> {
+    /// Creates a new array buffer (used by device)
+    pub unsafe fn new(name: <R as Resources>::ArrayBuffer)
+        -> ArrayBufferHandle<R> {
+        ArrayBufferHandle(name)
+    }
+    /// Get array buffer name
+    pub fn get_name(&self) -> <R as Resources>::ArrayBuffer { self.0 }
+}
+
 /// Shader Handle
-pub type ShaderHandle<R: Resources>  = Handle<<R as Resources>::Shader, shade::Stage>;
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub struct ShaderHandle<R: Resources>(<R as Resources>::Shader, shade::Stage);
+
+impl<R: Resources> ShaderHandle<R> {
+    /// Creates a new shader (used by device)
+    pub unsafe fn new(name: <R as Resources>::Shader, info: shade::Stage)
+        -> ShaderHandle<R> {
+        ShaderHandle(name, info)
+    }
+    /// Get shader name
+    pub fn get_name(&self) -> <R as Resources>::Shader { self.0 }
+    /// Get shader info
+    pub fn get_info(&self) -> &shade::Stage { &self.1 }
+}
+
 /// Program Handle
-pub type ProgramHandle<R: Resources> = Handle<<R as Resources>::Program, shade::ProgramInfo>;
+#[derive(Clone, PartialEq, Debug)]
+pub struct ProgramHandle<R: Resources>(
+    <R as Resources>::Program,
+    shade::ProgramInfo,
+);
+
+impl<R: Resources> ProgramHandle<R> {
+    /// Creates a new program (used by device)
+    pub unsafe fn new(name: <R as Resources>::Program, info: shade::ProgramInfo)
+        -> ProgramHandle<R> {
+        ProgramHandle(name, info)
+    }
+    /// Get program name
+    pub fn get_name(&self) -> <R as Resources>::Program { self.0 }
+    /// Get program info
+    pub fn get_info(&self) -> &shade::ProgramInfo { &self.1 }
+}
+
 /// Frame Buffer Handle
-pub type FrameBufferHandle<R: Resources> = Handle<<R as Resources>::FrameBuffer, ()>;
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub struct FrameBufferHandle<R: Resources>(<R as Resources>::FrameBuffer);
+
+impl<R: Resources> FrameBufferHandle<R> {
+    /// Creates a new frame buffer (used by device)
+    pub unsafe fn new(name: <R as Resources>::FrameBuffer)
+        -> FrameBufferHandle<R> {
+        FrameBufferHandle(name)
+    }
+    /// Get frame buffer name
+    pub fn get_name(&self) -> <R as Resources>::FrameBuffer { self.0 }
+}
+
 /// Surface Handle
-pub type SurfaceHandle<R: Resources> = Handle<<R as Resources>::Surface, tex::SurfaceInfo>;
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub struct SurfaceHandle<R: Resources>(
+    <R as Resources>::Surface,
+    tex::SurfaceInfo,
+);
+
+impl<R: Resources> SurfaceHandle<R> {
+    /// Creates a new surface (used by device)
+    pub unsafe fn new(name: <R as Resources>::Surface, info: tex::SurfaceInfo)
+        -> SurfaceHandle<R> {
+        SurfaceHandle(name, info)
+    }
+    /// Get surface name
+    pub fn get_name(&self) -> <R as Resources>::Surface { self.0 }
+    /// Get surface info
+    pub fn get_info(&self) -> &tex::SurfaceInfo { &self.1 }
+}
+
 /// Texture Handle
-pub type TextureHandle<R: Resources> = Handle<<R as Resources>::Texture, tex::TextureInfo>;
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub struct TextureHandle<R: Resources>(
+    <R as Resources>::Texture,
+    tex::TextureInfo,
+);
+
+impl<R: Resources> TextureHandle<R> {
+    /// Creates a new texture (used by device)
+    pub unsafe fn new(name: <R as Resources>::Texture, info: tex::TextureInfo)
+        -> TextureHandle<R> {
+        TextureHandle(name, info)
+    }
+    /// Get texture name
+    pub fn get_name(&self) -> <R as Resources>::Texture { self.0 }
+    /// Get texture info
+    pub fn get_info(&self) -> &tex::TextureInfo { &self.1 }
+}
+
 /// Sampler Handle
-pub type SamplerHandle<R: Resources> = Handle<<R as Resources>::Sampler, tex::SamplerInfo>;
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub struct SamplerHandle<R: Resources>(
+    <R as Resources>::Sampler,
+    tex::SamplerInfo,
+);
+
+impl<R: Resources> SamplerHandle<R> {
+    /// Creates a new sampler (used by device)
+    pub unsafe fn new(name: <R as Resources>::Sampler, info: tex::SamplerInfo)
+        -> SamplerHandle<R> {
+        SamplerHandle(name, info)
+    }
+    /// Get sampler name
+    pub fn get_name(&self) -> <R as Resources>::Sampler { self.0 }
+    /// Get sampler info
+    pub fn get_info(&self) -> &tex::SamplerInfo { &self.1 }
+}
 
 /// Treat a given slice as `&[u8]` for the given function call
 pub fn as_byte_slice<T>(slice: &[T]) -> &[u8] {
@@ -403,18 +505,6 @@ pub trait Device {
     fn generate_mipmap(&mut self, tex: &TextureHandle<Self::Resources>);
 }
 
-/// A service trait with methods for handle creation already implemented.
-/// To be used by device back ends and some tests.
-pub trait HandleFactory {
-    /// Create a handle
-    fn make_handle<T, I>(&self, value: T, info: I) -> Handle<T, I> {
-        Handle(value, info)
-    }
-}
-
-impl HandleFactory for () {}
-impl<D: Device> HandleFactory for D {}
-
 /// A service trait with methods for mapping already implemented.
 /// To be used by device back ends.
 #[allow(missing_docs)]
@@ -468,18 +558,18 @@ impl<D: Device> MapFactory for D {
 mod test {
     use std::mem;
     use std::marker::PhantomData;
-    use super::{BufferHandle, Handle};
+    use super::{BufferHandle, RawBufferHandle};
     use super::{BufferInfo, BufferUsage};
 
     fn mock_buffer<T>(len: usize) -> BufferHandle<(), T> {
         BufferHandle {
-            raw: Handle(
+            raw: unsafe { RawBufferHandle::new(
                 (),
                 BufferInfo {
                     usage: BufferUsage::Static,
                     size: mem::size_of::<T>() * len,
                 },
-            ),
+            ) },
             phantom_t: PhantomData,
         }
     }

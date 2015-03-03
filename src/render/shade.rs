@@ -66,10 +66,16 @@ pub type TextureParam<R: Resources> = (TextureHandle<R>, Option<SamplerHandle<R>
 
 /// A borrowed mutable storage for shader parameter values.
 // Not sure if it's the best data structure to represent it.
-pub struct ParamValues<'a, R: Resources> where
+pub struct ParamValues<'a, R> where
+    R: 'a + Resources,
     <R as Resources>::Buffer: 'a,
     <R as Resources>::Sampler: 'a,
     <R as Resources>::Texture: 'a,
+    <R as Resources>::Surface: 'a,
+    <R as Resources>::FrameBuffer: 'a,
+    <R as Resources>::Program: 'a,
+    <R as Resources>::ArrayBuffer: 'a,
+    <R as Resources>::Shader: 'a,
 {
     /// uniform values to be provided
     pub uniforms: &'a mut Vec<UniformValue>,
