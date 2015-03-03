@@ -21,7 +21,6 @@ use std::num::from_uint;
 use std::cmp::Ordering;
 use std::marker::PhantomData;
 use device::{Resources, PrimitiveType, ProgramHandle};
-use device::shade::ProgramInfo;
 use render::mesh;
 use render::mesh::ToSlice;
 use shade::{ParameterError, ShaderParam};
@@ -55,8 +54,28 @@ pub trait Batch {
                    -> Result<&ProgramHandle<Self::Resources>, Self::Error>;
 }
 
-impl<'a, T: ShaderParam> Batch for (&'a mesh::Mesh<T::Resources>, mesh::Slice<T::Resources>,
-                                    &'a ProgramHandle<T::Resources>, &'a T, &'a DrawState) {
+/// A batch that is constructed on the fly when rendering.
+/// Meant to be a struct, blocked by #614
+pub type ImplicitBatch<'a, T: ShaderParam> = (
+    &'a mesh::Mesh<T::Resources>,
+    mesh::Slice<T::Resources>,
+    &'a ProgramHandle<T::Resources>,
+    &'a T,
+    &'a DrawState
+);
+
+impl DrawState {
+    /// Create an implicit batch
+    pub fn bind<'a, T: ShaderParam>(&'a self,
+                 mesh: &'a mesh::Mesh<T::Resources>,
+                 slice: mesh::Slice<T::Resources>,
+                 program: &'a ProgramHandle<T::Resources>,
+                 data: &'a T) -> ImplicitBatch<'a, T> {
+        (mesh, slice, program, data, self)
+    }
+}
+
+impl<'a, T: ShaderParam> Batch for ImplicitBatch<'a, T> {
     type Resources = T::Resources;
     type Error = Error;
 
