@@ -633,7 +633,7 @@ impl Device for GlDevice {
             size: size,
         };
         self.init_buffer(name, &info);
-        d::BufferHandle::from_raw(RawBufferHandle { name: name, info: info })
+        d::BufferHandle::from_raw(unsafe { RawBufferHandle::new(name, info) })
     }
 
     fn create_buffer_static_raw(&mut self, data: &[u8]) -> BufferHandle<()> {
@@ -645,7 +645,7 @@ impl Device for GlDevice {
         };
         self.init_buffer(name, &info);
         self.update_sub_buffer(name, data.as_ptr(), data.len(), 0);
-        d::BufferHandle::from_raw(RawBufferHandle { name: name, info: info })
+        d::BufferHandle::from_raw(unsafe { RawBufferHandle::new(name, info) })
     }
 
     fn create_array_buffer(&mut self) -> Result<d::ArrayBufferHandle<GlResources>, ()> {
