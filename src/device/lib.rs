@@ -565,13 +565,13 @@ mod test {
 
     fn mock_buffer<T>(len: usize) -> BufferHandle<(), T> {
         BufferHandle {
-            raw: RawBufferHandle {
-                name: (),
-                info: BufferInfo {
+            raw: unsafe { RawBufferHandle::new(
+                (),
+                BufferInfo {
                     usage: BufferUsage::Static,
                     size: mem::size_of::<T>() * len,
                 },
-            },
+            ) },
             phantom_t: PhantomData,
         }
     }
