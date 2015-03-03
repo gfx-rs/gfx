@@ -20,11 +20,12 @@ use std::{fmt, mem, raw};
 use std::ops::{Deref, DerefMut};
 use std::marker::{PhantomData, PhantomFn};
 
+pub use draw_state::target;
+pub use draw_state::block as state;
+
 pub mod attrib;
 pub mod draw;
 pub mod shade;
-pub mod state;
-pub mod target;
 pub mod tex;
 
 /// Draw vertex count.

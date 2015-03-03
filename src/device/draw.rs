@@ -14,7 +14,9 @@
 
 //! Command Buffer device interface
 
-use super::{attrib, shade, target, tex, Resources};
+use draw_state::target;
+
+use super::{attrib, shade, tex, Resources};
 
 type Offset = u32;
 type Size = u32;
@@ -93,15 +95,15 @@ pub trait CommandBuffer {
     /// Bind an index buffer
     fn bind_index(&mut self, <Self::Resources as Resources>::Buffer);
     /// Bind a frame buffer object
-    fn bind_frame_buffer(&mut self, target::Access,
+    fn bind_frame_buffer(&mut self, Access,
                          <Self::Resources as Resources>::FrameBuffer);
     /// Unbind any surface from the specified target slot
-    fn unbind_target(&mut self, target::Access, target::Target);
+    fn unbind_target(&mut self, Access, Target);
     /// Bind a surface to the specified target slot
-    fn bind_target_surface(&mut self, target::Access, target::Target,
+    fn bind_target_surface(&mut self, Access, Target,
                            <Self::Resources as Resources>::Surface);
     /// Bind a level of the texture to the specified target slot
-    fn bind_target_texture(&mut self, target::Access, target::Target,
+    fn bind_target_texture(&mut self, Access, Target,
                            <Self::Resources as Resources>::Texture,
                            target::Level, Option<target::Layer>);
     /// Bind a uniform block
@@ -126,7 +128,7 @@ pub trait CommandBuffer {
     fn set_scissor(&mut self, Option<target::Rect>);
     /// Set depth and stencil states
     fn set_depth_stencil(&mut self, Option<::state::Depth>,
-                         Option<::state::Stencil>, ::state::CullMode);
+                         Option<::state::Stencil>, ::state::CullFace);
     /// Set blend state
     fn set_blend(&mut self, Option<::state::Blend>);
     /// Set output color mask for all targets
@@ -148,6 +150,35 @@ pub trait CommandBuffer {
     /// Blit from one target to another
     fn call_blit(&mut self, target::Rect, target::Rect, target::Mirror, target::Mask);
 }
+
+/// Type of the frame buffer access
+#[repr(u8)]
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub enum Access {
+    /// Draw access
+    Draw,
+    /// Read access
+    Read,
+}
+
+/// When rendering, each "output" of the fragment shader goes to a specific target. A `Plane` can
+/// be bound to a target, causing writes to that target to affect the `Plane`.
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub enum Target {
+    /// Color data.
+    ///
+    /// # Portability Note
+    ///
+    /// The device is only required to expose one color target.
+    Color(u8),
+    /// Depth data.
+    Depth,
+    /// Stencil data.
+    Stencil,
+    /// A target for both depth and stencil data at once.
+    DepthStencil,
+}
+
 
 #[cfg(test)]
 mod tests {
