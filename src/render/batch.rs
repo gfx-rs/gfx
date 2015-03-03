@@ -285,6 +285,16 @@ pub struct Context<R: Resources> {
     states: Array<DrawState>,
 }
 
+/// A RefBatch completed by the shader parameters and a context
+/// Implements `Batch` thus can be drawn.
+/// It is meant to be a struct, but we have lots of lifetime issues
+/// with associated resources, binding which looks nasty (#614)
+pub type RefBatchFull<'a, T: ShaderParam> = (
+    &'a RefBatch<T>,
+    &'a T,
+    &'a Context<T::Resources>
+);
+
 impl<R: Resources> Context<R> {
     /// Create a new empty `Context`
     pub fn new() -> Context<R> {
@@ -334,9 +344,15 @@ impl<R: Resources> Context<R> {
             state_id: state_id,
         })
     }
+
+    /// Complete a RefBatch temporarily by turning it into RefBatchFull
+    pub fn bind<'a, T: ShaderParam<Resources = R> + 'a>(&'a self,
+                 batch: &'a RefBatch<T>, data: &'a T) -> RefBatchFull<'a, T> {
+        (batch, data, self)
+    }
 }
 
-impl<'a, T: ShaderParam> Batch for (&'a RefBatch<T>, &'a T, &'a Context<T::Resources>) {
+impl<'a, T: ShaderParam + 'a> Batch for RefBatchFull<'a, T> {
     type Resources = T::Resources;
     type Error = OutOfBounds;
 
