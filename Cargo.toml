@@ -40,7 +40,7 @@ git = "https://github.com/gfx-rs/gfx_device_gl"
 version = "*"
 
 [dependencies.gfx_macros]
-git = "https://github.com/gfx-rs/gfx-rs"
+git = "https://github.com/gfx-rs/gfx_macros"
 plugin = true
 version = "*"
 

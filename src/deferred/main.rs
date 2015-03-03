@@ -638,7 +638,7 @@ fn main() {
         // Render the terrain to the geometry buffer
         renderer.clear(clear_data, gfx::COLOR|gfx::DEPTH, &g_buffer);
         renderer.draw(
-            &(&terrain_batch, &terrain_data, &context),
+            &context.bind(&terrain_batch, &terrain_data),
             &g_buffer)
             .unwrap();
 
@@ -648,7 +648,7 @@ fn main() {
                 blit_data.tex = (tex, Some(sampler));
                 renderer.clear(clear_data, gfx::COLOR | gfx::DEPTH, &frame);
                 renderer.draw(
-                    &(&blit_batch, &blit_data, &context),
+                    &context.bind(&blit_batch, &blit_data),
                     &frame)
                     .unwrap();
             },
@@ -657,12 +657,12 @@ fn main() {
 
                 // Apply light
                 renderer.draw_instanced(
-                    &(&light_batch, &light_data, &context),
+                    &context.bind(&light_batch, &light_data),
                     NUM_LIGHTS as u32, 0, &res_buffer)
                     .unwrap();
                 // Draw light emitters
                 renderer.draw_instanced(
-                    &(&emitter_batch, &emitter_data, &context),
+                    &context.bind(&emitter_batch, &emitter_data),
                     NUM_LIGHTS as u32, 0, &res_buffer)
                     .unwrap();
 
@@ -670,7 +670,7 @@ fn main() {
                 renderer.clear(clear_data, gfx::COLOR | gfx::DEPTH, &frame);
                 blit_data.tex = (texture_frame, Some(sampler));
                 renderer.draw(
-                    &(&blit_batch, &blit_data, &context),
+                    &context.bind(&blit_batch, &blit_data),
                     &frame)
                     .unwrap();
             }

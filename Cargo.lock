@@ -2,14 +2,14 @@
 name = "gfx-examples"
 version = "0.0.1"
 dependencies = [
- "cgmath 0.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "genmesh 0.0.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "gfx 0.2.0 (git+https://github.com/gfx-rs/gfx-rs)",
+ "cgmath 0.0.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "genmesh 0.0.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "gfx 0.2.1 (git+https://github.com/gfx-rs/gfx-rs)",
  "gfx_device_gl 0.2.0 (git+https://github.com/gfx-rs/gfx_device_gl)",
  "gfx_gl 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "gfx_macros 0.1.6 (git+https://github.com/gfx-rs/gfx-rs)",
- "glfw 0.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "glutin 0.0.5 (git+https://github.com/tomaka/glutin)",
+ "gfx_macros 0.1.7 (git+https://github.com/gfx-rs/gfx_macros)",
+ "glfw 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "glutin 0.0.6 (git+https://github.com/tomaka/glutin)",
  "noise 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "time 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -27,7 +27,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "cgmath"
-version = "0.0.6"
+version = "0.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "rand 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -75,13 +75,13 @@ dependencies = [
 
 [[package]]
 name = "genmesh"
-version = "0.0.12"
+version = "0.0.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "gfx"
-version = "0.2.0"
-source = "git+https://github.com/gfx-rs/gfx-rs#3af683a93169b5b5788b532f6bd11e98b7cc535c"
+version = "0.2.1"
+source = "git+https://github.com/gfx-rs/gfx-rs#42834728d1f0ab3e4b8ee3ae76046c7b92e2b2c3"
 dependencies = [
  "bitflags 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -90,9 +90,9 @@ dependencies = [
 [[package]]
 name = "gfx_device_gl"
 version = "0.2.0"
-source = "git+https://github.com/gfx-rs/gfx_device_gl#cab2d5c83e43ed1cb288e0f056be1e8375eaaa16"
+source = "git+https://github.com/gfx-rs/gfx_device_gl#3abcbb77cdf12818546440cd552d22fc69abeaeb"
 dependencies = [
- "gfx 0.2.0 (git+https://github.com/gfx-rs/gfx-rs)",
+ "gfx 0.2.1 (git+https://github.com/gfx-rs/gfx-rs)",
  "gfx_gl 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -111,8 +111,8 @@ dependencies = [
 
 [[package]]
 name = "gfx_macros"
-version = "0.1.6"
-source = "git+https://github.com/gfx-rs/gfx-rs#3af683a93169b5b5788b532f6bd11e98b7cc535c"
+version = "0.1.7"
+source = "git+https://github.com/gfx-rs/gfx_macros#4e47129ce43c95b00fea748d3e46033a1e55bf62"
 
 [[package]]
 name = "gl_common"
@@ -129,19 +129,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "khronos_api 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "xml-rs 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)",
+ "xml-rs 0.1.20 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "glfw"
-version = "0.0.4"
+version = "0.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bitflags 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "glfw-sys 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "semver 0.1.15 (registry+https://github.com/rust-lang/crates.io-index)",
+ "semver 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -151,8 +151,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "glutin"
-version = "0.0.5"
-source = "git+https://github.com/tomaka/glutin#77d8a113385e8bb85f145d514724a1e3bd574cfd"
+version = "0.0.6"
+source = "git+https://github.com/tomaka/glutin#41e3328ca7d271b1291996dec9e59830d917ee2c"
 dependencies = [
  "android_glue 0.0.1 (git+https://github.com/tomaka/android-rs-glue)",
  "cocoa 0.1.1 (git+https://github.com/servo/rust-cocoa)",
@@ -220,7 +220,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "semver"
-version = "0.1.15"
+version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
@@ -250,7 +250,7 @@ dependencies = [
 
 [[package]]
 name = "xml-rs"
-version = "0.1.19"
+version = "0.1.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bitflags 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
