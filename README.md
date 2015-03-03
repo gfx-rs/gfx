@@ -81,24 +81,13 @@ Add the following to your `Cargo.toml`:
 git = "http://github.com/gfx-rs/gfx-rs"
 ~~~
 
-See the [triangle example](./examples/triangle) for a typical context
+See the [triangle example](https://github.com/gfx-rs/gfx_examples/src/triangle) for a typical context
 initialization with [glfw](https://github.com/bjz/glfw-rs/), or
-[glutin example](./examples/glutin) for [glutin](https://github.com/tomaka/gl-init-rs/).
+[glutin example](https://github.com/gfx-rs/gfx_examples/src/glutin) for [glutin](https://github.com/tomaka/glutin/).
 
 ## Crate hierarchy
 
 ![Dependency graph](diagrams/png/dependencies.png)
-
-## Building the examples
-
-To build the examples run `cargo test`. The executables will be in the `target` directory.
-
-~~~sh
-# Build all Examples
-cargo test
-# Run Cube Example
-target/examples/cube
-~~~
 
 ## Note
 
