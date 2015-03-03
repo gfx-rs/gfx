@@ -218,7 +218,7 @@ impl<C: CommandBuffer> Renderer<C> {
             Err(e) => return Err(DrawError::InvalidBatch(e)),
         };
         self.bind_state(state);
-        self.bind_mesh(mesh, attrib_iter, &program.get_info());
+        self.bind_mesh(mesh, attrib_iter, program.get_info());
         self.draw_slice(slice, instances);
         Ok(())
     }
