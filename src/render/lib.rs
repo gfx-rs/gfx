@@ -114,9 +114,9 @@ impl<C: CommandBuffer> CommandBufferExt for C {
         match plane {
             None => self.unbind_target(access, to),
             Some(&target::Plane::Surface(ref suf)) =>
-                self.bind_target_surface(access, to, suf.name),
+                self.bind_target_surface(access, to, suf.get_name()),
             Some(&target::Plane::Texture(ref tex, level, layer)) =>
-                self.bind_target_texture(access, to, tex.name, level, layer),
+                self.bind_target_texture(access, to, tex.get_name(), level, layer),
         }
     }
 }
@@ -218,7 +218,7 @@ impl<C: CommandBuffer> Renderer<C> {
             Err(e) => return Err(DrawError::InvalidBatch(e)),
         };
         self.bind_state(state);
-        self.bind_mesh(mesh, attrib_iter, &program.info);
+        self.bind_mesh(mesh, attrib_iter, &program.get_info());
         self.draw_slice(slice, instances);
         Ok(())
     }
@@ -267,9 +267,9 @@ impl<C: CommandBuffer> Renderer<C> {
     /// Update the contents of a texture.
     pub fn update_texture<T: Copy>(&mut self, tex: device::TextureHandle<C::Resources>,
                           img: device::tex::ImageInfo, data: &[T]) {
-        debug_assert!(tex.info.contains(&img));
+        debug_assert!(tex.get_info().contains(&img));
         let pointer = self.data_buffer.add_vec(data);
-        self.command_buffer.update_texture(tex.info.kind, tex.name, img, pointer);
+        self.command_buffer.update_texture(tex.get_info().kind, tex.get_name(), img, pointer);
     }
 
     fn bind_frame(&mut self, frame: &target::Frame<C::Resources>) {
@@ -287,12 +287,12 @@ impl<C: CommandBuffer> Renderer<C> {
         if frame.is_default() {
             if self.render_state.is_frame_buffer_set {
                 // binding the default FBO, not touching our common one
-                self.command_buffer.bind_frame_buffer(Access::Draw, self.default_frame_buffer.name);
+                self.command_buffer.bind_frame_buffer(Access::Draw, self.default_frame_buffer.get_name());
                 self.render_state.is_frame_buffer_set = false;
             }
         } else {
             if !self.render_state.is_frame_buffer_set {
-                self.command_buffer.bind_frame_buffer(Access::Draw, self.draw_frame_buffer.name);
+                self.command_buffer.bind_frame_buffer(Access::Draw, self.draw_frame_buffer.get_name());
                 self.render_state.is_frame_buffer_set = true;
             }
             // cut off excess color planes
@@ -331,7 +331,7 @@ impl<C: CommandBuffer> Renderer<C> {
     }
 
     fn bind_read_frame(&mut self, frame: &target::Frame<C::Resources>) {
-        self.command_buffer.bind_frame_buffer(Access::Read, self.read_frame_buffer.name);
+        self.command_buffer.bind_frame_buffer(Access::Read, self.read_frame_buffer.get_name());
         // color
         if frame.colors.is_empty() {
             self.command_buffer.unbind_target(Access::Read, Target::Color(0));
@@ -374,16 +374,16 @@ impl<C: CommandBuffer> Renderer<C> {
             Err(e) => return Err(e),
         };
         //Warning: this is not protected against deleted resources in single-threaded mode
-        if self.render_state.program_name != Some(program.name) {
-            self.command_buffer.bind_program(program.name);
-            self.render_state.program_name = Some(program.name);
+        if self.render_state.program_name != Some(program.get_name()) {
+            self.command_buffer.bind_program(program.get_name());
+            self.render_state.program_name = Some(program.get_name());
         }
         self.upload_parameters(program);
         Ok(program)
     }
 
     fn upload_parameters(&mut self, program: &device::ProgramHandle<C::Resources>) {
-        let info = &program.info;
+        let info = program.get_info();
         if self.parameters.uniforms.len() != info.uniforms.len() ||
             self.parameters.blocks.len() != info.blocks.len() ||
             self.parameters.textures.len() != info.textures.len() {
@@ -403,21 +403,21 @@ impl<C: CommandBuffer> Renderer<C> {
         for (i, (_, buf)) in info.blocks.iter()
             .zip(self.parameters.blocks.iter()).enumerate() {
             self.command_buffer.bind_uniform_block(
-                program.name,
+                program.get_name(),
                 i as device::UniformBufferSlot,
                 i as device::UniformBlockIndex,
-                buf.name
+                buf.get_name()
             );
         }
         // bind textures and samplers
         for (i, (var, &(tex, sampler))) in info.textures.iter()
             .zip(self.parameters.textures.iter()).enumerate() {
-            if sampler.is_some() && tex.info.kind.get_aa_mode().is_some() {
+            if sampler.is_some() && tex.get_info().kind.get_aa_mode().is_some() {
                 error!("A sampler provided for an AA texture: {}", var.name.clone());
             }
             self.command_buffer.bind_uniform(var.location, UniformValue::I32(i as i32));
             self.command_buffer.bind_texture(i as device::TextureSlot,
-                tex.info.kind, tex.name, sampler);
+                tex.get_info().kind, tex.get_name(), sampler);
         }
     }
 
@@ -426,7 +426,7 @@ impl<C: CommandBuffer> Renderer<C> {
         if !self.render_state.is_array_buffer_set {
             // It's Ok if the array buffer is not supported. We can just ignore it.
             self.common_array_buffer.map(|ab|
-                self.command_buffer.bind_array_buffer(ab.name)
+                self.command_buffer.bind_array_buffer(ab.get_name())
             ).is_ok();
             self.render_state.is_array_buffer_set = true;
         }

@@ -81,7 +81,7 @@ impl<'a, T: ShaderParam> Batch for ImplicitBatch<'a, T> {
 
     fn get_data(&self) -> Result<BatchData<T::Resources>, Error> {
         let (mesh, ref slice, program, _, state) = *self;
-        match mesh::Link::new(mesh, &program.info) {
+        match mesh::Link::new(mesh, &program.get_info()) {
             Ok(link) => Ok((mesh, link.to_iter(), &slice, state)),
             Err(e) => Err(Error::Mesh(e)),
         }
@@ -90,7 +90,7 @@ impl<'a, T: ShaderParam> Batch for ImplicitBatch<'a, T> {
     fn fill_params(&self, values: ::shade::ParamValues<T::Resources>)
                    -> Result<&ProgramHandle<T::Resources>, Error> {
         let (_, _, program, params, _) = *self;
-        match ShaderParam::create_link(None::<&T>, &program.info) {
+        match ShaderParam::create_link(None::<&T>, &program.get_info()) {
             Ok(link) => {
                 params.fill_params(&link, values);
                 Ok(program)
@@ -119,11 +119,11 @@ impl<T: ShaderParam> OwnedBatch<T> {
     pub fn new(mesh: mesh::Mesh<T::Resources>, program: ProgramHandle<T::Resources>, param: T)
            -> Result<OwnedBatch<T>, Error> {
         let slice = mesh.to_slice(PrimitiveType::TriangleList);
-        let mesh_link = match mesh::Link::new(&mesh, &program.info) {
+        let mesh_link = match mesh::Link::new(&mesh, &program.get_info()) {
             Ok(l) => l,
             Err(e) => return Err(Error::Mesh(e)),
         };
-        let param_link = match ShaderParam::create_link(None::<&T>, &program.info) {
+        let param_link = match ShaderParam::create_link(None::<&T>, &program.get_info()) {
             Ok(l) => l,
             Err(e) => return Err(Error::Parameters(e)),
         };
@@ -333,11 +333,11 @@ impl<R: Resources> Context<R> {
                       slice: mesh::Slice<R>,
                       state: &DrawState)
                       -> Result<RefBatch<T>, Error> {
-        let mesh_link = match mesh::Link::new(mesh, &program.info) {
+        let mesh_link = match mesh::Link::new(mesh, &program.get_info()) {
             Ok(l) => l,
             Err(e) => return Err(Error::Mesh(e)),
         };
-        let link = match ShaderParam::create_link(None::<&T>, &program.info) {
+        let link = match ShaderParam::create_link(None::<&T>, &program.get_info()) {
             Ok(l) => l,
             Err(e) => return Err(Error::Parameters(e))
         };

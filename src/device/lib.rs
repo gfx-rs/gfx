@@ -197,57 +197,116 @@ pub struct RawBufferHandle<R: Resources> {
     /// Info about the raw buffer.
     pub info: BufferInfo
 }
+
+impl<R: Resources> RawBufferHandle<R> {
+    /// Get raw buffer name
+    pub fn get_name(&self) -> <R as Resources>::Buffer { self.name }
+    /// Get raw buffer info
+    pub fn get_info(&self) -> &BufferInfo { &self.info }
+}
+
 /// Array Buffer Handle
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct ArrayBufferHandle<R: Resources> {
     /// Name of array buffer.
-    pub name: <R as Resources>::ArrayBuffer,
+    name: <R as Resources>::ArrayBuffer,
 }
+
+impl<R: Resources> ArrayBufferHandle<R> {
+    /// Get array buffer name
+    pub fn get_name(&self) -> <R as Resources>::ArrayBuffer { self.name }
+}
+
 /// Shader Handle
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct ShaderHandle<R: Resources> {
     /// Name of shader.
-    pub name: <R as Resources>::Shader,
+    name: <R as Resources>::Shader,
     /// Info about shader.
-    pub info: shade::Stage,
+    info: shade::Stage,
 }
+
+impl<R: Resources> ShaderHandle<R> {
+    /// Get shader name
+    pub fn get_name(&self) -> <R as Resources>::Shader { self.name }
+    /// Get shader info
+    pub fn get_info(&self) -> &shade::Stage { &self.info }
+}
+
 /// Program Handle
 #[derive(Clone, PartialEq, Debug)]
 pub struct ProgramHandle<R: Resources> {
     /// Name of program.
-    pub name: <R as Resources>::Program,
+    name: <R as Resources>::Program,
     /// Info about the program.
-    pub info: shade::ProgramInfo,
+    info: shade::ProgramInfo,
 }
+
+impl<R: Resources> ProgramHandle<R> {
+    /// Get program name
+    pub fn get_name(&self) -> <R as Resources>::Program { self.name }
+    /// Get program info
+    pub fn get_info(&self) -> &shade::ProgramInfo { &self.info }
+}
+
 /// Frame Buffer Handle
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct FrameBufferHandle<R: Resources> {
     /// Name of frame buffer.
-    pub name: <R as Resources>::FrameBuffer,
+    name: <R as Resources>::FrameBuffer,
 }
+
+impl<R: Resources> FrameBufferHandle<R> {
+    /// Get frame buffer name
+    pub fn get_name(&self) -> <R as Resources>::FrameBuffer { self.name }
+}
+
 /// Surface Handle
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct SurfaceHandle<R: Resources> {
     /// Name of surface.
-    pub name: <R as Resources>::Surface,
+    name: <R as Resources>::Surface,
     /// Info about surface.
-    pub info: tex::SurfaceInfo,
+    info: tex::SurfaceInfo,
 }
+
+impl<R: Resources> SurfaceHandle<R> {
+    /// Get surface name
+    pub fn get_name(&self) -> <R as Resources>::Surface { self.name }
+    /// Get surface info
+    pub fn get_info(&self) -> &tex::SurfaceInfo { &self.info }
+}
+
 /// Texture Handle
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct TextureHandle<R: Resources> {
     /// Name of texture.
-    pub name: <R as Resources>::Texture,
+    name: <R as Resources>::Texture,
     /// Info about texture.
-    pub info: tex::TextureInfo,
+    info: tex::TextureInfo,
 }
+
+impl<R: Resources> TextureHandle<R> {
+    /// Get texture name
+    pub fn get_name(&self) -> <R as Resources>::Texture { self.name }
+    /// Get texture info
+    pub fn get_info(&self) -> &tex::TextureInfo { &self.info }
+}
+
 /// Sampler Handle
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct SamplerHandle<R: Resources> {
     /// Name of the sampler.
-    pub name: <R as Resources>::Sampler,
+    name: <R as Resources>::Sampler,
     /// Info about the sampler.
-    pub info: tex::SamplerInfo,
+    info: tex::SamplerInfo,
+}
+
+impl<R: Resources> SamplerHandle<R> {
+    /// Get sampler name
+    pub fn get_name(&self) -> <R as Resources>::Sampler { self.name }
+    /// Get sampler info
+    pub fn get_info(&self) -> &tex::SamplerInfo { &self.info }
 }
 
 /// Treat a given slice as `&[u8]` for the given function call
