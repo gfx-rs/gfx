@@ -81,7 +81,7 @@ impl<'a, T: ShaderParam> Batch for ImplicitBatch<'a, T> {
 
     fn get_data(&self) -> Result<BatchData<T::Resources>, Error> {
         let (mesh, ref slice, program, _, state) = *self;
-        match mesh::Link::new(mesh, &program.get_info()) {
+        match mesh::Link::new(mesh, program.get_info()) {
             Ok(link) => Ok((mesh, link.to_iter(), &slice, state)),
             Err(e) => Err(Error::Mesh(e)),
         }
