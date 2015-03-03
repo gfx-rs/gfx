@@ -88,7 +88,7 @@ impl<D: device::Device> Graphics<D> {
     pub fn draw<'a, T: shade::ShaderParam<Resources = D::Resources>>(&'a mut self,
                 batch: &'a batch::RefBatch<T>, data: &'a T, frame: &Frame<D::Resources>)
                 -> Result<(), DrawError<batch::OutOfBounds>> {
-        self.renderer.draw(&(batch, data, &self.context), frame)
+        self.renderer.draw(&self.context.bind(batch, data), frame)
     }
 
     /// Submit the internal command buffer and reset for the next frame.
