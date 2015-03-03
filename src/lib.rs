@@ -32,8 +32,8 @@ use gfx::{Device, Resources, BufferUsage};
 use gfx::device as d;
 use gfx::device::{MapFactory};
 use gfx::device::attrib::*;
-use gfx::device::state::{CullMode, RasterMethod, WindingOrder};
-use gfx::device::target::{Access, Target};
+use gfx::device::state::{CullFace, RasterMethod, FrontFace};
+use gfx::device::draw::{Access, Target};
 use gfx::device::{
     FrameBufferHandle, ProgramHandle, ShaderHandle, ArrayBufferHandle,
     SamplerHandle, SurfaceHandle, TextureHandle, RawBufferHandle
@@ -130,13 +130,13 @@ const RESET_CB: [Command; 11] = [
     // BindUniform
     // BindTexture
     Command::SetPrimitiveState(d::state::Primitive {
-        front_face: WindingOrder::CounterClockwise,
-        method: RasterMethod::Fill(CullMode::Back),
+        front_face: FrontFace::CounterClockwise,
+        method: RasterMethod::Fill(CullFace::Back),
         offset: None,
     }),
     Command::SetViewport(d::target::Rect{x: 0, y: 0, w: 0, h: 0}),
     Command::SetScissor(None),
-    Command::SetDepthStencilState(None, None, CullMode::Nothing),
+    Command::SetDepthStencilState(None, None, CullFace::Nothing),
     Command::SetBlendState(None),
     Command::SetColorMask(d::state::MASK_ALL),
 ];

@@ -17,6 +17,7 @@
 use std::slice;
 
 use gfx::device as d;
+use gfx::device::draw::{Access, Target};
 use gfx::device::target::*;
 use super::{ArrayBuffer, Buffer, FrameBuffer, Program, Surface, Texture, GlResources};
 
@@ -41,7 +42,7 @@ pub enum Command {
     SetMultiSampleState(Option<d::state::MultiSample>),
     SetScissor(Option<Rect>),
     SetDepthStencilState(Option<d::state::Depth>, Option<d::state::Stencil>,
-                         d::state::CullMode),
+                         d::state::CullFace),
     SetBlendState(Option<d::state::Blend>),
     SetColorMask(d::state::ColorMask),
     UpdateBuffer(Buffer, d::draw::DataPointer, usize),
@@ -146,7 +147,7 @@ impl d::draw::CommandBuffer for CommandBuffer {
 
     fn set_depth_stencil(&mut self, depth: Option<d::state::Depth>,
                          stencil: Option<d::state::Stencil>,
-                         cull: d::state::CullMode) {
+                         cull: d::state::CullFace) {
         self.buf.push(Command::SetDepthStencilState(depth, stencil, cull));
     }
 

@@ -13,15 +13,15 @@
 // limitations under the License.
 
 use gfx::device::state as s;
-use gfx::device::state::{BlendValue, Comparison, CullMode, Equation, InverseFlag,
-                         Offset, RasterMethod, StencilOp, WindingOrder};
+use gfx::device::state::{BlendValue, Comparison, CullFace, Equation, InverseFlag,
+                         Offset, RasterMethod, StencilOp, FrontFace};
 use gfx::device::target::Rect;
 use super::gl;
 
 pub fn bind_primitive(gl: &gl::Gl, p: s::Primitive) {
     unsafe { gl.FrontFace(match p.front_face {
-        WindingOrder::Clockwise => gl::CW,
-        WindingOrder::CounterClockwise => gl::CCW,
+        FrontFace::Clockwise => gl::CW,
+        FrontFace::CounterClockwise => gl::CCW,
     }) };
 
     let (gl_draw, gl_offset) = match p.method {
@@ -32,12 +32,12 @@ pub fn bind_primitive(gl: &gl::Gl, p: s::Primitive) {
         },
         RasterMethod::Fill(cull) => {
             match cull {
-                CullMode::Nothing => unsafe { gl.Disable(gl::CULL_FACE) },
-                CullMode::Front => { unsafe {
+                CullFace::Nothing => unsafe { gl.Disable(gl::CULL_FACE) },
+                CullFace::Front => { unsafe {
                     gl.Enable(gl::CULL_FACE);
                     gl.CullFace(gl::FRONT);
                 }},
-                CullMode::Back => { unsafe {
+                CullFace::Back => { unsafe {
                     gl.Enable(gl::CULL_FACE);
                     gl.CullFace(gl::BACK);
                 }},
@@ -139,7 +139,7 @@ fn map_operation(op: StencilOp) -> gl::types::GLenum {
     }
 }
 
-pub fn bind_stencil(gl: &gl::Gl, stencil: Option<s::Stencil>, cull: s::CullMode) {
+pub fn bind_stencil(gl: &gl::Gl, stencil: Option<s::Stencil>, cull: s::CullFace) {
     fn bind_side(gl: &gl::Gl, face: gl::types::GLenum, side: s::StencilSide) { unsafe {
         gl.StencilFuncSeparate(face, map_comparison(side.fun),
             side.value as gl::types::GLint, side.mask_read as gl::types::GLuint);
@@ -150,10 +150,10 @@ pub fn bind_stencil(gl: &gl::Gl, stencil: Option<s::Stencil>, cull: s::CullMode)
     match stencil {
         Some(s) => {
             unsafe { gl.Enable(gl::STENCIL_TEST) };
-            if cull != CullMode::Front {
+            if cull != CullFace::Front {
                 bind_side(gl, gl::FRONT, s.front);
             }
-            if cull != CullMode::Back {
+            if cull != CullFace::Back {
                 bind_side(gl, gl::BACK, s.back);
             }
         }
