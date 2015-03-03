@@ -28,10 +28,10 @@ pub trait ToUniform {
 }
 
 macro_rules! impl_ToUniform(
-    ($srcty:ty, $dstty:expr) => (
-        impl ToUniform for $srcty {
+    ($ty_src:ty, $ty_dst:expr) => (
+        impl ToUniform for $ty_src {
             fn to_uniform(&self) -> shade::UniformValue {
-                $dstty(*self)
+                $ty_dst(*self)
             }
         }
     );
