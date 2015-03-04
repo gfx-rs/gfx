@@ -61,6 +61,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "draw_state"
+version = "0.0.1"
+source = "git+https://github.com/gfx-rs/draw_state#b92422e8671a25f8fe5c8216001b44f5ca849744"
+dependencies = [
+ "bitflags 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "gcc"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -81,16 +89,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "gfx"
 version = "0.2.1"
-source = "git+https://github.com/gfx-rs/gfx-rs#42834728d1f0ab3e4b8ee3ae76046c7b92e2b2c3"
+source = "git+https://github.com/gfx-rs/gfx-rs#451ddb513c2d335878618ea2a2b6819a2bde9855"
 dependencies = [
  "bitflags 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "draw_state 0.0.1 (git+https://github.com/gfx-rs/draw_state)",
  "log 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "gfx_device_gl"
 version = "0.2.0"
-source = "git+https://github.com/gfx-rs/gfx_device_gl#3abcbb77cdf12818546440cd552d22fc69abeaeb"
+source = "git+https://github.com/gfx-rs/gfx_device_gl#e101ee3a64b92b1d1555c8c91fe9c583f54888d7"
 dependencies = [
  "gfx 0.2.1 (git+https://github.com/gfx-rs/gfx-rs)",
  "gfx_gl 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
