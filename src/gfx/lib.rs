@@ -70,6 +70,12 @@ impl<D: device::Device> std::ops::Deref for Graphics<D> {
     }
 }
 
+impl<D: device::Device> std::ops::DerefMut for Graphics<D> {
+    fn deref_mut(&mut self) -> &mut batch::Context<D::Resources> {
+        &mut self.context
+    }
+}
+
 impl<D: device::Device> Graphics<D> {
     /// Create a new graphics wrapper.
     pub fn new(mut device: D) -> Graphics<D> {
