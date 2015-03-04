@@ -22,6 +22,10 @@ extern crate bitflags;
 #[macro_use]
 extern crate log;
 extern crate libc;
+extern crate draw_state;
+
+// draw state re-exports
+pub use draw_state::{DrawState, BlendPreset};
 
 // public re-exports
 pub use render::{Renderer, DrawError};
@@ -30,11 +34,10 @@ pub use render::device_ext::{DeviceExt, ShaderSource, ProgramError};
 pub use render::mesh::{Attribute, Mesh, VertexFormat};
 pub use render::mesh::Error as MeshError;
 pub use render::mesh::{Slice, ToSlice, SliceKind};
-pub use render::state::{BlendPreset, DrawState};
 pub use render::shade;
 pub use render::target::{Frame, Plane};
 pub use device::{Device, Resources};
-pub use device::{attrib, state, tex};
+pub use device::{attrib, tex};
 pub use device::as_byte_slice;
 pub use device::{BufferHandle, BufferInfo, RawBufferHandle, ShaderHandle};
 pub use device::{ProgramHandle, SurfaceHandle, TextureHandle, SamplerHandle};
@@ -43,7 +46,8 @@ pub use device::{VertexCount, InstanceCount};
 pub use device::PrimitiveType;
 pub use device::draw::CommandBuffer;
 pub use device::shade::{ProgramInfo, UniformValue};
-pub use device::target::*;
+pub use draw_state::target::*;
+pub use draw_state::block as state;
 
 #[path = "../render/lib.rs"] pub mod render;
 #[path = "../device/lib.rs"] pub mod device;

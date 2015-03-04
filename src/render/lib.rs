@@ -17,14 +17,15 @@
 #![deny(missing_docs)]
 
 use std::mem;
+use draw_state::{self, DrawState};
+use draw_state::target::{ClearData, Mask, Mirror, Rect};
 
 use device;
 use device::{Device, Resources};
 use device::attrib;
 use device::attrib::IntSize;
-use device::draw::{CommandBuffer, InstanceOption};
+use device::draw::{Access, CommandBuffer, InstanceOption, Target};
 use device::shade::{ProgramInfo, UniformValue};
-use device::target::{Rect, ClearData, Mirror, Mask, Access, Target};
 use render::batch::Batch;
 use render::mesh::SliceKind;
 
@@ -36,8 +37,6 @@ pub mod device_ext;
 pub mod mesh;
 /// Shaders
 pub mod shade;
-/// Draw state
-pub mod state;
 /// Render targets
 pub mod target;
 
@@ -54,7 +53,7 @@ struct RenderState<R: Resources> {
     program_name: Option<R::Program>,
     index: Option<device::RawBufferHandle<R>>,
     attributes: [Option<CachedAttribute<R>>; TRACKED_ATTRIBUTES],
-    draw: state::DrawState,
+    draw: DrawState,
 }
 
 impl<R: Resources> RenderState<R> {
@@ -67,7 +66,7 @@ impl<R: Resources> RenderState<R> {
             program_name: None,
             index: None,
             attributes: [None; TRACKED_ATTRIBUTES],
-            draw: state::DrawState::new(),
+            draw: DrawState::new(),
         }
     }
 }
@@ -228,15 +227,15 @@ impl<C: CommandBuffer> Renderer<C> {
                 destination: &target::Frame<C::Resources>, dest_rect: Rect,
                 mirror: Mirror, mask: Mask) {
         // verify as much as possible here
-        if mask.intersects(device::target::COLOR) {
+        if mask.intersects(draw_state::target::COLOR) {
             debug_assert!(source.is_default() || !source.colors.is_empty());
             debug_assert!(destination.is_default() || !destination.colors.is_empty());
         }
-        if mask.intersects(device::target::DEPTH) {
+        if mask.intersects(draw_state::target::DEPTH) {
             debug_assert!(source.is_default() || source.depth.is_some());
             debug_assert!(destination.is_default() || destination.depth.is_some());
         }
-        if mask.intersects(device::target::STENCIL) {
+        if mask.intersects(draw_state::target::STENCIL) {
             debug_assert!(source.is_default() || source.stencil.is_some());
             debug_assert!(destination.is_default() || destination.stencil.is_some());
         }
@@ -343,7 +342,7 @@ impl<C: CommandBuffer> Renderer<C> {
         self.command_buffer.bind_target(Access::Read, Target::Stencil, frame.stencil.as_ref());
     }
 
-    fn bind_state(&mut self, state: &state::DrawState) {
+    fn bind_state(&mut self, state: &DrawState) {
         if self.render_state.draw.primitive != state.primitive {
             self.command_buffer.set_primitive(state.primitive);
         }
@@ -354,9 +353,9 @@ impl<C: CommandBuffer> Renderer<C> {
             self.command_buffer.set_scissor(state.scissor);
         }
         if self.render_state.draw.depth != state.depth || self.render_state.draw.stencil != state.stencil ||
-                self.render_state.draw.primitive.get_cull_mode() != state.primitive.get_cull_mode() {
+                self.render_state.draw.primitive.get_cull_face() != state.primitive.get_cull_face() {
             self.command_buffer.set_depth_stencil(state.depth, state.stencil,
-                state.primitive.get_cull_mode());
+                state.primitive.get_cull_face());
         }
         if self.render_state.draw.blend != state.blend {
             self.command_buffer.set_blend(state.blend);

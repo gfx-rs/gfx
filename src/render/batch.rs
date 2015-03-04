@@ -20,11 +20,12 @@ use std::fmt;
 use std::num::from_uint;
 use std::cmp::Ordering;
 use std::marker::PhantomData;
+use draw_state::DrawState;
+
 use device::{Resources, PrimitiveType, ProgramHandle};
 use render::mesh;
 use render::mesh::ToSlice;
 use shade::{ParameterError, ShaderParam};
-use render::state::DrawState;
 
 /// An error occurring at batch creation
 #[derive(Clone, Debug, PartialEq)]
@@ -64,15 +65,13 @@ pub type ImplicitBatch<'a, T: ShaderParam> = (
     &'a DrawState
 );
 
-impl DrawState {
-    /// Create an implicit batch
-    pub fn bind<'a, T: ShaderParam>(&'a self,
-                 mesh: &'a mesh::Mesh<T::Resources>,
-                 slice: mesh::Slice<T::Resources>,
-                 program: &'a ProgramHandle<T::Resources>,
-                 data: &'a T) -> ImplicitBatch<'a, T> {
-        (mesh, slice, program, data, self)
-    }
+/// Create an implicit batch
+pub fn bind<'a, T: ShaderParam>(draw_state: &'a DrawState,
+             mesh: &'a mesh::Mesh<T::Resources>,
+             slice: mesh::Slice<T::Resources>,
+             program: &'a ProgramHandle<T::Resources>,
+             data: &'a T) -> ImplicitBatch<'a, T> {
+    (mesh, slice, program, data, draw_state)
 }
 
 impl<'a, T: ShaderParam> Batch for ImplicitBatch<'a, T> {

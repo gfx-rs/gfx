@@ -16,7 +16,7 @@
 
 use device;
 use device::Resources;
-use device::target::{Level, Layer, Mask};
+use draw_state::target::{Layer, Level, Mask};
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 /// A single buffer that can be bound to a render target.
@@ -76,7 +76,7 @@ impl<R: Resources> Frame<R> {
 
     /// Return a mask of contained planes.
     pub fn get_mask(&self) -> Mask {
-        use device::target as t;
+        use draw_state::target as t;
         let mut mask = match self.colors.len() {
             0 => Mask::empty(),
             1 => t::COLOR0,

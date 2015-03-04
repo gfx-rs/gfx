@@ -25,7 +25,7 @@ use attrib::IntSubType;
 use std::default::Default;
 use std::fmt;
 
-use super::state;
+use state;
 
 /// Surface creation/update error.
 #[derive(Copy, Clone, PartialEq, Debug)]
