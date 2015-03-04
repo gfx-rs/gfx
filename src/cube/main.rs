@@ -24,7 +24,6 @@ use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
 use gfx::{Device, DeviceExt, ToSlice};
-use gfx::batch::RefBatch;
 use glfw::Context;
 
 #[vertex_format]
@@ -173,8 +172,6 @@ fn main() {
 
     let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
-    let batch: RefBatch<Params<gfx_device_gl::GlResources>> =
-        context.make_batch(&program, &mesh, slice, &state).unwrap();
 
     let view: AffineMatrix3<f32> = Transform::look_at(
         &Point3::new(1.5f32, -5.0, 3.0),
@@ -188,6 +185,7 @@ fn main() {
         transform: proj.mul_m(&view.mat).into_fixed(),
         color: (texture, Some(sampler)),
     };
+    let batch = context.make_batch(&program, data, &mesh, slice, &state).unwrap();
 
     let clear_data = gfx::ClearData {
         color: [0.3, 0.3, 0.3, 1.0],
@@ -206,7 +204,7 @@ fn main() {
         }
 
         renderer.clear(clear_data, gfx::COLOR | gfx::DEPTH, &frame);
-        renderer.draw(&context.bind(&batch, &data), &frame).unwrap();
+        renderer.draw(&(&batch, &context), &frame).unwrap();
         device.submit(renderer.as_buffer());
         renderer.reset();
 

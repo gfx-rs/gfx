@@ -27,7 +27,7 @@ use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3, Matrix3, ToMatrix4};
 use cgmath::{Transform, AffineMatrix3, Vector4, Array1};
 use gfx::{Device, DeviceExt, ToSlice};
-use gfx::batch::RefBatch;
+use gfx::batch::RefCore;
 use glfw::Context;
 use gl::Gl;
 use gl::types::*;
@@ -130,8 +130,8 @@ fn gfx_main(mut glfw: glfw::Glfw,
     };
 
     let mut graphics = gfx::Graphics::new(device);
-    let batch: RefBatch<Params<gfx_device_gl::GlResources>> = 
-        graphics.make_batch(&program, &mesh, slice, &state).unwrap();
+    let batch: RefCore<Params<_>> = 
+        graphics.make_core(&program, &mesh, &state).unwrap();
 
     while !window.should_close() {
         glfw.poll_events();
@@ -159,7 +159,7 @@ fn gfx_main(mut glfw: glfw::Glfw,
                                    .mul_m(&model).into_fixed(),
                     _dummy: std::marker::PhantomData,
                 };
-                graphics.draw(&batch, &data, &frame).unwrap();
+                graphics.draw_core(&batch, &slice, &data, &frame).unwrap();
             }
         }
 
