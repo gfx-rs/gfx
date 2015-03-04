@@ -372,17 +372,17 @@ impl<R: Resources> Context<R> {
 }
 
 impl<R: Resources> Context<R> {
-    /// Produce a new `RefCore`
-    pub fn make_core<T: ShaderParam<Resources = R>>(&mut self,
-                     program: &ProgramHandle<R>,
-                     mesh: &mesh::Mesh<R>,
-                     state: &DrawState)
-                     -> Result<RefCore<T>, Error> {
+    fn make<T: ShaderParam<Resources = R>>(&mut self,
+            program: &ProgramHandle<R>,
+            params: Option<&T>,
+            mesh: &mesh::Mesh<R>,
+            state: &DrawState)
+            -> Result<RefCore<T>, Error> {
         let mesh_link = match mesh::Link::new(mesh, program.get_info()) {
             Ok(l) => l,
             Err(e) => return Err(Error::Mesh(e)),
         };
-        let link = match ShaderParam::create_link(None::<&T>, program.get_info()) {
+        let link = match ShaderParam::create_link(params, program.get_info()) {
             Ok(l) => l,
             Err(e) => return Err(Error::Parameters(e))
         };
@@ -408,6 +408,15 @@ impl<R: Resources> Context<R> {
         })
     }
 
+    /// Produce a new `RefCore`
+    pub fn make_core<T: ShaderParam<Resources = R>>(&mut self,
+                     program: &ProgramHandle<R>,
+                     mesh: &mesh::Mesh<R>,
+                     state: &DrawState)
+                     -> Result<RefCore<T>, Error> {
+        self.make(program, None, mesh, state)
+    }
+
     /// Produce a new `RefBatch`
     pub fn make_batch<T: ShaderParam<Resources = R>>(&mut self,
                       program: &ProgramHandle<R>,
@@ -416,7 +425,8 @@ impl<R: Resources> Context<R> {
                       slice: &mesh::Slice<R>,
                       state: &DrawState)
                       -> Result<RefBatch<T>, Error> {
-        self.make_core(program, mesh, state).map(|core| RefBatch {
+        self.make(program, Some(&params), mesh, state)
+            .map(|core| RefBatch {
             core: core,
             slice: slice.clone(),
             params: params,
