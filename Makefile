@@ -50,5 +50,3 @@ clean: clean-diagrams
 
 .PHONY: travis
 travis: test doc
-	# the doc directory needs to be in the root for rust-ci
-	mv target/doc doc
