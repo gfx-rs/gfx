@@ -86,11 +86,19 @@ impl<D: device::Device> Graphics<D> {
         self.renderer.clear(data, mask, frame)
     }
 
-    /// Draw a ref batch.
+    /// Draw a `RefBatch` batch.
     pub fn draw<'a, T: shade::ShaderParam<Resources = D::Resources>>(&'a mut self,
                 batch: &'a batch::RefBatch<T>, frame: &Frame<D::Resources>)
                 -> Result<(), DrawError<batch::OutOfBounds>> {
         self.renderer.draw(&(batch, &self.context), frame)
+    }
+
+    /// Draw a `RefCore` batch.
+    pub fn draw_core<'a, T: shade::ShaderParam<Resources = D::Resources>>(&'a mut self,
+                     core: &'a batch::RefCore<T>, slice: &'a Slice<D::Resources>,
+                     params: &'a T, frame: &Frame<D::Resources>)
+                     -> Result<(), DrawError<batch::OutOfBounds>> {
+        self.renderer.draw(&self.context.bind(core, slice, params), frame)
     }
 
     /// Submit the internal command buffer and reset for the next frame.
