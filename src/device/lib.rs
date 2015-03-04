@@ -191,11 +191,19 @@ impl<R: Resources, T> BufferHandle<R, T> {
 }
 
 /// Raw (untyped) Buffer Handle
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(PartialEq, Debug)]
 pub struct RawBufferHandle<R: Resources>(
     <R as Resources>::Buffer,
     BufferInfo
 );
+
+impl<R: Resources> Copy for RawBufferHandle<R> {}
+
+impl<R: Resources> Clone for RawBufferHandle<R> {
+    fn clone(&self) -> RawBufferHandle<R> {
+        RawBufferHandle(self.0, self.1.clone())
+    }
+}
 
 impl<R: Resources> RawBufferHandle<R> {
     /// Creates a new raw buffer handle (used by device)
@@ -292,11 +300,19 @@ impl<R: Resources> SurfaceHandle<R> {
 }
 
 /// Texture Handle
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(PartialEq, Debug)]
 pub struct TextureHandle<R: Resources>(
     <R as Resources>::Texture,
     tex::TextureInfo,
 );
+
+impl<R: Resources> Copy for TextureHandle<R> {}
+
+impl<R: Resources> Clone for TextureHandle<R> {
+    fn clone(&self) -> TextureHandle<R> {
+        TextureHandle(self.0, self.1.clone())
+    }
+}
 
 impl<R: Resources> TextureHandle<R> {
     /// Creates a new texture (used by device)
@@ -311,11 +327,19 @@ impl<R: Resources> TextureHandle<R> {
 }
 
 /// Sampler Handle
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(PartialEq, Debug)]
 pub struct SamplerHandle<R: Resources>(
     <R as Resources>::Sampler,
     tex::SamplerInfo,
 );
+
+impl<R: Resources> Copy for SamplerHandle<R> {}
+
+impl<R: Resources> Clone for SamplerHandle<R> {
+    fn clone(&self) -> SamplerHandle<R> {
+        SamplerHandle(self.0, self.1.clone())
+    }
+}
 
 impl<R: Resources> SamplerHandle<R> {
     /// Creates a new sampler (used by device)
@@ -414,7 +438,7 @@ pub struct BufferInfo {
 
 /// Resources pertaining to a specific API.
 #[allow(missing_docs)]
-pub trait Resources: PhantomFn<Self> + Copy + Clone + PartialEq + fmt::Debug {
+pub trait Resources: PhantomFn<Self> + Clone + PartialEq + fmt::Debug {
     type Buffer:        Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
     type ArrayBuffer:   Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
     type Shader:        Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
@@ -423,17 +447,6 @@ pub trait Resources: PhantomFn<Self> + Copy + Clone + PartialEq + fmt::Debug {
     type Surface:       Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
     type Texture:       Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
     type Sampler:       Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
-}
-
-impl Resources for () {
-    type Buffer = ();
-    type ArrayBuffer = ();
-    type Shader = ();
-    type Program = ();
-    type FrameBuffer = ();
-    type Surface = ();
-    type Texture = ();
-    type Sampler = ();
 }
 
 /// An interface for performing draw calls using a specific graphics API
@@ -561,6 +574,17 @@ mod test {
     use std::marker::PhantomData;
     use super::{BufferHandle, RawBufferHandle};
     use super::{BufferInfo, BufferUsage};
+
+    impl super::Resources for () {
+        type Buffer = ();
+        type ArrayBuffer = ();
+        type Shader = ();
+        type Program = ();
+        type FrameBuffer = ();
+        type Surface = ();
+        type Texture = ();
+        type Sampler = ();
+    }
 
     fn mock_buffer<T>(len: usize) -> BufferHandle<(), T> {
         BufferHandle {

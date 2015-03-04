@@ -18,7 +18,7 @@ use device;
 use device::Resources;
 use draw_state::target::{Layer, Level, Mask};
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 /// A single buffer that can be bound to a render target.
 pub enum Plane<R: Resources> {
     /// Render to a `Surface` (corresponds to a renderbuffer in GL).

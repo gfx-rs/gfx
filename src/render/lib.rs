@@ -166,10 +166,10 @@ impl<C: CommandBuffer> Renderer<C> {
         Renderer {
             command_buffer: CommandBuffer::new(),
             data_buffer: device::draw::DataBuffer::new(),
-            common_array_buffer: self.common_array_buffer,
-            draw_frame_buffer: self.draw_frame_buffer,
-            read_frame_buffer: self.read_frame_buffer,
-            default_frame_buffer: self.default_frame_buffer,
+            common_array_buffer: self.common_array_buffer.clone(),
+            draw_frame_buffer: self.draw_frame_buffer.clone(),
+            read_frame_buffer: self.read_frame_buffer.clone(),
+            default_frame_buffer: self.default_frame_buffer.clone(),
             render_state: RenderState::new(),
             parameters: ParamStorage::new(),
         }
@@ -305,7 +305,7 @@ impl<C: CommandBuffer> Renderer<C> {
                                        .zip(frame.colors.iter()).enumerate() {
                 if *cur != *new {
                     self.command_buffer.bind_target(Access::Draw, Target::Color(i as u8), Some(new));
-                    *cur = *new;
+                    *cur = new.clone();
                 }
             }
             // activate the color targets that were just bound
@@ -314,17 +314,17 @@ impl<C: CommandBuffer> Renderer<C> {
             for (i, new) in frame.colors.iter().enumerate()
                                  .skip(self.render_state.frame.colors.len()) {
                 self.command_buffer.bind_target(Access::Draw, Target::Color(i as u8), Some(new));
-                self.render_state.frame.colors.push(*new);
+                self.render_state.frame.colors.push(new.clone());
             }
             // set depth
             if self.render_state.frame.depth != frame.depth {
                 self.command_buffer.bind_target(Access::Draw, Target::Depth, frame.depth.as_ref());
-                self.render_state.frame.depth = frame.depth;
+                self.render_state.frame.depth = frame.depth.clone();
             }
             // set stencil
             if self.render_state.frame.stencil != frame.stencil {
                 self.command_buffer.bind_target(Access::Draw, Target::Stencil, frame.stencil.as_ref());
-                self.render_state.frame.stencil = frame.stencil;
+                self.render_state.frame.stencil = frame.stencil.clone();
             }
         }
     }
@@ -424,9 +424,10 @@ impl<C: CommandBuffer> Renderer<C> {
                  mesh: &mesh::Mesh<C::Resources>, attrib_iter: I, info: &ProgramInfo) {
         if !self.render_state.is_array_buffer_set {
             // It's Ok if the array buffer is not supported. We can just ignore it.
-            self.common_array_buffer.map(|ab|
-                self.command_buffer.bind_array_buffer(ab.get_name())
-            ).is_ok();
+            match self.common_array_buffer {
+                Ok(ref ab) => self.command_buffer.bind_array_buffer(ab.get_name()),
+                Err(()) => (),
+            };
             self.render_state.is_array_buffer_set = true;
         }
         for (attr_index, sat) in attrib_iter.zip(info.attributes.iter()) {
