@@ -422,13 +422,13 @@ impl<R: Resources> Context<R> {
                       program: &ProgramHandle<R>,
                       params: T,
                       mesh: &mesh::Mesh<R>,
-                      slice: &mesh::Slice<R>,
+                      slice: mesh::Slice<R>,
                       state: &DrawState)
                       -> Result<RefBatch<T>, Error> {
         self.make(program, Some(&params), mesh, state)
             .map(|core| RefBatch {
             core: core,
-            slice: slice.clone(),
+            slice: slice,
             params: params,
         })
     }
