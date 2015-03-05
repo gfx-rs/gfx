@@ -99,9 +99,9 @@ impl<D: device::Device> Graphics<D> {
         self.renderer.draw(&(batch, &self.context), frame)
     }
 
-    /// Draw a `RefCore` batch.
+    /// Draw a `CoreBatch` batch.
     pub fn draw_core<'a, T: shade::ShaderParam<Resources = D::Resources>>(&'a mut self,
-                     core: &'a batch::RefCore<T>, slice: &'a Slice<D::Resources>,
+                     core: &'a batch::CoreBatch<T>, slice: &'a Slice<D::Resources>,
                      params: &'a T, frame: &Frame<D::Resources>)
                      -> Result<(), DrawError<batch::OutOfBounds>> {
         self.renderer.draw(&self.context.bind(core, slice, params), frame)

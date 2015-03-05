@@ -575,7 +575,9 @@ mod test {
     use super::{BufferHandle, RawBufferHandle};
     use super::{BufferInfo, BufferUsage};
 
-    impl super::Resources for () {
+    #[derive(Clone, Debug, PartialEq)]
+    enum TestResources {}
+    impl super::Resources for TestResources {
         type Buffer = ();
         type ArrayBuffer = ();
         type Shader = ();
@@ -586,7 +588,7 @@ mod test {
         type Sampler = ();
     }
 
-    fn mock_buffer<T>(len: usize) -> BufferHandle<(), T> {
+    fn mock_buffer<T>(len: usize) -> BufferHandle<TestResources, T> {
         BufferHandle {
             raw: unsafe { RawBufferHandle::new(
                 (),
