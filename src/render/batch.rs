@@ -17,9 +17,10 @@
 //! `RefBatch` and `OwnedBatch` implementations.
 
 use std::fmt;
-use std::num::from_uint;
 use std::cmp::Ordering;
 use std::marker::PhantomData;
+use std::num::from_uint;
+use std::ops::Deref;
 use draw_state::DrawState;
 
 use device::{Resources, PrimitiveType, ProgramHandle};
@@ -236,65 +237,112 @@ impl<T: Clone + PartialEq> Array<T> {
 }
 
 
-/// Ref batch - copyable and smaller, but depends on the `Context`.
+/// Referenced core - a minimal sealed batch that depends on `Context`.
 /// It has references to the resources (mesh, program, state), that are held
 /// by the context that created the batch, so these have to be used together.
-pub struct RefBatch<T: ShaderParam> {
+pub struct CoreBatch<T: ShaderParam> {
     mesh_id: Id<mesh::Mesh<T::Resources>>,
     mesh_link: mesh::Link,
-    /// Mesh slice
-    pub slice: mesh::Slice<T::Resources>,
     program_id: Id<ProgramHandle<T::Resources>>,
     param_link: T::Link,
     state_id: Id<DrawState>,
 }
 
-impl<T: ShaderParam> Copy for RefBatch<T> where T::Link: Copy {}
+impl<T: ShaderParam> Copy for CoreBatch<T> where T::Link: Copy {}
 
-impl<T: ShaderParam> fmt::Debug for RefBatch<T> {
+impl<T: ShaderParam> fmt::Debug for CoreBatch<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "RefBatch(mesh: {:?}, slice: {:?}, program: {:?}, state: {:?})",
-            self.mesh_id, self.slice, self.program_id, self.state_id)
+        write!(f, "CoreBatch(mesh: {:?}, program: {:?}, state: {:?})",
+            self.mesh_id, self.program_id, self.state_id)
     }
 }
 
-impl<T: ShaderParam> PartialEq for RefBatch<T> {
-    fn eq(&self, other: &RefBatch<T>) -> bool {
+impl<T: ShaderParam> PartialEq for CoreBatch<T> {
+    fn eq(&self, other: &CoreBatch<T>) -> bool {
         self.program_id == other.program_id &&
         self.state_id == other.state_id &&
         self.mesh_id == other.mesh_id
     }
 }
 
-impl<T: ShaderParam> Eq for RefBatch<T> {}
+impl<T: ShaderParam> Eq for CoreBatch<T> {}
 
-impl<T: ShaderParam> PartialOrd for RefBatch<T> {
-    fn partial_cmp(&self, other: &RefBatch<T>) -> Option<Ordering> {
+impl<T: ShaderParam> PartialOrd for CoreBatch<T> {
+    fn partial_cmp(&self, other: &CoreBatch<T>) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<T: ShaderParam> Ord for RefBatch<T> {
-    fn cmp(&self, other: &RefBatch<T>) -> Ordering {
+impl<T: ShaderParam> Ord for CoreBatch<T> {
+    fn cmp(&self, other: &CoreBatch<T>) -> Ordering {
         (&self.program_id, &self.state_id, &self.mesh_id).cmp(
         &(&other.program_id, &other.state_id, &other.mesh_id))
     }
 }
 
-impl<T: ShaderParam> RefBatch<T> {
+impl<T: ShaderParam> CoreBatch<T> {
     /// Compare meshes by Id
-    pub fn cmp_mesh(&self, other: &RefBatch<T>) -> Ordering {
+    pub fn cmp_mesh(&self, other: &CoreBatch<T>) -> Ordering {
         self.mesh_id.cmp(&other.mesh_id)
     }
     /// Compare programs by Id
-    pub fn cmp_program(&self, other: &RefBatch<T>) -> Ordering {
+    pub fn cmp_program(&self, other: &CoreBatch<T>) -> Ordering {
         self.program_id.cmp(&other.program_id)
     }
     /// Compare draw states by Id
-    pub fn cmp_state(&self, other: &RefBatch<T>) -> Ordering {
+    pub fn cmp_state(&self, other: &CoreBatch<T>) -> Ordering {
         self.state_id.cmp(&other.state_id)
     }
 }
+
+/// A `CoreBatch` completed by a slice, shader parameters, and a context
+/// Implements `Batch` thus can be drawn.
+/// It is meant to be a struct, but we have lots of lifetime issues
+/// with associated resources, binding which looks nasty (#614)
+pub type CoreBatchFull<'a, T: ShaderParam> = (
+    &'a CoreBatch<T>,
+    &'a mesh::Slice<T::Resources>,
+    &'a T,
+    &'a Context<T::Resources>
+);
+
+
+/// An expanded version of the `CoreBatch`, carrying the parameters and
+/// the mesh slice with it, publicly mutable.
+pub struct RefBatch<T: ShaderParam> {
+    /// Core of the batch
+    pub core: CoreBatch<T>,
+    /// Mesh slice
+    pub slice: mesh::Slice<T::Resources>,
+    /// Shader parameter values
+    pub params: T,
+}
+
+impl<T: ShaderParam> Deref for RefBatch<T> {
+    type Target = CoreBatch<T>;
+
+    fn deref(&self) -> &CoreBatch<T> {
+        &self.core
+    }
+}
+
+impl<T: ShaderParam + Clone> Clone for RefBatch<T> where T::Link: Copy {
+    fn clone(&self) -> RefBatch<T> {
+        RefBatch {
+            core: self.core,
+            slice: self.slice.clone(),
+            params: self.params.clone(),
+        }
+    }
+}
+
+impl<T: ShaderParam + fmt::Debug> fmt::Debug for RefBatch<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "RefBatch(core: {:?}, slice: {:?}, params: {:?}",
+            self.core, self.slice, self.params)
+    }
+}
+
 
 /// Factory of ref batches, required to always be used with them.
 pub struct Context<R: Resources> {
@@ -303,13 +351,12 @@ pub struct Context<R: Resources> {
     states: Array<DrawState>,
 }
 
-/// A RefBatch completed by the shader parameters and a context
+/// A `RefBatch` completed by the a batch context
 /// Implements `Batch` thus can be drawn.
 /// It is meant to be a struct, but we have lots of lifetime issues
 /// with associated resources, binding which looks nasty (#614)
 pub type RefBatchFull<'a, T: ShaderParam> = (
     &'a RefBatch<T>,
-    &'a T,
     &'a Context<T::Resources>
 );
 
@@ -325,18 +372,17 @@ impl<R: Resources> Context<R> {
 }
 
 impl<R: Resources> Context<R> {
-    /// Produce a new ref batch
-    pub fn make_batch<T: ShaderParam<Resources = R>>(&mut self,
-                      program: &ProgramHandle<R>,
-                      mesh: &mesh::Mesh<R>,
-                      slice: mesh::Slice<R>,
-                      state: &DrawState)
-                      -> Result<RefBatch<T>, Error> {
+    fn make<T: ShaderParam<Resources = R>>(&mut self,
+            program: &ProgramHandle<R>,
+            params: Option<&T>,
+            mesh: &mesh::Mesh<R>,
+            state: &DrawState)
+            -> Result<CoreBatch<T>, Error> {
         let mesh_link = match mesh::Link::new(mesh, program.get_info()) {
             Ok(l) => l,
             Err(e) => return Err(Error::Mesh(e)),
         };
-        let link = match ShaderParam::create_link(None::<&T>, program.get_info()) {
+        let link = match ShaderParam::create_link(params, program.get_info()) {
             Ok(l) => l,
             Err(e) => return Err(Error::Parameters(e))
         };
@@ -353,20 +399,73 @@ impl<R: Resources> Context<R> {
             None => return Err(Error::ContextFull),
         };
 
-        Ok(RefBatch {
+        Ok(CoreBatch {
             mesh_id: mesh_id,
             mesh_link: mesh_link,
-            slice: slice,
             program_id: program_id,
             param_link: link,
             state_id: state_id,
         })
     }
 
-    /// Complete a RefBatch temporarily by turning it into RefBatchFull
+    /// Produce a new `CoreBatch`
+    pub fn make_core<T: ShaderParam<Resources = R>>(&mut self,
+                     program: &ProgramHandle<R>,
+                     mesh: &mesh::Mesh<R>,
+                     state: &DrawState)
+                     -> Result<CoreBatch<T>, Error> {
+        self.make(program, None, mesh, state)
+    }
+
+    /// Produce a new `RefBatch`
+    pub fn make_batch<T: ShaderParam<Resources = R>>(&mut self,
+                      program: &ProgramHandle<R>,
+                      params: T,
+                      mesh: &mesh::Mesh<R>,
+                      slice: mesh::Slice<R>,
+                      state: &DrawState)
+                      -> Result<RefBatch<T>, Error> {
+        self.make(program, Some(&params), mesh, state)
+            .map(|core| RefBatch {
+            core: core,
+            slice: slice,
+            params: params,
+        })
+    }
+
+    /// Complete a CoreBatch temporarily by turning it into CoreBatchFull
     pub fn bind<'a, T: ShaderParam<Resources = R> + 'a>(&'a self,
-                 batch: &'a RefBatch<T>, data: &'a T) -> RefBatchFull<'a, T> {
-        (batch, data, self)
+                 core: &'a CoreBatch<T>, slice: &'a mesh::Slice<R>,
+                 params: &'a T) -> CoreBatchFull<'a, T> {
+        (core, slice, params, self)
+    }
+
+    /// Get data from a batch in the format required for `Batch`
+    pub fn get_data<'a, T: ShaderParam<Resources = R> + 'a>(&'a self,
+                    core: &CoreBatch<T>, slice: &'a mesh::Slice<R>)
+                    -> Result<BatchData<'a, T::Resources>, OutOfBounds> {
+        Ok((try!(self.meshes.get(core.mesh_id)),
+            core.mesh_link.to_iter(),
+            slice,
+            try!(self.states.get(core.state_id))
+        ))
+    }
+}
+
+impl<'a, T: ShaderParam + 'a> Batch for CoreBatchFull<'a, T> {
+    type Resources = T::Resources;
+    type Error = OutOfBounds;
+
+    fn get_data(&self) -> Result<BatchData<T::Resources>, OutOfBounds> {
+        let (b, slice, _, ctx) = *self;
+        ctx.get_data(b, slice)
+    }
+
+    fn fill_params(&self, values: ::shade::ParamValues<T::Resources>)
+                   -> Result<&ProgramHandle<T::Resources>, OutOfBounds> {
+        let (b, _, data, ctx) = *self;
+        data.fill_params(&b.param_link, values);
+        ctx.programs.get(b.program_id)
     }
 }
 
@@ -375,18 +474,14 @@ impl<'a, T: ShaderParam + 'a> Batch for RefBatchFull<'a, T> {
     type Error = OutOfBounds;
 
     fn get_data(&self) -> Result<BatchData<T::Resources>, OutOfBounds> {
-        let (b, _, ctx) = *self;
-        Ok((try!(ctx.meshes.get(b.mesh_id)),
-            b.mesh_link.to_iter(),
-            &b.slice,
-            try!(ctx.states.get(b.state_id))
-        ))
+        let (b, ctx) = *self;
+        ctx.get_data(&b.core, &b.slice)
     }
 
     fn fill_params(&self, values: ::shade::ParamValues<T::Resources>)
                    -> Result<&ProgramHandle<T::Resources>, OutOfBounds> {
-        let (b, data, ctx) = *self;
-        data.fill_params(&b.param_link, values);
-        ctx.programs.get(b.program_id)
+        let (b, ctx) = *self;
+        b.params.fill_params(&b.core.param_link, values);
+        ctx.programs.get(b.core.program_id)
     }
 }

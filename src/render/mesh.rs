@@ -100,7 +100,7 @@ impl<R: Resources> Mesh<R> {
 /// The `prim_type` defines how the mesh contents are interpreted.
 /// For example,  `Point` typed vertex slice can be used to do shape
 /// blending, while still rendereing it as an indexed `TriangleList`.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Slice<R: Resources> {
     /// Start index of vertices to draw.
     pub start: VertexCount,
@@ -113,7 +113,7 @@ pub struct Slice<R: Resources> {
 }
 
 /// Source of vertex ordering for a slice
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum SliceKind<R: Resources> {
     /// Render vertex data directly from the `Mesh`'s buffer.
     Vertex,
@@ -158,7 +158,7 @@ impl<R: Resources> ToSlice<R> for BufferHandle<R, u8> {
             start: 0,
             end: self.len() as VertexCount,
             prim_type: ty,
-            kind: SliceKind::Index8(*self, 0)
+            kind: SliceKind::Index8(self.clone(), 0)
         }
     }
 }
@@ -170,7 +170,7 @@ impl<R: Resources> ToSlice<R> for BufferHandle<R, u16> {
             start: 0,
             end: self.len() as VertexCount,
             prim_type: ty,
-            kind: SliceKind::Index16(*self, 0)
+            kind: SliceKind::Index16(self.clone(), 0)
         }
     }
 }
@@ -182,7 +182,7 @@ impl<R: Resources> ToSlice<R> for BufferHandle<R, u32> {
             start: 0,
             end: self.len() as VertexCount,
             prim_type: ty,
-            kind: SliceKind::Index32(*self, 0)
+            kind: SliceKind::Index32(self.clone(), 0)
         }
     }
 }

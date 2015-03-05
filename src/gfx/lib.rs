@@ -62,6 +62,20 @@ pub struct Graphics<D: device::Device> {
     context: batch::Context<D::Resources>,
 }
 
+impl<D: device::Device> std::ops::Deref for Graphics<D> {
+    type Target = batch::Context<D::Resources>;
+
+    fn deref(&self) -> &batch::Context<D::Resources> {
+        &self.context
+    }
+}
+
+impl<D: device::Device> std::ops::DerefMut for Graphics<D> {
+    fn deref_mut(&mut self) -> &mut batch::Context<D::Resources> {
+        &mut self.context
+    }
+}
+
 impl<D: device::Device> Graphics<D> {
     /// Create a new graphics wrapper.
     pub fn new(mut device: D) -> Graphics<D> {
@@ -73,26 +87,24 @@ impl<D: device::Device> Graphics<D> {
         }
     }
 
-    /// Create a new ref batch.
-    pub fn make_batch<T: shade::ShaderParam<Resources = D::Resources>>(&mut self,
-                      program: &ProgramHandle<D::Resources>,
-                      mesh: &Mesh<D::Resources>,
-                      slice: Slice<D::Resources>,
-                      state: &DrawState)
-                      -> Result<batch::RefBatch<T>, batch::Error> {
-        self.context.make_batch(program, mesh, slice, state)
-    }
-
     /// Clear the `Frame` as the `ClearData` specifies.
     pub fn clear(&mut self, data: ClearData, mask: Mask, frame: &Frame<D::Resources>) {
         self.renderer.clear(data, mask, frame)
     }
 
-    /// Draw a ref batch.
+    /// Draw a `RefBatch` batch.
     pub fn draw<'a, T: shade::ShaderParam<Resources = D::Resources>>(&'a mut self,
-                batch: &'a batch::RefBatch<T>, data: &'a T, frame: &Frame<D::Resources>)
+                batch: &'a batch::RefBatch<T>, frame: &Frame<D::Resources>)
                 -> Result<(), DrawError<batch::OutOfBounds>> {
-        self.renderer.draw(&self.context.bind(batch, data), frame)
+        self.renderer.draw(&(batch, &self.context), frame)
+    }
+
+    /// Draw a `CoreBatch` batch.
+    pub fn draw_core<'a, T: shade::ShaderParam<Resources = D::Resources>>(&'a mut self,
+                     core: &'a batch::CoreBatch<T>, slice: &'a Slice<D::Resources>,
+                     params: &'a T, frame: &Frame<D::Resources>)
+                     -> Result<(), DrawError<batch::OutOfBounds>> {
+        self.renderer.draw(&self.context.bind(core, slice, params), frame)
     }
 
     /// Submit the internal command buffer and reset for the next frame.
