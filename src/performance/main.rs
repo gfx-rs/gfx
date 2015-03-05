@@ -27,7 +27,6 @@ use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3, Matrix3, ToMatrix4};
 use cgmath::{Transform, AffineMatrix3, Vector4, Array1};
 use gfx::{Device, DeviceExt, ToSlice};
-use gfx::batch::RefCore;
 use glfw::Context;
 use gl::Gl;
 use gl::types::*;
@@ -130,7 +129,7 @@ fn gfx_main(mut glfw: glfw::Glfw,
     };
 
     let mut graphics = gfx::Graphics::new(device);
-    let batch: RefCore<Params<_>> = 
+    let batch: gfx::batch::CoreBatch<Params<_>> = 
         graphics.make_core(&program, &mesh, &state).unwrap();
 
     while !window.should_close() {

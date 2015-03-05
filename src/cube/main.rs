@@ -99,7 +99,6 @@ fn main() {
 
     let mut device = gfx_device_gl::GlDevice::new(|s| window.get_proc_address(s));
     let mut renderer = device.create_renderer();
-    let mut context = gfx::batch::Context::new();
 
     let vertex_data = [
         // top (0, 0, 1)
@@ -145,10 +144,6 @@ fn main() {
         20, 21, 22, 22, 23, 20, // back
     ];
 
-    let slice = device
-        .create_buffer_static::<u8>(index_data)
-        .to_slice(gfx::PrimitiveType::TriangleList);
-
     let texture_info = gfx::tex::TextureInfo {
         width: 1,
         height: 1,
@@ -170,9 +165,6 @@ fn main() {
 
     let program = device.link_program(VERTEX_SRC, FRAGMENT_SRC).unwrap();
 
-    let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
-
-
     let view: AffineMatrix3<f32> = Transform::look_at(
         &Point3::new(1.5f32, -5.0, 3.0),
         &Point3::new(0f32, 0.0, 0.0),
@@ -185,7 +177,11 @@ fn main() {
         transform: proj.mul_m(&view.mat).into_fixed(),
         color: (texture, Some(sampler)),
     };
-    let batch = context.make_batch(&program, data, &mesh, slice, &state).unwrap();
+
+    let mut batch = gfx::batch::OwnedBatch::new(mesh, program, data).unwrap();
+    batch.slice = device.create_buffer_static::<u8>(index_data)
+                        .to_slice(gfx::PrimitiveType::TriangleList);
+    batch.state.depth(gfx::state::Comparison::LessEqual, true);
 
     let clear_data = gfx::ClearData {
         color: [0.3, 0.3, 0.3, 1.0],
@@ -204,7 +200,7 @@ fn main() {
         }
 
         renderer.clear(clear_data, gfx::COLOR | gfx::DEPTH, &frame);
-        renderer.draw(&(&batch, &context), &frame).unwrap();
+        renderer.draw(&batch, &frame).unwrap();
         device.submit(renderer.as_buffer());
         renderer.reset();
 
