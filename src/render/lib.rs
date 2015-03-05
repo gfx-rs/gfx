@@ -21,7 +21,7 @@ use draw_state::{self, DrawState};
 use draw_state::target::{ClearData, Mask, Mirror, Rect};
 
 use device;
-use device::{Device, Resources};
+use device::Resources;
 use device::{attrib, handle};
 use device::attrib::IntSize;
 use device::draw::{Access, CommandBuffer, DataBuffer, InstanceOption, Target};

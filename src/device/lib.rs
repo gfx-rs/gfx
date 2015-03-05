@@ -17,8 +17,7 @@
 //! Graphics device. Not meant for direct use.
 
 use std::{fmt, mem, raw};
-use std::ops::{Deref, DerefMut};
-use std::marker::{PhantomData, PhantomFn};
+use std::marker::PhantomFn;
 
 pub use draw_state::target;
 pub use draw_state::block as state;
@@ -26,6 +25,7 @@ pub use draw_state::block as state;
 pub mod attrib;
 pub mod draw;
 pub mod handle;
+pub mod mapping;
 pub mod shade;
 pub mod tex;
 
@@ -41,117 +41,6 @@ pub type AttributeSlot = u8;
 pub type UniformBufferSlot = u8;
 /// Slot a texture can be bound to.
 pub type TextureSlot = u8;
-
-/// Specifies the access allowed to a buffer mapping.
-#[derive(Copy)]
-pub enum MapAccess {
-    /// Only allow reads.
-    Readable,
-    /// Only allow writes.
-    Writable,
-    /// Allow full access.
-    RW
-}
-
-/// Unsafe operations for a buffer mapping
-pub trait RawMapping {
-    /// Set the element at `index` to `val`. Not bounds-checked.
-    unsafe fn set<T>(&self, index: usize, val: T);
-    /// Returns a slice of the specified length.
-    unsafe fn to_slice<T>(&self, len: usize) -> &[T];
-    /// Returns a mutable slice of the specified length.
-    unsafe fn to_mut_slice<T>(&self, len: usize) -> &mut [T];
-}
-
-/// A handle to a readable map, which can be sliced.
-pub struct ReadableMapping<'a, T: Copy, R: 'a + Resources, F: 'a + Factory<R>> {
-    raw: F::Mapper,
-    len: usize,
-    factory: &'a mut F,
-    phantom_t: PhantomData<T>
-}
-
-impl<'a, T: Copy, R: Resources, F: Factory<R>> Deref for ReadableMapping<'a, T, R, F> where
-    F::Mapper: 'a,
-{
-    type Target = [T];
-
-    fn deref(&self) -> &[T] {
-        unsafe { self.raw.to_slice(self.len) }
-    }
-}
-
-#[unsafe_destructor]
-impl<'a, T: Copy, R: Resources, F: Factory<R>> Drop for ReadableMapping<'a, T, R, F> where
-    F::Mapper: 'a,
-{
-    fn drop(&mut self) {
-        self.factory.unmap_buffer_raw(self.raw.clone())
-    }
-}
-
-/// A handle to a writable map, which only allows setting elements.
-pub struct WritableMapping<'a, T: Copy, R: 'a + Resources, F: 'a + Factory<R>> {
-    raw: F::Mapper,
-    len: usize,
-    factory: &'a mut F,
-    phantom_t: PhantomData<T>
-}
-
-impl<'a, T: Copy, R: Resources, F: Factory<R>> WritableMapping<'a, T, R, F> {
-    /// Set a value in the buffer
-    pub fn set(&mut self, idx: usize, val: T) {
-        if idx >= self.len {
-            panic!("Tried to write out of bounds to a WritableMapping!")
-        }
-        unsafe { self.raw.set(idx, val); }
-    }
-}
-
-#[unsafe_destructor]
-impl<'a, T: Copy, R: Resources, F: Factory<R>> Drop for WritableMapping<'a, T, R, F> where
-    F::Mapper: 'a,
-{
-    fn drop(&mut self) {
-        self.factory.unmap_buffer_raw(self.raw.clone())
-    }
-}
-
-/// A handle to a complete readable/writable map, which can be sliced both ways.
-pub struct RWMapping<'a, T: Copy, R: 'a + Resources, F: 'a + Factory<R>> {
-    raw: F::Mapper,
-    len: usize,
-    factory: &'a mut F,
-    phantom_t: PhantomData<T>
-}
-
-impl<'a, T: Copy, R: Resources, F: Factory<R>> Deref for RWMapping<'a, T, R, F> where
-    F::Mapper: 'a
-{
-    type Target = [T];
-
-    fn deref(&self) -> &[T] {
-        unsafe { self.raw.to_slice(self.len) }
-    }
-}
-
-impl<'a, T: Copy, R: Resources, F: Factory<R>> DerefMut for RWMapping<'a, T, R, F> where
-    F::Mapper: 'a
-{
-    fn deref_mut(&mut self) -> &mut [T] {
-        unsafe { self.raw.to_mut_slice(self.len) }
-    }
-}
-
-#[unsafe_destructor]
-impl<'a, T: Copy, R: Resources, F: Factory<R>> Drop for RWMapping<'a, T, R, F> where
-    F::Mapper: 'a
-{
-    fn drop(&mut self) {
-        self.factory.unmap_buffer_raw(self.raw.clone())
-    }
-}
-
 
 /// Treat a given slice as `&[u8]` for the given function call
 pub fn as_byte_slice<T>(slice: &[T]) -> &[u8] {
@@ -180,6 +69,17 @@ pub struct Capabilities {
     pub sampler_objects_supported: bool,
     pub uniform_block_supported: bool,
     pub vertex_base_supported: bool,
+}
+
+/// Specifies the access allowed to a buffer mapping.
+#[derive(Copy)]
+pub enum MapAccess {
+    /// Only allow reads.
+    Readable,
+    /// Only allow writes.
+    Writable,
+    /// Allow full access.
+    RW
 }
 
 /// Describes what geometric primitives are created from vertex data.
@@ -252,7 +152,7 @@ pub trait Resources: PhantomFn<Self> + Clone + PartialEq + fmt::Debug {
 #[allow(missing_docs)]
 pub trait Factory<R: Resources> {
     /// Associated mapper type
-    type Mapper: Clone + RawMapping;
+    type Mapper: Clone + mapping::Raw;
     // resource creation
     fn create_buffer_raw(&mut self, size: usize, usage: BufferUsage) -> handle::Buffer<R, ()>;
     fn create_buffer<T>(&mut self, num: usize, usage: BufferUsage) -> handle::Buffer<R, T> {
@@ -295,9 +195,9 @@ pub trait Factory<R: Resources> {
     }
     fn map_buffer_raw(&mut self, buf: handle::Buffer<R, ()>, access: MapAccess) -> Self::Mapper;
     fn unmap_buffer_raw(&mut self, map: Self::Mapper);
-    fn map_buffer_readable<T: Copy>(&mut self, buf: handle::Buffer<R, T>) -> ReadableMapping<T, R, Self>;
-    fn map_buffer_writable<T: Copy>(&mut self, buf: handle::Buffer<R, T>) -> WritableMapping<T, R, Self>;
-    fn map_buffer_rw<T: Copy>(&mut self, buf: handle::Buffer<R, T>) -> RWMapping<T, R, Self>;
+    fn map_buffer_readable<T: Copy>(&mut self, buf: handle::Buffer<R, T>) -> mapping::Readable<T, R, Self>;
+    fn map_buffer_writable<T: Copy>(&mut self, buf: handle::Buffer<R, T>) -> mapping::Writable<T, R, Self>;
+    fn map_buffer_rw<T: Copy>(&mut self, buf: handle::Buffer<R, T>) -> mapping::RW<T, R, Self>;
 
     /// Update the information stored in a texture
     fn update_texture_raw(&mut self, tex: &handle::Texture<R>, img: &tex::ImageInfo,
@@ -310,54 +210,6 @@ pub trait Factory<R: Resources> {
     fn generate_mipmap(&mut self, tex: &handle::Texture<R>);
 }
 
-/// A service trait with methods for mapping already implemented.
-/// To be used by device back ends.
-#[allow(missing_docs)]
-pub trait MapFactory<R: Resources> {
-    type RawMapping: RawMapping;
-
-    fn map_readable<T: Copy>(&mut self, Self::RawMapping, usize)
-                    -> ReadableMapping<T, R, Self>;
-    fn map_writable<T: Copy>(&mut self, Self::RawMapping, usize)
-                    -> WritableMapping<T, R, Self>;
-    fn map_read_write<T: Copy>(&mut self, Self::RawMapping, usize)
-                      -> RWMapping<T, R, Self>;
-}
-
-
-impl<R: Resources, F: Factory<R>> MapFactory<R> for F {
-    type RawMapping = F::Mapper;
-
-    fn map_readable<T: Copy>(&mut self, map: <Self as MapFactory<R>>::RawMapping,
-                    length: usize) -> ReadableMapping<T, R, Self> {
-        ReadableMapping {
-            raw: map,
-            len: length,
-            factory: self,
-            phantom_t: PhantomData,
-        }
-    }
-
-    fn map_writable<T: Copy>(&mut self, map: <Self as MapFactory<R>>::RawMapping,
-                    length: usize) -> WritableMapping<T, R, Self> {
-        WritableMapping {
-            raw: map,
-            len: length,
-            factory: self,
-            phantom_t: PhantomData,
-        }
-    }
-
-    fn map_read_write<T: Copy>(&mut self, map: <Self as MapFactory<R>>::RawMapping,
-                      length: usize) -> RWMapping<T, R, Self> {
-        RWMapping {
-            raw: map,
-            len: length,
-            factory: self,
-            phantom_t: PhantomData,
-        }
-    }
-}
 
 /// An interface for performing draw calls using a specific graphics API
 pub trait Device {
