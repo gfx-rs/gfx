@@ -227,3 +227,49 @@ impl<R: Resources> Sampler<R> {
     /// Get sampler info
     pub fn get_info(&self) -> &tex::SamplerInfo { &self.1 }
 }
+
+
+#[cfg(test)]
+mod test {
+    use std::mem;
+    use std::marker::PhantomData;
+    use device::{BufferInfo, BufferUsage, Resources};
+
+    #[derive(Clone, Debug, PartialEq)]
+    enum TestResources {}
+    impl Resources for TestResources {
+        type Buffer = ();
+        type ArrayBuffer = ();
+        type Shader = ();
+        type Program = ();
+        type FrameBuffer = ();
+        type Surface = ();
+        type Texture = ();
+        type Sampler = ();
+    }
+
+    fn mock_buffer<T>(len: usize) -> super::Buffer<TestResources, T> {
+        super::Buffer {
+            raw: unsafe { super::RawBuffer::new(
+                (),
+                BufferInfo {
+                    usage: BufferUsage::Static,
+                    size: mem::size_of::<T>() * len,
+                },
+            ) },
+            phantom_t: PhantomData,
+        }
+    }
+
+    #[test]
+    fn test_buffer_len() {
+        assert_eq!(mock_buffer::<u8>(8).len(), 8);
+        assert_eq!(mock_buffer::<u16>(8).len(), 8);
+    }
+
+    #[test]
+    #[should_fail]
+    fn test_buffer_zero_len() {
+        let _ = mock_buffer::<()>(0).len();
+    }
+}
