@@ -16,6 +16,7 @@ use std::iter::repeat;
 use std::ffi::CString;
 
 use gfx::device as d;
+use gfx::device::handle;
 use gfx::device::shade as s;
 use gfx::device::shade::{BaseType, ContainerType, CreateShaderError,
                          IsArray, IsShadow, IsRect, IsMultiSample, MatrixFormat,
@@ -283,7 +284,7 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
 }
 
 pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities,
-                      shaders: &[d::ShaderHandle<super::GlResources>],
+                      shaders: &[handle::Shader<super::GlResources>],
                       targets: Option<&[&str]>)
                       -> (Result<(::Program, s::ProgramInfo), ()>, Option<String>) {
     let name = unsafe { gl.CreateProgram() };
