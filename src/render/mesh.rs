@@ -21,8 +21,9 @@
 //! `Buffer`, and then use `Mesh::from`.
 
 use device;
-use device::{PrimitiveType, BufferHandle, Resources, VertexCount};
+use device::{PrimitiveType, Resources, VertexCount};
 use device::attrib;
+use device::handle::Buffer as BufferHandle;
 
 /// Describes a single attribute of a vertex buffer, including its type, name, etc.
 #[derive(Clone, Debug, PartialEq)]
@@ -30,7 +31,7 @@ pub struct Attribute<R: Resources> {
     /// A name to match the shader input
     pub name: String,
     /// Vertex buffer to contain the data
-    pub buffer: device::RawBufferHandle<R>,
+    pub buffer: device::handle::RawBuffer<R>,
     /// Format of the attribute
     pub format: attrib::Format,
 }
@@ -40,7 +41,7 @@ pub struct Attribute<R: Resources> {
 #[allow(missing_docs)]
 pub trait VertexFormat {
     /// Create the attributes for this type, using the given buffer.
-    fn generate<R: Resources>(Option<&Self>, buffer: device::RawBufferHandle<R>)
+    fn generate<R: Resources>(Option<&Self>, buffer: device::handle::RawBuffer<R>)
                 -> Vec<Attribute<R>>;
 }
 
@@ -63,7 +64,7 @@ impl<R: Resources> Mesh<R> {
     }
 
     /// Create a new `Mesh` from a struct that implements `VertexFormat` and a buffer.
-    pub fn from_format<V: VertexFormat>(buf: device::BufferHandle<R, V>, nv: device::VertexCount)
+    pub fn from_format<V: VertexFormat>(buf: BufferHandle<R, V>, nv: device::VertexCount)
                        -> Mesh<R> {
         Mesh {
             num_vertices: nv,
@@ -73,9 +74,9 @@ impl<R: Resources> Mesh<R> {
 
     /// Create a new intanced `Mesh` given a vertex buffer and an instance buffer.
     pub fn from_format_instanced<V: VertexFormat, U: VertexFormat>(
-                                 buf: device::BufferHandle<R, V>,
+                                 buf: BufferHandle<R, V>,
                                  nv: device::VertexCount,
-                                 inst: device::BufferHandle<R, U>) -> Mesh<R> {
+                                 inst: BufferHandle<R, U>) -> Mesh<R> {
         let per_vertex   = VertexFormat::generate(None::<&V>, buf.raw());
         let per_instance = VertexFormat::generate(None::<&U>, inst.raw());
 

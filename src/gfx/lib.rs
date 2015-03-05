@@ -39,15 +39,21 @@ pub use render::target::{Frame, Plane};
 pub use device::{Device, Resources};
 pub use device::{attrib, tex};
 pub use device::as_byte_slice;
-pub use device::{BufferHandle, BufferInfo, RawBufferHandle, ShaderHandle};
-pub use device::{ProgramHandle, SurfaceHandle, TextureHandle, SamplerHandle};
-pub use device::BufferUsage;
+pub use device::{BufferInfo, BufferUsage};
 pub use device::{VertexCount, InstanceCount};
 pub use device::PrimitiveType;
 pub use device::draw::CommandBuffer;
 pub use device::shade::{ProgramInfo, UniformValue};
 pub use draw_state::target::*;
 pub use draw_state::block as state;
+
+pub use device::handle::Buffer as BufferHandle;
+pub use device::handle::RawBuffer as RawBufferHandle;
+pub use device::handle::Shader as ShaderHandle;
+pub use device::handle::Program as ProgramHandle;
+pub use device::handle::Surface as SurfaceHandle;
+pub use device::handle::Texture as TextureHandle;
+pub use device::handle::Sampler as SamplerHandle;
 
 #[path = "../render/lib.rs"] pub mod render;
 #[path = "../device/lib.rs"] pub mod device;
