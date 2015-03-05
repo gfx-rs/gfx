@@ -30,7 +30,6 @@ use cgmath::FixedArray;
 use cgmath::{Matrix4, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
 use gfx::{Device, DeviceExt, ToSlice};
-use gfx::batch::RefBatch;
 use glfw::Context;
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
@@ -165,17 +164,17 @@ fn main() {
     let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
     let mut graphics = gfx::Graphics::new(device);
-    let batch: RefBatch<Params<_>> =
-        graphics.make_batch(&program, &mesh, slice, &state).unwrap();
 
     let aspect = w as f32 / h as f32;
-    let mut data = Params {
+    let data = Params {
         model: Matrix4::identity().into_fixed(),
         view: Matrix4::identity().into_fixed(),
         proj: cgmath::perspective(cgmath::deg(60.0f32), aspect,
                                   0.1, 1000.0).into_fixed(),
         _dummy: std::marker::PhantomData,
     };
+    let mut batch = graphics.make_batch(&program, data, &mesh, slice, &state)
+                            .unwrap();
 
     let clear_data = gfx::ClearData {
         color: [0.3, 0.3, 0.3, 1.0],
@@ -201,10 +200,10 @@ fn main() {
             &Point3::new(0.0, 0.0, 0.0),
             &Vector3::unit_z(),
         );
-        data.view = view.mat.into_fixed();
+        batch.params.view = view.mat.into_fixed();
 
         graphics.clear(clear_data, gfx::COLOR | gfx::DEPTH, &frame);
-        graphics.draw(&batch, &data, &frame).unwrap();
+        graphics.draw(&batch, &frame).unwrap();
         graphics.end_frame();
 
         window.swap_buffers();

@@ -44,7 +44,6 @@ use cgmath::FixedArray;
 use cgmath::{Matrix, Matrix4, Point3, Vector3, EuclideanVector};
 use cgmath::{Transform, AffineMatrix3};
 use gfx::{Device, DeviceExt, Plane, ToSlice, RawBufferHandle};
-use gfx::batch::RefBatch;
 use glfw::Context;
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{SharedVertex, IndexedPolygon};
@@ -397,8 +396,16 @@ fn main() {
         Seed::new(rand_seed)
     };
 
+    let sampler = device.create_sampler(
+        gfx::tex::SamplerInfo::new(gfx::tex::FilterMethod::Scale,
+                                   gfx::tex::WrapMode::Clamp)
+    );
+
+    let aspect = w as f32 / h as f32;
+    let proj = cgmath::perspective(cgmath::deg(60.0f32), aspect, 5.0, 100.0);
+
     let terrain_scale = Vector3::new(25.0, 25.0, 25.0);
-    let terrain_batch: RefBatch<TerrainParams<R>> = {
+    let mut terrain = {
         let plane = genmesh::generators::Plane::subdivide(256, 256);
         let vertex_data: Vec<TerrainVertex> = plane.shared_vertex_iter()
             .map(|(x, y)| {
@@ -427,11 +434,19 @@ fn main() {
                             .unwrap();
         let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
-        context.make_batch(&program, &mesh, slice, &state)
+        let data = TerrainParams {
+            model: Matrix4::identity().into_fixed(),
+            view: Matrix4::identity().into_fixed(),
+            proj: proj.into_fixed(),
+            cam_pos: Vector3::new(0.0, 0.0, 0.0).into_fixed(),
+            _dummy: std::marker::PhantomData,
+        };
+
+        context.make_batch(&program, data, &mesh, slice, &state)
                .unwrap()
     };
 
-    let blit_batch: RefBatch<BlitParams<R>> = {
+    let mut blit = {
         let vertex_data = [
             BlitVertex { pos: [-1, -1, 0], tex_coord: [0, 0] },
             BlitVertex { pos: [ 1, -1, 0], tex_coord: [1, 0] },
@@ -447,11 +462,17 @@ fn main() {
                             .unwrap();
         let state = gfx::DrawState::new();
 
-        context.make_batch(&program, &mesh, slice, &state)
+        let data = BlitParams {
+          tex: (texture_pos, Some(sampler)),
+        };
+
+        context.make_batch(&program, data, &mesh, slice, &state)
                .unwrap()
     };
 
-    let (light_batch, emitter_batch) = {
+    let light_pos_buffer = device.create_buffer::<[f32; 4]>(NUM_LIGHTS, gfx::BufferUsage::Stream);
+
+    let (mut light, mut emitter) = {
         let vertex_data = [
             // top (0, 0, 1)
             CubeVertex { pos: [-1, -1,  1] },
@@ -503,70 +524,46 @@ fn main() {
             .depth(gfx::state::Comparison::LessEqual, false)
             .blend(gfx::BlendPreset::Additive);
 
-        let light_batch: RefBatch<LightParams<R>> = {
+        let light_data = LightParams {
+            transform: Matrix4::identity().into_fixed(),
+            light_pos_buf: light_pos_buffer.raw(),
+            radius: 3.0,
+            cam_pos: Vector3::new(0.0, 0.0, 0.0).into_fixed(),
+            frame_res: [w as f32, h as f32],
+            tex_pos: (texture_pos, Some(sampler)),
+            tex_normal: (texture_normal, Some(sampler)),
+            tex_diffuse: (texture_diffuse, Some(sampler)),
+        };
+
+        let light = {
             let program = device.link_program(LIGHT_VERTEX_SRC, LIGHT_FRAGMENT_SRC)
                                 .unwrap();
 
-            context.make_batch(&program, &mesh, slice, &state)
+            context.make_batch(&program, light_data, &mesh, slice.clone(), &state)
                    .unwrap()
         };
 
-        let emitter_batch: RefBatch<EmitterParams<R>> = {
+        let emitter_data = EmitterParams {
+            transform: Matrix4::identity().into_fixed(),
+            light_pos_buf: light_pos_buffer.raw(),
+            radius: 0.2,
+        };
+
+        let emitter = {
             let program = device.link_program(EMITTER_VERTEX_SRC, EMITTER_FRAGMENT_SRC)
                                 .unwrap();
 
-            context.make_batch(&program, &mesh, slice, &state)
+            context.make_batch(&program, emitter_data, &mesh, slice, &state)
                    .unwrap()
         };
 
-        (light_batch, emitter_batch)
+        (light, emitter)
     };
 
     let clear_data = gfx::ClearData {
         color: [0.0, 0.0, 0.0, 1.0],
         depth: 1.0,
         stencil: 0,
-    };
-
-    let aspect = w as f32 / h as f32;
-    let proj = cgmath::perspective(cgmath::deg(60.0f32), aspect, 5.0, 100.0);
-
-    let mut terrain_data = TerrainParams {
-        model: Matrix4::identity().into_fixed(),
-        view: Matrix4::identity().into_fixed(),
-        proj: proj.into_fixed(),
-        cam_pos: Vector3::new(0.0, 0.0, 0.0).into_fixed(),
-        _dummy: std::marker::PhantomData,
-    };
-
-    let sampler = device.create_sampler(
-        gfx::tex::SamplerInfo::new(gfx::tex::FilterMethod::Scale,
-                                   gfx::tex::WrapMode::Clamp)
-    );
-
-
-    let light_pos_buffer = device.create_buffer::<[f32; 4]>(NUM_LIGHTS, gfx::BufferUsage::Stream);
-
-    let mut light_data = LightParams {
-        transform: Matrix4::identity().into_fixed(),
-        light_pos_buf: light_pos_buffer.raw(),
-        radius: 3.0,
-        cam_pos: Vector3::new(0.0, 0.0, 0.0).into_fixed(),
-        frame_res: [w as f32, h as f32],
-        tex_pos: (texture_pos, Some(sampler)),
-        tex_normal: (texture_normal, Some(sampler)),
-        tex_diffuse: (texture_diffuse, Some(sampler)),
-    };
-
-
-    let mut emitter_data = EmitterParams {
-        transform: Matrix4::identity().into_fixed(),
-        light_pos_buf: light_pos_buffer.raw(),
-        radius: 0.2,
-    };
-
-    let mut blit_data = BlitParams {
-        tex: (texture_pos, Some(sampler)),
     };
 
     let mut debug_buf: Option<gfx::TextureHandle<R>> = None;
@@ -610,13 +607,13 @@ fn main() {
                 &Point3::new(0.0, 0.0, 0.0),
                 &Vector3::unit_z(),
             );
-            terrain_data.view = view.mat.into_fixed();
-            terrain_data.cam_pos = cam_pos.into_fixed();
+            terrain.params.view = view.mat.into_fixed();
+            terrain.params.cam_pos = cam_pos.into_fixed();
 
-            light_data.transform = proj.mul_m(&view.mat).into_fixed();
-            light_data.cam_pos = cam_pos.into_fixed();
+            light.params.transform = proj.mul_m(&view.mat).into_fixed();
+            light.params.cam_pos = cam_pos.into_fixed();
 
-            emitter_data.transform = proj.mul_m(&view.mat).into_fixed();
+            emitter.params.transform = proj.mul_m(&view.mat).into_fixed();
         }
 
         // Update light positions
@@ -637,18 +634,15 @@ fn main() {
 
         // Render the terrain to the geometry buffer
         renderer.clear(clear_data, gfx::COLOR|gfx::DEPTH, &g_buffer);
-        renderer.draw(
-            &context.bind(&terrain_batch, &terrain_data),
-            &g_buffer)
-            .unwrap();
+        renderer.draw(&(&terrain, &context), &g_buffer).unwrap();
 
         match debug_buf {
             Some(tex) => {
                 // Show one of the immediate buffers
-                blit_data.tex = (tex, Some(sampler));
+                blit.params.tex = (tex, Some(sampler));
                 renderer.clear(clear_data, gfx::COLOR | gfx::DEPTH, &frame);
                 renderer.draw(
-                    &context.bind(&blit_batch, &blit_data),
+                    &(&blit, &context),
                     &frame)
                     .unwrap();
             },
@@ -657,22 +651,19 @@ fn main() {
 
                 // Apply light
                 renderer.draw_instanced(
-                    &context.bind(&light_batch, &light_data),
+                    &(&light, &context),
                     NUM_LIGHTS as u32, 0, &res_buffer)
                     .unwrap();
                 // Draw light emitters
                 renderer.draw_instanced(
-                    &context.bind(&emitter_batch, &emitter_data),
+                    &(&emitter, &context),
                     NUM_LIGHTS as u32, 0, &res_buffer)
                     .unwrap();
 
                 // Show the result
                 renderer.clear(clear_data, gfx::COLOR | gfx::DEPTH, &frame);
-                blit_data.tex = (texture_frame, Some(sampler));
-                renderer.draw(
-                    &context.bind(&blit_batch, &blit_data),
-                    &frame)
-                    .unwrap();
+                blit.params.tex = (texture_frame, Some(sampler));
+                renderer.draw(&(&blit, &context), &frame).unwrap();
             }
         }
         device.submit(renderer.as_buffer());
