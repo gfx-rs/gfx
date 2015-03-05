@@ -17,6 +17,7 @@
 use std::slice;
 
 use gfx::device as d;
+use gfx::device::handle;
 use gfx::device::draw::{Access, Target};
 use gfx::device::target::*;
 use super::{ArrayBuffer, Buffer, FrameBuffer, Program, Surface, Texture, GlResources};
@@ -35,7 +36,7 @@ pub enum Command {
     BindUniformBlock(Program, d::UniformBufferSlot, d::UniformBlockIndex, Buffer),
     BindUniform(d::shade::Location, d::shade::UniformValue),
     BindTexture(d::TextureSlot, d::tex::TextureKind, Texture,
-                Option<d::SamplerHandle<GlResources>>),
+                Option<handle::Sampler<GlResources>>),
     SetDrawColorBuffers(usize),
     SetPrimitiveState(d::state::Primitive),
     SetViewport(Rect),
@@ -121,7 +122,7 @@ impl d::draw::CommandBuffer for CommandBuffer {
         self.buf.push(Command::BindUniform(loc, value));
     }
     fn bind_texture(&mut self, slot: d::TextureSlot, kind: d::tex::TextureKind,
-                    tex: Texture, sampler: Option<d::SamplerHandle<GlResources>>) {
+                    tex: Texture, sampler: Option<handle::Sampler<GlResources>>) {
         self.buf.push(Command::BindTexture(slot, kind, tex, sampler));
     }
 
