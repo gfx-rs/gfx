@@ -36,7 +36,7 @@ pub use render::mesh::Error as MeshError;
 pub use render::mesh::{Slice, ToSlice, SliceKind};
 pub use render::shade;
 pub use render::target::{Frame, Plane};
-pub use device::{Device, Resources};
+pub use device::{Device, Factory, Resources};
 pub use device::{attrib, tex};
 pub use device::as_byte_slice;
 pub use device::{BufferInfo, BufferUsage};
@@ -63,7 +63,7 @@ pub struct Graphics<D: device::Device> {
     /// Graphics device.
     pub device: D,
     /// Renderer front-end.
-    pub renderer: Renderer<D::CommandBuffer>,
+    pub renderer: Renderer<D::Resources, D::CommandBuffer>,
     /// Hidden batch context.
     context: batch::Context<D::Resources>,
 }
@@ -84,7 +84,7 @@ impl<D: device::Device> std::ops::DerefMut for Graphics<D> {
 
 impl<D: device::Device> Graphics<D> {
     /// Create a new graphics wrapper.
-    pub fn new(mut device: D) -> Graphics<D> {
+    pub fn new(mut device: D) -> Graphics<D> where D: DeviceExt<D> {
         let rend = device.create_renderer();
         Graphics {
             device: device,
@@ -92,7 +92,6 @@ impl<D: device::Device> Graphics<D> {
             context: batch::Context::new(),
         }
     }
-
     /// Clear the `Frame` as the `ClearData` specifies.
     pub fn clear(&mut self, data: ClearData, mask: Mask, frame: &Frame<D::Resources>) {
         self.renderer.clear(data, mask, frame)

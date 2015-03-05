@@ -102,14 +102,14 @@ impl<R: Resources> ParamStorage<R> {
 
 /// Extension methods for the command buffer.
 /// Useful when Renderer is borrowed, and we need to issue commands.
-trait CommandBufferExt: CommandBuffer {
+trait CommandBufferExt<R: Resources>: CommandBuffer<R> {
     /// Bind a plane to some target
-    fn bind_target(&mut self, Access, Target, Option<&target::Plane<Self::Resources>>);
+    fn bind_target(&mut self, Access, Target, Option<&target::Plane<R>>);
 }
 
-impl<C: CommandBuffer> CommandBufferExt for C {
+impl<R: Resources, C: CommandBuffer<R>> CommandBufferExt<R> for C {
     fn bind_target(&mut self, access: Access, to: Target,
-                   plane: Option<&target::Plane<C::Resources>>) {
+                   plane: Option<&target::Plane<R>>) {
         match plane {
             None => self.unbind_target(access, to),
             Some(&target::Plane::Surface(ref suf)) =>
@@ -137,18 +137,18 @@ pub enum DrawError<E> {
 }
 
 /// Renderer front-end
-pub struct Renderer<C: CommandBuffer> {
+pub struct Renderer<R: Resources, C: CommandBuffer<R>> {
     command_buffer: C,
     data_buffer: DataBuffer,
-    common_array_buffer: Result<handle::ArrayBuffer<C::Resources>, ()>,
-    draw_frame_buffer: handle::FrameBuffer<C::Resources>,
-    read_frame_buffer: handle::FrameBuffer<C::Resources>,
-    default_frame_buffer: handle::FrameBuffer<C::Resources>,
-    render_state: RenderState<C::Resources>,
-    parameters: ParamStorage<C::Resources>,
+    common_array_buffer: Result<handle::ArrayBuffer<R>, ()>,
+    draw_frame_buffer: handle::FrameBuffer<R>,
+    read_frame_buffer: handle::FrameBuffer<R>,
+    default_frame_buffer: handle::FrameBuffer<R>,
+    render_state: RenderState<R>,
+    parameters: ParamStorage<R>,
 }
 
-impl<C: CommandBuffer> Renderer<C> {
+impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     /// Reset all commands for the command buffer re-usal.
     pub fn reset(&mut self) {
         self.command_buffer.clear();
@@ -162,7 +162,7 @@ impl<C: CommandBuffer> Renderer<C> {
     }
 
     /// Clone the renderer shared data but ignore the commands.
-    pub fn clone_empty(&self) -> Renderer<C> {
+    pub fn clone_empty(&self) -> Renderer<R, C> {
         Renderer {
             command_buffer: CommandBuffer::new(),
             data_buffer: DataBuffer::new(),
@@ -176,29 +176,29 @@ impl<C: CommandBuffer> Renderer<C> {
     }
 
     /// Clear the `Frame` as the `ClearData` specifies.
-    pub fn clear(&mut self, data: ClearData, mask: Mask, frame: &target::Frame<C::Resources>) {
+    pub fn clear(&mut self, data: ClearData, mask: Mask, frame: &target::Frame<R>) {
         self.bind_frame(frame);
         self.command_buffer.call_clear(data, mask);
     }
 
     /// Draw a `batch` into the specified `frame`
-    pub fn draw<B: Batch<Resources = C::Resources>>(&mut self, batch: &B, frame: &target::Frame<C::Resources>)
+    pub fn draw<B: Batch<Resources = R>>(&mut self, batch: &B, frame: &target::Frame<R>)
                 -> Result<(), DrawError<B::Error>> {
         self.draw_all(batch, None, frame)
     }
 
     /// Draw a `batch` multiple times using instancing
-    pub fn draw_instanced<B: Batch<Resources = C::Resources>>(&mut self, batch: &B,
+    pub fn draw_instanced<B: Batch<Resources = R>>(&mut self, batch: &B,
                           count: device::InstanceCount,
                           base: device::VertexCount,
-                          frame: &target::Frame<C::Resources>)
+                          frame: &target::Frame<R>)
                           -> Result<(), DrawError<B::Error>> {
         self.draw_all(batch, Some((count, base)), frame)
     }
 
     /// Draw a 'batch' with all known parameters specified, internal use only.
-    fn draw_all<B: Batch<Resources = C::Resources>>(&mut self, batch: &B,
-                instances: InstanceOption, frame: &target::Frame<C::Resources>)
+    fn draw_all<B: Batch<Resources = R>>(&mut self, batch: &B,
+                instances: InstanceOption, frame: &target::Frame<R>)
                 -> Result<(), DrawError<B::Error>> {
         let (mesh, attrib_iter, slice, state) = match batch.get_data() {
             Ok(data) => data,
@@ -223,8 +223,8 @@ impl<C: CommandBuffer> Renderer<C> {
     }
 
     /// Blit one frame onto another
-    pub fn blit(&mut self, source: &target::Frame<C::Resources>, source_rect: Rect,
-                destination: &target::Frame<C::Resources>, dest_rect: Rect,
+    pub fn blit(&mut self, source: &target::Frame<R>, source_rect: Rect,
+                destination: &target::Frame<R>, dest_rect: Rect,
                 mirror: Mirror, mask: Mask) {
         // verify as much as possible here
         if mask.intersects(draw_state::target::COLOR) {
@@ -246,7 +246,7 @@ impl<C: CommandBuffer> Renderer<C> {
     }
 
     /// Update a buffer with data from a vector.
-    pub fn update_buffer_vec<T: Copy>(&mut self, buf: handle::Buffer<C::Resources, T>,
+    pub fn update_buffer_vec<T: Copy>(&mut self, buf: handle::Buffer<R, T>,
                              data: &[T], offset_elements: usize) {
         let esize = mem::size_of::<T>();
         let offset_bytes = esize * offset_elements;
@@ -257,21 +257,21 @@ impl<C: CommandBuffer> Renderer<C> {
 
     /// Update a buffer with data from a single type.
     pub fn update_buffer_struct<U, T: Copy>(&mut self,
-                                buf: handle::Buffer<C::Resources, U>, data: &T) {
+                                buf: handle::Buffer<R, U>, data: &T) {
         debug_assert!(mem::size_of::<T>() <= buf.get_info().size);
         let pointer = self.data_buffer.add_struct(data);
         self.command_buffer.update_buffer(buf.get_name(), pointer, 0);
     }
 
     /// Update the contents of a texture.
-    pub fn update_texture<T: Copy>(&mut self, tex: handle::Texture<C::Resources>,
+    pub fn update_texture<T: Copy>(&mut self, tex: handle::Texture<R>,
                           img: device::tex::ImageInfo, data: &[T]) {
         debug_assert!(tex.get_info().contains(&img));
         let pointer = self.data_buffer.add_vec(data);
         self.command_buffer.update_texture(tex.get_info().kind, tex.get_name(), img, pointer);
     }
 
-    fn bind_frame(&mut self, frame: &target::Frame<C::Resources>) {
+    fn bind_frame(&mut self, frame: &target::Frame<R>) {
         if self.render_state.frame.width != frame.width ||
                 self.render_state.frame.height != frame.height {
             self.command_buffer.set_viewport(Rect {
@@ -329,7 +329,7 @@ impl<C: CommandBuffer> Renderer<C> {
         }
     }
 
-    fn bind_read_frame(&mut self, frame: &target::Frame<C::Resources>) {
+    fn bind_read_frame(&mut self, frame: &target::Frame<R>) {
         self.command_buffer.bind_frame_buffer(Access::Read, self.read_frame_buffer.get_name());
         // color
         if frame.colors.is_empty() {
@@ -366,8 +366,8 @@ impl<C: CommandBuffer> Renderer<C> {
         self.render_state.draw = *state;
     }
 
-    fn bind_program<'a, B: Batch<Resources = C::Resources>>(&mut self, batch: &'a B)
-                    -> Result<&'a handle::Program<C::Resources>, B::Error> {
+    fn bind_program<'a, B: Batch<Resources = R>>(&mut self, batch: &'a B)
+                    -> Result<&'a handle::Program<R>, B::Error> {
         let program = match batch.fill_params(self.parameters.get_mut()) {
             Ok(p) => p,
             Err(e) => return Err(e),
@@ -381,7 +381,7 @@ impl<C: CommandBuffer> Renderer<C> {
         Ok(program)
     }
 
-    fn upload_parameters(&mut self, program: &handle::Program<C::Resources>) {
+    fn upload_parameters(&mut self, program: &handle::Program<R>) {
         let info = program.get_info();
         if self.parameters.uniforms.len() != info.uniforms.len() ||
             self.parameters.blocks.len() != info.blocks.len() ||
@@ -421,7 +421,7 @@ impl<C: CommandBuffer> Renderer<C> {
     }
 
     fn bind_mesh<I: Iterator<Item = mesh::AttributeIndex>>(&mut self,
-                 mesh: &mesh::Mesh<C::Resources>, attrib_iter: I, info: &ProgramInfo) {
+                 mesh: &mesh::Mesh<R>, attrib_iter: I, info: &ProgramInfo) {
         if !self.render_state.is_array_buffer_set {
             // It's Ok if the array buffer is not supported. We can just ignore it.
             match self.common_array_buffer {
@@ -448,14 +448,14 @@ impl<C: CommandBuffer> Renderer<C> {
         }
     }
 
-    fn bind_index<T>(&mut self, buf: handle::Buffer<C::Resources, T>) {
+    fn bind_index<T>(&mut self, buf: handle::Buffer<R, T>) {
         if self.render_state.index != Some(buf.raw()) {
             self.command_buffer.bind_index(buf.get_name());
             self.render_state.index = Some(buf.raw());
         }
     }
 
-    fn draw_slice(&mut self, slice: &mesh::Slice<C::Resources>, instances: InstanceOption) {
+    fn draw_slice(&mut self, slice: &mesh::Slice<R>, instances: InstanceOption) {
         let mesh::Slice { start, end, prim_type, kind } = slice.clone();
         match kind {
             SliceKind::Vertex => {

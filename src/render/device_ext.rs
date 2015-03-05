@@ -57,23 +57,24 @@ impl<'a> ShaderSource<'a> {
 
 
 /// Backend extension trait for convenience methods
-pub trait DeviceExt: device::Device {
+pub trait DeviceExt<D: device::Device>: device::Factory<D::Resources> {
     /// Create a new renderer
-    fn create_renderer(&mut self) -> ::Renderer<Self::CommandBuffer>;
+    fn create_renderer(&mut self) -> ::Renderer<D::Resources, D::CommandBuffer>;
     /// Create a new mesh from the given vertex data.
     /// Convenience function around `create_buffer` and `Mesh::from_format`.
-    fn create_mesh<T: VertexFormat + Copy>(&mut self, data: &[T]) -> Mesh<Self::Resources>;
+    fn create_mesh<T: VertexFormat + Copy>(&mut self, data: &[T]) -> Mesh<D::Resources>;
     /// Create a simple program given a vertex shader with a fragment one.
     fn link_program(&mut self, vs_code: &[u8], fs_code: &[u8])
-                    -> Result<device::handle::Program<Self::Resources>, ProgramError>;
+                    -> Result<device::handle::Program<D::Resources>, ProgramError>;
     /// Create a simple program given `ShaderSource` versions of vertex and
     /// fragment shaders, chooss the matching versions for the device.
-    fn link_program_source(&mut self, vs_src: ShaderSource, fs_src: ShaderSource)
-                           -> Result<device::handle::Program<Self::Resources>, ProgramError>;
+    fn link_program_source(&mut self, vs_src: ShaderSource, fs_src: ShaderSource,
+                           caps: &device::Capabilities)
+                           -> Result<device::handle::Program<D::Resources>, ProgramError>;
 }
 
-impl<D: device::Device> DeviceExt for D {
-    fn create_renderer(&mut self) -> ::Renderer<D::CommandBuffer> {
+impl<D: device::Device, F: device::Factory<D::Resources>> DeviceExt<D> for F {
+    fn create_renderer(&mut self) -> ::Renderer<D::Resources, D::CommandBuffer> {
         ::Renderer {
             command_buffer: device::draw::CommandBuffer::new(),
             data_buffer: device::draw::DataBuffer::new(),
@@ -112,9 +113,10 @@ impl<D: device::Device> DeviceExt for D {
             .map_err(|e| ProgramError::Link(e))
     }
 
-    fn link_program_source(&mut self, vs_src: ShaderSource, fs_src: ShaderSource)
+    fn link_program_source(&mut self, vs_src: ShaderSource, fs_src: ShaderSource,
+                           caps: &device::Capabilities)
                            -> Result<device::handle::Program<D::Resources>, ProgramError> {
-        let model = self.get_capabilities().shader_model;
+        let model = caps.shader_model;
         let err_model = CreateShaderError::ModelNotSupported;
 
         let vs = match vs_src.choose(model) {
