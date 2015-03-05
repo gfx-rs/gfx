@@ -28,9 +28,9 @@ extern crate gfx;
 use std::slice;
 use log::LogLevel;
 
-use gfx::{Device, Resources, BufferUsage};
+use gfx::{Device, Factory, Resources, BufferUsage};
 use gfx::device as d;
-use gfx::device::{MapFactory};
+use gfx::device::mapping::Builder;
 use gfx::device::attrib::*;
 use gfx::device::state::{CullFace, RasterMethod, FrontFace};
 use gfx::device::draw::{Access, Target};
@@ -51,7 +51,7 @@ pub struct RawMapping {
     target: gl::types::GLenum,
 }
 
-impl d::RawMapping for RawMapping {
+impl d::mapping::Raw for RawMapping {
     unsafe fn set<T>(&self, index: usize, val: T) {
         *(self.pointer as *mut T).offset(index as isize) = val;
     }
@@ -601,7 +601,6 @@ impl GlDevice {
 
 impl Device for GlDevice {
     type Resources = GlResources;
-    type Mapper = RawMapping;
     type CommandBuffer  = CommandBuffer;
 
     fn get_capabilities<'a>(&'a self) -> &'a d::Capabilities {
@@ -621,6 +620,10 @@ impl Device for GlDevice {
             self.process(com, db);
         }
     }
+}
+
+impl Factory<GlResources> for GlDevice {
+    type Mapper = RawMapping;
 
     fn create_buffer_raw(&mut self, size: usize, usage: BufferUsage)
                          -> BufferHandle<()> {
@@ -801,19 +804,19 @@ impl Device for GlDevice {
     }
 
     fn map_buffer_readable<T: Copy>(&mut self, buf: BufferHandle<T>)
-                           -> d::ReadableMapping<T, GlDevice> {
+                           -> d::mapping::Readable<T, GlResources, GlDevice> {
         let map = self.map_buffer_raw(buf.cast(), d::MapAccess::Readable);
         self.map_readable(map, buf.len())
     }
 
     fn map_buffer_writable<T: Copy>(&mut self, buf: BufferHandle<T>)
-                                    -> d::WritableMapping<T, GlDevice> {
+                                    -> d::mapping::Writable<T, GlResources, GlDevice> {
         let map = self.map_buffer_raw(buf.cast(), d::MapAccess::Writable);
         self.map_writable(map, buf.len())
     }
 
     fn map_buffer_rw<T: Copy>(&mut self, buf: BufferHandle<T>)
-                              -> d::RWMapping<T, GlDevice> {
+                              -> d::mapping::RW<T, GlResources, GlDevice> {
         let map = self.map_buffer_raw(buf.cast(), d::MapAccess::RW);
         self.map_read_write(map, buf.len())
     }
