@@ -25,6 +25,7 @@ pub use draw_state::block as state;
 
 pub mod attrib;
 pub mod draw;
+pub mod handle;
 pub mod shade;
 pub mod tex;
 
@@ -145,213 +146,6 @@ impl<'a, T: Copy, D: Device> Drop for RWMapping<'a, T, D> where D::Mapper: 'a {
     }
 }
 
-/// Type-safe buffer handle
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub struct BufferHandle<R: Resources, T> {
-    raw: RawBufferHandle<R>,
-    phantom_t: PhantomData<T>,
-}
-
-impl<R: Resources, T> BufferHandle<R, T> {
-    /// Create a type-safe BufferHandle from a RawBufferHandle
-    pub fn from_raw(handle: RawBufferHandle<R>) -> BufferHandle<R, T> {
-        BufferHandle {
-            raw: handle,
-            phantom_t: PhantomData,
-        }
-    }
-
-    /// Cast the type this BufferHandle references
-    pub fn cast<U>(self) -> BufferHandle<R, U> {
-        BufferHandle::from_raw(self.raw)
-    }
-
-    /// Get the underlying name for this BufferHandle
-    pub fn get_name(&self) -> <R as Resources>::Buffer {
-        self.raw.get_name()
-    }
-
-    /// Get the underlying raw Handle
-    pub fn raw(&self) -> RawBufferHandle<R> {
-        self.raw
-    }
-
-    /// Get the associated information about the buffer
-    pub fn get_info(&self) -> &BufferInfo {
-        self.raw.get_info()
-    }
-
-    /// Get the number of elements in the buffer.
-    ///
-    /// Fails if `T` is zero-sized.
-    pub fn len(&self) -> usize {
-        assert!(mem::size_of::<T>() != 0, "Cannot determine the length of zero-sized buffers.");
-        self.get_info().size / mem::size_of::<T>()
-    }
-}
-
-/// Raw (untyped) Buffer Handle
-#[derive(PartialEq, Debug)]
-pub struct RawBufferHandle<R: Resources>(
-    <R as Resources>::Buffer,
-    BufferInfo
-);
-
-impl<R: Resources> Copy for RawBufferHandle<R> {}
-
-impl<R: Resources> Clone for RawBufferHandle<R> {
-    fn clone(&self) -> RawBufferHandle<R> {
-        RawBufferHandle(self.0, self.1.clone())
-    }
-}
-
-impl<R: Resources> RawBufferHandle<R> {
-    /// Creates a new raw buffer handle (used by device)
-    pub unsafe fn new(name: <R as Resources>::Buffer, info: BufferInfo)
-        -> RawBufferHandle<R> {
-        RawBufferHandle(name, info)
-    }
-    /// Get raw buffer name
-    pub fn get_name(&self) -> <R as Resources>::Buffer { self.0 }
-    /// Get raw buffer info
-    pub fn get_info(&self) -> &BufferInfo { &self.1 }
-}
-
-/// Array Buffer Handle
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub struct ArrayBufferHandle<R: Resources>(<R as Resources>::ArrayBuffer);
-
-impl<R: Resources> ArrayBufferHandle<R> {
-    /// Creates a new array buffer (used by device)
-    pub unsafe fn new(name: <R as Resources>::ArrayBuffer)
-        -> ArrayBufferHandle<R> {
-        ArrayBufferHandle(name)
-    }
-    /// Get array buffer name
-    pub fn get_name(&self) -> <R as Resources>::ArrayBuffer { self.0 }
-}
-
-/// Shader Handle
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub struct ShaderHandle<R: Resources>(<R as Resources>::Shader, shade::Stage);
-
-impl<R: Resources> ShaderHandle<R> {
-    /// Creates a new shader (used by device)
-    pub unsafe fn new(name: <R as Resources>::Shader, info: shade::Stage)
-        -> ShaderHandle<R> {
-        ShaderHandle(name, info)
-    }
-    /// Get shader name
-    pub fn get_name(&self) -> <R as Resources>::Shader { self.0 }
-    /// Get shader info
-    pub fn get_info(&self) -> &shade::Stage { &self.1 }
-}
-
-/// Program Handle
-#[derive(Clone, PartialEq, Debug)]
-pub struct ProgramHandle<R: Resources>(
-    <R as Resources>::Program,
-    shade::ProgramInfo,
-);
-
-impl<R: Resources> ProgramHandle<R> {
-    /// Creates a new program (used by device)
-    pub unsafe fn new(name: <R as Resources>::Program, info: shade::ProgramInfo)
-        -> ProgramHandle<R> {
-        ProgramHandle(name, info)
-    }
-    /// Get program name
-    pub fn get_name(&self) -> <R as Resources>::Program { self.0 }
-    /// Get program info
-    pub fn get_info(&self) -> &shade::ProgramInfo { &self.1 }
-}
-
-/// Frame Buffer Handle
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub struct FrameBufferHandle<R: Resources>(<R as Resources>::FrameBuffer);
-
-impl<R: Resources> FrameBufferHandle<R> {
-    /// Creates a new frame buffer (used by device)
-    pub unsafe fn new(name: <R as Resources>::FrameBuffer)
-        -> FrameBufferHandle<R> {
-        FrameBufferHandle(name)
-    }
-    /// Get frame buffer name
-    pub fn get_name(&self) -> <R as Resources>::FrameBuffer { self.0 }
-}
-
-/// Surface Handle
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub struct SurfaceHandle<R: Resources>(
-    <R as Resources>::Surface,
-    tex::SurfaceInfo,
-);
-
-impl<R: Resources> SurfaceHandle<R> {
-    /// Creates a new surface (used by device)
-    pub unsafe fn new(name: <R as Resources>::Surface, info: tex::SurfaceInfo)
-        -> SurfaceHandle<R> {
-        SurfaceHandle(name, info)
-    }
-    /// Get surface name
-    pub fn get_name(&self) -> <R as Resources>::Surface { self.0 }
-    /// Get surface info
-    pub fn get_info(&self) -> &tex::SurfaceInfo { &self.1 }
-}
-
-/// Texture Handle
-#[derive(PartialEq, Debug)]
-pub struct TextureHandle<R: Resources>(
-    <R as Resources>::Texture,
-    tex::TextureInfo,
-);
-
-impl<R: Resources> Copy for TextureHandle<R> {}
-
-impl<R: Resources> Clone for TextureHandle<R> {
-    fn clone(&self) -> TextureHandle<R> {
-        TextureHandle(self.0, self.1.clone())
-    }
-}
-
-impl<R: Resources> TextureHandle<R> {
-    /// Creates a new texture (used by device)
-    pub unsafe fn new(name: <R as Resources>::Texture, info: tex::TextureInfo)
-        -> TextureHandle<R> {
-        TextureHandle(name, info)
-    }
-    /// Get texture name
-    pub fn get_name(&self) -> <R as Resources>::Texture { self.0 }
-    /// Get texture info
-    pub fn get_info(&self) -> &tex::TextureInfo { &self.1 }
-}
-
-/// Sampler Handle
-#[derive(PartialEq, Debug)]
-pub struct SamplerHandle<R: Resources>(
-    <R as Resources>::Sampler,
-    tex::SamplerInfo,
-);
-
-impl<R: Resources> Copy for SamplerHandle<R> {}
-
-impl<R: Resources> Clone for SamplerHandle<R> {
-    fn clone(&self) -> SamplerHandle<R> {
-        SamplerHandle(self.0, self.1.clone())
-    }
-}
-
-impl<R: Resources> SamplerHandle<R> {
-    /// Creates a new sampler (used by device)
-    pub unsafe fn new(name: <R as Resources>::Sampler, info: tex::SamplerInfo)
-        -> SamplerHandle<R> {
-        SamplerHandle(name, info)
-    }
-    /// Get sampler name
-    pub fn get_name(&self) -> <R as Resources>::Sampler { self.0 }
-    /// Get sampler info
-    pub fn get_info(&self) -> &tex::SamplerInfo { &self.1 }
-}
 
 /// Treat a given slice as `&[u8]` for the given function call
 pub fn as_byte_slice<T>(slice: &[T]) -> &[u8] {
@@ -464,59 +258,59 @@ pub trait Device {
     fn submit(&mut self, buffer: (&Self::CommandBuffer, &draw::DataBuffer));
 
     // resource creation
-    fn create_buffer_raw(&mut self, size: usize, usage: BufferUsage) -> BufferHandle<Self::Resources, ()>;
-    fn create_buffer<T>(&mut self, num: usize, usage: BufferUsage) -> BufferHandle<Self::Resources, T> {
+    fn create_buffer_raw(&mut self, size: usize, usage: BufferUsage) -> handle::Buffer<Self::Resources, ()>;
+    fn create_buffer<T>(&mut self, num: usize, usage: BufferUsage) -> handle::Buffer<Self::Resources, T> {
         self.create_buffer_raw(num * mem::size_of::<T>(), usage).cast()
     }
-    fn create_buffer_static_raw(&mut self, data: &[u8]) -> BufferHandle<Self::Resources, ()>;
-    fn create_buffer_static<T: Copy>(&mut self, data: &[T]) -> BufferHandle<Self::Resources, T> {
+    fn create_buffer_static_raw(&mut self, data: &[u8]) -> handle::Buffer<Self::Resources, ()>;
+    fn create_buffer_static<T: Copy>(&mut self, data: &[T]) -> handle::Buffer<Self::Resources, T> {
         self.create_buffer_static_raw(as_byte_slice(data)).cast()
     }
-    fn create_array_buffer(&mut self) -> Result<ArrayBufferHandle<Self::Resources>, ()>;
+    fn create_array_buffer(&mut self) -> Result<handle::ArrayBuffer<Self::Resources>, ()>;
     fn create_shader(&mut self, stage: shade::Stage, code: &[u8]) ->
-                     Result<ShaderHandle<Self::Resources>, shade::CreateShaderError>;
-    fn create_program(&mut self, shaders: &[ShaderHandle<Self::Resources>], targets: Option<&[&str]>) -> Result<ProgramHandle<Self::Resources>, ()>;
-    fn create_frame_buffer(&mut self) -> FrameBufferHandle<Self::Resources>;
-    fn create_surface(&mut self, info: tex::SurfaceInfo) -> Result<SurfaceHandle<Self::Resources>, tex::SurfaceError>;
-    fn create_texture(&mut self, info: tex::TextureInfo) -> Result<TextureHandle<Self::Resources>, tex::TextureError>;
-    fn create_sampler(&mut self, info: tex::SamplerInfo) -> SamplerHandle<Self::Resources>;
+                     Result<handle::Shader<Self::Resources>, shade::CreateShaderError>;
+    fn create_program(&mut self, shaders: &[handle::Shader<Self::Resources>], targets: Option<&[&str]>) -> Result<handle::Program<Self::Resources>, ()>;
+    fn create_frame_buffer(&mut self) -> handle::FrameBuffer<Self::Resources>;
+    fn create_surface(&mut self, info: tex::SurfaceInfo) -> Result<handle::Surface<Self::Resources>, tex::SurfaceError>;
+    fn create_texture(&mut self, info: tex::TextureInfo) -> Result<handle::Texture<Self::Resources>, tex::TextureError>;
+    fn create_sampler(&mut self, info: tex::SamplerInfo) -> handle::Sampler<Self::Resources>;
 
     /// Return the framebuffer handle for the screen.
-    fn get_main_frame_buffer(&self) -> FrameBufferHandle<Self::Resources>;
+    fn get_main_frame_buffer(&self) -> handle::FrameBuffer<Self::Resources>;
 
     // resource deletion
-    fn delete_buffer_raw(&mut self, buf: BufferHandle<Self::Resources, ()>);
-    fn delete_buffer<T>(&mut self, buf: BufferHandle<Self::Resources, T>) {
+    fn delete_buffer_raw(&mut self, buf: handle::Buffer<Self::Resources, ()>);
+    fn delete_buffer<T>(&mut self, buf: handle::Buffer<Self::Resources, T>) {
         self.delete_buffer_raw(buf.cast());
     }
-    fn delete_shader(&mut self, ShaderHandle<Self::Resources>);
-    fn delete_program(&mut self, ProgramHandle<Self::Resources>);
-    fn delete_surface(&mut self, SurfaceHandle<Self::Resources>);
-    fn delete_texture(&mut self, TextureHandle<Self::Resources>);
-    fn delete_sampler(&mut self, SamplerHandle<Self::Resources>);
+    fn delete_shader(&mut self, handle::Shader<Self::Resources>);
+    fn delete_program(&mut self, handle::Program<Self::Resources>);
+    fn delete_surface(&mut self, handle::Surface<Self::Resources>);
+    fn delete_texture(&mut self, handle::Texture<Self::Resources>);
+    fn delete_sampler(&mut self, handle::Sampler<Self::Resources>);
 
     /// Update the information stored in a specific buffer
-    fn update_buffer_raw(&mut self, buf: BufferHandle<Self::Resources, ()>, data: &[u8],
+    fn update_buffer_raw(&mut self, buf: handle::Buffer<Self::Resources, ()>, data: &[u8],
                          offset_bytes: usize);
-    fn update_buffer<T: Copy>(&mut self, buf: BufferHandle<Self::Resources, T>, data: &[T],
+    fn update_buffer<T: Copy>(&mut self, buf: handle::Buffer<Self::Resources, T>, data: &[T],
                      offset_elements: usize) {
         self.update_buffer_raw(buf.cast(), as_byte_slice(data), mem::size_of::<T>() * offset_elements)
     }
-    fn map_buffer_raw(&mut self, buf: BufferHandle<Self::Resources, ()>, access: MapAccess) -> Self::Mapper;
+    fn map_buffer_raw(&mut self, buf: handle::Buffer<Self::Resources, ()>, access: MapAccess) -> Self::Mapper;
     fn unmap_buffer_raw(&mut self, map: Self::Mapper);
-    fn map_buffer_readable<T: Copy>(&mut self, buf: BufferHandle<Self::Resources, T>) -> ReadableMapping<T, Self>;
-    fn map_buffer_writable<T: Copy>(&mut self, buf: BufferHandle<Self::Resources, T>) -> WritableMapping<T, Self>;
-    fn map_buffer_rw<T: Copy>(&mut self, buf: BufferHandle<Self::Resources, T>) -> RWMapping<T, Self>;
+    fn map_buffer_readable<T: Copy>(&mut self, buf: handle::Buffer<Self::Resources, T>) -> ReadableMapping<T, Self>;
+    fn map_buffer_writable<T: Copy>(&mut self, buf: handle::Buffer<Self::Resources, T>) -> WritableMapping<T, Self>;
+    fn map_buffer_rw<T: Copy>(&mut self, buf: handle::Buffer<Self::Resources, T>) -> RWMapping<T, Self>;
 
     /// Update the information stored in a texture
-    fn update_texture_raw(&mut self, tex: &TextureHandle<Self::Resources>, img: &tex::ImageInfo,
+    fn update_texture_raw(&mut self, tex: &handle::Texture<Self::Resources>, img: &tex::ImageInfo,
                           data: &[u8]) -> Result<(), tex::TextureError>;
-    fn update_texture<T: Copy>(&mut self, tex: &TextureHandle<Self::Resources>,
+    fn update_texture<T: Copy>(&mut self, tex: &handle::Texture<Self::Resources>,
                       img: &tex::ImageInfo, data: &[T])
                       -> Result<(), tex::TextureError> {
         self.update_texture_raw(tex, img, as_byte_slice(data))
     }
-    fn generate_mipmap(&mut self, tex: &TextureHandle<Self::Resources>);
+    fn generate_mipmap(&mut self, tex: &handle::Texture<Self::Resources>);
 }
 
 /// A service trait with methods for mapping already implemented.
@@ -565,51 +359,5 @@ impl<D: Device> MapFactory for D {
             device: self,
             phantom_t: PhantomData,
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use std::mem;
-    use std::marker::PhantomData;
-    use super::{BufferHandle, RawBufferHandle};
-    use super::{BufferInfo, BufferUsage};
-
-    #[derive(Clone, Debug, PartialEq)]
-    enum TestResources {}
-    impl super::Resources for TestResources {
-        type Buffer = ();
-        type ArrayBuffer = ();
-        type Shader = ();
-        type Program = ();
-        type FrameBuffer = ();
-        type Surface = ();
-        type Texture = ();
-        type Sampler = ();
-    }
-
-    fn mock_buffer<T>(len: usize) -> BufferHandle<TestResources, T> {
-        BufferHandle {
-            raw: unsafe { RawBufferHandle::new(
-                (),
-                BufferInfo {
-                    usage: BufferUsage::Static,
-                    size: mem::size_of::<T>() * len,
-                },
-            ) },
-            phantom_t: PhantomData,
-        }
-    }
-
-    #[test]
-    fn test_buffer_len() {
-        assert_eq!(mock_buffer::<u8>(8).len(), 8);
-        assert_eq!(mock_buffer::<u16>(8).len(), 8);
-    }
-
-    #[test]
-    #[should_fail]
-    fn test_buffer_zero_len() {
-        let _ = mock_buffer::<()>(0).len();
     }
 }

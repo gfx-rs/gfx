@@ -23,7 +23,8 @@ use std::num::from_uint;
 use std::ops::Deref;
 use draw_state::DrawState;
 
-use device::{Resources, PrimitiveType, ProgramHandle};
+use device::{Resources, PrimitiveType};
+use device::handle::Program as ProgramHandle;
 use render::mesh;
 use render::mesh::ToSlice;
 use shade::{ParameterError, ShaderParam};

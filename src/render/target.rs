@@ -22,10 +22,10 @@ use draw_state::target::{Layer, Level, Mask};
 /// A single buffer that can be bound to a render target.
 pub enum Plane<R: Resources> {
     /// Render to a `Surface` (corresponds to a renderbuffer in GL).
-    Surface(device::SurfaceHandle<R>),
+    Surface(device::handle::Surface<R>),
     /// Render to a texture at a specific mipmap level
     /// If `Layer` is set, it is selecting a single 2D slice of a given 3D texture
-    Texture(device::TextureHandle<R>, Level, Option<Layer>),
+    Texture(device::handle::Texture<R>, Level, Option<Layer>),
 }
 
 impl<R: Resources> Plane<R> {

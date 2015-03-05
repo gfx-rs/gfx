@@ -22,9 +22,9 @@ use draw_state::target::{ClearData, Mask, Mirror, Rect};
 
 use device;
 use device::{Device, Resources};
-use device::attrib;
+use device::{attrib, handle};
 use device::attrib::IntSize;
-use device::draw::{Access, CommandBuffer, InstanceOption, Target};
+use device::draw::{Access, CommandBuffer, DataBuffer, InstanceOption, Target};
 use device::shade::{ProgramInfo, UniformValue};
 use render::batch::Batch;
 use render::mesh::SliceKind;
@@ -42,7 +42,7 @@ pub mod target;
 
 
 const TRACKED_ATTRIBUTES: usize = 8;
-type CachedAttribute<R: Resources> = (device::RawBufferHandle<R>, attrib::Format);
+type CachedAttribute<R: Resources> = (handle::RawBuffer<R>, attrib::Format);
 
 /// The internal state of the renderer.
 /// This is used as a cache to eliminate redundant state changes.
@@ -51,7 +51,7 @@ struct RenderState<R: Resources> {
     frame: target::Frame<R>,
     is_array_buffer_set: bool,
     program_name: Option<R::Program>,
-    index: Option<device::RawBufferHandle<R>>,
+    index: Option<handle::RawBuffer<R>>,
     attributes: [Option<CachedAttribute<R>>; TRACKED_ATTRIBUTES],
     draw: DrawState,
 }
@@ -74,7 +74,7 @@ impl<R: Resources> RenderState<R> {
 /// Temporary parameter storage, used for shader activation.
 struct ParamStorage<R: Resources> {
     uniforms: Vec<UniformValue>,
-    blocks  : Vec<device::RawBufferHandle<R>>,
+    blocks  : Vec<handle::RawBuffer<R>>,
     textures: Vec<shade::TextureParam<R>>,
 }
 
@@ -139,11 +139,11 @@ pub enum DrawError<E> {
 /// Renderer front-end
 pub struct Renderer<C: CommandBuffer> {
     command_buffer: C,
-    data_buffer: device::draw::DataBuffer,
-    common_array_buffer: Result<device::ArrayBufferHandle<C::Resources>, ()>,
-    draw_frame_buffer: device::FrameBufferHandle<C::Resources>,
-    read_frame_buffer: device::FrameBufferHandle<C::Resources>,
-    default_frame_buffer: device::FrameBufferHandle<C::Resources>,
+    data_buffer: DataBuffer,
+    common_array_buffer: Result<handle::ArrayBuffer<C::Resources>, ()>,
+    draw_frame_buffer: handle::FrameBuffer<C::Resources>,
+    read_frame_buffer: handle::FrameBuffer<C::Resources>,
+    default_frame_buffer: handle::FrameBuffer<C::Resources>,
     render_state: RenderState<C::Resources>,
     parameters: ParamStorage<C::Resources>,
 }
@@ -157,7 +157,7 @@ impl<C: CommandBuffer> Renderer<C> {
     }
 
     /// Get command and data buffers to be submitted to the device.
-    pub fn as_buffer(&self) -> (&C, &device::draw::DataBuffer) {
+    pub fn as_buffer(&self) -> (&C, &DataBuffer) {
         (&self.command_buffer, &self.data_buffer)
     }
 
@@ -165,7 +165,7 @@ impl<C: CommandBuffer> Renderer<C> {
     pub fn clone_empty(&self) -> Renderer<C> {
         Renderer {
             command_buffer: CommandBuffer::new(),
-            data_buffer: device::draw::DataBuffer::new(),
+            data_buffer: DataBuffer::new(),
             common_array_buffer: self.common_array_buffer.clone(),
             draw_frame_buffer: self.draw_frame_buffer.clone(),
             read_frame_buffer: self.read_frame_buffer.clone(),
@@ -246,7 +246,7 @@ impl<C: CommandBuffer> Renderer<C> {
     }
 
     /// Update a buffer with data from a vector.
-    pub fn update_buffer_vec<T: Copy>(&mut self, buf: device::BufferHandle<C::Resources, T>,
+    pub fn update_buffer_vec<T: Copy>(&mut self, buf: handle::Buffer<C::Resources, T>,
                              data: &[T], offset_elements: usize) {
         let esize = mem::size_of::<T>();
         let offset_bytes = esize * offset_elements;
@@ -257,14 +257,14 @@ impl<C: CommandBuffer> Renderer<C> {
 
     /// Update a buffer with data from a single type.
     pub fn update_buffer_struct<U, T: Copy>(&mut self,
-                                buf: device::BufferHandle<C::Resources, U>, data: &T) {
+                                buf: handle::Buffer<C::Resources, U>, data: &T) {
         debug_assert!(mem::size_of::<T>() <= buf.get_info().size);
         let pointer = self.data_buffer.add_struct(data);
         self.command_buffer.update_buffer(buf.get_name(), pointer, 0);
     }
 
     /// Update the contents of a texture.
-    pub fn update_texture<T: Copy>(&mut self, tex: device::TextureHandle<C::Resources>,
+    pub fn update_texture<T: Copy>(&mut self, tex: handle::Texture<C::Resources>,
                           img: device::tex::ImageInfo, data: &[T]) {
         debug_assert!(tex.get_info().contains(&img));
         let pointer = self.data_buffer.add_vec(data);
@@ -367,7 +367,7 @@ impl<C: CommandBuffer> Renderer<C> {
     }
 
     fn bind_program<'a, B: Batch<Resources = C::Resources>>(&mut self, batch: &'a B)
-                    -> Result<&'a device::ProgramHandle<C::Resources>, B::Error> {
+                    -> Result<&'a handle::Program<C::Resources>, B::Error> {
         let program = match batch.fill_params(self.parameters.get_mut()) {
             Ok(p) => p,
             Err(e) => return Err(e),
@@ -381,7 +381,7 @@ impl<C: CommandBuffer> Renderer<C> {
         Ok(program)
     }
 
-    fn upload_parameters(&mut self, program: &device::ProgramHandle<C::Resources>) {
+    fn upload_parameters(&mut self, program: &handle::Program<C::Resources>) {
         let info = program.get_info();
         if self.parameters.uniforms.len() != info.uniforms.len() ||
             self.parameters.blocks.len() != info.blocks.len() ||
@@ -448,7 +448,7 @@ impl<C: CommandBuffer> Renderer<C> {
         }
     }
 
-    fn bind_index<T>(&mut self, buf: device::BufferHandle<C::Resources, T>) {
+    fn bind_index<T>(&mut self, buf: handle::Buffer<C::Resources, T>) {
         if self.render_state.index != Some(buf.raw()) {
             self.command_buffer.bind_index(buf.get_name());
             self.render_state.index = Some(buf.raw());
