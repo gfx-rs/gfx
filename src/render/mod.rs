@@ -31,8 +31,8 @@ use render::mesh::SliceKind;
 
 /// Batches
 pub mod batch;
-/// Device extensions
-pub mod device_ext;
+/// Extensions
+pub mod ext;
 /// Meshes
 pub mod mesh;
 /// Shaders
