@@ -24,7 +24,7 @@ authors = ["The Gfx-rs Developers"]
 
 [lib]
 name = "gfx"
-path = "src/gfx/lib.rs"
+path = "src/lib.rs"
 
 [dependencies]
 bitflags = "*"

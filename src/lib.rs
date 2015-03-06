@@ -62,5 +62,5 @@ pub use device::handle::Surface as SurfaceHandle;
 pub use device::handle::Texture as TextureHandle;
 pub use device::handle::Sampler as SamplerHandle;
 
-#[path = "../render/lib.rs"] pub mod render;
-#[path = "../device/lib.rs"] pub mod device;
+pub mod render;
+pub mod device;
