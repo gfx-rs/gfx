@@ -21,7 +21,7 @@ extern crate gfx;
 extern crate gfx_device_gl;
 extern crate glutin;
 
-use gfx::{Device, DeviceExt};
+use gfx::traits::*;
 
 fn main() {
     let window = glutin::Window::new().unwrap();

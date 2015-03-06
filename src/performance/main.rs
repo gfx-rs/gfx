@@ -26,7 +26,7 @@ use time::precise_time_s;
 use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3, Matrix3, ToMatrix4};
 use cgmath::{Transform, AffineMatrix3, Vector4, Array1};
-use gfx::{Device, DeviceExt, ToSlice};
+use gfx::traits::*;
 use glfw::Context;
 use gl::Gl;
 use gl::types::*;
@@ -128,7 +128,7 @@ fn gfx_main(mut glfw: glfw::Glfw,
         stencil: 0,
     };
 
-    let mut graphics = gfx::Graphics::new(device);
+    let mut graphics = device.into_graphics();
     let batch: gfx::batch::CoreBatch<Params<_>> = 
         graphics.make_core(&program, &mesh, &state).unwrap();
 

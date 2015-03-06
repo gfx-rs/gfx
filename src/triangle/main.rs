@@ -19,7 +19,7 @@ extern crate gfx;
 extern crate gfx_device_gl;
 extern crate glfw;
 
-use gfx::{Device, DeviceExt, ToSlice};
+use gfx::traits::*;
 use glfw::Context;
 
 #[vertex_format]
