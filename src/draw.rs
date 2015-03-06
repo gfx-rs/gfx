@@ -66,9 +66,7 @@ impl CommandBuffer {
     }
 }
 
-impl d::draw::CommandBuffer for CommandBuffer {
-    type Resources = super::GlResources;
-
+impl d::draw::CommandBuffer<GlResources> for CommandBuffer {
     fn new() -> CommandBuffer {
         CommandBuffer {
             buf: Vec::new(),
