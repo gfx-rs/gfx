@@ -23,7 +23,7 @@ extern crate gfx_device_gl;
 use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
-use gfx::{Device, DeviceExt, ToSlice};
+use gfx::traits::*;
 use glfw::Context;
 
 #[vertex_format]

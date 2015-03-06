@@ -43,7 +43,8 @@ use std::num::Float;
 use cgmath::FixedArray;
 use cgmath::{Matrix, Matrix4, Point3, Vector3, EuclideanVector};
 use cgmath::{Transform, AffineMatrix3};
-use gfx::{Device, DeviceExt, Plane, ToSlice, RawBufferHandle};
+use gfx::traits::*;
+use gfx::{Plane, RawBufferHandle};
 use glfw::Context;
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{SharedVertex, IndexedPolygon};
@@ -308,10 +309,9 @@ fn calculate_color(height: f32) -> [f32; 3] {
     }
 }
 
-type Texture<D: gfx::Device> = gfx::TextureHandle<D::Resources>;
-
-fn create_g_buffer<D: gfx::Device>(width: u16, height: u16, device: &mut D)
-                   -> (gfx::Frame<D::Resources>, Texture<D>, Texture<D>, Texture<D>, Texture<D>) {
+fn create_g_buffer<R: gfx::Resources, F: Factory<R>>(width: u16, height: u16, factory: &mut F)
+                   -> (gfx::Frame<R>, gfx::TextureHandle<R>, gfx::TextureHandle<R>,
+                   gfx::TextureHandle<R>, gfx::TextureHandle<R>) {
     let mut frame = gfx::Frame::new(width, height);
 
     let texture_info_float = gfx::tex::TextureInfo {
@@ -330,10 +330,10 @@ fn create_g_buffer<D: gfx::Device>(width: u16, height: u16, device: &mut D)
         kind: gfx::tex::TextureKind::Texture2D,
         format: gfx::tex::Format::DEPTH24STENCIL8,
     };
-    let texture_pos     = device.create_texture(texture_info_float).unwrap();
-    let texture_normal  = device.create_texture(texture_info_float).unwrap();
-    let texture_diffuse = device.create_texture(texture_info_float).unwrap();
-    let texture_depth   = device.create_texture(texture_info_depth).unwrap();
+    let texture_pos     = factory.create_texture(texture_info_float).unwrap();
+    let texture_normal  = factory.create_texture(texture_info_float).unwrap();
+    let texture_diffuse = factory.create_texture(texture_info_float).unwrap();
+    let texture_depth   = factory.create_texture(texture_info_depth).unwrap();
 
     frame.colors.push(Plane::Texture(texture_pos,     0, None));
     frame.colors.push(Plane::Texture(texture_normal,  0, None));
@@ -343,8 +343,9 @@ fn create_g_buffer<D: gfx::Device>(width: u16, height: u16, device: &mut D)
     (frame, texture_pos, texture_normal, texture_diffuse, texture_depth)
 }
 
-fn create_res_buffer<D: gfx::Device>(width: u16, height: u16, device: &mut D, texture_depth: Texture<D>)
-                     -> (gfx::Frame<D::Resources>, Texture<D>, Texture<D>) {
+fn create_res_buffer<R: gfx::Resources, F: Factory<R>>(width: u16, height: u16,
+                     factory: &mut F, texture_depth: gfx::TextureHandle<R>)
+                     -> (gfx::Frame<R>, gfx::TextureHandle<R>, gfx::TextureHandle<R>) {
     let mut frame = gfx::Frame::new(width, height);
 
     let texture_info_float = gfx::tex::TextureInfo {
@@ -356,7 +357,7 @@ fn create_res_buffer<D: gfx::Device>(width: u16, height: u16, device: &mut D, te
         format: gfx::tex::Format::Float(gfx::tex::Components::RGBA, gfx::attrib::FloatSize::F32),
     };
 
-    let texture_frame = device.create_texture(texture_info_float).unwrap();
+    let texture_frame = factory.create_texture(texture_info_float).unwrap();
 
     frame.colors.push(Plane::Texture(texture_frame, 0, None));
     frame.depth = Some(Plane::Texture(texture_depth, 0, None));

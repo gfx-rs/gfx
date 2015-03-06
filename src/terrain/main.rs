@@ -29,7 +29,7 @@ use rand::Rng;
 use cgmath::FixedArray;
 use cgmath::{Matrix4, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
-use gfx::{Device, DeviceExt, ToSlice};
+use gfx::traits::*;
 use glfw::Context;
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
@@ -163,7 +163,7 @@ fn main() {
     let program = device.link_program(VERTEX_SRC, FRAGMENT_SRC).unwrap();
     let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
-    let mut graphics = gfx::Graphics::new(device);
+    let mut graphics = device.into_graphics();
 
     let aspect = w as f32 / h as f32;
     let data = Params {
