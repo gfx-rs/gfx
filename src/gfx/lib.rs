@@ -24,13 +24,20 @@ extern crate log;
 extern crate libc;
 extern crate draw_state;
 
+/// public re-exported traits
+pub mod traits {
+    pub use device::{Device, Factory};
+    pub use render::device_ext::{DeviceExt, FactoryExt};
+    pub use render::mesh::ToSlice;
+}
+
 // draw state re-exports
 pub use draw_state::{DrawState, BlendPreset};
 
 // public re-exports
 pub use render::{Renderer, DrawError};
 pub use render::batch;
-pub use render::device_ext::{DeviceExt, ShaderSource, ProgramError};
+pub use render::device_ext::{Graphics, ShaderSource, ProgramError};
 pub use render::mesh::{Attribute, Mesh, VertexFormat};
 pub use render::mesh::Error as MeshError;
 pub use render::mesh::{Slice, ToSlice, SliceKind};
@@ -57,64 +64,3 @@ pub use device::handle::Sampler as SamplerHandle;
 
 #[path = "../render/lib.rs"] pub mod render;
 #[path = "../device/lib.rs"] pub mod device;
-
-/// A convenient wrapper suitable for single-threaded operation.
-pub struct Graphics<D: device::Device> {
-    /// Graphics device.
-    pub device: D,
-    /// Renderer front-end.
-    pub renderer: Renderer<D::Resources, D::CommandBuffer>,
-    /// Hidden batch context.
-    context: batch::Context<D::Resources>,
-}
-
-impl<D: device::Device> std::ops::Deref for Graphics<D> {
-    type Target = batch::Context<D::Resources>;
-
-    fn deref(&self) -> &batch::Context<D::Resources> {
-        &self.context
-    }
-}
-
-impl<D: device::Device> std::ops::DerefMut for Graphics<D> {
-    fn deref_mut(&mut self) -> &mut batch::Context<D::Resources> {
-        &mut self.context
-    }
-}
-
-impl<D: device::Device> Graphics<D> {
-    /// Create a new graphics wrapper.
-    pub fn new(mut device: D) -> Graphics<D> where D: DeviceExt<D> {
-        let rend = device.create_renderer();
-        Graphics {
-            device: device,
-            renderer: rend,
-            context: batch::Context::new(),
-        }
-    }
-    /// Clear the `Frame` as the `ClearData` specifies.
-    pub fn clear(&mut self, data: ClearData, mask: Mask, frame: &Frame<D::Resources>) {
-        self.renderer.clear(data, mask, frame)
-    }
-
-    /// Draw a `RefBatch` batch.
-    pub fn draw<'a, T: shade::ShaderParam<Resources = D::Resources>>(&'a mut self,
-                batch: &'a batch::RefBatch<T>, frame: &Frame<D::Resources>)
-                -> Result<(), DrawError<batch::OutOfBounds>> {
-        self.renderer.draw(&(batch, &self.context), frame)
-    }
-
-    /// Draw a `CoreBatch` batch.
-    pub fn draw_core<'a, T: shade::ShaderParam<Resources = D::Resources>>(&'a mut self,
-                     core: &'a batch::CoreBatch<T>, slice: &'a Slice<D::Resources>,
-                     params: &'a T, frame: &Frame<D::Resources>)
-                     -> Result<(), DrawError<batch::OutOfBounds>> {
-        self.renderer.draw(&self.context.bind(core, slice, params), frame)
-    }
-
-    /// Submit the internal command buffer and reset for the next frame.
-    pub fn end_frame(&mut self) {
-        self.device.submit(self.renderer.as_buffer());
-        self.renderer.reset();
-    }
-}

@@ -1,4 +1,7 @@
+use std::ops;
 use device;
+use render::{batch, Renderer};
+use render::shade::ShaderParam;
 use device::shade::{Stage, CreateShaderError, ShaderModel};
 use super::mesh::{Mesh, VertexFormat};
 
@@ -56,25 +59,76 @@ impl<'a> ShaderSource<'a> {
 }
 
 
-/// Backend extension trait for convenience methods
-pub trait DeviceExt<D: device::Device>: device::Factory<D::Resources> {
-    /// Create a new renderer
-    fn create_renderer(&mut self) -> ::Renderer<D::Resources, D::CommandBuffer>;
-    /// Create a new mesh from the given vertex data.
-    /// Convenience function around `create_buffer` and `Mesh::from_format`.
-    fn create_mesh<T: VertexFormat + Copy>(&mut self, data: &[T]) -> Mesh<D::Resources>;
-    /// Create a simple program given a vertex shader with a fragment one.
-    fn link_program(&mut self, vs_code: &[u8], fs_code: &[u8])
-                    -> Result<device::handle::Program<D::Resources>, ProgramError>;
-    /// Create a simple program given `ShaderSource` versions of vertex and
-    /// fragment shaders, chooss the matching versions for the device.
-    fn link_program_source(&mut self, vs_src: ShaderSource, fs_src: ShaderSource,
-                           caps: &device::Capabilities)
-                           -> Result<device::handle::Program<D::Resources>, ProgramError>;
+/// A convenient wrapper suitable for single-threaded operation.
+pub struct Graphics<D: device::Device> {
+    /// Graphics device.
+    pub device: D,
+    /// Renderer front-end.
+    pub renderer: Renderer<D::Resources, D::CommandBuffer>,
+    /// Hidden batch context.
+    context: batch::Context<D::Resources>,
 }
 
-impl<D: device::Device, F: device::Factory<D::Resources>> DeviceExt<D> for F {
-    fn create_renderer(&mut self) -> ::Renderer<D::Resources, D::CommandBuffer> {
+impl<D: device::Device> ops::Deref for Graphics<D> {
+    type Target = batch::Context<D::Resources>;
+
+    fn deref(&self) -> &batch::Context<D::Resources> {
+        &self.context
+    }
+}
+
+impl<D: device::Device> ops::DerefMut for Graphics<D> {
+    fn deref_mut(&mut self) -> &mut batch::Context<D::Resources> {
+        &mut self.context
+    }
+}
+
+
+impl<D: device::Device> Graphics<D> {
+    /// Clear the `Frame` as the `ClearData` specifies.
+    pub fn clear(&mut self, data: ::ClearData, mask: ::Mask, frame: &::Frame<D::Resources>) {
+        self.renderer.clear(data, mask, frame)
+    }
+
+    /// Draw a `RefBatch` batch.
+    pub fn draw<'a, T: ShaderParam<Resources = D::Resources>>(&'a mut self,
+                batch: &'a batch::RefBatch<T>, frame: &::Frame<D::Resources>)
+                -> Result<(), ::DrawError<batch::OutOfBounds>> {
+        self.renderer.draw(&(batch, &self.context), frame)
+    }
+
+    /// Draw a `CoreBatch` batch.
+    pub fn draw_core<'a, T: ShaderParam<Resources = D::Resources>>(&'a mut self,
+                     core: &'a batch::CoreBatch<T>, slice: &'a ::Slice<D::Resources>,
+                     params: &'a T, frame: &::Frame<D::Resources>)
+                     -> Result<(), ::DrawError<batch::OutOfBounds>> {
+        self.renderer.draw(&self.context.bind(core, slice, params), frame)
+    }
+
+    /// Submit the internal command buffer and reset for the next frame.
+    pub fn end_frame(&mut self) {
+        self.device.submit(self.renderer.as_buffer());
+        self.renderer.reset();
+    }
+}
+
+
+/// Backend extension trait for convenience methods
+pub trait DeviceExt<R: device::Resources, C: device::draw::CommandBuffer<R>>:
+    device::Factory<R> + device::Device<Resources = R, CommandBuffer = C>
+{
+    /// Create a new renderer
+    fn create_renderer(&mut self) -> ::Renderer<R, C>;
+    /// Convert to single-threaded wrapper
+    fn into_graphics(mut self) -> Graphics<Self>;
+}
+
+impl<
+    R: device::Resources,
+    C: device::draw::CommandBuffer<R>,
+    D: device::Factory<R> + device::Device<Resources = R, CommandBuffer = C>,
+> DeviceExt<R, C> for D {
+    fn create_renderer(&mut self) -> ::Renderer<R, C> {
         ::Renderer {
             command_buffer: device::draw::CommandBuffer::new(),
             data_buffer: device::draw::DataBuffer::new(),
@@ -87,7 +141,33 @@ impl<D: device::Device, F: device::Factory<D::Resources>> DeviceExt<D> for F {
         }
     }
 
-    fn create_mesh<T: VertexFormat + Copy>(&mut self, data: &[T]) -> Mesh<D::Resources> {
+    fn into_graphics(mut self) -> Graphics<D> {
+        let rend = self.create_renderer();
+        Graphics {
+            device: self,
+            renderer: rend,
+            context: batch::Context::new(),
+        }
+    }
+}
+
+/// Factory extension trait
+pub trait FactoryExt<R: device::Resources> {
+    /// Create a new mesh from the given vertex data.
+    /// Convenience function around `create_buffer` and `Mesh::from_format`.
+    fn create_mesh<T: VertexFormat + Copy>(&mut self, data: &[T]) -> Mesh<R>;
+    /// Create a simple program given a vertex shader with a fragment one.
+    fn link_program(&mut self, vs_code: &[u8], fs_code: &[u8])
+                    -> Result<device::handle::Program<R>, ProgramError>;
+    /// Create a simple program given `ShaderSource` versions of vertex and
+    /// fragment shaders, chooss the matching versions for the device.
+    fn link_program_source(&mut self, vs_src: ShaderSource, fs_src: ShaderSource,
+                           caps: &device::Capabilities)
+                           -> Result<device::handle::Program<R>, ProgramError>;
+}
+
+impl<R: device::Resources, F: device::Factory<R>> FactoryExt<R> for F {
+    fn create_mesh<T: VertexFormat + Copy>(&mut self, data: &[T]) -> Mesh<R> {
         let nv = data.len();
         debug_assert!(nv < {
             use std::num::Int;
@@ -99,7 +179,7 @@ impl<D: device::Device, F: device::Factory<D::Resources>> DeviceExt<D> for F {
     }
 
     fn link_program(&mut self, vs_code: &[u8], fs_code: &[u8])
-                    -> Result<device::handle::Program<D::Resources>, ProgramError> {
+                    -> Result<device::handle::Program<R>, ProgramError> {
         let vs = match self.create_shader(Stage::Vertex, vs_code) {
             Ok(s) => s,
             Err(e) => return Err(ProgramError::Vertex(e)),
@@ -115,7 +195,7 @@ impl<D: device::Device, F: device::Factory<D::Resources>> DeviceExt<D> for F {
 
     fn link_program_source(&mut self, vs_src: ShaderSource, fs_src: ShaderSource,
                            caps: &device::Capabilities)
-                           -> Result<device::handle::Program<D::Resources>, ProgramError> {
+                           -> Result<device::handle::Program<R>, ProgramError> {
         let model = caps.shader_model;
         let err_model = CreateShaderError::ModelNotSupported;
 
