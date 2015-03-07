@@ -112,9 +112,9 @@ impl<R: Resources, C: CommandBuffer<R>> CommandBufferExt<R> for C {
         match plane {
             None => self.unbind_target(access, to),
             Some(&target::Plane::Surface(ref suf)) =>
-                self.bind_target_surface(access, to, handler.ref_surface(&suf)),
+                self.bind_target_surface(access, to, handler.ref_surface(suf)),
             Some(&target::Plane::Texture(ref tex, level, layer)) =>
-                self.bind_target_texture(access, to, tex.get_name(), level, layer),
+                self.bind_target_texture(access, to, handler.ref_texture(tex), level, layer),
         }
     }
 }
@@ -248,7 +248,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     }
 
     /// Update a buffer with data from a vector.
-    pub fn update_buffer_vec<T: Copy>(&mut self, buf: handle::Buffer<R, T>,
+    pub fn update_buffer_vec<T: Copy>(&mut self, buf: &handle::Buffer<R, T>,
                              data: &[T], offset_elements: usize) {
         let esize = mem::size_of::<T>();
         let offset_bytes = esize * offset_elements;
@@ -260,7 +260,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
 
     /// Update a buffer with data from a single type.
     pub fn update_buffer_struct<U, T: Copy>(&mut self,
-                                buf: handle::Buffer<R, U>, data: &T) {
+                                buf: &handle::Buffer<R, U>, data: &T) {
         debug_assert!(mem::size_of::<T>() <= buf.get_info().size);
         let pointer = self.data_buffer.add_struct(data);
         self.command_buffer.update_buffer(
@@ -268,11 +268,11 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     }
 
     /// Update the contents of a texture.
-    pub fn update_texture<T: Copy>(&mut self, tex: handle::Texture<R>,
+    pub fn update_texture<T: Copy>(&mut self, tex: &handle::Texture<R>,
                           img: device::tex::ImageInfo, data: &[T]) {
         debug_assert!(tex.get_info().contains(&img));
         let pointer = self.data_buffer.add_vec(data);
-        self.command_buffer.update_texture(tex.get_info().kind, tex.get_name(), img, pointer);
+        self.command_buffer.update_texture(tex.get_info().kind, self.handler.ref_texture(tex), img, pointer);
     }
 
     fn bind_frame(&mut self, frame: &target::Frame<R>) {
@@ -417,21 +417,21 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         for (i, (_, buf)) in info.blocks.iter()
             .zip(self.parameters.blocks.iter()).enumerate() {
             self.command_buffer.bind_uniform_block(
-                self.handler.ref_program(&program),
+                self.handler.ref_program(program),
                 i as device::UniformBufferSlot,
                 i as device::UniformBlockIndex,
                 self.handler.ref_buffer(&buf)
             );
         }
         // bind textures and samplers
-        for (i, (var, &(tex, sampler))) in info.textures.iter()
+        for (i, (var, &(ref tex, ref sampler))) in info.textures.iter()
             .zip(self.parameters.textures.iter()).enumerate() {
             if sampler.is_some() && tex.get_info().kind.get_aa_mode().is_some() {
                 error!("A sampler provided for an AA texture: {}", var.name.clone());
             }
             self.command_buffer.bind_uniform(var.location, UniformValue::I32(i as i32));
             self.command_buffer.bind_texture(i as device::TextureSlot,
-                tex.get_info().kind, tex.get_name(), sampler);
+                tex.get_info().kind, self.handler.ref_texture(tex), *sampler);
         }
     }
 
@@ -466,7 +466,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         }
     }
 
-    fn bind_index<T>(&mut self, buf: handle::Buffer<R, T>) {
+    fn bind_index<T>(&mut self, buf: &handle::Buffer<R, T>) {
         if self.render_state.index.as_ref() != Some(buf.raw()) {
             self.render_state.index = Some(buf.raw().clone());
             self.command_buffer.bind_index(self.handler.ref_buffer(buf.raw()));
@@ -474,22 +474,25 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     }
 
     fn draw_slice(&mut self, slice: &mesh::Slice<R>, instances: InstanceOption) {
-        let mesh::Slice { start, end, prim_type, kind } = slice.clone();
-        match kind {
+        let &mesh::Slice { start, end, prim_type, ref kind } = slice;
+        match *kind {
             SliceKind::Vertex => {
                 self.command_buffer.call_draw(prim_type, start, end - start, instances);
             },
-            SliceKind::Index8(buf, base) => {
+            SliceKind::Index8(ref buf, base) => {
                 self.bind_index(buf);
-                self.command_buffer.call_draw_indexed(prim_type, IntSize::U8, start, end - start, base, instances);
+                self.command_buffer.call_draw_indexed(prim_type, IntSize::U8,
+                    start, end - start, base, instances);
             },
-            SliceKind::Index16(buf, base) => {
+            SliceKind::Index16(ref buf, base) => {
                 self.bind_index(buf);
-                self.command_buffer.call_draw_indexed(prim_type, IntSize::U16, start, end - start, base, instances);
+                self.command_buffer.call_draw_indexed(prim_type, IntSize::U16,
+                    start, end - start, base, instances);
             },
-            SliceKind::Index32(buf, base) => {
+            SliceKind::Index32(ref buf, base) => {
                 self.bind_index(buf);
-                self.command_buffer.call_draw_indexed(prim_type, IntSize::U32, start, end - start, base, instances);
+                self.command_buffer.call_draw_indexed(prim_type, IntSize::U32,
+                    start, end - start, base, instances);
             },
         }
     }

@@ -107,28 +107,10 @@ impl<R: Resources> Surface<R> {
 }
 
 /// Texture Handle
-#[derive(PartialEq, Debug)]
-pub struct Texture<R: Resources>(
-    R::Texture,
-    tex::TextureInfo,
-);
-
-impl<R: Resources> Copy for Texture<R> {}
-
-impl<R: Resources> Clone for Texture<R> {
-    fn clone(&self) -> Texture<R> {
-        Texture(self.0, self.1.clone())
-    }
-}
+#[derive(Clone, PartialEq, Debug)]
+pub struct Texture<R: Resources>(Arc<R::Texture>, tex::TextureInfo);
 
 impl<R: Resources> Texture<R> {
-    /// Creates a new texture (used by device)
-    pub unsafe fn new(name: R::Texture, info: tex::TextureInfo)
-        -> Texture<R> {
-        Texture(name, info)
-    }
-    /// Get texture name
-    pub fn get_name(&self) -> R::Texture { self.0 }
     /// Get texture info
     pub fn get_info(&self) -> &tex::TextureInfo { &self.1 }
 }
@@ -173,6 +155,7 @@ pub struct Manager<R: Resources> {
     programs:      Vec<Arc<R::Program>>,
     frame_buffers: Vec<Arc<R::FrameBuffer>>,
     surfaces:      Vec<Arc<R::Surface>>,
+    textures:      Vec<Arc<R::Texture>>,
     //TODO
 }
 
@@ -185,6 +168,7 @@ pub trait Producer<R: Resources> {
     fn make_program(&mut self, R::Program, shade::ProgramInfo) -> Program<R>;
     fn make_frame_buffer(&mut self, R::FrameBuffer) -> FrameBuffer<R>;
     fn make_surface(&mut self, R::Surface, tex::SurfaceInfo) -> Surface<R>;
+    fn make_texture(&mut self, R::Texture, tex::TextureInfo) -> Texture<R>;
 }
 
 impl<R: Resources> Producer<R> for Manager<R> {
@@ -223,6 +207,12 @@ impl<R: Resources> Producer<R> for Manager<R> {
         self.surfaces.push(r.clone());
         Surface(r, info)
     }
+
+    fn make_texture(&mut self, name: R::Texture, info: tex::TextureInfo) -> Texture<R> {
+        let r = Arc::new(name);
+        self.textures.push(r.clone());
+        Texture(r, info)
+    }
 }
 
 impl<R: Resources> Manager<R> {
@@ -235,6 +225,7 @@ impl<R: Resources> Manager<R> {
             programs: Vec::new(),
             frame_buffers: Vec::new(),
             surfaces: Vec::new(),
+            textures: Vec::new(),
         }
     }
     /// Clear all references
@@ -273,6 +264,11 @@ impl<R: Resources> Manager<R> {
     /// Reference a surface
     pub fn ref_surface(&mut self, handle: &Surface<R>) -> R::Surface {
         self.surfaces.push(handle.0.clone());
+        *handle.0.deref()
+    }
+    /// Reference a texture
+    pub fn ref_texture(&mut self, handle: &Texture<R>) -> R::Texture {
+        self.textures.push(handle.0.clone());
         *handle.0.deref()
     }
 }
