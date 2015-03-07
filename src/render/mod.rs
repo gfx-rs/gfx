@@ -426,12 +426,18 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         // bind textures and samplers
         for (i, (var, &(ref tex, ref sampler))) in info.textures.iter()
             .zip(self.parameters.textures.iter()).enumerate() {
-            if sampler.is_some() && tex.get_info().kind.get_aa_mode().is_some() {
-                error!("A sampler provided for an AA texture: {}", var.name.clone());
-            }
+            let sam = match *sampler {
+                Some(ref s) => {
+                    if tex.get_info().kind.get_aa_mode().is_some() {
+                        error!("A sampler provided for an AA texture: {}", var.name.clone());
+                    }
+                    Some((self.handler.ref_sampler(s), *s.get_info()))
+                },
+                None => None,
+            };
             self.command_buffer.bind_uniform(var.location, UniformValue::I32(i as i32));
-            self.command_buffer.bind_texture(i as device::TextureSlot,
-                tex.get_info().kind, self.handler.ref_texture(tex), *sampler);
+            self.command_buffer.bind_texture(i as device::TextureSlot, tex.get_info().kind,
+                self.handler.ref_texture(tex), sam);
         }
     }
 

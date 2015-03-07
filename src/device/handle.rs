@@ -116,28 +116,10 @@ impl<R: Resources> Texture<R> {
 }
 
 /// Sampler Handle
-#[derive(PartialEq, Debug)]
-pub struct Sampler<R: Resources>(
-    R::Sampler,
-    tex::SamplerInfo,
-);
-
-impl<R: Resources> Copy for Sampler<R> {}
-
-impl<R: Resources> Clone for Sampler<R> {
-    fn clone(&self) -> Sampler<R> {
-        Sampler(self.0, self.1.clone())
-    }
-}
+#[derive(Clone, PartialEq, Debug)]
+pub struct Sampler<R: Resources>(Arc<R::Sampler>, tex::SamplerInfo);
 
 impl<R: Resources> Sampler<R> {
-    /// Creates a new sampler (used by device)
-    pub unsafe fn new(name: R::Sampler, info: tex::SamplerInfo)
-        -> Sampler<R> {
-        Sampler(name, info)
-    }
-    /// Get sampler name
-    pub fn get_name(&self) -> R::Sampler { self.0 }
     /// Get sampler info
     pub fn get_info(&self) -> &tex::SamplerInfo { &self.1 }
 }
@@ -156,7 +138,7 @@ pub struct Manager<R: Resources> {
     frame_buffers: Vec<Arc<R::FrameBuffer>>,
     surfaces:      Vec<Arc<R::Surface>>,
     textures:      Vec<Arc<R::Texture>>,
-    //TODO
+    samplers:      Vec<Arc<R::Sampler>>,
 }
 
 /// A service trait to be used by the device implementation
@@ -169,6 +151,7 @@ pub trait Producer<R: Resources> {
     fn make_frame_buffer(&mut self, R::FrameBuffer) -> FrameBuffer<R>;
     fn make_surface(&mut self, R::Surface, tex::SurfaceInfo) -> Surface<R>;
     fn make_texture(&mut self, R::Texture, tex::TextureInfo) -> Texture<R>;
+    fn make_sampler(&mut self, R::Sampler, tex::SamplerInfo) -> Sampler<R>;
 }
 
 impl<R: Resources> Producer<R> for Manager<R> {
@@ -213,6 +196,12 @@ impl<R: Resources> Producer<R> for Manager<R> {
         self.textures.push(r.clone());
         Texture(r, info)
     }
+
+    fn make_sampler(&mut self, name: R::Sampler, info: tex::SamplerInfo) -> Sampler<R> {
+        let r = Arc::new(name);
+        self.samplers.push(r.clone());
+        Sampler(r, info)
+    }
 }
 
 impl<R: Resources> Manager<R> {
@@ -226,6 +215,7 @@ impl<R: Resources> Manager<R> {
             frame_buffers: Vec::new(),
             surfaces: Vec::new(),
             textures: Vec::new(),
+            samplers: Vec::new(),
         }
     }
     /// Clear all references
@@ -271,6 +261,11 @@ impl<R: Resources> Manager<R> {
         self.textures.push(handle.0.clone());
         *handle.0.deref()
     }
+    /// Reference a sampler
+    pub fn ref_sampler(&mut self, handle: &Sampler<R>) -> R::Sampler {
+        self.samplers.push(handle.0.clone());
+        *handle.0.deref()
+    }
 }
 
 
@@ -294,14 +289,13 @@ mod test {
     }
 
     fn mock_buffer<T>(len: usize) -> super::Buffer<TestResources, T> {
+        use super::Producer;
+        let mut handler = super::Manager::new();
         super::Buffer {
-            raw: unsafe { super::RawBuffer::new(
-                (),
-                BufferInfo {
+            raw: handler.make_buffer((), BufferInfo {
                     usage: BufferUsage::Static,
                     size: mem::size_of::<T>() * len,
-                },
-            ) },
+            }),
             phantom_t: PhantomData,
         }
     }

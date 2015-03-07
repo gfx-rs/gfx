@@ -198,6 +198,7 @@ pub trait Factory<R: Resources> {
     }
     fn generate_mipmap(&mut self, tex: &handle::Texture<R>);
 
+    /// Clean up all unreferenced resources
     fn cleanup(&mut self);
 }
 
