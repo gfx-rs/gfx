@@ -72,10 +72,13 @@ impl<R: Resources> RenderState<R> {
 }
 
 /// Temporary parameter storage, used for shader activation.
-struct ParamStorage<R: Resources> {
-    uniforms: Vec<UniformValue>,
-    blocks  : Vec<handle::RawBuffer<R>>,
-    textures: Vec<shade::TextureParam<R>>,
+pub struct ParamStorage<R: Resources> {
+    /// uniform values to be provided
+    pub uniforms: Vec<UniformValue>,
+    /// uniform buffers to be provided
+    pub blocks  : Vec<handle::RawBuffer<R>>,
+    /// textures to be provided
+    pub textures: Vec<shade::TextureParam<R>>,
 }
 
 impl<R: Resources> ParamStorage<R> {
@@ -88,15 +91,11 @@ impl<R: Resources> ParamStorage<R> {
         }
     }
 
-    fn get_mut(&mut self) -> shade::ParamValues<R> {
-        self.uniforms.truncate(0);
-        self.blocks.truncate(0);
-        self.textures.truncate(0);
-        shade::ParamValues {
-            uniforms: &mut self.uniforms,
-            blocks: &mut self.blocks,
-            textures: &mut self.textures,
-        }
+    fn get_mut(&mut self) -> &mut ParamStorage<R> {
+        self.uniforms.clear();
+        self.blocks.clear();
+        self.textures.clear();
+        self
     }
 }
 

@@ -28,6 +28,7 @@ use device::handle::Program as ProgramHandle;
 use render::mesh;
 use render::mesh::ToSlice;
 use shade::{ParameterError, ShaderParam};
+use super::ParamStorage;
 
 /// An error occurring at batch creation
 #[derive(Clone, Debug, PartialEq)]
@@ -53,7 +54,7 @@ pub trait Batch {
     /// Obtain information about the mesh, program, and state
     fn get_data(&self) -> Result<BatchData<Self::Resources>, Self::Error>;
     /// Fill shader parameter values
-    fn fill_params(&self, ::shade::ParamValues<Self::Resources>)
+    fn fill_params(&self, &mut ParamStorage<Self::Resources>)
                    -> Result<&ProgramHandle<Self::Resources>, Self::Error>;
 }
 
@@ -88,7 +89,7 @@ impl<'a, T: ShaderParam> Batch for ImplicitBatch<'a, T> {
         }
     }
 
-    fn fill_params(&self, values: ::shade::ParamValues<T::Resources>)
+    fn fill_params(&self, values: &mut ParamStorage<T::Resources>)
                    -> Result<&ProgramHandle<T::Resources>, Error> {
         let (_, _, program, params, _) = *self;
         match ShaderParam::create_link(None::<&T>, program.get_info()) {
@@ -148,7 +149,7 @@ impl<T: ShaderParam> Batch for OwnedBatch<T> {
         Ok((&self.mesh, self.mesh_link.to_iter(), &self.slice, &self.state))
     }
 
-    fn fill_params(&self, values: ::shade::ParamValues<T::Resources>)
+    fn fill_params(&self, values: &mut ParamStorage<T::Resources>)
                    -> Result<&ProgramHandle<T::Resources>, ()> {
         self.param.fill_params(&self.param_link, values);
         Ok(&self.program)
@@ -462,7 +463,7 @@ impl<'a, T: ShaderParam + 'a> Batch for CoreBatchFull<'a, T> {
         ctx.get_data(b, slice)
     }
 
-    fn fill_params(&self, values: ::shade::ParamValues<T::Resources>)
+    fn fill_params(&self, values: &mut ParamStorage<T::Resources>)
                    -> Result<&ProgramHandle<T::Resources>, OutOfBounds> {
         let (b, _, data, ctx) = *self;
         data.fill_params(&b.param_link, values);
@@ -479,7 +480,7 @@ impl<'a, T: ShaderParam + 'a> Batch for RefBatchFull<'a, T> {
         ctx.get_data(&b.core, &b.slice)
     }
 
-    fn fill_params(&self, values: ::shade::ParamValues<T::Resources>)
+    fn fill_params(&self, values: &mut ParamStorage<T::Resources>)
                    -> Result<&ProgramHandle<T::Resources>, OutOfBounds> {
         let (b, ctx) = *self;
         b.params.fill_params(&b.core.param_link, values);

@@ -18,6 +18,7 @@ use std::cell::Cell;
 use device::shade;
 use device::shade::UniformValue;
 use device::{handle, Resources};
+use super::ParamStorage;
 
 pub use device::shade::{Stage, CreateShaderError};
 
@@ -64,27 +65,6 @@ pub type VarTexture = u8;
 /// A texture parameter: consists of a texture handle with an optional sampler.
 pub type TextureParam<R: Resources> = (handle::Texture<R>, Option<handle::Sampler<R>>);
 
-/// A borrowed mutable storage for shader parameter values.
-// Not sure if it's the best data structure to represent it.
-pub struct ParamValues<'a, R> where
-    R: 'a + Resources,
-    <R as Resources>::Buffer: 'a,
-    <R as Resources>::Sampler: 'a,
-    <R as Resources>::Texture: 'a,
-    <R as Resources>::Surface: 'a,
-    <R as Resources>::FrameBuffer: 'a,
-    <R as Resources>::Program: 'a,
-    <R as Resources>::ArrayBuffer: 'a,
-    <R as Resources>::Shader: 'a,
-{
-    /// uniform values to be provided
-    pub uniforms: &'a mut Vec<UniformValue>,
-    /// uniform buffers to be provided
-    pub blocks  : &'a mut Vec<handle::RawBuffer<R>>,
-    /// textures to be provided
-    pub textures: &'a mut Vec<TextureParam<R>>,
-}
-
 /// An error type on either the parameter storage or the program side
 #[derive(Clone, PartialEq, Debug)]
 pub enum ParameterError {
@@ -107,7 +87,7 @@ pub trait ShaderParam {
     /// Create a new link to be used with a given program
     fn create_link(Option<&Self>, &shade::ProgramInfo) -> Result<Self::Link, ParameterError>;
     /// Get all the contained parameter values, using a given link
-    fn fill_params(&self, &Self::Link, ParamValues<Self::Resources>);
+    fn fill_params(&self, &Self::Link, &mut ParamStorage<Self::Resources>);
 }
 
 impl<R: Resources> ShaderParam for Option<R> {
@@ -130,7 +110,7 @@ impl<R: Resources> ShaderParam for Option<R> {
         Ok(())
     }
 
-    fn fill_params(&self, _: &(), _: ParamValues<R>) {
+    fn fill_params(&self, _: &(), _: &mut ParamStorage<R>) {
         //empty
     }
 }
@@ -184,7 +164,7 @@ impl<R: Resources> ShaderParam for ParamDictionary<R> {
         })
     }
 
-    fn fill_params(&self, link: &ParamDictionaryLink, params: ParamValues<R>) {
+    fn fill_params(&self, link: &ParamDictionaryLink, params: &mut ParamStorage<R>) {
         for &id in link.uniforms.iter() {
             params.uniforms.push(self.uniforms[id].value.get());
         }
