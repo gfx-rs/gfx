@@ -31,6 +31,7 @@ pub struct RefStorage<R: Resources> {
     buffers: Vec<Arc<R::Buffer>>,
     array_buffers: Vec<Arc<R::ArrayBuffer>>,
     shaders: Vec<Arc<R::Shader>>,
+    programs: Vec<Arc<R::Program>>,
     //TODO
 }
 
@@ -42,6 +43,8 @@ pub trait HandleFactory<R: Resources> {
     fn new_array_buffer(&mut self, R::ArrayBuffer) -> ArrayBuffer<R>;
     /// Create a new shader
     fn new_shader(&mut self, R::Shader, shade::Stage) -> Shader<R>;
+    /// Creates a new program (used by device)
+    fn new_program(&mut self, R::Program, shade::ProgramInfo) -> Program<R>;
 }
 
 impl<R: Resources> HandleFactory<R> for RefStorage<R> {
@@ -62,6 +65,12 @@ impl<R: Resources> HandleFactory<R> for RefStorage<R> {
         self.shaders.push(r.clone());
         Shader(r, info)
     }
+
+    fn new_program(&mut self, name: R::Program, info: shade::ProgramInfo) -> Program<R> {
+        let r = Arc::new(name);
+        self.programs.push(r.clone());
+        Program(r, info)
+    }
 }
 
 impl<R: Resources> RefStorage<R> {
@@ -71,6 +80,7 @@ impl<R: Resources> RefStorage<R> {
             buffers: Vec::new(),
             array_buffers: Vec::new(),
             shaders: Vec::new(),
+            programs: Vec::new(),
         }
     }
     /// Remove all references
@@ -94,6 +104,11 @@ impl<R: Resources> RefStorage<R> {
     /// Reference a shader
     pub fn ref_shader(&mut self, handle: &Shader<R>) -> R::Shader {
         self.shaders.push(handle.0.clone());
+        *handle.0.deref()
+    }
+    /// Reference a program
+    pub fn ref_program(&mut self, handle: &Program<R>) -> R::Program {
+        self.programs.push(handle.0.clone());
         *handle.0.deref()
     }
 }
@@ -162,19 +177,9 @@ impl<R: Resources> Shader<R> {
 
 /// Program Handle
 #[derive(Clone, PartialEq, Debug)]
-pub struct Program<R: Resources>(
-    R::Program,
-    shade::ProgramInfo,
-);
+pub struct Program<R: Resources>(Arc<R::Program>, shade::ProgramInfo);
 
 impl<R: Resources> Program<R> {
-    /// Creates a new program (used by device)
-    pub unsafe fn new(name: <R as Resources>::Program, info: shade::ProgramInfo)
-        -> Program<R> {
-        Program(name, info)
-    }
-    /// Get program name
-    pub fn get_name(&self) -> R::Program { self.0 }
     /// Get program info
     pub fn get_info(&self) -> &shade::ProgramInfo { &self.1 }
 }

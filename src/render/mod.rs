@@ -49,7 +49,7 @@ struct RenderState<R: Resources> {
     is_frame_buffer_set: bool,
     frame: target::Frame<R>,
     is_array_buffer_set: bool,
-    program_name: Option<R::Program>,
+    program: Option<handle::Program<R>>,
     index: Option<handle::RawBuffer<R>>,
     attributes: Vec<Option<CachedAttribute<R>>>,
     draw: DrawState,
@@ -62,7 +62,7 @@ impl<R: Resources> RenderState<R> {
             is_frame_buffer_set: false,
             frame: target::Frame::new(0,0),
             is_array_buffer_set: false,
-            program_name: None,
+            program: None,
             index: None,
             attributes: Vec::new(),
             draw: DrawState::new(),
@@ -375,9 +375,10 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
             Err(e) => return Err(e),
         };
         //Warning: this is not protected against deleted resources in single-threaded mode
-        if self.render_state.program_name != Some(program.get_name()) {
-            self.command_buffer.bind_program(program.get_name());
-            self.render_state.program_name = Some(program.get_name());
+        if self.render_state.program.as_ref() != Some(&program) {
+            self.render_state.program = Some(program.clone());
+            self.command_buffer.bind_program(
+                self.ref_storage.ref_program(&program));
         }
         self.upload_parameters(program);
         Ok(program)
@@ -404,7 +405,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         for (i, (_, buf)) in info.blocks.iter()
             .zip(self.parameters.blocks.iter()).enumerate() {
             self.command_buffer.bind_uniform_block(
-                program.get_name(),
+                self.ref_storage.ref_program(&program),
                 i as device::UniformBufferSlot,
                 i as device::UniformBlockIndex,
                 self.ref_storage.ref_buffer(&buf)
