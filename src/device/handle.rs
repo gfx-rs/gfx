@@ -30,6 +30,7 @@ use super::{shade, tex, Resources, BufferInfo};
 pub struct RefStorage<R: Resources> {
     buffers: Vec<Arc<R::Buffer>>,
     array_buffers: Vec<Arc<R::ArrayBuffer>>,
+    shaders: Vec<Arc<R::Shader>>,
     //TODO
 }
 
@@ -39,6 +40,8 @@ pub trait HandleFactory<R: Resources> {
     fn new_buffer(&mut self, R::Buffer, BufferInfo) -> RawBuffer<R>;
     /// Create a new array buffer
     fn new_array_buffer(&mut self, R::ArrayBuffer) -> ArrayBuffer<R>;
+    /// Create a new shader
+    fn new_shader(&mut self, R::Shader, shade::Stage) -> Shader<R>;
 }
 
 impl<R: Resources> HandleFactory<R> for RefStorage<R> {
@@ -53,6 +56,12 @@ impl<R: Resources> HandleFactory<R> for RefStorage<R> {
         self.array_buffers.push(r.clone());
         ArrayBuffer(r)
     }
+
+    fn new_shader(&mut self, name: R::Shader, info: shade::Stage) -> Shader<R> {
+        let r = Arc::new(name);
+        self.shaders.push(r.clone());
+        Shader(r, info)
+    }
 }
 
 impl<R: Resources> RefStorage<R> {
@@ -61,6 +70,7 @@ impl<R: Resources> RefStorage<R> {
         RefStorage {
             buffers: Vec::new(),
             array_buffers: Vec::new(),
+            shaders: Vec::new(),
         }
     }
     /// Remove all references
@@ -71,14 +81,19 @@ impl<R: Resources> RefStorage<R> {
     pub fn extend(&mut self, other: &RefStorage<R>) {
         self.buffers.extend(other.buffers.iter().map(|b| b.clone()));
     }
-    /// Reference a buffer inside the storage
+    /// Reference a buffer
     pub fn ref_buffer(&mut self, handle: &RawBuffer<R>) -> R::Buffer {
         self.buffers.push(handle.0.clone());
         *handle.0.deref()
     }
-    /// Reference am array buffer inside the storage
+    /// Reference am array buffer
     pub fn ref_array_buffer(&mut self, handle: &ArrayBuffer<R>) -> R::ArrayBuffer {
         self.array_buffers.push(handle.0.clone());
+        *handle.0.deref()
+    }
+    /// Reference a shader
+    pub fn ref_shader(&mut self, handle: &Shader<R>) -> R::Shader {
+        self.shaders.push(handle.0.clone());
         *handle.0.deref()
     }
 }
@@ -137,17 +152,10 @@ impl<R: Resources> RawBuffer<R> {
 pub struct ArrayBuffer<R: Resources>(Arc<R::ArrayBuffer>);
 
 /// Shader Handle
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub struct Shader<R: Resources>(R::Shader, shade::Stage);
+#[derive(Clone, PartialEq, Debug)]
+pub struct Shader<R: Resources>(Arc<R::Shader>, shade::Stage);
 
 impl<R: Resources> Shader<R> {
-    /// Creates a new shader (used by device)
-    pub unsafe fn new(name: R::Shader, info: shade::Stage)
-        -> Shader<R> {
-        Shader(name, info)
-    }
-    /// Get shader name
-    pub fn get_name(&self) -> R::Shader { self.0 }
     /// Get shader info
     pub fn get_info(&self) -> &shade::Stage { &self.1 }
 }
