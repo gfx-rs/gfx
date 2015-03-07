@@ -18,10 +18,58 @@
 
 use std::mem;
 use std::marker::PhantomData;
+use std::ops::Deref;
+use std::sync::Arc;
 use super::{shade, tex, Resources, BufferInfo};
 
+/// Stores reference-counted resources used in a command buffer.
+/// Seals actual resource names behind the interface, automatically
+/// referencing them both by the Factory on resource creation
+/// and the Renderer during CommandBuffer population.
+#[allow(missing_docs)]
+pub struct RefStorage<R: Resources> {
+    buffers: Vec<Arc<R::Buffer>>,
+    //TODO
+}
+
+/// A service trait to be used by the device implementation
+pub trait HandleFactory<R: Resources> {
+    /// Create a new raw buffer handle (used by device)
+    fn new_buffer(&mut self, R::Buffer, BufferInfo) -> RawBuffer<R>;
+}
+
+impl<R: Resources> HandleFactory<R> for RefStorage<R> {
+    fn new_buffer(&mut self, name: R::Buffer, info: BufferInfo) -> RawBuffer<R> {
+        let h = Arc::new(name);
+        self.buffers.push(h.clone());
+        RawBuffer(h, info)
+    }
+}
+
+impl<R: Resources> RefStorage<R> {
+    /// Create a new reference storage
+    pub fn new() -> RefStorage<R> {
+        RefStorage {
+            buffers: Vec::new(),
+        }
+    }
+    /// Remove all references
+    pub fn reset(&mut self) {
+        self.buffers.clear();
+    }
+    /// Extend with references from another buffer
+    pub fn extend(&mut self, other: &RefStorage<R>) {
+        self.buffers.extend(other.buffers.iter().map(|b| b.clone()));
+    }
+    /// Reference a buffer inside the storage
+    pub fn ref_buffer(&mut self, &RawBuffer(ref name, _): &RawBuffer<R>) -> R::Buffer {
+        self.buffers.push(name.clone());
+        *name.deref()
+    }
+}
+
 /// Type-safe buffer handle
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Buffer<R: Resources, T> {
     raw: RawBuffer<R>,
     phantom_t: PhantomData<T>,
@@ -42,13 +90,13 @@ impl<R: Resources, T> Buffer<R, T> {
     }
 
     /// Get the underlying name for this Buffer
-    pub fn get_name(&self) -> <R as Resources>::Buffer {
+    pub fn get_name(&self) -> Arc<R::Buffer> {
         self.raw.get_name()
     }
 
     /// Get the underlying raw Handle
-    pub fn raw(&self) -> RawBuffer<R> {
-        self.raw
+    pub fn raw(&self) -> &RawBuffer<R> {
+        &self.raw
     }
 
     /// Get the associated information about the buffer
@@ -67,27 +115,17 @@ impl<R: Resources, T> Buffer<R, T> {
 
 /// Raw (untyped) Buffer Handle
 #[derive(PartialEq, Debug)]
-pub struct RawBuffer<R: Resources>(
-    <R as Resources>::Buffer,
-    BufferInfo
-);
-
-impl<R: Resources> Copy for RawBuffer<R> {}
+pub struct RawBuffer<R: Resources>(Arc<R::Buffer>, BufferInfo);
 
 impl<R: Resources> Clone for RawBuffer<R> {
     fn clone(&self) -> RawBuffer<R> {
-        RawBuffer(self.0, self.1.clone())
+        RawBuffer(self.0.clone(), self.1.clone())
     }
 }
 
 impl<R: Resources> RawBuffer<R> {
-    /// Creates a new raw buffer handle (used by device)
-    pub unsafe fn new(name: <R as Resources>::Buffer, info: BufferInfo)
-        -> RawBuffer<R> {
-        RawBuffer(name, info)
-    }
     /// Get raw buffer name
-    pub fn get_name(&self) -> <R as Resources>::Buffer { self.0 }
+    pub fn get_name(&self) -> Arc<R::Buffer> { self.0.clone() }
     /// Get raw buffer info
     pub fn get_info(&self) -> &BufferInfo { &self.1 }
 }

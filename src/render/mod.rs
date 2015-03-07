@@ -41,7 +41,6 @@ pub mod shade;
 pub mod target;
 
 
-const TRACKED_ATTRIBUTES: usize = 8;
 type CachedAttribute<R: Resources> = (handle::RawBuffer<R>, attrib::Format);
 
 /// The internal state of the renderer.
@@ -52,7 +51,7 @@ struct RenderState<R: Resources> {
     is_array_buffer_set: bool,
     program_name: Option<R::Program>,
     index: Option<handle::RawBuffer<R>>,
-    attributes: [Option<CachedAttribute<R>>; TRACKED_ATTRIBUTES],
+    attributes: Vec<Option<CachedAttribute<R>>>,
     draw: DrawState,
 }
 
@@ -65,7 +64,7 @@ impl<R: Resources> RenderState<R> {
             is_array_buffer_set: false,
             program_name: None,
             index: None,
-            attributes: [None; TRACKED_ATTRIBUTES],
+            attributes: Vec::new(),
             draw: DrawState::new(),
         }
     }
@@ -139,6 +138,7 @@ pub enum DrawError<E> {
 pub struct Renderer<R: Resources, C: CommandBuffer<R>> {
     command_buffer: C,
     data_buffer: DataBuffer,
+    ref_storage: handle::RefStorage<R>,
     common_array_buffer: Result<handle::ArrayBuffer<R>, ()>,
     draw_frame_buffer: handle::FrameBuffer<R>,
     read_frame_buffer: handle::FrameBuffer<R>,
@@ -156,8 +156,8 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     }
 
     /// Get command and data buffers to be submitted to the device.
-    pub fn as_buffer(&self) -> (&C, &DataBuffer) {
-        (&self.command_buffer, &self.data_buffer)
+    pub fn as_buffer(&self) -> (&C, &DataBuffer, &handle::RefStorage<R>) {
+        (&self.command_buffer, &self.data_buffer, &self.ref_storage)
     }
 
     /// Clone the renderer shared data but ignore the commands.
@@ -165,6 +165,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         Renderer {
             command_buffer: CommandBuffer::new(),
             data_buffer: DataBuffer::new(),
+            ref_storage: handle::RefStorage::new(),
             common_array_buffer: self.common_array_buffer.clone(),
             draw_frame_buffer: self.draw_frame_buffer.clone(),
             read_frame_buffer: self.read_frame_buffer.clone(),
@@ -251,7 +252,8 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         let offset_bytes = esize * offset_elements;
         debug_assert!(data.len() * esize + offset_bytes <= buf.get_info().size);
         let pointer = self.data_buffer.add_vec(data);
-        self.command_buffer.update_buffer(buf.get_name(), pointer, offset_bytes);
+        self.command_buffer.update_buffer(
+            self.ref_storage.ref_buffer(buf.raw()), pointer, offset_bytes);
     }
 
     /// Update a buffer with data from a single type.
@@ -259,7 +261,8 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
                                 buf: handle::Buffer<R, U>, data: &T) {
         debug_assert!(mem::size_of::<T>() <= buf.get_info().size);
         let pointer = self.data_buffer.add_struct(data);
-        self.command_buffer.update_buffer(buf.get_name(), pointer, 0);
+        self.command_buffer.update_buffer(
+            self.ref_storage.ref_buffer(buf.raw()), pointer, 0);
     }
 
     /// Update the contents of a texture.
@@ -404,7 +407,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
                 program.get_name(),
                 i as device::UniformBufferSlot,
                 i as device::UniformBlockIndex,
-                buf.get_name()
+                self.ref_storage.ref_buffer(&buf)
             );
         }
         // bind textures and samplers
@@ -432,25 +435,26 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         for (attr_index, sat) in attrib_iter.zip(info.attributes.iter()) {
             let vat = &mesh.attributes[attr_index as usize];
             let loc = sat.location as usize;
-            let need_update = loc >= self.render_state.attributes.len() ||
-                match self.render_state.attributes[loc] {
-                    Some((buf, fmt)) => buf != vat.buffer || fmt != vat.format,
-                    None => true,
-                };
+            if loc >= self.render_state.attributes.len() {
+                let range = self.render_state.attributes.len() .. loc+1;
+                self.render_state.attributes.extend(range.map(|_| None));
+            }
+            let need_update = match self.render_state.attributes[loc] {
+                Some((ref buf, fmt)) => *buf != vat.buffer || fmt != vat.format,
+                None => true,
+            };
             if need_update {
                 self.command_buffer.bind_attribute(loc as device::AttributeSlot,
-                    vat.buffer.get_name(), vat.format);
-                if loc < self.render_state.attributes.len() {
-                    self.render_state.attributes[loc] = Some((vat.buffer, vat.format));
-                }
+                    self.ref_storage.ref_buffer(&vat.buffer), vat.format);
+                self.render_state.attributes[loc] = Some((vat.buffer.clone(), vat.format));
             }
         }
     }
 
     fn bind_index<T>(&mut self, buf: handle::Buffer<R, T>) {
-        if self.render_state.index != Some(buf.raw()) {
-            self.command_buffer.bind_index(buf.get_name());
-            self.render_state.index = Some(buf.raw());
+        if self.render_state.index.as_ref() != Some(buf.raw()) {
+            self.render_state.index = Some(buf.raw().clone());
+            self.command_buffer.bind_index(self.ref_storage.ref_buffer(buf.raw()));
         }
     }
 

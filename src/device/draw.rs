@@ -96,8 +96,7 @@ pub trait CommandBuffer<R: Resources> {
     /// Unbind any surface from the specified target slot
     fn unbind_target(&mut self, Access, Target);
     /// Bind a surface to the specified target slot
-    fn bind_target_surface(&mut self, Access, Target,
-                           R::Surface);
+    fn bind_target_surface(&mut self, Access, Target, R::Surface);
     /// Bind a level of the texture to the specified target slot
     fn bind_target_texture(&mut self, Access, Target, R::Texture,
                            target::Level, Option<target::Layer>);

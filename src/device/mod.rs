@@ -175,17 +175,6 @@ pub trait Factory<R: Resources> {
     /// Return the framebuffer handle for the screen.
     fn get_main_frame_buffer(&self) -> handle::FrameBuffer<R>;
 
-    // resource deletion
-    fn delete_buffer_raw(&mut self, buf: handle::Buffer<R, ()>);
-    fn delete_buffer<T>(&mut self, buf: handle::Buffer<R, T>) {
-        self.delete_buffer_raw(buf.cast());
-    }
-    fn delete_shader(&mut self, handle::Shader<R>);
-    fn delete_program(&mut self, handle::Program<R>);
-    fn delete_surface(&mut self, handle::Surface<R>);
-    fn delete_texture(&mut self, handle::Texture<R>);
-    fn delete_sampler(&mut self, handle::Sampler<R>);
-
     /// Update the information stored in a specific buffer
     fn update_buffer_raw(&mut self, buf: handle::Buffer<R, ()>, data: &[u8],
                          offset_bytes: usize);
@@ -208,6 +197,8 @@ pub trait Factory<R: Resources> {
         self.update_texture_raw(tex, img, as_byte_slice(data))
     }
     fn generate_mipmap(&mut self, tex: &handle::Texture<R>);
+
+    fn cleanup(&mut self);
 }
 
 
@@ -223,5 +214,11 @@ pub trait Device {
     /// Reset all the states to disabled/default
     fn reset_state(&mut self);
     /// Submit a command buffer for execution
-    fn submit(&mut self, buffer: (&Self::CommandBuffer, &draw::DataBuffer));
+    fn submit(&mut self, buffer: (
+        &Self::CommandBuffer,
+        &draw::DataBuffer,
+        &handle::RefStorage<Self::Resources>
+    ));
+    /// Finish processing the current frame
+    fn present(&mut self);
 }
