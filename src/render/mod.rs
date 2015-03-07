@@ -427,7 +427,9 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         if !self.render_state.is_array_buffer_set {
             // It's Ok if the array buffer is not supported. We can just ignore it.
             match self.common_array_buffer {
-                Ok(ref ab) => self.command_buffer.bind_array_buffer(ab.get_name()),
+                Ok(ref ab) => self.command_buffer.bind_array_buffer(
+                    self.ref_storage.ref_array_buffer(ab)
+                ),
                 Err(()) => (),
             };
             self.render_state.is_array_buffer_set = true;
