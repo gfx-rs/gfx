@@ -102,16 +102,17 @@ impl<R: Resources> ParamStorage<R> {
 /// Useful when Renderer is borrowed, and we need to issue commands.
 trait CommandBufferExt<R: Resources>: CommandBuffer<R> {
     /// Bind a plane to some target
-    fn bind_target(&mut self, Access, Target, Option<&target::Plane<R>>);
+    fn bind_target(&mut self, &mut handle::Manager<R>, Access, Target,
+                   Option<&target::Plane<R>>);
 }
 
 impl<R: Resources, C: CommandBuffer<R>> CommandBufferExt<R> for C {
-    fn bind_target(&mut self, access: Access, to: Target,
-                   plane: Option<&target::Plane<R>>) {
+    fn bind_target(&mut self, handler: &mut handle::Manager<R>, access: Access,
+                   to: Target, plane: Option<&target::Plane<R>>) {
         match plane {
             None => self.unbind_target(access, to),
             Some(&target::Plane::Surface(ref suf)) =>
-                self.bind_target_surface(access, to, suf.get_name()),
+                self.bind_target_surface(access, to, handler.ref_surface(&suf)),
             Some(&target::Plane::Texture(ref tex, level, layer)) =>
                 self.bind_target_texture(access, to, tex.get_name(), level, layer),
         }
@@ -309,7 +310,8 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
             for (i, (cur, new)) in self.render_state.frame.colors.iter_mut()
                                        .zip(frame.colors.iter()).enumerate() {
                 if *cur != *new {
-                    self.command_buffer.bind_target(Access::Draw, Target::Color(i as u8), Some(new));
+                    self.command_buffer.bind_target(&mut self.handler,
+                        Access::Draw, Target::Color(i as u8), Some(new));
                     *cur = new.clone();
                 }
             }
@@ -318,17 +320,20 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
             // append new planes
             for (i, new) in frame.colors.iter().enumerate()
                                  .skip(self.render_state.frame.colors.len()) {
-                self.command_buffer.bind_target(Access::Draw, Target::Color(i as u8), Some(new));
+                self.command_buffer.bind_target(&mut self.handler,
+                    Access::Draw, Target::Color(i as u8), Some(new));
                 self.render_state.frame.colors.push(new.clone());
             }
             // set depth
             if self.render_state.frame.depth != frame.depth {
-                self.command_buffer.bind_target(Access::Draw, Target::Depth, frame.depth.as_ref());
+                self.command_buffer.bind_target(&mut self.handler,
+                    Access::Draw, Target::Depth, frame.depth.as_ref());
                 self.render_state.frame.depth = frame.depth.clone();
             }
             // set stencil
             if self.render_state.frame.stencil != frame.stencil {
-                self.command_buffer.bind_target(Access::Draw, Target::Stencil, frame.stencil.as_ref());
+                self.command_buffer.bind_target(&mut self.handler,
+                    Access::Draw, Target::Stencil, frame.stencil.as_ref());
                 self.render_state.frame.stencil = frame.stencil.clone();
             }
         }
@@ -341,11 +346,14 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         if frame.colors.is_empty() {
             self.command_buffer.unbind_target(Access::Read, Target::Color(0));
         }else {
-            self.command_buffer.bind_target(Access::Read, Target::Color(0), Some(&frame.colors[0]));
+            self.command_buffer.bind_target(&mut self.handler,
+                Access::Read, Target::Color(0), Some(&frame.colors[0]));
         }
         // depth/stencil
-        self.command_buffer.bind_target(Access::Read, Target::Depth, frame.depth.as_ref());
-        self.command_buffer.bind_target(Access::Read, Target::Stencil, frame.stencil.as_ref());
+        self.command_buffer.bind_target(&mut self.handler,
+            Access::Read, Target::Depth, frame.depth.as_ref());
+        self.command_buffer.bind_target(&mut self.handler,
+            Access::Read, Target::Stencil, frame.stencil.as_ref());
     }
 
     fn bind_state(&mut self, state: &DrawState) {
