@@ -32,44 +32,49 @@ pub struct Manager<R: Resources> {
     array_buffers: Vec<Arc<R::ArrayBuffer>>,
     shaders: Vec<Arc<R::Shader>>,
     programs: Vec<Arc<R::Program>>,
+    frame_buffers: Vec<Arc<R::FrameBuffer>>,
     //TODO
 }
 
 /// A service trait to be used by the device implementation
+#[allow(missing_docs)]
 pub trait Producer<R: Resources> {
-    /// Create a new raw buffer handle
-    fn new_buffer(&mut self, R::Buffer, BufferInfo) -> RawBuffer<R>;
-    /// Create a new array buffer
-    fn new_array_buffer(&mut self, R::ArrayBuffer) -> ArrayBuffer<R>;
-    /// Create a new shader
-    fn new_shader(&mut self, R::Shader, shade::Stage) -> Shader<R>;
-    /// Creates a new program (used by device)
-    fn new_program(&mut self, R::Program, shade::ProgramInfo) -> Program<R>;
+    fn make_buffer(&mut self, R::Buffer, BufferInfo) -> RawBuffer<R>;
+    fn make_array_buffer(&mut self, R::ArrayBuffer) -> ArrayBuffer<R>;
+    fn make_shader(&mut self, R::Shader, shade::Stage) -> Shader<R>;
+    fn make_program(&mut self, R::Program, shade::ProgramInfo) -> Program<R>;
+    fn make_frame_buffer(&mut self, R::FrameBuffer) -> FrameBuffer<R>;
 }
 
 impl<R: Resources> Producer<R> for Manager<R> {
-    fn new_buffer(&mut self, name: R::Buffer, info: BufferInfo) -> RawBuffer<R> {
+    fn make_buffer(&mut self, name: R::Buffer, info: BufferInfo) -> RawBuffer<R> {
         let r = Arc::new(name);
         self.buffers.push(r.clone());
         RawBuffer(r, info)
     }
 
-    fn new_array_buffer(&mut self, name: R::ArrayBuffer) -> ArrayBuffer<R> {
+    fn make_array_buffer(&mut self, name: R::ArrayBuffer) -> ArrayBuffer<R> {
         let r = Arc::new(name);
         self.array_buffers.push(r.clone());
         ArrayBuffer(r)
     }
 
-    fn new_shader(&mut self, name: R::Shader, info: shade::Stage) -> Shader<R> {
+    fn make_shader(&mut self, name: R::Shader, info: shade::Stage) -> Shader<R> {
         let r = Arc::new(name);
         self.shaders.push(r.clone());
         Shader(r, info)
     }
 
-    fn new_program(&mut self, name: R::Program, info: shade::ProgramInfo) -> Program<R> {
+    fn make_program(&mut self, name: R::Program, info: shade::ProgramInfo) -> Program<R> {
         let r = Arc::new(name);
         self.programs.push(r.clone());
         Program(r, info)
+    }
+
+    fn make_frame_buffer(&mut self, name: R::FrameBuffer) -> FrameBuffer<R> {
+        let r = Arc::new(name);
+        self.frame_buffers.push(r.clone());
+        FrameBuffer(r)
     }
 }
 
@@ -81,10 +86,11 @@ impl<R: Resources> Manager<R> {
             array_buffers: Vec::new(),
             shaders: Vec::new(),
             programs: Vec::new(),
+            frame_buffers: Vec::new(),
         }
     }
-    /// Remove all references
-    pub fn reset(&mut self) {
+    /// Clear all references
+    pub fn clear(&mut self) {
         self.buffers.clear();
     }
     /// Extend with references from another manager
@@ -109,6 +115,11 @@ impl<R: Resources> Manager<R> {
     /// Reference a program
     pub fn ref_program(&mut self, handle: &Program<R>) -> R::Program {
         self.programs.push(handle.0.clone());
+        *handle.0.deref()
+    }
+    /// Reference a frame buffer
+    pub fn ref_frame_buffer(&mut self, handle: &FrameBuffer<R>) -> R::FrameBuffer {
+        self.frame_buffers.push(handle.0.clone());
         *handle.0.deref()
     }
 }
@@ -185,34 +196,24 @@ impl<R: Resources> Program<R> {
 }
 
 /// Frame Buffer Handle
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub struct FrameBuffer<R: Resources>(<R as Resources>::FrameBuffer);
-
-impl<R: Resources> FrameBuffer<R> {
-    /// Creates a new frame buffer (used by device)
-    pub unsafe fn new(name: <R as Resources>::FrameBuffer)
-        -> FrameBuffer<R> {
-        FrameBuffer(name)
-    }
-    /// Get frame buffer name
-    pub fn get_name(&self) -> <R as Resources>::FrameBuffer { self.0 }
-}
+#[derive(Clone, PartialEq, Debug)]
+pub struct FrameBuffer<R: Resources>(Arc<R::FrameBuffer>);
 
 /// Surface Handle
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Surface<R: Resources>(
-    <R as Resources>::Surface,
+    R::Surface,
     tex::SurfaceInfo,
 );
 
 impl<R: Resources> Surface<R> {
     /// Creates a new surface (used by device)
-    pub unsafe fn new(name: <R as Resources>::Surface, info: tex::SurfaceInfo)
+    pub unsafe fn new(name: R::Surface, info: tex::SurfaceInfo)
         -> Surface<R> {
         Surface(name, info)
     }
     /// Get surface name
-    pub fn get_name(&self) -> <R as Resources>::Surface { self.0 }
+    pub fn get_name(&self) -> R::Surface { self.0 }
     /// Get surface info
     pub fn get_info(&self) -> &tex::SurfaceInfo { &self.1 }
 }
@@ -220,7 +221,7 @@ impl<R: Resources> Surface<R> {
 /// Texture Handle
 #[derive(PartialEq, Debug)]
 pub struct Texture<R: Resources>(
-    <R as Resources>::Texture,
+    R::Texture,
     tex::TextureInfo,
 );
 
@@ -234,12 +235,12 @@ impl<R: Resources> Clone for Texture<R> {
 
 impl<R: Resources> Texture<R> {
     /// Creates a new texture (used by device)
-    pub unsafe fn new(name: <R as Resources>::Texture, info: tex::TextureInfo)
+    pub unsafe fn new(name: R::Texture, info: tex::TextureInfo)
         -> Texture<R> {
         Texture(name, info)
     }
     /// Get texture name
-    pub fn get_name(&self) -> <R as Resources>::Texture { self.0 }
+    pub fn get_name(&self) -> R::Texture { self.0 }
     /// Get texture info
     pub fn get_info(&self) -> &tex::TextureInfo { &self.1 }
 }
@@ -247,7 +248,7 @@ impl<R: Resources> Texture<R> {
 /// Sampler Handle
 #[derive(PartialEq, Debug)]
 pub struct Sampler<R: Resources>(
-    <R as Resources>::Sampler,
+    R::Sampler,
     tex::SamplerInfo,
 );
 
@@ -261,12 +262,12 @@ impl<R: Resources> Clone for Sampler<R> {
 
 impl<R: Resources> Sampler<R> {
     /// Creates a new sampler (used by device)
-    pub unsafe fn new(name: <R as Resources>::Sampler, info: tex::SamplerInfo)
+    pub unsafe fn new(name: R::Sampler, info: tex::SamplerInfo)
         -> Sampler<R> {
         Sampler(name, info)
     }
     /// Get sampler name
-    pub fn get_name(&self) -> <R as Resources>::Sampler { self.0 }
+    pub fn get_name(&self) -> R::Sampler { self.0 }
     /// Get sampler info
     pub fn get_info(&self) -> &tex::SamplerInfo { &self.1 }
 }

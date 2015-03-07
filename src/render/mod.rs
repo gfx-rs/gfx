@@ -152,6 +152,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     pub fn reset(&mut self) {
         self.command_buffer.clear();
         self.data_buffer.clear();
+        self.handler.clear();
         self.render_state = RenderState::new();
     }
 
@@ -288,12 +289,14 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         if frame.is_default() {
             if self.render_state.is_frame_buffer_set {
                 // binding the default FBO, not touching our common one
-                self.command_buffer.bind_frame_buffer(Access::Draw, self.default_frame_buffer.get_name());
+                self.command_buffer.bind_frame_buffer(Access::Draw,
+                    self.handler.ref_frame_buffer(&self.default_frame_buffer));
                 self.render_state.is_frame_buffer_set = false;
             }
         } else {
             if !self.render_state.is_frame_buffer_set {
-                self.command_buffer.bind_frame_buffer(Access::Draw, self.draw_frame_buffer.get_name());
+                self.command_buffer.bind_frame_buffer(Access::Draw,
+                    self.handler.ref_frame_buffer(&self.draw_frame_buffer));
                 self.render_state.is_frame_buffer_set = true;
             }
             // cut off excess color planes
@@ -332,7 +335,8 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     }
 
     fn bind_read_frame(&mut self, frame: &target::Frame<R>) {
-        self.command_buffer.bind_frame_buffer(Access::Read, self.read_frame_buffer.get_name());
+        self.command_buffer.bind_frame_buffer(Access::Read,
+            self.handler.ref_frame_buffer(&self.read_frame_buffer));
         // color
         if frame.colors.is_empty() {
             self.command_buffer.unbind_target(Access::Read, Target::Color(0));
