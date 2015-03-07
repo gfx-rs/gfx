@@ -138,7 +138,7 @@ pub enum DrawError<E> {
 pub struct Renderer<R: Resources, C: CommandBuffer<R>> {
     command_buffer: C,
     data_buffer: DataBuffer,
-    ref_storage: handle::RefStorage<R>,
+    handler: handle::Manager<R>,
     common_array_buffer: Result<handle::ArrayBuffer<R>, ()>,
     draw_frame_buffer: handle::FrameBuffer<R>,
     read_frame_buffer: handle::FrameBuffer<R>,
@@ -156,8 +156,8 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     }
 
     /// Get command and data buffers to be submitted to the device.
-    pub fn as_buffer(&self) -> (&C, &DataBuffer, &handle::RefStorage<R>) {
-        (&self.command_buffer, &self.data_buffer, &self.ref_storage)
+    pub fn as_buffer(&self) -> (&C, &DataBuffer, &handle::Manager<R>) {
+        (&self.command_buffer, &self.data_buffer, &self.handler)
     }
 
     /// Clone the renderer shared data but ignore the commands.
@@ -165,7 +165,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         Renderer {
             command_buffer: CommandBuffer::new(),
             data_buffer: DataBuffer::new(),
-            ref_storage: handle::RefStorage::new(),
+            handler: handle::Manager::new(),
             common_array_buffer: self.common_array_buffer.clone(),
             draw_frame_buffer: self.draw_frame_buffer.clone(),
             read_frame_buffer: self.read_frame_buffer.clone(),
@@ -253,7 +253,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         debug_assert!(data.len() * esize + offset_bytes <= buf.get_info().size);
         let pointer = self.data_buffer.add_vec(data);
         self.command_buffer.update_buffer(
-            self.ref_storage.ref_buffer(buf.raw()), pointer, offset_bytes);
+            self.handler.ref_buffer(buf.raw()), pointer, offset_bytes);
     }
 
     /// Update a buffer with data from a single type.
@@ -262,7 +262,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         debug_assert!(mem::size_of::<T>() <= buf.get_info().size);
         let pointer = self.data_buffer.add_struct(data);
         self.command_buffer.update_buffer(
-            self.ref_storage.ref_buffer(buf.raw()), pointer, 0);
+            self.handler.ref_buffer(buf.raw()), pointer, 0);
     }
 
     /// Update the contents of a texture.
@@ -378,7 +378,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         if self.render_state.program.as_ref() != Some(&program) {
             self.render_state.program = Some(program.clone());
             self.command_buffer.bind_program(
-                self.ref_storage.ref_program(&program));
+                self.handler.ref_program(&program));
         }
         self.upload_parameters(program);
         Ok(program)
@@ -405,10 +405,10 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         for (i, (_, buf)) in info.blocks.iter()
             .zip(self.parameters.blocks.iter()).enumerate() {
             self.command_buffer.bind_uniform_block(
-                self.ref_storage.ref_program(&program),
+                self.handler.ref_program(&program),
                 i as device::UniformBufferSlot,
                 i as device::UniformBlockIndex,
-                self.ref_storage.ref_buffer(&buf)
+                self.handler.ref_buffer(&buf)
             );
         }
         // bind textures and samplers
@@ -429,7 +429,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
             // It's Ok if the array buffer is not supported. We can just ignore it.
             match self.common_array_buffer {
                 Ok(ref ab) => self.command_buffer.bind_array_buffer(
-                    self.ref_storage.ref_array_buffer(ab)
+                    self.handler.ref_array_buffer(ab)
                 ),
                 Err(()) => (),
             };
@@ -448,7 +448,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
             };
             if need_update {
                 self.command_buffer.bind_attribute(loc as device::AttributeSlot,
-                    self.ref_storage.ref_buffer(&vat.buffer), vat.format);
+                    self.handler.ref_buffer(&vat.buffer), vat.format);
                 self.render_state.attributes[loc] = Some((vat.buffer.clone(), vat.format));
             }
         }
@@ -457,7 +457,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     fn bind_index<T>(&mut self, buf: handle::Buffer<R, T>) {
         if self.render_state.index.as_ref() != Some(buf.raw()) {
             self.render_state.index = Some(buf.raw().clone());
-            self.command_buffer.bind_index(self.ref_storage.ref_buffer(buf.raw()));
+            self.command_buffer.bind_index(self.handler.ref_buffer(buf.raw()));
         }
     }
 

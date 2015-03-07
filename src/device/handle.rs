@@ -27,7 +27,7 @@ use super::{shade, tex, Resources, BufferInfo};
 /// referencing them both by the Factory on resource creation
 /// and the Renderer during CommandBuffer population.
 #[allow(missing_docs)]
-pub struct RefStorage<R: Resources> {
+pub struct Manager<R: Resources> {
     buffers: Vec<Arc<R::Buffer>>,
     array_buffers: Vec<Arc<R::ArrayBuffer>>,
     shaders: Vec<Arc<R::Shader>>,
@@ -36,7 +36,7 @@ pub struct RefStorage<R: Resources> {
 }
 
 /// A service trait to be used by the device implementation
-pub trait HandleFactory<R: Resources> {
+pub trait Producer<R: Resources> {
     /// Create a new raw buffer handle
     fn new_buffer(&mut self, R::Buffer, BufferInfo) -> RawBuffer<R>;
     /// Create a new array buffer
@@ -47,7 +47,7 @@ pub trait HandleFactory<R: Resources> {
     fn new_program(&mut self, R::Program, shade::ProgramInfo) -> Program<R>;
 }
 
-impl<R: Resources> HandleFactory<R> for RefStorage<R> {
+impl<R: Resources> Producer<R> for Manager<R> {
     fn new_buffer(&mut self, name: R::Buffer, info: BufferInfo) -> RawBuffer<R> {
         let r = Arc::new(name);
         self.buffers.push(r.clone());
@@ -73,10 +73,10 @@ impl<R: Resources> HandleFactory<R> for RefStorage<R> {
     }
 }
 
-impl<R: Resources> RefStorage<R> {
+impl<R: Resources> Manager<R> {
     /// Create a new reference storage
-    pub fn new() -> RefStorage<R> {
-        RefStorage {
+    pub fn new() -> Manager<R> {
+        Manager {
             buffers: Vec::new(),
             array_buffers: Vec::new(),
             shaders: Vec::new(),
@@ -87,8 +87,8 @@ impl<R: Resources> RefStorage<R> {
     pub fn reset(&mut self) {
         self.buffers.clear();
     }
-    /// Extend with references from another buffer
-    pub fn extend(&mut self, other: &RefStorage<R>) {
+    /// Extend with references from another manager
+    pub fn extend(&mut self, other: &Manager<R>) {
         self.buffers.extend(other.buffers.iter().map(|b| b.clone()));
     }
     /// Reference a buffer

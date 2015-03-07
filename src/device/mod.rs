@@ -217,7 +217,7 @@ pub trait Device {
     fn submit(&mut self, buffer: (
         &Self::CommandBuffer,
         &draw::DataBuffer,
-        &handle::RefStorage<Self::Resources>
+        &handle::Manager<Self::Resources>
     ));
     /// Finish processing the current frame
     fn present(&mut self);
