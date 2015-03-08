@@ -287,6 +287,13 @@ impl<R: Resources> Manager<R> {
     /// Clear all references
     pub fn clear(&mut self) {
         self.buffers.clear();
+        self.array_buffers.clear();
+        self.shaders.clear();
+        self.programs.clear();
+        self.frame_buffers.clear();
+        self.surfaces.clear();
+        self.textures.clear();
+        self.samplers.clear();
     }
     /// Extend with all references of another handle manager
     pub fn extend(&mut self, other: &Manager<R>) {
