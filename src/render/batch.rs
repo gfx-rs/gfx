@@ -19,7 +19,6 @@
 use std::fmt;
 use std::cmp::Ordering;
 use std::marker::PhantomData;
-use std::num::from_uint;
 use std::ops::Deref;
 use draw_state::DrawState;
 
@@ -226,10 +225,11 @@ impl<T> Array<T> {
 
 impl<T: Clone + PartialEq> Array<T> {
     fn find_or_insert(&mut self, value: &T) -> Option<Id<T>> {
+        use std::num::from_u32;
         match self.data.iter().position(|v| v == value) {
-            Some(i) => from_uint::<Index>(i).map(|id| Id(id, PhantomData)),
+            Some(i) => from_u32(i as u32).map(|id| Id(id, PhantomData)),
             None => {
-                from_uint::<Index>(self.data.len()).map(|id| {
+                from_u32(self.data.len() as u32).map(|id| {
                     self.data.push(value.clone());
                     Id(id, PhantomData)
                 })

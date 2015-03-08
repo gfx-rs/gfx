@@ -18,10 +18,26 @@
 
 use std::mem;
 use std::marker::PhantomData;
+use std::ops::Deref;
+use std::sync::Arc;
 use super::{shade, tex, Resources, BufferInfo};
 
+/// A service trait to be used by the factory cleanup implementation
+pub trait Bare<T> {
+    /// Extract a bare handle
+    unsafe fn bare(&self) -> T;
+}
+
+macro_rules! bare{
+    ($name:ident) => {
+        impl<R: Resources> Bare<R::$name> for $name<R> {
+            unsafe fn bare(&self) -> R::$name { *self.0.deref() }
+        }
+    }
+}
+
 /// Type-safe buffer handle
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Buffer<R: Resources, T> {
     raw: RawBuffer<R>,
     phantom_t: PhantomData<T>,
@@ -41,14 +57,9 @@ impl<R: Resources, T> Buffer<R, T> {
         Buffer::from_raw(self.raw)
     }
 
-    /// Get the underlying name for this Buffer
-    pub fn get_name(&self) -> <R as Resources>::Buffer {
-        self.raw.get_name()
-    }
-
     /// Get the underlying raw Handle
-    pub fn raw(&self) -> RawBuffer<R> {
-        self.raw
+    pub fn raw(&self) -> &RawBuffer<R> {
+        &self.raw
     }
 
     /// Get the associated information about the buffer
@@ -66,166 +77,286 @@ impl<R: Resources, T> Buffer<R, T> {
 }
 
 /// Raw (untyped) Buffer Handle
-#[derive(PartialEq, Debug)]
-pub struct RawBuffer<R: Resources>(
-    <R as Resources>::Buffer,
-    BufferInfo
-);
+#[derive(Clone, PartialEq, Debug)]
+pub struct RawBuffer<R: Resources>(Arc<R::Buffer>, BufferInfo);
 
-impl<R: Resources> Copy for RawBuffer<R> {}
-
-impl<R: Resources> Clone for RawBuffer<R> {
-    fn clone(&self) -> RawBuffer<R> {
-        RawBuffer(self.0, self.1.clone())
-    }
+impl<R: Resources> Bare<R::Buffer> for RawBuffer<R> {
+    unsafe fn bare(&self) -> R::Buffer { *self.0.deref() }
 }
 
 impl<R: Resources> RawBuffer<R> {
-    /// Creates a new raw buffer handle (used by device)
-    pub unsafe fn new(name: <R as Resources>::Buffer, info: BufferInfo)
-        -> RawBuffer<R> {
-        RawBuffer(name, info)
-    }
-    /// Get raw buffer name
-    pub fn get_name(&self) -> <R as Resources>::Buffer { self.0 }
     /// Get raw buffer info
     pub fn get_info(&self) -> &BufferInfo { &self.1 }
 }
 
 /// Array Buffer Handle
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub struct ArrayBuffer<R: Resources>(<R as Resources>::ArrayBuffer);
-
-impl<R: Resources> ArrayBuffer<R> {
-    /// Creates a new array buffer (used by device)
-    pub unsafe fn new(name: <R as Resources>::ArrayBuffer)
-        -> ArrayBuffer<R> {
-        ArrayBuffer(name)
-    }
-    /// Get array buffer name
-    pub fn get_name(&self) -> <R as Resources>::ArrayBuffer { self.0 }
-}
+#[derive(Clone, PartialEq, Debug)]
+pub struct ArrayBuffer<R: Resources>(Arc<R::ArrayBuffer>);
+bare!(ArrayBuffer);
 
 /// Shader Handle
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub struct Shader<R: Resources>(<R as Resources>::Shader, shade::Stage);
+#[derive(Clone, PartialEq, Debug)]
+pub struct Shader<R: Resources>(Arc<R::Shader>, shade::Stage);
+bare!(Shader);
 
 impl<R: Resources> Shader<R> {
-    /// Creates a new shader (used by device)
-    pub unsafe fn new(name: <R as Resources>::Shader, info: shade::Stage)
-        -> Shader<R> {
-        Shader(name, info)
-    }
-    /// Get shader name
-    pub fn get_name(&self) -> <R as Resources>::Shader { self.0 }
-    /// Get shader info
-    pub fn get_info(&self) -> &shade::Stage { &self.1 }
+    /// Get shader stage
+    pub fn get_stage(&self) -> &shade::Stage { &self.1 }
 }
 
 /// Program Handle
 #[derive(Clone, PartialEq, Debug)]
-pub struct Program<R: Resources>(
-    <R as Resources>::Program,
-    shade::ProgramInfo,
-);
+pub struct Program<R: Resources>(Arc<R::Program>, shade::ProgramInfo);
+bare!(Program);
 
 impl<R: Resources> Program<R> {
-    /// Creates a new program (used by device)
-    pub unsafe fn new(name: <R as Resources>::Program, info: shade::ProgramInfo)
-        -> Program<R> {
-        Program(name, info)
-    }
-    /// Get program name
-    pub fn get_name(&self) -> <R as Resources>::Program { self.0 }
     /// Get program info
     pub fn get_info(&self) -> &shade::ProgramInfo { &self.1 }
 }
 
 /// Frame Buffer Handle
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub struct FrameBuffer<R: Resources>(<R as Resources>::FrameBuffer);
-
-impl<R: Resources> FrameBuffer<R> {
-    /// Creates a new frame buffer (used by device)
-    pub unsafe fn new(name: <R as Resources>::FrameBuffer)
-        -> FrameBuffer<R> {
-        FrameBuffer(name)
-    }
-    /// Get frame buffer name
-    pub fn get_name(&self) -> <R as Resources>::FrameBuffer { self.0 }
-}
+#[derive(Clone, PartialEq, Debug)]
+pub struct FrameBuffer<R: Resources>(Arc<R::FrameBuffer>);
+bare!(FrameBuffer);
 
 /// Surface Handle
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub struct Surface<R: Resources>(
-    <R as Resources>::Surface,
-    tex::SurfaceInfo,
-);
+#[derive(Clone, PartialEq, Debug)]
+pub struct Surface<R: Resources>(Arc<R::Surface>, tex::SurfaceInfo);
+bare!(Surface);
 
 impl<R: Resources> Surface<R> {
-    /// Creates a new surface (used by device)
-    pub unsafe fn new(name: <R as Resources>::Surface, info: tex::SurfaceInfo)
-        -> Surface<R> {
-        Surface(name, info)
-    }
-    /// Get surface name
-    pub fn get_name(&self) -> <R as Resources>::Surface { self.0 }
     /// Get surface info
     pub fn get_info(&self) -> &tex::SurfaceInfo { &self.1 }
 }
 
 /// Texture Handle
-#[derive(PartialEq, Debug)]
-pub struct Texture<R: Resources>(
-    <R as Resources>::Texture,
-    tex::TextureInfo,
-);
-
-impl<R: Resources> Copy for Texture<R> {}
-
-impl<R: Resources> Clone for Texture<R> {
-    fn clone(&self) -> Texture<R> {
-        Texture(self.0, self.1.clone())
-    }
-}
+#[derive(Clone, PartialEq, Debug)]
+pub struct Texture<R: Resources>(Arc<R::Texture>, tex::TextureInfo);
+bare!(Texture);
 
 impl<R: Resources> Texture<R> {
-    /// Creates a new texture (used by device)
-    pub unsafe fn new(name: <R as Resources>::Texture, info: tex::TextureInfo)
-        -> Texture<R> {
-        Texture(name, info)
-    }
-    /// Get texture name
-    pub fn get_name(&self) -> <R as Resources>::Texture { self.0 }
     /// Get texture info
     pub fn get_info(&self) -> &tex::TextureInfo { &self.1 }
 }
 
 /// Sampler Handle
-#[derive(PartialEq, Debug)]
-pub struct Sampler<R: Resources>(
-    <R as Resources>::Sampler,
-    tex::SamplerInfo,
-);
+#[derive(Clone, PartialEq, Debug)]
+pub struct Sampler<R: Resources>(Arc<R::Sampler>, tex::SamplerInfo);
+bare!(Sampler);
 
-impl<R: Resources> Copy for Sampler<R> {}
+impl<R: Resources> Sampler<R> {
+    /// Get sampler info
+    pub fn get_info(&self) -> &tex::SamplerInfo { &self.1 }
+}
 
-impl<R: Resources> Clone for Sampler<R> {
-    fn clone(&self) -> Sampler<R> {
-        Sampler(self.0, self.1.clone())
+
+/// Stores reference-counted resources used in a command buffer.
+/// Seals actual resource names behind the interface, automatically
+/// referencing them both by the Factory on resource creation
+/// and the Renderer during CommandBuffer population.
+#[allow(missing_docs)]
+pub struct Manager<R: Resources> {
+    buffers:       Vec<Arc<R::Buffer>>,
+    array_buffers: Vec<Arc<R::ArrayBuffer>>,
+    shaders:       Vec<Arc<R::Shader>>,
+    programs:      Vec<Arc<R::Program>>,
+    frame_buffers: Vec<Arc<R::FrameBuffer>>,
+    surfaces:      Vec<Arc<R::Surface>>,
+    textures:      Vec<Arc<R::Texture>>,
+    samplers:      Vec<Arc<R::Sampler>>,
+}
+
+/// A service trait to be used by the device implementation
+#[allow(missing_docs)]
+pub trait Producer<R: Resources> {
+    fn make_buffer(&mut self, R::Buffer, BufferInfo) -> RawBuffer<R>;
+    fn make_array_buffer(&mut self, R::ArrayBuffer) -> ArrayBuffer<R>;
+    fn make_shader(&mut self, R::Shader, shade::Stage) -> Shader<R>;
+    fn make_program(&mut self, R::Program, shade::ProgramInfo) -> Program<R>;
+    fn make_frame_buffer(&mut self, R::FrameBuffer) -> FrameBuffer<R>;
+    fn make_surface(&mut self, R::Surface, tex::SurfaceInfo) -> Surface<R>;
+    fn make_texture(&mut self, R::Texture, tex::TextureInfo) -> Texture<R>;
+    fn make_sampler(&mut self, R::Sampler, tex::SamplerInfo) -> Sampler<R>;
+    /// Walk through all the handles, keep ones that are reference elsewhere
+    /// and call the provided delete function (resource-specific) for others
+    fn clean_with<T,
+        F1: Fn(&mut T, &R::Buffer),
+        F2: Fn(&mut T, &R::ArrayBuffer),
+        F3: Fn(&mut T, &R::Shader),
+        F4: Fn(&mut T, &R::Program),
+        F5: Fn(&mut T, &R::FrameBuffer),
+        F6: Fn(&mut T, &R::Surface),
+        F7: Fn(&mut T, &R::Texture),
+        F8: Fn(&mut T, &R::Sampler),
+    >(&mut self, &mut T, F1, F2, F3, F4, F5, F6, F7, F8);
+}
+
+impl<R: Resources> Producer<R> for Manager<R> {
+    fn make_buffer(&mut self, name: R::Buffer, info: BufferInfo) -> RawBuffer<R> {
+        let r = Arc::new(name);
+        self.buffers.push(r.clone());
+        RawBuffer(r, info)
+    }
+
+    fn make_array_buffer(&mut self, name: R::ArrayBuffer) -> ArrayBuffer<R> {
+        let r = Arc::new(name);
+        self.array_buffers.push(r.clone());
+        ArrayBuffer(r)
+    }
+
+    fn make_shader(&mut self, name: R::Shader, info: shade::Stage) -> Shader<R> {
+        let r = Arc::new(name);
+        self.shaders.push(r.clone());
+        Shader(r, info)
+    }
+
+    fn make_program(&mut self, name: R::Program, info: shade::ProgramInfo) -> Program<R> {
+        let r = Arc::new(name);
+        self.programs.push(r.clone());
+        Program(r, info)
+    }
+
+    fn make_frame_buffer(&mut self, name: R::FrameBuffer) -> FrameBuffer<R> {
+        let r = Arc::new(name);
+        self.frame_buffers.push(r.clone());
+        FrameBuffer(r)
+    }
+
+    fn make_surface(&mut self, name: R::Surface, info: tex::SurfaceInfo) -> Surface<R> {
+        let r = Arc::new(name);
+        self.surfaces.push(r.clone());
+        Surface(r, info)
+    }
+
+    fn make_texture(&mut self, name: R::Texture, info: tex::TextureInfo) -> Texture<R> {
+        let r = Arc::new(name);
+        self.textures.push(r.clone());
+        Texture(r, info)
+    }
+
+    fn make_sampler(&mut self, name: R::Sampler, info: tex::SamplerInfo) -> Sampler<R> {
+        let r = Arc::new(name);
+        self.samplers.push(r.clone());
+        Sampler(r, info)
+    }
+
+    fn clean_with<T,
+        F1: Fn(&mut T, &R::Buffer),
+        F2: Fn(&mut T, &R::ArrayBuffer),
+        F3: Fn(&mut T, &R::Shader),
+        F4: Fn(&mut T, &R::Program),
+        F5: Fn(&mut T, &R::FrameBuffer),
+        F6: Fn(&mut T, &R::Surface),
+        F7: Fn(&mut T, &R::Texture),
+        F8: Fn(&mut T, &R::Sampler),
+    >(&mut self, param: &mut T, f1: F1, f2: F2, f3: F3, f4: F4, f5: F5, f6: F6, f7: F7, f8: F8) {
+        fn clean_vec<X, T, F: Fn(&mut T, &X)>(param: &mut T, vector: &mut Vec<Arc<X>>, fun: F) {
+            use alloc::arc::{strong_count, weak_count};
+            use std::ops::Deref;
+            vector.retain(|v| {
+                let free = strong_count(v) == 1 && weak_count(v) == 0;
+                if free { fun(param, v.deref()); }
+                !free
+            });
+        }
+        clean_vec(param, &mut self.buffers,       f1);
+        clean_vec(param, &mut self.array_buffers, f2);
+        clean_vec(param, &mut self.shaders,       f3);
+        clean_vec(param, &mut self.programs,      f4);
+        clean_vec(param, &mut self.frame_buffers, f5);
+        clean_vec(param, &mut self.surfaces,      f6);
+        clean_vec(param, &mut self.textures,      f7);
+        clean_vec(param, &mut self.samplers,      f8);
     }
 }
 
-impl<R: Resources> Sampler<R> {
-    /// Creates a new sampler (used by device)
-    pub unsafe fn new(name: <R as Resources>::Sampler, info: tex::SamplerInfo)
-        -> Sampler<R> {
-        Sampler(name, info)
+impl<R: Resources> Manager<R> {
+    /// Create a new handle manager
+    pub fn new() -> Manager<R> {
+        Manager {
+            buffers: Vec::new(),
+            array_buffers: Vec::new(),
+            shaders: Vec::new(),
+            programs: Vec::new(),
+            frame_buffers: Vec::new(),
+            surfaces: Vec::new(),
+            textures: Vec::new(),
+            samplers: Vec::new(),
+        }
     }
-    /// Get sampler name
-    pub fn get_name(&self) -> <R as Resources>::Sampler { self.0 }
-    /// Get sampler info
-    pub fn get_info(&self) -> &tex::SamplerInfo { &self.1 }
+    /// Clear all references
+    pub fn clear(&mut self) {
+        self.buffers.clear();
+        self.array_buffers.clear();
+        self.shaders.clear();
+        self.programs.clear();
+        self.frame_buffers.clear();
+        self.surfaces.clear();
+        self.textures.clear();
+        self.samplers.clear();
+    }
+    /// Extend with all references of another handle manager
+    pub fn extend(&mut self, other: &Manager<R>) {
+        self.buffers      .extend(other.buffers      .iter().map(|h| h.clone()));
+        self.array_buffers.extend(other.array_buffers.iter().map(|h| h.clone()));
+        self.shaders      .extend(other.shaders      .iter().map(|h| h.clone()));
+        self.programs     .extend(other.programs     .iter().map(|h| h.clone()));
+        self.frame_buffers.extend(other.frame_buffers.iter().map(|h| h.clone()));
+        self.surfaces     .extend(other.surfaces     .iter().map(|h| h.clone()));
+        self.textures     .extend(other.textures     .iter().map(|h| h.clone()));
+        self.samplers     .extend(other.samplers     .iter().map(|h| h.clone()));
+    }
+    /// Count the total number of referenced resources
+    pub fn count(&self) -> usize {
+        self.buffers.len() +
+        self.array_buffers.len() +
+        self.shaders.len() +
+        self.programs.len() +
+        self.frame_buffers.len() +
+        self.surfaces.len() +
+        self.textures.len() +
+        self.samplers.len()
+    }
+    /// Reference a buffer
+    pub fn ref_buffer(&mut self, handle: &RawBuffer<R>) -> R::Buffer {
+        self.buffers.push(handle.0.clone());
+        *handle.0.deref()
+    }
+    /// Reference am array buffer
+    pub fn ref_array_buffer(&mut self, handle: &ArrayBuffer<R>) -> R::ArrayBuffer {
+        self.array_buffers.push(handle.0.clone());
+        *handle.0.deref()
+    }
+    /// Reference a shader
+    pub fn ref_shader(&mut self, handle: &Shader<R>) -> R::Shader {
+        self.shaders.push(handle.0.clone());
+        *handle.0.deref()
+    }
+    /// Reference a program
+    pub fn ref_program(&mut self, handle: &Program<R>) -> R::Program {
+        self.programs.push(handle.0.clone());
+        *handle.0.deref()
+    }
+    /// Reference a frame buffer
+    pub fn ref_frame_buffer(&mut self, handle: &FrameBuffer<R>) -> R::FrameBuffer {
+        self.frame_buffers.push(handle.0.clone());
+        *handle.0.deref()
+    }
+    /// Reference a surface
+    pub fn ref_surface(&mut self, handle: &Surface<R>) -> R::Surface {
+        self.surfaces.push(handle.0.clone());
+        *handle.0.deref()
+    }
+    /// Reference a texture
+    pub fn ref_texture(&mut self, handle: &Texture<R>) -> R::Texture {
+        self.textures.push(handle.0.clone());
+        *handle.0.deref()
+    }
+    /// Reference a sampler
+    pub fn ref_sampler(&mut self, handle: &Sampler<R>) -> R::Sampler {
+        self.samplers.push(handle.0.clone());
+        *handle.0.deref()
+    }
 }
 
 
@@ -249,14 +380,13 @@ mod test {
     }
 
     fn mock_buffer<T>(len: usize) -> super::Buffer<TestResources, T> {
+        use super::{Manager, Producer};
+        let mut handler = Manager::new();
         super::Buffer {
-            raw: unsafe { super::RawBuffer::new(
-                (),
-                BufferInfo {
+            raw: handler.make_buffer((), BufferInfo {
                     usage: BufferUsage::Static,
                     size: mem::size_of::<T>() * len,
-                },
-            ) },
+            }),
             phantom_t: PhantomData,
         }
     }
@@ -271,5 +401,24 @@ mod test {
     #[should_fail]
     fn test_buffer_zero_len() {
         let _ = mock_buffer::<()>(0).len();
+    }
+
+    #[test]
+    fn test_cleanup() {
+        use super::{Manager, Producer};
+        let mut man: Manager<TestResources> = Manager::new();
+        let _ = man.make_frame_buffer(());
+        let mut count = 0u8;
+        man.clean_with(&mut count,
+            |_,_| (),
+            |_,_| (),
+            |_,_| (),
+            |_,_| (),
+            |b,_| { *b += 1; },
+            |_,_| (),
+            |_,_| (),
+            |_,_| ()
+            );
+        assert_eq!(count, 1);
     }
 }

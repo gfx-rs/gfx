@@ -14,7 +14,7 @@
 
 //! Shader parameter handling.
 
-use std::cell::Cell;
+use std::cell::RefCell;
 use device::shade;
 use device::shade::UniformValue;
 use device::{handle, Resources};
@@ -28,15 +28,15 @@ pub trait ToUniform {
     fn to_uniform(&self) -> shade::UniformValue;
 }
 
-macro_rules! impl_ToUniform(
-    ($ty_src:ty, $ty_dst:expr) => (
+macro_rules! impl_ToUniform{
+    ($ty_src:ty, $ty_dst:expr) => {
         impl ToUniform for $ty_src {
             fn to_uniform(&self) -> shade::UniformValue {
                 $ty_dst(*self)
             }
         }
-    );
-);
+    }
+}
 
 impl_ToUniform!(i32, UniformValue::I32);
 impl_ToUniform!(f32, UniformValue::F32);
@@ -120,7 +120,7 @@ pub struct NamedCell<T> {
     /// Name
     pub name: String,
     /// Value
-    pub value: Cell<T>,
+    pub value: RefCell<T>,
 }
 
 /// A dictionary of parameters, meant to be shared between different programs
@@ -166,13 +166,13 @@ impl<R: Resources> ShaderParam for ParamDictionary<R> {
 
     fn fill_params(&self, link: &ParamDictionaryLink, params: &mut ParamStorage<R>) {
         for &id in link.uniforms.iter() {
-            params.uniforms.push(self.uniforms[id].value.get());
+            params.uniforms.push(self.uniforms[id].value.borrow().clone());
         }
         for &id in link.blocks.iter() {
-            params.blocks.push(self.blocks[id].value.get());
+            params.blocks.push(self.blocks[id].value.borrow().clone());
         }
         for &id in link.textures.iter() {
-            params.textures.push(self.textures[id].value.get());
+            params.textures.push(self.textures[id].value.borrow().clone());
         }
     }
 }

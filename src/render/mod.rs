@@ -41,7 +41,6 @@ pub mod shade;
 pub mod target;
 
 
-const TRACKED_ATTRIBUTES: usize = 8;
 type CachedAttribute<R: Resources> = (handle::RawBuffer<R>, attrib::Format);
 
 /// The internal state of the renderer.
@@ -50,9 +49,9 @@ struct RenderState<R: Resources> {
     is_frame_buffer_set: bool,
     frame: target::Frame<R>,
     is_array_buffer_set: bool,
-    program_name: Option<R::Program>,
+    program: Option<handle::Program<R>>,
     index: Option<handle::RawBuffer<R>>,
-    attributes: [Option<CachedAttribute<R>>; TRACKED_ATTRIBUTES],
+    attributes: Vec<Option<CachedAttribute<R>>>,
     draw: DrawState,
 }
 
@@ -63,9 +62,9 @@ impl<R: Resources> RenderState<R> {
             is_frame_buffer_set: false,
             frame: target::Frame::new(0,0),
             is_array_buffer_set: false,
-            program_name: None,
+            program: None,
             index: None,
-            attributes: [None; TRACKED_ATTRIBUTES],
+            attributes: Vec::new(),
             draw: DrawState::new(),
         }
     }
@@ -103,18 +102,19 @@ impl<R: Resources> ParamStorage<R> {
 /// Useful when Renderer is borrowed, and we need to issue commands.
 trait CommandBufferExt<R: Resources>: CommandBuffer<R> {
     /// Bind a plane to some target
-    fn bind_target(&mut self, Access, Target, Option<&target::Plane<R>>);
+    fn bind_target(&mut self, &mut handle::Manager<R>, Access, Target,
+                   Option<&target::Plane<R>>);
 }
 
 impl<R: Resources, C: CommandBuffer<R>> CommandBufferExt<R> for C {
-    fn bind_target(&mut self, access: Access, to: Target,
-                   plane: Option<&target::Plane<R>>) {
+    fn bind_target(&mut self, handles: &mut handle::Manager<R>, access: Access,
+                   to: Target, plane: Option<&target::Plane<R>>) {
         match plane {
             None => self.unbind_target(access, to),
             Some(&target::Plane::Surface(ref suf)) =>
-                self.bind_target_surface(access, to, suf.get_name()),
+                self.bind_target_surface(access, to, handles.ref_surface(suf)),
             Some(&target::Plane::Texture(ref tex, level, layer)) =>
-                self.bind_target_texture(access, to, tex.get_name(), level, layer),
+                self.bind_target_texture(access, to, handles.ref_texture(tex), level, layer),
         }
     }
 }
@@ -139,6 +139,7 @@ pub enum DrawError<E> {
 pub struct Renderer<R: Resources, C: CommandBuffer<R>> {
     command_buffer: C,
     data_buffer: DataBuffer,
+    handles: handle::Manager<R>,
     common_array_buffer: Result<handle::ArrayBuffer<R>, ()>,
     draw_frame_buffer: handle::FrameBuffer<R>,
     read_frame_buffer: handle::FrameBuffer<R>,
@@ -152,12 +153,13 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     pub fn reset(&mut self) {
         self.command_buffer.clear();
         self.data_buffer.clear();
+        self.handles.clear();
         self.render_state = RenderState::new();
     }
 
     /// Get command and data buffers to be submitted to the device.
-    pub fn as_buffer(&self) -> (&C, &DataBuffer) {
-        (&self.command_buffer, &self.data_buffer)
+    pub fn as_buffer(&self) -> (&C, &DataBuffer, &handle::Manager<R>) {
+        (&self.command_buffer, &self.data_buffer, &self.handles)
     }
 
     /// Clone the renderer shared data but ignore the commands.
@@ -165,6 +167,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         Renderer {
             command_buffer: CommandBuffer::new(),
             data_buffer: DataBuffer::new(),
+            handles: handle::Manager::new(),
             common_array_buffer: self.common_array_buffer.clone(),
             draw_frame_buffer: self.draw_frame_buffer.clone(),
             read_frame_buffer: self.read_frame_buffer.clone(),
@@ -245,29 +248,31 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     }
 
     /// Update a buffer with data from a vector.
-    pub fn update_buffer_vec<T: Copy>(&mut self, buf: handle::Buffer<R, T>,
+    pub fn update_buffer_vec<T: Copy>(&mut self, buf: &handle::Buffer<R, T>,
                              data: &[T], offset_elements: usize) {
         let esize = mem::size_of::<T>();
         let offset_bytes = esize * offset_elements;
         debug_assert!(data.len() * esize + offset_bytes <= buf.get_info().size);
         let pointer = self.data_buffer.add_vec(data);
-        self.command_buffer.update_buffer(buf.get_name(), pointer, offset_bytes);
+        self.command_buffer.update_buffer(
+            self.handles.ref_buffer(buf.raw()), pointer, offset_bytes);
     }
 
     /// Update a buffer with data from a single type.
     pub fn update_buffer_struct<U, T: Copy>(&mut self,
-                                buf: handle::Buffer<R, U>, data: &T) {
+                                buf: &handle::Buffer<R, U>, data: &T) {
         debug_assert!(mem::size_of::<T>() <= buf.get_info().size);
         let pointer = self.data_buffer.add_struct(data);
-        self.command_buffer.update_buffer(buf.get_name(), pointer, 0);
+        self.command_buffer.update_buffer(
+            self.handles.ref_buffer(buf.raw()), pointer, 0);
     }
 
     /// Update the contents of a texture.
-    pub fn update_texture<T: Copy>(&mut self, tex: handle::Texture<R>,
+    pub fn update_texture<T: Copy>(&mut self, tex: &handle::Texture<R>,
                           img: device::tex::ImageInfo, data: &[T]) {
         debug_assert!(tex.get_info().contains(&img));
         let pointer = self.data_buffer.add_vec(data);
-        self.command_buffer.update_texture(tex.get_info().kind, tex.get_name(), img, pointer);
+        self.command_buffer.update_texture(tex.get_info().kind, self.handles.ref_texture(tex), img, pointer);
     }
 
     fn bind_frame(&mut self, frame: &target::Frame<R>) {
@@ -285,12 +290,14 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         if frame.is_default() {
             if self.render_state.is_frame_buffer_set {
                 // binding the default FBO, not touching our common one
-                self.command_buffer.bind_frame_buffer(Access::Draw, self.default_frame_buffer.get_name());
+                self.command_buffer.bind_frame_buffer(Access::Draw,
+                    self.handles.ref_frame_buffer(&self.default_frame_buffer));
                 self.render_state.is_frame_buffer_set = false;
             }
         } else {
             if !self.render_state.is_frame_buffer_set {
-                self.command_buffer.bind_frame_buffer(Access::Draw, self.draw_frame_buffer.get_name());
+                self.command_buffer.bind_frame_buffer(Access::Draw,
+                    self.handles.ref_frame_buffer(&self.draw_frame_buffer));
                 self.render_state.is_frame_buffer_set = true;
             }
             // cut off excess color planes
@@ -303,7 +310,8 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
             for (i, (cur, new)) in self.render_state.frame.colors.iter_mut()
                                        .zip(frame.colors.iter()).enumerate() {
                 if *cur != *new {
-                    self.command_buffer.bind_target(Access::Draw, Target::Color(i as u8), Some(new));
+                    self.command_buffer.bind_target(&mut self.handles,
+                        Access::Draw, Target::Color(i as u8), Some(new));
                     *cur = new.clone();
                 }
             }
@@ -312,33 +320,40 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
             // append new planes
             for (i, new) in frame.colors.iter().enumerate()
                                  .skip(self.render_state.frame.colors.len()) {
-                self.command_buffer.bind_target(Access::Draw, Target::Color(i as u8), Some(new));
+                self.command_buffer.bind_target(&mut self.handles,
+                    Access::Draw, Target::Color(i as u8), Some(new));
                 self.render_state.frame.colors.push(new.clone());
             }
             // set depth
             if self.render_state.frame.depth != frame.depth {
-                self.command_buffer.bind_target(Access::Draw, Target::Depth, frame.depth.as_ref());
+                self.command_buffer.bind_target(&mut self.handles,
+                    Access::Draw, Target::Depth, frame.depth.as_ref());
                 self.render_state.frame.depth = frame.depth.clone();
             }
             // set stencil
             if self.render_state.frame.stencil != frame.stencil {
-                self.command_buffer.bind_target(Access::Draw, Target::Stencil, frame.stencil.as_ref());
+                self.command_buffer.bind_target(&mut self.handles,
+                    Access::Draw, Target::Stencil, frame.stencil.as_ref());
                 self.render_state.frame.stencil = frame.stencil.clone();
             }
         }
     }
 
     fn bind_read_frame(&mut self, frame: &target::Frame<R>) {
-        self.command_buffer.bind_frame_buffer(Access::Read, self.read_frame_buffer.get_name());
+        self.command_buffer.bind_frame_buffer(Access::Read,
+            self.handles.ref_frame_buffer(&self.read_frame_buffer));
         // color
         if frame.colors.is_empty() {
             self.command_buffer.unbind_target(Access::Read, Target::Color(0));
         }else {
-            self.command_buffer.bind_target(Access::Read, Target::Color(0), Some(&frame.colors[0]));
+            self.command_buffer.bind_target(&mut self.handles,
+                Access::Read, Target::Color(0), Some(&frame.colors[0]));
         }
         // depth/stencil
-        self.command_buffer.bind_target(Access::Read, Target::Depth, frame.depth.as_ref());
-        self.command_buffer.bind_target(Access::Read, Target::Stencil, frame.stencil.as_ref());
+        self.command_buffer.bind_target(&mut self.handles,
+            Access::Read, Target::Depth, frame.depth.as_ref());
+        self.command_buffer.bind_target(&mut self.handles,
+            Access::Read, Target::Stencil, frame.stencil.as_ref());
     }
 
     fn bind_state(&mut self, state: &DrawState) {
@@ -372,9 +387,10 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
             Err(e) => return Err(e),
         };
         //Warning: this is not protected against deleted resources in single-threaded mode
-        if self.render_state.program_name != Some(program.get_name()) {
-            self.command_buffer.bind_program(program.get_name());
-            self.render_state.program_name = Some(program.get_name());
+        if self.render_state.program.as_ref() != Some(&program) {
+            self.render_state.program = Some(program.clone());
+            self.command_buffer.bind_program(
+                self.handles.ref_program(&program));
         }
         self.upload_parameters(program);
         Ok(program)
@@ -401,21 +417,27 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         for (i, (_, buf)) in info.blocks.iter()
             .zip(self.parameters.blocks.iter()).enumerate() {
             self.command_buffer.bind_uniform_block(
-                program.get_name(),
+                self.handles.ref_program(program),
                 i as device::UniformBufferSlot,
                 i as device::UniformBlockIndex,
-                buf.get_name()
+                self.handles.ref_buffer(&buf)
             );
         }
         // bind textures and samplers
-        for (i, (var, &(tex, sampler))) in info.textures.iter()
+        for (i, (var, &(ref tex, ref sampler))) in info.textures.iter()
             .zip(self.parameters.textures.iter()).enumerate() {
-            if sampler.is_some() && tex.get_info().kind.get_aa_mode().is_some() {
-                error!("A sampler provided for an AA texture: {}", var.name.clone());
-            }
+            let sam = match *sampler {
+                Some(ref s) => {
+                    if tex.get_info().kind.get_aa_mode().is_some() {
+                        error!("A sampler provided for an AA texture: {}", var.name.clone());
+                    }
+                    Some((self.handles.ref_sampler(s), *s.get_info()))
+                },
+                None => None,
+            };
             self.command_buffer.bind_uniform(var.location, UniformValue::I32(i as i32));
-            self.command_buffer.bind_texture(i as device::TextureSlot,
-                tex.get_info().kind, tex.get_name(), sampler);
+            self.command_buffer.bind_texture(i as device::TextureSlot, tex.get_info().kind,
+                self.handles.ref_texture(tex), sam);
         }
     }
 
@@ -424,7 +446,9 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         if !self.render_state.is_array_buffer_set {
             // It's Ok if the array buffer is not supported. We can just ignore it.
             match self.common_array_buffer {
-                Ok(ref ab) => self.command_buffer.bind_array_buffer(ab.get_name()),
+                Ok(ref ab) => self.command_buffer.bind_array_buffer(
+                    self.handles.ref_array_buffer(ab)
+                ),
                 Err(()) => (),
             };
             self.render_state.is_array_buffer_set = true;
@@ -432,45 +456,49 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         for (attr_index, sat) in attrib_iter.zip(info.attributes.iter()) {
             let vat = &mesh.attributes[attr_index as usize];
             let loc = sat.location as usize;
-            let need_update = loc >= self.render_state.attributes.len() ||
-                match self.render_state.attributes[loc] {
-                    Some((buf, fmt)) => buf != vat.buffer || fmt != vat.format,
-                    None => true,
-                };
+            if loc >= self.render_state.attributes.len() {
+                let range = self.render_state.attributes.len() .. loc+1;
+                self.render_state.attributes.extend(range.map(|_| None));
+            }
+            let need_update = match self.render_state.attributes[loc] {
+                Some((ref buf, fmt)) => *buf != vat.buffer || fmt != vat.format,
+                None => true,
+            };
             if need_update {
                 self.command_buffer.bind_attribute(loc as device::AttributeSlot,
-                    vat.buffer.get_name(), vat.format);
-                if loc < self.render_state.attributes.len() {
-                    self.render_state.attributes[loc] = Some((vat.buffer, vat.format));
-                }
+                    self.handles.ref_buffer(&vat.buffer), vat.format);
+                self.render_state.attributes[loc] = Some((vat.buffer.clone(), vat.format));
             }
         }
     }
 
-    fn bind_index<T>(&mut self, buf: handle::Buffer<R, T>) {
-        if self.render_state.index != Some(buf.raw()) {
-            self.command_buffer.bind_index(buf.get_name());
-            self.render_state.index = Some(buf.raw());
+    fn bind_index<T>(&mut self, buf: &handle::Buffer<R, T>) {
+        if self.render_state.index.as_ref() != Some(buf.raw()) {
+            self.render_state.index = Some(buf.raw().clone());
+            self.command_buffer.bind_index(self.handles.ref_buffer(buf.raw()));
         }
     }
 
     fn draw_slice(&mut self, slice: &mesh::Slice<R>, instances: InstanceOption) {
-        let mesh::Slice { start, end, prim_type, kind } = slice.clone();
-        match kind {
+        let &mesh::Slice { start, end, prim_type, ref kind } = slice;
+        match *kind {
             SliceKind::Vertex => {
                 self.command_buffer.call_draw(prim_type, start, end - start, instances);
             },
-            SliceKind::Index8(buf, base) => {
+            SliceKind::Index8(ref buf, base) => {
                 self.bind_index(buf);
-                self.command_buffer.call_draw_indexed(prim_type, IntSize::U8, start, end - start, base, instances);
+                self.command_buffer.call_draw_indexed(prim_type, IntSize::U8,
+                    start, end - start, base, instances);
             },
-            SliceKind::Index16(buf, base) => {
+            SliceKind::Index16(ref buf, base) => {
                 self.bind_index(buf);
-                self.command_buffer.call_draw_indexed(prim_type, IntSize::U16, start, end - start, base, instances);
+                self.command_buffer.call_draw_indexed(prim_type, IntSize::U16,
+                    start, end - start, base, instances);
             },
-            SliceKind::Index32(buf, base) => {
+            SliceKind::Index32(ref buf, base) => {
                 self.bind_index(buf);
-                self.command_buffer.call_draw_indexed(prim_type, IntSize::U32, start, end - start, base, instances);
+                self.command_buffer.call_draw_indexed(prim_type, IntSize::U32,
+                    start, end - start, base, instances);
             },
         }
     }

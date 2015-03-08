@@ -154,13 +154,13 @@ pub trait Factory<R: Resources> {
     /// Associated mapper type
     type Mapper: Clone + mapping::Raw;
     // resource creation
-    fn create_buffer_raw(&mut self, size: usize, usage: BufferUsage) -> handle::Buffer<R, ()>;
+    fn create_buffer_raw(&mut self, size: usize, usage: BufferUsage) -> handle::RawBuffer<R>;
     fn create_buffer<T>(&mut self, num: usize, usage: BufferUsage) -> handle::Buffer<R, T> {
-        self.create_buffer_raw(num * mem::size_of::<T>(), usage).cast()
+        handle::Buffer::from_raw(self.create_buffer_raw(num * mem::size_of::<T>(), usage))
     }
-    fn create_buffer_static_raw(&mut self, data: &[u8]) -> handle::Buffer<R, ()>;
+    fn create_buffer_static_raw(&mut self, data: &[u8]) -> handle::RawBuffer<R>;
     fn create_buffer_static<T: Copy>(&mut self, data: &[T]) -> handle::Buffer<R, T> {
-        self.create_buffer_static_raw(as_byte_slice(data)).cast()
+        handle::Buffer::from_raw(self.create_buffer_static_raw(as_byte_slice(data)))
     }
     fn create_array_buffer(&mut self) -> Result<handle::ArrayBuffer<R>, ()>;
     fn create_shader(&mut self, stage: shade::Stage, code: &[u8]) ->
@@ -168,46 +168,35 @@ pub trait Factory<R: Resources> {
     fn create_program(&mut self, shaders: &[handle::Shader<R>], targets: Option<&[&str]>)
                       -> Result<handle::Program<R>, ()>;
     fn create_frame_buffer(&mut self) -> handle::FrameBuffer<R>;
-    fn create_surface(&mut self, info: tex::SurfaceInfo) -> Result<handle::Surface<R>, tex::SurfaceError>;
-    fn create_texture(&mut self, info: tex::TextureInfo) -> Result<handle::Texture<R>, tex::TextureError>;
-    fn create_sampler(&mut self, info: tex::SamplerInfo) -> handle::Sampler<R>;
+    fn create_surface(&mut self, tex::SurfaceInfo) -> Result<handle::Surface<R>, tex::SurfaceError>;
+    fn create_texture(&mut self, tex::TextureInfo) -> Result<handle::Texture<R>, tex::TextureError>;
+    fn create_sampler(&mut self, tex::SamplerInfo) -> handle::Sampler<R>;
 
     /// Return the framebuffer handle for the screen.
     fn get_main_frame_buffer(&self) -> handle::FrameBuffer<R>;
 
-    // resource deletion
-    fn delete_buffer_raw(&mut self, buf: handle::Buffer<R, ()>);
-    fn delete_buffer<T>(&mut self, buf: handle::Buffer<R, T>) {
-        self.delete_buffer_raw(buf.cast());
-    }
-    fn delete_shader(&mut self, handle::Shader<R>);
-    fn delete_program(&mut self, handle::Program<R>);
-    fn delete_surface(&mut self, handle::Surface<R>);
-    fn delete_texture(&mut self, handle::Texture<R>);
-    fn delete_sampler(&mut self, handle::Sampler<R>);
-
     /// Update the information stored in a specific buffer
-    fn update_buffer_raw(&mut self, buf: handle::Buffer<R, ()>, data: &[u8],
-                         offset_bytes: usize);
-    fn update_buffer<T: Copy>(&mut self, buf: handle::Buffer<R, T>, data: &[T],
-                     offset_elements: usize) {
-        self.update_buffer_raw(buf.cast(), as_byte_slice(data), mem::size_of::<T>() * offset_elements)
+    fn update_buffer_raw(&mut self, buf: &handle::RawBuffer<R>, data: &[u8], offset_bytes: usize);
+    fn update_buffer<T: Copy>(&mut self, buf: &handle::Buffer<R, T>, data: &[T], offset_elements: usize) {
+        self.update_buffer_raw(buf.raw(), as_byte_slice(data), mem::size_of::<T>() * offset_elements)
     }
-    fn map_buffer_raw(&mut self, buf: handle::Buffer<R, ()>, access: MapAccess) -> Self::Mapper;
-    fn unmap_buffer_raw(&mut self, map: Self::Mapper);
-    fn map_buffer_readable<T: Copy>(&mut self, buf: handle::Buffer<R, T>) -> mapping::Readable<T, R, Self>;
-    fn map_buffer_writable<T: Copy>(&mut self, buf: handle::Buffer<R, T>) -> mapping::Writable<T, R, Self>;
-    fn map_buffer_rw<T: Copy>(&mut self, buf: handle::Buffer<R, T>) -> mapping::RW<T, R, Self>;
+    fn map_buffer_raw(&mut self, &handle::RawBuffer<R>, MapAccess) -> Self::Mapper;
+    fn unmap_buffer_raw(&mut self, Self::Mapper);
+    fn map_buffer_readable<T: Copy>(&mut self, &handle::Buffer<R, T>) -> mapping::Readable<T, R, Self>;
+    fn map_buffer_writable<T: Copy>(&mut self, &handle::Buffer<R, T>) -> mapping::Writable<T, R, Self>;
+    fn map_buffer_rw<T: Copy>(&mut self, &handle::Buffer<R, T>) -> mapping::RW<T, R, Self>;
 
     /// Update the information stored in a texture
-    fn update_texture_raw(&mut self, tex: &handle::Texture<R>, img: &tex::ImageInfo,
-                          data: &[u8]) -> Result<(), tex::TextureError>;
-    fn update_texture<T: Copy>(&mut self, tex: &handle::Texture<R>,
-                      img: &tex::ImageInfo, data: &[T])
+    fn update_texture_raw(&mut self, tex: &handle::Texture<R>, img: &tex::ImageInfo, data: &[u8])
+                          -> Result<(), tex::TextureError>;
+    fn update_texture<T: Copy>(&mut self, tex: &handle::Texture<R>, img: &tex::ImageInfo, data: &[T])
                       -> Result<(), tex::TextureError> {
         self.update_texture_raw(tex, img, as_byte_slice(data))
     }
-    fn generate_mipmap(&mut self, tex: &handle::Texture<R>);
+    fn generate_mipmap(&mut self, &handle::Texture<R>);
+
+    /// Clean up all unreferenced resources
+    fn cleanup(&mut self);
 }
 
 
@@ -220,8 +209,17 @@ pub trait Device {
 
     /// Returns the capabilities available to the specific API implementation
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
+
     /// Reset all the states to disabled/default
     fn reset_state(&mut self);
+
     /// Submit a command buffer for execution
-    fn submit(&mut self, buffer: (&Self::CommandBuffer, &draw::DataBuffer));
+    fn submit(&mut self, (
+        &Self::CommandBuffer,
+        &draw::DataBuffer,
+        &handle::Manager<Self::Resources>
+    ));
+
+    /// Notify the finished frame
+    fn after_frame(&mut self);
 }

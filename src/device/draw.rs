@@ -96,8 +96,7 @@ pub trait CommandBuffer<R: Resources> {
     /// Unbind any surface from the specified target slot
     fn unbind_target(&mut self, Access, Target);
     /// Bind a surface to the specified target slot
-    fn bind_target_surface(&mut self, Access, Target,
-                           R::Surface);
+    fn bind_target_surface(&mut self, Access, Target, R::Surface);
     /// Bind a level of the texture to the specified target slot
     fn bind_target_texture(&mut self, Access, Target, R::Texture,
                            target::Level, Option<target::Layer>);
@@ -109,7 +108,7 @@ pub trait CommandBuffer<R: Resources> {
     fn bind_uniform(&mut self, shade::Location, shade::UniformValue);
     /// Bind a texture
     fn bind_texture(&mut self, super::TextureSlot, tex::TextureKind,
-                    R::Texture, Option<::SamplerHandle<R>>);
+                    R::Texture, Option<(R::Sampler, tex::SamplerInfo)>);
     /// Select, which color buffers are going to be targetted by the shader
     fn set_draw_color_buffers(&mut self, usize);
     /// Set primitive topology

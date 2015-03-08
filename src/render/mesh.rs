@@ -68,7 +68,7 @@ impl<R: Resources> Mesh<R> {
                        -> Mesh<R> {
         Mesh {
             num_vertices: nv,
-            attributes: VertexFormat::generate(None::<&V>, buf.raw()),
+            attributes: VertexFormat::generate(None::<&V>, buf.raw().clone()),
         }
     }
 
@@ -77,8 +77,8 @@ impl<R: Resources> Mesh<R> {
                                  buf: BufferHandle<R, V>,
                                  nv: device::VertexCount,
                                  inst: BufferHandle<R, U>) -> Mesh<R> {
-        let per_vertex   = VertexFormat::generate(None::<&V>, buf.raw());
-        let per_instance = VertexFormat::generate(None::<&U>, inst.raw());
+        let per_vertex   = VertexFormat::generate(None::<&V>, buf.raw().clone());
+        let per_instance = VertexFormat::generate(None::<&U>, inst.raw().clone());
 
         let mut attributes = per_vertex;
         for mut at in per_instance.into_iter() {
