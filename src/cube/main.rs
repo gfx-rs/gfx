@@ -205,5 +205,6 @@ fn main() {
         renderer.reset();
 
         window.swap_buffers();
+        device.after_frame();
     }
 }

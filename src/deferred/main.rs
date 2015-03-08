@@ -335,16 +335,16 @@ fn create_g_buffer<R: gfx::Resources, F: Factory<R>>(width: u16, height: u16, fa
     let texture_diffuse = factory.create_texture(texture_info_float).unwrap();
     let texture_depth   = factory.create_texture(texture_info_depth).unwrap();
 
-    frame.colors.push(Plane::Texture(texture_pos,     0, None));
-    frame.colors.push(Plane::Texture(texture_normal,  0, None));
-    frame.colors.push(Plane::Texture(texture_diffuse, 0, None));
-    frame.depth = Some(Plane::Texture(texture_depth,  0, None));
+    frame.colors.push(Plane::Texture(texture_pos    .clone(), 0, None));
+    frame.colors.push(Plane::Texture(texture_normal .clone(), 0, None));
+    frame.colors.push(Plane::Texture(texture_diffuse.clone(), 0, None));
+    frame.depth =Some(Plane::Texture(texture_depth  .clone(), 0, None));
 
     (frame, texture_pos, texture_normal, texture_diffuse, texture_depth)
 }
 
 fn create_res_buffer<R: gfx::Resources, F: Factory<R>>(width: u16, height: u16,
-                     factory: &mut F, texture_depth: gfx::TextureHandle<R>)
+                     factory: &mut F, texture_depth: &gfx::TextureHandle<R>)
                      -> (gfx::Frame<R>, gfx::TextureHandle<R>, gfx::TextureHandle<R>) {
     let mut frame = gfx::Frame::new(width, height);
 
@@ -359,10 +359,10 @@ fn create_res_buffer<R: gfx::Resources, F: Factory<R>>(width: u16, height: u16,
 
     let texture_frame = factory.create_texture(texture_info_float).unwrap();
 
-    frame.colors.push(Plane::Texture(texture_frame, 0, None));
-    frame.depth = Some(Plane::Texture(texture_depth, 0, None));
+    frame.colors.push(Plane::Texture(texture_frame.clone(), 0, None));
+    frame.depth =Some(Plane::Texture(texture_depth.clone(), 0, None));
 
-    (frame, texture_frame, texture_depth)
+    (frame, texture_frame, texture_depth.clone())
 }
 
 fn main() {
@@ -390,7 +390,7 @@ fn main() {
     type R = gfx_device_gl::GlResources;
 
     let (g_buffer, texture_pos, texture_normal, texture_diffuse, texture_depth)  = create_g_buffer(w as u16, h as u16, &mut device);
-    let (res_buffer, texture_frame, _)  = create_res_buffer(w as u16, h as u16, &mut device, texture_depth);
+    let (res_buffer, texture_frame, _)  = create_res_buffer(w as u16, h as u16, &mut device, &texture_depth);
 
     let seed = {
         let rand_seed = rand::thread_rng().gen();
@@ -464,7 +464,7 @@ fn main() {
         let state = gfx::DrawState::new();
 
         let data = BlitParams {
-          tex: (texture_pos, Some(sampler)),
+          tex: (texture_pos.clone(), Some(sampler.clone())),
         };
 
         context.make_batch(&program, data, &mesh, slice, &state)
@@ -527,13 +527,13 @@ fn main() {
 
         let light_data = LightParams {
             transform: Matrix4::identity().into_fixed(),
-            light_pos_buf: light_pos_buffer.raw(),
+            light_pos_buf: light_pos_buffer.raw().clone(),
             radius: 3.0,
             cam_pos: Vector3::new(0.0, 0.0, 0.0).into_fixed(),
             frame_res: [w as f32, h as f32],
-            tex_pos: (texture_pos, Some(sampler)),
-            tex_normal: (texture_normal, Some(sampler)),
-            tex_diffuse: (texture_diffuse, Some(sampler)),
+            tex_pos: (texture_pos.clone(), Some(sampler.clone())),
+            tex_normal: (texture_normal.clone(), Some(sampler.clone())),
+            tex_diffuse: (texture_diffuse.clone(), Some(sampler.clone())),
         };
 
         let light = {
@@ -546,7 +546,7 @@ fn main() {
 
         let emitter_data = EmitterParams {
             transform: Matrix4::identity().into_fixed(),
-            light_pos_buf: light_pos_buffer.raw(),
+            light_pos_buf: light_pos_buffer.raw().clone(),
             radius: 0.2,
         };
 
@@ -580,13 +580,13 @@ fn main() {
                 glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Action::Press, _) =>
                     window.set_should_close(true),
                 glfw::WindowEvent::Key(glfw::Key::Num1, _, glfw::Action::Press, _) =>
-                    debug_buf = Some(texture_pos),
+                    debug_buf = Some(texture_pos.clone()),
                 glfw::WindowEvent::Key(glfw::Key::Num2, _, glfw::Action::Press, _) =>
-                    debug_buf = Some(texture_normal),
+                    debug_buf = Some(texture_normal.clone()),
                 glfw::WindowEvent::Key(glfw::Key::Num3, _, glfw::Action::Press, _) =>
-                    debug_buf = Some(texture_diffuse),
+                    debug_buf = Some(texture_diffuse.clone()),
                 glfw::WindowEvent::Key(glfw::Key::Num4, _, glfw::Action::Press, _) =>
-                    debug_buf = Some(texture_depth),
+                    debug_buf = Some(texture_depth.clone()),
                 glfw::WindowEvent::Key(glfw::Key::Num0, _, glfw::Action::Press, _) =>
                     debug_buf = None,
                 _ => {},
@@ -631,16 +631,16 @@ fn main() {
             p[1] = terrain_scale.y * y;
             p[2] = terrain_scale.z * h + 0.5;
         };
-        device.update_buffer(light_pos_buffer, light_pos_vec.as_slice(), 0);
+        device.update_buffer(&light_pos_buffer, light_pos_vec.as_slice(), 0);
 
         // Render the terrain to the geometry buffer
         renderer.clear(clear_data, gfx::COLOR|gfx::DEPTH, &g_buffer);
         renderer.draw(&(&terrain, &context), &g_buffer).unwrap();
 
         match debug_buf {
-            Some(tex) => {
+            Some(ref tex) => {
                 // Show one of the immediate buffers
-                blit.params.tex = (tex, Some(sampler));
+                blit.params.tex = (tex.clone(), Some(sampler.clone()));
                 renderer.clear(clear_data, gfx::COLOR | gfx::DEPTH, &frame);
                 renderer.draw(
                     &(&blit, &context),
@@ -663,7 +663,7 @@ fn main() {
 
                 // Show the result
                 renderer.clear(clear_data, gfx::COLOR | gfx::DEPTH, &frame);
-                blit.params.tex = (texture_frame, Some(sampler));
+                blit.params.tex = (texture_frame.clone(), Some(sampler.clone()));
                 renderer.draw(&(&blit, &context), &frame).unwrap();
             }
         }
@@ -671,5 +671,6 @@ fn main() {
         renderer.reset();
 
         window.swap_buffers();
+        device.after_frame();
     }
 }
