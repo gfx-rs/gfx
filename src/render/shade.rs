@@ -28,15 +28,15 @@ pub trait ToUniform {
     fn to_uniform(&self) -> shade::UniformValue;
 }
 
-macro_rules! impl_ToUniform(
-    ($ty_src:ty, $ty_dst:expr) => (
+macro_rules! impl_ToUniform{
+    ($ty_src:ty, $ty_dst:expr) => {
         impl ToUniform for $ty_src {
             fn to_uniform(&self) -> shade::UniformValue {
                 $ty_dst(*self)
             }
         }
-    );
-);
+    }
+}
 
 impl_ToUniform!(i32, UniformValue::I32);
 impl_ToUniform!(f32, UniformValue::F32);

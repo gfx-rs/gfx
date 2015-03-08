@@ -93,7 +93,7 @@ impl<
         ::Renderer {
             command_buffer: device::draw::CommandBuffer::new(),
             data_buffer: device::draw::DataBuffer::new(),
-            handler: device::handle::Manager::new(),
+            handles: device::handle::Manager::new(),
             common_array_buffer: self.create_array_buffer(),
             draw_frame_buffer: self.create_frame_buffer(),
             read_frame_buffer: self.create_frame_buffer(),
