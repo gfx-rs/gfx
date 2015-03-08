@@ -254,7 +254,7 @@ impl<R: Resources> Producer<R> for Manager<R> {
             use alloc::arc::{strong_count, weak_count};
             use std::ops::Deref;
             vector.retain(|v| {
-                let free = strong_count(v) == 1 && weak_count(v) == 1;
+                let free = strong_count(v) == 1 && weak_count(v) == 0;
                 if free { fun(param, v.deref()); }
                 !free
             });
@@ -380,8 +380,8 @@ mod test {
     }
 
     fn mock_buffer<T>(len: usize) -> super::Buffer<TestResources, T> {
-        use super::Producer;
-        let mut handler = super::Manager::new();
+        use super::{Manager, Producer};
+        let mut handler = Manager::new();
         super::Buffer {
             raw: handler.make_buffer((), BufferInfo {
                     usage: BufferUsage::Static,
@@ -401,5 +401,24 @@ mod test {
     #[should_fail]
     fn test_buffer_zero_len() {
         let _ = mock_buffer::<()>(0).len();
+    }
+
+    #[test]
+    fn test_cleanup() {
+        use super::{Manager, Producer};
+        let mut man: Manager<TestResources> = Manager::new();
+        let _ = man.make_frame_buffer(());
+        let mut count = 0u8;
+        man.clean_with(&mut count,
+            |_,_| (),
+            |_,_| (),
+            |_,_| (),
+            |_,_| (),
+            |b,_| { *b += 1; },
+            |_,_| (),
+            |_,_| (),
+            |_,_| ()
+            );
+        assert_eq!(count, 1);
     }
 }
