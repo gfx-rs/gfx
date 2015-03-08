@@ -207,5 +207,6 @@ fn main() {
         graphics.end_frame();
 
         window.swap_buffers();
+        graphics.device.after_frame();
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "gfx-examples"
-version = "0.0.1"
+version = "0.0.2"
 
 [[bin]]
 name = "cube"
@@ -9,6 +9,10 @@ path = "src/cube/main.rs"
 [[bin]]
 name = "deferred"
 path = "src/deferred/main.rs"
+
+[[bin]]
+name = "glutin"
+path = "src/glutin/main.rs"
 
 [[bin]]
 name = "performance"
@@ -33,16 +37,16 @@ noise = "*"
 
 [dependencies.gfx]
 git = "https://github.com/gfx-rs/gfx-rs"
-version = "*"
+#version = "*"
 
 [dependencies.gfx_device_gl]
 git = "https://github.com/gfx-rs/gfx_device_gl"
-version = "*"
+#version = "*"
 
 [dependencies.gfx_macros]
 git = "https://github.com/gfx-rs/gfx_macros"
+#version = "*"
 plugin = true
-version = "*"
 
 [dependencies.glutin]
 git = "https://github.com/tomaka/glutin"

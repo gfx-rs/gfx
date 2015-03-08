@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(core, plugin, std_misc, custom_attribute)]
+#![feature(core, plugin, custom_attribute)]
 #![plugin(gfx_macros)]
 
 extern crate cgmath;
@@ -166,6 +166,7 @@ fn gfx_main(mut glfw: glfw::Glfw,
         graphics.end_frame();
         let post_submit = precise_time_s() * 1000.;
         window.swap_buffers();
+        graphics.device.after_frame();
         let swap = precise_time_s() * 1000.;
 
         println!("total time:\t\t{0:4.2}ms", swap - start);

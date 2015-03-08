@@ -53,5 +53,6 @@ fn main() {
         }
         device.submit(renderer.as_buffer());
         window.swap_buffers();
+        device.after_frame();
     }
 }
