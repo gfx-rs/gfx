@@ -287,9 +287,10 @@ pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities,
                       shaders: &[handle::Shader<super::GlResources>],
                       targets: Option<&[&str]>)
                       -> (Result<(::Program, s::ProgramInfo), ()>, Option<String>) {
+    use gfx::device::handle::Bare;
     let name = unsafe { gl.CreateProgram() };
     for sh in shaders.iter() {
-        unsafe { gl.AttachShader(name, sh.get_name()) };
+        unsafe { gl.AttachShader(name, sh.bare()) };
     }
 
     let targets = targets.map(|targets| {

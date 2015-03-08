@@ -15,7 +15,7 @@
 //! OpenGL implementation of a device, striving to support OpenGL 2.0 with at
 //! least VAOs, but using newer extensions when available.
 
-#![feature(core, std_misc)]
+#![feature(core)]
 #![allow(missing_docs)]
 #![deny(missing_copy_implementations)]
 
@@ -30,15 +30,17 @@ use log::LogLevel;
 
 use gfx::{Device, Factory, Resources, BufferUsage};
 use gfx::device as d;
-use gfx::device::mapping::Builder;
 use gfx::device::attrib::*;
-use gfx::device::state::{CullFace, RasterMethod, FrontFace};
 use gfx::device::draw::{Access, Target};
 use gfx::device::handle;
+use gfx::device::handle::{Bare, Producer};
+use gfx::device::mapping::Builder;
+use gfx::device::state::{CullFace, RasterMethod, FrontFace};
 pub use self::draw::{Command, CommandBuffer};
 pub use self::info::{Info, PlatformName, Version};
 
 mod draw;
+mod factory;
 mod shade;
 mod state;
 mod tex;
@@ -73,8 +75,6 @@ pub type FrameBuffer    = gl::types::GLuint;
 pub type Surface        = gl::types::GLuint;
 pub type Sampler        = gl::types::GLuint;
 pub type Texture        = gl::types::GLuint;
-
-type BufferHandle<T> = handle::Buffer<GlResources, T>;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum GlResources {}
@@ -170,6 +170,10 @@ pub struct GlDevice {
     info: Info,
     caps: d::Capabilities,
     gl: gl::Gl,
+    main_fbo: handle::FrameBuffer<GlResources>,
+    frame_handles: handle::Manager<GlResources>,
+    handles: handle::Manager<GlResources>,
+    max_resource_count: Option<usize>,
 }
 
 impl GlDevice {
@@ -188,10 +192,16 @@ impl GlDevice {
             info!("- {:?}", *extension);
         }
 
+        let mut handles = handle::Manager::new();
+
         GlDevice {
             info: info,
             caps: caps,
             gl: gl,
+            main_fbo: handles.make_frame_buffer(0),
+            frame_handles: handle::Manager::new(),
+            handles: handles,
+            max_resource_count: Some(999999),
         }
     }
 
@@ -396,12 +406,12 @@ impl GlDevice {
                     gl::TEXTURE0 + slot as gl::types::GLenum,
                     kind, texture);
                 match (anchor, kind.get_aa_mode(), sampler) {
-                    (anchor, None, Some(handle)) => {
+                    (anchor, None, Some((name, info))) => {
                         if self.caps.sampler_objects_supported {
-                            unsafe { self.gl.BindSampler(slot as gl::types::GLenum, handle.get_name()) };
+                            unsafe { self.gl.BindSampler(slot as gl::types::GLenum, name) };
                         } else {
-                            debug_assert_eq!(handle.get_name(), 0);
-                            tex::bind_sampler(&self.gl, anchor, handle.get_info());
+                            debug_assert_eq!(name, 0);
+                            tex::bind_sampler(&self.gl, anchor, &info);
                         }
                     },
                     (_, Some(_), Some(_)) =>
@@ -614,11 +624,26 @@ impl Device for GlDevice {
         }
     }
 
-    fn submit(&mut self, (cb, db): (&CommandBuffer, &d::draw::DataBuffer)) {
+    fn submit(&mut self, (cb, db, handles):
+              (&CommandBuffer, &d::draw::DataBuffer, &handle::Manager<GlResources>)) {
+        self.frame_handles.extend(handles);
         self.reset_state();
         for com in cb.iter() {
             self.process(com, db);
         }
+        match self.max_resource_count {
+            Some(c) if self.frame_handles.count() > c => {
+                error!("Way too many resources in the current frame. Did you call Device::after_frame()?");
+                self.max_resource_count = None;
+            },
+            _ => (),
+        }
+    }
+
+    fn after_frame(&mut self) {
+        self.handles.extend(&self.frame_handles);
+        self.frame_handles.clear();
+        self.cleanup();
     }
 }
 
@@ -626,17 +651,17 @@ impl Factory<GlResources> for GlDevice {
     type Mapper = RawMapping;
 
     fn create_buffer_raw(&mut self, size: usize, usage: BufferUsage)
-                         -> BufferHandle<()> {
+                         -> handle::RawBuffer<GlResources> {
         let name = self.create_buffer_internal();
         let info = d::BufferInfo {
             usage: usage,
             size: size,
         };
         self.init_buffer(name, &info);
-        handle::Buffer::from_raw(unsafe { handle::RawBuffer::new(name, info) })
+        self.handles.make_buffer(name, info)
     }
 
-    fn create_buffer_static_raw(&mut self, data: &[u8]) -> BufferHandle<()> {
+    fn create_buffer_static_raw(&mut self, data: &[u8]) -> handle::RawBuffer<GlResources> {
         let name = self.create_buffer_internal();
 
         let info = d::BufferInfo {
@@ -645,7 +670,7 @@ impl Factory<GlResources> for GlDevice {
         };
         self.init_buffer(name, &info);
         self.update_sub_buffer(name, data.as_ptr(), data.len(), 0);
-        handle::Buffer::from_raw(unsafe { handle::RawBuffer::new(name, info) })
+        self.handles.make_buffer(name, info)
     }
 
     fn create_array_buffer(&mut self) -> Result<handle::ArrayBuffer<GlResources>, ()> {
@@ -655,7 +680,7 @@ impl Factory<GlResources> for GlDevice {
                 self.gl.GenVertexArrays(1, &mut name);
             }
             info!("\tCreated array buffer {}", name);
-            Ok(unsafe { handle::ArrayBuffer::new(name) })
+            Ok(self.handles.make_array_buffer(name))
         } else {
             error!("\tarray buffer creation unsupported, ignored");
             Err(())
@@ -669,7 +694,7 @@ impl Factory<GlResources> for GlDevice {
             let level = if name.is_err() { LogLevel::Error } else { LogLevel::Warn };
             log!(level, "\tShader compile log: {}", info);
         });
-        name.map(|sh| unsafe { handle::Shader::new(sh, stage) })
+        name.map(|sh| self.handles.make_shader(sh, stage))
     }
 
     fn create_program(&mut self, shaders: &[handle::Shader<GlResources>],
@@ -680,7 +705,7 @@ impl Factory<GlResources> for GlDevice {
             let level = if prog.is_err() { LogLevel::Error } else { LogLevel::Warn };
             log!(level, "\tProgram link log: {}", log);
         });
-        prog.map(|(name, info)| unsafe { handle::Program::new(name, info) })
+        prog.map(|(name, info)| self.handles.make_program(name, info))
     }
 
     fn create_frame_buffer(&mut self) -> handle::FrameBuffer<GlResources> {
@@ -693,13 +718,13 @@ impl Factory<GlResources> for GlDevice {
             self.gl.GenFramebuffers(1, &mut name);
         }
         info!("\tCreated frame buffer {}", name);
-        unsafe { handle::FrameBuffer::new(name) }
+        self.handles.make_frame_buffer(name)
     }
 
     fn create_surface(&mut self, info: d::tex::SurfaceInfo) ->
                       Result<handle::Surface<GlResources>, d::tex::SurfaceError> {
         tex::make_surface(&self.gl, &info)
-            .map(|suf| unsafe { handle::Surface::new(suf, info) })
+            .map(|suf| self.handles.make_surface(suf, info))
     }
 
     fn create_texture(&mut self, info: d::tex::TextureInfo) ->
@@ -713,7 +738,7 @@ impl Factory<GlResources> for GlDevice {
         } else {
             tex::make_without_storage(&self.gl, &info)
         };
-        name.map(|tex| unsafe { handle::Texture::new(tex, info) })
+        name.map(|tex| self.handles.make_texture(tex, info))
     }
 
     fn create_sampler(&mut self, info: d::tex::SamplerInfo)
@@ -723,53 +748,17 @@ impl Factory<GlResources> for GlDevice {
         } else {
             0
         };
-        unsafe { handle::Sampler::new(sam, info) }
+        self.handles.make_sampler(sam, info)
     }
 
     fn get_main_frame_buffer(&self) -> handle::FrameBuffer<GlResources> {
-        unsafe { handle::FrameBuffer::new(0) }
+        self.main_fbo.clone()
     }
 
-    fn delete_buffer_raw(&mut self, handle: BufferHandle<()>) {
-        let name = handle.get_name();
-        unsafe {
-            self.gl.DeleteBuffers(1, &name);
-        }
-    }
-
-    fn delete_shader(&mut self, handle: handle::Shader<GlResources>) {
-        unsafe { self.gl.DeleteShader(handle.get_name()) };
-    }
-
-    fn delete_program(&mut self, handle: handle::Program<GlResources>) {
-        unsafe { self.gl.DeleteProgram(handle.get_name()) };
-    }
-
-    fn delete_surface(&mut self, handle: handle::Surface<GlResources>) {
-        let name = handle.get_name();
-        unsafe {
-            self.gl.DeleteRenderbuffers(1, &name);
-        }
-    }
-
-    fn delete_texture(&mut self, handle: handle::Texture<GlResources>) {
-        let name = handle.get_name();
-        unsafe {
-            self.gl.DeleteTextures(1, &name);
-        }
-    }
-
-    fn delete_sampler(&mut self, handle: handle::Sampler<GlResources>) {
-        let name = handle.get_name();
-        unsafe {
-            self.gl.DeleteSamplers(1, &name);
-        }
-    }
-
-    fn update_buffer_raw(&mut self, buffer: BufferHandle<()>,
+    fn update_buffer_raw(&mut self, buffer: &handle::RawBuffer<GlResources>,
                          data: &[u8], offset_bytes: usize) {
         debug_assert!(offset_bytes + data.len() <= buffer.get_info().size);
-        self.update_sub_buffer(buffer.get_name(), data.as_ptr(), data.len(),
+        self.update_sub_buffer(unsafe{ buffer.bare() }, data.as_ptr(), data.len(),
                                offset_bytes)
     }
 
@@ -777,17 +766,19 @@ impl Factory<GlResources> for GlDevice {
                           img: &d::tex::ImageInfo, data: &[u8])
                           -> Result<(), d::tex::TextureError> {
         tex::update_texture(&self.gl, texture.get_info().kind,
-                            texture.get_name(), img, data.as_ptr(), data.len())
+                            unsafe{ texture.bare() }, img, data.as_ptr(),
+                            data.len())
     }
 
     fn generate_mipmap(&mut self, texture: &handle::Texture<GlResources>) {
-        tex::generate_mipmap(&self.gl, texture.get_info().kind, texture.get_name());
+        tex::generate_mipmap(&self.gl, texture.get_info().kind,
+                             unsafe{ texture.bare() });
     }
 
-    fn map_buffer_raw(&mut self, buf: BufferHandle<()>, access: d::MapAccess)
-                      -> RawMapping {
+    fn map_buffer_raw(&mut self, buf: &handle::RawBuffer<GlResources>,
+                      access: d::MapAccess) -> RawMapping {
         let ptr;
-        unsafe { self.gl.BindBuffer(gl::ARRAY_BUFFER, buf.get_name()) };
+        unsafe { self.gl.BindBuffer(gl::ARRAY_BUFFER, buf.bare()) };
         ptr = unsafe { self.gl.MapBuffer(gl::ARRAY_BUFFER, match access {
             d::MapAccess::Readable => gl::READ_ONLY,
             d::MapAccess::Writable => gl::WRITE_ONLY,
@@ -803,21 +794,33 @@ impl Factory<GlResources> for GlDevice {
         unsafe { self.gl.UnmapBuffer(map.target) };
     }
 
-    fn map_buffer_readable<T: Copy>(&mut self, buf: BufferHandle<T>)
+    fn map_buffer_readable<T: Copy>(&mut self, buf: &handle::Buffer<GlResources, T>)
                            -> d::mapping::Readable<T, GlResources, GlDevice> {
-        let map = self.map_buffer_raw(buf.cast(), d::MapAccess::Readable);
+        let map = self.map_buffer_raw(buf.raw(), d::MapAccess::Readable);
         self.map_readable(map, buf.len())
     }
 
-    fn map_buffer_writable<T: Copy>(&mut self, buf: BufferHandle<T>)
+    fn map_buffer_writable<T: Copy>(&mut self, buf: &handle::Buffer<GlResources, T>)
                                     -> d::mapping::Writable<T, GlResources, GlDevice> {
-        let map = self.map_buffer_raw(buf.cast(), d::MapAccess::Writable);
+        let map = self.map_buffer_raw(buf.raw(), d::MapAccess::Writable);
         self.map_writable(map, buf.len())
     }
 
-    fn map_buffer_rw<T: Copy>(&mut self, buf: BufferHandle<T>)
+    fn map_buffer_rw<T: Copy>(&mut self, buf: &handle::Buffer<GlResources, T>)
                               -> d::mapping::RW<T, GlResources, GlDevice> {
-        let map = self.map_buffer_raw(buf.cast(), d::MapAccess::RW);
+        let map = self.map_buffer_raw(buf.raw(), d::MapAccess::RW);
         self.map_read_write(map, buf.len())
+    }
+
+    fn cleanup(&mut self) {
+        self.handles.clean_with(&mut self.gl,
+            |gl, v| unsafe { gl.DeleteBuffers(1, v) },
+            |gl, v| unsafe { gl.DeleteVertexArrays(1, v) },
+            |gl, v| unsafe { gl.DeleteShader(*v) },
+            |gl, v| unsafe { gl.DeleteProgram(*v) },
+            |gl, v| unsafe { gl.DeleteFramebuffers(1, v) },
+            |gl, v| unsafe { gl.DeleteRenderbuffers(1, v) },
+            |gl, v| unsafe { gl.DeleteTextures(1, v) },
+            |gl, v| unsafe { gl.DeleteSamplers(1, v) })
     }
 }
