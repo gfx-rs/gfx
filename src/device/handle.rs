@@ -177,6 +177,8 @@ pub trait Producer<R: Resources> {
     fn make_surface(&mut self, R::Surface, tex::SurfaceInfo) -> Surface<R>;
     fn make_texture(&mut self, R::Texture, tex::TextureInfo) -> Texture<R>;
     fn make_sampler(&mut self, R::Sampler, tex::SamplerInfo) -> Sampler<R>;
+    /// Walk through all the handles, keep ones that are reference elsewhere
+    /// and call the provided delete function (resource-specific) for others
     fn clean_with<T,
         F1: Fn(&mut T, &R::Buffer),
         F2: Fn(&mut T, &R::ArrayBuffer),
@@ -252,10 +254,9 @@ impl<R: Resources> Producer<R> for Manager<R> {
             use alloc::arc::{strong_count, weak_count};
             use std::ops::Deref;
             vector.retain(|v| {
-                strong_count(v) > 1 || weak_count(v) > 1 || {
-                    fun(param, v.deref());
-                    false
-                }
+                let free = strong_count(v) == 1 && weak_count(v) == 1;
+                if free { fun(param, v.deref()); }
+                !free
             });
         }
         clean_vec(param, &mut self.buffers,       f1);
@@ -297,6 +298,17 @@ impl<R: Resources> Manager<R> {
         self.surfaces     .extend(other.surfaces     .iter().map(|h| h.clone()));
         self.textures     .extend(other.textures     .iter().map(|h| h.clone()));
         self.samplers     .extend(other.samplers     .iter().map(|h| h.clone()));
+    }
+    /// Count the total number of referenced resources
+    pub fn count(&self) -> usize {
+        self.buffers.len() +
+        self.array_buffers.len() +
+        self.shaders.len() +
+        self.programs.len() +
+        self.frame_buffers.len() +
+        self.surfaces.len() +
+        self.textures.len() +
+        self.samplers.len()
     }
     /// Reference a buffer
     pub fn ref_buffer(&mut self, handle: &RawBuffer<R>) -> R::Buffer {
