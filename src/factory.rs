@@ -20,7 +20,7 @@ use {gl, tex};
 use gfx::{Factory, BufferUsage};
 use gfx::device as d;
 use gfx::device::handle;
-use gfx::device::handle::{Bare, Producer};
+use gfx::device::handle::Producer;
 use gfx::device::mapping::Builder;
 
 use GlDevice;
@@ -167,28 +167,28 @@ impl Factory<R> for GlDevice {
     fn update_buffer_raw(&mut self, buffer: &handle::RawBuffer<R>,
                          data: &[u8], offset_bytes: usize) {
         debug_assert!(offset_bytes + data.len() <= buffer.get_info().size);
-        self.update_sub_buffer(unsafe{ buffer.bare() }, data.as_ptr(), data.len(),
-                               offset_bytes)
+        let raw_handle = self.frame_handles.ref_buffer(buffer);
+        self.update_sub_buffer(raw_handle, data.as_ptr(), data.len(), offset_bytes)
     }
 
     fn update_texture_raw(&mut self, texture: &handle::Texture<R>,
                           img: &d::tex::ImageInfo, data: &[u8])
                           -> Result<(), d::tex::TextureError> {
         tex::update_texture(&self.gl, texture.get_info().kind,
-                            unsafe{ texture.bare() }, img, data.as_ptr(),
-                            data.len())
+                            self.frame_handles.ref_texture(texture),
+                            img, data.as_ptr(), data.len())
     }
 
     fn generate_mipmap(&mut self, texture: &handle::Texture<R>) {
         tex::generate_mipmap(&self.gl, texture.get_info().kind,
-                             unsafe{ texture.bare() });
+                             self.frame_handles.ref_texture(texture));
     }
 
     fn map_buffer_raw(&mut self, buf: &handle::RawBuffer<R>,
                       access: d::MapAccess) -> RawMapping {
-        let ptr;
-        unsafe { self.gl.BindBuffer(gl::ARRAY_BUFFER, buf.bare()) };
-        ptr = unsafe { self.gl.MapBuffer(gl::ARRAY_BUFFER, match access {
+        let raw_handle = self.frame_handles.ref_buffer(buf);
+        unsafe { self.gl.BindBuffer(gl::ARRAY_BUFFER, raw_handle) };
+        let ptr = unsafe { self.gl.MapBuffer(gl::ARRAY_BUFFER, match access {
             d::MapAccess::Readable => gl::READ_ONLY,
             d::MapAccess::Writable => gl::WRITE_ONLY,
             d::MapAccess::RW => gl::READ_WRITE
