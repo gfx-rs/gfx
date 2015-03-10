@@ -22,19 +22,6 @@ use std::ops::Deref;
 use std::sync::Arc;
 use super::{shade, tex, Resources, BufferInfo};
 
-/// A service trait to be used by the factory cleanup implementation
-pub trait Bare<T> {
-    /// Extract a bare handle
-    unsafe fn bare(&self) -> T;
-}
-
-macro_rules! bare{
-    ($name:ident) => {
-        impl<R: Resources> Bare<R::$name> for $name<R> {
-            unsafe fn bare(&self) -> R::$name { *self.0.deref() }
-        }
-    }
-}
 
 /// Type-safe buffer handle
 #[derive(Clone, PartialEq, Debug)]
@@ -80,10 +67,6 @@ impl<R: Resources, T> Buffer<R, T> {
 #[derive(Clone, PartialEq, Debug)]
 pub struct RawBuffer<R: Resources>(Arc<R::Buffer>, BufferInfo);
 
-impl<R: Resources> Bare<R::Buffer> for RawBuffer<R> {
-    unsafe fn bare(&self) -> R::Buffer { *self.0.deref() }
-}
-
 impl<R: Resources> RawBuffer<R> {
     /// Get raw buffer info
     pub fn get_info(&self) -> &BufferInfo { &self.1 }
@@ -92,12 +75,10 @@ impl<R: Resources> RawBuffer<R> {
 /// Array Buffer Handle
 #[derive(Clone, PartialEq, Debug)]
 pub struct ArrayBuffer<R: Resources>(Arc<R::ArrayBuffer>);
-bare!(ArrayBuffer);
 
 /// Shader Handle
 #[derive(Clone, PartialEq, Debug)]
 pub struct Shader<R: Resources>(Arc<R::Shader>, shade::Stage);
-bare!(Shader);
 
 impl<R: Resources> Shader<R> {
     /// Get shader stage
@@ -107,7 +88,6 @@ impl<R: Resources> Shader<R> {
 /// Program Handle
 #[derive(Clone, PartialEq, Debug)]
 pub struct Program<R: Resources>(Arc<R::Program>, shade::ProgramInfo);
-bare!(Program);
 
 impl<R: Resources> Program<R> {
     /// Get program info
@@ -117,12 +97,10 @@ impl<R: Resources> Program<R> {
 /// Frame Buffer Handle
 #[derive(Clone, PartialEq, Debug)]
 pub struct FrameBuffer<R: Resources>(Arc<R::FrameBuffer>);
-bare!(FrameBuffer);
 
 /// Surface Handle
 #[derive(Clone, PartialEq, Debug)]
 pub struct Surface<R: Resources>(Arc<R::Surface>, tex::SurfaceInfo);
-bare!(Surface);
 
 impl<R: Resources> Surface<R> {
     /// Get surface info
@@ -132,7 +110,6 @@ impl<R: Resources> Surface<R> {
 /// Texture Handle
 #[derive(Clone, PartialEq, Debug)]
 pub struct Texture<R: Resources>(Arc<R::Texture>, tex::TextureInfo);
-bare!(Texture);
 
 impl<R: Resources> Texture<R> {
     /// Get texture info
@@ -142,7 +119,6 @@ impl<R: Resources> Texture<R> {
 /// Sampler Handle
 #[derive(Clone, PartialEq, Debug)]
 pub struct Sampler<R: Resources>(Arc<R::Sampler>, tex::SamplerInfo);
-bare!(Sampler);
 
 impl<R: Resources> Sampler<R> {
     /// Get sampler info
