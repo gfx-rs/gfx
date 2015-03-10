@@ -109,7 +109,11 @@ impl Factory<R> for GlDevice {
     fn create_program(&mut self, shaders: &[handle::Shader<R>],
                       targets: Option<&[&str]>)
                       -> Result<handle::Program<R>, ()> {
-        let (prog, log) = ::shade::create_program(&self.gl, &self.caps, shaders, targets);
+        let objects: Vec<::Shader> = shaders.iter()
+            .map(|h| self.frame_handles.ref_shader(h))
+            .collect();
+        let (prog, log) = ::shade::create_program(&self.gl, &self.caps,
+                                                  objects.into_iter(), targets);
         log.map(|log| {
             let level = if prog.is_err() { LogLevel::Error } else { LogLevel::Warn };
             log!(level, "\tProgram link log: {}", log);
