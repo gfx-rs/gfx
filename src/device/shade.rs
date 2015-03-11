@@ -90,7 +90,8 @@ pub enum ContainerType {
 
 /// Which program stage this shader represents.
 #[allow(missing_docs)]
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq)]
+#[repr(u8)]
 pub enum Stage {
     Vertex,
     Geometry,

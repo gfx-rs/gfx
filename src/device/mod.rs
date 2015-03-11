@@ -17,6 +17,7 @@
 //! Graphics device. Not meant for direct use.
 
 use std::{fmt, mem, raw};
+use std::hash::Hash;
 use std::marker::PhantomFn;
 
 pub use draw_state::target;
@@ -115,7 +116,7 @@ pub type IndexType = attrib::IntSize;
 /// The nature of these hints make them very implementation specific. Different drivers on
 /// different hardware will handle them differently. Only careful profiling will tell which is the
 /// best to use for a specific buffer.
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq)]
 #[repr(u8)]
 pub enum BufferUsage {
     /// Once uploaded, this buffer will rarely change, but will be read from often.
@@ -128,7 +129,7 @@ pub enum BufferUsage {
 }
 
 /// An information block that is immutable and associated with each buffer
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq)]
 pub struct BufferInfo {
     /// Usage hint
     pub usage: BufferUsage,
@@ -139,14 +140,14 @@ pub struct BufferInfo {
 /// Resources pertaining to a specific API.
 #[allow(missing_docs)]
 pub trait Resources: PhantomFn<Self> + Clone + PartialEq + fmt::Debug {
-    type Buffer:        Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
-    type ArrayBuffer:   Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
-    type Shader:        Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
-    type Program:       Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
-    type FrameBuffer:   Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
-    type Surface:       Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
-    type Texture:       Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
-    type Sampler:       Copy + Clone + fmt::Debug + PartialEq + Send + Sync;
+    type Buffer:        Copy + Clone + Hash + fmt::Debug + PartialEq + Send + Sync;
+    type ArrayBuffer:   Copy + Clone + Hash + fmt::Debug + PartialEq + Send + Sync;
+    type Shader:        Copy + Clone + Hash + fmt::Debug + PartialEq + Send + Sync;
+    type Program:       Copy + Clone + Hash + fmt::Debug + PartialEq + Send + Sync;
+    type FrameBuffer:   Copy + Clone + Hash + fmt::Debug + PartialEq + Send + Sync;
+    type Surface:       Copy + Clone + Hash + fmt::Debug + PartialEq + Send + Sync;
+    type Texture:       Copy + Clone + Hash + fmt::Debug + PartialEq + Send + Sync;
+    type Sampler:       Copy + Clone + Hash + fmt::Debug + PartialEq + Send + Sync;
 }
 
 #[allow(missing_docs)]

@@ -24,7 +24,7 @@ use super::{shade, tex, Resources, BufferInfo};
 
 
 /// Type-safe buffer handle
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq)]
 pub struct Buffer<R: Resources, T> {
     raw: RawBuffer<R>,
     phantom_t: PhantomData<T>,
@@ -64,7 +64,7 @@ impl<R: Resources, T> Buffer<R, T> {
 }
 
 /// Raw (untyped) Buffer Handle
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq)]
 pub struct RawBuffer<R: Resources>(Arc<R::Buffer>, BufferInfo);
 
 impl<R: Resources> RawBuffer<R> {
@@ -73,11 +73,11 @@ impl<R: Resources> RawBuffer<R> {
 }
 
 /// Array Buffer Handle
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq)]
 pub struct ArrayBuffer<R: Resources>(Arc<R::ArrayBuffer>);
 
 /// Shader Handle
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq)]
 pub struct Shader<R: Resources>(Arc<R::Shader>, shade::Stage);
 
 impl<R: Resources> Shader<R> {
@@ -86,7 +86,7 @@ impl<R: Resources> Shader<R> {
 }
 
 /// Program Handle
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Program<R: Resources>(Arc<R::Program>, shade::ProgramInfo);
 
 impl<R: Resources> Program<R> {
@@ -95,11 +95,11 @@ impl<R: Resources> Program<R> {
 }
 
 /// Frame Buffer Handle
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq)]
 pub struct FrameBuffer<R: Resources>(Arc<R::FrameBuffer>);
 
 /// Surface Handle
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq)]
 pub struct Surface<R: Resources>(Arc<R::Surface>, tex::SurfaceInfo);
 
 impl<R: Resources> Surface<R> {
@@ -108,7 +108,7 @@ impl<R: Resources> Surface<R> {
 }
 
 /// Texture Handle
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq)]
 pub struct Texture<R: Resources>(Arc<R::Texture>, tex::TextureInfo);
 
 impl<R: Resources> Texture<R> {
@@ -117,7 +117,7 @@ impl<R: Resources> Texture<R> {
 }
 
 /// Sampler Handle
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Sampler<R: Resources>(Arc<R::Sampler>, tex::SamplerInfo);
 
 impl<R: Resources> Sampler<R> {
