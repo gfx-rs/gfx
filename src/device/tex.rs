@@ -407,7 +407,7 @@ pub enum ComparisonMode {
 
 /// Specifies how to sample from a texture.
 // TODO: document the details of sampling.
-#[derive(PartialEq, PartialOrd, Copy, Clone, Debug)]
+#[derive(PartialEq, PartialOrd, Clone, Copy, Debug)]
 pub struct SamplerInfo {
     /// Filter method to use.
     pub filtering: FilterMethod,

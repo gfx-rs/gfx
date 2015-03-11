@@ -26,7 +26,7 @@ use device::attrib;
 use device::handle::Buffer as BufferHandle;
 
 /// Describes a single attribute of a vertex buffer, including its type, name, etc.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq)]
 pub struct Attribute<R: Resources> {
     /// A name to match the shader input
     pub name: String,
@@ -46,7 +46,7 @@ pub trait VertexFormat {
 }
 
 /// Describes geometry to render.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq)]
 pub struct Mesh<R: Resources> {
     /// Number of vertices in the mesh.
     pub num_vertices: device::VertexCount,
