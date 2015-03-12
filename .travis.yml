@@ -35,6 +35,6 @@ install:
   # glfw3
   - sudo apt-get install xdotool cmake libXxf86vm-dev libxinerama-dev libxinerama1 libxcursor-dev libxcursor1
 script:
-  - make travis
+  - cargo test
 after_script:
   - curl http://www.rust-ci.org/artifacts/put?t=$RUSTCI_TOKEN | sh
