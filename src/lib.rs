@@ -50,7 +50,7 @@ pub use render::ParamStorage;
 pub use device::{Device, Factory, Resources};
 pub use device::{attrib, tex};
 pub use device::as_byte_slice;
-pub use device::{BufferInfo, BufferUsage};
+pub use device::{BufferRole, BufferInfo, BufferUsage};
 pub use device::{VertexCount, InstanceCount};
 pub use device::PrimitiveType;
 pub use device::draw::CommandBuffer;

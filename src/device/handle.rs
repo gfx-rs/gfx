@@ -340,7 +340,7 @@ impl<R: Resources> Manager<R> {
 mod test {
     use std::mem;
     use std::marker::PhantomData;
-    use device::{BufferInfo, BufferUsage, Resources};
+    use device::{BufferRole, BufferInfo, BufferUsage, Resources};
 
     #[derive(Clone, Debug, PartialEq)]
     enum TestResources {}
@@ -360,8 +360,9 @@ mod test {
         let mut handler = Manager::new();
         super::Buffer {
             raw: handler.make_buffer((), BufferInfo {
-                    usage: BufferUsage::Static,
-                    size: mem::size_of::<T>() * len,
+                role: BufferRole::Vertex,
+                usage: BufferUsage::Static,
+                size: mem::size_of::<T>() * len,
             }),
             phantom_t: PhantomData,
         }
