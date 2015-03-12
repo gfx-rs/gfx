@@ -265,7 +265,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     /// Update a buffer with data from a single type.
     pub fn update_buffer_struct<U, T: Copy>(&mut self,
                                 buf: &handle::Buffer<R, U>, data: &T) {
-        debug_assert!(mem::size_of::<T>() <= buf.get_info().size);
+        assert!(mem::size_of::<T>() <= buf.get_info().size);
         let pointer = self.data_buffer.add_struct(data);
         self.command_buffer.update_buffer(
             self.handles.ref_buffer(buf.raw()), pointer, 0);
@@ -476,7 +476,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         }
     }
 
-    fn bind_index<T>(&mut self, buf: &handle::Buffer<R, T>) {
+    fn bind_index<T>(&mut self, buf: &handle::IndexBuffer<R, T>) {
         if self.render_state.index.as_ref() != Some(buf.raw()) {
             self.render_state.index = Some(buf.raw().clone());
             self.command_buffer.bind_index(self.handles.ref_buffer(buf.raw()));

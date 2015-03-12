@@ -111,6 +111,16 @@ pub enum PrimitiveType {
 /// A type of each index value in the mesh's index buffer
 pub type IndexType = attrib::IntSize;
 
+/// Role of the memory buffer. GLES doesn't chaning bind points for buffers.
+#[derive(Copy, Clone, Debug, Hash, PartialEq)]
+#[repr(u8)]
+pub enum BufferRole {
+    /// Generic vertex buffer
+    Vertex,
+    /// Index buffer
+    Index,
+}
+
 /// A hint as to how this buffer will be used.
 ///
 /// The nature of these hints make them very implementation specific. Different drivers on
@@ -131,6 +141,8 @@ pub enum BufferUsage {
 /// An information block that is immutable and associated with each buffer
 #[derive(Clone, Copy, Debug, Hash, PartialEq)]
 pub struct BufferInfo {
+    /// Role
+    pub role: BufferRole,
     /// Usage hint
     pub usage: BufferUsage,
     /// Size in bytes
@@ -157,11 +169,17 @@ pub trait Factory<R: Resources> {
     // resource creation
     fn create_buffer_raw(&mut self, size: usize, usage: BufferUsage) -> handle::RawBuffer<R>;
     fn create_buffer<T>(&mut self, num: usize, usage: BufferUsage) -> handle::Buffer<R, T> {
-        handle::Buffer::from_raw(self.create_buffer_raw(num * mem::size_of::<T>(), usage))
+        handle::Buffer::from_raw(
+            self.create_buffer_raw(num * mem::size_of::<T>(), usage))
     }
-    fn create_buffer_static_raw(&mut self, data: &[u8]) -> handle::RawBuffer<R>;
+    fn create_buffer_static_raw(&mut self, data: &[u8], role: BufferRole) -> handle::RawBuffer<R>;
     fn create_buffer_static<T: Copy>(&mut self, data: &[T]) -> handle::Buffer<R, T> {
-        handle::Buffer::from_raw(self.create_buffer_static_raw(as_byte_slice(data)))
+        handle::Buffer::from_raw(
+            self.create_buffer_static_raw(as_byte_slice(data), BufferRole::Vertex))
+    }
+    fn create_buffer_index<T: Copy>(&mut self, data: &[T]) -> handle::IndexBuffer<R, T> {
+        handle::IndexBuffer::from_raw(
+            self.create_buffer_static_raw(as_byte_slice(data), BufferRole::Index))
     }
     fn create_array_buffer(&mut self) -> Result<handle::ArrayBuffer<R>, ()>;
     fn create_shader(&mut self, stage: shade::Stage, code: &[u8]) ->

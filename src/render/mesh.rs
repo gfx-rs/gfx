@@ -24,6 +24,7 @@ use device;
 use device::{PrimitiveType, Resources, VertexCount};
 use device::attrib;
 use device::handle::Buffer as BufferHandle;
+use device::handle::IndexBuffer as IndexBufferHandle;
 
 /// Describes a single attribute of a vertex buffer, including its type, name, etc.
 #[derive(Clone, Debug, Hash, PartialEq)]
@@ -127,11 +128,11 @@ pub enum SliceKind<R: Resources> {
     /// the vertices will be identical, wasting space for the duplicated
     /// attributes.  Instead, the `Mesh` can store 4 vertices and an
     /// `Index8` can be used instead.
-    Index8(BufferHandle<R, u8>, VertexCount),
+    Index8(IndexBufferHandle<R, u8>, VertexCount),
     /// As `Index8` but with `u16` indices
-    Index16(BufferHandle<R, u16>, VertexCount),
+    Index16(IndexBufferHandle<R, u16>, VertexCount),
     /// As `Index8` but with `u32` indices
-    Index32(BufferHandle<R, u32>, VertexCount),
+    Index32(IndexBufferHandle<R, u32>, VertexCount),
 }
 
 /// Helper methods for cleanly getting the slice of a type.
@@ -152,7 +153,7 @@ impl<R: Resources> ToSlice<R> for Mesh<R> {
     }
 }
 
-impl<R: Resources> ToSlice<R> for BufferHandle<R, u8> {
+impl<R: Resources> ToSlice<R> for IndexBufferHandle<R, u8> {
     /// Return an index slice of the whole buffer.
     fn to_slice(&self, ty: PrimitiveType) -> Slice<R> {
         Slice {
@@ -164,7 +165,7 @@ impl<R: Resources> ToSlice<R> for BufferHandle<R, u8> {
     }
 }
 
-impl<R: Resources> ToSlice<R> for BufferHandle<R, u16> {
+impl<R: Resources> ToSlice<R> for IndexBufferHandle<R, u16> {
     /// Return an index slice of the whole buffer.
     fn to_slice(&self, ty: PrimitiveType) -> Slice<R> {
         Slice {
@@ -176,7 +177,7 @@ impl<R: Resources> ToSlice<R> for BufferHandle<R, u16> {
     }
 }
 
-impl<R: Resources> ToSlice<R> for BufferHandle<R, u32> {
+impl<R: Resources> ToSlice<R> for IndexBufferHandle<R, u32> {
     /// Return an index slice of the whole buffer.
     fn to_slice(&self, ty: PrimitiveType) -> Slice<R> {
         Slice {

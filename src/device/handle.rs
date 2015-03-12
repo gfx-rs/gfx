@@ -31,7 +31,7 @@ pub struct Buffer<R: Resources, T> {
 }
 
 impl<R: Resources, T> Buffer<R, T> {
-    /// Create a type-safe BufferHandle from a RawBufferHandle
+    /// Create a type-safe Buffer from a RawBufferHandle
     pub fn from_raw(handle: RawBuffer<R>) -> Buffer<R, T> {
         Buffer {
             raw: handle,
@@ -42,6 +42,41 @@ impl<R: Resources, T> Buffer<R, T> {
     /// Cast the type this Buffer references
     pub fn cast<U>(self) -> Buffer<R, U> {
         Buffer::from_raw(self.raw)
+    }
+
+    /// Get the underlying raw Handle
+    pub fn raw(&self) -> &RawBuffer<R> {
+        &self.raw
+    }
+
+    /// Get the associated information about the buffer
+    pub fn get_info(&self) -> &BufferInfo {
+        self.raw.get_info()
+    }
+
+    /// Get the number of elements in the buffer.
+    ///
+    /// Fails if `T` is zero-sized.
+    pub fn len(&self) -> usize {
+        assert!(mem::size_of::<T>() != 0, "Cannot determine the length of zero-sized buffers.");
+        self.get_info().size / mem::size_of::<T>()
+    }
+}
+
+/// Type-safe index buffer handle
+#[derive(Clone, Debug, Hash, PartialEq)]
+pub struct IndexBuffer<R: Resources, T> {
+    raw: RawBuffer<R>,
+    phantom_t: PhantomData<T>,
+}
+
+impl<R: Resources, T> IndexBuffer<R, T> {
+    /// Create a type-safe IndexBuffer from a RawBufferHandle
+    pub fn from_raw(handle: RawBuffer<R>) -> IndexBuffer<R, T> {
+        IndexBuffer {
+            raw: handle,
+            phantom_t: PhantomData,
+        }
     }
 
     /// Get the underlying raw Handle
@@ -340,7 +375,7 @@ impl<R: Resources> Manager<R> {
 mod test {
     use std::mem;
     use std::marker::PhantomData;
-    use device::{BufferInfo, BufferUsage, Resources};
+    use device::{BufferRole, BufferInfo, BufferUsage, Resources};
 
     #[derive(Clone, Debug, PartialEq)]
     enum TestResources {}
@@ -360,8 +395,9 @@ mod test {
         let mut handler = Manager::new();
         super::Buffer {
             raw: handler.make_buffer((), BufferInfo {
-                    usage: BufferUsage::Static,
-                    size: mem::size_of::<T>() * len,
+                role: BufferRole::Vertex,
+                usage: BufferUsage::Static,
+                size: mem::size_of::<T>() * len,
             }),
             phantom_t: PhantomData,
         }
