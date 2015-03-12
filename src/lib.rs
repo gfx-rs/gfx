@@ -25,7 +25,7 @@ extern crate libc;
 extern crate "gfx_gl" as gl;
 extern crate gfx;
 
-use gfx::{Device, Factory, Resources, BufferUsage};
+use gfx::{Device, Factory, Resources};
 use gfx::device as d;
 use gfx::device::attrib::*;
 use gfx::device::draw::{Access, Target};
@@ -213,14 +213,18 @@ impl GlDevice {
     }
 
     fn init_buffer(&mut self, buffer: Buffer, info: &d::BufferInfo) {
-        unsafe { self.gl.BindBuffer(gl::ARRAY_BUFFER, buffer) };
+        let target = match info.role {
+            gfx::BufferRole::Vertex => gl::ARRAY_BUFFER,
+            gfx::BufferRole::Index  => gl::ELEMENT_ARRAY_BUFFER,
+        };
+        unsafe { self.gl.BindBuffer(target, buffer) };
         let usage = match info.usage {
-            BufferUsage::Static  => gl::STATIC_DRAW,
-            BufferUsage::Dynamic => gl::DYNAMIC_DRAW,
-            BufferUsage::Stream  => gl::STREAM_DRAW,
+            gfx::BufferUsage::Static  => gl::STATIC_DRAW,
+            gfx::BufferUsage::Dynamic => gl::DYNAMIC_DRAW,
+            gfx::BufferUsage::Stream  => gl::STREAM_DRAW,
         };
         unsafe {
-            self.gl.BufferData(gl::ARRAY_BUFFER,
+            self.gl.BufferData(target,
                 info.size as gl::types::GLsizeiptr,
                 0 as *const gl::types::GLvoid,
                 usage
@@ -229,10 +233,14 @@ impl GlDevice {
     }
 
     fn update_sub_buffer(&mut self, buffer: Buffer, address: *const u8,
-                         size: usize, offset: usize) {
-        unsafe { self.gl.BindBuffer(gl::ARRAY_BUFFER, buffer) };
+                         size: usize, offset: usize, role: gfx::BufferRole) {
+        let target = match role {
+            gfx::BufferRole::Vertex => gl::ARRAY_BUFFER,
+            gfx::BufferRole::Index  => gl::ELEMENT_ARRAY_BUFFER,
+        };
+        unsafe { self.gl.BindBuffer(target, buffer) };
         unsafe {
-            self.gl.BufferSubData(gl::ARRAY_BUFFER,
+            self.gl.BufferSubData(target,
                 offset as gl::types::GLintptr,
                 size as gl::types::GLsizeiptr,
                 address as *const gl::types::GLvoid
@@ -422,7 +430,8 @@ impl GlDevice {
             },
             Command::UpdateBuffer(buffer, pointer, offset) => {
                 let data = data_buf.get_ref(pointer);
-                self.update_sub_buffer(buffer, data.as_ptr(), data.len(), offset);
+                self.update_sub_buffer(buffer, data.as_ptr(), data.len(), offset,
+                    gfx::BufferRole::Vertex);
             },
             Command::UpdateTexture(kind, texture, image_info, pointer) => {
                 let data = data_buf.get_ref(pointer);
