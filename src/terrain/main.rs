@@ -156,7 +156,7 @@ fn main() {
         .collect();
 
     let slice = device
-        .create_buffer_static::<u32>(index_data.as_slice())
+        .create_buffer_index::<u32>(index_data.as_slice())
         .to_slice(gfx::PrimitiveType::TriangleList);
 
     let mesh = device.create_mesh(vertex_data.as_slice());
