@@ -90,11 +90,15 @@ impl<R: Resources> ParamStorage<R> {
         }
     }
 
-    fn get_mut(&mut self) -> &mut ParamStorage<R> {
+    fn reserve(&mut self, pinfo: &ProgramInfo) {
+        // clear
         self.uniforms.clear();
         self.blocks.clear();
         self.textures.clear();
-        self
+        // allocate
+        self.uniforms.reserve(pinfo.uniforms.len());
+        self.blocks.reserve(pinfo.blocks.len());
+        self.textures.reserve(pinfo.textures.len());
     }
 }
 
@@ -382,7 +386,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
 
     fn bind_program<'a, B: Batch<Resources = R>>(&mut self, batch: &'a B)
                     -> Result<&'a handle::Program<R>, B::Error> {
-        let program = match batch.fill_params(self.parameters.get_mut()) {
+        let program = match batch.fill_params(&mut self.parameters) {
             Ok(p) => p,
             Err(e) => return Err(e),
         };
