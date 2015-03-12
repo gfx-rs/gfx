@@ -93,6 +93,7 @@ impl<'a, T: ShaderParam> Batch for ImplicitBatch<'a, T> {
         let (_, _, program, params, _) = *self;
         match ShaderParam::create_link(None::<&T>, program.get_info()) {
             Ok(link) => {
+                values.reserve(program.get_info());
                 params.fill_params(&link, values);
                 Ok(program)
             },
@@ -150,6 +151,7 @@ impl<T: ShaderParam> Batch for OwnedBatch<T> {
 
     fn fill_params(&self, values: &mut ParamStorage<T::Resources>)
                    -> Result<&ProgramHandle<T::Resources>, ()> {
+        values.reserve(self.program.get_info());
         self.param.fill_params(&self.param_link, values);
         Ok(&self.program)
     }
@@ -466,8 +468,14 @@ impl<'a, T: ShaderParam + 'a> Batch for CoreBatchFull<'a, T> {
     fn fill_params(&self, values: &mut ParamStorage<T::Resources>)
                    -> Result<&ProgramHandle<T::Resources>, OutOfBounds> {
         let (b, _, data, ctx) = *self;
-        data.fill_params(&b.param_link, values);
-        ctx.programs.get(b.program_id)
+        match ctx.programs.get(b.program_id) {
+            Ok(program) => {
+                values.reserve(program.get_info());
+                data.fill_params(&b.param_link, values);
+                Ok(program)
+            },
+            e => e,
+        }
     }
 }
 
@@ -483,7 +491,13 @@ impl<'a, T: ShaderParam + 'a> Batch for RefBatchFull<'a, T> {
     fn fill_params(&self, values: &mut ParamStorage<T::Resources>)
                    -> Result<&ProgramHandle<T::Resources>, OutOfBounds> {
         let (b, ctx) = *self;
-        b.params.fill_params(&b.core.param_link, values);
-        ctx.programs.get(b.core.program_id)
+        match ctx.programs.get(b.core.program_id) {
+            Ok(program) => {
+                values.reserve(program.get_info());
+                b.params.fill_params(&b.core.param_link, values);
+                Ok(program)
+            },
+            e => e,
+        }
     }
 }
