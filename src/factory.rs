@@ -17,7 +17,6 @@ use log::LogLevel;
 use std::slice;
 
 use {gl, tex};
-use gfx::{Factory, BufferUsage};
 use gfx::device as d;
 use gfx::device::handle;
 use gfx::device::handle::Producer;
@@ -56,13 +55,14 @@ impl d::mapping::Raw for RawMapping {
 }
 
 
-impl Factory<R> for GlDevice {
+impl d::Factory<R> for GlDevice {
     type Mapper = RawMapping;
 
-    fn create_buffer_raw(&mut self, size: usize, usage: BufferUsage)
+    fn create_buffer_raw(&mut self, size: usize, usage: d::BufferUsage)
                          -> handle::RawBuffer<R> {
         let name = self.create_buffer_internal();
         let info = d::BufferInfo {
+            role: d::BufferRole::Vertex,
             usage: usage,
             size: size,
         };
@@ -70,15 +70,17 @@ impl Factory<R> for GlDevice {
         self.handles.make_buffer(name, info)
     }
 
-    fn create_buffer_static_raw(&mut self, data: &[u8]) -> handle::RawBuffer<R> {
+    fn create_buffer_static_raw(&mut self, data: &[u8], role: d::BufferRole)
+                                -> handle::RawBuffer<R> {
         let name = self.create_buffer_internal();
 
         let info = d::BufferInfo {
-            usage: BufferUsage::Static,
+            role: role,
+            usage: d::BufferUsage::Static,
             size: data.len(),
         };
         self.init_buffer(name, &info);
-        self.update_sub_buffer(name, data.as_ptr(), data.len(), 0);
+        self.update_sub_buffer(name, data.as_ptr(), data.len(), 0, role);
         self.handles.make_buffer(name, info)
     }
 
@@ -172,7 +174,8 @@ impl Factory<R> for GlDevice {
                          data: &[u8], offset_bytes: usize) {
         debug_assert!(offset_bytes + data.len() <= buffer.get_info().size);
         let raw_handle = self.frame_handles.ref_buffer(buffer);
-        self.update_sub_buffer(raw_handle, data.as_ptr(), data.len(), offset_bytes)
+        self.update_sub_buffer(raw_handle, data.as_ptr(), data.len(),
+                               offset_bytes, buffer.get_info().role)
     }
 
     fn update_texture_raw(&mut self, texture: &handle::Texture<R>,
