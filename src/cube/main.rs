@@ -179,7 +179,7 @@ fn main() {
     };
 
     let mut batch = gfx::batch::OwnedBatch::new(mesh, program, data).unwrap();
-    batch.slice = device.create_buffer_static::<u8>(index_data)
+    batch.slice = device.create_buffer_index::<u8>(index_data)
                         .to_slice(gfx::PrimitiveType::TriangleList);
     batch.state.depth(gfx::state::Comparison::LessEqual, true);
 

@@ -428,7 +428,7 @@ fn main() {
         let mesh = device.create_mesh(vertex_data.as_slice());
 
         let slice = device
-            .create_buffer_static::<u32>(index_data.as_slice())
+            .create_buffer_index::<u32>(index_data.as_slice())
             .to_slice(gfx::PrimitiveType::TriangleList);
 
         let program = device.link_program(TERRAIN_VERTEX_SRC, TERRAIN_FRAGMENT_SRC)
@@ -518,7 +518,7 @@ fn main() {
 
         let mesh = device.create_mesh(&vertex_data);
         let slice = device
-            .create_buffer_static::<u8>(index_data)
+            .create_buffer_index::<u8>(index_data)
             .to_slice(gfx::PrimitiveType::TriangleList);
 
         let state = gfx::DrawState::new()
