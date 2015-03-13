@@ -166,13 +166,13 @@ impl<R: Resources> ShaderParam for ParamDictionary<R> {
 
     fn fill_params(&self, link: &ParamDictionaryLink, params: &mut ParamStorage<R>) {
         for &id in link.uniforms.iter() {
-            params.uniforms.push(self.uniforms[id].value.borrow().clone());
+            params.uniforms[id] = Some(self.uniforms[id].value.borrow().clone());
         }
         for &id in link.blocks.iter() {
-            params.blocks.push(self.blocks[id].value.borrow().clone());
+            params.blocks[id] = Some(self.blocks[id].value.borrow().clone());
         }
         for &id in link.textures.iter() {
-            params.textures.push(self.textures[id].value.borrow().clone());
+            params.textures[id] = Some(self.textures[id].value.borrow().clone());
         }
     }
 }

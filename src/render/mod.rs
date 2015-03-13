@@ -73,11 +73,11 @@ impl<R: Resources> RenderState<R> {
 /// Temporary parameter storage, used for shader activation.
 pub struct ParamStorage<R: Resources> {
     /// uniform values to be provided
-    pub uniforms: Vec<UniformValue>,
+    pub uniforms: Vec<Option<UniformValue>>,
     /// uniform buffers to be provided
-    pub blocks  : Vec<handle::RawBuffer<R>>,
+    pub blocks  : Vec<Option<handle::RawBuffer<R>>>,
     /// textures to be provided
-    pub textures: Vec<shade::TextureParam<R>>,
+    pub textures: Vec<Option<shade::TextureParam<R>>>,
 }
 
 impl<R: Resources> ParamStorage<R> {
@@ -93,12 +93,12 @@ impl<R: Resources> ParamStorage<R> {
     fn reserve(&mut self, pinfo: &ProgramInfo) {
         // clear
         self.uniforms.clear();
-        self.blocks.clear();
+        self.blocks  .clear();
         self.textures.clear();
         // allocate
-        self.uniforms.reserve(pinfo.uniforms.len());
-        self.blocks.reserve(pinfo.blocks.len());
-        self.textures.reserve(pinfo.textures.len());
+        self.uniforms.extend(pinfo.uniforms.iter().map(|_| None));
+        self.blocks  .extend(pinfo.blocks  .iter().map(|_| None));
+        self.textures.extend(pinfo.textures.iter().map(|_| None));
     }
 }
 
@@ -402,46 +402,47 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
 
     fn upload_parameters(&mut self, program: &handle::Program<R>) {
         let info = program.get_info();
-        if self.parameters.uniforms.len() != info.uniforms.len() ||
-            self.parameters.blocks.len() != info.blocks.len() ||
-            self.parameters.textures.len() != info.textures.len() {
-            error!("Mismatching number of uniforms ({:?}), blocks ({:?}), or \
-                    textures ({:?}) in `upload_parameters` for program: {:?}",
-                    self.parameters.uniforms.len(),
-                    self.parameters.blocks.len(),
-                    self.parameters.textures.len(),
-                    info);
-        }
         // bind uniforms
         for (var, value) in info.uniforms.iter()
             .zip(self.parameters.uniforms.iter()) {
-            self.command_buffer.bind_uniform(var.location, *value);
+            match value {
+                &Some(v) => self.command_buffer.bind_uniform(var.location, v),
+                &None => error!("Missed uniform {}", var.name),
+            }
         }
         // bind uniform blocks
-        for (i, (_, buf)) in info.blocks.iter()
+        for (i, (var, value)) in info.blocks.iter()
             .zip(self.parameters.blocks.iter()).enumerate() {
-            self.command_buffer.bind_uniform_block(
-                self.handles.ref_program(program),
-                i as device::UniformBufferSlot,
-                i as device::UniformBlockIndex,
-                self.handles.ref_buffer(&buf)
-            );
+            match value {
+                &Some(ref buf) => self.command_buffer.bind_uniform_block(
+                    self.handles.ref_program(program),
+                    i as device::UniformBufferSlot,
+                    i as device::UniformBlockIndex,
+                    self.handles.ref_buffer(buf)
+                ),
+                &None => error!("Missed block {}", var.name),
+            }
         }
         // bind textures and samplers
-        for (i, (var, &(ref tex, ref sampler))) in info.textures.iter()
+        for (i, (var, value)) in info.textures.iter()
             .zip(self.parameters.textures.iter()).enumerate() {
-            let sam = match *sampler {
-                Some(ref s) => {
-                    if tex.get_info().kind.get_aa_mode().is_some() {
-                        error!("A sampler provided for an AA texture: {}", var.name.clone());
-                    }
-                    Some((self.handles.ref_sampler(s), *s.get_info()))
+            match value {
+                &Some((ref tex, ref sampler)) => {
+                    let sam = match sampler {
+                        &Some(ref s) => {
+                            if tex.get_info().kind.get_aa_mode().is_some() {
+                                error!("A sampler provided for an AA texture: {}", var.name);
+                            }
+                            Some((self.handles.ref_sampler(s), *s.get_info()))
+                        },
+                        &None => None,
+                    };
+                    self.command_buffer.bind_uniform(var.location, UniformValue::I32(i as i32));
+                    self.command_buffer.bind_texture(i as device::TextureSlot, tex.get_info().kind,
+                        self.handles.ref_texture(tex), sam);
                 },
-                None => None,
-            };
-            self.command_buffer.bind_uniform(var.location, UniformValue::I32(i as i32));
-            self.command_buffer.bind_texture(i as device::TextureSlot, tex.get_info().kind,
-                self.handles.ref_texture(tex), sam);
+                &None => error!("Missed texture {}", var.name),
+            }
         }
     }
 
