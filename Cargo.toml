@@ -1,6 +1,6 @@
 [package]
 name = "gfx-examples"
-version = "0.0.2"
+version = "0.0.3"
 
 [[bin]]
 name = "cube"
