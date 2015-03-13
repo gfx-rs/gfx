@@ -85,10 +85,6 @@ See the [triangle example](https://github.com/gfx-rs/gfx_examples/tree/master/sr
 initialization with [glfw](https://github.com/bjz/glfw-rs/), or
 [glutin example](https://github.com/gfx-rs/gfx_examples/tree/master/src/glutin) for [glutin](https://github.com/tomaka/glutin/).
 
-## Crate hierarchy
-
-![Dependency graph](diagrams/png/dependencies.png)
-
 ## Note
 
 gfx-rs is still in the early stages of development. Help is most appreciated.
