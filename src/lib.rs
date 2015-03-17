@@ -609,8 +609,7 @@ impl Device for GlDevice {
         }
     }
 
-    fn submit(&mut self, (cb, db, handles):
-              (&CommandBuffer, &d::draw::DataBuffer, &handle::Manager<GlResources>)) {
+    fn submit(&mut self, (cb, db, handles): d::SubmitInfo<GlDevice>) {
         self.frame_handles.extend(handles);
         self.reset_state();
         for com in cb.iter() {
