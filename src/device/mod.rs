@@ -218,6 +218,13 @@ pub trait Factory<R: Resources> {
     fn cleanup(&mut self);
 }
 
+/// All the data needed simultaneously for submitting a command buffer for
+/// execution on a device.
+pub type SubmitInfo<'a, D: Device> = (
+    &'a D::CommandBuffer,
+    &'a draw::DataBuffer,
+    &'a handle::Manager<D::Resources>
+);
 
 /// An interface for performing draw calls using a specific graphics API
 pub trait Device {
@@ -233,11 +240,7 @@ pub trait Device {
     fn reset_state(&mut self);
 
     /// Submit a command buffer for execution
-    fn submit(&mut self, (
-        &Self::CommandBuffer,
-        &draw::DataBuffer,
-        &handle::Manager<Self::Resources>
-    ));
+    fn submit(&mut self, SubmitInfo<Self>);
 
     /// Notify the finished frame
     fn after_frame(&mut self);

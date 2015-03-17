@@ -47,7 +47,7 @@ pub use render::mesh::{Slice, ToSlice, SliceKind};
 pub use render::shade;
 pub use render::target::{Frame, Plane};
 pub use render::ParamStorage;
-pub use device::{Device, Factory, Resources};
+pub use device::{Device, SubmitInfo, Factory, Resources};
 pub use device::{attrib, tex};
 pub use device::as_byte_slice;
 pub use device::{BufferRole, BufferInfo, BufferUsage};
