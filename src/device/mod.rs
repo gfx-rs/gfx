@@ -21,7 +21,7 @@ use std::hash::Hash;
 use std::marker::PhantomFn;
 
 pub use draw_state::target;
-pub use draw_state::block as state;
+pub use draw_state::state;
 
 pub mod attrib;
 pub mod draw;

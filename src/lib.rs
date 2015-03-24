@@ -56,7 +56,7 @@ pub use device::PrimitiveType;
 pub use device::draw::CommandBuffer;
 pub use device::shade::{ProgramInfo, UniformValue};
 pub use draw_state::target::*;
-pub use draw_state::block as state;
+pub use draw_state::state;
 
 pub use device::handle::Buffer as BufferHandle;
 pub use device::handle::RawBuffer as RawBufferHandle;
