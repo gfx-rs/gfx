@@ -59,6 +59,7 @@ pub use draw_state::target::*;
 pub use draw_state::state;
 
 pub use device::handle::Buffer as BufferHandle;
+pub use device::handle::IndexBuffer as IndexBufferHandle;
 pub use device::handle::RawBuffer as RawBufferHandle;
 pub use device::handle::Shader as ShaderHandle;
 pub use device::handle::Program as ProgramHandle;
