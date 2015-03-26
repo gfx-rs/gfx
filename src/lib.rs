@@ -15,14 +15,13 @@
 //! OpenGL implementation of a device, striving to support OpenGL 2.0 with at
 //! least VAOs, but using newer extensions when available.
 
-#![feature(core)]
 #![allow(missing_docs)]
 #![deny(missing_copy_implementations)]
 
 #[macro_use]
 extern crate log;
 extern crate libc;
-extern crate "gfx_gl" as gl;
+extern crate gfx_gl as gl;
 extern crate gfx;
 
 use gfx::{Device, Factory, Resources};
