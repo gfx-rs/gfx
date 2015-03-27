@@ -410,7 +410,7 @@ mod test {
     }
 
     #[test]
-    #[should_fail]
+    #[should_panic]
     fn test_buffer_zero_len() {
         let _ = mock_buffer::<()>(0).len();
     }

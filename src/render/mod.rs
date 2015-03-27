@@ -459,8 +459,8 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
             self.render_state.is_array_buffer_set = true;
         }
         for (attr_index, sat) in attrib_iter.zip(info.attributes.iter()) {
-            let vat = &mesh.attributes[attr_index as usize];
-            let loc = sat.location as usize;
+            let vat = &mesh.attributes[attr_index];
+            let loc = sat.location;
             if loc >= self.render_state.attributes.len() {
                 let range = self.render_state.attributes.len() .. loc+1;
                 self.render_state.attributes.extend(range.map(|_| None));
