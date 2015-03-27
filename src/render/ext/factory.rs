@@ -24,11 +24,13 @@ pub trait FactoryExt<R: device::Resources> {
     /// Create a new mesh from the given vertex data.
     /// Convenience function around `create_buffer` and `Mesh::from_format`.
     fn create_mesh<T: VertexFormat + Copy>(&mut self, data: &[T]) -> Mesh<R>;
-    /// Create a simple program given a vertex shader with a fragment one.
+    /// Create a simple program given a vertex shader with a fragment one. If `log`
+    /// is provided, it will be filled with compile log messages (if any).
     fn link_program(&mut self, vs_code: &[u8], fs_code: &[u8], log: Option<&mut String>)
                     -> Result<device::handle::Program<R>, ProgramError>;
     /// Create a simple program given `ShaderSource` versions of vertex and
-    /// fragment shaders, chooss the matching versions for the device.
+    /// fragment shaders, choosing the matching versions for the device. If `log`
+    /// is provided, it will be filled with compile log messages (if any).
     fn link_program_source(&mut self, vs_src: ShaderSource, fs_src: ShaderSource,
                            caps: &device::Capabilities, log: Option<&mut String>)
                            -> Result<device::handle::Program<R>, ProgramError>;
