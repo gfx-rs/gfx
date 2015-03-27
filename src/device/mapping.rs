@@ -31,7 +31,9 @@ pub trait Raw {
 }
 
 /// A handle to a readable map, which can be sliced.
-pub struct Readable<'a, T: Copy, R: 'a + Resources, F: 'a + Factory<R>> {
+pub struct Readable<'a, T: Copy, R: 'a + Resources, F: 'a + Factory<R>> where
+    F::Mapper: 'a
+{
     raw: F::Mapper,
     len: usize,
     factory: &'a mut F,
@@ -58,14 +60,18 @@ impl<'a, T: Copy, R: Resources, F: Factory<R>> Drop for Readable<'a, T, R, F> wh
 }
 
 /// A handle to a writable map, which only allows setting elements.
-pub struct Writable<'a, T: Copy, R: 'a + Resources, F: 'a + Factory<R>> {
+pub struct Writable<'a, T: Copy, R: 'a + Resources, F: 'a + Factory<R>> where
+    F::Mapper: 'a
+{
     raw: F::Mapper,
     len: usize,
     factory: &'a mut F,
     phantom_t: PhantomData<T>
 }
 
-impl<'a, T: Copy, R: Resources, F: Factory<R>> Writable<'a, T, R, F> {
+impl<'a, T: Copy, R: Resources, F: Factory<R>> Writable<'a, T, R, F> where
+    F::Mapper: 'a
+{
     /// Set a value in the buffer
     pub fn set(&mut self, idx: usize, val: T) {
         if idx >= self.len {
@@ -85,7 +91,9 @@ impl<'a, T: Copy, R: Resources, F: Factory<R>> Drop for Writable<'a, T, R, F> wh
 }
 
 /// A handle to a complete readable/writable map, which can be sliced both ways.
-pub struct RW<'a, T: Copy, R: 'a + Resources, F: 'a + Factory<R>> {
+pub struct RW<'a, T: Copy, R: 'a + Resources, F: 'a + Factory<R>> where
+    F::Mapper: 'a
+{
     raw: F::Mapper,
     len: usize,
     factory: &'a mut F,
@@ -122,22 +130,24 @@ impl<'a, T: Copy, R: Resources, F: Factory<R>> Drop for RW<'a, T, R, F> where
 /// A service trait with methods for mapping already implemented.
 /// To be used by device back ends.
 #[allow(missing_docs)]
-pub trait Builder<R: Resources> {
+pub trait Builder<'a, R: Resources> {
     type RawMapping: Raw;
 
-    fn map_readable<T: Copy>(&mut self, Self::RawMapping, usize)
+    fn map_readable<T: Copy>(&'a mut self, Self::RawMapping, usize)
                     -> Readable<T, R, Self>;
-    fn map_writable<T: Copy>(&mut self, Self::RawMapping, usize)
+    fn map_writable<T: Copy>(&'a mut self, Self::RawMapping, usize)
                     -> Writable<T, R, Self>;
-    fn map_read_write<T: Copy>(&mut self, Self::RawMapping, usize)
+    fn map_read_write<T: Copy>(&'a mut self, Self::RawMapping, usize)
                       -> RW<T, R, Self>;
 }
 
 
-impl<R: Resources, F: Factory<R>> Builder<R> for F {
+impl<'a, R: Resources, F: Factory<R>> Builder<'a, R> for F where
+    F::Mapper: 'a
+{
     type RawMapping = F::Mapper;
 
-    fn map_readable<T: Copy>(&mut self, map: F::Mapper,
+    fn map_readable<T: Copy>(&'a mut self, map: F::Mapper,
                     length: usize) -> Readable<T, R, Self> {
         Readable {
             raw: map,
@@ -147,7 +157,7 @@ impl<R: Resources, F: Factory<R>> Builder<R> for F {
         }
     }
 
-    fn map_writable<T: Copy>(&mut self, map: F::Mapper,
+    fn map_writable<T: Copy>(&'a mut self, map: F::Mapper,
                     length: usize) -> Writable<T, R, Self> {
         Writable {
             raw: map,
@@ -157,7 +167,7 @@ impl<R: Resources, F: Factory<R>> Builder<R> for F {
         }
     }
 
-    fn map_read_write<T: Copy>(&mut self, map: F::Mapper,
+    fn map_read_write<T: Copy>(&'a mut self, map: F::Mapper,
                       length: usize) -> RW<T, R, Self> {
         RW {
             raw: map,
