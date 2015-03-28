@@ -26,10 +26,10 @@ authors = ["The Gfx-rs Developers"]
 name = "gfx"
 path = "src/lib.rs"
 
+[dependencies.draw_state]
+git = "https://github.com/gfx-rs/draw_state"
+version = "*"
+
 [dependencies]
 bitflags = "*"
 log = "*"
-
-[dependencies.draw_state]
-#git = "https://github.com/gfx-rs/draw_state"
-version = "*"
