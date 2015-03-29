@@ -20,6 +20,8 @@
 //! create a mesh is to use the `#[vertex_format]` attribute on a struct, upload them into a
 //! `Buffer`, and then use `Mesh::from`.
 
+use std::marker::PhantomFn;
+
 use device;
 use device::{PrimitiveType, Resources, VertexCount};
 use device::attrib;
@@ -40,10 +42,9 @@ pub struct Attribute<R: Resources> {
 /// A trait implemented automatically for user vertex structure by
 /// `#[vertex_format] attribute
 #[allow(missing_docs)]
-pub trait VertexFormat {
+pub trait VertexFormat: PhantomFn<Self> {
     /// Create the attributes for this type, using the given buffer.
-    fn generate<R: Resources>(Option<&Self>, buffer: device::handle::RawBuffer<R>)
-                -> Vec<Attribute<R>>;
+    fn generate<R: Resources>(buffer: device::handle::RawBuffer<R>) -> Vec<Attribute<R>>;
 }
 
 /// Describes geometry to render.
@@ -69,7 +70,7 @@ impl<R: Resources> Mesh<R> {
                        -> Mesh<R> {
         Mesh {
             num_vertices: nv,
-            attributes: VertexFormat::generate(None::<&V>, buf.raw().clone()),
+            attributes: <V as VertexFormat>::generate(buf.raw().clone()),
         }
     }
 
@@ -78,8 +79,8 @@ impl<R: Resources> Mesh<R> {
                                  buf: BufferHandle<R, V>,
                                  nv: device::VertexCount,
                                  inst: BufferHandle<R, U>) -> Mesh<R> {
-        let per_vertex   = VertexFormat::generate(None::<&V>, buf.raw().clone());
-        let per_instance = VertexFormat::generate(None::<&U>, inst.raw().clone());
+        let per_vertex   = <V as VertexFormat>::generate(buf.raw().clone());
+        let per_instance = <U as VertexFormat>::generate(inst.raw().clone());
 
         let mut attributes = per_vertex;
         for mut at in per_instance.into_iter() {
