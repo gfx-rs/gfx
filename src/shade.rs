@@ -235,7 +235,7 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
         unsafe {
             gl.GetActiveUniformsiv(prog, total_num as gl::types::GLsizei,
                 (&indices[..]).as_ptr(), gl::UNIFORM_BLOCK_INDEX,
-                block_indices.as_mut_slice().as_mut_ptr());
+                block_indices.as_mut_ptr());
         }
         //TODO: UNIFORM_IS_ROW_MAJOR
     }

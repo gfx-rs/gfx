@@ -17,6 +17,7 @@
 
 #![allow(missing_docs)]
 #![deny(missing_copy_implementations)]
+#![feature(slice_patterns)]
 
 #[macro_use]
 extern crate log;
