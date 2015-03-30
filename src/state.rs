@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use gfx::device::state as s;
-use gfx::device::state::{BlendValue, Comparison, CullFace, Equation, InverseFlag,
+use gfx::device::state::{BlendValue, Comparison, CullFace, Equation,
                          Offset, RasterMethod, StencilOp, FrontFace};
 use gfx::device::target::Rect;
 use super::gl;
@@ -174,22 +174,21 @@ fn map_equation(eq: Equation) -> gl::types::GLenum {
 
 fn map_factor(factor: s::Factor) -> gl::types::GLenum {
     match factor {
-        s::Factor(InverseFlag::Normal,  BlendValue::Zero)        => gl::ZERO,
-        s::Factor(InverseFlag::Inverse, BlendValue::Zero)        => gl::ONE,
-        s::Factor(InverseFlag::Normal,  BlendValue::SourceColor) => gl::SRC_COLOR,
-        s::Factor(InverseFlag::Inverse, BlendValue::SourceColor) => gl::ONE_MINUS_SRC_COLOR,
-        s::Factor(InverseFlag::Normal,  BlendValue::SourceAlpha) => gl::SRC_ALPHA,
-        s::Factor(InverseFlag::Inverse, BlendValue::SourceAlpha) => gl::ONE_MINUS_SRC_ALPHA,
-        s::Factor(InverseFlag::Normal,  BlendValue::DestColor)   => gl::DST_COLOR,
-        s::Factor(InverseFlag::Inverse, BlendValue::DestColor)   => gl::ONE_MINUS_DST_COLOR,
-        s::Factor(InverseFlag::Normal,  BlendValue::DestAlpha)   => gl::DST_ALPHA,
-        s::Factor(InverseFlag::Inverse, BlendValue::DestAlpha)   => gl::ONE_MINUS_DST_ALPHA,
-        s::Factor(InverseFlag::Normal,  BlendValue::ConstColor)  => gl::CONSTANT_COLOR,
-        s::Factor(InverseFlag::Inverse, BlendValue::ConstColor)  => gl::ONE_MINUS_CONSTANT_COLOR,
-        s::Factor(InverseFlag::Normal,  BlendValue::ConstAlpha)  => gl::CONSTANT_ALPHA,
-        s::Factor(InverseFlag::Inverse, BlendValue::ConstAlpha)  => gl::ONE_MINUS_CONSTANT_ALPHA,
-        s::Factor(InverseFlag::Normal,  BlendValue::SourceAlphaSaturated) => gl::SRC_ALPHA_SATURATE,
-        _ => panic!("Unsupported blend factor: {:?}", factor),
+        s::Factor::Zero                              => gl::ZERO,
+        s::Factor::One                               => gl::ONE,
+        s::Factor::ZeroPlus(BlendValue::SourceColor) => gl::SRC_COLOR,
+        s::Factor::OneMinus(BlendValue::SourceColor) => gl::ONE_MINUS_SRC_COLOR,
+        s::Factor::ZeroPlus(BlendValue::SourceAlpha) => gl::SRC_ALPHA,
+        s::Factor::OneMinus(BlendValue::SourceAlpha) => gl::ONE_MINUS_SRC_ALPHA,
+        s::Factor::ZeroPlus(BlendValue::DestColor)   => gl::DST_COLOR,
+        s::Factor::OneMinus(BlendValue::DestColor)   => gl::ONE_MINUS_DST_COLOR,
+        s::Factor::ZeroPlus(BlendValue::DestAlpha)   => gl::DST_ALPHA,
+        s::Factor::OneMinus(BlendValue::DestAlpha)   => gl::ONE_MINUS_DST_ALPHA,
+        s::Factor::ZeroPlus(BlendValue::ConstColor)  => gl::CONSTANT_COLOR,
+        s::Factor::OneMinus(BlendValue::ConstColor)  => gl::ONE_MINUS_CONSTANT_COLOR,
+        s::Factor::ZeroPlus(BlendValue::ConstAlpha)  => gl::CONSTANT_ALPHA,
+        s::Factor::OneMinus(BlendValue::ConstAlpha)  => gl::ONE_MINUS_CONSTANT_ALPHA,
+        s::Factor::SourceAlphaSaturated => gl::SRC_ALPHA_SATURATE,
     }
 }
 
