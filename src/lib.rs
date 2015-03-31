@@ -464,69 +464,63 @@ impl GlDevice {
                     }},
                 }
             },
-            Command::DrawIndexed(prim_type, index_type, start, count, basevertex, instances) => {
+            Command::DrawIndexed(prim_type, index_type, start, count, base_vertex, instances) => {
                 let (offset, gl_index) = match index_type {
                     IntSize::U8  => (start * 1u32, gl::UNSIGNED_BYTE),
                     IntSize::U16 => (start * 2u32, gl::UNSIGNED_SHORT),
                     IntSize::U32 => (start * 4u32, gl::UNSIGNED_INT),
                 };
                 match instances {
-                    Some((num, baseinstance)) if self.caps.instance_call_supported => unsafe {
-                        if !self.caps.vertex_base_supported {
-                            if baseinstance != 0 && !self.caps.instance_base_supported {
+                    Some((num, base_instance)) if self.caps.instance_call_supported => unsafe {
+                        if (base_vertex == 0 && base_instance == 0) || !self.caps.vertex_base_supported {
+                            if base_vertex != 0 || base_instance != 0 {
                                 error!("Instance bases with indexed drawing is not supported")
-                                // else, baseinstance == 0 OR instance_base_supported
-                            } else if !self.caps.instance_base_supported {
-                                // feature's not supported, but the base is 0
-                                self.gl.DrawElementsInstanced(
-                                    primitive_to_gl(prim_type),
-                                    count as gl::types::GLsizei,
-                                    gl_index,
-                                    offset as *const gl::types::GLvoid,
-                                    num as gl::types::GLsizei,
-                                );
-                            } else {
-                                self.gl.DrawElementsInstancedBaseInstance(
-                                    primitive_to_gl(prim_type),
-                                    count as gl::types::GLsizei,
-                                    gl_index,
-                                    offset as *const gl::types::GLvoid,
-                                    num as gl::types::GLsizei,
-                                    baseinstance as gl::types::GLuint,
-                                );
                             }
+                            self.gl.DrawElementsInstanced(
+                                primitive_to_gl(prim_type),
+                                count as gl::types::GLsizei,
+                                gl_index,
+                                offset as *const gl::types::GLvoid,
+                                num as gl::types::GLsizei,
+                            );
+                        } else if base_vertex != 0 && base_instance == 0 {
+                            self.gl.DrawElementsInstancedBaseVertex(
+                                primitive_to_gl(prim_type),
+                                count as gl::types::GLsizei,
+                                gl_index,
+                                offset as *const gl::types::GLvoid,
+                                num as gl::types::GLsizei,
+                                base_vertex as gl::types::GLint,
+                            );
+                        } else if base_vertex == 0 && base_instance != 0 {
+                            self.gl.DrawElementsInstancedBaseInstance(
+                                primitive_to_gl(prim_type),
+                                count as gl::types::GLsizei,
+                                gl_index,
+                                offset as *const gl::types::GLvoid,
+                                num as gl::types::GLsizei,
+                                base_instance as gl::types::GLuint,
+                            );
                         } else {
-                            if baseinstance != 0 && !self.caps.instance_base_supported {
-                                error!("Instance bases with indexed drawing not supported");
-                            } else if !self.caps.instance_base_supported {
-                                self.gl.DrawElementsInstancedBaseVertex(
-                                    primitive_to_gl(prim_type),
-                                    count as gl::types::GLsizei,
-                                    gl_index,
-                                    offset as *const gl::types::GLvoid,
-                                    num as gl::types::GLsizei,
-                                    basevertex as gl::types::GLint,
-                                );
-                            } else {
-                                self.gl.DrawElementsInstancedBaseVertexBaseInstance(
-                                    primitive_to_gl(prim_type),
-                                    count as gl::types::GLsizei,
-                                    gl_index,
-                                    offset as *const gl::types::GLvoid,
-                                    num as gl::types::GLsizei,
-                                    basevertex as gl::types::GLint,
-                                    baseinstance as gl::types::GLuint,
-                                );
-                            }
+                            self.gl.DrawElementsInstancedBaseVertexBaseInstance(
+                                primitive_to_gl(prim_type),
+                                count as gl::types::GLsizei,
+                                gl_index,
+                                offset as *const gl::types::GLvoid,
+                                num as gl::types::GLsizei,
+                                base_vertex as gl::types::GLint,
+                                base_instance as gl::types::GLuint,
+                            );
                         }
                     },
                     Some(_) => {
                         error!("Instanced draw calls are not supported");
                     },
                     None => unsafe {
-                        if basevertex != 0 && !self.caps.vertex_base_supported {
-                            error!("Base vertex with indexed drawing not supported");
-                        } else if !self.caps.vertex_base_supported {
+                        if base_vertex == 0 || !self.caps.vertex_base_supported {
+                            if base_vertex != 0 {
+                                error!("Base vertex with indexed drawing not supported");
+                            }
                             self.gl.DrawElements(
                                 primitive_to_gl(prim_type),
                                 count as gl::types::GLsizei,
@@ -539,7 +533,7 @@ impl GlDevice {
                                 count as gl::types::GLsizei,
                                 gl_index,
                                 offset as *const gl::types::GLvoid,
-                                basevertex as gl::types::GLint,
+                                base_vertex as gl::types::GLint,
                             );
                         }
                     },
