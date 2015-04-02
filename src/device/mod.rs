@@ -59,6 +59,8 @@ pub struct Capabilities {
     pub max_draw_buffers: usize,
     pub max_texture_size: usize,
     pub max_vertex_attributes: usize,
+    //pub max_vertex_count: usize,  //TODO
+    //pub max_index_count: usize,   //TODO
 
     pub array_buffer_supported: bool,
     pub fragment_output_supported: bool,
