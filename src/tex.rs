@@ -21,7 +21,6 @@ use gfx::device::tex::{SurfaceError, TextureError, FilterMethod, TextureKind,
                        Compression, CubeFace};
 use gfx::device::attrib::{FloatSize, IntSubType};
 
-use std::num::Float;
 
 /// A token produced by the `bind_texture` that allows following up
 /// with a GL-compatibility sampler settings in `bind_sampler`

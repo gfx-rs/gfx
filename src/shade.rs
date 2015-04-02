@@ -168,15 +168,15 @@ fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::Attribute> {
         let (base, container) = match StorageType::new(storage) {
             Var(b, c) => (b, c),
             _ => {
-                error!("Unrecognized attribute storage: {:?}", storage);
+                error!("Unrecognized attribute storage: {}", storage);
                 (BaseType::F32, ContainerType::Single)
             }
         };
         // we expect only built-ins to have location -1
         if loc == -1 && !real_name.starts_with("gl_") {
-            error!("Invalid location {:?} for attribute {:?}", loc, real_name);
+            error!("Invalid location {} for attribute {}", loc, real_name);
         }
-        info!("\t\tAttrib[{:?}] = '{:?}'\t{:?}\t{:?}", loc, real_name, base, container);
+        info!("\t\tAttrib[{}] = {:?}\t{:?}\t{:?}", loc, real_name, base, container);
         s::Attribute {
             name: real_name,
             location: loc as usize,
@@ -256,7 +256,7 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
         let real_name = name[..length as usize].to_string();
         match StorageType::new(storage) {
             Var(base, container) => {
-                info!("\t\tUniform[{:?}] = '{:?}'\t{:?}\t{:?}", loc, real_name, base, container);
+                info!("\t\tUniform[{}] = {:?}\t{:?}\t{:?}", loc, real_name, base, container);
                 uniforms.push(s::UniformVar {
                     name: real_name,
                     location: loc as usize,
@@ -266,7 +266,7 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
                 });
             },
             Sampler(base, sam_type) => {
-                info!("\t\tSampler[{:?}] = '{:?}'\t{:?}\t{:?}", loc, real_name, base, sam_type);
+                info!("\t\tSampler[{}] = {:?}\t{:?}\t{:?}", loc, real_name, base, sam_type);
                 textures.push(s::SamplerVar {
                     name: real_name,
                     location: loc as usize,
@@ -275,7 +275,7 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
                 });
             },
             Unknown => {
-                error!("Unrecognized uniform storage: {:?}", storage);
+                error!("Unrecognized uniform storage: {}", storage);
             },
         }
     }
@@ -301,12 +301,12 @@ pub fn create_program<I: Iterator<Item = super::Shader>>(gl: &gl::Gl,
     });
 
     unsafe { gl.LinkProgram(name) };
-    info!("\tLinked program {:?}", name);
+    info!("\tLinked program {}", name);
 
     if let Some(targets) = targets {
         match &targets.iter()
             .map(|target| (unsafe { gl.GetFragDataLocation(name, target.as_bytes_with_nul().as_ptr() as *const i8) }, target))
-            .inspect(|&(loc, target)| info!("\t\tOutput[{:?}] = '{:?}'", loc, target))
+            .inspect(|&(loc, target)| info!("\t\tOutput[{}] = {:?}", loc, target))
             .filter(|&(loc, _)| loc == -1)
             .collect::<Vec<_>>()[..]
         {
