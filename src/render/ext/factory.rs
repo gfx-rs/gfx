@@ -37,11 +37,7 @@ pub trait FactoryExt<R: device::Resources> {
 impl<R: device::Resources, F: device::Factory<R>> FactoryExt<R> for F {
     fn create_mesh<T: VertexFormat + Copy>(&mut self, data: &[T]) -> Mesh<R> {
         let nv = data.len();
-        debug_assert!(nv < {
-            use std::num::Int;
-            let val: device::VertexCount = Int::max_value();
-            val as usize
-        });
+        //debug_assert!(nv < caps.max_vertex_count); //TODO: capabilities
         let buf = self.create_buffer_static(data);
         Mesh::from_format(buf, nv as device::VertexCount)
     }
