@@ -52,7 +52,7 @@ pub type Surface        = gl::types::GLuint;
 pub type Sampler        = gl::types::GLuint;
 pub type Texture        = gl::types::GLuint;
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum GlResources {}
 
 impl Resources for GlResources {
@@ -163,9 +163,9 @@ impl GlDevice {
         info!("Renderer: {:?}", info.platform_name.renderer);
         info!("Version: {:?}", info.version);
         info!("Shading Language: {:?}", info.shading_language);
-        info!("Loaded Extensions:");
+        debug!("Loaded Extensions:");
         for extension in info.extensions.iter() {
-            info!("- {:?}", *extension);
+            debug!("- {}", *extension);
         }
 
         let mut handles = handle::Manager::new();
@@ -208,7 +208,7 @@ impl GlDevice {
         unsafe {
             self.gl.GenBuffers(1, &mut name);
         }
-        info!("\tCreated buffer {:?}", name);
+        info!("\tCreated buffer {}", name);
         name
     }
 
@@ -281,7 +281,7 @@ impl GlDevice {
                 if self.caps.array_buffer_supported {
                     unsafe { self.gl.BindVertexArray(array_buffer) };
                 } else {
-                    error!("Ignored VAO bind command: {:?}", array_buffer)
+                    error!("Ignored VAO bind command: {}", array_buffer)
                 }
             },
             Command::BindAttribute(slot, buffer, format) => {
