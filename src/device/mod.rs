@@ -151,7 +151,7 @@ pub struct BufferInfo {
 
 /// Resources pertaining to a specific API.
 #[allow(missing_docs)]
-pub trait Resources: PhantomFn<Self> + Clone+ fmt::Debug + Eq + PartialEq {
+pub trait Resources: PhantomFn<Self> + Hash + fmt::Debug + Eq + PartialEq + Clone {
     type Buffer:        Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
     type ArrayBuffer:   Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
     type Shader:        Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
