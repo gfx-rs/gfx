@@ -377,7 +377,7 @@ mod test {
     use std::marker::PhantomData;
     use device::{BufferRole, BufferInfo, BufferUsage, Resources};
 
-    #[derive(Clone, Debug, Eq, PartialEq)]
+    #[derive(Clone, Debug, Eq, Hash, PartialEq)]
     enum TestResources {}
     impl Resources for TestResources {
         type Buffer = ();
