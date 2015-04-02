@@ -112,7 +112,7 @@ pub enum PrimitiveType {
 pub type IndexType = attrib::IntSize;
 
 /// Role of the memory buffer. GLES doesn't chaning bind points for buffers.
-#[derive(Copy, Clone, Debug, Hash, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 #[repr(u8)]
 pub enum BufferRole {
     /// Generic vertex buffer
@@ -126,7 +126,7 @@ pub enum BufferRole {
 /// The nature of these hints make them very implementation specific. Different drivers on
 /// different hardware will handle them differently. Only careful profiling will tell which is the
 /// best to use for a specific buffer.
-#[derive(Copy, Clone, Debug, Hash, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 #[repr(u8)]
 pub enum BufferUsage {
     /// Once uploaded, this buffer will rarely change, but will be read from often.
@@ -139,7 +139,7 @@ pub enum BufferUsage {
 }
 
 /// An information block that is immutable and associated with each buffer
-#[derive(Clone, Copy, Debug, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct BufferInfo {
     /// Role
     pub role: BufferRole,
@@ -151,15 +151,15 @@ pub struct BufferInfo {
 
 /// Resources pertaining to a specific API.
 #[allow(missing_docs)]
-pub trait Resources: PhantomFn<Self> + Clone + PartialEq + fmt::Debug {
-    type Buffer:        Copy + Clone + Hash + fmt::Debug + PartialEq + Send + Sync;
-    type ArrayBuffer:   Copy + Clone + Hash + fmt::Debug + PartialEq + Send + Sync;
-    type Shader:        Copy + Clone + Hash + fmt::Debug + PartialEq + Send + Sync;
-    type Program:       Copy + Clone + Hash + fmt::Debug + PartialEq + Send + Sync;
-    type FrameBuffer:   Copy + Clone + Hash + fmt::Debug + PartialEq + Send + Sync;
-    type Surface:       Copy + Clone + Hash + fmt::Debug + PartialEq + Send + Sync;
-    type Texture:       Copy + Clone + Hash + fmt::Debug + PartialEq + Send + Sync;
-    type Sampler:       Copy + Clone + Hash + fmt::Debug + PartialEq + Send + Sync;
+pub trait Resources: PhantomFn<Self> + Clone+ fmt::Debug + Eq + PartialEq {
+    type Buffer:        Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type ArrayBuffer:   Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Shader:        Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Program:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type FrameBuffer:   Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Surface:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Texture:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Sampler:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
 }
 
 #[allow(missing_docs)]

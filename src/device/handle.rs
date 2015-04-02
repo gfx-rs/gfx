@@ -99,7 +99,7 @@ impl<R: Resources, T> IndexBuffer<R, T> {
 }
 
 /// Raw (untyped) Buffer Handle
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct RawBuffer<R: Resources>(Arc<R::Buffer>, BufferInfo);
 
 impl<R: Resources> RawBuffer<R> {
@@ -377,7 +377,7 @@ mod test {
     use std::marker::PhantomData;
     use device::{BufferRole, BufferInfo, BufferUsage, Resources};
 
-    #[derive(Clone, Debug, PartialEq)]
+    #[derive(Clone, Debug, Eq, PartialEq)]
     enum TestResources {}
     impl Resources for TestResources {
         type Buffer = ();

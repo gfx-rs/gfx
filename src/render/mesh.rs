@@ -29,7 +29,7 @@ use device::handle::Buffer as BufferHandle;
 use device::handle::IndexBuffer as IndexBufferHandle;
 
 /// Describes a single attribute of a vertex buffer, including its type, name, etc.
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Attribute<R: Resources> {
     /// A name to match the shader input
     pub name: String,
@@ -48,7 +48,7 @@ pub trait VertexFormat: PhantomFn<Self> {
 }
 
 /// Describes geometry to render.
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Mesh<R: Resources> {
     /// Number of vertices in the mesh.
     pub num_vertices: device::VertexCount,
