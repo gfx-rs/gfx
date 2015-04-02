@@ -52,7 +52,7 @@ pub type Surface        = gl::types::GLuint;
 pub type Sampler        = gl::types::GLuint;
 pub type Texture        = gl::types::GLuint;
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum GlResources {}
 
 impl Resources for GlResources {
