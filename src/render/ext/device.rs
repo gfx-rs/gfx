@@ -73,7 +73,12 @@ impl<D: device::Device, F: device::Factory<D::Resources>> Graphics<D, F> {
     pub fn end_frame(&mut self) {
         self.device.submit(self.renderer.as_buffer());
         self.renderer.reset();
-        // self.factory.after_frame();
+    }
+    
+    /// Cleanup resources after the frame.
+    pub fn cleanup(&mut self) {
+        self.device.after_frame();
+        self.factory.cleanup();
     }
 }
 
