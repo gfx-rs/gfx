@@ -25,7 +25,7 @@ extern crate libc;
 extern crate gfx_gl as gl;
 extern crate gfx;
 
-use gfx::{Device, Factory, Resources};
+use std::rc::Rc;
 use gfx::device as d;
 use gfx::device::attrib::*;
 use gfx::device::draw::{Access, Target};
@@ -33,6 +33,7 @@ use gfx::device::handle;
 use gfx::device::state::{CullFace, RasterMethod, FrontFace};
 
 pub use self::draw::{Command, CommandBuffer};
+pub use self::factory::Factory;
 pub use self::info::{Info, PlatformName, Version};
 
 mod draw;
@@ -53,9 +54,9 @@ pub type Sampler        = gl::types::GLuint;
 pub type Texture        = gl::types::GLuint;
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub enum GlResources {}
+pub enum Resources {}
 
-impl Resources for GlResources {
+impl gfx::Resources for Resources {
     type Buffer         = Buffer;
     type ArrayBuffer    = ArrayBuffer;
     type Shader         = Shader;
@@ -67,7 +68,7 @@ impl Resources for GlResources {
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum GlError {
+pub enum Error {
     NoError,
     InvalidEnum,
     InvalidValue,
@@ -77,16 +78,16 @@ pub enum GlError {
     UnknownError,
 }
 
-impl GlError {
-    pub fn from_error_code(error_code: gl::types::GLenum) -> GlError {
+impl Error {
+    pub fn from_error_code(error_code: gl::types::GLenum) -> Error {
         match error_code {
-            gl::NO_ERROR                      => GlError::NoError,
-            gl::INVALID_ENUM                  => GlError::InvalidEnum,
-            gl::INVALID_VALUE                 => GlError::InvalidValue,
-            gl::INVALID_OPERATION             => GlError::InvalidOperation,
-            gl::INVALID_FRAMEBUFFER_OPERATION => GlError::InvalidFramebufferOperation,
-            gl::OUT_OF_MEMORY                 => GlError::OutOfMemory,
-            _                                 => GlError::UnknownError,
+            gl::NO_ERROR                      => Error::NoError,
+            gl::INVALID_ENUM                  => Error::InvalidEnum,
+            gl::INVALID_VALUE                 => Error::InvalidValue,
+            gl::INVALID_OPERATION             => Error::InvalidOperation,
+            gl::INVALID_FRAMEBUFFER_OPERATION => Error::InvalidFramebufferOperation,
+            gl::OUT_OF_MEMORY                 => Error::OutOfMemory,
+            _                                 => Error::UnknownError,
         }
     }
 }
@@ -141,49 +142,46 @@ fn target_to_gl(target: Target) -> gl::types::GLenum {
     }
 }
 
-/// An OpenGL device with GLSL shaders
-pub struct GlDevice {
+/// An OpenGL device with GLSL shaders.
+pub struct Device {
     info: Info,
     caps: d::Capabilities,
-    gl: gl::Gl,
-    main_fbo: handle::FrameBuffer<GlResources>,
-    frame_handles: handle::Manager<GlResources>,
-    handles: handle::Manager<GlResources>,
+    gl: Rc<gl::Gl>,
+    frame_handles: handle::Manager<Resources>,
     max_resource_count: Option<usize>,
 }
 
-impl GlDevice {
-    /// Load OpenGL symbols and detect driver information
-    pub fn new<F>(fn_proc: F) -> GlDevice where F: FnMut(&str) -> *const ::libc::c_void {
-        let gl = gl::Gl::load_with(fn_proc);
+/// Load OpenGL symbols and detect driver information.
+pub fn create<F: FnMut(&str) -> *const ::libc::c_void>(fn_proc: F)
+              -> (Device, Factory) {
+    let gl = Rc::new(gl::Gl::load_with(fn_proc));
+    let (info, caps) = info::get(&gl);
 
-        let (info, caps) = info::get(&gl);
-
-        info!("Vendor: {:?}", info.platform_name.vendor);
-        info!("Renderer: {:?}", info.platform_name.renderer);
-        info!("Version: {:?}", info.version);
-        info!("Shading Language: {:?}", info.shading_language);
-        debug!("Loaded Extensions:");
-        for extension in info.extensions.iter() {
-            debug!("- {}", *extension);
-        }
-
-        let mut handles = handle::Manager::new();
-
-        GlDevice {
-            info: info,
-            caps: caps,
-            gl: gl,
-            main_fbo: factory::make_default_frame_buffer(&mut handles),
-            frame_handles: handle::Manager::new(),
-            handles: handles,
-            max_resource_count: Some(999999),
-        }
+    info!("Vendor: {:?}", info.platform_name.vendor);
+    info!("Renderer: {:?}", info.platform_name.renderer);
+    info!("Version: {:?}", info.version);
+    info!("Shading Language: {:?}", info.shading_language);
+    debug!("Loaded Extensions:");
+    for extension in info.extensions.iter() {
+        debug!("- {}", *extension);
     }
 
+    let factory = factory::create(caps, gl.clone());
+    let device = Device {
+        info: info,
+        caps: caps,
+        gl: gl,
+        frame_handles: handle::Manager::new(),
+        max_resource_count: Some(999999),
+    };
+    (device, factory)
+}
+
+impl Device {
     /// Access the OpenGL directly via a closure. OpenGL types and enumerations
     /// can be found in the `gl` crate.
-    pub unsafe fn with_gl<F>(&mut self, mut fun: F) where F: FnMut(&gl::Gl) {
+    pub unsafe fn with_gl<F: FnMut(&gl::Gl)>(&mut self, mut fun: F) {
+        use gfx::Device;
         self.reset_state();
         fun(&self.gl);
     }
@@ -191,8 +189,8 @@ impl GlDevice {
     /// Fails during a debug build if the implementation's error flag was set.
     fn check(&mut self, cmd: &Command) {
         if cfg!(not(ndebug)) {
-            let err = GlError::from_error_code(unsafe { self.gl.GetError() });
-            if err != GlError::NoError {
+            let err = Error::from_error_code(unsafe { self.gl.GetError() });
+            if err != Error::NoError {
                 panic!("Error after executing command {:?}: {:?}", cmd, err);
             }
         }
@@ -201,51 +199,6 @@ impl GlDevice {
     /// Get the OpenGL-specific driver information
     pub fn get_info<'a>(&'a self) -> &'a Info {
         &self.info
-    }
-
-    fn create_buffer_internal(&mut self) -> Buffer {
-        let mut name = 0 as Buffer;
-        unsafe {
-            self.gl.GenBuffers(1, &mut name);
-        }
-        info!("\tCreated buffer {}", name);
-        name
-    }
-
-    fn init_buffer(&mut self, buffer: Buffer, info: &d::BufferInfo) {
-        let target = match info.role {
-            gfx::BufferRole::Vertex => gl::ARRAY_BUFFER,
-            gfx::BufferRole::Index  => gl::ELEMENT_ARRAY_BUFFER,
-        };
-        unsafe { self.gl.BindBuffer(target, buffer) };
-        let usage = match info.usage {
-            gfx::BufferUsage::Static  => gl::STATIC_DRAW,
-            gfx::BufferUsage::Dynamic => gl::DYNAMIC_DRAW,
-            gfx::BufferUsage::Stream  => gl::STREAM_DRAW,
-        };
-        unsafe {
-            self.gl.BufferData(target,
-                info.size as gl::types::GLsizeiptr,
-                0 as *const gl::types::GLvoid,
-                usage
-            );
-        }
-    }
-
-    fn update_sub_buffer(&mut self, buffer: Buffer, address: *const u8,
-                         size: usize, offset: usize, role: gfx::BufferRole) {
-        let target = match role {
-            gfx::BufferRole::Vertex => gl::ARRAY_BUFFER,
-            gfx::BufferRole::Index  => gl::ELEMENT_ARRAY_BUFFER,
-        };
-        unsafe { self.gl.BindBuffer(target, buffer) };
-        unsafe {
-            self.gl.BufferSubData(target,
-                offset as gl::types::GLintptr,
-                size as gl::types::GLsizeiptr,
-                address as *const gl::types::GLvoid
-            );
-        }
     }
 
     fn process(&mut self, cmd: &Command, data_buf: &d::draw::DataBuffer) {
@@ -430,8 +383,8 @@ impl GlDevice {
             },
             Command::UpdateBuffer(buffer, pointer, offset) => {
                 let data = data_buf.get_ref(pointer);
-                self.update_sub_buffer(buffer, data.as_ptr(), data.len(), offset,
-                    gfx::BufferRole::Vertex);
+                factory::update_sub_buffer(&self.gl, buffer, data.as_ptr(),
+                    data.len(), offset, gfx::BufferRole::Vertex);
             },
             Command::UpdateTexture(kind, texture, image_info, pointer) => {
                 let data = data_buf.get_ref(pointer);
@@ -588,9 +541,9 @@ impl GlDevice {
     }
 }
 
-impl Device for GlDevice {
-    type Resources = GlResources;
-    type CommandBuffer  = CommandBuffer;
+impl gfx::Device for Device {
+    type Resources = Resources;
+    type CommandBuffer = draw::CommandBuffer;
 
     fn get_capabilities<'a>(&'a self) -> &'a d::Capabilities {
         &self.caps
@@ -603,7 +556,7 @@ impl Device for GlDevice {
         }
     }
 
-    fn submit(&mut self, (cb, db, handles): d::SubmitInfo<GlDevice>) {
+    fn submit(&mut self, (cb, db, handles): d::SubmitInfo<Device>) {
         self.frame_handles.extend(handles);
         self.reset_state();
         for com in cb.iter() {
@@ -619,8 +572,6 @@ impl Device for GlDevice {
     }
 
     fn after_frame(&mut self) {
-        self.handles.extend(&self.frame_handles);
         self.frame_handles.clear();
-        self.cleanup();
     }
 }

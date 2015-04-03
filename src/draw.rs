@@ -19,7 +19,7 @@ use std::slice;
 use gfx::device as d;
 use gfx::device::draw::{Access, Target};
 use gfx::device::target::*;
-use super::{ArrayBuffer, Buffer, FrameBuffer, Program, Surface, Texture, Sampler, GlResources};
+use super::{ArrayBuffer, Buffer, FrameBuffer, Program, Surface, Texture, Sampler, Resources};
 
 /// Serialized device command.
 #[derive(Copy, Clone, Debug)]
@@ -65,7 +65,7 @@ impl CommandBuffer {
     }
 }
 
-impl d::draw::CommandBuffer<GlResources> for CommandBuffer {
+impl d::draw::CommandBuffer<Resources> for CommandBuffer {
     fn new() -> CommandBuffer {
         CommandBuffer {
             buf: Vec::new(),

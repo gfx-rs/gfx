@@ -14,6 +14,7 @@
 
 use libc;
 use log::LogLevel;
+use std::rc::Rc;
 use std::slice;
 
 use {gl, tex};
@@ -22,14 +23,77 @@ use gfx::device::handle;
 use gfx::device::handle::Producer;
 use gfx::device::mapping::Builder;
 
-use GlDevice;
-use GlResources as R;
+use Buffer;
+use Resources as R;
 
-/// Create a default FBO for the device.
-/// Implemented here to limit `Producer` import to this module.
-pub fn make_default_frame_buffer(handles: &mut handle::Manager<R>)
-							     -> handle::FrameBuffer<R> {
-	handles.make_frame_buffer(0)
+
+pub fn update_sub_buffer(gl: &gl::Gl, buffer: Buffer, address: *const u8,
+                         size: usize, offset: usize, role: d::BufferRole) {
+    let target = match role {
+        d::BufferRole::Vertex => gl::ARRAY_BUFFER,
+        d::BufferRole::Index  => gl::ELEMENT_ARRAY_BUFFER,
+    };
+    unsafe { gl.BindBuffer(target, buffer) };
+    unsafe {
+        gl.BufferSubData(target,
+            offset as gl::types::GLintptr,
+            size as gl::types::GLsizeiptr,
+            address as *const gl::types::GLvoid
+        );
+    }
+}
+
+/// GL resource factory.
+pub struct Factory {
+    caps: d::Capabilities,
+    gl: Rc<gl::Gl>,
+    main_fbo: handle::FrameBuffer<R>,
+    handles: handle::Manager<R>,
+    frame_handles: handle::Manager<R>,
+}
+
+/// Create a new `Factory`.
+pub fn create(caps: d::Capabilities, gl: Rc<gl::Gl>) -> Factory {
+    let mut handles = handle::Manager::new();
+
+    Factory {
+        caps: caps,
+        gl: gl,
+        main_fbo: handles.make_frame_buffer(0),
+        handles: handles,
+        frame_handles: handle::Manager::new(),
+    }
+}
+
+impl Factory {
+    fn create_buffer_internal(&mut self) -> Buffer {
+        let mut name = 0 as Buffer;
+        unsafe {
+            self.gl.GenBuffers(1, &mut name);
+        }
+        info!("\tCreated buffer {}", name);
+        name
+    }
+
+    fn init_buffer(&mut self, buffer: Buffer, info: &d::BufferInfo) {
+        let target = match info.role {
+            d::BufferRole::Vertex => gl::ARRAY_BUFFER,
+            d::BufferRole::Index  => gl::ELEMENT_ARRAY_BUFFER,
+        };
+        unsafe { self.gl.BindBuffer(target, buffer) };
+        let usage = match info.usage {
+            d::BufferUsage::Static  => gl::STATIC_DRAW,
+            d::BufferUsage::Dynamic => gl::DYNAMIC_DRAW,
+            d::BufferUsage::Stream  => gl::STREAM_DRAW,
+        };
+        unsafe {
+            self.gl.BufferData(target,
+                info.size as gl::types::GLsizeiptr,
+                0 as *const gl::types::GLvoid,
+                usage
+            );
+        }
+    }
 }
 
 
@@ -55,7 +119,7 @@ impl d::mapping::Raw for RawMapping {
 }
 
 
-impl d::Factory<R> for GlDevice {
+impl d::Factory<R> for Factory {
     type Mapper = RawMapping;
 
     fn create_buffer_raw(&mut self, size: usize, usage: d::BufferUsage)
@@ -80,7 +144,7 @@ impl d::Factory<R> for GlDevice {
             size: data.len(),
         };
         self.init_buffer(name, &info);
-        self.update_sub_buffer(name, data.as_ptr(), data.len(), 0, role);
+        update_sub_buffer(&self.gl, name, data.as_ptr(), data.len(), 0, role);
         self.handles.make_buffer(name, info)
     }
 
@@ -174,8 +238,8 @@ impl d::Factory<R> for GlDevice {
                          data: &[u8], offset_bytes: usize) {
         debug_assert!(offset_bytes + data.len() <= buffer.get_info().size);
         let raw_handle = self.frame_handles.ref_buffer(buffer);
-        self.update_sub_buffer(raw_handle, data.as_ptr(), data.len(),
-                               offset_bytes, buffer.get_info().role)
+        update_sub_buffer(&self.gl, raw_handle, data.as_ptr(), data.len(),
+                          offset_bytes, buffer.get_info().role)
     }
 
     fn update_texture_raw(&mut self, texture: &handle::Texture<R>,
@@ -217,19 +281,19 @@ impl d::Factory<R> for GlDevice {
     }
 
     fn map_buffer_readable<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
-                           -> d::mapping::Readable<T, R, GlDevice> {
+                           -> d::mapping::Readable<T, R, Factory> {
         let map = self.map_buffer_raw(buf.raw(), d::MapAccess::Readable);
         self.map_readable(map, buf.len())
     }
 
     fn map_buffer_writable<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
-                                    -> d::mapping::Writable<T, R, GlDevice> {
+                                    -> d::mapping::Writable<T, R, Factory> {
         let map = self.map_buffer_raw(buf.raw(), d::MapAccess::Writable);
         self.map_writable(map, buf.len())
     }
 
     fn map_buffer_rw<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
-                              -> d::mapping::RW<T, R, GlDevice> {
+                              -> d::mapping::RW<T, R, Factory> {
         let map = self.map_buffer_raw(buf.raw(), d::MapAccess::RW);
         self.map_read_write(map, buf.len())
     }
@@ -243,6 +307,7 @@ impl d::Factory<R> for GlDevice {
             |gl, v| unsafe { gl.DeleteFramebuffers(1, v) },
             |gl, v| unsafe { gl.DeleteRenderbuffers(1, v) },
             |gl, v| unsafe { gl.DeleteTextures(1, v) },
-            |gl, v| unsafe { gl.DeleteSamplers(1, v) })
+            |gl, v| unsafe { gl.DeleteSamplers(1, v) });
+        self.frame_handles.clear();
     }
 }
