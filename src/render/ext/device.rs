@@ -22,16 +22,18 @@ use render::ext::factory::RenderFactory;
 use render::shade::ShaderParam;
 
 /// A convenient wrapper suitable for single-threaded operation.
-pub struct Graphics<D: device::Device> {
+pub struct Graphics<D: device::Device, F> {
     /// Graphics device.
     pub device: D,
+    /// Resource factory.
+    pub factory: F,
     /// Renderer front-end.
     pub renderer: Renderer<D::Resources, D::CommandBuffer>,
     /// Hidden batch context.
     context: batch::Context<D::Resources>,
 }
 
-impl<D: device::Device> ops::Deref for Graphics<D> {
+impl<D: device::Device, F> ops::Deref for Graphics<D, F> {
     type Target = batch::Context<D::Resources>;
 
     fn deref(&self) -> &batch::Context<D::Resources> {
@@ -39,14 +41,14 @@ impl<D: device::Device> ops::Deref for Graphics<D> {
     }
 }
 
-impl<D: device::Device> ops::DerefMut for Graphics<D> {
+impl<D: device::Device, F> ops::DerefMut for Graphics<D, F> {
     fn deref_mut(&mut self) -> &mut batch::Context<D::Resources> {
         &mut self.context
     }
 }
 
 
-impl<D: device::Device> Graphics<D> {
+impl<D: device::Device, F: device::Factory<D::Resources>> Graphics<D, F> {
     /// Clear the `Frame` as the `ClearData` specifies.
     pub fn clear(&mut self, data: ::ClearData, mask: ::Mask, frame: &::Frame<D::Resources>) {
         self.renderer.clear(data, mask, frame)
@@ -71,27 +73,26 @@ impl<D: device::Device> Graphics<D> {
     pub fn end_frame(&mut self) {
         self.device.submit(self.renderer.as_buffer());
         self.renderer.reset();
+        // self.factory.after_frame();
     }
 }
 
 
 /// Backend extension trait for convenience methods
-pub trait DeviceExt<R: device::Resources, C: device::draw::CommandBuffer<R>>:
-    device::Device<Resources = R, CommandBuffer = C>
-{
+pub trait DeviceExt<D: device::Device, F> {
     /// Convert to single-threaded wrapper
-    fn into_graphics(mut self) -> Graphics<Self>;
+    fn into_graphics(mut self) -> Graphics<D, F>;
 }
 
 impl<
-    R: device::Resources,
-    C: device::draw::CommandBuffer<R>,
-    D: RenderFactory<R, C> + device::Device<Resources = R, CommandBuffer = C>,
-> DeviceExt<R, C> for D {
-    fn into_graphics(mut self) -> Graphics<D> {
-        let rend = self.create_renderer();
+    D: device::Device,
+    F: device::Factory<D::Resources>,
+> DeviceExt<D, F> for (D, F) {
+    fn into_graphics(mut self) -> Graphics<D, F> {
+        let rend = self.1.create_renderer();
         Graphics {
-            device: self,
+            device: self.0,
+            factory: self.1,
             renderer: rend,
             context: batch::Context::new(),
         }
