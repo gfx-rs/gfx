@@ -69,3 +69,14 @@ pub use device::handle::Sampler as SamplerHandle;
 
 pub mod render;
 pub mod device;
+
+
+/// An abstract window that has the graphics context.
+pub trait Window {
+    /// Get width and height of the render area.
+    fn get_dimensions(&self) -> (u16, u16);
+    /// Get anti-aliasing mode.
+    fn get_aa_mode(&self) -> Option<device::tex::AaMode> { None }
+    /// Swap front and back buffers.
+    fn swap_buffers(&mut self);
+}
