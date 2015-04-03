@@ -17,7 +17,8 @@
 
 use std::ops;
 use device;
-use render::{batch, Renderer, RenderState, ParamStorage};
+use render::{batch, Renderer};
+use render::ext::factory::RenderFactory;
 use render::shade::ShaderParam;
 
 /// A convenient wrapper suitable for single-threaded operation.
@@ -76,10 +77,8 @@ impl<D: device::Device> Graphics<D> {
 
 /// Backend extension trait for convenience methods
 pub trait DeviceExt<R: device::Resources, C: device::draw::CommandBuffer<R>>:
-    device::Factory<R> + device::Device<Resources = R, CommandBuffer = C>
+    device::Device<Resources = R, CommandBuffer = C>
 {
-    /// Create a new renderer
-    fn create_renderer(&mut self) -> ::Renderer<R, C>;
     /// Convert to single-threaded wrapper
     fn into_graphics(mut self) -> Graphics<Self>;
 }
@@ -87,22 +86,8 @@ pub trait DeviceExt<R: device::Resources, C: device::draw::CommandBuffer<R>>:
 impl<
     R: device::Resources,
     C: device::draw::CommandBuffer<R>,
-    D: device::Factory<R> + device::Device<Resources = R, CommandBuffer = C>,
+    D: RenderFactory<R, C> + device::Device<Resources = R, CommandBuffer = C>,
 > DeviceExt<R, C> for D {
-    fn create_renderer(&mut self) -> ::Renderer<R, C> {
-        ::Renderer {
-            command_buffer: device::draw::CommandBuffer::new(),
-            data_buffer: device::draw::DataBuffer::new(),
-            handles: device::handle::Manager::new(),
-            common_array_buffer: self.create_array_buffer(),
-            draw_frame_buffer: self.create_frame_buffer(),
-            read_frame_buffer: self.create_frame_buffer(),
-            default_frame_buffer: self.get_main_frame_buffer(),
-            render_state: RenderState::new(),
-            parameters: ParamStorage::new(),
-        }
-    }
-
     fn into_graphics(mut self) -> Graphics<D> {
         let rend = self.create_renderer();
         Graphics {
