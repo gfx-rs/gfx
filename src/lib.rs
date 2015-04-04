@@ -268,7 +268,7 @@ impl GlDevice {
                 if mask.intersects(d::target::STENCIL) {
                     flags |= gl::STENCIL_BUFFER_BIT;
                     unsafe {
-                        self.gl.StencilMask(-1);
+                        self.gl.StencilMask(gl::types::GLuint::max_value());
                         self.gl.ClearStencil(data.stencil as gl::types::GLint);
                     }
                 }
