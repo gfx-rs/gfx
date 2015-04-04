@@ -211,7 +211,7 @@ const MESH_ATTRIBUTE_MASK: AttributeIndex = (1 << BITS_PER_ATTRIBUTE) - 1;
 const MAX_SHADER_INPUTS: usize = 64 / BITS_PER_ATTRIBUTE;
 
 /// An iterator over mesh attributes.
-#[derive(Copy)]
+#[derive(Clone, Copy)]
 pub struct AttributeIter {
     value: u64,
 }
@@ -227,7 +227,7 @@ impl Iterator for AttributeIter {
 }
 
 /// Holds a remapping table from shader inputs to mesh attributes.
-#[derive(Copy)]
+#[derive(Clone, Copy)]
 pub struct Link {
     table: u64,
 }
