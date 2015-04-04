@@ -50,7 +50,6 @@ impl<'a, T: Copy, R: Resources, F: Factory<R>> Deref for Readable<'a, T, R, F> w
     }
 }
 
-#[unsafe_destructor]
 impl<'a, T: Copy, R: Resources, F: Factory<R>> Drop for Readable<'a, T, R, F> where
     F::Mapper: 'a,
 {
@@ -81,7 +80,6 @@ impl<'a, T: Copy, R: Resources, F: Factory<R>> Writable<'a, T, R, F> where
     }
 }
 
-#[unsafe_destructor]
 impl<'a, T: Copy, R: Resources, F: Factory<R>> Drop for Writable<'a, T, R, F> where
     F::Mapper: 'a,
 {
@@ -118,7 +116,6 @@ impl<'a, T: Copy, R: Resources, F: Factory<R>> DerefMut for RW<'a, T, R, F> wher
     }
 }
 
-#[unsafe_destructor]
 impl<'a, T: Copy, R: Resources, F: Factory<R>> Drop for RW<'a, T, R, F> where
     F::Mapper: 'a
 {
