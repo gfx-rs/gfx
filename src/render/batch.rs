@@ -160,9 +160,10 @@ impl<T: ShaderParam> Batch for OwnedBatch<T> {
 type Index = u16;
 
 //#[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone)]
 struct Id<T>(Index, PhantomData<T>);
 
-impl<T> Copy for Id<T> {}
+impl<T: Clone> Copy for Id<T> {}
 
 impl<T> Id<T> {
     fn unwrap(&self) -> Index {
@@ -244,6 +245,7 @@ impl<T: Clone + PartialEq> Array<T> {
 /// Referenced core - a minimal sealed batch that depends on `Context`.
 /// It has references to the resources (mesh, program, state), that are held
 /// by the context that created the batch, so these have to be used together.
+#[derive(Clone)]
 pub struct CoreBatch<T: ShaderParam> {
     mesh_id: Id<mesh::Mesh<T::Resources>>,
     mesh_link: mesh::Link,
@@ -252,7 +254,7 @@ pub struct CoreBatch<T: ShaderParam> {
     state_id: Id<DrawState>,
 }
 
-impl<T: ShaderParam> Copy for CoreBatch<T> where T::Link: Copy {}
+impl<T: Clone + ShaderParam> Copy for CoreBatch<T> where T::Link: Copy {}
 
 impl<T: ShaderParam> fmt::Debug for CoreBatch<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

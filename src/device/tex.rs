@@ -329,7 +329,7 @@ impl Default for TextureInfo {
             width: 0,
             height: 1,
             depth: 1,
-            levels: -1,
+            levels: !0,
             kind: TextureKind::Texture2D,
             format: RGBA8,
         }
