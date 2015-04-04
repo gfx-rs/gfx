@@ -81,7 +81,7 @@ fn get_program_iv(gl: &gl::Gl, program: super::Program, query: gl::types::GLenum
     iv
 }
 
-#[derive(Copy)]
+#[derive(Copy, Clone)]
 enum StorageType {
     Var(BaseType, s::ContainerType),
     Sampler(BaseType, s::SamplerType),

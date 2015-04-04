@@ -66,7 +66,7 @@ impl Resources for GlResources {
     type Sampler        = Sampler;
 }
 
-#[derive(Copy, Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum GlError {
     NoError,
     InvalidEnum,
@@ -268,7 +268,7 @@ impl GlDevice {
                 if mask.intersects(d::target::STENCIL) {
                     flags |= gl::STENCIL_BUFFER_BIT;
                     unsafe {
-                        self.gl.StencilMask(-1);
+                        self.gl.StencilMask(gl::types::GLuint::max_value());
                         self.gl.ClearStencil(data.stencil as gl::types::GLint);
                     }
                 }
