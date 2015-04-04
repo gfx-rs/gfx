@@ -179,9 +179,15 @@ impl d::Factory<R> for GlDevice {
     }
 
     fn update_texture_raw(&mut self, texture: &handle::Texture<R>,
-                          img: &d::tex::ImageInfo, data: &[u8])
+                          img: &d::tex::ImageInfo, data: &[u8],
+                          optkind: Option<d::tex::TextureKind>)
                           -> Result<(), d::tex::TextureError> {
-        tex::update_texture(&self.gl, texture.get_info().kind,
+
+        // use the specified texture kind if set for this update, otherwise
+        // fall back on the kind that was set when the texture was created.
+        let kind = optkind.unwrap_or(texture.get_info().kind);
+
+        tex::update_texture(&self.gl, kind,
                             self.frame_handles.ref_texture(texture),
                             img, data.as_ptr(), data.len())
     }
