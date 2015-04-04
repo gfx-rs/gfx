@@ -276,7 +276,7 @@ pub struct ProgramInfo {
 }
 
 /// Error type for trying to store a UniformValue in a UniformVar.
-#[derive(Copy, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum CompatibilityError {
     /// Array sizes differ between the value and the var (trying to upload a vec2 as a vec4, etc)
     ErrorArraySize,

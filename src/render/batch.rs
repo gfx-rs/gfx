@@ -164,6 +164,10 @@ struct Id<T>(Index, PhantomData<T>);
 
 impl<T> Copy for Id<T> {}
 
+impl<T> Clone for Id<T> {
+    fn clone(&self) -> Id<T> { *self }
+}
+
 impl<T> Id<T> {
     fn unwrap(&self) -> Index {
         let Id(i, _) = *self;
@@ -253,6 +257,18 @@ pub struct CoreBatch<T: ShaderParam> {
 }
 
 impl<T: ShaderParam> Copy for CoreBatch<T> where T::Link: Copy {}
+
+impl<T: ShaderParam> Clone for CoreBatch<T> where T::Link: Clone {
+    fn clone(&self) -> CoreBatch<T> {
+        CoreBatch {
+            mesh_id: self.mesh_id,
+            mesh_link: self.mesh_link,
+            program_id: self.program_id,
+            param_link: self.param_link.clone(),
+            state_id: self.state_id,
+        }
+    }
+}
 
 impl<T: ShaderParam> fmt::Debug for CoreBatch<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
