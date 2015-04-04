@@ -15,7 +15,7 @@
 //! An efficient, low-level, bindless graphics API for Rust. See [the
 //! blog](http://gfx-rs.github.io/) for explanations and annotated examples.
 
-#![feature(alloc, core, libc, unsafe_destructor)]
+#![feature(alloc, core, libc)]
 
 extern crate alloc;
 #[macro_use]
