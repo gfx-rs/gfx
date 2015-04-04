@@ -149,11 +149,6 @@ pub struct Texture<R: Resources>(Arc<R::Texture>, tex::TextureInfo);
 impl<R: Resources> Texture<R> {
     /// Get texture info
     pub fn get_info(&self) -> &tex::TextureInfo { &self.1 }
-	/// Update texture info kind
-	pub fn set_info_kind(&mut self, kind: tex::TextureKind) {
-		// TODO mutable handles seems wrong.
-		self.1.kind = kind;
-	}
 }
 
 /// Sampler Handle

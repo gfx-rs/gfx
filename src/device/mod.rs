@@ -206,11 +206,14 @@ pub trait Factory<R: Resources> {
     fn map_buffer_rw<T: Copy>(&mut self, &handle::Buffer<R, T>) -> mapping::RW<T, R, Self>;
 
     /// Update the information stored in a texture
-    fn update_texture_raw(&mut self, tex: &handle::Texture<R>, img: &tex::ImageInfo, data: &[u8])
-                          -> Result<(), tex::TextureError>;
-    fn update_texture<T: Copy>(&mut self, tex: &handle::Texture<R>, img: &tex::ImageInfo, data: &[T])
-                      -> Result<(), tex::TextureError> {
-        self.update_texture_raw(tex, img, as_byte_slice(data))
+    fn update_texture_raw(&mut self, tex: &handle::Texture<R>,
+					img: &tex::ImageInfo, data: &[u8],
+					kind: Option<&tex::TextureKind>) -> Result<(), tex::TextureError>;
+
+    fn update_texture<T: Copy>(&mut self, tex: &handle::Texture<R>, 
+					img: &tex::ImageInfo, data: &[T],
+					kind: Option<&tex::TextureKind>) -> Result<(), tex::TextureError> {
+        self.update_texture_raw(tex, img, as_byte_slice(data), kind)
     }
     fn generate_mipmap(&mut self, &handle::Texture<R>);
 
