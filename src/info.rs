@@ -23,7 +23,7 @@ use gfx::device::Capabilities;
 use gfx::device::shade;
 
 /// A version number for a specific component of an OpenGL implementation
-#[derive(Copy, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub struct Version {
     pub major: u32,
     pub minor: u32,
@@ -143,7 +143,7 @@ unsafe fn c_str_as_static_str(c_str: *const i8) -> &'static str {
 }
 
 /// A unique platform identifier that does not change between releases
-#[derive(Copy, Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub struct PlatformName {
     /// The company responsible for the OpenGL implementation
     pub vendor: &'static str,

@@ -66,7 +66,7 @@ impl Resources for GlResources {
     type Sampler        = Sampler;
 }
 
-#[derive(Copy, Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum GlError {
     NoError,
     InvalidEnum,

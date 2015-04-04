@@ -24,7 +24,7 @@ use gfx::device::attrib::{FloatSize, IntSubType};
 
 /// A token produced by the `bind_texture` that allows following up
 /// with a GL-compatibility sampler settings in `bind_sampler`
-#[derive(Copy)]
+#[derive(Copy, Clone)]
 pub struct BindAnchor(GLenum);
 
 fn create_kind_to_gl(kind: TextureKind) -> GLenum {

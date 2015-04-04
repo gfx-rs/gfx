@@ -22,7 +22,7 @@ use gfx::device::target::*;
 use super::{ArrayBuffer, Buffer, FrameBuffer, Program, Surface, Texture, Sampler, GlResources};
 
 /// Serialized device command.
-#[derive(Copy, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum Command {
     BindProgram(Program),
     BindArrayBuffer(ArrayBuffer),
