@@ -51,7 +51,7 @@ pub fn as_byte_slice<T>(slice: &[T]) -> &[u8] {
 }
 
 /// Features that the device supports.
-#[derive(Copy, Debug)]
+#[derive(Clone, Copy, Debug)]
 #[allow(missing_docs)] // pretty self-explanatory fields!
 pub struct Capabilities {
     pub shader_model: shade::ShaderModel,
@@ -73,7 +73,7 @@ pub struct Capabilities {
 }
 
 /// Specifies the access allowed to a buffer mapping.
-#[derive(Copy)]
+#[derive(Clone, Copy)]
 pub enum MapAccess {
     /// Only allow reads.
     Readable,
