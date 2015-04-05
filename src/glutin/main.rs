@@ -23,24 +23,14 @@ extern crate glutin;
 
 use gfx::traits::*;
 
-fn main() {
+pub fn main() {
     let window = glutin::Window::new().unwrap();
     window.set_title("glutin initialization example");
     unsafe { window.make_current() };
     let (w, h) = window.get_inner_size().unwrap();
 
-    let mut device = gfx_device_gl::GlDevice::new(|s| window.get_proc_address(s));
-    let mut renderer = device.create_renderer();
-
-    renderer.clear(
-        gfx::ClearData {
-            color: [0.3, 0.3, 0.3, 1.0],
-            depth: 1.0,
-            stencil: 0,
-        },
-        gfx::COLOR,
-        &gfx::Frame::new(w as u16, h as u16)
-    );
+    let mut graphics = gfx_device_gl::create(|s| window.get_proc_address(s))
+                                     .into_graphics();
 
     'main: loop {
         // quit when Esc is pressed.
@@ -51,8 +41,19 @@ fn main() {
                 _ => {},
             }
         }
-        device.submit(renderer.as_buffer());
+
+        graphics.clear(
+            gfx::ClearData {
+                color: [0.3, 0.3, 0.3, 1.0],
+                depth: 1.0,
+                stencil: 0,
+            },
+            gfx::COLOR,
+            &gfx::Frame::new(w as u16, h as u16)
+        );
+
+        graphics.end_frame();
         window.swap_buffers();
-        device.after_frame();
+        graphics.cleanup();
     }
 }
