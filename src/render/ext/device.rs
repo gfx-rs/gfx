@@ -17,20 +17,23 @@
 
 use std::ops;
 use device;
-use render::{batch, Renderer, RenderState, ParamStorage};
+use render::{batch, Renderer};
+use render::ext::factory::RenderFactory;
 use render::shade::ShaderParam;
 
 /// A convenient wrapper suitable for single-threaded operation.
-pub struct Graphics<D: device::Device> {
+pub struct Graphics<D: device::Device, F> {
     /// Graphics device.
     pub device: D,
+    /// Resource factory.
+    pub factory: F,
     /// Renderer front-end.
     pub renderer: Renderer<D::Resources, D::CommandBuffer>,
     /// Hidden batch context.
     context: batch::Context<D::Resources>,
 }
 
-impl<D: device::Device> ops::Deref for Graphics<D> {
+impl<D: device::Device, F> ops::Deref for Graphics<D, F> {
     type Target = batch::Context<D::Resources>;
 
     fn deref(&self) -> &batch::Context<D::Resources> {
@@ -38,14 +41,14 @@ impl<D: device::Device> ops::Deref for Graphics<D> {
     }
 }
 
-impl<D: device::Device> ops::DerefMut for Graphics<D> {
+impl<D: device::Device, F> ops::DerefMut for Graphics<D, F> {
     fn deref_mut(&mut self) -> &mut batch::Context<D::Resources> {
         &mut self.context
     }
 }
 
 
-impl<D: device::Device> Graphics<D> {
+impl<D: device::Device, F: device::Factory<D::Resources>> Graphics<D, F> {
     /// Clear the `Frame` as the `ClearData` specifies.
     pub fn clear(&mut self, data: ::ClearData, mask: ::Mask, frame: &::Frame<D::Resources>) {
         self.renderer.clear(data, mask, frame)
@@ -71,42 +74,30 @@ impl<D: device::Device> Graphics<D> {
         self.device.submit(self.renderer.as_buffer());
         self.renderer.reset();
     }
+    
+    /// Cleanup resources after the frame.
+    pub fn cleanup(&mut self) {
+        self.device.after_frame();
+        self.factory.cleanup();
+    }
 }
 
 
 /// Backend extension trait for convenience methods
-pub trait DeviceExt<R: device::Resources, C: device::draw::CommandBuffer<R>>:
-    device::Factory<R> + device::Device<Resources = R, CommandBuffer = C>
-{
-    /// Create a new renderer
-    fn create_renderer(&mut self) -> ::Renderer<R, C>;
+pub trait DeviceExt<D: device::Device, F> {
     /// Convert to single-threaded wrapper
-    fn into_graphics(mut self) -> Graphics<Self>;
+    fn into_graphics(mut self) -> Graphics<D, F>;
 }
 
 impl<
-    R: device::Resources,
-    C: device::draw::CommandBuffer<R>,
-    D: device::Factory<R> + device::Device<Resources = R, CommandBuffer = C>,
-> DeviceExt<R, C> for D {
-    fn create_renderer(&mut self) -> ::Renderer<R, C> {
-        ::Renderer {
-            command_buffer: device::draw::CommandBuffer::new(),
-            data_buffer: device::draw::DataBuffer::new(),
-            handles: device::handle::Manager::new(),
-            common_array_buffer: self.create_array_buffer(),
-            draw_frame_buffer: self.create_frame_buffer(),
-            read_frame_buffer: self.create_frame_buffer(),
-            default_frame_buffer: self.get_main_frame_buffer(),
-            render_state: RenderState::new(),
-            parameters: ParamStorage::new(),
-        }
-    }
-
-    fn into_graphics(mut self) -> Graphics<D> {
-        let rend = self.create_renderer();
+    D: device::Device,
+    F: device::Factory<D::Resources>,
+> DeviceExt<D, F> for (D, F) {
+    fn into_graphics(mut self) -> Graphics<D, F> {
+        let rend = self.1.create_renderer();
         Graphics {
-            device: self,
+            device: self.0,
+            factory: self.1,
             renderer: rend,
             context: batch::Context::new(),
         }

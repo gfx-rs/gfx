@@ -16,8 +16,35 @@
 
 use device;
 use device::shade::{Stage, CreateShaderError};
+use render::{Renderer, RenderState, ParamStorage};
 use render::mesh::{Mesh, VertexFormat};
 use super::shade::*;
+
+/// Factory extension that allows creating new renderers.
+pub trait RenderFactory<R: device::Resources, C: device::draw::CommandBuffer<R>> {
+    /// Create a new renderer
+    fn create_renderer(&mut self) -> Renderer<R, C>;
+}
+
+impl<
+    R: device::Resources,
+    C: device::draw::CommandBuffer<R>,
+    F: device::Factory<R>,
+> RenderFactory<R, C> for F {
+    fn create_renderer(&mut self) -> Renderer<R, C> {
+        Renderer {
+            command_buffer: device::draw::CommandBuffer::new(),
+            data_buffer: device::draw::DataBuffer::new(),
+            handles: device::handle::Manager::new(),
+            common_array_buffer: self.create_array_buffer(),
+            draw_frame_buffer: self.create_frame_buffer(),
+            read_frame_buffer: self.create_frame_buffer(),
+            default_frame_buffer: self.get_main_frame_buffer(),
+            render_state: RenderState::new(),
+            parameters: ParamStorage::new(),
+        }
+    }
+}
 
 /// Factory extension trait
 pub trait FactoryExt<R: device::Resources> {

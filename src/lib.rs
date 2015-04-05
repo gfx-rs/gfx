@@ -28,7 +28,7 @@ extern crate draw_state;
 pub mod traits {
     pub use device::{Device, Factory};
     pub use render::ext::device::DeviceExt;
-    pub use render::ext::factory::FactoryExt;
+    pub use render::ext::factory::{RenderFactory, FactoryExt};
     pub use render::mesh::ToSlice;
 }
 
