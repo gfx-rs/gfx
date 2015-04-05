@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(core, plugin, custom_attribute)]
+#![feature(plugin, custom_attribute)]
 #![plugin(gfx_macros)]
 
 extern crate cgmath;
@@ -38,19 +38,13 @@ use time::precise_time_s;
 use noise::{Seed, perlin2};
 
 #[vertex_format]
-#[derive(Copy)]
+#[derive(Clone, Copy)]
 struct Vertex {
     #[name = "a_Pos"]
     pos: [f32; 3],
 
     #[name = "a_Color"]
     color: [f32; 3],
-}
-
-impl Clone for Vertex {
-    fn clone(&self) -> Vertex {
-        Vertex { pos: self.pos, color: self.color }
-    }
 }
 
 impl fmt::Debug for Vertex {
@@ -114,11 +108,8 @@ fn calculate_color(height: f32) -> [f32; 3] {
     }
 }
 
-fn main() {
-    use std::num::Float;
-
-    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS)
-        .ok().expect("Failed to initialize glfw-rs");
+pub fn main() {
+    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
     glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
     glfw.window_hint(glfw::WindowHint::OpenglForwardCompat(true));
     glfw.window_hint(glfw::WindowHint::OpenglProfile(glfw::OpenGlProfileHint::Core));
@@ -134,7 +125,7 @@ fn main() {
     let (w, h) = window.get_framebuffer_size();
     let frame = gfx::Frame::new(w as u16, h as u16);
 
-    let mut device = gfx_device_gl::GlDevice::new(|s| window.get_proc_address(s));
+    let (device, mut factory) = gfx_device_gl::create(|s| window.get_proc_address(s));
 
     let rand_seed = rand::thread_rng().gen();
     let seed = Seed::new(rand_seed);
@@ -155,15 +146,15 @@ fn main() {
         .map(|i| i as u32)
         .collect();
 
-    let slice = device
-        .create_buffer_index::<u32>(index_data.as_slice())
+    let slice = factory
+        .create_buffer_index::<u32>(&index_data)
         .to_slice(gfx::PrimitiveType::TriangleList);
 
-    let mesh = device.create_mesh(vertex_data.as_slice());
-    let program = device.link_program(VERTEX_SRC, FRAGMENT_SRC).unwrap();
+    let mesh = factory.create_mesh(&vertex_data);
+    let program = factory.link_program(VERTEX_SRC, FRAGMENT_SRC).unwrap();
     let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
-    let mut graphics = device.into_graphics();
+    let mut graphics = (device, factory).into_graphics();
 
     let aspect = w as f32 / h as f32;
     let data = Params {
@@ -207,6 +198,6 @@ fn main() {
         graphics.end_frame();
 
         window.swap_buffers();
-        graphics.device.after_frame();
+        graphics.cleanup();
     }
 }

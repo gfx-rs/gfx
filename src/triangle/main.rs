@@ -23,7 +23,7 @@ use gfx::traits::*;
 use glfw::Context;
 
 #[vertex_format]
-#[derive(Copy)]
+#[derive(Clone, Copy)]
 struct Vertex {
     #[name = "a_Pos"]
     pos: [f32; 2],
@@ -55,9 +55,8 @@ static FRAGMENT_SRC: &'static [u8] = b"
     }
 ";
 
-fn main() {
-    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS)
-                        .ok().expect("failed to init glfw");
+pub fn main() {
+    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
     let (mut window, events) = glfw
         .create_window(640, 480, "Triangle example.", glfw::WindowMode::Windowed)
@@ -70,20 +69,20 @@ fn main() {
     let (w, h) = window.get_framebuffer_size();
     let frame = gfx::Frame::new(w as u16, h as u16);
 
-    let mut device = gfx_device_gl::GlDevice::new(|s| window.get_proc_address(s));
+    let (mut device, mut factory) = gfx_device_gl::create(|s| window.get_proc_address(s));
 
     let vertex_data = [
         Vertex { pos: [ -0.5, -0.5 ], color: [1.0, 0.0, 0.0] },
         Vertex { pos: [  0.5, -0.5 ], color: [0.0, 1.0, 0.0] },
         Vertex { pos: [  0.0,  0.5 ], color: [0.0, 0.0, 1.0] },
     ];
-    let mesh = device.create_mesh(&vertex_data);
+    let mesh = factory.create_mesh(&vertex_data);
     let slice = mesh.to_slice(gfx::PrimitiveType::TriangleList);
 
-    let program = device.link_program(VERTEX_SRC, FRAGMENT_SRC)
-                        .ok().expect("Failed to link program");
+    let program = factory.link_program(VERTEX_SRC, FRAGMENT_SRC)
+                         .unwrap();
 
-    let mut renderer = device.create_renderer();
+    let mut renderer = factory.create_renderer();
 
     let clear_data = gfx::ClearData {
         color: [0.3, 0.3, 0.3, 1.0],
@@ -109,5 +108,6 @@ fn main() {
 
         window.swap_buffers();
         device.after_frame();
+        factory.cleanup();
     }
 }

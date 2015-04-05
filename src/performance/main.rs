@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(core, plugin, custom_attribute)]
+#![feature(convert, plugin, custom_attribute)]
 #![plugin(gfx_macros)]
 
 extern crate cgmath;
@@ -20,7 +20,7 @@ extern crate gfx;
 extern crate gfx_device_gl;
 extern crate glfw;
 extern crate time;
-extern crate "gfx_gl" as gl;
+extern crate gfx_gl as gl;
 
 use time::precise_time_s;
 use cgmath::FixedArray;
@@ -38,10 +38,9 @@ use std::str::FromStr;
 use std::sync::mpsc::Receiver;
 use std::iter::repeat;
 use std::ffi::CString;
-use std::num::Int;
 
 #[vertex_format]
-#[derive(Copy)]
+#[derive(Clone, Copy)]
 struct Vertex {
     #[as_float]
     #[name = "a_Pos"]
@@ -85,7 +84,7 @@ fn gfx_main(mut glfw: glfw::Glfw,
     let (w, h) = window.get_framebuffer_size();
     let frame = gfx::Frame::new(w as u16, h as u16);
 
-    let mut device = gfx_device_gl::GlDevice::new(|s| window.get_proc_address(s));
+    let (device, mut factory) = gfx_device_gl::create(|s| window.get_proc_address(s));
 
     let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
@@ -96,7 +95,7 @@ fn gfx_main(mut glfw: glfw::Glfw,
         Vertex { pos: [ 1,  1,  1] },
     ];
 
-    let mesh = device.create_mesh(&vertex_data);
+    let mesh = factory.create_mesh(&vertex_data);
     let slice = mesh.to_slice(gfx::PrimitiveType::TriangleList);
 
     let texture_info = gfx::tex::TextureInfo {
@@ -108,12 +107,13 @@ fn gfx_main(mut glfw: glfw::Glfw,
         format: gfx::tex::RGBA8,
     };
     let image_info = texture_info.to_image_info();
-    let texture = device.create_texture(texture_info).unwrap();
-    device.update_texture(&texture, &image_info,
-                          &[0x20u8, 0xA0u8, 0xC0u8, 0x00u8])
-          .unwrap();
+    let texture = factory.create_texture(texture_info).unwrap();
+    factory.update_texture(&texture, &image_info,
+                          &[0x20u8, 0xA0u8, 0xC0u8, 0x00u8],
+                          None)
+           .unwrap();
 
-    let program = device.link_program(VERTEX_SRC, FRAGMENT_SRC).unwrap();
+    let program = factory.link_program(VERTEX_SRC, FRAGMENT_SRC).unwrap();
     let view: AffineMatrix3<f32> = Transform::look_at(
         &Point3::new(0f32, -5.0, 0.0),
         &Point3::new(0f32, 0.0, 0.0),
@@ -128,7 +128,7 @@ fn gfx_main(mut glfw: glfw::Glfw,
         stencil: 0,
     };
 
-    let mut graphics = device.into_graphics();
+    let mut graphics = (device, factory).into_graphics();
     let batch: gfx::batch::CoreBatch<Params<_>> = 
         graphics.make_core(&program, &mesh, &state).unwrap();
 
@@ -166,7 +166,7 @@ fn gfx_main(mut glfw: glfw::Glfw,
         graphics.end_frame();
         let post_submit = precise_time_s() * 1000.;
         window.swap_buffers();
-        graphics.device.after_frame();
+        graphics.cleanup();
         let swap = precise_time_s() * 1000.;
 
         println!("total time:\t\t{0:4.2}ms", swap - start);
@@ -198,7 +198,6 @@ static FS_SRC: &'static str = "
 
 
 fn compile_shader(gl: &Gl, src: &str, ty: GLenum) -> GLuint { unsafe {
-    use std::num::Int;
     let shader = gl.CreateShader(ty);
     // Attempt to compile the shader
     let src = CString::new(src).unwrap();
@@ -358,9 +357,7 @@ fn gl_main(mut glfw: glfw::Glfw,
     }
 }
 
-fn main() {
-    use std::num::Float;
-
+pub fn main() {
     let ref mut args = env::args();
     let args_count = env::args().count();
     if args_count == 1 {
@@ -393,7 +390,7 @@ fn main() {
     window.set_key_polling(true);
 
     println!("count is {}", count*count*4);
-    match mode.as_slice() {
+    match mode.as_ref() {
         "gfx" => gfx_main(glfw, window, events, count),
         "gl" => gl_main(glfw, window, events, count),
         x => {

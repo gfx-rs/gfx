@@ -27,7 +27,7 @@ use gfx::traits::*;
 use glfw::Context;
 
 #[vertex_format]
-#[derive(Copy)]
+#[derive(Clone, Copy)]
 struct Vertex {
     #[as_float]
     #[name = "a_Pos"]
@@ -79,9 +79,8 @@ static FRAGMENT_SRC: &'static [u8] = b"
 
 //----------------------------------------
 
-fn main() {
-    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS)
-        .ok().expect("Failed to initialize glfw-rs");
+pub fn main() {
+    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
     glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
     glfw.window_hint(glfw::WindowHint::OpenglForwardCompat(true));
     glfw.window_hint(glfw::WindowHint::OpenglProfile(glfw::OpenGlProfileHint::Core));
@@ -97,8 +96,8 @@ fn main() {
     let (w, h) = window.get_framebuffer_size();
     let frame = gfx::Frame::new(w as u16, h as u16);
 
-    let mut device = gfx_device_gl::GlDevice::new(|s| window.get_proc_address(s));
-    let mut renderer = device.create_renderer();
+    let (mut device, mut factory) = gfx_device_gl::create(|s| window.get_proc_address(s));
+    let mut renderer = factory.create_renderer();
 
     let vertex_data = [
         // top (0, 0, 1)
@@ -133,7 +132,7 @@ fn main() {
         Vertex { pos: [ 1, -1, -1], tex_coord: [0, 1] },
     ];
 
-    let mesh = device.create_mesh(&vertex_data);
+    let mesh = factory.create_mesh(&vertex_data);
 
     let index_data: &[u8] = &[
          0,  1,  2,  2,  3,  0, // top
@@ -153,17 +152,17 @@ fn main() {
         format: gfx::tex::RGBA8,
     };
     let image_info = texture_info.to_image_info();
-    let texture = device.create_texture(texture_info).unwrap();
-    device.update_texture(&texture, &image_info,
-                          &[0x20u8, 0xA0u8, 0xC0u8, 0x00u8])
-          .unwrap();
+    let texture = factory.create_texture(texture_info).unwrap();
+    factory.update_texture(&texture, &image_info,
+                          &[0x20u8, 0xA0u8, 0xC0u8, 0x00u8],
+                          None).unwrap();
 
-    let sampler = device.create_sampler(
+    let sampler = factory.create_sampler(
         gfx::tex::SamplerInfo::new(gfx::tex::FilterMethod::Bilinear,
                                    gfx::tex::WrapMode::Clamp)
     );
 
-    let program = device.link_program(VERTEX_SRC, FRAGMENT_SRC).unwrap();
+    let program = factory.link_program(VERTEX_SRC, FRAGMENT_SRC).unwrap();
 
     let view: AffineMatrix3<f32> = Transform::look_at(
         &Point3::new(1.5f32, -5.0, 3.0),
@@ -179,8 +178,8 @@ fn main() {
     };
 
     let mut batch = gfx::batch::OwnedBatch::new(mesh, program, data).unwrap();
-    batch.slice = device.create_buffer_index::<u8>(index_data)
-                        .to_slice(gfx::PrimitiveType::TriangleList);
+    batch.slice = factory.create_buffer_index::<u8>(index_data)
+                         .to_slice(gfx::PrimitiveType::TriangleList);
     batch.state.depth(gfx::state::Comparison::LessEqual, true);
 
     let clear_data = gfx::ClearData {
@@ -206,5 +205,6 @@ fn main() {
 
         window.swap_buffers();
         device.after_frame();
+        factory.cleanup();
     }
 }

@@ -26,7 +26,7 @@
 //
 // Press 1-4 to show the immediate buffers. Press 0 to show the final result.
 
-#![feature(core, plugin, custom_attribute)]
+#![feature(plugin, custom_attribute)]
 #![plugin(gfx_macros)]
 
 extern crate cgmath;
@@ -39,7 +39,6 @@ extern crate genmesh;
 extern crate noise;
 
 use rand::Rng;
-use std::num::Float;
 use cgmath::FixedArray;
 use cgmath::{Matrix, Matrix4, Point3, Vector3, EuclideanVector};
 use cgmath::{Transform, AffineMatrix3};
@@ -56,7 +55,7 @@ use noise::{Seed, perlin2};
 const NUM_LIGHTS: usize = 250;
 
 #[vertex_format]
-#[derive(Copy)]
+#[derive(Clone, Copy)]
 struct TerrainVertex {
     #[name = "a_Pos"]
     pos: [f32; 3],
@@ -67,7 +66,7 @@ struct TerrainVertex {
 }
 
 #[vertex_format]
-#[derive(Copy)]
+#[derive(Clone, Copy)]
 struct BlitVertex {
     #[as_float]
     #[name = "a_Pos"]
@@ -78,7 +77,7 @@ struct BlitVertex {
 }
 
 #[vertex_format]
-#[derive(Copy)]
+#[derive(Clone, Copy)]
 struct CubeVertex {
     #[as_float]
     #[name = "a_Pos"]
@@ -365,7 +364,7 @@ fn create_res_buffer<R: gfx::Resources, F: Factory<R>>(width: u16, height: u16,
     (frame, texture_frame, texture_depth.clone())
 }
 
-fn main() {
+pub fn main() {
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS)
                         .unwrap();
 
@@ -384,20 +383,20 @@ fn main() {
     let (w, h) = window.get_framebuffer_size();
     let frame = gfx::Frame::new(w as u16, h as u16);
 
-    let mut device = gfx_device_gl::GlDevice::new(|s| window.get_proc_address(s));
-    let mut renderer = device.create_renderer();
+    let (mut device, mut factory) = gfx_device_gl::create(|s| window.get_proc_address(s));
+    let mut renderer = factory.create_renderer();
     let mut context = gfx::batch::Context::new();
-    type R = gfx_device_gl::GlResources;
+    type R = gfx_device_gl::Resources;
 
-    let (g_buffer, texture_pos, texture_normal, texture_diffuse, texture_depth)  = create_g_buffer(w as u16, h as u16, &mut device);
-    let (res_buffer, texture_frame, _)  = create_res_buffer(w as u16, h as u16, &mut device, &texture_depth);
+    let (g_buffer, texture_pos, texture_normal, texture_diffuse, texture_depth)  = create_g_buffer(w as u16, h as u16, &mut factory);
+    let (res_buffer, texture_frame, _) = create_res_buffer(w as u16, h as u16, &mut factory, &texture_depth);
 
     let seed = {
         let rand_seed = rand::thread_rng().gen();
         Seed::new(rand_seed)
     };
 
-    let sampler = device.create_sampler(
+    let sampler = factory.create_sampler(
         gfx::tex::SamplerInfo::new(gfx::tex::FilterMethod::Scale,
                                    gfx::tex::WrapMode::Clamp)
     );
@@ -425,14 +424,14 @@ fn main() {
             .map(|i| i as u32)
             .collect();
 
-        let mesh = device.create_mesh(vertex_data.as_slice());
+        let mesh = factory.create_mesh(&vertex_data);
 
-        let slice = device
-            .create_buffer_index::<u32>(index_data.as_slice())
+        let slice = factory
+            .create_buffer_index::<u32>(&index_data)
             .to_slice(gfx::PrimitiveType::TriangleList);
 
-        let program = device.link_program(TERRAIN_VERTEX_SRC, TERRAIN_FRAGMENT_SRC)
-                            .unwrap();
+        let program = factory.link_program(TERRAIN_VERTEX_SRC, TERRAIN_FRAGMENT_SRC)
+                             .unwrap();
         let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
         let data = TerrainParams {
@@ -456,11 +455,11 @@ fn main() {
             BlitVertex { pos: [ 1,  1, 0], tex_coord: [1, 1] },
             BlitVertex { pos: [-1,  1, 0], tex_coord: [0, 1] },
         ];
-        let mesh = device.create_mesh(&vertex_data);
+        let mesh = factory.create_mesh(&vertex_data);
         let slice = mesh.to_slice(gfx::PrimitiveType::TriangleList);
 
-        let program = device.link_program(BLIT_VERTEX_SRC, BLIT_FRAGMENT_SRC)
-                            .unwrap();
+        let program = factory.link_program(BLIT_VERTEX_SRC, BLIT_FRAGMENT_SRC)
+                             .unwrap();
         let state = gfx::DrawState::new();
 
         let data = BlitParams {
@@ -471,7 +470,7 @@ fn main() {
                .unwrap()
     };
 
-    let light_pos_buffer = device.create_buffer::<[f32; 4]>(NUM_LIGHTS, gfx::BufferUsage::Stream);
+    let light_pos_buffer = factory.create_buffer::<[f32; 4]>(NUM_LIGHTS, gfx::BufferUsage::Stream);
 
     let (mut light, mut emitter) = {
         let vertex_data = [
@@ -516,14 +515,14 @@ fn main() {
             20, 21, 22, 22, 23, 20, // back
         ];
 
-        let mesh = device.create_mesh(&vertex_data);
-        let slice = device
+        let mesh = factory.create_mesh(&vertex_data);
+        let slice = factory
             .create_buffer_index::<u8>(index_data)
             .to_slice(gfx::PrimitiveType::TriangleList);
 
         let state = gfx::DrawState::new()
             .depth(gfx::state::Comparison::LessEqual, false)
-            .blend(gfx::BlendPreset::Additive);
+            .blend(gfx::BlendPreset::Add);
 
         let light_data = LightParams {
             transform: Matrix4::identity().into_fixed(),
@@ -537,8 +536,8 @@ fn main() {
         };
 
         let light = {
-            let program = device.link_program(LIGHT_VERTEX_SRC, LIGHT_FRAGMENT_SRC)
-                                .unwrap();
+            let program = factory.link_program(LIGHT_VERTEX_SRC, LIGHT_FRAGMENT_SRC)
+                                 .unwrap();
 
             context.make_batch(&program, light_data, &mesh, slice.clone(), &state)
                    .unwrap()
@@ -551,8 +550,8 @@ fn main() {
         };
 
         let emitter = {
-            let program = device.link_program(EMITTER_VERTEX_SRC, EMITTER_FRAGMENT_SRC)
-                                .unwrap();
+            let program = factory.link_program(EMITTER_VERTEX_SRC, EMITTER_FRAGMENT_SRC)
+                                 .unwrap();
 
             context.make_batch(&program, emitter_data, &mesh, slice, &state)
                    .unwrap()
@@ -631,7 +630,7 @@ fn main() {
             p[1] = terrain_scale.y * y;
             p[2] = terrain_scale.z * h + 0.5;
         };
-        device.update_buffer(&light_pos_buffer, light_pos_vec.as_slice(), 0);
+        factory.update_buffer(&light_pos_buffer, &light_pos_vec, 0);
 
         // Render the terrain to the geometry buffer
         renderer.clear(clear_data, gfx::COLOR|gfx::DEPTH, &g_buffer);
@@ -672,5 +671,6 @@ fn main() {
 
         window.swap_buffers();
         device.after_frame();
+        factory.cleanup();
     }
 }
