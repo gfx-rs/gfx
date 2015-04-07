@@ -184,7 +184,7 @@ pub trait Factory<R: Resources> {
     fn create_array_buffer(&mut self) -> Result<handle::ArrayBuffer<R>, ()>;
     fn create_shader(&mut self, stage: shade::Stage, code: &[u8]) ->
                      Result<handle::Shader<R>, shade::CreateShaderError>;
-    fn create_program(&mut self, shaders: &[handle::Shader<R>], targets: Option<&[&str]>)
+    fn create_program(&mut self, shaders: &[handle::Shader<R>], targets: Option<&[&str]>, log: Option<&mut String>)
                       -> Result<handle::Program<R>, ()>;
     fn create_frame_buffer(&mut self) -> handle::FrameBuffer<R>;
     fn create_surface(&mut self, tex::SurfaceInfo) -> Result<handle::Surface<R>, tex::SurfaceError>;
