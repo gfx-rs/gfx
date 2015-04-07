@@ -49,42 +49,11 @@ struct Params<R: gfx::Resources> {
     color: gfx::shade::TextureParam<R>,
 }
 
-static VERTEX_SRC: &'static [u8] = b"
-    #version 120
-
-    attribute vec3 a_Pos;
-    attribute vec2 a_TexCoord;
-    varying vec2 v_TexCoord;
-
-    uniform mat4 u_Transform;
-
-    void main() {
-        v_TexCoord = a_TexCoord;
-        gl_Position = u_Transform * vec4(a_Pos, 1.0);
-    }
-";
-
-static FRAGMENT_SRC: &'static [u8] = b"
-    #version 120
-
-    varying vec2 v_TexCoord;
-    uniform sampler2D t_Color;
-
-    void main() {
-        vec4 tex = texture2D(t_Color, v_TexCoord);
-        float blend = dot(v_TexCoord-vec2(0.5,0.5), v_TexCoord-vec2(0.5,0.5));
-        gl_FragColor = mix(tex, vec4(0.0,0.0,0.0,0.0), blend*1.0);
-    }
-";
 
 //----------------------------------------
 
 pub fn main() {
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
-    glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
-    glfw.window_hint(glfw::WindowHint::OpenglForwardCompat(true));
-    glfw.window_hint(glfw::WindowHint::OpenglProfile(glfw::OpenGlProfileHint::Core));
-
     let (mut window, events) = glfw
         .create_window(640, 480, "Cube example", glfw::WindowMode::Windowed)
         .expect("Failed to create GLFW window.");
@@ -162,7 +131,20 @@ pub fn main() {
                                    gfx::tex::WrapMode::Clamp)
     );
 
-    let program = factory.link_program(VERTEX_SRC, FRAGMENT_SRC).unwrap();
+    let program = {
+        let vs = gfx::ShaderSource {
+            glsl_120: Some(include_bytes!("cube_120.glslv")),
+            glsl_150: Some(include_bytes!("cube_150.glslv")),
+            .. gfx::ShaderSource::empty()
+        };
+        let fs = gfx::ShaderSource {
+            glsl_120: Some(include_bytes!("cube_120.glslf")),
+            glsl_150: Some(include_bytes!("cube_150.glslf")),
+            .. gfx::ShaderSource::empty()
+        };
+        factory.link_program_source(vs, fs, &device.get_capabilities())
+               .unwrap()
+    };
 
     let view: AffineMatrix3<f32> = Transform::look_at(
         &Point3::new(1.5f32, -5.0, 3.0),

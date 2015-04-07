@@ -29,11 +29,14 @@ path = "src/triangle/main.rs"
 [dependencies]
 gfx_gl = "*"
 glfw = "*"
-cgmath = "*"
 rand = "*"
 time = "*"
 genmesh = "*"
 noise = "*"
+
+[dependencies.cgmath]
+git = "https://github.com/bjz/cgmath-rs"
+#version = "*"
 
 [dependencies.gfx]
 git = "https://github.com/gfx-rs/gfx-rs"
