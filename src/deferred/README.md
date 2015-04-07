@@ -16,7 +16,7 @@
 
 # Deferred Shading Example
 
-This is an example of deferred shading with gfx-rs. It demonstrates the use of render targets and uniform buffers.
+This is an example of deferred shading with gfx-rs. It demonstrates the use of render targets and uniform buffers. It requires GL-3.2 to run.
 
 Two render targets are created: a geometry buffer and a result buffer.
 

@@ -134,17 +134,17 @@ struct BlitParams<R: gfx::Resources> {
 }
 
 static TERRAIN_VERTEX_SRC: &'static [u8] = b"
-    #version 120
+    #version 150 core
 
     uniform mat4 u_Model;
     uniform mat4 u_View;
     uniform mat4 u_Proj;
-    attribute vec3 a_Pos;
-    attribute vec3 a_Normal;
-    attribute vec3 a_Color;
-    varying vec3 v_FragPos;
-    varying vec3 v_Normal;
-    varying vec3 v_Color;
+    in vec3 a_Pos;
+    in vec3 a_Normal;
+    in vec3 a_Color;
+    out vec3 v_FragPos;
+    out vec3 v_Normal;
+    out vec3 v_Color;
 
     void main() {
         v_FragPos = (u_Model * vec4(a_Pos, 1.0)).xyz;
@@ -155,27 +155,30 @@ static TERRAIN_VERTEX_SRC: &'static [u8] = b"
 ";
 
 static TERRAIN_FRAGMENT_SRC: &'static [u8] = b"
-    #version 130
+    #version 150 core
 
-    varying vec3 v_FragPos;
-    varying vec3 v_Normal;
-    varying vec3 v_Color;
+    in vec3 v_FragPos;
+    in vec3 v_Normal;
+    in vec3 v_Color;
+    out o_Position;
+    out o_Normal;
+    out o_Color;
 
     void main() {
         vec3 n = normalize(v_Normal);
 
-        gl_FragData[0] = vec4(v_FragPos, 0.0);
-        gl_FragData[1] = vec4(n, 0.0);
-        gl_FragData[2] = vec4(v_Color, 1.0);
+        o_Position = vec4(v_FragPos, 0.0);
+        o_Normal = vec4(n, 0.0);
+        o_Color = vec4(v_Color, 1.0);
     }
 ";
 
 static BLIT_VERTEX_SRC: &'static [u8] = b"
-    #version 120
+    #version 150 core
 
-    attribute vec3 a_Pos;
-    attribute vec2 a_TexCoord;
-    varying vec2 v_TexCoord;
+    in vec3 a_Pos;
+    in vec2 a_TexCoord;
+    out vec2 v_TexCoord;
 
     void main() {
         v_TexCoord = a_TexCoord;
@@ -184,26 +187,25 @@ static BLIT_VERTEX_SRC: &'static [u8] = b"
 ";
 
 static BLIT_FRAGMENT_SRC: &'static [u8] = b"
-    #version 120
+    #version 150 core
 
     uniform sampler2D u_Tex;
-    varying vec2 v_TexCoord;
+    in vec2 v_TexCoord;
+    out vec4 o_Color;
 
     void main() {
-        vec4 tex = texture2D(u_Tex, v_TexCoord);
-        gl_FragColor = tex;
+        vec4 tex = texture(u_Tex, v_TexCoord);
+        o_Color = tex;
     }
 ";
 
 static LIGHT_VERTEX_SRC: &'static [u8] = b"
-    #version 140
-    #extension GL_EXT_draw_instanced : enable
-    #extension GL_ARB_uniform_buffer_object : enable
+    #version 150 core
 
     uniform mat4 u_Transform;
     uniform float u_Radius;
-    attribute vec3 a_Pos;
-    varying vec3 v_LightPos;
+    in vec3 a_Pos;
+    out vec3 v_LightPos;
 
     const int NUM_LIGHTS = 250;
     layout(std140)
@@ -218,7 +220,7 @@ static LIGHT_VERTEX_SRC: &'static [u8] = b"
 ";
 
 static LIGHT_FRAGMENT_SRC: &'static [u8] = b"
-    #version 120
+    #version 150 core
 
     uniform float u_Radius;
     uniform vec3 u_CameraPos;
@@ -226,13 +228,14 @@ static LIGHT_FRAGMENT_SRC: &'static [u8] = b"
     uniform sampler2D u_TexPos;
     uniform sampler2D u_TexNormal;
     uniform sampler2D u_TexDiffuse;
-    varying vec3 v_LightPos;
+    in vec3 v_LightPos;
+    out vec4 o_Color;
 
     void main() {
         vec2 texCoord = gl_FragCoord.xy / u_FrameRes;
-        vec3 pos     = texture2D(u_TexPos,     texCoord).xyz;
-        vec3 normal  = texture2D(u_TexNormal,  texCoord).xyz;
-        vec3 diffuse = texture2D(u_TexDiffuse, texCoord).xyz;
+        vec3 pos     = texture(u_TexPos,     texCoord).xyz;
+        vec3 normal  = texture(u_TexNormal,  texCoord).xyz;
+        vec3 diffuse = texture(u_TexDiffuse, texCoord).xyz;
 
         vec3 light    = v_LightPos;
         vec3 to_light = normalize(light - pos);
@@ -247,18 +250,16 @@ static LIGHT_FRAGMENT_SRC: &'static [u8] = b"
 
         vec3 res_color = d*vec3(diffuse) + vec3(s);
 
-        gl_FragColor = vec4(scale*res_color, 1.0);
+        o_Color = vec4(scale*res_color, 1.0);
     }
 ";
 
 static EMITTER_VERTEX_SRC: &'static [u8] = b"
-    #version 140
-    #extension GL_EXT_draw_instanced : enable
-    #extension GL_ARB_uniform_buffer_object : enable
+    #version 150 core
 
     uniform mat4 u_Transform;
     uniform float u_Radius;
-    attribute vec3 a_Pos;
+    in vec3 a_Pos;
 
     const int NUM_LIGHTS = 250;
     layout(std140)
@@ -272,10 +273,12 @@ static EMITTER_VERTEX_SRC: &'static [u8] = b"
 ";
 
 static EMITTER_FRAGMENT_SRC: &'static [u8] = b"
-    #version 120
+    #version 150 core
+
+    out vec4 o_Color;
 
     void main() {
-        gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+        o_Color = vec4(1.0, 1.0, 1.0, 1.0);
     }
 ";
 
