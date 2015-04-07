@@ -118,6 +118,8 @@ impl fmt::Debug for Version {
     }
 }
 
+const EMPTY_STRING: &'static str = "";
+
 /// Get a statically allocated string from the implementation using
 /// `glGetString`. Fails if it `GLenum` cannot be handled by the
 /// implementation's `gl.GetString` function.
@@ -128,7 +130,8 @@ fn get_string(gl: &gl::Gl, name: gl::types::GLenum) -> &'static str {
         // GlGetString only returns static strings.
         unsafe { c_str_as_static_str(ptr) }
     } else {
-        panic!("Invalid GLenum passed to `get_string`: {:x}", name)
+        error!("Invalid GLenum passed to `get_string`: {:x}", name);
+        EMPTY_STRING
     }
 }
 
