@@ -21,7 +21,7 @@
 //! image data.  Image data consists of an array of "texture elements", or
 //! texels.
 
-use attrib::IntSubType;
+use attrib::{FloatSize, IntSubType};
 use std::default::Default;
 use std::fmt;
 
@@ -123,11 +123,11 @@ pub enum Compression {
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 pub enum Format {
     /// Floating point.
-    Float(Components, ::attrib::FloatSize),
+    Float(Components, FloatSize),
     /// Signed integer.
-    Integer(Components, Bits, ::attrib::IntSubType),
+    Integer(Components, Bits, IntSubType),
     /// Unsigned integer.
-    Unsigned(Components, Bits, ::attrib::IntSubType),
+    Unsigned(Components, Bits, IntSubType),
     /// Compressed data.
     Compressed(Compression),
     /// Normalized integer, with 3 bits for R and G, but only 2 for B.
@@ -178,8 +178,14 @@ impl Format {
     }
 }
 
-/// A commonly used RGBA8 format
-pub static RGBA8: Format = Format::Unsigned(Components::RGBA, 8, IntSubType::Normalized);
+/// A single R-component 8-bit normalized format
+pub static R8     : Format = Format::Unsigned(Components::R, 8, IntSubType::Normalized);
+/// A standard RGBA 8-bit normalized format
+pub static RGBA8  : Format = Format::Unsigned(Components::RGBA, 8, IntSubType::Normalized);
+/// A standard RGBA 16-bit floating-point format
+pub static RGBA16F: Format = Format::Float(Components::RGBA, FloatSize::F16);
+/// A standard RGBA 32-bit floating-point format
+pub static RGBA32F: Format = Format::Float(Components::RGBA, FloatSize::F32);
 
 /// Describes the storage of a surface
 #[allow(missing_docs)]
