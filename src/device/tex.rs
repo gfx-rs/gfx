@@ -131,8 +131,10 @@ pub enum Format {
     Unsigned(Components, Bits, IntSubType),
     /// Compressed data.
     Compressed(Compression),
-    /// Normalized integer, with 3 bits for R and G, but only 2 for B.
+    /// 3 bits for RG, 2 for B.
     R3_G3_B2,
+    /// 5 bits for RB, 6 for G
+    R5_G6_B5,
     /// 5 bits each for RGB, 1 for Alpha.
     RGB5_A1,
     /// 10 bits each for RGB, 2 for Alpha.
@@ -174,6 +176,7 @@ impl Format {
                 return None
             },
             Format::R3_G3_B2          |
+            Format::R5_G6_B5          |
             Format::R11F_G11F_B10F    |
             Format::RGB9_E5           |
             Format::SRGB8             => Components::RGB,
