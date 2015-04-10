@@ -51,6 +51,8 @@ pub struct Frame<R: Resources> {
     pub depth: Option<Plane<R>>,
     /// The stencil buffer for this frame.
     pub stencil: Option<Plane<R>>,
+    /// Convert to sRGB color space.
+    pub convert_gamma: bool,
 }
 
 impl<R: Resources> Frame<R> {
@@ -63,6 +65,7 @@ impl<R: Resources> Frame<R> {
             colors: Vec::new(),
             depth: None,
             stencil: None,
+            convert_gamma: false,
         }
     }
 

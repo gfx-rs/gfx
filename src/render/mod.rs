@@ -24,7 +24,8 @@ use device;
 use device::Resources;
 use device::{attrib, handle};
 use device::attrib::IntSize;
-use device::draw::{Access, CommandBuffer, DataBuffer, InstanceOption, Target};
+use device::draw::{Access, Gamma, Target};
+use device::draw::{CommandBuffer, DataBuffer, InstanceOption};
 use device::shade::{ProgramInfo, UniformValue};
 use render::batch::Batch;
 use render::mesh::SliceKind;
@@ -48,6 +49,7 @@ type CachedAttribute<R: Resources> = (handle::RawBuffer<R>, attrib::Format);
 struct RenderState<R: Resources> {
     is_frame_buffer_set: bool,
     frame: target::Frame<R>,
+    convert_gamma: bool,
     is_array_buffer_set: bool,
     program: Option<handle::Program<R>>,
     index: Option<handle::RawBuffer<R>>,
@@ -61,6 +63,7 @@ impl<R: Resources> RenderState<R> {
         RenderState {
             is_frame_buffer_set: false,
             frame: target::Frame::new(0,0),
+            convert_gamma: false,
             is_array_buffer_set: false,
             program: None,
             index: None,
@@ -291,17 +294,22 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
             self.render_state.frame.width = frame.width;
             self.render_state.frame.height = frame.height;
         }
+        let change_gamma = self.render_state.convert_gamma != frame.convert_gamma;
+
         if frame.is_default() {
-            if self.render_state.is_frame_buffer_set {
+            if self.render_state.is_frame_buffer_set || change_gamma {
                 // binding the default FBO, not touching our common one
                 self.command_buffer.bind_frame_buffer(Access::Draw,
-                    self.handles.ref_frame_buffer(&self.default_frame_buffer));
+                    self.handles.ref_frame_buffer(&self.default_frame_buffer),
+                    if frame.convert_gamma { Gamma::Convert } else { Gamma::Original });
                 self.render_state.is_frame_buffer_set = false;
+                self.render_state.convert_gamma = frame.convert_gamma;
             }
         } else {
-            if !self.render_state.is_frame_buffer_set {
+            if !self.render_state.is_frame_buffer_set || change_gamma {
                 self.command_buffer.bind_frame_buffer(Access::Draw,
-                    self.handles.ref_frame_buffer(&self.draw_frame_buffer));
+                    self.handles.ref_frame_buffer(&self.draw_frame_buffer),
+                    if frame.convert_gamma { Gamma::Convert } else { Gamma::Original });
                 self.render_state.is_frame_buffer_set = true;
             }
             // cut off excess color planes
@@ -345,7 +353,8 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
 
     fn bind_read_frame(&mut self, frame: &target::Frame<R>) {
         self.command_buffer.bind_frame_buffer(Access::Read,
-            self.handles.ref_frame_buffer(&self.read_frame_buffer));
+            self.handles.ref_frame_buffer(&self.read_frame_buffer),
+            Gamma::Original);
         // color
         if frame.colors.is_empty() {
             self.command_buffer.unbind_target(Access::Read, Target::Color(0));
