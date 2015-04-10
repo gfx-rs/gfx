@@ -93,7 +93,7 @@ pub trait CommandBuffer<R: Resources> {
     /// Bind an index buffer
     fn bind_index(&mut self, R::Buffer);
     /// Bind a frame buffer object
-    fn bind_frame_buffer(&mut self, Access, R::FrameBuffer);
+    fn bind_frame_buffer(&mut self, Access, R::FrameBuffer, Gamma);
     /// Unbind any surface from the specified target slot
     fn unbind_target(&mut self, Access, Target);
     /// Bind a surface to the specified target slot
@@ -145,7 +145,7 @@ pub trait CommandBuffer<R: Resources> {
     fn call_blit(&mut self, target::Rect, target::Rect, target::Mirror, target::Mask);
 }
 
-/// Type of the frame buffer access
+/// Type of the frame buffer access.
 #[repr(u8)]
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Access {
@@ -153,6 +153,16 @@ pub enum Access {
     Draw,
     /// Read access
     Read,
+}
+
+/// Type of the gamma transformation for framebuffer writes.
+#[repr(u8)]
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub enum Gamma {
+    /// Process in linear color space.
+    Original,
+    /// Convert to sRGB color space.
+    Convert,
 }
 
 /// When rendering, each "output" of the fragment shader goes to a specific target. A `Plane` can

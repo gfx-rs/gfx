@@ -18,7 +18,6 @@
 
 use std::{fmt, mem, raw};
 use std::hash::Hash;
-use std::marker::PhantomFn;
 
 pub use draw_state::target;
 pub use draw_state::state;
@@ -68,6 +67,7 @@ pub struct Capabilities {
     pub instance_rate_supported: bool,
     pub render_targets_supported: bool,
     pub sampler_objects_supported: bool,
+    pub srgb_color_supported: bool,
     pub uniform_block_supported: bool,
     pub vertex_base_supported: bool,
 }
@@ -151,7 +151,7 @@ pub struct BufferInfo {
 
 /// Resources pertaining to a specific API.
 #[allow(missing_docs)]
-pub trait Resources: PhantomFn<Self> + Hash + fmt::Debug + Eq + PartialEq + Clone {
+pub trait Resources:           Clone + Hash + fmt::Debug + Eq + PartialEq {
     type Buffer:        Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
     type ArrayBuffer:   Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
     type Shader:        Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;

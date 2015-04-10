@@ -21,7 +21,7 @@
 //! image data.  Image data consists of an array of "texture elements", or
 //! texels.
 
-use attrib::IntSubType;
+use attrib::{FloatSize, IntSubType};
 use std::default::Default;
 use std::fmt;
 
@@ -30,43 +30,50 @@ use state;
 /// Surface creation/update error.
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum SurfaceError {
-    /// Failed to map a given format to the device
-    UnsupportedSurfaceFormat,
+    /// Failed to map a given format to the device.
+    UnsupportedFormat,
+    /// Failed to provide sRGB formats.
+    UnsupportedGamma,
 }
 
 /// Texture creation/update error.
 #[derive(Copy, Clone, PartialEq)]
 pub enum TextureError {
     /// Failed to map a given format to the device.
-    UnsupportedTextureFormat,
+    UnsupportedFormat,
+    /// Failed to provide sRGB formats.
+    UnsupportedGamma,
     /// Failed to map a given multisampled kind to the device.
-    UnsupportedTextureSampling,
+    UnsupportedSampling,
     /// The given TextureInfo contains invalid values.
-    InvalidTextureInfo(TextureInfo),
+    InvalidInfo(TextureInfo),
     /// The given data has a different size than the target texture slice.
-    IncorrectTextureSize(usize),
+    IncorrectSize(usize),
 }
 
 impl fmt::Debug for TextureError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &TextureError::UnsupportedTextureFormat =>
+            &TextureError::UnsupportedFormat =>
                 write!(f, "Failed to map a given format to the device"),
 
-            &TextureError::UnsupportedTextureSampling =>
+            &TextureError::UnsupportedGamma =>
+                write!(f, "Failed to provide sRGB formats"),
+
+            &TextureError::UnsupportedSampling =>
                 write!(
                     f,
                     "Failed to map a given multisampled kind to the device"
                 ),
 
-            &TextureError::InvalidTextureInfo(info) =>
+            &TextureError::InvalidInfo(info) =>
                 write!(
                     f,
                     "Invalid TextureInfo (width, height, and levels must not \
                     be zero): {:?}\n",
                     info
                 ),
-            &TextureError::IncorrectTextureSize(expected) =>
+            &TextureError::IncorrectSize(expected) =>
                 write!(
                     f,
                     "Invalid data size provided to update the texture, \
@@ -121,33 +128,47 @@ pub enum Compression {
 
 /// Describes the layout of each texel within a surface/texture.
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+#[allow(non_camel_case_types)]
 pub enum Format {
     /// Floating point.
-    Float(Components, ::attrib::FloatSize),
+    Float(Components, FloatSize),
     /// Signed integer.
-    Integer(Components, Bits, ::attrib::IntSubType),
+    Integer(Components, Bits, IntSubType),
     /// Unsigned integer.
-    Unsigned(Components, Bits, ::attrib::IntSubType),
+    Unsigned(Components, Bits, IntSubType),
     /// Compressed data.
     Compressed(Compression),
-    /// Normalized integer, with 3 bits for R and G, but only 2 for B.
-    R3G3B2,
+    /// 3 bits for RG, 2 for B.
+    R3_G3_B2,
+    /// 5 bits for RB, 6 for G
+    R5_G6_B5,
     /// 5 bits each for RGB, 1 for Alpha.
-    RGB5A1,
+    RGB5_A1,
     /// 10 bits each for RGB, 2 for Alpha.
-    RGB10A2,
+    RGB10_A2,
     /// 10 bits each for RGB, 2 for Alpha, as unsigned integers.
-    RGB10A2UI,
+    RGB10_A2UI,
     /// This uses special 11 and 10-bit floating-point values without sign bits.
-    R11FG11FB10F,
+    R11F_G11F_B10F,
     /// This s an RGB format of type floating-point. The 3 color values have
     /// 9 bits of precision, and they share a single exponent.
-    RGB9E5,
+    RGB9_E5,
     /// Swizzled RGBA color format, used for interaction with Windows DIBs
     BGRA8,
+    /// Gamma-encoded RGB8
+    SRGB8,
+    /// Gamma-encoded RGB8, unchanged alpha
+    SRGB8_A8,
+    /// 16-bit bits depth
+    DEPTH16,
+    /// 24 bits depth
+    DEPTH24,
+    /// 32 floating-point bits depth
+    DEPTH32F,
     /// 24 bits for depth, 8 for stencil
-    DEPTH24STENCIL8,
-    // TODO: sRGB
+    DEPTH24_STENCIL8,
+    /// 32 floating point bits for depth, 8 for stencil
+    DEPTH32F_STENCIL8,
 }
 
 impl Format {
@@ -157,15 +178,26 @@ impl Format {
             Format::Float(c, _)       => c,
             Format::Integer(c, _, _)  => c,
             Format::Unsigned(c, _, _) => c,
-            Format::Compressed(_)   => panic!("Tried to get components of compressed texel!"),
-            Format::R3G3B2          |
-            Format::R11FG11FB10F    |
-            Format::RGB9E5          => Components::RGB,
-            Format::RGB5A1          |
-            Format::RGB10A2         |
-            Format::RGB10A2UI       |
-            Format::BGRA8           => Components::RGBA,
-            Format::DEPTH24STENCIL8 => return None,
+            Format::Compressed(_)     => {
+                error!("Tried to get components of compressed texel!");
+                return None
+            },
+            Format::R3_G3_B2          |
+            Format::R5_G6_B5          |
+            Format::R11F_G11F_B10F    |
+            Format::RGB9_E5           |
+            Format::SRGB8             => Components::RGB,
+            Format::RGB5_A1           |
+            Format::RGB10_A2          |
+            Format::RGB10_A2UI        |
+            Format::BGRA8             |
+            Format::SRGB8_A8          => Components::RGBA,
+            // not sure about depth/stencil
+            Format::DEPTH16           |
+            Format::DEPTH24           |
+            Format::DEPTH32F          |
+            Format::DEPTH24_STENCIL8  |
+            Format::DEPTH32F_STENCIL8 => return None,
         })
     }
 
@@ -176,10 +208,26 @@ impl Format {
             _ => false
         }
     }
+
+    /// Check if it's a sRGB color space
+    pub fn does_convert_gamma(&self) -> bool {
+        match *self {
+            Format::SRGB8    |
+            Format::SRGB8_A8 |
+            Format::Compressed(Compression::ETC2_SRGB) => true,
+            _ => false,
+        }
+    }
 }
 
-/// A commonly used RGBA8 format
-pub static RGBA8: Format = Format::Unsigned(Components::RGBA, 8, IntSubType::Normalized);
+/// A single R-component 8-bit normalized format
+pub static R8     : Format = Format::Unsigned(Components::R, 8, IntSubType::Normalized);
+/// A standard RGBA 8-bit normalized format
+pub static RGBA8  : Format = Format::Unsigned(Components::RGBA, 8, IntSubType::Normalized);
+/// A standard RGBA 16-bit floating-point format
+pub static RGBA16F: Format = Format::Float(Components::RGBA, FloatSize::F16);
+/// A standard RGBA 32-bit floating-point format
+pub static RGBA32F: Format = Format::Float(Components::RGBA, FloatSize::F32);
 
 /// Describes the storage of a surface
 #[allow(missing_docs)]
