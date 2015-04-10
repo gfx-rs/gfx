@@ -67,6 +67,7 @@ pub struct Capabilities {
     pub instance_rate_supported: bool,
     pub render_targets_supported: bool,
     pub sampler_objects_supported: bool,
+    pub srgb_color_supported: bool,
     pub uniform_block_supported: bool,
     pub vertex_base_supported: bool,
 }

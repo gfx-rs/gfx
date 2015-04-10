@@ -30,43 +30,50 @@ use state;
 /// Surface creation/update error.
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum SurfaceError {
-    /// Failed to map a given format to the device
-    UnsupportedSurfaceFormat,
+    /// Failed to map a given format to the device.
+    UnsupportedFormat,
+    /// Failed to provide sRGB formats.
+    UnsupportedGamma,
 }
 
 /// Texture creation/update error.
 #[derive(Copy, Clone, PartialEq)]
 pub enum TextureError {
     /// Failed to map a given format to the device.
-    UnsupportedTextureFormat,
+    UnsupportedFormat,
+    /// Failed to provide sRGB formats.
+    UnsupportedGamma,
     /// Failed to map a given multisampled kind to the device.
-    UnsupportedTextureSampling,
+    UnsupportedSampling,
     /// The given TextureInfo contains invalid values.
-    InvalidTextureInfo(TextureInfo),
+    InvalidInfo(TextureInfo),
     /// The given data has a different size than the target texture slice.
-    IncorrectTextureSize(usize),
+    IncorrectSize(usize),
 }
 
 impl fmt::Debug for TextureError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &TextureError::UnsupportedTextureFormat =>
+            &TextureError::UnsupportedFormat =>
                 write!(f, "Failed to map a given format to the device"),
 
-            &TextureError::UnsupportedTextureSampling =>
+            &TextureError::UnsupportedGamma =>
+                write!(f, "Failed to provide sRGB formats"),
+
+            &TextureError::UnsupportedSampling =>
                 write!(
                     f,
                     "Failed to map a given multisampled kind to the device"
                 ),
 
-            &TextureError::InvalidTextureInfo(info) =>
+            &TextureError::InvalidInfo(info) =>
                 write!(
                     f,
                     "Invalid TextureInfo (width, height, and levels must not \
                     be zero): {:?}\n",
                     info
                 ),
-            &TextureError::IncorrectTextureSize(expected) =>
+            &TextureError::IncorrectSize(expected) =>
                 write!(
                     f,
                     "Invalid data size provided to update the texture, \
@@ -199,6 +206,16 @@ impl Format {
         match *self {
             Format::Compressed(_) => true,
             _ => false
+        }
+    }
+
+    /// Check if it's a sRGB color space
+    pub fn does_convert_gamma(&self) -> bool {
+        match *self {
+            Format::SRGB8    |
+            Format::SRGB8_A8 |
+            Format::Compressed(Compression::ETC2_SRGB) => true,
+            _ => false,
         }
     }
 }
