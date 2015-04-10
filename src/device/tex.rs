@@ -121,6 +121,7 @@ pub enum Compression {
 
 /// Describes the layout of each texel within a surface/texture.
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+#[allow(non_camel_case_types)]
 pub enum Format {
     /// Floating point.
     Float(Components, FloatSize),
@@ -131,23 +132,34 @@ pub enum Format {
     /// Compressed data.
     Compressed(Compression),
     /// Normalized integer, with 3 bits for R and G, but only 2 for B.
-    R3G3B2,
+    R3_G3_B2,
     /// 5 bits each for RGB, 1 for Alpha.
-    RGB5A1,
+    RGB5_A1,
     /// 10 bits each for RGB, 2 for Alpha.
-    RGB10A2,
+    RGB10_A2,
     /// 10 bits each for RGB, 2 for Alpha, as unsigned integers.
-    RGB10A2UI,
+    RGB10_A2UI,
     /// This uses special 11 and 10-bit floating-point values without sign bits.
-    R11FG11FB10F,
+    R11F_G11F_B10F,
     /// This s an RGB format of type floating-point. The 3 color values have
     /// 9 bits of precision, and they share a single exponent.
-    RGB9E5,
+    RGB9_E5,
     /// Swizzled RGBA color format, used for interaction with Windows DIBs
     BGRA8,
+    /// Gamma-encoded RGB8
+    SRGB8,
+    /// Gamma-encoded RGB8, unchanged alpha
+    SRGB8_A8,
+    /// 16-bit bits depth
+    DEPTH16,
+    /// 24 bits depth
+    DEPTH24,
+    /// 32 floating-point bits depth
+    DEPTH32F,
     /// 24 bits for depth, 8 for stencil
-    DEPTH24STENCIL8,
-    // TODO: sRGB
+    DEPTH24_STENCIL8,
+    /// 32 floating point bits for depth, 8 for stencil
+    DEPTH32F_STENCIL8,
 }
 
 impl Format {
@@ -157,15 +169,25 @@ impl Format {
             Format::Float(c, _)       => c,
             Format::Integer(c, _, _)  => c,
             Format::Unsigned(c, _, _) => c,
-            Format::Compressed(_)   => panic!("Tried to get components of compressed texel!"),
-            Format::R3G3B2          |
-            Format::R11FG11FB10F    |
-            Format::RGB9E5          => Components::RGB,
-            Format::RGB5A1          |
-            Format::RGB10A2         |
-            Format::RGB10A2UI       |
-            Format::BGRA8           => Components::RGBA,
-            Format::DEPTH24STENCIL8 => return None,
+            Format::Compressed(_)     => {
+                error!("Tried to get components of compressed texel!");
+                return None
+            },
+            Format::R3_G3_B2          |
+            Format::R11F_G11F_B10F    |
+            Format::RGB9_E5           |
+            Format::SRGB8             => Components::RGB,
+            Format::RGB5_A1           |
+            Format::RGB10_A2          |
+            Format::RGB10_A2UI        |
+            Format::BGRA8             |
+            Format::SRGB8_A8          => Components::RGBA,
+            // not sure about depth/stencil
+            Format::DEPTH16           |
+            Format::DEPTH24           |
+            Format::DEPTH32F          |
+            Format::DEPTH24_STENCIL8  |
+            Format::DEPTH32F_STENCIL8 => return None,
         })
     }
 

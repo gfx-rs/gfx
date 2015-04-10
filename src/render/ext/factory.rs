@@ -137,7 +137,7 @@ impl<R: device::Resources, F: device::Factory<R>> FactoryExt<R> for F {
             depth: 0,
             levels: 1,
             kind: tex::TextureKind::Texture2D,
-            format: tex::Format::DEPTH24STENCIL8,
+            format: tex::Format::DEPTH24_STENCIL8,
         })
     }
 }
