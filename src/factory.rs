@@ -202,6 +202,9 @@ impl d::Factory<R> for Factory {
 
     fn create_surface(&mut self, info: d::tex::SurfaceInfo) ->
                       Result<handle::Surface<R>, d::tex::SurfaceError> {
+        if info.format.does_convert_gamma() && !self.caps.srgb_color_supported {
+            return Err(d::tex::SurfaceError::UnsupportedGamma)
+        }
         tex::make_surface(&self.gl, &info)
             .map(|suf| self.handles.make_surface(suf, info))
     }
@@ -209,7 +212,10 @@ impl d::Factory<R> for Factory {
     fn create_texture(&mut self, info: d::tex::TextureInfo) ->
                       Result<handle::Texture<R>, d::tex::TextureError> {
         if info.width == 0 || info.height == 0 || info.levels == 0 {
-            return Err(d::tex::TextureError::InvalidTextureInfo(info))
+            return Err(d::tex::TextureError::InvalidInfo(info))
+        }
+        if info.format.does_convert_gamma() && !self.caps.srgb_color_supported {
+            return Err(d::tex::TextureError::UnsupportedGamma)
         }
 
         let name = if self.caps.immutable_storage_supported {

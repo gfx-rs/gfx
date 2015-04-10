@@ -17,7 +17,7 @@
 use std::slice;
 
 use gfx::device as d;
-use gfx::device::draw::{Access, Target};
+use gfx::device::draw::{Access, Gamma, Target};
 use gfx::device::target::*;
 use super::{ArrayBuffer, Buffer, FrameBuffer, Program, Surface, Texture, Sampler, Resources};
 
@@ -28,7 +28,7 @@ pub enum Command {
     BindArrayBuffer(ArrayBuffer),
     BindAttribute(d::AttributeSlot, Buffer, d::attrib::Format),
     BindIndex(Buffer),
-    BindFrameBuffer(Access, FrameBuffer),
+    BindFrameBuffer(Access, FrameBuffer, Gamma),
     UnbindTarget(Access, Target),
     BindTargetSurface(Access, Target, Surface),
     BindTargetTexture(Access, Target, Texture, Level, Option<Layer>),
@@ -93,8 +93,8 @@ impl d::draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.push(Command::BindIndex(buf));
     }
 
-    fn bind_frame_buffer(&mut self, access: Access, fbo: FrameBuffer) {
-        self.buf.push(Command::BindFrameBuffer(access, fbo));
+    fn bind_frame_buffer(&mut self, access: Access, fbo: FrameBuffer, gamma: Gamma) {
+        self.buf.push(Command::BindFrameBuffer(access, fbo, gamma));
     }
 
     fn unbind_target(&mut self, access: Access, tar: Target) {

@@ -237,6 +237,7 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities) {
         instance_call_supported:        info.is_version_or_extension_supported(3, 1, "GL_ARB_draw_instanced"),
         instance_rate_supported:        info.is_version_or_extension_supported(3, 3, "GL_ARB_instanced_arrays"),
         render_targets_supported:       info.is_version_or_extension_supported(3, 0, "GL_ARB_framebuffer_object"),
+        srgb_color_supported:           info.is_version_or_extension_supported(3, 2, "GL_ARB_framebuffer_sRGB"),
         sampler_objects_supported:      info.is_version_or_extension_supported(3, 3, "GL_ARB_sampler_objects"),
         uniform_block_supported:        info.is_version_or_extension_supported(3, 0, "GL_ARB_uniform_buffer_object"),
         vertex_base_supported:          info.is_version_or_extension_supported(3, 2, "GL_ARB_draw_elements_base_vertex"),

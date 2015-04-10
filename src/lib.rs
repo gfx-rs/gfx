@@ -28,7 +28,7 @@ extern crate gfx;
 use std::rc::Rc;
 use gfx::device as d;
 use gfx::device::attrib::*;
-use gfx::device::draw::{Access, Target};
+use gfx::device::draw::{Access, Gamma, Target};
 use gfx::device::handle;
 use gfx::device::state::{CullFace, RasterMethod, FrontFace};
 
@@ -97,8 +97,8 @@ const RESET_CB: [Command; 11] = [
     Command::BindArrayBuffer(0),
     // BindAttribute
     Command::BindIndex(0),
-    Command::BindFrameBuffer(Access::Draw, 0),
-    Command::BindFrameBuffer(Access::Read, 0),
+    Command::BindFrameBuffer(Access::Draw, 0, Gamma::Original),
+    Command::BindFrameBuffer(Access::Read, 0, Gamma::Original),
     // UnbindTarget
     // BindUniformBlock
     // BindUniform
@@ -294,12 +294,17 @@ impl Device {
             Command::BindIndex(buffer) => {
                 unsafe { self.gl.BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer) };
             },
-            Command::BindFrameBuffer(access, frame_buffer) => {
+            Command::BindFrameBuffer(access, frame_buffer, gamma) => {
                 if !self.caps.render_targets_supported {
                     panic!("Tried to do something with an FBO without FBO support!")
                 }
                 let point = access_to_gl(access);
                 unsafe { self.gl.BindFramebuffer(point, frame_buffer) };
+                match (self.caps.srgb_color_supported, gamma) {
+                    (true, Gamma::Original) => unsafe { self.gl.Disable(gl::FRAMEBUFFER_SRGB) },
+                    (true, Gamma::Convert)  => unsafe { self.gl.Enable( gl::FRAMEBUFFER_SRGB) },
+                    (false, _) => (),
+                }
             },
             Command::UnbindTarget(access, target) => {
                 if !self.caps.render_targets_supported {
