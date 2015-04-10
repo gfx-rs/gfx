@@ -20,8 +20,6 @@
 //! create a mesh is to use the `#[vertex_format]` attribute on a struct, upload them into a
 //! `Buffer`, and then use `Mesh::from`.
 
-use std::marker::PhantomFn;
-
 use device;
 use device::{PrimitiveType, Resources, VertexCount};
 use device::attrib;
@@ -42,7 +40,7 @@ pub struct Attribute<R: Resources> {
 /// A trait implemented automatically for user vertex structure by
 /// `#[vertex_format] attribute
 #[allow(missing_docs)]
-pub trait VertexFormat: PhantomFn<Self> {
+pub trait VertexFormat {
     /// Create the attributes for this type, using the given buffer.
     fn generate<R: Resources>(buffer: device::handle::RawBuffer<R>) -> Vec<Attribute<R>>;
 }
