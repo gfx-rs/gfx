@@ -15,6 +15,7 @@
 //! Factory extension. Provides resource construction shortcuts.
 
 use device;
+use device::{handle, tex};
 use device::shade::{Stage, CreateShaderError};
 use render::{Renderer, RenderState, ParamStorage};
 use render::mesh::{Mesh, VertexFormat};
@@ -35,7 +36,7 @@ impl<
         Renderer {
             command_buffer: device::draw::CommandBuffer::new(),
             data_buffer: device::draw::DataBuffer::new(),
-            handles: device::handle::Manager::new(),
+            handles: handle::Manager::new(),
             common_array_buffer: self.create_array_buffer(),
             draw_frame_buffer: self.create_frame_buffer(),
             read_frame_buffer: self.create_frame_buffer(),
@@ -53,12 +54,18 @@ pub trait FactoryExt<R: device::Resources> {
     fn create_mesh<T: VertexFormat + Copy>(&mut self, data: &[T]) -> Mesh<R>;
     /// Create a simple program given a vertex shader with a fragment one.
     fn link_program(&mut self, vs_code: &[u8], fs_code: &[u8])
-                    -> Result<device::handle::Program<R>, ProgramError>;
+                    -> Result<handle::Program<R>, ProgramError>;
     /// Create a simple program given `ShaderSource` versions of vertex and
     /// fragment shaders, chooss the matching versions for the device.
     fn link_program_source(&mut self, vs_src: ShaderSource, fs_src: ShaderSource,
                            caps: &device::Capabilities)
-                           -> Result<device::handle::Program<R>, ProgramError>;
+                           -> Result<handle::Program<R>, ProgramError>;
+    /// Create a simple RGBA8 2D texture
+    fn crate_texture_rgba8(&mut self, width: u16, height: u16, mipmap: bool)
+                           -> Result<handle::Texture<R>, tex::TextureError>;
+    /// Create a simple depth+stencil 2D texture
+    fn create_texture_depth_stencil(&mut self, width: u16, height: u16)
+                                    -> Result<handle::Texture<R>, tex::TextureError>;
 }
 
 impl<R: device::Resources, F: device::Factory<R>> FactoryExt<R> for F {
@@ -70,7 +77,7 @@ impl<R: device::Resources, F: device::Factory<R>> FactoryExt<R> for F {
     }
 
     fn link_program(&mut self, vs_code: &[u8], fs_code: &[u8])
-                    -> Result<device::handle::Program<R>, ProgramError> {
+                    -> Result<handle::Program<R>, ProgramError> {
         let vs = match self.create_shader(Stage::Vertex, vs_code) {
             Ok(s) => s,
             Err(e) => return Err(ProgramError::Vertex(e)),
@@ -86,7 +93,7 @@ impl<R: device::Resources, F: device::Factory<R>> FactoryExt<R> for F {
 
     fn link_program_source(&mut self, vs_src: ShaderSource, fs_src: ShaderSource,
                            caps: &device::Capabilities)
-                           -> Result<device::handle::Program<R>, ProgramError> {
+                           -> Result<handle::Program<R>, ProgramError> {
         let model = caps.shader_model;
         let err_model = CreateShaderError::ModelNotSupported;
 
@@ -108,5 +115,29 @@ impl<R: device::Resources, F: device::Factory<R>> FactoryExt<R> for F {
 
         self.create_program(&[vs, fs], Some(fs_src.targets))
             .map_err(|e| ProgramError::Link(e))
+    }
+
+    fn crate_texture_rgba8(&mut self, width: u16, height: u16, mipmap: bool)
+                           -> Result<handle::Texture<R>, tex::TextureError> {
+        self.create_texture(tex::TextureInfo {
+            width: width,
+            height: height,
+            depth: 0,
+            levels: if mipmap {99} else {1},
+            kind: tex::TextureKind::Texture2D,
+            format: tex::RGBA8,
+        })
+    }
+
+    fn create_texture_depth_stencil(&mut self, width: u16, height: u16)
+                                    -> Result<handle::Texture<R>, tex::TextureError> {
+        self.create_texture(tex::TextureInfo {
+            width: width,
+            height: height,
+            depth: 0,
+            levels: 1,
+            kind: tex::TextureKind::Texture2D,
+            format: tex::Format::DEPTH24STENCIL8,
+        })
     }
 }
