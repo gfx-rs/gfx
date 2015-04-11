@@ -32,11 +32,19 @@ pub enum Plane<R: Resources> {
 }
 
 impl<R: Resources> Plane<R> {
-    /// Get the surface info
+    /// Get the surface info.
     pub fn get_surface_info(&self) -> device::tex::SurfaceInfo {
         match *self {
             Plane::Surface(ref suf) => *suf.get_info(),
             Plane::Texture(ref tex, _, _) => tex.get_info().to_surface_info(),
+        }
+    }
+
+    /// Get surface/texture format.
+    pub fn get_format(&self) -> device::tex::Format {
+        match *self {
+            Plane::Surface(ref suf) => suf.get_info().format,
+            Plane::Texture(ref tex, _, _) => tex.get_info().format,
         }
     }
 }
@@ -72,6 +80,38 @@ pub trait Output<R: Resources>: Debug {
             mask.insert(t::STENCIL);
         }
         mask
+    }
+}
+
+impl<R: Resources> Output<R> for Plane<R> {
+    fn get_size(&self) -> (Size, Size) {
+        let info = self.get_surface_info();
+        (info.width, info.height)
+    }
+
+    fn get_colors(&self) -> &[Plane<R>] {
+        use std::slice::ref_slice;
+        if self.get_format().is_color() {
+            ref_slice(self)
+        }else {
+            &[]
+        }
+    }
+
+    fn get_depth(&self) -> Option<&Plane<R>> {
+        if self.get_format().has_depth() {
+            Some(self)
+        }else {
+            None
+        }
+    }
+
+    fn get_stencil(&self) -> Option<&Plane<R>> {
+        if self.get_format().has_stencil() {
+            Some(self)
+        }else {
+            None
+        }
     }
 }
 
