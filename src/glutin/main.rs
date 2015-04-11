@@ -15,26 +15,22 @@
 #![feature(plugin)]
 #![plugin(gfx_macros)]
 
-//! Demonstrates how to initialize gfx-rs using the gl-init-rs library.
+//! Demonstrates how to initialize gfx-rs using the glutin library.
 
 extern crate gfx;
-extern crate gfx_device_gl;
+extern crate gfx_window_glutin;
 extern crate glutin;
 
 use gfx::traits::*;
 
 pub fn main() {
-    let window = glutin::Window::new().unwrap();
-    window.set_title("glutin initialization example");
-    unsafe { window.make_current() };
-    let (w, h) = window.get_inner_size().unwrap();
-
-    let mut graphics = gfx_device_gl::create(|s| window.get_proc_address(s))
-                                     .into_graphics();
-
+    let (wrap, device, factory) =
+        gfx_window_glutin::init_titled("glutin initialization example")
+                          .unwrap();
+    let mut graphics = (device, factory).into_graphics();
     'main: loop {
         // quit when Esc is pressed.
-        for event in window.poll_events() {
+        for event in wrap.window.poll_events() {
             match event {
                 glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) => break 'main,
                 glutin::Event::Closed => break 'main,
@@ -42,18 +38,14 @@ pub fn main() {
             }
         }
 
-        graphics.clear(
-            gfx::ClearData {
-                color: [0.3, 0.3, 0.3, 1.0],
-                depth: 1.0,
-                stencil: 0,
-            },
-            gfx::COLOR,
-            &gfx::Frame::new(w as u16, h as u16)
-        );
-
+        let cdata = gfx::ClearData {
+            color: [0.3, 0.3, 0.3, 1.0],
+            depth: 1.0,
+            stencil: 0,
+        };
+        graphics.clear(cdata, gfx::COLOR, &wrap);
         graphics.end_frame();
-        window.swap_buffers();
+        wrap.window.swap_buffers();
         graphics.cleanup();
     }
 }
