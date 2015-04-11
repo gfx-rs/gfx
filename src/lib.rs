@@ -26,7 +26,7 @@ pub struct Wrap<R: gfx::Resources> {
     pub window: glutin::Window,
     frame: gfx::FrameBufferHandle<R>,
     mask: gfx::Mask,
-    srgb: bool,
+    gamma: gfx::Gamma,
 }
 
 impl<R: gfx::Resources> gfx::Output<R> for Wrap<R> {
@@ -43,8 +43,8 @@ impl<R: gfx::Resources> gfx::Output<R> for Wrap<R> {
         self.mask
     }
 
-    fn does_convert_gamma(&self) -> bool {
-        self.srgb
+    fn get_gamma(&self) -> gfx::Gamma {
+        self.gamma
     }
 }
 
@@ -87,7 +87,7 @@ pub fn init<'a>(builder: glutin::WindowBuilder<'a>)
             window: window,
             frame: factory.get_main_frame_buffer(),
             mask: mask,
-            srgb: srgb,
+            gamma: if srgb {gfx::Gamma::Convert} else {gfx::Gamma::Original},
         };
         (wrap, device, factory)
     })
