@@ -17,7 +17,7 @@
 #![deny(missing_docs)]
 
 use std::mem;
-use draw_state::{self, DrawState};
+use draw_state::DrawState;
 use draw_state::target::{ClearData, Mask, Mirror, Rect};
 
 use device;
@@ -184,7 +184,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
 
     /// Clear the output with given `ClearData`.
     pub fn clear<O: target::Output<R>>(&mut self, data: ClearData, mask: Mask, output: &O) {
-        assert!(output.get_mask().contains(mask));
+        debug_assert!(output.get_mask().contains(mask));
         self.bind_output(output);
         self.command_buffer.call_clear(data, mask);
     }
@@ -232,26 +232,15 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         Ok(())
     }
 
-    /// Blit one frame onto another. //TODO
-    pub fn blit(&mut self, source: &target::Frame<R>, source_rect: Rect,
-                destination: &target::Frame<R>, dest_rect: Rect,
+    /// Blit one frame onto another.
+    pub fn blit<I: target::Output<R>, O: target::Output<R>>(&mut self,
+                source: &I, source_rect: Rect,
+                destination: &O, dest_rect: Rect,
                 mirror: Mirror, mask: Mask) {
-        // verify as much as possible here
-        if mask.intersects(draw_state::target::COLOR) {
-            //debug_assert!(source.is_default() || !source.colors.is_empty());
-            //debug_assert!(destination.is_default() || !destination.colors.is_empty());
-        }
-        if mask.intersects(draw_state::target::DEPTH) {
-            //debug_assert!(source.is_default() || source.depth.is_some());
-            //debug_assert!(destination.is_default() || destination.depth.is_some());
-        }
-        if mask.intersects(draw_state::target::STENCIL) {
-            //debug_assert!(source.is_default() || source.stencil.is_some());
-            //debug_assert!(destination.is_default() || destination.stencil.is_some());
-        }
-        // actually blit
+        debug_assert!(source.get_mask().contains(mask));
+        debug_assert!(destination.get_mask().contains(mask));
         self.bind_output(destination);
-        self.bind_read_frame(source);
+        self.bind_pixel_input(source);
         self.command_buffer.call_blit(source_rect, dest_rect, mirror, mask);
     }
 
@@ -283,18 +272,18 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         self.command_buffer.update_texture(tex.get_info().kind, self.handles.ref_texture(tex), img, pointer);
     }
 
-    fn bind_output<O: target::Output<R>>(&mut self, out: &O) {
-        let (width, height) = out.get_size();
+    fn bind_output<O: target::Output<R>>(&mut self, output: &O) {
+        let (width, height) = output.get_size();
         if self.render_state.frame.width != width ||
                 self.render_state.frame.height != height {
             self.command_buffer.set_viewport(Rect {x: 0, y: 0, w: width, h: height});
             self.render_state.frame.width = width;
             self.render_state.frame.height = height;
         }
-        let gamma = if out.does_convert_gamma() {Gamma::Convert} else {Gamma::Original};
+        let gamma = if output.does_convert_gamma() {Gamma::Convert} else {Gamma::Original};
         let change_gamma = self.render_state.gamma != gamma;
 
-        match out.get_handle() {
+        match output.get_handle() {
             Some(ref handle) => {
                 if self.render_state.frame_buffer.as_ref() != Some(handle) || change_gamma {
                     self.command_buffer.bind_frame_buffer(Access::Draw,
@@ -312,7 +301,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
                     self.render_state.frame_buffer = None;
                     self.render_state.gamma = gamma;
                 }
-                let colors = out.get_colors();
+                let colors = output.get_colors();
                 // cut off excess color planes
                 for (i, _) in self.render_state.frame.colors.iter().enumerate()
                                     .skip(colors.len()) {
@@ -338,14 +327,14 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
                     self.render_state.frame.colors.push(new.clone());
                 }
                 // set depth
-                let depth = out.get_depth();
+                let depth = output.get_depth();
                 if self.render_state.frame.depth.as_ref() != depth {
                     self.command_buffer.bind_target(&mut self.handles,
                         Access::Draw, Target::Depth, depth);
                     self.render_state.frame.depth = depth.map(|p| p.clone());
                 }
                 // set stencil
-                let stencil = out.get_stencil();
+                let stencil = output.get_stencil();
                 if self.render_state.frame.stencil.as_ref() != stencil {
                     self.command_buffer.bind_target(&mut self.handles,
                         Access::Draw, Target::Stencil, stencil);
@@ -355,22 +344,25 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         }
     }
 
-    fn bind_read_frame(&mut self, frame: &target::Frame<R>) {
+    fn bind_pixel_input<I: target::Output<R>>(&mut self, input: &I) {
         self.command_buffer.bind_frame_buffer(Access::Read,
             self.handles.ref_frame_buffer(&self.read_frame_buffer),
             Gamma::Original);
         // color
-        if frame.colors.is_empty() {
-            self.command_buffer.unbind_target(Access::Read, Target::Color(0));
-        }else {
-            self.command_buffer.bind_target(&mut self.handles,
-                Access::Read, Target::Color(0), Some(&frame.colors[0]));
+        match input.get_colors().first() {
+            Some(ref color) => {
+                self.command_buffer.bind_target(&mut self.handles,
+                    Access::Read, Target::Color(0), Some(color));
+            },
+            None => {
+                self.command_buffer.unbind_target(Access::Read, Target::Color(0));
+            },
         }
         // depth/stencil
         self.command_buffer.bind_target(&mut self.handles,
-            Access::Read, Target::Depth, frame.depth.as_ref());
+            Access::Read, Target::Depth, input.get_depth());
         self.command_buffer.bind_target(&mut self.handles,
-            Access::Read, Target::Stencil, frame.stencil.as_ref());
+            Access::Read, Target::Stencil, input.get_stencil());
     }
 
     fn bind_state(&mut self, state: &DrawState) {
