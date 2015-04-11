@@ -24,9 +24,8 @@ extern crate glutin;
 use gfx::traits::*;
 
 pub fn main() {
-    let (wrap, device, factory) =
-        gfx_window_glutin::init_titled("glutin initialization example")
-                          .unwrap();
+    let (wrap, device, factory) = gfx_window_glutin::init_titled("glutin initialization example")
+                                                    .unwrap();
     let mut graphics = (device, factory).into_graphics();
     'main: loop {
         // quit when Esc is pressed.
