@@ -94,6 +94,10 @@ impl Factory {
             );
         }
     }
+
+    pub fn get_main_frame_buffer(&self) -> handle::FrameBuffer<R> {
+        self.main_fbo.clone()
+    }
 }
 
 
@@ -234,10 +238,6 @@ impl d::Factory<R> for Factory {
             0
         };
         self.handles.make_sampler(sam, info)
-    }
-
-    fn get_main_frame_buffer(&self) -> handle::FrameBuffer<R> {
-        self.main_fbo.clone()
     }
 
     fn update_buffer_raw(&mut self, buffer: &handle::RawBuffer<R>,
