@@ -62,7 +62,7 @@ impl<R: Resources> RenderState<R> {
     fn new() -> RenderState<R> {
         RenderState {
             frame_buffer: None,
-            frame: target::Frame::new(0,0),
+            frame: target::Frame::empty(0,0),
             gamma: Gamma::Original,
             is_array_buffer_set: false,
             program: None,

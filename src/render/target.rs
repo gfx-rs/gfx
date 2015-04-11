@@ -133,9 +133,8 @@ pub struct Frame<R: Resources> {
 }
 
 impl<R: Resources> Frame<R> {
-    /// Create an empty `Frame`, which corresponds to the 'default framebuffer',
-    /// which renders directly to the window that was created with the OpenGL context.
-    pub fn new(width: Size, height: Size) -> Frame<R> {
+    /// Create an empty `Frame`.
+    pub fn empty(width: Size, height: Size) -> Frame<R> {
         Frame {
             width: width,
             height: height,
