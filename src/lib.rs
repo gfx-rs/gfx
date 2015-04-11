@@ -33,7 +33,7 @@ use gfx::device::handle;
 use gfx::device::state::{CullFace, RasterMethod, FrontFace};
 
 pub use self::draw::{Command, CommandBuffer};
-pub use self::factory::Factory;
+pub use self::factory::{Factory, Output};
 pub use self::info::{Info, PlatformName, Version};
 
 mod draw;
