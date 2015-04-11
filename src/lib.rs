@@ -12,14 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[deny(missing_docs)]
+
 extern crate gfx;
 extern crate gfx_device_gl;
 extern crate glutin;
 
 use gfx::tex::Size;
 
-
+/// A wrapper around the window that implements `Output`.
 pub struct Wrap<R: gfx::Resources> {
+    /// Glutin window in the open.
     pub window: glutin::Window,
     frame: gfx::FrameBufferHandle<R>,
     mask: gfx::Mask,
@@ -46,9 +49,17 @@ impl<R: gfx::Resources> gfx::Output<R> for Wrap<R> {
 }
 
 
+/// Result of successful context initialization.
+pub type Success = (
+    Wrap<gfx_device_gl::Resources>,
+    gfx_device_gl::Device,
+    gfx_device_gl::Factory,
+);
+
+
+/// Initialize with a window builder.
 pub fn init<'a>(builder: glutin::WindowBuilder<'a>)
-            -> Result<(Wrap<gfx_device_gl::Resources>, gfx_device_gl::Device, gfx_device_gl::Factory),
-                      glutin::CreationError>
+            -> Result<Success, glutin::CreationError>
 {
     let (mask, srgb) = {
         let attribs = builder.get_attributes();
@@ -69,6 +80,7 @@ pub fn init<'a>(builder: glutin::WindowBuilder<'a>)
     };
     // create window
     builder.build().map(|window| {
+        unsafe { window.make_current() };
         let (device, factory) = gfx_device_gl::create(|s| window.get_proc_address(s));
         let wrap = Wrap {
             window: window,
@@ -78,4 +90,12 @@ pub fn init<'a>(builder: glutin::WindowBuilder<'a>)
         };
         (wrap, device, factory)
     })
+}
+
+/// Initialize with just a title string.
+pub fn init_titled(title: &str) -> Result<Success, glutin::CreationError>
+{
+    let builder = glutin::WindowBuilder::new()
+        .with_title(title.to_string());
+    init(builder)
 }
