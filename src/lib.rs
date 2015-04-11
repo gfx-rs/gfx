@@ -30,6 +30,7 @@ pub mod traits {
     pub use render::ext::device::DeviceExt;
     pub use render::ext::factory::{RenderFactory, FactoryExt};
     pub use render::mesh::ToSlice;
+    pub use render::target::Output;
 }
 
 // draw state re-exports
@@ -62,6 +63,7 @@ pub use device::handle::IndexBuffer as IndexBufferHandle;
 pub use device::handle::RawBuffer as RawBufferHandle;
 pub use device::handle::Shader as ShaderHandle;
 pub use device::handle::Program as ProgramHandle;
+pub use device::handle::FrameBuffer as FrameBufferHandle;
 pub use device::handle::Surface as SurfaceHandle;
 pub use device::handle::Texture as TextureHandle;
 pub use device::handle::Sampler as SamplerHandle;

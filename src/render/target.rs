@@ -14,7 +14,6 @@
 
 //! Render target specification.
 
-use std::fmt::Debug;
 use device;
 use device::Resources;
 use device::tex::Size;
@@ -49,8 +48,8 @@ impl<R: Resources> Plane<R> {
     }
 }
 
-/// A generic rendering output, typically an FBO.
-pub trait Output<R: Resources>: Debug {
+/// A generic rendering output, consisting of multiple planes.
+pub trait Output<R: Resources> {
     /// Get an associated device handle, if any.
     fn get_handle(&self) -> Option<&device::handle::FrameBuffer<R>> { None }
     /// Get canvas dimensions.

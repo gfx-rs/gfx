@@ -216,7 +216,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         };
         let target_missing = state.get_target_mask() - output.get_mask();
         if !target_missing.is_empty() {
-            error!("Error drawing to the output {:?}. ", output);
+            error!("Error drawing to the output {:?}. ", output.get_handle());
             error!("Output mask: {:?}, State mask: {:?}, difference: {:?}",
                 output.get_mask(), state.get_target_mask(), target_missing);
             return Err(DrawError::MissingTarget(target_missing))
