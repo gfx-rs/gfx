@@ -17,8 +17,8 @@
 
 extern crate cgmath;
 extern crate gfx;
-extern crate gfx_device_gl;
-extern crate glfw;
+extern crate gfx_window_glutin;
+extern crate glutin;
 extern crate time;
 extern crate rand;
 extern crate genmesh;
@@ -30,7 +30,6 @@ use cgmath::FixedArray;
 use cgmath::{Matrix4, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
 use gfx::traits::*;
-use glfw::Context;
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
 use time::precise_time_s;
@@ -109,19 +108,9 @@ fn calculate_color(height: f32) -> [f32; 3] {
 }
 
 pub fn main() {
-    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
-    let (mut window, events) = glfw
-        .create_window(800, 600, "Terrain example", glfw::WindowMode::Windowed)
-        .expect("Failed to create GLFW window.");
-
-    window.make_current();
-    glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
-    window.set_key_polling(true);
-
-    let (w, h) = window.get_framebuffer_size();
-    let frame = gfx::Frame::new(w as u16, h as u16);
-
-    let (device, mut factory) = gfx_device_gl::create(|s| window.get_proc_address(s));
+    let (wrap, device, mut factory) =
+        gfx_window_glutin::init_titled("Terrain example")
+                          .unwrap();
 
     let rand_seed = rand::thread_rng().gen();
     let seed = Seed::new(rand_seed);
@@ -152,7 +141,10 @@ pub fn main() {
 
     let mut graphics = (device, factory).into_graphics();
 
-    let aspect = w as f32 / h as f32;
+    let aspect = {
+        let (w, h) = wrap.get_size();
+        w as f32 / h as f32
+    };
     let data = Params {
         model: Matrix4::identity().into_fixed(),
         view: Matrix4::identity().into_fixed(),
@@ -169,12 +161,12 @@ pub fn main() {
         stencil: 0,
     };
 
-    while !window.should_close() {
-        glfw.poll_events();
-        for (_, event) in glfw::flush_messages(&events) {
+    'main: loop {
+        // quit when Esc is pressed.
+        for event in wrap.window.poll_events() {
             match event {
-                glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Action::Press, _) =>
-                    window.set_should_close(true),
+                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) => break 'main,
+                glutin::Event::Closed => break 'main,
                 _ => {},
             }
         }
@@ -189,11 +181,11 @@ pub fn main() {
         );
         batch.params.view = view.mat.into_fixed();
 
-        graphics.clear(clear_data, gfx::COLOR | gfx::DEPTH, &frame);
-        graphics.draw(&batch, &frame).unwrap();
+        graphics.clear(clear_data, gfx::COLOR | gfx::DEPTH, &wrap);
+        graphics.draw(&batch, &wrap).unwrap();
         graphics.end_frame();
 
-        window.swap_buffers();
+        wrap.window.swap_buffers();
         graphics.cleanup();
     }
 }
