@@ -38,6 +38,40 @@ impl<R: Resources> Plane<R> {
     }
 }
 
+/// A generic rendering output, typically an FBO.
+pub trait Output<R: Resources> {
+    /// Get an associated device handle, if any.
+    fn get_handle(&self) -> Option<&device::handle::FrameBuffer<R>> { None }
+    /// Get canvas dimensions.
+    fn get_size(&self) -> (u16, u16);
+    /// Get array of color planes.
+    fn get_colors(&self) -> &[Plane<R>] { &[] }
+    /// Get depth plane, if any.
+    fn get_depth(&self) -> Option<&Plane<R>> { None }
+    /// Get stencil plane, if any.
+    fn get_stencil(&self) -> Option<&Plane<R>> { None }
+    /// Check if it converts gamma of the output colors.
+    fn does_convert_gamma(&self) -> bool { false }
+    /// Get the output surface mask.
+    fn get_mask(&self) -> Mask {
+        use draw_state::target as t;
+        let mut mask = match self.get_colors().len() {
+            0 => Mask::empty(),
+            1 => t::COLOR0,
+            2 => t::COLOR0 | t::COLOR1,
+            3 => t::COLOR0 | t::COLOR1 | t::COLOR2,
+            _ => t::COLOR0 | t::COLOR1 | t::COLOR2 | t::COLOR3,
+        };
+        if self.get_depth().is_some() {
+            mask.insert(t::DEPTH);
+        }
+        if self.get_stencil().is_some() {
+            mask.insert(t::STENCIL);
+        }
+        mask
+    }
+}
+
 /// A complete `Frame`, which is the result of rendering.
 #[derive(Clone, PartialEq, Debug)]
 pub struct Frame<R: Resources> {
@@ -68,36 +102,26 @@ impl<R: Resources> Frame<R> {
             convert_gamma: false,
         }
     }
+}
 
-    /// Return true if this framebuffer is associated with the main window
-    /// (matches `Frame::new` exactly).
-    pub fn is_default(&self) -> bool {
-        self.colors.is_empty() &&
-        self.depth.is_none() &&
-        self.stencil.is_none()
+impl<R: Resources> Output<R> for Frame<R> {
+    fn get_size(&self) -> (u16, u16) {
+        (self.width, self.height)
     }
 
-    /// Return a mask of contained planes.
-    pub fn get_mask(&self) -> Mask {
-        use draw_state::target as t;
-        let mut mask = match self.colors.len() {
-            0 => Mask::empty(),
-            1 => t::COLOR0,
-            2 => t::COLOR0 | t::COLOR1,
-            3 => t::COLOR0 | t::COLOR1 | t::COLOR2,
-            _ => t::COLOR0 | t::COLOR1 | t::COLOR2 | t::COLOR3,
-        };
-        if self.depth.is_some() {
-            mask.insert(t::DEPTH);
-        }
-        if self.stencil.is_some() {
-            mask.insert(t::STENCIL);
-        }
-        if mask.is_empty() {
-            // hack: assuming the default FBO has all planes
-            t::COLOR | t::DEPTH | t::STENCIL
-        } else {
-            mask
-        }
+    fn get_colors(&self) -> &[Plane<R>] {
+        &self.colors
+    }
+
+    fn get_depth(&self) -> Option<&Plane<R>> {
+        self.depth.as_ref()
+    }
+
+    fn get_stencil(&self) -> Option<&Plane<R>> {
+        self.stencil.as_ref()
+    }
+
+    fn does_convert_gamma(&self) -> bool {
+        self.convert_gamma
     }
 }

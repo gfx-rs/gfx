@@ -44,7 +44,7 @@ pub use render::mesh::{Attribute, Mesh, VertexFormat};
 pub use render::mesh::Error as MeshError;
 pub use render::mesh::{Slice, ToSlice, SliceKind};
 pub use render::shade;
-pub use render::target::{Frame, Plane};
+pub use render::target::{Frame, Output, Plane};
 pub use render::ParamStorage;
 pub use device::{Device, SubmitInfo, Factory, Resources};
 pub use device::{attrib, tex};
