@@ -30,9 +30,10 @@
 #![plugin(gfx_macros)]
 
 extern crate cgmath;
+extern crate env_logger;
 extern crate gfx;
-extern crate gfx_device_gl;
-extern crate glfw;
+extern crate gfx_window_glutin;
+extern crate glutin;
 extern crate time;
 extern crate rand;
 extern crate genmesh;
@@ -44,7 +45,6 @@ use cgmath::{Matrix, Matrix4, Point3, Vector3, EuclideanVector};
 use cgmath::{Transform, AffineMatrix3};
 use gfx::traits::*;
 use gfx::{Plane, RawBufferHandle};
-use glfw::Context;
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{SharedVertex, IndexedPolygon};
 use time::precise_time_s;
@@ -311,11 +311,10 @@ fn calculate_color(height: f32) -> [f32; 3] {
     }
 }
 
-fn create_g_buffer<R: gfx::Resources, F: Factory<R>>(width: u16, height: u16, factory: &mut F)
+fn create_g_buffer<R: gfx::Resources, F: Factory<R>>(
+                   width: gfx::tex::Size, height: gfx::tex::Size, factory: &mut F)
                    -> (gfx::Frame<R>, gfx::TextureHandle<R>, gfx::TextureHandle<R>,
                    gfx::TextureHandle<R>, gfx::TextureHandle<R>) {
-    let mut frame = gfx::Frame::new(width, height);
-
     let texture_info_float = gfx::tex::TextureInfo {
         width: width,
         height: height,
@@ -330,26 +329,33 @@ fn create_g_buffer<R: gfx::Resources, F: Factory<R>>(width: u16, height: u16, fa
         depth: 1,
         levels: 1,
         kind: gfx::tex::TextureKind::Texture2D,
-        format: gfx::tex::Format::DEPTH24STENCIL8,
+        format: gfx::tex::Format::DEPTH24_STENCIL8,
     };
     let texture_pos     = factory.create_texture(texture_info_float).unwrap();
     let texture_normal  = factory.create_texture(texture_info_float).unwrap();
     let texture_diffuse = factory.create_texture(texture_info_float).unwrap();
     let texture_depth   = factory.create_texture(texture_info_depth).unwrap();
 
-    frame.colors.push(Plane::Texture(texture_pos    .clone(), 0, None));
-    frame.colors.push(Plane::Texture(texture_normal .clone(), 0, None));
-    frame.colors.push(Plane::Texture(texture_diffuse.clone(), 0, None));
-    frame.depth =Some(Plane::Texture(texture_depth  .clone(), 0, None));
+    let frame = gfx::Frame {
+        width: width,
+        height: height,
+        colors: vec![
+            Plane::Texture(texture_pos    .clone(), 0, None),
+            Plane::Texture(texture_normal .clone(), 0, None),
+            Plane::Texture(texture_diffuse.clone(), 0, None),
+        ],
+        depth: Some(Plane::Texture(texture_depth  .clone(), 0, None)),
+        stencil: None,
+        convert_gamma: false,
+    };
 
     (frame, texture_pos, texture_normal, texture_diffuse, texture_depth)
 }
 
-fn create_res_buffer<R: gfx::Resources, F: Factory<R>>(width: u16, height: u16,
+fn create_res_buffer<R: gfx::Resources, F: Factory<R>>(
+                     width: gfx::tex::Size, height: gfx::tex::Size,
                      factory: &mut F, texture_depth: &gfx::TextureHandle<R>)
                      -> (gfx::Frame<R>, gfx::TextureHandle<R>, gfx::TextureHandle<R>) {
-    let mut frame = gfx::Frame::new(width, height);
-
     let texture_info_float = gfx::tex::TextureInfo {
         width: width,
         height: height,
@@ -361,38 +367,33 @@ fn create_res_buffer<R: gfx::Resources, F: Factory<R>>(width: u16, height: u16,
 
     let texture_frame = factory.create_texture(texture_info_float).unwrap();
 
-    frame.colors.push(Plane::Texture(texture_frame.clone(), 0, None));
-    frame.depth =Some(Plane::Texture(texture_depth.clone(), 0, None));
+    let frame = gfx::Frame {
+        width: width,
+        height: height,
+        colors: vec![Plane::Texture(texture_frame.clone(), 0, None)],
+        depth: Some(Plane::Texture(texture_depth.clone(), 0, None)),
+        stencil: None,
+        convert_gamma: false,
+    };
 
     (frame, texture_frame, texture_depth.clone())
 }
 
 pub fn main() {
-    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS)
-                        .unwrap();
+    env_logger::init().unwrap();
+    let (wrap, mut device, mut factory) = gfx_window_glutin::init(
+        glutin::WindowBuilder::new()
+            .with_title("Deferred rendering example with gfx-rs".to_string())
+            .with_dimensions(800, 600)
+            .with_gl(glutin::GlRequest::Latest)
+        ).unwrap();
 
-    glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
-    glfw.window_hint(glfw::WindowHint::OpenglForwardCompat(true));
-    glfw.window_hint(glfw::WindowHint::OpenglProfile(glfw::OpenGlProfileHint::Core));
-
-    let (mut window, events) = glfw
-        .create_window(800, 600, "", glfw::WindowMode::Windowed)
-        .expect("Failed to create GLFW window.");
-
-    window.make_current();
-    glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
-    window.set_key_polling(true);
-
-    let (w, h) = window.get_framebuffer_size();
-    let frame = gfx::Frame::new(w as u16, h as u16);
-
-    let (mut device, mut factory) = gfx_device_gl::create(|s| window.get_proc_address(s));
+    let (w, h) = wrap.get_size();
     let mut renderer = factory.create_renderer();
     let mut context = gfx::batch::Context::new();
-    type R = gfx_device_gl::Resources;
 
-    let (g_buffer, texture_pos, texture_normal, texture_diffuse, texture_depth)  = create_g_buffer(w as u16, h as u16, &mut factory);
-    let (res_buffer, texture_frame, _) = create_res_buffer(w as u16, h as u16, &mut factory, &texture_depth);
+    let (g_buffer, texture_pos, texture_normal, texture_diffuse, texture_depth) = create_g_buffer(w, h, &mut factory);
+    let (res_buffer, texture_frame, _) = create_res_buffer(w, h, &mut factory, &texture_depth);
 
     let seed = {
         let rand_seed = rand::thread_rng().gen();
@@ -569,27 +570,29 @@ pub fn main() {
         stencil: 0,
     };
 
-    let mut debug_buf: Option<gfx::TextureHandle<R>> = None;
+    let mut debug_buf: Option<gfx::TextureHandle<_>> = None;
 
     let mut light_pos_vec: Vec<[f32; 4]> = (0 ..NUM_LIGHTS).map(|_| {
         [0.0, 0.0, 0.0, 0.0]
     }).collect();
 
-    while !window.should_close() {
-        glfw.poll_events();
-        for (_, event) in glfw::flush_messages(&events) {
+     'main: loop {
+        // quit when Esc is pressed.
+        for event in wrap.window.poll_events() {
+            use glutin::{Event, VirtualKeyCode};
             match event {
-                glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Action::Press, _) =>
-                    window.set_should_close(true),
-                glfw::WindowEvent::Key(glfw::Key::Num1, _, glfw::Action::Press, _) =>
+                Event::Closed => break 'main,
+                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Escape)) =>
+                    break 'main,
+                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Numpad1)) =>
                     debug_buf = Some(texture_pos.clone()),
-                glfw::WindowEvent::Key(glfw::Key::Num2, _, glfw::Action::Press, _) =>
+                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Numpad2)) =>
                     debug_buf = Some(texture_normal.clone()),
-                glfw::WindowEvent::Key(glfw::Key::Num3, _, glfw::Action::Press, _) =>
+                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Numpad3)) =>
                     debug_buf = Some(texture_diffuse.clone()),
-                glfw::WindowEvent::Key(glfw::Key::Num4, _, glfw::Action::Press, _) =>
+                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Numpad4)) =>
                     debug_buf = Some(texture_depth.clone()),
-                glfw::WindowEvent::Key(glfw::Key::Num0, _, glfw::Action::Press, _) =>
+                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Numpad0)) =>
                     debug_buf = None,
                 _ => {},
             }
@@ -643,10 +646,10 @@ pub fn main() {
             Some(ref tex) => {
                 // Show one of the immediate buffers
                 blit.params.tex = (tex.clone(), Some(sampler.clone()));
-                renderer.clear(clear_data, gfx::COLOR | gfx::DEPTH, &frame);
+                renderer.clear(clear_data, gfx::COLOR | gfx::DEPTH, &wrap);
                 renderer.draw(
                     &(&blit, &context),
-                    &frame)
+                    &wrap)
                     .unwrap();
             },
             None => {
@@ -664,15 +667,15 @@ pub fn main() {
                     .unwrap();
 
                 // Show the result
-                renderer.clear(clear_data, gfx::COLOR | gfx::DEPTH, &frame);
+                renderer.clear(clear_data, gfx::COLOR | gfx::DEPTH, &wrap);
                 blit.params.tex = (texture_frame.clone(), Some(sampler.clone()));
-                renderer.draw(&(&blit, &context), &frame).unwrap();
+                renderer.draw(&(&blit, &context), &wrap).unwrap();
             }
         }
         device.submit(renderer.as_buffer());
         renderer.reset();
 
-        window.swap_buffers();
+        wrap.window.swap_buffers();
         device.after_frame();
         factory.cleanup();
     }
