@@ -63,7 +63,8 @@ pub fn init<'a>(builder: glutin::WindowBuilder<'a>)
 {
     let (mask, srgb) = {
         let attribs = builder.get_attributes();
-        let mut mask = gfx::Mask::empty();
+        //let mut mask = gfx::Mask::empty(); // need Glutin to really expose defaults
+        let mut mask = gfx::COLOR | gfx::DEPTH | gfx::STENCIL;
         match attribs.color_bits {
             Some(b) if b>0 => mask.insert(gfx::COLOR),
             _ => (),
