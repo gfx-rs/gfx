@@ -17,7 +17,9 @@
 use std::fmt::Debug;
 use device;
 use device::Resources;
+use device::tex::Size;
 use draw_state::target::{Layer, Level, Mask};
+
 
 #[derive(Clone, PartialEq, Debug)]
 /// A single buffer that can be bound to a render target.
@@ -44,7 +46,7 @@ pub trait Output<R: Resources>: Debug {
     /// Get an associated device handle, if any.
     fn get_handle(&self) -> Option<&device::handle::FrameBuffer<R>> { None }
     /// Get canvas dimensions.
-    fn get_size(&self) -> (u16, u16);
+    fn get_size(&self) -> (Size, Size);
     /// Get array of color planes.
     fn get_colors(&self) -> &[Plane<R>] { &[] }
     /// Get depth plane, if any.
@@ -77,9 +79,9 @@ pub trait Output<R: Resources>: Debug {
 #[derive(Clone, PartialEq, Debug)]
 pub struct Frame<R: Resources> {
     /// The width of the viewport.
-    pub width: u16,
+    pub width: Size,
     /// The height of the viewport.
-    pub height: u16,
+    pub height: Size,
     /// Each color component has its own buffer.
     pub colors: Vec<Plane<R>>,
     /// The depth buffer for this frame.
@@ -93,7 +95,7 @@ pub struct Frame<R: Resources> {
 impl<R: Resources> Frame<R> {
     /// Create an empty `Frame`, which corresponds to the 'default framebuffer',
     /// which renders directly to the window that was created with the OpenGL context.
-    pub fn new(width: u16, height: u16) -> Frame<R> {
+    pub fn new(width: Size, height: Size) -> Frame<R> {
         Frame {
             width: width,
             height: height,
@@ -106,7 +108,7 @@ impl<R: Resources> Frame<R> {
 }
 
 impl<R: Resources> Output<R> for Frame<R> {
-    fn get_size(&self) -> (u16, u16) {
+    fn get_size(&self) -> (Size, Size) {
         (self.width, self.height)
     }
 

@@ -84,6 +84,8 @@ impl fmt::Debug for TextureError {
     }
 }
 
+/// Dimension size
+pub type Size = u16;
 /// Number of bits per component
 pub type Bits = u8;
 /// Number of MSAA samples
@@ -233,8 +235,8 @@ pub static RGBA32F: Format = Format::Float(Components::RGBA, FloatSize::F32);
 #[allow(missing_docs)]
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 pub struct SurfaceInfo {
-    pub width: u16,
-    pub height: u16,
+    pub width: Size,
+    pub height: Size,
     pub format: Format,
     pub aa_mode: Option<AaMode>,
 }
@@ -328,9 +330,9 @@ impl TextureKind {
 #[allow(missing_docs)]
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 pub struct TextureInfo {
-    pub width: u16,
-    pub height: u16,
-    pub depth: u16,
+    pub width: Size,
+    pub height: Size,
+    pub depth: Size,
     /// Number of mipmap levels. Defaults to -1, which stands for unlimited.
     /// Mipmap levels at equal or above `levels` can not be loaded or sampled
     /// by the shader. width and height of each consecutive mipmap level is
@@ -344,12 +346,12 @@ pub struct TextureInfo {
 #[allow(missing_docs)]
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 pub struct ImageInfo {
-    pub xoffset: u16,
-    pub yoffset: u16,
-    pub zoffset: u16,
-    pub width: u16,
-    pub height: u16,
-    pub depth: u16,
+    pub xoffset: Size,
+    pub yoffset: Size,
+    pub zoffset: Size,
+    pub width: Size,
+    pub height: Size,
+    pub depth: Size,
     /// Format of each texel.
     pub format: Format,
     /// Which mipmap to select.
