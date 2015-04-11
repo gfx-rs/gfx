@@ -18,10 +18,12 @@ use std::rc::Rc;
 use std::slice;
 
 use {gl, tex};
+use gfx;
 use gfx::device as d;
 use gfx::device::handle;
 use gfx::device::handle::Producer;
 use gfx::device::mapping::Builder;
+use gfx::tex::Size;
 
 use Buffer;
 use Resources as R;
@@ -40,6 +42,27 @@ pub fn update_sub_buffer(gl: &gl::Gl, buffer: Buffer, address: *const u8,
             size as gl::types::GLsizeiptr,
             address as *const gl::types::GLvoid
         );
+    }
+}
+
+/// A placeholder for a real `Output` implemented by your window.
+pub struct Output {
+    width: Size,
+    height: Size,
+    handle: handle::FrameBuffer<R>,
+}
+
+impl gfx::Output<R> for Output {
+    fn get_handle(&self) -> Option<&handle::FrameBuffer<R>> {
+        Some(&self.handle)
+    }
+
+    fn get_size(&self) -> (Size, Size) {
+        (self.width, self.height)
+    }
+
+    fn get_mask(&self) -> gfx::Mask {
+        gfx::COLOR | gfx::DEPTH | gfx::STENCIL
     }
 }
 
@@ -92,6 +115,18 @@ impl Factory {
                 0 as *const gl::types::GLvoid,
                 usage
             );
+        }
+    }
+
+    pub fn get_main_frame_buffer(&self) -> handle::FrameBuffer<R> {
+        self.main_fbo.clone()
+    }
+
+    pub fn make_fake_output(&self, w: Size, h: Size) -> Output {
+        Output {
+            width: w,
+            height: h,
+            handle: self.main_fbo.clone(),
         }
     }
 }
@@ -234,10 +269,6 @@ impl d::Factory<R> for Factory {
             0
         };
         self.handles.make_sampler(sam, info)
-    }
-
-    fn get_main_frame_buffer(&self) -> handle::FrameBuffer<R> {
-        self.main_fbo.clone()
     }
 
     fn update_buffer_raw(&mut self, buffer: &handle::RawBuffer<R>,
