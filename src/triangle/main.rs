@@ -55,9 +55,9 @@ static FRAGMENT_SRC: &'static [u8] = b"
 ";
 
 pub fn main() {
-    let (wrap, mut device, mut factory) =
-        gfx_window_glutin::init_titled("Triangle example.")
-                          .unwrap();
+    let (wrap, mut device, mut factory) = gfx_window_glutin::init(glutin::Window::new().unwrap());
+    wrap.window.set_title("Triangle example");
+
     let vertex_data = [
         Vertex { pos: [ -0.5, -0.5 ], color: [1.0, 0.0, 0.0] },
         Vertex { pos: [  0.5, -0.5 ], color: [0.0, 1.0, 0.0] },

@@ -53,8 +53,8 @@ struct Params<R: gfx::Resources> {
 //----------------------------------------
 
 pub fn main() {
-    let (wrap, mut device, mut factory) = gfx_window_glutin::init_titled("Cube example")
-                                                             .unwrap();
+    let (wrap, mut device, mut factory) = gfx_window_glutin::init(glutin::Window::new().unwrap());
+    wrap.window.set_title("Cube example");
     let mut renderer = factory.create_renderer();
 
     let vertex_data = [

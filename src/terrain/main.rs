@@ -108,9 +108,8 @@ fn calculate_color(height: f32) -> [f32; 3] {
 }
 
 pub fn main() {
-    let (wrap, device, mut factory) =
-        gfx_window_glutin::init_titled("Terrain example")
-                          .unwrap();
+    let (wrap, device, mut factory) = gfx_window_glutin::init(glutin::Window::new().unwrap());
+    wrap.window.set_title("Terrain example");
 
     let rand_seed = rand::thread_rng().gen();
     let seed = Seed::new(rand_seed);

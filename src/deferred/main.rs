@@ -337,16 +337,13 @@ fn create_g_buffer<R: gfx::Resources, F: Factory<R>>(
     let texture_depth   = factory.create_texture(texture_info_depth).unwrap();
 
     let frame = gfx::Frame {
-        width: width,
-        height: height,
         colors: vec![
             Plane::Texture(texture_pos    .clone(), 0, None),
             Plane::Texture(texture_normal .clone(), 0, None),
             Plane::Texture(texture_diffuse.clone(), 0, None),
         ],
         depth: Some(Plane::Texture(texture_depth  .clone(), 0, None)),
-        stencil: None,
-        convert_gamma: false,
+        .. gfx::Frame::empty(width, height)
     };
 
     (frame, texture_pos, texture_normal, texture_diffuse, texture_depth)
@@ -368,12 +365,9 @@ fn create_res_buffer<R: gfx::Resources, F: Factory<R>>(
     let texture_frame = factory.create_texture(texture_info_float).unwrap();
 
     let frame = gfx::Frame {
-        width: width,
-        height: height,
         colors: vec![Plane::Texture(texture_frame.clone(), 0, None)],
         depth: Some(Plane::Texture(texture_depth.clone(), 0, None)),
-        stencil: None,
-        convert_gamma: false,
+       .. gfx::Frame::empty(width, height)
     };
 
     (frame, texture_frame, texture_depth.clone())
@@ -386,7 +380,8 @@ pub fn main() {
             .with_title("Deferred rendering example with gfx-rs".to_string())
             .with_dimensions(800, 600)
             .with_gl(glutin::GlRequest::Latest)
-        ).unwrap();
+            .build().unwrap()
+    );
 
     let (w, h) = wrap.get_size();
     let mut renderer = factory.create_renderer();
