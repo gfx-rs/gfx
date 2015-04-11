@@ -47,9 +47,9 @@ type CachedAttribute<R: Resources> = (handle::RawBuffer<R>, attrib::Format);
 /// The internal state of the renderer.
 /// This is used as a cache to eliminate redundant state changes.
 struct RenderState<R: Resources> {
-    is_frame_buffer_set: bool,
+    frame_buffer: Option<handle::FrameBuffer<R>>,
     frame: target::Frame<R>,
-    convert_gamma: bool,
+    gamma: Gamma,
     is_array_buffer_set: bool,
     program: Option<handle::Program<R>>,
     index: Option<handle::RawBuffer<R>>,
@@ -61,9 +61,9 @@ impl<R: Resources> RenderState<R> {
     /// Generate the initial state matching `Device::reset_state`
     fn new() -> RenderState<R> {
         RenderState {
-            is_frame_buffer_set: false,
+            frame_buffer: None,
             frame: target::Frame::new(0,0),
-            convert_gamma: false,
+            gamma: Gamma::Original,
             is_array_buffer_set: false,
             program: None,
             index: None,
@@ -150,7 +150,6 @@ pub struct Renderer<R: Resources, C: CommandBuffer<R>> {
     common_array_buffer: Result<handle::ArrayBuffer<R>, ()>,
     draw_frame_buffer: handle::FrameBuffer<R>,
     read_frame_buffer: handle::FrameBuffer<R>,
-    default_frame_buffer: handle::FrameBuffer<R>,
     render_state: RenderState<R>,
     parameters: ParamStorage<R>,
 }
@@ -178,49 +177,51 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
             common_array_buffer: self.common_array_buffer.clone(),
             draw_frame_buffer: self.draw_frame_buffer.clone(),
             read_frame_buffer: self.read_frame_buffer.clone(),
-            default_frame_buffer: self.default_frame_buffer.clone(),
             render_state: RenderState::new(),
             parameters: ParamStorage::new(),
         }
     }
 
-    /// Clear the `Frame` as the `ClearData` specifies.
-    pub fn clear(&mut self, data: ClearData, mask: Mask, frame: &target::Frame<R>) {
-        self.bind_frame(frame);
+    /// Clear the output with given `ClearData`.
+    pub fn clear<O: target::Output<R>>(&mut self, data: ClearData, mask: Mask, output: &O) {
+        assert!(output.get_mask().contains(mask));
+        self.bind_output(output);
         self.command_buffer.call_clear(data, mask);
     }
 
-    /// Draw a `batch` into the specified `frame`
-    pub fn draw<B: Batch<Resources = R>>(&mut self, batch: &B, frame: &target::Frame<R>)
+    /// Draw a `batch` into the specified output.
+    pub fn draw<B: Batch<Resources = R>, O: target::Output<R>>(
+                &mut self, batch: &B, output: &O)
                 -> Result<(), DrawError<B::Error>> {
-        self.draw_all(batch, None, frame)
+        self.draw_all(batch, None, output)
     }
 
-    /// Draw a `batch` multiple times using instancing
-    pub fn draw_instanced<B: Batch<Resources = R>>(&mut self, batch: &B,
+    /// Draw a `batch` multiple times using instancing.
+    pub fn draw_instanced<B: Batch<Resources = R>, O: target::Output<R>>(
+                          &mut self, batch: &B,
                           count: device::InstanceCount,
                           base: device::VertexCount,
-                          frame: &target::Frame<R>)
+                          output: &O)
                           -> Result<(), DrawError<B::Error>> {
-        self.draw_all(batch, Some((count, base)), frame)
+        self.draw_all(batch, Some((count, base)), output)
     }
 
     /// Draw a 'batch' with all known parameters specified, internal use only.
-    fn draw_all<B: Batch<Resources = R>>(&mut self, batch: &B,
-                instances: InstanceOption, frame: &target::Frame<R>)
+    fn draw_all<B: Batch<Resources = R>, O: target::Output<R>>(
+                &mut self, batch: &B, instances: InstanceOption, output: &O)
                 -> Result<(), DrawError<B::Error>> {
         let (mesh, attrib_iter, slice, state) = match batch.get_data() {
             Ok(data) => data,
             Err(e) => return Err(DrawError::InvalidBatch(e)),
         };
-        let target_missing = state.get_target_mask() - frame.get_mask();
+        let target_missing = state.get_target_mask() - output.get_mask();
         if !target_missing.is_empty() {
-            error!("Error drawing to frame {:?}. ", frame);
-            error!("Frame mask: {:?}, State mask: {:?}, difference: {:?}",
-                frame.get_mask(), state.get_target_mask(), target_missing);
+            error!("Error drawing to the output {:?}. ", output);
+            error!("Output mask: {:?}, State mask: {:?}, difference: {:?}",
+                output.get_mask(), state.get_target_mask(), target_missing);
             return Err(DrawError::MissingTarget(target_missing))
         }
-        self.bind_frame(frame);
+        self.bind_output(output);
         let program = match self.bind_program(batch) {
             Ok(p) => p,
             Err(e) => return Err(DrawError::InvalidBatch(e)),
@@ -231,25 +232,25 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         Ok(())
     }
 
-    /// Blit one frame onto another
+    /// Blit one frame onto another. //TODO
     pub fn blit(&mut self, source: &target::Frame<R>, source_rect: Rect,
                 destination: &target::Frame<R>, dest_rect: Rect,
                 mirror: Mirror, mask: Mask) {
         // verify as much as possible here
         if mask.intersects(draw_state::target::COLOR) {
-            debug_assert!(source.is_default() || !source.colors.is_empty());
-            debug_assert!(destination.is_default() || !destination.colors.is_empty());
+            //debug_assert!(source.is_default() || !source.colors.is_empty());
+            //debug_assert!(destination.is_default() || !destination.colors.is_empty());
         }
         if mask.intersects(draw_state::target::DEPTH) {
-            debug_assert!(source.is_default() || source.depth.is_some());
-            debug_assert!(destination.is_default() || destination.depth.is_some());
+            //debug_assert!(source.is_default() || source.depth.is_some());
+            //debug_assert!(destination.is_default() || destination.depth.is_some());
         }
         if mask.intersects(draw_state::target::STENCIL) {
-            debug_assert!(source.is_default() || source.stencil.is_some());
-            debug_assert!(destination.is_default() || destination.stencil.is_some());
+            //debug_assert!(source.is_default() || source.stencil.is_some());
+            //debug_assert!(destination.is_default() || destination.stencil.is_some());
         }
         // actually blit
-        self.bind_frame(destination);
+        self.bind_output(destination);
         self.bind_read_frame(source);
         self.command_buffer.call_blit(source_rect, dest_rect, mirror, mask);
     }
@@ -282,72 +283,75 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         self.command_buffer.update_texture(tex.get_info().kind, self.handles.ref_texture(tex), img, pointer);
     }
 
-    fn bind_frame(&mut self, frame: &target::Frame<R>) {
-        if self.render_state.frame.width != frame.width ||
-                self.render_state.frame.height != frame.height {
-            self.command_buffer.set_viewport(Rect {
-                x: 0,
-                y: 0,
-                w: frame.width,
-                h: frame.height,
-            });
-            self.render_state.frame.width = frame.width;
-            self.render_state.frame.height = frame.height;
+    fn bind_output<O: target::Output<R>>(&mut self, out: &O) {
+        let (width, height) = out.get_size();
+        if self.render_state.frame.width != width ||
+                self.render_state.frame.height != height {
+            self.command_buffer.set_viewport(Rect {x: 0, y: 0, w: width, h: height});
+            self.render_state.frame.width = width;
+            self.render_state.frame.height = height;
         }
-        let change_gamma = self.render_state.convert_gamma != frame.convert_gamma;
+        let gamma = if out.does_convert_gamma() {Gamma::Convert} else {Gamma::Original};
+        let change_gamma = self.render_state.gamma != gamma;
 
-        if frame.is_default() {
-            if self.render_state.is_frame_buffer_set || change_gamma {
-                // binding the default FBO, not touching our common one
-                self.command_buffer.bind_frame_buffer(Access::Draw,
-                    self.handles.ref_frame_buffer(&self.default_frame_buffer),
-                    if frame.convert_gamma { Gamma::Convert } else { Gamma::Original });
-                self.render_state.is_frame_buffer_set = false;
-                self.render_state.convert_gamma = frame.convert_gamma;
-            }
-        } else {
-            if !self.render_state.is_frame_buffer_set || change_gamma {
-                self.command_buffer.bind_frame_buffer(Access::Draw,
-                    self.handles.ref_frame_buffer(&self.draw_frame_buffer),
-                    if frame.convert_gamma { Gamma::Convert } else { Gamma::Original });
-                self.render_state.is_frame_buffer_set = true;
-            }
-            // cut off excess color planes
-            for (i, _) in self.render_state.frame.colors.iter().enumerate()
-                                .skip(frame.colors.len()) {
-                self.command_buffer.unbind_target(Access::Draw, Target::Color(i as u8));
-            }
-            self.render_state.frame.colors.truncate(frame.colors.len());
-            // bind intersecting subsets
-            for (i, (cur, new)) in self.render_state.frame.colors.iter_mut()
-                                       .zip(frame.colors.iter()).enumerate() {
-                if *cur != *new {
+        match out.get_handle() {
+            Some(ref handle) => {
+                if self.render_state.frame_buffer.as_ref() != Some(handle) || change_gamma {
+                    self.command_buffer.bind_frame_buffer(Access::Draw,
+                        self.handles.ref_frame_buffer(handle),
+                        gamma);
+                    self.render_state.frame_buffer = Some((*handle).clone());
+                    self.render_state.gamma = gamma;
+                }
+            },
+            None => {
+                if self.render_state.frame_buffer.is_some() || change_gamma {
+                    self.command_buffer.bind_frame_buffer(Access::Draw,
+                        self.handles.ref_frame_buffer(&self.draw_frame_buffer),
+                        gamma);
+                    self.render_state.frame_buffer = None;
+                    self.render_state.gamma = gamma;
+                }
+                let colors = out.get_colors();
+                // cut off excess color planes
+                for (i, _) in self.render_state.frame.colors.iter().enumerate()
+                                    .skip(colors.len()) {
+                    self.command_buffer.unbind_target(Access::Draw, Target::Color(i as u8));
+                }
+                self.render_state.frame.colors.truncate(colors.len());
+                // bind intersecting subsets
+                for (i, (cur, new)) in self.render_state.frame.colors.iter_mut()
+                                           .zip(colors.iter()).enumerate() {
+                    if *cur != *new {
+                        self.command_buffer.bind_target(&mut self.handles,
+                            Access::Draw, Target::Color(i as u8), Some(new));
+                        *cur = new.clone();
+                    }
+                }
+                // activate the color targets that were just bound
+                self.command_buffer.set_draw_color_buffers(colors.len());
+                // append new planes
+                for (i, new) in colors.iter().enumerate()
+                                      .skip(self.render_state.frame.colors.len()) {
                     self.command_buffer.bind_target(&mut self.handles,
                         Access::Draw, Target::Color(i as u8), Some(new));
-                    *cur = new.clone();
+                    self.render_state.frame.colors.push(new.clone());
                 }
-            }
-            // activate the color targets that were just bound
-            self.command_buffer.set_draw_color_buffers(frame.colors.len());
-            // append new planes
-            for (i, new) in frame.colors.iter().enumerate()
-                                 .skip(self.render_state.frame.colors.len()) {
-                self.command_buffer.bind_target(&mut self.handles,
-                    Access::Draw, Target::Color(i as u8), Some(new));
-                self.render_state.frame.colors.push(new.clone());
-            }
-            // set depth
-            if self.render_state.frame.depth != frame.depth {
-                self.command_buffer.bind_target(&mut self.handles,
-                    Access::Draw, Target::Depth, frame.depth.as_ref());
-                self.render_state.frame.depth = frame.depth.clone();
-            }
-            // set stencil
-            if self.render_state.frame.stencil != frame.stencil {
-                self.command_buffer.bind_target(&mut self.handles,
-                    Access::Draw, Target::Stencil, frame.stencil.as_ref());
-                self.render_state.frame.stencil = frame.stencil.clone();
-            }
+                // set depth
+                let depth = out.get_depth();
+                if self.render_state.frame.depth.as_ref() != depth {
+                    self.command_buffer.bind_target(&mut self.handles,
+                        Access::Draw, Target::Depth, depth);
+                    self.render_state.frame.depth = depth.map(|p| p.clone());
+                }
+                // set stencil
+                let stencil = out.get_stencil();
+                if self.render_state.frame.stencil.as_ref() != stencil {
+                    self.command_buffer.bind_target(&mut self.handles,
+                        Access::Draw, Target::Stencil, stencil);
+                    self.render_state.frame.stencil = stencil.map(|p| p.clone());
+                }
+            },
         }
     }
 

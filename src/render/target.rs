@@ -14,6 +14,7 @@
 
 //! Render target specification.
 
+use std::fmt::Debug;
 use device;
 use device::Resources;
 use draw_state::target::{Layer, Level, Mask};
@@ -39,7 +40,7 @@ impl<R: Resources> Plane<R> {
 }
 
 /// A generic rendering output, typically an FBO.
-pub trait Output<R: Resources> {
+pub trait Output<R: Resources>: Debug {
     /// Get an associated device handle, if any.
     fn get_handle(&self) -> Option<&device::handle::FrameBuffer<R>> { None }
     /// Get canvas dimensions.
