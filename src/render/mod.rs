@@ -280,7 +280,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
             self.render_state.frame.width = width;
             self.render_state.frame.height = height;
         }
-        let gamma = if output.does_convert_gamma() {Gamma::Convert} else {Gamma::Original};
+        let gamma = output.get_gamma();
         let change_gamma = self.render_state.gamma != gamma;
 
         match output.get_handle() {

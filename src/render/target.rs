@@ -16,6 +16,7 @@
 
 use device;
 use device::Resources;
+use device::draw::Gamma;
 use device::tex::Size;
 use draw_state::target::{Layer, Level, Mask};
 
@@ -61,7 +62,7 @@ pub trait Output<R: Resources> {
     /// Get stencil plane, if any.
     fn get_stencil(&self) -> Option<&Plane<R>> { None }
     /// Check if it converts gamma of the output colors.
-    fn does_convert_gamma(&self) -> bool { false }
+    fn get_gamma(&self) -> Gamma { Gamma::Original }
     /// Get the output surface mask.
     fn get_mask(&self) -> Mask {
         use draw_state::target as t;
@@ -127,8 +128,8 @@ pub struct Frame<R: Resources> {
     pub depth: Option<Plane<R>>,
     /// The stencil buffer for this frame.
     pub stencil: Option<Plane<R>>,
-    /// Convert to sRGB color space.
-    pub convert_gamma: bool,
+    /// Color space.
+    pub gamma: Gamma,
 }
 
 impl<R: Resources> Frame<R> {
@@ -140,7 +141,7 @@ impl<R: Resources> Frame<R> {
             colors: Vec::new(),
             depth: None,
             stencil: None,
-            convert_gamma: false,
+            gamma: Gamma::Original,
         }
     }
 }
@@ -162,7 +163,7 @@ impl<R: Resources> Output<R> for Frame<R> {
         self.stencil.as_ref()
     }
 
-    fn does_convert_gamma(&self) -> bool {
-        self.convert_gamma
+    fn get_gamma(&self) -> Gamma {
+        self.gamma
     }
 }
