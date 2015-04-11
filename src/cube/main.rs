@@ -18,13 +18,13 @@
 extern crate cgmath;
 extern crate glfw;
 extern crate gfx;
-extern crate gfx_device_gl;
+extern crate gfx_window_glutin;
+extern crate glutin;
 
 use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
 use gfx::traits::*;
-use glfw::Context;
 
 #[vertex_format]
 #[derive(Clone, Copy)]
@@ -53,19 +53,8 @@ struct Params<R: gfx::Resources> {
 //----------------------------------------
 
 pub fn main() {
-    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
-    let (mut window, events) = glfw
-        .create_window(640, 480, "Cube example", glfw::WindowMode::Windowed)
-        .expect("Failed to create GLFW window.");
-
-    window.make_current();
-    glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
-    window.set_key_polling(true);
-
-    let (w, h) = window.get_framebuffer_size();
-    let frame = gfx::Frame::new(w as u16, h as u16);
-
-    let (mut device, mut factory) = gfx_device_gl::create(|s| window.get_proc_address(s));
+    let (wrap, mut device, mut factory) = gfx_window_glutin::init_titled("Cube example")
+                                                             .unwrap();
     let mut renderer = factory.create_renderer();
 
     let vertex_data = [
@@ -151,7 +140,10 @@ pub fn main() {
         &Point3::new(0f32, 0.0, 0.0),
         &Vector3::unit_z(),
     );
-    let aspect = w as f32 / h as f32;
+    let aspect = {
+        let (w, h) = wrap.get_size();
+        w as f32 / h as f32
+    };
     let proj = cgmath::perspective(cgmath::deg(45.0f32), aspect, 1.0, 10.0);
 
     let data = Params {
@@ -170,22 +162,22 @@ pub fn main() {
         stencil: 0,
     };
 
-    while !window.should_close() {
-        glfw.poll_events();
-        for (_, event) in glfw::flush_messages(&events) {
+    'main: loop {
+        // quit when Esc is pressed.
+        for event in wrap.window.poll_events() {
             match event {
-                glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Action::Press, _) =>
-                    window.set_should_close(true),
+                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) => break 'main,
+                glutin::Event::Closed => break 'main,
                 _ => {},
             }
         }
 
-        renderer.clear(clear_data, gfx::COLOR | gfx::DEPTH, &frame);
-        renderer.draw(&batch, &frame).unwrap();
+        renderer.clear(clear_data, gfx::COLOR | gfx::DEPTH, &wrap);
+        renderer.draw(&batch, &wrap).unwrap();
         device.submit(renderer.as_buffer());
         renderer.reset();
 
-        window.swap_buffers();
+        wrap.window.swap_buffers();
         device.after_frame();
         factory.cleanup();
     }
