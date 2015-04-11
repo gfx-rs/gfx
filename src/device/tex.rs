@@ -84,6 +84,8 @@ impl fmt::Debug for TextureError {
     }
 }
 
+/// Dimension size
+pub type Size = u16;
 /// Number of bits per component
 pub type Bits = u8;
 /// Number of MSAA samples
@@ -201,7 +203,40 @@ impl Format {
         })
     }
 
-    /// Check if it's a compressed format
+    /// Check if it's a color format.
+    pub fn is_color(&self) -> bool {
+        match *self {
+            Format::DEPTH16           |
+            Format::DEPTH24           |
+            Format::DEPTH32F          |
+            Format::DEPTH24_STENCIL8  |
+            Format::DEPTH32F_STENCIL8 => false,
+            _ => true,
+        }
+    }
+
+    /// Check if it has a depth component.
+    pub fn has_depth(&self) -> bool {
+        match *self {
+            Format::DEPTH16           |
+            Format::DEPTH24           |
+            Format::DEPTH32F          |
+            Format::DEPTH24_STENCIL8  |
+            Format::DEPTH32F_STENCIL8 => true,
+            _ => false,
+        }
+    }
+
+    /// Check if it has a stencil component.
+    pub fn has_stencil(&self) -> bool {
+        match *self {
+            Format::DEPTH24_STENCIL8  |
+            Format::DEPTH32F_STENCIL8 => true,
+            _ => false,
+        }
+    }
+
+    /// Check if it's a compressed format.
     pub fn is_compressed(&self) -> bool {
         match *self {
             Format::Compressed(_) => true,
@@ -209,7 +244,7 @@ impl Format {
         }
     }
 
-    /// Check if it's a sRGB color space
+    /// Check if it's a sRGB color space.
     pub fn does_convert_gamma(&self) -> bool {
         match *self {
             Format::SRGB8    |
@@ -220,21 +255,21 @@ impl Format {
     }
 }
 
-/// A single R-component 8-bit normalized format
+/// A single R-component 8-bit normalized format.
 pub static R8     : Format = Format::Unsigned(Components::R, 8, IntSubType::Normalized);
-/// A standard RGBA 8-bit normalized format
+/// A standard RGBA 8-bit normalized format.
 pub static RGBA8  : Format = Format::Unsigned(Components::RGBA, 8, IntSubType::Normalized);
-/// A standard RGBA 16-bit floating-point format
+/// A standard RGBA 16-bit floating-point format.
 pub static RGBA16F: Format = Format::Float(Components::RGBA, FloatSize::F16);
-/// A standard RGBA 32-bit floating-point format
+/// A standard RGBA 32-bit floating-point format.
 pub static RGBA32F: Format = Format::Float(Components::RGBA, FloatSize::F32);
 
-/// Describes the storage of a surface
+/// Describes the storage of a surface.
 #[allow(missing_docs)]
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 pub struct SurfaceInfo {
-    pub width: u16,
-    pub height: u16,
+    pub width: Size,
+    pub height: Size,
     pub format: Format,
     pub aa_mode: Option<AaMode>,
 }
@@ -328,9 +363,9 @@ impl TextureKind {
 #[allow(missing_docs)]
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 pub struct TextureInfo {
-    pub width: u16,
-    pub height: u16,
-    pub depth: u16,
+    pub width: Size,
+    pub height: Size,
+    pub depth: Size,
     /// Number of mipmap levels. Defaults to -1, which stands for unlimited.
     /// Mipmap levels at equal or above `levels` can not be loaded or sampled
     /// by the shader. width and height of each consecutive mipmap level is
@@ -344,12 +379,12 @@ pub struct TextureInfo {
 #[allow(missing_docs)]
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 pub struct ImageInfo {
-    pub xoffset: u16,
-    pub yoffset: u16,
-    pub zoffset: u16,
-    pub width: u16,
-    pub height: u16,
-    pub depth: u16,
+    pub xoffset: Size,
+    pub yoffset: Size,
+    pub zoffset: Size,
+    pub width: Size,
+    pub height: Size,
+    pub depth: Size,
     /// Format of each texel.
     pub format: Format,
     /// Which mipmap to select.

@@ -49,24 +49,32 @@ impl<D: device::Device, F> ops::DerefMut for Graphics<D, F> {
 
 
 impl<D: device::Device, F: device::Factory<D::Resources>> Graphics<D, F> {
-    /// Clear the `Frame` as the `ClearData` specifies.
-    pub fn clear(&mut self, data: ::ClearData, mask: ::Mask, frame: &::Frame<D::Resources>) {
-        self.renderer.clear(data, mask, frame)
+    /// Clear the output with given `ClearData`.
+    pub fn clear<O: ::Output<D::Resources>>(&mut self,
+                 data: ::ClearData, mask: ::Mask, out: &O) {
+        self.renderer.clear(data, mask, out)
     }
 
     /// Draw a `RefBatch` batch.
-    pub fn draw<'a, T: ShaderParam<Resources = D::Resources>>(&'a mut self,
-                batch: &'a batch::RefBatch<T>, frame: &::Frame<D::Resources>)
-                -> Result<(), ::DrawError<batch::OutOfBounds>> {
-        self.renderer.draw(&(batch, &self.context), frame)
+    pub fn draw<'a,
+        T: ShaderParam<Resources = D::Resources>,
+        O: ::Output<D::Resources>,
+    >(
+        &'a mut self, batch: &'a batch::RefBatch<T>, out: &O)
+        -> Result<(), ::DrawError<batch::OutOfBounds>>
+    {
+        self.renderer.draw(&(batch, &self.context), out)
     }
 
     /// Draw a `CoreBatch` batch.
-    pub fn draw_core<'a, T: ShaderParam<Resources = D::Resources>>(&'a mut self,
-                     core: &'a batch::CoreBatch<T>, slice: &'a ::Slice<D::Resources>,
-                     params: &'a T, frame: &::Frame<D::Resources>)
-                     -> Result<(), ::DrawError<batch::OutOfBounds>> {
-        self.renderer.draw(&self.context.bind(core, slice, params), frame)
+    pub fn draw_core<'a,
+        T: ShaderParam<Resources = D::Resources>,
+        O: ::Output<D::Resources>,
+    >(
+        &'a mut self, core: &'a batch::CoreBatch<T>, slice: &'a ::Slice<D::Resources>,
+        params: &'a T, out: &O) -> Result<(), ::DrawError<batch::OutOfBounds>>
+    {
+        self.renderer.draw(&self.context.bind(core, slice, params), out)
     }
 
     /// Submit the internal command buffer and reset for the next frame.

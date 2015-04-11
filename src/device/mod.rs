@@ -191,9 +191,6 @@ pub trait Factory<R: Resources> {
     fn create_texture(&mut self, tex::TextureInfo) -> Result<handle::Texture<R>, tex::TextureError>;
     fn create_sampler(&mut self, tex::SamplerInfo) -> handle::Sampler<R>;
 
-    /// Return the framebuffer handle for the screen.
-    fn get_main_frame_buffer(&self) -> handle::FrameBuffer<R>;
-
     /// Update the information stored in a specific buffer
     fn update_buffer_raw(&mut self, buf: &handle::RawBuffer<R>, data: &[u8], offset_bytes: usize);
     fn update_buffer<T: Copy>(&mut self, buf: &handle::Buffer<R, T>, data: &[T], offset_elements: usize) {

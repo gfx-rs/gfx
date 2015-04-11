@@ -30,6 +30,7 @@ pub mod traits {
     pub use render::ext::device::DeviceExt;
     pub use render::ext::factory::{RenderFactory, FactoryExt};
     pub use render::mesh::ToSlice;
+    pub use render::target::Output;
 }
 
 // draw state re-exports
@@ -44,7 +45,7 @@ pub use render::mesh::{Attribute, Mesh, VertexFormat};
 pub use render::mesh::Error as MeshError;
 pub use render::mesh::{Slice, ToSlice, SliceKind};
 pub use render::shade;
-pub use render::target::{Frame, Plane};
+pub use render::target::{Frame, Output, Plane};
 pub use render::ParamStorage;
 pub use device::{Device, SubmitInfo, Factory, Resources};
 pub use device::{attrib, tex};
@@ -52,7 +53,7 @@ pub use device::as_byte_slice;
 pub use device::{BufferRole, BufferInfo, BufferUsage};
 pub use device::{VertexCount, InstanceCount};
 pub use device::PrimitiveType;
-pub use device::draw::CommandBuffer;
+pub use device::draw::{CommandBuffer, Gamma};
 pub use device::shade::{ProgramInfo, UniformValue};
 pub use draw_state::target::*;
 pub use draw_state::state;
@@ -62,6 +63,7 @@ pub use device::handle::IndexBuffer as IndexBufferHandle;
 pub use device::handle::RawBuffer as RawBufferHandle;
 pub use device::handle::Shader as ShaderHandle;
 pub use device::handle::Program as ProgramHandle;
+pub use device::handle::FrameBuffer as FrameBufferHandle;
 pub use device::handle::Surface as SurfaceHandle;
 pub use device::handle::Texture as TextureHandle;
 pub use device::handle::Sampler as SamplerHandle;

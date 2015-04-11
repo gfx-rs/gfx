@@ -40,7 +40,6 @@ impl<
             common_array_buffer: self.create_array_buffer(),
             draw_frame_buffer: self.create_frame_buffer(),
             read_frame_buffer: self.create_frame_buffer(),
-            default_frame_buffer: self.get_main_frame_buffer(),
             render_state: RenderState::new(),
             parameters: ParamStorage::new(),
         }
