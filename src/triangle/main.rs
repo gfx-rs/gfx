@@ -16,11 +16,10 @@
 #![plugin(gfx_macros)]
 
 extern crate gfx;
-extern crate gfx_device_gl;
-extern crate glfw;
+extern crate gfx_window_glutin;
+extern crate glutin;
 
 use gfx::traits::*;
-use glfw::Context;
 
 #[vertex_format]
 #[derive(Clone, Copy)]
@@ -56,20 +55,8 @@ static FRAGMENT_SRC: &'static [u8] = b"
 ";
 
 pub fn main() {
-    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
-
-    let (mut window, events) = glfw
-        .create_window(640, 480, "Triangle example.", glfw::WindowMode::Windowed)
-        .expect("Failed to create GLFW window.");
-
-    window.make_current();
-    glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
-    window.set_key_polling(true);
-
-    let (w, h) = window.get_framebuffer_size();
-    let frame = gfx::Frame::new(w as u16, h as u16);
-
-    let (mut device, mut factory) = gfx_device_gl::create(|s| window.get_proc_address(s));
+    let (wrap, mut device, mut factory) = gfx_window_glutin::init(glutin::Window::new().unwrap());
+    wrap.window.set_title("Triangle example");
 
     let vertex_data = [
         Vertex { pos: [ -0.5, -0.5 ], color: [1.0, 0.0, 0.0] },
@@ -91,22 +78,24 @@ pub fn main() {
     };
     let state = gfx::DrawState::new();
 
-    while !window.should_close() {
-        glfw.poll_events();
-        for (_, event) in glfw::flush_messages(&events) {
+    'main: loop {
+        // quit when Esc is pressed.
+        for event in wrap.window.poll_events() {
             match event {
-                glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Action::Press, _) =>
-                    window.set_should_close(true),
+                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) => break 'main,
+                glutin::Event::Closed => break 'main,
                 _ => {},
             }
         }
 
         renderer.reset();
-        renderer.clear(clear_data, gfx::COLOR, &frame);
-        renderer.draw(&gfx::batch::bind(&state, &mesh, slice.clone(), &program, &None), &frame).unwrap();
+        renderer.clear(clear_data, gfx::COLOR, &wrap);
+        renderer.draw(
+            &gfx::batch::bind(&state, &mesh, slice.clone(), &program, &None),
+            &wrap).unwrap();
         device.submit(renderer.as_buffer());
 
-        window.swap_buffers();
+        wrap.window.swap_buffers();
         device.after_frame();
         factory.cleanup();
     }

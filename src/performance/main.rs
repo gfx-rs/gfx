@@ -81,10 +81,9 @@ fn gfx_main(mut glfw: glfw::Glfw,
             mut window: glfw::Window,
             events: Receiver<(f64, glfw::WindowEvent)>,
             dimension: i16) {
-    let (w, h) = window.get_framebuffer_size();
-    let frame = gfx::Frame::new(w as u16, h as u16);
-
     let (device, mut factory) = gfx_device_gl::create(|s| window.get_proc_address(s));
+    let (w, h) = window.get_framebuffer_size();
+    let frame = factory.make_fake_output(w as u16, h as u16);
 
     let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
