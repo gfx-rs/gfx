@@ -48,6 +48,12 @@ impl<R: gfx::Resources> gfx::Output<R> for Wrap<R> {
     }
 }
 
+impl<R: gfx::Resources> gfx::Window<R> for Wrap<R> {
+    fn swap_buffers(&mut self) {
+        self.window.swap_buffers();
+    }
+}
+
 
 /// Result of successful context initialization.
 pub type Success = (
