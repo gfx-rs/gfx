@@ -59,7 +59,8 @@ pub type Success = (
 
 /// Initialize with a window.
 pub fn init(mut window: glfw::Window) -> Success {
-    // window.make_current(); //private?
+    use gflw::Context;
+    window.make_current();
     let (device, factory) = gfx_device_gl::create(|s| window.get_proc_address(s));
     let wrap = Wrap {
         window: window,
