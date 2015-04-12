@@ -60,8 +60,8 @@ pub trait FactoryExt<R: device::Resources> {
                            caps: &device::Capabilities)
                            -> Result<handle::Program<R>, ProgramError>;
     /// Create a simple RGBA8 2D texture
-    fn crate_texture_rgba8(&mut self, width: u16, height: u16, mipmap: bool)
-                           -> Result<handle::Texture<R>, tex::TextureError>;
+    fn create_texture_rgba8(&mut self, width: u16, height: u16, mipmap: bool)
+                            -> Result<handle::Texture<R>, tex::TextureError>;
     /// Create a simple depth+stencil 2D texture
     fn create_texture_depth_stencil(&mut self, width: u16, height: u16)
                                     -> Result<handle::Texture<R>, tex::TextureError>;
@@ -116,7 +116,7 @@ impl<R: device::Resources, F: device::Factory<R>> FactoryExt<R> for F {
             .map_err(|e| ProgramError::Link(e))
     }
 
-    fn crate_texture_rgba8(&mut self, width: u16, height: u16, mipmap: bool)
+    fn create_texture_rgba8(&mut self, width: u16, height: u16, mipmap: bool)
                            -> Result<handle::Texture<R>, tex::TextureError> {
         self.create_texture(tex::TextureInfo {
             width: width,

@@ -184,7 +184,13 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
 
     /// Clear the output with given `ClearData`.
     pub fn clear<O: target::Output<R>>(&mut self, data: ClearData, mask: Mask, output: &O) {
-        debug_assert!(output.get_mask().contains(mask));
+        let has_mask = output.get_mask();
+        if has_mask.is_empty() {
+            panic!("Clearing a frame without any attachments is not possible!
+                    If you are using `Frame::empty` in place of a real output window,
+                    please see https://github.com/gfx-rs/gfx-rs/pull/682");
+        }
+        debug_assert!(has_mask.contains(mask));
         self.bind_output(output);
         self.command_buffer.call_clear(data, mask);
     }
