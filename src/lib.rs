@@ -19,6 +19,7 @@ extern crate gfx_device_gl;
 extern crate glfw;
 
 use gfx::tex::Size;
+use glfw::Context;
 
 /// A wrapper around the window that implements `Output`.
 pub struct Wrap<R: gfx::Resources> {
@@ -48,6 +49,12 @@ impl<R: gfx::Resources> gfx::Output<R> for Wrap<R> {
     }
 }
 
+impl<R: gfx::Resources> gfx::Window<R> for Wrap<R> {
+    fn swap_buffers(&mut self) {
+        self.window.swap_buffers();
+    }
+}
+
 
 /// Result of successful context initialization.
 pub type Success = (
@@ -59,7 +66,6 @@ pub type Success = (
 
 /// Initialize with a window.
 pub fn init(mut window: glfw::Window) -> Success {
-    use gflw::Context;
     window.make_current();
     let (device, factory) = gfx_device_gl::create(|s| window.get_proc_address(s));
     let wrap = Wrap {
