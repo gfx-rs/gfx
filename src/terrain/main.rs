@@ -108,8 +108,9 @@ fn calculate_color(height: f32) -> [f32; 3] {
 }
 
 pub fn main() {
-    let (wrap, device, mut factory) = gfx_window_glutin::init(glutin::Window::new().unwrap());
-    wrap.window.set_title("Terrain example");
+    let mut canvas = gfx_window_glutin::init(glutin::Window::new().unwrap())
+                                       .into_canvas();
+    canvas.output.window.set_title("Terrain example");
 
     let rand_seed = rand::thread_rng().gen();
     let seed = Seed::new(rand_seed);
@@ -130,39 +131,30 @@ pub fn main() {
         .map(|i| i as u32)
         .collect();
 
-    let slice = factory
+    let slice = canvas.factory
         .create_buffer_index::<u32>(&index_data)
         .to_slice(gfx::PrimitiveType::TriangleList);
 
-    let mesh = factory.create_mesh(&vertex_data);
-    let program = factory.link_program(VERTEX_SRC, FRAGMENT_SRC).unwrap();
+    let mesh = canvas.factory.create_mesh(&vertex_data);
+    let program = canvas.factory.link_program(VERTEX_SRC, FRAGMENT_SRC).unwrap();
     let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
-    let mut graphics = (device, factory).into_graphics();
-
-    let aspect = {
-        let (w, h) = wrap.get_size();
-        w as f32 / h as f32
-    };
     let data = Params {
         model: Matrix4::identity().into_fixed(),
         view: Matrix4::identity().into_fixed(),
-        proj: cgmath::perspective(cgmath::deg(60.0f32), aspect,
-                                  0.1, 1000.0).into_fixed(),
+        proj: cgmath::perspective(cgmath::deg(60.0f32), 
+                                  canvas.get_aspect_ratio(),
+                                  0.1, 1000.0
+                                  ).into_fixed(),
         _dummy: std::marker::PhantomData,
     };
-    let mut batch = graphics.make_batch(&program, data, &mesh, slice, &state)
-                            .unwrap();
-
-    let clear_data = gfx::ClearData {
-        color: [0.3, 0.3, 0.3, 1.0],
-        depth: 1.0,
-        stencil: 0,
-    };
+    let mut context = gfx::batch::Context::new();
+    let mut batch = context.make_batch(&program, data, &mesh, slice, &state)
+                           .unwrap();
 
     'main: loop {
         // quit when Esc is pressed.
-        for event in wrap.window.poll_events() {
+        for event in canvas.output.window.poll_events() {
             match event {
                 glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) => break 'main,
                 glutin::Event::Closed => break 'main,
@@ -180,11 +172,12 @@ pub fn main() {
         );
         batch.params.view = view.mat.into_fixed();
 
-        graphics.clear(clear_data, gfx::COLOR | gfx::DEPTH, &wrap);
-        graphics.draw(&batch, &wrap).unwrap();
-        graphics.end_frame();
-
-        wrap.window.swap_buffers();
-        graphics.cleanup();
+        canvas.clear(gfx::ClearData {
+            color: [0.3, 0.3, 0.3, 1.0],
+            depth: 1.0,
+            stencil: 0,
+        });
+        canvas.draw(&(&batch, &context)).unwrap();
+        canvas.present();
     }
 }

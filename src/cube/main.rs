@@ -16,10 +16,9 @@
 #![plugin(gfx_macros)]
 
 extern crate cgmath;
-extern crate glfw;
 extern crate gfx;
-extern crate gfx_window_glutin;
-extern crate glutin;
+extern crate gfx_window_glfw;
+extern crate glfw;
 
 use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3};
@@ -53,9 +52,14 @@ struct Params<R: gfx::Resources> {
 //----------------------------------------
 
 pub fn main() {
-    let (wrap, mut device, mut factory) = gfx_window_glutin::init(glutin::Window::new().unwrap());
-    wrap.window.set_title("Cube example");
-    let mut renderer = factory.create_renderer();
+    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
+    glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
+    let (mut window, events) = glfw
+        .create_window(640, 480, "Cube example", glfw::WindowMode::Windowed)
+        .unwrap();
+    window.set_key_polling(true);
+
+    let mut canvas = gfx_window_glfw::init(window).into_canvas();
 
     let vertex_data = [
         // top (0, 0, 1)
@@ -90,7 +94,7 @@ pub fn main() {
         Vertex { pos: [ 1, -1, -1], tex_coord: [0, 1] },
     ];
 
-    let mesh = factory.create_mesh(&vertex_data);
+    let mesh = canvas.factory.create_mesh(&vertex_data);
 
     let index_data: &[u8] = &[
          0,  1,  2,  2,  3,  0, // top
@@ -101,21 +105,13 @@ pub fn main() {
         20, 21, 22, 22, 23, 20, // back
     ];
 
-    let texture_info = gfx::tex::TextureInfo {
-        width: 1,
-        height: 1,
-        depth: 1,
-        levels: 1,
-        kind: gfx::tex::TextureKind::Texture2D,
-        format: gfx::tex::RGBA8,
-    };
-    let image_info = texture_info.to_image_info();
-    let texture = factory.create_texture(texture_info).unwrap();
-    factory.update_texture(&texture, &image_info,
-                          &[0x20u8, 0xA0u8, 0xC0u8, 0x00u8],
-                          None).unwrap();
+    let texture = canvas.factory.create_texture_rgba8(1, 1, true).unwrap();
+    canvas.factory.update_texture(
+        &texture, &texture.get_info().to_image_info(),
+        &[0x20u8, 0xA0u8, 0xC0u8, 0x00u8],
+        None).unwrap();
 
-    let sampler = factory.create_sampler(
+    let sampler = canvas.factory.create_sampler(
         gfx::tex::SamplerInfo::new(gfx::tex::FilterMethod::Bilinear,
                                    gfx::tex::WrapMode::Clamp)
     );
@@ -131,8 +127,8 @@ pub fn main() {
             glsl_150: Some(include_bytes!("cube_150.glslf")),
             .. gfx::ShaderSource::empty()
         };
-        factory.link_program_source(vs, fs, &device.get_capabilities())
-               .unwrap()
+        canvas.factory.link_program_source(vs, fs, &canvas.device.get_capabilities())
+                      .unwrap()
     };
 
     let view: AffineMatrix3<f32> = Transform::look_at(
@@ -140,11 +136,8 @@ pub fn main() {
         &Point3::new(0f32, 0.0, 0.0),
         &Vector3::unit_z(),
     );
-    let aspect = {
-        let (w, h) = wrap.get_size();
-        w as f32 / h as f32
-    };
-    let proj = cgmath::perspective(cgmath::deg(45.0f32), aspect, 1.0, 10.0);
+    let proj = cgmath::perspective(cgmath::deg(45.0f32),
+                                   canvas.get_aspect_ratio(), 1.0, 10.0);
 
     let data = Params {
         transform: proj.mul_m(&view.mat).into_fixed(),
@@ -152,33 +145,26 @@ pub fn main() {
     };
 
     let mut batch = gfx::batch::OwnedBatch::new(mesh, program, data).unwrap();
-    batch.slice = factory.create_buffer_index::<u8>(index_data)
-                         .to_slice(gfx::PrimitiveType::TriangleList);
+    batch.slice = canvas.factory.create_buffer_index::<u8>(index_data)
+                                .to_slice(gfx::PrimitiveType::TriangleList);
     batch.state.depth(gfx::state::Comparison::LessEqual, true);
 
-    let clear_data = gfx::ClearData {
-        color: [0.3, 0.3, 0.3, 1.0],
-        depth: 1.0,
-        stencil: 0,
-    };
-
-    'main: loop {
-        // quit when Esc is pressed.
-        for event in wrap.window.poll_events() {
+    while !canvas.output.window.should_close() {
+        glfw.poll_events();
+        for (_, event) in glfw::flush_messages(&events) {
             match event {
-                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) => break 'main,
-                glutin::Event::Closed => break 'main,
+                glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Action::Press, _) =>
+                    canvas.output.window.set_should_close(true),
                 _ => {},
             }
         }
 
-        renderer.clear(clear_data, gfx::COLOR | gfx::DEPTH, &wrap);
-        renderer.draw(&batch, &wrap).unwrap();
-        device.submit(renderer.as_buffer());
-        renderer.reset();
-
-        wrap.window.swap_buffers();
-        device.after_frame();
-        factory.cleanup();
+        canvas.clear(gfx::ClearData {
+            color: [0.3, 0.3, 0.3, 1.0],
+            depth: 1.0,
+            stencil: 0,
+        });
+        canvas.draw(&batch).unwrap();
+        canvas.present();
     }
 }
