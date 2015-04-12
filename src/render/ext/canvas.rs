@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use draw_state::target::{ClearData, Mask, Mirror, Rect};
 use device::{Device, Factory, Resources};
+use device::{InstanceCount, VertexCount};
+use render::{DrawError, Renderer};
+use render::batch::Batch;
 use render::target::Output;
-use render::Renderer;
 
 
 /// Generic output window.
@@ -51,5 +54,49 @@ impl<W, D: Device, F: Factory<D::Resources>> IntoCanvas<W, D, F> for (W, D, F) {
             factory: self.2,
             renderer: renderer,
         }
+    }
+}
+
+impl<D: Device, F: Factory<D::Resources>, W: Window<D::Resources>> Canvas<W, D, F> {
+    /// Clear the canvas.
+    pub fn clear(&mut self, data: ClearData) {
+        let mask = self.output.get_mask();
+        self.renderer.clear(data, mask, &self.output);
+    }
+
+    /// Blit on this canvas from another `Output`.
+    pub fn blit_on<I: Output<D::Resources>>(&mut self,
+                   source: &I, source_rect: Rect, dest_rect: Rect,
+                   mirror: Mirror, mask: Mask) {
+        self.renderer.blit(source, source_rect, &self.output, dest_rect, mirror, mask);
+    }
+
+    /// Blit this canvas to another `Output`.
+    pub fn blit_to<O: Output<D::Resources>>(&mut self,
+                   destination: &O, dest_rect: Rect, source_rect: Rect,
+                   mirror: Mirror, mask: Mask) {
+        self.renderer.blit(&self.output, source_rect, destination, dest_rect, mirror, mask);
+    }
+
+    /// Draw a simple `Batch`.
+    pub fn draw<B: Batch<Resources = D::Resources>>(&mut self, batch: &B)
+                -> Result<(), DrawError<B::Error>> {
+        self.renderer.draw_all(batch, None, &self.output)
+    }
+
+    /// Draw an instanced `Batch`.
+    pub fn draw_instanced<B: Batch<Resources = D::Resources>>(&mut self, batch: &B,
+                          count: InstanceCount, base: VertexCount)
+                          -> Result<(), DrawError<B::Error>> {
+        self.renderer.draw_all(batch, Some((count, base)), &self.output)
+    }
+
+    /// Show what we've been drawing all this time.
+    pub fn present(&mut self) {
+        self.device.submit(self.renderer.as_buffer());
+        self.output.swap_buffers();
+        self.device.after_frame();
+        self.factory.cleanup();
+        self.renderer.reset();
     }
 }
