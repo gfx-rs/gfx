@@ -58,6 +58,12 @@ impl<W, D: Device, F: Factory<D::Resources>> IntoCanvas<W, D, F> for (W, D, F) {
 }
 
 impl<D: Device, F: Factory<D::Resources>, W: Window<D::Resources>> Canvas<W, D, F> {
+    /// Get width/height aspect, needed for projections.
+    pub fn get_aspect_ratio(&self) -> f32 {
+        let (w, h) = self.output.get_size();
+        w as f32 / h as f32
+    }
+
     /// Clear the canvas.
     pub fn clear(&mut self, data: ClearData) {
         let mask = self.output.get_mask();
