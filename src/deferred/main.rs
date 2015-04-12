@@ -314,7 +314,7 @@ fn calculate_color(height: f32) -> [f32; 3] {
 fn create_g_buffer<R: gfx::Resources, F: Factory<R>>(
                    width: gfx::tex::Size, height: gfx::tex::Size, factory: &mut F)
                    -> (gfx::Frame<R>, gfx::TextureHandle<R>, gfx::TextureHandle<R>,
-                   gfx::TextureHandle<R>, gfx::TextureHandle<R>) {
+                       gfx::TextureHandle<R>, gfx::TextureHandle<R>) {
     let texture_info_float = gfx::tex::TextureInfo {
         width: width,
         height: height,

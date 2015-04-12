@@ -17,7 +17,7 @@
 
 extern crate cgmath;
 extern crate gfx;
-extern crate gfx_device_gl;
+extern crate gfx_window_glfw;
 extern crate glfw;
 extern crate time;
 extern crate gfx_gl as gl;
@@ -78,13 +78,10 @@ static FRAGMENT_SRC: &'static [u8] = b"
 //----------------------------------------
 
 fn gfx_main(mut glfw: glfw::Glfw,
-            mut window: glfw::Window,
+            window: glfw::Window,
             events: Receiver<(f64, glfw::WindowEvent)>,
             dimension: i16) {
-    let (device, mut factory) = gfx_device_gl::create(|s| window.get_proc_address(s));
-    let (w, h) = window.get_framebuffer_size();
-    let frame = factory.make_fake_output(w as u16, h as u16);
-
+    let (mut wrap, device, mut factory) = gfx_window_glfw::init(window);
     let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
     let vertex_data = [
@@ -97,28 +94,16 @@ fn gfx_main(mut glfw: glfw::Glfw,
     let mesh = factory.create_mesh(&vertex_data);
     let slice = mesh.to_slice(gfx::PrimitiveType::TriangleList);
 
-    let texture_info = gfx::tex::TextureInfo {
-        width: 1,
-        height: 1,
-        depth: 1,
-        levels: 1,
-        kind: gfx::tex::TextureKind::Texture2D,
-        format: gfx::tex::RGBA8,
-    };
-    let image_info = texture_info.to_image_info();
-    let texture = factory.create_texture(texture_info).unwrap();
-    factory.update_texture(&texture, &image_info,
-                          &[0x20u8, 0xA0u8, 0xC0u8, 0x00u8],
-                          None)
-           .unwrap();
-
     let program = factory.link_program(VERTEX_SRC, FRAGMENT_SRC).unwrap();
     let view: AffineMatrix3<f32> = Transform::look_at(
         &Point3::new(0f32, -5.0, 0.0),
         &Point3::new(0f32, 0.0, 0.0),
         &Vector3::unit_z(),
     );
-    let aspect = w as f32 / h as f32;
+    let aspect = {
+        let (w, h) = wrap.get_size();
+        w as f32 / h as f32
+    };
     let proj = cgmath::perspective(cgmath::deg(45.0f32), aspect, 1.0, 10.0);
 
     let clear_data = gfx::ClearData {
@@ -131,18 +116,18 @@ fn gfx_main(mut glfw: glfw::Glfw,
     let batch: gfx::batch::CoreBatch<Params<_>> = 
         graphics.make_core(&program, &mesh, &state).unwrap();
 
-    while !window.should_close() {
+    while !wrap.window.should_close() {
         glfw.poll_events();
         for (_, event) in glfw::flush_messages(&events) {
             match event {
                 glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Action::Press, _) =>
-                    window.set_should_close(true),
+                    wrap.window.set_should_close(true),
                 _ => {},
             }
         }
 
         let start = precise_time_s() * 1000.;
-        graphics.clear(clear_data, gfx::COLOR | gfx::DEPTH, &frame);
+        graphics.clear(clear_data, gfx::COLOR | gfx::DEPTH, &wrap);
 
         for x in (-dimension) ..dimension {
             for y in (-dimension) ..dimension {
@@ -157,14 +142,14 @@ fn gfx_main(mut glfw: glfw::Glfw,
                                    .mul_m(&model).into_fixed(),
                     _dummy: std::marker::PhantomData,
                 };
-                graphics.draw_core(&batch, &slice, &data, &frame).unwrap();
+                graphics.draw_core(&batch, &slice, &data, &wrap).unwrap();
             }
         }
 
         let pre_submit = precise_time_s() * 1000.;
         graphics.end_frame();
         let post_submit = precise_time_s() * 1000.;
-        window.swap_buffers();
+        wrap.window.swap_buffers();
         graphics.cleanup();
         let swap = precise_time_s() * 1000.;
 

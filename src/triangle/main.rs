@@ -55,32 +55,25 @@ static FRAGMENT_SRC: &'static [u8] = b"
 ";
 
 pub fn main() {
-    let (wrap, mut device, mut factory) = gfx_window_glutin::init(glutin::Window::new().unwrap());
-    wrap.window.set_title("Triangle example");
+    let mut canvas = gfx_window_glutin::init(glutin::Window::new().unwrap())
+                                       .into_canvas();
+    canvas.output.window.set_title("Triangle example");
 
     let vertex_data = [
         Vertex { pos: [ -0.5, -0.5 ], color: [1.0, 0.0, 0.0] },
         Vertex { pos: [  0.5, -0.5 ], color: [0.0, 1.0, 0.0] },
         Vertex { pos: [  0.0,  0.5 ], color: [0.0, 0.0, 1.0] },
     ];
-    let mesh = factory.create_mesh(&vertex_data);
+    let mesh = canvas.factory.create_mesh(&vertex_data);
     let slice = mesh.to_slice(gfx::PrimitiveType::TriangleList);
 
-    let program = factory.link_program(VERTEX_SRC, FRAGMENT_SRC)
-                         .unwrap();
-
-    let mut renderer = factory.create_renderer();
-
-    let clear_data = gfx::ClearData {
-        color: [0.3, 0.3, 0.3, 1.0],
-        depth: 1.0,
-        stencil: 0,
-    };
+    let program = canvas.factory.link_program(VERTEX_SRC, FRAGMENT_SRC)
+                                .unwrap();
     let state = gfx::DrawState::new();
 
     'main: loop {
         // quit when Esc is pressed.
-        for event in wrap.window.poll_events() {
+        for event in canvas.output.window.poll_events() {
             match event {
                 glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) => break 'main,
                 glutin::Event::Closed => break 'main,
@@ -88,15 +81,13 @@ pub fn main() {
             }
         }
 
-        renderer.reset();
-        renderer.clear(clear_data, gfx::COLOR, &wrap);
-        renderer.draw(
-            &gfx::batch::bind(&state, &mesh, slice.clone(), &program, &None),
-            &wrap).unwrap();
-        device.submit(renderer.as_buffer());
-
-        wrap.window.swap_buffers();
-        device.after_frame();
-        factory.cleanup();
+        canvas.clear(gfx::ClearData {
+            color: [0.3, 0.3, 0.3, 1.0],
+            depth: 1.0,
+            stencil: 0,
+        });
+        canvas.draw(&gfx::batch::bind(&state, &mesh, slice.clone(), &program, &None))
+              .unwrap();
+        canvas.present();
     }
 }
