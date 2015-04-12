@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
 use draw_state::target::{ClearData, Mask, Mirror, Rect};
 use device::{Device, Factory, Resources};
 use device::{InstanceCount, VertexCount};
@@ -44,14 +45,16 @@ pub trait IntoCanvas<W, D: Device, F> {
     fn into_canvas(self) -> Canvas<W, D, F>;
 }
 
-impl<W, D: Device, F: Factory<D::Resources>> IntoCanvas<W, D, F> for (W, D, F) {
-    fn into_canvas(mut self) -> Canvas<W, D, F> {
+impl<W, D: Device, F: Factory<D::Resources>, E: Debug> IntoCanvas<W, D, F>
+for Result<(W, D, F), E> {
+    fn into_canvas(self) -> Canvas<W, D, F> {
         use super::factory::RenderFactory;
-        let renderer = self.2.create_renderer();
+        let (out, dev, mut factory) = self.unwrap();
+        let renderer = factory.create_renderer();
         Canvas {
-            output: self.0,
-            device: self.1,
-            factory: self.2,
+            output: out,
+            device: dev,
+            factory: factory,
             renderer: renderer,
         }
     }
