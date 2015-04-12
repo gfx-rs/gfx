@@ -57,46 +57,16 @@ pub type Success = (
 );
 
 
-/// Initialize with a window builder.
-pub fn init<'a>(builder: glutin::WindowBuilder<'a>)
-            -> Result<Success, glutin::CreationError>
-{
-    let (mask, srgb) = {
-        let attribs = builder.get_attributes();
-        //let mut mask = gfx::Mask::empty(); // need Glutin to really expose defaults
-        let mut mask = gfx::COLOR | gfx::DEPTH | gfx::STENCIL;
-        match attribs.color_bits {
-            Some(b) if b>0 => mask.insert(gfx::COLOR),
-            _ => (),
-        }
-        match attribs.depth_bits {
-            Some(b) if b>0 => mask.insert(gfx::DEPTH),
-            _ => (),
-        }
-        match attribs.stencil_bits {
-            Some(b) if b>0 => mask.insert(gfx::STENCIL),
-            _ => (),
-        }
-        (mask, attribs.srgb == Some(true))
+/// Initialize with a window.
+pub fn init(window: glutin::Window) -> Success {
+    // actual queries are WIP: https://github.com/tomaka/glutin/pull/372
+    unsafe { window.make_current() };
+    let (device, factory) = gfx_device_gl::create(|s| window.get_proc_address(s));
+    let wrap = Wrap {
+        window: window,
+        frame: factory.get_main_frame_buffer(),
+        mask: gfx::COLOR | gfx::DEPTH | gfx::STENCIL, //TODO
+        gamma: gfx::Gamma::Original, //TODO
     };
-    // create window
-    builder.build().map(|window| {
-        unsafe { window.make_current() };
-        let (device, factory) = gfx_device_gl::create(|s| window.get_proc_address(s));
-        let wrap = Wrap {
-            window: window,
-            frame: factory.get_main_frame_buffer(),
-            mask: mask,
-            gamma: if srgb {gfx::Gamma::Convert} else {gfx::Gamma::Original},
-        };
-        (wrap, device, factory)
-    })
-}
-
-/// Initialize with just a title string.
-pub fn init_titled(title: &str) -> Result<Success, glutin::CreationError>
-{
-    let builder = glutin::WindowBuilder::new()
-        .with_title(title.to_string());
-    init(builder)
+    (wrap, device, factory)
 }
