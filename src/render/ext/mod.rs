@@ -16,6 +16,8 @@
 
 #![deny(missing_docs)]
 
+/// Canvas
+pub mod canvas;
 /// Device extensions
 pub mod device;
 /// Factory extensions

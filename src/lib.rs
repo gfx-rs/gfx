@@ -27,6 +27,7 @@ extern crate draw_state;
 /// public re-exported traits
 pub mod traits {
     pub use device::{Device, Factory};
+    pub use render::ext::canvas::IntoCanvas;
     pub use render::ext::device::DeviceExt;
     pub use render::ext::factory::{RenderFactory, FactoryExt};
     pub use render::mesh::ToSlice;
@@ -39,6 +40,7 @@ pub use draw_state::{DrawState, BlendPreset};
 // public re-exports
 pub use render::{Renderer, DrawError};
 pub use render::batch;
+pub use render::ext::canvas::{Canvas, Window};
 pub use render::ext::device::Graphics;
 pub use render::ext::shade::{ShaderSource, ProgramError};
 pub use render::mesh::{Attribute, Mesh, VertexFormat};
