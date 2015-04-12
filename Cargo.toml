@@ -34,5 +34,5 @@ git = "https://github.com/gfx-rs/gfx_device_gl"
 #version = "*"
 
 [dependencies.glfw]
-git = "https://github.com/tomaka/glutin"
+git = "https://github.com/bjz/glfw-rs"
 #version = "*"
