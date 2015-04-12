@@ -1,6 +1,6 @@
 [package]
 name = "gfx-examples"
-version = "0.0.4"
+version = "0.0.5"
 
 [[bin]]
 name = "cube"
@@ -9,10 +9,6 @@ path = "src/cube/main.rs"
 [[bin]]
 name = "deferred"
 path = "src/deferred/main.rs"
-
-[[bin]]
-name = "glutin"
-path = "src/glutin/main.rs"
 
 [[bin]]
 name = "performance"
@@ -28,8 +24,8 @@ path = "src/triangle/main.rs"
 
 [dependencies]
 env_logger = "*"
+log = "*"
 gfx_gl = "*"
-glfw = "*"
 rand = "*"
 time = "*"
 genmesh = "*"
@@ -48,11 +44,14 @@ git = "https://github.com/gfx-rs/gfx_macros"
 #version = "*"
 plugin = true
 
-[dependencies.gfx_device_gl]
-git = "https://github.com/gfx-rs/gfx_device_gl"
-
 [dependencies.gfx_window_glutin]
 git = "https://github.com/gfx-rs/gfx_window_glutin"
 
+[dependencies.gfx_window_glfw]
+git = "https://github.com/gfx-rs/gfx_window_glfw"
+
 [dependencies.glutin]
 git = "https://github.com/tomaka/glutin"
+
+[dependencies.glfw]
+git = "https://github.com/bjz/glfw-rs"
