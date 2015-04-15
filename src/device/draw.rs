@@ -47,8 +47,17 @@ impl DataBuffer {
     /// Copy a given structure into the buffer, return the offset and the size.
     #[inline(always)]
     pub fn add_struct<T: Copy>(&mut self, v: &T) -> DataPointer {
-        use std::slice::ref_slice;
-        self.add_vec(ref_slice(v))
+        use std::{mem, slice};
+        let offset = self.buf.len();
+        let size = mem::size_of::<T>();
+        self.buf.reserve(size);
+        let source = unsafe {
+            slice::from_raw_parts((v as *const T) as *const u8, size)
+        };
+        for &b in source.iter() {
+            self.buf.push(b);
+        }
+        DataPointer(offset as Offset, size as Size)
     }
 
     /// Copy a given vector slice into the buffer
@@ -57,11 +66,11 @@ impl DataBuffer {
         let offset = self.buf.len();
         let size = mem::size_of::<T>() * v.len();
         self.buf.reserve(size);
-        unsafe {
-            self.buf.set_len(offset + size);
-            slice::bytes::copy_memory(
-                slice::from_raw_parts(v.as_ptr() as *const u8, size),
-                &mut self.buf[offset ..]);
+        let source = unsafe {
+            slice::from_raw_parts(v.as_ptr() as *const u8, size)
+        };
+        for &b in source.iter() {
+            self.buf.push(b);
         }
         DataPointer(offset as Offset, size as Size)
     }

@@ -261,11 +261,10 @@ impl<R: Resources> Producer<R> for Manager<R> {
         F7: Fn(&mut T, &R::Texture),
         F8: Fn(&mut T, &R::Sampler),
     >(&mut self, param: &mut T, f1: F1, f2: F2, f3: F3, f4: F4, f5: F5, f6: F6, f7: F7, f8: F8) {
-        fn clean_vec<X, T, F: Fn(&mut T, &X)>(param: &mut T, vector: &mut Vec<Arc<X>>, fun: F) {
-            use alloc::arc::{strong_count, weak_count};
+        fn clean_vec<X: Clone, T, F: Fn(&mut T, &X)>(param: &mut T, vector: &mut Vec<Arc<X>>, fun: F) {
             use std::ops::Deref;
             vector.retain(|v| {
-                let free = strong_count(v) == 1 && weak_count(v) == 0;
+                let free = false; //TODO: how?
                 if free { fun(param, v.deref()); }
                 !free
             });

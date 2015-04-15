@@ -15,13 +15,11 @@
 //! An efficient, low-level, bindless graphics API for Rust. See [the
 //! blog](http://gfx-rs.github.io/) for explanations and annotated examples.
 
-#![feature(alloc, core)]
-
-extern crate alloc;
 #[macro_use]
 extern crate bitflags;
 #[macro_use]
 extern crate log;
+extern crate num;
 extern crate draw_state;
 
 /// public re-exported traits
