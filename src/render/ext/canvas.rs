@@ -57,7 +57,7 @@ impl<W, D: Device, F: Factory<D::Resources>> IntoCanvas<W, D, F> for (W, D, F) {
     }
 }
 
-impl<D: Device, F: Factory<D::Resources>, W: Window<D::Resources>> Canvas<W, D, F> {
+impl<D: Device, F: Factory<D::Resources>, O: Output<D::Resources>> Canvas<O, D, F> {
     /// Get width/height aspect, needed for projections.
     pub fn get_aspect_ratio(&self) -> f32 {
         let (w, h) = self.output.get_size();
@@ -71,15 +71,15 @@ impl<D: Device, F: Factory<D::Resources>, W: Window<D::Resources>> Canvas<W, D, 
     }
 
     /// Blit on this canvas from another `Output`.
-    pub fn blit_on<I: Output<D::Resources>>(&mut self,
-                   source: &I, source_rect: Rect, dest_rect: Rect,
+    pub fn blit_on<X: Output<D::Resources>>(&mut self,
+                   source: &X, source_rect: Rect, dest_rect: Rect,
                    mirror: Mirror, mask: Mask) {
         self.renderer.blit(source, source_rect, &self.output, dest_rect, mirror, mask);
     }
 
     /// Blit this canvas to another `Output`.
-    pub fn blit_to<O: Output<D::Resources>>(&mut self,
-                   destination: &O, dest_rect: Rect, source_rect: Rect,
+    pub fn blit_to<Y: Output<D::Resources>>(&mut self,
+                   destination: &Y, dest_rect: Rect, source_rect: Rect,
                    mirror: Mirror, mask: Mask) {
         self.renderer.blit(&self.output, source_rect, destination, dest_rect, mirror, mask);
     }
@@ -96,7 +96,9 @@ impl<D: Device, F: Factory<D::Resources>, W: Window<D::Resources>> Canvas<W, D, 
                           -> Result<(), DrawError<B::Error>> {
         self.renderer.draw_all(batch, Some((count, base)), &self.output)
     }
+}
 
+impl<D: Device, F: Factory<D::Resources>, W: Window<D::Resources>> Canvas<W, D, F> {
     /// Show what we've been drawing all this time.
     pub fn present(&mut self) {
         self.device.submit(self.renderer.as_buffer());
