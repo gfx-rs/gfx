@@ -59,10 +59,13 @@ pub trait FactoryExt<R: device::Resources> {
     fn link_program_source(&mut self, vs_src: ShaderSource, fs_src: ShaderSource,
                            caps: &device::Capabilities)
                            -> Result<handle::Program<R>, ProgramError>;
-    /// Create a simple RGBA8 2D texture
-    fn create_texture_rgba8(&mut self, width: u16, height: u16, mipmap: bool)
+    /// Create a simple RGBA8 2D texture.
+    fn create_texture_rgba8(&mut self, width: u16, height: u16)
                             -> Result<handle::Texture<R>, tex::TextureError>;
-    /// Create a simple depth+stencil 2D texture
+    /// Create RGBA8 2D texture with given contents and mipmap chain.
+    fn create_texture_rgba8_static(&mut self, width: u16, height: u16, data: &[u32])
+                                   -> Result<handle::Texture<R>, tex::TextureError>;
+    /// Create a simple depth+stencil 2D texture.
     fn create_texture_depth_stencil(&mut self, width: u16, height: u16)
                                     -> Result<handle::Texture<R>, tex::TextureError>;
 }
@@ -116,16 +119,35 @@ impl<R: device::Resources, F: device::Factory<R>> FactoryExt<R> for F {
             .map_err(|e| ProgramError::Link(e))
     }
 
-    fn create_texture_rgba8(&mut self, width: u16, height: u16, mipmap: bool)
-                           -> Result<handle::Texture<R>, tex::TextureError> {
+    fn create_texture_rgba8(&mut self, width: u16, height: u16)
+                            -> Result<handle::Texture<R>, tex::TextureError> {
         self.create_texture(tex::TextureInfo {
             width: width,
             height: height,
-            depth: 0,
-            levels: if mipmap {99} else {1},
+            depth: 1,
+            levels: 1,
             kind: tex::TextureKind::Texture2D,
             format: tex::RGBA8,
         })
+    }
+
+    fn create_texture_rgba8_static(&mut self, width: u16, height: u16, data: &[u32])
+                                   -> Result<handle::Texture<R>, tex::TextureError> {
+        let info = tex::TextureInfo {
+            width: width,
+            height: height,
+            depth: 1,
+            levels: 99,
+            kind: tex::TextureKind::Texture2D,
+            format: tex::RGBA8,
+        };
+        match self.create_texture_static(info, data) {
+            Ok(handle) => {
+                self.generate_mipmap(&handle);
+                Ok(handle)
+            },
+            Err(e) => Err(e),
+        }
     }
 
     fn create_texture_depth_stencil(&mut self, width: u16, height: u16)
