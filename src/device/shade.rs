@@ -321,13 +321,13 @@ pub enum CreateShaderError {
     /// The device does not support the requested shader model.
     ModelNotSupported,
     /// The shader failed to compile.
-    ShaderCompilationFailed
+    ShaderCompilationFailed(String)
 }
 
 /// An error type for creating programs.
 #[derive(Clone, PartialEq, Debug)]
 pub enum CreateProgramError {
-    LinkFail,
+    LinkFail(String),
     TargetMismatch(Vec<String>),
 }
 
