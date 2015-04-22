@@ -315,13 +315,20 @@ impl UniformVar {
     }
 }
 
-/// An error type for creating programs.
-#[derive(Copy, Clone, PartialEq, Debug)]
+/// An error type for creating shaders.
+#[derive(Clone, PartialEq, Debug)]
 pub enum CreateShaderError {
     /// The device does not support the requested shader model.
     ModelNotSupported,
     /// The shader failed to compile.
     ShaderCompilationFailed
+}
+
+/// An error type for creating programs.
+#[derive(Clone, PartialEq, Debug)]
+pub enum CreateProgramError {
+    LinkFail,
+    TargetMismatch(Vec<String>),
 }
 
 /// Shader model supported by the device, corresponds to the HLSL shader models.

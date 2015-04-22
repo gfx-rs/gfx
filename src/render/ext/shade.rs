@@ -14,17 +14,17 @@
 
 //! Shader source extension
 
-use device::shade::{CreateShaderError, ShaderModel};
+use device::shade::{CreateShaderError, CreateProgramError, ShaderModel};
 
 /// Program linking error
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum ProgramError {
     /// Unable to compile the vertex shader
     Vertex(CreateShaderError),
     /// Unable to compile the fragment shader
     Fragment(CreateShaderError),
     /// Unable to link
-    Link(()),
+    Link(CreateProgramError),
 }
 
 /// A type storing shader source for different graphics APIs and versions.
