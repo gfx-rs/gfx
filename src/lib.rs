@@ -35,8 +35,9 @@ impl<R: gfx::Resources> gfx::Output<R> for Wrap<R> {
     }
 
     fn get_size(&self) -> (Size, Size) {
+        let factor = self.window.hidpi_factor();
         let (w, h) = self.window.get_inner_size().unwrap_or((0, 0));
-        (w as Size, h as Size)
+        ((w as f32 * factor) as Size, (h as f32 * factor) as Size)
     }
 
     fn get_mask(&self) -> gfx::Mask {
