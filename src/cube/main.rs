@@ -105,7 +105,7 @@ pub fn main() {
         20, 21, 22, 22, 23, 20, // back
     ];
 
-    let texture = canvas.factory.create_texture_rgba8(1, 1, true).unwrap();
+    let texture = canvas.factory.create_texture_rgba8(1, 1).unwrap();
     canvas.factory.update_texture(
         &texture, &texture.get_info().to_image_info(),
         &[0x20u8, 0xA0u8, 0xC0u8, 0x00u8],
