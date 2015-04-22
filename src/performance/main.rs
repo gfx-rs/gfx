@@ -362,8 +362,8 @@ pub fn main() {
         .ok().expect("Failed to initialize glfw-rs");
 
     glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
-    glfw.window_hint(glfw::WindowHint::OpenglForwardCompat(true));
-    glfw.window_hint(glfw::WindowHint::OpenglProfile(glfw::OpenGlProfileHint::Core));
+    glfw.window_hint(glfw::WindowHint::OpenGlForwardCompat(true));
+    glfw.window_hint(glfw::WindowHint::OpenGlProfile(glfw::OpenGlProfileHint::Core));
 
     let (mut window, events) = glfw
         .create_window(640, 480, "Cube example", glfw::WindowMode::Windowed)
