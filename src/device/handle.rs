@@ -122,11 +122,15 @@ impl<R: Resources> Shader<R> {
 
 /// Program Handle
 #[derive(Clone, Debug, PartialEq)]
-pub struct Program<R: Resources>(Arc<R::Program>, shade::ProgramInfo);
+pub struct Program<R: Resources>(Arc<R::Program>, shade::ProgramInfo, Vec<Shader<R>>);
 
 impl<R: Resources> Program<R> {
     /// Get program info
     pub fn get_info(&self) -> &shade::ProgramInfo { &self.1 }
+    /// Get shader objects
+    pub fn get_shaders(&self) -> &[Shader<R>] { &self.2 }
+    /// Don't carry the shaders any more
+    pub fn drop_shaders(&mut self) { self.2.clear() }
 }
 
 /// Frame Buffer Handle
@@ -183,7 +187,7 @@ pub trait Producer<R: Resources> {
     fn make_buffer(&mut self, R::Buffer, BufferInfo) -> RawBuffer<R>;
     fn make_array_buffer(&mut self, R::ArrayBuffer) -> ArrayBuffer<R>;
     fn make_shader(&mut self, R::Shader, shade::Stage) -> Shader<R>;
-    fn make_program(&mut self, R::Program, shade::ProgramInfo) -> Program<R>;
+    fn make_program(&mut self, R::Program, shade::ProgramInfo, Vec<Shader<R>>) -> Program<R>;
     fn make_frame_buffer(&mut self, R::FrameBuffer) -> FrameBuffer<R>;
     fn make_surface(&mut self, R::Surface, tex::SurfaceInfo) -> Surface<R>;
     fn make_texture(&mut self, R::Texture, tex::TextureInfo) -> Texture<R>;
@@ -221,10 +225,11 @@ impl<R: Resources> Producer<R> for Manager<R> {
         Shader(r, info)
     }
 
-    fn make_program(&mut self, name: R::Program, info: shade::ProgramInfo) -> Program<R> {
+    fn make_program(&mut self, name: R::Program, info: shade::ProgramInfo,
+                    shaders: Vec<Shader<R>>) -> Program<R> {
         let r = Arc::new(name);
         self.programs.push(r.clone());
-        Program(r, info)
+        Program(r, info, shaders)
     }
 
     fn make_frame_buffer(&mut self, name: R::FrameBuffer) -> FrameBuffer<R> {

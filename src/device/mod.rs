@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![deny(missing_docs, missing_copy_implementations)]
+#![deny(missing_docs)]
 
 //! Graphics device. Not meant for direct use.
 
@@ -184,12 +184,15 @@ pub trait Factory<R: Resources> {
     fn create_array_buffer(&mut self) -> Result<handle::ArrayBuffer<R>, ()>;
     fn create_shader(&mut self, stage: shade::Stage, code: &[u8]) ->
                      Result<handle::Shader<R>, shade::CreateShaderError>;
-    fn create_program(&mut self, shaders: &[handle::Shader<R>], targets: Option<&[&str]>)
-                      -> Result<handle::Program<R>, ()>;
+    fn create_program(&mut self, shaders: Vec<handle::Shader<R>>, targets: Option<&[&str]>)
+                      -> Result<handle::Program<R>, shade::CreateProgramError>;
     fn create_frame_buffer(&mut self) -> handle::FrameBuffer<R>;
     fn create_surface(&mut self, tex::SurfaceInfo) -> Result<handle::Surface<R>, tex::SurfaceError>;
     fn create_texture(&mut self, tex::TextureInfo) -> Result<handle::Texture<R>, tex::TextureError>;
     fn create_sampler(&mut self, tex::SamplerInfo) -> handle::Sampler<R>;
+
+    fn get_shader_log(&mut self, &handle::Shader<R>) -> String;
+    fn get_program_log(&mut self, &handle::Program<R>) -> String;
 
     /// Update the information stored in a specific buffer
     fn update_buffer_raw(&mut self, buf: &handle::RawBuffer<R>, data: &[u8], offset_bytes: usize);
