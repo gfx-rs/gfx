@@ -89,7 +89,7 @@ impl<R: device::Resources, F: device::Factory<R>> FactoryExt<R> for F {
             Err(e) => return Err(ProgramError::Fragment(e)),
         };
 
-        self.create_program(vec![vs, fs], None)
+        self.create_program(&[vs, fs], None)
             .map_err(|e| ProgramError::Link(e))
     }
 
@@ -115,7 +115,7 @@ impl<R: device::Resources, F: device::Factory<R>> FactoryExt<R> for F {
             Err(_) => return Err(ProgramError::Fragment(err_model))
         };
 
-        self.create_program(vec![vs, fs], Some(fs_src.targets))
+        self.create_program(&[vs, fs], Some(fs_src.targets))
             .map_err(|e| ProgramError::Link(e))
     }
 
