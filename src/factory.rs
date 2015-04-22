@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use libc;
-use log::LogLevel;
 use std::rc::Rc;
 use std::slice;
 
@@ -199,27 +198,18 @@ impl d::Factory<R> for Factory {
 
     fn create_shader(&mut self, stage: d::shade::Stage, code: &[u8])
                      -> Result<handle::Shader<R>, d::shade::CreateShaderError> {
-        let (name, info) = ::shade::create_shader(&self.gl, stage, code);
-        info.map(|info| {
-            let level = if name.is_err() { LogLevel::Error } else { LogLevel::Warn };
-            log!(level, "\tShader compile log: {}", info);
-        });
-        name.map(|sh| self.handles.make_shader(sh, stage))
+        ::shade::create_shader(&self.gl, stage, code)
+                .map(|sh| self.handles.make_shader(sh, stage))
     }
 
-    fn create_program(&mut self, shaders: &[handle::Shader<R>],
+    fn create_program(&mut self, shaders: Vec<handle::Shader<R>>,
                       targets: Option<&[&str]>)
-                      -> Result<handle::Program<R>, ()> {
-        let objects: Vec<::Shader> = shaders.iter()
-            .map(|h| self.frame_handles.ref_shader(h))
-            .collect();
-        let (prog, log) = ::shade::create_program(&self.gl, &self.caps,
-                                                  objects.into_iter(), targets);
-        log.map(|log| {
-            let level = if prog.is_err() { LogLevel::Error } else { LogLevel::Warn };
-            log!(level, "\tProgram link log: {}", log);
-        });
-        prog.map(|(name, info)| self.handles.make_program(name, info))
+                      -> Result<handle::Program<R>, d::shade::CreateProgramError> {
+        let frame_handles = &mut self.frame_handles;
+        let handles = &mut self.handles;
+        ::shade::create_program(&self.gl, &self.caps, targets,
+            shaders.iter().map(|h| frame_handles.ref_shader(h)))
+                .map(|(name, info)| handles.make_program(name, info, shaders))
     }
 
     fn create_frame_buffer(&mut self) -> handle::FrameBuffer<R> {
@@ -269,6 +259,14 @@ impl d::Factory<R> for Factory {
             0
         };
         self.handles.make_sampler(sam, info)
+    }
+
+    fn get_shader_log(&mut self, shader: &handle::Shader<R>) -> String {
+        ::shade::get_shader_log(&self.gl, self.frame_handles.ref_shader(shader))
+    }
+
+    fn get_program_log(&mut self, program: &handle::Program<R>) -> String {
+        ::shade::get_program_log(&self.gl, self.frame_handles.ref_program(program))
     }
 
     fn update_buffer_raw(&mut self, buffer: &handle::RawBuffer<R>,

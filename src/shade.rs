@@ -22,14 +22,21 @@ use gfx::device::shade::{BaseType, ContainerType, CreateShaderError,
                          SamplerType, Stage, UniformValue};
 use super::gl;
 
-use self::StorageType::{
-    Var,
-    Sampler,
-    Unknown,
-};
+
+fn get_shader_iv(gl: &gl::Gl, name: super::Shader, query: gl::types::GLenum) -> gl::types::GLint {
+    let mut iv = 0;
+    unsafe { gl.GetShaderiv(name, query, &mut iv) };
+    iv
+}
+
+fn get_program_iv(gl: &gl::Gl, name: super::Program, query: gl::types::GLenum) -> gl::types::GLint {
+    let mut iv = 0;
+    unsafe { gl.GetProgramiv(name, query, &mut iv) };
+    iv
+}
 
 pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: &[u8])
-        -> (Result<super::Shader, s::CreateShaderError>, Option<String>) {
+                     -> Result<super::Shader, s::CreateShaderError> {
     let target = match stage {
         Stage::Vertex => gl::VERTEX_SHADER,
         Stage::Geometry => gl::GEOMETRY_SHADER,
@@ -45,9 +52,16 @@ pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: &[u8])
     info!("\tCompiled shader {}", name);
 
     let status = get_shader_iv(gl, name, gl::COMPILE_STATUS);
-    let mut length = get_shader_iv(gl, name, gl::INFO_LOG_LENGTH);
+    if status != 0 {
+        Ok(name)
+    }else {
+        Err(CreateShaderError::ShaderCompilationFailed)
+    }
+}
 
-    let log = if length > 0 {
+pub fn get_shader_log(gl: &gl::Gl, name: super::Shader) -> String {
+    let mut length = get_shader_iv(gl, name, gl::INFO_LOG_LENGTH);
+    if length > 0 {
         let mut log = String::with_capacity(length as usize);
         log.extend(repeat('\0').take(length as usize));
         unsafe {
@@ -55,33 +69,13 @@ pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: &[u8])
                 (&log[..]).as_ptr() as *mut gl::types::GLchar);
         }
         log.truncate(length as usize);
-        Some(log)
+        log
     } else {
-        None
-    };
-
-    let name = if status != 0 {
-        Ok(name)
-    }else {
-        Err(CreateShaderError::ShaderCompilationFailed)
-    };
-
-    (name, log)
+        String::new()
+    }
 }
 
-fn get_shader_iv(gl: &gl::Gl, shader: super::Shader, query: gl::types::GLenum) -> gl::types::GLint {
-    let mut iv = 0;
-    unsafe { gl.GetShaderiv(shader, query, &mut iv) };
-    iv
-}
-
-fn get_program_iv(gl: &gl::Gl, program: super::Program, query: gl::types::GLenum) -> gl::types::GLint {
-    let mut iv = 0;
-    unsafe { gl.GetProgramiv(program, query, &mut iv) };
-    iv
-}
-
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 enum StorageType {
     Var(BaseType, s::ContainerType),
     Sampler(BaseType, s::SamplerType),
@@ -90,6 +84,7 @@ enum StorageType {
 
 impl StorageType {
     fn new(storage: gl::types::GLenum) -> StorageType {
+        use self::StorageType::*;
         match storage {
             gl::FLOAT                        => Var(BaseType::F32,  ContainerType::Single),
             gl::FLOAT_VEC2                   => Var(BaseType::F32,  ContainerType::Vector(2)),
@@ -166,7 +161,7 @@ fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::Attribute> {
         };
         let real_name = name[..length as usize].to_string();
         let (base, container) = match StorageType::new(storage) {
-            Var(b, c) => (b, c),
+            StorageType::Var(b, c) => (b, c),
             _ => {
                 error!("Unrecognized attribute storage: {}", storage);
                 (BaseType::F32, ContainerType::Single)
@@ -255,7 +250,7 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
         };
         let real_name = name[..length as usize].to_string();
         match StorageType::new(storage) {
-            Var(base, container) => {
+            StorageType::Var(base, container) => {
                 info!("\t\tUniform[{}] = {:?}\t{:?}\t{:?}", loc, real_name, base, container);
                 uniforms.push(s::UniformVar {
                     name: real_name,
@@ -265,7 +260,7 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
                     container: container,
                 });
             },
-            Sampler(base, sam_type) => {
+            StorageType::Sampler(base, sam_type) => {
                 info!("\t\tSampler[{}] = {:?}\t{:?}\t{:?}", loc, real_name, base, sam_type);
                 textures.push(s::SamplerVar {
                     name: real_name,
@@ -274,7 +269,7 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
                     sampler_type: sam_type,
                 });
             },
-            Unknown => {
+            StorageType::Unknown => {
                 error!("Unrecognized uniform storage: {}", storage);
             },
         }
@@ -283,18 +278,21 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
 }
 
 pub fn create_program<I: Iterator<Item = super::Shader>>(gl: &gl::Gl,
-                      caps: &d::Capabilities, shaders: I, targets: Option<&[&str]>)
-                      -> (Result<(::Program, s::ProgramInfo), ()>, Option<String>) {
+                      caps: &d::Capabilities, targets: Option<&[&str]>, shaders: I)
+                      -> Result<(::Program, s::ProgramInfo), s::CreateProgramError> {
     let name = unsafe { gl.CreateProgram() };
     for sh in shaders {
         unsafe { gl.AttachShader(name, sh) };
     }
 
-    let targets = targets.map(|targets| {
+    let c_targets = targets.map(|targets| {
         let targets: Vec<CString> = targets.iter().map(|&s| CString::new(s).unwrap()).collect();
 
         for (i, target) in targets.iter().enumerate() {
-            unsafe { gl.BindFragDataLocation(name, i as u32, target.as_bytes_with_nul().as_ptr() as *const i8) };
+            unsafe {
+                gl.BindFragDataLocation(name, i as u32,
+                    target.as_bytes_with_nul().as_ptr() as *const i8);
+            }
         }
 
         targets
@@ -303,35 +301,23 @@ pub fn create_program<I: Iterator<Item = super::Shader>>(gl: &gl::Gl,
     unsafe { gl.LinkProgram(name) };
     info!("\tLinked program {}", name);
 
-    if let Some(targets) = targets {
-        match &targets.iter()
-            .map(|target| (unsafe { gl.GetFragDataLocation(name, target.as_bytes_with_nul().as_ptr() as *const i8) }, target))
-            .inspect(|&(loc, target)| info!("\t\tOutput[{}] = {:?}", loc, target))
+    if let (Some(targets), Some(c_targets)) = (targets, c_targets) {
+        let unbound = targets.iter()
+            .zip(c_targets)
+            .map(|(s, target)| (unsafe {
+                gl.GetFragDataLocation(name, target.as_bytes_with_nul().as_ptr() as *const i8)
+                }, s))
+            .inspect(|&(loc, s)| info!("\t\tOutput[{}] = {}", loc, s))
             .filter(|&(loc, _)| loc == -1)
-            .collect::<Vec<_>>()[..]
-        {
-            [] => {},
-            unbound => return (Err(()), Some(format!("Unbound targets: {:?}", unbound))),
-        };
+            .map(|(_, s)| s.to_string())
+            .collect::<Vec<_>>();
+        if !unbound.is_empty() {
+            return Err(s::CreateProgramError::TargetMismatch(unbound));
+        }
     }
 
-    // get info message
     let status = get_program_iv(gl, name, gl::LINK_STATUS);
-    let mut length  = get_program_iv(gl, name, gl::INFO_LOG_LENGTH);
-    let log = if length > 0 {
-        let mut log = String::with_capacity(length as usize);
-        log.extend(repeat('\0').take(length as usize));
-        unsafe {
-            gl.GetProgramInfoLog(name, length, &mut length,
-                (&log[..]).as_ptr() as *mut gl::types::GLchar);
-        }
-        log.truncate(length as usize);
-        Some(log)
-    } else {
-        None
-    };
-
-    let prog = if status != 0 {
+    if status != 0 {
         let (uniforms, textures) = query_parameters(gl, caps, name);
         let info = s::ProgramInfo {
             attributes: query_attributes(gl, name),
@@ -341,10 +327,24 @@ pub fn create_program<I: Iterator<Item = super::Shader>>(gl: &gl::Gl,
         };
         Ok((name, info))
     } else {
-        Err(())
-    };
+        Err(s::CreateProgramError::LinkFail)
+    }
+}
 
-    (prog, log)
+pub fn get_program_log(gl: &gl::Gl, name: super::Program) -> String {
+    let mut length  = get_program_iv(gl, name, gl::INFO_LOG_LENGTH);
+    if length > 0 {
+        let mut log = String::with_capacity(length as usize);
+        log.extend(repeat('\0').take(length as usize));
+        unsafe {
+            gl.GetProgramInfoLog(name, length, &mut length,
+                (&log[..]).as_ptr() as *mut gl::types::GLchar);
+        }
+        log.truncate(length as usize);
+        log
+    } else {
+        String::new()
+    }
 }
 
 pub fn bind_uniform(gl: &gl::Gl, loc: gl::types::GLint, uniform: UniformValue) {
