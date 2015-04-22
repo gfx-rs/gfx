@@ -202,14 +202,13 @@ impl d::Factory<R> for Factory {
                 .map(|sh| self.handles.make_shader(sh, stage))
     }
 
-    fn create_program(&mut self, shaders: Vec<handle::Shader<R>>,
-                      targets: Option<&[&str]>)
+    fn create_program(&mut self, shaders: &[handle::Shader<R>], targets: Option<&[&str]>)
                       -> Result<handle::Program<R>, d::shade::CreateProgramError> {
         let frame_handles = &mut self.frame_handles;
         let handles = &mut self.handles;
         ::shade::create_program(&self.gl, &self.caps, targets,
             shaders.iter().map(|h| frame_handles.ref_shader(h)))
-                .map(|(name, info)| handles.make_program(name, info, shaders))
+                .map(|(name, info)| handles.make_program(name, info))
     }
 
     fn create_frame_buffer(&mut self) -> handle::FrameBuffer<R> {
@@ -259,14 +258,6 @@ impl d::Factory<R> for Factory {
             0
         };
         self.handles.make_sampler(sam, info)
-    }
-
-    fn get_shader_log(&mut self, shader: &handle::Shader<R>) -> String {
-        ::shade::get_shader_log(&self.gl, self.frame_handles.ref_shader(shader))
-    }
-
-    fn get_program_log(&mut self, program: &handle::Program<R>) -> String {
-        ::shade::get_program_log(&self.gl, self.frame_handles.ref_program(program))
     }
 
     fn update_buffer_raw(&mut self, buffer: &handle::RawBuffer<R>,

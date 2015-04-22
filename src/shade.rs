@@ -35,6 +35,22 @@ fn get_program_iv(gl: &gl::Gl, name: super::Program, query: gl::types::GLenum) -
     iv
 }
 
+pub fn get_shader_log(gl: &gl::Gl, name: super::Shader) -> String {
+    let mut length = get_shader_iv(gl, name, gl::INFO_LOG_LENGTH);
+    if length > 0 {
+        let mut log = String::with_capacity(length as usize);
+        log.extend(repeat('\0').take(length as usize));
+        unsafe {
+            gl.GetShaderInfoLog(name, length, &mut length,
+                (&log[..]).as_ptr() as *mut gl::types::GLchar);
+        }
+        log.truncate(length as usize);
+        log
+    } else {
+        String::new()
+    }
+}
+
 pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: &[u8])
                      -> Result<super::Shader, s::CreateShaderError> {
     let target = match stage {
@@ -52,26 +68,14 @@ pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: &[u8])
     info!("\tCompiled shader {}", name);
 
     let status = get_shader_iv(gl, name, gl::COMPILE_STATUS);
+    let log = get_shader_log(gl, name);
     if status != 0 {
+        if !log.is_empty() {
+            warn!("\tLog: {}", log);
+        }
         Ok(name)
     }else {
-        Err(CreateShaderError::ShaderCompilationFailed)
-    }
-}
-
-pub fn get_shader_log(gl: &gl::Gl, name: super::Shader) -> String {
-    let mut length = get_shader_iv(gl, name, gl::INFO_LOG_LENGTH);
-    if length > 0 {
-        let mut log = String::with_capacity(length as usize);
-        log.extend(repeat('\0').take(length as usize));
-        unsafe {
-            gl.GetShaderInfoLog(name, length, &mut length,
-                (&log[..]).as_ptr() as *mut gl::types::GLchar);
-        }
-        log.truncate(length as usize);
-        log
-    } else {
-        String::new()
+        Err(CreateShaderError::ShaderCompilationFailed(log))
     }
 }
 
@@ -277,6 +281,22 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
     (uniforms, textures)
 }
 
+pub fn get_program_log(gl: &gl::Gl, name: super::Program) -> String {
+    let mut length  = get_program_iv(gl, name, gl::INFO_LOG_LENGTH);
+    if length > 0 {
+        let mut log = String::with_capacity(length as usize);
+        log.extend(repeat('\0').take(length as usize));
+        unsafe {
+            gl.GetProgramInfoLog(name, length, &mut length,
+                (&log[..]).as_ptr() as *mut gl::types::GLchar);
+        }
+        log.truncate(length as usize);
+        log
+    } else {
+        String::new()
+    }
+}
+
 pub fn create_program<I: Iterator<Item = super::Shader>>(gl: &gl::Gl,
                       caps: &d::Capabilities, targets: Option<&[&str]>, shaders: I)
                       -> Result<(::Program, s::ProgramInfo), s::CreateProgramError> {
@@ -317,7 +337,11 @@ pub fn create_program<I: Iterator<Item = super::Shader>>(gl: &gl::Gl,
     }
 
     let status = get_program_iv(gl, name, gl::LINK_STATUS);
+    let log = get_program_log(gl, name);
     if status != 0 {
+        if !log.is_empty() {
+            warn!("\tLog: {}", log);
+        }
         let (uniforms, textures) = query_parameters(gl, caps, name);
         let info = s::ProgramInfo {
             attributes: query_attributes(gl, name),
@@ -327,23 +351,7 @@ pub fn create_program<I: Iterator<Item = super::Shader>>(gl: &gl::Gl,
         };
         Ok((name, info))
     } else {
-        Err(s::CreateProgramError::LinkFail)
-    }
-}
-
-pub fn get_program_log(gl: &gl::Gl, name: super::Program) -> String {
-    let mut length  = get_program_iv(gl, name, gl::INFO_LOG_LENGTH);
-    if length > 0 {
-        let mut log = String::with_capacity(length as usize);
-        log.extend(repeat('\0').take(length as usize));
-        unsafe {
-            gl.GetProgramInfoLog(name, length, &mut length,
-                (&log[..]).as_ptr() as *mut gl::types::GLchar);
-        }
-        log.truncate(length as usize);
-        log
-    } else {
-        String::new()
+        Err(s::CreateProgramError::LinkFail(log))
     }
 }
 
