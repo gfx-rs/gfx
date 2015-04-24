@@ -231,11 +231,12 @@ impl<T> Array<T> {
 
 impl<T: Clone + PartialEq> Array<T> {
     fn find_or_insert(&mut self, value: &T) -> Option<Id<T>> {
-        use std::num::from_u32;
+        use num::traits::FromPrimitive;
         match self.data.iter().position(|v| v == value) {
-            Some(i) => from_u32(i as u32).map(|id| Id(id, PhantomData)),
+            Some(i) => FromPrimitive::from_u32(i as u32)
+                .map(|id| Id(id, PhantomData)),
             None => {
-                from_u32(self.data.len() as u32).map(|id| {
+                FromPrimitive::from_u32(self.data.len() as u32).map(|id| {
                     self.data.push(value.clone());
                     Id(id, PhantomData)
                 })
