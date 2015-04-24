@@ -23,6 +23,7 @@ extern crate bitflags;
 #[macro_use]
 extern crate log;
 extern crate draw_state;
+extern crate num;
 
 /// public re-exported traits
 pub mod traits {
