@@ -16,8 +16,7 @@
 language: rust
 env:
   global:
-    - LD_LIBRARY_PATH: /usr/local/lib
-    - secure: X6P2Epmcc4RWq64OWMD0sWP8VkC4sapVStG33Cipn2G9mwQUKs0AQRSRl/g2oLXWgg0/HxxhJlHXmGMgj8UimQwKKYdAIYdhr/WmQ72lXx9ulve+jKVvZmneGiXaCtHTVHkMaU0Aahr5eqDCvNfsZSCnOhYlVXR+df8EAQMqdbo=
+    - secure: GuVXzAr8XzK8WxUdgmBJzqYTHdQaUCvGtlppsyQiG7fE2qykq/ANHEqnc2A94l9lAoq1T3HcPbottrZwHJ/CYPMI3ijjeUY8lQ9E/acgwBCniAHqkXn8fBg9hDnYi5qFNt9kB8I7CIeIJrzWNwRG1MiqcTCX34Ow4ioLf/HNCtY=
 notifications:
   webhooks:
     urls:
@@ -27,7 +26,8 @@ notifications:
     on_start: false     # default: false
 script:
   - cargo test
-after_script:
   - cargo doc
+after_script:
+  # the doc directory needs to be in the root for rust-ci
   - mv target/doc doc
   - curl http://www.rust-ci.org/artifacts/put?t=$RUSTCI_TOKEN | sh
