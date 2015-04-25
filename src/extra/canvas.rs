@@ -15,7 +15,7 @@
 use draw_state::target::{ClearData, Mask, Mirror, Rect};
 use device::{Device, Factory, Resources};
 use device::{InstanceCount, VertexCount};
-use render::{DrawError, Renderer};
+use render::{DrawError, Renderer, RenderFactory};
 use render::batch::Batch;
 use render::target::Output;
 
@@ -46,7 +46,6 @@ pub trait IntoCanvas<W, D: Device, F> {
 
 impl<W, D: Device, F: Factory<D::Resources>> IntoCanvas<W, D, F> for (W, D, F) {
     fn into_canvas(mut self) -> Canvas<W, D, F> {
-        use super::factory::RenderFactory;
         let renderer = self.2.create_renderer();
         Canvas {
             output: self.0,
@@ -87,14 +86,14 @@ impl<D: Device, F: Factory<D::Resources>, O: Output<D::Resources>> Canvas<O, D, 
     /// Draw a simple `Batch`.
     pub fn draw<B: Batch<Resources = D::Resources>>(&mut self, batch: &B)
                 -> Result<(), DrawError<B::Error>> {
-        self.renderer.draw_all(batch, None, &self.output)
+        self.renderer.draw(batch, &self.output)
     }
 
     /// Draw an instanced `Batch`.
     pub fn draw_instanced<B: Batch<Resources = D::Resources>>(&mut self, batch: &B,
                           count: InstanceCount, base: VertexCount)
                           -> Result<(), DrawError<B::Error>> {
-        self.renderer.draw_all(batch, Some((count, base)), &self.output)
+        self.renderer.draw_instanced(batch, count, base, &self.output)
     }
 }
 

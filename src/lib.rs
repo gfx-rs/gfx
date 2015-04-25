@@ -28,28 +28,20 @@ extern crate num;
 /// public re-exported traits
 pub mod traits {
     pub use device::{Device, Factory};
-    pub use render::ext::canvas::IntoCanvas;
-    pub use render::ext::device::DeviceExt;
-    pub use render::ext::factory::{RenderFactory, FactoryExt};
+    pub use extra::canvas::IntoCanvas;
+    pub use extra::device::DeviceExt;
+    pub use extra::factory::FactoryExt;
+    pub use render::RenderFactory;
     pub use render::mesh::ToSlice;
     pub use render::target::Output;
 }
 
 // draw state re-exports
 pub use draw_state::{DrawState, BlendPreset};
+pub use draw_state::state;
+pub use draw_state::target::*;
 
 // public re-exports
-pub use render::{Renderer, DrawError};
-pub use render::batch;
-pub use render::ext::canvas::{Canvas, Window};
-pub use render::ext::device::Graphics;
-pub use render::ext::shade::{ShaderSource, ProgramError};
-pub use render::mesh::{Attribute, Mesh, VertexFormat};
-pub use render::mesh::Error as MeshError;
-pub use render::mesh::{Slice, ToSlice, SliceKind};
-pub use render::shade;
-pub use render::target::{Frame, Output, Plane};
-pub use render::ParamStorage;
 pub use device::{Device, SubmitInfo, Factory, Resources};
 pub use device::{attrib, tex};
 pub use device::as_byte_slice;
@@ -58,8 +50,17 @@ pub use device::{VertexCount, InstanceCount};
 pub use device::PrimitiveType;
 pub use device::draw::{CommandBuffer, Gamma};
 pub use device::shade::{ProgramInfo, UniformValue};
-pub use draw_state::target::*;
-pub use draw_state::state;
+pub use render::{Renderer, DrawError};
+pub use render::batch;
+pub use render::mesh::{Attribute, Mesh, VertexFormat};
+pub use render::mesh::Error as MeshError;
+pub use render::mesh::{Slice, ToSlice, SliceKind};
+pub use render::shade;
+pub use render::target::{Frame, Output, Plane};
+pub use render::ParamStorage;
+pub use extra::canvas::{Canvas, Window};
+pub use extra::device::Graphics;
+pub use extra::shade::{ShaderSource, ProgramError};
 
 pub use device::handle::Buffer as BufferHandle;
 pub use device::handle::IndexBuffer as IndexBufferHandle;
@@ -71,5 +72,6 @@ pub use device::handle::Surface as SurfaceHandle;
 pub use device::handle::Texture as TextureHandle;
 pub use device::handle::Sampler as SamplerHandle;
 
-pub mod render;
 pub mod device;
+pub mod extra;
+pub mod render;

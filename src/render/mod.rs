@@ -32,8 +32,6 @@ use render::mesh::SliceKind;
 
 /// Batches
 pub mod batch;
-/// Extensions
-pub mod ext;
 /// Meshes
 pub mod mesh;
 /// Shaders
@@ -516,6 +514,31 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
                 self.command_buffer.call_draw_indexed(prim_type, IntSize::U32,
                     start, end - start, base, instances);
             },
+        }
+    }
+}
+
+/// Factory extension that allows creating new renderers.
+pub trait RenderFactory<R: device::Resources, C: CommandBuffer<R>> {
+    /// Create a new renderer
+    fn create_renderer(&mut self) -> Renderer<R, C>;
+}
+
+impl<
+    R: Resources,
+    C: CommandBuffer<R>,
+    F: device::Factory<R>,
+> RenderFactory<R, C> for F {
+    fn create_renderer(&mut self) -> Renderer<R, C> {
+        Renderer {
+            command_buffer: CommandBuffer::new(),
+            data_buffer: DataBuffer::new(),
+            handles: handle::Manager::new(),
+            common_array_buffer: self.create_array_buffer(),
+            draw_frame_buffer: self.create_frame_buffer(),
+            read_frame_buffer: self.create_frame_buffer(),
+            render_state: RenderState::new(),
+            parameters: ParamStorage::new(),
         }
     }
 }

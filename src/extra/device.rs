@@ -17,8 +17,7 @@
 
 use std::ops;
 use device;
-use render::{batch, Renderer};
-use render::ext::factory::RenderFactory;
+use render::{batch, Renderer, RenderFactory};
 use render::shade::ShaderParam;
 
 /// A convenient wrapper suitable for single-threaded operation.
@@ -82,7 +81,7 @@ impl<D: device::Device, F: device::Factory<D::Resources>> Graphics<D, F> {
         self.device.submit(self.renderer.as_buffer());
         self.renderer.reset();
     }
-    
+
     /// Cleanup resources after the frame.
     pub fn cleanup(&mut self) {
         self.device.after_frame();
