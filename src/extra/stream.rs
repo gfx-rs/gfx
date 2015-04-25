@@ -16,7 +16,7 @@
 //! It includes a renderer and an output, stored by constrained types.
 
 
-use device::{InstanceCount, Resources, VertexCount};
+use device::{Device, InstanceCount, Resources, VertexCount};
 use device::draw::CommandBuffer;
 use device::target::{ClearData, Mask, Mirror, Rect};
 use render::{DrawError, Renderer, RenderFactory};
@@ -84,6 +84,15 @@ pub trait Stream<R: Resources> {
                       -> Result<(), DrawError<B::Error>> {
         let (ren, out) = self.access();
         ren.draw_instanced(batch, count, base, out)
+    }
+
+    /// Execute everything and clear the command buffer.
+    fn flush<D>(&mut self, device: &mut D) where
+        D: Device<Resources = R, CommandBuffer = Self::CommandBuffer>,
+    {
+        let (ren, _) = self.access();
+        device.submit(ren.as_buffer());
+        ren.reset();
     }
 }
 
