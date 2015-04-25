@@ -19,9 +19,15 @@
 use device::{InstanceCount, Resources, VertexCount};
 use device::draw::CommandBuffer;
 use device::target::{ClearData, Mask, Mirror, Rect};
-use render::{DrawError, Renderer};
+use render::{DrawError, Renderer, RenderFactory};
 use render::batch::Batch;
 use render::target::Output;
+
+//TODO: when `Stream` gets adopted, we can remove these methods:
+//  - Renderer::draw(...)
+//  - Renderer::draw_instanced(...)
+// in favor of bare `Renderer::draw_all` (renamed), since most
+// of the usage will go through `Stream`, which already has this.
 
 /// Render stream abstraction.
 pub trait Stream<R: Resources> {
@@ -80,3 +86,49 @@ pub trait Stream<R: Resources> {
         ren.draw_instanced(batch, count, base, out)
     }
 }
+
+impl<'a, R: Resources, C: CommandBuffer<R>, O: Output<R>>
+Stream<R> for (&'a mut Renderer<R, C>, &'a O) {
+    type CommandBuffer = C;
+    type Output = O;
+
+    fn get_output(&self) -> &O {
+        &self.1
+    }
+
+    fn access(&mut self) -> (&mut Renderer<R, C>, &O) {
+        (&mut self.0, &self.1)
+    }
+}
+
+/// A stream that owns its components.
+pub struct OwnedStream<
+    R: Resources,
+    C: CommandBuffer<R>,
+    O: Output<R>
+>(pub Renderer<R, C>, pub O);
+
+impl<R: Resources, C: CommandBuffer<R>, O: Output<R>>
+Stream<R> for OwnedStream<R, C, O> {
+    type CommandBuffer = C;
+    type Output = O;
+
+    fn get_output(&self) -> &O {
+        &self.1
+    }
+
+    fn access(&mut self) -> (&mut Renderer<R, C>, &O) {
+        (&mut self.0, &self.1)
+    }
+}
+
+/// A render factory extension that allows creating streams with new renderers.
+pub trait StreamFactory<R: Resources, C: CommandBuffer<R>>: RenderFactory<R, C> {
+    /// Create a new stream from a given output.
+    fn create_stream<O: Output<R>>(&mut self, output: O) -> OwnedStream<R, C, O> {
+        OwnedStream(self.create_renderer(), output)
+    }
+}
+
+impl<R: Resources, C: CommandBuffer<R>>
+StreamFactory<R, C> for RenderFactory<R, C> {}

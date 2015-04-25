@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use draw_state::target::{ClearData, Mask, Mirror, Rect};
 use device::{Device, Factory, Resources};
-use device::{InstanceCount, VertexCount};
-use render::{DrawError, Renderer, RenderFactory};
-use render::batch::Batch;
+use extra::stream::Stream;
+use render::{Renderer, RenderFactory};
 use render::target::Output;
 
 
@@ -56,44 +54,17 @@ impl<W, D: Device, F: Factory<D::Resources>> IntoCanvas<W, D, F> for (W, D, F) {
     }
 }
 
-impl<D: Device, F: Factory<D::Resources>, O: Output<D::Resources>> Canvas<O, D, F> {
-    /// Get width/height aspect, needed for projections.
-    pub fn get_aspect_ratio(&self) -> f32 {
-        let (w, h) = self.output.get_size();
-        w as f32 / h as f32
+impl<D: Device, F: Factory<D::Resources>, O: Output<D::Resources>>
+Stream<D::Resources> for Canvas<O, D, F> {
+    type CommandBuffer = D::CommandBuffer;
+    type Output = O;
+
+    fn get_output(&self) -> &O {
+        &self.output
     }
 
-    /// Clear the canvas.
-    pub fn clear(&mut self, data: ClearData) {
-        let mask = self.output.get_mask();
-        self.renderer.clear(data, mask, &self.output);
-    }
-
-    /// Blit on this canvas from another `Output`.
-    pub fn blit_on<X: Output<D::Resources>>(&mut self,
-                   source: &X, source_rect: Rect, dest_rect: Rect,
-                   mirror: Mirror, mask: Mask) {
-        self.renderer.blit(source, source_rect, &self.output, dest_rect, mirror, mask);
-    }
-
-    /// Blit this canvas to another `Output`.
-    pub fn blit_to<Y: Output<D::Resources>>(&mut self,
-                   destination: &Y, dest_rect: Rect, source_rect: Rect,
-                   mirror: Mirror, mask: Mask) {
-        self.renderer.blit(&self.output, source_rect, destination, dest_rect, mirror, mask);
-    }
-
-    /// Draw a simple `Batch`.
-    pub fn draw<B: Batch<Resources = D::Resources>>(&mut self, batch: &B)
-                -> Result<(), DrawError<B::Error>> {
-        self.renderer.draw(batch, &self.output)
-    }
-
-    /// Draw an instanced `Batch`.
-    pub fn draw_instanced<B: Batch<Resources = D::Resources>>(&mut self, batch: &B,
-                          count: InstanceCount, base: VertexCount)
-                          -> Result<(), DrawError<B::Error>> {
-        self.renderer.draw_instanced(batch, count, base, &self.output)
+    fn access(&mut self) -> (&mut Renderer<D::Resources, D::CommandBuffer>, &O) {
+        (&mut self.renderer, &self.output)
     }
 }
 
