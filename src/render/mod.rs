@@ -194,25 +194,21 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     }
 
     /// Draw a `batch` into the specified output.
-    pub fn draw<B: Batch<Resources = R>, O: target::Output<R>>(
-                &mut self, batch: &B, output: &O)
+    pub fn draw<B: Batch<R>, O: target::Output<R>>(&mut self, batch: &B, output: &O)
                 -> Result<(), DrawError<B::Error>> {
         self.draw_all(batch, None, output)
     }
 
     /// Draw a `batch` multiple times using instancing.
-    pub fn draw_instanced<B: Batch<Resources = R>, O: target::Output<R>>(
-                          &mut self, batch: &B,
-                          count: device::InstanceCount,
-                          base: device::VertexCount,
-                          output: &O)
-                          -> Result<(), DrawError<B::Error>> {
+    pub fn draw_instanced<B: Batch<R>, O: target::Output<R>>(&mut self, batch: &B,
+                          count: device::InstanceCount, base: device::VertexCount,
+                          output: &O) -> Result<(), DrawError<B::Error>> {
         self.draw_all(batch, Some((count, base)), output)
     }
 
     /// Draw a 'batch' with all known parameters specified, internal use only.
-    fn draw_all<B: Batch<Resources = R>, O: target::Output<R>>(
-                &mut self, batch: &B, instances: InstanceOption, output: &O)
+    fn draw_all<B: Batch<R>, O: target::Output<R>>(&mut self, batch: &B,
+                instances: InstanceOption, output: &O)
                 -> Result<(), DrawError<B::Error>> {
         let (mesh, attrib_iter, slice, state) = match batch.get_data() {
             Ok(data) => data,
@@ -393,7 +389,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         self.render_state.draw = *state;
     }
 
-    fn bind_program<'a, B: Batch<Resources = R>>(&mut self, batch: &'a B)
+    fn bind_program<'a, B: Batch<R>>(&mut self, batch: &'a B)
                     -> Result<&'a handle::Program<R>, B::Error> {
         let program = match batch.fill_params(&mut self.parameters) {
             Ok(p) => p,

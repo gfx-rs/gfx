@@ -72,14 +72,14 @@ pub trait Stream<R: Resources> {
     }
 
     /// Draw a simple `Batch`.
-    fn draw<B: Batch<Resources = R>>(&mut self, batch: &B)
+    fn draw<B: Batch<R>>(&mut self, batch: &B) 
             -> Result<(), DrawError<B::Error>> {
         let (ren, out) = self.access();
         ren.draw(batch, out)
     }
 
     /// Draw an instanced `Batch`.
-    fn draw_instanced<B: Batch<Resources = R>>(&mut self, batch: &B,
+    fn draw_instanced<B: Batch<R>>(&mut self, batch: &B,
                       count: InstanceCount, base: VertexCount)
                       -> Result<(), DrawError<B::Error>> {
         let (ren, out) = self.access();
