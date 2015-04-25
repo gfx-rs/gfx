@@ -21,30 +21,9 @@ use render::mesh::{Mesh, VertexFormat};
 use super::shade::*;
 
 /// Factory extension trait
-pub trait FactoryExt<R: device::Resources> {
+pub trait FactoryExt<R: device::Resources>: device::Factory<R> {
     /// Create a new mesh from the given vertex data.
     /// Convenience function around `create_buffer` and `Mesh::from_format`.
-    fn create_mesh<T: VertexFormat + Copy>(&mut self, data: &[T]) -> Mesh<R>;
-    /// Create a simple program given a vertex shader with a fragment one.
-    fn link_program(&mut self, vs_code: &[u8], fs_code: &[u8])
-                    -> Result<handle::Program<R>, ProgramError>;
-    /// Create a simple program given `ShaderSource` versions of vertex and
-    /// fragment shaders, chooss the matching versions for the device.
-    fn link_program_source(&mut self, vs_src: ShaderSource, fs_src: ShaderSource,
-                           caps: &device::Capabilities)
-                           -> Result<handle::Program<R>, ProgramError>;
-    /// Create a simple RGBA8 2D texture.
-    fn create_texture_rgba8(&mut self, width: u16, height: u16)
-                            -> Result<handle::Texture<R>, tex::TextureError>;
-    /// Create RGBA8 2D texture with given contents and mipmap chain.
-    fn create_texture_rgba8_static(&mut self, width: u16, height: u16, data: &[u32])
-                                   -> Result<handle::Texture<R>, tex::TextureError>;
-    /// Create a simple depth+stencil 2D texture.
-    fn create_texture_depth_stencil(&mut self, width: u16, height: u16)
-                                    -> Result<handle::Texture<R>, tex::TextureError>;
-}
-
-impl<R: device::Resources, F: device::Factory<R>> FactoryExt<R> for F {
     fn create_mesh<T: VertexFormat + Copy>(&mut self, data: &[T]) -> Mesh<R> {
         let nv = data.len();
         //debug_assert!(nv < self.max_vertex_count); //TODO
@@ -52,6 +31,7 @@ impl<R: device::Resources, F: device::Factory<R>> FactoryExt<R> for F {
         Mesh::from_format(buf, nv as device::VertexCount)
     }
 
+    /// Create a simple program given a vertex shader with a fragment one.
     fn link_program(&mut self, vs_code: &[u8], fs_code: &[u8])
                     -> Result<handle::Program<R>, ProgramError> {
         let vs = match self.create_shader(Stage::Vertex, vs_code) {
@@ -67,6 +47,8 @@ impl<R: device::Resources, F: device::Factory<R>> FactoryExt<R> for F {
             .map_err(|e| ProgramError::Link(e))
     }
 
+    /// Create a simple program given `ShaderSource` versions of vertex and
+    /// fragment shaders, chooss the matching versions for the device.
     fn link_program_source(&mut self, vs_src: ShaderSource, fs_src: ShaderSource,
                            caps: &device::Capabilities)
                            -> Result<handle::Program<R>, ProgramError> {
@@ -93,6 +75,7 @@ impl<R: device::Resources, F: device::Factory<R>> FactoryExt<R> for F {
             .map_err(|e| ProgramError::Link(e))
     }
 
+    /// Create a simple RGBA8 2D texture.
     fn create_texture_rgba8(&mut self, width: u16, height: u16)
                             -> Result<handle::Texture<R>, tex::TextureError> {
         self.create_texture(tex::TextureInfo {
@@ -105,6 +88,7 @@ impl<R: device::Resources, F: device::Factory<R>> FactoryExt<R> for F {
         })
     }
 
+    /// Create RGBA8 2D texture with given contents and mipmap chain.
     fn create_texture_rgba8_static(&mut self, width: u16, height: u16, data: &[u32])
                                    -> Result<handle::Texture<R>, tex::TextureError> {
         let info = tex::TextureInfo {
@@ -124,6 +108,7 @@ impl<R: device::Resources, F: device::Factory<R>> FactoryExt<R> for F {
         }
     }
 
+    /// Create a simple depth+stencil 2D texture.
     fn create_texture_depth_stencil(&mut self, width: u16, height: u16)
                                     -> Result<handle::Texture<R>, tex::TextureError> {
         self.create_texture(tex::TextureInfo {
@@ -136,3 +121,5 @@ impl<R: device::Resources, F: device::Factory<R>> FactoryExt<R> for F {
         })
     }
 }
+
+impl<R: device::Resources, F: device::Factory<R>> FactoryExt<R> for F {}
