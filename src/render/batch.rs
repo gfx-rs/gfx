@@ -45,16 +45,14 @@ pub type BatchData<'a, R: Resources> = (&'a mesh::Mesh<R>, mesh::AttributeIter,
                                         &'a mesh::Slice<R>, &'a DrawState);
 
 /// Abstract batch trait
-#[allow(missing_docs)]
-pub trait Batch {
-    type Resources: Resources;
+pub trait Batch<R: Resources> {
     /// Possible errors occurring at batch access
     type Error: fmt::Debug;
     /// Obtain information about the mesh, program, and state
-    fn get_data(&self) -> Result<BatchData<Self::Resources>, Self::Error>;
+    fn get_data(&self) -> Result<BatchData<R>, Self::Error>;
     /// Fill shader parameter values
-    fn fill_params(&self, &mut ParamStorage<Self::Resources>)
-                   -> Result<&ProgramHandle<Self::Resources>, Self::Error>;
+    fn fill_params(&self, &mut ParamStorage<R>)
+                   -> Result<&ProgramHandle<R>, Self::Error>;
 }
 
 /// A batch that is constructed on the fly when rendering.
@@ -76,8 +74,7 @@ pub fn bind<'a, T: ShaderParam>(draw_state: &'a DrawState,
     (mesh, slice, program, data, draw_state)
 }
 
-impl<'a, T: ShaderParam> Batch for ImplicitBatch<'a, T> {
-    type Resources = T::Resources;
+impl<'a, T: ShaderParam> Batch<T::Resources> for ImplicitBatch<'a, T> {
     type Error = Error;
 
     fn get_data(&self) -> Result<BatchData<T::Resources>, Error> {
@@ -141,8 +138,7 @@ impl<T: ShaderParam> OwnedBatch<T> {
     }
 }
 
-impl<T: ShaderParam> Batch for OwnedBatch<T> {
-    type Resources = T::Resources;
+impl<T: ShaderParam> Batch<T::Resources> for OwnedBatch<T> {
     type Error = ();
 
     fn get_data(&self) -> Result<BatchData<T::Resources>, ()> {
@@ -473,8 +469,7 @@ impl<R: Resources> Context<R> {
     }
 }
 
-impl<'a, T: ShaderParam + 'a> Batch for CoreBatchFull<'a, T> {
-    type Resources = T::Resources;
+impl<'a, T: ShaderParam + 'a> Batch<T::Resources> for CoreBatchFull<'a, T> {
     type Error = OutOfBounds;
 
     fn get_data(&self) -> Result<BatchData<T::Resources>, OutOfBounds> {
@@ -496,8 +491,7 @@ impl<'a, T: ShaderParam + 'a> Batch for CoreBatchFull<'a, T> {
     }
 }
 
-impl<'a, T: ShaderParam + 'a> Batch for RefBatchFull<'a, T> {
-    type Resources = T::Resources;
+impl<'a, T: ShaderParam + 'a> Batch<T::Resources> for RefBatchFull<'a, T> {
     type Error = OutOfBounds;
 
     fn get_data(&self) -> Result<BatchData<T::Resources>, OutOfBounds> {
