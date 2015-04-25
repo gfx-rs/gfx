@@ -31,6 +31,7 @@ pub mod traits {
     pub use extra::canvas::IntoCanvas;
     pub use extra::device::DeviceExt;
     pub use extra::factory::FactoryExt;
+    pub use extra::stream::Stream;
     pub use render::RenderFactory;
     pub use render::mesh::ToSlice;
     pub use render::target::Output;
@@ -61,6 +62,7 @@ pub use render::ParamStorage;
 pub use extra::canvas::{Canvas, Window};
 pub use extra::device::Graphics;
 pub use extra::shade::{ShaderSource, ProgramError};
+pub use extra::stream::Stream;
 
 pub use device::handle::Buffer as BufferHandle;
 pub use device::handle::IndexBuffer as IndexBufferHandle;
