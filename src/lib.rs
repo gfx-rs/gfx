@@ -65,14 +65,20 @@ pub type Success = (
 
 /// Initialize with a window.
 pub fn init(window: glutin::Window) -> Success {
-    // actual queries are WIP: https://github.com/tomaka/glutin/pull/372
     unsafe { window.make_current() };
     let (device, factory) = gfx_device_gl::create(|s| window.get_proc_address(s));
+    let format = window.get_pixel_format();
     let wrap = Wrap {
         window: window,
         frame: factory.get_main_frame_buffer(),
-        mask: gfx::COLOR | gfx::DEPTH | gfx::STENCIL, //TODO
-        gamma: gfx::Gamma::Original, //TODO
+        mask: if format.color_bits != 0 { gfx::COLOR } else { gfx::Mask::empty() } |
+            if format.depth_bits != 0 { gfx::DEPTH } else  { gfx::Mask::empty() } |
+            if format.stencil_bits != 0 { gfx::STENCIL } else { gfx::Mask::empty() },
+        gamma: if format.srgb {
+            gfx::Gamma::Convert
+        } else {
+            gfx::Gamma::Original
+        },
     };
     (wrap, device, factory)
 }
