@@ -294,11 +294,11 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
                 }
             },
             None => {
-                if self.render_state.frame_buffer.is_some() || change_gamma {
+                if self.render_state.frame_buffer.as_ref() != Some(&self.draw_frame_buffer) || change_gamma {
                     self.command_buffer.bind_frame_buffer(Access::Draw,
                         self.handles.ref_frame_buffer(&self.draw_frame_buffer),
                         gamma);
-                    self.render_state.frame_buffer = None;
+                    self.render_state.frame_buffer = Some(self.draw_frame_buffer.clone());
                     self.render_state.gamma = gamma;
                 }
                 let colors = output.get_colors();
