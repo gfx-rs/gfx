@@ -160,9 +160,9 @@ static TERRAIN_FRAGMENT_SRC: &'static [u8] = b"
     in vec3 v_FragPos;
     in vec3 v_Normal;
     in vec3 v_Color;
-    out o_Position;
-    out o_Normal;
-    out o_Color;
+    out vec4 o_Position;
+    out vec4 o_Normal;
+    out vec4 o_Color;
 
     void main() {
         vec3 n = normalize(v_Normal);
