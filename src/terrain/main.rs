@@ -68,33 +68,6 @@ struct Params<R: gfx::Resources> {
     _dummy: std::marker::PhantomData<R>,
 }
 
-static VERTEX_SRC: &'static [u8] = b"
-    #version 120
-
-    attribute vec3 a_Pos;
-    attribute vec3 a_Color;
-    varying vec3 v_Color;
-
-    uniform mat4 u_Model;
-    uniform mat4 u_View;
-    uniform mat4 u_Proj;
-
-    void main() {
-        v_Color = a_Color;
-        gl_Position = u_Proj * u_View * u_Model * vec4(a_Pos, 1.0);
-    }
-";
-
-static FRAGMENT_SRC: &'static [u8] = b"
-    #version 120
-
-    varying vec3 v_Color;
-
-    void main() {
-        gl_FragColor = vec4(v_Color, 1.0);
-    }
-";
-
 fn calculate_color(height: f32) -> [f32; 3] {
     if height > 8.0 {
         [0.9, 0.9, 0.9] // white
@@ -136,7 +109,21 @@ pub fn main() {
         .to_slice(gfx::PrimitiveType::TriangleList);
 
     let mesh = canvas.factory.create_mesh(&vertex_data);
-    let program = canvas.factory.link_program(VERTEX_SRC, FRAGMENT_SRC).unwrap();
+    let program = {
+        let vs = gfx::ShaderSource {
+            glsl_120: Some(include_bytes!("terrain_120.glslv")),
+            glsl_150: Some(include_bytes!("terrain_150.glslv")),
+            .. gfx::ShaderSource::empty()
+        };
+        let fs = gfx::ShaderSource {
+            glsl_120: Some(include_bytes!("terrain_120.glslf")),
+            glsl_150: Some(include_bytes!("terrain_150.glslf")),
+            .. gfx::ShaderSource::empty()
+        };
+        canvas.factory.link_program_source(vs, fs, &canvas.device.get_capabilities())
+                      .unwrap()
+    };
+
     let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
     let data = Params {
