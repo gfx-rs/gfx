@@ -26,7 +26,8 @@ pub struct Wrap<R: gfx::Resources> {
     pub window: glutin::Window,
     frame: gfx::FrameBufferHandle<R>,
     mask: gfx::Mask,
-    gamma: gfx::Gamma,
+    /// Gamma output mode.
+    pub gamma: gfx::Gamma,
 }
 
 impl<R: gfx::Resources> gfx::Output<R> for Wrap<R> {
