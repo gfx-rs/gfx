@@ -21,16 +21,28 @@ extern crate glutin;
 use gfx::tex::Size;
 
 /// A wrapper around the window that implements `Output`.
-pub struct Wrap<R: gfx::Resources> {
+pub struct Output<R: gfx::Resources> {
     /// Glutin window in the open.
     pub window: glutin::Window,
     frame: gfx::FrameBufferHandle<R>,
     mask: gfx::Mask,
-    /// Gamma output mode.
-    pub gamma: gfx::Gamma,
+    supports_gamma_convertion: bool,
+    gamma: gfx::Gamma,
 }
 
-impl<R: gfx::Resources> gfx::Output<R> for Wrap<R> {
+impl<R: gfx::Resources> Output<R> {
+    /// Try to set the gamma conversion.
+    pub fn set_gamma(&mut self, gamma: gfx::Gamma) -> Result<(), ()> {
+        if self.supports_gamma_convertion || gamma == gfx::Gamma::Original {
+            self.gamma = gamma;
+            Ok(())
+        }else {
+            Err(())
+        }
+    }
+}
+
+impl<R: gfx::Resources> gfx::Output<R> for Output<R> {
     fn get_handle(&self) -> Option<&gfx::FrameBufferHandle<R>> {
         Some(&self.frame)
     }
@@ -50,7 +62,7 @@ impl<R: gfx::Resources> gfx::Output<R> for Wrap<R> {
     }
 }
 
-impl<R: gfx::Resources> gfx::Window<R> for Wrap<R> {
+impl<R: gfx::Resources> gfx::Window<R> for Output<R> {
     fn swap_buffers(&mut self) {
         self.window.swap_buffers();
     }
@@ -59,7 +71,7 @@ impl<R: gfx::Resources> gfx::Window<R> for Wrap<R> {
 
 /// Result of successful context initialization.
 pub type Success = (
-    Wrap<gfx_device_gl::Resources>,
+    Output<gfx_device_gl::Resources>,
     gfx_device_gl::Device,
     gfx_device_gl::Factory,
 );
@@ -70,17 +82,14 @@ pub fn init(window: glutin::Window) -> Success {
     unsafe { window.make_current() };
     let (device, factory) = gfx_device_gl::create(|s| window.get_proc_address(s));
     let format = window.get_pixel_format();
-    let wrap = Wrap {
+    let out = Output {
         window: window,
         frame: factory.get_main_frame_buffer(),
         mask: if format.color_bits != 0 { gfx::COLOR } else { gfx::Mask::empty() } |
             if format.depth_bits != 0 { gfx::DEPTH } else  { gfx::Mask::empty() } |
             if format.stencil_bits != 0 { gfx::STENCIL } else { gfx::Mask::empty() },
-        gamma: if format.srgb {
-            gfx::Gamma::Convert
-        } else {
-            gfx::Gamma::Original
-        },
+        supports_gamma_convertion: format.srgb,
+        gamma: gfx::Gamma::Original,
     };
-    (wrap, device, factory)
+    (out, device, factory)
 }
