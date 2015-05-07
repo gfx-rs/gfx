@@ -34,3 +34,6 @@ version = "*"
 bitflags = "*"
 log = "*"
 num = "*"
+
+[features]
+unstable = []

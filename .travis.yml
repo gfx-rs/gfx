@@ -1,33 +1,24 @@
-# Copyright 2014 The Gfx-rs Developers. For a full listing of the authors,
-# refer to the AUTHORS file at the top-level directory of this distribution.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 language: rust
-env:
-  global:
-    - secure: GuVXzAr8XzK8WxUdgmBJzqYTHdQaUCvGtlppsyQiG7fE2qykq/ANHEqnc2A94l9lAoq1T3HcPbottrZwHJ/CYPMI3ijjeUY8lQ9E/acgwBCniAHqkXn8fBg9hDnYi5qFNt9kB8I7CIeIJrzWNwRG1MiqcTCX34Ow4ioLf/HNCtY=
+rust:
+- nightly
+#- beta
+before_script:
+- pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
 notifications:
   webhooks:
     urls:
-      - https://webhooks.gitter.im/e/7479b6691b7e5e40716a
-    on_success: always  # options: [always|never|change] default: always
-    on_failure: always  # options: [always|never|change] default: always
-    on_start: false     # default: false
+    - https://webhooks.gitter.im/e/7479b6691b7e5e40716a
+    on_success: always
+    on_failure: always
+    on_start: false
 script:
-  - cargo test
-  - cargo doc
-after_script:
-  # the doc directory needs to be in the root for rust-ci
-  - mv target/doc doc
-  - curl http://www.rust-ci.org/artifacts/put?t=$RUSTCI_TOKEN | sh
+- |
+  travis-cargo build &&
+  travis-cargo test &&
+  travis-cargo bench &&
+  travis-cargo doc
+after_success:
+- travis-cargo --only nightly doc-upload
+env:
+  global:
+  - secure: eYm18Lr7+FYFgY9Cj/LFyL0WaC/zesBE8pywho9c+ByUEMwaZ9QCbsaX3H+IBNQCTSCImiKj+zuj+uIPyOTIiC5OPY0cvziWcBvyAlrwnwT7oBm8X9CPDCuspRVGO52CoksI1oYNkEc1xaL9PIUw6GMXhVCAIkQI7tMbq+kWxDQ=
