@@ -31,29 +31,6 @@ struct Vertex {
     color: [f32; 3],
 }
 
-static VERTEX_SRC: &'static [u8] = b"
-    #version 120
-
-    attribute vec2 a_Pos;
-    attribute vec3 a_Color;
-    varying vec4 v_Color;
-
-    void main() {
-        v_Color = vec4(a_Color, 1.0);
-        gl_Position = vec4(a_Pos, 0.0, 1.0);
-    }
-";
-
-static FRAGMENT_SRC: &'static [u8] = b"
-    #version 120
-
-    varying vec4 v_Color;
-
-    void main() {
-        gl_FragColor = v_Color;
-    }
-";
-
 pub fn main() {
     let mut canvas = gfx_window_glutin::init(glutin::Window::new().unwrap())
                                        .into_canvas();
@@ -67,8 +44,20 @@ pub fn main() {
     let mesh = canvas.factory.create_mesh(&vertex_data);
     let slice = mesh.to_slice(gfx::PrimitiveType::TriangleList);
 
-    let program = canvas.factory.link_program(VERTEX_SRC, FRAGMENT_SRC)
-                                .unwrap();
+    let program = {
+        let vs = gfx::ShaderSource {
+            glsl_120: Some(include_bytes!("triangle_120.glslv")),
+            glsl_150: Some(include_bytes!("triangle_150.glslv")),
+            .. gfx::ShaderSource::empty()
+        };
+        let fs = gfx::ShaderSource {
+            glsl_120: Some(include_bytes!("triangle_120.glslf")),
+            glsl_150: Some(include_bytes!("triangle_150.glslf")),
+            .. gfx::ShaderSource::empty()
+        };
+        canvas.factory.link_program_source(vs, fs, &canvas.device.get_capabilities())
+                      .unwrap()
+    };
     let state = gfx::DrawState::new();
 
     'main: loop {
