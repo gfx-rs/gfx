@@ -24,7 +24,7 @@ extern crate gfx_gl as gl;
 
 use time::precise_time_s;
 use cgmath::FixedArray;
-use cgmath::{Matrix, Point3, Vector3, Matrix3, ToMatrix4};
+use cgmath::{Matrix, Point3, Vector3, Matrix3, Matrix4};
 use cgmath::{Transform, AffineMatrix3, Vector4, Array1};
 use gfx::traits::*;
 use glfw::Context;
@@ -131,7 +131,7 @@ fn gfx_main(mut glfw: glfw::Glfw,
 
         for x in (-dimension) ..dimension {
             for y in (-dimension) ..dimension {
-                let mut model = Matrix3::identity().mul_s(0.01f32).to_matrix4();
+                let mut model = Matrix4::from(Matrix3::identity().mul_s(0.01f32));
                 model.w = Vector4::new(x as f32 * 0.05,
                                        0f32,
                                        y as f32 * 0.05,
@@ -300,7 +300,7 @@ fn gl_main(mut glfw: glfw::Glfw,
 
         for x in (-dimension) ..dimension {
             for y in (-dimension) ..dimension {
-                let mut model = Matrix3::identity().mul_s(0.01f32).to_matrix4();
+                let mut model = Matrix4::from(Matrix3::identity().mul_s(0.01f32));
                 model.w = Vector4::new(x as f32 * 0.05,
                                        0f32,
                                        y as f32 * 0.05,
