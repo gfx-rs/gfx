@@ -44,7 +44,7 @@ pub use draw_state::target::*;
 
 // public re-exports
 pub use device::{Device, SubmitInfo, Factory, Resources};
-pub use device::{attrib, tex};
+pub use device::{attrib, tex, handle};
 pub use device::as_byte_slice;
 pub use device::{BufferRole, BufferInfo, BufferUsage};
 pub use device::{VertexCount, InstanceCount};
@@ -63,16 +63,6 @@ pub use extra::canvas::{Canvas, Window};
 pub use extra::device::Graphics;
 pub use extra::shade::{ShaderSource, ProgramError};
 pub use extra::stream::{OwnedStream, Stream};
-
-pub use device::handle::Buffer as BufferHandle;
-pub use device::handle::IndexBuffer as IndexBufferHandle;
-pub use device::handle::RawBuffer as RawBufferHandle;
-pub use device::handle::Shader as ShaderHandle;
-pub use device::handle::Program as ProgramHandle;
-pub use device::handle::FrameBuffer as FrameBufferHandle;
-pub use device::handle::Surface as SurfaceHandle;
-pub use device::handle::Texture as TextureHandle;
-pub use device::handle::Sampler as SamplerHandle;
 
 pub mod device;
 pub mod extra;
