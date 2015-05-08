@@ -24,7 +24,7 @@ use gfx::tex::Size;
 pub struct Output<R: gfx::Resources> {
     /// Glutin window in the open.
     pub window: glutin::Window,
-    frame: gfx::FrameBufferHandle<R>,
+    frame: gfx::handle::FrameBuffer<R>,
     mask: gfx::Mask,
     supports_gamma_convertion: bool,
     gamma: gfx::Gamma,
@@ -43,7 +43,7 @@ impl<R: gfx::Resources> Output<R> {
 }
 
 impl<R: gfx::Resources> gfx::Output<R> for Output<R> {
-    fn get_handle(&self) -> Option<&gfx::FrameBufferHandle<R>> {
+    fn get_handle(&self) -> Option<&gfx::handle::FrameBuffer<R>> {
         Some(&self.frame)
     }
 
