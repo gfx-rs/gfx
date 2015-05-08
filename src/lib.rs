@@ -19,19 +19,20 @@ extern crate gfx_device_gl;
 extern crate glfw;
 
 use gfx::tex::Size;
+
 use glfw::Context;
 
 /// A wrapper around the window that implements `Output`.
 pub struct Wrap<R: gfx::Resources> {
     /// Glutin window in the open.
     pub window: glfw::Window,
-    frame: gfx::FrameBufferHandle<R>,
+    frame: gfx::handle::FrameBuffer<R>,
     mask: gfx::Mask,
     gamma: gfx::Gamma,
 }
 
 impl<R: gfx::Resources> gfx::Output<R> for Wrap<R> {
-    fn get_handle(&self) -> Option<&gfx::FrameBufferHandle<R>> {
+    fn get_handle(&self) -> Option<&gfx::handle::FrameBuffer<R>> {
         Some(&self.frame)
     }
 
