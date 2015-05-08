@@ -44,7 +44,7 @@ use cgmath::FixedArray;
 use cgmath::{Matrix, Matrix4, Point3, Vector3, EuclideanVector};
 use cgmath::{Transform, AffineMatrix3};
 use gfx::traits::*;
-use gfx::{Plane, RawBufferHandle};
+use gfx::{Plane};
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{SharedVertex, IndexedPolygon};
 use time::precise_time_s;
@@ -102,7 +102,7 @@ struct LightParams<R: gfx::Resources> {
     #[name = "u_Transform"]
     transform: [[f32; 4]; 4],
     #[name = "u_LightPosBlock"]
-    light_pos_buf: gfx::RawBufferHandle<R>,
+    light_pos_buf: gfx::handle::RawBuffer<R>,
     #[name = "u_Radius"]
     radius: f32,
     #[name = "u_CameraPos"]
@@ -122,7 +122,7 @@ struct EmitterParams<R: gfx::Resources> {
     #[name = "u_Transform"]
     transform: [[f32; 4]; 4],
     #[name = "u_LightPosBlock"]
-    light_pos_buf: gfx::RawBufferHandle<R>,
+    light_pos_buf: gfx::handle::RawBuffer<R>,
     #[name = "u_Radius"]
     radius: f32,
 }
@@ -313,8 +313,8 @@ fn calculate_color(height: f32) -> [f32; 3] {
 
 fn create_g_buffer<R: gfx::Resources, F: Factory<R>>(
                    width: gfx::tex::Size, height: gfx::tex::Size, factory: &mut F)
-                   -> (gfx::Frame<R>, gfx::TextureHandle<R>, gfx::TextureHandle<R>,
-                       gfx::TextureHandle<R>, gfx::TextureHandle<R>) {
+                   -> (gfx::Frame<R>, gfx::handle::Texture<R>, gfx::handle::Texture<R>,
+                       gfx::handle::Texture<R>, gfx::handle::Texture<R>) {
     let texture_info_float = gfx::tex::TextureInfo {
         width: width,
         height: height,
@@ -351,8 +351,8 @@ fn create_g_buffer<R: gfx::Resources, F: Factory<R>>(
 
 fn create_res_buffer<R: gfx::Resources, F: Factory<R>>(
                      width: gfx::tex::Size, height: gfx::tex::Size,
-                     factory: &mut F, texture_depth: &gfx::TextureHandle<R>)
-                     -> (gfx::Frame<R>, gfx::TextureHandle<R>, gfx::TextureHandle<R>) {
+                     factory: &mut F, texture_depth: &gfx::handle::Texture<R>)
+                     -> (gfx::Frame<R>, gfx::handle::Texture<R>, gfx::handle::Texture<R>) {
     let texture_info_float = gfx::tex::TextureInfo {
         width: width,
         height: height,
@@ -565,7 +565,7 @@ pub fn main() {
         stencil: 0,
     };
 
-    let mut debug_buf: Option<gfx::TextureHandle<_>> = None;
+    let mut debug_buf: Option<gfx::handle::Texture<_>> = None;
 
     let mut light_pos_vec: Vec<[f32; 4]> = (0 ..NUM_LIGHTS).map(|_| {
         [0.0, 0.0, 0.0, 0.0]
