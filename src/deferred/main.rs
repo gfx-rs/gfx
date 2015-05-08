@@ -579,15 +579,15 @@ pub fn main() {
                 Event::Closed => break 'main,
                 Event::KeyboardInput(_, _, Some(VirtualKeyCode::Escape)) =>
                     break 'main,
-                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Numpad1)) =>
+                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key1)) =>
                     debug_buf = Some(texture_pos.clone()),
-                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Numpad2)) =>
+                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key2)) =>
                     debug_buf = Some(texture_normal.clone()),
-                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Numpad3)) =>
+                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key3)) =>
                     debug_buf = Some(texture_diffuse.clone()),
-                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Numpad4)) =>
+                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key4)) =>
                     debug_buf = Some(texture_depth.clone()),
-                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Numpad0)) =>
+                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key0)) =>
                     debug_buf = None,
                 _ => {},
             }
