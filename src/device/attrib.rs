@@ -124,3 +124,93 @@ pub struct Format {
     /// Instance rate per vertex
     pub instance_rate: InstanceRate,
 }
+
+/// A service module for deriving `ToFormat` for primitive types.
+pub mod format {
+    use super::{Count, Type};
+    use super::Type::*;
+    use super::FloatSize::*;
+    use super::FloatSubType::*;
+    use super::IntSize::*;
+    use super::IntSubType::*;
+    use super::SignFlag::*;
+
+    /// A trait for getting the format out of vertex element types.
+    /// Needed to implement `VertexFormat` with a macro.
+    pub trait ToFormat {
+        fn describe() -> (Count, Type);
+    }
+
+    /// A helper trait for implementing ToFormat.
+    pub trait ToType {
+        fn describe() -> Type;
+    }
+
+    impl<T: ToType> ToFormat for T {
+        fn describe() -> (Count, Type) {
+            (1, T::describe())
+        }
+    }
+    impl<T: ToType> ToFormat for [T; 2] {
+        fn describe() -> (Count, Type) {
+            (2, T::describe())
+        }
+    }
+    impl<T: ToType> ToFormat for [T; 3] {
+        fn describe() -> (Count, Type) {
+            (3, T::describe())
+        }
+    }
+    impl<T: ToType> ToFormat for [T; 4] {
+        fn describe() -> (Count, Type) {
+            (4, T::describe())
+        }
+    }
+
+    impl ToType for f32 {
+        fn describe() -> Type { Float(Default, F32) }
+    }
+    impl ToType for f64 {
+        fn describe() -> Type { Float(Precision, F64) }
+    }
+    impl ToType for u8 {
+        fn describe() -> Type { Int(Raw, U8, Unsigned) }
+    }
+    impl ToType for u16 {
+        fn describe() -> Type { Int(Raw, U16, Unsigned) }
+    }
+    impl ToType for u32 {
+        fn describe() -> Type { Int(Raw, U32, Unsigned) }
+    }
+    impl ToType for i8 {
+        fn describe() -> Type { Int(Raw, U8, Signed) }
+    }
+    impl ToType for i16 {
+        fn describe() -> Type { Int(Raw, U16, Signed) }
+    }
+    impl ToType for i32 {
+        fn describe() -> Type { Int(Raw, U32, Signed) }
+    }
+
+    /// Fixed-point version of integer attributes.
+    pub struct FixedPoint<T>(pub T);
+
+    impl ToType for FixedPoint<u8> {
+        fn describe() -> Type { Int(Raw, U8, Unsigned) }
+    }
+    impl ToType for FixedPoint<u16> {
+        fn describe() -> Type { Int(Raw, U16, Unsigned) }
+    }
+    impl ToType for FixedPoint<u32> {
+        fn describe() -> Type { Int(Raw, U32, Unsigned) }
+    }
+    impl ToType for FixedPoint<i8> {
+        fn describe() -> Type { Int(Raw, U8, Signed) }
+    }
+    impl ToType for FixedPoint<i16> {
+        fn describe() -> Type { Int(Raw, U16, Signed) }
+    }
+    impl ToType for FixedPoint<i32> {
+        fn describe() -> Type { Int(Raw, U32, Signed) }
+    }
+}
