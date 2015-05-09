@@ -22,7 +22,6 @@ use std::ops::Deref;
 use std::sync::Arc;
 use super::{shade, tex, Resources, BufferInfo};
 
-
 /// Type-safe buffer handle
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct Buffer<R: Resources, T> {
@@ -261,14 +260,21 @@ impl<R: Resources> Producer<R> for Manager<R> {
         F7: Fn(&mut T, &R::Texture),
         F8: Fn(&mut T, &R::Sampler),
     >(&mut self, param: &mut T, f1: F1, f2: F2, f3: F3, f4: F4, f5: F5, f6: F6, f7: F7, f8: F8) {
-        fn clean_vec<X, T, F: Fn(&mut T, &X)>(param: &mut T, vector: &mut Vec<Arc<X>>, fun: F) {
-            use alloc::arc::{strong_count, weak_count};
-            use std::ops::Deref;
-            vector.retain(|v| {
-                let free = strong_count(v) == 1 && weak_count(v) == 0;
-                if free { fun(param, v.deref()); }
-                !free
-            });
+        fn clean_vec<X: Clone, T, F: Fn(&mut T, &X)>(param: &mut T, vector: &mut Vec<Arc<X>>, fun: F) {
+            fn is_unique<T>(_: &mut Arc<T>) -> Option<&T> { None }
+            let mut temp = Vec::new();
+            // delete unique resources and make a list of their indices
+            for (i, v) in vector.iter_mut().enumerate() {
+                if let Some(r) = is_unique(v) {
+                    fun(param, r);
+                    temp.push(i);
+                }
+            }
+            // update the resource vector by removing the elements
+            // starting from the last one
+            for t in temp.iter().rev() {
+                vector.swap_remove(*t);
+            }
         }
         clean_vec(param, &mut self.buffers,       f1);
         clean_vec(param, &mut self.array_buffers, f2);
