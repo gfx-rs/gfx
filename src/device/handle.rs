@@ -30,7 +30,7 @@ pub struct Buffer<R: Resources, T> {
 }
 
 impl<R: Resources, T> Buffer<R, T> {
-    /// Create a type-safe Buffer from a RawBufferHandle
+    /// Create a type-safe Buffer from a RawBuffer
     pub fn from_raw(handle: RawBuffer<R>) -> Buffer<R, T> {
         Buffer {
             raw: handle,
@@ -70,7 +70,7 @@ pub struct IndexBuffer<R: Resources, T> {
 }
 
 impl<R: Resources, T> IndexBuffer<R, T> {
-    /// Create a type-safe IndexBuffer from a RawBufferHandle
+    /// Create a type-safe IndexBuffer from a RawBuffer
     pub fn from_raw(handle: RawBuffer<R>) -> IndexBuffer<R, T> {
         IndexBuffer {
             raw: handle,
