@@ -206,8 +206,8 @@ pub fn bind_blend(gl: &gl::Gl, blend: Option<s::Blend>) {
                 map_factor(b.alpha.source),
                 map_factor(b.alpha.destination)
             );
-            let [r, g, b, a] = b.value;
-            gl.BlendColor(r, g, b, a);
+            let c = b.value;
+            gl.BlendColor(c[0], c[1], c[2], c[3]);
         }},
         None => unsafe { gl.Disable(gl::BLEND) },
     }
