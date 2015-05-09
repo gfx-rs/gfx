@@ -16,7 +16,7 @@
 
 //! Graphics device. Not meant for direct use.
 
-use std::{fmt, mem, raw};
+use std::{fmt, mem};
 use std::hash::Hash;
 
 pub use draw_state::target;
@@ -44,9 +44,11 @@ pub type TextureSlot = u8;
 
 /// Treat a given slice as `&[u8]` for the given function call
 pub fn as_byte_slice<T>(slice: &[T]) -> &[u8] {
+    use std::slice;
     let len = mem::size_of::<T>() * slice.len();
-    let slice = raw::Slice { data: slice.as_ptr(), len: len };
-    unsafe { mem::transmute(slice) }
+    unsafe {
+        slice::from_raw_parts(slice.as_ptr() as *const u8, len)
+    }
 }
 
 /// Features that the device supports.

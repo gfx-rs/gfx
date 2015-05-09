@@ -52,6 +52,7 @@ impl DataBuffer {
         self.add_vec(ref_slice(v))
     }
 
+    /// Copy a given structure into the buffer, return the offset and the size.
     #[cfg(not(unstable))]
     pub fn add_struct<T: Copy>(&mut self, v: &T) -> DataPointer {
         use std::{intrinsics, mem};
