@@ -28,6 +28,7 @@ pub mod handle;
 pub mod mapping;
 pub mod shade;
 pub mod tex;
+mod arc;
 
 /// Draw vertex count.
 pub type VertexCount = u32;

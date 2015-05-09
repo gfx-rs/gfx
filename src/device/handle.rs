@@ -19,7 +19,7 @@
 use std::mem;
 use std::marker::PhantomData;
 use std::ops::Deref;
-use std::sync::Arc;
+use super::arc::Arc;
 use super::{shade, tex, Resources, BufferInfo};
 
 /// Type-safe buffer handle
@@ -261,11 +261,10 @@ impl<R: Resources> Producer<R> for Manager<R> {
         F8: Fn(&mut T, &R::Sampler),
     >(&mut self, param: &mut T, f1: F1, f2: F2, f3: F3, f4: F4, f5: F5, f6: F6, f7: F7, f8: F8) {
         fn clean_vec<X: Clone, T, F: Fn(&mut T, &X)>(param: &mut T, vector: &mut Vec<Arc<X>>, fun: F) {
-            fn is_unique<T>(_: &mut Arc<T>) -> Option<&T> { None }
             let mut temp = Vec::new();
             // delete unique resources and make a list of their indices
             for (i, v) in vector.iter_mut().enumerate() {
-                if let Some(r) = is_unique(v) {
+                if let Some(r) = v.is_unique() {
                     fun(param, r);
                     temp.push(i);
                 }
