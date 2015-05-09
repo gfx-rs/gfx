@@ -45,23 +45,40 @@ impl DataBuffer {
     }
 
     /// Copy a given structure into the buffer, return the offset and the size.
+    #[cfg(unstable)]
     #[inline(always)]
     pub fn add_struct<T: Copy>(&mut self, v: &T) -> DataPointer {
         use std::slice::ref_slice;
         self.add_vec(ref_slice(v))
     }
 
+    /// Copy a given structure into the buffer, return the offset and the size.
+    #[cfg(not(unstable))]
+    pub fn add_struct<T: Copy>(&mut self, v: &T) -> DataPointer {
+        use std::{intrinsics, mem};
+        let offset = self.buf.len();
+        let size = mem::size_of::<T>();
+        self.buf.reserve(size);
+        unsafe {
+            self.buf.set_len(offset + size);
+            intrinsics::copy((v as *const T) as *const u8,
+                             &mut self.buf[offset] as *mut u8,
+                             size);
+        };
+        DataPointer(offset as Offset, size as Size)
+    }
+
     /// Copy a given vector slice into the buffer
     pub fn add_vec<T: Copy>(&mut self, v: &[T]) -> DataPointer {
-        use std::{mem, slice};
+        use std::{intrinsics, mem};
         let offset = self.buf.len();
         let size = mem::size_of::<T>() * v.len();
         self.buf.reserve(size);
         unsafe {
             self.buf.set_len(offset + size);
-            slice::bytes::copy_memory(
-                slice::from_raw_parts(v.as_ptr() as *const u8, size),
-                &mut self.buf[offset ..]);
+            intrinsics::copy(v.as_ptr() as *const u8,
+                             &mut self.buf[offset] as *mut u8,
+                             size);
         }
         DataPointer(offset as Offset, size as Size)
     }

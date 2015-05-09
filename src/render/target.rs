@@ -89,10 +89,20 @@ impl<R: Resources> Output<R> for Plane<R> {
         (info.width, info.height)
     }
 
+    #[cfg(unstable)]
     fn get_colors(&self) -> &[Plane<R>] {
         use std::slice::ref_slice;
         if self.get_format().is_color() {
             ref_slice(self)
+        }else {
+            &[]
+        }
+    }
+
+    #[cfg(not(unstable))]
+    fn get_colors(&self) -> &[Plane<R>] {
+        if self.get_format().is_color() {
+            unimplemented!()
         }else {
             &[]
         }
