@@ -113,6 +113,21 @@ pub struct Slice<R: Resources> {
     pub kind: SliceKind<R>,
 }
 
+impl<R: Resources> Slice<R> {
+    /// Get the number of primitives in this slice.
+    pub fn get_prim_count(&self) -> u32 {
+        use device::PrimitiveType::*;
+        let nv = (self.end - self.start) as u32;
+        match self.prim_type {
+            Point => nv,
+            Line => nv / 2,
+            LineStrip => (nv-1),
+            TriangleList => nv / 3,
+            TriangleStrip | TriangleFan => (nv-2) / 3,
+        }
+    }
+}
+
 /// Source of vertex ordering for a slice
 #[derive(Clone, Debug, PartialEq)]
 pub enum SliceKind<R: Resources> {
