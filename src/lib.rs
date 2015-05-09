@@ -17,7 +17,6 @@
 
 #![allow(missing_docs)]
 #![deny(missing_copy_implementations)]
-#![feature(slice_patterns)]
 
 #[macro_use]
 extern crate log;
@@ -208,8 +207,8 @@ impl Device {
                 if mask.intersects(d::target::COLOR) {
                     flags |= gl::COLOR_BUFFER_BIT;
                     state::bind_color_mask(&self.gl, d::state::MASK_ALL);
-                    let [r, g, b, a] = data.color;
-                    unsafe { self.gl.ClearColor(r, g, b, a) };
+                    let c = data.color;
+                    unsafe { self.gl.ClearColor(c[0], c[1], c[2], c[3]) };
                 }
                 if mask.intersects(d::target::DEPTH) {
                     flags |= gl::DEPTH_BUFFER_BIT;
