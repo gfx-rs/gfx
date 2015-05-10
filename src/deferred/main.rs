@@ -26,11 +26,9 @@
 //
 // Press 1-4 to show the immediate buffers. Press 0 to show the final result.
 
-#![feature(plugin, custom_attribute)]
-#![plugin(gfx_macros)]
-
 extern crate cgmath;
 extern crate env_logger;
+#[macro_use]
 extern crate gfx;
 extern crate gfx_window_glutin;
 extern crate glutin;
@@ -39,12 +37,13 @@ extern crate rand;
 extern crate genmesh;
 extern crate noise;
 
+use std::marker::PhantomData;
 use rand::Rng;
 use cgmath::FixedArray;
 use cgmath::{Matrix, Matrix4, Point3, Vector3, EuclideanVector};
 use cgmath::{Transform, AffineMatrix3};
+use gfx::attrib::Floater;
 use gfx::traits::*;
-use gfx::{Plane};
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{SharedVertex, IndexedPolygon};
 use time::precise_time_s;
@@ -54,84 +53,49 @@ use noise::{Seed, perlin2};
 // Remember to also change the constants in the shaders
 const NUM_LIGHTS: usize = 250;
 
-#[vertex_format]
-#[derive(Clone, Copy)]
-struct TerrainVertex {
-    #[name = "a_Pos"]
-    pos: [f32; 3],
-    #[name = "a_Normal"]
-    normal: [f32; 3],
-    #[name = "a_Color"]
-    color: [f32; 3],
-}
+gfx_vertex!( TerrainVertex {
+    a_Pos@ pos: [f32; 3],
+    a_Normal@ normal: [f32; 3],
+    a_Color@ color: [f32; 3],
+});
 
-#[vertex_format]
-#[derive(Clone, Copy)]
-struct BlitVertex {
-    #[as_float]
-    #[name = "a_Pos"]
-    pos: [i8; 3],
-    #[as_float]
-    #[name = "a_TexCoord"]
-    tex_coord: [u8; 2],
-}
+gfx_vertex!( BlitVertex {
+    a_Pos@ pos: [Floater<i8>; 3],
+    a_TexCoord@ tex_coord: [Floater<u8>; 2],
+});
 
-#[vertex_format]
-#[derive(Clone, Copy)]
-struct CubeVertex {
-    #[as_float]
-    #[name = "a_Pos"]
-    pos: [i8; 3],
-}
+gfx_vertex!( CubeVertex {
+    a_Pos@ pos: [Floater<i8>; 3],
+});
 
-#[shader_param]
-struct TerrainParams<R: gfx::Resources> {
-    #[name = "u_Model"]
-    model: [[f32; 4]; 4],
-    #[name = "u_View"]
-    view: [[f32; 4]; 4],
-    #[name = "u_Proj"]
-    proj: [[f32; 4]; 4],
-    #[name = "u_CameraPos"]
-    cam_pos: [f32; 3],
-    _dummy: std::marker::PhantomData<R>,
-}
+gfx_parameters!( TerrainParams/TerrainLink {
+    u_Model@ model: [[f32; 4]; 4],
+    u_View@ view: [[f32; 4]; 4],
+    u_Proj@ proj: [[f32; 4]; 4],
+    u_CameraPos@ cam_pos: [f32; 3],
+});
 
-#[shader_param]
-struct LightParams<R: gfx::Resources> {
-    #[name = "u_Transform"]
-    transform: [[f32; 4]; 4],
-    #[name = "u_LightPosBlock"]
-    light_pos_buf: gfx::handle::RawBuffer<R>,
-    #[name = "u_Radius"]
-    radius: f32,
-    #[name = "u_CameraPos"]
-    cam_pos: [f32; 3],
-    #[name = "u_FrameRes"]
-    frame_res: [f32; 2],
-    #[name = "u_TexPos"]
-    tex_pos: gfx::shade::TextureParam<R>,
-    #[name = "u_TexNormal"]
-    tex_normal: gfx::shade::TextureParam<R>,
-    #[name = "u_TexDiffuse"]
-    tex_diffuse: gfx::shade::TextureParam<R>,
-}
+gfx_parameters!( LightParams/LightLink {
+    u_Transform@ transform: [[f32; 4]; 4],
+    u_LightPosBlock@ light_pos_buf: gfx::handle::RawBuffer<R>,
+    u_Radius@ radius: f32,
+    u_CameraPos@ cam_pos: [f32; 3],
+    u_FrameRes@ frame_res: [f32; 2],
+    u_TexPos@ tex_pos: gfx::shade::TextureParam<R>,
+    u_TexNormal@ tex_normal: gfx::shade::TextureParam<R>,
+    u_TexDiffuse@ tex_diffuse: gfx::shade::TextureParam<R>,
+});
 
-#[shader_param]
-struct EmitterParams<R: gfx::Resources> {
-    #[name = "u_Transform"]
-    transform: [[f32; 4]; 4],
-    #[name = "u_LightPosBlock"]
-    light_pos_buf: gfx::handle::RawBuffer<R>,
-    #[name = "u_Radius"]
-    radius: f32,
-}
+gfx_parameters!( EmitterParams/EmitterLink {
+    u_Transform@ transform: [[f32; 4]; 4],
+    u_LightPosBlock@ light_pos_buf: gfx::handle::RawBuffer<R>,
+    u_Radius@ radius: f32,
+});
 
-#[shader_param]
-struct BlitParams<R: gfx::Resources> {
-    #[name = "u_Tex"]
-    tex: gfx::shade::TextureParam<R>,
-}
+gfx_parameters!( BlitParams/BlitLink {
+    u_Tex@ tex: gfx::shade::TextureParam<R>,
+});
+
 
 static TERRAIN_VERTEX_SRC: &'static [u8] = b"
     #version 150 core
@@ -338,11 +302,11 @@ fn create_g_buffer<R: gfx::Resources, F: Factory<R>>(
 
     let frame = gfx::Frame {
         colors: vec![
-            Plane::Texture(texture_pos    .clone(), 0, None),
-            Plane::Texture(texture_normal .clone(), 0, None),
-            Plane::Texture(texture_diffuse.clone(), 0, None),
+            gfx::Plane::Texture(texture_pos    .clone(), 0, None),
+            gfx::Plane::Texture(texture_normal .clone(), 0, None),
+            gfx::Plane::Texture(texture_diffuse.clone(), 0, None),
         ],
-        depth: Some(Plane::Texture(texture_depth  .clone(), 0, None)),
+        depth: Some(gfx::Plane::Texture(texture_depth  .clone(), 0, None)),
         .. gfx::Frame::empty(width, height)
     };
 
@@ -365,8 +329,8 @@ fn create_res_buffer<R: gfx::Resources, F: Factory<R>>(
     let texture_frame = factory.create_texture(texture_info_float).unwrap();
 
     let frame = gfx::Frame {
-        colors: vec![Plane::Texture(texture_frame.clone(), 0, None)],
-        depth: Some(Plane::Texture(texture_depth.clone(), 0, None)),
+        colors: vec![gfx::Plane::Texture(texture_frame.clone(), 0, None)],
+        depth: Some(gfx::Plane::Texture(texture_depth.clone(), 0, None)),
        .. gfx::Frame::empty(width, height)
     };
 
@@ -379,7 +343,7 @@ pub fn main() {
         glutin::WindowBuilder::new()
             .with_title("Deferred rendering example with gfx-rs".to_string())
             .with_dimensions(800, 600)
-            .with_gl(glutin::GlRequest::Latest)
+            .with_gl(glutin::GL_CORE)
             .build().unwrap()
     );
 
@@ -438,7 +402,7 @@ pub fn main() {
             view: Matrix4::identity().into_fixed(),
             proj: proj.into_fixed(),
             cam_pos: Vector3::new(0.0, 0.0, 0.0).into_fixed(),
-            _dummy: std::marker::PhantomData,
+            _r: PhantomData,
         };
 
         context.make_batch(&program, data, &mesh, slice, &state)
@@ -447,12 +411,12 @@ pub fn main() {
 
     let mut blit = {
         let vertex_data = [
-            BlitVertex { pos: [-1, -1, 0], tex_coord: [0, 0] },
-            BlitVertex { pos: [ 1, -1, 0], tex_coord: [1, 0] },
-            BlitVertex { pos: [ 1,  1, 0], tex_coord: [1, 1] },
-            BlitVertex { pos: [-1, -1, 0], tex_coord: [0, 0] },
-            BlitVertex { pos: [ 1,  1, 0], tex_coord: [1, 1] },
-            BlitVertex { pos: [-1,  1, 0], tex_coord: [0, 1] },
+            BlitVertex { pos: Floater::cast3([-1, -1, 0]), tex_coord: Floater::cast2([0, 0]) },
+            BlitVertex { pos: Floater::cast3([ 1, -1, 0]), tex_coord: Floater::cast2([1, 0]) },
+            BlitVertex { pos: Floater::cast3([ 1,  1, 0]), tex_coord: Floater::cast2([1, 1]) },
+            BlitVertex { pos: Floater::cast3([-1, -1, 0]), tex_coord: Floater::cast2([0, 0]) },
+            BlitVertex { pos: Floater::cast3([ 1,  1, 0]), tex_coord: Floater::cast2([1, 1]) },
+            BlitVertex { pos: Floater::cast3([-1,  1, 0]), tex_coord: Floater::cast2([0, 1]) },
         ];
         let mesh = factory.create_mesh(&vertex_data);
         let slice = mesh.to_slice(gfx::PrimitiveType::TriangleList);
@@ -462,7 +426,8 @@ pub fn main() {
         let state = gfx::DrawState::new();
 
         let data = BlitParams {
-          tex: (texture_pos.clone(), Some(sampler.clone())),
+            tex: (texture_pos.clone(), Some(sampler.clone())),
+            _r: PhantomData,
         };
 
         context.make_batch(&program, data, &mesh, slice, &state)
@@ -474,35 +439,35 @@ pub fn main() {
     let (mut light, mut emitter) = {
         let vertex_data = [
             // top (0, 0, 1)
-            CubeVertex { pos: [-1, -1,  1] },
-            CubeVertex { pos: [ 1, -1,  1] },
-            CubeVertex { pos: [ 1,  1,  1] },
-            CubeVertex { pos: [-1,  1,  1] },
+            CubeVertex { pos: Floater::cast3([-1, -1,  1]) },
+            CubeVertex { pos: Floater::cast3([ 1, -1,  1]) },
+            CubeVertex { pos: Floater::cast3([ 1,  1,  1]) },
+            CubeVertex { pos: Floater::cast3([-1,  1,  1]) },
             // bottom (0, 0, -1)
-            CubeVertex { pos: [-1,  1, -1] },
-            CubeVertex { pos: [ 1,  1, -1] },
-            CubeVertex { pos: [ 1, -1, -1] },
-            CubeVertex { pos: [-1, -1, -1] },
+            CubeVertex { pos: Floater::cast3([-1,  1, -1]) },
+            CubeVertex { pos: Floater::cast3([ 1,  1, -1]) },
+            CubeVertex { pos: Floater::cast3([ 1, -1, -1]) },
+            CubeVertex { pos: Floater::cast3([-1, -1, -1]) },
             // right (1, 0, 0)
-            CubeVertex { pos: [ 1, -1, -1] },
-            CubeVertex { pos: [ 1,  1, -1] },
-            CubeVertex { pos: [ 1,  1,  1] },
-            CubeVertex { pos: [ 1, -1,  1] },
+            CubeVertex { pos: Floater::cast3([ 1, -1, -1]) },
+            CubeVertex { pos: Floater::cast3([ 1,  1, -1]) },
+            CubeVertex { pos: Floater::cast3([ 1,  1,  1]) },
+            CubeVertex { pos: Floater::cast3([ 1, -1,  1]) },
             // left (-1, 0, 0)
-            CubeVertex { pos: [-1, -1,  1] },
-            CubeVertex { pos: [-1,  1,  1] },
-            CubeVertex { pos: [-1,  1, -1] },
-            CubeVertex { pos: [-1, -1, -1] },
+            CubeVertex { pos: Floater::cast3([-1, -1,  1]) },
+            CubeVertex { pos: Floater::cast3([-1,  1,  1]) },
+            CubeVertex { pos: Floater::cast3([-1,  1, -1]) },
+            CubeVertex { pos: Floater::cast3([-1, -1, -1]) },
             // front (0, 1, 0)
-            CubeVertex { pos: [ 1,  1, -1] },
-            CubeVertex { pos: [-1,  1, -1] },
-            CubeVertex { pos: [-1,  1,  1] },
-            CubeVertex { pos: [ 1,  1,  1] },
+            CubeVertex { pos: Floater::cast3([ 1,  1, -1]) },
+            CubeVertex { pos: Floater::cast3([-1,  1, -1]) },
+            CubeVertex { pos: Floater::cast3([-1,  1,  1]) },
+            CubeVertex { pos: Floater::cast3([ 1,  1,  1]) },
             // back (0, -1, 0)
-            CubeVertex { pos: [ 1, -1,  1] },
-            CubeVertex { pos: [-1, -1,  1] },
-            CubeVertex { pos: [-1, -1, -1] },
-            CubeVertex { pos: [ 1, -1, -1] },
+            CubeVertex { pos: Floater::cast3([ 1, -1,  1]) },
+            CubeVertex { pos: Floater::cast3([-1, -1,  1]) },
+            CubeVertex { pos: Floater::cast3([-1, -1, -1]) },
+            CubeVertex { pos: Floater::cast3([ 1, -1, -1]) },
         ];
 
         let index_data: &[u8] = &[
@@ -532,6 +497,7 @@ pub fn main() {
             tex_pos: (texture_pos.clone(), Some(sampler.clone())),
             tex_normal: (texture_normal.clone(), Some(sampler.clone())),
             tex_diffuse: (texture_diffuse.clone(), Some(sampler.clone())),
+            _r: PhantomData,
         };
 
         let light = {
@@ -546,6 +512,7 @@ pub fn main() {
             transform: Matrix4::identity().into_fixed(),
             light_pos_buf: light_pos_buffer.raw().clone(),
             radius: 0.2,
+            _r: PhantomData,
         };
 
         let emitter = {
