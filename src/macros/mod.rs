@@ -1,7 +1,24 @@
+// Copyright 2014 The Gfx-rs Developers.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! Macros for deriving `VertexFormat` and `ShaderParam`.
+
 #[macro_export]
 macro_rules! gfx_vertex {
-    ($name:ident {$($field:ident: $ty:ty,)*}) => {
-        struct $name {
+    ($name:ident {$($gl_name:ident@ $field:ident: $ty:ty,)*}) => {
+        #[derive(Clone, Debug)]
+        pub struct $name {
             $($field: $ty,)*
         }
         impl $crate::VertexFormat for $name {
@@ -23,7 +40,7 @@ macro_rules! gfx_vertex {
                         instance_rate: 0,
                     };
                     attributes.push($crate::Attribute {
-                        name: String::new(), //fixme
+                        name: stringify!($gl_name).to_string(),
                         format: format,
                         buffer: buffer.raw().clone(),
                     });
@@ -36,11 +53,12 @@ macro_rules! gfx_vertex {
     }
 }
 
+#[cfg(test)]
+gfx_vertex!(_Foo {
+    x@ _x: i8,
+    y@ _y: f32,
+    z@ _z: [u32; 4],
+});
+
 #[test]
-fn vertex() {
-    gfx_vertex!(_Foo {
-        _x: i8,
-        _y: f32,
-        _z: [u32; 4],
-    });
-}
+fn vertex() {}

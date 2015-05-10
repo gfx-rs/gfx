@@ -176,11 +176,11 @@ pub trait Factory<R: Resources> {
             self.create_buffer_raw(num * mem::size_of::<T>(), usage))
     }
     fn create_buffer_static_raw(&mut self, data: &[u8], role: BufferRole) -> handle::RawBuffer<R>;
-    fn create_buffer_static<T: Copy>(&mut self, data: &[T]) -> handle::Buffer<R, T> {
+    fn create_buffer_static<T>(&mut self, data: &[T]) -> handle::Buffer<R, T> {
         handle::Buffer::from_raw(
             self.create_buffer_static_raw(as_byte_slice(data), BufferRole::Vertex))
     }
-    fn create_buffer_index<T: Copy>(&mut self, data: &[T]) -> handle::IndexBuffer<R, T> {
+    fn create_buffer_index<T>(&mut self, data: &[T]) -> handle::IndexBuffer<R, T> {
         handle::IndexBuffer::from_raw(
             self.create_buffer_static_raw(as_byte_slice(data), BufferRole::Index))
     }
@@ -196,7 +196,7 @@ pub trait Factory<R: Resources> {
 
     /// Update the information stored in a specific buffer
     fn update_buffer_raw(&mut self, buf: &handle::RawBuffer<R>, data: &[u8], offset_bytes: usize);
-    fn update_buffer<T: Copy>(&mut self, buf: &handle::Buffer<R, T>, data: &[T], offset_elements: usize) {
+    fn update_buffer<T>(&mut self, buf: &handle::Buffer<R, T>, data: &[T], offset_elements: usize) {
         self.update_buffer_raw(buf.raw(), as_byte_slice(data), mem::size_of::<T>() * offset_elements)
     }
     fn map_buffer_raw(&mut self, &handle::RawBuffer<R>, MapAccess) -> Self::Mapper;
@@ -210,16 +210,16 @@ pub trait Factory<R: Resources> {
                           img: &tex::ImageInfo, data: &[u8],
                           kind: Option<tex::TextureKind>) -> Result<(), tex::TextureError>;
 
-    fn update_texture<T: Copy>(&mut self, tex: &handle::Texture<R>, 
-                          img: &tex::ImageInfo, data: &[T],
-                          kind: Option<tex::TextureKind>) -> Result<(), tex::TextureError> {
+    fn update_texture<T>(&mut self, tex: &handle::Texture<R>,
+                         img: &tex::ImageInfo, data: &[T],
+                         kind: Option<tex::TextureKind>) -> Result<(), tex::TextureError> {
         self.update_texture_raw(tex, img, as_byte_slice(data), kind)
     }
 
     fn generate_mipmap(&mut self, &handle::Texture<R>);
 
     /// Create a new texture with given data
-    fn create_texture_static<T: Copy>(&mut self, info: tex::TextureInfo, data: &[T])
+    fn create_texture_static<T>(&mut self, info: tex::TextureInfo, data: &[T])
                              -> Result<handle::Texture<R>, tex::TextureError> {
         let image_info = info.to_image_info();
         match self.create_texture(info) {
