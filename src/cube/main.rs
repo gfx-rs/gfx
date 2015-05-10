@@ -28,7 +28,7 @@ use gfx::traits::*;
 // Notice the use of FixedPoint.
 gfx_vertex!( Vertex {
     a_Pos@ pos: [Floater<i8>; 3],
-    a_TexCoord@  tex_coord: [Floater<u8>; 2],
+    a_TexCoord@ tex_coord: [Floater<u8>; 2],
 });
 
 impl Vertex {

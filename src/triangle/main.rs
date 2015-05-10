@@ -12,24 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(plugin, custom_attribute)]
-#![plugin(gfx_macros)]
-
+#[macro_use]
 extern crate gfx;
 extern crate gfx_window_glutin;
 extern crate glutin;
 
 use gfx::traits::*;
 
-#[vertex_format]
-#[derive(Clone, Copy)]
-struct Vertex {
-    #[name = "a_Pos"]
-    pos: [f32; 2],
-
-    #[name = "a_Color"]
-    color: [f32; 3],
-}
+gfx_vertex!( Vertex {
+    a_Pos@ pos: [f32; 2],
+    a_Color@ color: [f32; 3],
+});
 
 pub fn main() {
     let mut canvas = gfx_window_glutin::init(glutin::Window::new().unwrap())
