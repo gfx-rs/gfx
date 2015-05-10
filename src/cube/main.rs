@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(plugin, custom_attribute)]
-#![plugin(gfx_macros)]
-
 extern crate cgmath;
+#[macro_use]
 extern crate gfx;
 extern crate gfx_window_glfw;
 extern crate glfw;
@@ -23,30 +21,31 @@ extern crate glfw;
 use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
+use gfx::attrib::Floater;
 use gfx::traits::*;
 
-#[vertex_format]
-#[derive(Clone, Copy)]
-struct Vertex {
-    #[as_float]
-    #[name = "a_Pos"]
-    pos: [i8; 3],
+// Declare the vertex format suitable for drawing.
+// Notice the use of FixedPoint.
+gfx_vertex!( Vertex {
+    a_Pos@ pos: [Floater<i8>; 3],
+    a_TexCoord@ tex_coord: [Floater<u8>; 2],
+});
 
-    #[as_float]
-    #[name = "a_TexCoord"]
-    tex_coord: [u8; 2],
+impl Vertex {
+    fn new(p: [i8; 3], t: [u8; 2]) -> Vertex {
+        Vertex {
+            pos: Floater::cast3(p),
+            tex_coord: Floater::cast2(t),
+        }
+    }
 }
 
 // The shader_param attribute makes sure the following struct can be used to
 // pass parameters to a shader.
-#[shader_param]
-struct Params<R: gfx::Resources> {
-    #[name = "u_Transform"]
-    transform: [[f32; 4]; 4],
-
-    #[name = "t_Color"]
-    color: gfx::shade::TextureParam<R>,
-}
+gfx_parameters!( Params/ParamsLink {
+    u_Transform@ transform: [[f32; 4]; 4],
+    t_Color@ color: gfx::shade::TextureParam<R>,
+});
 
 
 //----------------------------------------
@@ -63,35 +62,35 @@ pub fn main() {
 
     let vertex_data = [
         // top (0, 0, 1)
-        Vertex { pos: [-1, -1,  1], tex_coord: [0, 0] },
-        Vertex { pos: [ 1, -1,  1], tex_coord: [1, 0] },
-        Vertex { pos: [ 1,  1,  1], tex_coord: [1, 1] },
-        Vertex { pos: [-1,  1,  1], tex_coord: [0, 1] },
+        Vertex::new([-1, -1,  1], [0, 0]),
+        Vertex::new([ 1, -1,  1], [1, 0]),
+        Vertex::new([ 1,  1,  1], [1, 1]),
+        Vertex::new([-1,  1,  1], [0, 1]),
         // bottom (0, 0, -1)
-        Vertex { pos: [-1,  1, -1], tex_coord: [1, 0] },
-        Vertex { pos: [ 1,  1, -1], tex_coord: [0, 0] },
-        Vertex { pos: [ 1, -1, -1], tex_coord: [0, 1] },
-        Vertex { pos: [-1, -1, -1], tex_coord: [1, 1] },
+        Vertex::new([-1,  1, -1], [1, 0]),
+        Vertex::new([ 1,  1, -1], [0, 0]),
+        Vertex::new([ 1, -1, -1], [0, 1]),
+        Vertex::new([-1, -1, -1], [1, 1]),
         // right (1, 0, 0)
-        Vertex { pos: [ 1, -1, -1], tex_coord: [0, 0] },
-        Vertex { pos: [ 1,  1, -1], tex_coord: [1, 0] },
-        Vertex { pos: [ 1,  1,  1], tex_coord: [1, 1] },
-        Vertex { pos: [ 1, -1,  1], tex_coord: [0, 1] },
+        Vertex::new([ 1, -1, -1], [0, 0]),
+        Vertex::new([ 1,  1, -1], [1, 0]),
+        Vertex::new([ 1,  1,  1], [1, 1]),
+        Vertex::new([ 1, -1,  1], [0, 1]),
         // left (-1, 0, 0)
-        Vertex { pos: [-1, -1,  1], tex_coord: [1, 0] },
-        Vertex { pos: [-1,  1,  1], tex_coord: [0, 0] },
-        Vertex { pos: [-1,  1, -1], tex_coord: [0, 1] },
-        Vertex { pos: [-1, -1, -1], tex_coord: [1, 1] },
+        Vertex::new([-1, -1,  1], [1, 0]),
+        Vertex::new([-1,  1,  1], [0, 0]),
+        Vertex::new([-1,  1, -1], [0, 1]),
+        Vertex::new([-1, -1, -1], [1, 1]),
         // front (0, 1, 0)
-        Vertex { pos: [ 1,  1, -1], tex_coord: [1, 0] },
-        Vertex { pos: [-1,  1, -1], tex_coord: [0, 0] },
-        Vertex { pos: [-1,  1,  1], tex_coord: [0, 1] },
-        Vertex { pos: [ 1,  1,  1], tex_coord: [1, 1] },
+        Vertex::new([ 1,  1, -1], [1, 0]),
+        Vertex::new([-1,  1, -1], [0, 0]),
+        Vertex::new([-1,  1,  1], [0, 1]),
+        Vertex::new([ 1,  1,  1], [1, 1]),
         // back (0, -1, 0)
-        Vertex { pos: [ 1, -1,  1], tex_coord: [0, 0] },
-        Vertex { pos: [-1, -1,  1], tex_coord: [1, 0] },
-        Vertex { pos: [-1, -1, -1], tex_coord: [1, 1] },
-        Vertex { pos: [ 1, -1, -1], tex_coord: [0, 1] },
+        Vertex::new([ 1, -1,  1], [0, 0]),
+        Vertex::new([-1, -1,  1], [1, 0]),
+        Vertex::new([-1, -1, -1], [1, 1]),
+        Vertex::new([ 1, -1, -1], [0, 1]),
     ];
 
     let mesh = canvas.factory.create_mesh(&vertex_data);
@@ -142,6 +141,7 @@ pub fn main() {
     let data = Params {
         transform: proj.mul_m(&view.mat).into_fixed(),
         color: (texture, Some(sampler)),
+        _r: std::marker::PhantomData,
     };
 
     let mut batch = gfx::batch::OwnedBatch::new(mesh, program, data).unwrap();

@@ -1,6 +1,6 @@
 [package]
 name = "gfx-examples"
-version = "0.0.5"
+version = "0.1.0"
 
 [[bin]]
 name = "cube"
@@ -37,12 +37,6 @@ git = "https://github.com/bjz/cgmath-rs"
 
 [dependencies.gfx]
 git = "https://github.com/gfx-rs/gfx-rs"
-#version = "*"
-
-[dependencies.gfx_macros]
-git = "https://github.com/gfx-rs/gfx_macros"
-#version = "*"
-plugin = true
 
 [dependencies.gfx_window_glutin]
 git = "https://github.com/gfx-rs/gfx_window_glutin"

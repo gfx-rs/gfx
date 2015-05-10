@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(plugin, custom_attribute)]
-#![plugin(gfx_macros)]
-
 extern crate cgmath;
+#[macro_use]
 extern crate gfx;
 extern crate gfx_window_glutin;
 extern crate glutin;
@@ -24,7 +22,6 @@ extern crate rand;
 extern crate genmesh;
 extern crate noise;
 
-use std::fmt;
 use rand::Rng;
 use cgmath::FixedArray;
 use cgmath::{Matrix4, Point3, Vector3};
@@ -36,37 +33,17 @@ use time::precise_time_s;
 
 use noise::{Seed, perlin2};
 
-#[vertex_format]
-#[derive(Clone, Copy)]
-struct Vertex {
-    #[name = "a_Pos"]
-    pos: [f32; 3],
 
-    #[name = "a_Color"]
-    color: [f32; 3],
-}
+gfx_vertex!( Vertex {
+    a_Pos@ pos: [f32; 3],
+    a_Color@ color: [f32; 3],
+});
 
-impl fmt::Debug for Vertex {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Pos({}, {}, {})", self.pos[0], self.pos[1], self.pos[2])
-    }
-}
-
-// The shader_param attribute makes sure the following struct can be used to
-// pass parameters to a shader.
-#[shader_param]
-struct Params<R: gfx::Resources> {
-    #[name = "u_Model"]
-    model: [[f32; 4]; 4],
-
-    #[name = "u_View"]
-    view: [[f32; 4]; 4],
-
-    #[name = "u_Proj"]
-    proj: [[f32; 4]; 4],
-
-    _dummy: std::marker::PhantomData<R>,
-}
+gfx_parameters!( Params/ParamsLink {
+    u_Model@ model: [[f32; 4]; 4],
+    u_View@ view: [[f32; 4]; 4],
+    u_Proj@ proj: [[f32; 4]; 4],
+});
 
 fn calculate_color(height: f32) -> [f32; 3] {
     if height > 8.0 {
@@ -133,7 +110,7 @@ pub fn main() {
                                   canvas.get_aspect_ratio(),
                                   0.1, 1000.0
                                   ).into_fixed(),
-        _dummy: std::marker::PhantomData,
+        _r: std::marker::PhantomData,
     };
     let mut context = gfx::batch::Context::new();
     let mut batch = context.make_batch(&program, data, &mesh, slice, &state)
