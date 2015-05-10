@@ -22,61 +22,104 @@ use super::ParamStorage;
 
 pub use device::shade::{Stage, CreateShaderError};
 
-/// Helper trait to transform base types into their corresponding uniforms
-pub trait ToUniform {
-    /// Create a `UniformValue` representing this value.
-    fn to_uniform(&self) -> shade::UniformValue;
-}
 
-macro_rules! impl_ToUniform{
-    ($ty_src:ty, $ty_dst:expr) => {
-        impl ToUniform for $ty_src {
-            fn to_uniform(&self) -> shade::UniformValue {
-                $ty_dst(*self)
+macro_rules! uniform {
+    ($ty_src:ty, $ty_dst:ident) => {
+        impl Into<UniformValue> for $ty_src {
+            fn into(self) -> UniformValue {
+                UniformValue::$ty_dst(self)
             }
         }
     }
 }
 
-impl_ToUniform!(i32, UniformValue::I32);
-impl_ToUniform!(f32, UniformValue::F32);
+uniform!(i32, I32);
+uniform!(f32, F32);
 
-impl_ToUniform!([i32; 2], UniformValue::I32Vector2);
-impl_ToUniform!([i32; 3], UniformValue::I32Vector3);
-impl_ToUniform!([i32; 4], UniformValue::I32Vector4);
+uniform!([i32; 2], I32Vector2);
+uniform!([i32; 3], I32Vector3);
+uniform!([i32; 4], I32Vector4);
 
-impl_ToUniform!([f32; 2], UniformValue::F32Vector2);
-impl_ToUniform!([f32; 3], UniformValue::F32Vector3);
-impl_ToUniform!([f32; 4], UniformValue::F32Vector4);
+uniform!([f32; 2], F32Vector2);
+uniform!([f32; 3], F32Vector3);
+uniform!([f32; 4], F32Vector4);
 
-impl_ToUniform!([[f32; 2]; 2], UniformValue::F32Matrix2);
-impl_ToUniform!([[f32; 3]; 3], UniformValue::F32Matrix3);
-impl_ToUniform!([[f32; 4]; 4], UniformValue::F32Matrix4);
-
-/// Variable index of a uniform.
-pub type VarUniform = u16;
-
-/// Variable index of a uniform block.
-pub type VarBlock = u8;
-
-/// Variable index of a texture.
-pub type VarTexture = u8;
+uniform!([[f32; 2]; 2], F32Matrix2);
+uniform!([[f32; 3]; 3], F32Matrix3);
+uniform!([[f32; 4]; 4], F32Matrix4);
 
 /// A texture parameter: consists of a texture handle with an optional sampler.
+/// Not all textures need a sampler (i.e. MSAA ones do not). Optimally, we'd want to
+/// encode this logic into the type system (TODO).
 pub type TextureParam<R: Resources> = (handle::Texture<R>, Option<handle::Sampler<R>>);
 
 /// An error type on either the parameter storage or the program side
 #[derive(Clone, PartialEq, Debug)]
 pub enum ParameterError {
-    /// Internal error
-    ParameterGeneralMismatch,
-    /// Shader requested a uniform that the parameters do not have
+    /// The parameter requires 'self' to be assigned, but none was provided.
+    MissingSelf,
+    /// Shader requested a uniform that the parameters do not have.
     MissingUniform(String),
-    /// Shader requested a block that the parameters do not have
+    /// Shader requested a block that the parameters do not have.
     MissingBlock(String),
-    /// Shader requested a texture that the parameters do not have
+    /// Shader requested a texture that the parameters do not have.
     MissingTexture(String),
 }
+
+/// Parameter index.
+pub type ParameterId = u16;
+
+/// General shader parameter.
+pub trait Parameter<R: Resources> {
+    /// Find this parameter by name in the program descriptor.
+    fn find(&str, &shade::ProgramInfo) -> Result<ParameterId, ParameterError>;
+    /// Write into the parameter storage for rendering.
+    fn put(&self, ParameterId, &mut ParamStorage<R>);
+}
+
+impl<T: Clone + Into<UniformValue>, R: Resources> Parameter<R> for T {
+    fn find(name: &str, info: &shade::ProgramInfo)
+            -> Result<ParameterId, ParameterError> {
+        //TODO: match semantics
+        match info.uniforms.iter().position(|u| &u.name == name) {
+            Some(pos) => Ok(pos as ParameterId),
+            None => Err(ParameterError::MissingUniform(name.to_string())),
+        }
+    }
+
+    fn put(&self, id: ParameterId, storage: &mut ParamStorage<R>) {
+        storage.uniforms[id as usize] = Some(self.clone().into());
+    }
+}
+
+impl<R: Resources> Parameter<R> for handle::RawBuffer<R> {
+    fn find(name: &str, info: &shade::ProgramInfo)
+            -> Result<ParameterId, ParameterError> {
+        match info.blocks.iter().position(|b| &b.name == name) {
+            Some(pos) => Ok(pos as ParameterId),
+            None => Err(ParameterError::MissingBlock(name.to_string())),
+        }
+    }
+
+    fn put(&self, id: ParameterId, storage: &mut ParamStorage<R>) {
+        storage.blocks[id as usize] = Some(self.clone());
+    }
+}
+
+impl<R: Resources> Parameter<R> for TextureParam<R> {
+    fn find(name: &str, info: &shade::ProgramInfo)
+            -> Result<ParameterId, ParameterError> {
+        match info.textures.iter().position(|t| &t.name == name) {
+            Some(pos) => Ok(pos as ParameterId),
+            None => Err(ParameterError::MissingTexture(name.to_string())),
+        }
+    }
+
+    fn put(&self, id: ParameterId, storage: &mut ParamStorage<R>) {
+        storage.textures[id as usize] = Some(self.clone());
+    }
+}
+
 
 /// Abstracts the shader parameter structure, generated by the `shader_param` attribute
 #[allow(missing_docs)]
@@ -148,7 +191,7 @@ impl<R: Resources> ShaderParam for ParamDictionary<R> {
                    -> Result<ParamDictionaryLink, ParameterError> {
         let this = match this {
             Some(d) => d,
-            None => return Err(ParameterError::ParameterGeneralMismatch),
+            None => return Err(ParameterError::MissingSelf),
         };
         //TODO: proper error checks
         Ok(ParamDictionaryLink {

@@ -16,10 +16,12 @@
 
 #[macro_export]
 macro_rules! gfx_vertex {
-    ($name:ident {$($gl_name:ident@ $field:ident: $ty:ty,)*}) => {
+    ($name:ident {
+        $($gl_name:ident@ $field:ident: $ty:ty,)*
+    }) => {
         #[derive(Clone, Debug)]
         pub struct $name {
-            $($field: $ty,)*
+            $(pub $field: $ty,)*
         }
         impl $crate::VertexFormat for $name {
             fn generate<R: $crate::Resources>(buffer: &$crate::handle::Buffer<R, $name>)
@@ -53,6 +55,42 @@ macro_rules! gfx_vertex {
     }
 }
 
+#[macro_export]
+macro_rules! gfx_parameters {
+    ($name:ident/$link_name:ident {
+        $($gl_name:ident@ $field:ident: $ty:ty,)*
+    }) => {
+        #[derive(Clone, Debug)]
+        pub struct $name<R: $crate::Resources> {
+            $(pub $field: $ty,)*
+            pub _r: ::std::marker::PhantomData<R>,
+        }
+        #[derive(Clone, Debug)]
+        pub struct $link_name {
+            $($field: $crate::shade::ParameterId,)*
+        }
+        impl<R: $crate::Resources> $crate::shade::ShaderParam for $name<R> {
+            type Resources = R;
+            type Link = $link_name;
+            fn create_link(_: Option<&$name<R>>, info: &$crate::ProgramInfo)
+                           -> Result<$link_name, $crate::shade::ParameterError> {
+                use $crate::shade::Parameter;
+                Ok($link_name {
+                    $(
+                        $field: try!(<$ty as Parameter<R>>::find(stringify!($gl_name), info)),
+                    )*
+                })
+            }
+            fn fill_params(&self, link: &$link_name, storage: &mut $crate::ParamStorage<R>) {
+                use $crate::shade::Parameter;
+                $(
+                    self.$field.put(link.$field, storage);
+                )*
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 gfx_vertex!(_Foo {
     x@ _x: i8,
@@ -60,5 +98,12 @@ gfx_vertex!(_Foo {
     z@ _z: [u32; 4],
 });
 
+gfx_parameters!(_Bar/BarLink {
+    x@ _x: i32,
+    y@ _y: [f32; 4],
+    b@ _b: ::handle::RawBuffer<R>,
+    t@ _t: ::shade::TextureParam<R>,
+});
+
 #[test]
-fn vertex() {}
+fn test() {}
