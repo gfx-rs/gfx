@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(convert, plugin, custom_attribute)]
-#![plugin(gfx_macros)]
-
 extern crate cgmath;
+#[macro_use]
 extern crate gfx;
 extern crate gfx_window_glfw;
 extern crate glfw;
@@ -26,6 +24,7 @@ use time::precise_time_s;
 use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3, Matrix3, Matrix4};
 use cgmath::{Transform, AffineMatrix3, Vector4, Array1};
+use gfx::attrib::Floater;
 use gfx::traits::*;
 use glfw::Context;
 use gl::Gl;
@@ -39,22 +38,14 @@ use std::sync::mpsc::Receiver;
 use std::iter::repeat;
 use std::ffi::CString;
 
-#[vertex_format]
-#[derive(Clone, Copy)]
-struct Vertex {
-    #[as_float]
-    #[name = "a_Pos"]
-    pos: [i8; 3],
-}
 
-// The shader_param attribute makes sure the following struct can be used to
-// pass parameters to a shader.
-#[shader_param]
-struct Params<R: gfx::Resources> {
-    #[name = "u_Transform"]
-    transform: [[f32; 4]; 4],
-    _dummy: std::marker::PhantomData<R>,
-}
+gfx_vertex!( Vertex {
+    a_Pos@ pos: [Floater<i8>; 3],
+});
+
+gfx_parameters!( Params/ParamsLink {
+    u_Transform@ transform: [[f32; 4]; 4],
+});
 
 static VERTEX_SRC: &'static [u8] = b"
     #version 150 core
@@ -85,10 +76,9 @@ fn gfx_main(mut glfw: glfw::Glfw,
     let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
     let vertex_data = [
-        // front (0, 1, 0)
-        Vertex { pos: [-1,  1, -1] },
-        Vertex { pos: [ 1,  1, -1] },
-        Vertex { pos: [ 1,  1,  1] },
+        Vertex { pos: Floater::cast3([-1,  1, -1]) },
+        Vertex { pos: Floater::cast3([ 1,  1, -1]) },
+        Vertex { pos: Floater::cast3([ 1,  1,  1]) },
     ];
 
     let mesh = factory.create_mesh(&vertex_data);
@@ -140,7 +130,7 @@ fn gfx_main(mut glfw: glfw::Glfw,
                 let data = Params {
                     transform: proj.mul_m(&view.mat)
                                    .mul_m(&model).into_fixed(),
-                    _dummy: std::marker::PhantomData,
+                    _r: std::marker::PhantomData,
                 };
                 graphics.draw_core(&batch, &slice, &data, &wrap).unwrap();
             }
@@ -198,7 +188,7 @@ fn compile_shader(gl: &Gl, src: &str, ty: GLenum) -> GLuint { unsafe {
         gl.GetShaderiv(shader, gl::INFO_LOG_LENGTH, &mut len);
         let mut buf: Vec<u8> = repeat(0u8).take((len as isize).saturating_sub(1) as usize).collect();     // subtract 1 to skip the trailing null character
         gl.GetShaderInfoLog(shader, len, ptr::null_mut(), buf.as_mut_ptr() as *mut GLchar);
-        panic!("{}", str::from_utf8(buf.as_slice()).ok().expect("ShaderInfoLog not valid utf8"));
+        panic!("{}", str::from_utf8(&buf).ok().expect("ShaderInfoLog not valid utf8"));
     }
     shader
 }}
@@ -218,7 +208,7 @@ fn link_program(gl: &Gl, vs: GLuint, fs: GLuint) -> GLuint { unsafe {
         gl.GetProgramiv(program, gl::INFO_LOG_LENGTH, &mut len);
         let mut buf: Vec<u8> = repeat(0u8).take((len as isize).saturating_sub(1) as usize).collect();     // subtract 1 to skip the trailing null character
         gl.GetProgramInfoLog(program, len, ptr::null_mut(), buf.as_mut_ptr() as *mut GLchar);
-        panic!("{}", str::from_utf8(buf.as_slice()).ok().expect("ProgramInfoLog not valid utf8"));
+        panic!("{}", str::from_utf8(&buf).ok().expect("ProgramInfoLog not valid utf8"));
     }
     program
 }}
@@ -247,10 +237,9 @@ fn gl_main(mut glfw: glfw::Glfw,
         gl.BindBuffer(gl::ARRAY_BUFFER, vbo);
 
         let vertex_data = vec![
-            // front (0, 1, 0)
-            Vertex { pos: [-1,  1, -1] },
-            Vertex { pos: [ 1,  1, -1] },
-            Vertex { pos: [ 1,  1,  1] },
+            Vertex { pos: Floater::cast3([-1,  1, -1]) },
+            Vertex { pos: Floater::cast3([ 1,  1, -1]) },
+            Vertex { pos: Floater::cast3([ 1,  1,  1]) },
         ];
 
         gl.BufferData(gl::ARRAY_BUFFER,
