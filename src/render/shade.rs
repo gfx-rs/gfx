@@ -60,10 +60,16 @@ pub enum ParameterError {
     MissingSelf,
     /// Shader requested a uniform that the parameters do not have.
     MissingUniform(String),
+    /// Shader requested a uniform that the parameters do not match.
+    BadUniform(String),
     /// Shader requested a block that the parameters do not have.
     MissingBlock(String),
+    /// Shader requested a block that the parameters do not match.
+    BadBlock(String),
     /// Shader requested a texture that the parameters do not have.
     MissingTexture(String),
+    /// Shader requested a texture that the parameters do not match.
+    BadTexture(String),
 }
 
 /// Parameter index.
@@ -71,20 +77,19 @@ pub type ParameterId = u16;
 
 /// General shader parameter.
 pub trait Parameter<R: Resources> {
-    /// Find this parameter by name in the program descriptor.
-    fn find(&str, &shade::ProgramInfo) -> Result<ParameterId, ParameterError>;
+    /// Check if this parameter is good for a given uniform.
+    fn check_uniform(&shade::UniformVar) -> bool { false }
+    /// Check if this parameter is good for a given block.
+    fn check_block(&shade::BlockVar) -> bool { false }
+    /// Check if this parameter is good for a given texture.
+    fn check_texture(&shade::SamplerVar) -> bool { false }
     /// Write into the parameter storage for rendering.
     fn put(&self, ParameterId, &mut ParamStorage<R>);
 }
 
 impl<T: Clone + Into<UniformValue>, R: Resources> Parameter<R> for T {
-    fn find(name: &str, info: &shade::ProgramInfo)
-            -> Result<ParameterId, ParameterError> {
-        //TODO: match semantics
-        match info.uniforms.iter().position(|u| &u.name == name) {
-            Some(pos) => Ok(pos as ParameterId),
-            None => Err(ParameterError::MissingUniform(name.to_string())),
-        }
+    fn check_uniform(_var: &shade::UniformVar) -> bool {
+        true //TODO
     }
 
     fn put(&self, id: ParameterId, storage: &mut ParamStorage<R>) {
@@ -93,12 +98,8 @@ impl<T: Clone + Into<UniformValue>, R: Resources> Parameter<R> for T {
 }
 
 impl<R: Resources> Parameter<R> for handle::RawBuffer<R> {
-    fn find(name: &str, info: &shade::ProgramInfo)
-            -> Result<ParameterId, ParameterError> {
-        match info.blocks.iter().position(|b| &b.name == name) {
-            Some(pos) => Ok(pos as ParameterId),
-            None => Err(ParameterError::MissingBlock(name.to_string())),
-        }
+    fn check_block(_var: &shade::BlockVar) -> bool {
+        true
     }
 
     fn put(&self, id: ParameterId, storage: &mut ParamStorage<R>) {
@@ -107,12 +108,8 @@ impl<R: Resources> Parameter<R> for handle::RawBuffer<R> {
 }
 
 impl<R: Resources> Parameter<R> for TextureParam<R> {
-    fn find(name: &str, info: &shade::ProgramInfo)
-            -> Result<ParameterId, ParameterError> {
-        match info.textures.iter().position(|t| &t.name == name) {
-            Some(pos) => Ok(pos as ParameterId),
-            None => Err(ParameterError::MissingTexture(name.to_string())),
-        }
+    fn check_texture(_var: &shade::SamplerVar) -> bool {
+        true
     }
 
     fn put(&self, id: ParameterId, storage: &mut ParamStorage<R>) {
