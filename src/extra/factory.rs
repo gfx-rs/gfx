@@ -24,7 +24,7 @@ use super::shade::*;
 pub trait FactoryExt<R: device::Resources>: device::Factory<R> {
     /// Create a new mesh from the given vertex data.
     /// Convenience function around `create_buffer` and `Mesh::from_format`.
-    fn create_mesh<T: VertexFormat + Copy>(&mut self, data: &[T]) -> Mesh<R> {
+    fn create_mesh<T: VertexFormat>(&mut self, data: &[T]) -> Mesh<R> {
         let nv = data.len();
         //debug_assert!(nv < self.max_vertex_count); //TODO
         let buf = self.create_buffer_static(data);

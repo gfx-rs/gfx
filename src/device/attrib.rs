@@ -125,9 +125,50 @@ pub struct Format {
     pub instance_rate: InstanceRate,
 }
 
+
+/// Fixed-point version of integer attributes.
+#[derive(Clone, Copy, Debug, PartialEq, Hash)]
+pub struct FixedPoint<T>(pub T);
+
+impl<T: Copy> FixedPoint<T> {
+    /// Cast a fixed-size2 array to fixed-point.
+    pub fn cast2(a: [T; 2]) -> [FixedPoint<T>; 2] {
+        [FixedPoint(a[0]), FixedPoint(a[1])]
+    }
+    /// Cast a fixed-size3 array to fixed-point.
+    pub fn cast3(a: [T; 3]) -> [FixedPoint<T>; 3] {
+        [FixedPoint(a[0]), FixedPoint(a[1]), FixedPoint(a[2])]
+    }
+    /// Cast a fixed-size4 array to fixed-point.
+    pub fn cast4(a: [T; 4]) -> [FixedPoint<T>; 4] {
+        [FixedPoint(a[0]), FixedPoint(a[1]),
+         FixedPoint(a[2]), FixedPoint(a[3])]
+    }
+}
+
+/// Floating-point version of integer attributes.
+#[derive(Clone, Copy, Debug, PartialEq, Hash)]
+pub struct Floater<T>(pub T);
+
+impl<T: Copy> Floater<T> {
+    /// Cast a fixed-size2 array to floating-point.
+    pub fn cast2(a: [T; 2]) -> [Floater<T>; 2] {
+        [Floater(a[0]), Floater(a[1])]
+    }
+    /// Cast a fixed-size3 array to floating-point.
+    pub fn cast3(a: [T; 3]) -> [Floater<T>; 3] {
+        [Floater(a[0]), Floater(a[1]), Floater(a[2])]
+    }
+    /// Cast a fixed-size4 array to floating-point.
+    pub fn cast4(a: [T; 4]) -> [Floater<T>; 4] {
+        [Floater(a[0]), Floater(a[1]),
+         Floater(a[2]), Floater(a[3])]
+    }
+}
+
 /// A service module for deriving `ToFormat` for primitive types.
 pub mod format {
-    use super::{Count, Type};
+    use super::{Count, FixedPoint, Floater, Type};
     use super::Type::*;
     use super::FloatSize::*;
     use super::FloatSubType::*;
@@ -192,25 +233,41 @@ pub mod format {
         fn describe() -> Type { Int(Raw, U32, Signed) }
     }
 
-    /// Fixed-point version of integer attributes.
-    pub struct FixedPoint<T>(pub T);
-
     impl ToType for FixedPoint<u8> {
-        fn describe() -> Type { Int(Raw, U8, Unsigned) }
+        fn describe() -> Type { Int(Normalized, U8, Unsigned) }
     }
     impl ToType for FixedPoint<u16> {
-        fn describe() -> Type { Int(Raw, U16, Unsigned) }
+        fn describe() -> Type { Int(Normalized, U16, Unsigned) }
     }
     impl ToType for FixedPoint<u32> {
-        fn describe() -> Type { Int(Raw, U32, Unsigned) }
+        fn describe() -> Type { Int(Normalized, U32, Unsigned) }
     }
     impl ToType for FixedPoint<i8> {
-        fn describe() -> Type { Int(Raw, U8, Signed) }
+        fn describe() -> Type { Int(Normalized, U8, Signed) }
     }
     impl ToType for FixedPoint<i16> {
-        fn describe() -> Type { Int(Raw, U16, Signed) }
+        fn describe() -> Type { Int(Normalized, U16, Signed) }
     }
     impl ToType for FixedPoint<i32> {
-        fn describe() -> Type { Int(Raw, U32, Signed) }
+        fn describe() -> Type { Int(Normalized, U32, Signed) }
+    }
+
+    impl ToType for Floater<u8> {
+        fn describe() -> Type { Int(AsFloat, U8, Unsigned) }
+    }
+    impl ToType for Floater<u16> {
+        fn describe() -> Type { Int(AsFloat, U16, Unsigned) }
+    }
+    impl ToType for Floater<u32> {
+        fn describe() -> Type { Int(AsFloat, U32, Unsigned) }
+    }
+    impl ToType for Floater<i8> {
+        fn describe() -> Type { Int(AsFloat, U8, Signed) }
+    }
+    impl ToType for Floater<i16> {
+        fn describe() -> Type { Int(AsFloat, U16, Signed) }
+    }
+    impl ToType for Floater<i32> {
+        fn describe() -> Type { Int(AsFloat, U32, Signed) }
     }
 }

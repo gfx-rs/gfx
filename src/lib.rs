@@ -46,7 +46,6 @@ pub use device::as_byte_slice;
 pub use device::{BufferRole, BufferInfo, BufferUsage};
 pub use device::{VertexCount, InstanceCount};
 pub use device::PrimitiveType;
-pub use device::attrib::format::{FixedPoint};
 pub use device::draw::{CommandBuffer, Gamma};
 pub use device::shade::{ProgramInfo, UniformValue};
 pub use render::{Renderer, DrawError};
