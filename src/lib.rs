@@ -63,4 +63,5 @@ pub use extra::stream::{OwnedStream, Stream};
 
 pub mod device;
 pub mod extra;
+mod macros;
 pub mod render;
