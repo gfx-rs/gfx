@@ -11,6 +11,10 @@ name = "deferred"
 path = "src/deferred/main.rs"
 
 [[bin]]
+name = "flowmap"
+path = "src/flowmap/main.rs"
+
+[[bin]]
 name = "performance"
 path = "src/performance/main.rs"
 
@@ -30,6 +34,7 @@ rand = "*"
 time = "*"
 genmesh = "*"
 noise = "*"
+image = "*"
 
 [dependencies.cgmath]
 git = "https://github.com/bjz/cgmath-rs"
