@@ -174,6 +174,10 @@ pub trait Resources:           Clone + Hash + fmt::Debug + Eq + PartialEq {
 pub trait Factory<R: Resources> {
     /// Associated mapper type
     type Mapper: Clone + mapping::Raw;
+
+    /// Returns the capabilities available to the specific API implementation
+    fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
+
     // resource creation
     fn create_buffer_raw(&mut self, size: usize, usage: BufferUsage) -> handle::RawBuffer<R>;
     fn create_buffer<T>(&mut self, num: usize, usage: BufferUsage) -> handle::Buffer<R, T> {

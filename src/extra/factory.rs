@@ -47,8 +47,7 @@ pub trait FactoryExt<R: device::Resources>: device::Factory<R> {
             .map_err(|e| ProgramError::Link(e))
     }
 
-    /// Create a simple program given `ShaderSource` versions of vertex and
-    /// fragment shaders, chooss the matching versions for the device.
+    /// DEPRECATED, use `link_program_source2` instead
     fn link_program_source(&mut self, vs_src: ShaderSource, fs_src: ShaderSource,
                            caps: &device::Capabilities)
                            -> Result<handle::Program<R>, ProgramError> {
@@ -71,6 +70,32 @@ pub trait FactoryExt<R: device::Resources>: device::Factory<R> {
             Err(_) => return Err(ProgramError::Fragment(err_model))
         };
 
+        self.create_program(&[vs, fs], Some(fs_src.targets))
+            .map_err(|e| ProgramError::Link(e))
+    }
+
+    /// Compile a single shader of a given stage, automatically picking the right
+    /// shader variant.
+    fn compile_shader_source(&mut self, stage: Stage, source: ShaderSource)
+                             -> Result<handle::Shader<R>, CreateShaderError> {
+        match source.choose(self.get_capabilities().shader_model) {
+            Ok(code) => self.create_shader(stage, code),
+            Err(_) => Err(CreateShaderError::ModelNotSupported)
+        }
+    }
+
+    /// Create a simple program given `ShaderSource` versions of vertex and
+    /// fragment shaders, automatically picking available shader variant.
+    fn link_program_source2(&mut self, vs_src: ShaderSource, fs_src: ShaderSource)
+                            -> Result<handle::Program<R>, ProgramError> {
+        let vs = match self.compile_shader_source(Stage::Vertex, vs_src) {
+            Ok(s) => s,
+            Err(e) => return Err(ProgramError::Vertex(e)),
+        };
+        let fs = match self.compile_shader_source(Stage::Fragment, fs_src) {
+            Ok(s) => s,
+            Err(e) => return Err(ProgramError::Fragment(e)),
+        };
         self.create_program(&[vs, fs], Some(fs_src.targets))
             .map_err(|e| ProgramError::Link(e))
     }

@@ -294,7 +294,8 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
                 }
             },
             None => {
-                let draw_fbo = self.draw_frame_buffer.as_ref().unwrap();
+                let draw_fbo = self.draw_frame_buffer.as_ref().ok().expect(
+                    "Unable to use off-screen draw targets: not supported by the backend");
                 if self.render_state.frame_buffer.as_ref() != Some(draw_fbo) || change_gamma {
                     self.command_buffer.bind_frame_buffer(Access::Draw,
                         self.handles.ref_frame_buffer(draw_fbo),
