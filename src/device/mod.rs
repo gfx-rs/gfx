@@ -43,6 +43,11 @@ pub type UniformBufferSlot = u8;
 /// Slot a texture can be bound to.
 pub type TextureSlot = u8;
 
+/// Generic error for features that are not supported
+/// by the device capabilities.
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub struct NotSupported;
+
 /// Treat a given slice as `&[u8]` for the given function call
 pub fn as_byte_slice<T>(slice: &[T]) -> &[u8] {
     use std::slice;
@@ -184,12 +189,12 @@ pub trait Factory<R: Resources> {
         handle::IndexBuffer::from_raw(
             self.create_buffer_static_raw(as_byte_slice(data), BufferRole::Index))
     }
-    fn create_array_buffer(&mut self) -> Result<handle::ArrayBuffer<R>, ()>;
+    fn create_array_buffer(&mut self) -> Result<handle::ArrayBuffer<R>, NotSupported>;
     fn create_shader(&mut self, stage: shade::Stage, code: &[u8]) ->
                      Result<handle::Shader<R>, shade::CreateShaderError>;
     fn create_program(&mut self, shaders: &[handle::Shader<R>], targets: Option<&[&str]>)
                       -> Result<handle::Program<R>, shade::CreateProgramError>;
-    fn create_frame_buffer(&mut self) -> handle::FrameBuffer<R>;
+    fn create_frame_buffer(&mut self) -> Result<handle::FrameBuffer<R>, NotSupported>;
     fn create_surface(&mut self, tex::SurfaceInfo) -> Result<handle::Surface<R>, tex::SurfaceError>;
     fn create_texture(&mut self, tex::TextureInfo) -> Result<handle::Texture<R>, tex::TextureError>;
     fn create_sampler(&mut self, tex::SamplerInfo) -> handle::Sampler<R>;
