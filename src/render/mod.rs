@@ -145,9 +145,9 @@ pub struct Renderer<R: Resources, C: CommandBuffer<R>> {
     command_buffer: C,
     data_buffer: DataBuffer,
     handles: handle::Manager<R>,
-    common_array_buffer: Result<handle::ArrayBuffer<R>, ()>,
-    draw_frame_buffer: handle::FrameBuffer<R>,
-    read_frame_buffer: handle::FrameBuffer<R>,
+    common_array_buffer: Result<handle::ArrayBuffer<R>, device::NotSupported>,
+    draw_frame_buffer: Result<handle::FrameBuffer<R>, device::NotSupported>,
+    read_frame_buffer: Result<handle::FrameBuffer<R>, device::NotSupported>,
     render_state: RenderState<R>,
     parameters: ParamStorage<R>,
 }
@@ -294,11 +294,13 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
                 }
             },
             None => {
-                if self.render_state.frame_buffer.as_ref() != Some(&self.draw_frame_buffer) || change_gamma {
+                let draw_fbo = self.draw_frame_buffer.as_ref().ok().expect(
+                    "Unable to use off-screen draw targets: not supported by the backend");
+                if self.render_state.frame_buffer.as_ref() != Some(draw_fbo) || change_gamma {
                     self.command_buffer.bind_frame_buffer(Access::Draw,
-                        self.handles.ref_frame_buffer(&self.draw_frame_buffer),
+                        self.handles.ref_frame_buffer(draw_fbo),
                         gamma);
-                    self.render_state.frame_buffer = Some(self.draw_frame_buffer.clone());
+                    self.render_state.frame_buffer = Some(draw_fbo.clone());
                     self.render_state.gamma = gamma;
                 }
                 let colors = output.get_colors();
@@ -345,9 +347,18 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     }
 
     fn bind_pixel_input<I: target::Output<R>>(&mut self, input: &I) {
-        self.command_buffer.bind_frame_buffer(Access::Read,
-            self.handles.ref_frame_buffer(&self.read_frame_buffer),
-            Gamma::Original);
+        // bind input
+        if let Some(ref handle) = input.get_handle() {
+            self.command_buffer.bind_frame_buffer(Access::Read,
+                self.handles.ref_frame_buffer(handle),
+                Gamma::Original);
+        }else if let Ok(ref fbo) = self.read_frame_buffer {
+            self.command_buffer.bind_frame_buffer(Access::Read,
+                self.handles.ref_frame_buffer(fbo),
+                Gamma::Original);
+        }else {
+            panic!("Unable to use off-screen read targets: not supported by the backend");
+        }
         // color
         match input.get_colors().first() {
             Some(ref color) => {
@@ -459,7 +470,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
                 Ok(ref ab) => self.command_buffer.bind_array_buffer(
                     self.handles.ref_array_buffer(ab)
                 ),
-                Err(()) => (),
+                Err(_) => (),
             };
             self.render_state.is_array_buffer_set = true;
         }
@@ -515,7 +526,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
 }
 
 /// Factory extension that allows creating new renderers.
-pub trait RenderFactory<R: device::Resources, C: CommandBuffer<R>> {
+pub trait RenderFactory<R: Resources, C: CommandBuffer<R>> {
     /// Create a new renderer
     fn create_renderer(&mut self) -> Renderer<R, C>;
 }
