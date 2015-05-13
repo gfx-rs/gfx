@@ -156,6 +156,10 @@ impl d::mapping::Raw for RawMapping {
 impl d::Factory<R> for Factory {
     type Mapper = RawMapping;
 
+    fn get_capabilities(&self) -> &d::Capabilities {
+        &self.caps
+    }
+
     fn create_buffer_raw(&mut self, size: usize, usage: d::BufferUsage)
                          -> handle::RawBuffer<R> {
         let name = self.create_buffer_internal();
@@ -182,7 +186,7 @@ impl d::Factory<R> for Factory {
         self.handles.make_buffer(name, info)
     }
 
-    fn create_array_buffer(&mut self) -> Result<handle::ArrayBuffer<R>, ()> {
+    fn create_array_buffer(&mut self) -> Result<handle::ArrayBuffer<R>, d::NotSupported> {
         if self.caps.array_buffer_supported {
             let mut name = 0 as ::ArrayBuffer;
             unsafe {
@@ -191,8 +195,8 @@ impl d::Factory<R> for Factory {
             info!("\tCreated array buffer {}", name);
             Ok(self.handles.make_array_buffer(name))
         } else {
-            error!("\tarray buffer creation unsupported, ignored");
-            Err(())
+            error!("\tArray buffer creation unsupported, ignored");
+            Err(d::NotSupported)
         }
     }
 
@@ -211,17 +215,18 @@ impl d::Factory<R> for Factory {
                 .map(|(name, info)| handles.make_program(name, info))
     }
 
-    fn create_frame_buffer(&mut self) -> handle::FrameBuffer<R> {
-        if !self.caps.render_targets_supported {
-            panic!("No framebuffer objects, can't make a new one!");
+    fn create_frame_buffer(&mut self) -> Result<handle::FrameBuffer<R>, d::NotSupported> {
+        if self.caps.render_targets_supported {
+            let mut name = 0 as ::FrameBuffer;
+            unsafe {
+                self.gl.GenFramebuffers(1, &mut name);
+            }
+            info!("\tCreated frame buffer {}", name);
+            Ok(self.handles.make_frame_buffer(name))
+        } else {
+            error!("No framebuffer objects, can't make a new one!");
+            Err(d::NotSupported)
         }
-
-        let mut name = 0 as ::FrameBuffer;
-        unsafe {
-            self.gl.GenFramebuffers(1, &mut name);
-        }
-        info!("\tCreated frame buffer {}", name);
-        self.handles.make_frame_buffer(name)
     }
 
     fn create_surface(&mut self, info: d::tex::SurfaceInfo) ->
