@@ -178,6 +178,12 @@ pub trait Factory<R: Resources> {
     /// Returns the capabilities available to the specific API implementation
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
 
+    //TODO: allow selecting BufferRole for dynamic buffers
+    // this would be a breaking change, we'll need to change the naming scheme to
+    // a better one once we are at it.
+    // Potentially, leave only generic `RawBuffer` methods here, and move the rest
+    // to FactoryExt.
+
     // resource creation
     fn create_buffer_raw(&mut self, size: usize, usage: BufferUsage) -> handle::RawBuffer<R>;
     fn create_buffer<T>(&mut self, num: usize, usage: BufferUsage) -> handle::Buffer<R, T> {
@@ -189,10 +195,19 @@ pub trait Factory<R: Resources> {
         handle::Buffer::from_raw(
             self.create_buffer_static_raw(as_byte_slice(data), BufferRole::Vertex))
     }
-    fn create_buffer_index<T>(&mut self, data: &[T]) -> handle::IndexBuffer<R, T> {
+    fn create_buffer_index_static<T>(&mut self, data: &[T]) -> handle::IndexBuffer<R, T> {
         handle::IndexBuffer::from_raw(
             self.create_buffer_static_raw(as_byte_slice(data), BufferRole::Index))
     }
+    fn create_buffer_index_dynamic<T>(&mut self, num: usize) -> handle::IndexBuffer<R, T> {
+        handle::IndexBuffer::from_raw(
+            self.create_buffer_raw(num * mem::size_of::<T>(), BufferUsage::Dynamic))
+    }
+    /// DEPRECATED: use create_buffer_index_static instrad
+    fn create_buffer_index<T>(&mut self, data: &[T]) -> handle::IndexBuffer<R, T> {
+        self.create_buffer_index_static(data)
+    }
+
     fn create_array_buffer(&mut self) -> Result<handle::ArrayBuffer<R>, NotSupported>;
     fn create_shader(&mut self, stage: shade::Stage, code: &[u8]) ->
                      Result<handle::Shader<R>, shade::CreateShaderError>;

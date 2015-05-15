@@ -244,24 +244,35 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         self.command_buffer.call_blit(source_rect, dest_rect, mirror, mask);
     }
 
-    /// Update a buffer with data from a vector.
-    pub fn update_buffer_vec<T: Copy>(&mut self, buf: &handle::Buffer<R, T>,
-                             data: &[T], offset_elements: usize) {
-        let esize = mem::size_of::<T>();
-        let offset_bytes = esize * offset_elements;
-        debug_assert!(data.len() * esize + offset_bytes <= buf.get_info().size);
+    /// Update a buffer with a slice of data.
+    pub fn update_buffer<T: Copy>(&mut self, buf: &handle::RawBuffer<R>,
+                         data: &[T], offset_elements: usize) {
+        let elem_size = mem::size_of::<T>();
+        let offset_bytes = elem_size * offset_elements;
+        debug_assert!(data.len() * elem_size + offset_bytes <= buf.get_info().size);
         let pointer = self.data_buffer.add_vec(data);
         self.command_buffer.update_buffer(
-            self.handles.ref_buffer(buf.raw()), pointer, offset_bytes);
+            self.handles.ref_buffer(buf), pointer, offset_bytes);
     }
 
-    /// Update a buffer with data from a single type.
-    pub fn update_buffer_struct<U, T: Copy>(&mut self,
-                                buf: &handle::Buffer<R, U>, data: &T) {
+    /// Update a buffer with a data struct.
+    pub fn update_block<U, T: Copy>(&mut self, buf: &handle::Buffer<R, U>, data: &T) {
         assert!(mem::size_of::<T>() <= buf.get_info().size);
         let pointer = self.data_buffer.add_struct(data);
         self.command_buffer.update_buffer(
             self.handles.ref_buffer(buf.raw()), pointer, 0);
+    }
+
+    /// DEPRECATED: use update_buffer buffer instead.
+    pub fn update_buffer_vec<T: Copy>(&mut self, buf: &handle::Buffer<R, T>,
+                             data: &[T], offset_elements: usize) {
+        self.update_buffer(buf.raw(), data, offset_elements)
+    }
+
+    /// DEPRECATED: use update_block buffer instead.
+    pub fn update_buffer_struct<U, T: Copy>(&mut self,
+                                buf: &handle::Buffer<R, U>, data: &T) {
+        self.update_block(buf, data)
     }
 
     /// Update the contents of a texture.
@@ -269,7 +280,8 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
                           img: device::tex::ImageInfo, data: &[T]) {
         debug_assert!(tex.get_info().contains(&img));
         let pointer = self.data_buffer.add_vec(data);
-        self.command_buffer.update_texture(tex.get_info().kind, self.handles.ref_texture(tex), img, pointer);
+        self.command_buffer.update_texture(tex.get_info().kind,
+            self.handles.ref_texture(tex), img, pointer);
     }
 
     fn bind_output<O: target::Output<R>>(&mut self, output: &O) {
