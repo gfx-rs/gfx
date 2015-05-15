@@ -154,8 +154,8 @@ pub struct Device {
 pub fn create<F: FnMut(&str) -> *const ::libc::c_void>(fn_proc: F)
               -> (Device, Factory) {
     let gl = Rc::new(gl::Gl::load_with(fn_proc));
+    // query information
     let (info, caps) = info::get(&gl);
-
     info!("Vendor: {:?}", info.platform_name.vendor);
     info!("Renderer: {:?}", info.platform_name.renderer);
     info!("Version: {:?}", info.version);
@@ -164,7 +164,11 @@ pub fn create<F: FnMut(&str) -> *const ::libc::c_void>(fn_proc: F)
     for extension in info.extensions.iter() {
         debug!("- {}", *extension);
     }
-
+    // initialize permanent states
+    unsafe {
+        gl.PixelStorei(gl::UNPACK_ALIGNMENT, 1);
+    }
+    // create factory and device
     let factory = factory::create(caps, gl.clone());
     let device = Device {
         info: info,
