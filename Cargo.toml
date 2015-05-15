@@ -15,7 +15,7 @@
 [package]
 
 name = "gfx_device_gl"
-version = "0.2.6"
+version = "0.2.7"
 description = "OpenGL device for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx_device_gl"
 repository = "https://github.com/gfx-rs/gfx_device_gl"
