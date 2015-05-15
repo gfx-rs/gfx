@@ -19,7 +19,7 @@ macro_rules! gfx_vertex {
     ($name:ident {
         $($gl_name:ident@ $field:ident: $ty:ty,)*
     }) => {
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Copy, Debug)]
         pub struct $name {
             $(pub $field: $ty,)*
         }
