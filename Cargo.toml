@@ -15,7 +15,7 @@
 [package]
 
 name = "gfx_device_gl"
-version = "0.2.7"
+version = "0.3.0"
 description = "OpenGL device for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx_device_gl"
 repository = "https://github.com/gfx-rs/gfx_device_gl"
@@ -28,6 +28,7 @@ name = "gfx_device_gl"
 
 [dependencies.gfx]
 git = "https://github.com/gfx-rs/gfx-rs"
+branch = "v0.5"
 version = "*"
 
 [dependencies]
