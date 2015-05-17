@@ -25,8 +25,6 @@ extern crate num;
 /// public re-exported traits
 pub mod traits {
     pub use device::{Device, Factory};
-    pub use extra::canvas::IntoCanvas;
-    pub use extra::device::DeviceExt;
     pub use extra::factory::FactoryExt;
     pub use extra::stream::{Stream, StreamFactory};
     pub use render::RenderFactory;
@@ -57,7 +55,6 @@ pub use render::shade;
 pub use render::target::{Frame, Output, Plane};
 pub use render::ParamStorage;
 pub use extra::canvas::{Canvas, Window};
-pub use extra::device::Graphics;
 pub use extra::shade::{ShaderSource, ProgramError};
 pub use extra::stream::{OwnedStream, Stream};
 
