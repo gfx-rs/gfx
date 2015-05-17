@@ -252,9 +252,6 @@ pub trait Factory<R: Resources> {
             Err(e) => Err(e),
         }
     }
-
-    /// Clean up all unreferenced resources
-    fn cleanup(&mut self);
 }
 
 /// All the data needed simultaneously for submitting a command buffer for
@@ -267,20 +264,20 @@ pub type SubmitInfo<'a, D: Device> = (
 
 /// An interface for performing draw calls using a specific graphics API
 pub trait Device {
-    /// Associated resources type
+    /// Associated resources type.
     type Resources: Resources;
-    /// Associated command buffer type
+    /// Associated command buffer type.
     type CommandBuffer: draw::CommandBuffer<Self::Resources>;
 
-    /// Returns the capabilities available to the specific API implementation
+    /// Returns the capabilities available to the specific API implementation.
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
 
-    /// Reset all the states to disabled/default
+    /// Reset all the states to disabled/default.
     fn reset_state(&mut self);
 
-    /// Submit a command buffer for execution
+    /// Submit a command buffer for execution.
     fn submit(&mut self, SubmitInfo<Self>);
 
-    /// Notify the finished frame
-    fn after_frame(&mut self);
+    /// Cleanup unused resources, to be called between frames.
+    fn cleanup(&mut self);
 }

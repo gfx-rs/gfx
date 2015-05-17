@@ -24,7 +24,7 @@ pub trait Window<R: Resources>: Output<R> {
     fn swap_buffers(&mut self);
 }
 
-/// A canvas with everything you need to draw on it.
+/// DEPRECATED
 pub struct Canvas<W, D: Device, F> {
     /// Output window.
     pub output: W,
@@ -36,19 +36,13 @@ pub struct Canvas<W, D: Device, F> {
     pub renderer: Renderer<D::Resources, D::CommandBuffer>,
 }
 
-/// Something that can be transformed into `Canvas`.
-pub trait IntoCanvas<W, D: Device, F> {
-    /// Transform into `Canvas`.
-    fn into_canvas(self) -> Canvas<W, D, F>;
-}
-
-impl<W, D: Device, F: Factory<D::Resources>> IntoCanvas<W, D, F> for (W, D, F) {
-    fn into_canvas(mut self) -> Canvas<W, D, F> {
-        let renderer = self.2.create_renderer();
+impl<W, D: Device, F: Factory<D::Resources>> From<(W, D, F)> for Canvas<W, D, F> {
+    fn from(mut triple: (W, D, F)) -> Canvas<W, D, F> {
+        let renderer = triple.2.create_renderer();
         Canvas {
-            output: self.0,
-            device: self.1,
-            factory: self.2,
+            output: triple.0,
+            device: triple.1,
+            factory: triple.2,
             renderer: renderer,
         }
     }
@@ -73,8 +67,7 @@ impl<D: Device, F: Factory<D::Resources>, W: Window<D::Resources>> Canvas<W, D, 
     pub fn present(&mut self) {
         self.device.submit(self.renderer.as_buffer());
         self.output.swap_buffers();
-        self.device.after_frame();
-        self.factory.cleanup();
+        self.device.cleanup();
         self.renderer.reset();
     }
 }
