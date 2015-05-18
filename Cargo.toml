@@ -28,7 +28,6 @@ name = "gfx_device_gl"
 
 [dependencies.gfx]
 git = "https://github.com/gfx-rs/gfx-rs"
-branch = "v0.5"
 version = "*"
 
 [dependencies]
