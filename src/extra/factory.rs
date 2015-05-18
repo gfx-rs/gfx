@@ -26,7 +26,7 @@ pub trait FactoryExt<R: device::Resources>: device::Factory<R> {
     /// Create a new mesh from the given vertex data.
     fn create_mesh<T: VertexFormat>(&mut self, data: &[T]) -> Mesh<R> {
         let nv = data.len();
-        debug_assert!(nv <= self.get_capabilities().max_vertex_count);
+        //debug_assert!(nv <= self.get_capabilities().max_vertex_count);
         let buf = self.create_buffer_static(data, device::BufferRole::Vertex);
         Mesh::from_format(buf, nv as device::VertexCount)
     }

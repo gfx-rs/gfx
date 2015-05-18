@@ -184,7 +184,7 @@ macro_rules! impl_slice {
         }
         impl<'a, R: Resources> ToIndexSlice<R> for &'a [$ty] {
             fn to_slice<F: Factory<R>>(self, factory: &mut F, prim: PrimitiveType) -> Slice<R> {
-                debug_assert!(self.len() <= factory.get_capabilities().max_index_count);
+                //debug_assert!(self.len() <= factory.get_capabilities().max_index_count);
                 factory.create_buffer_static(self, BufferRole::Index).to_slice(prim)
             }
         }

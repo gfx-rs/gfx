@@ -202,7 +202,7 @@ pub trait Factory<R: Resources> {
     }
     fn create_buffer_dynamic<T>(&mut self, num: usize, role: BufferRole) -> handle::Buffer<R, T> {
         handle::Buffer::from_raw(
-            self.create_buffer_raw(num * mem::size_of::<T>(), role, BufferUsage::Dynamic))
+            self.create_buffer_raw(num * mem::size_of::<T>(), role, BufferUsage::Stream))
     }
 
     fn create_array_buffer(&mut self) -> Result<handle::ArrayBuffer<R>, NotSupported>;
