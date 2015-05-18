@@ -57,7 +57,7 @@ macro_rules! gfx_vertex {
 
 #[macro_export]
 macro_rules! gfx_parameters {
-    ($name:ident/$link_name:ident {
+    ($name:ident {
         $($gl_name:ident@ $field:ident: $ty:ty,)*
     }) => {
         #[derive(Clone, Debug)]
@@ -66,21 +66,17 @@ macro_rules! gfx_parameters {
             pub _r: ::std::marker::PhantomData<R>,
         }
 
-        #[derive(Clone, Debug)]
-        pub struct $link_name {
-            $($field: Option<$crate::shade::ParameterId>,)*
-        }
-
         impl<R: $crate::Resources> $crate::shade::ShaderParam for $name<R> {
             type Resources = R;
-            type Link = $link_name;
+            type Link = ($(Option<$crate::shade::ParameterId>, ::std::marker::PhantomData<$ty>,)*);
 
             fn create_link(_: Option<&$name<R>>, info: &$crate::ProgramInfo)
-                           -> Result<$link_name, $crate::shade::ParameterError> {
+                           -> Result<Self::Link, $crate::shade::ParameterError>
+            {
                 use $crate::shade::Parameter;
-                let mut link = $link_name{
-                    $( $field: None, )*
-                };
+                $(
+                    let mut $field = None;
+                )*
                 // scan uniforms
                 for (i, u) in info.uniforms.iter().enumerate() {
                     match &u.name[..] {
@@ -89,7 +85,7 @@ macro_rules! gfx_parameters {
                             if !<$ty as Parameter<R>>::check_uniform(u) {
                                 return Err($crate::shade::ParameterError::BadUniform(u.name.clone()))
                             }
-                            link.$field = Some(i as $crate::shade::ParameterId);
+                            $field = Some(i as $crate::shade::ParameterId);
                         },
                         )*
                         _ => return Err($crate::shade::ParameterError::MissingUniform(u.name.clone()))
@@ -103,7 +99,7 @@ macro_rules! gfx_parameters {
                             if !<$ty as Parameter<R>>::check_block(b) {
                                 return Err($crate::shade::ParameterError::BadBlock(b.name.clone()))
                             }
-                            link.$field = Some(i as $crate::shade::ParameterId);
+                            $field = Some(i as $crate::shade::ParameterId);
                         },
                         )*
                         _ => return Err($crate::shade::ParameterError::MissingBlock(b.name.clone()))
@@ -117,19 +113,20 @@ macro_rules! gfx_parameters {
                             if !<$ty as Parameter<R>>::check_texture(t) {
                                 return Err($crate::shade::ParameterError::BadBlock(t.name.clone()))
                             }
-                            link.$field = Some(i as $crate::shade::ParameterId);
+                            $field = Some(i as $crate::shade::ParameterId);
                         },
                         )*
                         _ => return Err($crate::shade::ParameterError::MissingBlock(t.name.clone()))
                     }
                 }
-                Ok(link)
+                Ok(( $($field, ::std::marker::PhantomData,)* ))
             }
 
-            fn fill_params(&self, link: &$link_name, storage: &mut $crate::ParamStorage<R>) {
+            fn fill_params(&self, link: &Self::Link, storage: &mut $crate::ParamStorage<R>) {
                 use $crate::shade::Parameter;
+                let &($($field, _,)*) = link;
                 $(
-                    if let Some(id) = link.$field {
+                    if let Some(id) = $field {
                         self.$field.put(id, storage);
                     }
                 )*
@@ -145,7 +142,8 @@ gfx_vertex!(_Foo {
     z@ _z: [u32; 4],
 });
 
-gfx_parameters!(_Bar/BarLink {
+#[cfg(test)]
+gfx_parameters!(_Bar {
     x@ _x: i32,
     y@ _y: [f32; 4],
     b@ _b: ::handle::RawBuffer<R>,

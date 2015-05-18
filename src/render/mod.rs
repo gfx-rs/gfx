@@ -193,21 +193,8 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         self.command_buffer.call_clear(data, mask);
     }
 
-    /// Draw a `batch` into the specified output.
-    pub fn draw<B: Batch<R>, O: target::Output<R>>(&mut self, batch: &B, output: &O)
-                -> Result<(), DrawError<B::Error>> {
-        self.draw_all(batch, None, output)
-    }
-
-    /// Draw a `batch` multiple times using instancing.
-    pub fn draw_instanced<B: Batch<R>, O: target::Output<R>>(&mut self, batch: &B,
-                          count: device::InstanceCount, base: device::VertexCount,
-                          output: &O) -> Result<(), DrawError<B::Error>> {
-        self.draw_all(batch, Some((count, base)), output)
-    }
-
     /// Draw a 'batch' with all known parameters specified, internal use only.
-    fn draw_all<B: Batch<R>, O: target::Output<R>>(&mut self, batch: &B,
+    pub fn draw<B: Batch<R>, O: target::Output<R>>(&mut self, batch: &B,
                 instances: InstanceOption, output: &O)
                 -> Result<(), DrawError<B::Error>> {
         let (mesh, attrib_iter, slice, state) = match batch.get_data() {
@@ -261,18 +248,6 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         let pointer = self.data_buffer.add_struct(data);
         self.command_buffer.update_buffer(
             self.handles.ref_buffer(buf.raw()), pointer, 0);
-    }
-
-    /// DEPRECATED: use update_buffer buffer instead.
-    pub fn update_buffer_vec<T: Copy>(&mut self, buf: &handle::Buffer<R, T>,
-                             data: &[T], offset_elements: usize) {
-        self.update_buffer(buf.raw(), data, offset_elements)
-    }
-
-    /// DEPRECATED: use update_block buffer instead.
-    pub fn update_buffer_struct<U, T: Copy>(&mut self,
-                                buf: &handle::Buffer<R, U>, data: &T) {
-        self.update_block(buf, data)
     }
 
     /// Update the contents of a texture.
@@ -505,34 +480,27 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         }
     }
 
-    fn bind_index<T>(&mut self, buf: &handle::IndexBuffer<R, T>) {
+    fn bind_index<T>(&mut self, buf: &handle::Buffer<R, T>, format: IntSize,
+                     slice: &mesh::Slice<R>, base: device::VertexCount,
+                     instances: InstanceOption) {
         if self.render_state.index.as_ref() != Some(buf.raw()) {
             self.render_state.index = Some(buf.raw().clone());
             self.command_buffer.bind_index(self.handles.ref_buffer(buf.raw()));
         }
+        self.command_buffer.call_draw_indexed(slice.prim_type, format,
+            slice.start, slice.end - slice.start, base, instances);
     }
 
     fn draw_slice(&mut self, slice: &mesh::Slice<R>, instances: InstanceOption) {
-        let &mesh::Slice { start, end, prim_type, ref kind } = slice;
-        match *kind {
-            SliceKind::Vertex => {
-                self.command_buffer.call_draw(prim_type, start, end - start, instances);
-            },
-            SliceKind::Index8(ref buf, base) => {
-                self.bind_index(buf);
-                self.command_buffer.call_draw_indexed(prim_type, IntSize::U8,
-                    start, end - start, base, instances);
-            },
-            SliceKind::Index16(ref buf, base) => {
-                self.bind_index(buf);
-                self.command_buffer.call_draw_indexed(prim_type, IntSize::U16,
-                    start, end - start, base, instances);
-            },
-            SliceKind::Index32(ref buf, base) => {
-                self.bind_index(buf);
-                self.command_buffer.call_draw_indexed(prim_type, IntSize::U32,
-                    start, end - start, base, instances);
-            },
+        match slice.kind {
+            SliceKind::Vertex => self.command_buffer.call_draw(
+                slice.prim_type, slice.start, slice.end - slice.start, instances),
+            SliceKind::Index8(ref buf, base) =>
+                self.bind_index(buf, IntSize::U8, slice, base, instances),
+            SliceKind::Index16(ref buf, base) =>
+                self.bind_index(buf, IntSize::U16, slice, base, instances),
+            SliceKind::Index32(ref buf, base) =>
+                self.bind_index(buf, IntSize::U32, slice, base, instances),
         }
     }
 }

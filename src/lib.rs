@@ -28,7 +28,7 @@ pub mod traits {
     pub use extra::factory::FactoryExt;
     pub use extra::stream::{Stream, StreamFactory};
     pub use render::RenderFactory;
-    pub use render::mesh::ToSlice;
+    pub use render::mesh::{ToIndexSlice, ToSlice};
     pub use render::target::Output;
 }
 
@@ -44,21 +44,20 @@ pub use device::as_byte_slice;
 pub use device::{BufferRole, BufferInfo, BufferUsage};
 pub use device::{VertexCount, InstanceCount};
 pub use device::PrimitiveType;
-pub use device::draw::{CommandBuffer, Gamma};
+pub use device::draw::{CommandBuffer, Gamma, InstanceOption};
 pub use device::shade::{ProgramInfo, UniformValue};
 pub use render::{Renderer, DrawError};
 pub use render::batch;
 pub use render::mesh::{Attribute, Mesh, VertexFormat};
 pub use render::mesh::Error as MeshError;
-pub use render::mesh::{Slice, ToSlice, SliceKind};
+pub use render::mesh::{Slice, ToIndexSlice, ToSlice, SliceKind};
 pub use render::shade;
 pub use render::target::{Frame, Output, Plane};
 pub use render::ParamStorage;
-pub use extra::canvas::{Canvas, Window};
 pub use extra::shade::{ShaderSource, ProgramError};
-pub use extra::stream::{OwnedStream, Stream};
+pub use extra::stream::{OwnedStream, Stream, Window};
 
 pub mod device;
 pub mod extra;
-mod macros;
+pub mod macros;
 pub mod render;

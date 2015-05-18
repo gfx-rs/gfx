@@ -16,8 +16,6 @@
 
 #![deny(missing_docs)]
 
-/// Canvas
-pub mod canvas;
 /// Factory extensions
 pub mod factory;
 /// Shader extensions

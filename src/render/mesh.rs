@@ -20,7 +20,7 @@
 //! create a mesh is to use the `#[vertex_format]` attribute on a struct, upload them into a
 //! `Buffer`, and then use `Mesh::from`.
 
-use device::{PrimitiveType, Resources, VertexCount};
+use device::{BufferRole, Factory, PrimitiveType, Resources, VertexCount};
 use device::{attrib, handle, shade};
 
 /// Describes a single attribute of a vertex buffer, including its type, name, etc.
@@ -139,17 +139,23 @@ pub enum SliceKind<R: Resources> {
     /// the vertices will be identical, wasting space for the duplicated
     /// attributes.  Instead, the `Mesh` can store 4 vertices and an
     /// `Index8` can be used instead.
-    Index8(handle::IndexBuffer<R, u8>, VertexCount),
+    Index8(handle::Buffer<R, u8>, VertexCount),
     /// As `Index8` but with `u16` indices
-    Index16(handle::IndexBuffer<R, u16>, VertexCount),
+    Index16(handle::Buffer<R, u16>, VertexCount),
     /// As `Index8` but with `u32` indices
-    Index32(handle::IndexBuffer<R, u32>, VertexCount),
+    Index32(handle::Buffer<R, u32>, VertexCount),
 }
 
-/// Helper methods for cleanly getting the slice of a type.
+/// A helper trait for cleanly getting the slice of a type.
 pub trait ToSlice<R: Resources> {
     /// Get the slice of a type.
     fn to_slice(&self, pt: PrimitiveType) -> Slice<R>;
+}
+
+/// A helper trait to build index slices from data.
+pub trait ToIndexSlice<R: Resources> {
+    /// Make an index slice.
+    fn to_slice<F: Factory<R>>(self, factory: &mut F, prim: PrimitiveType) -> Slice<R>;
 }
 
 impl<R: Resources> ToSlice<R> for Mesh<R> {
@@ -164,41 +170,31 @@ impl<R: Resources> ToSlice<R> for Mesh<R> {
     }
 }
 
-impl<R: Resources> ToSlice<R> for handle::IndexBuffer<R, u8> {
-    /// Return an index slice of the whole buffer.
-    fn to_slice(&self, ty: PrimitiveType) -> Slice<R> {
-        Slice {
-            start: 0,
-            end: self.len() as VertexCount,
-            prim_type: ty,
-            kind: SliceKind::Index8(self.clone(), 0)
+macro_rules! impl_slice {
+    ($ty:ty, $index:ident) => (
+        impl<R: Resources> ToSlice<R> for handle::Buffer<R, $ty> {
+            fn to_slice(&self, prim: PrimitiveType) -> Slice<R> {
+                Slice {
+                    start: 0,
+                    end: self.len() as VertexCount,
+                    prim_type: prim,
+                    kind: SliceKind::$index(self.clone(), 0)
+                }
+            }
         }
-    }
+        impl<'a, R: Resources> ToIndexSlice<R> for &'a [$ty] {
+            fn to_slice<F: Factory<R>>(self, factory: &mut F, prim: PrimitiveType) -> Slice<R> {
+                //debug_assert!(self.len() <= factory.get_capabilities().max_index_count);
+                factory.create_buffer_static(self, BufferRole::Index).to_slice(prim)
+            }
+        }
+    )
 }
 
-impl<R: Resources> ToSlice<R> for handle::IndexBuffer<R, u16> {
-    /// Return an index slice of the whole buffer.
-    fn to_slice(&self, ty: PrimitiveType) -> Slice<R> {
-        Slice {
-            start: 0,
-            end: self.len() as VertexCount,
-            prim_type: ty,
-            kind: SliceKind::Index16(self.clone(), 0)
-        }
-    }
-}
+impl_slice!(u8, Index8);
+impl_slice!(u16, Index16);
+impl_slice!(u32, Index32);
 
-impl<R: Resources> ToSlice<R> for handle::IndexBuffer<R, u32> {
-    /// Return an index slice of the whole buffer.
-    fn to_slice(&self, ty: PrimitiveType) -> Slice<R> {
-        Slice {
-            start: 0,
-            end: self.len() as VertexCount,
-            prim_type: ty,
-            kind: SliceKind::Index32(self.clone(), 0)
-        }
-    }
-}
 
 /// Index of a vertex attribute inside the mesh
 pub type AttributeIndex = usize;
