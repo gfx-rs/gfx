@@ -59,13 +59,6 @@ impl<R: gfx::Resources> gfx::Window<R> for Output<R> {
 
 /// Result of successful context initialization.
 pub type Success = (
-    Output<gfx_device_gl::Resources>,
-    gfx_device_gl::Device,
-    gfx_device_gl::Factory,
-);
-
-/// A streamed version of the success struct.
-pub type SuccessStream = (
     gfx::OwnedStream<
         gfx_device_gl::Resources,
         gfx_device_gl::CommandBuffer,
@@ -75,25 +68,18 @@ pub type SuccessStream = (
     gfx_device_gl::Factory,
 );
 
-
 /// Initialize with a window.
 pub fn init(mut window: glfw::Window) -> Success {
+    use gfx::traits::StreamFactory;
     window.make_current();
     let device = gfx_device_gl::Device::new(|s| window.get_proc_address(s));
-    let factory = device.spawn_factory();
+    let mut factory = device.spawn_factory();
     let out = Output {
         window: window,
         frame: factory.get_main_frame_buffer(),
         mask: gfx::COLOR | gfx::DEPTH | gfx::STENCIL, //TODO
         gamma: gfx::Gamma::Original, //TODO
     };
-    (out, device, factory)
-}
-
-/// Initialize with a window, return a `Stream`.
-pub fn init_stream(window: glfw::Window) -> SuccessStream {
-    use gfx::traits::StreamFactory;
-    let (out, device, mut factory) = init(window);
     let stream = factory.create_stream(out);
     (stream, device, factory)
 }
