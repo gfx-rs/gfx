@@ -71,17 +71,22 @@ impl<R: gfx::Resources> gfx::Window<R> for Output<R> {
 
 /// Result of successful context initialization.
 pub type Success = (
-    Output<gfx_device_gl::Resources>,
+    gfx::OwnedStream<
+        gfx_device_gl::Resources,
+        gfx_device_gl::CommandBuffer,
+        Output<gfx_device_gl::Resources>,
+    >,
     gfx_device_gl::Device,
     gfx_device_gl::Factory,
 );
 
-
 /// Initialize with a window.
 pub fn init(window: glutin::Window) -> Success {
+    use gfx::traits::StreamFactory;
     unsafe { window.make_current() };
-    let (device, factory) = gfx_device_gl::create(|s| window.get_proc_address(s));
     let format = window.get_pixel_format();
+    let device = gfx_device_gl::Device::new(|s| window.get_proc_address(s));
+    let mut factory = device.spawn_factory();
     let out = Output {
         window: window,
         frame: factory.get_main_frame_buffer(),
@@ -91,5 +96,6 @@ pub fn init(window: glutin::Window) -> Success {
         supports_gamma_convertion: format.srgb,
         gamma: gfx::Gamma::Original,
     };
-    (out, device, factory)
+    let stream = factory.create_stream(out);
+    (stream, device, factory)
 }
