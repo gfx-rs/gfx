@@ -13,16 +13,10 @@
 // limitations under the License.
 
 use device::{Device, Factory, Resources};
-use extra::stream::Stream;
+use extra::stream::{Stream, Window};
 use render::{Renderer, RenderFactory};
 use render::target::Output;
 
-
-/// Generic output window.
-pub trait Window<R: Resources>: Output<R> {
-    /// Swap front and back buffers.
-    fn swap_buffers(&mut self);
-}
 
 /// DEPRECATED
 pub struct Canvas<W, D: Device, F> {

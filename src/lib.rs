@@ -54,9 +54,9 @@ pub use render::mesh::{Slice, ToSlice, SliceKind};
 pub use render::shade;
 pub use render::target::{Frame, Output, Plane};
 pub use render::ParamStorage;
-pub use extra::canvas::{Canvas, Window};
+pub use extra::canvas::Canvas;
 pub use extra::shade::{ShaderSource, ProgramError};
-pub use extra::stream::{OwnedStream, Stream};
+pub use extra::stream::{OwnedStream, Stream, Window};
 
 pub mod device;
 pub mod extra;

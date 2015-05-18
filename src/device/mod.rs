@@ -64,13 +64,14 @@ pub struct Capabilities {
     pub shader_model: shade::ShaderModel,
 
     pub max_vertex_count: usize,
+    pub max_index_count: usize,
     pub max_draw_buffers: usize,
     pub max_texture_size: usize,
     pub max_vertex_attributes: usize,
 
     /// In GLES it is not allowed to re-bind a buffer to a different
     /// target than the one it was initialized with.
-    pub buffer_role_change_allowed: usize,
+    pub buffer_role_change_allowed: bool,
 
     pub array_buffer_supported: bool,
     pub fragment_output_supported: bool,

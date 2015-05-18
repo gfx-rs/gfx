@@ -23,11 +23,12 @@ use render::{DrawError, Renderer, RenderFactory};
 use render::batch::Batch;
 use render::target::Output;
 
-//TODO: when `Stream` gets adopted, we can remove these methods:
-//  - Renderer::draw(...)
-//  - Renderer::draw_instanced(...)
-// in favor of bare `Renderer::draw_all` (renamed), since most
-// of the usage will go through `Stream`, which already has this.
+
+/// Generic output window.
+pub trait Window<R: Resources>: Output<R> {
+    /// Swap front and back buffers.
+    fn swap_buffers(&mut self);
+}
 
 /// Render stream abstraction.
 pub trait Stream<R: Resources> {
@@ -114,8 +115,13 @@ Stream<R> for (&'a mut Renderer<R, C>, &'a O) {
 pub struct OwnedStream<
     R: Resources,
     C: CommandBuffer<R>,
-    O: Output<R>
->(pub Renderer<R, C>, pub O);
+    O: Output<R>,
+>{
+    /// Renderer
+    pub ren: Renderer<R, C>,
+    /// Output
+    pub out: O,
+}
 
 impl<R: Resources, C: CommandBuffer<R>, O: Output<R>>
 Stream<R> for OwnedStream<R, C, O> {
@@ -123,11 +129,20 @@ Stream<R> for OwnedStream<R, C, O> {
     type Output = O;
 
     fn get_output(&self) -> &O {
-        &self.1
+        &self.out
     }
 
     fn access(&mut self) -> (&mut Renderer<R, C>, &O) {
-        (&mut self.0, &self.1)
+        (&mut self.ren, &self.out)
+    }
+}
+
+impl<D: Device, W: Window<D::Resources>> OwnedStream<D::Resources, D::CommandBuffer, W> {
+    /// Show what we've been drawing all this time.
+    pub fn present(&mut self, device: &mut D) {
+        self.flush(device);
+        self.out.swap_buffers();
+        device.cleanup();
     }
 }
 
@@ -135,9 +150,12 @@ Stream<R> for OwnedStream<R, C, O> {
 pub trait StreamFactory<R: Resources, C: CommandBuffer<R>>: RenderFactory<R, C> {
     /// Create a new stream from a given output.
     fn create_stream<O: Output<R>>(&mut self, output: O) -> OwnedStream<R, C, O> {
-        OwnedStream(self.create_renderer(), output)
+        OwnedStream {
+            ren: self.create_renderer(),
+            out: output,
+        }
     }
 }
 
-impl<R: Resources, C: CommandBuffer<R>>
-StreamFactory<R, C> for RenderFactory<R, C> {}
+impl<R: Resources, C: CommandBuffer<R>, F: RenderFactory<R, C>>
+StreamFactory<R, C> for F {}
