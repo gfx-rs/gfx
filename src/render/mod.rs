@@ -193,21 +193,8 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         self.command_buffer.call_clear(data, mask);
     }
 
-    /// Draw a `batch` into the specified output.
-    pub fn draw<B: Batch<R>, O: target::Output<R>>(&mut self, batch: &B, output: &O)
-                -> Result<(), DrawError<B::Error>> {
-        self.draw_all(batch, None, output)
-    }
-
-    /// Draw a `batch` multiple times using instancing.
-    pub fn draw_instanced<B: Batch<R>, O: target::Output<R>>(&mut self, batch: &B,
-                          count: device::InstanceCount, base: device::VertexCount,
-                          output: &O) -> Result<(), DrawError<B::Error>> {
-        self.draw_all(batch, Some((count, base)), output)
-    }
-
     /// Draw a 'batch' with all known parameters specified, internal use only.
-    fn draw_all<B: Batch<R>, O: target::Output<R>>(&mut self, batch: &B,
+    pub fn draw<B: Batch<R>, O: target::Output<R>>(&mut self, batch: &B,
                 instances: InstanceOption, output: &O)
                 -> Result<(), DrawError<B::Error>> {
         let (mesh, attrib_iter, slice, state) = match batch.get_data() {
