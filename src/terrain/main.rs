@@ -39,7 +39,7 @@ gfx_vertex!( Vertex {
     a_Color@ color: [f32; 3],
 });
 
-gfx_parameters!( Params/ParamsLink {
+gfx_parameters!( Params {
     u_Model@ model: [[f32; 4]; 4],
     u_View@ view: [[f32; 4]; 4],
     u_Proj@ proj: [[f32; 4]; 4],
@@ -58,9 +58,9 @@ fn calculate_color(height: f32) -> [f32; 3] {
 }
 
 pub fn main() {
-    let mut canvas = gfx_window_glutin::init(glutin::Window::new().unwrap())
-                                       .into_canvas();
-    canvas.output.window.set_title("Terrain example");
+    let (mut stream, mut device, mut factory) = gfx_window_glutin::init(
+        glutin::Window::new().unwrap());
+    stream.out.window.set_title("Terrain example");
 
     let rand_seed = rand::thread_rng().gen();
     let seed = Seed::new(rand_seed);
@@ -80,12 +80,9 @@ pub fn main() {
         .vertices()
         .map(|i| i as u32)
         .collect();
+    let slice = index_data.to_slice(&mut factory, gfx::PrimitiveType::TriangleList);
 
-    let slice = canvas.factory
-        .create_buffer_index::<u32>(&index_data)
-        .to_slice(gfx::PrimitiveType::TriangleList);
-
-    let mesh = canvas.factory.create_mesh(&vertex_data);
+    let mesh = factory.create_mesh(&vertex_data);
     let program = {
         let vs = gfx::ShaderSource {
             glsl_120: Some(include_bytes!("terrain_120.glslv")),
@@ -97,8 +94,7 @@ pub fn main() {
             glsl_150: Some(include_bytes!("terrain_150.glslf")),
             .. gfx::ShaderSource::empty()
         };
-        canvas.factory.link_program_source(vs, fs, &canvas.device.get_capabilities())
-                      .unwrap()
+        factory.link_program_source(vs, fs).unwrap()
     };
 
     let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
@@ -107,7 +103,7 @@ pub fn main() {
         model: Matrix4::identity().into_fixed(),
         view: Matrix4::identity().into_fixed(),
         proj: cgmath::perspective(cgmath::deg(60.0f32), 
-                                  canvas.get_aspect_ratio(),
+                                  stream.get_aspect_ratio(),
                                   0.1, 1000.0
                                   ).into_fixed(),
         _r: std::marker::PhantomData,
@@ -118,7 +114,7 @@ pub fn main() {
 
     'main: loop {
         // quit when Esc is pressed.
-        for event in canvas.output.window.poll_events() {
+        for event in stream.out.window.poll_events() {
             match event {
                 glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) => break 'main,
                 glutin::Event::Closed => break 'main,
@@ -136,12 +132,15 @@ pub fn main() {
         );
         batch.params.view = view.mat.into_fixed();
 
-        canvas.clear(gfx::ClearData {
+        stream.clear(gfx::ClearData {
             color: [0.3, 0.3, 0.3, 1.0],
             depth: 1.0,
             stencil: 0,
         });
-        canvas.draw(&(&batch, &context)).unwrap();
-        canvas.present();
+        stream.draw(&(&batch, &context)).unwrap();
+        //stream.present(&mut device); ICE!
+        stream.flush(&mut device);
+        stream.out.window.swap_buffers();
+        device.cleanup();
     }
 }

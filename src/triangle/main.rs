@@ -25,16 +25,16 @@ gfx_vertex!( Vertex {
 });
 
 pub fn main() {
-    let mut canvas = gfx_window_glutin::init(glutin::Window::new().unwrap())
-                                       .into_canvas();
-    canvas.output.window.set_title("Triangle example");
+    let (mut stream, mut device, mut factory) = gfx_window_glutin::init(
+        glutin::Window::new().unwrap());
+    stream.out.window.set_title("Triangle example");
 
     let vertex_data = [
         Vertex { pos: [ -0.5, -0.5 ], color: [1.0, 0.0, 0.0] },
         Vertex { pos: [  0.5, -0.5 ], color: [0.0, 1.0, 0.0] },
         Vertex { pos: [  0.0,  0.5 ], color: [0.0, 0.0, 1.0] },
     ];
-    let mesh = canvas.factory.create_mesh(&vertex_data);
+    let mesh = factory.create_mesh(&vertex_data);
     let slice = mesh.to_slice(gfx::PrimitiveType::TriangleList);
 
     let program = {
@@ -48,14 +48,13 @@ pub fn main() {
             glsl_150: Some(include_bytes!("triangle_150.glslf")),
             .. gfx::ShaderSource::empty()
         };
-        canvas.factory.link_program_source(vs, fs, &canvas.device.get_capabilities())
-                      .unwrap()
+        factory.link_program_source(vs, fs).unwrap()
     };
     let state = gfx::DrawState::new();
 
     'main: loop {
         // quit when Esc is pressed.
-        for event in canvas.output.window.poll_events() {
+        for event in stream.out.window.poll_events() {
             match event {
                 glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) => break 'main,
                 glutin::Event::Closed => break 'main,
@@ -63,13 +62,16 @@ pub fn main() {
             }
         }
 
-        canvas.clear(gfx::ClearData {
+        stream.clear(gfx::ClearData {
             color: [0.3, 0.3, 0.3, 1.0],
             depth: 1.0,
             stencil: 0,
         });
-        canvas.draw(&gfx::batch::bind(&state, &mesh, slice.clone(), &program, &None))
+        stream.draw(&gfx::batch::bind(&state, &mesh, slice.clone(), &program, &None))
               .unwrap();
-        canvas.present();
+        //stream.present(&mut device); ICE!
+        stream.flush(&mut device);
+        stream.out.window.swap_buffers();
+        device.cleanup();
     }
 }

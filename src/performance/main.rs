@@ -43,7 +43,7 @@ gfx_vertex!( Vertex {
     a_Pos@ pos: [Floater<i8>; 3],
 });
 
-gfx_parameters!( Params/ParamsLink {
+gfx_parameters!( Params {
     u_Transform@ transform: [[f32; 4]; 4],
 });
 
@@ -72,7 +72,8 @@ fn gfx_main(mut glfw: glfw::Glfw,
             window: glfw::Window,
             events: Receiver<(f64, glfw::WindowEvent)>,
             dimension: i16) {
-    let (mut wrap, device, mut factory) = gfx_window_glfw::init(window);
+    let (mut stream, mut device, mut factory) = gfx_window_glfw::init(window);
+    let mut context = gfx::batch::Context::new();
     let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
     let vertex_data = [
@@ -90,34 +91,28 @@ fn gfx_main(mut glfw: glfw::Glfw,
         &Point3::new(0f32, 0.0, 0.0),
         &Vector3::unit_z(),
     );
-    let aspect = {
-        let (w, h) = wrap.get_size();
-        w as f32 / h as f32
-    };
+    let aspect = stream.get_aspect_ratio();
     let proj = cgmath::perspective(cgmath::deg(45.0f32), aspect, 1.0, 10.0);
 
-    let clear_data = gfx::ClearData {
-        color: [0.3, 0.3, 0.3, 1.0],
-        depth: 1.0,
-        stencil: 0,
-    };
-
-    let mut graphics = (device, factory).into_graphics();
     let batch: gfx::batch::CoreBatch<Params<_>> = 
-        graphics.make_core(&program, &mesh, &state).unwrap();
+        context.make_core(&program, &mesh, &state).unwrap();
 
-    while !wrap.window.should_close() {
+    while !stream.out.window.should_close() {
         glfw.poll_events();
         for (_, event) in glfw::flush_messages(&events) {
             match event {
                 glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Action::Press, _) =>
-                    wrap.window.set_should_close(true),
+                    stream.out.window.set_should_close(true),
                 _ => {},
             }
         }
 
         let start = precise_time_s() * 1000.;
-        graphics.clear(clear_data, gfx::COLOR | gfx::DEPTH, &wrap);
+        stream.clear(gfx::ClearData {
+            color: [0.3, 0.3, 0.3, 1.0],
+            depth: 1.0,
+            stencil: 0,
+        });
 
         for x in (-dimension) ..dimension {
             for y in (-dimension) ..dimension {
@@ -132,15 +127,16 @@ fn gfx_main(mut glfw: glfw::Glfw,
                                    .mul_m(&model).into_fixed(),
                     _r: std::marker::PhantomData,
                 };
-                graphics.draw_core(&batch, &slice, &data, &wrap).unwrap();
+                stream.draw(&context.bind(&batch, &slice, &data)).unwrap();
             }
         }
 
         let pre_submit = precise_time_s() * 1000.;
-        graphics.end_frame();
+        //stream.present(&mut device); ICE!
+        stream.flush(&mut device);
         let post_submit = precise_time_s() * 1000.;
-        wrap.window.swap_buffers();
-        graphics.cleanup();
+        stream.out.window.swap_buffers();
+        device.cleanup();
         let swap = precise_time_s() * 1000.;
 
         println!("total time:\t\t{0:4.2}ms", swap - start);
