@@ -24,18 +24,23 @@ use gfx::device::handle::Producer;
 use gfx::device::mapping::Builder;
 use gfx::tex::Size;
 
-use Buffer;
+use {Buffer, Share};
 use Resources as R;
 
 
+fn role_to_target(role: d::BufferRole) -> gl::types::GLenum {
+    match role {
+        d::BufferRole::Vertex  => gl::ARRAY_BUFFER,
+        d::BufferRole::Index   => gl::ELEMENT_ARRAY_BUFFER,
+        d::BufferRole::Uniform => gl::UNIFORM_BUFFER,
+    }
+}
+
 pub fn update_sub_buffer(gl: &gl::Gl, buffer: Buffer, address: *const u8,
                          size: usize, offset: usize, role: d::BufferRole) {
-    let target = match role {
-        d::BufferRole::Vertex => gl::ARRAY_BUFFER,
-        d::BufferRole::Index  => gl::ELEMENT_ARRAY_BUFFER,
-    };
-    unsafe { gl.BindBuffer(target, buffer) };
+    let target = role_to_target(role);
     unsafe {
+        gl.BindBuffer(target, buffer);
         gl.BufferSubData(target,
             offset as gl::types::GLintptr,
             size as gl::types::GLsizeiptr,
@@ -67,49 +72,40 @@ impl gfx::Output<R> for Output {
 
 /// GL resource factory.
 pub struct Factory {
-    caps: d::Capabilities,
-    gl: Rc<gl::Gl>,
-    main_fbo: handle::FrameBuffer<R>,
-    handles: handle::Manager<R>,
+    share: Rc<Share>,
     frame_handles: handle::Manager<R>,
 }
 
-/// Create a new `Factory`.
-pub fn create(caps: d::Capabilities, gl: Rc<gl::Gl>) -> Factory {
-    let mut handles = handle::Manager::new();
-
-    Factory {
-        caps: caps,
-        gl: gl,
-        main_fbo: handles.make_frame_buffer(0),
-        handles: handles,
-        frame_handles: handle::Manager::new(),
-    }
-}
-
 impl Factory {
+    /// Create a new `Factory`.
+    pub fn new(share: Rc<Share>) -> Factory {
+        Factory {
+            share: share,
+            frame_handles: handle::Manager::new(),
+        }
+    }
+
     fn create_buffer_internal(&mut self) -> Buffer {
+        let gl = &self.share.context;
         let mut name = 0 as Buffer;
         unsafe {
-            self.gl.GenBuffers(1, &mut name);
+            gl.GenBuffers(1, &mut name);
         }
         info!("\tCreated buffer {}", name);
         name
     }
 
     fn init_buffer(&mut self, buffer: Buffer, info: &d::BufferInfo) {
-        let target = match info.role {
-            d::BufferRole::Vertex => gl::ARRAY_BUFFER,
-            d::BufferRole::Index  => gl::ELEMENT_ARRAY_BUFFER,
-        };
-        unsafe { self.gl.BindBuffer(target, buffer) };
+        let gl = &self.share.context;
+        let target = role_to_target(info.role);
         let usage = match info.usage {
             d::BufferUsage::Static  => gl::STATIC_DRAW,
             d::BufferUsage::Dynamic => gl::DYNAMIC_DRAW,
             d::BufferUsage::Stream  => gl::STREAM_DRAW,
         };
         unsafe {
-            self.gl.BufferData(target,
+            gl.BindBuffer(target, buffer);
+            gl.BufferData(target,
                 info.size as gl::types::GLsizeiptr,
                 0 as *const gl::types::GLvoid,
                 usage
@@ -118,14 +114,14 @@ impl Factory {
     }
 
     pub fn get_main_frame_buffer(&self) -> handle::FrameBuffer<R> {
-        self.main_fbo.clone()
+        self.share.main_fbo.clone()
     }
 
     pub fn make_fake_output(&self, w: Size, h: Size) -> Output {
         Output {
             width: w,
             height: h,
-            handle: self.main_fbo.clone(),
+            handle: self.get_main_frame_buffer(),
         }
     }
 }
@@ -157,19 +153,19 @@ impl d::Factory<R> for Factory {
     type Mapper = RawMapping;
 
     fn get_capabilities(&self) -> &d::Capabilities {
-        &self.caps
+        &self.share.capabilities
     }
 
-    fn create_buffer_raw(&mut self, size: usize, usage: d::BufferUsage)
+    fn create_buffer_raw(&mut self, size: usize, role: d::BufferRole, usage: d::BufferUsage)
                          -> handle::RawBuffer<R> {
         let name = self.create_buffer_internal();
         let info = d::BufferInfo {
-            role: d::BufferRole::Vertex,
+            role: role,
             usage: usage,
             size: size,
         };
         self.init_buffer(name, &info);
-        self.handles.make_buffer(name, info)
+        self.share.handles.borrow_mut().make_buffer(name, info)
     }
 
     fn create_buffer_static_raw(&mut self, data: &[u8], role: d::BufferRole)
@@ -182,18 +178,19 @@ impl d::Factory<R> for Factory {
             size: data.len(),
         };
         self.init_buffer(name, &info);
-        update_sub_buffer(&self.gl, name, data.as_ptr(), data.len(), 0, role);
-        self.handles.make_buffer(name, info)
+        update_sub_buffer(&self.share.context, name, data.as_ptr(), data.len(), 0, role);
+        self.share.handles.borrow_mut().make_buffer(name, info)
     }
 
     fn create_array_buffer(&mut self) -> Result<handle::ArrayBuffer<R>, d::NotSupported> {
-        if self.caps.array_buffer_supported {
+        if self.share.capabilities.array_buffer_supported {
+            let gl = &self.share.context;
             let mut name = 0 as ::ArrayBuffer;
             unsafe {
-                self.gl.GenVertexArrays(1, &mut name);
+                gl.GenVertexArrays(1, &mut name);
             }
             info!("\tCreated array buffer {}", name);
-            Ok(self.handles.make_array_buffer(name))
+            Ok(self.share.handles.borrow_mut().make_array_buffer(name))
         } else {
             error!("\tArray buffer creation unsupported, ignored");
             Err(d::NotSupported)
@@ -202,27 +199,28 @@ impl d::Factory<R> for Factory {
 
     fn create_shader(&mut self, stage: d::shade::Stage, code: &[u8])
                      -> Result<handle::Shader<R>, d::shade::CreateShaderError> {
-        ::shade::create_shader(&self.gl, stage, code)
-                .map(|sh| self.handles.make_shader(sh, stage))
+        ::shade::create_shader(&self.share.context, stage, code)
+                .map(|sh| self.share.handles.borrow_mut().make_shader(sh, stage))
     }
 
     fn create_program(&mut self, shaders: &[handle::Shader<R>], targets: Option<&[&str]>)
                       -> Result<handle::Program<R>, d::shade::CreateProgramError> {
         let frame_handles = &mut self.frame_handles;
-        let handles = &mut self.handles;
-        ::shade::create_program(&self.gl, &self.caps, targets,
+        let mut handles = self.share.handles.borrow_mut();
+        ::shade::create_program(&self.share.context, &self.share.capabilities, targets,
             shaders.iter().map(|h| frame_handles.ref_shader(h)))
                 .map(|(name, info)| handles.make_program(name, info))
     }
 
     fn create_frame_buffer(&mut self) -> Result<handle::FrameBuffer<R>, d::NotSupported> {
-        if self.caps.render_targets_supported {
+        if self.share.capabilities.render_targets_supported {
+            let gl = &self.share.context;
             let mut name = 0 as ::FrameBuffer;
             unsafe {
-                self.gl.GenFramebuffers(1, &mut name);
+                gl.GenFramebuffers(1, &mut name);
             }
             info!("\tCreated frame buffer {}", name);
-            Ok(self.handles.make_frame_buffer(name))
+            Ok(self.share.handles.borrow_mut().make_frame_buffer(name))
         } else {
             error!("No framebuffer objects, can't make a new one!");
             Err(d::NotSupported)
@@ -231,46 +229,51 @@ impl d::Factory<R> for Factory {
 
     fn create_surface(&mut self, info: d::tex::SurfaceInfo) ->
                       Result<handle::Surface<R>, d::tex::SurfaceError> {
-        if info.format.does_convert_gamma() && !self.caps.srgb_color_supported {
+        if info.format.does_convert_gamma() && !self.share.capabilities.srgb_color_supported {
             return Err(d::tex::SurfaceError::UnsupportedGamma)
         }
-        tex::make_surface(&self.gl, &info)
-            .map(|suf| self.handles.make_surface(suf, info))
+        tex::make_surface(&self.share.context, &info)
+            .map(|suf| self.share.handles.borrow_mut().make_surface(suf, info))
     }
 
     fn create_texture(&mut self, info: d::tex::TextureInfo) ->
                       Result<handle::Texture<R>, d::tex::TextureError> {
+        let caps = &self.share.capabilities;
         if info.width == 0 || info.height == 0 || info.levels == 0 {
             return Err(d::tex::TextureError::InvalidInfo(info))
         }
-        if info.format.does_convert_gamma() && !self.caps.srgb_color_supported {
+        if info.format.does_convert_gamma() && !caps.srgb_color_supported {
             return Err(d::tex::TextureError::UnsupportedGamma)
         }
-
-        let name = if self.caps.immutable_storage_supported {
-            tex::make_with_storage(&self.gl, &info)
+        let gl = &self.share.context;
+        let name = if caps.immutable_storage_supported {
+            tex::make_with_storage(gl, &info)
         } else {
-            tex::make_without_storage(&self.gl, &info)
+            tex::make_without_storage(gl, &info)
         };
-        name.map(|tex| self.handles.make_texture(tex, info))
+        name.map(|tex| self.share.handles.borrow_mut().make_texture(tex, info))
     }
 
     fn create_sampler(&mut self, info: d::tex::SamplerInfo)
                       -> handle::Sampler<R> {
-        let sam = if self.caps.sampler_objects_supported {
-            tex::make_sampler(&self.gl, &info)
+        let sam = if self.share.capabilities.sampler_objects_supported {
+            tex::make_sampler(&self.share.context, &info)
         } else {
             0
         };
-        self.handles.make_sampler(sam, info)
+        self.share.handles.borrow_mut().make_sampler(sam, info)
     }
 
-    fn update_buffer_raw(&mut self, buffer: &handle::RawBuffer<R>,
-                         data: &[u8], offset_bytes: usize) {
-        debug_assert!(offset_bytes + data.len() <= buffer.get_info().size);
-        let raw_handle = self.frame_handles.ref_buffer(buffer);
-        update_sub_buffer(&self.gl, raw_handle, data.as_ptr(), data.len(),
-                          offset_bytes, buffer.get_info().role)
+    fn update_buffer_raw(&mut self, buffer: &handle::RawBuffer<R>, data: &[u8],
+                         offset_bytes: usize) -> Result<(), d::BufferUpdateError> {
+        if offset_bytes + data.len() > buffer.get_info().size {
+            Err(d::BufferUpdateError::OutOfBounds)
+        } else {
+            let raw_handle = self.frame_handles.ref_buffer(buffer);
+            update_sub_buffer(&self.share.context, raw_handle, data.as_ptr(), data.len(),
+                              offset_bytes, buffer.get_info().role);
+            Ok(())
+        }
     }
 
     fn update_texture_raw(&mut self, texture: &handle::Texture<R>,
@@ -282,21 +285,22 @@ impl d::Factory<R> for Factory {
         // fall back on the kind that was set when the texture was created.
         let kind = optkind.unwrap_or(texture.get_info().kind);
 
-        tex::update_texture(&self.gl, kind,
+        tex::update_texture(&self.share.context, kind,
                             self.frame_handles.ref_texture(texture),
                             img, data.as_ptr(), data.len())
     }
 
     fn generate_mipmap(&mut self, texture: &handle::Texture<R>) {
-        tex::generate_mipmap(&self.gl, texture.get_info().kind,
+        tex::generate_mipmap(&self.share.context, texture.get_info().kind,
                              self.frame_handles.ref_texture(texture));
     }
 
     fn map_buffer_raw(&mut self, buf: &handle::RawBuffer<R>,
                       access: d::MapAccess) -> RawMapping {
+        let gl = &self.share.context;
         let raw_handle = self.frame_handles.ref_buffer(buf);
-        unsafe { self.gl.BindBuffer(gl::ARRAY_BUFFER, raw_handle) };
-        let ptr = unsafe { self.gl.MapBuffer(gl::ARRAY_BUFFER, match access {
+        unsafe { gl.BindBuffer(gl::ARRAY_BUFFER, raw_handle) };
+        let ptr = unsafe { gl.MapBuffer(gl::ARRAY_BUFFER, match access {
             d::MapAccess::Readable => gl::READ_ONLY,
             d::MapAccess::Writable => gl::WRITE_ONLY,
             d::MapAccess::RW => gl::READ_WRITE
@@ -308,7 +312,8 @@ impl d::Factory<R> for Factory {
     }
 
     fn unmap_buffer_raw(&mut self, map: RawMapping) {
-        unsafe { self.gl.UnmapBuffer(map.target) };
+        let gl = &self.share.context;
+        unsafe { gl.UnmapBuffer(map.target) };
     }
 
     fn map_buffer_readable<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
@@ -327,18 +332,5 @@ impl d::Factory<R> for Factory {
                               -> d::mapping::RW<T, R, Factory> {
         let map = self.map_buffer_raw(buf.raw(), d::MapAccess::RW);
         self.map_read_write(map, buf.len())
-    }
-
-    fn cleanup(&mut self) {
-        self.handles.clean_with(&mut self.gl,
-            |gl, v| unsafe { gl.DeleteBuffers(1, v) },
-            |gl, v| unsafe { gl.DeleteVertexArrays(1, v) },
-            |gl, v| unsafe { gl.DeleteShader(*v) },
-            |gl, v| unsafe { gl.DeleteProgram(*v) },
-            |gl, v| unsafe { gl.DeleteFramebuffers(1, v) },
-            |gl, v| unsafe { gl.DeleteRenderbuffers(1, v) },
-            |gl, v| unsafe { gl.DeleteTextures(1, v) },
-            |gl, v| unsafe { gl.DeleteSamplers(1, v) });
-        self.frame_handles.clear();
     }
 }

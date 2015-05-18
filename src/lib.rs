@@ -24,6 +24,7 @@ extern crate libc;
 extern crate gfx_gl as gl;
 extern crate gfx;
 
+use std::cell::RefCell;
 use std::rc::Rc;
 use gfx::device as d;
 use gfx::device::attrib::*;
@@ -141,58 +142,79 @@ fn target_to_gl(target: Target) -> gl::types::GLenum {
     }
 }
 
+
+/// Internal struct of shared data between the device and its factories.
+pub struct Share {
+    context: gl::Gl,
+    capabilities: d::Capabilities,
+    handles: RefCell<handle::Manager<Resources>>,
+    main_fbo: handle::FrameBuffer<Resources>,
+}
+
 /// An OpenGL device with GLSL shaders.
 pub struct Device {
     info: Info,
-    caps: d::Capabilities,
-    gl: Rc<gl::Gl>,
+    share: Rc<Share>,
     frame_handles: handle::Manager<Resources>,
     max_resource_count: Option<usize>,
 }
 
-/// Load OpenGL symbols and detect driver information.
-pub fn create<F: FnMut(&str) -> *const ::libc::c_void>(fn_proc: F)
-              -> (Device, Factory) {
-    let gl = Rc::new(gl::Gl::load_with(fn_proc));
-    // query information
-    let (info, caps) = info::get(&gl);
-    info!("Vendor: {:?}", info.platform_name.vendor);
-    info!("Renderer: {:?}", info.platform_name.renderer);
-    info!("Version: {:?}", info.version);
-    info!("Shading Language: {:?}", info.shading_language);
-    debug!("Loaded Extensions:");
-    for extension in info.extensions.iter() {
-        debug!("- {}", *extension);
-    }
-    // initialize permanent states
-    unsafe {
-        gl.PixelStorei(gl::UNPACK_ALIGNMENT, 1);
-    }
-    // create factory and device
-    let factory = factory::create(caps, gl.clone());
-    let device = Device {
-        info: info,
-        caps: caps,
-        gl: gl,
-        frame_handles: handle::Manager::new(),
-        max_resource_count: Some(999999),
-    };
-    (device, factory)
-}
-
 impl Device {
+    /// Create a new device. There can be only one!
+    /// Also, load OpenGL symbols and detect driver information.
+    pub fn new<F>(fn_proc: F) -> Device where
+        F: FnMut(&str) -> *const ::libc::c_void
+    {
+        use gfx::device::handle::Producer;
+        let gl = gl::Gl::load_with(fn_proc);
+        // query information
+        let (info, caps) = info::get(&gl);
+        info!("Vendor: {:?}", info.platform_name.vendor);
+        info!("Renderer: {:?}", info.platform_name.renderer);
+        info!("Version: {:?}", info.version);
+        info!("Shading Language: {:?}", info.shading_language);
+        debug!("Loaded Extensions:");
+        for extension in info.extensions.iter() {
+            debug!("- {}", *extension);
+        }
+        // initialize permanent states
+        unsafe {
+            gl.PixelStorei(gl::UNPACK_ALIGNMENT, 1);
+        }
+        // create the device
+        let mut handles = handle::Manager::new();
+        let main_fbo = handles.make_frame_buffer(0);
+        Device {
+            info: info,
+            share: Rc::new(Share {
+                context: gl,
+                capabilities: caps,
+                handles: RefCell::new(handles),
+                main_fbo: main_fbo,
+            }),
+            frame_handles: handle::Manager::new(),
+            max_resource_count: Some(999999),
+        }
+    }
+
+    /// Spawn a new factory.
+    pub fn spawn_factory(&self) -> Factory {
+        Factory::new(self.share.clone())
+    }
+
     /// Access the OpenGL directly via a closure. OpenGL types and enumerations
     /// can be found in the `gl` crate.
     pub unsafe fn with_gl<F: FnMut(&gl::Gl)>(&mut self, mut fun: F) {
         use gfx::Device;
         self.reset_state();
-        fun(&self.gl);
+        fun(&self.share.context);
     }
 
     /// Fails during a debug build if the implementation's error flag was set.
     fn check(&mut self, cmd: &Command) {
         if cfg!(not(ndebug)) {
-            let err = Error::from_error_code(unsafe { self.gl.GetError() });
+            let gl = &self.share.context;
+            let err = Error::from_error_code(unsafe { gl.GetError() });
             if err != Error::NoError {
                 panic!("Error after executing command {:?}: {:?}", cmd, err);
             }
@@ -208,34 +230,37 @@ impl Device {
         match *cmd {
             Command::Clear(ref data, mask) => {
                 let mut flags = 0;
+                let gl = &self.share.context;
                 if mask.intersects(d::target::COLOR) {
                     flags |= gl::COLOR_BUFFER_BIT;
-                    state::bind_color_mask(&self.gl, d::state::MASK_ALL);
+                    state::bind_color_mask(gl, d::state::MASK_ALL);
                     let c = data.color;
-                    unsafe { self.gl.ClearColor(c[0], c[1], c[2], c[3]) };
+                    unsafe { gl.ClearColor(c[0], c[1], c[2], c[3]) };
                 }
                 if mask.intersects(d::target::DEPTH) {
                     flags |= gl::DEPTH_BUFFER_BIT;
                     unsafe {
-                        self.gl.DepthMask(gl::TRUE);
-                        self.gl.ClearDepth(data.depth as gl::types::GLclampd);
+                        gl.DepthMask(gl::TRUE);
+                        gl.ClearDepth(data.depth as gl::types::GLclampd);
                     }
                 }
                 if mask.intersects(d::target::STENCIL) {
                     flags |= gl::STENCIL_BUFFER_BIT;
                     unsafe {
-                        self.gl.StencilMask(gl::types::GLuint::max_value());
-                        self.gl.ClearStencil(data.stencil as gl::types::GLint);
+                        gl.StencilMask(gl::types::GLuint::max_value());
+                        gl.ClearStencil(data.stencil as gl::types::GLint);
                     }
                 }
-                unsafe { self.gl.Clear(flags) };
+                unsafe { gl.Clear(flags) };
             },
             Command::BindProgram(program) => {
-                unsafe { self.gl.UseProgram(program) };
+                let gl = &self.share.context;
+                unsafe { gl.UseProgram(program) };
             },
             Command::BindArrayBuffer(array_buffer) => {
-                if self.caps.array_buffer_supported {
-                    unsafe { self.gl.BindVertexArray(array_buffer) };
+                let gl = &self.share.context;
+                if self.share.capabilities.array_buffer_supported {
+                    unsafe { gl.BindVertexArray(array_buffer) };
                 } else {
                     error!("Ignored VAO bind command: {}", array_buffer)
                 }
@@ -256,107 +281,119 @@ impl Device {
                         return
                     }
                 };
-                unsafe { self.gl.BindBuffer(gl::ARRAY_BUFFER, buffer) };
+                let gl = &self.share.context;
+                unsafe { gl.BindBuffer(gl::ARRAY_BUFFER, buffer) };
                 let offset = format.offset as *const gl::types::GLvoid;
                 match format.elem_type {
                     Type::Int(IntSubType::Raw, _, _) => unsafe {
-                        self.gl.VertexAttribIPointer(slot as gl::types::GLuint,
+                        gl.VertexAttribIPointer(slot as gl::types::GLuint,
                             format.elem_count as gl::types::GLint, gl_type,
                             format.stride as gl::types::GLint, offset);
                     },
                     Type::Int(IntSubType::Normalized, _, _) => unsafe {
-                        self.gl.VertexAttribPointer(slot as gl::types::GLuint,
+                        gl.VertexAttribPointer(slot as gl::types::GLuint,
                             format.elem_count as gl::types::GLint, gl_type, gl::TRUE,
                             format.stride as gl::types::GLint, offset);
                     },
                     Type::Int(IntSubType::AsFloat, _, _) => unsafe {
-                        self.gl.VertexAttribPointer(slot as gl::types::GLuint,
+                        gl.VertexAttribPointer(slot as gl::types::GLuint,
                             format.elem_count as gl::types::GLint, gl_type, gl::FALSE,
                             format.stride as gl::types::GLint, offset);
                     },
                     Type::Float(FloatSubType::Default, _) => unsafe {
-                        self.gl.VertexAttribPointer(slot as gl::types::GLuint,
+                        gl.VertexAttribPointer(slot as gl::types::GLuint,
                             format.elem_count as gl::types::GLint, gl_type, gl::FALSE,
                             format.stride as gl::types::GLint, offset);
                     },
                     Type::Float(FloatSubType::Precision, _) => unsafe {
-                        self.gl.VertexAttribLPointer(slot as gl::types::GLuint,
+                        gl.VertexAttribLPointer(slot as gl::types::GLuint,
                             format.elem_count as gl::types::GLint, gl_type,
                             format.stride as gl::types::GLint, offset);
                     },
                     _ => ()
                 }
-                unsafe { self.gl.EnableVertexAttribArray(slot as gl::types::GLuint) };
-                if self.caps.instance_rate_supported {
-                    unsafe { self.gl.VertexAttribDivisor(slot as gl::types::GLuint,
+                unsafe { gl.EnableVertexAttribArray(slot as gl::types::GLuint) };
+                if self.share.capabilities.instance_rate_supported {
+                    unsafe { gl.VertexAttribDivisor(slot as gl::types::GLuint,
                         format.instance_rate as gl::types::GLuint) };
                 }else if format.instance_rate != 0 {
                     error!("Instanced arrays are not supported");
                 }
             },
             Command::BindIndex(buffer) => {
-                unsafe { self.gl.BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer) };
+                let gl = &self.share.context;
+                unsafe { gl.BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer) };
             },
             Command::BindFrameBuffer(access, frame_buffer, gamma) => {
-                if !self.caps.render_targets_supported {
+                let caps = &self.share.capabilities;
+                let gl = &self.share.context;
+                if !caps.render_targets_supported {
                     panic!("Tried to do something with an FBO without FBO support!")
                 }
                 let point = access_to_gl(access);
-                unsafe { self.gl.BindFramebuffer(point, frame_buffer) };
-                match (self.caps.srgb_color_supported, gamma) {
-                    (true, Gamma::Original) => unsafe { self.gl.Disable(gl::FRAMEBUFFER_SRGB) },
-                    (true, Gamma::Convert)  => unsafe { self.gl.Enable( gl::FRAMEBUFFER_SRGB) },
+                unsafe { gl.BindFramebuffer(point, frame_buffer) };
+                match (caps.srgb_color_supported, gamma) {
+                    (true, Gamma::Original) => unsafe { gl.Disable(gl::FRAMEBUFFER_SRGB) },
+                    (true, Gamma::Convert)  => unsafe { gl.Enable( gl::FRAMEBUFFER_SRGB) },
                     (false, _) => (),
                 }
             },
             Command::UnbindTarget(access, target) => {
-                if !self.caps.render_targets_supported {
+                if !self.share.capabilities.render_targets_supported {
                     panic!("Tried to do something with an FBO without FBO support!")
                 }
+                let gl = &self.share.context;
                 let point = access_to_gl(access);
                 let att = target_to_gl(target);
-                unsafe { self.gl.FramebufferRenderbuffer(point, att, gl::RENDERBUFFER, 0) };
+                unsafe { gl.FramebufferRenderbuffer(point, att, gl::RENDERBUFFER, 0) };
             },
             Command::BindTargetSurface(access, target, name) => {
-                if !self.caps.render_targets_supported {
+                if !self.share.capabilities.render_targets_supported {
                     panic!("Tried to do something with an FBO without FBO support!")
                 }
+                let gl = &self.share.context;
                 let point = access_to_gl(access);
                 let att = target_to_gl(target);
-                unsafe { self.gl.FramebufferRenderbuffer(point, att, gl::RENDERBUFFER, name) };
+                unsafe { gl.FramebufferRenderbuffer(point, att, gl::RENDERBUFFER, name) };
             },
             Command::BindTargetTexture(access, target, name, level, layer) => {
-                if !self.caps.render_targets_supported {
+                if !self.share.capabilities.render_targets_supported {
                     panic!("Tried to do something with an FBO without FBO support!")
                 }
+                let gl = &self.share.context;
                 let point = access_to_gl(access);
                 let att = target_to_gl(target);
                 match layer {
-                    Some(layer) => unsafe { self.gl.FramebufferTextureLayer(
+                    Some(layer) => unsafe { gl.FramebufferTextureLayer(
                         point, att, name, level as gl::types::GLint,
                         layer as gl::types::GLint) },
-                    None => unsafe { self.gl.FramebufferTexture(
+                    None => unsafe { gl.FramebufferTexture(
                         point, att, name, level as gl::types::GLint) },
                 }
             },
-            Command::BindUniformBlock(program, slot, loc, buffer) => { unsafe {
-                self.gl.UniformBlockBinding(program, slot as gl::types::GLuint, loc as gl::types::GLuint);
-                self.gl.BindBufferBase(gl::UNIFORM_BUFFER, loc as gl::types::GLuint, buffer);
-            }},
+            Command::BindUniformBlock(program, slot, loc, buffer) => {
+                let gl = &self.share.context;
+                unsafe {
+                    gl.UniformBlockBinding(program, slot as gl::types::GLuint, loc as gl::types::GLuint);
+                    gl.BindBufferBase(gl::UNIFORM_BUFFER, loc as gl::types::GLuint, buffer);
+                }
+            },
             Command::BindUniform(loc, uniform) => {
-                shade::bind_uniform(&self.gl, loc as gl::types::GLint, uniform);
+                let gl = &self.share.context;
+                shade::bind_uniform(gl, loc as gl::types::GLint, uniform);
             },
             Command::BindTexture(slot, kind, texture, sampler) => {
-                let anchor = tex::bind_texture(&self.gl,
+                let gl = &self.share.context;
+                let anchor = tex::bind_texture(gl,
                     gl::TEXTURE0 + slot as gl::types::GLenum,
                     kind, texture);
                 match (anchor, kind.get_aa_mode(), sampler) {
                     (anchor, None, Some((name, info))) => {
-                        if self.caps.sampler_objects_supported {
-                            unsafe { self.gl.BindSampler(slot as gl::types::GLenum, name) };
+                        if self.share.capabilities.sampler_objects_supported {
+                            unsafe { gl.BindSampler(slot as gl::types::GLenum, name) };
                         } else {
                             debug_assert_eq!(name, 0);
-                            tex::bind_sampler(&self.gl, anchor, &info);
+                            tex::bind_sampler(gl, anchor, &info);
                         }
                     },
                     (_, Some(_), Some(_)) =>
@@ -365,79 +402,85 @@ impl Device {
                 }
             },
             Command::SetDrawColorBuffers(num) => {
-                state::bind_draw_color_buffers(&self.gl, num);
+                state::bind_draw_color_buffers(&self.share.context, num);
             },
             Command::SetPrimitiveState(prim) => {
-                state::bind_primitive(&self.gl, prim);
+                state::bind_primitive(&self.share.context, prim);
             },
             Command::SetViewport(rect) => {
-                state::bind_viewport(&self.gl, rect);
+                state::bind_viewport(&self.share.context, rect);
             },
             Command::SetMultiSampleState(ms) => {
-                state::bind_multi_sample(&self.gl, ms);
+                state::bind_multi_sample(&self.share.context, ms);
             },
             Command::SetScissor(rect) => {
-                state::bind_scissor(&self.gl, rect);
+                state::bind_scissor(&self.share.context, rect);
             },
             Command::SetDepthStencilState(depth, stencil, cull) => {
-                state::bind_stencil(&self.gl, stencil, cull);
-                state::bind_depth(&self.gl, depth);
+                let gl = &self.share.context;
+                state::bind_stencil(gl, stencil, cull);
+                state::bind_depth(gl, depth);
             },
             Command::SetBlendState(blend) => {
-                state::bind_blend(&self.gl, blend);
+                state::bind_blend(&self.share.context, blend);
             },
             Command::SetColorMask(mask) => {
-                state::bind_color_mask(&self.gl, mask);
+                state::bind_color_mask(&self.share.context, mask);
             },
             Command::UpdateBuffer(buffer, pointer, offset) => {
                 let data = data_buf.get_ref(pointer);
-                factory::update_sub_buffer(&self.gl, buffer, data.as_ptr(),
-                    data.len(), offset, gfx::BufferRole::Vertex);
+                factory::update_sub_buffer(&self.share.context, buffer,
+                    data.as_ptr(), data.len(), offset, gfx::BufferRole::Vertex);
             },
             Command::UpdateTexture(kind, texture, image_info, pointer) => {
                 let data = data_buf.get_ref(pointer);
-                match tex::update_texture(&self.gl, kind, texture, &image_info,
-                                          data.as_ptr(), data.len()) {
+                match tex::update_texture(&self.share.context, kind, texture,
+                        &image_info, data.as_ptr(), data.len()) {
                     Ok(_) => (),
-                    Err(_) => unimplemented!(),
+                    Err(e) => {
+                        error!("Error updating a texture: {:?}", e);
+                    },
                 }
             },
             Command::Draw(prim_type, start, count, instances) => {
+                let gl = &self.share.context;
                 match instances {
-                    Some((num, base)) if self.caps.instance_call_supported => { unsafe {
-                        self.gl.DrawArraysInstancedBaseInstance(
+                    Some((num, base)) if self.share.capabilities.instance_call_supported => unsafe {
+                        gl.DrawArraysInstancedBaseInstance(
                             primitive_to_gl(prim_type),
                             start as gl::types::GLsizei,
                             count as gl::types::GLsizei,
                             num as gl::types::GLsizei,
                             base as gl::types::GLuint,
                         );
-                    }},
+                    },
                     Some(_) => {
                         error!("Instanced draw calls are not supported");
                     },
-                    None => { unsafe {
-                        self.gl.DrawArrays(
+                    None => unsafe {
+                        gl.DrawArrays(
                             primitive_to_gl(prim_type),
                             start as gl::types::GLsizei,
                             count as gl::types::GLsizei
                         );
-                    }},
+                    },
                 }
             },
             Command::DrawIndexed(prim_type, index_type, start, count, base_vertex, instances) => {
+                let gl = &self.share.context;
+                let caps = &self.share.capabilities;
                 let (offset, gl_index) = match index_type {
                     IntSize::U8  => (start * 1u32, gl::UNSIGNED_BYTE),
                     IntSize::U16 => (start * 2u32, gl::UNSIGNED_SHORT),
                     IntSize::U32 => (start * 4u32, gl::UNSIGNED_INT),
                 };
                 match instances {
-                    Some((num, base_instance)) if self.caps.instance_call_supported => unsafe {
-                        if (base_vertex == 0 && base_instance == 0) || !self.caps.vertex_base_supported {
+                    Some((num, base_instance)) if caps.instance_call_supported => unsafe {
+                        if (base_vertex == 0 && base_instance == 0) || !caps.vertex_base_supported {
                             if base_vertex != 0 || base_instance != 0 {
                                 error!("Instance bases with indexed drawing is not supported")
                             }
-                            self.gl.DrawElementsInstanced(
+                            gl.DrawElementsInstanced(
                                 primitive_to_gl(prim_type),
                                 count as gl::types::GLsizei,
                                 gl_index,
@@ -445,7 +488,7 @@ impl Device {
                                 num as gl::types::GLsizei,
                             );
                         } else if base_vertex != 0 && base_instance == 0 {
-                            self.gl.DrawElementsInstancedBaseVertex(
+                            gl.DrawElementsInstancedBaseVertex(
                                 primitive_to_gl(prim_type),
                                 count as gl::types::GLsizei,
                                 gl_index,
@@ -454,7 +497,7 @@ impl Device {
                                 base_vertex as gl::types::GLint,
                             );
                         } else if base_vertex == 0 && base_instance != 0 {
-                            self.gl.DrawElementsInstancedBaseInstance(
+                            gl.DrawElementsInstancedBaseInstance(
                                 primitive_to_gl(prim_type),
                                 count as gl::types::GLsizei,
                                 gl_index,
@@ -463,7 +506,7 @@ impl Device {
                                 base_instance as gl::types::GLuint,
                             );
                         } else {
-                            self.gl.DrawElementsInstancedBaseVertexBaseInstance(
+                            gl.DrawElementsInstancedBaseVertexBaseInstance(
                                 primitive_to_gl(prim_type),
                                 count as gl::types::GLsizei,
                                 gl_index,
@@ -478,18 +521,18 @@ impl Device {
                         error!("Instanced draw calls are not supported");
                     },
                     None => unsafe {
-                        if base_vertex == 0 || !self.caps.vertex_base_supported {
+                        if base_vertex == 0 || !caps.vertex_base_supported {
                             if base_vertex != 0 {
                                 error!("Base vertex with indexed drawing not supported");
                             }
-                            self.gl.DrawElements(
+                            gl.DrawElements(
                                 primitive_to_gl(prim_type),
                                 count as gl::types::GLsizei,
                                 gl_index,
                                 offset as *const gl::types::GLvoid,
                             );
                         } else {
-                            self.gl.DrawElementsBaseVertex(
+                            gl.DrawElementsBaseVertex(
                                 primitive_to_gl(prim_type),
                                 count as gl::types::GLsizei,
                                 gl_index,
@@ -531,7 +574,8 @@ impl Device {
                     gl::LINEAR
                 };
                 // blit
-                unsafe { self.gl.BlitFramebuffer(
+                let gl = &self.share.context;
+                unsafe { gl.BlitFramebuffer(
                     s_rect.x as GLint,
                     s_rect.y as GLint,
                     s_end_x as GLint,
@@ -554,7 +598,7 @@ impl gfx::Device for Device {
     type CommandBuffer = draw::CommandBuffer;
 
     fn get_capabilities<'a>(&'a self) -> &'a d::Capabilities {
-        &self.caps
+        &self.share.capabilities
     }
 
     fn reset_state(&mut self) {
@@ -579,7 +623,18 @@ impl gfx::Device for Device {
         }
     }
 
-    fn after_frame(&mut self) {
+    fn cleanup(&mut self) {
+        use gfx::device::handle::Producer;
         self.frame_handles.clear();
+        self.share.handles.borrow_mut().clean_with(&mut &self.share.context,
+            |gl, v| unsafe { gl.DeleteBuffers(1, v) },
+            |gl, v| unsafe { gl.DeleteVertexArrays(1, v) },
+            |gl, v| unsafe { gl.DeleteShader(*v) },
+            |gl, v| unsafe { gl.DeleteProgram(*v) },
+            |gl, v| unsafe { gl.DeleteFramebuffers(1, v) },
+            |gl, v| unsafe { gl.DeleteRenderbuffers(1, v) },
+            |gl, v| unsafe { gl.DeleteTextures(1, v) },
+            |gl, v| unsafe { gl.DeleteSamplers(1, v) },
+        );
     }
 }
