@@ -28,14 +28,19 @@ use {Buffer, Share};
 use Resources as R;
 
 
+fn role_to_target(role: d::BufferRole) -> gl::types::GLenum {
+    match role {
+        d::BufferRole::Vertex  => gl::ARRAY_BUFFER,
+        d::BufferRole::Index   => gl::ELEMENT_ARRAY_BUFFER,
+        d::BufferRole::Uniform => gl::UNIFORM_BUFFER,
+    }
+}
+
 pub fn update_sub_buffer(gl: &gl::Gl, buffer: Buffer, address: *const u8,
                          size: usize, offset: usize, role: d::BufferRole) {
-    let target = match role {
-        d::BufferRole::Vertex => gl::ARRAY_BUFFER,
-        d::BufferRole::Index  => gl::ELEMENT_ARRAY_BUFFER,
-    };
-    unsafe { gl.BindBuffer(target, buffer) };
+    let target = role_to_target(role);
     unsafe {
+        gl.BindBuffer(target, buffer);
         gl.BufferSubData(target,
             offset as gl::types::GLintptr,
             size as gl::types::GLsizeiptr,
@@ -92,17 +97,14 @@ impl Factory {
 
     fn init_buffer(&mut self, buffer: Buffer, info: &d::BufferInfo) {
         let gl = &self.share.context;
-        let target = match info.role {
-            d::BufferRole::Vertex => gl::ARRAY_BUFFER,
-            d::BufferRole::Index  => gl::ELEMENT_ARRAY_BUFFER,
-        };
-        unsafe { gl.BindBuffer(target, buffer) };
+        let target = role_to_target(info.role);
         let usage = match info.usage {
             d::BufferUsage::Static  => gl::STATIC_DRAW,
             d::BufferUsage::Dynamic => gl::DYNAMIC_DRAW,
             d::BufferUsage::Stream  => gl::STREAM_DRAW,
         };
         unsafe {
+            gl.BindBuffer(target, buffer);
             gl.BufferData(target,
                 info.size as gl::types::GLsizeiptr,
                 0 as *const gl::types::GLvoid,
@@ -154,11 +156,11 @@ impl d::Factory<R> for Factory {
         &self.share.capabilities
     }
 
-    fn create_buffer_raw(&mut self, size: usize, usage: d::BufferUsage)
+    fn create_buffer_raw(&mut self, size: usize, role: d::BufferRole, usage: d::BufferUsage)
                          -> handle::RawBuffer<R> {
         let name = self.create_buffer_internal();
         let info = d::BufferInfo {
-            role: d::BufferRole::Vertex,
+            role: role,
             usage: usage,
             size: size,
         };
@@ -262,12 +264,16 @@ impl d::Factory<R> for Factory {
         self.share.handles.borrow_mut().make_sampler(sam, info)
     }
 
-    fn update_buffer_raw(&mut self, buffer: &handle::RawBuffer<R>,
-                         data: &[u8], offset_bytes: usize) {
-        debug_assert!(offset_bytes + data.len() <= buffer.get_info().size);
-        let raw_handle = self.frame_handles.ref_buffer(buffer);
-        update_sub_buffer(&self.share.context, raw_handle, data.as_ptr(), data.len(),
-                          offset_bytes, buffer.get_info().role)
+    fn update_buffer_raw(&mut self, buffer: &handle::RawBuffer<R>, data: &[u8],
+                         offset_bytes: usize) -> Result<(), d::BufferUpdateError> {
+        if offset_bytes + data.len() > buffer.get_info().size {
+            Err(d::BufferUpdateError::OutOfBounds)
+        } else {
+            let raw_handle = self.frame_handles.ref_buffer(buffer);
+            update_sub_buffer(&self.share.context, raw_handle, data.as_ptr(), data.len(),
+                              offset_bytes, buffer.get_info().role);
+            Ok(())
+        }
     }
 
     fn update_texture_raw(&mut self, texture: &handle::Texture<R>,

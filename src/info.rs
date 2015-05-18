@@ -226,9 +226,13 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities) {
     let caps = Capabilities {
         shader_model:                   to_shader_model(&info.shading_language),
 
+        max_vertex_count:               get_usize(gl, gl::MAX_ELEMENTS_VERTICES),
+        max_index_count:                get_usize(gl, gl::MAX_ELEMENTS_INDICES),
         max_draw_buffers:               get_usize(gl, gl::MAX_DRAW_BUFFERS),
         max_texture_size:               get_usize(gl, gl::MAX_TEXTURE_SIZE),
         max_vertex_attributes:          get_usize(gl, gl::MAX_VERTEX_ATTRIBS),
+
+        buffer_role_change_allowed:     true, //TODO
 
         array_buffer_supported:         info.is_version_or_extension_supported(3, 0, "GL_ARB_vertex_array_object"),
         fragment_output_supported:      info.is_version_or_extension_supported(3, 0, "GL_ARB_gpu_shader4"),
