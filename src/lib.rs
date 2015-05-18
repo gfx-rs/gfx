@@ -76,12 +76,24 @@ pub type Success = (
     gfx_device_gl::Factory,
 );
 
+/// A streamed version of the success struct.
+pub type SuccessStream = (
+    gfx::OwnedStream<
+        gfx_device_gl::Resources,
+        gfx_device_gl::CommandBuffer,
+        Output<gfx_device_gl::Resources>,
+    >,
+    gfx_device_gl::Device,
+    gfx_device_gl::Factory,
+);
+
 
 /// Initialize with a window.
 pub fn init(window: glutin::Window) -> Success {
     unsafe { window.make_current() };
-    let (device, factory) = gfx_device_gl::create(|s| window.get_proc_address(s));
     let format = window.get_pixel_format();
+    let device = gfx_device_gl::Device::new(|s| window.get_proc_address(s));
+    let factory = device.spawn_factory();
     let out = Output {
         window: window,
         frame: factory.get_main_frame_buffer(),
@@ -92,4 +104,12 @@ pub fn init(window: glutin::Window) -> Success {
         gamma: gfx::Gamma::Original,
     };
     (out, device, factory)
+}
+
+/// Initialize with a window, return a `Stream`.
+pub fn init_stream(window: glutin::Window) -> SuccessStream {
+    use gfx::traits::StreamFactory;
+    let (out, device, mut factory) = init(window);
+    let stream = factory.create_stream(out);
+    (stream, device, factory)
 }
