@@ -250,18 +250,6 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
             self.handles.ref_buffer(buf.raw()), pointer, 0);
     }
 
-    /// DEPRECATED: use update_buffer buffer instead.
-    pub fn update_buffer_vec<T: Copy>(&mut self, buf: &handle::Buffer<R, T>,
-                             data: &[T], offset_elements: usize) {
-        self.update_buffer(buf.raw(), data, offset_elements)
-    }
-
-    /// DEPRECATED: use update_block buffer instead.
-    pub fn update_buffer_struct<U, T: Copy>(&mut self,
-                                buf: &handle::Buffer<R, U>, data: &T) {
-        self.update_block(buf, data)
-    }
-
     /// Update the contents of a texture.
     pub fn update_texture<T: Copy>(&mut self, tex: &handle::Texture<R>,
                           img: device::tex::ImageInfo, data: &[T]) {
