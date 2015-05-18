@@ -495,13 +495,10 @@ pub fn main() {
             _r: PhantomData,
         };
 
-        let light = {
-            let program = factory.link_program(LIGHT_VERTEX_SRC, LIGHT_FRAGMENT_SRC)
-                                 .unwrap();
-
-            context.make_batch(&program, light_data, &mesh, slice.clone(), &state)
-                   .unwrap()
-        };
+        let light_program = factory.link_program(LIGHT_VERTEX_SRC, LIGHT_FRAGMENT_SRC)
+                                   .unwrap();
+        let light = context.make_batch(&light_program, light_data, &mesh, slice.clone(), &state)
+                           .unwrap();
 
         let emitter_data = EmitterParams {
             transform: Matrix4::identity().into_fixed(),
@@ -510,13 +507,10 @@ pub fn main() {
             _r: PhantomData,
         };
 
-        let emitter = {
-            let program = factory.link_program(EMITTER_VERTEX_SRC, EMITTER_FRAGMENT_SRC)
-                                 .unwrap();
-
-            context.make_batch(&program, emitter_data, &mesh, slice, &state)
-                   .unwrap()
-        };
+        let emitter_program = factory.link_program(EMITTER_VERTEX_SRC, EMITTER_FRAGMENT_SRC)
+                                     .unwrap();
+        let emitter = context.make_batch(&emitter_program, emitter_data, &mesh, slice, &state)
+                             .unwrap();
 
         (light, emitter)
     };
@@ -605,8 +599,8 @@ pub fn main() {
         let blit_tex = match debug_buf {
             Some(ref tex) => tex,   // Show one of the immediate buffers
             None => {
+                renderer.clear(clear_data, gfx::COLOR, &res_buffer);
                 let mut stream = (&mut renderer, &res_buffer);
-                stream.clear(clear_data);
 
                 // Apply light
                 stream.draw_instanced(&(&light, &context), NUM_LIGHTS as u32, 0)
