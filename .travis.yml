@@ -1,7 +1,8 @@
 language: rust
 rust:
+- 1.0.0
+- beta
 - nightly
-- 1.0.0-beta.4
 before_script:
 - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
 notifications:
