@@ -23,7 +23,7 @@ use gfx::tex::Size;
 use glfw::Context;
 
 /// A wrapper around the window that implements `Output`.
-pub struct Wrap<R: gfx::Resources> {
+pub struct Output<R: gfx::Resources> {
     /// Glutin window in the open.
     pub window: glfw::Window,
     frame: gfx::handle::FrameBuffer<R>,
@@ -31,7 +31,7 @@ pub struct Wrap<R: gfx::Resources> {
     gamma: gfx::Gamma,
 }
 
-impl<R: gfx::Resources> gfx::Output<R> for Wrap<R> {
+impl<R: gfx::Resources> gfx::Output<R> for Output<R> {
     fn get_handle(&self) -> Option<&gfx::handle::FrameBuffer<R>> {
         Some(&self.frame)
     }
@@ -50,7 +50,7 @@ impl<R: gfx::Resources> gfx::Output<R> for Wrap<R> {
     }
 }
 
-impl<R: gfx::Resources> gfx::Window<R> for Wrap<R> {
+impl<R: gfx::Resources> gfx::Window<R> for Output<R> {
     fn swap_buffers(&mut self) {
         self.window.swap_buffers();
     }
@@ -59,7 +59,18 @@ impl<R: gfx::Resources> gfx::Window<R> for Wrap<R> {
 
 /// Result of successful context initialization.
 pub type Success = (
-    Wrap<gfx_device_gl::Resources>,
+    Output<gfx_device_gl::Resources>,
+    gfx_device_gl::Device,
+    gfx_device_gl::Factory,
+);
+
+/// A streamed version of the success struct.
+pub type SuccessStream = (
+    gfx::OwnedStream<
+        gfx_device_gl::Resources,
+        gfx_device_gl::CommandBuffer,
+        Output<gfx_device_gl::Resources>,
+    >,
     gfx_device_gl::Device,
     gfx_device_gl::Factory,
 );
@@ -68,12 +79,21 @@ pub type Success = (
 /// Initialize with a window.
 pub fn init(mut window: glfw::Window) -> Success {
     window.make_current();
-    let (device, factory) = gfx_device_gl::create(|s| window.get_proc_address(s));
-    let wrap = Wrap {
+    let device = gfx_device_gl::Device::new(|s| window.get_proc_address(s));
+    let factory = device.spawn_factory();
+    let out = Output {
         window: window,
         frame: factory.get_main_frame_buffer(),
         mask: gfx::COLOR | gfx::DEPTH | gfx::STENCIL, //TODO
         gamma: gfx::Gamma::Original, //TODO
     };
-    (wrap, device, factory)
+    (out, device, factory)
+}
+
+/// Initialize with a window, return a `Stream`.
+pub fn init_stream(window: glfw::Window) -> SuccessStream {
+    use gfx::traits::StreamFactory;
+    let (out, device, mut factory) = init(window);
+    let stream = factory.create_stream(out);
+    (stream, device, factory)
 }
