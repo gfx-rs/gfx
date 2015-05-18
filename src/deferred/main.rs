@@ -68,14 +68,14 @@ gfx_vertex!( CubeVertex {
     a_Pos@ pos: [Floater<i8>; 3],
 });
 
-gfx_parameters!( TerrainParams/TerrainLink {
+gfx_parameters!( TerrainParams {
     u_Model@ model: [[f32; 4]; 4],
     u_View@ view: [[f32; 4]; 4],
     u_Proj@ proj: [[f32; 4]; 4],
     u_CameraPos@ cam_pos: [f32; 3],
 });
 
-gfx_parameters!( LightParams/LightLink {
+gfx_parameters!( LightParams {
     u_Transform@ transform: [[f32; 4]; 4],
     u_LightPosBlock@ light_pos_buf: gfx::handle::RawBuffer<R>,
     u_Radius@ radius: f32,
@@ -86,13 +86,13 @@ gfx_parameters!( LightParams/LightLink {
     u_TexDiffuse@ tex_diffuse: gfx::shade::TextureParam<R>,
 });
 
-gfx_parameters!( EmitterParams/EmitterLink {
+gfx_parameters!( EmitterParams {
     u_Transform@ transform: [[f32; 4]; 4],
     u_LightPosBlock@ light_pos_buf: gfx::handle::RawBuffer<R>,
     u_Radius@ radius: f32,
 });
 
-gfx_parameters!( BlitParams/BlitLink {
+gfx_parameters!( BlitParams {
     u_Tex@ tex: gfx::shade::TextureParam<R>,
 });
 
@@ -339,16 +339,15 @@ fn create_res_buffer<R: gfx::Resources, F: Factory<R>>(
 
 pub fn main() {
     env_logger::init().unwrap();
-    let (wrap, mut device, mut factory) = gfx_window_glutin::init(
-        glutin::WindowBuilder::new()
+    let (gfx::OwnedStream{ ren: mut renderer, out: output }, mut device, mut factory) =
+        gfx_window_glutin::init(glutin::WindowBuilder::new()
             .with_title("Deferred rendering example with gfx-rs".to_string())
             .with_dimensions(800, 600)
             .with_gl(glutin::GL_CORE)
             .build().unwrap()
     );
 
-    let (w, h) = wrap.get_size();
-    let mut renderer = factory.create_renderer();
+    let (w, h) = output.get_size();
     let mut context = gfx::batch::Context::new();
 
     let (g_buffer, texture_pos, texture_normal, texture_diffuse, texture_depth) = create_g_buffer(w, h, &mut factory);
@@ -388,10 +387,7 @@ pub fn main() {
             .collect();
 
         let mesh = factory.create_mesh(&vertex_data);
-
-        let slice = factory
-            .create_buffer_index::<u32>(&index_data)
-            .to_slice(gfx::PrimitiveType::TriangleList);
+        let slice = index_data.to_slice(&mut factory, gfx::PrimitiveType::TriangleList);
 
         let program = factory.link_program(TERRAIN_VERTEX_SRC, TERRAIN_FRAGMENT_SRC)
                              .unwrap();
@@ -434,7 +430,8 @@ pub fn main() {
                .unwrap()
     };
 
-    let light_pos_buffer = factory.create_buffer::<[f32; 4]>(NUM_LIGHTS, gfx::BufferUsage::Stream);
+    let light_pos_buffer = factory.create_buffer_dynamic::<[f32; 4]>(NUM_LIGHTS,
+        gfx::BufferRole::Uniform);
 
     let (mut light, mut emitter) = {
         let vertex_data = [
@@ -480,9 +477,7 @@ pub fn main() {
         ];
 
         let mesh = factory.create_mesh(&vertex_data);
-        let slice = factory
-            .create_buffer_index::<u8>(index_data)
-            .to_slice(gfx::PrimitiveType::TriangleList);
+        let slice = index_data.to_slice(&mut factory, gfx::PrimitiveType::TriangleList);
 
         let state = gfx::DrawState::new()
             .depth(gfx::state::Comparison::LessEqual, false)
@@ -500,13 +495,10 @@ pub fn main() {
             _r: PhantomData,
         };
 
-        let light = {
-            let program = factory.link_program(LIGHT_VERTEX_SRC, LIGHT_FRAGMENT_SRC)
-                                 .unwrap();
-
-            context.make_batch(&program, light_data, &mesh, slice.clone(), &state)
-                   .unwrap()
-        };
+        let light_program = factory.link_program(LIGHT_VERTEX_SRC, LIGHT_FRAGMENT_SRC)
+                                   .unwrap();
+        let light = context.make_batch(&light_program, light_data, &mesh, slice.clone(), &state)
+                           .unwrap();
 
         let emitter_data = EmitterParams {
             transform: Matrix4::identity().into_fixed(),
@@ -515,13 +507,10 @@ pub fn main() {
             _r: PhantomData,
         };
 
-        let emitter = {
-            let program = factory.link_program(EMITTER_VERTEX_SRC, EMITTER_FRAGMENT_SRC)
-                                 .unwrap();
-
-            context.make_batch(&program, emitter_data, &mesh, slice, &state)
-                   .unwrap()
-        };
+        let emitter_program = factory.link_program(EMITTER_VERTEX_SRC, EMITTER_FRAGMENT_SRC)
+                                     .unwrap();
+        let emitter = context.make_batch(&emitter_program, emitter_data, &mesh, slice, &state)
+                             .unwrap();
 
         (light, emitter)
     };
@@ -540,7 +529,7 @@ pub fn main() {
 
      'main: loop {
         // quit when Esc is pressed.
-        for event in wrap.window.poll_events() {
+        for event in output.window.poll_events() {
             use glutin::{Event, VirtualKeyCode};
             match event {
                 Event::Closed => break 'main,
@@ -598,47 +587,41 @@ pub fn main() {
             p[1] = terrain_scale.y * y;
             p[2] = terrain_scale.z * h + 0.5;
         };
-        factory.update_buffer(&light_pos_buffer, &light_pos_vec, 0);
+        factory.update_buffer(&light_pos_buffer, &light_pos_vec, 0)
+               .unwrap();
 
-        // Render the terrain to the geometry buffer
-        renderer.clear(clear_data, gfx::COLOR|gfx::DEPTH, &g_buffer);
-        renderer.draw(&(&terrain, &context), &g_buffer).unwrap();
+        {   // Render the terrain to the geometry buffer
+            let mut stream = (&mut renderer, &g_buffer);
+            stream.clear(clear_data);
+            stream.draw(&(&terrain, &context)).unwrap();
+        }
 
-        match debug_buf {
-            Some(ref tex) => {
-                // Show one of the immediate buffers
-                blit.params.tex = (tex.clone(), Some(sampler.clone()));
-                renderer.clear(clear_data, gfx::COLOR | gfx::DEPTH, &wrap);
-                renderer.draw(
-                    &(&blit, &context),
-                    &wrap)
-                    .unwrap();
-            },
+        let blit_tex = match debug_buf {
+            Some(ref tex) => tex,   // Show one of the immediate buffers
             None => {
                 renderer.clear(clear_data, gfx::COLOR, &res_buffer);
+                let mut stream = (&mut renderer, &res_buffer);
 
                 // Apply light
-                renderer.draw_instanced(
-                    &(&light, &context),
-                    NUM_LIGHTS as u32, 0, &res_buffer)
-                    .unwrap();
+                stream.draw_instanced(&(&light, &context), NUM_LIGHTS as u32, 0)
+                      .unwrap();
                 // Draw light emitters
-                renderer.draw_instanced(
-                    &(&emitter, &context),
-                    NUM_LIGHTS as u32, 0, &res_buffer)
-                    .unwrap();
+                stream.draw_instanced(&(&emitter, &context), NUM_LIGHTS as u32, 0)
+                      .unwrap();
 
-                // Show the result
-                renderer.clear(clear_data, gfx::COLOR | gfx::DEPTH, &wrap);
-                blit.params.tex = (texture_frame.clone(), Some(sampler.clone()));
-                renderer.draw(&(&blit, &context), &wrap).unwrap();
+                &texture_frame
             }
-        }
-        device.submit(renderer.as_buffer());
-        renderer.reset();
+        };
+        blit.params.tex = (blit_tex.clone(), Some(sampler.clone()));
 
-        wrap.window.swap_buffers();
-        device.after_frame();
-        factory.cleanup();
+        {   // Show the result
+            let mut stream = (&mut renderer, &output);
+            stream.clear(clear_data);
+            stream.draw(&(&blit, &context)).unwrap();
+            stream.flush(&mut device);
+        }
+
+        output.window.swap_buffers();
+        device.cleanup();
     }
 }

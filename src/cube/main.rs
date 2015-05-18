@@ -42,7 +42,7 @@ impl Vertex {
 
 // The shader_param attribute makes sure the following struct can be used to
 // pass parameters to a shader.
-gfx_parameters!( Params/ParamsLink {
+gfx_parameters!( Params {
     u_Transform@ transform: [[f32; 4]; 4],
     t_Color@ color: gfx::shade::TextureParam<R>,
 });
@@ -58,7 +58,7 @@ pub fn main() {
         .unwrap();
     window.set_key_polling(true);
 
-    let mut canvas = gfx_window_glfw::init(window).into_canvas();
+    let (mut stream, mut device, mut factory) = gfx_window_glfw::init(window);
 
     let vertex_data = [
         // top (0, 0, 1)
@@ -93,7 +93,7 @@ pub fn main() {
         Vertex::new([ 1, -1, -1], [0, 1]),
     ];
 
-    let mesh = canvas.factory.create_mesh(&vertex_data);
+    let mesh = factory.create_mesh(&vertex_data);
 
     let index_data: &[u8] = &[
          0,  1,  2,  2,  3,  0, // top
@@ -104,13 +104,13 @@ pub fn main() {
         20, 21, 22, 22, 23, 20, // back
     ];
 
-    let texture = canvas.factory.create_texture_rgba8(1, 1).unwrap();
-    canvas.factory.update_texture(
+    let texture = factory.create_texture_rgba8(1, 1).unwrap();
+    factory.update_texture(
         &texture, &texture.get_info().to_image_info(),
         &[0x20u8, 0xA0u8, 0xC0u8, 0x00u8],
         None).unwrap();
 
-    let sampler = canvas.factory.create_sampler(
+    let sampler = factory.create_sampler(
         gfx::tex::SamplerInfo::new(gfx::tex::FilterMethod::Bilinear,
                                    gfx::tex::WrapMode::Clamp)
     );
@@ -126,8 +126,7 @@ pub fn main() {
             glsl_150: Some(include_bytes!("cube_150.glslf")),
             .. gfx::ShaderSource::empty()
         };
-        canvas.factory.link_program_source(vs, fs, &canvas.device.get_capabilities())
-                      .unwrap()
+        factory.link_program_source(vs, fs).unwrap()
     };
 
     let view: AffineMatrix3<f32> = Transform::look_at(
@@ -136,7 +135,7 @@ pub fn main() {
         &Vector3::unit_z(),
     );
     let proj = cgmath::perspective(cgmath::deg(45.0f32),
-                                   canvas.get_aspect_ratio(), 1.0, 10.0);
+                                   stream.get_aspect_ratio(), 1.0, 10.0);
 
     let data = Params {
         transform: proj.mul_m(&view.mat).into_fixed(),
@@ -145,26 +144,29 @@ pub fn main() {
     };
 
     let mut batch = gfx::batch::OwnedBatch::new(mesh, program, data).unwrap();
-    batch.slice = canvas.factory.create_buffer_index::<u8>(index_data)
-                                .to_slice(gfx::PrimitiveType::TriangleList);
+    batch.slice = index_data.to_slice(&mut factory, gfx::PrimitiveType::TriangleList);
     batch.state.depth(gfx::state::Comparison::LessEqual, true);
 
-    while !canvas.output.window.should_close() {
+    while !stream.out.window.should_close() {
+        use glfw::Context;
         glfw.poll_events();
         for (_, event) in glfw::flush_messages(&events) {
             match event {
                 glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Action::Press, _) =>
-                    canvas.output.window.set_should_close(true),
+                    stream.out.window.set_should_close(true),
                 _ => {},
             }
         }
 
-        canvas.clear(gfx::ClearData {
+        stream.clear(gfx::ClearData {
             color: [0.3, 0.3, 0.3, 1.0],
             depth: 1.0,
             stencil: 0,
         });
-        canvas.draw(&batch).unwrap();
-        canvas.present();
+        stream.draw(&batch).unwrap();
+        //stream.present(&mut device); //triggers ICE in rust-1.0
+        stream.flush(&mut device);
+        stream.out.window.swap_buffers();
+        device.cleanup();
     }
 }

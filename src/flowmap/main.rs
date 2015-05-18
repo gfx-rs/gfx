@@ -19,11 +19,8 @@ extern crate glutin;
 
 extern crate image;
 
-use gfx::attrib::Floater;
-use gfx::traits::*;
-
-use std::path::Path;
 use std::io::Cursor;
+use gfx::traits::*;
 
 gfx_vertex!( Vertex {
     a_Pos@ pos: [f32; 2],
@@ -39,7 +36,7 @@ impl Vertex {
     }
 }
 
-gfx_parameters!( Params/ParamsLink {
+gfx_parameters!( Params {
     t_Color@ color: gfx::shade::TextureParam<R>,
     t_Flow@ flow: gfx::shade::TextureParam<R>,
     t_Noise@ noise: gfx::shade::TextureParam<R>,
@@ -51,7 +48,7 @@ fn load_texture<R, F>(factory: &mut F, data: &[u8]) -> Result<gfx::handle::Textu
         where R: gfx::Resources, F: gfx::device::Factory<R> {
     let img = image::load(Cursor::new(data), image::PNG).unwrap();
 
-    let mut img = match img {
+    let img = match img {
         image::DynamicImage::ImageRgba8(img) => img,
         img => img.to_rgba()
     };
@@ -69,10 +66,11 @@ fn load_texture<R, F>(factory: &mut F, data: &[u8]) -> Result<gfx::handle::Textu
 }
 
 pub fn main() {
-    let mut canvas = gfx_window_glutin::init(glutin::WindowBuilder::new()
-        .with_dimensions(800, 600).build().unwrap())
-        .into_canvas();
-    canvas.output.window.set_title("Flowmap example");
+    let (mut stream, mut device, mut factory) = gfx_window_glutin::init(
+        glutin::WindowBuilder::new()
+            .with_title("Flowmap example".to_string())
+            .with_dimensions(800, 600).build().unwrap()
+    );
 
     let vertex_data = [
         Vertex::new([-1.0, -1.0], [0.0, 0.0]),
@@ -84,11 +82,11 @@ pub fn main() {
         Vertex::new([-1.0,  1.0], [0.0, 1.0]),
     ];
 
-    let mesh = canvas.factory.create_mesh(&vertex_data);
+    let mesh = factory.create_mesh(&vertex_data);
 
-    let water_texture = load_texture(&mut canvas.factory, &include_bytes!("image/water.png")[..]).unwrap();
-    let flow_texture = load_texture(&mut canvas.factory, &include_bytes!("image/flow.png")[..]).unwrap();
-    let noise_texture = load_texture(&mut canvas.factory, &include_bytes!("image/noise.png")[..]).unwrap();
+    let water_texture = load_texture(&mut factory, &include_bytes!("image/water.png")[..]).unwrap();
+    let flow_texture  = load_texture(&mut factory, &include_bytes!("image/flow.png")[..]).unwrap();
+    let noise_texture = load_texture(&mut factory, &include_bytes!("image/noise.png")[..]).unwrap();
 
     let program = {
         let vs = gfx::ShaderSource {
@@ -101,8 +99,7 @@ pub fn main() {
             glsl_150: Some(include_bytes!("shader/flowmap_150.glslf")),
             .. gfx::ShaderSource::empty()
         };
-        canvas.factory.link_program_source(vs, fs, &canvas.device.get_capabilities())
-                      .unwrap()
+        factory.link_program_source(vs, fs).unwrap()
     };
 
     let uniforms = Params {
@@ -119,10 +116,8 @@ pub fn main() {
     let mut cycle1 = 0.5f32;
 
     'main: loop {
-        use std::f32;
-
         // quit when Esc is pressed.
-        for event in canvas.output.window.poll_events() {
+        for event in stream.out.window.poll_events() {
             match event {
                 glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) => break 'main,
                 glutin::Event::Closed => break 'main,
@@ -148,14 +143,16 @@ pub fn main() {
         batch.param.offset0 = cycle0;
         batch.param.offset1 = cycle1;
 
-        canvas.clear(gfx::ClearData {
+        stream.clear(gfx::ClearData {
             color: [0.3, 0.3, 0.3, 1.0],
             depth: 1.0,
             stencil: 0,
         });
 
-        canvas.draw(&batch).unwrap();
-
-        canvas.present();
+        stream.draw(&batch).unwrap();
+        //stream.present(&mut device); ICE!
+        stream.flush(&mut device);
+        stream.out.window.swap_buffers();
+        device.cleanup();
     }
 }
