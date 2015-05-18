@@ -505,34 +505,27 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         }
     }
 
-    fn bind_index<T>(&mut self, buf: &handle::IndexBuffer<R, T>) {
+    fn bind_index<T>(&mut self, buf: &handle::Buffer<R, T>, format: IntSize,
+                     slice: &mesh::Slice<R>, base: device::VertexCount,
+                     instances: InstanceOption) {
         if self.render_state.index.as_ref() != Some(buf.raw()) {
             self.render_state.index = Some(buf.raw().clone());
             self.command_buffer.bind_index(self.handles.ref_buffer(buf.raw()));
         }
+        self.command_buffer.call_draw_indexed(slice.prim_type, format,
+            slice.start, slice.end - slice.start, base, instances);
     }
 
     fn draw_slice(&mut self, slice: &mesh::Slice<R>, instances: InstanceOption) {
-        let &mesh::Slice { start, end, prim_type, ref kind } = slice;
-        match *kind {
-            SliceKind::Vertex => {
-                self.command_buffer.call_draw(prim_type, start, end - start, instances);
-            },
-            SliceKind::Index8(ref buf, base) => {
-                self.bind_index(buf);
-                self.command_buffer.call_draw_indexed(prim_type, IntSize::U8,
-                    start, end - start, base, instances);
-            },
-            SliceKind::Index16(ref buf, base) => {
-                self.bind_index(buf);
-                self.command_buffer.call_draw_indexed(prim_type, IntSize::U16,
-                    start, end - start, base, instances);
-            },
-            SliceKind::Index32(ref buf, base) => {
-                self.bind_index(buf);
-                self.command_buffer.call_draw_indexed(prim_type, IntSize::U32,
-                    start, end - start, base, instances);
-            },
+        match slice.kind {
+            SliceKind::Vertex => self.command_buffer.call_draw(
+                slice.prim_type, slice.start, slice.end - slice.start, instances),
+            SliceKind::Index8(ref buf, base) =>
+                self.bind_index(buf, IntSize::U8, slice, base, instances),
+            SliceKind::Index16(ref buf, base) =>
+                self.bind_index(buf, IntSize::U16, slice, base, instances),
+            SliceKind::Index32(ref buf, base) =>
+                self.bind_index(buf, IntSize::U32, slice, base, instances),
         }
     }
 }

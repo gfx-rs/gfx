@@ -22,6 +22,16 @@ use std::ops::Deref;
 use super::arc::Arc;
 use super::{shade, tex, Resources, BufferInfo};
 
+
+/// Raw (untyped) Buffer Handle
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct RawBuffer<R: Resources>(Arc<R::Buffer>, BufferInfo);
+
+impl<R: Resources> RawBuffer<R> {
+    /// Get raw buffer info
+    pub fn get_info(&self) -> &BufferInfo { &self.1 }
+}
+
 /// Type-safe buffer handle
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct Buffer<R: Resources, T> {
@@ -60,50 +70,6 @@ impl<R: Resources, T> Buffer<R, T> {
         assert!(mem::size_of::<T>() != 0, "Cannot determine the length of zero-sized buffers.");
         self.get_info().size / mem::size_of::<T>()
     }
-}
-
-/// Type-safe index buffer handle
-#[derive(Clone, Debug, Hash, PartialEq)]
-pub struct IndexBuffer<R: Resources, T> {
-    raw: RawBuffer<R>,
-    phantom_t: PhantomData<T>,
-}
-
-impl<R: Resources, T> IndexBuffer<R, T> {
-    /// Create a type-safe IndexBuffer from a RawBuffer
-    pub fn from_raw(handle: RawBuffer<R>) -> IndexBuffer<R, T> {
-        IndexBuffer {
-            raw: handle,
-            phantom_t: PhantomData,
-        }
-    }
-
-    /// Get the underlying raw Handle
-    pub fn raw(&self) -> &RawBuffer<R> {
-        &self.raw
-    }
-
-    /// Get the associated information about the buffer
-    pub fn get_info(&self) -> &BufferInfo {
-        self.raw.get_info()
-    }
-
-    /// Get the number of elements in the buffer.
-    ///
-    /// Fails if `T` is zero-sized.
-    pub fn len(&self) -> usize {
-        assert!(mem::size_of::<T>() != 0, "Cannot determine the length of zero-sized buffers.");
-        self.get_info().size / mem::size_of::<T>()
-    }
-}
-
-/// Raw (untyped) Buffer Handle
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct RawBuffer<R: Resources>(Arc<R::Buffer>, BufferInfo);
-
-impl<R: Resources> RawBuffer<R> {
-    /// Get raw buffer info
-    pub fn get_info(&self) -> &BufferInfo { &self.1 }
 }
 
 /// Array Buffer Handle

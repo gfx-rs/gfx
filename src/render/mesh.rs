@@ -139,11 +139,11 @@ pub enum SliceKind<R: Resources> {
     /// the vertices will be identical, wasting space for the duplicated
     /// attributes.  Instead, the `Mesh` can store 4 vertices and an
     /// `Index8` can be used instead.
-    Index8(handle::IndexBuffer<R, u8>, VertexCount),
+    Index8(handle::Buffer<R, u8>, VertexCount),
     /// As `Index8` but with `u16` indices
-    Index16(handle::IndexBuffer<R, u16>, VertexCount),
+    Index16(handle::Buffer<R, u16>, VertexCount),
     /// As `Index8` but with `u32` indices
-    Index32(handle::IndexBuffer<R, u32>, VertexCount),
+    Index32(handle::Buffer<R, u32>, VertexCount),
 }
 
 /// Helper methods for cleanly getting the slice of a type.
@@ -164,7 +164,7 @@ impl<R: Resources> ToSlice<R> for Mesh<R> {
     }
 }
 
-impl<R: Resources> ToSlice<R> for handle::IndexBuffer<R, u8> {
+impl<R: Resources> ToSlice<R> for handle::Buffer<R, u8> {
     /// Return an index slice of the whole buffer.
     fn to_slice(&self, ty: PrimitiveType) -> Slice<R> {
         Slice {
@@ -176,7 +176,7 @@ impl<R: Resources> ToSlice<R> for handle::IndexBuffer<R, u8> {
     }
 }
 
-impl<R: Resources> ToSlice<R> for handle::IndexBuffer<R, u16> {
+impl<R: Resources> ToSlice<R> for handle::Buffer<R, u16> {
     /// Return an index slice of the whole buffer.
     fn to_slice(&self, ty: PrimitiveType) -> Slice<R> {
         Slice {
@@ -188,7 +188,7 @@ impl<R: Resources> ToSlice<R> for handle::IndexBuffer<R, u16> {
     }
 }
 
-impl<R: Resources> ToSlice<R> for handle::IndexBuffer<R, u32> {
+impl<R: Resources> ToSlice<R> for handle::Buffer<R, u32> {
     /// Return an index slice of the whole buffer.
     fn to_slice(&self, ty: PrimitiveType) -> Slice<R> {
         Slice {

@@ -63,9 +63,14 @@ pub fn as_byte_slice<T>(slice: &[T]) -> &[u8] {
 pub struct Capabilities {
     pub shader_model: shade::ShaderModel,
 
+    pub max_vertex_count: usize,
     pub max_draw_buffers: usize,
     pub max_texture_size: usize,
     pub max_vertex_attributes: usize,
+
+    /// In GLES it is not allowed to re-bind a buffer to a different
+    /// target than the one it was initialized with.
+    pub buffer_role_change_allowed: usize,
 
     pub array_buffer_supported: bool,
     pub fragment_output_supported: bool,
@@ -127,6 +132,8 @@ pub enum BufferRole {
     Vertex,
     /// Index buffer
     Index,
+    /// Uniform block buffer
+    Uniform,
 }
 
 /// A hint as to how this buffer will be used.
@@ -157,6 +164,13 @@ pub struct BufferInfo {
     pub size: usize,
 }
 
+/// An error happening on buffer updates.
+#[derive(Clone, PartialEq, Debug)]
+pub enum BufferUpdateError {
+    /// Trying to change the contents outside of the allocation.
+    OutOfBounds,
+}
+
 /// Resources pertaining to a specific API.
 #[allow(missing_docs)]
 pub trait Resources:           Clone + Hash + fmt::Debug + Eq + PartialEq {
@@ -178,34 +192,16 @@ pub trait Factory<R: Resources> {
     /// Returns the capabilities available to the specific API implementation
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
 
-    //TODO: allow selecting BufferRole for dynamic buffers
-    // this would be a breaking change, we'll need to change the naming scheme to
-    // a better one once we are at it.
-    // Potentially, leave only generic `RawBuffer` methods here, and move the rest
-    // to FactoryExt.
-
     // resource creation
-    fn create_buffer_raw(&mut self, size: usize, usage: BufferUsage) -> handle::RawBuffer<R>;
-    fn create_buffer<T>(&mut self, num: usize, usage: BufferUsage) -> handle::Buffer<R, T> {
+    fn create_buffer_raw(&mut self, size: usize, BufferRole, BufferUsage) -> handle::RawBuffer<R>;
+    fn create_buffer_static_raw(&mut self, data: &[u8], BufferRole) -> handle::RawBuffer<R>;
+    fn create_buffer_static<T>(&mut self, data: &[T], role: BufferRole) -> handle::Buffer<R, T> {
         handle::Buffer::from_raw(
-            self.create_buffer_raw(num * mem::size_of::<T>(), usage))
+            self.create_buffer_static_raw(as_byte_slice(data), role))
     }
-    fn create_buffer_static_raw(&mut self, data: &[u8], role: BufferRole) -> handle::RawBuffer<R>;
-    fn create_buffer_static<T>(&mut self, data: &[T]) -> handle::Buffer<R, T> {
+    fn create_buffer_dynamic<T>(&mut self, num: usize, role: BufferRole) -> handle::Buffer<R, T> {
         handle::Buffer::from_raw(
-            self.create_buffer_static_raw(as_byte_slice(data), BufferRole::Vertex))
-    }
-    fn create_buffer_index_static<T>(&mut self, data: &[T]) -> handle::IndexBuffer<R, T> {
-        handle::IndexBuffer::from_raw(
-            self.create_buffer_static_raw(as_byte_slice(data), BufferRole::Index))
-    }
-    fn create_buffer_index_dynamic<T>(&mut self, num: usize) -> handle::IndexBuffer<R, T> {
-        handle::IndexBuffer::from_raw(
-            self.create_buffer_raw(num * mem::size_of::<T>(), BufferUsage::Dynamic))
-    }
-    /// DEPRECATED: use create_buffer_index_static instrad
-    fn create_buffer_index<T>(&mut self, data: &[T]) -> handle::IndexBuffer<R, T> {
-        self.create_buffer_index_static(data)
+            self.create_buffer_raw(num * mem::size_of::<T>(), role, BufferUsage::Dynamic))
     }
 
     fn create_array_buffer(&mut self) -> Result<handle::ArrayBuffer<R>, NotSupported>;
@@ -219,8 +215,10 @@ pub trait Factory<R: Resources> {
     fn create_sampler(&mut self, tex::SamplerInfo) -> handle::Sampler<R>;
 
     /// Update the information stored in a specific buffer
-    fn update_buffer_raw(&mut self, buf: &handle::RawBuffer<R>, data: &[u8], offset_bytes: usize);
-    fn update_buffer<T>(&mut self, buf: &handle::Buffer<R, T>, data: &[T], offset_elements: usize) {
+    fn update_buffer_raw(&mut self, buf: &handle::RawBuffer<R>, data: &[u8], offset_bytes: usize)
+                         -> Result<(), BufferUpdateError>;
+    fn update_buffer<T>(&mut self, buf: &handle::Buffer<R, T>, data: &[T], offset_elements: usize)
+                        -> Result<(), BufferUpdateError> {
         self.update_buffer_raw(buf.raw(), as_byte_slice(data), mem::size_of::<T>() * offset_elements)
     }
     fn map_buffer_raw(&mut self, &handle::RawBuffer<R>, MapAccess) -> Self::Mapper;

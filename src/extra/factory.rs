@@ -15,7 +15,7 @@
 //! Factory extension. Provides resource construction shortcuts.
 
 use device;
-use device::{handle, tex};
+use device::{handle, tex, BufferRole};
 use device::shade::{Stage, CreateShaderError};
 use render::mesh::{Mesh, VertexFormat};
 use super::shade::*;
@@ -26,8 +26,8 @@ pub trait FactoryExt<R: device::Resources>: device::Factory<R> {
     /// Convenience function around `create_buffer` and `Mesh::from_format`.
     fn create_mesh<T: VertexFormat>(&mut self, data: &[T]) -> Mesh<R> {
         let nv = data.len();
-        //debug_assert!(nv < self.max_vertex_count); //TODO
-        let buf = self.create_buffer_static(data);
+        debug_assert!(nv <= self.get_capabilities().max_vertex_count);
+        let buf = self.create_buffer_static(data, BufferRole::Vertex);
         Mesh::from_format(buf, nv as device::VertexCount)
     }
 
@@ -47,33 +47,6 @@ pub trait FactoryExt<R: device::Resources>: device::Factory<R> {
             .map_err(|e| ProgramError::Link(e))
     }
 
-    /// DEPRECATED, use `link_program_source2` instead
-    fn link_program_source(&mut self, vs_src: ShaderSource, fs_src: ShaderSource,
-                           caps: &device::Capabilities)
-                           -> Result<handle::Program<R>, ProgramError> {
-        let model = caps.shader_model;
-        let err_model = CreateShaderError::ModelNotSupported;
-
-        let vs = match vs_src.choose(model) {
-            Ok(code) => match self.create_shader(Stage::Vertex, code) {
-                Ok(s) => s,
-                Err(e) => return Err(ProgramError::Vertex(e)),
-            },
-            Err(_) => return Err(ProgramError::Vertex(err_model))
-        };
-
-        let fs = match fs_src.choose(model) {
-            Ok(code) => match self.create_shader(Stage::Fragment, code) {
-                Ok(s) => s,
-                Err(e) => return Err(ProgramError::Fragment(e)),
-            },
-            Err(_) => return Err(ProgramError::Fragment(err_model))
-        };
-
-        self.create_program(&[vs, fs], Some(fs_src.targets))
-            .map_err(|e| ProgramError::Link(e))
-    }
-
     /// Compile a single shader of a given stage, automatically picking the right
     /// shader variant.
     fn compile_shader_source(&mut self, stage: Stage, source: ShaderSource)
@@ -86,7 +59,7 @@ pub trait FactoryExt<R: device::Resources>: device::Factory<R> {
 
     /// Create a simple program given `ShaderSource` versions of vertex and
     /// fragment shaders, automatically picking available shader variant.
-    fn link_program_source2(&mut self, vs_src: ShaderSource, fs_src: ShaderSource)
+    fn link_program_source(&mut self, vs_src: ShaderSource, fs_src: ShaderSource)
                             -> Result<handle::Program<R>, ProgramError> {
         let vs = match self.compile_shader_source(Stage::Vertex, vs_src) {
             Ok(s) => s,
