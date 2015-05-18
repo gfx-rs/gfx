@@ -28,7 +28,7 @@ pub mod traits {
     pub use extra::factory::FactoryExt;
     pub use extra::stream::{Stream, StreamFactory};
     pub use render::RenderFactory;
-    pub use render::mesh::ToSlice;
+    pub use render::mesh::{ToIndexSlice, ToSlice};
     pub use render::target::Output;
 }
 
@@ -50,7 +50,7 @@ pub use render::{Renderer, DrawError};
 pub use render::batch;
 pub use render::mesh::{Attribute, Mesh, VertexFormat};
 pub use render::mesh::Error as MeshError;
-pub use render::mesh::{Slice, ToSlice, SliceKind};
+pub use render::mesh::{Slice, ToIndexSlice, ToSlice, SliceKind};
 pub use render::shade;
 pub use render::target::{Frame, Output, Plane};
 pub use render::ParamStorage;
