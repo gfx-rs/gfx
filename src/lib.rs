@@ -55,7 +55,7 @@ pub use render::shade;
 pub use render::target::{Frame, Output, Plane};
 pub use render::ParamStorage;
 pub use extra::shade::{ShaderSource, ProgramError};
-pub use extra::stream::{Canvas, Stream, Window};
+pub use extra::stream::{OwnedStream, Stream, Window};
 
 pub mod device;
 pub mod extra;
