@@ -51,8 +51,11 @@ pub fn update_sub_buffer(gl: &gl::Gl, buffer: Buffer, address: *const u8,
 
 /// A placeholder for a real `Output` implemented by your window.
 pub struct Output {
-    width: Size,
-    height: Size,
+    /// render frame width.
+    pub width: Size,
+    /// render frame height.
+    pub height: Size,
+    /// main FBO handle
     handle: handle::FrameBuffer<R>,
 }
 
