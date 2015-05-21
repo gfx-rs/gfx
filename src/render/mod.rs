@@ -234,6 +234,9 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     /// Update a buffer with a slice of data.
     pub fn update_buffer<T: Copy>(&mut self, buf: &handle::RawBuffer<R>,
                          data: &[T], offset_elements: usize) {
+        if data.is_empty() {
+            return
+        }
         let elem_size = mem::size_of::<T>();
         let offset_bytes = elem_size * offset_elements;
         debug_assert!(data.len() * elem_size + offset_bytes <= buf.get_info().size);
