@@ -25,14 +25,7 @@ authors = ["The Gfx-rs Developers"]
 [lib]
 name = "gfx_window_glfw"
 
-[dependencies.gfx]
-git = "https://github.com/gfx-rs/gfx-rs"
-version = "*"
-
-[dependencies.gfx_device_gl]
-git = "https://github.com/gfx-rs/gfx_device_gl"
-version = "*"
-
-[dependencies.glfw]
-git = "https://github.com/bjz/glfw-rs"
-version = "*"
+[dependencies]
+gfx = ">=0.5.0,<0.7.0"
+gfx_device_gl = ">=0.3.1"
+glfw = ">=0.0.8"
