@@ -22,7 +22,7 @@ use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
 use gfx::attrib::Floater;
-use gfx::traits::*;
+use gfx::traits::{Device, Factory, Stream, ToIndexSlice, ToSlice, FactoryExt};
 
 // Declare the vertex format suitable for drawing.
 // Notice the use of FixedPoint.
