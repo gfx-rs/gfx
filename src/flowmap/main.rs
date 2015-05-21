@@ -20,7 +20,7 @@ extern crate glutin;
 extern crate image;
 
 use std::io::Cursor;
-use gfx::traits::*;
+use gfx::traits::{Device, Factory, Stream, FactoryExt};
 
 gfx_vertex!( Vertex {
     a_Pos@ pos: [f32; 2],
