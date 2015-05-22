@@ -24,20 +24,21 @@ use gfx::traits::*;
 
 gfx_vertex!( Vertex {
     a_Pos@ pos: [Floater<i8>; 3],
-    a_TexCoord@ tex_coord: [Floater<u8>; 2],
+    a_Normal@ normal: [Floater<i8>; 3],
 });
 
 impl Vertex {
-    fn new(p: [i8; 3], t: [u8; 2]) -> Vertex {
+    fn new(p: [i8; 3], n: [i8; 3]) -> Vertex {
         Vertex {
             pos: Floater::cast3(p),
-            tex_coord: Floater::cast2(t),
+            normal: Floater::cast3(n),
         }
     }
 }
 
 gfx_parameters!( ForwardParams {
     u_Transform@ transform: [[f32; 4]; 4],
+    u_NormalTransform@ normal_transform: [[f32; 3]; 3],
     u_Color@ color: [f32; 4],
 });
 
@@ -52,35 +53,35 @@ fn create_cube<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F)
 {
     let vertex_data = [
         // top (0, 0, 1)
-        Vertex::new([-1, -1,  1], [0, 0]),
-        Vertex::new([ 1, -1,  1], [1, 0]),
-        Vertex::new([ 1,  1,  1], [1, 1]),
-        Vertex::new([-1,  1,  1], [0, 1]),
+        Vertex::new([-1, -1,  1], [0, 0, 1]),
+        Vertex::new([ 1, -1,  1], [0, 0, 1]),
+        Vertex::new([ 1,  1,  1], [0, 0, 1]),
+        Vertex::new([-1,  1,  1], [0, 0, 1]),
         // bottom (0, 0, -1)
-        Vertex::new([-1,  1, -1], [1, 0]),
-        Vertex::new([ 1,  1, -1], [0, 0]),
-        Vertex::new([ 1, -1, -1], [0, 1]),
-        Vertex::new([-1, -1, -1], [1, 1]),
+        Vertex::new([-1,  1, -1], [0, 0, -1]),
+        Vertex::new([ 1,  1, -1], [0, 0, -1]),
+        Vertex::new([ 1, -1, -1], [0, 0, -1]),
+        Vertex::new([-1, -1, -1], [0, 0, -1]),
         // right (1, 0, 0)
-        Vertex::new([ 1, -1, -1], [0, 0]),
-        Vertex::new([ 1,  1, -1], [1, 0]),
-        Vertex::new([ 1,  1,  1], [1, 1]),
-        Vertex::new([ 1, -1,  1], [0, 1]),
+        Vertex::new([ 1, -1, -1], [1, 0, 0]),
+        Vertex::new([ 1,  1, -1], [1, 0, 0]),
+        Vertex::new([ 1,  1,  1], [1, 0, 0]),
+        Vertex::new([ 1, -1,  1], [1, 0, 0]),
         // left (-1, 0, 0)
-        Vertex::new([-1, -1,  1], [1, 0]),
-        Vertex::new([-1,  1,  1], [0, 0]),
-        Vertex::new([-1,  1, -1], [0, 1]),
-        Vertex::new([-1, -1, -1], [1, 1]),
+        Vertex::new([-1, -1,  1], [-1, 0, 0]),
+        Vertex::new([-1,  1,  1], [-1, 0, 0]),
+        Vertex::new([-1,  1, -1], [-1, 0, 0]),
+        Vertex::new([-1, -1, -1], [-1, 0, 0]),
         // front (0, 1, 0)
-        Vertex::new([ 1,  1, -1], [1, 0]),
-        Vertex::new([-1,  1, -1], [0, 0]),
-        Vertex::new([-1,  1,  1], [0, 1]),
-        Vertex::new([ 1,  1,  1], [1, 1]),
+        Vertex::new([ 1,  1, -1], [0, 1, 0]),
+        Vertex::new([-1,  1, -1], [0, 1, 0]),
+        Vertex::new([-1,  1,  1], [0, 1, 0]),
+        Vertex::new([ 1,  1,  1], [0, 1, 0]),
         // back (0, -1, 0)
-        Vertex::new([ 1, -1,  1], [0, 0]),
-        Vertex::new([-1, -1,  1], [1, 0]),
-        Vertex::new([-1, -1, -1], [1, 1]),
-        Vertex::new([ 1, -1, -1], [0, 1]),
+        Vertex::new([ 1, -1,  1], [0, -1, 0]),
+        Vertex::new([-1, -1,  1], [0, -1, 0]),
+        Vertex::new([-1, -1, -1], [0, -1, 0]),
+        Vertex::new([ 1, -1, -1], [0, -1, 0]),
     ];
 
     let mesh = factory.create_mesh(&vertex_data);
@@ -103,10 +104,10 @@ fn create_plane<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F)
                 -> (gfx::Mesh<R>, gfx::Slice<R>)
 {
     let vertex_data = [
-        Vertex::new([ 5, -5,  0], [1, 0]),
-        Vertex::new([ 5,  5,  0], [1, 1]),
-        Vertex::new([-5, -5,  0], [0, 0]),
-        Vertex::new([-5,  5,  0], [0, 1]),
+        Vertex::new([ 5, -5,  0], [0, 0, 1]),
+        Vertex::new([ 5,  5,  0], [0, 0, 1]),
+        Vertex::new([-5, -5,  0], [0, 0, 1]),
+        Vertex::new([-5,  5,  0], [0, 0, 1]),
     ];
 
     let mesh = factory.create_mesh(&vertex_data);
@@ -152,13 +153,14 @@ fn make_entity<R: gfx::Resources>(mesh: &gfx::Mesh<R>, slice: &gfx::Slice<R>,
         batch_forward: {
             let data = ForwardParams {
                 transform: cgmath::Matrix4::identity().into_fixed(),
+                normal_transform: cgmath::Matrix3::identity().into_fixed(),
                 color: [1.0, 1.0, 1.0, 1.0],
                 _r: std::marker::PhantomData,
             };
             let mut batch = gfx::batch::OwnedBatch::new(
                 mesh.clone(), prog_fw.clone(), data).unwrap();
             batch.slice = slice.clone();
-            batch.state.depth(gfx::state::Comparison::LessEqual, true);
+            batch.state = batch.state.depth(gfx::state::Comparison::LessEqual, true);
             batch
         },
         batch_shadow: {
@@ -169,7 +171,7 @@ fn make_entity<R: gfx::Resources>(mesh: &gfx::Mesh<R>, slice: &gfx::Slice<R>,
             let mut batch = gfx::batch::OwnedBatch::new(
                 mesh.clone(), prog_sh.clone(), data).unwrap();
             batch.slice = slice.clone();
-            batch.state.depth(gfx::state::Comparison::LessEqual, true);
+            batch.state = batch.state.depth(gfx::state::Comparison::LessEqual, true);
             batch
         },
     }
@@ -246,6 +248,7 @@ pub fn main() {
             .with_title("Multi-threaded shadow rendering example with gfx-rs".to_string())
             .with_dimensions(800, 600)
             .with_gl(glutin::GL_CORE)
+            .with_depth_buffer(24)
             .build().unwrap()
     );
 
@@ -276,6 +279,12 @@ pub fn main() {
         };
         for ent in scene.entities.iter_mut() {
             ent.batch_forward.param.transform = mx_vp.mul_m(&ent.mx_to_world).into_fixed();
+            ent.batch_forward.param.normal_transform = {
+                let m = &ent.mx_to_world;
+                [[m.x.x, m.x.y, m.x.z],
+                [m.y.x, m.y.y, m.y.z],
+                [m.z.x, m.z.y, m.z.z]]
+            };
             stream.draw(&ent.batch_forward).unwrap();
         }
 

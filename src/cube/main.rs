@@ -145,7 +145,7 @@ pub fn main() {
 
     let mut batch = gfx::batch::OwnedBatch::new(mesh, program, data).unwrap();
     batch.slice = index_data.to_slice(&mut factory, gfx::PrimitiveType::TriangleList);
-    batch.state.depth(gfx::state::Comparison::LessEqual, true);
+    batch.state = batch.state.depth(gfx::state::Comparison::LessEqual, true);
 
     while !stream.out.window.should_close() {
         glfw.poll_events();
