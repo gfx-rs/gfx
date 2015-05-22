@@ -1,6 +1,6 @@
 [package]
 name = "gfx-examples"
-version = "0.1.0"
+version = "0.2.0"
 
 [[bin]]
 name = "cube"
@@ -17,6 +17,10 @@ path = "src/flowmap/main.rs"
 [[bin]]
 name = "performance"
 path = "src/performance/main.rs"
+
+[[bin]]
+name = "shadow"
+path = "src/shadow/main.rs"
 
 [[bin]]
 name = "terrain"
@@ -38,19 +42,24 @@ image = "*"
 
 [dependencies.cgmath]
 git = "https://github.com/bjz/cgmath-rs"
-#version = "*"
+version = "*"
 
 [dependencies.gfx]
 git = "https://github.com/gfx-rs/gfx-rs"
+version = "*"
 
 [dependencies.gfx_window_glutin]
 git = "https://github.com/gfx-rs/gfx_window_glutin"
+version = "*"
 
 [dependencies.gfx_window_glfw]
 git = "https://github.com/gfx-rs/gfx_window_glfw"
+version = "*"
 
 [dependencies.glutin]
 git = "https://github.com/tomaka/glutin"
+version = "*"
 
 [dependencies.glfw]
 git = "https://github.com/bjz/glfw-rs"
+version = "*"
