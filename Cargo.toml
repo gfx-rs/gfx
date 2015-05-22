@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx_window_glfw"
-version = "0.0.1"
+version = "0.1.1"
 description = "GLFW window for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx_window_glfw"
 repository = "https://github.com/gfx-rs/gfx_window_glfw"
@@ -27,12 +27,12 @@ name = "gfx_window_glfw"
 
 [dependencies.gfx]
 git = "https://github.com/gfx-rs/gfx-rs"
-#version = "*"
+version = "*"
 
 [dependencies.gfx_device_gl]
 git = "https://github.com/gfx-rs/gfx_device_gl"
-#version = "*"
+version = "*"
 
 [dependencies.glfw]
 git = "https://github.com/bjz/glfw-rs"
-#version = "*"
+version = "*"
