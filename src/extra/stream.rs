@@ -112,32 +112,30 @@ Stream<R> for (&'a mut Renderer<R, C>, &'a O) {
 }
 
 /// A stream that owns its components.
-pub struct OwnedStream<
-    R: Resources,
-    C: CommandBuffer<R>,
-    O: Output<R>,
->{
+pub struct OwnedStream<D: Device, O>{
     /// Renderer
-    pub ren: Renderer<R, C>,
+    pub ren: Renderer<D::Resources, D::CommandBuffer>,
     /// Output
     pub out: O,
 }
 
-impl<R: Resources, C: CommandBuffer<R>, O: Output<R>>
-Stream<R> for OwnedStream<R, C, O> {
-    type CommandBuffer = C;
+impl<
+    D: Device,
+    O: Output<D::Resources>,
+> Stream<D::Resources> for OwnedStream<D, O> {
+    type CommandBuffer = D::CommandBuffer;
     type Output = O;
 
     fn get_output(&self) -> &O {
         &self.out
     }
 
-    fn access(&mut self) -> (&mut Renderer<R, C>, &O) {
+    fn access(&mut self) -> (&mut Renderer<D::Resources, D::CommandBuffer>, &O) {
         (&mut self.ren, &self.out)
     }
 }
 
-impl<D: Device, W: Window<D::Resources>> OwnedStream<D::Resources, D::CommandBuffer, W> {
+impl<D: Device, W: Window<D::Resources>> OwnedStream<D, W> {
     /// Show what we've been drawing all this time.
     pub fn present(&mut self, device: &mut D) {
         self.flush(device);
@@ -147,9 +145,9 @@ impl<D: Device, W: Window<D::Resources>> OwnedStream<D::Resources, D::CommandBuf
 }
 
 /// A render factory extension that allows creating streams with new renderers.
-pub trait StreamFactory<R: Resources, C: CommandBuffer<R>>: RenderFactory<R, C> {
+pub trait StreamFactory<D: Device>: RenderFactory<D::Resources, D::CommandBuffer> {
     /// Create a new stream from a given output.
-    fn create_stream<O: Output<R>>(&mut self, output: O) -> OwnedStream<R, C, O> {
+    fn create_stream<O: Output<D::Resources>>(&mut self, output: O) -> OwnedStream<D, O> {
         OwnedStream {
             ren: self.create_renderer(),
             out: output,
@@ -157,5 +155,5 @@ pub trait StreamFactory<R: Resources, C: CommandBuffer<R>>: RenderFactory<R, C> 
     }
 }
 
-impl<R: Resources, C: CommandBuffer<R>, F: RenderFactory<R, C>>
-StreamFactory<R, C> for F {}
+impl<D: Device, F: RenderFactory<D::Resources, D::CommandBuffer>>
+StreamFactory<D> for F {}
