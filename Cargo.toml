@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx_window_glutin"
-version = "0.0.1"
+version = "0.1.1"
 description = "Glutin window for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx_window_glutin"
 repository = "https://github.com/gfx-rs/gfx_window_glutin"
@@ -27,11 +27,12 @@ name = "gfx_window_glutin"
 
 [dependencies.gfx]
 git = "https://github.com/gfx-rs/gfx-rs"
-#version = "*"
+version = "*"
 
 [dependencies.gfx_device_gl]
 git = "https://github.com/gfx-rs/gfx_device_gl"
-#version = "*"
+version = "*"
 
 [dependencies.glutin]
 git = "https://github.com/tomaka/glutin"
+version = "*"
