@@ -148,7 +148,6 @@ pub fn main() {
     batch.state.depth(gfx::state::Comparison::LessEqual, true);
 
     while !stream.out.window.should_close() {
-        use glfw::Context;
         glfw.poll_events();
         for (_, event) in glfw::flush_messages(&events) {
             match event {
@@ -164,9 +163,6 @@ pub fn main() {
             stencil: 0,
         });
         stream.draw(&batch).unwrap();
-        //stream.present(&mut device); //triggers ICE in rust-1.0
-        stream.flush(&mut device);
-        stream.out.window.swap_buffers();
-        device.cleanup();
+        stream.present(&mut device);
     }
 }
