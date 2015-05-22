@@ -36,13 +36,18 @@ impl Vertex {
     }
 }
 
-gfx_parameters!( Params {
+gfx_parameters!( ForwardParams {
     u_Transform@ transform: [[f32; 4]; 4],
     u_Color@ color: [f32; 4],
 });
 
+gfx_parameters!( ShadowParams {
+    u_Transform@ transform: [[f32; 4]; 4],
+});
 
-fn create_mesh<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F)
+//----------------------------------------
+
+fn create_cube<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F)
                -> (gfx::Mesh<R>, gfx::Slice<R>)
 {
     let vertex_data = [
@@ -94,6 +99,143 @@ fn create_mesh<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F)
     (mesh, slice)
 }
 
+fn create_plane<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F)
+                -> (gfx::Mesh<R>, gfx::Slice<R>)
+{
+    let vertex_data = [
+        Vertex::new([ 5, -5,  0], [1, 0]),
+        Vertex::new([ 5,  5,  0], [1, 1]),
+        Vertex::new([-5, -5,  0], [0, 0]),
+        Vertex::new([-5,  5,  0], [0, 1]),
+    ];
+
+    let mesh = factory.create_mesh(&vertex_data);
+    let slice = mesh.to_slice(gfx::PrimitiveType::TriangleStrip);
+
+    (mesh, slice)
+}
+
+//----------------------------------------
+
+struct Camera {
+    mx_view: cgmath::Matrix4<f32>,
+    projection: cgmath::PerspectiveFov<f32, cgmath::Deg<f32>>,
+}
+
+struct Light {
+    mx_to_world: cgmath::Matrix4<f32>,
+    projection: cgmath::Perspective<f32>,
+    color: gfx::ColorValue,
+}
+
+struct Entity<R: gfx::Resources> {
+    mx_to_world: cgmath::Matrix4<f32>,
+    batch_shadow: gfx::batch::OwnedBatch<ShadowParams<R>>,
+    batch_forward: gfx::batch::OwnedBatch<ForwardParams<R>>,
+}
+
+struct Scene<R: gfx::Resources> {
+    camera: Camera,
+    lights: Vec<Light>,
+    entities: Vec<Entity<R>>,
+}
+
+//----------------------------------------
+
+fn make_entity<R: gfx::Resources>(mesh: &gfx::Mesh<R>, slice: &gfx::Slice<R>,
+               prog_fw: &gfx::handle::Program<R>, prog_sh: &gfx::handle::Program<R>,
+               transform: cgmath::Matrix4<f32>) -> Entity<R>
+{
+    use cgmath::FixedArray;
+    Entity {
+        mx_to_world: transform,
+        batch_forward: {
+            let data = ForwardParams {
+                transform: cgmath::Matrix4::identity().into_fixed(),
+                color: [1.0, 1.0, 1.0, 1.0],
+                _r: std::marker::PhantomData,
+            };
+            let mut batch = gfx::batch::OwnedBatch::new(
+                mesh.clone(), prog_fw.clone(), data).unwrap();
+            batch.slice = slice.clone();
+            batch.state.depth(gfx::state::Comparison::LessEqual, true);
+            batch
+        },
+        batch_shadow: {
+            let data = ShadowParams {
+                transform: cgmath::Matrix4::identity().into_fixed(),
+                _r: std::marker::PhantomData,
+            };
+            let mut batch = gfx::batch::OwnedBatch::new(
+                mesh.clone(), prog_sh.clone(), data).unwrap();
+            batch.slice = slice.clone();
+            batch.state.depth(gfx::state::Comparison::LessEqual, true);
+            batch
+        },
+    }
+}
+
+fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F)
+                -> Scene<R>
+{
+    let program_forward = factory.link_program(
+        include_bytes!("shader/forward_150.glslv"),
+        include_bytes!("shader/forward_150.glslf"),
+    ).unwrap();
+    let program_shadow = factory.link_program(
+        include_bytes!("shader/shadow_150.glslv"),
+        include_bytes!("shader/shadow_150.glslf"),
+    ).unwrap();
+
+    let num = 4i32;
+    let mut entities: Vec<Entity<_>> = (0i32..num).map(|i| {
+        use cgmath::{EuclideanVector, Rotation3};
+        let (mesh, slice) = create_cube(factory);
+        let disp = cgmath::Vector3::new(
+            ((i&1)*2-1) as f32 * 2.0,
+            ((i&2)-1) as f32 * 2.0,
+            ((i&4)/2) as f32 + 2.0,
+        );
+        make_entity(&mesh, &slice,
+            &program_forward, &program_shadow,
+            cgmath::Decomposed {
+                disp: disp.clone(),
+                rot: cgmath::Quaternion::from_axis_angle(
+                    &disp.normalize(),
+                    cgmath::deg((i*180/num) as f32).into(),
+                ),
+                scale: 1f32,
+            }.into(),
+        )
+    }).collect();
+    entities.push({
+        let (mesh, slice) = create_plane(factory);
+        make_entity(&mesh, &slice,
+            &program_forward, &program_shadow,
+            cgmath::Matrix4::identity())
+    });
+
+    let camera = Camera {
+        mx_view: cgmath::Matrix4::look_at(
+            &cgmath::Point3::new(3.0f32, -10.0, 6.0),
+            &cgmath::Point3::new(0f32, 0.0, 0.0),
+            &cgmath::Vector3::unit_z(),
+        ),
+        projection: cgmath::PerspectiveFov {
+            fovy: cgmath::deg(45.0f32),
+            aspect: 1.0,
+            near: 1.0,
+            far: 20.0,
+        },
+    };
+
+    Scene {
+        camera: camera,
+        lights: Vec::new(), //TODO
+        entities: entities,
+    }
+}
+
 //----------------------------------------
 
 pub fn main() {
@@ -107,45 +249,15 @@ pub fn main() {
             .build().unwrap()
     );
 
-    let program = {
-        let vs = gfx::ShaderSource {
-            glsl_120: Some(include_bytes!("shader/cube_120.glslv")),
-            glsl_150: Some(include_bytes!("shader/cube_150.glslv")),
-            .. gfx::ShaderSource::empty()
-        };
-        let fs = gfx::ShaderSource {
-            glsl_120: Some(include_bytes!("shader/cube_120.glslf")),
-            glsl_150: Some(include_bytes!("shader/cube_150.glslf")),
-            .. gfx::ShaderSource::empty()
-        };
-        factory.link_program_source(vs, fs).unwrap()
-    };
-
-    let view = cgmath::Matrix4::look_at(
-        &cgmath::Point3::new(1.5f32, -5.0, 3.0),
-        &cgmath::Point3::new(0f32, 0.0, 0.0),
-        &cgmath::Vector3::unit_z(),
-    );
-    let proj = cgmath::perspective(cgmath::deg(45.0f32),
-                                   stream.get_aspect_ratio(), 1.0, 10.0);
-
-    let data = Params {
-        transform: proj.mul_m(&view).into_fixed(),
-        color: [1.0, 1.0, 1.0, 1.0],
-        _r: std::marker::PhantomData,
-    };
-
-    let (mesh, slice) = create_mesh(&mut factory);
-    let mut batch = gfx::batch::OwnedBatch::new(mesh, program, data).unwrap();
-    batch.slice = slice;
-    batch.state.depth(gfx::state::Comparison::LessEqual, true);
+    let mut scene = create_scene(&mut factory);
 
     'main: loop {
         // quit when Esc is pressed.
         for event in stream.out.window.poll_events() {
+            use glutin::{Event, VirtualKeyCode};
             match event {
-                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) => break 'main,
-                glutin::Event::Closed => break 'main,
+                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Escape)) => break 'main,
+                Event::Closed => break 'main,
                 _ => {},
             }
         }
@@ -155,7 +267,18 @@ pub fn main() {
             depth: 1.0,
             stencil: 0,
         });
-        stream.draw(&batch).unwrap();
+
+        let mx_vp = {
+            let mut proj = scene.camera.projection;
+            proj.aspect = stream.get_aspect_ratio();
+            let proj_mx: cgmath::Matrix4<_> = proj.into();
+            proj_mx.mul_m(&scene.camera.mx_view)
+        };
+        for ent in scene.entities.iter_mut() {
+            ent.batch_forward.param.transform = mx_vp.mul_m(&ent.mx_to_world).into_fixed();
+            stream.draw(&ent.batch_forward).unwrap();
+        }
+
         stream.present(&mut device);
     }
 }

@@ -1,6 +1,6 @@
-#version 120
+#version 150 core
 
-attribute vec3 a_Pos;
+in vec3 a_Pos;
 
 uniform mat4 u_Transform;
 
