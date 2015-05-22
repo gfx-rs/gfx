@@ -60,8 +60,7 @@ impl<R: gfx::Resources> gfx::Window<R> for Output<R> {
 /// Result of successful context initialization.
 pub type Success = (
     gfx::OwnedStream<
-        gfx_device_gl::Resources,
-        gfx_device_gl::CommandBuffer,
+        gfx_device_gl::Device,
         Output<gfx_device_gl::Resources>,
     >,
     gfx_device_gl::Device,
