@@ -150,9 +150,6 @@ pub fn main() {
         });
 
         stream.draw(&batch).unwrap();
-        //stream.present(&mut device); ICE!
-        stream.flush(&mut device);
-        stream.out.window.swap_buffers();
-        device.cleanup();
+        stream.present(&mut device);
     }
 }

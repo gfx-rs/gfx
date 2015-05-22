@@ -132,7 +132,6 @@ fn gfx_main(mut glfw: glfw::Glfw,
         }
 
         let pre_submit = precise_time_s() * 1000.;
-        //stream.present(&mut device); ICE!
         stream.flush(&mut device);
         let post_submit = precise_time_s() * 1000.;
         stream.out.window.swap_buffers();

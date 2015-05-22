@@ -69,9 +69,6 @@ pub fn main() {
         });
         stream.draw(&gfx::batch::bind(&state, &mesh, slice.clone(), &program, &None))
               .unwrap();
-        //stream.present(&mut device); ICE!
-        stream.flush(&mut device);
-        stream.out.window.swap_buffers();
-        device.cleanup();
+        stream.present(&mut device);
     }
 }

@@ -138,9 +138,6 @@ pub fn main() {
             stencil: 0,
         });
         stream.draw(&(&batch, &context)).unwrap();
-        //stream.present(&mut device); ICE!
-        stream.flush(&mut device);
-        stream.out.window.swap_buffers();
-        device.cleanup();
+        stream.present(&mut device);
     }
 }
