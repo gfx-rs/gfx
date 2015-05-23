@@ -36,10 +36,22 @@ impl Vertex {
     }
 }
 
+const MAX_LIGHTS: usize = 10;
+
+#[derive(Clone, Copy, Debug)]
+struct LightParam {
+    pos: [f32; 4],
+    color: [f32; 4],
+    proj: [[f32; 4]; 4],
+}
+
 gfx_parameters!( ForwardParams {
     u_Transform@ transform: [[f32; 4]; 4],
+    u_ModelTransform@ model_transform: [[f32; 4]; 4],
     u_NormalTransform@ normal_transform: [[f32; 3]; 3],
     u_Color@ color: [f32; 4],
+    u_NumLights@ num_lights: i32,
+    b_Lights@ light_buf: gfx::handle::RawBuffer<R>,
     t_Shadow@ shadow: gfx::shade::TextureParam<R>,
 });
 
@@ -142,12 +154,14 @@ struct Scene<R: gfx::Resources, S> {
     camera: Camera,
     lights: Vec<Light<S>>,
     entities: Vec<Entity<R>>,
+    light_buf: gfx::handle::Buffer<R, LightParam>,
 }
 
 //----------------------------------------
 
 fn make_entity<R: gfx::Resources>(mesh: &gfx::Mesh<R>, slice: &gfx::Slice<R>,
                prog_fw: &gfx::handle::Program<R>, prog_sh: &gfx::handle::Program<R>,
+               num_lights: usize, light_buf: &gfx::handle::Buffer<R, LightParam>,
                shadow: &gfx::shade::TextureParam<R>, transform: cgmath::Matrix4<f32>)
                -> Entity<R>
 {
@@ -157,8 +171,11 @@ fn make_entity<R: gfx::Resources>(mesh: &gfx::Mesh<R>, slice: &gfx::Slice<R>,
         batch_forward: {
             let data = ForwardParams {
                 transform: cgmath::Matrix4::identity().into_fixed(),
+                model_transform: cgmath::Matrix4::identity().into_fixed(),
                 normal_transform: cgmath::Matrix3::identity().into_fixed(),
                 color: [1.0, 1.0, 1.0, 1.0],
+                num_lights: num_lights as i32,
+                light_buf: light_buf.raw().clone(),
                 shadow: shadow.clone(),
                 _r: std::marker::PhantomData,
             };
@@ -177,6 +194,7 @@ fn make_entity<R: gfx::Resources>(mesh: &gfx::Mesh<R>, slice: &gfx::Slice<R>,
                 mesh.clone(), prog_sh.clone(), data).unwrap();
             batch.slice = slice.clone();
             batch.state = batch.state.depth(gfx::state::Comparison::LessEqual, true);
+            batch.state.primitive.offset = Some(gfx::state::Offset(2.0, 2));
             batch
         },
     }
@@ -199,11 +217,69 @@ fn create_scene<D, F>(_: &D, factory: &mut F)
     let shadow_array = factory.create_texture(gfx::tex::TextureInfo {
         width: 512,
         height: 512,
-        depth: 5,
+        depth: MAX_LIGHTS as gfx::tex::Size,
         levels: 1,
         kind: gfx::tex::TextureKind::Texture2DArray,
         format: gfx::tex::Format::DEPTH24,
     }).unwrap();
+
+    let (near, far) = (1f32, 20f32);
+
+    let light_buf = factory.create_buffer_dynamic::<LightParam>(
+        MAX_LIGHTS, gfx::BufferRole::Uniform);
+
+    struct LightDesc {
+        pos: cgmath::Point3<f32>,
+        color: gfx::ColorValue,
+        fov: f32,
+    }
+
+    let light_descs = vec![
+        LightDesc {
+            pos: cgmath::Point3::new(7.0, -5.0, 10.0),
+            color: [0.5, 1.0, 0.5, 1.0],
+            fov: 60.0,
+        },
+        LightDesc {
+            pos: cgmath::Point3::new(-5.0, 7.0, 10.0),
+            color: [1.0, 0.5, 0.5, 1.0],
+            fov: 45.0,
+        },
+    ];
+
+    let lights: Vec<_> = light_descs.iter().enumerate().map(|(i, desc)| Light {
+        position: desc.pos.clone(),
+        mx_view: cgmath::Matrix4::look_at(
+            &desc.pos,
+            &cgmath::Point3::new(0.0, 0.0, 0.0),
+            &cgmath::Vector3::unit_z(),
+        ),
+        projection: cgmath::PerspectiveFov {
+            fovy: cgmath::deg(desc.fov),
+            aspect: 1.0,
+            near: near,
+            far: far,
+        }.to_perspective(),
+        color: desc.color.clone(),
+        stream: factory.create_stream(
+            gfx::Plane::Texture(
+                shadow_array.clone(),
+                0,
+                Some(i as gfx::Layer)
+            ),
+        ),
+    }).collect();
+
+    let light_params: Vec<_> = lights.iter().map(|light| LightParam {
+        pos: [light.position.x, light.position.y, light.position.z, 1.0],
+        color: light.color,
+        proj: {
+            use cgmath::{FixedArray, Matrix, Matrix4};
+            let mx_proj: Matrix4<_> = light.projection.into();
+            mx_proj.mul_m(&light.mx_view).into_fixed()
+        },
+    }).collect();
+    factory.update_buffer(&light_buf, &light_params, 0).unwrap();
 
     let shadow_param = {
         let mut sinfo = gfx::tex::SamplerInfo::new(
@@ -211,13 +287,11 @@ fn create_scene<D, F>(_: &D, factory: &mut F)
             gfx::tex::WrapMode::Clamp
         );
         sinfo.comparison = gfx::tex::ComparisonMode::CompareRefToTexture(
-            gfx::state::Comparison::Less
+            gfx::state::Comparison::LessEqual
         );
         let sampler = factory.create_sampler(sinfo);
         (shadow_array.clone(), Some(sampler))
     };
-
-    let (near, far) = (1f32, 20f32);
 
     struct EntityDesc {
         offset: cgmath::Vector3<f32>,
@@ -248,11 +322,12 @@ fn create_scene<D, F>(_: &D, factory: &mut F)
         },
     ];
 
-    let mut entities: Vec<Entity<_>> = cube_descs.iter().map(|desc| {
+    let mut entities: Vec<_> = cube_descs.iter().map(|desc| {
         use cgmath::{EuclideanVector, Rotation3};
         let (mesh, slice) = create_cube(factory);
         make_entity(&mesh, &slice,
-            &program_forward, &program_shadow, &shadow_param,
+            &program_forward, &program_shadow,
+            lights.len(), &light_buf, &shadow_param,
             cgmath::Decomposed {
                 disp: desc.offset.clone(),
                 rot: cgmath::Quaternion::from_axis_angle(
@@ -266,7 +341,8 @@ fn create_scene<D, F>(_: &D, factory: &mut F)
     entities.push({
         let (mesh, slice) = create_plane(factory);
         make_entity(&mesh, &slice,
-            &program_forward, &program_shadow, &shadow_param,
+            &program_forward, &program_shadow,
+            lights.len(), &light_buf, &shadow_param,
             cgmath::Matrix4::identity())
     });
 
@@ -284,47 +360,11 @@ fn create_scene<D, F>(_: &D, factory: &mut F)
         },
     };
 
-    struct LightDesc {
-        pos: cgmath::Point3<f32>,
-        color: gfx::ColorValue,
-        fov: f32,
-    }
-
-    let light_descs = vec![
-        LightDesc {
-            pos: cgmath::Point3::new(-3.0, 10.0, 3.0),
-            color: [1.0, 1.0, 1.0, 1.0],
-            fov: 60.0,
-        }
-    ];
-
-    let lights = light_descs.iter().enumerate().map(|(i, desc)| Light {
-        position: desc.pos.clone(),
-        mx_view: cgmath::Matrix4::look_at(
-            &desc.pos,
-            &cgmath::Point3::new(0.0, 0.0, 0.0),
-            &cgmath::Vector3::unit_z(),
-        ),
-        projection: cgmath::PerspectiveFov {
-            fovy: cgmath::deg(desc.fov),
-            aspect: 1.0,
-            near: near,
-            far: far,
-        }.to_perspective(),
-        color: desc.color.clone(),
-        stream: factory.create_stream(
-            gfx::Plane::Texture(
-                shadow_array.clone(),
-                0,
-                Some(i as gfx::Layer)
-            ),
-        ),
-    }).collect();
-
     Scene {
         camera: camera,
         lights: lights,
         entities: entities,
+        light_buf: light_buf.clone(),
     }
 }
 
@@ -341,11 +381,11 @@ pub fn main() {
             .with_depth_buffer(24)
             .build().unwrap()
     );
+    let _ = stream.out.set_gamma(gfx::Gamma::Convert); // enable srgb
 
     let mut scene = create_scene(&device, &mut factory);
 
     'main: loop {
-        // quit when Esc is pressed.
         for event in stream.out.window.poll_events() {
             use glutin::{Event, VirtualKeyCode};
             match event {
@@ -355,8 +395,32 @@ pub fn main() {
             }
         }
 
+        // fill up shadow map for each light
+        for light in scene.lights.iter_mut() {
+            // clear
+            light.stream.clear(gfx::ClearData {
+                color: [0.0; 4],
+                depth: 1.0,
+                stencil: 0,
+            });
+            // fill
+            for ent in scene.entities.iter_mut() {
+                let batch = &mut ent.batch_shadow; //TODO: clone
+                batch.param.transform = {
+                    let mx_proj: cgmath::Matrix4<_> = light.projection.into();
+                    let mx_view = mx_proj.mul_m(&light.mx_view);
+                    let mvp = mx_view.mul_m(&ent.mx_to_world);
+                    mvp.into_fixed()
+                };
+                light.stream.draw(batch).unwrap();
+            }
+            // submit
+            light.stream.flush(&mut device);
+        }
+
+        // draw entities with forward pass
         stream.clear(gfx::ClearData {
-            color: [0.3, 0.3, 0.3, 1.0],
+            color: [0.1, 0.2, 0.3, 1.0],
             depth: 1.0,
             stencil: 0,
         });
@@ -364,20 +428,23 @@ pub fn main() {
         let mx_vp = {
             let mut proj = scene.camera.projection;
             proj.aspect = stream.get_aspect_ratio();
-            let proj_mx: cgmath::Matrix4<_> = proj.into();
-            proj_mx.mul_m(&scene.camera.mx_view)
+            let mx_proj: cgmath::Matrix4<_> = proj.into();
+            mx_proj.mul_m(&scene.camera.mx_view)
         };
         for ent in scene.entities.iter_mut() {
-            ent.batch_forward.param.transform = mx_vp.mul_m(&ent.mx_to_world).into_fixed();
-            ent.batch_forward.param.normal_transform = {
+            let batch = &mut ent.batch_forward;
+            batch.param.transform = mx_vp.mul_m(&ent.mx_to_world).into_fixed();
+            batch.param.model_transform = ent.mx_to_world.into_fixed();
+            batch.param.normal_transform = {
                 let m = &ent.mx_to_world;
                 [[m.x.x, m.x.y, m.x.z],
                 [m.y.x, m.y.y, m.y.z],
                 [m.z.x, m.z.y, m.z.z]]
             };
-            stream.draw(&ent.batch_forward).unwrap();
+            stream.draw(batch).unwrap();
         }
 
+        // done
         stream.present(&mut device);
     }
 }
