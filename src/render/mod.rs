@@ -194,7 +194,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     }
 
     /// Draw a 'batch' with all known parameters specified, internal use only.
-    pub fn draw<B: Batch<R>, O: target::Output<R>>(&mut self, batch: &B,
+    pub fn draw<B: Batch<R> + ?Sized, O: target::Output<R>>(&mut self, batch: &B,
                 instances: InstanceOption, output: &O)
                 -> Result<(), DrawError<Error>> {
         let (mesh, attrib_iter, slice, state) = match batch.get_data() {
@@ -390,7 +390,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         self.render_state.draw = *state;
     }
 
-    fn bind_program<'a, B: Batch<R>>(&mut self, batch: &'a B)
+    fn bind_program<'a, B: Batch<R> + ?Sized>(&mut self, batch: &'a B)
                     -> Result<&'a handle::Program<R>, Error> {
         let program = match batch.fill_params(&mut self.parameters) {
             Ok(p) => p,
