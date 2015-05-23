@@ -40,6 +40,7 @@ gfx_parameters!( ForwardParams {
     u_Transform@ transform: [[f32; 4]; 4],
     u_NormalTransform@ normal_transform: [[f32; 3]; 3],
     u_Color@ color: [f32; 4],
+    t_Shadow@ shadow: gfx::shade::TextureParam<R>,
 });
 
 gfx_parameters!( ShadowParams {
@@ -123,10 +124,12 @@ struct Camera {
     projection: cgmath::PerspectiveFov<f32, cgmath::Deg<f32>>,
 }
 
-struct Light {
-    mx_to_world: cgmath::Matrix4<f32>,
+struct Light<S> {
+    position: cgmath::Point3<f32>,
+    mx_view: cgmath::Matrix4<f32>,
     projection: cgmath::Perspective<f32>,
     color: gfx::ColorValue,
+    stream: S,
 }
 
 struct Entity<R: gfx::Resources> {
@@ -135,9 +138,9 @@ struct Entity<R: gfx::Resources> {
     batch_forward: gfx::batch::OwnedBatch<ForwardParams<R>>,
 }
 
-struct Scene<R: gfx::Resources> {
+struct Scene<R: gfx::Resources, S> {
     camera: Camera,
-    lights: Vec<Light>,
+    lights: Vec<Light<S>>,
     entities: Vec<Entity<R>>,
 }
 
@@ -145,7 +148,8 @@ struct Scene<R: gfx::Resources> {
 
 fn make_entity<R: gfx::Resources>(mesh: &gfx::Mesh<R>, slice: &gfx::Slice<R>,
                prog_fw: &gfx::handle::Program<R>, prog_sh: &gfx::handle::Program<R>,
-               transform: cgmath::Matrix4<f32>) -> Entity<R>
+               shadow: &gfx::shade::TextureParam<R>, transform: cgmath::Matrix4<f32>)
+               -> Entity<R>
 {
     use cgmath::FixedArray;
     Entity {
@@ -155,6 +159,7 @@ fn make_entity<R: gfx::Resources>(mesh: &gfx::Mesh<R>, slice: &gfx::Slice<R>,
                 transform: cgmath::Matrix4::identity().into_fixed(),
                 normal_transform: cgmath::Matrix3::identity().into_fixed(),
                 color: [1.0, 1.0, 1.0, 1.0],
+                shadow: shadow.clone(),
                 _r: std::marker::PhantomData,
             };
             let mut batch = gfx::batch::OwnedBatch::new(
@@ -177,8 +182,10 @@ fn make_entity<R: gfx::Resources>(mesh: &gfx::Mesh<R>, slice: &gfx::Slice<R>,
     }
 }
 
-fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F)
-                -> Scene<R>
+fn create_scene<D, F>(_: &D, factory: &mut F)
+                -> Scene<D::Resources, gfx::OwnedStream<D, gfx::Plane<D::Resources>>> where
+    D: gfx::Device,
+    F: gfx::Factory<D::Resources> + gfx::traits::StreamFactory<D>,
 {
     let program_forward = factory.link_program(
         include_bytes!("shader/forward_150.glslv"),
@@ -189,31 +196,77 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F)
         include_bytes!("shader/shadow_150.glslf"),
     ).unwrap();
 
-    let num = 4i32;
-    let mut entities: Vec<Entity<_>> = (0i32..num).map(|i| {
+    let shadow_array = factory.create_texture(gfx::tex::TextureInfo {
+        width: 512,
+        height: 512,
+        depth: 5,
+        levels: 1,
+        kind: gfx::tex::TextureKind::Texture2DArray,
+        format: gfx::tex::Format::DEPTH24,
+    }).unwrap();
+
+    let shadow_param = {
+        let mut sinfo = gfx::tex::SamplerInfo::new(
+            gfx::tex::FilterMethod::Bilinear,
+            gfx::tex::WrapMode::Clamp
+        );
+        sinfo.comparison = gfx::tex::ComparisonMode::CompareRefToTexture(
+            gfx::state::Comparison::Less
+        );
+        let sampler = factory.create_sampler(sinfo);
+        (shadow_array.clone(), Some(sampler))
+    };
+
+    let (near, far) = (1f32, 20f32);
+
+    struct EntityDesc {
+        offset: cgmath::Vector3<f32>,
+        angle: f32,
+        scale: f32,
+    }
+
+    let cube_descs = vec![
+        EntityDesc {
+            offset: cgmath::vec3(-2.0, -2.0, 2.0),
+            angle: 10.0,
+            scale: 0.6,
+        },
+        EntityDesc {
+            offset: cgmath::vec3(2.0, -2.0, 2.0),
+            angle: 50.0,
+            scale: 1.6,
+        },
+        EntityDesc {
+            offset: cgmath::vec3(-2.0, 2.0, 2.0),
+            angle: 140.0,
+            scale: 1.1,
+        },
+        EntityDesc {
+            offset: cgmath::vec3(2.0, 2.0, 2.0),
+            angle: 210.0,
+            scale: 0.9,
+        },
+    ];
+
+    let mut entities: Vec<Entity<_>> = cube_descs.iter().map(|desc| {
         use cgmath::{EuclideanVector, Rotation3};
         let (mesh, slice) = create_cube(factory);
-        let disp = cgmath::Vector3::new(
-            ((i&1)*2-1) as f32 * 2.0,
-            ((i&2)-1) as f32 * 2.0,
-            ((i&4)/2) as f32 + 2.0,
-        );
         make_entity(&mesh, &slice,
-            &program_forward, &program_shadow,
+            &program_forward, &program_shadow, &shadow_param,
             cgmath::Decomposed {
-                disp: disp.clone(),
+                disp: desc.offset.clone(),
                 rot: cgmath::Quaternion::from_axis_angle(
-                    &disp.normalize(),
-                    cgmath::deg((i*180/num) as f32).into(),
+                    &desc.offset.normalize(),
+                    cgmath::deg(desc.angle).into(),
                 ),
-                scale: 1f32,
+                scale: desc.scale,
             }.into(),
         )
     }).collect();
     entities.push({
         let (mesh, slice) = create_plane(factory);
         make_entity(&mesh, &slice,
-            &program_forward, &program_shadow,
+            &program_forward, &program_shadow, &shadow_param,
             cgmath::Matrix4::identity())
     });
 
@@ -226,14 +279,51 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F)
         projection: cgmath::PerspectiveFov {
             fovy: cgmath::deg(45.0f32),
             aspect: 1.0,
-            near: 1.0,
-            far: 20.0,
+            near: near,
+            far: far,
         },
     };
 
+    struct LightDesc {
+        pos: cgmath::Point3<f32>,
+        color: gfx::ColorValue,
+        fov: f32,
+    }
+
+    let light_descs = vec![
+        LightDesc {
+            pos: cgmath::Point3::new(-3.0, 10.0, 3.0),
+            color: [1.0, 1.0, 1.0, 1.0],
+            fov: 60.0,
+        }
+    ];
+
+    let lights = light_descs.iter().enumerate().map(|(i, desc)| Light {
+        position: desc.pos.clone(),
+        mx_view: cgmath::Matrix4::look_at(
+            &desc.pos,
+            &cgmath::Point3::new(0.0, 0.0, 0.0),
+            &cgmath::Vector3::unit_z(),
+        ),
+        projection: cgmath::PerspectiveFov {
+            fovy: cgmath::deg(desc.fov),
+            aspect: 1.0,
+            near: near,
+            far: far,
+        }.to_perspective(),
+        color: desc.color.clone(),
+        stream: factory.create_stream(
+            gfx::Plane::Texture(
+                shadow_array.clone(),
+                0,
+                Some(i as gfx::Layer)
+            ),
+        ),
+    }).collect();
+
     Scene {
         camera: camera,
-        lights: Vec::new(), //TODO
+        lights: lights,
         entities: entities,
     }
 }
@@ -252,7 +342,7 @@ pub fn main() {
             .build().unwrap()
     );
 
-    let mut scene = create_scene(&mut factory);
+    let mut scene = create_scene(&device, &mut factory);
 
     'main: loop {
         // quit when Esc is pressed.
