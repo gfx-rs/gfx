@@ -27,7 +27,7 @@ use device::attrib::IntSize;
 use device::draw::{Access, Gamma, Target};
 use device::draw::{CommandBuffer, DataBuffer, InstanceOption};
 use device::shade::{ProgramInfo, UniformValue};
-use render::batch::Batch;
+use render::batch::{Batch, Error};
 use render::mesh::SliceKind;
 
 /// Batches
@@ -196,7 +196,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     /// Draw a 'batch' with all known parameters specified, internal use only.
     pub fn draw<B: Batch<R>, O: target::Output<R>>(&mut self, batch: &B,
                 instances: InstanceOption, output: &O)
-                -> Result<(), DrawError<B::Error>> {
+                -> Result<(), DrawError<Error>> {
         let (mesh, attrib_iter, slice, state) = match batch.get_data() {
             Ok(data) => data,
             Err(e) => return Err(DrawError::InvalidBatch(e)),
@@ -391,7 +391,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     }
 
     fn bind_program<'a, B: Batch<R>>(&mut self, batch: &'a B)
-                    -> Result<&'a handle::Program<R>, B::Error> {
+                    -> Result<&'a handle::Program<R>, Error> {
         let program = match batch.fill_params(&mut self.parameters) {
             Ok(p) => p,
             Err(e) => return Err(e),
