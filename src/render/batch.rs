@@ -100,6 +100,7 @@ impl<'a, T: ShaderParam> Batch<T::Resources> for ImplicitBatch<'a, T> {
 }
 
 /// Owned batch - self-contained, but has heap-allocated data
+#[derive(Clone)]
 pub struct OwnedBatch<T: ShaderParam> {
     mesh: mesh::Mesh<T::Resources>,
     mesh_link: mesh::Link,
