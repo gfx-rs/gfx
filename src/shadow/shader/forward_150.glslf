@@ -34,7 +34,8 @@ void main() {
 		vec4 light_local = light.proj * vec4(v_Position, 1.0);
 		// compute texture coordinates for shadow lookup
 		light_local.xyw = (light_local.xyz/light_local.w + 1.0) / 2.0;
-		light_local.z = i + 0.5;
+		light_local.w -= 0.002;
+		light_local.z = i;
 		// do the lookup, using HW PCF and comparison
 		float shadow = texture(t_Shadow, light_local);
 		// compute Lambertian diffuse term
