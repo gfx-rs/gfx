@@ -113,14 +113,14 @@ fn create_cube<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F)
     (mesh, slice)
 }
 
-fn create_plane<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F)
+fn create_plane<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F, size: i8)
                 -> (gfx::Mesh<R>, gfx::Slice<R>)
 {
     let vertex_data = [
-        Vertex::new([ 5, -5,  0], [0, 0, 1]),
-        Vertex::new([ 5,  5,  0], [0, 0, 1]),
-        Vertex::new([-5, -5,  0], [0, 0, 1]),
-        Vertex::new([-5,  5,  0], [0, 0, 1]),
+        Vertex::new([ size, -size,  0], [0, 0, 1]),
+        Vertex::new([ size,  size,  0], [0, 0, 1]),
+        Vertex::new([-size, -size,  0], [0, 0, 1]),
+        Vertex::new([-size,  size,  0], [0, 0, 1]),
     ];
 
     let mesh = factory.create_mesh(&vertex_data);
@@ -145,6 +145,7 @@ struct Light<S> {
 }
 
 struct Entity<R: gfx::Resources> {
+    dynamic: bool,
     mx_to_world: cgmath::Matrix4<f32>,
     batch_shadow: gfx::batch::OwnedBatch<ShadowParams<R>>,
     batch_forward: gfx::batch::OwnedBatch<ForwardParams<R>>,
@@ -159,7 +160,7 @@ struct Scene<R: gfx::Resources, S> {
 
 //----------------------------------------
 
-fn make_entity<R: gfx::Resources>(mesh: &gfx::Mesh<R>, slice: &gfx::Slice<R>,
+fn make_entity<R: gfx::Resources>(dynamic: bool, mesh: &gfx::Mesh<R>, slice: &gfx::Slice<R>,
                prog_fw: &gfx::handle::Program<R>, prog_sh: &gfx::handle::Program<R>,
                num_lights: usize, light_buf: &gfx::handle::Buffer<R, LightParam>,
                shadow: &gfx::shade::TextureParam<R>, transform: cgmath::Matrix4<f32>)
@@ -167,6 +168,7 @@ fn make_entity<R: gfx::Resources>(mesh: &gfx::Mesh<R>, slice: &gfx::Slice<R>,
 {
     use cgmath::FixedArray;
     Entity {
+        dynamic: dynamic,
         mx_to_world: transform,
         batch_forward: {
             let data = ForwardParams {
@@ -293,29 +295,29 @@ fn create_scene<D, F>(_: &D, factory: &mut F)
         (shadow_array.clone(), Some(sampler))
     };
 
-    struct EntityDesc {
+    struct CubeDesc {
         offset: cgmath::Vector3<f32>,
         angle: f32,
         scale: f32,
     }
 
     let cube_descs = vec![
-        EntityDesc {
+        CubeDesc {
             offset: cgmath::vec3(-2.0, -2.0, 2.0),
             angle: 10.0,
-            scale: 0.6,
+            scale: 0.7,
         },
-        EntityDesc {
+        CubeDesc {
             offset: cgmath::vec3(2.0, -2.0, 2.0),
             angle: 50.0,
-            scale: 1.6,
+            scale: 1.3,
         },
-        EntityDesc {
+        CubeDesc {
             offset: cgmath::vec3(-2.0, 2.0, 2.0),
             angle: 140.0,
             scale: 1.1,
         },
-        EntityDesc {
+        CubeDesc {
             offset: cgmath::vec3(2.0, 2.0, 2.0),
             angle: 210.0,
             scale: 0.9,
@@ -325,7 +327,7 @@ fn create_scene<D, F>(_: &D, factory: &mut F)
     let mut entities: Vec<_> = cube_descs.iter().map(|desc| {
         use cgmath::{EuclideanVector, Rotation3};
         let (mesh, slice) = create_cube(factory);
-        make_entity(&mesh, &slice,
+        make_entity(true, &mesh, &slice,
             &program_forward, &program_shadow,
             lights.len(), &light_buf, &shadow_param,
             cgmath::Decomposed {
@@ -339,8 +341,8 @@ fn create_scene<D, F>(_: &D, factory: &mut F)
         )
     }).collect();
     entities.push({
-        let (mesh, slice) = create_plane(factory);
-        make_entity(&mesh, &slice,
+        let (mesh, slice) = create_plane(factory, 7);
+        make_entity(false, &mesh, &slice,
             &program_forward, &program_shadow,
             lights.len(), &light_buf, &shadow_param,
             cgmath::Matrix4::identity())
@@ -371,7 +373,7 @@ fn create_scene<D, F>(_: &D, factory: &mut F)
 //----------------------------------------
 
 pub fn main() {
-    use cgmath::{FixedArray, Matrix};
+    use cgmath::{EuclideanVector, FixedArray, Matrix, Rotation3, Vector};
 
     let (mut stream, mut device, mut factory) = gfx_window_glutin::init(
         glutin::WindowBuilder::new()
@@ -384,12 +386,36 @@ pub fn main() {
     let _ = stream.out.set_gamma(gfx::Gamma::Convert); // enable srgb
 
     let mut scene = create_scene(&device, &mut factory);
+    let mut last_mouse: (i32, i32) = (0, 0);
 
     'main: loop {
         for event in stream.out.window.poll_events() {
             use glutin::{Event, VirtualKeyCode};
             match event {
                 Event::KeyboardInput(_, _, Some(VirtualKeyCode::Escape)) => break 'main,
+                Event::MouseMoved(cur) => if cur != last_mouse {
+                    let axis = cgmath::vec3(
+                        (cur.0 - last_mouse.0) as f32,
+                        0.0,
+                        (cur.1 - last_mouse.1) as f32,
+                    );
+                    let len = axis.length();
+                    for ent in scene.entities.iter_mut() {
+                        if !ent.dynamic {
+                            continue
+                        }
+                        let rot = cgmath::Decomposed {
+                            disp: cgmath::vec3(0.0, 0.0, 0.0),
+                            rot: cgmath::Quaternion::from_axis_angle(
+                                &axis.mul_s(1.0 / len),
+                                cgmath::deg(len * 0.3).into(),
+                            ),
+                            scale: 1.0,
+                        }.into();
+                        ent.mx_to_world = ent.mx_to_world.mul_m(&rot);
+                    }
+                    last_mouse = cur;
+                },
                 Event::Closed => break 'main,
                 _ => {},
             }
