@@ -38,6 +38,8 @@ pub enum Error {
     Parameters(ParameterError),
     /// Error context is full
     ContextFull,
+    /// Another kind of error
+    Other(String),
 }
 
 /// Return type for `Batch::get_data()``
@@ -46,13 +48,10 @@ pub type BatchData<'a, R: Resources> = (&'a mesh::Mesh<R>, mesh::AttributeIter,
 
 /// Abstract batch trait
 pub trait Batch<R: Resources> {
-    /// Possible errors occurring at batch access
-    type Error: fmt::Debug;
     /// Obtain information about the mesh, program, and state
-    fn get_data(&self) -> Result<BatchData<R>, Self::Error>;
+    fn get_data(&self) -> Result<BatchData<R>, Error>;
     /// Fill shader parameter values
-    fn fill_params(&self, &mut ParamStorage<R>)
-                   -> Result<&ProgramHandle<R>, Self::Error>;
+    fn fill_params(&self, &mut ParamStorage<R>) -> Result<&ProgramHandle<R>, Error>;
 }
 
 /// A batch that is constructed on the fly when rendering.
@@ -75,8 +74,6 @@ pub fn bind<'a, T: ShaderParam>(draw_state: &'a DrawState,
 }
 
 impl<'a, T: ShaderParam> Batch<T::Resources> for ImplicitBatch<'a, T> {
-    type Error = Error;
-
     fn get_data(&self) -> Result<BatchData<T::Resources>, Error> {
         let (mesh, ref slice, program, _, state) = *self;
         match mesh::Link::new(mesh, program.get_info()) {
@@ -140,14 +137,12 @@ impl<T: ShaderParam> OwnedBatch<T> {
 }
 
 impl<T: ShaderParam> Batch<T::Resources> for OwnedBatch<T> {
-    type Error = ();
-
-    fn get_data(&self) -> Result<BatchData<T::Resources>, ()> {
+    fn get_data(&self) -> Result<BatchData<T::Resources>, Error> {
         Ok((&self.mesh, self.mesh_link.to_iter(), &self.slice, &self.state))
     }
 
     fn fill_params(&self, values: &mut ParamStorage<T::Resources>)
-                   -> Result<&ProgramHandle<T::Resources>, ()> {
+                   -> Result<&ProgramHandle<T::Resources>, Error> {
         values.reserve(self.program.get_info());
         self.param.fill_params(&self.param_link, values);
         Ok(&self.program)
@@ -471,45 +466,56 @@ impl<R: Resources> Context<R> {
 }
 
 impl<'a, T: ShaderParam + 'a> Batch<T::Resources> for CoreBatchFull<'a, T> {
-    type Error = OutOfBounds;
-
-    fn get_data(&self) -> Result<BatchData<T::Resources>, OutOfBounds> {
+    fn get_data(&self) -> Result<BatchData<T::Resources>, Error> {
         let (b, slice, _, ctx) = *self;
         ctx.get_data(b, slice)
+            .map_err(|err| Error::Other(format!("{:?}", err)))
     }
 
     fn fill_params(&self, values: &mut ParamStorage<T::Resources>)
-                   -> Result<&ProgramHandle<T::Resources>, OutOfBounds> {
+                   -> Result<&ProgramHandle<T::Resources>, Error> {
         let (b, _, data, ctx) = *self;
-        match ctx.programs.get(b.program_id) {
-            Ok(program) => {
+        ctx.programs.get(b.program_id)
+            .map(|program| {
                 values.reserve(program.get_info());
                 data.fill_params(&b.param_link, values);
-                Ok(program)
-            },
-            e => e,
-        }
+                program
+            })
+            .map_err(|err| Error::Other(format!("{:?}", err)))
     }
 }
 
 impl<'a, T: ShaderParam + 'a> Batch<T::Resources> for RefBatchFull<'a, T> {
-    type Error = OutOfBounds;
-
-    fn get_data(&self) -> Result<BatchData<T::Resources>, OutOfBounds> {
+    fn get_data(&self) -> Result<BatchData<T::Resources>, Error> {
         let (b, ctx) = *self;
         ctx.get_data(&b.core, &b.slice)
+            .map_err(|err| Error::Other(format!("{:?}", err)))
     }
 
     fn fill_params(&self, values: &mut ParamStorage<T::Resources>)
-                   -> Result<&ProgramHandle<T::Resources>, OutOfBounds> {
+                   -> Result<&ProgramHandle<T::Resources>, Error> {
         let (b, ctx) = *self;
-        match ctx.programs.get(b.core.program_id) {
-            Ok(program) => {
+        ctx.programs.get(b.core.program_id)
+            .map(|program| {
                 values.reserve(program.get_info());
                 b.params.fill_params(&b.core.param_link, values);
-                Ok(program)
-            },
-            e => e,
-        }
+                program
+            })
+            .map_err(|err| Error::Other(format!("{:?}", err)))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use device::Resources;
+    use super::Batch;
+
+    #[test]
+    fn batch_is_object_safe() {
+        #[allow(dead_code)]
+        fn must_compile<B, R>(b: &B) -> &Batch<R>
+            where B: Batch<R> + 'static,
+                  R: Resources,
+        { b as &Batch<R> }
     }
 }

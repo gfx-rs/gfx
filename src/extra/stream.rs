@@ -20,7 +20,7 @@ use device::{Device, InstanceCount, Resources, VertexCount};
 use device::draw::CommandBuffer;
 use device::target::{ClearData, Mask, Mirror, Rect};
 use render::{DrawError, Renderer, RenderFactory};
-use render::batch::Batch;
+use render::batch::{Batch, Error};
 use render::target::Output;
 
 
@@ -74,7 +74,7 @@ pub trait Stream<R: Resources> {
 
     /// Draw a simple `Batch`.
     fn draw<B: Batch<R>>(&mut self, batch: &B) 
-            -> Result<(), DrawError<B::Error>> {
+            -> Result<(), DrawError<Error>> {
         let (ren, out) = self.access();
         ren.draw(batch, None, out)
     }
@@ -82,7 +82,7 @@ pub trait Stream<R: Resources> {
     /// Draw an instanced `Batch`.
     fn draw_instanced<B: Batch<R>>(&mut self, batch: &B,
                       count: InstanceCount, base: VertexCount)
-                      -> Result<(), DrawError<B::Error>> {
+                      -> Result<(), DrawError<Error>> {
         let (ren, out) = self.access();
         ren.draw(batch, Some((count, base)), out)
     }
