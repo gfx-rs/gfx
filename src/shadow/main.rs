@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+extern crate time;
 extern crate cgmath;
-extern crate genmesh;
 #[macro_use]
 extern crate gfx;
 extern crate gfx_window_glutin;
 extern crate glutin;
 
+use std::sync::{Arc, RwLock};
 use gfx::attrib::Floater;
 use gfx::traits::*;
 
@@ -48,7 +49,6 @@ struct LightParam {
 gfx_parameters!( ForwardParams {
     u_Transform@ transform: [[f32; 4]; 4],
     u_ModelTransform@ model_transform: [[f32; 4]; 4],
-    u_NormalTransform@ normal_transform: [[f32; 3]; 3],
     u_Color@ color: [f32; 4],
     u_NumLights@ num_lights: i32,
     b_Lights@ light_buf: gfx::handle::RawBuffer<R>,
@@ -154,8 +154,8 @@ struct Entity<R: gfx::Resources> {
 struct Scene<R: gfx::Resources, S> {
     camera: Camera,
     lights: Vec<Light<S>>,
-    entities: Vec<Entity<R>>,
-    light_buf: gfx::handle::Buffer<R, LightParam>,
+    entities: Arc<RwLock<Vec<Entity<R>>>>,
+    _light_buf: gfx::handle::Buffer<R, LightParam>,
 }
 
 //----------------------------------------
@@ -174,7 +174,6 @@ fn make_entity<R: gfx::Resources>(dynamic: bool, mesh: &gfx::Mesh<R>, slice: &gf
             let data = ForwardParams {
                 transform: cgmath::Matrix4::identity().into_fixed(),
                 model_transform: cgmath::Matrix4::identity().into_fixed(),
-                normal_transform: cgmath::Matrix3::identity().into_fixed(),
                 color: [1.0, 1.0, 1.0, 1.0],
                 num_lights: num_lights as i32,
                 light_buf: light_buf.raw().clone(),
@@ -202,11 +201,13 @@ fn make_entity<R: gfx::Resources>(dynamic: bool, mesh: &gfx::Mesh<R>, slice: &gf
     }
 }
 
+/// Create a full scene
 fn create_scene<D, F>(_: &D, factory: &mut F)
                 -> Scene<D::Resources, gfx::OwnedStream<D, gfx::Plane<D::Resources>>> where
     D: gfx::Device,
     F: gfx::Factory<D::Resources> + gfx::traits::StreamFactory<D>,
 {
+    // load programs
     let program_forward = factory.link_program(
         include_bytes!("shader/forward_150.glslv"),
         include_bytes!("shader/forward_150.glslf"),
@@ -216,6 +217,7 @@ fn create_scene<D, F>(_: &D, factory: &mut F)
         include_bytes!("shader/shadow_150.glslf"),
     ).unwrap();
 
+    // create shadows
     let shadow_array = factory.create_texture(gfx::tex::TextureInfo {
         width: 512,
         height: 512,
@@ -230,6 +232,7 @@ fn create_scene<D, F>(_: &D, factory: &mut F)
     let light_buf = factory.create_buffer_dynamic::<LightParam>(
         MAX_LIGHTS, gfx::BufferRole::Uniform);
 
+    // create lights
     struct LightDesc {
         pos: cgmath::Point3<f32>,
         color: gfx::ColorValue,
@@ -272,6 +275,7 @@ fn create_scene<D, F>(_: &D, factory: &mut F)
         ),
     }).collect();
 
+    // init light parameters
     let light_params: Vec<_> = lights.iter().map(|light| LightParam {
         pos: [light.position.x, light.position.y, light.position.z, 1.0],
         color: light.color,
@@ -295,6 +299,7 @@ fn create_scene<D, F>(_: &D, factory: &mut F)
         (shadow_array.clone(), Some(sampler))
     };
 
+    // create entities
     struct CubeDesc {
         offset: cgmath::Vector3<f32>,
         angle: f32,
@@ -348,6 +353,7 @@ fn create_scene<D, F>(_: &D, factory: &mut F)
             cgmath::Matrix4::identity())
     });
 
+    // create camera
     let camera = Camera {
         mx_view: cgmath::Matrix4::look_at(
             &cgmath::Point3::new(3.0f32, -10.0, 6.0),
@@ -365,15 +371,28 @@ fn create_scene<D, F>(_: &D, factory: &mut F)
     Scene {
         camera: camera,
         lights: lights,
-        entities: entities,
-        light_buf: light_buf.clone(),
+        entities: Arc::new(RwLock::new(entities)),
+        _light_buf: light_buf.clone(),
     }
 }
 
 //----------------------------------------
 
 pub fn main() {
+    use std::env;
+    use time::precise_time_s;
     use cgmath::{EuclideanVector, FixedArray, Matrix, Rotation3, Vector};
+
+    // initialize
+    let mut is_parallel = true;
+    for arg in env::args().skip(1) {
+        if arg == "single" {
+            is_parallel = false;
+        }
+    }
+    println!("Running in {}-threaded mode",
+        if is_parallel {"multi"} else {"single"},
+    );
 
     let (mut stream, mut device, mut factory) = gfx_window_glutin::init(
         glutin::WindowBuilder::new()
@@ -387,8 +406,11 @@ pub fn main() {
 
     let mut scene = create_scene(&device, &mut factory);
     let mut last_mouse: (i32, i32) = (0, 0);
+    let time_start = precise_time_s();
+    let mut num_frames = 0f64;
 
     'main: loop {
+        // process events
         for event in stream.out.window.poll_events() {
             use glutin::{Event, VirtualKeyCode};
             match event {
@@ -400,7 +422,7 @@ pub fn main() {
                         (cur.1 - last_mouse.1) as f32,
                     );
                     let len = axis.length();
-                    for ent in scene.entities.iter_mut() {
+                    for ent in scene.entities.write().unwrap().iter_mut() {
                         if !ent.dynamic {
                             continue
                         }
@@ -422,26 +444,67 @@ pub fn main() {
         }
 
         // fill up shadow map for each light
-        for light in scene.lights.iter_mut() {
-            // clear
-            light.stream.clear(gfx::ClearData {
-                color: [0.0; 4],
-                depth: 1.0,
-                stencil: 0,
-            });
-            // fill
-            for ent in scene.entities.iter_mut() {
-                let batch = &mut ent.batch_shadow; //TODO: clone
-                batch.param.transform = {
-                    let mx_proj: cgmath::Matrix4<_> = light.projection.into();
-                    let mx_view = mx_proj.mul_m(&light.mx_view);
-                    let mvp = mx_view.mul_m(&ent.mx_to_world);
-                    mvp.into_fixed()
-                };
-                light.stream.draw(batch).unwrap();
+        if is_parallel {
+            use std::thread;
+            use std::sync::mpsc;
+            let (sender_orig, receiver) = mpsc::channel();
+            let num = scene.lights.len();
+            // run parallel threads
+            let threads: Vec<_> = (0..num).map(|_| {
+                let mut light = scene.lights.swap_remove(0);
+                let entities = scene.entities.clone();
+                let sender = sender_orig.clone();
+                thread::spawn(move || {
+                    // clear
+                    light.stream.clear(gfx::ClearData {
+                        color: [0.0; 4],
+                        depth: 1.0,
+                        stencil: 0,
+                    });
+                    // fill
+                    for ent in entities.read().unwrap().iter() {
+                        let mut batch = ent.batch_shadow.clone();
+                        batch.param.transform = {
+                            let mx_proj: cgmath::Matrix4<_> = light.projection.into();
+                            let mx_view = mx_proj.mul_m(&light.mx_view);
+                            let mvp = mx_view.mul_m(&ent.mx_to_world);
+                            mvp.into_fixed()
+                        };
+                        light.stream.draw(&batch).unwrap();
+                    }
+                    sender.send(light).unwrap();
+                })
+            }).collect();
+            // wait for them
+            drop(threads);
+            // execute the results
+            for _ in 0..num {
+                let mut light = receiver.recv().unwrap();
+                light.stream.flush(&mut device);
+                scene.lights.push(light);
             }
-            // submit
-            light.stream.flush(&mut device);
+        } else {
+            for light in scene.lights.iter_mut() {
+                // clear
+                light.stream.clear(gfx::ClearData {
+                    color: [0.0; 4],
+                    depth: 1.0,
+                    stencil: 0,
+                });
+                // fill
+                for ent in scene.entities.read().unwrap().iter() {
+                    let mut batch = ent.batch_shadow.clone();
+                    batch.param.transform = {
+                        let mx_proj: cgmath::Matrix4<_> = light.projection.into();
+                        let mx_view = mx_proj.mul_m(&light.mx_view);
+                        let mvp = mx_view.mul_m(&ent.mx_to_world);
+                        mvp.into_fixed()
+                    };
+                    light.stream.draw(&batch).unwrap();
+                }
+                // submit
+                light.stream.flush(&mut device);
+            }
         }
 
         // draw entities with forward pass
@@ -457,20 +520,21 @@ pub fn main() {
             let mx_proj: cgmath::Matrix4<_> = proj.into();
             mx_proj.mul_m(&scene.camera.mx_view)
         };
-        for ent in scene.entities.iter_mut() {
+
+        for ent in scene.entities.write().unwrap().iter_mut() {
             let batch = &mut ent.batch_forward;
             batch.param.transform = mx_vp.mul_m(&ent.mx_to_world).into_fixed();
             batch.param.model_transform = ent.mx_to_world.into_fixed();
-            batch.param.normal_transform = {
-                let m = &ent.mx_to_world;
-                [[m.x.x, m.x.y, m.x.z],
-                [m.y.x, m.y.y, m.y.z],
-                [m.z.x, m.z.y, m.z.z]]
-            };
             stream.draw(batch).unwrap();
         }
 
         // done
         stream.present(&mut device);
+        num_frames += 1.0;
     }
+
+    let time_end = precise_time_s();
+    println!("Avg frame time: {} ms",
+        (time_end - time_start) * 1000.0 / num_frames
+    );
 }
