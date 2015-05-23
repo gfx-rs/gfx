@@ -3,10 +3,14 @@
 in vec3 a_Pos;
 in vec3 a_Normal;
 
+// world-space normal
 out vec3 v_Normal;
+// world-space position
 out vec3 v_Position;
 
+// model-view-projection matrix
 uniform mat4 u_Transform;
+// model matrix
 uniform mat4 u_ModelTransform;
 
 void main() {

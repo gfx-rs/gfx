@@ -23,6 +23,8 @@ use std::sync::{Arc, RwLock};
 use gfx::attrib::Floater;
 use gfx::traits::*;
 
+// Section-1: vertex formats and shader parameters
+
 gfx_vertex!( Vertex {
     a_Pos@ pos: [Floater<i8>; 3],
     a_Normal@ normal: [Floater<i8>; 3],
@@ -60,6 +62,8 @@ gfx_parameters!( ShadowParams {
 });
 
 //----------------------------------------
+// Section-2: simple primitives generation
+//TODO: replace by genmesh
 
 fn create_cube<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F)
                -> (gfx::Mesh<R>, gfx::Slice<R>)
@@ -130,6 +134,7 @@ fn create_plane<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F, size: i8
 }
 
 //----------------------------------------
+// Section-3: scene definitions
 
 struct Camera {
     mx_view: cgmath::Matrix4<f32>,
@@ -154,11 +159,12 @@ struct Entity<R: gfx::Resources> {
 struct Scene<R: gfx::Resources, S> {
     camera: Camera,
     lights: Vec<Light<S>>,
-    entities: Arc<RwLock<Vec<Entity<R>>>>,
+    entities: Arc<RwLock<Vec<Entity<R>>>>,  // needs to be shared
     _light_buf: gfx::handle::Buffer<R, LightParam>,
 }
 
 //----------------------------------------
+// Section-4: scene construction routines
 
 fn make_entity<R: gfx::Resources>(dynamic: bool, mesh: &gfx::Mesh<R>, slice: &gfx::Slice<R>,
                prog_fw: &gfx::handle::Program<R>, prog_sh: &gfx::handle::Program<R>,
@@ -183,6 +189,7 @@ fn make_entity<R: gfx::Resources>(dynamic: bool, mesh: &gfx::Mesh<R>, slice: &gf
             let mut batch = gfx::batch::OwnedBatch::new(
                 mesh.clone(), prog_fw.clone(), data).unwrap();
             batch.slice = slice.clone();
+            // forward pass is using depth test + write
             batch.state = batch.state.depth(gfx::state::Comparison::LessEqual, true);
             batch
         },
@@ -194,7 +201,9 @@ fn make_entity<R: gfx::Resources>(dynamic: bool, mesh: &gfx::Mesh<R>, slice: &gf
             let mut batch = gfx::batch::OwnedBatch::new(
                 mesh.clone(), prog_sh.clone(), data).unwrap();
             batch.slice = slice.clone();
+            // shadow pass is also depth testing and writing
             batch.state = batch.state.depth(gfx::state::Comparison::LessEqual, true);
+            // need to offset the shadow depth a bit to prevent self-shadowing
             batch.state.primitive.offset = Some(gfx::state::Offset(2.0, 2));
             batch
         },
@@ -377,6 +386,7 @@ fn create_scene<D, F>(_: &D, factory: &mut F)
 }
 
 //----------------------------------------
+// Section-5: main entry point
 
 pub fn main() {
     use std::env;
@@ -426,6 +436,7 @@ pub fn main() {
                         if !ent.dynamic {
                             continue
                         }
+                        // rotate all cubes around the axis
                         let rot = cgmath::Decomposed {
                             disp: cgmath::vec3(0.0, 0.0, 0.0),
                             rot: cgmath::Quaternion::from_axis_angle(
@@ -451,6 +462,7 @@ pub fn main() {
             let num = scene.lights.len();
             // run parallel threads
             let threads: Vec<_> = (0..num).map(|_| {
+                // move the light into the thread scope
                 let mut light = scene.lights.swap_remove(0);
                 let entities = scene.entities.clone();
                 let sender = sender_orig.clone();
@@ -477,7 +489,7 @@ pub fn main() {
             }).collect();
             // wait for them
             drop(threads);
-            // execute the results
+            // execute the results, obtain the lights back
             for _ in 0..num {
                 let mut light = receiver.recv().unwrap();
                 light.stream.flush(&mut device);
