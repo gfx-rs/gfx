@@ -203,7 +203,8 @@ fn make_entity<R: gfx::Resources>(dynamic: bool, mesh: &gfx::Mesh<R>, slice: &gf
             batch.slice = slice.clone();
             // shadow pass is also depth testing and writing
             batch.state = batch.state.depth(gfx::state::Comparison::LessEqual, true);
-            // need to offset the shadow depth a bit to prevent self-shadowing
+            // need to offset the shadow depth to prevent self-shadowing
+            // offset = 2, because we are using bilinear filtering
             batch.state.primitive.offset = Some(gfx::state::Offset(2.0, 2));
             batch
         },
@@ -461,7 +462,7 @@ pub fn main() {
             let (sender_orig, receiver) = mpsc::channel();
             let num = scene.lights.len();
             // run parallel threads
-            let threads: Vec<_> = (0..num).map(|_| {
+            let _threads: Vec<_> = (0..num).map(|_| {
                 // move the light into the thread scope
                 let mut light = scene.lights.swap_remove(0);
                 let entities = scene.entities.clone();
@@ -487,9 +488,8 @@ pub fn main() {
                     sender.send(light).unwrap();
                 })
             }).collect();
-            // wait for them
-            drop(threads);
-            // execute the results, obtain the lights back
+            // wait for the results and execute them
+            // put the lights back into the scene
             for _ in 0..num {
                 let mut light = receiver.recv().unwrap();
                 light.stream.flush(&mut device);
