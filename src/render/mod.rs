@@ -50,12 +50,20 @@ pub enum BlitError {
 }
 
 /// An error occuring in buffer/texture updates.
+#[allow(missing_docs)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum UpdateError<T> {
-    /// Target slice exceeds the allocated memory.
     OutOfBounds {
-        requested: T,
-        allocated: T,
+        target: T,
+        source: T,
+    },
+    UnitSizeMismatch {
+        target: u8,
+        source: u8,
+    },
+    UnitCountMismatch {
+        target: usize,
+        slice: usize,
     },
 }
 
@@ -279,8 +287,8 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
             Ok(())
         } else {
             Err(UpdateError::OutOfBounds {
-                requested: bound,
-                allocated: buf.get_info().size,
+                target: bound,
+                source: buf.get_info().size,
             })
         }
     }
@@ -297,8 +305,8 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
             Ok(())
         } else {
             Err(UpdateError::OutOfBounds {
-                requested: bound,
-                allocated: buf.get_info().size,
+                target: bound,
+                source: buf.get_info().size,
             })
         }
     }
@@ -311,26 +319,43 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         if data.is_empty() {
             return Ok(())
         }
-        if tex.get_info().
-        if tex.get_info().contains(&img) {
-            let pointer = self.data_buffer.add_vec(data);
-            self.command_buffer.update_texture(tex.get_info().kind,
-                self.handles.ref_texture(tex), img, pointer);
-            Ok(())
-        } else {
-            Err(UpdateError::OutOfBounds {
-                requested: [
+
+        let source_size = tex.get_info().format.get_size().unwrap_or(0);
+        let target_size = mem::size_of::<T>() as u8;
+        if source_size != target_size {
+            return Err(UpdateError::UnitSizeMismatch {
+                target: target_size,
+                source: source_size,
+            })
+        }
+
+        let target_count = img.get_texel_count();
+        if target_count != data.len() {
+            return Err(UpdateError::UnitCountMismatch {
+                target: target_count,
+                slice: data.len(),
+            })
+        }
+
+        if !tex.get_info().contains(&img) {
+            return Err(UpdateError::OutOfBounds {
+                target: [
                     img.xoffset + img.width,
                     img.yoffset + img.height,
                     img.zoffset + img.depth,
                 ],
-                allocated: [
+                source: [
                     tex.get_info().width,
                     tex.get_info().height,
                     tex.get_info().depth,
                 ],
             })
         }
+
+        let pointer = self.data_buffer.add_vec(data);
+        self.command_buffer.update_texture(tex.get_info().kind,
+            self.handles.ref_texture(tex), img, pointer);
+        Ok(())
     }
 
     fn bind_output<O: target::Output<R>>(&mut self, output: &O) {
