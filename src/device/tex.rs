@@ -116,6 +116,18 @@ pub enum Components {
     RGBA,
 }
 
+impl Components {
+    /// Get the number of components.
+    pub fn get_count(&self) -> u8 {
+        match *self {
+            Components::R    => 1,
+            Components::RG   => 2,
+            Components::RGB  => 3,
+            Components::RGBA => 4,
+        }
+    }
+}
+
 /// Codec used to compress image data.
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 #[allow(non_camel_case_types)]
@@ -252,6 +264,33 @@ impl Format {
             Format::Compressed(Compression::ETC2_SRGB) => true,
             _ => false,
         }
+    }
+
+    /// Get size of the texel in bytes.
+    pub fn get_size(&self) -> Option<u8> {
+        Some(match *self {
+            Format::Float(c, FloatSize::F16) => c.get_count() * 2,
+            Format::Float(c, FloatSize::F32) => c.get_count() * 4,
+            Format::Float(c, FloatSize::F64) => c.get_count() * 8,
+            Format::Integer(c, bits, _) => (c.get_count() * bits) >> 3,
+            Format::Unsigned(c, bits, _) => (c.get_count() * bits) >> 3,
+            Format::Compressed(_) => return None,
+            Format::R3_G3_B2 => 1,
+            Format::R5_G6_B5 => 2,
+            Format::RGB5_A1 => 2,
+            Format::RGB10_A2 => 4,
+            Format::RGB10_A2UI => 4,
+            Format::R11F_G11F_B10F => 4,
+            Format::RGB9_E5 => 4,
+            Format::BGRA8 => 4,
+            Format::SRGB8 => 4,
+            Format::SRGB8_A8 => 4,
+            Format::DEPTH16 => 2,
+            Format::DEPTH24 => 4,
+            Format::DEPTH32F => 4,
+            Format::DEPTH24_STENCIL8 => 4,
+            Format::DEPTH32F_STENCIL8 => 8,
+        })
     }
 }
 
@@ -465,6 +504,12 @@ impl TextureInfo {
 impl ImageInfo {
     /// Create a new `ImageInfo`, using default values.
     pub fn new() -> ImageInfo { Default::default() }
+    /// Get the total number of texels.
+    pub fn get_texel_count(&self) -> usize {
+        self.width as usize *
+        self.height as usize *
+        self.depth as usize
+    }
 }
 
 /// Specifies how texture coordinates outside the range `[0, 1]` are handled.
