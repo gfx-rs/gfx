@@ -464,32 +464,6 @@ impl TextureInfo {
         Default::default()
     }
 
-    /// Convert to a default ImageInfo that could be used
-    /// to update the contents of the whole texture.
-    pub fn to_image_info(&self) -> ImageInfo {
-        ImageInfo {
-            xoffset: 0,
-            yoffset: 0,
-            zoffset: 0,
-            width: self.width,
-            height: self.height,
-            depth: self.depth,
-            format: self.format,
-            mipmap: 0,
-        }
-    }
-
-    /// Convert to a `SurfaceInfo`, used as a common denominator between
-    /// surfaces and textures.
-    pub fn to_surface_info(&self) -> SurfaceInfo {
-        SurfaceInfo {
-            width: self.width,
-            height: self.height,
-            format: self.format,
-            aa_mode: self.kind.get_aa_mode(),
-        }
-    }
-
     /// Check if given ImageInfo is a part of the texture.
     pub fn contains(&self, img: &ImageInfo) -> bool {
         self.width <= img.xoffset + img.width &&
@@ -498,6 +472,32 @@ impl TextureInfo {
         self.format == img.format &&
         img.mipmap < self.levels &&
         self.kind.get_aa_mode().is_none()
+    }
+}
+
+impl From<TextureInfo> for ImageInfo {
+    fn from(ti: TextureInfo) -> ImageInfo {
+        ImageInfo {
+            xoffset: 0,
+            yoffset: 0,
+            zoffset: 0,
+            width: ti.width,
+            height: ti.height,
+            depth: ti.depth,
+            format: ti.format,
+            mipmap: 0,
+        }
+    }
+}
+
+impl From<TextureInfo> for SurfaceInfo {
+    fn from(ti: TextureInfo) -> SurfaceInfo {
+        SurfaceInfo {
+            width: ti.width,
+            height: ti.height,
+            format: ti.format,
+            aa_mode: ti.kind.get_aa_mode(),
+        }
     }
 }
 
