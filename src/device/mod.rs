@@ -244,7 +244,7 @@ pub trait Factory<R: Resources> {
     /// Create a new texture with given data
     fn create_texture_static<T>(&mut self, info: tex::TextureInfo, data: &[T])
                              -> Result<handle::Texture<R>, tex::TextureError> {
-        let image_info = info.to_image_info();
+        let image_info = info.into();
         match self.create_texture(info) {
             Ok(handle) => self.update_texture(&handle, &image_info, data, None)
                               .map(|_| handle),
