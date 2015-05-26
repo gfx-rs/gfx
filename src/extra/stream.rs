@@ -19,7 +19,7 @@
 use device::{Device, InstanceCount, Resources, VertexCount};
 use device::draw::CommandBuffer;
 use device::target::{ClearData, Mask, Mirror, Rect};
-use render::{DrawError, Renderer, RenderFactory};
+use render::{BlitError, DrawError, Renderer, RenderFactory};
 use render::batch::{Batch, Error};
 use render::target::Output;
 
@@ -59,17 +59,21 @@ pub trait Stream<R: Resources> {
     /// Blit on this stream from another `Output`.
     fn blit_on<I: Output<R>>(&mut self,
                source: &I, source_rect: Rect, dest_rect: Rect,
-               mirror: Mirror, mask: Mask) {
+               mirror: Mirror, mask: Mask)
+               -> Result<(), BlitError>
+    {
         let (ren, out) = self.access();
-        ren.blit(source, source_rect, out, dest_rect, mirror, mask);
+        ren.blit(source, source_rect, out, dest_rect, mirror, mask)
     }
 
     /// Blit this stream to another `Output`.
     fn blit_to<O: Output<R>>(&mut self,
                destination: &O, dest_rect: Rect, source_rect: Rect,
-               mirror: Mirror, mask: Mask) {
+               mirror: Mirror, mask: Mask)
+               -> Result<(), BlitError>
+    {
         let (ren, out) = self.access();
-        ren.blit(out, source_rect, destination, dest_rect, mirror, mask);
+        ren.blit(out, source_rect, destination, dest_rect, mirror, mask)
     }
 
     /// Draw a simple `Batch`.
