@@ -46,7 +46,7 @@ pub use device::{VertexCount, InstanceCount};
 pub use device::PrimitiveType;
 pub use device::draw::{CommandBuffer, Gamma, InstanceOption};
 pub use device::shade::{ProgramInfo, UniformValue};
-pub use render::{Renderer, DrawError};
+pub use render::{Renderer, BlitError, DrawError, UpdateError};
 pub use render::batch;
 pub use render::mesh::{Attribute, Mesh, VertexFormat};
 pub use render::mesh::Error as MeshError;
