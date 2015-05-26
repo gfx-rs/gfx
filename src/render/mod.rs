@@ -27,6 +27,7 @@ use device::attrib::IntSize;
 use device::draw::{Access, Gamma, Target};
 use device::draw::{CommandBuffer, DataBuffer, InstanceOption};
 use device::shade::{ProgramInfo, UniformValue};
+use device::tex::Size;
 use render::batch::{Batch, Error};
 use render::mesh::SliceKind;
 
@@ -38,6 +39,25 @@ pub mod mesh;
 pub mod shade;
 /// Render targets
 pub mod target;
+
+/// An error occuring in surface blits.
+#[derive(Clone, Debug, PartialEq)]
+pub enum BlitError {
+    /// The source doesn't have some of the requested planes.
+    SourcePlanesMissing(Mask),
+    /// The destination doesn't have some of the requested planes.
+    DestinationPlanesMissing(Mask),
+}
+
+/// An error occuring in buffer/texture updates.
+#[derive(Clone, Debug, PartialEq)]
+pub enum UpdateError<T> {
+    /// Target slice exceeds the allocated memory.
+    OutOfBounds {
+        requested: T,
+        allocated: T,
+    },
+}
 
 
 type CachedAttribute<R: Resources> = (handle::RawBuffer<R>, attrib::Format);
@@ -196,7 +216,8 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     /// Draw a 'batch' with all known parameters specified, internal use only.
     pub fn draw<B: Batch<R> + ?Sized, O: target::Output<R>>(&mut self, batch: &B,
                 instances: InstanceOption, output: &O)
-                -> Result<(), DrawError<Error>> {
+                -> Result<(), DrawError<B::Error>>
+    {
         let (mesh, attrib_iter, slice, state) = match batch.get_data() {
             Ok(data) => data,
             Err(e) => return Err(DrawError::InvalidBatch(e)),
@@ -223,43 +244,93 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     pub fn blit<I: target::Output<R>, O: target::Output<R>>(&mut self,
                 source: &I, source_rect: Rect,
                 destination: &O, dest_rect: Rect,
-                mirror: Mirror, mask: Mask) {
-        debug_assert!(source.get_mask().contains(mask));
-        debug_assert!(destination.get_mask().contains(mask));
+                mirror: Mirror, mask: Mask)
+                -> Result<(), BlitError>
+    {
+        if !source.get_mask().contains(mask) {
+            let missing = mask - source.get_mask();
+            return Err(BlitError::SourcePlanesMissing(missing))
+        }
+        if !destination.get_mask().contains(mask) {
+            let missing = mask - destination.get_mask();
+            return Err(BlitError::DestinationPlanesMissing(missing))
+        }
         self.bind_output(destination);
         self.bind_pixel_input(source);
         self.command_buffer.call_blit(source_rect, dest_rect, mirror, mask);
+        Ok(())
     }
 
     /// Update a buffer with a slice of data.
     pub fn update_buffer<T: Copy>(&mut self, buf: &handle::RawBuffer<R>,
-                         data: &[T], offset_elements: usize) {
+                         data: &[T], offset_elements: usize)
+                         -> Result<(), UpdateError<usize>>
+    {
         if data.is_empty() {
-            return
+            return Ok(())
         }
         let elem_size = mem::size_of::<T>();
         let offset_bytes = elem_size * offset_elements;
-        debug_assert!(data.len() * elem_size + offset_bytes <= buf.get_info().size);
-        let pointer = self.data_buffer.add_vec(data);
-        self.command_buffer.update_buffer(
-            self.handles.ref_buffer(buf), pointer, offset_bytes);
+        let bound = data.len() * elem_size + offset_bytes;
+        if bound <= buf.get_info().size {
+            let pointer = self.data_buffer.add_vec(data);
+            self.command_buffer.update_buffer(
+                self.handles.ref_buffer(buf), pointer, offset_bytes);
+            Ok(())
+        } else {
+            Err(UpdateError::OutOfBounds {
+                requested: bound,
+                allocated: buf.get_info().size,
+            })
+        }
     }
 
     /// Update a buffer with a data struct.
-    pub fn update_block<U, T: Copy>(&mut self, buf: &handle::Buffer<R, U>, data: &T) {
-        assert!(mem::size_of::<T>() <= buf.get_info().size);
-        let pointer = self.data_buffer.add_struct(data);
-        self.command_buffer.update_buffer(
-            self.handles.ref_buffer(buf.raw()), pointer, 0);
+    pub fn update_block<U, T: Copy>(&mut self, buf: &handle::Buffer<R, U>, data: &T)
+                        -> Result<(), UpdateError<usize>>
+    {
+        let bound = mem::size_of::<T>();
+        if bound <= buf.get_info().size {
+            let pointer = self.data_buffer.add_struct(data);
+            self.command_buffer.update_buffer(
+                self.handles.ref_buffer(buf.raw()), pointer, 0);
+            Ok(())
+        } else {
+            Err(UpdateError::OutOfBounds {
+                requested: bound,
+                allocated: buf.get_info().size,
+            })
+        }
     }
 
     /// Update the contents of a texture.
     pub fn update_texture<T: Copy>(&mut self, tex: &handle::Texture<R>,
-                          img: device::tex::ImageInfo, data: &[T]) {
-        debug_assert!(tex.get_info().contains(&img));
-        let pointer = self.data_buffer.add_vec(data);
-        self.command_buffer.update_texture(tex.get_info().kind,
-            self.handles.ref_texture(tex), img, pointer);
+                          img: device::tex::ImageInfo, data: &[T])
+                          -> Result<(), UpdateError<[Size; 3]>>
+    {
+        if data.is_empty() {
+            return Ok(())
+        }
+        if tex.get_info().
+        if tex.get_info().contains(&img) {
+            let pointer = self.data_buffer.add_vec(data);
+            self.command_buffer.update_texture(tex.get_info().kind,
+                self.handles.ref_texture(tex), img, pointer);
+            Ok(())
+        } else {
+            Err(UpdateError::OutOfBounds {
+                requested: [
+                    img.xoffset + img.width,
+                    img.yoffset + img.height,
+                    img.zoffset + img.depth,
+                ],
+                allocated: [
+                    tex.get_info().width,
+                    tex.get_info().height,
+                    tex.get_info().depth,
+                ],
+            })
+        }
     }
 
     fn bind_output<O: target::Output<R>>(&mut self, output: &O) {
