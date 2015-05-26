@@ -120,7 +120,7 @@ impl Components {
     /// Get the number of components.
     pub fn get_count(&self) -> u8 {
         match *self {
-            Components::R    => 1,
+            Components::R     => 1,
             Components::RG   => 2,
             Components::RGB  => 3,
             Components::RGBA => 4,
@@ -339,37 +339,6 @@ pub enum FilterMethod {
     Anisotropic(u8)
 }
 
-/// Specifies how a given texture may be used. The available texture types are
-/// restricted by what Metal exposes, though this could conceivably be
-/// extended in the future. Note that a single texture can *only* ever be of
-/// one kind. A texture created as `Texture2D` will forever be `Texture2D`.
-// TODO: "Texture views" let you get around that limitation.
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
-pub enum TextureKind {
-    /// A single row of texels.
-    Texture1D,
-    /// An array of rows of texels. Equivalent to Texture2D except that texels
-    /// in a different row are not sampled.
-    Texture1DArray,
-    /// A traditional 2D texture, with rows arranged contiguously.
-    Texture2D,
-    /// An array of 2D textures. Equivalent to Texture3D except that texels in
-    /// a different depth level are not sampled.
-    Texture2DArray,
-    /// A multi-sampled 2D texture. Each pixel may have more than one data value
-    /// (sample) associated with it.
-    Texture2DMultiSample(AaMode),
-    /// A array of multi-sampled 2D textures.
-    Texture2DMultiSampleArray(AaMode),
-    /// A set of 6 2D textures, one for each face of a cube.
-    ///
-    /// When creating a cube texture, the face is ignored, and storage for all 6 faces is created.
-    /// When updating, only the face specified is updated.
-    TextureCube(CubeFace),
-    /// A volume texture, with each 2D layer arranged contiguously.
-    Texture3D,
-}
-
 /// The face of a cube texture to do an operation on.
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 #[allow(missing_docs)]
@@ -382,12 +351,43 @@ pub enum CubeFace {
     NegY
 }
 
-impl TextureKind {
+/// Specifies how a given texture may be used. The available texture types are
+/// restricted by what Metal exposes, though this could conceivably be
+/// extended in the future. Note that a single texture can *only* ever be of
+/// one kind. A texture created as `Texture2D` will forever be `Texture2D`.
+// TODO: "Texture views" let you get around that limitation.
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+pub enum Kind {
+    /// A single row of texels.
+    D1,
+    /// An array of rows of texels. Equivalent to Texture2D except that texels
+    /// in a different row are not sampled.
+    D1Array,
+    /// A traditional 2D texture, with rows arranged contiguously.
+    D2,
+    /// An array of 2D textures. Equivalent to Texture3D except that texels in
+    /// a different depth level are not sampled.
+    D2Array,
+    /// A multi-sampled 2D texture. Each pixel may have more than one data value
+    /// (sample) associated with it.
+    D2MultiSample(AaMode),
+    /// A array of multi-sampled 2D textures.
+    D2MultiSampleArray(AaMode),
+    /// A set of 6 2D textures, one for each face of a cube.
+    ///
+    /// When creating a cube texture, the face is ignored, and storage for all 6 faces is created.
+    /// When updating, only the face specified is updated.
+    Cube(CubeFace),
+    /// A volume texture, with each 2D layer arranged contiguously.
+    D3,
+}
+
+impl Kind {
     /// Return the anti-aliasing mode of the texture
     pub fn get_aa_mode(&self) -> Option<AaMode> {
         match *self {
-            TextureKind::Texture2DMultiSample(aa) => Some(aa),
-            TextureKind::Texture2DMultiSampleArray(aa) => Some(aa),
+            Kind::D2MultiSample(aa) => Some(aa),
+            Kind::D2MultiSampleArray(aa) => Some(aa),
             _ => None,
         }
     }
@@ -410,7 +410,7 @@ pub struct TextureInfo {
     /// by the shader. width and height of each consecutive mipmap level is
     /// halved, starting from level 0.
     pub levels: u8,
-    pub kind: TextureKind,
+    pub kind: Kind,
     pub format: Format,
 }
 
@@ -452,7 +452,7 @@ impl Default for TextureInfo {
             height: 1,
             depth: 1,
             levels: !0,
-            kind: TextureKind::Texture2D,
+            kind: Kind::D2,
             format: RGBA8,
         }
     }
@@ -464,32 +464,6 @@ impl TextureInfo {
         Default::default()
     }
 
-    /// Convert to a default ImageInfo that could be used
-    /// to update the contents of the whole texture.
-    pub fn to_image_info(&self) -> ImageInfo {
-        ImageInfo {
-            xoffset: 0,
-            yoffset: 0,
-            zoffset: 0,
-            width: self.width,
-            height: self.height,
-            depth: self.depth,
-            format: self.format,
-            mipmap: 0,
-        }
-    }
-
-    /// Convert to a `SurfaceInfo`, used as a common denominator between
-    /// surfaces and textures.
-    pub fn to_surface_info(&self) -> SurfaceInfo {
-        SurfaceInfo {
-            width: self.width,
-            height: self.height,
-            format: self.format,
-            aa_mode: self.kind.get_aa_mode(),
-        }
-    }
-
     /// Check if given ImageInfo is a part of the texture.
     pub fn contains(&self, img: &ImageInfo) -> bool {
         self.width <= img.xoffset + img.width &&
@@ -498,6 +472,32 @@ impl TextureInfo {
         self.format == img.format &&
         img.mipmap < self.levels &&
         self.kind.get_aa_mode().is_none()
+    }
+}
+
+impl From<TextureInfo> for ImageInfo {
+    fn from(ti: TextureInfo) -> ImageInfo {
+        ImageInfo {
+            xoffset: 0,
+            yoffset: 0,
+            zoffset: 0,
+            width: ti.width,
+            height: ti.height,
+            depth: ti.depth,
+            format: ti.format,
+            mipmap: 0,
+        }
+    }
+}
+
+impl From<TextureInfo> for SurfaceInfo {
+    fn from(ti: TextureInfo) -> SurfaceInfo {
+        SurfaceInfo {
+            width: ti.width,
+            height: ti.height,
+            format: ti.format,
+            aa_mode: ti.kind.get_aa_mode(),
+        }
     }
 }
 

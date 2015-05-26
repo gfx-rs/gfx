@@ -231,11 +231,11 @@ pub trait Factory<R: Resources> {
     /// Update the information stored in a texture
     fn update_texture_raw(&mut self, tex: &handle::Texture<R>,
                           img: &tex::ImageInfo, data: &[u8],
-                          kind: Option<tex::TextureKind>) -> Result<(), tex::TextureError>;
+                          kind: Option<tex::Kind>) -> Result<(), tex::TextureError>;
 
     fn update_texture<T>(&mut self, tex: &handle::Texture<R>,
                          img: &tex::ImageInfo, data: &[T],
-                         kind: Option<tex::TextureKind>) -> Result<(), tex::TextureError> {
+                         kind: Option<tex::Kind>) -> Result<(), tex::TextureError> {
         self.update_texture_raw(tex, img, as_byte_slice(data), kind)
     }
 
@@ -244,7 +244,7 @@ pub trait Factory<R: Resources> {
     /// Create a new texture with given data
     fn create_texture_static<T>(&mut self, info: tex::TextureInfo, data: &[T])
                              -> Result<handle::Texture<R>, tex::TextureError> {
-        let image_info = info.to_image_info();
+        let image_info = info.into();
         match self.create_texture(info) {
             Ok(handle) => self.update_texture(&handle, &image_info, data, None)
                               .map(|_| handle),
