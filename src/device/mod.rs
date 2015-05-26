@@ -231,11 +231,11 @@ pub trait Factory<R: Resources> {
     /// Update the information stored in a texture
     fn update_texture_raw(&mut self, tex: &handle::Texture<R>,
                           img: &tex::ImageInfo, data: &[u8],
-                          kind: Option<tex::TextureKind>) -> Result<(), tex::TextureError>;
+                          kind: Option<tex::Kind>) -> Result<(), tex::TextureError>;
 
     fn update_texture<T>(&mut self, tex: &handle::Texture<R>,
                          img: &tex::ImageInfo, data: &[T],
-                         kind: Option<tex::TextureKind>) -> Result<(), tex::TextureError> {
+                         kind: Option<tex::Kind>) -> Result<(), tex::TextureError> {
         self.update_texture_raw(tex, img, as_byte_slice(data), kind)
     }
 
