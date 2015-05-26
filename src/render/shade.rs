@@ -123,7 +123,7 @@ impl<R: Resources> Parameter<R> for TextureParam<R> {
 pub trait ShaderParam {
     type Resources: Resources;
     /// A helper structure to contain variable indices inside the shader
-    type Link;
+    type Link: Clone;
     /// Create a new link to be used with a given program
     fn create_link(Option<&Self>, &shade::ProgramInfo) -> Result<Self::Link, ParameterError>;
     /// Get all the contained parameter values, using a given link
@@ -174,6 +174,7 @@ pub struct ParamDictionary<R: Resources> {
 }
 
 /// Redirects program input to the relevant ParamDictionary cell
+#[derive(Clone)]
 pub struct ParamDictionaryLink {
     uniforms: Vec<usize>,
     blocks: Vec<usize>,
