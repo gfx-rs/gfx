@@ -224,7 +224,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     /// Draw a 'batch' with all known parameters specified, internal use only.
     pub fn draw<B: Batch<R> + ?Sized, O: target::Output<R>>(&mut self, batch: &B,
                 instances: InstanceOption, output: &O)
-                -> Result<(), DrawError<B::Error>>
+                -> Result<(), DrawError<Error>>
     {
         let (mesh, attrib_iter, slice, state) = match batch.get_data() {
             Ok(data) => data,

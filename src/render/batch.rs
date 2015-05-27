@@ -16,7 +16,6 @@
 //! except for the target frame. Here we define the `Batch` trait as well as
 //! `RefBatch` and `OwnedBatch` implementations.
 
-use std::fmt;
 use draw_state::DrawState;
 
 use device::{Resources, PrimitiveType};
@@ -132,7 +131,7 @@ impl<T: ShaderParam> Full<T> {
 }
 
 impl<T: ShaderParam> Batch<T::Resources> for Full<T> {
-    fn get_data(&self) -> Result<BatchData<T::Resources>, ()> {
+    fn get_data(&self) -> Result<BatchData<T::Resources>, Error> {
         Ok((&self.mesh, self.mesh_link.to_iter(), &self.slice, &self.state))
     }
 
@@ -194,13 +193,13 @@ impl<T: ShaderParam> Core<T> {
 }
 
 impl<'a, T: ShaderParam + 'a> Batch<T::Resources> for Complete<'a, T> {
-    fn get_data(&self) -> Result<BatchData<T::Resources>, ()> {
+    fn get_data(&self) -> Result<BatchData<T::Resources>, Error> {
         let (b, slice, _, state) = *self;
         Ok((&b.mesh, b.mesh_link.to_iter(), slice, state))
     }
 
     fn fill_params(&self, values: &mut ParamStorage<T::Resources>)
-                   -> Result<&ProgramHandle<T::Resources>, ()> {
+                   -> Result<&ProgramHandle<T::Resources>, Error> {
         let (b, _, data, _) = *self;
         values.reserve(b.program.get_info());
         data.fill_params(&b.param_link, values);
