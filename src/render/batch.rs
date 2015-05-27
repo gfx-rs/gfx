@@ -98,7 +98,7 @@ pub struct Full<T: ShaderParam> {
     /// Mesh slice
     pub slice: mesh::Slice<T::Resources>,
     /// Parameter data.
-    pub param: T,
+    pub params: T,
     program: ProgramHandle<T::Resources>,
     param_link: T::Link,
     /// Draw state
@@ -107,14 +107,14 @@ pub struct Full<T: ShaderParam> {
 
 impl<T: ShaderParam> Full<T> {
     /// Create a new full batch
-    pub fn new(mesh: mesh::Mesh<T::Resources>, program: ProgramHandle<T::Resources>, param: T)
+    pub fn new(mesh: mesh::Mesh<T::Resources>, program: ProgramHandle<T::Resources>, params: T)
            -> Result<Full<T>, Error> {
         let slice = mesh.to_slice(PrimitiveType::TriangleList);
         let mesh_link = match mesh::Link::new(&mesh, program.get_info()) {
             Ok(l) => l,
             Err(e) => return Err(Error::Mesh(e)),
         };
-        let param_link = match ShaderParam::create_link(Some(&param), program.get_info()) {
+        let param_link = match ShaderParam::create_link(Some(&params), program.get_info()) {
             Ok(l) => l,
             Err(e) => return Err(Error::Parameters(e)),
         };
@@ -123,7 +123,7 @@ impl<T: ShaderParam> Full<T> {
             mesh_link: mesh_link,
             slice: slice,
             program: program,
-            param: param,
+            params: params,
             param_link: param_link,
             state: DrawState::new(),
         })
@@ -138,7 +138,7 @@ impl<T: ShaderParam> Batch<T::Resources> for Full<T> {
     fn fill_params(&self, values: &mut ParamStorage<T::Resources>)
                    -> Result<&ProgramHandle<T::Resources>, Error> {
         values.reserve(self.program.get_info());
-        self.param.fill_params(&self.param_link, values);
+        self.params.fill_params(&self.param_link, values);
         Ok(&self.program)
     }
 }

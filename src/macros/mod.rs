@@ -68,7 +68,7 @@ macro_rules! gfx_parameters {
 
         impl<R: $crate::Resources> $crate::shade::ShaderParam for $name<R> {
             type Resources = R;
-            type Link = ($(Option<$crate::shade::ParameterId>, ::std::marker::PhantomData<$ty>,)*);
+            type Link = ($((Option<$crate::shade::ParameterId>, ::std::marker::PhantomData<$ty>),)*);
 
             fn create_link(_: Option<&$name<R>>, info: &$crate::ProgramInfo)
                            -> Result<Self::Link, $crate::shade::ParameterError>
@@ -119,12 +119,12 @@ macro_rules! gfx_parameters {
                         _ => return Err($crate::shade::ParameterError::MissingBlock(t.name.clone()))
                     }
                 }
-                Ok(( $($field, ::std::marker::PhantomData,)* ))
+                Ok(( $(($field, ::std::marker::PhantomData),)* ))
             }
 
             fn fill_params(&self, link: &Self::Link, storage: &mut $crate::ParamStorage<R>) {
                 use $crate::shade::Parameter;
-                let &($($field, _,)*) = link;
+                let &($(($field, _),)*) = link;
                 $(
                     if let Some(id) = $field {
                         self.$field.put(id, storage);
