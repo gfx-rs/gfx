@@ -1,6 +1,6 @@
 [package]
 name = "gfx-examples"
-version = "0.2.0"
+version = "0.3.0"
 
 [[bin]]
 name = "cube"
@@ -33,33 +33,15 @@ path = "src/triangle/main.rs"
 [dependencies]
 env_logger = "*"
 log = "*"
+cgmath = "*"
 gfx_gl = "*"
+gfx = "*"
+gfx_window_glutin = "*"
+gfx_window_glfw = "*"
+glutin = "*"
+glfw = "*"
 rand = "*"
 time = "*"
 genmesh = "*"
 noise = "*"
 image = "*"
-
-[dependencies.cgmath]
-git = "https://github.com/bjz/cgmath-rs"
-version = "*"
-
-[dependencies.gfx]
-git = "https://github.com/gfx-rs/gfx-rs"
-version = "*"
-
-[dependencies.gfx_window_glutin]
-git = "https://github.com/gfx-rs/gfx_window_glutin"
-version = "*"
-
-[dependencies.gfx_window_glfw]
-git = "https://github.com/gfx-rs/gfx_window_glfw"
-version = "*"
-
-[dependencies.glutin]
-git = "https://github.com/tomaka/glutin"
-version = "*"
-
-[dependencies.glfw]
-git = "https://github.com/bjz/glfw-rs"
-version = "*"
