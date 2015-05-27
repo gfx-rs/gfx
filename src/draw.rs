@@ -34,7 +34,7 @@ pub enum Command {
     BindTargetTexture(Access, Target, Texture, Level, Option<Layer>),
     BindUniformBlock(Program, d::UniformBufferSlot, d::UniformBlockIndex, Buffer),
     BindUniform(d::shade::Location, d::shade::UniformValue),
-    BindTexture(d::TextureSlot, d::tex::TextureKind, Texture,
+    BindTexture(d::TextureSlot, d::tex::Kind, Texture,
                 Option<(Sampler, d::tex::SamplerInfo)>),
     SetDrawColorBuffers(usize),
     SetPrimitiveState(d::state::Primitive),
@@ -46,7 +46,7 @@ pub enum Command {
     SetBlendState(Option<d::state::Blend>),
     SetColorMask(d::state::ColorMask),
     UpdateBuffer(Buffer, d::draw::DataPointer, usize),
-    UpdateTexture(d::tex::TextureKind, Texture, d::tex::ImageInfo, d::draw::DataPointer),
+    UpdateTexture(d::tex::Kind, Texture, d::tex::ImageInfo, d::draw::DataPointer),
     // drawing
     Clear(ClearData, Mask),
     Draw(d::PrimitiveType, d::VertexCount, d::VertexCount, d::draw::InstanceOption),
@@ -118,7 +118,7 @@ impl d::draw::CommandBuffer<Resources> for CommandBuffer {
     fn bind_uniform(&mut self, loc: d::shade::Location, value: d::shade::UniformValue) {
         self.buf.push(Command::BindUniform(loc, value));
     }
-    fn bind_texture(&mut self, slot: d::TextureSlot, kind: d::tex::TextureKind,
+    fn bind_texture(&mut self, slot: d::TextureSlot, kind: d::tex::Kind,
                     tex: Texture, sampler: Option<(Sampler, d::tex::SamplerInfo)>) {
         self.buf.push(Command::BindTexture(slot, kind, tex, sampler));
     }
@@ -162,7 +162,7 @@ impl d::draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.push(Command::UpdateBuffer(buf, data, offset_bytes));
     }
 
-    fn update_texture(&mut self, kind: d::tex::TextureKind, tex: Texture,
+    fn update_texture(&mut self, kind: d::tex::Kind, tex: Texture,
                       info: d::tex::ImageInfo, data: d::draw::DataPointer) {
         self.buf.push(Command::UpdateTexture(kind, tex, info, data));
     }
