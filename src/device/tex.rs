@@ -524,15 +524,6 @@ pub enum WrapMode {
     Clamp,
 }
 
-/// Specified how the Comparison operator should be used when sampling
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
-pub enum ComparisonMode {
-    /// the default, don't use this feature.
-    NoComparison,
-    /// Compare Reference to Texture
-    CompareRefToTexture(state::Comparison)
-}
-
 /// Specifies how to sample from a texture.
 // TODO: document the details of sampling.
 #[derive(PartialEq, PartialOrd, Clone, Copy, Debug)]
@@ -549,7 +540,7 @@ pub struct SamplerInfo {
     /// This range is used to clamp LOD level used for sampling
     pub lod_range: (f32, f32),
     /// comparison mode, used primary for a shadow map
-    pub comparison: ComparisonMode
+    pub comparison: Option<state::Comparison>,
 }
 
 impl SamplerInfo {
@@ -561,7 +552,7 @@ impl SamplerInfo {
             wrap_mode: (wrap, wrap, wrap),
             lod_bias: 0.0,
             lod_range: (-1000.0, 1000.0),
-            comparison: ComparisonMode::NoComparison
+            comparison: None,
         }
     }
 }
