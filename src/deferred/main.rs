@@ -284,7 +284,7 @@ fn create_g_buffer<R: gfx::Resources, F: Factory<R>>(
         height: height,
         depth: 1,
         levels: 1,
-        kind: gfx::tex::TextureKind::Texture2D,
+        kind: gfx::tex::Kind::D2,
         format: gfx::tex::Format::Float(gfx::tex::Components::RGBA, gfx::attrib::FloatSize::F32),
     };
     let texture_info_depth = gfx::tex::TextureInfo {
@@ -292,7 +292,7 @@ fn create_g_buffer<R: gfx::Resources, F: Factory<R>>(
         height: height,
         depth: 1,
         levels: 1,
-        kind: gfx::tex::TextureKind::Texture2D,
+        kind: gfx::tex::Kind::D2,
         format: gfx::tex::Format::DEPTH24_STENCIL8,
     };
     let texture_pos     = factory.create_texture(texture_info_float).unwrap();
@@ -322,7 +322,7 @@ fn create_res_buffer<R: gfx::Resources, F: Factory<R>>(
         height: height,
         depth: 1,
         levels: 1,
-        kind: gfx::tex::TextureKind::Texture2D,
+        kind: gfx::tex::Kind::D2,
         format: gfx::tex::Format::Float(gfx::tex::Components::RGBA, gfx::attrib::FloatSize::F32),
     };
 
@@ -348,8 +348,6 @@ pub fn main() {
     );
 
     let (w, h) = output.get_size();
-    let mut context = gfx::batch::Context::new();
-
     let (g_buffer, texture_pos, texture_normal, texture_diffuse, texture_depth) = create_g_buffer(w, h, &mut factory);
     let (res_buffer, texture_frame, _) = create_res_buffer(w, h, &mut factory, &texture_depth);
 
@@ -401,8 +399,10 @@ pub fn main() {
             _r: PhantomData,
         };
 
-        context.make_batch(&program, data, &mesh, slice, &state)
-               .unwrap()
+        let mut batch = gfx::batch::Full::new(mesh, program, data).unwrap();
+        batch.slice = slice;
+        batch.state = state;
+        batch
     };
 
     let mut blit = {
@@ -426,8 +426,10 @@ pub fn main() {
             _r: PhantomData,
         };
 
-        context.make_batch(&program, data, &mesh, slice, &state)
-               .unwrap()
+        let mut batch = gfx::batch::Full::new(mesh, program, data).unwrap();
+        batch.slice = slice;
+        batch.state = state;
+        batch
     };
 
     let light_pos_buffer = factory.create_buffer_dynamic::<[f32; 4]>(NUM_LIGHTS,
@@ -497,8 +499,12 @@ pub fn main() {
 
         let light_program = factory.link_program(LIGHT_VERTEX_SRC, LIGHT_FRAGMENT_SRC)
                                    .unwrap();
-        let light = context.make_batch(&light_program, light_data, &mesh, slice.clone(), &state)
-                           .unwrap();
+        let light = {
+            let mut batch = gfx::batch::Full::new(mesh.clone(), light_program, light_data).unwrap();
+            batch.slice = slice.clone();
+            batch.state = state.clone();
+            batch
+        };
 
         let emitter_data = EmitterParams {
             transform: Matrix4::identity().into_fixed(),
@@ -509,8 +515,12 @@ pub fn main() {
 
         let emitter_program = factory.link_program(EMITTER_VERTEX_SRC, EMITTER_FRAGMENT_SRC)
                                      .unwrap();
-        let emitter = context.make_batch(&emitter_program, emitter_data, &mesh, slice, &state)
-                             .unwrap();
+        let emitter = {
+            let mut batch = gfx::batch::Full::new(mesh, emitter_program, emitter_data).unwrap();
+            batch.slice = slice;
+            batch.state = state;
+            batch
+        };
 
         (light, emitter)
     };
@@ -593,7 +603,7 @@ pub fn main() {
         {   // Render the terrain to the geometry buffer
             let mut stream = (&mut renderer, &g_buffer);
             stream.clear(clear_data);
-            stream.draw(&(&terrain, &context)).unwrap();
+            stream.draw(&terrain).unwrap();
         }
 
         let blit_tex = match debug_buf {
@@ -603,10 +613,10 @@ pub fn main() {
                 let mut stream = (&mut renderer, &res_buffer);
 
                 // Apply light
-                stream.draw_instanced(&(&light, &context), NUM_LIGHTS as u32, 0)
+                stream.draw_instanced(&light, NUM_LIGHTS as u32, 0)
                       .unwrap();
                 // Draw light emitters
-                stream.draw_instanced(&(&emitter, &context), NUM_LIGHTS as u32, 0)
+                stream.draw_instanced(&emitter, NUM_LIGHTS as u32, 0)
                       .unwrap();
 
                 &texture_frame
@@ -617,7 +627,7 @@ pub fn main() {
         {   // Show the result
             let mut stream = (&mut renderer, &output);
             stream.clear(clear_data);
-            stream.draw(&(&blit, &context)).unwrap();
+            stream.draw(&blit).unwrap();
             stream.flush(&mut device);
         }
 

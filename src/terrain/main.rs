@@ -129,7 +129,7 @@ pub fn main() {
             &Point3::new(0.0, 0.0, 0.0),
             &Vector3::unit_z(),
         );
-        batch.param.view = view.mat.into_fixed();
+        batch.params.view = view.mat.into_fixed();
 
         stream.clear(gfx::ClearData {
             color: [0.3, 0.3, 0.3, 1.0],
