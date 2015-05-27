@@ -17,9 +17,6 @@
 //! `RefBatch` and `OwnedBatch` implementations.
 
 use std::fmt;
-use std::cmp::Ordering;
-use std::marker::PhantomData;
-use std::ops::Deref;
 use draw_state::DrawState;
 
 use device::{Resources, PrimitiveType};
