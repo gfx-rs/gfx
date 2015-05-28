@@ -24,6 +24,7 @@ use std::ops::Deref;
 use std::mem;
 use std::fmt;
 use std::hash;
+use std::cmp;
 
 struct Inner<T> {
     refs: AtomicUsize,
@@ -46,6 +47,11 @@ impl<T:Send+Sync> Arc<T> {
         unsafe {
             Arc(mem::transmute(inner))
         }
+    }
+
+    /// Like Ord, but checks by ref vs value
+    pub fn cmp_ref(&self, rhs: &Arc<T>) -> cmp::Ordering {
+        (self.0 as usize).cmp(&(rhs.0 as usize))
     }
 }
 
