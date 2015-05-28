@@ -26,11 +26,8 @@ authors = ["The Gfx-rs Developers"]
 [lib]
 name = "gfx_device_gl"
 
-[dependencies.gfx]
-git = "https://github.com/gfx-rs/gfx-rs"
-version = "*"
-
 [dependencies]
 log = "*"
 libc = "*"
-gfx_gl = "*"
+gfx = "0.6.*"
+gfx_gl = "~0.1.4"

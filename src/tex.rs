@@ -24,27 +24,27 @@ use gfx::device::attrib::{FloatSize, IntSubType};
 #[derive(Copy, Clone)]
 pub struct BindAnchor(GLenum);
 
-fn create_kind_to_gl(kind: TextureKind) -> GLenum {
+fn create_kind_to_gl(kind: Kind) -> GLenum {
     match kind {
-        TextureKind::Texture1D => gl::TEXTURE_1D,
-        TextureKind::Texture1DArray => gl::TEXTURE_1D_ARRAY,
-        TextureKind::Texture2D => gl::TEXTURE_2D,
-        TextureKind::Texture2DArray => gl::TEXTURE_2D_ARRAY,
-        TextureKind::Texture2DMultiSample(_) => gl::TEXTURE_2D_MULTISAMPLE,
-        TextureKind::Texture2DMultiSampleArray(_) => gl::TEXTURE_2D_MULTISAMPLE_ARRAY,
-        TextureKind::TextureCube(CubeFace::PosZ) => gl::TEXTURE_CUBE_MAP_POSITIVE_Z,
-        TextureKind::TextureCube(CubeFace::NegZ) => gl::TEXTURE_CUBE_MAP_NEGATIVE_Z,
-        TextureKind::TextureCube(CubeFace::PosX) => gl::TEXTURE_CUBE_MAP_POSITIVE_X,
-        TextureKind::TextureCube(CubeFace::NegX) => gl::TEXTURE_CUBE_MAP_NEGATIVE_X,
-        TextureKind::TextureCube(CubeFace::PosY) => gl::TEXTURE_CUBE_MAP_POSITIVE_Y,
-        TextureKind::TextureCube(CubeFace::NegY) => gl::TEXTURE_CUBE_MAP_NEGATIVE_Y,
-        TextureKind::Texture3D => gl::TEXTURE_3D,
+        Kind::D1 => gl::TEXTURE_1D,
+        Kind::D1Array => gl::TEXTURE_1D_ARRAY,
+        Kind::D2 => gl::TEXTURE_2D,
+        Kind::D2Array => gl::TEXTURE_2D_ARRAY,
+        Kind::D2MultiSample(_) => gl::TEXTURE_2D_MULTISAMPLE,
+        Kind::D2MultiSampleArray(_) => gl::TEXTURE_2D_MULTISAMPLE_ARRAY,
+        Kind::Cube(CubeFace::PosZ) => gl::TEXTURE_CUBE_MAP_POSITIVE_Z,
+        Kind::Cube(CubeFace::NegZ) => gl::TEXTURE_CUBE_MAP_NEGATIVE_Z,
+        Kind::Cube(CubeFace::PosX) => gl::TEXTURE_CUBE_MAP_POSITIVE_X,
+        Kind::Cube(CubeFace::NegX) => gl::TEXTURE_CUBE_MAP_NEGATIVE_X,
+        Kind::Cube(CubeFace::PosY) => gl::TEXTURE_CUBE_MAP_POSITIVE_Y,
+        Kind::Cube(CubeFace::NegY) => gl::TEXTURE_CUBE_MAP_NEGATIVE_Y,
+        Kind::D3 => gl::TEXTURE_3D,
     }
 }
 
-fn bind_kind_to_gl(kind: TextureKind) -> GLenum {
+fn bind_kind_to_gl(kind: Kind) -> GLenum {
     match kind {
-        TextureKind::TextureCube(_) => gl::TEXTURE_CUBE_MAP,
+        Kind::Cube(_) => gl::TEXTURE_CUBE_MAP,
         other => create_kind_to_gl(other)
     }
 }
@@ -163,15 +163,6 @@ fn components_to_glpixel(c: Components) -> GLenum {
     }
 }
 
-fn components_to_count(c: Components) -> usize {
-    match c {
-        Components::R    => 1,
-        Components::RG   => 2,
-        Components::RGB  => 3,
-        Components::RGBA => 4,
-    }
-}
-
 fn format_to_glpixel(t: Format) -> GLenum {
     match t {
         Format::Float(c, _)       => components_to_glpixel(c),
@@ -232,35 +223,6 @@ fn format_to_gltype(t: Format) -> Result<GLenum, ()> {
         Format::DEPTH24_STENCIL8   => Ok(gl::UNSIGNED_INT_24_8),
         Format::DEPTH32F_STENCIL8  => Ok(gl::FLOAT_32_UNSIGNED_INT_24_8_REV),
         _ => Err(()),
-    }
-}
-
-fn format_to_size(t: Format) -> usize {
-    match t {
-        Format::Float(c, FloatSize::F16) => 2 * components_to_count(c),
-        Format::Float(c, FloatSize::F32) => 4 * components_to_count(c),
-        Format::Float(c, FloatSize::F64) => 8 * components_to_count(c),
-        Format::Integer(c, bits, _)  => bits as usize * components_to_count(c) >> 3,
-        Format::Unsigned(c, bits, _) => bits as usize * components_to_count(c) >> 3,
-        Format::Compressed(_) => {
-            error!("Tried to get size of a compressed texel!");
-            0
-        },
-        Format::R3_G3_B2          => 1,
-        Format::R5_G6_B5          => 2,
-        Format::RGB5_A1           => 2,
-        Format::RGB10_A2          => 4,
-        Format::RGB10_A2UI        => 4,
-        Format::R11F_G11F_B10F    => 4,
-        Format::RGB9_E5           => 4,
-        Format::BGRA8             => 4,
-        Format::SRGB8             => 3,
-        Format::SRGB8_A8          => 4,
-        Format::DEPTH16           => 2,
-        Format::DEPTH24           => 4, //TODO: verify
-        Format::DEPTH32F          => 4,
-        Format::DEPTH24_STENCIL8  => 4,
-        Format::DEPTH32F_STENCIL8 => 8, //TODO: verify
     }
 }
 
@@ -329,7 +291,7 @@ pub fn make_without_storage(gl: &gl::Gl, info: &TextureInfo) ->
     let fixed_sample_locations = gl::TRUE;
 
     match info.kind {
-        TextureKind::Texture1D => unsafe {
+        Kind::D1 => unsafe {
             gl.TexImage1D(
                 target,
                 0,
@@ -341,7 +303,7 @@ pub fn make_without_storage(gl: &gl::Gl, info: &TextureInfo) ->
                 ::std::ptr::null()
             );
         },
-        TextureKind::Texture1DArray => unsafe {
+        Kind::D1Array => unsafe {
             gl.TexImage2D(
                 target,
                 0,
@@ -354,7 +316,7 @@ pub fn make_without_storage(gl: &gl::Gl, info: &TextureInfo) ->
                 ::std::ptr::null()
             );
         },
-        TextureKind::Texture2D => unsafe {
+        Kind::D2 => unsafe {
             gl.TexImage2D(
                 target,
                 0,
@@ -367,7 +329,7 @@ pub fn make_without_storage(gl: &gl::Gl, info: &TextureInfo) ->
                 ::std::ptr::null()
             );
         },
-        TextureKind::Texture2DMultiSample(AaMode::Msaa(samples)) => { unsafe {
+        Kind::D2MultiSample(AaMode::Msaa(samples)) => unsafe {
             gl.TexImage2DMultisample(
                 target,
                 samples as GLsizei,
@@ -376,8 +338,8 @@ pub fn make_without_storage(gl: &gl::Gl, info: &TextureInfo) ->
                 info.height as GLsizei,
                 fixed_sample_locations
             );
-        }},
-        TextureKind::TextureCube(_) =>
+        },
+        Kind::Cube(_) => {
             for &target in [gl::TEXTURE_CUBE_MAP_POSITIVE_X, gl::TEXTURE_CUBE_MAP_NEGATIVE_X,
                     gl::TEXTURE_CUBE_MAP_POSITIVE_Y, gl::TEXTURE_CUBE_MAP_NEGATIVE_Y,
                     gl::TEXTURE_CUBE_MAP_POSITIVE_Z, gl::TEXTURE_CUBE_MAP_NEGATIVE_Z].iter() {
@@ -392,8 +354,9 @@ pub fn make_without_storage(gl: &gl::Gl, info: &TextureInfo) ->
                     typ,
                     ::std::ptr::null()
                 )};
-            },
-        TextureKind::Texture2DArray | TextureKind::Texture3D => unsafe {
+            }
+        },
+        Kind::D2Array | Kind::D3 => unsafe {
             gl.TexImage3D(
                 target,
                 0,
@@ -407,7 +370,7 @@ pub fn make_without_storage(gl: &gl::Gl, info: &TextureInfo) ->
                 ::std::ptr::null()
             );
         },
-        TextureKind::Texture2DMultiSampleArray(AaMode::Msaa(samples)) => { unsafe {
+        Kind::D2MultiSampleArray(AaMode::Msaa(samples)) => unsafe {
             gl.TexImage3DMultisample(
                 target,
                 samples as GLsizei,
@@ -417,7 +380,7 @@ pub fn make_without_storage(gl: &gl::Gl, info: &TextureInfo) ->
                 info.depth as GLsizei,
                 fixed_sample_locations
             );
-        }},
+        },
         _ => return Err(TextureError::UnsupportedSampling),
     }
 
@@ -458,15 +421,15 @@ pub fn make_with_storage(gl: &gl::Gl, info: &TextureInfo) ->
     let fixed_sample_locations = gl::TRUE;
 
     match info.kind {
-        TextureKind::Texture1D => { unsafe {
+        Kind::D1 => unsafe {
             gl.TexStorage1D(
                 target,
                 min(info.levels, mip_level1(info.width)),
                 fmt,
                 info.width as GLsizei
             );
-        }},
-        TextureKind::Texture1DArray => { unsafe {
+        },
+        Kind::D1Array => unsafe {
             gl.TexStorage2D(
                 target,
                 min(info.levels, mip_level1(info.width)),
@@ -474,12 +437,12 @@ pub fn make_with_storage(gl: &gl::Gl, info: &TextureInfo) ->
                 info.width as GLsizei,
                 info.height as GLsizei
             );
-        }},
-        TextureKind::Texture2D | TextureKind::TextureCube(_) => { unsafe {
+        },
+        Kind::D2 | Kind::Cube(_) => unsafe {
             gl.TexStorage2D(
                 // to create storage for a texture cube, we don't do individual faces
                 match info.kind {
-                    TextureKind::TextureCube(_) => gl::TEXTURE_CUBE_MAP,
+                    Kind::Cube(_) => gl::TEXTURE_CUBE_MAP,
                     _ => target
                 },
                 min(info.levels, mip_level2(info.width, info.height)),
@@ -487,8 +450,8 @@ pub fn make_with_storage(gl: &gl::Gl, info: &TextureInfo) ->
                 info.width as GLsizei,
                 info.height as GLsizei
             );
-        }},
-        TextureKind::Texture2DArray => { unsafe {
+        },
+        Kind::D2Array => unsafe {
             gl.TexStorage3D(
                 target,
                 min(info.levels, mip_level2(info.width, info.height)),
@@ -497,8 +460,8 @@ pub fn make_with_storage(gl: &gl::Gl, info: &TextureInfo) ->
                 info.height as GLsizei,
                 info.depth as GLsizei
             );
-        }},
-        TextureKind::Texture2DMultiSample(AaMode::Msaa(samples)) => { unsafe {
+        },
+        Kind::D2MultiSample(AaMode::Msaa(samples)) => unsafe {
             gl.TexStorage2DMultisample(
                 target,
                 samples as GLsizei,
@@ -507,8 +470,8 @@ pub fn make_with_storage(gl: &gl::Gl, info: &TextureInfo) ->
                 info.height as GLsizei,
                 fixed_sample_locations
             );
-        }},
-        TextureKind::Texture2DMultiSampleArray(AaMode::Msaa(samples)) => { unsafe {
+        },
+        Kind::D2MultiSampleArray(AaMode::Msaa(samples)) => unsafe {
             gl.TexStorage3DMultisample(
                 target,
                 samples as GLsizei,
@@ -518,8 +481,8 @@ pub fn make_with_storage(gl: &gl::Gl, info: &TextureInfo) ->
                 info.depth as GLsizei,
                 fixed_sample_locations
             );
-        }},
-        TextureKind::Texture3D => { unsafe {
+        },
+        Kind::D3 => unsafe {
             gl.TexStorage3D(
                 target,
                 min(info.levels, mip_level3(info.width, info.height, info.depth)),
@@ -528,7 +491,7 @@ pub fn make_with_storage(gl: &gl::Gl, info: &TextureInfo) ->
                 info.height as GLsizei,
                 info.depth as GLsizei
             );
-        }},
+        },
         _ => return Err(TextureError::UnsupportedSampling),
     }
 
@@ -538,7 +501,7 @@ pub fn make_with_storage(gl: &gl::Gl, info: &TextureInfo) ->
 }
 
 /// Bind a texture to the specified slot
-pub fn bind_texture(gl: &gl::Gl, slot: GLenum, kind: TextureKind,
+pub fn bind_texture(gl: &gl::Gl, slot: GLenum, kind: Kind,
                     name: Texture) -> BindAnchor {
     let target = bind_kind_to_gl(kind);
     unsafe {
@@ -575,21 +538,21 @@ pub fn bind_sampler(gl: &gl::Gl, anchor: BindAnchor, info: &SamplerInfo) { unsaf
     gl.TexParameterf(target, gl::TEXTURE_MAX_LOD, max);
 
     match info.comparison {
-        ComparisonMode::NoComparison => gl.TexParameteri(target, gl::TEXTURE_COMPARE_MODE, gl::NONE as GLint),
-        ComparisonMode::CompareRefToTexture(cmp) => {
+        None => gl.TexParameteri(target, gl::TEXTURE_COMPARE_MODE, gl::NONE as GLint),
+        Some(cmp) => {
             gl.TexParameteri(target, gl::TEXTURE_COMPARE_MODE, gl::COMPARE_REF_TO_TEXTURE as GLint);
             gl.TexParameteri(target, gl::TEXTURE_COMPARE_FUNC, state::map_comparison(cmp) as GLint);
         }
     }
 }}
 
-pub fn update_texture(gl: &gl::Gl, kind: TextureKind, name: Texture,
+pub fn update_texture(gl: &gl::Gl, kind: Kind, name: Texture,
                       img: &ImageInfo, address: *const u8, size: usize)
                       -> Result<(), TextureError> {
-    if !img.format.is_compressed() {
+    if let Some(fmt_size) = img.format.get_size() {
         // TODO: can we compute the expected size for compressed formats?
         let expected_size = img.width as usize * img.height as usize *
-                            img.depth as usize * format_to_size(img.format);
+                            img.depth as usize * fmt_size as usize;
         if size != expected_size {
             return Err(TextureError::IncorrectSize(expected_size));
         }
@@ -609,132 +572,128 @@ pub fn update_texture(gl: &gl::Gl, kind: TextureKind, name: Texture,
         return compressed_update(gl, kind, target, img, data, typ, size as GLint);
     }
 
-    unsafe {
-        match kind {
-            TextureKind::Texture1D => {
-                gl.TexSubImage1D(
-                    target,
-                    img.mipmap as GLint,
-                    img.xoffset as GLint,
-                    img.width as GLint,
-                    pix,
-                    typ,
-                    data
-                );
-            },
-            TextureKind::Texture1DArray | TextureKind::Texture2D => {
-                gl.TexSubImage2D(
-                    target,
-                    img.mipmap as GLint,
-                    img.xoffset as GLint,
-                    img.yoffset as GLint,
-                    img.width as GLint,
-                    img.height as GLint,
-                    pix,
-                    typ,
-                    data
-                );
-            },
-            TextureKind::TextureCube(_) => {
-                // get specific face target
-                let target = create_kind_to_gl(kind);
-                gl.TexSubImage2D(
-                    target,
-                    img.mipmap as GLint,
-                    img.xoffset as GLint,
-                    img.yoffset as GLint,
-                    img.width as GLint,
-                    img.height as GLint,
-                    pix,
-                    typ,
-                    data
-                );
-            },
-            TextureKind::Texture2DArray | TextureKind::Texture3D => {
-                gl.TexSubImage3D(
-                    target,
-                    img.mipmap as GLint,
-                    img.xoffset as GLint,
-                    img.yoffset as GLint,
-                    img.zoffset as GLint,
-                    img.width as GLint,
-                    img.height as GLint,
-                    img.depth as GLint,
-                    pix,
-                    typ,
-                    data
-                );
-            },
-            TextureKind::Texture2DMultiSample(_) | TextureKind::Texture2DMultiSampleArray(_) =>
-                return Err(TextureError::UnsupportedSampling),
-        }
+    match kind {
+        Kind::D1 => unsafe {
+            gl.TexSubImage1D(
+                target,
+                img.mipmap as GLint,
+                img.xoffset as GLint,
+                img.width as GLint,
+                pix,
+                typ,
+                data
+            );
+        },
+        Kind::D1Array | Kind::D2 => unsafe {
+            gl.TexSubImage2D(
+                target,
+                img.mipmap as GLint,
+                img.xoffset as GLint,
+                img.yoffset as GLint,
+                img.width as GLint,
+                img.height as GLint,
+                pix,
+                typ,
+                data
+            );
+        },
+        Kind::Cube(_) => unsafe {
+            // get specific face target
+            let target = create_kind_to_gl(kind);
+            gl.TexSubImage2D(
+                target,
+                img.mipmap as GLint,
+                img.xoffset as GLint,
+                img.yoffset as GLint,
+                img.width as GLint,
+                img.height as GLint,
+                pix,
+                typ,
+                data
+            );
+        },
+        Kind::D2Array | Kind::D3 => unsafe {
+            gl.TexSubImage3D(
+                target,
+                img.mipmap as GLint,
+                img.xoffset as GLint,
+                img.yoffset as GLint,
+                img.zoffset as GLint,
+                img.width as GLint,
+                img.height as GLint,
+                img.depth as GLint,
+                pix,
+                typ,
+                data
+            );
+        },
+        Kind::D2MultiSample(_) | Kind::D2MultiSampleArray(_) =>
+            return Err(TextureError::UnsupportedSampling),
     }
 
     Ok(())
 }
 
-pub fn compressed_update(gl: &gl::Gl, kind: TextureKind, target: GLenum, img: &ImageInfo,
+pub fn compressed_update(gl: &gl::Gl, kind: Kind, target: GLenum, img: &ImageInfo,
                          data: *const GLvoid, typ: GLenum, size: GLint)
                          -> Result<(), TextureError> {
-    unsafe {
-        match kind {
-            TextureKind::Texture1D => {
-                gl.CompressedTexSubImage1D(
-                    target,
-                    img.mipmap as GLint,
-                    img.xoffset as GLint,
-                    img.width as GLint,
-                    typ,
-                    size as GLint,
-                    data
-                );
-            },
-            TextureKind::Texture1DArray | TextureKind::Texture2D => {
-                gl.CompressedTexSubImage2D(
-                    target,
-                    img.mipmap as GLint,
-                    img.xoffset as GLint,
-                    img.yoffset as GLint,
-                    img.width as GLint,
-                    img.height as GLint,
-                    typ,
-                    size as GLint,
-                    data
-                );
-            },
-            TextureKind::TextureCube(_) => {
-                // get specific face target
-                let target = create_kind_to_gl(kind);
-                gl.CompressedTexSubImage2D(
-                    target,
-                    img.mipmap as GLint,
-                    img.xoffset as GLint,
-                    img.yoffset as GLint,
-                    img.width as GLint,
-                    img.height as GLint,
-                    typ,
-                    size as GLint,
-                    data
-                );
-            },
-            TextureKind::Texture2DArray | TextureKind::Texture3D => {
-                gl.CompressedTexSubImage3D(
-                    target,
-                    img.mipmap as GLint,
-                    img.xoffset as GLint,
-                    img.yoffset as GLint,
-                    img.zoffset as GLint,
-                    img.width as GLint,
-                    img.height as GLint,
-                    img.depth as GLint,
-                    typ,
-                    size as GLint,
-                    data
-                );
-            },
-            TextureKind::Texture2DMultiSample(_) | TextureKind::Texture2DMultiSampleArray(_) =>
-                return Err(TextureError::UnsupportedSampling),
-        }
+    match kind {
+        Kind::D1 => unsafe {
+            gl.CompressedTexSubImage1D(
+                target,
+                img.mipmap as GLint,
+                img.xoffset as GLint,
+                img.width as GLint,
+                typ,
+                size as GLint,
+                data
+            );
+        },
+        Kind::D1Array | Kind::D2 => unsafe {
+            gl.CompressedTexSubImage2D(
+                target,
+                img.mipmap as GLint,
+                img.xoffset as GLint,
+                img.yoffset as GLint,
+                img.width as GLint,
+                img.height as GLint,
+                typ,
+                size as GLint,
+                data
+            );
+        },
+        Kind::Cube(_) => unsafe {
+            // get specific face target
+            let target = create_kind_to_gl(kind);
+            gl.CompressedTexSubImage2D(
+                target,
+                img.mipmap as GLint,
+                img.xoffset as GLint,
+                img.yoffset as GLint,
+                img.width as GLint,
+                img.height as GLint,
+                typ,
+                size as GLint,
+                data
+            );
+        },
+        Kind::D2Array | Kind::D3 => unsafe {
+            gl.CompressedTexSubImage3D(
+                target,
+                img.mipmap as GLint,
+                img.xoffset as GLint,
+                img.yoffset as GLint,
+                img.zoffset as GLint,
+                img.width as GLint,
+                img.height as GLint,
+                img.depth as GLint,
+                typ,
+                size as GLint,
+                data
+            );
+        },
+        Kind::D2MultiSample(_) | Kind::D2MultiSampleArray(_) =>
+            return Err(TextureError::UnsupportedSampling),
     }
 
     Ok(())
@@ -796,8 +755,8 @@ pub fn make_sampler(gl: &gl::Gl, info: &SamplerInfo) -> Sampler { unsafe {
     gl.SamplerParameterf(name, gl::TEXTURE_MAX_LOD, max);
 
     match info.comparison {
-        ComparisonMode::NoComparison => gl.SamplerParameteri(name, gl::TEXTURE_COMPARE_MODE, gl::NONE as GLint),
-        ComparisonMode::CompareRefToTexture(cmp) => {
+        None => gl.SamplerParameteri(name, gl::TEXTURE_COMPARE_MODE, gl::NONE as GLint),
+        Some(cmp) => {
             gl.SamplerParameteri(name, gl::TEXTURE_COMPARE_MODE, gl::COMPARE_REF_TO_TEXTURE as GLint);
             gl.SamplerParameteri(name, gl::TEXTURE_COMPARE_FUNC, state::map_comparison(cmp) as GLint);
         }
@@ -806,7 +765,7 @@ pub fn make_sampler(gl: &gl::Gl, info: &SamplerInfo) -> Sampler { unsafe {
     name
 }}
 
-pub fn generate_mipmap(gl: &gl::Gl, kind: TextureKind, name: Texture) { unsafe {
+pub fn generate_mipmap(gl: &gl::Gl, kind: Kind, name: Texture) { unsafe {
     //can't fail here, but we need to check for integer formats too
     debug_assert!(kind.get_aa_mode().is_none());
     let target = bind_kind_to_gl(kind);

@@ -79,6 +79,15 @@ pub struct Factory {
     frame_handles: handle::Manager<R>,
 }
 
+impl Clone for Factory {
+    fn clone(&self) -> Factory {
+        Factory {
+            share: self.share.clone(),
+            frame_handles: handle::Manager::new(),
+        }
+    }
+}
+
 impl Factory {
     /// Create a new `Factory`.
     pub fn new(share: Rc<Share>) -> Factory {
@@ -281,12 +290,12 @@ impl d::Factory<R> for Factory {
 
     fn update_texture_raw(&mut self, texture: &handle::Texture<R>,
                           img: &d::tex::ImageInfo, data: &[u8],
-                          optkind: Option<d::tex::TextureKind>)
+                          kind_override: Option<d::tex::Kind>)
                           -> Result<(), d::tex::TextureError> {
 
         // use the specified texture kind if set for this update, otherwise
         // fall back on the kind that was set when the texture was created.
-        let kind = optkind.unwrap_or(texture.get_info().kind);
+        let kind = kind_override.unwrap_or(texture.get_info().kind);
 
         tex::update_texture(&self.share.context, kind,
                             self.frame_handles.ref_texture(texture),
