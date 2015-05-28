@@ -84,8 +84,7 @@ pub fn init(window: glutin::Window) -> Success {
     use gfx::traits::StreamFactory;
     unsafe { window.make_current() };
     let format = window.get_pixel_format();
-    let device = gfx_device_gl::Device::new(|s| window.get_proc_address(s));
-    let mut factory = device.spawn_factory();
+    let (device, mut factory) = gfx_device_gl::create(|s| window.get_proc_address(s));
     let out = Output {
         window: window,
         frame: factory.get_main_frame_buffer(),
