@@ -26,6 +26,6 @@ authors = ["The Gfx-rs Developers"]
 name = "gfx_window_glfw"
 
 [dependencies]
-gfx = ">=0.5.0,<0.7.0"
+gfx = "0.6.*"
 gfx_device_gl = ">=0.3.1"
 glfw = ">=0.0.8"
