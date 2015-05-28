@@ -29,5 +29,5 @@ name = "gfx_device_gl"
 [dependencies]
 log = "*"
 libc = "*"
-gfx = ">=0.5.0,<0.7.0"
+gfx = "0.6.*"
 gfx_gl = "~0.1.4"

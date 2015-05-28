@@ -142,8 +142,18 @@ fn target_to_gl(target: Target) -> gl::types::GLenum {
     }
 }
 
+/// Create a new device with a factory.
+pub fn create<F>(fn_proc: F) -> (Device, Factory) where
+    F: FnMut(&str) -> *const ::libc::c_void
+{
+    let device = Device::new(fn_proc);
+    let factory = Factory::new(device.share.clone());
+    (device, factory)
+}
+
 
 /// Internal struct of shared data between the device and its factories.
+#[doc(hidden)]
 pub struct Share {
     context: gl::Gl,
     capabilities: d::Capabilities,
@@ -162,7 +172,7 @@ pub struct Device {
 impl Device {
     /// Create a new device. There can be only one!
     /// Also, load OpenGL symbols and detect driver information.
-    pub fn new<F>(fn_proc: F) -> Device where
+    fn new<F>(fn_proc: F) -> Device where
         F: FnMut(&str) -> *const ::libc::c_void
     {
         use gfx::device::handle::Producer;
@@ -195,11 +205,6 @@ impl Device {
             frame_handles: handle::Manager::new(),
             max_resource_count: Some(999999),
         }
-    }
-
-    /// Spawn a new factory.
-    pub fn spawn_factory(&self) -> Factory {
-        Factory::new(self.share.clone())
     }
 
     /// Access the OpenGL directly via a closure. OpenGL types and enumerations

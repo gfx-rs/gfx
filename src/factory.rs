@@ -79,6 +79,15 @@ pub struct Factory {
     frame_handles: handle::Manager<R>,
 }
 
+impl Clone for Factory {
+    fn clone(&self) -> Factory {
+        Factory {
+            share: self.share.clone(),
+            frame_handles: handle::Manager::new(),
+        }
+    }
+}
+
 impl Factory {
     /// Create a new `Factory`.
     pub fn new(share: Rc<Share>) -> Factory {
