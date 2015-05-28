@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx"
-version = "0.5.2"
+version = "0.6.0"
 description = "A high-performance, bindless graphics API"
 homepage = "https://github.com/gfx-rs/gfx-rs"
 repository = "https://github.com/gfx-rs/gfx-rs"
@@ -26,11 +26,8 @@ authors = ["The Gfx-rs Developers"]
 name = "gfx"
 path = "src/lib.rs"
 
-[dependencies.draw_state]
-git = "https://github.com/gfx-rs/draw_state"
-version = "*"
-
 [dependencies]
+draw_state = "0.0.*"
 bitflags = "*"
 log = "*"
 num = "*"

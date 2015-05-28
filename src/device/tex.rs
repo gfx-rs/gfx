@@ -116,6 +116,18 @@ pub enum Components {
     RGBA,
 }
 
+impl Components {
+    /// Get the number of components.
+    pub fn get_count(&self) -> u8 {
+        match *self {
+            Components::R     => 1,
+            Components::RG   => 2,
+            Components::RGB  => 3,
+            Components::RGBA => 4,
+        }
+    }
+}
+
 /// Codec used to compress image data.
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 #[allow(non_camel_case_types)]
@@ -253,6 +265,33 @@ impl Format {
             _ => false,
         }
     }
+
+    /// Get size of the texel in bytes.
+    pub fn get_size(&self) -> Option<u8> {
+        Some(match *self {
+            Format::Float(c, FloatSize::F16) => c.get_count() * 2,
+            Format::Float(c, FloatSize::F32) => c.get_count() * 4,
+            Format::Float(c, FloatSize::F64) => c.get_count() * 8,
+            Format::Integer(c, bits, _) => (c.get_count() * bits) >> 3,
+            Format::Unsigned(c, bits, _) => (c.get_count() * bits) >> 3,
+            Format::Compressed(_) => return None,
+            Format::R3_G3_B2 => 1,
+            Format::R5_G6_B5 => 2,
+            Format::RGB5_A1 => 2,
+            Format::RGB10_A2 => 4,
+            Format::RGB10_A2UI => 4,
+            Format::R11F_G11F_B10F => 4,
+            Format::RGB9_E5 => 4,
+            Format::BGRA8 => 4,
+            Format::SRGB8 => 4,
+            Format::SRGB8_A8 => 4,
+            Format::DEPTH16 => 2,
+            Format::DEPTH24 => 4,
+            Format::DEPTH32F => 4,
+            Format::DEPTH24_STENCIL8 => 4,
+            Format::DEPTH32F_STENCIL8 => 8,
+        })
+    }
 }
 
 /// A single R-component 8-bit normalized format.
@@ -300,37 +339,6 @@ pub enum FilterMethod {
     Anisotropic(u8)
 }
 
-/// Specifies how a given texture may be used. The available texture types are
-/// restricted by what Metal exposes, though this could conceivably be
-/// extended in the future. Note that a single texture can *only* ever be of
-/// one kind. A texture created as `Texture2D` will forever be `Texture2D`.
-// TODO: "Texture views" let you get around that limitation.
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
-pub enum TextureKind {
-    /// A single row of texels.
-    Texture1D,
-    /// An array of rows of texels. Equivalent to Texture2D except that texels
-    /// in a different row are not sampled.
-    Texture1DArray,
-    /// A traditional 2D texture, with rows arranged contiguously.
-    Texture2D,
-    /// An array of 2D textures. Equivalent to Texture3D except that texels in
-    /// a different depth level are not sampled.
-    Texture2DArray,
-    /// A multi-sampled 2D texture. Each pixel may have more than one data value
-    /// (sample) associated with it.
-    Texture2DMultiSample(AaMode),
-    /// A array of multi-sampled 2D textures.
-    Texture2DMultiSampleArray(AaMode),
-    /// A set of 6 2D textures, one for each face of a cube.
-    ///
-    /// When creating a cube texture, the face is ignored, and storage for all 6 faces is created.
-    /// When updating, only the face specified is updated.
-    TextureCube(CubeFace),
-    /// A volume texture, with each 2D layer arranged contiguously.
-    Texture3D,
-}
-
 /// The face of a cube texture to do an operation on.
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 #[allow(missing_docs)]
@@ -343,12 +351,43 @@ pub enum CubeFace {
     NegY
 }
 
-impl TextureKind {
+/// Specifies how a given texture may be used. The available texture types are
+/// restricted by what Metal exposes, though this could conceivably be
+/// extended in the future. Note that a single texture can *only* ever be of
+/// one kind. A texture created as `Texture2D` will forever be `Texture2D`.
+// TODO: "Texture views" let you get around that limitation.
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+pub enum Kind {
+    /// A single row of texels.
+    D1,
+    /// An array of rows of texels. Equivalent to Texture2D except that texels
+    /// in a different row are not sampled.
+    D1Array,
+    /// A traditional 2D texture, with rows arranged contiguously.
+    D2,
+    /// An array of 2D textures. Equivalent to Texture3D except that texels in
+    /// a different depth level are not sampled.
+    D2Array,
+    /// A multi-sampled 2D texture. Each pixel may have more than one data value
+    /// (sample) associated with it.
+    D2MultiSample(AaMode),
+    /// A array of multi-sampled 2D textures.
+    D2MultiSampleArray(AaMode),
+    /// A set of 6 2D textures, one for each face of a cube.
+    ///
+    /// When creating a cube texture, the face is ignored, and storage for all 6 faces is created.
+    /// When updating, only the face specified is updated.
+    Cube(CubeFace),
+    /// A volume texture, with each 2D layer arranged contiguously.
+    D3,
+}
+
+impl Kind {
     /// Return the anti-aliasing mode of the texture
     pub fn get_aa_mode(&self) -> Option<AaMode> {
         match *self {
-            TextureKind::Texture2DMultiSample(aa) => Some(aa),
-            TextureKind::Texture2DMultiSampleArray(aa) => Some(aa),
+            Kind::D2MultiSample(aa) => Some(aa),
+            Kind::D2MultiSampleArray(aa) => Some(aa),
             _ => None,
         }
     }
@@ -371,7 +410,7 @@ pub struct TextureInfo {
     /// by the shader. width and height of each consecutive mipmap level is
     /// halved, starting from level 0.
     pub levels: u8,
-    pub kind: TextureKind,
+    pub kind: Kind,
     pub format: Format,
 }
 
@@ -413,7 +452,7 @@ impl Default for TextureInfo {
             height: 1,
             depth: 1,
             levels: !0,
-            kind: TextureKind::Texture2D,
+            kind: Kind::D2,
             format: RGBA8,
         }
     }
@@ -423,32 +462,6 @@ impl TextureInfo {
     /// Create a new empty texture info.
     pub fn new() -> TextureInfo {
         Default::default()
-    }
-
-    /// Convert to a default ImageInfo that could be used
-    /// to update the contents of the whole texture.
-    pub fn to_image_info(&self) -> ImageInfo {
-        ImageInfo {
-            xoffset: 0,
-            yoffset: 0,
-            zoffset: 0,
-            width: self.width,
-            height: self.height,
-            depth: self.depth,
-            format: self.format,
-            mipmap: 0,
-        }
-    }
-
-    /// Convert to a `SurfaceInfo`, used as a common denominator between
-    /// surfaces and textures.
-    pub fn to_surface_info(&self) -> SurfaceInfo {
-        SurfaceInfo {
-            width: self.width,
-            height: self.height,
-            format: self.format,
-            aa_mode: self.kind.get_aa_mode(),
-        }
     }
 
     /// Check if given ImageInfo is a part of the texture.
@@ -462,9 +475,41 @@ impl TextureInfo {
     }
 }
 
+impl From<TextureInfo> for ImageInfo {
+    fn from(ti: TextureInfo) -> ImageInfo {
+        ImageInfo {
+            xoffset: 0,
+            yoffset: 0,
+            zoffset: 0,
+            width: ti.width,
+            height: ti.height,
+            depth: ti.depth,
+            format: ti.format,
+            mipmap: 0,
+        }
+    }
+}
+
+impl From<TextureInfo> for SurfaceInfo {
+    fn from(ti: TextureInfo) -> SurfaceInfo {
+        SurfaceInfo {
+            width: ti.width,
+            height: ti.height,
+            format: ti.format,
+            aa_mode: ti.kind.get_aa_mode(),
+        }
+    }
+}
+
 impl ImageInfo {
     /// Create a new `ImageInfo`, using default values.
     pub fn new() -> ImageInfo { Default::default() }
+    /// Get the total number of texels.
+    pub fn get_texel_count(&self) -> usize {
+        self.width as usize *
+        self.height as usize *
+        self.depth as usize
+    }
 }
 
 /// Specifies how texture coordinates outside the range `[0, 1]` are handled.
@@ -477,15 +522,6 @@ pub enum WrapMode {
     Mirror,
     /// Clamp the texture to the value at `0.0` or `1.0` respectively.
     Clamp,
-}
-
-/// Specified how the Comparison operator should be used when sampling
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
-pub enum ComparisonMode {
-    /// the default, don't use this feature.
-    NoComparison,
-    /// Compare Reference to Texture
-    CompareRefToTexture(state::Comparison)
 }
 
 /// Specifies how to sample from a texture.
@@ -504,7 +540,7 @@ pub struct SamplerInfo {
     /// This range is used to clamp LOD level used for sampling
     pub lod_range: (f32, f32),
     /// comparison mode, used primary for a shadow map
-    pub comparison: ComparisonMode
+    pub comparison: Option<state::Comparison>,
 }
 
 impl SamplerInfo {
@@ -516,7 +552,7 @@ impl SamplerInfo {
             wrap_mode: (wrap, wrap, wrap),
             lod_bias: 0.0,
             lod_range: (-1000.0, 1000.0),
-            comparison: ComparisonMode::NoComparison
+            comparison: None,
         }
     }
 }

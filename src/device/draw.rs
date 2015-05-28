@@ -125,7 +125,7 @@ pub trait CommandBuffer<R: Resources> {
     /// Bind a single uniform in the default block
     fn bind_uniform(&mut self, shade::Location, shade::UniformValue);
     /// Bind a texture
-    fn bind_texture(&mut self, super::TextureSlot, tex::TextureKind,
+    fn bind_texture(&mut self, super::TextureSlot, tex::Kind,
                     R::Texture, Option<(R::Sampler, tex::SamplerInfo)>);
     /// Select, which color buffers are going to be targetted by the shader
     fn set_draw_color_buffers(&mut self, usize);
@@ -147,7 +147,7 @@ pub trait CommandBuffer<R: Resources> {
     /// Update a vertex/index/uniform buffer
     fn update_buffer(&mut self, R::Buffer, DataPointer, usize);
     /// Update a texture region
-    fn update_texture(&mut self, tex::TextureKind, R::Texture,
+    fn update_texture(&mut self, tex::Kind, R::Texture,
                       tex::ImageInfo, DataPointer);
     /// Clear target surfaces
     fn call_clear(&mut self, target::ClearData, target::Mask);

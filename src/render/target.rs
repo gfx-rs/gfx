@@ -36,7 +36,7 @@ impl<R: Resources> Plane<R> {
     pub fn get_surface_info(&self) -> device::tex::SurfaceInfo {
         match *self {
             Plane::Surface(ref suf) => *suf.get_info(),
-            Plane::Texture(ref tex, _, _) => tex.get_info().to_surface_info(),
+            Plane::Texture(ref tex, _, _) => (*tex.get_info()).into(),
         }
     }
 
