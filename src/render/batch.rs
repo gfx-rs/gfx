@@ -190,6 +190,16 @@ impl<T: ShaderParam> Core<T> {
                 -> Complete<'a, T> {
         (self, slice, params, state)
     }
+
+    /// Read the ProgramHandle
+    pub fn program(&self) -> &ProgramHandle<T::Resources> {
+        &self.program
+    }
+
+    /// Read the Mesh
+    pub fn mesh(&self) -> &mesh::Mesh<T::Resources> {
+        &self.mesh
+    }
 }
 
 impl<'a, T: ShaderParam + 'a> Batch<T::Resources> for Complete<'a, T> {
