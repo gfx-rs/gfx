@@ -26,7 +26,7 @@ use rand::Rng;
 use cgmath::FixedArray;
 use cgmath::{Matrix4, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
-use gfx::traits::{Device, Stream, ToIndexSlice, ToSlice, FactoryExt};
+use gfx::traits::{Stream, ToIndexSlice, ToSlice, FactoryExt};
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
 use time::precise_time_s;
@@ -97,8 +97,6 @@ pub fn main() {
         factory.link_program_source(vs, fs).unwrap()
     };
 
-    let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
-
     let data = Params {
         model: Matrix4::identity().into_fixed(),
         view: Matrix4::identity().into_fixed(),
@@ -108,9 +106,10 @@ pub fn main() {
                                   ).into_fixed(),
         _r: std::marker::PhantomData,
     };
-    let mut context = gfx::batch::Context::new();
-    let mut batch = context.make_batch(&program, data, &mesh, slice, &state)
-                           .unwrap();
+    let mut batch = gfx::batch::Full::new(mesh, program, data)
+                                     .unwrap();
+    batch.slice = slice;
+    batch.state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
     'main: loop {
         // quit when Esc is pressed.
@@ -137,7 +136,7 @@ pub fn main() {
             depth: 1.0,
             stencil: 0,
         });
-        stream.draw(&(&batch, &context)).unwrap();
+        stream.draw(&batch).unwrap();
         stream.present(&mut device);
     }
 }

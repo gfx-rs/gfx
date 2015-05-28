@@ -152,8 +152,8 @@ struct Light<S> {
 struct Entity<R: gfx::Resources> {
     dynamic: bool,
     mx_to_world: cgmath::Matrix4<f32>,
-    batch_shadow: gfx::batch::OwnedBatch<ShadowParams<R>>,
-    batch_forward: gfx::batch::OwnedBatch<ForwardParams<R>>,
+    batch_shadow: gfx::batch::Full<ShadowParams<R>>,
+    batch_forward: gfx::batch::Full<ForwardParams<R>>,
 }
 
 struct Scene<R: gfx::Resources, S> {
@@ -186,7 +186,7 @@ fn make_entity<R: gfx::Resources>(dynamic: bool, mesh: &gfx::Mesh<R>, slice: &gf
                 shadow: shadow.clone(),
                 _r: std::marker::PhantomData,
             };
-            let mut batch = gfx::batch::OwnedBatch::new(
+            let mut batch = gfx::batch::Full::new(
                 mesh.clone(), prog_fw.clone(), data).unwrap();
             batch.slice = slice.clone();
             // forward pass is using depth test + write
@@ -198,7 +198,7 @@ fn make_entity<R: gfx::Resources>(dynamic: bool, mesh: &gfx::Mesh<R>, slice: &gf
                 transform: cgmath::Matrix4::identity().into_fixed(),
                 _r: std::marker::PhantomData,
             };
-            let mut batch = gfx::batch::OwnedBatch::new(
+            let mut batch = gfx::batch::Full::new(
                 mesh.clone(), prog_sh.clone(), data).unwrap();
             batch.slice = slice.clone();
             // shadow pass is also depth testing and writing
@@ -233,7 +233,7 @@ fn create_scene<D, F>(_: &D, factory: &mut F)
         height: 512,
         depth: MAX_LIGHTS as gfx::tex::Size,
         levels: 1,
-        kind: gfx::tex::TextureKind::Texture2DArray,
+        kind: gfx::tex::Kind::D2Array,
         format: gfx::tex::Format::DEPTH24,
     }).unwrap();
 
@@ -302,9 +302,7 @@ fn create_scene<D, F>(_: &D, factory: &mut F)
             gfx::tex::FilterMethod::Bilinear,
             gfx::tex::WrapMode::Clamp
         );
-        sinfo.comparison = gfx::tex::ComparisonMode::CompareRefToTexture(
-            gfx::state::Comparison::LessEqual
-        );
+        sinfo.comparison = Some(gfx::state::Comparison::LessEqual);
         let sampler = factory.create_sampler(sinfo);
         (shadow_array.clone(), Some(sampler))
     };
@@ -477,7 +475,7 @@ pub fn main() {
                     // fill
                     for ent in entities.read().unwrap().iter() {
                         let mut batch = ent.batch_shadow.clone();
-                        batch.param.transform = {
+                        batch.params.transform = {
                             let mx_proj: cgmath::Matrix4<_> = light.projection.into();
                             let mx_view = mx_proj.mul_m(&light.mx_view);
                             let mvp = mx_view.mul_m(&ent.mx_to_world);
@@ -506,7 +504,7 @@ pub fn main() {
                 // fill
                 for ent in scene.entities.read().unwrap().iter() {
                     let mut batch = ent.batch_shadow.clone();
-                    batch.param.transform = {
+                    batch.params.transform = {
                         let mx_proj: cgmath::Matrix4<_> = light.projection.into();
                         let mx_view = mx_proj.mul_m(&light.mx_view);
                         let mvp = mx_view.mul_m(&ent.mx_to_world);
@@ -535,8 +533,8 @@ pub fn main() {
 
         for ent in scene.entities.write().unwrap().iter_mut() {
             let batch = &mut ent.batch_forward;
-            batch.param.transform = mx_vp.mul_m(&ent.mx_to_world).into_fixed();
-            batch.param.model_transform = ent.mx_to_world.into_fixed();
+            batch.params.transform = mx_vp.mul_m(&ent.mx_to_world).into_fixed();
+            batch.params.model_transform = ent.mx_to_world.into_fixed();
             stream.draw(batch).unwrap();
         }
 

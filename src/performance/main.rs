@@ -73,7 +73,6 @@ fn gfx_main(mut glfw: glfw::Glfw,
             events: Receiver<(f64, glfw::WindowEvent)>,
             dimension: i16) {
     let (mut stream, mut device, mut factory) = gfx_window_glfw::init(window);
-    let mut context = gfx::batch::Context::new();
     let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
     let vertex_data = [
@@ -94,8 +93,7 @@ fn gfx_main(mut glfw: glfw::Glfw,
     let aspect = stream.get_aspect_ratio();
     let proj = cgmath::perspective(cgmath::deg(45.0f32), aspect, 1.0, 10.0);
 
-    let batch: gfx::batch::CoreBatch<Params<_>> = 
-        context.make_core(&program, &mesh, &state).unwrap();
+    let batch = gfx::batch::Core::new(mesh, program).unwrap();;
 
     while !stream.out.window.should_close() {
         glfw.poll_events();
@@ -127,7 +125,8 @@ fn gfx_main(mut glfw: glfw::Glfw,
                                    .mul_m(&model).into_fixed(),
                     _r: std::marker::PhantomData,
                 };
-                stream.draw(&context.bind(&batch, &slice, &data)).unwrap();
+                stream.draw(&batch.with(&slice, &data, &state))
+                      .unwrap();
             }
         }
 

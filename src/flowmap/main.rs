@@ -20,7 +20,7 @@ extern crate glutin;
 extern crate image;
 
 use std::io::Cursor;
-use gfx::traits::{Device, Factory, Stream, FactoryExt};
+use gfx::traits::{Factory, Stream, FactoryExt};
 
 gfx_vertex!( Vertex {
     a_Pos@ pos: [f32; 2],
@@ -58,7 +58,7 @@ fn load_texture<R, F>(factory: &mut F, data: &[u8]) -> Result<gfx::handle::Textu
         height: height as u16,
         depth: 1,
         levels: 1,
-        kind: gfx::tex::TextureKind::Texture2D,
+        kind: gfx::tex::Kind::D2,
         format: gfx::tex::RGBA8
     };
 
@@ -110,7 +110,7 @@ pub fn main() {
         offset1: 0.5f32,
         _r: std::marker::PhantomData,
     };
-    let mut batch = gfx::batch::OwnedBatch::new(mesh, program, uniforms).unwrap();
+    let mut batch = gfx::batch::Full::new(mesh, program, uniforms).unwrap();
 
     let mut cycle0 = 0.0f32;
     let mut cycle1 = 0.5f32;
@@ -140,8 +140,8 @@ pub fn main() {
             cycle1 -= 1f32;
         }
 
-        batch.param.offset0 = cycle0;
-        batch.param.offset1 = cycle1;
+        batch.params.offset0 = cycle0;
+        batch.params.offset1 = cycle1;
 
         stream.clear(gfx::ClearData {
             color: [0.3, 0.3, 0.3, 1.0],

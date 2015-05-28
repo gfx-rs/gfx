@@ -22,7 +22,7 @@ use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
 use gfx::attrib::Floater;
-use gfx::traits::{Device, Factory, Stream, ToIndexSlice, ToSlice, FactoryExt};
+use gfx::traits::{Factory, Stream, ToIndexSlice, ToSlice, FactoryExt};
 
 // Declare the vertex format suitable for drawing.
 // Notice the use of FixedPoint.
@@ -106,7 +106,7 @@ pub fn main() {
 
     let texture = factory.create_texture_rgba8(1, 1).unwrap();
     factory.update_texture(
-        &texture, &texture.get_info().to_image_info(),
+        &texture, &(*texture.get_info()).into(),
         &[0x20u8, 0xA0u8, 0xC0u8, 0x00u8],
         None).unwrap();
 
@@ -143,7 +143,7 @@ pub fn main() {
         _r: std::marker::PhantomData,
     };
 
-    let mut batch = gfx::batch::OwnedBatch::new(mesh, program, data).unwrap();
+    let mut batch = gfx::batch::Full::new(mesh, program, data).unwrap();
     batch.slice = index_data.to_slice(&mut factory, gfx::PrimitiveType::TriangleList);
     batch.state = batch.state.depth(gfx::state::Comparison::LessEqual, true);
 

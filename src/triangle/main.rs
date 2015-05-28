@@ -17,7 +17,7 @@ extern crate gfx;
 extern crate gfx_window_glutin;
 extern crate glutin;
 
-use gfx::traits::{Device, Stream, ToIndexSlice, ToSlice, FactoryExt};
+use gfx::traits::{Stream, ToIndexSlice, ToSlice, FactoryExt};
 
 gfx_vertex!( Vertex {
     a_Pos@ pos: [f32; 2],
