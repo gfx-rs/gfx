@@ -107,6 +107,16 @@ impl<R: Resources> Parameter<R> for handle::RawBuffer<R> {
     }
 }
 
+impl<R: Resources, T> Parameter<R> for handle::Buffer<R, T> {
+    fn check_block(_var: &shade::BlockVar) -> bool {
+        true
+    }
+
+    fn put(&self, id: ParameterId, storage: &mut ParamStorage<R>) {
+        storage.blocks[id as usize] = Some(self.raw().clone());
+    }
+}
+
 impl<R: Resources> Parameter<R> for TextureParam<R> {
     fn check_texture(_var: &shade::SamplerVar) -> bool {
         true
