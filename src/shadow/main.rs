@@ -42,7 +42,7 @@ impl Vertex {
 const MAX_LIGHTS: usize = 10;
 
 #[derive(Clone, Copy, Debug)]
-struct LightParam {
+pub struct LightParam {
     pos: [f32; 4],
     color: [f32; 4],
     proj: [[f32; 4]; 4],
@@ -53,7 +53,7 @@ gfx_parameters!( ForwardParams {
     u_ModelTransform@ model_transform: [[f32; 4]; 4],
     u_Color@ color: [f32; 4],
     u_NumLights@ num_lights: i32,
-    b_Lights@ light_buf: gfx::handle::RawBuffer<R>,
+    b_Lights@ light_buf: gfx::handle::Buffer<R, LightParam>,
     t_Shadow@ shadow: gfx::shade::TextureParam<R>,
 });
 
@@ -182,7 +182,7 @@ fn make_entity<R: gfx::Resources>(dynamic: bool, mesh: &gfx::Mesh<R>, slice: &gf
                 model_transform: cgmath::Matrix4::identity().into_fixed(),
                 color: [1.0, 1.0, 1.0, 1.0],
                 num_lights: num_lights as i32,
-                light_buf: light_buf.raw().clone(),
+                light_buf: light_buf.clone(),
                 shadow: shadow.clone(),
                 _r: std::marker::PhantomData,
             };
