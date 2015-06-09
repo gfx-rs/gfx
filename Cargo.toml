@@ -3,6 +3,10 @@ name = "gfx-examples"
 version = "0.3.0"
 
 [[bin]]
+name = "blend"
+path = "src/blend/main.rs"
+
+[[bin]]
 name = "cube"
 path = "src/cube/main.rs"
 
