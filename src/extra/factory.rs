@@ -118,6 +118,14 @@ pub trait FactoryExt<R: device::Resources>: device::Factory<R> {
             format: tex::Format::DEPTH24_STENCIL8,
         })
     }
+
+    /// Create a linear sampler with clamping to border.
+    fn create_sampler_linear(&mut self) -> handle::Sampler<R> {
+        self.create_sampler(tex::SamplerInfo::new(
+            tex::FilterMethod::Trilinear,
+            tex::WrapMode::Clamp,
+        ))
+    }
 }
 
 impl<R: device::Resources, F: device::Factory<R>> FactoryExt<R> for F {}
