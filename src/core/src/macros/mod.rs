@@ -134,21 +134,3 @@ macro_rules! gfx_parameters {
         }
     }
 }
-
-#[cfg(test)]
-gfx_vertex!(_Foo {
-    x@ _x: i8,
-    y@ _y: f32,
-    z@ _z: [u32; 4],
-});
-
-#[cfg(test)]
-gfx_parameters!(_Bar {
-    x@ _x: i32,
-    y@ _y: [f32; 4],
-    b@ _b: ::handle::RawBuffer<R>,
-    t@ _t: ::shade::TextureParam<R>,
-});
-
-#[test]
-fn test() {}
