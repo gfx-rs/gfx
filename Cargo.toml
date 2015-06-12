@@ -7,6 +7,10 @@ keywords = ["graphics", "gamedev"]
 license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
 
+[features]
+unstable = []
+
+
 [lib]
 name = "gfx_meta"
 
@@ -65,6 +69,7 @@ log = "*"
 cgmath = "*"
 glutin = "*"
 glfw = "*"
+gfx_gl = "*"
 rand = "*"
 time = "*"
 genmesh = "*"
