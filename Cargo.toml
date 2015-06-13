@@ -13,3 +13,7 @@ name = "gfx_meta"
 [dependencies.gfx]
 path = "src/core"
 version = "0.6"
+
+[dependencies.gfx_device_gl]
+path = "src/backend/gl"
+version = "0.4"

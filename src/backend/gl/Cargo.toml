@@ -16,9 +16,8 @@
 
 name = "gfx_device_gl"
 version = "0.4.0"
-description = "OpenGL device for gfx-rs"
-homepage = "https://github.com/gfx-rs/gfx_device_gl"
-repository = "https://github.com/gfx-rs/gfx_device_gl"
+description = "OpenGL backend for gfx-rs"
+repository = "https://github.com/gfx-rs/gfx"
 keywords = ["graphics", "gamedev"]
 license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
@@ -29,5 +28,8 @@ name = "gfx_device_gl"
 [dependencies]
 log = "*"
 libc = "*"
-gfx = "0.6.*"
-gfx_gl = "~0.1.4"
+gfx_gl = "0.1"
+
+[dependencies.gfx]
+path = "../../core"
+version = "0.6"
