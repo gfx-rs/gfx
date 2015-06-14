@@ -16,8 +16,7 @@
 name = "gfx_window_glutin"
 version = "0.2.0"
 description = "Glutin window for gfx-rs"
-homepage = "https://github.com/gfx-rs/gfx_window_glutin"
-repository = "https://github.com/gfx-rs/gfx_window_glutin"
+repository = "https://github.com/gfx-rs/gfx"
 keywords = ["graphics", "gamedev"]
 license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
@@ -25,7 +24,13 @@ authors = ["The Gfx-rs Developers"]
 [lib]
 name = "gfx_window_glutin"
 
+[dependencies.gfx]
+path = "../../core"
+version = "0.6"
+
+[dependencies.gfx_device_gl]
+path = "../../backend/gl"
+version = ">=0.3.1"
+
 [dependencies]
-gfx = "0.6.*"
-gfx_device_gl = ">=0.3.1"
-glutin = "0.1.*"
+glutin = "0.1"
