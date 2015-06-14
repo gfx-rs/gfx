@@ -19,9 +19,7 @@
 [![Build Status](https://travis-ci.org/gfx-rs/gfx-rs.png?branch=master)](https://travis-ci.org/gfx-rs/gfx-rs)
 [![Gitter Chat](https://badges.gitter.im/gfx-rs/gfx-rs.png)](https://gitter.im/gfx-rs/gfx-rs)
 [![Stories in Ready](https://badge.waffle.io/gfx-rs/gfx-rs.png?label=S-ready&title=issues)](https://waffle.io/gfx-rs/gfx-rs)
-
-[Documentation](http://rust-ci.org/gfx-rs/gfx-rs/doc/gfx/index.html) is hosted
-on [`rust-ci`](http://rust-ci.org/).
+[Documentation](http://gfx-rs.github.io/gfx-rs/gfx/index.html)
 
 `gfx-rs` is a high-performance, bindless graphics API for the Rust
 programming language. It aims to be the default API for Rust graphics: for
@@ -65,30 +63,21 @@ one-off applications, or higher level libraries or engines.
 
 - window and input management
 - mathematics and transformations
-- lighting and shadows
-- visibility determination
+- procedural content generation ([genmesh](http://github.com/gfx-rs/genmesh))
+- lighting and shadows ([gfx_pipeline](http:://github.com/kvark/gfx_pipeline))
+- visibility determination ([gfx_scene](http:://github.com/gfx-rs/gfx_scene))
 - draw call reordering
 - de-serializing of scene data formats
 - abstractions for platform-specific shaders
-- material abstractions
+- material abstractions ([gfx_pipeline](http:://github.com/kvark/gfx_pipeline))
 
 ## Getting started
 
-Add the following to your `Cargo.toml`:
+Use gfx [package](https://crates.io/crates/gfx) from `crates.io`.
 
-~~~toml
-[dependencies.gfx]
-git = "http://github.com/gfx-rs/gfx-rs"
-~~~
-
-See the [triangle example](https://github.com/gfx-rs/gfx_examples/tree/master/src/triangle) for a typical context
+See the [triangle example](examples/triangle) for a typical context
 initialization with [glutin](https://github.com/tomaka/glutin/), or
-[cube example](https://github.com/gfx-rs/gfx_examples/tree/master/src/cube) for [glfw](https://github.com/bjz/glfw-rs/).
+[cube example](examples/cube) for [glfw](https://github.com/bjz/glfw-rs/).
 
-## Note
-
-gfx-rs is still in the early stages of development. Help is most appreciated.
-
-If you are interested in helping out, you can contact the developers on
-[Gitter](https://gitter.im/gfx-rs/gfx-rs). See [contrib.md](wiki/contrib.md) for
-contact information and contribution guidelines.
+If you are interested in helping out, or just need to talk to someone,
+please contact the developers on [Gitter](https://gitter.im/gfx-rs/gfx-rs).

@@ -1,36 +1,77 @@
-# Copyright 2014 The Gfx-rs Developers.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 [package]
-name = "gfx"
-version = "0.6.4"
-description = "A high-performance, bindless graphics API"
-homepage = "https://github.com/gfx-rs/gfx-rs"
-repository = "https://github.com/gfx-rs/gfx-rs"
+name = "gfx_meta"
+version = "0.0.1"
+description = "Meta package for GFX"
+homepage = "https://github.com/gfx-rs/gfx"
 keywords = ["graphics", "gamedev"]
 license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
 
-[lib]
-name = "gfx"
-path = "src/lib.rs"
-
-[dependencies]
-draw_state = "0.1.0"
-bitflags = "*"
-log = "*"
-num = "*"
-
 [features]
 unstable = []
+
+
+[lib]
+name = "gfx_meta"
+
+[dependencies.gfx]
+path = "src/core"
+version = "0.6"
+
+[dependencies.gfx_device_gl]
+path = "src/backend/gl"
+version = "0.4"
+
+[dependencies.gfx_window_glutin]
+path = "src/window/glutin"
+version = "0.2"
+
+[dependencies.gfx_window_glfw]
+path = "src/window/glfw"
+version = "0.2"
+
+
+[[example]]
+name = "blend"
+path = "examples/blend/main.rs"
+
+[[example]]
+name = "cube"
+path = "examples/cube/main.rs"
+
+[[example]]
+name = "deferred"
+path = "examples/deferred/main.rs"
+
+[[example]]
+name = "flowmap"
+path = "examples/flowmap/main.rs"
+
+[[example]]
+name = "performance"
+path = "examples/performance/main.rs"
+
+[[example]]
+name = "shadow"
+path = "examples/shadow/main.rs"
+
+[[example]]
+name = "terrain"
+path = "examples/terrain/main.rs"
+
+[[example]]
+name = "triangle"
+path = "examples/triangle/main.rs"
+
+[dev_dependencies]
+env_logger = "*"
+log = "*"
+cgmath = "*"
+glutin = "0.1"
+glfw = ">=0.0.8"
+gfx_gl = "0.1"
+rand = "*"
+time = "*"
+genmesh = "*"
+noise = "*"
+image = "*"
