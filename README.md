@@ -64,12 +64,12 @@ one-off applications, or higher level libraries or engines.
 - window and input management
 - mathematics and transformations
 - procedural content generation ([genmesh](http://github.com/gfx-rs/genmesh))
-- lighting and shadows ([gfx_pipeline](http:://github.com/kvark/gfx_pipeline))
-- visibility determination ([gfx_scene](http:://github.com/gfx-rs/gfx_scene))
+- lighting and shadows ([gfx_pipeline](http://github.com/kvark/gfx_pipeline))
+- visibility determination ([gfx_scene](http://github.com/gfx-rs/gfx_scene))
 - draw call reordering
 - de-serializing of scene data formats
 - abstractions for platform-specific shaders
-- material abstractions ([gfx_pipeline](http:://github.com/kvark/gfx_pipeline))
+- material abstractions ([gfx_pipeline](http://github.com/kvark/gfx_pipeline))
 
 ## Getting started
 
