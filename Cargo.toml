@@ -7,6 +7,10 @@ keywords = ["graphics", "gamedev"]
 license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
 
+[features]
+unstable = []
+
+
 [lib]
 name = "gfx_meta"
 
@@ -25,3 +29,49 @@ version = "0.2"
 [dependencies.gfx_window_glfw]
 path = "src/window/glfw"
 version = "0.2"
+
+
+[[example]]
+name = "blend"
+path = "examples/blend/main.rs"
+
+[[example]]
+name = "cube"
+path = "examples/cube/main.rs"
+
+[[example]]
+name = "deferred"
+path = "examples/deferred/main.rs"
+
+[[example]]
+name = "flowmap"
+path = "examples/flowmap/main.rs"
+
+[[example]]
+name = "performance"
+path = "examples/performance/main.rs"
+
+[[example]]
+name = "shadow"
+path = "examples/shadow/main.rs"
+
+[[example]]
+name = "terrain"
+path = "examples/terrain/main.rs"
+
+[[example]]
+name = "triangle"
+path = "examples/triangle/main.rs"
+
+[dev_dependencies]
+env_logger = "*"
+log = "*"
+cgmath = "*"
+glutin = "0.1"
+glfw = ">=0.0.8"
+gfx_gl = "0.1"
+rand = "*"
+time = "*"
+genmesh = "*"
+noise = "*"
+image = "*"
