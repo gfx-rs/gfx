@@ -631,7 +631,7 @@ pub fn main() {
             stream.flush(&mut device);
         }
 
-        output.window.swap_buffers();
+        output.window.swap_buffers().unwrap();
         device.cleanup();
     }
 }
