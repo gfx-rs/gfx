@@ -33,4 +33,4 @@ path = "../../backend/gl"
 version = ">=0.3.1"
 
 [dependencies]
-glutin = "0.1"
+glutin = "0.2"
