@@ -24,7 +24,7 @@ version = "0.4"
 
 [dependencies.gfx_window_glutin]
 path = "src/window/glutin"
-version = "0.2"
+version = "0.3"
 
 [dependencies.gfx_window_glfw]
 path = "src/window/glfw"
