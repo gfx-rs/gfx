@@ -165,31 +165,9 @@ impl CommandBuffer<DummyResources> for DummyCommandBuffer {
 }
 
 impl DummyDevice {
-    fn new() -> DummyDevice {
+    fn new(capabilities: Capabilities) -> DummyDevice {
         DummyDevice {
-            capabilities: Capabilities {
-                shader_model: shade::ShaderModel::Unsupported,
-
-                max_vertex_count: 0,
-                max_index_count: 0,
-                max_draw_buffers: 0,
-                max_texture_size: 0,
-                max_vertex_attributes: 0,
-
-                buffer_role_change_allowed: false,
-
-                array_buffer_supported: false,
-                fragment_output_supported: false,
-                immutable_storage_supported: false,
-                instance_base_supported: false,
-                instance_call_supported: false,
-                instance_rate_supported: false,
-                render_targets_supported: false,
-                sampler_objects_supported: false,
-                srgb_color_supported: false,
-                uniform_block_supported: false,
-                vertex_base_supported: false,
-            }
+            capabilities: capabilities
         }
     }
 }
