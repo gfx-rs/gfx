@@ -28,6 +28,7 @@ pub mod handle;
 pub mod mapping;
 pub mod shade;
 pub mod tex;
+pub mod dummy;
 mod arc;
 
 /// Draw vertex count.
