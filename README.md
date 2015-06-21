@@ -17,15 +17,17 @@
   <img src="info/logo.png">
 </p>
 <p align="center">
-  <a href="https://travis-ci.org/gfx-rs/gfx-rs">
+  <a href="https://travis-ci.org/gfx-rs/gfx">
       <img src="https://img.shields.io/travis/gfx-rs/gfx/master.svg?style=flat-square" alt="Build Status">
   </a>
   <a href="https://crates.io/crates/gfx">
       <img src="http://meritbadge.herokuapp.com/gfx?style=flat-square" alt="crates.io">
   </a>
-  <img src="https://img.shields.io/badge/GITTER-join%20chat-green.svg?style=flat-square" alt="Gitter Chat">
+  <a href="https://gitter.im/gfx-rs/gfx">
+    <img src="https://img.shields.io/badge/GITTER-join%20chat-green.svg?style=flat-square" alt="Gitter Chat">
+  </a>
   <br>
-  <strong><a href="http://rust-ci.org/gfx-rs/gfx/doc/gfx/index.html">Documentation</a> | <a href="http://gfx-rs.github.io/">Blog</a> </strong>
+  <strong><a href="http://gfx-rs.github.io/gfx/gfx/index.html">Documentation</a> | <a href="http://gfx-rs.github.io/">Blog</a> </strong>
 </p>
 
 ## gfx-rs
