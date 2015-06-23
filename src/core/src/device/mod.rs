@@ -23,6 +23,7 @@ pub use draw_state::target;
 pub use draw_state::state;
 
 pub mod attrib;
+pub mod command;
 pub mod draw;
 pub mod dummy;
 pub mod handle;
@@ -31,7 +32,6 @@ pub mod shade;
 pub mod tex;
 
 mod arc;
-mod command;
 
 /// Draw vertex count.
 pub type VertexCount = u32;

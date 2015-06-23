@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 use device::{Capabilities, Device, Resources, SubmitInfo};
-use device::command::{GenericCommandBuffer};
+use device::command::{CommandBuffer};
 
 pub struct DummyDevice {
     capabilities: Capabilities
@@ -30,7 +30,7 @@ impl DummyDevice {
 
 impl Device for DummyDevice {
     type Resources = DummyResources;
-    type CommandBuffer = GenericCommandBuffer<Self::Resources>;
+    type CommandBuffer = CommandBuffer<Self::Resources>;
 
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities {
         &self.capabilities

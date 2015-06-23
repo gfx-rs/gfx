@@ -3,11 +3,11 @@ use std::slice;
 
 use device as d;
 use device::{Resources};
-use device::draw::{Access, CommandBuffer, Gamma, Target};
+use device::draw::{Access, Gamma, Target};
 use draw_state::target::{Rect, Mirror, Mask, ClearData, Layer, Level};
 
 ///Generic command buffer to be used by multiple backends
-pub struct GenericCommandBuffer<R: Resources> {
+pub struct CommandBuffer<R: Resources> {
     buf: Vec<Command<R>>
 }
 
@@ -48,17 +48,17 @@ pub enum Command<R: Resources> {
     Blit(Rect, Rect, Mirror, Mask),
 }
 
-impl<R> GenericCommandBuffer<R> where R: Resources {
+impl<R> CommandBuffer<R> where R: Resources {
     pub fn iter<'a>(&'a self) -> slice::Iter<'a, Command<R>> {
         self.buf.iter()
     }
 }
 
-impl<R> CommandBuffer<R> for GenericCommandBuffer<R>
+impl<R> d::draw::CommandBuffer<R> for CommandBuffer<R>
         where R : Resources {
 
-    fn new() -> GenericCommandBuffer<R> {
-        GenericCommandBuffer {
+    fn new() -> CommandBuffer<R> {
+        CommandBuffer {
             buf: Vec::new(),
         }
     }
