@@ -32,11 +32,10 @@ use gfx::device::draw::{Access, Gamma, Target};
 use gfx::device::handle;
 use gfx::device::state::{CullFace, RasterMethod, FrontFace};
 
-pub use self::draw::{Command, CommandBuffer};
+pub use gfx::device::command::{Command, CommandBuffer};
 pub use self::factory::{Factory, Output};
 pub use self::info::{Info, PlatformName, Version};
 
-mod draw;
 mod factory;
 mod shade;
 mod state;
@@ -92,7 +91,7 @@ impl Error {
     }
 }
 
-const RESET_CB: [Command; 11] = [
+const RESET_CB: [Command<Resources>; 11] = [
     Command::BindProgram(0),
     Command::BindArrayBuffer(0),
     // BindAttribute
@@ -216,7 +215,7 @@ impl Device {
     }
 
     /// Fails during a debug build if the implementation's error flag was set.
-    fn check(&mut self, cmd: &Command) {
+    fn check(&mut self, cmd: &Command<Resources>) {
         if cfg!(not(ndebug)) {
             let gl = &self.share.context;
             let err = Error::from_error_code(unsafe { gl.GetError() });
@@ -231,7 +230,8 @@ impl Device {
         &self.info
     }
 
-    fn process(&mut self, cmd: &Command, data_buf: &d::draw::DataBuffer) {
+    fn process(&mut self, cmd: &Command<Resources>,
+               data_buf: &d::draw::DataBuffer) {
         match *cmd {
             Command::Clear(ref data, mask) => {
                 let mut flags = 0;
@@ -600,7 +600,7 @@ impl Device {
 
 impl gfx::Device for Device {
     type Resources = Resources;
-    type CommandBuffer = draw::CommandBuffer;
+    type CommandBuffer = CommandBuffer<Self::Resources>;
 
     fn get_capabilities<'a>(&'a self) -> &'a d::Capabilities {
         &self.share.capabilities
