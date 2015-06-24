@@ -1,4 +1,4 @@
-// Copyright 2014 The Gfx-rs Developers.
+// Copyright 2015 The Gfx-rs Developers.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,31 +11,35 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-//! OpenGL implementation of the Command Buffer
-
+#![allow(missing_docs)]
 use std::slice;
 
-use gfx::device as d;
-use gfx::device::draw::{Access, Gamma, Target};
-use gfx::device::target::*;
-use super::{ArrayBuffer, Buffer, FrameBuffer, Program, Surface, Texture, Sampler, Resources};
+use device as d;
+use device::{Resources};
+use device::draw::{Access, Gamma, Target};
+use draw_state::target::{Rect, Mirror, Mask, ClearData, Layer, Level};
 
-/// Serialized device command.
+///Generic command buffer to be used by multiple backends
+pub struct CommandBuffer<R: Resources> {
+    buf: Vec<Command<R>>
+}
+
+///Serialized device command.
 #[derive(Copy, Clone, Debug)]
-pub enum Command {
-    BindProgram(Program),
-    BindArrayBuffer(ArrayBuffer),
-    BindAttribute(d::AttributeSlot, Buffer, d::attrib::Format),
-    BindIndex(Buffer),
-    BindFrameBuffer(Access, FrameBuffer, Gamma),
+pub enum Command<R: Resources> {
+    BindProgram(R::Program),
+    BindArrayBuffer(R::ArrayBuffer),
+    BindAttribute(d::AttributeSlot, R::Buffer, d::attrib::Format),
+    BindIndex(R::Buffer),
+    BindFrameBuffer(Access, R::FrameBuffer, Gamma),
     UnbindTarget(Access, Target),
-    BindTargetSurface(Access, Target, Surface),
-    BindTargetTexture(Access, Target, Texture, Level, Option<Layer>),
-    BindUniformBlock(Program, d::UniformBufferSlot, d::UniformBlockIndex, Buffer),
+    BindTargetSurface(Access, Target, R::Surface),
+    BindTargetTexture(Access, Target, R::Texture, Level, Option<Layer>),
+    BindUniformBlock(R::Program, d::UniformBufferSlot, d::UniformBlockIndex,
+                     R::Buffer),
     BindUniform(d::shade::Location, d::shade::UniformValue),
-    BindTexture(d::TextureSlot, d::tex::Kind, Texture,
-                Option<(Sampler, d::tex::SamplerInfo)>),
+    BindTexture(d::TextureSlot, d::tex::Kind, R::Texture,
+                Option<(R::Sampler, d::tex::SamplerInfo)>),
     SetDrawColorBuffers(usize),
     SetPrimitiveState(d::state::Primitive),
     SetViewport(Rect),
@@ -45,28 +49,28 @@ pub enum Command {
                          d::state::CullFace),
     SetBlendState(Option<d::state::Blend>),
     SetColorMask(d::state::ColorMask),
-    UpdateBuffer(Buffer, d::draw::DataPointer, usize),
-    UpdateTexture(d::tex::Kind, Texture, d::tex::ImageInfo, d::draw::DataPointer),
+    UpdateBuffer(R::Buffer, d::draw::DataPointer, usize),
+    UpdateTexture(d::tex::Kind, R::Texture, d::tex::ImageInfo,
+                  d::draw::DataPointer),
     // drawing
     Clear(ClearData, Mask),
-    Draw(d::PrimitiveType, d::VertexCount, d::VertexCount, d::draw::InstanceOption),
+    Draw(d::PrimitiveType, d::VertexCount, d::VertexCount,
+         d::draw::InstanceOption),
     DrawIndexed(d::PrimitiveType, d::IndexType, d::VertexCount, d::VertexCount,
                 d::VertexCount, d::draw::InstanceOption),
     Blit(Rect, Rect, Mirror, Mask),
 }
 
-pub struct CommandBuffer {
-    buf: Vec<Command>,
-}
-
-impl CommandBuffer {
-    pub fn iter<'a>(&'a self) -> slice::Iter<'a, Command> {
+impl<R> CommandBuffer<R> where R: Resources {
+    pub fn iter<'a>(&'a self) -> slice::Iter<'a, Command<R>> {
         self.buf.iter()
     }
 }
 
-impl d::draw::CommandBuffer<Resources> for CommandBuffer {
-    fn new() -> CommandBuffer {
+impl<R> d::draw::CommandBuffer<R> for CommandBuffer<R>
+        where R : Resources {
+
+    fn new() -> CommandBuffer<R> {
         CommandBuffer {
             buf: Vec::new(),
         }
@@ -76,24 +80,25 @@ impl d::draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.clear();
     }
 
-    fn bind_program(&mut self, prog: Program) {
+    fn bind_program(&mut self, prog: R::Program) {
         self.buf.push(Command::BindProgram(prog));
     }
 
-    fn bind_array_buffer(&mut self, vao: ArrayBuffer) {
+    fn bind_array_buffer(&mut self, vao: R::ArrayBuffer) {
         self.buf.push(Command::BindArrayBuffer(vao));
     }
 
-    fn bind_attribute(&mut self, slot: d::AttributeSlot, buf: Buffer,
+    fn bind_attribute(&mut self, slot: d::AttributeSlot, buf: R::Buffer,
                       format: d::attrib::Format) {
         self.buf.push(Command::BindAttribute(slot, buf, format));
     }
 
-    fn bind_index(&mut self, buf: Buffer) {
+    fn bind_index(&mut self, buf: R::Buffer) {
         self.buf.push(Command::BindIndex(buf));
     }
 
-    fn bind_frame_buffer(&mut self, access: Access, fbo: FrameBuffer, gamma: Gamma) {
+    fn bind_frame_buffer(&mut self, access: Access, fbo: R::FrameBuffer,
+                         gamma: Gamma) {
         self.buf.push(Command::BindFrameBuffer(access, fbo, gamma));
     }
 
@@ -101,25 +106,31 @@ impl d::draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.push(Command::UnbindTarget(access, tar));
     }
 
-    fn bind_target_surface(&mut self, access: Access, tar: Target, suf: Surface) {
+    fn bind_target_surface(&mut self, access: Access, tar: Target,
+                           suf: R::Surface) {
         self.buf.push(Command::BindTargetSurface(access, tar, suf));
     }
 
-    fn bind_target_texture(&mut self, access: Access, tar: Target, tex: Texture,
-                           level: Level, layer: Option<Layer>) {
-        self.buf.push(Command::BindTargetTexture(access, tar, tex, level, layer));
+    fn bind_target_texture(&mut self, access: Access, tar: Target,
+                           tex: R::Texture, level: Level,
+                           layer: Option<Layer>) {
+        self.buf.push(Command::BindTargetTexture(
+            access, tar, tex, level, layer));
     }
 
-    fn bind_uniform_block(&mut self, prog: Program, slot: d::UniformBufferSlot,
-                          index: d::UniformBlockIndex, buf: Buffer) {
+    fn bind_uniform_block(&mut self, prog: R::Program,
+                          slot: d::UniformBufferSlot,
+                          index: d::UniformBlockIndex, buf: R::Buffer) {
         self.buf.push(Command::BindUniformBlock(prog, slot, index, buf));
     }
 
-    fn bind_uniform(&mut self, loc: d::shade::Location, value: d::shade::UniformValue) {
+    fn bind_uniform(&mut self, loc: d::shade::Location,
+                    value: d::shade::UniformValue) {
         self.buf.push(Command::BindUniform(loc, value));
     }
     fn bind_texture(&mut self, slot: d::TextureSlot, kind: d::tex::Kind,
-                    tex: Texture, sampler: Option<(Sampler, d::tex::SamplerInfo)>) {
+                    tex: R::Texture,
+                    sampler: Option<(R::Sampler, d::tex::SamplerInfo)>) {
         self.buf.push(Command::BindTexture(slot, kind, tex, sampler));
     }
 
@@ -157,12 +168,12 @@ impl d::draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.push(Command::SetColorMask(mask));
     }
 
-    fn update_buffer(&mut self, buf: Buffer, data: d::draw::DataPointer,
+    fn update_buffer(&mut self, buf: R::Buffer, data: d::draw::DataPointer,
                         offset_bytes: usize) {
         self.buf.push(Command::UpdateBuffer(buf, data, offset_bytes));
     }
 
-    fn update_texture(&mut self, kind: d::tex::Kind, tex: Texture,
+    fn update_texture(&mut self, kind: d::tex::Kind, tex: R::Texture,
                       info: d::tex::ImageInfo, data: d::draw::DataPointer) {
         self.buf.push(Command::UpdateTexture(kind, tex, info, data));
     }
@@ -176,13 +187,16 @@ impl d::draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.push(Command::Draw(ptype, start, count, instances));
     }
 
-    fn call_draw_indexed(&mut self, ptype: d::PrimitiveType, itype: d::IndexType,
-                         start: d::VertexCount, count: d::VertexCount,
-                         base: d::VertexCount, instances: d::draw::InstanceOption) {
-        self.buf.push(Command::DrawIndexed(ptype, itype, start, count, base, instances));
+    fn call_draw_indexed(&mut self, ptype: d::PrimitiveType,
+                         itype: d::IndexType, start: d::VertexCount,
+                         count: d::VertexCount, base: d::VertexCount,
+                         instances: d::draw::InstanceOption) {
+        self.buf.push(Command::DrawIndexed(
+            ptype, itype, start, count, base, instances));
     }
 
-    fn call_blit(&mut self, s_rect: Rect, d_rect: Rect, mirror: Mirror, mask: Mask) {
+    fn call_blit(&mut self, s_rect: Rect, d_rect: Rect, mirror: Mirror,
+                 mask: Mask) {
         self.buf.push(Command::Blit(s_rect, d_rect, mirror, mask));
     }
 }
