@@ -235,7 +235,7 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities) {
         buffer_role_change_allowed:     true, //TODO
 
         array_buffer_supported:         info.is_version_or_extension_supported(3, 0, "GL_ARB_vertex_array_object"),
-        fragment_output_supported:      info.is_version_or_extension_supported(3, 0, "GL_ARB_gpu_shader4"),
+        fragment_output_supported:      info.is_version_or_extension_supported(3, 0, "GL_EXT_gpu_shader4"),
         immutable_storage_supported:    info.is_version_or_extension_supported(4, 2, "GL_ARB_texture_storage"),
         instance_base_supported:        info.is_version_or_extension_supported(4, 2, "GL_ARB_base_instance"),
         instance_call_supported:        info.is_version_or_extension_supported(3, 1, "GL_ARB_draw_instanced"),
