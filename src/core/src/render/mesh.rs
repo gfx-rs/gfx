@@ -70,6 +70,8 @@ impl<R: Resources> Mesh<R> {
     }
 
     /// Create a new intanced `Mesh` given a vertex buffer and an instance buffer.
+    ///
+    /// `nv` is the number of vertices of the repeated mesh.
     pub fn from_format_instanced<V: VertexFormat, U: VertexFormat>(
                                  buf: handle::Buffer<R, V>,
                                  nv: VertexCount,
