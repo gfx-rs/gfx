@@ -84,6 +84,9 @@ pub trait Stream<R: Resources> {
     }
 
     /// Draw an instanced `Batch`.
+    ///
+    /// `count` is the number of instances you wish to draw and
+    /// `base` is the first instance to draw (instance offset).
     fn draw_instanced<B: Batch<R> + ?Sized>(&mut self, batch: &B,
                       count: InstanceCount, base: VertexCount)
                       -> Result<(), DrawError<Error>> {
