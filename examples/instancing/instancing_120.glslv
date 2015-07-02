@@ -1,12 +1,12 @@
-#version 150 core
+#version 130
 
-in vec2 a_Position;
-in vec2 a_Translate;
-in uint a_Color;
+attribute vec2 a_Position;
+attribute vec2 a_Translate;
+attribute uint a_Color;
 
 uniform float u_Scale;
 
-out vec4 v_Color;
+varying vec4 v_Color;
 
 void main() {
     gl_Position = vec4((a_Position*u_Scale) + a_Translate, 0.0, 1.0);

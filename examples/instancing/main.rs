@@ -6,6 +6,7 @@ extern crate glutin;
 extern crate gfx_window_glutin;
 extern crate gfx_device_gl;
 
+use std::marker::PhantomData;
 use rand::Rng;
 use glutin::WindowBuilder;
 use gfx::device::{Factory, BufferRole, PrimitiveType};
@@ -15,7 +16,7 @@ use gfx::render::mesh::{Mesh, ToSlice};
 use gfx::render::batch;
 
 const QUAD_VERTICES: [Vertex; 4] = [
-    Vertex { position: [-0.5,  0.5] }, // Top left
+    Vertex { position: [-0.5,  0.5] },
     Vertex { position: [-0.5, -0.5] },
     Vertex { position: [ 0.5, -0.5] },
     Vertex { position: [ 0.5,  0.5] },
@@ -29,6 +30,7 @@ gfx_vertex! {
     }
 }
 
+// color format: 0xRRGGBBAA
 gfx_vertex! {
     Attributes {
         a_Translate@ translate: [f32; 2],
@@ -38,7 +40,7 @@ gfx_vertex! {
 
 gfx_parameters! {
     Params {
-        u_Scale@ scale: f32
+        u_Scale@ scale: f32,
     }
 }
 
@@ -93,18 +95,23 @@ fn main() {
     let program = {
         let vs = gfx::ShaderSource {
             glsl_150: Some(include_bytes!("instancing_150.glslv")),
+            glsl_120: Some(include_bytes!("instancing_120.glslv")),
             .. gfx::ShaderSource::empty()
         };
         let fs = gfx::ShaderSource {
             glsl_150: Some(include_bytes!("instancing_150.glslf")),
+            glsl_120: Some(include_bytes!("instancing_120.glslf")),
             .. gfx::ShaderSource::empty()
         };
         factory.link_program_source(vs, fs).unwrap()
     };
-    
-    let params = Params { scale: size };
 
-    let mut batch = batch::Full::new(mesh, program, Some(params)).unwrap();
+    let params = Params {
+        scale: size,
+        _r: PhantomData
+    };
+
+    let mut batch = batch::Full::new(mesh, program, params).unwrap();
     batch.slice = quad_indices.to_slice(PrimitiveType::TriangleList);
 
     'l: loop {
