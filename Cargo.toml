@@ -63,6 +63,10 @@ path = "examples/terrain/main.rs"
 name = "triangle"
 path = "examples/triangle/main.rs"
 
+[[example]]
+name = "instancing"
+path = "examples/instancing/main.rs"
+
 [dev_dependencies]
 env_logger = "*"
 log = "*"
