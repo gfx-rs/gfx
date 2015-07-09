@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+extern crate time;
+
 #[macro_use]
 extern crate gfx;
 extern crate gfx_window_glutin;
@@ -66,6 +68,8 @@ fn load_texture<R, F>(factory: &mut F, data: &[u8]) -> Result<gfx::handle::Textu
 }
 
 pub fn main() {
+    use time::precise_time_s;
+
     let (mut stream, mut device, mut factory) = gfx_window_glutin::init(
         glutin::WindowBuilder::new()
             .with_title("Flowmap example".to_string())
@@ -115,7 +119,14 @@ pub fn main() {
     let mut cycle0 = 0.0f32;
     let mut cycle1 = 0.5f32;
 
+    let mut time_start = precise_time_s();
+    let mut time_end;
     'main: loop {
+        time_end = time_start;
+        time_start = precise_time_s();
+
+        let delta = (time_start - time_end) as f32;
+
         // quit when Esc is pressed.
         for event in stream.out.window.poll_events() {
             match event {
@@ -130,12 +141,12 @@ pub fn main() {
 
         // they start half a cycle apart (0.5) and is later used to calculate
         // the interpolation amount via `2.0 * abs(cycle0 - .5f)`
-        cycle0 += 0.0025f32;
+        cycle0 += 0.25f32 * delta;
         if cycle0 > 1f32 {
             cycle0 -= 1f32;
         }
 
-        cycle1 += 0.0025f32;
+        cycle1 += 0.25f32 * delta;
         if cycle1 > 1f32 {
             cycle1 -= 1f32;
         }
