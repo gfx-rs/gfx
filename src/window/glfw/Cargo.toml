@@ -14,8 +14,9 @@
 
 [package]
 name = "gfx_window_glfw"
-version = "0.2.0"
+version = "0.2.1"
 description = "GLFW window for gfx-rs"
+homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
 keywords = ["graphics", "gamedev"]
 license = "Apache-2.0"

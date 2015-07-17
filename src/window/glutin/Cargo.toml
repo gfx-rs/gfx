@@ -14,8 +14,9 @@
 
 [package]
 name = "gfx_window_glutin"
-version = "0.3.0"
+version = "0.3.1"
 description = "Glutin window for gfx-rs"
+homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
 keywords = ["graphics", "gamedev"]
 license = "Apache-2.0"
