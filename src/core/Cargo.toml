@@ -14,10 +14,10 @@
 
 [package]
 name = "gfx"
-version = "0.6.4"
+version = "0.6.5"
 description = "A high-performance, bindless graphics API"
-homepage = "https://github.com/gfx-rs/gfx-rs"
-repository = "https://github.com/gfx-rs/gfx-rs"
+homepage = "https://github.com/gfx-rs/gfx"
+repository = "https://github.com/gfx-rs/gfx"
 keywords = ["graphics", "gamedev"]
 license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
