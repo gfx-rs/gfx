@@ -16,19 +16,19 @@ name = "gfx_meta"
 
 [dependencies.gfx]
 path = "src/core"
-version = "0.6"
+version = "0.7"
 
 [dependencies.gfx_device_gl]
 path = "src/backend/gl"
-version = "0.4"
+version = "0.5"
 
 [dependencies.gfx_window_glutin]
 path = "src/window/glutin"
-version = "0.3"
+version = "0.4"
 
 [dependencies.gfx_window_glfw]
 path = "src/window/glfw"
-version = "0.2"
+version = "0.3"
 
 
 [[example]]
