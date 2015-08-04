@@ -24,7 +24,7 @@ The plane can be zoomed in/out with `+` and `-`. The camera can be moved in spac
 
 ## Tilesheet Information
 
-The provided `scifitiles-sheet_0.png` was created by [Buch](http://blog-buch.rhcloud.com) and is [Public Domain](http://opengameart.org/content/sci-fi-interior-tiles).
+The provided `scifitiles-sheet_0.png` was created by [Michele Bucelli (aka Buch)](https://www.patreon.com/buch?ty=h) and is [Public Domain](http://opengameart.org/content/sci-fi-interior-tiles).
 
 ## Screenshot
 
