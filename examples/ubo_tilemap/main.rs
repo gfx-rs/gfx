@@ -191,8 +191,8 @@ impl<R> TileMapPlane<R> where R: Resources {
 
                 let u_pos = (1.0 + raw_x) / 2.0;
                 let v_pos = (1.0 + raw_y) / 2.0;
-                let tilemap_x = (u_pos * width as f32) as i32;
-                let tilemap_y = (v_pos * height as f32) as i32;
+                let tilemap_x = (u_pos * width as f32).floor();
+                let tilemap_y = (v_pos * height as f32).floor();
 
                 VertexData {
                     pos: [vertex_x, vertex_y, 0.0],
@@ -213,10 +213,12 @@ impl<R> TileMapPlane<R> where R: Resources {
         // shader
         let program = {
             let vs = gfx::ShaderSource {
+                glsl_140: Some(include_bytes!("tilemap_140.glslv")),
                 glsl_150: Some(include_bytes!("tilemap_150.glslv")),
                 .. gfx::ShaderSource::empty()
             };
             let fs = gfx::ShaderSource {
+                glsl_140: Some(include_bytes!("tilemap_140.glslf")),
                 glsl_150: Some(include_bytes!("tilemap_150.glslf")),
                 .. gfx::ShaderSource::empty()
             };
@@ -256,7 +258,7 @@ impl<R> TileMapPlane<R> where R: Resources {
     }
     
     pub fn update_data<TFactory>(&mut self, factory: &mut TFactory) where TFactory: Factory<R> {
-        if factory.update_buffer(&self.batch.params.tilemap, &self.data, 0).is_ok() == false { panic!("Failed to update glsl buffer"); }
+        factory.update_buffer(&self.batch.params.tilemap, &self.data, 0).unwrap();
     }
     pub fn update_view(&mut self, view: &AffineMatrix3<f32>) {
         self.batch.params.view = view.mat.into_fixed();
@@ -378,6 +380,13 @@ impl<R: Resources> TileMap<R> {
         self.tilemap_plane.update_view(view);
         stream.draw(&self.tilemap_plane.batch).unwrap();
     }
+    fn calc_idx(&self, xpos: usize, ypos: usize) -> usize {
+        (ypos * self.tilemap_size[0]) + xpos
+    }
+    pub fn set_tile(&mut self, xpos: usize, ypos: usize, data: [f32; 4]) {
+        let idx = self.calc_idx(xpos, ypos);
+        self.tiles[idx] = TileMapData::new(data);
+    }
 }
 
 
@@ -385,47 +394,44 @@ pub fn populate_tilemap<R>(tilemap: &mut TileMap<R>, tilemap_size: [usize; 2]) w
     // paper in with dummy data
     for ypos in (0..tilemap_size[1]) {
         for xpos in (0..tilemap_size[0]) {
-            let idx = (ypos * tilemap_size[0]) + xpos;
-            tilemap.tiles[idx] = TileMapData::new([1.0, 7.0, 0.0, 0.0]);
+            tilemap.set_tile(xpos, ypos, [1.0, 7.0, 0.0, 0.0]);
         }
     }
-    let calc_idx = {|x, y| (y * tilemap_size[0]) + x};
-
-    tilemap.tiles[calc_idx(1,3)] = TileMapData::new([5.0, 0.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(2,3)] = TileMapData::new([6.0, 0.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(3,3)] = TileMapData::new([7.0, 0.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(1,2)] = TileMapData::new([5.0, 1.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(2,2)] = TileMapData::new([4.0, 0.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(3,2)] = TileMapData::new([11.0, 2.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(1,1)] = TileMapData::new([5.0, 2.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(2,1)] = TileMapData::new([6.0, 2.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(3,1)] = TileMapData::new([7.0, 2.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(1,0)] = TileMapData::new([4.0, 7.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(2,0)] = TileMapData::new([4.0, 7.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(3,0)] = TileMapData::new([4.0, 7.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(4,2)] = TileMapData::new([4.0, 2.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(5,2)] = TileMapData::new([4.0, 2.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(6,2)] = TileMapData::new([11.0, 1.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(4,1)] = TileMapData::new([4.0, 7.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(5,1)] = TileMapData::new([4.0, 7.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(6,1)] = TileMapData::new([4.0, 7.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(6,3)] = TileMapData::new([4.0, 1.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(6,4)] = TileMapData::new([4.0, 1.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(6,5)] = TileMapData::new([4.0, 1.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(6,6)] = TileMapData::new([4.0, 1.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(6,7)] = TileMapData::new([4.0, 1.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(5,10)] = TileMapData::new([5.0, 0.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(7,10)] = TileMapData::new([7.0, 0.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(5,9)] = TileMapData::new([5.0, 1.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(6,9)] = TileMapData::new([6.0, 1.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(7,9)] = TileMapData::new([7.0, 1.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(5,8)] = TileMapData::new([5.0, 2.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(6,8)] = TileMapData::new([8.0, 2.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(7,8)] = TileMapData::new([7.0, 2.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(5,7)] = TileMapData::new([2.0, 1.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(7,7)] = TileMapData::new([2.0, 1.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(6,10)] = TileMapData::new([2.0, 3.0, 0.0, 0.0]);
-    tilemap.tiles[calc_idx(6,11)] = TileMapData::new([2.0, 2.0, 0.0, 0.0]);
+    tilemap.set_tile(1,3,[5.0, 0.0, 0.0, 0.0]);
+    tilemap.set_tile(2,3,[6.0, 0.0, 0.0, 0.0]);
+    tilemap.set_tile(3,3,[7.0, 0.0, 0.0, 0.0]);
+    tilemap.set_tile(1,2,[5.0, 1.0, 0.0, 0.0]);
+    tilemap.set_tile(2,2,[4.0, 0.0, 0.0, 0.0]);
+    tilemap.set_tile(3,2,[11.0, 2.0, 0.0, 0.0]);
+    tilemap.set_tile(1,1,[5.0, 2.0, 0.0, 0.0]);
+    tilemap.set_tile(2,1,[6.0, 2.0, 0.0, 0.0]);
+    tilemap.set_tile(3,1,[7.0, 2.0, 0.0, 0.0]);
+    tilemap.set_tile(1,0,[4.0, 7.0, 0.0, 0.0]);
+    tilemap.set_tile(2,0,[4.0, 7.0, 0.0, 0.0]);
+    tilemap.set_tile(3,0,[4.0, 7.0, 0.0, 0.0]);
+    tilemap.set_tile(4,2,[4.0, 2.0, 0.0, 0.0]);
+    tilemap.set_tile(5,2,[4.0, 2.0, 0.0, 0.0]);
+    tilemap.set_tile(6,2,[11.0, 1.0, 0.0, 0.0]);
+    tilemap.set_tile(4,1,[4.0, 7.0, 0.0, 0.0]);
+    tilemap.set_tile(5,1,[4.0, 7.0, 0.0, 0.0]);
+    tilemap.set_tile(6,1,[4.0, 7.0, 0.0, 0.0]);
+    tilemap.set_tile(6,3,[4.0, 1.0, 0.0, 0.0]);
+    tilemap.set_tile(6,4,[4.0, 1.0, 0.0, 0.0]);
+    tilemap.set_tile(6,5,[4.0, 1.0, 0.0, 0.0]);
+    tilemap.set_tile(6,6,[4.0, 1.0, 0.0, 0.0]);
+    tilemap.set_tile(6,7,[4.0, 1.0, 0.0, 0.0]);
+    tilemap.set_tile(5,10,[5.0, 0.0, 0.0, 0.0]);
+    tilemap.set_tile(7,10,[7.0, 0.0, 0.0, 0.0]);
+    tilemap.set_tile(5,9,[5.0, 1.0, 0.0, 0.0]);
+    tilemap.set_tile(6,9,[6.0, 1.0, 0.0, 0.0]);
+    tilemap.set_tile(7,9,[7.0, 1.0, 0.0, 0.0]);
+    tilemap.set_tile(5,8,[5.0, 2.0, 0.0, 0.0]);
+    tilemap.set_tile(6,8,[8.0, 2.0, 0.0, 0.0]);
+    tilemap.set_tile(7,8,[7.0, 2.0, 0.0, 0.0]);
+    tilemap.set_tile(5,7,[2.0, 1.0, 0.0, 0.0]);
+    tilemap.set_tile(7,7,[2.0, 1.0, 0.0, 0.0]);
+    tilemap.set_tile(6,10,[2.0, 3.0, 0.0, 0.0]);
+    tilemap.set_tile(6,11,[2.0, 2.0, 0.0, 0.0]);
 }
 
 pub fn main() {
