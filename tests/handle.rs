@@ -15,6 +15,7 @@ impl gfx::Resources for TestResources {
     type Surface = ();
     type Texture = ();
     type Sampler = ();
+    type Fence = ();
 }
 
 fn mock_buffer<T>(len: usize) -> Buffer<TestResources, T> {
@@ -51,6 +52,7 @@ fn test_cleanup() {
         |_,_| (),
         |_,_| (),
         |b,_| { *b += 1; },
+        |_,_| (),
         |_,_| (),
         |_,_| (),
         |_,_| ()

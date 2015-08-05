@@ -284,3 +284,16 @@ pub trait Device {
     /// Cleanup unused resources, to be called between frames.
     fn cleanup(&mut self);
 }
+
+/// Extension to the Device that allows for submitting of commands
+/// around a fence
+pub trait DeviceFence<R: Resources>: Device<Resources=R> {
+    /// Submit a command buffer to the stream creating a fence
+    /// the fence is signaled after the GPU has executed all commands
+    /// in the buffer
+    fn fenced_submit(&mut self, SubmitInfo<Self>, after: Option<handle::Fence<R>>) -> handle::Fence<R>;
+
+    /// Wait on the supplied fence stalling the current thread until
+    /// the fence is satisfied
+    fn fence_wait(&mut self, fence: &handle::Fence<R>);
+}
