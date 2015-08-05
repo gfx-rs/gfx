@@ -52,6 +52,12 @@ pub type Surface        = gl::types::GLuint;
 pub type Sampler        = gl::types::GLuint;
 pub type Texture        = gl::types::GLuint;
 
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct Fence(gl::types::GLsync);
+
+unsafe impl Send for Fence {}
+unsafe impl Sync for Fence {}
+
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Resources {}
 
@@ -64,6 +70,7 @@ impl gfx::Resources for Resources {
     type Surface        = Surface;
     type Texture        = Texture;
     type Sampler        = Sampler;
+    type Fence          = Fence;
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]

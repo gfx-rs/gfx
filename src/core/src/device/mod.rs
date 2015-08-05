@@ -186,6 +186,7 @@ pub trait Resources:           Clone + Hash + fmt::Debug + Eq + PartialEq {
     type Surface:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
     type Texture:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
     type Sampler:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Fence:         Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
 }
 
 #[allow(missing_docs)]

@@ -33,6 +33,7 @@ impl Resources for DummyResources {
     type Surface        = ();
     type Texture        = ();
     type Sampler        = ();
+    type Fence          = ();
 }
 
 impl DummyDevice {
