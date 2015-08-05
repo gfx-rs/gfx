@@ -1,4 +1,4 @@
-#version 140 core
+#version 140
 
 in vec2 v_BufPos;
 

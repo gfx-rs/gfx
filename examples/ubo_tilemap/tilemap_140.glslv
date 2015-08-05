@@ -1,4 +1,4 @@
-#version 140 core
+#version 140
 
 // useful for moving camera
 in vec3 a_Pos;
