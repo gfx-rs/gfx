@@ -195,6 +195,8 @@ pub trait Producer<R: Resources> {
     fn make_surface(&mut self, R::Surface, tex::SurfaceInfo) -> Surface<R>;
     fn make_texture(&mut self, R::Texture, tex::TextureInfo) -> Texture<R>;
     fn make_sampler(&mut self, R::Sampler, tex::SamplerInfo) -> Sampler<R>;
+    fn make_fence(&mut self, name: R::Fence) -> Fence<R>;
+
     /// Walk through all the handles, keep ones that are reference elsewhere
     /// and call the provided delete function (resource-specific) for others
     fn clean_with<T,
@@ -257,6 +259,12 @@ impl<R: Resources> Producer<R> for Manager<R> {
         let r = Arc::new(name);
         self.samplers.push(r.clone());
         Sampler(r, info)
+    }
+
+    fn make_fence(&mut self, name: R::Fence) -> Fence<R> {
+        let r = Arc::new(name);
+        self.fences.push(r.clone());
+        Fence(r)
     }
 
     fn clean_with<T,
@@ -384,5 +392,11 @@ impl<R: Resources> Manager<R> {
     pub fn ref_sampler(&mut self, handle: &Sampler<R>) -> R::Sampler {
         self.samplers.push(handle.0.clone());
         *handle.0.deref()
+    }
+
+    /// Reference a fence
+    pub fn ref_fence(&mut self, fence: &Fence<R>) -> R::Fence {
+        self.fences.push(fence.0.clone());
+        *fence.0.deref()
     }
 }

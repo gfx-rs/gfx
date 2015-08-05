@@ -651,3 +651,31 @@ impl gfx::Device for Device {
         );
     }
 }
+
+impl gfx::traits::DeviceFence<Resources> for Device {
+    fn fenced_submit(&mut self, info: d::SubmitInfo<Device>, after: Option<handle::Fence<Resources>>) -> handle::Fence<Resources> {
+        use gfx::Device;
+        use gfx::handle::Producer;
+
+        unsafe {
+            if let Some(fence) = after {
+                let f = self.frame_handles.ref_fence(&fence);
+                self.share.context.WaitSync(f.0, 0, 1_000_000_000_000);
+            }
+        }
+
+        self.submit(info);
+
+        unsafe {
+            let fence = self.share.context.FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0);
+            self.frame_handles.make_fence(Fence(fence))
+        }
+    }
+
+    fn fence_wait(&mut self, fence: &handle::Fence<Resources>) {
+        let f = self.frame_handles.ref_fence(fence);
+        unsafe {
+            self.share.context.ClientWaitSync(f.0, gl::SYNC_FLUSH_COMMANDS_BIT, 1_000_000_000_000);
+        }
+    }
+}

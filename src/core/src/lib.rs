@@ -24,7 +24,7 @@ extern crate num;
 
 /// public re-exported traits
 pub mod traits {
-    pub use device::{Device, Factory};
+    pub use device::{Device, Factory, DeviceFence};
     pub use extra::factory::FactoryExt;
     pub use extra::stream::{Stream, StreamFactory};
     pub use render::RenderFactory;
