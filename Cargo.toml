@@ -67,6 +67,10 @@ path = "examples/triangle/main.rs"
 name = "instancing"
 path = "examples/instancing/main.rs"
 
+[[example]]
+name = "ubo_tilemap"
+path = "examples/ubo_tilemap/main.rs"
+
 [dev_dependencies]
 env_logger = "*"
 log = "*"
