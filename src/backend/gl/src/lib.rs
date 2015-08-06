@@ -666,10 +666,10 @@ impl gfx::traits::DeviceFence<Resources> for Device {
 
         self.submit(info);
 
-        unsafe {
-            let fence = self.share.context.FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0);
-            self.frame_handles.make_fence(Fence(fence))
-        }
+        let fence = unsafe {
+            self.share.context.FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0)
+        };
+        self.frame_handles.make_fence(Fence(fence))
     }
 
     fn fence_wait(&mut self, fence: &handle::Fence<Resources>) {

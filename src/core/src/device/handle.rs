@@ -163,7 +163,7 @@ impl<R: Resources> Sampler<R> {
     }
 }
 
-/// Sampler Handle
+/// Fence Handle
 #[derive(Clone, Debug, PartialEq)]
 pub struct Fence<R: Resources>(Arc<R::Fence>);
 
