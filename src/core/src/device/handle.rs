@@ -163,6 +163,9 @@ impl<R: Resources> Sampler<R> {
     }
 }
 
+/// Fence Handle
+#[derive(Clone, Debug, PartialEq)]
+pub struct Fence<R: Resources>(Arc<R::Fence>);
 
 /// Stores reference-counted resources used in a command buffer.
 /// Seals actual resource names behind the interface, automatically
@@ -178,6 +181,7 @@ pub struct Manager<R: Resources> {
     surfaces:      Vec<Arc<R::Surface>>,
     textures:      Vec<Arc<R::Texture>>,
     samplers:      Vec<Arc<R::Sampler>>,
+    fences:        Vec<Arc<R::Fence>>
 }
 
 /// A service trait to be used by the device implementation
@@ -191,6 +195,8 @@ pub trait Producer<R: Resources> {
     fn make_surface(&mut self, R::Surface, tex::SurfaceInfo) -> Surface<R>;
     fn make_texture(&mut self, R::Texture, tex::TextureInfo) -> Texture<R>;
     fn make_sampler(&mut self, R::Sampler, tex::SamplerInfo) -> Sampler<R>;
+    fn make_fence(&mut self, name: R::Fence) -> Fence<R>;
+
     /// Walk through all the handles, keep ones that are reference elsewhere
     /// and call the provided delete function (resource-specific) for others
     fn clean_with<T,
@@ -202,7 +208,8 @@ pub trait Producer<R: Resources> {
         F6: Fn(&mut T, &R::Surface),
         F7: Fn(&mut T, &R::Texture),
         F8: Fn(&mut T, &R::Sampler),
-    >(&mut self, &mut T, F1, F2, F3, F4, F5, F6, F7, F8);
+        F9: Fn(&mut T, &R::Fence),
+    >(&mut self, &mut T, F1, F2, F3, F4, F5, F6, F7, F8, F9);
 }
 
 impl<R: Resources> Producer<R> for Manager<R> {
@@ -254,6 +261,12 @@ impl<R: Resources> Producer<R> for Manager<R> {
         Sampler(r, info)
     }
 
+    fn make_fence(&mut self, name: R::Fence) -> Fence<R> {
+        let r = Arc::new(name);
+        self.fences.push(r.clone());
+        Fence(r)
+    }
+
     fn clean_with<T,
         F1: Fn(&mut T, &R::Buffer),
         F2: Fn(&mut T, &R::ArrayBuffer),
@@ -263,7 +276,8 @@ impl<R: Resources> Producer<R> for Manager<R> {
         F6: Fn(&mut T, &R::Surface),
         F7: Fn(&mut T, &R::Texture),
         F8: Fn(&mut T, &R::Sampler),
-    >(&mut self, param: &mut T, f1: F1, f2: F2, f3: F3, f4: F4, f5: F5, f6: F6, f7: F7, f8: F8) {
+        F9: Fn(&mut T, &R::Fence),
+    >(&mut self, param: &mut T, f1: F1, f2: F2, f3: F3, f4: F4, f5: F5, f6: F6, f7: F7, f8: F8, f9: F9) {
         fn clean_vec<X: Clone, T, F: Fn(&mut T, &X)>(param: &mut T, vector: &mut Vec<Arc<X>>, fun: F) {
             let mut temp = Vec::new();
             // delete unique resources and make a list of their indices
@@ -287,6 +301,7 @@ impl<R: Resources> Producer<R> for Manager<R> {
         clean_vec(param, &mut self.surfaces,      f6);
         clean_vec(param, &mut self.textures,      f7);
         clean_vec(param, &mut self.samplers,      f8);
+        clean_vec(param, &mut self.fences,        f9);
     }
 }
 
@@ -302,6 +317,7 @@ impl<R: Resources> Manager<R> {
             surfaces: Vec::new(),
             textures: Vec::new(),
             samplers: Vec::new(),
+            fences: Vec::new()
         }
     }
     /// Clear all references
@@ -376,5 +392,11 @@ impl<R: Resources> Manager<R> {
     pub fn ref_sampler(&mut self, handle: &Sampler<R>) -> R::Sampler {
         self.samplers.push(handle.0.clone());
         *handle.0.deref()
+    }
+
+    /// Reference a fence
+    pub fn ref_fence(&mut self, fence: &Fence<R>) -> R::Fence {
+        self.fences.push(fence.0.clone());
+        *fence.0.deref()
     }
 }

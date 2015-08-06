@@ -52,6 +52,12 @@ pub type Surface        = gl::types::GLuint;
 pub type Sampler        = gl::types::GLuint;
 pub type Texture        = gl::types::GLuint;
 
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct Fence(gl::types::GLsync);
+
+unsafe impl Send for Fence {}
+unsafe impl Sync for Fence {}
+
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Resources {}
 
@@ -64,6 +70,7 @@ impl gfx::Resources for Resources {
     type Surface        = Surface;
     type Texture        = Texture;
     type Sampler        = Sampler;
+    type Fence          = Fence;
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -640,6 +647,35 @@ impl gfx::Device for Device {
             |gl, v| unsafe { gl.DeleteRenderbuffers(1, v) },
             |gl, v| unsafe { gl.DeleteTextures(1, v) },
             |gl, v| unsafe { gl.DeleteSamplers(1, v) },
+            |gl, v| unsafe { gl.DeleteSync(v.0) },
         );
+    }
+}
+
+impl gfx::traits::DeviceFence<Resources> for Device {
+    fn fenced_submit(&mut self, info: d::SubmitInfo<Device>, after: Option<handle::Fence<Resources>>) -> handle::Fence<Resources> {
+        use gfx::Device;
+        use gfx::handle::Producer;
+
+        unsafe {
+            if let Some(fence) = after {
+                let f = self.frame_handles.ref_fence(&fence);
+                self.share.context.WaitSync(f.0, 0, 1_000_000_000_000);
+            }
+        }
+
+        self.submit(info);
+
+        let fence = unsafe {
+            self.share.context.FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0)
+        };
+        self.frame_handles.make_fence(Fence(fence))
+    }
+
+    fn fence_wait(&mut self, fence: &handle::Fence<Resources>) {
+        let f = self.frame_handles.ref_fence(fence);
+        unsafe {
+            self.share.context.ClientWaitSync(f.0, gl::SYNC_FLUSH_COMMANDS_BIT, 1_000_000_000_000);
+        }
     }
 }
