@@ -128,6 +128,7 @@ impl<R> d::draw::CommandBuffer<R> for CommandBuffer<R>
                     value: d::shade::UniformValue) {
         self.buf.push(Command::BindUniform(loc, value));
     }
+
     fn bind_texture(&mut self, slot: d::TextureSlot, kind: d::tex::Kind,
                     tex: R::Texture,
                     sampler: Option<(R::Sampler, d::tex::SamplerInfo)>) {
