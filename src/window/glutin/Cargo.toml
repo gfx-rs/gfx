@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx_window_glutin"
-version = "0.4.0"
+version = "0.5.0"
 description = "Glutin window for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -27,7 +27,7 @@ name = "gfx_window_glutin"
 
 [dependencies.gfx]
 path = "../../core"
-version = "0.6"
+version = "0.7"
 
 [dependencies.gfx_device_gl]
 path = "../../backend/gl"
