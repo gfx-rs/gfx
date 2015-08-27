@@ -178,15 +178,15 @@ pub enum BufferUpdateError {
 /// Resources pertaining to a specific API.
 #[allow(missing_docs)]
 pub trait Resources:           Clone + Hash + fmt::Debug + Eq + PartialEq {
-    type Buffer:        Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync + 'static;
-    type ArrayBuffer:   Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync + 'static;
-    type Shader:        Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync + 'static;
-    type Program:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync + 'static;
-    type FrameBuffer:   Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync + 'static;
-    type Surface:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync + 'static;
-    type Texture:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync + 'static;
-    type Sampler:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync + 'static;
-    type Fence:         Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync + 'static;
+    type Buffer:        Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type ArrayBuffer:   Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Shader:        Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Program:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type FrameBuffer:   Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Surface:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Texture:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Sampler:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Fence:         Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
 }
 
 #[allow(missing_docs)]
