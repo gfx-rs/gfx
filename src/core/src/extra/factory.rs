@@ -34,6 +34,7 @@ pub trait FactoryExt<R: device::Resources>: device::Factory<R> {
     /// Create a simple program given a vertex shader with a fragment one.
     fn link_program(&mut self, vs_code: &[u8], fs_code: &[u8])
                     -> Result<handle::Program<R>, ProgramError> {
+
         let vs = match self.create_shader(Stage::Vertex, vs_code) {
             Ok(s) => s,
             Err(e) => return Err(ProgramError::Vertex(e)),
@@ -43,7 +44,10 @@ pub trait FactoryExt<R: device::Resources>: device::Factory<R> {
             Err(e) => return Err(ProgramError::Fragment(e)),
         };
 
-        self.create_program(&[vs, fs], None)
+        let builder = device::program::Builder::new()
+            .add_shaders(&[&vs, &fs]);
+
+        self.create_program(&builder)
             .map_err(|e| ProgramError::Link(e))
     }
 
@@ -69,7 +73,12 @@ pub trait FactoryExt<R: device::Resources>: device::Factory<R> {
             Ok(s) => s,
             Err(e) => return Err(ProgramError::Fragment(e)),
         };
-        self.create_program(&[vs, fs], Some(fs_src.targets))
+
+        let builder = device::program::Builder::new()
+            .add_shaders(&[&vs, &fs])
+            .add_targets(fs_src.targets);
+
+        self.create_program(&builder)
             .map_err(|e| ProgramError::Link(e))
     }
 
