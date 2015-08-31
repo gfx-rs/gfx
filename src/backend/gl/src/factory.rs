@@ -22,6 +22,7 @@ use gfx::device as d;
 use gfx::device::handle;
 use gfx::device::handle::Producer;
 use gfx::device::mapping::Builder;
+use gfx::device::program;
 use gfx::tex::Size;
 
 use {Buffer, Share};
@@ -215,12 +216,12 @@ impl d::Factory<R> for Factory {
                 .map(|sh| self.share.handles.borrow_mut().make_shader(sh, stage))
     }
 
-    fn create_program(&mut self, shaders: &[handle::Shader<R>], targets: Option<&[&str]>)
+    fn create_program(&mut self, builder: &program::Builder<R>)
                       -> Result<handle::Program<R>, d::shade::CreateProgramError> {
         let frame_handles = &mut self.frame_handles;
         let mut handles = self.share.handles.borrow_mut();
-        ::shade::create_program(&self.share.context, &self.share.capabilities, targets,
-            shaders.iter().map(|h| frame_handles.ref_shader(h)))
+        ::shade::create_program(&self.share.context, &self.share.capabilities, Some(&builder.targets[..]),
+            builder.shaders.iter().map(|h| frame_handles.ref_shader(h)))
                 .map(|(name, info)| handles.make_program(name, info))
     }
 
