@@ -64,7 +64,7 @@ impl<R: gfx::Resources> gfx::Output<R> for Output<R> {
 
 impl<R: gfx::Resources> gfx::Window<R> for Output<R> {
     fn swap_buffers(&mut self) {
-        self.window.swap_buffers();
+        self.window.swap_buffers().unwrap();
     }
 }
 
@@ -82,7 +82,7 @@ pub type Success = (
 /// Initialize with a window.
 pub fn init(window: glutin::Window) -> Success {
     use gfx::traits::StreamFactory;
-    unsafe { window.make_current() };
+    unsafe { window.make_current().unwrap() };
     let format = window.get_pixel_format();
     let (device, mut factory) = gfx_device_gl::create(|s| window.get_proc_address(s));
     let out = Output {
