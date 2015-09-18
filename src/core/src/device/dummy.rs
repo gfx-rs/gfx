@@ -37,7 +37,7 @@ impl Resources for DummyResources {
 }
 
 impl DummyDevice {
-    fn new(capabilities: Capabilities) -> DummyDevice {
+    pub fn new(capabilities: Capabilities) -> DummyDevice {
         DummyDevice {
             capabilities: capabilities
         }
