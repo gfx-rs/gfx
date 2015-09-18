@@ -55,13 +55,13 @@ impl DataBuffer {
     /// Copy a given structure into the buffer, return the offset and the size.
     #[cfg(not(unstable))]
     pub fn add_struct<T: Copy>(&mut self, v: &T) -> DataPointer {
-        use std::{intrinsics, mem};
+        use std::{ptr, mem};
         let offset = self.buf.len();
         let size = mem::size_of::<T>();
         self.buf.reserve(size);
         unsafe {
             self.buf.set_len(offset + size);
-            intrinsics::copy((v as *const T) as *const u8,
+            ptr::copy((v as *const T) as *const u8,
                              &mut self.buf[offset] as *mut u8,
                              size);
         };
@@ -70,13 +70,13 @@ impl DataBuffer {
 
     /// Copy a given vector slice into the buffer
     pub fn add_vec<T: Copy>(&mut self, v: &[T]) -> DataPointer {
-        use std::{intrinsics, mem};
+        use std::{ptr, mem};
         let offset = self.buf.len();
         let size = mem::size_of::<T>() * v.len();
         self.buf.reserve(size);
         unsafe {
             self.buf.set_len(offset + size);
-            intrinsics::copy(v.as_ptr() as *const u8,
+            ptr::copy(v.as_ptr() as *const u8,
                              &mut self.buf[offset] as *mut u8,
                              size);
         }
