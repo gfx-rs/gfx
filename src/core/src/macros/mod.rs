@@ -30,14 +30,14 @@ macro_rules! gfx_vertex {
                 use $crate::attrib::{Offset, Stride};
                 use $crate::attrib::format::ToFormat;
                 let stride = size_of::<$name>() as Stride;
-                let mut offset = 0 as Offset;
+                let tmp: $name = unsafe{ ::std::mem::uninitialized() };
                 let mut attributes = Vec::new();
                 $(
                     let (count, etype) = <$ty as ToFormat>::describe();
                     let format = $crate::attrib::Format {
                         elem_count: count,
                         elem_type: etype,
-                        offset: offset,
+                        offset: (&tmp.$field as *const _ as usize) - (&tmp as *const _ as usize),
                         stride: stride,
                         instance_rate: 0,
                     };
@@ -46,9 +46,7 @@ macro_rules! gfx_vertex {
                         format: format,
                         buffer: buffer.raw().clone(),
                     });
-                    offset += size_of::<$ty>() as Offset;
                 )*
-                assert_eq!(offset, stride as Offset);
                 attributes
             }
         }
