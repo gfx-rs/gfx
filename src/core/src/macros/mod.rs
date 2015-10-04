@@ -37,7 +37,7 @@ macro_rules! gfx_vertex {
                     let format = $crate::attrib::Format {
                         elem_count: count,
                         elem_type: etype,
-                        offset: (&tmp.$field as *const _ as usize) - (&tmp as *const _ as usize),
+                        offset: ((&tmp.$field as *const _ as usize) - (&tmp as *const _ as usize)) as Offset,
                         stride: stride,
                         instance_rate: 0,
                     };
