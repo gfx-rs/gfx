@@ -36,10 +36,9 @@ pub struct Attribute<R: Resources> {
 
 /// A trait implemented automatically for user vertex structure by
 /// `#[vertex_format] attribute
-#[allow(missing_docs)]
 pub trait VertexFormat {
     /// Create the attributes for this type, using the given buffer.
-    fn generate<R: Resources>(buffer: &handle::Buffer<R, Self>) -> Vec<Attribute<R>>;
+    fn generate<R: Resources>(buffer: &handle::Buffer<R, Self>) -> Vec<Attribute<R>> where Self: Sized;
 }
 
 /// Describes geometry to render.
