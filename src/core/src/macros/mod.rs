@@ -26,14 +26,14 @@ macro_rules! gfx_vertex {
         impl $crate::VertexFormat for $name {
             fn generate<R: $crate::Resources>(buffer: &$crate::handle::Buffer<R, $name>)
                         -> Vec<$crate::Attribute<R>> {
-                use std::mem::size_of;
+                use std::mem::{size_of, forget};
                 use $crate::attrib::{Offset, Stride};
                 use $crate::attrib::format::ToFormat;
                 let stride = size_of::<$name>() as Stride;
-                let tmp: $name = unsafe{ ::std::mem::uninitialized() };
                 let mut attributes = Vec::new();
                 $(
                     let (count, etype) = <$ty as ToFormat>::describe();
+                    let tmp: $name = unsafe{ ::std::mem::uninitialized() };
                     let format = $crate::attrib::Format {
                         elem_count: count,
                         elem_type: etype,
@@ -41,6 +41,7 @@ macro_rules! gfx_vertex {
                         stride: stride,
                         instance_rate: 0,
                     };
+                    forget(tmp);
                     attributes.push($crate::Attribute {
                         name: stringify!($gl_name).to_string(),
                         format: format,
