@@ -130,12 +130,12 @@ impl<'a, T: Copy, R: Resources, F: Factory<R>> Drop for RW<'a, T, R, F> where
 pub trait Builder<'a, R: Resources> {
     type RawMapping: Raw;
 
-    fn map_readable<T: Copy>(&'a mut self, Self::RawMapping, usize)
-                    -> Readable<T, R, Self>;
-    fn map_writable<T: Copy>(&'a mut self, Self::RawMapping, usize)
-                    -> Writable<T, R, Self>;
-    fn map_read_write<T: Copy>(&'a mut self, Self::RawMapping, usize)
-                      -> RW<T, R, Self>;
+    fn map_readable<T: Copy>(&'a mut self, Self::RawMapping, usize) -> Readable<T, R, Self> where
+        Self: Sized + Factory<R>;
+    fn map_writable<T: Copy>(&'a mut self, Self::RawMapping, usize) -> Writable<T, R, Self> where
+        Self: Sized + Factory<R>;
+    fn map_read_write<T: Copy>(&'a mut self, Self::RawMapping, usize) -> RW<T, R, Self> where
+        Self: Sized + Factory<R>;
 }
 
 

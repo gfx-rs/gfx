@@ -228,9 +228,12 @@ pub trait Factory<R: Resources> {
     }
     fn map_buffer_raw(&mut self, &handle::RawBuffer<R>, MapAccess) -> Self::Mapper;
     fn unmap_buffer_raw(&mut self, Self::Mapper);
-    fn map_buffer_readable<T: Copy>(&mut self, &handle::Buffer<R, T>) -> mapping::Readable<T, R, Self>;
-    fn map_buffer_writable<T: Copy>(&mut self, &handle::Buffer<R, T>) -> mapping::Writable<T, R, Self>;
-    fn map_buffer_rw<T: Copy>(&mut self, &handle::Buffer<R, T>) -> mapping::RW<T, R, Self>;
+    fn map_buffer_readable<T: Copy>(&mut self, &handle::Buffer<R, T>) -> mapping::Readable<T, R, Self> where
+        Self: Sized;
+    fn map_buffer_writable<T: Copy>(&mut self, &handle::Buffer<R, T>) -> mapping::Writable<T, R, Self> where
+        Self: Sized;
+    fn map_buffer_rw<T: Copy>(&mut self, &handle::Buffer<R, T>) -> mapping::RW<T, R, Self> where
+        Self: Sized;
 
     /// Update the information stored in a texture
     fn update_texture_raw(&mut self, tex: &handle::Texture<R>,
@@ -287,7 +290,8 @@ pub trait Device {
 
 /// Extension to the Device that allows for submitting of commands
 /// around a fence
-pub trait DeviceFence<R: Resources>: Device<Resources=R> {
+pub trait DeviceFence<R: Resources>: Device<Resources=R> where
+    <Self as Device>::CommandBuffer: draw::CommandBuffer<R> {
     /// Submit a command buffer to the stream creating a fence
     /// the fence is signaled after the GPU has executed all commands
     /// in the buffer
