@@ -74,7 +74,7 @@ path = "examples/ubo_tilemap/main.rs"
 [dev_dependencies]
 env_logger = "*"
 log = "*"
-cgmath = "*"
+cgmath = "0.3"
 glutin = "0.4"
 glfw = ">=0.0.8"
 gfx_gl = "0.1"
