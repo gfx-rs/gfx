@@ -24,7 +24,7 @@ version = "0.5"
 
 [dependencies.gfx_window_glutin]
 path = "src/window/glutin"
-version = "0.5"
+version = "0.6"
 
 [dependencies.gfx_window_glfw]
 path = "src/window/glfw"
@@ -74,8 +74,8 @@ path = "examples/ubo_tilemap/main.rs"
 [dev_dependencies]
 env_logger = "*"
 log = "*"
-cgmath = "*"
-glutin = "0.3"
+cgmath = "0.3"
+glutin = "0.4"
 glfw = ">=0.0.8"
 gfx_gl = "0.1"
 rand = "*"
