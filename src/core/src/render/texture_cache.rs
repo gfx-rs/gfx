@@ -79,7 +79,7 @@ impl<R> TextureCache<R> where R: Resources {
 
         // No texture was found that was bound to the texture slot
         let mut oldest = 0;
-        for i in (0..self.textures.len()) {
+        for i in 0..self.textures.len() {
             if self.textures[i].bound.is_none() {
                 oldest = i;
                 break;
