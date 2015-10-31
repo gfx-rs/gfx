@@ -31,7 +31,7 @@ pub trait Raw {
 }
 
 /// A handle to a readable map, which can be sliced.
-pub struct Readable<'a, T: Copy, R: 'a + Resources, F: 'a + Factory<R>> where
+pub struct Readable<'a, T: Copy + 'a, R: 'a + Resources, F: 'a + Factory<R>> where
     F::Mapper: 'a
 {
     raw: F::Mapper,
@@ -41,7 +41,7 @@ pub struct Readable<'a, T: Copy, R: 'a + Resources, F: 'a + Factory<R>> where
 }
 
 impl<'a, T: Copy, R: Resources, F: Factory<R>> Deref for Readable<'a, T, R, F> where
-    F::Mapper: 'a,
+    F::Mapper: 'a
 {
     type Target = [T];
 
@@ -51,7 +51,7 @@ impl<'a, T: Copy, R: Resources, F: Factory<R>> Deref for Readable<'a, T, R, F> w
 }
 
 impl<'a, T: Copy, R: Resources, F: Factory<R>> Drop for Readable<'a, T, R, F> where
-    F::Mapper: 'a,
+    F::Mapper: 'a
 {
     fn drop(&mut self) {
         self.factory.unmap_buffer_raw(self.raw.clone())
@@ -81,7 +81,7 @@ impl<'a, T: Copy, R: Resources, F: Factory<R>> Writable<'a, T, R, F> where
 }
 
 impl<'a, T: Copy, R: Resources, F: Factory<R>> Drop for Writable<'a, T, R, F> where
-    F::Mapper: 'a,
+    F::Mapper: 'a
 {
     fn drop(&mut self) {
         self.factory.unmap_buffer_raw(self.raw.clone())
@@ -89,7 +89,7 @@ impl<'a, T: Copy, R: Resources, F: Factory<R>> Drop for Writable<'a, T, R, F> wh
 }
 
 /// A handle to a complete readable/writable map, which can be sliced both ways.
-pub struct RW<'a, T: Copy, R: 'a + Resources, F: 'a + Factory<R>> where
+pub struct RW<'a, T: Copy + 'a, R: 'a + Resources, F: 'a + Factory<R>> where
     F::Mapper: 'a
 {
     raw: F::Mapper,
@@ -98,7 +98,7 @@ pub struct RW<'a, T: Copy, R: 'a + Resources, F: 'a + Factory<R>> where
     phantom_t: PhantomData<T>
 }
 
-impl<'a, T: Copy, R: Resources, F: Factory<R>> Deref for RW<'a, T, R, F> where
+impl<'a, T: Copy + 'a, R: Resources, F: Factory<R>> Deref for RW<'a, T, R, F> where
     F::Mapper: 'a
 {
     type Target = [T];
@@ -108,7 +108,7 @@ impl<'a, T: Copy, R: Resources, F: Factory<R>> Deref for RW<'a, T, R, F> where
     }
 }
 
-impl<'a, T: Copy, R: Resources, F: Factory<R>> DerefMut for RW<'a, T, R, F> where
+impl<'a, T: Copy + 'a, R: Resources, F: Factory<R>> DerefMut for RW<'a, T, R, F> where
     F::Mapper: 'a
 {
     fn deref_mut(&mut self) -> &mut [T] {

@@ -39,6 +39,8 @@ pub mod mesh;
 pub mod shade;
 /// Render targets
 pub mod target;
+/// Contains the logic for the Texture LRU
+mod texture_cache;
 
 /// An error occuring in surface blits.
 #[derive(Clone, Debug, PartialEq)]
@@ -178,6 +180,7 @@ pub struct Renderer<R: Resources, C: CommandBuffer<R>> {
     read_frame_buffer: Result<handle::FrameBuffer<R>, device::NotSupported>,
     render_state: RenderState<R>,
     parameters: ParamStorage<R>,
+    texture_cache: texture_cache::TextureCache<R>
 }
 
 impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
@@ -187,6 +190,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         self.data_buffer.clear();
         self.handles.clear();
         self.render_state = RenderState::new();
+        self.texture_cache.clear();
     }
 
     /// Get command and data buffers to be submitted to the device.
@@ -205,6 +209,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
             read_frame_buffer: self.read_frame_buffer.clone(),
             render_state: RenderState::new(),
             parameters: ParamStorage::new(),
+            texture_cache: texture_cache::TextureCache::new(self.texture_cache.number_of_slots()),
         }
     }
 
@@ -525,9 +530,19 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
                 &None => error!("Missed block {}", var.name),
             }
         }
+
+        // If the number of slots is greater then the number of active textures
+        // we will fail the bind in the device, so we might as well fail here
+        if self.texture_cache.number_of_slots() < info.textures.len() {
+            panic!("Insufficient textures slots to draw batch slots:{} have:{}",
+                self.texture_cache.number_of_slots(),
+                info.textures.len()
+            );
+        }
+
         // bind textures and samplers
-        for (i, (var, value)) in info.textures.iter()
-            .zip(self.parameters.textures.iter()).enumerate() {
+        for (var, value) in info.textures.iter()
+            .zip(self.parameters.textures.iter()) {
             match value {
                 &Some((ref tex, ref sampler)) => {
                     let sam = match sampler {
@@ -539,9 +554,17 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
                         },
                         &None => None,
                     };
+
+                    let info = tex.get_info();
+                    let texture = self.handles.ref_texture(tex);
+
+                    // This will find a slot that the texture is already bound to
+                    // if there is no slot it will create one and return a slot
+                    let i = self.texture_cache.bind_texture(
+                        info.kind, texture, sam, &mut self.command_buffer
+                    );
+
                     self.command_buffer.bind_uniform(var.location, UniformValue::I32(i as i32));
-                    self.command_buffer.bind_texture(i as device::TextureSlot, tex.get_info().kind,
-                        self.handles.ref_texture(tex), sam);
                 },
                 &None => error!("Missed texture {}", var.name),
             }
@@ -610,6 +633,9 @@ pub trait RenderFactory<R: Resources, C: CommandBuffer<R>> {
     fn create_renderer(&mut self) -> Renderer<R, C>;
 }
 
+/// This is taken from the the OpenGL ES 3 spec
+const DEFAULT_MAX_COMBINED_TEXTURE_IMAGE_UNITS: usize = 32;
+
 impl<
     R: Resources,
     C: CommandBuffer<R>,
@@ -625,6 +651,7 @@ impl<
             read_frame_buffer: self.create_frame_buffer(),
             render_state: RenderState::new(),
             parameters: ParamStorage::new(),
+            texture_cache: texture_cache::TextureCache::new(DEFAULT_MAX_COMBINED_TEXTURE_IMAGE_UNITS),
         }
     }
 }

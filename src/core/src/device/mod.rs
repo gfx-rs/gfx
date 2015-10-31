@@ -30,6 +30,7 @@ pub mod handle;
 pub mod mapping;
 pub mod shade;
 pub mod tex;
+pub mod program;
 
 mod arc;
 
@@ -178,15 +179,15 @@ pub enum BufferUpdateError {
 /// Resources pertaining to a specific API.
 #[allow(missing_docs)]
 pub trait Resources:           Clone + Hash + fmt::Debug + Eq + PartialEq {
-    type Buffer:        Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync + 'static;
-    type ArrayBuffer:   Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync + 'static;
-    type Shader:        Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync + 'static;
-    type Program:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync + 'static;
-    type FrameBuffer:   Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync + 'static;
-    type Surface:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync + 'static;
-    type Texture:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync + 'static;
-    type Sampler:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync + 'static;
-    type Fence:         Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync + 'static;
+    type Buffer:        Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type ArrayBuffer:   Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Shader:        Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Program:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type FrameBuffer:   Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Surface:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Texture:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Sampler:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Fence:         Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
 }
 
 #[allow(missing_docs)]
@@ -212,7 +213,7 @@ pub trait Factory<R: Resources> {
     fn create_array_buffer(&mut self) -> Result<handle::ArrayBuffer<R>, NotSupported>;
     fn create_shader(&mut self, stage: shade::Stage, code: &[u8]) ->
                      Result<handle::Shader<R>, shade::CreateShaderError>;
-    fn create_program(&mut self, shaders: &[handle::Shader<R>], targets: Option<&[&str]>)
+    fn create_program(&mut self, builder: &program::Builder<R>)
                       -> Result<handle::Program<R>, shade::CreateProgramError>;
     fn create_frame_buffer(&mut self) -> Result<handle::FrameBuffer<R>, NotSupported>;
     fn create_surface(&mut self, tex::SurfaceInfo) -> Result<handle::Surface<R>, tex::SurfaceError>;
