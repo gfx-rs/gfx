@@ -28,9 +28,9 @@ path = "src/lib.rs"
 
 [dependencies]
 draw_state = "0.2.0"
-bitflags = "*"
-log = "*"
-num = "*"
+bitflags = "0.3"
+log = "0.3"
+num = "0.1"
 
 [features]
 unstable = []

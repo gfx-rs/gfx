@@ -211,7 +211,7 @@ fn gl_main(mut glfw: glfw::Glfw,
            mut window: glfw::Window,
            _: Receiver<(f64, glfw::WindowEvent),>,
            dimension: i16) {
-    let gl = Gl::load_with(|s| window.get_proc_address(s));
+    let gl = Gl::load_with(|s| window.get_proc_address(s) as *const _);
 
     // Create GLSL shaders
     let vs = compile_shader(&gl, VS_SRC, gl::VERTEX_SHADER);

@@ -27,8 +27,8 @@ authors = ["The Gfx-rs Developers"]
 name = "gfx_device_gl"
 
 [dependencies]
-log = "*"
-libc = "*"
+log = "0.3"
+libc = "0.1"
 gfx_gl = "0.1"
 
 [dependencies.gfx]

@@ -71,7 +71,7 @@ pub type Success = (
 pub fn init(mut window: glfw::Window) -> Success {
     use gfx::traits::StreamFactory;
     window.make_current();
-    let (device, mut factory) = gfx_device_gl::create(|s| window.get_proc_address(s));
+    let (device, mut factory) = gfx_device_gl::create(|s| window.get_proc_address(s) as *const _);
     let out = Output {
         window: window,
         frame: factory.get_main_frame_buffer(),
