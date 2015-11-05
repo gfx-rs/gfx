@@ -91,12 +91,9 @@ impl<R: Resources> ArrayBuffer<R> {
 
 /// Shader Handle
 #[derive(Clone, Debug, Hash, PartialEq)]
-pub struct Shader<R: Resources>(Arc<R::Shader>, shade::Stage);
+pub struct Shader<R: Resources>(Arc<R::Shader>);
 
 impl<R: Resources> Shader<R> {
-    /// Get shader stage
-    pub fn get_stage(&self) -> &shade::Stage { &self.1 }
-
     /// Compare ethe handle by the reference (not data)
     pub fn cmp_ref(&self, lhs: &Shader<R>) -> cmp::Ordering {
         self.0.cmp_ref(&lhs.0)
@@ -189,7 +186,7 @@ pub struct Manager<R: Resources> {
 pub trait Producer<R: Resources> {
     fn make_buffer(&mut self, R::Buffer, BufferInfo) -> RawBuffer<R>;
     fn make_array_buffer(&mut self, R::ArrayBuffer) -> ArrayBuffer<R>;
-    fn make_shader(&mut self, R::Shader, shade::Stage) -> Shader<R>;
+    fn make_shader(&mut self, R::Shader) -> Shader<R>;
     fn make_program(&mut self, R::Program, shade::ProgramInfo) -> Program<R>;
     fn make_frame_buffer(&mut self, R::FrameBuffer) -> FrameBuffer<R>;
     fn make_surface(&mut self, R::Surface, tex::SurfaceInfo) -> Surface<R>;
@@ -225,10 +222,10 @@ impl<R: Resources> Producer<R> for Manager<R> {
         ArrayBuffer(r)
     }
 
-    fn make_shader(&mut self, name: R::Shader, info: shade::Stage) -> Shader<R> {
+    fn make_shader(&mut self, name: R::Shader) -> Shader<R> {
         let r = Arc::new(name);
         self.shaders.push(r.clone());
-        Shader(r, info)
+        Shader(r)
     }
 
     fn make_program(&mut self, name: R::Program, info: shade::ProgramInfo) -> Program<R> {

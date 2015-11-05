@@ -56,7 +56,7 @@ pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: &[u8])
     let target = match stage {
         Stage::Vertex => gl::VERTEX_SHADER,
         Stage::Geometry => gl::GEOMETRY_SHADER,
-        Stage::Fragment => gl::FRAGMENT_SHADER,
+        Stage::Pixel => gl::FRAGMENT_SHADER,
     };
     let name = unsafe { gl.CreateShader(target) };
     unsafe {
@@ -297,11 +297,11 @@ pub fn get_program_log(gl: &gl::Gl, name: super::Program) -> String {
     }
 }
 
-pub fn create_program<I: Iterator<Item = super::Shader>>(gl: &gl::Gl,
-                      caps: &d::Capabilities, targets: Option<&[&str]>, shaders: I)
+pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities, targets: Option<&[&str]>,
+                      shaders: &[super::Shader])
                       -> Result<(::Program, s::ProgramInfo), s::CreateProgramError> {
     let name = unsafe { gl.CreateProgram() };
-    for sh in shaders {
+    for &sh in shaders {
         unsafe { gl.AttachShader(name, sh) };
     }
 
