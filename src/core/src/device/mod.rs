@@ -30,7 +30,6 @@ pub mod handle;
 pub mod mapping;
 pub mod shade;
 pub mod tex;
-pub mod program;
 
 mod arc;
 
@@ -59,6 +58,30 @@ pub fn as_byte_slice<T>(slice: &[T]) -> &[u8] {
     unsafe {
         slice::from_raw_parts(slice.as_ptr() as *const u8, len)
     }
+}
+
+macro_rules! define_shaders {
+    ($($name:ident),+) => {$(
+        #[allow(missing_docs)]
+        pub struct $name<R: Resources>(handle::Shader<R>);
+        impl<R: Resources> $name<R> {
+            #[allow(missing_docs)]
+            pub fn reference(&self, man: &mut handle::Manager<R>) -> R::Shader {
+                man.ref_shader(&self.0)
+            }
+        }
+    )+}
+}
+
+define_shaders!(VertexShader, HullShader, DomainShader, GeometryShader, PixelShader);
+
+/// A complete set of shaders to link a program.
+pub enum ShaderSet<R: Resources> {
+    /// Simple program: Vs-Ps
+    Simple(VertexShader<R>, PixelShader<R>),
+    /// Geometry shader programs: Vs-Gs-Ps
+    Geometry(VertexShader<R>, GeometryShader<R>, PixelShader<R>),
+    //TODO: Tessellated, TessellatedGeometry, TransformFeedback
 }
 
 /// Features that the device supports.
@@ -199,6 +222,7 @@ pub trait Factory<R: Resources> {
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
 
     // resource creation
+    fn create_array_buffer(&mut self) -> Result<handle::ArrayBuffer<R>, NotSupported>;
     fn create_buffer_raw(&mut self, size: usize, BufferRole, BufferUsage) -> handle::RawBuffer<R>;
     fn create_buffer_static_raw(&mut self, data: &[u8], BufferRole) -> handle::RawBuffer<R>;
     fn create_buffer_static<T>(&mut self, data: &[T], role: BufferRole) -> handle::Buffer<R, T> {
@@ -210,11 +234,20 @@ pub trait Factory<R: Resources> {
             self.create_buffer_raw(num * mem::size_of::<T>(), role, BufferUsage::Stream))
     }
 
-    fn create_array_buffer(&mut self) -> Result<handle::ArrayBuffer<R>, NotSupported>;
+    fn create_program(&mut self, shader_set: &ShaderSet<R>)
+                      -> Result<handle::Program<R>, shade::CreateProgramError>;
     fn create_shader(&mut self, stage: shade::Stage, code: &[u8]) ->
                      Result<handle::Shader<R>, shade::CreateShaderError>;
-    fn create_program(&mut self, builder: &program::Builder<R>)
-                      -> Result<handle::Program<R>, shade::CreateProgramError>;
+    fn create_shader_vertex(&mut self, code: &[u8]) -> Result<VertexShader<R>, shade::CreateShaderError> {
+        self.create_shader(shade::Stage::Vertex, code).map(|s| VertexShader(s))
+    }
+    fn create_shader_geometry(&mut self, code: &[u8]) -> Result<GeometryShader<R>, shade::CreateShaderError> {
+        self.create_shader(shade::Stage::Geometry, code).map(|s| GeometryShader(s))
+    }
+    fn create_shader_pixel(&mut self, code: &[u8]) -> Result<PixelShader<R>, shade::CreateShaderError> {
+        self.create_shader(shade::Stage::Pixel, code).map(|s| PixelShader(s))
+    }
+
     fn create_frame_buffer(&mut self) -> Result<handle::FrameBuffer<R>, NotSupported>;
     fn create_surface(&mut self, tex::SurfaceInfo) -> Result<handle::Surface<R>, tex::SurfaceError>;
     fn create_texture(&mut self, tex::TextureInfo) -> Result<handle::Texture<R>, tex::TextureError>;

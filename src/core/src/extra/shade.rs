@@ -21,8 +21,8 @@ use device::shade::{CreateShaderError, CreateProgramError, ShaderModel};
 pub enum ProgramError {
     /// Unable to compile the vertex shader
     Vertex(CreateShaderError),
-    /// Unable to compile the fragment shader
-    Fragment(CreateShaderError),
+    /// Unable to compile the pixel shader
+    Pixel(CreateShaderError),
     /// Unable to link
     Link(CreateProgramError),
 }

@@ -22,7 +22,6 @@ use gfx::device as d;
 use gfx::device::handle;
 use gfx::device::handle::Producer;
 use gfx::device::mapping::Builder;
-use gfx::device::program;
 use gfx::tex::Size;
 
 use {Buffer, Share};
@@ -213,15 +212,28 @@ impl d::Factory<R> for Factory {
     fn create_shader(&mut self, stage: d::shade::Stage, code: &[u8])
                      -> Result<handle::Shader<R>, d::shade::CreateShaderError> {
         ::shade::create_shader(&self.share.context, stage, code)
-                .map(|sh| self.share.handles.borrow_mut().make_shader(sh, stage))
+                .map(|sh| self.share.handles.borrow_mut().make_shader(sh))
     }
 
-    fn create_program(&mut self, builder: &program::Builder<R>)
+    fn create_program(&mut self, shader_set: &d::ShaderSet<R>)
                       -> Result<handle::Program<R>, d::shade::CreateProgramError> {
         let frame_handles = &mut self.frame_handles;
         let mut handles = self.share.handles.borrow_mut();
-        ::shade::create_program(&self.share.context, &self.share.capabilities, Some(&builder.targets[..]),
-            builder.shaders.iter().map(|h| frame_handles.ref_shader(h)))
+        let mut shaders = [0; 3];
+        let shader_slice = match shader_set {
+            &d::ShaderSet::Simple(ref vs, ref ps) => {
+                shaders[0] = vs.reference(frame_handles);
+                shaders[1] = ps.reference(frame_handles);
+                &shaders[..2]
+            },
+            &d::ShaderSet::Geometry(ref vs, ref gs, ref ps) => {
+                shaders[0] = vs.reference(frame_handles);
+                shaders[1] = gs.reference(frame_handles);
+                shaders[2] = ps.reference(frame_handles);
+                &shaders[..3]
+            },
+        };
+        ::shade::create_program(&self.share.context, &self.share.capabilities, None, shader_slice)
                 .map(|(name, info)| handles.make_program(name, info))
     }
 

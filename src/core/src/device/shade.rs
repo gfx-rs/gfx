@@ -95,7 +95,7 @@ pub enum ContainerType {
 pub enum Stage {
     Vertex,
     Geometry,
-    Fragment,
+    Pixel,
 }
 
 // Describing program data

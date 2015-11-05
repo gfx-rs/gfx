@@ -16,7 +16,7 @@
 
 use device;
 use device::{handle, tex};
-use device::shade::{Stage, CreateShaderError};
+use device::shade::CreateShaderError;
 use render::mesh::{Mesh, VertexFormat};
 use super::shade::*;
 
@@ -31,55 +31,36 @@ pub trait FactoryExt<R: device::Resources>: device::Factory<R> {
         Mesh::from_format(buf, nv as device::VertexCount)
     }
 
-    /// Create a simple program given a vertex shader with a fragment one.
-    fn link_program(&mut self, vs_code: &[u8], fs_code: &[u8])
+    /// Create a simple program given a vertex shader with a pixel one.
+    fn link_program(&mut self, vs_code: &[u8], ps_code: &[u8])
                     -> Result<handle::Program<R>, ProgramError> {
 
-        let vs = match self.create_shader(Stage::Vertex, vs_code) {
+        let vs = match self.create_shader_vertex(vs_code) {
             Ok(s) => s,
             Err(e) => return Err(ProgramError::Vertex(e)),
         };
-        let fs = match self.create_shader(Stage::Fragment, fs_code) {
+        let ps = match self.create_shader_pixel(ps_code) {
             Ok(s) => s,
-            Err(e) => return Err(ProgramError::Fragment(e)),
+            Err(e) => return Err(ProgramError::Pixel(e)),
         };
 
-        let builder = device::program::Builder::new()
-            .add_shaders(&[&vs, &fs]);
+        let set = device::ShaderSet::Simple(vs, ps);
 
-        self.create_program(&builder)
+        self.create_program(&set)
             .map_err(|e| ProgramError::Link(e))
-    }
-
-    /// Compile a single shader of a given stage, automatically picking the right
-    /// shader variant.
-    fn compile_shader_source(&mut self, stage: Stage, source: ShaderSource)
-                             -> Result<handle::Shader<R>, CreateShaderError> {
-        match source.choose(self.get_capabilities().shader_model) {
-            Ok(code) => self.create_shader(stage, code),
-            Err(_) => Err(CreateShaderError::ModelNotSupported)
-        }
     }
 
     /// Create a simple program given `ShaderSource` versions of vertex and
-    /// fragment shaders, automatically picking available shader variant.
-    fn link_program_source(&mut self, vs_src: ShaderSource, fs_src: ShaderSource)
+    /// pixel shaders, automatically picking available shader variant.
+    fn link_program_source(&mut self, vs_src: ShaderSource, ps_src: ShaderSource)
                             -> Result<handle::Program<R>, ProgramError> {
-        let vs = match self.compile_shader_source(Stage::Vertex, vs_src) {
-            Ok(s) => s,
-            Err(e) => return Err(ProgramError::Vertex(e)),
-        };
-        let fs = match self.compile_shader_source(Stage::Fragment, fs_src) {
-            Ok(s) => s,
-            Err(e) => return Err(ProgramError::Fragment(e)),
-        };
+        let model = self.get_capabilities().shader_model;
 
-        let builder = device::program::Builder::new()
-            .add_shaders(&[&vs, &fs])
-            .add_targets(fs_src.targets);
-
-        self.create_program(&builder)
-            .map_err(|e| ProgramError::Link(e))
+        match (vs_src.choose(model), ps_src.choose(model)) {
+            (Ok(vs_code), Ok(ps_code)) => self.link_program(vs_code, ps_code),
+            (Err(_), Ok(_)) => Err(ProgramError::Vertex(CreateShaderError::ModelNotSupported)),
+            (_, Err(_)) => Err(ProgramError::Pixel(CreateShaderError::ModelNotSupported)),
+        }
     }
 
     /// Create a simple RGBA8 2D texture.
