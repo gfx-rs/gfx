@@ -52,6 +52,9 @@ pub type Sampler        = gl::types::GLuint;
 pub type Texture        = gl::types::GLuint;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct PipelineState(Program);
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Fence(gl::types::GLsync);
 
 unsafe impl Send for Fence {}
@@ -65,6 +68,7 @@ impl gfx::Resources for Resources {
     type ArrayBuffer    = ArrayBuffer;
     type Shader         = Shader;
     type Program        = Program;
+    type PipelineState  = PipelineState;
     type FrameBuffer    = FrameBuffer;
     type Surface        = Surface;
     type Texture        = Texture;
@@ -642,6 +646,7 @@ impl gfx::Device for Device {
             |gl, v| unsafe { gl.DeleteVertexArrays(1, v) },
             |gl, v| unsafe { gl.DeleteShader(*v) },
             |gl, v| unsafe { gl.DeleteProgram(*v) },
+            |gl, v| unsafe { gl.DeleteProgram(v.0) },
             |gl, v| unsafe { gl.DeleteFramebuffers(1, v) },
             |gl, v| unsafe { gl.DeleteRenderbuffers(1, v) },
             |gl, v| unsafe { gl.DeleteTextures(1, v) },

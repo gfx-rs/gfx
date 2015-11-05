@@ -34,6 +34,7 @@ impl Resources for DummyResources {
     type Texture        = ();
     type Sampler        = ();
     type Fence          = ();
+    type PipelineState  = ();
 }
 
 impl DummyDevice {

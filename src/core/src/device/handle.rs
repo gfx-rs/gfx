@@ -31,6 +31,11 @@ pub struct RawBuffer<R: Resources>(Arc<R::Buffer>, BufferInfo);
 impl<R: Resources> RawBuffer<R> {
     /// Get raw buffer info
     pub fn get_info(&self) -> &BufferInfo { &self.1 }
+
+    /// Compare the handle by the reference (not data)
+    pub fn cmp_ref(&self, other: &RawBuffer<R>) -> cmp::Ordering {
+        self.0.cmp_ref(&other.0)
+    }
 }
 
 /// Type-safe buffer handle
@@ -131,15 +136,16 @@ pub struct Fence<R: Resources>(Arc<R::Fence>);
 /// and the Renderer during CommandBuffer population.
 #[allow(missing_docs)]
 pub struct Manager<R: Resources> {
-    buffers:       Vec<Arc<R::Buffer>>,
-    array_buffers: Vec<Arc<R::ArrayBuffer>>,
-    shaders:       Vec<Arc<R::Shader>>,
-    programs:      Vec<Arc<R::Program>>,
-    frame_buffers: Vec<Arc<R::FrameBuffer>>,
-    surfaces:      Vec<Arc<R::Surface>>,
-    textures:      Vec<Arc<R::Texture>>,
-    samplers:      Vec<Arc<R::Sampler>>,
-    fences:        Vec<Arc<R::Fence>>
+    buffers:         Vec<Arc<R::Buffer>>,
+    array_buffers:   Vec<Arc<R::ArrayBuffer>>,
+    shaders:         Vec<Arc<R::Shader>>,
+    programs:        Vec<Arc<R::Program>>,
+    pipeline_states: Vec<Arc<R::PipelineState>>,
+    frame_buffers:   Vec<Arc<R::FrameBuffer>>,
+    surfaces:        Vec<Arc<R::Surface>>,
+    textures:        Vec<Arc<R::Texture>>,
+    samplers:        Vec<Arc<R::Sampler>>,
+    fences:          Vec<Arc<R::Fence>>,
 }
 
 /// A service trait to be used by the device implementation
@@ -149,6 +155,7 @@ pub trait Producer<R: Resources> {
     fn make_array_buffer(&mut self, R::ArrayBuffer) -> ArrayBuffer<R>;
     fn make_shader(&mut self, R::Shader) -> Shader<R>;
     fn make_program(&mut self, R::Program, shade::ProgramInfo) -> Program<R>;
+    fn make_pipeline_state(&mut self, R::PipelineState, shade::ProgramInfo) -> PipelineState<R>;
     fn make_frame_buffer(&mut self, R::FrameBuffer) -> FrameBuffer<R>;
     fn make_surface(&mut self, R::Surface, tex::SurfaceInfo) -> Surface<R>;
     fn make_texture(&mut self, R::Texture, tex::TextureInfo) -> Texture<R>;
@@ -158,16 +165,17 @@ pub trait Producer<R: Resources> {
     /// Walk through all the handles, keep ones that are reference elsewhere
     /// and call the provided delete function (resource-specific) for others
     fn clean_with<T,
-        F1: Fn(&mut T, &R::Buffer),
-        F2: Fn(&mut T, &R::ArrayBuffer),
-        F3: Fn(&mut T, &R::Shader),
-        F4: Fn(&mut T, &R::Program),
-        F5: Fn(&mut T, &R::FrameBuffer),
-        F6: Fn(&mut T, &R::Surface),
-        F7: Fn(&mut T, &R::Texture),
-        F8: Fn(&mut T, &R::Sampler),
-        F9: Fn(&mut T, &R::Fence),
-    >(&mut self, &mut T, F1, F2, F3, F4, F5, F6, F7, F8, F9);
+        A: Fn(&mut T, &R::Buffer),
+        B: Fn(&mut T, &R::ArrayBuffer),
+        C: Fn(&mut T, &R::Shader),
+        D: Fn(&mut T, &R::Program),
+        E: Fn(&mut T, &R::PipelineState),
+        F: Fn(&mut T, &R::FrameBuffer),
+        G: Fn(&mut T, &R::Surface),
+        H: Fn(&mut T, &R::Texture),
+        I: Fn(&mut T, &R::Sampler),
+        J: Fn(&mut T, &R::Fence),
+    >(&mut self, &mut T, A, B, C, D, E, F, G, H, I, J);
 }
 
 impl<R: Resources> Producer<R> for Manager<R> {
@@ -226,17 +234,20 @@ impl<R: Resources> Producer<R> for Manager<R> {
     }
 
     fn clean_with<T,
-        F1: Fn(&mut T, &R::Buffer),
-        F2: Fn(&mut T, &R::ArrayBuffer),
-        F3: Fn(&mut T, &R::Shader),
-        F4: Fn(&mut T, &R::Program),
-        F5: Fn(&mut T, &R::FrameBuffer),
-        F6: Fn(&mut T, &R::Surface),
-        F7: Fn(&mut T, &R::Texture),
-        F8: Fn(&mut T, &R::Sampler),
-        F9: Fn(&mut T, &R::Fence),
-    >(&mut self, param: &mut T, f1: F1, f2: F2, f3: F3, f4: F4, f5: F5, f6: F6, f7: F7, f8: F8, f9: F9) {
-        fn clean_vec<X: Clone, T, F: Fn(&mut T, &X)>(param: &mut T, vector: &mut Vec<Arc<X>>, fun: F) {
+        A: Fn(&mut T, &R::Buffer),
+        B: Fn(&mut T, &R::ArrayBuffer),
+        C: Fn(&mut T, &R::Shader),
+        D: Fn(&mut T, &R::Program),
+        E: Fn(&mut T, &R::PipelineState),
+        F: Fn(&mut T, &R::FrameBuffer),
+        G: Fn(&mut T, &R::Surface),
+        H: Fn(&mut T, &R::Texture),
+        I: Fn(&mut T, &R::Sampler),
+        J: Fn(&mut T, &R::Fence),
+    >(&mut self, param: &mut T, fa: A, fb: B, fc: C, fd: D, fe: E, ff: F, fg: G, fh: H, fi: I, fj: J) {
+        fn clean_vec<X, Param, Fun>(param: &mut Param, vector: &mut Vec<Arc<X>>, fun: Fun)
+            where X: Clone, Fun: Fn(&mut Param, &X)
+        {
             let mut temp = Vec::new();
             // delete unique resources and make a list of their indices
             for (i, v) in vector.iter_mut().enumerate() {
@@ -251,15 +262,16 @@ impl<R: Resources> Producer<R> for Manager<R> {
                 vector.swap_remove(*t);
             }
         }
-        clean_vec(param, &mut self.buffers,       f1);
-        clean_vec(param, &mut self.array_buffers, f2);
-        clean_vec(param, &mut self.shaders,       f3);
-        clean_vec(param, &mut self.programs,      f4);
-        clean_vec(param, &mut self.frame_buffers, f5);
-        clean_vec(param, &mut self.surfaces,      f6);
-        clean_vec(param, &mut self.textures,      f7);
-        clean_vec(param, &mut self.samplers,      f8);
-        clean_vec(param, &mut self.fences,        f9);
+        clean_vec(param, &mut self.buffers,         fa);
+        clean_vec(param, &mut self.array_buffers,   fb);
+        clean_vec(param, &mut self.shaders,         fc);
+        clean_vec(param, &mut self.programs,        fd);
+        clean_vec(param, &mut self.pipeline_states, fe);
+        clean_vec(param, &mut self.frame_buffers,   ff);
+        clean_vec(param, &mut self.surfaces,        fg);
+        clean_vec(param, &mut self.textures,        fh);
+        clean_vec(param, &mut self.samplers,        fi);
+        clean_vec(param, &mut self.fences,          fj);
     }
 }
 
@@ -271,6 +283,7 @@ impl<R: Resources> Manager<R> {
             array_buffers: Vec::new(),
             shaders: Vec::new(),
             programs: Vec::new(),
+            pipeline_states: Vec::new(),
             frame_buffers: Vec::new(),
             surfaces: Vec::new(),
             textures: Vec::new(),
@@ -284,6 +297,7 @@ impl<R: Resources> Manager<R> {
         self.array_buffers.clear();
         self.shaders.clear();
         self.programs.clear();
+        self.pipeline_states.clear();
         self.frame_buffers.clear();
         self.surfaces.clear();
         self.textures.clear();
@@ -291,14 +305,15 @@ impl<R: Resources> Manager<R> {
     }
     /// Extend with all references of another handle manager
     pub fn extend(&mut self, other: &Manager<R>) {
-        self.buffers      .extend(other.buffers      .iter().map(|h| h.clone()));
-        self.array_buffers.extend(other.array_buffers.iter().map(|h| h.clone()));
-        self.shaders      .extend(other.shaders      .iter().map(|h| h.clone()));
-        self.programs     .extend(other.programs     .iter().map(|h| h.clone()));
-        self.frame_buffers.extend(other.frame_buffers.iter().map(|h| h.clone()));
-        self.surfaces     .extend(other.surfaces     .iter().map(|h| h.clone()));
-        self.textures     .extend(other.textures     .iter().map(|h| h.clone()));
-        self.samplers     .extend(other.samplers     .iter().map(|h| h.clone()));
+        self.buffers        .extend(other.buffers        .iter().map(|h| h.clone()));
+        self.array_buffers  .extend(other.array_buffers  .iter().map(|h| h.clone()));
+        self.shaders        .extend(other.shaders        .iter().map(|h| h.clone()));
+        self.programs       .extend(other.programs       .iter().map(|h| h.clone()));
+        self.pipeline_states.extend(other.pipeline_states.iter().map(|h| h.clone()));
+        self.frame_buffers  .extend(other.frame_buffers  .iter().map(|h| h.clone()));
+        self.surfaces       .extend(other.surfaces       .iter().map(|h| h.clone()));
+        self.textures       .extend(other.textures       .iter().map(|h| h.clone()));
+        self.samplers       .extend(other.samplers       .iter().map(|h| h.clone()));
     }
     /// Count the total number of referenced resources
     pub fn count(&self) -> usize {
@@ -306,6 +321,7 @@ impl<R: Resources> Manager<R> {
         self.array_buffers.len() +
         self.shaders.len() +
         self.programs.len() +
+        self.pipeline_states.len() +
         self.frame_buffers.len() +
         self.surfaces.len() +
         self.textures.len() +
@@ -331,6 +347,11 @@ impl<R: Resources> Manager<R> {
         self.programs.push(handle.0.clone());
         *handle.0.deref()
     }
+    /// Reference a ppipeline state object
+    pub fn ref_pipeline_state(&mut self, handle: &PipelineState<R>) -> R::PipelineState {
+        self.pipeline_states.push(handle.0.clone());
+        *handle.0.deref()
+    }
     /// Reference a frame buffer
     pub fn ref_frame_buffer(&mut self, handle: &FrameBuffer<R>) -> R::FrameBuffer {
         self.frame_buffers.push(handle.0.clone());
@@ -351,7 +372,6 @@ impl<R: Resources> Manager<R> {
         self.samplers.push(handle.0.clone());
         *handle.0.deref()
     }
-
     /// Reference a fence
     pub fn ref_fence(&mut self, fence: &Fence<R>) -> R::Fence {
         self.fences.push(fence.0.clone());
