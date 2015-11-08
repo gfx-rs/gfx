@@ -17,7 +17,7 @@
 #[macro_export]
 macro_rules! gfx_vertex {
     ($name:ident {
-        $($gl_name:ident@ $field:ident: $ty:ty,)*
+        $($gl_name:ident@ $field:ident: $ty:ty),*
     }) => {
         #[derive(Clone, Copy, Debug)]
         pub struct $name {
@@ -57,7 +57,7 @@ macro_rules! gfx_vertex {
 #[macro_export]
 macro_rules! gfx_parameters {
     ($name:ident {
-        $($gl_name:ident@ $field:ident: $ty:ty,)*
+        $($gl_name:ident@ $field:ident: $ty:ty),*
     }) => {
         #[derive(Clone, Debug)]
         pub struct $name<R: $crate::Resources> {
