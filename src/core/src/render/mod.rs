@@ -485,8 +485,16 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         if self.render_state.draw.blend != state.blend {
             self.command_buffer.set_blend(state.blend);
         }
-        if self.render_state.draw.color_mask != state.color_mask {
-            self.command_buffer.set_color_mask(state.color_mask);
+        let stencil_change = match (self.render_state.draw.stencil, state.stencil) {
+            (Some(ref old), Some(ref new)) if
+                old.front_ref_value != new.front_ref_value ||
+                old.back_ref_value != new.back_ref_value => Some((new.front_ref_value, new.back_ref_value)),
+            (None, Some(ref new)) => Some((new.front_ref_value, new.back_ref_value)),
+            (_, _) => None,
+        };
+        if self.render_state.draw.blend_value != state.blend_value || stencil_change.is_some() {
+            let (sf, sb) = stencil_change.unwrap_or((0, 0));
+            self.command_buffer.set_ref_values(state.blend_value, sf, sb);
         }
         self.render_state.draw = *state;
     }

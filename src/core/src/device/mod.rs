@@ -19,8 +19,7 @@
 use std::{fmt, mem};
 use std::hash::Hash;
 
-pub use draw_state::target;
-pub use draw_state::state;
+pub use draw_state::{state, target};
 
 pub mod attrib;
 pub mod command;
@@ -123,7 +122,7 @@ pub enum MapAccess {
 }
 
 /// Describes what geometric primitives are created from vertex data.
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 #[repr(u8)]
 pub enum PrimitiveType {
     /// Each vertex represents a single point.

@@ -17,7 +17,7 @@ use std::slice;
 use device as d;
 use device::{Resources};
 use device::draw::{Access, Gamma, Target};
-use draw_state::target::{Rect, Mirror, Mask, ClearData, Layer, Level};
+use draw_state::target::{ClearData, ColorValue, Layer, Level, Mask, Mirror, Rect, Stencil};
 
 ///Generic command buffer to be used by multiple backends
 pub struct CommandBuffer<R: Resources> {
@@ -28,6 +28,7 @@ pub struct CommandBuffer<R: Resources> {
 #[derive(Copy, Clone, Debug)]
 pub enum Command<R: Resources> {
     BindProgram(R::Program),
+    BindPipelineState(R::PipelineState),
     BindArrayBuffer(R::ArrayBuffer),
     BindAttribute(d::AttributeSlot, R::Buffer, d::attrib::Format),
     BindIndex(R::Buffer),
@@ -48,7 +49,7 @@ pub enum Command<R: Resources> {
     SetDepthStencilState(Option<d::state::Depth>, Option<d::state::Stencil>,
                          d::state::CullFace),
     SetBlendState(Option<d::state::Blend>),
-    SetColorMask(d::state::ColorMask),
+    SetRefValues(ColorValue, Stencil, Stencil),
     UpdateBuffer(R::Buffer, d::draw::DataPointer, usize),
     UpdateTexture(d::tex::Kind, R::Texture, d::tex::ImageInfo,
                   d::draw::DataPointer),
@@ -82,6 +83,10 @@ impl<R> d::draw::CommandBuffer<R> for CommandBuffer<R>
 
     fn bind_program(&mut self, prog: R::Program) {
         self.buf.push(Command::BindProgram(prog));
+    }
+
+    fn bind_pipeline_state(&mut self, pso: R::PipelineState) {
+        self.buf.push(Command::BindPipelineState(pso));
     }
 
     fn bind_array_buffer(&mut self, vao: R::ArrayBuffer) {
@@ -165,8 +170,8 @@ impl<R> d::draw::CommandBuffer<R> for CommandBuffer<R>
         self.buf.push(Command::SetBlendState(blend));
     }
 
-    fn set_color_mask(&mut self, mask: d::state::ColorMask) {
-        self.buf.push(Command::SetColorMask(mask));
+    fn set_ref_values(&mut self, blend: ColorValue, stencil_front: Stencil, stencil_back: Stencil) {
+        self.buf.push(Command::SetRefValues(blend, stencil_front, stencil_back));
     }
 
     fn update_buffer(&mut self, buf: R::Buffer, data: d::draw::DataPointer,

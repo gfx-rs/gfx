@@ -15,7 +15,7 @@
 use gfx::device::state as s;
 use gfx::device::state::{BlendValue, Comparison, CullFace, Equation,
                          Offset, RasterMethod, StencilOp, FrontFace};
-use gfx::device::target::Rect;
+use gfx::device::target::{ColorValue, Rect, Stencil};
 use super::gl;
 
 pub fn bind_primitive(gl: &gl::Gl, p: s::Primitive) {
@@ -27,7 +27,7 @@ pub fn bind_primitive(gl: &gl::Gl, p: s::Primitive) {
     let (gl_draw, gl_offset) = match p.method {
         RasterMethod::Point => (gl::POINT, gl::POLYGON_OFFSET_POINT),
         RasterMethod::Line(width) => {
-            unsafe { gl.LineWidth(width) };
+            unsafe { gl.LineWidth(width as gl::types::GLfloat) };
             (gl::LINE, gl::POLYGON_OFFSET_LINE)
         },
         RasterMethod::Fill(cull) => {
@@ -51,7 +51,8 @@ pub fn bind_primitive(gl: &gl::Gl, p: s::Primitive) {
     match p.offset {
         Some(Offset(factor, units)) => unsafe {
             gl.Enable(gl_offset);
-            gl.PolygonOffset(factor, units as gl::types::GLfloat);
+            gl.PolygonOffset(factor as gl::types::GLfloat,
+                             units as gl::types::GLfloat);
         },
         None => unsafe {
             gl.Disable(gl_offset)
@@ -140,9 +141,9 @@ fn map_operation(op: StencilOp) -> gl::types::GLenum {
 }
 
 pub fn bind_stencil(gl: &gl::Gl, stencil: Option<s::Stencil>, cull: s::CullFace) {
-    fn bind_side(gl: &gl::Gl, face: gl::types::GLenum, side: s::StencilSide) { unsafe {
+    fn bind_side(gl: &gl::Gl, face: gl::types::GLenum, side: s::StencilSide, ref_value: Stencil) { unsafe {
         gl.StencilFuncSeparate(face, map_comparison(side.fun),
-            side.value as gl::types::GLint, side.mask_read as gl::types::GLuint);
+            ref_value as gl::types::GLint, side.mask_read as gl::types::GLuint);
         gl.StencilMaskSeparate(face, side.mask_write as gl::types::GLuint);
         gl.StencilOpSeparate(face, map_operation(side.op_fail),
             map_operation(side.op_depth_fail), map_operation(side.op_pass));
@@ -151,10 +152,10 @@ pub fn bind_stencil(gl: &gl::Gl, stencil: Option<s::Stencil>, cull: s::CullFace)
         Some(s) => {
             unsafe { gl.Enable(gl::STENCIL_TEST) };
             if cull != CullFace::Front {
-                bind_side(gl, gl::FRONT, s.front);
+                bind_side(gl, gl::FRONT, s.front, s.front_ref_value);
             }
             if cull != CullFace::Back {
-                bind_side(gl, gl::BACK, s.back);
+                bind_side(gl, gl::BACK, s.back, s.back_ref_value);
             }
         }
         None => unsafe { gl.Disable(gl::STENCIL_TEST) },
@@ -193,7 +194,7 @@ fn map_factor(factor: s::Factor) -> gl::types::GLenum {
 }
 
 pub fn bind_blend(gl: &gl::Gl, blend: Option<s::Blend>) {
-    match blend {
+    let mask = match blend {
         Some(b) => { unsafe {
             gl.Enable(gl::BLEND);
             gl.BlendEquationSeparate(
@@ -206,18 +207,29 @@ pub fn bind_blend(gl: &gl::Gl, blend: Option<s::Blend>) {
                 map_factor(b.alpha.source),
                 map_factor(b.alpha.destination)
             );
-            let c = b.value;
-            gl.BlendColor(c[0], c[1], c[2], c[3]);
+            b.mask
         }},
-        None => unsafe { gl.Disable(gl::BLEND) },
-    }
-}
-
-pub fn bind_color_mask(gl: &gl::Gl, mask: s::ColorMask) {
+        None => {
+            unsafe { gl.Disable(gl::BLEND) };
+            s::MASK_ALL
+        },
+    };
     unsafe { gl.ColorMask(
         if (mask & s::RED  ).is_empty() {gl::FALSE} else {gl::TRUE},
         if (mask & s::GREEN).is_empty() {gl::FALSE} else {gl::TRUE},
         if (mask & s::BLUE ).is_empty() {gl::FALSE} else {gl::TRUE},
         if (mask & s::ALPHA).is_empty() {gl::FALSE} else {gl::TRUE}
     )};
+}
+
+pub fn unlock_color_mask(gl: &gl::Gl) {
+    unsafe { gl.ColorMask(gl::TRUE, gl::TRUE, gl::TRUE, gl::TRUE) };
+}
+
+pub fn set_ref_values(gl: &gl::Gl, blend: ColorValue,
+                      _front: Stencil, _back: Stencil) {
+    unsafe {
+        gl.BlendColor(blend[0], blend[1], blend[2], blend[3])
+    };
+    //TODO: call gl.StencilFuncSeparate with cached parameters
 }

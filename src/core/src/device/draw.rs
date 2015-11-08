@@ -103,6 +103,8 @@ pub trait CommandBuffer<R: Resources> {
     fn clear(&mut self);
     /// Bind a shader program
     fn bind_program(&mut self, R::Program);
+    /// Bind a pipeline state object
+    fn bind_pipeline_state(&mut self, R::PipelineState);
     /// Bind an array buffer object
     fn bind_array_buffer(&mut self, R::ArrayBuffer);
     /// Bind a vertex attribute
@@ -142,8 +144,9 @@ pub trait CommandBuffer<R: Resources> {
                          Option<::state::Stencil>, ::state::CullFace);
     /// Set blend state
     fn set_blend(&mut self, Option<::state::Blend>);
-    /// Set output color mask for all targets
-    fn set_color_mask(&mut self, ::state::ColorMask);
+    /// Set reference values for the blending and stencil front/back.
+    fn set_ref_values(&mut self, target::ColorValue,
+                      target::Stencil, target::Stencil);
     /// Update a vertex/index/uniform buffer
     fn update_buffer(&mut self, R::Buffer, DataPointer, usize);
     /// Update a texture region

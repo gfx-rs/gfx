@@ -11,6 +11,7 @@ impl gfx::Resources for TestResources {
     type ArrayBuffer = ();
     type Shader = ();
     type Program = ();
+    type PipelineState = ();
     type FrameBuffer = ();
     type Surface = ();
     type Texture = ();
@@ -47,6 +48,7 @@ fn test_cleanup() {
     let _ = man.make_frame_buffer(());
     let mut count = 0u8;
     man.clean_with(&mut count,
+        |_,_| (),
         |_,_| (),
         |_,_| (),
         |_,_| (),

@@ -205,7 +205,7 @@ fn make_entity<R: gfx::Resources>(dynamic: bool, mesh: &gfx::Mesh<R>, slice: &gf
             batch.state = batch.state.depth(gfx::state::Comparison::LessEqual, true);
             // need to offset the shadow depth to prevent self-shadowing
             // offset = 2, because we are using bilinear filtering
-            batch.state.primitive.offset = Some(gfx::state::Offset(2.0, 2));
+            batch.state.primitive.offset = Some(gfx::state::Offset(2, 2));
             batch
         },
     }

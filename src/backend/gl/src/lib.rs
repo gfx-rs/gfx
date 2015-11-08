@@ -29,7 +29,7 @@ use gfx::device as d;
 use gfx::device::attrib::*;
 use gfx::device::draw::{Access, Gamma, Target};
 use gfx::device::handle;
-use gfx::device::state::{CullFace, RasterMethod, FrontFace};
+use gfx::state as s;
 
 pub use gfx::device::command::{Command, CommandBuffer};
 pub use self::factory::{Factory, Output};
@@ -52,7 +52,26 @@ pub type Sampler        = gl::types::GLuint;
 pub type Texture        = gl::types::GLuint;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct PipelineState(Program);
+pub struct PipelineDrawState {
+    /// How to rasterize geometric primitives.
+    pub primitive: s::Primitive,
+    /// Multi-sampling mode
+    pub multi_sample: Option<s::MultiSample>,
+    /// Stencil test to use. If None, no stencil testing is done.
+    pub stencil: Option<(s::StencilSide, s::StencilSide)>,
+    /// Depth test to use. If None, no depth testing is done.
+    pub depth: Option<s::Depth>,
+    /// Blend function to use. If None, no blending is done.
+    pub blend: Option<s::Blend>,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct PipelineState {
+    program: Program,
+    prim_type: d::PrimitiveType,
+    num_targets: usize,
+    state: PipelineDrawState,
+}
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Fence(gl::types::GLsync);
@@ -113,15 +132,15 @@ const RESET_CB: [Command<Resources>; 11] = [
     // BindUniform
     // BindTexture
     Command::SetPrimitiveState(d::state::Primitive {
-        front_face: FrontFace::CounterClockwise,
-        method: RasterMethod::Fill(CullFace::Back),
+        front_face: s::FrontFace::CounterClockwise,
+        method: s::RasterMethod::Fill(s::CullFace::Back),
         offset: None,
     }),
     Command::SetViewport(d::target::Rect{x: 0, y: 0, w: 0, h: 0}),
     Command::SetScissor(None),
-    Command::SetDepthStencilState(None, None, CullFace::Nothing),
+    Command::SetDepthStencilState(None, None, s::CullFace::Nothing),
     Command::SetBlendState(None),
-    Command::SetColorMask(d::state::MASK_ALL),
+    Command::SetRefValues([0f32; 4], 0, 0),
 ];
 
 fn primitive_to_gl(prim_type: d::PrimitiveType) -> gl::types::GLenum {
@@ -248,7 +267,7 @@ impl Device {
                 let gl = &self.share.context;
                 if mask.intersects(d::target::COLOR) {
                     flags |= gl::COLOR_BUFFER_BIT;
-                    state::bind_color_mask(gl, d::state::MASK_ALL);
+                    state::unlock_color_mask(gl);
                     let c = data.color;
                     unsafe { gl.ClearColor(c[0], c[1], c[2], c[3]) };
                 }
@@ -271,6 +290,19 @@ impl Device {
             Command::BindProgram(program) => {
                 let gl = &self.share.context;
                 unsafe { gl.UseProgram(program) };
+            },
+            Command::BindPipelineState(pso) => {
+                let gl = &self.share.context;
+                unsafe { gl.UseProgram(pso.program) };
+                //TODO: input layout
+                state::bind_draw_color_buffers(gl, pso.num_targets);
+                state::bind_primitive(gl, pso.state.primitive);
+                state::bind_multi_sample(gl, pso.state.multi_sample);
+                state::bind_stencil(gl, pso.state.stencil.map(|s| s::Stencil {
+                    front: s.0, back: s.1, front_ref_value: 0, back_ref_value: 0,
+                    }), pso.state.primitive.get_cull_face());
+                state::bind_depth(gl, pso.state.depth);
+                state::bind_blend(gl, pso.state.blend);
             },
             Command::BindArrayBuffer(array_buffer) => {
                 let gl = &self.share.context;
@@ -439,8 +471,8 @@ impl Device {
             Command::SetBlendState(blend) => {
                 state::bind_blend(&self.share.context, blend);
             },
-            Command::SetColorMask(mask) => {
-                state::bind_color_mask(&self.share.context, mask);
+            Command::SetRefValues(blend, stencil_front, stencil_back) => {
+                state::set_ref_values(&self.share.context, blend, stencil_front, stencil_back);
             },
             Command::UpdateBuffer(buffer, pointer, offset) => {
                 let data = data_buf.get_ref(pointer);
@@ -646,7 +678,7 @@ impl gfx::Device for Device {
             |gl, v| unsafe { gl.DeleteVertexArrays(1, v) },
             |gl, v| unsafe { gl.DeleteShader(*v) },
             |gl, v| unsafe { gl.DeleteProgram(*v) },
-            |gl, v| unsafe { gl.DeleteProgram(v.0) },
+            |gl, v| unsafe { gl.DeleteProgram(v.program) },
             |gl, v| unsafe { gl.DeleteFramebuffers(1, v) },
             |gl, v| unsafe { gl.DeleteRenderbuffers(1, v) },
             |gl, v| unsafe { gl.DeleteTextures(1, v) },
