@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx_window_glfw"
-version = "0.4.1"
+version = "0.5.0"
 description = "GLFW window for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -31,7 +31,7 @@ version = "0.8"
 
 [dependencies.gfx_device_gl]
 path = "../../backend/gl"
-version = "0.6"
+version = "0.7"
 
 [dependencies]
-glfw = "0.1"
+glfw = "0.2"

@@ -17,6 +17,7 @@
 extern crate gfx;
 extern crate gfx_device_gl;
 extern crate glutin;
+extern crate libc;
 
 use gfx::tex::Size;
 
@@ -84,7 +85,7 @@ pub fn init(window: glutin::Window) -> Success {
     use gfx::traits::StreamFactory;
     unsafe { window.make_current().unwrap() };
     let format = window.get_pixel_format();
-    let (device, mut factory) = gfx_device_gl::create(|s| window.get_proc_address(s));
+    let (device, mut factory) = gfx_device_gl::create(|s| window.get_proc_address(s) as *const libc::c_void);
     let out = Output {
         window: window,
         frame: factory.get_main_frame_buffer(),
