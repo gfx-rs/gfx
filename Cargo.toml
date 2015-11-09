@@ -20,15 +20,15 @@ version = "0.8"
 
 [dependencies.gfx_device_gl]
 path = "src/backend/gl"
-version = "0.6"
+version = "0.7"
 
 [dependencies.gfx_window_glutin]
 path = "src/window/glutin"
-version = "0.7"
+version = "0.8"
 
 [dependencies.gfx_window_glfw]
 path = "src/window/glfw"
-version = "0.4"
+version = "0.5"
 
 
 [[example]]
@@ -75,8 +75,8 @@ path = "examples/ubo_tilemap/main.rs"
 env_logger = "*"
 log = "*"
 cgmath = "0.3"
-glutin = "0.4"
-glfw = ">=0.0.8"
+glutin = ">=0.4.2"
+glfw = "0.2"
 gfx_gl = "0.1"
 rand = "*"
 time = "*"
