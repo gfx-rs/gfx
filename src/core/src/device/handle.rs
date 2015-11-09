@@ -16,7 +16,6 @@
 
 //! Device resource handles
 
-use std::cmp;
 use std::mem;
 use std::marker::PhantomData;
 use std::ops::Deref;
@@ -31,11 +30,6 @@ pub struct RawBuffer<R: Resources>(Arc<R::Buffer>, BufferInfo);
 impl<R: Resources> RawBuffer<R> {
     /// Get raw buffer info
     pub fn get_info(&self) -> &BufferInfo { &self.1 }
-
-    /// Compare the handle by the reference (not data)
-    pub fn cmp_ref(&self, other: &RawBuffer<R>) -> cmp::Ordering {
-        self.0.cmp_ref(&other.0)
-    }
 }
 
 /// Type-safe buffer handle

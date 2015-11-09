@@ -29,6 +29,7 @@ pub struct CommandBuffer<R: Resources> {
 pub enum Command<R: Resources> {
     BindProgram(R::Program),
     BindPipelineState(R::PipelineState),
+    BindVertexBuffers(d::pso::VertexBufferSet<R>),
     BindArrayBuffer(R::ArrayBuffer),
     BindAttribute(d::AttributeSlot, R::Buffer, d::attrib::Format),
     BindIndex(R::Buffer),
@@ -87,6 +88,10 @@ impl<R> d::draw::CommandBuffer<R> for CommandBuffer<R>
 
     fn bind_pipeline_state(&mut self, pso: R::PipelineState) {
         self.buf.push(Command::BindPipelineState(pso));
+    }
+
+    fn bind_vertex_buffers(&mut self, vbs: &d::pso::VertexBufferSet<R>) {
+        self.buf.push(Command::BindVertexBuffers(*vbs));
     }
 
     fn bind_array_buffer(&mut self, vao: R::ArrayBuffer) {

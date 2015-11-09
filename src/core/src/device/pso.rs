@@ -14,33 +14,36 @@
 
 //! Pipeline State Objects
 
-use super::{MAX_COLOR_TARGETS, attrib, tex};
-use super::{AttributeSlot, ColorSlot, PrimitiveType};
+use device as d;
 
 /// Compile-time maximum number of vertex attributes.
 pub const MAX_VERTEX_ATTRIBUTES:  usize = 16;
 
 /// Layout of the input vertices.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct VertexImportLayout {
     /// Expected attribute format for every slot.
-    pub formats: [Option<attrib::Format>; MAX_VERTEX_ATTRIBUTES],
+    pub formats: [Option<d::attrib::Format>; MAX_VERTEX_ATTRIBUTES],
 }
 
+/// A complete set of vertex buffers to be used with an import layout.
+pub type VertexBufferSet<R: d::Resources> =
+    [Option<R::Buffer>; MAX_VERTEX_ATTRIBUTES];
+
 /// Layout of the output pixels.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq)]
 pub struct PixelExportLayout {
     /// Expected target format for every slot.
-    pub colors: [Option<tex::Format>; MAX_COLOR_TARGETS],
+    pub colors: [Option<d::tex::Format>; d::MAX_COLOR_TARGETS],
     /// Format of the depth/stencil surface.
-    pub depth_stencil: Option<tex::Format>,
+    pub depth_stencil: Option<d::tex::Format>,
 }
 
 /// Pipeline State information block.
 #[allow(missing_docs)]
 #[derive(Clone, Debug, PartialEq)]
 pub struct PipelineInfo(
-    pub PrimitiveType,
+    pub d::PrimitiveType,
     pub VertexImportLayout,
     pub PixelExportLayout,
 );
@@ -59,7 +62,7 @@ pub enum CreationError {
     /// Shader program failed to link, providing an error string.
     ProgramLink(String),
     /// Vertex attribute mismatch between the layout and the shader inputs.
-    VertexImport(AttributeSlot, String),
+    VertexImport(d::AttributeSlot, String),
     /// Pixel target mismatch between the layout and the shader outputs.
-    PixelExport(ColorSlot, String),
+    PixelExport(d::ColorSlot, String),
 }

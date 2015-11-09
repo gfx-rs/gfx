@@ -126,14 +126,14 @@ pub fn map_comparison(cmp: Comparison) -> gl::types::GLenum {
     }
 }
 
-pub fn bind_depth(gl: &gl::Gl, depth: Option<s::Depth>) {
+pub fn bind_depth(gl: &gl::Gl, depth: &Option<s::Depth>) {
     match depth {
-        Some(d) => { unsafe {
+        &Some(ref d) => { unsafe {
             gl.Enable(gl::DEPTH_TEST);
             gl.DepthFunc(map_comparison(d.fun));
             gl.DepthMask(if d.write {gl::TRUE} else {gl::FALSE});
         }},
-        None => unsafe { gl.Disable(gl::DEPTH_TEST) },
+        &None => unsafe { gl.Disable(gl::DEPTH_TEST) },
     }
 }
 
@@ -150,7 +150,7 @@ fn map_operation(op: StencilOp) -> gl::types::GLenum {
     }
 }
 
-pub fn bind_stencil(gl: &gl::Gl, stencil: Option<s::Stencil>, cull: s::CullFace) {
+pub fn bind_stencil(gl: &gl::Gl, stencil: &Option<s::Stencil>, cull: s::CullFace) {
     fn bind_side(gl: &gl::Gl, face: gl::types::GLenum, side: s::StencilSide, ref_value: Stencil) { unsafe {
         gl.StencilFuncSeparate(face, map_comparison(side.fun),
             ref_value as gl::types::GLint, side.mask_read as gl::types::GLuint);
@@ -159,7 +159,7 @@ pub fn bind_stencil(gl: &gl::Gl, stencil: Option<s::Stencil>, cull: s::CullFace)
             map_operation(side.op_depth_fail), map_operation(side.op_pass));
     }}
     match stencil {
-        Some(s) => {
+        &Some(ref s) => {
             unsafe { gl.Enable(gl::STENCIL_TEST) };
             if cull != CullFace::Front {
                 bind_side(gl, gl::FRONT, s.front, s.front_ref);
@@ -168,7 +168,7 @@ pub fn bind_stencil(gl: &gl::Gl, stencil: Option<s::Stencil>, cull: s::CullFace)
                 bind_side(gl, gl::BACK, s.back, s.back_ref);
             }
         }
-        None => unsafe { gl.Disable(gl::STENCIL_TEST) },
+        &None => unsafe { gl.Disable(gl::STENCIL_TEST) },
     }
 }
 
@@ -267,10 +267,23 @@ pub fn unlock_color_mask(gl: &gl::Gl) {
     unsafe { gl.ColorMask(gl::TRUE, gl::TRUE, gl::TRUE, gl::TRUE) };
 }
 
-pub fn set_ref_values(gl: &gl::Gl, blend: ColorValue,
-                      _front: Stencil, _back: Stencil) {
+pub fn set_ref_values(gl: &gl::Gl, blend: ColorValue, front: Stencil, back: Stencil,
+                      cached_state: &Option<s::Stencil>, cull: s::CullFace) {
     unsafe {
         gl.BlendColor(blend[0], blend[1], blend[2], blend[3])
     };
-    //TODO: call gl.StencilFuncSeparate with cached parameters
+    match cached_state {
+        &Some(ref old) if
+            (cull != s::CullFace::Front && front != old.front_ref) ||
+            (cull != s::CullFace::Back && back != old.back_ref) => {
+            let new = s::Stencil {
+                front: old.front,
+                back: old.back,
+                front_ref: front,
+                back_ref: back,
+            };
+            bind_stencil(gl, &Some(new), cull);
+        },
+        _ => {},
+    }
 }

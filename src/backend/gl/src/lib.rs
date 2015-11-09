@@ -69,6 +69,7 @@ pub struct PipelineDrawState {
 pub struct PipelineState {
     topology: d::PrimitiveType,
     program: Program,
+    vertex_import: d::pso::VertexImportLayout,
     draw_target_mask: usize,
     state: PipelineDrawState,
 }
@@ -192,10 +193,33 @@ pub struct Share {
     main_fbo: handle::FrameBuffer<Resources>,
 }
 
+/// Temporary data stored between different gfx calls that
+/// can not be separated on the GL backend.
+struct Temp {
+    primitive_type: gl::types::GLenum,
+    vertex_import: d::pso::VertexImportLayout,
+    stencil: Option<s::Stencil>,
+    cull_face: s::CullFace,
+}
+
+impl Temp {
+    fn new() -> Temp {
+        Temp {
+            primitive_type: 0,
+            vertex_import: d::pso::VertexImportLayout {
+                formats: [None; d::pso::MAX_VERTEX_ATTRIBUTES],
+            },
+            stencil: None,
+            cull_face: s::CullFace::Nothing,
+        }
+    }
+}
+
 /// An OpenGL device with GLSL shaders.
 pub struct Device {
     info: Info,
     share: Rc<Share>,
+    temp: Temp,
     frame_handles: handle::Manager<Resources>,
     max_resource_count: Option<usize>,
 }
@@ -233,6 +257,7 @@ impl Device {
                 handles: RefCell::new(handles),
                 main_fbo: main_fbo,
             }),
+            temp: Temp::new(),
             frame_handles: handle::Manager::new(),
             max_resource_count: Some(999999),
         }
@@ -260,6 +285,63 @@ impl Device {
     /// Get the OpenGL-specific driver information
     pub fn get_info<'a>(&'a self) -> &'a Info {
         &self.info
+    }
+
+    fn bind_attribute(&mut self, slot: d::AttributeSlot, buffer: Buffer,
+                      format: d::attrib::Format) {
+        let gl_type = match format.elem_type {
+            Type::Int(_, IntSize::U8, SignFlag::Unsigned)  => gl::UNSIGNED_BYTE,
+            Type::Int(_, IntSize::U8, SignFlag::Signed)    => gl::BYTE,
+            Type::Int(_, IntSize::U16, SignFlag::Unsigned) => gl::UNSIGNED_SHORT,
+            Type::Int(_, IntSize::U16, SignFlag::Signed)   => gl::SHORT,
+            Type::Int(_, IntSize::U32, SignFlag::Unsigned) => gl::UNSIGNED_INT,
+            Type::Int(_, IntSize::U32, SignFlag::Signed)   => gl::INT,
+            Type::Float(_, FloatSize::F16) => gl::HALF_FLOAT,
+            Type::Float(_, FloatSize::F32) => gl::FLOAT,
+            Type::Float(_, FloatSize::F64) => gl::DOUBLE,
+            _ => {
+                error!("Unsupported element type: {:?}", format.elem_type);
+                return
+            }
+        };
+        let gl = &self.share.context;
+        unsafe { gl.BindBuffer(gl::ARRAY_BUFFER, buffer) };
+        let offset = format.offset as *const gl::types::GLvoid;
+        match format.elem_type {
+            Type::Int(IntSubType::Raw, _, _) => unsafe {
+                gl.VertexAttribIPointer(slot as gl::types::GLuint,
+                    format.elem_count as gl::types::GLint, gl_type,
+                    format.stride as gl::types::GLint, offset);
+            },
+            Type::Int(IntSubType::Normalized, _, _) => unsafe {
+                gl.VertexAttribPointer(slot as gl::types::GLuint,
+                    format.elem_count as gl::types::GLint, gl_type, gl::TRUE,
+                    format.stride as gl::types::GLint, offset);
+            },
+            Type::Int(IntSubType::AsFloat, _, _) => unsafe {
+                gl.VertexAttribPointer(slot as gl::types::GLuint,
+                    format.elem_count as gl::types::GLint, gl_type, gl::FALSE,
+                    format.stride as gl::types::GLint, offset);
+            },
+            Type::Float(FloatSubType::Default, _) => unsafe {
+                gl.VertexAttribPointer(slot as gl::types::GLuint,
+                    format.elem_count as gl::types::GLint, gl_type, gl::FALSE,
+                    format.stride as gl::types::GLint, offset);
+            },
+            Type::Float(FloatSubType::Precision, _) => unsafe {
+                gl.VertexAttribLPointer(slot as gl::types::GLuint,
+                    format.elem_count as gl::types::GLint, gl_type,
+                    format.stride as gl::types::GLint, offset);
+            },
+            _ => ()
+        }
+        unsafe { gl.EnableVertexAttribArray(slot as gl::types::GLuint) };
+        if self.share.capabilities.instance_rate_supported {
+            unsafe { gl.VertexAttribDivisor(slot as gl::types::GLuint,
+                format.instance_rate as gl::types::GLuint) };
+        }else if format.instance_rate != 0 {
+            error!("Instanced arrays are not supported");
+        }
     }
 
     fn process(&mut self, cmd: &Command<Resources>,
@@ -297,16 +379,32 @@ impl Device {
             Command::BindPipelineState(pso) => {
                 let gl = &self.share.context;
                 unsafe { gl.UseProgram(pso.program) };
-                //TODO: input layout
+                self.temp.primitive_type = primitive_to_gl(pso.topology);
+                self.temp.vertex_import = pso.vertex_import;
                 state::bind_draw_color_buffers(gl, pso.draw_target_mask);
                 state::bind_primitive(gl, pso.state.primitive);
                 state::bind_multi_sample(gl, pso.state.multi_sample);
-                state::bind_stencil(gl, pso.state.stencil.map(|s| s::Stencil {
+                self.temp.stencil = pso.state.stencil.map(|s| s::Stencil {
                     front: s.0, back: s.1, front_ref: 0, back_ref: 0,
-                    }), pso.state.primitive.get_cull_face());
-                state::bind_depth(gl, pso.state.depth);
+                    });
+                self.temp.cull_face = pso.state.primitive.get_cull_face();
+                state::bind_stencil(gl, &self.temp.stencil, self.temp.cull_face);
+                state::bind_depth(gl, &pso.state.depth);
                 for i in 0 .. d::MAX_COLOR_TARGETS {
                     state::bind_blend_slot(gl, i as d::ColorSlot, pso.state.blend[i]);
+                }
+            },
+            Command::BindVertexBuffers(vbs) => {
+                for i in 0 .. d::pso::MAX_VERTEX_ATTRIBUTES {
+                    match (vbs[i], self.temp.vertex_import.formats[i]) {
+                        (None, Some(fm)) => {
+                            error!("No vertex input provided for slot {} of format {:?}", i, fm)
+                        },
+                        (Some(buffer), Some(format)) => {
+                            self.bind_attribute(i as d::AttributeSlot, buffer, format);
+                        },
+                        (_, None) => {},
+                    }
                 }
             },
             Command::BindArrayBuffer(array_buffer) => {
@@ -318,59 +416,7 @@ impl Device {
                 }
             },
             Command::BindAttribute(slot, buffer, format) => {
-                let gl_type = match format.elem_type {
-                    Type::Int(_, IntSize::U8, SignFlag::Unsigned)  => gl::UNSIGNED_BYTE,
-                    Type::Int(_, IntSize::U8, SignFlag::Signed)    => gl::BYTE,
-                    Type::Int(_, IntSize::U16, SignFlag::Unsigned) => gl::UNSIGNED_SHORT,
-                    Type::Int(_, IntSize::U16, SignFlag::Signed)   => gl::SHORT,
-                    Type::Int(_, IntSize::U32, SignFlag::Unsigned) => gl::UNSIGNED_INT,
-                    Type::Int(_, IntSize::U32, SignFlag::Signed)   => gl::INT,
-                    Type::Float(_, FloatSize::F16) => gl::HALF_FLOAT,
-                    Type::Float(_, FloatSize::F32) => gl::FLOAT,
-                    Type::Float(_, FloatSize::F64) => gl::DOUBLE,
-                    _ => {
-                        error!("Unsupported element type: {:?}", format.elem_type);
-                        return
-                    }
-                };
-                let gl = &self.share.context;
-                unsafe { gl.BindBuffer(gl::ARRAY_BUFFER, buffer) };
-                let offset = format.offset as *const gl::types::GLvoid;
-                match format.elem_type {
-                    Type::Int(IntSubType::Raw, _, _) => unsafe {
-                        gl.VertexAttribIPointer(slot as gl::types::GLuint,
-                            format.elem_count as gl::types::GLint, gl_type,
-                            format.stride as gl::types::GLint, offset);
-                    },
-                    Type::Int(IntSubType::Normalized, _, _) => unsafe {
-                        gl.VertexAttribPointer(slot as gl::types::GLuint,
-                            format.elem_count as gl::types::GLint, gl_type, gl::TRUE,
-                            format.stride as gl::types::GLint, offset);
-                    },
-                    Type::Int(IntSubType::AsFloat, _, _) => unsafe {
-                        gl.VertexAttribPointer(slot as gl::types::GLuint,
-                            format.elem_count as gl::types::GLint, gl_type, gl::FALSE,
-                            format.stride as gl::types::GLint, offset);
-                    },
-                    Type::Float(FloatSubType::Default, _) => unsafe {
-                        gl.VertexAttribPointer(slot as gl::types::GLuint,
-                            format.elem_count as gl::types::GLint, gl_type, gl::FALSE,
-                            format.stride as gl::types::GLint, offset);
-                    },
-                    Type::Float(FloatSubType::Precision, _) => unsafe {
-                        gl.VertexAttribLPointer(slot as gl::types::GLuint,
-                            format.elem_count as gl::types::GLint, gl_type,
-                            format.stride as gl::types::GLint, offset);
-                    },
-                    _ => ()
-                }
-                unsafe { gl.EnableVertexAttribArray(slot as gl::types::GLuint) };
-                if self.share.capabilities.instance_rate_supported {
-                    unsafe { gl.VertexAttribDivisor(slot as gl::types::GLuint,
-                        format.instance_rate as gl::types::GLuint) };
-                }else if format.instance_rate != 0 {
-                    error!("Instanced arrays are not supported");
-                }
+                self.bind_attribute(slot, buffer, format);
             },
             Command::BindIndex(buffer) => {
                 let gl = &self.share.context;
@@ -471,8 +517,8 @@ impl Device {
             },
             Command::SetDepthStencilState(depth, stencil, cull) => {
                 let gl = &self.share.context;
-                state::bind_stencil(gl, stencil, cull);
-                state::bind_depth(gl, depth);
+                state::bind_stencil(gl, &stencil, cull);
+                state::bind_depth(gl, &depth);
             },
             Command::SetBlendState(slot, blend) => {
                 if self.share.capabilities.separate_blending_slots_supported {
@@ -484,7 +530,9 @@ impl Device {
                 }
             },
             Command::SetRefValues(blend, stencil_front, stencil_back) => {
-                state::set_ref_values(&self.share.context, blend, stencil_front, stencil_back);
+                state::set_ref_values(&self.share.context, blend, stencil_front,
+                                      stencil_back, &self.temp.stencil,
+                                      self.temp.cull_face);
             },
             Command::UpdateBuffer(buffer, pointer, offset) => {
                 let data = data_buf.get_ref(pointer);

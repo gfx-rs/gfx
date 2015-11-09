@@ -256,6 +256,7 @@ impl d::Factory<R> for Factory {
         let pso = PipelineState {
             topology: info.0,
             program: program,
+            vertex_import: info.1,
             draw_target_mask: info.get_export_mask(),
             state: PipelineDrawState {
                 primitive: state.primitive,
