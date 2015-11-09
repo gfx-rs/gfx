@@ -20,7 +20,7 @@ use std::cmp;
 use std::mem;
 use std::marker::PhantomData;
 use std::ops::Deref;
-use super::arc::Arc;
+use std::sync::Arc;
 use super::{shade, tex, Resources, BufferInfo};
 
 
@@ -31,11 +31,6 @@ pub struct RawBuffer<R: Resources>(Arc<R::Buffer>, BufferInfo);
 impl<R: Resources> RawBuffer<R> {
     /// Get raw buffer info
     pub fn get_info(&self) -> &BufferInfo { &self.1 }
-
-    /// Compare ethe handle by the reference (not data)
-    pub fn cmp_ref(&self, lhs: &RawBuffer<R>) -> cmp::Ordering {
-        self.0.cmp_ref(&lhs.0)
-    }
 }
 
 /// Type-safe buffer handle
@@ -82,23 +77,9 @@ impl<R: Resources, T> Buffer<R, T> {
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct ArrayBuffer<R: Resources>(Arc<R::ArrayBuffer>);
 
-impl<R: Resources> ArrayBuffer<R> {
-    /// Compare ethe handle by the reference (not data)
-    pub fn cmp_ref(&self, lhs: &ArrayBuffer<R>) -> cmp::Ordering {
-        self.0.cmp_ref(&lhs.0)
-    }
-}
-
 /// Shader Handle
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct Shader<R: Resources>(Arc<R::Shader>);
-
-impl<R: Resources> Shader<R> {
-    /// Compare ethe handle by the reference (not data)
-    pub fn cmp_ref(&self, lhs: &Shader<R>) -> cmp::Ordering {
-        self.0.cmp_ref(&lhs.0)
-    }
-}
 
 /// Program Handle
 #[derive(Clone, Debug, PartialEq)]
@@ -107,11 +88,6 @@ pub struct Program<R: Resources>(Arc<R::Program>, shade::ProgramInfo);
 impl<R: Resources> Program<R> {
     /// Get program info
     pub fn get_info(&self) -> &shade::ProgramInfo { &self.1 }
-
-    /// Compare ethe handle by the reference (not data)
-    pub fn cmp_ref(&self, lhs: &Program<R>) -> cmp::Ordering {
-        self.0.cmp_ref(&lhs.0)
-    }
 }
 
 /// Frame Buffer Handle
@@ -125,11 +101,6 @@ pub struct Surface<R: Resources>(Arc<R::Surface>, tex::SurfaceInfo);
 impl<R: Resources> Surface<R> {
     /// Get surface info
     pub fn get_info(&self) -> &tex::SurfaceInfo { &self.1 }
-
-    /// Compare ethe handle by the reference (not data)
-    pub fn cmp_ref(&self, lhs: &Surface<R>) -> cmp::Ordering {
-        self.0.cmp_ref(&lhs.0)
-    }
 }
 
 /// Texture Handle
@@ -139,11 +110,6 @@ pub struct Texture<R: Resources>(Arc<R::Texture>, tex::TextureInfo);
 impl<R: Resources> Texture<R> {
     /// Get texture info
     pub fn get_info(&self) -> &tex::TextureInfo { &self.1 }
-
-    /// Compare ethe handle by the reference (not data)
-    pub fn cmp_ref(&self, lhs: &Texture<R>) -> cmp::Ordering {
-        self.0.cmp_ref(&lhs.0)
-    }
 }
 
 /// Sampler Handle
@@ -153,11 +119,6 @@ pub struct Sampler<R: Resources>(Arc<R::Sampler>, tex::SamplerInfo);
 impl<R: Resources> Sampler<R> {
     /// Get sampler info
     pub fn get_info(&self) -> &tex::SamplerInfo { &self.1 }
-
-    /// Compare ethe handle by the reference (not data)
-    pub fn cmp_ref(&self, lhs: &Sampler<R>) -> cmp::Ordering {
-        self.0.cmp_ref(&lhs.0)
-    }
 }
 
 /// Fence Handle
@@ -279,8 +240,8 @@ impl<R: Resources> Producer<R> for Manager<R> {
             let mut temp = Vec::new();
             // delete unique resources and make a list of their indices
             for (i, v) in vector.iter_mut().enumerate() {
-                if let Some(r) = v.is_unique() {
-                    fun(param, r);
+                if let Some(x) = Arc::get_mut(v) {
+                    fun(param, x);
                     temp.push(i);
                 }
             }
