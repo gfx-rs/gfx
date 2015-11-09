@@ -411,7 +411,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
                     }
                 }
                 // activate the color targets that were just bound
-                self.command_buffer.set_draw_color_buffers(colors.len());
+                self.command_buffer.set_draw_color_buffers(colors.len() as device::ColorSlot);
                 // append new planes
                 for (i, new) in colors.iter().enumerate()
                                       .skip(self.render_state.frame.colors.len()) {
@@ -482,14 +482,15 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
             self.command_buffer.set_depth_stencil(state.depth, state.stencil,
                 state.primitive.get_cull_face());
         }
-        if self.render_state.draw.blend != state.blend {
-            self.command_buffer.set_blend(state.blend);
+        for i in 0 .. device::MAX_COLOR_TARGETS {
+            if self.render_state.draw.blend[i] != state.blend[i] {
+                self.command_buffer.set_blend(i as device::ColorSlot, state.blend[i]);
+            }
         }
         let stencil_change = match (self.render_state.draw.stencil, state.stencil) {
-            (Some(ref old), Some(ref new)) if
-                old.front_ref_value != new.front_ref_value ||
-                old.back_ref_value != new.back_ref_value => Some((new.front_ref_value, new.back_ref_value)),
-            (None, Some(ref new)) => Some((new.front_ref_value, new.back_ref_value)),
+            (Some(ref old), Some(ref new)) if old.front_ref != new.front_ref || old.back_ref != new.back_ref =>
+                Some((new.front_ref, new.back_ref)),
+            (None, Some(ref new)) => Some((new.front_ref, new.back_ref)),
             (_, _) => None,
         };
         if self.render_state.draw.blend_value != state.blend_value || stencil_change.is_some() {

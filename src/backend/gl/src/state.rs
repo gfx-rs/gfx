@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use gfx::device::{MAX_COLOR_TARGETS, ColorSlot};
 use gfx::device::state as s;
 use gfx::device::state::{BlendValue, Comparison, CullFace, Equation,
                          Offset, RasterMethod, StencilOp, FrontFace};
@@ -67,16 +68,25 @@ pub fn bind_multi_sample(gl: &gl::Gl, ms: Option<s::MultiSample>) {
     }
 }
 
-pub fn bind_draw_color_buffers(gl: &gl::Gl, num: usize) {
-    unsafe { gl.DrawBuffers(
-        num as i32,
-        [gl::COLOR_ATTACHMENT0,  gl::COLOR_ATTACHMENT1,  gl::COLOR_ATTACHMENT2,
-         gl::COLOR_ATTACHMENT3,  gl::COLOR_ATTACHMENT4,  gl::COLOR_ATTACHMENT5,
-         gl::COLOR_ATTACHMENT6,  gl::COLOR_ATTACHMENT7,  gl::COLOR_ATTACHMENT8,
-         gl::COLOR_ATTACHMENT9,  gl::COLOR_ATTACHMENT10, gl::COLOR_ATTACHMENT11,
-         gl::COLOR_ATTACHMENT12, gl::COLOR_ATTACHMENT13, gl::COLOR_ATTACHMENT14,
-         gl::COLOR_ATTACHMENT15].as_ptr()
-    )};
+pub fn bind_draw_color_buffers(gl: &gl::Gl, mask: usize) {
+    let attachments = [
+        gl::COLOR_ATTACHMENT0,  gl::COLOR_ATTACHMENT1,  gl::COLOR_ATTACHMENT2,
+        gl::COLOR_ATTACHMENT3,  gl::COLOR_ATTACHMENT4,  gl::COLOR_ATTACHMENT5,
+        gl::COLOR_ATTACHMENT6,  gl::COLOR_ATTACHMENT7,  gl::COLOR_ATTACHMENT8,
+        gl::COLOR_ATTACHMENT9,  gl::COLOR_ATTACHMENT10, gl::COLOR_ATTACHMENT11,
+        gl::COLOR_ATTACHMENT12, gl::COLOR_ATTACHMENT13, gl::COLOR_ATTACHMENT14,
+        gl::COLOR_ATTACHMENT15];
+    let mut targets = [0; MAX_COLOR_TARGETS];
+    let mut count = 0;
+    let mut i = 0;
+    while mask >> i != 0 {
+        if mask & (1<<i) != 0 {
+            targets[count] = attachments[i];
+            count += 1;
+        }
+        i += 1;
+    }
+    unsafe { gl.DrawBuffers(count as gl::types::GLint, targets.as_ptr()) };
 }
 
 pub fn bind_viewport(gl: &gl::Gl, rect: Rect) {
@@ -152,10 +162,10 @@ pub fn bind_stencil(gl: &gl::Gl, stencil: Option<s::Stencil>, cull: s::CullFace)
         Some(s) => {
             unsafe { gl.Enable(gl::STENCIL_TEST) };
             if cull != CullFace::Front {
-                bind_side(gl, gl::FRONT, s.front, s.front_ref_value);
+                bind_side(gl, gl::FRONT, s.front, s.front_ref);
             }
             if cull != CullFace::Back {
-                bind_side(gl, gl::BACK, s.back, s.back_ref_value);
+                bind_side(gl, gl::BACK, s.back, s.back_ref);
             }
         }
         None => unsafe { gl.Disable(gl::STENCIL_TEST) },
@@ -215,6 +225,37 @@ pub fn bind_blend(gl: &gl::Gl, blend: Option<s::Blend>) {
         },
     };
     unsafe { gl.ColorMask(
+        if (mask & s::RED  ).is_empty() {gl::FALSE} else {gl::TRUE},
+        if (mask & s::GREEN).is_empty() {gl::FALSE} else {gl::TRUE},
+        if (mask & s::BLUE ).is_empty() {gl::FALSE} else {gl::TRUE},
+        if (mask & s::ALPHA).is_empty() {gl::FALSE} else {gl::TRUE}
+    )};
+}
+
+pub fn bind_blend_slot(gl: &gl::Gl, slot: ColorSlot, blend: Option<s::Blend>) {
+    unsafe { gl.Enable(gl::BLEND) }; //TODO?
+    let buf = slot as gl::types::GLuint;
+    let mask = match blend {
+        Some(b) => unsafe {
+            gl.BlendEquationSeparatei(buf,
+                map_equation(b.color.equation),
+                map_equation(b.alpha.equation)
+            );
+            gl.BlendFuncSeparatei(buf,
+                map_factor(b.color.source),
+                map_factor(b.color.destination),
+                map_factor(b.alpha.source),
+                map_factor(b.alpha.destination)
+            );
+            b.mask
+        },
+        None => unsafe {
+            gl.BlendEquationSeparatei(buf, gl::FUNC_ADD, gl::FUNC_ADD);
+            gl.BlendFuncSeparatei(buf, gl::ZERO, gl::ONE, gl::ZERO, gl::ONE);
+            s::MASK_ALL
+        },
+    };
+    unsafe { gl.ColorMaski(buf,
         if (mask & s::RED  ).is_empty() {gl::FALSE} else {gl::TRUE},
         if (mask & s::GREEN).is_empty() {gl::FALSE} else {gl::TRUE},
         if (mask & s::BLUE ).is_empty() {gl::FALSE} else {gl::TRUE},

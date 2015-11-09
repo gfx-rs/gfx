@@ -16,7 +16,7 @@
 
 use draw_state::target;
 
-use super::{attrib, shade, tex, Resources};
+use super::{attrib, shade, tex, ColorSlot, Resources};
 
 type Offset = u32;
 type Size = u32;
@@ -130,7 +130,7 @@ pub trait CommandBuffer<R: Resources> {
     fn bind_texture(&mut self, super::TextureSlot, tex::Kind,
                     R::Texture, Option<(R::Sampler, tex::SamplerInfo)>);
     /// Select, which color buffers are going to be targetted by the shader
-    fn set_draw_color_buffers(&mut self, usize);
+    fn set_draw_color_buffers(&mut self, ColorSlot);
     /// Set primitive topology
     fn set_primitive(&mut self, ::state::Primitive);
     /// Set viewport rectangle
@@ -143,7 +143,7 @@ pub trait CommandBuffer<R: Resources> {
     fn set_depth_stencil(&mut self, Option<::state::Depth>,
                          Option<::state::Stencil>, ::state::CullFace);
     /// Set blend state
-    fn set_blend(&mut self, Option<::state::Blend>);
+    fn set_blend(&mut self, ColorSlot, Option<::state::Blend>);
     /// Set reference values for the blending and stencil front/back.
     fn set_ref_values(&mut self, target::ColorValue,
                       target::Stencil, target::Stencil);

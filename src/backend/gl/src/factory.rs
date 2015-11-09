@@ -17,13 +17,14 @@ use std::slice;
 
 use {gl, tex};
 use gfx;
+use gfx::DrawState;
 use gfx::device as d;
 use gfx::device::handle;
 use gfx::device::handle::Producer;
 use gfx::device::mapping::Builder;
 use gfx::tex::Size;
 
-use {Buffer, Share};
+use {Buffer, PipelineDrawState, PipelineState, Program, Share};
 use Resources as R;
 
 
@@ -124,6 +125,29 @@ impl Factory {
         }
     }
 
+    pub fn create_program_raw(&mut self, shader_set: &d::ShaderSet<R>)
+                              -> Result<(Program, d::shade::ProgramInfo), d::shade::CreateProgramError> {
+        let frame_handles = &mut self.frame_handles;
+        let mut shaders = [0; 3];
+        let shader_slice = match shader_set {
+            &d::ShaderSet::Simple(ref vs, ref ps) => {
+                shaders[0] = vs.reference(frame_handles);
+                shaders[1] = ps.reference(frame_handles);
+                &shaders[..2]
+            },
+            &d::ShaderSet::Geometry(ref vs, ref gs, ref ps) => {
+                shaders[0] = vs.reference(frame_handles);
+                shaders[1] = gs.reference(frame_handles);
+                shaders[2] = ps.reference(frame_handles);
+                &shaders[..3]
+            },
+        };
+        ::shade::create_program(&self.share.context,
+                                &self.share.capabilities,
+                                None,
+                                shader_slice)
+    }
+
     pub fn get_main_frame_buffer(&self) -> handle::FrameBuffer<R> {
         self.share.main_fbo.clone()
     }
@@ -216,24 +240,33 @@ impl d::Factory<R> for Factory {
 
     fn create_program(&mut self, shader_set: &d::ShaderSet<R>)
                       -> Result<handle::Program<R>, d::shade::CreateProgramError> {
-        let frame_handles = &mut self.frame_handles;
-        let mut handles = self.share.handles.borrow_mut();
-        let mut shaders = [0; 3];
-        let shader_slice = match shader_set {
-            &d::ShaderSet::Simple(ref vs, ref ps) => {
-                shaders[0] = vs.reference(frame_handles);
-                shaders[1] = ps.reference(frame_handles);
-                &shaders[..2]
-            },
-            &d::ShaderSet::Geometry(ref vs, ref gs, ref ps) => {
-                shaders[0] = vs.reference(frame_handles);
-                shaders[1] = gs.reference(frame_handles);
-                shaders[2] = ps.reference(frame_handles);
-                &shaders[..3]
+        self.create_program_raw(shader_set)
+            .map(|(name, info)| self.share.handles.borrow_mut().make_program(name, info))
+    }
+
+    fn create_pipeline_state(&mut self, info: d::pso::PipelineInfo, shader_set: &d::ShaderSet<R>, state: DrawState)
+                             -> Result<handle::PipelineState<R>, d::pso::CreationError> {
+        let (program, pinfo) = match self.create_program_raw(shader_set) {
+            Ok(ok) => ok,
+            Err(d::shade::CreateProgramError::TargetMismatch(_)) =>
+                return Err(d::pso::CreationError::PixelExport(0, "".to_string())), //TODO
+            Err(d::shade::CreateProgramError::LinkFail(e)) =>
+                return Err(d::pso::CreationError::ProgramLink(e)),
+        };
+        let pso = PipelineState {
+            topology: info.0,
+            program: program,
+            draw_target_mask: info.get_export_mask(),
+            state: PipelineDrawState {
+                primitive: state.primitive,
+                multi_sample: state.multi_sample,
+                stencil: state.stencil.map(|s| (s.front, s.back)),
+                depth: state.depth,
+                blend: state.blend,
             },
         };
-        ::shade::create_program(&self.share.context, &self.share.capabilities, None, shader_slice)
-                .map(|(name, info)| handles.make_program(name, info))
+        //TODO: match program info with PSO info
+        Ok(self.share.handles.borrow_mut().make_pipeline_state(pso, info, pinfo))
     }
 
     fn create_frame_buffer(&mut self) -> Result<handle::FrameBuffer<R>, d::NotSupported> {

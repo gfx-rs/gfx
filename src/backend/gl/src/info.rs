@@ -198,13 +198,17 @@ impl Info {
         }
     }
 
+    pub fn is_version_supported(&self, major: u32, minor: u32) -> bool {
+        self.version >= Version::new(major, minor, None, "")
+    }
+
     /// Returns `true` if the implementation supports the extension
     pub fn is_extension_supported(&self, s: &'static str) -> bool {
         self.extensions.contains(&s)
     }
 
     pub fn is_version_or_extension_supported(&self, major: u32, minor: u32, ext: &'static str) -> bool {
-        self.version >= Version::new(major, minor, None, "") || self.is_extension_supported(ext)
+        self.is_version_supported(major, minor) || self.is_extension_supported(ext)
     }
 }
 
@@ -245,6 +249,7 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities) {
         sampler_objects_supported:      info.is_version_or_extension_supported(3, 3, "GL_ARB_sampler_objects"),
         uniform_block_supported:        info.is_version_or_extension_supported(3, 0, "GL_ARB_uniform_buffer_object"),
         vertex_base_supported:          info.is_version_or_extension_supported(3, 2, "GL_ARB_draw_elements_base_vertex"),
+        separate_blending_slots_supported: info.is_version_supported(4, 0), //TODO: extension?
     };
     (info, caps)
 }

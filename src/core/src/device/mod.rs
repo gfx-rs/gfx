@@ -19,7 +19,8 @@
 use std::{fmt, mem};
 use std::hash::Hash;
 
-pub use draw_state::{state, target};
+pub use draw_state::{MAX_COLOR_TARGETS, state, target};
+use draw_state::DrawState;
 
 pub mod attrib;
 pub mod command;
@@ -27,6 +28,7 @@ pub mod draw;
 pub mod dummy;
 pub mod handle;
 pub mod mapping;
+pub mod pso;
 pub mod shade;
 pub mod tex;
 
@@ -42,6 +44,8 @@ pub type AttributeSlot = u8;
 pub type UniformBufferSlot = u8;
 /// Slot a texture can be bound to.
 pub type TextureSlot = u8;
+/// Slot for an active color buffer.
+pub type ColorSlot = u8;
 
 /// Generic error for features that are not supported
 /// by the device capabilities.
@@ -108,6 +112,7 @@ pub struct Capabilities {
     pub srgb_color_supported: bool,
     pub uniform_block_supported: bool,
     pub vertex_base_supported: bool,
+    pub separate_blending_slots_supported: bool,
 }
 
 /// Specifies the access allowed to a buffer mapping.
@@ -203,12 +208,12 @@ pub trait Resources:           Clone + Hash + fmt::Debug + Eq + PartialEq {
     type ArrayBuffer:   Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
     type Shader:        Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
     type Program:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type PipelineState: Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
     type FrameBuffer:   Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
     type Surface:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
     type Texture:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
     type Sampler:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
     type Fence:         Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
-    type PipelineState: Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
 }
 
 #[allow(missing_docs)]
@@ -232,6 +237,8 @@ pub trait Factory<R: Resources> {
             self.create_buffer_raw(num * mem::size_of::<T>(), role, BufferUsage::Stream))
     }
 
+    fn create_pipeline_state(&mut self, pso::PipelineInfo, &ShaderSet<R>, DrawState)
+                             -> Result<handle::PipelineState<R>, pso::CreationError>;
     fn create_program(&mut self, shader_set: &ShaderSet<R>)
                       -> Result<handle::Program<R>, shade::CreateProgramError>;
     fn create_shader(&mut self, stage: shade::Stage, code: &[u8]) ->

@@ -41,14 +41,14 @@ pub enum Command<R: Resources> {
     BindUniform(d::shade::Location, d::shade::UniformValue),
     BindTexture(d::TextureSlot, d::tex::Kind, R::Texture,
                 Option<(R::Sampler, d::tex::SamplerInfo)>),
-    SetDrawColorBuffers(usize),
+    SetDrawColorBuffers(d::ColorSlot),
     SetPrimitiveState(d::state::Primitive),
     SetViewport(Rect),
     SetMultiSampleState(Option<d::state::MultiSample>),
     SetScissor(Option<Rect>),
     SetDepthStencilState(Option<d::state::Depth>, Option<d::state::Stencil>,
                          d::state::CullFace),
-    SetBlendState(Option<d::state::Blend>),
+    SetBlendState(d::ColorSlot, Option<d::state::Blend>),
     SetRefValues(ColorValue, Stencil, Stencil),
     UpdateBuffer(R::Buffer, d::draw::DataPointer, usize),
     UpdateTexture(d::tex::Kind, R::Texture, d::tex::ImageInfo,
@@ -140,7 +140,7 @@ impl<R> d::draw::CommandBuffer<R> for CommandBuffer<R>
         self.buf.push(Command::BindTexture(slot, kind, tex, sampler));
     }
 
-    fn set_draw_color_buffers(&mut self, num: usize) {
+    fn set_draw_color_buffers(&mut self, num: d::ColorSlot) {
         self.buf.push(Command::SetDrawColorBuffers(num));
     }
 
@@ -166,8 +166,8 @@ impl<R> d::draw::CommandBuffer<R> for CommandBuffer<R>
         self.buf.push(Command::SetDepthStencilState(depth, stencil, cull));
     }
 
-    fn set_blend(&mut self, blend: Option<d::state::Blend>) {
-        self.buf.push(Command::SetBlendState(blend));
+    fn set_blend(&mut self, slot: d::ColorSlot, blend: Option<d::state::Blend>) {
+        self.buf.push(Command::SetBlendState(slot, blend));
     }
 
     fn set_ref_values(&mut self, blend: ColorValue, stencil_front: Stencil, stencil_back: Stencil) {

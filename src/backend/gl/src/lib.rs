@@ -62,14 +62,14 @@ pub struct PipelineDrawState {
     /// Depth test to use. If None, no depth testing is done.
     pub depth: Option<s::Depth>,
     /// Blend function to use. If None, no blending is done.
-    pub blend: Option<s::Blend>,
+    pub blend: [Option<s::Blend>; d::MAX_COLOR_TARGETS],
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct PipelineState {
+    topology: d::PrimitiveType,
     program: Program,
-    prim_type: d::PrimitiveType,
-    num_targets: usize,
+    draw_target_mask: usize,
     state: PipelineDrawState,
 }
 
@@ -120,7 +120,7 @@ impl Error {
     }
 }
 
-const RESET_CB: [Command<Resources>; 11] = [
+const RESET_CB: [Command<Resources>; 14] = [
     Command::BindProgram(0),
     Command::BindArrayBuffer(0),
     // BindAttribute
@@ -139,7 +139,10 @@ const RESET_CB: [Command<Resources>; 11] = [
     Command::SetViewport(d::target::Rect{x: 0, y: 0, w: 0, h: 0}),
     Command::SetScissor(None),
     Command::SetDepthStencilState(None, None, s::CullFace::Nothing),
-    Command::SetBlendState(None),
+    Command::SetBlendState(0, None),
+    Command::SetBlendState(1, None),
+    Command::SetBlendState(2, None),
+    Command::SetBlendState(3, None),
     Command::SetRefValues([0f32; 4], 0, 0),
 ];
 
@@ -295,14 +298,16 @@ impl Device {
                 let gl = &self.share.context;
                 unsafe { gl.UseProgram(pso.program) };
                 //TODO: input layout
-                state::bind_draw_color_buffers(gl, pso.num_targets);
+                state::bind_draw_color_buffers(gl, pso.draw_target_mask);
                 state::bind_primitive(gl, pso.state.primitive);
                 state::bind_multi_sample(gl, pso.state.multi_sample);
                 state::bind_stencil(gl, pso.state.stencil.map(|s| s::Stencil {
-                    front: s.0, back: s.1, front_ref_value: 0, back_ref_value: 0,
+                    front: s.0, back: s.1, front_ref: 0, back_ref: 0,
                     }), pso.state.primitive.get_cull_face());
                 state::bind_depth(gl, pso.state.depth);
-                state::bind_blend(gl, pso.state.blend);
+                for i in 0 .. d::MAX_COLOR_TARGETS {
+                    state::bind_blend_slot(gl, i as d::ColorSlot, pso.state.blend[i]);
+                }
             },
             Command::BindArrayBuffer(array_buffer) => {
                 let gl = &self.share.context;
@@ -449,7 +454,8 @@ impl Device {
                 }
             },
             Command::SetDrawColorBuffers(num) => {
-                state::bind_draw_color_buffers(&self.share.context, num);
+                let mask = (1 << (num as usize)) - 1;
+                state::bind_draw_color_buffers(&self.share.context, mask);
             },
             Command::SetPrimitiveState(prim) => {
                 state::bind_primitive(&self.share.context, prim);
@@ -468,8 +474,14 @@ impl Device {
                 state::bind_stencil(gl, stencil, cull);
                 state::bind_depth(gl, depth);
             },
-            Command::SetBlendState(blend) => {
-                state::bind_blend(&self.share.context, blend);
+            Command::SetBlendState(slot, blend) => {
+                if self.share.capabilities.separate_blending_slots_supported {
+                    state::bind_blend_slot(&self.share.context, slot, blend);
+                }else if slot == 0 {
+                    state::bind_blend(&self.share.context, blend);
+                }else {
+                    error!("Separate blending slots are not supported");
+                }
             },
             Command::SetRefValues(blend, stencil_front, stencil_back) => {
                 state::set_ref_values(&self.share.context, blend, stencil_front, stencil_back);

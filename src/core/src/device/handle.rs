@@ -21,7 +21,7 @@ use std::mem;
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync::Arc;
-use super::{shade, tex, Resources, BufferInfo};
+use super::{shade, pso, tex, Resources, BufferInfo};
 
 
 /// Raw (untyped) Buffer Handle
@@ -95,6 +95,22 @@ impl<R: Resources> Program<R> {
     pub fn get_info(&self) -> &shade::ProgramInfo { &self.1 }
 }
 
+/// Pipeline State Handle
+#[derive(Clone, Debug, PartialEq)]
+pub struct PipelineState<R: Resources>(
+    Arc<R::PipelineState>,
+    pso::PipelineInfo,
+    shade::ProgramInfo,
+);
+
+impl<R: Resources> PipelineState<R> {
+    /// get pipeline info
+    pub fn get_info(&self) -> &pso::PipelineInfo { &self.1 }
+
+    /// Get program info
+    pub fn get_program_info(&self) -> &shade::ProgramInfo { &self.2 }
+}
+
 /// Frame Buffer Handle
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct FrameBuffer<R: Resources>(Arc<R::FrameBuffer>);
@@ -155,7 +171,8 @@ pub trait Producer<R: Resources> {
     fn make_array_buffer(&mut self, R::ArrayBuffer) -> ArrayBuffer<R>;
     fn make_shader(&mut self, R::Shader) -> Shader<R>;
     fn make_program(&mut self, R::Program, shade::ProgramInfo) -> Program<R>;
-    fn make_pipeline_state(&mut self, R::PipelineState, shade::ProgramInfo) -> PipelineState<R>;
+    fn make_pipeline_state(&mut self, R::PipelineState, pso::PipelineInfo,
+                           shade::ProgramInfo) -> PipelineState<R>;
     fn make_frame_buffer(&mut self, R::FrameBuffer) -> FrameBuffer<R>;
     fn make_surface(&mut self, R::Surface, tex::SurfaceInfo) -> Surface<R>;
     fn make_texture(&mut self, R::Texture, tex::TextureInfo) -> Texture<R>;
@@ -201,6 +218,13 @@ impl<R: Resources> Producer<R> for Manager<R> {
         let r = Arc::new(name);
         self.programs.push(r.clone());
         Program(r, info)
+    }
+
+    fn make_pipeline_state(&mut self, name: R::PipelineState, info: pso::PipelineInfo,
+                           prog_info: shade::ProgramInfo) -> PipelineState<R> {
+        let r = Arc::new(name);
+        self.pipeline_states.push(r.clone());
+        PipelineState(r, info, prog_info)
     }
 
     fn make_frame_buffer(&mut self, name: R::FrameBuffer) -> FrameBuffer<R> {
