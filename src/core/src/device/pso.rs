@@ -14,10 +14,35 @@
 
 //! Pipeline State Objects
 
+use std::collections::HashMap;
 use device as d;
 
 /// Compile-time maximum number of vertex attributes.
 pub const MAX_VERTEX_ATTRIBUTES:  usize = 16;
+/// An offset inside a vertex buffer, in bytes.
+pub type BufferOffset = usize;
+
+/// Error types happening upon PSO creation.
+pub enum CreationError {
+    /// Shader program failed to link, providing an error string.
+    ProgramLink(String),
+    /// Vertex attribute mismatch between the shader and the link data.
+    VertexImport(d::AttributeSlot, String, Option<d::attrib::Format>),
+    /// Pixel target mismatch between the shader and the link data.
+    PixelExport(d::ColorSlot, String, Option<d::tex::Format>),
+}
+
+/// Compound type of the linked PSO data formats.
+pub enum Link {
+    /// Vertex attribute
+    Attribute(d::attrib::Format),
+    /// Render target
+    Target(d::tex::Format),
+}
+
+/// Map of all objects that are provided for PSO usage,
+/// including vertex attributes, render targets, and shader parameters.
+pub type LinkMap<'a> = HashMap<&'a str, Link>;
 
 /// Layout of the input vertices.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -26,9 +51,39 @@ pub struct VertexImportLayout {
     pub formats: [Option<d::attrib::Format>; MAX_VERTEX_ATTRIBUTES],
 }
 
-/// A complete set of vertex buffers to be used with an import layout.
-pub type VertexBufferSet<R: d::Resources> =
-    [Option<R::Buffer>; MAX_VERTEX_ATTRIBUTES];
+fn match_attribute(_sh: &d::shade::Attribute, _format: d::attrib::Format) -> bool {
+    true //TODO
+}
+
+impl VertexImportLayout {
+    /// Create an empty layout
+    pub fn new() -> VertexImportLayout {
+        VertexImportLayout {
+            formats: [None; MAX_VERTEX_ATTRIBUTES],
+        }
+    }
+    /// Create the layout by matching shader requirements with the link map.
+    pub fn link(map: &LinkMap, attributes: &[d::shade::Attribute])
+                -> Result<VertexImportLayout, CreationError> {
+        let mut formats = [None; MAX_VERTEX_ATTRIBUTES];
+        for at in attributes.iter() {
+            let slot = at.location as d::AttributeSlot;
+            match map.get(&at.name[..]) {
+                Some(&Link::Attribute(fm)) => {
+                    if match_attribute(at, fm) {
+                        formats[at.location] = Some(fm);
+                    }else {
+                        return Err(CreationError::VertexImport(slot, at.name.clone(), Some(fm)))
+                    }
+                },
+                _ => return Err(CreationError::VertexImport(slot, at.name.clone(), None))
+            }
+        }
+        Ok(VertexImportLayout {
+            formats: formats,
+        })
+    }
+}
 
 /// Layout of the output pixels.
 #[derive(Clone, Copy, Debug, Hash, PartialEq)]
@@ -39,30 +94,61 @@ pub struct PixelExportLayout {
     pub depth_stencil: Option<d::tex::Format>,
 }
 
-/// Pipeline State information block.
-#[allow(missing_docs)]
-#[derive(Clone, Debug, PartialEq)]
-pub struct PipelineInfo(
-    pub d::PrimitiveType,
-    pub VertexImportLayout,
-    pub PixelExportLayout,
-);
-
-impl PipelineInfo {
+impl PixelExportLayout {
+    /// Create an empty layout
+    pub fn new() -> PixelExportLayout {
+        PixelExportLayout {
+            colors: [None; d::MAX_COLOR_TARGETS],
+            depth_stencil: None,
+        }
+    }
+    /// Create the layout by matching shader requirements with the link map.
+    pub fn link(_map: &LinkMap, _outputs: &[d::shade::Output], need_depth: bool)
+                -> Result<PixelExportLayout, CreationError> {
+        let mut colors = [None; d::MAX_COLOR_TARGETS];
+        let depth_stencil = if need_depth {
+            Some(d::tex::Format::DEPTH24_STENCIL8)
+        } else {None};
+        colors[0] = Some(d::tex::RGBA8); //TODO
+        Ok(PixelExportLayout {
+            colors: colors,
+            depth_stencil: depth_stencil,
+        })
+    }
     /// Return the bitmask of the required render target slots
-    pub fn get_export_mask(&self) -> usize {
-        self.2.colors.iter().fold((0,0), |(mask, i), color| {
+    pub fn get_mask(&self) -> usize {
+        self.colors.iter().fold((0,0), |(mask, i), color| {
             (if color.is_some() { mask | (1<<i) } else { mask } , i + 1)
         }).0
     }
 }
 
-/// Error types happening upon PSO creation.
-pub enum CreationError {
-    /// Shader program failed to link, providing an error string.
-    ProgramLink(String),
-    /// Vertex attribute mismatch between the layout and the shader inputs.
-    VertexImport(d::AttributeSlot, String),
-    /// Pixel target mismatch between the layout and the shader outputs.
-    PixelExport(d::ColorSlot, String),
+/// A complete set of vertex buffers to be used for vertex import in PSO.
+#[derive(Copy, Clone, Debug)]
+pub struct VertexBufferSet<R: d::Resources>(
+    /// Array of buffer handles with offsets in them
+    pub [Option<(R::Buffer, BufferOffset)>; MAX_VERTEX_ATTRIBUTES]
+);
+
+impl<R: d::Resources> VertexBufferSet<R> {
+    /// Create an empty set
+    pub fn new() -> VertexBufferSet<R> {
+        VertexBufferSet([None; MAX_VERTEX_ATTRIBUTES])
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+/// A complete set of render targets to be used for pixel export in PSO.
+pub struct PixelTargetSet<R: d::Resources>(
+    /// Array of color target views
+    pub [Option<R::Surface>; d::MAX_COLOR_TARGETS], //TODO
+    /// Depth-stencil target view
+    pub Option<R::Surface>, //TODO
+);
+
+impl<R: d::Resources> PixelTargetSet<R> {
+    /// Create an empty set
+    pub fn new() -> PixelTargetSet<R> {
+        PixelTargetSet([None; d::MAX_COLOR_TARGETS], None)
+    }
 }

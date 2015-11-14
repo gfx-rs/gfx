@@ -351,6 +351,7 @@ pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities, targets: Option<&[&st
             uniforms: uniforms,
             blocks: query_blocks(gl, caps, name),
             textures: textures,
+            outputs: Vec::new(),
         };
         Ok((name, info))
     } else {

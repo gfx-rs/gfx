@@ -262,6 +262,10 @@ pub struct SamplerVar {
     pub sampler_type: SamplerType,
 }
 
+/// Target output.
+#[derive(Clone, PartialEq, Debug)]
+pub struct Output; //TODO
+
 /// Metadata about a program.
 #[derive(Clone, PartialEq, Debug)]
 pub struct ProgramInfo {
@@ -273,6 +277,8 @@ pub struct ProgramInfo {
     pub blocks: Vec<BlockVar>,
     /// Samplers in the program
     pub textures: Vec<SamplerVar>,
+    /// Output targets in the program
+    pub outputs: Vec<Output>,
 }
 
 /// Error type for trying to store a UniformValue in a UniformVar.

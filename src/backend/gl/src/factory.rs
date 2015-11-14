@@ -244,20 +244,24 @@ impl d::Factory<R> for Factory {
             .map(|(name, info)| self.share.handles.borrow_mut().make_program(name, info))
     }
 
-    fn create_pipeline_state(&mut self, info: d::pso::PipelineInfo, shader_set: &d::ShaderSet<R>, state: DrawState)
-                             -> Result<handle::PipelineState<R>, d::pso::CreationError> {
+    fn create_pipeline_state(&mut self, prim_type: d::PrimitiveType, map: &d::pso::LinkMap,
+                             shader_set: &d::ShaderSet<R>, state: &DrawState)
+                             -> Result<handle::RawPipelineState<R>, d::pso::CreationError> {
         let (program, pinfo) = match self.create_program_raw(shader_set) {
             Ok(ok) => ok,
             Err(d::shade::CreateProgramError::TargetMismatch(_)) =>
-                return Err(d::pso::CreationError::PixelExport(0, "".to_string())), //TODO
+                return Err(d::pso::CreationError::PixelExport(0, "".to_string(), None)), //TODO
             Err(d::shade::CreateProgramError::LinkFail(e)) =>
                 return Err(d::pso::CreationError::ProgramLink(e)),
         };
+        let need_depth = state.depth.is_some() || state.stencil.is_some();
+        let import = try!(d::pso::VertexImportLayout::link(map, &pinfo.attributes));
+        let export = try!(d::pso::PixelExportLayout::link(map, &pinfo.outputs, need_depth));
         let pso = PipelineState {
-            topology: info.0,
+            topology: prim_type,
             program: program,
-            vertex_import: info.1,
-            draw_target_mask: info.get_export_mask(),
+            vertex_import: import,
+            draw_target_mask: export.get_mask(),
             state: PipelineDrawState {
                 primitive: state.primitive,
                 multi_sample: state.multi_sample,
@@ -266,8 +270,7 @@ impl d::Factory<R> for Factory {
                 blend: state.blend,
             },
         };
-        //TODO: match program info with PSO info
-        Ok(self.share.handles.borrow_mut().make_pipeline_state(pso, info, pinfo))
+        Ok(self.share.handles.borrow_mut().make_pipeline_state(pso))
     }
 
     fn create_frame_buffer(&mut self) -> Result<handle::FrameBuffer<R>, d::NotSupported> {

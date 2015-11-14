@@ -206,9 +206,7 @@ impl Temp {
     fn new() -> Temp {
         Temp {
             primitive_type: 0,
-            vertex_import: d::pso::VertexImportLayout {
-                formats: [None; d::pso::MAX_VERTEX_ATTRIBUTES],
-            },
+            vertex_import: d::pso::VertexImportLayout::new(),
             stencil: None,
             cull_face: s::CullFace::Nothing,
         }
@@ -396,11 +394,12 @@ impl Device {
             },
             Command::BindVertexBuffers(vbs) => {
                 for i in 0 .. d::pso::MAX_VERTEX_ATTRIBUTES {
-                    match (vbs[i], self.temp.vertex_import.formats[i]) {
+                    match (vbs.0[i], self.temp.vertex_import.formats[i]) {
                         (None, Some(fm)) => {
                             error!("No vertex input provided for slot {} of format {:?}", i, fm)
                         },
-                        (Some(buffer), Some(format)) => {
+                        (Some((buffer, offset)), Some(mut format)) => {
+                            format.offset += offset as gl::types::GLuint;
                             self.bind_attribute(i as d::AttributeSlot, buffer, format);
                         },
                         (_, None) => {},

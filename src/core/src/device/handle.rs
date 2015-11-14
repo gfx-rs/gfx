@@ -20,7 +20,7 @@ use std::mem;
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync::Arc;
-use super::{shade, pso, tex, Resources, BufferInfo};
+use super::{shade, tex, Resources, BufferInfo};
 
 
 /// Raw (untyped) Buffer Handle
@@ -91,19 +91,7 @@ impl<R: Resources> Program<R> {
 
 /// Pipeline State Handle
 #[derive(Clone, Debug, PartialEq)]
-pub struct PipelineState<R: Resources>(
-    Arc<R::PipelineState>,
-    pso::PipelineInfo,
-    shade::ProgramInfo,
-);
-
-impl<R: Resources> PipelineState<R> {
-    /// get pipeline info
-    pub fn get_info(&self) -> &pso::PipelineInfo { &self.1 }
-
-    /// Get program info
-    pub fn get_program_info(&self) -> &shade::ProgramInfo { &self.2 }
-}
+pub struct RawPipelineState<R: Resources>(Arc<R::PipelineState>,);
 
 /// Frame Buffer Handle
 #[derive(Clone, Debug, Hash, PartialEq)]
@@ -165,8 +153,7 @@ pub trait Producer<R: Resources> {
     fn make_array_buffer(&mut self, R::ArrayBuffer) -> ArrayBuffer<R>;
     fn make_shader(&mut self, R::Shader) -> Shader<R>;
     fn make_program(&mut self, R::Program, shade::ProgramInfo) -> Program<R>;
-    fn make_pipeline_state(&mut self, R::PipelineState, pso::PipelineInfo,
-                           shade::ProgramInfo) -> PipelineState<R>;
+    fn make_pipeline_state(&mut self, R::PipelineState) -> RawPipelineState<R>;
     fn make_frame_buffer(&mut self, R::FrameBuffer) -> FrameBuffer<R>;
     fn make_surface(&mut self, R::Surface, tex::SurfaceInfo) -> Surface<R>;
     fn make_texture(&mut self, R::Texture, tex::TextureInfo) -> Texture<R>;
@@ -214,11 +201,10 @@ impl<R: Resources> Producer<R> for Manager<R> {
         Program(r, info)
     }
 
-    fn make_pipeline_state(&mut self, name: R::PipelineState, info: pso::PipelineInfo,
-                           prog_info: shade::ProgramInfo) -> PipelineState<R> {
+    fn make_pipeline_state(&mut self, name: R::PipelineState) -> RawPipelineState<R> {
         let r = Arc::new(name);
         self.pipeline_states.push(r.clone());
-        PipelineState(r, info, prog_info)
+        RawPipelineState(r)
     }
 
     fn make_frame_buffer(&mut self, name: R::FrameBuffer) -> FrameBuffer<R> {
@@ -366,7 +352,7 @@ impl<R: Resources> Manager<R> {
         *handle.0.deref()
     }
     /// Reference a ppipeline state object
-    pub fn ref_pipeline_state(&mut self, handle: &PipelineState<R>) -> R::PipelineState {
+    pub fn ref_pipeline_state(&mut self, handle: &RawPipelineState<R>) -> R::PipelineState {
         self.pipeline_states.push(handle.0.clone());
         *handle.0.deref()
     }
