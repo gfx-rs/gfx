@@ -90,8 +90,8 @@ impl<R> d::draw::CommandBuffer<R> for CommandBuffer<R>
         self.buf.push(Command::BindPipelineState(pso));
     }
 
-    fn bind_vertex_buffers(&mut self, vbs: &d::pso::VertexBufferSet<R>) {
-        self.buf.push(Command::BindVertexBuffers(vbs.clone()));
+    fn bind_vertex_buffers(&mut self, vbs: d::pso::VertexBufferSet<R>) {
+        self.buf.push(Command::BindVertexBuffers(vbs));
     }
 
     fn bind_array_buffer(&mut self, vao: R::ArrayBuffer) {

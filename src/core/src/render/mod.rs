@@ -35,6 +35,8 @@ use render::mesh::SliceKind;
 pub mod batch;
 /// Meshes
 pub mod mesh;
+/// Pipeline states
+pub mod pso;
 /// Shaders
 pub mod shade;
 /// Render targets
@@ -611,7 +613,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         }
     }
 
-    fn bind_index<T>(&mut self, buf: &handle::Buffer<R, T>, format: IntSize,
+    fn draw_indexed<T>(&mut self, buf: &handle::Buffer<R, T>, format: IntSize,
                      slice: &mesh::Slice<R>, base: device::VertexCount,
                      instances: InstanceOption) {
         if self.render_state.index.as_ref() != Some(buf.raw()) {
@@ -627,12 +629,23 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
             SliceKind::Vertex => self.command_buffer.call_draw(
                 slice.prim_type, slice.start, slice.end - slice.start, instances),
             SliceKind::Index8(ref buf, base) =>
-                self.bind_index(buf, IntSize::U8, slice, base, instances),
+                self.draw_indexed(buf, IntSize::U8, slice, base, instances),
             SliceKind::Index16(ref buf, base) =>
-                self.bind_index(buf, IntSize::U16, slice, base, instances),
+                self.draw_indexed(buf, IntSize::U16, slice, base, instances),
             SliceKind::Index32(ref buf, base) =>
-                self.bind_index(buf, IntSize::U32, slice, base, instances),
+                self.draw_indexed(buf, IntSize::U32, slice, base, instances),
         }
+    }
+
+    /// Draw a mesh slice using a typed pipeline state object (PSO).
+    pub fn draw_pipeline<L: pso::ShaderLink<R>>(&mut self, slice: &mesh::Slice<R>,
+                         pipeline: &pso::PipelineState<R, L>, user_data: &L::Data)
+    {
+        self.command_buffer.bind_pipeline_state(self.handles.ref_pipeline_state(pipeline.get_handle()));
+        let raw_data = pipeline.prepare_data(user_data);
+        self.command_buffer.bind_vertex_buffers(raw_data.vertex_buffers);
+        //TODO: bind more stuff (b#, s#, t#, u#)
+        self.draw_slice(slice, None);
     }
 }
 

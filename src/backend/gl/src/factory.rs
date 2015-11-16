@@ -244,9 +244,10 @@ impl d::Factory<R> for Factory {
             .map(|(name, info)| self.share.handles.borrow_mut().make_program(name, info))
     }
 
-    fn create_pipeline_state(&mut self, prim_type: d::PrimitiveType, map: &d::pso::LinkMap,
-                             shader_set: &d::ShaderSet<R>, state: &DrawState)
-                             -> Result<handle::RawPipelineState<R>, d::pso::CreationError> {
+    fn create_pipeline_state_raw<'a>(&mut self, prim_type: d::PrimitiveType,
+                                 shader_set: &d::ShaderSet<R>, state: &DrawState,
+                                 map: &d::pso::LinkMap<'a>, response: &mut d::pso::LinkResponse<'a>)
+                                 -> Result<handle::RawPipelineState<R>, d::pso::CreationError> {
         let (program, pinfo) = match self.create_program_raw(shader_set) {
             Ok(ok) => ok,
             Err(d::shade::CreateProgramError::TargetMismatch(_)) =>
@@ -257,6 +258,8 @@ impl d::Factory<R> for Factory {
         let need_depth = state.depth.is_some() || state.stencil.is_some();
         let import = try!(d::pso::VertexImportLayout::link(map, &pinfo.attributes));
         let export = try!(d::pso::PixelExportLayout::link(map, &pinfo.outputs, need_depth));
+        //TODO: fill response
+        response.clear();
         let pso = PipelineState {
             topology: prim_type,
             program: program,

@@ -237,8 +237,9 @@ pub trait Factory<R: Resources> {
             self.create_buffer_raw(num * mem::size_of::<T>(), role, BufferUsage::Stream))
     }
 
-    fn create_pipeline_state(&mut self, PrimitiveType, &pso::LinkMap, &ShaderSet<R>, &DrawState)
-                             -> Result<handle::RawPipelineState<R>, pso::CreationError>;
+    fn create_pipeline_state_raw<'a>(&mut self, PrimitiveType, &ShaderSet<R>, &DrawState,
+                                 &pso::LinkMap<'a>, &mut pso::LinkResponse<'a>)
+                                 -> Result<handle::RawPipelineState<R>, pso::CreationError>;
     fn create_program(&mut self, shader_set: &ShaderSet<R>)
                       -> Result<handle::Program<R>, shade::CreateProgramError>;
     fn create_shader(&mut self, stage: shade::Stage, code: &[u8]) ->
