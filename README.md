@@ -49,8 +49,8 @@ Add the following to your `Cargo.toml`:
 gfx = "*"
 ~~~
 
-See the [triangle example](https://github.com/gfx-rs/gfx/tree/master/examples/triangle) for a typical context
-initialization with [glfw](https://github.com/bjz/glfw-rs/) and [glutin](https://github.com/tomaka/glutin/).
+See the [cube example](https://github.com/gfx-rs/gfx/tree/master/examples/cube) for a typical context
+initialization with [glfw](https://github.com/bjz/glfw-rs/) and the [triangle example](https://github.com/gfx-rs/gfx/tree/master/examples/triangle) for initialization with [glutin](https://github.com/tomaka/glutin/).
 
 links to stuff here!
 
