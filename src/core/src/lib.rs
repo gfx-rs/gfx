@@ -53,6 +53,7 @@ pub use render::batch;
 pub use render::mesh::{Attribute, Mesh, VertexFormat};
 pub use render::mesh::Error as MeshError;
 pub use render::mesh::{Slice, ToIndexSlice, ToSlice, SliceKind};
+pub use render::pso::{PipelineState, VertexBuffer, InstanceBuffer, ConstantBuffer};
 pub use render::shade;
 pub use render::target::{Frame, Output, Plane};
 pub use render::ParamStorage;

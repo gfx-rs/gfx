@@ -44,9 +44,11 @@ pub enum Link {
 /// including vertex attributes, render targets, and shader parameters.
 pub type LinkMap<'a> = HashMap<&'a str, Link>;
 
-/// Map of the resources that are actually used by the shader.
-/// The values are untyped register indices.
-pub type LinkResponse<'a> = HashMap<&'a str, u32>;
+/// Generic (untyped) register.
+pub type Register = u32;
+
+/// Map of the registers that are actually used by the shader.
+pub type RegisterMap<'a> = HashMap<&'a str, Register>;
 
 /// Layout of the input vertices.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]

@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Macros for deriving `VertexFormat` and `ShaderParam`.
+//! Macros for implementing `VertexFormat` and `ShaderParam`.
+
+mod pso;
+mod structure;
 
 #[macro_export]
 macro_rules! gfx_vertex {

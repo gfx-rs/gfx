@@ -238,7 +238,7 @@ pub trait Factory<R: Resources> {
     }
 
     fn create_pipeline_state_raw<'a>(&mut self, PrimitiveType, &ShaderSet<R>, &DrawState,
-                                 &pso::LinkMap<'a>, &mut pso::LinkResponse<'a>)
+                                 &pso::LinkMap<'a>, &mut pso::RegisterMap<'a>)
                                  -> Result<handle::RawPipelineState<R>, pso::CreationError>;
     fn create_program(&mut self, shader_set: &ShaderSet<R>)
                       -> Result<handle::Program<R>, shade::CreateProgramError>;

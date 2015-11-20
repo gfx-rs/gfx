@@ -21,14 +21,6 @@ use render::mesh::{Mesh, VertexFormat};
 use render::pso;
 use extra::shade::*;
 
-/// Errors building a type-safe PSO
-pub enum PipelineBuildError {
-    /// Failed to create a raw handle
-    Creation(device::pso::CreationError),
-    /// Failed to link with shader data
-    Link(pso::ShaderLinkError),
-}
-
 /// Factory extension trait
 pub trait FactoryExt<R: device::Resources>: device::Factory<R> {
     /// Create a new mesh from the given vertex data.
@@ -72,25 +64,19 @@ pub trait FactoryExt<R: device::Resources>: device::Factory<R> {
     }
 
     /// Create a strongly-typed Pipeline State.
-    fn create_pipeline_state<'a, L>(&mut self, prim_type: device::PrimitiveType,
+    fn create_pipeline_state<'a, L, M>(&mut self, prim_type: device::PrimitiveType,
                              shaders: &device::ShaderSet<R>, state: &::DrawState)
-                             -> Result<pso::PipelineState<R, L>, PipelineBuildError> where
-        L : pso::LinkBuilder<'a> + pso::ShaderLink<R>,
+                             -> Result<pso::PipelineState<R, L>, device::pso::CreationError> where
+        L : pso::LinkBuilder<'a, M> + pso::ShaderLink<R, Meta=M>,
     {
         use std::collections::HashMap;
 
         let map = L::declare();
-        let mut response = HashMap::new();
-        let raw = match self.create_pipeline_state_raw(prim_type, shaders, state, &map, &mut response) {
-            Ok(pso) => pso,
-            Err(e) => return Err(PipelineBuildError::Creation(e)),
-        };
-        let link = match L::new(&response) {
-            Ok(link) => link,
-            Err(e) => return Err(PipelineBuildError::Link(e)),
-        };
+        let mut reg = HashMap::new();
+        let raw = try!(self.create_pipeline_state_raw(prim_type, shaders, state, &map, &mut reg));
+        let meta = L::register(&reg);
 
-        Ok(pso::PipelineState::new(raw, prim_type, link))
+        Ok(pso::PipelineState::new(raw, prim_type, meta))
     }
 
     /// Create a simple RGBA8 2D texture.
