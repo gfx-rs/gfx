@@ -36,6 +36,10 @@ pub enum CreationError {
 pub enum Link {
     /// Vertex attribute
     Attribute(d::attrib::Format),
+    /// Uniform constant
+    Constant(d::attrib::Format),
+    /// Constant buffer
+    ConstantBuffer,
     /// Render target
     Target(d::tex::Format),
 }

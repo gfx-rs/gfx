@@ -34,13 +34,13 @@ macro_rules! gfx_shader_link {
 				use std::collections::HashMap;
 				use $crate::render::pso::DataLink;
 				let mut map = HashMap::new();
-				$( <$ty as DataLink<'static, R>>::declare_to(&mut map); )*
+				$( <$ty as DataLink<'static, R>>::declare_to(&mut map, stringify!($semantic)); )*
 				map
 			}
-			fn register(response: &$crate::device::pso::RegisterMap<'static>) -> $meta<R> {
+			fn register(map: &$crate::device::pso::RegisterMap<'static>) -> $meta<R> {
 				use $crate::render::pso::DataLink;
 				$meta {
-					$( $field: <$ty as DataLink<'static, R>>::link(response), )*
+					$( $field: <$ty as DataLink<'static, R>>::link(map, stringify!($semantic)), )*
 					_res: ::std::marker::PhantomData,
 				}
 			}

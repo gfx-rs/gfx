@@ -65,8 +65,8 @@ impl<R: d::Resources, L: ShaderLink<R>> PipelineState<R, L> {
 
 pub trait DataLink<'a, R: d::Resources> {
     type Link;
-    fn declare_to(&mut d::pso::LinkMap<'a>);
-    fn link(&d::pso::RegisterMap<'a>) -> Option<Self::Link>;
+    fn declare_to(&mut d::pso::LinkMap<'a>, &'a str);
+    fn link(&d::pso::RegisterMap<'a>, &'a str) -> Option<Self::Link>;
     fn bind_to(&self, &mut ShaderDataSet<R>, &Self::Link, &mut d::handle::Manager<R>);
 }
 
@@ -86,15 +86,15 @@ pub struct ConstantBuffer<R: d::Resources, T>(pub d::handle::Buffer<R, T>);
 
 impl<'a, R: d::Resources, T: Structure> DataLink<'a, R> for VertexBuffer<R, T> {
     type Link = T::Meta;
-    fn declare_to(map: &mut d::pso::LinkMap<'a>) {
+    fn declare_to(map: &mut d::pso::LinkMap<'a>, _: &'a str) {
         T::iter_fields(|name, format| {
             map.insert(name, d::pso::Link::Attribute(format));
         });
     }
-    fn link(map: &d::pso::RegisterMap<'a>) -> Option<T::Meta> {
+    fn link(map: &d::pso::RegisterMap<'a>, _: &'a str) -> Option<Self::Link> {
         Some(T::make_meta(|name| map.get(name).map(|&reg| reg)))
     }
-    fn bind_to(&self, data: &mut ShaderDataSet<R>, meta: &T::Meta, man: &mut d::handle::Manager<R>) {
+    fn bind_to(&self, data: &mut ShaderDataSet<R>, meta: &Self::Link, man: &mut d::handle::Manager<R>) {
         let value = Some((man.ref_buffer(self.0.raw()), 0));
         T::iter_meta(meta, |reg| data.vertex_buffers.0[reg as usize] = value);
     }
@@ -102,17 +102,33 @@ impl<'a, R: d::Resources, T: Structure> DataLink<'a, R> for VertexBuffer<R, T> {
 
 impl<'a, R: d::Resources, T: Structure> DataLink<'a, R> for InstanceBuffer<R, T> {
     type Link = T::Meta;
-    fn declare_to(map: &mut d::pso::LinkMap<'a>) {
+    fn declare_to(map: &mut d::pso::LinkMap<'a>, _: &'a str) {
         T::iter_fields(|name, mut format| {
             format.instance_rate = 1;
             map.insert(name, d::pso::Link::Attribute(format));
         });
     }
-    fn link(map: &d::pso::RegisterMap<'a>) -> Option<T::Meta> {
+    fn link(map: &d::pso::RegisterMap<'a>, _: &'a str) -> Option<Self::Link> {
         Some(T::make_meta(|name| map.get(name).map(|&reg| reg)))
     }
-    fn bind_to(&self, data: &mut ShaderDataSet<R>, meta: &T::Meta, man: &mut d::handle::Manager<R>) {
+    fn bind_to(&self, data: &mut ShaderDataSet<R>, meta: &Self::Link, man: &mut d::handle::Manager<R>) {
         let value = Some((man.ref_buffer(self.0.raw()), 0));
         T::iter_meta(meta, |reg| data.vertex_buffers.0[reg as usize] = value);
+    }
+}
+
+impl<'a, R: d::Resources, T: Structure> DataLink<'a, R> for ConstantBuffer<R, T> {
+    type Link = d::pso::Register;
+    fn declare_to(map: &mut d::pso::LinkMap<'a>, buf_name: &'a str) {
+        map.insert(buf_name, d::pso::Link::ConstantBuffer);
+        T::iter_fields(|name, format| {
+            map.insert(name, d::pso::Link::Constant(format));
+        });
+    }
+    fn link(map: &d::pso::RegisterMap<'a>, buf_name: &'a str) -> Option<Self::Link> {
+        map.get(buf_name).map(|&buf_reg| buf_reg)
+    }
+    fn bind_to(&self, data: &mut ShaderDataSet<R>, meta: &Self::Link, man: &mut d::handle::Manager<R>) {
+        data.vertex_buffers.0[*meta as usize] = Some((man.ref_buffer(self.0.raw()), 0));
     }
 }
