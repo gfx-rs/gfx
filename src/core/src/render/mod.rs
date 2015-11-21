@@ -641,7 +641,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     pub fn draw_pipeline<L: pso::ShaderLink<R>>(&mut self, slice: &mesh::Slice<R>,
                          pipeline: &pso::PipelineState<R, L>, user_data: &L)
     {
-        self.command_buffer.bind_pipeline_state(self.handles.ref_pipeline_state(pipeline.get_handle()));
+        self.command_buffer.bind_pipeline_state(self.handles.ref_pso(pipeline.get_handle()));
         let raw_data = pipeline.prepare_data(user_data, &mut self.handles);
         self.command_buffer.bind_vertex_buffers(raw_data.vertex_buffers);
         //TODO: bind more stuff (b#, s#, t#, u#)

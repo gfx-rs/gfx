@@ -751,6 +751,8 @@ impl gfx::Device for Device {
             |gl, v| unsafe { gl.DeleteProgram(v.program) },
             |gl, v| unsafe { gl.DeleteFramebuffers(1, v) },
             |gl, v| unsafe { gl.DeleteRenderbuffers(1, v) },
+            |_, _| {},
+            |_, _| {},
             |gl, v| unsafe { gl.DeleteTextures(1, v) },
             |gl, v| unsafe { gl.DeleteSamplers(1, v) },
             |gl, v| unsafe { gl.DeleteSync(v.0) },

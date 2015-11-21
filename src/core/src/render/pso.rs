@@ -79,34 +79,30 @@ pub trait Structure {
     fn iter_meta<F: FnMut(d::pso::Register)>(&Self::Meta, F);
 }
 
-
-#[derive(Clone, Debug)]
-pub struct VertexBuffer<R: d::Resources, T>(pub d::handle::Buffer<R, T>);
-
-impl<'a, R: d::Resources, T: Structure> DataLink<'a, R> for VertexBuffer<R, T> {
-    type Link = T::Meta;
-    fn declare_to(map: &mut d::pso::LinkMap<'a>, _: &'a str) {
-        T::iter_fields(|name, format| {
-            map.insert(name, d::pso::Link::Attribute(format));
-        });
-    }
-    fn link(map: &d::pso::RegisterMap<'a>, _: &'a str) -> Option<Self::Link> {
-        Some(T::make_meta(|name| map.get(name).map(|&reg| reg)))
-    }
-    fn bind_to(&self, data: &mut ShaderDataSet<R>, meta: &Self::Link, man: &mut d::handle::Manager<R>) {
-        let value = Some((man.ref_buffer(self.0.raw()), 0));
-        T::iter_meta(meta, |reg| data.vertex_buffers.0[reg as usize] = value);
-    }
+pub trait Instancing {
+    fn get_rate() -> d::attrib::InstanceRate;
 }
 
 #[derive(Clone, Debug)]
-pub struct InstanceBuffer<R: d::Resources, T>(pub d::handle::Buffer<R, T>);
+pub enum PerInstance {}
 
-impl<'a, R: d::Resources, T: Structure> DataLink<'a, R> for InstanceBuffer<R, T> {
+impl Instancing for () {
+    fn get_rate() -> d::attrib::InstanceRate { 0 }
+}
+
+impl Instancing for PerInstance {
+    fn get_rate() -> d::attrib::InstanceRate { 1 }
+}
+
+
+#[derive(Clone, Debug)]
+pub struct VertexBuffer<R: d::Resources, T, I>(d::handle::Buffer<R, T>, PhantomData<I>);
+
+impl<'a, R: d::Resources, T: Structure, I: Instancing> DataLink<'a, R> for VertexBuffer<R, T, I> {
     type Link = T::Meta;
     fn declare_to(map: &mut d::pso::LinkMap<'a>, _: &'a str) {
         T::iter_fields(|name, mut format| {
-            format.instance_rate = 1;
+            format.instance_rate = I::get_rate();
             map.insert(name, d::pso::Link::Attribute(format));
         });
     }

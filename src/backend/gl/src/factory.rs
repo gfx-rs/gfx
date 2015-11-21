@@ -273,7 +273,7 @@ impl d::Factory<R> for Factory {
                 blend: state.blend,
             },
         };
-        Ok(self.share.handles.borrow_mut().make_pipeline_state(pso))
+        Ok(self.share.handles.borrow_mut().make_pso(pso))
     }
 
     fn create_frame_buffer(&mut self) -> Result<handle::FrameBuffer<R>, d::NotSupported> {

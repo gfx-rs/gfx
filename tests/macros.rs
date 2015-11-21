@@ -30,8 +30,8 @@ gfx_structure!(Local: _LocalDef {
 });
 
 gfx_shader_link!( _Shader: _ShaderDef {
-    v@ _vertex: gfx::VertexBuffer<R, Vertex>,
-    i@ _instance: gfx::InstanceBuffer<R, Instance>,
+    v@ _vertex: gfx::VertexBuffer<R, Vertex, ()>,
+    i@ _instance: gfx::VertexBuffer<R, Instance, gfx::PerInstance>,
     l@ const_locals: gfx::ConstantBuffer<R, Local>,
     //tex_diffuse: TextureView<Dim2, Float4>,
     //tex_normal: TextureView<Dim2, Float3>,
