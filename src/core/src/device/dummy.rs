@@ -25,16 +25,20 @@ pub struct DummyDevice {
 pub enum DummyResources{}
 
 impl Resources for DummyResources {
-    type Buffer         = ();
-    type ArrayBuffer    = ();
-    type Shader         = ();
-    type Program        = ();
-    type FrameBuffer    = ();
-    type Surface        = ();
-    type Texture        = ();
-    type Sampler        = ();
-    type Fence          = ();
-    type PipelineState  = ();
+    type Buffer               = ();
+    type ArrayBuffer          = ();
+    type Shader               = ();
+    type Program              = ();
+    type PipelineStateObject  = ();
+    type FrameBuffer          = ();
+    type Surface              = ();
+    type RenderTargetView     = ();
+    type DepthStencilView     = ();
+    type ShaderResourceView   = ();
+    type UnorderedAccessView  = ();
+    type Texture              = ();
+    type Sampler              = ();
+    type Fence                = ();
 }
 
 impl DummyDevice {

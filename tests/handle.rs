@@ -1,25 +1,11 @@
 extern crate gfx;
 
 use std::mem;
-use gfx::device::{BufferRole, BufferInfo, BufferUsage, Resources};
+use gfx::device::{BufferRole, BufferInfo, BufferUsage};
+use gfx::device::dummy::DummyResources;
 use gfx::handle::{Buffer, Manager, Producer};
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-enum TestResources {}
-impl gfx::Resources for TestResources {
-    type Buffer = ();
-    type ArrayBuffer = ();
-    type Shader = ();
-    type Program = ();
-    type PipelineState = ();
-    type FrameBuffer = ();
-    type Surface = ();
-    type Texture = ();
-    type Sampler = ();
-    type Fence = ();
-}
-
-fn mock_buffer<T>(len: usize) -> Buffer<TestResources, T> {
+fn mock_buffer<T>(len: usize) -> Buffer<DummyResources, T> {
     let mut handler = Manager::new();
     Buffer::from_raw(
         handler.make_buffer((), BufferInfo {
@@ -44,7 +30,7 @@ fn test_buffer_zero_len() {
 
 #[test]
 fn test_cleanup() {
-    let mut man: Manager<TestResources> = Manager::new();
+    let mut man: Manager<DummyResources> = Manager::new();
     let _ = man.make_frame_buffer(());
     let mut count = 0u8;
     man.clean_with(&mut count,

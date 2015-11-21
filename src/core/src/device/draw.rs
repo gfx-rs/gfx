@@ -103,7 +103,7 @@ pub trait CommandBuffer<R: d::Resources> {
     /// Bind a shader program
     fn bind_program(&mut self, R::Program);
     /// Bind a pipeline state object
-    fn bind_pipeline_state(&mut self, R::PipelineState);
+    fn bind_pipeline_state(&mut self, R::PipelineStateObject);
     /// Bind a complete set of vertex buffers
     fn bind_vertex_buffers(&mut self, d::pso::VertexBufferSet<R>);
     /// Bind an array buffer object

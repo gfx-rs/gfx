@@ -75,6 +75,13 @@ pub struct PipelineState {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub enum TargetView {
+    Surface(Surface),
+    Texture(Texture, gfx::Level),
+    TextureLayer(Texture, gfx::Level, gfx::Layer),
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Fence(gl::types::GLsync);
 
 unsafe impl Send for Fence {}
@@ -84,16 +91,20 @@ unsafe impl Sync for Fence {}
 pub enum Resources {}
 
 impl gfx::Resources for Resources {
-    type Buffer         = Buffer;
-    type ArrayBuffer    = ArrayBuffer;
-    type Shader         = Shader;
-    type Program        = Program;
-    type PipelineState  = PipelineState;
-    type FrameBuffer    = FrameBuffer;
-    type Surface        = Surface;
-    type Texture        = Texture;
-    type Sampler        = Sampler;
-    type Fence          = Fence;
+    type Buffer              = Buffer;
+    type ArrayBuffer         = ArrayBuffer;
+    type Shader              = Shader;
+    type Program             = Program;
+    type PipelineStateObject = PipelineState;
+    type FrameBuffer         = FrameBuffer;
+    type Surface             = Surface;
+    type RenderTargetView    = TargetView;
+    type DepthStencilView    = TargetView;
+    type ShaderResourceView  = Texture; //TODO
+    type UnorderedAccessView = Texture; //TODO
+    type Texture             = Texture;
+    type Sampler             = Sampler;
+    type Fence               = Fence;
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]

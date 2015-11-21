@@ -91,7 +91,7 @@ impl<R: Resources> Program<R> {
 
 /// Pipeline State Handle
 #[derive(Clone, Debug, PartialEq)]
-pub struct RawPipelineState<R: Resources>(Arc<R::PipelineState>,);
+pub struct RawPipelineState<R: Resources>(Arc<R::PipelineStateObject>,);
 
 /// Frame Buffer Handle
 #[derive(Clone, Debug, Hash, PartialEq)]
@@ -138,7 +138,7 @@ pub struct Manager<R: Resources> {
     array_buffers:   Vec<Arc<R::ArrayBuffer>>,
     shaders:         Vec<Arc<R::Shader>>,
     programs:        Vec<Arc<R::Program>>,
-    pipeline_states: Vec<Arc<R::PipelineState>>,
+    pipeline_states: Vec<Arc<R::PipelineStateObject>>,
     frame_buffers:   Vec<Arc<R::FrameBuffer>>,
     surfaces:        Vec<Arc<R::Surface>>,
     textures:        Vec<Arc<R::Texture>>,
@@ -153,7 +153,7 @@ pub trait Producer<R: Resources> {
     fn make_array_buffer(&mut self, R::ArrayBuffer) -> ArrayBuffer<R>;
     fn make_shader(&mut self, R::Shader) -> Shader<R>;
     fn make_program(&mut self, R::Program, shade::ProgramInfo) -> Program<R>;
-    fn make_pipeline_state(&mut self, R::PipelineState) -> RawPipelineState<R>;
+    fn make_pipeline_state(&mut self, R::PipelineStateObject) -> RawPipelineState<R>;
     fn make_frame_buffer(&mut self, R::FrameBuffer) -> FrameBuffer<R>;
     fn make_surface(&mut self, R::Surface, tex::SurfaceInfo) -> Surface<R>;
     fn make_texture(&mut self, R::Texture, tex::TextureInfo) -> Texture<R>;
@@ -167,7 +167,7 @@ pub trait Producer<R: Resources> {
         B: Fn(&mut T, &R::ArrayBuffer),
         C: Fn(&mut T, &R::Shader),
         D: Fn(&mut T, &R::Program),
-        E: Fn(&mut T, &R::PipelineState),
+        E: Fn(&mut T, &R::PipelineStateObject),
         F: Fn(&mut T, &R::FrameBuffer),
         G: Fn(&mut T, &R::Surface),
         H: Fn(&mut T, &R::Texture),
@@ -201,7 +201,7 @@ impl<R: Resources> Producer<R> for Manager<R> {
         Program(r, info)
     }
 
-    fn make_pipeline_state(&mut self, name: R::PipelineState) -> RawPipelineState<R> {
+    fn make_pipeline_state(&mut self, name: R::PipelineStateObject) -> RawPipelineState<R> {
         let r = Arc::new(name);
         self.pipeline_states.push(r.clone());
         RawPipelineState(r)
@@ -242,7 +242,7 @@ impl<R: Resources> Producer<R> for Manager<R> {
         B: Fn(&mut T, &R::ArrayBuffer),
         C: Fn(&mut T, &R::Shader),
         D: Fn(&mut T, &R::Program),
-        E: Fn(&mut T, &R::PipelineState),
+        E: Fn(&mut T, &R::PipelineStateObject),
         F: Fn(&mut T, &R::FrameBuffer),
         G: Fn(&mut T, &R::Surface),
         H: Fn(&mut T, &R::Texture),
@@ -352,7 +352,7 @@ impl<R: Resources> Manager<R> {
         *handle.0.deref()
     }
     /// Reference a ppipeline state object
-    pub fn ref_pipeline_state(&mut self, handle: &RawPipelineState<R>) -> R::PipelineState {
+    pub fn ref_pipeline_state(&mut self, handle: &RawPipelineState<R>) -> R::PipelineStateObject {
         self.pipeline_states.push(handle.0.clone());
         *handle.0.deref()
     }

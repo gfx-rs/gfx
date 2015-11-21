@@ -203,17 +203,21 @@ pub enum BufferUpdateError {
 
 /// Resources pertaining to a specific API.
 #[allow(missing_docs)]
-pub trait Resources:           Clone + Hash + fmt::Debug + Eq + PartialEq {
-    type Buffer:        Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
-    type ArrayBuffer:   Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
-    type Shader:        Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
-    type Program:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
-    type PipelineState: Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
-    type FrameBuffer:   Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
-    type Surface:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
-    type Texture:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
-    type Sampler:       Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
-    type Fence:         Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+pub trait Resources:                 Clone + Hash + fmt::Debug + Eq + PartialEq {
+    type Buffer:              Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type ArrayBuffer:         Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Shader:              Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Program:             Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type PipelineStateObject: Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type FrameBuffer:         Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Surface:             Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type RenderTargetView:    Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type DepthStencilView:    Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type ShaderResourceView:  Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type UnorderedAccessView: Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Texture:             Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Sampler:             Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Fence:               Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
 }
 
 #[allow(missing_docs)]
