@@ -40,8 +40,14 @@ pub enum Link {
     Constant(d::attrib::Format),
     /// Constant buffer
     ConstantBuffer,
-    /// Render target
+    /// Shader resource view (SRV)
+    Resource,
+    /// Unordered access view (UAV)
+    Unordered,
+    /// Render target view (RTV)
     Target(d::tex::Format),
+    /// Depth stencil view (DSV)
+    DepthStencil(d::tex::Format),
 }
 
 /// Map of all objects that are provided for PSO usage,

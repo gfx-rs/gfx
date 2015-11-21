@@ -16,7 +16,9 @@
 
 #![allow(missing_docs)]
 
+use std::marker::PhantomData;
 use device as d;
+use render::target;
 
 pub struct ShaderDataSet<R: d::Resources>{
     pub vertex_buffers: d::pso::VertexBufferSet<R>,
@@ -77,12 +79,9 @@ pub trait Structure {
     fn iter_meta<F: FnMut(d::pso::Register)>(&Self::Meta, F);
 }
 
+
 #[derive(Clone, Debug)]
 pub struct VertexBuffer<R: d::Resources, T>(pub d::handle::Buffer<R, T>);
-#[derive(Clone, Debug)]
-pub struct InstanceBuffer<R: d::Resources, T>(pub d::handle::Buffer<R, T>);
-#[derive(Clone, Debug)]
-pub struct ConstantBuffer<R: d::Resources, T>(pub d::handle::Buffer<R, T>);
 
 impl<'a, R: d::Resources, T: Structure> DataLink<'a, R> for VertexBuffer<R, T> {
     type Link = T::Meta;
@@ -99,6 +98,9 @@ impl<'a, R: d::Resources, T: Structure> DataLink<'a, R> for VertexBuffer<R, T> {
         T::iter_meta(meta, |reg| data.vertex_buffers.0[reg as usize] = value);
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct InstanceBuffer<R: d::Resources, T>(pub d::handle::Buffer<R, T>);
 
 impl<'a, R: d::Resources, T: Structure> DataLink<'a, R> for InstanceBuffer<R, T> {
     type Link = T::Meta;
@@ -117,6 +119,9 @@ impl<'a, R: d::Resources, T: Structure> DataLink<'a, R> for InstanceBuffer<R, T>
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct ConstantBuffer<R: d::Resources, T>(pub d::handle::Buffer<R, T>);
+
 impl<'a, R: d::Resources, T: Structure> DataLink<'a, R> for ConstantBuffer<R, T> {
     type Link = d::pso::Register;
     fn declare_to(map: &mut d::pso::LinkMap<'a>, buf_name: &'a str) {
@@ -126,9 +131,67 @@ impl<'a, R: d::Resources, T: Structure> DataLink<'a, R> for ConstantBuffer<R, T>
         });
     }
     fn link(map: &d::pso::RegisterMap<'a>, buf_name: &'a str) -> Option<Self::Link> {
-        map.get(buf_name).map(|&buf_reg| buf_reg)
+        map.get(buf_name).map(|&reg| reg)
     }
     fn bind_to(&self, data: &mut ShaderDataSet<R>, meta: &Self::Link, man: &mut d::handle::Manager<R>) {
         data.vertex_buffers.0[*meta as usize] = Some((man.ref_buffer(self.0.raw()), 0));
+    }
+}
+
+pub trait TextureFormat {
+    fn get_format() -> d::tex::Format;
+}
+
+impl TextureFormat for [f32; 4] {
+    fn get_format() -> d::tex::Format {
+        d::tex::RGBA8
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct RenderView<R: d::Resources, T>(target::Plane<R>, PhantomData<T>);
+
+impl<R: d::Resources, T> From<d::handle::Surface<R>> for RenderView<R, T> {
+    fn from(h: d::handle::Surface<R>) -> RenderView<R, T> {
+        //TODO: match T with surface format
+        RenderView(target::Plane::Surface(h), PhantomData)
+    }
+}
+
+impl<R: d::Resources, T> From<d::handle::Texture<R>> for RenderView<R, T> {
+    fn from(h: d::handle::Texture<R>) -> RenderView<R, T> {
+        //TODO: match T with texture format
+        RenderView(target::Plane::Texture(h, 0, None), PhantomData)
+    }
+}
+
+impl<'a, R: d::Resources, T: TextureFormat> DataLink<'a, R> for RenderView<R, T> {
+    type Link = d::pso::Register;
+    fn declare_to(map: &mut d::pso::LinkMap<'a>, name: &'a str) {
+        map.insert(name, d::pso::Link::Target(T::get_format()));
+    }
+    fn link(map: &d::pso::RegisterMap<'a>, name: &'a str) -> Option<Self::Link> {
+        map.get(name).map(|&reg| reg)
+    }
+    fn bind_to(&self, data: &mut ShaderDataSet<R>, meta: &Self::Link, man: &mut d::handle::Manager<R>) {
+        let _ = (data, meta, man);
+        //data.render_targets.0[*meta as usize] = Some((man.ref_buffer(self.0.raw()), 0)); //TODO!
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct DepthStencilView<R: d::Resources>(pub target::Plane<R>);
+
+impl<'a, R: d::Resources> DataLink<'a, R> for DepthStencilView<R> {
+    type Link = d::pso::Register;
+    fn declare_to(map: &mut d::pso::LinkMap<'a>, name: &'a str) {
+        map.insert(name, d::pso::Link::DepthStencil(d::tex::Format::DEPTH24_STENCIL8));
+    }
+    fn link(map: &d::pso::RegisterMap<'a>, name: &'a str) -> Option<Self::Link> {
+        map.get(name).map(|&reg| reg)
+    }
+    fn bind_to(&self, data: &mut ShaderDataSet<R>, meta: &Self::Link, man: &mut d::handle::Manager<R>) {
+        let _ = (data, meta, man);
+        //data.render_targets.0[*meta as usize] = Some((man.ref_buffer(self.0.raw()), 0)); //TODO!
     }
 }
