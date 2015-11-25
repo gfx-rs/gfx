@@ -150,7 +150,7 @@ fn target_to_gl(target: Target) -> gl::types::GLenum {
 
 /// Create a new device with a factory.
 pub fn create<F>(fn_proc: F) -> (Device, Factory) where
-    F: FnMut(&str) -> *const ::libc::c_void
+    F: FnMut(&str) -> *const std::os::raw::c_void
 {
     let device = Device::new(fn_proc);
     let factory = Factory::new(device.share.clone());
@@ -179,7 +179,7 @@ impl Device {
     /// Create a new device. There can be only one!
     /// Also, load OpenGL symbols and detect driver information.
     fn new<F>(fn_proc: F) -> Device where
-        F: FnMut(&str) -> *const ::libc::c_void
+        F: FnMut(&str) -> *const std::os::raw::c_void
     {
         use gfx::device::handle::Producer;
         let gl = gl::Gl::load_with(fn_proc);
