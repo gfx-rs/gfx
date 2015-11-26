@@ -24,7 +24,7 @@ addons:
     packages:
     - xdotool
     - cmake
-    - libXxf86vm-dev
+    - libxxf86vm-dev
     - libxinerama-dev
     - libxinerama1
     - libxcursor-dev
