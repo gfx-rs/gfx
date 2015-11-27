@@ -28,7 +28,6 @@ name = "gfx_device_gl"
 
 [dependencies]
 log = "0.3"
-libc = "0.2"
 gfx_gl = "0.3"
 
 [dependencies.gfx]

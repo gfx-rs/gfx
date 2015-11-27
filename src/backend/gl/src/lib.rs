@@ -20,7 +20,6 @@
 
 #[macro_use]
 extern crate log;
-extern crate libc;
 extern crate gfx_gl as gl;
 extern crate gfx;
 

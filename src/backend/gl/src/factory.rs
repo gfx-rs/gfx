@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use libc;
 use std::rc::Rc;
 use std::slice;
 
@@ -142,7 +141,7 @@ impl Factory {
 #[allow(raw_pointer_derive)]
 #[derive(Copy, Clone)]
 pub struct RawMapping {
-    pub pointer: *mut libc::c_void,
+    pub pointer: *mut ::std::os::raw::c_void,
     target: gl::types::GLenum,
 }
 
@@ -329,7 +328,7 @@ impl d::Factory<R> for Factory {
             d::MapAccess::Readable => gl::READ_ONLY,
             d::MapAccess::Writable => gl::WRITE_ONLY,
             d::MapAccess::RW => gl::READ_WRITE
-        }) } as *mut libc::c_void;
+        }) } as *mut ::std::os::raw::c_void;
         RawMapping {
             pointer: ptr,
             target: gl::ARRAY_BUFFER
