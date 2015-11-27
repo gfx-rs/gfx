@@ -384,7 +384,7 @@ pub fn make_without_storage(gl: &gl::Gl, info: &TextureInfo) ->
         _ => return Err(TextureError::UnsupportedSampling),
     }
 
-    set_mipmap_range(gl, target, (0, info.levels));
+    set_mipmap_range(gl, target, (0, info.levels - 1));
 
     Ok(name)
 }
@@ -495,7 +495,7 @@ pub fn make_with_storage(gl: &gl::Gl, info: &TextureInfo) ->
         _ => return Err(TextureError::UnsupportedSampling),
     }
 
-    set_mipmap_range(gl, target, (0, info.levels));
+    set_mipmap_range(gl, target, (0, info.levels - 1));
 
     Ok(name)
 }
