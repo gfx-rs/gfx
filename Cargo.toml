@@ -71,6 +71,10 @@ path = "examples/instancing/main.rs"
 name = "ubo_tilemap"
 path = "examples/ubo_tilemap/main.rs"
 
+[[example]]
+name = "mipmap"
+path = "examples/mipmap/main.rs"
+
 [dev_dependencies]
 env_logger = "*"
 log = "*"
