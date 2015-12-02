@@ -64,19 +64,19 @@ pub trait FactoryExt<R: device::Resources>: device::Factory<R> {
     }
 
     /// Create a strongly-typed Pipeline State.
-    fn create_pipeline_state<'a, L, M>(&mut self, prim_type: device::PrimitiveType,
-                             shaders: &device::ShaderSet<R>, state: &::DrawState)
-                             -> Result<pso::PipelineState<R, L>, device::pso::CreationError> where
-        L : pso::LinkBuilder<'a, M> + pso::ShaderLink<R, Meta=M>,
+    fn create_pipeline_state<'a, I: pso::PipelineInit<'a>>(&mut self, init: &I,
+                             rasterizer: device::pso::Rasterizer, shaders: &device::ShaderSet<R>)
+                             -> Result<pso::PipelineState<R, I::Meta>, device::pso::CreationError>
     {
         use std::collections::HashMap;
 
-        let map = L::declare();
+        let map = init.declare();
         let mut reg = HashMap::new();
-        let raw = try!(self.create_pipeline_state_raw(prim_type, shaders, state, &map, &mut reg));
-        let meta = L::register(&reg);
+        let topo = rasterizer.topology;
+        let raw = try!(self.create_pipeline_state_raw(rasterizer, shaders, &map, &mut reg));
+        let meta = init.register(&reg);
 
-        Ok(pso::PipelineState::new(raw, prim_type, meta))
+        Ok(pso::PipelineState::new(raw, topo, meta))
     }
 
     /// Create a simple RGBA8 2D texture.

@@ -20,7 +20,6 @@ use std::{fmt, mem};
 use std::hash::Hash;
 
 pub use draw_state::{MAX_COLOR_TARGETS, state, target};
-use draw_state::DrawState;
 
 pub mod attrib;
 pub mod command;
@@ -233,15 +232,13 @@ pub trait Factory<R: Resources> {
     fn create_buffer_raw(&mut self, size: usize, BufferRole, BufferUsage) -> handle::RawBuffer<R>;
     fn create_buffer_static_raw(&mut self, data: &[u8], BufferRole) -> handle::RawBuffer<R>;
     fn create_buffer_static<T>(&mut self, data: &[T], role: BufferRole) -> handle::Buffer<R, T> {
-        handle::Buffer::from_raw(
-            self.create_buffer_static_raw(as_byte_slice(data), role))
+        self.create_buffer_static_raw(as_byte_slice(data), role).into()
     }
     fn create_buffer_dynamic<T>(&mut self, num: usize, role: BufferRole) -> handle::Buffer<R, T> {
-        handle::Buffer::from_raw(
-            self.create_buffer_raw(num * mem::size_of::<T>(), role, BufferUsage::Stream))
+        self.create_buffer_raw(num * mem::size_of::<T>(), role, BufferUsage::Stream).into()
     }
 
-    fn create_pipeline_state_raw<'a>(&mut self, PrimitiveType, &ShaderSet<R>, &DrawState,
+    fn create_pipeline_state_raw<'a>(&mut self, rasterizer: pso::Rasterizer, &ShaderSet<R>,
                                  &pso::LinkMap<'a>, &mut pso::RegisterMap<'a>)
                                  -> Result<handle::RawPipelineState<R>, pso::CreationError>;
     fn create_program(&mut self, shader_set: &ShaderSet<R>)

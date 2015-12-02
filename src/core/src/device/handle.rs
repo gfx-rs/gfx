@@ -39,20 +39,16 @@ pub struct Buffer<R: Resources, T> {
     phantom_t: PhantomData<T>,
 }
 
-impl<R: Resources, T> Buffer<R, T> {
-    /// Create a type-safe Buffer from a RawBuffer
-    pub fn from_raw(handle: RawBuffer<R>) -> Buffer<R, T> {
+impl<R: Resources, T> From<RawBuffer<R>> for Buffer<R, T> {
+    fn from(handle: RawBuffer<R>) -> Buffer<R, T> {
         Buffer {
             raw: handle,
             phantom_t: PhantomData,
         }
     }
+}
 
-    /// Cast the type this Buffer references
-    pub fn cast<U>(self) -> Buffer<R, U> {
-        Buffer::from_raw(self.raw)
-    }
-
+impl<R: Resources, T> Buffer<R, T> {
     /// Get the underlying raw Handle
     pub fn raw(&self) -> &RawBuffer<R> {
         &self.raw
@@ -106,22 +102,44 @@ impl<R: Resources> Surface<R> {
     pub fn get_info(&self) -> &tex::SurfaceInfo { &self.1 }
 }
 
-/// Raw target view, applicable to both colors and depth/stencil
-#[derive(Clone, Debug, Hash, PartialEq)]
-pub struct RawTargetView<R: Resources, X>(Arc<X>, Texture<R>);
+/// Convenience target view prototype, applicable to both colors and depth/stencil
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct ProtoTargetView<R: Resources, X>(Arc<X>, Texture<R>);
 
-impl<R: Resources, X> RawTargetView<R, X> {
+impl<R: Resources, X> ProtoTargetView<R, X> {
     /// Get target texture
     pub fn get_texture(&self) -> &Texture<R> { &self.1 }
 }
 
 /// Raw RTV
-pub type RawRenderTargetView<R: Resources> = RawTargetView<R, R::RenderTargetView>;
+pub type RawRenderTargetView<R: Resources> = ProtoTargetView<R, R::RenderTargetView>;
 /// Raw DSV
-pub type RawDepthStencilView<R: Resources> = RawTargetView<R, R::DepthStencilView>;
+pub type RawDepthStencilView<R: Resources> = ProtoTargetView<R, R::DepthStencilView>;
+
+/// A target view template that is equally applicable to colors and depth/stencil
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct TargetView<R: Resources, X, T>(ProtoTargetView<R, X>, PhantomData<T>);
+
+impl<R: Resources, X, T> From<ProtoTargetView<R, X>> for TargetView<R, X, T> {
+    fn from(h: ProtoTargetView<R, X>) -> TargetView<R, X, T> {
+        TargetView(h, PhantomData)
+    }
+}
+
+impl<R: Resources, X, T> TargetView<R, X, T> {
+    /// Get the underlying raw Handle
+    pub fn raw(&self) -> &ProtoTargetView<R, X> {
+        &self.0
+    }
+}
+
+/// Typed RTV
+pub type RenderTargetView<R: Resources, T> = TargetView<R, R::RenderTargetView, T>;
+/// Typed DSV
+pub type DepthStencilView<R: Resources, T> = TargetView<R, R::DepthStencilView, T>; 
 
 /// Texture Handle
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Texture<R: Resources>(Arc<R::Texture>, tex::TextureInfo);
 
 impl<R: Resources> Texture<R> {
@@ -242,13 +260,13 @@ impl<R: Resources> Producer<R> for Manager<R> {
     fn make_rtv(&mut self, res: R::RenderTargetView, tex: Texture<R>) -> RawRenderTargetView<R> {
         let r = Arc::new(res);
         self.rtvs.push(r.clone());
-        RawTargetView(r, tex)
+        ProtoTargetView(r, tex)
     }
 
     fn make_dsv(&mut self, res: R::DepthStencilView, tex: Texture<R>) -> RawDepthStencilView<R> {
         let r = Arc::new(res);
         self.dsvs.push(r.clone());
-        RawTargetView(r, tex)
+        ProtoTargetView(r, tex)
     }
 
     fn make_texture(&mut self, res: R::Texture, info: tex::TextureInfo) -> Texture<R> {

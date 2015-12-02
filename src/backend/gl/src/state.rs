@@ -19,13 +19,17 @@ use gfx::device::state::{BlendValue, Comparison, CullFace, Equation,
 use gfx::device::target::{ColorValue, Rect, Stencil};
 use super::gl;
 
-pub fn bind_primitive(gl: &gl::Gl, p: s::Primitive) {
-    unsafe { gl.FrontFace(match p.front_face {
-        FrontFace::Clockwise => gl::CW,
-        FrontFace::CounterClockwise => gl::CCW,
-    }) };
+pub fn bind_front_face(gl: &gl::Gl, ff: s::FrontFace) {
+    unsafe {
+        gl.FrontFace(match ff {
+            FrontFace::Clockwise => gl::CW,
+            FrontFace::CounterClockwise => gl::CCW,
+        })
+    };
+}
 
-    let (gl_draw, gl_offset) = match p.method {
+pub fn bind_raster_method(gl: &gl::Gl, method: s::RasterMethod, offset: Option<s::Offset>) {
+    let (gl_draw, gl_offset) = match method {
         RasterMethod::Point => (gl::POINT, gl::POLYGON_OFFSET_POINT),
         RasterMethod::Line(width) => {
             unsafe { gl.LineWidth(width as gl::types::GLfloat) };
@@ -49,7 +53,7 @@ pub fn bind_primitive(gl: &gl::Gl, p: s::Primitive) {
 
     unsafe { gl.PolygonMode(gl::FRONT_AND_BACK, gl_draw) };
 
-    match p.offset {
+    match offset {
         Some(Offset(factor, units)) => unsafe {
             gl.Enable(gl_offset);
             gl.PolygonOffset(factor as gl::types::GLfloat,
@@ -59,6 +63,11 @@ pub fn bind_primitive(gl: &gl::Gl, p: s::Primitive) {
             gl.Disable(gl_offset)
         },
     }
+}
+
+pub fn bind_primitive(gl: &gl::Gl, p: s::Primitive) {
+    bind_front_face(gl, p.front_face);
+    bind_raster_method(gl, p.method, p.offset);
 }
 
 pub fn bind_multi_sample(gl: &gl::Gl, ms: Option<s::MultiSample>) {

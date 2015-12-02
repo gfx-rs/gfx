@@ -52,11 +52,9 @@ pub type Sampler        = gl::types::GLuint;
 pub type Texture        = gl::types::GLuint;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct PipelineDrawState {
-    /// How to rasterize geometric primitives.
-    pub primitive: s::Primitive,
-    /// Multi-sampling mode
-    pub multi_sample: Option<s::MultiSample>,
+pub struct OutputMerger {
+    /// Color attachment draw mask.
+    draw_mask: usize,
     /// Stencil test to use. If None, no stencil testing is done.
     pub stencil: Option<(s::StencilSide, s::StencilSide)>,
     /// Depth test to use. If None, no depth testing is done.
@@ -67,11 +65,10 @@ pub struct PipelineDrawState {
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct PipelineState {
-    topology: d::PrimitiveType,
     program: Program,
     vertex_import: d::pso::VertexImportLayout,
-    draw_target_mask: usize,
-    state: PipelineDrawState,
+    rasterizer: d::pso::Rasterizer,
+    output: OutputMerger,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -388,19 +385,20 @@ impl Device {
             Command::BindPipelineState(pso) => {
                 let gl = &self.share.context;
                 unsafe { gl.UseProgram(pso.program) };
-                self.temp.primitive_type = primitive_to_gl(pso.topology);
+                self.temp.primitive_type = primitive_to_gl(pso.rasterizer.topology);
                 self.temp.vertex_import = pso.vertex_import;
-                state::bind_draw_color_buffers(gl, pso.draw_target_mask);
-                state::bind_primitive(gl, pso.state.primitive);
-                state::bind_multi_sample(gl, pso.state.multi_sample);
-                self.temp.stencil = pso.state.stencil.map(|s| s::Stencil {
+                state::bind_draw_color_buffers(gl, pso.output.draw_mask);
+                state::bind_front_face(gl, pso.rasterizer.front_face);
+                state::bind_raster_method(gl, pso.rasterizer.raster_method, pso.rasterizer.depth_offset);
+                state::bind_multi_sample(gl, pso.rasterizer.multi_sample);
+                self.temp.stencil = pso.output.stencil.map(|s| s::Stencil {
                     front: s.0, back: s.1, front_ref: 0, back_ref: 0,
                     });
-                self.temp.cull_face = pso.state.primitive.get_cull_face();
+                self.temp.cull_face = pso.rasterizer.raster_method.get_cull_face();
                 state::bind_stencil(gl, &self.temp.stencil, self.temp.cull_face);
-                state::bind_depth(gl, &pso.state.depth);
+                state::bind_depth(gl, &pso.output.depth);
                 for i in 0 .. d::MAX_COLOR_TARGETS {
-                    state::bind_blend_slot(gl, i as d::ColorSlot, pso.state.blend[i]);
+                    state::bind_blend_slot(gl, i as d::ColorSlot, pso.output.blend[i]);
                 }
             },
             Command::BindVertexBuffers(vbs) => {

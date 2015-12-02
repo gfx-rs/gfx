@@ -480,9 +480,9 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
             self.command_buffer.set_scissor(state.scissor);
         }
         if self.render_state.draw.depth != state.depth || self.render_state.draw.stencil != state.stencil ||
-                self.render_state.draw.primitive.get_cull_face() != state.primitive.get_cull_face() {
+                self.render_state.draw.primitive.method.get_cull_face() != state.primitive.method.get_cull_face() {
             self.command_buffer.set_depth_stencil(state.depth, state.stencil,
-                state.primitive.get_cull_face());
+                state.primitive.method.get_cull_face());
         }
         for i in 0 .. device::MAX_COLOR_TARGETS {
             if self.render_state.draw.blend[i] != state.blend[i] {
@@ -638,8 +638,8 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     }
 
     /// Draw a mesh slice using a typed pipeline state object (PSO).
-    pub fn draw_pipeline<L: pso::ShaderLink<R>>(&mut self, slice: &mesh::Slice<R>,
-                         pipeline: &pso::PipelineState<R, L>, user_data: &L)
+    pub fn draw_pipeline<D: pso::PipelineData<R>>(&mut self, slice: &mesh::Slice<R>,
+                         pipeline: &pso::PipelineState<R, D::Meta>, user_data: &D)
     {
         self.command_buffer.bind_pipeline_state(self.handles.ref_pso(pipeline.get_handle()));
         let raw_data = pipeline.prepare_data(user_data, &mut self.handles);

@@ -18,58 +18,86 @@
 
 use std::marker::PhantomData;
 use device as d;
-use render::target;
 
-pub struct ShaderDataSet<R: d::Resources>{
-    pub vertex_buffers: d::pso::VertexBufferSet<R>,
-    pub pixel_targets: d::pso::PixelTargetSet<R>,
-    //TODO: add more, move to the device side
+
+pub struct RasterConstants {
+    pub stencil_ref: (d::target::Stencil, d::target::Stencil),
+    pub blend_factors: [f32; 4],
 }
 
-impl<R: d::Resources> ShaderDataSet<R> {
-    pub fn new() -> ShaderDataSet<R> {
-        ShaderDataSet {
-            vertex_buffers: d::pso::VertexBufferSet::new(),
-            pixel_targets: d::pso::PixelTargetSet::new(),
+impl RasterConstants {
+    pub fn new() -> RasterConstants {
+        RasterConstants {
+            stencil_ref: (0, 0),
+            blend_factors: [0.0; 4],
         }
     }
 }
 
-pub trait LinkBuilder<'a, M> {
-    fn declare() -> d::pso::LinkMap<'a>;
-    fn register(&d::pso::RegisterMap<'a>) -> M;
+pub struct RawDataSet<R: d::Resources>{
+    pub vertex_buffers: d::pso::VertexBufferSet<R>,
+    pub constant_buffers: d::pso::ConstantBufferSet<R>,
+    pub constants: Vec<(d::pso::Register, d::shade::UniformValue)>,
+    pub pixel_targets: d::pso::PixelTargetSet<R>,
+    //TODO: add more, move to the device side
+    pub rasterizer: RasterConstants,
+    pub scissor: Option<d::target::Rect>,
 }
 
-pub trait ShaderLink<R: d::Resources> {
+impl<R: d::Resources> RawDataSet<R> {
+    pub fn new() -> RawDataSet<R> {
+        RawDataSet {
+            vertex_buffers: d::pso::VertexBufferSet::new(),
+            constant_buffers: d::pso::ConstantBufferSet::new(),
+            constants: Vec::new(),
+            pixel_targets: d::pso::PixelTargetSet::new(),
+            rasterizer: RasterConstants::new(),
+            scissor: None,
+        }
+    }
+}
+
+pub trait PipelineInit<'a> {
+    type Meta;
+    fn declare(&self) -> d::pso::LinkMap<'a>;
+    fn register(&self, &d::pso::RegisterMap<'a>) -> Self::Meta;
+}
+
+pub trait PipelineData<R: d::Resources> {
     type Meta;
     fn define(&self, meta: &Self::Meta, &mut d::handle::Manager<R>)
-              -> ShaderDataSet<R>;
+              -> RawDataSet<R>;
 }
 
 /// Strongly-typed compiled pipeline state
-pub struct PipelineState<R: d::Resources, L: ShaderLink<R>>(
-    d::handle::RawPipelineState<R>, d::PrimitiveType, L::Meta);
+pub struct PipelineState<R: d::Resources, M>(
+    d::handle::RawPipelineState<R>, d::PrimitiveType, M);
 
-impl<R: d::Resources, L: ShaderLink<R>> PipelineState<R, L> {
+impl<R: d::Resources, M> PipelineState<R, M> {
     pub fn new(raw: d::handle::RawPipelineState<R>, pt: d::PrimitiveType,
-               meta: L::Meta) -> PipelineState<R, L> {
+               meta: M) -> PipelineState<R, M> {
         PipelineState(raw, pt, meta)
     }
     pub fn get_handle(&self) -> &d::handle::RawPipelineState<R> {
         &self.0
     }
-    pub fn prepare_data(&self, data: &L, handle_man: &mut d::handle::Manager<R>)
-                        -> ShaderDataSet<R>
+    pub fn prepare_data<D: PipelineData<R, Meta=M>>(&self, data: &D,
+                        handle_man: &mut d::handle::Manager<R>) -> RawDataSet<R>
     {
         data.define(&self.2, handle_man)
     }
 }
 
-pub trait DataLink<'a, R: d::Resources> {
-    type Link;
-    fn declare_to(&mut d::pso::LinkMap<'a>, &'a str);
-    fn link(&d::pso::RegisterMap<'a>, &'a str) -> Option<Self::Link>;
-    fn bind_to(&self, &mut ShaderDataSet<R>, &Self::Link, &mut d::handle::Manager<R>);
+
+pub trait DataLink<'a>: Sized {
+    type Init;
+    fn declare_to(&mut d::pso::LinkMap<'a>, &Self::Init);
+    fn link(&d::pso::RegisterMap<'a>, &Self::Init) -> Option<Self>;
+}
+
+pub trait DataBind<R: d::Resources> {
+    type Data;
+    fn bind_to(&self, &mut RawDataSet<R>, &Self::Data, &mut d::handle::Manager<R>);
 }
 
 pub trait Structure {
@@ -79,115 +107,124 @@ pub trait Structure {
     fn iter_meta<F: FnMut(d::pso::Register)>(&Self::Meta, F);
 }
 
-pub trait Instancing {
-    fn get_rate() -> d::attrib::InstanceRate;
-}
-
-#[derive(Clone, Debug)]
-pub enum PerInstance {}
-
-impl Instancing for () {
-    fn get_rate() -> d::attrib::InstanceRate { 0 }
-}
-
-impl Instancing for PerInstance {
-    fn get_rate() -> d::attrib::InstanceRate { 1 }
-}
-
-
-#[derive(Clone, Debug)]
-pub struct VertexBuffer<R: d::Resources, T, I>(d::handle::Buffer<R, T>, PhantomData<I>);
-
-impl<'a, R: d::Resources, T: Structure, I: Instancing> DataLink<'a, R> for VertexBuffer<R, T, I> {
-    type Link = T::Meta;
-    fn declare_to(map: &mut d::pso::LinkMap<'a>, _: &'a str) {
-        T::iter_fields(|name, mut format| {
-            format.instance_rate = I::get_rate();
-            map.insert(name, d::pso::Link::Attribute(format));
-        });
-    }
-    fn link(map: &d::pso::RegisterMap<'a>, _: &'a str) -> Option<Self::Link> {
-        Some(T::make_meta(|name| map.get(name).map(|&reg| reg)))
-    }
-    fn bind_to(&self, data: &mut ShaderDataSet<R>, meta: &Self::Link, man: &mut d::handle::Manager<R>) {
-        let value = Some((man.ref_buffer(self.0.raw()), 0));
-        T::iter_meta(meta, |reg| data.vertex_buffers.0[reg as usize] = value);
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct ConstantBuffer<R: d::Resources, T>(pub d::handle::Buffer<R, T>);
-
-impl<'a, R: d::Resources, T: Structure> DataLink<'a, R> for ConstantBuffer<R, T> {
-    type Link = d::pso::Register;
-    fn declare_to(map: &mut d::pso::LinkMap<'a>, buf_name: &'a str) {
-        map.insert(buf_name, d::pso::Link::ConstantBuffer);
-        T::iter_fields(|name, format| {
-            map.insert(name, d::pso::Link::Constant(format));
-        });
-    }
-    fn link(map: &d::pso::RegisterMap<'a>, buf_name: &'a str) -> Option<Self::Link> {
-        map.get(buf_name).map(|&reg| reg)
-    }
-    fn bind_to(&self, data: &mut ShaderDataSet<R>, meta: &Self::Link, man: &mut d::handle::Manager<R>) {
-        data.vertex_buffers.0[*meta as usize] = Some((man.ref_buffer(self.0.raw()), 0));
-    }
-}
-
 pub trait TextureFormat {
     fn get_format() -> d::tex::Format;
 }
 
-impl TextureFormat for [f32; 4] {
-    fn get_format() -> d::tex::Format {
-        d::tex::RGBA8
+pub trait BlendFormat: TextureFormat {}
+
+pub trait BlendInfo {
+    fn get_mask(&self) -> d::state::ColorMask;
+    fn get_blend(&self) -> d::pso::Blending;
+}
+impl BlendInfo for d::state::ColorMask {
+    fn get_mask(&self) -> d::state::ColorMask { *self }
+    fn get_blend(&self) -> d::pso::Blending { d::pso::Blending::None }
+}
+impl BlendInfo for d::state::Blend {
+    fn get_mask(&self) -> d::state::ColorMask {
+        self.mask
+    }
+    fn get_blend(&self) -> d::pso::Blending {
+        d::pso::Blending::Separate(self.color, self.alpha)
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct RenderView<R: d::Resources, T>(target::Plane<R>, PhantomData<T>);
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct FetchRate(d::attrib::InstanceRate);
+pub static PER_VERTEX  : FetchRate = FetchRate(0);
+pub static PER_INSTANCE: FetchRate = FetchRate(1);
 
-impl<R: d::Resources, T> From<d::handle::Surface<R>> for RenderView<R, T> {
-    fn from(h: d::handle::Surface<R>) -> RenderView<R, T> {
-        //TODO: match T with surface format
-        RenderView(target::Plane::Surface(h), PhantomData)
+
+pub struct VertexBuffer<T: Structure>(T::Meta);
+pub struct ConstantBuffer<T: Structure>(d::pso::Register, PhantomData<T>);
+pub struct Constant<T: d::attrib::format::ToFormat>(d::pso::Register, PhantomData<T>);
+pub struct RenderTargetCommon<T: TextureFormat, B>(d::pso::Register, PhantomData<(T, B)>);
+pub type RenderTarget<T: TextureFormat> = RenderTargetCommon<T, d::state::ColorMask>;
+pub type BlendTarget<T: BlendFormat> = RenderTargetCommon<T, d::state::Blend>;
+
+
+impl<'a, T: Structure> DataLink<'a> for VertexBuffer<T> {
+    type Init = FetchRate;
+    fn declare_to(map: &mut d::pso::LinkMap<'a>, init: &Self::Init) {
+        T::iter_fields(|name, mut format| {
+            format.instance_rate = init.0;
+            map.insert(name, d::pso::Link::Attribute(format));
+        });
+    }
+    fn link(map: &d::pso::RegisterMap<'a>, _: &Self::Init) -> Option<Self> {
+        let meta = T::make_meta(|name| map.get(name).map(|&reg| reg));
+        Some(VertexBuffer(meta))
     }
 }
 
-impl<R: d::Resources, T> From<d::handle::Texture<R>> for RenderView<R, T> {
-    fn from(h: d::handle::Texture<R>) -> RenderView<R, T> {
-        //TODO: match T with texture format
-        RenderView(target::Plane::Texture(h, 0, None), PhantomData)
+impl<R: d::Resources, T: Structure> DataBind<R> for VertexBuffer<T> {
+    type Data = d::handle::Buffer<R, T>;
+    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
+        let value = Some((man.ref_buffer(data.raw()), 0));
+        T::iter_meta(&self.0, |reg| out.vertex_buffers.0[reg as usize] = value);
     }
 }
 
-impl<'a, R: d::Resources, T: TextureFormat> DataLink<'a, R> for RenderView<R, T> {
-    type Link = d::pso::Register;
-    fn declare_to(map: &mut d::pso::LinkMap<'a>, name: &'a str) {
-        map.insert(name, d::pso::Link::Target(T::get_format()));
+impl<'a, T: Structure> DataLink<'a> for ConstantBuffer<T> {
+    type Init = &'a str;
+    fn declare_to(map: &mut d::pso::LinkMap<'a>, init: &Self::Init) {
+        map.insert(*init, d::pso::Link::ConstantBuffer);
+        T::iter_fields(|name, format| {
+            map.insert(name, d::pso::Link::Constant(format));
+        });
     }
-    fn link(map: &d::pso::RegisterMap<'a>, name: &'a str) -> Option<Self::Link> {
-        map.get(name).map(|&reg| reg)
-    }
-    fn bind_to(&self, data: &mut ShaderDataSet<R>, meta: &Self::Link, man: &mut d::handle::Manager<R>) {
-        let _ = (data, meta, man);
-        //data.render_targets.0[*meta as usize] = Some((man.ref_buffer(self.0.raw()), 0)); //TODO!
+    fn link(map: &d::pso::RegisterMap<'a>, init: &Self::Init) -> Option<Self> {
+        map.get(*init).map(|&reg| ConstantBuffer(reg, PhantomData))
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct DepthStencilView<R: d::Resources>(pub target::Plane<R>);
+impl<R: d::Resources, T: Structure> DataBind<R> for ConstantBuffer<T> {
+    type Data = d::handle::Buffer<R, T>;
+    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
+        out.constant_buffers.0[self.0 as usize] = Some(man.ref_buffer(data.raw()));
+    }
+}
 
-impl<'a, R: d::Resources> DataLink<'a, R> for DepthStencilView<R> {
-    type Link = d::pso::Register;
-    fn declare_to(map: &mut d::pso::LinkMap<'a>, name: &'a str) {
-        map.insert(name, d::pso::Link::DepthStencil(d::tex::Format::DEPTH24_STENCIL8));
+impl<'a, T: d::attrib::format::ToFormat> DataLink<'a> for Constant<T> {
+    type Init = &'a str;
+    fn declare_to(map: &mut d::pso::LinkMap<'a>, init: &Self::Init) {
+        let (count, etype) = T::describe();
+        let format = d::attrib::Format {
+            elem_count: count,
+            elem_type: etype,
+            offset: 0,
+            stride: 0,
+            instance_rate: 0,
+        };
+        map.insert(*init, d::pso::Link::Constant(format));
     }
-    fn link(map: &d::pso::RegisterMap<'a>, name: &'a str) -> Option<Self::Link> {
-        map.get(name).map(|&reg| reg)
+    fn link(map: &d::pso::RegisterMap<'a>, init: &Self::Init) -> Option<Self> {
+        map.get(*init).map(|&reg| Constant(reg, PhantomData))
     }
-    fn bind_to(&self, data: &mut ShaderDataSet<R>, meta: &Self::Link, man: &mut d::handle::Manager<R>) {
-        let _ = (data, meta, man);
-        //data.render_targets.0[*meta as usize] = Some((man.ref_buffer(self.0.raw()), 0)); //TODO!
+}
+
+impl<R: d::Resources, T: d::attrib::format::ToFormat> DataBind<R> for Constant<T> {
+    type Data = d::shade::UniformValue;
+    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, _: &mut d::handle::Manager<R>) {
+        out.constants.push((self.0, *data));
+    }
+}
+
+
+impl<'a, T: TextureFormat, B: BlendInfo> DataLink<'a> for RenderTargetCommon<T, B> {
+    type Init = (&'a str, B);
+    fn declare_to(map: &mut d::pso::LinkMap<'a>, init: &Self::Init) {
+        map.insert(init.0, d::pso::Link::Target(T::get_format(), init.1.get_mask(), init.1.get_blend()));
+    }
+    fn link(map: &d::pso::RegisterMap<'a>, init: &Self::Init) -> Option<Self> {
+        map.get(init.0).map(|&reg| RenderTargetCommon(reg, PhantomData))
+    }
+}
+
+impl<R: d::Resources, T: TextureFormat, B> DataBind<R> for RenderTargetCommon<T, B> {
+    type Data = d::handle::RenderTargetView<R, T>;
+    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
+        out.pixel_targets.0[self.0 as usize] = Some(man.ref_rtv(data.raw()));
     }
 }

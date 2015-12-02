@@ -18,6 +18,17 @@ mod pso;
 mod structure;
 
 #[macro_export]
+macro_rules! gfx_tex_format {
+    ($name:ident = $fm:path) => {
+        #[derive(Clone, Debug)]
+        pub struct $name;
+        impl $crate::TextureFormat for $name {
+            fn get_format() -> $crate::tex::Format { $fm }
+        }
+    }
+}
+
+#[macro_export]
 macro_rules! gfx_vertex {
     ($name:ident {
         $($gl_name:ident@ $field:ident: $ty:ty,)*

@@ -7,13 +7,11 @@ use gfx::handle::{Buffer, Manager, Producer};
 
 fn mock_buffer<T>(len: usize) -> Buffer<DummyResources, T> {
     let mut handler = Manager::new();
-    Buffer::from_raw(
-        handler.make_buffer((), BufferInfo {
-            role: BufferRole::Vertex,
-            usage: BufferUsage::Static,
-            size: mem::size_of::<T>() * len,
-        }),
-    )
+    handler.make_buffer((), BufferInfo {
+        role: BufferRole::Vertex,
+        usage: BufferUsage::Static,
+        size: mem::size_of::<T>() * len,
+    }).into()
 }
 
 #[test]

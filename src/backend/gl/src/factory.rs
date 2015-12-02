@@ -17,14 +17,13 @@ use std::slice;
 
 use {gl, tex};
 use gfx;
-use gfx::DrawState;
 use gfx::device as d;
 use gfx::device::handle;
 use gfx::device::handle::Producer;
 use gfx::device::mapping::Builder;
 use gfx::tex::Size;
 
-use {Buffer, PipelineDrawState, PipelineState, Program, Share};
+use {Buffer, OutputMerger, PipelineState, Program, Share};
 use Resources as R;
 
 
@@ -244,8 +243,8 @@ impl d::Factory<R> for Factory {
             .map(|(name, info)| self.share.handles.borrow_mut().make_program(name, info))
     }
 
-    fn create_pipeline_state_raw<'a>(&mut self, prim_type: d::PrimitiveType,
-                                 shader_set: &d::ShaderSet<R>, state: &DrawState,
+    fn create_pipeline_state_raw<'a>(&mut self,
+                                 rasterizer: d::pso::Rasterizer, shader_set: &d::ShaderSet<R>,
                                  map: &d::pso::LinkMap<'a>, reg: &mut d::pso::RegisterMap<'a>)
                                  -> Result<handle::RawPipelineState<R>, d::pso::CreationError> {
         let (program, pinfo) = match self.create_program_raw(shader_set) {
@@ -255,22 +254,20 @@ impl d::Factory<R> for Factory {
             Err(d::shade::CreateProgramError::LinkFail(e)) =>
                 return Err(d::pso::CreationError::ProgramLink(e)),
         };
-        let need_depth = state.depth.is_some() || state.stencil.is_some();
+        let need_depth = false; //TODO
         let import = try!(d::pso::VertexImportLayout::link(map, &pinfo.attributes));
         let export = try!(d::pso::PixelExportLayout::link(map, &pinfo.outputs, need_depth));
         //TODO: fill the register map
         reg.clear();
         let pso = PipelineState {
-            topology: prim_type,
             program: program,
             vertex_import: import,
-            draw_target_mask: export.get_mask(),
-            state: PipelineDrawState {
-                primitive: state.primitive,
-                multi_sample: state.multi_sample,
-                stencil: state.stencil.map(|s| (s.front, s.back)),
-                depth: state.depth,
-                blend: state.blend,
+            rasterizer: rasterizer,
+            output: OutputMerger {
+                draw_mask: export.get_mask(),
+                stencil: None, //TODO
+                depth: None, //TODO
+                blend: [None; d::MAX_COLOR_TARGETS], //TODO
             },
         };
         Ok(self.share.handles.borrow_mut().make_pso(pso))

@@ -15,10 +15,13 @@
 //! Pipeline State Objects
 
 use std::collections::HashMap;
+use state as s;
 use device as d;
 
 /// Compile-time maximum number of vertex attributes.
-pub const MAX_VERTEX_ATTRIBUTES:  usize = 16;
+pub const MAX_VERTEX_ATTRIBUTES: usize = 16;
+/// Compile-time maximum number of constant buffers.
+pub const MAX_CONSTANT_BUFFERS: usize = 16;
 /// An offset inside a vertex buffer, in bytes.
 pub type BufferOffset = usize;
 
@@ -32,11 +35,21 @@ pub enum CreationError {
     PixelExport(d::ColorSlot, String, Option<d::tex::Format>),
 }
 
+/// Type of the blending set for a render target.
+pub enum Blending {
+    /// No blending is set
+    None,
+    /// Blending is the same for color and alpha
+    United(s::BlendChannel),
+    /// Blending is separately specified for color and alpha
+    Separate(s::BlendChannel, s::BlendChannel),
+}
+
 /// Compound type of the linked PSO data formats.
 pub enum Link {
     /// Vertex attribute
     Attribute(d::attrib::Format),
-    /// Uniform constant
+    /// Uniform constant, may be inside a constant buffer, or outside
     Constant(d::attrib::Format),
     /// Constant buffer
     ConstantBuffer,
@@ -45,7 +58,7 @@ pub enum Link {
     /// Unordered access view (UAV)
     Unordered,
     /// Render target view (RTV)
-    Target(d::tex::Format),
+    Target(d::tex::Format, s::ColorMask, Blending),
     /// Depth stencil view (DSV)
     DepthStencil(d::tex::Format),
 }
@@ -153,13 +166,27 @@ impl<R: d::Resources> VertexBufferSet<R> {
     }
 }
 
+/// A complete set of constant buffers to be used for the constants binding in PSO.
+#[derive(Copy, Clone, Debug)]
+pub struct ConstantBufferSet<R: d::Resources>(
+    /// Array of buffer handles
+    pub [Option<R::Buffer>; MAX_CONSTANT_BUFFERS]
+);
+
+impl<R: d::Resources> ConstantBufferSet<R> {
+    /// Create an empty set
+    pub fn new() -> ConstantBufferSet<R> {
+        ConstantBufferSet([None; MAX_CONSTANT_BUFFERS])
+    }
+}
+
 #[derive(Copy, Clone, Debug)]
 /// A complete set of render targets to be used for pixel export in PSO.
 pub struct PixelTargetSet<R: d::Resources>(
     /// Array of color target views
-    pub [Option<R::Surface>; d::MAX_COLOR_TARGETS], //TODO
+    pub [Option<R::RenderTargetView>; d::MAX_COLOR_TARGETS],
     /// Depth-stencil target view
-    pub Option<R::Surface>, //TODO
+    pub Option<R::DepthStencilView>,
 );
 
 impl<R: d::Resources> PixelTargetSet<R> {
@@ -167,4 +194,19 @@ impl<R: d::Resources> PixelTargetSet<R> {
     pub fn new() -> PixelTargetSet<R> {
         PixelTargetSet([None; d::MAX_COLOR_TARGETS], None)
     }
+}
+
+/// The rasterizer state needed for PSO initialization.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct Rasterizer {
+    /// Type of the primitive.
+    pub topology: d::PrimitiveType,
+    /// Which vertex winding is considered to be the front face for culling.
+    pub front_face: s::FrontFace,
+    /// How to rasterize this primitive.
+    pub raster_method: s::RasterMethod,
+    /// Depth offset to apply.
+    pub depth_offset: Option<s::Offset>,
+    /// Multi-sampling mode.
+    pub multi_sample: Option<s::MultiSample>,
 }
