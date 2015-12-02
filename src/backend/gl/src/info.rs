@@ -181,7 +181,7 @@ impl Info {
         let platform_name = PlatformName::get(gl);
         let version = Version::parse(get_string(gl, gl::VERSION)).unwrap();
         let shading_language = Version::parse(get_string(gl, gl::SHADING_LANGUAGE_VERSION)).unwrap();
-        let extensions = if version >= Version::new(3, 2, None, "") {
+        let extensions = if version >= Version::new(3, 0, None, "") {
             let num_exts = get_usize(gl, gl::NUM_EXTENSIONS) as gl::types::GLuint;
             (0..num_exts)
                 .map(|i| unsafe { c_str_as_static_str(gl.GetStringi(gl::EXTENSIONS, i) as *const i8) })
