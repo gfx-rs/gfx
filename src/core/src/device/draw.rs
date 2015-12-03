@@ -16,6 +16,7 @@
 
 use draw_state::target;
 use device as d;
+use state as s;
 
 type Offset = u32;
 type Size = u32;
@@ -133,21 +134,19 @@ pub trait CommandBuffer<R: d::Resources> {
     /// Select, which color buffers are going to be targetted by the shader
     fn set_draw_color_buffers(&mut self, d::ColorSlot);
     /// Set primitive topology
-    fn set_primitive(&mut self, ::state::Primitive);
+    fn set_primitive(&mut self, s::Primitive);
     /// Set viewport rectangle
     fn set_viewport(&mut self, target::Rect);
     /// Set multi-sampling state
-    fn set_multi_sample(&mut self, Option<::state::MultiSample>);
+    fn set_multi_sample(&mut self, Option<s::MultiSample>);
     /// Set scissor test
     fn set_scissor(&mut self, Option<target::Rect>);
     /// Set depth and stencil states
-    fn set_depth_stencil(&mut self, Option<::state::Depth>,
-                         Option<::state::Stencil>, ::state::CullFace);
+    fn set_depth_stencil(&mut self, Option<s::Depth>, Option<s::Stencil>, s::CullFace);
     /// Set blend state
-    fn set_blend(&mut self, d::ColorSlot, Option<::state::Blend>);
+    fn set_blend(&mut self, d::ColorSlot, Option<s::Blend>);
     /// Set reference values for the blending and stencil front/back.
-    fn set_ref_values(&mut self, target::ColorValue,
-                      target::Stencil, target::Stencil);
+    fn set_ref_values(&mut self, s::RefValues);
     /// Update a vertex/index/uniform buffer
     fn update_buffer(&mut self, R::Buffer, DataPointer, usize);
     /// Update a texture region

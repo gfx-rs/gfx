@@ -17,7 +17,7 @@ use std::slice;
 use device as d;
 use device::{Resources};
 use device::draw::{Access, Gamma, Target};
-use draw_state::target::{ClearData, ColorValue, Layer, Level, Mask, Mirror, Rect, Stencil};
+use draw_state::target::{ClearData, Layer, Level, Mask, Mirror, Rect};
 
 ///Generic command buffer to be used by multiple backends
 pub struct CommandBuffer<R: Resources> {
@@ -50,7 +50,7 @@ pub enum Command<R: Resources> {
     SetDepthStencilState(Option<d::state::Depth>, Option<d::state::Stencil>,
                          d::state::CullFace),
     SetBlendState(d::ColorSlot, Option<d::state::Blend>),
-    SetRefValues(ColorValue, Stencil, Stencil),
+    SetRefValues(d::state::RefValues),
     UpdateBuffer(R::Buffer, d::draw::DataPointer, usize),
     UpdateTexture(d::tex::Kind, R::Texture, d::tex::ImageInfo,
                   d::draw::DataPointer),
@@ -175,8 +175,8 @@ impl<R> d::draw::CommandBuffer<R> for CommandBuffer<R>
         self.buf.push(Command::SetBlendState(slot, blend));
     }
 
-    fn set_ref_values(&mut self, blend: ColorValue, stencil_front: Stencil, stencil_back: Stencil) {
-        self.buf.push(Command::SetRefValues(blend, stencil_front, stencil_back));
+    fn set_ref_values(&mut self, rv: d::state::RefValues) {
+        self.buf.push(Command::SetRefValues(rv));
     }
 
     fn update_buffer(&mut self, buf: R::Buffer, data: d::draw::DataPointer,

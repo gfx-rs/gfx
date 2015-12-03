@@ -56,7 +56,7 @@ pub struct OutputMerger {
     /// Color attachment draw mask.
     draw_mask: usize,
     /// Stencil test to use. If None, no stencil testing is done.
-    pub stencil: Option<(s::StencilSide, s::StencilSide)>,
+    pub stencil: Option<s::Stencil>,
     /// Depth test to use. If None, no depth testing is done.
     pub depth: Option<s::Depth>,
     /// Blend function to use. If None, no blending is done.
@@ -152,7 +152,7 @@ const RESET_CB: [Command<Resources>; 14] = [
     Command::SetBlendState(1, None),
     Command::SetBlendState(2, None),
     Command::SetBlendState(3, None),
-    Command::SetRefValues([0f32; 4], 0, 0),
+    Command::SetRefValues(s::RefValues {blend: [0f32; 4], stencil: (0, 0)}),
 ];
 
 fn primitive_to_gl(prim_type: d::PrimitiveType) -> gl::types::GLenum {
@@ -391,11 +391,9 @@ impl Device {
                 state::bind_front_face(gl, pso.rasterizer.front_face);
                 state::bind_raster_method(gl, pso.rasterizer.raster_method, pso.rasterizer.depth_offset);
                 state::bind_multi_sample(gl, pso.rasterizer.multi_sample);
-                self.temp.stencil = pso.output.stencil.map(|s| s::Stencil {
-                    front: s.0, back: s.1, front_ref: 0, back_ref: 0,
-                    });
+                self.temp.stencil = pso.output.stencil;
                 self.temp.cull_face = pso.rasterizer.raster_method.get_cull_face();
-                state::bind_stencil(gl, &self.temp.stencil, self.temp.cull_face);
+                state::bind_stencil(gl, &self.temp.stencil, (0, 0), self.temp.cull_face);
                 state::bind_depth(gl, &pso.output.depth);
                 for i in 0 .. d::MAX_COLOR_TARGETS {
                     state::bind_blend_slot(gl, i as d::ColorSlot, pso.output.blend[i]);
@@ -525,7 +523,7 @@ impl Device {
             },
             Command::SetDepthStencilState(depth, stencil, cull) => {
                 let gl = &self.share.context;
-                state::bind_stencil(gl, &stencil, cull);
+                state::bind_stencil(gl, &stencil, (0, 0), cull);
                 state::bind_depth(gl, &depth);
             },
             Command::SetBlendState(slot, blend) => {
@@ -537,10 +535,10 @@ impl Device {
                     error!("Separate blending slots are not supported");
                 }
             },
-            Command::SetRefValues(blend, stencil_front, stencil_back) => {
-                state::set_ref_values(&self.share.context, blend, stencil_front,
-                                      stencil_back, &self.temp.stencil,
-                                      self.temp.cull_face);
+            Command::SetRefValues(rv) => {
+                let gl = &self.share.context;
+                state::set_blend_color(gl, rv.blend);
+                state::bind_stencil(gl, &self.temp.stencil, rv.stencil, self.temp.cull_face);
             },
             Command::UpdateBuffer(buffer, pointer, offset) => {
                 let data = data_buf.get_ref(pointer);

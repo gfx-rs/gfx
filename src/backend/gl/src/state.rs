@@ -159,7 +159,7 @@ fn map_operation(op: StencilOp) -> gl::types::GLenum {
     }
 }
 
-pub fn bind_stencil(gl: &gl::Gl, stencil: &Option<s::Stencil>, cull: s::CullFace) {
+pub fn bind_stencil(gl: &gl::Gl, stencil: &Option<s::Stencil>, refs: (Stencil, Stencil), cull: s::CullFace) {
     fn bind_side(gl: &gl::Gl, face: gl::types::GLenum, side: s::StencilSide, ref_value: Stencil) { unsafe {
         gl.StencilFuncSeparate(face, map_comparison(side.fun),
             ref_value as gl::types::GLint, side.mask_read as gl::types::GLuint);
@@ -171,10 +171,10 @@ pub fn bind_stencil(gl: &gl::Gl, stencil: &Option<s::Stencil>, cull: s::CullFace
         &Some(ref s) => {
             unsafe { gl.Enable(gl::STENCIL_TEST) };
             if cull != CullFace::Front {
-                bind_side(gl, gl::FRONT, s.front, s.front_ref);
+                bind_side(gl, gl::FRONT, s.front, refs.0);
             }
             if cull != CullFace::Back {
-                bind_side(gl, gl::BACK, s.back, s.back_ref);
+                bind_side(gl, gl::BACK, s.back, refs.1);
             }
         }
         &None => unsafe { gl.Disable(gl::STENCIL_TEST) },
@@ -276,23 +276,8 @@ pub fn unlock_color_mask(gl: &gl::Gl) {
     unsafe { gl.ColorMask(gl::TRUE, gl::TRUE, gl::TRUE, gl::TRUE) };
 }
 
-pub fn set_ref_values(gl: &gl::Gl, blend: ColorValue, front: Stencil, back: Stencil,
-                      cached_state: &Option<s::Stencil>, cull: s::CullFace) {
+pub fn set_blend_color(gl: &gl::Gl, color: ColorValue) {
     unsafe {
-        gl.BlendColor(blend[0], blend[1], blend[2], blend[3])
+        gl.BlendColor(color[0], color[1], color[2], color[3])
     };
-    match cached_state {
-        &Some(ref old) if
-            (cull != s::CullFace::Front && front != old.front_ref) ||
-            (cull != s::CullFace::Back && back != old.back_ref) => {
-            let new = s::Stencil {
-                front: old.front,
-                back: old.back,
-                front_ref: front,
-                back_ref: back,
-            };
-            bind_stencil(gl, &Some(new), cull);
-        },
-        _ => {},
-    }
 }

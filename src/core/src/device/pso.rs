@@ -15,8 +15,8 @@
 //! Pipeline State Objects
 
 use std::collections::HashMap;
-use state as s;
 use device as d;
+use state as s;
 
 /// Compile-time maximum number of vertex attributes.
 pub const MAX_VERTEX_ATTRIBUTES: usize = 16;
@@ -24,6 +24,8 @@ pub const MAX_VERTEX_ATTRIBUTES: usize = 16;
 pub const MAX_CONSTANT_BUFFERS: usize = 16;
 /// An offset inside a vertex buffer, in bytes.
 pub type BufferOffset = usize;
+/// A special unique tag for depth/stencil entries in the Link/Register maps.
+pub const DEPTH_STENCIL_TAG: &'static str = "<ds>";
 
 /// Error types happening upon PSO creation.
 pub enum CreationError {
@@ -35,14 +37,65 @@ pub enum CreationError {
     PixelExport(d::ColorSlot, String, Option<d::tex::Format>),
 }
 
-/// Type of the blending set for a render target.
-pub enum Blending {
-    /// No blending is set
-    None,
-    /// Blending is the same for color and alpha
-    United(s::BlendChannel),
-    /// Blending is separately specified for color and alpha
-    Separate(s::BlendChannel, s::BlendChannel),
+#[allow(missing_docs)]
+#[derive(Clone, Copy)]
+pub struct BlendInfo {
+    pub mask: s::ColorMask,
+    pub color: Option<s::BlendChannel>,
+    pub alpha: Option<s::BlendChannel>,
+}
+impl From<s::ColorMask> for BlendInfo {
+    fn from(mask: s::ColorMask) -> BlendInfo {
+        BlendInfo {
+            mask: mask,
+            color: None,
+            alpha: None,
+        }
+    }
+}
+impl From<s::Blend> for BlendInfo {
+    fn from(blend: s::Blend) -> BlendInfo {
+        BlendInfo {
+            mask: blend.mask,
+            color: Some(blend.color),
+            alpha: Some(blend.alpha),
+        }
+    }
+}
+
+#[allow(missing_docs)]
+#[derive(Clone, Copy)]
+pub struct DepthStencilInfo {
+    pub depth: Option<s::Depth>,
+    pub front: Option<s::StencilSide>,
+    pub back: Option<s::StencilSide>,
+}
+impl From<s::Depth> for DepthStencilInfo {
+    fn from(depth: s::Depth) -> DepthStencilInfo {
+        DepthStencilInfo {
+            depth: Some(depth),
+            front: None,
+            back: None,
+        }
+    }
+}
+impl From<s::Stencil> for DepthStencilInfo {
+    fn from(stencil: s::Stencil) -> DepthStencilInfo {
+        DepthStencilInfo {
+            depth: None,
+            front: Some(stencil.front),
+            back: Some(stencil.back),
+        }
+    }
+}
+impl From<(s::Depth, s::Stencil)> for DepthStencilInfo {
+    fn from(ds: (s::Depth, s::Stencil)) -> DepthStencilInfo {
+        DepthStencilInfo {
+            depth: Some(ds.0),
+            front: Some(ds.1.front),
+            back: Some(ds.1.back),
+        }
+    }
 }
 
 /// Compound type of the linked PSO data formats.
@@ -58,9 +111,9 @@ pub enum Link {
     /// Unordered access view (UAV)
     Unordered,
     /// Render target view (RTV)
-    Target(d::tex::Format, s::ColorMask, Blending),
+    Target(d::tex::Format, BlendInfo),
     /// Depth stencil view (DSV)
-    DepthStencil(d::tex::Format),
+    DepthStencil(d::tex::Format, DepthStencilInfo),
 }
 
 /// Map of all objects that are provided for PSO usage,
