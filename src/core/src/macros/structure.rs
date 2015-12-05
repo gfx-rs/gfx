@@ -25,13 +25,13 @@ macro_rules! gfx_structure {
         }
 
         pub struct $meta {
-            $( $field: Option<$crate::device::pso::Register>, )*
+            $( $field: Option<usize>, )*
         }
 
         impl $crate::render::pso::Structure for $name {
             type Meta = $meta;
 
-            fn iter_fields<F: FnMut(&'static str, $crate::device::attrib::Format)>(mut fun: F) {
+            /*fn iter_fields<F: FnMut(&'static str, $crate::device::attrib::Format)>(mut fun: F) {
                 use std::mem::size_of;
                 use $crate::attrib::{Offset, Format, Stride};
                 use $crate::attrib::format::ToFormat;
@@ -64,7 +64,7 @@ macro_rules! gfx_structure {
                         fun(reg);
                     }
                 )*
-            }
+            }*/
         }
     }
 }

@@ -19,7 +19,7 @@ macro_rules! gfx_pipeline {
     ($data:ident $meta:ident $init:ident {
         $( $field:ident: $ty:ty, )*
     }) => {
-        use $crate::render::pso::{DataLink, DataBind};
+        use $crate::render::pso::{DataLink, DataBind, InitResult, RawDataSet};
 
         #[derive(Clone, Debug)]
         pub struct $data<R: $crate::Resources> {
@@ -30,30 +30,23 @@ macro_rules! gfx_pipeline {
             $( $field: Option<$ty>, )*
         }
 
-        pub struct $init<'a> {
-            $( pub $field: <$ty as DataLink<'a>>::Init, )*
+        pub struct $init {
+            $( pub $field: <$ty as DataLink>::Init, )*
         }
 
-        impl<'a> $crate::render::pso::PipelineInit<'a> for $init<'a> {
+        impl $crate::render::pso::PipelineInit for $init {
             type Meta = $meta;
-            fn declare(&self) -> $crate::device::pso::LinkMap<'a> {
-                use std::collections::HashMap;
-                let mut map = HashMap::new();
-                $( <$ty as DataLink<'a>>::declare_to(&mut map, &self.$field); )*
-                map
-            }
-            fn register(&self, map: &$crate::device::pso::RegisterMap<'a>) -> $meta {
-                $meta {
-                    $( $field: <$ty as DataLink<'a>>::link(map, &self.$field), )*
-                }
+            fn link(&self, info: &$crate::device::shade::ProgramInfo) -> InitResult<Self::Meta> {
+                //TODO: prove that all of the program resources are covered
+                Ok($meta { $(
+                    $field: <$ty as DataLink>::link(&self.$field, info),
+                )* })
             }
         }
 
         impl<R: $crate::Resources> $crate::render::pso::PipelineData<R> for $data<R> {
             type Meta = $meta;
-            fn define(&self, meta: &$meta, man: &mut $crate::handle::Manager<R>)
-                        -> $crate::render::pso::RawDataSet<R> {
-                let mut out = $crate::render::pso::RawDataSet::new();
+            fn bake(&self, meta: &Self::Meta, man: &mut $crate::handle::Manager<R>) -> RawDataSet<R> {               let mut out = RawDataSet::new();
                 $(
                     if let Some(ref link) = meta.$field {
                         link.bind_to(&mut out, &self.$field, man);
@@ -73,7 +66,7 @@ macro_rules! gfx_pipeline_init {
         gfx_pipeline!( $data $meta $init {
             $( $field: $ty, )*
         });
-        pub fn $fun() -> $init<'static> {
+        pub fn $fun() -> $init {
             $init {
                 $( $field: $value, )*
             }
