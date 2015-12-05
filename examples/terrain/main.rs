@@ -80,7 +80,7 @@ pub fn main() {
         .vertices()
         .map(|i| i as u32)
         .collect();
-    let slice = index_data.to_slice(&mut factory, gfx::PrimitiveType::TriangleList);
+    let slice = index_data.to_slice(&mut factory, gfx::Primitive::TriangleList);
 
     let mesh = factory.create_mesh(&vertex_data);
     let program = {

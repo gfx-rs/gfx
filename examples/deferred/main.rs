@@ -385,7 +385,7 @@ pub fn main() {
             .collect();
 
         let mesh = factory.create_mesh(&vertex_data);
-        let slice = index_data.to_slice(&mut factory, gfx::PrimitiveType::TriangleList);
+        let slice = index_data.to_slice(&mut factory, gfx::Primitive::TriangleList);
 
         let program = factory.link_program(TERRAIN_VERTEX_SRC, TERRAIN_FRAGMENT_SRC)
                              .unwrap();
@@ -415,7 +415,7 @@ pub fn main() {
             BlitVertex { pos: Floater::cast3([-1,  1, 0]), tex_coord: Floater::cast2([0, 1]) },
         ];
         let mesh = factory.create_mesh(&vertex_data);
-        let slice = mesh.to_slice(gfx::PrimitiveType::TriangleList);
+        let slice = mesh.to_slice(gfx::Primitive::TriangleList);
 
         let program = factory.link_program(BLIT_VERTEX_SRC, BLIT_FRAGMENT_SRC)
                              .unwrap();
@@ -479,7 +479,7 @@ pub fn main() {
         ];
 
         let mesh = factory.create_mesh(&vertex_data);
-        let slice = index_data.to_slice(&mut factory, gfx::PrimitiveType::TriangleList);
+        let slice = index_data.to_slice(&mut factory, gfx::Primitive::TriangleList);
 
         let state = gfx::DrawState::new()
             .depth(gfx::state::Comparison::LessEqual, false)

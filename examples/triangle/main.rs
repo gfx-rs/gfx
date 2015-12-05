@@ -35,7 +35,7 @@ pub fn main() {
         Vertex { pos: [  0.0,  0.5 ], color: [0.0, 0.0, 1.0] },
     ];
     let mesh = factory.create_mesh(&vertex_data);
-    let slice = mesh.to_slice(gfx::PrimitiveType::TriangleList);
+    let slice = mesh.to_slice(gfx::Primitive::TriangleList);
 
     let program = {
         let vs = gfx::ShaderSource {

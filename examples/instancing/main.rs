@@ -23,7 +23,7 @@ extern crate gfx_device_gl;
 use std::marker::PhantomData;
 use rand::Rng;
 use glutin::WindowBuilder;
-use gfx::device::{Factory, BufferRole, PrimitiveType};
+use gfx::device::{Factory, BufferRole, Primitive};
 use gfx::extra::stream::Stream;
 use gfx::extra::factory::FactoryExt;
 use gfx::render::mesh::{Mesh, ToSlice};
@@ -126,7 +126,7 @@ fn main() {
     };
 
     let mut batch = batch::Full::new(mesh, program, params).unwrap();
-    batch.slice = quad_indices.to_slice(PrimitiveType::TriangleList);
+    batch.slice = quad_indices.to_slice(Primitive::TriangleList);
 
     'l: loop {
         for event in stream.out.window.poll_events() {

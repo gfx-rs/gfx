@@ -82,7 +82,7 @@ fn gfx_main(mut glfw: glfw::Glfw,
     ];
 
     let mesh = factory.create_mesh(&vertex_data);
-    let slice = mesh.to_slice(gfx::PrimitiveType::TriangleList);
+    let slice = mesh.to_slice(gfx::Primitive::TriangleList);
 
     let program = factory.link_program(VERTEX_SRC, FRAGMENT_SRC).unwrap();
     let view: AffineMatrix3<f32> = Transform::look_at(

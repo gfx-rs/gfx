@@ -206,7 +206,7 @@ impl<R> TileMapPlane<R> where R: Resources {
             .vertices()
             .map(|i| i as u32)
             .collect();
-        let slice = index_data.to_slice(factory, gfx::PrimitiveType::TriangleList);
+        let slice = index_data.to_slice(factory, gfx::Primitive::TriangleList);
 
         // set up texture
         let mesh = factory.create_mesh(&vertex_data);

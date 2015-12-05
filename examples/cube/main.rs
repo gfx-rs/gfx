@@ -144,7 +144,7 @@ pub fn main() {
     };
 
     let mut batch = gfx::batch::Full::new(mesh, program, data).unwrap();
-    batch.slice = index_data.to_slice(&mut factory, gfx::PrimitiveType::TriangleList);
+    batch.slice = index_data.to_slice(&mut factory, gfx::Primitive::TriangleList);
     batch.state = batch.state.depth(gfx::state::Comparison::LessEqual, true);
 
     while !stream.out.window.should_close() {

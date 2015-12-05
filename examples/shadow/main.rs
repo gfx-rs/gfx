@@ -112,7 +112,7 @@ fn create_cube<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F)
         20, 21, 22, 22, 23, 20, // back
     ];
 
-    let slice = index_data.to_slice(factory, gfx::PrimitiveType::TriangleList);
+    let slice = index_data.to_slice(factory, gfx::Primitive::TriangleList);
 
     (mesh, slice)
 }
@@ -128,7 +128,7 @@ fn create_plane<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F, size: i8
     ];
 
     let mesh = factory.create_mesh(&vertex_data);
-    let slice = mesh.to_slice(gfx::PrimitiveType::TriangleStrip);
+    let slice = mesh.to_slice(gfx::Primitive::TriangleStrip);
 
     (mesh, slice)
 }
@@ -205,7 +205,7 @@ fn make_entity<R: gfx::Resources>(dynamic: bool, mesh: &gfx::Mesh<R>, slice: &gf
             batch.state = batch.state.depth(gfx::state::Comparison::LessEqual, true);
             // need to offset the shadow depth to prevent self-shadowing
             // offset = 2, because we are using bilinear filtering
-            batch.state.primitive.offset = Some(gfx::state::Offset(2, 2));
+            batch.state.rasterizer.offset = Some(gfx::state::Offset(2, 2));
             batch
         },
     }
