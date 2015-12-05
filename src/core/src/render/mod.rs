@@ -470,19 +470,16 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     }
 
     fn bind_state(&mut self, state: &DrawState) {
-        if self.render_state.draw.primitive != state.primitive {
-            self.command_buffer.set_primitive(state.primitive);
-        }
-        if self.render_state.draw.multi_sample != state.multi_sample {
-            self.command_buffer.set_multi_sample(state.multi_sample);
+        if self.render_state.draw.rasterizer != state.rasterizer {
+            self.command_buffer.set_rasterizer(state.rasterizer);
         }
         if self.render_state.draw.scissor != state.scissor {
             self.command_buffer.set_scissor(state.scissor);
         }
         if self.render_state.draw.depth != state.depth || self.render_state.draw.stencil != state.stencil ||
-                self.render_state.draw.primitive.method.get_cull_face() != state.primitive.method.get_cull_face() {
+                self.render_state.draw.rasterizer.method.get_cull_face() != state.rasterizer.method.get_cull_face() {
             self.command_buffer.set_depth_stencil(state.depth, state.stencil,
-                state.primitive.method.get_cull_face());
+                state.rasterizer.method.get_cull_face());
         }
         for i in 0 .. device::MAX_COLOR_TARGETS {
             if self.render_state.draw.blend[i] != state.blend[i] {
@@ -613,14 +610,14 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
             self.render_state.index = Some(buf.raw().clone());
             self.command_buffer.bind_index(self.handles.ref_buffer(buf.raw()));
         }
-        self.command_buffer.call_draw_indexed(slice.prim_type, format,
+        self.command_buffer.call_draw_indexed(slice.primitive, format,
             slice.start, slice.end - slice.start, base, instances);
     }
 
     fn draw_slice(&mut self, slice: &mesh::Slice<R>, instances: InstanceOption) {
         match slice.kind {
             SliceKind::Vertex => self.command_buffer.call_draw(
-                slice.prim_type, slice.start, slice.end - slice.start, instances),
+                slice.primitive, slice.start, slice.end - slice.start, instances),
             SliceKind::Index8(ref buf, base) =>
                 self.draw_indexed(buf, IntSize::U8, slice, base, instances),
             SliceKind::Index16(ref buf, base) =>

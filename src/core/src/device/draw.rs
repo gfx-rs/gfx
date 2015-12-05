@@ -133,12 +133,10 @@ pub trait CommandBuffer<R: d::Resources> {
                     R::Texture, Option<(R::Sampler, d::tex::SamplerInfo)>);
     /// Select, which color buffers are going to be targetted by the shader
     fn set_draw_color_buffers(&mut self, d::ColorSlot);
-    /// Set primitive topology
-    fn set_primitive(&mut self, s::Primitive);
+    /// Set rasterizer state
+    fn set_rasterizer(&mut self, s::Rasterizer);
     /// Set viewport rectangle
     fn set_viewport(&mut self, target::Rect);
-    /// Set multi-sampling state
-    fn set_multi_sample(&mut self, Option<s::MultiSample>);
     /// Set scissor test
     fn set_scissor(&mut self, Option<target::Rect>);
     /// Set depth and stencil states
@@ -155,10 +153,10 @@ pub trait CommandBuffer<R: d::Resources> {
     /// Clear target surfaces
     fn call_clear(&mut self, target::ClearData, target::Mask);
     /// Draw a primitive
-    fn call_draw(&mut self, d::PrimitiveType, d::VertexCount,
+    fn call_draw(&mut self, d::Primitive, d::VertexCount,
                  d::VertexCount, InstanceOption);
     /// Draw a primitive with index buffer
-    fn call_draw_indexed(&mut self, d::PrimitiveType, d::IndexType,
+    fn call_draw_indexed(&mut self, d::Primitive, d::IndexType,
                          d::VertexCount, d::VertexCount,
                          d::VertexCount, InstanceOption);
     /// Blit from one target to another

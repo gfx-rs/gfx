@@ -331,11 +331,7 @@ pub enum CreateShaderError {
 }
 
 /// An error type for creating programs.
-#[derive(Clone, PartialEq, Debug)]
-pub enum CreateProgramError {
-    LinkFail(String),
-    TargetMismatch(Vec<String>),
-}
+pub type CreateProgramError = String;
 
 /// Shader model supported by the device, corresponds to the HLSL shader models.
 #[allow(missing_docs)]

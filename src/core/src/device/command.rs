@@ -43,7 +43,7 @@ pub enum Command<R: Resources> {
     BindTexture(d::TextureSlot, d::tex::Kind, R::Texture,
                 Option<(R::Sampler, d::tex::SamplerInfo)>),
     SetDrawColorBuffers(d::ColorSlot),
-    SetPrimitiveState(d::state::Primitive),
+    SetRasterizer(d::state::Rasterizer),
     SetViewport(Rect),
     SetMultiSampleState(Option<d::state::MultiSample>),
     SetScissor(Option<Rect>),
@@ -56,9 +56,9 @@ pub enum Command<R: Resources> {
                   d::draw::DataPointer),
     // drawing
     Clear(ClearData, Mask),
-    Draw(d::PrimitiveType, d::VertexCount, d::VertexCount,
+    Draw(d::Primitive, d::VertexCount, d::VertexCount,
          d::draw::InstanceOption),
-    DrawIndexed(d::PrimitiveType, d::IndexType, d::VertexCount, d::VertexCount,
+    DrawIndexed(d::Primitive, d::IndexType, d::VertexCount, d::VertexCount,
                 d::VertexCount, d::draw::InstanceOption),
     Blit(Rect, Rect, Mirror, Mask),
 }
@@ -149,16 +149,12 @@ impl<R> d::draw::CommandBuffer<R> for CommandBuffer<R>
         self.buf.push(Command::SetDrawColorBuffers(num));
     }
 
-    fn set_primitive(&mut self, prim: d::state::Primitive) {
-        self.buf.push(Command::SetPrimitiveState(prim));
+    fn set_rasterizer(&mut self, rast: d::state::Rasterizer) {
+        self.buf.push(Command::SetRasterizer(rast));
     }
 
     fn set_viewport(&mut self, view: Rect) {
         self.buf.push(Command::SetViewport(view));
-    }
-
-    fn set_multi_sample(&mut self, ms: Option<d::state::MultiSample>) {
-        self.buf.push(Command::SetMultiSampleState(ms));
     }
 
     fn set_scissor(&mut self, rect: Option<Rect>) {
@@ -193,17 +189,17 @@ impl<R> d::draw::CommandBuffer<R> for CommandBuffer<R>
         self.buf.push(Command::Clear(data, mask));
     }
 
-    fn call_draw(&mut self, ptype: d::PrimitiveType, start: d::VertexCount,
+    fn call_draw(&mut self, prim: d::Primitive, start: d::VertexCount,
                  count: d::VertexCount, instances: d::draw::InstanceOption) {
-        self.buf.push(Command::Draw(ptype, start, count, instances));
+        self.buf.push(Command::Draw(prim, start, count, instances));
     }
 
-    fn call_draw_indexed(&mut self, ptype: d::PrimitiveType,
+    fn call_draw_indexed(&mut self, prim: d::Primitive,
                          itype: d::IndexType, start: d::VertexCount,
                          count: d::VertexCount, base: d::VertexCount,
                          instances: d::draw::InstanceOption) {
         self.buf.push(Command::DrawIndexed(
-            ptype, itype, start, count, base, instances));
+            prim, itype, start, count, base, instances));
     }
 
     fn call_blit(&mut self, s_rect: Rect, d_rect: Rect, mirror: Mirror,

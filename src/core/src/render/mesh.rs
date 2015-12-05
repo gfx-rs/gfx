@@ -20,7 +20,7 @@
 //! create a mesh is to use the `#[vertex_format]` attribute on a struct, upload them into a
 //! `Buffer`, and then use `Mesh::from`.
 
-use device::{BufferRole, Factory, PrimitiveType, Resources, VertexCount};
+use device::{BufferRole, Factory, Primitive, Resources, VertexCount};
 use device::{attrib, handle, shade};
 
 /// Describes a single attribute of a vertex buffer, including its type, name, etc.
@@ -96,7 +96,7 @@ impl<R: Resources> Mesh<R> {
 /// Only vertices between `start` and `end` are rendered. The
 /// source of the vertex data is dependent on the `kind` value.
 ///
-/// The `prim_type` defines how the mesh contents are interpreted.
+/// The `primitive` defines how the mesh contents are interpreted.
 /// For example,  `Point` typed vertex slice can be used to do shape
 /// blending, while still rendereing it as an indexed `TriangleList`.
 #[derive(Clone, Debug, PartialEq)]
@@ -106,7 +106,7 @@ pub struct Slice<R: Resources> {
     /// End index of vertices to draw.
     pub end: VertexCount,
     /// Primitive type to render collections of vertices as.
-    pub prim_type: PrimitiveType,
+    pub primitive: Primitive,
     /// Source of the vertex ordering when drawing.
     pub kind: SliceKind<R>,
 }
@@ -114,9 +114,9 @@ pub struct Slice<R: Resources> {
 impl<R: Resources> Slice<R> {
     /// Get the number of primitives in this slice.
     pub fn get_prim_count(&self) -> u32 {
-        use device::PrimitiveType::*;
+        use device::Primitive::*;
         let nv = (self.end - self.start) as u32;
-        match self.prim_type {
+        match self.primitive {
             Point => nv,
             Line => nv / 2,
             LineStrip => (nv-1),
@@ -150,22 +150,22 @@ pub enum SliceKind<R: Resources> {
 /// A helper trait for cleanly getting the slice of a type.
 pub trait ToSlice<R: Resources> {
     /// Get the slice of a type.
-    fn to_slice(&self, pt: PrimitiveType) -> Slice<R>;
+    fn to_slice(&self, Primitive) -> Slice<R>;
 }
 
 /// A helper trait to build index slices from data.
 pub trait ToIndexSlice<R: Resources> {
     /// Make an index slice.
-    fn to_slice<F: Factory<R>>(self, factory: &mut F, prim: PrimitiveType) -> Slice<R>;
+    fn to_slice<F: Factory<R>>(self, factory: &mut F, prim: Primitive) -> Slice<R>;
 }
 
 impl<R: Resources> ToSlice<R> for Mesh<R> {
     /// Return a vertex slice of the whole mesh.
-    fn to_slice(&self, ty: PrimitiveType) -> Slice<R> {
+    fn to_slice(&self, prim: Primitive) -> Slice<R> {
         Slice {
             start: 0,
             end: self.num_vertices,
-            prim_type: ty,
+            primitive: prim,
             kind: SliceKind::Vertex
         }
     }
@@ -174,17 +174,17 @@ impl<R: Resources> ToSlice<R> for Mesh<R> {
 macro_rules! impl_slice {
     ($ty:ty, $index:ident) => (
         impl<R: Resources> ToSlice<R> for handle::Buffer<R, $ty> {
-            fn to_slice(&self, prim: PrimitiveType) -> Slice<R> {
+            fn to_slice(&self, prim: Primitive) -> Slice<R> {
                 Slice {
                     start: 0,
                     end: self.len() as VertexCount,
-                    prim_type: prim,
+                    primitive: prim,
                     kind: SliceKind::$index(self.clone(), 0)
                 }
             }
         }
         impl<'a, R: Resources> ToIndexSlice<R> for &'a [$ty] {
-            fn to_slice<F: Factory<R>>(self, factory: &mut F, prim: PrimitiveType) -> Slice<R> {
+            fn to_slice<F: Factory<R>>(self, factory: &mut F, prim: Primitive) -> Slice<R> {
                 //debug_assert!(self.len() <= factory.get_capabilities().max_index_count);
                 factory.create_buffer_static(self, BufferRole::Index).to_slice(prim)
             }
