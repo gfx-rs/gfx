@@ -23,7 +23,7 @@ use device as d;
 pub struct RawDataSet<R: d::Resources>{
     pub vertex_buffers: d::pso::VertexBufferSet<R>,
     pub constant_buffers: d::pso::ConstantBufferSet<R>,
-    pub constants: Vec<(d::pso::Register, d::shade::UniformValue)>,
+    pub constants: Vec<(d::shade::Location, d::shade::UniformValue)>,
     pub pixel_targets: d::pso::PixelTargetSet<R>,
     pub ref_values: d::state::RefValues,
     pub scissor: Option<d::target::Rect>,
@@ -42,26 +42,35 @@ impl<R: d::Resources> RawDataSet<R> {
     }
 }
 
-pub trait PipelineInit<'a> {
+#[derive(Clone, PartialEq, Debug)]
+pub enum InitError {
+    /// Vertex attribute mismatch between the shader and the link data.
+    VertexImport(d::AttributeSlot, String, Option<d::attrib::Format>),
+    /// Pixel target mismatch between the shader and the link data.
+    PixelExport(d::ColorSlot, String, Option<d::tex::Format>),
+}
+
+pub type InitResult<M> = Result<(M, d::pso::Descriptor), InitError>;
+
+pub trait PipelineInit {
     type Meta;
-    fn declare(&self) -> d::pso::LinkMap<'a>;
-    fn register(&self, &d::pso::RegisterMap<'a>) -> Self::Meta;
+    fn link(&self, &d::shade::ProgramInfo) -> InitResult<Self::Meta>;
 }
 
 pub trait PipelineData<R: d::Resources> {
     type Meta;
-    fn define(&self, meta: &Self::Meta, &mut d::handle::Manager<R>)
+    fn bake(&self, meta: &Self::Meta, &mut d::handle::Manager<R>)
               -> RawDataSet<R>;
 }
 
 /// Strongly-typed compiled pipeline state
 pub struct PipelineState<R: d::Resources, M>(
-    d::handle::RawPipelineState<R>, d::PrimitiveType, M);
+    d::handle::RawPipelineState<R>, d::Primitive, M);
 
 impl<R: d::Resources, M> PipelineState<R, M> {
-    pub fn new(raw: d::handle::RawPipelineState<R>, pt: d::PrimitiveType,
-               meta: M) -> PipelineState<R, M> {
-        PipelineState(raw, pt, meta)
+    pub fn new(raw: d::handle::RawPipelineState<R>, prim: d::Primitive, meta: M)
+               -> PipelineState<R, M> {
+        PipelineState(raw, prim, meta)
     }
     pub fn get_handle(&self) -> &d::handle::RawPipelineState<R> {
         &self.0
@@ -69,15 +78,14 @@ impl<R: d::Resources, M> PipelineState<R, M> {
     pub fn prepare_data<D: PipelineData<R, Meta=M>>(&self, data: &D,
                         handle_man: &mut d::handle::Manager<R>) -> RawDataSet<R>
     {
-        data.define(&self.2, handle_man)
+        data.bake(&self.2, handle_man)
     }
 }
 
 
-pub trait DataLink<'a>: Sized {
+pub trait DataLink: Sized {
     type Init;
-    fn declare_to(&mut d::pso::LinkMap<'a>, &Self::Init);
-    fn link(&d::pso::RegisterMap<'a>, &Self::Init) -> Option<Self>;
+    fn link(&Self::Init, &d::shade::ProgramInfo) -> Option<Self>;
 }
 
 pub trait DataBind<R: d::Resources> {
@@ -87,9 +95,9 @@ pub trait DataBind<R: d::Resources> {
 
 pub trait Structure {
     type Meta;
-    fn iter_fields<F: FnMut(&'static str, d::attrib::Format)>(F);
-    fn make_meta<F: Fn(&str) -> Option<d::pso::Register>>(F) -> Self::Meta;
-    fn iter_meta<F: FnMut(d::pso::Register)>(&Self::Meta, F);
+    //fn iter_fields<F: FnMut(&'static str, d::attrib::Format)>(F);
+    //fn make_meta<F: Fn(&str) -> Option<d::pso::Register>>(F) -> Self::Meta;
+    //fn iter_meta<F: FnMut(d::pso::Register)>(&Self::Meta, F);
 }
 
 pub trait TextureFormat {
@@ -106,8 +114,8 @@ pub static PER_VERTEX  : FetchRate = FetchRate(0);
 pub static PER_INSTANCE: FetchRate = FetchRate(1);
 
 pub struct VertexBuffer<T: Structure>(T::Meta);
-pub struct ConstantBuffer<T: Structure>(d::pso::Register, PhantomData<T>);
-pub struct Constant<T: d::attrib::format::ToFormat>(d::pso::Register, PhantomData<T>);
+pub struct ConstantBuffer<T: Structure>(d::ConstantBufferSlot, PhantomData<T>);
+pub struct Constant<T: d::attrib::format::ToFormat>(d::shade::Location, PhantomData<T>);
 pub struct RenderTargetCommon<T: TextureFormat, I>(d::ColorSlot, PhantomData<(T, I)>);
 pub type RenderTarget<T: TextureFormat> = RenderTargetCommon<T, d::state::ColorMask>;
 pub type BlendTarget<T: BlendFormat> = RenderTargetCommon<T, d::state::Blend>;
@@ -117,7 +125,7 @@ pub type StencilTarget<T: StencilFormat> = DepthStencilCommon<T, d::state::Stenc
 pub type DepthStencilTarget<T: DepthStencilFormat> = DepthStencilCommon<T, (d::state::Depth, d::state::Stencil)>;
 
 
-impl<'a, T: Structure> DataLink<'a> for VertexBuffer<T> {
+/*impl<'a, T: Structure> DataLink<'a> for VertexBuffer<T> {
     type Init = FetchRate;
     fn declare_to(map: &mut d::pso::LinkMap<'a>, init: &Self::Init) {
         T::iter_fields(|name, mut format| {
@@ -226,3 +234,4 @@ impl<R: d::Resources, T: DepthStencilFormat, I> DataBind<R> for DepthStencilComm
         out.pixel_targets.1 = Some(man.ref_dsv(data.raw()));
     }
 }
+*/

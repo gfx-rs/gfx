@@ -43,7 +43,7 @@ pub use device::{attrib, tex, handle};
 pub use device::as_byte_slice;
 pub use device::{BufferRole, BufferInfo, BufferUsage};
 pub use device::{VertexCount, InstanceCount};
-pub use device::PrimitiveType;
+pub use device::Primitive;
 pub use device::{ShaderSet, VertexShader, HullShader, DomainShader,
                  GeometryShader, PixelShader};
 pub use device::draw::{CommandBuffer, Gamma, InstanceOption};
@@ -61,6 +61,7 @@ pub use render::pso::{PipelineState, VertexBuffer, ConstantBuffer,
 pub use render::shade;
 pub use render::target::{Frame, Output, Plane};
 pub use render::ParamStorage;
+pub use extra::factory::PipelineStateError;
 pub use extra::shade::{ShaderSource, ProgramError};
 pub use extra::stream::{OwnedStream, Stream, Window};
 

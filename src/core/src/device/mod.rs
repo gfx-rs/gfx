@@ -35,16 +35,19 @@ pub mod tex;
 pub type VertexCount = u32;
 /// Draw number of instances
 pub type InstanceCount = u32;
-/// Index of a uniform block.
-pub type UniformBlockIndex = u8;
 /// Slot for an attribute.
 pub type AttributeSlot = u8;
-/// Slot for a uniform buffer object.
-pub type UniformBufferSlot = u8;
+/// Slot for a constant buffer object.
+pub type ConstantBufferSlot = u8;
 /// Slot a texture can be bound to.
 pub type TextureSlot = u8;
 /// Slot for an active color buffer.
 pub type ColorSlot = u8;
+
+/// Index of a uniform block.
+pub type UniformBlockIndex = u8;    //TODO: remove
+/// Slot for a uniform buffer object.
+pub type UniformBufferSlot = u8;    //TODO: remove
 
 /// Generic error for features that are not supported
 /// by the device capabilities.
@@ -128,7 +131,7 @@ pub enum MapAccess {
 /// Describes what geometric primitives are created from vertex data.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 #[repr(u8)]
-pub enum PrimitiveType {
+pub enum Primitive {
     /// Each vertex represents a single point.
     Point,
     /// Each pair of vertices represent a single line segment. For example, with `[a, b, c, d,
@@ -238,8 +241,7 @@ pub trait Factory<R: Resources> {
         self.create_buffer_raw(num * mem::size_of::<T>(), role, BufferUsage::Stream).into()
     }
 
-    fn create_pipeline_state_raw<'a>(&mut self, rasterizer: pso::Rasterizer, &ShaderSet<R>,
-                                 &pso::LinkMap<'a>, &mut pso::RegisterMap<'a>)
+    fn create_pipeline_state_raw(&mut self, &handle::Program<R>, &pso::Descriptor)
                                  -> Result<handle::RawPipelineState<R>, pso::CreationError>;
     fn create_program(&mut self, shader_set: &ShaderSet<R>)
                       -> Result<handle::Program<R>, shade::CreateProgramError>;

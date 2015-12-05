@@ -14,8 +14,8 @@
 
 //! Pipeline State Objects
 
-use std::collections::HashMap;
 use device as d;
+use device::MAX_COLOR_TARGETS;
 use state as s;
 
 /// Compile-time maximum number of vertex attributes.
@@ -27,18 +27,12 @@ pub type BufferOffset = usize;
 /// A special unique tag for depth/stencil entries in the Link/Register maps.
 pub const DEPTH_STENCIL_TAG: &'static str = "<ds>";
 
-/// Error types happening upon PSO creation.
-pub enum CreationError {
-    /// Shader program failed to link, providing an error string.
-    ProgramLink(String),
-    /// Vertex attribute mismatch between the shader and the link data.
-    VertexImport(d::AttributeSlot, String, Option<d::attrib::Format>),
-    /// Pixel target mismatch between the shader and the link data.
-    PixelExport(d::ColorSlot, String, Option<d::tex::Format>),
-}
+/// Error types happening upon PSO creation on the device side.
+#[derive(Clone, PartialEq, Debug)]
+pub struct CreationError;
 
 #[allow(missing_docs)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct BlendInfo {
     pub mask: s::ColorMask,
     pub color: Option<s::BlendChannel>,
@@ -64,7 +58,7 @@ impl From<s::Blend> for BlendInfo {
 }
 
 #[allow(missing_docs)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct DepthStencilInfo {
     pub depth: Option<s::Depth>,
     pub front: Option<s::StencilSide>,
@@ -98,34 +92,37 @@ impl From<(s::Depth, s::Stencil)> for DepthStencilInfo {
     }
 }
 
-/// Compound type of the linked PSO data formats.
-pub enum Link {
-    /// Vertex attribute
-    Attribute(d::attrib::Format),
-    /// Uniform constant, may be inside a constant buffer, or outside
-    Constant(d::attrib::Format),
-    /// Constant buffer
-    ConstantBuffer,
-    /// Shader resource view (SRV)
-    Resource,
-    /// Unordered access view (UAV)
-    Unordered,
-    /// Render target view (RTV)
-    Target(d::tex::Format, BlendInfo),
+/// All the information surrounding a shader program that is required
+/// for PSO creation, including the formats of vertex buffers and pixel targets;
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct Descriptor {
+    /// Type of the primitive
+    pub primitive: d::Primitive,
+    /// Rasterizer setup
+    pub rasterizer: s::Rasterizer,
+    /// Vertex attributes
+    pub attributes: [Option<d::attrib::Format>; MAX_VERTEX_ATTRIBUTES],
+    /// Render target views (RTV)
+    pub color_targets: [Option<(d::tex::Format, BlendInfo)>; MAX_COLOR_TARGETS],
     /// Depth stencil view (DSV)
-    DepthStencil(d::tex::Format, DepthStencilInfo),
+    pub depth_stencil: Option<(d::tex::Format, DepthStencilInfo)>,
 }
 
-/// Map of all objects that are provided for PSO usage,
-/// including vertex attributes, render targets, and shader parameters.
-pub type LinkMap<'a> = HashMap<&'a str, Link>;
+impl Descriptor {
+    /// Create a new empty PSO descriptor.
+    pub fn new(prim: d::Primitive) -> Descriptor {
+        use std::default::Default;
+        Descriptor {
+            primitive: prim,
+            rasterizer: Default::default(),
+            attributes: [None; MAX_VERTEX_ATTRIBUTES],
+            color_targets: [None; MAX_COLOR_TARGETS],
+            depth_stencil: None,
+        }
+    }
+}
 
-/// Generic (untyped) register.
-pub type Register = u32;
-
-/// Map of the registers that are actually used by the shader.
-pub type RegisterMap<'a> = HashMap<&'a str, Register>;
-
+/*
 /// Layout of the input vertices.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct VertexImportLayout {
@@ -204,6 +201,7 @@ impl PixelExportLayout {
         }).0
     }
 }
+*/
 
 /// A complete set of vertex buffers to be used for vertex import in PSO.
 #[derive(Copy, Clone, Debug)]
@@ -249,17 +247,3 @@ impl<R: d::Resources> PixelTargetSet<R> {
     }
 }
 
-/// The rasterizer state needed for PSO initialization.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct Rasterizer {
-    /// Type of the primitive.
-    pub topology: d::PrimitiveType,
-    /// Which vertex winding is considered to be the front face for culling.
-    pub front_face: s::FrontFace,
-    /// How to rasterize this primitive.
-    pub raster_method: s::RasterMethod,
-    /// Depth offset to apply.
-    pub depth_offset: Option<s::Offset>,
-    /// Multi-sampling mode.
-    pub multi_sample: Option<s::MultiSample>,
-}

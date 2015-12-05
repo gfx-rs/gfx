@@ -16,10 +16,22 @@
 
 use device;
 use device::{handle, tex};
-use device::shade::CreateShaderError;
+use device::shade::{CreateShaderError, CreateProgramError};
 use render::mesh::{Mesh, VertexFormat};
 use render::pso;
 use extra::shade::*;
+
+/// Error creating a PipelineState
+#[derive(Clone, PartialEq, Debug)]
+pub enum PipelineStateError {
+    /// Shader program failed to link, providing an error string.
+    ProgramLink(CreateProgramError),
+    /// Unable to create PSO descriptor due to mismatched formats.
+    DescriptorInit(pso::InitError),
+    /// Device failed to create the handle give the descriptor.
+    DeviceCreate(device::pso::CreationError),
+}
+
 
 /// Factory extension trait
 pub trait FactoryExt<R: device::Resources>: device::Factory<R> {
@@ -64,19 +76,26 @@ pub trait FactoryExt<R: device::Resources>: device::Factory<R> {
     }
 
     /// Create a strongly-typed Pipeline State.
-    fn create_pipeline_state<'a, I: pso::PipelineInit<'a>>(&mut self, init: &I,
-                             rasterizer: device::pso::Rasterizer, shaders: &device::ShaderSet<R>)
-                             -> Result<pso::PipelineState<R, I::Meta>, device::pso::CreationError>
+    fn create_pipeline_state<I: pso::PipelineInit>(&mut self, shaders: &device::ShaderSet<R>,
+                             primitive: device::Primitive, rasterizer: device::state::Rasterizer, init: &I)
+                             -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError>
     {
-        use std::collections::HashMap;
+        let program = match self.create_program(shaders) {
+            Ok(p) => p,
+            Err(e) => return Err(PipelineStateError::ProgramLink(e)),
+        };
+        let (meta, mut descriptor) = match I::link(init, program.get_info()) {
+            Ok(ok) => ok,
+            Err(e) => return Err(PipelineStateError::DescriptorInit(e)),
+        };
+        descriptor.primitive = primitive;
+        descriptor.rasterizer = rasterizer;
+        let raw = match self.create_pipeline_state_raw(&program, &descriptor) {
+            Ok(raw) => raw,
+            Err(e) => return Err(PipelineStateError::DeviceCreate(e)),
+        };
 
-        let map = init.declare();
-        let mut reg = HashMap::new();
-        let topo = rasterizer.topology;
-        let raw = try!(self.create_pipeline_state_raw(rasterizer, shaders, &map, &mut reg));
-        let meta = init.register(&reg);
-
-        Ok(pso::PipelineState::new(raw, topo, meta))
+        Ok(pso::PipelineState::new(raw, primitive, meta))
     }
 
     /// Create a simple RGBA8 2D texture.
