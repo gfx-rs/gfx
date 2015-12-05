@@ -26,7 +26,6 @@ extern crate gfx;
 use std::cell::RefCell;
 use std::rc::Rc;
 use gfx::device as d;
-use gfx::device::attrib::*;
 use gfx::device::draw::{Access, Gamma, Target};
 use gfx::device::handle;
 use gfx::state as s;
@@ -52,33 +51,6 @@ pub type Sampler        = gl::types::GLuint;
 pub type Texture        = gl::types::GLuint;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct OutputMerger {
-    /// Color attachment draw mask.
-    draw_mask: usize,
-    /// Stencil test to use. If None, no stencil testing is done.
-    pub stencil: Option<s::Stencil>,
-    /// Depth test to use. If None, no depth testing is done.
-    pub depth: Option<s::Depth>,
-    /// Blend function to use. If None, no blending is done.
-    pub blend: [Option<s::Blend>; d::MAX_COLOR_TARGETS],
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct PipelineState {
-    program: Program,
-    vertex_import: d::pso::VertexImportLayout,
-    rasterizer: d::pso::Rasterizer,
-    output: OutputMerger,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub enum TargetView {
-    Surface(Surface),
-    Texture(Texture, gfx::Level),
-    TextureLayer(Texture, gfx::Level, gfx::Layer),
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Fence(gl::types::GLsync);
 
 unsafe impl Send for Fence {}
@@ -102,6 +74,34 @@ impl gfx::Resources for Resources {
     type Texture             = Texture;
     type Sampler             = Sampler;
     type Fence               = Fence;
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct OutputMerger {
+    /// Color attachment draw mask.
+    pub draw_mask: usize,
+    /// Stencil test to use. If None, no stencil testing is done.
+    pub stencil: Option<s::Stencil>,
+    /// Depth test to use. If None, no depth testing is done.
+    pub depth: Option<s::Depth>,
+    /// Blend function to use. If None, no blending is done.
+    pub blend: [Option<s::Blend>; d::MAX_COLOR_TARGETS],
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct PipelineState {
+    program: Program, //TODO: Arc<Program>
+    primitive: d::Primitive,
+    input: [Option<d::attrib::Format>; d::MAX_VERTEX_ATTRIBUTES],
+    rasterizer: s::Rasterizer,
+    output: OutputMerger,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub enum TargetView {
+    Surface(Surface),
+    Texture(Texture, gfx::Level),
+    TextureLayer(Texture, gfx::Level, gfx::Layer),
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -140,10 +140,11 @@ const RESET_CB: [Command<Resources>; 14] = [
     // BindUniformBlock
     // BindUniform
     // BindTexture
-    Command::SetPrimitiveState(d::state::Primitive {
+    Command::SetRasterizer(s::Rasterizer {
         front_face: s::FrontFace::CounterClockwise,
         method: s::RasterMethod::Fill(s::CullFace::Back),
         offset: None,
+        samples: None,
     }),
     Command::SetViewport(d::target::Rect{x: 0, y: 0, w: 0, h: 0}),
     Command::SetScissor(None),
@@ -155,14 +156,14 @@ const RESET_CB: [Command<Resources>; 14] = [
     Command::SetRefValues(s::RefValues {blend: [0f32; 4], stencil: (0, 0)}),
 ];
 
-fn primitive_to_gl(prim_type: d::PrimitiveType) -> gl::types::GLenum {
-    match prim_type {
-        d::PrimitiveType::Point => gl::POINTS,
-        d::PrimitiveType::Line => gl::LINES,
-        d::PrimitiveType::LineStrip => gl::LINE_STRIP,
-        d::PrimitiveType::TriangleList => gl::TRIANGLES,
-        d::PrimitiveType::TriangleStrip => gl::TRIANGLE_STRIP,
-        d::PrimitiveType::TriangleFan => gl::TRIANGLE_FAN,
+fn primitive_to_gl(primitive: d::Primitive) -> gl::types::GLenum {
+    match primitive {
+        d::Primitive::Point => gl::POINTS,
+        d::Primitive::Line => gl::LINES,
+        d::Primitive::LineStrip => gl::LINE_STRIP,
+        d::Primitive::TriangleList => gl::TRIANGLES,
+        d::Primitive::TriangleStrip => gl::TRIANGLE_STRIP,
+        d::Primitive::TriangleFan => gl::TRIANGLE_FAN,
     }
 }
 
@@ -204,8 +205,8 @@ pub struct Share {
 /// Temporary data stored between different gfx calls that
 /// can not be separated on the GL backend.
 struct Temp {
-    primitive_type: gl::types::GLenum,
-    vertex_import: d::pso::VertexImportLayout,
+    primitive: gl::types::GLenum,
+    attributes: [Option<d::attrib::Format>; d::MAX_VERTEX_ATTRIBUTES],
     stencil: Option<s::Stencil>,
     cull_face: s::CullFace,
 }
@@ -213,8 +214,8 @@ struct Temp {
 impl Temp {
     fn new() -> Temp {
         Temp {
-            primitive_type: 0,
-            vertex_import: d::pso::VertexImportLayout::new(),
+            primitive: 0,
+            attributes: [None; d::MAX_VERTEX_ATTRIBUTES],
             stencil: None,
             cull_face: s::CullFace::Nothing,
         }
@@ -295,6 +296,7 @@ impl Device {
 
     fn bind_attribute(&mut self, slot: d::AttributeSlot, buffer: Buffer,
                       format: d::attrib::Format) {
+        use gfx::device::attrib::{Type, IntSize, IntSubType, FloatSize, FloatSubType, SignFlag};
         let gl_type = match format.elem_type {
             Type::Int(_, IntSize::U8, SignFlag::Unsigned)  => gl::UNSIGNED_BYTE,
             Type::Int(_, IntSize::U8, SignFlag::Signed)    => gl::BYTE,
@@ -385,14 +387,12 @@ impl Device {
             Command::BindPipelineState(pso) => {
                 let gl = &self.share.context;
                 unsafe { gl.UseProgram(pso.program) };
-                self.temp.primitive_type = primitive_to_gl(pso.rasterizer.topology);
-                self.temp.vertex_import = pso.vertex_import;
+                self.temp.primitive = primitive_to_gl(pso.primitive);
+                self.temp.attributes = pso.input;
                 state::bind_draw_color_buffers(gl, pso.output.draw_mask);
-                state::bind_front_face(gl, pso.rasterizer.front_face);
-                state::bind_raster_method(gl, pso.rasterizer.raster_method, pso.rasterizer.depth_offset);
-                state::bind_multi_sample(gl, pso.rasterizer.multi_sample);
+                state::bind_rasterizer(gl, &pso.rasterizer);
                 self.temp.stencil = pso.output.stencil;
-                self.temp.cull_face = pso.rasterizer.raster_method.get_cull_face();
+                self.temp.cull_face = pso.rasterizer.method.get_cull_face();
                 state::bind_stencil(gl, &self.temp.stencil, (0, 0), self.temp.cull_face);
                 state::bind_depth(gl, &pso.output.depth);
                 for i in 0 .. d::MAX_COLOR_TARGETS {
@@ -400,8 +400,8 @@ impl Device {
                 }
             },
             Command::BindVertexBuffers(vbs) => {
-                for i in 0 .. d::pso::MAX_VERTEX_ATTRIBUTES {
-                    match (vbs.0[i], self.temp.vertex_import.formats[i]) {
+                for i in 0 .. d::MAX_VERTEX_ATTRIBUTES {
+                    match (vbs.0[i], self.temp.attributes[i]) {
                         (None, Some(fm)) => {
                             error!("No vertex input provided for slot {} of format {:?}", i, fm)
                         },
@@ -509,14 +509,11 @@ impl Device {
                 let mask = (1 << (num as usize)) - 1;
                 state::bind_draw_color_buffers(&self.share.context, mask);
             },
-            Command::SetPrimitiveState(prim) => {
-                state::bind_primitive(&self.share.context, prim);
+            Command::SetRasterizer(rast) => {
+                state::bind_rasterizer(&self.share.context, &rast);
             },
             Command::SetViewport(rect) => {
                 state::bind_viewport(&self.share.context, rect);
-            },
-            Command::SetMultiSampleState(ms) => {
-                state::bind_multi_sample(&self.share.context, ms);
             },
             Command::SetScissor(rect) => {
                 state::bind_scissor(&self.share.context, rect);
@@ -580,6 +577,7 @@ impl Device {
                 }
             },
             Command::DrawIndexed(prim_type, index_type, start, count, base_vertex, instances) => {
+                use gfx::device::attrib::IntSize;
                 let gl = &self.share.context;
                 let caps = &self.share.capabilities;
                 let (offset, gl_index) = match index_type {

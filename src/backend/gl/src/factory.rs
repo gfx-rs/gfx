@@ -143,7 +143,6 @@ impl Factory {
         };
         ::shade::create_program(&self.share.context,
                                 &self.share.capabilities,
-                                None,
                                 shader_slice)
     }
 
@@ -243,32 +242,37 @@ impl d::Factory<R> for Factory {
             .map(|(name, info)| self.share.handles.borrow_mut().make_program(name, info))
     }
 
-    fn create_pipeline_state_raw<'a>(&mut self,
-                                 rasterizer: d::pso::Rasterizer, shader_set: &d::ShaderSet<R>,
-                                 map: &d::pso::LinkMap<'a>, reg: &mut d::pso::RegisterMap<'a>)
+    fn create_pipeline_state_raw(&mut self, program: &handle::Program<R>, desc: &d::pso::Descriptor)
                                  -> Result<handle::RawPipelineState<R>, d::pso::CreationError> {
-        let (program, pinfo) = match self.create_program_raw(shader_set) {
-            Ok(ok) => ok,
-            Err(d::shade::CreateProgramError::TargetMismatch(_)) =>
-                return Err(d::pso::CreationError::PixelExport(0, "".to_string(), None)), //TODO
-            Err(d::shade::CreateProgramError::LinkFail(e)) =>
-                return Err(d::pso::CreationError::ProgramLink(e)),
+        use std::default::Default;
+        use gfx::state as s;
+        let mut output = OutputMerger {
+            draw_mask: 0,
+            stencil: desc.depth_stencil.map(|(_, t)| s::Stencil {
+                front: t.front.unwrap_or(Default::default()),
+                back: t.back.unwrap_or(Default::default()),
+            }),
+            depth: desc.depth_stencil.and_then(|(_, t)| t.depth),
+            blend: [None; d::MAX_COLOR_TARGETS],
         };
-        let need_depth = false; //TODO
-        let import = try!(d::pso::VertexImportLayout::link(map, &pinfo.attributes));
-        let export = try!(d::pso::PixelExportLayout::link(map, &pinfo.outputs, need_depth));
-        //TODO: fill the register map
-        reg.clear();
+        for i in 0 .. d::MAX_COLOR_TARGETS {
+            if let Some((_, ref bi)) = desc.color_targets[i] {
+                output.draw_mask |= 1<<i;
+                if bi.mask != s::MASK_ALL || bi.color.is_some() || bi.alpha.is_some() {
+                    output.blend[i] = Some(s::Blend {
+                        color: bi.color.unwrap_or(Default::default()),
+                        alpha: bi.alpha.unwrap_or(Default::default()),
+                        mask: bi.mask,
+                    });
+                }
+            }
+        }
         let pso = PipelineState {
-            program: program,
-            vertex_import: import,
-            rasterizer: rasterizer,
-            output: OutputMerger {
-                draw_mask: export.get_mask(),
-                stencil: None, //TODO
-                depth: None, //TODO
-                blend: [None; d::MAX_COLOR_TARGETS], //TODO
-            },
+            program: self.share.handles.borrow_mut().ref_program(program),
+            primitive: desc.primitive,
+            input: desc.attributes,
+            rasterizer: desc.rasterizer,
+            output: output,
         };
         Ok(self.share.handles.borrow_mut().make_pso(pso))
     }

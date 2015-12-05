@@ -15,13 +15,8 @@
 //! Pipeline State Objects
 
 use device as d;
-use device::MAX_COLOR_TARGETS;
 use state as s;
 
-/// Compile-time maximum number of vertex attributes.
-pub const MAX_VERTEX_ATTRIBUTES: usize = 16;
-/// Compile-time maximum number of constant buffers.
-pub const MAX_CONSTANT_BUFFERS: usize = 16;
 /// An offset inside a vertex buffer, in bytes.
 pub type BufferOffset = usize;
 /// A special unique tag for depth/stencil entries in the Link/Register maps.
@@ -101,9 +96,9 @@ pub struct Descriptor {
     /// Rasterizer setup
     pub rasterizer: s::Rasterizer,
     /// Vertex attributes
-    pub attributes: [Option<d::attrib::Format>; MAX_VERTEX_ATTRIBUTES],
+    pub attributes: [Option<d::attrib::Format>; d::MAX_VERTEX_ATTRIBUTES],
     /// Render target views (RTV)
-    pub color_targets: [Option<(d::tex::Format, BlendInfo)>; MAX_COLOR_TARGETS],
+    pub color_targets: [Option<(d::tex::Format, BlendInfo)>; d::MAX_COLOR_TARGETS],
     /// Depth stencil view (DSV)
     pub depth_stencil: Option<(d::tex::Format, DepthStencilInfo)>,
 }
@@ -115,8 +110,8 @@ impl Descriptor {
         Descriptor {
             primitive: prim,
             rasterizer: Default::default(),
-            attributes: [None; MAX_VERTEX_ATTRIBUTES],
-            color_targets: [None; MAX_COLOR_TARGETS],
+            attributes: [None; d::MAX_VERTEX_ATTRIBUTES],
+            color_targets: [None; d::MAX_COLOR_TARGETS],
             depth_stencil: None,
         }
     }
@@ -127,7 +122,7 @@ impl Descriptor {
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct VertexImportLayout {
     /// Expected attribute format for every slot.
-    pub formats: [Option<d::attrib::Format>; MAX_VERTEX_ATTRIBUTES],
+    pub formats: [Option<d::attrib::Format>; d::MAX_VERTEX_ATTRIBUTES],
 }
 
 fn match_attribute(_sh: &d::shade::Attribute, _format: d::attrib::Format) -> bool {
@@ -144,7 +139,7 @@ impl VertexImportLayout {
     /// Create the layout by matching shader requirements with the link map.
     pub fn link(map: &LinkMap, attributes: &[d::shade::Attribute])
                 -> Result<VertexImportLayout, CreationError> {
-        let mut formats = [None; MAX_VERTEX_ATTRIBUTES];
+        let mut formats = [None; d::MAX_VERTEX_ATTRIBUTES];
         for at in attributes.iter() {
             let slot = at.location as d::AttributeSlot;
             match map.get(&at.name[..]) {
@@ -207,13 +202,13 @@ impl PixelExportLayout {
 #[derive(Copy, Clone, Debug)]
 pub struct VertexBufferSet<R: d::Resources>(
     /// Array of buffer handles with offsets in them
-    pub [Option<(R::Buffer, BufferOffset)>; MAX_VERTEX_ATTRIBUTES]
+    pub [Option<(R::Buffer, BufferOffset)>; d::MAX_VERTEX_ATTRIBUTES]
 );
 
 impl<R: d::Resources> VertexBufferSet<R> {
     /// Create an empty set
     pub fn new() -> VertexBufferSet<R> {
-        VertexBufferSet([None; MAX_VERTEX_ATTRIBUTES])
+        VertexBufferSet([None; d::MAX_VERTEX_ATTRIBUTES])
     }
 }
 
@@ -221,13 +216,13 @@ impl<R: d::Resources> VertexBufferSet<R> {
 #[derive(Copy, Clone, Debug)]
 pub struct ConstantBufferSet<R: d::Resources>(
     /// Array of buffer handles
-    pub [Option<R::Buffer>; MAX_CONSTANT_BUFFERS]
+    pub [Option<R::Buffer>; d::MAX_CONSTANT_BUFFERS]
 );
 
 impl<R: d::Resources> ConstantBufferSet<R> {
     /// Create an empty set
     pub fn new() -> ConstantBufferSet<R> {
-        ConstantBufferSet([None; MAX_CONSTANT_BUFFERS])
+        ConstantBufferSet([None; d::MAX_CONSTANT_BUFFERS])
     }
 }
 

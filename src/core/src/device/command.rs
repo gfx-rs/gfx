@@ -45,7 +45,6 @@ pub enum Command<R: Resources> {
     SetDrawColorBuffers(d::ColorSlot),
     SetRasterizer(d::state::Rasterizer),
     SetViewport(Rect),
-    SetMultiSampleState(Option<d::state::MultiSample>),
     SetScissor(Option<Rect>),
     SetDepthStencilState(Option<d::state::Depth>, Option<d::state::Stencil>,
                          d::state::CullFace),

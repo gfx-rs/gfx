@@ -19,14 +19,6 @@ use gfx::device::state::{BlendValue, Comparison, CullFace, Equation,
 use gfx::device::target::{ColorValue, Rect, Stencil};
 use super::gl;
 
-pub fn bind_front_face(gl: &gl::Gl, ff: s::FrontFace) {
-    unsafe {
-        gl.FrontFace(match ff {
-            FrontFace::Clockwise => gl::CW,
-            FrontFace::CounterClockwise => gl::CCW,
-        })
-    };
-}
 
 pub fn bind_raster_method(gl: &gl::Gl, method: s::RasterMethod, offset: Option<s::Offset>) {
     let (gl_draw, gl_offset) = match method {
@@ -65,13 +57,15 @@ pub fn bind_raster_method(gl: &gl::Gl, method: s::RasterMethod, offset: Option<s
     }
 }
 
-pub fn bind_primitive(gl: &gl::Gl, p: s::Primitive) {
-    bind_front_face(gl, p.front_face);
-    bind_raster_method(gl, p.method, p.offset);
-}
-
-pub fn bind_multi_sample(gl: &gl::Gl, ms: Option<s::MultiSample>) {
-    match ms {
+pub fn bind_rasterizer(gl: &gl::Gl, r: &s::Rasterizer) {
+    unsafe {
+        gl.FrontFace(match r.front_face {
+            FrontFace::Clockwise => gl::CW,
+            FrontFace::CounterClockwise => gl::CCW,
+        })
+    };
+    bind_raster_method(gl, r.method, r.offset);
+    match r.samples {
         Some(_) => unsafe { gl.Enable(gl::MULTISAMPLE) },
         None => unsafe { gl.Disable(gl::MULTISAMPLE) },
     }
