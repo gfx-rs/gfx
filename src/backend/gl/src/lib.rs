@@ -21,16 +21,17 @@
 #[macro_use]
 extern crate log;
 extern crate gfx_gl as gl;
-extern crate gfx;
+extern crate gfx_core;
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use gfx::device as d;
-use gfx::device::draw::{Access, Gamma, Target};
-use gfx::device::handle;
-use gfx::state as s;
+use gfx_core as d;
+use gfx_core::draw::{Access, Gamma, Target};
+use gfx_core::handle;
+use gfx_core::state as s;
+use gfx_core::target::{Layer, Level};
 
-pub use gfx::device::command::{Command, CommandBuffer};
+pub use gfx_core::command::{Command, CommandBuffer};
 pub use self::factory::{Factory, Output};
 pub use self::info::{Info, PlatformName, Version};
 
@@ -59,7 +60,7 @@ unsafe impl Sync for Fence {}
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Resources {}
 
-impl gfx::Resources for Resources {
+impl d::Resources for Resources {
     type Buffer              = Buffer;
     type ArrayBuffer         = ArrayBuffer;
     type Shader              = Shader;
@@ -100,8 +101,8 @@ pub struct PipelineState {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum TargetView {
     Surface(Surface),
-    Texture(Texture, gfx::Level),
-    TextureLayer(Texture, gfx::Level, gfx::Layer),
+    Texture(Texture, Level),
+    TextureLayer(Texture, Level, Layer),
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -237,7 +238,7 @@ impl Device {
     fn new<F>(fn_proc: F) -> Device where
         F: FnMut(&str) -> *const std::os::raw::c_void
     {
-        use gfx::device::handle::Producer;
+        use gfx_core::handle::Producer;
         let gl = gl::Gl::load_with(fn_proc);
         // query information
         let (info, caps) = info::get(&gl);
@@ -273,7 +274,7 @@ impl Device {
     /// Access the OpenGL directly via a closure. OpenGL types and enumerations
     /// can be found in the `gl` crate.
     pub unsafe fn with_gl<F: FnMut(&gl::Gl)>(&mut self, mut fun: F) {
-        use gfx::Device;
+        use gfx_core::Device;
         self.reset_state();
         fun(&self.share.context);
     }
@@ -296,7 +297,7 @@ impl Device {
 
     fn bind_attribute(&mut self, slot: d::AttributeSlot, buffer: Buffer,
                       format: d::attrib::Format) {
-        use gfx::device::attrib::{Type, IntSize, IntSubType, FloatSize, FloatSubType, SignFlag};
+        use gfx_core::attrib::{Type, IntSize, IntSubType, FloatSize, FloatSubType, SignFlag};
         let gl_type = match format.elem_type {
             Type::Int(_, IntSize::U8, SignFlag::Unsigned)  => gl::UNSIGNED_BYTE,
             Type::Int(_, IntSize::U8, SignFlag::Signed)    => gl::BYTE,
@@ -540,7 +541,7 @@ impl Device {
             Command::UpdateBuffer(buffer, pointer, offset) => {
                 let data = data_buf.get_ref(pointer);
                 factory::update_sub_buffer(&self.share.context, buffer,
-                    data.as_ptr(), data.len(), offset, gfx::BufferRole::Vertex);
+                    data.as_ptr(), data.len(), offset, d::BufferRole::Vertex);
             },
             Command::UpdateTexture(kind, texture, image_info, pointer) => {
                 let data = data_buf.get_ref(pointer);
@@ -577,7 +578,7 @@ impl Device {
                 }
             },
             Command::DrawIndexed(prim_type, index_type, start, count, base_vertex, instances) => {
-                use gfx::device::attrib::IntSize;
+                use gfx_core::attrib::IntSize;
                 let gl = &self.share.context;
                 let caps = &self.share.capabilities;
                 let (offset, gl_index) = match index_type {
@@ -704,7 +705,7 @@ impl Device {
     }
 }
 
-impl gfx::Device for Device {
+impl d::Device for Device {
     type Resources = Resources;
     type CommandBuffer = CommandBuffer<Self::Resources>;
 
@@ -735,7 +736,7 @@ impl gfx::Device for Device {
     }
 
     fn cleanup(&mut self) {
-        use gfx::device::handle::Producer;
+        use gfx_core::handle::Producer;
         self.frame_handles.clear();
         self.share.handles.borrow_mut().clean_with(&mut &self.share.context,
             |gl, v| unsafe { gl.DeleteBuffers(1, v) },
@@ -754,10 +755,10 @@ impl gfx::Device for Device {
     }
 }
 
-impl gfx::traits::DeviceFence<Resources> for Device {
+impl gfx_core::DeviceFence<Resources> for Device {
     fn fenced_submit(&mut self, info: d::SubmitInfo<Device>, after: Option<handle::Fence<Resources>>) -> handle::Fence<Resources> {
-        use gfx::Device;
-        use gfx::handle::Producer;
+        use gfx_core::Device;
+        use gfx_core::handle::Producer;
 
         unsafe {
             if let Some(fence) = after {

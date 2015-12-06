@@ -17,10 +17,9 @@ use std::ffi;
 use std::fmt;
 use std::mem;
 use std::str;
-use super::gl;
-
-use gfx::device::Capabilities;
-use gfx::device::shade;
+use gl;
+use gfx_core::Capabilities;
+use gfx_core::shade;
 
 /// A version number for a specific component of an OpenGL implementation
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -213,7 +212,7 @@ impl Info {
 }
 
 fn to_shader_model(v: &Version) -> shade::ShaderModel {
-    use gfx::device::shade::ShaderModel;
+    use gfx_core::shade::ShaderModel;
     match v {
         v if *v < Version::new(1, 20, None, "") => ShaderModel::Unsupported,
         v if *v < Version::new(1, 50, None, "") => ShaderModel::Version30,
@@ -276,7 +275,7 @@ mod tests {
 
     #[test]
     fn test_shader_model() {
-        use gfx::device::shade::ShaderModel;
+        use gfx_core::shade::ShaderModel;
         assert_eq!(to_shader_model(&Version::parse("1.10").unwrap()), ShaderModel::Unsupported);
         assert_eq!(to_shader_model(&Version::parse("1.20").unwrap()), ShaderModel::Version30);
         assert_eq!(to_shader_model(&Version::parse("1.50").unwrap()), ShaderModel::Version40);

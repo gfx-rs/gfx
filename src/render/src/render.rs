@@ -20,29 +20,21 @@ use std::mem;
 use draw_state::DrawState;
 use draw_state::target::{ClearData, Mask, Mirror, Rect};
 
-use device;
-use device::Resources;
-use device::{attrib, handle};
-use device::attrib::IntSize;
-use device::draw::{Access, Gamma, Target};
-use device::draw::{CommandBuffer, DataBuffer, InstanceOption};
-use device::shade::{ProgramInfo, UniformValue};
-use device::tex::Size;
-use render::batch::{Batch, Error};
-use render::mesh::SliceKind;
-
-/// Batches
-pub mod batch;
-/// Meshes
-pub mod mesh;
-/// Pipeline states
-pub mod pso;
-/// Shaders
-pub mod shade;
-/// Render targets
-pub mod target;
-/// Contains the logic for the Texture LRU
-mod texture_cache;
+use gfx_core as device;
+use gfx_core::Resources;
+use gfx_core::{attrib, handle};
+use gfx_core::attrib::IntSize;
+use gfx_core::draw::{Access, Gamma, Target};
+use gfx_core::draw::{CommandBuffer, DataBuffer, InstanceOption};
+use gfx_core::output::{Output, Plane};
+use gfx_core::shade::{ProgramInfo, UniformValue};
+use gfx_core::tex::Size;
+use batch::{Batch, Error};
+use mesh;
+use pso;
+use shade::TextureParam;
+use target;
+use texture_cache::TextureCache;
 
 /// An error occuring in surface blits.
 #[derive(Clone, Debug, PartialEq)]
@@ -110,7 +102,7 @@ pub struct ParamStorage<R: Resources> {
     /// uniform buffers to be provided
     pub blocks  : Vec<Option<handle::RawBuffer<R>>>,
     /// textures to be provided
-    pub textures: Vec<Option<shade::TextureParam<R>>>,
+    pub textures: Vec<Option<TextureParam<R>>>,
 }
 
 impl<R: Resources> ParamStorage<R> {
@@ -123,7 +115,8 @@ impl<R: Resources> ParamStorage<R> {
         }
     }
 
-    fn reserve(&mut self, pinfo: &ProgramInfo) {
+    /// Reserve the exact slots needed for this program info.
+    pub fn reserve(&mut self, pinfo: &ProgramInfo) {
         // clear
         self.uniforms.clear();
         self.blocks  .clear();
@@ -140,17 +133,17 @@ impl<R: Resources> ParamStorage<R> {
 trait CommandBufferExt<R: Resources>: CommandBuffer<R> {
     /// Bind a plane to some target
     fn bind_target(&mut self, &mut handle::Manager<R>, Access, Target,
-                   Option<&target::Plane<R>>);
+                   Option<&Plane<R>>);
 }
 
 impl<R: Resources, C: CommandBuffer<R>> CommandBufferExt<R> for C {
     fn bind_target(&mut self, handles: &mut handle::Manager<R>, access: Access,
-                   to: Target, plane: Option<&target::Plane<R>>) {
+                   to: Target, plane: Option<&Plane<R>>) {
         match plane {
             None => self.unbind_target(access, to),
-            Some(&target::Plane::Surface(ref suf)) =>
+            Some(&Plane::Surface(ref suf)) =>
                 self.bind_target_surface(access, to, handles.ref_surface(suf)),
-            Some(&target::Plane::Texture(ref tex, level, layer)) =>
+            Some(&Plane::Texture(ref tex, level, layer)) =>
                 self.bind_target_texture(access, to, handles.ref_texture(tex), level, layer),
         }
     }
@@ -182,7 +175,7 @@ pub struct Renderer<R: Resources, C: CommandBuffer<R>> {
     read_frame_buffer: Result<handle::FrameBuffer<R>, device::NotSupported>,
     render_state: RenderState<R>,
     parameters: ParamStorage<R>,
-    texture_cache: texture_cache::TextureCache<R>
+    texture_cache: TextureCache<R>,
 }
 
 impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
@@ -211,12 +204,12 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
             read_frame_buffer: self.read_frame_buffer.clone(),
             render_state: RenderState::new(),
             parameters: ParamStorage::new(),
-            texture_cache: texture_cache::TextureCache::new(self.texture_cache.number_of_slots()),
+            texture_cache: TextureCache::new(self.texture_cache.number_of_slots()),
         }
     }
 
     /// Clear the output with given `ClearData`.
-    pub fn clear<O: target::Output<R>>(&mut self, data: ClearData, mask: Mask, output: &O) {
+    pub fn clear<O: Output<R>>(&mut self, data: ClearData, mask: Mask, output: &O) {
         let has_mask = output.get_mask();
         if has_mask.is_empty() {
             panic!("Clearing a frame without any attachments is not possible!
@@ -229,7 +222,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     }
 
     /// Draw a 'batch' with all known parameters specified, internal use only.
-    pub fn draw<B: Batch<R> + ?Sized, O: target::Output<R>>(&mut self, batch: &B,
+    pub fn draw<B: Batch<R> + ?Sized, O: Output<R>>(&mut self, batch: &B,
                 instances: InstanceOption, output: &O)
                 -> Result<(), DrawError<Error>>
     {
@@ -256,7 +249,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     }
 
     /// Blit one frame onto another.
-    pub fn blit<I: target::Output<R>, O: target::Output<R>>(&mut self,
+    pub fn blit<I: Output<R>, O: Output<R>>(&mut self,
                 source: &I, source_rect: Rect,
                 destination: &O, dest_rect: Rect,
                 mirror: Mirror, mask: Mask)
@@ -365,7 +358,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         Ok(())
     }
 
-    fn bind_output<O: target::Output<R>>(&mut self, output: &O) {
+    fn bind_output<O: Output<R>>(&mut self, output: &O) {
         let (width, height) = output.get_size();
         if self.render_state.frame.width != width ||
                 self.render_state.frame.height != height {
@@ -439,7 +432,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         }
     }
 
-    fn bind_pixel_input<I: target::Output<R>>(&mut self, input: &I) {
+    fn bind_pixel_input<I: Output<R>>(&mut self, input: &I) {
         // bind input
         if let Some(ref handle) = input.get_handle() {
             self.command_buffer.bind_frame_buffer(Access::Read,
@@ -616,13 +609,13 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
 
     fn draw_slice(&mut self, slice: &mesh::Slice<R>, instances: InstanceOption) {
         match slice.kind {
-            SliceKind::Vertex => self.command_buffer.call_draw(
+            mesh::SliceKind::Vertex => self.command_buffer.call_draw(
                 slice.primitive, slice.start, slice.end - slice.start, instances),
-            SliceKind::Index8(ref buf, base) =>
+            mesh::SliceKind::Index8(ref buf, base) =>
                 self.draw_indexed(buf, IntSize::U8, slice, base, instances),
-            SliceKind::Index16(ref buf, base) =>
+            mesh::SliceKind::Index16(ref buf, base) =>
                 self.draw_indexed(buf, IntSize::U16, slice, base, instances),
-            SliceKind::Index32(ref buf, base) =>
+            mesh::SliceKind::Index32(ref buf, base) =>
                 self.draw_indexed(buf, IntSize::U32, slice, base, instances),
         }
     }
@@ -663,7 +656,7 @@ impl<
             read_frame_buffer: self.create_frame_buffer(),
             render_state: RenderState::new(),
             parameters: ParamStorage::new(),
-            texture_cache: texture_cache::TextureCache::new(DEFAULT_MAX_COMBINED_TEXTURE_IMAGE_UNITS),
+            texture_cache: TextureCache::new(DEFAULT_MAX_COMBINED_TEXTURE_IMAGE_UNITS),
         }
     }
 }

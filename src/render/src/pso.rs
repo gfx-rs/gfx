@@ -18,7 +18,7 @@
 
 use std::default::Default;
 use std::marker::PhantomData;
-use device as d;
+use gfx_core as d;
 
 pub struct RawDataSet<R: d::Resources>{
     pub vertex_buffers: d::pso::VertexBufferSet<R>,

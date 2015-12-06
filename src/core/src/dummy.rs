@@ -11,9 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #![allow(missing_docs)]
-use device::{Capabilities, Device, Resources, SubmitInfo};
-use device::command::{CommandBuffer};
+
+use {Capabilities, Device, Resources, SubmitInfo};
+use command::{CommandBuffer};
 
 ///Dummy device which does minimal work, just to allow testing gfx-rs apps for
 ///compilation.

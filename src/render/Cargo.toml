@@ -13,9 +13,9 @@
 # limitations under the License.
 
 [package]
-name = "gfx_window_glutin"
+name = "gfx"
 version = "0.9.0"
-description = "Glutin window for gfx-rs"
+description = "A high-performance, bindless graphics API"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
 keywords = ["graphics", "gamedev"]
@@ -23,15 +23,16 @@ license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
 
 [lib]
-name = "gfx_window_glutin"
-
-[dependencies.gfx]
-path = "../../render"
-version = "0.9"
-
-[dependencies.gfx_device_gl]
-path = "../../backend/gl"
-version = "0.8"
+name = "gfx"
+path = "src/lib.rs"
 
 [dependencies]
-glutin = ">=0.4.2"
+draw_state = "0.2.0"
+log = "0.3"
+
+[dependencies.gfx_core]
+path = "../core"
+version = "0.1"
+
+[features]
+unstable = []

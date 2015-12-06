@@ -57,7 +57,7 @@ const L2_DATA: [u8; 1] = [ 0x02 ];
 
 fn make_texture<R, F>(factory: &mut F) -> gfx::shade::TextureParam<R>
         where R: gfx::Resources, 
-              F: gfx::device::Factory<R> 
+              F: gfx::Factory<R>
 {
     let tex_info = gfx::tex::TextureInfo {
         width: 4,

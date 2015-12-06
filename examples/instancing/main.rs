@@ -23,11 +23,11 @@ extern crate gfx_device_gl;
 use std::marker::PhantomData;
 use rand::Rng;
 use glutin::WindowBuilder;
-use gfx::device::{Factory, BufferRole, Primitive};
+use gfx::{Factory, BufferRole, Primitive};
 use gfx::extra::stream::Stream;
 use gfx::extra::factory::FactoryExt;
-use gfx::render::mesh::{Mesh, ToSlice};
-use gfx::render::batch;
+use gfx::mesh::{Mesh, ToSlice};
+use gfx::batch;
 
 const QUAD_VERTICES: [Vertex; 4] = [
     Vertex { position: [-0.5,  0.5] },

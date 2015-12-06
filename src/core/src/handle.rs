@@ -20,7 +20,7 @@ use std::mem;
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync::Arc;
-use super::{shade, tex, Resources, BufferInfo};
+use {shade, tex, Resources, BufferInfo};
 
 
 /// Raw (untyped) Buffer Handle

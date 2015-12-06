@@ -47,7 +47,7 @@ gfx_parameters!( Params {
 });
 
 fn load_texture<R, F>(factory: &mut F, data: &[u8]) -> Result<gfx::handle::Texture<R>, String>
-        where R: gfx::Resources, F: gfx::device::Factory<R> {
+        where R: gfx::Resources, F: gfx::Factory<R> {
     let img = image::load(Cursor::new(data), image::PNG).unwrap();
 
     let img = match img {

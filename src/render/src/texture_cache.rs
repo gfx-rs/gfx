@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use device as d;
-use device::Resources;
+use gfx_core::{Resources, TextureSlot, draw, tex};
 
 struct Entry<R: Resources> {
     last_used: u16,
-    bound: Option<(d::tex::Kind, R::Texture, Option<(R::Sampler, d::tex::SamplerInfo)>)>,
+    bound: Option<(tex::Kind, R::Texture, Option<(R::Sampler, tex::SamplerInfo)>)>,
 }
 
 pub struct TextureCache<R: Resources> {
@@ -57,11 +56,11 @@ impl<R> TextureCache<R> where R: Resources {
     /// no free slots, and there is no bound texture we will throw
     /// away the oldest entries first to make room for the new ones
     pub fn bind_texture<C>(&mut self,
-                           kind: d::tex::Kind,
+                           kind: tex::Kind,
                            tex: R::Texture,
-                           samp: Option<(R::Sampler, d::tex::SamplerInfo)>,
-                           cb: &mut C) -> d::TextureSlot
-        where C: d::draw::CommandBuffer<R>
+                           samp: Option<(R::Sampler, tex::SamplerInfo)>,
+                           cb: &mut C) -> TextureSlot
+        where C: draw::CommandBuffer<R>
     {
         self.count += 1;
         let count = self.count;
@@ -72,7 +71,7 @@ impl<R> TextureCache<R> where R: Resources {
                 if bound.0 == bind.0 && bound.1 == bind.1 && bound.2 == bind.2 {
                     // Update the LRU with the current count
                     ent.last_used = count;
-                    return i as d::TextureSlot;
+                    return i as TextureSlot;
                 }
             }
         }
@@ -89,11 +88,11 @@ impl<R> TextureCache<R> where R: Resources {
             }
         }
 
-        cb.bind_texture(oldest as d::TextureSlot, bind.0, bind.1, bind.2);
+        cb.bind_texture(oldest as TextureSlot, bind.0, bind.1, bind.2);
 
         self.textures[oldest].last_used = count;
         self.textures[oldest].bound = Some(bind);
-        return oldest as d::TextureSlot;
+        return oldest as TextureSlot;
     }
 
     /// Clear the texture cache

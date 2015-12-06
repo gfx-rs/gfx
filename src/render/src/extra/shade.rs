@@ -14,7 +14,7 @@
 
 //! Shader source extension
 
-use device::shade::{CreateShaderError, CreateProgramError, ShaderModel};
+use gfx_core::shade::{CreateShaderError, CreateProgramError, ShaderModel};
 
 /// Program linking error
 #[derive(Clone, PartialEq, Debug)]

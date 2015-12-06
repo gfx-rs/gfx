@@ -18,12 +18,11 @@
 
 use draw_state::DrawState;
 
-use device::{Resources, Primitive};
-use device::handle::Program as ProgramHandle;
-use render::mesh;
-use render::mesh::ToSlice;
+use gfx_core::{Resources, Primitive};
+use gfx_core::handle::Program as ProgramHandle;
+use mesh;
 use shade::{ParameterError, ShaderParam};
-use super::ParamStorage;
+use ParamStorage;
 
 /// An error occurring at batch creation
 #[derive(Clone, Debug, PartialEq)]
@@ -109,6 +108,7 @@ impl<T: ShaderParam> Full<T> {
     /// Create a new full batch
     pub fn new(mesh: mesh::Mesh<T::Resources>, program: ProgramHandle<T::Resources>, params: T)
            -> Result<Full<T>, Error> {
+        use mesh::ToSlice;
         let slice = mesh.to_slice(Primitive::TriangleList);
         let mesh_link = match mesh::Link::new(&mesh, program.get_info()) {
             Ok(l) => l,

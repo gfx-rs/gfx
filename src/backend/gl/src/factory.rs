@@ -16,12 +16,11 @@ use std::rc::Rc;
 use std::slice;
 
 use {gl, tex};
-use gfx;
-use gfx::device as d;
-use gfx::device::handle;
-use gfx::device::handle::Producer;
-use gfx::device::mapping::Builder;
-use gfx::tex::Size;
+use gfx_core as d;
+use gfx_core::handle;
+use gfx_core::handle::Producer;
+use gfx_core::mapping::Builder;
+use gfx_core::tex::Size;
 
 use {Buffer, OutputMerger, PipelineState, Program, Share};
 use Resources as R;
@@ -58,7 +57,7 @@ pub struct Output {
     handle: handle::FrameBuffer<R>,
 }
 
-impl gfx::Output<R> for Output {
+impl d::output::Output<R> for Output {
     fn get_handle(&self) -> Option<&handle::FrameBuffer<R>> {
         Some(&self.handle)
     }
@@ -67,8 +66,8 @@ impl gfx::Output<R> for Output {
         (self.width, self.height)
     }
 
-    fn get_mask(&self) -> gfx::Mask {
-        gfx::COLOR | gfx::DEPTH | gfx::STENCIL
+    fn get_mask(&self) -> d::target::Mask {
+        d::target::COLOR | d::target::DEPTH | d::target::STENCIL
     }
 }
 
@@ -245,7 +244,7 @@ impl d::Factory<R> for Factory {
     fn create_pipeline_state_raw(&mut self, program: &handle::Program<R>, desc: &d::pso::Descriptor)
                                  -> Result<handle::RawPipelineState<R>, d::pso::CreationError> {
         use std::default::Default;
-        use gfx::state as s;
+        use gfx_core::state as s;
         let mut output = OutputMerger {
             draw_mask: 0,
             stencil: desc.depth_stencil.map(|(_, t)| s::Stencil {

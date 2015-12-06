@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{gl, Surface, Texture, Sampler};
-use super::gl::types::{GLenum, GLuint, GLint, GLfloat, GLsizei, GLvoid};
-use super::state;
-use gfx::device::tex::*;
-use gfx::device::attrib::{FloatSize, IntSubType};
+use {gl, Surface, Texture, Sampler};
+use gl::types::{GLenum, GLuint, GLint, GLfloat, GLsizei, GLvoid};
+use state;
+use gfx_core::tex::*;
+use gfx_core::attrib::{FloatSize, IntSubType};
 
 
 /// A token produced by the `bind_texture` that allows following up

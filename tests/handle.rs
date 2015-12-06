@@ -1,9 +1,9 @@
-extern crate gfx;
+extern crate gfx_core;
 
 use std::mem;
-use gfx::device::{BufferRole, BufferInfo, BufferUsage};
-use gfx::device::dummy::DummyResources;
-use gfx::handle::{Buffer, Manager, Producer};
+use gfx_core::{BufferRole, BufferInfo, BufferUsage};
+use gfx_core::dummy::DummyResources;
+use gfx_core::handle::{Buffer, Manager, Producer};
 
 fn mock_buffer<T>(len: usize) -> Buffer<DummyResources, T> {
     let mut handler = Manager::new();

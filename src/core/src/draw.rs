@@ -15,7 +15,9 @@
 //! Command Buffer device interface
 
 use draw_state::target;
-use device as d;
+use {Resources, IndexType, InstanceCount, VertexCount, Primitive,
+     AttributeSlot, TextureSlot, ColorSlot, UniformBufferSlot, UniformBlockIndex};
+use {attrib, pso, shade, tex};
 use state as s;
 
 type Offset = u32;
@@ -91,12 +93,12 @@ impl DataBuffer {
 }
 
 /// Optional instance parameters
-pub type InstanceOption = Option<(d::InstanceCount, d::VertexCount)>;
+pub type InstanceOption = Option<(InstanceCount, VertexCount)>;
 
 /// An interface of the abstract command buffer. It collects commands in an
 /// efficient API-specific manner, to be ready for execution on the device.
 #[allow(missing_docs)]
-pub trait CommandBuffer<R: d::Resources> {
+pub trait CommandBuffer<R: Resources> {
     /// An empty constructor
     fn new() -> Self;
     /// Clear the command buffer contents, retain the allocated storage
@@ -106,11 +108,11 @@ pub trait CommandBuffer<R: d::Resources> {
     /// Bind a pipeline state object
     fn bind_pipeline_state(&mut self, R::PipelineStateObject);
     /// Bind a complete set of vertex buffers
-    fn bind_vertex_buffers(&mut self, d::pso::VertexBufferSet<R>);
+    fn bind_vertex_buffers(&mut self, pso::VertexBufferSet<R>);
     /// Bind an array buffer object
     fn bind_array_buffer(&mut self, R::ArrayBuffer);
     /// Bind a vertex attribute
-    fn bind_attribute(&mut self, d::AttributeSlot, R::Buffer, d::attrib::Format);
+    fn bind_attribute(&mut self, AttributeSlot, R::Buffer, attrib::Format);
     /// Bind an index buffer
     fn bind_index(&mut self, R::Buffer);
     /// Bind a frame buffer object
@@ -124,15 +126,15 @@ pub trait CommandBuffer<R: d::Resources> {
                            target::Level, Option<target::Layer>);
     /// Bind a uniform block
     fn bind_uniform_block(&mut self, R::Program,
-                          d::UniformBufferSlot, d::UniformBlockIndex,
+                          UniformBufferSlot, UniformBlockIndex,
                           R::Buffer);
     /// Bind a single uniform in the default block
-    fn bind_uniform(&mut self, d::shade::Location, d::shade::UniformValue);
+    fn bind_uniform(&mut self, shade::Location, shade::UniformValue);
     /// Bind a texture
-    fn bind_texture(&mut self, d::TextureSlot, d::tex::Kind,
-                    R::Texture, Option<(R::Sampler, d::tex::SamplerInfo)>);
+    fn bind_texture(&mut self, TextureSlot, tex::Kind,
+                    R::Texture, Option<(R::Sampler, tex::SamplerInfo)>);
     /// Select, which color buffers are going to be targetted by the shader
-    fn set_draw_color_buffers(&mut self, d::ColorSlot);
+    fn set_draw_color_buffers(&mut self, ColorSlot);
     /// Set rasterizer state
     fn set_rasterizer(&mut self, s::Rasterizer);
     /// Set viewport rectangle
@@ -142,23 +144,23 @@ pub trait CommandBuffer<R: d::Resources> {
     /// Set depth and stencil states
     fn set_depth_stencil(&mut self, Option<s::Depth>, Option<s::Stencil>, s::CullFace);
     /// Set blend state
-    fn set_blend(&mut self, d::ColorSlot, Option<s::Blend>);
+    fn set_blend(&mut self, ColorSlot, Option<s::Blend>);
     /// Set reference values for the blending and stencil front/back.
     fn set_ref_values(&mut self, s::RefValues);
     /// Update a vertex/index/uniform buffer
     fn update_buffer(&mut self, R::Buffer, DataPointer, usize);
     /// Update a texture region
-    fn update_texture(&mut self, d::tex::Kind, R::Texture,
-                      d::tex::ImageInfo, DataPointer);
+    fn update_texture(&mut self, tex::Kind, R::Texture,
+                      tex::ImageInfo, DataPointer);
     /// Clear target surfaces
     fn call_clear(&mut self, target::ClearData, target::Mask);
     /// Draw a primitive
-    fn call_draw(&mut self, d::Primitive, d::VertexCount,
-                 d::VertexCount, InstanceOption);
+    fn call_draw(&mut self, Primitive, VertexCount,
+                 VertexCount, InstanceOption);
     /// Draw a primitive with index buffer
-    fn call_draw_indexed(&mut self, d::Primitive, d::IndexType,
-                         d::VertexCount, d::VertexCount,
-                         d::VertexCount, InstanceOption);
+    fn call_draw_indexed(&mut self, Primitive, IndexType,
+                         VertexCount, VertexCount,
+                         VertexCount, InstanceOption);
     /// Blit from one target to another
     fn call_blit(&mut self, target::Rect, target::Rect, target::Mirror, target::Mask);
 }

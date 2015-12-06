@@ -20,8 +20,8 @@
 //! create a mesh is to use the `#[vertex_format]` attribute on a struct, upload them into a
 //! `Buffer`, and then use `Mesh::from`.
 
-use device::{BufferRole, Factory, Primitive, Resources, VertexCount};
-use device::{attrib, handle, shade};
+use gfx_core::{BufferRole, Factory, Primitive, Resources, VertexCount};
+use gfx_core::{attrib, handle, shade};
 
 /// Describes a single attribute of a vertex buffer, including its type, name, etc.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -114,7 +114,7 @@ pub struct Slice<R: Resources> {
 impl<R: Resources> Slice<R> {
     /// Get the number of primitives in this slice.
     pub fn get_prim_count(&self) -> u32 {
-        use device::Primitive::*;
+        use gfx_core::Primitive::*;
         let nv = (self.end - self.start) as u32;
         match self.primitive {
             Point => nv,

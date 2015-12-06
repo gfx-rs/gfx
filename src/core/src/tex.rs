@@ -21,10 +21,9 @@
 //! image data.  Image data consists of an array of "texture elements", or
 //! texels.
 
-use attrib::{FloatSize, IntSubType};
 use std::default::Default;
 use std::fmt;
-
+use attrib::{FloatSize, IntSubType};
 use state;
 
 /// Surface creation/update error.

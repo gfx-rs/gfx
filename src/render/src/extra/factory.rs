@@ -14,12 +14,12 @@
 
 //! Factory extension. Provides resource construction shortcuts.
 
-use device;
-use device::{handle, tex};
-use device::shade::{CreateShaderError, CreateProgramError};
-use render::mesh::{Mesh, VertexFormat};
-use render::pso;
+use gfx_core as device;
+use gfx_core::{handle, tex};
+use gfx_core::shade::{CreateShaderError, CreateProgramError};
 use extra::shade::*;
+use mesh::{Mesh, VertexFormat};
+use pso;
 
 /// Error creating a PipelineState
 #[derive(Clone, PartialEq, Debug)]

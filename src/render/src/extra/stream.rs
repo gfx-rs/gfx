@@ -16,13 +16,12 @@
 //! It includes a renderer and an output, stored by constrained types.
 
 
-use device::{Device, InstanceCount, Resources, VertexCount};
-use device::draw::CommandBuffer;
-use device::target::{ClearData, Mask, Mirror, Rect};
+use gfx_core::{Device, InstanceCount, Resources, VertexCount};
+use gfx_core::draw::CommandBuffer;
+use gfx_core::output::Output;
+use gfx_core::target::{ClearData, Mask, Mirror, Rect};
+use batch::{Batch, Error};
 use render::{BlitError, DrawError, Renderer, RenderFactory};
-use render::batch::{Batch, Error};
-use render::target::Output;
-
 
 /// Generic output window.
 pub trait Window<R: Resources>: Output<R> {

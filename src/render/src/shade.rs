@@ -15,19 +15,26 @@
 //! Shader parameter handling.
 
 use std::cell::RefCell;
-use device::shade;
-use device::shade::UniformValue;
-use device::{handle, Resources};
-use super::ParamStorage;
+use gfx_core::{Resources, handle, shade};
+use ParamStorage;
 
-pub use device::shade::{Stage, CreateShaderError};
+pub use gfx_core::shade::{Stage, CreateShaderError};
 
+
+/// A texture parameter: consists of a texture handle with an optional sampler.
+/// Not all textures need a sampler (i.e. MSAA ones do not). Optimally, we'd want to
+/// encode this logic into the type system (TODO).
+pub type TextureParam<R: Resources> = (handle::Texture<R>, Option<handle::Sampler<R>>);
+
+pub trait ToUniform: Copy {
+    fn convert(self) -> shade::UniformValue;
+}
 
 macro_rules! uniform {
     ($ty_src:ty, $ty_dst:ident) => {
-        impl Into<UniformValue> for $ty_src {
-            fn into(self) -> UniformValue {
-                UniformValue::$ty_dst(self)
+        impl ToUniform for $ty_src {
+            fn convert(self) -> shade::UniformValue {
+                shade::UniformValue::$ty_dst(self)
             }
         }
     }
@@ -48,10 +55,6 @@ uniform!([[f32; 2]; 2], F32Matrix2);
 uniform!([[f32; 3]; 3], F32Matrix3);
 uniform!([[f32; 4]; 4], F32Matrix4);
 
-/// A texture parameter: consists of a texture handle with an optional sampler.
-/// Not all textures need a sampler (i.e. MSAA ones do not). Optimally, we'd want to
-/// encode this logic into the type system (TODO).
-pub type TextureParam<R: Resources> = (handle::Texture<R>, Option<handle::Sampler<R>>);
 
 /// An error type on either the parameter storage or the program side
 #[derive(Clone, PartialEq, Debug)]
@@ -87,13 +90,13 @@ pub trait Parameter<R: Resources> {
     fn put(&self, ParameterId, &mut ParamStorage<R>);
 }
 
-impl<T: Clone + Into<UniformValue>, R: Resources> Parameter<R> for T {
+impl<T: ToUniform, R: Resources> Parameter<R> for T {
     fn check_uniform(_var: &shade::UniformVar) -> bool {
         true //TODO
     }
 
     fn put(&self, id: ParameterId, storage: &mut ParamStorage<R>) {
-        storage.uniforms[id as usize] = Some(self.clone().into());
+        storage.uniforms[id as usize] = Some(self.convert());
     }
 }
 

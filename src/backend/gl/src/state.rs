@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use gfx::device::{MAX_COLOR_TARGETS, ColorSlot};
-use gfx::device::state as s;
-use gfx::device::state::{BlendValue, Comparison, CullFace, Equation,
-                         Offset, RasterMethod, StencilOp, FrontFace};
-use gfx::device::target::{ColorValue, Rect, Stencil};
-use super::gl;
+use gfx_core::{MAX_COLOR_TARGETS, ColorSlot};
+use gfx_core::state as s;
+use gfx_core::state::{BlendValue, Comparison, CullFace, Equation,
+                      Offset, RasterMethod, StencilOp, FrontFace};
+use gfx_core::target::{ColorValue, Rect, Stencil};
+use gl;
 
 
 pub fn bind_raster_method(gl: &gl::Gl, method: s::RasterMethod, offset: Option<s::Offset>) {

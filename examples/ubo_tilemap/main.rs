@@ -28,8 +28,8 @@ use std::io::Cursor;
 use glutin::{PollEventsIterator, Event, VirtualKeyCode, ElementState};
 
 use gfx::traits::{Stream, ToIndexSlice, ToSlice, FactoryExt};
-use gfx::device::{Resources, Factory};
-use gfx::render::batch::Full;
+use gfx::{Resources, Factory};
+use gfx::batch::Full;
 
 use cgmath::FixedArray;
 use cgmath::{Matrix4, AffineMatrix3};
@@ -46,7 +46,7 @@ pub const TILEMAP_BUF_LENGTH: usize = 4096;
 
 // texture loading boilerplate
 pub fn load_texture<R, F>(factory: &mut F, data: &[u8]) -> Result<gfx::handle::Texture<R>, String>
-        where R: gfx::Resources, F: gfx::device::Factory<R> {
+        where R: gfx::Resources, F: Factory<R> {
     let img = image::load(Cursor::new(data), image::PNG).unwrap();
 
     let img = match img {

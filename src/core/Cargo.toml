@@ -1,4 +1,4 @@
-# Copyright 2014 The Gfx-rs Developers.
+# Copyright 2015 The Gfx-rs Developers.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,24 +13,24 @@
 # limitations under the License.
 
 [package]
-name = "gfx"
-version = "0.8.1"
-description = "A high-performance, bindless graphics API"
+name = "gfx_core"
+version = "0.1.0"
+description = "Core library of Gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
-keywords = ["graphics", "gamedev"]
+keywords = ["graphics"]
 license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
 
 [lib]
-name = "gfx"
+name = "gfx_core"
 path = "src/lib.rs"
 
 [dependencies]
 draw_state = "0.2.0"
 bitflags = "0.3"
 log = "0.3"
-num = "0.1"
+#num = "0.1"
 
 [features]
 unstable = []

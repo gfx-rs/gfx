@@ -14,7 +14,9 @@
 
 //! Pipeline State Objects
 
-use device as d;
+use {MAX_COLOR_TARGETS, MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS};
+use {Primitive, Resources};
+use {attrib, tex};
 use state as s;
 
 /// An offset inside a vertex buffer, in bytes.
@@ -92,26 +94,26 @@ impl From<(s::Depth, s::Stencil)> for DepthStencilInfo {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Descriptor {
     /// Type of the primitive
-    pub primitive: d::Primitive,
+    pub primitive: Primitive,
     /// Rasterizer setup
     pub rasterizer: s::Rasterizer,
     /// Vertex attributes
-    pub attributes: [Option<d::attrib::Format>; d::MAX_VERTEX_ATTRIBUTES],
+    pub attributes: [Option<attrib::Format>; MAX_VERTEX_ATTRIBUTES],
     /// Render target views (RTV)
-    pub color_targets: [Option<(d::tex::Format, BlendInfo)>; d::MAX_COLOR_TARGETS],
+    pub color_targets: [Option<(tex::Format, BlendInfo)>; MAX_COLOR_TARGETS],
     /// Depth stencil view (DSV)
-    pub depth_stencil: Option<(d::tex::Format, DepthStencilInfo)>,
+    pub depth_stencil: Option<(tex::Format, DepthStencilInfo)>,
 }
 
 impl Descriptor {
     /// Create a new empty PSO descriptor.
-    pub fn new(prim: d::Primitive) -> Descriptor {
+    pub fn new(prim: Primitive) -> Descriptor {
         use std::default::Default;
         Descriptor {
             primitive: prim,
             rasterizer: Default::default(),
-            attributes: [None; d::MAX_VERTEX_ATTRIBUTES],
-            color_targets: [None; d::MAX_COLOR_TARGETS],
+            attributes: [None; MAX_VERTEX_ATTRIBUTES],
+            color_targets: [None; MAX_COLOR_TARGETS],
             depth_stencil: None,
         }
     }
@@ -122,10 +124,10 @@ impl Descriptor {
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct VertexImportLayout {
     /// Expected attribute format for every slot.
-    pub formats: [Option<d::attrib::Format>; d::MAX_VERTEX_ATTRIBUTES],
+    pub formats: [Option<attrib::Format>; MAX_VERTEX_ATTRIBUTES],
 }
 
-fn match_attribute(_sh: &d::shade::Attribute, _format: d::attrib::Format) -> bool {
+fn match_attribute(_sh: &d::shade::Attribute, _format: attrib::Format) -> bool {
     true //TODO
 }
 
@@ -139,7 +141,7 @@ impl VertexImportLayout {
     /// Create the layout by matching shader requirements with the link map.
     pub fn link(map: &LinkMap, attributes: &[d::shade::Attribute])
                 -> Result<VertexImportLayout, CreationError> {
-        let mut formats = [None; d::MAX_VERTEX_ATTRIBUTES];
+        let mut formats = [None; MAX_VERTEX_ATTRIBUTES];
         for at in attributes.iter() {
             let slot = at.location as d::AttributeSlot;
             match map.get(&at.name[..]) {
@@ -163,27 +165,27 @@ impl VertexImportLayout {
 #[derive(Clone, Copy, Debug, Hash, PartialEq)]
 pub struct PixelExportLayout {
     /// Expected target format for every slot.
-    pub colors: [Option<d::tex::Format>; d::MAX_COLOR_TARGETS],
+    pub colors: [Option<tex::Format>; MAX_COLOR_TARGETS],
     /// Format of the depth/stencil surface.
-    pub depth_stencil: Option<d::tex::Format>,
+    pub depth_stencil: Option<tex::Format>,
 }
 
 impl PixelExportLayout {
     /// Create an empty layout
     pub fn new() -> PixelExportLayout {
         PixelExportLayout {
-            colors: [None; d::MAX_COLOR_TARGETS],
+            colors: [None; MAX_COLOR_TARGETS],
             depth_stencil: None,
         }
     }
     /// Create the layout by matching shader requirements with the link map.
     pub fn link(_map: &LinkMap, _outputs: &[d::shade::Output], need_depth: bool)
                 -> Result<PixelExportLayout, CreationError> {
-        let mut colors = [None; d::MAX_COLOR_TARGETS];
+        let mut colors = [None; MAX_COLOR_TARGETS];
         let depth_stencil = if need_depth {
-            Some(d::tex::Format::DEPTH24_STENCIL8)
+            Some(tex::Format::DEPTH24_STENCIL8)
         } else {None};
-        colors[0] = Some(d::tex::RGBA8); //TODO
+        colors[0] = Some(tex::RGBA8); //TODO
         Ok(PixelExportLayout {
             colors: colors,
             depth_stencil: depth_stencil,
@@ -200,45 +202,45 @@ impl PixelExportLayout {
 
 /// A complete set of vertex buffers to be used for vertex import in PSO.
 #[derive(Copy, Clone, Debug)]
-pub struct VertexBufferSet<R: d::Resources>(
+pub struct VertexBufferSet<R: Resources>(
     /// Array of buffer handles with offsets in them
-    pub [Option<(R::Buffer, BufferOffset)>; d::MAX_VERTEX_ATTRIBUTES]
+    pub [Option<(R::Buffer, BufferOffset)>; MAX_VERTEX_ATTRIBUTES]
 );
 
-impl<R: d::Resources> VertexBufferSet<R> {
+impl<R: Resources> VertexBufferSet<R> {
     /// Create an empty set
     pub fn new() -> VertexBufferSet<R> {
-        VertexBufferSet([None; d::MAX_VERTEX_ATTRIBUTES])
+        VertexBufferSet([None; MAX_VERTEX_ATTRIBUTES])
     }
 }
 
 /// A complete set of constant buffers to be used for the constants binding in PSO.
 #[derive(Copy, Clone, Debug)]
-pub struct ConstantBufferSet<R: d::Resources>(
+pub struct ConstantBufferSet<R: Resources>(
     /// Array of buffer handles
-    pub [Option<R::Buffer>; d::MAX_CONSTANT_BUFFERS]
+    pub [Option<R::Buffer>; MAX_CONSTANT_BUFFERS]
 );
 
-impl<R: d::Resources> ConstantBufferSet<R> {
+impl<R: Resources> ConstantBufferSet<R> {
     /// Create an empty set
     pub fn new() -> ConstantBufferSet<R> {
-        ConstantBufferSet([None; d::MAX_CONSTANT_BUFFERS])
+        ConstantBufferSet([None; MAX_CONSTANT_BUFFERS])
     }
 }
 
 #[derive(Copy, Clone, Debug)]
 /// A complete set of render targets to be used for pixel export in PSO.
-pub struct PixelTargetSet<R: d::Resources>(
+pub struct PixelTargetSet<R: Resources>(
     /// Array of color target views
-    pub [Option<R::RenderTargetView>; d::MAX_COLOR_TARGETS],
+    pub [Option<R::RenderTargetView>; MAX_COLOR_TARGETS],
     /// Depth-stencil target view
     pub Option<R::DepthStencilView>,
 );
 
-impl<R: d::Resources> PixelTargetSet<R> {
+impl<R: Resources> PixelTargetSet<R> {
     /// Create an empty set
     pub fn new() -> PixelTargetSet<R> {
-        PixelTargetSet([None; d::MAX_COLOR_TARGETS], None)
+        PixelTargetSet([None; MAX_COLOR_TARGETS], None)
     }
 }
 

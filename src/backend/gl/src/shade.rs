@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use std::iter::repeat;
-use gfx::device as d;
-use gfx::device::shade as s;
+use gfx_core as d;
+use gfx_core::shade as s;
 use super::gl;
 
 
@@ -83,7 +83,7 @@ enum StorageType {
 
 impl StorageType {
     fn new(storage: gl::types::GLenum) -> StorageType {
-        use gfx::device::shade::{BaseType, ContainerType, SamplerType,
+        use gfx_core::shade::{BaseType, ContainerType, SamplerType,
             MatrixFormat, IsArray, IsRect, IsShadow, IsMultiSample};
         use self::StorageType::*;
         match storage {
@@ -328,7 +328,7 @@ pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities, shaders: &[super::Sha
 }
 
 pub fn bind_uniform(gl: &gl::Gl, loc: gl::types::GLint, uniform: s::UniformValue) {
-    use gfx::device::shade::UniformValue;
+    use gfx_core::shade::UniformValue;
     match uniform {
         UniformValue::I32(val) => unsafe { gl.Uniform1i(loc, val) },
         UniformValue::F32(val) => unsafe { gl.Uniform1f(loc, val) },

@@ -11,13 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#![allow(missing_docs)]
-use std::slice;
 
-use device as d;
-use device::{Resources};
-use device::draw::{Access, Gamma, Target};
+#![allow(missing_docs)]
+
+use std::slice;
 use draw_state::target::{ClearData, Layer, Level, Mask, Mirror, Rect};
+use {attrib, draw, shade, state, pso, tex};
+use {Resources, IndexType, VertexCount, Primitive,
+     AttributeSlot, TextureSlot, ColorSlot, UniformBufferSlot, UniformBlockIndex};
 
 ///Generic command buffer to be used by multiple backends
 pub struct CommandBuffer<R: Resources> {
@@ -29,36 +30,36 @@ pub struct CommandBuffer<R: Resources> {
 pub enum Command<R: Resources> {
     BindProgram(R::Program),
     BindPipelineState(R::PipelineStateObject),
-    BindVertexBuffers(d::pso::VertexBufferSet<R>),
+    BindVertexBuffers(pso::VertexBufferSet<R>),
     BindArrayBuffer(R::ArrayBuffer),
-    BindAttribute(d::AttributeSlot, R::Buffer, d::attrib::Format),
+    BindAttribute(AttributeSlot, R::Buffer, attrib::Format),
     BindIndex(R::Buffer),
-    BindFrameBuffer(Access, R::FrameBuffer, Gamma),
-    UnbindTarget(Access, Target),
-    BindTargetSurface(Access, Target, R::Surface),
-    BindTargetTexture(Access, Target, R::Texture, Level, Option<Layer>),
-    BindUniformBlock(R::Program, d::UniformBufferSlot, d::UniformBlockIndex,
+    BindFrameBuffer(draw::Access, R::FrameBuffer, draw::Gamma),
+    UnbindTarget(draw::Access, draw::Target),
+    BindTargetSurface(draw::Access, draw::Target, R::Surface),
+    BindTargetTexture(draw::Access, draw::Target, R::Texture, Level, Option<Layer>),
+    BindUniformBlock(R::Program, UniformBufferSlot, UniformBlockIndex,
                      R::Buffer),
-    BindUniform(d::shade::Location, d::shade::UniformValue),
-    BindTexture(d::TextureSlot, d::tex::Kind, R::Texture,
-                Option<(R::Sampler, d::tex::SamplerInfo)>),
-    SetDrawColorBuffers(d::ColorSlot),
-    SetRasterizer(d::state::Rasterizer),
+    BindUniform(shade::Location, shade::UniformValue),
+    BindTexture(TextureSlot, tex::Kind, R::Texture,
+                Option<(R::Sampler, tex::SamplerInfo)>),
+    SetDrawColorBuffers(ColorSlot),
+    SetRasterizer(state::Rasterizer),
     SetViewport(Rect),
     SetScissor(Option<Rect>),
-    SetDepthStencilState(Option<d::state::Depth>, Option<d::state::Stencil>,
-                         d::state::CullFace),
-    SetBlendState(d::ColorSlot, Option<d::state::Blend>),
-    SetRefValues(d::state::RefValues),
-    UpdateBuffer(R::Buffer, d::draw::DataPointer, usize),
-    UpdateTexture(d::tex::Kind, R::Texture, d::tex::ImageInfo,
-                  d::draw::DataPointer),
+    SetDepthStencilState(Option<state::Depth>, Option<state::Stencil>,
+                         state::CullFace),
+    SetBlendState(ColorSlot, Option<state::Blend>),
+    SetRefValues(state::RefValues),
+    UpdateBuffer(R::Buffer, draw::DataPointer, usize),
+    UpdateTexture(tex::Kind, R::Texture, tex::ImageInfo,
+                  draw::DataPointer),
     // drawing
     Clear(ClearData, Mask),
-    Draw(d::Primitive, d::VertexCount, d::VertexCount,
-         d::draw::InstanceOption),
-    DrawIndexed(d::Primitive, d::IndexType, d::VertexCount, d::VertexCount,
-                d::VertexCount, d::draw::InstanceOption),
+    Draw(Primitive, VertexCount, VertexCount,
+         draw::InstanceOption),
+    DrawIndexed(Primitive, IndexType, VertexCount, VertexCount,
+                VertexCount, draw::InstanceOption),
     Blit(Rect, Rect, Mirror, Mask),
 }
 
@@ -68,7 +69,7 @@ impl<R> CommandBuffer<R> where R: Resources {
     }
 }
 
-impl<R> d::draw::CommandBuffer<R> for CommandBuffer<R>
+impl<R> draw::CommandBuffer<R> for CommandBuffer<R>
         where R : Resources {
 
     fn new() -> CommandBuffer<R> {
@@ -89,7 +90,7 @@ impl<R> d::draw::CommandBuffer<R> for CommandBuffer<R>
         self.buf.push(Command::BindPipelineState(pso));
     }
 
-    fn bind_vertex_buffers(&mut self, vbs: d::pso::VertexBufferSet<R>) {
+    fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<R>) {
         self.buf.push(Command::BindVertexBuffers(vbs));
     }
 
@@ -97,8 +98,8 @@ impl<R> d::draw::CommandBuffer<R> for CommandBuffer<R>
         self.buf.push(Command::BindArrayBuffer(vao));
     }
 
-    fn bind_attribute(&mut self, slot: d::AttributeSlot, buf: R::Buffer,
-                      format: d::attrib::Format) {
+    fn bind_attribute(&mut self, slot: AttributeSlot, buf: R::Buffer,
+                      format: attrib::Format) {
         self.buf.push(Command::BindAttribute(slot, buf, format));
     }
 
@@ -106,49 +107,46 @@ impl<R> d::draw::CommandBuffer<R> for CommandBuffer<R>
         self.buf.push(Command::BindIndex(buf));
     }
 
-    fn bind_frame_buffer(&mut self, access: Access, fbo: R::FrameBuffer,
-                         gamma: Gamma) {
+    fn bind_frame_buffer(&mut self, access: draw::Access, fbo: R::FrameBuffer,
+                         gamma: draw::Gamma) {
         self.buf.push(Command::BindFrameBuffer(access, fbo, gamma));
     }
 
-    fn unbind_target(&mut self, access: Access, tar: Target) {
+    fn unbind_target(&mut self, access: draw::Access, tar: draw::Target) {
         self.buf.push(Command::UnbindTarget(access, tar));
     }
 
-    fn bind_target_surface(&mut self, access: Access, tar: Target,
+    fn bind_target_surface(&mut self, access: draw::Access, tar: draw::Target,
                            suf: R::Surface) {
         self.buf.push(Command::BindTargetSurface(access, tar, suf));
     }
 
-    fn bind_target_texture(&mut self, access: Access, tar: Target,
-                           tex: R::Texture, level: Level,
-                           layer: Option<Layer>) {
+    fn bind_target_texture(&mut self, access: draw::Access, tar: draw::Target,
+                           tex: R::Texture, level: Level, layer: Option<Layer>) {
         self.buf.push(Command::BindTargetTexture(
             access, tar, tex, level, layer));
     }
 
-    fn bind_uniform_block(&mut self, prog: R::Program,
-                          slot: d::UniformBufferSlot,
-                          index: d::UniformBlockIndex, buf: R::Buffer) {
+    fn bind_uniform_block(&mut self, prog: R::Program, slot: UniformBufferSlot,
+                          index: UniformBlockIndex, buf: R::Buffer) {
         self.buf.push(Command::BindUniformBlock(prog, slot, index, buf));
     }
 
-    fn bind_uniform(&mut self, loc: d::shade::Location,
-                    value: d::shade::UniformValue) {
+    fn bind_uniform(&mut self, loc: shade::Location,
+                    value: shade::UniformValue) {
         self.buf.push(Command::BindUniform(loc, value));
     }
 
-    fn bind_texture(&mut self, slot: d::TextureSlot, kind: d::tex::Kind,
-                    tex: R::Texture,
-                    sampler: Option<(R::Sampler, d::tex::SamplerInfo)>) {
+    fn bind_texture(&mut self, slot: TextureSlot, kind: tex::Kind, tex: R::Texture,
+                    sampler: Option<(R::Sampler, tex::SamplerInfo)>) {
         self.buf.push(Command::BindTexture(slot, kind, tex, sampler));
     }
 
-    fn set_draw_color_buffers(&mut self, num: d::ColorSlot) {
+    fn set_draw_color_buffers(&mut self, num: ColorSlot) {
         self.buf.push(Command::SetDrawColorBuffers(num));
     }
 
-    fn set_rasterizer(&mut self, rast: d::state::Rasterizer) {
+    fn set_rasterizer(&mut self, rast: state::Rasterizer) {
         self.buf.push(Command::SetRasterizer(rast));
     }
 
@@ -160,27 +158,27 @@ impl<R> d::draw::CommandBuffer<R> for CommandBuffer<R>
         self.buf.push(Command::SetScissor(rect));
     }
 
-    fn set_depth_stencil(&mut self, depth: Option<d::state::Depth>,
-                         stencil: Option<d::state::Stencil>,
-                         cull: d::state::CullFace) {
+    fn set_depth_stencil(&mut self, depth: Option<state::Depth>,
+                         stencil: Option<state::Stencil>,
+                         cull: state::CullFace) {
         self.buf.push(Command::SetDepthStencilState(depth, stencil, cull));
     }
 
-    fn set_blend(&mut self, slot: d::ColorSlot, blend: Option<d::state::Blend>) {
+    fn set_blend(&mut self, slot: ColorSlot, blend: Option<state::Blend>) {
         self.buf.push(Command::SetBlendState(slot, blend));
     }
 
-    fn set_ref_values(&mut self, rv: d::state::RefValues) {
+    fn set_ref_values(&mut self, rv: state::RefValues) {
         self.buf.push(Command::SetRefValues(rv));
     }
 
-    fn update_buffer(&mut self, buf: R::Buffer, data: d::draw::DataPointer,
+    fn update_buffer(&mut self, buf: R::Buffer, data: draw::DataPointer,
                         offset_bytes: usize) {
         self.buf.push(Command::UpdateBuffer(buf, data, offset_bytes));
     }
 
-    fn update_texture(&mut self, kind: d::tex::Kind, tex: R::Texture,
-                      info: d::tex::ImageInfo, data: d::draw::DataPointer) {
+    fn update_texture(&mut self, kind: tex::Kind, tex: R::Texture,
+                      info: tex::ImageInfo, data: draw::DataPointer) {
         self.buf.push(Command::UpdateTexture(kind, tex, info, data));
     }
 
@@ -188,15 +186,15 @@ impl<R> d::draw::CommandBuffer<R> for CommandBuffer<R>
         self.buf.push(Command::Clear(data, mask));
     }
 
-    fn call_draw(&mut self, prim: d::Primitive, start: d::VertexCount,
-                 count: d::VertexCount, instances: d::draw::InstanceOption) {
+    fn call_draw(&mut self, prim: Primitive, start: VertexCount,
+                 count: VertexCount, instances: draw::InstanceOption) {
         self.buf.push(Command::Draw(prim, start, count, instances));
     }
 
-    fn call_draw_indexed(&mut self, prim: d::Primitive,
-                         itype: d::IndexType, start: d::VertexCount,
-                         count: d::VertexCount, base: d::VertexCount,
-                         instances: d::draw::InstanceOption) {
+    fn call_draw_indexed(&mut self, prim: Primitive,
+                         itype: IndexType, start: VertexCount,
+                         count: VertexCount, base: VertexCount,
+                         instances: draw::InstanceOption) {
         self.buf.push(Command::DrawIndexed(
             prim, itype, start, count, base, instances));
     }
