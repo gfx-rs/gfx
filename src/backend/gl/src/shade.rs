@@ -253,6 +253,9 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
             gl.GetUniformLocation(prog, raw as *const gl::types::GLchar)
         };
         let real_name = name[..length as usize].to_string();
+        if real_name.starts_with("gl_") {
+            continue;
+        }
         match StorageType::new(storage) {
             StorageType::Var(base, container) => {
                 info!("\t\tUniform[{}] = {:?}\t{:?}\t{:?}", loc, real_name, base, container);
