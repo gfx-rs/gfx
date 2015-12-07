@@ -12,59 +12,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Macro for implementing Structure
+//! Macro for implementing Structure.
 
 #[macro_export]
 macro_rules! gfx_structure {
-    ($name:ident: $meta:ident {
-        $( $semantic:ident@ $field:ident: $ty:ty, )*
+    ($root:ident {
+        $( $name:ident@ $field:ident: $ty:ty, )*
     }) => {
         #[derive(Clone, Copy, Debug)]
-        pub struct $name {
+        pub struct $root {
             $( pub $field: $ty, )*
         }
 
-        pub struct $meta {
-            $( $field: Option<usize>, )*
-        }
-
-        impl $crate::render::pso::Structure for $name {
-            type Meta = $meta;
-
-            /*fn iter_fields<F: FnMut(&'static str, $crate::device::attrib::Format)>(mut fun: F) {
+        impl $crate::pso::Structure for $root {
+            fn query(name: &str) -> Option<$crate::attrib::Format> {
                 use std::mem::size_of;
                 use $crate::attrib::{Offset, Format, Stride};
                 use $crate::attrib::format::ToFormat;
-                let stride = size_of::<$name>() as Stride;
+                let stride = size_of::<$root>() as Stride;
+                let tmp: &$root = unsafe{ ::std::mem::uninitialized() };
+                match name {
                 $(
-                    let (count, etype) = <$ty as ToFormat>::describe();
-                    let tmp: &$name = unsafe{ ::std::mem::uninitialized() };
-                    let format = Format {
-                        elem_count: count,
-                        elem_type: etype,
-                        offset: ((&tmp.$field as *const _ as usize) - (&tmp as *const _ as usize)) as Offset,
-                        stride: stride,
-                        instance_rate: 0,
-                    };
-                    fun(stringify!($semantic), format);
+                    stringify!($name) => {
+                        let (count, etype) = <$ty as ToFormat>::describe();
+                        Some(Format {
+                            elem_count: count,
+                            elem_type: etype,
+                            offset: ((&tmp.$field as *const _ as usize) - (&tmp as *const _ as usize)) as Offset,
+                            stride: stride,
+                            instance_rate: 0,
+                        })
+                    },
                 )*
-            }
-
-            fn make_meta<F: Fn(&str) -> Option<$crate::device::pso::Register>>(fun: F) -> $meta {
-                $meta {
-                    $(
-                        $field: fun(stringify!($semantic)),
-                    )*
+                    _ => None,
                 }
             }
-
-            fn iter_meta<F: FnMut($crate::device::pso::Register)>(meta: &Self::Meta, mut fun: F) {
-                $(
-                    if let Some(reg) = meta.$field {
-                        fun(reg);
-                    }
-                )*
-            }*/
         }
     }
 }

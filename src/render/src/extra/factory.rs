@@ -14,33 +14,35 @@
 
 //! Factory extension. Provides resource construction shortcuts.
 
-use gfx_core as device;
 use gfx_core::{handle, tex};
+use gfx_core::{BufferRole, Factory, Primitive, Resources, ShaderSet, VertexCount};
+use gfx_core::pso::{CreationError, Descriptor};
 use gfx_core::shade::{CreateShaderError, CreateProgramError};
+use gfx_core::state::Rasterizer;
 use extra::shade::*;
 use mesh::{Mesh, VertexFormat};
 use pso;
 
 /// Error creating a PipelineState
 #[derive(Clone, PartialEq, Debug)]
-pub enum PipelineStateError {
+pub enum PipelineStateError<R: Resources> {
     /// Shader program failed to link, providing an error string.
     ProgramLink(CreateProgramError),
     /// Unable to create PSO descriptor due to mismatched formats.
-    DescriptorInit(pso::InitError),
+    DescriptorInit(pso::InitError, handle::Program<R>),
     /// Device failed to create the handle give the descriptor.
-    DeviceCreate(device::pso::CreationError),
+    DeviceCreate(CreationError),
 }
 
 
 /// Factory extension trait
-pub trait FactoryExt<R: device::Resources>: device::Factory<R> {
+pub trait FactoryExt<R: Resources>: Factory<R> {
     /// Create a new mesh from the given vertex data.
     fn create_mesh<T: VertexFormat>(&mut self, data: &[T]) -> Mesh<R> {
         let nv = data.len();
         //debug_assert!(nv <= self.get_capabilities().max_vertex_count);
-        let buf = self.create_buffer_static(data, device::BufferRole::Vertex);
-        Mesh::from_format(buf, nv as device::VertexCount)
+        let buf = self.create_buffer_static(data, BufferRole::Vertex);
+        Mesh::from_format(buf, nv as VertexCount)
     }
 
     /// Create a simple program given a vertex shader with a pixel one.
@@ -56,7 +58,7 @@ pub trait FactoryExt<R: device::Resources>: device::Factory<R> {
             Err(e) => return Err(ProgramError::Pixel(e)),
         };
 
-        let set = device::ShaderSet::Simple(vs, ps);
+        let set = ShaderSet::Simple(vs, ps);
 
         self.create_program(&set)
             .map_err(|e| ProgramError::Link(e))
@@ -76,20 +78,19 @@ pub trait FactoryExt<R: device::Resources>: device::Factory<R> {
     }
 
     /// Create a strongly-typed Pipeline State.
-    fn create_pipeline_state<I: pso::PipelineInit>(&mut self, shaders: &device::ShaderSet<R>,
-                             primitive: device::Primitive, rasterizer: device::state::Rasterizer, init: &I)
-                             -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError>
+    fn create_pipeline_state<I: pso::PipelineInit>(&mut self, shaders: &ShaderSet<R>,
+                             primitive: Primitive, rasterizer: Rasterizer, init: &I)
+                             -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError<R>>
     {
         let program = match self.create_program(shaders) {
             Ok(p) => p,
             Err(e) => return Err(PipelineStateError::ProgramLink(e)),
         };
-        let (meta, mut descriptor) = match I::link(init, program.get_info()) {
-            Ok(ok) => ok,
-            Err(e) => return Err(PipelineStateError::DescriptorInit(e)),
+        let mut descriptor = Descriptor::new(primitive, rasterizer);
+        let meta = match init.link_to(&mut descriptor, program.get_info()) {
+            Ok(m) => m,
+            Err(e) => return Err(PipelineStateError::DescriptorInit(e, program)),
         };
-        descriptor.primitive = primitive;
-        descriptor.rasterizer = rasterizer;
         let raw = match self.create_pipeline_state_raw(&program, &descriptor) {
             Ok(raw) => raw,
             Err(e) => return Err(PipelineStateError::DeviceCreate(e)),
@@ -153,4 +154,4 @@ pub trait FactoryExt<R: device::Resources>: device::Factory<R> {
     }
 }
 
-impl<R: device::Resources, F: device::Factory<R>> FactoryExt<R> for F {}
+impl<R: Resources, F: Factory<R>> FactoryExt<R> for F {}

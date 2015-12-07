@@ -579,7 +579,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
         }
         for (attr_index, sat) in attrib_iter.zip(info.attributes.iter()) {
             let vat = &mesh.attributes[attr_index];
-            let loc = sat.location;
+            let loc = sat.slot as usize;
             if loc >= self.render_state.attributes.len() {
                 let range = self.render_state.attributes.len() .. loc+1;
                 self.render_state.attributes.extend(range.map(|_| None));
@@ -589,7 +589,7 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
                 None => true,
             };
             if need_update {
-                self.command_buffer.bind_attribute(loc as device::AttributeSlot,
+                self.command_buffer.bind_attribute(sat.slot,
                     self.handles.ref_buffer(&vat.buffer), vat.format);
                 self.render_state.attributes[loc] = Some((vat.buffer.clone(), vat.format));
             }

@@ -175,7 +175,7 @@ fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::Attribute> {
         info!("\t\tAttrib[{}] = {:?}\t{:?}\t{:?}", loc, real_name, base, container);
         s::Attribute {
             name: real_name,
-            location: loc as usize,
+            slot: loc as d::AttributeSlot,
             count: size as usize,
             base_type: base,
             container: container,
@@ -258,7 +258,7 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
                 info!("\t\tUniform[{}] = {:?}\t{:?}\t{:?}", loc, real_name, base, container);
                 uniforms.push(s::UniformVar {
                     name: real_name,
-                    location: loc as usize,
+                    location: loc as s::Location,
                     count: size as usize,
                     base_type: base,
                     container: container,
@@ -268,7 +268,7 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
                 info!("\t\tSampler[{}] = {:?}\t{:?}\t{:?}", loc, real_name, base, sam_type);
                 textures.push(s::SamplerVar {
                     name: real_name,
-                    location: loc as usize,
+                    location: loc as s::Location,
                     base_type: base,
                     sampler_type: sam_type,
                 });

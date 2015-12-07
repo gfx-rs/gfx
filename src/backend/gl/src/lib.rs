@@ -93,7 +93,7 @@ pub struct OutputMerger {
 pub struct PipelineState {
     program: Program, //TODO: Arc<Program>
     primitive: d::Primitive,
-    input: [Option<d::attrib::Format>; d::MAX_VERTEX_ATTRIBUTES],
+    input: [Option<d::pso::AttributeDesc>; d::MAX_VERTEX_ATTRIBUTES],
     rasterizer: s::Rasterizer,
     output: OutputMerger,
 }
@@ -207,7 +207,7 @@ pub struct Share {
 /// can not be separated on the GL backend.
 struct Temp {
     primitive: gl::types::GLenum,
-    attributes: [Option<d::attrib::Format>; d::MAX_VERTEX_ATTRIBUTES],
+    attributes: [Option<d::pso::AttributeDesc>; d::MAX_VERTEX_ATTRIBUTES],
     stencil: Option<s::Stencil>,
     cull_face: s::CullFace,
 }
@@ -296,7 +296,7 @@ impl Device {
     }
 
     fn bind_attribute(&mut self, slot: d::AttributeSlot, buffer: Buffer,
-                      format: d::attrib::Format) {
+                      (format, instance_rate): d::pso::AttributeDesc) {
         use gfx_core::attrib::{Type, IntSize, IntSubType, FloatSize, FloatSubType, SignFlag};
         let gl_type = match format.elem_type {
             Type::Int(_, IntSize::U8, SignFlag::Unsigned)  => gl::UNSIGNED_BYTE,
@@ -347,8 +347,8 @@ impl Device {
         unsafe { gl.EnableVertexAttribArray(slot as gl::types::GLuint) };
         if self.share.capabilities.instance_rate_supported {
             unsafe { gl.VertexAttribDivisor(slot as gl::types::GLuint,
-                format.instance_rate as gl::types::GLuint) };
-        }else if format.instance_rate != 0 {
+                instance_rate as gl::types::GLuint) };
+        }else if instance_rate != 0 {
             error!("Instanced arrays are not supported");
         }
     }
@@ -407,7 +407,7 @@ impl Device {
                             error!("No vertex input provided for slot {} of format {:?}", i, fm)
                         },
                         (Some((buffer, offset)), Some(mut format)) => {
-                            format.offset += offset as gl::types::GLuint;
+                            format.0.offset += offset as gl::types::GLuint;
                             self.bind_attribute(i as d::AttributeSlot, buffer, format);
                         },
                         (_, None) => {},
@@ -423,7 +423,7 @@ impl Device {
                 }
             },
             Command::BindAttribute(slot, buffer, format) => {
-                self.bind_attribute(slot, buffer, format);
+                self.bind_attribute(slot, buffer, (format, format.instance_rate));
             },
             Command::BindIndex(buffer) => {
                 let gl = &self.share.context;

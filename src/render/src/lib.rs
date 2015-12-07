@@ -49,6 +49,7 @@ pub use gfx_core::{ShaderSet, VertexShader, HullShader, DomainShader,
                    GeometryShader, PixelShader};
 pub use gfx_core::draw::{CommandBuffer, Gamma, InstanceOption};
 pub use gfx_core::output::{Output, Plane};
+pub use gfx_core::pso as pso_core;
 pub use gfx_core::shade::{ProgramInfo, UniformValue};
 pub use mesh::{Attribute, Mesh, VertexFormat};
 pub use mesh::Error as MeshError;

@@ -19,6 +19,7 @@
 use std::default::Default;
 use std::marker::PhantomData;
 use gfx_core as d;
+pub use gfx_core::pso::Descriptor;
 
 pub struct RawDataSet<R: d::Resources>{
     pub vertex_buffers: d::pso::VertexBufferSet<R>,
@@ -45,16 +46,15 @@ impl<R: d::Resources> RawDataSet<R> {
 #[derive(Clone, PartialEq, Debug)]
 pub enum InitError {
     /// Vertex attribute mismatch between the shader and the link data.
-    VertexImport(d::AttributeSlot, String, Option<d::attrib::Format>),
+    VertexImport(d::AttributeSlot, Option<d::attrib::Format>),
     /// Pixel target mismatch between the shader and the link data.
-    PixelExport(d::ColorSlot, String, Option<d::tex::Format>),
+    PixelExport(d::ColorSlot, Option<d::tex::Format>),
 }
-
-pub type InitResult<M> = Result<(M, d::pso::Descriptor), InitError>;
 
 pub trait PipelineInit {
     type Meta;
-    fn link(&self, &d::shade::ProgramInfo) -> InitResult<Self::Meta>;
+    fn link_to(&self, &mut Descriptor, &d::shade::ProgramInfo)
+               -> Result<Self::Meta, InitError>;
 }
 
 pub trait PipelineData<R: d::Resources> {
@@ -82,10 +82,17 @@ impl<R: d::Resources, M> PipelineState<R, M> {
     }
 }
 
-
 pub trait DataLink: Sized {
     type Init;
-    fn link(&Self::Init, &d::shade::ProgramInfo) -> Option<Self>;
+    fn new() -> Self;
+    fn link_input(&mut self, _: &d::shade::Attribute, _: &Self::Init) ->
+                  Option<Result<d::pso::AttributeDesc, d::attrib::Format>> { None }
+    fn link_constant_buffer(&mut self, _: &d::shade::BlockVar, _: &Self::Init) ->
+                            Option<Result<(), d::attrib::Format>> { None }
+    fn link_constant(&mut self, _: &d::shade::UniformVar, _: &Self::Init) ->
+                     Option<Result<(), d::attrib::Format>> { None }
+    fn link_output(&mut self, _: &d::shade::OutputVar, _: &Self::Init) ->
+                   Option<Result<d::pso::ColorTargetDesc, d::tex::Format>> { None }
 }
 
 pub trait DataBind<R: d::Resources> {
@@ -94,10 +101,7 @@ pub trait DataBind<R: d::Resources> {
 }
 
 pub trait Structure {
-    type Meta;
-    //fn iter_fields<F: FnMut(&'static str, d::attrib::Format)>(F);
-    //fn make_meta<F: Fn(&str) -> Option<d::pso::Register>>(F) -> Self::Meta;
-    //fn iter_meta<F: FnMut(d::pso::Register)>(&Self::Meta, F);
+    fn query(&str) -> Option<d::attrib::Format>;
 }
 
 pub trait TextureFormat {
@@ -108,12 +112,13 @@ pub trait DepthStencilFormat: TextureFormat {}
 pub trait DepthFormat: DepthStencilFormat {}
 pub trait StencilFormat: DepthStencilFormat {}
 
+pub type AttributeSlotSet = usize;
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct FetchRate(d::attrib::InstanceRate);
 pub static PER_VERTEX  : FetchRate = FetchRate(0);
 pub static PER_INSTANCE: FetchRate = FetchRate(1);
 
-pub struct VertexBuffer<T: Structure>(T::Meta);
+pub struct VertexBuffer<T: Structure>(AttributeSlotSet, PhantomData<T>);
 pub struct ConstantBuffer<T: Structure>(d::ConstantBufferSlot, PhantomData<T>);
 pub struct Constant<T: d::attrib::format::ToFormat>(d::shade::Location, PhantomData<T>);
 pub struct RenderTargetCommon<T: TextureFormat, I>(d::ColorSlot, PhantomData<(T, I)>);
@@ -124,18 +129,25 @@ pub type DepthTarget<T: DepthFormat> = DepthStencilCommon<T, d::state::Depth>;
 pub type StencilTarget<T: StencilFormat> = DepthStencilCommon<T, d::state::Stencil>;
 pub type DepthStencilTarget<T: DepthStencilFormat> = DepthStencilCommon<T, (d::state::Depth, d::state::Stencil)>;
 
+fn match_attribute(_: &d::shade::Attribute, _: d::attrib::Format) -> bool {
+    true //TODO
+}
 
-/*impl<'a, T: Structure> DataLink<'a> for VertexBuffer<T> {
+impl<T: Structure> DataLink for VertexBuffer<T> {
     type Init = FetchRate;
-    fn declare_to(map: &mut d::pso::LinkMap<'a>, init: &Self::Init) {
-        T::iter_fields(|name, mut format| {
-            format.instance_rate = init.0;
-            map.insert(name, d::pso::Link::Attribute(format));
-        });
+    fn new() -> Self {
+        VertexBuffer(0, PhantomData)
     }
-    fn link(map: &d::pso::RegisterMap<'a>, _: &Self::Init) -> Option<Self> {
-        let meta = T::make_meta(|name| map.get(name).map(|&reg| reg));
-        Some(VertexBuffer(meta))
+    fn link_input(&mut self, at: &d::shade::Attribute, init: &Self::Init) ->
+                  Option<Result<d::pso::AttributeDesc, d::attrib::Format>> {
+        T::query(&at.name).map(|format| {
+            self.0 |= 1 << (at.slot as AttributeSlotSet);
+            if match_attribute(at, format) {
+                Ok((format, init.0))
+            }else {
+                Err(format)
+            }
+        })
     }
 }
 
@@ -143,10 +155,15 @@ impl<R: d::Resources, T: Structure> DataBind<R> for VertexBuffer<T> {
     type Data = d::handle::Buffer<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
         let value = Some((man.ref_buffer(data.raw()), 0));
-        T::iter_meta(&self.0, |reg| out.vertex_buffers.0[reg as usize] = value);
+        for i in 0 .. d::MAX_VERTEX_ATTRIBUTES {
+            if (self.0 & (1<<i)) != 0 {
+                out.vertex_buffers.0[i] = value;
+            }
+        }
     }
 }
 
+/*
 impl<'a, T: Structure> DataLink<'a> for ConstantBuffer<T> {
     type Init = &'a str;
     fn declare_to(map: &mut d::pso::LinkMap<'a>, init: &Self::Init) {

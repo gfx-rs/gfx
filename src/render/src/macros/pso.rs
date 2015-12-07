@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Macro for implementing PipelineData
+//! Macros for implementing PipelineInit and PipelineData.
 
 #[macro_export]
 macro_rules! gfx_pipeline {
     ($data:ident $meta:ident $init:ident {
         $( $field:ident: $ty:ty, )*
     }) => {
-        use $crate::render::pso::{DataLink, DataBind, InitResult, RawDataSet};
+        use $crate::pso::{DataLink, DataBind, Descriptor, InitError, RawDataSet};
 
         #[derive(Clone, Debug)]
         pub struct $data<R: $crate::Resources> {
@@ -27,30 +27,44 @@ macro_rules! gfx_pipeline {
         }
 
         pub struct $meta {
-            $( $field: Option<$ty>, )*
+            $( $field: $ty, )*
         }
 
         pub struct $init {
             $( pub $field: <$ty as DataLink>::Init, )*
         }
 
-        impl $crate::render::pso::PipelineInit for $init {
+        impl $crate::pso::PipelineInit for $init {
             type Meta = $meta;
-            fn link(&self, info: &$crate::device::shade::ProgramInfo) -> InitResult<Self::Meta> {
-                //TODO: prove that all of the program resources are covered
-                Ok($meta { $(
-                    $field: <$ty as DataLink>::link(&self.$field, info),
-                )* })
+            fn link_to(&self, desc: &mut Descriptor, info: &$crate::ProgramInfo) -> Result<Self::Meta, InitError> {
+                let mut meta = $meta {
+                    $( $field: <$ty as DataLink>::new(), )*
+                };
+                for a in &info.attributes {
+                    $(
+                        match meta.$field.link_input(a, &self.$field) {
+                            Some(Ok(d)) => {
+                                desc.attributes[a.slot as usize] = Some(d);
+                                break;
+                            },
+                            Some(Err(fm)) => return Err(
+                                InitError::VertexImport(a.slot, Some(fm))
+                            ),
+                            None => (),
+                        }
+                    )*
+                    return Err(InitError::VertexImport(a.slot, None));
+                }
+                Ok(meta)
             }
         }
 
-        impl<R: $crate::Resources> $crate::render::pso::PipelineData<R> for $data<R> {
+        impl<R: $crate::Resources> $crate::pso::PipelineData<R> for $data<R> {
             type Meta = $meta;
-            fn bake(&self, meta: &Self::Meta, man: &mut $crate::handle::Manager<R>) -> RawDataSet<R> {               let mut out = RawDataSet::new();
+            fn bake(&self, meta: &Self::Meta, man: &mut $crate::handle::Manager<R>) -> RawDataSet<R> {
+                let mut out = RawDataSet::new();
                 $(
-                    if let Some(ref link) = meta.$field {
-                        link.bind_to(&mut out, &self.$field, man);
-                    }
+                    meta.$field.bind_to(&mut out, &self.$field, man);
                 )*
                 out
             }
@@ -60,15 +74,17 @@ macro_rules! gfx_pipeline {
 
 #[macro_export]
 macro_rules! gfx_pipeline_init {
-    ($data:ident $meta:ident $init:ident = $fun:ident {
+    ($data:ident $meta:ident $init:ident {
         $( $field:ident: $ty:ty = $value:expr, )*
     }) => {
         gfx_pipeline!( $data $meta $init {
             $( $field: $ty, )*
         });
-        pub fn $fun() -> $init {
-            $init {
-                $( $field: $value, )*
+        impl $init {
+            pub fn new() -> $init {
+                $init {
+                    $( $field: $value, )*
+                }
             }
         }
     }

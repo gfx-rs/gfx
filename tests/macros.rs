@@ -14,18 +14,17 @@ gfx_parameters!(_Bar {
     t@ _t: gfx::shade::TextureParam<R>,
 });
 
-gfx_structure!(Vertex: _VertexDef {
+gfx_structure!(Vertex {
     x@ _x: i8,
     y@ _y: f32,
-    z@ _z: [u32; 4],
 });
 
-gfx_structure!(Instance: _InstanceDef {
+gfx_structure!(Instance {
     alpha@ _alpha: f32,
 });
 
-gfx_structure!(Local: _LocalDef {
-    pos@ _pos: f32,
+gfx_structure!(Local {
+    pos@ _pos: [u32; 4],
 });
 
 gfx_tex_format!(Rgba = gfx::tex::RGBA8);
@@ -34,9 +33,9 @@ gfx_tex_format!(Depth = gfx::tex::Format::DEPTH24);
 impl gfx::DepthStencilFormat for Depth {}
 impl gfx::DepthFormat for Depth {}
 
-gfx_pipeline_init!( _Data _Meta _Init = init {
-    //_vertex: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
-    //_instance: gfx::VertexBuffer<Instance> = gfx::PER_INSTANCE,
+gfx_pipeline_init!( _Data _Meta _Init {
+    _vertex: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
+    _instance: gfx::VertexBuffer<Instance> = gfx::PER_INSTANCE,
     //_const_locals: gfx::ConstantBuffer<Local> = "Locals",
     //_gobal: gfx::Constant<[f32; 4]> = "Global",
     //tex_diffuse: TextureView<Dim2, Float4>,

@@ -17,6 +17,7 @@
 #![allow(missing_docs)]
 
 use std::fmt;
+use AttributeSlot;
 
 // Describing shader parameters
 // TOOD: Remove GL-isms, especially in the documentation.
@@ -214,7 +215,7 @@ pub struct Attribute {
     /// Name of this attribute.
     pub name: String,
     /// Vertex attribute binding.
-    pub location: usize,
+    pub slot: AttributeSlot,
     /// Number of elements this attribute represents.
     pub count: usize,
     /// Type that this attribute is composed of.
@@ -262,9 +263,9 @@ pub struct SamplerVar {
     pub sampler_type: SamplerType,
 }
 
-/// Target output.
+/// Target output variable.
 #[derive(Clone, PartialEq, Debug)]
-pub struct Output; //TODO
+pub struct OutputVar; //TODO
 
 /// Metadata about a program.
 #[derive(Clone, PartialEq, Debug)]
@@ -278,7 +279,7 @@ pub struct ProgramInfo {
     /// Samplers in the program
     pub textures: Vec<SamplerVar>,
     /// Output targets in the program
-    pub outputs: Vec<Output>,
+    pub outputs: Vec<OutputVar>,
 }
 
 /// Error type for trying to store a UniformValue in a UniformVar.
