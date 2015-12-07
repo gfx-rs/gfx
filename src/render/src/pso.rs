@@ -47,6 +47,8 @@ impl<R: d::Resources> RawDataSet<R> {
 pub enum InitError {
     /// Vertex attribute mismatch between the shader and the link data.
     VertexImport(d::AttributeSlot, Option<d::attrib::Format>),
+    /// Constant buffer mismatch between the shader and the link data.
+    ConstantBuffer(d::ConstantBufferSlot, Option<()>),
     /// Pixel target mismatch between the shader and the link data.
     PixelExport(d::ColorSlot, Option<d::tex::Format>),
 }
@@ -82,12 +84,12 @@ impl<R: d::Resources, M> PipelineState<R, M> {
     }
 }
 
-pub trait DataLink: Sized {
-    type Init;
+pub trait DataLink<'a>: Sized {
+    type Init: 'a;
     fn new() -> Self;
-    fn link_input(&mut self, _: &d::shade::Attribute, _: &Self::Init) ->
+    fn link_input(&mut self, _: &d::shade::AttributeVar, _: &Self::Init) ->
                   Option<Result<d::pso::AttributeDesc, d::attrib::Format>> { None }
-    fn link_constant_buffer(&mut self, _: &d::shade::BlockVar, _: &Self::Init) ->
+    fn link_constant_buffer(&mut self, _: &d::shade::ConstantBufferVar, _: &Self::Init) ->
                             Option<Result<(), d::attrib::Format>> { None }
     fn link_constant(&mut self, _: &d::shade::UniformVar, _: &Self::Init) ->
                      Option<Result<(), d::attrib::Format>> { None }
@@ -119,7 +121,7 @@ pub static PER_VERTEX  : FetchRate = FetchRate(0);
 pub static PER_INSTANCE: FetchRate = FetchRate(1);
 
 pub struct VertexBuffer<T: Structure>(AttributeSlotSet, PhantomData<T>);
-pub struct ConstantBuffer<T: Structure>(d::ConstantBufferSlot, PhantomData<T>);
+pub struct ConstantBuffer<T: Structure>(Option<d::ConstantBufferSlot>, PhantomData<T>);
 pub struct Constant<T: d::attrib::format::ToFormat>(d::shade::Location, PhantomData<T>);
 pub struct RenderTargetCommon<T: TextureFormat, I>(d::ColorSlot, PhantomData<(T, I)>);
 pub type RenderTarget<T: TextureFormat> = RenderTargetCommon<T, d::state::ColorMask>;
@@ -129,16 +131,16 @@ pub type DepthTarget<T: DepthFormat> = DepthStencilCommon<T, d::state::Depth>;
 pub type StencilTarget<T: StencilFormat> = DepthStencilCommon<T, d::state::Stencil>;
 pub type DepthStencilTarget<T: DepthStencilFormat> = DepthStencilCommon<T, (d::state::Depth, d::state::Stencil)>;
 
-fn match_attribute(_: &d::shade::Attribute, _: d::attrib::Format) -> bool {
+fn match_attribute(_: &d::shade::AttributeVar, _: d::attrib::Format) -> bool {
     true //TODO
 }
 
-impl<T: Structure> DataLink for VertexBuffer<T> {
+impl<'a, T: Structure> DataLink<'a> for VertexBuffer<T> {
     type Init = FetchRate;
     fn new() -> Self {
         VertexBuffer(0, PhantomData)
     }
-    fn link_input(&mut self, at: &d::shade::Attribute, init: &Self::Init) ->
+    fn link_input(&mut self, at: &d::shade::AttributeVar, init: &Self::Init) ->
                   Option<Result<d::pso::AttributeDesc, d::attrib::Format>> {
         T::query(&at.name).map(|format| {
             self.0 |= 1 << (at.slot as AttributeSlotSet);
@@ -163,27 +165,31 @@ impl<R: d::Resources, T: Structure> DataBind<R> for VertexBuffer<T> {
     }
 }
 
-/*
 impl<'a, T: Structure> DataLink<'a> for ConstantBuffer<T> {
     type Init = &'a str;
-    fn declare_to(map: &mut d::pso::LinkMap<'a>, init: &Self::Init) {
-        map.insert(*init, d::pso::Link::ConstantBuffer);
-        T::iter_fields(|name, format| {
-            map.insert(name, d::pso::Link::Constant(format));
-        });
+    fn new() -> Self {
+        ConstantBuffer(None, PhantomData)
     }
-    fn link(map: &d::pso::RegisterMap<'a>, init: &Self::Init) -> Option<Self> {
-        map.get(*init).map(|&reg| ConstantBuffer(reg, PhantomData))
+    fn link_constant_buffer(&mut self, cb: &d::shade::ConstantBufferVar, init: &Self::Init) ->
+                  Option<Result<(), d::attrib::Format>> {
+        if &cb.name == *init {
+            self.0 = Some(cb.slot);
+            Some(Ok(()))
+        }else {
+            None
+        }
     }
 }
 
 impl<R: d::Resources, T: Structure> DataBind<R> for ConstantBuffer<T> {
     type Data = d::handle::Buffer<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
-        out.constant_buffers.0[self.0 as usize] = Some(man.ref_buffer(data.raw()));
+        if let Some(slot) = self.0 {
+            out.constant_buffers.0[slot as usize] = Some(man.ref_buffer(data.raw()));
+        }
     }
 }
-
+/*
 impl<'a, T: d::attrib::format::ToFormat> DataLink<'a> for Constant<T> {
     type Init = &'a str;
     fn declare_to(map: &mut d::pso::LinkMap<'a>, init: &Self::Init) {

@@ -123,7 +123,7 @@ impl<R: Resources> ParamStorage<R> {
         self.textures.clear();
         // allocate
         self.uniforms.extend(pinfo.uniforms.iter().map(|_| None));
-        self.blocks  .extend(pinfo.blocks  .iter().map(|_| None));
+        self.blocks  .extend(pinfo.constant_buffers.iter().map(|_| None));
         self.textures.extend(pinfo.textures.iter().map(|_| None));
     }
 }
@@ -512,7 +512,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
             }
         }
         // bind uniform blocks
-        for (i, (var, value)) in info.blocks.iter()
+        for (i, (var, value)) in info.constant_buffers.iter()
             .zip(self.parameters.blocks.iter()).enumerate() {
             match value {
                 &Some(ref buf) => self.command_buffer.bind_uniform_block(
@@ -577,7 +577,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
             };
             self.render_state.is_array_buffer_set = true;
         }
-        for (attr_index, sat) in attrib_iter.zip(info.attributes.iter()) {
+        for (attr_index, sat) in attrib_iter.zip(info.vertex_attributes.iter()) {
             let vat = &mesh.attributes[attr_index];
             let loc = sat.slot as usize;
             if loc >= self.render_state.attributes.len() {

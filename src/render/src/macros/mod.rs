@@ -105,7 +105,7 @@ macro_rules! gfx_parameters {
                     }
                 }
                 // scan uniform blocks
-                for (i, b) in info.blocks.iter().enumerate() {
+                for (i, b) in info.constant_buffers.iter().enumerate() {
                     match &b.name[..] {
                         $(
                         stringify!($gl_name) => {

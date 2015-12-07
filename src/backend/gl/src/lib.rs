@@ -132,6 +132,7 @@ impl Error {
 
 const RESET_CB: [Command<Resources>; 14] = [
     Command::BindProgram(0),
+    //TODO: PSO
     Command::BindArrayBuffer(0),
     // BindAttribute
     Command::BindIndex(0),
@@ -411,6 +412,19 @@ impl Device {
                             self.bind_attribute(i as d::AttributeSlot, buffer, format);
                         },
                         (_, None) => {},
+                    }
+                }
+            },
+            Command::BindConstantBuffers(cbs) => {
+                for i in 0 .. d::MAX_CONSTANT_BUFFERS {
+                    let _gl = &self.share.context;
+                    if let Some(_buffer) = cbs.0[i] {
+                        //unsafe { //TODO
+                        //    gl.UniformBlockBinding(program, slot as gl::types::GLuint, loc as gl::types::GLuint);
+                        //    gl.BindBufferBase(gl::UNIFORM_BUFFER, loc as gl::types::GLuint, buffer);
+                        //}
+                        //self.bind_uniform_block()
+                        //self.bind_attribute(i as d::AttributeSlot, buffer, format);
                     }
                 }
             },

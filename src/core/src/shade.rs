@@ -17,7 +17,7 @@
 #![allow(missing_docs)]
 
 use std::fmt;
-use AttributeSlot;
+use {AttributeSlot, ConstantBufferSlot};
 
 // Describing shader parameters
 // TOOD: Remove GL-isms, especially in the documentation.
@@ -211,10 +211,10 @@ impl fmt::Debug for UniformValue {
 
 /// Vertex information that a shader takes as input.
 #[derive(Clone, PartialEq, Debug)]
-pub struct Attribute {
+pub struct AttributeVar {
     /// Name of this attribute.
     pub name: String,
-    /// Vertex attribute binding.
+    /// Slot of the vertex attribute.
     pub slot: AttributeSlot,
     /// Number of elements this attribute represents.
     pub count: usize,
@@ -239,14 +239,16 @@ pub struct UniformVar {
     pub container: ContainerType,
 }
 
-/// A uniform block.
+/// A constant buffer.
 #[derive(Clone, PartialEq, Debug)]
-pub struct BlockVar {
-    /// Name of this uniform block.
+pub struct ConstantBufferVar {
+    /// Name of this constant buffer.
     pub name: String,
-    /// Size (in bytes) of this uniform block's data.
+    /// Slot of the constant buffer.
+    pub slot: ConstantBufferSlot,
+    /// Size (in bytes) of this buffer's data.
     pub size: usize,
-    /// What program stage this uniform block can be used in, as a bitflag.
+    /// What program stage this buffer can be used in, as a bitflag.
     pub usage: u8,
 }
 
@@ -271,11 +273,11 @@ pub struct OutputVar; //TODO
 #[derive(Clone, PartialEq, Debug)]
 pub struct ProgramInfo {
     /// Attributes in the program.
-    pub attributes: Vec<Attribute>,
+    pub vertex_attributes: Vec<AttributeVar>,
     /// Uniforms in the program
     pub uniforms: Vec<UniformVar>,
-    /// Uniform blocks in the program
-    pub blocks: Vec<BlockVar>,
+    /// Constant buffers in the program
+    pub constant_buffers: Vec<ConstantBufferVar>,
     /// Samplers in the program
     pub textures: Vec<SamplerVar>,
     /// Output targets in the program

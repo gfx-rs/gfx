@@ -106,7 +106,7 @@ pub struct Slice<R: Resources> {
     /// End index of vertices to draw.
     pub end: VertexCount,
     /// Primitive type to render collections of vertices as.
-    pub primitive: Primitive,
+    pub primitive: Primitive, //TODO: remove
     /// Source of the vertex ordering when drawing.
     pub kind: SliceKind<R>,
 }
@@ -245,7 +245,7 @@ impl Link {
     pub fn new<R: Resources>(mesh: &Mesh<R>, pinfo: &shade::ProgramInfo)
                              -> Result<Link, Error> {
         let mut indices = Vec::new();
-        for sat in pinfo.attributes.iter() {
+        for sat in pinfo.vertex_attributes.iter() {
             match mesh.attributes.iter().enumerate()
                       .find(|&(_, a)| a.name == sat.name) {
                 Some((attrib_id, vat)) => match vat.format.elem_type.is_compatible(sat.base_type) {

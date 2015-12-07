@@ -30,30 +30,42 @@ macro_rules! gfx_pipeline {
             $( $field: $ty, )*
         }
 
-        pub struct $init {
-            $( pub $field: <$ty as DataLink>::Init, )*
+        pub struct $init<'a> {
+            $( pub $field: <$ty as DataLink<'a>>::Init, )*
         }
 
-        impl $crate::pso::PipelineInit for $init {
+        impl<'a> $crate::pso::PipelineInit for $init<'a> {
             type Meta = $meta;
             fn link_to(&self, desc: &mut Descriptor, info: &$crate::ProgramInfo) -> Result<Self::Meta, InitError> {
                 let mut meta = $meta {
-                    $( $field: <$ty as DataLink>::new(), )*
+                    $( $field: <$ty as DataLink<'a>>::new(), )*
                 };
-                for a in &info.attributes {
+                for at in &info.vertex_attributes {
                     $(
-                        match meta.$field.link_input(a, &self.$field) {
+                        match meta.$field.link_input(at, &self.$field) {
                             Some(Ok(d)) => {
-                                desc.attributes[a.slot as usize] = Some(d);
+                                desc.attributes[at.slot as usize] = Some(d);
                                 break;
                             },
                             Some(Err(fm)) => return Err(
-                                InitError::VertexImport(a.slot, Some(fm))
+                                InitError::VertexImport(at.slot, Some(fm))
                             ),
                             None => (),
                         }
                     )*
-                    return Err(InitError::VertexImport(a.slot, None));
+                    return Err(InitError::VertexImport(at.slot, None));
+                }
+                for cb in &info.constant_buffers {
+                    $(
+                        match meta.$field.link_constant_buffer(cb, &self.$field) {
+                            Some(Ok(())) => break,
+                            Some(Err(_)) => return Err(
+                                InitError::ConstantBuffer(cb.slot, Some(()))
+                            ),
+                            None => (),
+                        }
+                    )*
+                    return Err(InitError::ConstantBuffer(cb.slot, None));
                 }
                 Ok(meta)
             }
@@ -80,8 +92,8 @@ macro_rules! gfx_pipeline_init {
         gfx_pipeline!( $data $meta $init {
             $( $field: $ty, )*
         });
-        impl $init {
-            pub fn new() -> $init {
+        impl $init<'static> {
+            pub fn new() -> $init<'static> {
                 $init {
                     $( $field: $value, )*
                 }

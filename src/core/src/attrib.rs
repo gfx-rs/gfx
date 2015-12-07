@@ -122,7 +122,7 @@ pub struct Format {
     /// Stride in bytes between consecutive vertices
     pub stride: Stride,
     /// Instance rate per vertex
-    pub instance_rate: InstanceRate,
+    pub instance_rate: InstanceRate, //TODO: remove
 }
 
 

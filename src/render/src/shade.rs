@@ -83,7 +83,7 @@ pub trait Parameter<R: Resources> {
     /// Check if this parameter is good for a given uniform.
     fn check_uniform(&shade::UniformVar) -> bool { false }
     /// Check if this parameter is good for a given block.
-    fn check_block(&shade::BlockVar) -> bool { false }
+    fn check_block(&shade::ConstantBufferVar) -> bool { false }
     /// Check if this parameter is good for a given texture.
     fn check_texture(&shade::SamplerVar) -> bool { false }
     /// Write into the parameter storage for rendering.
@@ -101,7 +101,7 @@ impl<T: ToUniform, R: Resources> Parameter<R> for T {
 }
 
 impl<R: Resources> Parameter<R> for handle::RawBuffer<R> {
-    fn check_block(_var: &shade::BlockVar) -> bool {
+    fn check_block(_var: &shade::ConstantBufferVar) -> bool {
         true
     }
 
@@ -111,7 +111,7 @@ impl<R: Resources> Parameter<R> for handle::RawBuffer<R> {
 }
 
 impl<R: Resources, T> Parameter<R> for handle::Buffer<R, T> {
-    fn check_block(_var: &shade::BlockVar) -> bool {
+    fn check_block(_var: &shade::ConstantBufferVar) -> bool {
         true
     }
 
@@ -152,7 +152,7 @@ impl<R: Resources> ShaderParam for Option<R> {
             Some(u) => return Err(ParameterError::MissingUniform(u.name.clone())),
             None => (),
         }
-        match info.blocks[..].first() {
+        match info.constant_buffers[..].first() {
             Some(b) => return Err(ParameterError::MissingBlock(b.name.clone())),
             None => (),
         }
@@ -209,7 +209,7 @@ impl<R: Resources> ShaderParam for ParamDictionary<R> {
             uniforms: info.uniforms.iter().map(|var|
                 this.uniforms.iter().position(|c| c.name == var.name).unwrap()
             ).collect(),
-            blocks: info.blocks.iter().map(|var|
+            blocks: info.constant_buffers.iter().map(|var|
                 this.blocks  .iter().position(|c| c.name == var.name).unwrap()
             ).collect(),
             textures: info.textures.iter().map(|var|

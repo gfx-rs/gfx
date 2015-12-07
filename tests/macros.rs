@@ -36,7 +36,7 @@ impl gfx::DepthFormat for Depth {}
 gfx_pipeline_init!( _Data _Meta _Init {
     _vertex: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
     _instance: gfx::VertexBuffer<Instance> = gfx::PER_INSTANCE,
-    //_const_locals: gfx::ConstantBuffer<Local> = "Locals",
+    _const_locals: gfx::ConstantBuffer<Local> = "Locals",
     //_gobal: gfx::Constant<[f32; 4]> = "Global",
     //tex_diffuse: TextureView<Dim2, Float4>,
     //tex_normal: TextureView<Dim2, Float3>,

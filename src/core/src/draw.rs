@@ -109,6 +109,8 @@ pub trait CommandBuffer<R: Resources> {
     fn bind_pipeline_state(&mut self, R::PipelineStateObject);
     /// Bind a complete set of vertex buffers
     fn bind_vertex_buffers(&mut self, pso::VertexBufferSet<R>);
+    /// Bind a complete set of constant buffers
+    fn bind_constant_buffers(&mut self, pso::ConstantBufferSet<R>);
     /// Bind an array buffer object
     fn bind_array_buffer(&mut self, R::ArrayBuffer);
     /// Bind a vertex attribute

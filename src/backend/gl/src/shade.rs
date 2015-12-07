@@ -146,7 +146,7 @@ impl StorageType {
     }
 }
 
-fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::Attribute> {
+fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::AttributeVar> {
     let num = get_program_iv(gl, prog, gl::ACTIVE_ATTRIBUTES);
     let max_len = get_program_iv(gl, prog, gl::ACTIVE_ATTRIBUTE_MAX_LENGTH);
     let mut name = String::with_capacity(max_len as usize);
@@ -173,7 +173,7 @@ fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::Attribute> {
             error!("Invalid location {} for attribute {}", loc, real_name);
         }
         info!("\t\tAttrib[{}] = {:?}\t{:?}\t{:?}", loc, real_name, base, container);
-        s::Attribute {
+        s::AttributeVar {
             name: real_name,
             slot: loc as d::AttributeSlot,
             count: size as usize,
@@ -184,7 +184,7 @@ fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::Attribute> {
     .collect()
 }
 
-fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program) -> Vec<s::BlockVar> {
+fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program) -> Vec<s::ConstantBufferVar> {
     let num = if caps.uniform_block_supported {
         get_program_iv(gl, prog, gl::ACTIVE_UNIFORM_BLOCKS)
     } else {
@@ -212,8 +212,9 @@ fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program) -> Ve
         }
         name.truncate(actual_name_size as usize);
         info!("\t\tBlock '{}' of size {}", name, size);
-        s::BlockVar {
+        s::ConstantBufferVar {
             name: name,
+            slot: i as d::ConstantBufferSlot,
             size: size as usize,
             usage: usage,
         }
@@ -315,9 +316,9 @@ pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities, shaders: &[super::Sha
         }
         let (uniforms, textures) = query_parameters(gl, caps, name);
         let info = s::ProgramInfo {
-            attributes: query_attributes(gl, name),
+            vertex_attributes: query_attributes(gl, name),
             uniforms: uniforms,
-            blocks: query_blocks(gl, caps, name),
+            constant_buffers: query_blocks(gl, caps, name),
             textures: textures,
             outputs: Vec::new(),
         };
