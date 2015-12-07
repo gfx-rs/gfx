@@ -49,3 +49,13 @@ gfx_pipeline_init!( _Data _Meta _Init {
     //    write: false,
     //},
 });
+
+fn _test_pso<R, F>(factory: &mut F, shaders: &gfx::ShaderSet<R>)
+             -> gfx::PipelineState<R, _Meta>  where
+    R: gfx::Resources,
+    F: gfx::traits::FactoryExt<R>,
+{
+    use std::default::Default;
+    factory.create_pipeline_state(shaders, gfx::Primitive::Point,
+        Default::default(), &_Init::new()).unwrap()
+}
