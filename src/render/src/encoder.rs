@@ -627,6 +627,10 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
         self.command_buffer.bind_pipeline_state(self.handles.ref_pso(pipeline.get_handle()));
         let raw_data = pipeline.prepare_data(user_data, &mut self.handles);
         self.command_buffer.bind_vertex_buffers(raw_data.vertex_buffers);
+        self.command_buffer.bind_constant_buffers(raw_data.constant_buffers);
+        for &(location, value) in &raw_data.constants {
+            self.command_buffer.bind_uniform(location, value);
+        }
         //TODO: bind more stuff (b#, s#, t#, u#)
         self.draw_slice(slice, None);
     }

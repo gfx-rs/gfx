@@ -122,7 +122,7 @@ pub static PER_INSTANCE: FetchRate = FetchRate(1);
 
 pub struct VertexBuffer<T: Structure>(AttributeSlotSet, PhantomData<T>);
 pub struct ConstantBuffer<T: Structure>(Option<d::ConstantBufferSlot>, PhantomData<T>);
-pub struct Constant<T: d::attrib::format::ToFormat>(d::shade::Location, PhantomData<T>);
+pub struct Constant<T: d::attrib::format::ToFormat>(Option<d::shade::Location>, PhantomData<T>);
 pub struct RenderTargetCommon<T: TextureFormat, I>(d::ColorSlot, PhantomData<(T, I)>);
 pub type RenderTarget<T: TextureFormat> = RenderTargetCommon<T, d::state::ColorMask>;
 pub type BlendTarget<T: BlendFormat> = RenderTargetCommon<T, d::state::Blend>;
@@ -189,33 +189,34 @@ impl<R: d::Resources, T: Structure> DataBind<R> for ConstantBuffer<T> {
         }
     }
 }
-/*
+
 impl<'a, T: d::attrib::format::ToFormat> DataLink<'a> for Constant<T> {
     type Init = &'a str;
-    fn declare_to(map: &mut d::pso::LinkMap<'a>, init: &Self::Init) {
-        let (count, etype) = T::describe();
-        let format = d::attrib::Format {
-            elem_count: count,
-            elem_type: etype,
-            offset: 0,
-            stride: 0,
-            instance_rate: 0,
-        };
-        map.insert(*init, d::pso::Link::Constant(format));
+    fn new() -> Self {
+        Constant(None, PhantomData)
     }
-    fn link(map: &d::pso::RegisterMap<'a>, init: &Self::Init) -> Option<Self> {
-        map.get(*init).map(|&reg| Constant(reg, PhantomData))
+    fn link_constant(&mut self, var: &d::shade::UniformVar, init: &Self::Init) ->
+                  Option<Result<(), d::attrib::Format>> {
+        if &var.name == *init {
+            //if match_constant(var, ())
+            self.0 = Some(var.location);
+            Some(Ok(()))
+        }else {
+            None
+        }
     }
 }
 
 impl<R: d::Resources, T: d::attrib::format::ToFormat> DataBind<R> for Constant<T> {
     type Data = d::shade::UniformValue;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, _: &mut d::handle::Manager<R>) {
-        out.constants.push((self.0, *data));
+        if let Some(loc) = self.0 {
+            out.constants.push((loc, *data));
+        }
     }
 }
 
-
+/*
 impl<'a,
     T: TextureFormat,
     I: Copy + Into<d::pso::BlendInfo>
