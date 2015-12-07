@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! High-level, platform independent, bindless rendering API.
+//! Graphics commands encoder.
 
 #![deny(missing_docs)]
 
@@ -165,8 +165,8 @@ pub enum DrawError<E> {
     BadIndexCount,
 }
 
-/// Renderer front-end
-pub struct Renderer<R: Resources, C: CommandBuffer<R>> {
+/// Graphics commands encoder.
+pub struct Encoder<R: Resources, C: CommandBuffer<R>> {
     command_buffer: C,
     data_buffer: DataBuffer,
     handles: handle::Manager<R>,
@@ -178,7 +178,7 @@ pub struct Renderer<R: Resources, C: CommandBuffer<R>> {
     texture_cache: TextureCache<R>,
 }
 
-impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
+impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
     /// Reset all commands for the command buffer re-usal.
     pub fn reset(&mut self) {
         self.command_buffer.clear();
@@ -194,8 +194,8 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     }
 
     /// Clone the renderer shared data but ignore the commands.
-    pub fn clone_empty(&self) -> Renderer<R, C> {
-        Renderer {
+    pub fn clone_empty(&self) -> Encoder<R, C> {
+        Encoder {
             command_buffer: CommandBuffer::new(),
             data_buffer: DataBuffer::new(),
             handles: handle::Manager::new(),
@@ -632,10 +632,10 @@ impl<R: Resources, C: CommandBuffer<R>> Renderer<R, C> {
     }
 }
 
-/// Factory extension that allows creating new renderers.
-pub trait RenderFactory<R: Resources, C: CommandBuffer<R>> {
-    /// Create a new renderer
-    fn create_renderer(&mut self) -> Renderer<R, C>;
+/// Factory extension that allows creating new encoders.
+pub trait EncoderFactory<R: Resources, C: CommandBuffer<R>> {
+    /// Create a new Encoder
+    fn create_encoder(&mut self) -> Encoder<R, C>;
 }
 
 /// This is taken from the the OpenGL ES 3 spec
@@ -645,9 +645,9 @@ impl<
     R: Resources,
     C: CommandBuffer<R>,
     F: device::Factory<R>,
-> RenderFactory<R, C> for F {
-    fn create_renderer(&mut self) -> Renderer<R, C> {
-        Renderer {
+> EncoderFactory<R, C> for F {
+    fn create_encoder(&mut self) -> Encoder<R, C> {
+        Encoder {
             command_buffer: CommandBuffer::new(),
             data_buffer: DataBuffer::new(),
             handles: handle::Manager::new(),

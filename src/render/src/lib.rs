@@ -29,7 +29,7 @@ pub mod traits {
     pub use gfx_core::output::Output;
     pub use extra::factory::FactoryExt;
     pub use extra::stream::{Stream, StreamFactory};
-    pub use render::RenderFactory;
+    pub use encoder::EncoderFactory;
     pub use mesh::{ToIndexSlice, ToSlice};
 }
 
@@ -51,10 +51,10 @@ pub use gfx_core::draw::{CommandBuffer, Gamma, InstanceOption};
 pub use gfx_core::output::{Output, Plane};
 pub use gfx_core::pso as pso_core;
 pub use gfx_core::shade::{ProgramInfo, UniformValue};
+pub use encoder::{Encoder, BlitError, DrawError, UpdateError, ParamStorage};
 pub use mesh::{Attribute, Mesh, VertexFormat};
 pub use mesh::Error as MeshError;
 pub use mesh::{Slice, ToIndexSlice, ToSlice, SliceKind};
-pub use render::{Renderer, BlitError, DrawError, UpdateError, ParamStorage};
 pub use pso::{PipelineState, VertexBuffer, ConstantBuffer,
               Constant, PER_VERTEX, PER_INSTANCE,
               TextureFormat, BlendFormat, RenderTarget, BlendTarget,
@@ -67,10 +67,10 @@ pub use extra::stream::{OwnedStream, Stream, Window};
 
 /// Batches
 pub mod batch;
+/// Render commands encoder
+pub mod encoder;
 /// Meshes
 pub mod mesh;
-/// Render commands encoder
-pub mod render;
 /// Pipeline states
 pub mod pso;
 /// Shaders

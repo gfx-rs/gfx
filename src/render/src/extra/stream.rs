@@ -21,7 +21,7 @@ use gfx_core::draw::CommandBuffer;
 use gfx_core::output::Output;
 use gfx_core::target::{ClearData, Mask, Mirror, Rect};
 use batch::{Batch, Error};
-use render::{BlitError, DrawError, Renderer, RenderFactory};
+use encoder::{BlitError, DrawError, Encoder, EncoderFactory};
 
 /// Generic output window.
 pub trait Window<R: Resources>: Output<R> {
@@ -31,7 +31,7 @@ pub trait Window<R: Resources>: Output<R> {
 
 /// Render stream abstraction.
 pub trait Stream<R: Resources> {
-    /// Command buffer type to constraint the `Renderer`.
+    /// Command buffer type to constraint the `Encoder`.
     type CommandBuffer: CommandBuffer<R>;
     /// Constrained `Output` type.
     type Output: Output<R>;
@@ -40,7 +40,7 @@ pub trait Stream<R: Resources> {
     fn get_output(&self) -> &Self::Output;
 
     /// Access both of the stream components.
-    fn access(&mut self) -> (&mut Renderer<R, Self::CommandBuffer>, &Self::Output);
+    fn access(&mut self) -> (&mut Encoder<R, Self::CommandBuffer>, &Self::Output);
 
     /// Get width/height aspect, needed for projections.
     fn get_aspect_ratio(&self) -> f32 {
@@ -104,7 +104,7 @@ pub trait Stream<R: Resources> {
 }
 
 impl<'a, R: Resources, C: CommandBuffer<R>, O: Output<R>>
-Stream<R> for (&'a mut Renderer<R, C>, &'a O) {
+Stream<R> for (&'a mut Encoder<R, C>, &'a O) {
     type CommandBuffer = C;
     type Output = O;
 
@@ -112,7 +112,7 @@ Stream<R> for (&'a mut Renderer<R, C>, &'a O) {
         &self.1
     }
 
-    fn access(&mut self) -> (&mut Renderer<R, C>, &O) {
+    fn access(&mut self) -> (&mut Encoder<R, C>, &O) {
         (&mut self.0, &self.1)
     }
 }
@@ -120,7 +120,7 @@ Stream<R> for (&'a mut Renderer<R, C>, &'a O) {
 /// A stream that owns its components.
 pub struct OwnedStream<D: Device, O>{
     /// Renderer
-    pub ren: Renderer<D::Resources, D::CommandBuffer>,
+    pub ren: Encoder<D::Resources, D::CommandBuffer>,
     /// Output
     pub out: O,
 }
@@ -136,7 +136,7 @@ impl<
         &self.out
     }
 
-    fn access(&mut self) -> (&mut Renderer<D::Resources, D::CommandBuffer>, &O) {
+    fn access(&mut self) -> (&mut Encoder<D::Resources, D::CommandBuffer>, &O) {
         (&mut self.ren, &self.out)
     }
 }
@@ -151,15 +151,15 @@ impl<D: Device, W: Window<D::Resources>> OwnedStream<D, W> {
 }
 
 /// A render factory extension that allows creating streams with new renderers.
-pub trait StreamFactory<D: Device>: RenderFactory<D::Resources, D::CommandBuffer> {
+pub trait StreamFactory<D: Device>: EncoderFactory<D::Resources, D::CommandBuffer> {
     /// Create a new stream from a given output.
     fn create_stream<O: Output<D::Resources>>(&mut self, output: O) -> OwnedStream<D, O> {
         OwnedStream {
-            ren: self.create_renderer(),
+            ren: self.create_encoder(),
             out: output,
         }
     }
 }
 
-impl<D: Device, F: RenderFactory<D::Resources, D::CommandBuffer>>
+impl<D: Device, F: EncoderFactory<D::Resources, D::CommandBuffer>>
 StreamFactory<D> for F {}
