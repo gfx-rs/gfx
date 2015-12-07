@@ -95,6 +95,8 @@ pub trait DataLink<'a>: Sized {
                      Option<Result<(), d::attrib::Format>> { None }
     fn link_output(&mut self, _: &d::shade::OutputVar, _: &Self::Init) ->
                    Option<Result<d::pso::ColorTargetDesc, d::tex::Format>> { None }
+    fn link_depth_stencil(&mut self, _: &Self::Init) ->
+                          Option<d::pso::DepthStencilDesc> { None }
 }
 
 pub trait DataBind<R: d::Resources> {
@@ -123,7 +125,7 @@ pub static PER_INSTANCE: FetchRate = FetchRate(1);
 pub struct VertexBuffer<T: Structure>(AttributeSlotSet, PhantomData<T>);
 pub struct ConstantBuffer<T: Structure>(Option<d::ConstantBufferSlot>, PhantomData<T>);
 pub struct Constant<T: d::attrib::format::ToFormat>(Option<d::shade::Location>, PhantomData<T>);
-pub struct RenderTargetCommon<T: TextureFormat, I>(d::ColorSlot, PhantomData<(T, I)>);
+pub struct RenderTargetCommon<T: TextureFormat, I>(Option<d::ColorSlot>, PhantomData<(T, I)>);
 pub type RenderTarget<T: TextureFormat> = RenderTargetCommon<T, d::state::ColorMask>;
 pub type BlendTarget<T: BlendFormat> = RenderTargetCommon<T, d::state::Blend>;
 pub struct DepthStencilCommon<T: DepthStencilFormat, I>(PhantomData<(T, I)>);
@@ -216,39 +218,47 @@ impl<R: d::Resources, T: d::attrib::format::ToFormat> DataBind<R> for Constant<T
     }
 }
 
-/*
 impl<'a,
     T: TextureFormat,
-    I: Copy + Into<d::pso::BlendInfo>
+    I: 'a + Copy + Into<d::pso::BlendInfo>
 > DataLink<'a> for RenderTargetCommon<T, I> {
     type Init = (&'a str, I);
-    fn declare_to(map: &mut d::pso::LinkMap<'a>, init: &Self::Init) {
-        map.insert(init.0,
-            d::pso::Link::Target(T::get_format(), init.1.into()));
+    fn new() -> Self {
+        RenderTargetCommon(None, PhantomData)
     }
-    fn link(map: &d::pso::RegisterMap<'a>, init: &Self::Init) -> Option<Self> {
-        map.get(init.0).map(|&reg| RenderTargetCommon(reg as d::ColorSlot, PhantomData))
+    fn link_output(&mut self, out: &d::shade::OutputVar, init: &Self::Init) ->
+                   Option<Result<d::pso::ColorTargetDesc, d::tex::Format>> {
+        if &out.name == init.0 {
+            self.0 = Some(out.slot);
+            let desc = (T::get_format(), init.1.into());
+            Some(Ok(desc))
+        }else {
+            None
+        }
     }
 }
 
 impl<R: d::Resources, T: TextureFormat, I> DataBind<R> for RenderTargetCommon<T, I> {
     type Data = d::handle::RenderTargetView<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
-        out.pixel_targets.0[self.0 as usize] = Some(man.ref_rtv(data.raw()));
+        if let Some(slot) = self.0 {
+            out.pixel_targets.0[slot as usize] = Some(man.ref_rtv(data.raw()));
+        }
     }
 }
 
 impl<'a,
     T: DepthStencilFormat,
-    I: Copy + Into<d::pso::DepthStencilInfo>
+    I: 'a + Copy + Into<d::pso::DepthStencilInfo>
 > DataLink<'a> for DepthStencilCommon<T, I> {
     type Init = I;
-    fn declare_to(map: &mut d::pso::LinkMap<'a>, init: &Self::Init) {
-        map.insert(d::pso::DEPTH_STENCIL_TAG,
-            d::pso::Link::DepthStencil(T::get_format(), (*init).into()));
+    fn new() -> Self {
+        DepthStencilCommon(PhantomData)
     }
-    fn link(map: &d::pso::RegisterMap<'a>, _: &Self::Init) -> Option<Self> {
-        map.get(d::pso::DEPTH_STENCIL_TAG).map(|_| DepthStencilCommon(PhantomData))
+    fn link_depth_stencil(&mut self, init: &Self::Init) ->
+                          Option<d::pso::DepthStencilDesc> {
+        let desc = (T::get_format(), (*init).into());
+        Some(desc)
     }
 }
 
@@ -258,4 +268,3 @@ impl<R: d::Resources, T: DepthStencilFormat, I> DataBind<R> for DepthStencilComm
         out.pixel_targets.1 = Some(man.ref_dsv(data.raw()));
     }
 }
-*/

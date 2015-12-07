@@ -43,11 +43,11 @@ gfx_pipeline_init!( _Data _Meta _Init {
     //sampler_linear: Sampler,
     //buf_noise: BufferView<Int4>,
     //buf_frequency: UnorderedView<Dim2, Int>,
-    //pixel_color: gfx::RenderTarget<Rgba> = ("Color", gfx::state::MASK_ALL),
-    //depth: gfx::DepthTarget<Depth> = gfx::state::Depth {
-    //    fun: gfx::state::Comparison::LessEqual,
-    //    write: false,
-    //},
+    pixel_color: gfx::RenderTarget<Rgba> = ("Color", gfx::state::MASK_ALL),
+    depth: gfx::DepthTarget<Depth> = gfx::state::Depth {
+        fun: gfx::state::Comparison::LessEqual,
+        write: false,
+    },
 });
 
 fn _test_pso<R, F>(factory: &mut F, shaders: &gfx::ShaderSet<R>)

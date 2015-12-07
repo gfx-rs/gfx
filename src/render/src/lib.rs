@@ -39,9 +39,9 @@ pub use draw_state::state;
 pub use draw_state::target::*;
 
 // public re-exports
+pub use gfx_core as core;
 pub use gfx_core::{Device, SubmitInfo, Factory, Resources};
 pub use gfx_core::{attrib, tex, handle};
-pub use gfx_core::as_byte_slice;
 pub use gfx_core::{BufferRole, BufferInfo, BufferUsage};
 pub use gfx_core::{VertexCount, InstanceCount};
 pub use gfx_core::Primitive;
@@ -49,7 +49,6 @@ pub use gfx_core::{ShaderSet, VertexShader, HullShader, DomainShader,
                    GeometryShader, PixelShader};
 pub use gfx_core::draw::{CommandBuffer, Gamma, InstanceOption};
 pub use gfx_core::output::{Output, Plane};
-pub use gfx_core::pso as pso_core;
 pub use gfx_core::shade::{ProgramInfo, UniformValue};
 pub use encoder::{Encoder, BlitError, DrawError, UpdateError, ParamStorage};
 pub use mesh::{Attribute, Mesh, VertexFormat};

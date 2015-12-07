@@ -21,8 +21,6 @@ use state as s;
 
 /// An offset inside a vertex buffer, in bytes.
 pub type BufferOffset = usize;
-/// A special unique tag for depth/stencil entries in the Link/Register maps.
-pub const DEPTH_STENCIL_TAG: &'static str = "<ds>";
 
 /// Error types happening upon PSO creation on the device side.
 #[derive(Clone, PartialEq, Debug)]

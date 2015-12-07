@@ -17,7 +17,7 @@
 #![allow(missing_docs)]
 
 use std::fmt;
-use {AttributeSlot, ConstantBufferSlot};
+use {AttributeSlot, ColorSlot, ConstantBufferSlot};
 
 // Describing shader parameters
 // TOOD: Remove GL-isms, especially in the documentation.
@@ -267,7 +267,12 @@ pub struct SamplerVar {
 
 /// Target output variable.
 #[derive(Clone, PartialEq, Debug)]
-pub struct OutputVar; //TODO
+pub struct OutputVar {
+    /// Name of this output variable.
+    pub name: String,
+    /// Output color target index.
+    pub slot: ColorSlot,
+}
 
 /// Metadata about a program.
 #[derive(Clone, PartialEq, Debug)]

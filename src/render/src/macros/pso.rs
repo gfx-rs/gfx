@@ -40,12 +40,13 @@ macro_rules! gfx_pipeline {
                 let mut meta = $meta {
                     $( $field: <$ty as DataLink<'a>>::new(), )*
                 };
+                // v#
                 for at in &info.vertex_attributes {
                     $(
                         match meta.$field.link_input(at, &self.$field) {
                             Some(Ok(d)) => {
                                 desc.attributes[at.slot as usize] = Some(d);
-                                break;
+                                continue;
                             },
                             Some(Err(fm)) => return Err(
                                 InitError::VertexImport(at.slot, Some(fm))
@@ -55,10 +56,11 @@ macro_rules! gfx_pipeline {
                     )*
                     return Err(InitError::VertexImport(at.slot, None));
                 }
+                // c#
                 for cb in &info.constant_buffers {
                     $(
                         match meta.$field.link_constant_buffer(cb, &self.$field) {
-                            Some(Ok(())) => break,
+                            Some(Ok(())) => continue,
                             Some(Err(_)) => return Err(
                                 InitError::ConstantBuffer(cb.slot, Some(()))
                             ),
@@ -67,6 +69,35 @@ macro_rules! gfx_pipeline {
                     )*
                     return Err(InitError::ConstantBuffer(cb.slot, None));
                 }
+                // targets
+                for out in &info.outputs {
+                    $(
+                        match meta.$field.link_output(out, &self.$field) {
+                            Some(Ok(d)) => {
+                                desc.color_targets[out.slot as usize] = Some(d);
+                                continue;
+                            },
+                            Some(Err(fm)) => return Err(
+                                InitError::PixelExport(out.slot, Some(fm))
+                            ),
+                            None => (),
+                        }
+                    )*
+                    return Err(InitError::PixelExport(out.slot, None));
+                }
+                // ds
+                for _ in 0 .. 1 {
+                    $(
+                      match meta.$field.link_depth_stencil(&self.$field) {
+                            Some(d) => {
+                                desc.depth_stencil = Some(d);
+                                continue;
+                            },
+                            None => (),
+                        }
+                    )*
+                }
+                // done
                 Ok(meta)
             }
         }
