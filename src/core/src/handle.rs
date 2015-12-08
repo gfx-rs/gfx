@@ -102,41 +102,47 @@ impl<R: Resources> Surface<R> {
     pub fn get_info(&self) -> &tex::SurfaceInfo { &self.1 }
 }
 
-/// Convenience target view prototype, applicable to both colors and depth/stencil
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct ProtoTargetView<R: Resources, X>(Arc<X>, Texture<R>);
-
-impl<R: Resources, X> ProtoTargetView<R, X> {
-    /// Get target texture
-    pub fn get_texture(&self) -> &Texture<R> { &self.1 }
-}
-
 /// Raw RTV
-pub type RawRenderTargetView<R: Resources> = ProtoTargetView<R, R::RenderTargetView>;
-/// Raw DSV
-pub type RawDepthStencilView<R: Resources> = ProtoTargetView<R, R::DepthStencilView>;
-
-/// A target view template that is equally applicable to colors and depth/stencil
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct TargetView<R: Resources, X, T>(ProtoTargetView<R, X>, PhantomData<T>);
+pub struct RawRenderTargetView<R: Resources>(Arc<R::RenderTargetView>);
 
-impl<R: Resources, X, T> From<ProtoTargetView<R, X>> for TargetView<R, X, T> {
-    fn from(h: ProtoTargetView<R, X>) -> TargetView<R, X, T> {
-        TargetView(h, PhantomData)
+/// Raw DSV
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct RawDepthStencilView<R: Resources>(Arc<R::DepthStencilView>);
+
+/// Typed RTV
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct RenderTargetView<R: Resources, T>(RawRenderTargetView<R>, PhantomData<T>);
+
+impl<R: Resources, T> From<RawRenderTargetView<R>> for RenderTargetView<R, T> {
+    fn from(h: RawRenderTargetView<R>) -> RenderTargetView<R, T> {
+        RenderTargetView(h, PhantomData)
     }
 }
 
-impl<R: Resources, X, T> TargetView<R, X, T> {
+impl<R: Resources, T> RenderTargetView<R, T> {
     /// Get the underlying raw Handle
-    pub fn raw(&self) -> &ProtoTargetView<R, X> {
+    pub fn raw(&self) -> &RawRenderTargetView<R> {
         &self.0
     }
 }
 
-/// Typed RTV
-pub type RenderTargetView<R: Resources, T> = TargetView<R, R::RenderTargetView, T>;
 /// Typed DSV
-pub type DepthStencilView<R: Resources, T> = TargetView<R, R::DepthStencilView, T>; 
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct DepthStencilView<R: Resources, T>(RawDepthStencilView<R>, PhantomData<T>); 
+
+impl<R: Resources, T> From<RawDepthStencilView<R>> for DepthStencilView<R, T> {
+    fn from(h: RawDepthStencilView<R>) -> DepthStencilView<R, T> {
+        DepthStencilView(h, PhantomData)
+    }
+}
+
+impl<R: Resources, T> DepthStencilView<R, T> {
+    /// Get the underlying raw Handle
+    pub fn raw(&self) -> &RawDepthStencilView<R> {
+        &self.0
+    }
+}
 
 /// Texture Handle
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -190,8 +196,8 @@ pub trait Producer<R: Resources> {
     fn make_pso(&mut self, R::PipelineStateObject) -> RawPipelineState<R>;
     fn make_frame_buffer(&mut self, R::FrameBuffer) -> FrameBuffer<R>;
     fn make_surface(&mut self, R::Surface, tex::SurfaceInfo) -> Surface<R>;
-    fn make_rtv(&mut self, R::RenderTargetView, Texture<R>) -> RawRenderTargetView<R>;
-    fn make_dsv(&mut self, R::DepthStencilView, Texture<R>) -> RawDepthStencilView<R>;
+    fn make_rtv(&mut self, R::RenderTargetView) -> RawRenderTargetView<R>;
+    fn make_dsv(&mut self, R::DepthStencilView) -> RawDepthStencilView<R>;
     fn make_texture(&mut self, R::Texture, tex::TextureInfo) -> Texture<R>;
     fn make_sampler(&mut self, R::Sampler, tex::SamplerInfo) -> Sampler<R>;
     fn make_fence(&mut self, name: R::Fence) -> Fence<R>;
@@ -257,16 +263,16 @@ impl<R: Resources> Producer<R> for Manager<R> {
         Surface(r, info)
     }
 
-    fn make_rtv(&mut self, res: R::RenderTargetView, tex: Texture<R>) -> RawRenderTargetView<R> {
+    fn make_rtv(&mut self, res: R::RenderTargetView) -> RawRenderTargetView<R> {
         let r = Arc::new(res);
         self.rtvs.push(r.clone());
-        ProtoTargetView(r, tex)
+        RawRenderTargetView(r)
     }
 
-    fn make_dsv(&mut self, res: R::DepthStencilView, tex: Texture<R>) -> RawDepthStencilView<R> {
+    fn make_dsv(&mut self, res: R::DepthStencilView) -> RawDepthStencilView<R> {
         let r = Arc::new(res);
         self.dsvs.push(r.clone());
-        ProtoTargetView(r, tex)
+        RawDepthStencilView(r)
     }
 
     fn make_texture(&mut self, res: R::Texture, info: tex::TextureInfo) -> Texture<R> {
