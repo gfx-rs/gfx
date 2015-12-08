@@ -319,14 +319,17 @@ pub trait Factory<R: Resources> {
 
 /// All the data needed simultaneously for submitting a command buffer for
 /// execution on a device.
-pub type SubmitInfo<'a, D: Device> = (
-    &'a D::CommandBuffer,
-    &'a draw::DataBuffer,
-    &'a handle::Manager<D::Resources>
-);
+pub struct SubmitInfo<'a, D>(
+    pub &'a D::CommandBuffer,
+    pub &'a draw::DataBuffer,
+    pub &'a handle::Manager<D::Resources>
+) where
+    D: Device,
+    D::CommandBuffer: 'a,
+    D::Resources: 'a;
 
 /// An interface for performing draw calls using a specific graphics API
-pub trait Device {
+pub trait Device: Sized {
     /// Associated resources type.
     type Resources: Resources;
     /// Associated command buffer type.

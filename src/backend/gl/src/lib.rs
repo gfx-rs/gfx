@@ -749,7 +749,7 @@ impl Device {
 
 impl d::Device for Device {
     type Resources = Resources;
-    type CommandBuffer = CommandBuffer<Self::Resources>;
+    type CommandBuffer = CommandBuffer<Resources>;
 
     fn get_capabilities<'a>(&'a self) -> &'a d::Capabilities {
         &self.share.capabilities
@@ -762,7 +762,8 @@ impl d::Device for Device {
         }
     }
 
-    fn submit(&mut self, (cb, db, handles): d::SubmitInfo<Device>) {
+    fn submit(&mut self, submit_info: d::SubmitInfo<Self>) {
+        let d::SubmitInfo(cb, db, handles) = submit_info;
         self.frame_handles.extend(handles);
         self.reset_state();
         for com in cb.iter() {
@@ -798,7 +799,8 @@ impl d::Device for Device {
 }
 
 impl gfx_core::DeviceFence<Resources> for Device {
-    fn fenced_submit(&mut self, info: d::SubmitInfo<Device>, after: Option<handle::Fence<Resources>>) -> handle::Fence<Resources> {
+    fn fenced_submit(&mut self, info: d::SubmitInfo<Self>, after: Option<handle::Fence<Resources>>)
+                     -> handle::Fence<Resources> {
         use gfx_core::Device;
         use gfx_core::handle::Producer;
 

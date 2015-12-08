@@ -189,8 +189,9 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
     }
 
     /// Get command and data buffers to be submitted to the device.
-    pub fn as_buffer(&self) -> (&C, &DataBuffer, &handle::Manager<R>) {
-        (&self.command_buffer, &self.data_buffer, &self.handles)
+    pub fn as_buffer<D>(&self) -> device::SubmitInfo<D> where
+        D: device::Device<Resources=R, CommandBuffer=C> {
+        device::SubmitInfo(&self.command_buffer, &self.data_buffer, &self.handles)
     }
 
     /// Clone the renderer shared data but ignore the commands.

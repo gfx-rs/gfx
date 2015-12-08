@@ -53,12 +53,12 @@ impl DummyDevice {
 
 impl Device for DummyDevice {
     type Resources = DummyResources;
-    type CommandBuffer = CommandBuffer<Self::Resources>;
+    type CommandBuffer = CommandBuffer<DummyResources>;
 
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities {
         &self.capabilities
     }
     fn reset_state(&mut self) {}
-    fn submit(&mut self, (_cb, _db, _handles): SubmitInfo<Self>) {}
+    fn submit(&mut self, _: SubmitInfo<Self>) {}
     fn cleanup(&mut self) {}
 }
