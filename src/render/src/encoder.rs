@@ -631,6 +631,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
         for &(location, value) in &raw_data.constants {
             self.command_buffer.bind_uniform(location, value);
         }
+        self.command_buffer.bind_pixel_targets(raw_data.pixel_targets);
         //TODO: bind more stuff (b#, s#, t#, u#)
         self.draw_slice(slice, None);
     }

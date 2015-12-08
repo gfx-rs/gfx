@@ -242,7 +242,7 @@ impl<R: d::Resources, T: TextureFormat, I> DataBind<R> for RenderTargetCommon<T,
     type Data = d::handle::RenderTargetView<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
         if let Some(slot) = self.0 {
-            out.pixel_targets.0[slot as usize] = Some(man.ref_rtv(data.raw()));
+            out.pixel_targets.colors[slot as usize] = Some(man.ref_rtv(data.raw()));
         }
     }
 }
@@ -265,6 +265,6 @@ impl<'a,
 impl<R: d::Resources, T: DepthStencilFormat, I> DataBind<R> for DepthStencilCommon<T, I> {
     type Data = d::handle::DepthStencilView<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
-        out.pixel_targets.1 = Some(man.ref_dsv(data.raw()));
+        out.pixel_targets.depth_stencil = Some(man.ref_dsv(data.raw()));
     }
 }

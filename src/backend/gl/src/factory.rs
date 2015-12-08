@@ -266,6 +266,8 @@ impl d::Factory<R> for Factory {
                 }
             }
         }
+        //TODO: texture & UBO binding
+        //verification of the target output names
         let pso = PipelineState {
             program: self.share.handles.borrow_mut().ref_program(program),
             primitive: desc.primitive,

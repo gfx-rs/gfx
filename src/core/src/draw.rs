@@ -111,6 +111,9 @@ pub trait CommandBuffer<R: Resources> {
     fn bind_vertex_buffers(&mut self, pso::VertexBufferSet<R>);
     /// Bind a complete set of constant buffers
     fn bind_constant_buffers(&mut self, pso::ConstantBufferSet<R>);
+    /// Bind a complete set of pixel targets, including multiple
+    /// colors views and an optional depth/stencil view.
+    fn bind_pixel_targets(&mut self, pso::PixelTargetSet<R>);
     /// Bind an array buffer object
     fn bind_array_buffer(&mut self, R::ArrayBuffer);
     /// Bind a vertex attribute

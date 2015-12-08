@@ -354,6 +354,24 @@ impl Device {
         }
     }
 
+    fn bind_target(&mut self, point: gl::types::GLenum, attachment: gl::types::GLenum, view: &TargetView) {
+        let gl = &self.share.context;
+        match view {
+            &TargetView::Surface(surface) => unsafe {
+                gl.FramebufferRenderbuffer(point, attachment, gl::RENDERBUFFER, surface);
+            },
+            &TargetView::Texture(texture, level) => unsafe {
+                gl.FramebufferTexture(point, attachment, texture,
+                                      level as gl::types::GLint);
+            },
+            &TargetView::TextureLayer(texture, level, layer) => unsafe {
+                gl.FramebufferTextureLayer(point, attachment, texture,
+                                           level as gl::types::GLint,
+                                           layer as gl::types::GLint);
+            },
+        }
+    }
+
     fn process(&mut self, cmd: &Command<Resources>,
                data_buf: &d::draw::DataBuffer) {
         match *cmd {
@@ -417,15 +435,25 @@ impl Device {
             },
             Command::BindConstantBuffers(cbs) => {
                 for i in 0 .. d::MAX_CONSTANT_BUFFERS {
-                    let _gl = &self.share.context;
-                    if let Some(_buffer) = cbs.0[i] {
-                        //unsafe { //TODO
-                        //    gl.UniformBlockBinding(program, slot as gl::types::GLuint, loc as gl::types::GLuint);
-                        //    gl.BindBufferBase(gl::UNIFORM_BUFFER, loc as gl::types::GLuint, buffer);
-                        //}
-                        //self.bind_uniform_block()
-                        //self.bind_attribute(i as d::AttributeSlot, buffer, format);
+                    if let Some(buffer) = cbs.0[i] {
+                        let gl = &self.share.context;
+                        unsafe {
+                            gl.BindBufferBase(gl::UNIFORM_BUFFER, i as gl::types::GLuint, buffer);
+                        }
                     }
+                }
+            },
+            Command::BindPixelTargets(pts) => {
+                let point = gl::DRAW_FRAMEBUFFER;
+                for i in 0 .. d::MAX_COLOR_TARGETS {
+                    if let Some(ref target) = pts.colors[i] {
+                        let att = gl::COLOR_ATTACHMENT0 + i as gl::types::GLuint;
+                        self.bind_target(point, att, target);
+                    }
+                }
+                if let Some(ref ds) = pts.depth_stencil {
+                    let att = gl::DEPTH_STENCIL_ATTACHMENT;
+                    self.bind_target(point, att, ds);
                 }
             },
             Command::BindArrayBuffer(array_buffer) => {

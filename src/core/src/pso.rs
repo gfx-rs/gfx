@@ -153,17 +153,20 @@ impl<R: Resources> ConstantBufferSet<R> {
 
 #[derive(Copy, Clone, Debug)]
 /// A complete set of render targets to be used for pixel export in PSO.
-pub struct PixelTargetSet<R: Resources>(
+pub struct PixelTargetSet<R: Resources> {
     /// Array of color target views
-    pub [Option<R::RenderTargetView>; MAX_COLOR_TARGETS],
+    pub colors: [Option<R::RenderTargetView>; MAX_COLOR_TARGETS],
     /// Depth-stencil target view
-    pub Option<R::DepthStencilView>,
-);
+    pub depth_stencil: Option<R::DepthStencilView>,
+}
 
 impl<R: Resources> PixelTargetSet<R> {
     /// Create an empty set
     pub fn new() -> PixelTargetSet<R> {
-        PixelTargetSet([None; MAX_COLOR_TARGETS], None)
+        PixelTargetSet {
+            colors: [None; MAX_COLOR_TARGETS],
+            depth_stencil: None,
+        }
     }
 }
 

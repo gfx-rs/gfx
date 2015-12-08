@@ -32,6 +32,7 @@ pub enum Command<R: Resources> {
     BindPipelineState(R::PipelineStateObject),
     BindVertexBuffers(pso::VertexBufferSet<R>),
     BindConstantBuffers(pso::ConstantBufferSet<R>),
+    BindPixelTargets(pso::PixelTargetSet<R>),
     BindArrayBuffer(R::ArrayBuffer),
     BindAttribute(AttributeSlot, R::Buffer, attrib::Format),
     BindIndex(R::Buffer),
@@ -97,6 +98,10 @@ impl<R> draw::CommandBuffer<R> for CommandBuffer<R>
 
     fn bind_constant_buffers(&mut self, cbs: pso::ConstantBufferSet<R>) {
         self.buf.push(Command::BindConstantBuffers(cbs));
+    }
+
+    fn bind_pixel_targets(&mut self, pts: pso::PixelTargetSet<R>) {
+        self.buf.push(Command::BindPixelTargets(pts));
     }
 
     fn bind_array_buffer(&mut self, vao: R::ArrayBuffer) {
