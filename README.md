@@ -37,7 +37,7 @@
 
 - Graphics APIs are mostly designed with C and C++ in mind, and hence are dangerous and error prone, with little static safety guarantees.
 - Providing type safe wrappers around platform-specific APIs is feasible, but only pushes the problem of platform independence to a higher level of abstraction, often to the game or rendering engine.
-- Modern graphics APIs, whilst providing a great degree of flexibility and a high level of performance, often have a much higher barrier to entry than traditional [fixed-function](http://en.wikipedia.org/wiki/Fixed-function) APIs.
+- Modern graphics APIs, whilst providing a great degree of flexibility and a high level of performance, often have a much higher barrier to entry than traditional [fixed-function](https://en.wikipedia.org/wiki/Fixed-function) APIs.
 - Graphics APIs like OpenGL still [require the developer to 'bind' and 'unbind' objects](http://www.arcsynthesis.org/gltut/Basics/Intro%20What%20is%20OpenGL.html#d0e887) in order to perform operations on them. This results in a large amount of boiler plate code, and brings with it the usual problems associated with global state.
 
 ## Getting started
@@ -50,7 +50,7 @@ gfx = "*"
 ~~~
 
 See the [cube example](https://github.com/gfx-rs/gfx/tree/master/examples/cube) for a typical context
-initialization with [glfw](https://github.com/bjz/glfw-rs/) and the [triangle example](https://github.com/gfx-rs/gfx/tree/master/examples/triangle) for initialization with [glutin](https://github.com/tomaka/glutin/).
+initialization with [glfw](https://github.com/PistonDevelopers/glfw-rs) and the [triangle example](https://github.com/gfx-rs/gfx/tree/master/examples/triangle) for initialization with [glutin](https://github.com/tomaka/glutin/).
 
 links to stuff here!
 
