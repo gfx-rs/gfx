@@ -275,7 +275,7 @@ impl d::Factory<R> for Factory {
             rasterizer: desc.rasterizer,
             output: output,
         };
-        Ok(self.share.handles.borrow_mut().make_pso(pso))
+        Ok(self.share.handles.borrow_mut().make_pso(pso, program))
     }
 
     fn create_frame_buffer(&mut self) -> Result<handle::FrameBuffer<R>, d::NotSupported> {

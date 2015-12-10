@@ -66,6 +66,7 @@ impl d::Resources for Resources {
     type Shader              = Shader;
     type Program             = Program;
     type PipelineStateObject = PipelineState;
+    type NewTexture          = NewTexture;
     type FrameBuffer         = FrameBuffer;
     type Surface             = Surface;
     type RenderTargetView    = TargetView;
@@ -96,6 +97,12 @@ pub struct PipelineState {
     input: [Option<d::pso::AttributeDesc>; d::MAX_VERTEX_ATTRIBUTES],
     rasterizer: s::Rasterizer,
     output: OutputMerger,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub enum NewTexture {
+    Surface(Surface),
+    Texture(Texture),
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -786,11 +793,17 @@ impl d::Device for Device {
             |gl, v| unsafe { gl.DeleteVertexArrays(1, v) },
             |gl, v| unsafe { gl.DeleteShader(*v) },
             |gl, v| unsafe { gl.DeleteProgram(*v) },
-            |gl, v| unsafe { gl.DeleteProgram(v.program) },
+            |gl, v| unsafe { gl.DeleteProgram(v.program) }, //PSO
+            |gl, v| match v {
+                &NewTexture::Surface(ref suf) => unsafe { gl.DeleteRenderbuffers(1, suf) },
+                &NewTexture::Texture(ref tex) => unsafe { gl.DeleteTextures(1, tex) },
+            },
+            |_, _| {}, //SRV
+            |_, _| {}, //UAV
             |gl, v| unsafe { gl.DeleteFramebuffers(1, v) },
             |gl, v| unsafe { gl.DeleteRenderbuffers(1, v) },
-            |_, _| {},
-            |_, _| {},
+            |_, _| {}, //RTV
+            |_, _| {}, //DSV
             |gl, v| unsafe { gl.DeleteTextures(1, v) },
             |gl, v| unsafe { gl.DeleteSamplers(1, v) },
             |gl, v| unsafe { gl.DeleteSync(v.0) },

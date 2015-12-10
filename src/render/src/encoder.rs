@@ -625,7 +625,8 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
     pub fn draw_pipeline<D: pso::PipelineData<R>>(&mut self, slice: &mesh::Slice<R>,
                          pipeline: &pso::PipelineState<R, D::Meta>, user_data: &D)
     {
-        self.command_buffer.bind_pipeline_state(self.handles.ref_pso(pipeline.get_handle()));
+        let (pso, _) = self.handles.ref_pso(pipeline.get_handle());
+        self.command_buffer.bind_pipeline_state(pso);
         let raw_data = pipeline.prepare_data(user_data, &mut self.handles);
         self.command_buffer.bind_vertex_buffers(raw_data.vertex_buffers);
         self.command_buffer.bind_constant_buffers(raw_data.constant_buffers);
