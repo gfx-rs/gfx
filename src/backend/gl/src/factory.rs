@@ -129,14 +129,14 @@ impl Factory {
         let mut shaders = [0; 3];
         let shader_slice = match shader_set {
             &d::ShaderSet::Simple(ref vs, ref ps) => {
-                shaders[0] = vs.reference(frame_handles);
-                shaders[1] = ps.reference(frame_handles);
+                shaders[0] = *vs.reference(frame_handles);
+                shaders[1] = *ps.reference(frame_handles);
                 &shaders[..2]
             },
             &d::ShaderSet::Geometry(ref vs, ref gs, ref ps) => {
-                shaders[0] = vs.reference(frame_handles);
-                shaders[1] = gs.reference(frame_handles);
-                shaders[2] = ps.reference(frame_handles);
+                shaders[0] = *vs.reference(frame_handles);
+                shaders[1] = *gs.reference(frame_handles);
+                shaders[2] = *ps.reference(frame_handles);
                 &shaders[..3]
             },
         };
@@ -269,7 +269,7 @@ impl d::Factory<R> for Factory {
         //TODO: texture & UBO binding
         //verification of the target output names
         let pso = PipelineState {
-            program: self.share.handles.borrow_mut().ref_program(program),
+            program: *self.share.handles.borrow_mut().ref_program(program),
             primitive: desc.primitive,
             input: desc.attributes,
             rasterizer: desc.rasterizer,
@@ -335,7 +335,7 @@ impl d::Factory<R> for Factory {
         if offset_bytes + data.len() > buffer.get_info().size {
             Err(d::BufferUpdateError::OutOfBounds)
         } else {
-            let raw_handle = self.frame_handles.ref_buffer(buffer);
+            let raw_handle = *self.frame_handles.ref_buffer(buffer);
             update_sub_buffer(&self.share.context, raw_handle, data.as_ptr(), data.len(),
                               offset_bytes, buffer.get_info().role);
             Ok(())
@@ -352,19 +352,19 @@ impl d::Factory<R> for Factory {
         let kind = kind_override.unwrap_or(texture.get_info().kind);
 
         tex::update_texture(&self.share.context, kind,
-                            self.frame_handles.ref_texture(texture),
+                            *self.frame_handles.ref_texture(texture),
                             img, data.as_ptr(), data.len())
     }
 
     fn generate_mipmap(&mut self, texture: &handle::Texture<R>) {
         tex::generate_mipmap(&self.share.context, texture.get_info().kind,
-                             self.frame_handles.ref_texture(texture));
+                             *self.frame_handles.ref_texture(texture));
     }
 
     fn map_buffer_raw(&mut self, buf: &handle::RawBuffer<R>,
                       access: d::MapAccess) -> RawMapping {
         let gl = &self.share.context;
-        let raw_handle = self.frame_handles.ref_buffer(buf);
+        let raw_handle = *self.frame_handles.ref_buffer(buf);
         unsafe { gl.BindBuffer(gl::ARRAY_BUFFER, raw_handle) };
         let ptr = unsafe { gl.MapBuffer(gl::ARRAY_BUFFER, match access {
             d::MapAccess::Readable => gl::READ_ONLY,

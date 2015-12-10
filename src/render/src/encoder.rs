@@ -142,9 +142,9 @@ impl<R: Resources, C: CommandBuffer<R>> CommandBufferExt<R> for C {
         match plane {
             None => self.unbind_target(access, to),
             Some(&Plane::Surface(ref suf)) =>
-                self.bind_target_surface(access, to, handles.ref_surface(suf)),
+                self.bind_target_surface(access, to, handles.ref_surface(suf).clone()),
             Some(&Plane::Texture(ref tex, level, layer)) =>
-                self.bind_target_texture(access, to, handles.ref_texture(tex), level, layer),
+                self.bind_target_texture(access, to, handles.ref_texture(tex).clone(), level, layer),
         }
     }
 }
@@ -284,7 +284,8 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
         if bound <= buf.get_info().size {
             let pointer = self.data_buffer.add_vec(data);
             self.command_buffer.update_buffer(
-                self.handles.ref_buffer(buf), pointer, offset_bytes);
+                self.handles.ref_buffer(buf).clone(),
+                pointer, offset_bytes);
             Ok(())
         } else {
             Err(UpdateError::OutOfBounds {
@@ -302,7 +303,8 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
         if bound <= buf.get_info().size {
             let pointer = self.data_buffer.add_struct(data);
             self.command_buffer.update_buffer(
-                self.handles.ref_buffer(buf.raw()), pointer, 0);
+                self.handles.ref_buffer(buf.raw()).clone(),
+                pointer, 0);
             Ok(())
         } else {
             Err(UpdateError::OutOfBounds {
@@ -355,7 +357,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
 
         let pointer = self.data_buffer.add_vec(data);
         self.command_buffer.update_texture(tex.get_info().kind,
-            self.handles.ref_texture(tex), img, pointer);
+            self.handles.ref_texture(tex).clone(), img, pointer);
         Ok(())
     }
 
@@ -374,7 +376,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
             Some(ref handle) => {
                 if self.render_state.frame_buffer.as_ref() != Some(handle) || change_gamma {
                     self.command_buffer.bind_frame_buffer(Access::Draw,
-                        self.handles.ref_frame_buffer(handle),
+                        self.handles.ref_frame_buffer(handle).clone(),
                         gamma);
                     self.render_state.frame_buffer = Some((*handle).clone());
                     self.render_state.gamma = gamma;
@@ -385,7 +387,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
                     "Unable to use off-screen draw targets: not supported by the backend");
                 if self.render_state.frame_buffer.as_ref() != Some(draw_fbo) || change_gamma {
                     self.command_buffer.bind_frame_buffer(Access::Draw,
-                        self.handles.ref_frame_buffer(draw_fbo),
+                        self.handles.ref_frame_buffer(draw_fbo).clone(),
                         gamma);
                     self.render_state.frame_buffer = Some(draw_fbo.clone());
                     self.render_state.gamma = gamma;
@@ -437,11 +439,11 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
         // bind input
         if let Some(ref handle) = input.get_handle() {
             self.command_buffer.bind_frame_buffer(Access::Read,
-                self.handles.ref_frame_buffer(handle),
+                self.handles.ref_frame_buffer(handle).clone(),
                 Gamma::Original);
         }else if let Ok(ref fbo) = self.read_frame_buffer {
             self.command_buffer.bind_frame_buffer(Access::Read,
-                self.handles.ref_frame_buffer(fbo),
+                self.handles.ref_frame_buffer(fbo).clone(),
                 Gamma::Original);
         }else {
             panic!("Unable to use off-screen read targets: not supported by the backend");
@@ -496,7 +498,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
         if self.render_state.program.as_ref() != Some(&program) {
             self.render_state.program = Some(program.clone());
             self.command_buffer.bind_program(
-                self.handles.ref_program(&program));
+                self.handles.ref_program(&program).clone());
         }
         self.upload_parameters(program);
         Ok(program)
@@ -517,10 +519,10 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
             .zip(self.parameters.blocks.iter()).enumerate() {
             match value {
                 &Some(ref buf) => self.command_buffer.bind_uniform_block(
-                    self.handles.ref_program(program),
+                    self.handles.ref_program(program).clone(),
                     i as device::UniformBufferSlot,
                     i as device::UniformBlockIndex,
-                    self.handles.ref_buffer(buf)
+                    self.handles.ref_buffer(buf).clone()
                 ),
                 &None => error!("Missed block {}", var.name),
             }
@@ -545,13 +547,13 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
                             if tex.get_info().kind.get_aa_mode().is_some() {
                                 error!("A sampler provided for an AA texture: {}", var.name);
                             }
-                            Some((self.handles.ref_sampler(s), *s.get_info()))
+                            Some((self.handles.ref_sampler(s).clone(), *s.get_info()))
                         },
                         &None => None,
                     };
 
                     let info = tex.get_info();
-                    let texture = self.handles.ref_texture(tex);
+                    let texture = self.handles.ref_texture(tex).clone();
 
                     // This will find a slot that the texture is already bound to
                     // if there is no slot it will create one and return a slot
@@ -572,7 +574,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
             // It's Ok if the array buffer is not supported. We can just ignore it.
             match self.common_array_buffer {
                 Ok(ref ab) => self.command_buffer.bind_array_buffer(
-                    self.handles.ref_array_buffer(ab)
+                    self.handles.ref_array_buffer(ab).clone()
                 ),
                 Err(_) => (),
             };
@@ -591,7 +593,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
             };
             if need_update {
                 self.command_buffer.bind_attribute(sat.slot,
-                    self.handles.ref_buffer(&vat.buffer), vat.format);
+                    self.handles.ref_buffer(&vat.buffer).clone(), vat.format);
                 self.render_state.attributes[loc] = Some((vat.buffer.clone(), vat.format));
             }
         }
@@ -602,7 +604,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
                      instances: InstanceOption) {
         if self.render_state.index.as_ref() != Some(buf.raw()) {
             self.render_state.index = Some(buf.raw().clone());
-            self.command_buffer.bind_index(self.handles.ref_buffer(buf.raw()));
+            self.command_buffer.bind_index(self.handles.ref_buffer(buf.raw()).clone());
         }
         self.command_buffer.call_draw_indexed(slice.primitive, format,
             slice.start, slice.end - slice.start, base, instances);
@@ -626,7 +628,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
                          pipeline: &pso::PipelineState<R, D::Meta>, user_data: &D)
     {
         let (pso, _) = self.handles.ref_pso(pipeline.get_handle());
-        self.command_buffer.bind_pipeline_state(pso);
+        self.command_buffer.bind_pipeline_state(pso.clone());
         let raw_data = pipeline.prepare_data(user_data, &mut self.handles);
         self.command_buffer.bind_vertex_buffers(raw_data.vertex_buffers);
         self.command_buffer.bind_constant_buffers(raw_data.constant_buffers);

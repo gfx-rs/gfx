@@ -88,7 +88,7 @@ impl<R> TextureCache<R> where R: Resources {
             }
         }
 
-        cb.bind_texture(oldest as TextureSlot, bind.0, bind.1, bind.2);
+        cb.bind_texture(oldest as TextureSlot, bind.0, bind.1.clone(), bind.2.clone());
 
         self.textures[oldest].last_used = count;
         self.textures[oldest].bound = Some(bind);

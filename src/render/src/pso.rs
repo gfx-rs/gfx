@@ -158,7 +158,7 @@ impl<'a, T: Structure> DataLink<'a> for VertexBuffer<T> {
 impl<R: d::Resources, T: Structure> DataBind<R> for VertexBuffer<T> {
     type Data = d::handle::Buffer<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
-        let value = Some((man.ref_buffer(data.raw()), 0));
+        let value = Some((man.ref_buffer(data.raw()).clone(), 0));
         for i in 0 .. d::MAX_VERTEX_ATTRIBUTES {
             if (self.0 & (1<<i)) != 0 {
                 out.vertex_buffers.0[i] = value;
@@ -187,7 +187,8 @@ impl<R: d::Resources, T: Structure> DataBind<R> for ConstantBuffer<T> {
     type Data = d::handle::Buffer<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
         if let Some(slot) = self.0 {
-            out.constant_buffers.0[slot as usize] = Some(man.ref_buffer(data.raw()));
+            let value = Some(man.ref_buffer(data.raw()).clone());
+            out.constant_buffers.0[slot as usize] = value;
         }
     }
 }
@@ -242,7 +243,8 @@ impl<R: d::Resources, T: TextureFormat, I> DataBind<R> for RenderTargetCommon<T,
     type Data = d::handle::RenderTargetView<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
         if let Some(slot) = self.0 {
-            out.pixel_targets.colors[slot as usize] = Some(man.ref_rtv(data.raw()));
+            let value = Some(man.ref_rtv(data.raw()).clone());
+            out.pixel_targets.colors[slot as usize] = value;
         }
     }
 }
@@ -265,6 +267,7 @@ impl<'a,
 impl<R: d::Resources, T: DepthStencilFormat, I> DataBind<R> for DepthStencilCommon<T, I> {
     type Data = d::handle::DepthStencilView<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
-        out.pixel_targets.depth_stencil = Some(man.ref_dsv(data.raw()));
+        let value = Some(man.ref_dsv(data.raw()).clone());
+        out.pixel_targets.depth_stencil = value;
     }
 }

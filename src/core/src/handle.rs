@@ -454,78 +454,78 @@ impl<R: Resources> Manager<R> {
         self.samplers.len()
     }
     /// Reference a buffer
-    pub fn ref_buffer(&mut self, handle: &RawBuffer<R>) -> R::Buffer {
+    pub fn ref_buffer<'a>(&mut self, handle: &'a RawBuffer<R>) -> &'a R::Buffer {
         self.buffers.push(handle.0.clone());
-        *handle.0.deref()
+        &handle.0
     }
     /// Reference am array buffer
-    pub fn ref_array_buffer(&mut self, handle: &ArrayBuffer<R>) -> R::ArrayBuffer {
+    pub fn ref_array_buffer<'a>(&mut self, handle: &'a ArrayBuffer<R>) -> &'a R::ArrayBuffer {
         self.array_buffers.push(handle.0.clone());
-        *handle.0.deref()
+        &handle.0
     }
     /// Reference a shader
-    pub fn ref_shader(&mut self, handle: &Shader<R>) -> R::Shader {
+    pub fn ref_shader<'a>(&mut self, handle: &'a Shader<R>) -> &'a R::Shader {
         self.shaders.push(handle.0.clone());
-        *handle.0.deref()
+        &handle.0
     }
     /// Reference a program
-    pub fn ref_program(&mut self, handle: &Program<R>) -> R::Program {
+    pub fn ref_program<'a>(&mut self, handle: &'a Program<R>) -> &'a R::Program {
         self.programs.push(handle.0.clone());
-        *handle.0.deref()
+        &handle.0
     }
     /// Reference a pipeline state object
-    pub fn ref_pso(&mut self, handle: &RawPipelineState<R>) -> (R::PipelineStateObject, R::Program) {
+    pub fn ref_pso<'a>(&mut self, handle: &'a RawPipelineState<R>) -> (&'a R::PipelineStateObject, &'a R::Program) {
         self.psos.push(handle.0.clone());
-        (*handle.0.deref(), *handle.1.deref())
+        (&handle.0, &handle.1)
     }
     /// Reference a texture
-    pub fn ref_new_texture(&mut self, handle: &RawTexture<R>) -> R::NewTexture {
+    pub fn ref_new_texture<'a>(&mut self, handle: &'a RawTexture<R>) -> &'a R::NewTexture {
         self.new_textures.push(handle.0.clone());
-        *handle.0.deref()
+        &handle.0
     }
     /// Reference a shader resource view
-    pub fn ref_srv(&mut self, handle: &RawShaderResourceView<R>) -> R::ShaderResourceView {
+    pub fn ref_srv<'a>(&mut self, handle: &'a RawShaderResourceView<R>) -> &'a R::ShaderResourceView {
         self.srvs.push(handle.0.clone());
-        *handle.0.deref()
+        &handle.0
     }
     /// Reference an unordered access view
-    pub fn ref_uav(&mut self, handle: &RawUnorderedAccessView<R>) -> R::UnorderedAccessView {
+    pub fn ref_uav<'a>(&mut self, handle: &'a RawUnorderedAccessView<R>) -> &'a R::UnorderedAccessView {
         self.uavs.push(handle.0.clone());
-        *handle.0.deref()
+        &handle.0
     }
     /// Reference a frame buffer
-    pub fn ref_frame_buffer(&mut self, handle: &FrameBuffer<R>) -> R::FrameBuffer {
+    pub fn ref_frame_buffer<'a>(&mut self, handle: &'a FrameBuffer<R>) -> &'a R::FrameBuffer {
         self.frame_buffers.push(handle.0.clone());
-        *handle.0.deref()
+        &handle.0
     }
     /// Reference a surface
-    pub fn ref_surface(&mut self, handle: &Surface<R>) -> R::Surface {
+    pub fn ref_surface<'a>(&mut self, handle: &'a Surface<R>) -> &'a R::Surface {
         self.surfaces.push(handle.0.clone());
-        *handle.0.deref()
+        &handle.0
     }
     /// Reference an RTV
-    pub fn ref_rtv(&mut self, handle: &RawRenderTargetView<R>) -> R::RenderTargetView {
+    pub fn ref_rtv<'a>(&mut self, handle: &'a RawRenderTargetView<R>) -> &'a R::RenderTargetView {
         self.rtvs.push(handle.0.clone());
-        *handle.0.deref()
+        &handle.0
     }
     /// Reference a DSV
-    pub fn ref_dsv(&mut self, handle: &RawDepthStencilView<R>) -> R::DepthStencilView {
+    pub fn ref_dsv<'a>(&mut self, handle: &'a RawDepthStencilView<R>) -> &'a R::DepthStencilView {
         self.dsvs.push(handle.0.clone());
-        *handle.0.deref()
+        &handle.0
     }
     /// Reference a texture
-    pub fn ref_texture(&mut self, handle: &Texture<R>) -> R::Texture {
+    pub fn ref_texture<'a>(&mut self, handle: &'a Texture<R>) -> &'a R::Texture {
         self.textures.push(handle.0.clone());
-        *handle.0.deref()
+        &handle.0
     }
     /// Reference a sampler
-    pub fn ref_sampler(&mut self, handle: &Sampler<R>) -> R::Sampler {
+    pub fn ref_sampler<'a>(&mut self, handle: &'a Sampler<R>) -> &'a R::Sampler {
         self.samplers.push(handle.0.clone());
-        *handle.0.deref()
+        &handle.0
     }
     /// Reference a fence
-    pub fn ref_fence(&mut self, fence: &Fence<R>) -> R::Fence {
+    pub fn ref_fence<'a>(&mut self, fence: &'a Fence<R>) -> &'a R::Fence {
         self.fences.push(fence.0.clone());
-        *fence.0.deref()
+        &fence.0
     }
 }

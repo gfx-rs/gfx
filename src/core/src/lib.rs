@@ -83,7 +83,7 @@ macro_rules! define_shaders {
         pub struct $name<R: Resources>(handle::Shader<R>);
         impl<R: Resources> $name<R> {
             #[allow(missing_docs)]
-            pub fn reference(&self, man: &mut handle::Manager<R>) -> R::Shader {
+            pub fn reference(&self, man: &mut handle::Manager<R>) -> &R::Shader {
                 man.ref_shader(&self.0)
             }
         }
@@ -219,22 +219,22 @@ pub enum BufferUpdateError {
 
 /// Resources pertaining to a specific API.
 #[allow(missing_docs)]
-pub trait Resources:                 Clone + Hash + fmt::Debug + Eq + PartialEq {
-    type Buffer:              Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
-    type ArrayBuffer:         Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
-    type Shader:              Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
-    type Program:             Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
-    type PipelineStateObject: Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
-    type NewTexture:          Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
-    type ShaderResourceView:  Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
-    type UnorderedAccessView: Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
-    type FrameBuffer:         Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
-    type Surface:             Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
-    type RenderTargetView:    Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
-    type DepthStencilView:    Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
-    type Texture:             Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
-    type Sampler:             Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
-    type Fence:               Copy + Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+pub trait Resources:          Clone + Hash + fmt::Debug + Eq + PartialEq {
+    type Buffer:              Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync + Copy;
+    type ArrayBuffer:         Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Shader:              Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Program:             Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type PipelineStateObject: Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type NewTexture:          Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type ShaderResourceView:  Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync + Copy;
+    type UnorderedAccessView: Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync + Copy;
+    type FrameBuffer:         Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Surface:             Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type RenderTargetView:    Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync + Copy;
+    type DepthStencilView:    Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Texture:             Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Sampler:             Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Fence:               Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
 }
 
 #[allow(missing_docs)]

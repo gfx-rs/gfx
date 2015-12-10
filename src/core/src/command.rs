@@ -26,7 +26,7 @@ pub struct CommandBuffer<R: Resources> {
 }
 
 ///Serialized device command.
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum Command<R: Resources> {
     BindProgram(R::Program),
     BindPipelineState(R::PipelineStateObject),
