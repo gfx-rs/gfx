@@ -18,7 +18,6 @@
 
 use std::mem;
 use std::marker::PhantomData;
-use std::ops::Deref;
 use std::sync::Arc;
 use {shade, tex, Resources, BufferInfo};
 

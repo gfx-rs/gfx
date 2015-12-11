@@ -22,7 +22,7 @@ use gfx_core::handle::Producer;
 use gfx_core::mapping::Builder;
 use gfx_core::tex::Size;
 
-use {Buffer, OutputMerger, PipelineState, Program, Share};
+use {Buffer, NewTexture, OutputMerger, PipelineState, Program, Share};
 use Resources as R;
 
 
@@ -320,8 +320,46 @@ impl d::Factory<R> for Factory {
         name.map(|tex| self.share.handles.borrow_mut().make_texture(tex, info))
     }
 
-    fn create_sampler(&mut self, info: d::tex::SamplerInfo)
-                      -> handle::Sampler<R> {
+    fn create_texture_raw(&mut self, info: &d::tex::TextureInfo, bind: d::Bind)
+                          -> Result<handle::RawTexture<R>, d::tex::Error> {
+        use gfx_core::tex::Error;
+        let caps = &self.share.capabilities;
+        if info.width == 0 || info.height == 0 || info.levels == 0 {
+            return Err(Error::Size(0))
+        }
+        if info.format.does_convert_gamma() && !caps.srgb_color_supported {
+            return Err(Error::Gamma)
+        }
+        let gl = &self.share.context;
+        let object = if bind.intersects(d::SHADER_RESOURCE | d::UNORDERED_ACCESS) {
+            use gfx_core::tex::TextureError;
+            let result = if caps.immutable_storage_supported {
+                tex::make_with_storage(gl, info)
+            } else {
+                tex::make_without_storage(gl, info)
+            };
+            match result {
+                Ok(name) => NewTexture::Texture(name),
+                Err(TextureError::UnsupportedGamma) => return Err(Error::Gamma),
+                Err(TextureError::UnsupportedSamples) => {
+                    let aa = info.kind.get_aa_mode().unwrap_or(d::tex::AaMode::Msaa(0));
+                    return Err(Error::Samples(aa));
+                },
+                Err(_) => return Err(Error::Format(info.format)),
+            }
+        }else {
+            use gfx_core::tex::SurfaceError;
+            let result = tex::make_surface(gl, &info.clone().into());
+            match result {
+                Ok(name) => NewTexture::Surface(name),
+                Err(SurfaceError::UnsupportedFormat) => return Err(Error::Format(info.format)),
+                Err(SurfaceError::UnsupportedGamma) => return Err(Error::Gamma),
+            }
+        };
+        Ok(self.share.handles.borrow_mut().make_new_texture(object))
+    }
+
+    fn create_sampler(&mut self, info: d::tex::SamplerInfo) -> handle::Sampler<R> {
         let sam = if self.share.capabilities.sampler_objects_supported {
             tex::make_sampler(&self.share.context, &info)
         } else {

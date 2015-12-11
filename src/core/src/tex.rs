@@ -26,6 +26,21 @@ use std::fmt;
 use attrib::{FloatSize, IntSubType};
 use state;
 
+/// Pure texture object creation error.
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum Error {
+    /// Failed to map a given format to the device.
+    Format(Format),
+    /// Failed to provide sRGB formats.
+    Gamma,
+    /// Failed to map a given multisampled kind to the device.
+    Samples(AaMode),
+    /// Unsupported size in one of the dimensions.
+    Size(Size),
+    /// The given data has a different size than the target texture slice.
+    Data(usize),
+}
+
 /// Surface creation/update error.
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum SurfaceError {
@@ -43,7 +58,7 @@ pub enum TextureError {
     /// Failed to provide sRGB formats.
     UnsupportedGamma,
     /// Failed to map a given multisampled kind to the device.
-    UnsupportedSampling,
+    UnsupportedSamples,
     /// The given TextureInfo contains invalid values.
     InvalidInfo(TextureInfo),
     /// The given data has a different size than the target texture slice.
@@ -59,22 +74,19 @@ impl fmt::Debug for TextureError {
             &TextureError::UnsupportedGamma =>
                 write!(f, "Failed to provide sRGB formats"),
 
-            &TextureError::UnsupportedSampling =>
-                write!(
-                    f,
+            &TextureError::UnsupportedSamples =>
+                write!(f,
                     "Failed to map a given multisampled kind to the device"
                 ),
 
             &TextureError::InvalidInfo(info) =>
-                write!(
-                    f,
+                write!(f,
                     "Invalid TextureInfo (width, height, and levels must not \
                     be zero): {:?}\n",
                     info
                 ),
             &TextureError::IncorrectSize(expected) =>
-                write!(
-                    f,
+                write!(f,
                     "Invalid data size provided to update the texture, \
                     expected size {:?}",
                     expected

@@ -216,6 +216,18 @@ pub enum BufferUpdateError {
     OutOfBounds,
 }
 
+bitflags!(
+    /// Bind flags
+    flags Bind: u8 {
+        /// The resource can be bound to the shader for reading.
+        const SHADER_RESOURCE  = 0x1,
+        /// The resource can be rendered into.
+        const RENDER_TARGET    = 0x2,
+        /// The resource can be bound to the shader for writing.
+        const UNORDERED_ACCESS = 0x4,
+    }
+);
+
 /// Resources pertaining to a specific API.
 #[allow(missing_docs)]
 pub trait Resources:          Clone + Hash + fmt::Debug + Eq + PartialEq {
@@ -315,6 +327,9 @@ pub trait Factory<R: Resources> {
             Err(e) => Err(e),
         }
     }
+
+    fn create_texture_raw(&mut self, info: &tex::TextureInfo, bind: Bind)
+                          -> Result<handle::RawTexture<R>, tex::Error>;
 }
 
 /// All the data needed simultaneously for submitting a command buffer for

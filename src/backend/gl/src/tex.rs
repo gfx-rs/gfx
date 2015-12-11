@@ -381,7 +381,7 @@ pub fn make_without_storage(gl: &gl::Gl, info: &TextureInfo) ->
                 fixed_sample_locations
             );
         },
-        _ => return Err(TextureError::UnsupportedSampling),
+        _ => return Err(TextureError::UnsupportedSamples),
     }
 
     set_mipmap_range(gl, target, (0, info.levels - 1));
@@ -492,7 +492,7 @@ pub fn make_with_storage(gl: &gl::Gl, info: &TextureInfo) ->
                 info.depth as GLsizei
             );
         },
-        _ => return Err(TextureError::UnsupportedSampling),
+        _ => return Err(TextureError::UnsupportedSamples),
     }
 
     set_mipmap_range(gl, target, (0, info.levels - 1));
@@ -628,7 +628,7 @@ pub fn update_texture(gl: &gl::Gl, kind: Kind, name: Texture,
             );
         },
         Kind::D2MultiSample(_) | Kind::D2MultiSampleArray(_) =>
-            return Err(TextureError::UnsupportedSampling),
+            return Err(TextureError::UnsupportedSamples),
     }
 
     Ok(())
@@ -693,7 +693,7 @@ pub fn compressed_update(gl: &gl::Gl, kind: Kind, target: GLenum, img: &ImageInf
             );
         },
         Kind::D2MultiSample(_) | Kind::D2MultiSampleArray(_) =>
-            return Err(TextureError::UnsupportedSampling),
+            return Err(TextureError::UnsupportedSamples),
     }
 
     Ok(())
