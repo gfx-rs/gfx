@@ -15,16 +15,19 @@
 #![allow(missing_docs)]
 
 use {Capabilities, Device, Resources, SubmitInfo};
-use command::{CommandBuffer};
+use {AttributeSlot, ColorSlot, TextureSlot, UniformBufferSlot, UniformBlockIndex};
+use {IndexType, Primitive, VertexCount};
+use {attrib, draw, pso, shade, target, tex};
+use state as s;
 
 ///Dummy device which does minimal work, just to allow testing gfx-rs apps for
 ///compilation.
 pub struct DummyDevice {
-    capabilities: Capabilities
+    capabilities: Capabilities,
 }
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub enum DummyResources{}
+pub enum DummyResources {}
 
 impl Resources for DummyResources {
     type Buffer               = ();
@@ -45,16 +48,80 @@ impl Resources for DummyResources {
 }
 
 impl DummyDevice {
-    pub fn new(capabilities: Capabilities) -> DummyDevice {
+    pub fn new() -> DummyDevice {
+        let caps = Capabilities {
+            shader_model: shade::ShaderModel::Unsupported,
+            max_vertex_count: 0,
+            max_index_count: 0,
+            max_draw_buffers: 0,
+            max_texture_size: 0,
+            max_vertex_attributes: 0,
+            buffer_role_change_allowed: false,
+            array_buffer_supported: false,
+            fragment_output_supported: false,
+            immutable_storage_supported: false,
+            instance_base_supported: false,
+            instance_call_supported: false,
+            instance_rate_supported: false,
+            render_targets_supported: false,
+            sampler_objects_supported: false,
+            srgb_color_supported: false,
+            uniform_block_supported: false,
+            vertex_base_supported: false,
+            separate_blending_slots_supported: false,
+        };
         DummyDevice {
-            capabilities: capabilities
+            capabilities: caps,
         }
     }
 }
 
+pub struct DummyCommandBuffer;
+impl draw::CommandBuffer<DummyResources> for DummyCommandBuffer {
+    fn new() -> DummyCommandBuffer { DummyCommandBuffer }
+    fn clear(&mut self) {}
+    fn bind_program(&mut self, _: ()) {}
+    fn bind_pipeline_state(&mut self, _: ()) {}
+    fn bind_vertex_buffers(&mut self, _: pso::VertexBufferSet<DummyResources>) {}
+    fn bind_constant_buffers(&mut self, _: pso::ConstantBufferSet<DummyResources>) {}
+    fn bind_pixel_targets(&mut self, _: pso::PixelTargetSet<DummyResources>) {}
+    fn bind_array_buffer(&mut self, _: ()) {}
+    fn bind_attribute(&mut self, _: AttributeSlot, _: (), _: attrib::Format) {}
+    fn bind_index(&mut self, _: ()) {}
+    fn bind_frame_buffer(&mut self, _: draw::Access, _: (), _: draw::Gamma) {}
+    fn unbind_target(&mut self, _: draw::Access, _: draw::Target) {}
+    fn bind_target_surface(&mut self, _: draw::Access, _: draw::Target, _: ()) {}
+    fn bind_target_texture(&mut self, _: draw::Access, _: draw::Target, _: (),
+                           _: target::Level, _: Option<target::Layer>) {}
+    fn bind_uniform_block(&mut self, _: (), _: UniformBufferSlot,
+                          _: UniformBlockIndex, _: ()) {}
+    fn bind_uniform(&mut self, _: shade::Location, _: shade::UniformValue) {}
+    fn bind_texture(&mut self, _: TextureSlot, _: tex::Kind, _: (),
+                    _: Option<((), tex::SamplerInfo)>) {}
+    fn set_draw_color_buffers(&mut self, _: ColorSlot) {}
+    fn set_rasterizer(&mut self, _: s::Rasterizer) {}
+    fn set_viewport(&mut self, _: target::Rect) {}
+    fn set_scissor(&mut self, _: Option<target::Rect>) {}
+    fn set_depth_stencil(&mut self, _: Option<s::Depth>, _: Option<s::Stencil>,
+                         _: s::CullFace) {}
+    fn set_blend(&mut self, _: ColorSlot, _: Option<s::Blend>) {}
+    fn set_ref_values(&mut self, _: s::RefValues) {}
+    fn update_buffer(&mut self, _: (), _: draw::DataPointer, _: usize) {}
+    fn update_texture(&mut self, _: tex::Kind, _: (), _: tex::ImageInfo,
+                      _: draw::DataPointer) {}
+    fn call_clear(&mut self, _: target::ClearData, _: target::Mask) {}
+    fn call_draw(&mut self, _: Primitive, _: VertexCount, _: VertexCount,
+                 _: draw::InstanceOption) {}
+    fn call_draw_indexed(&mut self, _: Primitive, _: IndexType,
+                         _: VertexCount, _: VertexCount,
+                         _: VertexCount, _: draw::InstanceOption) {}
+    fn call_blit(&mut self, _: target::Rect, _: target::Rect,
+                 _: target::Mirror, _: target::Mask) {}
+}
+
 impl Device for DummyDevice {
     type Resources = DummyResources;
-    type CommandBuffer = CommandBuffer<DummyResources>;
+    type CommandBuffer = DummyCommandBuffer;
 
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities {
         &self.capabilities
