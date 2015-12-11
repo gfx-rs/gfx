@@ -30,7 +30,6 @@ use std::hash::Hash;
 pub use draw_state::{MAX_COLOR_TARGETS, state, target};
 
 pub mod attrib;
-pub mod command;
 pub mod draw;
 pub mod dummy;
 pub mod handle;

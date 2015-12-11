@@ -14,67 +14,57 @@
 
 #![allow(missing_docs)]
 
-use std::slice;
-use draw_state::target::{ClearData, Layer, Level, Mask, Mirror, Rect};
-use {attrib, draw, shade, state, pso, tex};
-use {Resources, IndexType, VertexCount, Primitive,
-     AttributeSlot, TextureSlot, ColorSlot, UniformBufferSlot, UniformBlockIndex};
-
-///Generic command buffer to be used by multiple backends
-pub struct CommandBuffer<R: Resources> {
-    buf: Vec<Command<R>>
-}
+use gfx_core as c;
+use gfx_core::draw::{Access, Gamma, Target, DataPointer, InstanceOption};
+use gfx_core::state as s;
+use gfx_core::target::{ClearData, Layer, Level, Mask, Mirror, Rect};
+use {Buffer, ArrayBuffer, Program, FrameBuffer, Surface, Sampler, Texture,
+     Resources, PipelineState};
 
 ///Serialized device command.
-#[derive(Clone, Debug)]
-pub enum Command<R: Resources> {
-    BindProgram(R::Program),
-    BindPipelineState(R::PipelineStateObject),
-    BindVertexBuffers(pso::VertexBufferSet<R>),
-    BindConstantBuffers(pso::ConstantBufferSet<R>),
-    BindPixelTargets(pso::PixelTargetSet<R>),
-    BindArrayBuffer(R::ArrayBuffer),
-    BindAttribute(AttributeSlot, R::Buffer, attrib::Format),
-    BindIndex(R::Buffer),
-    BindFrameBuffer(draw::Access, R::FrameBuffer, draw::Gamma),
-    UnbindTarget(draw::Access, draw::Target),
-    BindTargetSurface(draw::Access, draw::Target, R::Surface),
-    BindTargetTexture(draw::Access, draw::Target, R::Texture, Level, Option<Layer>),
-    BindUniformBlock(R::Program, UniformBufferSlot, UniformBlockIndex,
-                     R::Buffer),
-    BindUniform(shade::Location, shade::UniformValue),
-    BindTexture(TextureSlot, tex::Kind, R::Texture,
-                Option<(R::Sampler, tex::SamplerInfo)>),
-    SetDrawColorBuffers(ColorSlot),
-    SetRasterizer(state::Rasterizer),
+#[derive(Clone, Copy, Debug)]
+pub enum Command {
+    BindProgram(Program),
+    BindPipelineState(PipelineState),
+    BindVertexBuffers(c::pso::VertexBufferSet<Resources>),
+    BindConstantBuffers(c::pso::ConstantBufferSet<Resources>),
+    BindPixelTargets(c::pso::PixelTargetSet<Resources>),
+    BindArrayBuffer(ArrayBuffer),
+    BindAttribute(c::AttributeSlot, Buffer, c::attrib::Format),
+    BindIndex(Buffer),
+    BindFrameBuffer(Access, FrameBuffer, Gamma),
+    UnbindTarget(Access, Target),
+    BindTargetSurface(Access, Target, Surface),
+    BindTargetTexture(Access, Target, Texture,
+                      Level, Option<Layer>),
+    BindUniformBlock(Program, c::UniformBufferSlot, c::UniformBlockIndex,
+                     Buffer),
+    BindUniform(c::shade::Location, c::shade::UniformValue),
+    BindTexture(c::TextureSlot, c::tex::Kind, Texture,
+                Option<(Sampler, c::tex::SamplerInfo)>),
+    SetDrawColorBuffers(c::ColorSlot),
+    SetRasterizer(s::Rasterizer),
     SetViewport(Rect),
     SetScissor(Option<Rect>),
-    SetDepthStencilState(Option<state::Depth>, Option<state::Stencil>,
-                         state::CullFace),
-    SetBlendState(ColorSlot, Option<state::Blend>),
-    SetRefValues(state::RefValues),
-    UpdateBuffer(R::Buffer, draw::DataPointer, usize),
-    UpdateTexture(tex::Kind, R::Texture, tex::ImageInfo,
-                  draw::DataPointer),
+    SetDepthStencilState(Option<s::Depth>, Option<s::Stencil>, s::CullFace),
+    SetBlendState(c::ColorSlot, Option<s::Blend>),
+    SetRefValues(s::RefValues),
+    UpdateBuffer(Buffer, DataPointer, usize),
+    UpdateTexture(c::tex::Kind, Texture, c::tex::ImageInfo, DataPointer),
     // drawing
     Clear(ClearData, Mask),
-    Draw(Primitive, VertexCount, VertexCount,
-         draw::InstanceOption),
-    DrawIndexed(Primitive, IndexType, VertexCount, VertexCount,
-                VertexCount, draw::InstanceOption),
+    Draw(c::Primitive, c::VertexCount, c::VertexCount, InstanceOption),
+    DrawIndexed(c::Primitive, c::IndexType, c::VertexCount, c::VertexCount,
+                c::VertexCount, InstanceOption),
     Blit(Rect, Rect, Mirror, Mask),
 }
 
-impl<R> CommandBuffer<R> where R: Resources {
-    pub fn iter<'a>(&'a self) -> slice::Iter<'a, Command<R>> {
-        self.buf.iter()
-    }
+pub struct CommandBuffer {
+    pub buf: Vec<Command>,
 }
 
-impl<R> draw::CommandBuffer<R> for CommandBuffer<R>
-        where R : Resources {
-
-    fn new() -> CommandBuffer<R> {
+impl c::draw::CommandBuffer<Resources> for CommandBuffer {
+    fn new() -> CommandBuffer {
         CommandBuffer {
             buf: Vec::new(),
         }
@@ -84,79 +74,79 @@ impl<R> draw::CommandBuffer<R> for CommandBuffer<R>
         self.buf.clear();
     }
 
-    fn bind_program(&mut self, prog: R::Program) {
+    fn bind_program(&mut self, prog: Program) {
         self.buf.push(Command::BindProgram(prog));
     }
 
-    fn bind_pipeline_state(&mut self, pso: R::PipelineStateObject) {
+    fn bind_pipeline_state(&mut self, pso: PipelineState) {
         self.buf.push(Command::BindPipelineState(pso));
     }
 
-    fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<R>) {
+    fn bind_vertex_buffers(&mut self, vbs: c::pso::VertexBufferSet<Resources>) {
         self.buf.push(Command::BindVertexBuffers(vbs));
     }
 
-    fn bind_constant_buffers(&mut self, cbs: pso::ConstantBufferSet<R>) {
+    fn bind_constant_buffers(&mut self, cbs: c::pso::ConstantBufferSet<Resources>) {
         self.buf.push(Command::BindConstantBuffers(cbs));
     }
 
-    fn bind_pixel_targets(&mut self, pts: pso::PixelTargetSet<R>) {
+    fn bind_pixel_targets(&mut self, pts: c::pso::PixelTargetSet<Resources>) {
         self.buf.push(Command::BindPixelTargets(pts));
     }
 
-    fn bind_array_buffer(&mut self, vao: R::ArrayBuffer) {
+    fn bind_array_buffer(&mut self, vao: ArrayBuffer) {
         self.buf.push(Command::BindArrayBuffer(vao));
     }
 
-    fn bind_attribute(&mut self, slot: AttributeSlot, buf: R::Buffer,
-                      format: attrib::Format) {
+    fn bind_attribute(&mut self, slot: c::AttributeSlot, buf: Buffer,
+                      format: c::attrib::Format) {
         self.buf.push(Command::BindAttribute(slot, buf, format));
     }
 
-    fn bind_index(&mut self, buf: R::Buffer) {
+    fn bind_index(&mut self, buf: Buffer) {
         self.buf.push(Command::BindIndex(buf));
     }
 
-    fn bind_frame_buffer(&mut self, access: draw::Access, fbo: R::FrameBuffer,
-                         gamma: draw::Gamma) {
+    fn bind_frame_buffer(&mut self, access: Access, fbo: FrameBuffer,
+                         gamma: Gamma) {
         self.buf.push(Command::BindFrameBuffer(access, fbo, gamma));
     }
 
-    fn unbind_target(&mut self, access: draw::Access, tar: draw::Target) {
+    fn unbind_target(&mut self, access: Access, tar: Target) {
         self.buf.push(Command::UnbindTarget(access, tar));
     }
 
-    fn bind_target_surface(&mut self, access: draw::Access, tar: draw::Target,
-                           suf: R::Surface) {
+    fn bind_target_surface(&mut self, access: Access, tar: Target,
+                           suf: Surface) {
         self.buf.push(Command::BindTargetSurface(access, tar, suf));
     }
 
-    fn bind_target_texture(&mut self, access: draw::Access, tar: draw::Target,
-                           tex: R::Texture, level: Level, layer: Option<Layer>) {
+    fn bind_target_texture(&mut self, access: Access, tar: Target,
+                           tex: Texture, level: Level, layer: Option<Layer>) {
         self.buf.push(Command::BindTargetTexture(
             access, tar, tex, level, layer));
     }
 
-    fn bind_uniform_block(&mut self, prog: R::Program, slot: UniformBufferSlot,
-                          index: UniformBlockIndex, buf: R::Buffer) {
+    fn bind_uniform_block(&mut self, prog: Program, slot: c::UniformBufferSlot,
+                          index: c::UniformBlockIndex, buf: Buffer) {
         self.buf.push(Command::BindUniformBlock(prog, slot, index, buf));
     }
 
-    fn bind_uniform(&mut self, loc: shade::Location,
-                    value: shade::UniformValue) {
+    fn bind_uniform(&mut self, loc: c::shade::Location,
+                    value: c::shade::UniformValue) {
         self.buf.push(Command::BindUniform(loc, value));
     }
 
-    fn bind_texture(&mut self, slot: TextureSlot, kind: tex::Kind, tex: R::Texture,
-                    sampler: Option<(R::Sampler, tex::SamplerInfo)>) {
+    fn bind_texture(&mut self, slot: c::TextureSlot, kind: c::tex::Kind, tex: Texture,
+                    sampler: Option<(Sampler, c::tex::SamplerInfo)>) {
         self.buf.push(Command::BindTexture(slot, kind, tex, sampler));
     }
 
-    fn set_draw_color_buffers(&mut self, num: ColorSlot) {
+    fn set_draw_color_buffers(&mut self, num: c::ColorSlot) {
         self.buf.push(Command::SetDrawColorBuffers(num));
     }
 
-    fn set_rasterizer(&mut self, rast: state::Rasterizer) {
+    fn set_rasterizer(&mut self, rast: s::Rasterizer) {
         self.buf.push(Command::SetRasterizer(rast));
     }
 
@@ -168,27 +158,27 @@ impl<R> draw::CommandBuffer<R> for CommandBuffer<R>
         self.buf.push(Command::SetScissor(rect));
     }
 
-    fn set_depth_stencil(&mut self, depth: Option<state::Depth>,
-                         stencil: Option<state::Stencil>,
-                         cull: state::CullFace) {
+    fn set_depth_stencil(&mut self, depth: Option<s::Depth>,
+                         stencil: Option<s::Stencil>,
+                         cull: s::CullFace) {
         self.buf.push(Command::SetDepthStencilState(depth, stencil, cull));
     }
 
-    fn set_blend(&mut self, slot: ColorSlot, blend: Option<state::Blend>) {
+    fn set_blend(&mut self, slot: c::ColorSlot, blend: Option<s::Blend>) {
         self.buf.push(Command::SetBlendState(slot, blend));
     }
 
-    fn set_ref_values(&mut self, rv: state::RefValues) {
+    fn set_ref_values(&mut self, rv: s::RefValues) {
         self.buf.push(Command::SetRefValues(rv));
     }
 
-    fn update_buffer(&mut self, buf: R::Buffer, data: draw::DataPointer,
+    fn update_buffer(&mut self, buf: Buffer, data: DataPointer,
                         offset_bytes: usize) {
         self.buf.push(Command::UpdateBuffer(buf, data, offset_bytes));
     }
 
-    fn update_texture(&mut self, kind: tex::Kind, tex: R::Texture,
-                      info: tex::ImageInfo, data: draw::DataPointer) {
+    fn update_texture(&mut self, kind: c::tex::Kind, tex: Texture,
+                      info: c::tex::ImageInfo, data: DataPointer) {
         self.buf.push(Command::UpdateTexture(kind, tex, info, data));
     }
 
@@ -196,15 +186,15 @@ impl<R> draw::CommandBuffer<R> for CommandBuffer<R>
         self.buf.push(Command::Clear(data, mask));
     }
 
-    fn call_draw(&mut self, prim: Primitive, start: VertexCount,
-                 count: VertexCount, instances: draw::InstanceOption) {
+    fn call_draw(&mut self, prim: c::Primitive, start: c::VertexCount,
+                 count: c::VertexCount, instances: InstanceOption) {
         self.buf.push(Command::Draw(prim, start, count, instances));
     }
 
-    fn call_draw_indexed(&mut self, prim: Primitive,
-                         itype: IndexType, start: VertexCount,
-                         count: VertexCount, base: VertexCount,
-                         instances: draw::InstanceOption) {
+    fn call_draw_indexed(&mut self, prim: c::Primitive,
+                         itype: c::IndexType, start: c::VertexCount,
+                         count: c::VertexCount, base: c::VertexCount,
+                         instances: InstanceOption) {
         self.buf.push(Command::DrawIndexed(
             prim, itype, start, count, base, instances));
     }

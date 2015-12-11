@@ -30,16 +30,17 @@ use gfx_core::draw::{Access, Gamma, Target};
 use gfx_core::handle;
 use gfx_core::state as s;
 use gfx_core::target::{Layer, Level};
+use command::Command;
 
-pub use gfx_core::command::{Command, CommandBuffer};
 pub use self::factory::{Factory, Output};
 pub use self::info::{Info, PlatformName, Version};
 
+pub mod command;
 mod factory;
+mod info;
 mod shade;
 mod state;
 mod tex;
-mod info;
 
 
 pub type Buffer         = gl::types::GLuint;
@@ -137,7 +138,7 @@ impl Error {
     }
 }
 
-const RESET_CB: [Command<Resources>; 14] = [
+const RESET_CB: [Command; 14] = [
     Command::BindProgram(0),
     //TODO: PSO
     Command::BindArrayBuffer(0),
@@ -288,7 +289,7 @@ impl Device {
     }
 
     /// Fails during a debug build if the implementation's error flag was set.
-    fn check(&mut self, cmd: &Command<Resources>) {
+    fn check(&mut self, cmd: &Command) {
         if cfg!(not(ndebug)) {
             let gl = &self.share.context;
             let err = Error::from_error_code(unsafe { gl.GetError() });
@@ -379,8 +380,7 @@ impl Device {
         }
     }
 
-    fn process(&mut self, cmd: &Command<Resources>,
-               data_buf: &d::draw::DataBuffer) {
+    fn process(&mut self, cmd: &Command, data_buf: &d::draw::DataBuffer) {
         match *cmd {
             Command::Clear(ref data, mask) => {
                 let mut flags = 0;
@@ -756,7 +756,7 @@ impl Device {
 
 impl d::Device for Device {
     type Resources = Resources;
-    type CommandBuffer = CommandBuffer<Resources>;
+    type CommandBuffer = command::CommandBuffer;
 
     fn get_capabilities<'a>(&'a self) -> &'a d::Capabilities {
         &self.share.capabilities
@@ -773,7 +773,7 @@ impl d::Device for Device {
         let d::SubmitInfo(cb, db, handles) = submit_info;
         self.frame_handles.extend(handles);
         self.reset_state();
-        for com in cb.iter() {
+        for com in &cb.buf {
             self.process(com, db);
         }
         match self.max_resource_count {
