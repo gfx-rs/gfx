@@ -228,6 +228,17 @@ bitflags!(
     }
 );
 
+/// Error creating either a RenderTargetView, or DepthStencilView
+#[derive(Clone, PartialEq, Debug)]
+pub enum TargetViewError {
+    /// The `RENDER_TARGET` flag does not present in the texture.
+    NoBindFlag,
+    /// Tried to view more than there is.
+    Size,
+    /// The backend refused for some reason.
+    Unsupported,
+}
+
 /// Resources pertaining to a specific API.
 #[allow(missing_docs)]
 pub trait Resources:          Clone + Hash + fmt::Debug + Eq + PartialEq {
@@ -328,8 +339,12 @@ pub trait Factory<R: Resources> {
         }
     }
 
-    fn create_texture_raw(&mut self, info: &tex::TextureInfo, bind: Bind)
-                          -> Result<handle::RawTexture<R>, tex::Error>;
+    fn create_new_texture_raw(&mut self, tex::TextureInfo, Bind)
+        -> Result<handle::RawTexture<R>, tex::Error>;
+    fn view_texture_as_render_target_raw(&mut self, &handle::RawTexture<R>, target::Level, Option<target::Layer>)
+        -> Result<handle::RawRenderTargetView<R>, TargetViewError>;
+    fn view_texture_as_depth_stencil_raw(&mut self, &handle::RawTexture<R>, Option<target::Layer>)
+        -> Result<handle::RawDepthStencilView<R>, TargetViewError>;
 }
 
 /// All the data needed simultaneously for submitting a command buffer for

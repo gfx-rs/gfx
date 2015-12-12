@@ -19,7 +19,7 @@
 use std::mem;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use {shade, tex, Resources, BufferInfo};
+use {shade, tex, Resources, Bind, BufferInfo};
 
 
 /// Raw (untyped) Buffer Handle
@@ -89,7 +89,14 @@ impl<R: Resources> Program<R> {
 pub struct RawPipelineState<R: Resources>(Arc<R::PipelineStateObject>, Arc<R::Program>);
 
 /// Raw texture object
-pub struct RawTexture<R: Resources>(Arc<R::NewTexture>);
+pub struct RawTexture<R: Resources>(Arc<R::NewTexture>, tex::TextureInfo, Bind);
+
+impl<R: Resources> RawTexture<R> {
+    /// Get texture info
+    pub fn get_info(&self) -> &tex::TextureInfo { &self.1 }
+    /// Get bind flags
+    pub fn get_bind(&self) -> Bind { self.2 }
+}
 
 /// Raw Shader Resource View Handle
 pub struct RawShaderResourceView<R: Resources>(Arc<R::ShaderResourceView>);
@@ -205,7 +212,7 @@ pub trait Producer<R: Resources> {
     fn make_shader(&mut self, R::Shader) -> Shader<R>;
     fn make_program(&mut self, R::Program, shade::ProgramInfo) -> Program<R>;
     fn make_pso(&mut self, R::PipelineStateObject, &Program<R>) -> RawPipelineState<R>;
-    fn make_new_texture(&mut self, R::NewTexture) -> RawTexture<R>;
+    fn make_new_texture(&mut self, R::NewTexture, tex::TextureInfo, Bind) -> RawTexture<R>;
     fn make_srv(&mut self, R::ShaderResourceView) -> RawShaderResourceView<R>;
     fn make_uav(&mut self, R::UnorderedAccessView) -> RawUnorderedAccessView<R>;
     fn make_frame_buffer(&mut self, R::FrameBuffer) -> FrameBuffer<R>;
@@ -268,10 +275,10 @@ impl<R: Resources> Producer<R> for Manager<R> {
         RawPipelineState(r, program.0.clone())
     }
 
-    fn make_new_texture(&mut self, res: R::NewTexture) -> RawTexture<R> {
+    fn make_new_texture(&mut self, res: R::NewTexture, info: tex::TextureInfo, bind: Bind) -> RawTexture<R> {
         let r = Arc::new(res);
         self.new_textures.push(r.clone());
-        RawTexture(r)
+        RawTexture(r, info, bind)
     }
 
     fn make_srv(&mut self, res: R::ShaderResourceView) -> RawShaderResourceView<R> {

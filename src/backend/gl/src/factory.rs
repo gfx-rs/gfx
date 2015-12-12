@@ -20,9 +20,10 @@ use gfx_core as d;
 use gfx_core::handle;
 use gfx_core::handle::Producer;
 use gfx_core::mapping::Builder;
+use gfx_core::target::{Layer, Level};
 use gfx_core::tex::Size;
 
-use {Buffer, NewTexture, OutputMerger, PipelineState, Program, Share};
+use {Buffer, NewTexture, OutputMerger, PipelineState, Program, Share, TargetView};
 use Resources as R;
 
 
@@ -143,6 +144,17 @@ impl Factory {
         ::shade::create_program(&self.share.context,
                                 &self.share.capabilities,
                                 shader_slice)
+    }
+
+    fn view_texture_as_target(&mut self, htex: &handle::RawTexture<R>, level: Level, layer: Option<Layer>)
+                    -> Result<TargetView, d::TargetViewError> {
+        match (self.frame_handles.ref_new_texture(htex), layer) {
+            (&NewTexture::Surface(_), Some(_)) => Err(d::TargetViewError::Unsupported),
+            (&NewTexture::Surface(_), None) if level != 0 => Err(d::TargetViewError::Unsupported),
+            (&NewTexture::Surface(s), None) => Ok(TargetView::Surface(s)),
+            (&NewTexture::Texture(t), Some(l)) => Ok(TargetView::TextureLayer(t, level, l)),
+            (&NewTexture::Texture(t), None) => Ok(TargetView::Texture(t, level)),
+        }
     }
 
     pub fn get_main_frame_buffer(&self) -> handle::FrameBuffer<R> {
@@ -269,7 +281,7 @@ impl d::Factory<R> for Factory {
         //TODO: texture & UBO binding
         //verification of the target output names
         let pso = PipelineState {
-            program: *self.share.handles.borrow_mut().ref_program(program),
+            program: *self.frame_handles.ref_program(program),
             primitive: desc.primitive,
             input: desc.attributes,
             rasterizer: desc.rasterizer,
@@ -320,8 +332,8 @@ impl d::Factory<R> for Factory {
         name.map(|tex| self.share.handles.borrow_mut().make_texture(tex, info))
     }
 
-    fn create_texture_raw(&mut self, info: &d::tex::TextureInfo, bind: d::Bind)
-                          -> Result<handle::RawTexture<R>, d::tex::Error> {
+    fn create_new_texture_raw(&mut self, info: d::tex::TextureInfo, bind: d::Bind)
+                              -> Result<handle::RawTexture<R>, d::tex::Error> {
         use gfx_core::tex::Error;
         let caps = &self.share.capabilities;
         if info.width == 0 || info.height == 0 || info.levels == 0 {
@@ -334,9 +346,9 @@ impl d::Factory<R> for Factory {
         let object = if bind.intersects(d::SHADER_RESOURCE | d::UNORDERED_ACCESS) {
             use gfx_core::tex::TextureError;
             let result = if caps.immutable_storage_supported {
-                tex::make_with_storage(gl, info)
+                tex::make_with_storage(gl, &info)
             } else {
-                tex::make_without_storage(gl, info)
+                tex::make_without_storage(gl, &info)
             };
             match result {
                 Ok(name) => NewTexture::Texture(name),
@@ -356,7 +368,19 @@ impl d::Factory<R> for Factory {
                 Err(SurfaceError::UnsupportedGamma) => return Err(Error::Gamma),
             }
         };
-        Ok(self.share.handles.borrow_mut().make_new_texture(object))
+        Ok(self.share.handles.borrow_mut().make_new_texture(object, info, bind))
+    }
+
+    fn view_texture_as_render_target_raw(&mut self, htex: &handle::RawTexture<R>, level: Level, layer: Option<Layer>)
+                                         -> Result<handle::RawRenderTargetView<R>, d::TargetViewError> {
+        self.view_texture_as_target(htex, level, layer)
+            .map(|view| self.share.handles.borrow_mut().make_rtv(view, htex))
+    }
+
+    fn view_texture_as_depth_stencil_raw(&mut self, htex: &handle::RawTexture<R>, layer: Option<Layer>)
+                                         -> Result<handle::RawDepthStencilView<R>, d::TargetViewError> {
+        self.view_texture_as_target(htex, 0, layer)
+            .map(|view| self.share.handles.borrow_mut().make_dsv(view, htex))
     }
 
     fn create_sampler(&mut self, info: d::tex::SamplerInfo) -> handle::Sampler<R> {

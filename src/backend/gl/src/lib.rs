@@ -93,7 +93,7 @@ pub struct OutputMerger {
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct PipelineState {
-    program: Program, //TODO: Arc<Program>
+    program: Program,
     primitive: d::Primitive,
     input: [Option<d::pso::AttributeDesc>; d::MAX_VERTEX_ATTRIBUTES],
     rasterizer: s::Rasterizer,
