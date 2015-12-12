@@ -77,6 +77,9 @@ impl<R: d::Resources, M> PipelineState<R, M> {
     pub fn get_handle(&self) -> &d::handle::RawPipelineState<R> {
         &self.0
     }
+    pub fn get_meta(&self) -> &M {
+        &self.2
+    }
     pub fn prepare_data<D: PipelineData<R, Meta=M>>(&self, data: &D,
                         handle_man: &mut d::handle::Manager<R>) -> RawDataSet<R>
     {
@@ -87,6 +90,7 @@ impl<R: d::Resources, M> PipelineState<R, M> {
 pub trait DataLink<'a>: Sized {
     type Init: 'a;
     fn new() -> Self;
+    fn is_active(&self) -> bool;
     fn link_input(&mut self, _: &d::shade::AttributeVar, _: &Self::Init) ->
                   Option<Result<d::pso::AttributeDesc, d::attrib::Format>> { None }
     fn link_constant_buffer(&mut self, _: &d::shade::ConstantBufferVar, _: &Self::Init) ->
@@ -142,6 +146,9 @@ impl<'a, T: Structure> DataLink<'a> for VertexBuffer<T> {
     fn new() -> Self {
         VertexBuffer(0, PhantomData)
     }
+    fn is_active(&self) -> bool {
+        self.0 != 0
+    }
     fn link_input(&mut self, at: &d::shade::AttributeVar, init: &Self::Init) ->
                   Option<Result<d::pso::AttributeDesc, d::attrib::Format>> {
         T::query(&at.name).map(|format| {
@@ -172,6 +179,9 @@ impl<'a, T: Structure> DataLink<'a> for ConstantBuffer<T> {
     fn new() -> Self {
         ConstantBuffer(None, PhantomData)
     }
+    fn is_active(&self) -> bool {
+        self.0.is_some()
+    }
     fn link_constant_buffer(&mut self, cb: &d::shade::ConstantBufferVar, init: &Self::Init) ->
                   Option<Result<(), d::attrib::Format>> {
         if &cb.name == *init {
@@ -197,6 +207,9 @@ impl<'a, T: d::attrib::format::ToFormat> DataLink<'a> for Constant<T> {
     type Init = &'a str;
     fn new() -> Self {
         Constant(None, PhantomData)
+    }
+    fn is_active(&self) -> bool {
+        self.0.is_some()
     }
     fn link_constant(&mut self, var: &d::shade::UniformVar, init: &Self::Init) ->
                   Option<Result<(), d::attrib::Format>> {
@@ -227,6 +240,9 @@ impl<'a,
     fn new() -> Self {
         RenderTargetCommon(None, PhantomData)
     }
+    fn is_active(&self) -> bool {
+        self.0.is_some()
+    }
     fn link_output(&mut self, out: &d::shade::OutputVar, init: &Self::Init) ->
                    Option<Result<d::pso::ColorTargetDesc, d::tex::Format>> {
         if &out.name == init.0 {
@@ -256,6 +272,9 @@ impl<'a,
     type Init = I;
     fn new() -> Self {
         DepthStencilCommon(PhantomData)
+    }
+    fn is_active(&self) -> bool {
+        true
     }
     fn link_depth_stencil(&mut self, init: &Self::Init) ->
                           Option<d::pso::DepthStencilDesc> {

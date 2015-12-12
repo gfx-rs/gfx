@@ -45,6 +45,7 @@ macro_rules! gfx_pipeline {
                     $(
                         match meta.$field.link_input(at, &self.$field) {
                             Some(Ok(d)) => {
+                                assert!(meta.$field.is_active());
                                 desc.attributes[at.slot as usize] = Some(d);
                                 continue;
                             },
@@ -60,7 +61,10 @@ macro_rules! gfx_pipeline {
                 for cb in &info.constant_buffers {
                     $(
                         match meta.$field.link_constant_buffer(cb, &self.$field) {
-                            Some(Ok(())) => continue,
+                            Some(Ok(())) => {
+                                assert!(meta.$field.is_active());
+                                continue;
+                            },
                             Some(Err(_)) => return Err(
                                 InitError::ConstantBuffer(cb.slot, Some(()))
                             ),
@@ -74,6 +78,7 @@ macro_rules! gfx_pipeline {
                     $(
                         match meta.$field.link_output(out, &self.$field) {
                             Some(Ok(d)) => {
+                                assert!(meta.$field.is_active());
                                 desc.color_targets[out.slot as usize] = Some(d);
                                 continue;
                             },
@@ -90,6 +95,7 @@ macro_rules! gfx_pipeline {
                     $(
                       match meta.$field.link_depth_stencil(&self.$field) {
                             Some(d) => {
+                                assert!(meta.$field.is_active());
                                 desc.depth_stencil = Some(d);
                                 continue;
                             },
