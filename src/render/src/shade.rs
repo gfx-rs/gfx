@@ -85,7 +85,7 @@ pub trait Parameter<R: Resources> {
     /// Check if this parameter is good for a given block.
     fn check_block(&shade::ConstantBufferVar) -> bool { false }
     /// Check if this parameter is good for a given texture.
-    fn check_texture(&shade::SamplerVar) -> bool { false }
+    fn check_texture(&shade::TextureVar) -> bool { false }
     /// Write into the parameter storage for rendering.
     fn put(&self, ParameterId, &mut ParamStorage<R>);
 }
@@ -121,7 +121,7 @@ impl<R: Resources, T> Parameter<R> for handle::Buffer<R, T> {
 }
 
 impl<R: Resources> Parameter<R> for TextureParam<R> {
-    fn check_texture(_var: &shade::SamplerVar) -> bool {
+    fn check_texture(_var: &shade::TextureVar) -> bool {
         true
     }
 

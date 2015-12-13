@@ -17,10 +17,7 @@
 #![allow(missing_docs)]
 
 use std::fmt;
-use {AttributeSlot, ColorSlot, ConstantBufferSlot};
-
-// Describing shader parameters
-// TOOD: Remove GL-isms, especially in the documentation.
+use {AttributeSlot, ColorSlot, ConstantBufferSlot, SamplerSlot, TextureSlot};
 
 /// Number of components in a container type (vectors/matrices)
 pub type Dimension = u8;
@@ -29,9 +26,9 @@ pub type Dimension = u8;
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum IsArray { Array, NoArray }
 
-/// Whether the sampler samples a shadow texture (texture with a depth comparison)
+/// Whether the sampler compares the depth value upon sampling.
 #[derive(Copy, Clone, PartialEq, Debug)]
-pub enum IsShadow { Shadow, NoShadow }
+pub enum IsComparison { Compare, NoCompare }
 
 /// Whether the sampler samples a multisample texture.
 #[derive(Copy, Clone, PartialEq, Debug)]
@@ -48,22 +45,39 @@ pub enum IsRect { Rect, NoRect }
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum MatrixFormat { ColumnMajor, RowMajor }
 
-/// What texture type this sampler samples from.
-///
-/// A single sampler cannot be used with multiple texture types.
+/// A type of the texture variable.
+/// This has to match the actual data we bind to the shader.
 #[derive(Copy, Clone, PartialEq, Debug)]
-pub enum SamplerType {
+pub enum TextureType {
     /// Sample from a buffer.
-    SamplerBuffer,
+    Buffer,
     /// Sample from a 1D texture
-    Sampler1D(IsArray, IsShadow),
+    D1(IsArray),
     /// Sample from a 2D texture
-    Sampler2D(IsArray, IsShadow, IsMultiSample, IsRect),
+    D2(IsArray, IsMultiSample),
     /// Sample from a 3D texture
-    Sampler3D,
+    D3,
     /// Sample from a cubemap.
-    SamplerCube(IsShadow),
+    Cube,
 }
+
+impl TextureType {
+    /// Check if this texture can be used with a sampler.
+    pub fn can_sample(&self) -> bool {
+        match self {
+            &TextureType::Buffer => false,
+            &TextureType::D1(_) => true,
+            &TextureType::D2(_, IsMultiSample::MultiSample) => false,
+            &TextureType::D2(_, IsMultiSample::NoMultiSample) => true,
+            &TextureType::D3 => true,
+            &TextureType::Cube => true,
+        }
+    }
+}
+
+/// A type of the sampler variable.
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub struct SamplerType(pub IsComparison, pub IsRect);
 
 /// Base type of this shader parameter.
 #[allow(missing_docs)]
@@ -252,17 +266,28 @@ pub struct ConstantBufferVar {
     pub usage: u8,
 }
 
-/// Sampler, a type of shader parameter representing a texture that can be sampled.
+/// Texture shader parameter.
+#[derive(Clone, PartialEq, Debug)]
+pub struct TextureVar {
+    /// Name of this texture variable.
+    pub name: String,
+    /// Slot of this texture variable.
+    pub slot: TextureSlot,
+    /// Base type for the texture.
+    pub base_type: BaseType,
+    /// Type of this texture.
+    pub ty: TextureType,
+}
+
+/// Sampler shader parameter.
 #[derive(Clone, PartialEq, Debug)]
 pub struct SamplerVar {
     /// Name of this sampler variable.
     pub name: String,
-    /// Location of this sampler in the program.
-    pub location: Location,
-    /// Base type for the sampler.
-    pub base_type: BaseType,
+    /// Slot of this sampler variable.
+    pub slot: SamplerSlot,
     /// Type of this sampler.
-    pub sampler_type: SamplerType,
+    pub ty: SamplerType,
 }
 
 /// Target output variable.
@@ -277,14 +302,16 @@ pub struct OutputVar {
 /// Metadata about a program.
 #[derive(Clone, PartialEq, Debug)]
 pub struct ProgramInfo {
-    /// Attributes in the program.
+    /// Attributes in the program
     pub vertex_attributes: Vec<AttributeVar>,
     /// Uniforms in the program
     pub uniforms: Vec<UniformVar>,
     /// Constant buffers in the program
     pub constant_buffers: Vec<ConstantBufferVar>,
+    /// Textures in the program
+    pub textures: Vec<TextureVar>,
     /// Samplers in the program
-    pub textures: Vec<SamplerVar>,
+    pub samplers: Vec<SamplerVar>,
     /// Output targets in the program
     pub outputs: Vec<OutputVar>,
 }

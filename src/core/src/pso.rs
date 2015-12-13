@@ -14,7 +14,7 @@
 
 //! Pipeline State Objects
 
-use {MAX_COLOR_TARGETS, MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS};
+use {MAX_COLOR_TARGETS, MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS, MAX_SAMPLERS};
 use {Primitive, Resources};
 use {attrib, tex};
 use state as s;
@@ -151,8 +151,8 @@ impl<R: Resources> ConstantBufferSet<R> {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
 /// A complete set of render targets to be used for pixel export in PSO.
+#[derive(Copy, Clone, Debug)]
 pub struct PixelTargetSet<R: Resources> {
     /// Array of color target views
     pub colors: [Option<R::RenderTargetView>; MAX_COLOR_TARGETS],
@@ -170,3 +170,16 @@ impl<R: Resources> PixelTargetSet<R> {
     }
 }
 
+/// A complete set of samplers to be used for PSO.
+#[derive(Copy, Clone, Debug)]
+pub struct SamplerSet<R: Resources>(
+    /// Array of samplers
+    pub [Option<R::Sampler>; MAX_SAMPLERS]
+);
+
+impl<R: Resources> SamplerSet<R> {
+    /// Create an empty set
+    pub fn new() -> SamplerSet<R> {
+        SamplerSet([None; MAX_SAMPLERS])
+    }
+}

@@ -482,6 +482,7 @@ impl<R: Resources> Manager<R> {
     /// Reference a pipeline state object
     pub fn ref_pso<'a>(&mut self, handle: &'a RawPipelineState<R>) -> (&'a R::PipelineStateObject, &'a R::Program) {
         self.psos.push(handle.0.clone());
+        self.programs.push(handle.1.clone());
         (&handle.0, &handle.1)
     }
     /// Reference a texture
@@ -512,11 +513,13 @@ impl<R: Resources> Manager<R> {
     /// Reference an RTV
     pub fn ref_rtv<'a>(&mut self, handle: &'a RawRenderTargetView<R>) -> &'a R::RenderTargetView {
         self.rtvs.push(handle.0.clone());
+        self.new_textures.push(handle.1.clone());
         &handle.0
     }
     /// Reference a DSV
     pub fn ref_dsv<'a>(&mut self, handle: &'a RawDepthStencilView<R>) -> &'a R::DepthStencilView {
         self.dsvs.push(handle.0.clone());
+        self.new_textures.push(handle.1.clone());
         &handle.0
     }
     /// Reference a texture

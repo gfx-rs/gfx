@@ -43,24 +43,24 @@ pub mod tex;
 pub const MAX_VERTEX_ATTRIBUTES: usize = 16;
 /// Compile-time maximum number of constant buffers.
 pub const MAX_CONSTANT_BUFFERS: usize = 16;
+/// Compile-time maximum number of samplers.
+pub const MAX_SAMPLERS: usize = 16;
 
 /// Draw vertex count.
 pub type VertexCount = u32;
 /// Draw number of instances
 pub type InstanceCount = u32;
+
 /// Slot for an attribute.
 pub type AttributeSlot = u8;
 /// Slot for a constant buffer object.
 pub type ConstantBufferSlot = u8;
-/// Slot a texture can be bound to.
+/// Slot for a texture.
 pub type TextureSlot = u8;
 /// Slot for an active color buffer.
 pub type ColorSlot = u8;
-
-/// Index of a uniform block.
-pub type UniformBlockIndex = u8;    //TODO: remove
-/// Slot for a uniform buffer object.
-pub type UniformBufferSlot = u8;    //TODO: remove
+/// Slot for a sampler.
+pub type SamplerSlot = u8;
 
 /// Generic error for features that are not supported
 /// by the device capabilities.
@@ -255,7 +255,7 @@ pub trait Resources:          Clone + Hash + fmt::Debug + Eq + PartialEq {
     type RenderTargetView:    Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync + Copy;
     type DepthStencilView:    Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
     type Texture:             Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
-    type Sampler:             Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
+    type Sampler:             Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync + Copy;
     type Fence:               Clone + Hash + fmt::Debug + Eq + PartialEq + Send + Sync;
 }
 

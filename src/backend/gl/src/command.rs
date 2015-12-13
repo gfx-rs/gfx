@@ -37,8 +37,7 @@ pub enum Command {
     BindTargetSurface(Access, Target, Surface),
     BindTargetTexture(Access, Target, Texture,
                       Level, Option<Layer>),
-    BindUniformBlock(Program, c::UniformBufferSlot, c::UniformBlockIndex,
-                     Buffer),
+    BindUniformBlock(c::ConstantBufferSlot, Buffer),
     BindUniform(c::shade::Location, c::shade::UniformValue),
     BindTexture(c::TextureSlot, c::tex::Kind, Texture,
                 Option<(Sampler, c::tex::SamplerInfo)>),
@@ -127,9 +126,8 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
             access, tar, tex, level, layer));
     }
 
-    fn bind_uniform_block(&mut self, prog: Program, slot: c::UniformBufferSlot,
-                          index: c::UniformBlockIndex, buf: Buffer) {
-        self.buf.push(Command::BindUniformBlock(prog, slot, index, buf));
+    fn bind_uniform_block(&mut self, slot: c::ConstantBufferSlot, buf: Buffer) {
+        self.buf.push(Command::BindUniformBlock(slot, buf));
     }
 
     fn bind_uniform(&mut self, loc: c::shade::Location,

@@ -58,7 +58,8 @@ pub use pso::{PipelineState, VertexBuffer, ConstantBuffer,
               Constant, PER_VERTEX, PER_INSTANCE,
               TextureFormat, BlendFormat, RenderTarget, BlendTarget,
               DepthStencilFormat, DepthStencilTarget,
-              DepthFormat, StencilFormat, DepthTarget, StencilTarget};
+              DepthFormat, StencilFormat, DepthTarget, StencilTarget,
+              Sampler};
 pub use target::{Frame};
 pub use extra::factory::PipelineStateError;
 pub use extra::shade::{ShaderSource, ProgramError};
@@ -76,8 +77,6 @@ pub mod pso;
 pub mod shade;
 /// Render targets
 pub mod target;
-/// Contains the logic for the Texture LRU
-mod texture_cache;
 /// Extra core extensions
 pub mod extra;
 /// Convenience macros

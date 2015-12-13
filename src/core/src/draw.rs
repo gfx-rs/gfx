@@ -16,7 +16,7 @@
 
 use draw_state::target;
 use {Resources, IndexType, InstanceCount, VertexCount, Primitive,
-     AttributeSlot, TextureSlot, ColorSlot, UniformBufferSlot, UniformBlockIndex};
+     AttributeSlot, TextureSlot, ColorSlot, ConstantBufferSlot};
 use {attrib, pso, shade, tex};
 use state as s;
 
@@ -130,9 +130,7 @@ pub trait CommandBuffer<R: Resources> {
     fn bind_target_texture(&mut self, Access, Target, R::Texture,
                            target::Level, Option<target::Layer>);
     /// Bind a uniform block
-    fn bind_uniform_block(&mut self, R::Program,
-                          UniformBufferSlot, UniformBlockIndex,
-                          R::Buffer);
+    fn bind_uniform_block(&mut self, ConstantBufferSlot, R::Buffer);
     /// Bind a single uniform in the default block
     fn bind_uniform(&mut self, shade::Location, shade::UniformValue);
     /// Bind a texture

@@ -15,7 +15,7 @@
 #![allow(missing_docs)]
 
 use {Capabilities, Device, Resources, SubmitInfo};
-use {AttributeSlot, ColorSlot, TextureSlot, UniformBufferSlot, UniformBlockIndex};
+use {AttributeSlot, ColorSlot, TextureSlot, ConstantBufferSlot};
 use {IndexType, Primitive, VertexCount};
 use {attrib, draw, pso, shade, target, tex};
 use state as s;
@@ -93,8 +93,7 @@ impl draw::CommandBuffer<DummyResources> for DummyCommandBuffer {
     fn bind_target_surface(&mut self, _: draw::Access, _: draw::Target, _: ()) {}
     fn bind_target_texture(&mut self, _: draw::Access, _: draw::Target, _: (),
                            _: target::Level, _: Option<target::Layer>) {}
-    fn bind_uniform_block(&mut self, _: (), _: UniformBufferSlot,
-                          _: UniformBlockIndex, _: ()) {}
+    fn bind_uniform_block(&mut self, _: ConstantBufferSlot, _: ()) {}
     fn bind_uniform(&mut self, _: shade::Location, _: shade::UniformValue) {}
     fn bind_texture(&mut self, _: TextureSlot, _: tex::Kind, _: (),
                     _: Option<((), tex::SamplerInfo)>) {}

@@ -25,6 +25,7 @@ pub struct RawDataSet<R: d::Resources>{
     pub vertex_buffers: d::pso::VertexBufferSet<R>,
     pub constant_buffers: d::pso::ConstantBufferSet<R>,
     pub constants: Vec<(d::shade::Location, d::shade::UniformValue)>,
+    pub samplers: d::pso::SamplerSet<R>,
     pub pixel_targets: d::pso::PixelTargetSet<R>,
     pub ref_values: d::state::RefValues,
     pub scissor: Option<d::target::Rect>,
@@ -36,6 +37,7 @@ impl<R: d::Resources> RawDataSet<R> {
             vertex_buffers: d::pso::VertexBufferSet::new(),
             constant_buffers: d::pso::ConstantBufferSet::new(),
             constants: Vec::new(),
+            samplers: d::pso::SamplerSet::new(),
             pixel_targets: d::pso::PixelTargetSet::new(),
             ref_values: Default::default(),
             scissor: None,
@@ -101,6 +103,7 @@ pub trait DataLink<'a>: Sized {
                    Option<Result<d::pso::ColorTargetDesc, d::tex::Format>> { None }
     fn link_depth_stencil(&mut self, _: &Self::Init) ->
                           Option<d::pso::DepthStencilDesc> { None }
+    fn link_sampler(&mut self, _: &d::shade::SamplerVar, _: &Self::Init) -> Option<()> { None }
 }
 
 pub trait DataBind<R: d::Resources> {
@@ -136,6 +139,7 @@ pub struct DepthStencilCommon<T: DepthStencilFormat, I>(PhantomData<(T, I)>);
 pub type DepthTarget<T: DepthFormat> = DepthStencilCommon<T, d::state::Depth>;
 pub type StencilTarget<T: StencilFormat> = DepthStencilCommon<T, d::state::Stencil>;
 pub type DepthStencilTarget<T: DepthStencilFormat> = DepthStencilCommon<T, (d::state::Depth, d::state::Stencil)>;
+pub struct Sampler(Option<d::SamplerSlot>);
 
 fn match_attribute(_: &d::shade::AttributeVar, _: d::attrib::Format) -> bool {
     true //TODO
@@ -288,5 +292,33 @@ impl<R: d::Resources, T: DepthStencilFormat, I> DataBind<R> for DepthStencilComm
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
         let value = Some(man.ref_dsv(data.raw()).clone());
         out.pixel_targets.depth_stencil = value;
+    }
+}
+
+impl<'a> DataLink<'a> for Sampler {
+    type Init = &'a str;
+    fn new() -> Self {
+        Sampler(None)
+    }
+    fn is_active(&self) -> bool {
+        self.0.is_some()
+    }
+    fn link_sampler(&mut self, var: &d::shade::SamplerVar, init: &Self::Init) -> Option<()> {
+        if *init == var.name {
+            self.0 = Some(var.slot);
+            Some(())
+        }else {
+            None
+        }
+    }
+}
+
+impl<R: d::Resources> DataBind<R> for Sampler {
+    type Data = d::handle::Sampler<R>;
+    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
+        if let Some(slot) = self.0 {
+            let value = Some(man.ref_sampler(data).clone());
+            out.samplers.0[slot as usize] = value;
+        }
     }
 }

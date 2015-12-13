@@ -34,7 +34,6 @@ use mesh;
 use pso;
 use shade::TextureParam;
 use target;
-use texture_cache::TextureCache;
 
 /// An error occuring in surface blits.
 #[derive(Clone, Debug, PartialEq)]
@@ -175,7 +174,6 @@ pub struct Encoder<R: Resources, C: CommandBuffer<R>> {
     read_frame_buffer: Result<handle::FrameBuffer<R>, device::NotSupported>,
     render_state: RenderState<R>,
     parameters: ParamStorage<R>,
-    texture_cache: TextureCache<R>,
 }
 
 impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
@@ -185,7 +183,6 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
         self.data_buffer.clear();
         self.handles.clear();
         self.render_state = RenderState::new();
-        self.texture_cache.clear();
     }
 
     /// Get command and data buffers to be submitted to the device.
@@ -205,7 +202,6 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
             read_frame_buffer: self.read_frame_buffer.clone(),
             render_state: RenderState::new(),
             parameters: ParamStorage::new(),
-            texture_cache: TextureCache::new(self.texture_cache.number_of_slots()),
         }
     }
 
@@ -515,26 +511,13 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
             }
         }
         // bind uniform blocks
-        for (i, (var, value)) in info.constant_buffers.iter()
-            .zip(self.parameters.blocks.iter()).enumerate() {
+        for (var, value) in info.constant_buffers.iter()
+            .zip(self.parameters.blocks.iter()) {
             match value {
                 &Some(ref buf) => self.command_buffer.bind_uniform_block(
-                    self.handles.ref_program(program).clone(),
-                    i as device::UniformBufferSlot,
-                    i as device::UniformBlockIndex,
-                    self.handles.ref_buffer(buf).clone()
-                ),
+                    var.slot, self.handles.ref_buffer(buf).clone()),
                 &None => error!("Missed block {}", var.name),
             }
-        }
-
-        // If the number of slots is greater then the number of active textures
-        // we will fail the bind in the device, so we might as well fail here
-        if self.texture_cache.number_of_slots() < info.textures.len() {
-            panic!("Insufficient textures slots to draw batch slots:{} have:{}",
-                self.texture_cache.number_of_slots(),
-                info.textures.len()
-            );
         }
 
         // bind textures and samplers
@@ -542,7 +525,8 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
             .zip(self.parameters.textures.iter()) {
             match value {
                 &Some((ref tex, ref sampler)) => {
-                    let sam = match sampler {
+                    let texture = self.handles.ref_texture(tex).clone();
+                    let s_param = match sampler {
                         &Some(ref s) => {
                             if tex.get_info().kind.get_aa_mode().is_some() {
                                 error!("A sampler provided for an AA texture: {}", var.name);
@@ -551,17 +535,8 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
                         },
                         &None => None,
                     };
-
-                    let info = tex.get_info();
-                    let texture = self.handles.ref_texture(tex).clone();
-
-                    // This will find a slot that the texture is already bound to
-                    // if there is no slot it will create one and return a slot
-                    let i = self.texture_cache.bind_texture(
-                        info.kind, texture, sam, &mut self.command_buffer
-                    );
-
-                    self.command_buffer.bind_uniform(var.location, UniformValue::I32(i as i32));
+                    self.command_buffer.bind_texture(var.slot,
+                        tex.get_info().kind, texture, s_param);
                 },
                 &None => error!("Missed texture {}", var.name),
             }
@@ -647,9 +622,6 @@ pub trait EncoderFactory<R: Resources, C: CommandBuffer<R>> {
     fn create_encoder(&mut self) -> Encoder<R, C>;
 }
 
-/// This is taken from the the OpenGL ES 3 spec
-const DEFAULT_MAX_COMBINED_TEXTURE_IMAGE_UNITS: usize = 32;
-
 impl<
     R: Resources,
     C: CommandBuffer<R>,
@@ -665,7 +637,6 @@ impl<
             read_frame_buffer: self.create_frame_buffer(),
             render_state: RenderState::new(),
             parameters: ParamStorage::new(),
-            texture_cache: TextureCache::new(DEFAULT_MAX_COMBINED_TEXTURE_IMAGE_UNITS),
         }
     }
 }

@@ -525,11 +525,10 @@ impl Device {
                         point, att, name, level as gl::types::GLint) },
                 }
             },
-            Command::BindUniformBlock(program, slot, loc, buffer) => {
+            Command::BindUniformBlock(slot, buffer) => {
                 let gl = &self.share.context;
                 unsafe {
-                    gl.UniformBlockBinding(program, slot as gl::types::GLuint, loc as gl::types::GLuint);
-                    gl.BindBufferBase(gl::UNIFORM_BUFFER, loc as gl::types::GLuint, buffer);
+                    gl.BindBufferBase(gl::UNIFORM_BUFFER, slot as gl::types::GLuint, buffer);
                 }
             },
             Command::BindUniform(loc, uniform) => {
