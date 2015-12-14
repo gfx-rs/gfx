@@ -111,6 +111,8 @@ pub trait CommandBuffer<R: Resources> {
     fn bind_vertex_buffers(&mut self, pso::VertexBufferSet<R>);
     /// Bind a complete set of constant buffers
     fn bind_constant_buffers(&mut self, pso::ConstantBufferSet<R>);
+    /// Bind a complete set of samplers
+    fn bind_samplers(&mut self, pso::SamplerSet<R>);
     /// Bind a complete set of pixel targets, including multiple
     /// colors views and an optional depth/stencil view.
     fn bind_pixel_targets(&mut self, pso::PixelTargetSet<R>);
@@ -135,7 +137,7 @@ pub trait CommandBuffer<R: Resources> {
     fn bind_uniform(&mut self, shade::Location, shade::UniformValue);
     /// Bind a texture
     fn bind_texture(&mut self, TextureSlot, tex::Kind,
-                    R::Texture, Option<(R::Sampler, tex::SamplerInfo)>);
+                    R::Texture, Option<R::Sampler>);
     /// Select, which color buffers are going to be targetted by the shader
     fn set_draw_color_buffers(&mut self, ColorSlot);
     /// Set rasterizer state

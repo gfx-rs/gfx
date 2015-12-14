@@ -84,6 +84,7 @@ impl draw::CommandBuffer<DummyResources> for DummyCommandBuffer {
     fn bind_pipeline_state(&mut self, _: ()) {}
     fn bind_vertex_buffers(&mut self, _: pso::VertexBufferSet<DummyResources>) {}
     fn bind_constant_buffers(&mut self, _: pso::ConstantBufferSet<DummyResources>) {}
+    fn bind_samplers(&mut self, _: pso::SamplerSet<DummyResources>) {}
     fn bind_pixel_targets(&mut self, _: pso::PixelTargetSet<DummyResources>) {}
     fn bind_array_buffer(&mut self, _: ()) {}
     fn bind_attribute(&mut self, _: AttributeSlot, _: (), _: attrib::Format) {}
@@ -95,8 +96,7 @@ impl draw::CommandBuffer<DummyResources> for DummyCommandBuffer {
                            _: target::Level, _: Option<target::Layer>) {}
     fn bind_uniform_block(&mut self, _: ConstantBufferSlot, _: ()) {}
     fn bind_uniform(&mut self, _: shade::Location, _: shade::UniformValue) {}
-    fn bind_texture(&mut self, _: TextureSlot, _: tex::Kind, _: (),
-                    _: Option<((), tex::SamplerInfo)>) {}
+    fn bind_texture(&mut self, _: TextureSlot, _: tex::Kind, _: (), _: Option<()>) {}
     fn set_draw_color_buffers(&mut self, _: ColorSlot) {}
     fn set_rasterizer(&mut self, _: s::Rasterizer) {}
     fn set_viewport(&mut self, _: target::Rect) {}

@@ -531,11 +531,11 @@ pub fn bind_sampler(gl: &gl::Gl, anchor: BindAnchor, info: &SamplerInfo) { unsaf
     gl.TexParameteri(target, gl::TEXTURE_WRAP_T, wrap_to_gl(t) as GLint);
     gl.TexParameteri(target, gl::TEXTURE_WRAP_R, wrap_to_gl(r) as GLint);
 
-    gl.TexParameterf(target, gl::TEXTURE_LOD_BIAS, info.lod_bias);
+    gl.TexParameterf(target, gl::TEXTURE_LOD_BIAS, info.lod_bias.into());
 
     let (min, max) = info.lod_range;
-    gl.TexParameterf(target, gl::TEXTURE_MIN_LOD, min);
-    gl.TexParameterf(target, gl::TEXTURE_MAX_LOD, max);
+    gl.TexParameterf(target, gl::TEXTURE_MIN_LOD, min.into());
+    gl.TexParameterf(target, gl::TEXTURE_MAX_LOD, max.into());
 
     match info.comparison {
         None => gl.TexParameteri(target, gl::TEXTURE_COMPARE_MODE, gl::NONE as GLint),
@@ -748,11 +748,11 @@ pub fn make_sampler(gl: &gl::Gl, info: &SamplerInfo) -> Sampler { unsafe {
     gl.SamplerParameteri(name, gl::TEXTURE_WRAP_T, wrap_to_gl(t) as GLint);
     gl.SamplerParameteri(name, gl::TEXTURE_WRAP_R, wrap_to_gl(r) as GLint);
 
-    gl.SamplerParameterf(name, gl::TEXTURE_LOD_BIAS, info.lod_bias);
+    gl.SamplerParameterf(name, gl::TEXTURE_LOD_BIAS, info.lod_bias.into());
 
     let (min, max) = info.lod_range;
-    gl.SamplerParameterf(name, gl::TEXTURE_MIN_LOD, min);
-    gl.SamplerParameterf(name, gl::TEXTURE_MAX_LOD, max);
+    gl.SamplerParameterf(name, gl::TEXTURE_MIN_LOD, min.into());
+    gl.SamplerParameterf(name, gl::TEXTURE_MAX_LOD, max.into());
 
     match info.comparison {
         None => gl.SamplerParameteri(name, gl::TEXTURE_COMPARE_MODE, gl::NONE as GLint),

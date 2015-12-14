@@ -23,7 +23,8 @@ use gfx_core::mapping::Builder;
 use gfx_core::target::{Layer, Level};
 use gfx_core::tex::Size;
 
-use {Buffer, NewTexture, OutputMerger, PipelineState, Program, Share, TargetView};
+use {Share, OutputMerger};
+use {Buffer, NewTexture, PipelineState, FatSampler, Program, TargetView};
 use Resources as R;
 
 
@@ -384,10 +385,14 @@ impl d::Factory<R> for Factory {
     }
 
     fn create_sampler(&mut self, info: d::tex::SamplerInfo) -> handle::Sampler<R> {
-        let sam = if self.share.capabilities.sampler_objects_supported {
+        let name = if self.share.capabilities.sampler_objects_supported {
             tex::make_sampler(&self.share.context, &info)
         } else {
             0
+        };
+        let sam = FatSampler {
+            object: name,
+            info: info.clone(),
         };
         self.share.handles.borrow_mut().make_sampler(sam, info)
     }

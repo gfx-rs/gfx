@@ -531,7 +531,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
                             if tex.get_info().kind.get_aa_mode().is_some() {
                                 error!("A sampler provided for an AA texture: {}", var.name);
                             }
-                            Some((self.handles.ref_sampler(s).clone(), *s.get_info()))
+                            Some(self.handles.ref_sampler(s).clone())
                         },
                         &None => None,
                     };
@@ -610,6 +610,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
         for &(location, value) in &raw_data.constants {
             self.command_buffer.bind_uniform(location, value);
         }
+        self.command_buffer.bind_samplers(raw_data.samplers);
         self.command_buffer.bind_pixel_targets(raw_data.pixel_targets);
         //TODO: bind more stuff (b#, s#, t#, u#)
         self.draw_slice(slice, None);

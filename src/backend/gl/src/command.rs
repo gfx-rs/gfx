@@ -18,8 +18,8 @@ use gfx_core as c;
 use gfx_core::draw::{Access, Gamma, Target, DataPointer, InstanceOption};
 use gfx_core::state as s;
 use gfx_core::target::{ClearData, Layer, Level, Mask, Mirror, Rect};
-use {Buffer, ArrayBuffer, Program, FrameBuffer, Surface, Sampler, Texture,
-     Resources, PipelineState};
+use {Buffer, ArrayBuffer, Program, FrameBuffer, Surface, Texture,
+     Resources, PipelineState, FatSampler};
 
 ///Serialized device command.
 #[derive(Clone, Copy, Debug)]
@@ -28,6 +28,7 @@ pub enum Command {
     BindPipelineState(PipelineState),
     BindVertexBuffers(c::pso::VertexBufferSet<Resources>),
     BindConstantBuffers(c::pso::ConstantBufferSet<Resources>),
+    BindSamplers(c::pso::SamplerSet<Resources>),
     BindPixelTargets(c::pso::PixelTargetSet<Resources>),
     BindArrayBuffer(ArrayBuffer),
     BindAttribute(c::AttributeSlot, Buffer, c::attrib::Format),
@@ -39,8 +40,7 @@ pub enum Command {
                       Level, Option<Layer>),
     BindUniformBlock(c::ConstantBufferSlot, Buffer),
     BindUniform(c::shade::Location, c::shade::UniformValue),
-    BindTexture(c::TextureSlot, c::tex::Kind, Texture,
-                Option<(Sampler, c::tex::SamplerInfo)>),
+    BindTexture(c::TextureSlot, c::tex::Kind, Texture, Option<FatSampler>),
     SetDrawColorBuffers(c::ColorSlot),
     SetRasterizer(s::Rasterizer),
     SetViewport(Rect),
@@ -87,6 +87,10 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
 
     fn bind_constant_buffers(&mut self, cbs: c::pso::ConstantBufferSet<Resources>) {
         self.buf.push(Command::BindConstantBuffers(cbs));
+    }
+
+    fn bind_samplers(&mut self, ss: c::pso::SamplerSet<Resources>) {
+        self.buf.push(Command::BindSamplers(ss));
     }
 
     fn bind_pixel_targets(&mut self, pts: c::pso::PixelTargetSet<Resources>) {
@@ -136,7 +140,7 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
     }
 
     fn bind_texture(&mut self, slot: c::TextureSlot, kind: c::tex::Kind, tex: Texture,
-                    sampler: Option<(Sampler, c::tex::SamplerInfo)>) {
+                    sampler: Option<FatSampler>) {
         self.buf.push(Command::BindTexture(slot, kind, tex, sampler));
     }
 

@@ -40,7 +40,7 @@ gfx_pipeline_init!( _Data _Meta _Init {
     _gobal: gfx::Constant<[f32; 4]> = "Global",
     //tex_diffuse: TextureView<Dim2, Float4>,
     //tex_normal: TextureView<Dim2, Float3>,
-    //sampler_linear: Sampler,
+    sampler_linear: gfx::Sampler = "Linear",
     //buf_noise: BufferView<Int4>,
     //buf_frequency: UnorderedView<Dim2, Int>,
     pixel_color: gfx::RenderTarget<Rgba> = ("Color", gfx::state::MASK_ALL),

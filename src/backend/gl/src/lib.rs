@@ -49,8 +49,8 @@ pub type Shader         = gl::types::GLuint;
 pub type Program        = gl::types::GLuint;
 pub type FrameBuffer    = gl::types::GLuint;
 pub type Surface        = gl::types::GLuint;
-pub type Sampler        = gl::types::GLuint;
 pub type Texture        = gl::types::GLuint;
+pub type Sampler        = gl::types::GLuint;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Fence(gl::types::GLsync);
@@ -75,7 +75,7 @@ impl d::Resources for Resources {
     type ShaderResourceView  = Texture; //TODO
     type UnorderedAccessView = Texture; //TODO
     type Texture             = Texture;
-    type Sampler             = Sampler;
+    type Sampler             = FatSampler;
     type Fence               = Fence;
 }
 
@@ -104,6 +104,12 @@ pub struct PipelineState {
 pub enum NewTexture {
     Surface(Surface),
     Texture(Texture),
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct FatSampler {
+    object: Sampler,
+    info: d::tex::SamplerInfo,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -217,6 +223,7 @@ pub struct Share {
 struct Temp {
     primitive: gl::types::GLenum,
     attributes: [Option<d::pso::AttributeDesc>; d::MAX_VERTEX_ATTRIBUTES],
+    resource_views: [Option<(Texture, tex::BindAnchor)>; d::MAX_RESOURCE_VIEWS],
     stencil: Option<s::Stencil>,
     cull_face: s::CullFace,
 }
@@ -226,6 +233,7 @@ impl Temp {
         Temp {
             primitive: 0,
             attributes: [None; d::MAX_VERTEX_ATTRIBUTES],
+            resource_views: [None; d::MAX_RESOURCE_VIEWS],
             stencil: None,
             cull_face: s::CullFace::Nothing,
         }
@@ -450,6 +458,24 @@ impl Device {
                     }
                 }
             },
+            Command::BindSamplers(ss) => {
+                let gl = &self.share.context;
+                for i in 0 .. d::MAX_SAMPLERS {
+                    if let Some(s) = ss.0[i] {
+                        if self.share.capabilities.sampler_objects_supported {
+                            unsafe { gl.BindSampler(i as gl::types::GLenum, s.object) };
+                        } else {
+                            assert!(d::MAX_SAMPLERS <= d::MAX_RESOURCE_VIEWS);
+                            debug_assert_eq!(s.object, 0);
+                            if let Some((_, anchor)) = self.temp.resource_views[i] {
+                                tex::bind_sampler(gl, anchor, &s.info);
+                            }else {
+                                error!("Trying to bind a sampler to slot {}, when sampler objects are not supported, and no texture is bound there", i);
+                            }
+                        }
+                    }
+                }
+            },
             Command::BindPixelTargets(pts) => {
                 let point = gl::DRAW_FRAMEBUFFER;
                 for i in 0 .. d::MAX_COLOR_TARGETS {
@@ -541,12 +567,12 @@ impl Device {
                     gl::TEXTURE0 + slot as gl::types::GLenum,
                     kind, texture);
                 match (anchor, kind.get_aa_mode(), sampler) {
-                    (anchor, None, Some((name, info))) => {
+                    (anchor, None, Some(s)) => {
                         if self.share.capabilities.sampler_objects_supported {
-                            unsafe { gl.BindSampler(slot as gl::types::GLenum, name) };
+                            unsafe { gl.BindSampler(slot as gl::types::GLenum, s.object) };
                         } else {
-                            debug_assert_eq!(name, 0);
-                            tex::bind_sampler(gl, anchor, &info);
+                            debug_assert_eq!(s.object, 0);
+                            tex::bind_sampler(gl, anchor, &s.info);
                         }
                     },
                     (_, Some(_), Some(_)) =>
@@ -792,7 +818,7 @@ impl d::Device for Device {
             |gl, v| unsafe { gl.DeleteVertexArrays(1, v) },
             |gl, v| unsafe { gl.DeleteShader(*v) },
             |gl, v| unsafe { gl.DeleteProgram(*v) },
-            |gl, v| unsafe { gl.DeleteProgram(v.program) }, //PSO
+            |_, _| {}, //PSO
             |gl, v| match v {
                 &NewTexture::Surface(ref suf) => unsafe { gl.DeleteRenderbuffers(1, suf) },
                 &NewTexture::Texture(ref tex) => unsafe { gl.DeleteTextures(1, tex) },
@@ -804,7 +830,7 @@ impl d::Device for Device {
             |_, _| {}, //RTV
             |_, _| {}, //DSV
             |gl, v| unsafe { gl.DeleteTextures(1, v) },
-            |gl, v| unsafe { gl.DeleteSamplers(1, v) },
+            |gl, v| unsafe { if v.object != 0 { gl.DeleteSamplers(1, &v.object) }},
             |gl, v| unsafe { gl.DeleteSync(v.0) },
         );
     }

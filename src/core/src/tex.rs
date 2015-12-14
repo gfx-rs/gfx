@@ -535,9 +535,25 @@ pub enum WrapMode {
     Clamp,
 }
 
+/// A wrapper for the LOD level of a texture.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
+pub struct Lod(i16);
+
+impl From<f32> for Lod {
+    fn from(v: f32) -> Lod {
+        Lod((v * 8.0) as i16)
+    }
+}
+
+impl Into<f32> for Lod {
+    fn into(self) -> f32 {
+        self.0 as f32 / 8.0
+    }
+}
+
 /// Specifies how to sample from a texture.
 // TODO: document the details of sampling.
-#[derive(PartialEq, PartialOrd, Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct SamplerInfo {
     /// Filter method to use.
     pub filtering: FilterMethod,
@@ -547,9 +563,9 @@ pub struct SamplerInfo {
     /// This bias is added to every computed mipmap level (N + lod_bias). For
     /// example, if it would select mipmap level 2 and lod_bias is 1, it will
     /// use mipmap level 3.
-    pub lod_bias: f32,
+    pub lod_bias: Lod,
     /// This range is used to clamp LOD level used for sampling
-    pub lod_range: (f32, f32),
+    pub lod_range: (Lod, Lod),
     /// comparison mode, used primary for a shadow map
     pub comparison: Option<state::Comparison>,
 }
@@ -561,8 +577,8 @@ impl SamplerInfo {
         SamplerInfo {
             filtering: filtering,
             wrap_mode: (wrap, wrap, wrap),
-            lod_bias: 0.0,
-            lod_range: (-1000.0, 1000.0),
+            lod_bias: Lod(0),
+            lod_range: (Lod(-8000), Lod(8000)),
             comparison: None,
         }
     }
