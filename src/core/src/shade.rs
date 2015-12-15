@@ -17,7 +17,7 @@
 #![allow(missing_docs)]
 
 use std::fmt;
-use {AttributeSlot, ColorSlot, ConstantBufferSlot, SamplerSlot, TextureSlot};
+use {AttributeSlot, ColorSlot, ConstantBufferSlot, SamplerSlot, TextureSlot, UnorderedSlot};
 
 /// Number of components in a container type (vectors/matrices)
 pub type Dimension = u8;
@@ -279,6 +279,15 @@ pub struct TextureVar {
     pub ty: TextureType,
 }
 
+/// Unordered access shader parameter.
+#[derive(Clone, PartialEq, Debug)]
+pub struct UnorderedVar {
+    /// Name of this unordered variable.
+    pub name: String,
+    /// Slot of this unordered variable.
+    pub slot: UnorderedSlot,
+}
+
 /// Sampler shader parameter.
 #[derive(Clone, PartialEq, Debug)]
 pub struct SamplerVar {
@@ -310,6 +319,8 @@ pub struct ProgramInfo {
     pub constant_buffers: Vec<ConstantBufferVar>,
     /// Textures in the program
     pub textures: Vec<TextureVar>,
+    /// Unordered access resources in the program
+    pub unordereds: Vec<UnorderedVar>,
     /// Samplers in the program
     pub samplers: Vec<SamplerVar>,
     /// Output targets in the program

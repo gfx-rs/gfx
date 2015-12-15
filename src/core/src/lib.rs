@@ -61,6 +61,8 @@ pub type AttributeSlot = u8;
 pub type ConstantBufferSlot = u8;
 /// Slot for a texture.
 pub type TextureSlot = u8;
+/// Slot for an unordered access object.
+pub type UnorderedSlot = u8;
 /// Slot for an active color buffer.
 pub type ColorSlot = u8;
 /// Slot for a sampler.

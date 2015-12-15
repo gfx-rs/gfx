@@ -33,29 +33,23 @@ impl<R: Resources> RawBuffer<R> {
 
 /// Type-safe buffer handle
 #[derive(Clone, Debug, Hash, PartialEq)]
-pub struct Buffer<R: Resources, T> {
-    raw: RawBuffer<R>,
-    phantom_t: PhantomData<T>,
-}
+pub struct Buffer<R: Resources, T>(RawBuffer<R>, PhantomData<T>);
 
 impl<R: Resources, T> From<RawBuffer<R>> for Buffer<R, T> {
     fn from(handle: RawBuffer<R>) -> Buffer<R, T> {
-        Buffer {
-            raw: handle,
-            phantom_t: PhantomData,
-        }
+        Buffer(handle, PhantomData)
     }
 }
 
 impl<R: Resources, T> Buffer<R, T> {
     /// Get the underlying raw Handle
     pub fn raw(&self) -> &RawBuffer<R> {
-        &self.raw
+        &self.0
     }
 
     /// Get the associated information about the buffer
     pub fn get_info(&self) -> &BufferInfo {
-        self.raw.get_info()
+        self.0.get_info()
     }
 
     /// Get the number of elements in the buffer.
@@ -98,16 +92,53 @@ impl<R: Resources> RawTexture<R> {
     pub fn get_bind(&self) -> Bind { self.2 }
 }
 
+#[derive(Clone, Debug, Hash, PartialEq)]
 enum ViewSource<R: Resources> {
     Buffer(Arc<R::Buffer>),
     Texture(Arc<R::NewTexture>),
 }
 
 /// Raw Shader Resource View Handle
+#[derive(Clone, Debug, Hash, PartialEq)]
 pub struct RawShaderResourceView<R: Resources>(Arc<R::ShaderResourceView>, ViewSource<R>);
 
+/// Type-safe Shader Resource View Handle
+#[derive(Clone, Debug, Hash, PartialEq)]
+pub struct ShaderResourceView<R: Resources, T>(RawShaderResourceView<R>, PhantomData<T>);
+
+impl<R: Resources, T> From<RawShaderResourceView<R>> for ShaderResourceView<R, T> {
+    fn from(handle: RawShaderResourceView<R>) -> ShaderResourceView<R, T> {
+        ShaderResourceView(handle, PhantomData)
+    }
+}
+
+impl<R: Resources, T> ShaderResourceView<R, T> {
+    /// Get the underlying raw SRV
+    pub fn raw(&self) -> &RawShaderResourceView<R> {
+        &self.0
+    }
+}
+
 /// Raw Unordered Access View Handle
+#[derive(Clone, Debug, Hash, PartialEq)]
 pub struct RawUnorderedAccessView<R: Resources>(Arc<R::UnorderedAccessView>, ViewSource<R>);
+
+/// Type-safe Unordered Access View Handle
+#[derive(Clone, Debug, Hash, PartialEq)]
+pub struct UnorderedAccessView<R: Resources, T>(RawUnorderedAccessView<R>, PhantomData<T>);
+
+impl<R: Resources, T> From<RawUnorderedAccessView<R>> for UnorderedAccessView<R, T> {
+    fn from(handle: RawUnorderedAccessView<R>) -> UnorderedAccessView<R, T> {
+        UnorderedAccessView(handle, PhantomData)
+    }
+}
+
+impl<R: Resources, T> UnorderedAccessView<R, T> {
+    /// Get the underlying raw UAV
+    pub fn raw(&self) -> &RawUnorderedAccessView<R> {
+        &self.0
+    }
+}
 
 /// Frame Buffer Handle
 #[derive(Clone, Debug, Hash, PartialEq)]

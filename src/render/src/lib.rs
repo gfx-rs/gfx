@@ -59,7 +59,7 @@ pub use pso::{PipelineState, VertexBuffer, ConstantBuffer,
               TextureFormat, BlendFormat, RenderTarget, BlendTarget,
               DepthStencilFormat, DepthStencilTarget,
               DepthFormat, StencilFormat, DepthTarget, StencilTarget,
-              Sampler};
+              ResourceView, UnorderedView, Sampler};
 pub use target::{Frame};
 pub use extra::factory::PipelineStateError;
 pub use extra::shade::{ShaderSource, ProgramError};

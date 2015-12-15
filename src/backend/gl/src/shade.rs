@@ -338,6 +338,7 @@ pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities, shaders: &[super::Sha
             uniforms: uniforms,
             constant_buffers: query_blocks(gl, caps, name),
             textures: textures,
+            unordereds: Vec::new(), //TODO
             samplers: samplers,
             outputs: Vec::new(),
         };

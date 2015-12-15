@@ -14,7 +14,8 @@
 
 //! Pipeline State Objects
 
-use {MAX_COLOR_TARGETS, MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS, MAX_SAMPLERS};
+use {MAX_COLOR_TARGETS, MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
+     MAX_RESOURCE_VIEWS, MAX_UNORDERED_VIEWS, MAX_SAMPLERS};
 use {Primitive, Resources};
 use {attrib, tex};
 use state as s;
@@ -151,6 +152,48 @@ impl<R: Resources> ConstantBufferSet<R> {
     }
 }
 
+/// A complete set of shader resource views to be used in PSO.
+#[derive(Copy, Clone, Debug)]
+pub struct ResourceViewSet<R: Resources>(
+    /// Array of SRVs
+    pub [Option<R::ShaderResourceView>; MAX_RESOURCE_VIEWS],
+);
+
+impl<R: Resources> ResourceViewSet<R> {
+    /// Create an empty set
+    pub fn new() -> ResourceViewSet<R> {
+        ResourceViewSet([None; MAX_RESOURCE_VIEWS])
+    }
+}
+
+/// A complete set of unordered access views to be used in PSO.
+#[derive(Copy, Clone, Debug)]
+pub struct UnorderedViewSet<R: Resources>(
+    /// Array of UAVs
+    pub [Option<R::UnorderedAccessView>; MAX_UNORDERED_VIEWS],
+);
+
+impl<R: Resources> UnorderedViewSet<R> {
+    /// Create an empty set
+    pub fn new() -> UnorderedViewSet<R> {
+        UnorderedViewSet([None; MAX_UNORDERED_VIEWS])
+    }
+}
+
+/// A complete set of samplers to be used for PSO.
+#[derive(Copy, Clone, Debug)]
+pub struct SamplerSet<R: Resources>(
+    /// Array of samplers
+    pub [Option<R::Sampler>; MAX_SAMPLERS]
+);
+
+impl<R: Resources> SamplerSet<R> {
+    /// Create an empty set
+    pub fn new() -> SamplerSet<R> {
+        SamplerSet([None; MAX_SAMPLERS])
+    }
+}
+
 /// A complete set of render targets to be used for pixel export in PSO.
 #[derive(Copy, Clone, Debug)]
 pub struct PixelTargetSet<R: Resources> {
@@ -167,19 +210,5 @@ impl<R: Resources> PixelTargetSet<R> {
             colors: [None; MAX_COLOR_TARGETS],
             depth_stencil: None,
         }
-    }
-}
-
-/// A complete set of samplers to be used for PSO.
-#[derive(Copy, Clone, Debug)]
-pub struct SamplerSet<R: Resources>(
-    /// Array of samplers
-    pub [Option<R::Sampler>; MAX_SAMPLERS]
-);
-
-impl<R: Resources> SamplerSet<R> {
-    /// Create an empty set
-    pub fn new() -> SamplerSet<R> {
-        SamplerSet([None; MAX_SAMPLERS])
     }
 }
