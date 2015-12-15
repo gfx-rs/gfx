@@ -232,7 +232,16 @@ bitflags!(
     }
 );
 
-/// Error creating either a RenderTargetView, or DepthStencilView
+/// Error creating either a ShaderResourceView, or UnorderedAccessView.
+#[derive(Clone, PartialEq, Debug)]
+pub enum ResourceViewError {
+    /// The corresponding bind flag does not present in the texture.
+    NoBindFlag,
+    /// The backend refused for some reason.
+    Unsupported,
+}
+
+/// Error creating either a RenderTargetView, or DepthStencilView.
 #[derive(Clone, PartialEq, Debug)]
 pub enum TargetViewError {
     /// The `RENDER_TARGET` flag does not present in the texture.
@@ -345,6 +354,14 @@ pub trait Factory<R: Resources> {
 
     fn create_new_texture_raw(&mut self, tex::TextureInfo, Bind)
         -> Result<handle::RawTexture<R>, tex::Error>;
+    fn view_buffer_as_shader_resource(&mut self, &handle::RawBuffer<R>)
+        -> Result<handle::RawShaderResourceView<R>, ResourceViewError>;
+    fn view_buffer_as_unordered_access(&mut self, &handle::RawBuffer<R>)
+        -> Result<handle::RawUnorderedAccessView<R>, ResourceViewError>;
+    fn view_texture_as_shader_resource(&mut self, &handle::RawTexture<R>)
+        -> Result<handle::RawShaderResourceView<R>, ResourceViewError>;
+    fn view_texture_as_unordered_access(&mut self, &handle::RawTexture<R>)
+        -> Result<handle::RawUnorderedAccessView<R>, ResourceViewError>;
     fn view_texture_as_render_target_raw(&mut self, &handle::RawTexture<R>, target::Level, Option<target::Layer>)
         -> Result<handle::RawRenderTargetView<R>, TargetViewError>;
     fn view_texture_as_depth_stencil_raw(&mut self, &handle::RawTexture<R>, Option<target::Layer>)

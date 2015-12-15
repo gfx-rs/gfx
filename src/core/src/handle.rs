@@ -98,11 +98,16 @@ impl<R: Resources> RawTexture<R> {
     pub fn get_bind(&self) -> Bind { self.2 }
 }
 
+enum ViewSource<R: Resources> {
+    Buffer(Arc<R::Buffer>),
+    Texture(Arc<R::NewTexture>),
+}
+
 /// Raw Shader Resource View Handle
-pub struct RawShaderResourceView<R: Resources>(Arc<R::ShaderResourceView>);
+pub struct RawShaderResourceView<R: Resources>(Arc<R::ShaderResourceView>, ViewSource<R>);
 
 /// Raw Unordered Access View Handle
-pub struct RawUnorderedAccessView<R: Resources>(Arc<R::UnorderedAccessView>);
+pub struct RawUnorderedAccessView<R: Resources>(Arc<R::UnorderedAccessView>, ViewSource<R>);
 
 /// Frame Buffer Handle
 #[derive(Clone, Debug, Hash, PartialEq)]
@@ -213,8 +218,10 @@ pub trait Producer<R: Resources> {
     fn make_program(&mut self, R::Program, shade::ProgramInfo) -> Program<R>;
     fn make_pso(&mut self, R::PipelineStateObject, &Program<R>) -> RawPipelineState<R>;
     fn make_new_texture(&mut self, R::NewTexture, tex::TextureInfo, Bind) -> RawTexture<R>;
-    fn make_srv(&mut self, R::ShaderResourceView) -> RawShaderResourceView<R>;
-    fn make_uav(&mut self, R::UnorderedAccessView) -> RawUnorderedAccessView<R>;
+    fn make_buffer_srv(&mut self, R::ShaderResourceView, &RawBuffer<R>) -> RawShaderResourceView<R>;
+    fn make_texture_srv(&mut self, R::ShaderResourceView, &RawTexture<R>) -> RawShaderResourceView<R>;
+    fn make_buffer_uav(&mut self, R::UnorderedAccessView, &RawBuffer<R>) -> RawUnorderedAccessView<R>;
+    fn make_texture_uav(&mut self, R::UnorderedAccessView, &RawTexture<R>) -> RawUnorderedAccessView<R>;
     fn make_frame_buffer(&mut self, R::FrameBuffer) -> FrameBuffer<R>;
     fn make_surface(&mut self, R::Surface, tex::SurfaceInfo) -> Surface<R>;
     fn make_rtv(&mut self, R::RenderTargetView, &RawTexture<R>) -> RawRenderTargetView<R>;
@@ -281,16 +288,28 @@ impl<R: Resources> Producer<R> for Manager<R> {
         RawTexture(r, info, bind)
     }
 
-    fn make_srv(&mut self, res: R::ShaderResourceView) -> RawShaderResourceView<R> {
+    fn make_buffer_srv(&mut self, res: R::ShaderResourceView, buf: &RawBuffer<R>) -> RawShaderResourceView<R> {
         let r = Arc::new(res);
         self.srvs.push(r.clone());
-        RawShaderResourceView(r)
+        RawShaderResourceView(r, ViewSource::Buffer(buf.0.clone()))
     }
 
-    fn make_uav(&mut self, res: R::UnorderedAccessView) -> RawUnorderedAccessView<R> {
+    fn make_texture_srv(&mut self, res: R::ShaderResourceView, tex: &RawTexture<R>) -> RawShaderResourceView<R> {
+        let r = Arc::new(res);
+        self.srvs.push(r.clone());
+        RawShaderResourceView(r, ViewSource::Texture(tex.0.clone()))
+    }
+
+    fn make_buffer_uav(&mut self, res: R::UnorderedAccessView, buf: &RawBuffer<R>) -> RawUnorderedAccessView<R> {
         let r = Arc::new(res);
         self.uavs.push(r.clone());
-        RawUnorderedAccessView(r)
+        RawUnorderedAccessView(r, ViewSource::Buffer(buf.0.clone()))
+    }
+
+    fn make_texture_uav(&mut self, res: R::UnorderedAccessView, tex: &RawTexture<R>) -> RawUnorderedAccessView<R> {
+        let r = Arc::new(res);
+        self.uavs.push(r.clone());
+        RawUnorderedAccessView(r, ViewSource::Texture(tex.0.clone()))
     }
 
     fn make_frame_buffer(&mut self, res: R::FrameBuffer) -> FrameBuffer<R> {

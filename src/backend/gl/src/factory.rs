@@ -23,8 +23,8 @@ use gfx_core::mapping::Builder;
 use gfx_core::target::{Layer, Level};
 use gfx_core::tex::Size;
 
-use {Share, OutputMerger};
-use {Buffer, NewTexture, PipelineState, FatSampler, Program, TargetView};
+use {Share, OutputMerger, ViewSource};
+use {Buffer, FatSampler, NewTexture, PipelineState, Program, ResourceView, TargetView};
 use Resources as R;
 
 
@@ -256,13 +256,12 @@ impl d::Factory<R> for Factory {
 
     fn create_pipeline_state_raw(&mut self, program: &handle::Program<R>, desc: &d::pso::Descriptor)
                                  -> Result<handle::RawPipelineState<R>, d::pso::CreationError> {
-        use std::default::Default;
         use gfx_core::state as s;
         let mut output = OutputMerger {
             draw_mask: 0,
             stencil: desc.depth_stencil.map(|(_, t)| s::Stencil {
-                front: t.front.unwrap_or(Default::default()),
-                back: t.back.unwrap_or(Default::default()),
+                front: t.front.unwrap_or_default(),
+                back: t.back.unwrap_or_default(),
             }),
             depth: desc.depth_stencil.and_then(|(_, t)| t.depth),
             blend: [None; d::MAX_COLOR_TARGETS],
@@ -272,15 +271,13 @@ impl d::Factory<R> for Factory {
                 output.draw_mask |= 1<<i;
                 if bi.mask != s::MASK_ALL || bi.color.is_some() || bi.alpha.is_some() {
                     output.blend[i] = Some(s::Blend {
-                        color: bi.color.unwrap_or(Default::default()),
-                        alpha: bi.alpha.unwrap_or(Default::default()),
+                        color: bi.color.unwrap_or_default(),
+                        alpha: bi.alpha.unwrap_or_default(),
                         mask: bi.mask,
                     });
                 }
             }
         }
-        //TODO: texture & UBO binding
-        //verification of the target output names
         let pso = PipelineState {
             program: *self.frame_handles.ref_program(program),
             primitive: desc.primitive,
@@ -370,6 +367,42 @@ impl d::Factory<R> for Factory {
             }
         };
         Ok(self.share.handles.borrow_mut().make_new_texture(object, info, bind))
+    }
+
+    fn view_buffer_as_shader_resource(&mut self, hbuf: &handle::RawBuffer<R>)
+                                      -> Result<handle::RawShaderResourceView<R>, d::ResourceViewError> {
+        let gl = &self.share.context;
+        let mut name = 0 as gl::types::GLuint;
+        let buf_name = *self.frame_handles.ref_buffer(hbuf);
+        let format = gl::R8; //TODO: get from the buffer handle
+        unsafe {
+            gl.GenTextures(1, &mut name);
+            gl.BindTexture(gl::TEXTURE_BUFFER, name);
+            gl.TexBuffer(gl::TEXTURE_BUFFER, format, buf_name);
+        }
+        let view = ResourceView(name, ViewSource::BufferProxy);
+        Ok(self.share.handles.borrow_mut().make_buffer_srv(view, hbuf))
+    }
+
+    fn view_buffer_as_unordered_access(&mut self, _hbuf: &handle::RawBuffer<R>)
+                                       -> Result<handle::RawUnorderedAccessView<R>, d::ResourceViewError> {
+        Err(d::ResourceViewError::Unsupported) //TODO
+    }
+
+    fn view_texture_as_shader_resource(&mut self, htex: &handle::RawTexture<R>)
+                                       -> Result<handle::RawShaderResourceView<R>, d::ResourceViewError> {
+        match self.frame_handles.ref_new_texture(htex) {
+            &NewTexture::Surface(_) => Err(d::ResourceViewError::NoBindFlag),
+            &NewTexture::Texture(t) => {
+                let view = ResourceView(t, ViewSource::TextureSlice);
+                Ok(self.share.handles.borrow_mut().make_texture_srv(view, htex))
+            },
+        }
+    }
+
+    fn view_texture_as_unordered_access(&mut self, _htex: &handle::RawTexture<R>)
+                                        -> Result<handle::RawUnorderedAccessView<R>, d::ResourceViewError> {
+        Err(d::ResourceViewError::Unsupported) //TODO
     }
 
     fn view_texture_as_render_target_raw(&mut self, htex: &handle::RawTexture<R>, level: Level, layer: Option<Layer>)

@@ -72,8 +72,8 @@ impl d::Resources for Resources {
     type Surface             = Surface;
     type RenderTargetView    = TargetView;
     type DepthStencilView    = TargetView;
-    type ShaderResourceView  = Texture; //TODO
-    type UnorderedAccessView = Texture; //TODO
+    type ShaderResourceView  = ResourceView;
+    type UnorderedAccessView = ();
     type Texture             = Texture;
     type Sampler             = FatSampler;
     type Fence               = Fence;
@@ -105,6 +105,15 @@ pub enum NewTexture {
     Surface(Surface),
     Texture(Texture),
 }
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub enum ViewSource {
+    TextureSlice,
+    BufferProxy,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct ResourceView(pub Texture, pub ViewSource);
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct FatSampler {
@@ -823,7 +832,10 @@ impl d::Device for Device {
                 &NewTexture::Surface(ref suf) => unsafe { gl.DeleteRenderbuffers(1, suf) },
                 &NewTexture::Texture(ref tex) => unsafe { gl.DeleteTextures(1, tex) },
             },
-            |_, _| {}, //SRV
+            |gl, v| match v.1 { //SRV
+                ViewSource::TextureSlice => (), // nothing, it is borrowed
+                ViewSource::BufferProxy => unsafe { gl.DeleteTextures(1, &v.0) },
+            },
             |_, _| {}, //UAV
             |gl, v| unsafe { gl.DeleteFramebuffers(1, v) },
             |gl, v| unsafe { gl.DeleteRenderbuffers(1, v) },
