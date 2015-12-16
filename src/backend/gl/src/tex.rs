@@ -15,8 +15,9 @@
 use {gl, Surface, Texture, Sampler};
 use gl::types::{GLenum, GLuint, GLint, GLfloat, GLsizei, GLvoid};
 use state;
-use gfx_core::tex::*;
-use gfx_core::attrib::{FloatSize, IntSubType};
+use gfx_core::tex::{Format, Kind, TextureError, SurfaceError,
+                    SurfaceInfo, TextureInfo, SamplerInfo, ImageInfo,
+                    AaMode, Components, FilterMethod, WrapMode};
 
 
 /// A token produced by the `bind_texture` that allows following up
@@ -25,6 +26,7 @@ use gfx_core::attrib::{FloatSize, IntSubType};
 pub struct BindAnchor(GLenum);
 
 fn create_kind_to_gl(kind: Kind) -> GLenum {
+    use gfx_core::tex::CubeFace;
     match kind {
         Kind::D1 => gl::TEXTURE_1D,
         Kind::D1Array => gl::TEXTURE_1D_ARRAY,
@@ -42,7 +44,7 @@ fn create_kind_to_gl(kind: Kind) -> GLenum {
     }
 }
 
-fn bind_kind_to_gl(kind: Kind) -> GLenum {
+pub fn bind_kind_to_gl(kind: Kind) -> GLenum {
     match kind {
         Kind::Cube(_) => gl::TEXTURE_CUBE_MAP,
         other => create_kind_to_gl(other)
@@ -50,6 +52,7 @@ fn bind_kind_to_gl(kind: Kind) -> GLenum {
 }
 
 fn format_to_gl(t: Format) -> Result<GLenum, ()> {
+    use gfx_core::tex::{Components, FloatSize, IntSubType, Compression};
     Ok(match t {
         // floating-point
         Format::Float(Components::R,    FloatSize::F16) => gl::R16F,
@@ -197,6 +200,7 @@ fn format_to_glpixel(t: Format) -> GLenum {
 /// Also note that in OpenGL there are multiple allowed formats of data, while this
 /// function only gives you only the most compact representation.
 fn format_to_gltype(t: Format) -> Result<GLenum, ()> {
+    use gfx_core::tex::FloatSize;
     match t {
         Format::Float(_, FloatSize::F16) => Ok(gl::HALF_FLOAT),
         Format::Float(_, FloatSize::F32) => Ok(gl::FLOAT),

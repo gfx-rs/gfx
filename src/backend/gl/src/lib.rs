@@ -107,13 +107,28 @@ pub enum NewTexture {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub enum ViewSource {
-    TextureSlice,
-    BufferProxy,
+pub struct ResourceView {
+    object: Texture,
+    bind: gl::types::GLenum,
+    owned: bool,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct ResourceView(pub Texture, pub ViewSource);
+impl ResourceView {
+    pub fn new_texture(t: Texture, kind: d::tex::Kind) -> ResourceView {
+        ResourceView {
+            object: t,
+            bind: tex::bind_kind_to_gl(kind),
+            owned: false,
+        }
+    }
+    pub fn new_buffer(b: Texture) -> ResourceView {
+        ResourceView {
+            object: b,
+            bind: gl::TEXTURE_BUFFER,
+            owned: true,
+        }
+    }
+}
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct FatSampler {
@@ -458,12 +473,30 @@ impl Device {
                 }
             },
             Command::BindConstantBuffers(cbs) => {
+                let gl = &self.share.context;
                 for i in 0 .. d::MAX_CONSTANT_BUFFERS {
                     if let Some(buffer) = cbs.0[i] {
-                        let gl = &self.share.context;
                         unsafe {
                             gl.BindBufferBase(gl::UNIFORM_BUFFER, i as gl::types::GLuint, buffer);
                         }
+                    }
+                }
+            },
+            Command::BindResourceViews(srvs) => {
+                let gl = &self.share.context;
+                for i in 0 .. d::MAX_RESOURCE_VIEWS {
+                    if let Some(view) = srvs.0[i] {
+                        unsafe {
+                            gl.ActiveTexture(gl::TEXTURE0 + i as gl::types::GLenum);
+                            gl.BindTexture(view.bind, view.object);
+                        }
+                    }
+                }
+            },
+            Command::BindUnorderedViews(uavs) => {
+                for i in 0 .. d::MAX_UNORDERED_VIEWS {
+                    if let Some(_view) = uavs.0[i] {
+                        //TODO
                     }
                 }
             },
@@ -832,10 +865,9 @@ impl d::Device for Device {
                 &NewTexture::Surface(ref suf) => unsafe { gl.DeleteRenderbuffers(1, suf) },
                 &NewTexture::Texture(ref tex) => unsafe { gl.DeleteTextures(1, tex) },
             },
-            |gl, v| match v.1 { //SRV
-                ViewSource::TextureSlice => (), // nothing, it is borrowed
-                ViewSource::BufferProxy => unsafe { gl.DeleteTextures(1, &v.0) },
-            },
+            |gl, v| if v.owned {
+                unsafe { gl.DeleteTextures(1, &v.object) }
+            }, //SRV
             |_, _| {}, //UAV
             |gl, v| unsafe { gl.DeleteFramebuffers(1, v) },
             |gl, v| unsafe { gl.DeleteRenderbuffers(1, v) },

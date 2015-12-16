@@ -23,9 +23,8 @@ use gfx_core::mapping::Builder;
 use gfx_core::target::{Layer, Level};
 use gfx_core::tex::Size;
 
-use {Share, OutputMerger, ViewSource};
+use {Resources as R, Share, OutputMerger};
 use {Buffer, FatSampler, NewTexture, PipelineState, Program, ResourceView, TargetView};
-use Resources as R;
 
 
 fn role_to_target(role: d::BufferRole) -> gl::types::GLenum {
@@ -380,7 +379,7 @@ impl d::Factory<R> for Factory {
             gl.BindTexture(gl::TEXTURE_BUFFER, name);
             gl.TexBuffer(gl::TEXTURE_BUFFER, format, buf_name);
         }
-        let view = ResourceView(name, ViewSource::BufferProxy);
+        let view = ResourceView::new_buffer(name);
         Ok(self.share.handles.borrow_mut().make_buffer_srv(view, hbuf))
     }
 
@@ -394,7 +393,7 @@ impl d::Factory<R> for Factory {
         match self.frame_handles.ref_new_texture(htex) {
             &NewTexture::Surface(_) => Err(d::ResourceViewError::NoBindFlag),
             &NewTexture::Texture(t) => {
-                let view = ResourceView(t, ViewSource::TextureSlice);
+                let view = ResourceView::new_texture(t, htex.get_info().kind);
                 Ok(self.share.handles.borrow_mut().make_texture_srv(view, htex))
             },
         }

@@ -28,6 +28,8 @@ pub enum Command {
     BindPipelineState(PipelineState),
     BindVertexBuffers(c::pso::VertexBufferSet<Resources>),
     BindConstantBuffers(c::pso::ConstantBufferSet<Resources>),
+    BindResourceViews(c::pso::ResourceViewSet<Resources>),
+    BindUnorderedViews(c::pso::UnorderedViewSet<Resources>),
     BindSamplers(c::pso::SamplerSet<Resources>),
     BindPixelTargets(c::pso::PixelTargetSet<Resources>),
     BindArrayBuffer(ArrayBuffer),
@@ -89,6 +91,19 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.push(Command::BindConstantBuffers(cbs));
     }
 
+    fn bind_global_constant(&mut self, loc: c::shade::Location,
+                    value: c::shade::UniformValue) {
+        self.buf.push(Command::BindUniform(loc, value));
+    }
+
+    fn bind_resource_views(&mut self, srvs: c::pso::ResourceViewSet<Resources>) {
+        self.buf.push(Command::BindResourceViews(srvs));
+    }
+
+    fn bind_unordered_views(&mut self, uavs: c::pso::UnorderedViewSet<Resources>) {
+        self.buf.push(Command::BindUnorderedViews(uavs));
+    }
+
     fn bind_samplers(&mut self, ss: c::pso::SamplerSet<Resources>) {
         self.buf.push(Command::BindSamplers(ss));
     }
@@ -132,11 +147,6 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
 
     fn bind_uniform_block(&mut self, slot: c::ConstantBufferSlot, buf: Buffer) {
         self.buf.push(Command::BindUniformBlock(slot, buf));
-    }
-
-    fn bind_uniform(&mut self, loc: c::shade::Location,
-                    value: c::shade::UniformValue) {
-        self.buf.push(Command::BindUniform(loc, value));
     }
 
     fn bind_texture(&mut self, slot: c::ResourceViewSlot, kind: c::tex::Kind, tex: Texture,

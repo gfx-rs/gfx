@@ -23,7 +23,7 @@
 
 use std::default::Default;
 use std::fmt;
-use attrib::{FloatSize, IntSubType};
+pub use attrib::{FloatSize, IntSubType};
 use state;
 
 /// Pure texture object creation error.

@@ -506,7 +506,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
         for (var, value) in info.globals.iter()
             .zip(self.parameters.uniforms.iter()) {
             match value {
-                &Some(v) => self.command_buffer.bind_uniform(var.location, v),
+                &Some(v) => self.command_buffer.bind_global_constant(var.location, v),
                 &None => error!("Missed uniform {}", var.name),
             }
         }
@@ -608,11 +608,12 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
         self.command_buffer.bind_vertex_buffers(raw_data.vertex_buffers);
         self.command_buffer.bind_constant_buffers(raw_data.constant_buffers);
         for &(location, value) in &raw_data.global_constants {
-            self.command_buffer.bind_uniform(location, value);
+            self.command_buffer.bind_global_constant(location, value);
         }
+        self.command_buffer.bind_resource_views(raw_data.resource_views);
+        self.command_buffer.bind_unordered_views(raw_data.unordered_views);
         self.command_buffer.bind_samplers(raw_data.samplers);
         self.command_buffer.bind_pixel_targets(raw_data.pixel_targets);
-        //TODO: bind more stuff (b#, s#, t#, u#)
         self.draw_slice(slice, None);
     }
 }

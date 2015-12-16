@@ -111,6 +111,12 @@ pub trait CommandBuffer<R: Resources> {
     fn bind_vertex_buffers(&mut self, pso::VertexBufferSet<R>);
     /// Bind a complete set of constant buffers
     fn bind_constant_buffers(&mut self, pso::ConstantBufferSet<R>);
+    /// Bind a global constant
+    fn bind_global_constant(&mut self, shade::Location, shade::UniformValue);
+    /// Bind a complete set of shader resource views
+    fn bind_resource_views(&mut self, pso::ResourceViewSet<R>);
+    /// Bind a complete set of unordered access views
+    fn bind_unordered_views(&mut self, pso::UnorderedViewSet<R>);
     /// Bind a complete set of samplers
     fn bind_samplers(&mut self, pso::SamplerSet<R>);
     /// Bind a complete set of pixel targets, including multiple
@@ -133,8 +139,6 @@ pub trait CommandBuffer<R: Resources> {
                            target::Level, Option<target::Layer>);
     /// Bind a uniform block
     fn bind_uniform_block(&mut self, ConstantBufferSlot, R::Buffer);
-    /// Bind a single uniform in the default block
-    fn bind_uniform(&mut self, shade::Location, shade::UniformValue);
     /// Bind a texture
     fn bind_texture(&mut self, ResourceViewSlot, tex::Kind,
                     R::Texture, Option<R::Sampler>);
