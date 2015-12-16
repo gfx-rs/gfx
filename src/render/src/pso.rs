@@ -24,9 +24,9 @@ pub use gfx_core::pso::Descriptor;
 pub struct RawDataSet<R: d::Resources>{
     pub vertex_buffers: d::pso::VertexBufferSet<R>,
     pub constant_buffers: d::pso::ConstantBufferSet<R>,
-    pub constants: Vec<(d::shade::Location, d::shade::UniformValue)>,
-    pub resources: d::pso::ResourceViewSet<R>,
-    pub unordereds: d::pso::UnorderedViewSet<R>,
+    pub global_constants: Vec<(d::shade::Location, d::shade::UniformValue)>,
+    pub resource_views: d::pso::ResourceViewSet<R>,
+    pub unordered_views: d::pso::UnorderedViewSet<R>,
     pub samplers: d::pso::SamplerSet<R>,
     pub pixel_targets: d::pso::PixelTargetSet<R>,
     pub ref_values: d::state::RefValues,
@@ -38,9 +38,9 @@ impl<R: d::Resources> RawDataSet<R> {
         RawDataSet {
             vertex_buffers: d::pso::VertexBufferSet::new(),
             constant_buffers: d::pso::ConstantBufferSet::new(),
-            constants: Vec::new(),
-            resources: d::pso::ResourceViewSet::new(),
-            unordereds: d::pso::UnorderedViewSet::new(),
+            global_constants: Vec::new(),
+            resource_views: d::pso::ResourceViewSet::new(),
+            unordered_views: d::pso::UnorderedViewSet::new(),
             samplers: d::pso::SamplerSet::new(),
             pixel_targets: d::pso::PixelTargetSet::new(),
             ref_values: Default::default(),
@@ -49,13 +49,22 @@ impl<R: d::Resources> RawDataSet<R> {
     }
 }
 
+/// Failure to initilize the link between the shader and the data.
 #[derive(Clone, PartialEq, Debug)]
 pub enum InitError {
-    /// Vertex attribute mismatch between the shader and the link data.
+    /// Vertex attribute mismatch.
     VertexImport(d::AttributeSlot, Option<d::attrib::Format>),
-    /// Constant buffer mismatch between the shader and the link data.
+    /// Constant buffer mismatch.
     ConstantBuffer(d::ConstantBufferSlot, Option<()>),
-    /// Pixel target mismatch between the shader and the link data.
+    /// Global constant mismatch.
+    GlobalConstant(d::shade::Location, Option<()>),
+    /// Shader resource view mismatch.
+    ResourceView(d::ResourceViewSlot, Option<()>),
+    /// Unordered access view mismatch.
+    UnorderedView(d::UnorderedViewSlot, Option<()>),
+    /// Sampler mismatch.
+    Sampler(d::SamplerSlot, Option<()>),
+    /// Pixel target mismatch.
     PixelExport(d::ColorSlot, Option<d::tex::Format>),
 }
 
@@ -101,8 +110,8 @@ pub trait DataLink<'a>: Sized {
                   Option<Result<d::pso::AttributeDesc, d::attrib::Format>> { None }
     fn link_constant_buffer(&mut self, _: &d::shade::ConstantBufferVar, _: &Self::Init) ->
                             Option<Result<(), d::attrib::Format>> { None }
-    fn link_constant(&mut self, _: &d::shade::UniformVar, _: &Self::Init) ->
-                     Option<Result<(), d::attrib::Format>> { None }
+    fn link_global_constant(&mut self, _: &d::shade::ConstVar, _: &Self::Init) ->
+                            Option<Result<(), d::attrib::Format>> { None }
     fn link_output(&mut self, _: &d::shade::OutputVar, _: &Self::Init) ->
                    Option<Result<d::pso::ColorTargetDesc, d::tex::Format>> { None }
     fn link_depth_stencil(&mut self, _: &Self::Init) ->
@@ -139,7 +148,10 @@ pub static PER_INSTANCE: FetchRate = FetchRate(1);
 
 pub struct VertexBuffer<T: Structure>(AttributeSlotSet, PhantomData<T>);
 pub struct ConstantBuffer<T: Structure>(Option<d::ConstantBufferSlot>, PhantomData<T>);
-pub struct Constant<T: d::attrib::format::ToFormat>(Option<d::shade::Location>, PhantomData<T>);
+pub struct Global<T: d::attrib::format::ToFormat>(Option<d::shade::Location>, PhantomData<T>);
+pub struct ResourceView<T: TextureFormat>(Option<d::ResourceViewSlot>, PhantomData<T>);
+pub struct UnorderedView<T: TextureFormat>(Option<d::UnorderedViewSlot>, PhantomData<T>);
+pub struct Sampler(Option<d::SamplerSlot>);
 pub struct RenderTargetCommon<T: TextureFormat, I>(Option<d::ColorSlot>, PhantomData<(T, I)>);
 pub type RenderTarget<T: TextureFormat> = RenderTargetCommon<T, d::state::ColorMask>;
 pub type BlendTarget<T: BlendFormat> = RenderTargetCommon<T, d::state::Blend>;
@@ -147,9 +159,6 @@ pub struct DepthStencilCommon<T: DepthStencilFormat, I>(PhantomData<(T, I)>);
 pub type DepthTarget<T: DepthFormat> = DepthStencilCommon<T, d::state::Depth>;
 pub type StencilTarget<T: StencilFormat> = DepthStencilCommon<T, d::state::Stencil>;
 pub type DepthStencilTarget<T: DepthStencilFormat> = DepthStencilCommon<T, (d::state::Depth, d::state::Stencil)>;
-pub struct ResourceView<T: TextureFormat>(Option<d::TextureSlot>, PhantomData<T>);
-pub struct UnorderedView<T: TextureFormat>(Option<d::UnorderedSlot>, PhantomData<T>);
-pub struct Sampler(Option<d::SamplerSlot>);
 
 fn match_attribute(_: &d::shade::AttributeVar, _: d::attrib::Format) -> bool {
     true //TODO
@@ -217,16 +226,16 @@ impl<R: d::Resources, T: Structure> DataBind<R> for ConstantBuffer<T> {
     }
 }
 
-impl<'a, T: d::attrib::format::ToFormat> DataLink<'a> for Constant<T> {
+impl<'a, T: d::attrib::format::ToFormat> DataLink<'a> for Global<T> {
     type Init = &'a str;
     fn new() -> Self {
-        Constant(None, PhantomData)
+        Global(None, PhantomData)
     }
     fn is_active(&self) -> bool {
         self.0.is_some()
     }
-    fn link_constant(&mut self, var: &d::shade::UniformVar, init: &Self::Init) ->
-                  Option<Result<(), d::attrib::Format>> {
+    fn link_global_constant(&mut self, var: &d::shade::ConstVar, init: &Self::Init) ->
+                            Option<Result<(), d::attrib::Format>> {
         if &var.name == *init {
             //if match_constant(var, ())
             self.0 = Some(var.location);
@@ -237,11 +246,97 @@ impl<'a, T: d::attrib::format::ToFormat> DataLink<'a> for Constant<T> {
     }
 }
 
-impl<R: d::Resources, T: d::attrib::format::ToFormat> DataBind<R> for Constant<T> {
+impl<R: d::Resources, T: d::attrib::format::ToFormat> DataBind<R> for Global<T> {
     type Data = d::shade::UniformValue;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, _: &mut d::handle::Manager<R>) {
         if let Some(loc) = self.0 {
-            out.constants.push((loc, *data));
+            out.global_constants.push((loc, *data));
+        }
+    }
+}
+
+impl<'a, T: TextureFormat> DataLink<'a> for ResourceView<T> {
+    type Init = &'a str;
+    fn new() -> Self {
+        ResourceView(None, PhantomData)
+    }
+    fn is_active(&self) -> bool {
+        self.0.is_some()
+    }
+    fn link_resource_view(&mut self, var: &d::shade::TextureVar, init: &Self::Init)
+                          -> Option<Result<(), d::tex::Format>> {
+        if *init == var.name {
+            self.0 = Some(var.slot);
+            Some(Ok(())) //TODO: check format
+        }else {
+            None
+        }
+    }
+}
+
+impl<R: d::Resources, T: TextureFormat> DataBind<R> for ResourceView<T> {
+    type Data = d::handle::ShaderResourceView<R, T>;
+    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
+        if let Some(slot) = self.0 {
+            let value = Some(man.ref_srv(data.raw()).clone());
+            out.resource_views.0[slot as usize] = value;
+        }
+    }
+}
+
+impl<'a, T: TextureFormat> DataLink<'a> for UnorderedView<T> {
+    type Init = &'a str;
+    fn new() -> Self {
+        UnorderedView(None, PhantomData)
+    }
+    fn is_active(&self) -> bool {
+        self.0.is_some()
+    }
+    fn link_unordered_view(&mut self, var: &d::shade::UnorderedVar, init: &Self::Init)
+                           -> Option<Result<(), d::tex::Format>> {
+        if *init == var.name {
+            self.0 = Some(var.slot);
+            Some(Ok(())) //TODO: check format
+        }else {
+            None
+        }
+    }
+}
+
+impl<R: d::Resources, T: TextureFormat> DataBind<R> for UnorderedView<T> {
+    type Data = d::handle::UnorderedAccessView<R, T>;
+    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
+        if let Some(slot) = self.0 {
+            let value = Some(man.ref_uav(data.raw()).clone());
+            out.unordered_views.0[slot as usize] = value;
+        }
+    }
+}
+
+impl<'a> DataLink<'a> for Sampler {
+    type Init = &'a str;
+    fn new() -> Self {
+        Sampler(None)
+    }
+    fn is_active(&self) -> bool {
+        self.0.is_some()
+    }
+    fn link_sampler(&mut self, var: &d::shade::SamplerVar, init: &Self::Init) -> Option<()> {
+        if *init == var.name {
+            self.0 = Some(var.slot);
+            Some(())
+        }else {
+            None
+        }
+    }
+}
+
+impl<R: d::Resources> DataBind<R> for Sampler {
+    type Data = d::handle::Sampler<R>;
+    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
+        if let Some(slot) = self.0 {
+            let value = Some(man.ref_sampler(data).clone());
+            out.samplers.0[slot as usize] = value;
         }
     }
 }
@@ -302,91 +397,5 @@ impl<R: d::Resources, T: DepthStencilFormat, I> DataBind<R> for DepthStencilComm
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
         let value = Some(man.ref_dsv(data.raw()).clone());
         out.pixel_targets.depth_stencil = value;
-    }
-}
-
-impl<'a, T: TextureFormat> DataLink<'a> for ResourceView<T> {
-    type Init = &'a str;
-    fn new() -> Self {
-        ResourceView(None, PhantomData)
-    }
-    fn is_active(&self) -> bool {
-        self.0.is_some()
-    }
-    fn link_resource_view(&mut self, var: &d::shade::TextureVar, init: &Self::Init)
-                          -> Option<Result<(), d::tex::Format>> {
-        if *init == var.name {
-            self.0 = Some(var.slot);
-            Some(Ok(())) //TODO: check format
-        }else {
-            None
-        }
-    }
-}
-
-impl<R: d::Resources, T: TextureFormat> DataBind<R> for ResourceView<T> {
-    type Data = d::handle::ShaderResourceView<R, T>;
-    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
-        if let Some(slot) = self.0 {
-            let value = Some(man.ref_srv(data.raw()).clone());
-            out.resources.0[slot as usize] = value;
-        }
-    }
-}
-
-impl<'a, T: TextureFormat> DataLink<'a> for UnorderedView<T> {
-    type Init = &'a str;
-    fn new() -> Self {
-        UnorderedView(None, PhantomData)
-    }
-    fn is_active(&self) -> bool {
-        self.0.is_some()
-    }
-    fn link_unordered_view(&mut self, var: &d::shade::UnorderedVar, init: &Self::Init)
-                           -> Option<Result<(), d::tex::Format>> {
-        if *init == var.name {
-            self.0 = Some(var.slot);
-            Some(Ok(())) //TODO: check format
-        }else {
-            None
-        }
-    }
-}
-
-impl<R: d::Resources, T: TextureFormat> DataBind<R> for UnorderedView<T> {
-    type Data = d::handle::UnorderedAccessView<R, T>;
-    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
-        if let Some(slot) = self.0 {
-            let value = Some(man.ref_uav(data.raw()).clone());
-            out.unordereds.0[slot as usize] = value;
-        }
-    }
-}
-
-impl<'a> DataLink<'a> for Sampler {
-    type Init = &'a str;
-    fn new() -> Self {
-        Sampler(None)
-    }
-    fn is_active(&self) -> bool {
-        self.0.is_some()
-    }
-    fn link_sampler(&mut self, var: &d::shade::SamplerVar, init: &Self::Init) -> Option<()> {
-        if *init == var.name {
-            self.0 = Some(var.slot);
-            Some(())
-        }else {
-            None
-        }
-    }
-}
-
-impl<R: d::Resources> DataBind<R> for Sampler {
-    type Data = d::handle::Sampler<R>;
-    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
-        if let Some(slot) = self.0 {
-            let value = Some(man.ref_sampler(data).clone());
-            out.samplers.0[slot as usize] = value;
-        }
     }
 }

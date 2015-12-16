@@ -227,7 +227,7 @@ fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program) -> Ve
 }
 
 fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
-                    -> (Vec<s::UniformVar>, Vec<s::TextureVar>, Vec<s::SamplerVar>) {
+                    -> (Vec<s::ConstVar>, Vec<s::TextureVar>, Vec<s::SamplerVar>) {
     let mut uniforms = Vec::new();
     let mut textures = Vec::new();
     let mut samplers = Vec::new();
@@ -263,7 +263,7 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
         match StorageType::new(storage) {
             StorageType::Var(base, container) => {
                 info!("\t\tUniform[{}] = '{}'\t{:?}\t{:?}", loc, real_name, base, container);
-                uniforms.push(s::UniformVar {
+                uniforms.push(s::ConstVar {
                     name: real_name,
                     location: loc as s::Location,
                     count: size as usize,
@@ -280,7 +280,7 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
                 info!("\t\tSampler[{}] = '{}'\t{:?}\t{:?}", slot, real_name, base, tex_type);
                 textures.push(s::TextureVar {
                     name: real_name.clone(),
-                    slot: slot as d::TextureSlot,
+                    slot: slot as d::ResourceViewSlot,
                     base_type: base,
                     ty: tex_type,
                 });
@@ -335,7 +335,7 @@ pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities, shaders: &[super::Sha
         let (uniforms, textures, samplers) = query_parameters(gl, caps, name);
         let info = s::ProgramInfo {
             vertex_attributes: query_attributes(gl, name),
-            uniforms: uniforms,
+            globals: uniforms,
             constant_buffers: query_blocks(gl, caps, name),
             textures: textures,
             unordereds: Vec::new(), //TODO

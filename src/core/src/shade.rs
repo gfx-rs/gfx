@@ -17,7 +17,8 @@
 #![allow(missing_docs)]
 
 use std::fmt;
-use {AttributeSlot, ColorSlot, ConstantBufferSlot, SamplerSlot, TextureSlot, UnorderedSlot};
+use {AttributeSlot, ColorSlot, ConstantBufferSlot, ResourceViewSlot,
+     SamplerSlot, UnorderedViewSlot};
 
 /// Number of components in a container type (vectors/matrices)
 pub type Dimension = u8;
@@ -238,18 +239,19 @@ pub struct AttributeVar {
     pub container: ContainerType,
 }
 
-/// Uniform, a type of shader parameter representing data passed to the program.
+/// A constant in the shader - a bit of data that doesn't vary
+// between the shader execution units (vertices/pixels/etc).
 #[derive(Clone, PartialEq, Debug)]
-pub struct UniformVar {
-    /// Name of this uniform.
+pub struct ConstVar {
+    /// Name of this constant.
     pub name: String,
-    /// Location of this uniform in the program.
+    /// Location of this constant in the program.
     pub location: Location,
-    /// Number of elements this uniform represents.
+    /// Number of elements this constant represents.
     pub count: usize,
-    /// Type that this uniform is composed of
+    /// Type that this constant is composed of
     pub base_type: BaseType,
-    /// "Scalarness" of this uniform.
+    /// "Scalarness" of this constant.
     pub container: ContainerType,
 }
 
@@ -272,7 +274,7 @@ pub struct TextureVar {
     /// Name of this texture variable.
     pub name: String,
     /// Slot of this texture variable.
-    pub slot: TextureSlot,
+    pub slot: ResourceViewSlot,
     /// Base type for the texture.
     pub base_type: BaseType,
     /// Type of this texture.
@@ -285,7 +287,7 @@ pub struct UnorderedVar {
     /// Name of this unordered variable.
     pub name: String,
     /// Slot of this unordered variable.
-    pub slot: UnorderedSlot,
+    pub slot: UnorderedViewSlot,
 }
 
 /// Sampler shader parameter.
@@ -313,8 +315,8 @@ pub struct OutputVar {
 pub struct ProgramInfo {
     /// Attributes in the program
     pub vertex_attributes: Vec<AttributeVar>,
-    /// Uniforms in the program
-    pub uniforms: Vec<UniformVar>,
+    /// Global constants in the program
+    pub globals: Vec<ConstVar>,
     /// Constant buffers in the program
     pub constant_buffers: Vec<ConstantBufferVar>,
     /// Textures in the program
@@ -327,7 +329,7 @@ pub struct ProgramInfo {
     pub outputs: Vec<OutputVar>,
 }
 
-/// Error type for trying to store a UniformValue in a UniformVar.
+/// Error type for trying to store a UniformValue in a ConstVar.
 #[derive(Clone, Copy, Debug)]
 pub enum CompatibilityError {
     /// Array sizes differ between the value and the var (trying to upload a vec2 as a vec4, etc)
@@ -339,7 +341,7 @@ pub enum CompatibilityError {
     ErrorContainer,
 }
 
-impl UniformVar {
+impl ConstVar {
     /// Whether a value is compatible with this variable. That is, whether the value can be stored
     /// in this variable.
     pub fn is_compatible(&self, value: &UniformValue) -> Result<(), CompatibilityError> {

@@ -73,7 +73,68 @@ macro_rules! gfx_pipeline {
                     )*
                     return Err(InitError::ConstantBuffer(cb.slot, None));
                 }
-                // targets
+                // global constants
+                for gc in &info.globals {
+                    $(
+                        match meta.$field.link_global_constant(gc, &self.$field) {
+                            Some(Ok(())) => {
+                                assert!(meta.$field.is_active());
+                                continue;
+                            },
+                            Some(Err(_)) => return Err(
+                                InitError::GlobalConstant(gc.location, Some(()))
+                            ),
+                            None => (),
+                        }
+                    )*
+                    return Err(InitError::GlobalConstant(gc.location, None));
+                }
+                // t#
+                for srv in &info.textures {
+                    $(
+                        match meta.$field.link_resource_view(srv, &self.$field) {
+                            Some(Ok(())) => {
+                                assert!(meta.$field.is_active());
+                                continue;
+                            },
+                            Some(Err(_)) => return Err(
+                                InitError::ResourceView(srv.slot, Some(()))
+                            ),
+                            None => (),
+                        }
+                    )*
+                    return Err(InitError::ResourceView(srv.slot, None));
+                }
+                // u#
+                for uav in &info.unordereds {
+                    $(
+                        match meta.$field.link_unordered_view(uav, &self.$field) {
+                            Some(Ok(())) => {
+                                assert!(meta.$field.is_active());
+                                continue;
+                            },
+                            Some(Err(_)) => return Err(
+                                InitError::UnorderedView(uav.slot, Some(()))
+                            ),
+                            None => (),
+                        }
+                    )*
+                    return Err(InitError::UnorderedView(uav.slot, None));
+                }
+                // s#
+                for sm in &info.samplers {
+                    $(
+                        match meta.$field.link_sampler(sm, &self.$field) {
+                            Some(()) => {
+                                assert!(meta.$field.is_active());
+                                continue;
+                            },
+                            None => (),
+                        }
+                    )*
+                    return Err(InitError::Sampler(sm.slot, None));
+                }
+                // color targets
                 for out in &info.outputs {
                     $(
                         match meta.$field.link_output(out, &self.$field) {
@@ -90,7 +151,7 @@ macro_rules! gfx_pipeline {
                     )*
                     return Err(InitError::PixelExport(out.slot, None));
                 }
-                // ds
+                // depth-stencil
                 for _ in 0 .. 1 {
                     $(
                       match meta.$field.link_depth_stencil(&self.$field) {

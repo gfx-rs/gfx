@@ -81,7 +81,7 @@ pub type ParameterId = u16;
 /// General shader parameter.
 pub trait Parameter<R: Resources> {
     /// Check if this parameter is good for a given uniform.
-    fn check_uniform(&shade::UniformVar) -> bool { false }
+    fn check_uniform(&shade::ConstVar) -> bool { false }
     /// Check if this parameter is good for a given block.
     fn check_block(&shade::ConstantBufferVar) -> bool { false }
     /// Check if this parameter is good for a given texture.
@@ -91,7 +91,7 @@ pub trait Parameter<R: Resources> {
 }
 
 impl<T: ToUniform, R: Resources> Parameter<R> for T {
-    fn check_uniform(_var: &shade::UniformVar) -> bool {
+    fn check_uniform(_var: &shade::ConstVar) -> bool {
         true //TODO
     }
 
@@ -148,7 +148,7 @@ impl<R: Resources> ShaderParam for Option<R> {
     type Link = ();
 
     fn create_link(_: Option<&Option<R>>, info: &shade::ProgramInfo) -> Result<(), ParameterError> {
-        match info.uniforms[..].first() {
+        match info.globals[..].first() {
             Some(u) => return Err(ParameterError::MissingUniform(u.name.clone())),
             None => (),
         }
@@ -206,7 +206,7 @@ impl<R: Resources> ShaderParam for ParamDictionary<R> {
         };
         //TODO: proper error checks
         Ok(ParamDictionaryLink {
-            uniforms: info.uniforms.iter().map(|var|
+            uniforms: info.globals.iter().map(|var|
                 this.uniforms.iter().position(|c| c.name == var.name).unwrap()
             ).collect(),
             blocks: info.constant_buffers.iter().map(|var|

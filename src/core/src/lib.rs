@@ -59,10 +59,10 @@ pub type InstanceCount = u32;
 pub type AttributeSlot = u8;
 /// Slot for a constant buffer object.
 pub type ConstantBufferSlot = u8;
-/// Slot for a texture.
-pub type TextureSlot = u8;
+/// Slot for a shader resource view.
+pub type ResourceViewSlot = u8;
 /// Slot for an unordered access object.
-pub type UnorderedSlot = u8;
+pub type UnorderedViewSlot = u8;
 /// Slot for an active color buffer.
 pub type ColorSlot = u8;
 /// Slot for a sampler.

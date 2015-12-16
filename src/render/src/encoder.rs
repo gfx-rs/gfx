@@ -121,7 +121,7 @@ impl<R: Resources> ParamStorage<R> {
         self.blocks  .clear();
         self.textures.clear();
         // allocate
-        self.uniforms.extend(pinfo.uniforms.iter().map(|_| None));
+        self.uniforms.extend(pinfo.globals.iter().map(|_| None));
         self.blocks  .extend(pinfo.constant_buffers.iter().map(|_| None));
         self.textures.extend(pinfo.textures.iter().map(|_| None));
     }
@@ -503,7 +503,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
     fn upload_parameters(&mut self, program: &handle::Program<R>) {
         let info = program.get_info();
         // bind uniforms
-        for (var, value) in info.uniforms.iter()
+        for (var, value) in info.globals.iter()
             .zip(self.parameters.uniforms.iter()) {
             match value {
                 &Some(v) => self.command_buffer.bind_uniform(var.location, v),
@@ -607,7 +607,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
         let raw_data = pipeline.prepare_data(user_data, &mut self.handles);
         self.command_buffer.bind_vertex_buffers(raw_data.vertex_buffers);
         self.command_buffer.bind_constant_buffers(raw_data.constant_buffers);
-        for &(location, value) in &raw_data.constants {
+        for &(location, value) in &raw_data.global_constants {
             self.command_buffer.bind_uniform(location, value);
         }
         self.command_buffer.bind_samplers(raw_data.samplers);

@@ -91,7 +91,7 @@ macro_rules! gfx_parameters {
                     let mut $field = None;
                 )*
                 // scan uniforms
-                for (i, u) in info.uniforms.iter().enumerate() {
+                for (i, u) in info.globals.iter().enumerate() {
                     match &u.name[..] {
                         $(
                         stringify!($gl_name) => {

@@ -55,7 +55,7 @@ pub use mesh::{Attribute, Mesh, VertexFormat};
 pub use mesh::Error as MeshError;
 pub use mesh::{Slice, ToIndexSlice, ToSlice, SliceKind};
 pub use pso::{PipelineState, VertexBuffer, ConstantBuffer,
-              Constant, PER_VERTEX, PER_INSTANCE,
+              Global, PER_VERTEX, PER_INSTANCE,
               TextureFormat, BlendFormat, RenderTarget, BlendTarget,
               DepthStencilFormat, DepthStencilTarget,
               DepthFormat, StencilFormat, DepthTarget, StencilTarget,

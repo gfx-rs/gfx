@@ -38,7 +38,7 @@ gfx_pipeline_init!( _Data _Meta _Init {
     _vertex: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
     _instance: gfx::VertexBuffer<Instance> = gfx::PER_INSTANCE,
     _const_locals: gfx::ConstantBuffer<Local> = "Locals",
-    _gobal: gfx::Constant<[f32; 4]> = "Global",
+    _global: gfx::Global<[f32; 4]> = "Global",
     tex_diffuse: gfx::ResourceView<Float4> = "Diffuse",
     sampler_linear: gfx::Sampler = "Linear",
     buf_frequency: gfx::UnorderedView<Float4> = "Frequency",

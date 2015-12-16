@@ -40,7 +40,7 @@ pub enum Command {
                       Level, Option<Layer>),
     BindUniformBlock(c::ConstantBufferSlot, Buffer),
     BindUniform(c::shade::Location, c::shade::UniformValue),
-    BindTexture(c::TextureSlot, c::tex::Kind, Texture, Option<FatSampler>),
+    BindTexture(c::ResourceViewSlot, c::tex::Kind, Texture, Option<FatSampler>),
     SetDrawColorBuffers(c::ColorSlot),
     SetRasterizer(s::Rasterizer),
     SetViewport(Rect),
@@ -139,7 +139,7 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.push(Command::BindUniform(loc, value));
     }
 
-    fn bind_texture(&mut self, slot: c::TextureSlot, kind: c::tex::Kind, tex: Texture,
+    fn bind_texture(&mut self, slot: c::ResourceViewSlot, kind: c::tex::Kind, tex: Texture,
                     sampler: Option<FatSampler>) {
         self.buf.push(Command::BindTexture(slot, kind, tex, sampler));
     }
