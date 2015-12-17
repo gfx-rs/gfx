@@ -44,6 +44,8 @@ pub trait VertexFormat {
 /// Describes geometry to render.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Mesh<R: Resources> {
+    /// Primitive type of the mesh.
+    pub primitive: Primitive,
     /// Number of vertices in the mesh.
     pub num_vertices: VertexCount,
     /// Vertex attributes to use.
@@ -54,6 +56,7 @@ impl<R: Resources> Mesh<R> {
     /// Create a new mesh, which is a `TriangleList` with no attributes and `nv` vertices.
     pub fn new(nv: VertexCount) -> Mesh<R> {
         Mesh {
+            primitive: Primitive::TriangleList,
             num_vertices: nv,
             attributes: Vec::new(),
         }
@@ -63,6 +66,7 @@ impl<R: Resources> Mesh<R> {
     pub fn from_format<V: VertexFormat>(buf: handle::Buffer<R, V>, nv: VertexCount)
                        -> Mesh<R> {
         Mesh {
+            primitive: Primitive::TriangleList,
             num_vertices: nv,
             attributes: V::generate(&buf),
         }
@@ -85,8 +89,18 @@ impl<R: Resources> Mesh<R> {
         }));
 
         Mesh {
+            primitive: Primitive::TriangleList,
             num_vertices: nv,
             attributes: attributes,
+        }
+    }
+
+    /// Get a vertex slice of the whole mesh.
+    pub fn get_slice(&self) -> Slice<R> {
+        Slice {
+            start: 0,
+            end: self.num_vertices,
+            kind: SliceKind::Vertex,
         }
     }
 }
@@ -105,18 +119,16 @@ pub struct Slice<R: Resources> {
     pub start: VertexCount,
     /// End index of vertices to draw.
     pub end: VertexCount,
-    /// Primitive type to render collections of vertices as.
-    pub primitive: Primitive, //TODO: remove
     /// Source of the vertex ordering when drawing.
     pub kind: SliceKind<R>,
 }
 
 impl<R: Resources> Slice<R> {
     /// Get the number of primitives in this slice.
-    pub fn get_prim_count(&self) -> u32 {
+    pub fn get_prim_count(&self, prim: Primitive) -> u32 {
         use gfx_core::Primitive::*;
         let nv = (self.end - self.start) as u32;
-        match self.primitive {
+        match prim {
             Point => nv,
             Line => nv / 2,
             LineStrip => (nv-1),
@@ -147,46 +159,27 @@ pub enum SliceKind<R: Resources> {
     Index32(handle::Buffer<R, u32>, VertexCount),
 }
 
-/// A helper trait for cleanly getting the slice of a type.
-pub trait ToSlice<R: Resources> {
-    /// Get the slice of a type.
-    fn to_slice(&self, Primitive) -> Slice<R>;
-}
-
 /// A helper trait to build index slices from data.
 pub trait ToIndexSlice<R: Resources> {
     /// Make an index slice.
-    fn to_slice<F: Factory<R>>(self, factory: &mut F, prim: Primitive) -> Slice<R>;
-}
-
-impl<R: Resources> ToSlice<R> for Mesh<R> {
-    /// Return a vertex slice of the whole mesh.
-    fn to_slice(&self, prim: Primitive) -> Slice<R> {
-        Slice {
-            start: 0,
-            end: self.num_vertices,
-            primitive: prim,
-            kind: SliceKind::Vertex
-        }
-    }
+    fn to_slice<F: Factory<R>>(self, factory: &mut F) -> Slice<R>;
 }
 
 macro_rules! impl_slice {
     ($ty:ty, $index:ident) => (
-        impl<R: Resources> ToSlice<R> for handle::Buffer<R, $ty> {
-            fn to_slice(&self, prim: Primitive) -> Slice<R> {
+        impl<R: Resources> From<handle::Buffer<R, $ty>> for Slice<R> {
+            fn from(buf: handle::Buffer<R, $ty>) -> Slice<R> {
                 Slice {
                     start: 0,
-                    end: self.len() as VertexCount,
-                    primitive: prim,
-                    kind: SliceKind::$index(self.clone(), 0)
+                    end: buf.len() as VertexCount,
+                    kind: SliceKind::$index(buf, 0)
                 }
             }
         }
         impl<'a, R: Resources> ToIndexSlice<R> for &'a [$ty] {
-            fn to_slice<F: Factory<R>>(self, factory: &mut F, prim: Primitive) -> Slice<R> {
+            fn to_slice<F: Factory<R>>(self, factory: &mut F) -> Slice<R> {
                 //debug_assert!(self.len() <= factory.get_capabilities().max_index_count);
-                factory.create_buffer_static(self, BufferRole::Index).to_slice(prim)
+                factory.create_buffer_static(self, BufferRole::Index).into()
             }
         }
     )

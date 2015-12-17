@@ -572,6 +572,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
                 self.render_state.attributes[loc] = Some((vat.buffer.clone(), vat.format));
             }
         }
+        self.command_buffer.set_primitive(mesh.primitive);
     }
 
     fn draw_indexed<T>(&mut self, buf: &handle::Buffer<R, T>, format: IntSize,
@@ -581,14 +582,14 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
             self.render_state.index = Some(buf.raw().clone());
             self.command_buffer.bind_index(self.handles.ref_buffer(buf.raw()).clone());
         }
-        self.command_buffer.call_draw_indexed(slice.primitive, format,
+        self.command_buffer.call_draw_indexed(format,
             slice.start, slice.end - slice.start, base, instances);
     }
 
     fn draw_slice(&mut self, slice: &mesh::Slice<R>, instances: InstanceOption) {
         match slice.kind {
             mesh::SliceKind::Vertex => self.command_buffer.call_draw(
-                slice.primitive, slice.start, slice.end - slice.start, instances),
+                slice.start, slice.end - slice.start, instances),
             mesh::SliceKind::Index8(ref buf, base) =>
                 self.draw_indexed(buf, IntSize::U8, slice, base, instances),
             mesh::SliceKind::Index16(ref buf, base) =>

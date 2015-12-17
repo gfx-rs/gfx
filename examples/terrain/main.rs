@@ -26,7 +26,7 @@ use rand::Rng;
 use cgmath::FixedArray;
 use cgmath::{Matrix4, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
-use gfx::traits::{Stream, ToIndexSlice, ToSlice, FactoryExt};
+use gfx::traits::{Stream, ToIndexSlice, FactoryExt};
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
 use time::precise_time_s;
@@ -80,7 +80,7 @@ pub fn main() {
         .vertices()
         .map(|i| i as u32)
         .collect();
-    let slice = index_data.to_slice(&mut factory, gfx::Primitive::TriangleList);
+    let slice = index_data.to_slice(&mut factory);
 
     let mesh = factory.create_mesh(&vertex_data);
     let program = {

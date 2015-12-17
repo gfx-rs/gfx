@@ -23,10 +23,10 @@ extern crate gfx_device_gl;
 use std::marker::PhantomData;
 use rand::Rng;
 use glutin::WindowBuilder;
-use gfx::{Factory, BufferRole, Primitive};
+use gfx::{Factory, BufferRole};
 use gfx::extra::stream::Stream;
 use gfx::extra::factory::FactoryExt;
-use gfx::mesh::{Mesh, ToSlice};
+use gfx::mesh::Mesh;
 use gfx::batch;
 
 const QUAD_VERTICES: [Vertex; 4] = [
@@ -126,7 +126,7 @@ fn main() {
     };
 
     let mut batch = batch::Full::new(mesh, program, params).unwrap();
-    batch.slice = quad_indices.to_slice(Primitive::TriangleList);
+    batch.slice = quad_indices.into();
 
     'l: loop {
         for event in stream.out.window.poll_events() {

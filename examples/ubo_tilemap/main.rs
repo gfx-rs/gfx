@@ -27,7 +27,7 @@ use std::io::Cursor;
 
 use glutin::{PollEventsIterator, Event, VirtualKeyCode, ElementState};
 
-use gfx::traits::{Stream, ToIndexSlice, ToSlice, FactoryExt};
+use gfx::traits::{Stream, ToIndexSlice, FactoryExt};
 use gfx::{Resources, Factory};
 use gfx::batch::Full;
 
@@ -206,7 +206,7 @@ impl<R> TileMapPlane<R> where R: Resources {
             .vertices()
             .map(|i| i as u32)
             .collect();
-        let slice = index_data.to_slice(factory, gfx::Primitive::TriangleList);
+        let slice = index_data.to_slice(factory);
 
         // set up texture
         let mesh = factory.create_mesh(&vertex_data);

@@ -154,20 +154,21 @@ pub trait CommandBuffer<R: Resources> {
     fn set_depth_stencil(&mut self, Option<s::Depth>, Option<s::Stencil>, s::CullFace);
     /// Set blend state
     fn set_blend(&mut self, ColorSlot, Option<s::Blend>);
-    /// Set reference values for the blending and stencil front/back.
+    /// Set reference values for the blending and stencil front/back
     fn set_ref_values(&mut self, s::RefValues);
     /// Update a vertex/index/uniform buffer
     fn update_buffer(&mut self, R::Buffer, DataPointer, usize);
     /// Update a texture region
     fn update_texture(&mut self, tex::Kind, R::Texture,
                       tex::ImageInfo, DataPointer);
+    /// Set the primitive type prior to drawing
+    fn set_primitive(&mut self, Primitive);
     /// Clear target surfaces
     fn call_clear(&mut self, target::ClearData, target::Mask);
     /// Draw a primitive
-    fn call_draw(&mut self, Primitive, VertexCount,
-                 VertexCount, InstanceOption);
+    fn call_draw(&mut self, VertexCount, VertexCount, InstanceOption);
     /// Draw a primitive with index buffer
-    fn call_draw_indexed(&mut self, Primitive, IndexType,
+    fn call_draw_indexed(&mut self, IndexType,
                          VertexCount, VertexCount,
                          VertexCount, InstanceOption);
     /// Blit from one target to another

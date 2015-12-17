@@ -112,7 +112,7 @@ fn create_cube<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F)
         20, 21, 22, 22, 23, 20, // back
     ];
 
-    let slice = index_data.to_slice(factory, gfx::Primitive::TriangleList);
+    let slice = index_data.to_slice(factory);
 
     (mesh, slice)
 }
@@ -128,7 +128,7 @@ fn create_plane<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F, size: i8
     ];
 
     let mesh = factory.create_mesh(&vertex_data);
-    let slice = mesh.to_slice(gfx::Primitive::TriangleStrip);
+    let slice = mesh.get_slice();
 
     (mesh, slice)
 }

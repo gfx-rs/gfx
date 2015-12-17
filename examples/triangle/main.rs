@@ -17,7 +17,7 @@ extern crate gfx;
 extern crate gfx_window_glutin;
 extern crate glutin;
 
-use gfx::traits::{Stream, ToIndexSlice, ToSlice, FactoryExt};
+use gfx::traits::{Stream, FactoryExt};
 
 gfx_vertex!( Vertex {
     a_Pos@ pos: [f32; 2],
@@ -35,7 +35,7 @@ pub fn main() {
         Vertex { pos: [  0.0,  0.5 ], color: [0.0, 0.0, 1.0] },
     ];
     let mesh = factory.create_mesh(&vertex_data);
-    let slice = mesh.to_slice(gfx::Primitive::TriangleList);
+    let slice = mesh.get_slice();
 
     let program = {
         let vs = gfx::ShaderSource {

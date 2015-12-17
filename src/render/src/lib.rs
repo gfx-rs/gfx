@@ -30,7 +30,7 @@ pub mod traits {
     pub use extra::factory::FactoryExt;
     pub use extra::stream::{Stream, StreamFactory};
     pub use encoder::EncoderFactory;
-    pub use mesh::{ToIndexSlice, ToSlice};
+    pub use mesh::ToIndexSlice;
 }
 
 // draw state re-exports
@@ -53,7 +53,7 @@ pub use gfx_core::shade::{ProgramInfo, UniformValue};
 pub use encoder::{Encoder, BlitError, DrawError, UpdateError, ParamStorage};
 pub use mesh::{Attribute, Mesh, VertexFormat};
 pub use mesh::Error as MeshError;
-pub use mesh::{Slice, ToIndexSlice, ToSlice, SliceKind};
+pub use mesh::{Slice, ToIndexSlice, SliceKind};
 pub use pso::{PipelineState, VertexBuffer, ConstantBuffer,
               Global, PER_VERTEX, PER_INSTANCE,
               TextureFormat, BlendFormat, RenderTarget, BlendTarget,

@@ -22,7 +22,7 @@ use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
 use gfx::attrib::Floater;
-use gfx::traits::{Factory, Stream, ToIndexSlice, ToSlice, FactoryExt};
+use gfx::traits::{Factory, Stream, ToIndexSlice, FactoryExt};
 
 // Declare the vertex format suitable for drawing.
 // Notice the use of FixedPoint.
@@ -144,7 +144,7 @@ pub fn main() {
     };
 
     let mut batch = gfx::batch::Full::new(mesh, program, data).unwrap();
-    batch.slice = index_data.to_slice(&mut factory, gfx::Primitive::TriangleList);
+    batch.slice = index_data.to_slice(&mut factory);
     batch.state = batch.state.depth(gfx::state::Comparison::LessEqual, true);
 
     while !stream.out.window.should_close() {

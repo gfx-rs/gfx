@@ -52,10 +52,11 @@ pub enum Command {
     SetRefValues(s::RefValues),
     UpdateBuffer(Buffer, DataPointer, usize),
     UpdateTexture(c::tex::Kind, Texture, c::tex::ImageInfo, DataPointer),
+    SetPrimitive(c::Primitive),
     // drawing
     Clear(ClearData, Mask),
-    Draw(c::Primitive, c::VertexCount, c::VertexCount, InstanceOption),
-    DrawIndexed(c::Primitive, c::IndexType, c::VertexCount, c::VertexCount,
+    Draw(c::VertexCount, c::VertexCount, InstanceOption),
+    DrawIndexed(c::IndexType, c::VertexCount, c::VertexCount,
                 c::VertexCount, InstanceOption),
     Blit(Rect, Rect, Mirror, Mask),
 }
@@ -194,21 +195,25 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.push(Command::UpdateTexture(kind, tex, info, data));
     }
 
+    fn set_primitive(&mut self, prim: c::Primitive) {
+        self.buf.push(Command::SetPrimitive(prim));
+    }
+
     fn call_clear(&mut self, data: ClearData, mask: Mask) {
         self.buf.push(Command::Clear(data, mask));
     }
 
-    fn call_draw(&mut self, prim: c::Primitive, start: c::VertexCount,
+    fn call_draw(&mut self, start: c::VertexCount,
                  count: c::VertexCount, instances: InstanceOption) {
-        self.buf.push(Command::Draw(prim, start, count, instances));
+        self.buf.push(Command::Draw(start, count, instances));
     }
 
-    fn call_draw_indexed(&mut self, prim: c::Primitive,
+    fn call_draw_indexed(&mut self,
                          itype: c::IndexType, start: c::VertexCount,
                          count: c::VertexCount, base: c::VertexCount,
                          instances: InstanceOption) {
         self.buf.push(Command::DrawIndexed(
-            prim, itype, start, count, base, instances));
+            itype, start, count, base, instances));
     }
 
     fn call_blit(&mut self, s_rect: Rect, d_rect: Rect, mirror: Mirror,

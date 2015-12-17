@@ -669,12 +669,15 @@ impl Device {
                     },
                 }
             },
-            Command::Draw(prim_type, start, count, instances) => {
+            Command::SetPrimitive(primitive) => {
+                self.temp.primitive = primitive_to_gl(primitive);
+            },
+            Command::Draw(start, count, instances) => {
                 let gl = &self.share.context;
                 match instances {
                     Some((num, base)) if self.share.capabilities.instance_call_supported => unsafe {
                         gl.DrawArraysInstancedBaseInstance(
-                            primitive_to_gl(prim_type),
+                            self.temp.primitive,
                             start as gl::types::GLsizei,
                             count as gl::types::GLsizei,
                             num as gl::types::GLsizei,
@@ -686,14 +689,14 @@ impl Device {
                     },
                     None => unsafe {
                         gl.DrawArrays(
-                            primitive_to_gl(prim_type),
+                            self.temp.primitive,
                             start as gl::types::GLsizei,
                             count as gl::types::GLsizei
                         );
                     },
                 }
             },
-            Command::DrawIndexed(prim_type, index_type, start, count, base_vertex, instances) => {
+            Command::DrawIndexed(index_type, start, count, base_vertex, instances) => {
                 use gfx_core::attrib::IntSize;
                 let gl = &self.share.context;
                 let caps = &self.share.capabilities;
@@ -709,7 +712,7 @@ impl Device {
                                 error!("Instance bases with indexed drawing is not supported")
                             }
                             gl.DrawElementsInstanced(
-                                primitive_to_gl(prim_type),
+                                self.temp.primitive,
                                 count as gl::types::GLsizei,
                                 gl_index,
                                 offset as *const gl::types::GLvoid,
@@ -717,7 +720,7 @@ impl Device {
                             );
                         } else if base_vertex != 0 && base_instance == 0 {
                             gl.DrawElementsInstancedBaseVertex(
-                                primitive_to_gl(prim_type),
+                                self.temp.primitive,
                                 count as gl::types::GLsizei,
                                 gl_index,
                                 offset as *const gl::types::GLvoid,
@@ -726,7 +729,7 @@ impl Device {
                             );
                         } else if base_vertex == 0 && base_instance != 0 {
                             gl.DrawElementsInstancedBaseInstance(
-                                primitive_to_gl(prim_type),
+                                self.temp.primitive,
                                 count as gl::types::GLsizei,
                                 gl_index,
                                 offset as *const gl::types::GLvoid,
@@ -735,7 +738,7 @@ impl Device {
                             );
                         } else {
                             gl.DrawElementsInstancedBaseVertexBaseInstance(
-                                primitive_to_gl(prim_type),
+                                self.temp.primitive,
                                 count as gl::types::GLsizei,
                                 gl_index,
                                 offset as *const gl::types::GLvoid,
@@ -754,14 +757,14 @@ impl Device {
                                 error!("Base vertex with indexed drawing not supported");
                             }
                             gl.DrawElements(
-                                primitive_to_gl(prim_type),
+                                self.temp.primitive,
                                 count as gl::types::GLsizei,
                                 gl_index,
                                 offset as *const gl::types::GLvoid,
                             );
                         } else {
                             gl.DrawElementsBaseVertex(
-                                primitive_to_gl(prim_type),
+                                self.temp.primitive,
                                 count as gl::types::GLsizei,
                                 gl_index,
                                 offset as *const gl::types::GLvoid,

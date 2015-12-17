@@ -110,10 +110,10 @@ impl draw::CommandBuffer<DummyResources> for DummyCommandBuffer {
     fn update_buffer(&mut self, _: (), _: draw::DataPointer, _: usize) {}
     fn update_texture(&mut self, _: tex::Kind, _: (), _: tex::ImageInfo,
                       _: draw::DataPointer) {}
+    fn set_primitive(&mut self, _: Primitive) {}
     fn call_clear(&mut self, _: target::ClearData, _: target::Mask) {}
-    fn call_draw(&mut self, _: Primitive, _: VertexCount, _: VertexCount,
-                 _: draw::InstanceOption) {}
-    fn call_draw_indexed(&mut self, _: Primitive, _: IndexType,
+    fn call_draw(&mut self, _: VertexCount, _: VertexCount, _: draw::InstanceOption) {}
+    fn call_draw_indexed(&mut self, _: IndexType,
                          _: VertexCount, _: VertexCount,
                          _: VertexCount, _: draw::InstanceOption) {}
     fn call_blit(&mut self, _: target::Rect, _: target::Rect,

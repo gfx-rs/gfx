@@ -43,7 +43,7 @@ use cgmath::FixedArray;
 use cgmath::{Matrix, Matrix4, Point3, Vector3, EuclideanVector};
 use cgmath::{Transform, AffineMatrix3};
 use gfx::attrib::Floater;
-use gfx::traits::{Device, Factory, Stream, ToIndexSlice, ToSlice, Output, FactoryExt};
+use gfx::traits::{Device, Factory, Stream, ToIndexSlice, Output, FactoryExt};
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{SharedVertex, IndexedPolygon};
 use time::precise_time_s;
@@ -385,7 +385,7 @@ pub fn main() {
             .collect();
 
         let mesh = factory.create_mesh(&vertex_data);
-        let slice = index_data.to_slice(&mut factory, gfx::Primitive::TriangleList);
+        let slice = index_data.to_slice(&mut factory);
 
         let program = factory.link_program(TERRAIN_VERTEX_SRC, TERRAIN_FRAGMENT_SRC)
                              .unwrap();
@@ -415,7 +415,7 @@ pub fn main() {
             BlitVertex { pos: Floater::cast3([-1,  1, 0]), tex_coord: Floater::cast2([0, 1]) },
         ];
         let mesh = factory.create_mesh(&vertex_data);
-        let slice = mesh.to_slice(gfx::Primitive::TriangleList);
+        let slice = mesh.get_slice();
 
         let program = factory.link_program(BLIT_VERTEX_SRC, BLIT_FRAGMENT_SRC)
                              .unwrap();
@@ -479,7 +479,7 @@ pub fn main() {
         ];
 
         let mesh = factory.create_mesh(&vertex_data);
-        let slice = index_data.to_slice(&mut factory, gfx::Primitive::TriangleList);
+        let slice = index_data.to_slice(&mut factory);
 
         let state = gfx::DrawState::new()
             .depth(gfx::state::Comparison::LessEqual, false)

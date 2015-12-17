@@ -18,7 +18,7 @@
 
 use draw_state::DrawState;
 
-use gfx_core::{Resources, Primitive};
+use gfx_core::Resources;
 use gfx_core::handle::Program as ProgramHandle;
 use mesh;
 use shade::{ParameterError, ShaderParam};
@@ -108,8 +108,7 @@ impl<T: ShaderParam> Full<T> {
     /// Create a new full batch
     pub fn new(mesh: mesh::Mesh<T::Resources>, program: ProgramHandle<T::Resources>, params: T)
            -> Result<Full<T>, Error> {
-        use mesh::ToSlice;
-        let slice = mesh.to_slice(Primitive::TriangleList);
+        let slice = mesh.get_slice();
         let mesh_link = match mesh::Link::new(&mesh, program.get_info()) {
             Ok(l) => l,
             Err(e) => return Err(Error::Mesh(e)),

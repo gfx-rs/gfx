@@ -25,7 +25,7 @@ use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3, Matrix3, Matrix4};
 use cgmath::{Transform, AffineMatrix3, Vector4, Array1};
 use gfx::attrib::Floater;
-use gfx::traits::{Device, Stream, ToIndexSlice, ToSlice, FactoryExt};
+use gfx::traits::{Device, Stream, FactoryExt};
 use glfw::Context;
 use gl::Gl;
 use gl::types::*;
@@ -82,7 +82,7 @@ fn gfx_main(mut glfw: glfw::Glfw,
     ];
 
     let mesh = factory.create_mesh(&vertex_data);
-    let slice = mesh.to_slice(gfx::Primitive::TriangleList);
+    let slice = mesh.get_slice();
 
     let program = factory.link_program(VERTEX_SRC, FRAGMENT_SRC).unwrap();
     let view: AffineMatrix3<f32> = Transform::look_at(
