@@ -240,6 +240,8 @@ pub struct Share {
     capabilities: d::Capabilities,
     handles: RefCell<handle::Manager<Resources>>,
     main_fbo: handle::FrameBuffer<Resources>,
+    main_color: handle::RawRenderTargetView<Resources>,
+    main_depth_stencil: handle::RawDepthStencilView<Resources>,
 }
 
 /// Temporary data stored between different gfx calls that
@@ -295,9 +297,24 @@ impl Device {
         unsafe {
             gl.PixelStorei(gl::UNPACK_ALIGNMENT, 1);
         }
-        // create the device
+        // create the main FBO surface proxies
         let mut handles = handle::Manager::new();
         let main_fbo = handles.make_frame_buffer(0);
+        let texture = handles.make_new_texture(
+            NewTexture::Surface(0),
+            d::tex::TextureInfo {
+                width: 0,
+                height: 0,
+                depth: 0,
+                levels: 0,
+                kind: d::tex::Kind::D2,
+                format: d::tex::RGBA8,
+            },
+            d::RENDER_TARGET
+        );
+        let m_color = handles.make_rtv(TargetView::Surface(0), &texture);
+        let m_ds = handles.make_dsv(TargetView::Surface(0), &texture);
+        // create the device
         Device {
             info: info,
             share: Rc::new(Share {
@@ -305,6 +322,8 @@ impl Device {
                 capabilities: caps,
                 handles: RefCell::new(handles),
                 main_fbo: main_fbo,
+                main_color: m_color,
+                main_depth_stencil: m_ds,
             }),
             temp: Temp::new(),
             frame_handles: handle::Manager::new(),
@@ -865,9 +884,10 @@ impl d::Device for Device {
             |gl, v| unsafe { gl.DeleteProgram(*v) },
             |_, _| {}, //PSO
             |gl, v| match v {
+                &NewTexture::Surface(0) => (), // fake surface
                 &NewTexture::Surface(ref suf) => unsafe { gl.DeleteRenderbuffers(1, suf) },
                 &NewTexture::Texture(ref tex) => unsafe { gl.DeleteTextures(1, tex) },
-            },
+            }, // new texture
             |gl, v| if v.owned {
                 unsafe { gl.DeleteTextures(1, &v.object) }
             }, //SRV

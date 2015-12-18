@@ -97,3 +97,21 @@ pub fn init(window: glutin::Window) -> Success {
     let stream = factory.create_stream(out);
     (stream, device, factory)
 }
+
+pub fn init_new<
+    Cf: gfx::format::Formatted = gfx::format::Rgba8,
+    Df: gfx::format::Formatted = gfx::format::DepthStencil,
+>(builder: glutin::WindowBuilder) -> (glutin::Window,
+        gfx_device_gl::Device, gfx_device_gl::Factory,
+        gfx::handle::RenderTargetView<gfx_device_gl::Resources, Cf>,
+        gfx::handle::DepthStencilView<gfx_device_gl::Resources, Df>)
+{
+    // TODO: set the color/depth/stencil bits according to Cf and Df
+    let window = builder.build().unwrap();
+    unsafe { window.make_current().unwrap() };
+    let (device, factory) = gfx_device_gl::create(|s|
+        window.get_proc_address(s) as *const std::os::raw::c_void);
+    let color_view = factory.get_main_color();
+    let ds_view = factory.get_main_depth_stencil();
+    (window, device, factory, color_view, ds_view)
+}

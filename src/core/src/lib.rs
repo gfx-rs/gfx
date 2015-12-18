@@ -32,6 +32,7 @@ pub use draw_state::{MAX_COLOR_TARGETS, state, target};
 pub mod attrib;
 pub mod draw;
 pub mod dummy;
+pub mod format;
 pub mod handle;
 pub mod mapping;
 pub mod output;

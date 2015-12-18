@@ -168,6 +168,14 @@ impl Factory {
             handle: self.get_main_frame_buffer(),
         }
     }
+
+    pub fn get_main_color<T: d::format::Formatted>(&self) -> handle::RenderTargetView<R, T> {
+        self.share.main_color.clone().into()
+    }
+
+    pub fn get_main_depth_stencil<T: d::format::Formatted>(&self) -> handle::DepthStencilView<R, T> {
+        self.share.main_depth_stencil.clone().into()
+    }
 }
 
 
