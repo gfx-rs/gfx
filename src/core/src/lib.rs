@@ -343,6 +343,7 @@ pub trait Factory<R: Resources> {
     }
 
     fn generate_mipmap(&mut self, &handle::Texture<R>);
+    fn generate_mipmap_new(&mut self, &handle::RawTexture<R>);
 
     /// Create a new texture with given data
     fn create_texture_static<T>(&mut self, info: tex::TextureInfo, data: &[T])
@@ -355,13 +356,15 @@ pub trait Factory<R: Resources> {
         }
     }
 
-    fn create_new_texture_raw(&mut self, tex::TextureInfo, Bind)
+    fn create_new_texture_raw(&mut self, tex::Descriptor)
+        -> Result<handle::RawTexture<R>, tex::Error>;
+    fn create_new_texture_with_data(&mut self, tex::Descriptor, &[u8])
         -> Result<handle::RawTexture<R>, tex::Error>;
     fn view_buffer_as_shader_resource(&mut self, &handle::RawBuffer<R>)
         -> Result<handle::RawShaderResourceView<R>, ResourceViewError>;
     fn view_buffer_as_unordered_access(&mut self, &handle::RawBuffer<R>)
         -> Result<handle::RawUnorderedAccessView<R>, ResourceViewError>;
-    fn view_texture_as_shader_resource(&mut self, &handle::RawTexture<R>)
+    fn view_texture_as_shader_resource(&mut self, &handle::RawTexture<R>, min: target::Level, max: target::Level)
         -> Result<handle::RawShaderResourceView<R>, ResourceViewError>;
     fn view_texture_as_unordered_access(&mut self, &handle::RawTexture<R>)
         -> Result<handle::RawUnorderedAccessView<R>, ResourceViewError>;

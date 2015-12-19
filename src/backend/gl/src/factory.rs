@@ -48,6 +48,29 @@ pub fn update_sub_buffer(gl: &gl::Gl, buffer: Buffer, address: *const u8,
     }
 }
 
+fn surface_type_to_old_format(sf: d::format::SurfaceType) -> d::tex::Format {
+    use gfx_core::format::SurfaceType;
+    use gfx_core::tex::{Format, Components, FloatSize, IntSubType};
+    match sf {
+        SurfaceType::R8_G8_B8_A8 => Format::Unsigned(Components::RGBA, 8, IntSubType::Normalized),
+        SurfaceType::R10_G10_B10_A2 => Format::RGB10_A2,
+        SurfaceType::R16_G16_B16_A16 => Format::Float(Components::RGBA, FloatSize::F16),
+        SurfaceType::R32_G32_B32_A32 => Format::Float(Components::RGBA, FloatSize::F32),
+        SurfaceType::D24_S8 => Format::DEPTH24_STENCIL8,
+    }
+}
+
+fn descriptor_to_texture_info(d: &d::tex::Descriptor) -> d::tex::TextureInfo {
+    d::tex::TextureInfo {
+        width: d.width,
+        height: d.height,
+        depth: d.depth,
+        levels: d.levels,
+        kind: d.kind,
+        format: surface_type_to_old_format(d.format),
+    }
+}
+
 /// A placeholder for a real `Output` implemented by your window.
 pub struct Output {
     /// render frame width.
@@ -337,18 +360,16 @@ impl d::Factory<R> for Factory {
         name.map(|tex| self.share.handles.borrow_mut().make_texture(tex, info))
     }
 
-    fn create_new_texture_raw(&mut self, info: d::tex::TextureInfo, bind: d::Bind)
+    fn create_new_texture_raw(&mut self, desc: d::tex::Descriptor)
                               -> Result<handle::RawTexture<R>, d::tex::Error> {
         use gfx_core::tex::Error;
         let caps = &self.share.capabilities;
-        if info.width == 0 || info.height == 0 || info.levels == 0 {
+        if desc.width == 0 || desc.height == 0 || desc.levels == 0 {
             return Err(Error::Size(0))
         }
-        if info.format.does_convert_gamma() && !caps.srgb_color_supported {
-            return Err(Error::Gamma)
-        }
+        let info = descriptor_to_texture_info(&desc);
         let gl = &self.share.context;
-        let object = if bind.intersects(d::SHADER_RESOURCE | d::UNORDERED_ACCESS) {
+        let object = if desc.bind.intersects(d::SHADER_RESOURCE | d::UNORDERED_ACCESS) {
             use gfx_core::tex::TextureError;
             let result = if caps.immutable_storage_supported {
                 tex::make_with_storage(gl, &info)
@@ -359,21 +380,36 @@ impl d::Factory<R> for Factory {
                 Ok(name) => NewTexture::Texture(name),
                 Err(TextureError::UnsupportedGamma) => return Err(Error::Gamma),
                 Err(TextureError::UnsupportedSamples) => {
-                    let aa = info.kind.get_aa_mode().unwrap_or(d::tex::AaMode::Msaa(0));
+                    let aa = desc.kind.get_aa_mode().unwrap_or(d::tex::AaMode::Msaa(0));
                     return Err(Error::Samples(aa));
                 },
-                Err(_) => return Err(Error::Format(info.format)),
+                Err(_) => return Err(Error::Format(desc.format)),
             }
         }else {
             use gfx_core::tex::SurfaceError;
-            let result = tex::make_surface(gl, &info.clone().into());
+            let result = tex::make_surface(gl, &info.into());
             match result {
                 Ok(name) => NewTexture::Surface(name),
-                Err(SurfaceError::UnsupportedFormat) => return Err(Error::Format(info.format)),
+                Err(SurfaceError::UnsupportedFormat) => return Err(Error::Format(desc.format)),
                 Err(SurfaceError::UnsupportedGamma) => return Err(Error::Gamma),
             }
         };
-        Ok(self.share.handles.borrow_mut().make_new_texture(object, info, bind))
+        Ok(self.share.handles.borrow_mut().make_new_texture(object, desc))
+    }
+
+    fn create_new_texture_with_data(&mut self, desc: d::tex::Descriptor, data: &[u8])
+                                    -> Result<handle::RawTexture<R>, d::tex::Error> {
+        let kind = desc.kind;
+        let img = descriptor_to_texture_info(&desc).into();
+        let tex = try!(self.create_new_texture_raw(desc));
+        match self.frame_handles.ref_new_texture(&tex) {
+            &NewTexture::Surface(_) => Err(d::tex::Error::Data(0)),
+            &NewTexture::Texture(t) => match tex::update_texture(&self.share.context,
+                kind, t, &img, data.as_ptr(), data.len()) {
+                Ok(_) => Ok(tex),
+                Err(_) => Err(d::tex::Error::Data(0)),
+            }
+        }
     }
 
     fn view_buffer_as_shader_resource(&mut self, hbuf: &handle::RawBuffer<R>)
@@ -396,11 +432,12 @@ impl d::Factory<R> for Factory {
         Err(d::ResourceViewError::Unsupported) //TODO
     }
 
-    fn view_texture_as_shader_resource(&mut self, htex: &handle::RawTexture<R>)
+    fn view_texture_as_shader_resource(&mut self, htex: &handle::RawTexture<R>, _min: Level, _max: Level)
                                        -> Result<handle::RawShaderResourceView<R>, d::ResourceViewError> {
         match self.frame_handles.ref_new_texture(htex) {
             &NewTexture::Surface(_) => Err(d::ResourceViewError::NoBindFlag),
             &NewTexture::Texture(t) => {
+                //TODO: use min/max `Level`
                 let view = ResourceView::new_texture(t, htex.get_info().kind);
                 Ok(self.share.handles.borrow_mut().make_texture_srv(view, htex))
             },
@@ -466,6 +503,14 @@ impl d::Factory<R> for Factory {
     fn generate_mipmap(&mut self, texture: &handle::Texture<R>) {
         tex::generate_mipmap(&self.share.context, texture.get_info().kind,
                              *self.frame_handles.ref_texture(texture));
+    }
+
+    fn generate_mipmap_new(&mut self, texture: &handle::RawTexture<R>) {
+        match self.frame_handles.ref_new_texture(texture) {
+            &NewTexture::Surface(_) => (), // no mip chain
+            &NewTexture::Texture(t) =>
+                tex::generate_mipmap(&self.share.context, texture.get_info().kind, t),
+        }
     }
 
     fn map_buffer_raw(&mut self, buf: &handle::RawBuffer<R>,

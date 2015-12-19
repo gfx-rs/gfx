@@ -302,15 +302,15 @@ impl Device {
         let main_fbo = handles.make_frame_buffer(0);
         let texture = handles.make_new_texture(
             NewTexture::Surface(0),
-            d::tex::TextureInfo {
+            d::tex::Descriptor {
                 width: 0,
                 height: 0,
                 depth: 0,
                 levels: 0,
                 kind: d::tex::Kind::D2,
-                format: d::tex::RGBA8,
+                format: d::format::SurfaceType::R8_G8_B8_A8,
+                bind: d::RENDER_TARGET,
             },
-            d::RENDER_TARGET
         );
         let m_color = handles.make_rtv(TargetView::Surface(0), &texture);
         let m_ds = handles.make_dsv(TargetView::Surface(0), &texture);

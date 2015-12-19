@@ -83,13 +83,11 @@ impl<R: Resources> Program<R> {
 pub struct RawPipelineState<R: Resources>(Arc<R::PipelineStateObject>, Arc<R::Program>);
 
 /// Raw texture object
-pub struct RawTexture<R: Resources>(Arc<R::NewTexture>, tex::TextureInfo, Bind);
+pub struct RawTexture<R: Resources>(Arc<R::NewTexture>, tex::Descriptor);
 
 impl<R: Resources> RawTexture<R> {
-    /// Get texture info
-    pub fn get_info(&self) -> &tex::TextureInfo { &self.1 }
-    /// Get bind flags
-    pub fn get_bind(&self) -> Bind { self.2 }
+    /// Get texture descriptor
+    pub fn get_info(&self) -> &tex::Descriptor { &self.1 }
 }
 
 #[derive(Clone, Debug, Hash, PartialEq)]
@@ -248,7 +246,7 @@ pub trait Producer<R: Resources> {
     fn make_shader(&mut self, R::Shader) -> Shader<R>;
     fn make_program(&mut self, R::Program, shade::ProgramInfo) -> Program<R>;
     fn make_pso(&mut self, R::PipelineStateObject, &Program<R>) -> RawPipelineState<R>;
-    fn make_new_texture(&mut self, R::NewTexture, tex::TextureInfo, Bind) -> RawTexture<R>;
+    fn make_new_texture(&mut self, R::NewTexture, tex::Descriptor) -> RawTexture<R>;
     fn make_buffer_srv(&mut self, R::ShaderResourceView, &RawBuffer<R>) -> RawShaderResourceView<R>;
     fn make_texture_srv(&mut self, R::ShaderResourceView, &RawTexture<R>) -> RawShaderResourceView<R>;
     fn make_buffer_uav(&mut self, R::UnorderedAccessView, &RawBuffer<R>) -> RawUnorderedAccessView<R>;
@@ -313,10 +311,10 @@ impl<R: Resources> Producer<R> for Manager<R> {
         RawPipelineState(r, program.0.clone())
     }
 
-    fn make_new_texture(&mut self, res: R::NewTexture, info: tex::TextureInfo, bind: Bind) -> RawTexture<R> {
+    fn make_new_texture(&mut self, res: R::NewTexture, desc: tex::Descriptor) -> RawTexture<R> {
         let r = Arc::new(res);
         self.new_textures.push(r.clone());
-        RawTexture(r, info, bind)
+        RawTexture(r, desc)
     }
 
     fn make_buffer_srv(&mut self, res: R::ShaderResourceView, buf: &RawBuffer<R>) -> RawShaderResourceView<R> {

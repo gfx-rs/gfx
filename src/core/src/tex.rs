@@ -23,14 +23,16 @@
 
 use std::default::Default;
 use std::fmt;
+use Bind;
 pub use attrib::{FloatSize, IntSubType};
+use format;
 use state;
 
 /// Pure texture object creation error.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Error {
     /// Failed to map a given format to the device.
-    Format(Format),
+    Format(format::SurfaceType),
     /// Failed to provide sRGB formats.
     Gamma,
     /// Failed to map a given multisampled kind to the device.
@@ -582,4 +584,17 @@ impl SamplerInfo {
             comparison: None,
         }
     }
+}
+
+/// Texture storage descriptor.
+#[allow(missing_docs)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+pub struct Descriptor {
+    pub width: Size,
+    pub height: Size,
+    pub depth: Size,
+    pub levels: u8,
+    pub kind: Kind,
+    pub format: format::SurfaceType,
+    pub bind: Bind,
 }

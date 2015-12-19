@@ -17,12 +17,19 @@
 use std::marker::PhantomData;
 
 macro_rules! impl_surface_type {
-    { $($name:ident $(=$tr:ident)* ,)* } => {
-        #[derive(Copy, Clone)]
-        #[allow(non_camel_case_types)]
+    { $($name:ident [$bits:expr] $(=$tr:ty)* ,)* } => {
         #[repr(u8)]
+        #[allow(non_camel_case_types)]
+        #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
         pub enum SurfaceType {
             $( $name, )*
+        }
+        impl SurfaceType {
+            fn get_bit_size(&self) -> u8 {
+                match *self {
+                    $( SurfaceType::$name => $bits, )*
+                }
+            }
         }
         $(
             #[allow(non_camel_case_types)]
@@ -30,6 +37,9 @@ macro_rules! impl_surface_type {
             impl SurfaceTyped for $name {
                 fn get_surface_type() -> SurfaceType {
                     SurfaceType::$name
+                }
+                fn get_bit_size() -> u8 {
+                    $bits
                 }
             }
             $(
@@ -40,10 +50,11 @@ macro_rules! impl_surface_type {
 }
 
 impl_surface_type! {
-    R8_G8_B8_A8     = BufferSurface = TextureSurface = RenderSurface,
-    R16_G16_B16_A16 = BufferSurface = TextureSurface = RenderSurface,
-    R32_G32_B32_A32 = BufferSurface = TextureSurface = RenderSurface,
-    D24_S8          = TextureSurface = DepthStencilSurface,
+    R8_G8_B8_A8     [32]  = BufferSurface = TextureSurface = RenderSurface,
+    R10_G10_B10_A2  [32]  = BufferSurface = TextureSurface = RenderSurface,
+    R16_G16_B16_A16 [64]  = BufferSurface = TextureSurface = RenderSurface,
+    R32_G32_B32_A32 [128] = BufferSurface = TextureSurface = RenderSurface,
+    D24_S8          [32]  = TextureSurface = DepthStencilSurface,
 }
 
 macro_rules! impl_channel_type {
@@ -90,18 +101,31 @@ pub enum Channel {
 }
 
 #[derive(Copy, Clone)]
-pub struct Swizzle(pub Channel, pub Channel, pub Channel, pub Channel);
+pub struct View {
+    pub ty: ChannelType,
+    pub x: Channel,
+    pub y: Channel,
+    pub z: Channel,
+    pub w: Channel,
+}
 
-pub const NO_SWIZZLE: Swizzle = Swizzle(Channel::X, Channel::Y, Channel::Z, Channel::W);
-
-#[derive(Copy, Clone)]
-pub struct RuntimeFormat(pub SurfaceType, pub ChannelType, pub Swizzle);
-
+impl From<ChannelType> for View {
+    fn from(ty: ChannelType) -> View {
+        View {
+            ty: ty,
+            x: Channel::X,
+            y: Channel::Y,
+            z: Channel::Z,
+            w: Channel::W,
+        }
+    }
+}
 
 // compile-time specification
 
 pub trait SurfaceTyped {
     fn get_surface_type() -> SurfaceType;
+    fn get_bit_size() -> u8;
 }
 pub trait BufferSurface: SurfaceTyped {}
 pub trait TextureSurface: SurfaceTyped {}
@@ -116,7 +140,7 @@ pub trait RenderChannel: ChannelTyped {}
 pub trait BlendChannel: RenderChannel {}
 
 pub trait Formatted {
-    fn get_format() -> RuntimeFormat;
+    fn get_format() -> (SurfaceType, View);
 }
 pub trait BufferFormat: Formatted {}
 pub trait DepthStencilFormat: Formatted {}
@@ -124,27 +148,19 @@ pub trait TextureFormat: Formatted {}
 pub trait RenderFormat: Formatted {}
 pub trait BlendFormat: RenderFormat {}
 
-impl ChannelTyped for () {
-    fn get_channel_type() -> ChannelType {
-        ChannelType::Float
+impl<S: SurfaceTyped, C: ChannelTyped> Formatted for (S, C) {
+    fn get_format() -> (SurfaceType, View) {
+        (S::get_surface_type(), C::get_channel_type().into())
     }
 }
+impl<S: BufferSurface, C: ChannelTyped> BufferFormat for (S, C) {}
+impl<S: DepthStencilSurface, C: RenderChannel> DepthStencilFormat for (S, C) {}
+impl<S: TextureSurface, C: TextureChannel> TextureFormat for (S, C) {}
+impl<S: RenderSurface, C: RenderChannel> RenderFormat for (S, C) {}
+impl<S: RenderSurface, C: BlendChannel> BlendFormat for (S, C) {}
 
-pub struct CompileFormat<S, C>(PhantomData<(S,C)>);
-
-impl<S: SurfaceTyped, C: ChannelTyped> Formatted for CompileFormat<S, C> {
-    fn get_format() -> RuntimeFormat {
-        RuntimeFormat(S::get_surface_type(), C::get_channel_type(), NO_SWIZZLE)
-    }
-}
-
-impl<S: BufferSurface> BufferFormat                         for CompileFormat<S, ()> {}
-impl<S: DepthStencilSurface> DepthStencilFormat             for CompileFormat<S, ()> {}
-impl<S: TextureSurface, C: TextureChannel> TextureFormat    for CompileFormat<S, C> {}
-impl<S: RenderSurface, C: RenderChannel> RenderFormat       for CompileFormat<S, C> {}
-impl<S: RenderSurface, C: BlendChannel> BlendFormat         for CompileFormat<S, C> {}
-
-pub type Rgba8 = CompileFormat<R8_G8_B8_A8, UintNormalized>;
-pub type Rgba16F = CompileFormat<R16_G16_B16_A16, Float>;
-pub type Rgba32F = CompileFormat<R32_G32_B32_A32, Float>;
-pub type DepthStencil = CompileFormat<D24_S8, UintNormalized>;
+pub type Rgba8 = (R8_G8_B8_A8, UintNormalized);
+pub type Rgb10a2F = (R10_G10_B10_A2, Float);
+pub type Rgba16F = (R16_G16_B16_A16, Float);
+pub type Rgba32F = (R32_G32_B32_A32, Float);
+pub type DepthStencil = (D24_S8, UintNormalized);
