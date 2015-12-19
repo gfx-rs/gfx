@@ -14,8 +14,6 @@
 
 #![allow(missing_docs)]
 
-use std::marker::PhantomData;
-
 macro_rules! impl_surface_type {
     { $($name:ident [$bits:expr] $(=$tr:ty)* ,)* } => {
         #[repr(u8)]
@@ -25,7 +23,7 @@ macro_rules! impl_surface_type {
             $( $name, )*
         }
         impl SurfaceType {
-            fn get_bit_size(&self) -> u8 {
+            pub fn get_bit_size(&self) -> u8 {
                 match *self {
                     $( SurfaceType::$name => $bits, )*
                 }
@@ -59,8 +57,8 @@ impl_surface_type! {
 
 macro_rules! impl_channel_type {
     { $($name:ident $(=$tr:ident)* ,)* } => {
-        #[derive(Copy, Clone)]
         #[repr(u8)]
+        #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
         pub enum ChannelType {
             $( $name, )*
         }

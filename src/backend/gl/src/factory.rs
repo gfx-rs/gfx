@@ -432,12 +432,12 @@ impl d::Factory<R> for Factory {
         Err(d::ResourceViewError::Unsupported) //TODO
     }
 
-    fn view_texture_as_shader_resource(&mut self, htex: &handle::RawTexture<R>, _min: Level, _max: Level)
+    fn view_texture_as_shader_resource(&mut self, htex: &handle::RawTexture<R>, _desc: d::tex::ViewDesc)
                                        -> Result<handle::RawShaderResourceView<R>, d::ResourceViewError> {
         match self.frame_handles.ref_new_texture(htex) {
             &NewTexture::Surface(_) => Err(d::ResourceViewError::NoBindFlag),
             &NewTexture::Texture(t) => {
-                //TODO: use min/max `Level`
+                //TODO: use the view descriptor
                 let view = ResourceView::new_texture(t, htex.get_info().kind);
                 Ok(self.share.handles.borrow_mut().make_texture_srv(view, htex))
             },

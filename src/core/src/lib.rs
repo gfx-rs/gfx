@@ -364,7 +364,7 @@ pub trait Factory<R: Resources> {
         -> Result<handle::RawShaderResourceView<R>, ResourceViewError>;
     fn view_buffer_as_unordered_access(&mut self, &handle::RawBuffer<R>)
         -> Result<handle::RawUnorderedAccessView<R>, ResourceViewError>;
-    fn view_texture_as_shader_resource(&mut self, &handle::RawTexture<R>, min: target::Level, max: target::Level)
+    fn view_texture_as_shader_resource(&mut self, &handle::RawTexture<R>, tex::ViewDesc)
         -> Result<handle::RawShaderResourceView<R>, ResourceViewError>;
     fn view_texture_as_unordered_access(&mut self, &handle::RawTexture<R>)
         -> Result<handle::RawUnorderedAccessView<R>, ResourceViewError>;

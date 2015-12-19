@@ -27,6 +27,7 @@ use Bind;
 pub use attrib::{FloatSize, IntSubType};
 use format;
 use state;
+use target::Level;
 
 /// Pure texture object creation error.
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -597,4 +598,13 @@ pub struct Descriptor {
     pub kind: Kind,
     pub format: format::SurfaceType,
     pub bind: Bind,
+}
+
+/// Texture view descriptor.
+#[allow(missing_docs)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+pub struct ViewDesc {
+    pub channel: format::ChannelType,
+    pub min: Level,
+    pub max: Level,
 }
