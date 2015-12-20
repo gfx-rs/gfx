@@ -91,7 +91,7 @@ impl From<(s::Depth, s::Stencil)> for DepthStencilInfo {
 /// PSO vertex attribute descriptor
 pub type AttributeDesc = (attrib::Format, attrib::InstanceRate);
 /// PSO color target descriptor
-pub type ColorTargetDesc = (format::SurfaceType, format::View, BlendInfo);
+pub type ColorTargetDesc = (format::Format, BlendInfo);
 /// PSO depth-stencil target descriptor
 pub type DepthStencilDesc = (format::SurfaceType, DepthStencilInfo);
 

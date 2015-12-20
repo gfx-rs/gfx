@@ -297,7 +297,7 @@ impl d::Factory<R> for Factory {
             blend: [None; d::MAX_COLOR_TARGETS],
         };
         for i in 0 .. d::MAX_COLOR_TARGETS {
-            if let Some((_, _, ref bi)) = desc.color_targets[i] {
+            if let Some((_, ref bi)) = desc.color_targets[i] {
                 output.draw_mask |= 1<<i;
                 if bi.mask != s::MASK_ALL || bi.color.is_some() || bi.alpha.is_some() {
                     output.blend[i] = Some(s::Blend {

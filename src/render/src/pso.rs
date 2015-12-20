@@ -65,7 +65,7 @@ pub enum InitError {
     /// Sampler mismatch.
     Sampler(d::SamplerSlot, Option<()>),
     /// Pixel target mismatch.
-    PixelExport(d::ColorSlot, Option<d::tex::Format>),
+    PixelExport(d::ColorSlot, Option<d::format::Format>),
 }
 
 pub trait PipelineInit {
@@ -113,13 +113,13 @@ pub trait DataLink<'a>: Sized {
     fn link_global_constant(&mut self, _: &d::shade::ConstVar, _: &Self::Init) ->
                             Option<Result<(), d::attrib::Format>> { None }
     fn link_output(&mut self, _: &d::shade::OutputVar, _: &Self::Init) ->
-                   Option<Result<d::pso::ColorTargetDesc, d::tex::Format>> { None }
+                   Option<Result<d::pso::ColorTargetDesc, d::format::Format>> { None }
     fn link_depth_stencil(&mut self, _: &Self::Init) ->
                           Option<d::pso::DepthStencilDesc> { None }
     fn link_resource_view(&mut self, _: &d::shade::TextureVar, _: &Self::Init) ->
-                          Option<Result<(), d::tex::Format>> { None }
+                          Option<Result<(), d::format::Format>> { None }
     fn link_unordered_view(&mut self, _: &d::shade::UnorderedVar, _: &Self::Init) ->
-                           Option<Result<(), d::tex::Format>> { None }
+                           Option<Result<(), d::format::Format>> { None }
     fn link_sampler(&mut self, _: &d::shade::SamplerVar, _: &Self::Init) -> Option<()> { None }
 }
 
@@ -256,7 +256,7 @@ impl<'a, T> DataLink<'a> for ResourceView<T> {
         self.0.is_some()
     }
     fn link_resource_view(&mut self, var: &d::shade::TextureVar, init: &Self::Init)
-                          -> Option<Result<(), d::tex::Format>> {
+                          -> Option<Result<(), d::format::Format>> {
         if *init == var.name {
             self.0 = Some(var.slot);
             Some(Ok(())) //TODO: check format
@@ -285,7 +285,7 @@ impl<'a, T> DataLink<'a> for UnorderedView<T> {
         self.0.is_some()
     }
     fn link_unordered_view(&mut self, var: &d::shade::UnorderedVar, init: &Self::Init)
-                           -> Option<Result<(), d::tex::Format>> {
+                           -> Option<Result<(), d::format::Format>> {
         if *init == var.name {
             self.0 = Some(var.slot);
             Some(Ok(())) //TODO: check format
@@ -345,11 +345,10 @@ impl<'a,
         self.0.is_some()
     }
     fn link_output(&mut self, out: &d::shade::OutputVar, init: &Self::Init) ->
-                   Option<Result<d::pso::ColorTargetDesc, d::tex::Format>> {
+                   Option<Result<d::pso::ColorTargetDesc, d::format::Format>> {
         if &out.name == init.0 {
             self.0 = Some(out.slot);
-            let (st, view) = T::get_format();
-            let desc = (st, view, init.1.into());
+            let desc = (T::get_format(), init.1.into());
             Some(Ok(desc))
         }else {
             None
@@ -380,8 +379,8 @@ impl<'a,
     }
     fn link_depth_stencil(&mut self, init: &Self::Init) ->
                           Option<d::pso::DepthStencilDesc> {
-        let (st, _) = T::get_format();
-        let desc = (st, (*init).into());
+        let format = T::get_format();
+        let desc = (format.0, (*init).into());
         Some(desc)
     }
 }

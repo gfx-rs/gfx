@@ -121,6 +121,9 @@ impl From<ChannelType> for View {
     }
 }
 
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+pub struct Format(pub SurfaceType, pub View);
+
 // compile-time specification
 
 pub trait SurfaceTyped {
@@ -140,7 +143,7 @@ pub trait RenderChannel: ChannelTyped {}
 pub trait BlendChannel: RenderChannel {}
 
 pub trait Formatted {
-    fn get_format() -> (SurfaceType, View);
+    fn get_format() -> Format;
 }
 pub trait BufferFormat: Formatted {}
 pub trait DepthStencilFormat: Formatted {}
@@ -149,8 +152,8 @@ pub trait RenderFormat: Formatted {}
 pub trait BlendFormat: RenderFormat {}
 
 impl<S: SurfaceTyped, C: ChannelTyped> Formatted for (S, C) {
-    fn get_format() -> (SurfaceType, View) {
-        (S::get_surface_type(), C::get_channel_type().into())
+    fn get_format() -> Format {
+        Format(S::get_surface_type(), C::get_channel_type().into())
     }
 }
 impl<S: BufferSurface, C: ChannelTyped> BufferFormat for (S, C) {}
