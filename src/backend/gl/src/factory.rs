@@ -297,7 +297,7 @@ impl d::Factory<R> for Factory {
             blend: [None; d::MAX_COLOR_TARGETS],
         };
         for i in 0 .. d::MAX_COLOR_TARGETS {
-            if let Some((_, ref bi)) = desc.color_targets[i] {
+            if let Some((_, _, ref bi)) = desc.color_targets[i] {
                 output.draw_mask |= 1<<i;
                 if bi.mask != s::MASK_ALL || bi.color.is_some() || bi.alpha.is_some() {
                     output.blend[i] = Some(s::Blend {
@@ -412,7 +412,7 @@ impl d::Factory<R> for Factory {
         }
     }
 
-    fn view_buffer_as_shader_resource(&mut self, hbuf: &handle::RawBuffer<R>)
+    fn view_buffer_as_shader_resource_raw(&mut self, hbuf: &handle::RawBuffer<R>)
                                       -> Result<handle::RawShaderResourceView<R>, d::ResourceViewError> {
         let gl = &self.share.context;
         let mut name = 0 as gl::types::GLuint;
@@ -427,12 +427,12 @@ impl d::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_buffer_srv(view, hbuf))
     }
 
-    fn view_buffer_as_unordered_access(&mut self, _hbuf: &handle::RawBuffer<R>)
+    fn view_buffer_as_unordered_access_raw(&mut self, _hbuf: &handle::RawBuffer<R>)
                                        -> Result<handle::RawUnorderedAccessView<R>, d::ResourceViewError> {
         Err(d::ResourceViewError::Unsupported) //TODO
     }
 
-    fn view_texture_as_shader_resource(&mut self, htex: &handle::RawTexture<R>, _desc: d::tex::ViewDesc)
+    fn view_texture_as_shader_resource_raw(&mut self, htex: &handle::RawTexture<R>, _desc: d::tex::ViewDesc)
                                        -> Result<handle::RawShaderResourceView<R>, d::ResourceViewError> {
         match self.frame_handles.ref_new_texture(htex) {
             &NewTexture::Surface(_) => Err(d::ResourceViewError::NoBindFlag),
@@ -444,7 +444,7 @@ impl d::Factory<R> for Factory {
         }
     }
 
-    fn view_texture_as_unordered_access(&mut self, _htex: &handle::RawTexture<R>)
+    fn view_texture_as_unordered_access_raw(&mut self, _htex: &handle::RawTexture<R>)
                                         -> Result<handle::RawUnorderedAccessView<R>, d::ResourceViewError> {
         Err(d::ResourceViewError::Unsupported) //TODO
     }

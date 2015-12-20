@@ -17,7 +17,7 @@
 use {MAX_COLOR_TARGETS, MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
      MAX_RESOURCE_VIEWS, MAX_UNORDERED_VIEWS, MAX_SAMPLERS};
 use {Primitive, Resources};
-use {attrib, tex};
+use {attrib, format};
 use state as s;
 
 /// An offset inside a vertex buffer, in bytes.
@@ -91,9 +91,9 @@ impl From<(s::Depth, s::Stencil)> for DepthStencilInfo {
 /// PSO vertex attribute descriptor
 pub type AttributeDesc = (attrib::Format, attrib::InstanceRate);
 /// PSO color target descriptor
-pub type ColorTargetDesc = (tex::Format, BlendInfo);
+pub type ColorTargetDesc = (format::SurfaceType, format::View, BlendInfo);
 /// PSO depth-stencil target descriptor
-pub type DepthStencilDesc = (tex::Format, DepthStencilInfo);
+pub type DepthStencilDesc = (format::SurfaceType, DepthStencilInfo);
 
 /// All the information surrounding a shader program that is required
 /// for PSO creation, including the formats of vertex buffers and pixel targets;

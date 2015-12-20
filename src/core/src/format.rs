@@ -31,6 +31,7 @@ macro_rules! impl_surface_type {
         }
         $(
             #[allow(non_camel_case_types)]
+            #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
             pub enum $name {}
             impl SurfaceTyped for $name {
                 fn get_surface_type() -> SurfaceType {
@@ -63,6 +64,7 @@ macro_rules! impl_channel_type {
             $( $name, )*
         }
         $(
+            #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
             pub enum $name {}
             impl ChannelTyped for $name {
                 fn get_channel_type() -> ChannelType {
@@ -87,8 +89,8 @@ impl_channel_type! {
     Srgb            = TextureChannel = RenderChannel = BlendChannel,
 }
 
-#[derive(Copy, Clone)]
 #[repr(u8)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 pub enum Channel {
     Zero,
     One,
@@ -98,7 +100,7 @@ pub enum Channel {
     W,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 pub struct View {
     pub ty: ChannelType,
     pub x: Channel,

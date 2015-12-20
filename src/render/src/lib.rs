@@ -56,10 +56,9 @@ pub use mesh::Error as MeshError;
 pub use mesh::{Slice, ToIndexSlice, SliceKind};
 pub use pso::{PipelineState, VertexBuffer, ConstantBuffer,
               Global, PER_VERTEX, PER_INSTANCE,
-              TextureFormat, BlendFormat, RenderTarget, BlendTarget,
-              DepthStencilFormat, DepthStencilTarget,
-              DepthFormat, StencilFormat, DepthTarget, StencilTarget,
-              ResourceView, UnorderedView, Sampler};
+              ResourceView, UnorderedView, Sampler,
+              RenderTarget, BlendTarget,
+              DepthStencilTarget, DepthTarget, StencilTarget};
 pub use target::{Frame};
 pub use extra::factory::PipelineStateError;
 pub use extra::shade::{ShaderSource, ProgramError};

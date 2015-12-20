@@ -15,7 +15,7 @@
 #![allow(missing_docs)]
 
 use {Capabilities, Device, Resources, SubmitInfo};
-use {AttributeSlot, ColorSlot, ConstantBufferSlot, ResourceViewSlot, UnorderedViewSlot};
+use {AttributeSlot, ColorSlot, ConstantBufferSlot, ResourceViewSlot};
 use {IndexType, Primitive, VertexCount};
 use {attrib, draw, pso, shade, target, tex};
 use state as s;

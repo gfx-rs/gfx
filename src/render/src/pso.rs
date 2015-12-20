@@ -132,14 +132,6 @@ pub trait Structure {
     fn query(&str) -> Option<d::attrib::Format>;
 }
 
-pub trait TextureFormat {
-    fn get_format() -> d::tex::Format;
-}
-pub trait BlendFormat: TextureFormat {}
-pub trait DepthStencilFormat: TextureFormat {}
-pub trait DepthFormat: DepthStencilFormat {}
-pub trait StencilFormat: DepthStencilFormat {}
-
 pub type AttributeSlotSet = usize;
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct FetchRate(d::attrib::InstanceRate);
@@ -149,16 +141,16 @@ pub static PER_INSTANCE: FetchRate = FetchRate(1);
 pub struct VertexBuffer<T: Structure>(AttributeSlotSet, PhantomData<T>);
 pub struct ConstantBuffer<T: Structure>(Option<d::ConstantBufferSlot>, PhantomData<T>);
 pub struct Global<T: d::attrib::format::ToFormat>(Option<d::shade::Location>, PhantomData<T>);
-pub struct ResourceView<T: TextureFormat>(Option<d::ResourceViewSlot>, PhantomData<T>);
-pub struct UnorderedView<T: TextureFormat>(Option<d::UnorderedViewSlot>, PhantomData<T>);
+pub struct ResourceView<T>(Option<d::ResourceViewSlot>, PhantomData<T>);
+pub struct UnorderedView<T>(Option<d::UnorderedViewSlot>, PhantomData<T>);
 pub struct Sampler(Option<d::SamplerSlot>);
-pub struct RenderTargetCommon<T: TextureFormat, I>(Option<d::ColorSlot>, PhantomData<(T, I)>);
-pub type RenderTarget<T: TextureFormat> = RenderTargetCommon<T, d::state::ColorMask>;
-pub type BlendTarget<T: BlendFormat> = RenderTargetCommon<T, d::state::Blend>;
-pub struct DepthStencilCommon<T: DepthStencilFormat, I>(PhantomData<(T, I)>);
-pub type DepthTarget<T: DepthFormat> = DepthStencilCommon<T, d::state::Depth>;
-pub type StencilTarget<T: StencilFormat> = DepthStencilCommon<T, d::state::Stencil>;
-pub type DepthStencilTarget<T: DepthStencilFormat> = DepthStencilCommon<T, (d::state::Depth, d::state::Stencil)>;
+pub struct RenderTargetCommon<T, I>(Option<d::ColorSlot>, PhantomData<(T, I)>);
+pub type RenderTarget<T: d::format::RenderFormat> = RenderTargetCommon<T, d::state::ColorMask>;
+pub type BlendTarget<T: d::format::BlendFormat> = RenderTargetCommon<T, d::state::Blend>;
+pub struct DepthStencilCommon<T, I>(PhantomData<(T, I)>);
+pub type DepthTarget<T: d::format::DepthStencilFormat> = DepthStencilCommon<T, d::state::Depth>;
+pub type StencilTarget<T: d::format::DepthStencilFormat> = DepthStencilCommon<T, d::state::Stencil>;
+pub type DepthStencilTarget<T: d::format::DepthStencilFormat> = DepthStencilCommon<T, (d::state::Depth, d::state::Stencil)>;
 
 fn match_attribute(_: &d::shade::AttributeVar, _: d::attrib::Format) -> bool {
     true //TODO
@@ -255,7 +247,7 @@ impl<R: d::Resources, T: d::attrib::format::ToFormat> DataBind<R> for Global<T> 
     }
 }
 
-impl<'a, T: TextureFormat> DataLink<'a> for ResourceView<T> {
+impl<'a, T> DataLink<'a> for ResourceView<T> {
     type Init = &'a str;
     fn new() -> Self {
         ResourceView(None, PhantomData)
@@ -274,7 +266,7 @@ impl<'a, T: TextureFormat> DataLink<'a> for ResourceView<T> {
     }
 }
 
-impl<R: d::Resources, T: TextureFormat> DataBind<R> for ResourceView<T> {
+impl<R: d::Resources, T> DataBind<R> for ResourceView<T> {
     type Data = d::handle::ShaderResourceView<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
         if let Some(slot) = self.0 {
@@ -284,7 +276,7 @@ impl<R: d::Resources, T: TextureFormat> DataBind<R> for ResourceView<T> {
     }
 }
 
-impl<'a, T: TextureFormat> DataLink<'a> for UnorderedView<T> {
+impl<'a, T> DataLink<'a> for UnorderedView<T> {
     type Init = &'a str;
     fn new() -> Self {
         UnorderedView(None, PhantomData)
@@ -303,7 +295,7 @@ impl<'a, T: TextureFormat> DataLink<'a> for UnorderedView<T> {
     }
 }
 
-impl<R: d::Resources, T: TextureFormat> DataBind<R> for UnorderedView<T> {
+impl<R: d::Resources, T> DataBind<R> for UnorderedView<T> {
     type Data = d::handle::UnorderedAccessView<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
         if let Some(slot) = self.0 {
@@ -342,7 +334,7 @@ impl<R: d::Resources> DataBind<R> for Sampler {
 }
 
 impl<'a,
-    T: TextureFormat,
+    T: d::format::RenderFormat,
     I: 'a + Copy + Into<d::pso::BlendInfo>
 > DataLink<'a> for RenderTargetCommon<T, I> {
     type Init = (&'a str, I);
@@ -356,7 +348,8 @@ impl<'a,
                    Option<Result<d::pso::ColorTargetDesc, d::tex::Format>> {
         if &out.name == init.0 {
             self.0 = Some(out.slot);
-            let desc = (T::get_format(), init.1.into());
+            let (st, view) = T::get_format();
+            let desc = (st, view, init.1.into());
             Some(Ok(desc))
         }else {
             None
@@ -364,7 +357,7 @@ impl<'a,
     }
 }
 
-impl<R: d::Resources, T: TextureFormat, I> DataBind<R> for RenderTargetCommon<T, I> {
+impl<R: d::Resources, T, I> DataBind<R> for RenderTargetCommon<T, I> {
     type Data = d::handle::RenderTargetView<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
         if let Some(slot) = self.0 {
@@ -375,7 +368,7 @@ impl<R: d::Resources, T: TextureFormat, I> DataBind<R> for RenderTargetCommon<T,
 }
 
 impl<'a,
-    T: DepthStencilFormat,
+    T: d::format::DepthStencilFormat,
     I: 'a + Copy + Into<d::pso::DepthStencilInfo>
 > DataLink<'a> for DepthStencilCommon<T, I> {
     type Init = I;
@@ -387,12 +380,13 @@ impl<'a,
     }
     fn link_depth_stencil(&mut self, init: &Self::Init) ->
                           Option<d::pso::DepthStencilDesc> {
-        let desc = (T::get_format(), (*init).into());
+        let (st, _) = T::get_format();
+        let desc = (st, (*init).into());
         Some(desc)
     }
 }
 
-impl<R: d::Resources, T: DepthStencilFormat, I> DataBind<R> for DepthStencilCommon<T, I> {
+impl<R: d::Resources, T, I> DataBind<R> for DepthStencilCommon<T, I> {
     type Data = d::handle::DepthStencilView<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
         let value = Some(man.ref_dsv(data.raw()).clone());
