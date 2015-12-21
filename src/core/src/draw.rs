@@ -15,7 +15,7 @@
 //! Command Buffer device interface
 
 use draw_state::target;
-use {Factory, Resources, IndexType, InstanceCount, VertexCount, Primitive,
+use {Resources, IndexType, InstanceCount, VertexCount, Primitive,
      AttributeSlot, ColorSlot, ConstantBufferSlot, ResourceViewSlot};
 use {attrib, pso, shade, tex};
 use state as s;

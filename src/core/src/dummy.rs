@@ -14,7 +14,7 @@
 
 #![allow(missing_docs)]
 
-use {Capabilities, Device, Factory, Resources, SubmitInfo};
+use {Capabilities, Device, Resources, SubmitInfo};
 use {AttributeSlot, ColorSlot, ConstantBufferSlot, ResourceViewSlot};
 use {IndexType, Primitive, VertexCount};
 use {attrib, draw, pso, shade, target, tex};

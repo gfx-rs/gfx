@@ -173,12 +173,6 @@ impl<S: TextureSurface, C: TextureChannel> TextureFormat for (S, C) {}
 impl<S: RenderSurface, C: RenderChannel> RenderFormat for (S, C) {}
 impl<S: RenderSurface, C: BlendChannel> BlendFormat for (S, C) {}
 
-pub type Rgba8 = (R8_G8_B8_A8, UintNormalized);
-pub type Rgb10a2F = (R10_G10_B10_A2, Float);
-pub type Rgba16F = (R16_G16_B16_A16, Float);
-pub type Rgba32F = (R32_G32_B32_A32, Float);
-pub type DepthStencil = (D24_S8, UintNormalized);
-
 macro_rules! alias {
     { $( $name:ident = $ty:ty, )* } => {
         $(
@@ -198,6 +192,10 @@ macro_rules! alias {
                 }
                 pub fn cast4(v: [$ty; 4]) -> [$name; 4] {
                     [$name(v[0]), $name(v[1]), $name(v[2]), $name(v[3])]
+                }
+                pub fn cast_slice(slice: &[$ty]) -> &[$name] {
+                    use std::mem::transmute;
+                    unsafe { transmute(slice) }
                 }
             }
         )*
@@ -286,3 +284,11 @@ impl_formats_32bit! {
     I32Norm = IntNormalized,
     f32 = Float,
 }
+
+// Some handy pre-defined formats
+
+pub type Rgba8 = [U8Norm; 4]; //(R8_G8_B8_A8, UintNormalized);
+pub type Rgb10a2F = (R10_G10_B10_A2, Float);
+pub type Rgba16F = (R16_G16_B16_A16, Float);
+pub type Rgba32F = [f32; 4]; //(R32_G32_B32_A32, Float);
+pub type DepthStencil = (D24_S8, UintNormalized);

@@ -527,7 +527,7 @@ impl d::Factory<R> for Factory {
                              *self.frame_handles.ref_texture(texture));
     }
 
-    fn generate_mipmap_new(&mut self, texture: &handle::RawTexture<R>) {
+    fn generate_mipmap_raw(&mut self, texture: &handle::RawTexture<R>) {
         match self.frame_handles.ref_new_texture(texture) {
             &NewTexture::Surface(_) => (), // no mip chain
             &NewTexture::Texture(t) =>

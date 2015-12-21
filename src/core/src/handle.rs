@@ -87,6 +87,11 @@ pub struct RawTexture<R: Resources>(Arc<R::NewTexture>, tex::Descriptor);
 /// Typed texture object
 pub struct NewTexture<R: Resources, S>(RawTexture<R>, PhantomData<S>);
 
+impl<R: Resources> RawTexture<R> {
+    /// Get texture descriptor
+    pub fn get_info(&self) -> &tex::Descriptor { &self.1 }
+}
+
 impl<R: Resources, S> Phantom for NewTexture<R, S> {
     type Raw = RawTexture<R>;
     fn new(handle: RawTexture<R>) -> NewTexture<R, S> {
@@ -97,9 +102,9 @@ impl<R: Resources, S> Phantom for NewTexture<R, S> {
     }
 }
 
-impl<R: Resources> RawTexture<R> {
+impl<R: Resources, S> NewTexture<R, S> {
     /// Get texture descriptor
-    pub fn get_info(&self) -> &tex::Descriptor { &self.1 }
+    pub fn get_info(&self) -> &tex::Descriptor { self.raw().get_info() }
 }
 
 #[derive(Clone, Debug, Hash, PartialEq)]
