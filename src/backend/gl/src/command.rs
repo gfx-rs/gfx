@@ -15,11 +15,11 @@
 #![allow(missing_docs)]
 
 use gfx_core as c;
-use gfx_core::draw::{Access, Gamma, Target, DataPointer, InstanceOption};
+use gfx_core::draw::{Access, Target, DataPointer, InstanceOption};
 use gfx_core::state as s;
 use gfx_core::target::{ClearData, Layer, Level, Mask, Mirror, Rect};
 use {Buffer, ArrayBuffer, Program, FrameBuffer, Surface, Texture,
-     Resources, PipelineState, FatSampler};
+     Resources, PipelineState, FatSampler, TargetView};
 
 ///Serialized device command.
 #[derive(Clone, Copy, Debug)]
@@ -35,7 +35,7 @@ pub enum Command {
     BindArrayBuffer(ArrayBuffer),
     BindAttribute(c::AttributeSlot, Buffer, c::attrib::Format),
     BindIndex(Buffer),
-    BindFrameBuffer(Access, FrameBuffer, Gamma),
+    BindFrameBuffer(Access, FrameBuffer),
     UnbindTarget(Access, Target),
     BindTargetSurface(Access, Target, Surface),
     BindTargetTexture(Access, Target, Texture,
@@ -73,6 +73,12 @@ impl CommandBuffer {
             fbo: fbo,
         }
     }
+    fn is_main_target(&self, tv: Option<TargetView>) -> bool {
+        match tv {
+            Some(TargetView::Surface(0)) | None => true,
+            Some(_) => false,
+        }
+    }
 }
 
 impl c::draw::CommandBuffer<Resources> for CommandBuffer {
@@ -92,6 +98,8 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
     }
 
     fn bind_pipeline_state(&mut self, pso: PipelineState) {
+        // for the draw buffers mask;
+        self.buf.push(Command::BindFrameBuffer(Access::Draw, self.fbo));
         self.buf.push(Command::BindPipelineState(pso));
     }
 
@@ -121,7 +129,15 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
     }
 
     fn bind_pixel_targets(&mut self, pts: c::pso::PixelTargetSet<Resources>) {
-        self.buf.push(Command::BindPixelTargets(pts));
+        let is_main = pts.colors.iter().skip(1).find(|c| c.is_some()).is_none() &&
+            self.is_main_target(pts.colors[0]) &&
+            self.is_main_target(pts.depth_stencil);
+        if is_main {
+            self.buf.push(Command::BindFrameBuffer(Access::Draw, 0));
+        }else {
+            self.buf.push(Command::BindFrameBuffer(Access::Draw, self.fbo));
+            self.buf.push(Command::BindPixelTargets(pts));
+        }
     }
 
     fn bind_array_buffer(&mut self, vao: ArrayBuffer) {
@@ -137,9 +153,8 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.push(Command::BindIndex(buf));
     }
 
-    fn bind_frame_buffer(&mut self, access: Access, fbo: FrameBuffer,
-                         gamma: Gamma) {
-        self.buf.push(Command::BindFrameBuffer(access, fbo, gamma));
+    fn bind_frame_buffer(&mut self, access: Access, fbo: FrameBuffer, _: c::draw::Gamma) {
+        self.buf.push(Command::BindFrameBuffer(access, fbo));
     }
 
     fn unbind_target(&mut self, access: Access, tar: Target) {

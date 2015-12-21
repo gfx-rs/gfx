@@ -26,7 +26,7 @@ extern crate gfx_core;
 use std::cell::RefCell;
 use std::rc::Rc;
 use gfx_core as d;
-use gfx_core::draw::{Access, Gamma, Target};
+use gfx_core::draw::{Access, Target};
 use gfx_core::handle;
 use gfx_core::state as s;
 use gfx_core::target::{Layer, Level};
@@ -174,8 +174,8 @@ const RESET_CB: [Command; 14] = [
     Command::BindArrayBuffer(0),
     // BindAttribute
     Command::BindIndex(0),
-    Command::BindFrameBuffer(Access::Draw, 0, Gamma::Original),
-    Command::BindFrameBuffer(Access::Read, 0, Gamma::Original),
+    Command::BindFrameBuffer(Access::Draw, 0),
+    Command::BindFrameBuffer(Access::Read, 0),
     // UnbindTarget
     // BindUniformBlock
     // BindUniform
@@ -296,6 +296,7 @@ impl Device {
         // initialize permanent states
         unsafe {
             gl.PixelStorei(gl::UNPACK_ALIGNMENT, 1);
+            gl.Enable(gl::FRAMEBUFFER_SRGB);
         }
         // create the main FBO surface proxies
         let mut handles = handle::Manager::new();
@@ -630,7 +631,7 @@ impl Device {
                 let gl = &self.share.context;
                 unsafe { gl.BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer) };
             },
-            Command::BindFrameBuffer(access, frame_buffer, gamma) => {
+            Command::BindFrameBuffer(access, frame_buffer) => {
                 let caps = &self.share.capabilities;
                 let gl = &self.share.context;
                 if !caps.render_targets_supported {
@@ -638,11 +639,6 @@ impl Device {
                 }
                 let point = access_to_gl(access);
                 unsafe { gl.BindFramebuffer(point, frame_buffer) };
-                match (caps.srgb_color_supported, gamma) {
-                    (true, Gamma::Original) => unsafe { gl.Disable(gl::FRAMEBUFFER_SRGB) },
-                    (true, Gamma::Convert)  => unsafe { gl.Enable( gl::FRAMEBUFFER_SRGB) },
-                    (false, _) => (),
-                }
             },
             Command::UnbindTarget(access, target) => {
                 if !self.share.capabilities.render_targets_supported {
