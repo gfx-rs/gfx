@@ -19,7 +19,7 @@
 use std::mem;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use {shade, tex, Resources, BufferInfo};
+use {shade, tex, Resources, BufferInfo, Phantom};
 
 
 /// Raw (untyped) Buffer Handle
@@ -35,18 +35,17 @@ impl<R: Resources> RawBuffer<R> {
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct Buffer<R: Resources, T>(RawBuffer<R>, PhantomData<T>);
 
-impl<R: Resources, T> From<RawBuffer<R>> for Buffer<R, T> {
-    fn from(handle: RawBuffer<R>) -> Buffer<R, T> {
+impl<R: Resources, T> Phantom for Buffer<R, T> {
+    type Raw = RawBuffer<R>;
+    fn new(handle: RawBuffer<R>) -> Buffer<R, T> {
         Buffer(handle, PhantomData)
+    }
+    fn raw(&self) -> &RawBuffer<R> {
+        &self.0
     }
 }
 
 impl<R: Resources, T> Buffer<R, T> {
-    /// Get the underlying raw Handle
-    pub fn raw(&self) -> &RawBuffer<R> {
-        &self.0
-    }
-
     /// Get the associated information about the buffer
     pub fn get_info(&self) -> &BufferInfo {
         self.0.get_info()
@@ -85,6 +84,19 @@ pub struct RawPipelineState<R: Resources>(Arc<R::PipelineStateObject>, Arc<R::Pr
 /// Raw texture object
 pub struct RawTexture<R: Resources>(Arc<R::NewTexture>, tex::Descriptor);
 
+/// Typed texture object
+pub struct NewTexture<R: Resources, S>(RawTexture<R>, PhantomData<S>);
+
+impl<R: Resources, S> Phantom for NewTexture<R, S> {
+    type Raw = RawTexture<R>;
+    fn new(handle: RawTexture<R>) -> NewTexture<R, S> {
+        NewTexture(handle, PhantomData)
+    }
+    fn raw(&self) -> &RawTexture<R> {
+        &self.0
+    }
+}
+
 impl<R: Resources> RawTexture<R> {
     /// Get texture descriptor
     pub fn get_info(&self) -> &tex::Descriptor { &self.1 }
@@ -104,15 +116,12 @@ pub struct RawShaderResourceView<R: Resources>(Arc<R::ShaderResourceView>, ViewS
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct ShaderResourceView<R: Resources, T>(RawShaderResourceView<R>, PhantomData<T>);
 
-impl<R: Resources, T> From<RawShaderResourceView<R>> for ShaderResourceView<R, T> {
-    fn from(handle: RawShaderResourceView<R>) -> ShaderResourceView<R, T> {
+impl<R: Resources, T> Phantom for ShaderResourceView<R, T> {
+    type Raw = RawShaderResourceView<R>;
+    fn new(handle: RawShaderResourceView<R>) -> ShaderResourceView<R, T> {
         ShaderResourceView(handle, PhantomData)
     }
-}
-
-impl<R: Resources, T> ShaderResourceView<R, T> {
-    /// Get the underlying raw SRV
-    pub fn raw(&self) -> &RawShaderResourceView<R> {
+    fn raw(&self) -> &RawShaderResourceView<R> {
         &self.0
     }
 }
@@ -125,15 +134,12 @@ pub struct RawUnorderedAccessView<R: Resources>(Arc<R::UnorderedAccessView>, Vie
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct UnorderedAccessView<R: Resources, T>(RawUnorderedAccessView<R>, PhantomData<T>);
 
-impl<R: Resources, T> From<RawUnorderedAccessView<R>> for UnorderedAccessView<R, T> {
-    fn from(handle: RawUnorderedAccessView<R>) -> UnorderedAccessView<R, T> {
+impl<R: Resources, T> Phantom for UnorderedAccessView<R, T> {
+    type Raw = RawUnorderedAccessView<R>;
+    fn new(handle: RawUnorderedAccessView<R>) -> UnorderedAccessView<R, T> {
         UnorderedAccessView(handle, PhantomData)
     }
-}
-
-impl<R: Resources, T> UnorderedAccessView<R, T> {
-    /// Get the underlying raw UAV
-    pub fn raw(&self) -> &RawUnorderedAccessView<R> {
+    fn raw(&self) -> &RawUnorderedAccessView<R> {
         &self.0
     }
 }
@@ -163,15 +169,12 @@ pub struct RawDepthStencilView<R: Resources>(Arc<R::DepthStencilView>, Arc<R::Ne
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct RenderTargetView<R: Resources, T>(RawRenderTargetView<R>, PhantomData<T>);
 
-impl<R: Resources, T> From<RawRenderTargetView<R>> for RenderTargetView<R, T> {
-    fn from(h: RawRenderTargetView<R>) -> RenderTargetView<R, T> {
+impl<R: Resources, T> Phantom for RenderTargetView<R, T> {
+    type Raw = RawRenderTargetView<R>;
+    fn new(h: RawRenderTargetView<R>) -> RenderTargetView<R, T> {
         RenderTargetView(h, PhantomData)
     }
-}
-
-impl<R: Resources, T> RenderTargetView<R, T> {
-    /// Get the underlying raw Handle
-    pub fn raw(&self) -> &RawRenderTargetView<R> {
+    fn raw(&self) -> &RawRenderTargetView<R> {
         &self.0
     }
 }
@@ -180,15 +183,12 @@ impl<R: Resources, T> RenderTargetView<R, T> {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct DepthStencilView<R: Resources, T>(RawDepthStencilView<R>, PhantomData<T>); 
 
-impl<R: Resources, T> From<RawDepthStencilView<R>> for DepthStencilView<R, T> {
-    fn from(h: RawDepthStencilView<R>) -> DepthStencilView<R, T> {
+impl<R: Resources, T> Phantom for DepthStencilView<R, T> {
+    type Raw = RawDepthStencilView<R>;
+    fn new(h: RawDepthStencilView<R>) -> DepthStencilView<R, T> {
         DepthStencilView(h, PhantomData)
     }
-}
-
-impl<R: Resources, T> DepthStencilView<R, T> {
-    /// Get the underlying raw Handle
-    pub fn raw(&self) -> &RawDepthStencilView<R> {
+    fn raw(&self) -> &RawDepthStencilView<R> {
         &self.0
     }
 }

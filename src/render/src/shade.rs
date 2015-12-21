@@ -116,6 +116,7 @@ impl<R: Resources, T> Parameter<R> for handle::Buffer<R, T> {
     }
 
     fn put(&self, id: ParameterId, storage: &mut ParamStorage<R>) {
+        use gfx_core::Phantom;
         storage.blocks[id as usize] = Some(self.raw().clone());
     }
 }

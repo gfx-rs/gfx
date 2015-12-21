@@ -213,11 +213,13 @@ impl Factory {
     }
 
     pub fn get_main_color<T: d::format::Formatted>(&self) -> handle::RenderTargetView<R, T> {
-        self.share.main_color.clone().into()
+        use gfx_core::Phantom;
+        Phantom::new(self.share.main_color.clone()) //todo: types
     }
 
     pub fn get_main_depth_stencil<T: d::format::Formatted>(&self) -> handle::DepthStencilView<R, T> {
-        self.share.main_depth_stencil.clone().into()
+        use gfx_core::Phantom;
+        Phantom::new(self.share.main_depth_stencil.clone()) //todo: types
     }
 }
 
@@ -556,18 +558,21 @@ impl d::Factory<R> for Factory {
 
     fn map_buffer_readable<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
                            -> d::mapping::Readable<T, R, Factory> {
+        use gfx_core::Phantom;
         let map = self.map_buffer_raw(buf.raw(), d::MapAccess::Readable);
         self.map_readable(map, buf.len())
     }
 
     fn map_buffer_writable<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
                                     -> d::mapping::Writable<T, R, Factory> {
+        use gfx_core::Phantom;
         let map = self.map_buffer_raw(buf.raw(), d::MapAccess::Writable);
         self.map_writable(map, buf.len())
     }
 
     fn map_buffer_rw<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
                               -> d::mapping::RW<T, R, Factory> {
+        use gfx_core::Phantom;
         let map = self.map_buffer_raw(buf.raw(), d::MapAccess::RW);
         self.map_read_write(map, buf.len())
     }

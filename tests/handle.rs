@@ -6,12 +6,14 @@ use gfx_core::dummy::DummyResources;
 use gfx_core::handle::{Buffer, Manager, Producer};
 
 fn mock_buffer<T>(len: usize) -> Buffer<DummyResources, T> {
+    use gfx_core::Phantom;
     let mut handler = Manager::new();
-    handler.make_buffer((), BufferInfo {
+    let raw = handler.make_buffer((), BufferInfo {
         role: BufferRole::Vertex,
         usage: BufferUsage::Static,
         size: mem::size_of::<T>() * len,
-    }).into()
+    });
+    Phantom::new(raw)
 }
 
 #[test]

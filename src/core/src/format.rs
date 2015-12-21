@@ -152,6 +152,7 @@ pub trait RenderChannel: ChannelTyped {}
 pub trait BlendChannel: RenderChannel {}
 
 pub trait Formatted {
+    type Surface: SurfaceTyped;
     fn get_format() -> Format;
 }
 pub trait BufferFormat: Formatted {}
@@ -161,6 +162,7 @@ pub trait RenderFormat: Formatted {}
 pub trait BlendFormat: RenderFormat {}
 
 impl<S: SurfaceTyped, C: ChannelTyped> Formatted for (S, C) {
+    type Surface = S;
     fn get_format() -> Format {
         Format(S::get_surface_type(), C::get_channel_type().into())
     }
@@ -218,6 +220,7 @@ macro_rules! impl_format {
     { $($ty:ty = $surface:ident . $channel:ident,)* } => {
         $(
             impl Formatted for $ty {
+                type Surface = $surface;
                 fn get_format() -> Format {
                     <($surface, $channel) as Formatted>::get_format()
                 }

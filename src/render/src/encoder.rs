@@ -297,6 +297,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
     {
         let bound = mem::size_of::<T>();
         if bound <= buf.get_info().size {
+            use gfx_core::Phantom;
             let pointer = self.data_buffer.add_struct(data);
             self.command_buffer.update_buffer(
                 self.handles.ref_buffer(buf.raw()).clone(),
@@ -578,6 +579,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
     fn draw_indexed<T>(&mut self, buf: &handle::Buffer<R, T>, format: IntSize,
                      slice: &mesh::Slice<R>, base: device::VertexCount,
                      instances: InstanceOption) {
+        use gfx_core::Phantom;
         if self.render_state.index.as_ref() != Some(buf.raw()) {
             self.render_state.index = Some(buf.raw().clone());
             self.command_buffer.bind_index(self.handles.ref_buffer(buf.raw()).clone());

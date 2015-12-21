@@ -74,6 +74,18 @@ pub type SamplerSlot = u8;
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct NotSupported;
 
+/// A service trait used to get the raw data out of
+/// strong types. Not meant for public use.
+pub trait Phantom: Sized {
+    /// The raw type behind the phantom.
+    type Raw;
+    /// Crete a new phantom from the raw type.
+    fn new(raw: Self::Raw) -> Self;
+    /// Get an internal reference to the raw type.
+    fn raw(&self) -> &Self::Raw;
+}
+
+
 /// Treat a given slice as `&[u8]` for the given function call
 pub fn as_byte_slice<T>(slice: &[T]) -> &[u8] {
     use std::slice;
@@ -292,10 +304,12 @@ pub trait Factory<R: Resources> {
     fn create_buffer_raw(&mut self, size: usize, BufferRole, BufferUsage) -> handle::RawBuffer<R>;
     fn create_buffer_static_raw(&mut self, data: &[u8], BufferRole) -> handle::RawBuffer<R>;
     fn create_buffer_static<T>(&mut self, data: &[T], role: BufferRole) -> handle::Buffer<R, T> {
-        self.create_buffer_static_raw(as_byte_slice(data), role).into()
+        let raw = self.create_buffer_static_raw(as_byte_slice(data), role);
+        Phantom::new(raw)
     }
     fn create_buffer_dynamic<T>(&mut self, num: usize, role: BufferRole) -> handle::Buffer<R, T> {
-        self.create_buffer_raw(num * mem::size_of::<T>(), role, BufferUsage::Stream).into()
+        let raw = self.create_buffer_raw(num * mem::size_of::<T>(), role, BufferUsage::Stream);
+        Phantom::new(raw)
     }
 
     fn create_pipeline_state_raw(&mut self, &handle::Program<R>, &pso::Descriptor)
@@ -376,6 +390,45 @@ pub trait Factory<R: Resources> {
         -> Result<handle::RawRenderTargetView<R>, TargetViewError>;
     fn view_texture_as_depth_stencil_raw(&mut self, &handle::RawTexture<R>, Option<target::Layer>)
         -> Result<handle::RawDepthStencilView<R>, TargetViewError>;
+
+    fn create_texture_2d<S: format::SurfaceTyped>(&mut self, width: tex::Size, height: tex::Size,
+                         bind: Bind, mipmap: bool) -> Result<handle::NewTexture<R, S>, tex::Error>
+    {
+        let desc = tex::Descriptor {
+            width: width,
+            height: height,
+            depth: 0,
+            levels: if mipmap {99} else {1},
+            kind: tex::Kind::D2,
+            format: S::get_surface_type(),
+            bind: bind,
+        };
+        let raw = try!(self.create_new_texture_raw(desc));
+        Ok(Phantom::new(raw))
+    }
+
+    fn view_texture_as_shader_resource<T: format::Formatted>(&mut self,
+                                       tex: &handle::NewTexture<R, T::Surface>, levels: (target::Level, target::Level))
+                                       -> Result<handle::ShaderResourceView<R, T>, ResourceViewError>
+    {
+        assert!(levels.0 <= levels.1);
+        let desc = tex::ViewDesc {
+            channel: T::get_format().1.ty,
+            min: levels.0,
+            max: levels.1,
+        };
+        let raw = try!(self.view_texture_as_shader_resource_raw(tex.raw(), desc));
+        Ok(Phantom::new(raw))
+    }
+
+    fn create_texture_2d_static<T: format::Formatted>(&mut self, width: tex::Size, height: tex::Size, data: &[T], mipmap: bool) ->
+                                Result<(handle::NewTexture<R, T::Surface>, handle::ShaderResourceView<R, T>), tex::Error>
+    {
+        let tex = try!(self.create_texture_2d(width, height, SHADER_RESOURCE, mipmap));
+        let levels = (0, tex.raw().get_info().levels - 1);
+        let view = self.view_texture_as_shader_resource(&tex, levels).unwrap(); //TODO: error handling
+        Ok((tex, view))
+    }
 }
 
 /// All the data needed simultaneously for submitting a command buffer for
