@@ -15,7 +15,7 @@
 //! Command Buffer device interface
 
 use draw_state::target;
-use {Resources, IndexType, InstanceCount, VertexCount, Primitive,
+use {Factory, Resources, IndexType, InstanceCount, VertexCount, Primitive,
      AttributeSlot, ColorSlot, ConstantBufferSlot, ResourceViewSlot};
 use {attrib, pso, shade, tex};
 use state as s;
@@ -99,8 +99,8 @@ pub type InstanceOption = Option<(InstanceCount, VertexCount)>;
 /// efficient API-specific manner, to be ready for execution on the device.
 #[allow(missing_docs)]
 pub trait CommandBuffer<R: Resources> {
-    /// An empty constructor
-    fn new() -> Self;
+    /// Clone as an empty buffer
+    fn clone_empty(&self) -> Self;
     /// Clear the command buffer contents, retain the allocated storage
     fn clear(&mut self);
     /// Bind a shader program

@@ -23,8 +23,9 @@ use gfx_core::mapping::Builder;
 use gfx_core::target::{Layer, Level};
 use gfx_core::tex::Size;
 
+use command::CommandBuffer;
 use {Resources as R, Share, OutputMerger};
-use {Buffer, FatSampler, NewTexture, PipelineState, Program, ResourceView, TargetView};
+use {Buffer, FatSampler, NewTexture, PipelineState, ResourceView, TargetView};
 
 
 fn role_to_target(role: d::BufferRole) -> gl::types::GLenum {
@@ -128,6 +129,16 @@ impl Factory {
         }
     }
 
+    fn create_fbo_internal(&mut self) -> gl::types::GLuint {
+        let gl = &self.share.context;
+        let mut name = 0 as ::FrameBuffer;
+        unsafe {
+            gl.GenFramebuffers(1, &mut name);
+        }
+        info!("\tCreated frame buffer {}", name);
+        name
+    }
+
     fn create_buffer_internal(&mut self) -> Buffer {
         let gl = &self.share.context;
         let mut name = 0 as Buffer;
@@ -157,7 +168,7 @@ impl Factory {
     }
 
     pub fn create_program_raw(&mut self, shader_set: &d::ShaderSet<R>)
-                              -> Result<(Program, d::shade::ProgramInfo), d::shade::CreateProgramError> {
+                              -> Result<(gl::types::GLuint, d::shade::ProgramInfo), d::shade::CreateProgramError> {
         let frame_handles = &mut self.frame_handles;
         let mut shaders = [0; 3];
         let shader_slice = match shader_set {
@@ -234,10 +245,15 @@ impl d::mapping::Raw for RawMapping {
 
 
 impl d::Factory<R> for Factory {
+    type CommandBuffer = CommandBuffer;
     type Mapper = RawMapping;
 
     fn get_capabilities(&self) -> &d::Capabilities {
         &self.share.capabilities
+    }
+
+    fn create_command_buffer(&mut self) -> CommandBuffer {
+        CommandBuffer::new(self.create_fbo_internal())
     }
 
     fn create_buffer_raw(&mut self, size: usize, role: d::BufferRole, usage: d::BufferUsage)
@@ -329,12 +345,7 @@ impl d::Factory<R> for Factory {
 
     fn create_frame_buffer(&mut self) -> Result<handle::FrameBuffer<R>, d::NotSupported> {
         if self.share.capabilities.render_targets_supported {
-            let gl = &self.share.context;
-            let mut name = 0 as ::FrameBuffer;
-            unsafe {
-                gl.GenFramebuffers(1, &mut name);
-            }
-            info!("\tCreated frame buffer {}", name);
+            let name = self.create_fbo_internal();
             Ok(self.share.handles.borrow_mut().make_frame_buffer(name))
         } else {
             error!("No framebuffer objects, can't make a new one!");

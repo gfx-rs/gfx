@@ -194,7 +194,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
     /// Clone the renderer shared data but ignore the commands.
     pub fn clone_empty(&self) -> Encoder<R, C> {
         Encoder {
-            command_buffer: CommandBuffer::new(),
+            command_buffer: self.command_buffer.clone_empty(),
             data_buffer: DataBuffer::new(),
             handles: handle::Manager::new(),
             common_array_buffer: self.common_array_buffer.clone(),
@@ -627,12 +627,11 @@ pub trait EncoderFactory<R: Resources, C: CommandBuffer<R>> {
 
 impl<
     R: Resources,
-    C: CommandBuffer<R>,
     F: device::Factory<R>,
-> EncoderFactory<R, C> for F {
-    fn create_encoder(&mut self) -> Encoder<R, C> {
+> EncoderFactory<R, F::CommandBuffer> for F {
+    fn create_encoder(&mut self) -> Encoder<R, F::CommandBuffer> {
         Encoder {
-            command_buffer: CommandBuffer::new(),
+            command_buffer: self.create_command_buffer(),
             data_buffer: DataBuffer::new(),
             handles: handle::Manager::new(),
             common_array_buffer: self.create_array_buffer(),

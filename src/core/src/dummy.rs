@@ -14,7 +14,7 @@
 
 #![allow(missing_docs)]
 
-use {Capabilities, Device, Resources, SubmitInfo};
+use {Capabilities, Device, Factory, Resources, SubmitInfo};
 use {AttributeSlot, ColorSlot, ConstantBufferSlot, ResourceViewSlot};
 use {IndexType, Primitive, VertexCount};
 use {attrib, draw, pso, shade, target, tex};
@@ -78,7 +78,7 @@ impl DummyDevice {
 
 pub struct DummyCommandBuffer;
 impl draw::CommandBuffer<DummyResources> for DummyCommandBuffer {
-    fn new() -> DummyCommandBuffer { DummyCommandBuffer }
+    fn clone_empty(&self) -> DummyCommandBuffer { DummyCommandBuffer }
     fn clear(&mut self) {}
     fn bind_program(&mut self, _: ()) {}
     fn bind_pipeline_state(&mut self, _: ()) {}

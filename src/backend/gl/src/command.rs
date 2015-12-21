@@ -63,12 +63,23 @@ pub enum Command {
 
 pub struct CommandBuffer {
     pub buf: Vec<Command>,
+    fbo: FrameBuffer,
+}
+
+impl CommandBuffer {
+    pub fn new(fbo: FrameBuffer) -> CommandBuffer {
+        CommandBuffer {
+            buf: Vec::new(),
+            fbo: fbo,
+        }
+    }
 }
 
 impl c::draw::CommandBuffer<Resources> for CommandBuffer {
-    fn new() -> CommandBuffer {
+    fn clone_empty(&self) -> CommandBuffer {
         CommandBuffer {
             buf: Vec::new(),
+            fbo: self.fbo,
         }
     }
 

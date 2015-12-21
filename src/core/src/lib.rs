@@ -277,11 +277,15 @@ pub trait Resources:          Clone + Hash + fmt::Debug + Eq + PartialEq {
 
 #[allow(missing_docs)]
 pub trait Factory<R: Resources> {
+    /// Associated command buffer type
+    type CommandBuffer: draw::CommandBuffer<R>;
     /// Associated mapper type
     type Mapper: Clone + mapping::Raw;
 
     /// Returns the capabilities available to the specific API implementation
     fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
+
+    fn create_command_buffer(&mut self) -> Self::CommandBuffer;
 
     // resource creation
     fn create_array_buffer(&mut self) -> Result<handle::ArrayBuffer<R>, NotSupported>;
