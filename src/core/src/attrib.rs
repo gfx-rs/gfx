@@ -17,6 +17,7 @@
 #![allow(missing_docs)]
 
 use shade::BaseType;
+pub use self::format_old::ToFormat;
 
 /// Number of elements per attribute, only 1 to 4 are supported
 pub type Count = u8;
@@ -167,7 +168,7 @@ impl<T: Copy> Floater<T> {
 }
 
 /// A service module for deriving `ToFormat` for primitive types.
-pub mod format {
+mod format_old {
     use super::{Count, FixedPoint, Floater, Type};
     use super::Type::*;
     use super::FloatSize::*;

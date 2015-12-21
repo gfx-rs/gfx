@@ -19,7 +19,7 @@
 use std::default::Default;
 use std::marker::PhantomData;
 use gfx_core as d;
-pub use gfx_core::pso::Descriptor;
+pub use gfx_core::pso::{Element, Descriptor};
 
 pub struct RawDataSet<R: d::Resources>{
     pub vertex_buffers: d::pso::VertexBufferSet<R>,
@@ -53,7 +53,7 @@ impl<R: d::Resources> RawDataSet<R> {
 #[derive(Clone, PartialEq, Debug)]
 pub enum InitError {
     /// Vertex attribute mismatch.
-    VertexImport(d::AttributeSlot, Option<d::attrib::Format>),
+    VertexImport(d::AttributeSlot, Option<d::format::Format>),
     /// Constant buffer mismatch.
     ConstantBuffer(d::ConstantBufferSlot, Option<()>),
     /// Global constant mismatch.
@@ -107,11 +107,11 @@ pub trait DataLink<'a>: Sized {
     fn new() -> Self;
     fn is_active(&self) -> bool;
     fn link_input(&mut self, _: &d::shade::AttributeVar, _: &Self::Init) ->
-                  Option<Result<d::pso::AttributeDesc, d::attrib::Format>> { None }
+                  Option<Result<d::pso::AttributeDesc, d::format::Format>> { None }
     fn link_constant_buffer(&mut self, _: &d::shade::ConstantBufferVar, _: &Self::Init) ->
-                            Option<Result<(), d::attrib::Format>> { None }
+                            Option<Result<(), d::format::Format>> { None }
     fn link_global_constant(&mut self, _: &d::shade::ConstVar, _: &Self::Init) ->
-                            Option<Result<(), d::attrib::Format>> { None }
+                            Option<Result<(), d::format::Format>> { None }
     fn link_output(&mut self, _: &d::shade::OutputVar, _: &Self::Init) ->
                    Option<Result<d::pso::ColorTargetDesc, d::format::Format>> { None }
     fn link_depth_stencil(&mut self, _: &Self::Init) ->
@@ -129,7 +129,7 @@ pub trait DataBind<R: d::Resources> {
 }
 
 pub trait Structure {
-    fn query(&str) -> Option<d::attrib::Format>;
+    fn query(&str) -> Option<d::pso::Element>;
 }
 
 pub type AttributeSlotSet = usize;
@@ -140,7 +140,7 @@ pub static PER_INSTANCE: FetchRate = FetchRate(1);
 
 pub struct VertexBuffer<T: Structure>(AttributeSlotSet, PhantomData<T>);
 pub struct ConstantBuffer<T: Structure>(Option<d::ConstantBufferSlot>, PhantomData<T>);
-pub struct Global<T: d::attrib::format::ToFormat>(Option<d::shade::Location>, PhantomData<T>);
+pub struct Global<T: d::format::Formatted>(Option<d::shade::Location>, PhantomData<T>);
 pub struct ResourceView<T>(Option<d::ResourceViewSlot>, PhantomData<T>);
 pub struct UnorderedView<T>(Option<d::UnorderedViewSlot>, PhantomData<T>);
 pub struct Sampler(Option<d::SamplerSlot>);
@@ -152,7 +152,7 @@ pub type DepthTarget<T: d::format::DepthStencilFormat> = DepthStencilCommon<T, d
 pub type StencilTarget<T: d::format::DepthStencilFormat> = DepthStencilCommon<T, d::state::Stencil>;
 pub type DepthStencilTarget<T: d::format::DepthStencilFormat> = DepthStencilCommon<T, (d::state::Depth, d::state::Stencil)>;
 
-fn match_attribute(_: &d::shade::AttributeVar, _: d::attrib::Format) -> bool {
+fn match_attribute(_: &d::shade::AttributeVar, _: d::format::Format) -> bool {
     true //TODO
 }
 
@@ -165,13 +165,13 @@ impl<'a, T: Structure> DataLink<'a> for VertexBuffer<T> {
         self.0 != 0
     }
     fn link_input(&mut self, at: &d::shade::AttributeVar, init: &Self::Init) ->
-                  Option<Result<d::pso::AttributeDesc, d::attrib::Format>> {
-        T::query(&at.name).map(|format| {
+                  Option<Result<d::pso::AttributeDesc, d::format::Format>> {
+        T::query(&at.name).map(|el| {
             self.0 |= 1 << (at.slot as AttributeSlotSet);
-            if match_attribute(at, format) {
-                Ok((format, init.0))
+            if match_attribute(at, el.format) {
+                Ok((el, init.0))
             }else {
-                Err(format)
+                Err(el.format)
             }
         })
     }
@@ -198,7 +198,7 @@ impl<'a, T: Structure> DataLink<'a> for ConstantBuffer<T> {
         self.0.is_some()
     }
     fn link_constant_buffer(&mut self, cb: &d::shade::ConstantBufferVar, init: &Self::Init) ->
-                  Option<Result<(), d::attrib::Format>> {
+                  Option<Result<(), d::format::Format>> {
         if &cb.name == *init {
             self.0 = Some(cb.slot);
             Some(Ok(()))
@@ -218,7 +218,7 @@ impl<R: d::Resources, T: Structure> DataBind<R> for ConstantBuffer<T> {
     }
 }
 
-impl<'a, T: d::attrib::format::ToFormat> DataLink<'a> for Global<T> {
+impl<'a, T: d::format::Formatted> DataLink<'a> for Global<T> {
     type Init = &'a str;
     fn new() -> Self {
         Global(None, PhantomData)
@@ -227,7 +227,7 @@ impl<'a, T: d::attrib::format::ToFormat> DataLink<'a> for Global<T> {
         self.0.is_some()
     }
     fn link_global_constant(&mut self, var: &d::shade::ConstVar, init: &Self::Init) ->
-                            Option<Result<(), d::attrib::Format>> {
+                            Option<Result<(), d::format::Format>> {
         if &var.name == *init {
             //if match_constant(var, ())
             self.0 = Some(var.location);
@@ -238,7 +238,7 @@ impl<'a, T: d::attrib::format::ToFormat> DataLink<'a> for Global<T> {
     }
 }
 
-impl<R: d::Resources, T: d::attrib::format::ToFormat> DataBind<R> for Global<T> {
+impl<R: d::Resources, T: d::format::Formatted> DataBind<R> for Global<T> {
     type Data = d::shade::UniformValue;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, _: &mut d::handle::Manager<R>) {
         if let Some(loc) = self.0 {

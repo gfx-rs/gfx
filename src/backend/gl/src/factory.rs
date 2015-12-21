@@ -49,14 +49,23 @@ pub fn update_sub_buffer(gl: &gl::Gl, buffer: Buffer, address: *const u8,
 }
 
 fn surface_type_to_old_format(sf: d::format::SurfaceType) -> d::tex::Format {
-    use gfx_core::format::SurfaceType;
+    use gfx_core::format::SurfaceType as S;
     use gfx_core::tex::{Format, Components, FloatSize, IntSubType};
     match sf {
-        SurfaceType::R8_G8_B8_A8 => Format::Unsigned(Components::RGBA, 8, IntSubType::Normalized),
-        SurfaceType::R10_G10_B10_A2 => Format::RGB10_A2,
-        SurfaceType::R16_G16_B16_A16 => Format::Float(Components::RGBA, FloatSize::F16),
-        SurfaceType::R32_G32_B32_A32 => Format::Float(Components::RGBA, FloatSize::F32),
-        SurfaceType::D24_S8 => Format::DEPTH24_STENCIL8,
+        S::R8 => Format::Unsigned(Components::R, 8, IntSubType::Normalized),
+        S::R8_G8 => Format::Unsigned(Components::RG, 8, IntSubType::Normalized),
+        S::R8_G8_B8 => Format::Unsigned(Components::RGB, 8, IntSubType::Normalized),
+        S::R8_G8_B8_A8 => Format::Unsigned(Components::RGBA, 8, IntSubType::Normalized),
+        S::R10_G10_B10_A2 => Format::RGB10_A2,
+        S::R16 => Format::Float(Components::R, FloatSize::F16),
+        S::R16_G16 => Format::Float(Components::RG, FloatSize::F16),
+        S::R16_G16_B16 => Format::Float(Components::RGB, FloatSize::F16),
+        S::R16_G16_B16_A16 => Format::Float(Components::RGBA, FloatSize::F16),
+        S::R32 => Format::Float(Components::R, FloatSize::F32),
+        S::R32_G32 => Format::Float(Components::RG, FloatSize::F32),
+        S::R32_G32_B32 => Format::Float(Components::RGB, FloatSize::F32),
+        S::R32_G32_B32_A32 => Format::Float(Components::RGBA, FloatSize::F32),
+        S::D24_S8 => Format::DEPTH24_STENCIL8,
     }
 }
 

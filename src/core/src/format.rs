@@ -49,9 +49,18 @@ macro_rules! impl_surface_type {
 }
 
 impl_surface_type! {
+    R8              [8]   = BufferSurface = TextureSurface = RenderSurface,
+    R8_G8           [16]  = BufferSurface = TextureSurface = RenderSurface,
+    R8_G8_B8        [24]  = BufferSurface = TextureSurface = RenderSurface,
     R8_G8_B8_A8     [32]  = BufferSurface = TextureSurface = RenderSurface,
     R10_G10_B10_A2  [32]  = BufferSurface = TextureSurface = RenderSurface,
+    R16             [16]  = BufferSurface = TextureSurface = RenderSurface,
+    R16_G16         [32]  = BufferSurface = TextureSurface = RenderSurface,
+    R16_G16_B16     [48]  = BufferSurface = TextureSurface = RenderSurface,
     R16_G16_B16_A16 [64]  = BufferSurface = TextureSurface = RenderSurface,
+    R32             [32]  = BufferSurface = TextureSurface = RenderSurface,
+    R32_G32         [64]  = BufferSurface = TextureSurface = RenderSurface,
+    R32_G32_B32     [96]  = BufferSurface = TextureSurface = RenderSurface,
     R32_G32_B32_A32 [128] = BufferSurface = TextureSurface = RenderSurface,
     D24_S8          [32]  = TextureSurface = DepthStencilSurface,
 }
@@ -167,3 +176,110 @@ pub type Rgb10a2F = (R10_G10_B10_A2, Float);
 pub type Rgba16F = (R16_G16_B16_A16, Float);
 pub type Rgba32F = (R32_G32_B32_A32, Float);
 pub type DepthStencil = (D24_S8, UintNormalized);
+
+macro_rules! alias {
+    { $( $name:ident = $ty:ty, )* } => {
+        $(
+            #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+            pub struct $name(pub $ty);
+            impl From<$ty> for $name {
+                fn from(v: $ty) -> $name {
+                    $name(v)
+                }
+            }
+            impl $name {
+                pub fn cast2(v: [$ty; 2]) -> [$name; 2] {
+                    [$name(v[0]), $name(v[1])]
+                }
+                pub fn cast3(v: [$ty; 3]) -> [$name; 3] {
+                    [$name(v[0]), $name(v[1]), $name(v[2])]
+                }
+                pub fn cast4(v: [$ty; 4]) -> [$name; 4] {
+                    [$name(v[0]), $name(v[1]), $name(v[2]), $name(v[3])]
+                }
+            }
+        )*
+    }
+}
+
+alias! {
+    U8Norm = u8,
+    I8Norm = i8,
+    U8Scaled = u8,
+    I8Scaled = i8,
+    U16Norm = u16,
+    I16Norm = i16,
+    F16 = u16, // half-float
+    U32Norm = u32,
+    I32Norm = i32,
+}
+
+macro_rules! impl_format {
+    { $($ty:ty = $surface:ident . $channel:ident,)* } => {
+        $(
+            impl Formatted for $ty {
+                fn get_format() -> Format {
+                    <($surface, $channel) as Formatted>::get_format()
+                }
+            }
+        )*
+    }
+}
+
+macro_rules! impl_formats_8bit {
+    { $( $ty:ty = $channel:ident, )* } => {
+        impl_format! {$(
+            $ty = R8 . $channel,
+            [$ty; 2] = R8_G8 . $channel,
+            [$ty; 3] = R8_G8_B8 . $channel,
+            [$ty; 4] = R8_G8_B8_A8 . $channel,
+        )*}
+    }
+}
+
+macro_rules! impl_formats_16bit {
+    { $( $ty:ty = $channel:ident, )* } => {
+        impl_format! {$(
+            $ty = R16 . $channel,
+            [$ty; 2] = R16_G16 . $channel,
+            [$ty; 3] = R16_G16_B16 . $channel,
+            [$ty; 4] = R16_G16_B16_A16 . $channel,
+        )*}
+    }
+}
+
+macro_rules! impl_formats_32bit {
+    { $( $ty:ty = $channel:ident, )* } => {
+        impl_format! {$(
+            $ty = R32 . $channel,
+            [$ty; 2] = R32_G32 . $channel,
+            [$ty; 3] = R32_G32_B32 . $channel,
+            [$ty; 4] = R32_G32_B32_A32 . $channel,
+        )*}
+    }
+}
+
+impl_formats_8bit! {
+    u8 = Uint,
+    i8 = Int,
+    U8Norm = UintNormalized,
+    I8Norm = UintNormalized,
+    U8Scaled = UintScaled,
+    I8Scaled = IntScaled,
+}
+
+impl_formats_16bit! {
+    u16 = Uint,
+    i16 = Int,
+    U16Norm = UintNormalized,
+    I16Norm = IntNormalized,
+    F16 = Float,
+}
+
+impl_formats_32bit! {
+    u32 = Uint,
+    i32 = Int,
+    U32Norm = UintNormalized,
+    I32Norm = IntNormalized,
+    f32 = Float,
+}

@@ -88,8 +88,19 @@ impl From<(s::Depth, s::Stencil)> for DepthStencilInfo {
     }
 }
 
+/// A struct element descriptor.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct Element {
+    /// Element format
+    pub format: format::Format,
+    /// Offset from the beginning of the container, in bytes
+    pub offset: attrib::Offset,
+    /// Total container size, in bytes
+    pub stride: attrib::Stride,
+}
+
 /// PSO vertex attribute descriptor
-pub type AttributeDesc = (attrib::Format, attrib::InstanceRate);
+pub type AttributeDesc = (Element, attrib::InstanceRate);
 /// PSO color target descriptor
 pub type ColorTargetDesc = (format::Format, BlendInfo);
 /// PSO depth-stencil target descriptor

@@ -25,24 +25,19 @@ macro_rules! gfx_structure {
         }
 
         impl $crate::pso::Structure for $root {
-            fn query(name: &str) -> Option<$crate::attrib::Format> {
+            fn query(name: &str) -> Option<$crate::pso::Element> {
                 use std::mem::size_of;
-                use $crate::attrib::{Offset, Format, Stride};
-                use $crate::attrib::format::ToFormat;
+                use $crate::attrib::{Offset, Stride};
                 let stride = size_of::<$root>() as Stride;
                 let tmp: &$root = unsafe{ ::std::mem::uninitialized() };
+                let base = &tmp as *const _ as usize;
                 match name {
                 $(
-                    stringify!($name) => {
-                        let (count, etype) = <$ty as ToFormat>::describe();
-                        Some(Format {
-                            elem_count: count,
-                            elem_type: etype,
-                            offset: ((&tmp.$field as *const _ as usize) - (&tmp as *const _ as usize)) as Offset,
+                    stringify!($name) => Some($crate::pso::Element {
+                            format: <$ty as $crate::format::Formatted>::get_format(),
+                            offset: ((&tmp.$field as *const _ as usize) - base) as Offset,
                             stride: stride,
-                            instance_rate: 0,
-                        })
-                    },
+                    }),
                 )*
                     _ => None,
                 }

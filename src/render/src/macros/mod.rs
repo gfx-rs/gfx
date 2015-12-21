@@ -30,8 +30,7 @@ macro_rules! gfx_vertex {
             fn generate<R: $crate::Resources>(buffer: &$crate::handle::Buffer<R, $name>)
                         -> Vec<$crate::Attribute<R>> {
                 use std::mem::{size_of, forget};
-                use $crate::attrib::{Offset, Stride};
-                use $crate::attrib::format::ToFormat;
+                use $crate::attrib::{Offset, Stride, ToFormat};
                 let stride = size_of::<$name>() as Stride;
                 let mut attributes = Vec::new();
                 $(

@@ -356,7 +356,72 @@ impl Device {
     }
 
     fn bind_attribute(&mut self, slot: d::AttributeSlot, buffer: Buffer,
-                      (format, instance_rate): d::pso::AttributeDesc) {
+                      (elem, instance_rate): d::pso::AttributeDesc) {
+        use gfx_core::format::SurfaceType as S;
+        use gfx_core::format::ChannelType as C;
+        let (fm8, fm16, fm32) = match elem.format.1.ty {
+            C::Int | C::IntNormalized | C::IntScaled =>
+                (gl::BYTE, gl::SHORT, gl::INT),
+            C::Uint | C::UintNormalized | C::UintScaled =>
+                (gl::UNSIGNED_BYTE, gl::UNSIGNED_SHORT, gl::UNSIGNED_INT),
+            C::Float => (gl::ZERO, gl::HALF_FLOAT, gl::FLOAT),
+            C::Srgb => {
+                error!("Unsupported Srgb channel type");
+                return
+            }
+        };
+        let (count, gl_type) = match elem.format.0 {
+            S::R8              => (1, fm8),
+            S::R8_G8           => (2, fm8),
+            S::R8_G8_B8        => (3, fm8),
+            S::R8_G8_B8_A8     => (4, fm8),
+            S::R16             => (1, fm16),
+            S::R16_G16         => (1, fm16),
+            S::R16_G16_B16     => (1, fm16),
+            S::R16_G16_B16_A16 => (1, fm16),
+            S::R32             => (1, fm32),
+            S::R32_G32         => (2, fm32),
+            S::R32_G32_B32     => (3, fm32),
+            S::R32_G32_B32_A32 => (4, fm32),
+            _ => {
+                error!("Unsupported element type: {:?}", elem.format.0);
+                return
+            }
+        };
+        let gl = &self.share.context;
+        unsafe { gl.BindBuffer(gl::ARRAY_BUFFER, buffer) };
+        let offset = elem.offset as *const gl::types::GLvoid;
+        let stride = elem.stride as gl::types::GLint;
+        match elem.format.1.ty {
+            C::Int | C::Uint => unsafe {
+                gl.VertexAttribIPointer(slot as gl::types::GLuint,
+                    count, gl_type, stride, offset);
+            },
+            C::IntNormalized | C::UintNormalized => unsafe {
+                gl.VertexAttribPointer(slot as gl::types::GLuint,
+                    count, gl_type, gl::TRUE, stride, offset);
+            },
+            C::IntScaled | C:: UintScaled => unsafe {
+                gl.VertexAttribPointer(slot as gl::types::GLuint,
+                    count, gl_type, gl::FALSE, stride, offset);
+            },
+            C::Float => unsafe {
+                gl.VertexAttribPointer(slot as gl::types::GLuint,
+                    count, gl_type, gl::FALSE, stride, offset);
+            },
+            C::Srgb => (),
+        }
+        unsafe { gl.EnableVertexAttribArray(slot as gl::types::GLuint) };
+        if self.share.capabilities.instance_rate_supported {
+            unsafe { gl.VertexAttribDivisor(slot as gl::types::GLuint,
+                instance_rate as gl::types::GLuint) };
+        }else if instance_rate != 0 {
+            error!("Instanced arrays are not supported");
+        }
+    }
+
+    fn bind_attribute_old(&mut self, slot: d::AttributeSlot, buffer: Buffer,
+                          format: d::attrib::Format) {
         use gfx_core::attrib::{Type, IntSize, IntSubType, FloatSize, FloatSubType, SignFlag};
         let gl_type = match format.elem_type {
             Type::Int(_, IntSize::U8, SignFlag::Unsigned)  => gl::UNSIGNED_BYTE,
@@ -407,8 +472,8 @@ impl Device {
         unsafe { gl.EnableVertexAttribArray(slot as gl::types::GLuint) };
         if self.share.capabilities.instance_rate_supported {
             unsafe { gl.VertexAttribDivisor(slot as gl::types::GLuint,
-                instance_rate as gl::types::GLuint) };
-        }else if instance_rate != 0 {
+                format.instance_rate as gl::types::GLuint) };
+        }else if format.instance_rate != 0 {
             error!("Instanced arrays are not supported");
         }
     }
@@ -559,7 +624,7 @@ impl Device {
                 }
             },
             Command::BindAttribute(slot, buffer, format) => {
-                self.bind_attribute(slot, buffer, (format, format.instance_rate));
+                self.bind_attribute_old(slot, buffer, format);
             },
             Command::BindIndex(buffer) => {
                 let gl = &self.share.context;
