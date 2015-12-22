@@ -442,7 +442,7 @@ pub trait Factory<R: Resources> {
         }
         assert!(levels.0 <= levels.1);
         let desc = tex::ViewDesc {
-            channel: T::get_format().1.ty,
+            channel: <T::Channel as format::ChannelTyped>::get_channel_type(),
             min: levels.0,
             max: levels.1,
         };

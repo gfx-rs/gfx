@@ -153,7 +153,11 @@ pub trait BlendChannel: RenderChannel {}
 
 pub trait Formatted {
     type Surface: SurfaceTyped;
-    fn get_format() -> Format;
+    type Channel: ChannelTyped;
+    fn get_format() -> Format {
+        Format(Self::Surface::get_surface_type(),
+            Self::Channel::get_channel_type().into())
+    }
 }
 pub trait BufferFormat: Formatted {}
 pub trait DepthStencilFormat: Formatted {}
@@ -163,15 +167,29 @@ pub trait BlendFormat: RenderFormat {}
 
 impl<S: SurfaceTyped, C: ChannelTyped> Formatted for (S, C) {
     type Surface = S;
-    fn get_format() -> Format {
-        Format(S::get_surface_type(), C::get_channel_type().into())
-    }
+    type Channel = C;
 }
-impl<S: BufferSurface, C: ChannelTyped> BufferFormat for (S, C) {}
-impl<S: DepthStencilSurface, C: RenderChannel> DepthStencilFormat for (S, C) {}
-impl<S: TextureSurface, C: TextureChannel> TextureFormat for (S, C) {}
-impl<S: RenderSurface, C: RenderChannel> RenderFormat for (S, C) {}
-impl<S: RenderSurface, C: BlendChannel> BlendFormat for (S, C) {}
+
+impl<F: Formatted> BufferFormat for F where
+    F::Surface: BufferSurface,
+    F::Channel: ChannelTyped,
+{}
+impl<F: Formatted> DepthStencilFormat for F where
+    F::Surface: DepthStencilSurface,
+    F::Channel: RenderChannel,
+{}
+impl<F: Formatted> TextureFormat for F where
+    F::Surface: TextureSurface,
+    F::Channel: TextureChannel,
+{}
+impl<F: Formatted> RenderFormat for F where
+    F::Surface: RenderSurface,
+    F::Channel: RenderChannel,
+{}
+impl<F: Formatted> BlendFormat for F where
+    F::Surface: RenderSurface,
+    F::Channel: BlendChannel,
+{}
 
 macro_rules! alias {
     { $( $name:ident = $ty:ty, )* } => {
@@ -215,13 +233,11 @@ alias! {
 }
 
 macro_rules! impl_format {
-    { $($ty:ty = $surface:ident . $channel:ident,)* } => {
+    { $( $ty:ty = $surface:ident . $channel:ident ,)* } => {
         $(
             impl Formatted for $ty {
                 type Surface = $surface;
-                fn get_format() -> Format {
-                    <($surface, $channel) as Formatted>::get_format()
-                }
+                type Channel = $channel;
             }
         )*
     }
@@ -289,6 +305,6 @@ impl_formats_32bit! {
 
 pub type Rgba8 = [U8Norm; 4]; //(R8_G8_B8_A8, UintNormalized);
 pub type Rgb10a2F = (R10_G10_B10_A2, Float);
-pub type Rgba16F = (R16_G16_B16_A16, Float);
+pub type Rgba16F = [F16; 4]; //(R16_G16_B16_A16, Float);
 pub type Rgba32F = [f32; 4]; //(R32_G32_B32_A32, Float);
 pub type DepthStencil = (D24_S8, UintNormalized);
