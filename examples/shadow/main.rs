@@ -233,7 +233,7 @@ fn create_scene<D, F>(_: &D, factory: &mut F)
         height: 512,
         depth: MAX_LIGHTS as gfx::tex::Size,
         levels: 1,
-        kind: gfx::tex::Kind::D2Array,
+        kind: gfx::tex::Kind::D2Array(gfx::tex::AaMode::Single),
         format: gfx::tex::Format::DEPTH24,
     }).unwrap();
 

@@ -109,10 +109,27 @@ pub type NumFragments = u8;
 /// Describes the configuration of samples inside each texel.
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 pub enum AaMode {
-    /// MultiSampled Anti-Aliasing
-    Msaa(NumSamples),
-    /// Enhanced Quality Anti-Aliasing
-    Eqaa(NumSamples, NumFragments),
+    /// No additional sample information
+    Single,
+    /// MultiSampled Anti-Aliasing (MSAA)
+    Multi(NumSamples),
+    /// Coverage Sampling Anti-Aliasing (CSAA/EQAA)
+    Coverage(NumSamples, NumFragments),
+}
+
+impl AaMode {
+    /// Return the number of actual data fragments stored per texel.
+    pub fn get_num_fragments(&self) -> NumFragments {
+        match *self {
+            AaMode::Single => 1,
+            AaMode::Multi(n) => n,
+            AaMode::Coverage(_, nf) => nf,
+        }
+    }
+    /// Return true if the surface has to be resolved before sampling.
+    pub fn needs_resolve(&self) -> bool {
+        self.get_num_fragments() == 1
+    }
 }
 
 /// Describes the color components of each texel.
@@ -323,7 +340,7 @@ pub struct SurfaceInfo {
     pub width: Size,
     pub height: Size,
     pub format: Format,
-    pub aa_mode: Option<AaMode>,
+    pub aa_mode: AaMode,
 }
 
 /// How to [filter](https://en.wikipedia.org/wiki/Texture_filtering) the
@@ -377,15 +394,10 @@ pub enum Kind {
     /// in a different row are not sampled.
     D1Array,
     /// A traditional 2D texture, with rows arranged contiguously.
-    D2,
+    D2(AaMode),
     /// An array of 2D textures. Equivalent to Texture3D except that texels in
     /// a different depth level are not sampled.
-    D2Array,
-    /// A multi-sampled 2D texture. Each pixel may have more than one data value
-    /// (sample) associated with it.
-    D2MultiSample(AaMode),
-    /// A array of multi-sampled 2D textures.
-    D2MultiSampleArray(AaMode),
+    D2Array(AaMode),
     /// A set of 6 2D textures, one for each face of a cube.
     ///
     /// When creating a cube texture, the face is ignored, and storage for all 6 faces is created.
@@ -397,11 +409,11 @@ pub enum Kind {
 
 impl Kind {
     /// Return the anti-aliasing mode of the texture
-    pub fn get_aa_mode(&self) -> Option<AaMode> {
+    pub fn get_aa_mode(&self) -> AaMode {
         match *self {
-            Kind::D2MultiSample(aa) => Some(aa),
-            Kind::D2MultiSampleArray(aa) => Some(aa),
-            _ => None,
+            Kind::D2(aa) => aa,
+            Kind::D2Array(aa) => aa,
+            _ => AaMode::Single,
         }
     }
 }
@@ -454,7 +466,7 @@ impl TextureInfo {
             height: 0,
             depth: 0,
             levels: !0,
-            kind: Kind::D2,
+            kind: Kind::D2(AaMode::Single),
             format: RGBA8,
         }
     }
@@ -466,7 +478,7 @@ impl TextureInfo {
         self.depth <= img.zoffset + img.depth &&
         self.format == img.format &&
         img.mipmap < self.levels &&
-        self.kind.get_aa_mode().is_none()
+        self.kind.get_aa_mode() == AaMode::Single
     }
 }
 
@@ -589,7 +601,6 @@ pub struct Descriptor {
     pub levels: u8,
     pub kind: Kind,
     pub format: format::SurfaceType,
-    pub aa_mode: Option<AaMode>,
     pub bind: Bind,
 }
 

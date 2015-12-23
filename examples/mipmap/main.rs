@@ -64,7 +64,7 @@ fn make_texture<R, F>(factory: &mut F) -> gfx::shade::TextureParam<R>
         height: 4,
         depth: 1,
         levels: 3,
-        kind: gfx::tex::Kind::D2,
+        kind: gfx::tex::Kind::D2(gfx::tex::AaMode::Single),
         format: gfx::tex::Format::SRGB8,
     };
 

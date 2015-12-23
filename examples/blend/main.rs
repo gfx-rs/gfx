@@ -56,7 +56,7 @@ fn load_texture<R, F>(factory: &mut F, data: &[u8]) -> Result<gfx::handle::Textu
         height: height as u16,
         depth: 1,
         levels: 1,
-        kind: gfx::tex::Kind::D2,
+        kind: gfx::tex::Kind::D2(gfx::tex::AaMode::Single),
         format: fmt
     };
 

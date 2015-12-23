@@ -301,6 +301,8 @@ impl Device {
         // create the main FBO surface proxies
         let mut handles = handle::Manager::new();
         let main_fbo = handles.make_frame_buffer(0);
+        // this is pretty rough, we need to be using the actual
+        // parameters given to WGL/EGL
         let texture = handles.make_new_texture(
             NewTexture::Surface(0),
             d::tex::Descriptor {
@@ -308,9 +310,8 @@ impl Device {
                 height: 0,
                 depth: 0,
                 levels: 0,
-                kind: d::tex::Kind::D2,
+                kind: d::tex::Kind::D2(d::tex::AaMode::Single),
                 format: d::format::SurfaceType::R8_G8_B8_A8,
-                aa_mode: None,
                 bind: d::factory::RENDER_TARGET,
             },
         );
@@ -690,7 +691,7 @@ impl Device {
                     gl::TEXTURE0 + slot as gl::types::GLenum,
                     kind, texture);
                 match (anchor, kind.get_aa_mode(), sampler) {
-                    (anchor, None, Some(s)) => {
+                    (anchor, d::tex::AaMode::Single, Some(s)) => {
                         if self.share.capabilities.sampler_objects_supported {
                             unsafe { gl.BindSampler(slot as gl::types::GLenum, s.object) };
                         } else {
@@ -698,7 +699,7 @@ impl Device {
                             tex::bind_sampler(gl, anchor, &s.info);
                         }
                     },
-                    (_, Some(_), Some(_)) =>
+                    (_, _, Some(_)) =>
                         error!("Unable to bind a multi-sampled texture with a sampler"),
                     (_, _, _) => (),
                 }

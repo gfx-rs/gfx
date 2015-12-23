@@ -108,7 +108,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
             height: height,
             depth: 1,
             levels: 1,
-            kind: tex::Kind::D2,
+            kind: tex::Kind::D2(tex::AaMode::Single),
             format: tex::RGBA8,
         })
     }
@@ -121,7 +121,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
             height: height,
             depth: 1,
             levels: 99,
-            kind: tex::Kind::D2,
+            kind: tex::Kind::D2(tex::AaMode::Single),
             format: tex::RGBA8,
         };
         match self.create_texture_static(info, data) {
@@ -141,7 +141,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
             height: height,
             depth: 0,
             levels: 1,
-            kind: tex::Kind::D2,
+            kind: tex::Kind::D2(tex::AaMode::Single),
             format: tex::Format::DEPTH24_STENCIL8,
         })
     }

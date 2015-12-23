@@ -274,9 +274,8 @@ pub trait Factory<R: Resources> {
             height: height,
             depth: 0,
             levels: if mipmap {99} else {1},
-            kind: tex::Kind::D2,
+            kind: tex::Kind::D2(tex::AaMode::Single),
             format: S::get_surface_type(),
-            aa_mode: None,
             bind: bind,
         };
         let raw = try!(self.create_new_texture_raw(desc));
@@ -338,9 +337,8 @@ pub trait Factory<R: Resources> {
             height: height,
             depth: 0,
             levels: if mipmap {99} else {1},
-            kind: tex::Kind::D2,
+            kind: tex::Kind::D2(tex::AaMode::Single),
             format: <T::Surface as format::SurfaceTyped>::get_surface_type(),
-            aa_mode: None,
             bind: SHADER_RESOURCE,
         };
         //todo: check sizes

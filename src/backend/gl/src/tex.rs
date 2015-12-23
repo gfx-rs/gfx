@@ -33,10 +33,10 @@ fn create_kind_to_gl(kind: Kind) -> GLenum {
     match kind {
         Kind::D1 => gl::TEXTURE_1D,
         Kind::D1Array => gl::TEXTURE_1D_ARRAY,
-        Kind::D2 => gl::TEXTURE_2D,
-        Kind::D2Array => gl::TEXTURE_2D_ARRAY,
-        Kind::D2MultiSample(_) => gl::TEXTURE_2D_MULTISAMPLE,
-        Kind::D2MultiSampleArray(_) => gl::TEXTURE_2D_MULTISAMPLE_ARRAY,
+        Kind::D2(AaMode::Single) => gl::TEXTURE_2D,
+        Kind::D2(_) => gl::TEXTURE_2D_MULTISAMPLE,
+        Kind::D2Array(AaMode::Single) => gl::TEXTURE_2D_ARRAY,
+        Kind::D2Array(_) => gl::TEXTURE_2D_MULTISAMPLE_ARRAY,
         Kind::Cube(CubeFace::PosZ) => gl::TEXTURE_CUBE_MAP_POSITIVE_Z,
         Kind::Cube(CubeFace::NegZ) => gl::TEXTURE_CUBE_MAP_NEGATIVE_Z,
         Kind::Cube(CubeFace::PosX) => gl::TEXTURE_CUBE_MAP_POSITIVE_X,
@@ -304,7 +304,7 @@ fn set_mipmap_range(gl: &gl::Gl, target: GLenum, (base, max): (u8, u8)) { unsafe
     gl.TexParameteri(target, gl::TEXTURE_MAX_LEVEL, max as GLint);
 }}
 
-pub fn make_surface_impl(gl: &gl::Gl, format: GLenum, width: Size, height: Size, aa: Option<AaMode>)
+pub fn make_surface_impl(gl: &gl::Gl, format: GLenum, width: Size, height: Size, aa: AaMode)
                          -> Result<Surface, SurfaceError> {
     let mut name = 0 as GLuint;
     unsafe {
@@ -316,7 +316,7 @@ pub fn make_surface_impl(gl: &gl::Gl, format: GLenum, width: Size, height: Size,
         gl.BindRenderbuffer(target, name);
     }
     match aa {
-        None => unsafe {
+        AaMode::Single => unsafe {
             gl.RenderbufferStorage(
                 target,
                 format,
@@ -324,7 +324,7 @@ pub fn make_surface_impl(gl: &gl::Gl, format: GLenum, width: Size, height: Size,
                 height as GLsizei
             );
         },
-        Some(AaMode::Msaa(samples)) => unsafe {
+        AaMode::Multi(samples) => unsafe {
             gl.RenderbufferStorageMultisample(
                 target,
                 samples as GLsizei,
@@ -333,7 +333,7 @@ pub fn make_surface_impl(gl: &gl::Gl, format: GLenum, width: Size, height: Size,
                 height as GLsizei
             );
         },
-        Some(_) => return Err(SurfaceError::UnsupportedFormat),
+        AaMode::Coverage(_, _) => return Err(SurfaceError::UnsupportedFormat),
     }
 
     Ok(name)
@@ -357,7 +357,7 @@ pub fn make_surface(gl: &gl::Gl, desc: &Descriptor, cty: ChannelType) ->
         Ok(f) => f,
         Err(_) => return Err(SurfaceError::UnsupportedFormat),
     };
-    make_surface_impl(gl, fmt, desc.width, desc.height, desc.aa_mode)
+    make_surface_impl(gl, fmt, desc.width, desc.height, desc.kind.get_aa_mode())
 }
 
 /// Create a texture, assuming TexStorage* isn't available.
@@ -404,7 +404,7 @@ pub fn make_without_storage(gl: &gl::Gl, info: &TextureInfo) ->
                 ::std::ptr::null()
             );
         },
-        Kind::D2 => unsafe {
+        Kind::D2(AaMode::Single) => unsafe {
             gl.TexImage2D(
                 target,
                 0,
@@ -417,7 +417,7 @@ pub fn make_without_storage(gl: &gl::Gl, info: &TextureInfo) ->
                 ::std::ptr::null()
             );
         },
-        Kind::D2MultiSample(AaMode::Msaa(samples)) => unsafe {
+        Kind::D2(AaMode::Multi(samples)) => unsafe {
             gl.TexImage2DMultisample(
                 target,
                 samples as GLsizei,
@@ -444,7 +444,7 @@ pub fn make_without_storage(gl: &gl::Gl, info: &TextureInfo) ->
                 )};
             }
         },
-        Kind::D2Array | Kind::D3 => unsafe {
+        Kind::D2Array(AaMode::Single) | Kind::D3 => unsafe {
             gl.TexImage3D(
                 target,
                 0,
@@ -458,7 +458,7 @@ pub fn make_without_storage(gl: &gl::Gl, info: &TextureInfo) ->
                 ::std::ptr::null()
             );
         },
-        Kind::D2MultiSampleArray(AaMode::Msaa(samples)) => unsafe {
+        Kind::D2Array(AaMode::Multi(samples)) => unsafe {
             gl.TexImage3DMultisample(
                 target,
                 samples as GLsizei,
@@ -526,7 +526,7 @@ pub fn make_with_storage(gl: &gl::Gl, info: &TextureInfo) ->
                 info.height as GLsizei
             );
         },
-        Kind::D2 | Kind::Cube(_) => unsafe {
+        Kind::D2(AaMode::Single) | Kind::Cube(_) => unsafe {
             gl.TexStorage2D(
                 // to create storage for a texture cube, we don't do individual faces
                 match info.kind {
@@ -539,7 +539,7 @@ pub fn make_with_storage(gl: &gl::Gl, info: &TextureInfo) ->
                 info.height as GLsizei
             );
         },
-        Kind::D2Array => unsafe {
+        Kind::D2Array(AaMode::Single) => unsafe {
             gl.TexStorage3D(
                 target,
                 min(info.levels, mip_level2(info.width, info.height)),
@@ -549,7 +549,7 @@ pub fn make_with_storage(gl: &gl::Gl, info: &TextureInfo) ->
                 info.depth as GLsizei
             );
         },
-        Kind::D2MultiSample(AaMode::Msaa(samples)) => unsafe {
+        Kind::D2(AaMode::Multi(samples)) => unsafe {
             gl.TexStorage2DMultisample(
                 target,
                 samples as GLsizei,
@@ -559,7 +559,7 @@ pub fn make_with_storage(gl: &gl::Gl, info: &TextureInfo) ->
                 fixed_sample_locations
             );
         },
-        Kind::D2MultiSampleArray(AaMode::Msaa(samples)) => unsafe {
+        Kind::D2Array(AaMode::Multi(samples)) => unsafe {
             gl.TexStorage3DMultisample(
                 target,
                 samples as GLsizei,
@@ -649,7 +649,7 @@ pub fn update_texture_impl<F>(gl: &gl::Gl, kind: Kind, target: GLenum, pix: GLen
                 data
             );
         },
-        Kind::D1Array | Kind::D2 => unsafe {
+        Kind::D1Array | Kind::D2(AaMode::Single) => unsafe {
             gl.TexSubImage2D(
                 target,
                 img.mipmap as GLint,
@@ -677,7 +677,7 @@ pub fn update_texture_impl<F>(gl: &gl::Gl, kind: Kind, target: GLenum, pix: GLen
                 data
             );
         },
-        Kind::D2Array | Kind::D3 => unsafe {
+        Kind::D2Array(AaMode::Single) | Kind::D3 => unsafe {
             gl.TexSubImage3D(
                 target,
                 img.mipmap as GLint,
@@ -692,8 +692,7 @@ pub fn update_texture_impl<F>(gl: &gl::Gl, kind: Kind, target: GLenum, pix: GLen
                 data
             );
         },
-        Kind::D2MultiSample(_) | Kind::D2MultiSampleArray(_) =>
-            return Err(TextureError::UnsupportedSamples),
+        _ => return Err(TextureError::UnsupportedSamples),
     })
 }
 
@@ -758,7 +757,7 @@ pub fn compressed_update(gl: &gl::Gl, kind: Kind, target: GLenum, img: &ImageInf
                 data
             );
         },
-        Kind::D1Array | Kind::D2 => unsafe {
+        Kind::D1Array | Kind::D2(AaMode::Single) => unsafe {
             gl.CompressedTexSubImage2D(
                 target,
                 img.mipmap as GLint,
@@ -786,7 +785,7 @@ pub fn compressed_update(gl: &gl::Gl, kind: Kind, target: GLenum, img: &ImageInf
                 data
             );
         },
-        Kind::D2Array | Kind::D3 => unsafe {
+        Kind::D2Array(AaMode::Single) | Kind::D3 => unsafe {
             gl.CompressedTexSubImage3D(
                 target,
                 img.mipmap as GLint,
@@ -801,8 +800,7 @@ pub fn compressed_update(gl: &gl::Gl, kind: Kind, target: GLenum, img: &ImageInf
                 data
             );
         },
-        Kind::D2MultiSample(_) | Kind::D2MultiSampleArray(_) =>
-            return Err(TextureError::UnsupportedSamples),
+        _ => return Err(TextureError::UnsupportedSamples),
     }
 
     Ok(())
@@ -876,7 +874,7 @@ pub fn make_sampler(gl: &gl::Gl, info: &SamplerInfo) -> Sampler { unsafe {
 
 pub fn generate_mipmap(gl: &gl::Gl, kind: Kind, name: Texture) { unsafe {
     //can't fail here, but we need to check for integer formats too
-    debug_assert!(kind.get_aa_mode().is_none());
+    debug_assert!(!kind.get_aa_mode().needs_resolve());
     let target = bind_kind_to_gl(kind);
     gl.BindTexture(target, name);
     gl.GenerateMipmap(target);

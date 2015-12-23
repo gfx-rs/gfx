@@ -403,7 +403,7 @@ impl d::Factory<R> for Factory {
                 Ok(name) => NewTexture::Texture(name),
                 Err(TextureError::UnsupportedGamma) => return Err(Error::Gamma),
                 Err(TextureError::UnsupportedSamples) => {
-                    let aa = desc.kind.get_aa_mode().unwrap_or(t::AaMode::Msaa(0));
+                    let aa = desc.kind.get_aa_mode();
                     return Err(Error::Samples(aa));
                 },
                 Err(_) => return Err(Error::Format(desc.format)),

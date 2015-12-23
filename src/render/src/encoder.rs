@@ -530,7 +530,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
                     let texture = self.handles.ref_texture(tex).clone();
                     let s_param = match sampler {
                         &Some(ref s) => {
-                            if tex.get_info().kind.get_aa_mode().is_some() {
+                            if tex.get_info().kind.get_aa_mode().needs_resolve() {
                                 error!("A sampler provided for an AA texture: {}", var.name);
                             }
                             Some(self.handles.ref_sampler(s).clone())

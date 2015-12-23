@@ -284,7 +284,7 @@ fn create_g_buffer<R: gfx::Resources, F: Factory<R>>(
         height: height,
         depth: 1,
         levels: 1,
-        kind: gfx::tex::Kind::D2,
+        kind: gfx::tex::Kind::D2(gfx::tex::AaMode::Single),
         format: gfx::tex::Format::Float(gfx::tex::Components::RGBA, gfx::attrib::FloatSize::F32),
     };
     let texture_info_depth = gfx::tex::TextureInfo {
@@ -292,7 +292,7 @@ fn create_g_buffer<R: gfx::Resources, F: Factory<R>>(
         height: height,
         depth: 1,
         levels: 1,
-        kind: gfx::tex::Kind::D2,
+        kind: gfx::tex::Kind::D2(gfx::tex::AaMode::Single),
         format: gfx::tex::Format::DEPTH24_STENCIL8,
     };
     let texture_pos     = factory.create_texture(texture_info_float).unwrap();
@@ -322,7 +322,7 @@ fn create_res_buffer<R: gfx::Resources, F: Factory<R>>(
         height: height,
         depth: 1,
         levels: 1,
-        kind: gfx::tex::Kind::D2,
+        kind: gfx::tex::Kind::D2(gfx::tex::AaMode::Single),
         format: gfx::tex::Format::Float(gfx::tex::Components::RGBA, gfx::attrib::FloatSize::F32),
     };
 
