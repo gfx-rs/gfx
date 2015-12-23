@@ -20,7 +20,7 @@ use gfx_core::tex::{Format, Kind, TextureError, SurfaceError,
                     SurfaceInfo, TextureInfo, SamplerInfo,
                     ImageInfo, ImageInfoCommon, NewImageInfo,
                     AaMode, Components, FilterMethod, WrapMode,
-                    Size, Descriptor};
+                    Size, Level, Descriptor};
 
 
 /// A token produced by the `bind_texture` that allows following up
@@ -380,6 +380,7 @@ fn format_to_glfull(format: NewFormat) -> Result<GLenum, ()> {
             C::Float => gl::RGBA32F,
             _ => return Err(()),
         },
+        // depth-stencil
         S::D24_S8 => gl::DEPTH24_STENCIL8,
     })
 }
@@ -448,7 +449,7 @@ pub fn make_surface(gl: &gl::Gl, desc: &Descriptor, cty: ChannelType) ->
 /// Create a texture, assuming TexStorage* isn't available.
 pub fn make_without_storage(gl: &gl::Gl, info: &TextureInfo) ->
                             Result<Texture, TextureError> {
-    let (name, target) = make_texture(gl, info);
+    let (name, target) = make_texture(gl, info.kind);
 
     let fmt = match old_format_to_gl(info.format) {
         Ok(f) => f as GLint,
@@ -563,114 +564,124 @@ pub fn make_without_storage(gl: &gl::Gl, info: &TextureInfo) ->
 }
 
 /// Create a texture, assuming TexStorage is available.
-pub fn make_with_storage(gl: &gl::Gl, info: &TextureInfo) ->
-                         Result<Texture, TextureError> {
+pub fn make_with_storage_impl(gl: &gl::Gl, kind: Kind, format: GLenum,
+                              width: Size, height: Size, depth: Size,
+                              levels: Level, fixed_sample_locations: bool)
+                              -> Result<Texture, TextureError> {
     use std::cmp::max;
 
     fn min(a: u8, b: u8) -> GLint {
         ::std::cmp::min(a, b) as GLint
     }
-
     fn mip_level1(w: u16) -> u8 {
         ((w as f32).log2() + 1.0) as u8
     }
-
     fn mip_level2(w: u16, h: u16) -> u8 {
         ((max(w, h) as f32).log2() + 1.0) as u8
     }
-
     fn mip_level3(w: u16, h: u16, d: u16) -> u8 {
         ((max(w, max(h, d)) as f32).log2() + 1.0) as u8
     }
 
-    let (name, target) = make_texture(gl, info);
-
-    let fmt = match old_format_to_gl(info.format) {
-        Ok(f) => f,
-        Err(_) => return Err(TextureError::UnsupportedFormat),
-    };
-
-    // since it's a texture, we want to read from it
-    let fixed_sample_locations = gl::TRUE;
-
-    match info.kind {
+    let (name, target) = make_texture(gl, kind);
+    match kind {
         Kind::D1 => unsafe {
             gl.TexStorage1D(
                 target,
-                min(info.levels, mip_level1(info.width)),
-                fmt,
-                info.width as GLsizei
+                min(levels, mip_level1(width)),
+                format,
+                width as GLsizei
             );
         },
         Kind::D1Array => unsafe {
             gl.TexStorage2D(
                 target,
-                min(info.levels, mip_level1(info.width)),
-                fmt,
-                info.width as GLsizei,
-                info.height as GLsizei
+                min(levels, mip_level1(width)),
+                format,
+                width as GLsizei,
+                height as GLsizei
             );
         },
         Kind::D2(AaMode::Single) | Kind::Cube(_) => unsafe {
             gl.TexStorage2D(
-                // to create storage for a texture cube, we don't do individual faces
-                match info.kind {
-                    Kind::Cube(_) => gl::TEXTURE_CUBE_MAP,
-                    _ => target
-                },
-                min(info.levels, mip_level2(info.width, info.height)),
-                fmt,
-                info.width as GLsizei,
-                info.height as GLsizei
+                target,
+                min(levels, mip_level2(width, height)),
+                format,
+                width as GLsizei,
+                height as GLsizei
             );
         },
         Kind::D2Array(AaMode::Single) => unsafe {
             gl.TexStorage3D(
                 target,
-                min(info.levels, mip_level2(info.width, info.height)),
-                fmt,
-                info.width as GLsizei,
-                info.height as GLsizei,
-                info.depth as GLsizei
+                min(levels, mip_level2(width, height)),
+                format,
+                width as GLsizei,
+                height as GLsizei,
+                depth as GLsizei
             );
         },
         Kind::D2(AaMode::Multi(samples)) => unsafe {
             gl.TexStorage2DMultisample(
                 target,
                 samples as GLsizei,
-                fmt as GLenum,
-                info.width as GLsizei,
-                info.height as GLsizei,
-                fixed_sample_locations
+                format as GLenum,
+                width as GLsizei,
+                height as GLsizei,
+                if fixed_sample_locations {gl::TRUE} else {gl::FALSE}
             );
         },
         Kind::D2Array(AaMode::Multi(samples)) => unsafe {
             gl.TexStorage3DMultisample(
                 target,
                 samples as GLsizei,
-                fmt as GLenum,
-                info.width as GLsizei,
-                info.height as GLsizei,
-                info.depth as GLsizei,
-                fixed_sample_locations
+                format as GLenum,
+                width as GLsizei,
+                height as GLsizei,
+                depth as GLsizei,
+                if fixed_sample_locations {gl::TRUE} else {gl::FALSE}
             );
         },
         Kind::D3 => unsafe {
             gl.TexStorage3D(
                 target,
-                min(info.levels, mip_level3(info.width, info.height, info.depth)),
-                fmt,
-                info.width as GLsizei,
-                info.height as GLsizei,
-                info.depth as GLsizei
+                min(levels, mip_level3(width, height, depth)),
+                format,
+                width as GLsizei,
+                height as GLsizei,
+                depth as GLsizei
             );
         },
         _ => return Err(TextureError::UnsupportedSamples),
     }
 
-    set_mipmap_range(gl, target, (0, info.levels - 1));
+    set_mipmap_range(gl, target, (0, levels - 1));
 
     Ok(name)
+}
+
+/// Create a texture using the old `TextureInfo`, assuming TexStorage is available.
+pub fn make_with_storage_old(gl: &gl::Gl, info: &TextureInfo) ->
+                         Result<Texture, TextureError> {
+    let gl_format = match old_format_to_gl(info.format) {
+        Ok(f) => f,
+        Err(_) => return Err(TextureError::UnsupportedFormat),
+    };
+    make_with_storage_impl(gl, info.kind, gl_format,
+                           info.width, info.height, info.depth,
+                           info.levels, true)
+}
+
+pub fn make_with_storage(gl: &gl::Gl, desc: &Descriptor, cty: ChannelType) ->
+                         Result<Texture, TextureError> {
+    let format = NewFormat(desc.format, cty.into());
+    let gl_format = match format_to_glfull(format) {
+        Ok(f) => f,
+        Err(_) => return Err(TextureError::UnsupportedFormat),
+    };
+    make_with_storage_impl(gl, desc.kind, gl_format,
+                           desc.width, desc.height, desc.depth,
+                           desc.levels, true)
 }
 
 /// Bind a texture to the specified slot
@@ -891,13 +902,13 @@ pub fn compressed_update(gl: &gl::Gl, kind: Kind, target: GLenum, img: &ImageInf
     Ok(())
 }
 /// Common texture creation routine, just creates and binds.
-fn make_texture(gl: &gl::Gl, info: &TextureInfo) -> (Texture, GLuint) {
+fn make_texture(gl: &gl::Gl, kind: Kind) -> (Texture, GLuint) {
     let mut name = 0 as GLuint;
     unsafe {
         gl.GenTextures(1, &mut name);
     }
 
-    let k = bind_kind_to_gl(info.kind);
+    let k = bind_kind_to_gl(kind);
     unsafe { gl.BindTexture(k, name) };
     (name, k)
 }

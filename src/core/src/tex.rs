@@ -26,7 +26,7 @@ pub use attrib::{FloatSize, IntSubType};
 use factory::Bind;
 use format;
 use state;
-use target::Level;
+pub use target::Level;
 
 /// Pure texture object creation error.
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -434,7 +434,7 @@ pub struct TextureInfo {
     /// Mipmap levels at equal or above `levels` can not be loaded or sampled
     /// by the shader. width and height of each consecutive mipmap level is
     /// halved, starting from level 0.
-    pub levels: u8,
+    pub levels: Level,
     pub kind: Kind,
     pub format: Format,
 }
@@ -598,7 +598,7 @@ pub struct Descriptor {
     pub width: Size,
     pub height: Size,
     pub depth: Size,
-    pub levels: u8,
+    pub levels: Level,
     pub kind: Kind,
     pub format: format::SurfaceType,
     pub bind: Bind,

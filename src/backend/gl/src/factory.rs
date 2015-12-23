@@ -377,7 +377,7 @@ impl d::Factory<R> for Factory {
         }
         let gl = &self.share.context;
         let name = if caps.immutable_storage_supported {
-            tex::make_with_storage(gl, &info)
+            tex::make_with_storage_old(gl, &info)
         } else {
             tex::make_without_storage(gl, &info)
         };
@@ -391,12 +391,13 @@ impl d::Factory<R> for Factory {
         if desc.width == 0 || desc.height == 0 || desc.levels == 0 {
             return Err(Error::Size(0))
         }
+        let cty = ChannelType::UintNormalized; //TODO
         let info = descriptor_to_texture_info(&desc);
         let gl = &self.share.context;
         let object = if desc.bind.intersects(f::SHADER_RESOURCE | f::UNORDERED_ACCESS) {
             use gfx_core::tex::TextureError;
             let result = if caps.immutable_storage_supported {
-                tex::make_with_storage(gl, &info)
+                tex::make_with_storage(gl, &desc, cty)
             } else {
                 tex::make_without_storage(gl, &info)
             };
@@ -411,7 +412,6 @@ impl d::Factory<R> for Factory {
             }
         }else {
             use gfx_core::tex::SurfaceError;
-            let cty = ChannelType::UintNormalized; //TODO
             let result = tex::make_surface(gl, &desc, cty);
             match result {
                 Ok(name) => NewTexture::Surface(name),
