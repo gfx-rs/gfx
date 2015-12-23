@@ -436,7 +436,7 @@ pub fn main() {
         gfx::BufferRole::Uniform);
 
     let (mut light, mut emitter) = {
-        use gfx::core::Phantom;
+        use gfx::core::factory::Phantom;
         let vertex_data = [
             // top (0, 0, 1)
             CubeVertex { pos: Floater::cast3([-1, -1,  1]) },

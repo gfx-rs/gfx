@@ -17,27 +17,30 @@ use std::slice;
 
 use {gl, tex};
 use gfx_core as d;
+use gfx_core::factory as f;
+use gfx_core::factory::Phantom;
+use gfx_core::format::{Formatted, SurfaceType};
 use gfx_core::handle;
 use gfx_core::handle::Producer;
 use gfx_core::mapping::Builder;
 use gfx_core::target::{Layer, Level};
-use gfx_core::tex::Size;
+use gfx_core::tex as t;
 
 use command::CommandBuffer;
 use {Resources as R, Share, OutputMerger};
 use {Buffer, FatSampler, NewTexture, PipelineState, ResourceView, TargetView};
 
 
-fn role_to_target(role: d::BufferRole) -> gl::types::GLenum {
+fn role_to_target(role: f::BufferRole) -> gl::types::GLenum {
     match role {
-        d::BufferRole::Vertex  => gl::ARRAY_BUFFER,
-        d::BufferRole::Index   => gl::ELEMENT_ARRAY_BUFFER,
-        d::BufferRole::Uniform => gl::UNIFORM_BUFFER,
+        f::BufferRole::Vertex  => gl::ARRAY_BUFFER,
+        f::BufferRole::Index   => gl::ELEMENT_ARRAY_BUFFER,
+        f::BufferRole::Uniform => gl::UNIFORM_BUFFER,
     }
 }
 
 pub fn update_sub_buffer(gl: &gl::Gl, buffer: Buffer, address: *const u8,
-                         size: usize, offset: usize, role: d::BufferRole) {
+                         size: usize, offset: usize, role: f::BufferRole) {
     let target = role_to_target(role);
     unsafe {
         gl.BindBuffer(target, buffer);
@@ -49,7 +52,7 @@ pub fn update_sub_buffer(gl: &gl::Gl, buffer: Buffer, address: *const u8,
     }
 }
 
-fn surface_type_to_old_format(sf: d::format::SurfaceType) -> d::tex::Format {
+fn surface_type_to_old_format(sf: SurfaceType) -> t::Format {
     use gfx_core::format::SurfaceType as S;
     use gfx_core::tex::{Format, Components, FloatSize, IntSubType};
     match sf {
@@ -70,8 +73,8 @@ fn surface_type_to_old_format(sf: d::format::SurfaceType) -> d::tex::Format {
     }
 }
 
-fn descriptor_to_texture_info(d: &d::tex::Descriptor) -> d::tex::TextureInfo {
-    d::tex::TextureInfo {
+fn descriptor_to_texture_info(d: &t::Descriptor) -> t::TextureInfo {
+    t::TextureInfo {
         width: d.width,
         height: d.height,
         depth: d.depth,
@@ -84,9 +87,9 @@ fn descriptor_to_texture_info(d: &d::tex::Descriptor) -> d::tex::TextureInfo {
 /// A placeholder for a real `Output` implemented by your window.
 pub struct Output {
     /// render frame width.
-    pub width: Size,
+    pub width: t::Size,
     /// render frame height.
-    pub height: Size,
+    pub height: t::Size,
     /// main FBO handle
     handle: handle::FrameBuffer<R>,
 }
@@ -96,7 +99,7 @@ impl d::output::Output<R> for Output {
         Some(&self.handle)
     }
 
-    fn get_size(&self) -> (Size, Size) {
+    fn get_size(&self) -> (t::Size, t::Size) {
         (self.width, self.height)
     }
 
@@ -149,13 +152,13 @@ impl Factory {
         name
     }
 
-    fn init_buffer(&mut self, buffer: Buffer, info: &d::BufferInfo) {
+    fn init_buffer(&mut self, buffer: Buffer, info: &f::BufferInfo) {
         let gl = &self.share.context;
         let target = role_to_target(info.role);
         let usage = match info.usage {
-            d::BufferUsage::Static  => gl::STATIC_DRAW,
-            d::BufferUsage::Dynamic => gl::DYNAMIC_DRAW,
-            d::BufferUsage::Stream  => gl::STREAM_DRAW,
+            f::BufferUsage::Const   => gl::STATIC_DRAW,
+            f::BufferUsage::Dynamic => gl::DYNAMIC_DRAW,
+            f::BufferUsage::Stream  => gl::STREAM_DRAW,
         };
         unsafe {
             gl.BindBuffer(target, buffer);
@@ -190,10 +193,10 @@ impl Factory {
     }
 
     fn view_texture_as_target(&mut self, htex: &handle::RawTexture<R>, level: Level, layer: Option<Layer>)
-                    -> Result<TargetView, d::TargetViewError> {
+                    -> Result<TargetView, f::TargetViewError> {
         match (self.frame_handles.ref_new_texture(htex), layer) {
-            (&NewTexture::Surface(_), Some(_)) => Err(d::TargetViewError::Unsupported),
-            (&NewTexture::Surface(_), None) if level != 0 => Err(d::TargetViewError::Unsupported),
+            (&NewTexture::Surface(_), Some(_)) => Err(f::TargetViewError::Unsupported),
+            (&NewTexture::Surface(_), None) if level != 0 => Err(f::TargetViewError::Unsupported),
             (&NewTexture::Surface(s), None) => Ok(TargetView::Surface(s)),
             (&NewTexture::Texture(t), Some(l)) => Ok(TargetView::TextureLayer(t, level, l)),
             (&NewTexture::Texture(t), None) => Ok(TargetView::Texture(t, level)),
@@ -204,7 +207,7 @@ impl Factory {
         self.share.main_fbo.clone()
     }
 
-    pub fn make_fake_output(&self, w: Size, h: Size) -> Output {
+    pub fn make_fake_output(&self, w: t::Size, h: t::Size) -> Output {
         Output {
             width: w,
             height: h,
@@ -212,13 +215,11 @@ impl Factory {
         }
     }
 
-    pub fn get_main_color<T: d::format::Formatted>(&self) -> handle::RenderTargetView<R, T> {
-        use gfx_core::Phantom;
+    pub fn get_main_color<T: Formatted>(&self) -> handle::RenderTargetView<R, T> {
         Phantom::new(self.share.main_color.clone()) //todo: types
     }
 
-    pub fn get_main_depth_stencil<T: d::format::Formatted>(&self) -> handle::DepthStencilView<R, T> {
-        use gfx_core::Phantom;
+    pub fn get_main_depth_stencil<T: Formatted>(&self) -> handle::DepthStencilView<R, T> {
         Phantom::new(self.share.main_depth_stencil.clone()) //todo: types
     }
 }
@@ -258,10 +259,10 @@ impl d::Factory<R> for Factory {
         CommandBuffer::new(self.create_fbo_internal())
     }
 
-    fn create_buffer_raw(&mut self, size: usize, role: d::BufferRole, usage: d::BufferUsage)
+    fn create_buffer_raw(&mut self, size: usize, role: f::BufferRole, usage: f::BufferUsage)
                          -> handle::RawBuffer<R> {
         let name = self.create_buffer_internal();
-        let info = d::BufferInfo {
+        let info = f::BufferInfo {
             role: role,
             usage: usage,
             size: size,
@@ -270,13 +271,13 @@ impl d::Factory<R> for Factory {
         self.share.handles.borrow_mut().make_buffer(name, info)
     }
 
-    fn create_buffer_static_raw(&mut self, data: &[u8], role: d::BufferRole)
+    fn create_buffer_static_raw(&mut self, data: &[u8], role: f::BufferRole)
                                 -> handle::RawBuffer<R> {
         let name = self.create_buffer_internal();
 
-        let info = d::BufferInfo {
+        let info = f::BufferInfo {
             role: role,
-            usage: d::BufferUsage::Static,
+            usage: f::BufferUsage::Const,
             size: data.len(),
         };
         self.init_buffer(name, &info);
@@ -284,7 +285,7 @@ impl d::Factory<R> for Factory {
         self.share.handles.borrow_mut().make_buffer(name, info)
     }
 
-    fn create_array_buffer(&mut self) -> Result<handle::ArrayBuffer<R>, d::NotSupported> {
+    fn create_array_buffer(&mut self) -> Result<handle::ArrayBuffer<R>, f::NotSupported> {
         if self.share.capabilities.array_buffer_supported {
             let gl = &self.share.context;
             let mut name = 0 as ::ArrayBuffer;
@@ -295,7 +296,7 @@ impl d::Factory<R> for Factory {
             Ok(self.share.handles.borrow_mut().make_array_buffer(name))
         } else {
             error!("\tArray buffer creation unsupported, ignored");
-            Err(d::NotSupported)
+            Err(f::NotSupported)
         }
     }
 
@@ -345,33 +346,33 @@ impl d::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_pso(pso, program))
     }
 
-    fn create_frame_buffer(&mut self) -> Result<handle::FrameBuffer<R>, d::NotSupported> {
+    fn create_frame_buffer(&mut self) -> Result<handle::FrameBuffer<R>, f::NotSupported> {
         if self.share.capabilities.render_targets_supported {
             let name = self.create_fbo_internal();
             Ok(self.share.handles.borrow_mut().make_frame_buffer(name))
         } else {
             error!("No framebuffer objects, can't make a new one!");
-            Err(d::NotSupported)
+            Err(f::NotSupported)
         }
     }
 
-    fn create_surface(&mut self, info: d::tex::SurfaceInfo) ->
-                      Result<handle::Surface<R>, d::tex::SurfaceError> {
+    fn create_surface(&mut self, info: t::SurfaceInfo) ->
+                      Result<handle::Surface<R>, t::SurfaceError> {
         if info.format.does_convert_gamma() && !self.share.capabilities.srgb_color_supported {
-            return Err(d::tex::SurfaceError::UnsupportedGamma)
+            return Err(t::SurfaceError::UnsupportedGamma)
         }
         tex::make_surface(&self.share.context, &info)
             .map(|suf| self.share.handles.borrow_mut().make_surface(suf, info))
     }
 
-    fn create_texture(&mut self, info: d::tex::TextureInfo) ->
-                      Result<handle::Texture<R>, d::tex::TextureError> {
+    fn create_texture(&mut self, info: t::TextureInfo) ->
+                      Result<handle::Texture<R>, t::TextureError> {
         let caps = &self.share.capabilities;
         if info.width == 0 || info.height == 0 || info.levels == 0 {
-            return Err(d::tex::TextureError::InvalidInfo(info))
+            return Err(t::TextureError::InvalidInfo(info))
         }
         if info.format.does_convert_gamma() && !caps.srgb_color_supported {
-            return Err(d::tex::TextureError::UnsupportedGamma)
+            return Err(t::TextureError::UnsupportedGamma)
         }
         let gl = &self.share.context;
         let name = if caps.immutable_storage_supported {
@@ -382,8 +383,8 @@ impl d::Factory<R> for Factory {
         name.map(|tex| self.share.handles.borrow_mut().make_texture(tex, info))
     }
 
-    fn create_new_texture_raw(&mut self, desc: d::tex::Descriptor)
-                              -> Result<handle::RawTexture<R>, d::tex::Error> {
+    fn create_new_texture_raw(&mut self, desc: t::Descriptor)
+                              -> Result<handle::RawTexture<R>, t::Error> {
         use gfx_core::tex::Error;
         let caps = &self.share.capabilities;
         if desc.width == 0 || desc.height == 0 || desc.levels == 0 {
@@ -391,7 +392,7 @@ impl d::Factory<R> for Factory {
         }
         let info = descriptor_to_texture_info(&desc);
         let gl = &self.share.context;
-        let object = if desc.bind.intersects(d::SHADER_RESOURCE | d::UNORDERED_ACCESS) {
+        let object = if desc.bind.intersects(f::SHADER_RESOURCE | f::UNORDERED_ACCESS) {
             use gfx_core::tex::TextureError;
             let result = if caps.immutable_storage_supported {
                 tex::make_with_storage(gl, &info)
@@ -402,7 +403,7 @@ impl d::Factory<R> for Factory {
                 Ok(name) => NewTexture::Texture(name),
                 Err(TextureError::UnsupportedGamma) => return Err(Error::Gamma),
                 Err(TextureError::UnsupportedSamples) => {
-                    let aa = desc.kind.get_aa_mode().unwrap_or(d::tex::AaMode::Msaa(0));
+                    let aa = desc.kind.get_aa_mode().unwrap_or(t::AaMode::Msaa(0));
                     return Err(Error::Samples(aa));
                 },
                 Err(_) => return Err(Error::Format(desc.format)),
@@ -419,23 +420,23 @@ impl d::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_new_texture(object, desc))
     }
 
-    fn create_new_texture_with_data(&mut self, desc: d::tex::Descriptor, data: &[u8])
-                                    -> Result<handle::RawTexture<R>, d::tex::Error> {
+    fn create_new_texture_with_data(&mut self, desc: t::Descriptor, data: &[u8])
+                                    -> Result<handle::RawTexture<R>, t::Error> {
         let kind = desc.kind;
         let img = descriptor_to_texture_info(&desc).into();
         let tex = try!(self.create_new_texture_raw(desc));
         match self.frame_handles.ref_new_texture(&tex) {
-            &NewTexture::Surface(_) => Err(d::tex::Error::Data(0)),
+            &NewTexture::Surface(_) => Err(t::Error::Data(0)),
             &NewTexture::Texture(t) => match tex::update_texture(&self.share.context,
                 kind, t, &img, data.as_ptr(), data.len()) {
                 Ok(_) => Ok(tex),
-                Err(_) => Err(d::tex::Error::Data(0)),
+                Err(_) => Err(t::Error::Data(0)),
             }
         }
     }
 
     fn view_buffer_as_shader_resource_raw(&mut self, hbuf: &handle::RawBuffer<R>)
-                                      -> Result<handle::RawShaderResourceView<R>, d::ResourceViewError> {
+                                      -> Result<handle::RawShaderResourceView<R>, f::ResourceViewError> {
         let gl = &self.share.context;
         let mut name = 0 as gl::types::GLuint;
         let buf_name = *self.frame_handles.ref_buffer(hbuf);
@@ -450,14 +451,14 @@ impl d::Factory<R> for Factory {
     }
 
     fn view_buffer_as_unordered_access_raw(&mut self, _hbuf: &handle::RawBuffer<R>)
-                                       -> Result<handle::RawUnorderedAccessView<R>, d::ResourceViewError> {
-        Err(d::ResourceViewError::Unsupported) //TODO
+                                       -> Result<handle::RawUnorderedAccessView<R>, f::ResourceViewError> {
+        Err(f::ResourceViewError::Unsupported) //TODO
     }
 
-    fn view_texture_as_shader_resource_raw(&mut self, htex: &handle::RawTexture<R>, _desc: d::tex::ViewDesc)
-                                       -> Result<handle::RawShaderResourceView<R>, d::ResourceViewError> {
+    fn view_texture_as_shader_resource_raw(&mut self, htex: &handle::RawTexture<R>, _desc: t::ViewDesc)
+                                       -> Result<handle::RawShaderResourceView<R>, f::ResourceViewError> {
         match self.frame_handles.ref_new_texture(htex) {
-            &NewTexture::Surface(_) => Err(d::ResourceViewError::NoBindFlag),
+            &NewTexture::Surface(_) => Err(f::ResourceViewError::NoBindFlag),
             &NewTexture::Texture(t) => {
                 //TODO: use the view descriptor
                 let view = ResourceView::new_texture(t, htex.get_info().kind);
@@ -467,23 +468,23 @@ impl d::Factory<R> for Factory {
     }
 
     fn view_texture_as_unordered_access_raw(&mut self, _htex: &handle::RawTexture<R>)
-                                        -> Result<handle::RawUnorderedAccessView<R>, d::ResourceViewError> {
-        Err(d::ResourceViewError::Unsupported) //TODO
+                                        -> Result<handle::RawUnorderedAccessView<R>, f::ResourceViewError> {
+        Err(f::ResourceViewError::Unsupported) //TODO
     }
 
     fn view_texture_as_render_target_raw(&mut self, htex: &handle::RawTexture<R>, level: Level, layer: Option<Layer>)
-                                         -> Result<handle::RawRenderTargetView<R>, d::TargetViewError> {
+                                         -> Result<handle::RawRenderTargetView<R>, f::TargetViewError> {
         self.view_texture_as_target(htex, level, layer)
             .map(|view| self.share.handles.borrow_mut().make_rtv(view, htex))
     }
 
     fn view_texture_as_depth_stencil_raw(&mut self, htex: &handle::RawTexture<R>, layer: Option<Layer>)
-                                         -> Result<handle::RawDepthStencilView<R>, d::TargetViewError> {
+                                         -> Result<handle::RawDepthStencilView<R>, f::TargetViewError> {
         self.view_texture_as_target(htex, 0, layer)
             .map(|view| self.share.handles.borrow_mut().make_dsv(view, htex))
     }
 
-    fn create_sampler(&mut self, info: d::tex::SamplerInfo) -> handle::Sampler<R> {
+    fn create_sampler(&mut self, info: t::SamplerInfo) -> handle::Sampler<R> {
         let name = if self.share.capabilities.sampler_objects_supported {
             tex::make_sampler(&self.share.context, &info)
         } else {
@@ -497,9 +498,9 @@ impl d::Factory<R> for Factory {
     }
 
     fn update_buffer_raw(&mut self, buffer: &handle::RawBuffer<R>, data: &[u8],
-                         offset_bytes: usize) -> Result<(), d::BufferUpdateError> {
+                         offset_bytes: usize) -> Result<(), f::BufferUpdateError> {
         if offset_bytes + data.len() > buffer.get_info().size {
-            Err(d::BufferUpdateError::OutOfBounds)
+            Err(f::BufferUpdateError::OutOfBounds)
         } else {
             let raw_handle = *self.frame_handles.ref_buffer(buffer);
             update_sub_buffer(&self.share.context, raw_handle, data.as_ptr(), data.len(),
@@ -509,9 +510,9 @@ impl d::Factory<R> for Factory {
     }
 
     fn update_texture_raw(&mut self, texture: &handle::Texture<R>,
-                          img: &d::tex::ImageInfo, data: &[u8],
-                          kind_override: Option<d::tex::Kind>)
-                          -> Result<(), d::tex::TextureError> {
+                          img: &t::ImageInfo, data: &[u8],
+                          kind_override: Option<t::Kind>)
+                          -> Result<(), t::TextureError> {
 
         // use the specified texture kind if set for this update, otherwise
         // fall back on the kind that was set when the texture was created.
@@ -536,14 +537,14 @@ impl d::Factory<R> for Factory {
     }
 
     fn map_buffer_raw(&mut self, buf: &handle::RawBuffer<R>,
-                      access: d::MapAccess) -> RawMapping {
+                      access: f::MapAccess) -> RawMapping {
         let gl = &self.share.context;
         let raw_handle = *self.frame_handles.ref_buffer(buf);
         unsafe { gl.BindBuffer(gl::ARRAY_BUFFER, raw_handle) };
         let ptr = unsafe { gl.MapBuffer(gl::ARRAY_BUFFER, match access {
-            d::MapAccess::Readable => gl::READ_ONLY,
-            d::MapAccess::Writable => gl::WRITE_ONLY,
-            d::MapAccess::RW => gl::READ_WRITE
+            f::MapAccess::Readable => gl::READ_ONLY,
+            f::MapAccess::Writable => gl::WRITE_ONLY,
+            f::MapAccess::RW => gl::READ_WRITE
         }) } as *mut ::std::os::raw::c_void;
         RawMapping {
             pointer: ptr,
@@ -558,22 +559,19 @@ impl d::Factory<R> for Factory {
 
     fn map_buffer_readable<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
                            -> d::mapping::Readable<T, R, Factory> {
-        use gfx_core::Phantom;
-        let map = self.map_buffer_raw(buf.raw(), d::MapAccess::Readable);
+        let map = self.map_buffer_raw(buf.raw(), f::MapAccess::Readable);
         self.map_readable(map, buf.len())
     }
 
     fn map_buffer_writable<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
                                     -> d::mapping::Writable<T, R, Factory> {
-        use gfx_core::Phantom;
-        let map = self.map_buffer_raw(buf.raw(), d::MapAccess::Writable);
+        let map = self.map_buffer_raw(buf.raw(), f::MapAccess::Writable);
         self.map_writable(map, buf.len())
     }
 
     fn map_buffer_rw<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
                               -> d::mapping::RW<T, R, Factory> {
-        use gfx_core::Phantom;
-        let map = self.map_buffer_raw(buf.raw(), d::MapAccess::RW);
+        let map = self.map_buffer_raw(buf.raw(), f::MapAccess::RW);
         self.map_read_write(map, buf.len())
     }
 }

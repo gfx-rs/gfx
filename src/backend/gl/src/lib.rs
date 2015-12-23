@@ -310,7 +310,7 @@ impl Device {
                 levels: 0,
                 kind: d::tex::Kind::D2,
                 format: d::format::SurfaceType::R8_G8_B8_A8,
-                bind: d::RENDER_TARGET,
+                bind: d::factory::RENDER_TARGET,
             },
         );
         let m_color = handles.make_rtv(TargetView::Surface(0), &texture);
@@ -737,7 +737,7 @@ impl Device {
             Command::UpdateBuffer(buffer, pointer, offset) => {
                 let data = data_buf.get_ref(pointer);
                 factory::update_sub_buffer(&self.share.context, buffer,
-                    data.as_ptr(), data.len(), offset, d::BufferRole::Vertex);
+                    data.as_ptr(), data.len(), offset, d::factory::BufferRole::Vertex);
             },
             Command::UpdateTexture(kind, texture, image_info, pointer) => {
                 let data = data_buf.get_ref(pointer);

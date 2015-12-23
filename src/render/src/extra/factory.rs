@@ -15,7 +15,8 @@
 //! Factory extension. Provides resource construction shortcuts.
 
 use gfx_core::{handle, tex};
-use gfx_core::{BufferRole, Factory, Primitive, Resources, ShaderSet, VertexCount};
+use gfx_core::{Primitive, Resources, ShaderSet, VertexCount};
+use gfx_core::factory::{BufferRole, Factory};
 use gfx_core::pso::{CreationError, Descriptor};
 use gfx_core::shade::{CreateShaderError, CreateProgramError};
 use gfx_core::state::Rasterizer;

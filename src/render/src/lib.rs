@@ -40,9 +40,9 @@ pub use draw_state::target::*;
 
 // public re-exports
 pub use gfx_core as core;
-pub use gfx_core::{Device, SubmitInfo, Factory, Resources};
+pub use gfx_core::{Device, SubmitInfo, Resources};
 pub use gfx_core::{attrib, format, handle, tex};
-pub use gfx_core::{BufferRole, BufferInfo, BufferUsage};
+pub use gfx_core::factory::{Factory, BufferRole, BufferInfo, BufferUsage};
 pub use gfx_core::{VertexCount, InstanceCount};
 pub use gfx_core::Primitive;
 pub use gfx_core::{ShaderSet, VertexShader, HullShader, DomainShader,

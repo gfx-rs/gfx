@@ -19,7 +19,7 @@
 use std::default::Default;
 use std::marker::PhantomData;
 use gfx_core as d;
-use gfx_core::Phantom;
+use gfx_core::factory::Phantom;
 pub use gfx_core::pso::{Element, Descriptor};
 
 pub struct RawDataSet<R: d::Resources>{

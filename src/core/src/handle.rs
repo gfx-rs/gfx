@@ -19,7 +19,8 @@
 use std::mem;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use {shade, tex, Resources, BufferInfo, Phantom};
+use {shade, tex, Resources};
+use factory::{BufferInfo, Phantom};
 
 
 /// Raw (untyped) Buffer Handle

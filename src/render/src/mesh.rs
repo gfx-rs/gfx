@@ -20,8 +20,9 @@
 //! create a mesh is to use the `#[vertex_format]` attribute on a struct, upload them into a
 //! `Buffer`, and then use `Mesh::from`.
 
-use gfx_core::{BufferRole, Factory, Primitive, Resources, VertexCount};
 use gfx_core::{attrib, handle, shade};
+use gfx_core::{Primitive, Resources, VertexCount};
+use gfx_core::factory::{BufferRole, Factory};
 
 /// Describes a single attribute of a vertex buffer, including its type, name, etc.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]

@@ -31,7 +31,7 @@ macro_rules! gfx_vertex {
                         -> Vec<$crate::Attribute<R>> {
                 use std::mem::{size_of, forget};
                 use $crate::attrib::{Offset, Stride, ToFormat};
-                use $crate::core::Phantom;
+                use $crate::core::factory::Phantom;
                 let stride = size_of::<$name>() as Stride;
                 let mut attributes = Vec::new();
                 $(

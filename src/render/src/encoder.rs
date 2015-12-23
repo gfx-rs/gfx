@@ -26,6 +26,7 @@ use gfx_core::{attrib, handle};
 use gfx_core::attrib::IntSize;
 use gfx_core::draw::{Access, Gamma, Target};
 use gfx_core::draw::{CommandBuffer, DataBuffer, InstanceOption};
+use gfx_core::factory::NotSupported;
 use gfx_core::output::{Output, Plane};
 use gfx_core::shade::{ProgramInfo, UniformValue};
 use gfx_core::tex::Size;
@@ -169,9 +170,9 @@ pub struct Encoder<R: Resources, C: CommandBuffer<R>> {
     command_buffer: C,
     data_buffer: DataBuffer,
     handles: handle::Manager<R>,
-    common_array_buffer: Result<handle::ArrayBuffer<R>, device::NotSupported>,
-    draw_frame_buffer: Result<handle::FrameBuffer<R>, device::NotSupported>,
-    read_frame_buffer: Result<handle::FrameBuffer<R>, device::NotSupported>,
+    common_array_buffer: Result<handle::ArrayBuffer<R>, NotSupported>,
+    draw_frame_buffer: Result<handle::FrameBuffer<R>, NotSupported>,
+    read_frame_buffer: Result<handle::FrameBuffer<R>, NotSupported>,
     render_state: RenderState<R>,
     parameters: ParamStorage<R>,
 }
@@ -297,7 +298,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
     {
         let bound = mem::size_of::<T>();
         if bound <= buf.get_info().size {
-            use gfx_core::Phantom;
+            use gfx_core::factory::Phantom;
             let pointer = self.data_buffer.add_struct(data);
             self.command_buffer.update_buffer(
                 self.handles.ref_buffer(buf.raw()).clone(),
@@ -579,7 +580,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
     fn draw_indexed<T>(&mut self, buf: &handle::Buffer<R, T>, format: IntSize,
                      slice: &mesh::Slice<R>, base: device::VertexCount,
                      instances: InstanceOption) {
-        use gfx_core::Phantom;
+        use gfx_core::factory::Phantom;
         if self.render_state.index.as_ref() != Some(buf.raw()) {
             self.render_state.index = Some(buf.raw().clone());
             self.command_buffer.bind_index(self.handles.ref_buffer(buf.raw()).clone());

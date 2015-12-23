@@ -23,8 +23,8 @@
 
 use std::default::Default;
 use std::fmt;
-use Bind;
 pub use attrib::{FloatSize, IntSubType};
+use factory::Bind;
 use format;
 use state;
 use target::Level;
