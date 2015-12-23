@@ -70,6 +70,7 @@ fn surface_type_to_old_format(sf: SurfaceType) -> t::Format {
         S::R32_G32_B32 => Format::Float(Components::RGB, FloatSize::F32),
         S::R32_G32_B32_A32 => Format::Float(Components::RGBA, FloatSize::F32),
         S::D24_S8 => Format::DEPTH24_STENCIL8,
+        _ => Format::DEPTH24_STENCIL8, //TODO
     }
 }
 
