@@ -15,11 +15,12 @@
 use {gl, Surface, Texture, Sampler};
 use gl::types::{GLenum, GLuint, GLint, GLfloat, GLsizei, GLvoid};
 use state;
-use gfx_core::format::Format as NewFormat;
+use gfx_core::format::{Format as NewFormat, ChannelType};
 use gfx_core::tex::{Format, Kind, TextureError, SurfaceError,
                     SurfaceInfo, TextureInfo, SamplerInfo,
                     ImageInfo, ImageInfoCommon, NewImageInfo,
-                    AaMode, Components, FilterMethod, WrapMode};
+                    AaMode, Components, FilterMethod, WrapMode,
+                    Size, Descriptor};
 
 
 /// A token produced by the `bind_texture` that allows following up
@@ -263,50 +264,100 @@ fn format_to_gltype(format: NewFormat) -> Result<GLenum, ()> {
     })
 }
 
+fn format_to_glfull(format: NewFormat) -> Result<GLenum, ()> {
+    use gfx_core::format::SurfaceType as S;
+    use gfx_core::format::ChannelType as C;
+    Ok(match (format.0, format.1.ty) {
+        (S::R8, C::Int) => gl::R8I,
+        (S::R8, C::IntNormalized) => gl::R8_SNORM,
+        (S::R8, C::Uint) => gl::R8UI,
+        (S::R8, C::UintNormalized) => gl::R8,
+        (S::R8_G8, C::Int) => gl::RG8I,
+        (S::R8_G8, C::IntNormalized) => gl::RG8_SNORM,
+        (S::R8_G8, C::Uint) => gl::RG8UI,
+        (S::R8_G8, C::UintNormalized) => gl::RG8,
+        (S::R8_G8_B8, C::Int) => gl::RGB8I,
+        (S::R8_G8_B8, C::IntNormalized) => gl::RGB8_SNORM,
+        (S::R8_G8_B8, C::Uint) => gl::RGB8UI,
+        (S::R8_G8_B8, C::UintNormalized) => gl::RGB8,
+        (S::R8_G8_B8_A8, C::Int) => gl::RGBA8I,
+        (S::R8_G8_B8_A8, C::IntNormalized) => gl::RGBA8_SNORM,
+        (S::R8_G8_B8_A8, C::Uint) => gl::RGBA8UI,
+        (S::R8_G8_B8_A8, C::UintNormalized) => gl::RGBA8,
+        (S::R10_G10_B10_A2, C::UintNormalized) => gl::RGB10_A2,
+        (S::R10_G10_B10_A2, C::Uint) => gl::RGB10_A2UI,
+        (S::R16, _) => gl::R16, // TODO this and below
+        (S::R16_G16, _) => gl::RG16,
+        (S::R16_G16_B16, _) => gl::RGB16,
+        (S::R16_G16_B16_A16, _) => gl::RGBA16,
+        (S::R32, _) => gl::R32F,
+        (S::R32_G32, _) => gl::RG32F,
+        (S::R32_G32_B32, _) => gl::RGB32F,
+        (S::R32_G32_B32_A32, _) => gl::RGBA32F,
+        (S::D24_S8, _) => gl::DEPTH24_STENCIL8,
+        (_, _) => return Err(())
+    })
+}
+
 fn set_mipmap_range(gl: &gl::Gl, target: GLenum, (base, max): (u8, u8)) { unsafe {
     gl.TexParameteri(target, gl::TEXTURE_BASE_LEVEL, base as GLint);
     gl.TexParameteri(target, gl::TEXTURE_MAX_LEVEL, max as GLint);
 }}
 
-/// Create a render surface.
-pub fn make_surface(gl: &gl::Gl, info: &SurfaceInfo) ->
-                    Result<Surface, SurfaceError> {
+pub fn make_surface_impl(gl: &gl::Gl, format: GLenum, width: Size, height: Size, aa: Option<AaMode>)
+                         -> Result<Surface, SurfaceError> {
     let mut name = 0 as GLuint;
     unsafe {
         gl.GenRenderbuffers(1, &mut name);
     }
 
     let target = gl::RENDERBUFFER;
-    let fmt = match old_format_to_gl(info.format) {
-        Ok(f) => f,
-        Err(_) => return Err(SurfaceError::UnsupportedFormat),
-    };
-
     unsafe {
         gl.BindRenderbuffer(target, name);
     }
-    match info.aa_mode {
-        None => { unsafe {
+    match aa {
+        None => unsafe {
             gl.RenderbufferStorage(
                 target,
-                fmt,
-                info.width as GLsizei,
-                info.height as GLsizei
+                format,
+                width as GLsizei,
+                height as GLsizei
             );
-        }},
-        Some(AaMode::Msaa(samples)) => { unsafe {
+        },
+        Some(AaMode::Msaa(samples)) => unsafe {
             gl.RenderbufferStorageMultisample(
                 target,
                 samples as GLsizei,
-                fmt,
-                info.width as GLsizei,
-                info.height as GLsizei
+                format,
+                width as GLsizei,
+                height as GLsizei
             );
-        }},
+        },
         Some(_) => return Err(SurfaceError::UnsupportedFormat),
     }
 
     Ok(name)
+}
+
+/// Create a render surface, using the old SurfaceInfo
+pub fn make_surface_old(gl: &gl::Gl, info: &SurfaceInfo) ->
+                    Result<Surface, SurfaceError> {
+    let fmt = match old_format_to_gl(info.format) {
+        Ok(f) => f,
+        Err(_) => return Err(SurfaceError::UnsupportedFormat),
+    };
+    make_surface_impl(gl, fmt, info.width, info.height, info.aa_mode)
+}
+
+/// Create a render surface.
+pub fn make_surface(gl: &gl::Gl, desc: &Descriptor, cty: ChannelType) ->
+                        Result<Surface, SurfaceError> {
+    let format = NewFormat(desc.format, cty.into());
+    let fmt = match format_to_glfull(format) {
+        Ok(f) => f,
+        Err(_) => return Err(SurfaceError::UnsupportedFormat),
+    };
+    make_surface_impl(gl, fmt, desc.width, desc.height, desc.aa_mode)
 }
 
 /// Create a texture, assuming TexStorage* isn't available.

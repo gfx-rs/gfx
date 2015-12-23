@@ -589,6 +589,7 @@ pub struct Descriptor {
     pub levels: u8,
     pub kind: Kind,
     pub format: format::SurfaceType,
+    pub aa_mode: Option<AaMode>,
     pub bind: Bind,
 }
 

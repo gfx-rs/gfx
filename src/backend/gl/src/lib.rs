@@ -310,6 +310,7 @@ impl Device {
                 levels: 0,
                 kind: d::tex::Kind::D2,
                 format: d::format::SurfaceType::R8_G8_B8_A8,
+                aa_mode: None,
                 bind: d::factory::RENDER_TARGET,
             },
         );

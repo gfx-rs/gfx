@@ -361,7 +361,7 @@ impl d::Factory<R> for Factory {
         if info.format.does_convert_gamma() && !self.share.capabilities.srgb_color_supported {
             return Err(t::SurfaceError::UnsupportedGamma)
         }
-        tex::make_surface(&self.share.context, &info)
+        tex::make_surface_old(&self.share.context, &info)
             .map(|suf| self.share.handles.borrow_mut().make_surface(suf, info))
     }
 
@@ -410,7 +410,8 @@ impl d::Factory<R> for Factory {
             }
         }else {
             use gfx_core::tex::SurfaceError;
-            let result = tex::make_surface(gl, &info.into());
+            let cty = ChannelType::UintNormalized; //TODO
+            let result = tex::make_surface(gl, &desc, cty);
             match result {
                 Ok(name) => NewTexture::Surface(name),
                 Err(SurfaceError::UnsupportedFormat) => return Err(Error::Format(desc.format)),
