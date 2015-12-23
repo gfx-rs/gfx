@@ -251,7 +251,7 @@ pub trait Factory<R: Resources> {
 
     fn create_new_texture_raw(&mut self, tex::Descriptor)
         -> Result<handle::RawTexture<R>, tex::Error>;
-    fn create_new_texture_with_data(&mut self, tex::Descriptor, &[u8])
+    fn create_new_texture_with_data(&mut self, tex::Descriptor, format::ChannelType, &[u8])
         -> Result<handle::RawTexture<R>, tex::Error>;
     fn view_buffer_as_shader_resource_raw(&mut self, &handle::RawBuffer<R>)
         -> Result<handle::RawShaderResourceView<R>, ResourceViewError>;
@@ -342,7 +342,8 @@ pub trait Factory<R: Resources> {
             bind: SHADER_RESOURCE,
         };
         //todo: check sizes
-        let raw = try!(self.create_new_texture_with_data(desc, as_byte_slice(data)));
+        let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
+        let raw = try!(self.create_new_texture_with_data(desc, cty, as_byte_slice(data)));
         self.generate_mipmap_raw(&raw);
         let levels = (0, raw.get_info().levels - 1);
         let tex = Phantom::new(raw);

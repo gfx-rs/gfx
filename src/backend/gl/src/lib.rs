@@ -741,8 +741,7 @@ impl Device {
             },
             Command::UpdateTexture(kind, texture, image_info, pointer) => {
                 let data = data_buf.get_ref(pointer);
-                match tex::update_texture(&self.share.context, kind, texture,
-                        &image_info, data.as_ptr(), data.len()) {
+                match tex::update_texture(&self.share.context, kind, texture, &image_info, data) {
                     Ok(_) => (),
                     Err(e) => {
                         error!("Error updating a texture: {:?}", e);

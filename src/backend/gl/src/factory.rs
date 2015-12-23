@@ -19,7 +19,7 @@ use {gl, tex};
 use gfx_core as d;
 use gfx_core::factory as f;
 use gfx_core::factory::Phantom;
-use gfx_core::format::{Formatted, SurfaceType};
+use gfx_core::format::{Formatted, ChannelType, SurfaceType};
 use gfx_core::handle;
 use gfx_core::handle::Producer;
 use gfx_core::mapping::Builder;
@@ -420,15 +420,14 @@ impl d::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_new_texture(object, desc))
     }
 
-    fn create_new_texture_with_data(&mut self, desc: t::Descriptor, data: &[u8])
+    fn create_new_texture_with_data(&mut self, desc: t::Descriptor, cty: ChannelType, data: &[u8])
                                     -> Result<handle::RawTexture<R>, t::Error> {
-        let kind = desc.kind;
-        let img = descriptor_to_texture_info(&desc).into();
+        let kind = desc.kind; //TODO: cubemap slice
+        let img = desc.to_image_info(cty, 0);
         let tex = try!(self.create_new_texture_raw(desc));
         match self.frame_handles.ref_new_texture(&tex) {
             &NewTexture::Surface(_) => Err(t::Error::Data(0)),
-            &NewTexture::Texture(t) => match tex::update_texture(&self.share.context,
-                kind, t, &img, data.as_ptr(), data.len()) {
+            &NewTexture::Texture(t) => match tex::update_texture_new(&self.share.context, t, kind, &img, data) {
                 Ok(_) => Ok(tex),
                 Err(_) => Err(t::Error::Data(0)),
             }
@@ -520,7 +519,7 @@ impl d::Factory<R> for Factory {
 
         tex::update_texture(&self.share.context, kind,
                             *self.frame_handles.ref_texture(texture),
-                            img, data.as_ptr(), data.len())
+                            img, data)
     }
 
     fn generate_mipmap(&mut self, texture: &handle::Texture<R>) {

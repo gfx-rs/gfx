@@ -21,7 +21,6 @@
 //! image data.  Image data consists of an array of "texture elements", or
 //! texels.
 
-use std::default::Default;
 use std::fmt;
 pub use attrib::{FloatSize, IntSubType};
 use factory::Bind;
@@ -431,7 +430,7 @@ pub struct TextureInfo {
 /// Describes a subvolume of a texture, which image data can be uploaded into.
 #[allow(missing_docs)]
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
-pub struct ImageInfo {
+pub struct ImageInfoCommon<F> {
     pub xoffset: Size,
     pub yoffset: Size,
     pub zoffset: Size,
@@ -439,43 +438,25 @@ pub struct ImageInfo {
     pub height: Size,
     pub depth: Size,
     /// Format of each texel.
-    pub format: Format,
+    pub format: F,
     /// Which mipmap to select.
-    pub mipmap: u8,
+    pub mipmap: Level,
 }
 
-impl Default for ImageInfo {
-    fn default() -> ImageInfo {
-        ImageInfo {
-            xoffset: 0,
-            yoffset: 0,
-            zoffset: 0,
-            width: 0,
-            height: 1,
-            depth: 1,
-            format: RGBA8,
-            mipmap: 0
-        }
-    }
-}
-
-impl Default for TextureInfo {
-    fn default() -> TextureInfo {
-        TextureInfo {
-            width: 0,
-            height: 1,
-            depth: 1,
-            levels: !0,
-            kind: Kind::D2,
-            format: RGBA8,
-        }
-    }
-}
+/// Old image info based on the old format.
+pub type ImageInfo = ImageInfoCommon<Format>;
 
 impl TextureInfo {
     /// Create a new empty texture info.
     pub fn new() -> TextureInfo {
-        Default::default()
+        TextureInfo {
+            width: 0,
+            height: 0,
+            depth: 0,
+            levels: !0,
+            kind: Kind::D2,
+            format: RGBA8,
+        }
     }
 
     /// Check if given ImageInfo is a part of the texture.
@@ -515,9 +496,20 @@ impl From<TextureInfo> for SurfaceInfo {
     }
 }
 
-impl ImageInfo {
-    /// Create a new `ImageInfo`, using default values.
-    pub fn new() -> ImageInfo { Default::default() }
+impl<F> ImageInfoCommon<F> {
+    /// Create an empty new `ImageInfo` of a given format.
+    pub fn new(format: F) -> ImageInfoCommon<F> {
+        ImageInfoCommon {
+            xoffset: 0,
+            yoffset: 0,
+            zoffset: 0,
+            width: 0,
+            height: 0,
+            depth: 0,
+            format: format,
+            mipmap: 0
+        }
+    }
     /// Get the total number of texels.
     pub fn get_texel_count(&self) -> usize {
         self.width as usize *
@@ -598,6 +590,25 @@ pub struct Descriptor {
     pub kind: Kind,
     pub format: format::SurfaceType,
     pub bind: Bind,
+}
+
+/// New image info using the universal format.
+pub type NewImageInfo = ImageInfoCommon<format::Format>;
+
+impl Descriptor {
+    /// Get image info for a given mip.
+    pub fn to_image_info(&self, cty: format::ChannelType, mip: Level) -> NewImageInfo {
+        ImageInfoCommon {
+            xoffset: 0,
+            yoffset: 0,
+            zoffset: 0,
+            width: self.width >> mip,
+            height: self.height >> mip,
+            depth: self.depth >> mip,
+            format: format::Format(self.format, cty.into()),
+            mipmap: mip,
+        }
+    }
 }
 
 /// Texture view descriptor.

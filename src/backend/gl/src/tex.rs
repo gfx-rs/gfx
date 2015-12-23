@@ -15,8 +15,10 @@
 use {gl, Surface, Texture, Sampler};
 use gl::types::{GLenum, GLuint, GLint, GLfloat, GLsizei, GLvoid};
 use state;
+use gfx_core::format::Format as NewFormat;
 use gfx_core::tex::{Format, Kind, TextureError, SurfaceError,
-                    SurfaceInfo, TextureInfo, SamplerInfo, ImageInfo,
+                    SurfaceInfo, TextureInfo, SamplerInfo,
+                    ImageInfo, ImageInfoCommon, NewImageInfo,
                     AaMode, Components, FilterMethod, WrapMode};
 
 
@@ -51,7 +53,7 @@ pub fn bind_kind_to_gl(kind: Kind) -> GLenum {
     }
 }
 
-fn format_to_gl(t: Format) -> Result<GLenum, ()> {
+fn old_format_to_gl(t: Format) -> Result<GLenum, ()> {
     use gfx_core::tex::{Components, FloatSize, IntSubType, Compression};
     Ok(match t {
         // floating-point
@@ -166,7 +168,7 @@ fn components_to_glpixel(c: Components) -> GLenum {
     }
 }
 
-fn format_to_glpixel(t: Format) -> GLenum {
+fn old_format_to_glpixel(t: Format) -> GLenum {
     match t {
         Format::Float(c, _)       => components_to_glpixel(c),
         Format::Integer(c, _, _)  => components_to_glpixel(c),
@@ -199,7 +201,7 @@ fn format_to_glpixel(t: Format) -> GLenum {
 /// It is not used for rendering at all.
 /// Also note that in OpenGL there are multiple allowed formats of data, while this
 /// function only gives you only the most compact representation.
-fn format_to_gltype(t: Format) -> Result<GLenum, ()> {
+fn old_format_to_gltype(t: Format) -> Result<GLenum, ()> {
     use gfx_core::tex::FloatSize;
     match t {
         Format::Float(_, FloatSize::F16) => Ok(gl::HALF_FLOAT),
@@ -230,6 +232,37 @@ fn format_to_gltype(t: Format) -> Result<GLenum, ()> {
     }
 }
 
+fn format_to_glpixel(format: NewFormat) -> GLenum {
+    use gfx_core::format::SurfaceType as S;
+    match format.0 {
+        S::R8 | S::R16 | S::R32=> gl::RED,
+        S::R8_G8 | S::R16_G16 | S::R32_G32 => gl::RG,
+        S::R8_G8_B8 | S::R16_G16_B16 | S::R32_G32_B32 => gl::RGB,
+        S::R8_G8_B8_A8 | S::R16_G16_B16_A16 | S::R32_G32_B32_A32 | S::R10_G10_B10_A2 => gl::RGBA,
+        S::D24_S8 => gl::DEPTH_STENCIL,
+    }
+}
+
+fn format_to_gltype(format: NewFormat) -> Result<GLenum, ()> {
+    use gfx_core::format::SurfaceType as S;
+    use gfx_core::format::ChannelType as C;
+    let (fm8, fm16, fm32) = match format.1.ty {
+        C::Int | C::IntNormalized | C::IntScaled =>
+            (gl::BYTE, gl::SHORT, gl::INT),
+        C::Uint | C::UintNormalized | C::UintScaled =>
+            (gl::UNSIGNED_BYTE, gl::UNSIGNED_SHORT, gl::UNSIGNED_INT),
+        C::Float => (gl::ZERO, gl::HALF_FLOAT, gl::FLOAT),
+        C::Srgb => return Err(()),
+    };
+    Ok(match format.0 {
+        S::R8 | S::R8_G8 | S::R8_G8_B8 | S::R8_G8_B8_A8 => fm8,
+        S::R10_G10_B10_A2 => gl::UNSIGNED_INT_10_10_10_2,
+        S::R16 | S::R16_G16 | S::R16_G16_B16 | S::R16_G16_B16_A16 => fm16,
+        S::R32 | S::R32_G32 | S::R32_G32_B32 | S::R32_G32_B32_A32 => fm32,
+        S::D24_S8 => gl::UNSIGNED_INT_24_8,
+    })
+}
+
 fn set_mipmap_range(gl: &gl::Gl, target: GLenum, (base, max): (u8, u8)) { unsafe {
     gl.TexParameteri(target, gl::TEXTURE_BASE_LEVEL, base as GLint);
     gl.TexParameteri(target, gl::TEXTURE_MAX_LEVEL, max as GLint);
@@ -244,7 +277,7 @@ pub fn make_surface(gl: &gl::Gl, info: &SurfaceInfo) ->
     }
 
     let target = gl::RENDERBUFFER;
-    let fmt = match format_to_gl(info.format) {
+    let fmt = match old_format_to_gl(info.format) {
         Ok(f) => f,
         Err(_) => return Err(SurfaceError::UnsupportedFormat),
     };
@@ -281,12 +314,12 @@ pub fn make_without_storage(gl: &gl::Gl, info: &TextureInfo) ->
                             Result<Texture, TextureError> {
     let (name, target) = make_texture(gl, info);
 
-    let fmt = match format_to_gl(info.format) {
+    let fmt = match old_format_to_gl(info.format) {
         Ok(f) => f as GLint,
         Err(_) => return Err(TextureError::UnsupportedFormat),
     };
-    let pix = format_to_glpixel(info.format);
-    let typ = match format_to_gltype(info.format) {
+    let pix = old_format_to_glpixel(info.format);
+    let typ = match old_format_to_gltype(info.format) {
         Ok(t) => t,
         Err(_) => return Err(TextureError::UnsupportedFormat),
     };
@@ -416,7 +449,7 @@ pub fn make_with_storage(gl: &gl::Gl, info: &TextureInfo) ->
 
     let (name, target) = make_texture(gl, info);
 
-    let fmt = match format_to_gl(info.format) {
+    let fmt = match old_format_to_gl(info.format) {
         Ok(f) => f,
         Err(_) => return Err(TextureError::UnsupportedFormat),
     };
@@ -550,33 +583,10 @@ pub fn bind_sampler(gl: &gl::Gl, anchor: BindAnchor, info: &SamplerInfo) { unsaf
     }
 }}
 
-pub fn update_texture(gl: &gl::Gl, kind: Kind, name: Texture,
-                      img: &ImageInfo, address: *const u8, size: usize)
-                      -> Result<(), TextureError> {
-    if let Some(fmt_size) = img.format.get_size() {
-        // TODO: can we compute the expected size for compressed formats?
-        let expected_size = img.width as usize * img.height as usize *
-                            img.depth as usize * fmt_size as usize;
-        if size != expected_size {
-            return Err(TextureError::IncorrectSize(expected_size));
-        }
-    }
-
-    let data = address as *const GLvoid;
-    let pix = format_to_glpixel(img.format);
-    let typ = match format_to_gltype(img.format) {
-        Ok(t) => t,
-        Err(_) => return Err(TextureError::UnsupportedFormat),
-    };
-    let target = bind_kind_to_gl(kind);
-
-    unsafe { gl.BindTexture(target, name) };
-
-    if img.format.is_compressed() {
-        return compressed_update(gl, kind, target, img, data, typ, size as GLint);
-    }
-
-    match kind {
+pub fn update_texture_impl<F>(gl: &gl::Gl, kind: Kind, target: GLenum, pix: GLenum,
+                           typ: GLenum, img: &ImageInfoCommon<F>, data: *const GLvoid)
+                           -> Result<(), TextureError> {
+    Ok(match kind {
         Kind::D1 => unsafe {
             gl.TexSubImage1D(
                 target,
@@ -633,9 +643,53 @@ pub fn update_texture(gl: &gl::Gl, kind: Kind, name: Texture,
         },
         Kind::D2MultiSample(_) | Kind::D2MultiSampleArray(_) =>
             return Err(TextureError::UnsupportedSamples),
+    })
+}
+
+pub fn update_texture_new(gl: &gl::Gl, name: Texture, kind: Kind,
+                          img: &NewImageInfo, slice: &[u8])
+                          -> Result<(), TextureError> {
+    //TODO: check size
+    let data = slice.as_ptr() as *const GLvoid;
+    let pixel_format = format_to_glpixel(img.format);
+    let data_type = match format_to_gltype(img.format) {
+        Ok(t) => t,
+        Err(_) => return Err(TextureError::UnsupportedFormat),
+    };
+    let target = bind_kind_to_gl(kind);
+
+    unsafe { gl.BindTexture(target, name) };
+
+    update_texture_impl(gl, kind, target, pixel_format, data_type, img, data)
+}
+
+pub fn update_texture(gl: &gl::Gl, kind: Kind, name: Texture,
+                      img: &ImageInfo, slice: &[u8])
+                      -> Result<(), TextureError> {
+    if let Some(fmt_size) = img.format.get_size() {
+        // TODO: can we compute the expected size for compressed formats?
+        let expected_size = img.width as usize * img.height as usize *
+                            img.depth as usize * fmt_size as usize;
+        if slice.len() != expected_size {
+            return Err(TextureError::IncorrectSize(expected_size));
+        }
     }
 
-    Ok(())
+    let data = slice.as_ptr() as *const GLvoid;
+    let pixel_format = old_format_to_glpixel(img.format);
+    let data_type = match old_format_to_gltype(img.format) {
+        Ok(t) => t,
+        Err(_) => return Err(TextureError::UnsupportedFormat),
+    };
+    let target = bind_kind_to_gl(kind);
+
+    unsafe { gl.BindTexture(target, name) };
+
+    if img.format.is_compressed() {
+        compressed_update(gl, kind, target, img, data, data_type, slice.len() as GLint)
+    }else {
+        update_texture_impl(gl, kind, target, pixel_format, data_type, img, data)
+    }
 }
 
 pub fn compressed_update(gl: &gl::Gl, kind: Kind, target: GLenum, img: &ImageInfo,
