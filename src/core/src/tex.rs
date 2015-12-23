@@ -128,7 +128,7 @@ impl AaMode {
     }
     /// Return true if the surface has to be resolved before sampling.
     pub fn needs_resolve(&self) -> bool {
-        self.get_num_fragments() == 1
+        self.get_num_fragments() > 1
     }
 }
 

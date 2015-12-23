@@ -252,6 +252,7 @@ struct Temp {
     resource_views: [Option<(Texture, tex::BindAnchor)>; d::MAX_RESOURCE_VIEWS],
     stencil: Option<s::Stencil>,
     cull_face: s::CullFace,
+    blend: Option<s::Blend>,
 }
 
 impl Temp {
@@ -262,6 +263,7 @@ impl Temp {
             resource_views: [None; d::MAX_RESOURCE_VIEWS],
             stencil: None,
             cull_face: s::CullFace::Nothing,
+            blend: None,
         }
     }
 }
@@ -726,8 +728,9 @@ impl Device {
                 if self.share.capabilities.separate_blending_slots_supported {
                     state::bind_blend_slot(&self.share.context, slot, blend);
                 }else if slot == 0 {
+                    self.temp.blend = blend;
                     state::bind_blend(&self.share.context, blend);
-                }else {
+                }else if blend != self.temp.blend {
                     error!("Separate blending slots are not supported");
                 }
             },
