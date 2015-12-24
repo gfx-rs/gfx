@@ -61,9 +61,50 @@ pub enum Command {
     Blit(Rect, Rect, Mirror, Mask),
 }
 
+pub const RESET: [Command; 13] = [
+    Command::BindProgram(0),
+    //TODO: PSO
+    //Command::BindArrayBuffer(0),
+    // BindAttribute
+    Command::BindIndex(0),
+    Command::BindFrameBuffer(Access::Draw, 0),
+    Command::BindFrameBuffer(Access::Read, 0),
+    // UnbindTarget
+    // BindUniformBlock
+    // BindUniform
+    // BindTexture
+    Command::SetRasterizer(s::Rasterizer {
+        front_face: s::FrontFace::CounterClockwise,
+        method: s::RasterMethod::Fill(s::CullFace::Back),
+        offset: None,
+        samples: None,
+    }),
+    Command::SetViewport(Rect{x: 0, y: 0, w: 0, h: 0}),
+    Command::SetScissor(None),
+    Command::SetDepthStencilState(None, None, s::CullFace::Nothing),
+    Command::SetBlendState(0, None),
+    Command::SetBlendState(1, None),
+    Command::SetBlendState(2, None),
+    Command::SetBlendState(3, None),
+    Command::SetRefValues(s::RefValues {blend: [0f32; 4], stencil: (0, 0)}),
+];
+
+struct Cache {
+    draw_mask: u32,
+}
+
+impl Cache {
+    fn new() -> Cache {
+        Cache {
+            draw_mask: 0,
+        }
+    }
+}
+
 pub struct CommandBuffer {
     pub buf: Vec<Command>,
     fbo: FrameBuffer,
+    cache: Cache,
 }
 
 impl CommandBuffer {
@@ -71,6 +112,7 @@ impl CommandBuffer {
         CommandBuffer {
             buf: Vec::new(),
             fbo: fbo,
+            cache: Cache::new(),
         }
     }
     fn is_main_target(&self, tv: Option<TargetView>) -> bool {
@@ -86,11 +128,13 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
         CommandBuffer {
             buf: Vec::new(),
             fbo: self.fbo,
+            cache: Cache::new(),
         }
     }
 
     fn clear(&mut self) {
         self.buf.clear();
+        self.cache = Cache::new();
     }
 
     fn bind_program(&mut self, prog: Program) {
@@ -98,8 +142,7 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
     }
 
     fn bind_pipeline_state(&mut self, pso: PipelineState) {
-        // for the draw buffers mask;
-        self.buf.push(Command::BindFrameBuffer(Access::Draw, self.fbo));
+        self.cache.draw_mask = pso.output.draw_mask;
         self.buf.push(Command::BindPipelineState(pso));
     }
 
@@ -137,7 +180,10 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
         }else {
             self.buf.push(Command::BindFrameBuffer(Access::Draw, self.fbo));
             self.buf.push(Command::BindPixelTargets(pts));
+            //self.buf.push(Command::SetDrawColorBuffers(self.cache.draw_mask));
         }
+        self.buf.push(Command::SetViewport(Rect {
+            x: 0, y: 0, w: 500, h: 500}));
     }
 
     fn bind_array_buffer(&mut self, vao: ArrayBuffer) {

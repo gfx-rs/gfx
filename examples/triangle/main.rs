@@ -17,44 +17,51 @@ extern crate gfx;
 extern crate gfx_window_glutin;
 extern crate glutin;
 
-use gfx::traits::{Stream, FactoryExt};
-
-gfx_vertex!( Vertex {
+gfx_structure!( Vertex {
     a_Pos@ pos: [f32; 2],
     a_Color@ color: [f32; 3],
 });
 
+gfx_pipeline_init!(PipeData PipeMeta PipeInit {
+    vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
+    out: gfx::RenderTarget<gfx::format::Rgba8> = ("o_Color", gfx::state::MASK_ALL),
+});
+
 pub fn main() {
-    let (mut stream, mut device, mut factory) = gfx_window_glutin::init(
-        glutin::Window::new().unwrap());
-    stream.out.window.set_title("Triangle example");
+    use std::default::Default;
+    use gfx::Device;
+    use gfx::traits::{EncoderFactory, FactoryExt};
+
+    let builder = glutin::WindowBuilder::new()
+        .with_title("Triangle example".to_string());
+    let (window, mut device, mut factory, main_color, _) =
+        gfx_window_glutin::init_new::<gfx::format::Rgba8>(builder);
+    let mut encoder = factory.create_encoder();
+
+    let shaders = factory.create_shader_set(
+        include_bytes!("triangle_150.glslv"),
+        include_bytes!("triangle_150.glslf")
+        ).unwrap();
+
+    let pso = factory.create_pipeline_state(&shaders,
+        gfx::Primitive::TriangleList, Default::default(), &PipeInit::new())
+        .unwrap();
 
     let vertex_data = [
         Vertex { pos: [ -0.5, -0.5 ], color: [1.0, 0.0, 0.0] },
         Vertex { pos: [  0.5, -0.5 ], color: [0.0, 1.0, 0.0] },
         Vertex { pos: [  0.0,  0.5 ], color: [0.0, 0.0, 1.0] },
     ];
-    let mesh = factory.create_mesh(&vertex_data);
-    let slice = mesh.get_slice();
-
-    let program = {
-        let vs = gfx::ShaderSource {
-            glsl_120: Some(include_bytes!("triangle_120.glslv")),
-            glsl_150: Some(include_bytes!("triangle_150.glslv")),
-            .. gfx::ShaderSource::empty()
-        };
-        let fs = gfx::ShaderSource {
-            glsl_120: Some(include_bytes!("triangle_120.glslf")),
-            glsl_150: Some(include_bytes!("triangle_150.glslf")),
-            .. gfx::ShaderSource::empty()
-        };
-        factory.link_program_source(vs, fs).unwrap()
+    let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
+    let data = PipeData {
+        vbuf: vbuf,
+        out: main_color.clone(),
     };
-    let state = gfx::DrawState::new();
 
     'main: loop {
+        encoder.reset();
         // quit when Esc is pressed.
-        for event in stream.out.window.poll_events() {
+        for event in window.poll_events() {
             match event {
                 glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) => break 'main,
                 glutin::Event::Closed => break 'main,
@@ -62,13 +69,11 @@ pub fn main() {
             }
         }
 
-        stream.clear(gfx::ClearData {
-            color: [0.3, 0.3, 0.3, 1.0],
-            depth: 1.0,
-            stencil: 0,
-        });
-        stream.draw(&gfx::batch::bind(&state, &mesh, slice.clone(), &program, &None))
-              .unwrap();
-        stream.present(&mut device);
+        let color = gfx::format::U8Norm::cast4([0x50, 0x50, 0x50, 0xFF]);
+        encoder.clear_target_view(&main_color, color);
+        encoder.draw_pipeline(&slice, &pso, &data);
+        device.submit(encoder.as_buffer());
+        window.swap_buffers().unwrap();
+        device.cleanup();
     }
 }

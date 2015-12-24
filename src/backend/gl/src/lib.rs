@@ -82,7 +82,7 @@ impl d::Resources for Resources {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct OutputMerger {
     /// Color attachment draw mask.
-    pub draw_mask: usize,
+    pub draw_mask: u32,
     /// Stencil test to use. If None, no stencil testing is done.
     pub stencil: Option<s::Stencil>,
     /// Depth test to use. If None, no depth testing is done.
@@ -167,34 +167,6 @@ impl Error {
         }
     }
 }
-
-const RESET_CB: [Command; 13] = [
-    Command::BindProgram(0),
-    //TODO: PSO
-    //Command::BindArrayBuffer(0),
-    // BindAttribute
-    Command::BindIndex(0),
-    Command::BindFrameBuffer(Access::Draw, 0),
-    Command::BindFrameBuffer(Access::Read, 0),
-    // UnbindTarget
-    // BindUniformBlock
-    // BindUniform
-    // BindTexture
-    Command::SetRasterizer(s::Rasterizer {
-        front_face: s::FrontFace::CounterClockwise,
-        method: s::RasterMethod::Fill(s::CullFace::Back),
-        offset: None,
-        samples: None,
-    }),
-    Command::SetViewport(d::target::Rect{x: 0, y: 0, w: 0, h: 0}),
-    Command::SetScissor(None),
-    Command::SetDepthStencilState(None, None, s::CullFace::Nothing),
-    Command::SetBlendState(0, None),
-    Command::SetBlendState(1, None),
-    Command::SetBlendState(2, None),
-    Command::SetBlendState(3, None),
-    Command::SetRefValues(s::RefValues {blend: [0f32; 4], stencil: (0, 0)}),
-];
 
 fn primitive_to_gl(primitive: d::Primitive) -> gl::types::GLenum {
     match primitive {
@@ -547,7 +519,6 @@ impl Device {
                 unsafe { gl.UseProgram(pso.program) };
                 self.temp.primitive = primitive_to_gl(pso.primitive);
                 self.temp.attributes = pso.input;
-                state::bind_draw_color_buffers(gl, pso.output.draw_mask);
                 state::bind_rasterizer(gl, &pso.rasterizer);
                 self.temp.stencil = pso.output.stencil;
                 self.temp.cull_face = pso.rasterizer.method.get_cull_face();
@@ -928,7 +899,7 @@ impl d::Device for Device {
 
     fn reset_state(&mut self) {
         let data = d::draw::DataBuffer::new();
-        for com in RESET_CB.iter() {
+        for com in command::RESET.iter() {
             self.process(com, &data);
         }
     }

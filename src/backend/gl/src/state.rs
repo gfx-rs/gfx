@@ -254,7 +254,7 @@ pub fn bind_blend_slot(gl: &gl::Gl, slot: ColorSlot, blend: Option<s::Blend>) {
         },
         None => unsafe {
             gl.BlendEquationSeparatei(buf, gl::FUNC_ADD, gl::FUNC_ADD);
-            gl.BlendFuncSeparatei(buf, gl::ZERO, gl::ONE, gl::ZERO, gl::ONE);
+            gl.BlendFuncSeparatei(buf, gl::ONE, gl::ZERO, gl::ONE, gl::ZERO);
             s::MASK_ALL
         },
     };

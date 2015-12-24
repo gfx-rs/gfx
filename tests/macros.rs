@@ -20,7 +20,8 @@ gfx_structure!(Vertex {
 });
 
 gfx_structure!(Instance {
-    alpha@ _alpha: f32,
+    pos@ pos: [f32; 2],
+    color@ color: [f32; 3],
 });
 
 gfx_structure!(Local {
