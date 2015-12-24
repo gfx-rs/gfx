@@ -19,7 +19,7 @@ use {gl, tex};
 use gfx_core as d;
 use gfx_core::factory as f;
 use gfx_core::factory::Phantom;
-use gfx_core::format::{Formatted, ChannelType, SurfaceType};
+use gfx_core::format::{Formatted, ChannelType};
 use gfx_core::handle;
 use gfx_core::handle::Producer;
 use gfx_core::mapping::Builder;
@@ -49,39 +49,6 @@ pub fn update_sub_buffer(gl: &gl::Gl, buffer: Buffer, address: *const u8,
             size as gl::types::GLsizeiptr,
             address as *const gl::types::GLvoid
         );
-    }
-}
-
-fn surface_type_to_old_format(sf: SurfaceType) -> t::Format {
-    use gfx_core::format::SurfaceType as S;
-    use gfx_core::tex::{Format, Components, FloatSize, IntSubType};
-    match sf {
-        S::R8 => Format::Unsigned(Components::R, 8, IntSubType::Normalized),
-        S::R8_G8 => Format::Unsigned(Components::RG, 8, IntSubType::Normalized),
-        S::R8_G8_B8 => Format::Unsigned(Components::RGB, 8, IntSubType::Normalized),
-        S::R8_G8_B8_A8 => Format::Unsigned(Components::RGBA, 8, IntSubType::Normalized),
-        S::R10_G10_B10_A2 => Format::RGB10_A2,
-        S::R16 => Format::Float(Components::R, FloatSize::F16),
-        S::R16_G16 => Format::Float(Components::RG, FloatSize::F16),
-        S::R16_G16_B16 => Format::Float(Components::RGB, FloatSize::F16),
-        S::R16_G16_B16_A16 => Format::Float(Components::RGBA, FloatSize::F16),
-        S::R32 => Format::Float(Components::R, FloatSize::F32),
-        S::R32_G32 => Format::Float(Components::RG, FloatSize::F32),
-        S::R32_G32_B32 => Format::Float(Components::RGB, FloatSize::F32),
-        S::R32_G32_B32_A32 => Format::Float(Components::RGBA, FloatSize::F32),
-        S::D24_S8 => Format::DEPTH24_STENCIL8,
-        _ => Format::DEPTH24_STENCIL8, //TODO
-    }
-}
-
-fn descriptor_to_texture_info(d: &t::Descriptor) -> t::TextureInfo {
-    t::TextureInfo {
-        width: d.width,
-        height: d.height,
-        depth: d.depth,
-        levels: d.levels,
-        kind: d.kind,
-        format: surface_type_to_old_format(d.format),
     }
 }
 
@@ -379,7 +346,7 @@ impl d::Factory<R> for Factory {
         let name = if caps.immutable_storage_supported {
             tex::make_with_storage_old(gl, &info)
         } else {
-            tex::make_without_storage(gl, &info)
+            tex::make_without_storage_old(gl, &info)
         };
         name.map(|tex| self.share.handles.borrow_mut().make_texture(tex, info))
     }
@@ -392,14 +359,13 @@ impl d::Factory<R> for Factory {
             return Err(Error::Size(0))
         }
         let cty = ChannelType::UintNormalized; //TODO
-        let info = descriptor_to_texture_info(&desc);
         let gl = &self.share.context;
         let object = if desc.bind.intersects(f::SHADER_RESOURCE | f::UNORDERED_ACCESS) {
             use gfx_core::tex::TextureError;
             let result = if caps.immutable_storage_supported {
                 tex::make_with_storage(gl, &desc, cty)
             } else {
-                tex::make_without_storage(gl, &info)
+                tex::make_without_storage(gl, &desc, cty)
             };
             match result {
                 Ok(name) => NewTexture::Texture(name),

@@ -15,6 +15,7 @@
 use {gl, Surface, Texture, Sampler};
 use gl::types::{GLenum, GLuint, GLint, GLfloat, GLsizei, GLvoid};
 use state;
+use gfx_core::factory::SHADER_RESOURCE;
 use gfx_core::format::{Format as NewFormat, ChannelType};
 use gfx_core::tex::{Format, Kind, TextureError, SurfaceError,
                     SurfaceInfo, TextureInfo, SamplerInfo,
@@ -390,8 +391,8 @@ fn set_mipmap_range(gl: &gl::Gl, target: GLenum, (base, max): (u8, u8)) { unsafe
     gl.TexParameteri(target, gl::TEXTURE_MAX_LEVEL, max as GLint);
 }}
 
-pub fn make_surface_impl(gl: &gl::Gl, format: GLenum, width: Size, height: Size, aa: AaMode)
-                         -> Result<Surface, SurfaceError> {
+fn make_surface_impl(gl: &gl::Gl, format: GLenum, width: Size, height: Size, aa: AaMode)
+                     -> Result<Surface, SurfaceError> {
     let mut name = 0 as GLuint;
     unsafe {
         gl.GenRenderbuffers(1, &mut name);
@@ -446,31 +447,19 @@ pub fn make_surface(gl: &gl::Gl, desc: &Descriptor, cty: ChannelType) ->
     make_surface_impl(gl, fmt, desc.width, desc.height, desc.kind.get_aa_mode())
 }
 
-/// Create a texture, assuming TexStorage* isn't available.
-pub fn make_without_storage(gl: &gl::Gl, info: &TextureInfo) ->
-                            Result<Texture, TextureError> {
-    let (name, target) = make_texture(gl, info.kind);
-
-    let fmt = match old_format_to_gl(info.format) {
-        Ok(f) => f as GLint,
-        Err(_) => return Err(TextureError::UnsupportedFormat),
-    };
-    let pix = old_format_to_glpixel(info.format);
-    let typ = match old_format_to_gltype(info.format) {
-        Ok(t) => t,
-        Err(_) => return Err(TextureError::UnsupportedFormat),
-    };
-
-    // since it's a texture, we want to read from it
-    let fixed_sample_locations = gl::TRUE;
-
-    match info.kind {
+fn make_widout_storage_impl(gl: &gl::Gl, kind: Kind,
+                            format: GLint, pix: GLenum, typ: GLenum,
+                            width: Size, height: Size, depth: Size,
+                            levels: Level, fixed_sample_locations: bool)
+                            -> Result<Texture, TextureError> {
+    let (name, target) = make_texture(gl, kind);
+    match kind {
         Kind::D1 => unsafe {
             gl.TexImage1D(
                 target,
                 0,
-                fmt,
-                info.width as GLsizei,
+                format,
+                width as GLsizei,
                 0,
                 pix,
                 typ,
@@ -481,9 +470,9 @@ pub fn make_without_storage(gl: &gl::Gl, info: &TextureInfo) ->
             gl.TexImage2D(
                 target,
                 0,
-                fmt,
-                info.width as GLsizei,
-                info.height as GLsizei,
+                format,
+                width as GLsizei,
+                height as GLsizei,
                 0,
                 pix,
                 typ,
@@ -494,9 +483,9 @@ pub fn make_without_storage(gl: &gl::Gl, info: &TextureInfo) ->
             gl.TexImage2D(
                 target,
                 0,
-                fmt,
-                info.width as GLsizei,
-                info.height as GLsizei,
+                format,
+                width as GLsizei,
+                height as GLsizei,
                 0,
                 pix,
                 typ,
@@ -507,10 +496,10 @@ pub fn make_without_storage(gl: &gl::Gl, info: &TextureInfo) ->
             gl.TexImage2DMultisample(
                 target,
                 samples as GLsizei,
-                fmt as GLenum,  //GL spec bug
-                info.width as GLsizei,
-                info.height as GLsizei,
-                fixed_sample_locations
+                format as GLenum,  //GL spec bug
+                width as GLsizei,
+                height as GLsizei,
+                if fixed_sample_locations {gl::TRUE} else {gl::FALSE}
             );
         },
         Kind::Cube(_) => {
@@ -520,9 +509,9 @@ pub fn make_without_storage(gl: &gl::Gl, info: &TextureInfo) ->
                 unsafe { gl.TexImage2D(
                     target,
                     0,
-                    fmt,
-                    info.width as GLsizei,
-                    info.height as GLsizei,
+                    format,
+                    width as GLsizei,
+                    height as GLsizei,
                     0,
                     pix,
                     typ,
@@ -534,10 +523,10 @@ pub fn make_without_storage(gl: &gl::Gl, info: &TextureInfo) ->
             gl.TexImage3D(
                 target,
                 0,
-                fmt,
-                info.width as GLsizei,
-                info.height as GLsizei,
-                info.depth as GLsizei,
+                format,
+                width as GLsizei,
+                height as GLsizei,
+                depth as GLsizei,
                 0,
                 pix,
                 typ,
@@ -548,26 +537,60 @@ pub fn make_without_storage(gl: &gl::Gl, info: &TextureInfo) ->
             gl.TexImage3DMultisample(
                 target,
                 samples as GLsizei,
-                fmt as GLenum,  //GL spec bug
-                info.width as GLsizei,
-                info.height as GLsizei,
-                info.depth as GLsizei,
-                fixed_sample_locations
+                format as GLenum,  //GL spec bug
+                width as GLsizei,
+                height as GLsizei,
+                depth as GLsizei,
+                if fixed_sample_locations {gl::TRUE} else {gl::FALSE}
             );
         },
         _ => return Err(TextureError::UnsupportedSamples),
     }
 
-    set_mipmap_range(gl, target, (0, info.levels - 1));
-
+    set_mipmap_range(gl, target, (0, levels - 1));
     Ok(name)
 }
 
+/// Create a texture, using the old TextureInfo, assuming TexStorage* isn't available.
+pub fn make_without_storage_old(gl: &gl::Gl, info: &TextureInfo) ->
+                                Result<Texture, TextureError> {
+    let gl_format = match old_format_to_gl(info.format) {
+        Ok(f) => f as GLint,
+        Err(_) => return Err(TextureError::UnsupportedFormat),
+    };
+    let gl_pixel_format = old_format_to_glpixel(info.format);
+    let gl_data_type = match old_format_to_gltype(info.format) {
+        Ok(t) => t,
+        Err(_) => return Err(TextureError::UnsupportedFormat),
+    };
+
+    make_widout_storage_impl(gl, info.kind, gl_format, gl_pixel_format, gl_data_type,
+                             info.width, info.height, info.depth, info.levels, true)
+}
+
+pub fn make_without_storage(gl: &gl::Gl, desc: &Descriptor, cty: ChannelType) ->
+                            Result<Texture, TextureError> {
+    let format = NewFormat(desc.format, cty.into());
+    let gl_format = match format_to_glfull(format) {
+        Ok(f) => f as GLint,
+        Err(_) => return Err(TextureError::UnsupportedFormat),
+    };
+    let gl_pixel_format = format_to_glpixel(format);
+    let gl_data_type = match format_to_gltype(format) {
+        Ok(t) => t,
+        Err(_) => return Err(TextureError::UnsupportedFormat),
+    };
+
+    let fixed_loc = desc.bind.contains(SHADER_RESOURCE);
+    make_widout_storage_impl(gl, desc.kind, gl_format, gl_pixel_format, gl_data_type,
+                             desc.width, desc.height, desc.depth, desc.levels, fixed_loc)
+}
+
 /// Create a texture, assuming TexStorage is available.
-pub fn make_with_storage_impl(gl: &gl::Gl, kind: Kind, format: GLenum,
-                              width: Size, height: Size, depth: Size,
-                              levels: Level, fixed_sample_locations: bool)
-                              -> Result<Texture, TextureError> {
+fn make_with_storage_impl(gl: &gl::Gl, kind: Kind, format: GLenum,
+                          width: Size, height: Size, depth: Size,
+                          levels: Level, fixed_sample_locations: bool)
+                          -> Result<Texture, TextureError> {
     use std::cmp::max;
 
     fn min(a: u8, b: u8) -> GLint {
@@ -679,9 +702,10 @@ pub fn make_with_storage(gl: &gl::Gl, desc: &Descriptor, cty: ChannelType) ->
         Ok(f) => f,
         Err(_) => return Err(TextureError::UnsupportedFormat),
     };
+    let fixed_loc = desc.bind.contains(SHADER_RESOURCE);
     make_with_storage_impl(gl, desc.kind, gl_format,
                            desc.width, desc.height, desc.depth,
-                           desc.levels, true)
+                           desc.levels, fixed_loc)
 }
 
 /// Bind a texture to the specified slot
@@ -730,9 +754,9 @@ pub fn bind_sampler(gl: &gl::Gl, anchor: BindAnchor, info: &SamplerInfo) { unsaf
     }
 }}
 
-pub fn update_texture_impl<F>(gl: &gl::Gl, kind: Kind, target: GLenum, pix: GLenum,
-                           typ: GLenum, img: &ImageInfoCommon<F>, data: *const GLvoid)
-                           -> Result<(), TextureError> {
+fn update_texture_impl<F>(gl: &gl::Gl, kind: Kind, target: GLenum, pix: GLenum,
+                       typ: GLenum, img: &ImageInfoCommon<F>, data: *const GLvoid)
+                       -> Result<(), TextureError> {
     Ok(match kind {
         Kind::D1 => unsafe {
             gl.TexSubImage1D(
