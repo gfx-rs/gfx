@@ -602,6 +602,23 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
         }
     }
 
+    /// Clear a target view with a specified value.
+    pub fn clear_target_view<T>(&mut self, view: &handle::RenderTargetView<R, T>, _value: T) {
+        use draw_state::target::COLOR;
+        use gfx_core::factory::Phantom;
+        use gfx_core::pso::PixelTargetSet;
+
+        let mut pts = PixelTargetSet::new();
+        pts.colors[0] = Some(self.handles.ref_rtv(view.raw()).clone());
+        let cdata = ClearData { //TODO
+            color: [0.3, 0.3, 0.3, 1.0],
+            depth: 0.0,
+            stencil: 0,
+        };
+        self.command_buffer.bind_pixel_targets(pts);
+        self.command_buffer.call_clear(cdata, COLOR);
+    }
+
     /// Draw a mesh slice using a typed pipeline state object (PSO).
     pub fn draw_pipeline<D: pso::PipelineData<R>>(&mut self, slice: &mesh::Slice<R>,
                          pipeline: &pso::PipelineState<R, D::Meta>, user_data: &D)

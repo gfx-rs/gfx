@@ -30,7 +30,7 @@ macro_rules! gfx_structure {
                 use $crate::attrib::{Offset, Stride};
                 let stride = size_of::<$root>() as Stride;
                 let tmp: &$root = unsafe{ ::std::mem::uninitialized() };
-                let base = &tmp as *const _ as usize;
+                let base = tmp as *const _ as usize;
                 match name {
                 $(
                     stringify!($name) => Some($crate::pso::Element {

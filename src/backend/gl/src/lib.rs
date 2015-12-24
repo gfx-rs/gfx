@@ -168,10 +168,10 @@ impl Error {
     }
 }
 
-const RESET_CB: [Command; 14] = [
+const RESET_CB: [Command; 13] = [
     Command::BindProgram(0),
     //TODO: PSO
-    Command::BindArrayBuffer(0),
+    //Command::BindArrayBuffer(0),
     // BindAttribute
     Command::BindIndex(0),
     Command::BindFrameBuffer(Access::Draw, 0),
@@ -273,6 +273,7 @@ pub struct Device {
     info: Info,
     share: Rc<Share>,
     temp: Temp,
+    _vao: ArrayBuffer,
     frame_handles: handle::Manager<Resources>,
     max_resource_count: Option<usize>,
 }
@@ -299,6 +300,14 @@ impl Device {
         unsafe {
             gl.PixelStorei(gl::UNPACK_ALIGNMENT, 1);
             gl.Enable(gl::FRAMEBUFFER_SRGB);
+        }
+        // create main VAO and bind it
+        let mut vao = 0;
+        if caps.array_buffer_supported {
+            unsafe {
+                gl.GenVertexArrays(1, &mut vao);
+                gl.BindVertexArray(vao);
+            }
         }
         // create the main FBO surface proxies
         let mut handles = handle::Manager::new();
@@ -331,6 +340,7 @@ impl Device {
                 main_depth_stencil: m_ds,
             }),
             temp: Temp::new(),
+            _vao: vao,
             frame_handles: handle::Manager::new(),
             max_resource_count: Some(999999),
         }

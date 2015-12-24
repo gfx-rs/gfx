@@ -21,7 +21,7 @@ use gfx_core::pso::{CreationError, Descriptor};
 use gfx_core::shade::{CreateShaderError, CreateProgramError};
 use gfx_core::state::Rasterizer;
 use extra::shade::*;
-use mesh::{Mesh, VertexFormat};
+use mesh::{Mesh, Slice, SliceKind, VertexFormat};
 use pso;
 
 /// Error creating a PipelineState
@@ -46,10 +46,22 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
         Mesh::from_format(buf, nv as VertexCount)
     }
 
-    /// Create a simple program given a vertex shader with a pixel one.
-    fn link_program(&mut self, vs_code: &[u8], ps_code: &[u8])
-                    -> Result<handle::Program<R>, ProgramError> {
+    /// Create a vertex buffer with an associated slice.
+    fn create_vertex_buffer<T: pso::Structure>(&mut self, data: &[T])
+                            -> (handle::Buffer<R, T>, Slice<R>) {
+        let nv = data.len();
+        //debug_assert!(nv <= self.get_capabilities().max_vertex_count);
+        let buf = self.create_buffer_static(data, BufferRole::Vertex);
+        (buf, Slice {
+            start: 0,
+            end: nv as VertexCount,
+            kind: SliceKind::Vertex,
+        })
+    }
 
+    /// Create a shader set from a given vs/ps code for multiple shader models.
+    fn create_shader_set(&mut self, vs_code: &[u8], ps_code: &[u8])
+                         -> Result<ShaderSet<R>, ProgramError> {
         let vs = match self.create_shader_vertex(vs_code) {
             Ok(s) => s,
             Err(e) => return Err(ProgramError::Vertex(e)),
@@ -58,9 +70,14 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
             Ok(s) => s,
             Err(e) => return Err(ProgramError::Pixel(e)),
         };
+        Ok(ShaderSet::Simple(vs, ps))
+    }
 
-        let set = ShaderSet::Simple(vs, ps);
+    /// Create a simple program given a vertex shader with a pixel one.
+    fn link_program(&mut self, vs_code: &[u8], ps_code: &[u8])
+                    -> Result<handle::Program<R>, ProgramError> {
 
+        let set = try!(self.create_shader_set(vs_code, ps_code));
         self.create_program(&set)
             .map_err(|e| ProgramError::Link(e))
     }
@@ -68,7 +85,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     /// Create a simple program given `ShaderSource` versions of vertex and
     /// pixel shaders, automatically picking available shader variant.
     fn link_program_source(&mut self, vs_src: ShaderSource, ps_src: ShaderSource)
-                            -> Result<handle::Program<R>, ProgramError> {
+                           -> Result<handle::Program<R>, ProgramError> {
         let model = self.get_capabilities().shader_model;
 
         match (vs_src.choose(model), ps_src.choose(model)) {
