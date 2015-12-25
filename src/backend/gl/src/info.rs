@@ -248,7 +248,7 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities) {
         sampler_objects_supported:      info.is_version_or_extension_supported(3, 3, "GL_ARB_sampler_objects"),
         uniform_block_supported:        info.is_version_or_extension_supported(3, 0, "GL_ARB_uniform_buffer_object"),
         vertex_base_supported:          info.is_version_or_extension_supported(3, 2, "GL_ARB_draw_elements_base_vertex"),
-        separate_blending_slots_supported: info.is_version_supported(4, 0), //TODO: extension?
+        separate_blending_slots_supported: info.is_version_or_extension_supported(4, 0, "GL_ARB_draw_buffers_blend"),
     };
     (info, caps)
 }

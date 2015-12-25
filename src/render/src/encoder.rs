@@ -339,17 +339,14 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
         }
 
         if !tex.get_info().contains(&img) {
+            let (w, h, d, _) = tex.get_info().kind.get_dimensions();
             return Err(UpdateError::OutOfBounds {
                 target: [
                     img.xoffset + img.width,
                     img.yoffset + img.height,
                     img.zoffset + img.depth,
                 ],
-                source: [
-                    tex.get_info().width,
-                    tex.get_info().height,
-                    tex.get_info().depth,
-                ],
+                source: [w, h, d],
             })
         }
 
@@ -530,7 +527,8 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
                     let texture = self.handles.ref_texture(tex).clone();
                     let s_param = match sampler {
                         &Some(ref s) => {
-                            if tex.get_info().kind.get_aa_mode().needs_resolve() {
+                            let (_, _, _, aa) = tex.get_info().kind.get_dimensions();
+                            if aa.needs_resolve() {
                                 error!("A sampler provided for an AA texture: {}", var.name);
                             }
                             Some(self.handles.ref_sampler(s).clone())

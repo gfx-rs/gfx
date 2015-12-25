@@ -99,6 +99,8 @@ impl fmt::Debug for TextureError {
 
 /// Dimension size
 pub type Size = u16;
+/// Array size
+pub type ArraySize = u8;
 /// Number of bits per component
 pub type Bits = u8;
 /// Number of MSAA samples
@@ -106,8 +108,8 @@ pub type NumSamples = u8;
 /// Number of EQAA fragments
 pub type NumFragments = u8;
 
-/// Dimensions: width, height, and depth.
-pub type Dimensions = (Size, Size, Size);
+/// Dimensions: width, height, depth, and samples.
+pub type Dimensions = (Size, Size, Size, AaMode);
 
 /// Describes the configuration of samples inside each texel.
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
@@ -384,40 +386,47 @@ pub enum CubeFace {
     NegY
 }
 
-/// Specifies how a given texture may be used. The available texture types are
-/// restricted by what Metal exposes, though this could conceivably be
-/// extended in the future. Note that a single texture can *only* ever be of
-/// one kind. A texture created as `Texture2D` will forever be `Texture2D`.
-// TODO: "Texture views" let you get around that limitation.
+/// Specifies the kind of a texture storage to be allocated.
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 pub enum Kind {
     /// A single row of texels.
-    D1,
+    D1(Size),
     /// An array of rows of texels. Equivalent to Texture2D except that texels
     /// in a different row are not sampled.
-    D1Array,
+    D1Array(Size, ArraySize),
     /// A traditional 2D texture, with rows arranged contiguously.
-    D2(AaMode),
+    D2(Size, Size, AaMode),
     /// An array of 2D textures. Equivalent to Texture3D except that texels in
     /// a different depth level are not sampled.
-    D2Array(AaMode),
-    /// A set of 6 2D textures, one for each face of a cube.
-    ///
-    /// When creating a cube texture, the face is ignored, and storage for all 6 faces is created.
-    /// When updating, only the face specified is updated.
-    Cube(CubeFace),
+    D2Array(Size, Size, ArraySize, AaMode),
     /// A volume texture, with each 2D layer arranged contiguously.
-    D3,
+    D3(Size, Size, Size),
+    /// A set of 6 2D textures, one for each face of a cube.
+    Cube(Size, Size),
+    /// An array of Cube textures.
+    CubeArray(Size, Size, ArraySize),
 }
 
 impl Kind {
-    /// Return the anti-aliasing mode of the texture
-    pub fn get_aa_mode(&self) -> AaMode {
+    /// Get texture dimensions, with 0 values where not applicable.
+    pub fn get_dimensions(&self) -> Dimensions {
+        let s0 = AaMode::Single;
         match *self {
-            Kind::D2(aa) => aa,
-            Kind::D2Array(aa) => aa,
-            _ => AaMode::Single,
+            Kind::D1(w) => (w, 0, 0, s0),
+            Kind::D1Array(w, a) => (w, 0, a as Size, s0),
+            Kind::D2(w, h, s) => (w, h, 0, s),
+            Kind::D2Array(w, h, a, s) => (w, h, a as Size, s),
+            Kind::D3(w, h, d) => (w, h, d, s0),
+            Kind::Cube(w, h) => (w, h, 6, s0),
+            Kind::CubeArray(w, h, a) => (w, h, 6 * (a as Size), s0)
         }
+    }
+    /// Get the dimensionality of a particular mipmap level.
+    pub fn get_level_dimensions(&self, level: Level) -> Dimensions {
+        use std::cmp::max;
+        let (w, h, d, _) = self.get_dimensions();
+        (max(1, w >> level), max(1, h >> level), max(1, d >> level), AaMode::Single)
+
     }
 }
 
@@ -430,15 +439,12 @@ impl Kind {
 #[allow(missing_docs)]
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 pub struct TextureInfo {
-    pub width: Size,
-    pub height: Size,
-    pub depth: Size,
+    pub kind: Kind,
     /// Number of mipmap levels. Defaults to -1, which stands for unlimited.
     /// Mipmap levels at equal or above `levels` can not be loaded or sampled
     /// by the shader. width and height of each consecutive mipmap level is
     /// halved, starting from level 0.
     pub levels: Level,
-    pub kind: Kind,
     pub format: Format,
 }
 
@@ -465,35 +471,34 @@ impl TextureInfo {
     /// Create a new empty texture info.
     pub fn new() -> TextureInfo {
         TextureInfo {
-            width: 0,
-            height: 0,
-            depth: 0,
+            kind: Kind::D2(0, 0, AaMode::Single),
             levels: !0,
-            kind: Kind::D2(AaMode::Single),
             format: RGBA8,
         }
     }
 
     /// Check if given ImageInfo is a part of the texture.
     pub fn contains(&self, img: &ImageInfo) -> bool {
-        self.width <= img.xoffset + img.width &&
-        self.height <= img.yoffset + img.height &&
-        self.depth <= img.zoffset + img.depth &&
+        let (w, h, d, aa) = self.kind.get_dimensions();
+        w >= img.xoffset + img.width &&
+        h >= img.yoffset + img.height &&
+        d >= img.zoffset + img.depth &&
         self.format == img.format &&
-        img.mipmap < self.levels &&
-        self.kind.get_aa_mode() == AaMode::Single
+        self.levels > img.mipmap &&
+        aa == AaMode::Single
     }
 }
 
 impl From<TextureInfo> for ImageInfo {
     fn from(ti: TextureInfo) -> ImageInfo {
+        let (w, h, d, _) = ti.kind.get_dimensions();
         ImageInfo {
             xoffset: 0,
             yoffset: 0,
             zoffset: 0,
-            width: ti.width,
-            height: ti.height,
-            depth: ti.depth,
+            width: w,
+            height: h,
+            depth: d,
             format: ti.format,
             mipmap: 0,
         }
@@ -502,11 +507,12 @@ impl From<TextureInfo> for ImageInfo {
 
 impl From<TextureInfo> for SurfaceInfo {
     fn from(ti: TextureInfo) -> SurfaceInfo {
+        let (w, h, _, aa) = ti.kind.get_dimensions();
         SurfaceInfo {
-            width: ti.width,
-            height: ti.height,
+            width: w,
+            height: h,
             format: ti.format,
-            aa_mode: ti.kind.get_aa_mode(),
+            aa_mode: aa,
         }
     }
 }
@@ -598,9 +604,8 @@ impl SamplerInfo {
 #[allow(missing_docs)]
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 pub struct Descriptor {
-    pub dim: Dimensions,
-    pub levels: Level,
     pub kind: Kind,
+    pub levels: Level,
     pub format: format::SurfaceType,
     pub bind: Bind,
 }
@@ -609,17 +614,9 @@ pub struct Descriptor {
 pub type NewImageInfo = ImageInfoCommon<format::Format>;
 
 impl Descriptor {
-    /// Get the dimensionality of a particular mipmap level.
-    pub fn get_level_dimensions(&self, level: Level) -> Dimensions {
-        use std::cmp::max;
-        (max(1, self.dim.0 >> level),
-         max(1, self.dim.1 >> level),
-         max(1, self.dim.2 >> level))
-
-    }
     /// Get image info for a given mip.
     pub fn to_image_info(&self, cty: format::ChannelType, mip: Level) -> NewImageInfo {
-        let (w, h, d) = self.get_level_dimensions(mip);
+        let (w, h, d, _) = self.kind.get_level_dimensions(mip);
         ImageInfoCommon {
             xoffset: 0,
             yoffset: 0,

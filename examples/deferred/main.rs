@@ -280,19 +280,13 @@ fn create_g_buffer<R: gfx::Resources, F: Factory<R>>(
                    -> (gfx::Frame<R>, gfx::handle::Texture<R>, gfx::handle::Texture<R>,
                        gfx::handle::Texture<R>, gfx::handle::Texture<R>) {
     let texture_info_float = gfx::tex::TextureInfo {
-        width: width,
-        height: height,
-        depth: 1,
+        kind: gfx::tex::Kind::D2(width, height, gfx::tex::AaMode::Single),
         levels: 1,
-        kind: gfx::tex::Kind::D2(gfx::tex::AaMode::Single),
         format: gfx::tex::Format::Float(gfx::tex::Components::RGBA, gfx::attrib::FloatSize::F32),
     };
     let texture_info_depth = gfx::tex::TextureInfo {
-        width: width,
-        height: height,
-        depth: 1,
+        kind: gfx::tex::Kind::D2(width, height, gfx::tex::AaMode::Single),
         levels: 1,
-        kind: gfx::tex::Kind::D2(gfx::tex::AaMode::Single),
         format: gfx::tex::Format::DEPTH24_STENCIL8,
     };
     let texture_pos     = factory.create_texture(texture_info_float).unwrap();
@@ -318,11 +312,8 @@ fn create_res_buffer<R: gfx::Resources, F: Factory<R>>(
                      factory: &mut F, texture_depth: &gfx::handle::Texture<R>)
                      -> (gfx::Frame<R>, gfx::handle::Texture<R>, gfx::handle::Texture<R>) {
     let texture_info_float = gfx::tex::TextureInfo {
-        width: width,
-        height: height,
-        depth: 1,
+        kind: gfx::tex::Kind::D2(width, height, gfx::tex::AaMode::Single),
         levels: 1,
-        kind: gfx::tex::Kind::D2(gfx::tex::AaMode::Single),
         format: gfx::tex::Format::Float(gfx::tex::Components::RGBA, gfx::attrib::FloatSize::F32),
     };
 

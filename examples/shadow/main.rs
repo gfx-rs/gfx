@@ -229,11 +229,10 @@ fn create_scene<D, F>(_: &D, factory: &mut F)
 
     // create shadows
     let shadow_array = factory.create_texture(gfx::tex::TextureInfo {
-        width: 512,
-        height: 512,
-        depth: MAX_LIGHTS as gfx::tex::Size,
+        kind: gfx::tex::Kind::D2Array(512, 512,
+            MAX_LIGHTS as gfx::tex::ArraySize,
+            gfx::tex::AaMode::Single),
         levels: 1,
-        kind: gfx::tex::Kind::D2Array(gfx::tex::AaMode::Single),
         format: gfx::tex::Format::DEPTH24,
     }).unwrap();
 

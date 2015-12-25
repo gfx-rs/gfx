@@ -226,13 +226,13 @@ pub trait Factory<R: Resources> {
 
     /// Update the information stored in a texture
     fn update_texture_raw(&mut self, tex: &handle::Texture<R>,
-                          img: &tex::ImageInfo, data: &[u8],
-                          kind: Option<tex::Kind>) -> Result<(), tex::TextureError>;
+                          img: &tex::ImageInfo, data: &[u8], face: Option<tex::CubeFace>)
+                          -> Result<(), tex::TextureError>;
 
     fn update_texture<T>(&mut self, tex: &handle::Texture<R>,
-                         img: &tex::ImageInfo, data: &[T],
-                         kind: Option<tex::Kind>) -> Result<(), tex::TextureError> {
-        self.update_texture_raw(tex, img, as_byte_slice(data), kind)
+                         img: &tex::ImageInfo, data: &[T], face: Option<tex::CubeFace>)
+                         -> Result<(), tex::TextureError> {
+        self.update_texture_raw(tex, img, as_byte_slice(data), face)
     }
 
     fn generate_mipmap(&mut self, &handle::Texture<R>);
@@ -270,9 +270,8 @@ pub trait Factory<R: Resources> {
                          bind: Bind, mipmap: bool) -> Result<handle::NewTexture<R, S>, tex::Error>
     {
         let desc = tex::Descriptor {
-            dim: (width, height, 0),
+            kind: tex::Kind::D2(width, height, tex::AaMode::Single),
             levels: if mipmap {99} else {1},
-            kind: tex::Kind::D2(tex::AaMode::Single),
             format: S::get_surface_type(),
             bind: bind,
         };
@@ -331,9 +330,8 @@ pub trait Factory<R: Resources> {
     {
         //let tex = try!(self.create_texture_2d(width, height, SHADER_RESOURCE, mipmap));
         let desc = tex::Descriptor {
-            dim: (width, height, 0),
+            kind: tex::Kind::D2(width, height, tex::AaMode::Single),
             levels: if mipmap {99} else {1},
-            kind: tex::Kind::D2(tex::AaMode::Single),
             format: <T::Surface as format::SurfaceTyped>::get_surface_type(),
             bind: SHADER_RESOURCE,
         };

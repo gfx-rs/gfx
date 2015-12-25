@@ -44,6 +44,7 @@ gfx_parameters!( Params {
 
 fn load_texture<R, F>(factory: &mut F, data: &[u8]) -> Result<gfx::handle::Texture<R>, String>
         where R: gfx::Resources, F: gfx::Factory<R> {
+    use gfx::tex::Size;
     let img = image::load(Cursor::new(data), image::PNG).unwrap();
 
     let (fmt, img) = match img {
@@ -52,11 +53,8 @@ fn load_texture<R, F>(factory: &mut F, data: &[u8]) -> Result<gfx::handle::Textu
     };
     let (width, height) = img.dimensions();
     let tex_info = gfx::tex::TextureInfo {
-        width: width as u16,
-        height: height as u16,
-        depth: 1,
+        kind: gfx::tex::Kind::D2(width as Size, height as Size, gfx::tex::AaMode::Single),
         levels: 1,
-        kind: gfx::tex::Kind::D2(gfx::tex::AaMode::Single),
         format: fmt
     };
 

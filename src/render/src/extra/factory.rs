@@ -121,11 +121,8 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     fn create_texture_rgba8(&mut self, width: u16, height: u16)
                             -> Result<handle::Texture<R>, tex::TextureError> {
         self.create_texture(tex::TextureInfo {
-            width: width,
-            height: height,
-            depth: 1,
+            kind: tex::Kind::D2(width, height, tex::AaMode::Single),
             levels: 1,
-            kind: tex::Kind::D2(tex::AaMode::Single),
             format: tex::RGBA8,
         })
     }
@@ -134,11 +131,8 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     fn create_texture_rgba8_static(&mut self, width: u16, height: u16, data: &[u32])
                                    -> Result<handle::Texture<R>, tex::TextureError> {
         let info = tex::TextureInfo {
-            width: width,
-            height: height,
-            depth: 1,
+            kind: tex::Kind::D2(width, height, tex::AaMode::Single),
             levels: 99,
-            kind: tex::Kind::D2(tex::AaMode::Single),
             format: tex::RGBA8,
         };
         match self.create_texture_static(info, data) {
@@ -154,11 +148,8 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     fn create_texture_depth_stencil(&mut self, width: u16, height: u16)
                                     -> Result<handle::Texture<R>, tex::TextureError> {
         self.create_texture(tex::TextureInfo {
-            width: width,
-            height: height,
-            depth: 0,
+            kind: tex::Kind::D2(width, height, tex::AaMode::Single),
             levels: 1,
-            kind: tex::Kind::D2(tex::AaMode::Single),
             format: tex::Format::DEPTH24_STENCIL8,
         })
     }

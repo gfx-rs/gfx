@@ -117,7 +117,7 @@ impl ResourceView {
     pub fn new_texture(t: Texture, kind: d::tex::Kind) -> ResourceView {
         ResourceView {
             object: t,
-            bind: tex::bind_kind_to_gl(kind),
+            bind: tex::kind_to_gl(kind),
             owned: false,
         }
     }
@@ -286,13 +286,12 @@ impl Device {
         let main_fbo = handles.make_frame_buffer(0);
         // this is pretty rough, we need to be using the actual
         // parameters given to WGL/EGL
-        let dim = (0, 0, 0);
+        let dim = (0, 0, 0, d::tex::AaMode::Single);
         let texture = handles.make_new_texture(
             NewTexture::Surface(0),
             d::tex::Descriptor {
-                dim: dim,
                 levels: 0,
-                kind: d::tex::Kind::D2(d::tex::AaMode::Single),
+                kind: d::tex::Kind::D2(dim.0, dim.1, dim.3),
                 format: d::format::SurfaceType::R8_G8_B8_A8,
                 bind: d::factory::RENDER_TARGET,
             },
@@ -671,8 +670,9 @@ impl Device {
                 let gl = &self.share.context;
                 let anchor = tex::bind_texture(gl,
                     gl::TEXTURE0 + slot as gl::types::GLenum,
-                    kind, texture);
-                match (anchor, kind.get_aa_mode(), sampler) {
+                    kind, None, texture);
+                let (_, _, _, aa) = kind.get_dimensions();
+                match (anchor, aa, sampler) {
                     (anchor, d::tex::AaMode::Single, Some(s)) => {
                         if self.share.capabilities.sampler_objects_supported {
                             unsafe { gl.BindSampler(slot as gl::types::GLenum, s.object) };
@@ -725,8 +725,9 @@ impl Device {
                     data.as_ptr(), data.len(), offset, d::factory::BufferRole::Vertex);
             },
             Command::UpdateTexture(kind, texture, image_info, pointer) => {
+                let face = None; //TODO
                 let data = data_buf.get_ref(pointer);
-                match tex::update_texture(&self.share.context, kind, texture, &image_info, data) {
+                match tex::update_texture(&self.share.context, kind, face, texture, &image_info, data) {
                     Ok(_) => (),
                     Err(e) => {
                         error!("Error updating a texture: {:?}", e);

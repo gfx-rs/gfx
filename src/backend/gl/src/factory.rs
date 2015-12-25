@@ -336,7 +336,7 @@ impl d::Factory<R> for Factory {
     fn create_texture(&mut self, info: t::TextureInfo) ->
                       Result<handle::Texture<R>, t::TextureError> {
         let caps = &self.share.capabilities;
-        if info.width == 0 || info.height == 0 || info.levels == 0 {
+        if info.levels == 0 {
             return Err(t::TextureError::InvalidInfo(info))
         }
         if info.format.does_convert_gamma() && !caps.srgb_color_supported {
@@ -355,7 +355,7 @@ impl d::Factory<R> for Factory {
                               -> Result<handle::RawTexture<R>, t::Error> {
         use gfx_core::tex::Error;
         let caps = &self.share.capabilities;
-        if desc.dim.0 == 0 || desc.dim.1 == 0 || desc.levels == 0 {
+        if desc.levels == 0 {
             return Err(Error::Size(0))
         }
         let cty = ChannelType::UintNormalized; //TODO
@@ -371,7 +371,7 @@ impl d::Factory<R> for Factory {
                 Ok(name) => NewTexture::Texture(name),
                 Err(TextureError::UnsupportedGamma) => return Err(Error::Gamma),
                 Err(TextureError::UnsupportedSamples) => {
-                    let aa = desc.kind.get_aa_mode();
+                    let (_, _, _, aa) = desc.kind.get_dimensions();
                     return Err(Error::Samples(aa));
                 },
                 Err(_) => return Err(Error::Format(desc.format)),
@@ -390,12 +390,13 @@ impl d::Factory<R> for Factory {
 
     fn create_new_texture_with_data(&mut self, desc: t::Descriptor, cty: ChannelType, data: &[u8])
                                     -> Result<handle::RawTexture<R>, t::Error> {
-        let kind = desc.kind; //TODO: cubemap slice
+        let kind = desc.kind;
+        let face = None; //TODO: cubemap slice
         let img = desc.to_image_info(cty, 0);
         let tex = try!(self.create_new_texture_raw(desc));
         match self.frame_handles.ref_new_texture(&tex) {
             &NewTexture::Surface(_) => Err(t::Error::Data(0)),
-            &NewTexture::Texture(t) => match tex::update_texture_new(&self.share.context, t, kind, &img, data) {
+            &NewTexture::Texture(t) => match tex::update_texture_new(&self.share.context, t, kind, face, &img, data) {
                 Ok(_) => Ok(tex),
                 Err(_) => Err(t::Error::Data(0)),
             }
@@ -443,7 +444,7 @@ impl d::Factory<R> for Factory {
                                          -> Result<handle::RawRenderTargetView<R>, f::TargetViewError> {
         self.view_texture_as_target(htex, level, layer)
             .map(|view| {
-                let dim = htex.get_info().get_level_dimensions(level);
+                let dim = htex.get_info().kind.get_level_dimensions(level);
                 self.share.handles.borrow_mut().make_rtv(view, htex, dim)
             })
     }
@@ -452,7 +453,7 @@ impl d::Factory<R> for Factory {
                                          -> Result<handle::RawDepthStencilView<R>, f::TargetViewError> {
         self.view_texture_as_target(htex, 0, layer)
             .map(|view| {
-                let dim = htex.get_info().get_level_dimensions(0);
+                let dim = htex.get_info().kind.get_level_dimensions(0);
                 self.share.handles.borrow_mut().make_dsv(view, htex, dim)
             })
     }
@@ -484,16 +485,11 @@ impl d::Factory<R> for Factory {
 
     fn update_texture_raw(&mut self, texture: &handle::Texture<R>,
                           img: &t::ImageInfo, data: &[u8],
-                          kind_override: Option<t::Kind>)
+                          face: Option<t::CubeFace>)
                           -> Result<(), t::TextureError> {
 
-        // use the specified texture kind if set for this update, otherwise
-        // fall back on the kind that was set when the texture was created.
-        let kind = kind_override.unwrap_or(texture.get_info().kind);
-
-        tex::update_texture(&self.share.context, kind,
-                            *self.frame_handles.ref_texture(texture),
-                            img, data)
+        tex::update_texture(&self.share.context, texture.get_info().kind, face,
+                            *self.frame_handles.ref_texture(texture), img, data)
     }
 
     fn generate_mipmap(&mut self, texture: &handle::Texture<R>) {

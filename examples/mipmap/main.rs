@@ -60,11 +60,8 @@ fn make_texture<R, F>(factory: &mut F) -> gfx::shade::TextureParam<R>
               F: gfx::Factory<R>
 {
     let tex_info = gfx::tex::TextureInfo {
-        width: 4,
-        height: 4,
-        depth: 1,
+        kind: gfx::tex::Kind::D2(4, 4, gfx::tex::AaMode::Single),
         levels: 3,
-        kind: gfx::tex::Kind::D2(gfx::tex::AaMode::Single),
         format: gfx::tex::Format::SRGB8,
     };
 
