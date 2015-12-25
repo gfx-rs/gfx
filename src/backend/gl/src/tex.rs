@@ -21,7 +21,7 @@ use gfx_core::tex::{Format, Kind, TextureError, SurfaceError,
                     SurfaceInfo, TextureInfo, SamplerInfo,
                     ImageInfo, ImageInfoCommon, NewImageInfo,
                     AaMode, Components, FilterMethod, WrapMode,
-                    Size, Level, Descriptor};
+                    Level, Dimensions, Descriptor};
 
 
 /// A token produced by the `bind_texture` that allows following up
@@ -391,7 +391,7 @@ fn set_mipmap_range(gl: &gl::Gl, target: GLenum, (base, max): (u8, u8)) { unsafe
     gl.TexParameteri(target, gl::TEXTURE_MAX_LEVEL, max as GLint);
 }}
 
-fn make_surface_impl(gl: &gl::Gl, format: GLenum, width: Size, height: Size, aa: AaMode)
+fn make_surface_impl(gl: &gl::Gl, format: GLenum, dim: Dimensions, aa: AaMode)
                      -> Result<Surface, SurfaceError> {
     let mut name = 0 as GLuint;
     unsafe {
@@ -407,8 +407,8 @@ fn make_surface_impl(gl: &gl::Gl, format: GLenum, width: Size, height: Size, aa:
             gl.RenderbufferStorage(
                 target,
                 format,
-                width as GLsizei,
-                height as GLsizei
+                dim.0 as GLsizei,
+                dim.1 as GLsizei
             );
         },
         AaMode::Multi(samples) => unsafe {
@@ -416,8 +416,8 @@ fn make_surface_impl(gl: &gl::Gl, format: GLenum, width: Size, height: Size, aa:
                 target,
                 samples as GLsizei,
                 format,
-                width as GLsizei,
-                height as GLsizei
+                dim.0 as GLsizei,
+                dim.1 as GLsizei
             );
         },
         AaMode::Coverage(_, _) => return Err(SurfaceError::UnsupportedFormat),
@@ -433,7 +433,8 @@ pub fn make_surface_old(gl: &gl::Gl, info: &SurfaceInfo) ->
         Ok(f) => f,
         Err(_) => return Err(SurfaceError::UnsupportedFormat),
     };
-    make_surface_impl(gl, fmt, info.width, info.height, info.aa_mode)
+    let dim = (info.width, info.height, 0);
+    make_surface_impl(gl, fmt, dim, info.aa_mode)
 }
 
 /// Create a render surface.
@@ -444,13 +445,11 @@ pub fn make_surface(gl: &gl::Gl, desc: &Descriptor, cty: ChannelType) ->
         Ok(f) => f,
         Err(_) => return Err(SurfaceError::UnsupportedFormat),
     };
-    make_surface_impl(gl, fmt, desc.width, desc.height, desc.kind.get_aa_mode())
+    make_surface_impl(gl, fmt, desc.dim, desc.kind.get_aa_mode())
 }
 
-fn make_widout_storage_impl(gl: &gl::Gl, kind: Kind,
-                            format: GLint, pix: GLenum, typ: GLenum,
-                            width: Size, height: Size, depth: Size,
-                            levels: Level, fixed_sample_locations: bool)
+fn make_widout_storage_impl(gl: &gl::Gl, kind: Kind, format: GLint, pix: GLenum, typ: GLenum,
+                            dim: Dimensions, levels: Level, fixed_sample_locations: bool)
                             -> Result<Texture, TextureError> {
     let (name, target) = make_texture(gl, kind);
     match kind {
@@ -459,7 +458,7 @@ fn make_widout_storage_impl(gl: &gl::Gl, kind: Kind,
                 target,
                 0,
                 format,
-                width as GLsizei,
+                dim.0 as GLsizei,
                 0,
                 pix,
                 typ,
@@ -471,8 +470,8 @@ fn make_widout_storage_impl(gl: &gl::Gl, kind: Kind,
                 target,
                 0,
                 format,
-                width as GLsizei,
-                height as GLsizei,
+                dim.0 as GLsizei,
+                dim.2 as GLsizei,
                 0,
                 pix,
                 typ,
@@ -484,8 +483,8 @@ fn make_widout_storage_impl(gl: &gl::Gl, kind: Kind,
                 target,
                 0,
                 format,
-                width as GLsizei,
-                height as GLsizei,
+                dim.0 as GLsizei,
+                dim.1 as GLsizei,
                 0,
                 pix,
                 typ,
@@ -497,8 +496,8 @@ fn make_widout_storage_impl(gl: &gl::Gl, kind: Kind,
                 target,
                 samples as GLsizei,
                 format as GLenum,  //GL spec bug
-                width as GLsizei,
-                height as GLsizei,
+                dim.0 as GLsizei,
+                dim.1 as GLsizei,
                 if fixed_sample_locations {gl::TRUE} else {gl::FALSE}
             );
         },
@@ -510,8 +509,8 @@ fn make_widout_storage_impl(gl: &gl::Gl, kind: Kind,
                     target,
                     0,
                     format,
-                    width as GLsizei,
-                    height as GLsizei,
+                    dim.0 as GLsizei,
+                    dim.1 as GLsizei,
                     0,
                     pix,
                     typ,
@@ -524,9 +523,9 @@ fn make_widout_storage_impl(gl: &gl::Gl, kind: Kind,
                 target,
                 0,
                 format,
-                width as GLsizei,
-                height as GLsizei,
-                depth as GLsizei,
+                dim.0 as GLsizei,
+                dim.1 as GLsizei,
+                dim.2 as GLsizei,
                 0,
                 pix,
                 typ,
@@ -538,9 +537,9 @@ fn make_widout_storage_impl(gl: &gl::Gl, kind: Kind,
                 target,
                 samples as GLsizei,
                 format as GLenum,  //GL spec bug
-                width as GLsizei,
-                height as GLsizei,
-                depth as GLsizei,
+                dim.0 as GLsizei,
+                dim.1 as GLsizei,
+                dim.2 as GLsizei,
                 if fixed_sample_locations {gl::TRUE} else {gl::FALSE}
             );
         },
@@ -563,9 +562,9 @@ pub fn make_without_storage_old(gl: &gl::Gl, info: &TextureInfo) ->
         Ok(t) => t,
         Err(_) => return Err(TextureError::UnsupportedFormat),
     };
-
+    let dim = (info.width, info.height, info.depth);
     make_widout_storage_impl(gl, info.kind, gl_format, gl_pixel_format, gl_data_type,
-                             info.width, info.height, info.depth, info.levels, true)
+                             dim, info.levels, true)
 }
 
 pub fn make_without_storage(gl: &gl::Gl, desc: &Descriptor, cty: ChannelType) ->
@@ -583,13 +582,12 @@ pub fn make_without_storage(gl: &gl::Gl, desc: &Descriptor, cty: ChannelType) ->
 
     let fixed_loc = desc.bind.contains(SHADER_RESOURCE);
     make_widout_storage_impl(gl, desc.kind, gl_format, gl_pixel_format, gl_data_type,
-                             desc.width, desc.height, desc.depth, desc.levels, fixed_loc)
+                             desc.dim, desc.levels, fixed_loc)
 }
 
 /// Create a texture, assuming TexStorage is available.
 fn make_with_storage_impl(gl: &gl::Gl, kind: Kind, format: GLenum,
-                          width: Size, height: Size, depth: Size,
-                          levels: Level, fixed_sample_locations: bool)
+                          dim: Dimensions, levels: Level, fixed_sample_locations: bool)
                           -> Result<Texture, TextureError> {
     use std::cmp::max;
 
@@ -611,46 +609,46 @@ fn make_with_storage_impl(gl: &gl::Gl, kind: Kind, format: GLenum,
         Kind::D1 => unsafe {
             gl.TexStorage1D(
                 target,
-                min(levels, mip_level1(width)),
+                min(levels, mip_level1(dim.0)),
                 format,
-                width as GLsizei
+                dim.0 as GLsizei
             );
         },
         Kind::D1Array => unsafe {
             gl.TexStorage2D(
                 target,
-                min(levels, mip_level1(width)),
+                min(levels, mip_level1(dim.0)),
                 format,
-                width as GLsizei,
-                height as GLsizei
+                dim.0 as GLsizei,
+                dim.2 as GLsizei
             );
         },
         Kind::D2(AaMode::Single) | Kind::Cube(_) => unsafe {
             gl.TexStorage2D(
                 target,
-                min(levels, mip_level2(width, height)),
+                min(levels, mip_level2(dim.0, dim.1)),
                 format,
-                width as GLsizei,
-                height as GLsizei
+                dim.0 as GLsizei,
+                dim.1 as GLsizei
             );
         },
         Kind::D2Array(AaMode::Single) => unsafe {
             gl.TexStorage3D(
                 target,
-                min(levels, mip_level2(width, height)),
+                min(levels, mip_level2(dim.0, dim.1)),
                 format,
-                width as GLsizei,
-                height as GLsizei,
-                depth as GLsizei
+                dim.0 as GLsizei,
+                dim.1 as GLsizei,
+                dim.2 as GLsizei
             );
         },
         Kind::D2(AaMode::Multi(samples)) => unsafe {
             gl.TexStorage2DMultisample(
                 target,
                 samples as GLsizei,
-                format as GLenum,
-                width as GLsizei,
-                height as GLsizei,
+                dim.0 as GLenum,
+                dim.1 as GLsizei,
+                dim.2 as GLsizei,
                 if fixed_sample_locations {gl::TRUE} else {gl::FALSE}
             );
         },
@@ -659,20 +657,20 @@ fn make_with_storage_impl(gl: &gl::Gl, kind: Kind, format: GLenum,
                 target,
                 samples as GLsizei,
                 format as GLenum,
-                width as GLsizei,
-                height as GLsizei,
-                depth as GLsizei,
+                dim.0 as GLsizei,
+                dim.1 as GLsizei,
+                dim.2 as GLsizei,
                 if fixed_sample_locations {gl::TRUE} else {gl::FALSE}
             );
         },
         Kind::D3 => unsafe {
             gl.TexStorage3D(
                 target,
-                min(levels, mip_level3(width, height, depth)),
+                min(levels, mip_level3(dim.0, dim.1, dim.2)),
                 format,
-                width as GLsizei,
-                height as GLsizei,
-                depth as GLsizei
+                dim.0 as GLsizei,
+                dim.1 as GLsizei,
+                dim.2 as GLsizei
             );
         },
         _ => return Err(TextureError::UnsupportedSamples),
@@ -691,7 +689,7 @@ pub fn make_with_storage_old(gl: &gl::Gl, info: &TextureInfo) ->
         Err(_) => return Err(TextureError::UnsupportedFormat),
     };
     make_with_storage_impl(gl, info.kind, gl_format,
-                           info.width, info.height, info.depth,
+                           (info.width, info.height, info.depth),
                            info.levels, true)
 }
 
@@ -704,8 +702,7 @@ pub fn make_with_storage(gl: &gl::Gl, desc: &Descriptor, cty: ChannelType) ->
     };
     let fixed_loc = desc.bind.contains(SHADER_RESOURCE);
     make_with_storage_impl(gl, desc.kind, gl_format,
-                           desc.width, desc.height, desc.depth,
-                           desc.levels, fixed_loc)
+                           desc.dim, desc.levels, fixed_loc)
 }
 
 /// Bind a texture to the specified slot

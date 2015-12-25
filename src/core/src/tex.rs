@@ -106,6 +106,9 @@ pub type NumSamples = u8;
 /// Number of EQAA fragments
 pub type NumFragments = u8;
 
+/// Dimensions: width, height, and depth.
+pub type Dimensions = (Size, Size, Size);
+
 /// Describes the configuration of samples inside each texel.
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 pub enum AaMode {
@@ -595,9 +598,7 @@ impl SamplerInfo {
 #[allow(missing_docs)]
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 pub struct Descriptor {
-    pub width: Size,
-    pub height: Size,
-    pub depth: Size,
+    pub dim: Dimensions,
     pub levels: Level,
     pub kind: Kind,
     pub format: format::SurfaceType,
@@ -608,15 +609,24 @@ pub struct Descriptor {
 pub type NewImageInfo = ImageInfoCommon<format::Format>;
 
 impl Descriptor {
+    /// Get the dimensionality of a particular mipmap level.
+    pub fn get_level_dimensions(&self, level: Level) -> Dimensions {
+        use std::cmp::max;
+        (max(1, self.dim.0 >> level),
+         max(1, self.dim.1 >> level),
+         max(1, self.dim.2 >> level))
+
+    }
     /// Get image info for a given mip.
     pub fn to_image_info(&self, cty: format::ChannelType, mip: Level) -> NewImageInfo {
+        let (w, h, d) = self.get_level_dimensions(mip);
         ImageInfoCommon {
             xoffset: 0,
             yoffset: 0,
             zoffset: 0,
-            width: self.width >> mip,
-            height: self.height >> mip,
-            depth: self.depth >> mip,
+            width: w,
+            height: h,
+            depth: d,
             format: format::Format(self.format, cty.into()),
             mipmap: mip,
         }

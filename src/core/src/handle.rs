@@ -165,11 +165,25 @@ impl<R: Resources> Surface<R> {
 
 /// Raw RTV
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct RawRenderTargetView<R: Resources>(Arc<R::RenderTargetView>, Arc<R::NewTexture>);
+pub struct RawRenderTargetView<R: Resources>(Arc<R::RenderTargetView>, Arc<R::NewTexture>, tex::Dimensions);
+
+impl<R: Resources> RawRenderTargetView<R> {
+    /// Get target dimensions
+    pub fn get_dimensions(&self) -> tex::Dimensions {
+        self.2
+    }
+}
 
 /// Raw DSV
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct RawDepthStencilView<R: Resources>(Arc<R::DepthStencilView>, Arc<R::NewTexture>);
+pub struct RawDepthStencilView<R: Resources>(Arc<R::DepthStencilView>, Arc<R::NewTexture>, tex::Dimensions);
+
+impl<R: Resources> RawDepthStencilView<R> {
+    /// Get target dimensions
+    pub fn get_dimensions(&self) -> tex::Dimensions {
+        self.2
+    }
+}
 
 /// Typed RTV
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -259,8 +273,8 @@ pub trait Producer<R: Resources> {
     fn make_texture_uav(&mut self, R::UnorderedAccessView, &RawTexture<R>) -> RawUnorderedAccessView<R>;
     fn make_frame_buffer(&mut self, R::FrameBuffer) -> FrameBuffer<R>;
     fn make_surface(&mut self, R::Surface, tex::SurfaceInfo) -> Surface<R>;
-    fn make_rtv(&mut self, R::RenderTargetView, &RawTexture<R>) -> RawRenderTargetView<R>;
-    fn make_dsv(&mut self, R::DepthStencilView, &RawTexture<R>) -> RawDepthStencilView<R>;
+    fn make_rtv(&mut self, R::RenderTargetView, &RawTexture<R>, tex::Dimensions) -> RawRenderTargetView<R>;
+    fn make_dsv(&mut self, R::DepthStencilView, &RawTexture<R>, tex::Dimensions) -> RawDepthStencilView<R>;
     fn make_texture(&mut self, R::Texture, tex::TextureInfo) -> Texture<R>;
     fn make_sampler(&mut self, R::Sampler, tex::SamplerInfo) -> Sampler<R>;
     fn make_fence(&mut self, name: R::Fence) -> Fence<R>;
@@ -359,16 +373,16 @@ impl<R: Resources> Producer<R> for Manager<R> {
         Surface(r, info)
     }
 
-    fn make_rtv(&mut self, res: R::RenderTargetView, tex: &RawTexture<R>) -> RawRenderTargetView<R> {
+    fn make_rtv(&mut self, res: R::RenderTargetView, tex: &RawTexture<R>, dim: tex::Dimensions) -> RawRenderTargetView<R> {
         let r = Arc::new(res);
         self.rtvs.push(r.clone());
-        RawRenderTargetView(r, tex.0.clone())
+        RawRenderTargetView(r, tex.0.clone(), dim)
     }
 
-    fn make_dsv(&mut self, res: R::DepthStencilView, tex: &RawTexture<R>) -> RawDepthStencilView<R> {
+    fn make_dsv(&mut self, res: R::DepthStencilView, tex: &RawTexture<R>, dim: tex::Dimensions) -> RawDepthStencilView<R> {
         let r = Arc::new(res);
         self.dsvs.push(r.clone());
-        RawDepthStencilView(r, tex.0.clone())
+        RawDepthStencilView(r, tex.0.clone(), dim)
     }
 
     fn make_texture(&mut self, res: R::Texture, info: tex::TextureInfo) -> Texture<R> {

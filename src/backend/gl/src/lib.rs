@@ -286,20 +286,19 @@ impl Device {
         let main_fbo = handles.make_frame_buffer(0);
         // this is pretty rough, we need to be using the actual
         // parameters given to WGL/EGL
+        let dim = (0, 0, 0);
         let texture = handles.make_new_texture(
             NewTexture::Surface(0),
             d::tex::Descriptor {
-                width: 0,
-                height: 0,
-                depth: 0,
+                dim: dim,
                 levels: 0,
                 kind: d::tex::Kind::D2(d::tex::AaMode::Single),
                 format: d::format::SurfaceType::R8_G8_B8_A8,
                 bind: d::factory::RENDER_TARGET,
             },
         );
-        let m_color = handles.make_rtv(TargetView::Surface(0), &texture);
-        let m_ds = handles.make_dsv(TargetView::Surface(0), &texture);
+        let m_color = handles.make_rtv(TargetView::Surface(0), &texture, dim);
+        let m_ds = handles.make_dsv(TargetView::Surface(0), &texture, dim);
         // create the device
         Device {
             info: info,

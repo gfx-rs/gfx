@@ -270,9 +270,7 @@ pub trait Factory<R: Resources> {
                          bind: Bind, mipmap: bool) -> Result<handle::NewTexture<R, S>, tex::Error>
     {
         let desc = tex::Descriptor {
-            width: width,
-            height: height,
-            depth: 0,
+            dim: (width, height, 0),
             levels: if mipmap {99} else {1},
             kind: tex::Kind::D2(tex::AaMode::Single),
             format: S::get_surface_type(),
@@ -333,9 +331,7 @@ pub trait Factory<R: Resources> {
     {
         //let tex = try!(self.create_texture_2d(width, height, SHADER_RESOURCE, mipmap));
         let desc = tex::Descriptor {
-            width: width,
-            height: height,
-            depth: 0,
+            dim: (width, height, 0),
             levels: if mipmap {99} else {1},
             kind: tex::Kind::D2(tex::AaMode::Single),
             format: <T::Surface as format::SurfaceTyped>::get_surface_type(),

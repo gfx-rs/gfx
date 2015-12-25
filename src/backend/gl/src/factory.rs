@@ -161,7 +161,7 @@ impl Factory {
     }
 
     fn view_texture_as_target(&mut self, htex: &handle::RawTexture<R>, level: Level, layer: Option<Layer>)
-                    -> Result<TargetView, f::TargetViewError> {
+                              -> Result<TargetView, f::TargetViewError> {
         match (self.frame_handles.ref_new_texture(htex), layer) {
             (&NewTexture::Surface(_), Some(_)) => Err(f::TargetViewError::Unsupported),
             (&NewTexture::Surface(_), None) if level != 0 => Err(f::TargetViewError::Unsupported),
@@ -355,7 +355,7 @@ impl d::Factory<R> for Factory {
                               -> Result<handle::RawTexture<R>, t::Error> {
         use gfx_core::tex::Error;
         let caps = &self.share.capabilities;
-        if desc.width == 0 || desc.height == 0 || desc.levels == 0 {
+        if desc.dim.0 == 0 || desc.dim.1 == 0 || desc.levels == 0 {
             return Err(Error::Size(0))
         }
         let cty = ChannelType::UintNormalized; //TODO
@@ -442,13 +442,19 @@ impl d::Factory<R> for Factory {
     fn view_texture_as_render_target_raw(&mut self, htex: &handle::RawTexture<R>, level: Level, layer: Option<Layer>)
                                          -> Result<handle::RawRenderTargetView<R>, f::TargetViewError> {
         self.view_texture_as_target(htex, level, layer)
-            .map(|view| self.share.handles.borrow_mut().make_rtv(view, htex))
+            .map(|view| {
+                let dim = htex.get_info().get_level_dimensions(level);
+                self.share.handles.borrow_mut().make_rtv(view, htex, dim)
+            })
     }
 
     fn view_texture_as_depth_stencil_raw(&mut self, htex: &handle::RawTexture<R>, layer: Option<Layer>)
                                          -> Result<handle::RawDepthStencilView<R>, f::TargetViewError> {
         self.view_texture_as_target(htex, 0, layer)
-            .map(|view| self.share.handles.borrow_mut().make_dsv(view, htex))
+            .map(|view| {
+                let dim = htex.get_info().get_level_dimensions(0);
+                self.share.handles.borrow_mut().make_dsv(view, htex, dim)
+            })
     }
 
     fn create_sampler(&mut self, info: t::SamplerInfo) -> handle::Sampler<R> {
