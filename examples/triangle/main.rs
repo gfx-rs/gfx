@@ -44,8 +44,8 @@ pub fn main() {
         ).unwrap();
 
     let pso = factory.create_pipeline_state(&shaders,
-        gfx::Primitive::TriangleList, Default::default(), &PipeInit::new())
-        .unwrap();
+        gfx::Primitive::TriangleList, Default::default(), &PipeInit::new()
+        ).unwrap();
 
     let vertex_data = [
         Vertex { pos: [ -0.5, -0.5 ], color: [1.0, 0.0, 0.0] },
@@ -69,8 +69,7 @@ pub fn main() {
             }
         }
 
-        let color = gfx::format::U8Norm::cast4([0x20, 0x30, 0x40, 0xFF]);
-        encoder.clear_target_view(&data.out, color);
+        encoder.clear_target(&data.out, [0.1, 0.2, 0.3, 1.0]);
         encoder.draw_pipeline(&slice, &pso, &data);
         device.submit(encoder.as_buffer());
         window.swap_buffers().unwrap();

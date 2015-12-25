@@ -231,8 +231,6 @@ alias! {
     U16Norm = u16,
     I16Norm = i16,
     F16 = u16, // half-float
-    U32Norm = u32,
-    I32Norm = i32,
 }
 
 macro_rules! impl_format {
@@ -299,8 +297,6 @@ impl_formats_16bit! {
 impl_formats_32bit! {
     u32 = Uint,
     i32 = Int,
-    U32Norm = UintNormalized,
-    I32Norm = IntNormalized,
     f32 = Float,
 }
 

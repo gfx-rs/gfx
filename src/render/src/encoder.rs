@@ -18,7 +18,7 @@
 
 use std::mem;
 use draw_state::DrawState;
-use draw_state::target::{ClearData, Mask, Mirror, Rect};
+use draw_state::target::{ClearData, ColorValue, Depth, Mask, Mirror, Rect, Stencil};
 
 use gfx_core as device;
 use gfx_core::Resources;
@@ -601,20 +601,39 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
     }
 
     /// Clear a target view with a specified value.
-    pub fn clear_target_view<T>(&mut self, view: &handle::RenderTargetView<R, T>, _value: T) {
+    pub fn clear_target<T>(&mut self, view: &handle::RenderTargetView<R, T>,
+                        value: ColorValue) { //TODO: value: T
         use draw_state::target::COLOR;
         use gfx_core::factory::Phantom;
         use gfx_core::pso::PixelTargetSet;
 
         let mut pts = PixelTargetSet::new();
         pts.colors[0] = Some(self.handles.ref_rtv(view.raw()).clone());
-        let cdata = ClearData { //TODO
-            color: [0.3, 0.3, 0.3, 1.0],
+        let cdata = ClearData {
+            color: value,
             depth: 0.0,
             stencil: 0,
         };
         self.command_buffer.bind_pixel_targets(pts);
         self.command_buffer.call_clear(cdata, COLOR);
+    }
+
+    /// Clear a depth/stencil view with a specified value.
+    pub fn clear_depth_stencil<T>(&mut self, view: &handle::DepthStencilView<R, T>,
+                               depth: Depth, stencil: Stencil) {
+        use draw_state::target::{DEPTH, STENCIL};
+        use gfx_core::factory::Phantom;
+        use gfx_core::pso::PixelTargetSet;
+
+        let mut pts = PixelTargetSet::new();
+        pts.depth_stencil = Some(self.handles.ref_dsv(view.raw()).clone());
+        let cdata = ClearData {
+            color: [0.0; 4],
+            depth: depth,
+            stencil: stencil,
+        };
+        self.command_buffer.bind_pixel_targets(pts);
+        self.command_buffer.call_clear(cdata, DEPTH | STENCIL);
     }
 
     /// Draw a mesh slice using a typed pipeline state object (PSO).
