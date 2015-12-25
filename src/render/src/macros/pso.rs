@@ -151,6 +151,25 @@ macro_rules! gfx_pipeline {
                     )*
                     return Err(InitError::PixelExport(out.slot, None));
                 }
+                if !info.knows_outputs {
+                    let mut out = $crate::core::shade::OutputVar {
+                        name: String::new(),
+                        slot: 0,
+                    };
+                    $(
+                        match meta.$field.link_output(&out, &self.$field) {
+                            Some(Ok(d)) => {
+                                assert!(meta.$field.is_active());
+                                desc.color_targets[out.slot as usize] = Some(d);
+                                out.slot += 1;
+                            },
+                            Some(Err(fm)) => return Err(
+                                InitError::PixelExport(out.slot, Some(fm))
+                            ),
+                            None => (),
+                        }
+                    )*
+                }
                 // depth-stencil
                 for _ in 0 .. 1 {
                     $(

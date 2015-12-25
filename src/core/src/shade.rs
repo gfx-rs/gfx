@@ -327,6 +327,9 @@ pub struct ProgramInfo {
     pub samplers: Vec<SamplerVar>,
     /// Output targets in the program
     pub outputs: Vec<OutputVar>,
+    /// A hacky flag to make sure the clients know we are
+    /// unable to actually get the output variable info
+    pub knows_outputs: bool,
 }
 
 /// Error type for trying to store a UniformValue in a ConstVar.

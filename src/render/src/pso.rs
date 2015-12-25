@@ -347,7 +347,7 @@ impl<'a,
     }
     fn link_output(&mut self, out: &d::shade::OutputVar, init: &Self::Init) ->
                    Option<Result<d::pso::ColorTargetDesc, d::format::Format>> {
-        if &out.name == init.0 {
+        if out.name.is_empty() || &out.name == init.0 {
             self.0 = Some(out.slot);
             let desc = (T::get_format(), init.1.into());
             Some(Ok(desc))

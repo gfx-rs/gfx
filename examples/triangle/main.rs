@@ -55,7 +55,7 @@ pub fn main() {
     let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
     let data = PipeData {
         vbuf: vbuf,
-        out: main_color.clone(),
+        out: main_color,
     };
 
     'main: loop {
@@ -69,8 +69,8 @@ pub fn main() {
             }
         }
 
-        let color = gfx::format::U8Norm::cast4([0x50, 0x50, 0x50, 0xFF]);
-        encoder.clear_target_view(&main_color, color);
+        let color = gfx::format::U8Norm::cast4([0x20, 0x30, 0x40, 0xFF]);
+        encoder.clear_target_view(&data.out, color);
         encoder.draw_pipeline(&slice, &pso, &data);
         device.submit(encoder.as_buffer());
         window.swap_buffers().unwrap();

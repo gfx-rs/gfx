@@ -341,6 +341,7 @@ pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities, shaders: &[super::Sha
             unordereds: Vec::new(), //TODO
             samplers: samplers,
             outputs: Vec::new(),
+            knows_outputs: false,
         };
         Ok((name, info))
     } else {
