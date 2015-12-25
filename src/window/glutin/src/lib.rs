@@ -99,8 +99,8 @@ pub fn init(window: glutin::Window) -> Success {
 }
 
 pub fn init_new<
-    Cf: gfx::format::Formatted = gfx::format::Rgba8,
-    Df: gfx::format::Formatted = gfx::format::DepthStencil,
+    Cf: gfx::format::RenderFormat = gfx::format::Rgba8,
+    Df: gfx::format::DepthStencilFormat = gfx::format::DepthStencil,
 >(builder: glutin::WindowBuilder) -> (glutin::Window,
         gfx_device_gl::Device, gfx_device_gl::Factory,
         gfx::handle::RenderTargetView<gfx_device_gl::Resources, Cf>,
@@ -111,7 +111,12 @@ pub fn init_new<
     unsafe { window.make_current().unwrap() };
     let (device, factory) = gfx_device_gl::create(|s|
         window.get_proc_address(s) as *const std::os::raw::c_void);
-    let color_view = factory.get_main_color();
-    let ds_view = factory.get_main_depth_stencil();
+    // create the main color/depth targets
+    let (width, height) = window.get_inner_size().unwrap();
+    let aa = window.get_pixel_format().multisampling
+                   .unwrap_or(0) as gfx::tex::NumSamples;
+    let dim = (width as Size, height as Size, 1, aa.into());
+    let (color_view, ds_view) = gfx_device_gl::create_main_targets(dim);
+    // done
     (window, device, factory, color_view, ds_view)
 }

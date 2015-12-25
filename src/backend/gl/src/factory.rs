@@ -19,7 +19,7 @@ use {gl, tex};
 use gfx_core as d;
 use gfx_core::factory as f;
 use gfx_core::factory::Phantom;
-use gfx_core::format::{Formatted, ChannelType};
+use gfx_core::format::ChannelType;
 use gfx_core::handle;
 use gfx_core::handle::Producer;
 use gfx_core::mapping::Builder;
@@ -181,14 +181,6 @@ impl Factory {
             height: h,
             handle: self.get_main_frame_buffer(),
         }
-    }
-
-    pub fn get_main_color<T: Formatted>(&self) -> handle::RenderTargetView<R, T> {
-        Phantom::new(self.share.main_color.clone()) //todo: types
-    }
-
-    pub fn get_main_depth_stencil<T: Formatted>(&self) -> handle::DepthStencilView<R, T> {
-        Phantom::new(self.share.main_depth_stencil.clone()) //todo: types
     }
 }
 

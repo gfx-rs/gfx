@@ -122,6 +122,16 @@ pub enum AaMode {
     Coverage(NumSamples, NumFragments),
 }
 
+impl From<NumSamples> for AaMode {
+    fn from(ns: NumSamples) -> AaMode {
+        if ns > 1 {
+            AaMode::Multi(ns)
+        }else {
+            AaMode::Single
+        }
+    }
+}
+
 impl AaMode {
     /// Return the number of actual data fragments stored per texel.
     pub fn get_num_fragments(&self) -> NumFragments {

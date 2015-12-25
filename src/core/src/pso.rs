@@ -17,9 +17,8 @@
 use {MAX_COLOR_TARGETS, MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
      MAX_RESOURCE_VIEWS, MAX_UNORDERED_VIEWS, MAX_SAMPLERS};
 use {Primitive, Resources};
-use {attrib, format};
+use {attrib, format, tex};
 use state as s;
-use tex::Size;
 
 /// An offset inside a vertex buffer, in bytes.
 pub type BufferOffset = usize;
@@ -213,8 +212,8 @@ pub struct PixelTargetSet<R: Resources> {
     pub colors: [Option<R::RenderTargetView>; MAX_COLOR_TARGETS],
     /// Depth-stencil target view
     pub depth_stencil: Option<R::DepthStencilView>,
-    /// Rendering viewport size
-    pub size: (Size, Size),
+    /// Rendering dimensions
+    pub size: tex::Dimensions,
 }
 
 impl<R: Resources> PixelTargetSet<R> {
@@ -223,7 +222,12 @@ impl<R: Resources> PixelTargetSet<R> {
         PixelTargetSet {
             colors: [None; MAX_COLOR_TARGETS],
             depth_stencil: None,
-            size: (0, 0),
+            size: (0, 0, 0, tex::AaMode::Single),
         }
+    }
+    /// Update rendering dimensions for the new target
+    pub fn update_size(&mut self, dim: tex::Dimensions) {
+        use std::cmp::max;
+        self.size = max(self.size, dim);
     }
 }

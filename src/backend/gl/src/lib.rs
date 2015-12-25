@@ -204,6 +204,30 @@ pub fn create<F>(fn_proc: F) -> (Device, Factory) where
     (device, factory)
 }
 
+/// Create the proxy target views (RTV and DSV) for the attachments of the
+/// main framebuffer. These have GL names equal to 0.
+pub fn create_main_targets<Tc, Td>(dim: d::tex::Dimensions)
+                           -> (handle::RenderTargetView<Resources, Tc>,
+                               handle::DepthStencilView<Resources, Td>)
+where
+    Tc: d::format::RenderFormat,
+    Td: d::format::DepthStencilFormat,
+{
+    use gfx_core::handle::Producer;
+    let mut temp = handle::Manager::new();
+    let texture = temp.make_new_texture(
+        NewTexture::Surface(0),
+        d::tex::Descriptor {
+            levels: 0,
+            kind: d::tex::Kind::D2(dim.0, dim.1, dim.3),
+            format: d::format::SurfaceType::R8_G8_B8_A8,
+            bind: d::factory::RENDER_TARGET,
+        },
+    );
+    let m_color = temp.make_rtv(TargetView::Surface(0), &texture, dim);
+    let m_ds = temp.make_dsv(TargetView::Surface(0), &texture, dim);
+    (d::factory::Phantom::new(m_color), d::factory::Phantom::new(m_ds))
+}
 
 /// Internal struct of shared data between the device and its factories.
 #[doc(hidden)]
@@ -212,8 +236,6 @@ pub struct Share {
     capabilities: d::Capabilities,
     handles: RefCell<handle::Manager<Resources>>,
     main_fbo: handle::FrameBuffer<Resources>,
-    main_color: handle::RawRenderTargetView<Resources>,
-    main_depth_stencil: handle::RawDepthStencilView<Resources>,
 }
 
 /// Temporary data stored between different gfx calls that
@@ -284,20 +306,6 @@ impl Device {
         // create the main FBO surface proxies
         let mut handles = handle::Manager::new();
         let main_fbo = handles.make_frame_buffer(0);
-        // this is pretty rough, we need to be using the actual
-        // parameters given to WGL/EGL
-        let dim = (0, 0, 0, d::tex::AaMode::Single);
-        let texture = handles.make_new_texture(
-            NewTexture::Surface(0),
-            d::tex::Descriptor {
-                levels: 0,
-                kind: d::tex::Kind::D2(dim.0, dim.1, dim.3),
-                format: d::format::SurfaceType::R8_G8_B8_A8,
-                bind: d::factory::RENDER_TARGET,
-            },
-        );
-        let m_color = handles.make_rtv(TargetView::Surface(0), &texture, dim);
-        let m_ds = handles.make_dsv(TargetView::Surface(0), &texture, dim);
         // create the device
         Device {
             info: info,
@@ -306,8 +314,6 @@ impl Device {
                 capabilities: caps,
                 handles: RefCell::new(handles),
                 main_fbo: main_fbo,
-                main_color: m_color,
-                main_depth_stencil: m_ds,
             }),
             temp: Temp::new(),
             _vao: vao,
@@ -930,7 +936,6 @@ impl d::Device for Device {
             |gl, v| unsafe { gl.DeleteProgram(*v) },
             |_, _| {}, //PSO
             |gl, v| match v {
-                &NewTexture::Surface(0) => (), // fake surface
                 &NewTexture::Surface(ref suf) => unsafe { gl.DeleteRenderbuffers(1, suf) },
                 &NewTexture::Texture(ref tex) => unsafe { gl.DeleteTextures(1, tex) },
             }, // new texture

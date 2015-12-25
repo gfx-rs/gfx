@@ -363,6 +363,7 @@ impl<R: d::Resources, T, I> DataBind<R> for RenderTargetCommon<T, I> {
         if let Some(slot) = self.0 {
             let value = Some(man.ref_rtv(data.raw()).clone());
             out.pixel_targets.colors[slot as usize] = value;
+            out.pixel_targets.update_size(data.raw().get_dimensions());
         }
     }
 }
@@ -391,5 +392,6 @@ impl<R: d::Resources, T, I> DataBind<R> for DepthStencilCommon<T, I> {
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
         let value = Some(man.ref_dsv(data.raw()).clone());
         out.pixel_targets.depth_stencil = value;
+        out.pixel_targets.update_size(data.raw().get_dimensions());
     }
 }

@@ -183,7 +183,7 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
             //self.buf.push(Command::SetDrawColorBuffers(self.cache.draw_mask));
         }
         self.buf.push(Command::SetViewport(Rect {
-            x: 0, y: 0, w: 500, h: 500}));
+            x: 0, y: 0, w: pts.size.0, h: pts.size.1}));
     }
 
     fn bind_array_buffer(&mut self, vao: ArrayBuffer) {
