@@ -18,16 +18,8 @@ extern crate rand;
 extern crate glutin;
 #[macro_use] extern crate gfx;
 extern crate gfx_window_glutin;
-extern crate gfx_device_gl;
 
-use std::marker::PhantomData;
 use rand::Rng;
-use glutin::WindowBuilder;
-use gfx::{Factory, BufferRole};
-use gfx::extra::stream::Stream;
-use gfx::extra::factory::FactoryExt;
-use gfx::mesh::Mesh;
-use gfx::batch;
 
 const QUAD_VERTICES: [Vertex; 4] = [
     Vertex { position: [-0.5,  0.5] },
@@ -38,40 +30,49 @@ const QUAD_VERTICES: [Vertex; 4] = [
 
 const QUAD_INDICES: [u8; 6] = [0, 1, 2, 2, 3, 0];
 
-gfx_vertex! {
-    Vertex {
-        a_Position@ position: [f32; 2],
-    }
-}
+gfx_structure!(Vertex {
+    position: [f32; 2] = "a_Position",
+});
 
 // color format: 0xRRGGBBAA
-gfx_vertex! {
-    Attributes {
-        a_Translate@ translate: [f32; 2],
-        a_Color@ color: u32,
-    }
-}
+gfx_structure!(Instance {
+    translate: [f32; 2] = "a_Translate",
+    color: u32 = "a_Color",
+});
 
-gfx_parameters! {
-    Params {
-        u_Scale@ scale: f32,
-    }
-}
+gfx_pipeline_init!(PipeData PipeMeta PipeInit {
+    vertex: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
+    instance: gfx::VertexBuffer<Instance> = gfx::PER_INSTANCE,
+    scale: gfx::Global<f32> = "u_Scale",
+    out: gfx::RenderTarget<gfx::format::Rgba8> = ("o_Color", gfx::state::MASK_ALL),
+});
 
 const MAX_INSTANCE_COUNT: usize = 2048;
 
 fn main() {
-    let window = WindowBuilder::new().with_dimensions(800, 600)
-                                     .with_title("Instancing".to_string())
-                                     .build().unwrap();
-    let (mut stream, mut device, mut factory) = gfx_window_glutin::init(window);
+    use std::default::Default;
+    use gfx::{Device, Factory};
+    use gfx::traits::{EncoderFactory, FactoryExt};
 
+    let builder = glutin::WindowBuilder::new()
+        .with_dimensions(800, 600)
+        .with_title("Instancing example".to_string());
+    let (window, mut device, mut factory, main_color, _) =
+        gfx_window_glutin::init_new::<gfx::format::Rgba8>(builder);
+    let mut encoder = factory.create_encoder();
 
-    let quad_vertices = factory.create_buffer_static(&QUAD_VERTICES, BufferRole::Vertex);
-    let quad_indices = factory.create_buffer_static(&QUAD_INDICES, BufferRole::Index);
-    let quad_vertices_count = QUAD_VERTICES.len() as u32;
+    let shaders = factory.create_shader_set(
+        include_bytes!("instancing_150.glslv"),
+        include_bytes!("instancing_150.glslf")
+        ).unwrap();
 
-    let attributes = factory.create_buffer_dynamic(MAX_INSTANCE_COUNT, BufferRole::Vertex);
+    let pso = factory.create_pipeline_state(&shaders,
+        gfx::Primitive::TriangleList, Default::default(), &PipeInit::new()
+        ).unwrap();
+
+    let quad_vertices = factory.create_buffer_static(&QUAD_VERTICES, gfx::BufferRole::Vertex);
+    let quad_indices = factory.create_buffer_static(&QUAD_INDICES, gfx::BufferRole::Index);
+    let quad_instances = factory.create_buffer_dynamic(MAX_INSTANCE_COUNT, gfx::BufferRole::Vertex);
 
     let instances_per_length: u32 = 32;
     println!("{} instances per length", instances_per_length);
@@ -89,11 +90,11 @@ fn main() {
         let mut rng = rand::StdRng::new().unwrap();
 
         let length = instances_per_length as usize;
-        let mut attributes = factory.map_buffer_writable(&attributes);
+        let mut attributes = factory.map_buffer_writable(&quad_instances);
         for x in 0..length {
             for y in 0..length {
                 let i = x*length + y;
-                attributes.set(i, Attributes {
+                attributes.set(i, Instance {
                     translate: translate,
                     color: rng.next_u32()
                 });
@@ -104,44 +105,30 @@ fn main() {
         }
     }
 
-    let mesh = Mesh::from_format_instanced(quad_vertices, quad_vertices_count, attributes);
-
-    let program = {
-        let vs = gfx::ShaderSource {
-            glsl_150: Some(include_bytes!("instancing_150.glslv")),
-            glsl_120: Some(include_bytes!("instancing_120.glslv")),
-            .. gfx::ShaderSource::empty()
-        };
-        let fs = gfx::ShaderSource {
-            glsl_150: Some(include_bytes!("instancing_150.glslf")),
-            glsl_120: Some(include_bytes!("instancing_120.glslf")),
-            .. gfx::ShaderSource::empty()
-        };
-        factory.link_program_source(vs, fs).unwrap()
-    };
-
-    let params = Params {
+    let data = PipeData {
+        vertex: quad_vertices,
+        instance: quad_instances,
         scale: size,
-        _r: PhantomData
+        out: main_color,
     };
-
-    let mut batch = batch::Full::new(mesh, program, params).unwrap();
-    batch.slice = quad_indices.into();
+    let mut slice: gfx::Slice<_> = quad_indices.into();
+    slice.instances = Some((instance_count, 0));
 
     'l: loop {
-        for event in stream.out.window.poll_events() {
+        for event in window.poll_events() {
             match event {
+                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
                 glutin::Event::Closed => break 'l,
                 _ => {}
             }
         }
 
-        stream.clear(gfx::ClearData {
-            color: [0.3, 0.3, 0.3, 1.0],
-            depth: 1.0,
-            stencil: 0,
-        });
-        stream.draw_instanced(&batch, instance_count, 0).unwrap();
-        stream.present(&mut device);
+        encoder.clear_target(&data.out, [0.1, 0.2, 0.3, 1.0]);
+        encoder.draw_pipeline(&slice, &pso, &data);
+
+        device.submit(encoder.as_buffer());
+        window.swap_buffers().unwrap();
+        device.cleanup();
+        encoder.reset();
     }
 }

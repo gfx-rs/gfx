@@ -1,4 +1,4 @@
-// Copyright 2014 The Gfx-rs Developers.
+// Copyright 2015 The Gfx-rs Developers.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ extern crate image;
 
 use gfx::Device;
 use gfx::format::Rgba8;
-use gfx::shade::ToUniform;
 use gfx::traits::{EncoderFactory, Factory, FactoryExt};
 
 gfx_structure!( Vertex {
@@ -131,7 +130,7 @@ pub fn main() {
         lena_sampler: sampler.clone(),
         tint: tint_texture,
         tint_sampler: sampler,
-        blend: blend_func.0.convert(),
+        blend: blend_func.0,
         out: main_color,
     };
 
@@ -140,12 +139,12 @@ pub fn main() {
         // quit when Esc is pressed.
         for event in window.poll_events() {
             match event {
-                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) => break 'main,
                 glutin::Event::KeyboardInput(glutin::ElementState::Pressed, _, Some(glutin::VirtualKeyCode::B)) => {
                     let blend_func = blends_cycle.next().unwrap();
                     println!("Using '{}' blend equation", blend_func.1);
-                    data.blend = blend_func.0.convert();
+                    data.blend = blend_func.0;
                 },
+                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
                 glutin::Event::Closed => break 'main,
                 _ => {},
             }

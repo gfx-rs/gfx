@@ -22,6 +22,7 @@
 
 use gfx_core::{attrib, handle, shade};
 use gfx_core::{Primitive, Resources, VertexCount};
+use gfx_core::draw::InstanceOption;
 use gfx_core::factory::{BufferRole, Factory};
 
 /// Describes a single attribute of a vertex buffer, including its type, name, etc.
@@ -101,6 +102,7 @@ impl<R: Resources> Mesh<R> {
         Slice {
             start: 0,
             end: self.num_vertices,
+            instances: None,
             kind: SliceKind::Vertex,
         }
     }
@@ -120,6 +122,8 @@ pub struct Slice<R: Resources> {
     pub start: VertexCount,
     /// End index of vertices to draw.
     pub end: VertexCount,
+    /// Instancing configuration.
+    pub instances: InstanceOption,
     /// Source of the vertex ordering when drawing.
     pub kind: SliceKind<R>,
 }
@@ -161,7 +165,7 @@ pub enum SliceKind<R: Resources> {
 }
 
 /// A helper trait to build index slices from data.
-pub trait ToIndexSlice<R: Resources> {
+pub trait ToIndexSlice<R: Resources> { //TODO: remove/refactor it
     /// Make an index slice.
     fn to_slice<F: Factory<R>>(self, factory: &mut F) -> Slice<R>;
 }
@@ -173,6 +177,7 @@ macro_rules! impl_slice {
                 Slice {
                     start: 0,
                     end: buf.len() as VertexCount,
+                    instances: None,
                     kind: SliceKind::$index(buf, 0)
                 }
             }

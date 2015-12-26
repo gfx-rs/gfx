@@ -21,6 +21,7 @@ use std::marker::PhantomData;
 use gfx_core as d;
 use gfx_core::factory::Phantom;
 pub use gfx_core::pso::{Element, Descriptor};
+use shade::ToUniform;
 
 pub struct RawDataSet<R: d::Resources>{
     pub vertex_buffers: d::pso::VertexBufferSet<R>,
@@ -141,7 +142,7 @@ pub static PER_INSTANCE: FetchRate = FetchRate(1);
 
 pub struct VertexBuffer<T: Structure>(AttributeSlotSet, PhantomData<T>);
 pub struct ConstantBuffer<T: Structure>(Option<d::ConstantBufferSlot>, PhantomData<T>);
-pub struct Global<T: d::format::Formatted>(Option<d::shade::Location>, PhantomData<T>);
+pub struct Global<T: d::format::Formatted + ToUniform>(Option<d::shade::Location>, PhantomData<T>);
 pub struct ResourceView<T>(Option<d::ResourceViewSlot>, PhantomData<T>);
 pub struct UnorderedView<T>(Option<d::UnorderedViewSlot>, PhantomData<T>);
 pub struct Sampler(Option<d::SamplerSlot>);
@@ -219,7 +220,7 @@ impl<R: d::Resources, T: Structure> DataBind<R> for ConstantBuffer<T> {
     }
 }
 
-impl<'a, T: d::format::Formatted> DataLink<'a> for Global<T> {
+impl<'a, T: d::format::Formatted + ToUniform> DataLink<'a> for Global<T> {
     type Init = &'a str;
     fn new() -> Self {
         Global(None, PhantomData)
@@ -239,11 +240,12 @@ impl<'a, T: d::format::Formatted> DataLink<'a> for Global<T> {
     }
 }
 
-impl<R: d::Resources, T: d::format::Formatted> DataBind<R> for Global<T> {
-    type Data = d::shade::UniformValue;
+impl<R: d::Resources, T: d::format::Formatted + ToUniform> DataBind<R> for Global<T> {
+    type Data = T;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, _: &mut d::handle::Manager<R>) {
         if let Some(loc) = self.0 {
-            out.global_constants.push((loc, *data));
+            let value = data.convert();
+            out.global_constants.push((loc, value));
         }
     }
 }
