@@ -15,17 +15,17 @@ gfx_parameters!(_Bar {
 });
 
 gfx_structure!(Vertex {
-    x@ _x: i8,
-    y@ _y: f32,
+    _x: i8 = "x",
+    _y: f32 = "y",
 });
 
 gfx_structure!(Instance {
-    pos@ pos: [f32; 2],
-    color@ color: [f32; 3],
+    pos: [f32; 2] = "pos",
+    color: [f32; 3] = "color",
 });
 
 gfx_structure!(Local {
-    pos@ _pos: [u32; 4],
+    _pos: [u32; 4] = "pos",
 });
 
 gfx_pipeline_init!( _Data _Meta _Init {

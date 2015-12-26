@@ -18,8 +18,8 @@ extern crate gfx_window_glutin;
 extern crate glutin;
 
 gfx_structure!( Vertex {
-    a_Pos@ pos: [f32; 2],
-    a_Color@ color: [f32; 3],
+    pos: [f32; 2] = "a_Pos",
+    color: [f32; 3] = "a_Color",
 });
 
 gfx_pipeline_init!(PipeData PipeMeta PipeInit {

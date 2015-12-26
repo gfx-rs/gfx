@@ -17,7 +17,7 @@
 #[macro_export]
 macro_rules! gfx_structure {
     ($root:ident {
-        $( $name:ident@ $field:ident: $ty:ty, )*
+        $( $field:ident: $ty:ty = $name:expr, )*
     }) => {
         #[derive(Clone, Copy, Debug)]
         pub struct $root {
@@ -33,10 +33,10 @@ macro_rules! gfx_structure {
                 let base = tmp as *const _ as usize;
                 match name {
                 $(
-                    stringify!($name) => Some($crate::pso::Element {
-                            format: <$ty as $crate::format::Formatted>::get_format(),
-                            offset: ((&tmp.$field as *const _ as usize) - base) as Offset,
-                            stride: stride,
+                    $name => Some($crate::pso::Element {
+                        format: <$ty as $crate::format::Formatted>::get_format(),
+                        offset: ((&tmp.$field as *const _ as usize) - base) as Offset,
+                        stride: stride,
                     }),
                 )*
                     _ => None,
