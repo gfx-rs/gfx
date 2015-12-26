@@ -65,7 +65,8 @@ impl_surface_type! {
     R32_G32         [64]  = BufferSurface = TextureSurface = RenderSurface,
     R32_G32_B32     [96]  = BufferSurface = TextureSurface = RenderSurface,
     R32_G32_B32_A32 [128] = BufferSurface = TextureSurface = RenderSurface,
-    D24_S8          [32]  = TextureSurface = DepthStencilSurface,
+    D24_S8          [32]  = TextureSurface = DepthSurface = StencilSurface,
+    D32             [32]  = TextureSurface = DepthSurface,
 }
 
 macro_rules! impl_channel_type {
@@ -145,7 +146,8 @@ pub trait SurfaceTyped {
 pub trait BufferSurface: SurfaceTyped {}
 pub trait TextureSurface: SurfaceTyped {}
 pub trait RenderSurface: SurfaceTyped {}
-pub trait DepthStencilSurface: SurfaceTyped {}
+pub trait DepthSurface: SurfaceTyped {}
+pub trait StencilSurface: SurfaceTyped {}
 
 pub trait ChannelTyped {
     fn get_channel_type() -> ChannelType;
@@ -163,6 +165,8 @@ pub trait Formatted {
     }
 }
 pub trait BufferFormat: Formatted {}
+pub trait DepthFormat: Formatted {}
+pub trait StencilFormat: Formatted {}
 pub trait DepthStencilFormat: Formatted {}
 pub trait TextureFormat: Formatted {}
 pub trait RenderFormat: Formatted {}
@@ -177,8 +181,16 @@ impl<F: Formatted> BufferFormat for F where
     F::Surface: BufferSurface,
     F::Channel: ChannelTyped,
 {}
+impl<F: Formatted> DepthFormat for F where
+    F::Surface: DepthSurface,
+    F::Channel: RenderChannel,
+{}
+impl<F: Formatted> StencilFormat for F where
+    F::Surface: StencilSurface,
+    F::Channel: RenderChannel,
+{}
 impl<F: Formatted> DepthStencilFormat for F where
-    F::Surface: DepthStencilSurface,
+    F::Surface: DepthSurface + StencilSurface,
     F::Channel: RenderChannel,
 {}
 impl<F: Formatted> TextureFormat for F where
@@ -307,3 +319,4 @@ pub type Rgb10a2F = (R10_G10_B10_A2, Float);
 pub type Rgba16F = [F16; 4]; //(R16_G16_B16_A16, Float);
 pub type Rgba32F = [f32; 4]; //(R32_G32_B32_A32, Float);
 pub type DepthStencil = (D24_S8, UintNormalized);
+pub type Depth32F = (D32, Float);

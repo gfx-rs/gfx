@@ -149,8 +149,8 @@ pub struct RenderTargetCommon<T, I>(Option<d::ColorSlot>, PhantomData<(T, I)>);
 pub type RenderTarget<T: d::format::RenderFormat> = RenderTargetCommon<T, d::state::ColorMask>;
 pub type BlendTarget<T: d::format::BlendFormat> = RenderTargetCommon<T, d::state::Blend>;
 pub struct DepthStencilCommon<T, I>(PhantomData<(T, I)>);
-pub type DepthTarget<T: d::format::DepthStencilFormat> = DepthStencilCommon<T, d::state::Depth>;
-pub type StencilTarget<T: d::format::DepthStencilFormat> = DepthStencilCommon<T, d::state::Stencil>;
+pub type DepthTarget<T: d::format::DepthFormat> = DepthStencilCommon<T, d::state::Depth>;
+pub type StencilTarget<T: d::format::StencilFormat> = DepthStencilCommon<T, d::state::Stencil>;
 pub type DepthStencilTarget<T: d::format::DepthStencilFormat> = DepthStencilCommon<T, (d::state::Depth, d::state::Stencil)>;
 
 fn match_attribute(_: &d::shade::AttributeVar, _: d::format::Format) -> bool {
