@@ -26,11 +26,11 @@ use pso;
 
 /// Error creating a PipelineState
 #[derive(Clone, PartialEq, Debug)]
-pub enum PipelineStateError<R: Resources> {
+pub enum PipelineStateError {
     /// Shader program failed to link, providing an error string.
     ProgramLink(CreateProgramError),
     /// Unable to create PSO descriptor due to mismatched formats.
-    DescriptorInit(pso::InitError, handle::Program<R>),
+    DescriptorInit(pso::InitError),
     /// Device failed to create the handle give the descriptor.
     DeviceCreate(CreationError),
 }
@@ -98,7 +98,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     /// Create a strongly-typed Pipeline State.
     fn create_pipeline_state<I: pso::PipelineInit>(&mut self, shaders: &ShaderSet<R>,
                              primitive: Primitive, rasterizer: Rasterizer, init: &I)
-                             -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError<R>>
+                             -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError>
     {
         let program = match self.create_program(shaders) {
             Ok(p) => p,
@@ -107,7 +107,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
         let mut descriptor = Descriptor::new(primitive, rasterizer);
         let meta = match init.link_to(&mut descriptor, program.get_info()) {
             Ok(m) => m,
-            Err(e) => return Err(PipelineStateError::DescriptorInit(e, program)),
+            Err(e) => return Err(PipelineStateError::DescriptorInit(e)),
         };
         let raw = match self.create_pipeline_state_raw(&program, &descriptor) {
             Ok(raw) => raw,
