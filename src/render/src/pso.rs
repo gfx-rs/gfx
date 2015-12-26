@@ -113,7 +113,7 @@ pub trait DataLink<'a>: Sized {
     fn link_constant_buffer(&mut self, _: &d::shade::ConstantBufferVar, _: &Self::Init) ->
                             Option<Result<(), d::format::Format>> { None }
     fn link_global_constant(&mut self, _: &d::shade::ConstVar, _: &Self::Init) ->
-                            Option<Result<(), d::format::Format>> { None }
+                            Option<Result<(), d::shade::UniformValue>> { None }
     fn link_output(&mut self, _: &d::shade::OutputVar, _: &Self::Init) ->
                    Option<Result<d::pso::ColorTargetDesc, d::format::Format>> { None }
     fn link_depth_stencil(&mut self, _: &Self::Init) ->
@@ -142,7 +142,7 @@ pub static PER_INSTANCE: FetchRate = FetchRate(1);
 
 pub struct VertexBuffer<T: Structure>(AttributeSlotSet, PhantomData<T>);
 pub struct ConstantBuffer<T: Structure>(Option<d::ConstantBufferSlot>, PhantomData<T>);
-pub struct Global<T: d::format::Formatted + ToUniform>(Option<d::shade::Location>, PhantomData<T>);
+pub struct Global<T: ToUniform>(Option<d::shade::Location>, PhantomData<T>);
 pub struct ResourceView<T>(Option<d::ResourceViewSlot>, PhantomData<T>);
 pub struct UnorderedView<T>(Option<d::UnorderedViewSlot>, PhantomData<T>);
 pub struct Sampler(Option<d::SamplerSlot>);
@@ -220,7 +220,7 @@ impl<R: d::Resources, T: Structure> DataBind<R> for ConstantBuffer<T> {
     }
 }
 
-impl<'a, T: d::format::Formatted + ToUniform> DataLink<'a> for Global<T> {
+impl<'a, T: ToUniform> DataLink<'a> for Global<T> {
     type Init = &'a str;
     fn new() -> Self {
         Global(None, PhantomData)
@@ -229,7 +229,7 @@ impl<'a, T: d::format::Formatted + ToUniform> DataLink<'a> for Global<T> {
         self.0.is_some()
     }
     fn link_global_constant(&mut self, var: &d::shade::ConstVar, init: &Self::Init) ->
-                            Option<Result<(), d::format::Format>> {
+                            Option<Result<(), d::shade::UniformValue>> {
         if &var.name == *init {
             //if match_constant(var, ())
             self.0 = Some(var.location);
@@ -240,7 +240,7 @@ impl<'a, T: d::format::Formatted + ToUniform> DataLink<'a> for Global<T> {
     }
 }
 
-impl<R: d::Resources, T: d::format::Formatted + ToUniform> DataBind<R> for Global<T> {
+impl<R: d::Resources, T: ToUniform> DataBind<R> for Global<T> {
     type Data = T;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, _: &mut d::handle::Manager<R>) {
         if let Some(loc) = self.0 {

@@ -51,22 +51,11 @@ fn load_texture<R, F>(factory: &mut F, data: &[u8])
                 -> Result<gfx::handle::ShaderResourceView<R, Rgba8>, String> where
                 R: gfx::Resources, F: gfx::Factory<R> {
     use std::io::Cursor;
-    use gfx::core::factory::Phantom;
     use gfx::tex as t;
     let img = image::load(Cursor::new(data), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
-    //TODO: cast the slice
-    //let (_, view) = factory.create_texture_2d_const(width as Size, height as Size, &img, false).unwrap();
-    let desc = t::Descriptor {
-        kind: t::Kind::D2(width as t::Size, height as t::Size, t::AaMode::Single),
-        levels: 1,
-        format: gfx::format::SurfaceType::R8_G8_B8_A8,
-        bind: gfx::core::factory::SHADER_RESOURCE,
-    };
-    let raw = factory.create_new_texture_with_data(desc,
-        gfx::format::ChannelType::UintNormalized, &img).unwrap();
-    let tex = Phantom::new(raw);
-    let view = factory.view_texture_as_shader_resource(&tex, (0, 0)).unwrap();
+    let kind = t::Kind::D2(width as t::Size, height as t::Size, t::AaMode::Single);
+    let (_, view) = factory.create_texture_const(kind, gfx::cast_slice(&img), false).unwrap();
     Ok(view)
 }
 

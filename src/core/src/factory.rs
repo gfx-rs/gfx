@@ -37,14 +37,17 @@ pub trait Phantom: Sized {
 }
 
 
-/// Treat a given slice as `&[u8]` for the given function call
-pub fn as_byte_slice<T>(slice: &[T]) -> &[u8] {
+/// Cast a slice from one type to another.
+pub fn cast_slice<A, B>(slice: &[A]) -> &[B] {
     use std::slice;
-    let len = mem::size_of::<T>() * slice.len();
+    let raw_len = mem::size_of::<A>() * slice.len();
+    let len = raw_len / mem::size_of::<B>();
+    assert_eq!(raw_len, len * mem::size_of::<B>());
     unsafe {
-        slice::from_raw_parts(slice.as_ptr() as *const u8, len)
+        slice::from_raw_parts(slice.as_ptr() as *const B, len)
     }
 }
+
 
 /// Specifies the access allowed to a buffer mapping.
 #[derive(Copy, Clone)]
@@ -137,6 +140,7 @@ pub enum TargetViewError {
 }
 
 /// An error from creating textures with views at the same time.
+#[derive(Clone, PartialEq, Debug)]
 pub enum CombinedError {
     /// Failed to create the raw texture.
     Texture(tex::Error),
@@ -179,7 +183,7 @@ pub trait Factory<R: Resources> {
     fn create_buffer_raw(&mut self, size: usize, BufferRole, BufferUsage) -> handle::RawBuffer<R>;
     fn create_buffer_static_raw(&mut self, data: &[u8], BufferRole) -> handle::RawBuffer<R>;
     fn create_buffer_static<T>(&mut self, data: &[T], role: BufferRole) -> handle::Buffer<R, T> {
-        let raw = self.create_buffer_static_raw(as_byte_slice(data), role);
+        let raw = self.create_buffer_static_raw(cast_slice(data), role);
         Phantom::new(raw)
     }
     fn create_buffer_dynamic<T>(&mut self, num: usize, role: BufferRole) -> handle::Buffer<R, T> {
@@ -213,7 +217,7 @@ pub trait Factory<R: Resources> {
                          -> Result<(), BufferUpdateError>;
     fn update_buffer<T>(&mut self, buf: &handle::Buffer<R, T>, data: &[T], offset_elements: usize)
                         -> Result<(), BufferUpdateError> {
-        self.update_buffer_raw(buf.raw(), as_byte_slice(data), mem::size_of::<T>() * offset_elements)
+        self.update_buffer_raw(buf.raw(), cast_slice(data), mem::size_of::<T>() * offset_elements)
     }
     fn map_buffer_raw(&mut self, &handle::RawBuffer<R>, MapAccess) -> Self::Mapper;
     fn unmap_buffer_raw(&mut self, Self::Mapper);
@@ -232,7 +236,7 @@ pub trait Factory<R: Resources> {
     fn update_texture<T>(&mut self, tex: &handle::Texture<R>,
                          img: &tex::ImageInfo, data: &[T], face: Option<tex::CubeFace>)
                          -> Result<(), tex::TextureError> {
-        self.update_texture_raw(tex, img, as_byte_slice(data), face)
+        self.update_texture_raw(tex, img, cast_slice(data), face)
     }
 
     fn generate_mipmap(&mut self, &handle::Texture<R>);
@@ -266,12 +270,12 @@ pub trait Factory<R: Resources> {
     fn view_texture_as_depth_stencil_raw(&mut self, &handle::RawTexture<R>, Option<target::Layer>)
         -> Result<handle::RawDepthStencilView<R>, TargetViewError>;
 
-    fn create_texture_2d<S: format::SurfaceTyped>(&mut self, width: tex::Size, height: tex::Size,
-                         bind: Bind, mipmap: bool) -> Result<handle::NewTexture<R, S>, tex::Error>
+    fn create_new_texture<S: format::SurfaceTyped>(&mut self, kind: tex::Kind, levels: target::Level, bind: Bind)
+                          -> Result<handle::NewTexture<R, S>, tex::Error>
     {
         let desc = tex::Descriptor {
-            kind: tex::Kind::D2(width, height, tex::AaMode::Single),
-            levels: if mipmap {99} else {1},
+            kind: kind,
+            levels: levels,
             format: S::get_surface_type(),
             bind: bind,
         };
@@ -297,7 +301,8 @@ pub trait Factory<R: Resources> {
     }
 
     fn view_texture_as_unordered_access<T: format::Formatted>(&mut self, tex: &handle::NewTexture<R, T::Surface>)
-                                        -> Result<handle::UnorderedAccessView<R, T>, ResourceViewError> {
+                                        -> Result<handle::UnorderedAccessView<R, T>, ResourceViewError>
+    {
         if !tex.get_info().bind.contains(UNORDERED_ACCESS) {
             return Err(ResourceViewError::NoBindFlag)
         }
@@ -307,7 +312,8 @@ pub trait Factory<R: Resources> {
 
     fn view_texture_as_render_target<T: format::RenderFormat>(&mut self,
                                      tex: &handle::NewTexture<R, T::Surface>, level: target::Level, layer: Option<target::Layer>)
-                                     -> Result<handle::RenderTargetView<R, T>, TargetViewError> {
+                                     -> Result<handle::RenderTargetView<R, T>, TargetViewError>
+    {
         if !tex.get_info().bind.contains(RENDER_TARGET) {
             return Err(TargetViewError::NoBindFlag)
         }
@@ -317,7 +323,8 @@ pub trait Factory<R: Resources> {
 
     fn view_texture_as_depth_stencil<T: format::DepthStencilFormat>(&mut self,
                                      tex: &handle::NewTexture<R, T::Surface>, layer: Option<target::Layer>)
-                                     -> Result<handle::DepthStencilView<R, T>, TargetViewError> {
+                                     -> Result<handle::DepthStencilView<R, T>, TargetViewError>
+    {
         if !tex.get_info().bind.contains(RENDER_TARGET) {
             return Err(TargetViewError::NoBindFlag)
         }
@@ -325,19 +332,18 @@ pub trait Factory<R: Resources> {
         Ok(Phantom::new(raw))
     }
 
-    fn create_texture_2d_const<T: format::Formatted>(&mut self, width: tex::Size, height: tex::Size, data: &[T], mipmap: bool)
-                               -> Result<(handle::NewTexture<R, T::Surface>, handle::ShaderResourceView<R, T>), CombinedError>
+    fn create_texture_const<T: format::Formatted>(&mut self, kind: tex::Kind, data: &[T], mipmap: bool)
+                            -> Result<(handle::NewTexture<R, T::Surface>, handle::ShaderResourceView<R, T>), CombinedError>
     {
-        //let tex = try!(self.create_texture_2d(width, height, SHADER_RESOURCE, mipmap));
         let desc = tex::Descriptor {
-            kind: tex::Kind::D2(width, height, tex::AaMode::Single),
+            kind: kind,
             levels: if mipmap {99} else {1},
             format: <T::Surface as format::SurfaceTyped>::get_surface_type(),
             bind: SHADER_RESOURCE,
         };
         //todo: check sizes
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
-        let raw = try!(self.create_new_texture_with_data(desc, cty, as_byte_slice(data)));
+        let raw = try!(self.create_new_texture_with_data(desc, cty, cast_slice(data)));
         self.generate_mipmap_raw(&raw);
         let levels = (0, raw.get_info().levels - 1);
         let tex = Phantom::new(raw);
@@ -346,17 +352,21 @@ pub trait Factory<R: Resources> {
     }
 
     fn create_render_target<T: format::RenderFormat>(&mut self, width: tex::Size, height: tex::Size, allocate_mipmap: bool)
-                            -> Result<(handle::NewTexture<R, T::Surface>, handle::ShaderResourceView<R, T>, handle::RenderTargetView<R, T>), CombinedError> {
-        let tex = try!(self.create_texture_2d(width, height, SHADER_RESOURCE | RENDER_TARGET, allocate_mipmap));
-        let levels = (0, tex.raw().get_info().levels - 1);
-        let resource = try!(self.view_texture_as_shader_resource(&tex, levels));
+                            -> Result<(handle::NewTexture<R, T::Surface>, handle::ShaderResourceView<R, T>, handle::RenderTargetView<R, T>), CombinedError>
+    {
+        let kind = tex::Kind::D2(width, height, tex::AaMode::Single);
+        let levels = if allocate_mipmap {99} else {1};
+        let tex = try!(self.create_new_texture(kind, levels, SHADER_RESOURCE | RENDER_TARGET));
+        let resource = try!(self.view_texture_as_shader_resource(&tex, (0, levels)));
         let target = try!(self.view_texture_as_render_target(&tex, 0, None));
         Ok((tex, resource, target))
     }
 
     fn create_depth_stencil<T: format::DepthStencilFormat>(&mut self, width: tex::Size, height: tex::Size)
-                            -> Result<(handle::NewTexture<R, T::Surface>, handle::ShaderResourceView<R, T>, handle::DepthStencilView<R, T>), CombinedError> {
-        let tex = try!(self.create_texture_2d(width, height, SHADER_RESOURCE | RENDER_TARGET, false));
+                            -> Result<(handle::NewTexture<R, T::Surface>, handle::ShaderResourceView<R, T>, handle::DepthStencilView<R, T>), CombinedError>
+    {
+        let kind = tex::Kind::D2(width, height, tex::AaMode::Single);
+        let tex = try!(self.create_new_texture(kind, 1, SHADER_RESOURCE | RENDER_TARGET));
         let resource = try!(self.view_texture_as_shader_resource(&tex, (0,0)));
         let target = try!(self.view_texture_as_depth_stencil(&tex, None));
         Ok((tex, resource, target))

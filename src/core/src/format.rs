@@ -65,6 +65,8 @@ impl_surface_type! {
     R32_G32         [64]  = BufferSurface = TextureSurface = RenderSurface,
     R32_G32_B32     [96]  = BufferSurface = TextureSurface = RenderSurface,
     R32_G32_B32_A32 [128] = BufferSurface = TextureSurface = RenderSurface,
+    D16             [16]  = TextureSurface = DepthSurface,
+    D24             [24]  = TextureSurface = DepthSurface,
     D24_S8          [32]  = TextureSurface = DepthSurface = StencilSurface,
     D32             [32]  = TextureSurface = DepthSurface,
 }
@@ -318,5 +320,6 @@ pub type Rgba8 = [U8Norm; 4]; //(R8_G8_B8_A8, UintNormalized);
 pub type Rgb10a2F = (R10_G10_B10_A2, Float);
 pub type Rgba16F = [F16; 4]; //(R16_G16_B16_A16, Float);
 pub type Rgba32F = [f32; 4]; //(R32_G32_B32_A32, Float);
+pub type Depth = (D24, UintNormalized);
 pub type DepthStencil = (D24_S8, UintNormalized);
 pub type Depth32F = (D32, Float);
