@@ -246,6 +246,8 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
     let max_len = get_program_iv(gl, prog, gl::ACTIVE_UNIFORM_MAX_LENGTH);
     let mut name = String::with_capacity(max_len as usize);
     name.extend(repeat('\0').take(max_len as usize));
+    let mut texture_slot = 0;
+    unsafe { gl.UseProgram(prog); } //TODO: passive mode
     // walk the indices
     for (&i, _) in indices.iter().zip(block_indices.iter()).filter(|&(_, &b)| b<0) {
         let mut length = 0;
@@ -272,11 +274,12 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
                 });
             },
             StorageType::Sampler(base, tex_type, samp_type) => {
-                let slot = unsafe {
-                    let mut gl_slot = 0;
-                    gl.GetUniformiv(prog, loc, &mut gl_slot);
-                    gl_slot
-                };
+                let slot = texture_slot;
+                texture_slot += 1;
+                unsafe {
+                    gl.Uniform1i(loc, slot as gl::types::GLint);
+                }
+                //TODO: detect the texture slot instead of trying to set it up
                 info!("\t\tSampler[{}] = '{}'\t{:?}\t{:?}", slot, real_name, base, tex_type);
                 textures.push(s::TextureVar {
                     name: real_name.clone(),

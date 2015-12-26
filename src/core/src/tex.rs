@@ -501,14 +501,15 @@ impl TextureInfo {
 
 impl From<TextureInfo> for ImageInfo {
     fn from(ti: TextureInfo) -> ImageInfo {
+        use std::cmp::max;
         let (w, h, d, _) = ti.kind.get_dimensions();
         ImageInfo {
             xoffset: 0,
             yoffset: 0,
             zoffset: 0,
-            width: w,
-            height: h,
-            depth: d,
+            width: max(1, w),
+            height: max(1, h),
+            depth: max(1, d),
             format: ti.format,
             mipmap: 0,
         }
