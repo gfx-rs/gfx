@@ -526,10 +526,17 @@ impl Device {
                 state::bind_rasterizer(gl, &pso.rasterizer);
                 self.temp.stencil = pso.output.stencil;
                 self.temp.cull_face = pso.rasterizer.method.get_cull_face();
-                state::bind_stencil(gl, &self.temp.stencil, (0, 0), self.temp.cull_face);
+                state::bind_stencil(gl, &pso.output.stencil, (0, 0), self.temp.cull_face);
                 state::bind_depth(gl, &pso.output.depth);
-                for i in 0 .. d::MAX_COLOR_TARGETS {
-                    state::bind_blend_slot(gl, i as d::ColorSlot, pso.output.blend[i]);
+                if pso.output.blend.iter().find(|b| b.is_some()).is_some() {
+                    for i in 0 .. d::MAX_COLOR_TARGETS {
+                        state::bind_blend_slot(gl, i as d::ColorSlot, pso.output.blend[i]);
+                    }
+                }else {
+                    unsafe {
+                        gl.ColorMask(gl::TRUE, gl::TRUE, gl::TRUE, gl::TRUE);
+                        gl.Disable(gl::BLEND);
+                    }
                 }
             },
             Command::BindVertexBuffers(vbs) => {

@@ -277,10 +277,13 @@ impl d::Factory<R> for Factory {
         use gfx_core::state as s;
         let mut output = OutputMerger {
             draw_mask: 0,
-            stencil: desc.depth_stencil.map(|(_, t)| s::Stencil {
-                front: t.front.unwrap_or_default(),
-                back: t.back.unwrap_or_default(),
-            }),
+            stencil: match desc.depth_stencil {
+                Some((_, t)) if t.front.is_some() || t.back.is_some() => Some(s::Stencil {
+                    front: t.front.unwrap_or_default(),
+                    back: t.back.unwrap_or_default(),
+                }),
+                _ => None,
+            },
             depth: desc.depth_stencil.and_then(|(_, t)| t.depth),
             blend: [None; d::MAX_COLOR_TARGETS],
         };
