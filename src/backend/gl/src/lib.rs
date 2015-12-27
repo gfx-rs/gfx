@@ -211,7 +211,7 @@ pub fn create_main_targets<Tc, Td>(dim: d::tex::Dimensions)
                                handle::DepthStencilView<Resources, Td>)
 where
     Tc: d::format::RenderFormat,
-    Td: d::format::DepthStencilFormat,
+    Td: d::format::DepthFormat,
 {
     use gfx_core::handle::Producer;
     let mut temp = handle::Manager::new();

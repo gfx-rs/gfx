@@ -100,7 +100,7 @@ pub fn init(window: glutin::Window) -> Success {
 
 pub fn init_new<
     Cf: gfx::format::RenderFormat = gfx::format::Rgba8,
-    Df: gfx::format::DepthStencilFormat = gfx::format::DepthStencil,
+    Df: gfx::format::DepthFormat = gfx::format::DepthStencil,
 >(builder: glutin::WindowBuilder) -> (glutin::Window,
         gfx_device_gl::Device, gfx_device_gl::Factory,
         gfx::handle::RenderTargetView<gfx_device_gl::Resources, Cf>,

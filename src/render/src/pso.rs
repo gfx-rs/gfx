@@ -371,7 +371,7 @@ impl<R: d::Resources, T, I> DataBind<R> for RenderTargetCommon<T, I> {
 }
 
 impl<'a,
-    T: d::format::DepthStencilFormat,
+    T: d::format::Formatted,
     I: 'a + Copy + Into<d::pso::DepthStencilInfo>
 > DataLink<'a> for DepthStencilCommon<T, I> {
     type Init = I;

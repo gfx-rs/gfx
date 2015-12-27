@@ -283,6 +283,20 @@ pub trait Factory<R: Resources> {
         Ok(Phantom::new(raw))
     }
 
+    fn view_buffer_as_shader_resource<T>(&mut self, buf: &handle::Buffer<R, T>)
+                                      -> Result<handle::ShaderResourceView<R, T>, ResourceViewError>
+    {
+        //TODO: check bind flags
+        self.view_buffer_as_shader_resource_raw(buf.raw()).map(Phantom::new)
+    }
+
+    fn view_buffer_as_unordered_access<T>(&mut self, buf: &handle::Buffer<R, T>)
+                                      -> Result<handle::UnorderedAccessView<R, T>, ResourceViewError>
+    {
+        //TODO: check bind flags
+        self.view_buffer_as_unordered_access_raw(buf.raw()).map(Phantom::new)
+    }
+
     fn view_texture_as_shader_resource<T: format::Formatted>(&mut self,
                                        tex: &handle::NewTexture<R, T::Surface>, levels: (target::Level, target::Level))
                                        -> Result<handle::ShaderResourceView<R, T>, ResourceViewError>
@@ -296,8 +310,8 @@ pub trait Factory<R: Resources> {
             min: levels.0,
             max: levels.1,
         };
-        let raw = try!(self.view_texture_as_shader_resource_raw(tex.raw(), desc));
-        Ok(Phantom::new(raw))
+        self.view_texture_as_shader_resource_raw(tex.raw(), desc)
+            .map(Phantom::new)
     }
 
     fn view_texture_as_unordered_access<T: format::Formatted>(&mut self, tex: &handle::NewTexture<R, T::Surface>)
@@ -306,8 +320,8 @@ pub trait Factory<R: Resources> {
         if !tex.get_info().bind.contains(UNORDERED_ACCESS) {
             return Err(ResourceViewError::NoBindFlag)
         }
-        let raw = try!(self.view_texture_as_unordered_access_raw(tex.raw()));
-        Ok(Phantom::new(raw))
+        self.view_texture_as_unordered_access_raw(tex.raw())
+            .map(Phantom::new)
     }
 
     fn view_texture_as_render_target<T: format::RenderFormat>(&mut self,
@@ -317,19 +331,19 @@ pub trait Factory<R: Resources> {
         if !tex.get_info().bind.contains(RENDER_TARGET) {
             return Err(TargetViewError::NoBindFlag)
         }
-        let raw = try!(self.view_texture_as_render_target_raw(tex.raw(), level, layer));
-        Ok(Phantom::new(raw))
+        self.view_texture_as_render_target_raw(tex.raw(), level, layer)
+            .map(Phantom::new)
     }
 
-    fn view_texture_as_depth_stencil<T: format::DepthStencilFormat>(&mut self,
+    fn view_texture_as_depth_stencil<T: format::DepthFormat>(&mut self,
                                      tex: &handle::NewTexture<R, T::Surface>, layer: Option<target::Layer>)
                                      -> Result<handle::DepthStencilView<R, T>, TargetViewError>
     {
         if !tex.get_info().bind.contains(RENDER_TARGET) {
             return Err(TargetViewError::NoBindFlag)
         }
-        let raw = try!(self.view_texture_as_depth_stencil_raw(tex.raw(), layer));
-        Ok(Phantom::new(raw))
+        self.view_texture_as_depth_stencil_raw(tex.raw(), layer)
+            .map(Phantom::new)
     }
 
     fn create_texture_const<T: format::Formatted>(&mut self, kind: tex::Kind, data: &[T], mipmap: bool)
@@ -362,7 +376,7 @@ pub trait Factory<R: Resources> {
         Ok((tex, resource, target))
     }
 
-    fn create_depth_stencil<T: format::DepthStencilFormat>(&mut self, width: tex::Size, height: tex::Size)
+    fn create_depth_stencil<T: format::DepthFormat>(&mut self, width: tex::Size, height: tex::Size)
                             -> Result<(handle::NewTexture<R, T::Surface>, handle::ShaderResourceView<R, T>, handle::DepthStencilView<R, T>), CombinedError>
     {
         let kind = tex::Kind::D2(width, height, tex::AaMode::Single);

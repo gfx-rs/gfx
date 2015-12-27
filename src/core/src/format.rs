@@ -169,7 +169,7 @@ pub trait Formatted {
 pub trait BufferFormat: Formatted {}
 pub trait DepthFormat: Formatted {}
 pub trait StencilFormat: Formatted {}
-pub trait DepthStencilFormat: Formatted {}
+pub trait DepthStencilFormat: DepthFormat + StencilFormat {}
 pub trait TextureFormat: Formatted {}
 pub trait RenderFormat: Formatted {}
 pub trait BlendFormat: RenderFormat {}
@@ -187,7 +187,8 @@ impl<F: Formatted> DepthFormat for F where
     F::Surface: DepthSurface,
     F::Channel: RenderChannel,
 {}
-impl<F: Formatted> StencilFormat for F where
+impl<F> StencilFormat for F where
+    F: DepthFormat + StencilFormat,
     F::Surface: StencilSurface,
     F::Channel: RenderChannel,
 {}
