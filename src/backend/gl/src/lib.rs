@@ -168,17 +168,6 @@ impl Error {
     }
 }
 
-fn primitive_to_gl(primitive: d::Primitive) -> gl::types::GLenum {
-    match primitive {
-        d::Primitive::Point => gl::POINTS,
-        d::Primitive::Line => gl::LINES,
-        d::Primitive::LineStrip => gl::LINE_STRIP,
-        d::Primitive::TriangleList => gl::TRIANGLES,
-        d::Primitive::TriangleStrip => gl::TRIANGLE_STRIP,
-        d::Primitive::TriangleFan => gl::TRIANGLE_FAN,
-    }
-}
-
 fn access_to_gl(access: Access) -> gl::types::GLenum {
     match access {
         Access::Draw => gl::DRAW_FRAMEBUFFER,
@@ -241,22 +230,14 @@ pub struct Share {
 /// Temporary data stored between different gfx calls that
 /// can not be separated on the GL backend.
 struct Temp {
-    primitive: gl::types::GLenum,
-    attributes: [Option<d::pso::AttributeDesc>; d::MAX_VERTEX_ATTRIBUTES],
     resource_views: [Option<(Texture, tex::BindAnchor)>; d::MAX_RESOURCE_VIEWS],
-    stencil: Option<s::Stencil>,
-    cull_face: s::CullFace,
     blend: Option<s::Blend>,
 }
 
 impl Temp {
     fn new() -> Temp {
         Temp {
-            primitive: 0,
-            attributes: [None; d::MAX_VERTEX_ATTRIBUTES],
             resource_views: [None; d::MAX_RESOURCE_VIEWS],
-            stencil: None,
-            cull_face: s::CullFace::Nothing,
             blend: None,
         }
     }
@@ -518,41 +499,6 @@ impl Device {
                 let gl = &self.share.context;
                 unsafe { gl.UseProgram(program) };
             },
-            Command::BindPipelineState(pso) => {
-                let gl = &self.share.context;
-                unsafe { gl.UseProgram(pso.program) };
-                self.temp.primitive = primitive_to_gl(pso.primitive);
-                self.temp.attributes = pso.input;
-                state::bind_rasterizer(gl, &pso.rasterizer);
-                self.temp.stencil = pso.output.stencil;
-                self.temp.cull_face = pso.rasterizer.method.get_cull_face();
-                state::bind_stencil(gl, &pso.output.stencil, (0, 0), self.temp.cull_face);
-                state::bind_depth(gl, &pso.output.depth);
-                if pso.output.blend.iter().find(|b| b.is_some()).is_some() {
-                    for i in 0 .. d::MAX_COLOR_TARGETS {
-                        state::bind_blend_slot(gl, i as d::ColorSlot, pso.output.blend[i]);
-                    }
-                }else {
-                    unsafe {
-                        gl.ColorMask(gl::TRUE, gl::TRUE, gl::TRUE, gl::TRUE);
-                        gl.Disable(gl::BLEND);
-                    }
-                }
-            },
-            Command::BindVertexBuffers(vbs) => {
-                for i in 0 .. d::MAX_VERTEX_ATTRIBUTES {
-                    match (vbs.0[i], self.temp.attributes[i]) {
-                        (None, Some(fm)) => {
-                            error!("No vertex input provided for slot {} of format {:?}", i, fm)
-                        },
-                        (Some((buffer, offset)), Some(mut format)) => {
-                            format.0.offset += offset as gl::types::GLuint;
-                            self.bind_attribute(i as d::AttributeSlot, buffer, format);
-                        },
-                        (_, None) => {},
-                    }
-                }
-            },
             Command::BindConstantBuffers(cbs) => {
                 let gl = &self.share.context;
                 for i in 0 .. d::MAX_CONSTANT_BUFFERS {
@@ -621,6 +567,9 @@ impl Device {
                 } else {
                     error!("Ignored VAO bind command: {}", array_buffer)
                 }
+            },
+            Command::BindAttributeNew(slot, buffer, desc) => {
+                self.bind_attribute(slot, buffer, desc);
             },
             Command::BindAttribute(slot, buffer, format) => {
                 self.bind_attribute_old(slot, buffer, format);
@@ -714,10 +663,11 @@ impl Device {
             Command::SetScissor(rect) => {
                 state::bind_scissor(&self.share.context, rect);
             },
-            Command::SetDepthStencilState(depth, stencil, cull) => {
-                let gl = &self.share.context;
-                state::bind_stencil(gl, &stencil, (0, 0), cull);
-                state::bind_depth(gl, &depth);
+            Command::SetDepthState(depth) => {
+                state::bind_depth(&self.share.context, &depth);
+            },
+            Command::SetStencilState(stencil, refs, cull) => {
+                state::bind_stencil(&self.share.context, &stencil, refs, cull);
             },
             Command::SetBlendState(slot, blend) => {
                 if self.share.capabilities.separate_blending_slots_supported {
@@ -729,10 +679,8 @@ impl Device {
                     error!("Separate blending slots are not supported");
                 }
             },
-            Command::SetRefValues(rv) => {
-                let gl = &self.share.context;
-                state::set_blend_color(gl, rv.blend);
-                state::bind_stencil(gl, &self.temp.stencil, rv.stencil, self.temp.cull_face);
+            Command::SetBlendColor(color) => {
+                state::set_blend_color(&self.share.context, color);
             },
             Command::UpdateBuffer(buffer, pointer, offset) => {
                 let data = data_buf.get_ref(pointer);
@@ -749,15 +697,12 @@ impl Device {
                     },
                 }
             },
-            Command::SetPrimitive(primitive) => {
-                self.temp.primitive = primitive_to_gl(primitive);
-            },
-            Command::Draw(start, count, instances) => {
+            Command::Draw(primitive, start, count, instances) => {
                 let gl = &self.share.context;
                 match instances {
                     Some((num, base)) if self.share.capabilities.instance_call_supported => unsafe {
                         gl.DrawArraysInstancedBaseInstance(
-                            self.temp.primitive,
+                            primitive,
                             start as gl::types::GLsizei,
                             count as gl::types::GLsizei,
                             num as gl::types::GLsizei,
@@ -769,14 +714,14 @@ impl Device {
                     },
                     None => unsafe {
                         gl.DrawArrays(
-                            self.temp.primitive,
+                            primitive,
                             start as gl::types::GLsizei,
                             count as gl::types::GLsizei
                         );
                     },
                 }
             },
-            Command::DrawIndexed(index_type, start, count, base_vertex, instances) => {
+            Command::DrawIndexed(primitive, index_type, start, count, base_vertex, instances) => {
                 use gfx_core::attrib::IntSize;
                 let gl = &self.share.context;
                 let caps = &self.share.capabilities;
@@ -792,7 +737,7 @@ impl Device {
                                 error!("Instance bases with indexed drawing is not supported")
                             }
                             gl.DrawElementsInstanced(
-                                self.temp.primitive,
+                                primitive,
                                 count as gl::types::GLsizei,
                                 gl_index,
                                 offset as *const gl::types::GLvoid,
@@ -800,7 +745,7 @@ impl Device {
                             );
                         } else if base_vertex != 0 && base_instance == 0 {
                             gl.DrawElementsInstancedBaseVertex(
-                                self.temp.primitive,
+                                primitive,
                                 count as gl::types::GLsizei,
                                 gl_index,
                                 offset as *const gl::types::GLvoid,
@@ -809,7 +754,7 @@ impl Device {
                             );
                         } else if base_vertex == 0 && base_instance != 0 {
                             gl.DrawElementsInstancedBaseInstance(
-                                self.temp.primitive,
+                                primitive,
                                 count as gl::types::GLsizei,
                                 gl_index,
                                 offset as *const gl::types::GLvoid,
@@ -818,7 +763,7 @@ impl Device {
                             );
                         } else {
                             gl.DrawElementsInstancedBaseVertexBaseInstance(
-                                self.temp.primitive,
+                                primitive,
                                 count as gl::types::GLsizei,
                                 gl_index,
                                 offset as *const gl::types::GLvoid,
@@ -837,14 +782,14 @@ impl Device {
                                 error!("Base vertex with indexed drawing not supported");
                             }
                             gl.DrawElements(
-                                self.temp.primitive,
+                                primitive,
                                 count as gl::types::GLsizei,
                                 gl_index,
                                 offset as *const gl::types::GLvoid,
                             );
                         } else {
                             gl.DrawElementsBaseVertex(
-                                self.temp.primitive,
+                                primitive,
                                 count as gl::types::GLsizei,
                                 gl_index,
                                 offset as *const gl::types::GLvoid,

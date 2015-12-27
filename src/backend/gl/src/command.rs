@@ -14,19 +14,31 @@
 
 #![allow(missing_docs)]
 
+use gl;
 use gfx_core as c;
 use gfx_core::draw::{Access, Target, DataPointer, InstanceOption};
 use gfx_core::state as s;
-use gfx_core::target::{ClearData, Layer, Level, Mask, Mirror, Rect};
+use gfx_core::target::{ClearData, ColorValue, Layer, Level, Mask, Mirror, Rect, Stencil};
 use {Buffer, ArrayBuffer, Program, FrameBuffer, Surface, Texture,
      Resources, PipelineState, FatSampler, TargetView};
+//use tex::BindAnchor;
+
+fn primitive_to_gl(primitive: c::Primitive) -> gl::types::GLenum {
+    use gfx_core::Primitive as P;
+    match primitive {
+        P::Point => gl::POINTS,
+        P::Line => gl::LINES,
+        P::LineStrip => gl::LINE_STRIP,
+        P::TriangleList => gl::TRIANGLES,
+        P::TriangleStrip => gl::TRIANGLE_STRIP,
+        P::TriangleFan => gl::TRIANGLE_FAN,
+    }
+}
 
 ///Serialized device command.
 #[derive(Clone, Copy, Debug)]
 pub enum Command {
     BindProgram(Program),
-    BindPipelineState(PipelineState),
-    BindVertexBuffers(c::pso::VertexBufferSet<Resources>),
     BindConstantBuffers(c::pso::ConstantBufferSet<Resources>),
     BindResourceViews(c::pso::ResourceViewSet<Resources>),
     BindUnorderedViews(c::pso::UnorderedViewSet<Resources>),
@@ -34,6 +46,7 @@ pub enum Command {
     BindPixelTargets(c::pso::PixelTargetSet<Resources>),
     BindArrayBuffer(ArrayBuffer),
     BindAttribute(c::AttributeSlot, Buffer, c::attrib::Format),
+    BindAttributeNew(c::AttributeSlot, Buffer, c::pso::AttributeDesc),
     BindIndex(Buffer),
     BindFrameBuffer(Access, FrameBuffer),
     UnbindTarget(Access, Target),
@@ -47,23 +60,22 @@ pub enum Command {
     SetRasterizer(s::Rasterizer),
     SetViewport(Rect),
     SetScissor(Option<Rect>),
-    SetDepthStencilState(Option<s::Depth>, Option<s::Stencil>, s::CullFace),
+    SetDepthState(Option<s::Depth>),
+    SetStencilState(Option<s::Stencil>, (Stencil, Stencil), s::CullFace),
     SetBlendState(c::ColorSlot, Option<s::Blend>),
-    SetRefValues(s::RefValues),
+    SetBlendColor(ColorValue),
     UpdateBuffer(Buffer, DataPointer, usize),
     UpdateTexture(c::tex::Kind, Texture, c::tex::ImageInfo, DataPointer),
-    SetPrimitive(c::Primitive),
     // drawing
     Clear(ClearData, Mask),
-    Draw(c::VertexCount, c::VertexCount, InstanceOption),
-    DrawIndexed(c::IndexType, c::VertexCount, c::VertexCount,
+    Draw(gl::types::GLenum, c::VertexCount, c::VertexCount, InstanceOption),
+    DrawIndexed(gl::types::GLenum, c::IndexType, c::VertexCount, c::VertexCount,
                 c::VertexCount, InstanceOption),
     Blit(Rect, Rect, Mirror, Mask),
 }
 
-pub const RESET: [Command; 13] = [
+pub const RESET: [Command; 14] = [
     Command::BindProgram(0),
-    //TODO: PSO
     //Command::BindArrayBuffer(0),
     // BindAttribute
     Command::BindIndex(0),
@@ -81,21 +93,34 @@ pub const RESET: [Command; 13] = [
     }),
     Command::SetViewport(Rect{x: 0, y: 0, w: 0, h: 0}),
     Command::SetScissor(None),
-    Command::SetDepthStencilState(None, None, s::CullFace::Nothing),
+    Command::SetDepthState(None),
+    Command::SetStencilState(None, (0, 0), s::CullFace::Nothing),
     Command::SetBlendState(0, None),
     Command::SetBlendState(1, None),
     Command::SetBlendState(2, None),
     Command::SetBlendState(3, None),
-    Command::SetRefValues(s::RefValues {blend: [0f32; 4], stencil: (0, 0)}),
+    Command::SetBlendColor([0f32; 4]),
 ];
 
 struct Cache {
+    primitive: gl::types::GLenum,
+    attributes: [Option<c::pso::AttributeDesc>;c::MAX_VERTEX_ATTRIBUTES],
+    //resource_views: [Option<(Texture, BindAnchor)>; c::MAX_RESOURCE_VIEWS],
+    stencil: Option<s::Stencil>,
+    //blend: Option<s::Blend>,
+    cull_face: s::CullFace,
     draw_mask: u32,
 }
 
 impl Cache {
     fn new() -> Cache {
         Cache {
+            primitive: 0,
+            attributes: [None; c::MAX_VERTEX_ATTRIBUTES],
+            //resource_views: [None; c::MAX_RESOURCE_VIEWS],
+            stencil: None,
+            cull_face: s::CullFace::Nothing,
+            //blend: None,
             draw_mask: 0,
         }
     }
@@ -142,12 +167,38 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
     }
 
     fn bind_pipeline_state(&mut self, pso: PipelineState) {
+        let cull = pso.rasterizer.method.get_cull_face();
+        self.cache.primitive = primitive_to_gl(pso.primitive);
+        self.cache.attributes = pso.input;
+        self.cache.stencil = pso.output.stencil;
+        self.cache.cull_face = cull;
         self.cache.draw_mask = pso.output.draw_mask;
-        self.buf.push(Command::BindPipelineState(pso));
+        self.buf.push(Command::BindProgram(pso.program));
+        self.buf.push(Command::SetRasterizer(pso.rasterizer));
+        self.buf.push(Command::SetDepthState(pso.output.depth));
+        self.buf.push(Command::SetStencilState(pso.output.stencil, (0, 0), cull));
+        if pso.output.blend.iter().find(|b| b.is_some()).is_some() {
+            for i in 0 .. c::MAX_COLOR_TARGETS {
+                self.buf.push(Command::SetBlendState(i as c::ColorSlot, pso.output.blend[i]));
+            }
+        }else {
+            self.buf.push(Command::SetBlendState(0, None));
+        }
     }
 
     fn bind_vertex_buffers(&mut self, vbs: c::pso::VertexBufferSet<Resources>) {
-        self.buf.push(Command::BindVertexBuffers(vbs));
+        for i in 0 .. c::MAX_VERTEX_ATTRIBUTES {
+            match (vbs.0[i], self.cache.attributes[i]) {
+                (None, Some(fm)) => {
+                    error!("No vertex input provided for slot {} of format {:?}", i, fm)
+                },
+                (Some((buffer, offset)), Some(mut format)) => {
+                    format.0.offset += offset as gl::types::GLuint;
+                    self.buf.push(Command::BindAttributeNew(i as c::AttributeSlot, buffer, format));
+                },
+                (_, None) => (),
+            }
+        }
     }
 
     fn bind_constant_buffers(&mut self, cbs: c::pso::ConstantBufferSet<Resources>) {
@@ -249,7 +300,8 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
     fn set_depth_stencil(&mut self, depth: Option<s::Depth>,
                          stencil: Option<s::Stencil>,
                          cull: s::CullFace) {
-        self.buf.push(Command::SetDepthStencilState(depth, stencil, cull));
+        self.buf.push(Command::SetDepthState(depth));
+        self.buf.push(Command::SetStencilState(stencil, (0, 0), cull)); //care!
     }
 
     fn set_blend(&mut self, slot: c::ColorSlot, blend: Option<s::Blend>) {
@@ -257,7 +309,8 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
     }
 
     fn set_ref_values(&mut self, rv: s::RefValues) {
-        self.buf.push(Command::SetRefValues(rv));
+        self.buf.push(Command::SetStencilState(self.cache.stencil, rv.stencil, self.cache.cull_face));
+        self.buf.push(Command::SetBlendColor(rv.blend));
     }
 
     fn update_buffer(&mut self, buf: Buffer, data: DataPointer,
@@ -271,7 +324,7 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
     }
 
     fn set_primitive(&mut self, prim: c::Primitive) {
-        self.buf.push(Command::SetPrimitive(prim));
+        self.cache.primitive = primitive_to_gl(prim);
     }
 
     fn call_clear(&mut self, data: ClearData, mask: Mask) {
@@ -280,14 +333,14 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
 
     fn call_draw(&mut self, start: c::VertexCount,
                  count: c::VertexCount, instances: InstanceOption) {
-        self.buf.push(Command::Draw(start, count, instances));
+        self.buf.push(Command::Draw(self.cache.primitive, start, count, instances));
     }
 
     fn call_draw_indexed(&mut self,
                          itype: c::IndexType, start: c::VertexCount,
                          count: c::VertexCount, base: c::VertexCount,
                          instances: InstanceOption) {
-        self.buf.push(Command::DrawIndexed(
+        self.buf.push(Command::DrawIndexed(self.cache.primitive,
             itype, start, count, base, instances));
     }
 
