@@ -59,7 +59,6 @@ pub fn main() {
     };
 
     'main: loop {
-        encoder.reset();
         // quit when Esc is pressed.
         for event in window.poll_events() {
             match event {
@@ -69,6 +68,7 @@ pub fn main() {
             }
         }
 
+        encoder.reset();
         encoder.clear_target(&data.out, [0.1, 0.2, 0.3, 1.0]);
         encoder.draw_pipeline(&slice, &pso, &data);
         device.submit(encoder.as_buffer());
