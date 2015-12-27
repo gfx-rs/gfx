@@ -210,8 +210,10 @@ impl<R: Resources> SamplerSet<R> {
 pub struct PixelTargetSet<R: Resources> {
     /// Array of color target views
     pub colors: [Option<R::RenderTargetView>; MAX_COLOR_TARGETS],
-    /// Depth-stencil target view
-    pub depth_stencil: Option<R::DepthStencilView>,
+    /// Depth target view
+    pub depth: Option<R::DepthStencilView>,
+    /// Stencil target view
+    pub stencil: Option<R::DepthStencilView>,
     /// Rendering dimensions
     pub size: tex::Dimensions,
 }
@@ -221,7 +223,8 @@ impl<R: Resources> PixelTargetSet<R> {
     pub fn new() -> PixelTargetSet<R> {
         PixelTargetSet {
             colors: [None; MAX_COLOR_TARGETS],
-            depth_stencil: None,
+            depth: None,
+            stencil: None,
             size: (0, 0, 0, tex::AaMode::Single),
         }
     }

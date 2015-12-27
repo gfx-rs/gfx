@@ -370,6 +370,21 @@ impl<R: d::Resources, T, I> DataBind<R> for RenderTargetCommon<T, I> {
     }
 }
 
+trait DepthStencilAttachment {
+    fn has_depth() -> bool { false }
+    fn has_stencil() -> bool { false }
+}
+impl DepthStencilAttachment for d::state::Depth {
+    fn has_depth() -> bool { true }
+}
+impl DepthStencilAttachment for d::state::Stencil {
+    fn has_stencil() -> bool { true }
+}
+impl DepthStencilAttachment for (d::state::Depth, d::state::Stencil) {
+    fn has_depth() -> bool { true }
+    fn has_stencil() -> bool { true }
+}
+
 impl<'a,
     T: d::format::Formatted,
     I: 'a + Copy + Into<d::pso::DepthStencilInfo>
@@ -389,11 +404,17 @@ impl<'a,
     }
 }
 
-impl<R: d::Resources, T, I> DataBind<R> for DepthStencilCommon<T, I> {
+impl<R: d::Resources, T, I: DepthStencilAttachment>
+DataBind<R> for DepthStencilCommon<T, I> {
     type Data = d::handle::DepthStencilView<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
         let value = Some(man.ref_dsv(data.raw()).clone());
-        out.pixel_targets.depth_stencil = value;
+        if I::has_depth() {
+            out.pixel_targets.depth = value.clone();
+        }
+        if I::has_stencil() {
+            out.pixel_targets.stencil = value;
+        }
         out.pixel_targets.update_size(data.raw().get_dimensions());
     }
 }

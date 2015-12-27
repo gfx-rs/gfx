@@ -174,13 +174,16 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
     fn bind_pixel_targets(&mut self, pts: c::pso::PixelTargetSet<Resources>) {
         let is_main = pts.colors.iter().skip(1).find(|c| c.is_some()).is_none() &&
             self.is_main_target(pts.colors[0]) &&
-            self.is_main_target(pts.depth_stencil);
+            self.is_main_target(pts.depth) &&
+            self.is_main_target(pts.stencil);
         if is_main {
             self.buf.push(Command::BindFrameBuffer(Access::Draw, 0));
         }else {
+            let num = pts.colors.iter().position(|c| c.is_none())
+                         .unwrap_or(pts.colors.len()) as c::ColorSlot;
             self.buf.push(Command::BindFrameBuffer(Access::Draw, self.fbo));
             self.buf.push(Command::BindPixelTargets(pts));
-            //self.buf.push(Command::SetDrawColorBuffers(self.cache.draw_mask));
+            self.buf.push(Command::SetDrawColorBuffers(num));
         }
         self.buf.push(Command::SetViewport(Rect {
             x: 0, y: 0, w: pts.size.0, h: pts.size.1}));

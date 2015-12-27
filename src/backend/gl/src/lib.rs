@@ -600,9 +600,11 @@ impl Device {
                         self.bind_target(point, att, target);
                     }
                 }
-                if let Some(ref ds) = pts.depth_stencil {
-                    let att = gl::DEPTH_STENCIL_ATTACHMENT;
-                    self.bind_target(point, att, ds);
+                if let Some(ref depth) = pts.depth {
+                    self.bind_target(point, gl::DEPTH_ATTACHMENT, depth);
+                }
+                if let Some(ref stencil) = pts.stencil {
+                    self.bind_target(point, gl::STENCIL_ATTACHMENT, stencil);
                 }
             },
             Command::BindArrayBuffer(array_buffer) => {
