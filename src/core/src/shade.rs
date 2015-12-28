@@ -59,7 +59,7 @@ pub enum TextureType {
     /// Sample from a 3D texture
     D3,
     /// Sample from a cubemap.
-    Cube,
+    Cube(IsArray),
 }
 
 impl TextureType {
@@ -71,7 +71,7 @@ impl TextureType {
             &TextureType::D2(_, IsMultiSample::MultiSample) => false,
             &TextureType::D2(_, IsMultiSample::NoMultiSample) => true,
             &TextureType::D3 => true,
-            &TextureType::Cube => true,
+            &TextureType::Cube(_) => true,
         }
     }
 }
@@ -84,10 +84,10 @@ pub struct SamplerType(pub IsComparison, pub IsRect);
 #[allow(missing_docs)]
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum BaseType {
-    F32,
-    F64,
     I32,
     U32,
+    F32,
+    F64,
     Bool,
 }
 
@@ -122,7 +122,7 @@ pub type Location = usize;
 // unable to derive anything for fixed arrays
 /// A value that can be uploaded to the device as a uniform.
 #[allow(missing_docs)]
-#[derive(Copy)]
+#[derive(Clone, Copy)]
 pub enum UniformValue {
     I32(i32),
     F32(f32),
@@ -138,51 +138,6 @@ pub enum UniformValue {
     F32Matrix2([[f32; 2]; 2]),
     F32Matrix3([[f32; 3]; 3]),
     F32Matrix4([[f32; 4]; 4]),
-}
-
-impl UniformValue {
-    /// Whether two `UniformValue`s have the same type.
-    pub fn is_same_type(&self, other: &UniformValue) -> bool {
-        match (*self, *other) {
-            (UniformValue::I32(_), UniformValue::I32(_)) => true,
-            (UniformValue::F32(_), UniformValue::F32(_)) => true,
-
-            (UniformValue::I32Vector2(_), UniformValue::I32Vector2(_)) => true,
-            (UniformValue::I32Vector3(_), UniformValue::I32Vector3(_)) => true,
-            (UniformValue::I32Vector4(_), UniformValue::I32Vector4(_)) => true,
-
-            (UniformValue::F32Vector2(_), UniformValue::F32Vector2(_)) => true,
-            (UniformValue::F32Vector3(_), UniformValue::F32Vector3(_)) => true,
-            (UniformValue::F32Vector4(_), UniformValue::F32Vector4(_)) => true,
-
-            (UniformValue::F32Matrix2(_), UniformValue::F32Matrix2(_)) => true,
-            (UniformValue::F32Matrix3(_), UniformValue::F32Matrix3(_)) => true,
-            (UniformValue::F32Matrix4(_), UniformValue::F32Matrix4(_)) => true,
-
-            _ => false,
-        }
-    }
-}
-
-impl Clone for UniformValue {
-    fn clone(&self) -> UniformValue {
-        match *self {
-            UniformValue::I32(val)      => UniformValue::I32(val),
-            UniformValue::F32(val)      => UniformValue::F32(val),
-
-            UniformValue::I32Vector2(v) => UniformValue::I32Vector2(v),
-            UniformValue::I32Vector3(v) => UniformValue::I32Vector3(v),
-            UniformValue::I32Vector4(v) => UniformValue::I32Vector4(v),
-
-            UniformValue::F32Vector2(v) => UniformValue::F32Vector2(v),
-            UniformValue::F32Vector3(v) => UniformValue::F32Vector3(v),
-            UniformValue::F32Vector4(v) => UniformValue::F32Vector4(v),
-
-            UniformValue::F32Matrix2(m) => UniformValue::F32Matrix2(m),
-            UniformValue::F32Matrix3(m) => UniformValue::F32Matrix3(m),
-            UniformValue::F32Matrix4(m) => UniformValue::F32Matrix4(m),
-        }
-    }
 }
 
 impl fmt::Debug for UniformValue {
@@ -223,6 +178,74 @@ impl fmt::Debug for UniformValue {
         }
     }
 }
+
+/// Format of a shader constant.
+pub type ConstFormat = (BaseType, ContainerType);
+
+/// A trait that statically links simple data types to
+/// base types of the shader constants.
+pub trait BaseTyped {
+    fn get_base_type() -> BaseType;
+}
+
+/// A trait that statically links simple data types to
+/// constant formats.
+pub trait Formatted {
+    /// Get the associated constant format.
+    fn get_format() -> ConstFormat;
+}
+
+macro_rules! impl_base_type {
+    { $($name:ident = $value:ident ,)* } => {
+        $(
+            impl BaseTyped for $name {
+                fn get_base_type() -> BaseType {
+                    BaseType::$value
+                }
+            }
+        )*
+    }
+}
+
+macro_rules! impl_const_vector {
+    ( $( $num:expr ),* ) => {
+        $(
+            impl<T: BaseTyped> Formatted for [T; $num] {
+                fn get_format() -> ConstFormat {
+                    (T::get_base_type(), ContainerType::Vector($num))
+                }
+            }
+        )*
+    }
+}
+macro_rules! impl_const_matrix {
+    ( $( [$n:expr, $m:expr] ),* ) => {
+        $(
+            impl<T: BaseTyped> Formatted for [[T; $n]; $m] {
+                fn get_format() -> ConstFormat {
+                    let mf = MatrixFormat::ColumnMajor;
+                    (T::get_base_type(), ContainerType::Matrix(mf, $n, $m))
+                }
+            }
+        )*
+    }
+}
+
+impl_base_type! {
+    i32 = I32,
+    u32 = U32,
+    f32 = F32,
+    bool = Bool,
+}
+
+impl<T: BaseTyped> Formatted for T {
+    fn get_format() -> ConstFormat {
+        (T::get_base_type(), ContainerType::Single)
+    }
+}
+
+impl_const_vector!(2, 3, 4);
+impl_const_matrix!([2,2], [3,3], [4,4], [4,3]);
 
 /// Vertex information that a shader takes as input.
 #[derive(Clone, PartialEq, Debug)]

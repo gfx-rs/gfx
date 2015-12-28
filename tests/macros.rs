@@ -14,17 +14,17 @@ gfx_parameters!(_Bar {
     t@ _t: gfx::shade::TextureParam<R>,
 });
 
-gfx_structure!(Vertex {
+gfx_vertex_struct!(Vertex {
     _x: i8 = "x",
     _y: f32 = "y",
 });
 
-gfx_structure!(Instance {
+gfx_vertex_struct!(Instance {
     pos: [f32; 2] = "pos",
     color: [f32; 3] = "color",
 });
 
-gfx_structure!(Local {
+gfx_constant_struct!(Local {
     _pos: [u32; 4] = "pos",
 });
 

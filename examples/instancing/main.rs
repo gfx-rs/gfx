@@ -30,12 +30,12 @@ const QUAD_VERTICES: [Vertex; 4] = [
 
 const QUAD_INDICES: [u8; 6] = [0, 1, 2, 2, 3, 0];
 
-gfx_structure!(Vertex {
+gfx_vertex_struct!(Vertex {
     position: [f32; 2] = "a_Position",
 });
 
 // color format: 0xRRGGBBAA
-gfx_structure!(Instance {
+gfx_vertex_struct!(Instance {
     translate: [f32; 2] = "a_Translate",
     color: u32 = "a_Color",
 });

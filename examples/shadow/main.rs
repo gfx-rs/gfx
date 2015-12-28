@@ -25,7 +25,7 @@ use gfx::traits::*;
 
 // Section-1: vertex formats and shader parameters
 
-gfx_structure!( Vertex {
+gfx_vertex_struct!( Vertex {
     pos: [I8Scaled; 3] = "a_Pos",
     normal: [I8Scaled; 3] = "a_Normal",
 });
@@ -41,12 +41,11 @@ impl Vertex {
 
 const MAX_LIGHTS: usize = 10;
 
-#[derive(Clone, Copy, Debug)]
-pub struct LightParam {
-    pos: [f32; 4],
-    color: [f32; 4],
-    proj: [[f32; 4]; 4],
-}
+gfx_constant_struct!(LightParam {
+    pos: [f32; 4] = "pos",
+    color: [f32; 4] = "color",
+    proj: [[f32; 4]; 4] = "proj",
+});
 
 mod forward {
     use gfx;
@@ -59,7 +58,7 @@ mod forward {
         model_transform: gfx::Global<[[f32; 4]; 4]> = "u_ModelTransform",
         color: gfx::Global<[f32; 4]> = "u_Color",
         num_lights: gfx::Global<i32> = "u_NumLights",
-        light_buf: gfx::ResourceView<LightParam> = "b_Lights",
+        light_buf: gfx::ConstantBuffer<LightParam> = "b_Lights",
         shadow: gfx::ResourceView<Depth> = "t_Shadow",
         shadow_sampler: gfx::Sampler = "t_Shadow",
         out_color: gfx::RenderTarget<Rgba8> = ("o_Color", gfx::state::MASK_ALL),
@@ -310,7 +309,7 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
         model_transform: Matrix4::identity().into_fixed(),
         color: [1.0, 1.0, 1.0, 1.0],
         num_lights: lights.len() as i32,
-        light_buf: factory.view_buffer_as_shader_resource(&light_buf).unwrap(),
+        light_buf: light_buf,
         shadow: shadow_resource,
         shadow_sampler: shadow_sampler,
         out_color: out_color,

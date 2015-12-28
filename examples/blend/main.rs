@@ -23,7 +23,7 @@ use gfx::Device;
 use gfx::format::Rgba8;
 use gfx::traits::{EncoderFactory, Factory, FactoryExt};
 
-gfx_structure!( Vertex {
+gfx_vertex_struct!( Vertex {
     pos: [f32; 2] = "a_Pos",
     uv: [f32; 2] = "a_Uv",
 });

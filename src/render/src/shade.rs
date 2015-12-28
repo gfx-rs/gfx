@@ -18,7 +18,7 @@ use std::cell::RefCell;
 use gfx_core::{Resources, handle, shade};
 use ParamStorage;
 
-pub use gfx_core::shade::{Stage, CreateShaderError};
+pub use gfx_core::shade::{Stage, CreateShaderError, ConstFormat, Formatted};
 
 
 /// A texture parameter: consists of a texture handle with an optional sampler.

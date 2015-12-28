@@ -9,9 +9,9 @@ struct Light {
 };
 
 //TODO: structured buffer
-//uniform b_Lights {
-//	Light u_Lights[MAX_LIGHTS];
-//};
+uniform b_Lights {
+	Light u_Lights[MAX_LIGHTS];
+};
 
 // an array of shadows, one per light
 uniform sampler2DArrayShadow t_Shadow;
@@ -30,14 +30,7 @@ void main() {
 	// accumulated color
 	vec3 color = ambient;
 	for (int i=0; i<u_NumLights; ++i) {
-		//Light light = u_Lights[i]; //TODO!
-		Light light;
-		light.pos = vec4(0.0,0.0,0.0,0.0);
-		light.color = vec4(1.0,1.0,1.0,1.0);
-		light.proj = mat4(1.0,0.0,0.0,0.0,
-						  0.0,1.0,0.0,0.0,
-						  0.0,0.0,1.0,0.0,
-						  0.0,0.0,0.0,1.0);
+		Light light = u_Lights[i];
 		// project into the light space
 		vec4 light_local = light.proj * vec4(v_Position, 1.0);
 		// compute texture coordinates for shadow lookup

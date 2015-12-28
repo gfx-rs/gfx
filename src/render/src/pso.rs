@@ -111,7 +111,7 @@ pub trait DataLink<'a>: Sized {
     fn link_input(&mut self, _: &d::shade::AttributeVar, _: &Self::Init) ->
                   Option<Result<d::pso::AttributeDesc, d::format::Format>> { None }
     fn link_constant_buffer(&mut self, _: &d::shade::ConstantBufferVar, _: &Self::Init) ->
-                            Option<Result<(), d::format::Format>> { None }
+                            Option<Result<(), d::shade::ConstFormat>> { None }
     fn link_global_constant(&mut self, _: &d::shade::ConstVar, _: &Self::Init) ->
                             Option<Result<(), d::shade::UniformValue>> { None }
     fn link_output(&mut self, _: &d::shade::OutputVar, _: &Self::Init) ->
@@ -130,8 +130,8 @@ pub trait DataBind<R: d::Resources> {
     fn bind_to(&self, &mut RawDataSet<R>, &Self::Data, &mut d::handle::Manager<R>);
 }
 
-pub trait Structure {
-    fn query(&str) -> Option<d::pso::Element>;
+pub trait Structure<F> {
+    fn query(&str) -> Option<d::pso::Element<F>>;
 }
 
 pub type AttributeSlotSet = usize;
@@ -140,8 +140,8 @@ pub struct FetchRate(d::attrib::InstanceRate);
 pub static PER_VERTEX  : FetchRate = FetchRate(0);
 pub static PER_INSTANCE: FetchRate = FetchRate(1);
 
-pub struct VertexBuffer<T: Structure>(AttributeSlotSet, PhantomData<T>);
-pub struct ConstantBuffer<T: Structure>(Option<d::ConstantBufferSlot>, PhantomData<T>);
+pub struct VertexBuffer<T: Structure<d::format::Format>>(AttributeSlotSet, PhantomData<T>);
+pub struct ConstantBuffer<T: Structure<d::shade::ConstFormat>>(Option<d::ConstantBufferSlot>, PhantomData<T>);
 pub struct Global<T: ToUniform>(Option<d::shade::Location>, PhantomData<T>);
 pub struct ResourceView<T>(Option<d::ResourceViewSlot>, PhantomData<T>);
 pub struct UnorderedView<T>(Option<d::UnorderedViewSlot>, PhantomData<T>);
@@ -158,7 +158,8 @@ fn match_attribute(_: &d::shade::AttributeVar, _: d::format::Format) -> bool {
     true //TODO
 }
 
-impl<'a, T: Structure> DataLink<'a> for VertexBuffer<T> {
+impl<'a, T: Structure<d::format::Format>>
+DataLink<'a> for VertexBuffer<T> {
     type Init = FetchRate;
     fn new() -> Self {
         VertexBuffer(0, PhantomData)
@@ -179,7 +180,8 @@ impl<'a, T: Structure> DataLink<'a> for VertexBuffer<T> {
     }
 }
 
-impl<R: d::Resources, T: Structure> DataBind<R> for VertexBuffer<T> {
+impl<R: d::Resources, T: Structure<d::format::Format>>
+DataBind<R> for VertexBuffer<T> {
     type Data = d::handle::Buffer<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
         let value = Some((man.ref_buffer(data.raw()).clone(), 0));
@@ -191,7 +193,8 @@ impl<R: d::Resources, T: Structure> DataBind<R> for VertexBuffer<T> {
     }
 }
 
-impl<'a, T: Structure> DataLink<'a> for ConstantBuffer<T> {
+impl<'a, T: Structure<d::shade::ConstFormat>>
+DataLink<'a> for ConstantBuffer<T> {
     type Init = &'a str;
     fn new() -> Self {
         ConstantBuffer(None, PhantomData)
@@ -200,7 +203,7 @@ impl<'a, T: Structure> DataLink<'a> for ConstantBuffer<T> {
         self.0.is_some()
     }
     fn link_constant_buffer(&mut self, cb: &d::shade::ConstantBufferVar, init: &Self::Init) ->
-                  Option<Result<(), d::format::Format>> {
+                  Option<Result<(), d::shade::ConstFormat>> {
         if &cb.name == *init {
             self.0 = Some(cb.slot);
             Some(Ok(()))
@@ -210,7 +213,8 @@ impl<'a, T: Structure> DataLink<'a> for ConstantBuffer<T> {
     }
 }
 
-impl<R: d::Resources, T: Structure> DataBind<R> for ConstantBuffer<T> {
+impl<R: d::Resources, T: Structure<d::shade::ConstFormat>>
+DataBind<R> for ConstantBuffer<T> {
     type Data = d::handle::Buffer<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
         if let Some(slot) = self.0 {

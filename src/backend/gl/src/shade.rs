@@ -137,8 +137,10 @@ impl StorageType {
             gl::SAMPLER_2D_RECT_SHADOW       => Sampler(BaseType::F32, TextureType::D2(NoArray, NoMultiSample), SamplerType(Compare,   Rect)),
 
             gl::SAMPLER_3D                   => Sampler(BaseType::F32, TextureType::D3,   SamplerType(NoCompare, NoRect)),
-            gl::SAMPLER_CUBE                 => Sampler(BaseType::F32, TextureType::Cube, SamplerType(NoCompare, NoRect)),
-            gl::SAMPLER_CUBE_SHADOW          => Sampler(BaseType::F32, TextureType::Cube, SamplerType(Compare,   NoRect)),
+            gl::SAMPLER_CUBE                 => Sampler(BaseType::F32, TextureType::Cube(NoArray), SamplerType(NoCompare, NoRect)),
+            gl::SAMPLER_CUBE_MAP_ARRAY       => Sampler(BaseType::F32, TextureType::Cube(Array),   SamplerType(NoCompare, NoRect)),
+            gl::SAMPLER_CUBE_SHADOW          => Sampler(BaseType::F32, TextureType::Cube(NoArray), SamplerType(Compare,   NoRect)),
+            gl::SAMPLER_CUBE_MAP_ARRAY_SHADOW=> Sampler(BaseType::F32, TextureType::Cube(Array),   SamplerType(Compare,   NoRect)),
 
             // TODO: int samplers
 

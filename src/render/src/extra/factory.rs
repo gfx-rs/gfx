@@ -14,7 +14,7 @@
 
 //! Factory extension. Provides resource construction shortcuts.
 
-use gfx_core::{handle, tex};
+use gfx_core::{format, handle, tex};
 use gfx_core::{Primitive, Resources, ShaderSet, VertexCount};
 use gfx_core::factory::{BufferRole, Factory};
 use gfx_core::pso::{CreationError, Descriptor};
@@ -47,8 +47,10 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     }
 
     /// Create a vertex buffer with an associated slice.
-    fn create_vertex_buffer<T: pso::Structure>(&mut self, data: &[T])
-                            -> (handle::Buffer<R, T>, Slice<R>) {
+    fn create_vertex_buffer<T>(&mut self, data: &[T])
+                            -> (handle::Buffer<R, T>, Slice<R>) where
+                            T: pso::Structure<format::Format>
+    {
         let nv = data.len();
         //debug_assert!(nv <= self.get_capabilities().max_vertex_count);
         let buf = self.create_buffer_static(data, BufferRole::Vertex);

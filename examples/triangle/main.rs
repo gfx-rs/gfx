@@ -17,7 +17,7 @@ extern crate gfx;
 extern crate gfx_window_glutin;
 extern crate glutin;
 
-gfx_structure!( Vertex {
+gfx_vertex_struct!( Vertex {
     pos: [f32; 2] = "a_Pos",
     color: [f32; 3] = "a_Color",
 });
