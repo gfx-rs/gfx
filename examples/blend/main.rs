@@ -89,7 +89,9 @@ pub fn main() {
         ).unwrap();
 
     let pso = factory.create_pipeline_state(&shaders,
-        gfx::Primitive::TriangleList, Default::default(), &PipeInit::new()
+        gfx::Primitive::TriangleList,
+        gfx::state::Rasterizer::new_fill(gfx::state::CullFace::Nothing),
+        &PipeInit::new()
         ).unwrap();
 
     // we pass a integer to our shader to show what blending function we want

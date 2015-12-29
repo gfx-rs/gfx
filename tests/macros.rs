@@ -48,7 +48,9 @@ fn _test_pso<R, F>(factory: &mut F, shaders: &gfx::ShaderSet<R>)
     R: gfx::Resources,
     F: gfx::traits::FactoryExt<R>,
 {
-    use std::default::Default;
-    factory.create_pipeline_state(shaders, gfx::Primitive::Point,
-        Default::default(), &_Init::new()).unwrap()
+    factory.create_pipeline_state(shaders,
+        gfx::Primitive::Point,
+        gfx::state::Rasterizer::new_fill(gfx::state::CullFace::Nothing),
+        &_Init::new()
+        ).unwrap()
 }

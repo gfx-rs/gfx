@@ -50,7 +50,6 @@ gfx_pipeline_init!(PipeData PipeMeta PipeInit {
 const MAX_INSTANCE_COUNT: usize = 2048;
 
 fn main() {
-    use std::default::Default;
     use gfx::{Device, Factory};
     use gfx::traits::{EncoderFactory, FactoryExt};
 
@@ -67,7 +66,9 @@ fn main() {
         ).unwrap();
 
     let pso = factory.create_pipeline_state(&shaders,
-        gfx::Primitive::TriangleList, Default::default(), &PipeInit::new()
+        gfx::Primitive::TriangleList,
+        gfx::state::Rasterizer::new_fill(gfx::state::CullFace::Back),
+        &PipeInit::new()
         ).unwrap();
 
     let quad_vertices = factory.create_buffer_static(&QUAD_VERTICES, gfx::BufferRole::Vertex);

@@ -28,7 +28,6 @@ gfx_pipeline_init!(PipeData PipeMeta PipeInit {
 });
 
 pub fn main() {
-    use std::default::Default;
     use gfx::Device;
     use gfx::traits::{EncoderFactory, FactoryExt};
 
@@ -44,7 +43,9 @@ pub fn main() {
         ).unwrap();
 
     let pso = factory.create_pipeline_state(&shaders,
-        gfx::Primitive::TriangleList, Default::default(), &PipeInit::new()
+        gfx::Primitive::TriangleList,
+        gfx::state::Rasterizer::new_fill(gfx::state::CullFace::Nothing),
+        &PipeInit::new()
         ).unwrap();
 
     let vertex_data = [

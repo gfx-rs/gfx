@@ -76,7 +76,7 @@ mod shadow {
         transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
         out: gfx::DepthTarget<gfx::format::Depth> = gfx::state::Depth {
             fun: gfx::state::Comparison::LessEqual,
-            write: false,
+            write: true,
         },
     });
 }
@@ -384,7 +384,6 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
 // Section-5: main entry point
 
 pub fn main() {
-    use std::default::Default;
     use std::env;
     use time::precise_time_s;
     use cgmath::{EuclideanVector, FixedArray, Matrix, Rotation3, Vector};
@@ -418,7 +417,7 @@ pub fn main() {
     let forward_pso = factory.create_pipeline_state(
         &forward_shaders,
         gfx::Primitive::TriangleList,
-        Default::default(),
+        gfx::state::Rasterizer::new_fill(gfx::state::CullFace::Back),
         &forward::Init::new()
         ).unwrap();
 
@@ -430,7 +429,8 @@ pub fn main() {
     let shadow_pso = factory.create_pipeline_state(
         &shadow_shaders,
         gfx::Primitive::TriangleList,
-        Default::default(),
+        gfx::state::Rasterizer::new_fill(gfx::state::CullFace::Back)
+                               .with_offset(1.0, 1),
         &shadow::Init::new()
         ).unwrap();
 

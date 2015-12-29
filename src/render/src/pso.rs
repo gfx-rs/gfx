@@ -134,7 +134,7 @@ pub trait Structure<F> {
     fn query(&str) -> Option<d::pso::Element<F>>;
 }
 
-pub type AttributeSlotSet = usize;
+type AttributeSlotSet = usize;
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct FetchRate(d::attrib::InstanceRate);
 pub static PER_VERTEX  : FetchRate = FetchRate(0);

@@ -34,8 +34,7 @@ pub mod traits {
 }
 
 // draw state re-exports
-pub use draw_state::{DrawState, BlendPreset};
-pub use draw_state::state;
+pub use draw_state::{DrawState, blend, state};
 pub use draw_state::target::*;
 
 // public re-exports

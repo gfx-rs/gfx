@@ -473,9 +473,12 @@ pub fn main() {
         let mesh = factory.create_mesh(&vertex_data);
         let slice = index_data.to_slice(&mut factory);
 
-        let state = gfx::DrawState::new()
-            .depth(gfx::state::Comparison::LessEqual, false)
-            .blend(gfx::BlendPreset::Add);
+        let mut state = gfx::DrawState::new();
+        state.depth = Some(gfx::state::Depth {
+            fun: gfx::state::Comparison::LessEqual,
+            write: false,
+        });
+        state.blend[0] = Some(gfx::blend::ADD);
 
         let light_data = LightParams {
             transform: Matrix4::identity().into_fixed(),
