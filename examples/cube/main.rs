@@ -18,39 +18,47 @@ extern crate gfx;
 extern crate gfx_window_glfw;
 extern crate glfw;
 
-use cgmath::FixedArray;
-use cgmath::{Matrix, Point3, Vector3};
-use cgmath::{Transform, AffineMatrix3};
-use gfx::attrib::Floater;
-use gfx::traits::{Factory, Stream, ToIndexSlice, FactoryExt};
+use gfx::format::{I8Scaled, U8Norm};
 
 // Declare the vertex format suitable for drawing.
 // Notice the use of FixedPoint.
-gfx_vertex!( Vertex {
-    a_Pos@ pos: [Floater<i8>; 3],
-    a_TexCoord@ tex_coord: [Floater<u8>; 2],
+gfx_vertex_struct!( Vertex {
+    pos: [I8Scaled; 3] = "a_Pos",
+    tex_coord: [I8Scaled; 2] = "a_TexCoord",
 });
 
 impl Vertex {
-    fn new(p: [i8; 3], t: [u8; 2]) -> Vertex {
+    fn new(p: [i8; 3], t: [i8; 2]) -> Vertex {
         Vertex {
-            pos: Floater::cast3(p),
-            tex_coord: Floater::cast2(t),
+            pos: I8Scaled::cast3(p),
+            tex_coord: I8Scaled::cast2(t),
         }
     }
 }
 
-// The shader_param attribute makes sure the following struct can be used to
-// pass parameters to a shader.
-gfx_parameters!( Params {
-    u_Transform@ transform: [[f32; 4]; 4],
-    t_Color@ color: gfx::shade::TextureParam<R>,
+gfx_pipeline_init!( PipeData PipeMeta PipeInit {
+    vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
+    transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
+    color_tex: gfx::ResourceView<gfx::format::Rgba8> = "t_Color",
+    color_sampler: gfx::Sampler = "t_Color",
+    out_color: gfx::RenderTarget<gfx::format::Rgba8> = ("o_Color", gfx::state::MASK_ALL),
+    out_depth: gfx::DepthTarget<gfx::format::DepthStencil> = gfx::state::Depth {
+        fun: gfx::state::Comparison::LessEqual,
+        write: true,
+    },
 });
 
 
 //----------------------------------------
 
 pub fn main() {
+    use cgmath::FixedArray;
+    use cgmath::{Matrix, Point3, Vector3};
+    use cgmath::{Transform, AffineMatrix3};
+    use glfw::Context;
+    use gfx::{Device, Factory};
+    use gfx::traits::{ToIndexSlice, FactoryExt, EncoderFactory};
+
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
     glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
     let (mut window, events) = glfw
@@ -58,7 +66,8 @@ pub fn main() {
         .unwrap();
     window.set_key_polling(true);
 
-    let (mut stream, mut device, mut factory) = gfx_window_glfw::init(window);
+    let (mut device, mut factory, main_color, main_depth) =
+        gfx_window_glfw::init_new(&mut window);
 
     let vertex_data = [
         // top (0, 0, 1)
@@ -93,7 +102,7 @@ pub fn main() {
         Vertex::new([ 1, -1, -1], [0, 1]),
     ];
 
-    let mesh = factory.create_mesh(&vertex_data);
+    let (vbuf, _) = factory.create_vertex_buffer(&vertex_data);
 
     let index_data: &[u8] = &[
          0,  1,  2,  2,  3,  0, // top
@@ -103,66 +112,68 @@ pub fn main() {
         16, 17, 18, 18, 19, 16, // front
         20, 21, 22, 22, 23, 20, // back
     ];
+    let slice = index_data.to_slice(&mut factory);
 
-    let texture = factory.create_texture_rgba8(1, 1).unwrap();
-    factory.update_texture(
-        &texture, &(*texture.get_info()).into(),
-        &[0x20u8, 0xA0u8, 0xC0u8, 0x00u8],
-        None).unwrap();
+    let (_, texture_view) = factory.create_texture_const(
+        gfx::tex::Kind::D2(1, 1, gfx::tex::AaMode::Single),
+        &[U8Norm::cast4([0x20, 0xA0, 0xC0, 0x00])],
+        false
+        ).unwrap();
 
-    let sampler = factory.create_sampler(
-        gfx::tex::SamplerInfo::new(gfx::tex::FilterMethod::Bilinear,
-                                   gfx::tex::WrapMode::Clamp)
-    );
+    let sinfo = gfx::tex::SamplerInfo::new(
+        gfx::tex::FilterMethod::Bilinear,
+        gfx::tex::WrapMode::Clamp);
 
-    let program = {
-        let vs = gfx::ShaderSource {
-            glsl_120: Some(include_bytes!("cube_120.glslv")),
-            glsl_150: Some(include_bytes!("cube_150.glslv")),
-            .. gfx::ShaderSource::empty()
-        };
-        let fs = gfx::ShaderSource {
-            glsl_120: Some(include_bytes!("cube_120.glslf")),
-            glsl_150: Some(include_bytes!("cube_150.glslf")),
-            .. gfx::ShaderSource::empty()
-        };
-        factory.link_program_source(vs, fs).unwrap()
-    };
+    let shaders = factory.create_shader_set(
+        include_bytes!("cube_120.glslv"),
+        include_bytes!("cube_120.glslf")
+        ).unwrap();
+
+    let pso = factory.create_pipeline_state(&shaders,
+        gfx::Primitive::TriangleList,
+        gfx::state::Rasterizer::new_fill(gfx::state::CullFace::Back),
+        &PipeInit::new()
+        ).unwrap();
 
     let view: AffineMatrix3<f32> = Transform::look_at(
         &Point3::new(1.5f32, -5.0, 3.0),
         &Point3::new(0f32, 0.0, 0.0),
         &Vector3::unit_z(),
     );
-    let proj = cgmath::perspective(cgmath::deg(45.0f32),
-                                   stream.get_aspect_ratio(), 1.0, 10.0);
+    let aspect = {
+        let (w, h) = window.get_framebuffer_size();
+        (w as f32) / (h as f32)
+    };
+    let proj = cgmath::perspective(cgmath::deg(45.0f32), aspect, 1.0, 10.0);
 
-    let data = Params {
+    let data = PipeData {
+        vbuf: vbuf,
         transform: proj.mul_m(&view.mat).into_fixed(),
-        color: (texture, Some(sampler)),
-        _r: std::marker::PhantomData,
+        color_tex: texture_view,
+        color_sampler: factory.create_sampler(sinfo),
+        out_color: main_color.clone(),
+        out_depth: main_depth.clone(),
     };
 
-    let mut batch = gfx::batch::Full::new(mesh, program, data).unwrap();
-    batch.slice = index_data.to_slice(&mut factory);
-    batch.state = batch.state.depth(gfx::state::Comparison::LessEqual, true);
+    let mut encoder = factory.create_encoder();
 
-    while !stream.out.window.should_close() {
+    while !window.should_close() {
         glfw.poll_events();
         for (_, event) in glfw::flush_messages(&events) {
             match event {
                 glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Action::Press, _) =>
-                    stream.out.window.set_should_close(true),
+                    window.set_should_close(true),
                 _ => {},
             }
         }
 
-        stream.clear(gfx::ClearData {
-            color: [0.3, 0.3, 0.3, 1.0],
-            depth: 1.0,
-            stencil: 0,
-        });
-        stream.draw(&batch).unwrap();
-        stream.present(&mut device);
-    }
+        encoder.reset();
+        encoder.clear_target(&main_color, [0.3, 0.3, 0.3, 1.0]);
+        encoder.clear_depth(&main_depth, 1.0);
+        encoder.draw_pipeline(&slice, &pso, &data);
+
+        device.submit(encoder.as_buffer());
+        window.swap_buffers();
+        device.cleanup();
+   }
 }

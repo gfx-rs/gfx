@@ -18,7 +18,7 @@ extern crate gfx;
 extern crate gfx_device_gl;
 extern crate glfw;
 
-use gfx::tex::Size;
+use gfx::tex::{AaMode, Size};
 
 use glfw::Context;
 
@@ -80,4 +80,19 @@ pub fn init(mut window: glfw::Window) -> Success {
     };
     let stream = factory.create_stream(out);
     (stream, device, factory)
+}
+
+pub fn init_new(window: &mut glfw::Window) -> (gfx_device_gl::Device, gfx_device_gl::Factory,
+        gfx::handle::RenderTargetView<gfx_device_gl::Resources, gfx::format::Rgba8>,
+        gfx::handle::DepthStencilView<gfx_device_gl::Resources, gfx::format::DepthStencil>)
+{
+    window.make_current();
+    let (device, factory) = gfx_device_gl::create(|s|
+        window.get_proc_address(s) as *const std::os::raw::c_void);
+    // create the main color/depth targets
+    let (width, height) = window.get_framebuffer_size();
+    let dim = (width as Size, height as Size, 1, AaMode::Single);
+    let (color_view, ds_view) = gfx_device_gl::create_main_targets(dim);
+    // done
+    (device, factory, color_view, ds_view)
 }
