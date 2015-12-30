@@ -43,7 +43,7 @@ use cgmath::FixedArray;
 use cgmath::{Matrix, Matrix4, Point3, Vector3, EuclideanVector};
 use cgmath::{Transform, AffineMatrix3};
 use gfx::attrib::Floater;
-use gfx::traits::{Device, Factory, Stream, ToIndexSlice, Output, FactoryExt};
+use gfx::traits::{Device, Factory, Stream, Output, FactoryExt};
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{SharedVertex, IndexedPolygon};
 use time::precise_time_s;
@@ -376,7 +376,7 @@ pub fn main() {
             .collect();
 
         let mesh = factory.create_mesh(&vertex_data);
-        let slice = index_data.to_slice(&mut factory);
+        let slice = factory.create_index_slice(&index_data[..]);
 
         let program = factory.link_program(TERRAIN_VERTEX_SRC, TERRAIN_FRAGMENT_SRC)
                              .unwrap();
@@ -471,7 +471,7 @@ pub fn main() {
         ];
 
         let mesh = factory.create_mesh(&vertex_data);
-        let slice = index_data.to_slice(&mut factory);
+        let slice = factory.create_index_slice(index_data);
 
         let mut state = gfx::DrawState::new();
         state.depth = Some(gfx::state::Depth {

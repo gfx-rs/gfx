@@ -132,7 +132,7 @@ fn create_cube<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F)
         20, 21, 22, 22, 23, 20, // back
     ];
 
-    let slice = index_data.to_slice(factory);
+    let slice = factory.create_index_slice(index_data);
 
     (vbuf, slice)
 }

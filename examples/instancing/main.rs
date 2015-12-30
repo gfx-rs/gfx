@@ -50,8 +50,7 @@ gfx_pipeline_init!(PipeData PipeMeta PipeInit {
 const MAX_INSTANCE_COUNT: usize = 2048;
 
 fn main() {
-    use gfx::{Device, Factory};
-    use gfx::traits::{EncoderFactory, FactoryExt};
+    use gfx::traits::{Device, Factory, FactoryExt};
 
     let builder = glutin::WindowBuilder::new()
         .with_dimensions(800, 600)

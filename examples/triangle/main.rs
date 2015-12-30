@@ -28,8 +28,7 @@ gfx_pipeline_init!(PipeData PipeMeta PipeInit {
 });
 
 pub fn main() {
-    use gfx::Device;
-    use gfx::traits::{EncoderFactory, FactoryExt};
+    use gfx::traits::{Device, FactoryExt};
 
     let builder = glutin::WindowBuilder::new()
         .with_title("Triangle example".to_string());

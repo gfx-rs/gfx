@@ -29,8 +29,6 @@ pub mod traits {
     pub use gfx_core::output::Output;
     pub use extra::factory::FactoryExt;
     pub use extra::stream::{Stream, StreamFactory};
-    pub use encoder::EncoderFactory;
-    pub use mesh::ToIndexSlice;
 }
 
 // draw state re-exports

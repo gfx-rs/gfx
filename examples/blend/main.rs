@@ -19,9 +19,8 @@ extern crate glutin;
 
 extern crate image;
 
-use gfx::Device;
 use gfx::format::Rgba8;
-use gfx::traits::{EncoderFactory, Factory, FactoryExt};
+use gfx::traits::{Device, Factory, FactoryExt};
 
 gfx_vertex_struct!( Vertex {
     pos: [f32; 2] = "a_Pos",

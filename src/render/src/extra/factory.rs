@@ -20,9 +20,10 @@ use gfx_core::factory::{BufferRole, Factory};
 use gfx_core::pso::{CreationError, Descriptor};
 use gfx_core::shade::{CreateShaderError, CreateProgramError};
 use gfx_core::state::Rasterizer;
-use extra::shade::*;
-use mesh::{Mesh, Slice, SliceKind, VertexFormat};
+use encoder::Encoder;
+use mesh::{Mesh, Slice, SliceKind, ToIndexSlice, VertexFormat};
 use pso;
+use extra::shade::*;
 
 /// Error creating a PipelineState
 #[derive(Clone, PartialEq, Debug)]
@@ -37,7 +38,12 @@ pub enum PipelineStateError {
 
 
 /// Factory extension trait
-pub trait FactoryExt<R: Resources>: Factory<R> {
+pub trait FactoryExt<R: Resources>: Factory<R> + Sized {
+    /// Create a new graphics command Encoder
+    fn create_encoder(&mut self) -> Encoder<R, Self::CommandBuffer> {
+        Encoder::create(self)
+    }
+
     /// Create a new mesh from the given vertex data.
     fn create_mesh<T: VertexFormat>(&mut self, data: &[T]) -> Mesh<R> {
         let nv = data.len();
@@ -60,6 +66,11 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
             instances: None,
             kind: SliceKind::Vertex,
         })
+    }
+
+    /// Create an index buffer in a slice.
+    fn create_index_slice<I: ToIndexSlice<R>>(&mut self, data: I) -> Slice<R> {
+        data.to_slice(self)
     }
 
     /// Create a shader set from a given vs/ps code for multiple shader models.

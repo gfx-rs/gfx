@@ -26,7 +26,7 @@ use gfx_core::{attrib, format, handle};
 use gfx_core::attrib::IntSize;
 use gfx_core::draw::{Access, Gamma, Target};
 use gfx_core::draw::{CommandBuffer, DataBuffer, InstanceOption};
-use gfx_core::factory::NotSupported;
+use gfx_core::factory::{Factory, NotSupported};
 use gfx_core::output::{Output, Plane};
 use gfx_core::shade::{ProgramInfo, UniformValue};
 use gfx_core::tex::Size;
@@ -107,7 +107,7 @@ pub struct ParamStorage<R: Resources> {
 
 impl<R: Resources> ParamStorage<R> {
     /// Create an empty parameter storage.
-    fn new() -> ParamStorage<R> {
+    pub fn new() -> ParamStorage<R> {
         ParamStorage {
             uniforms: Vec::new(),
             blocks: Vec::new(),
@@ -178,6 +178,22 @@ pub struct Encoder<R: Resources, C: CommandBuffer<R>> {
 }
 
 impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
+    /// Create a new encoder using a factory.
+    pub fn create<F>(factory: &mut F) -> Encoder<R, C> where
+        F: Factory<R, CommandBuffer = C>
+    {
+        Encoder {
+            command_buffer: factory.create_command_buffer(),
+            data_buffer: DataBuffer::new(),
+            handles: handle::Manager::new(),
+            common_array_buffer: factory.create_array_buffer(),
+            draw_frame_buffer: factory.create_frame_buffer(),
+            read_frame_buffer: factory.create_frame_buffer(),
+            render_state: RenderState::new(),
+            parameters: ParamStorage::new(),
+        }
+    }
+
     /// Reset all commands for the command buffer re-usal.
     pub fn reset(&mut self) {
         self.command_buffer.clear();
@@ -670,29 +686,5 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
         self.command_buffer.bind_samplers(raw_data.samplers);
         self.command_buffer.bind_pixel_targets(raw_data.pixel_targets);
         self.draw_slice(slice, slice.instances);
-    }
-}
-
-/// Factory extension that allows creating new encoders.
-pub trait EncoderFactory<R: Resources, C: CommandBuffer<R>> {
-    /// Create a new Encoder
-    fn create_encoder(&mut self) -> Encoder<R, C>;
-}
-
-impl<
-    R: Resources,
-    F: device::Factory<R>,
-> EncoderFactory<R, F::CommandBuffer> for F {
-    fn create_encoder(&mut self) -> Encoder<R, F::CommandBuffer> {
-        Encoder {
-            command_buffer: self.create_command_buffer(),
-            data_buffer: DataBuffer::new(),
-            handles: handle::Manager::new(),
-            common_array_buffer: self.create_array_buffer(),
-            draw_frame_buffer: self.create_frame_buffer(),
-            read_frame_buffer: self.create_frame_buffer(),
-            render_state: RenderState::new(),
-            parameters: ParamStorage::new(),
-        }
     }
 }

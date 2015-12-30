@@ -21,7 +21,8 @@ use gfx_core::draw::CommandBuffer;
 use gfx_core::output::Output;
 use gfx_core::target::{ClearData, Mask, Mirror, Rect};
 use batch::{Batch, Error};
-use encoder::{BlitError, DrawError, Encoder, EncoderFactory};
+use encoder::{BlitError, DrawError, Encoder};
+use extra::factory::FactoryExt;
 
 /// Generic output window.
 pub trait Window<R: Resources>: Output<R> {
@@ -151,7 +152,7 @@ impl<D: Device, W: Window<D::Resources>> OwnedStream<D, W> {
 }
 
 /// A render factory extension that allows creating streams with new renderers.
-pub trait StreamFactory<D: Device>: EncoderFactory<D::Resources, D::CommandBuffer> {
+pub trait StreamFactory<D: Device>: FactoryExt<D::Resources, CommandBuffer = D::CommandBuffer> {
     /// Create a new stream from a given output.
     fn create_stream<O: Output<D::Resources>>(&mut self, output: O) -> OwnedStream<D, O> {
         OwnedStream {
@@ -161,5 +162,5 @@ pub trait StreamFactory<D: Device>: EncoderFactory<D::Resources, D::CommandBuffe
     }
 }
 
-impl<D: Device, F: EncoderFactory<D::Resources, D::CommandBuffer>>
+impl<D: Device, F: FactoryExt<D::Resources, CommandBuffer = D::CommandBuffer>>
 StreamFactory<D> for F {}

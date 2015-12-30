@@ -56,8 +56,7 @@ pub fn main() {
     use cgmath::{Matrix, Point3, Vector3};
     use cgmath::{Transform, AffineMatrix3};
     use glfw::Context;
-    use gfx::{Device, Factory};
-    use gfx::traits::{ToIndexSlice, FactoryExt, EncoderFactory};
+    use gfx::traits::{Device, Factory, FactoryExt};
 
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
     glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
@@ -112,7 +111,7 @@ pub fn main() {
         16, 17, 18, 18, 19, 16, // front
         20, 21, 22, 22, 23, 20, // back
     ];
-    let slice = index_data.to_slice(&mut factory);
+    let slice = factory.create_index_slice(index_data);
 
     let (_, texture_view) = factory.create_texture_const(
         gfx::tex::Kind::D2(1, 1, gfx::tex::AaMode::Single),
