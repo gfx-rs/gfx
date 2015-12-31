@@ -121,14 +121,10 @@ pub fn main() {
         gfx::tex::FilterMethod::Bilinear,
         gfx::tex::WrapMode::Clamp);
 
-    let shaders = factory.create_shader_set(
+    let pso = factory.create_pipeline_simple(
         include_bytes!("cube_120.glslv"),
-        include_bytes!("cube_120.glslf")
-        ).unwrap();
-
-    let pso = factory.create_pipeline_state(&shaders,
-        gfx::Primitive::TriangleList,
-        gfx::state::Rasterizer::new_fill(gfx::state::CullFace::Back),
+        include_bytes!("cube_120.glslf"),
+        gfx::state::CullFace::Back,
         &PipeInit::new()
         ).unwrap();
 

@@ -80,14 +80,10 @@ pub fn main() {
     let tint_texture = load_texture(&mut factory, &include_bytes!("image/tint.png")[..]).unwrap();
     let sampler = factory.create_sampler_linear();
 
-    let shaders = factory.create_shader_set(
+    let pso = factory.create_pipeline_simple(
         include_bytes!("shader/blend_150.glslv"),
-        include_bytes!("shader/blend_150.glslf")
-        ).unwrap();
-
-    let pso = factory.create_pipeline_state(&shaders,
-        gfx::Primitive::TriangleList,
-        gfx::state::Rasterizer::new_fill(gfx::state::CullFace::Nothing),
+        include_bytes!("shader/blend_150.glslf"),
+        gfx::state::CullFace::Nothing,
         &PipeInit::new()
         ).unwrap();
 

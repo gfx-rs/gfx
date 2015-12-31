@@ -36,14 +36,10 @@ pub fn main() {
         gfx_window_glutin::init_new::<gfx::format::Rgba8>(builder);
     let mut encoder = factory.create_encoder();
 
-    let shaders = factory.create_shader_set(
+    let pso = factory.create_pipeline_simple(
         include_bytes!("triangle_150.glslv"),
-        include_bytes!("triangle_150.glslf")
-        ).unwrap();
-
-    let pso = factory.create_pipeline_state(&shaders,
-        gfx::Primitive::TriangleList,
-        gfx::state::Rasterizer::new_fill(gfx::state::CullFace::Nothing),
+        include_bytes!("triangle_150.glslf"),
+        gfx::state::CullFace::Nothing,
         &PipeInit::new()
         ).unwrap();
 

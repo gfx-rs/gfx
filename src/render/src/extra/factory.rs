@@ -18,18 +18,17 @@ use gfx_core::{format, handle, tex};
 use gfx_core::{Primitive, Resources, ShaderSet, VertexCount};
 use gfx_core::factory::{BufferRole, Factory};
 use gfx_core::pso::{CreationError, Descriptor};
-use gfx_core::shade::{CreateShaderError, CreateProgramError};
-use gfx_core::state::Rasterizer;
+use gfx_core::state::{CullFace, Rasterizer};
 use encoder::Encoder;
 use mesh::{Mesh, Slice, SliceKind, ToIndexSlice, VertexFormat};
 use pso;
-use extra::shade::*;
+use extra::shade::{ProgramError, ShaderSource};
 
 /// Error creating a PipelineState
 #[derive(Clone, PartialEq, Debug)]
 pub enum PipelineStateError {
-    /// Shader program failed to link, providing an error string.
-    ProgramLink(CreateProgramError),
+    /// Shader program failed to link.
+    Program(ProgramError),
     /// Unable to create PSO descriptor due to mismatched formats.
     DescriptorInit(pso::InitError),
     /// Device failed to create the handle give the descriptor.
@@ -110,6 +109,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> + Sized {
     /// pixel shaders, automatically picking available shader variant.
     fn link_program_source(&mut self, vs_src: ShaderSource, ps_src: ShaderSource)
                            -> Result<handle::Program<R>, ProgramError> {
+        use gfx_core::shade::CreateShaderError;
         let model = self.get_capabilities().shader_model;
 
         match (vs_src.choose(model), ps_src.choose(model)) {
@@ -126,7 +126,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> + Sized {
     {
         let program = match self.create_program(shaders) {
             Ok(p) => p,
-            Err(e) => return Err(PipelineStateError::ProgramLink(e)),
+            Err(e) => return Err(PipelineStateError::Program(ProgramError::Link(e))),
         };
         let mut descriptor = Descriptor::new(primitive, rasterizer);
         let meta = match init.link_to(&mut descriptor, program.get_info()) {
@@ -139,6 +139,18 @@ pub trait FactoryExt<R: Resources>: Factory<R> + Sized {
         };
 
         Ok(pso::PipelineState::new(raw, primitive, meta))
+    }
+
+    /// Create a simplified version of the Pipeline State,
+    /// which works on triangles, and only has VS and PS shaders in it.
+    fn create_pipeline_simple<I: pso::PipelineInit>(&mut self, vs: &[u8], ps: &[u8], cull: CullFace, init: &I)
+                              -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError>
+    {
+        match self.create_shader_set(vs, ps) {
+            Ok(ref s) => self.create_pipeline_state(s,
+                Primitive::TriangleList, Rasterizer::new_fill(cull), init),
+            Err(e) => Err(PipelineStateError::Program(e)),
+        }
     }
 
     /// Create a simple RGBA8 2D texture.

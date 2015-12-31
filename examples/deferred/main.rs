@@ -408,14 +408,9 @@ pub fn main() {
 
         let (vbuf, slice) = factory.create_vertex_buffer_indexed(&vertex_data, &index_data[..]);
 
-        let shaders = factory.create_shader_set(
-            terrain::VERTEX_SRC, terrain::FRAGMENT_SRC
-            ).unwrap();
-
-        let pso = factory.create_pipeline_state(&shaders,
-            gfx::Primitive::TriangleList,
-            gfx::state::Rasterizer::new_fill(gfx::state::CullFace::Back),
-            &terrain::Init::new()
+        let pso = factory.create_pipeline_simple(
+            terrain::VERTEX_SRC, terrain::FRAGMENT_SRC,
+            gfx::state::CullFace::Back, &terrain::Init::new()
             ).unwrap();
 
         let data = terrain::Data {
@@ -445,14 +440,9 @@ pub fn main() {
 
         let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
 
-        let shaders = factory.create_shader_set(
-            blit::VERTEX_SRC, blit::FRAGMENT_SRC
-            ).unwrap();
-
-        let pso = factory.create_pipeline_state(&shaders,
-            gfx::Primitive::TriangleList,
-            gfx::state::Rasterizer::new_fill(gfx::state::CullFace::Nothing),
-            &blit::Init::new()
+        let pso = factory.create_pipeline_simple(
+            blit::VERTEX_SRC, blit::FRAGMENT_SRC,
+            gfx::state::CullFace::Nothing, &blit::Init::new()
             ).unwrap();
 
         let data = blit::Data {
@@ -514,14 +504,9 @@ pub fn main() {
     light_slice.instances = Some((NUM_LIGHTS as gfx::InstanceCount, 0));
 
     let (light_pso, mut light_data) = {
-        let shaders = factory.create_shader_set(
-            light::VERTEX_SRC, light::FRAGMENT_SRC
-            ).unwrap();
-
-        let pso = factory.create_pipeline_state(&shaders,
-            gfx::Primitive::TriangleList,
-            gfx::state::Rasterizer::new_fill(gfx::state::CullFace::Back),
-            &light::Init::new()
+        let pso = factory.create_pipeline_simple(
+            light::VERTEX_SRC, light::FRAGMENT_SRC,
+            gfx::state::CullFace::Back, &light::Init::new()
             ).unwrap();
 
         let data = light::Data {
@@ -542,14 +527,9 @@ pub fn main() {
     };
 
     let (emitter_pso, mut emitter_data) = {
-        let shaders = factory.create_shader_set(
-            emitter::VERTEX_SRC, emitter::FRAGMENT_SRC
-            ).unwrap();
-
-        let pso = factory.create_pipeline_state(&shaders,
-            gfx::Primitive::TriangleList,
-            gfx::state::Rasterizer::new_fill(gfx::state::CullFace::Back),
-            &emitter::Init::new()
+        let pso = factory.create_pipeline_simple(
+            emitter::VERTEX_SRC, emitter::FRAGMENT_SRC,
+            gfx::state::CullFace::Back, &emitter::Init::new()
             ).unwrap();
 
         let data = emitter::Data {

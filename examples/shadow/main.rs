@@ -199,7 +199,8 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
         use gfx::tex as t;
         let kind = t::Kind::D2Array(512, 512, MAX_LIGHTS as t::ArraySize, t::AaMode::Single);
         let bind = gfx::SHADER_RESOURCE | gfx::RENDER_TARGET;
-        let tex = factory.create_new_texture(kind, 1, bind).unwrap();
+        let cty = gfx::format::ChannelType::UintNormalized;
+        let tex = factory.create_new_texture(kind, 1, bind, Some(cty)).unwrap();
         let resource = factory.view_texture_as_shader_resource(&tex, (0, 0)).unwrap();
         (tex, resource)
     };
@@ -404,15 +405,10 @@ pub fn main() {
     let mut encoder = factory.create_encoder();
 
     // create PSOs
-    let forward_shaders = factory.create_shader_set(
+    let forward_pso = factory.create_pipeline_simple(
         include_bytes!("shader/forward_150.glslv"),
-        include_bytes!("shader/forward_150.glslf")
-        ).unwrap();
-
-    let forward_pso = factory.create_pipeline_state(
-        &forward_shaders,
-        gfx::Primitive::TriangleList,
-        gfx::state::Rasterizer::new_fill(gfx::state::CullFace::Back),
+        include_bytes!("shader/forward_150.glslf"),
+        gfx::state::CullFace::Back,
         &forward::Init::new()
         ).unwrap();
 
