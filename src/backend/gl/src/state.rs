@@ -236,10 +236,10 @@ pub fn bind_blend(gl: &gl::Gl, blend: Option<s::Blend>) {
 }
 
 pub fn bind_blend_slot(gl: &gl::Gl, slot: ColorSlot, blend: Option<s::Blend>) {
-    unsafe { gl.Enable(gl::BLEND) }; //TODO?
     let buf = slot as gl::types::GLuint;
     let mask = match blend {
         Some(b) => unsafe {
+            gl.Enablei(gl::BLEND, buf);
             gl.BlendEquationSeparatei(buf,
                 map_equation(b.color.equation),
                 map_equation(b.alpha.equation)
@@ -253,8 +253,7 @@ pub fn bind_blend_slot(gl: &gl::Gl, slot: ColorSlot, blend: Option<s::Blend>) {
             b.mask
         },
         None => unsafe {
-            gl.BlendEquationSeparatei(buf, gl::FUNC_ADD, gl::FUNC_ADD);
-            gl.BlendFuncSeparatei(buf, gl::ONE, gl::ZERO, gl::ONE, gl::ZERO);
+            gl.Disablei(gl::BLEND, buf);
             s::MASK_ALL
         },
     };

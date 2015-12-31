@@ -177,12 +177,10 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.push(Command::SetRasterizer(pso.rasterizer));
         self.buf.push(Command::SetDepthState(pso.output.depth));
         self.buf.push(Command::SetStencilState(pso.output.stencil, (0, 0), cull));
-        if pso.output.blend.iter().find(|b| b.is_some()).is_some() {
-            for i in 0 .. c::MAX_COLOR_TARGETS {
+        for i in 0 .. c::MAX_COLOR_TARGETS {
+            if pso.output.draw_mask & (1<<i) != 0 {
                 self.buf.push(Command::SetBlendState(i as c::ColorSlot, pso.output.blend[i]));
             }
-        }else {
-            self.buf.push(Command::SetBlendState(0, None));
         }
     }
 
