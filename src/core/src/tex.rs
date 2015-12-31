@@ -32,7 +32,7 @@ pub use target::Level;
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Error {
     /// Failed to map a given format to the device.
-    Format(format::SurfaceType),
+    Format(format::SurfaceType, Option<format::ChannelType>),
     /// Failed to provide sRGB formats.
     Gamma,
     /// Failed to map a given multisampled kind to the device.

@@ -346,14 +346,14 @@ impl d::Factory<R> for Factory {
         name.map(|tex| self.share.handles.borrow_mut().make_texture(tex, info))
     }
 
-    fn create_new_texture_raw(&mut self, desc: t::Descriptor)
+    fn create_new_texture_raw(&mut self, desc: t::Descriptor, hint: Option<ChannelType>)
                               -> Result<handle::RawTexture<R>, t::Error> {
         use gfx_core::tex::Error;
         let caps = &self.share.capabilities;
         if desc.levels == 0 {
             return Err(Error::Size(0))
         }
-        let cty = ChannelType::UintNormalized; //TODO
+        let cty = hint.unwrap_or(ChannelType::Uint); //careful here
         let gl = &self.share.context;
         let object = if desc.bind.intersects(f::SHADER_RESOURCE | f::UNORDERED_ACCESS) {
             use gfx_core::tex::TextureError;
@@ -369,14 +369,14 @@ impl d::Factory<R> for Factory {
                     let (_, _, _, aa) = desc.kind.get_dimensions();
                     return Err(Error::Samples(aa));
                 },
-                Err(_) => return Err(Error::Format(desc.format)),
+                Err(_) => return Err(Error::Format(desc.format, hint)),
             }
         }else {
             use gfx_core::tex::SurfaceError;
             let result = tex::make_surface(gl, &desc, cty);
             match result {
                 Ok(name) => NewTexture::Surface(name),
-                Err(SurfaceError::UnsupportedFormat) => return Err(Error::Format(desc.format)),
+                Err(SurfaceError::UnsupportedFormat) => return Err(Error::Format(desc.format, hint)),
                 Err(SurfaceError::UnsupportedGamma) => return Err(Error::Gamma),
             }
         };
@@ -388,7 +388,7 @@ impl d::Factory<R> for Factory {
         let kind = desc.kind;
         let face = None; //TODO: cubemap slice
         let img = desc.to_image_info(cty, 0);
-        let tex = try!(self.create_new_texture_raw(desc));
+        let tex = try!(self.create_new_texture_raw(desc, Some(cty)));
         match self.frame_handles.ref_new_texture(&tex) {
             &NewTexture::Surface(_) => Err(t::Error::Data(0)),
             &NewTexture::Texture(t) => match tex::update_texture_new(&self.share.context, t, kind, face, &img, data) {

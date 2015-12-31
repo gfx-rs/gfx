@@ -39,8 +39,7 @@ impl Vertex {
 gfx_pipeline_init!( PipeData PipeMeta PipeInit {
     vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
     transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
-    color_tex: gfx::ResourceView<gfx::format::Rgba8> = "t_Color",
-    color_sampler: gfx::Sampler = "t_Color",
+    color: gfx::TextureSampler<gfx::format::Rgba8> = "t_Color",
     out_color: gfx::RenderTarget<gfx::format::Rgba8> = ("o_Color", gfx::state::MASK_ALL),
     out_depth: gfx::DepthTarget<gfx::format::DepthStencil> = gfx::state::Depth {
         fun: gfx::state::Comparison::LessEqual,
@@ -101,8 +100,6 @@ pub fn main() {
         Vertex::new([ 1, -1, -1], [0, 1]),
     ];
 
-    let (vbuf, _) = factory.create_vertex_buffer(&vertex_data);
-
     let index_data: &[u8] = &[
          0,  1,  2,  2,  3,  0, // top
          4,  5,  6,  6,  7,  4, // bottom
@@ -111,7 +108,8 @@ pub fn main() {
         16, 17, 18, 18, 19, 16, // front
         20, 21, 22, 22, 23, 20, // back
     ];
-    let slice = factory.create_index_slice(index_data);
+
+    let (vbuf, slice) = factory.create_vertex_buffer_indexed(&vertex_data, index_data);
 
     let (_, texture_view) = factory.create_texture_const(
         gfx::tex::Kind::D2(1, 1, gfx::tex::AaMode::Single),
@@ -148,8 +146,7 @@ pub fn main() {
     let data = PipeData {
         vbuf: vbuf,
         transform: proj.mul_m(&view.mat).into_fixed(),
-        color_tex: texture_view,
-        color_sampler: factory.create_sampler(sinfo),
+        color: (texture_view, factory.create_sampler(sinfo)),
         out_color: main_color.clone(),
         out_depth: main_depth.clone(),
     };

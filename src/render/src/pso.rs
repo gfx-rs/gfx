@@ -146,6 +146,10 @@ pub struct Global<T: ToUniform>(Option<d::shade::Location>, PhantomData<T>);
 pub struct ResourceView<T>(Option<d::ResourceViewSlot>, PhantomData<T>);
 pub struct UnorderedView<T>(Option<d::UnorderedViewSlot>, PhantomData<T>);
 pub struct Sampler(Option<d::SamplerSlot>);
+/// A convenience type for a texture paired with a sampler.
+/// It only makes sense for DX9 class hardware, since everything newer
+/// has samplers totally separated from the textures.
+pub struct TextureSampler<T>(ResourceView<T>, Sampler);
 pub struct RenderTargetCommon<T, I>(Option<d::ColorSlot>, PhantomData<(T, I)>);
 pub type RenderTarget<T: d::format::RenderFormat> = RenderTargetCommon<T, d::state::ColorMask>;
 pub type BlendTarget<T: d::format::BlendFormat> = RenderTargetCommon<T, d::state::Blend>;
@@ -337,6 +341,31 @@ impl<R: d::Resources> DataBind<R> for Sampler {
             let value = Some(man.ref_sampler(data).clone());
             out.samplers.0[slot as usize] = value;
         }
+    }
+}
+
+impl<'a, T> DataLink<'a> for TextureSampler<T> {
+    type Init = &'a str;
+    fn new() -> Self {
+        TextureSampler(ResourceView::new(), Sampler::new())
+    }
+    fn is_active(&self) -> bool {
+        self.0.is_active()
+    }
+    fn link_resource_view(&mut self, var: &d::shade::TextureVar, init: &Self::Init)
+                          -> Option<Result<(), d::format::Format>> {
+        self.0.link_resource_view(var, init)
+    }
+    fn link_sampler(&mut self, var: &d::shade::SamplerVar, init: &Self::Init) -> Option<()> {
+        self.1.link_sampler(var, init)
+    }
+}
+
+impl<R: d::Resources, T> DataBind<R> for TextureSampler<T> {
+    type Data = (d::handle::ShaderResourceView<R, T>, d::handle::Sampler<R>);
+    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
+        self.0.bind_to(out, &data.0, man);
+        self.1.bind_to(out, &data.1, man);
     }
 }
 

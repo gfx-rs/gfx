@@ -38,10 +38,8 @@ impl Vertex {
 
 gfx_pipeline_init!( PipeData PipeMeta PipeInit {
     vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
-    lena: gfx::ResourceView<Rgba8> = "t_Lena",
-    lena_sampler: gfx::Sampler = "t_Lena",
-    tint: gfx::ResourceView<Rgba8> = "t_Tint",
-    tint_sampler: gfx::Sampler = "t_Tint",
+    lena: gfx::TextureSampler<Rgba8> = "t_Lena",
+    tint: gfx::TextureSampler<Rgba8> = "t_Tint",
     blend: gfx::Global<i32> = "i_Blend",
     out: gfx::RenderTarget<Rgba8> = ("o_Color", gfx::state::MASK_ALL),
 });
@@ -116,10 +114,8 @@ pub fn main() {
 
     let mut data = PipeData {
         vbuf: vbuf,
-        lena: lena_texture,
-        lena_sampler: sampler.clone(),
-        tint: tint_texture,
-        tint_sampler: sampler,
+        lena: (lena_texture, sampler.clone()),
+        tint: (tint_texture, sampler),
         blend: blend_func.0,
         out: main_color,
     };

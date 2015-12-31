@@ -121,8 +121,6 @@ fn create_cube<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F)
         Vertex::new([ 1, -1, -1], [0, -1, 0]),
     ];
 
-    let vbuf = factory.create_buffer_static(&vertex_data, gfx::BufferRole::Vertex);
-
     let index_data: &[u8] = &[
          0,  1,  2,  2,  3,  0, // top
          4,  5,  6,  6,  7,  4, // bottom
@@ -132,9 +130,7 @@ fn create_cube<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F)
         20, 21, 22, 22, 23, 20, // back
     ];
 
-    let slice = factory.create_index_slice(index_data);
-
-    (vbuf, slice)
+    factory.create_vertex_buffer_indexed(&vertex_data, index_data)
 }
 
 fn create_plane<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F, size: i8)
@@ -217,8 +213,7 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
     };
 
     let (near, far) = (1f32, 20f32);
-    let light_buf = factory.create_buffer_dynamic::<LightParam>(
-        MAX_LIGHTS, gfx::BufferRole::Uniform);
+    let light_buf = factory.create_constant_buffer(MAX_LIGHTS);
 
     // create lights
     struct LightDesc {

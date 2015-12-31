@@ -68,9 +68,19 @@ pub trait FactoryExt<R: Resources>: Factory<R> + Sized {
         })
     }
 
-    /// Create an index buffer in a slice.
-    fn create_index_slice<I: ToIndexSlice<R>>(&mut self, data: I) -> Slice<R> {
-        data.to_slice(self)
+    /// Create a vertex buffer with an index, returned by a slice.
+    fn create_vertex_buffer_indexed<V, I>(&mut self, vd: &[V], id: I)
+                                    -> (handle::Buffer<R, V>, Slice<R>) where
+        V: pso::Structure<format::Format>,
+        I: ToIndexSlice<R>,
+    {
+        let buf = self.create_buffer_static(vd, BufferRole::Vertex);
+        (buf, id.to_slice(self))
+    }
+
+    /// Create a constant buffer for `num` identical elements of type `T`.
+    fn create_constant_buffer<T>(&mut self, num: usize) -> handle::Buffer<R, T> {
+        self.create_buffer_dynamic(num, BufferRole::Uniform)
     }
 
     /// Create a shader set from a given vs/ps code for multiple shader models.

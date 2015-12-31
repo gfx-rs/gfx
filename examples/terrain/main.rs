@@ -26,6 +26,7 @@ use rand::Rng;
 use cgmath::FixedArray;
 use cgmath::{Matrix4, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
+use gfx::mesh::ToIndexSlice;
 use gfx::traits::{Stream, FactoryExt};
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
@@ -80,7 +81,7 @@ pub fn main() {
         .vertices()
         .map(|i| i as u32)
         .collect();
-    let slice = factory.create_index_slice(&index_data[..]);
+    let slice = index_data.to_slice(&mut factory);
     let mesh = factory.create_mesh(&vertex_data);
     let program = {
         let vs = gfx::ShaderSource {

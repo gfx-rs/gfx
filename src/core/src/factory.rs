@@ -253,7 +253,7 @@ pub trait Factory<R: Resources> {
         }
     }
 
-    fn create_new_texture_raw(&mut self, tex::Descriptor)
+    fn create_new_texture_raw(&mut self, tex::Descriptor, Option<format::ChannelType>)
         -> Result<handle::RawTexture<R>, tex::Error>;
     fn create_new_texture_with_data(&mut self, tex::Descriptor, format::ChannelType, &[u8])
         -> Result<handle::RawTexture<R>, tex::Error>;
@@ -270,7 +270,8 @@ pub trait Factory<R: Resources> {
     fn view_texture_as_depth_stencil_raw(&mut self, &handle::RawTexture<R>, Option<target::Layer>)
         -> Result<handle::RawDepthStencilView<R>, TargetViewError>;
 
-    fn create_new_texture<S: format::SurfaceTyped>(&mut self, kind: tex::Kind, levels: target::Level, bind: Bind)
+    fn create_new_texture<S: format::SurfaceTyped>(&mut self, kind: tex::Kind, levels: target::Level,
+                          bind: Bind, channel_hint: Option<format::ChannelType>)
                           -> Result<handle::NewTexture<R, S>, tex::Error>
     {
         let desc = tex::Descriptor {
@@ -279,7 +280,7 @@ pub trait Factory<R: Resources> {
             format: S::get_surface_type(),
             bind: bind,
         };
-        let raw = try!(self.create_new_texture_raw(desc));
+        let raw = try!(self.create_new_texture_raw(desc, channel_hint));
         Ok(Phantom::new(raw))
     }
 
@@ -370,7 +371,8 @@ pub trait Factory<R: Resources> {
     {
         let kind = tex::Kind::D2(width, height, tex::AaMode::Single);
         let levels = if allocate_mipmap {99} else {1};
-        let tex = try!(self.create_new_texture(kind, levels, SHADER_RESOURCE | RENDER_TARGET));
+        let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
+        let tex = try!(self.create_new_texture(kind, levels, SHADER_RESOURCE | RENDER_TARGET, Some(cty)));
         let resource = try!(self.view_texture_as_shader_resource(&tex, (0, levels)));
         let target = try!(self.view_texture_as_render_target(&tex, 0, None));
         Ok((tex, resource, target))
@@ -380,7 +382,8 @@ pub trait Factory<R: Resources> {
                             -> Result<(handle::NewTexture<R, T::Surface>, handle::ShaderResourceView<R, T>, handle::DepthStencilView<R, T>), CombinedError>
     {
         let kind = tex::Kind::D2(width, height, tex::AaMode::Single);
-        let tex = try!(self.create_new_texture(kind, 1, SHADER_RESOURCE | RENDER_TARGET));
+        let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
+        let tex = try!(self.create_new_texture(kind, 1, SHADER_RESOURCE | RENDER_TARGET, Some(cty)));
         let resource = try!(self.view_texture_as_shader_resource(&tex, (0,0)));
         let target = try!(self.view_texture_as_depth_stencil(&tex, None));
         Ok((tex, resource, target))

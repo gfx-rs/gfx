@@ -70,6 +70,8 @@ fn main() {
         &PipeInit::new()
         ).unwrap();
 
+    // we could use `factory.create_vertex_buffer_indexed` for the first two
+    // but leaving the direct creation here for consistency.
     let quad_vertices = factory.create_buffer_static(&QUAD_VERTICES, gfx::BufferRole::Vertex);
     let quad_indices = factory.create_buffer_static(&QUAD_INDICES, gfx::BufferRole::Index);
     let quad_instances = factory.create_buffer_dynamic(MAX_INSTANCE_COUNT, gfx::BufferRole::Vertex);

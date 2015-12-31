@@ -30,6 +30,7 @@ use glutin::{PollEventsIterator, Event, VirtualKeyCode, ElementState};
 use gfx::traits::{Stream, FactoryExt};
 use gfx::{Resources, Factory};
 use gfx::batch::Full;
+use gfx::mesh::ToIndexSlice;
 
 use cgmath::FixedArray;
 use cgmath::{Matrix4, AffineMatrix3};
@@ -204,7 +205,7 @@ impl<R> TileMapPlane<R> where R: Resources {
             .vertices()
             .map(|i| i as u32)
             .collect();
-        let slice = factory.create_index_slice(&index_data[..]);
+        let slice = index_data.to_slice(factory);
 
         // set up texture
         let mesh = factory.create_mesh(&vertex_data);
