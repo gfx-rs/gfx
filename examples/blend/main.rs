@@ -138,6 +138,7 @@ pub fn main() {
         encoder.reset();
         encoder.clear_target(&data.out, [0.0; 4]);
         encoder.draw_pipeline(&slice, &pso, &data);
+
         device.submit(encoder.as_buffer());
         window.swap_buffers().unwrap();
         device.cleanup();
