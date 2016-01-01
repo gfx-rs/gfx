@@ -125,7 +125,7 @@ pub fn main() {
         include_bytes!("cube_120.glslv"),
         include_bytes!("cube_120.glslf"),
         gfx::state::CullFace::Back,
-        &PipeInit::new()
+        PipeInit::new()
         ).unwrap();
 
     let view: AffineMatrix3<f32> = Transform::look_at(

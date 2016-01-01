@@ -43,14 +43,12 @@ gfx_pipeline_init!( _Data _Meta _Init {
     },
 });
 
-fn _test_pso<R, F>(factory: &mut F, shaders: &gfx::ShaderSet<R>)
+fn _test_pso<R, F>(factory: &mut F)
              -> gfx::PipelineState<R, _Meta>  where
     R: gfx::Resources,
     F: gfx::traits::FactoryExt<R>,
 {
-    factory.create_pipeline_state(shaders,
-        gfx::Primitive::Point,
-        gfx::state::Rasterizer::new_fill(gfx::state::CullFace::Nothing),
-        &_Init::new()
+    factory.create_pipeline_simple(&[], &[],
+        gfx::state::CullFace::Nothing, _Init::new()
         ).unwrap()
 }

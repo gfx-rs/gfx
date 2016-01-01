@@ -63,7 +63,7 @@ fn main() {
         include_bytes!("instancing_150.glslv"),
         include_bytes!("instancing_150.glslf"),
         gfx::state::CullFace::Back,
-        &PipeInit::new()
+        PipeInit::new()
         ).unwrap();
 
     // we could use `factory.create_vertex_buffer_indexed` for the first two

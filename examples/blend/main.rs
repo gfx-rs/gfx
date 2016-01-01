@@ -84,7 +84,7 @@ pub fn main() {
         include_bytes!("shader/blend_150.glslv"),
         include_bytes!("shader/blend_150.glslf"),
         gfx::state::CullFace::Nothing,
-        &PipeInit::new()
+        PipeInit::new()
         ).unwrap();
 
     // we pass a integer to our shader to show what blending function we want

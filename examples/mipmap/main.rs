@@ -135,7 +135,7 @@ pub fn main() {
         include_bytes!("shader/120.glslv"),
         include_bytes!("shader/120.glslf"),
         gfx::state::CullFace::Nothing,
-        &PipeInit::new()
+        PipeInit::new()
         ).unwrap();
 
     let vertex_data = [

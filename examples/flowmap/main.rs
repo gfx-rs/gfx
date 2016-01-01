@@ -91,7 +91,7 @@ pub fn main() {
         include_bytes!("shader/flowmap_150.glslv"),
         include_bytes!("shader/flowmap_150.glslf"),
         gfx::state::CullFace::Nothing,
-        &PipeInit::new()
+        PipeInit::new()
         ).unwrap();
 
     let mut data = PipeData {

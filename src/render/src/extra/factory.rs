@@ -121,7 +121,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> + Sized {
 
     /// Create a strongly-typed Pipeline State.
     fn create_pipeline_state<I: pso::PipelineInit>(&mut self, shaders: &ShaderSet<R>,
-                             primitive: Primitive, rasterizer: Rasterizer, init: &I)
+                             primitive: Primitive, rasterizer: Rasterizer, init: I)
                              -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError>
     {
         let program = match self.create_program(shaders) {
@@ -143,7 +143,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> + Sized {
 
     /// Create a simplified version of the Pipeline State,
     /// which works on triangles, and only has VS and PS shaders in it.
-    fn create_pipeline_simple<I: pso::PipelineInit>(&mut self, vs: &[u8], ps: &[u8], cull: CullFace, init: &I)
+    fn create_pipeline_simple<I: pso::PipelineInit>(&mut self, vs: &[u8], ps: &[u8], cull: CullFace, init: I)
                               -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError>
     {
         match self.create_shader_set(vs, ps) {

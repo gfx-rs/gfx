@@ -409,7 +409,7 @@ pub fn main() {
         include_bytes!("shader/forward_150.glslv"),
         include_bytes!("shader/forward_150.glslf"),
         gfx::state::CullFace::Back,
-        &forward::Init::new()
+        forward::Init::new()
         ).unwrap();
 
     let shadow_shaders = factory.create_shader_set(
@@ -422,7 +422,7 @@ pub fn main() {
         gfx::Primitive::TriangleList,
         gfx::state::Rasterizer::new_fill(gfx::state::CullFace::Back)
                                .with_offset(1.0, 1),
-        &shadow::Init::new()
+        shadow::Init::new()
         ).unwrap();
 
     let mut scene = create_scene(&mut factory,

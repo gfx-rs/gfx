@@ -96,7 +96,7 @@ pub fn main() {
         include_bytes!("terrain_150.glslv"),
         include_bytes!("terrain_150.glslf"),
         gfx::state::CullFace::Back,
-        &PipeInit::new()
+        PipeInit::new()
         ).unwrap();
 
     let aspect_ratio = {

@@ -410,7 +410,7 @@ pub fn main() {
 
         let pso = factory.create_pipeline_simple(
             terrain::VERTEX_SRC, terrain::FRAGMENT_SRC,
-            gfx::state::CullFace::Back, &terrain::Init::new()
+            gfx::state::CullFace::Back, terrain::Init::new()
             ).unwrap();
 
         let data = terrain::Data {
@@ -442,7 +442,7 @@ pub fn main() {
 
         let pso = factory.create_pipeline_simple(
             blit::VERTEX_SRC, blit::FRAGMENT_SRC,
-            gfx::state::CullFace::Nothing, &blit::Init::new()
+            gfx::state::CullFace::Nothing, blit::Init::new()
             ).unwrap();
 
         let data = blit::Data {
@@ -506,7 +506,7 @@ pub fn main() {
     let (light_pso, mut light_data) = {
         let pso = factory.create_pipeline_simple(
             light::VERTEX_SRC, light::FRAGMENT_SRC,
-            gfx::state::CullFace::Back, &light::Init::new()
+            gfx::state::CullFace::Back, light::Init::new()
             ).unwrap();
 
         let data = light::Data {
@@ -529,7 +529,7 @@ pub fn main() {
     let (emitter_pso, mut emitter_data) = {
         let pso = factory.create_pipeline_simple(
             emitter::VERTEX_SRC, emitter::FRAGMENT_SRC,
-            gfx::state::CullFace::Back, &emitter::Init::new()
+            gfx::state::CullFace::Back, emitter::Init::new()
             ).unwrap();
 
         let data = emitter::Data {

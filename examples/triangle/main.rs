@@ -40,7 +40,7 @@ pub fn main() {
         include_bytes!("triangle_150.glslv"),
         include_bytes!("triangle_150.glslf"),
         gfx::state::CullFace::Nothing,
-        &PipeInit::new()
+        PipeInit::new()
         ).unwrap();
 
     let vertex_data = [
