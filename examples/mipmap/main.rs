@@ -17,11 +17,11 @@ extern crate gfx;
 extern crate gfx_window_glutin;
 extern crate glutin;
 
-use gfx::traits::{Factory, Stream, FactoryExt};
+use gfx::format::{Rgba8};
 
-gfx_vertex!( Vertex {
-    a_Pos@ pos: [f32; 2],
-    a_Uv@ uv: [f32; 2],
+gfx_vertex_struct!( Vertex {
+    pos: [f32; 2] = "a_Pos",
+    uv: [f32; 2] = "a_Uv",
 });
 
 impl Vertex {
@@ -33,8 +33,10 @@ impl Vertex {
     }
 }
 
-gfx_parameters!( Params {
-    t_Tex@ tex: gfx::shade::TextureParam<R>,
+gfx_pipeline_init!( PipeData PipeMeta PipeInit {
+    vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
+    tex: gfx::TextureSampler<Rgba8> = "t_Tex",
+    out: gfx::RenderTarget<Rgba8> = ("o_Color", gfx::state::MASK_ALL),
 });
 
 // Larger red dots
@@ -54,11 +56,11 @@ const L1_DATA: [u8; 4] = [
 // Uniform blue
 const L2_DATA: [u8; 1] = [ 0x02 ];
 
-
-fn make_texture<R, F>(factory: &mut F) -> gfx::shade::TextureParam<R>
+fn make_texture<R, F>(factory: &mut F) -> gfx::handle::ShaderResourceView<R, Rgba8>
         where R: gfx::Resources, 
               F: gfx::Factory<R>
 {
+    /*
     let tex_info = gfx::tex::TextureInfo {
         kind: gfx::tex::Kind::D2(4, 4, gfx::tex::AaMode::Single),
         levels: 3,
@@ -96,29 +98,40 @@ fn make_texture<R, F>(factory: &mut F) -> gfx::shade::TextureParam<R>
         depth: 1,
         format: gfx::tex::Format::R3_G3_B2,
         mipmap: 2,
-    };
+    };*/
 
-    let tex = factory.create_texture(tex_info).unwrap();
-    factory.update_texture(&tex, &l0_info, &L0_DATA, None).unwrap();
-    factory.update_texture(&tex, &l1_info, &L1_DATA, None).unwrap();
-    factory.update_texture(&tex, &l2_info, &L2_DATA, None).unwrap();
+    let kind = gfx::tex::Kind::D2(2, 2, gfx::tex::AaMode::Single);
+    //TODO: proper update
+    //let tex = factory.create_new_texture(kind, gfx::SHADER_RESOURCE, 3,
+    //    Some(gfx::format::ChannelType::UintNormalized)
+    //    ).unwrap();
+    //factory.update_texture(&tex, &l0_info, &L0_DATA, None).unwrap();
+    //factory.update_texture(&tex, &l1_info, &L1_DATA, None).unwrap();
+    //factory.update_texture(&tex, &l2_info, &L2_DATA, None).unwrap();
 
-    let sampler_info = gfx::tex::SamplerInfo::new(
-        gfx::tex::FilterMethod::Trilinear,
-        gfx::tex::WrapMode::Tile,
-    );
+    //factory.view_texture_as_shader_resource(&tex, (0, 2)).unwrap()
 
-    let sampler = factory.create_sampler(sampler_info);
-
-    (tex, Some(sampler))
+    let (_, view) = factory.create_texture_const(kind, gfx::cast_slice(&L0_DATA), true)
+                           .unwrap();
+    view
 }
 
 pub fn main() {
-    let (mut stream, mut device, mut factory) = gfx_window_glutin::init(
-        glutin::WindowBuilder::new()
-            .with_title("Mipmap example".to_string())
-            .with_dimensions(800, 600).build().unwrap()
-    );
+    use gfx::traits::{Device, Factory, FactoryExt};
+
+    let builder = glutin::WindowBuilder::new()
+        .with_title("Mipmap example".to_string())
+        .with_dimensions(800, 600);
+    let (window, mut device, mut factory, main_color, _) =
+        gfx_window_glutin::init_new::<gfx::format::Rgba8>(builder);
+    let mut encoder = factory.create_encoder();
+
+    let pso = factory.create_pipeline_simple(
+        include_bytes!("shader/120.glslv"),
+        include_bytes!("shader/120.glslf"),
+        gfx::state::CullFace::Nothing,
+        &PipeInit::new()
+        ).unwrap();
 
     let vertex_data = [
         Vertex::new([ 0.0,  0.0], [ 0.0,  0.0]),
@@ -129,45 +142,36 @@ pub fn main() {
         Vertex::new([-1.0,  0.0], [800.0,   0.0]),
         Vertex::new([-1.0, -1.0], [800.0, 800.0]),
     ];
-    let mesh = factory.create_mesh(&vertex_data);
+    let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
 
-    let program = {
-        let vs = gfx::ShaderSource {
-            glsl_120: Some(include_bytes!("shader/120.glslv")),
-            .. gfx::ShaderSource::empty()
-        };
-        let fs = gfx::ShaderSource {
-            glsl_120: Some(include_bytes!("shader/120.glslf")),
-            .. gfx::ShaderSource::empty()
-        };
-        factory.link_program_source(vs, fs).unwrap()
+    let texture_view = make_texture(&mut factory);
+
+    let sampler = factory.create_sampler(gfx::tex::SamplerInfo::new(
+        gfx::tex::FilterMethod::Trilinear,
+        gfx::tex::WrapMode::Tile,
+    ));
+
+    let data = PipeData {
+        vbuf: vbuf,
+        tex: (texture_view, sampler),
+        out: main_color,
     };
-
-    let texture = make_texture(&mut factory);
-
-    let uniforms = Params {
-        tex: texture,
-        _r: std::marker::PhantomData,
-    };
-    let batch = gfx::batch::Full::new(mesh, program, uniforms).unwrap();
 
     'main: loop {
         // quit when Esc is pressed.
-        for event in stream.out.window.poll_events() {
+        for event in window.poll_events() {
             match event {
-                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) => break 'main,
+                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
                 glutin::Event::Closed => break 'main,
                 _ => {},
             }
         }
 
-        stream.clear(gfx::ClearData {
-            color: [0.3, 0.3, 0.3, 1.0],
-            depth: 1.0,
-            stencil: 0,
-        });
+        encoder.reset();
+        encoder.draw_pipeline(&slice, &pso, &data);
 
-        stream.draw(&batch).unwrap();
-        stream.present(&mut device);
+        device.submit(encoder.as_buffer());
+        window.swap_buffers().unwrap();
+        device.cleanup();
     }
 }
