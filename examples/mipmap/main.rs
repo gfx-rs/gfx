@@ -19,6 +19,10 @@ extern crate glutin;
 
 use gfx::format::{Rgba8};
 
+#[derive(Clone, Debug)]
+pub struct Rgb332(u8);
+gfx_format!(Rgb332 = R3_G3_B2 . UintNormalized);
+
 gfx_vertex_struct!( Vertex {
     pos: [f32; 2] = "a_Pos",
     uv: [f32; 2] = "a_Uv",
@@ -35,7 +39,7 @@ impl Vertex {
 
 gfx_pipeline_init!( PipeData PipeMeta PipeInit {
     vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
-    tex: gfx::TextureSampler<Rgba8> = "t_Tex",
+    tex: gfx::TextureSampler<Rgb332> = "t_Tex",
     out: gfx::RenderTarget<Rgba8> = ("o_Color", gfx::state::MASK_ALL),
 });
 
@@ -56,7 +60,7 @@ const L1_DATA: [u8; 4] = [
 // Uniform blue
 const L2_DATA: [u8; 1] = [ 0x02 ];
 
-fn make_texture<R, F>(factory: &mut F) -> gfx::handle::ShaderResourceView<R, Rgba8>
+fn make_texture<R, F>(factory: &mut F) -> gfx::handle::ShaderResourceView<R, Rgb332>
         where R: gfx::Resources, 
               F: gfx::Factory<R>
 {
@@ -100,7 +104,7 @@ fn make_texture<R, F>(factory: &mut F) -> gfx::handle::ShaderResourceView<R, Rgb
         mipmap: 2,
     };*/
 
-    let kind = gfx::tex::Kind::D2(2, 2, gfx::tex::AaMode::Single);
+    let kind = gfx::tex::Kind::D2(4, 4, gfx::tex::AaMode::Single);
     //TODO: proper update
     //let tex = factory.create_new_texture(kind, gfx::SHADER_RESOURCE, 3,
     //    Some(gfx::format::ChannelType::UintNormalized)
@@ -111,8 +115,9 @@ fn make_texture<R, F>(factory: &mut F) -> gfx::handle::ShaderResourceView<R, Rgb
 
     //factory.view_texture_as_shader_resource(&tex, (0, 2)).unwrap()
 
-    let (_, view) = factory.create_texture_const(kind, gfx::cast_slice(&L0_DATA), true)
-                           .unwrap();
+    let (_, view) = factory.create_texture_const(
+        kind, gfx::cast_slice(&L0_DATA), true
+        ).unwrap();
     view
 }
 
@@ -168,6 +173,7 @@ pub fn main() {
         }
 
         encoder.reset();
+        encoder.clear_target(&data.out, [0.1, 0.2, 0.3, 1.0]);
         encoder.draw_pipeline(&slice, &pso, &data);
 
         device.submit(encoder.as_buffer());

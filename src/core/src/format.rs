@@ -49,6 +49,8 @@ macro_rules! impl_surface_type {
 }
 
 impl_surface_type! {
+    R3_G3_B2        [8]   = TextureSurface,
+    R4_G4           [8]   = TextureSurface = RenderSurface,
     R4_G4_B4_A4     [16]  = TextureSurface = RenderSurface,
     R5_G5_B5_A1     [16]  = TextureSurface = RenderSurface,
     R5_G6_B5        [16]  = TextureSurface = RenderSurface,

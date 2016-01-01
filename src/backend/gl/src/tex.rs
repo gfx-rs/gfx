@@ -244,8 +244,9 @@ fn format_to_glpixel(format: NewFormat) -> GLenum {
     use gfx_core::format::SurfaceType as S;
     match format.0 {
         S::R8 | S::R16 | S::R32=> gl::RED,
-        S::R8_G8 | S::R16_G16 | S::R32_G32 => gl::RG,
-        S::R8_G8_B8 | S::R16_G16_B16 | S::R32_G32_B32 | S::R5_G6_B5 => gl::RGB,
+        S::R4_G4 | S::R8_G8 | S::R16_G16 | S::R32_G32 => gl::RG,
+        S::R8_G8_B8 | S::R16_G16_B16 | S::R32_G32_B32 |
+        S::R3_G3_B2 | S::R5_G6_B5 => gl::RGB,
         S::R8_G8_B8_A8 | S::R16_G16_B16_A16 | S::R32_G32_B32_A32 |
         S::R4_G4_B4_A4 | S::R5_G5_B5_A1 | S::R10_G10_B10_A2 => gl::RGBA,
         S::D24_S8 => gl::DEPTH_STENCIL,
@@ -265,6 +266,8 @@ fn format_to_gltype(format: NewFormat) -> Result<GLenum, ()> {
         C::Srgb => return Err(()),
     };
     Ok(match format.0 {
+        S::R3_G3_B2 => gl::UNSIGNED_BYTE_3_3_2,
+        S::R4_G4 => return Err(()),
         S::R4_G4_B4_A4 => gl::UNSIGNED_SHORT_4_4_4_4,
         S::R5_G5_B5_A1 => gl::UNSIGNED_SHORT_5_5_5_1,
         S::R5_G6_B5 => gl::UNSIGNED_SHORT_5_6_5,
@@ -284,6 +287,11 @@ fn format_to_glfull(format: NewFormat) -> Result<GLenum, ()> {
     use gfx_core::format::ChannelType as C;
     let cty = format.1.ty;
     Ok(match format.0 {
+        S::R3_G3_B2 => match cty {
+            C::UintNormalized => gl::R3_G3_B2,
+            _ => return Err(()),
+        },
+        S::R4_G4 => return Err(()),
         S::R4_G4_B4_A4 => match cty {
             C::UintNormalized => gl::RGBA4,
             _ => return Err(()),

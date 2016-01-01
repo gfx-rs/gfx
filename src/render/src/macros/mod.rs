@@ -18,6 +18,16 @@ mod pso;
 mod structure;
 
 #[macro_export]
+macro_rules! gfx_format {
+    ($name:ident = $surface:ident . $channel:ident) => {
+        impl $crate::format::Formatted for $name {
+            type Surface = $crate::format::$surface;
+            type Channel = $crate::format::$channel;
+        }
+    }
+}
+
+#[macro_export]
 macro_rules! gfx_vertex {
     ($name:ident {
         $($gl_name:ident@ $field:ident: $ty:ty,)*
