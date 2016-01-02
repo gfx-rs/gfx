@@ -105,20 +105,17 @@ fn make_texture<R, F>(factory: &mut F) -> gfx::handle::ShaderResourceView<R, Rgb
     };*/
 
     let kind = gfx::tex::Kind::D2(4, 4, gfx::tex::AaMode::Single);
-    //TODO: proper update
-    //let tex = factory.create_new_texture(kind, gfx::SHADER_RESOURCE, 3,
-    //    Some(gfx::format::ChannelType::UintNormalized)
-    //    ).unwrap();
-    //factory.update_texture(&tex, &l0_info, &L0_DATA, None).unwrap();
-    //factory.update_texture(&tex, &l1_info, &L1_DATA, None).unwrap();
-    //factory.update_texture(&tex, &l2_info, &L2_DATA, None).unwrap();
+    let tex = factory.create_new_texture(kind, 3, gfx::SHADER_RESOURCE,
+        Some(gfx::format::ChannelType::UintNormalized)).unwrap();
 
-    //factory.view_texture_as_shader_resource(&tex, (0, 2)).unwrap()
+    factory.update_new_texture::<Rgb332>(&tex, &tex.get_info().to_image_info(0),
+        gfx::cast_slice(&L0_DATA), None).unwrap();
+    factory.update_new_texture::<Rgb332>(&tex, &tex.get_info().to_image_info(1),
+        gfx::cast_slice(&L1_DATA), None).unwrap();
+    factory.update_new_texture::<Rgb332>(&tex, &tex.get_info().to_image_info(2),
+        gfx::cast_slice(&L2_DATA), None).unwrap();
 
-    let (_, view) = factory.create_texture_const(
-        kind, gfx::cast_slice(&L0_DATA), true
-        ).unwrap();
-    view
+    factory.view_texture_as_shader_resource(&tex, (0, 2)).unwrap()
 }
 
 pub fn main() {

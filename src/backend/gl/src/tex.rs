@@ -19,7 +19,7 @@ use gfx_core::factory::SHADER_RESOURCE;
 use gfx_core::format::{Format as NewFormat, ChannelType};
 use gfx_core::tex::{Format, CubeFace, Kind, TextureError, SurfaceError,
                     SurfaceInfo, TextureInfo, SamplerInfo,
-                    ImageInfo, ImageInfoCommon, NewImageInfo,
+                    ImageInfo, ImageInfoCommon, RawImageInfo,
                     AaMode, Components, FilterMethod, WrapMode,
                     Level, Dimensions, Descriptor};
 
@@ -845,7 +845,7 @@ fn update_texture_impl<F>(gl: &gl::Gl, kind: Kind, target: GLenum, pix: GLenum,
 
 pub fn update_texture_new(gl: &gl::Gl, name: Texture,
                           kind: Kind, face: Option<CubeFace>,
-                          img: &NewImageInfo, slice: &[u8])
+                          img: &RawImageInfo, slice: &[u8])
                           -> Result<(), TextureError> {
     //TODO: check size
     let data = slice.as_ptr() as *const GLvoid;

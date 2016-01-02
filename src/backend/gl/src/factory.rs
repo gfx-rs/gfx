@@ -383,21 +383,6 @@ impl d::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_new_texture(object, desc))
     }
 
-    fn create_new_texture_with_data(&mut self, desc: t::Descriptor, cty: ChannelType, data: &[u8])
-                                    -> Result<handle::RawTexture<R>, t::Error> {
-        let kind = desc.kind;
-        let face = None; //TODO: cubemap slice
-        let img = desc.to_image_info(cty, 0);
-        let tex = try!(self.create_new_texture_raw(desc, Some(cty)));
-        match self.frame_handles.ref_new_texture(&tex) {
-            &NewTexture::Surface(_) => Err(t::Error::Data(0)),
-            &NewTexture::Texture(t) => match tex::update_texture_new(&self.share.context, t, kind, face, &img, data) {
-                Ok(_) => Ok(tex),
-                Err(_) => Err(t::Error::Data(0)),
-            }
-        }
-    }
-
     fn view_buffer_as_shader_resource_raw(&mut self, hbuf: &handle::RawBuffer<R>)
                                       -> Result<handle::RawShaderResourceView<R>, f::ResourceViewError> {
         let gl = &self.share.context;
@@ -485,6 +470,21 @@ impl d::Factory<R> for Factory {
 
         tex::update_texture(&self.share.context, texture.get_info().kind, face,
                             *self.frame_handles.ref_texture(texture), img, data)
+    }
+
+    fn update_new_texture_raw(&mut self, texture: &handle::RawTexture<R>, image: &t::RawImageInfo,
+                              data: &[u8], face: Option<t::CubeFace>) -> Result<(), t::Error> {
+        use gfx_core::tex::TextureError;
+        let kind = texture.get_info().kind;
+        let (_, _, _, aa) = kind.get_dimensions();
+        match self.frame_handles.ref_new_texture(texture) {
+            &NewTexture::Surface(_) => return Err(t::Error::Data(0)),
+            &NewTexture::Texture(t) => tex::update_texture_new(&self.share.context, t, kind, face, image, data),
+        }.map_err(|error| match error {
+            TextureError::UnsupportedFormat => t::Error::Format(image.format.0, Some(image.format.1.ty)), //TODO: could be `image.format.into()`
+            TextureError::UnsupportedSamples => t::Error::Samples(aa),
+            _ => t::Error::Data(0),
+        })
     }
 
     fn generate_mipmap(&mut self, texture: &handle::Texture<R>) {

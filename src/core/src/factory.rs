@@ -239,6 +239,16 @@ pub trait Factory<R: Resources> {
         self.update_texture_raw(tex, img, cast_slice(data), face)
     }
 
+    fn update_new_texture_raw(&mut self, &handle::RawTexture<R>, &tex::RawImageInfo,
+                              &[u8], Option<tex::CubeFace>) -> Result<(), tex::Error>;
+    fn update_new_texture<T: format::Formatted>(&mut self, tex: &handle::NewTexture<R, T::Surface>,
+                          image: &tex::NewImageInfo, data: &[T], face: Option<tex::CubeFace>)
+                          -> Result<(), tex::Error>
+    {
+        self.update_new_texture_raw(tex.raw(),
+            &image.convert(T::get_format()), cast_slice(data), face)
+    }
+
     fn generate_mipmap(&mut self, &handle::Texture<R>);
     fn generate_mipmap_raw(&mut self, &handle::RawTexture<R>);
 
@@ -255,8 +265,14 @@ pub trait Factory<R: Resources> {
 
     fn create_new_texture_raw(&mut self, tex::Descriptor, Option<format::ChannelType>)
         -> Result<handle::RawTexture<R>, tex::Error>;
-    fn create_new_texture_with_data(&mut self, tex::Descriptor, format::ChannelType, &[u8])
-        -> Result<handle::RawTexture<R>, tex::Error>;
+    fn create_new_texture_with_data(&mut self, desc: tex::Descriptor, channel: format::ChannelType, data: &[u8])
+        -> Result<handle::RawTexture<R>, tex::Error> {
+        let image = desc.to_raw_image_info(channel, 0);
+        let tex = try!(self.create_new_texture_raw(desc, Some(channel)));
+        try!(self.update_new_texture_raw(&tex, &image, data, None));
+        Ok(tex)
+    }
+
     fn view_buffer_as_shader_resource_raw(&mut self, &handle::RawBuffer<R>)
         -> Result<handle::RawShaderResourceView<R>, ResourceViewError>;
     fn view_buffer_as_unordered_access_raw(&mut self, &handle::RawBuffer<R>)

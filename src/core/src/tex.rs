@@ -358,6 +358,18 @@ pub struct SurfaceInfo {
     pub aa_mode: AaMode,
 }
 
+impl From<TextureInfo> for SurfaceInfo {
+    fn from(ti: TextureInfo) -> SurfaceInfo {
+        let (w, h, _, aa) = ti.kind.get_dimensions();
+        SurfaceInfo {
+            width: w,
+            height: h,
+            format: ti.format,
+            aa_mode: aa,
+        }
+    }
+}
+
 /// How to [filter](https://en.wikipedia.org/wiki/Texture_filtering) the
 /// texture when sampling. They correspond to increasing levels of quality,
 /// but also cost. They "layer" on top of each other: it is not possible to
@@ -458,25 +470,6 @@ pub struct TextureInfo {
     pub format: Format,
 }
 
-/// Describes a subvolume of a texture, which image data can be uploaded into.
-#[allow(missing_docs)]
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
-pub struct ImageInfoCommon<F> {
-    pub xoffset: Size,
-    pub yoffset: Size,
-    pub zoffset: Size,
-    pub width: Size,
-    pub height: Size,
-    pub depth: Size,
-    /// Format of each texel.
-    pub format: F,
-    /// Which mipmap to select.
-    pub mipmap: Level,
-}
-
-/// Old image info based on the old format.
-pub type ImageInfo = ImageInfoCommon<Format>;
-
 impl TextureInfo {
     /// Create a new empty texture info.
     pub fn new() -> TextureInfo {
@@ -499,6 +492,25 @@ impl TextureInfo {
     }
 }
 
+/// Describes a subvolume of a texture, which image data can be uploaded into.
+#[allow(missing_docs)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+pub struct ImageInfoCommon<F> {
+    pub xoffset: Size,
+    pub yoffset: Size,
+    pub zoffset: Size,
+    pub width: Size,
+    pub height: Size,
+    pub depth: Size,
+    /// Format of each texel.
+    pub format: F,
+    /// Which mipmap to select.
+    pub mipmap: Level,
+}
+
+/// Old image info based on the old format.
+pub type ImageInfo = ImageInfoCommon<Format>;
+
 impl From<TextureInfo> for ImageInfo {
     fn from(ti: TextureInfo) -> ImageInfo {
         use std::cmp::max;
@@ -516,37 +528,33 @@ impl From<TextureInfo> for ImageInfo {
     }
 }
 
-impl From<TextureInfo> for SurfaceInfo {
-    fn from(ti: TextureInfo) -> SurfaceInfo {
-        let (w, h, _, aa) = ti.kind.get_dimensions();
-        SurfaceInfo {
-            width: w,
-            height: h,
-            format: ti.format,
-            aa_mode: aa,
-        }
-    }
-}
+/// New raw image info based on the universal format spec.
+pub type RawImageInfo = ImageInfoCommon<format::Format>;
+/// New image info based on the universal format spec.
+/// The format is suppsed to come from compile-time information
+/// as opposed to run-time enum values.
+pub type NewImageInfo = ImageInfoCommon<()>;
 
 impl<F> ImageInfoCommon<F> {
-    /// Create an empty new `ImageInfo` of a given format.
-    pub fn new(format: F) -> ImageInfoCommon<F> {
-        ImageInfoCommon {
-            xoffset: 0,
-            yoffset: 0,
-            zoffset: 0,
-            width: 0,
-            height: 0,
-            depth: 0,
-            format: format,
-            mipmap: 0
-        }
-    }
     /// Get the total number of texels.
     pub fn get_texel_count(&self) -> usize {
         self.width as usize *
         self.height as usize *
         self.depth as usize
+    }
+
+    /// Convert into a differently typed format.
+    pub fn convert<T>(&self, new_format: T) -> ImageInfoCommon<T> {
+        ImageInfoCommon {
+            xoffset: self.xoffset,
+            yoffset: self.yoffset,
+            zoffset: self.zoffset,
+            width: self.width,
+            height: self.height,
+            depth: self.depth,
+            format: new_format,
+            mipmap: self.mipmap,
+        }
     }
 }
 
@@ -621,12 +629,9 @@ pub struct Descriptor {
     pub bind: Bind,
 }
 
-/// New image info using the universal format.
-pub type NewImageInfo = ImageInfoCommon<format::Format>;
-
 impl Descriptor {
     /// Get image info for a given mip.
-    pub fn to_image_info(&self, cty: format::ChannelType, mip: Level) -> NewImageInfo {
+    pub fn to_image_info(&self, mip: Level) -> NewImageInfo {
         let (w, h, d, _) = self.kind.get_level_dimensions(mip);
         ImageInfoCommon {
             xoffset: 0,
@@ -635,9 +640,15 @@ impl Descriptor {
             width: w,
             height: h,
             depth: d,
-            format: format::Format(self.format, cty.into()),
+            format: (),
             mipmap: mip,
         }
+    }
+
+    /// Get the raw image info for a given mip and a channel type.
+    pub fn to_raw_image_info(&self, cty: format::ChannelType, mip: Level) -> RawImageInfo {
+        let format = format::Format(self.format, cty.into());
+        self.to_image_info(mip).convert(format)
     }
 }
 
