@@ -36,7 +36,7 @@ impl Vertex {
     }
 }
 
-gfx_pipeline_init!( PipeData PipeMeta PipeInit {
+gfx_pipeline!( pipe {
     vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
     transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
     color: gfx::TextureSampler<gfx::format::Rgba8> = "t_Color",
@@ -125,7 +125,7 @@ pub fn main() {
         include_bytes!("cube_120.glslv"),
         include_bytes!("cube_120.glslf"),
         gfx::state::CullFace::Back,
-        PipeInit::new()
+        pipe::new()
         ).unwrap();
 
     let view: AffineMatrix3<f32> = Transform::look_at(
@@ -139,7 +139,7 @@ pub fn main() {
     };
     let proj = cgmath::perspective(cgmath::deg(45.0f32), aspect, 1.0, 10.0);
 
-    let data = PipeData {
+    let data = pipe::Data {
         vbuf: vbuf,
         transform: proj.mul_m(&view.mat).into_fixed(),
         color: (texture_view, factory.create_sampler(sinfo)),

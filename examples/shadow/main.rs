@@ -20,7 +20,7 @@ extern crate gfx_window_glutin;
 extern crate glutin;
 
 use std::sync::{Arc, RwLock};
-use gfx::format::{Depth, Rgba8, I8Scaled};
+pub use gfx::format::{Depth, Rgba8, I8Scaled};
 use gfx::traits::*;
 
 // Section-1: vertex formats and shader parameters
@@ -47,39 +47,30 @@ gfx_constant_struct!(LightParam {
     proj: [[f32; 4]; 4],
 });
 
-mod forward {
-    use gfx;
-    use gfx::format::{Depth, Rgba8};
-    use {Vertex, LightParam};
+gfx_pipeline!( forward {
+    vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
+    transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
+    model_transform: gfx::Global<[[f32; 4]; 4]> = "u_ModelTransform",
+    color: gfx::Global<[f32; 4]> = "u_Color",
+    num_lights: gfx::Global<i32> = "u_NumLights",
+    light_buf: gfx::ConstantBuffer<LightParam> = "b_Lights",
+    shadow: gfx::ResourceView<Depth> = "t_Shadow",
+    shadow_sampler: gfx::Sampler = "t_Shadow",
+    out_color: gfx::RenderTarget<Rgba8> = ("o_Color", gfx::state::MASK_ALL),
+    out_depth: gfx::DepthTarget<Depth> = gfx::state::Depth {
+        fun: gfx::state::Comparison::LessEqual,
+        write: true,
+    },
+});
 
-    gfx_pipeline_init!( Data Meta Init {
-        vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
-        transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
-        model_transform: gfx::Global<[[f32; 4]; 4]> = "u_ModelTransform",
-        color: gfx::Global<[f32; 4]> = "u_Color",
-        num_lights: gfx::Global<i32> = "u_NumLights",
-        light_buf: gfx::ConstantBuffer<LightParam> = "b_Lights",
-        shadow: gfx::ResourceView<Depth> = "t_Shadow",
-        shadow_sampler: gfx::Sampler = "t_Shadow",
-        out_color: gfx::RenderTarget<Rgba8> = ("o_Color", gfx::state::MASK_ALL),
-        out_depth: gfx::DepthTarget<Depth> = gfx::state::Depth {
-            fun: gfx::state::Comparison::LessEqual,
-            write: true,
-        },
-    });
-}
-
-mod shadow {
-    use gfx;
-    gfx_pipeline_init!( Data Meta Init {
-        vbuf: gfx::VertexBuffer<super::Vertex> = gfx::PER_VERTEX,
-        transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
-        out: gfx::DepthTarget<gfx::format::Depth> = gfx::state::Depth {
-            fun: gfx::state::Comparison::LessEqual,
-            write: true,
-        },
-    });
-}
+gfx_pipeline!( shadow {
+    vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
+    transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
+    out: gfx::DepthTarget<Depth> = gfx::state::Depth {
+        fun: gfx::state::Comparison::LessEqual,
+        write: true,
+    },
+});
 
 //----------------------------------------
 // Section-2: simple primitives generation
@@ -409,7 +400,7 @@ pub fn main() {
         include_bytes!("shader/forward_150.glslv"),
         include_bytes!("shader/forward_150.glslf"),
         gfx::state::CullFace::Back,
-        forward::Init::new()
+        forward::new()
         ).unwrap();
 
     let shadow_shaders = factory.create_shader_set(
@@ -422,7 +413,7 @@ pub fn main() {
         gfx::Primitive::TriangleList,
         gfx::state::Rasterizer::new_fill(gfx::state::CullFace::Back)
                                .with_offset(1.0, 1),
-        shadow::Init::new()
+        shadow::new()
         ).unwrap();
 
     let mut scene = create_scene(&mut factory,

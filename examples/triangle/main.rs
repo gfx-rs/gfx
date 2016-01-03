@@ -22,7 +22,7 @@ gfx_vertex_struct!( Vertex {
     color: [f32; 3] = "a_Color",
 });
 
-gfx_pipeline_init!(PipeData PipeMeta PipeInit {
+gfx_pipeline!(pipe {
     vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
     out: gfx::RenderTarget<gfx::format::Rgba8> = ("o_Color", gfx::state::MASK_ALL),
 });
@@ -40,7 +40,7 @@ pub fn main() {
         include_bytes!("triangle_150.glslv"),
         include_bytes!("triangle_150.glslf"),
         gfx::state::CullFace::Nothing,
-        PipeInit::new()
+        pipe::new()
         ).unwrap();
 
     let vertex_data = [
@@ -49,7 +49,7 @@ pub fn main() {
         Vertex { pos: [  0.0,  0.5 ], color: [0.0, 0.0, 1.0] },
     ];
     let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
-    let data = PipeData {
+    let data = pipe::Data {
         vbuf: vbuf,
         out: main_color,
     };

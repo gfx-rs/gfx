@@ -40,7 +40,7 @@ gfx_vertex_struct!(Instance {
     color: u32 = "a_Color",
 });
 
-gfx_pipeline_init!(PipeData PipeMeta PipeInit {
+gfx_pipeline!(pipe {
     vertex: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
     instance: gfx::VertexBuffer<Instance> = gfx::PER_INSTANCE,
     scale: gfx::Global<f32> = "u_Scale",
@@ -63,7 +63,7 @@ fn main() {
         include_bytes!("instancing_150.glslv"),
         include_bytes!("instancing_150.glslf"),
         gfx::state::CullFace::Back,
-        PipeInit::new()
+        pipe::new()
         ).unwrap();
 
     // we could use `factory.create_vertex_buffer_indexed` for the first two
@@ -103,7 +103,7 @@ fn main() {
         }
     }
 
-    let data = PipeData {
+    let data = pipe::Data {
         vertex: quad_vertices,
         instance: quad_instances,
         scale: size,

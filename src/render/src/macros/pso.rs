@@ -15,29 +15,29 @@
 //! Macros for implementing PipelineInit and PipelineData.
 
 #[macro_export]
-macro_rules! gfx_pipeline {
-    ($data:ident $meta:ident $init:ident {
+macro_rules! gfx_pipeline_inner {
+    {
         $( $field:ident: $ty:ty, )*
-    }) => {
+    } => {
         use $crate::pso::{DataLink, DataBind, Descriptor, InitError, RawDataSet};
 
         #[derive(Clone, Debug)]
-        pub struct $data<R: $crate::Resources> {
+        pub struct Data<R: $crate::Resources> {
             $( pub $field: <$ty as DataBind<R>>::Data, )*
         }
 
-        pub struct $meta {
+        pub struct Meta {
             $( $field: $ty, )*
         }
 
-        pub struct $init<'a> {
+        pub struct Init<'a> {
             $( pub $field: <$ty as DataLink<'a>>::Init, )*
         }
 
-        impl<'a> $crate::pso::PipelineInit for $init<'a> {
-            type Meta = $meta;
+        impl<'a> $crate::pso::PipelineInit for Init<'a> {
+            type Meta = Meta;
             fn link_to(&self, desc: &mut Descriptor, info: &$crate::ProgramInfo) -> Result<Self::Meta, InitError> {
-                let mut meta = $meta {
+                let mut meta = Meta {
                     $( $field: <$ty as DataLink<'a>>::new(), )*
                 };
                 // v#
@@ -188,8 +188,8 @@ macro_rules! gfx_pipeline {
             }
         }
 
-        impl<R: $crate::Resources> $crate::pso::PipelineData<R> for $data<R> {
-            type Meta = $meta;
+        impl<R: $crate::Resources> $crate::pso::PipelineData<R> for Data<R> {
+            type Meta = Meta;
             fn bake(&self, meta: &Self::Meta, man: &mut $crate::handle::Manager<R>) -> RawDataSet<R> {
                 let mut out = RawDataSet::new();
                 $(
@@ -202,16 +202,33 @@ macro_rules! gfx_pipeline {
 }
 
 #[macro_export]
-macro_rules! gfx_pipeline_init {
-    ($data:ident $meta:ident $init:ident {
+macro_rules! gfx_pipeline_base {
+    ($module:ident {
+        $( $field:ident: $ty:ty, )*
+    }) => {
+        pub mod $module {
+            use $crate;
+            use super::*;
+            gfx_pipeline_inner!{ $(
+                $field: $ty,
+            )*}
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! gfx_pipeline {
+    ($module:ident {
         $( $field:ident: $ty:ty = $value:expr, )*
     }) => {
-        gfx_pipeline!( $data $meta $init {
-            $( $field: $ty, )*
-        });
-        impl $init<'static> {
-            pub fn new() -> $init<'static> {
-                $init {
+        pub mod $module {
+            use $crate;
+            use super::*;
+            gfx_pipeline_inner!{ $(
+                $field: $ty,
+            )*}
+            pub fn new() -> Init<'static> {
+                Init {
                     $( $field: $value, )*
                 }
             }

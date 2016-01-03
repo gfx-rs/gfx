@@ -22,7 +22,7 @@ extern crate glutin;
 extern crate image;
 
 use std::io::Cursor;
-use gfx::format::Rgba8;
+pub use gfx::format::Rgba8;
 
 gfx_vertex_struct!( Vertex {
     pos: [f32; 2] = "a_Pos",
@@ -38,7 +38,7 @@ impl Vertex {
     }
 }
 
-gfx_pipeline_init!( PipeData PipeMeta PipeInit {
+gfx_pipeline!( pipe {
     vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
     color: gfx::TextureSampler<Rgba8> = "t_Color",
     flow: gfx::TextureSampler<Rgba8> = "t_Flow",
@@ -91,10 +91,10 @@ pub fn main() {
         include_bytes!("shader/flowmap_150.glslv"),
         include_bytes!("shader/flowmap_150.glslf"),
         gfx::state::CullFace::Nothing,
-        PipeInit::new()
+        pipe::new()
         ).unwrap();
 
-    let mut data = PipeData {
+    let mut data = pipe::Data {
         vbuf: vbuf,
         color: (water_texture, sampler.clone()),
         flow: (flow_texture, sampler.clone()),

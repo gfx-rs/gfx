@@ -41,7 +41,7 @@ use rand::Rng;
 use cgmath::FixedArray;
 use cgmath::{Matrix, Matrix4, Point3, Vector3, EuclideanVector};
 use cgmath::{Transform, AffineMatrix3};
-use gfx::format::{Depth, I8Scaled, Rgba8};
+pub use gfx::format::{Depth, I8Scaled, Rgba8};
 use gfx::traits::{Device, Factory, FactoryExt};
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{SharedVertex, IndexedPolygon};
@@ -58,244 +58,222 @@ gfx_constant_struct!(LightInfo {
     pos: [f32; 4],
 });
 
-mod terrain {
-    use super::GFormat;
-    use gfx;
+gfx_vertex_struct!( TerrainVertex {
+    pos: [f32; 3] = "a_Pos",
+    normal: [f32; 3] = "a_Normal",
+    color: [f32; 3] = "a_Color",
+});
 
-    gfx_vertex_struct!( Vertex {
-        pos: [f32; 3] = "a_Pos",
-        normal: [f32; 3] = "a_Normal",
-        color: [f32; 3] = "a_Color",
-    });
+gfx_pipeline!( terrain {
+    vbuf: gfx::VertexBuffer<TerrainVertex> = gfx::PER_VERTEX,
+    model: gfx::Global<[[f32; 4]; 4]> = "u_Model",
+    view: gfx::Global<[[f32; 4]; 4]> = "u_View",
+    proj: gfx::Global<[[f32; 4]; 4]> = "u_Proj",
+    cam_pos: gfx::Global<[f32; 3]> = "u_CameraPos",
+    out_position: gfx::RenderTarget<GFormat> =
+        ("o_Position", gfx::state::MASK_ALL),
+    out_normal: gfx::RenderTarget<GFormat> =
+        ("o_Normal", gfx::state::MASK_ALL),
+    out_color: gfx::RenderTarget<GFormat> =
+        ("o_Color", gfx::state::MASK_ALL),
+    out_depth: gfx::DepthTarget<gfx::format::Depth> = gfx::state::Depth {
+        fun: gfx::state::Comparison::LessEqual,
+        write: true,
+    },
+});
 
-    gfx_pipeline_init!( Data Meta Init {
-        vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
-        model: gfx::Global<[[f32; 4]; 4]> = "u_Model",
-        view: gfx::Global<[[f32; 4]; 4]> = "u_View",
-        proj: gfx::Global<[[f32; 4]; 4]> = "u_Proj",
-        cam_pos: gfx::Global<[f32; 3]> = "u_CameraPos",
-        out_position: gfx::RenderTarget<GFormat> =
-            ("o_Position", gfx::state::MASK_ALL),
-        out_normal: gfx::RenderTarget<GFormat> =
-            ("o_Normal", gfx::state::MASK_ALL),
-        out_color: gfx::RenderTarget<GFormat> =
-            ("o_Color", gfx::state::MASK_ALL),
-        out_depth: gfx::DepthTarget<gfx::format::Depth> = gfx::state::Depth {
-            fun: gfx::state::Comparison::LessEqual,
-            write: true,
-        },
-    });
+pub static TERRAIN_VERTEX_SRC: &'static [u8] = b"
+    #version 150 core
 
-    pub static VERTEX_SRC: &'static [u8] = b"
-        #version 150 core
+    uniform mat4 u_Model;
+    uniform mat4 u_View;
+    uniform mat4 u_Proj;
+    in vec3 a_Pos;
+    in vec3 a_Normal;
+    in vec3 a_Color;
+    out vec3 v_FragPos;
+    out vec3 v_Normal;
+    out vec3 v_Color;
 
-        uniform mat4 u_Model;
-        uniform mat4 u_View;
-        uniform mat4 u_Proj;
-        in vec3 a_Pos;
-        in vec3 a_Normal;
-        in vec3 a_Color;
-        out vec3 v_FragPos;
-        out vec3 v_Normal;
-        out vec3 v_Color;
+    void main() {
+        v_FragPos = (u_Model * vec4(a_Pos, 1.0)).xyz;
+        v_Normal = a_Normal;
+        v_Color = a_Color;
+        gl_Position = u_Proj * u_View * u_Model * vec4(a_Pos, 1.0);
+    }
+";
 
-        void main() {
-            v_FragPos = (u_Model * vec4(a_Pos, 1.0)).xyz;
-            v_Normal = a_Normal;
-            v_Color = a_Color;
-            gl_Position = u_Proj * u_View * u_Model * vec4(a_Pos, 1.0);
-        }
-    ";
+pub static TERRAIN_FRAGMENT_SRC: &'static [u8] = b"
+    #version 150 core
 
-    pub static FRAGMENT_SRC: &'static [u8] = b"
-        #version 150 core
+    in vec3 v_FragPos;
+    in vec3 v_Normal;
+    in vec3 v_Color;
+    out vec4 o_Position;
+    out vec4 o_Normal;
+    out vec4 o_Color;
 
-        in vec3 v_FragPos;
-        in vec3 v_Normal;
-        in vec3 v_Color;
-        out vec4 o_Position;
-        out vec4 o_Normal;
-        out vec4 o_Color;
+    void main() {
+        vec3 n = normalize(v_Normal);
 
-        void main() {
-            vec3 n = normalize(v_Normal);
+        o_Position = vec4(v_FragPos, 0.0);
+        o_Normal = vec4(n, 0.0);
+        o_Color = vec4(v_Color, 1.0);
+    }
+";
 
-            o_Position = vec4(v_FragPos, 0.0);
-            o_Normal = vec4(n, 0.0);
-            o_Color = vec4(v_Color, 1.0);
-        }
-    ";
-}
+gfx_vertex_struct!( BlitVertex {
+    pos: [I8Scaled; 3] = "a_Pos",
+    tex_coord: [I8Scaled; 2] = "a_TexCoord",
+});
 
-mod blit {
-    use gfx;
-    use gfx::format::{I8Scaled, Rgba8};
+gfx_pipeline!( blit {
+    vbuf: gfx::VertexBuffer<BlitVertex> = gfx::PER_VERTEX,
+    tex: gfx::TextureSampler<GFormat> = "u_Tex",
+    out: gfx::RenderTarget<Rgba8> = ("o_Color", gfx::state::MASK_ALL),
+});
 
-    gfx_vertex_struct!( Vertex {
-        pos: [I8Scaled; 3] = "a_Pos",
-        tex_coord: [I8Scaled; 2] = "a_TexCoord",
-    });
+pub static BLIT_VERTEX_SRC: &'static [u8] = b"
+    #version 150 core
 
-    gfx_pipeline_init!( Data Meta Init {
-        vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
-        tex: gfx::TextureSampler<super::GFormat> = "u_Tex",
-        out: gfx::RenderTarget<Rgba8> = ("o_Color", gfx::state::MASK_ALL),
-    });
+    in vec3 a_Pos;
+    in vec2 a_TexCoord;
+    out vec2 v_TexCoord;
 
-    pub static VERTEX_SRC: &'static [u8] = b"
-        #version 150 core
+    void main() {
+        v_TexCoord = a_TexCoord;
+        gl_Position = vec4(a_Pos, 1.0);
+    }
+";
 
-        in vec3 a_Pos;
-        in vec2 a_TexCoord;
-        out vec2 v_TexCoord;
+pub static BLIT_FRAGMENT_SRC: &'static [u8] = b"
+    #version 150 core
 
-        void main() {
-            v_TexCoord = a_TexCoord;
-            gl_Position = vec4(a_Pos, 1.0);
-        }
-    ";
+    uniform sampler2D u_Tex;
+    in vec2 v_TexCoord;
+    out vec4 o_Color;
 
-    pub static FRAGMENT_SRC: &'static [u8] = b"
-        #version 150 core
-
-        uniform sampler2D u_Tex;
-        in vec2 v_TexCoord;
-        out vec4 o_Color;
-
-        void main() {
-            vec4 tex = texture(u_Tex, v_TexCoord);
-            o_Color = tex;
-        }
-    ";
-}
+    void main() {
+        vec4 tex = texture(u_Tex, v_TexCoord);
+        o_Color = tex;
+    }
+";
 
 gfx_vertex_struct!( CubeVertex {
     pos: [I8Scaled; 3] = "a_Pos",
 });
 
-mod light {
-    use super::CubeVertex as Vertex;
-    use super::{GFormat, LightInfo};
-    use gfx;
+gfx_pipeline!( light {
+    vbuf: gfx::VertexBuffer<CubeVertex> = gfx::PER_VERTEX,
+    transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
+    light_pos_buf: gfx::ConstantBuffer<LightInfo> = "u_LightPosBlock",
+    radius: gfx::Global<f32> = "u_Radius",
+    cam_pos: gfx::Global<[f32; 3]> = "u_CameraPos",
+    frame_res: gfx::Global<[f32; 2]> = "u_FrameRes",
+    tex_pos: gfx::TextureSampler<GFormat> = "u_TexPos",
+    tex_normal: gfx::TextureSampler<GFormat> = "u_TexNormal",
+    tex_diffuse: gfx::TextureSampler<GFormat> = "u_TexDiffuse",
+    out_color: gfx::BlendTarget<GFormat> = ("o_Color", gfx::preset::blend::ADD),
+    out_depth: gfx::DepthTarget<gfx::format::Depth> = gfx::state::Depth {
+        fun: gfx::state::Comparison::LessEqual,
+        write: false,
+    },
+});
 
-    gfx_pipeline_init!( Data Meta Init {
-        vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
-        transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
-        light_pos_buf: gfx::ConstantBuffer<LightInfo> = "u_LightPosBlock",
-        radius: gfx::Global<f32> = "u_Radius",
-        cam_pos: gfx::Global<[f32; 3]> = "u_CameraPos",
-        frame_res: gfx::Global<[f32; 2]> = "u_FrameRes",
-        tex_pos: gfx::TextureSampler<GFormat> = "u_TexPos",
-        tex_normal: gfx::TextureSampler<GFormat> = "u_TexNormal",
-        tex_diffuse: gfx::TextureSampler<GFormat> = "u_TexDiffuse",
-        out_color: gfx::BlendTarget<GFormat> = ("o_Color", gfx::preset::blend::ADD),
-        out_depth: gfx::DepthTarget<gfx::format::Depth> = gfx::state::Depth {
-            fun: gfx::state::Comparison::LessEqual,
-            write: false,
-        },
-    });
+pub static LIGHT_VERTEX_SRC: &'static [u8] = b"
+    #version 150 core
 
-    pub static VERTEX_SRC: &'static [u8] = b"
-        #version 150 core
+    uniform mat4 u_Transform;
+    uniform float u_Radius;
+    in vec3 a_Pos;
+    out vec3 v_LightPos;
 
-        uniform mat4 u_Transform;
-        uniform float u_Radius;
-        in vec3 a_Pos;
-        out vec3 v_LightPos;
+    const int NUM_LIGHTS = 250;
+    layout(std140)
+    uniform u_LightPosBlock {
+        vec4 offs[NUM_LIGHTS];
+    };
 
-        const int NUM_LIGHTS = 250;
-        layout(std140)
-        uniform u_LightPosBlock {
-            vec4 offs[NUM_LIGHTS];
-        };
+    void main() {
+        v_LightPos = offs[gl_InstanceID].xyz;
+        gl_Position = u_Transform * vec4(u_Radius * a_Pos + offs[gl_InstanceID].xyz, 1.0);
+    }
+";
 
-        void main() {
-            v_LightPos = offs[gl_InstanceID].xyz;
-            gl_Position = u_Transform * vec4(u_Radius * a_Pos + offs[gl_InstanceID].xyz, 1.0);
-        }
-    ";
+pub static LIGHT_FRAGMENT_SRC: &'static [u8] = b"
+    #version 150 core
 
-    pub static FRAGMENT_SRC: &'static [u8] = b"
-        #version 150 core
+    uniform float u_Radius;
+    uniform vec3 u_CameraPos;
+    uniform vec2 u_FrameRes;
+    uniform sampler2D u_TexPos;
+    uniform sampler2D u_TexNormal;
+    uniform sampler2D u_TexDiffuse;
+    in vec3 v_LightPos;
+    out vec4 o_Color;
 
-        uniform float u_Radius;
-        uniform vec3 u_CameraPos;
-        uniform vec2 u_FrameRes;
-        uniform sampler2D u_TexPos;
-        uniform sampler2D u_TexNormal;
-        uniform sampler2D u_TexDiffuse;
-        in vec3 v_LightPos;
-        out vec4 o_Color;
+    void main() {
+        vec2 texCoord = gl_FragCoord.xy / u_FrameRes;
+        vec3 pos     = texture(u_TexPos,     texCoord).xyz;
+        vec3 normal  = texture(u_TexNormal,  texCoord).xyz;
+        vec3 diffuse = texture(u_TexDiffuse, texCoord).xyz;
 
-        void main() {
-            vec2 texCoord = gl_FragCoord.xy / u_FrameRes;
-            vec3 pos     = texture(u_TexPos,     texCoord).xyz;
-            vec3 normal  = texture(u_TexNormal,  texCoord).xyz;
-            vec3 diffuse = texture(u_TexDiffuse, texCoord).xyz;
+        vec3 light    = v_LightPos;
+        vec3 to_light = normalize(light - pos);
+        vec3 to_cam   = normalize(u_CameraPos - pos);
 
-            vec3 light    = v_LightPos;
-            vec3 to_light = normalize(light - pos);
-            vec3 to_cam   = normalize(u_CameraPos - pos);
+        vec3 n = normalize(normal);
+        float s = pow(max(0.0, dot(to_cam, reflect(-to_light, n))), 20.0);
+        float d = max(0.0, dot(n, to_light));
 
-            vec3 n = normalize(normal);
-            float s = pow(max(0.0, dot(to_cam, reflect(-to_light, n))), 20.0);
-            float d = max(0.0, dot(n, to_light));
+        float dist_sq = dot(light - pos, light - pos);
+        float scale = max(0.0, 1.0-dist_sq/(u_Radius*u_Radius));
 
-            float dist_sq = dot(light - pos, light - pos);
-            float scale = max(0.0, 1.0-dist_sq/(u_Radius*u_Radius));
+        vec3 res_color = d*vec3(diffuse) + vec3(s);
 
-            vec3 res_color = d*vec3(diffuse) + vec3(s);
+        o_Color = vec4(scale*res_color, 1.0);
+    }
+";
 
-            o_Color = vec4(scale*res_color, 1.0);
-        }
-    ";
-}
+gfx_pipeline!( emitter {
+    vbuf: gfx::VertexBuffer<CubeVertex> = gfx::PER_VERTEX,
+    transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
+    light_pos_buf: gfx::ConstantBuffer<LightInfo> = "u_LightPosBlock",
+    radius: gfx::Global<f32> = "u_Radius",
+    out_color: gfx::BlendTarget<GFormat> = ("o_Color", gfx::preset::blend::ADD),
+    out_depth: gfx::DepthTarget<gfx::format::Depth> = gfx::state::Depth {
+        fun: gfx::state::Comparison::LessEqual,
+        write: false,
+    },
+});
 
-mod emitter {
-    use super::CubeVertex as Vertex;
-    use super::{GFormat, LightInfo};
-    use gfx;
+pub static EMITTER_VERTEX_SRC: &'static [u8] = b"
+    #version 150 core
 
-    gfx_pipeline_init!( Data Meta Init {
-        vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
-        transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
-        light_pos_buf: gfx::ConstantBuffer<LightInfo> = "u_LightPosBlock",
-        radius: gfx::Global<f32> = "u_Radius",
-        out_color: gfx::BlendTarget<GFormat> = ("o_Color", gfx::preset::blend::ADD),
-        out_depth: gfx::DepthTarget<gfx::format::Depth> = gfx::state::Depth {
-            fun: gfx::state::Comparison::LessEqual,
-            write: false,
-        },
-    });
+    uniform mat4 u_Transform;
+    uniform float u_Radius;
+    in vec3 a_Pos;
 
-    pub static VERTEX_SRC: &'static [u8] = b"
-        #version 150 core
+    const int NUM_LIGHTS = 250;
+    layout(std140)
+    uniform u_LightPosBlock {
+        vec4 offs[NUM_LIGHTS];
+    };
 
-        uniform mat4 u_Transform;
-        uniform float u_Radius;
-        in vec3 a_Pos;
+    void main() {
+        gl_Position = u_Transform * vec4(u_Radius * a_Pos + offs[gl_InstanceID].xyz, 1.0);
+    }
+";
 
-        const int NUM_LIGHTS = 250;
-        layout(std140)
-        uniform u_LightPosBlock {
-            vec4 offs[NUM_LIGHTS];
-        };
+pub static EMITTER_FRAGMENT_SRC: &'static [u8] = b"
+    #version 150 core
 
-        void main() {
-            gl_Position = u_Transform * vec4(u_Radius * a_Pos + offs[gl_InstanceID].xyz, 1.0);
-        }
-    ";
+    out vec4 o_Color;
 
-    pub static FRAGMENT_SRC: &'static [u8] = b"
-        #version 150 core
-
-        out vec4 o_Color;
-
-        void main() {
-            o_Color = vec4(1.0, 1.0, 1.0, 1.0);
-        }
-    ";
-}
+    void main() {
+        o_Color = vec4(1.0, 1.0, 1.0, 1.0);
+    }
+";
 
 fn calculate_normal(seed: &Seed, x: f32, y: f32)-> [f32; 3] {
     // determine sample points
@@ -389,10 +367,10 @@ pub fn main() {
     let terrain_scale = Vector3::new(25.0, 25.0, 25.0);
     let (terrain_pso, mut terrain_data, terrain_slice) = {
         let plane = genmesh::generators::Plane::subdivide(256, 256);
-        let vertex_data: Vec<terrain::Vertex> = plane.shared_vertex_iter()
+        let vertex_data: Vec<TerrainVertex> = plane.shared_vertex_iter()
             .map(|(x, y)| {
                 let h = terrain_scale.z * perlin2(&seed, &[x, y]);
-                terrain::Vertex {
+                TerrainVertex {
                     pos: [terrain_scale.x * x, terrain_scale.y * y, h],
                     normal: calculate_normal(&seed, x, y),
                     color: calculate_color(h),
@@ -409,8 +387,8 @@ pub fn main() {
         let (vbuf, slice) = factory.create_vertex_buffer_indexed(&vertex_data, &index_data[..]);
 
         let pso = factory.create_pipeline_simple(
-            terrain::VERTEX_SRC, terrain::FRAGMENT_SRC,
-            gfx::state::CullFace::Back, terrain::Init::new()
+            TERRAIN_VERTEX_SRC, TERRAIN_FRAGMENT_SRC,
+            gfx::state::CullFace::Back, terrain::new()
             ).unwrap();
 
         let data = terrain::Data {
@@ -430,19 +408,19 @@ pub fn main() {
 
     let (blit_pso, mut blit_data, blit_slice) = {
         let vertex_data = [
-            blit::Vertex { pos: I8Scaled::cast3([-1, -1, 0]), tex_coord: I8Scaled::cast2([0, 0]) },
-            blit::Vertex { pos: I8Scaled::cast3([ 1, -1, 0]), tex_coord: I8Scaled::cast2([1, 0]) },
-            blit::Vertex { pos: I8Scaled::cast3([ 1,  1, 0]), tex_coord: I8Scaled::cast2([1, 1]) },
-            blit::Vertex { pos: I8Scaled::cast3([-1, -1, 0]), tex_coord: I8Scaled::cast2([0, 0]) },
-            blit::Vertex { pos: I8Scaled::cast3([ 1,  1, 0]), tex_coord: I8Scaled::cast2([1, 1]) },
-            blit::Vertex { pos: I8Scaled::cast3([-1,  1, 0]), tex_coord: I8Scaled::cast2([0, 1]) },
+            BlitVertex { pos: I8Scaled::cast3([-1, -1, 0]), tex_coord: I8Scaled::cast2([0, 0]) },
+            BlitVertex { pos: I8Scaled::cast3([ 1, -1, 0]), tex_coord: I8Scaled::cast2([1, 0]) },
+            BlitVertex { pos: I8Scaled::cast3([ 1,  1, 0]), tex_coord: I8Scaled::cast2([1, 1]) },
+            BlitVertex { pos: I8Scaled::cast3([-1, -1, 0]), tex_coord: I8Scaled::cast2([0, 0]) },
+            BlitVertex { pos: I8Scaled::cast3([ 1,  1, 0]), tex_coord: I8Scaled::cast2([1, 1]) },
+            BlitVertex { pos: I8Scaled::cast3([-1,  1, 0]), tex_coord: I8Scaled::cast2([0, 1]) },
         ];
 
         let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
 
         let pso = factory.create_pipeline_simple(
-            blit::VERTEX_SRC, blit::FRAGMENT_SRC,
-            gfx::state::CullFace::Nothing, blit::Init::new()
+            BLIT_VERTEX_SRC, BLIT_FRAGMENT_SRC,
+            gfx::state::CullFace::Nothing, blit::new()
             ).unwrap();
 
         let data = blit::Data {
@@ -505,8 +483,8 @@ pub fn main() {
 
     let (light_pso, mut light_data) = {
         let pso = factory.create_pipeline_simple(
-            light::VERTEX_SRC, light::FRAGMENT_SRC,
-            gfx::state::CullFace::Back, light::Init::new()
+            LIGHT_VERTEX_SRC, LIGHT_FRAGMENT_SRC,
+            gfx::state::CullFace::Back, light::new()
             ).unwrap();
 
         let data = light::Data {
@@ -528,8 +506,8 @@ pub fn main() {
 
     let (emitter_pso, mut emitter_data) = {
         let pso = factory.create_pipeline_simple(
-            emitter::VERTEX_SRC, emitter::FRAGMENT_SRC,
-            gfx::state::CullFace::Back, emitter::Init::new()
+            EMITTER_VERTEX_SRC, EMITTER_FRAGMENT_SRC,
+            gfx::state::CullFace::Back, emitter::new()
             ).unwrap();
 
         let data = emitter::Data {

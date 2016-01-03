@@ -24,7 +24,7 @@ use time::precise_time_s;
 use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3, Matrix3, Matrix4};
 use cgmath::{Transform, AffineMatrix3, Vector4, Array1};
-use gfx::format::{I8Scaled, DepthStencil, Rgba8};
+pub use gfx::format::{I8Scaled, DepthStencil, Rgba8};
 use glfw::Context;
 use gl::Gl;
 use gl::types::*;
@@ -42,7 +42,7 @@ gfx_vertex_struct!( Vertex {
     pos: [I8Scaled; 3] = "a_Pos",
 });
 
-gfx_pipeline_init!( PipeData PipeMeta PipeInit {
+gfx_pipeline!(pipe {
     vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
     transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
     out_color: gfx::RenderTarget<Rgba8> = ("o_Color", gfx::state::MASK_ALL),
@@ -86,7 +86,7 @@ fn gfx_main(mut glfw: glfw::Glfw,
     let pso = factory.create_pipeline_simple(
         VERTEX_SRC, FRAGMENT_SRC,
         gfx::state::CullFace::Back,
-        PipeInit::new()
+        pipe::new()
         ).unwrap();
 
     let vertex_data = [
@@ -107,7 +107,7 @@ fn gfx_main(mut glfw: glfw::Glfw,
     };
     let proj = cgmath::perspective(cgmath::deg(45.0f32), aspect, 1.0, 10.0);
 
-    let mut data = PipeData {
+    let mut data = pipe::Data {
         vbuf: vbuf,
         transform: cgmath::Matrix4::identity().into_fixed(),
         out_color: main_color,

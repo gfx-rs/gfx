@@ -15,7 +15,7 @@ gfx_constant_struct!(Local {
     _pos: [u32; 4],
 });
 
-gfx_pipeline_init!( _Data _Meta _Init {
+gfx_pipeline!( testpipe {
     _vertex: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
     _instance: gfx::VertexBuffer<Instance> = gfx::PER_INSTANCE,
     _const_locals: gfx::ConstantBuffer<Local> = "Locals",
@@ -31,11 +31,11 @@ gfx_pipeline_init!( _Data _Meta _Init {
 });
 
 fn _test_pso<R, F>(factory: &mut F)
-             -> gfx::PipelineState<R, _Meta>  where
+             -> gfx::PipelineState<R, testpipe::Meta>  where
     R: gfx::Resources,
     F: gfx::traits::FactoryExt<R>,
 {
     factory.create_pipeline_simple(&[], &[],
-        gfx::state::CullFace::Nothing, _Init::new()
+        gfx::state::CullFace::Nothing, testpipe::new()
         ).unwrap()
 }

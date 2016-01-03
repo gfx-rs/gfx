@@ -19,7 +19,7 @@ extern crate glutin;
 
 extern crate image;
 
-use gfx::format::Rgba8;
+pub use gfx::format::Rgba8;
 use gfx::traits::{Device, Factory, FactoryExt};
 
 gfx_vertex_struct!( Vertex {
@@ -36,7 +36,7 @@ impl Vertex {
     }
 }
 
-gfx_pipeline_init!( PipeData PipeMeta PipeInit {
+gfx_pipeline!( pipe {
     vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
     lena: gfx::TextureSampler<Rgba8> = "t_Lena",
     tint: gfx::TextureSampler<Rgba8> = "t_Tint",
@@ -84,7 +84,7 @@ pub fn main() {
         include_bytes!("shader/blend_150.glslv"),
         include_bytes!("shader/blend_150.glslf"),
         gfx::state::CullFace::Nothing,
-        PipeInit::new()
+        pipe::new()
         ).unwrap();
 
     // we pass a integer to our shader to show what blending function we want
@@ -108,7 +108,7 @@ pub fn main() {
 
     println!("Using '{}' blend equation", blend_func.1);
 
-    let mut data = PipeData {
+    let mut data = pipe::Data {
         vbuf: vbuf,
         lena: (lena_texture, sampler.clone()),
         tint: (tint_texture, sampler),

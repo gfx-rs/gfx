@@ -26,7 +26,7 @@ use rand::Rng;
 use cgmath::FixedArray;
 use cgmath::{Matrix4, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
-use gfx::format::{DepthStencil, Rgba8};
+pub use gfx::format::{DepthStencil, Rgba8};
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
 use time::precise_time_s;
@@ -38,7 +38,7 @@ gfx_vertex_struct!( Vertex {
     color: [f32; 3] = "a_Color",
 });
 
-gfx_pipeline_init!( PipeData PipeMeta PipeInit {
+gfx_pipeline!(pipe {
     vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
     model: gfx::Global<[[f32; 4]; 4]> = "u_Model",
     view: gfx::Global<[[f32; 4]; 4]> = "u_View",
@@ -96,7 +96,7 @@ pub fn main() {
         include_bytes!("terrain_150.glslv"),
         include_bytes!("terrain_150.glslf"),
         gfx::state::CullFace::Back,
-        PipeInit::new()
+        pipe::new()
         ).unwrap();
 
     let aspect_ratio = {
@@ -104,7 +104,7 @@ pub fn main() {
         w as f32 / h as f32
     };
 
-    let mut data = PipeData {
+    let mut data = pipe::Data {
         vbuf: vbuf,
         model: Matrix4::identity().into_fixed(),
         view: Matrix4::identity().into_fixed(),

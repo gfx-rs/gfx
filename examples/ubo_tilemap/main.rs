@@ -27,7 +27,7 @@ use std::io::Cursor;
 
 use glutin::{PollEventsIterator, Event, VirtualKeyCode, ElementState};
 
-use gfx::format::{DepthStencil, Rgba8};
+pub use gfx::format::{DepthStencil, Rgba8};
 use gfx::traits::{FactoryExt};
 
 use cgmath::FixedArray;
@@ -129,7 +129,7 @@ gfx_vertex_struct!( VertexData {
 });
 
 // Pipeline state definition
-gfx_pipeline_init!( PipeData PipeMeta PipeInit {
+gfx_pipeline!(pipe {
     vbuf: gfx::VertexBuffer<VertexData> = gfx::PER_VERTEX,
     // projection stuff
     model: gfx::Global<[[f32; 4]; 4]> = "u_Model",
@@ -153,7 +153,7 @@ gfx_pipeline_init!( PipeData PipeMeta PipeInit {
 // Also holds a Vec<TileMapData> as a working data
 // set for consumers
 pub struct TileMapPlane<R> where R: gfx::Resources {
-    pub params: PipeData<R>,
+    pub params: pipe::Data<R>,
     pub slice: gfx::Slice<R>,
     pub data: Vec<TileMapData>,
 }
@@ -212,7 +212,7 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
         let tile_texture = load_texture(factory, tilesheet_bytes).unwrap();
         let tilemap_buf = factory.create_constant_buffer(TILEMAP_BUF_LENGTH);
 
-        let params = PipeData {
+        let params = pipe::Data {
             vbuf: vbuf,
             model: Matrix4::identity().into_fixed(),
             view: Matrix4::identity().into_fixed(),
@@ -257,7 +257,7 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
 // within the TileMapData when the visible set of tiles changes
 pub struct TileMap<R> where R: gfx::Resources {
     pub tiles: Vec<TileMapData>,
-    pso: gfx::PipelineState<R, PipeMeta>,
+    pso: gfx::PipelineState<R, pipe::Meta>,
     tilemap_plane: TileMapPlane<R>,
     tile_size: f32,
     tilemap_size: [usize; 2],
@@ -280,7 +280,7 @@ impl<R: gfx::Resources> TileMap<R> {
             include_bytes!("tilemap_150.glslv"),
             include_bytes!("tilemap_150.glslf"),
             gfx::state::CullFace::Back,
-            PipeInit::new()
+            pipe::new()
             ).unwrap();
 
         // TODO: should probably check that charmap is smaller than tilemap

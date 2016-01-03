@@ -17,7 +17,7 @@ extern crate gfx;
 extern crate gfx_window_glutin;
 extern crate glutin;
 
-use gfx::format::{Rgba8};
+pub use gfx::format::Rgba8;
 
 #[derive(Clone, Debug)]
 pub struct Rgb332(u8);
@@ -37,7 +37,7 @@ impl Vertex {
     }
 }
 
-gfx_pipeline_init!( PipeData PipeMeta PipeInit {
+gfx_pipeline!(pipe {
     vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
     tex: gfx::TextureSampler<Rgb332> = "t_Tex",
     out: gfx::RenderTarget<Rgba8> = ("o_Color", gfx::state::MASK_ALL),
@@ -132,7 +132,7 @@ pub fn main() {
         include_bytes!("shader/120.glslv"),
         include_bytes!("shader/120.glslf"),
         gfx::state::CullFace::Nothing,
-        PipeInit::new()
+        pipe::new()
         ).unwrap();
 
     let vertex_data = [
@@ -153,7 +153,7 @@ pub fn main() {
         gfx::tex::WrapMode::Tile,
     ));
 
-    let data = PipeData {
+    let data = pipe::Data {
         vbuf: vbuf,
         tex: (texture_view, sampler),
         out: main_color,
