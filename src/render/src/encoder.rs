@@ -27,11 +27,9 @@ use gfx_core::draw::{Access, Gamma, Target};
 use gfx_core::draw::{CommandBuffer, DataBuffer, InstanceOption};
 use gfx_core::factory::{Factory, NotSupported};
 use gfx_core::output::{Output, Plane};
-use gfx_core::shade::{ProgramInfo, UniformValue};
 use gfx_core::tex::Size;
 use mesh;
 use pso;
-use shade::TextureParam;
 use target;
 
 /// An error occuring in surface blits.
@@ -80,39 +78,6 @@ impl<R: Resources> RenderState<R> {
             gamma: Gamma::Original,
             index: None,
         }
-    }
-}
-
-/// Temporary parameter storage, used for shader activation.
-pub struct ParamStorage<R: Resources> {
-    /// uniform values to be provided
-    pub uniforms: Vec<Option<UniformValue>>,
-    /// uniform buffers to be provided
-    pub blocks  : Vec<Option<handle::RawBuffer<R>>>,
-    /// textures to be provided
-    pub textures: Vec<Option<TextureParam<R>>>,
-}
-
-impl<R: Resources> ParamStorage<R> {
-    /// Create an empty parameter storage.
-    pub fn new() -> ParamStorage<R> {
-        ParamStorage {
-            uniforms: Vec::new(),
-            blocks: Vec::new(),
-            textures: Vec::new(),
-        }
-    }
-
-    /// Reserve the exact slots needed for this program info.
-    pub fn reserve(&mut self, pinfo: &ProgramInfo) {
-        // clear
-        self.uniforms.clear();
-        self.blocks  .clear();
-        self.textures.clear();
-        // allocate
-        self.uniforms.extend(pinfo.globals.iter().map(|_| None));
-        self.blocks  .extend(pinfo.constant_buffers.iter().map(|_| None));
-        self.textures.extend(pinfo.textures.iter().map(|_| None));
     }
 }
 
