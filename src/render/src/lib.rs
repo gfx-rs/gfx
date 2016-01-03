@@ -50,8 +50,6 @@ pub use gfx_core::draw::{CommandBuffer, Gamma, InstanceOption};
 pub use gfx_core::output::{Output, Plane};
 pub use gfx_core::shade::{ProgramInfo, UniformValue};
 pub use encoder::{Encoder, BlitError, UpdateError};
-pub use mesh::{Attribute, Mesh, VertexFormat};
-pub use mesh::Error as MeshError;
 pub use mesh::{Slice, ToIndexSlice, SliceKind};
 pub use pso::{PipelineState, VertexBuffer, ConstantBuffer,
               Global, PER_VERTEX, PER_INSTANCE,

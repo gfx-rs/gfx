@@ -20,7 +20,7 @@ use gfx_core::factory::{BufferRole, Factory};
 use gfx_core::pso::{CreationError, Descriptor};
 use gfx_core::state::{CullFace, Rasterizer};
 use encoder::Encoder;
-use mesh::{Mesh, Slice, SliceKind, ToIndexSlice, VertexFormat};
+use mesh::{Slice, SliceKind, ToIndexSlice};
 use pso;
 use shade::{ProgramError, ShaderSource};
 
@@ -41,14 +41,6 @@ pub trait FactoryExt<R: Resources>: Factory<R> + Sized {
     /// Create a new graphics command Encoder
     fn create_encoder(&mut self) -> Encoder<R, Self::CommandBuffer> {
         Encoder::create(self)
-    }
-
-    /// Create a new mesh from the given vertex data.
-    fn create_mesh<T: VertexFormat>(&mut self, data: &[T]) -> Mesh<R> {
-        let nv = data.len();
-        //debug_assert!(nv <= self.get_capabilities().max_vertex_count);
-        let buf = self.create_buffer_static(data, BufferRole::Vertex);
-        Mesh::from_format(buf, nv as VertexCount)
     }
 
     /// Create a vertex buffer with an associated slice.
