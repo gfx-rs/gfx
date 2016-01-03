@@ -37,7 +37,6 @@ pub mod factory;
 pub mod format;
 pub mod handle;
 pub mod mapping;
-pub mod output;
 pub mod pso;
 pub mod shade;
 pub mod tex;

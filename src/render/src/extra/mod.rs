@@ -18,5 +18,3 @@
 
 /// Factory extensions
 pub mod factory;
-/// Render stream
-pub mod stream;

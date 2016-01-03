@@ -32,7 +32,7 @@ use gfx_core::state as s;
 use gfx_core::target::{Layer, Level};
 use command::Command;
 
-pub use self::factory::{Factory, Output};
+pub use self::factory::Factory;
 pub use self::info::{Info, PlatformName, Version};
 
 pub mod command;

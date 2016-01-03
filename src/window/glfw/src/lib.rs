@@ -19,69 +19,9 @@ extern crate gfx_device_gl;
 extern crate glfw;
 
 use gfx::tex::{AaMode, Size};
-
 use glfw::Context;
 
-/// A wrapper around the window that implements `Output`.
-pub struct Output<R: gfx::Resources> {
-    /// Glutin window in the open.
-    pub window: glfw::Window,
-    frame: gfx::handle::FrameBuffer<R>,
-    mask: gfx::Mask,
-    gamma: gfx::Gamma,
-}
-
-impl<R: gfx::Resources> gfx::Output<R> for Output<R> {
-    fn get_handle(&self) -> Option<&gfx::handle::FrameBuffer<R>> {
-        Some(&self.frame)
-    }
-
-    fn get_size(&self) -> (Size, Size) {
-        let (w, h) = self.window.get_framebuffer_size();
-        (w as Size, h as Size)
-    }
-
-    fn get_mask(&self) -> gfx::Mask {
-        self.mask
-    }
-
-    fn get_gamma(&self) -> gfx::Gamma {
-        self.gamma
-    }
-}
-
-impl<R: gfx::Resources> gfx::Window<R> for Output<R> {
-    fn swap_buffers(&mut self) {
-        self.window.swap_buffers();
-    }
-}
-
-
-/// Result of successful context initialization.
-pub type Success = (
-    gfx::OwnedStream<
-        gfx_device_gl::Device,
-        Output<gfx_device_gl::Resources>,
-    >,
-    gfx_device_gl::Device,
-    gfx_device_gl::Factory,
-);
-
 /// Initialize with a window.
-pub fn init(mut window: glfw::Window) -> Success {
-    use gfx::traits::StreamFactory;
-    window.make_current();
-    let (device, mut factory) = gfx_device_gl::create(|s| window.get_proc_address(s) as *const _);
-    let out = Output {
-        window: window,
-        frame: factory.get_main_frame_buffer(),
-        mask: gfx::COLOR | gfx::DEPTH | gfx::STENCIL, //TODO
-        gamma: gfx::Gamma::Original, //TODO
-    };
-    let stream = factory.create_stream(out);
-    (stream, device, factory)
-}
-
 pub fn init_new(window: &mut glfw::Window) -> (gfx_device_gl::Device, gfx_device_gl::Factory,
         gfx::handle::RenderTargetView<gfx_device_gl::Resources, gfx::format::Rgba8>,
         gfx::handle::DepthStencilView<gfx_device_gl::Resources, gfx::format::DepthStencil>)

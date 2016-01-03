@@ -25,7 +25,6 @@ use gfx_core::{format, handle};
 use gfx_core::attrib::IntSize;
 use gfx_core::draw::{CommandBuffer, DataBuffer, InstanceOption};
 use gfx_core::factory::{Factory, NotSupported};
-use gfx_core::output::Output;
 use gfx_core::tex::Size;
 use mesh;
 use pso;

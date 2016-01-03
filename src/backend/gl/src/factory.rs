@@ -52,29 +52,6 @@ pub fn update_sub_buffer(gl: &gl::Gl, buffer: Buffer, address: *const u8,
     }
 }
 
-/// A placeholder for a real `Output` implemented by your window.
-pub struct Output {
-    /// render frame width.
-    pub width: t::Size,
-    /// render frame height.
-    pub height: t::Size,
-    /// main FBO handle
-    handle: handle::FrameBuffer<R>,
-}
-
-impl d::output::Output<R> for Output {
-    fn get_handle(&self) -> Option<&handle::FrameBuffer<R>> {
-        Some(&self.handle)
-    }
-
-    fn get_size(&self) -> (t::Size, t::Size) {
-        (self.width, self.height)
-    }
-
-    fn get_mask(&self) -> d::target::Mask {
-        d::target::COLOR | d::target::DEPTH | d::target::STENCIL
-    }
-}
 
 /// GL resource factory.
 pub struct Factory {
@@ -173,14 +150,6 @@ impl Factory {
 
     pub fn get_main_frame_buffer(&self) -> handle::FrameBuffer<R> {
         self.share.main_fbo.clone()
-    }
-
-    pub fn make_fake_output(&self, w: t::Size, h: t::Size) -> Output {
-        Output {
-            width: w,
-            height: h,
-            handle: self.get_main_frame_buffer(),
-        }
     }
 }
 

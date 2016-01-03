@@ -26,9 +26,7 @@ extern crate gfx_core;
 /// public re-exported traits
 pub mod traits {
     pub use gfx_core::{Device, Factory, DeviceFence};
-    pub use gfx_core::output::Output;
     pub use extra::factory::FactoryExt;
-    pub use extra::stream::{Stream, StreamFactory};
 }
 
 // draw state re-exports
@@ -47,7 +45,6 @@ pub use gfx_core::Primitive;
 pub use gfx_core::{ShaderSet, VertexShader, HullShader, DomainShader,
                    GeometryShader, PixelShader};
 pub use gfx_core::draw::{CommandBuffer, Gamma, InstanceOption};
-pub use gfx_core::output::{Output, Plane};
 pub use gfx_core::shade::{ProgramInfo, UniformValue};
 pub use encoder::{Encoder, UpdateError};
 pub use mesh::{Slice, ToIndexSlice, SliceKind};
@@ -57,7 +54,6 @@ pub use pso::{PipelineState, VertexBuffer, ConstantBuffer,
               RenderTarget, BlendTarget,
               DepthStencilTarget, DepthTarget, StencilTarget};
 pub use extra::factory::PipelineStateError;
-pub use extra::stream::{OwnedStream, Stream, Window};
 
 /// Render commands encoder
 pub mod encoder;
