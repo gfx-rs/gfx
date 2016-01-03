@@ -68,7 +68,7 @@ pub fn main() {
     let builder = glutin::WindowBuilder::new()
         .with_title("Terrain example".to_string());
     let (window, mut device, mut factory, main_color, main_depth) =
-        gfx_window_glutin::init_new::<gfx::format::Rgba8>(builder);
+        gfx_window_glutin::init::<Rgba8>(builder);
     let mut encoder = factory.create_encoder();
 
     let rand_seed = rand::thread_rng().gen();

@@ -21,13 +21,13 @@ extern crate glutin;
 use gfx::tex::Size;
 
 /// Initialize with a window builder.
-pub fn init_new<
+pub fn init<
     Cf: gfx::format::RenderFormat = gfx::format::Rgba8,
     Df: gfx::format::DepthFormat = gfx::format::DepthStencil,
->(builder: glutin::WindowBuilder) -> (glutin::Window,
-        gfx_device_gl::Device, gfx_device_gl::Factory,
-        gfx::handle::RenderTargetView<gfx_device_gl::Resources, Cf>,
-        gfx::handle::DepthStencilView<gfx_device_gl::Resources, Df>)
+>(  builder: glutin::WindowBuilder) -> (glutin::Window,
+    gfx_device_gl::Device, gfx_device_gl::Factory,
+    gfx::handle::RenderTargetView<gfx_device_gl::Resources, Cf>,
+    gfx::handle::DepthStencilView<gfx_device_gl::Resources, Df>)
 {
     // TODO: set the color/depth/stencil bits according to Cf and Df
     let window = builder.build().unwrap();

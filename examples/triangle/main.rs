@@ -33,7 +33,7 @@ pub fn main() {
     let builder = glutin::WindowBuilder::new()
         .with_title("Triangle example".to_string());
     let (window, mut device, mut factory, main_color, _) =
-        gfx_window_glutin::init_new::<gfx::format::Rgba8>(builder);
+        gfx_window_glutin::init::<gfx::format::Rgba8>(builder);
     let mut encoder = factory.create_encoder();
 
     let pso = factory.create_pipeline_simple(

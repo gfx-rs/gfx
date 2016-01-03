@@ -22,9 +22,9 @@ use gfx::tex::{AaMode, Size};
 use glfw::Context;
 
 /// Initialize with a window.
-pub fn init_new(window: &mut glfw::Window) -> (gfx_device_gl::Device, gfx_device_gl::Factory,
-        gfx::handle::RenderTargetView<gfx_device_gl::Resources, gfx::format::Rgba8>,
-        gfx::handle::DepthStencilView<gfx_device_gl::Resources, gfx::format::DepthStencil>)
+pub fn init(window: &mut glfw::Window) -> (gfx_device_gl::Device, gfx_device_gl::Factory,
+            gfx::handle::RenderTargetView<gfx_device_gl::Resources, gfx::format::Rgba8>,
+            gfx::handle::DepthStencilView<gfx_device_gl::Resources, gfx::format::DepthStencil>)
 {
     window.make_current();
     let (device, factory) = gfx_device_gl::create(|s|

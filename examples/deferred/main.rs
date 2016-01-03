@@ -188,7 +188,7 @@ mod light {
         tex_pos: gfx::TextureSampler<GFormat> = "u_TexPos",
         tex_normal: gfx::TextureSampler<GFormat> = "u_TexNormal",
         tex_diffuse: gfx::TextureSampler<GFormat> = "u_TexDiffuse",
-        out_color: gfx::BlendTarget<GFormat> = ("o_Color", gfx::blend::ADD),
+        out_color: gfx::BlendTarget<GFormat> = ("o_Color", gfx::preset::blend::ADD),
         out_depth: gfx::DepthTarget<gfx::format::Depth> = gfx::state::Depth {
             fun: gfx::state::Comparison::LessEqual,
             write: false,
@@ -261,7 +261,7 @@ mod emitter {
         transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
         light_pos_buf: gfx::ConstantBuffer<LightInfo> = "u_LightPosBlock",
         radius: gfx::Global<f32> = "u_Radius",
-        out_color: gfx::BlendTarget<GFormat> = ("o_Color", gfx::blend::ADD),
+        out_color: gfx::BlendTarget<GFormat> = ("o_Color", gfx::preset::blend::ADD),
         out_depth: gfx::DepthTarget<gfx::format::Depth> = gfx::state::Depth {
             fun: gfx::state::Comparison::LessEqual,
             write: false,
@@ -356,7 +356,7 @@ fn create_g_buffer<R: gfx::Resources, F: Factory<R>>(
 pub fn main() {
     env_logger::init().unwrap();
     let (window, mut device, mut factory, main_color, _) =
-        gfx_window_glutin::init_new::<Rgba8>(glutin::WindowBuilder::new()
+        gfx_window_glutin::init::<Rgba8>(glutin::WindowBuilder::new()
             .with_title("Deferred rendering example with gfx-rs".to_string())
             .with_dimensions(800, 600)
             .with_gl(glutin::GL_CORE)

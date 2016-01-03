@@ -61,7 +61,7 @@ pub fn main() {
             .with_title("Blending example".to_string())
             .with_dimensions(800, 600);
     let (window, mut device, mut factory, main_color, _) =
-        gfx_window_glutin::init_new::<Rgba8>(builder);
+        gfx_window_glutin::init::<Rgba8>(builder);
     let mut encoder = factory.create_encoder();
 
     // fullscreen quad

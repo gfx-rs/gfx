@@ -80,7 +80,7 @@ fn gfx_main(mut glfw: glfw::Glfw,
     use gfx::traits::{Device, FactoryExt};
 
     let (mut device, mut factory, main_color, main_depth) =
-        gfx_window_glfw::init_new(&mut window);
+        gfx_window_glfw::init(&mut window);
     let mut encoder = factory.create_encoder();
 
     let pso = factory.create_pipeline_simple(

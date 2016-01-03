@@ -401,7 +401,7 @@ pub fn main() {
             .with_gl(glutin::GL_CORE)
             .with_depth_buffer(24); //TODO: derive automatically
     let (window, mut device, mut factory, main_color, main_depth) =
-        gfx_window_glutin::init_new::<Rgba8, Depth>(builder);
+        gfx_window_glutin::init::<Rgba8, Depth>(builder);
     let mut encoder = factory.create_encoder();
 
     // create PSOs

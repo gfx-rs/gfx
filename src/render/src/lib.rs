@@ -15,13 +15,10 @@
 //! An efficient, low-level, bindless graphics API for Rust. See [the
 //! blog](http://gfx-rs.github.io/) for explanations and annotated examples.
 
-//#[macro_use]
-//extern crate bitflags;
 #[macro_use]
 extern crate log;
 extern crate draw_state;
 extern crate gfx_core;
-//extern crate num;
 
 /// public re-exported traits
 pub mod traits {
@@ -30,8 +27,11 @@ pub mod traits {
 }
 
 // draw state re-exports
-pub use draw_state::{DrawState, blend, state};
+pub use draw_state::{DrawState, state};
 pub use draw_state::target::*;
+pub mod preset {
+    pub use draw_state::blend;
+}
 
 // public re-exports
 pub use gfx_core as core;

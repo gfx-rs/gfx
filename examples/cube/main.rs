@@ -65,7 +65,7 @@ pub fn main() {
     window.set_key_polling(true);
 
     let (mut device, mut factory, main_color, main_depth) =
-        gfx_window_glfw::init_new(&mut window);
+        gfx_window_glfw::init(&mut window);
 
     let vertex_data = [
         // top (0, 0, 1)

@@ -125,7 +125,7 @@ pub fn main() {
         .with_title("Mipmap example".to_string())
         .with_dimensions(800, 600);
     let (window, mut device, mut factory, main_color, _) =
-        gfx_window_glutin::init_new::<gfx::format::Rgba8>(builder);
+        gfx_window_glutin::init::<Rgba8>(builder);
     let mut encoder = factory.create_encoder();
 
     let pso = factory.create_pipeline_simple(
