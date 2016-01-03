@@ -375,7 +375,7 @@ impl<R: gfx::Resources> TileMap<R> {
     pub fn update<C>(&mut self, view: &AffineMatrix3<f32>, encoder: &mut gfx::Encoder<R, C>)
             where C: gfx::CommandBuffer<R> {
         self.tilemap_plane.update_view(view);
-        encoder.draw_pipeline(&self.tilemap_plane.slice, &self.pso, &self.tilemap_plane.params);
+        encoder.draw(&self.tilemap_plane.slice, &self.pso, &self.tilemap_plane.params);
     }
     fn calc_idx(&self, xpos: usize, ypos: usize) -> usize {
         (ypos * self.tilemap_size[0]) + xpos
@@ -441,7 +441,7 @@ pub fn main() {
     let mut encoder = factory.create_encoder();
 
     // clear window contents
-    encoder.clear_target(&main_color, [0.0, 0.0, 0.0, 1.0]);
+    encoder.clear(&main_color, [0.0, 0.0, 0.0, 1.0]);
     device.submit(encoder.as_buffer());
     window.swap_buffers().unwrap();
 
@@ -525,7 +525,7 @@ pub fn main() {
         );
 
         encoder.reset();
-        encoder.clear_target(&main_color,
+        encoder.clear(&main_color,
             [16.0 / 256.0, 14.0 / 256.0, 22.0 / 256.0, 1.0]);
         encoder.clear_depth(&main_depth, 1.0);
 

@@ -122,8 +122,8 @@ fn main() {
         }
 
         encoder.reset();
-        encoder.clear_target(&data.out, [0.1, 0.2, 0.3, 1.0]);
-        encoder.draw_pipeline(&slice, &pso, &data);
+        encoder.clear(&data.out, [0.1, 0.2, 0.3, 1.0]);
+        encoder.draw(&slice, &pso, &data);
 
         device.submit(encoder.as_buffer());
         window.swap_buffers().unwrap();

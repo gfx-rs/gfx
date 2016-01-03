@@ -49,7 +49,7 @@ pub use gfx_core::{ShaderSet, VertexShader, HullShader, DomainShader,
 pub use gfx_core::draw::{CommandBuffer, Gamma, InstanceOption};
 pub use gfx_core::output::{Output, Plane};
 pub use gfx_core::shade::{ProgramInfo, UniformValue};
-pub use encoder::{Encoder, BlitError, UpdateError};
+pub use encoder::{Encoder, UpdateError};
 pub use mesh::{Slice, ToIndexSlice, SliceKind};
 pub use pso::{PipelineState, VertexBuffer, ConstantBuffer,
               Global, PER_VERTEX, PER_INSTANCE,

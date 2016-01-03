@@ -140,11 +140,11 @@ pub fn main() {
         }
 
         encoder.reset();
-        encoder.clear_target(&data.out, [0.3, 0.3, 0.3, 1.0]);
+        encoder.clear(&data.out, [0.3, 0.3, 0.3, 1.0]);
 
         data.offset0 = cycle0;
         data.offset1 = cycle1;
-        encoder.draw_pipeline(&slice, &pso, &data);
+        encoder.draw(&slice, &pso, &data);
 
         device.submit(encoder.as_buffer());
         window.swap_buffers().unwrap();

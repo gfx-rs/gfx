@@ -494,7 +494,7 @@ pub fn main() {
                             let mvp = mx_view.mul_m(&ent.mx_to_world);
                             mvp.into_fixed()
                         };
-                        light.encoder.draw_pipeline(&ent.slice, &subshare.shadow_pso, &batch);
+                        light.encoder.draw(&ent.slice, &subshare.shadow_pso, &batch);
                     }
                     sender.send(light).unwrap();
                 })
@@ -521,13 +521,13 @@ pub fn main() {
                         let mvp = mx_view.mul_m(&ent.mx_to_world);
                         mvp.into_fixed()
                     };
-                    encoder.draw_pipeline(&ent.slice, &subshare.shadow_pso, &batch);
+                    encoder.draw(&ent.slice, &subshare.shadow_pso, &batch);
                 }
             }
         }
 
         // draw entities with forward pass
-        encoder.clear_target(&main_color, [0.1, 0.2, 0.3, 1.0]);
+        encoder.clear(&main_color, [0.1, 0.2, 0.3, 1.0]);
         encoder.clear_depth(&main_depth, 1.0);
 
         let mx_vp = {
@@ -542,7 +542,7 @@ pub fn main() {
             let batch = &mut ent.batch_forward;
             batch.transform = mx_vp.mul_m(&ent.mx_to_world).into_fixed();
             batch.model_transform = ent.mx_to_world.into_fixed();
-            encoder.draw_pipeline(&ent.slice, &forward_pso, batch);
+            encoder.draw(&ent.slice, &forward_pso, batch);
         }
 
         // done

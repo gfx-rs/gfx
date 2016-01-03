@@ -126,7 +126,7 @@ fn gfx_main(mut glfw: glfw::Glfw,
 
         let start = precise_time_s() * 1000.;
         encoder.reset();
-        encoder.clear_target(&data.out_color, [0.3, 0.3, 0.3, 1.0]);
+        encoder.clear(&data.out_color, [0.3, 0.3, 0.3, 1.0]);
         encoder.clear_depth(&data.out_depth, 1.0);
 
         for x in (-dimension) ..dimension {
@@ -138,7 +138,7 @@ fn gfx_main(mut glfw: glfw::Glfw,
                                        1f32);
                 data.transform = proj.mul_m(&view.mat)
                                      .mul_m(&model).into_fixed();
-                encoder.draw_pipeline(&slice, &pso, &data);
+                encoder.draw(&slice, &pso, &data);
             }
         }
 

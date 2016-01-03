@@ -618,28 +618,28 @@ pub fn main() {
 
         encoder.reset();
         encoder.clear_depth(&depth_target, 1.0);
-        encoder.clear_target(&gpos.target, [0.0, 0.0, 0.0, 1.0]);
-        encoder.clear_target(&gnormal.target, [0.0, 0.0, 0.0, 1.0]);
-        encoder.clear_target(&gdiffuse.target, [0.0, 0.0, 0.0, 1.0]);
+        encoder.clear(&gpos.target, [0.0, 0.0, 0.0, 1.0]);
+        encoder.clear(&gnormal.target, [0.0, 0.0, 0.0, 1.0]);
+        encoder.clear(&gdiffuse.target, [0.0, 0.0, 0.0, 1.0]);
         // Render the terrain to the geometry buffer
-        encoder.draw_pipeline(&terrain_slice, &terrain_pso, &terrain_data);
+        encoder.draw(&terrain_slice, &terrain_pso, &terrain_data);
 
         let blit_tex = match debug_buf {
             Some(ref tex) => tex,   // Show one of the immediate buffers
             None => {
-                encoder.clear_target(&res.target, [0.0, 0.0, 0.0, 1.0]);
+                encoder.clear(&res.target, [0.0, 0.0, 0.0, 1.0]);
                 // Apply lights
-                encoder.draw_pipeline(&light_slice, &light_pso, &light_data);
+                encoder.draw(&light_slice, &light_pso, &light_data);
                 // Draw light emitters
-                encoder.draw_pipeline(&light_slice, &emitter_pso, &emitter_data);
+                encoder.draw(&light_slice, &emitter_pso, &emitter_data);
 
                 &res.resource
             }
         };
         blit_data.tex = (blit_tex.clone(), sampler.clone());
         // Show the result
-        encoder.clear_target(&main_color, [0.0, 0.0, 0.0, 1.0]);
-        encoder.draw_pipeline(&blit_slice, &blit_pso, &blit_data);
+        encoder.clear(&main_color, [0.0, 0.0, 0.0, 1.0]);
+        encoder.draw(&blit_slice, &blit_pso, &blit_data);
 
         device.submit(encoder.as_buffer());
         window.swap_buffers().unwrap();

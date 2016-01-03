@@ -23,22 +23,13 @@ use gfx_core as device;
 use gfx_core::Resources;
 use gfx_core::{format, handle};
 use gfx_core::attrib::IntSize;
-use gfx_core::draw::{Access, Target};
 use gfx_core::draw::{CommandBuffer, DataBuffer, InstanceOption};
 use gfx_core::factory::{Factory, NotSupported};
-use gfx_core::output::{Output, Plane};
+use gfx_core::output::Output;
 use gfx_core::tex::Size;
 use mesh;
 use pso;
 
-/// An error occuring in surface blits.
-#[derive(Clone, Debug, PartialEq)]
-pub enum BlitError {
-    /// The source doesn't have some of the requested planes.
-    SourcePlanesMissing(Mask),
-    /// The destination doesn't have some of the requested planes.
-    DestinationPlanesMissing(Mask),
-}
 
 /// An error occuring in buffer/texture updates.
 #[allow(missing_docs)]
@@ -59,42 +50,6 @@ pub enum UpdateError<T> {
 }
 
 
-/// The internal state of the renderer.
-/// This is used as a cache to eliminate redundant state changes.
-struct RenderState<R: Resources> {
-    index: Option<handle::RawBuffer<R>>,
-}
-
-impl<R: Resources> RenderState<R> {
-    /// Generate the initial state matching `Device::reset_state`
-    fn new() -> RenderState<R> {
-        RenderState {
-            index: None,
-        }
-    }
-}
-
-/// Extension methods for the command buffer.
-/// Useful when Renderer is borrowed, and we need to issue commands.
-trait CommandBufferExt<R: Resources>: CommandBuffer<R> {
-    /// Bind a plane to some target
-    fn bind_target(&mut self, &mut handle::Manager<R>, Access, Target,
-                   Option<&Plane<R>>);
-}
-
-impl<R: Resources, C: CommandBuffer<R>> CommandBufferExt<R> for C {
-    fn bind_target(&mut self, handles: &mut handle::Manager<R>, access: Access,
-                   to: Target, plane: Option<&Plane<R>>) {
-        match plane {
-            None => self.unbind_target(access, to),
-            Some(&Plane::Surface(ref suf)) =>
-                self.bind_target_surface(access, to, handles.ref_surface(suf).clone()),
-            Some(&Plane::Texture(ref tex, level, layer)) =>
-                self.bind_target_texture(access, to, handles.ref_texture(tex).clone(), level, layer),
-        }
-    }
-}
-
 /// Graphics commands encoder.
 pub struct Encoder<R: Resources, C: CommandBuffer<R>> {
     command_buffer: C,
@@ -103,7 +58,6 @@ pub struct Encoder<R: Resources, C: CommandBuffer<R>> {
     common_array_buffer: Result<handle::ArrayBuffer<R>, NotSupported>,
     draw_frame_buffer: Result<handle::FrameBuffer<R>, NotSupported>,
     read_frame_buffer: Result<handle::FrameBuffer<R>, NotSupported>,
-    render_state: RenderState<R>,
 }
 
 impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
@@ -118,7 +72,6 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
             common_array_buffer: factory.create_array_buffer(),
             draw_frame_buffer: factory.create_frame_buffer(),
             read_frame_buffer: factory.create_frame_buffer(),
-            render_state: RenderState::new(),
         }
     }
 
@@ -127,7 +80,6 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
         self.command_buffer.clear();
         self.data_buffer.clear();
         self.handles.clear();
-        self.render_state = RenderState::new();
     }
 
     /// Get command and data buffers to be submitted to the device.
@@ -145,7 +97,6 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
             common_array_buffer: self.common_array_buffer.clone(),
             draw_frame_buffer: self.draw_frame_buffer.clone(),
             read_frame_buffer: self.read_frame_buffer.clone(),
-            render_state: RenderState::new(),
         }
     }
 
@@ -242,10 +193,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
                      slice: &mesh::Slice<R>, base: device::VertexCount,
                      instances: InstanceOption) {
         use gfx_core::factory::Phantom;
-        if self.render_state.index.as_ref() != Some(buf.raw()) {
-            self.render_state.index = Some(buf.raw().clone());
-            self.command_buffer.bind_index(self.handles.ref_buffer(buf.raw()).clone());
-        }
+        self.command_buffer.bind_index(self.handles.ref_buffer(buf.raw()).clone());
         self.command_buffer.call_draw_indexed(format,
             slice.start, slice.end - slice.start, base, instances);
     }
@@ -299,9 +247,8 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
     }
 
     /// Clear a target view with a specified value.
-    pub fn clear_target<T: format::RenderFormat>(&mut self,
-                        view: &handle::RenderTargetView<R, T>,
-                        value: ColorValue) { //TODO: value: T
+    pub fn clear<T: format::RenderFormat>(&mut self,
+                 view: &handle::RenderTargetView<R, T>, value: ColorValue) { //TODO: value: T
         self.clear_all(Some((view, value)), None, None)
     }
     /// Clear a depth view with a specified value.
@@ -317,8 +264,8 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
     }
 
     /// Draw a mesh slice using a typed pipeline state object (PSO).
-    pub fn draw_pipeline<D: pso::PipelineData<R>>(&mut self, slice: &mesh::Slice<R>,
-                         pipeline: &pso::PipelineState<R, D::Meta>, user_data: &D)
+    pub fn draw<D: pso::PipelineData<R>>(&mut self, slice: &mesh::Slice<R>,
+                pipeline: &pso::PipelineState<R, D::Meta>, user_data: &D)
     {
         let (pso, _) = self.handles.ref_pso(pipeline.get_handle());
         self.command_buffer.bind_pipeline_state(pso.clone());
