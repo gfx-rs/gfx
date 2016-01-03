@@ -19,8 +19,7 @@
 use gfx_core::{Device, Resources};
 use gfx_core::draw::CommandBuffer;
 use gfx_core::output::Output;
-use gfx_core::target::{ClearData, Mask, Mirror, Rect};
-use encoder::{BlitError, Encoder};
+use encoder::Encoder;
 use extra::factory::FactoryExt;
 
 /// Generic output window.
@@ -46,33 +45,6 @@ pub trait Stream<R: Resources> {
     fn get_aspect_ratio(&self) -> f32 {
         let (w, h) = self.get_output().get_size();
         w as f32 / h as f32
-    }
-
-    /// Clear the canvas.
-    fn clear(&mut self, data: ClearData) {
-        let (ren, out) = self.access();
-        let mask = out.get_mask();
-        ren.clear(data, mask, out);
-    }
-
-    /// Blit on this stream from another `Output`.
-    fn blit_on<I: Output<R>>(&mut self,
-               source: &I, source_rect: Rect, dest_rect: Rect,
-               mirror: Mirror, mask: Mask)
-               -> Result<(), BlitError>
-    {
-        let (ren, out) = self.access();
-        ren.blit(source, source_rect, out, dest_rect, mirror, mask)
-    }
-
-    /// Blit this stream to another `Output`.
-    fn blit_to<O: Output<R>>(&mut self,
-               destination: &O, dest_rect: Rect, source_rect: Rect,
-               mirror: Mirror, mask: Mask)
-               -> Result<(), BlitError>
-    {
-        let (ren, out) = self.access();
-        ren.blit(out, source_rect, destination, dest_rect, mirror, mask)
     }
 
     /// Execute everything and clear the command buffer.

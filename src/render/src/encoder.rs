@@ -17,20 +17,19 @@
 #![deny(missing_docs)]
 
 use std::mem;
-use draw_state::target::{ClearData, ColorValue, Depth, Mask, Mirror, Rect, Stencil};
+use draw_state::target::{ClearData, ColorValue, Depth, Mask, Stencil};
 
 use gfx_core as device;
 use gfx_core::Resources;
 use gfx_core::{format, handle};
 use gfx_core::attrib::IntSize;
-use gfx_core::draw::{Access, Gamma, Target};
+use gfx_core::draw::{Access, Target};
 use gfx_core::draw::{CommandBuffer, DataBuffer, InstanceOption};
 use gfx_core::factory::{Factory, NotSupported};
 use gfx_core::output::{Output, Plane};
 use gfx_core::tex::Size;
 use mesh;
 use pso;
-use target;
 
 /// An error occuring in surface blits.
 #[derive(Clone, Debug, PartialEq)]
@@ -63,9 +62,6 @@ pub enum UpdateError<T> {
 /// The internal state of the renderer.
 /// This is used as a cache to eliminate redundant state changes.
 struct RenderState<R: Resources> {
-    frame_buffer: Option<handle::FrameBuffer<R>>,
-    frame: target::Frame<R>,
-    gamma: Gamma,
     index: Option<handle::RawBuffer<R>>,
 }
 
@@ -73,9 +69,6 @@ impl<R: Resources> RenderState<R> {
     /// Generate the initial state matching `Device::reset_state`
     fn new() -> RenderState<R> {
         RenderState {
-            frame_buffer: None,
-            frame: target::Frame::empty(0,0),
-            gamma: Gamma::Original,
             index: None,
         }
     }
@@ -154,40 +147,6 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
             read_frame_buffer: self.read_frame_buffer.clone(),
             render_state: RenderState::new(),
         }
-    }
-
-    /// Clear the output with given `ClearData`.
-    pub fn clear<O: Output<R>>(&mut self, data: ClearData, mask: Mask, output: &O) {
-        let has_mask = output.get_mask();
-        if has_mask.is_empty() {
-            panic!("Clearing a frame without any attachments is not possible!
-                    If you are using `Frame::empty` in place of a real output window,
-                    please see https://github.com/gfx-rs/gfx-rs/pull/682");
-        }
-        debug_assert!(has_mask.contains(mask));
-        self.bind_output(output);
-        self.command_buffer.call_clear(data, mask);
-    }
-
-    /// Blit one frame onto another.
-    pub fn blit<I: Output<R>, O: Output<R>>(&mut self,
-                source: &I, source_rect: Rect,
-                destination: &O, dest_rect: Rect,
-                mirror: Mirror, mask: Mask)
-                -> Result<(), BlitError>
-    {
-        if !source.get_mask().contains(mask) {
-            let missing = mask - source.get_mask();
-            return Err(BlitError::SourcePlanesMissing(missing))
-        }
-        if !destination.get_mask().contains(mask) {
-            let missing = mask - destination.get_mask();
-            return Err(BlitError::DestinationPlanesMissing(missing))
-        }
-        self.bind_output(destination);
-        self.bind_pixel_input(source);
-        self.command_buffer.call_blit(source_rect, dest_rect, mirror, mask);
-        Ok(())
     }
 
     /// Update a buffer with a slice of data.
@@ -277,110 +236,6 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
         self.command_buffer.update_texture(tex.get_info().kind,
             self.handles.ref_texture(tex).clone(), img, pointer);
         Ok(())
-    }
-
-    fn bind_output<O: Output<R>>(&mut self, output: &O) {
-        let (width, height) = output.get_size();
-        if self.render_state.frame.width != width ||
-                self.render_state.frame.height != height {
-            self.command_buffer.set_viewport(Rect {x: 0, y: 0, w: width, h: height});
-            self.render_state.frame.width = width;
-            self.render_state.frame.height = height;
-        }
-        let gamma = output.get_gamma();
-        let change_gamma = self.render_state.gamma != gamma;
-
-        match output.get_handle() {
-            Some(ref handle) => {
-                if self.render_state.frame_buffer.as_ref() != Some(handle) || change_gamma {
-                    self.command_buffer.bind_frame_buffer(Access::Draw,
-                        self.handles.ref_frame_buffer(handle).clone(),
-                        gamma);
-                    self.render_state.frame_buffer = Some((*handle).clone());
-                    self.render_state.gamma = gamma;
-                }
-            },
-            None => {
-                let draw_fbo = self.draw_frame_buffer.as_ref().ok().expect(
-                    "Unable to use off-screen draw targets: not supported by the backend");
-                if self.render_state.frame_buffer.as_ref() != Some(draw_fbo) || change_gamma {
-                    self.command_buffer.bind_frame_buffer(Access::Draw,
-                        self.handles.ref_frame_buffer(draw_fbo).clone(),
-                        gamma);
-                    self.render_state.frame_buffer = Some(draw_fbo.clone());
-                    self.render_state.gamma = gamma;
-                }
-                let colors = output.get_colors();
-                // cut off excess color planes
-                for (i, _) in self.render_state.frame.colors.iter().enumerate()
-                                    .skip(colors.len()) {
-                    self.command_buffer.unbind_target(Access::Draw, Target::Color(i as u8));
-                }
-                self.render_state.frame.colors.truncate(colors.len());
-                // bind intersecting subsets
-                for (i, (cur, new)) in self.render_state.frame.colors.iter_mut()
-                                           .zip(colors.iter()).enumerate() {
-                    if *cur != *new {
-                        self.command_buffer.bind_target(&mut self.handles,
-                            Access::Draw, Target::Color(i as u8), Some(new));
-                        *cur = new.clone();
-                    }
-                }
-                // activate the color targets that were just bound
-                self.command_buffer.set_draw_color_buffers(colors.len() as device::ColorSlot);
-                // append new planes
-                for (i, new) in colors.iter().enumerate()
-                                      .skip(self.render_state.frame.colors.len()) {
-                    self.command_buffer.bind_target(&mut self.handles,
-                        Access::Draw, Target::Color(i as u8), Some(new));
-                    self.render_state.frame.colors.push(new.clone());
-                }
-                // set depth
-                let depth = output.get_depth();
-                if self.render_state.frame.depth.as_ref() != depth {
-                    self.command_buffer.bind_target(&mut self.handles,
-                        Access::Draw, Target::Depth, depth);
-                    self.render_state.frame.depth = depth.map(|p| p.clone());
-                }
-                // set stencil
-                let stencil = output.get_stencil();
-                if self.render_state.frame.stencil.as_ref() != stencil {
-                    self.command_buffer.bind_target(&mut self.handles,
-                        Access::Draw, Target::Stencil, stencil);
-                    self.render_state.frame.stencil = stencil.map(|p| p.clone());
-                }
-            },
-        }
-    }
-
-    fn bind_pixel_input<I: Output<R>>(&mut self, input: &I) {
-        // bind input
-        if let Some(ref handle) = input.get_handle() {
-            self.command_buffer.bind_frame_buffer(Access::Read,
-                self.handles.ref_frame_buffer(handle).clone(),
-                Gamma::Original);
-        }else if let Ok(ref fbo) = self.read_frame_buffer {
-            self.command_buffer.bind_frame_buffer(Access::Read,
-                self.handles.ref_frame_buffer(fbo).clone(),
-                Gamma::Original);
-        }else {
-            panic!("Unable to use off-screen read targets: not supported by the backend");
-        }
-        // color
-        match input.get_colors().first() {
-            Some(ref color) => {
-                self.command_buffer.bind_target(&mut self.handles,
-                    Access::Read, Target::Color(0), Some(color));
-            },
-            None => {
-                self.command_buffer.unbind_target(Access::Read, Target::Color(0));
-            },
-        }
-        // depth/stencil
-        self.command_buffer.bind_target(&mut self.handles,
-            Access::Read, Target::Depth, input.get_depth());
-        self.command_buffer.bind_target(&mut self.handles,
-            Access::Read, Target::Stencil, input.get_stencil());
     }
 
     fn draw_indexed<T>(&mut self, buf: &handle::Buffer<R, T>, format: IntSize,

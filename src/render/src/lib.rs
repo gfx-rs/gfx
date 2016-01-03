@@ -56,7 +56,6 @@ pub use pso::{PipelineState, VertexBuffer, ConstantBuffer,
               ResourceView, UnorderedView, Sampler, TextureSampler,
               RenderTarget, BlendTarget,
               DepthStencilTarget, DepthTarget, StencilTarget};
-pub use target::{Frame};
 pub use extra::factory::PipelineStateError;
 pub use extra::stream::{OwnedStream, Stream, Window};
 
@@ -68,8 +67,6 @@ pub mod mesh;
 pub mod pso;
 /// Shaders
 pub mod shade;
-/// Render targets
-pub mod target;
 /// Extra core extensions
 pub mod extra;
 /// Convenience macros
