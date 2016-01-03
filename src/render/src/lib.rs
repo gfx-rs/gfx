@@ -26,7 +26,7 @@ extern crate gfx_core;
 /// public re-exported traits
 pub mod traits {
     pub use gfx_core::{Device, Factory, DeviceFence};
-    pub use extra::factory::FactoryExt;
+    pub use factory::FactoryExt;
 }
 
 // draw state re-exports
@@ -46,24 +46,25 @@ pub use gfx_core::{ShaderSet, VertexShader, HullShader, DomainShader,
                    GeometryShader, PixelShader};
 pub use gfx_core::draw::{CommandBuffer, Gamma, InstanceOption};
 pub use gfx_core::shade::{ProgramInfo, UniformValue};
+
 pub use encoder::{Encoder, UpdateError};
+pub use factory::PipelineStateError;
 pub use mesh::{Slice, ToIndexSlice, SliceKind};
 pub use pso::{PipelineState, VertexBuffer, ConstantBuffer,
               Global, PER_VERTEX, PER_INSTANCE,
               ResourceView, UnorderedView, Sampler, TextureSampler,
               RenderTarget, BlendTarget,
               DepthStencilTarget, DepthTarget, StencilTarget};
-pub use extra::factory::PipelineStateError;
 
 /// Render commands encoder
-pub mod encoder;
+mod encoder;
+/// Factory extensions
+mod factory;
 /// Meshes
-pub mod mesh;
+mod mesh;
 /// Pipeline states
 pub mod pso;
 /// Shaders
 pub mod shade;
-/// Extra core extensions
-pub mod extra;
 /// Convenience macros
 pub mod macros;
