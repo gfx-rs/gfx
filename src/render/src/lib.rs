@@ -49,7 +49,7 @@ pub use gfx_core::{ShaderSet, VertexShader, HullShader, DomainShader,
 pub use gfx_core::draw::{CommandBuffer, Gamma, InstanceOption};
 pub use gfx_core::output::{Output, Plane};
 pub use gfx_core::shade::{ProgramInfo, UniformValue};
-pub use encoder::{Encoder, BlitError, DrawError, UpdateError, ParamStorage};
+pub use encoder::{Encoder, BlitError, UpdateError, ParamStorage};
 pub use mesh::{Attribute, Mesh, VertexFormat};
 pub use mesh::Error as MeshError;
 pub use mesh::{Slice, ToIndexSlice, SliceKind};
@@ -63,8 +63,6 @@ pub use extra::factory::PipelineStateError;
 pub use extra::shade::{ShaderSource, ProgramError};
 pub use extra::stream::{OwnedStream, Stream, Window};
 
-/// Batches
-pub mod batch;
 /// Render commands encoder
 pub mod encoder;
 /// Meshes

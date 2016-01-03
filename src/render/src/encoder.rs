@@ -17,12 +17,11 @@
 #![deny(missing_docs)]
 
 use std::mem;
-use draw_state::DrawState;
 use draw_state::target::{ClearData, ColorValue, Depth, Mask, Mirror, Rect, Stencil};
 
 use gfx_core as device;
 use gfx_core::Resources;
-use gfx_core::{attrib, format, handle};
+use gfx_core::{format, handle};
 use gfx_core::attrib::IntSize;
 use gfx_core::draw::{Access, Gamma, Target};
 use gfx_core::draw::{CommandBuffer, DataBuffer, InstanceOption};
@@ -30,7 +29,6 @@ use gfx_core::factory::{Factory, NotSupported};
 use gfx_core::output::{Output, Plane};
 use gfx_core::shade::{ProgramInfo, UniformValue};
 use gfx_core::tex::Size;
-use batch::{Batch, Error};
 use mesh;
 use pso;
 use shade::TextureParam;
@@ -64,19 +62,13 @@ pub enum UpdateError<T> {
 }
 
 
-type CachedAttribute<R: Resources> = (handle::RawBuffer<R>, attrib::Format);
-
 /// The internal state of the renderer.
 /// This is used as a cache to eliminate redundant state changes.
 struct RenderState<R: Resources> {
     frame_buffer: Option<handle::FrameBuffer<R>>,
     frame: target::Frame<R>,
     gamma: Gamma,
-    is_array_buffer_set: bool,
-    program: Option<handle::Program<R>>,
     index: Option<handle::RawBuffer<R>>,
-    attributes: Vec<Option<CachedAttribute<R>>>,
-    draw: DrawState,
 }
 
 impl<R: Resources> RenderState<R> {
@@ -86,11 +78,7 @@ impl<R: Resources> RenderState<R> {
             frame_buffer: None,
             frame: target::Frame::empty(0,0),
             gamma: Gamma::Original,
-            is_array_buffer_set: false,
-            program: None,
             index: None,
-            attributes: Vec::new(),
-            draw: DrawState::new(),
         }
     }
 }
@@ -149,22 +137,6 @@ impl<R: Resources, C: CommandBuffer<R>> CommandBufferExt<R> for C {
     }
 }
 
-/// Draw-time error, showing inconsistencies in draw parameters and data
-#[derive(Clone, Debug, PartialEq)]
-pub enum DrawError<E> {
-    /// Tha batch is not valid
-    InvalidBatch(E),
-    /// The `DrawState` interacts with a target that does not present in the
-    /// frame. For example, the depth test is enabled while there is no depth.
-    MissingTarget(Mask),
-    /// The viewport either covers zero space or exceeds HW limitations.
-    BadViewport,
-    /// Vertex count exceeds HW limitations.
-    BadVertexCount,
-    /// Index count exceeds HW limitations.
-    BadIndexCount,
-}
-
 /// Graphics commands encoder.
 pub struct Encoder<R: Resources, C: CommandBuffer<R>> {
     command_buffer: C,
@@ -174,7 +146,6 @@ pub struct Encoder<R: Resources, C: CommandBuffer<R>> {
     draw_frame_buffer: Result<handle::FrameBuffer<R>, NotSupported>,
     read_frame_buffer: Result<handle::FrameBuffer<R>, NotSupported>,
     render_state: RenderState<R>,
-    parameters: ParamStorage<R>,
 }
 
 impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
@@ -190,7 +161,6 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
             draw_frame_buffer: factory.create_frame_buffer(),
             read_frame_buffer: factory.create_frame_buffer(),
             render_state: RenderState::new(),
-            parameters: ParamStorage::new(),
         }
     }
 
@@ -218,7 +188,6 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
             draw_frame_buffer: self.draw_frame_buffer.clone(),
             read_frame_buffer: self.read_frame_buffer.clone(),
             render_state: RenderState::new(),
-            parameters: ParamStorage::new(),
         }
     }
 
@@ -233,33 +202,6 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
         debug_assert!(has_mask.contains(mask));
         self.bind_output(output);
         self.command_buffer.call_clear(data, mask);
-    }
-
-    /// Draw a 'batch' with all known parameters specified, internal use only.
-    pub fn draw<B: Batch<R> + ?Sized, O: Output<R>>(&mut self, batch: &B,
-                instances: InstanceOption, output: &O)
-                -> Result<(), DrawError<Error>>
-    {
-        let (mesh, attrib_iter, slice, state) = match batch.get_data() {
-            Ok(data) => data,
-            Err(e) => return Err(DrawError::InvalidBatch(e)),
-        };
-        let target_missing = state.get_target_mask() - output.get_mask();
-        if !target_missing.is_empty() {
-            error!("Error drawing to the output {:?}. ", output.get_handle());
-            error!("Output mask: {:?}, State mask: {:?}, difference: {:?}",
-                output.get_mask(), state.get_target_mask(), target_missing);
-            return Err(DrawError::MissingTarget(target_missing))
-        }
-        self.bind_output(output);
-        let program = match self.bind_program(batch) {
-            Ok(p) => p,
-            Err(e) => return Err(DrawError::InvalidBatch(e)),
-        };
-        self.bind_state(state);
-        self.bind_mesh(mesh, attrib_iter, program.get_info());
-        self.draw_slice(slice, instances);
-        Ok(())
     }
 
     /// Blit one frame onto another.
@@ -474,121 +416,6 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
             Access::Read, Target::Depth, input.get_depth());
         self.command_buffer.bind_target(&mut self.handles,
             Access::Read, Target::Stencil, input.get_stencil());
-    }
-
-    fn bind_state(&mut self, state: &DrawState) {
-        if self.render_state.draw.rasterizer != state.rasterizer {
-            self.command_buffer.set_rasterizer(state.rasterizer);
-        }
-        if self.render_state.draw.scissor != state.scissor {
-            self.command_buffer.set_scissor(state.scissor);
-        }
-        if self.render_state.draw.depth != state.depth || self.render_state.draw.stencil != state.stencil ||
-                self.render_state.draw.rasterizer.method.get_cull_face() != state.rasterizer.method.get_cull_face() {
-            self.command_buffer.set_depth_stencil(state.depth, state.stencil,
-                state.rasterizer.method.get_cull_face());
-        }
-        for i in 0 .. device::MAX_COLOR_TARGETS {
-            if self.render_state.draw.blend[i] != state.blend[i] {
-                self.command_buffer.set_blend(i as device::ColorSlot, state.blend[i]);
-            }
-        }
-        if self.render_state.draw.ref_values != state.ref_values {
-            self.command_buffer.set_ref_values(state.ref_values);
-        }
-        self.render_state.draw = *state;
-    }
-
-    fn bind_program<'a, B: Batch<R> + ?Sized>(&mut self, batch: &'a B)
-                    -> Result<&'a handle::Program<R>, Error> {
-        let program = match batch.fill_params(&mut self.parameters) {
-            Ok(p) => p,
-            Err(e) => return Err(e),
-        };
-        //Warning: this is not protected against deleted resources in single-threaded mode
-        if self.render_state.program.as_ref() != Some(&program) {
-            self.render_state.program = Some(program.clone());
-            self.command_buffer.bind_program(
-                self.handles.ref_program(&program).clone());
-        }
-        self.upload_parameters(program);
-        Ok(program)
-    }
-
-    fn upload_parameters(&mut self, program: &handle::Program<R>) {
-        let info = program.get_info();
-        // bind uniforms
-        for (var, value) in info.globals.iter()
-            .zip(self.parameters.uniforms.iter()) {
-            match value {
-                &Some(v) => self.command_buffer.bind_global_constant(var.location, v),
-                &None => error!("Missed uniform {}", var.name),
-            }
-        }
-        // bind uniform blocks
-        for (var, value) in info.constant_buffers.iter()
-            .zip(self.parameters.blocks.iter()) {
-            match value {
-                &Some(ref buf) => self.command_buffer.bind_uniform_block(
-                    var.slot, self.handles.ref_buffer(buf).clone()),
-                &None => error!("Missed block {}", var.name),
-            }
-        }
-
-        // bind textures and samplers
-        for (var, value) in info.textures.iter()
-            .zip(self.parameters.textures.iter()) {
-            match value {
-                &Some((ref tex, ref sampler)) => {
-                    let texture = self.handles.ref_texture(tex).clone();
-                    let s_param = match sampler {
-                        &Some(ref s) => {
-                            let (_, _, _, aa) = tex.get_info().kind.get_dimensions();
-                            if aa.needs_resolve() {
-                                error!("A sampler provided for an AA texture: {}", var.name);
-                            }
-                            Some(self.handles.ref_sampler(s).clone())
-                        },
-                        &None => None,
-                    };
-                    self.command_buffer.bind_texture(var.slot,
-                        tex.get_info().kind, texture, s_param);
-                },
-                &None => error!("Missed texture {}", var.name),
-            }
-        }
-    }
-
-    fn bind_mesh<I: Iterator<Item = mesh::AttributeIndex>>(&mut self,
-                 mesh: &mesh::Mesh<R>, attrib_iter: I, info: &ProgramInfo) {
-        if !self.render_state.is_array_buffer_set {
-            // It's Ok if the array buffer is not supported. We can just ignore it.
-            match self.common_array_buffer {
-                Ok(ref ab) => self.command_buffer.bind_array_buffer(
-                    self.handles.ref_array_buffer(ab).clone()
-                ),
-                Err(_) => (),
-            };
-            self.render_state.is_array_buffer_set = true;
-        }
-        for (attr_index, sat) in attrib_iter.zip(info.vertex_attributes.iter()) {
-            let vat = &mesh.attributes[attr_index];
-            let loc = sat.slot as usize;
-            if loc >= self.render_state.attributes.len() {
-                let range = self.render_state.attributes.len() .. loc+1;
-                self.render_state.attributes.extend(range.map(|_| None));
-            }
-            let need_update = match self.render_state.attributes[loc] {
-                Some((ref buf, fmt)) => *buf != vat.buffer || fmt != vat.format,
-                None => true,
-            };
-            if need_update {
-                self.command_buffer.bind_attribute(sat.slot,
-                    self.handles.ref_buffer(&vat.buffer).clone(), vat.format);
-                self.render_state.attributes[loc] = Some((vat.buffer.clone(), vat.format));
-            }
-        }
-        self.command_buffer.set_primitive(mesh.primitive);
     }
 
     fn draw_indexed<T>(&mut self, buf: &handle::Buffer<R, T>, format: IntSize,

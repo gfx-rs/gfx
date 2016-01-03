@@ -16,12 +16,11 @@
 //! It includes a renderer and an output, stored by constrained types.
 
 
-use gfx_core::{Device, InstanceCount, Resources, VertexCount};
+use gfx_core::{Device, Resources};
 use gfx_core::draw::CommandBuffer;
 use gfx_core::output::Output;
 use gfx_core::target::{ClearData, Mask, Mirror, Rect};
-use batch::{Batch, Error};
-use encoder::{BlitError, DrawError, Encoder};
+use encoder::{BlitError, Encoder};
 use extra::factory::FactoryExt;
 
 /// Generic output window.
@@ -74,24 +73,6 @@ pub trait Stream<R: Resources> {
     {
         let (ren, out) = self.access();
         ren.blit(out, source_rect, destination, dest_rect, mirror, mask)
-    }
-
-    /// Draw a simple `Batch`.
-    fn draw<B: Batch<R> + ?Sized>(&mut self, batch: &B)
-            -> Result<(), DrawError<Error>> {
-        let (ren, out) = self.access();
-        ren.draw(batch, None, out)
-    }
-
-    /// Draw an instanced `Batch`.
-    ///
-    /// `count` is the number of instances you wish to draw and
-    /// `base` is the first instance to draw (instance offset).
-    fn draw_instanced<B: Batch<R> + ?Sized>(&mut self, batch: &B,
-                      count: InstanceCount, base: VertexCount)
-                      -> Result<(), DrawError<Error>> {
-        let (ren, out) = self.access();
-        ren.draw(batch, Some((count, base)), out)
     }
 
     /// Execute everything and clear the command buffer.
