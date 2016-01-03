@@ -25,7 +25,7 @@ gfx_vertex_struct!(Instance {
 });
 
 gfx_constant_struct!(Local {
-    _pos: [u32; 4] = "pos",
+    _pos: [u32; 4],
 });
 
 gfx_pipeline_init!( _Data _Meta _Init {

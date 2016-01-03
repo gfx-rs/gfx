@@ -55,7 +55,7 @@ const NUM_LIGHTS: usize = 250;
 pub type GFormat = [f32; 4];
 
 gfx_constant_struct!(LightInfo {
-    pos: [f32; 4] = "pos",
+    pos: [f32; 4],
 });
 
 mod terrain {

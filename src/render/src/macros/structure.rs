@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Macro for implementing Structure.
+//! Macro for implementing Structure for vertex and constant buffers.
 
 #[macro_export]
-macro_rules! gfx_structure {
-    ($root:ident ($fm_trait:path = $fm_type:ty) {
+macro_rules! gfx_vertex_struct {
+    ($root:ident {
         $( $field:ident: $ty:ty = $name:expr, )*
     }) => {
         #[derive(Clone, Copy, Debug)]
@@ -24,8 +24,8 @@ macro_rules! gfx_structure {
             $( pub $field: $ty, )*
         }
 
-        impl $crate::pso::Structure<$fm_type> for $root {
-            fn query(name: &str) -> Option<$crate::pso::Element<$fm_type>> {
+        impl $crate::pso::Structure<$crate::format::Format> for $root {
+            fn query(name: &str) -> Option<$crate::pso::Element<$crate::format::Format>> {
                 use std::mem::size_of;
                 use $crate::attrib::{Offset, Stride};
                 let stride = size_of::<$root>() as Stride;
@@ -34,7 +34,7 @@ macro_rules! gfx_structure {
                 match name {
                 $(
                     $name => Some($crate::pso::Element {
-                        format: <$ty as $fm_trait>::get_format(),
+                        format: <$ty as $crate::format::Formatted>::get_format(),
                         offset: ((&tmp.$field as *const _ as usize) - base) as Offset,
                         stride: stride,
                     }),
@@ -47,25 +47,33 @@ macro_rules! gfx_structure {
 }
 
 #[macro_export]
-macro_rules! gfx_vertex_struct {
-    ($root:ident {
-        $( $field:ident: $ty:ty = $name:expr, )*
-    }) => {
-        gfx_structure!($root
-        ($crate::format::Formatted = $crate::format::Format) {
-            $( $field: $ty = $name, )*
-        });
-    }
-}
-
-#[macro_export]
 macro_rules! gfx_constant_struct {
     ($root:ident {
-        $( $field:ident: $ty:ty = $name:expr, )*
+        $( $field:ident: $ty:ty, )*
     }) => {
-        gfx_structure!($root
-        ($crate::shade::Formatted = $crate::shade::ConstFormat) {
-            $( $field: $ty = $name, )*
-        });
+        #[derive(Clone, Copy, Debug)]
+        pub struct $root {
+            $( pub $field: $ty, )*
+        }
+
+        impl $crate::pso::Structure<$crate::shade::ConstFormat> for $root {
+            fn query(name: &str) -> Option<$crate::pso::Element<$crate::shade::ConstFormat>> {
+                use std::mem::size_of;
+                use $crate::attrib::{Offset, Stride};
+                let stride = size_of::<$root>() as Stride;
+                let tmp: &$root = unsafe{ ::std::mem::uninitialized() };
+                let base = tmp as *const _ as usize;
+                match name {
+                $(
+                    stringify!($field) => Some($crate::pso::Element {
+                        format: <$ty as $crate::shade::Formatted>::get_format(),
+                        offset: ((&tmp.$field as *const _ as usize) - base) as Offset,
+                        stride: stride,
+                    }),
+                )*
+                    _ => None,
+                }
+            }
+        }
     }
 }
