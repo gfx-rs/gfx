@@ -22,7 +22,7 @@ use gfx_core::state::{CullFace, Rasterizer};
 use encoder::Encoder;
 use mesh::{Mesh, Slice, SliceKind, ToIndexSlice, VertexFormat};
 use pso;
-use extra::shade::{ProgramError, ShaderSource};
+use shade::{ProgramError, ShaderSource};
 
 /// Error creating a PipelineState
 #[derive(Clone, PartialEq, Debug)]

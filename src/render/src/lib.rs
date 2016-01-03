@@ -60,7 +60,6 @@ pub use pso::{PipelineState, VertexBuffer, ConstantBuffer,
               DepthStencilTarget, DepthTarget, StencilTarget};
 pub use target::{Frame};
 pub use extra::factory::PipelineStateError;
-pub use extra::shade::{ShaderSource, ProgramError};
 pub use extra::stream::{OwnedStream, Stream, Window};
 
 /// Render commands encoder

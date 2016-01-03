@@ -18,7 +18,5 @@
 
 /// Factory extensions
 pub mod factory;
-/// Shader extensions
-pub mod shade;
 /// Render stream
 pub mod stream;
