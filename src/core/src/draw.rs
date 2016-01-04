@@ -16,7 +16,7 @@
 
 use draw_state::target;
 use {Resources, IndexType, InstanceCount, VertexCount};
-use {pso, shade, tex};
+use {pso, shade};
 use state as s;
 
 type Offset = u32;
@@ -127,9 +127,6 @@ pub trait CommandBuffer<R: Resources> {
     fn set_ref_values(&mut self, s::RefValues);
     /// Update a vertex/index/uniform buffer
     fn update_buffer(&mut self, R::Buffer, DataPointer, usize);
-    /// Update a texture region
-    fn update_texture(&mut self, tex::Kind, R::Texture,
-                      tex::ImageInfo, DataPointer);
     /// Clear target surfaces
     fn call_clear(&mut self, target::ClearData, target::Mask);
     /// Draw a primitive

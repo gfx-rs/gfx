@@ -15,7 +15,7 @@
 #![allow(missing_docs)]
 
 use {Capabilities, Device, Resources, SubmitInfo, IndexType, VertexCount};
-use {draw, pso, shade, target, tex};
+use {draw, pso, shade, target};
 use state as s;
 
 ///Dummy device which does minimal work, just to allow testing gfx-rs apps for
@@ -90,8 +90,6 @@ impl draw::CommandBuffer<DummyResources> for DummyCommandBuffer {
     fn set_scissor(&mut self, _: Option<target::Rect>) {}
     fn set_ref_values(&mut self, _: s::RefValues) {}
     fn update_buffer(&mut self, _: (), _: draw::DataPointer, _: usize) {}
-    fn update_texture(&mut self, _: tex::Kind, _: (), _: tex::ImageInfo,
-                      _: draw::DataPointer) {}
     fn call_clear(&mut self, _: target::ClearData, _: target::Mask) {}
     fn call_draw(&mut self, _: VertexCount, _: VertexCount, _: draw::InstanceOption) {}
     fn call_draw_indexed(&mut self, _: IndexType,

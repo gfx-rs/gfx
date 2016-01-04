@@ -550,16 +550,6 @@ impl Device {
                 factory::update_sub_buffer(&self.share.context, buffer,
                     data.as_ptr(), data.len(), offset, d::factory::BufferRole::Vertex);
             },
-            Command::UpdateTexture(kind, texture, image_info, pointer) => {
-                let face = None; //TODO
-                let data = data_buf.get_ref(pointer);
-                match tex::update_texture(&self.share.context, kind, face, texture, &image_info, data) {
-                    Ok(_) => (),
-                    Err(e) => {
-                        error!("Error updating a texture: {:?}", e);
-                    },
-                }
-            },
             Command::Draw(primitive, start, count, instances) => {
                 let gl = &self.share.context;
                 match instances {
@@ -761,10 +751,8 @@ impl d::Device for Device {
             }, //SRV
             |_, _| {}, //UAV
             |gl, v| unsafe { gl.DeleteFramebuffers(1, v) },
-            |gl, v| unsafe { gl.DeleteRenderbuffers(1, v) },
             |_, _| {}, //RTV
             |_, _| {}, //DSV
-            |gl, v| unsafe { gl.DeleteTextures(1, v) },
             |gl, v| unsafe { if v.object != 0 { gl.DeleteSamplers(1, &v.object) }},
             |gl, v| unsafe { gl.DeleteSync(v.0) },
         );

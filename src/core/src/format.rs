@@ -14,6 +14,12 @@
 
 #![allow(missing_docs)]
 
+//TODO:
+//  ETC2_RGB, // Use the EXT2 algorithm on 3 components.
+//  ETC2_SRGB, // Use the EXT2 algorithm on 4 components (RGBA) in the sRGB color space.
+//  ETC2_EAC_RGBA8, // Use the EXT2 EAC algorithm on 4 components.
+
+
 macro_rules! impl_surface_type {
     { $($name:ident [$bits:expr] $(=$tr:ty)* ,)* } => {
         #[repr(u8)]

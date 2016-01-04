@@ -154,15 +154,6 @@ impl<R: Resources, T> Phantom for UnorderedAccessView<R, T> {
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct FrameBuffer<R: Resources>(Arc<R::FrameBuffer>);
 
-/// Surface Handle
-#[derive(Clone, Debug, Hash, PartialEq)]
-pub struct Surface<R: Resources>(Arc<R::Surface>, tex::SurfaceInfo);
-
-impl<R: Resources> Surface<R> {
-    /// Get surface info
-    pub fn get_info(&self) -> &tex::SurfaceInfo { &self.1 }
-}
-
 /// Raw RTV
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct RawRenderTargetView<R: Resources>(Arc<R::RenderTargetView>, Arc<R::NewTexture>, tex::Dimensions);
@@ -213,15 +204,6 @@ impl<R: Resources, T> Phantom for DepthStencilView<R, T> {
     }
 }
 
-/// Texture Handle
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Texture<R: Resources>(Arc<R::Texture>, tex::TextureInfo);
-
-impl<R: Resources> Texture<R> {
-    /// Get texture info
-    pub fn get_info(&self) -> &tex::TextureInfo { &self.1 }
-}
-
 /// Sampler Handle
 #[derive(Clone, Debug, PartialEq)]
 pub struct Sampler<R: Resources>(Arc<R::Sampler>, tex::SamplerInfo);
@@ -250,10 +232,8 @@ pub struct Manager<R: Resources> {
     srvs:          Vec<Arc<R::ShaderResourceView>>,
     uavs:          Vec<Arc<R::UnorderedAccessView>>,
     frame_buffers: Vec<Arc<R::FrameBuffer>>,
-    surfaces:      Vec<Arc<R::Surface>>,
     rtvs:          Vec<Arc<R::RenderTargetView>>,
     dsvs:          Vec<Arc<R::DepthStencilView>>,
-    textures:      Vec<Arc<R::Texture>>,
     samplers:      Vec<Arc<R::Sampler>>,
     fences:        Vec<Arc<R::Fence>>,
 }
@@ -272,10 +252,8 @@ pub trait Producer<R: Resources> {
     fn make_buffer_uav(&mut self, R::UnorderedAccessView, &RawBuffer<R>) -> RawUnorderedAccessView<R>;
     fn make_texture_uav(&mut self, R::UnorderedAccessView, &RawTexture<R>) -> RawUnorderedAccessView<R>;
     fn make_frame_buffer(&mut self, R::FrameBuffer) -> FrameBuffer<R>;
-    fn make_surface(&mut self, R::Surface, tex::SurfaceInfo) -> Surface<R>;
     fn make_rtv(&mut self, R::RenderTargetView, &RawTexture<R>, tex::Dimensions) -> RawRenderTargetView<R>;
     fn make_dsv(&mut self, R::DepthStencilView, &RawTexture<R>, tex::Dimensions) -> RawDepthStencilView<R>;
-    fn make_texture(&mut self, R::Texture, tex::TextureInfo) -> Texture<R>;
     fn make_sampler(&mut self, R::Sampler, tex::SamplerInfo) -> Sampler<R>;
     fn make_fence(&mut self, name: R::Fence) -> Fence<R>;
 
@@ -291,13 +269,11 @@ pub trait Producer<R: Resources> {
         G: Fn(&mut T, &R::ShaderResourceView),
         H: Fn(&mut T, &R::UnorderedAccessView),
         I: Fn(&mut T, &R::FrameBuffer),
-        J: Fn(&mut T, &R::Surface),
         K: Fn(&mut T, &R::RenderTargetView),
         L: Fn(&mut T, &R::DepthStencilView),
-        M: Fn(&mut T, &R::Texture),
         N: Fn(&mut T, &R::Sampler),
         O: Fn(&mut T, &R::Fence),
-    >(&mut self, &mut T, A, B, C, D, E, F, G, H, I, J, K, L, M, N, O);
+    >(&mut self, &mut T, A, B, C, D, E, F, G, H, I, K, L, N, O);
 }
 
 impl<R: Resources> Producer<R> for Manager<R> {
@@ -367,12 +343,6 @@ impl<R: Resources> Producer<R> for Manager<R> {
         FrameBuffer(r)
     }
 
-    fn make_surface(&mut self, res: R::Surface, info: tex::SurfaceInfo) -> Surface<R> {
-        let r = Arc::new(res);
-        self.surfaces.push(r.clone());
-        Surface(r, info)
-    }
-
     fn make_rtv(&mut self, res: R::RenderTargetView, tex: &RawTexture<R>, dim: tex::Dimensions) -> RawRenderTargetView<R> {
         let r = Arc::new(res);
         self.rtvs.push(r.clone());
@@ -383,12 +353,6 @@ impl<R: Resources> Producer<R> for Manager<R> {
         let r = Arc::new(res);
         self.dsvs.push(r.clone());
         RawDepthStencilView(r, tex.0.clone(), dim)
-    }
-
-    fn make_texture(&mut self, res: R::Texture, info: tex::TextureInfo) -> Texture<R> {
-        let r = Arc::new(res);
-        self.textures.push(r.clone());
-        Texture(r, info)
     }
 
     fn make_sampler(&mut self, res: R::Sampler, info: tex::SamplerInfo) -> Sampler<R> {
@@ -413,13 +377,11 @@ impl<R: Resources> Producer<R> for Manager<R> {
         G: Fn(&mut T, &R::ShaderResourceView),
         H: Fn(&mut T, &R::UnorderedAccessView),
         I: Fn(&mut T, &R::FrameBuffer),
-        J: Fn(&mut T, &R::Surface),
         K: Fn(&mut T, &R::RenderTargetView),
         L: Fn(&mut T, &R::DepthStencilView),
-        M: Fn(&mut T, &R::Texture),
         N: Fn(&mut T, &R::Sampler),
         O: Fn(&mut T, &R::Fence),
-    >(&mut self, param: &mut T, fa: A, fb: B, fc: C, fd: D, fe: E, ff: F, fg: G, fh: H, fi: I, fj: J, fk: K, fl: L, fm: M, fn_: N, fo: O) {
+    >(&mut self, param: &mut T, fa: A, fb: B, fc: C, fd: D, fe: E, ff: F, fg: G, fh: H, fi: I, fk: K, fl: L, fn_: N, fo: O) {
         fn clean_vec<X, Param, Fun>(param: &mut Param, vector: &mut Vec<Arc<X>>, fun: Fun)
             where X: Clone, Fun: Fn(&mut Param, &X)
         {
@@ -446,10 +408,8 @@ impl<R: Resources> Producer<R> for Manager<R> {
         clean_vec(param, &mut self.srvs,          fg);
         clean_vec(param, &mut self.uavs,          fh);
         clean_vec(param, &mut self.frame_buffers, fi);
-        clean_vec(param, &mut self.surfaces,      fj);
         clean_vec(param, &mut self.rtvs,          fk);
         clean_vec(param, &mut self.dsvs,          fl);
-        clean_vec(param, &mut self.textures,      fm);
         clean_vec(param, &mut self.samplers,      fn_);
         clean_vec(param, &mut self.fences,        fo);
     }
@@ -468,10 +428,8 @@ impl<R: Resources> Manager<R> {
             srvs: Vec::new(),
             uavs: Vec::new(),
             frame_buffers: Vec::new(),
-            surfaces: Vec::new(),
             rtvs: Vec::new(),
             dsvs: Vec::new(),
-            textures: Vec::new(),
             samplers: Vec::new(),
             fences: Vec::new()
         }
@@ -487,10 +445,8 @@ impl<R: Resources> Manager<R> {
         self.srvs.clear();
         self.uavs.clear();
         self.frame_buffers.clear();
-        self.surfaces.clear();
         self.rtvs.clear();
         self.dsvs.clear();
-        self.textures.clear();
         self.samplers.clear();
     }
     /// Extend with all references of another handle manager
@@ -504,10 +460,8 @@ impl<R: Resources> Manager<R> {
         self.srvs         .extend(other.srvs         .iter().map(|h| h.clone()));
         self.uavs         .extend(other.uavs         .iter().map(|h| h.clone()));
         self.frame_buffers.extend(other.frame_buffers.iter().map(|h| h.clone()));
-        self.surfaces     .extend(other.surfaces     .iter().map(|h| h.clone()));
         self.rtvs         .extend(other.rtvs         .iter().map(|h| h.clone()));
         self.dsvs         .extend(other.dsvs         .iter().map(|h| h.clone()));
-        self.textures     .extend(other.textures     .iter().map(|h| h.clone()));
         self.samplers     .extend(other.samplers     .iter().map(|h| h.clone()));
     }
     /// Count the total number of referenced resources
@@ -521,10 +475,8 @@ impl<R: Resources> Manager<R> {
         self.srvs.len() +
         self.uavs.len() +
         self.frame_buffers.len() +
-        self.surfaces.len() +
         self.rtvs.len() +
         self.dsvs.len() +
-        self.textures.len() +
         self.samplers.len()
     }
     /// Reference a buffer
@@ -573,11 +525,6 @@ impl<R: Resources> Manager<R> {
         self.frame_buffers.push(handle.0.clone());
         &handle.0
     }
-    /// Reference a surface
-    pub fn ref_surface<'a>(&mut self, handle: &'a Surface<R>) -> &'a R::Surface {
-        self.surfaces.push(handle.0.clone());
-        &handle.0
-    }
     /// Reference an RTV
     pub fn ref_rtv<'a>(&mut self, handle: &'a RawRenderTargetView<R>) -> &'a R::RenderTargetView {
         self.rtvs.push(handle.0.clone());
@@ -588,11 +535,6 @@ impl<R: Resources> Manager<R> {
     pub fn ref_dsv<'a>(&mut self, handle: &'a RawDepthStencilView<R>) -> &'a R::DepthStencilView {
         self.dsvs.push(handle.0.clone());
         self.new_textures.push(handle.1.clone());
-        &handle.0
-    }
-    /// Reference a texture
-    pub fn ref_texture<'a>(&mut self, handle: &'a Texture<R>) -> &'a R::Texture {
-        self.textures.push(handle.0.clone());
         &handle.0
     }
     /// Reference a sampler

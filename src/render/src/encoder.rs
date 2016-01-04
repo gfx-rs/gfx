@@ -25,7 +25,6 @@ use gfx_core::{format, handle};
 use gfx_core::attrib::IntSize;
 use gfx_core::draw::{CommandBuffer, DataBuffer, InstanceOption};
 use gfx_core::factory::{Factory};
-use gfx_core::tex::Size;
 use mesh;
 use pso;
 
@@ -135,7 +134,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
         }
     }
 
-    /// Update the contents of a texture.
+    /*/// Update the contents of a texture.
     pub fn update_texture<T: Copy>(&mut self, tex: &handle::Texture<R>,
                           img: device::tex::ImageInfo, data: &[T])
                           -> Result<(), UpdateError<[Size; 3]>>
@@ -177,7 +176,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
         self.command_buffer.update_texture(tex.get_info().kind,
             self.handles.ref_texture(tex).clone(), img, pointer);
         Ok(())
-    }
+    }*/
 
     fn draw_indexed<T>(&mut self, buf: &handle::Buffer<R, T>, format: IntSize,
                      slice: &mesh::Slice<R>, base: device::VertexCount,

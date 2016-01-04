@@ -21,7 +21,6 @@
 //! image data.  Image data consists of an array of "texture elements", or
 //! texels.
 
-use std::fmt;
 pub use attrib::{FloatSize, IntSubType};
 use factory::Bind;
 use format;
@@ -33,68 +32,14 @@ pub use target::Level;
 pub enum Error {
     /// Failed to map a given format to the device.
     Format(format::SurfaceType, Option<format::ChannelType>),
-    /// Failed to provide sRGB formats.
-    Gamma,
+    /// The kind doesn't support a particular operation.
+    Kind,
     /// Failed to map a given multisampled kind to the device.
     Samples(AaMode),
     /// Unsupported size in one of the dimensions.
     Size(Size),
     /// The given data has a different size than the target texture slice.
     Data(usize),
-}
-
-/// Surface creation/update error.
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub enum SurfaceError {
-    /// Failed to map a given format to the device.
-    UnsupportedFormat,
-    /// Failed to provide sRGB formats.
-    UnsupportedGamma,
-}
-
-/// Texture creation/update error.
-#[derive(Copy, Clone, PartialEq)]
-pub enum TextureError {
-    /// Failed to map a given format to the device.
-    UnsupportedFormat,
-    /// Failed to provide sRGB formats.
-    UnsupportedGamma,
-    /// Failed to map a given multisampled kind to the device.
-    UnsupportedSamples,
-    /// The given TextureInfo contains invalid values.
-    InvalidInfo(TextureInfo),
-    /// The given data has a different size than the target texture slice.
-    IncorrectSize(usize),
-}
-
-impl fmt::Debug for TextureError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            &TextureError::UnsupportedFormat =>
-                write!(f, "Failed to map a given format to the device"),
-
-            &TextureError::UnsupportedGamma =>
-                write!(f, "Failed to provide sRGB formats"),
-
-            &TextureError::UnsupportedSamples =>
-                write!(f,
-                    "Failed to map a given multisampled kind to the device"
-                ),
-
-            &TextureError::InvalidInfo(info) =>
-                write!(f,
-                    "Invalid TextureInfo (width, height, and levels must not \
-                    be zero): {:?}\n",
-                    info
-                ),
-            &TextureError::IncorrectSize(expected) =>
-                write!(f,
-                    "Invalid data size provided to update the texture, \
-                    expected size {:?}",
-                    expected
-                ),
-        }
-    }
 }
 
 /// Dimension size
@@ -147,228 +92,6 @@ impl AaMode {
     }
 }
 
-/// Describes the color components of each texel.
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
-#[repr(u8)]
-pub enum Components {
-    /// Red only
-    R,
-    /// Red and green
-    RG,
-    /// Red, green, blue
-    RGB,
-    /// Red, green, blue, alpha
-    RGBA,
-}
-
-impl Components {
-    /// Get the number of components.
-    pub fn get_count(&self) -> u8 {
-        match *self {
-            Components::R     => 1,
-            Components::RG   => 2,
-            Components::RGB  => 3,
-            Components::RGBA => 4,
-        }
-    }
-}
-
-/// Codec used to compress image data.
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
-#[allow(non_camel_case_types)]
-pub enum Compression {
-    /// Use the EXT2 algorithm on 3 components.
-    ETC2_RGB,
-    /// Use the EXT2 algorithm on 4 components (RGBA) in the sRGB color space.
-    ETC2_SRGB,
-    /// Use the EXT2 EAC algorithm on 4 components.
-    ETC2_EAC_RGBA8,
-}
-
-/// Describes the layout of each texel within a surface/texture.
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
-#[allow(non_camel_case_types)]
-pub enum Format {
-    /// Floating point.
-    Float(Components, FloatSize),
-    /// Signed integer.
-    Integer(Components, Bits, IntSubType),
-    /// Unsigned integer.
-    Unsigned(Components, Bits, IntSubType),
-    /// Compressed data.
-    Compressed(Compression),
-    /// 3 bits for RG, 2 for B.
-    R3_G3_B2,
-    /// 5 bits for RB, 6 for G
-    R5_G6_B5,
-    /// 5 bits each for RGB, 1 for Alpha.
-    RGB5_A1,
-    /// 10 bits each for RGB, 2 for Alpha.
-    RGB10_A2,
-    /// 10 bits each for RGB, 2 for Alpha, as unsigned integers.
-    RGB10_A2UI,
-    /// This uses special 11 and 10-bit floating-point values without sign bits.
-    R11F_G11F_B10F,
-    /// This s an RGB format of type floating-point. The 3 color values have
-    /// 9 bits of precision, and they share a single exponent.
-    RGB9_E5,
-    /// Swizzled RGBA color format, used for interaction with Windows DIBs
-    BGRA8,
-    /// Gamma-encoded RGB8
-    SRGB8,
-    /// Gamma-encoded RGB8, unchanged alpha
-    SRGB8_A8,
-    /// 16-bit bits depth
-    DEPTH16,
-    /// 24 bits depth
-    DEPTH24,
-    /// 32 floating-point bits depth
-    DEPTH32F,
-    /// 24 bits for depth, 8 for stencil
-    DEPTH24_STENCIL8,
-    /// 32 floating point bits for depth, 8 for stencil
-    DEPTH32F_STENCIL8,
-}
-
-impl Format {
-    /// Extract the components format
-    pub fn get_components(&self) -> Option<Components> {
-        Some(match *self {
-            Format::Float(c, _)       => c,
-            Format::Integer(c, _, _)  => c,
-            Format::Unsigned(c, _, _) => c,
-            Format::Compressed(_)     => {
-                error!("Tried to get components of compressed texel!");
-                return None
-            },
-            Format::R3_G3_B2          |
-            Format::R5_G6_B5          |
-            Format::R11F_G11F_B10F    |
-            Format::RGB9_E5           |
-            Format::SRGB8             => Components::RGB,
-            Format::RGB5_A1           |
-            Format::RGB10_A2          |
-            Format::RGB10_A2UI        |
-            Format::BGRA8             |
-            Format::SRGB8_A8          => Components::RGBA,
-            // not sure about depth/stencil
-            Format::DEPTH16           |
-            Format::DEPTH24           |
-            Format::DEPTH32F          |
-            Format::DEPTH24_STENCIL8  |
-            Format::DEPTH32F_STENCIL8 => return None,
-        })
-    }
-
-    /// Check if it's a color format.
-    pub fn is_color(&self) -> bool {
-        match *self {
-            Format::DEPTH16           |
-            Format::DEPTH24           |
-            Format::DEPTH32F          |
-            Format::DEPTH24_STENCIL8  |
-            Format::DEPTH32F_STENCIL8 => false,
-            _ => true,
-        }
-    }
-
-    /// Check if it has a depth component.
-    pub fn has_depth(&self) -> bool {
-        match *self {
-            Format::DEPTH16           |
-            Format::DEPTH24           |
-            Format::DEPTH32F          |
-            Format::DEPTH24_STENCIL8  |
-            Format::DEPTH32F_STENCIL8 => true,
-            _ => false,
-        }
-    }
-
-    /// Check if it has a stencil component.
-    pub fn has_stencil(&self) -> bool {
-        match *self {
-            Format::DEPTH24_STENCIL8  |
-            Format::DEPTH32F_STENCIL8 => true,
-            _ => false,
-        }
-    }
-
-    /// Check if it's a compressed format.
-    pub fn is_compressed(&self) -> bool {
-        match *self {
-            Format::Compressed(_) => true,
-            _ => false
-        }
-    }
-
-    /// Check if it's a sRGB color space.
-    pub fn does_convert_gamma(&self) -> bool {
-        match *self {
-            Format::SRGB8    |
-            Format::SRGB8_A8 |
-            Format::Compressed(Compression::ETC2_SRGB) => true,
-            _ => false,
-        }
-    }
-
-    /// Get size of the texel in bytes.
-    pub fn get_size(&self) -> Option<u8> {
-        Some(match *self {
-            Format::Float(c, FloatSize::F16) => c.get_count() * 2,
-            Format::Float(c, FloatSize::F32) => c.get_count() * 4,
-            Format::Float(c, FloatSize::F64) => c.get_count() * 8,
-            Format::Integer(c, bits, _) => (c.get_count() * bits) >> 3,
-            Format::Unsigned(c, bits, _) => (c.get_count() * bits) >> 3,
-            Format::Compressed(_) => return None,
-            Format::R3_G3_B2 => 1,
-            Format::R5_G6_B5 => 2,
-            Format::RGB5_A1 => 2,
-            Format::RGB10_A2 => 4,
-            Format::RGB10_A2UI => 4,
-            Format::R11F_G11F_B10F => 4,
-            Format::RGB9_E5 => 4,
-            Format::BGRA8 => 4,
-            Format::SRGB8 => 4,
-            Format::SRGB8_A8 => 4,
-            Format::DEPTH16 => 2,
-            Format::DEPTH24 => 4,
-            Format::DEPTH32F => 4,
-            Format::DEPTH24_STENCIL8 => 4,
-            Format::DEPTH32F_STENCIL8 => 8,
-        })
-    }
-}
-
-/// A single R-component 8-bit normalized format.
-pub static R8     : Format = Format::Unsigned(Components::R, 8, IntSubType::Normalized);
-/// A standard RGBA 8-bit normalized format.
-pub static RGBA8  : Format = Format::Unsigned(Components::RGBA, 8, IntSubType::Normalized);
-/// A standard RGBA 16-bit floating-point format.
-pub static RGBA16F: Format = Format::Float(Components::RGBA, FloatSize::F16);
-/// A standard RGBA 32-bit floating-point format.
-pub static RGBA32F: Format = Format::Float(Components::RGBA, FloatSize::F32);
-
-/// Describes the storage of a surface.
-#[allow(missing_docs)]
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
-pub struct SurfaceInfo {
-    pub width: Size,
-    pub height: Size,
-    pub format: Format,
-    pub aa_mode: AaMode,
-}
-
-impl From<TextureInfo> for SurfaceInfo {
-    fn from(ti: TextureInfo) -> SurfaceInfo {
-        let (w, h, _, aa) = ti.kind.get_dimensions();
-        SurfaceInfo {
-            width: w,
-            height: h,
-            format: ti.format,
-            aa_mode: aa,
-        }
-    }
-}
 
 /// How to [filter](https://en.wikipedia.org/wiki/Texture_filtering) the
 /// texture when sampling. They correspond to increasing levels of quality,
@@ -452,45 +175,6 @@ impl Kind {
     }
 }
 
-/// Describes the storage of a texture.
-///
-/// # Portability note
-///
-/// Textures larger than 1024px in any dimension are unlikely to be supported
-/// by mobile platforms.
-#[allow(missing_docs)]
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
-pub struct TextureInfo {
-    pub kind: Kind,
-    /// Number of mipmap levels. Defaults to -1, which stands for unlimited.
-    /// Mipmap levels at equal or above `levels` can not be loaded or sampled
-    /// by the shader. width and height of each consecutive mipmap level is
-    /// halved, starting from level 0.
-    pub levels: Level,
-    pub format: Format,
-}
-
-impl TextureInfo {
-    /// Create a new empty texture info.
-    pub fn new() -> TextureInfo {
-        TextureInfo {
-            kind: Kind::D2(0, 0, AaMode::Single),
-            levels: !0,
-            format: RGBA8,
-        }
-    }
-
-    /// Check if given ImageInfo is a part of the texture.
-    pub fn contains(&self, img: &ImageInfo) -> bool {
-        let (w, h, d, aa) = self.kind.get_dimensions();
-        w >= img.xoffset + img.width &&
-        h >= img.yoffset + img.height &&
-        d >= img.zoffset + img.depth &&
-        self.format == img.format &&
-        self.levels > img.mipmap &&
-        aa == AaMode::Single
-    }
-}
 
 /// Describes a subvolume of a texture, which image data can be uploaded into.
 #[allow(missing_docs)]
@@ -506,26 +190,6 @@ pub struct ImageInfoCommon<F> {
     pub format: F,
     /// Which mipmap to select.
     pub mipmap: Level,
-}
-
-/// Old image info based on the old format.
-pub type ImageInfo = ImageInfoCommon<Format>;
-
-impl From<TextureInfo> for ImageInfo {
-    fn from(ti: TextureInfo) -> ImageInfo {
-        use std::cmp::max;
-        let (w, h, d, _) = ti.kind.get_dimensions();
-        ImageInfo {
-            xoffset: 0,
-            yoffset: 0,
-            zoffset: 0,
-            width: max(1, w),
-            height: max(1, h),
-            depth: max(1, d),
-            format: ti.format,
-            mipmap: 0,
-        }
-    }
 }
 
 /// New raw image info based on the universal format spec.

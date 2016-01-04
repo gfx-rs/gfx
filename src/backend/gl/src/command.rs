@@ -19,7 +19,7 @@ use gfx_core as c;
 use gfx_core::draw::{DataPointer, InstanceOption};
 use gfx_core::state as s;
 use gfx_core::target::{ClearData, ColorValue, Mask, Mirror, Rect, Stencil};
-use {Buffer, ArrayBuffer, Program, FrameBuffer, Texture,
+use {Buffer, ArrayBuffer, Program, FrameBuffer,
      Resources, PipelineState, TargetView};
 
 
@@ -62,7 +62,6 @@ pub enum Command {
     SetBlendColor(ColorValue),
     // resource updates
     UpdateBuffer(Buffer, DataPointer, usize),
-    UpdateTexture(c::tex::Kind, Texture, c::tex::ImageInfo, DataPointer),
     // drawing
     Clear(ClearData, Mask),
     Draw(gl::types::GLenum, c::VertexCount, c::VertexCount, InstanceOption),
@@ -241,11 +240,6 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
     fn update_buffer(&mut self, buf: Buffer, data: DataPointer,
                         offset_bytes: usize) {
         self.buf.push(Command::UpdateBuffer(buf, data, offset_bytes));
-    }
-
-    fn update_texture(&mut self, kind: c::tex::Kind, tex: Texture,
-                      info: c::tex::ImageInfo, data: DataPointer) {
-        self.buf.push(Command::UpdateTexture(kind, tex, info, data));
     }
 
     fn call_clear(&mut self, data: ClearData, mask: Mask) {

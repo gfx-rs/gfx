@@ -273,29 +273,15 @@ impl d::Factory<R> for Factory {
         let cty = hint.unwrap_or(ChannelType::Uint); //careful here
         let gl = &self.share.context;
         let object = if desc.bind.intersects(f::SHADER_RESOURCE | f::UNORDERED_ACCESS) {
-            use gfx_core::tex::TextureError;
-            let result = if caps.immutable_storage_supported {
-                tex::make_with_storage(gl, &desc, cty)
+            let name = if caps.immutable_storage_supported {
+                try!(tex::make_with_storage(gl, &desc, cty))
             } else {
-                tex::make_without_storage(gl, &desc, cty)
+                try!(tex::make_without_storage(gl, &desc, cty))
             };
-            match result {
-                Ok(name) => NewTexture::Texture(name),
-                Err(TextureError::UnsupportedGamma) => return Err(Error::Gamma),
-                Err(TextureError::UnsupportedSamples) => {
-                    let (_, _, _, aa) = desc.kind.get_dimensions();
-                    return Err(Error::Samples(aa));
-                },
-                Err(_) => return Err(Error::Format(desc.format, hint)),
-            }
+            NewTexture::Texture(name)
         }else {
-            use gfx_core::tex::SurfaceError;
-            let result = tex::make_surface(gl, &desc, cty);
-            match result {
-                Ok(name) => NewTexture::Surface(name),
-                Err(SurfaceError::UnsupportedFormat) => return Err(Error::Format(desc.format, hint)),
-                Err(SurfaceError::UnsupportedGamma) => return Err(Error::Gamma),
-            }
+            let name = try!(tex::make_surface(gl, &desc, cty));
+            NewTexture::Surface(name)
         };
         Ok(self.share.handles.borrow_mut().make_new_texture(object, desc))
     }
@@ -382,17 +368,11 @@ impl d::Factory<R> for Factory {
 
     fn update_new_texture_raw(&mut self, texture: &handle::RawTexture<R>, image: &t::RawImageInfo,
                               data: &[u8], face: Option<t::CubeFace>) -> Result<(), t::Error> {
-        use gfx_core::tex::TextureError;
         let kind = texture.get_info().kind;
-        let (_, _, _, aa) = kind.get_dimensions();
         match self.frame_handles.ref_new_texture(texture) {
-            &NewTexture::Surface(_) => return Err(t::Error::Data(0)),
+            &NewTexture::Surface(_) => Err(t::Error::Data(0)),
             &NewTexture::Texture(t) => tex::update_texture_new(&self.share.context, t, kind, face, image, data),
-        }.map_err(|error| match error {
-            TextureError::UnsupportedFormat => t::Error::Format(image.format.0, Some(image.format.1.ty)), //TODO: could be `image.format.into()`
-            TextureError::UnsupportedSamples => t::Error::Samples(aa),
-            _ => t::Error::Data(0),
-        })
+        }
     }
 
     fn generate_mipmap_raw(&mut self, texture: &handle::RawTexture<R>) {
