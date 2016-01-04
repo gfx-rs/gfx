@@ -16,12 +16,12 @@
 
 use gl;
 use gfx_core as c;
-use gfx_core::draw::{Access, Target, DataPointer, InstanceOption};
+use gfx_core::draw::{DataPointer, InstanceOption};
 use gfx_core::state as s;
-use gfx_core::target::{ClearData, ColorValue, Layer, Level, Mask, Mirror, Rect, Stencil};
-use {Buffer, ArrayBuffer, Program, FrameBuffer, Surface, Texture,
-     Resources, PipelineState, FatSampler, TargetView};
-//use tex::BindAnchor;
+use gfx_core::target::{ClearData, ColorValue, Mask, Mirror, Rect, Stencil};
+use {Buffer, ArrayBuffer, Program, FrameBuffer, Texture,
+     Resources, PipelineState, TargetView};
+
 
 fn primitive_to_gl(primitive: c::Primitive) -> gl::types::GLenum {
     use gfx_core::Primitive as P;
@@ -35,9 +35,12 @@ fn primitive_to_gl(primitive: c::Primitive) -> gl::types::GLenum {
     }
 }
 
+pub type Access = gl::types::GLenum;
+
 ///Serialized device command.
 #[derive(Clone, Copy, Debug)]
 pub enum Command {
+    // states
     BindProgram(Program),
     BindConstantBuffers(c::pso::ConstantBufferSet<Resources>),
     BindResourceViews(c::pso::ResourceViewSet<Resources>),
@@ -45,17 +48,10 @@ pub enum Command {
     BindSamplers(c::pso::SamplerSet<Resources>),
     BindPixelTargets(c::pso::PixelTargetSet<Resources>),
     BindArrayBuffer(ArrayBuffer),
-    BindAttribute(c::AttributeSlot, Buffer, c::attrib::Format),
-    BindAttributeNew(c::AttributeSlot, Buffer, c::pso::AttributeDesc),
+    BindAttribute(c::AttributeSlot, Buffer, c::pso::AttributeDesc),
     BindIndex(Buffer),
     BindFrameBuffer(Access, FrameBuffer),
-    UnbindTarget(Access, Target),
-    BindTargetSurface(Access, Target, Surface),
-    BindTargetTexture(Access, Target, Texture,
-                      Level, Option<Layer>),
-    BindUniformBlock(c::ConstantBufferSlot, Buffer),
     BindUniform(c::shade::Location, c::shade::UniformValue),
-    BindTexture(c::ResourceViewSlot, c::tex::Kind, Texture, Option<FatSampler>),
     SetDrawColorBuffers(c::ColorSlot),
     SetRasterizer(s::Rasterizer),
     SetViewport(Rect),
@@ -64,6 +60,7 @@ pub enum Command {
     SetStencilState(Option<s::Stencil>, (Stencil, Stencil), s::CullFace),
     SetBlendState(c::ColorSlot, Option<s::Blend>),
     SetBlendColor(ColorValue),
+    // resource updates
     UpdateBuffer(Buffer, DataPointer, usize),
     UpdateTexture(c::tex::Kind, Texture, c::tex::ImageInfo, DataPointer),
     // drawing
@@ -74,17 +71,11 @@ pub enum Command {
     Blit(Rect, Rect, Mirror, Mask),
 }
 
-pub const RESET: [Command; 14] = [
+pub const RESET: [Command; 13] = [
     Command::BindProgram(0),
-    //Command::BindArrayBuffer(0),
     // BindAttribute
     Command::BindIndex(0),
-    Command::BindFrameBuffer(Access::Draw, 0),
-    Command::BindFrameBuffer(Access::Read, 0),
-    // UnbindTarget
-    // BindUniformBlock
-    // BindUniform
-    // BindTexture
+    Command::BindFrameBuffer(gl::FRAMEBUFFER, 0),
     Command::SetRasterizer(s::Rasterizer {
         front_face: s::FrontFace::CounterClockwise,
         method: s::RasterMethod::Fill(s::CullFace::Back),
@@ -162,10 +153,6 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
         self.cache = Cache::new();
     }
 
-    fn bind_program(&mut self, prog: Program) {
-        self.buf.push(Command::BindProgram(prog));
-    }
-
     fn bind_pipeline_state(&mut self, pso: PipelineState) {
         let cull = pso.rasterizer.method.get_cull_face();
         self.cache.primitive = primitive_to_gl(pso.primitive);
@@ -192,7 +179,7 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
                 },
                 (Some((buffer, offset)), Some(mut format)) => {
                     format.0.offset += offset as gl::types::GLuint;
-                    self.buf.push(Command::BindAttributeNew(i as c::AttributeSlot, buffer, format));
+                    self.buf.push(Command::BindAttribute(i as c::AttributeSlot, buffer, format));
                 },
                 (_, None) => (),
             }
@@ -226,11 +213,11 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
             self.is_main_target(pts.depth) &&
             self.is_main_target(pts.stencil);
         if is_main {
-            self.buf.push(Command::BindFrameBuffer(Access::Draw, 0));
+            self.buf.push(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, 0));
         }else {
             let num = pts.colors.iter().position(|c| c.is_none())
                          .unwrap_or(pts.colors.len()) as c::ColorSlot;
-            self.buf.push(Command::BindFrameBuffer(Access::Draw, self.fbo));
+            self.buf.push(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, self.fbo));
             self.buf.push(Command::BindPixelTargets(pts));
             self.buf.push(Command::SetDrawColorBuffers(num));
         }
@@ -238,72 +225,12 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
             x: 0, y: 0, w: pts.size.0, h: pts.size.1}));
     }
 
-    fn bind_array_buffer(&mut self, vao: ArrayBuffer) {
-        self.buf.push(Command::BindArrayBuffer(vao));
-    }
-
-    fn bind_attribute(&mut self, slot: c::AttributeSlot, buf: Buffer,
-                      format: c::attrib::Format) {
-        self.buf.push(Command::BindAttribute(slot, buf, format));
-    }
-
     fn bind_index(&mut self, buf: Buffer) {
         self.buf.push(Command::BindIndex(buf));
     }
 
-    fn bind_frame_buffer(&mut self, access: Access, fbo: FrameBuffer, _: c::draw::Gamma) {
-        self.buf.push(Command::BindFrameBuffer(access, fbo));
-    }
-
-    fn unbind_target(&mut self, access: Access, tar: Target) {
-        self.buf.push(Command::UnbindTarget(access, tar));
-    }
-
-    fn bind_target_surface(&mut self, access: Access, tar: Target,
-                           suf: Surface) {
-        self.buf.push(Command::BindTargetSurface(access, tar, suf));
-    }
-
-    fn bind_target_texture(&mut self, access: Access, tar: Target,
-                           tex: Texture, level: Level, layer: Option<Layer>) {
-        self.buf.push(Command::BindTargetTexture(
-            access, tar, tex, level, layer));
-    }
-
-    fn bind_uniform_block(&mut self, slot: c::ConstantBufferSlot, buf: Buffer) {
-        self.buf.push(Command::BindUniformBlock(slot, buf));
-    }
-
-    fn bind_texture(&mut self, slot: c::ResourceViewSlot, kind: c::tex::Kind, tex: Texture,
-                    sampler: Option<FatSampler>) {
-        self.buf.push(Command::BindTexture(slot, kind, tex, sampler));
-    }
-
-    fn set_draw_color_buffers(&mut self, num: c::ColorSlot) {
-        self.buf.push(Command::SetDrawColorBuffers(num));
-    }
-
-    fn set_rasterizer(&mut self, rast: s::Rasterizer) {
-        self.buf.push(Command::SetRasterizer(rast));
-    }
-
-    fn set_viewport(&mut self, view: Rect) {
-        self.buf.push(Command::SetViewport(view));
-    }
-
     fn set_scissor(&mut self, rect: Option<Rect>) {
         self.buf.push(Command::SetScissor(rect));
-    }
-
-    fn set_depth_stencil(&mut self, depth: Option<s::Depth>,
-                         stencil: Option<s::Stencil>,
-                         cull: s::CullFace) {
-        self.buf.push(Command::SetDepthState(depth));
-        self.buf.push(Command::SetStencilState(stencil, (0, 0), cull)); //care!
-    }
-
-    fn set_blend(&mut self, slot: c::ColorSlot, blend: Option<s::Blend>) {
-        self.buf.push(Command::SetBlendState(slot, blend));
     }
 
     fn set_ref_values(&mut self, rv: s::RefValues) {
@@ -321,10 +248,6 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.push(Command::UpdateTexture(kind, tex, info, data));
     }
 
-    fn set_primitive(&mut self, prim: c::Primitive) {
-        self.cache.primitive = primitive_to_gl(prim);
-    }
-
     fn call_clear(&mut self, data: ClearData, mask: Mask) {
         self.buf.push(Command::Clear(data, mask));
     }
@@ -340,10 +263,5 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
                          instances: InstanceOption) {
         self.buf.push(Command::DrawIndexed(self.cache.primitive,
             itype, start, count, base, instances));
-    }
-
-    fn call_blit(&mut self, s_rect: Rect, d_rect: Rect, mirror: Mirror,
-                 mask: Mask) {
-        self.buf.push(Command::Blit(s_rect, d_rect, mirror, mask));
     }
 }

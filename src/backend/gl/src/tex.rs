@@ -737,17 +737,6 @@ pub fn make_with_storage(gl: &gl::Gl, desc: &Descriptor, cty: ChannelType) ->
     make_with_storage_impl(gl, desc.kind, gl_format, desc.levels, fixed_loc)
 }
 
-/// Bind a texture to the specified slot
-pub fn bind_texture(gl: &gl::Gl, slot: GLenum, kind: Kind, face: Option<CubeFace>,
-                    name: Texture) -> BindAnchor {
-    let target = kind_face_to_gl(kind, face);
-    unsafe {
-        gl.ActiveTexture(slot);
-        gl.BindTexture(target, name);
-    }
-    BindAnchor(target)
-}
-
 /// Bind a sampler using a given binding anchor.
 /// Used for GL compatibility profile only. The core profile has sampler objects
 pub fn bind_sampler(gl: &gl::Gl, anchor: BindAnchor, info: &SamplerInfo) { unsafe {

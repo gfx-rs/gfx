@@ -15,9 +15,8 @@
 //! Command Buffer device interface
 
 use draw_state::target;
-use {Resources, IndexType, InstanceCount, VertexCount, Primitive,
-     AttributeSlot, ColorSlot, ConstantBufferSlot, ResourceViewSlot};
-use {attrib, pso, shade, tex};
+use {Resources, IndexType, InstanceCount, VertexCount};
+use {pso, shade, tex};
 use state as s;
 
 type Offset = u32;
@@ -103,8 +102,6 @@ pub trait CommandBuffer<R: Resources> {
     fn clone_empty(&self) -> Self;
     /// Clear the command buffer contents, retain the allocated storage
     fn clear(&mut self);
-    /// Bind a shader program
-    fn bind_program(&mut self, R::Program);
     /// Bind a pipeline state object
     fn bind_pipeline_state(&mut self, R::PipelineStateObject);
     /// Bind a complete set of vertex buffers
@@ -122,38 +119,10 @@ pub trait CommandBuffer<R: Resources> {
     /// Bind a complete set of pixel targets, including multiple
     /// colors views and an optional depth/stencil view.
     fn bind_pixel_targets(&mut self, pso::PixelTargetSet<R>);
-    /// Bind an array buffer object
-    fn bind_array_buffer(&mut self, R::ArrayBuffer);
-    /// Bind a vertex attribute
-    fn bind_attribute(&mut self, AttributeSlot, R::Buffer, attrib::Format);
     /// Bind an index buffer
     fn bind_index(&mut self, R::Buffer);
-    /// Bind a frame buffer object
-    fn bind_frame_buffer(&mut self, Access, R::FrameBuffer, Gamma);
-    /// Unbind any surface from the specified target slot
-    fn unbind_target(&mut self, Access, Target);
-    /// Bind a surface to the specified target slot
-    fn bind_target_surface(&mut self, Access, Target, R::Surface);
-    /// Bind a level of the texture to the specified target slot
-    fn bind_target_texture(&mut self, Access, Target, R::Texture,
-                           target::Level, Option<target::Layer>);
-    /// Bind a uniform block
-    fn bind_uniform_block(&mut self, ConstantBufferSlot, R::Buffer);
-    /// Bind a texture
-    fn bind_texture(&mut self, ResourceViewSlot, tex::Kind,
-                    R::Texture, Option<R::Sampler>);
-    /// Select, which color buffers are going to be targetted by the shader
-    fn set_draw_color_buffers(&mut self, ColorSlot);
-    /// Set rasterizer state
-    fn set_rasterizer(&mut self, s::Rasterizer);
-    /// Set viewport rectangle
-    fn set_viewport(&mut self, target::Rect);
     /// Set scissor test
     fn set_scissor(&mut self, Option<target::Rect>);
-    /// Set depth and stencil states
-    fn set_depth_stencil(&mut self, Option<s::Depth>, Option<s::Stencil>, s::CullFace);
-    /// Set blend state
-    fn set_blend(&mut self, ColorSlot, Option<s::Blend>);
     /// Set reference values for the blending and stencil front/back
     fn set_ref_values(&mut self, s::RefValues);
     /// Update a vertex/index/uniform buffer
@@ -161,8 +130,6 @@ pub trait CommandBuffer<R: Resources> {
     /// Update a texture region
     fn update_texture(&mut self, tex::Kind, R::Texture,
                       tex::ImageInfo, DataPointer);
-    /// Set the primitive type prior to drawing
-    fn set_primitive(&mut self, Primitive);
     /// Clear target surfaces
     fn call_clear(&mut self, target::ClearData, target::Mask);
     /// Draw a primitive
@@ -171,18 +138,6 @@ pub trait CommandBuffer<R: Resources> {
     fn call_draw_indexed(&mut self, IndexType,
                          VertexCount, VertexCount,
                          VertexCount, InstanceOption);
-    /// Blit from one target to another
-    fn call_blit(&mut self, target::Rect, target::Rect, target::Mirror, target::Mask);
-}
-
-/// Type of the frame buffer access.
-#[repr(u8)]
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub enum Access {
-    /// Draw access
-    Draw,
-    /// Read access
-    Read,
 }
 
 /// Type of the gamma transformation for framebuffer writes.
@@ -194,25 +149,6 @@ pub enum Gamma {
     /// Convert to sRGB color space.
     Convert,
 }
-
-/// When rendering, each "output" of the fragment shader goes to a specific target. A `Plane` can
-/// be bound to a target, causing writes to that target to affect the `Plane`.
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub enum Target {
-    /// Color data.
-    ///
-    /// # Portability Note
-    ///
-    /// The device is only required to expose one color target.
-    Color(u8),
-    /// Depth data.
-    Depth,
-    /// Stencil data.
-    Stencil,
-    /// A target for both depth and stencil data at once.
-    DepthStencil,
-}
-
 
 #[cfg(test)]
 mod tests {

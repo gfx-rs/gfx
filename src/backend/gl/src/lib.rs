@@ -26,7 +26,6 @@ extern crate gfx_core;
 use std::cell::RefCell;
 use std::rc::Rc;
 use gfx_core as d;
-use gfx_core::draw::{Access, Target};
 use gfx_core::handle;
 use gfx_core::state as s;
 use gfx_core::target::{Layer, Level};
@@ -165,22 +164,6 @@ impl Error {
             gl::OUT_OF_MEMORY                 => Error::OutOfMemory,
             _                                 => Error::UnknownError,
         }
-    }
-}
-
-fn access_to_gl(access: Access) -> gl::types::GLenum {
-    match access {
-        Access::Draw => gl::DRAW_FRAMEBUFFER,
-        Access::Read => gl::READ_FRAMEBUFFER,
-    }
-}
-
-fn target_to_gl(target: Target) -> gl::types::GLenum {
-    match target {
-        Target::Color(index) => gl::COLOR_ATTACHMENT0 + (index as gl::types::GLenum),
-        Target::Depth => gl::DEPTH_ATTACHMENT,
-        Target::Stencil => gl::STENCIL_ATTACHMENT,
-        Target::DepthStencil => gl::DEPTH_STENCIL_ATTACHMENT,
     }
 }
 
@@ -392,64 +375,6 @@ impl Device {
         }
     }
 
-    fn bind_attribute_old(&mut self, slot: d::AttributeSlot, buffer: Buffer,
-                          format: d::attrib::Format) {
-        use gfx_core::attrib::{Type, IntSize, IntSubType, FloatSize, FloatSubType, SignFlag};
-        let gl_type = match format.elem_type {
-            Type::Int(_, IntSize::U8, SignFlag::Unsigned)  => gl::UNSIGNED_BYTE,
-            Type::Int(_, IntSize::U8, SignFlag::Signed)    => gl::BYTE,
-            Type::Int(_, IntSize::U16, SignFlag::Unsigned) => gl::UNSIGNED_SHORT,
-            Type::Int(_, IntSize::U16, SignFlag::Signed)   => gl::SHORT,
-            Type::Int(_, IntSize::U32, SignFlag::Unsigned) => gl::UNSIGNED_INT,
-            Type::Int(_, IntSize::U32, SignFlag::Signed)   => gl::INT,
-            Type::Float(_, FloatSize::F16) => gl::HALF_FLOAT,
-            Type::Float(_, FloatSize::F32) => gl::FLOAT,
-            Type::Float(_, FloatSize::F64) => gl::DOUBLE,
-            _ => {
-                error!("Unsupported element type: {:?}", format.elem_type);
-                return
-            }
-        };
-        let gl = &self.share.context;
-        unsafe { gl.BindBuffer(gl::ARRAY_BUFFER, buffer) };
-        let offset = format.offset as *const gl::types::GLvoid;
-        match format.elem_type {
-            Type::Int(IntSubType::Raw, _, _) => unsafe {
-                gl.VertexAttribIPointer(slot as gl::types::GLuint,
-                    format.elem_count as gl::types::GLint, gl_type,
-                    format.stride as gl::types::GLint, offset);
-            },
-            Type::Int(IntSubType::Normalized, _, _) => unsafe {
-                gl.VertexAttribPointer(slot as gl::types::GLuint,
-                    format.elem_count as gl::types::GLint, gl_type, gl::TRUE,
-                    format.stride as gl::types::GLint, offset);
-            },
-            Type::Int(IntSubType::AsFloat, _, _) => unsafe {
-                gl.VertexAttribPointer(slot as gl::types::GLuint,
-                    format.elem_count as gl::types::GLint, gl_type, gl::FALSE,
-                    format.stride as gl::types::GLint, offset);
-            },
-            Type::Float(FloatSubType::Default, _) => unsafe {
-                gl.VertexAttribPointer(slot as gl::types::GLuint,
-                    format.elem_count as gl::types::GLint, gl_type, gl::FALSE,
-                    format.stride as gl::types::GLint, offset);
-            },
-            Type::Float(FloatSubType::Precision, _) => unsafe {
-                gl.VertexAttribLPointer(slot as gl::types::GLuint,
-                    format.elem_count as gl::types::GLint, gl_type,
-                    format.stride as gl::types::GLint, offset);
-            },
-            _ => ()
-        }
-        unsafe { gl.EnableVertexAttribArray(slot as gl::types::GLuint) };
-        if self.share.capabilities.instance_rate_supported {
-            unsafe { gl.VertexAttribDivisor(slot as gl::types::GLuint,
-                format.instance_rate as gl::types::GLuint) };
-        }else if format.instance_rate != 0 {
-            error!("Instanced arrays are not supported");
-        }
-    }
-
     fn bind_target(&mut self, point: gl::types::GLenum, attachment: gl::types::GLenum, view: &TargetView) {
         let gl = &self.share.context;
         match view {
@@ -568,87 +493,24 @@ impl Device {
                     error!("Ignored VAO bind command: {}", array_buffer)
                 }
             },
-            Command::BindAttributeNew(slot, buffer, desc) => {
+            Command::BindAttribute(slot, buffer, desc) => {
                 self.bind_attribute(slot, buffer, desc);
-            },
-            Command::BindAttribute(slot, buffer, format) => {
-                self.bind_attribute_old(slot, buffer, format);
             },
             Command::BindIndex(buffer) => {
                 let gl = &self.share.context;
                 unsafe { gl.BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer) };
             },
-            Command::BindFrameBuffer(access, frame_buffer) => {
+            Command::BindFrameBuffer(point, frame_buffer) => {
                 let caps = &self.share.capabilities;
                 let gl = &self.share.context;
                 if !caps.render_targets_supported {
                     panic!("Tried to do something with an FBO without FBO support!")
                 }
-                let point = access_to_gl(access);
                 unsafe { gl.BindFramebuffer(point, frame_buffer) };
-            },
-            Command::UnbindTarget(access, target) => {
-                if !self.share.capabilities.render_targets_supported {
-                    panic!("Tried to do something with an FBO without FBO support!")
-                }
-                let gl = &self.share.context;
-                let point = access_to_gl(access);
-                let att = target_to_gl(target);
-                unsafe { gl.FramebufferRenderbuffer(point, att, gl::RENDERBUFFER, 0) };
-            },
-            Command::BindTargetSurface(access, target, name) => {
-                if !self.share.capabilities.render_targets_supported {
-                    panic!("Tried to do something with an FBO without FBO support!")
-                }
-                let gl = &self.share.context;
-                let point = access_to_gl(access);
-                let att = target_to_gl(target);
-                unsafe { gl.FramebufferRenderbuffer(point, att, gl::RENDERBUFFER, name) };
-            },
-            Command::BindTargetTexture(access, target, name, level, layer) => {
-                if !self.share.capabilities.render_targets_supported {
-                    panic!("Tried to do something with an FBO without FBO support!")
-                }
-                let gl = &self.share.context;
-                let point = access_to_gl(access);
-                let att = target_to_gl(target);
-                match layer {
-                    Some(layer) => unsafe { gl.FramebufferTextureLayer(
-                        point, att, name, level as gl::types::GLint,
-                        layer as gl::types::GLint) },
-                    None => unsafe { gl.FramebufferTexture(
-                        point, att, name, level as gl::types::GLint) },
-                }
-            },
-            Command::BindUniformBlock(slot, buffer) => {
-                let gl = &self.share.context;
-                unsafe {
-                    gl.BindBufferBase(gl::UNIFORM_BUFFER, slot as gl::types::GLuint, buffer);
-                }
             },
             Command::BindUniform(loc, uniform) => {
                 let gl = &self.share.context;
                 shade::bind_uniform(gl, loc as gl::types::GLint, uniform);
-            },
-            Command::BindTexture(slot, kind, texture, sampler) => {
-                let gl = &self.share.context;
-                let anchor = tex::bind_texture(gl,
-                    gl::TEXTURE0 + slot as gl::types::GLenum,
-                    kind, None, texture);
-                let (_, _, _, aa) = kind.get_dimensions();
-                match (anchor, aa, sampler) {
-                    (anchor, d::tex::AaMode::Single, Some(s)) => {
-                        if self.share.capabilities.sampler_objects_supported {
-                            unsafe { gl.BindSampler(slot as gl::types::GLenum, s.object) };
-                        } else {
-                            debug_assert_eq!(s.object, 0);
-                            tex::bind_sampler(gl, anchor, &s.info);
-                        }
-                    },
-                    (_, _, Some(_)) =>
-                        error!("Unable to bind a multi-sampled texture with a sampler"),
-                    (_, _, _) => (),
-                }
             },
             Command::SetDrawColorBuffers(num) => {
                 let mask = (1 << (num as usize)) - 1;
