@@ -24,11 +24,6 @@ use gfx_core::tex::{Format, CubeFace, Kind, TextureError, SurfaceError,
                     Level, Dimensions, Descriptor};
 
 
-/// A token produced by the `bind_texture` that allows following up
-/// with a GL-compatibility sampler settings in `bind_sampler`
-#[derive(Copy, Clone)]
-pub struct BindAnchor(GLenum);
-
 fn cube_face_to_gl(face: CubeFace) -> GLenum {
     match face {
         CubeFace::PosZ => gl::TEXTURE_CUBE_MAP_POSITIVE_Z,
@@ -739,8 +734,7 @@ pub fn make_with_storage(gl: &gl::Gl, desc: &Descriptor, cty: ChannelType) ->
 
 /// Bind a sampler using a given binding anchor.
 /// Used for GL compatibility profile only. The core profile has sampler objects
-pub fn bind_sampler(gl: &gl::Gl, anchor: BindAnchor, info: &SamplerInfo) { unsafe {
-    let BindAnchor(target) = anchor;
+pub fn bind_sampler(gl: &gl::Gl, target: GLenum, info: &SamplerInfo) { unsafe {
     let (min, mag) = filter_to_gl(info.filtering);
 
     match info.filtering {
