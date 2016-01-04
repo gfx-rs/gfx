@@ -62,18 +62,14 @@ pub enum Resources {}
 
 impl d::Resources for Resources {
     type Buffer              = Buffer;
-    type ArrayBuffer         = ArrayBuffer;
     type Shader              = Shader;
     type Program             = Program;
     type PipelineStateObject = PipelineState;
     type NewTexture          = NewTexture;
-    type FrameBuffer         = FrameBuffer;
-    type Surface             = Surface;
     type RenderTargetView    = TargetView;
     type DepthStencilView    = TargetView;
     type ShaderResourceView  = ResourceView;
     type UnorderedAccessView = ();
-    type Texture             = Texture;
     type Sampler             = FatSampler;
     type Fence               = Fence;
 }

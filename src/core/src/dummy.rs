@@ -29,18 +29,14 @@ pub enum DummyResources {}
 
 impl Resources for DummyResources {
     type Buffer               = ();
-    type ArrayBuffer          = ();
     type Shader               = ();
     type Program              = ();
     type PipelineStateObject  = ();
     type NewTexture           = ();
     type ShaderResourceView   = ();
     type UnorderedAccessView  = ();
-    type FrameBuffer          = ();
-    type Surface              = ();
     type RenderTargetView     = ();
     type DepthStencilView     = ();
-    type Texture              = ();
     type Sampler              = ();
     type Fence                = ();
 }

@@ -156,18 +156,14 @@ pub type IndexType = attrib::IntSize;
 #[allow(missing_docs)]
 pub trait Resources:          Clone + Hash + Debug + Eq + PartialEq {
     type Buffer:              Clone + Hash + Debug + Eq + PartialEq + Send + Sync + Copy;
-    type ArrayBuffer:         Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
     type Shader:              Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
     type Program:             Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
     type PipelineStateObject: Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
     type NewTexture:          Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
     type ShaderResourceView:  Clone + Hash + Debug + Eq + PartialEq + Send + Sync + Copy;
     type UnorderedAccessView: Clone + Hash + Debug + Eq + PartialEq + Send + Sync + Copy;
-    type FrameBuffer:         Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
-    type Surface:             Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
     type RenderTargetView:    Clone + Hash + Debug + Eq + PartialEq + Send + Sync + Copy;
     type DepthStencilView:    Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
-    type Texture:             Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
     type Sampler:             Clone + Hash + Debug + Eq + PartialEq + Send + Sync + Copy;
     type Fence:               Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
 }
