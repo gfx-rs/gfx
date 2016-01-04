@@ -20,10 +20,6 @@ use {Capabilities, Resources};
 use {VertexShader, GeometryShader, PixelShader, ShaderSet};
 use draw::CommandBuffer;
 
-/// Generic error for features that are not supported
-/// by the device capabilities.
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub struct NotSupported;
 
 /// A service trait used to get the raw data out of
 /// strong types. Not meant for public use.
@@ -179,7 +175,6 @@ pub trait Factory<R: Resources> {
     fn create_command_buffer(&mut self) -> Self::CommandBuffer;
 
     // resource creation
-    fn create_array_buffer(&mut self) -> Result<handle::ArrayBuffer<R>, NotSupported>;
     fn create_buffer_raw(&mut self, size: usize, BufferRole, BufferUsage) -> handle::RawBuffer<R>;
     fn create_buffer_static_raw(&mut self, data: &[u8], BufferRole) -> handle::RawBuffer<R>;
     fn create_buffer_static<T>(&mut self, data: &[T], role: BufferRole) -> handle::Buffer<R, T> {
@@ -207,9 +202,6 @@ pub trait Factory<R: Resources> {
         self.create_shader(shade::Stage::Pixel, code).map(|s| PixelShader(s))
     }
 
-    fn create_frame_buffer(&mut self) -> Result<handle::FrameBuffer<R>, NotSupported>;
-    fn create_surface(&mut self, tex::SurfaceInfo) -> Result<handle::Surface<R>, tex::SurfaceError>;
-    fn create_texture(&mut self, tex::TextureInfo) -> Result<handle::Texture<R>, tex::TextureError>;
     fn create_sampler(&mut self, tex::SamplerInfo) -> handle::Sampler<R>;
 
     /// Update the information stored in a specific buffer
@@ -228,17 +220,6 @@ pub trait Factory<R: Resources> {
     fn map_buffer_rw<T: Copy>(&mut self, &handle::Buffer<R, T>) -> mapping::RW<T, R, Self> where
         Self: Sized;
 
-    /// Update the information stored in a texture
-    fn update_texture_raw(&mut self, tex: &handle::Texture<R>,
-                          img: &tex::ImageInfo, data: &[u8], face: Option<tex::CubeFace>)
-                          -> Result<(), tex::TextureError>;
-
-    fn update_texture<T>(&mut self, tex: &handle::Texture<R>,
-                         img: &tex::ImageInfo, data: &[T], face: Option<tex::CubeFace>)
-                         -> Result<(), tex::TextureError> {
-        self.update_texture_raw(tex, img, cast_slice(data), face)
-    }
-
     fn update_new_texture_raw(&mut self, &handle::RawTexture<R>, &tex::RawImageInfo,
                               &[u8], Option<tex::CubeFace>) -> Result<(), tex::Error>;
     fn update_new_texture<T: format::Formatted>(&mut self, tex: &handle::NewTexture<R, T::Surface>,
@@ -249,19 +230,7 @@ pub trait Factory<R: Resources> {
             &image.convert(T::get_format()), cast_slice(data), face)
     }
 
-    fn generate_mipmap(&mut self, &handle::Texture<R>);
     fn generate_mipmap_raw(&mut self, &handle::RawTexture<R>);
-
-    /// Create a new texture with given data
-    fn create_texture_static<T>(&mut self, info: tex::TextureInfo, data: &[T])
-                             -> Result<handle::Texture<R>, tex::TextureError> {
-        let image_info = info.into();
-        match self.create_texture(info) {
-            Ok(handle) => self.update_texture(&handle, &image_info, data, None)
-                              .map(|_| handle),
-            Err(e) => Err(e),
-        }
-    }
 
     fn create_new_texture_raw(&mut self, tex::Descriptor, Option<format::ChannelType>)
         -> Result<handle::RawTexture<R>, tex::Error>;

@@ -145,43 +145,6 @@ pub trait FactoryExt<R: Resources>: Factory<R> + Sized {
         }
     }
 
-    /// Create a simple RGBA8 2D texture.
-    fn create_texture_rgba8(&mut self, width: u16, height: u16)
-                            -> Result<handle::Texture<R>, tex::TextureError> {
-        self.create_texture(tex::TextureInfo {
-            kind: tex::Kind::D2(width, height, tex::AaMode::Single),
-            levels: 1,
-            format: tex::RGBA8,
-        })
-    }
-
-    /// Create RGBA8 2D texture with given contents and mipmap chain.
-    fn create_texture_rgba8_static(&mut self, width: u16, height: u16, data: &[u32])
-                                   -> Result<handle::Texture<R>, tex::TextureError> {
-        let info = tex::TextureInfo {
-            kind: tex::Kind::D2(width, height, tex::AaMode::Single),
-            levels: 99,
-            format: tex::RGBA8,
-        };
-        match self.create_texture_static(info, data) {
-            Ok(handle) => {
-                self.generate_mipmap(&handle);
-                Ok(handle)
-            },
-            Err(e) => Err(e),
-        }
-    }
-
-    /// Create a simple depth+stencil 2D texture.
-    fn create_texture_depth_stencil(&mut self, width: u16, height: u16)
-                                    -> Result<handle::Texture<R>, tex::TextureError> {
-        self.create_texture(tex::TextureInfo {
-            kind: tex::Kind::D2(width, height, tex::AaMode::Single),
-            levels: 1,
-            format: tex::Format::DEPTH24_STENCIL8,
-        })
-    }
-
     /// Create a linear sampler with clamping to border.
     fn create_sampler_linear(&mut self) -> handle::Sampler<R> {
         self.create_sampler(tex::SamplerInfo::new(

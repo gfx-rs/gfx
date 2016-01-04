@@ -214,21 +214,6 @@ impl d::Factory<R> for Factory {
         self.share.handles.borrow_mut().make_buffer(name, info)
     }
 
-    fn create_array_buffer(&mut self) -> Result<handle::ArrayBuffer<R>, f::NotSupported> {
-        if self.share.capabilities.array_buffer_supported {
-            let gl = &self.share.context;
-            let mut name = 0 as ::ArrayBuffer;
-            unsafe {
-                gl.GenVertexArrays(1, &mut name);
-            }
-            info!("\tCreated array buffer {}", name);
-            Ok(self.share.handles.borrow_mut().make_array_buffer(name))
-        } else {
-            error!("\tArray buffer creation unsupported, ignored");
-            Err(f::NotSupported)
-        }
-    }
-
     fn create_shader(&mut self, stage: d::shade::Stage, code: &[u8])
                      -> Result<handle::Shader<R>, d::shade::CreateShaderError> {
         ::shade::create_shader(&self.share.context, stage, code)
@@ -276,43 +261,6 @@ impl d::Factory<R> for Factory {
             output: output,
         };
         Ok(self.share.handles.borrow_mut().make_pso(pso, program))
-    }
-
-    fn create_frame_buffer(&mut self) -> Result<handle::FrameBuffer<R>, f::NotSupported> {
-        if self.share.capabilities.render_targets_supported {
-            let name = self.create_fbo_internal();
-            Ok(self.share.handles.borrow_mut().make_frame_buffer(name))
-        } else {
-            error!("No framebuffer objects, can't make a new one!");
-            Err(f::NotSupported)
-        }
-    }
-
-    fn create_surface(&mut self, info: t::SurfaceInfo) ->
-                      Result<handle::Surface<R>, t::SurfaceError> {
-        if info.format.does_convert_gamma() && !self.share.capabilities.srgb_color_supported {
-            return Err(t::SurfaceError::UnsupportedGamma)
-        }
-        tex::make_surface_old(&self.share.context, &info)
-            .map(|suf| self.share.handles.borrow_mut().make_surface(suf, info))
-    }
-
-    fn create_texture(&mut self, info: t::TextureInfo) ->
-                      Result<handle::Texture<R>, t::TextureError> {
-        let caps = &self.share.capabilities;
-        if info.levels == 0 {
-            return Err(t::TextureError::InvalidInfo(info))
-        }
-        if info.format.does_convert_gamma() && !caps.srgb_color_supported {
-            return Err(t::TextureError::UnsupportedGamma)
-        }
-        let gl = &self.share.context;
-        let name = if caps.immutable_storage_supported {
-            tex::make_with_storage_old(gl, &info)
-        } else {
-            tex::make_without_storage_old(gl, &info)
-        };
-        name.map(|tex| self.share.handles.borrow_mut().make_texture(tex, info))
     }
 
     fn create_new_texture_raw(&mut self, desc: t::Descriptor, hint: Option<ChannelType>)
@@ -432,15 +380,6 @@ impl d::Factory<R> for Factory {
         }
     }
 
-    fn update_texture_raw(&mut self, texture: &handle::Texture<R>,
-                          img: &t::ImageInfo, data: &[u8],
-                          face: Option<t::CubeFace>)
-                          -> Result<(), t::TextureError> {
-
-        tex::update_texture(&self.share.context, texture.get_info().kind, face,
-                            *self.frame_handles.ref_texture(texture), img, data)
-    }
-
     fn update_new_texture_raw(&mut self, texture: &handle::RawTexture<R>, image: &t::RawImageInfo,
                               data: &[u8], face: Option<t::CubeFace>) -> Result<(), t::Error> {
         use gfx_core::tex::TextureError;
@@ -454,11 +393,6 @@ impl d::Factory<R> for Factory {
             TextureError::UnsupportedSamples => t::Error::Samples(aa),
             _ => t::Error::Data(0),
         })
-    }
-
-    fn generate_mipmap(&mut self, texture: &handle::Texture<R>) {
-        tex::generate_mipmap(&self.share.context, texture.get_info().kind,
-                             *self.frame_handles.ref_texture(texture));
     }
 
     fn generate_mipmap_raw(&mut self, texture: &handle::RawTexture<R>) {

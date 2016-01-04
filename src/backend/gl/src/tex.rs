@@ -18,8 +18,7 @@ use state;
 use gfx_core::factory::SHADER_RESOURCE;
 use gfx_core::format::{Format as NewFormat, ChannelType};
 use gfx_core::tex::{Format, CubeFace, Kind, TextureError, SurfaceError,
-                    SurfaceInfo, TextureInfo, SamplerInfo,
-                    ImageInfo, ImageInfoCommon, RawImageInfo,
+                    SamplerInfo, ImageInfo, ImageInfoCommon, RawImageInfo,
                     AaMode, Components, FilterMethod, WrapMode,
                     Level, Dimensions, Descriptor};
 
@@ -54,112 +53,6 @@ fn kind_face_to_gl(kind: Kind, face: Option<CubeFace>) -> GLenum {
         Some(f) => cube_face_to_gl(f),
         None => kind_to_gl(kind),
     }
-}
-
-fn old_format_to_gl(t: Format) -> Result<GLenum, ()> {
-    use gfx_core::tex::{Components, FloatSize, IntSubType, Compression};
-    Ok(match t {
-        // floating-point
-        Format::Float(Components::R,    FloatSize::F16) => gl::R16F,
-        Format::Float(Components::R,    FloatSize::F32) => gl::R32F,
-        Format::Float(Components::RG,   FloatSize::F16) => gl::RG16F,
-        Format::Float(Components::RG,   FloatSize::F32) => gl::RG32F,
-        Format::Float(Components::RGB,  FloatSize::F16) => gl::RGB16F,
-        Format::Float(Components::RGB,  FloatSize::F32) => gl::RGB32F,
-        Format::Float(Components::RGBA, FloatSize::F16) => gl::RGBA16F,
-        Format::Float(Components::RGBA, FloatSize::F32) => gl::RGBA32F,
-        Format::Float(_, FloatSize::F64) => return Err(()),
-
-        // signed normalized
-        Format::Integer(Components::R,    8, IntSubType::Normalized) => gl::R8_SNORM,
-        Format::Integer(Components::RG,   8, IntSubType::Normalized) => gl::RG8_SNORM,
-        Format::Integer(Components::RGB,  8, IntSubType::Normalized) => gl::RGB8_SNORM,
-        Format::Integer(Components::RGBA, 8, IntSubType::Normalized) => gl::RGBA8_SNORM,
-
-        Format::Integer(Components::R,    16, IntSubType::Normalized) => gl::R16_SNORM,
-        Format::Integer(Components::RG,   16, IntSubType::Normalized) => gl::RG16_SNORM,
-        Format::Integer(Components::RGB,  16, IntSubType::Normalized) => gl::RGB16_SNORM,
-        Format::Integer(Components::RGBA, 16, IntSubType::Normalized) => gl::RGBA16_SNORM,
-
-        // signed integral
-        Format::Integer(Components::R,    8, IntSubType::Raw) => gl::R8I,
-        Format::Integer(Components::RG,   8, IntSubType::Raw) => gl::RG8I,
-        Format::Integer(Components::RGB,  8, IntSubType::Raw) => gl::RGB8I,
-        Format::Integer(Components::RGBA, 8, IntSubType::Raw) => gl::RGBA8I,
-
-        Format::Integer(Components::R,    16, IntSubType::Raw) => gl::R16I,
-        Format::Integer(Components::RG,   16, IntSubType::Raw) => gl::RG16I,
-        Format::Integer(Components::RGB,  16, IntSubType::Raw) => gl::RGB16I,
-        Format::Integer(Components::RGBA, 16, IntSubType::Raw) => gl::RGBA16I,
-
-        Format::Integer(Components::R,    32, IntSubType::Raw) => gl::R32I,
-        Format::Integer(Components::RG,   32, IntSubType::Raw) => gl::RG32I,
-        Format::Integer(Components::RGB,  32, IntSubType::Raw) => gl::RGB32I,
-        Format::Integer(Components::RGBA, 32, IntSubType::Raw) => gl::RGBA32I,
-
-        Format::Integer(_, _, _) => unimplemented!(),
-
-        // unsigned normalized
-        Format::Unsigned(Components::RGBA, 2,  IntSubType::Normalized) => gl::RGBA2,
-
-        Format::Unsigned(Components::RGB,  4,  IntSubType::Normalized) => gl::RGB4,
-        Format::Unsigned(Components::RGBA, 4,  IntSubType::Normalized) => gl::RGBA4,
-
-        Format::Unsigned(Components::RGB,  5,  IntSubType::Normalized) => gl::RGB5,
-        //tex::Unsigned(tex::RGBA, 5, attrib::IntNormalized) => gl::RGBA5,
-
-        Format::Unsigned(Components::R,    8,  IntSubType::Normalized) => gl::R8,
-        Format::Unsigned(Components::RG,   8,  IntSubType::Normalized) => gl::RG8,
-        Format::Unsigned(Components::RGB,  8,  IntSubType::Normalized) => gl::RGB8,
-        Format::Unsigned(Components::RGBA, 8,  IntSubType::Normalized) => gl::RGBA8,
-
-        Format::Unsigned(Components::RGB,  10, IntSubType::Normalized) => gl::RGB10,
-
-        Format::Unsigned(Components::RGB,  12, IntSubType::Normalized) => gl::RGB12,
-        Format::Unsigned(Components::RGBA, 12, IntSubType::Normalized) => gl::RGBA12,
-
-        Format::Unsigned(Components::R,    16, IntSubType::Normalized) => gl::R16,
-        Format::Unsigned(Components::RG,   16, IntSubType::Normalized) => gl::RG16,
-        Format::Unsigned(Components::RGB,  16, IntSubType::Normalized) => gl::RGB16,
-        Format::Unsigned(Components::RGBA, 16, IntSubType::Normalized) => gl::RGBA16,
-
-        // unsigned integral
-        Format::Unsigned(Components::R,    8,  IntSubType::Raw) => gl::R8UI,
-        Format::Unsigned(Components::RG,   8,  IntSubType::Raw) => gl::RG8UI,
-        Format::Unsigned(Components::RGB,  8,  IntSubType::Raw) => gl::RGB8UI,
-        Format::Unsigned(Components::RGBA, 8,  IntSubType::Raw) => gl::RGBA8UI,
-
-        Format::Unsigned(Components::R,    16, IntSubType::Raw) => gl::R16UI,
-        Format::Unsigned(Components::RG,   16, IntSubType::Raw) => gl::RG16UI,
-        Format::Unsigned(Components::RGB,  16, IntSubType::Raw) => gl::RGB16UI,
-        Format::Unsigned(Components::RGBA, 16, IntSubType::Raw) => gl::RGBA16UI,
-
-        Format::Unsigned(Components::R,    32, IntSubType::Raw) => gl::R32UI,
-        Format::Unsigned(Components::RG,   32, IntSubType::Raw) => gl::RG32UI,
-        Format::Unsigned(Components::RGB,  32, IntSubType::Raw) => gl::RGB32UI,
-        Format::Unsigned(Components::RGBA, 32, IntSubType::Raw) => gl::RGBA32UI,
-
-        Format::Unsigned(_, _, _) => unimplemented!(),
-        // special
-        Format::Compressed(Compression::ETC2_RGB) => gl::COMPRESSED_RGB8_ETC2,
-        Format::Compressed(Compression::ETC2_SRGB) => gl::COMPRESSED_SRGB8_ETC2,
-        Format::Compressed(Compression::ETC2_EAC_RGBA8) => gl::COMPRESSED_RGBA8_ETC2_EAC,
-        Format::R3_G3_B2          => gl::R3_G3_B2,
-        Format::R5_G6_B5          => gl::RGB565,
-        Format::RGB5_A1           => gl::RGB5_A1,
-        Format::RGB10_A2          => gl::RGB10_A2,
-        Format::RGB10_A2UI        => gl::RGB10_A2UI,
-        Format::R11F_G11F_B10F    => gl::R11F_G11F_B10F,
-        Format::RGB9_E5           => gl::RGB9_E5,
-        Format::BGRA8             => gl::RGBA8,
-        Format::SRGB8             => gl::SRGB8,
-        Format::SRGB8_A8          => gl::SRGB8_ALPHA8,
-        Format::DEPTH16           => gl::DEPTH_COMPONENT16,
-        Format::DEPTH24           => gl::DEPTH_COMPONENT24,
-        Format::DEPTH32F          => gl::DEPTH_COMPONENT32F,
-        Format::DEPTH24_STENCIL8  => gl::DEPTH24_STENCIL8,
-        Format::DEPTH32F_STENCIL8 => gl::DEPTH32F_STENCIL8,
-    })
 }
 
 fn components_to_glpixel(c: Components) -> GLenum {
@@ -442,17 +335,6 @@ fn make_surface_impl(gl: &gl::Gl, format: GLenum, dim: Dimensions)
     Ok(name)
 }
 
-/// Create a render surface, using the old SurfaceInfo
-pub fn make_surface_old(gl: &gl::Gl, info: &SurfaceInfo) ->
-                    Result<Surface, SurfaceError> {
-    let fmt = match old_format_to_gl(info.format) {
-        Ok(f) => f,
-        Err(_) => return Err(SurfaceError::UnsupportedFormat),
-    };
-    let dim = (info.width, info.height, 0, info.aa_mode);
-    make_surface_impl(gl, fmt, dim)
-}
-
 /// Create a render surface.
 pub fn make_surface(gl: &gl::Gl, desc: &Descriptor, cty: ChannelType) ->
                         Result<Surface, SurfaceError> {
@@ -580,22 +462,7 @@ fn make_widout_storage_impl(gl: &gl::Gl, kind: Kind, format: GLint, pix: GLenum,
     Ok(name)
 }
 
-/// Create a texture, using the old TextureInfo, assuming TexStorage* isn't available.
-pub fn make_without_storage_old(gl: &gl::Gl, info: &TextureInfo) ->
-                                Result<Texture, TextureError> {
-    let gl_format = match old_format_to_gl(info.format) {
-        Ok(f) => f as GLint,
-        Err(_) => return Err(TextureError::UnsupportedFormat),
-    };
-    let gl_pixel_format = old_format_to_glpixel(info.format);
-    let gl_data_type = match old_format_to_gltype(info.format) {
-        Ok(t) => t,
-        Err(_) => return Err(TextureError::UnsupportedFormat),
-    };
-    make_widout_storage_impl(gl, info.kind, gl_format, gl_pixel_format, gl_data_type,
-                             info.levels, true)
-}
-
+/// Create a texture, using the descriptor, assuming TexStorage* isn't available.
 pub fn make_without_storage(gl: &gl::Gl, desc: &Descriptor, cty: ChannelType) ->
                             Result<Texture, TextureError> {
     let format = NewFormat(desc.format, cty.into());
@@ -711,16 +578,7 @@ fn make_with_storage_impl(gl: &gl::Gl, kind: Kind, format: GLenum,
     Ok(name)
 }
 
-/// Create a texture using the old `TextureInfo`, assuming TexStorage is available.
-pub fn make_with_storage_old(gl: &gl::Gl, info: &TextureInfo) ->
-                         Result<Texture, TextureError> {
-    let gl_format = match old_format_to_gl(info.format) {
-        Ok(f) => f,
-        Err(_) => return Err(TextureError::UnsupportedFormat),
-    };
-    make_with_storage_impl(gl, info.kind, gl_format, info.levels, true)
-}
-
+/// Create a texture, using the descriptor, assuming TexStorage is available.
 pub fn make_with_storage(gl: &gl::Gl, desc: &Descriptor, cty: ChannelType) ->
                          Result<Texture, TextureError> {
     let format = NewFormat(desc.format, cty.into());

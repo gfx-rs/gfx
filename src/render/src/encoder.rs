@@ -24,7 +24,7 @@ use gfx_core::Resources;
 use gfx_core::{format, handle};
 use gfx_core::attrib::IntSize;
 use gfx_core::draw::{CommandBuffer, DataBuffer, InstanceOption};
-use gfx_core::factory::{Factory, NotSupported};
+use gfx_core::factory::{Factory};
 use gfx_core::tex::Size;
 use mesh;
 use pso;
@@ -54,9 +54,6 @@ pub struct Encoder<R: Resources, C: CommandBuffer<R>> {
     command_buffer: C,
     data_buffer: DataBuffer,
     handles: handle::Manager<R>,
-    common_array_buffer: Result<handle::ArrayBuffer<R>, NotSupported>,
-    draw_frame_buffer: Result<handle::FrameBuffer<R>, NotSupported>,
-    read_frame_buffer: Result<handle::FrameBuffer<R>, NotSupported>,
 }
 
 impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
@@ -68,9 +65,6 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
             command_buffer: factory.create_command_buffer(),
             data_buffer: DataBuffer::new(),
             handles: handle::Manager::new(),
-            common_array_buffer: factory.create_array_buffer(),
-            draw_frame_buffer: factory.create_frame_buffer(),
-            read_frame_buffer: factory.create_frame_buffer(),
         }
     }
 
@@ -93,9 +87,6 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
             command_buffer: self.command_buffer.clone_empty(),
             data_buffer: DataBuffer::new(),
             handles: handle::Manager::new(),
-            common_array_buffer: self.common_array_buffer.clone(),
-            draw_frame_buffer: self.draw_frame_buffer.clone(),
-            read_frame_buffer: self.read_frame_buffer.clone(),
         }
     }
 
