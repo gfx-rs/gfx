@@ -32,7 +32,7 @@ impl Resources for DummyResources {
     type Shader               = ();
     type Program              = ();
     type PipelineStateObject  = ();
-    type NewTexture           = ();
+    type Texture              = ();
     type ShaderResourceView   = ();
     type UnorderedAccessView  = ();
     type RenderTargetView     = ();

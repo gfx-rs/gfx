@@ -65,7 +65,7 @@ impl d::Resources for Resources {
     type Shader              = Shader;
     type Program             = Program;
     type PipelineStateObject = PipelineState;
-    type NewTexture          = NewTexture;
+    type Texture             = NewTexture;
     type RenderTargetView    = TargetView;
     type DepthStencilView    = TargetView;
     type ShaderResourceView  = ResourceView;
@@ -183,10 +183,10 @@ where
 {
     use gfx_core::handle::Producer;
     let mut temp = handle::Manager::new();
-    let texture = temp.make_new_texture(
+    let texture = temp.make_texture(
         NewTexture::Surface(0),
         d::tex::Descriptor {
-            levels: 0,
+            levels: 1,
             kind: d::tex::Kind::D2(dim.0, dim.1, dim.3),
             format: d::format::SurfaceType::R8_G8_B8_A8,
             bind: d::factory::RENDER_TARGET,

@@ -139,7 +139,7 @@ impl Factory {
 
     fn view_texture_as_target(&mut self, htex: &handle::RawTexture<R>, level: Level, layer: Option<Layer>)
                               -> Result<TargetView, f::TargetViewError> {
-        match (self.frame_handles.ref_new_texture(htex), layer) {
+        match (self.frame_handles.ref_texture(htex), layer) {
             (&NewTexture::Surface(_), Some(_)) => Err(f::TargetViewError::Unsupported),
             (&NewTexture::Surface(_), None) if level != 0 => Err(f::TargetViewError::Unsupported),
             (&NewTexture::Surface(s), None) => Ok(TargetView::Surface(s)),
@@ -279,7 +279,7 @@ impl d::Factory<R> for Factory {
             let name = try!(tex::make_surface(gl, &desc, cty));
             NewTexture::Surface(name)
         };
-        Ok(self.share.handles.borrow_mut().make_new_texture(object, desc))
+        Ok(self.share.handles.borrow_mut().make_texture(object, desc))
     }
 
     fn view_buffer_as_shader_resource_raw(&mut self, hbuf: &handle::RawBuffer<R>)
@@ -304,7 +304,7 @@ impl d::Factory<R> for Factory {
 
     fn view_texture_as_shader_resource_raw(&mut self, htex: &handle::RawTexture<R>, _desc: t::ViewDesc)
                                        -> Result<handle::RawShaderResourceView<R>, f::ResourceViewError> {
-        match self.frame_handles.ref_new_texture(htex) {
+        match self.frame_handles.ref_texture(htex) {
             &NewTexture::Surface(_) => Err(f::ResourceViewError::NoBindFlag),
             &NewTexture::Texture(t) => {
                 //TODO: use the view descriptor
@@ -365,14 +365,14 @@ impl d::Factory<R> for Factory {
     fn update_new_texture_raw(&mut self, texture: &handle::RawTexture<R>, image: &t::RawImageInfo,
                               data: &[u8], face: Option<t::CubeFace>) -> Result<(), t::Error> {
         let kind = texture.get_info().kind;
-        match self.frame_handles.ref_new_texture(texture) {
+        match self.frame_handles.ref_texture(texture) {
             &NewTexture::Surface(_) => Err(t::Error::Data(0)),
             &NewTexture::Texture(t) => tex::update_texture_new(&self.share.context, t, kind, face, image, data),
         }
     }
 
     fn generate_mipmap_raw(&mut self, texture: &handle::RawTexture<R>) {
-        match self.frame_handles.ref_new_texture(texture) {
+        match self.frame_handles.ref_texture(texture) {
             &NewTexture::Surface(_) => (), // no mip chain
             &NewTexture::Texture(t) =>
                 tex::generate_mipmap(&self.share.context, texture.get_info().kind, t),

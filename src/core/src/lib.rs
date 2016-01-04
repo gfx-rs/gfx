@@ -159,7 +159,7 @@ pub trait Resources:          Clone + Hash + Debug + Eq + PartialEq {
     type Shader:              Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
     type Program:             Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
     type PipelineStateObject: Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
-    type NewTexture:          Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
+    type Texture:             Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
     type ShaderResourceView:  Clone + Hash + Debug + Eq + PartialEq + Send + Sync + Copy;
     type UnorderedAccessView: Clone + Hash + Debug + Eq + PartialEq + Send + Sync + Copy;
     type RenderTargetView:    Clone + Hash + Debug + Eq + PartialEq + Send + Sync + Copy;

@@ -222,7 +222,7 @@ pub trait Factory<R: Resources> {
 
     fn update_new_texture_raw(&mut self, &handle::RawTexture<R>, &tex::RawImageInfo,
                               &[u8], Option<tex::CubeFace>) -> Result<(), tex::Error>;
-    fn update_new_texture<T: format::Formatted>(&mut self, tex: &handle::NewTexture<R, T::Surface>,
+    fn update_new_texture<T: format::Formatted>(&mut self, tex: &handle::Texture<R, T::Surface>,
                           image: &tex::NewImageInfo, data: &[T], face: Option<tex::CubeFace>)
                           -> Result<(), tex::Error>
     {
@@ -257,7 +257,7 @@ pub trait Factory<R: Resources> {
 
     fn create_new_texture<S: format::SurfaceTyped>(&mut self, kind: tex::Kind, levels: target::Level,
                           bind: Bind, channel_hint: Option<format::ChannelType>)
-                          -> Result<handle::NewTexture<R, S>, tex::Error>
+                          -> Result<handle::Texture<R, S>, tex::Error>
     {
         let desc = tex::Descriptor {
             kind: kind,
@@ -284,7 +284,7 @@ pub trait Factory<R: Resources> {
     }
 
     fn view_texture_as_shader_resource<T: format::Formatted>(&mut self,
-                                       tex: &handle::NewTexture<R, T::Surface>, levels: (target::Level, target::Level))
+                                       tex: &handle::Texture<R, T::Surface>, levels: (target::Level, target::Level))
                                        -> Result<handle::ShaderResourceView<R, T>, ResourceViewError>
     {
         if !tex.get_info().bind.contains(SHADER_RESOURCE) {
@@ -300,7 +300,7 @@ pub trait Factory<R: Resources> {
             .map(Phantom::new)
     }
 
-    fn view_texture_as_unordered_access<T: format::Formatted>(&mut self, tex: &handle::NewTexture<R, T::Surface>)
+    fn view_texture_as_unordered_access<T: format::Formatted>(&mut self, tex: &handle::Texture<R, T::Surface>)
                                         -> Result<handle::UnorderedAccessView<R, T>, ResourceViewError>
     {
         if !tex.get_info().bind.contains(UNORDERED_ACCESS) {
@@ -311,7 +311,7 @@ pub trait Factory<R: Resources> {
     }
 
     fn view_texture_as_render_target<T: format::RenderFormat>(&mut self,
-                                     tex: &handle::NewTexture<R, T::Surface>, level: target::Level, layer: Option<target::Layer>)
+                                     tex: &handle::Texture<R, T::Surface>, level: target::Level, layer: Option<target::Layer>)
                                      -> Result<handle::RenderTargetView<R, T>, TargetViewError>
     {
         if !tex.get_info().bind.contains(RENDER_TARGET) {
@@ -322,7 +322,7 @@ pub trait Factory<R: Resources> {
     }
 
     fn view_texture_as_depth_stencil<T: format::DepthFormat>(&mut self,
-                                     tex: &handle::NewTexture<R, T::Surface>, layer: Option<target::Layer>)
+                                     tex: &handle::Texture<R, T::Surface>, layer: Option<target::Layer>)
                                      -> Result<handle::DepthStencilView<R, T>, TargetViewError>
     {
         if !tex.get_info().bind.contains(RENDER_TARGET) {
@@ -333,7 +333,7 @@ pub trait Factory<R: Resources> {
     }
 
     fn create_texture_const<T: format::Formatted>(&mut self, kind: tex::Kind, data: &[T], mipmap: bool)
-                            -> Result<(handle::NewTexture<R, T::Surface>, handle::ShaderResourceView<R, T>), CombinedError>
+                            -> Result<(handle::Texture<R, T::Surface>, handle::ShaderResourceView<R, T>), CombinedError>
     {
         let desc = tex::Descriptor {
             kind: kind,
@@ -352,7 +352,7 @@ pub trait Factory<R: Resources> {
     }
 
     fn create_render_target<T: format::RenderFormat>(&mut self, width: tex::Size, height: tex::Size, allocate_mipmap: bool)
-                            -> Result<(handle::NewTexture<R, T::Surface>, handle::ShaderResourceView<R, T>, handle::RenderTargetView<R, T>), CombinedError>
+                            -> Result<(handle::Texture<R, T::Surface>, handle::ShaderResourceView<R, T>, handle::RenderTargetView<R, T>), CombinedError>
     {
         let kind = tex::Kind::D2(width, height, tex::AaMode::Single);
         let levels = if allocate_mipmap {99} else {1};
@@ -364,7 +364,7 @@ pub trait Factory<R: Resources> {
     }
 
     fn create_depth_stencil<T: format::DepthFormat>(&mut self, width: tex::Size, height: tex::Size)
-                            -> Result<(handle::NewTexture<R, T::Surface>, handle::ShaderResourceView<R, T>, handle::DepthStencilView<R, T>), CombinedError>
+                            -> Result<(handle::Texture<R, T::Surface>, handle::ShaderResourceView<R, T>, handle::DepthStencilView<R, T>), CombinedError>
     {
         let kind = tex::Kind::D2(width, height, tex::AaMode::Single);
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
