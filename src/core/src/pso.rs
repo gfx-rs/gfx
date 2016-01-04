@@ -17,8 +17,8 @@
 use {MAX_COLOR_TARGETS, MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
      MAX_RESOURCE_VIEWS, MAX_UNORDERED_VIEWS, MAX_SAMPLERS};
 use {Primitive, Resources};
-use {attrib, format, tex};
-use state as s;
+use {format, state as s, tex};
+
 
 /// An offset inside a vertex buffer, in bytes.
 pub type BufferOffset = usize;
@@ -88,19 +88,26 @@ impl From<(s::Depth, s::Stencil)> for DepthStencilInfo {
     }
 }
 
+/// Offset of an attribute from the start of the buffer, in bytes
+pub type ElemOffset = u32;
+/// Offset between attribute values, in bytes
+pub type ElemStride = u8;
+/// The number of instances between each subsequent attribute value
+pub type InstanceRate = u8;
+
 /// A struct element descriptor.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Element<F> {
     /// Element format
     pub format: F,
     /// Offset from the beginning of the container, in bytes
-    pub offset: attrib::Offset,
+    pub offset: ElemOffset,
     /// Total container size, in bytes
-    pub stride: attrib::Stride,
+    pub stride: ElemStride,
 }
 
 /// PSO vertex attribute descriptor
-pub type AttributeDesc = (Element<format::Format>, attrib::InstanceRate);
+pub type AttributeDesc = (Element<format::Format>, InstanceRate);
 /// PSO color target descriptor
 pub type ColorTargetDesc = (format::Format, BlendInfo);
 /// PSO depth-stencil target descriptor

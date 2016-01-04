@@ -20,7 +20,7 @@ use std::default::Default;
 use std::marker::PhantomData;
 use gfx_core as d;
 use gfx_core::factory::Phantom;
-pub use gfx_core::pso::{Element, Descriptor};
+pub use gfx_core::pso::{Element, ElemOffset, ElemStride, Descriptor};
 use shade::ToUniform;
 
 pub struct RawDataSet<R: d::Resources>{
@@ -136,7 +136,7 @@ pub trait Structure<F> {
 
 type AttributeSlotSet = usize;
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct FetchRate(d::attrib::InstanceRate);
+pub struct FetchRate(d::pso::InstanceRate);
 pub static PER_VERTEX  : FetchRate = FetchRate(0);
 pub static PER_INSTANCE: FetchRate = FetchRate(1);
 

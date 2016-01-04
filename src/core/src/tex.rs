@@ -21,11 +21,10 @@
 //! image data.  Image data consists of an array of "texture elements", or
 //! texels.
 
-pub use attrib::{FloatSize, IntSubType};
 use factory::Bind;
 use format;
 use state;
-pub use target::Level;
+pub use target::{Layer, Level};
 
 /// Pure texture object creation error.
 #[derive(Copy, Clone, Debug, PartialEq)]

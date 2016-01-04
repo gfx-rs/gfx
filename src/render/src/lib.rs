@@ -27,16 +27,13 @@ pub mod traits {
 }
 
 // draw state re-exports
-pub use draw_state::{DrawState, state};
+pub use draw_state::{DrawState, preset, state};
 pub use draw_state::target::*;
-pub mod preset {
-    pub use draw_state::blend;
-}
 
 // public re-exports
 pub use gfx_core as core;
 pub use gfx_core::{Device, SubmitInfo, Resources};
-pub use gfx_core::{attrib, format, handle, tex};
+pub use gfx_core::{format, handle, tex};
 pub use gfx_core::factory::{Factory, BufferRole, BufferInfo, BufferUsage,
                             SHADER_RESOURCE, UNORDERED_ACCESS, RENDER_TARGET,
                             cast_slice};

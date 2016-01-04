@@ -22,7 +22,6 @@ use draw_state::target::{ClearData, ColorValue, Depth, Mask, Stencil};
 use gfx_core as device;
 use gfx_core::Resources;
 use gfx_core::{format, handle};
-use gfx_core::attrib::IntSize;
 use gfx_core::draw::{CommandBuffer, DataBuffer, InstanceOption};
 use gfx_core::factory::{Factory};
 use mesh;
@@ -178,12 +177,12 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
         Ok(())
     }*/
 
-    fn draw_indexed<T>(&mut self, buf: &handle::Buffer<R, T>, format: IntSize,
+    fn draw_indexed<T>(&mut self, buf: &handle::Buffer<R, T>, ty: device::IndexType,
                      slice: &mesh::Slice<R>, base: device::VertexCount,
                      instances: InstanceOption) {
         use gfx_core::factory::Phantom;
         self.command_buffer.bind_index(self.handles.ref_buffer(buf.raw()).clone());
-        self.command_buffer.call_draw_indexed(format,
+        self.command_buffer.call_draw_indexed(ty,
             slice.start, slice.end - slice.start, base, instances);
     }
 
@@ -192,11 +191,11 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
             mesh::SliceKind::Vertex => self.command_buffer.call_draw(
                 slice.start, slice.end - slice.start, instances),
             mesh::SliceKind::Index8(ref buf, base) =>
-                self.draw_indexed(buf, IntSize::U8, slice, base, instances),
+                self.draw_indexed(buf, device::IndexType::U8, slice, base, instances),
             mesh::SliceKind::Index16(ref buf, base) =>
-                self.draw_indexed(buf, IntSize::U16, slice, base, instances),
+                self.draw_indexed(buf, device::IndexType::U16, slice, base, instances),
             mesh::SliceKind::Index32(ref buf, base) =>
-                self.draw_indexed(buf, IntSize::U32, slice, base, instances),
+                self.draw_indexed(buf, device::IndexType::U32, slice, base, instances),
         }
     }
 

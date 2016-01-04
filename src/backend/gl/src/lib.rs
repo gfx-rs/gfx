@@ -566,13 +566,12 @@ impl Device {
                 }
             },
             Command::DrawIndexed(primitive, index_type, start, count, base_vertex, instances) => {
-                use gfx_core::attrib::IntSize;
                 let gl = &self.share.context;
                 let caps = &self.share.capabilities;
                 let (offset, gl_index) = match index_type {
-                    IntSize::U8  => (start * 1u32, gl::UNSIGNED_BYTE),
-                    IntSize::U16 => (start * 2u32, gl::UNSIGNED_SHORT),
-                    IntSize::U32 => (start * 4u32, gl::UNSIGNED_INT),
+                    d::IndexType::U8  => (start * 1u32, gl::UNSIGNED_BYTE),
+                    d::IndexType::U16 => (start * 2u32, gl::UNSIGNED_SHORT),
+                    d::IndexType::U32 => (start * 4u32, gl::UNSIGNED_INT),
                 };
                 match instances {
                     Some((num, base_instance)) if caps.instance_call_supported => unsafe {

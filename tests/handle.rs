@@ -31,18 +31,14 @@ fn test_buffer_zero_len() {
 #[test]
 fn test_cleanup() {
     let mut man: Manager<DummyResources> = Manager::new();
-    let _ = man.make_frame_buffer(());
+    let _ = man.make_shader(());
     let mut count = 0u8;
     man.clean_with(&mut count,
         |_,_| (),
-        |_,_| (),
-        |_,_| (),
-        |_,_| (),
-        |_,_| (),
-        |_,_| (),
-        |_,_| (),
-        |_,_| (),
         |b,_| { *b += 1; },
+        |_,_| (),
+        |_,_| (),
+        |_,_| (),
         |_,_| (),
         |_,_| (),
         |_,_| (),

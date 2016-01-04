@@ -30,7 +30,6 @@ use std::hash::Hash;
 pub use draw_state::{MAX_COLOR_TARGETS, state, target};
 pub use self::factory::Factory;
 
-pub mod attrib;
 pub mod draw;
 pub mod dummy;
 pub mod factory;
@@ -150,7 +149,14 @@ pub enum Primitive {
 }
 
 /// A type of each index value in the mesh's index buffer
-pub type IndexType = attrib::IntSize;
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+#[allow(missing_docs)]
+#[repr(u8)]
+pub enum IndexType {
+    U8,
+    U16,
+    U32,
+}
 
 /// Resources pertaining to a specific API.
 #[allow(missing_docs)]
