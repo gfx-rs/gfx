@@ -207,7 +207,6 @@ pub struct Share {
     context: gl::Gl,
     capabilities: d::Capabilities,
     handles: RefCell<handle::Manager<Resources>>,
-    main_fbo: handle::FrameBuffer<Resources>,
 }
 
 /// Temporary data stored between different gfx calls that
@@ -242,7 +241,6 @@ impl Device {
     fn new<F>(fn_proc: F) -> Device where
         F: FnMut(&str) -> *const std::os::raw::c_void
     {
-        use gfx_core::handle::Producer;
         let gl = gl::Gl::load_with(fn_proc);
         // query information
         let (info, caps) = info::get(&gl);
@@ -267,9 +265,7 @@ impl Device {
                 gl.BindVertexArray(vao);
             }
         }
-        // create the main FBO surface proxies
-        let mut handles = handle::Manager::new();
-        let main_fbo = handles.make_frame_buffer(0);
+        let handles = handle::Manager::new();
         // create the device
         Device {
             info: info,
@@ -277,7 +273,6 @@ impl Device {
                 context: gl,
                 capabilities: caps,
                 handles: RefCell::new(handles),
-                main_fbo: main_fbo,
             }),
             temp: Temp::new(),
             _vao: vao,
@@ -738,7 +733,6 @@ impl d::Device for Device {
         self.frame_handles.clear();
         self.share.handles.borrow_mut().clean_with(&mut &self.share.context,
             |gl, v| unsafe { gl.DeleteBuffers(1, v) },
-            |gl, v| unsafe { gl.DeleteVertexArrays(1, v) },
             |gl, v| unsafe { gl.DeleteShader(*v) },
             |gl, v| unsafe { gl.DeleteProgram(*v) },
             |_, _| {}, //PSO
@@ -750,7 +744,6 @@ impl d::Device for Device {
                 unsafe { gl.DeleteTextures(1, &v.object) }
             }, //SRV
             |_, _| {}, //UAV
-            |gl, v| unsafe { gl.DeleteFramebuffers(1, v) },
             |_, _| {}, //RTV
             |_, _| {}, //DSV
             |gl, v| unsafe { if v.object != 0 { gl.DeleteSamplers(1, &v.object) }},

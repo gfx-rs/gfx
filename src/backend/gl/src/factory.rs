@@ -147,10 +147,6 @@ impl Factory {
             (&NewTexture::Texture(t), None) => Ok(TargetView::Texture(t, level)),
         }
     }
-
-    pub fn get_main_frame_buffer(&self) -> handle::FrameBuffer<R> {
-        self.share.main_fbo.clone()
-    }
 }
 
 
