@@ -24,16 +24,16 @@ macro_rules! gfx_vertex_struct {
             $( pub $field: $ty, )*
         }
 
-        impl $crate::pso::Structure<$crate::format::Format> for $root {
-            fn query(name: &str) -> Option<$crate::pso::Element<$crate::format::Format>> {
+        impl $crate::pso::buffer::Structure<$crate::format::Format> for $root {
+            fn query(name: &str) -> Option<$crate::pso::buffer::Element<$crate::format::Format>> {
                 use std::mem::size_of;
-                use $crate::pso::{ElemOffset, ElemStride};
+                use $crate::pso::buffer::{Element, ElemOffset, ElemStride};
                 let stride = size_of::<$root>() as ElemStride;
                 let tmp: &$root = unsafe{ ::std::mem::uninitialized() };
                 let base = tmp as *const _ as usize;
                 match name {
                 $(
-                    $name => Some($crate::pso::Element {
+                    $name => Some(Element {
                         format: <$ty as $crate::format::Formatted>::get_format(),
                         offset: ((&tmp.$field as *const _ as usize) - base) as ElemOffset,
                         stride: stride,
@@ -56,16 +56,16 @@ macro_rules! gfx_constant_struct {
             $( pub $field: $ty, )*
         }
 
-        impl $crate::pso::Structure<$crate::shade::ConstFormat> for $root {
-            fn query(name: &str) -> Option<$crate::pso::Element<$crate::shade::ConstFormat>> {
+        impl $crate::pso::buffer::Structure<$crate::shade::ConstFormat> for $root {
+            fn query(name: &str) -> Option<$crate::pso::buffer::Element<$crate::shade::ConstFormat>> {
                 use std::mem::size_of;
-                use $crate::pso::{ElemOffset, ElemStride};
+                use $crate::pso::buffer::{Element, ElemOffset, ElemStride};
                 let stride = size_of::<$root>() as ElemStride;
                 let tmp: &$root = unsafe{ ::std::mem::uninitialized() };
                 let base = tmp as *const _ as usize;
                 match name {
                 $(
-                    stringify!($field) => Some($crate::pso::Element {
+                    stringify!($field) => Some(Element {
                         format: <$ty as $crate::shade::Formatted>::get_format(),
                         offset: ((&tmp.$field as *const _ as usize) - base) as ElemOffset,
                         stride: stride,
