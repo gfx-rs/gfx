@@ -45,7 +45,7 @@ gfx_pipeline!( pipe {
     noise: gfx::TextureSampler<Rgba8> = "t_Noise",
     offset0: gfx::Global<f32> = "f_Offset0",
     offset1: gfx::Global<f32> = "f_Offset1",
-    out: gfx::RenderTarget<Rgba8> = ("o_Color", gfx::state::MASK_ALL),
+    out: gfx::RenderTarget<Rgba8> = "o_Color",
 });
 
 fn load_texture<R, F>(factory: &mut F, data: &[u8])

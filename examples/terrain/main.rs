@@ -43,11 +43,9 @@ gfx_pipeline!(pipe {
     model: gfx::Global<[[f32; 4]; 4]> = "u_Model",
     view: gfx::Global<[[f32; 4]; 4]> = "u_View",
     proj: gfx::Global<[[f32; 4]; 4]> = "u_Proj",
-    out_color: gfx::RenderTarget<Rgba8> = ("o_Color", gfx::state::MASK_ALL),
-    out_depth: gfx::DepthTarget<DepthStencil> = gfx::state::Depth {
-        fun: gfx::state::Comparison::LessEqual,
-        write: true,
-    },
+    out_color: gfx::RenderTarget<Rgba8> = "o_Color",
+    out_depth: gfx::DepthTarget<DepthStencil> =
+        gfx::preset::depth::LESS_EQUAL_WRITE,
 });
 
 fn calculate_color(height: f32) -> [f32; 3] {

@@ -142,11 +142,9 @@ gfx_pipeline!(pipe {
     tilesheet_size: gfx::Global<[f32; 4]> = "u_TilesheetSize",
     offsets: gfx::Global<[f32; 2]> = "u_TileOffsets",
     // output
-    out_color: gfx::RenderTarget<Rgba8> = ("o_Color", gfx::state::MASK_ALL),
-    out_depth: gfx::DepthTarget<DepthStencil> = gfx::state::Depth {
-        fun: gfx::state::Comparison::LessEqual,
-        write: true,
-    },
+    out_color: gfx::RenderTarget<Rgba8> = "o_Color",
+    out_depth: gfx::DepthTarget<DepthStencil> =
+        gfx::preset::depth::LESS_EQUAL_WRITE,
 });
 
 // Abstracts the plane mesh and uniform data

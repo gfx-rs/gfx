@@ -41,7 +41,7 @@ gfx_pipeline!( pipe {
     lena: gfx::TextureSampler<Rgba8> = "t_Lena",
     tint: gfx::TextureSampler<Rgba8> = "t_Tint",
     blend: gfx::Global<i32> = "i_Blend",
-    out: gfx::RenderTarget<Rgba8> = ("o_Color", gfx::state::MASK_ALL),
+    out: gfx::RenderTarget<Rgba8> = "o_Color",
 });
 
 fn load_texture<R, F>(factory: &mut F, data: &[u8])

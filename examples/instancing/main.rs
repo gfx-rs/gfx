@@ -44,7 +44,7 @@ gfx_pipeline!(pipe {
     vertex: gfx::VertexBuffer<Vertex> = (),
     instance: gfx::InstanceBuffer<Instance> = (),
     scale: gfx::Global<f32> = "u_Scale",
-    out: gfx::RenderTarget<gfx::format::Rgba8> = ("o_Color", gfx::state::MASK_ALL),
+    out: gfx::RenderTarget<gfx::format::Rgba8> = "o_Color",
 });
 
 const MAX_INSTANCE_COUNT: usize = 2048;

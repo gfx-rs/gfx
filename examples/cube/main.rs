@@ -40,11 +40,9 @@ gfx_pipeline!( pipe {
     vbuf: gfx::VertexBuffer<Vertex> = (),
     transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
     color: gfx::TextureSampler<gfx::format::Rgba8> = "t_Color",
-    out_color: gfx::RenderTarget<gfx::format::Rgba8> = ("o_Color", gfx::state::MASK_ALL),
-    out_depth: gfx::DepthTarget<gfx::format::DepthStencil> = gfx::state::Depth {
-        fun: gfx::state::Comparison::LessEqual,
-        write: true,
-    },
+    out_color: gfx::RenderTarget<gfx::format::Rgba8> = "o_Color",
+    out_depth: gfx::DepthTarget<gfx::format::DepthStencil> =
+        gfx::preset::depth::LESS_EQUAL_WRITE,
 });
 
 

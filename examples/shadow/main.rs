@@ -54,22 +54,16 @@ gfx_pipeline!( forward {
     color: gfx::Global<[f32; 4]> = "u_Color",
     num_lights: gfx::Global<i32> = "u_NumLights",
     light_buf: gfx::ConstantBuffer<LightParam> = "b_Lights",
-    shadow: gfx::ResourceView<Depth> = "t_Shadow",
+    shadow: gfx::ShaderResource<Depth> = "t_Shadow",
     shadow_sampler: gfx::Sampler = "t_Shadow",
-    out_color: gfx::RenderTarget<Rgba8> = ("o_Color", gfx::state::MASK_ALL),
-    out_depth: gfx::DepthTarget<Depth> = gfx::state::Depth {
-        fun: gfx::state::Comparison::LessEqual,
-        write: true,
-    },
+    out_color: gfx::RenderTarget<Rgba8> = "o_Color",
+    out_depth: gfx::DepthTarget<Depth> = gfx::preset::depth::LESS_EQUAL_WRITE,
 });
 
 gfx_pipeline!( shadow {
     vbuf: gfx::VertexBuffer<Vertex> = (),
     transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
-    out: gfx::DepthTarget<Depth> = gfx::state::Depth {
-        fun: gfx::state::Comparison::LessEqual,
-        write: true,
-    },
+    out: gfx::DepthTarget<Depth> = gfx::preset::depth::LESS_EQUAL_WRITE,
 });
 
 //----------------------------------------

@@ -70,16 +70,11 @@ gfx_pipeline!( terrain {
     view: gfx::Global<[[f32; 4]; 4]> = "u_View",
     proj: gfx::Global<[[f32; 4]; 4]> = "u_Proj",
     cam_pos: gfx::Global<[f32; 3]> = "u_CameraPos",
-    out_position: gfx::RenderTarget<GFormat> =
-        ("o_Position", gfx::state::MASK_ALL),
-    out_normal: gfx::RenderTarget<GFormat> =
-        ("o_Normal", gfx::state::MASK_ALL),
-    out_color: gfx::RenderTarget<GFormat> =
-        ("o_Color", gfx::state::MASK_ALL),
-    out_depth: gfx::DepthTarget<gfx::format::Depth> = gfx::state::Depth {
-        fun: gfx::state::Comparison::LessEqual,
-        write: true,
-    },
+    out_position: gfx::RenderTarget<GFormat> = "o_Position",
+    out_normal: gfx::RenderTarget<GFormat> = "o_Normal",
+    out_color: gfx::RenderTarget<GFormat> = "o_Color",
+    out_depth: gfx::DepthTarget<gfx::format::Depth> =
+        gfx::preset::depth::LESS_EQUAL_WRITE,
 });
 
 pub static TERRAIN_VERTEX_SRC: &'static [u8] = b"
@@ -130,7 +125,7 @@ gfx_vertex_struct!( BlitVertex {
 gfx_pipeline!( blit {
     vbuf: gfx::VertexBuffer<BlitVertex> = (),
     tex: gfx::TextureSampler<GFormat> = "u_Tex",
-    out: gfx::RenderTarget<Rgba8> = ("o_Color", gfx::state::MASK_ALL),
+    out: gfx::RenderTarget<Rgba8> = "o_Color",
 });
 
 pub static BLIT_VERTEX_SRC: &'static [u8] = b"
@@ -174,10 +169,7 @@ gfx_pipeline!( light {
     tex_normal: gfx::TextureSampler<GFormat> = "u_TexNormal",
     tex_diffuse: gfx::TextureSampler<GFormat> = "u_TexDiffuse",
     out_color: gfx::BlendTarget<GFormat> = ("o_Color", gfx::preset::blend::ADD),
-    out_depth: gfx::DepthTarget<gfx::format::Depth> = gfx::state::Depth {
-        fun: gfx::state::Comparison::LessEqual,
-        write: false,
-    },
+    out_depth: gfx::DepthTarget<gfx::format::Depth> = gfx::preset::depth::LESS_EQUAL_TEST,
 });
 
 pub static LIGHT_VERTEX_SRC: &'static [u8] = b"
@@ -241,10 +233,7 @@ gfx_pipeline!( emitter {
     light_pos_buf: gfx::ConstantBuffer<LightInfo> = "u_LightPosBlock",
     radius: gfx::Global<f32> = "u_Radius",
     out_color: gfx::BlendTarget<GFormat> = ("o_Color", gfx::preset::blend::ADD),
-    out_depth: gfx::DepthTarget<gfx::format::Depth> = gfx::state::Depth {
-        fun: gfx::state::Comparison::LessEqual,
-        write: false,
-    },
+    out_depth: gfx::DepthTarget<gfx::format::Depth> = gfx::preset::depth::LESS_EQUAL_TEST,
 });
 
 pub static EMITTER_VERTEX_SRC: &'static [u8] = b"
