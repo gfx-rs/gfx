@@ -50,10 +50,9 @@ pub use mesh::{Slice, ToIndexSlice, SliceKind};
 pub use pso::{PipelineState, VertexBuffer, InstanceBuffer,
               ConstantBuffer, Global,
               ShaderResource, UnorderedAccess,
-              Sampler, TextureSampler,
-              RenderTarget, BlendTarget,
-              DepthStencilTarget, DepthTarget, StencilTarget,
-              BlendRef, Scissor};
+              Sampler, TextureSampler};
+pub use pso::target::{DepthStencilTarget, DepthTarget, StencilTarget,
+                      RenderTarget, BlendTarget, BlendRef, Scissor};
 
 /// Render commands encoder
 mod encoder;
