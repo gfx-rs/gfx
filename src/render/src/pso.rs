@@ -137,25 +137,28 @@ pub trait Structure<F> {
 
 type AttributeSlotSet = usize;
 
+//Note: in order to increase the clarity of potential error messages,
+//it would make sense to put the generic bounds right here in the definitions.
+//However, this triggers Rust warning E0122, so will have to wait a bit.
+
 pub struct VertexBufferCommon<T, I>(AttributeSlotSet, PhantomData<(T, I)>);
-pub type VertexBuffer<T: Structure<d::format::Format>> = VertexBufferCommon<T, [(); 0]>;
-pub type InstanceBuffer<T: Structure<d::format::Format>> = VertexBufferCommon<T, [(); 1]>;
+pub type VertexBuffer<T> = VertexBufferCommon<T, [(); 0]>;
+pub type InstanceBuffer<T> = VertexBufferCommon<T, [(); 1]>;
 pub struct ConstantBuffer<T: Structure<d::shade::ConstFormat>>(Option<d::ConstantBufferSlot>, PhantomData<T>);
 pub struct Global<T: ToUniform>(Option<d::shade::Location>, PhantomData<T>);
-pub struct ResourceView<T>(Option<d::ResourceViewSlot>, PhantomData<T>);
-pub struct UnorderedView<T>(Option<d::UnorderedViewSlot>, PhantomData<T>);
+pub struct ShaderResource<T>(Option<d::ResourceViewSlot>, PhantomData<T>);
+pub struct UnorderedAccess<T>(Option<d::UnorderedViewSlot>, PhantomData<T>);
 pub struct Sampler(Option<d::SamplerSlot>);
 /// A convenience type for a texture paired with a sampler.
 /// It only makes sense for DX9 class hardware, since everything newer
 /// has samplers totally separated from the textures.
-pub struct TextureSampler<T>(ResourceView<T>, Sampler);
-pub struct RenderTargetCommon<T, I>(Option<d::ColorSlot>, PhantomData<(T, I)>);
-pub type RenderTarget<T: d::format::RenderFormat> = RenderTargetCommon<T, d::state::ColorMask>;
-pub type BlendTarget<T: d::format::BlendFormat> = RenderTargetCommon<T, d::state::Blend>;
-pub struct DepthStencilCommon<T, I>(bool, PhantomData<(T, I)>);
-pub type DepthTarget<T: d::format::DepthFormat> = DepthStencilCommon<T, d::state::Depth>;
-pub type StencilTarget<T: d::format::StencilFormat> = DepthStencilCommon<T, d::state::Stencil>;
-pub type DepthStencilTarget<T: d::format::DepthStencilFormat> = DepthStencilCommon<T, (d::state::Depth, d::state::Stencil)>;
+pub struct TextureSampler<T>(ShaderResource<T>, Sampler);
+pub struct RenderTarget<T>(Option<d::ColorSlot>, PhantomData<T>);
+pub struct BlendTarget<T>(Option<d::ColorSlot>, PhantomData<T>);
+pub struct DepthStencilCommon<T, I>(bool, bool, PhantomData<(T, I)>);
+pub type DepthTarget<T> = DepthStencilCommon<T, d::state::Depth>;
+pub type StencilTarget<T> = DepthStencilCommon<T, d::state::Stencil>;
+pub type DepthStencilTarget<T> = DepthStencilCommon<T, (d::state::Depth, d::state::Stencil)>;
 pub struct Scissor;
 pub struct BlendRef;
 
@@ -210,7 +213,7 @@ DataLink<'a> for ConstantBuffer<T> {
         self.0.is_some()
     }
     fn link_constant_buffer(&mut self, cb: &d::shade::ConstantBufferVar, init: &Self::Init) ->
-                  Option<Result<(), d::shade::ConstFormat>> {
+                            Option<Result<(), d::shade::ConstFormat>> {
         if &cb.name == *init {
             self.0 = Some(cb.slot);
             Some(Ok(()))
@@ -261,10 +264,10 @@ impl<R: d::Resources, T: ToUniform> DataBind<R> for Global<T> {
     }
 }
 
-impl<'a, T> DataLink<'a> for ResourceView<T> {
+impl<'a, T> DataLink<'a> for ShaderResource<T> {
     type Init = &'a str;
     fn new() -> Self {
-        ResourceView(None, PhantomData)
+        ShaderResource(None, PhantomData)
     }
     fn is_active(&self) -> bool {
         self.0.is_some()
@@ -280,7 +283,7 @@ impl<'a, T> DataLink<'a> for ResourceView<T> {
     }
 }
 
-impl<R: d::Resources, T> DataBind<R> for ResourceView<T> {
+impl<R: d::Resources, T> DataBind<R> for ShaderResource<T> {
     type Data = d::handle::ShaderResourceView<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
         if let Some(slot) = self.0 {
@@ -290,10 +293,10 @@ impl<R: d::Resources, T> DataBind<R> for ResourceView<T> {
     }
 }
 
-impl<'a, T> DataLink<'a> for UnorderedView<T> {
+impl<'a, T> DataLink<'a> for UnorderedAccess<T> {
     type Init = &'a str;
     fn new() -> Self {
-        UnorderedView(None, PhantomData)
+        UnorderedAccess(None, PhantomData)
     }
     fn is_active(&self) -> bool {
         self.0.is_some()
@@ -309,7 +312,7 @@ impl<'a, T> DataLink<'a> for UnorderedView<T> {
     }
 }
 
-impl<R: d::Resources, T> DataBind<R> for UnorderedView<T> {
+impl<R: d::Resources, T> DataBind<R> for UnorderedAccess<T> {
     type Data = d::handle::UnorderedAccessView<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
         if let Some(slot) = self.0 {
@@ -350,7 +353,7 @@ impl<R: d::Resources> DataBind<R> for Sampler {
 impl<'a, T> DataLink<'a> for TextureSampler<T> {
     type Init = &'a str;
     fn new() -> Self {
-        TextureSampler(ResourceView::new(), Sampler::new())
+        TextureSampler(ShaderResource::new(), Sampler::new())
     }
     fn is_active(&self) -> bool {
         self.0.is_active()
@@ -372,13 +375,40 @@ impl<R: d::Resources, T> DataBind<R> for TextureSampler<T> {
     }
 }
 
-impl<'a,
-    T: d::format::RenderFormat,
-    I: 'a + Copy + Into<d::pso::BlendInfo>
-> DataLink<'a> for RenderTargetCommon<T, I> {
-    type Init = (&'a str, I);
+impl<'a, T: d::format::RenderFormat> DataLink<'a> for RenderTarget<T> {
+    type Init = &'a str;
     fn new() -> Self {
-        RenderTargetCommon(None, PhantomData)
+        RenderTarget(None, PhantomData)
+    }
+    fn is_active(&self) -> bool {
+        self.0.is_some()
+    }
+    fn link_output(&mut self, out: &d::shade::OutputVar, init: &Self::Init) ->
+                   Option<Result<d::pso::ColorTargetDesc, d::format::Format>> {
+        if out.name.is_empty() || &out.name == init {
+            self.0 = Some(out.slot);
+            let desc = (T::get_format(), d::state::MASK_ALL.into());
+            Some(Ok(desc))
+        }else {
+            None
+        }
+    }
+}
+
+impl<R: d::Resources, T> DataBind<R> for RenderTarget<T> {
+    type Data = d::handle::RenderTargetView<R, T>;
+    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
+        if let Some(slot) = self.0 {
+            out.pixel_targets.add_color(slot, man.ref_rtv(data.raw()), data.raw().get_dimensions());
+        }
+    }
+}
+
+
+impl<'a, T: d::format::BlendFormat> DataLink<'a> for BlendTarget<T> {
+    type Init = (&'a str, d::state::Blend);
+    fn new() -> Self {
+        BlendTarget(None, PhantomData)
     }
     fn is_active(&self) -> bool {
         self.0.is_some()
@@ -395,30 +425,13 @@ impl<'a,
     }
 }
 
-impl<R: d::Resources, T, I> DataBind<R> for RenderTargetCommon<T, I> {
+impl<R: d::Resources, T> DataBind<R> for BlendTarget<T> {
     type Data = d::handle::RenderTargetView<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
         if let Some(slot) = self.0 {
-            let value = Some(man.ref_rtv(data.raw()).clone());
-            out.pixel_targets.colors[slot as usize] = value;
-            out.pixel_targets.update_size(data.raw().get_dimensions());
+            out.pixel_targets.add_color(slot, man.ref_rtv(data.raw()), data.raw().get_dimensions());
         }
     }
-}
-
-trait DepthStencilAttachment {
-    fn has_depth() -> bool { false }
-    fn has_stencil() -> bool { false }
-}
-impl DepthStencilAttachment for d::state::Depth {
-    fn has_depth() -> bool { true }
-}
-impl DepthStencilAttachment for d::state::Stencil {
-    fn has_stencil() -> bool { true }
-}
-impl DepthStencilAttachment for (d::state::Depth, d::state::Stencil) {
-    fn has_depth() -> bool { true }
-    fn has_stencil() -> bool { true }
 }
 
 impl<'a,
@@ -427,32 +440,26 @@ impl<'a,
 > DataLink<'a> for DepthStencilCommon<T, I> {
     type Init = I;
     fn new() -> Self {
-        DepthStencilCommon(false, PhantomData)
+        DepthStencilCommon(false, false, PhantomData)
     }
     fn is_active(&self) -> bool {
-        self.0
+        self.0 || self.1
     }
     fn link_depth_stencil(&mut self, init: &Self::Init) ->
                           Option<d::pso::DepthStencilDesc> {
-        self.0 = true;
         let format = T::get_format();
-        let desc = (format.0, (*init).into());
-        Some(desc)
+        let info = (*init).into();
+        self.0 = info.depth.is_some();
+        self.1 = info.front.is_some() || info.back.is_some();
+        Some((format.0, info))
     }
 }
 
-impl<R: d::Resources, T, I: DepthStencilAttachment>
-DataBind<R> for DepthStencilCommon<T, I> {
+impl<R: d::Resources, T, I> DataBind<R> for DepthStencilCommon<T, I> {
     type Data = d::handle::DepthStencilView<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
-        let value = Some(man.ref_dsv(data.raw()).clone());
-        if I::has_depth() {
-            out.pixel_targets.depth = value.clone();
-        }
-        if I::has_stencil() {
-            out.pixel_targets.stencil = value;
-        }
-        out.pixel_targets.update_size(data.raw().get_dimensions());
+        out.pixel_targets.add_depth_stencil(man.ref_dsv(data.raw()),
+            self.0, self.1, data.raw().get_dimensions());
     }
 }
 

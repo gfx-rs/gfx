@@ -49,7 +49,8 @@ pub use factory::PipelineStateError;
 pub use mesh::{Slice, ToIndexSlice, SliceKind};
 pub use pso::{PipelineState, VertexBuffer, InstanceBuffer,
               ConstantBuffer, Global,
-              ResourceView, UnorderedView, Sampler, TextureSampler,
+              ShaderResource, UnorderedAccess,
+              Sampler, TextureSampler,
               RenderTarget, BlendTarget,
               DepthStencilTarget, DepthTarget, StencilTarget,
               BlendRef, Scissor};

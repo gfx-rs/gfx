@@ -16,7 +16,7 @@
 
 use {MAX_COLOR_TARGETS, MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
      MAX_RESOURCE_VIEWS, MAX_UNORDERED_VIEWS, MAX_SAMPLERS};
-use {Primitive, Resources};
+use {ColorSlot, Primitive, Resources};
 use {format, state as s, tex};
 
 
@@ -235,9 +235,24 @@ impl<R: Resources> PixelTargetSet<R> {
             size: (0, 0, 0, tex::AaMode::Single),
         }
     }
-    /// Update rendering dimensions for the new target
-    pub fn update_size(&mut self, dim: tex::Dimensions) {
+    /// Add a color view to the specified slot
+    pub fn add_color(&mut self, slot: ColorSlot, view: &R::RenderTargetView,
+                     dim: tex::Dimensions) {
         use std::cmp::max;
+        self.colors[slot as usize] = Some(view.clone());
+        self.size = max(self.size, dim);
+    }
+    /// Add a depth or stencil view to the specified slot
+    pub fn add_depth_stencil(&mut self, view: &R::DepthStencilView,
+                             has_depth: bool, has_stencil: bool,
+                             dim: tex::Dimensions) {
+        use std::cmp::max;
+        if has_depth {
+            self.depth = Some(view.clone());
+        }
+        if has_stencil {
+            self.stencil = Some(view.clone());
+        }
         self.size = max(self.size, dim);
     }
 }
