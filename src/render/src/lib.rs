@@ -47,11 +47,11 @@ pub use gfx_core::shade::{ProgramInfo, UniformValue};
 pub use encoder::{Encoder, UpdateError};
 pub use factory::PipelineStateError;
 pub use mesh::{Slice, ToIndexSlice, SliceKind};
-pub use pso::{PipelineState,
-              ShaderResource, UnorderedAccess,
-              Sampler, TextureSampler};
+pub use pso::{PipelineState};
 pub use pso::buffer::{VertexBuffer, InstanceBuffer,
                       ConstantBuffer, Global};
+pub use pso::resource::{ShaderResource, UnorderedAccess,
+                        Sampler, TextureSampler};
 pub use pso::target::{DepthStencilTarget, DepthTarget, StencilTarget,
                       RenderTarget, BlendTarget, BlendRef, Scissor};
 

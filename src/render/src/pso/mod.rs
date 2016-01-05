@@ -17,13 +17,13 @@
 #![allow(missing_docs)]
 
 pub mod buffer;
+pub mod resource;
 pub mod target;
 
 use std::default::Default;
-use std::marker::PhantomData;
 use gfx_core as d;
-use gfx_core::factory::Phantom;
 pub use gfx_core::pso::{Descriptor};
+
 
 pub struct RawDataSet<R: d::Resources>{
     pub vertex_buffers: d::pso::VertexBufferSet<R>,
@@ -131,124 +131,4 @@ pub trait DataLink<'a>: Sized {
 pub trait DataBind<R: d::Resources> {
     type Data;
     fn bind_to(&self, &mut RawDataSet<R>, &Self::Data, &mut d::handle::Manager<R>);
-}
-
-
-pub struct ShaderResource<T>(Option<d::ResourceViewSlot>, PhantomData<T>);
-pub struct UnorderedAccess<T>(Option<d::UnorderedViewSlot>, PhantomData<T>);
-pub struct Sampler(Option<d::SamplerSlot>);
-/// A convenience type for a texture paired with a sampler.
-/// It only makes sense for DX9 class hardware, since everything newer
-/// has samplers totally separated from the textures.
-pub struct TextureSampler<T>(ShaderResource<T>, Sampler);
-
-impl<'a, T> DataLink<'a> for ShaderResource<T> {
-    type Init = &'a str;
-    fn new() -> Self {
-        ShaderResource(None, PhantomData)
-    }
-    fn is_active(&self) -> bool {
-        self.0.is_some()
-    }
-    fn link_resource_view(&mut self, var: &d::shade::TextureVar, init: &Self::Init)
-                          -> Option<Result<(), d::format::Format>> {
-        if *init == var.name {
-            self.0 = Some(var.slot);
-            Some(Ok(())) //TODO: check format
-        }else {
-            None
-        }
-    }
-}
-
-impl<R: d::Resources, T> DataBind<R> for ShaderResource<T> {
-    type Data = d::handle::ShaderResourceView<R, T>;
-    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
-        if let Some(slot) = self.0 {
-            let value = Some(man.ref_srv(data.raw()).clone());
-            out.resource_views.0[slot as usize] = value;
-        }
-    }
-}
-
-impl<'a, T> DataLink<'a> for UnorderedAccess<T> {
-    type Init = &'a str;
-    fn new() -> Self {
-        UnorderedAccess(None, PhantomData)
-    }
-    fn is_active(&self) -> bool {
-        self.0.is_some()
-    }
-    fn link_unordered_view(&mut self, var: &d::shade::UnorderedVar, init: &Self::Init)
-                           -> Option<Result<(), d::format::Format>> {
-        if *init == var.name {
-            self.0 = Some(var.slot);
-            Some(Ok(())) //TODO: check format
-        }else {
-            None
-        }
-    }
-}
-
-impl<R: d::Resources, T> DataBind<R> for UnorderedAccess<T> {
-    type Data = d::handle::UnorderedAccessView<R, T>;
-    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
-        if let Some(slot) = self.0 {
-            let value = Some(man.ref_uav(data.raw()).clone());
-            out.unordered_views.0[slot as usize] = value;
-        }
-    }
-}
-
-impl<'a> DataLink<'a> for Sampler {
-    type Init = &'a str;
-    fn new() -> Self {
-        Sampler(None)
-    }
-    fn is_active(&self) -> bool {
-        self.0.is_some()
-    }
-    fn link_sampler(&mut self, var: &d::shade::SamplerVar, init: &Self::Init) -> Option<()> {
-        if *init == var.name {
-            self.0 = Some(var.slot);
-            Some(())
-        }else {
-            None
-        }
-    }
-}
-
-impl<R: d::Resources> DataBind<R> for Sampler {
-    type Data = d::handle::Sampler<R>;
-    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
-        if let Some(slot) = self.0 {
-            let value = Some(man.ref_sampler(data).clone());
-            out.samplers.0[slot as usize] = value;
-        }
-    }
-}
-
-impl<'a, T> DataLink<'a> for TextureSampler<T> {
-    type Init = &'a str;
-    fn new() -> Self {
-        TextureSampler(ShaderResource::new(), Sampler::new())
-    }
-    fn is_active(&self) -> bool {
-        self.0.is_active()
-    }
-    fn link_resource_view(&mut self, var: &d::shade::TextureVar, init: &Self::Init)
-                          -> Option<Result<(), d::format::Format>> {
-        self.0.link_resource_view(var, init)
-    }
-    fn link_sampler(&mut self, var: &d::shade::SamplerVar, init: &Self::Init) -> Option<()> {
-        self.1.link_sampler(var, init)
-    }
-}
-
-impl<R: d::Resources, T> DataBind<R> for TextureSampler<T> {
-    type Data = (d::handle::ShaderResourceView<R, T>, d::handle::Sampler<R>);
-    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
-        self.0.bind_to(out, &data.0, man);
-        self.1.bind_to(out, &data.1, man);
-    }
 }
