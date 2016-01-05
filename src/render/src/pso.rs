@@ -131,7 +131,7 @@ pub trait DataBind<R: d::Resources> {
 }
 
 pub trait Structure<F> {
-    fn query(&str) -> Option<d::pso::Element<F>>;
+    fn query(&str) -> Option<Element<F>>;
 }
 
 type AttributeSlotSet = usize;
@@ -153,10 +153,12 @@ pub struct TextureSampler<T>(ResourceView<T>, Sampler);
 pub struct RenderTargetCommon<T, I>(Option<d::ColorSlot>, PhantomData<(T, I)>);
 pub type RenderTarget<T: d::format::RenderFormat> = RenderTargetCommon<T, d::state::ColorMask>;
 pub type BlendTarget<T: d::format::BlendFormat> = RenderTargetCommon<T, d::state::Blend>;
-pub struct DepthStencilCommon<T, I>(PhantomData<(T, I)>);
+pub struct DepthStencilCommon<T, I>(bool, PhantomData<(T, I)>);
 pub type DepthTarget<T: d::format::DepthFormat> = DepthStencilCommon<T, d::state::Depth>;
 pub type StencilTarget<T: d::format::StencilFormat> = DepthStencilCommon<T, d::state::Stencil>;
 pub type DepthStencilTarget<T: d::format::DepthStencilFormat> = DepthStencilCommon<T, (d::state::Depth, d::state::Stencil)>;
+pub struct Scissor;
+pub struct BlendRef;
 
 fn match_attribute(_: &d::shade::AttributeVar, _: d::format::Format) -> bool {
     true //TODO
@@ -424,13 +426,14 @@ impl<'a,
 > DataLink<'a> for DepthStencilCommon<T, I> {
     type Init = I;
     fn new() -> Self {
-        DepthStencilCommon(PhantomData)
+        DepthStencilCommon(false, PhantomData)
     }
     fn is_active(&self) -> bool {
-        true
+        self.0
     }
     fn link_depth_stencil(&mut self, init: &Self::Init) ->
                           Option<d::pso::DepthStencilDesc> {
+        self.0 = true;
         let format = T::get_format();
         let desc = (format.0, (*init).into());
         Some(desc)
@@ -449,5 +452,31 @@ DataBind<R> for DepthStencilCommon<T, I> {
             out.pixel_targets.stencil = value;
         }
         out.pixel_targets.update_size(data.raw().get_dimensions());
+    }
+}
+
+impl<'a> DataLink<'a> for Scissor {
+    type Init = ();
+    fn new() -> Self { Scissor }
+    fn is_active(&self) -> bool { true }
+}
+
+impl<R: d::Resources> DataBind<R> for Scissor {
+    type Data = d::target::Rect;
+    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, _: &mut d::handle::Manager<R>) {
+        out.scissor = Some(*data);
+    }
+}
+
+impl<'a> DataLink<'a> for BlendRef {
+    type Init = ();
+    fn new() -> Self { BlendRef }
+    fn is_active(&self) -> bool { true }
+}
+
+impl<R: d::Resources> DataBind<R> for BlendRef {
+    type Data = d::target::ColorValue;
+    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, _: &mut d::handle::Manager<R>) {
+        out.ref_values.blend = *data;
     }
 }

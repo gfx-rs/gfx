@@ -267,6 +267,8 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
         self.command_buffer.bind_unordered_views(raw_data.unordered_views);
         self.command_buffer.bind_samplers(raw_data.samplers);
         self.command_buffer.bind_pixel_targets(raw_data.pixel_targets);
+        self.command_buffer.set_ref_values(raw_data.ref_values);
+        self.command_buffer.set_scissor(raw_data.scissor);
         self.draw_slice(slice, slice.instances);
     }
 }
