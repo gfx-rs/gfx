@@ -65,7 +65,7 @@ gfx_vertex_struct!( TerrainVertex {
 });
 
 gfx_pipeline!( terrain {
-    vbuf: gfx::VertexBuffer<TerrainVertex> = gfx::PER_VERTEX,
+    vbuf: gfx::VertexBuffer<TerrainVertex> = (),
     model: gfx::Global<[[f32; 4]; 4]> = "u_Model",
     view: gfx::Global<[[f32; 4]; 4]> = "u_View",
     proj: gfx::Global<[[f32; 4]; 4]> = "u_Proj",
@@ -128,7 +128,7 @@ gfx_vertex_struct!( BlitVertex {
 });
 
 gfx_pipeline!( blit {
-    vbuf: gfx::VertexBuffer<BlitVertex> = gfx::PER_VERTEX,
+    vbuf: gfx::VertexBuffer<BlitVertex> = (),
     tex: gfx::TextureSampler<GFormat> = "u_Tex",
     out: gfx::RenderTarget<Rgba8> = ("o_Color", gfx::state::MASK_ALL),
 });
@@ -164,7 +164,7 @@ gfx_vertex_struct!( CubeVertex {
 });
 
 gfx_pipeline!( light {
-    vbuf: gfx::VertexBuffer<CubeVertex> = gfx::PER_VERTEX,
+    vbuf: gfx::VertexBuffer<CubeVertex> = (),
     transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
     light_pos_buf: gfx::ConstantBuffer<LightInfo> = "u_LightPosBlock",
     radius: gfx::Global<f32> = "u_Radius",
@@ -236,7 +236,7 @@ pub static LIGHT_FRAGMENT_SRC: &'static [u8] = b"
 ";
 
 gfx_pipeline!( emitter {
-    vbuf: gfx::VertexBuffer<CubeVertex> = gfx::PER_VERTEX,
+    vbuf: gfx::VertexBuffer<CubeVertex> = (),
     transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
     light_pos_buf: gfx::ConstantBuffer<LightInfo> = "u_LightPosBlock",
     radius: gfx::Global<f32> = "u_Radius",

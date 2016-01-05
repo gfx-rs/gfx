@@ -37,7 +37,7 @@ impl Vertex {
 }
 
 gfx_pipeline!( pipe {
-    vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
+    vbuf: gfx::VertexBuffer<Vertex> = (),
     transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
     color: gfx::TextureSampler<gfx::format::Rgba8> = "t_Color",
     out_color: gfx::RenderTarget<gfx::format::Rgba8> = ("o_Color", gfx::state::MASK_ALL),

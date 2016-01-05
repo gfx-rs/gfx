@@ -48,7 +48,7 @@ gfx_constant_struct!(LightParam {
 });
 
 gfx_pipeline!( forward {
-    vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
+    vbuf: gfx::VertexBuffer<Vertex> = (),
     transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
     model_transform: gfx::Global<[[f32; 4]; 4]> = "u_ModelTransform",
     color: gfx::Global<[f32; 4]> = "u_Color",
@@ -64,7 +64,7 @@ gfx_pipeline!( forward {
 });
 
 gfx_pipeline!( shadow {
-    vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
+    vbuf: gfx::VertexBuffer<Vertex> = (),
     transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
     out: gfx::DepthTarget<Depth> = gfx::state::Depth {
         fun: gfx::state::Comparison::LessEqual,

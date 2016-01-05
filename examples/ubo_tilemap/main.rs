@@ -130,7 +130,7 @@ gfx_vertex_struct!( VertexData {
 
 // Pipeline state definition
 gfx_pipeline!(pipe {
-    vbuf: gfx::VertexBuffer<VertexData> = gfx::PER_VERTEX,
+    vbuf: gfx::VertexBuffer<VertexData> = (),
     // projection stuff
     model: gfx::Global<[[f32; 4]; 4]> = "u_Model",
     view: gfx::Global<[[f32; 4]; 4]> = "u_View",

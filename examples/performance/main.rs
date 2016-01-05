@@ -43,7 +43,7 @@ gfx_vertex_struct!( Vertex {
 });
 
 gfx_pipeline!(pipe {
-    vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
+    vbuf: gfx::VertexBuffer<Vertex> = (),
     transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
     out_color: gfx::RenderTarget<Rgba8> = ("o_Color", gfx::state::MASK_ALL),
     out_depth: gfx::DepthTarget<DepthStencil> = gfx::state::Depth {

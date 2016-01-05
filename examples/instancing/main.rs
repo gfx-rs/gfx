@@ -41,8 +41,8 @@ gfx_vertex_struct!(Instance {
 });
 
 gfx_pipeline!(pipe {
-    vertex: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
-    instance: gfx::VertexBuffer<Instance> = gfx::PER_INSTANCE,
+    vertex: gfx::VertexBuffer<Vertex> = (),
+    instance: gfx::InstanceBuffer<Instance> = (),
     scale: gfx::Global<f32> = "u_Scale",
     out: gfx::RenderTarget<gfx::format::Rgba8> = ("o_Color", gfx::state::MASK_ALL),
 });

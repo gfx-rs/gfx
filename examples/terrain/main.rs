@@ -39,7 +39,7 @@ gfx_vertex_struct!( Vertex {
 });
 
 gfx_pipeline!(pipe {
-    vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
+    vbuf: gfx::VertexBuffer<Vertex> = (),
     model: gfx::Global<[[f32; 4]; 4]> = "u_Model",
     view: gfx::Global<[[f32; 4]; 4]> = "u_View",
     proj: gfx::Global<[[f32; 4]; 4]> = "u_Proj",

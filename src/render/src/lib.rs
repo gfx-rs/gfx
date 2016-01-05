@@ -47,11 +47,12 @@ pub use gfx_core::shade::{ProgramInfo, UniformValue};
 pub use encoder::{Encoder, UpdateError};
 pub use factory::PipelineStateError;
 pub use mesh::{Slice, ToIndexSlice, SliceKind};
-pub use pso::{PipelineState, VertexBuffer, ConstantBuffer,
-              Global, PER_VERTEX, PER_INSTANCE,
+pub use pso::{PipelineState, VertexBuffer, InstanceBuffer,
+              ConstantBuffer, Global,
               ResourceView, UnorderedView, Sampler, TextureSampler,
               RenderTarget, BlendTarget,
-              DepthStencilTarget, DepthTarget, StencilTarget};
+              DepthStencilTarget, DepthTarget, StencilTarget,
+              BlendRef, Scissor};
 
 /// Render commands encoder
 mod encoder;

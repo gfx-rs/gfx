@@ -16,8 +16,8 @@ gfx_constant_struct!(Local {
 });
 
 gfx_pipeline!( testpipe {
-    _vertex: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
-    _instance: gfx::VertexBuffer<Instance> = gfx::PER_INSTANCE,
+    _vertex: gfx::VertexBuffer<Vertex> = (),
+    _instance: gfx::InstanceBuffer<Instance> = (),
     _const_locals: gfx::ConstantBuffer<Local> = "Locals",
     _global: gfx::Global<[f32; 4]> = "Global",
     tex_diffuse: gfx::ResourceView<[f32; 4]> = "Diffuse",
@@ -28,6 +28,8 @@ gfx_pipeline!( testpipe {
         fun: gfx::state::Comparison::LessEqual,
         write: false,
     },
+    blend_ref: gfx::BlendRef = (),
+    scissor: gfx::Scissor = (),
 });
 
 fn _test_pso<R, F>(factory: &mut F)

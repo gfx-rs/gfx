@@ -104,6 +104,7 @@ impl<R: d::Resources, M> PipelineState<R, M> {
     }
 }
 
+
 pub trait DataLink<'a>: Sized {
     type Init: 'a;
     fn new() -> Self;
@@ -135,12 +136,10 @@ pub trait Structure<F> {
 }
 
 type AttributeSlotSet = usize;
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct FetchRate(d::pso::InstanceRate);
-pub static PER_VERTEX  : FetchRate = FetchRate(0);
-pub static PER_INSTANCE: FetchRate = FetchRate(1);
 
-pub struct VertexBuffer<T: Structure<d::format::Format>>(AttributeSlotSet, PhantomData<T>);
+pub struct VertexBufferCommon<T, I>(AttributeSlotSet, PhantomData<(T, I)>);
+pub type VertexBuffer<T: Structure<d::format::Format>> = VertexBufferCommon<T, [(); 0]>;
+pub type InstanceBuffer<T: Structure<d::format::Format>> = VertexBufferCommon<T, [(); 1]>;
 pub struct ConstantBuffer<T: Structure<d::shade::ConstFormat>>(Option<d::ConstantBufferSlot>, PhantomData<T>);
 pub struct Global<T: ToUniform>(Option<d::shade::Location>, PhantomData<T>);
 pub struct ResourceView<T>(Option<d::ResourceViewSlot>, PhantomData<T>);
@@ -164,21 +163,24 @@ fn match_attribute(_: &d::shade::AttributeVar, _: d::format::Format) -> bool {
     true //TODO
 }
 
-impl<'a, T: Structure<d::format::Format>>
-DataLink<'a> for VertexBuffer<T> {
-    type Init = FetchRate;
+impl<'a,
+    T: Structure<d::format::Format>,
+    I: AsRef<[()]> + Default,
+> DataLink<'a> for VertexBufferCommon<T, I> {
+    type Init = ();
     fn new() -> Self {
-        VertexBuffer(0, PhantomData)
+        VertexBufferCommon(0, PhantomData)
     }
     fn is_active(&self) -> bool {
         self.0 != 0
     }
-    fn link_input(&mut self, at: &d::shade::AttributeVar, init: &Self::Init) ->
+    fn link_input(&mut self, at: &d::shade::AttributeVar, _: &Self::Init) ->
                   Option<Result<d::pso::AttributeDesc, d::format::Format>> {
         T::query(&at.name).map(|el| {
             self.0 |= 1 << (at.slot as AttributeSlotSet);
             if match_attribute(at, el.format) {
-                Ok((el, init.0))
+                let rate = <I as Default>::default().as_ref().len();
+                Ok((el, rate as d::pso::InstanceRate))
             }else {
                 Err(el.format)
             }
@@ -186,8 +188,7 @@ DataLink<'a> for VertexBuffer<T> {
     }
 }
 
-impl<R: d::Resources, T: Structure<d::format::Format>>
-DataBind<R> for VertexBuffer<T> {
+impl<R: d::Resources, T, I> DataBind<R> for VertexBufferCommon<T, I> {
     type Data = d::handle::Buffer<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut d::handle::Manager<R>) {
         let value = Some((man.ref_buffer(data.raw()).clone(), 0));

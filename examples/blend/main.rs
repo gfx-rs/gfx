@@ -37,7 +37,7 @@ impl Vertex {
 }
 
 gfx_pipeline!( pipe {
-    vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
+    vbuf: gfx::VertexBuffer<Vertex> = (),
     lena: gfx::TextureSampler<Rgba8> = "t_Lena",
     tint: gfx::TextureSampler<Rgba8> = "t_Tint",
     blend: gfx::Global<i32> = "i_Blend",

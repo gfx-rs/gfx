@@ -39,7 +39,7 @@ impl Vertex {
 }
 
 gfx_pipeline!( pipe {
-    vbuf: gfx::VertexBuffer<Vertex> = gfx::PER_VERTEX,
+    vbuf: gfx::VertexBuffer<Vertex> = (),
     color: gfx::TextureSampler<Rgba8> = "t_Color",
     flow: gfx::TextureSampler<Rgba8> = "t_Flow",
     noise: gfx::TextureSampler<Rgba8> = "t_Noise",
