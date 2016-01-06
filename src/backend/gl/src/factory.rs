@@ -26,7 +26,7 @@ use gfx_core::mapping::Builder;
 use gfx_core::target::{Layer, Level};
 use gfx_core::tex as t;
 
-use command::CommandBuffer;
+use command::{CommandBuffer, COLOR_DEFAULT};
 use {Resources as R, Share, OutputMerger};
 use {Buffer, FatSampler, NewTexture, PipelineState, ResourceView, TargetView};
 
@@ -235,16 +235,16 @@ impl d::Factory<R> for Factory {
                 _ => None,
             },
             depth: desc.depth_stencil.and_then(|(_, t)| t.depth),
-            blend: [None; d::MAX_COLOR_TARGETS],
+            colors: [COLOR_DEFAULT; d::MAX_COLOR_TARGETS],
         };
         for i in 0 .. d::MAX_COLOR_TARGETS {
             if let Some((_, ref bi)) = desc.color_targets[i] {
                 output.draw_mask |= 1<<i;
-                if bi.mask != s::MASK_ALL || bi.color.is_some() || bi.alpha.is_some() {
-                    output.blend[i] = Some(s::Blend {
+                output.colors[i].mask = bi.mask;
+                if bi.color.is_some() || bi.alpha.is_some() {
+                    output.colors[i].blend = Some(s::Blend {
                         color: bi.color.unwrap_or_default(),
                         alpha: bi.alpha.unwrap_or_default(),
-                        mask: bi.mask,
                     });
                 }
             }

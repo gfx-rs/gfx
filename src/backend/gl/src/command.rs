@@ -58,7 +58,7 @@ pub enum Command {
     SetScissor(Option<Rect>),
     SetDepthState(Option<s::Depth>),
     SetStencilState(Option<s::Stencil>, (Stencil, Stencil), s::CullFace),
-    SetBlendState(c::ColorSlot, Option<s::Blend>),
+    SetBlendState(c::ColorSlot, s::Color),
     SetBlendColor(ColorValue),
     // resource updates
     UpdateBuffer(Buffer, DataPointer, usize),
@@ -69,6 +69,11 @@ pub enum Command {
                 c::VertexCount, InstanceOption),
     Blit(Rect, Rect, Mirror, Mask),
 }
+
+pub const COLOR_DEFAULT: s::Color = s::Color {
+    mask: s::MASK_ALL,
+    blend: None,
+};
 
 pub const RESET: [Command; 13] = [
     Command::BindProgram(0),
@@ -85,10 +90,10 @@ pub const RESET: [Command; 13] = [
     Command::SetScissor(None),
     Command::SetDepthState(None),
     Command::SetStencilState(None, (0, 0), s::CullFace::Nothing),
-    Command::SetBlendState(0, None),
-    Command::SetBlendState(1, None),
-    Command::SetBlendState(2, None),
-    Command::SetBlendState(3, None),
+    Command::SetBlendState(0, COLOR_DEFAULT),
+    Command::SetBlendState(1, COLOR_DEFAULT),
+    Command::SetBlendState(2, COLOR_DEFAULT),
+    Command::SetBlendState(3, COLOR_DEFAULT),
     Command::SetBlendColor([0f32; 4]),
 ];
 
@@ -165,7 +170,7 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.push(Command::SetStencilState(pso.output.stencil, (0, 0), cull));
         for i in 0 .. c::MAX_COLOR_TARGETS {
             if pso.output.draw_mask & (1<<i) != 0 {
-                self.buf.push(Command::SetBlendState(i as c::ColorSlot, pso.output.blend[i]));
+                self.buf.push(Command::SetBlendState(i as c::ColorSlot, pso.output.colors[i]));
             }
         }
     }

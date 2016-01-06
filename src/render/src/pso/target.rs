@@ -65,7 +65,7 @@ impl<R: Resources, T> DataBind<R> for RenderTarget<T> {
 
 
 impl<'a, T: format::BlendFormat> DataLink<'a> for BlendTarget<T> {
-    type Init = (&'a str, state::Blend);
+    type Init = (&'a str, state::ColorMask, state::Blend);
     fn new() -> Self {
         BlendTarget(None, PhantomData)
     }
@@ -76,7 +76,11 @@ impl<'a, T: format::BlendFormat> DataLink<'a> for BlendTarget<T> {
                    Option<Result<pso::ColorTargetDesc, format::Format>> {
         if out.name.is_empty() || &out.name == init.0 {
             self.0 = Some(out.slot);
-            let desc = (T::get_format(), init.1.into());
+            let desc = (T::get_format(), pso::BlendInfo {
+                mask: init.1,
+                color: Some(init.2.color),
+                alpha: Some(init.2.alpha),
+            });
             Some(Ok(desc))
         }else {
             None

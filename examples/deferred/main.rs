@@ -168,8 +168,10 @@ gfx_pipeline!( light {
     tex_pos: gfx::TextureSampler<GFormat> = "u_TexPos",
     tex_normal: gfx::TextureSampler<GFormat> = "u_TexNormal",
     tex_diffuse: gfx::TextureSampler<GFormat> = "u_TexDiffuse",
-    out_color: gfx::BlendTarget<GFormat> = ("o_Color", gfx::preset::blend::ADD),
-    out_depth: gfx::DepthTarget<gfx::format::Depth> = gfx::preset::depth::LESS_EQUAL_TEST,
+    out_color: gfx::BlendTarget<GFormat> =
+        ("o_Color", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
+    out_depth: gfx::DepthTarget<gfx::format::Depth> =
+        gfx::preset::depth::LESS_EQUAL_TEST,
 });
 
 pub static LIGHT_VERTEX_SRC: &'static [u8] = b"
@@ -232,8 +234,10 @@ gfx_pipeline!( emitter {
     transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
     light_pos_buf: gfx::ConstantBuffer<LightInfo> = "u_LightPosBlock",
     radius: gfx::Global<f32> = "u_Radius",
-    out_color: gfx::BlendTarget<GFormat> = ("o_Color", gfx::preset::blend::ADD),
-    out_depth: gfx::DepthTarget<gfx::format::Depth> = gfx::preset::depth::LESS_EQUAL_TEST,
+    out_color: gfx::BlendTarget<GFormat> =
+        ("o_Color", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
+    out_depth: gfx::DepthTarget<gfx::format::Depth> =
+        gfx::preset::depth::LESS_EQUAL_TEST,
 });
 
 pub static EMITTER_VERTEX_SRC: &'static [u8] = b"

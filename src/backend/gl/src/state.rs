@@ -206,9 +206,9 @@ fn map_factor(factor: s::Factor) -> gl::types::GLenum {
     }
 }
 
-pub fn bind_blend(gl: &gl::Gl, blend: Option<s::Blend>) {
-    let mask = match blend {
-        Some(b) => { unsafe {
+pub fn bind_blend(gl: &gl::Gl, color: s::Color) {
+    match color.blend {
+        Some(b) => unsafe {
             gl.Enable(gl::BLEND);
             gl.BlendEquationSeparate(
                 map_equation(b.color.equation),
@@ -220,24 +220,22 @@ pub fn bind_blend(gl: &gl::Gl, blend: Option<s::Blend>) {
                 map_factor(b.alpha.source),
                 map_factor(b.alpha.destination)
             );
-            b.mask
-        }},
-        None => {
-            unsafe { gl.Disable(gl::BLEND) };
-            s::MASK_ALL
+        },
+        None => unsafe {
+            gl.Disable(gl::BLEND);
         },
     };
     unsafe { gl.ColorMask(
-        if (mask & s::RED  ).is_empty() {gl::FALSE} else {gl::TRUE},
-        if (mask & s::GREEN).is_empty() {gl::FALSE} else {gl::TRUE},
-        if (mask & s::BLUE ).is_empty() {gl::FALSE} else {gl::TRUE},
-        if (mask & s::ALPHA).is_empty() {gl::FALSE} else {gl::TRUE}
+        if (color.mask & s::RED  ).is_empty() {gl::FALSE} else {gl::TRUE},
+        if (color.mask & s::GREEN).is_empty() {gl::FALSE} else {gl::TRUE},
+        if (color.mask & s::BLUE ).is_empty() {gl::FALSE} else {gl::TRUE},
+        if (color.mask & s::ALPHA).is_empty() {gl::FALSE} else {gl::TRUE}
     )};
 }
 
-pub fn bind_blend_slot(gl: &gl::Gl, slot: ColorSlot, blend: Option<s::Blend>) {
+pub fn bind_blend_slot(gl: &gl::Gl, slot: ColorSlot, color: s::Color) {
     let buf = slot as gl::types::GLuint;
-    let mask = match blend {
+    match color.blend {
         Some(b) => unsafe {
             gl.Enablei(gl::BLEND, buf);
             gl.BlendEquationSeparatei(buf,
@@ -250,18 +248,16 @@ pub fn bind_blend_slot(gl: &gl::Gl, slot: ColorSlot, blend: Option<s::Blend>) {
                 map_factor(b.alpha.source),
                 map_factor(b.alpha.destination)
             );
-            b.mask
         },
         None => unsafe {
             gl.Disablei(gl::BLEND, buf);
-            s::MASK_ALL
         },
     };
     unsafe { gl.ColorMaski(buf,
-        if (mask & s::RED  ).is_empty() {gl::FALSE} else {gl::TRUE},
-        if (mask & s::GREEN).is_empty() {gl::FALSE} else {gl::TRUE},
-        if (mask & s::BLUE ).is_empty() {gl::FALSE} else {gl::TRUE},
-        if (mask & s::ALPHA).is_empty() {gl::FALSE} else {gl::TRUE}
+        if (color.mask & s::RED  ).is_empty() {gl::FALSE} else {gl::TRUE},
+        if (color.mask & s::GREEN).is_empty() {gl::FALSE} else {gl::TRUE},
+        if (color.mask & s::BLUE ).is_empty() {gl::FALSE} else {gl::TRUE},
+        if (color.mask & s::ALPHA).is_empty() {gl::FALSE} else {gl::TRUE}
     )};
 }
 

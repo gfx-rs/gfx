@@ -24,6 +24,8 @@ gfx_pipeline!( testpipe {
     sampler_linear: gfx::Sampler = "Linear",
     buf_frequency: gfx::UnorderedAccess<[f32; 4]> = "Frequency",
     pixel_color: gfx::RenderTarget<gfx::format::Rgba8> = "Color",
+    blend_target: gfx::BlendTarget<gfx::format::Rgba8> =
+        ("o_Color1", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
     depth: gfx::DepthTarget<gfx::format::DepthStencil> =
         gfx::preset::depth::LESS_EQUAL_TEST,
     blend_ref: gfx::BlendRef = (),

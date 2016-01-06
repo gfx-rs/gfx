@@ -76,14 +76,10 @@ impl d::Resources for Resources {
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct OutputMerger {
-    /// Color attachment draw mask.
     pub draw_mask: u32,
-    /// Stencil test to use. If None, no stencil testing is done.
     pub stencil: Option<s::Stencil>,
-    /// Depth test to use. If None, no depth testing is done.
     pub depth: Option<s::Depth>,
-    /// Blend function to use. If None, no blending is done.
-    pub blend: [Option<s::Blend>; d::MAX_COLOR_TARGETS],
+    pub colors: [s::Color; d::MAX_COLOR_TARGETS],
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -209,14 +205,14 @@ pub struct Share {
 /// can not be separated on the GL backend.
 struct Temp {
     resource_views: [Option<ResourceView>; d::MAX_RESOURCE_VIEWS],
-    blend: Option<s::Blend>,
+    color: s::Color,
 }
 
 impl Temp {
     fn new() -> Temp {
         Temp {
             resource_views: [None; d::MAX_RESOURCE_VIEWS],
-            blend: None,
+            color: command::COLOR_DEFAULT,
         }
     }
 }
@@ -523,13 +519,13 @@ impl Device {
             Command::SetStencilState(stencil, refs, cull) => {
                 state::bind_stencil(&self.share.context, &stencil, refs, cull);
             },
-            Command::SetBlendState(slot, blend) => {
+            Command::SetBlendState(slot, color) => {
                 if self.share.capabilities.separate_blending_slots_supported {
-                    state::bind_blend_slot(&self.share.context, slot, blend);
+                    state::bind_blend_slot(&self.share.context, slot, color);
                 }else if slot == 0 {
-                    self.temp.blend = blend;
-                    state::bind_blend(&self.share.context, blend);
-                }else if blend != self.temp.blend {
+                    self.temp.color = color;
+                    state::bind_blend(&self.share.context, color);
+                }else if color != self.temp.color {
                     error!("Separate blending slots are not supported");
                 }
             },
