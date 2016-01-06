@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(missing_docs)]
+//! Universal format specification.
+//! Applicable to textures, views, and vertex buffers.
 
 //TODO:
 //  ETC2_RGB, // Use the EXT2 algorithm on 3 components.
@@ -22,13 +23,18 @@
 
 macro_rules! impl_surface_type {
     { $($name:ident [$bits:expr] $(=$tr:ty)* ,)* } => {
+        /// Type of the allocated texture surface. It is supposed to only
+        /// carry information about the number of bits per each channel.
+        /// The actual types are up to the views to decide and interpret.
+        /// The actual components are up to the swizzle to define.
         #[repr(u8)]
-        #[allow(non_camel_case_types)]
+        #[allow(missing_docs, non_camel_case_types)]
         #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
         pub enum SurfaceType {
             $( $name, )*
         }
         impl SurfaceType {
+            /// Return the total number of bits for this format.
             pub fn get_bit_size(&self) -> u8 {
                 match *self {
                     $( SurfaceType::$name => $bits, )*
@@ -36,7 +42,7 @@ macro_rules! impl_surface_type {
             }
         }
         $(
-            #[allow(non_camel_case_types)]
+            #[allow(missing_docs, non_camel_case_types)]
             #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
             pub enum $name {}
             impl SurfaceTyped for $name {
@@ -81,12 +87,16 @@ impl_surface_type! {
 
 macro_rules! impl_channel_type {
     { $($name:ident $(=$tr:ident)* ,)* } => {
+        /// Type of a surface channel. This is how we interpret the
+        /// storage allocated with `SurfaceType`.
+        #[allow(missing_docs)]
         #[repr(u8)]
         #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
         pub enum ChannelType {
             $( $name, )*
         }
         $(
+            #[allow(missing_docs)]
             #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
             pub enum $name {}
             impl ChannelTyped for $name {
@@ -112,6 +122,9 @@ impl_channel_type! {
     Srgb            = TextureChannel = RenderChannel = BlendChannel,
 }
 
+/// Target channel in a swizzle configuration. Some may redirect onto
+/// different physical channels, some may be hardcoded to 0 or 1.
+#[allow(missing_docs)]
 #[repr(u8)]
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 pub enum Channel {
@@ -123,6 +136,9 @@ pub enum Channel {
     W,
 }
 
+/// The view configuration for a surface. It includes the channel type
+/// as well as the swizzling of the channels.
+#[allow(missing_docs)]
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 pub struct View {
     pub ty: ChannelType,
@@ -144,42 +160,66 @@ impl From<ChannelType> for View {
     }
 }
 
+/// Complete run-time surface format.
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 pub struct Format(pub SurfaceType, pub View);
 
-// compile-time specification
 
+/// Compile-time surface type trait.
 pub trait SurfaceTyped {
+    /// Return the run-time value of the type.
     fn get_surface_type() -> SurfaceType;
+    /// Return the total number of bits.
     fn get_bit_size() -> u8;
 }
+/// An ability of a surface type to be used for vertex buffers.
 pub trait BufferSurface: SurfaceTyped {}
+/// An ability of a surface type to be used for textures.
 pub trait TextureSurface: SurfaceTyped {}
+/// An ability of a surface type to be used for render targets.
 pub trait RenderSurface: SurfaceTyped {}
+/// An ability of a surface type to be used for depth targets.
 pub trait DepthSurface: SurfaceTyped {}
+/// An ability of a surface type to be used for stencil targets.
 pub trait StencilSurface: SurfaceTyped {}
 
+/// Compile-time channel type trait.
 pub trait ChannelTyped {
+    /// Return the run-time value of the type.
     fn get_channel_type() -> ChannelType;
 }
+/// An ability of a channel type to be used for textures.
 pub trait TextureChannel: ChannelTyped {}
+/// An ability of a channel type to be used for render targets.
 pub trait RenderChannel: ChannelTyped {}
+/// An ability of a channel type to be used for blended render targets.
 pub trait BlendChannel: RenderChannel {}
 
+/// Compile-time full format trait.
 pub trait Formatted {
+    /// Associated surface type.
     type Surface: SurfaceTyped;
+    /// Associated channel type.
     type Channel: ChannelTyped;
+    /// Return the run-time value of the type.
     fn get_format() -> Format {
         Format(Self::Surface::get_surface_type(),
             Self::Channel::get_channel_type().into())
     }
 }
+/// Ability to be used for vertex buffers.
 pub trait BufferFormat: Formatted {}
+/// Ability to be used for depth targets.
 pub trait DepthFormat: Formatted {}
+/// Ability to be used for vertex buffers.
 pub trait StencilFormat: Formatted {}
+/// Ability to be used for depth+stencil targets.
 pub trait DepthStencilFormat: DepthFormat + StencilFormat {}
+/// Ability to be used for textures.
 pub trait TextureFormat: Formatted {}
+/// Ability to be used for render targets.
 pub trait RenderFormat: Formatted {}
+/// Ability to be used for blended render targets.
 pub trait BlendFormat: RenderFormat {}
 
 impl<S: SurfaceTyped, C: ChannelTyped> Formatted for (S, C) {
@@ -220,6 +260,7 @@ impl<F: Formatted> BlendFormat for F where
 macro_rules! alias {
     { $( $name:ident = $ty:ty, )* } => {
         $(
+            #[allow(missing_docs)]
             #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
             pub struct $name(pub $ty);
             impl From<$ty> for $name {
@@ -228,15 +269,19 @@ macro_rules! alias {
                 }
             }
             impl $name {
+                /// Convert a 2-element slice.
                 pub fn cast2(v: [$ty; 2]) -> [$name; 2] {
                     [$name(v[0]), $name(v[1])]
                 }
+                /// Convert a 3-element slice.
                 pub fn cast3(v: [$ty; 3]) -> [$name; 3] {
                     [$name(v[0]), $name(v[1]), $name(v[2])]
                 }
+                /// Convert a 4-element slice.
                 pub fn cast4(v: [$ty; 4]) -> [$name; 4] {
                     [$name(v[0]), $name(v[1]), $name(v[2]), $name(v[3])]
                 }
+                /// Convert a generic slice by transmutation.
                 pub fn cast_slice(slice: &[$ty]) -> &[$name] {
                     use std::mem::transmute;
                     unsafe { transmute(slice) }
@@ -323,12 +368,19 @@ impl_formats_32bit! {
     f32 = Float,
 }
 
-// Some handy pre-defined formats
 
+/// Standard 8bits RGBA format.
 pub type Rgba8 = [U8Norm; 4]; //(R8_G8_B8_A8, UintNormalized);
+/// Standard HDR floating-point format with 10 bits for RGB components
+/// and 2 bits for the alpha.
 pub type Rgb10a2F = (R10_G10_B10_A2, Float);
+/// Standard 16-bit floating-point RGBA format.
 pub type Rgba16F = [F16; 4]; //(R16_G16_B16_A16, Float);
+/// Standard 32-bit floating-point RGBA format.
 pub type Rgba32F = [f32; 4]; //(R32_G32_B32_A32, Float);
+/// Standard 24-bit depth format.
 pub type Depth = (D24, UintNormalized);
+/// Standard 24-bit depth format with 8-bit stencil.
 pub type DepthStencil = (D24_S8, UintNormalized);
+/// Standard 32-bit floating-point depth format.
 pub type Depth32F = (D32, Float);
