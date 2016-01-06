@@ -76,7 +76,7 @@ impl<'a, T: format::BlendFormat> DataLink<'a> for BlendTarget<T> {
                    Option<Result<pso::ColorTargetDesc, format::Format>> {
         if out.name.is_empty() || &out.name == init.0 {
             self.0 = Some(out.slot);
-            let desc = (T::get_format(), pso::BlendInfo {
+            let desc = (T::get_format(), pso::ColorInfo {
                 mask: init.1,
                 color: Some(init.2.color),
                 alpha: Some(init.2.alpha),

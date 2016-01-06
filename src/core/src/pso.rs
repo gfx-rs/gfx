@@ -27,25 +27,28 @@ pub type BufferOffset = usize;
 #[derive(Clone, PartialEq, Debug)]
 pub struct CreationError;
 
-#[allow(missing_docs)]
+/// Color output configuration of the PSO.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct BlendInfo {
+pub struct ColorInfo {
+    /// Color channel mask
     pub mask: s::ColorMask,
+    /// Optional color blending
     pub color: Option<s::BlendChannel>,
+    /// Optional alpha blending
     pub alpha: Option<s::BlendChannel>,
 }
-impl From<s::ColorMask> for BlendInfo {
-    fn from(mask: s::ColorMask) -> BlendInfo {
-        BlendInfo {
+impl From<s::ColorMask> for ColorInfo {
+    fn from(mask: s::ColorMask) -> ColorInfo {
+        ColorInfo {
             mask: mask,
             color: None,
             alpha: None,
         }
     }
 }
-impl From<s::Blend> for BlendInfo {
-    fn from(blend: s::Blend) -> BlendInfo {
-        BlendInfo {
+impl From<s::Blend> for ColorInfo {
+    fn from(blend: s::Blend) -> ColorInfo {
+        ColorInfo {
             mask: s::MASK_ALL,
             color: Some(blend.color),
             alpha: Some(blend.alpha),
@@ -53,11 +56,14 @@ impl From<s::Blend> for BlendInfo {
     }
 }
 
-#[allow(missing_docs)]
+/// Depth and stencil state of the PSO.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct DepthStencilInfo {
+    /// Optional depth test configuration
     pub depth: Option<s::Depth>,
+    /// Optional stencil test on the front faces
     pub front: Option<s::StencilSide>,
+    /// Optional stencil test on the back faces
     pub back: Option<s::StencilSide>,
 }
 impl From<s::Depth> for DepthStencilInfo {
@@ -109,7 +115,7 @@ pub struct Element<F> {
 /// PSO vertex attribute descriptor
 pub type AttributeDesc = (Element<format::Format>, InstanceRate);
 /// PSO color target descriptor
-pub type ColorTargetDesc = (format::Format, BlendInfo);
+pub type ColorTargetDesc = (format::Format, ColorInfo);
 /// PSO depth-stencil target descriptor
 pub type DepthStencilDesc = (format::SurfaceType, DepthStencilInfo);
 
