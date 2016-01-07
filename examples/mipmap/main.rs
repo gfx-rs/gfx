@@ -21,7 +21,7 @@ pub use gfx::format::Rgba8;
 
 #[derive(Clone, Debug)]
 pub struct Rgb332(u8);
-gfx_format!(Rgb332 = R3_G3_B2 . UintNormalized);
+gfx_format!(Rgb332: Vec3 = R3_G3_B2 . UintNormalized);
 
 gfx_vertex_struct!( Vertex {
     pos: [f32; 2] = "a_Pos",

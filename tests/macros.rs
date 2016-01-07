@@ -15,6 +15,10 @@ gfx_constant_struct!(Local {
     _pos: [u32; 4],
 });
 
+#[derive(Clone, Debug)]
+pub struct Rg16;
+gfx_format!(Rg16: Vec2 = R16_G16 . Float);
+
 gfx_pipeline!( testpipe {
     _vertex: gfx::VertexBuffer<Vertex> = (),
     _instance: gfx::InstanceBuffer<Instance> = (),
@@ -24,7 +28,7 @@ gfx_pipeline!( testpipe {
     sampler_linear: gfx::Sampler = "Linear",
     buf_frequency: gfx::UnorderedAccess<[f32; 4]> = "Frequency",
     pixel_color: gfx::RenderTarget<gfx::format::Rgba8> = "Color",
-    blend_target: gfx::BlendTarget<gfx::format::Rgba8> =
+    blend_target: gfx::BlendTarget<Rg16> =
         ("o_Color1", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
     depth: gfx::DepthTarget<gfx::format::DepthStencil> =
         gfx::preset::depth::LESS_EQUAL_TEST,

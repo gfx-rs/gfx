@@ -86,7 +86,7 @@ impl_surface_type! {
 }
 
 macro_rules! impl_channel_type {
-    { $($name:ident $(=$tr:ident)* ,)* } => {
+    { $($name:ident : $shtype:ident $(=$tr:ident)* ,)* } => {
         /// Type of a surface channel. This is how we interpret the
         /// storage allocated with `SurfaceType`.
         #[allow(missing_docs)]
@@ -100,6 +100,7 @@ macro_rules! impl_channel_type {
             #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
             pub enum $name {}
             impl ChannelTyped for $name {
+                type ShaderType = $shtype;
                 fn get_channel_type() -> ChannelType {
                     ChannelType::$name
                 }
@@ -112,14 +113,14 @@ macro_rules! impl_channel_type {
 }
 
 impl_channel_type! {
-    Int             = TextureChannel = RenderChannel,
-    Uint            = TextureChannel = RenderChannel,
-    IntScaled       = TextureChannel,
-    UintScaled      = TextureChannel,
-    IntNormalized   = TextureChannel = RenderChannel = BlendChannel,
-    UintNormalized  = TextureChannel = RenderChannel = BlendChannel,
-    Float           = TextureChannel = RenderChannel = BlendChannel,
-    Srgb            = TextureChannel = RenderChannel = BlendChannel,
+    Int             : i32 = TextureChannel = RenderChannel,
+    Uint            : u32 = TextureChannel = RenderChannel,
+    IntScaled       : f32 = TextureChannel,
+    UintScaled      : f32 = TextureChannel,
+    IntNormalized   : f32 = TextureChannel = RenderChannel = BlendChannel,
+    UintNormalized  : f32 = TextureChannel = RenderChannel = BlendChannel,
+    Float           : f32 = TextureChannel = RenderChannel = BlendChannel,
+    Srgb            : f32 = TextureChannel = RenderChannel = BlendChannel,
 }
 
 /// Target channel in a swizzle configuration. Some may redirect onto
@@ -185,6 +186,9 @@ pub trait StencilSurface: SurfaceTyped {}
 
 /// Compile-time channel type trait.
 pub trait ChannelTyped {
+    /// Shader-visible type that corresponds to this channel.
+    /// For example, normalized and scaled integers are visible as floats.
+    type ShaderType;
     /// Return the run-time value of the type.
     fn get_channel_type() -> ChannelType;
 }
@@ -201,6 +205,8 @@ pub trait Formatted {
     type Surface: SurfaceTyped;
     /// Associated channel type.
     type Channel: ChannelTyped;
+    /// Shader-visible type that corresponds to this format.
+    type ShaderType;
     /// Return the run-time value of the type.
     fn get_format() -> Format {
         Format(Self::Surface::get_surface_type(),
@@ -222,9 +228,10 @@ pub trait RenderFormat: Formatted {}
 /// Ability to be used for blended render targets.
 pub trait BlendFormat: RenderFormat {}
 
-impl<S: SurfaceTyped, C: ChannelTyped> Formatted for (S, C) {
+impl<S: SurfaceTyped, C: ChannelTyped, T> Formatted for (S, C, T) {
     type Surface = S;
     type Channel = C;
+    type ShaderType = T;
 }
 
 impl<F: Formatted> BufferFormat for F where
@@ -301,12 +308,22 @@ alias! {
     F16 = u16, // half-float
 }
 
+/// Abstracted 1-element container for macro internal use
+pub type Vec1<T> = T;
+/// Abstracted 2-element container for macro internal use
+pub type Vec2<T> = [T; 2];
+/// Abstracted 3-element container for macro internal use
+pub type Vec3<T> = [T; 3];
+/// Abstracted 4-element container for macro internal use
+pub type Vec4<T> = [T; 4];
+
 macro_rules! impl_format {
-    { $( $ty:ty = $surface:ident . $channel:ident ,)* } => {
+    { $( $ty:ty : $container:ident = $surface:ident . $channel:ident ,)* } => {
         $(
-            impl Formatted for $ty {
+            impl Formatted for $container<$ty> {
                 type Surface = $surface;
                 type Channel = $channel;
+                type ShaderType = $container<<$channel as ChannelTyped>::ShaderType>;
             }
         )*
     }
@@ -315,10 +332,10 @@ macro_rules! impl_format {
 macro_rules! impl_formats_8bit {
     { $( $ty:ty = $channel:ident, )* } => {
         impl_format! {$(
-            $ty = R8 . $channel,
-            [$ty; 2] = R8_G8 . $channel,
-            [$ty; 3] = R8_G8_B8 . $channel,
-            [$ty; 4] = R8_G8_B8_A8 . $channel,
+            $ty: Vec1 = R8 . $channel,
+            $ty: Vec2 = R8_G8 . $channel,
+            $ty: Vec3 = R8_G8_B8 . $channel,
+            $ty: Vec4 = R8_G8_B8_A8 . $channel,
         )*}
     }
 }
@@ -326,10 +343,10 @@ macro_rules! impl_formats_8bit {
 macro_rules! impl_formats_16bit {
     { $( $ty:ty = $channel:ident, )* } => {
         impl_format! {$(
-            $ty = R16 . $channel,
-            [$ty; 2] = R16_G16 . $channel,
-            [$ty; 3] = R16_G16_B16 . $channel,
-            [$ty; 4] = R16_G16_B16_A16 . $channel,
+            $ty: Vec1 = R16 . $channel,
+            $ty: Vec2 = R16_G16 . $channel,
+            $ty: Vec3 = R16_G16_B16 . $channel,
+            $ty: Vec4 = R16_G16_B16_A16 . $channel,
         )*}
     }
 }
@@ -337,10 +354,10 @@ macro_rules! impl_formats_16bit {
 macro_rules! impl_formats_32bit {
     { $( $ty:ty = $channel:ident, )* } => {
         impl_format! {$(
-            $ty = R32 . $channel,
-            [$ty; 2] = R32_G32 . $channel,
-            [$ty; 3] = R32_G32_B32 . $channel,
-            [$ty; 4] = R32_G32_B32_A32 . $channel,
+            $ty: Vec1 = R32 . $channel,
+            $ty: Vec2 = R32_G32 . $channel,
+            $ty: Vec3 = R32_G32_B32 . $channel,
+            $ty: Vec4 = R32_G32_B32_A32 . $channel,
         )*}
     }
 }
@@ -373,14 +390,14 @@ impl_formats_32bit! {
 pub type Rgba8 = [U8Norm; 4]; //(R8_G8_B8_A8, UintNormalized);
 /// Standard HDR floating-point format with 10 bits for RGB components
 /// and 2 bits for the alpha.
-pub type Rgb10a2F = (R10_G10_B10_A2, Float);
+pub type Rgb10a2F = (R10_G10_B10_A2, Float, [f32; 4]);
 /// Standard 16-bit floating-point RGBA format.
 pub type Rgba16F = [F16; 4]; //(R16_G16_B16_A16, Float);
 /// Standard 32-bit floating-point RGBA format.
 pub type Rgba32F = [f32; 4]; //(R32_G32_B32_A32, Float);
 /// Standard 24-bit depth format.
-pub type Depth = (D24, UintNormalized);
+pub type Depth = (D24, UintNormalized, f32);
 /// Standard 24-bit depth format with 8-bit stencil.
-pub type DepthStencil = (D24_S8, UintNormalized);
+pub type DepthStencil = (D24_S8, UintNormalized, f32);
 /// Standard 32-bit floating-point depth format.
-pub type Depth32F = (D32, Float);
+pub type Depth32F = (D32, Float, f32);

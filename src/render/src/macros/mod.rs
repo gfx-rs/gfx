@@ -19,10 +19,13 @@ mod structure;
 
 #[macro_export]
 macro_rules! gfx_format {
-    ($name:ident = $surface:ident . $channel:ident) => {
+    ($name:ident: $container:ident = $surface:ident . $channel:ident) => {
         impl $crate::format::Formatted for $name {
             type Surface = $crate::format::$surface;
             type Channel = $crate::format::$channel;
+            type ShaderType = $crate::format::$container<
+                <$crate::format::$channel as $crate::format::ChannelTyped>::ShaderType
+                >;
         }
     }
 }
