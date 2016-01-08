@@ -15,12 +15,33 @@
 //! Command Buffer device interface
 
 use draw_state::target;
+use {MAX_COLOR_TARGETS};
 use {Resources, IndexType, InstanceCount, VertexCount};
 use {pso, shade};
 use state as s;
 
 type Offset = u32;
 type Size = u32;
+
+/// A universal clear color supporting integet formats
+/// as well as the standard floating-point.
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+pub enum ClearColor {
+    /// Standard floating-point vec4 color
+    Float([f32; 4]),
+    /// Integer vector to clear ivec4 targets.
+    Int([i32; 4]),
+    /// Unsigned int vector to clear uvec4 targets.
+    Uint([u32; 4]),
+}
+
+/// Complete clear data for a given pixel target set.
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+pub struct ClearSet(
+    pub [Option<ClearColor>; MAX_COLOR_TARGETS],
+    pub Option<target::Depth>,
+    pub Option<target::Stencil>
+);
 
 /// The place of some data in the data buffer.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -100,8 +121,8 @@ pub type InstanceOption = Option<(InstanceCount, VertexCount)>;
 pub trait CommandBuffer<R: Resources> {
     /// Clone as an empty buffer
     fn clone_empty(&self) -> Self;
-    /// Clear the command buffer contents, retain the allocated storage
-    fn clear(&mut self);
+    /// Reset the command buffer contents, retain the allocated storage
+    fn reset(&mut self);
     /// Bind a pipeline state object
     fn bind_pipeline_state(&mut self, R::PipelineStateObject);
     /// Bind a complete set of vertex buffers
@@ -127,8 +148,8 @@ pub trait CommandBuffer<R: Resources> {
     fn set_ref_values(&mut self, s::RefValues);
     /// Update a vertex/index/uniform buffer
     fn update_buffer(&mut self, R::Buffer, DataPointer, usize);
-    /// Clear target surfaces
-    fn call_clear(&mut self, target::ClearData, target::Mask);
+    /// Clear render targets
+    fn clear(&mut self, ClearSet);
     /// Draw a primitive
     fn call_draw(&mut self, VertexCount, VertexCount, InstanceOption);
     /// Draw a primitive with index buffer
@@ -137,14 +158,44 @@ pub trait CommandBuffer<R: Resources> {
                          VertexCount, InstanceOption);
 }
 
-/// Type of the gamma transformation for framebuffer writes.
-#[repr(u8)]
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub enum Gamma {
-    /// Process in linear color space.
-    Original,
-    /// Convert to sRGB color space.
-    Convert,
+macro_rules! impl_clear {
+    { $( $ty:ty = $sub:ident[$a:expr, $b:expr, $c:expr, $d:expr], )* } => {
+        $(
+            impl From<$ty> for ClearColor {
+                fn from(v: $ty) -> ClearColor {
+                    ClearColor::$sub([v[$a], v[$b], v[$c], v[$d]])
+                }
+            }
+        )*
+    }
+}
+
+impl_clear! {
+    [f32; 4] = Float[0, 1, 2, 3],
+    [f32; 3] = Float[0, 1, 2, 0],
+    [f32; 2] = Float[0, 1, 0, 0],
+    [i32; 4] = Int  [0, 1, 2, 3],
+    [i32; 3] = Int  [0, 1, 2, 0],
+    [i32; 2] = Int  [0, 1, 0, 0],
+    [u32; 4] = Uint [0, 1, 2, 3],
+    [u32; 3] = Uint [0, 1, 2, 0],
+    [u32; 2] = Uint [0, 1, 0, 0],
+}
+
+impl From<f32> for ClearColor {
+    fn from(v: f32) -> ClearColor {
+        ClearColor::Float([v, 0.0, 0.0, 0.0])
+    }
+}
+impl From<i32> for ClearColor {
+    fn from(v: i32) -> ClearColor {
+        ClearColor::Int([v, 0, 0, 0])
+    }
+}
+impl From<u32> for ClearColor {
+    fn from(v: u32) -> ClearColor {
+        ClearColor::Uint([v, 0, 0, 0])
+    }
 }
 
 #[cfg(test)]

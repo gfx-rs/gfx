@@ -17,12 +17,12 @@
 #![deny(missing_docs)]
 
 use std::mem;
-use draw_state::target::{ClearData, ColorValue, Depth, Mask, Stencil};
+use draw_state::target::{Depth, Stencil};
 
 use gfx_core as device;
 use gfx_core::Resources;
 use gfx_core::{format, handle};
-use gfx_core::draw::{CommandBuffer, DataBuffer, InstanceOption};
+use gfx_core::draw::{ClearColor, CommandBuffer, DataBuffer, InstanceOption};
 use gfx_core::factory::{Factory};
 use mesh;
 use pso;
@@ -68,7 +68,7 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
 
     /// Reset all commands for the command buffer re-usal.
     pub fn reset(&mut self) {
-        self.command_buffer.clear();
+        self.command_buffer.reset();
         self.data_buffer.clear();
         self.handles.clear();
     }
@@ -200,44 +200,35 @@ impl<R: Resources, C: CommandBuffer<R>> Encoder<R, C> {
     }
 
     fn clear_all<T>(&mut self,
-                 color: Option<(&handle::RenderTargetView<R, T>, ColorValue)>,
+                 color: Option<(&handle::RenderTargetView<R, T>, ClearColor)>,
                  depth: Option<(&handle::DepthStencilView<R, T>, Depth)>,
                  stencil: Option<(&handle::DepthStencilView<R, T>, Stencil)>)
     {
-        use draw_state::target::{COLOR, DEPTH, STENCIL};
+        use gfx_core::draw::ClearSet;
         use gfx_core::factory::Phantom;
         use gfx_core::pso::PixelTargetSet;
 
         let mut pts = PixelTargetSet::new();
-        let mut mask = Mask::empty();
-        let mut cdata = ClearData {
-            color: [0.0; 4],
-            depth: 0.0,
-            stencil: 0,
-        };
-        if let Some((view, c)) = color {
-            pts.colors[0] = Some(self.handles.ref_rtv(view.raw()).clone());
-            mask = mask | COLOR;
-            cdata.color = c;
-        }
-        if let Some((view, d)) = depth {
-            pts.depth = Some(self.handles.ref_dsv(view.raw()).clone());
-            mask = mask | DEPTH;
-            cdata.depth = d;
-        }
-        if let Some((view, s)) = stencil {
-            pts.stencil = Some(self.handles.ref_dsv(view.raw()).clone());
-            mask = mask | STENCIL;
-            cdata.stencil = s;
-        }
+        pts.colors[0] = color.map(|(ref view, _)|
+            self.handles.ref_rtv(view.raw()).clone());
+        pts.depth = depth.map(|(ref view, _)|
+            self.handles.ref_dsv(view.raw()).clone());
+        pts.stencil = stencil.map(|(ref view, _)|
+            self.handles.ref_dsv(view.raw()).clone());
+
         self.command_buffer.bind_pixel_targets(pts);
-        self.command_buffer.call_clear(cdata, mask);
+
+        self.command_buffer.clear(ClearSet(
+            [color.map(|(_, c)| c), None, None, None],
+            depth.map(|(_, d)| d), stencil.map(|(_, s)| s)
+        ));
     }
 
     /// Clear a target view with a specified value.
     pub fn clear<T: format::RenderFormat>(&mut self,
-                 view: &handle::RenderTargetView<R, T>, value: ColorValue) { //TODO: value: T
-        self.clear_all(Some((view, value)), None, None)
+                 view: &handle::RenderTargetView<R, T>, value: T::View)
+    where T::View: Into<ClearColor> {
+        self.clear_all(Some((view, value.into())), None, None)
     }
     /// Clear a depth view with a specified value.
     pub fn clear_depth<T: format::DepthFormat>(&mut self,

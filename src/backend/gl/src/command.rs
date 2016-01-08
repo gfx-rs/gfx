@@ -16,7 +16,7 @@
 
 use gl;
 use gfx_core as c;
-use gfx_core::draw::{DataPointer, InstanceOption};
+use gfx_core::draw::{ClearSet, DataPointer, InstanceOption};
 use gfx_core::state as s;
 use gfx_core::target::{ClearData, ColorValue, Mask, Mirror, Rect, Stencil};
 use {Buffer, ArrayBuffer, Program, FrameBuffer,
@@ -63,7 +63,8 @@ pub enum Command {
     // resource updates
     UpdateBuffer(Buffer, DataPointer, usize),
     // drawing
-    Clear(ClearData, Mask),
+    ClearOld(ClearData, Mask),
+    Clear(ClearSet),
     Draw(gl::types::GLenum, c::VertexCount, c::VertexCount, InstanceOption),
     DrawIndexed(gl::types::GLenum, c::IndexType, c::VertexCount, c::VertexCount,
                 c::VertexCount, InstanceOption),
@@ -152,7 +153,7 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
         }
     }
 
-    fn clear(&mut self) {
+    fn reset(&mut self) {
         self.buf.clear();
         self.cache = Cache::new();
     }
@@ -247,8 +248,8 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.push(Command::UpdateBuffer(buf, data, offset_bytes));
     }
 
-    fn call_clear(&mut self, data: ClearData, mask: Mask) {
-        self.buf.push(Command::Clear(data, mask));
+    fn clear(&mut self, set: ClearSet) {
+        self.buf.push(Command::Clear(set));
     }
 
     fn call_draw(&mut self, start: c::VertexCount,

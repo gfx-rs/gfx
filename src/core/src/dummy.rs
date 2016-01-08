@@ -73,7 +73,7 @@ impl DummyDevice {
 pub struct DummyCommandBuffer;
 impl draw::CommandBuffer<DummyResources> for DummyCommandBuffer {
     fn clone_empty(&self) -> DummyCommandBuffer { DummyCommandBuffer }
-    fn clear(&mut self) {}
+    fn reset(&mut self) {}
     fn bind_pipeline_state(&mut self, _: ()) {}
     fn bind_vertex_buffers(&mut self, _: pso::VertexBufferSet<DummyResources>) {}
     fn bind_constant_buffers(&mut self, _: pso::ConstantBufferSet<DummyResources>) {}
@@ -86,7 +86,7 @@ impl draw::CommandBuffer<DummyResources> for DummyCommandBuffer {
     fn set_scissor(&mut self, _: Option<target::Rect>) {}
     fn set_ref_values(&mut self, _: s::RefValues) {}
     fn update_buffer(&mut self, _: (), _: draw::DataPointer, _: usize) {}
-    fn call_clear(&mut self, _: target::ClearData, _: target::Mask) {}
+    fn clear(&mut self, _: draw::ClearSet) {}
     fn call_draw(&mut self, _: VertexCount, _: VertexCount, _: draw::InstanceOption) {}
     fn call_draw_indexed(&mut self, _: IndexType,
                          _: VertexCount, _: VertexCount,

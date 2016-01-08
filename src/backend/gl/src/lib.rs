@@ -382,7 +382,7 @@ impl Device {
 
     fn process(&mut self, cmd: &Command, data_buf: &d::draw::DataBuffer) {
         match *cmd {
-            Command::Clear(ref data, mask) => {
+            Command::ClearOld(ref data, mask) => {
                 let mut flags = 0;
                 let gl = &self.share.context;
                 if mask.intersects(d::target::COLOR) {
@@ -406,6 +406,40 @@ impl Device {
                     }
                 }
                 unsafe { gl.Clear(flags) };
+            },
+            Command::Clear(ref set) => {
+                let gl = &self.share.context;
+                for i in 0 .. d::MAX_COLOR_TARGETS {
+                    if let Some(c) = set.0[i] {
+                        use gfx_core::draw::ClearColor;
+                        let slot = i as gl::types::GLint;
+                        state::unlock_color_mask(gl);
+                        match c {
+                            ClearColor::Float(v) => unsafe {
+                                gl.ClearBufferfv(gl::COLOR, slot, &v[0]);
+                            },
+                            ClearColor::Int(v) => unsafe {
+                                gl.ClearBufferiv(gl::COLOR, slot, &v[0]);
+                            },
+                            ClearColor::Uint(v) => unsafe {
+                                gl.ClearBufferuiv(gl::COLOR, slot, &v[0]);
+                            },
+                        }
+                    }
+                    if let Some(ref d) = set.1 {
+                        unsafe {
+                            gl.DepthMask(gl::TRUE);
+                            gl.ClearBufferfv(gl::DEPTH, 0, d);
+                        }
+                    }
+                    if let Some(s) = set.2 {
+                        let v = s as gl::types::GLint;
+                        unsafe {
+                            gl.StencilMask(gl::types::GLuint::max_value());
+                            gl.ClearBufferiv(gl::STENCIL, 0, &v);
+                        }
+                    }
+                }
             },
             Command::BindProgram(program) => {
                 let gl = &self.share.context;

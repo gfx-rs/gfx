@@ -41,7 +41,7 @@ pub use gfx_core::{VertexCount, InstanceCount};
 pub use gfx_core::Primitive;
 pub use gfx_core::{ShaderSet, VertexShader, HullShader, DomainShader,
                    GeometryShader, PixelShader};
-pub use gfx_core::draw::{CommandBuffer, Gamma, InstanceOption};
+pub use gfx_core::draw::{CommandBuffer, InstanceOption};
 pub use gfx_core::shade::{ProgramInfo, UniformValue};
 
 pub use encoder::{Encoder, UpdateError};
