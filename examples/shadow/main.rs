@@ -54,8 +54,7 @@ gfx_pipeline!( forward {
     color: gfx::Global<[f32; 4]> = "u_Color",
     num_lights: gfx::Global<i32> = "u_NumLights",
     light_buf: gfx::ConstantBuffer<LightParam> = "b_Lights",
-    shadow: gfx::ShaderResource<Depth> = "t_Shadow",
-    shadow_sampler: gfx::Sampler = "t_Shadow",
+    shadow: gfx::TextureSampler<f32> = "t_Shadow",
     out_color: gfx::RenderTarget<Rgba8> = "o_Color",
     out_depth: gfx::DepthTarget<Depth> = gfx::preset::depth::LESS_EQUAL_WRITE,
 });
@@ -186,7 +185,7 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
         let bind = gfx::SHADER_RESOURCE | gfx::RENDER_TARGET;
         let cty = gfx::format::ChannelType::UintNormalized;
         let tex = factory.create_new_texture(kind, 1, bind, Some(cty)).unwrap();
-        let resource = factory.view_texture_as_shader_resource(&tex, (0, 0)).unwrap();
+        let resource = factory.view_texture_as_shader_resource::<Depth>(&tex, (0, 0)).unwrap();
         (tex, resource)
     };
     let shadow_sampler = {
@@ -291,8 +290,7 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
         color: [1.0, 1.0, 1.0, 1.0],
         num_lights: lights.len() as i32,
         light_buf: light_buf,
-        shadow: shadow_resource,
-        shadow_sampler: shadow_sampler,
+        shadow: (shadow_resource, shadow_sampler),
         out_color: out_color,
         out_depth: out_depth,
     };

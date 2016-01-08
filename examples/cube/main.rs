@@ -39,7 +39,7 @@ impl Vertex {
 gfx_pipeline!( pipe {
     vbuf: gfx::VertexBuffer<Vertex> = (),
     transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
-    color: gfx::TextureSampler<gfx::format::Rgba8> = "t_Color",
+    color: gfx::TextureSampler<[f32; 4]> = "t_Color",
     out_color: gfx::RenderTarget<gfx::format::Rgba8> = "o_Color",
     out_depth: gfx::DepthTarget<gfx::format::DepthStencil> =
         gfx::preset::depth::LESS_EQUAL_WRITE,

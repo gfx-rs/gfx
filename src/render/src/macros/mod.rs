@@ -23,7 +23,7 @@ macro_rules! gfx_format {
         impl $crate::format::Formatted for $name {
             type Surface = $crate::format::$surface;
             type Channel = $crate::format::$channel;
-            type ShaderType = $crate::format::$container<
+            type View = $crate::format::$container<
                 <$crate::format::$channel as $crate::format::ChannelTyped>::ShaderType
                 >;
         }

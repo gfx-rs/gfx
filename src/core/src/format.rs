@@ -123,12 +123,12 @@ impl_channel_type! {
     Srgb            : f32 = TextureChannel = RenderChannel = BlendChannel,
 }
 
-/// Target channel in a swizzle configuration. Some may redirect onto
+/// Source channel in a swizzle configuration. Some may redirect onto
 /// different physical channels, some may be hardcoded to 0 or 1.
 #[allow(missing_docs)]
 #[repr(u8)]
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
-pub enum Channel {
+pub enum ChannelSource {
     Zero,
     One,
     X,
@@ -139,24 +139,26 @@ pub enum Channel {
 
 /// The view configuration for a surface. It includes the channel type
 /// as well as the swizzling of the channels.
+/// Note: the swizzling types are not mirrored at compile-time, thus
+/// providing less safety and convenience, as it stands now.
 #[allow(missing_docs)]
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 pub struct View {
     pub ty: ChannelType,
-    pub x: Channel,
-    pub y: Channel,
-    pub z: Channel,
-    pub w: Channel,
+    pub x: ChannelSource,
+    pub y: ChannelSource,
+    pub z: ChannelSource,
+    pub w: ChannelSource,
 }
 
 impl From<ChannelType> for View {
     fn from(ty: ChannelType) -> View {
         View {
             ty: ty,
-            x: Channel::X,
-            y: Channel::Y,
-            z: Channel::Z,
-            w: Channel::W,
+            x: ChannelSource::X,
+            y: ChannelSource::Y,
+            z: ChannelSource::Z,
+            w: ChannelSource::W,
         }
     }
 }
@@ -205,8 +207,8 @@ pub trait Formatted {
     type Surface: SurfaceTyped;
     /// Associated channel type.
     type Channel: ChannelTyped;
-    /// Shader-visible type that corresponds to this format.
-    type ShaderType;
+    /// Shader view type of this format.
+    type View;
     /// Return the run-time value of the type.
     fn get_format() -> Format {
         Format(Self::Surface::get_surface_type(),
@@ -231,7 +233,7 @@ pub trait BlendFormat: RenderFormat {}
 impl<S: SurfaceTyped, C: ChannelTyped, T> Formatted for (S, C, T) {
     type Surface = S;
     type Channel = C;
-    type ShaderType = T;
+    type View = T;
 }
 
 impl<F: Formatted> BufferFormat for F where
@@ -318,12 +320,12 @@ pub type Vec3<T> = [T; 3];
 pub type Vec4<T> = [T; 4];
 
 macro_rules! impl_format {
-    { $( $ty:ty : $container:ident = $surface:ident . $channel:ident ,)* } => {
+    { $( $container:ident< $ty:ty > = $channel:ident $surface:ident, )* } => {
         $(
             impl Formatted for $container<$ty> {
                 type Surface = $surface;
                 type Channel = $channel;
-                type ShaderType = $container<<$channel as ChannelTyped>::ShaderType>;
+                type View = $container<<$channel as ChannelTyped>::ShaderType>;
             }
         )*
     }
@@ -332,10 +334,10 @@ macro_rules! impl_format {
 macro_rules! impl_formats_8bit {
     { $( $ty:ty = $channel:ident, )* } => {
         impl_format! {$(
-            $ty: Vec1 = R8 . $channel,
-            $ty: Vec2 = R8_G8 . $channel,
-            $ty: Vec3 = R8_G8_B8 . $channel,
-            $ty: Vec4 = R8_G8_B8_A8 . $channel,
+            Vec1<$ty> = $channel R8,
+            Vec2<$ty> = $channel R8_G8,
+            Vec3<$ty> = $channel R8_G8_B8,
+            Vec4<$ty> = $channel R8_G8_B8_A8,
         )*}
     }
 }
@@ -343,10 +345,10 @@ macro_rules! impl_formats_8bit {
 macro_rules! impl_formats_16bit {
     { $( $ty:ty = $channel:ident, )* } => {
         impl_format! {$(
-            $ty: Vec1 = R16 . $channel,
-            $ty: Vec2 = R16_G16 . $channel,
-            $ty: Vec3 = R16_G16_B16 . $channel,
-            $ty: Vec4 = R16_G16_B16_A16 . $channel,
+            Vec1<$ty> = $channel R16,
+            Vec2<$ty> = $channel R16_G16,
+            Vec3<$ty> = $channel R16_G16_B16,
+            Vec4<$ty> = $channel R16_G16_B16_A16,
         )*}
     }
 }
@@ -354,10 +356,10 @@ macro_rules! impl_formats_16bit {
 macro_rules! impl_formats_32bit {
     { $( $ty:ty = $channel:ident, )* } => {
         impl_format! {$(
-            $ty: Vec1 = R32 . $channel,
-            $ty: Vec2 = R32_G32 . $channel,
-            $ty: Vec3 = R32_G32_B32 . $channel,
-            $ty: Vec4 = R32_G32_B32_A32 . $channel,
+            Vec1<$ty> = $channel R32,
+            Vec2<$ty> = $channel R32_G32,
+            Vec3<$ty> = $channel R32_G32_B32,
+            Vec4<$ty> = $channel R32_G32_B32_A32,
         )*}
     }
 }

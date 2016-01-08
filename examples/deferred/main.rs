@@ -124,7 +124,7 @@ gfx_vertex_struct!( BlitVertex {
 
 gfx_pipeline!( blit {
     vbuf: gfx::VertexBuffer<BlitVertex> = (),
-    tex: gfx::TextureSampler<GFormat> = "u_Tex",
+    tex: gfx::TextureSampler<[f32; 4]> = "u_Tex",
     out: gfx::RenderTarget<Rgba8> = "o_Color",
 });
 
@@ -165,9 +165,9 @@ gfx_pipeline!( light {
     radius: gfx::Global<f32> = "u_Radius",
     cam_pos: gfx::Global<[f32; 3]> = "u_CameraPos",
     frame_res: gfx::Global<[f32; 2]> = "u_FrameRes",
-    tex_pos: gfx::TextureSampler<GFormat> = "u_TexPos",
-    tex_normal: gfx::TextureSampler<GFormat> = "u_TexNormal",
-    tex_diffuse: gfx::TextureSampler<GFormat> = "u_TexDiffuse",
+    tex_pos: gfx::TextureSampler<[f32; 4]> = "u_TexPos",
+    tex_normal: gfx::TextureSampler<[f32; 4]> = "u_TexNormal",
+    tex_diffuse: gfx::TextureSampler<[f32; 4]> = "u_TexDiffuse",
     out_color: gfx::BlendTarget<GFormat> =
         ("o_Color", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
     out_depth: gfx::DepthTarget<gfx::format::Depth> =
@@ -297,15 +297,37 @@ fn calculate_color(height: f32) -> [f32; 3] {
     }
 }
 
-struct ViewPair<R: gfx::Resources, T> {
-    resource: gfx::handle::ShaderResourceView<R, T>,
+struct ViewPair<R: gfx::Resources, T: gfx::format::Formatted> {
+    resource: gfx::handle::ShaderResourceView<R, T::View>,
     target: gfx::handle::RenderTargetView<R, T>,
+}
+
+// need a custom depth format in order to view SRV depth as float4
+struct DepthFormat;
+impl gfx::format::Formatted for DepthFormat {
+    type Surface = gfx::format::D24;
+    type Channel = gfx::format::Float;
+    type View = [f32; 4];
+
+    fn get_format() -> gfx::format::Format {
+        use gfx::format as f;
+        f::Format(
+            f::SurfaceType::D24,
+            f::View {
+                ty: f::ChannelType::Float,
+                x: f::ChannelSource::X,
+                y: f::ChannelSource::X,
+                z: f::ChannelSource::X,
+                w: f::ChannelSource::X,
+            }
+        )
+    }
 }
 
 fn create_g_buffer<R: gfx::Resources, F: Factory<R>>(
                    width: gfx::tex::Size, height: gfx::tex::Size, factory: &mut F)
                    -> (ViewPair<R, GFormat>, ViewPair<R, GFormat>, ViewPair<R, GFormat>,
-                       gfx::handle::ShaderResourceView<R, Depth>, gfx::handle::DepthStencilView<R, Depth>)
+                       gfx::handle::ShaderResourceView<R, [f32; 4]>, gfx::handle::DepthStencilView<R, Depth>)
 {
     let pos = {
         let (_ , srv, rtv) = factory.create_render_target(width, height, false).unwrap();
@@ -319,7 +341,9 @@ fn create_g_buffer<R: gfx::Resources, F: Factory<R>>(
         let (_ , srv, rtv) = factory.create_render_target(width, height, false).unwrap();
         ViewPair{ resource: srv, target: rtv }
     };
-    let (_, depth_srv, depth_rtv) = factory.create_depth_stencil(width, height).unwrap();
+    let (tex, _srv, depth_rtv) = factory.create_depth_stencil(width, height).unwrap();
+    // ignoring the default SRV since we need to create a custom one with swizzling
+    let depth_srv = factory.view_texture_as_shader_resource::<DepthFormat>(&tex, (0,0)).unwrap();
 
     (pos, normal, diffuse, depth_srv, depth_rtv)
 }
@@ -515,7 +539,7 @@ pub fn main() {
         (pso, data)
     };
 
-    let mut debug_buf: Option<gfx::handle::ShaderResourceView<_, GFormat>> = None;
+    let mut debug_buf: Option<gfx::handle::ShaderResourceView<_, [f32; 4]>> = None;
 
     let mut light_pos_vec: Vec<LightInfo> = (0 ..NUM_LIGHTS).map(|_| {
         LightInfo{ pos: [0.0, 0.0, 0.0, 0.0] }
@@ -534,10 +558,8 @@ pub fn main() {
                     debug_buf = Some(gnormal.resource.clone()),
                 Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key3)) =>
                     debug_buf = Some(gdiffuse.resource.clone()),
-                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key4)) => {
-                    use gfx::core::factory::Phantom; //hack
-                    debug_buf = Some(Phantom::new(depth_resource.raw().clone()))
-                },
+                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key4)) =>
+                    debug_buf = Some(depth_resource.clone()),
                 Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key0)) =>
                     debug_buf = None,
                 Event::KeyboardInput(_, _, Some(VirtualKeyCode::Escape)) |

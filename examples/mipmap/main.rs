@@ -39,7 +39,7 @@ impl Vertex {
 
 gfx_pipeline!(pipe {
     vbuf: gfx::VertexBuffer<Vertex> = (),
-    tex: gfx::TextureSampler<Rgb332> = "t_Tex",
+    tex: gfx::TextureSampler<[f32; 3]> = "t_Tex",
     out: gfx::RenderTarget<Rgba8> = "o_Color",
 });
 
@@ -60,50 +60,10 @@ const L1_DATA: [u8; 4] = [
 // Uniform blue
 const L2_DATA: [u8; 1] = [ 0x02 ];
 
-fn make_texture<R, F>(factory: &mut F) -> gfx::handle::ShaderResourceView<R, Rgb332>
+fn make_texture<R, F>(factory: &mut F) -> gfx::handle::ShaderResourceView<R, [f32; 3]>
         where R: gfx::Resources, 
               F: gfx::Factory<R>
 {
-    /*
-    let tex_info = gfx::tex::TextureInfo {
-        kind: gfx::tex::Kind::D2(4, 4, gfx::tex::AaMode::Single),
-        levels: 3,
-        format: gfx::tex::Format::SRGB8,
-    };
-
-    let l0_info = gfx::tex::ImageInfo {
-        xoffset: 0,
-        yoffset: 0,
-        zoffset: 0,
-        width: 4,
-        height: 4,
-        depth: 1,
-        format: gfx::tex::Format::R3_G3_B2,
-        mipmap: 0,
-    };
-
-    let l1_info = gfx::tex::ImageInfo {
-        xoffset: 0,
-        yoffset: 0,
-        zoffset: 0,
-        width: 2,
-        height: 2,
-        depth: 1,
-        format: gfx::tex::Format::R3_G3_B2,
-        mipmap: 1,
-    };
-
-    let l2_info = gfx::tex::ImageInfo {
-        xoffset: 0,
-        yoffset: 0,
-        zoffset: 0,
-        width: 1,
-        height: 1,
-        depth: 1,
-        format: gfx::tex::Format::R3_G3_B2,
-        mipmap: 2,
-    };*/
-
     let kind = gfx::tex::Kind::D2(4, 4, gfx::tex::AaMode::Single);
     let tex = factory.create_new_texture(kind, 3, gfx::SHADER_RESOURCE,
         Some(gfx::format::ChannelType::UintNormalized)).unwrap();
@@ -115,7 +75,7 @@ fn make_texture<R, F>(factory: &mut F) -> gfx::handle::ShaderResourceView<R, Rgb
     factory.update_new_texture::<Rgb332>(&tex, &tex.get_info().to_image_info(2),
         gfx::cast_slice(&L2_DATA), None).unwrap();
 
-    factory.view_texture_as_shader_resource(&tex, (0, 2)).unwrap()
+    factory.view_texture_as_shader_resource::<Rgb332>(&tex, (0, 2)).unwrap()
 }
 
 pub fn main() {

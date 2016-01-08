@@ -40,22 +40,22 @@ impl Vertex {
 
 gfx_pipeline!( pipe {
     vbuf: gfx::VertexBuffer<Vertex> = (),
-    color: gfx::TextureSampler<Rgba8> = "t_Color",
-    flow: gfx::TextureSampler<Rgba8> = "t_Flow",
-    noise: gfx::TextureSampler<Rgba8> = "t_Noise",
+    color: gfx::TextureSampler<[f32; 4]> = "t_Color",
+    flow: gfx::TextureSampler<[f32; 4]> = "t_Flow",
+    noise: gfx::TextureSampler<[f32; 4]> = "t_Noise",
     offset0: gfx::Global<f32> = "f_Offset0",
     offset1: gfx::Global<f32> = "f_Offset1",
     out: gfx::RenderTarget<Rgba8> = "o_Color",
 });
 
 fn load_texture<R, F>(factory: &mut F, data: &[u8])
-                -> Result<gfx::handle::ShaderResourceView<R, Rgba8>, String>
+                -> Result<gfx::handle::ShaderResourceView<R, [f32; 4]>, String>
         where R: gfx::Resources, F: gfx::Factory<R> {
     use gfx::tex as t;
     let img = image::load(Cursor::new(data), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
     let kind = t::Kind::D2(width as t::Size, height as t::Size, t::AaMode::Single);
-    let (_, view) = factory.create_texture_const(kind, gfx::cast_slice(&img), false).unwrap();
+    let (_, view) = factory.create_texture_const::<Rgba8>(kind, gfx::cast_slice(&img), false).unwrap();
     Ok(view)
 }
 

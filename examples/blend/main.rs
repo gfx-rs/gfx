@@ -38,21 +38,21 @@ impl Vertex {
 
 gfx_pipeline!( pipe {
     vbuf: gfx::VertexBuffer<Vertex> = (),
-    lena: gfx::TextureSampler<Rgba8> = "t_Lena",
-    tint: gfx::TextureSampler<Rgba8> = "t_Tint",
+    lena: gfx::TextureSampler<[f32; 4]> = "t_Lena",
+    tint: gfx::TextureSampler<[f32; 4]> = "t_Tint",
     blend: gfx::Global<i32> = "i_Blend",
     out: gfx::RenderTarget<Rgba8> = "o_Color",
 });
 
 fn load_texture<R, F>(factory: &mut F, data: &[u8])
-                -> Result<gfx::handle::ShaderResourceView<R, Rgba8>, String> where
+                -> Result<gfx::handle::ShaderResourceView<R, [f32; 4]>, String> where
                 R: gfx::Resources, F: gfx::Factory<R> {
     use std::io::Cursor;
     use gfx::tex as t;
     let img = image::load(Cursor::new(data), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
     let kind = t::Kind::D2(width as t::Size, height as t::Size, t::AaMode::Single);
-    let (_, view) = factory.create_texture_const(kind, gfx::cast_slice(&img), false).unwrap();
+    let (_, view) = factory.create_texture_const::<Rgba8>(kind, gfx::cast_slice(&img), false).unwrap();
     Ok(view)
 }
 

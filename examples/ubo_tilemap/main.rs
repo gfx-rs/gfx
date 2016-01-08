@@ -45,13 +45,13 @@ pub const TILEMAP_BUF_LENGTH: usize = 4096;
 
 // texture loading boilerplate
 pub fn load_texture<R, F>(factory: &mut F, data: &[u8])
-                    -> Result<gfx::handle::ShaderResourceView<R, Rgba8>, String>
+                    -> Result<gfx::handle::ShaderResourceView<R, [f32; 4]>, String>
         where R: gfx::Resources, F: gfx::Factory<R> {
     use gfx::tex as t;
     let img = image::load(Cursor::new(data), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
     let kind = t::Kind::D2(width as t::Size, height as t::Size, t::AaMode::Single);
-    let (_, view) = factory.create_texture_const(kind, gfx::cast_slice(&img), false).unwrap();
+    let (_, view) = factory.create_texture_const::<Rgba8>(kind, gfx::cast_slice(&img), false).unwrap();
     Ok(view)
 }
 
@@ -136,7 +136,7 @@ gfx_pipeline!(pipe {
     view: gfx::Global<[[f32; 4]; 4]> = "u_View",
     proj: gfx::Global<[[f32; 4]; 4]> = "u_Proj",
     // tilemap stuff
-    tilesheet: gfx::TextureSampler<Rgba8> = "t_TileSheet",
+    tilesheet: gfx::TextureSampler<[f32; 4]> = "t_TileSheet",
     tilemap: gfx::ConstantBuffer<TileMapData> = "b_TileMap",
     world_size: gfx::Global<[f32; 3]> = "u_WorldSize",
     tilesheet_size: gfx::Global<[f32; 4]> = "u_TilesheetSize",
