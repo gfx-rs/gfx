@@ -14,6 +14,27 @@
 
 //! Macros for deriving `VertexFormat` and `ShaderParam`.
 
+/// Macro to derive a 'VertexFormat'.
+///
+/// Parameters include, a name identity to call your vertex format type as, and
+/// inside which you can define your fields with, in order:
+/// * **gl_name:** An identity, which must match the name of your vertex format in your shader;
+/// * **field:** An identity, which you will use in Rust to access your fields;
+/// * **ty:** A type, which will be your Vertex Format.
+///
+/// # Examples
+///
+/// ```
+/// # #[macro_use] extern crate gfx;
+/// gfx_vertex!( Vertex {
+///     a_Pos@ pos: [f32; 2],
+///     a_Color@ color: [f32; 3],
+/// });
+/// ```
+///
+/// In this case, we create a vertex type with 2 fields, pos and color, which use 2 and 3 32-bit
+/// floats respectively, and which get passed to the shader as a_Pos and a_Color.
+///
 #[macro_export]
 macro_rules! gfx_vertex {
     ($name:ident {
