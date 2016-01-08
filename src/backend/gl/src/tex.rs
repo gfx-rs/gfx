@@ -72,7 +72,7 @@ fn format_to_glpixel(format: NewFormat) -> GLenum {
 fn format_to_gltype(format: NewFormat) -> Result<GLenum, ()> {
     use gfx_core::format::SurfaceType as S;
     use gfx_core::format::ChannelType as C;
-    let (fm8, fm16, fm32) = match format.1.ty {
+    let (fm8, fm16, fm32) = match format.1 {
         C::Int | C::IntNormalized | C::IntScaled =>
             (gl::BYTE, gl::SHORT, gl::INT),
         C::Uint | C::UintNormalized | C::UintScaled =>
@@ -100,7 +100,7 @@ fn format_to_gltype(format: NewFormat) -> Result<GLenum, ()> {
 fn format_to_glfull(format: NewFormat) -> Result<GLenum, ()> {
     use gfx_core::format::SurfaceType as S;
     use gfx_core::format::ChannelType as C;
-    let cty = format.1.ty;
+    let cty = format.1;
     Ok(match format.0 {
         S::R3_G3_B2 => match cty {
             C::UintNormalized => gl::R3_G3_B2,
@@ -265,7 +265,7 @@ fn make_surface_impl(gl: &gl::Gl, format: GLenum, dim: Dimensions)
 /// Create a render surface.
 pub fn make_surface(gl: &gl::Gl, desc: &Descriptor, cty: ChannelType) ->
                         Result<Surface, Error> {
-    let format = NewFormat(desc.format, cty.into());
+    let format = NewFormat(desc.format, cty);
     let format_error = Error::Format(desc.format, Some(cty));
     let fmt = match format_to_glfull(format) {
         Ok(f) => f,
@@ -396,7 +396,7 @@ fn make_widout_storage_impl(gl: &gl::Gl, kind: Kind, format: GLint, pix: GLenum,
 /// Create a texture, using the descriptor, assuming TexStorage* isn't available.
 pub fn make_without_storage(gl: &gl::Gl, desc: &Descriptor, cty: ChannelType) ->
                             Result<Texture, Error> {
-    let format = NewFormat(desc.format, cty.into());
+    let format = NewFormat(desc.format, cty);
     let gl_format = match format_to_glfull(format) {
         Ok(f) => f as GLint,
         Err(_) => return Err(Error::Format(desc.format, Some(cty))),
@@ -513,7 +513,7 @@ fn make_with_storage_impl(gl: &gl::Gl, kind: Kind, format: GLenum,
 /// Create a texture, using the descriptor, assuming TexStorage is available.
 pub fn make_with_storage(gl: &gl::Gl, desc: &Descriptor, cty: ChannelType) ->
                          Result<Texture, Error> {
-    let format = NewFormat(desc.format, cty.into());
+    let format = NewFormat(desc.format, cty);
     let gl_format = match format_to_glfull(format) {
         Ok(f) => f,
         Err(_) => return Err(Error::Format(desc.format, Some(cty))),
@@ -627,7 +627,7 @@ pub fn update_texture_new(gl: &gl::Gl, name: Texture,
     let pixel_format = format_to_glpixel(img.format);
     let data_type = match format_to_gltype(img.format) {
         Ok(t) => t,
-        Err(_) => return Err(Error::Format(img.format.0, Some(img.format.1.ty))),
+        Err(_) => return Err(Error::Format(img.format.0, Some(img.format.1))),
     };
 
     let target = kind_to_gl(kind);

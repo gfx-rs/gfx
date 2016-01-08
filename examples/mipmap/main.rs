@@ -75,7 +75,8 @@ fn make_texture<R, F>(factory: &mut F) -> gfx::handle::ShaderResourceView<R, [f3
     factory.update_new_texture::<Rgb332>(&tex, &tex.get_info().to_image_info(2),
         gfx::cast_slice(&L2_DATA), None).unwrap();
 
-    factory.view_texture_as_shader_resource::<Rgb332>(&tex, (0, 2)).unwrap()
+    factory.view_texture_as_shader_resource::<Rgb332>(
+        &tex, (0, 2), gfx::format::Swizzle::new()).unwrap()
 }
 
 pub fn main() {

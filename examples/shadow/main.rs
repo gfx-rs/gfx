@@ -185,7 +185,8 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
         let bind = gfx::SHADER_RESOURCE | gfx::RENDER_TARGET;
         let cty = gfx::format::ChannelType::UintNormalized;
         let tex = factory.create_new_texture(kind, 1, bind, Some(cty)).unwrap();
-        let resource = factory.view_texture_as_shader_resource::<Depth>(&tex, (0, 0)).unwrap();
+        let resource = factory.view_texture_as_shader_resource::<Depth>(
+            &tex, (0, 0), gfx::format::Swizzle::new()).unwrap();
         (tex, resource)
     };
     let shadow_sampler = {

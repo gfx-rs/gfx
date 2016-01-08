@@ -301,7 +301,7 @@ impl Device {
                       (elem, instance_rate): d::pso::AttributeDesc) {
         use gfx_core::format::SurfaceType as S;
         use gfx_core::format::ChannelType as C;
-        let (fm8, fm16, fm32) = match elem.format.1.ty {
+        let (fm8, fm16, fm32) = match elem.format.1 {
             C::Int | C::IntNormalized | C::IntScaled =>
                 (gl::BYTE, gl::SHORT, gl::INT),
             C::Uint | C::UintNormalized | C::UintScaled =>
@@ -334,7 +334,7 @@ impl Device {
         unsafe { gl.BindBuffer(gl::ARRAY_BUFFER, buffer) };
         let offset = elem.offset as *const gl::types::GLvoid;
         let stride = elem.stride as gl::types::GLint;
-        match elem.format.1.ty {
+        match elem.format.1 {
             C::Int | C::Uint => unsafe {
                 gl.VertexAttribIPointer(slot as gl::types::GLuint,
                     count, gl_type, stride, offset);

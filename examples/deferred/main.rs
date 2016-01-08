@@ -311,16 +311,7 @@ impl gfx::format::Formatted for DepthFormat {
 
     fn get_format() -> gfx::format::Format {
         use gfx::format as f;
-        f::Format(
-            f::SurfaceType::D24,
-            f::View {
-                ty: f::ChannelType::Float,
-                x: f::ChannelSource::X,
-                y: f::ChannelSource::X,
-                z: f::ChannelSource::X,
-                w: f::ChannelSource::X,
-            }
-        )
+        f::Format(f::SurfaceType::D24, f::ChannelType::Float)
     }
 }
 
@@ -329,6 +320,7 @@ fn create_g_buffer<R: gfx::Resources, F: Factory<R>>(
                    -> (ViewPair<R, GFormat>, ViewPair<R, GFormat>, ViewPair<R, GFormat>,
                        gfx::handle::ShaderResourceView<R, [f32; 4]>, gfx::handle::DepthStencilView<R, Depth>)
 {
+    use gfx::format::ChannelSource;
     let pos = {
         let (_ , srv, rtv) = factory.create_render_target(width, height, false).unwrap();
         ViewPair{ resource: srv, target: rtv }
@@ -343,7 +335,8 @@ fn create_g_buffer<R: gfx::Resources, F: Factory<R>>(
     };
     let (tex, _srv, depth_rtv) = factory.create_depth_stencil(width, height).unwrap();
     // ignoring the default SRV since we need to create a custom one with swizzling
-    let depth_srv = factory.view_texture_as_shader_resource::<DepthFormat>(&tex, (0,0)).unwrap();
+    let swizzle = gfx::format::Swizzle(ChannelSource::X, ChannelSource::X, ChannelSource::X, ChannelSource::X);
+    let depth_srv = factory.view_texture_as_shader_resource::<DepthFormat>(&tex, (0,0), swizzle).unwrap();
 
     (pos, normal, diffuse, depth_srv, depth_rtv)
 }

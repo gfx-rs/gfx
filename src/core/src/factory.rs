@@ -283,8 +283,8 @@ pub trait Factory<R: Resources> {
         self.view_buffer_as_unordered_access_raw(buf.raw()).map(Phantom::new)
     }
 
-    fn view_texture_as_shader_resource<T: format::Formatted>(&mut self,
-                                       tex: &handle::Texture<R, T::Surface>, levels: (target::Level, target::Level))
+    fn view_texture_as_shader_resource<T: format::Formatted>(&mut self, tex: &handle::Texture<R, T::Surface>,
+                                       levels: (target::Level, target::Level), swizzle: format::Swizzle)
                                        -> Result<handle::ShaderResourceView<R, T::View>, ResourceViewError>
     {
         if !tex.get_info().bind.contains(SHADER_RESOURCE) {
@@ -295,6 +295,7 @@ pub trait Factory<R: Resources> {
             channel: <T::Channel as format::ChannelTyped>::get_channel_type(),
             min: levels.0,
             max: levels.1,
+            swizzle: swizzle,
         };
         self.view_texture_as_shader_resource_raw(tex.raw(), desc)
             .map(Phantom::new)
@@ -347,7 +348,7 @@ pub trait Factory<R: Resources> {
         self.generate_mipmap_raw(&raw);
         let levels = (0, raw.get_info().levels - 1);
         let tex = Phantom::new(raw);
-        let view = try!(self.view_texture_as_shader_resource::<T>(&tex, levels));
+        let view = try!(self.view_texture_as_shader_resource::<T>(&tex, levels, format::Swizzle::new()));
         Ok((tex, view))
     }
 
@@ -358,7 +359,7 @@ pub trait Factory<R: Resources> {
         let levels = if allocate_mipmap {99} else {1};
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
         let tex = try!(self.create_new_texture(kind, levels, SHADER_RESOURCE | RENDER_TARGET, Some(cty)));
-        let resource = try!(self.view_texture_as_shader_resource::<T>(&tex, (0, levels)));
+        let resource = try!(self.view_texture_as_shader_resource::<T>(&tex, (0, levels), format::Swizzle::new()));
         let target = try!(self.view_texture_as_render_target(&tex, 0, None));
         Ok((tex, resource, target))
     }
@@ -369,7 +370,7 @@ pub trait Factory<R: Resources> {
         let kind = tex::Kind::D2(width, height, tex::AaMode::Single);
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
         let tex = try!(self.create_new_texture(kind, 1, SHADER_RESOURCE | RENDER_TARGET, Some(cty)));
-        let resource = try!(self.view_texture_as_shader_resource::<T>(&tex, (0,0)));
+        let resource = try!(self.view_texture_as_shader_resource::<T>(&tex, (0,0), format::Swizzle::new()));
         let target = try!(self.view_texture_as_depth_stencil(&tex, None));
         Ok((tex, resource, target))
     }

@@ -322,4 +322,5 @@ pub struct ViewDesc {
     pub channel: format::ChannelType,
     pub min: Level,
     pub max: Level,
+    pub swizzle: format::Swizzle,
 }

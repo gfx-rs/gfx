@@ -137,35 +137,22 @@ pub enum ChannelSource {
     W,
 }
 
-/// The view configuration for a surface. It includes the channel type
-/// as well as the swizzling of the channels.
-/// Note: the swizzling types are not mirrored at compile-time, thus
-/// providing less safety and convenience, as it stands now.
-#[allow(missing_docs)]
+/// Channel swizzle configuration for the resource views.
+/// Note: It's not currently mirrored at compile-time,
+/// thus providing less safety and convenience.
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
-pub struct View {
-    pub ty: ChannelType,
-    pub x: ChannelSource,
-    pub y: ChannelSource,
-    pub z: ChannelSource,
-    pub w: ChannelSource,
-}
+pub struct Swizzle(pub ChannelSource, pub ChannelSource, pub ChannelSource, pub ChannelSource);
 
-impl From<ChannelType> for View {
-    fn from(ty: ChannelType) -> View {
-        View {
-            ty: ty,
-            x: ChannelSource::X,
-            y: ChannelSource::Y,
-            z: ChannelSource::Z,
-            w: ChannelSource::W,
-        }
+impl Swizzle {
+    /// Create a new swizzle where each channel is unmapped.
+    pub fn new() -> Swizzle {
+        Swizzle(ChannelSource::X, ChannelSource::Y, ChannelSource::Z, ChannelSource::W)
     }
 }
 
 /// Complete run-time surface format.
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
-pub struct Format(pub SurfaceType, pub View);
+pub struct Format(pub SurfaceType, pub ChannelType);
 
 
 /// Compile-time surface type trait.
@@ -211,8 +198,9 @@ pub trait Formatted {
     type View;
     /// Return the run-time value of the type.
     fn get_format() -> Format {
-        Format(Self::Surface::get_surface_type(),
-            Self::Channel::get_channel_type().into())
+        Format(
+            Self::Surface::get_surface_type(),
+            Self::Channel::get_channel_type())
     }
 }
 /// Ability to be used for vertex buffers.
@@ -368,7 +356,7 @@ impl_formats_8bit! {
     u8 = Uint,
     i8 = Int,
     U8Norm = UintNormalized,
-    I8Norm = UintNormalized,
+    I8Norm = IntNormalized,
     U8Scaled = UintScaled,
     I8Scaled = IntScaled,
 }
