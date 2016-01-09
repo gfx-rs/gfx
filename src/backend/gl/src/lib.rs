@@ -382,31 +382,6 @@ impl Device {
 
     fn process(&mut self, cmd: &Command, data_buf: &d::draw::DataBuffer) {
         match *cmd {
-            Command::ClearOld(ref data, mask) => {
-                let mut flags = 0;
-                let gl = &self.share.context;
-                if mask.intersects(d::target::COLOR) {
-                    flags |= gl::COLOR_BUFFER_BIT;
-                    state::unlock_color_mask(gl);
-                    let c = data.color;
-                    unsafe { gl.ClearColor(c[0], c[1], c[2], c[3]) };
-                }
-                if mask.intersects(d::target::DEPTH) {
-                    flags |= gl::DEPTH_BUFFER_BIT;
-                    unsafe {
-                        gl.DepthMask(gl::TRUE);
-                        gl.ClearDepth(data.depth as gl::types::GLclampd);
-                    }
-                }
-                if mask.intersects(d::target::STENCIL) {
-                    flags |= gl::STENCIL_BUFFER_BIT;
-                    unsafe {
-                        gl.StencilMask(gl::types::GLuint::max_value());
-                        gl.ClearStencil(data.stencil as gl::types::GLint);
-                    }
-                }
-                unsafe { gl.Clear(flags) };
-            },
             Command::Clear(ref set) => {
                 let gl = &self.share.context;
                 for i in 0 .. d::MAX_COLOR_TARGETS {
@@ -672,7 +647,7 @@ impl Device {
                     },
                 }
             },
-            Command::Blit(mut s_rect, d_rect, mirror, mask) => {
+            Command::Blit(mut s_rect, d_rect, mirror, _) => {
                 type GLint = gl::types::GLint;
                 // mirror
                 let mut s_end_x = s_rect.x + s_rect.w;
@@ -686,7 +661,8 @@ impl Device {
                     s_rect.y += s_rect.h;
                 }
                 // build mask
-                let mut flags = 0;
+                let flags = 0;
+                /*TODO
                 if mask.intersects(d::target::COLOR) {
                     flags |= gl::COLOR_BUFFER_BIT;
                 }
@@ -695,7 +671,7 @@ impl Device {
                 }
                 if mask.intersects(d::target::STENCIL) {
                     flags |= gl::STENCIL_BUFFER_BIT;
-                }
+                }*/
                 // build filter
                 let filter = if s_rect.w == d_rect.w && s_rect.h == d_rect.h {
                     gl::NEAREST

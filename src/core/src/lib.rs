@@ -27,7 +27,7 @@ extern crate draw_state;
 use std::fmt::Debug;
 use std::hash::Hash;
 
-pub use draw_state::{MAX_COLOR_TARGETS, state, target};
+pub use draw_state::{state, target};
 pub use self::factory::Factory;
 
 pub mod draw;
@@ -42,6 +42,8 @@ pub mod tex;
 
 /// Compile-time maximum number of vertex attributes.
 pub const MAX_VERTEX_ATTRIBUTES: usize = 16;
+/// Compile-time maximum number of color targets.
+pub const MAX_COLOR_TARGETS:      usize = 4;
 /// Compile-time maximum number of constant buffers.
 pub const MAX_CONSTANT_BUFFERS: usize = 16;
 /// Compile-time maximum number of shader resource views (SRV).

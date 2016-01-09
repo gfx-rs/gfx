@@ -18,7 +18,7 @@ use gl;
 use gfx_core as c;
 use gfx_core::draw::{ClearSet, DataPointer, InstanceOption};
 use gfx_core::state as s;
-use gfx_core::target::{ClearData, ColorValue, Mask, Mirror, Rect, Stencil};
+use gfx_core::target::{ColorValue, Mirror, Rect, Stencil};
 use {Buffer, ArrayBuffer, Program, FrameBuffer,
      Resources, PipelineState, TargetView};
 
@@ -63,12 +63,11 @@ pub enum Command {
     // resource updates
     UpdateBuffer(Buffer, DataPointer, usize),
     // drawing
-    ClearOld(ClearData, Mask),
     Clear(ClearSet),
     Draw(gl::types::GLenum, c::VertexCount, c::VertexCount, InstanceOption),
     DrawIndexed(gl::types::GLenum, c::IndexType, c::VertexCount, c::VertexCount,
                 c::VertexCount, InstanceOption),
-    Blit(Rect, Rect, Mirror, Mask),
+    Blit(Rect, Rect, Mirror, usize),
 }
 
 pub const COLOR_DEFAULT: s::Color = s::Color {

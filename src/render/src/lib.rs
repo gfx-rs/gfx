@@ -27,7 +27,7 @@ pub mod traits {
 }
 
 // draw state re-exports
-pub use draw_state::{DrawState, preset, state};
+pub use draw_state::{preset, state};
 pub use draw_state::target::*;
 
 // public re-exports
