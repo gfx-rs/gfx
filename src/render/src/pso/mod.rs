@@ -12,12 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Pipeline State Objects - typed higher-level version
+//! Pipeline State Objects - typed higher-level version.
+//!
+//! A typed PSO is defined by a macro (like `gfx_pipeline`)
+//! and generates 3 structures:
+//!  - "init" - containing all the information about resource types,
+//!    formats, layouts - everything needed for PSO initialization.
+//!  - "meta" - mapping the exact shader inputs to the PSO data. The exact
+//!    type of the PSO is `gfx::PipelineState<R, Meta>`.
+//!  - "data" - having the user-provided version of the run-time data
+//!    for PSO rendering, mostly consists of resource handles.
 
-#![allow(missing_docs)]
-
+/// Buffer components
 pub mod buffer;
+/// Resource components
 pub mod resource;
+/// Target components
 pub mod target;
 
 use std::default::Default;
@@ -25,6 +35,12 @@ use gfx_core as d;
 pub use gfx_core::pso::{Descriptor};
 
 
+/// A complete set of raw data that needs to be specified at run-time
+/// whenever we draw something with a PSO. This is what "data" struct
+/// gets transformed into when we call `encoder.draw(...)` with it.
+/// It doesn't have any typing information, since PSO knows what
+/// format and layout to expect from each resource.
+#[allow(missing_docs)]
 pub struct RawDataSet<R: d::Resources>{
     pub vertex_buffers: d::pso::VertexBufferSet<R>,
     pub constant_buffers: d::pso::ConstantBufferSet<R>,
@@ -38,6 +54,7 @@ pub struct RawDataSet<R: d::Resources>{
 }
 
 impl<R: d::Resources> RawDataSet<R> {
+    /// Create an empty data set.
     pub fn new() -> RawDataSet<R> {
         RawDataSet {
             vertex_buffers: d::pso::VertexBufferSet::new(),
@@ -72,63 +89,87 @@ pub enum InitError {
     PixelExport(d::ColorSlot, Option<d::format::Format>),
 }
 
+/// A service trait implemented by the "init" structure of PSO.
 pub trait PipelineInit {
+    /// The associated "meta" struct.
     type Meta;
+    /// Attempt to map a PSO descriptor to a give shader program,
+    /// represented by `ProgramInfo`. Returns an instance of the
+    /// "meta" struct upon successful mapping.
     fn link_to(&self, &mut Descriptor, &d::shade::ProgramInfo)
                -> Result<Self::Meta, InitError>;
 }
 
+/// a service trait implemented the "data" structure of PSO.
 pub trait PipelineData<R: d::Resources> {
+    /// The associated "meta" struct.
     type Meta;
+    /// Dump all the contained data into the raw data set,
+    /// given the mapping ("meta"), and a handle manager.
     fn bake(&self, meta: &Self::Meta, &mut d::handle::Manager<R>)
               -> RawDataSet<R>;
 }
 
-/// Strongly-typed compiled pipeline state
+/// Strongly-typed compiled pipeline state.
 pub struct PipelineState<R: d::Resources, M>(
     d::handle::RawPipelineState<R>, d::Primitive, M);
 
 impl<R: d::Resources, M> PipelineState<R, M> {
+    /// Create a new PSO from a raw handle and the "meta" instance.
     pub fn new(raw: d::handle::RawPipelineState<R>, prim: d::Primitive, meta: M)
                -> PipelineState<R, M> {
         PipelineState(raw, prim, meta)
     }
+    /// Get a raw handle reference.
     pub fn get_handle(&self) -> &d::handle::RawPipelineState<R> {
         &self.0
     }
+    /// Get a "meta" struct reference. Can be used by the user to check
+    /// what resources are actually used and what not.
     pub fn get_meta(&self) -> &M {
         &self.2
     }
-    pub fn prepare_data<D: PipelineData<R, Meta=M>>(&self, data: &D,
-                        handle_man: &mut d::handle::Manager<R>) -> RawDataSet<R>
-    {
-        data.bake(&self.2, handle_man)
-    }
 }
 
-
+/// The "link" logic portion of a PSO component.
+/// Defines the input data for the component.
 pub trait DataLink<'a>: Sized {
+    /// The assotiated "init" type - a member of the PSO "init" struct.
     type Init: 'a;
+    /// Create a new empty data link.
     fn new() -> Self;
+    /// Check if this link is actually used by the shader.
     fn is_active(&self) -> bool;
+    /// Attempt to link with a vertex attribute.
     fn link_input(&mut self, _: &d::shade::AttributeVar, _: &Self::Init) ->
                   Option<Result<d::pso::AttributeDesc, d::format::Format>> { None }
+    /// Attempt to link with a constant buffer.
     fn link_constant_buffer(&mut self, _: &d::shade::ConstantBufferVar, _: &Self::Init) ->
                             Option<Result<(), d::shade::ConstFormat>> { None }
+    /// Attempt to link with a global constant.
     fn link_global_constant(&mut self, _: &d::shade::ConstVar, _: &Self::Init) ->
                             Option<Result<(), d::shade::UniformValue>> { None }
+    /// Attempt to link with an output render target (RTV).
     fn link_output(&mut self, _: &d::shade::OutputVar, _: &Self::Init) ->
                    Option<Result<d::pso::ColorTargetDesc, d::format::Format>> { None }
+    /// Attempt to link with a depth-stencil target (DSV).
     fn link_depth_stencil(&mut self, _: &Self::Init) ->
                           Option<d::pso::DepthStencilDesc> { None }
+    /// Attempt to link with a shader resource (SRV).
     fn link_resource_view(&mut self, _: &d::shade::TextureVar, _: &Self::Init) ->
                           Option<Result<(), d::format::Format>> { None }
+    /// Attempt to link with an unordered access (UAV).
     fn link_unordered_view(&mut self, _: &d::shade::UnorderedVar, _: &Self::Init) ->
                            Option<Result<(), d::format::Format>> { None }
+    /// Attempt to link with a sampler.
     fn link_sampler(&mut self, _: &d::shade::SamplerVar, _: &Self::Init) -> Option<()> { None }
 }
 
+/// The "bind" logic portion of the PSO component.
+/// Defines how the user data translates into the raw data set.
 pub trait DataBind<R: d::Resources> {
+    /// The associated "data" type - a member of the PSO "data" struct.
     type Data;
+    /// Dump the given data into the raw data set.
     fn bind_to(&self, &mut RawDataSet<R>, &Self::Data, &mut d::handle::Manager<R>);
 }
