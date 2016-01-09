@@ -21,8 +21,46 @@
 //  ETC2_EAC_RGBA8, // Use the EXT2 EAC algorithm on 4 components.
 
 
-macro_rules! impl_surface_type {
-    { $($name:ident [$bits:expr] $(=$tr:ty)* ,)* } => {
+macro_rules! impl_channel_type {
+    { $($name:ident = $shader_type:ident [ $($imp_trait:ident),* ] ,)* } => {
+        /// Type of a surface channel. This is how we interpret the
+        /// storage allocated with `SurfaceType`.
+        #[allow(missing_docs)]
+        #[repr(u8)]
+        #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+        pub enum ChannelType {
+            $( $name, )*
+        }
+        $(
+            #[allow(missing_docs)]
+            #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+            pub struct $name;
+            impl ChannelTyped for $name {
+                type ShaderType = $shader_type;
+                fn get_channel_type() -> ChannelType {
+                    ChannelType::$name
+                }
+            }
+            $(
+                impl $imp_trait for $name {}
+            )*
+        )*
+    }
+}
+
+impl_channel_type! {
+    Int     = i32 [TextureChannel, RenderChannel],
+    Uint    = u32 [TextureChannel, RenderChannel],
+    Iscaled = f32 [TextureChannel],
+    Uscaled = f32 [TextureChannel],
+    Inorm   = f32 [TextureChannel, RenderChannel, BlendChannel],
+    Unorm   = f32 [TextureChannel, RenderChannel, BlendChannel],
+    Float   = f32 [TextureChannel, RenderChannel, BlendChannel],
+    Srgb    = f32 [TextureChannel, RenderChannel, BlendChannel],
+}
+
+macro_rules! impl_formats {
+    { $($name:ident : $container:ident < $($channel:ident),* > = $data_type:ty [ $($imp_trait:ident),* ] ,)* } => {
         /// Type of the allocated texture surface. It is supposed to only
         /// carry information about the number of bits per each channel.
         /// The actual types are up to the views to decide and interpret.
@@ -36,92 +74,77 @@ macro_rules! impl_surface_type {
         impl SurfaceType {
             /// Return the total number of bits for this format.
             pub fn get_bit_size(&self) -> u8 {
+                use std::mem::size_of;
                 match *self {
-                    $( SurfaceType::$name => $bits, )*
+                    $( SurfaceType::$name => size_of::<$data_type>() as u8, )*
                 }
             }
         }
         $(
             #[allow(missing_docs, non_camel_case_types)]
-            #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
-            pub enum $name {}
+            #[derive(PartialEq, PartialOrd, Copy, Clone, Debug)]
+            pub struct $name(pub $data_type);
             impl SurfaceTyped for $name {
+                type DataType = $data_type;
                 fn get_surface_type() -> SurfaceType {
                     SurfaceType::$name
                 }
-                fn get_bit_size() -> u8 {
-                    $bits
-                }
             }
             $(
-                impl $tr for $name {}
+                impl $imp_trait for $name {}
+            )*
+            $(
+                impl Formatted for ($name, $channel) {
+                    type Surface = $name;
+                    type Channel = $channel;
+                    type View = $container< <$channel as ChannelTyped>::ShaderType >;
+                }
             )*
         )*
     }
 }
 
-impl_surface_type! {
-    R3_G3_B2        [8]   = TextureSurface,
-    R4_G4           [8]   = TextureSurface = RenderSurface,
-    R4_G4_B4_A4     [16]  = TextureSurface = RenderSurface,
-    R5_G5_B5_A1     [16]  = TextureSurface = RenderSurface,
-    R5_G6_B5        [16]  = TextureSurface = RenderSurface,
-    R8              [8]   = BufferSurface = TextureSurface = RenderSurface,
-    R8_G8           [16]  = BufferSurface = TextureSurface = RenderSurface,
-    R8_G8_B8        [24]  = BufferSurface = TextureSurface = RenderSurface,
-    R8_G8_B8_A8     [32]  = BufferSurface = TextureSurface = RenderSurface,
-    R10_G10_B10_A2  [32]  = BufferSurface = TextureSurface = RenderSurface,
-    R16             [16]  = BufferSurface = TextureSurface = RenderSurface,
-    R16_G16         [32]  = BufferSurface = TextureSurface = RenderSurface,
-    R16_G16_B16     [48]  = BufferSurface = TextureSurface = RenderSurface,
-    R16_G16_B16_A16 [64]  = BufferSurface = TextureSurface = RenderSurface,
-    R32             [32]  = BufferSurface = TextureSurface = RenderSurface,
-    R32_G32         [64]  = BufferSurface = TextureSurface = RenderSurface,
-    R32_G32_B32     [96]  = BufferSurface = TextureSurface = RenderSurface,
-    R32_G32_B32_A32 [128] = BufferSurface = TextureSurface = RenderSurface,
-    D16             [16]  = TextureSurface = DepthSurface,
-    D24             [24]  = TextureSurface = DepthSurface,
-    D24_S8          [32]  = TextureSurface = DepthSurface = StencilSurface,
-    D32             [32]  = TextureSurface = DepthSurface,
+
+impl_formats! {
+    R3_G3_B2        : Vec3<Unorm> = u8  [TextureSurface],
+    R4_G4           : Vec2<Unorm> = u8  [TextureSurface, RenderSurface],
+    R4_G4_B4_A4     : Vec4<Unorm> = u16 [TextureSurface, RenderSurface],
+    R5_G5_B5_A1     : Vec4<Unorm> = u16 [TextureSurface, RenderSurface],
+    R5_G6_B5        : Vec3<Unorm> = u16 [TextureSurface, RenderSurface],
+    R8              : Vec1<Int, Uint, Inorm, Unorm, Iscaled, Uscaled> = u8
+        [BufferSurface, TextureSurface, RenderSurface],
+    R8_G8           : Vec2<Int, Uint, Inorm, Unorm, Iscaled, Uscaled> = [u8; 2]
+        [BufferSurface, TextureSurface, RenderSurface],
+    R8_G8_B8        : Vec3<Int, Uint, Inorm, Unorm, Iscaled, Uscaled, Srgb> = [u8; 3]
+        [BufferSurface, TextureSurface, RenderSurface],
+    R8_G8_B8_A8     : Vec4<Int, Uint, Inorm, Unorm, Iscaled, Uscaled, Srgb> = [u8; 4]
+        [BufferSurface, TextureSurface, RenderSurface],
+    R10_G10_B10_A2  : Vec4<Unorm> = u32
+        [BufferSurface, TextureSurface, RenderSurface],
+    R11_G11_B10     : Vec4<Unorm, Float> = u32
+        [BufferSurface, TextureSurface, RenderSurface],
+    R16             : Vec1<Int, Uint, Inorm, Unorm, Float> = u16
+        [BufferSurface, TextureSurface, RenderSurface],
+    R16_G16         : Vec2<Int, Uint, Inorm, Unorm, Float> = [u16; 2]
+        [BufferSurface, TextureSurface, RenderSurface],
+    R16_G16_B16     : Vec2<Int, Uint, Inorm, Unorm, Float> = [u16; 3]
+        [BufferSurface, TextureSurface, RenderSurface],
+    R16_G16_B16_A16 : Vec2<Int, Uint, Inorm, Unorm, Float> = [u16; 4]
+        [BufferSurface, TextureSurface, RenderSurface],
+    R32             : Vec1<Int, Uint, Float> = u32
+        [BufferSurface, TextureSurface, RenderSurface],
+    R32_G32         : Vec2<Int, Uint, Float> = [u32; 2]
+        [BufferSurface, TextureSurface, RenderSurface],
+    R32_G32_B32     : Vec2<Int, Uint, Float> = [u32; 3]
+        [BufferSurface, TextureSurface, RenderSurface],
+    R32_G32_B32_A32 : Vec2<Int, Uint, Float> = [u32; 4]
+        [BufferSurface, TextureSurface, RenderSurface],
+    D16             : Vec1<Unorm> = F16 [TextureSurface, DepthSurface],
+    D24             : Vec1<Unorm> = f32 [TextureSurface, DepthSurface],
+    D24_S8          : Vec1<Unorm> = (f32, u8) [TextureSurface, DepthSurface, StencilSurface],
+    D32             : Vec1<Unorm, Float> = f32 [TextureSurface, DepthSurface],
 }
 
-macro_rules! impl_channel_type {
-    { $($name:ident : $shtype:ident $(=$tr:ident)* ,)* } => {
-        /// Type of a surface channel. This is how we interpret the
-        /// storage allocated with `SurfaceType`.
-        #[allow(missing_docs)]
-        #[repr(u8)]
-        #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
-        pub enum ChannelType {
-            $( $name, )*
-        }
-        $(
-            #[allow(missing_docs)]
-            #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
-            pub enum $name {}
-            impl ChannelTyped for $name {
-                type ShaderType = $shtype;
-                fn get_channel_type() -> ChannelType {
-                    ChannelType::$name
-                }
-            }
-            $(
-                impl $tr for $name {}
-            )*
-        )*
-    }
-}
-
-impl_channel_type! {
-    Int             : i32 = TextureChannel = RenderChannel,
-    Uint            : u32 = TextureChannel = RenderChannel,
-    IntScaled       : f32 = TextureChannel,
-    UintScaled      : f32 = TextureChannel,
-    IntNormalized   : f32 = TextureChannel = RenderChannel = BlendChannel,
-    UintNormalized  : f32 = TextureChannel = RenderChannel = BlendChannel,
-    Float           : f32 = TextureChannel = RenderChannel = BlendChannel,
-    Srgb            : f32 = TextureChannel = RenderChannel = BlendChannel,
-}
 
 /// Source channel in a swizzle configuration. Some may redirect onto
 /// different physical channels, some may be hardcoded to 0 or 1.
@@ -157,10 +180,10 @@ pub struct Format(pub SurfaceType, pub ChannelType);
 
 /// Compile-time surface type trait.
 pub trait SurfaceTyped {
+    /// The corresponding data type to be passed from CPU.
+    type DataType;
     /// Return the run-time value of the type.
     fn get_surface_type() -> SurfaceType;
-    /// Return the total number of bits.
-    fn get_bit_size() -> u8;
 }
 /// An ability of a surface type to be used for vertex buffers.
 pub trait BufferSurface: SurfaceTyped {}
@@ -218,17 +241,13 @@ pub trait RenderFormat: Formatted {}
 /// Ability to be used for blended render targets.
 pub trait BlendFormat: RenderFormat {}
 
-impl<S: SurfaceTyped, C: ChannelTyped, T> Formatted for (S, C, T) {
-    type Surface = S;
-    type Channel = C;
-    type View = T;
-}
-
-impl<F: Formatted> BufferFormat for F where
+impl<F> BufferFormat for F where
+    F: Formatted,
     F::Surface: BufferSurface,
     F::Channel: ChannelTyped,
 {}
-impl<F: Formatted> DepthFormat for F where
+impl<F> DepthFormat for F where
+    F: Formatted,
     F::Surface: DepthSurface,
     F::Channel: RenderChannel,
 {}
@@ -237,19 +256,23 @@ impl<F> StencilFormat for F where
     F::Surface: StencilSurface,
     F::Channel: RenderChannel,
 {}
-impl<F: Formatted> DepthStencilFormat for F where
+impl<F> DepthStencilFormat for F where
+    F: Formatted,
     F::Surface: DepthSurface + StencilSurface,
     F::Channel: RenderChannel,
 {}
-impl<F: Formatted> TextureFormat for F where
+impl<F> TextureFormat for F where
+    F: Formatted,
     F::Surface: TextureSurface,
     F::Channel: TextureChannel,
 {}
-impl<F: Formatted> RenderFormat for F where
+impl<F> RenderFormat for F where
+    F: Formatted,
     F::Surface: RenderSurface,
     F::Channel: RenderChannel,
 {}
-impl<F: Formatted> BlendFormat for F where
+impl<F> BlendFormat for F where
+    F: Formatted,
     F::Surface: RenderSurface,
     F::Channel: BlendChannel,
 {}
@@ -307,6 +330,24 @@ pub type Vec3<T> = [T; 3];
 /// Abstracted 4-element container for macro internal use
 pub type Vec4<T> = [T; 4];
 
+
+/// Standard 8bits RGBA format.
+pub type Rgba8 = (R8_G8_B8_A8, Unorm);
+/// Standard HDR floating-point format with 10 bits for RGB components
+/// and 2 bits for the alpha.
+pub type Rgb10a2F = (R10_G10_B10_A2, Float);
+/// Standard 16-bit floating-point RGBA format.
+pub type Rgba16F = (R16_G16_B16_A16, Float);
+/// Standard 32-bit floating-point RGBA format.
+pub type Rgba32F = (R32_G32_B32_A32, Float);
+/// Standard 24-bit depth format.
+pub type Depth = (D24, Unorm);
+/// Standard 24-bit depth format with 8-bit stencil.
+pub type DepthStencil = (D24_S8, Unorm);
+/// Standard 32-bit floating-point depth format.
+pub type Depth32F = (D32, Float);
+
+
 macro_rules! impl_format {
     { $( $container:ident< $ty:ty > = $channel:ident $surface:ident, )* } => {
         $(
@@ -355,17 +396,17 @@ macro_rules! impl_formats_32bit {
 impl_formats_8bit! {
     u8 = Uint,
     i8 = Int,
-    U8Norm = UintNormalized,
-    I8Norm = IntNormalized,
-    U8Scaled = UintScaled,
-    I8Scaled = IntScaled,
+    U8Norm = Unorm,
+    I8Norm = Inorm,
+    U8Scaled = Uscaled,
+    I8Scaled = Iscaled,
 }
 
 impl_formats_16bit! {
     u16 = Uint,
     i16 = Int,
-    U16Norm = UintNormalized,
-    I16Norm = IntNormalized,
+    U16Norm = Unorm,
+    I16Norm = Inorm,
     F16 = Float,
 }
 
@@ -374,20 +415,3 @@ impl_formats_32bit! {
     i32 = Int,
     f32 = Float,
 }
-
-
-/// Standard 8bits RGBA format.
-pub type Rgba8 = [U8Norm; 4]; //(R8_G8_B8_A8, UintNormalized);
-/// Standard HDR floating-point format with 10 bits for RGB components
-/// and 2 bits for the alpha.
-pub type Rgb10a2F = (R10_G10_B10_A2, Float, [f32; 4]);
-/// Standard 16-bit floating-point RGBA format.
-pub type Rgba16F = [F16; 4]; //(R16_G16_B16_A16, Float);
-/// Standard 32-bit floating-point RGBA format.
-pub type Rgba32F = [f32; 4]; //(R32_G32_B32_A32, Float);
-/// Standard 24-bit depth format.
-pub type Depth = (D24, UintNormalized, f32);
-/// Standard 24-bit depth format with 8-bit stencil.
-pub type DepthStencil = (D24_S8, UintNormalized, f32);
-/// Standard 32-bit floating-point depth format.
-pub type Depth32F = (D32, Float, f32);

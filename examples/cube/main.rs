@@ -18,7 +18,7 @@ extern crate gfx;
 extern crate gfx_window_glfw;
 extern crate glfw;
 
-use gfx::format::{I8Scaled, U8Norm};
+use gfx::format::{I8Scaled};
 
 // Declare the vertex format suitable for drawing.
 // Notice the use of FixedPoint.
@@ -109,9 +109,9 @@ pub fn main() {
 
     let (vbuf, slice) = factory.create_vertex_buffer_indexed(&vertex_data, index_data);
 
-    let (_, texture_view) = factory.create_texture_const(
+    let (_, texture_view) = factory.create_texture_const::<gfx::format::Rgba8>(
         gfx::tex::Kind::D2(1, 1, gfx::tex::AaMode::Single),
-        &[U8Norm::cast4([0x20, 0xA0, 0xC0, 0x00])],
+        &[[0x20, 0xA0, 0xC0, 0x00]],
         false
         ).unwrap();
 

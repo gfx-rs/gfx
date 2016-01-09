@@ -259,8 +259,8 @@ impl d::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_pso(pso, program))
     }
 
-    fn create_new_texture_raw(&mut self, desc: t::Descriptor, hint: Option<ChannelType>)
-                              -> Result<handle::RawTexture<R>, t::Error> {
+    fn create_texture_raw(&mut self, desc: t::Descriptor, hint: Option<ChannelType>)
+                          -> Result<handle::RawTexture<R>, t::Error> {
         use gfx_core::tex::Error;
         let caps = &self.share.capabilities;
         if desc.levels == 0 {
@@ -362,8 +362,8 @@ impl d::Factory<R> for Factory {
         }
     }
 
-    fn update_new_texture_raw(&mut self, texture: &handle::RawTexture<R>, image: &t::RawImageInfo,
-                              data: &[u8], face: Option<t::CubeFace>) -> Result<(), t::Error> {
+    fn update_texture_raw(&mut self, texture: &handle::RawTexture<R>, image: &t::RawImageInfo,
+                          data: &[u8], face: Option<t::CubeFace>) -> Result<(), t::Error> {
         let kind = texture.get_info().kind;
         match self.frame_handles.ref_texture(texture) {
             &NewTexture::Surface(_) => Err(t::Error::Data(0)),

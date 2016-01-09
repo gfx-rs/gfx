@@ -19,7 +19,7 @@ mod structure;
 
 #[macro_export]
 macro_rules! gfx_format {
-    ($name:ident: $container:ident = $surface:ident . $channel:ident) => {
+    ($name:ident : $surface:ident = $container:ident<$channel:ident>) => {
         impl $crate::format::Formatted for $name {
             type Surface = $crate::format::$surface;
             type Channel = $crate::format::$channel;

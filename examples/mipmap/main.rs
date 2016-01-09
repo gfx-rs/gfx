@@ -19,10 +19,6 @@ extern crate glutin;
 
 pub use gfx::format::Rgba8;
 
-#[derive(Clone, Debug)]
-pub struct Rgb332(u8);
-gfx_format!(Rgb332: Vec3 = R3_G3_B2 . UintNormalized);
-
 gfx_vertex_struct!( Vertex {
     pos: [f32; 2] = "a_Pos",
     uv: [f32; 2] = "a_Uv",
@@ -65,14 +61,16 @@ fn make_texture<R, F>(factory: &mut F) -> gfx::handle::ShaderResourceView<R, [f3
               F: gfx::Factory<R>
 {
     let kind = gfx::tex::Kind::D2(4, 4, gfx::tex::AaMode::Single);
-    let tex = factory.create_new_texture(kind, 3, gfx::SHADER_RESOURCE,
-        Some(gfx::format::ChannelType::UintNormalized)).unwrap();
+    let tex = factory.create_texture(kind, 3, gfx::SHADER_RESOURCE,
+        Some(gfx::format::ChannelType::Unorm)).unwrap();
 
-    factory.update_new_texture::<Rgb332>(&tex, &tex.get_info().to_image_info(0),
+    type Rgb332 = (gfx::format::R3_G3_B2, gfx::format::Unorm);
+
+    factory.update_texture::<Rgb332>(&tex, &tex.get_info().to_image_info(0),
         gfx::cast_slice(&L0_DATA), None).unwrap();
-    factory.update_new_texture::<Rgb332>(&tex, &tex.get_info().to_image_info(1),
+    factory.update_texture::<Rgb332>(&tex, &tex.get_info().to_image_info(1),
         gfx::cast_slice(&L1_DATA), None).unwrap();
-    factory.update_new_texture::<Rgb332>(&tex, &tex.get_info().to_image_info(2),
+    factory.update_texture::<Rgb332>(&tex, &tex.get_info().to_image_info(2),
         gfx::cast_slice(&L2_DATA), None).unwrap();
 
     factory.view_texture_as_shader_resource::<Rgb332>(

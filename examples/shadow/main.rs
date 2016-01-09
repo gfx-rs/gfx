@@ -183,8 +183,8 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
         use gfx::tex as t;
         let kind = t::Kind::D2Array(512, 512, MAX_LIGHTS as t::ArraySize, t::AaMode::Single);
         let bind = gfx::SHADER_RESOURCE | gfx::RENDER_TARGET;
-        let cty = gfx::format::ChannelType::UintNormalized;
-        let tex = factory.create_new_texture(kind, 1, bind, Some(cty)).unwrap();
+        let cty = gfx::format::ChannelType::Unorm;
+        let tex = factory.create_texture(kind, 1, bind, Some(cty)).unwrap();
         let resource = factory.view_texture_as_shader_resource::<Depth>(
             &tex, (0, 0), gfx::format::Swizzle::new()).unwrap();
         (tex, resource)

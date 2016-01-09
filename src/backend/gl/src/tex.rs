@@ -61,7 +61,7 @@ fn format_to_glpixel(format: NewFormat) -> GLenum {
         S::R8 | S::R16 | S::R32=> gl::RED,
         S::R4_G4 | S::R8_G8 | S::R16_G16 | S::R32_G32 => gl::RG,
         S::R8_G8_B8 | S::R16_G16_B16 | S::R32_G32_B32 |
-        S::R3_G3_B2 | S::R5_G6_B5 => gl::RGB,
+        S::R3_G3_B2 | S::R5_G6_B5 | S::R11_G11_B10 => gl::RGB,
         S::R8_G8_B8_A8 | S::R16_G16_B16_A16 | S::R32_G32_B32_A32 |
         S::R4_G4_B4_A4 | S::R5_G5_B5_A1 | S::R10_G10_B10_A2 => gl::RGBA,
         S::D24_S8 => gl::DEPTH_STENCIL,
@@ -73,9 +73,9 @@ fn format_to_gltype(format: NewFormat) -> Result<GLenum, ()> {
     use gfx_core::format::SurfaceType as S;
     use gfx_core::format::ChannelType as C;
     let (fm8, fm16, fm32) = match format.1 {
-        C::Int | C::IntNormalized | C::IntScaled =>
+        C::Int | C::Inorm | C::Iscaled =>
             (gl::BYTE, gl::SHORT, gl::INT),
-        C::Uint | C::UintNormalized | C::UintScaled =>
+        C::Uint | C::Unorm | C::Uscaled =>
             (gl::UNSIGNED_BYTE, gl::UNSIGNED_SHORT, gl::UNSIGNED_INT),
         C::Float => (gl::ZERO, gl::HALF_FLOAT, gl::FLOAT),
         C::Srgb => return Err(()),
@@ -88,6 +88,7 @@ fn format_to_gltype(format: NewFormat) -> Result<GLenum, ()> {
         S::R5_G6_B5 => gl::UNSIGNED_SHORT_5_6_5,
         S::R8 | S::R8_G8 | S::R8_G8_B8 | S::R8_G8_B8_A8 => fm8,
         S::R10_G10_B10_A2 => gl::UNSIGNED_INT_10_10_10_2,
+        S::R11_G11_B10 => return Err(()),
         S::R16 | S::R16_G16 | S::R16_G16_B16 | S::R16_G16_B16_A16 => fm16,
         S::R32 | S::R32_G32 | S::R32_G32_B32 | S::R32_G32_B32_A32 => fm32,
         S::D16 => gl::UNSIGNED_SHORT,
@@ -103,89 +104,90 @@ fn format_to_glfull(format: NewFormat) -> Result<GLenum, ()> {
     let cty = format.1;
     Ok(match format.0 {
         S::R3_G3_B2 => match cty {
-            C::UintNormalized => gl::R3_G3_B2,
+            C::Unorm => gl::R3_G3_B2,
             _ => return Err(()),
         },
         S::R4_G4 => return Err(()),
         S::R4_G4_B4_A4 => match cty {
-            C::UintNormalized => gl::RGBA4,
+            C::Unorm => gl::RGBA4,
             _ => return Err(()),
         },
         S::R5_G5_B5_A1 => match cty {
-            C::UintNormalized => gl::RGB5_A1,
+            C::Unorm => gl::RGB5_A1,
             _ => return Err(()),
         },
         S::R5_G6_B5 => match cty {
-            C::UintNormalized => gl::RGB565,
+            C::Unorm => gl::RGB565,
             _ => return Err(()),
         },
         // 8 bits
         S::R8 => match cty {
             C::Int => gl::R8I,
-            C::IntNormalized => gl::R8_SNORM,
+            C::Inorm => gl::R8_SNORM,
             C::Uint => gl::R8UI,
-            C::UintNormalized => gl::R8,
+            C::Unorm => gl::R8,
             _ => return Err(()),
         },
         S::R8_G8 => match cty {
             C::Int => gl::RG8I,
-            C::IntNormalized => gl::RG8_SNORM,
+            C::Inorm => gl::RG8_SNORM,
             C::Uint => gl::RG8UI,
-            C::UintNormalized => gl::RG8,
+            C::Unorm => gl::RG8,
             _ => return Err(()),
         },
         S::R8_G8_B8 => match cty {
             C::Int => gl::RGB8I,
-            C::IntNormalized => gl::RGB8_SNORM,
+            C::Inorm => gl::RGB8_SNORM,
             C::Uint => gl::RGB8UI,
-            C::UintNormalized => gl::RGB8,
+            C::Unorm => gl::RGB8,
             C::Srgb => gl::SRGB8,
             _ => return Err(()),
         },
         S::R8_G8_B8_A8 => match cty {
             C::Int => gl::RGBA8I,
-            C::IntNormalized => gl::RGBA8_SNORM,
+            C::Inorm => gl::RGBA8_SNORM,
             C::Uint => gl::RGBA8UI,
-            C::UintNormalized => gl::RGBA8,
+            C::Unorm => gl::RGBA8,
             C::Srgb => gl::SRGB8_ALPHA8,
             _ => return Err(()),
         },
         // 10+ bits
         S::R10_G10_B10_A2 => match cty {
             C::Uint => gl::RGB10_A2UI,
-            C::UintNormalized => gl::RGB10_A2,
+            C::Unorm => gl::RGB10_A2,
             _ => return Err(()),
         },
+        S::R11_G11_B10 => return Err(()),
         // 16 bits
         S::R16 => match cty {
             C::Int => gl::R16I,
-            C::IntNormalized => gl::R16_SNORM,
+            C::Inorm => gl::R16_SNORM,
             C::Uint => gl::R16UI,
-            C::UintNormalized => gl::R16,
+            C::Unorm => gl::R16,
             C::Float => gl::R16F,
             _ => return Err(()),
         },
         S::R16_G16 => match cty {
             C::Int => gl::RG16I,
-            C::IntNormalized => gl::RG16_SNORM,
+            C::Inorm => gl::RG16_SNORM,
             C::Uint => gl::RG16UI,
-            C::UintNormalized => gl::RG16,
+            C::Unorm => gl::RG16,
             C::Float => gl::RG16F,
             _ => return Err(()),
         },
         S::R16_G16_B16 => match cty {
             C::Int => gl::RGB16I,
-            C::IntNormalized => gl::RGB16_SNORM,
+            C::Inorm => gl::RGB16_SNORM,
             C::Uint => gl::RGB16UI,
-            C::UintNormalized => gl::RGB16,
+            C::Unorm => gl::RGB16,
             C::Float => gl::RGB16F,
             _ => return Err(()),
         },
         S::R16_G16_B16_A16 => match cty {
             C::Int => gl::RGBA16I,
-            C::IntNormalized => gl::RGBA16_SNORM,
+            C::Inorm => gl::RGBA16_SNORM,
             C::Uint => gl::RGBA16UI,
-            C::UintNormalized => gl::RGBA16,
+            C::Unorm => gl::RGBA16,
             C::Float => gl::RGBA16F,
             _ => return Err(()),
         },

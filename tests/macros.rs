@@ -17,7 +17,7 @@ gfx_constant_struct!(Local {
 
 #[derive(Clone, Debug)]
 pub struct Rg16;
-gfx_format!(Rg16: Vec2 = R16_G16 . Float);
+gfx_format!(Rg16: R16_G16 = Vec2<Float>);
 
 gfx_pipeline!( testpipe {
     _vertex: gfx::VertexBuffer<Vertex> = (),

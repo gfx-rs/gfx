@@ -302,9 +302,9 @@ impl Device {
         use gfx_core::format::SurfaceType as S;
         use gfx_core::format::ChannelType as C;
         let (fm8, fm16, fm32) = match elem.format.1 {
-            C::Int | C::IntNormalized | C::IntScaled =>
+            C::Int | C::Inorm | C::Iscaled =>
                 (gl::BYTE, gl::SHORT, gl::INT),
-            C::Uint | C::UintNormalized | C::UintScaled =>
+            C::Uint | C::Unorm | C::Uscaled =>
                 (gl::UNSIGNED_BYTE, gl::UNSIGNED_SHORT, gl::UNSIGNED_INT),
             C::Float => (gl::ZERO, gl::HALF_FLOAT, gl::FLOAT),
             C::Srgb => {
@@ -339,11 +339,11 @@ impl Device {
                 gl.VertexAttribIPointer(slot as gl::types::GLuint,
                     count, gl_type, stride, offset);
             },
-            C::IntNormalized | C::UintNormalized => unsafe {
+            C::Inorm | C::Unorm => unsafe {
                 gl.VertexAttribPointer(slot as gl::types::GLuint,
                     count, gl_type, gl::TRUE, stride, offset);
             },
-            C::IntScaled | C:: UintScaled => unsafe {
+            C::Iscaled | C::Uscaled => unsafe {
                 gl.VertexAttribPointer(slot as gl::types::GLuint,
                     count, gl_type, gl::FALSE, stride, offset);
             },
