@@ -34,7 +34,7 @@ macro_rules! impl_channel_type {
         $(
             #[allow(missing_docs)]
             #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
-            pub struct $name;
+            pub enum $name {}
             impl ChannelTyped for $name {
                 type ShaderType = $shader_type;
                 fn get_channel_type() -> ChannelType {
@@ -82,8 +82,8 @@ macro_rules! impl_formats {
         }
         $(
             #[allow(missing_docs, non_camel_case_types)]
-            #[derive(PartialEq, PartialOrd, Copy, Clone, Debug)]
-            pub struct $name(pub $data_type);
+            #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+            pub enum $name {}
             impl SurfaceTyped for $name {
                 type DataType = $data_type;
                 fn get_surface_type() -> SurfaceType {
@@ -119,7 +119,7 @@ impl_formats! {
         [BufferSurface, TextureSurface, RenderSurface],
     R8_G8_B8_A8     : Vec4<Int, Uint, Inorm, Unorm, Iscaled, Uscaled, Srgb> = [u8; 4]
         [BufferSurface, TextureSurface, RenderSurface],
-    R10_G10_B10_A2  : Vec4<Unorm> = u32
+    R10_G10_B10_A2  : Vec4<Uint, Unorm> = u32
         [BufferSurface, TextureSurface, RenderSurface],
     R11_G11_B10     : Vec4<Unorm, Float> = u32
         [BufferSurface, TextureSurface, RenderSurface],
@@ -348,7 +348,7 @@ pub type DepthStencil = (D24_S8, Unorm);
 pub type Depth32F = (D32, Float);
 
 
-macro_rules! impl_format {
+macro_rules! impl_simple_formats {
     { $( $container:ident< $ty:ty > = $channel:ident $surface:ident, )* } => {
         $(
             impl Formatted for $container<$ty> {
@@ -362,7 +362,7 @@ macro_rules! impl_format {
 
 macro_rules! impl_formats_8bit {
     { $( $ty:ty = $channel:ident, )* } => {
-        impl_format! {$(
+        impl_simple_formats! {$(
             Vec1<$ty> = $channel R8,
             Vec2<$ty> = $channel R8_G8,
             Vec3<$ty> = $channel R8_G8_B8,
@@ -373,7 +373,7 @@ macro_rules! impl_formats_8bit {
 
 macro_rules! impl_formats_16bit {
     { $( $ty:ty = $channel:ident, )* } => {
-        impl_format! {$(
+        impl_simple_formats! {$(
             Vec1<$ty> = $channel R16,
             Vec2<$ty> = $channel R16_G16,
             Vec3<$ty> = $channel R16_G16_B16,
@@ -384,7 +384,7 @@ macro_rules! impl_formats_16bit {
 
 macro_rules! impl_formats_32bit {
     { $( $ty:ty = $channel:ident, )* } => {
-        impl_format! {$(
+        impl_simple_formats! {$(
             Vec1<$ty> = $channel R32,
             Vec2<$ty> = $channel R32_G32,
             Vec3<$ty> = $channel R32_G32_B32,
