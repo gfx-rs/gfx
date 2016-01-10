@@ -314,7 +314,7 @@ pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities, targets: Option<&[&st
         for (i, target) in targets.iter().enumerate() {
             unsafe {
                 gl.BindFragDataLocation(name, i as u32,
-                    target.as_bytes_with_nul().as_ptr() as *const i8);
+                    target.as_bytes_with_nul().as_ptr() as *const _);
             }
         }
 
@@ -328,7 +328,7 @@ pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities, targets: Option<&[&st
         let unbound = targets.iter()
             .zip(c_targets)
             .map(|(s, target)| (unsafe {
-                gl.GetFragDataLocation(name, target.as_bytes_with_nul().as_ptr() as *const i8)
+                gl.GetFragDataLocation(name, target.as_bytes_with_nul().as_ptr() as *const _)
                 }, s))
             .inspect(|&(loc, s)| info!("\t\tOutput[{}] = {}", loc, s))
             .filter(|&(loc, _)| loc == -1)
