@@ -29,21 +29,18 @@ pub struct RenderTarget<T>(Option<ColorSlot>, PhantomData<T>);
 /// - init: (`&str`, `ColorMask`, `Blend` = blending state)
 /// - data: `RenderTargetView<T>`
 pub struct BlendTarget<T>(Option<ColorSlot>, PhantomData<T>);
-/// Service struct to simplify the implementations of `DepthTarget`,
-/// `StencilTarget`, and `DepthStencilTarget`.
-pub struct DepthStencilCommon<T, I>(bool, bool, PhantomData<(T, I)>);
 /// Depth target component.
 /// - init: `Depth` = depth state
 /// - data: `DepthStencilView<T>`
-pub type DepthTarget<T> = DepthStencilCommon<T, state::Depth>;
+pub struct DepthTarget<T>(PhantomData<T>);
 /// Stencil target component.
 /// - init: `Stencil` = stencil state
-/// - data: `DepthStencilView<T>`
-pub type StencilTarget<T> = DepthStencilCommon<T, state::Stencil>;
+/// - data: (`DepthStencilView<T>`, `(front, back)` = stencil reference values)
+pub struct StencilTarget<T>(PhantomData<T>);
 /// Depth + stencil target component.
 /// - init: (`Depth` = depth state, `Stencil` = stencil state)
-/// - data: `DepthStencilView<T>`
-pub type DepthStencilTarget<T> = DepthStencilCommon<T, (state::Depth, state::Stencil)>;
+/// - data: (`DepthStencilView<T>`, `(front, back)` = stencil reference values)
+pub struct DepthStencilTarget<T>(PhantomData<T>);
 /// Scissor component. Sets up the scissor test for rendering.
 /// - init: `()`
 /// - data: `Rect` = target area
@@ -117,34 +114,60 @@ impl<R: Resources, T> DataBind<R> for BlendTarget<T> {
     }
 }
 
-impl<'a,
-    T: format::Formatted,
-    I: 'a + Copy + Into<pso::DepthStencilInfo>
-> DataLink<'a> for DepthStencilCommon<T, I> {
-    type Init = I;
-    fn new() -> Self {
-        DepthStencilCommon(false, false, PhantomData)
-    }
-    fn is_active(&self) -> bool {
-        self.0 || self.1
-    }
-    fn link_depth_stencil(&mut self, init: &Self::Init) ->
-                          Option<pso::DepthStencilDesc> {
-        let format = T::get_format();
-        let info = (*init).into();
-        self.0 = info.depth.is_some();
-        self.1 = info.front.is_some() || info.back.is_some();
-        Some((format.0, info))
+
+impl<'a, T: format::DepthFormat> DataLink<'a> for DepthTarget<T> {
+    type Init = state::Depth;
+    fn new() -> Self { DepthTarget(PhantomData) }
+    fn is_active(&self) -> bool { true }
+    fn link_depth_stencil(&mut self, init: &Self::Init) -> Option<pso::DepthStencilDesc> {
+        Some((T::get_format().0, (*init).into()))
     }
 }
 
-impl<R: Resources, T, I> DataBind<R> for DepthStencilCommon<T, I> {
+impl<R: Resources, T> DataBind<R> for DepthTarget<T> {
     type Data = handle::DepthStencilView<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
-        out.pixel_targets.add_depth_stencil(man.ref_dsv(data.raw()),
-            self.0, self.1, data.raw().get_dimensions());
+        let dsv = data.raw();
+        out.pixel_targets.add_depth_stencil(man.ref_dsv(dsv), true, false, dsv.get_dimensions());
     }
 }
+
+impl<'a, T: format::StencilFormat> DataLink<'a> for StencilTarget<T> {
+    type Init = state::Stencil;
+    fn new() -> Self { StencilTarget(PhantomData) }
+    fn is_active(&self) -> bool { true }
+    fn link_depth_stencil(&mut self, init: &Self::Init) -> Option<pso::DepthStencilDesc> {
+        Some((T::get_format().0, (*init).into()))
+    }
+}
+
+impl<R: Resources, T> DataBind<R> for StencilTarget<T> {
+    type Data = (handle::DepthStencilView<R, T>, (target::Stencil, target::Stencil));
+    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
+        let dsv = data.0.raw();
+        out.pixel_targets.add_depth_stencil(man.ref_dsv(dsv), false, true, dsv.get_dimensions());
+        out.ref_values.stencil = data.1;
+    }
+}
+
+impl<'a, T: format::DepthStencilFormat> DataLink<'a> for DepthStencilTarget<T> {
+    type Init = (state::Depth, state::Stencil);
+    fn new() -> Self { DepthStencilTarget(PhantomData) }
+    fn is_active(&self) -> bool { true }
+    fn link_depth_stencil(&mut self, init: &Self::Init) -> Option<pso::DepthStencilDesc> {
+        Some((T::get_format().0, (*init).into()))
+    }
+}
+
+impl<R: Resources, T> DataBind<R> for DepthStencilTarget<T> {
+    type Data = (handle::DepthStencilView<R, T>, (target::Stencil, target::Stencil));
+    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
+        let dsv = data.0.raw();
+        out.pixel_targets.add_depth_stencil(man.ref_dsv(dsv), true, true, dsv.get_dimensions());
+        out.ref_values.stencil = data.1;
+    }
+}
+
 
 impl<'a> DataLink<'a> for Scissor {
     type Init = ();
