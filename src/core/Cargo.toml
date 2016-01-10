@@ -27,10 +27,9 @@ name = "gfx_core"
 path = "src/lib.rs"
 
 [dependencies]
-draw_state = "0.2.0"
+draw_state = "0.3.0"
 bitflags = "0.3"
 log = "0.3"
-#num = "0.1"
 
 [features]
 unstable = []

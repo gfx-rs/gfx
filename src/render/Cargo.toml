@@ -27,7 +27,7 @@ name = "gfx"
 path = "src/lib.rs"
 
 [dependencies]
-draw_state = "0.2.0"
+draw_state = "0.3.0"
 log = "0.3"
 
 [dependencies.gfx_core]

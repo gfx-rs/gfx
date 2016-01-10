@@ -12,25 +12,45 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Render target components for the PSO macro
-
-#![allow(missing_docs)]
+//! Render target components for the PSO macro.
 
 use std::marker::PhantomData;
-use gfx_core::{format, handle, pso, state, target};
 use gfx_core::{ColorSlot, Resources};
+use gfx_core::{format, handle, pso, state, target};
 use gfx_core::factory::Phantom;
 use gfx_core::shade::OutputVar;
 use super::{DataLink, DataBind, RawDataSet};
 
-
+/// Render target component. Typically points to a color-formatted texture.
+/// - init: `&str` = name of the target
+/// - data: `RenderTargetView<T>`
 pub struct RenderTarget<T>(Option<ColorSlot>, PhantomData<T>);
+/// Render target component with active blending mode.
+/// - init: (`&str`, `ColorMask`, `Blend` = blending state)
+/// - data: `RenderTargetView<T>`
 pub struct BlendTarget<T>(Option<ColorSlot>, PhantomData<T>);
+/// Service struct to simplify the implementations of `DepthTarget`,
+/// `StencilTarget`, and `DepthStencilTarget`.
 pub struct DepthStencilCommon<T, I>(bool, bool, PhantomData<(T, I)>);
+/// Depth target component.
+/// - init: `Depth` = depth state
+/// - data: `DepthStencilView<T>`
 pub type DepthTarget<T> = DepthStencilCommon<T, state::Depth>;
+/// Stencil target component.
+/// - init: `Stencil` = stencil state
+/// - data: `DepthStencilView<T>`
 pub type StencilTarget<T> = DepthStencilCommon<T, state::Stencil>;
+/// Depth + stencil target component.
+/// - init: (`Depth` = depth state, `Stencil` = stencil state)
+/// - data: `DepthStencilView<T>`
 pub type DepthStencilTarget<T> = DepthStencilCommon<T, (state::Depth, state::Stencil)>;
+/// Scissor component. Sets up the scissor test for rendering.
+/// - init: `()`
+/// - data: `Rect` = target area
 pub struct Scissor;
+/// Blend reference component. Sets up the reference color for blending.
+/// - init: `()`
+/// - data: `ColorValue`
 pub struct BlendRef;
 
 

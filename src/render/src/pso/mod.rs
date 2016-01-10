@@ -22,6 +22,10 @@
 //!    type of the PSO is `gfx::PipelineState<R, Meta>`.
 //!  - "data" - having the user-provided version of the run-time data
 //!    for PSO rendering, mostly consists of resource handles.
+//!
+//! A typed PSO is made of individual components, each is represented
+//! by the same-named field in all three generated structures.
+//! The submodules here define these components grouped by area.
 
 /// Buffer components
 pub mod buffer;

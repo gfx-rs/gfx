@@ -12,24 +12,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Buffer components for PSO macro
-
-#![allow(missing_docs)]
+//! Resource components for PSO macro.
 
 use std::marker::PhantomData;
-use gfx_core::{handle, shade};
-use gfx_core::format::Format;
 use gfx_core::{ResourceViewSlot, UnorderedViewSlot, SamplerSlot, Resources};
+use gfx_core::{handle, shade};
 use gfx_core::factory::Phantom;
+use gfx_core::format::Format;
 use super::{DataLink, DataBind, RawDataSet};
 
-
+/// Shader resource component (SRV). Typically is a view into some texture,
+/// but can also be a buffer.
+/// - init: `&str` = name of the resource
+/// - data: `ShaderResourceView<T>`
 pub struct ShaderResource<T>(Option<ResourceViewSlot>, PhantomData<T>);
+/// Unordered access component (UAV). A writable resource (texture/buffer)
+/// with no defined access order across simultaneously executing shaders.
+/// Supported on DX10 and higher.
+/// - init: `&str` = name of the resource
+/// - data: `UnorderedAccessView<T>`
 pub struct UnorderedAccess<T>(Option<UnorderedViewSlot>, PhantomData<T>);
+/// Sampler component.
+/// - init: `&str` = name of the sampler
+/// - data: `Sampler`
 pub struct Sampler(Option<SamplerSlot>);
 /// A convenience type for a texture paired with a sampler.
-/// It only makes sense for DX9 class hardware, since everything newer
-/// has samplers totally separated from the textures.
+/// It only makes sense for DX9 class hardware, where every texture by default
+/// is bundled with a sampler, hence they are represented by the same name.
+/// In DX10 and higher samplers are totally separated from the textures.
+/// - init: `&str` = name of the sampler/texture (assuming they match)
+/// - data: (`ShaderResourceView<T>`, `Sampler`)
 pub struct TextureSampler<T>(ShaderResource<T>, Sampler);
 
 

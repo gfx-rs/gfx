@@ -12,30 +12,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Buffer components for PSO macro
-
-#![allow(missing_docs)]
+//! Buffer components for PSO macro.
 
 use std::marker::PhantomData;
-use gfx_core::{handle, pso, shade};
-use gfx_core::format::Format;
 use gfx_core::{ConstantBufferSlot, Resources, MAX_VERTEX_ATTRIBUTES};
+use gfx_core::{handle, pso, shade};
 use gfx_core::factory::Phantom;
+use gfx_core::format::Format;
 use shade::ToUniform;
 use super::{DataLink, DataBind, RawDataSet};
 
 pub use gfx_core::pso::{Element, ElemOffset, ElemStride};
 
-
+/// A trait to be implemented by any struct having the layout described
+/// in the graphics API, like a vertex buffer.
 pub trait Structure<F> {
     fn query(&str) -> Option<Element<F>>;
 }
 
 type AttributeSlotSet = usize;
+/// Service struct to simplify the implementations of `VertexBuffer` and `InstanceBuffer`.
 pub struct VertexBufferCommon<T, I>(AttributeSlotSet, PhantomData<(T, I)>);
+/// Vertex buffer component. Advanced per vertex.
+/// - init: `()`
+/// - data: `BufferHandle<T>`
 pub type VertexBuffer<T> = VertexBufferCommon<T, [(); 0]>;
+/// Instance buffer component. Same as the vertex buffer but advances per instance.
 pub type InstanceBuffer<T> = VertexBufferCommon<T, [(); 1]>;
+/// Constant buffer component.
+/// - init: `&str` = name of the buffer
+/// - data: `BufferHandle<T>`
 pub struct ConstantBuffer<T: Structure<shade::ConstFormat>>(Option<ConstantBufferSlot>, PhantomData<T>);
+/// Global (uniform) constant component. Describes a free-standing value passed into
+/// the shader, which is not enclosed into any constant buffer. Deprecated in DX10 and higher.
+/// - init: `&str` = name of the constant
+/// - data: `T` = value
 pub struct Global<T: ToUniform>(Option<shade::Location>, PhantomData<T>);
 
 
