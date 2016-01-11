@@ -482,14 +482,6 @@ impl Device {
                     self.bind_target(point, gl::STENCIL_ATTACHMENT, stencil);
                 }
             },
-            Command::BindArrayBuffer(array_buffer) => {
-                let gl = &self.share.context;
-                if self.share.capabilities.array_buffer_supported {
-                    unsafe { gl.BindVertexArray(array_buffer) };
-                } else {
-                    error!("Ignored VAO bind command: {}", array_buffer)
-                }
-            },
             Command::BindAttribute(slot, buffer, desc) => {
                 self.bind_attribute(slot, buffer, desc);
             },
@@ -545,6 +537,13 @@ impl Device {
                 let data = data_buf.get_ref(pointer);
                 factory::update_sub_buffer(&self.share.context, buffer,
                     data.as_ptr(), data.len(), offset, d::factory::BufferRole::Vertex);
+            },
+            Command::UpdateTexture(texture, kind, face, pointer, ref image) => {
+                let data = data_buf.get_ref(pointer);
+                match tex::update_texture(&self.share.context, texture, kind, face, image, data) {
+                    Ok(_) => (),
+                    Err(e) => error!("GL: Texture({}) update failed: {:?}", texture, e),
+                }
             },
             Command::Draw(primitive, start, count, instances) => {
                 let gl = &self.share.context;

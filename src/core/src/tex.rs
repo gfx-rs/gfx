@@ -219,6 +219,14 @@ impl<F> ImageInfoCommon<F> {
             mipmap: self.mipmap,
         }
     }
+
+    /// Check if it fits inside given dimensions.
+    pub fn is_inside(&self, (w, h, d, aa): Dimensions) -> bool {
+        aa == AaMode::Single &&
+        self.xoffset + self.width <= w &&
+        self.yoffset + self.height <= h &&
+        self.zoffset + self.depth <= d
+    }
 }
 
 /// Specifies how texture coordinates outside the range `[0, 1]` are handled.

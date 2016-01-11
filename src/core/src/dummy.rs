@@ -12,18 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(missing_docs)]
+//! Dummy backend implementation to test the code for compile errors
+//! outside of the graphics development environment.
 
 use {Capabilities, Device, Resources, SubmitInfo, IndexType, VertexCount};
-use {draw, pso, shade, target};
+use {draw, pso, shade, target, tex};
 use state as s;
 
-///Dummy device which does minimal work, just to allow testing gfx-rs apps for
-///compilation.
+/// Dummy device which does minimal work, just to allow testing
+/// gfx-rs apps for compilation.
 pub struct DummyDevice {
     capabilities: Capabilities,
 }
 
+/// Dummy resources phantom type
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum DummyResources {}
 
@@ -42,6 +44,7 @@ impl Resources for DummyResources {
 }
 
 impl DummyDevice {
+    /// Create a new dummy device
     pub fn new() -> DummyDevice {
         let caps = Capabilities {
             shader_model: shade::ShaderModel::Unsupported,
@@ -70,6 +73,7 @@ impl DummyDevice {
     }
 }
 
+/// Dummy command buffer, which ignores all the calls.
 pub struct DummyCommandBuffer;
 impl draw::CommandBuffer<DummyResources> for DummyCommandBuffer {
     fn clone_empty(&self) -> DummyCommandBuffer { DummyCommandBuffer }
@@ -86,6 +90,8 @@ impl draw::CommandBuffer<DummyResources> for DummyCommandBuffer {
     fn set_scissor(&mut self, _: Option<target::Rect>) {}
     fn set_ref_values(&mut self, _: s::RefValues) {}
     fn update_buffer(&mut self, _: (), _: draw::DataPointer, _: usize) {}
+    fn update_texture(&mut self, _: (), _: tex::Kind, _: Option<tex::CubeFace>,
+                      _: draw::DataPointer, _: tex::RawImageInfo) {}
     fn clear(&mut self, _: draw::ClearSet) {}
     fn call_draw(&mut self, _: VertexCount, _: VertexCount, _: draw::InstanceOption) {}
     fn call_draw_indexed(&mut self, _: IndexType,

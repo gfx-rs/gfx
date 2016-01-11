@@ -367,7 +367,7 @@ impl d::Factory<R> for Factory {
         let kind = texture.get_info().kind;
         match self.frame_handles.ref_texture(texture) {
             &NewTexture::Surface(_) => Err(t::Error::Data(0)),
-            &NewTexture::Texture(t) => tex::update_texture_new(&self.share.context, t, kind, face, image, data),
+            &NewTexture::Texture(t) => tex::update_texture(&self.share.context, t, kind, face, image, data),
         }
     }
 

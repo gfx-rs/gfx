@@ -19,8 +19,8 @@ use gfx_core as c;
 use gfx_core::draw::{ClearSet, DataPointer, InstanceOption};
 use gfx_core::state as s;
 use gfx_core::target::{ColorValue, Mirror, Rect, Stencil};
-use {Buffer, ArrayBuffer, Program, FrameBuffer,
-     Resources, PipelineState, TargetView};
+use {Buffer, Program, FrameBuffer, Texture,
+     NewTexture, Resources, PipelineState, TargetView};
 
 
 fn primitive_to_gl(primitive: c::Primitive) -> gl::types::GLenum {
@@ -47,7 +47,6 @@ pub enum Command {
     BindUnorderedViews(c::pso::UnorderedViewSet<Resources>),
     BindSamplers(c::pso::SamplerSet<Resources>),
     BindPixelTargets(c::pso::PixelTargetSet<Resources>),
-    BindArrayBuffer(ArrayBuffer),
     BindAttribute(c::AttributeSlot, Buffer, c::pso::AttributeDesc),
     BindIndex(Buffer),
     BindFrameBuffer(Access, FrameBuffer),
@@ -62,6 +61,8 @@ pub enum Command {
     SetBlendColor(ColorValue),
     // resource updates
     UpdateBuffer(Buffer, DataPointer, usize),
+    UpdateTexture(Texture, c::tex::Kind, Option<c::tex::CubeFace>,
+                  DataPointer, c::tex::RawImageInfo),
     // drawing
     Clear(ClearSet),
     Draw(gl::types::GLenum, c::VertexCount, c::VertexCount, InstanceOption),
@@ -245,6 +246,17 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
     fn update_buffer(&mut self, buf: Buffer, data: DataPointer,
                         offset_bytes: usize) {
         self.buf.push(Command::UpdateBuffer(buf, data, offset_bytes));
+    }
+
+    fn update_texture(&mut self, ntex: NewTexture, kind: c::tex::Kind,
+                      face: Option<c::tex::CubeFace>, data: DataPointer,
+                      img: c::tex::RawImageInfo) {
+        match ntex {
+            NewTexture::Texture(t) =>
+                self.buf.push(Command::UpdateTexture(t, kind, face, data, img)),
+            NewTexture::Surface(s) =>
+                error!("GL: unable to update the contents of a Surface({})", s),
+        }
     }
 
     fn clear(&mut self, set: ClearSet) {

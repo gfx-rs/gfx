@@ -27,6 +27,7 @@ pub use gfx_core::pso::{Element, ElemOffset, ElemStride};
 /// A trait to be implemented by any struct having the layout described
 /// in the graphics API, like a vertex buffer.
 pub trait Structure<F> {
+    /// Get the layout of an element by name.
     fn query(&str) -> Option<Element<F>>;
 }
 

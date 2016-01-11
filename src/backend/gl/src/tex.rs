@@ -620,9 +620,9 @@ fn update_texture_impl<F>(gl: &gl::Gl, kind: Kind, target: GLenum, pix: GLenum,
     })
 }
 
-pub fn update_texture_new(gl: &gl::Gl, name: Texture,
-                          kind: Kind, face: Option<CubeFace>,
-                          img: &RawImageInfo, slice: &[u8])
+pub fn update_texture(gl: &gl::Gl, name: Texture,
+                      kind: Kind, face: Option<CubeFace>,
+                      img: &RawImageInfo, slice: &[u8])
                           -> Result<(), Error> {
     //TODO: check size
     let data = slice.as_ptr() as *const GLvoid;

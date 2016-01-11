@@ -27,11 +27,8 @@
 //! by the same-named field in all three generated structures.
 //! The submodules here define these components grouped by area.
 
-/// Buffer components
 pub mod buffer;
-/// Resource components
 pub mod resource;
-/// Target components
 pub mod target;
 
 use std::default::Default;
