@@ -46,7 +46,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> + Sized {
     /// Create a vertex buffer with an associated slice.
     fn create_vertex_buffer<T>(&mut self, data: &[T])
                             -> (handle::Buffer<R, T>, Slice<R>) where
-                            T: pso::buffer::Structure<format::Format>
+                            T: Copy + pso::buffer::Structure<format::Format>
     {
         let nv = data.len();
         //debug_assert!(nv <= self.get_capabilities().max_vertex_count);
@@ -62,7 +62,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> + Sized {
     /// Create a vertex buffer with an index, returned by a slice.
     fn create_vertex_buffer_indexed<V, I>(&mut self, vd: &[V], id: I)
                                     -> (handle::Buffer<R, V>, Slice<R>) where
-        V: pso::buffer::Structure<format::Format>,
+        V: Copy + pso::buffer::Structure<format::Format>,
         I: ToIndexSlice<R>,
     {
         let buf = self.create_buffer_static(vd, BufferRole::Vertex);

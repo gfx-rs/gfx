@@ -283,7 +283,7 @@ impl Device {
 
     /// Fails during a debug build if the implementation's error flag was set.
     fn check(&mut self, cmd: &Command) {
-        if cfg!(not(ndebug)) {
+        if cfg!(debug_assertions) {
             let gl = &self.share.context;
             let err = Error::from_error_code(unsafe { gl.GetError() });
             if err != Error::NoError {

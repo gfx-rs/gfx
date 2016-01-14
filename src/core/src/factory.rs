@@ -33,8 +33,8 @@ pub trait Phantom: Sized {
 }
 
 
-/// Cast a slice from one type to another.
-pub fn cast_slice<A, B>(slice: &[A]) -> &[B] {
+/// Cast a slice from one POD type to another.
+pub fn cast_slice<A: Copy, B: Copy>(slice: &[A]) -> &[B] {
     use std::slice;
     let raw_len = mem::size_of::<A>() * slice.len();
     let len = raw_len / mem::size_of::<B>();
@@ -177,7 +177,7 @@ pub trait Factory<R: Resources> {
     // resource creation
     fn create_buffer_raw(&mut self, size: usize, BufferRole, BufferUsage) -> handle::RawBuffer<R>;
     fn create_buffer_static_raw(&mut self, data: &[u8], BufferRole) -> handle::RawBuffer<R>;
-    fn create_buffer_static<T>(&mut self, data: &[T], role: BufferRole) -> handle::Buffer<R, T> {
+    fn create_buffer_static<T: Copy>(&mut self, data: &[T], role: BufferRole) -> handle::Buffer<R, T> {
         let raw = self.create_buffer_static_raw(cast_slice(data), role);
         Phantom::new(raw)
     }
@@ -207,8 +207,8 @@ pub trait Factory<R: Resources> {
     /// Update the information stored in a specific buffer
     fn update_buffer_raw(&mut self, buf: &handle::RawBuffer<R>, data: &[u8], offset_bytes: usize)
                          -> Result<(), BufferUpdateError>;
-    fn update_buffer<T>(&mut self, buf: &handle::Buffer<R, T>, data: &[T], offset_elements: usize)
-                        -> Result<(), BufferUpdateError> {
+    fn update_buffer<T: Copy>(&mut self, buf: &handle::Buffer<R, T>, data: &[T], offset_elements: usize)
+                     -> Result<(), BufferUpdateError> {
         self.update_buffer_raw(buf.raw(), cast_slice(data), mem::size_of::<T>() * offset_elements)
     }
     fn map_buffer_raw(&mut self, &handle::RawBuffer<R>, MapAccess) -> Self::Mapper;

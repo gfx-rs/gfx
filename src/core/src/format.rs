@@ -181,7 +181,7 @@ pub struct Format(pub SurfaceType, pub ChannelType);
 /// Compile-time surface type trait.
 pub trait SurfaceTyped {
     /// The corresponding data type to be passed from CPU.
-    type DataType;
+    type DataType: Copy;
     /// Return the run-time value of the type.
     fn get_surface_type() -> SurfaceType;
 }
