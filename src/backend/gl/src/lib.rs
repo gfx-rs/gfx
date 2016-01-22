@@ -228,7 +228,8 @@ pub struct Device {
 }
 
 impl Device {
-    /// Create a new device. There can be only one!
+    /// Create a new device. Each GL context can only have a single
+    /// Device on GFX side to represent it. //TODO: enforce somehow
     /// Also, load OpenGL symbols and detect driver information.
     fn new<F>(fn_proc: F) -> Device where
         F: FnMut(&str) -> *const std::os::raw::c_void
@@ -445,7 +446,7 @@ impl Device {
             Command::BindUnorderedViews(uavs) => {
                 for i in 0 .. d::MAX_UNORDERED_VIEWS {
                     if let Some(_view) = uavs.0[i] {
-                        //TODO
+                        unimplemented!()
                     }
                 }
             },
@@ -493,7 +494,7 @@ impl Device {
                 let caps = &self.share.capabilities;
                 let gl = &self.share.context;
                 if !caps.render_targets_supported {
-                    panic!("Tried to do something with an FBO without FBO support!")
+                    error!("Tried to do something with an FBO without FBO support!")
                 }
                 unsafe { gl.BindFramebuffer(point, frame_buffer) };
             },
@@ -661,6 +662,7 @@ impl Device {
                 }
                 // build mask
                 let flags = 0;
+                error!("Blit mask setup is not implemented");
                 /*TODO
                 if mask.intersects(d::target::COLOR) {
                     flags |= gl::COLOR_BUFFER_BIT;
@@ -755,6 +757,7 @@ impl d::Device for Device {
 impl gfx_core::DeviceFence<Resources> for Device {
     fn fenced_submit(&mut self, info: d::SubmitInfo<Self>, after: Option<handle::Fence<Resources>>)
                      -> handle::Fence<Resources> {
+        //TODO: check capabilities?
         use gfx_core::Device;
         use gfx_core::handle::Producer;
 

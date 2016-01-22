@@ -13,10 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashSet;
-use std::ffi;
-use std::fmt;
-use std::mem;
-use std::str;
+use std::{cmp, ffi, fmt, mem, str};
 use gl;
 use gfx_core::Capabilities;
 use gfx_core::shade;
@@ -33,18 +30,16 @@ pub struct Version {
 // FIXME https://github.com/rust-lang/rust/issues/18738
 // derive
 
-#[automatically_derived]
-impl ::std::cmp::Ord for Version {
+impl cmp::Ord for Version {
     #[inline]
-    fn cmp(&self, other: &Version) -> ::std::cmp::Ordering {
+    fn cmp(&self, other: &Version) -> cmp::Ordering {
         (&self.major, &self.minor, &self.revision, self.vendor_info)
             .cmp(&(&other.major, &other.minor, &other.revision, other.vendor_info))
     }
 }
-#[automatically_derived]
-impl ::std::cmp::PartialOrd for Version {
+impl cmp::PartialOrd for Version {
     #[inline]
-    fn partial_cmp(&self, other: &Version) -> ::std::option::Option<::std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Version) -> Option<cmp::Ordering> {
         (&self.major, &self.minor, &self.revision, self.vendor_info)
             .partial_cmp(&(&other.major, &other.minor, &other.revision, other.vendor_info))
     }

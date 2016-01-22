@@ -130,10 +130,10 @@ pub struct Capabilities {
 #[repr(u8)]
 pub enum Primitive {
     /// Each vertex represents a single point.
-    Point,
+    PointList,
     /// Each pair of vertices represent a single line segment. For example, with `[a, b, c, d,
     /// e]`, `a` and `b` form a line, `c` and `d` form a line, and `e` is discarded.
-    Line,
+    LineList,
     /// Every two consecutive vertices represent a single line segment. Visually forms a "path" of
     /// lines, as they are all connected. For example, with `[a, b, c]`, `a` and `b` form a line
     /// line, and `b` and `c` form a line.

@@ -150,7 +150,6 @@ impl Factory {
 }
 
 
-#[allow(raw_pointer_derive)]
 #[derive(Copy, Clone)]
 pub struct RawMapping {
     pub pointer: *mut ::std::os::raw::c_void,

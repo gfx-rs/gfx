@@ -26,8 +26,8 @@ use {Buffer, Program, FrameBuffer, Texture,
 fn primitive_to_gl(primitive: c::Primitive) -> gl::types::GLenum {
     use gfx_core::Primitive as P;
     match primitive {
-        P::Point => gl::POINTS,
-        P::Line => gl::LINES,
+        P::PointList => gl::POINTS,
+        P::LineList => gl::LINES,
         P::LineStrip => gl::LINE_STRIP,
         P::TriangleList => gl::TRIANGLES,
         P::TriangleStrip => gl::TRIANGLE_STRIP,

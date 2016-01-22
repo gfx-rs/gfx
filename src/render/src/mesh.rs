@@ -51,8 +51,8 @@ impl<R: Resources> Slice<R> {
         use gfx_core::Primitive::*;
         let nv = (self.end - self.start) as u32;
         match prim {
-            Point => nv,
-            Line => nv / 2,
+            PointList => nv,
+            LineList => nv / 2,
             LineStrip => (nv-1),
             TriangleList => nv / 3,
             TriangleStrip | TriangleFan => (nv-2) / 3,

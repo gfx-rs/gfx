@@ -92,7 +92,7 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
         }
         let elem_size = mem::size_of::<T>();
         let offset_bytes = elem_size * offset_elements;
-        let bound = data.len() * elem_size + offset_bytes;
+        let bound = data.len().wrapping_mul(elem_size) + offset_bytes;
         if bound <= buf.get_info().size {
             let pointer = self.data_buffer.add_vec(data);
             self.command_buffer.update_buffer(

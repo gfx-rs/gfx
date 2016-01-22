@@ -36,9 +36,9 @@ pub trait Phantom: Sized {
 /// Cast a slice from one POD type to another.
 pub fn cast_slice<A: Copy, B: Copy>(slice: &[A]) -> &[B] {
     use std::slice;
-    let raw_len = mem::size_of::<A>() * slice.len();
+    let raw_len = mem::size_of::<A>().wrapping_mul(slice.len());
     let len = raw_len / mem::size_of::<B>();
-    assert_eq!(raw_len, len * mem::size_of::<B>());
+    assert_eq!(raw_len, mem::size_of::<B>().wrapping_mul(len));
     unsafe {
         slice::from_raw_parts(slice.as_ptr() as *const B, len)
     }

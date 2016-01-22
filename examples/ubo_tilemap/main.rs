@@ -235,7 +235,7 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
             data: charmap_data,
         }
     }
-    
+
     pub fn update_data<F>(&mut self, factory: &mut F) where F: gfx::Factory<R> {
         factory.update_buffer(&self.params.tilemap, &self.data, 0).unwrap();
     }
@@ -271,7 +271,7 @@ impl<R: gfx::Resources> TileMap<R> {
                   aspect_ratio: f32)
                   -> TileMap<R> where F: gfx::Factory<R> {
         let mut tiles = Vec::new();
-        for _ in (0..tilemap_size[0]*tilemap_size[1]) {
+        for _ in 0 .. tilemap_size[0]*tilemap_size[1] {
             tiles.push(TileMapData::new_empty());
         }
         let pso = factory.create_pipeline_simple(
@@ -299,9 +299,9 @@ impl<R: gfx::Resources> TileMap<R> {
         if focus[0] <= self.limit_coords[0] && focus[1] <= self.limit_coords[1] {
             self.focus_coords = focus;
             let mut charmap_ypos = 0;
-            for ypos in (self.focus_coords[1]..self.focus_coords[1]+self.charmap_size[1]) {
+            for ypos in self.focus_coords[1] .. self.focus_coords[1]+self.charmap_size[1] {
                 let mut charmap_xpos = 0;
-                for xpos in (self.focus_coords[0]..self.focus_coords[0]+self.charmap_size[0]) {
+                for xpos in self.focus_coords[0] .. self.focus_coords[0]+self.charmap_size[0] {
                     let tile_idx = (ypos * self.tilemap_size[0]) + xpos;
                     let charmap_idx = (charmap_ypos * self.charmap_size[0]) + charmap_xpos;
                     self.tilemap_plane.data[charmap_idx] = self.tiles[tile_idx];
@@ -387,8 +387,8 @@ impl<R: gfx::Resources> TileMap<R> {
 
 pub fn populate_tilemap<R>(tilemap: &mut TileMap<R>, tilemap_size: [usize; 2]) where R: gfx::Resources {
     // paper in with dummy data
-    for ypos in (0..tilemap_size[1]) {
-        for xpos in (0..tilemap_size[0]) {
+    for ypos in 0 .. tilemap_size[1] {
+        for xpos in 0 .. tilemap_size[0] {
             tilemap.set_tile(xpos, ypos, [1.0, 7.0, 0.0, 0.0]);
         }
     }
