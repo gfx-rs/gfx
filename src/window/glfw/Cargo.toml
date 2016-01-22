@@ -25,13 +25,7 @@ authors = ["The Gfx-rs Developers"]
 [lib]
 name = "gfx_window_glfw"
 
-[dependencies.gfx]
-path = "../../render"
-version = "0.9"
-
-[dependencies.gfx_device_gl]
-path = "../../backend/gl"
-version = "0.8"
-
 [dependencies]
 glfw = "0.2"
+gfx = { path = "../../render", version = "0.9" }
+gfx_device_gl = { path = "../../backend/gl", version = "0.8" }
