@@ -252,14 +252,12 @@ impl<F> DepthFormat for F where
     F::Channel: RenderChannel,
 {}
 impl<F> StencilFormat for F where
-    F: DepthFormat + StencilFormat,
+    F: Formatted,
     F::Surface: StencilSurface,
     F::Channel: RenderChannel,
 {}
 impl<F> DepthStencilFormat for F where
-    F: Formatted,
-    F::Surface: DepthSurface + StencilSurface,
-    F::Channel: RenderChannel,
+    F: DepthFormat + StencilFormat
 {}
 impl<F> TextureFormat for F where
     F: Formatted,
