@@ -1,32 +1,19 @@
-extern crate gfx;
+extern crate gfx_core;
 
 use std::mem;
-use gfx::device::{BufferRole, BufferInfo, BufferUsage, Resources};
-use gfx::handle::{Buffer, Manager, Producer};
+use gfx_core::dummy::DummyResources;
+use gfx_core::factory::{BufferRole, BufferInfo, BufferUsage};
+use gfx_core::handle::{Buffer, Manager, Producer};
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-enum TestResources {}
-impl gfx::Resources for TestResources {
-    type Buffer = ();
-    type ArrayBuffer = ();
-    type Shader = ();
-    type Program = ();
-    type FrameBuffer = ();
-    type Surface = ();
-    type Texture = ();
-    type Sampler = ();
-    type Fence = ();
-}
-
-fn mock_buffer<T>(len: usize) -> Buffer<TestResources, T> {
+fn mock_buffer<T>(len: usize) -> Buffer<DummyResources, T> {
+    use gfx_core::factory::Phantom;
     let mut handler = Manager::new();
-    Buffer::from_raw(
-        handler.make_buffer((), BufferInfo {
-            role: BufferRole::Vertex,
-            usage: BufferUsage::Static,
-            size: mem::size_of::<T>() * len,
-        }),
-    )
+    let raw = handler.make_buffer((), BufferInfo {
+        role: BufferRole::Vertex,
+        usage: BufferUsage::Const,
+        size: mem::size_of::<T>() * len,
+    });
+    Phantom::new(raw)
 }
 
 #[test]
@@ -43,15 +30,17 @@ fn test_buffer_zero_len() {
 
 #[test]
 fn test_cleanup() {
-    let mut man: Manager<TestResources> = Manager::new();
-    let _ = man.make_frame_buffer(());
+    let mut man: Manager<DummyResources> = Manager::new();
+    let _ = man.make_shader(());
     let mut count = 0u8;
     man.clean_with(&mut count,
         |_,_| (),
-        |_,_| (),
-        |_,_| (),
-        |_,_| (),
         |b,_| { *b += 1; },
+        |_,_| (),
+        |_,_| (),
+        |_,_| (),
+        |_,_| (),
+        |_,_| (),
         |_,_| (),
         |_,_| (),
         |_,_| (),

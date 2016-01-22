@@ -12,9 +12,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Shader source extension
+//! Shader parameter handling.
 
-use device::shade::{CreateShaderError, CreateProgramError, ShaderModel};
+pub use gfx_core::shade::{ConstFormat, Formatted};
+use gfx_core::shade::{CreateShaderError, CreateProgramError,
+                      ShaderModel, UniformValue};
+
+#[allow(missing_docs)]
+pub trait ToUniform: Copy {
+    fn convert(self) -> UniformValue;
+}
+
+macro_rules! impl_uniforms {
+    { $( $ty_src:ty = $ty_dst:ident ,)* } => {
+        $(
+        impl ToUniform for $ty_src {
+            fn convert(self) -> UniformValue {
+                UniformValue::$ty_dst(self)
+            }
+        }
+        )*
+    }
+}
+
+impl_uniforms!{
+    i32 = I32,
+    f32 = F32,
+    [i32; 2] = I32Vector2,
+    [i32; 3] = I32Vector3,
+    [i32; 4] = I32Vector4,
+    [f32; 2] = F32Vector2,
+    [f32; 3] = F32Vector3,
+    [f32; 4] = F32Vector4,
+    [[f32; 2]; 2] = F32Matrix2,
+    [[f32; 3]; 3] = F32Matrix3,
+    [[f32; 4]; 4] = F32Matrix4,
+}
 
 /// Program linking error
 #[derive(Clone, PartialEq, Debug)]

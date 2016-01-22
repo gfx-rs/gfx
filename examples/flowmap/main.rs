@@ -22,11 +22,11 @@ extern crate glutin;
 extern crate image;
 
 use std::io::Cursor;
-use gfx::traits::{Factory, Stream, FactoryExt};
+pub use gfx::format::Rgba8;
 
-gfx_vertex!( Vertex {
-    a_Pos@ pos: [f32; 2],
-    a_Uv@ uv: [f32; 2],
+gfx_vertex_struct!( Vertex {
+    pos: [f32; 2] = "a_Pos",
+    uv: [f32; 2] = "a_Uv",
 });
 
 impl Vertex {
@@ -38,43 +38,37 @@ impl Vertex {
     }
 }
 
-gfx_parameters!( Params {
-    t_Color@ color: gfx::shade::TextureParam<R>,
-    t_Flow@ flow: gfx::shade::TextureParam<R>,
-    t_Noise@ noise: gfx::shade::TextureParam<R>,
-    f_Offset0@ offset0: f32,
-    f_Offset1@ offset1: f32,
+gfx_pipeline!( pipe {
+    vbuf: gfx::VertexBuffer<Vertex> = (),
+    color: gfx::TextureSampler<[f32; 4]> = "t_Color",
+    flow: gfx::TextureSampler<[f32; 4]> = "t_Flow",
+    noise: gfx::TextureSampler<[f32; 4]> = "t_Noise",
+    offset0: gfx::Global<f32> = "f_Offset0",
+    offset1: gfx::Global<f32> = "f_Offset1",
+    out: gfx::RenderTarget<Rgba8> = "o_Color",
 });
 
-fn load_texture<R, F>(factory: &mut F, data: &[u8]) -> Result<gfx::handle::Texture<R>, String>
-        where R: gfx::Resources, F: gfx::device::Factory<R> {
-    let img = image::load(Cursor::new(data), image::PNG).unwrap();
-
-    let img = match img {
-        image::DynamicImage::ImageRgba8(img) => img,
-        img => img.to_rgba()
-    };
+fn load_texture<R, F>(factory: &mut F, data: &[u8])
+                -> Result<gfx::handle::ShaderResourceView<R, [f32; 4]>, String>
+        where R: gfx::Resources, F: gfx::Factory<R> {
+    use gfx::tex as t;
+    let img = image::load(Cursor::new(data), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
-    let tex_info = gfx::tex::TextureInfo {
-        width: width as u16,
-        height: height as u16,
-        depth: 1,
-        levels: 1,
-        kind: gfx::tex::Kind::D2,
-        format: gfx::tex::RGBA8
-    };
-
-    Ok(factory.create_texture_static(tex_info, &img).unwrap())
+    let kind = t::Kind::D2(width as t::Size, height as t::Size, t::AaMode::Single);
+    let (_, view) = factory.create_texture_const::<Rgba8>(kind, gfx::cast_slice(&img), false).unwrap();
+    Ok(view)
 }
 
 pub fn main() {
     use time::precise_time_s;
+    use gfx::traits::{Device, FactoryExt};
 
-    let (mut stream, mut device, mut factory) = gfx_window_glutin::init(
-        glutin::WindowBuilder::new()
+    let builder = glutin::WindowBuilder::new()
             .with_title("Flowmap example".to_string())
-            .with_dimensions(800, 600).build().unwrap()
-    );
+            .with_dimensions(800, 600);
+    let (window, mut device, mut factory, main_color, _) =
+        gfx_window_glutin::init::<Rgba8>(builder);
+    let mut encoder = factory.create_encoder();
 
     let vertex_data = [
         Vertex::new([-1.0, -1.0], [0.0, 0.0]),
@@ -86,35 +80,29 @@ pub fn main() {
         Vertex::new([-1.0,  1.0], [0.0, 1.0]),
     ];
 
-    let mesh = factory.create_mesh(&vertex_data);
+    let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
 
     let water_texture = load_texture(&mut factory, &include_bytes!("image/water.png")[..]).unwrap();
     let flow_texture  = load_texture(&mut factory, &include_bytes!("image/flow.png")[..]).unwrap();
     let noise_texture = load_texture(&mut factory, &include_bytes!("image/noise.png")[..]).unwrap();
+    let sampler = factory.create_sampler_linear();
 
-    let program = {
-        let vs = gfx::ShaderSource {
-            glsl_120: Some(include_bytes!("shader/flowmap_120.glslv")),
-            glsl_150: Some(include_bytes!("shader/flowmap_150.glslv")),
-            .. gfx::ShaderSource::empty()
-        };
-        let fs = gfx::ShaderSource {
-            glsl_120: Some(include_bytes!("shader/flowmap_120.glslf")),
-            glsl_150: Some(include_bytes!("shader/flowmap_150.glslf")),
-            .. gfx::ShaderSource::empty()
-        };
-        factory.link_program_source(vs, fs).unwrap()
-    };
+    let pso = factory.create_pipeline_simple(
+        include_bytes!("shader/flowmap_150.glslv"),
+        include_bytes!("shader/flowmap_150.glslf"),
+        gfx::state::CullFace::Nothing,
+        pipe::new()
+        ).unwrap();
 
-    let uniforms = Params {
-        color: (water_texture, None),
-        flow: (flow_texture, None),
-        noise: (noise_texture, None),
+    let mut data = pipe::Data {
+        vbuf: vbuf,
+        color: (water_texture, sampler.clone()),
+        flow: (flow_texture, sampler.clone()),
+        noise: (noise_texture, sampler.clone()),
         offset0: 0f32,
         offset1: 0.5f32,
-        _r: std::marker::PhantomData,
+        out: main_color,
     };
-    let mut batch = gfx::batch::Full::new(mesh, program, uniforms).unwrap();
 
     let mut cycle0 = 0.0f32;
     let mut cycle1 = 0.5f32;
@@ -128,9 +116,9 @@ pub fn main() {
         let delta = (time_start - time_end) as f32;
 
         // quit when Esc is pressed.
-        for event in stream.out.window.poll_events() {
+        for event in window.poll_events() {
             match event {
-                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) => break 'main,
+                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
                 glutin::Event::Closed => break 'main,
                 _ => {},
             }
@@ -151,16 +139,15 @@ pub fn main() {
             cycle1 -= 1f32;
         }
 
-        batch.params.offset0 = cycle0;
-        batch.params.offset1 = cycle1;
+        encoder.reset();
+        encoder.clear(&data.out, [0.3, 0.3, 0.3, 1.0]);
 
-        stream.clear(gfx::ClearData {
-            color: [0.3, 0.3, 0.3, 1.0],
-            depth: 1.0,
-            stencil: 0,
-        });
+        data.offset0 = cycle0;
+        data.offset1 = cycle1;
+        encoder.draw(&slice, &pso, &data);
 
-        stream.draw(&batch).unwrap();
-        stream.present(&mut device);
+        device.submit(encoder.as_buffer());
+        window.swap_buffers().unwrap();
+        device.cleanup();
     }
 }

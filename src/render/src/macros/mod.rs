@@ -1,4 +1,4 @@
-// Copyright 2014 The Gfx-rs Developers.
+// Copyright 2015 The Gfx-rs Developers.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Renderer extensions.
+//! Various helper macros.
 
-#![deny(missing_docs)]
+mod pso;
+mod structure;
 
-/// Factory extensions
-pub mod factory;
-/// Shader extensions
-pub mod shade;
-/// Render stream
-pub mod stream;
+#[macro_export]
+macro_rules! gfx_format {
+    ($name:ident : $surface:ident = $container:ident<$channel:ident>) => {
+        impl $crate::format::Formatted for $name {
+            type Surface = $crate::format::$surface;
+            type Channel = $crate::format::$channel;
+            type View = $crate::format::$container<
+                <$crate::format::$channel as $crate::format::ChannelTyped>::ShaderType
+                >;
+        }
+    }
+}

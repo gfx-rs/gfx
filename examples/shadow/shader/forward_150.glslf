@@ -8,6 +8,7 @@ struct Light {
 	mat4 proj;	// view-projection matrix
 };
 
+//TODO: structured buffer
 uniform b_Lights {
 	Light u_Lights[MAX_LIGHTS];
 };

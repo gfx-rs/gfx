@@ -1,4 +1,4 @@
-// Copyright 2014 The Gfx-rs Developers.
+// Copyright 2015 The Gfx-rs Developers.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,13 +37,12 @@ extern crate rand;
 extern crate genmesh;
 extern crate noise;
 
-use std::marker::PhantomData;
 use rand::Rng;
 use cgmath::FixedArray;
 use cgmath::{Matrix, Matrix4, Point3, Vector3, EuclideanVector};
 use cgmath::{Transform, AffineMatrix3};
-use gfx::attrib::Floater;
-use gfx::traits::{Device, Factory, Stream, ToIndexSlice, ToSlice, Output, FactoryExt};
+pub use gfx::format::{Depth, I8Scaled, Rgba8};
+use gfx::traits::{Device, Factory, FactoryExt};
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{SharedVertex, IndexedPolygon};
 use time::precise_time_s;
@@ -53,51 +52,32 @@ use noise::{Seed, perlin2};
 // Remember to also change the constants in the shaders
 const NUM_LIGHTS: usize = 250;
 
-gfx_vertex!( TerrainVertex {
-    a_Pos@ pos: [f32; 3],
-    a_Normal@ normal: [f32; 3],
-    a_Color@ color: [f32; 3],
+pub type GFormat = [f32; 4];
+
+gfx_constant_struct!(LightInfo {
+    pos: [f32; 4],
 });
 
-gfx_vertex!( BlitVertex {
-    a_Pos@ pos: [Floater<i8>; 3],
-    a_TexCoord@ tex_coord: [Floater<u8>; 2],
+gfx_vertex_struct!( TerrainVertex {
+    pos: [f32; 3] = "a_Pos",
+    normal: [f32; 3] = "a_Normal",
+    color: [f32; 3] = "a_Color",
 });
 
-gfx_vertex!( CubeVertex {
-    a_Pos@ pos: [Floater<i8>; 3],
+gfx_pipeline!( terrain {
+    vbuf: gfx::VertexBuffer<TerrainVertex> = (),
+    model: gfx::Global<[[f32; 4]; 4]> = "u_Model",
+    view: gfx::Global<[[f32; 4]; 4]> = "u_View",
+    proj: gfx::Global<[[f32; 4]; 4]> = "u_Proj",
+    cam_pos: gfx::Global<[f32; 3]> = "u_CameraPos",
+    out_position: gfx::RenderTarget<GFormat> = "o_Position",
+    out_normal: gfx::RenderTarget<GFormat> = "o_Normal",
+    out_color: gfx::RenderTarget<GFormat> = "o_Color",
+    out_depth: gfx::DepthTarget<gfx::format::Depth> =
+        gfx::preset::depth::LESS_EQUAL_WRITE,
 });
 
-gfx_parameters!( TerrainParams {
-    u_Model@ model: [[f32; 4]; 4],
-    u_View@ view: [[f32; 4]; 4],
-    u_Proj@ proj: [[f32; 4]; 4],
-    u_CameraPos@ cam_pos: [f32; 3],
-});
-
-gfx_parameters!( LightParams {
-    u_Transform@ transform: [[f32; 4]; 4],
-    u_LightPosBlock@ light_pos_buf: gfx::handle::RawBuffer<R>,
-    u_Radius@ radius: f32,
-    u_CameraPos@ cam_pos: [f32; 3],
-    u_FrameRes@ frame_res: [f32; 2],
-    u_TexPos@ tex_pos: gfx::shade::TextureParam<R>,
-    u_TexNormal@ tex_normal: gfx::shade::TextureParam<R>,
-    u_TexDiffuse@ tex_diffuse: gfx::shade::TextureParam<R>,
-});
-
-gfx_parameters!( EmitterParams {
-    u_Transform@ transform: [[f32; 4]; 4],
-    u_LightPosBlock@ light_pos_buf: gfx::handle::RawBuffer<R>,
-    u_Radius@ radius: f32,
-});
-
-gfx_parameters!( BlitParams {
-    u_Tex@ tex: gfx::shade::TextureParam<R>,
-});
-
-
-static TERRAIN_VERTEX_SRC: &'static [u8] = b"
+pub static TERRAIN_VERTEX_SRC: &'static [u8] = b"
     #version 150 core
 
     uniform mat4 u_Model;
@@ -118,7 +98,7 @@ static TERRAIN_VERTEX_SRC: &'static [u8] = b"
     }
 ";
 
-static TERRAIN_FRAGMENT_SRC: &'static [u8] = b"
+pub static TERRAIN_FRAGMENT_SRC: &'static [u8] = b"
     #version 150 core
 
     in vec3 v_FragPos;
@@ -137,7 +117,18 @@ static TERRAIN_FRAGMENT_SRC: &'static [u8] = b"
     }
 ";
 
-static BLIT_VERTEX_SRC: &'static [u8] = b"
+gfx_vertex_struct!( BlitVertex {
+    pos: [I8Scaled; 3] = "a_Pos",
+    tex_coord: [I8Scaled; 2] = "a_TexCoord",
+});
+
+gfx_pipeline!( blit {
+    vbuf: gfx::VertexBuffer<BlitVertex> = (),
+    tex: gfx::TextureSampler<[f32; 4]> = "u_Tex",
+    out: gfx::RenderTarget<Rgba8> = "o_Color",
+});
+
+pub static BLIT_VERTEX_SRC: &'static [u8] = b"
     #version 150 core
 
     in vec3 a_Pos;
@@ -150,7 +141,7 @@ static BLIT_VERTEX_SRC: &'static [u8] = b"
     }
 ";
 
-static BLIT_FRAGMENT_SRC: &'static [u8] = b"
+pub static BLIT_FRAGMENT_SRC: &'static [u8] = b"
     #version 150 core
 
     uniform sampler2D u_Tex;
@@ -163,7 +154,27 @@ static BLIT_FRAGMENT_SRC: &'static [u8] = b"
     }
 ";
 
-static LIGHT_VERTEX_SRC: &'static [u8] = b"
+gfx_vertex_struct!( CubeVertex {
+    pos: [I8Scaled; 3] = "a_Pos",
+});
+
+gfx_pipeline!( light {
+    vbuf: gfx::VertexBuffer<CubeVertex> = (),
+    transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
+    light_pos_buf: gfx::ConstantBuffer<LightInfo> = "u_LightPosBlock",
+    radius: gfx::Global<f32> = "u_Radius",
+    cam_pos: gfx::Global<[f32; 3]> = "u_CameraPos",
+    frame_res: gfx::Global<[f32; 2]> = "u_FrameRes",
+    tex_pos: gfx::TextureSampler<[f32; 4]> = "u_TexPos",
+    tex_normal: gfx::TextureSampler<[f32; 4]> = "u_TexNormal",
+    tex_diffuse: gfx::TextureSampler<[f32; 4]> = "u_TexDiffuse",
+    out_color: gfx::BlendTarget<GFormat> =
+        ("o_Color", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
+    out_depth: gfx::DepthTarget<gfx::format::Depth> =
+        gfx::preset::depth::LESS_EQUAL_TEST,
+});
+
+pub static LIGHT_VERTEX_SRC: &'static [u8] = b"
     #version 150 core
 
     uniform mat4 u_Transform;
@@ -183,7 +194,7 @@ static LIGHT_VERTEX_SRC: &'static [u8] = b"
     }
 ";
 
-static LIGHT_FRAGMENT_SRC: &'static [u8] = b"
+pub static LIGHT_FRAGMENT_SRC: &'static [u8] = b"
     #version 150 core
 
     uniform float u_Radius;
@@ -218,7 +229,18 @@ static LIGHT_FRAGMENT_SRC: &'static [u8] = b"
     }
 ";
 
-static EMITTER_VERTEX_SRC: &'static [u8] = b"
+gfx_pipeline!( emitter {
+    vbuf: gfx::VertexBuffer<CubeVertex> = (),
+    transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
+    light_pos_buf: gfx::ConstantBuffer<LightInfo> = "u_LightPosBlock",
+    radius: gfx::Global<f32> = "u_Radius",
+    out_color: gfx::BlendTarget<GFormat> =
+        ("o_Color", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
+    out_depth: gfx::DepthTarget<gfx::format::Depth> =
+        gfx::preset::depth::LESS_EQUAL_TEST,
+});
+
+pub static EMITTER_VERTEX_SRC: &'static [u8] = b"
     #version 150 core
 
     uniform mat4 u_Transform;
@@ -236,7 +258,7 @@ static EMITTER_VERTEX_SRC: &'static [u8] = b"
     }
 ";
 
-static EMITTER_FRAGMENT_SRC: &'static [u8] = b"
+pub static EMITTER_FRAGMENT_SRC: &'static [u8] = b"
     #version 150 core
 
     out vec4 o_Color;
@@ -275,81 +297,69 @@ fn calculate_color(height: f32) -> [f32; 3] {
     }
 }
 
-fn create_g_buffer<R: gfx::Resources, F: Factory<R>>(
-                   width: gfx::tex::Size, height: gfx::tex::Size, factory: &mut F)
-                   -> (gfx::Frame<R>, gfx::handle::Texture<R>, gfx::handle::Texture<R>,
-                       gfx::handle::Texture<R>, gfx::handle::Texture<R>) {
-    let texture_info_float = gfx::tex::TextureInfo {
-        width: width,
-        height: height,
-        depth: 1,
-        levels: 1,
-        kind: gfx::tex::Kind::D2,
-        format: gfx::tex::Format::Float(gfx::tex::Components::RGBA, gfx::attrib::FloatSize::F32),
-    };
-    let texture_info_depth = gfx::tex::TextureInfo {
-        width: width,
-        height: height,
-        depth: 1,
-        levels: 1,
-        kind: gfx::tex::Kind::D2,
-        format: gfx::tex::Format::DEPTH24_STENCIL8,
-    };
-    let texture_pos     = factory.create_texture(texture_info_float).unwrap();
-    let texture_normal  = factory.create_texture(texture_info_float).unwrap();
-    let texture_diffuse = factory.create_texture(texture_info_float).unwrap();
-    let texture_depth   = factory.create_texture(texture_info_depth).unwrap();
-
-    let frame = gfx::Frame {
-        colors: vec![
-            gfx::Plane::Texture(texture_pos    .clone(), 0, None),
-            gfx::Plane::Texture(texture_normal .clone(), 0, None),
-            gfx::Plane::Texture(texture_diffuse.clone(), 0, None),
-        ],
-        depth: Some(gfx::Plane::Texture(texture_depth  .clone(), 0, None)),
-        .. gfx::Frame::empty(width, height)
-    };
-
-    (frame, texture_pos, texture_normal, texture_diffuse, texture_depth)
+struct ViewPair<R: gfx::Resources, T: gfx::format::Formatted> {
+    resource: gfx::handle::ShaderResourceView<R, T::View>,
+    target: gfx::handle::RenderTargetView<R, T>,
 }
 
-fn create_res_buffer<R: gfx::Resources, F: Factory<R>>(
-                     width: gfx::tex::Size, height: gfx::tex::Size,
-                     factory: &mut F, texture_depth: &gfx::handle::Texture<R>)
-                     -> (gfx::Frame<R>, gfx::handle::Texture<R>, gfx::handle::Texture<R>) {
-    let texture_info_float = gfx::tex::TextureInfo {
-        width: width,
-        height: height,
-        depth: 1,
-        levels: 1,
-        kind: gfx::tex::Kind::D2,
-        format: gfx::tex::Format::Float(gfx::tex::Components::RGBA, gfx::attrib::FloatSize::F32),
+// need a custom depth format in order to view SRV depth as float4
+struct DepthFormat;
+impl gfx::format::Formatted for DepthFormat {
+    type Surface = gfx::format::D24;
+    type Channel = gfx::format::Float;
+    type View = [f32; 4];
+
+    fn get_format() -> gfx::format::Format {
+        use gfx::format as f;
+        f::Format(f::SurfaceType::D24, f::ChannelType::Float)
+    }
+}
+
+fn create_g_buffer<R: gfx::Resources, F: Factory<R>>(
+                   width: gfx::tex::Size, height: gfx::tex::Size, factory: &mut F)
+                   -> (ViewPair<R, GFormat>, ViewPair<R, GFormat>, ViewPair<R, GFormat>,
+                       gfx::handle::ShaderResourceView<R, [f32; 4]>, gfx::handle::DepthStencilView<R, Depth>)
+{
+    use gfx::format::ChannelSource;
+    let pos = {
+        let (_ , srv, rtv) = factory.create_render_target(width, height, false).unwrap();
+        ViewPair{ resource: srv, target: rtv }
     };
-
-    let texture_frame = factory.create_texture(texture_info_float).unwrap();
-
-    let frame = gfx::Frame {
-        colors: vec![gfx::Plane::Texture(texture_frame.clone(), 0, None)],
-        depth: Some(gfx::Plane::Texture(texture_depth.clone(), 0, None)),
-       .. gfx::Frame::empty(width, height)
+    let normal = {
+        let (_ , srv, rtv) = factory.create_render_target(width, height, false).unwrap();
+        ViewPair{ resource: srv, target: rtv }
     };
+    let diffuse = {
+        let (_ , srv, rtv) = factory.create_render_target(width, height, false).unwrap();
+        ViewPair{ resource: srv, target: rtv }
+    };
+    let (tex, _srv, depth_rtv) = factory.create_depth_stencil(width, height).unwrap();
+    // ignoring the default SRV since we need to create a custom one with swizzling
+    let swizzle = gfx::format::Swizzle(ChannelSource::X, ChannelSource::X, ChannelSource::X, ChannelSource::X);
+    let depth_srv = factory.view_texture_as_shader_resource::<DepthFormat>(&tex, (0,0), swizzle).unwrap();
 
-    (frame, texture_frame, texture_depth.clone())
+    (pos, normal, diffuse, depth_srv, depth_rtv)
 }
 
 pub fn main() {
     env_logger::init().unwrap();
-    let (gfx::OwnedStream{ ren: mut renderer, out: output }, mut device, mut factory) =
-        gfx_window_glutin::init(glutin::WindowBuilder::new()
+    let (window, mut device, mut factory, main_color, _) =
+        gfx_window_glutin::init::<Rgba8>(glutin::WindowBuilder::new()
             .with_title("Deferred rendering example with gfx-rs".to_string())
             .with_dimensions(800, 600)
             .with_gl(glutin::GL_CORE)
-            .build().unwrap()
     );
 
-    let (w, h) = output.get_size();
-    let (g_buffer, texture_pos, texture_normal, texture_diffuse, texture_depth) = create_g_buffer(w, h, &mut factory);
-    let (res_buffer, texture_frame, _) = create_res_buffer(w, h, &mut factory, &texture_depth);
+    let (w, h) = {
+        let (w, h) = window.get_inner_size().unwrap();
+        (w as gfx::tex::Size, h as gfx::tex::Size)
+    };
+    let (gpos, gnormal, gdiffuse, depth_resource, depth_target) =
+        create_g_buffer(w, h, &mut factory);
+    let res = {
+        let (_ , srv, rtv) = factory.create_render_target(w, h, false).unwrap();
+        ViewPair{ resource: srv, target: rtv }
+    };
 
     let seed = {
         let rand_seed = rand::thread_rng().gen();
@@ -365,7 +375,7 @@ pub fn main() {
     let proj = cgmath::perspective(cgmath::deg(60.0f32), aspect, 5.0, 100.0);
 
     let terrain_scale = Vector3::new(25.0, 25.0, 25.0);
-    let mut terrain = {
+    let (terrain_pso, mut terrain_data, terrain_slice) = {
         let plane = genmesh::generators::Plane::subdivide(256, 256);
         let vertex_data: Vec<TerrainVertex> = plane.shared_vertex_iter()
             .map(|(x, y)| {
@@ -384,89 +394,88 @@ pub fn main() {
             .map(|i| i as u32)
             .collect();
 
-        let mesh = factory.create_mesh(&vertex_data);
-        let slice = index_data.to_slice(&mut factory, gfx::PrimitiveType::TriangleList);
+        let (vbuf, slice) = factory.create_vertex_buffer_indexed(&vertex_data, &index_data[..]);
 
-        let program = factory.link_program(TERRAIN_VERTEX_SRC, TERRAIN_FRAGMENT_SRC)
-                             .unwrap();
-        let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
+        let pso = factory.create_pipeline_simple(
+            TERRAIN_VERTEX_SRC, TERRAIN_FRAGMENT_SRC,
+            gfx::state::CullFace::Back, terrain::new()
+            ).unwrap();
 
-        let data = TerrainParams {
+        let data = terrain::Data {
+            vbuf: vbuf,
             model: Matrix4::identity().into_fixed(),
             view: Matrix4::identity().into_fixed(),
             proj: proj.into_fixed(),
             cam_pos: Vector3::new(0.0, 0.0, 0.0).into_fixed(),
-            _r: PhantomData,
+            out_position: gpos.target.clone(),
+            out_normal: gnormal.target.clone(),
+            out_color: gdiffuse.target.clone(),
+            out_depth: depth_target.clone(),
         };
 
-        let mut batch = gfx::batch::Full::new(mesh, program, data).unwrap();
-        batch.slice = slice;
-        batch.state = state;
-        batch
+        (pso, data, slice)
     };
 
-    let mut blit = {
+    let (blit_pso, mut blit_data, blit_slice) = {
         let vertex_data = [
-            BlitVertex { pos: Floater::cast3([-1, -1, 0]), tex_coord: Floater::cast2([0, 0]) },
-            BlitVertex { pos: Floater::cast3([ 1, -1, 0]), tex_coord: Floater::cast2([1, 0]) },
-            BlitVertex { pos: Floater::cast3([ 1,  1, 0]), tex_coord: Floater::cast2([1, 1]) },
-            BlitVertex { pos: Floater::cast3([-1, -1, 0]), tex_coord: Floater::cast2([0, 0]) },
-            BlitVertex { pos: Floater::cast3([ 1,  1, 0]), tex_coord: Floater::cast2([1, 1]) },
-            BlitVertex { pos: Floater::cast3([-1,  1, 0]), tex_coord: Floater::cast2([0, 1]) },
+            BlitVertex { pos: I8Scaled::cast3([-1, -1, 0]), tex_coord: I8Scaled::cast2([0, 0]) },
+            BlitVertex { pos: I8Scaled::cast3([ 1, -1, 0]), tex_coord: I8Scaled::cast2([1, 0]) },
+            BlitVertex { pos: I8Scaled::cast3([ 1,  1, 0]), tex_coord: I8Scaled::cast2([1, 1]) },
+            BlitVertex { pos: I8Scaled::cast3([-1, -1, 0]), tex_coord: I8Scaled::cast2([0, 0]) },
+            BlitVertex { pos: I8Scaled::cast3([ 1,  1, 0]), tex_coord: I8Scaled::cast2([1, 1]) },
+            BlitVertex { pos: I8Scaled::cast3([-1,  1, 0]), tex_coord: I8Scaled::cast2([0, 1]) },
         ];
-        let mesh = factory.create_mesh(&vertex_data);
-        let slice = mesh.to_slice(gfx::PrimitiveType::TriangleList);
 
-        let program = factory.link_program(BLIT_VERTEX_SRC, BLIT_FRAGMENT_SRC)
-                             .unwrap();
-        let state = gfx::DrawState::new();
+        let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
 
-        let data = BlitParams {
-            tex: (texture_pos.clone(), Some(sampler.clone())),
-            _r: PhantomData,
+        let pso = factory.create_pipeline_simple(
+            BLIT_VERTEX_SRC, BLIT_FRAGMENT_SRC,
+            gfx::state::CullFace::Nothing, blit::new()
+            ).unwrap();
+
+        let data = blit::Data {
+            vbuf: vbuf,
+            tex: (gpos.resource.clone(), sampler.clone()),
+            out: main_color.clone(),
         };
 
-        let mut batch = gfx::batch::Full::new(mesh, program, data).unwrap();
-        batch.slice = slice;
-        batch.state = state;
-        batch
+        (pso, data, slice)
     };
 
-    let light_pos_buffer = factory.create_buffer_dynamic::<[f32; 4]>(NUM_LIGHTS,
-        gfx::BufferRole::Uniform);
+    let light_pos_buffer = factory.create_constant_buffer(NUM_LIGHTS);
 
-    let (mut light, mut emitter) = {
+    let (light_vbuf, mut light_slice) = {
         let vertex_data = [
             // top (0, 0, 1)
-            CubeVertex { pos: Floater::cast3([-1, -1,  1]) },
-            CubeVertex { pos: Floater::cast3([ 1, -1,  1]) },
-            CubeVertex { pos: Floater::cast3([ 1,  1,  1]) },
-            CubeVertex { pos: Floater::cast3([-1,  1,  1]) },
+            CubeVertex { pos: I8Scaled::cast3([-1, -1,  1]) },
+            CubeVertex { pos: I8Scaled::cast3([ 1, -1,  1]) },
+            CubeVertex { pos: I8Scaled::cast3([ 1,  1,  1]) },
+            CubeVertex { pos: I8Scaled::cast3([-1,  1,  1]) },
             // bottom (0, 0, -1)
-            CubeVertex { pos: Floater::cast3([-1,  1, -1]) },
-            CubeVertex { pos: Floater::cast3([ 1,  1, -1]) },
-            CubeVertex { pos: Floater::cast3([ 1, -1, -1]) },
-            CubeVertex { pos: Floater::cast3([-1, -1, -1]) },
+            CubeVertex { pos: I8Scaled::cast3([-1,  1, -1]) },
+            CubeVertex { pos: I8Scaled::cast3([ 1,  1, -1]) },
+            CubeVertex { pos: I8Scaled::cast3([ 1, -1, -1]) },
+            CubeVertex { pos: I8Scaled::cast3([-1, -1, -1]) },
             // right (1, 0, 0)
-            CubeVertex { pos: Floater::cast3([ 1, -1, -1]) },
-            CubeVertex { pos: Floater::cast3([ 1,  1, -1]) },
-            CubeVertex { pos: Floater::cast3([ 1,  1,  1]) },
-            CubeVertex { pos: Floater::cast3([ 1, -1,  1]) },
+            CubeVertex { pos: I8Scaled::cast3([ 1, -1, -1]) },
+            CubeVertex { pos: I8Scaled::cast3([ 1,  1, -1]) },
+            CubeVertex { pos: I8Scaled::cast3([ 1,  1,  1]) },
+            CubeVertex { pos: I8Scaled::cast3([ 1, -1,  1]) },
             // left (-1, 0, 0)
-            CubeVertex { pos: Floater::cast3([-1, -1,  1]) },
-            CubeVertex { pos: Floater::cast3([-1,  1,  1]) },
-            CubeVertex { pos: Floater::cast3([-1,  1, -1]) },
-            CubeVertex { pos: Floater::cast3([-1, -1, -1]) },
+            CubeVertex { pos: I8Scaled::cast3([-1, -1,  1]) },
+            CubeVertex { pos: I8Scaled::cast3([-1,  1,  1]) },
+            CubeVertex { pos: I8Scaled::cast3([-1,  1, -1]) },
+            CubeVertex { pos: I8Scaled::cast3([-1, -1, -1]) },
             // front (0, 1, 0)
-            CubeVertex { pos: Floater::cast3([ 1,  1, -1]) },
-            CubeVertex { pos: Floater::cast3([-1,  1, -1]) },
-            CubeVertex { pos: Floater::cast3([-1,  1,  1]) },
-            CubeVertex { pos: Floater::cast3([ 1,  1,  1]) },
+            CubeVertex { pos: I8Scaled::cast3([ 1,  1, -1]) },
+            CubeVertex { pos: I8Scaled::cast3([-1,  1, -1]) },
+            CubeVertex { pos: I8Scaled::cast3([-1,  1,  1]) },
+            CubeVertex { pos: I8Scaled::cast3([ 1,  1,  1]) },
             // back (0, -1, 0)
-            CubeVertex { pos: Floater::cast3([ 1, -1,  1]) },
-            CubeVertex { pos: Floater::cast3([-1, -1,  1]) },
-            CubeVertex { pos: Floater::cast3([-1, -1, -1]) },
-            CubeVertex { pos: Floater::cast3([ 1, -1, -1]) },
+            CubeVertex { pos: I8Scaled::cast3([ 1, -1,  1]) },
+            CubeVertex { pos: I8Scaled::cast3([-1, -1,  1]) },
+            CubeVertex { pos: I8Scaled::cast3([-1, -1, -1]) },
+            CubeVertex { pos: I8Scaled::cast3([ 1, -1, -1]) },
         ];
 
         let index_data: &[u8] = &[
@@ -478,83 +487,76 @@ pub fn main() {
             20, 21, 22, 22, 23, 20, // back
         ];
 
-        let mesh = factory.create_mesh(&vertex_data);
-        let slice = index_data.to_slice(&mut factory, gfx::PrimitiveType::TriangleList);
+        factory.create_vertex_buffer_indexed(&vertex_data, index_data)
+    };
+    light_slice.instances = Some((NUM_LIGHTS as gfx::InstanceCount, 0));
 
-        let state = gfx::DrawState::new()
-            .depth(gfx::state::Comparison::LessEqual, false)
-            .blend(gfx::BlendPreset::Add);
+    let (light_pso, mut light_data) = {
+        let pso = factory.create_pipeline_simple(
+            LIGHT_VERTEX_SRC, LIGHT_FRAGMENT_SRC,
+            gfx::state::CullFace::Back, light::new()
+            ).unwrap();
 
-        let light_data = LightParams {
+        let data = light::Data {
+            vbuf: light_vbuf.clone(),
             transform: Matrix4::identity().into_fixed(),
-            light_pos_buf: light_pos_buffer.raw().clone(),
+            light_pos_buf: light_pos_buffer.clone(),
             radius: 3.0,
             cam_pos: Vector3::new(0.0, 0.0, 0.0).into_fixed(),
             frame_res: [w as f32, h as f32],
-            tex_pos: (texture_pos.clone(), Some(sampler.clone())),
-            tex_normal: (texture_normal.clone(), Some(sampler.clone())),
-            tex_diffuse: (texture_diffuse.clone(), Some(sampler.clone())),
-            _r: PhantomData,
+            tex_pos: (gpos.resource.clone(), sampler.clone()),
+            tex_normal: (gnormal.resource.clone(), sampler.clone()),
+            tex_diffuse: (gdiffuse.resource.clone(), sampler.clone()),
+            out_color: res.target.clone(),
+            out_depth: depth_target.clone(),
         };
 
-        let light_program = factory.link_program(LIGHT_VERTEX_SRC, LIGHT_FRAGMENT_SRC)
-                                   .unwrap();
-        let light = {
-            let mut batch = gfx::batch::Full::new(mesh.clone(), light_program, light_data).unwrap();
-            batch.slice = slice.clone();
-            batch.state = state.clone();
-            batch
-        };
+        (pso, data)
+    };
 
-        let emitter_data = EmitterParams {
+    let (emitter_pso, mut emitter_data) = {
+        let pso = factory.create_pipeline_simple(
+            EMITTER_VERTEX_SRC, EMITTER_FRAGMENT_SRC,
+            gfx::state::CullFace::Back, emitter::new()
+            ).unwrap();
+
+        let data = emitter::Data {
+            vbuf: light_vbuf.clone(),
             transform: Matrix4::identity().into_fixed(),
-            light_pos_buf: light_pos_buffer.raw().clone(),
+            light_pos_buf: light_pos_buffer.clone(),
             radius: 0.2,
-            _r: PhantomData,
+            out_color: res.target.clone(),
+            out_depth: depth_target.clone(),
         };
 
-        let emitter_program = factory.link_program(EMITTER_VERTEX_SRC, EMITTER_FRAGMENT_SRC)
-                                     .unwrap();
-        let emitter = {
-            let mut batch = gfx::batch::Full::new(mesh, emitter_program, emitter_data).unwrap();
-            batch.slice = slice;
-            batch.state = state;
-            batch
-        };
-
-        (light, emitter)
+        (pso, data)
     };
 
-    let clear_data = gfx::ClearData {
-        color: [0.0, 0.0, 0.0, 1.0],
-        depth: 1.0,
-        stencil: 0,
-    };
+    let mut debug_buf: Option<gfx::handle::ShaderResourceView<_, [f32; 4]>> = None;
 
-    let mut debug_buf: Option<gfx::handle::Texture<_>> = None;
-
-    let mut light_pos_vec: Vec<[f32; 4]> = (0 ..NUM_LIGHTS).map(|_| {
-        [0.0, 0.0, 0.0, 0.0]
+    let mut light_pos_vec: Vec<LightInfo> = (0 ..NUM_LIGHTS).map(|_| {
+        LightInfo{ pos: [0.0, 0.0, 0.0, 0.0] }
     }).collect();
 
-     'main: loop {
+    let mut encoder = factory.create_encoder();
+
+    'main: loop {
         // quit when Esc is pressed.
-        for event in output.window.poll_events() {
+        for event in window.poll_events() {
             use glutin::{Event, VirtualKeyCode};
             match event {
-                Event::Closed => break 'main,
-                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Escape)) =>
-                    break 'main,
                 Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key1)) =>
-                    debug_buf = Some(texture_pos.clone()),
+                    debug_buf = Some(gpos.resource.clone()),
                 Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key2)) =>
-                    debug_buf = Some(texture_normal.clone()),
+                    debug_buf = Some(gnormal.resource.clone()),
                 Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key3)) =>
-                    debug_buf = Some(texture_diffuse.clone()),
+                    debug_buf = Some(gdiffuse.resource.clone()),
                 Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key4)) =>
-                    debug_buf = Some(texture_depth.clone()),
+                    debug_buf = Some(depth_resource.clone()),
                 Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key0)) =>
                     debug_buf = None,
+                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Escape)) |
+                Event::Closed => break 'main,
                 _ => {},
             }
         }
@@ -574,17 +576,17 @@ pub fn main() {
                 &Point3::new(0.0, 0.0, 0.0),
                 &Vector3::unit_z(),
             );
-            terrain.params.view = view.mat.into_fixed();
-            terrain.params.cam_pos = cam_pos.into_fixed();
+            terrain_data.view = view.mat.into_fixed();
+            terrain_data.cam_pos = cam_pos.into_fixed();
 
-            light.params.transform = proj.mul_m(&view.mat).into_fixed();
-            light.params.cam_pos = cam_pos.into_fixed();
+            light_data.transform = proj.mul_m(&view.mat).into_fixed();
+            light_data.cam_pos = cam_pos.into_fixed();
 
-            emitter.params.transform = proj.mul_m(&view.mat).into_fixed();
+            emitter_data.transform = proj.mul_m(&view.mat).into_fixed();
         }
 
         // Update light positions
-        for (i, p) in light_pos_vec.iter_mut().enumerate() {
+        for (i, d) in light_pos_vec.iter_mut().enumerate() {
             let (x, y) = {
                 let fi = i as f32;
                 // Distribute lights nicely
@@ -593,45 +595,40 @@ pub fn main() {
             };
             let h = perlin2(&seed, &[x, y]);
 
-            p[0] = terrain_scale.x * x;
-            p[1] = terrain_scale.y * y;
-            p[2] = terrain_scale.z * h + 0.5;
+            d.pos[0] = terrain_scale.x * x;
+            d.pos[1] = terrain_scale.y * y;
+            d.pos[2] = terrain_scale.z * h + 0.5;
         };
         factory.update_buffer(&light_pos_buffer, &light_pos_vec, 0)
                .unwrap();
 
-        {   // Render the terrain to the geometry buffer
-            let mut stream = (&mut renderer, &g_buffer);
-            stream.clear(clear_data);
-            stream.draw(&terrain).unwrap();
-        }
+        encoder.reset();
+        encoder.clear_depth(&depth_target, 1.0);
+        encoder.clear(&gpos.target, [0.0, 0.0, 0.0, 1.0]);
+        encoder.clear(&gnormal.target, [0.0, 0.0, 0.0, 1.0]);
+        encoder.clear(&gdiffuse.target, [0.0, 0.0, 0.0, 1.0]);
+        // Render the terrain to the geometry buffer
+        encoder.draw(&terrain_slice, &terrain_pso, &terrain_data);
 
         let blit_tex = match debug_buf {
             Some(ref tex) => tex,   // Show one of the immediate buffers
             None => {
-                renderer.clear(clear_data, gfx::COLOR, &res_buffer);
-                let mut stream = (&mut renderer, &res_buffer);
-
-                // Apply light
-                stream.draw_instanced(&light, NUM_LIGHTS as u32, 0)
-                      .unwrap();
+                encoder.clear(&res.target, [0.0, 0.0, 0.0, 1.0]);
+                // Apply lights
+                encoder.draw(&light_slice, &light_pso, &light_data);
                 // Draw light emitters
-                stream.draw_instanced(&emitter, NUM_LIGHTS as u32, 0)
-                      .unwrap();
+                encoder.draw(&light_slice, &emitter_pso, &emitter_data);
 
-                &texture_frame
+                &res.resource
             }
         };
-        blit.params.tex = (blit_tex.clone(), Some(sampler.clone()));
+        blit_data.tex = (blit_tex.clone(), sampler.clone());
+        // Show the result
+        encoder.clear(&main_color, [0.0, 0.0, 0.0, 1.0]);
+        encoder.draw(&blit_slice, &blit_pso, &blit_data);
 
-        {   // Show the result
-            let mut stream = (&mut renderer, &output);
-            stream.clear(clear_data);
-            stream.draw(&blit).unwrap();
-            stream.flush(&mut device);
-        }
-
-        output.window.swap_buffers().unwrap();
+        device.submit(encoder.as_buffer());
+        window.swap_buffers().unwrap();
         device.cleanup();
     }
 }

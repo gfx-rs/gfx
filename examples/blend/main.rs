@@ -1,4 +1,4 @@
-// Copyright 2014 The Gfx-rs Developers.
+// Copyright 2015 The Gfx-rs Developers.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,12 +19,12 @@ extern crate glutin;
 
 extern crate image;
 
-use std::io::Cursor;
-use gfx::traits::{Factory, Stream, FactoryExt};
+pub use gfx::format::Rgba8;
+use gfx::traits::{Device, Factory, FactoryExt};
 
-gfx_vertex!( Vertex {
-    a_Pos@ pos: [f32; 2],
-    a_Uv@ uv: [f32; 2],
+gfx_vertex_struct!( Vertex {
+    pos: [f32; 2] = "a_Pos",
+    uv: [f32; 2] = "a_Uv",
 });
 
 impl Vertex {
@@ -36,39 +36,33 @@ impl Vertex {
     }
 }
 
-gfx_parameters!( Params {
-    t_Lena@ lena: gfx::shade::TextureParam<R>,
-    t_Tint@ tint: gfx::shade::TextureParam<R>,
-    i_Blend@ blend: i32,
+gfx_pipeline!( pipe {
+    vbuf: gfx::VertexBuffer<Vertex> = (),
+    lena: gfx::TextureSampler<[f32; 4]> = "t_Lena",
+    tint: gfx::TextureSampler<[f32; 4]> = "t_Tint",
+    blend: gfx::Global<i32> = "i_Blend",
+    out: gfx::RenderTarget<Rgba8> = "o_Color",
 });
 
-fn load_texture<R, F>(factory: &mut F, data: &[u8]) -> Result<gfx::handle::Texture<R>, String>
-        where R: gfx::Resources, F: gfx::device::Factory<R> {
-    let img = image::load(Cursor::new(data), image::PNG).unwrap();
-
-    let (fmt, img) = match img {
-        image::DynamicImage::ImageRgba8(img) => (gfx::tex::RGBA8, img),
-        img =>                                  (gfx::tex::RGBA8, img.to_rgba())
-    };
+fn load_texture<R, F>(factory: &mut F, data: &[u8])
+                -> Result<gfx::handle::ShaderResourceView<R, [f32; 4]>, String> where
+                R: gfx::Resources, F: gfx::Factory<R> {
+    use std::io::Cursor;
+    use gfx::tex as t;
+    let img = image::load(Cursor::new(data), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
-    let tex_info = gfx::tex::TextureInfo {
-        width: width as u16,
-        height: height as u16,
-        depth: 1,
-        levels: 1,
-        kind: gfx::tex::Kind::D2,
-        format: fmt
-    };
-
-    Ok(factory.create_texture_static(tex_info, &img).unwrap())
+    let kind = t::Kind::D2(width as t::Size, height as t::Size, t::AaMode::Single);
+    let (_, view) = factory.create_texture_const::<Rgba8>(kind, gfx::cast_slice(&img), false).unwrap();
+    Ok(view)
 }
 
 pub fn main() {
-    let (mut stream, mut device, mut factory) = gfx_window_glutin::init(
-        glutin::WindowBuilder::new()
+    let builder = glutin::WindowBuilder::new()
             .with_title("Blending example".to_string())
-            .with_dimensions(800, 600).build().unwrap()
-    );
+            .with_dimensions(800, 600);
+    let (window, mut device, mut factory, main_color, _) =
+        gfx_window_glutin::init::<Rgba8>(builder);
+    let mut encoder = factory.create_encoder();
 
     // fullscreen quad
     let vertex_data = [
@@ -80,24 +74,18 @@ pub fn main() {
         Vertex::new([ 1.0,  1.0], [1.0, 0.0]),
         Vertex::new([-1.0,  1.0], [0.0, 0.0]),
     ];
-    let mesh = factory.create_mesh(&vertex_data);
+    let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
 
     let lena_texture = load_texture(&mut factory, &include_bytes!("image/lena.png")[..]).unwrap();
     let tint_texture = load_texture(&mut factory, &include_bytes!("image/tint.png")[..]).unwrap();
+    let sampler = factory.create_sampler_linear();
 
-    let program = {
-        let vs = gfx::ShaderSource {
-            glsl_120: Some(include_bytes!("shader/blend_120.glslv")),
-            glsl_150: Some(include_bytes!("shader/blend_150.glslv")),
-            .. gfx::ShaderSource::empty()
-        };
-        let fs = gfx::ShaderSource {
-            glsl_120: Some(include_bytes!("shader/blend_120.glslf")),
-            glsl_150: Some(include_bytes!("shader/blend_150.glslf")),
-            .. gfx::ShaderSource::empty()
-        };
-        factory.link_program_source(vs, fs).unwrap()
-    };
+    let pso = factory.create_pipeline_simple(
+        include_bytes!("shader/blend_150.glslv"),
+        include_bytes!("shader/blend_150.glslf"),
+        gfx::state::CullFace::Nothing,
+        pipe::new()
+        ).unwrap();
 
     // we pass a integer to our shader to show what blending function we want
     // it to use. normally you'd have a shader program per technique, but for
@@ -120,37 +108,35 @@ pub fn main() {
 
     println!("Using '{}' blend equation", blend_func.1);
 
-    let uniforms = Params {
-        lena: (lena_texture, None),
-        tint: (tint_texture, None),
+    let mut data = pipe::Data {
+        vbuf: vbuf,
+        lena: (lena_texture, sampler.clone()),
+        tint: (tint_texture, sampler),
         blend: blend_func.0,
-        _r: std::marker::PhantomData,
+        out: main_color,
     };
-    let mut batch = gfx::batch::Full::new(mesh, program, uniforms).unwrap();
 
     'main: loop {
         // quit when Esc is pressed.
-        for event in stream.out.window.poll_events() {
+        for event in window.poll_events() {
             match event {
-                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) => break 'main,
                 glutin::Event::KeyboardInput(glutin::ElementState::Pressed, _, Some(glutin::VirtualKeyCode::B)) => {
                     let blend_func = blends_cycle.next().unwrap();
-
                     println!("Using '{}' blend equation", blend_func.1);
-                    batch.params.blend = blend_func.0;
+                    data.blend = blend_func.0;
                 },
+                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
                 glutin::Event::Closed => break 'main,
                 _ => {},
             }
         }
 
-        stream.clear(gfx::ClearData {
-            color: [0.3, 0.3, 0.3, 1.0],
-            depth: 1.0,
-            stencil: 0,
-        });
+        encoder.reset();
+        encoder.clear(&data.out, [0.0; 4]);
+        encoder.draw(&slice, &pso, &data);
 
-        stream.draw(&batch).unwrap();
-        stream.present(&mut device);
+        device.submit(encoder.as_buffer());
+        window.swap_buffers().unwrap();
+        device.cleanup();
     }
 }

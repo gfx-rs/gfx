@@ -17,9 +17,8 @@
 #![allow(missing_docs)]
 
 use std::fmt;
-
-// Describing shader parameters
-// TOOD: Remove GL-isms, especially in the documentation.
+use {AttributeSlot, ColorSlot, ConstantBufferSlot, ResourceViewSlot,
+     SamplerSlot, UnorderedViewSlot};
 
 /// Number of components in a container type (vectors/matrices)
 pub type Dimension = u8;
@@ -28,9 +27,9 @@ pub type Dimension = u8;
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum IsArray { Array, NoArray }
 
-/// Whether the sampler samples a shadow texture (texture with a depth comparison)
+/// Whether the sampler compares the depth value upon sampling.
 #[derive(Copy, Clone, PartialEq, Debug)]
-pub enum IsShadow { Shadow, NoShadow }
+pub enum IsComparison { Compare, NoCompare }
 
 /// Whether the sampler samples a multisample texture.
 #[derive(Copy, Clone, PartialEq, Debug)]
@@ -47,31 +46,48 @@ pub enum IsRect { Rect, NoRect }
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum MatrixFormat { ColumnMajor, RowMajor }
 
-/// What texture type this sampler samples from.
-///
-/// A single sampler cannot be used with multiple texture types.
+/// A type of the texture variable.
+/// This has to match the actual data we bind to the shader.
 #[derive(Copy, Clone, PartialEq, Debug)]
-pub enum SamplerType {
+pub enum TextureType {
     /// Sample from a buffer.
-    SamplerBuffer,
+    Buffer,
     /// Sample from a 1D texture
-    Sampler1D(IsArray, IsShadow),
+    D1(IsArray),
     /// Sample from a 2D texture
-    Sampler2D(IsArray, IsShadow, IsMultiSample, IsRect),
+    D2(IsArray, IsMultiSample),
     /// Sample from a 3D texture
-    Sampler3D,
+    D3,
     /// Sample from a cubemap.
-    SamplerCube(IsShadow),
+    Cube(IsArray),
 }
+
+impl TextureType {
+    /// Check if this texture can be used with a sampler.
+    pub fn can_sample(&self) -> bool {
+        match self {
+            &TextureType::Buffer => false,
+            &TextureType::D1(_) => true,
+            &TextureType::D2(_, IsMultiSample::MultiSample) => false,
+            &TextureType::D2(_, IsMultiSample::NoMultiSample) => true,
+            &TextureType::D3 => true,
+            &TextureType::Cube(_) => true,
+        }
+    }
+}
+
+/// A type of the sampler variable.
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub struct SamplerType(pub IsComparison, pub IsRect);
 
 /// Base type of this shader parameter.
 #[allow(missing_docs)]
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum BaseType {
-    F32,
-    F64,
     I32,
     U32,
+    F32,
+    F64,
     Bool,
 }
 
@@ -106,7 +122,7 @@ pub type Location = usize;
 // unable to derive anything for fixed arrays
 /// A value that can be uploaded to the device as a uniform.
 #[allow(missing_docs)]
-#[derive(Copy)]
+#[derive(Clone, Copy)]
 pub enum UniformValue {
     I32(i32),
     F32(f32),
@@ -122,51 +138,6 @@ pub enum UniformValue {
     F32Matrix2([[f32; 2]; 2]),
     F32Matrix3([[f32; 3]; 3]),
     F32Matrix4([[f32; 4]; 4]),
-}
-
-impl UniformValue {
-    /// Whether two `UniformValue`s have the same type.
-    pub fn is_same_type(&self, other: &UniformValue) -> bool {
-        match (*self, *other) {
-            (UniformValue::I32(_), UniformValue::I32(_)) => true,
-            (UniformValue::F32(_), UniformValue::F32(_)) => true,
-
-            (UniformValue::I32Vector2(_), UniformValue::I32Vector2(_)) => true,
-            (UniformValue::I32Vector3(_), UniformValue::I32Vector3(_)) => true,
-            (UniformValue::I32Vector4(_), UniformValue::I32Vector4(_)) => true,
-
-            (UniformValue::F32Vector2(_), UniformValue::F32Vector2(_)) => true,
-            (UniformValue::F32Vector3(_), UniformValue::F32Vector3(_)) => true,
-            (UniformValue::F32Vector4(_), UniformValue::F32Vector4(_)) => true,
-
-            (UniformValue::F32Matrix2(_), UniformValue::F32Matrix2(_)) => true,
-            (UniformValue::F32Matrix3(_), UniformValue::F32Matrix3(_)) => true,
-            (UniformValue::F32Matrix4(_), UniformValue::F32Matrix4(_)) => true,
-
-            _ => false,
-        }
-    }
-}
-
-impl Clone for UniformValue {
-    fn clone(&self) -> UniformValue {
-        match *self {
-            UniformValue::I32(val)      => UniformValue::I32(val),
-            UniformValue::F32(val)      => UniformValue::F32(val),
-
-            UniformValue::I32Vector2(v) => UniformValue::I32Vector2(v),
-            UniformValue::I32Vector3(v) => UniformValue::I32Vector3(v),
-            UniformValue::I32Vector4(v) => UniformValue::I32Vector4(v),
-
-            UniformValue::F32Vector2(v) => UniformValue::F32Vector2(v),
-            UniformValue::F32Vector3(v) => UniformValue::F32Vector3(v),
-            UniformValue::F32Vector4(v) => UniformValue::F32Vector4(v),
-
-            UniformValue::F32Matrix2(m) => UniformValue::F32Matrix2(m),
-            UniformValue::F32Matrix3(m) => UniformValue::F32Matrix3(m),
-            UniformValue::F32Matrix4(m) => UniformValue::F32Matrix4(m),
-        }
-    }
 }
 
 impl fmt::Debug for UniformValue {
@@ -208,13 +179,81 @@ impl fmt::Debug for UniformValue {
     }
 }
 
+/// Format of a shader constant.
+pub type ConstFormat = (BaseType, ContainerType);
+
+/// A trait that statically links simple data types to
+/// base types of the shader constants.
+pub trait BaseTyped {
+    fn get_base_type() -> BaseType;
+}
+
+/// A trait that statically links simple data types to
+/// constant formats.
+pub trait Formatted {
+    /// Get the associated constant format.
+    fn get_format() -> ConstFormat;
+}
+
+macro_rules! impl_base_type {
+    { $($name:ident = $value:ident ,)* } => {
+        $(
+            impl BaseTyped for $name {
+                fn get_base_type() -> BaseType {
+                    BaseType::$value
+                }
+            }
+        )*
+    }
+}
+
+macro_rules! impl_const_vector {
+    ( $( $num:expr ),* ) => {
+        $(
+            impl<T: BaseTyped> Formatted for [T; $num] {
+                fn get_format() -> ConstFormat {
+                    (T::get_base_type(), ContainerType::Vector($num))
+                }
+            }
+        )*
+    }
+}
+macro_rules! impl_const_matrix {
+    ( $( [$n:expr, $m:expr] ),* ) => {
+        $(
+            impl<T: BaseTyped> Formatted for [[T; $n]; $m] {
+                fn get_format() -> ConstFormat {
+                    let mf = MatrixFormat::ColumnMajor;
+                    (T::get_base_type(), ContainerType::Matrix(mf, $n, $m))
+                }
+            }
+        )*
+    }
+}
+
+impl_base_type! {
+    i32 = I32,
+    u32 = U32,
+    f32 = F32,
+    bool = Bool,
+}
+
+impl<T: BaseTyped> Formatted for T {
+    fn get_format() -> ConstFormat {
+        (T::get_base_type(), ContainerType::Single)
+    }
+}
+
+impl_const_vector!(2, 3, 4);
+impl_const_matrix!([2,2], [3,3], [4,4], [4,3]);
+
 /// Vertex information that a shader takes as input.
 #[derive(Clone, PartialEq, Debug)]
-pub struct Attribute {
+pub struct AttributeVar {
     /// Name of this attribute.
     pub name: String,
-    /// Vertex attribute binding.
-    pub location: usize,
+    /// Slot of the vertex attribute.
+    pub slot: AttributeSlot,
     /// Number of elements this attribute represents.
     pub count: usize,
     /// Type that this attribute is composed of.
@@ -223,59 +262,100 @@ pub struct Attribute {
     pub container: ContainerType,
 }
 
-/// Uniform, a type of shader parameter representing data passed to the program.
+/// A constant in the shader - a bit of data that doesn't vary
+// between the shader execution units (vertices/pixels/etc).
 #[derive(Clone, PartialEq, Debug)]
-pub struct UniformVar {
-    /// Name of this uniform.
+pub struct ConstVar {
+    /// Name of this constant.
     pub name: String,
-    /// Location of this uniform in the program.
+    /// Location of this constant in the program.
     pub location: Location,
-    /// Number of elements this uniform represents.
+    /// Number of elements this constant represents.
     pub count: usize,
-    /// Type that this uniform is composed of
+    /// Type that this constant is composed of
     pub base_type: BaseType,
-    /// "Scalarness" of this uniform.
+    /// "Scalarness" of this constant.
     pub container: ContainerType,
 }
 
-/// A uniform block.
+/// A constant buffer.
 #[derive(Clone, PartialEq, Debug)]
-pub struct BlockVar {
-    /// Name of this uniform block.
+pub struct ConstantBufferVar {
+    /// Name of this constant buffer.
     pub name: String,
-    /// Size (in bytes) of this uniform block's data.
+    /// Slot of the constant buffer.
+    pub slot: ConstantBufferSlot,
+    /// Size (in bytes) of this buffer's data.
     pub size: usize,
-    /// What program stage this uniform block can be used in, as a bitflag.
+    /// What program stage this buffer can be used in, as a bitflag.
     pub usage: u8,
 }
 
-/// Sampler, a type of shader parameter representing a texture that can be sampled.
+/// Texture shader parameter.
+#[derive(Clone, PartialEq, Debug)]
+pub struct TextureVar {
+    /// Name of this texture variable.
+    pub name: String,
+    /// Slot of this texture variable.
+    pub slot: ResourceViewSlot,
+    /// Base type for the texture.
+    pub base_type: BaseType,
+    /// Type of this texture.
+    pub ty: TextureType,
+}
+
+/// Unordered access shader parameter.
+#[derive(Clone, PartialEq, Debug)]
+pub struct UnorderedVar {
+    /// Name of this unordered variable.
+    pub name: String,
+    /// Slot of this unordered variable.
+    pub slot: UnorderedViewSlot,
+}
+
+/// Sampler shader parameter.
 #[derive(Clone, PartialEq, Debug)]
 pub struct SamplerVar {
     /// Name of this sampler variable.
     pub name: String,
-    /// Location of this sampler in the program.
-    pub location: Location,
-    /// Base type for the sampler.
-    pub base_type: BaseType,
+    /// Slot of this sampler variable.
+    pub slot: SamplerSlot,
     /// Type of this sampler.
-    pub sampler_type: SamplerType,
+    pub ty: SamplerType,
+}
+
+/// Target output variable.
+#[derive(Clone, PartialEq, Debug)]
+pub struct OutputVar {
+    /// Name of this output variable.
+    pub name: String,
+    /// Output color target index.
+    pub slot: ColorSlot,
 }
 
 /// Metadata about a program.
 #[derive(Clone, PartialEq, Debug)]
 pub struct ProgramInfo {
-    /// Attributes in the program.
-    pub attributes: Vec<Attribute>,
-    /// Uniforms in the program
-    pub uniforms: Vec<UniformVar>,
-    /// Uniform blocks in the program
-    pub blocks: Vec<BlockVar>,
+    /// Attributes in the program
+    pub vertex_attributes: Vec<AttributeVar>,
+    /// Global constants in the program
+    pub globals: Vec<ConstVar>,
+    /// Constant buffers in the program
+    pub constant_buffers: Vec<ConstantBufferVar>,
+    /// Textures in the program
+    pub textures: Vec<TextureVar>,
+    /// Unordered access resources in the program
+    pub unordereds: Vec<UnorderedVar>,
     /// Samplers in the program
-    pub textures: Vec<SamplerVar>,
+    pub samplers: Vec<SamplerVar>,
+    /// Output targets in the program
+    pub outputs: Vec<OutputVar>,
+    /// A hacky flag to make sure the clients know we are
+    /// unable to actually get the output variable info
+    pub knows_outputs: bool,
 }
 
-/// Error type for trying to store a UniformValue in a UniformVar.
+/// Error type for trying to store a UniformValue in a ConstVar.
 #[derive(Clone, Copy, Debug)]
 pub enum CompatibilityError {
     /// Array sizes differ between the value and the var (trying to upload a vec2 as a vec4, etc)
@@ -287,7 +367,7 @@ pub enum CompatibilityError {
     ErrorContainer,
 }
 
-impl UniformVar {
+impl ConstVar {
     /// Whether a value is compatible with this variable. That is, whether the value can be stored
     /// in this variable.
     pub fn is_compatible(&self, value: &UniformValue) -> Result<(), CompatibilityError> {
@@ -325,11 +405,7 @@ pub enum CreateShaderError {
 }
 
 /// An error type for creating programs.
-#[derive(Clone, PartialEq, Debug)]
-pub enum CreateProgramError {
-    LinkFail(String),
-    TargetMismatch(Vec<String>),
-}
+pub type CreateProgramError = String;
 
 /// Shader model supported by the device, corresponds to the HLSL shader models.
 #[allow(missing_docs)]

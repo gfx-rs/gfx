@@ -12,22 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use gfx::device::state as s;
-use gfx::device::state::{BlendValue, Comparison, CullFace, Equation,
-                         Offset, RasterMethod, StencilOp, FrontFace};
-use gfx::device::target::Rect;
-use super::gl;
+use gfx_core::{MAX_COLOR_TARGETS, ColorSlot};
+use gfx_core::state as s;
+use gfx_core::state::{BlendValue, Comparison, CullFace, Equation,
+                      Offset, RasterMethod, StencilOp, FrontFace};
+use gfx_core::target::{ColorValue, Rect, Stencil};
+use gl;
 
-pub fn bind_primitive(gl: &gl::Gl, p: s::Primitive) {
-    unsafe { gl.FrontFace(match p.front_face {
-        FrontFace::Clockwise => gl::CW,
-        FrontFace::CounterClockwise => gl::CCW,
-    }) };
 
-    let (gl_draw, gl_offset) = match p.method {
+pub fn bind_raster_method(gl: &gl::Gl, method: s::RasterMethod, offset: Option<s::Offset>) {
+    let (gl_draw, gl_offset) = match method {
         RasterMethod::Point => (gl::POINT, gl::POLYGON_OFFSET_POINT),
         RasterMethod::Line(width) => {
-            unsafe { gl.LineWidth(width) };
+            unsafe { gl.LineWidth(width as gl::types::GLfloat) };
             (gl::LINE, gl::POLYGON_OFFSET_LINE)
         },
         RasterMethod::Fill(cull) => {
@@ -48,10 +45,11 @@ pub fn bind_primitive(gl: &gl::Gl, p: s::Primitive) {
 
     unsafe { gl.PolygonMode(gl::FRONT_AND_BACK, gl_draw) };
 
-    match p.offset {
+    match offset {
         Some(Offset(factor, units)) => unsafe {
             gl.Enable(gl_offset);
-            gl.PolygonOffset(factor, units as gl::types::GLfloat);
+            gl.PolygonOffset(factor as gl::types::GLfloat,
+                             units as gl::types::GLfloat);
         },
         None => unsafe {
             gl.Disable(gl_offset)
@@ -59,23 +57,39 @@ pub fn bind_primitive(gl: &gl::Gl, p: s::Primitive) {
     }
 }
 
-pub fn bind_multi_sample(gl: &gl::Gl, ms: Option<s::MultiSample>) {
-    match ms {
+pub fn bind_rasterizer(gl: &gl::Gl, r: &s::Rasterizer) {
+    unsafe {
+        gl.FrontFace(match r.front_face {
+            FrontFace::Clockwise => gl::CW,
+            FrontFace::CounterClockwise => gl::CCW,
+        })
+    };
+    bind_raster_method(gl, r.method, r.offset);
+    match r.samples {
         Some(_) => unsafe { gl.Enable(gl::MULTISAMPLE) },
         None => unsafe { gl.Disable(gl::MULTISAMPLE) },
     }
 }
 
-pub fn bind_draw_color_buffers(gl: &gl::Gl, num: usize) {
-    unsafe { gl.DrawBuffers(
-        num as i32,
-        [gl::COLOR_ATTACHMENT0,  gl::COLOR_ATTACHMENT1,  gl::COLOR_ATTACHMENT2,
-         gl::COLOR_ATTACHMENT3,  gl::COLOR_ATTACHMENT4,  gl::COLOR_ATTACHMENT5,
-         gl::COLOR_ATTACHMENT6,  gl::COLOR_ATTACHMENT7,  gl::COLOR_ATTACHMENT8,
-         gl::COLOR_ATTACHMENT9,  gl::COLOR_ATTACHMENT10, gl::COLOR_ATTACHMENT11,
-         gl::COLOR_ATTACHMENT12, gl::COLOR_ATTACHMENT13, gl::COLOR_ATTACHMENT14,
-         gl::COLOR_ATTACHMENT15].as_ptr()
-    )};
+pub fn bind_draw_color_buffers(gl: &gl::Gl, mask: usize) {
+    let attachments = [
+        gl::COLOR_ATTACHMENT0,  gl::COLOR_ATTACHMENT1,  gl::COLOR_ATTACHMENT2,
+        gl::COLOR_ATTACHMENT3,  gl::COLOR_ATTACHMENT4,  gl::COLOR_ATTACHMENT5,
+        gl::COLOR_ATTACHMENT6,  gl::COLOR_ATTACHMENT7,  gl::COLOR_ATTACHMENT8,
+        gl::COLOR_ATTACHMENT9,  gl::COLOR_ATTACHMENT10, gl::COLOR_ATTACHMENT11,
+        gl::COLOR_ATTACHMENT12, gl::COLOR_ATTACHMENT13, gl::COLOR_ATTACHMENT14,
+        gl::COLOR_ATTACHMENT15];
+    let mut targets = [0; MAX_COLOR_TARGETS];
+    let mut count = 0;
+    let mut i = 0;
+    while mask >> i != 0 {
+        if mask & (1<<i) != 0 {
+            targets[count] = attachments[i];
+            count += 1;
+        }
+        i += 1;
+    }
+    unsafe { gl.DrawBuffers(count as gl::types::GLint, targets.as_ptr()) };
 }
 
 pub fn bind_viewport(gl: &gl::Gl, rect: Rect) {
@@ -115,14 +129,14 @@ pub fn map_comparison(cmp: Comparison) -> gl::types::GLenum {
     }
 }
 
-pub fn bind_depth(gl: &gl::Gl, depth: Option<s::Depth>) {
+pub fn bind_depth(gl: &gl::Gl, depth: &Option<s::Depth>) {
     match depth {
-        Some(d) => { unsafe {
+        &Some(ref d) => { unsafe {
             gl.Enable(gl::DEPTH_TEST);
             gl.DepthFunc(map_comparison(d.fun));
             gl.DepthMask(if d.write {gl::TRUE} else {gl::FALSE});
         }},
-        None => unsafe { gl.Disable(gl::DEPTH_TEST) },
+        &None => unsafe { gl.Disable(gl::DEPTH_TEST) },
     }
 }
 
@@ -139,25 +153,25 @@ fn map_operation(op: StencilOp) -> gl::types::GLenum {
     }
 }
 
-pub fn bind_stencil(gl: &gl::Gl, stencil: Option<s::Stencil>, cull: s::CullFace) {
-    fn bind_side(gl: &gl::Gl, face: gl::types::GLenum, side: s::StencilSide) { unsafe {
+pub fn bind_stencil(gl: &gl::Gl, stencil: &Option<s::Stencil>, refs: (Stencil, Stencil), cull: s::CullFace) {
+    fn bind_side(gl: &gl::Gl, face: gl::types::GLenum, side: s::StencilSide, ref_value: Stencil) { unsafe {
         gl.StencilFuncSeparate(face, map_comparison(side.fun),
-            side.value as gl::types::GLint, side.mask_read as gl::types::GLuint);
+            ref_value as gl::types::GLint, side.mask_read as gl::types::GLuint);
         gl.StencilMaskSeparate(face, side.mask_write as gl::types::GLuint);
         gl.StencilOpSeparate(face, map_operation(side.op_fail),
             map_operation(side.op_depth_fail), map_operation(side.op_pass));
     }}
     match stencil {
-        Some(s) => {
+        &Some(ref s) => {
             unsafe { gl.Enable(gl::STENCIL_TEST) };
             if cull != CullFace::Front {
-                bind_side(gl, gl::FRONT, s.front);
+                bind_side(gl, gl::FRONT, s.front, refs.0);
             }
             if cull != CullFace::Back {
-                bind_side(gl, gl::BACK, s.back);
+                bind_side(gl, gl::BACK, s.back, refs.1);
             }
         }
-        None => unsafe { gl.Disable(gl::STENCIL_TEST) },
+        &None => unsafe { gl.Disable(gl::STENCIL_TEST) },
     }
 }
 
@@ -192,9 +206,9 @@ fn map_factor(factor: s::Factor) -> gl::types::GLenum {
     }
 }
 
-pub fn bind_blend(gl: &gl::Gl, blend: Option<s::Blend>) {
-    match blend {
-        Some(b) => { unsafe {
+pub fn bind_blend(gl: &gl::Gl, color: s::Color) {
+    match color.blend {
+        Some(b) => unsafe {
             gl.Enable(gl::BLEND);
             gl.BlendEquationSeparate(
                 map_equation(b.color.equation),
@@ -206,18 +220,53 @@ pub fn bind_blend(gl: &gl::Gl, blend: Option<s::Blend>) {
                 map_factor(b.alpha.source),
                 map_factor(b.alpha.destination)
             );
-            let c = b.value;
-            gl.BlendColor(c[0], c[1], c[2], c[3]);
-        }},
-        None => unsafe { gl.Disable(gl::BLEND) },
-    }
+        },
+        None => unsafe {
+            gl.Disable(gl::BLEND);
+        },
+    };
+    unsafe { gl.ColorMask(
+        if (color.mask & s::RED  ).is_empty() {gl::FALSE} else {gl::TRUE},
+        if (color.mask & s::GREEN).is_empty() {gl::FALSE} else {gl::TRUE},
+        if (color.mask & s::BLUE ).is_empty() {gl::FALSE} else {gl::TRUE},
+        if (color.mask & s::ALPHA).is_empty() {gl::FALSE} else {gl::TRUE}
+    )};
 }
 
-pub fn bind_color_mask(gl: &gl::Gl, mask: s::ColorMask) {
-    unsafe { gl.ColorMask(
-        if (mask & s::RED  ).is_empty() {gl::FALSE} else {gl::TRUE},
-        if (mask & s::GREEN).is_empty() {gl::FALSE} else {gl::TRUE},
-        if (mask & s::BLUE ).is_empty() {gl::FALSE} else {gl::TRUE},
-        if (mask & s::ALPHA).is_empty() {gl::FALSE} else {gl::TRUE}
+pub fn bind_blend_slot(gl: &gl::Gl, slot: ColorSlot, color: s::Color) {
+    let buf = slot as gl::types::GLuint;
+    match color.blend {
+        Some(b) => unsafe {
+            gl.Enablei(gl::BLEND, buf);
+            gl.BlendEquationSeparatei(buf,
+                map_equation(b.color.equation),
+                map_equation(b.alpha.equation)
+            );
+            gl.BlendFuncSeparatei(buf,
+                map_factor(b.color.source),
+                map_factor(b.color.destination),
+                map_factor(b.alpha.source),
+                map_factor(b.alpha.destination)
+            );
+        },
+        None => unsafe {
+            gl.Disablei(gl::BLEND, buf);
+        },
+    };
+    unsafe { gl.ColorMaski(buf,
+        if (color.mask & s::RED  ).is_empty() {gl::FALSE} else {gl::TRUE},
+        if (color.mask & s::GREEN).is_empty() {gl::FALSE} else {gl::TRUE},
+        if (color.mask & s::BLUE ).is_empty() {gl::FALSE} else {gl::TRUE},
+        if (color.mask & s::ALPHA).is_empty() {gl::FALSE} else {gl::TRUE}
     )};
+}
+
+pub fn unlock_color_mask(gl: &gl::Gl) {
+    unsafe { gl.ColorMask(gl::TRUE, gl::TRUE, gl::TRUE, gl::TRUE) };
+}
+
+pub fn set_blend_color(gl: &gl::Gl, color: ColorValue) {
+    unsafe {
+        gl.BlendColor(color[0], color[1], color[2], color[3])
+    };
 }

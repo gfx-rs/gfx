@@ -26,23 +26,26 @@ use rand::Rng;
 use cgmath::FixedArray;
 use cgmath::{Matrix4, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
-use gfx::traits::{Stream, ToIndexSlice, ToSlice, FactoryExt};
+pub use gfx::format::{DepthStencil, Rgba8};
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
 use time::precise_time_s;
-
 use noise::{Seed, perlin2};
 
 
-gfx_vertex!( Vertex {
-    a_Pos@ pos: [f32; 3],
-    a_Color@ color: [f32; 3],
+gfx_vertex_struct!( Vertex {
+    pos: [f32; 3] = "a_Pos",
+    color: [f32; 3] = "a_Color",
 });
 
-gfx_parameters!( Params {
-    u_Model@ model: [[f32; 4]; 4],
-    u_View@ view: [[f32; 4]; 4],
-    u_Proj@ proj: [[f32; 4]; 4],
+gfx_pipeline!(pipe {
+    vbuf: gfx::VertexBuffer<Vertex> = (),
+    model: gfx::Global<[[f32; 4]; 4]> = "u_Model",
+    view: gfx::Global<[[f32; 4]; 4]> = "u_View",
+    proj: gfx::Global<[[f32; 4]; 4]> = "u_Proj",
+    out_color: gfx::RenderTarget<Rgba8> = "o_Color",
+    out_depth: gfx::DepthTarget<DepthStencil> =
+        gfx::preset::depth::LESS_EQUAL_WRITE,
 });
 
 fn calculate_color(height: f32) -> [f32; 3] {
@@ -58,9 +61,13 @@ fn calculate_color(height: f32) -> [f32; 3] {
 }
 
 pub fn main() {
-    let (mut stream, mut device, mut factory) = gfx_window_glutin::init(
-        glutin::Window::new().unwrap());
-    stream.out.window.set_title("Terrain example");
+    use gfx::traits::{Device, FactoryExt};
+
+    let builder = glutin::WindowBuilder::new()
+        .with_title("Terrain example".to_string());
+    let (window, mut device, mut factory, main_color, main_depth) =
+        gfx_window_glutin::init::<Rgba8>(builder);
+    let mut encoder = factory.create_encoder();
 
     let rand_seed = rand::thread_rng().gen();
     let seed = Seed::new(rand_seed);
@@ -80,42 +87,37 @@ pub fn main() {
         .vertices()
         .map(|i| i as u32)
         .collect();
-    let slice = index_data.to_slice(&mut factory, gfx::PrimitiveType::TriangleList);
 
-    let mesh = factory.create_mesh(&vertex_data);
-    let program = {
-        let vs = gfx::ShaderSource {
-            glsl_120: Some(include_bytes!("terrain_120.glslv")),
-            glsl_150: Some(include_bytes!("terrain_150.glslv")),
-            .. gfx::ShaderSource::empty()
-        };
-        let fs = gfx::ShaderSource {
-            glsl_120: Some(include_bytes!("terrain_120.glslf")),
-            glsl_150: Some(include_bytes!("terrain_150.glslf")),
-            .. gfx::ShaderSource::empty()
-        };
-        factory.link_program_source(vs, fs).unwrap()
+    let (vbuf, slice) = factory.create_vertex_buffer_indexed(&vertex_data, &index_data[..]);
+
+    let pso = factory.create_pipeline_simple(
+        include_bytes!("terrain_150.glslv"),
+        include_bytes!("terrain_150.glslf"),
+        gfx::state::CullFace::Back,
+        pipe::new()
+        ).unwrap();
+
+    let aspect_ratio = {
+        let (w, h) = window.get_inner_size().unwrap();
+        w as f32 / h as f32
     };
 
-    let data = Params {
+    let mut data = pipe::Data {
+        vbuf: vbuf,
         model: Matrix4::identity().into_fixed(),
         view: Matrix4::identity().into_fixed(),
-        proj: cgmath::perspective(cgmath::deg(60.0f32), 
-                                  stream.get_aspect_ratio(),
-                                  0.1, 1000.0
-                                  ).into_fixed(),
-        _r: std::marker::PhantomData,
+        proj: cgmath::perspective(
+            cgmath::deg(60.0f32), aspect_ratio, 0.1, 1000.0
+            ).into_fixed(),
+        out_color: main_color,
+        out_depth: main_depth,
     };
-    let mut batch = gfx::batch::Full::new(mesh, program, data)
-                                     .unwrap();
-    batch.slice = slice;
-    batch.state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
     'main: loop {
         // quit when Esc is pressed.
-        for event in stream.out.window.poll_events() {
+        for event in window.poll_events() {
             match event {
-                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) => break 'main,
+                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
                 glutin::Event::Closed => break 'main,
                 _ => {},
             }
@@ -129,14 +131,16 @@ pub fn main() {
             &Point3::new(0.0, 0.0, 0.0),
             &Vector3::unit_z(),
         );
-        batch.params.view = view.mat.into_fixed();
 
-        stream.clear(gfx::ClearData {
-            color: [0.3, 0.3, 0.3, 1.0],
-            depth: 1.0,
-            stencil: 0,
-        });
-        stream.draw(&batch).unwrap();
-        stream.present(&mut device);
+        encoder.reset();
+        encoder.clear(&data.out_color, [0.3, 0.3, 0.3, 1.0]);
+        encoder.clear_depth(&data.out_depth, 1.0);
+
+        data.view = view.mat.into_fixed();
+        encoder.draw(&slice, &pso, &data);
+
+        device.submit(encoder.as_buffer());
+        window.swap_buffers().unwrap();
+        device.cleanup();
     }
 }

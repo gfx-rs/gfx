@@ -13,13 +13,8 @@
 // limitations under the License.
 
 use std::iter::repeat;
-use std::ffi::CString;
-
-use gfx::device as d;
-use gfx::device::shade as s;
-use gfx::device::shade::{BaseType, ContainerType, CreateShaderError,
-                         IsArray, IsShadow, IsRect, IsMultiSample, MatrixFormat,
-                         SamplerType, Stage, UniformValue};
+use gfx_core as d;
+use gfx_core::shade as s;
 use super::gl;
 
 
@@ -54,9 +49,9 @@ pub fn get_shader_log(gl: &gl::Gl, name: super::Shader) -> String {
 pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: &[u8])
                      -> Result<super::Shader, s::CreateShaderError> {
     let target = match stage {
-        Stage::Vertex => gl::VERTEX_SHADER,
-        Stage::Geometry => gl::GEOMETRY_SHADER,
-        Stage::Pixel => gl::FRAGMENT_SHADER,
+        s::Stage::Vertex => gl::VERTEX_SHADER,
+        s::Stage::Geometry => gl::GEOMETRY_SHADER,
+        s::Stage::Pixel => gl::FRAGMENT_SHADER,
     };
     let name = unsafe { gl.CreateShader(target) };
     unsafe {
@@ -75,19 +70,24 @@ pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: &[u8])
         }
         Ok(name)
     }else {
-        Err(CreateShaderError::ShaderCompilationFailed(log))
+        Err(s::CreateShaderError::ShaderCompilationFailed(log))
     }
 }
 
 #[derive(Copy, Clone, Debug)]
 enum StorageType {
-    Var(BaseType, s::ContainerType),
-    Sampler(BaseType, s::SamplerType),
+    Var(s::BaseType, s::ContainerType),
+    Sampler(s::BaseType, s::TextureType, s::SamplerType),
     Unknown,
 }
 
 impl StorageType {
     fn new(storage: gl::types::GLenum) -> StorageType {
+        use gfx_core::shade::{BaseType, ContainerType, TextureType, SamplerType, MatrixFormat};
+        use gfx_core::shade::IsArray::*;
+        use gfx_core::shade::IsRect::*;
+        use gfx_core::shade::IsComparison::*;
+        use gfx_core::shade::IsMultiSample::*;
         use self::StorageType::*;
         match storage {
             gl::FLOAT                        => Var(BaseType::F32,  ContainerType::Single),
@@ -122,23 +122,25 @@ impl StorageType {
 
             // TODO: double matrices
 
-            gl::SAMPLER_1D                   => Sampler(BaseType::F32, SamplerType::Sampler1D(IsArray::NoArray, IsShadow::NoShadow)),
-            gl::SAMPLER_1D_ARRAY             => Sampler(BaseType::F32, SamplerType::Sampler1D(IsArray::Array,   IsShadow::NoShadow)),
-            gl::SAMPLER_1D_SHADOW            => Sampler(BaseType::F32, SamplerType::Sampler1D(IsArray::NoArray, IsShadow::Shadow)),
-            gl::SAMPLER_1D_ARRAY_SHADOW      => Sampler(BaseType::F32, SamplerType::Sampler1D(IsArray::Array,   IsShadow::Shadow)),
+            gl::SAMPLER_1D                   => Sampler(BaseType::F32, TextureType::D1(NoArray), SamplerType(NoCompare, NoRect)),
+            gl::SAMPLER_1D_ARRAY             => Sampler(BaseType::F32, TextureType::D1(Array),   SamplerType(NoCompare, NoRect)),
+            gl::SAMPLER_1D_SHADOW            => Sampler(BaseType::F32, TextureType::D1(NoArray), SamplerType(Compare,   NoRect)),
+            gl::SAMPLER_1D_ARRAY_SHADOW      => Sampler(BaseType::F32, TextureType::D1(Array),   SamplerType(Compare,   NoRect)),
 
-            gl::SAMPLER_2D                   => Sampler(BaseType::F32, SamplerType::Sampler2D(IsArray::NoArray, IsShadow::NoShadow, IsMultiSample::NoMultiSample, IsRect::NoRect)),
-            gl::SAMPLER_2D_ARRAY             => Sampler(BaseType::F32, SamplerType::Sampler2D(IsArray::Array,   IsShadow::NoShadow, IsMultiSample::NoMultiSample, IsRect::NoRect)),
-            gl::SAMPLER_2D_SHADOW            => Sampler(BaseType::F32, SamplerType::Sampler2D(IsArray::NoArray, IsShadow::Shadow,   IsMultiSample::NoMultiSample, IsRect::NoRect)),
-            gl::SAMPLER_2D_MULTISAMPLE       => Sampler(BaseType::F32, SamplerType::Sampler2D(IsArray::NoArray, IsShadow::NoShadow, IsMultiSample::MultiSample,   IsRect::NoRect)),
-            gl::SAMPLER_2D_RECT              => Sampler(BaseType::F32, SamplerType::Sampler2D(IsArray::NoArray, IsShadow::NoShadow, IsMultiSample::NoMultiSample, IsRect::Rect)),
-            gl::SAMPLER_2D_ARRAY_SHADOW      => Sampler(BaseType::F32, SamplerType::Sampler2D(IsArray::Array,   IsShadow::Shadow,   IsMultiSample::NoMultiSample, IsRect::NoRect)),
-            gl::SAMPLER_2D_MULTISAMPLE_ARRAY => Sampler(BaseType::F32, SamplerType::Sampler2D(IsArray::Array,   IsShadow::NoShadow, IsMultiSample::MultiSample,   IsRect::NoRect)),
-            gl::SAMPLER_2D_RECT_SHADOW       => Sampler(BaseType::F32, SamplerType::Sampler2D(IsArray::NoArray, IsShadow::Shadow,   IsMultiSample::NoMultiSample, IsRect::Rect)),
+            gl::SAMPLER_2D                   => Sampler(BaseType::F32, TextureType::D2(NoArray, NoMultiSample), SamplerType(NoCompare, NoRect)),
+            gl::SAMPLER_2D_ARRAY             => Sampler(BaseType::F32, TextureType::D2(Array,   NoMultiSample), SamplerType(NoCompare, NoRect)),
+            gl::SAMPLER_2D_SHADOW            => Sampler(BaseType::F32, TextureType::D2(NoArray, NoMultiSample), SamplerType(Compare,   NoRect)),
+            gl::SAMPLER_2D_MULTISAMPLE       => Sampler(BaseType::F32, TextureType::D2(NoArray, MultiSample),   SamplerType(NoCompare, NoRect)),
+            gl::SAMPLER_2D_RECT              => Sampler(BaseType::F32, TextureType::D2(NoArray, NoMultiSample), SamplerType(NoCompare, Rect)),
+            gl::SAMPLER_2D_ARRAY_SHADOW      => Sampler(BaseType::F32, TextureType::D2(Array,   NoMultiSample), SamplerType(Compare,   NoRect)),
+            gl::SAMPLER_2D_MULTISAMPLE_ARRAY => Sampler(BaseType::F32, TextureType::D2(Array,   MultiSample),   SamplerType(NoCompare, NoRect)),
+            gl::SAMPLER_2D_RECT_SHADOW       => Sampler(BaseType::F32, TextureType::D2(NoArray, NoMultiSample), SamplerType(Compare,   Rect)),
 
-            gl::SAMPLER_3D                   => Sampler(BaseType::F32, SamplerType::Sampler3D),
-            gl::SAMPLER_CUBE                 => Sampler(BaseType::F32, SamplerType::SamplerCube(IsShadow::NoShadow)),
-            gl::SAMPLER_CUBE_SHADOW          => Sampler(BaseType::F32, SamplerType::SamplerCube(IsShadow::Shadow)),
+            gl::SAMPLER_3D                   => Sampler(BaseType::F32, TextureType::D3,   SamplerType(NoCompare, NoRect)),
+            gl::SAMPLER_CUBE                 => Sampler(BaseType::F32, TextureType::Cube(NoArray), SamplerType(NoCompare, NoRect)),
+            gl::SAMPLER_CUBE_MAP_ARRAY       => Sampler(BaseType::F32, TextureType::Cube(Array),   SamplerType(NoCompare, NoRect)),
+            gl::SAMPLER_CUBE_SHADOW          => Sampler(BaseType::F32, TextureType::Cube(NoArray), SamplerType(Compare,   NoRect)),
+            gl::SAMPLER_CUBE_MAP_ARRAY_SHADOW=> Sampler(BaseType::F32, TextureType::Cube(Array),   SamplerType(Compare,   NoRect)),
 
             // TODO: int samplers
 
@@ -149,7 +151,7 @@ impl StorageType {
     }
 }
 
-fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::Attribute> {
+fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::AttributeVar> {
     let num = get_program_iv(gl, prog, gl::ACTIVE_ATTRIBUTES);
     let max_len = get_program_iv(gl, prog, gl::ACTIVE_ATTRIBUTE_MAX_LENGTH);
     let mut name = String::with_capacity(max_len as usize);
@@ -168,7 +170,7 @@ fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::Attribute> {
             StorageType::Var(b, c) => (b, c),
             _ => {
                 error!("Unrecognized attribute storage: {}", storage);
-                (BaseType::F32, ContainerType::Single)
+                (s::BaseType::F32, s::ContainerType::Single)
             }
         };
         // we expect only built-ins to have location -1
@@ -176,9 +178,9 @@ fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::Attribute> {
             error!("Invalid location {} for attribute {}", loc, real_name);
         }
         info!("\t\tAttrib[{}] = {:?}\t{:?}\t{:?}", loc, real_name, base, container);
-        s::Attribute {
+        s::AttributeVar {
             name: real_name,
-            location: loc as usize,
+            slot: loc as d::AttributeSlot,
             count: size as usize,
             base_type: base,
             container: container,
@@ -187,7 +189,7 @@ fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::Attribute> {
     .collect()
 }
 
-fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program) -> Vec<s::BlockVar> {
+fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program) -> Vec<s::ConstantBufferVar> {
     let num = if caps.uniform_block_supported {
         get_program_iv(gl, prog, gl::ACTIVE_UNIFORM_BLOCKS)
     } else {
@@ -208,15 +210,18 @@ fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program) -> Ve
         let mut name = String::with_capacity(size as usize); //includes terminating null
         name.extend(repeat('\0').take(size as usize));
         let mut actual_name_size = 0;
-        unsafe {
+        let slot = unsafe {
             gl.GetActiveUniformBlockName(prog, i, size, &mut actual_name_size,
                 (&name[..]).as_ptr() as *mut gl::types::GLchar);
             gl.GetActiveUniformBlockiv(prog, i, gl::UNIFORM_BLOCK_DATA_SIZE, &mut size);
-        }
+            gl.GetActiveUniformBlockiv(prog, i, gl::UNIFORM_BLOCK_BINDING, &mut tmp);
+            tmp
+        };
         name.truncate(actual_name_size as usize);
-        info!("\t\tBlock '{}' of size {}", name, size);
-        s::BlockVar {
+        info!("\t\tBlock[{}] = '{}' of size {}", slot, name, size);
+        s::ConstantBufferVar {
             name: name,
+            slot: slot as d::ConstantBufferSlot,
             size: size as usize,
             usage: usage,
         }
@@ -224,9 +229,10 @@ fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program) -> Ve
 }
 
 fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
-                    -> (Vec<s::UniformVar>, Vec<s::SamplerVar>) {
+                    -> (Vec<s::ConstVar>, Vec<s::TextureVar>, Vec<s::SamplerVar>) {
     let mut uniforms = Vec::new();
     let mut textures = Vec::new();
+    let mut samplers = Vec::new();
     let total_num = get_program_iv(gl, prog, gl::ACTIVE_UNIFORMS);
     let indices: Vec<_> = (0..total_num as gl::types::GLuint).collect();
     let mut block_indices: Vec<gl::types::GLint> = repeat(-1 as gl::types::GLint).take(total_num as usize).collect();
@@ -242,6 +248,8 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
     let max_len = get_program_iv(gl, prog, gl::ACTIVE_UNIFORM_MAX_LENGTH);
     let mut name = String::with_capacity(max_len as usize);
     name.extend(repeat('\0').take(max_len as usize));
+    let mut texture_slot = 0;
+    unsafe { gl.UseProgram(prog); } //TODO: passive mode
     // walk the indices
     for (&i, _) in indices.iter().zip(block_indices.iter()).filter(|&(_, &b)| b<0) {
         let mut length = 0;
@@ -258,30 +266,43 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
         }
         match StorageType::new(storage) {
             StorageType::Var(base, container) => {
-                info!("\t\tUniform[{}] = {:?}\t{:?}\t{:?}", loc, real_name, base, container);
-                uniforms.push(s::UniformVar {
+                info!("\t\tUniform[{}] = '{}'\t{:?}\t{:?}", loc, real_name, base, container);
+                uniforms.push(s::ConstVar {
                     name: real_name,
-                    location: loc as usize,
+                    location: loc as s::Location,
                     count: size as usize,
                     base_type: base,
                     container: container,
                 });
             },
-            StorageType::Sampler(base, sam_type) => {
-                info!("\t\tSampler[{}] = {:?}\t{:?}\t{:?}", loc, real_name, base, sam_type);
-                textures.push(s::SamplerVar {
-                    name: real_name,
-                    location: loc as usize,
+            StorageType::Sampler(base, tex_type, samp_type) => {
+                let slot = texture_slot;
+                texture_slot += 1;
+                unsafe {
+                    gl.Uniform1i(loc, slot as gl::types::GLint);
+                }
+                //TODO: detect the texture slot instead of trying to set it up
+                info!("\t\tSampler[{}] = '{}'\t{:?}\t{:?}", slot, real_name, base, tex_type);
+                textures.push(s::TextureVar {
+                    name: real_name.clone(),
+                    slot: slot as d::ResourceViewSlot,
                     base_type: base,
-                    sampler_type: sam_type,
+                    ty: tex_type,
                 });
+                if tex_type.can_sample() {
+                    samplers.push(s::SamplerVar {
+                        name: real_name,
+                        slot: slot as d::SamplerSlot,
+                        ty: samp_type,
+                    });
+                }
             },
             StorageType::Unknown => {
                 error!("Unrecognized uniform storage: {}", storage);
             },
         }
     }
-    (uniforms, textures)
+    (uniforms, textures, samplers)
 }
 
 pub fn get_program_log(gl: &gl::Gl, name: super::Program) -> String {
@@ -300,44 +321,15 @@ pub fn get_program_log(gl: &gl::Gl, name: super::Program) -> String {
     }
 }
 
-pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities, targets: Option<&[&str]>,
-                      shaders: &[super::Shader])
+pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities, shaders: &[super::Shader])
                       -> Result<(::Program, s::ProgramInfo), s::CreateProgramError> {
     let name = unsafe { gl.CreateProgram() };
     for &sh in shaders {
         unsafe { gl.AttachShader(name, sh) };
     }
 
-    let c_targets = targets.map(|targets| {
-        let targets: Vec<CString> = targets.iter().map(|&s| CString::new(s).unwrap()).collect();
-
-        for (i, target) in targets.iter().enumerate() {
-            unsafe {
-                gl.BindFragDataLocation(name, i as u32,
-                    target.as_bytes_with_nul().as_ptr() as *const i8);
-            }
-        }
-
-        targets
-    });
-
     unsafe { gl.LinkProgram(name) };
     info!("\tLinked program {}", name);
-
-    if let (Some(targets), Some(c_targets)) = (targets, c_targets) {
-        let unbound = targets.iter()
-            .zip(c_targets)
-            .map(|(s, target)| (unsafe {
-                gl.GetFragDataLocation(name, target.as_bytes_with_nul().as_ptr() as *const i8)
-                }, s))
-            .inspect(|&(loc, s)| info!("\t\tOutput[{}] = {}", loc, s))
-            .filter(|&(loc, _)| loc == -1)
-            .map(|(_, s)| s.to_string())
-            .collect::<Vec<_>>();
-        if !unbound.is_empty() {
-            return Err(s::CreateProgramError::TargetMismatch(unbound));
-        }
-    }
 
     let status = get_program_iv(gl, name, gl::LINK_STATUS);
     let log = get_program_log(gl, name);
@@ -345,20 +337,25 @@ pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities, targets: Option<&[&st
         if !log.is_empty() {
             warn!("\tLog: {}", log);
         }
-        let (uniforms, textures) = query_parameters(gl, caps, name);
+        let (uniforms, textures, samplers) = query_parameters(gl, caps, name);
         let info = s::ProgramInfo {
-            attributes: query_attributes(gl, name),
-            uniforms: uniforms,
-            blocks: query_blocks(gl, caps, name),
+            vertex_attributes: query_attributes(gl, name),
+            globals: uniforms,
+            constant_buffers: query_blocks(gl, caps, name),
             textures: textures,
+            unordereds: Vec::new(), //TODO
+            samplers: samplers,
+            outputs: Vec::new(),
+            knows_outputs: false,
         };
         Ok((name, info))
     } else {
-        Err(s::CreateProgramError::LinkFail(log))
+        Err(log)
     }
 }
 
-pub fn bind_uniform(gl: &gl::Gl, loc: gl::types::GLint, uniform: UniformValue) {
+pub fn bind_uniform(gl: &gl::Gl, loc: gl::types::GLint, uniform: s::UniformValue) {
+    use gfx_core::shade::UniformValue;
     match uniform {
         UniformValue::I32(val) => unsafe { gl.Uniform1i(loc, val) },
         UniformValue::F32(val) => unsafe { gl.Uniform1f(loc, val) },

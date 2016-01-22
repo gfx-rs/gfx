@@ -24,8 +24,7 @@ use time::precise_time_s;
 use cgmath::FixedArray;
 use cgmath::{Matrix, Point3, Vector3, Matrix3, Matrix4};
 use cgmath::{Transform, AffineMatrix3, Vector4, Array1};
-use gfx::attrib::Floater;
-use gfx::traits::{Device, Stream, ToIndexSlice, ToSlice, FactoryExt};
+pub use gfx::format::{I8Scaled, DepthStencil, Rgba8};
 use glfw::Context;
 use gl::Gl;
 use gl::types::*;
@@ -39,12 +38,15 @@ use std::iter::repeat;
 use std::ffi::CString;
 
 
-gfx_vertex!( Vertex {
-    a_Pos@ pos: [Floater<i8>; 3],
+gfx_vertex_struct!( Vertex {
+    pos: [I8Scaled; 3] = "a_Pos",
 });
 
-gfx_parameters!( Params {
-    u_Transform@ transform: [[f32; 4]; 4],
+gfx_pipeline!(pipe {
+    vbuf: gfx::VertexBuffer<Vertex> = (),
+    transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
+    out_color: gfx::RenderTarget<Rgba8> = "o_Color",
+    out_depth: gfx::DepthTarget<DepthStencil> = gfx::preset::depth::LESS_EQUAL_WRITE,
 });
 
 static VERTEX_SRC: &'static [u8] = b"
@@ -69,48 +71,60 @@ static FRAGMENT_SRC: &'static [u8] = b"
 //----------------------------------------
 
 fn gfx_main(mut glfw: glfw::Glfw,
-            window: glfw::Window,
+            mut window: glfw::Window,
             events: Receiver<(f64, glfw::WindowEvent)>,
             dimension: i16) {
-    let (mut stream, mut device, mut factory) = gfx_window_glfw::init(window);
-    let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
+    use gfx::traits::{Device, FactoryExt};
+
+    let (mut device, mut factory, main_color, main_depth) =
+        gfx_window_glfw::init(&mut window);
+    let mut encoder = factory.create_encoder();
+
+    let pso = factory.create_pipeline_simple(
+        VERTEX_SRC, FRAGMENT_SRC,
+        gfx::state::CullFace::Back,
+        pipe::new()
+        ).unwrap();
 
     let vertex_data = [
-        Vertex { pos: Floater::cast3([-1,  1, -1]) },
-        Vertex { pos: Floater::cast3([ 1,  1, -1]) },
-        Vertex { pos: Floater::cast3([ 1,  1,  1]) },
+        Vertex { pos: I8Scaled::cast3([-1,  1, -1]) },
+        Vertex { pos: I8Scaled::cast3([ 1,  1, -1]) },
+        Vertex { pos: I8Scaled::cast3([ 1,  1,  1]) },
     ];
+    let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
 
-    let mesh = factory.create_mesh(&vertex_data);
-    let slice = mesh.to_slice(gfx::PrimitiveType::TriangleList);
-
-    let program = factory.link_program(VERTEX_SRC, FRAGMENT_SRC).unwrap();
     let view: AffineMatrix3<f32> = Transform::look_at(
         &Point3::new(0f32, -5.0, 0.0),
         &Point3::new(0f32, 0.0, 0.0),
         &Vector3::unit_z(),
     );
-    let aspect = stream.get_aspect_ratio();
+    let aspect = {
+        let (w, h) = window.get_framebuffer_size();
+        w as f32 / h as f32
+    };
     let proj = cgmath::perspective(cgmath::deg(45.0f32), aspect, 1.0, 10.0);
 
-    let batch = gfx::batch::Core::new(mesh, program).unwrap();;
+    let mut data = pipe::Data {
+        vbuf: vbuf,
+        transform: cgmath::Matrix4::identity().into_fixed(),
+        out_color: main_color,
+        out_depth: main_depth,
+    };
 
-    while !stream.out.window.should_close() {
+    while !window.should_close() {
         glfw.poll_events();
         for (_, event) in glfw::flush_messages(&events) {
             match event {
                 glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Action::Press, _) =>
-                    stream.out.window.set_should_close(true),
+                    window.set_should_close(true),
                 _ => {},
             }
         }
 
         let start = precise_time_s() * 1000.;
-        stream.clear(gfx::ClearData {
-            color: [0.3, 0.3, 0.3, 1.0],
-            depth: 1.0,
-            stencil: 0,
-        });
+        encoder.reset();
+        encoder.clear(&data.out_color, [0.3, 0.3, 0.3, 1.0]);
+        encoder.clear_depth(&data.out_depth, 1.0);
 
         for x in (-dimension) ..dimension {
             for y in (-dimension) ..dimension {
@@ -119,21 +133,16 @@ fn gfx_main(mut glfw: glfw::Glfw,
                                        0f32,
                                        y as f32 * 0.05,
                                        1f32);
-
-                let data = Params {
-                    transform: proj.mul_m(&view.mat)
-                                   .mul_m(&model).into_fixed(),
-                    _r: std::marker::PhantomData,
-                };
-                stream.draw(&batch.with(&slice, &data, &state))
-                      .unwrap();
+                data.transform = proj.mul_m(&view.mat)
+                                     .mul_m(&model).into_fixed();
+                encoder.draw(&slice, &pso, &data);
             }
         }
 
         let pre_submit = precise_time_s() * 1000.;
-        stream.flush(&mut device);
+        device.submit(encoder.as_buffer());
         let post_submit = precise_time_s() * 1000.;
-        stream.out.window.swap_buffers();
+        window.swap_buffers();
         device.cleanup();
         let swap = precise_time_s() * 1000.;
 
@@ -144,32 +153,13 @@ fn gfx_main(mut glfw: glfw::Glfw,
     }
 }
 
-static VS_SRC: &'static str = "
-    #version 150 core
-    in vec3 a_Pos;
-    uniform mat4 u_Transform;
 
-    void main() {
-        gl_Position = u_Transform * vec4(a_Pos, 1.0);
-    }
-";
-
-
-static FS_SRC: &'static str = "
-    #version 150 core
-    out vec4 o_Color;
-
-    void main() {
-        o_Color = vec4(1., 0., 0., 1.);
-    }
-";
-
-
-fn compile_shader(gl: &Gl, src: &str, ty: GLenum) -> GLuint { unsafe {
+fn compile_shader(gl: &Gl, src: &[u8], ty: GLenum) -> GLuint { unsafe {
     let shader = gl.CreateShader(ty);
     // Attempt to compile the shader
-    let src = CString::new(src).unwrap();
-    gl.ShaderSource(shader, 1, &(src.as_bytes_with_nul().as_ptr() as *const i8), ptr::null());
+    gl.ShaderSource(shader, 1,
+        &(src.as_ptr() as *const i8),
+        &(src.len() as GLint));
     gl.CompileShader(shader);
 
     // Get the compile status
@@ -214,8 +204,8 @@ fn gl_main(mut glfw: glfw::Glfw,
     let gl = Gl::load_with(|s| window.get_proc_address(s) as *const _);
 
     // Create GLSL shaders
-    let vs = compile_shader(&gl, VS_SRC, gl::VERTEX_SHADER);
-    let fs = compile_shader(&gl, FS_SRC, gl::FRAGMENT_SHADER);
+    let vs = compile_shader(&gl, VERTEX_SRC, gl::VERTEX_SHADER);
+    let fs = compile_shader(&gl, FRAGMENT_SRC, gl::FRAGMENT_SHADER);
     let program = link_program(&gl, vs, fs);
 
     let mut vao = 0;
@@ -231,9 +221,9 @@ fn gl_main(mut glfw: glfw::Glfw,
         gl.BindBuffer(gl::ARRAY_BUFFER, vbo);
 
         let vertex_data = vec![
-            Vertex { pos: Floater::cast3([-1,  1, -1]) },
-            Vertex { pos: Floater::cast3([ 1,  1, -1]) },
-            Vertex { pos: Floater::cast3([ 1,  1,  1]) },
+            Vertex { pos: I8Scaled::cast3([-1,  1, -1]) },
+            Vertex { pos: I8Scaled::cast3([ 1,  1, -1]) },
+            Vertex { pos: I8Scaled::cast3([ 1,  1,  1]) },
         ];
 
         gl.BufferData(gl::ARRAY_BUFFER,

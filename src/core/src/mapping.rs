@@ -18,7 +18,7 @@
 
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
-use super::{Resources, Factory};
+use {Resources, Factory};
 
 /// Unsafe operations for a buffer mapping
 pub trait Raw {

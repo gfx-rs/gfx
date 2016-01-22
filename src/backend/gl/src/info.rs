@@ -13,14 +13,10 @@
 // limitations under the License.
 
 use std::collections::HashSet;
-use std::ffi;
-use std::fmt;
-use std::mem;
-use std::str;
-use super::gl;
-
-use gfx::device::Capabilities;
-use gfx::device::shade;
+use std::{cmp, ffi, fmt, mem, str};
+use gl;
+use gfx_core::Capabilities;
+use gfx_core::shade;
 
 /// A version number for a specific component of an OpenGL implementation
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -34,18 +30,16 @@ pub struct Version {
 // FIXME https://github.com/rust-lang/rust/issues/18738
 // derive
 
-#[automatically_derived]
-impl ::std::cmp::Ord for Version {
+impl cmp::Ord for Version {
     #[inline]
-    fn cmp(&self, other: &Version) -> ::std::cmp::Ordering {
+    fn cmp(&self, other: &Version) -> cmp::Ordering {
         (&self.major, &self.minor, &self.revision, self.vendor_info)
             .cmp(&(&other.major, &other.minor, &other.revision, other.vendor_info))
     }
 }
-#[automatically_derived]
-impl ::std::cmp::PartialOrd for Version {
+impl cmp::PartialOrd for Version {
     #[inline]
-    fn partial_cmp(&self, other: &Version) -> ::std::option::Option<::std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Version) -> Option<cmp::Ordering> {
         (&self.major, &self.minor, &self.revision, self.vendor_info)
             .partial_cmp(&(&other.major, &other.minor, &other.revision, other.vendor_info))
     }
@@ -198,18 +192,22 @@ impl Info {
         }
     }
 
+    pub fn is_version_supported(&self, major: u32, minor: u32) -> bool {
+        self.version >= Version::new(major, minor, None, "")
+    }
+
     /// Returns `true` if the implementation supports the extension
     pub fn is_extension_supported(&self, s: &'static str) -> bool {
         self.extensions.contains(&s)
     }
 
     pub fn is_version_or_extension_supported(&self, major: u32, minor: u32, ext: &'static str) -> bool {
-        self.version >= Version::new(major, minor, None, "") || self.is_extension_supported(ext)
+        self.is_version_supported(major, minor) || self.is_extension_supported(ext)
     }
 }
 
 fn to_shader_model(v: &Version) -> shade::ShaderModel {
-    use gfx::device::shade::ShaderModel;
+    use gfx_core::shade::ShaderModel;
     match v {
         v if *v < Version::new(1, 20, None, "") => ShaderModel::Unsupported,
         v if *v < Version::new(1, 50, None, "") => ShaderModel::Version30,
@@ -245,6 +243,7 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities) {
         sampler_objects_supported:      info.is_version_or_extension_supported(3, 3, "GL_ARB_sampler_objects"),
         uniform_block_supported:        info.is_version_or_extension_supported(3, 0, "GL_ARB_uniform_buffer_object"),
         vertex_base_supported:          info.is_version_or_extension_supported(3, 2, "GL_ARB_draw_elements_base_vertex"),
+        separate_blending_slots_supported: info.is_version_or_extension_supported(4, 0, "GL_ARB_draw_buffers_blend"),
     };
     (info, caps)
 }
@@ -271,7 +270,7 @@ mod tests {
 
     #[test]
     fn test_shader_model() {
-        use gfx::device::shade::ShaderModel;
+        use gfx_core::shade::ShaderModel;
         assert_eq!(to_shader_model(&Version::parse("1.10").unwrap()), ShaderModel::Unsupported);
         assert_eq!(to_shader_model(&Version::parse("1.20").unwrap()), ShaderModel::Version30);
         assert_eq!(to_shader_model(&Version::parse("1.50").unwrap()), ShaderModel::Version40);
