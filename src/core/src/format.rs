@@ -76,7 +76,7 @@ macro_rules! impl_formats {
             pub fn get_bit_size(&self) -> u8 {
                 use std::mem::size_of;
                 match *self {
-                    $( SurfaceType::$name => size_of::<$data_type>() as u8, )*
+                    $( SurfaceType::$name => (size_of::<$data_type>() * 8) as u8, )*
                 }
             }
         }
