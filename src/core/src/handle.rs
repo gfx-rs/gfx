@@ -172,6 +172,13 @@ impl<R: Resources> RawDepthStencilView<R> {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct RenderTargetView<R: Resources, T>(RawRenderTargetView<R>, PhantomData<T>);
 
+impl<R: Resources, T> RenderTargetView<R, T> {
+    /// Get target dimensions
+    pub fn get_dimensions(&self) -> tex::Dimensions {
+        self.raw().get_dimensions()
+    }
+}
+
 impl<R: Resources, T> Phantom for RenderTargetView<R, T> {
     type Raw = RawRenderTargetView<R>;
     fn new(h: RawRenderTargetView<R>) -> RenderTargetView<R, T> {
@@ -184,7 +191,14 @@ impl<R: Resources, T> Phantom for RenderTargetView<R, T> {
 
 /// Typed DSV
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct DepthStencilView<R: Resources, T>(RawDepthStencilView<R>, PhantomData<T>); 
+pub struct DepthStencilView<R: Resources, T>(RawDepthStencilView<R>, PhantomData<T>);
+
+impl<R: Resources, T> DepthStencilView<R, T> {
+    /// Get target dimensions
+    pub fn get_dimensions(&self) -> tex::Dimensions {
+        self.raw().get_dimensions()
+    }
+}
 
 impl<R: Resources, T> Phantom for DepthStencilView<R, T> {
     type Raw = RawDepthStencilView<R>;
