@@ -163,17 +163,17 @@ pub enum IndexType {
 /// Resources pertaining to a specific API.
 #[allow(missing_docs)]
 pub trait Resources:          Clone + Hash + Debug + Eq + PartialEq {
-    type Buffer:              Clone + Hash + Debug + Eq + PartialEq + Send + Sync + Copy;
-    type Shader:              Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
-    type Program:             Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
-    type PipelineStateObject: Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
-    type Texture:             Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
-    type ShaderResourceView:  Clone + Hash + Debug + Eq + PartialEq + Send + Sync + Copy;
-    type UnorderedAccessView: Clone + Hash + Debug + Eq + PartialEq + Send + Sync + Copy;
-    type RenderTargetView:    Clone + Hash + Debug + Eq + PartialEq + Send + Sync + Copy;
-    type DepthStencilView:    Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
-    type Sampler:             Clone + Hash + Debug + Eq + PartialEq + Send + Sync + Copy;
-    type Fence:               Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
+    type Buffer:              Clone + Hash + Debug + Eq + PartialEq + Send + Copy;
+    type Shader:              Clone + Hash + Debug + Eq + PartialEq + Send;
+    type Program:             Clone + Hash + Debug + Eq + PartialEq + Send;
+    type PipelineStateObject: Clone + Hash + Debug + Eq + PartialEq + Send;
+    type Texture:             Clone + Hash + Debug + Eq + PartialEq + Send;
+    type ShaderResourceView:  Clone + Hash + Debug + Eq + PartialEq + Send + Copy;
+    type UnorderedAccessView: Clone + Hash + Debug + Eq + PartialEq + Send + Copy;
+    type RenderTargetView:    Clone + Hash + Debug + Eq + PartialEq + Send + Copy;
+    type DepthStencilView:    Clone + Hash + Debug + Eq + PartialEq + Send;
+    type Sampler:             Clone + Hash + Debug + Eq + PartialEq + Send + Copy;
+    type Fence:               Clone + Hash + Debug + Eq + PartialEq + Send;
 }
 
 /// All the data needed simultaneously for submitting a command buffer for
