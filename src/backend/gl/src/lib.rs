@@ -740,7 +740,7 @@ impl d::Device for Device {
         }
         match self.max_resource_count {
             Some(c) if self.frame_handles.count() > c => {
-                error!("Way too many resources in the current frame. Did you call Device::after_frame()?");
+                error!("Way too many resources in the current frame. Did you call Device::cleanup()?");
                 self.max_resource_count = None;
             },
             _ => (),
@@ -750,7 +750,7 @@ impl d::Device for Device {
     fn cleanup(&mut self) {
         use gfx_core::handle::Producer;
         self.frame_handles.clear();
-        self.share.handles.borrow_mut().clean_with(&mut &self.share.context,
+        self.share.handles.clean_with(&mut &self.share.context,
             |gl, v| unsafe { gl.DeleteBuffers(1, v) },
             |gl, v| unsafe { gl.DeleteShader(*v) },
             |gl, v| unsafe { gl.DeleteProgram(*v) },
