@@ -25,17 +25,17 @@ extern crate gfx_device_dx11;
 mod window;
 
 use std::mem;
-use gfx_device_dx11::{Device, Resources};
+use gfx_device_dx11::{Device, Factory, Resources};
 
 
-pub struct Window {
+pub struct Window<Cf> {
     hwnd: winapi::HWND,
     swap_chain: *mut winapi::IDXGISwapChain,
     pub driver_type: winapi::D3D_DRIVER_TYPE,
-    pub color_target: gfx_core::handle::RawRenderTargetView<Resources>,
+    pub color_target: gfx_core::handle::RenderTargetView<Resources, Cf>,
 }
 
-impl Window {
+impl<Cf> Window<Cf> {
     pub fn is_accelerated(&self) -> bool {
         self.driver_type == winapi::D3D_DRIVER_TYPE_HARDWARE
     }
@@ -61,8 +61,9 @@ impl Window {
 pub struct InitError;
 
 /// Initialize with a given size.
-pub fn init(title: &str, requested_width: winapi::INT, requested_height: winapi::INT) ->
-            Result<(Window, Device), InitError> {
+pub fn init<Cf: gfx_core::format::RenderFormat = gfx_core::format::Rgba8>
+           (title: &str, requested_width: winapi::INT, requested_height: winapi::INT)
+           -> Result<(Window<Cf>, Device, Factory), InitError> {
     let hwnd = window::create(title, requested_width, requested_height).unwrap();
     let (width, height) = window::show(hwnd).unwrap();
 
@@ -98,16 +99,17 @@ pub fn init(title: &str, requested_width: winapi::INT, requested_height: winapi:
 
     info!("Creating swap chain of size {}x{}", width, height);
     for dt in driver_types.iter() {
-        match gfx_device_dx11::Device::create(*dt, &swap_desc) {
-            Ok((device, chain, color)) => {
+        match gfx_device_dx11::create(*dt, &swap_desc) {
+            Ok((device, factory, chain, color)) => {
+                use gfx_core::factory::Phantom;
                 info!("Success with driver {:?}", *dt);
                 let win = Window {
                     hwnd: hwnd,
                     swap_chain: chain,
                     driver_type: *dt,
-                    color_target: color,
+                    color_target: gfx_core::handle::RenderTargetView::new(color),
                 };
-                return Ok((win, device))
+                return Ok((win, device, factory))
             },
             Err(hres) => {
                 info!("Failure with driver {:?}: code {:x}", *dt, hres);
