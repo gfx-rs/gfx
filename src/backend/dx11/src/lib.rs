@@ -145,9 +145,12 @@ impl Device {
     fn process(&mut self, command: &command::Command, _data_buf: &gfx_core::draw::DataBuffer) {
         use command::Command as C;
         match command {
-            &C::BindPixelTargets(ref _pts) => {},
-            &C::SetViewport(_rect) => {},
-            &C::Clear(_cs) => {},
+            &C::SetViewport(ref viewport) => unsafe {
+                (*self.context).RSSetViewports(1, viewport);
+            },
+            &C::ClearColor(target, ref data) => unsafe {
+                (*self.context).ClearRenderTargetView(target.0, data);
+            },
         }
     }
 }

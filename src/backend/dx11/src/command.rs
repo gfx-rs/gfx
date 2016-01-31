@@ -17,26 +17,29 @@
 use {native, Resources};
 use gfx_core::{draw, pso, shade, state, target, tex};
 use gfx_core::{IndexType, VertexCount};
+use gfx_core::{MAX_COLOR_TARGETS};
+use winapi::{D3D11_VIEWPORT};
 
 ///Serialized device command.
 #[derive(Clone, Copy, Debug)]
 pub enum Command {
     // states
-    BindPixelTargets(pso::PixelTargetSet<Resources>),
-    SetViewport(target::Rect),
+    SetViewport(D3D11_VIEWPORT),
     // resource updates
     // drawing
-    Clear(draw::ClearSet),
+    ClearColor(native::Rtv, [f32; 4]),
 }
 
 pub struct CommandBuffer {
     pub buf: Vec<Command>,
+    cur_pts: pso::PixelTargetSet<Resources>,
 }
 
 impl CommandBuffer {
     pub fn new() -> CommandBuffer {
         CommandBuffer {
             buf: Vec::new(),
+            cur_pts: pso::PixelTargetSet::new(),
         }
     }
 }
@@ -53,10 +56,13 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
     fn bind_samplers(&mut self, _: pso::SamplerSet<Resources>) {}
 
     fn bind_pixel_targets(&mut self, pts: pso::PixelTargetSet<Resources>) {
-        self.buf.push(Command::BindPixelTargets(pts));
-        self.buf.push(Command::SetViewport(target::Rect {
-            x: 0, y: 0, w: pts.size.0, h: pts.size.1
+        //TODO: OMSetRenderTargets
+        self.buf.push(Command::SetViewport(D3D11_VIEWPORT {
+            TopLeftX: 0.0, TopLeftY: 0.0,
+            Width: pts.size.0 as f32, Height: pts.size.1 as f32,
+            MinDepth: 0.0, MaxDepth: 1.0,
         }));
+        self.cur_pts = pts;
     }
 
     fn bind_index(&mut self, _: ()) {}
@@ -67,7 +73,21 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
                       _: draw::DataPointer, _: tex::RawImageInfo) {}
 
     fn clear(&mut self, set: draw::ClearSet) {
-        self.buf.push(Command::Clear(set));
+        for i in 0 .. MAX_COLOR_TARGETS {
+            match (self.cur_pts.colors[i], set.0[i]) {
+                (Some(target), Some(draw::ClearColor::Float(data))) => {
+                    self.buf.push(Command::ClearColor(target, data));
+                },
+                (Some(_), Some(_)) => {
+                    error!("Unable to clear int/uint surface for slot {}", i);
+                },
+                (None, Some(_)) => {
+                    error!("Color value provided for slot {} but there is no target there", i);
+                },
+                (_, None) => (),
+            }
+        }
+        //TODO: depth clear
     }
 
     fn call_draw(&mut self, _: VertexCount, _: VertexCount, _: draw::InstanceOption) {}
