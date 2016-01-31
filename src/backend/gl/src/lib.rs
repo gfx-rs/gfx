@@ -750,7 +750,7 @@ impl d::Device for Device {
     fn cleanup(&mut self) {
         use gfx_core::handle::Producer;
         self.frame_handles.clear();
-        self.share.handles.clean_with(&mut &self.share.context,
+        self.share.handles.borrow_mut().clean_with(&mut &self.share.context,
             |gl, v| unsafe { gl.DeleteBuffers(1, v) },
             |gl, v| unsafe { gl.DeleteShader(*v) },
             |gl, v| unsafe { gl.DeleteProgram(*v) },

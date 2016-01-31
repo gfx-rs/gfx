@@ -50,11 +50,9 @@ pub struct Encoder<R: Resources, C: draw::CommandBuffer<R>> {
 
 impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
     /// Create a new encoder using a factory.
-    pub fn create<F>(factory: &mut F) -> Encoder<R, C> where
-        F: Factory<R, CommandBuffer = C>
-    {
+    pub fn create(cb: C) -> Encoder<R, C> {
         Encoder {
-            command_buffer: factory.create_command_buffer(),
+            command_buffer: cb,
             data_buffer: draw::DataBuffer::new(),
             handles: handle::Manager::new(),
         }

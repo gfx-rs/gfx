@@ -40,7 +40,7 @@ pub enum PipelineStateError {
 pub trait FactoryExt<R: Resources>: Factory<R> + Sized {
     /// Create a new graphics command Encoder
     fn create_encoder(&mut self) -> Encoder<R, Self::CommandBuffer> {
-        Encoder::create(self)
+        Encoder::create(self.create_command_buffer())
     }
 
     /// Create a vertex buffer with an associated slice.
