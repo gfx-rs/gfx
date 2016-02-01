@@ -23,12 +23,17 @@ extern crate winapi;
 mod command;
 mod factory;
 
+#[doc(hidden)]
 pub mod native {
     use winapi::*;
 
     #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
     pub struct Rtv(pub *mut ID3D11RenderTargetView);
     unsafe impl Send for Rtv {}
+
+    #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+    pub struct Dsv(pub *mut ID3D11DepthStencilView);
+    unsafe impl Send for Dsv {}
 
     #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
     pub struct Texture(pub *mut ID3D11Texture2D);
@@ -52,7 +57,7 @@ impl gfx_core::Resources for Resources {
     type PipelineStateObject = ();
     type Texture             = native::Texture;
     type RenderTargetView    = native::Rtv;
-    type DepthStencilView    = ();
+    type DepthStencilView    = native::Dsv;
     type ShaderResourceView  = ();
     type UnorderedAccessView = ();
     type Sampler             = ();
@@ -160,11 +165,25 @@ impl Device {
     fn process(&mut self, command: &command::Command, _data_buf: &gfx_core::draw::DataBuffer) {
         use command::Command as C;
         match command {
+            &C::BindPixelTargets(ref pts) => {
+                use gfx_core::MAX_COLOR_TARGETS as NUM;
+                let mut colors = [ptr::null_mut(); NUM];
+                for i in 0 .. NUM {
+                    colors[i] = pts.colors[i].unwrap_or(native::Rtv(ptr::null_mut())).0;
+                }
+                let ds = pts.depth.unwrap_or(native::Dsv(ptr::null_mut())).0;
+                unsafe {
+                    (*self.context).OMSetRenderTargets(NUM as winapi::UINT, &colors[0], ds);
+                }
+            },
             &C::SetViewport(ref viewport) => unsafe {
                 (*self.context).RSSetViewports(1, viewport);
             },
             &C::ClearColor(target, ref data) => unsafe {
                 (*self.context).ClearRenderTargetView(target.0, data);
+            },
+            &C::ClearDepthStencil(target, flags, depth, stencil) => unsafe {
+                (*self.context).ClearDepthStencilView(target.0, flags.0, depth, stencil);
             },
         }
     }

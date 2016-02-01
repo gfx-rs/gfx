@@ -162,11 +162,10 @@ impl core::Factory<R> for Factory {
     fn view_texture_as_render_target_raw(&mut self, htex: &h::RawTexture<R>, level: core::target::Level, _layer: Option<core::target::Layer>)
                                          -> Result<h::RawRenderTargetView<R>, f::TargetViewError> {
         let mut raw_view: *mut winapi::ID3D11RenderTargetView = ptr::null_mut();
-        let dev = self.share.device;
         let raw_tex = self.frame_handles.ref_texture(htex).0;
         //TODO: pass in the descriptor
         unsafe {
-            (*dev).CreateRenderTargetView(raw_tex as *mut winapi::ID3D11Resource,
+            (*self.share.device).CreateRenderTargetView(raw_tex as *mut winapi::ID3D11Resource,
                 ptr::null_mut(), &mut raw_view);
         }
         let dim = htex.get_info().kind.get_level_dimensions(level);
@@ -175,8 +174,15 @@ impl core::Factory<R> for Factory {
 
     fn view_texture_as_depth_stencil_raw(&mut self, htex: &h::RawTexture<R>, _layer: Option<core::target::Layer>)
                                          -> Result<h::RawDepthStencilView<R>, f::TargetViewError> {
+        let mut raw_view: *mut winapi::ID3D11DepthStencilView = ptr::null_mut();
+        let raw_tex = self.frame_handles.ref_texture(htex).0;
+        //TODO: pass in the descriptor
+        unsafe {
+            (*self.share.device).CreateDepthStencilView(raw_tex as *mut winapi::ID3D11Resource,
+                ptr::null_mut(), &mut raw_view);
+        }
         let dim = htex.get_info().kind.get_level_dimensions(0);
-        Ok(self.share.handles.borrow_mut().make_dsv((), htex, dim)) //TODO
+        Ok(self.share.handles.borrow_mut().make_dsv(native::Dsv(raw_view), htex, dim))
     }
 
     fn create_sampler(&mut self, info: core::tex::SamplerInfo) -> h::Sampler<R> {

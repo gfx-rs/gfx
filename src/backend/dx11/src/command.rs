@@ -17,30 +17,28 @@
 use {native, Resources};
 use gfx_core::{draw, pso, shade, state, target, tex};
 use gfx_core::{IndexType, VertexCount};
-use gfx_core::{MAX_COLOR_TARGETS};
-use winapi::{D3D11_VIEWPORT};
+use winapi::{FLOAT, UINT8, D3D11_CLEAR_FLAG, D3D11_VIEWPORT};
 
 ///Serialized device command.
 #[derive(Clone, Copy, Debug)]
 pub enum Command {
     // states
-    //BindPixelTargets(pso::PixelTargetSet<Resources>),
+    BindPixelTargets(pso::PixelTargetSet<Resources>),
     SetViewport(D3D11_VIEWPORT),
     // resource updates
     // drawing
     ClearColor(native::Rtv, [f32; 4]),
+    ClearDepthStencil(native::Dsv, D3D11_CLEAR_FLAG, FLOAT, UINT8),
 }
 
 pub struct CommandBuffer {
     pub buf: Vec<Command>,
-    cur_pts: pso::PixelTargetSet<Resources>,
 }
 
 impl CommandBuffer {
     pub fn new() -> CommandBuffer {
         CommandBuffer {
             buf: Vec::new(),
-            cur_pts: pso::PixelTargetSet::new(),
         }
     }
 }
@@ -57,13 +55,18 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
     fn bind_samplers(&mut self, _: pso::SamplerSet<Resources>) {}
 
     fn bind_pixel_targets(&mut self, pts: pso::PixelTargetSet<Resources>) {
-        //self.buf.push(Command::BindPixelTargets(pts));
-        self.buf.push(Command::SetViewport(D3D11_VIEWPORT {
+        if let (Some(ref d), Some(ref s)) = (pts.depth, pts.stencil) {
+            if d != s {
+                error!("Depth and stencil views have to be the same");
+            }
+        }
+        let viewport = D3D11_VIEWPORT {
             TopLeftX: 0.0, TopLeftY: 0.0,
             Width: pts.size.0 as f32, Height: pts.size.1 as f32,
             MinDepth: 0.0, MaxDepth: 1.0,
-        }));
-        self.cur_pts = pts;
+        };
+        self.buf.push(Command::BindPixelTargets(pts));
+        self.buf.push(Command::SetViewport(viewport));
     }
 
     fn bind_index(&mut self, _: ()) {}
@@ -84,9 +87,15 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
         }
     }
 
-    fn clear_depth_stencil(&mut self, _target: (), _depth: Option<target::Depth>,
-                           _stencil: Option<target::Stencil>) {
-        //TODO
+    fn clear_depth_stencil(&mut self, target: native::Dsv, depth: Option<target::Depth>,
+                           stencil: Option<target::Stencil>) {
+        let flags = //warning: magic constants ahead
+            D3D11_CLEAR_FLAG(if depth.is_some() {1} else {0}) |
+            D3D11_CLEAR_FLAG(if stencil.is_some() {2} else {0});
+        self.buf.push(Command::ClearDepthStencil(target, flags,
+                      depth.unwrap_or_default() as FLOAT,
+                      stencil.unwrap_or_default() as UINT8
+        ));
     }
 
     fn call_draw(&mut self, _: VertexCount, _: VertexCount, _: draw::InstanceOption) {}
