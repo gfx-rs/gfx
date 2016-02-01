@@ -16,9 +16,9 @@
 
 use gl;
 use gfx_core as c;
-use gfx_core::draw::{ClearSet, DataPointer, InstanceOption};
+use gfx_core::draw::{ClearColor, DataPointer, InstanceOption};
 use gfx_core::state as s;
-use gfx_core::target::{ColorValue, Mirror, Rect, Stencil};
+use gfx_core::target::{ColorValue, Depth, Mirror, Rect, Stencil};
 use {Buffer, Program, FrameBuffer, Texture,
      NewTexture, Resources, PipelineState, TargetView};
 
@@ -64,7 +64,7 @@ pub enum Command {
     UpdateTexture(Texture, c::tex::Kind, Option<c::tex::CubeFace>,
                   DataPointer, c::tex::RawImageInfo),
     // drawing
-    Clear(ClearSet),
+    Clear(Option<ClearColor>, Option<Depth>, Option<Stencil>),
     Draw(gl::types::GLenum, c::VertexCount, c::VertexCount, InstanceOption),
     DrawIndexed(gl::types::GLenum, c::IndexType, c::VertexCount, c::VertexCount,
                 c::VertexCount, InstanceOption),
@@ -259,8 +259,24 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
         }
     }
 
-    fn clear(&mut self, set: ClearSet) {
-        self.buf.push(Command::Clear(set));
+    fn clear_color(&mut self, target: TargetView, value: ClearColor) {
+        // this could be optimized by deferring the actual clear call
+        let mut pts = c::pso::PixelTargetSet::new();
+        pts.colors[0] = Some(target);
+        self.bind_pixel_targets(pts);
+        self.buf.push(Command::Clear(Some(value), None, None));
+    }
+
+    fn clear_depth_stencil(&mut self, target: TargetView, depth: Option<Depth>, stencil: Option<Stencil>) {
+        let mut pts = c::pso::PixelTargetSet::new();
+        if depth.is_some() {
+            pts.depth = Some(target);
+        }
+        if stencil.is_some() {
+            pts.stencil = Some(target);
+        }
+        self.bind_pixel_targets(pts);
+        self.buf.push(Command::Clear(None, depth, stencil));
     }
 
     fn call_draw(&mut self, start: c::VertexCount,

@@ -15,7 +15,6 @@
 //! Command Buffer device interface
 
 use draw_state::target;
-use {MAX_COLOR_TARGETS};
 use {Resources, IndexType, InstanceCount, VertexCount};
 use {pso, shade, tex};
 use state as s;
@@ -34,14 +33,6 @@ pub enum ClearColor {
     /// Unsigned int vector to clear uvec4 targets.
     Uint([u32; 4]),
 }
-
-/// Complete clear data for a given pixel target set.
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
-pub struct ClearSet(
-    pub [Option<ClearColor>; MAX_COLOR_TARGETS],
-    pub Option<target::Depth>,
-    pub Option<target::Stencil>
-);
 
 /// The place of some data in the data buffer.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -151,8 +142,10 @@ pub trait CommandBuffer<R: Resources> {
     /// Update a texture
     fn update_texture(&mut self, R::Texture, tex::Kind, Option<tex::CubeFace>,
                       DataPointer, tex::RawImageInfo);
-    /// Clear render targets
-    fn clear(&mut self, ClearSet);
+    /// Clear color target
+    fn clear_color(&mut self, R::RenderTargetView, ClearColor);
+    fn clear_depth_stencil(&mut self, R::DepthStencilView,
+                           Option<target::Depth>, Option<target::Stencil>);
     /// Draw a primitive
     fn call_draw(&mut self, VertexCount, VertexCount, InstanceOption);
     /// Draw a primitive with index buffer

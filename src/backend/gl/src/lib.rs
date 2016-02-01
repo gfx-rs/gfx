@@ -400,37 +400,35 @@ impl Device {
 
     fn process(&mut self, cmd: &Command, data_buf: &d::draw::DataBuffer) {
         match *cmd {
-            Command::Clear(ref set) => {
+            Command::Clear(color, depth, stencil) => {
                 let gl = &self.share.context;
-                for i in 0 .. d::MAX_COLOR_TARGETS {
-                    if let Some(c) = set.0[i] {
-                        use gfx_core::draw::ClearColor;
-                        let slot = i as gl::types::GLint;
-                        state::unlock_color_mask(gl);
-                        match c {
-                            ClearColor::Float(v) => unsafe {
-                                gl.ClearBufferfv(gl::COLOR, slot, &v[0]);
-                            },
-                            ClearColor::Int(v) => unsafe {
-                                gl.ClearBufferiv(gl::COLOR, slot, &v[0]);
-                            },
-                            ClearColor::Uint(v) => unsafe {
-                                gl.ClearBufferuiv(gl::COLOR, slot, &v[0]);
-                            },
-                        }
+                if let Some(c) = color {
+                    use gfx_core::draw::ClearColor;
+                    let slot = 0;
+                    state::unlock_color_mask(gl);
+                    match c {
+                        ClearColor::Float(v) => unsafe {
+                            gl.ClearBufferfv(gl::COLOR, slot, &v[0]);
+                        },
+                        ClearColor::Int(v) => unsafe {
+                            gl.ClearBufferiv(gl::COLOR, slot, &v[0]);
+                        },
+                        ClearColor::Uint(v) => unsafe {
+                            gl.ClearBufferuiv(gl::COLOR, slot, &v[0]);
+                        },
                     }
-                    if let Some(ref d) = set.1 {
-                        unsafe {
-                            gl.DepthMask(gl::TRUE);
-                            gl.ClearBufferfv(gl::DEPTH, 0, d);
-                        }
+                }
+                if let Some(ref d) = depth {
+                    unsafe {
+                        gl.DepthMask(gl::TRUE);
+                        gl.ClearBufferfv(gl::DEPTH, 0, d);
                     }
-                    if let Some(s) = set.2 {
-                        let v = s as gl::types::GLint;
-                        unsafe {
-                            gl.StencilMask(gl::types::GLuint::max_value());
-                            gl.ClearBufferiv(gl::STENCIL, 0, &v);
-                        }
+                }
+                if let Some(s) = stencil {
+                    let v = s as gl::types::GLint;
+                    unsafe {
+                        gl.StencilMask(gl::types::GLuint::max_value());
+                        gl.ClearBufferiv(gl::STENCIL, 0, &v);
                     }
                 }
             },

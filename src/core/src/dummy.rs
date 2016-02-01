@@ -92,7 +92,9 @@ impl draw::CommandBuffer<DummyResources> for DummyCommandBuffer {
     fn update_buffer(&mut self, _: (), _: draw::DataPointer, _: usize) {}
     fn update_texture(&mut self, _: (), _: tex::Kind, _: Option<tex::CubeFace>,
                       _: draw::DataPointer, _: tex::RawImageInfo) {}
-    fn clear(&mut self, _: draw::ClearSet) {}
+    fn clear_color(&mut self, _: (), _: draw::ClearColor) {}
+    fn clear_depth_stencil(&mut self, _: (), _: Option<target::Depth>,
+                           _: Option<target::Stencil>) {}
     fn call_draw(&mut self, _: VertexCount, _: VertexCount, _: draw::InstanceOption) {}
     fn call_draw_indexed(&mut self, _: IndexType,
                          _: VertexCount, _: VertexCount,

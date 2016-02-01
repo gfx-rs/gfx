@@ -24,6 +24,7 @@ use winapi::{D3D11_VIEWPORT};
 #[derive(Clone, Copy, Debug)]
 pub enum Command {
     // states
+    //BindPixelTargets(pso::PixelTargetSet<Resources>),
     SetViewport(D3D11_VIEWPORT),
     // resource updates
     // drawing
@@ -56,7 +57,7 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
     fn bind_samplers(&mut self, _: pso::SamplerSet<Resources>) {}
 
     fn bind_pixel_targets(&mut self, pts: pso::PixelTargetSet<Resources>) {
-        //TODO: OMSetRenderTargets
+        //self.buf.push(Command::BindPixelTargets(pts));
         self.buf.push(Command::SetViewport(D3D11_VIEWPORT {
             TopLeftX: 0.0, TopLeftY: 0.0,
             Width: pts.size.0 as f32, Height: pts.size.1 as f32,
@@ -72,22 +73,20 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
     fn update_texture(&mut self, _: native::Texture, _: tex::Kind, _: Option<tex::CubeFace>,
                       _: draw::DataPointer, _: tex::RawImageInfo) {}
 
-    fn clear(&mut self, set: draw::ClearSet) {
-        for i in 0 .. MAX_COLOR_TARGETS {
-            match (self.cur_pts.colors[i], set.0[i]) {
-                (Some(target), Some(draw::ClearColor::Float(data))) => {
-                    self.buf.push(Command::ClearColor(target, data));
-                },
-                (Some(_), Some(_)) => {
-                    error!("Unable to clear int/uint surface for slot {}", i);
-                },
-                (None, Some(_)) => {
-                    error!("Color value provided for slot {} but there is no target there", i);
-                },
-                (_, None) => (),
-            }
+    fn clear_color(&mut self, target: native::Rtv, value: draw::ClearColor) {
+        match value {
+            draw::ClearColor::Float(data) => {
+                self.buf.push(Command::ClearColor(target, data));
+            },
+            _ => {
+                error!("Unable to clear int/uint target");
+            },
         }
-        //TODO: depth clear
+    }
+
+    fn clear_depth_stencil(&mut self, _target: (), _depth: Option<target::Depth>,
+                           _stencil: Option<target::Stencil>) {
+        //TODO
     }
 
     fn call_draw(&mut self, _: VertexCount, _: VertexCount, _: draw::InstanceOption) {}

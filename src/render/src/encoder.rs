@@ -177,45 +177,25 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
         }
     }
 
-    fn clear_all<T>(&mut self,
-                 color: Option<(&handle::RenderTargetView<R, T>, draw::ClearColor)>,
-                 depth: Option<(&handle::DepthStencilView<R, T>, Depth)>,
-                 stencil: Option<(&handle::DepthStencilView<R, T>, Stencil)>)
-    {
-        use gfx_core::pso::PixelTargetSet;
-
-        let mut pts = PixelTargetSet::new();
-        pts.colors[0] = color.map(|(ref view, _)|
-            self.handles.ref_rtv(view.raw()).clone());
-        pts.depth = depth.map(|(ref view, _)|
-            self.handles.ref_dsv(view.raw()).clone());
-        pts.stencil = stencil.map(|(ref view, _)|
-            self.handles.ref_dsv(view.raw()).clone());
-
-        self.command_buffer.bind_pixel_targets(pts);
-
-        self.command_buffer.clear(draw::ClearSet(
-            [color.map(|(_, c)| c), None, None, None],
-            depth.map(|(_, d)| d), stencil.map(|(_, s)| s)
-        ));
-    }
-
     /// Clear a target view with a specified value.
     pub fn clear<T: format::RenderFormat>(&mut self,
                  view: &handle::RenderTargetView<R, T>, value: T::View)
     where T::View: Into<draw::ClearColor> {
-        self.clear_all(Some((view, value.into())), None, None)
+        let target = self.handles.ref_rtv(view.raw()).clone();
+        self.command_buffer.clear_color(target, value.into())
     }
     /// Clear a depth view with a specified value.
     pub fn clear_depth<T: format::DepthFormat>(&mut self,
                        view: &handle::DepthStencilView<R, T>, depth: Depth) {
-        self.clear_all(None, Some((view, depth)), None)
+        let target = self.handles.ref_dsv(view.raw()).clone();
+        self.command_buffer.clear_depth_stencil(target, Some(depth), None)
     }
 
     /// Clear a stencil view with a specified value.
     pub fn clear_stencil<T: format::StencilFormat>(&mut self,
                          view: &handle::DepthStencilView<R, T>, stencil: Stencil) {
-        self.clear_all(None, None, Some((view, stencil)))
+        let target = self.handles.ref_dsv(view.raw()).clone();
+        self.command_buffer.clear_depth_stencil(target, None, Some(stencil))
     }
 
     /// Draw a mesh slice using a typed pipeline state object (PSO).
