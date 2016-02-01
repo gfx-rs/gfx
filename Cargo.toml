@@ -16,12 +16,14 @@ name = "gfx_meta"
 
 [dependencies]
 gfx_core = { path = "src/render", version = "0.1.1" }
-gfx_device_dx11 = { path = "src/backend/dx11", version = "0.1" }
 gfx_device_gl = { path = "src/backend/gl", version = "0.8.1" }
 gfx_window_glutin = { path = "src/window/glutin", version = "0.9.1" }
 gfx_window_glfw = { path = "src/window/glfw", version = "0.7.1" }
-gfx_window_dxgi = { path = "src/window/dxgi", version = "0.1" }
 gfx = { path = "src/render", version = "0.9.1" }
+
+[target.x86_64-pc-windows-gnu.dependencies]
+gfx_device_dx11 = { path = "src/backend/dx11", version = "0.1" }
+gfx_window_dxgi = { path = "src/window/dxgi", version = "0.1" }
 
 
 [[example]]
