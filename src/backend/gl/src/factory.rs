@@ -61,10 +61,7 @@ pub struct Factory {
 
 impl Clone for Factory {
     fn clone(&self) -> Factory {
-        Factory {
-            share: self.share.clone(),
-            frame_handles: handle::Manager::new(),
-        }
+        Factory::new(self.share.clone())
     }
 }
 
@@ -152,7 +149,7 @@ impl Factory {
 
 #[derive(Copy, Clone)]
 pub struct RawMapping {
-    pub pointer: *mut ::std::os::raw::c_void,
+    pointer: *mut ::std::os::raw::c_void,
     target: gl::types::GLenum,
 }
 

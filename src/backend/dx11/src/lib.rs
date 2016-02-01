@@ -35,10 +35,12 @@ pub mod native {
     unsafe impl Send for Texture {}
 }
 
+use std::cell::RefCell;
 use std::os::raw::c_void;
 use std::ptr;
+use std::sync::Arc;
 pub use self::factory::Factory;
-
+use gfx_core::handle as h;
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Resources {}
@@ -57,13 +59,19 @@ impl gfx_core::Resources for Resources {
     type Fence               = ();
 }
 
-pub struct Device {
+/// Internal struct of shared data between the device and its factories.
+#[doc(hidden)]
+pub struct Share {
     device: *mut winapi::ID3D11Device,
+    capabilities: gfx_core::Capabilities,
+    handles: RefCell<h::Manager<Resources>>,
+}
+
+pub struct Device {
     context: *mut winapi::ID3D11DeviceContext,
     feature_level: winapi::D3D_FEATURE_LEVEL,
-    capabilities: gfx_core::Capabilities,
-    frame_handles: gfx_core::handle::Manager<Resources>,
-    permanent_handles: gfx_core::handle::Manager<Resources>,
+    share: Arc<Share>,
+    frame_handles: h::Manager<Resources>,
     max_resource_count: Option<usize>,
 }
 
@@ -75,16 +83,14 @@ static FEATURE_LEVELS: [winapi::D3D_FEATURE_LEVEL; 3] = [
 
 
 pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHAIN_DESC)
-              -> Result<(Device, Factory, *mut winapi::IDXGISwapChain, gfx_core::handle::RawRenderTargetView<Resources>), winapi::HRESULT> {
+              -> Result<(Device, Factory, *mut winapi::IDXGISwapChain, h::RawRenderTargetView<Resources>), winapi::HRESULT> {
     use gfx_core::handle::Producer;
     use gfx_core::tex;
 
     let mut swap_chain = ptr::null_mut();
     let create_flags = 0;
-    let mut dev = Device {
+    let mut share = Share {
         device: ptr::null_mut(),
-        context: ptr::null_mut(),
-        feature_level: winapi::D3D_FEATURE_LEVEL_10_0,
         capabilities: gfx_core::Capabilities { //TODO
             shader_model: gfx_core::shade::ShaderModel::Unsupported,
             max_vertex_count: 0,
@@ -106,39 +112,48 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
             vertex_base_supported: false,
             separate_blending_slots_supported: false,
         },
-        frame_handles: gfx_core::handle::Manager::new(),
-        permanent_handles: gfx_core::handle::Manager::new(),
-        max_resource_count: None,
+        handles: RefCell::new(h::Manager::new()),
     };
 
+    let mut context = ptr::null_mut();
+    let mut feature_level = winapi::D3D_FEATURE_LEVEL_10_0;
     let hr = unsafe {
         d3d11::D3D11CreateDeviceAndSwapChain(ptr::null_mut(), driver_type, ptr::null_mut(), create_flags,
             &FEATURE_LEVELS[0], FEATURE_LEVELS.len() as winapi::UINT, winapi::D3D11_SDK_VERSION, desc,
-            &mut swap_chain, &mut dev.device, &mut dev.feature_level, &mut dev.context)
+            &mut swap_chain, &mut share.device, &mut feature_level, &mut context)
     };
     if !winapi::SUCCEEDED(hr) {
         return Err(hr)
     }
 
     let mut back_buffer: *mut winapi::ID3D11Texture2D = ptr::null_mut();
-    let mut raw_color: *mut winapi::ID3D11RenderTargetView = ptr::null_mut();
     unsafe {
         (*swap_chain).GetBuffer(0, &winapi::IID_ID3D11Texture2D, &mut back_buffer
             as *mut *mut winapi::ID3D11Texture2D as *mut *mut c_void);
-        (*dev.device).CreateRenderTargetView(back_buffer as *mut winapi::ID3D11Resource,
-            ptr::null_mut(), &mut raw_color);
     }
-
-    let color_tex = dev.permanent_handles.make_texture(native::Texture(back_buffer), gfx_core::tex::Descriptor {
+    let color_tex = share.handles.borrow_mut().make_texture(native::Texture(back_buffer), gfx_core::tex::Descriptor {
         kind: tex::Kind::D2(desc.BufferDesc.Width as tex::Size, desc.BufferDesc.Height as tex::Size, tex::AaMode::Single),
         levels: 1,
         format: gfx_core::format::SurfaceType::R8_G8_B8_A8,
         bind: gfx_core::factory::RENDER_TARGET,
     });
-    let color_target = dev.permanent_handles.make_rtv(native::Rtv(raw_color), &color_tex,
-        color_tex.get_info().kind.get_dimensions());
 
-    Ok((dev, Factory, swap_chain, color_target))
+    let dev = Device {
+        context: context,
+        feature_level: feature_level,
+        share: Arc::new(share),
+        frame_handles: h::Manager::new(),
+        max_resource_count: None,
+    };
+    let _ = dev.feature_level; //TODO
+
+    let mut factory = Factory::new(dev.share.clone());
+    let color_target = {
+        use gfx_core::Factory;
+        factory.view_texture_as_render_target_raw(&color_tex, 0, None).unwrap()
+    };
+
+    Ok((dev, factory, swap_chain, color_target))
 }
 
 impl Device {
@@ -160,7 +175,7 @@ impl gfx_core::Device for Device {
     type CommandBuffer = command::CommandBuffer;
 
     fn get_capabilities<'a>(&'a self) -> &'a gfx_core::Capabilities {
-        &self.capabilities
+        &self.share.capabilities
     }
 
     fn reset_state(&mut self) {
@@ -186,7 +201,7 @@ impl gfx_core::Device for Device {
     fn cleanup(&mut self) {
         use gfx_core::handle::Producer;
         self.frame_handles.clear();
-        self.permanent_handles.clean_with(&mut (),
+        self.share.handles.borrow_mut().clean_with(&mut (),
             |_, _| {}, //buffer
             |_, _| {}, //shader
             |_, _| {}, //program

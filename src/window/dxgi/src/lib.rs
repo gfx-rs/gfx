@@ -40,8 +40,8 @@ impl<Cf> Window<Cf> {
         self.driver_type == winapi::D3D_DRIVER_TYPE_HARDWARE
     }
 
-    pub fn swap_buffers(&self) {
-        unsafe{ (*self.swap_chain).Present(0, 0) };
+    pub fn swap_buffers(&self, wait: u8) {
+        unsafe{ (*self.swap_chain).Present(wait as winapi::UINT, 0) };
     }
 
     pub fn dispatch(&self) -> bool {unsafe {
