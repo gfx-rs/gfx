@@ -77,7 +77,7 @@ pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: &[u8])
         }
         Ok(name)
     }else {
-        Err(s::CreateShaderError::ShaderCompilationFailed(log))
+        Err(s::CreateShaderError::CompilationFailed(log))
     }
 }
 

@@ -47,12 +47,20 @@ use std::sync::Arc;
 pub use self::factory::Factory;
 use gfx_core::handle as h;
 
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub enum Shader {
+    Vertex(*mut winapi::ID3D11VertexShader),
+    Pixel(*mut winapi::ID3D11PixelShader),
+}
+unsafe impl Send for Shader {}
+
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Resources {}
 
 impl gfx_core::Resources for Resources {
     type Buffer              = ();
-    type Shader              = ();
+    type Shader              = Shader;
     type Program             = ();
     type PipelineStateObject = ();
     type Texture             = native::Texture;

@@ -400,8 +400,10 @@ impl ConstVar {
 pub enum CreateShaderError {
     /// The device does not support the requested shader model.
     ModelNotSupported,
+    /// The device does not support the shader stage.
+    StageNotSupported(Stage),
     /// The shader failed to compile.
-    ShaderCompilationFailed(String)
+    CompilationFailed(String),
 }
 
 /// An error type for creating programs.

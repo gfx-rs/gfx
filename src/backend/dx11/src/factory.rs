@@ -13,20 +13,21 @@
 // limitations under the License.
 
 use std::{ptr, slice};
+use std::os::raw::c_void;
 use std::sync::Arc;
 use winapi;
 use gfx_core as core;
 use gfx_core::factory as f;
 use gfx_core::handle as h;
 use gfx_core::handle::Producer;
-use {Resources as R, Share};
+use {Resources as R, Share, Shader};
 use command::CommandBuffer;
 use native;
 
 
 #[derive(Copy, Clone)]
 pub struct RawMapping {
-    pointer: *mut ::std::os::raw::c_void,
+    pointer: *mut c_void,
 }
 
 impl core::mapping::Raw for RawMapping {
@@ -109,9 +110,32 @@ impl core::Factory<R> for Factory {
         self.share.handles.borrow_mut().make_buffer(name, info)
     }
 
-    fn create_shader(&mut self, _stage: core::shade::Stage, _code: &[u8])
+    fn create_shader(&mut self, stage: core::shade::Stage, code: &[u8])
                      -> Result<h::Shader<R>, core::shade::CreateShaderError> {
-        Ok(self.share.handles.borrow_mut().make_shader(())) //TODO
+        use gfx_core::shade::{CreateShaderError, Stage};
+        let dev = self.share.device;
+        let (hr, shader) = match stage {
+            Stage::Vertex => {
+                let mut ret = ptr::null_mut();
+                let hr = unsafe {
+                    (*dev).CreateVertexShader(code.as_ptr() as *const c_void, code.len() as winapi::SIZE_T, ptr::null_mut(), &mut ret)
+                };
+                (hr, Shader::Vertex(ret))
+            },
+            Stage::Pixel => {
+                let mut ret = ptr::null_mut();
+                let hr = unsafe {
+                    (*dev).CreatePixelShader(code.as_ptr() as *const c_void, code.len() as winapi::SIZE_T, ptr::null_mut(), &mut ret)
+                };
+                (hr, Shader::Pixel(ret))
+            },
+            _ => return Err(CreateShaderError::StageNotSupported(stage))
+        };
+        if winapi::SUCCEEDED(hr) {
+            Ok(self.share.handles.borrow_mut().make_shader(shader))
+        }else {
+            Err(CreateShaderError::CompilationFailed(format!("code {}", hr)))
+        }
     }
 
     fn create_program(&mut self, _shader_set: &core::ShaderSet<R>)
