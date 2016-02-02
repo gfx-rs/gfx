@@ -20,7 +20,7 @@ use gfx_core as core;
 use gfx_core::factory as f;
 use gfx_core::handle as h;
 use gfx_core::handle::Producer;
-use {Resources as R, Share, Shader};
+use {Resources as R, Share, Program, Shader};
 use command::CommandBuffer;
 use native;
 
@@ -150,7 +150,11 @@ impl core::Factory<R> for Factory {
             outputs: Vec::new(),
             knows_outputs: true,
         };
-        Ok(self.share.handles.borrow_mut().make_program((), info)) //TODO
+        let prog = Program {
+            vs: ptr::null_mut(),
+            ps: ptr::null_mut(),
+        };
+        Ok(self.share.handles.borrow_mut().make_program(prog, info)) //TODO
     }
 
     fn create_pipeline_state_raw(&mut self, program: &h::Program<R>, _desc: &core::pso::Descriptor)

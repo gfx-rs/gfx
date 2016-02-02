@@ -55,13 +55,20 @@ pub enum Shader {
 }
 unsafe impl Send for Shader {}
 
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct Program {
+    vs: *mut winapi::ID3D11VertexShader,
+    ps: *mut winapi::ID3D11PixelShader,
+}
+unsafe impl Send for Program {}
+
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Resources {}
 
 impl gfx_core::Resources for Resources {
     type Buffer              = ();
     type Shader              = Shader;
-    type Program             = ();
+    type Program             = Program;
     type PipelineStateObject = ();
     type Texture             = native::Texture;
     type RenderTargetView    = native::Rtv;
@@ -230,7 +237,10 @@ impl gfx_core::Device for Device {
         self.frame_handles.clear();
         self.share.handles.borrow_mut().clean_with(&mut (),
             |_, _| {}, //buffer
-            |_, _| {}, //shader
+            |_, v| match *v { //shader
+                Shader::Vertex(s) => unsafe { (*s).Release(); },
+                Shader::Pixel(s) => unsafe { (*s).Release(); },
+            },
             |_, _| {}, //program
             |_, _| {}, //PSO
             |_, v| unsafe { (*v.0).Release(); }, //texture
