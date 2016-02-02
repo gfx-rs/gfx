@@ -56,7 +56,7 @@ pub enum MapAccess {
     RW
 }
 
-/// Role of the memory buffer. GLES doesn't chaning bind points for buffers.
+/// Role of the memory buffer. GLES doesn't allow chaning bind points for buffers.
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 #[repr(u8)]
 pub enum BufferRole {
@@ -76,7 +76,9 @@ pub enum BufferRole {
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 #[repr(u8)]
 pub enum BufferUsage {
-    /// Once uploaded, this buffer will rarely change, but will be read from often.
+    /// GPU: read + write, CPU: nothing
+    GpuOnly,
+    /// GPU: read, CPU: read
     Const,
     /// This buffer will be updated "frequently", and will be read from multiple times between
     /// updates.
@@ -235,11 +237,14 @@ pub trait Factory<R: Resources> {
 
     fn create_texture_raw(&mut self, tex::Descriptor, Option<format::ChannelType>)
                           -> Result<handle::RawTexture<R>, tex::Error>;
-    fn create_texture_with_data(&mut self, desc: tex::Descriptor, channel: format::ChannelType, data: &[u8])
+    fn create_texture_with_data(&mut self, desc: tex::Descriptor, channel: format::ChannelType, data: &[u8], mipmap: bool)
                                 -> Result<handle::RawTexture<R>, tex::Error> {
         let image = desc.to_raw_image_info(channel, 0);
         let tex = try!(self.create_texture_raw(desc, Some(channel)));
         try!(self.update_texture_raw(&tex, &image, data, None));
+        if mipmap {
+            self.generate_mipmap_raw(&tex);
+        }
         Ok(tex)
     }
 
@@ -346,8 +351,7 @@ pub trait Factory<R: Resources> {
             bind: SHADER_RESOURCE,
         };
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
-        let raw = try!(self.create_texture_with_data(desc, cty, cast_slice(data)));
-        self.generate_mipmap_raw(&raw);
+        let raw = try!(self.create_texture_with_data(desc, cty, cast_slice(data), mipmap));
         let levels = (0, raw.get_info().levels - 1);
         let tex = Phantom::new(raw);
         let view = try!(self.view_texture_as_shader_resource::<T>(&tex, levels, format::Swizzle::new()));

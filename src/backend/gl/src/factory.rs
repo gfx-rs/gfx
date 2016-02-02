@@ -98,6 +98,7 @@ impl Factory {
         let gl = &self.share.context;
         let target = role_to_target(info.role);
         let usage = match info.usage {
+            f::BufferUsage::GpuOnly => gl::STATIC_DRAW,
             f::BufferUsage::Const   => gl::STATIC_DRAW,
             f::BufferUsage::Dynamic => gl::DYNAMIC_DRAW,
             f::BufferUsage::Stream  => gl::STREAM_DRAW,

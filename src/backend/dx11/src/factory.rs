@@ -20,7 +20,7 @@ use gfx_core as core;
 use gfx_core::factory as f;
 use gfx_core::handle as h;
 use gfx_core::handle::Producer;
-use {Resources as R, Share, Program, Shader};
+use {Resources as R, Share, Pipeline, Program, Shader};
 use command::CommandBuffer;
 use native;
 
@@ -64,11 +64,34 @@ impl Factory {
         }
     }
 
-    fn create_buffer_internal(&self) -> () {
-        () //TODO
-    }
-    fn init_buffer(&self, _: (), _: &f::BufferInfo) {
-        //TODO
+    fn create_buffer_internal(&self, info: f::BufferInfo, raw_data: Option<*const c_void>) -> h::RawBuffer<R> {
+        let desc = winapi::D3D11_BUFFER_DESC {
+            ByteWidth: info.size as winapi::UINT,
+            Usage: match info.usage {
+                f::BufferUsage::GpuOnly => winapi::D3D11_USAGE_DEFAULT,
+                f::BufferUsage::Const   => winapi::D3D11_USAGE_IMMUTABLE,
+                f::BufferUsage::Dynamic => winapi::D3D11_USAGE_DYNAMIC,
+                f::BufferUsage::Stream  => winapi::D3D11_USAGE_STAGING,
+            },
+            BindFlags: match info.role {
+                f::BufferRole::Vertex   => winapi::D3D11_BIND_VERTEX_BUFFER,
+                f::BufferRole::Index    => winapi::D3D11_BIND_INDEX_BUFFER,
+                f::BufferRole::Uniform  => winapi::D3D11_BIND_CONSTANT_BUFFER,
+            }.0,
+            CPUAccessFlags: winapi::D3D11_CPU_ACCESS_WRITE.0, //TODO
+            MiscFlags: 0,
+            StructureByteStride: 0, //TODO
+        };
+        let sub = winapi::D3D11_SUBRESOURCE_DATA {
+            pSysMem: raw_data.unwrap_or(ptr::null()),
+            SysMemPitch: 0,
+            SysMemSlicePitch: 0,
+        };
+        let mut buf = native::Buffer(ptr::null_mut());
+        unsafe {
+            (*self.share.device).CreateBuffer(&desc, &sub, &mut buf.0);
+        }
+        self.share.handles.borrow_mut().make_buffer(buf, info)
     }
 }
 
@@ -86,28 +109,22 @@ impl core::Factory<R> for Factory {
 
     fn create_buffer_raw(&mut self, size: usize, role: f::BufferRole, usage: f::BufferUsage)
                          -> h::RawBuffer<R> {
-        let name = self.create_buffer_internal();
         let info = f::BufferInfo {
             role: role,
             usage: usage,
             size: size,
         };
-        self.init_buffer(name, &info);
-        self.share.handles.borrow_mut().make_buffer(name, info)
+        self.create_buffer_internal(info, None)
     }
 
     fn create_buffer_static_raw(&mut self, data: &[u8], role: f::BufferRole)
                                 -> h::RawBuffer<R> {
-        let name = self.create_buffer_internal();
-
         let info = f::BufferInfo {
             role: role,
             usage: f::BufferUsage::Const,
             size: data.len(),
         };
-        self.init_buffer(name, &info);
-        //update_sub_buffer(&self.share.context, name, data.as_ptr(), data.len(), 0, role); //TODO
-        self.share.handles.borrow_mut().make_buffer(name, info)
+        self.create_buffer_internal(info, Some(data.as_ptr() as *const c_void))
     }
 
     fn create_shader(&mut self, stage: core::shade::Stage, code: &[u8])
@@ -159,7 +176,10 @@ impl core::Factory<R> for Factory {
 
     fn create_pipeline_state_raw(&mut self, program: &h::Program<R>, _desc: &core::pso::Descriptor)
                                  -> Result<h::RawPipelineState<R>, core::pso::CreationError> {
-        Ok(self.share.handles.borrow_mut().make_pso((), program)) //TODO
+        let pso = Pipeline {
+            layout: ptr::null(),
+        };
+        Ok(self.share.handles.borrow_mut().make_pso(pso, program)) //TODO
     }
 
     fn create_texture_raw(&mut self, desc: core::tex::Descriptor, _hint: Option<core::format::ChannelType>)

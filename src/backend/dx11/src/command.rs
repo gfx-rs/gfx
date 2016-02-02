@@ -14,16 +14,17 @@
 
 #![allow(missing_docs)]
 
-use {native, Resources};
+use {native, Resources, Pipeline};
 use gfx_core::{draw, pso, shade, state, target, tex};
 use gfx_core::{IndexType, VertexCount};
-use winapi::{FLOAT, UINT8, D3D11_CLEAR_FLAG, D3D11_VIEWPORT};
+use winapi::{FLOAT, UINT8, DXGI_FORMAT, DXGI_FORMAT_R16_UINT, D3D11_CLEAR_FLAG, D3D11_VIEWPORT};
 
 ///Serialized device command.
 #[derive(Clone, Copy, Debug)]
 pub enum Command {
     // states
     BindPixelTargets(pso::PixelTargetSet<Resources>),
+    BindIndex(native::Buffer, DXGI_FORMAT),
     SetViewport(D3D11_VIEWPORT),
     // resource updates
     // drawing
@@ -46,7 +47,7 @@ impl CommandBuffer {
 impl draw::CommandBuffer<Resources> for CommandBuffer {
     fn clone_empty(&self) -> CommandBuffer { CommandBuffer::new() }
     fn reset(&mut self) {}
-    fn bind_pipeline_state(&mut self, _: ()) {}
+    fn bind_pipeline_state(&mut self, _: Pipeline) {}
     fn bind_vertex_buffers(&mut self, _: pso::VertexBufferSet<Resources>) {}
     fn bind_constant_buffers(&mut self, _: pso::ConstantBufferSet<Resources>) {}
     fn bind_global_constant(&mut self, _: shade::Location, _: shade::UniformValue) {}
@@ -69,10 +70,13 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.push(Command::SetViewport(viewport));
     }
 
-    fn bind_index(&mut self, _: ()) {}
+    fn bind_index(&mut self, buf: native::Buffer) {
+        self.buf.push(Command::BindIndex(buf, DXGI_FORMAT_R16_UINT));   //TODO
+    }
+
     fn set_scissor(&mut self, _: Option<target::Rect>) {}
     fn set_ref_values(&mut self, _: state::RefValues) {}
-    fn update_buffer(&mut self, _: (), _: draw::DataPointer, _: usize) {}
+    fn update_buffer(&mut self, _: native::Buffer, _: draw::DataPointer, _: usize) {}
     fn update_texture(&mut self, _: native::Texture, _: tex::Kind, _: Option<tex::CubeFace>,
                       _: draw::DataPointer, _: tex::RawImageInfo) {}
 

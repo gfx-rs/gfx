@@ -28,6 +28,10 @@ pub mod native {
     use winapi::*;
 
     #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+    pub struct Buffer(pub *mut ID3D11Buffer);
+    unsafe impl Send for Buffer {}
+
+    #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
     pub struct Rtv(pub *mut ID3D11RenderTargetView);
     unsafe impl Send for Rtv {}
 
@@ -62,14 +66,20 @@ pub struct Program {
 }
 unsafe impl Send for Program {}
 
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct Pipeline {
+    layout: *const winapi::ID3D11InputLayout,
+}
+unsafe impl Send for Pipeline {}
+
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Resources {}
 
 impl gfx_core::Resources for Resources {
-    type Buffer              = ();
+    type Buffer              = native::Buffer;
     type Shader              = Shader;
     type Program             = Program;
-    type PipelineStateObject = ();
+    type PipelineStateObject = Pipeline;
     type Texture             = native::Texture;
     type RenderTargetView    = native::Rtv;
     type DepthStencilView    = native::Dsv;
@@ -178,9 +188,9 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
 
 impl Device {
     fn process(&mut self, command: &command::Command, _data_buf: &gfx_core::draw::DataBuffer) {
-        use command::Command as C;
-        match command {
-            &C::BindPixelTargets(ref pts) => {
+        use command::Command::*;
+        match *command {
+            BindPixelTargets(ref pts) => {
                 use gfx_core::MAX_COLOR_TARGETS as NUM;
                 let mut colors = [ptr::null_mut(); NUM];
                 for i in 0 .. NUM {
@@ -191,13 +201,16 @@ impl Device {
                     (*self.context).OMSetRenderTargets(NUM as winapi::UINT, &colors[0], ds);
                 }
             },
-            &C::SetViewport(ref viewport) => unsafe {
+            BindIndex(ref buf, format) => unsafe {
+                (*self.context).IASetIndexBuffer(buf.0, format, 0);
+            },
+            SetViewport(ref viewport) => unsafe {
                 (*self.context).RSSetViewports(1, viewport);
             },
-            &C::ClearColor(target, ref data) => unsafe {
+            ClearColor(target, ref data) => unsafe {
                 (*self.context).ClearRenderTargetView(target.0, data);
             },
-            &C::ClearDepthStencil(target, flags, depth, stencil) => unsafe {
+            ClearDepthStencil(target, flags, depth, stencil) => unsafe {
                 (*self.context).ClearDepthStencilView(target.0, flags.0, depth, stencil);
             },
         }
