@@ -205,9 +205,19 @@ impl core::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_program(prog, info))
     }
 
-    fn create_pipeline_state_raw(&mut self, program: &h::Program<R>, _desc: &core::pso::Descriptor)
+    fn create_pipeline_state_raw(&mut self, program: &h::Program<R>, desc: &core::pso::Descriptor)
                                  -> Result<h::RawPipelineState<R>, core::pso::CreationError> {
+        use std::mem; //temporary
+        use winapi::d3dcommon::*;
+        use gfx_core::Primitive::*;
         let pso = Pipeline {
+            topology: unsafe{mem::transmute(match desc.primitive {
+                PointList       => D3D11_PRIMITIVE_TOPOLOGY_POINTLIST,
+                LineList        => D3D11_PRIMITIVE_TOPOLOGY_LINELIST,
+                LineStrip       => D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP,
+                TriangleList    => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+                TriangleStrip   => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+            })},
             layout: ptr::null(),
             program: *self.frame_handles.ref_program(program),
         };

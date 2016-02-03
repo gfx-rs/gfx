@@ -15,7 +15,8 @@
 #![allow(missing_docs)]
 
 use std::ptr;
-use winapi::{FLOAT, UINT, UINT8, DXGI_FORMAT, DXGI_FORMAT_R16_UINT, D3D11_CLEAR_FLAG, D3D11_VIEWPORT};
+use winapi::{FLOAT, UINT, UINT8, DXGI_FORMAT, DXGI_FORMAT_R16_UINT,
+             D3D11_CLEAR_FLAG, D3D11_PRIMITIVE_TOPOLOGY, D3D11_VIEWPORT};
 use gfx_core::{draw, pso, shade, state, target, tex};
 use gfx_core::{IndexType, VertexCount};
 use gfx_core::{MAX_VERTEX_ATTRIBUTES, MAX_COLOR_TARGETS};
@@ -26,9 +27,10 @@ use {native, Resources, Pipeline, Program};
 pub enum Command {
     // states
     BindProgram(Program),
+    BindInputLayout(D3D11_PRIMITIVE_TOPOLOGY),
+    BindIndex(native::Buffer, DXGI_FORMAT),
     BindVertexBuffers([native::Buffer; MAX_VERTEX_ATTRIBUTES], [UINT; MAX_VERTEX_ATTRIBUTES], [UINT; MAX_VERTEX_ATTRIBUTES]),
     BindPixelTargets([native::Rtv; MAX_COLOR_TARGETS], native::Dsv),
-    BindIndex(native::Buffer, DXGI_FORMAT),
     SetViewport(D3D11_VIEWPORT),
     // resource updates
     // drawing
@@ -60,7 +62,8 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
     fn clone_empty(&self) -> CommandBuffer { CommandBuffer::new() }
     fn reset(&mut self) {}
     fn bind_pipeline_state(&mut self, pso: Pipeline) {
-        //TODO
+        use std::mem; //temporary
+        self.buf.push(Command::BindInputLayout(unsafe{mem::transmute(pso.topology)}));
         self.buf.push(Command::BindProgram(pso.program));
     }
 

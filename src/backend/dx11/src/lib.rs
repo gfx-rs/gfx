@@ -66,6 +66,7 @@ unsafe impl Send for Program {}
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Pipeline {
+    topology: winapi::UINT, //winapi::D3D11_PRIMITIVE_TOPOLOGY,
     layout: *const winapi::ID3D11InputLayout,
     program: Program,
 }
@@ -187,12 +188,19 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
 
 impl Device {
     fn process(&mut self, command: &command::Command, _data_buf: &gfx_core::draw::DataBuffer) {
+        use std::mem; //temporary
         use command::Command::*;
         match *command {
             BindProgram(ref prog) => unsafe {
                 (*self.context).VSSetShader(prog.vs, ptr::null_mut(), 0);
                 (*self.context).GSSetShader(prog.gs, ptr::null_mut(), 0);
                 (*self.context).PSSetShader(prog.ps, ptr::null_mut(), 0);
+            },
+            BindInputLayout(topology) => unsafe {
+                (*self.context).IASetPrimitiveTopology(mem::transmute(topology));
+            },
+            BindIndex(ref buf, format) => unsafe {
+                (*self.context).IASetIndexBuffer(buf.0, format, 0);
             },
             BindVertexBuffers(ref buffers, ref strides, ref offsets) => unsafe {
                 (*self.context).IASetVertexBuffers(0, gfx_core::MAX_VERTEX_ATTRIBUTES as winapi::UINT,
@@ -201,9 +209,6 @@ impl Device {
             BindPixelTargets(ref colors, ds) => unsafe {
                 (*self.context).OMSetRenderTargets(gfx_core::MAX_COLOR_TARGETS as winapi::UINT,
                     &colors[0].0, ds.0);
-            },
-            BindIndex(ref buf, format) => unsafe {
-                (*self.context).IASetIndexBuffer(buf.0, format, 0);
             },
             SetViewport(ref viewport) => unsafe {
                 (*self.context).RSSetViewports(1, viewport);

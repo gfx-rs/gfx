@@ -144,9 +144,6 @@ pub enum Primitive {
     /// Every three consecutive vertices represent a single triangle. For example, with `[a, b, c,
     /// d]`, `a`, `b`, and `c` form a triangle, and `b`, `c`, and `d` form a triangle.
     TriangleStrip,
-    /// The first vertex with the last two are forming a triangle. For example, with `[a, b, c, d
-    /// ]`, `a` , `b`, and `c` form a triangle, and `a`, `c`, and `d` form a triangle.
-    TriangleFan,
     //Quad,
 }
 

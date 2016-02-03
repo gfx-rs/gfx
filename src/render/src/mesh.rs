@@ -55,7 +55,7 @@ impl<R: Resources> Slice<R> {
             LineList => nv / 2,
             LineStrip => (nv-1),
             TriangleList => nv / 3,
-            TriangleStrip | TriangleFan => (nv-2) / 3,
+            TriangleStrip => (nv-2) / 3,
         }
     }
 }

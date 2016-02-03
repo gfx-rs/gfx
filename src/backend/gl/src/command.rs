@@ -24,14 +24,14 @@ use {Buffer, Program, FrameBuffer, Texture,
 
 
 fn primitive_to_gl(primitive: c::Primitive) -> gl::types::GLenum {
-    use gfx_core::Primitive as P;
+    use gfx_core::Primitive::*;
     match primitive {
-        P::PointList => gl::POINTS,
-        P::LineList => gl::LINES,
-        P::LineStrip => gl::LINE_STRIP,
-        P::TriangleList => gl::TRIANGLES,
-        P::TriangleStrip => gl::TRIANGLE_STRIP,
-        P::TriangleFan => gl::TRIANGLE_FAN,
+        PointList => gl::POINTS,
+        LineList => gl::LINES,
+        LineStrip => gl::LINE_STRIP,
+        TriangleList => gl::TRIANGLES,
+        TriangleStrip => gl::TRIANGLE_STRIP,
+        //TriangleFan => gl::TRIANGLE_FAN,
     }
 }
 
@@ -108,6 +108,20 @@ struct Cache {
     draw_mask: u32,
 }
 
+impl Cache {
+    pub fn new() -> Cache {
+        Cache {
+            primitive: 0,
+            attributes: [None; c::MAX_VERTEX_ATTRIBUTES],
+            //resource_views: [None; c::MAX_RESOURCE_VIEWS],
+            stencil: None,
+            cull_face: s::CullFace::Nothing,
+            //blend: None,
+            draw_mask: 0,
+        }
+    }
+}
+
 pub struct CommandBuffer {
     pub buf: Vec<Command>,
     fbo: FrameBuffer,
@@ -119,15 +133,7 @@ impl CommandBuffer {
         CommandBuffer {
             buf: Vec::new(),
             fbo: fbo,
-            cache: Cache {
-                primitive: 0,
-                attributes: [None; c::MAX_VERTEX_ATTRIBUTES],
-                //resource_views: [None; c::MAX_RESOURCE_VIEWS],
-                stencil: None,
-                cull_face: s::CullFace::Nothing,
-                //blend: None,
-                draw_mask: 0,
-            },
+            cache: Cache::new(),
         }
     }
     fn is_main_target(&self, tv: Option<TargetView>) -> bool {
