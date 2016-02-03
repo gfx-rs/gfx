@@ -32,10 +32,6 @@ pub mod native {
     unsafe impl Send for Buffer {}
 
     #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-    pub struct Shader(pub *mut ID3D11DeviceChild);
-    unsafe impl Send for Shader {}
-
-    #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
     pub struct Rtv(pub *mut ID3D11RenderTargetView);
     unsafe impl Send for Rtv {}
 
@@ -56,6 +52,14 @@ pub use self::factory::Factory;
 use gfx_core::handle as h;
 
 
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct Shader {
+    object: *mut winapi::ID3D11DeviceChild,
+    //reflector: *const winapi::ID3D11ShaderReflection,
+    code: Vec<u8>,
+}
+unsafe impl Send for Shader {}
+
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Program {
     vs: *mut winapi::ID3D11VertexShader,
@@ -64,10 +68,12 @@ pub struct Program {
 }
 unsafe impl Send for Program {}
 
+pub type InputLayout = *mut winapi::ID3D11InputLayout;
+
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Pipeline {
     topology: winapi::UINT, //winapi::D3D11_PRIMITIVE_TOPOLOGY,
-    layout: *const winapi::ID3D11InputLayout,
+    layout: InputLayout,
     program: Program,
 }
 unsafe impl Send for Pipeline {}
@@ -77,7 +83,7 @@ pub enum Resources {}
 
 impl gfx_core::Resources for Resources {
     type Buffer              = native::Buffer;
-    type Shader              = native::Shader;
+    type Shader              = Shader;
     type Program             = Program;
     type PipelineStateObject = Pipeline;
     type Texture             = native::Texture;
@@ -188,7 +194,6 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
 
 impl Device {
     fn process(&mut self, command: &command::Command, _data_buf: &gfx_core::draw::DataBuffer) {
-        use std::mem; //temporary
         use command::Command::*;
         match *command {
             BindProgram(ref prog) => unsafe {
@@ -196,8 +201,8 @@ impl Device {
                 (*self.context).GSSetShader(prog.gs, ptr::null_mut(), 0);
                 (*self.context).PSSetShader(prog.ps, ptr::null_mut(), 0);
             },
-            BindInputLayout(topology) => unsafe {
-                (*self.context).IASetPrimitiveTopology(mem::transmute(topology));
+            BindInputLayout(layout) => unsafe {
+                (*self.context).IASetInputLayout(layout);
             },
             BindIndex(ref buf, format) => unsafe {
                 (*self.context).IASetIndexBuffer(buf.0, format, 0);
@@ -209,6 +214,10 @@ impl Device {
             BindPixelTargets(ref colors, ds) => unsafe {
                 (*self.context).OMSetRenderTargets(gfx_core::MAX_COLOR_TARGETS as winapi::UINT,
                     &colors[0].0, ds.0);
+            },
+            SetPrimitive(topology) => unsafe {
+                use std::mem; //temporary
+                (*self.context).IASetPrimitiveTopology(mem::transmute(topology));
             },
             SetViewport(ref viewport) => unsafe {
                 (*self.context).RSSetViewports(1, viewport);
@@ -256,7 +265,10 @@ impl gfx_core::Device for Device {
         self.frame_handles.clear();
         self.share.handles.borrow_mut().clean_with(&mut (),
             |_, _| {}, //buffer
-            |_, s| unsafe { (*s.0).Release(); }, //shader
+            |_, s| unsafe { //shader
+                (*s.object).Release();
+                //(*s.reflector).Release();
+            },
             |_, p| unsafe {
                 if p.vs != ptr::null_mut() { (*p.vs).Release(); }
                 if p.gs != ptr::null_mut() { (*p.gs).Release(); }

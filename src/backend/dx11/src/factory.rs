@@ -20,7 +20,7 @@ use gfx_core as core;
 use gfx_core::factory as f;
 use gfx_core::handle as h;
 use gfx_core::handle::Producer;
-use {Resources as R, Share, Pipeline, Program};
+use {Resources as R, Share, Pipeline, Program, Shader};
 use command::CommandBuffer;
 use native;
 
@@ -134,32 +134,36 @@ impl core::Factory<R> for Factory {
 
         let dev = self.share.device;
         let len = code.len() as winapi::SIZE_T;
-        let (hr, shader) = match stage {
+        let (hr, object) = match stage {
             Stage::Vertex => {
                 let mut ret = ptr::null_mut();
                 let hr = unsafe {
                     (*dev).CreateVertexShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
                 };
-                (hr, native::Shader(ret as *mut ID3D11DeviceChild))
+                (hr, ret as *mut ID3D11DeviceChild)
             },
             Stage::Geometry => {
                 let mut ret = ptr::null_mut();
                 let hr = unsafe {
                     (*dev).CreateGeometryShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
                 };
-                (hr, native::Shader(ret as *mut ID3D11DeviceChild))
+                (hr, ret as *mut ID3D11DeviceChild)
             },
             Stage::Pixel => {
                 let mut ret = ptr::null_mut();
                 let hr = unsafe {
                     (*dev).CreatePixelShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
                 };
-                (hr, native::Shader(ret as *mut ID3D11DeviceChild))
+                (hr, ret as *mut ID3D11DeviceChild)
             },
             //_ => return Err(CreateShaderError::StageNotSupported(stage))
         };
 
         if winapi::SUCCEEDED(hr) {
+            let shader = Shader {
+                object: object,
+                code: Vec::new(),
+            };
             Ok(self.share.handles.borrow_mut().make_shader(shader))
         }else {
             Err(CreateShaderError::CompilationFailed(format!("code {}", hr)))
@@ -183,7 +187,7 @@ impl core::Factory<R> for Factory {
         let fh = &mut self.frame_handles;
         let prog = match shader_set {
             &core::ShaderSet::Simple(ref vs, ref ps) => {
-                let (vs, ps) = (vs.reference(fh).0, ps.reference(fh).0);
+                let (vs, ps) = (vs.reference(fh).object, ps.reference(fh).object);
                 unsafe { (*vs).AddRef(); (*ps).AddRef(); }
                 Program {
                     vs: vs as *mut ID3D11VertexShader,
@@ -192,7 +196,7 @@ impl core::Factory<R> for Factory {
                 }
             },
             &core::ShaderSet::Geometry(ref vs, ref gs, ref ps) => {
-                let (vs, gs, ps) = (vs.reference(fh).0, gs.reference(fh).0, ps.reference(fh).0);
+                let (vs, gs, ps) = (vs.reference(fh).object, gs.reference(fh).object, ps.reference(fh).object);
                 unsafe { (*vs).AddRef(); (*gs).AddRef(); (*ps).AddRef(); }
                 Program {
                     vs: vs as *mut ID3D11VertexShader,
@@ -210,6 +214,28 @@ impl core::Factory<R> for Factory {
         use std::mem; //temporary
         use winapi::d3dcommon::*;
         use gfx_core::Primitive::*;
+
+        let layouts = Vec::new();
+        /*layouts.push(D3D11_INPUT_ELEMENT_DESC {
+            SemanticName: c_str!("POSITION"),
+            SemanticIndex: 0,
+            Format: DXGI_FORMAT_R32G32B32_FLOAT,
+            InputSlot: 0,
+            AlignedByteOffset: 0,
+            InputSlotClass: D3D11_INPUT_PER_VERTEX_DATA,
+            InstanceDataStepRate: 0,
+        });*/
+
+        let dev = self.share.device;
+        let mut vertex_layout = ptr::null_mut();
+        let _hr = unsafe {
+            (*dev).CreateInputLayout(
+                layouts.as_ptr(), layouts.len() as winapi::UINT,
+                ptr::null(),//mem::transmute(vs_bin.as_ptr()),
+                0 as winapi::SIZE_T,
+                &mut vertex_layout)
+        };
+
         let pso = Pipeline {
             topology: unsafe{mem::transmute(match desc.primitive {
                 PointList       => D3D11_PRIMITIVE_TOPOLOGY_POINTLIST,
@@ -218,7 +244,7 @@ impl core::Factory<R> for Factory {
                 TriangleList    => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
                 TriangleStrip   => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
             })},
-            layout: ptr::null(),
+            layout: vertex_layout,
             program: *self.frame_handles.ref_program(program),
         };
         Ok(self.share.handles.borrow_mut().make_pso(pso, program))

@@ -20,17 +20,18 @@ use winapi::{FLOAT, UINT, UINT8, DXGI_FORMAT, DXGI_FORMAT_R16_UINT,
 use gfx_core::{draw, pso, shade, state, target, tex};
 use gfx_core::{IndexType, VertexCount};
 use gfx_core::{MAX_VERTEX_ATTRIBUTES, MAX_COLOR_TARGETS};
-use {native, Resources, Pipeline, Program};
+use {native, Resources, InputLayout, Pipeline, Program};
 
 ///Serialized device command.
 #[derive(Clone, Copy, Debug)]
 pub enum Command {
     // states
     BindProgram(Program),
-    BindInputLayout(D3D11_PRIMITIVE_TOPOLOGY),
+    BindInputLayout(InputLayout),
     BindIndex(native::Buffer, DXGI_FORMAT),
     BindVertexBuffers([native::Buffer; MAX_VERTEX_ATTRIBUTES], [UINT; MAX_VERTEX_ATTRIBUTES], [UINT; MAX_VERTEX_ATTRIBUTES]),
     BindPixelTargets([native::Rtv; MAX_COLOR_TARGETS], native::Dsv),
+    SetPrimitive(D3D11_PRIMITIVE_TOPOLOGY),
     SetViewport(D3D11_VIEWPORT),
     // resource updates
     // drawing
@@ -63,7 +64,8 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
     fn reset(&mut self) {}
     fn bind_pipeline_state(&mut self, pso: Pipeline) {
         use std::mem; //temporary
-        self.buf.push(Command::BindInputLayout(unsafe{mem::transmute(pso.topology)}));
+        self.buf.push(Command::SetPrimitive(unsafe{mem::transmute(pso.topology)}));
+        self.buf.push(Command::BindInputLayout(pso.layout));
         self.buf.push(Command::BindProgram(pso.program));
     }
 
