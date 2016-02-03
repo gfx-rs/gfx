@@ -14,16 +14,19 @@
 
 #![allow(missing_docs)]
 
-use {native, Resources, Pipeline};
+use std::ptr;
+use winapi::{FLOAT, UINT, UINT8, DXGI_FORMAT, DXGI_FORMAT_R16_UINT, D3D11_CLEAR_FLAG, D3D11_VIEWPORT};
 use gfx_core::{draw, pso, shade, state, target, tex};
 use gfx_core::{IndexType, VertexCount};
-use winapi::{FLOAT, UINT8, DXGI_FORMAT, DXGI_FORMAT_R16_UINT, D3D11_CLEAR_FLAG, D3D11_VIEWPORT};
+use gfx_core::{MAX_VERTEX_ATTRIBUTES, MAX_COLOR_TARGETS};
+use {native, Resources, Pipeline};
 
 ///Serialized device command.
 #[derive(Clone, Copy, Debug)]
 pub enum Command {
     // states
-    BindPixelTargets(pso::PixelTargetSet<Resources>),
+    BindVertexBuffers([native::Buffer; MAX_VERTEX_ATTRIBUTES], [UINT; MAX_VERTEX_ATTRIBUTES], [UINT; MAX_VERTEX_ATTRIBUTES]),
+    BindPixelTargets([native::Rtv; MAX_COLOR_TARGETS], native::Dsv),
     BindIndex(native::Buffer, DXGI_FORMAT),
     SetViewport(D3D11_VIEWPORT),
     // resource updates
@@ -32,14 +35,22 @@ pub enum Command {
     ClearDepthStencil(native::Dsv, D3D11_CLEAR_FLAG, FLOAT, UINT8),
 }
 
+struct Cache {
+    attributes: [Option<pso::AttributeDesc>; MAX_VERTEX_ATTRIBUTES],
+}
+
 pub struct CommandBuffer {
     pub buf: Vec<Command>,
+    cache: Cache,
 }
 
 impl CommandBuffer {
     pub fn new() -> CommandBuffer {
         CommandBuffer {
             buf: Vec::new(),
+            cache: Cache {
+                attributes: [None; MAX_VERTEX_ATTRIBUTES],
+            },
         }
     }
 }
@@ -48,7 +59,27 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
     fn clone_empty(&self) -> CommandBuffer { CommandBuffer::new() }
     fn reset(&mut self) {}
     fn bind_pipeline_state(&mut self, _: Pipeline) {}
-    fn bind_vertex_buffers(&mut self, _: pso::VertexBufferSet<Resources>) {}
+
+    fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<Resources>) {
+        let mut buffers = [native::Buffer(ptr::null_mut()); MAX_VERTEX_ATTRIBUTES];
+        let mut strides = [0; MAX_VERTEX_ATTRIBUTES];
+        let mut offsets = [0; MAX_VERTEX_ATTRIBUTES];
+        for i in 0 .. MAX_VERTEX_ATTRIBUTES {
+            match (vbs.0[i], self.cache.attributes[i]) {
+                (None, Some(fm)) => {
+                    error!("No vertex input provided for slot {} of format {:?}", i, fm)
+                },
+                (Some((buffer, offset)), Some(ref format)) => {
+                    buffers[i] = buffer;
+                    strides[i] = format.0.stride as UINT;
+                    offsets[i] = format.0.offset as UINT + (offset as UINT);
+                },
+                (_, None) => (),
+            }
+        }
+        self.buf.push(Command::BindVertexBuffers(buffers, strides, offsets));
+    }
+
     fn bind_constant_buffers(&mut self, _: pso::ConstantBufferSet<Resources>) {}
     fn bind_global_constant(&mut self, _: shade::Location, _: shade::UniformValue) {}
     fn bind_resource_views(&mut self, _: pso::ResourceViewSet<Resources>) {}
@@ -66,7 +97,14 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
             Width: pts.size.0 as f32, Height: pts.size.1 as f32,
             MinDepth: 0.0, MaxDepth: 1.0,
         };
-        self.buf.push(Command::BindPixelTargets(pts));
+        let mut colors = [native::Rtv(ptr::null_mut()); MAX_COLOR_TARGETS];
+        for i in 0 .. MAX_COLOR_TARGETS {
+            if let Some(c) = pts.colors[i] {
+                colors[i] = c;
+            }
+        }
+        let ds = pts.depth.unwrap_or(native::Dsv(ptr::null_mut()));
+        self.buf.push(Command::BindPixelTargets(colors, ds));
         self.buf.push(Command::SetViewport(viewport));
     }
 

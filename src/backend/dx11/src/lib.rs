@@ -190,16 +190,13 @@ impl Device {
     fn process(&mut self, command: &command::Command, _data_buf: &gfx_core::draw::DataBuffer) {
         use command::Command::*;
         match *command {
-            BindPixelTargets(ref pts) => {
-                use gfx_core::MAX_COLOR_TARGETS as NUM;
-                let mut colors = [ptr::null_mut(); NUM];
-                for i in 0 .. NUM {
-                    colors[i] = pts.colors[i].unwrap_or(native::Rtv(ptr::null_mut())).0;
-                }
-                let ds = pts.depth.unwrap_or(native::Dsv(ptr::null_mut())).0;
-                unsafe {
-                    (*self.context).OMSetRenderTargets(NUM as winapi::UINT, &colors[0], ds);
-                }
+            BindVertexBuffers(ref buffers, ref strides, ref offsets) => unsafe {
+                (*self.context).IASetVertexBuffers(0, gfx_core::MAX_VERTEX_ATTRIBUTES as winapi::UINT,
+                    &buffers[0].0, strides.as_ptr(), offsets.as_ptr());
+            },
+            BindPixelTargets(ref colors, ds) => unsafe {
+                (*self.context).OMSetRenderTargets(gfx_core::MAX_COLOR_TARGETS as winapi::UINT,
+                    &colors[0].0, ds.0);
             },
             BindIndex(ref buf, format) => unsafe {
                 (*self.context).IASetIndexBuffer(buf.0, format, 0);

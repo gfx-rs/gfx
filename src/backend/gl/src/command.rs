@@ -100,26 +100,12 @@ pub const RESET: [Command; 13] = [
 
 struct Cache {
     primitive: gl::types::GLenum,
-    attributes: [Option<c::pso::AttributeDesc>;c::MAX_VERTEX_ATTRIBUTES],
+    attributes: [Option<c::pso::AttributeDesc>; c::MAX_VERTEX_ATTRIBUTES],
     //resource_views: [Option<(Texture, BindAnchor)>; c::MAX_RESOURCE_VIEWS],
     stencil: Option<s::Stencil>,
     //blend: Option<s::Blend>,
     cull_face: s::CullFace,
     draw_mask: u32,
-}
-
-impl Cache {
-    fn new() -> Cache {
-        Cache {
-            primitive: 0,
-            attributes: [None; c::MAX_VERTEX_ATTRIBUTES],
-            //resource_views: [None; c::MAX_RESOURCE_VIEWS],
-            stencil: None,
-            cull_face: s::CullFace::Nothing,
-            //blend: None,
-            draw_mask: 0,
-        }
-    }
 }
 
 pub struct CommandBuffer {
@@ -133,7 +119,15 @@ impl CommandBuffer {
         CommandBuffer {
             buf: Vec::new(),
             fbo: fbo,
-            cache: Cache::new(),
+            cache: Cache {
+                primitive: 0,
+                attributes: [None; c::MAX_VERTEX_ATTRIBUTES],
+                //resource_views: [None; c::MAX_RESOURCE_VIEWS],
+                stencil: None,
+                cull_face: s::CullFace::Nothing,
+                //blend: None,
+                draw_mask: 0,
+            },
         }
     }
     fn is_main_target(&self, tv: Option<TargetView>) -> bool {
@@ -146,11 +140,7 @@ impl CommandBuffer {
 
 impl c::draw::CommandBuffer<Resources> for CommandBuffer {
     fn clone_empty(&self) -> CommandBuffer {
-        CommandBuffer {
-            buf: Vec::new(),
-            fbo: self.fbo,
-            cache: Cache::new(),
-        }
+        CommandBuffer::new(self.fbo)
     }
 
     fn reset(&mut self) {
