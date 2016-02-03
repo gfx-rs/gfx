@@ -209,8 +209,9 @@ impl core::Factory<R> for Factory {
                                  -> Result<h::RawPipelineState<R>, core::pso::CreationError> {
         let pso = Pipeline {
             layout: ptr::null(),
+            program: *self.frame_handles.ref_program(program),
         };
-        Ok(self.share.handles.borrow_mut().make_pso(pso, program)) //TODO
+        Ok(self.share.handles.borrow_mut().make_pso(pso, program))
     }
 
     fn create_texture_raw(&mut self, desc: core::tex::Descriptor, _hint: Option<core::format::ChannelType>)

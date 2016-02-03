@@ -19,12 +19,13 @@ use winapi::{FLOAT, UINT, UINT8, DXGI_FORMAT, DXGI_FORMAT_R16_UINT, D3D11_CLEAR_
 use gfx_core::{draw, pso, shade, state, target, tex};
 use gfx_core::{IndexType, VertexCount};
 use gfx_core::{MAX_VERTEX_ATTRIBUTES, MAX_COLOR_TARGETS};
-use {native, Resources, Pipeline};
+use {native, Resources, Pipeline, Program};
 
 ///Serialized device command.
 #[derive(Clone, Copy, Debug)]
 pub enum Command {
     // states
+    BindProgram(Program),
     BindVertexBuffers([native::Buffer; MAX_VERTEX_ATTRIBUTES], [UINT; MAX_VERTEX_ATTRIBUTES], [UINT; MAX_VERTEX_ATTRIBUTES]),
     BindPixelTargets([native::Rtv; MAX_COLOR_TARGETS], native::Dsv),
     BindIndex(native::Buffer, DXGI_FORMAT),
@@ -58,7 +59,10 @@ impl CommandBuffer {
 impl draw::CommandBuffer<Resources> for CommandBuffer {
     fn clone_empty(&self) -> CommandBuffer { CommandBuffer::new() }
     fn reset(&mut self) {}
-    fn bind_pipeline_state(&mut self, _: Pipeline) {}
+    fn bind_pipeline_state(&mut self, pso: Pipeline) {
+        //TODO
+        self.buf.push(Command::BindProgram(pso.program));
+    }
 
     fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<Resources>) {
         let mut buffers = [native::Buffer(ptr::null_mut()); MAX_VERTEX_ATTRIBUTES];
