@@ -20,7 +20,7 @@ use gfx_core as core;
 use gfx_core::factory as f;
 use gfx_core::handle as h;
 use gfx_core::handle::Producer;
-use {Resources as R, Share, Pipeline, Program, Shader};
+use {Resources as R, Share, Pipeline, Program};
 use command::CommandBuffer;
 use native;
 
@@ -129,25 +129,36 @@ impl core::Factory<R> for Factory {
 
     fn create_shader(&mut self, stage: core::shade::Stage, code: &[u8])
                      -> Result<h::Shader<R>, core::shade::CreateShaderError> {
+        use winapi::ID3D11DeviceChild;
         use gfx_core::shade::{CreateShaderError, Stage};
+
         let dev = self.share.device;
+        let len = code.len() as winapi::SIZE_T;
         let (hr, shader) = match stage {
             Stage::Vertex => {
                 let mut ret = ptr::null_mut();
                 let hr = unsafe {
-                    (*dev).CreateVertexShader(code.as_ptr() as *const c_void, code.len() as winapi::SIZE_T, ptr::null_mut(), &mut ret)
+                    (*dev).CreateVertexShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
                 };
-                (hr, Shader::Vertex(ret))
+                (hr, native::Shader(ret as *mut ID3D11DeviceChild))
+            },
+            Stage::Geometry => {
+                let mut ret = ptr::null_mut();
+                let hr = unsafe {
+                    (*dev).CreateGeometryShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
+                };
+                (hr, native::Shader(ret as *mut ID3D11DeviceChild))
             },
             Stage::Pixel => {
                 let mut ret = ptr::null_mut();
                 let hr = unsafe {
-                    (*dev).CreatePixelShader(code.as_ptr() as *const c_void, code.len() as winapi::SIZE_T, ptr::null_mut(), &mut ret)
+                    (*dev).CreatePixelShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
                 };
-                (hr, Shader::Pixel(ret))
+                (hr, native::Shader(ret as *mut ID3D11DeviceChild))
             },
-            _ => return Err(CreateShaderError::StageNotSupported(stage))
+            //_ => return Err(CreateShaderError::StageNotSupported(stage))
         };
+
         if winapi::SUCCEEDED(hr) {
             Ok(self.share.handles.borrow_mut().make_shader(shader))
         }else {
@@ -155,9 +166,10 @@ impl core::Factory<R> for Factory {
         }
     }
 
-    fn create_program(&mut self, _shader_set: &core::ShaderSet<R>)
+    fn create_program(&mut self, shader_set: &core::ShaderSet<R>)
                       -> Result<h::Program<R>, core::shade::CreateProgramError> {
-        let info = core::shade::ProgramInfo {
+        use winapi::{ID3D11VertexShader, ID3D11GeometryShader, ID3D11PixelShader};
+        let info = core::shade::ProgramInfo { //TODO
             vertex_attributes: Vec::new(),
             globals: Vec::new(),
             constant_buffers: Vec::new(),
@@ -167,11 +179,30 @@ impl core::Factory<R> for Factory {
             outputs: Vec::new(),
             knows_outputs: true,
         };
-        let prog = Program {
-            vs: ptr::null_mut(),
-            ps: ptr::null_mut(),
+
+        let fh = &mut self.frame_handles;
+        let prog = match shader_set {
+            &core::ShaderSet::Simple(ref vs, ref ps) => {
+                let (vs, ps) = (vs.reference(fh).0, ps.reference(fh).0);
+                unsafe { (*vs).AddRef(); (*ps).AddRef(); }
+                Program {
+                    vs: vs as *mut ID3D11VertexShader,
+                    gs: ptr::null_mut(),
+                    ps: ps as *mut ID3D11PixelShader,
+                }
+            },
+            &core::ShaderSet::Geometry(ref vs, ref gs, ref ps) => {
+                let (vs, gs, ps) = (vs.reference(fh).0, gs.reference(fh).0, ps.reference(fh).0);
+                unsafe { (*vs).AddRef(); (*gs).AddRef(); (*ps).AddRef(); }
+                Program {
+                    vs: vs as *mut ID3D11VertexShader,
+                    gs: vs as *mut ID3D11GeometryShader,
+                    ps: ps as *mut ID3D11PixelShader,
+                }
+            },
         };
-        Ok(self.share.handles.borrow_mut().make_program(prog, info)) //TODO
+
+        Ok(self.share.handles.borrow_mut().make_program(prog, info))
     }
 
     fn create_pipeline_state_raw(&mut self, program: &h::Program<R>, _desc: &core::pso::Descriptor)

@@ -32,6 +32,10 @@ pub mod native {
     unsafe impl Send for Buffer {}
 
     #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+    pub struct Shader(pub *mut ID3D11DeviceChild);
+    unsafe impl Send for Shader {}
+
+    #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
     pub struct Rtv(pub *mut ID3D11RenderTargetView);
     unsafe impl Send for Rtv {}
 
@@ -53,15 +57,9 @@ use gfx_core::handle as h;
 
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub enum Shader {
-    Vertex(*mut winapi::ID3D11VertexShader),
-    Pixel(*mut winapi::ID3D11PixelShader),
-}
-unsafe impl Send for Shader {}
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Program {
     vs: *mut winapi::ID3D11VertexShader,
+    gs: *mut winapi::ID3D11GeometryShader,
     ps: *mut winapi::ID3D11PixelShader,
 }
 unsafe impl Send for Program {}
@@ -77,7 +75,7 @@ pub enum Resources {}
 
 impl gfx_core::Resources for Resources {
     type Buffer              = native::Buffer;
-    type Shader              = Shader;
+    type Shader              = native::Shader;
     type Program             = Program;
     type PipelineStateObject = Pipeline;
     type Texture             = native::Texture;
@@ -247,11 +245,12 @@ impl gfx_core::Device for Device {
         self.frame_handles.clear();
         self.share.handles.borrow_mut().clean_with(&mut (),
             |_, _| {}, //buffer
-            |_, v| match *v { //shader
-                Shader::Vertex(s) => unsafe { (*s).Release(); },
-                Shader::Pixel(s) => unsafe { (*s).Release(); },
-            },
-            |_, _| {}, //program
+            |_, s| unsafe { (*s.0).Release(); }, //shader
+            |_, p| unsafe {
+                if p.vs != ptr::null_mut() { (*p.vs).Release(); }
+                if p.gs != ptr::null_mut() { (*p.gs).Release(); }
+                if p.ps != ptr::null_mut() { (*p.ps).Release(); }
+            }, //program
             |_, _| {}, //PSO
             |_, v| unsafe { (*v.0).Release(); }, //texture
             |_, _| {}, //SRV
