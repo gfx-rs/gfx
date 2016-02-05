@@ -64,34 +64,52 @@ impl Factory {
         }
     }
 
-    fn create_buffer_internal(&self, info: f::BufferInfo, raw_data: Option<*const c_void>) -> h::RawBuffer<R> {
-        let desc = winapi::D3D11_BUFFER_DESC {
+    fn create_buffer_internal(&self, info: f::BufferInfo, raw_data: Option<*const c_void>)
+                              -> Result<h::RawBuffer<R>, f::BufferError> {
+        use winapi::d3d11::*;
+        let (usage, cpu) = match info.usage {
+            f::BufferUsage::GpuOnly => (D3D11_USAGE_DEFAULT, D3D11_CPU_ACCESS_FLAG(0)),
+            f::BufferUsage::Const   => (D3D11_USAGE_IMMUTABLE, D3D11_CPU_ACCESS_FLAG(0)),
+            f::BufferUsage::Dynamic => (D3D11_USAGE_DYNAMIC, D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE),
+            f::BufferUsage::Stream  => (D3D11_USAGE_STAGING, D3D11_CPU_ACCESS_WRITE),
+        };
+        let mut bind = match info.role {
+            f::BufferRole::Vertex   => D3D11_BIND_VERTEX_BUFFER,
+            f::BufferRole::Index    => D3D11_BIND_INDEX_BUFFER,
+            f::BufferRole::Uniform  => D3D11_BIND_CONSTANT_BUFFER,
+        };
+        if info.bind.contains(f::SHADER_RESOURCE) {
+            bind = bind | D3D11_BIND_SHADER_RESOURCE;
+        }
+        if info.bind.contains(f::UNORDERED_ACCESS) {
+            bind = bind | D3D11_BIND_UNORDERED_ACCESS;
+        }
+        if info.bind.contains(f::RENDER_TARGET) {
+            return Err(f::BufferError::UnsupportedBind(f::RENDER_TARGET))
+        }
+        let desc = D3D11_BUFFER_DESC {
             ByteWidth: info.size as winapi::UINT,
-            Usage: match info.usage {
-                f::BufferUsage::GpuOnly => winapi::D3D11_USAGE_DEFAULT,
-                f::BufferUsage::Const   => winapi::D3D11_USAGE_IMMUTABLE,
-                f::BufferUsage::Dynamic => winapi::D3D11_USAGE_DYNAMIC,
-                f::BufferUsage::Stream  => winapi::D3D11_USAGE_STAGING,
-            },
-            BindFlags: match info.role {
-                f::BufferRole::Vertex   => winapi::D3D11_BIND_VERTEX_BUFFER,
-                f::BufferRole::Index    => winapi::D3D11_BIND_INDEX_BUFFER,
-                f::BufferRole::Uniform  => winapi::D3D11_BIND_CONSTANT_BUFFER,
-            }.0,
-            CPUAccessFlags: winapi::D3D11_CPU_ACCESS_WRITE.0, //TODO
+            Usage: usage,
+            BindFlags: bind.0,
+            CPUAccessFlags: cpu.0,
             MiscFlags: 0,
             StructureByteStride: 0, //TODO
         };
-        let sub = winapi::D3D11_SUBRESOURCE_DATA {
+        let sub = D3D11_SUBRESOURCE_DATA {
             pSysMem: raw_data.unwrap_or(ptr::null()),
             SysMemPitch: 0,
             SysMemSlicePitch: 0,
         };
         let mut buf = native::Buffer(ptr::null_mut());
-        unsafe {
-            (*self.share.device).CreateBuffer(&desc, &sub, &mut buf.0);
+        let hr = unsafe {
+            (*self.share.device).CreateBuffer(&desc, &sub, &mut buf.0)
+        };
+        if winapi::SUCCEEDED(hr) {
+            Ok(self.share.handles.borrow_mut().make_buffer(buf, info))
+        }else {
+            error!("Buffer creation error code {:x}, info: {:?}", hr, info);
+            Err(f::BufferError::Other)
         }
-        self.share.handles.borrow_mut().make_buffer(buf, info)
     }
 }
 
@@ -107,21 +125,23 @@ impl core::Factory<R> for Factory {
         CommandBuffer::new()
     }
 
-    fn create_buffer_raw(&mut self, size: usize, role: f::BufferRole, usage: f::BufferUsage)
-                         -> h::RawBuffer<R> {
+    fn create_buffer_raw(&mut self, size: usize, role: f::BufferRole, usage: f::BufferUsage,
+                         bind: f::Bind) -> Result<h::RawBuffer<R>, f::BufferError> {
         let info = f::BufferInfo {
             role: role,
             usage: usage,
+            bind: bind,
             size: size,
         };
         self.create_buffer_internal(info, None)
     }
 
-    fn create_buffer_static_raw(&mut self, data: &[u8], role: f::BufferRole)
-                                -> h::RawBuffer<R> {
+    fn create_buffer_static_raw(&mut self, data: &[u8], role: f::BufferRole, bind: f::Bind)
+                                -> Result<h::RawBuffer<R>, f::BufferError> {
         let info = f::BufferInfo {
             role: role,
             usage: f::BufferUsage::Const,
+            bind: bind,
             size: data.len(),
         };
         self.create_buffer_internal(info, Some(data.as_ptr() as *const c_void))

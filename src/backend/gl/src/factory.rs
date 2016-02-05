@@ -181,30 +181,31 @@ impl d::Factory<R> for Factory {
         CommandBuffer::new(self.create_fbo_internal())
     }
 
-    fn create_buffer_raw(&mut self, size: usize, role: f::BufferRole, usage: f::BufferUsage)
-                         -> handle::RawBuffer<R> {
+    fn create_buffer_raw(&mut self, size: usize, role: f::BufferRole, usage: f::BufferUsage,
+                         bind: f::Bind) -> Result<handle::RawBuffer<R>, f::BufferError> {
         let name = self.create_buffer_internal();
         let info = f::BufferInfo {
             role: role,
             usage: usage,
+            bind: bind,
             size: size,
         };
         self.init_buffer(name, &info);
-        self.share.handles.borrow_mut().make_buffer(name, info)
+        Ok(self.share.handles.borrow_mut().make_buffer(name, info))
     }
 
-    fn create_buffer_static_raw(&mut self, data: &[u8], role: f::BufferRole)
-                                -> handle::RawBuffer<R> {
+    fn create_buffer_static_raw(&mut self, data: &[u8], role: f::BufferRole, bind: f::Bind)
+                                -> Result<handle::RawBuffer<R>, f::BufferError> {
         let name = self.create_buffer_internal();
-
         let info = f::BufferInfo {
             role: role,
             usage: f::BufferUsage::Const,
+            bind: bind,
             size: data.len(),
         };
         self.init_buffer(name, &info);
         update_sub_buffer(&self.share.context, name, data.as_ptr(), data.len(), 0, role);
-        self.share.handles.borrow_mut().make_buffer(name, info)
+        Ok(self.share.handles.borrow_mut().make_buffer(name, info))
     }
 
     fn create_shader(&mut self, stage: d::shade::Stage, code: &[u8])

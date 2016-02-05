@@ -118,6 +118,8 @@ pub struct BufferInfo {
 pub enum BufferError {
     /// Some of the bind flags are not supported.
     UnsupportedBind(Bind),
+    /// Unknown other error.
+    Other,
 }
 
 /// An error happening on buffer updates.
