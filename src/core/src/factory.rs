@@ -56,6 +56,19 @@ pub enum MapAccess {
     RW
 }
 
+bitflags!(
+    /// Bind flags
+    flags Bind: u8 {
+        /// The resource can be bound to the shader for reading.
+        const SHADER_RESOURCE  = 0x1,
+        /// The resource can be rendered into.
+        const RENDER_TARGET    = 0x2,
+        /// The resource can be bound to the shader for writing.
+        const UNORDERED_ACCESS = 0x4,
+    }
+);
+
+
 /// Role of the memory buffer. GLES doesn't allow chaning bind points for buffers.
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 #[repr(u8)]
@@ -87,15 +100,24 @@ pub enum BufferUsage {
     Stream,
 }
 
-/// An information block that is immutable and associated with each buffer
+/// An information block that is immutable and associated with each buffer.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct BufferInfo {
     /// Role
     pub role: BufferRole,
     /// Usage hint
     pub usage: BufferUsage,
+    /// Bind flags
+    pub bind: Bind,
     /// Size in bytes
     pub size: usize,
+}
+
+/// Error creating a buffer.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum BufferError {
+    /// Some of the bind flags are not supported.
+    UnsupportedBind(Bind),
 }
 
 /// An error happening on buffer updates.
@@ -104,18 +126,6 @@ pub enum BufferUpdateError {
     /// Trying to change the contents outside of the allocation.
     OutOfBounds,
 }
-
-bitflags!(
-    /// Bind flags
-    flags Bind: u8 {
-        /// The resource can be bound to the shader for reading.
-        const SHADER_RESOURCE  = 0x1,
-        /// The resource can be rendered into.
-        const RENDER_TARGET    = 0x2,
-        /// The resource can be bound to the shader for writing.
-        const UNORDERED_ACCESS = 0x4,
-    }
-);
 
 /// Error creating either a ShaderResourceView, or UnorderedAccessView.
 #[derive(Clone, PartialEq, Debug)]
@@ -177,15 +187,15 @@ pub trait Factory<R: Resources> {
     fn create_command_buffer(&mut self) -> Self::CommandBuffer;
 
     // resource creation
-    fn create_buffer_raw(&mut self, size: usize, BufferRole, BufferUsage) -> handle::RawBuffer<R>;
-    fn create_buffer_static_raw(&mut self, data: &[u8], BufferRole) -> handle::RawBuffer<R>;
-    fn create_buffer_static<T: Copy>(&mut self, data: &[T], role: BufferRole) -> handle::Buffer<R, T> {
-        let raw = self.create_buffer_static_raw(cast_slice(data), role);
-        Phantom::new(raw)
+    fn create_buffer_raw(&mut self, size: usize, BufferRole, BufferUsage, Bind) -> Result<handle::RawBuffer<R>, BufferError>;
+    fn create_buffer_static_raw(&mut self, data: &[u8], BufferRole, Bind) -> Result<handle::RawBuffer<R>, BufferError>;
+    fn create_buffer_static<T: Copy>(&mut self, data: &[T], role: BufferRole, bind: Bind) -> Result<handle::Buffer<R, T>, BufferError> {
+        self.create_buffer_static_raw(cast_slice(data), role, bind)
+            .map(|raw| Phantom::new(raw))
     }
-    fn create_buffer_dynamic<T>(&mut self, num: usize, role: BufferRole) -> handle::Buffer<R, T> {
-        let raw = self.create_buffer_raw(num * mem::size_of::<T>(), role, BufferUsage::Stream);
-        Phantom::new(raw)
+    fn create_buffer_dynamic<T>(&mut self, num: usize, role: BufferRole, bind: Bind) -> Result<handle::Buffer<R, T>, BufferError> {
+        self.create_buffer_raw(num * mem::size_of::<T>(), role, BufferUsage::Stream, bind)
+            .map(|raw| Phantom::new(raw))
     }
 
     fn create_pipeline_state_raw(&mut self, &handle::Program<R>, &pso::Descriptor)

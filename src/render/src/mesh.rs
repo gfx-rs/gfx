@@ -23,7 +23,7 @@
 use gfx_core::handle;
 use gfx_core::{Primitive, Resources, VertexCount};
 use gfx_core::draw::InstanceOption;
-use gfx_core::factory::{BufferRole, Factory};
+use gfx_core::factory::{Bind, BufferRole, Factory};
 
 /// Description of a subset of `Mesh` data to render.
 ///
@@ -102,7 +102,8 @@ macro_rules! impl_slice {
         impl<'a, R: Resources> ToIndexSlice<R> for &'a [$ty] {
             fn to_slice<F: Factory<R>>(self, factory: &mut F) -> Slice<R> {
                 //debug_assert!(self.len() <= factory.get_capabilities().max_index_count);
-                factory.create_buffer_static(self, BufferRole::Index).into()
+                factory.create_buffer_static(self, BufferRole::Index, Bind::empty())
+                       .unwrap().into()
             }
         }
     )

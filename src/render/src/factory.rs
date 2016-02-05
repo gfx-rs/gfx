@@ -16,7 +16,7 @@
 
 use gfx_core::{format, handle, tex};
 use gfx_core::{Primitive, Resources, ShaderSet, VertexCount};
-use gfx_core::factory::{BufferRole, Factory};
+use gfx_core::factory::{Bind, BufferRole, Factory};
 use gfx_core::pso::{CreationError, Descriptor};
 use gfx_core::state::{CullFace, Rasterizer};
 use encoder::Encoder;
@@ -50,7 +50,8 @@ pub trait FactoryExt<R: Resources>: Factory<R> + Sized {
     {
         let nv = data.len();
         //debug_assert!(nv <= self.get_capabilities().max_vertex_count);
-        let buf = self.create_buffer_static(data, BufferRole::Vertex);
+        let buf = self.create_buffer_static(data, BufferRole::Vertex, Bind::empty())
+                      .unwrap();
         (buf, Slice {
             start: 0,
             end: nv as VertexCount,
@@ -65,13 +66,15 @@ pub trait FactoryExt<R: Resources>: Factory<R> + Sized {
         V: Copy + pso::buffer::Structure<format::Format>,
         I: ToIndexSlice<R>,
     {
-        let buf = self.create_buffer_static(vd, BufferRole::Vertex);
+        let buf = self.create_buffer_static(vd, BufferRole::Vertex, Bind::empty())
+                      .unwrap();
         (buf, id.to_slice(self))
     }
 
     /// Create a constant buffer for `num` identical elements of type `T`.
     fn create_constant_buffer<T>(&mut self, num: usize) -> handle::Buffer<R, T> {
-        self.create_buffer_dynamic(num, BufferRole::Uniform)
+        self.create_buffer_dynamic(num, BufferRole::Uniform, Bind::empty())
+            .unwrap()
     }
 
     /// Create a shader set from a given vs/ps code for multiple shader models.
