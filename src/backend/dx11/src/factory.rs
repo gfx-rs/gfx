@@ -93,7 +93,7 @@ impl Factory {
             BindFlags: bind.0,
             CPUAccessFlags: cpu.0,
             MiscFlags: 0,
-            StructureByteStride: 0, //TODO
+            StructureByteStride: info.stride as winapi::UINT,
         };
         let sub = D3D11_SUBRESOURCE_DATA {
             pSysMem: raw_data.unwrap_or(ptr::null()),
@@ -125,24 +125,18 @@ impl core::Factory<R> for Factory {
         CommandBuffer::new()
     }
 
-    fn create_buffer_raw(&mut self, size: usize, role: f::BufferRole, usage: f::BufferUsage,
-                         bind: f::Bind) -> Result<h::RawBuffer<R>, f::BufferError> {
-        let info = f::BufferInfo {
-            role: role,
-            usage: usage,
-            bind: bind,
-            size: size,
-        };
+    fn create_buffer_raw(&mut self, info: f::BufferInfo) -> Result<h::RawBuffer<R>, f::BufferError> {
         self.create_buffer_internal(info, None)
     }
 
-    fn create_buffer_static_raw(&mut self, data: &[u8], role: f::BufferRole, bind: f::Bind)
+    fn create_buffer_static_raw(&mut self, data: &[u8], stride: usize, role: f::BufferRole, bind: f::Bind)
                                 -> Result<h::RawBuffer<R>, f::BufferError> {
         let info = f::BufferInfo {
             role: role,
             usage: f::BufferUsage::Const,
             bind: bind,
             size: data.len(),
+            stride: stride,
         };
         self.create_buffer_internal(info, Some(data.as_ptr() as *const c_void))
     }

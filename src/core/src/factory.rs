@@ -111,6 +111,9 @@ pub struct BufferInfo {
     pub bind: Bind,
     /// Size in bytes
     pub size: usize,
+    /// Stride of a single element, in bytes. Only used for structured buffers
+    /// that you use via shader resource / unordered access views.
+    pub stride: usize,
 }
 
 /// Error creating a buffer.
@@ -189,15 +192,23 @@ pub trait Factory<R: Resources> {
     fn create_command_buffer(&mut self) -> Self::CommandBuffer;
 
     // resource creation
-    fn create_buffer_raw(&mut self, size: usize, BufferRole, BufferUsage, Bind) -> Result<handle::RawBuffer<R>, BufferError>;
-    fn create_buffer_static_raw(&mut self, data: &[u8], BufferRole, Bind) -> Result<handle::RawBuffer<R>, BufferError>;
+    fn create_buffer_raw(&mut self, BufferInfo) -> Result<handle::RawBuffer<R>, BufferError>;
+    fn create_buffer_static_raw(&mut self, data: &[u8], stride: usize, BufferRole, Bind)
+                                -> Result<handle::RawBuffer<R>, BufferError>;
     fn create_buffer_static<T: Copy>(&mut self, data: &[T], role: BufferRole, bind: Bind) -> Result<handle::Buffer<R, T>, BufferError> {
-        self.create_buffer_static_raw(cast_slice(data), role, bind)
+        self.create_buffer_static_raw(cast_slice(data), mem::size_of::<T>(), role, bind)
             .map(|raw| Phantom::new(raw))
     }
     fn create_buffer_dynamic<T>(&mut self, num: usize, role: BufferRole, bind: Bind) -> Result<handle::Buffer<R, T>, BufferError> {
-        self.create_buffer_raw(num * mem::size_of::<T>(), role, BufferUsage::Stream, bind)
-            .map(|raw| Phantom::new(raw))
+        let stride = mem::size_of::<T>();
+        let info = BufferInfo {
+            role: role,
+            usage: BufferUsage::Stream,
+            bind: bind,
+            size: num * stride,
+            stride: stride,
+        };
+        self.create_buffer_raw(info).map(|raw| Phantom::new(raw))
     }
 
     fn create_pipeline_state_raw(&mut self, &handle::Program<R>, &pso::Descriptor)
