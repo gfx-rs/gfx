@@ -52,25 +52,26 @@ pub use self::factory::Factory;
 use gfx_core::handle as h;
 
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Shader {
     object: *mut winapi::ID3D11DeviceChild,
     //reflector: *const winapi::ID3D11ShaderReflection,
-    code: Vec<u8>,
+    code_hash: u64,
 }
 unsafe impl Send for Shader {}
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Program {
     vs: *mut winapi::ID3D11VertexShader,
     gs: *mut winapi::ID3D11GeometryShader,
     ps: *mut winapi::ID3D11PixelShader,
+    vs_hash: u64,
 }
 unsafe impl Send for Program {}
 
 pub type InputLayout = *mut winapi::ID3D11InputLayout;
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Pipeline {
     topology: winapi::UINT, //winapi::D3D11_PRIMITIVE_TOPOLOGY,
     layout: InputLayout,

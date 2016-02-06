@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::{ptr, slice};
+use std::collections::BTreeMap as Map;
 use std::os::raw::c_void;
 use std::sync::Arc;
 use winapi;
@@ -47,6 +48,7 @@ impl core::mapping::Raw for RawMapping {
 pub struct Factory {
     share: Arc<Share>,
     frame_handles: h::Manager<R>,
+    vs_cache: Map<u64, Vec<u8>>,
 }
 
 impl Clone for Factory {
@@ -61,6 +63,7 @@ impl Factory {
         Factory {
             share: share,
             frame_handles: h::Manager::new(),
+            vs_cache: Map::new(),
         }
     }
 
@@ -174,9 +177,18 @@ impl core::Factory<R> for Factory {
         };
 
         if winapi::SUCCEEDED(hr) {
+            let hash = {
+                use std::hash::{Hash, Hasher, SipHasher};
+                let mut hasher = SipHasher::new();
+                code.hash(&mut hasher);
+                hasher.finish()
+            };
+            if stage == Stage::Vertex {
+                self.vs_cache.insert(hash, code.to_owned());
+            }
             let shader = Shader {
                 object: object,
-                code: Vec::new(),
+                code_hash: hash,
             };
             Ok(self.share.handles.borrow_mut().make_shader(shader))
         }else {
@@ -201,21 +213,25 @@ impl core::Factory<R> for Factory {
         let fh = &mut self.frame_handles;
         let prog = match shader_set {
             &core::ShaderSet::Simple(ref vs, ref ps) => {
-                let (vs, ps) = (vs.reference(fh).object, ps.reference(fh).object);
+                let vs_ = vs.reference(fh);
+                let (vs, ps) = (vs_.object, ps.reference(fh).object);
                 unsafe { (*vs).AddRef(); (*ps).AddRef(); }
                 Program {
                     vs: vs as *mut ID3D11VertexShader,
                     gs: ptr::null_mut(),
                     ps: ps as *mut ID3D11PixelShader,
+                    vs_hash: vs_.code_hash,
                 }
             },
             &core::ShaderSet::Geometry(ref vs, ref gs, ref ps) => {
-                let (vs, gs, ps) = (vs.reference(fh).object, gs.reference(fh).object, ps.reference(fh).object);
+                let vs_ = vs.reference(fh);
+                let (vs, gs, ps) = (vs_.object, gs.reference(fh).object, ps.reference(fh).object);
                 unsafe { (*vs).AddRef(); (*gs).AddRef(); (*ps).AddRef(); }
                 Program {
                     vs: vs as *mut ID3D11VertexShader,
                     gs: vs as *mut ID3D11GeometryShader,
                     ps: ps as *mut ID3D11PixelShader,
+                    vs_hash: vs_.code_hash,
                 }
             },
         };
@@ -239,14 +255,21 @@ impl core::Factory<R> for Factory {
             InputSlotClass: D3D11_INPUT_PER_VERTEX_DATA,
             InstanceDataStepRate: 0,
         });*/
+        let prog = *self.frame_handles.ref_program(program);
+        let vs_bin = match self.vs_cache.get(&prog.vs_hash) {
+            Some(ref code) => &code[..],
+            None => {
+                error!("VS hash {} is not found in the factory cache", prog.vs_hash);
+                return Err(core::pso::CreationError);
+            }
+        };
 
         let dev = self.share.device;
         let mut vertex_layout = ptr::null_mut();
         let _hr = unsafe {
             (*dev).CreateInputLayout(
                 layouts.as_ptr(), layouts.len() as winapi::UINT,
-                ptr::null(),//mem::transmute(vs_bin.as_ptr()),
-                0 as winapi::SIZE_T,
+                vs_bin.as_ptr() as *const c_void, vs_bin.len() as winapi::SIZE_T,
                 &mut vertex_layout)
         };
 
@@ -259,7 +282,7 @@ impl core::Factory<R> for Factory {
                 TriangleStrip   => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
             })},
             layout: vertex_layout,
-            program: *self.frame_handles.ref_program(program),
+            program: prog,
         };
         Ok(self.share.handles.borrow_mut().make_pso(pso, program))
     }
