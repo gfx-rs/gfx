@@ -164,6 +164,8 @@ pub trait DataLink<'a>: Sized {
                            Option<Result<(), d::format::Format>> { None }
     /// Attempt to link with a sampler.
     fn link_sampler(&mut self, _: &d::shade::SamplerVar, _: &Self::Init) -> Option<()> { None }
+    /// Attempt to enable scissor test.
+    fn link_scissor(&mut self) -> bool { false }
 }
 
 /// The "bind" logic portion of the PSO component.

@@ -44,7 +44,7 @@ pub struct DepthStencilTarget<T>(PhantomData<T>);
 /// Scissor component. Sets up the scissor test for rendering.
 /// - init: `()`
 /// - data: `Rect` = target area
-pub struct Scissor;
+pub struct Scissor(bool);
 /// Blend reference component. Sets up the reference color for blending.
 /// - init: `()`
 /// - data: `ColorValue`
@@ -171,8 +171,9 @@ impl<R: Resources, T> DataBind<R> for DepthStencilTarget<T> {
 
 impl<'a> DataLink<'a> for Scissor {
     type Init = ();
-    fn new() -> Self { Scissor }
-    fn is_active(&self) -> bool { true }
+    fn new() -> Self { Scissor(false) }
+    fn is_active(&self) -> bool { self.0 }
+    fn link_scissor(&mut self) -> bool { self.0 = true; true }
 }
 
 impl<R: Resources> DataBind<R> for Scissor {

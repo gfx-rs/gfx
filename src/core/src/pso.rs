@@ -127,6 +127,8 @@ pub struct Descriptor {
     pub primitive: Primitive,
     /// Rasterizer setup
     pub rasterizer: s::Rasterizer,
+    /// Enable scissor test
+    pub scissor: bool,
     /// Vertex attributes
     pub attributes: [Option<AttributeDesc>; MAX_VERTEX_ATTRIBUTES],
     /// Render target views (RTV)
@@ -141,6 +143,7 @@ impl Descriptor {
         Descriptor {
             primitive: primitive,
             rasterizer: rast,
+            scissor: false,
             attributes: [None; MAX_VERTEX_ATTRIBUTES],
             color_targets: [None; MAX_COLOR_TARGETS],
             depth_stencil: None,

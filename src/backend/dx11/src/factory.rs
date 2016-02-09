@@ -244,6 +244,7 @@ impl core::Factory<R> for Factory {
         use std::mem; //temporary
         use winapi::d3dcommon::*;
         use gfx_core::Primitive::*;
+        use state;
 
         let layouts = Vec::new();
         /*layouts.push(D3D11_INPUT_ELEMENT_DESC {
@@ -283,6 +284,9 @@ impl core::Factory<R> for Factory {
             })},
             layout: vertex_layout,
             program: prog,
+            rasterizer: state::make_rasterizer(dev, &desc.rasterizer, desc.scissor),
+            depth_stencil: ptr::null(),
+            blend: ptr::null(),
         };
         Ok(self.share.handles.borrow_mut().make_pso(pso, program))
     }

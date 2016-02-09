@@ -22,6 +22,7 @@ extern crate winapi;
 
 mod command;
 mod factory;
+mod state;
 
 #[doc(hidden)]
 pub mod native {
@@ -76,6 +77,9 @@ pub struct Pipeline {
     topology: winapi::UINT, //winapi::D3D11_PRIMITIVE_TOPOLOGY,
     layout: InputLayout,
     program: Program,
+    rasterizer: *const winapi::ID3D11RasterizerState,
+    depth_stencil: *const winapi::ID3D11DepthStencilState,
+    blend: *const winapi::ID3D11BlendState,
 }
 unsafe impl Send for Pipeline {}
 
