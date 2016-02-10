@@ -290,7 +290,7 @@ impl core::Factory<R> for Factory {
                 Some((_, ref dsi)) => dsi,
                 None => &dummy_dsi,
             }),
-            blend: ptr::null(),
+            blend: state::make_blend(dev, &desc.color_targets),
         };
         Ok(self.share.handles.borrow_mut().make_pso(pso, program))
     }
