@@ -21,6 +21,7 @@ extern crate d3d11;
 extern crate winapi;
 
 mod command;
+mod data;
 mod factory;
 mod state;
 

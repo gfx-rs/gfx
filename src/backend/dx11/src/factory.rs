@@ -246,16 +246,35 @@ impl core::Factory<R> for Factory {
         use gfx_core::Primitive::*;
         use state;
 
-        let layouts = Vec::new();
-        /*layouts.push(D3D11_INPUT_ELEMENT_DESC {
-            SemanticName: c_str!("POSITION"),
-            SemanticIndex: 0,
-            Format: DXGI_FORMAT_R32G32B32_FLOAT,
-            InputSlot: 0,
-            AlignedByteOffset: 0,
-            InputSlotClass: D3D11_INPUT_PER_VERTEX_DATA,
-            InstanceDataStepRate: 0,
-        });*/
+        let mut layouts = Vec::new();
+        for (i, at_desc) in desc.attributes.iter().enumerate() {
+            use winapi::UINT;
+            use data::map_format;
+            let (elem, irate) = match at_desc {
+                &Some((ref el, ir)) => (el, ir),
+                &None => continue,
+            };
+            layouts.push(winapi::D3D11_INPUT_ELEMENT_DESC {
+                SemanticName: &[0i8] as *const i8, //TODO
+                SemanticIndex: 0,
+                Format: match map_format(elem.format) {
+                    Some(fm) => fm,
+                    None => {
+                        error!("Unable to find DXGI format for {:?}", elem.format);
+                        return Err(core::pso::CreationError);
+                    }
+                },
+                InputSlot: i as UINT,
+                AlignedByteOffset: elem.offset as UINT,
+                InputSlotClass: if irate == 0 {
+                    winapi::D3D11_INPUT_PER_VERTEX_DATA
+                }else {
+                    winapi::D3D11_INPUT_PER_INSTANCE_DATA
+                },
+                InstanceDataStepRate: irate as UINT,
+            });
+        }
+
         let prog = *self.frame_handles.ref_program(program);
         let vs_bin = match self.vs_cache.get(&prog.vs_hash) {
             Some(ref code) => &code[..],
