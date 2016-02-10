@@ -586,14 +586,9 @@ impl Device {
                     },
                 }
             },
-            Command::DrawIndexed(primitive, index_type, start, count, base_vertex, instances) => {
+            Command::DrawIndexed(primitive, index_type, offset, count, base_vertex, instances) => {
                 let gl = &self.share.context;
                 let caps = &self.share.capabilities;
-                let (offset, gl_index) = match index_type {
-                    d::IndexType::U8  => (start * 1u32, gl::UNSIGNED_BYTE),
-                    d::IndexType::U16 => (start * 2u32, gl::UNSIGNED_SHORT),
-                    d::IndexType::U32 => (start * 4u32, gl::UNSIGNED_INT),
-                };
                 match instances {
                     Some((num, base_instance)) if caps.instance_call_supported => unsafe {
                         if (base_vertex == 0 && base_instance == 0) || !caps.vertex_base_supported {
@@ -603,16 +598,16 @@ impl Device {
                             gl.DrawElementsInstanced(
                                 primitive,
                                 count as gl::types::GLsizei,
-                                gl_index,
-                                offset as *const gl::types::GLvoid,
+                                index_type,
+                                offset.0,
                                 num as gl::types::GLsizei,
                             );
                         } else if base_vertex != 0 && base_instance == 0 {
                             gl.DrawElementsInstancedBaseVertex(
                                 primitive,
                                 count as gl::types::GLsizei,
-                                gl_index,
-                                offset as *const gl::types::GLvoid,
+                                index_type,
+                                offset.0,
                                 num as gl::types::GLsizei,
                                 base_vertex as gl::types::GLint,
                             );
@@ -620,8 +615,8 @@ impl Device {
                             gl.DrawElementsInstancedBaseInstance(
                                 primitive,
                                 count as gl::types::GLsizei,
-                                gl_index,
-                                offset as *const gl::types::GLvoid,
+                                index_type,
+                                offset.0,
                                 num as gl::types::GLsizei,
                                 base_instance as gl::types::GLuint,
                             );
@@ -629,8 +624,8 @@ impl Device {
                             gl.DrawElementsInstancedBaseVertexBaseInstance(
                                 primitive,
                                 count as gl::types::GLsizei,
-                                gl_index,
-                                offset as *const gl::types::GLvoid,
+                                index_type,
+                                offset.0,
                                 num as gl::types::GLsizei,
                                 base_vertex as gl::types::GLint,
                                 base_instance as gl::types::GLuint,
@@ -648,15 +643,15 @@ impl Device {
                             gl.DrawElements(
                                 primitive,
                                 count as gl::types::GLsizei,
-                                gl_index,
-                                offset as *const gl::types::GLvoid,
+                                index_type,
+                                offset.0,
                             );
                         } else {
                             gl.DrawElementsBaseVertex(
                                 primitive,
                                 count as gl::types::GLsizei,
-                                gl_index,
-                                offset as *const gl::types::GLvoid,
+                                index_type,
+                                offset.0,
                                 base_vertex as gl::types::GLint,
                             );
                         }

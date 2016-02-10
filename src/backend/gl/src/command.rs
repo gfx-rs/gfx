@@ -37,6 +37,10 @@ fn primitive_to_gl(primitive: c::Primitive) -> gl::types::GLenum {
 
 pub type Access = gl::types::GLenum;
 
+#[derive(Clone, Copy, Debug)]
+pub struct RawOffset(pub *const gl::types::GLvoid);
+unsafe impl Send for RawOffset {}
+
 ///Serialized device command.
 #[derive(Clone, Copy, Debug)]
 pub enum Command {
@@ -66,8 +70,8 @@ pub enum Command {
     // drawing
     Clear(Option<ClearColor>, Option<Depth>, Option<Stencil>),
     Draw(gl::types::GLenum, c::VertexCount, c::VertexCount, InstanceOption),
-    DrawIndexed(gl::types::GLenum, c::IndexType, c::VertexCount, c::VertexCount,
-                c::VertexCount, InstanceOption),
+    DrawIndexed(gl::types::GLenum, gl::types::GLenum, RawOffset,
+                c::VertexCount, c::VertexCount, InstanceOption),
     Blit(Rect, Rect, Mirror, usize),
 }
 
@@ -100,6 +104,7 @@ pub const RESET: [Command; 13] = [
 
 struct Cache {
     primitive: gl::types::GLenum,
+    index_type: c::IndexType,
     attributes: [Option<c::pso::AttributeDesc>; c::MAX_VERTEX_ATTRIBUTES],
     //resource_views: [Option<(Texture, BindAnchor)>; c::MAX_RESOURCE_VIEWS],
     scissor: bool,
@@ -113,6 +118,7 @@ impl Cache {
     pub fn new() -> Cache {
         Cache {
             primitive: 0,
+            index_type: c::IndexType::U8,
             attributes: [None; c::MAX_VERTEX_ATTRIBUTES],
             //resource_views: [None; c::MAX_RESOURCE_VIEWS],
             scissor: false,
@@ -229,7 +235,8 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
             x: 0, y: 0, w: pts.size.0, h: pts.size.1}));
     }
 
-    fn bind_index(&mut self, buf: Buffer) {
+    fn bind_index(&mut self, buf: Buffer, itype: c::IndexType) {
+        self.cache.index_type = itype;
         self.buf.push(Command::BindIndex(buf));
     }
 
@@ -285,11 +292,15 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.push(Command::Draw(self.cache.primitive, start, count, instances));
     }
 
-    fn call_draw_indexed(&mut self,
-                         itype: c::IndexType, start: c::VertexCount,
+    fn call_draw_indexed(&mut self, start: c::VertexCount,
                          count: c::VertexCount, base: c::VertexCount,
                          instances: InstanceOption) {
+        let (offset, gl_index) = match self.cache.index_type {
+            c::IndexType::U8  => (start * 1u32, gl::UNSIGNED_BYTE),
+            c::IndexType::U16 => (start * 2u32, gl::UNSIGNED_SHORT),
+            c::IndexType::U32 => (start * 4u32, gl::UNSIGNED_INT),
+        };
         self.buf.push(Command::DrawIndexed(self.cache.primitive,
-            itype, start, count, base, instances));
+            gl_index, RawOffset(offset as *const gl::types::GLvoid), count, base, instances));
     }
 }

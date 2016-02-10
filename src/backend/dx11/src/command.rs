@@ -15,7 +15,8 @@
 #![allow(missing_docs)]
 
 use std::ptr;
-use winapi::{FLOAT, INT, UINT, UINT8, DXGI_FORMAT, DXGI_FORMAT_R16_UINT,
+use winapi::{FLOAT, INT, UINT, UINT8, DXGI_FORMAT,
+             DXGI_FORMAT_R8_UINT, DXGI_FORMAT_R16_UINT, DXGI_FORMAT_R32_UINT,
              D3D11_CLEAR_FLAG, D3D11_PRIMITIVE_TOPOLOGY, D3D11_VIEWPORT, D3D11_RECT,
              ID3D11RasterizerState, ID3D11DepthStencilState, ID3D11BlendState};
 use gfx_core::{draw, pso, shade, state, target, tex};
@@ -47,6 +48,8 @@ pub enum Command {
     DrawIndexed(UINT, UINT, INT),
     DrawIndexedInstanced(UINT, UINT, UINT, INT, UINT),
 }
+
+unsafe impl Send for Command {}
 
 struct Cache {
     attributes: [Option<pso::AttributeDesc>; MAX_VERTEX_ATTRIBUTES],
@@ -148,8 +151,12 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.push(Command::SetViewport(viewport));
     }
 
-    fn bind_index(&mut self, buf: native::Buffer) {
-        let format = DXGI_FORMAT_R16_UINT; //TODO
+    fn bind_index(&mut self, buf: native::Buffer, itype: IndexType) {
+        let format = match itype {
+            IndexType::U8  => DXGI_FORMAT_R8_UINT,
+            IndexType::U16 => DXGI_FORMAT_R16_UINT,
+            IndexType::U32 => DXGI_FORMAT_R32_UINT,
+        };
         self.buf.push(Command::BindIndex(buf, format));
     }
 
@@ -206,8 +213,7 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
         });
     }
 
-    fn call_draw_indexed(&mut self, _it: IndexType,
-                         start: VertexCount, count: VertexCount,
+    fn call_draw_indexed(&mut self, start: VertexCount, count: VertexCount,
                          base: VertexCount, instances: draw::InstanceOption) {
         self.flush();
         self.buf.push(match instances {

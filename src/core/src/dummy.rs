@@ -86,7 +86,7 @@ impl draw::CommandBuffer<DummyResources> for DummyCommandBuffer {
     fn bind_unordered_views(&mut self, _: pso::UnorderedViewSet<DummyResources>) {}
     fn bind_samplers(&mut self, _: pso::SamplerSet<DummyResources>) {}
     fn bind_pixel_targets(&mut self, _: pso::PixelTargetSet<DummyResources>) {}
-    fn bind_index(&mut self, _: ()) {}
+    fn bind_index(&mut self, _: (), _: IndexType) {}
     fn set_scissor(&mut self, _: target::Rect) {}
     fn set_ref_values(&mut self, _: s::RefValues) {}
     fn update_buffer(&mut self, _: (), _: draw::DataPointer, _: usize) {}
@@ -96,8 +96,7 @@ impl draw::CommandBuffer<DummyResources> for DummyCommandBuffer {
     fn clear_depth_stencil(&mut self, _: (), _: Option<target::Depth>,
                            _: Option<target::Stencil>) {}
     fn call_draw(&mut self, _: VertexCount, _: VertexCount, _: draw::InstanceOption) {}
-    fn call_draw_indexed(&mut self, _: IndexType,
-                         _: VertexCount, _: VertexCount,
+    fn call_draw_indexed(&mut self, _: VertexCount, _: VertexCount,
                          _: VertexCount, _: draw::InstanceOption) {}
 }
 

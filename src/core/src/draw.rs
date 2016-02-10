@@ -132,7 +132,7 @@ pub trait CommandBuffer<R: Resources> {
     /// colors views and an optional depth/stencil view.
     fn bind_pixel_targets(&mut self, pso::PixelTargetSet<R>);
     /// Bind an index buffer
-    fn bind_index(&mut self, R::Buffer);
+    fn bind_index(&mut self, R::Buffer, IndexType);
     /// Set scissor rectangle
     fn set_scissor(&mut self, target::Rect);
     /// Set reference values for the blending and stencil front/back
@@ -149,8 +149,7 @@ pub trait CommandBuffer<R: Resources> {
     /// Draw a primitive
     fn call_draw(&mut self, VertexCount, VertexCount, InstanceOption);
     /// Draw a primitive with index buffer
-    fn call_draw_indexed(&mut self, IndexType,
-                         VertexCount, VertexCount,
+    fn call_draw_indexed(&mut self, VertexCount, VertexCount,
                          VertexCount, InstanceOption);
 }
 

@@ -159,9 +159,8 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
     fn draw_indexed<T>(&mut self, buf: &handle::Buffer<R, T>, ty: IndexType,
                      slice: &mesh::Slice<R>, base: VertexCount,
                      instances: draw::InstanceOption) {
-        self.command_buffer.bind_index(self.handles.ref_buffer(buf.raw()).clone());
-        self.command_buffer.call_draw_indexed(ty,
-            slice.start, slice.end - slice.start, base, instances);
+        self.command_buffer.bind_index(self.handles.ref_buffer(buf.raw()).clone(), ty);
+        self.command_buffer.call_draw_indexed(slice.start, slice.end - slice.start, base, instances);
     }
 
     fn draw_slice(&mut self, slice: &mesh::Slice<R>, instances: draw::InstanceOption) {
