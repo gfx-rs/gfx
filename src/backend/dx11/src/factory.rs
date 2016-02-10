@@ -273,6 +273,7 @@ impl core::Factory<R> for Factory {
                 vs_bin.as_ptr() as *const c_void, vs_bin.len() as winapi::SIZE_T,
                 &mut vertex_layout)
         };
+        let dummy_dsi = core::pso::DepthStencilInfo { depth: None, front: None, back: None };
 
         let pso = Pipeline {
             topology: unsafe{mem::transmute(match desc.primitive {
@@ -285,7 +286,10 @@ impl core::Factory<R> for Factory {
             layout: vertex_layout,
             program: prog,
             rasterizer: state::make_rasterizer(dev, &desc.rasterizer, desc.scissor),
-            depth_stencil: ptr::null(),
+            depth_stencil: state::make_depth_stencil(dev, match desc.depth_stencil {
+                Some((_, ref dsi)) => dsi,
+                None => &dummy_dsi,
+            }),
             blend: ptr::null(),
         };
         Ok(self.share.handles.borrow_mut().make_pso(pso, program))
