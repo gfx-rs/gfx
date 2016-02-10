@@ -15,8 +15,8 @@
 #![allow(missing_docs)]
 
 use std::ptr;
-use winapi::{FLOAT, UINT, UINT8, DXGI_FORMAT, DXGI_FORMAT_R16_UINT,
-             D3D11_CLEAR_FLAG, D3D11_PRIMITIVE_TOPOLOGY, D3D11_VIEWPORT,
+use winapi::{FLOAT, INT, UINT, UINT8, DXGI_FORMAT, DXGI_FORMAT_R16_UINT,
+             D3D11_CLEAR_FLAG, D3D11_PRIMITIVE_TOPOLOGY, D3D11_VIEWPORT, D3D11_RECT,
              ID3D11RasterizerState, ID3D11DepthStencilState, ID3D11BlendState};
 use gfx_core::{draw, pso, shade, state, target, tex};
 use gfx_core::{IndexType, VertexCount};
@@ -34,6 +34,7 @@ pub enum Command {
     BindPixelTargets([native::Rtv; MAX_COLOR_TARGETS], native::Dsv),
     SetPrimitive(D3D11_PRIMITIVE_TOPOLOGY),
     SetViewport(D3D11_VIEWPORT),
+    SetScissor(D3D11_RECT),
     SetRasterizer(*const ID3D11RasterizerState),
     SetDepthStencil(*const ID3D11DepthStencilState, UINT),
     SetBlend(*const ID3D11BlendState, [FLOAT; 4], UINT),
@@ -148,8 +149,13 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.push(Command::BindIndex(buf, format));
     }
 
-    fn set_scissor(&mut self, _: Option<target::Rect>) {
-        //TODO
+    fn set_scissor(&mut self, rect: target::Rect) {
+        self.buf.push(Command::SetScissor(D3D11_RECT {
+            left: rect.x as INT,
+            top: rect.y as INT,
+            right: (rect.x + rect.w) as INT,
+            bottom: (rect.y + rect.h) as INT,
+        }));
     }
 
     fn set_ref_values(&mut self, rv: state::RefValues) {

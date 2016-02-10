@@ -179,7 +179,7 @@ impl<'a> DataLink<'a> for Scissor {
 impl<R: Resources> DataBind<R> for Scissor {
     type Data = target::Rect;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, _: &mut handle::Manager<R>) {
-        out.scissor = Some(*data);
+        out.scissor = *data;
     }
 }
 

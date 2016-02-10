@@ -102,6 +102,7 @@ struct Cache {
     primitive: gl::types::GLenum,
     attributes: [Option<c::pso::AttributeDesc>; c::MAX_VERTEX_ATTRIBUTES],
     //resource_views: [Option<(Texture, BindAnchor)>; c::MAX_RESOURCE_VIEWS],
+    scissor: bool,
     stencil: Option<s::Stencil>,
     //blend: Option<s::Blend>,
     cull_face: s::CullFace,
@@ -114,6 +115,7 @@ impl Cache {
             primitive: 0,
             attributes: [None; c::MAX_VERTEX_ATTRIBUTES],
             //resource_views: [None; c::MAX_RESOURCE_VIEWS],
+            scissor: false,
             stencil: None,
             cull_face: s::CullFace::Nothing,
             //blend: None,
@@ -162,6 +164,7 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
         self.cache.cull_face = cull;
         self.cache.draw_mask = pso.output.draw_mask;
         self.buf.push(Command::BindProgram(pso.program));
+        self.cache.scissor = pso.scissor;
         self.buf.push(Command::SetRasterizer(pso.rasterizer));
         self.buf.push(Command::SetDepthState(pso.output.depth));
         self.buf.push(Command::SetStencilState(pso.output.stencil, (0, 0), cull));
@@ -230,8 +233,10 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.push(Command::BindIndex(buf));
     }
 
-    fn set_scissor(&mut self, rect: Option<Rect>) {
-        self.buf.push(Command::SetScissor(rect));
+    fn set_scissor(&mut self, rect: Rect) {
+        self.buf.push(Command::SetScissor(
+            if self.cache.scissor {Some(rect)} else {None}
+        ));
     }
 
     fn set_ref_values(&mut self, rv: s::RefValues) {

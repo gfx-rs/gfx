@@ -227,6 +227,9 @@ impl Device {
             SetViewport(ref viewport) => unsafe {
                 (*self.context).RSSetViewports(1, viewport);
             },
+            SetScissor(ref rect) => unsafe {
+                (*self.context).RSSetScissorRects(1, rect);
+            },
             SetRasterizer(rast) => unsafe {
                 (*self.context).RSSetState(rast as *mut _);
             },

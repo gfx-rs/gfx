@@ -245,6 +245,7 @@ impl d::Factory<R> for Factory {
             program: *self.frame_handles.ref_program(program),
             primitive: desc.primitive,
             input: desc.attributes,
+            scissor: desc.scissor,
             rasterizer: desc.rasterizer,
             output: output,
         };

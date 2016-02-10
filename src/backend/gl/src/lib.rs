@@ -87,6 +87,7 @@ pub struct PipelineState {
     program: Program,
     primitive: d::Primitive,
     input: [Option<d::pso::AttributeDesc>; d::MAX_VERTEX_ATTRIBUTES],
+    scissor: bool,
     rasterizer: s::Rasterizer,
     output: OutputMerger,
 }

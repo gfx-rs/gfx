@@ -51,7 +51,7 @@ pub struct RawDataSet<R: d::Resources>{
     pub samplers: d::pso::SamplerSet<R>,
     pub pixel_targets: d::pso::PixelTargetSet<R>,
     pub ref_values: d::state::RefValues,
-    pub scissor: Option<d::target::Rect>,
+    pub scissor: d::target::Rect,
 }
 
 impl<R: d::Resources> RawDataSet<R> {
@@ -66,7 +66,7 @@ impl<R: d::Resources> RawDataSet<R> {
             samplers: d::pso::SamplerSet::new(),
             pixel_targets: d::pso::PixelTargetSet::new(),
             ref_values: Default::default(),
-            scissor: None,
+            scissor: d::target::Rect{x:0, y:0, w:1, h:1},
         }
     }
 }

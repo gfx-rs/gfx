@@ -87,7 +87,7 @@ impl draw::CommandBuffer<DummyResources> for DummyCommandBuffer {
     fn bind_samplers(&mut self, _: pso::SamplerSet<DummyResources>) {}
     fn bind_pixel_targets(&mut self, _: pso::PixelTargetSet<DummyResources>) {}
     fn bind_index(&mut self, _: ()) {}
-    fn set_scissor(&mut self, _: Option<target::Rect>) {}
+    fn set_scissor(&mut self, _: target::Rect) {}
     fn set_ref_values(&mut self, _: s::RefValues) {}
     fn update_buffer(&mut self, _: (), _: draw::DataPointer, _: usize) {}
     fn update_texture(&mut self, _: (), _: tex::Kind, _: Option<tex::CubeFace>,

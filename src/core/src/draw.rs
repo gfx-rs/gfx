@@ -133,8 +133,8 @@ pub trait CommandBuffer<R: Resources> {
     fn bind_pixel_targets(&mut self, pso::PixelTargetSet<R>);
     /// Bind an index buffer
     fn bind_index(&mut self, R::Buffer);
-    /// Set scissor test
-    fn set_scissor(&mut self, Option<target::Rect>);
+    /// Set scissor rectangle
+    fn set_scissor(&mut self, target::Rect);
     /// Set reference values for the blending and stencil front/back
     fn set_ref_values(&mut self, s::RefValues);
     /// Update a vertex/index/uniform buffer
