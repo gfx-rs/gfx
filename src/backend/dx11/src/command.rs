@@ -42,6 +42,10 @@ pub enum Command {
     // drawing
     ClearColor(native::Rtv, [f32; 4]),
     ClearDepthStencil(native::Dsv, D3D11_CLEAR_FLAG, FLOAT, UINT8),
+    Draw(UINT, UINT),
+    DrawInstanced(UINT, UINT, UINT, UINT),
+    DrawIndexed(UINT, UINT, INT),
+    DrawIndexedInstanced(UINT, UINT, UINT, INT, UINT),
 }
 
 struct Cache {
@@ -193,15 +197,23 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
         ));
     }
 
-    fn call_draw(&mut self, _: VertexCount, _: VertexCount, _: draw::InstanceOption) {
+    fn call_draw(&mut self, start: VertexCount, count: VertexCount, instances: draw::InstanceOption) {
         self.flush();
-        //TODO
+        self.buf.push(match instances {
+            Some((ninst, offset)) => Command::DrawInstanced(
+                count as UINT, ninst as UINT, start as UINT, offset as UINT),
+            None => Command::Draw(count as UINT, start as UINT),
+        });
     }
 
-    fn call_draw_indexed(&mut self, _: IndexType,
-                         _: VertexCount, _: VertexCount,
-                         _: VertexCount, _: draw::InstanceOption) {
+    fn call_draw_indexed(&mut self, _it: IndexType,
+                         start: VertexCount, count: VertexCount,
+                         base: VertexCount, instances: draw::InstanceOption) {
         self.flush();
-        //TODO
+        self.buf.push(match instances {
+            Some((ninst, offset)) => Command::DrawIndexedInstanced(
+                count as UINT, ninst as UINT, start as UINT, base as INT, offset as UINT),
+            None => Command::DrawIndexed(count as UINT, start as UINT, base as INT),
+        });
     }
 }

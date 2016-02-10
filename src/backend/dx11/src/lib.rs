@@ -246,6 +246,18 @@ impl Device {
             ClearDepthStencil(target, flags, depth, stencil) => unsafe {
                 (*self.context).ClearDepthStencilView(target.0, flags.0, depth, stencil);
             },
+            Draw(nvert, svert) => unsafe {
+                (*self.context).Draw(nvert, svert);
+            },
+            DrawInstanced(nvert, ninst, svert, sinst) => unsafe {
+                (*self.context).DrawInstanced(nvert, ninst, svert, sinst);
+            },
+            DrawIndexed(nind, svert, base) => unsafe {
+                (*self.context).DrawIndexed(nind, svert, base);
+            },
+            DrawIndexedInstanced(nind, ninst, sind, base, sinst) => unsafe {
+                (*self.context).DrawIndexedInstanced(nind, ninst, sind, base, sinst);
+            },
         }
     }
 }
@@ -259,7 +271,7 @@ impl gfx_core::Device for Device {
     }
 
     fn reset_state(&mut self) {
-        //TODO
+        unsafe { (*self.context).ClearState(); }
     }
 
     fn submit(&mut self, submit_info: gfx_core::SubmitInfo<Self>) {
