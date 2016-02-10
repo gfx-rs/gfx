@@ -227,6 +227,15 @@ impl Device {
             SetViewport(ref viewport) => unsafe {
                 (*self.context).RSSetViewports(1, viewport);
             },
+            SetRasterizer(rast) => unsafe {
+                (*self.context).RSSetState(rast as *mut _);
+            },
+            SetDepthStencil(ds, value) => unsafe {
+                (*self.context).OMSetDepthStencilState(ds as *mut _, value);
+            },
+            SetBlend(blend, ref value, mask) => unsafe {
+                (*self.context).OMSetBlendState(blend as *mut _, value, mask);
+            },
             ClearColor(target, ref data) => unsafe {
                 (*self.context).ClearRenderTargetView(target.0, data);
             },

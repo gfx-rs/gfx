@@ -274,6 +274,7 @@ impl core::Factory<R> for Factory {
                 &mut vertex_layout)
         };
         let dummy_dsi = core::pso::DepthStencilInfo { depth: None, front: None, back: None };
+        //TODO: cache rasterizer, depth-stencil, and blend states
 
         let pso = Pipeline {
             topology: unsafe{mem::transmute(match desc.primitive {

@@ -16,7 +16,8 @@
 
 use std::ptr;
 use winapi::{FLOAT, UINT, UINT8, DXGI_FORMAT, DXGI_FORMAT_R16_UINT,
-             D3D11_CLEAR_FLAG, D3D11_PRIMITIVE_TOPOLOGY, D3D11_VIEWPORT};
+             D3D11_CLEAR_FLAG, D3D11_PRIMITIVE_TOPOLOGY, D3D11_VIEWPORT,
+             ID3D11RasterizerState, ID3D11DepthStencilState, ID3D11BlendState};
 use gfx_core::{draw, pso, shade, state, target, tex};
 use gfx_core::{IndexType, VertexCount};
 use gfx_core::{MAX_VERTEX_ATTRIBUTES, MAX_COLOR_TARGETS};
@@ -33,6 +34,9 @@ pub enum Command {
     BindPixelTargets([native::Rtv; MAX_COLOR_TARGETS], native::Dsv),
     SetPrimitive(D3D11_PRIMITIVE_TOPOLOGY),
     SetViewport(D3D11_VIEWPORT),
+    SetRasterizer(*const ID3D11RasterizerState),
+    SetDepthStencil(*const ID3D11DepthStencilState, UINT),
+    SetBlend(*const ID3D11BlendState, [FLOAT; 4], UINT),
     // resource updates
     // drawing
     ClearColor(native::Rtv, [f32; 4]),
@@ -41,6 +45,11 @@ pub enum Command {
 
 struct Cache {
     attributes: [Option<pso::AttributeDesc>; MAX_VERTEX_ATTRIBUTES],
+    rasterizer: *const ID3D11RasterizerState,
+    depth_stencil: *const ID3D11DepthStencilState,
+    stencil_ref: UINT,
+    blend: *const ID3D11BlendState,
+    blend_ref: [FLOAT; 4],
 }
 
 pub struct CommandBuffer {
@@ -54,8 +63,19 @@ impl CommandBuffer {
             buf: Vec::new(),
             cache: Cache {
                 attributes: [None; MAX_VERTEX_ATTRIBUTES],
+                rasterizer: ptr::null(),
+                depth_stencil: ptr::null(),
+                stencil_ref: 0,
+                blend: ptr::null(),
+                blend_ref: [0.0; 4],
             },
         }
+    }
+
+    fn flush(&mut self) {
+        let sample_mask = !0; //TODO
+        self.buf.push(Command::SetDepthStencil(self.cache.depth_stencil, self.cache.stencil_ref));
+        self.buf.push(Command::SetBlend(self.cache.blend, self.cache.blend_ref, sample_mask));
     }
 }
 
@@ -65,6 +85,12 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
     fn bind_pipeline_state(&mut self, pso: Pipeline) {
         use std::mem; //temporary
         self.buf.push(Command::SetPrimitive(unsafe{mem::transmute(pso.topology)}));
+        if self.cache.rasterizer != pso.rasterizer {
+            self.cache.rasterizer = pso.rasterizer;
+            self.buf.push(Command::SetRasterizer(pso.rasterizer));
+        }
+        self.cache.depth_stencil = pso.depth_stencil;
+        self.cache.blend = pso.blend;
         self.buf.push(Command::BindInputLayout(pso.layout));
         self.buf.push(Command::BindProgram(pso.program));
     }
@@ -118,11 +144,23 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
     }
 
     fn bind_index(&mut self, buf: native::Buffer) {
-        self.buf.push(Command::BindIndex(buf, DXGI_FORMAT_R16_UINT));   //TODO
+        let format = DXGI_FORMAT_R16_UINT; //TODO
+        self.buf.push(Command::BindIndex(buf, format));
     }
 
-    fn set_scissor(&mut self, _: Option<target::Rect>) {}
-    fn set_ref_values(&mut self, _: state::RefValues) {}
+    fn set_scissor(&mut self, _: Option<target::Rect>) {
+        //TODO
+    }
+
+    fn set_ref_values(&mut self, rv: state::RefValues) {
+        if rv.stencil.0 != rv.stencil.1 {
+            error!("Unable to set different stencil ref values for front ({}) and back ({})",
+                rv.stencil.0, rv.stencil.1);
+        }
+        self.cache.stencil_ref = rv.stencil.0 as UINT;
+        self.cache.blend_ref = rv.blend;
+    }
+
     fn update_buffer(&mut self, _: native::Buffer, _: draw::DataPointer, _: usize) {}
     fn update_texture(&mut self, _: native::Texture, _: tex::Kind, _: Option<tex::CubeFace>,
                       _: draw::DataPointer, _: tex::RawImageInfo) {}
@@ -149,8 +187,15 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
         ));
     }
 
-    fn call_draw(&mut self, _: VertexCount, _: VertexCount, _: draw::InstanceOption) {}
+    fn call_draw(&mut self, _: VertexCount, _: VertexCount, _: draw::InstanceOption) {
+        self.flush();
+        //TODO
+    }
+
     fn call_draw_indexed(&mut self, _: IndexType,
                          _: VertexCount, _: VertexCount,
-                         _: VertexCount, _: draw::InstanceOption) {}
+                         _: VertexCount, _: draw::InstanceOption) {
+        self.flush();
+        //TODO
+    }
 }
