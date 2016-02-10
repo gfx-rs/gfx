@@ -68,9 +68,9 @@ fn main() {
 
     // we could use `factory.create_vertex_buffer_indexed` for the first two
     // but leaving the direct creation here for consistency.
-    let quad_vertices = factory.create_buffer_static(&QUAD_VERTICES, gfx::BufferRole::Vertex);
-    let quad_indices = factory.create_buffer_static(&QUAD_INDICES, gfx::BufferRole::Index);
-    let quad_instances = factory.create_buffer_dynamic(MAX_INSTANCE_COUNT, gfx::BufferRole::Vertex);
+    let quad_vertices = factory.create_buffer_static(&QUAD_VERTICES, gfx::BufferRole::Vertex, gfx::Bind::empty()).unwrap();
+    let quad_indices = factory.create_buffer_static(&QUAD_INDICES, gfx::BufferRole::Index, gfx::Bind::empty()).unwrap();
+    let quad_instances = factory.create_buffer_dynamic(MAX_INSTANCE_COUNT, gfx::BufferRole::Vertex, gfx::Bind::empty()).unwrap();
 
     let instances_per_length: u32 = 32;
     println!("{} instances per length", instances_per_length);
