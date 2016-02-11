@@ -295,7 +295,7 @@ impl d::Factory<R> for Factory {
         Err(f::ResourceViewError::Unsupported) //TODO
     }
 
-    fn view_texture_as_shader_resource_raw(&mut self, htex: &handle::RawTexture<R>, _desc: t::ViewDesc)
+    fn view_texture_as_shader_resource_raw(&mut self, htex: &handle::RawTexture<R>, _desc: t::ResourceDesc)
                                        -> Result<handle::RawShaderResourceView<R>, f::ResourceViewError> {
         match self.frame_handles.ref_texture(htex) {
             &NewTexture::Surface(_) => Err(f::ResourceViewError::NoBindFlag),
@@ -312,11 +312,11 @@ impl d::Factory<R> for Factory {
         Err(f::ResourceViewError::Unsupported) //TODO
     }
 
-    fn view_texture_as_render_target_raw(&mut self, htex: &handle::RawTexture<R>, level: Level, layer: Option<Layer>)
+    fn view_texture_as_render_target_raw(&mut self, htex: &handle::RawTexture<R>, desc: t::RenderDesc)
                                          -> Result<handle::RawRenderTargetView<R>, f::TargetViewError> {
-        self.view_texture_as_target(htex, level, layer)
+        self.view_texture_as_target(htex, desc.level, desc.layer)
             .map(|view| {
-                let dim = htex.get_info().kind.get_level_dimensions(level);
+                let dim = htex.get_info().kind.get_level_dimensions(desc.level);
                 self.share.handles.borrow_mut().make_rtv(view, htex, dim)
             })
     }

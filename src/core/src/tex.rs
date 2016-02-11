@@ -43,8 +43,6 @@ pub enum Error {
 
 /// Dimension size
 pub type Size = u16;
-/// Array size
-pub type ArraySize = u8;
 /// Number of bits per component
 pub type Bits = u8;
 /// Number of MSAA samples
@@ -137,18 +135,18 @@ pub enum Kind {
     D1(Size),
     /// An array of rows of texels. Equivalent to Texture2D except that texels
     /// in a different row are not sampled.
-    D1Array(Size, ArraySize),
+    D1Array(Size, Layer),
     /// A traditional 2D texture, with rows arranged contiguously.
     D2(Size, Size, AaMode),
     /// An array of 2D textures. Equivalent to Texture3D except that texels in
     /// a different depth level are not sampled.
-    D2Array(Size, Size, ArraySize, AaMode),
+    D2Array(Size, Size, Layer, AaMode),
     /// A volume texture, with each 2D layer arranged contiguously.
     D3(Size, Size, Size),
     /// A set of 6 2D textures, one for each face of a cube.
-    Cube(Size, Size),
+    Cube(Size),
     /// An array of Cube textures.
-    CubeArray(Size, Size, ArraySize),
+    CubeArray(Size, Layer),
 }
 
 impl Kind {
@@ -161,8 +159,8 @@ impl Kind {
             Kind::D2(w, h, s) => (w, h, 0, s),
             Kind::D2Array(w, h, a, s) => (w, h, a as Size, s),
             Kind::D3(w, h, d) => (w, h, d, s0),
-            Kind::Cube(w, h) => (w, h, 6, s0),
-            Kind::CubeArray(w, h, a) => (w, h, 6 * (a as Size), s0)
+            Kind::Cube(w) => (w, w, 6, s0),
+            Kind::CubeArray(w, a) => (w, w, 6 * (a as Size), s0)
         }
     }
     /// Get the dimensionality of a particular mipmap level.
@@ -170,7 +168,6 @@ impl Kind {
         use std::cmp::max;
         let (w, h, d, _) = self.get_dimensions();
         (max(1, w >> level), max(1, h >> level), max(1, d >> level), AaMode::Single)
-
     }
 }
 
@@ -323,12 +320,21 @@ impl Descriptor {
     }
 }
 
-/// Texture view descriptor.
+/// Texture resource view descriptor.
 #[allow(missing_docs)]
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
-pub struct ViewDesc {
+pub struct ResourceDesc {
     pub channel: format::ChannelType,
     pub min: Level,
     pub max: Level,
     pub swizzle: format::Swizzle,
+}
+
+/// Texture render view descriptor.
+#[allow(missing_docs)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+pub struct RenderDesc {
+    pub channel: format::ChannelType,
+    pub level: Level,
+    pub layer: Option<Layer>,
 }

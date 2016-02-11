@@ -146,8 +146,12 @@ pub enum ResourceViewError {
 pub enum TargetViewError {
     /// The `RENDER_TARGET` flag does not present in the texture.
     NoBindFlag,
-    /// Tried to view more than there is.
-    Size,
+    /// Selected mip level doesn't exist.
+    BadLevel(target::Level),
+    /// Selected array layer doesn't exist.
+    BadLayer(target::Layer),
+    /// Selected channel type is not supported for this texture.
+    Channel(format::ChannelType),
     /// The backend refused for some reason.
     Unsupported,
 }
@@ -275,11 +279,11 @@ pub trait Factory<R: Resources> {
         -> Result<handle::RawShaderResourceView<R>, ResourceViewError>;
     fn view_buffer_as_unordered_access_raw(&mut self, &handle::RawBuffer<R>)
         -> Result<handle::RawUnorderedAccessView<R>, ResourceViewError>;
-    fn view_texture_as_shader_resource_raw(&mut self, &handle::RawTexture<R>, tex::ViewDesc)
+    fn view_texture_as_shader_resource_raw(&mut self, &handle::RawTexture<R>, tex::ResourceDesc)
         -> Result<handle::RawShaderResourceView<R>, ResourceViewError>;
     fn view_texture_as_unordered_access_raw(&mut self, &handle::RawTexture<R>)
         -> Result<handle::RawUnorderedAccessView<R>, ResourceViewError>;
-    fn view_texture_as_render_target_raw(&mut self, &handle::RawTexture<R>, target::Level, Option<target::Layer>)
+    fn view_texture_as_render_target_raw(&mut self, &handle::RawTexture<R>, tex::RenderDesc)
         -> Result<handle::RawRenderTargetView<R>, TargetViewError>;
     fn view_texture_as_depth_stencil_raw(&mut self, &handle::RawTexture<R>, Option<target::Layer>)
         -> Result<handle::RawDepthStencilView<R>, TargetViewError>;
@@ -321,7 +325,7 @@ pub trait Factory<R: Resources> {
             return Err(ResourceViewError::NoBindFlag)
         }
         assert!(levels.0 <= levels.1);
-        let desc = tex::ViewDesc {
+        let desc = tex::ResourceDesc {
             channel: <T::Channel as format::ChannelTyped>::get_channel_type(),
             min: levels.0,
             max: levels.1,
@@ -348,7 +352,12 @@ pub trait Factory<R: Resources> {
         if !tex.get_info().bind.contains(RENDER_TARGET) {
             return Err(TargetViewError::NoBindFlag)
         }
-        self.view_texture_as_render_target_raw(tex.raw(), level, layer)
+        let desc = tex::RenderDesc {
+            channel: <T::Channel as format::ChannelTyped>::get_channel_type(),
+            level: level,
+            layer: layer,
+        };
+        self.view_texture_as_render_target_raw(tex.raw(), desc)
             .map(Phantom::new)
     }
 

@@ -192,7 +192,12 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
     let mut factory = Factory::new(dev.share.clone());
     let color_target = {
         use gfx_core::Factory;
-        factory.view_texture_as_render_target_raw(&color_tex, 0, None).unwrap()
+        let desc = gfx_core::tex::RenderDesc {
+            channel: gfx_core::format::ChannelType::Unorm,
+            level: 0,
+            layer: None,
+        };
+        factory.view_texture_as_render_target_raw(&color_tex, desc).unwrap()
     };
 
     Ok((dev, factory, swap_chain, color_target))

@@ -43,8 +43,8 @@ pub fn kind_to_gl(kind: Kind) -> GLenum {
         Kind::D2Array(_, _, _, AaMode::Single) => gl::TEXTURE_2D_ARRAY,
         Kind::D2Array(_, _, _, _) => gl::TEXTURE_2D_MULTISAMPLE_ARRAY,
         Kind::D3(_, _, _) => gl::TEXTURE_3D,
-        Kind::Cube(_, _) => gl::TEXTURE_CUBE_MAP,
-        Kind::CubeArray(_, _, _) => gl::TEXTURE_CUBE_MAP_ARRAY,
+        Kind::Cube(_) => gl::TEXTURE_CUBE_MAP,
+        Kind::CubeArray(_, _) => gl::TEXTURE_CUBE_MAP_ARRAY,
     }
 }
 
@@ -368,7 +368,7 @@ fn make_widout_storage_impl(gl: &gl::Gl, kind: Kind, format: GLint, pix: GLenum,
                 ::std::ptr::null()
             );
         },
-        Kind::Cube(w, h) => {
+        Kind::Cube(w) => {
             for &target in [gl::TEXTURE_CUBE_MAP_POSITIVE_X, gl::TEXTURE_CUBE_MAP_NEGATIVE_X,
                     gl::TEXTURE_CUBE_MAP_POSITIVE_Y, gl::TEXTURE_CUBE_MAP_NEGATIVE_Y,
                     gl::TEXTURE_CUBE_MAP_POSITIVE_Z, gl::TEXTURE_CUBE_MAP_NEGATIVE_Z].iter() {
@@ -377,7 +377,7 @@ fn make_widout_storage_impl(gl: &gl::Gl, kind: Kind, format: GLint, pix: GLenum,
                     0,
                     format,
                     w as GLsizei,
-                    h as GLsizei,
+                    w as GLsizei,
                     0,
                     pix,
                     typ,
@@ -385,7 +385,7 @@ fn make_widout_storage_impl(gl: &gl::Gl, kind: Kind, format: GLint, pix: GLenum,
                 )};
             }
         },
-        Kind::CubeArray(_, _, _) => return Err(Error::Kind),
+        Kind::CubeArray(_, _) => return Err(Error::Kind),
         Kind::D2(_, _, aa) => return Err(Error::Samples(aa)),
         Kind::D2Array(_, _, _, aa) => return Err(Error::Samples(aa)),
     }
@@ -609,7 +609,7 @@ fn update_texture_impl<F>(gl: &gl::Gl, kind: Kind, target: GLenum, pix: GLenum,
                 data
             );
         },
-        Kind::Cube(_, _) => unsafe {
+        Kind::Cube(_) => unsafe {
             gl.TexSubImage2D(
                 target,
                 img.mipmap as GLint,
@@ -622,7 +622,7 @@ fn update_texture_impl<F>(gl: &gl::Gl, kind: Kind, target: GLenum, pix: GLenum,
                 data
             );
         },
-        Kind::CubeArray(_, _, _) => return Err(Error::Kind),
+        Kind::CubeArray(_, _) => return Err(Error::Kind),
         Kind::D2(_, _, aa) => return Err(Error::Samples(aa)),
         Kind::D2Array(_, _, _, aa) => return Err(Error::Samples(aa)),
     })

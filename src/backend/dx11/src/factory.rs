@@ -23,6 +23,7 @@ use gfx_core::handle as h;
 use gfx_core::handle::Producer;
 use {Resources as R, Share, Pipeline, Program, Shader};
 use command::CommandBuffer;
+use data::map_format;
 use native;
 
 
@@ -249,7 +250,6 @@ impl core::Factory<R> for Factory {
         let mut layouts = Vec::new();
         for (i, at_desc) in desc.attributes.iter().enumerate() {
             use winapi::UINT;
-            use data::map_format;
             let (elem, irate) = match at_desc {
                 &Some((ref el, ir)) => (el, ir),
                 &None => continue,
@@ -330,7 +330,7 @@ impl core::Factory<R> for Factory {
         Err(f::ResourceViewError::Unsupported) //TODO
     }
 
-    fn view_texture_as_shader_resource_raw(&mut self, htex: &h::RawTexture<R>, _desc: core::tex::ViewDesc)
+    fn view_texture_as_shader_resource_raw(&mut self, htex: &h::RawTexture<R>, _desc: core::tex::ResourceDesc)
                                        -> Result<h::RawShaderResourceView<R>, f::ResourceViewError> {
         Ok(self.share.handles.borrow_mut().make_texture_srv((), htex)) //TODO
     }
@@ -340,27 +340,75 @@ impl core::Factory<R> for Factory {
         Err(f::ResourceViewError::Unsupported) //TODO
     }
 
-    fn view_texture_as_render_target_raw(&mut self, htex: &h::RawTexture<R>, level: core::target::Level, _layer: Option<core::target::Layer>)
+    fn view_texture_as_render_target_raw(&mut self, htex: &h::RawTexture<R>, desc: core::tex::RenderDesc)
                                          -> Result<h::RawRenderTargetView<R>, f::TargetViewError> {
+        use winapi::UINT;
+        use gfx_core::tex::{AaMode, Kind};
+
+        let kind = htex.get_info().kind;
+        let level = desc.level as UINT;
+        let (dim, extra) = match (kind, desc.layer) {
+            (Kind::D1(..), None) =>
+                (winapi::D3D11_RTV_DIMENSION_TEXTURE1D, [level, 0, 0]),
+            (Kind::D1Array(_, nlayers), Some(lid)) if lid < nlayers =>
+                (winapi::D3D11_RTV_DIMENSION_TEXTURE1DARRAY, [level, lid as UINT, 1+lid as UINT]),
+            (Kind::D1Array(_, nlayers), None) =>
+                (winapi::D3D11_RTV_DIMENSION_TEXTURE1DARRAY, [level, 0, nlayers as UINT]),
+            (Kind::D2(_, _, AaMode::Single), None) =>
+                (winapi::D3D11_RTV_DIMENSION_TEXTURE2D, [level, 0, 0]),
+            (Kind::D2(_, _, _), None) if level == 0 =>
+                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DMS, [0, 0, 0]),
+            (Kind::D2Array(_, _, nlayers, AaMode::Single), None) =>
+                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, 0, nlayers as UINT]),
+            (Kind::D2Array(_, _, nlayers, AaMode::Single), Some(lid)) if lid < nlayers =>
+                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, lid as UINT, 1+lid as UINT]),
+            (Kind::D2Array(_, _, nlayers, _), None) if level == 0 =>
+                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY, [0, nlayers as UINT, 0]),
+            (Kind::D2Array(_, _, nlayers, _), Some(lid)) if level == 0 && lid < nlayers =>
+                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY, [lid as UINT, 1+lid as UINT, 0]),
+            (Kind::D3(_, _, depth), None) =>
+                (winapi::D3D11_RTV_DIMENSION_TEXTURE3D, [level, 0, depth as UINT]),
+            (Kind::D3(_, _, depth), Some(lid)) if lid < depth =>
+                (winapi::D3D11_RTV_DIMENSION_TEXTURE3D, [level, lid as UINT, 1+lid as UINT]),
+            (Kind::Cube(..), None) =>
+                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, 0, 6]),
+            (Kind::Cube(..), Some(lid)) if lid < 6 =>
+                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, lid as UINT, 1+lid as UINT]),
+            (Kind::CubeArray(_, nlayers), None) =>
+                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, 0, 6 * nlayers as UINT]),
+            (Kind::CubeArray(_, nlayers), Some(lid)) if lid < nlayers =>
+                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, 6 * lid as UINT, 6 * (1+lid) as UINT]),
+            (_, None) => return Err(f::TargetViewError::BadLevel(desc.level)),
+            (_, Some(lid)) => return Err(f::TargetViewError::BadLayer(lid)),
+        };
+        let format = core::format::Format(htex.get_info().format, desc.channel);
+        let native_desc = winapi::D3D11_RENDER_TARGET_VIEW_DESC {
+            Format: match map_format(format) {
+                Some(fm) => fm,
+                None => return Err(f::TargetViewError::Channel(desc.channel)),
+            },
+            ViewDimension: dim,
+            u: extra,
+        };
         let mut raw_view: *mut winapi::ID3D11RenderTargetView = ptr::null_mut();
         let raw_tex = self.frame_handles.ref_texture(htex).0;
-        //TODO: pass in the descriptor
         unsafe {
-            (*self.share.device).CreateRenderTargetView(raw_tex as *mut winapi::ID3D11Resource,
-                ptr::null_mut(), &mut raw_view);
+            (*self.share.device).CreateRenderTargetView(
+                raw_tex as *mut winapi::ID3D11Resource, &native_desc, &mut raw_view);
         }
-        let dim = htex.get_info().kind.get_level_dimensions(level);
+        let dim = htex.get_info().kind.get_level_dimensions(desc.level);
         Ok(self.share.handles.borrow_mut().make_rtv(native::Rtv(raw_view), htex, dim))
     }
 
     fn view_texture_as_depth_stencil_raw(&mut self, htex: &h::RawTexture<R>, _layer: Option<core::target::Layer>)
                                          -> Result<h::RawDepthStencilView<R>, f::TargetViewError> {
+
+        //TODO: pass in the descriptor
         let mut raw_view: *mut winapi::ID3D11DepthStencilView = ptr::null_mut();
         let raw_tex = self.frame_handles.ref_texture(htex).0;
-        //TODO: pass in the descriptor
         unsafe {
-            (*self.share.device).CreateDepthStencilView(raw_tex as *mut winapi::ID3D11Resource,
-                ptr::null_mut(), &mut raw_view);
+            (*self.share.device).CreateDepthStencilView(
+                raw_tex as *mut winapi::ID3D11Resource, ptr::null(), &mut raw_view);
         }
         let dim = htex.get_info().kind.get_level_dimensions(0);
         Ok(self.share.handles.borrow_mut().make_dsv(native::Dsv(raw_view), htex, dim))

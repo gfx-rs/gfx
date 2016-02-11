@@ -141,7 +141,7 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
     }
 
     fn bind_global_constant(&mut self, _: shade::Location, _: shade::UniformValue) {
-        unimplemented!()
+        error!("Global constants are not supported");
     }
 
     fn bind_resource_views(&mut self, _: pso::ResourceViewSet<Resources>) {
