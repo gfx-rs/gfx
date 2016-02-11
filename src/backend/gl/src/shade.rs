@@ -142,6 +142,8 @@ impl StorageType {
             gl::SAMPLER_CUBE_SHADOW          => Sampler(BaseType::F32, TextureType::Cube(NoArray), SamplerType(Compare,   NoRect)),
             gl::SAMPLER_CUBE_MAP_ARRAY_SHADOW=> Sampler(BaseType::F32, TextureType::Cube(Array),   SamplerType(Compare,   NoRect)),
 
+            gl::INT_SAMPLER_BUFFER           => Sampler(BaseType::I32, TextureType::Buffer,        SamplerType(NoCompare, NoRect)),
+
             // TODO: int samplers
 
             // TODO: unsigned samplers
