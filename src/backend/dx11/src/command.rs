@@ -60,6 +60,19 @@ struct Cache {
     blend_ref: [FLOAT; 4],
 }
 
+impl Cache {
+    fn new() -> Cache {
+        Cache {
+            attributes: [None; MAX_VERTEX_ATTRIBUTES],
+            rasterizer: ptr::null(),
+            depth_stencil: ptr::null(),
+            stencil_ref: 0,
+            blend: ptr::null(),
+            blend_ref: [0.0; 4],
+        }
+    }
+}
+
 pub struct CommandBuffer {
     pub buf: Vec<Command>,
     cache: Cache,
@@ -69,14 +82,7 @@ impl CommandBuffer {
     pub fn new() -> CommandBuffer {
         CommandBuffer {
             buf: Vec::new(),
-            cache: Cache {
-                attributes: [None; MAX_VERTEX_ATTRIBUTES],
-                rasterizer: ptr::null(),
-                depth_stencil: ptr::null(),
-                stencil_ref: 0,
-                blend: ptr::null(),
-                blend_ref: [0.0; 4],
-            },
+            cache: Cache::new(),
         }
     }
 
@@ -88,8 +94,15 @@ impl CommandBuffer {
 }
 
 impl draw::CommandBuffer<Resources> for CommandBuffer {
-    fn clone_empty(&self) -> CommandBuffer { CommandBuffer::new() }
-    fn reset(&mut self) {}
+    fn clone_empty(&self) -> CommandBuffer {
+        CommandBuffer::new()
+    }
+
+    fn reset(&mut self) {
+        self.buf.clear();
+        self.cache = Cache::new();
+    }
+
     fn bind_pipeline_state(&mut self, pso: Pipeline) {
         use std::mem; //temporary
         self.buf.push(Command::SetPrimitive(unsafe{mem::transmute(pso.topology)}));
@@ -123,11 +136,25 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.push(Command::BindVertexBuffers(buffers, strides, offsets));
     }
 
-    fn bind_constant_buffers(&mut self, _: pso::ConstantBufferSet<Resources>) {}
-    fn bind_global_constant(&mut self, _: shade::Location, _: shade::UniformValue) {}
-    fn bind_resource_views(&mut self, _: pso::ResourceViewSet<Resources>) {}
-    fn bind_unordered_views(&mut self, _: pso::UnorderedViewSet<Resources>) {}
-    fn bind_samplers(&mut self, _: pso::SamplerSet<Resources>) {}
+    fn bind_constant_buffers(&mut self, _: pso::ConstantBufferSet<Resources>) {
+        unimplemented!()
+    }
+
+    fn bind_global_constant(&mut self, _: shade::Location, _: shade::UniformValue) {
+        unimplemented!()
+    }
+
+    fn bind_resource_views(&mut self, _: pso::ResourceViewSet<Resources>) {
+        unimplemented!()
+    }
+
+    fn bind_unordered_views(&mut self, _: pso::UnorderedViewSet<Resources>) {
+        unimplemented!()
+    }
+
+    fn bind_samplers(&mut self, _: pso::SamplerSet<Resources>) {
+        unimplemented!()
+    }
 
     fn bind_pixel_targets(&mut self, pts: pso::PixelTargetSet<Resources>) {
         if let (Some(ref d), Some(ref s)) = (pts.depth, pts.stencil) {
@@ -178,9 +205,14 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
         self.cache.blend_ref = rv.blend;
     }
 
-    fn update_buffer(&mut self, _: native::Buffer, _: draw::DataPointer, _: usize) {}
+    fn update_buffer(&mut self, _: native::Buffer, _: draw::DataPointer, _: usize) {
+        unimplemented!()
+    }
+
     fn update_texture(&mut self, _: native::Texture, _: tex::Kind, _: Option<tex::CubeFace>,
-                      _: draw::DataPointer, _: tex::RawImageInfo) {}
+                      _: draw::DataPointer, _: tex::RawImageInfo) {
+        unimplemented!()
+    }
 
     fn clear_color(&mut self, target: native::Rtv, value: draw::ClearColor) {
         match value {
