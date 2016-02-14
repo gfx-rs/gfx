@@ -14,6 +14,7 @@
 
 use winapi::*;
 use gfx_core::format::Format;
+use gfx_core::tex::AaMode;
 
 pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
     use gfx_core::format::SurfaceType::*;
@@ -105,4 +106,21 @@ pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
         D24 | D24_S8 => DXGI_FORMAT_D24_UNORM_S8_UINT,
         D32 => DXGI_FORMAT_D32_FLOAT,
     })
+}
+
+pub fn map_anti_alias(aa: AaMode) -> DXGI_SAMPLE_DESC {
+    match aa {
+        AaMode::Single => DXGI_SAMPLE_DESC {
+            Count: 1,
+            Quality: 0,
+        },
+        AaMode::Multi(count) => DXGI_SAMPLE_DESC {
+            Count: count as UINT,
+            Quality: 0,
+        },
+        AaMode::Coverage(samples, fragments) => DXGI_SAMPLE_DESC {
+            Count: fragments as UINT,
+            Quality: (0..9).find(|q| (fragments<<q) >= samples).unwrap() as UINT,
+        },
+    }
 }

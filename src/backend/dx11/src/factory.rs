@@ -23,7 +23,7 @@ use gfx_core::handle as h;
 use gfx_core::handle::Producer;
 use {Resources as R, Share, Texture, Pipeline, Program, Shader};
 use command::CommandBuffer;
-use data::map_format;
+use data::{map_format, map_anti_alias};
 use native;
 use mirror::{reflect_shader, reflect_program};
 
@@ -311,7 +311,34 @@ impl core::Factory<R> for Factory {
 
     fn create_texture_raw(&mut self, desc: core::tex::Descriptor, _hint: Option<core::format::ChannelType>)
                           -> Result<h::RawTexture<R>, core::tex::Error> {
-        Ok(self.share.handles.borrow_mut().make_texture(Texture::D1(ptr::null_mut()), desc)) //TODO
+        use winapi::UINT;
+        let (hr, texture) = match desc.kind {
+            core::tex::Kind::D2(w, h, aa) => {
+                let native_desc = winapi::D3D11_TEXTURE2D_DESC {
+                    Width: w as UINT,
+                    Height: h as UINT,
+                    MipLevels: desc.levels as UINT,
+                    ArraySize: 1,
+                    Format: winapi::DXGI_FORMAT_UNKNOWN,
+                    SampleDesc: map_anti_alias(aa),
+                    Usage: winapi::D3D11_USAGE_DEFAULT, //TODO
+                    BindFlags: 0,
+                    CPUAccessFlags: 0,
+                    MiscFlags: 0,
+                };
+                let mut raw = ptr::null_mut();
+                let hr = unsafe {
+                    (*self.share.device).CreateTexture2D(&native_desc, ptr::null(), &mut raw)
+                };
+                (hr, Texture::D2(raw))
+            },
+            _ => (-1, Texture::D1(ptr::null_mut())), //TODO
+        };
+        if winapi::SUCCEEDED(hr) {
+            Ok(self.share.handles.borrow_mut().make_texture(texture, desc))
+        }else {
+            unimplemented!()
+        }
     }
 
     fn view_buffer_as_shader_resource_raw(&mut self, hbuf: &h::RawBuffer<R>)
