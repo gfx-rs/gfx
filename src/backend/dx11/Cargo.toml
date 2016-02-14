@@ -30,4 +30,6 @@ name = "gfx_device_dx11"
 log = "0.3"
 gfx_core = { path = "../../core", version = "0.1" }
 d3d11-sys = "0.1"
+d3dcompiler-sys = "0.0.1"
+dxguid-sys = "0.0.1"
 winapi = "0.2"

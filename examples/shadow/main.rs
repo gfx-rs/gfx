@@ -181,7 +181,7 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
     // create shadows
     let (shadow_tex, shadow_resource) = {
         use gfx::tex as t;
-        let kind = t::Kind::D2Array(512, 512, MAX_LIGHTS as t::ArraySize, t::AaMode::Single);
+        let kind = t::Kind::D2Array(512, 512, MAX_LIGHTS as gfx::Layer, t::AaMode::Single);
         let bind = gfx::SHADER_RESOURCE | gfx::RENDER_TARGET;
         let cty = gfx::format::ChannelType::Unorm;
         let tex = factory.create_texture(kind, 1, bind, Some(cty)).unwrap();

@@ -21,7 +21,7 @@ use winapi::{FLOAT, INT, UINT, UINT8, DXGI_FORMAT,
              ID3D11RasterizerState, ID3D11DepthStencilState, ID3D11BlendState};
 use gfx_core::{draw, pso, shade, state, target, tex};
 use gfx_core::{IndexType, VertexCount};
-use gfx_core::{MAX_VERTEX_ATTRIBUTES, MAX_COLOR_TARGETS};
+use gfx_core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS, MAX_COLOR_TARGETS};
 use {native, Resources, InputLayout, Pipeline, Program};
 
 ///Serialized device command.
@@ -32,6 +32,7 @@ pub enum Command {
     BindInputLayout(InputLayout),
     BindIndex(native::Buffer, DXGI_FORMAT),
     BindVertexBuffers([native::Buffer; MAX_VERTEX_ATTRIBUTES], [UINT; MAX_VERTEX_ATTRIBUTES], [UINT; MAX_VERTEX_ATTRIBUTES]),
+    BindConstantBuffers(shade::Stage, [native::Buffer; MAX_CONSTANT_BUFFERS]),
     BindPixelTargets([native::Rtv; MAX_COLOR_TARGETS], native::Dsv),
     SetPrimitive(D3D11_PRIMITIVE_TOPOLOGY),
     SetViewport(D3D11_VIEWPORT),
@@ -136,8 +137,31 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.push(Command::BindVertexBuffers(buffers, strides, offsets));
     }
 
-    fn bind_constant_buffers(&mut self, _: pso::ConstantBufferSet<Resources>) {
-        unimplemented!()
+    fn bind_constant_buffers(&mut self, mut cbs: pso::ConstantBufferSet<Resources>) {
+        for &stage in [shade::Stage::Vertex, shade::Stage::Geometry, shade::Stage::Pixel].iter() {
+            let mut buffers = [native::Buffer(ptr::null_mut()); MAX_CONSTANT_BUFFERS];
+            let mask = stage.into();
+            let mut count = 0;
+            for i in 0 .. MAX_CONSTANT_BUFFERS {
+                if let Some((buffer, ref mut usage)) = cbs.0[i] {
+                    if usage.contains(mask) {
+                        buffers[i] = buffer;
+                        *usage = *usage ^ mask;
+                        count += 1;
+                    }
+                }
+            }
+            if count != 0 {
+                self.buf.push(Command::BindConstantBuffers(stage, buffers));
+            }
+        }
+        for i in 0 .. MAX_CONSTANT_BUFFERS {
+            if let Some((_, usage)) = cbs.0[i] {
+                if !usage.is_empty() {
+                    error!("Unhandled shader usage mask for a constant buffer: {:?}", usage);
+                }
+            }
+        }
     }
 
     fn bind_global_constant(&mut self, _: shade::Location, _: shade::UniformValue) {

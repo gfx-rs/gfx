@@ -25,6 +25,7 @@ use {Resources as R, Share, Pipeline, Program, Shader};
 use command::CommandBuffer;
 use data::map_format;
 use native;
+use mirror::{reflect_shader, reflect_program};
 
 
 #[derive(Copy, Clone)]
@@ -178,6 +179,7 @@ impl core::Factory<R> for Factory {
         };
 
         if winapi::SUCCEEDED(hr) {
+            let _reflection = reflect_shader(code);
             let hash = {
                 use std::hash::{Hash, Hasher, SipHasher};
                 let mut hasher = SipHasher::new();
@@ -189,6 +191,7 @@ impl core::Factory<R> for Factory {
             }
             let shader = Shader {
                 object: object,
+                //reflection: reflection,
                 code_hash: hash,
             };
             Ok(self.share.handles.borrow_mut().make_shader(shader))
@@ -200,16 +203,6 @@ impl core::Factory<R> for Factory {
     fn create_program(&mut self, shader_set: &core::ShaderSet<R>)
                       -> Result<h::Program<R>, core::shade::CreateProgramError> {
         use winapi::{ID3D11VertexShader, ID3D11GeometryShader, ID3D11PixelShader};
-        let info = core::shade::ProgramInfo { //TODO
-            vertex_attributes: Vec::new(),
-            globals: Vec::new(),
-            constant_buffers: Vec::new(),
-            textures: Vec::new(),
-            unordereds: Vec::new(),
-            samplers: Vec::new(),
-            outputs: Vec::new(),
-            knows_outputs: true,
-        };
 
         let fh = &mut self.frame_handles;
         let prog = match shader_set {
@@ -237,6 +230,7 @@ impl core::Factory<R> for Factory {
             },
         };
 
+        let info = reflect_program(&prog);
         Ok(self.share.handles.borrow_mut().make_program(prog, info))
     }
 

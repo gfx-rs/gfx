@@ -259,6 +259,16 @@ bitflags!(
     }
 );
 
+impl From<Stage> for Usage {
+    fn from(stage: Stage) -> Usage {
+        match stage {
+            Stage::Vertex => VERTEX,
+            Stage::Geometry => GEOMETRY,
+            Stage::Pixel => PIXEL,
+        }
+    }
+}
+
 /// Vertex information that a shader takes as input.
 #[derive(Clone, PartialEq, Debug)]
 pub struct AttributeVar {

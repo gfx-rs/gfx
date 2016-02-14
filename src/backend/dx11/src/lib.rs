@@ -18,11 +18,14 @@
 extern crate log;
 extern crate gfx_core;
 extern crate d3d11;
+extern crate d3dcompiler;
+extern crate dxguid;
 extern crate winapi;
 
 mod command;
 mod data;
 mod factory;
+mod mirror;
 mod state;
 
 #[doc(hidden)]
@@ -57,7 +60,7 @@ use gfx_core::handle as h;
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Shader {
     object: *mut winapi::ID3D11DeviceChild,
-    //reflector: *const winapi::ID3D11ShaderReflection,
+    //reflection: *const winapi::ID3D11ShaderReflection,
     code_hash: u64,
 }
 unsafe impl Send for Shader {}
@@ -170,7 +173,7 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
 
     let mut back_buffer: *mut winapi::ID3D11Texture2D = ptr::null_mut();
     unsafe {
-        (*swap_chain).GetBuffer(0, &winapi::IID_ID3D11Texture2D, &mut back_buffer
+        (*swap_chain).GetBuffer(0, &dxguid::IID_ID3D11Texture2D, &mut back_buffer
             as *mut *mut winapi::ID3D11Texture2D as *mut *mut c_void);
     }
     let color_tex = share.handles.borrow_mut().make_texture(native::Texture(back_buffer), gfx_core::tex::Descriptor {
@@ -205,7 +208,9 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
 
 impl Device {
     fn process(&mut self, command: &command::Command, _data_buf: &gfx_core::draw::DataBuffer) {
+        use gfx_core::shade::Stage;
         use command::Command::*;
+        let max_cbs = gfx_core::MAX_CONSTANT_BUFFERS as winapi::UINT;
         match *command {
             BindProgram(ref prog) => unsafe {
                 (*self.context).VSSetShader(prog.vs, ptr::null_mut(), 0);
@@ -221,6 +226,17 @@ impl Device {
             BindVertexBuffers(ref buffers, ref strides, ref offsets) => unsafe {
                 (*self.context).IASetVertexBuffers(0, gfx_core::MAX_VERTEX_ATTRIBUTES as winapi::UINT,
                     &buffers[0].0, strides.as_ptr(), offsets.as_ptr());
+            },
+            BindConstantBuffers(stage, ref buffers) => match stage {
+                Stage::Vertex => unsafe {
+                    (*self.context).VSSetConstantBuffers(0, max_cbs, &buffers[0].0);
+                },
+                Stage::Geometry => unsafe {
+                    (*self.context).GSSetConstantBuffers(0, max_cbs, &buffers[0].0);
+                },
+                Stage::Pixel => unsafe {
+                    (*self.context).PSSetConstantBuffers(0, max_cbs, &buffers[0].0);
+                },
             },
             BindPixelTargets(ref colors, ds) => unsafe {
                 (*self.context).OMSetRenderTargets(gfx_core::MAX_COLOR_TARGETS as winapi::UINT,
