@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use winapi::*;
-use gfx_core::format::Format;
+use gfx_core::factory::Bind;
+use gfx_core::format::{Format, SurfaceType};
 use gfx_core::tex::AaMode;
 
 pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
@@ -108,6 +109,29 @@ pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
     })
 }
 
+pub fn map_surface(surface: SurfaceType) -> Option<DXGI_FORMAT> {
+    use gfx_core::format::SurfaceType::*;
+    Some(match surface {
+        R3_G3_B2 | R4_G4 | R4_G4_B4_A4 | R5_G5_B5_A1 | R5_G6_B5 => return None,
+        R8_G8_B8 | R16_G16_B16 => return None,
+        R8              => DXGI_FORMAT_R8_TYPELESS,
+        R8_G8           => DXGI_FORMAT_R8G8_TYPELESS,
+        R8_G8_B8_A8     => DXGI_FORMAT_R8G8B8A8_TYPELESS,
+        R10_G10_B10_A2  => DXGI_FORMAT_R10G10B10A2_TYPELESS,
+        R11_G11_B10     => DXGI_FORMAT_R11G11B10_FLOAT, //careful
+        R16             => DXGI_FORMAT_R16_TYPELESS,
+        R16_G16         => DXGI_FORMAT_R16G16_TYPELESS,
+        R16_G16_B16_A16 => DXGI_FORMAT_R16G16B16A16_TYPELESS,
+        R32             => DXGI_FORMAT_R32_TYPELESS,
+        R32_G32         => DXGI_FORMAT_R32G32_TYPELESS,
+        R32_G32_B32     => DXGI_FORMAT_R32G32B32_TYPELESS,
+        R32_G32_B32_A32 => DXGI_FORMAT_R32G32B32A32_TYPELESS,
+        D16             => DXGI_FORMAT_R16_TYPELESS,
+        D24 | D24_S8    => DXGI_FORMAT_R24G8_TYPELESS,
+        D32             => DXGI_FORMAT_R32_TYPELESS,
+    })
+}
+
 pub fn map_anti_alias(aa: AaMode) -> DXGI_SAMPLE_DESC {
     match aa {
         AaMode::Single => DXGI_SAMPLE_DESC {
@@ -123,4 +147,19 @@ pub fn map_anti_alias(aa: AaMode) -> DXGI_SAMPLE_DESC {
             Quality: (0..9).find(|q| (fragments<<q) >= samples).unwrap() as UINT,
         },
     }
+}
+
+pub fn map_bind(bind: Bind) -> D3D11_BIND_FLAG {
+    use gfx_core::factory as f;
+    let mut flags = D3D11_BIND_FLAG(0);
+    if bind.contains(f::SHADER_RESOURCE) {
+        flags = flags | D3D11_BIND_SHADER_RESOURCE;
+    }
+    if bind.contains(f::UNORDERED_ACCESS) {
+        flags = flags | D3D11_BIND_UNORDERED_ACCESS;
+    }
+    if bind.contains(f::RENDER_TARGET) {
+        flags = flags | D3D11_BIND_RENDER_TARGET;
+    }
+    flags
 }

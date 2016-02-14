@@ -23,7 +23,7 @@ use gfx_core::handle as h;
 use gfx_core::handle::Producer;
 use {Resources as R, Share, Texture, Pipeline, Program, Shader};
 use command::CommandBuffer;
-use data::{map_format, map_anti_alias};
+use data::{map_format, map_surface, map_anti_alias, map_bind};
 use native;
 use mirror::{reflect_shader, reflect_program};
 
@@ -78,17 +78,11 @@ impl Factory {
             f::BufferUsage::Dynamic => (D3D11_USAGE_DYNAMIC, D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE),
             f::BufferUsage::Stream  => (D3D11_USAGE_STAGING, D3D11_CPU_ACCESS_WRITE),
         };
-        let mut bind = match info.role {
+        let bind = map_bind(info.bind) | match info.role {
             f::BufferRole::Vertex   => D3D11_BIND_VERTEX_BUFFER,
             f::BufferRole::Index    => D3D11_BIND_INDEX_BUFFER,
             f::BufferRole::Uniform  => D3D11_BIND_CONSTANT_BUFFER,
         };
-        if info.bind.contains(f::SHADER_RESOURCE) {
-            bind = bind | D3D11_BIND_SHADER_RESOURCE;
-        }
-        if info.bind.contains(f::UNORDERED_ACCESS) {
-            bind = bind | D3D11_BIND_UNORDERED_ACCESS;
-        }
         if info.bind.contains(f::RENDER_TARGET) {
             return Err(f::BufferError::UnsupportedBind(f::RENDER_TARGET))
         }
@@ -115,6 +109,31 @@ impl Factory {
             error!("Buffer creation error code {:x}, info: {:?}", hr, info);
             Err(f::BufferError::Other)
         }
+    }
+
+    fn create_texture_2d(&mut self, size: [core::tex::Size; 2], array: core::tex::Layer,
+                         levels: core::tex::Level, aa: core::tex::AaMode,
+                         format: winapi::DXGI_FORMAT, bind: winapi::D3D11_BIND_FLAG, misc: winapi::D3D11_RESOURCE_MISC_FLAG)
+                         -> (winapi::HRESULT, Texture)
+    {
+        use winapi::UINT;
+        let native_desc = winapi::D3D11_TEXTURE2D_DESC {
+            Width: size[0] as UINT,
+            Height: size[1] as UINT,
+            MipLevels: levels as UINT,
+            ArraySize: array as UINT,
+            Format: format,
+            SampleDesc: map_anti_alias(aa),
+            Usage: winapi::D3D11_USAGE_DEFAULT, //TODO
+            BindFlags: bind.0,
+            CPUAccessFlags: 0, //TODO
+            MiscFlags: misc.0,
+        };
+        let mut raw = ptr::null_mut();
+        let hr = unsafe {
+            (*self.share.device).CreateTexture2D(&native_desc, ptr::null(), &mut raw)
+        };
+        (hr, Texture::D2(raw))
     }
 }
 
@@ -311,33 +330,29 @@ impl core::Factory<R> for Factory {
 
     fn create_texture_raw(&mut self, desc: core::tex::Descriptor, _hint: Option<core::format::ChannelType>)
                           -> Result<h::RawTexture<R>, core::tex::Error> {
-        use winapi::UINT;
+        use gfx_core::tex::{AaMode, Error, Kind};
+        let format = match map_surface(desc.format) {
+            Some(f) => f,
+            None => return Err(Error::Format(desc.format, None))
+        };
+        let bind = map_bind(desc.bind);
+        let no_misc = winapi::D3D11_RESOURCE_MISC_FLAG(0);
         let (hr, texture) = match desc.kind {
-            core::tex::Kind::D2(w, h, aa) => {
-                let native_desc = winapi::D3D11_TEXTURE2D_DESC {
-                    Width: w as UINT,
-                    Height: h as UINT,
-                    MipLevels: desc.levels as UINT,
-                    ArraySize: 1,
-                    Format: winapi::DXGI_FORMAT_UNKNOWN,
-                    SampleDesc: map_anti_alias(aa),
-                    Usage: winapi::D3D11_USAGE_DEFAULT, //TODO
-                    BindFlags: 0,
-                    CPUAccessFlags: 0,
-                    MiscFlags: 0,
-                };
-                let mut raw = ptr::null_mut();
-                let hr = unsafe {
-                    (*self.share.device).CreateTexture2D(&native_desc, ptr::null(), &mut raw)
-                };
-                (hr, Texture::D2(raw))
-            },
+            Kind::D2(w, h, aa) =>
+                self.create_texture_2d([w,h], 1, desc.levels, aa, format, bind, no_misc),
+            Kind::D2Array(w, h, d, aa) =>
+                self.create_texture_2d([w,h], d, desc.levels, aa, format, bind, no_misc),
+            Kind::Cube(w) =>
+                self.create_texture_2d([w,w], 6*1, desc.levels, AaMode::Single, format, bind, winapi::D3D11_RESOURCE_MISC_TEXTURECUBE),
+            Kind::CubeArray(w, d) =>
+                self.create_texture_2d([w,w], 6*d, desc.levels, AaMode::Single, format, bind, winapi::D3D11_RESOURCE_MISC_TEXTURECUBE),
             _ => (-1, Texture::D1(ptr::null_mut())), //TODO
         };
         if winapi::SUCCEEDED(hr) {
             Ok(self.share.handles.borrow_mut().make_texture(texture, desc))
         }else {
-            unimplemented!()
+            error!("Failed to create a texture with code {:x}", hr);
+            Err(Error::Kind) //we should check for the error code here
         }
     }
 
