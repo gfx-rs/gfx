@@ -19,7 +19,7 @@ use gfx_core::{ConstantBufferSlot, Resources, MAX_VERTEX_ATTRIBUTES};
 use gfx_core::{handle, pso, shade};
 use gfx_core::factory::Phantom;
 use gfx_core::format::Format;
-use shade::ToUniform;
+use shade::{ToUniform, Usage};
 use super::{DataLink, DataBind, RawDataSet};
 
 pub use gfx_core::pso::{Element, ElemOffset, ElemStride};
@@ -43,7 +43,7 @@ pub type InstanceBuffer<T> = VertexBufferCommon<T, [(); 1]>;
 /// Constant buffer component.
 /// - init: `&str` = name of the buffer
 /// - data: `BufferHandle<T>`
-pub struct ConstantBuffer<T: Structure<shade::ConstFormat>>(Option<ConstantBufferSlot>, PhantomData<T>);
+pub struct ConstantBuffer<T: Structure<shade::ConstFormat>>(Option<(Usage, ConstantBufferSlot)>, PhantomData<T>);
 /// Global (uniform) constant component. Describes a free-standing value passed into
 /// the shader, which is not enclosed into any constant buffer. Deprecated in DX10 and higher.
 /// - init: `&str` = name of the constant
@@ -104,7 +104,7 @@ DataLink<'a> for ConstantBuffer<T> {
     fn link_constant_buffer(&mut self, cb: &shade::ConstantBufferVar, init: &Self::Init) ->
                             Option<Result<(), shade::ConstFormat>> {
         if &cb.name == *init {
-            self.0 = Some(cb.slot);
+            self.0 = Some((cb.usage, cb.slot));
             Some(Ok(()))
         }else {
             None
@@ -116,8 +116,8 @@ impl<R: Resources, T: Structure<shade::ConstFormat>>
 DataBind<R> for ConstantBuffer<T> {
     type Data = handle::Buffer<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
-        if let Some(slot) = self.0 {
-            let value = Some(man.ref_buffer(data.raw()).clone());
+        if let Some((usage, slot)) = self.0 {
+            let value = Some((man.ref_buffer(data.raw()).clone(), usage));
             out.constant_buffers.0[slot as usize] = value;
         }
     }

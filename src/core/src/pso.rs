@@ -18,6 +18,7 @@ use {MAX_COLOR_TARGETS, MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
      MAX_RESOURCE_VIEWS, MAX_UNORDERED_VIEWS, MAX_SAMPLERS};
 use {ColorSlot, Primitive, Resources};
 use {format, state as s, tex};
+use shade::Usage;
 
 
 /// An offset inside a vertex buffer, in bytes.
@@ -169,7 +170,7 @@ impl<R: Resources> VertexBufferSet<R> {
 #[derive(Copy, Clone, Debug)]
 pub struct ConstantBufferSet<R: Resources>(
     /// Array of buffer handles
-    pub [Option<R::Buffer>; MAX_CONSTANT_BUFFERS]
+    pub [Option<(R::Buffer, Usage)>; MAX_CONSTANT_BUFFERS]
 );
 
 impl<R: Resources> ConstantBufferSet<R> {

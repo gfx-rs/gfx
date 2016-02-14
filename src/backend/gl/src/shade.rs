@@ -198,7 +198,8 @@ fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::AttributeVar> {
     .collect()
 }
 
-fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program) -> Vec<s::ConstantBufferVar> {
+fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
+                -> Vec<s::ConstantBufferVar> {
     let num = if caps.uniform_block_supported {
         get_program_iv(gl, prog, gl::ACTIVE_UNIFORM_BLOCKS)
     } else {
@@ -228,15 +229,17 @@ fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program) -> Ve
         };
 
         let usage = {
-            let mut usage = 0;
-
-            for (stage, &eval) in [gl::UNIFORM_BLOCK_REFERENCED_BY_VERTEX_SHADER,
-                    gl::UNIFORM_BLOCK_REFERENCED_BY_FRAGMENT_SHADER].iter().enumerate() {
+            let usage_list = [
+                (s::VERTEX,   gl::UNIFORM_BLOCK_REFERENCED_BY_VERTEX_SHADER),
+                (s::GEOMETRY, gl::UNIFORM_BLOCK_REFERENCED_BY_GEOMETRY_SHADER),
+                (s::PIXEL,    gl::UNIFORM_BLOCK_REFERENCED_BY_FRAGMENT_SHADER),
+            ];
+            let mut usage = s::Usage::empty();
+            for &(stage, eval) in usage_list.iter() {
                 if get_block_iv(gl, prog, idx, eval) != 0 {
-                    usage |= 1 << stage;
+                    usage = usage | stage;
                 }
             }
-
             usage
         };
 

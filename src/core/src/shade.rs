@@ -247,6 +247,18 @@ impl<T: BaseTyped> Formatted for T {
 impl_const_vector!(2, 3, 4);
 impl_const_matrix!([2,2], [3,3], [4,4], [4,3]);
 
+bitflags!(
+    /// Parameter usage flags.
+    flags Usage: u8 {
+        /// Used by the vertex shader
+        const VERTEX   = 0x1,
+        /// Used by the geometry shader
+        const GEOMETRY = 0x2,
+        /// Used by the pixel shader
+        const PIXEL    = 0x4,
+    }
+);
+
 /// Vertex information that a shader takes as input.
 #[derive(Clone, PartialEq, Debug)]
 pub struct AttributeVar {
@@ -287,8 +299,8 @@ pub struct ConstantBufferVar {
     pub slot: ConstantBufferSlot,
     /// Size (in bytes) of this buffer's data.
     pub size: usize,
-    /// What program stage this buffer can be used in, as a bitflag.
-    pub usage: u8,
+    /// What program stage this buffer can be used in.
+    pub usage: Usage,
 }
 
 /// Texture shader parameter.

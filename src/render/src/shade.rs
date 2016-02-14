@@ -14,7 +14,7 @@
 
 //! Shader parameter handling.
 
-pub use gfx_core::shade::{ConstFormat, Formatted};
+pub use gfx_core::shade::{ConstFormat, Formatted, Usage};
 use gfx_core::shade::{CreateShaderError, CreateProgramError,
                       ShaderModel, UniformValue};
 

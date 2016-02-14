@@ -440,7 +440,7 @@ impl Device {
             Command::BindConstantBuffers(cbs) => {
                 let gl = &self.share.context;
                 for i in 0 .. d::MAX_CONSTANT_BUFFERS {
-                    if let Some(buffer) = cbs.0[i] {
+                    if let Some((buffer, _usage)) = cbs.0[i] {
                         unsafe {
                             gl.BindBufferBase(gl::UNIFORM_BUFFER, i as gl::types::GLuint, buffer);
                         }
