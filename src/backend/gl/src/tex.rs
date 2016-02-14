@@ -502,7 +502,16 @@ fn make_with_storage_impl(gl: &gl::Gl, kind: Kind, format: GLenum,
                 d as GLsizei
             );
         },
-        Kind::Cube(..) | Kind::CubeArray(..) => return Err(Error::Kind),
+        Kind::Cube(w, h) => unsafe {
+            gl.TexStorage2D(
+                target,
+                min(levels, mip_level2(w, h)),
+                format,
+                w as GLsizei,
+                h as GLsizei
+            );
+        },
+        Kind::CubeArray(..) => return Err(Error::Kind),
         Kind::D2(_, _, aa) => return Err(Error::Samples(aa)),
         Kind::D2Array(_, _, _, aa) => return Err(Error::Samples(aa)),
     }
