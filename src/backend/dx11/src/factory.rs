@@ -21,7 +21,7 @@ use gfx_core as core;
 use gfx_core::factory as f;
 use gfx_core::handle as h;
 use gfx_core::handle::Producer;
-use {Resources as R, Share, Pipeline, Program, Shader};
+use {Resources as R, Share, Texture, Pipeline, Program, Shader};
 use command::CommandBuffer;
 use data::map_format;
 use native;
@@ -311,7 +311,7 @@ impl core::Factory<R> for Factory {
 
     fn create_texture_raw(&mut self, desc: core::tex::Descriptor, _hint: Option<core::format::ChannelType>)
                           -> Result<h::RawTexture<R>, core::tex::Error> {
-        Ok(self.share.handles.borrow_mut().make_texture(native::Texture(ptr::null_mut()), desc)) //TODO
+        Ok(self.share.handles.borrow_mut().make_texture(Texture::D1(ptr::null_mut()), desc)) //TODO
     }
 
     fn view_buffer_as_shader_resource_raw(&mut self, hbuf: &h::RawBuffer<R>)
@@ -385,10 +385,9 @@ impl core::Factory<R> for Factory {
             u: extra,
         };
         let mut raw_view: *mut winapi::ID3D11RenderTargetView = ptr::null_mut();
-        let raw_tex = self.frame_handles.ref_texture(htex).0;
+        let raw_tex = self.frame_handles.ref_texture(htex).to_resource();
         unsafe {
-            (*self.share.device).CreateRenderTargetView(
-                raw_tex as *mut winapi::ID3D11Resource, &native_desc, &mut raw_view);
+            (*self.share.device).CreateRenderTargetView(raw_tex, &native_desc, &mut raw_view);
         }
         let dim = htex.get_info().kind.get_level_dimensions(desc.level);
         Ok(self.share.handles.borrow_mut().make_rtv(native::Rtv(raw_view), htex, dim))
@@ -399,10 +398,9 @@ impl core::Factory<R> for Factory {
 
         //TODO: pass in the descriptor
         let mut raw_view: *mut winapi::ID3D11DepthStencilView = ptr::null_mut();
-        let raw_tex = self.frame_handles.ref_texture(htex).0;
+        let raw_tex = self.frame_handles.ref_texture(htex).to_resource();
         unsafe {
-            (*self.share.device).CreateDepthStencilView(
-                raw_tex as *mut winapi::ID3D11Resource, ptr::null(), &mut raw_view);
+            (*self.share.device).CreateDepthStencilView(raw_tex, ptr::null(), &mut raw_view);
         }
         let dim = htex.get_info().kind.get_level_dimensions(0);
         Ok(self.share.handles.borrow_mut().make_dsv(native::Dsv(raw_view), htex, dim))

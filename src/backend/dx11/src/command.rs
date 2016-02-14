@@ -22,7 +22,7 @@ use winapi::{FLOAT, INT, UINT, UINT8, DXGI_FORMAT,
 use gfx_core::{draw, pso, shade, state, target, tex};
 use gfx_core::{IndexType, VertexCount};
 use gfx_core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS, MAX_COLOR_TARGETS};
-use {native, Resources, InputLayout, Pipeline, Program};
+use {native, Resources, InputLayout, Texture, Pipeline, Program};
 
 ///Serialized device command.
 #[derive(Clone, Copy, Debug)]
@@ -233,7 +233,7 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
         unimplemented!()
     }
 
-    fn update_texture(&mut self, _: native::Texture, _: tex::Kind, _: Option<tex::CubeFace>,
+    fn update_texture(&mut self, _: Texture, _: tex::Kind, _: Option<tex::CubeFace>,
                       _: draw::DataPointer, _: tex::RawImageInfo) {
         unimplemented!()
     }

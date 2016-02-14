@@ -43,10 +43,6 @@ pub mod native {
     #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
     pub struct Dsv(pub *mut ID3D11DepthStencilView);
     unsafe impl Send for Dsv {}
-
-    #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-    pub struct Texture(pub *mut ID3D11Texture2D);
-    unsafe impl Send for Texture {}
 }
 
 use std::cell::RefCell;
@@ -56,6 +52,24 @@ use std::sync::Arc;
 pub use self::factory::Factory;
 use gfx_core::handle as h;
 
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub enum Texture {
+    D1(*mut winapi::ID3D11Texture1D),
+    D2(*mut winapi::ID3D11Texture2D),
+    D3(*mut winapi::ID3D11Texture3D),
+}
+unsafe impl Send for Texture {}
+impl Texture {
+    pub fn to_resource(&self) -> *mut winapi::ID3D11Resource {
+        type Res = *mut winapi::ID3D11Resource;
+        match *self {
+            Texture::D1(t) => t as Res,
+            Texture::D2(t) => t as Res,
+            Texture::D3(t) => t as Res,
+        }
+    }
+}
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Shader {
@@ -95,7 +109,7 @@ impl gfx_core::Resources for Resources {
     type Shader              = Shader;
     type Program             = Program;
     type PipelineStateObject = Pipeline;
-    type Texture             = native::Texture;
+    type Texture             = Texture;
     type RenderTargetView    = native::Rtv;
     type DepthStencilView    = native::Dsv;
     type ShaderResourceView  = ();
@@ -176,7 +190,7 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
         (*swap_chain).GetBuffer(0, &dxguid::IID_ID3D11Texture2D, &mut back_buffer
             as *mut *mut winapi::ID3D11Texture2D as *mut *mut c_void);
     }
-    let color_tex = share.handles.borrow_mut().make_texture(native::Texture(back_buffer), gfx_core::tex::Descriptor {
+    let color_tex = share.handles.borrow_mut().make_texture(Texture::D2(back_buffer), gfx_core::tex::Descriptor {
         kind: tex::Kind::D2(desc.BufferDesc.Width as tex::Size, desc.BufferDesc.Height as tex::Size, tex::AaMode::Single),
         levels: 1,
         format: gfx_core::format::SurfaceType::R8_G8_B8_A8,
@@ -326,7 +340,7 @@ impl gfx_core::Device for Device {
                 if p.ps != ptr::null_mut() { (*p.ps).Release(); }
             }, //program
             |_, _| {}, //PSO
-            |_, v| unsafe { (*v.0).Release(); }, //texture
+            |_, v| unsafe { (*v.to_resource()).Release(); },  //texture
             |_, _| {}, //SRV
             |_, _| {}, //UAV
             |_, v| unsafe { (*v.0).Release(); }, //RTV
