@@ -47,6 +47,14 @@ impl core::mapping::Raw for RawMapping {
     }
 }
 
+struct TextureParam {
+    levels: winapi::UINT,
+    format: winapi::DXGI_FORMAT,
+    bind: winapi::D3D11_BIND_FLAG,
+    usage: winapi::D3D11_USAGE,
+    cpu_access: winapi::D3D11_CPU_ACCESS_FLAG,
+}
+
 pub struct Factory {
     share: Arc<Share>,
     frame_handles: h::Manager<R>,
@@ -111,22 +119,41 @@ impl Factory {
         }
     }
 
-    fn create_texture_2d(&mut self, size: [core::tex::Size; 2], array: core::tex::Layer,
-                         levels: core::tex::Level, aa: core::tex::AaMode,
-                         format: winapi::DXGI_FORMAT, bind: winapi::D3D11_BIND_FLAG, misc: winapi::D3D11_RESOURCE_MISC_FLAG)
-                         -> (winapi::HRESULT, Texture)
+    fn create_texture_1d(&mut self, size: core::tex::Size, array: core::tex::Layer,
+                         tp: TextureParam, misc: winapi::D3D11_RESOURCE_MISC_FLAG) -> (winapi::HRESULT, Texture)
+    {
+        use winapi::UINT;
+        let native_desc = winapi::D3D11_TEXTURE1D_DESC {
+            Width: size as UINT,
+            MipLevels: tp.levels,
+            ArraySize: array as UINT,
+            Format: tp.format,
+            Usage: tp.usage,
+            BindFlags: tp.bind.0,
+            CPUAccessFlags: tp.cpu_access.0,
+            MiscFlags: misc.0,
+        };
+        let mut raw = ptr::null_mut();
+        let hr = unsafe {
+            (*self.share.device).CreateTexture1D(&native_desc, ptr::null(), &mut raw)
+        };
+        (hr, Texture::D1(raw))
+    }
+
+    fn create_texture_2d(&mut self, size: [core::tex::Size; 2], array: core::tex::Layer, aa: core::tex::AaMode,
+                         tp: TextureParam, misc: winapi::D3D11_RESOURCE_MISC_FLAG) -> (winapi::HRESULT, Texture)
     {
         use winapi::UINT;
         let native_desc = winapi::D3D11_TEXTURE2D_DESC {
             Width: size[0] as UINT,
             Height: size[1] as UINT,
-            MipLevels: levels as UINT,
+            MipLevels: tp.levels,
             ArraySize: array as UINT,
-            Format: format,
+            Format: tp.format,
             SampleDesc: map_anti_alias(aa),
-            Usage: winapi::D3D11_USAGE_DEFAULT, //TODO
-            BindFlags: bind.0,
-            CPUAccessFlags: 0, //TODO
+            Usage: tp.usage,
+            BindFlags: tp.bind.0,
+            CPUAccessFlags: tp.cpu_access.0,
             MiscFlags: misc.0,
         };
         let mut raw = ptr::null_mut();
@@ -134,6 +161,28 @@ impl Factory {
             (*self.share.device).CreateTexture2D(&native_desc, ptr::null(), &mut raw)
         };
         (hr, Texture::D2(raw))
+    }
+
+    fn create_texture_3d(&mut self, size: [core::tex::Size; 3],
+                         tp: TextureParam, misc: winapi::D3D11_RESOURCE_MISC_FLAG) -> (winapi::HRESULT, Texture)
+    {
+        use winapi::UINT;
+        let native_desc = winapi::D3D11_TEXTURE3D_DESC {
+            Width: size[0] as UINT,
+            Height: size[1] as UINT,
+            Depth: size[2] as UINT,
+            MipLevels: tp.levels,
+            Format: tp.format,
+            Usage: tp.usage,
+            BindFlags: tp.bind.0,
+            CPUAccessFlags: tp.cpu_access.0,
+            MiscFlags: misc.0,
+        };
+        let mut raw = ptr::null_mut();
+        let hr = unsafe {
+            (*self.share.device).CreateTexture3D(&native_desc, ptr::null(), &mut raw)
+        };
+        (hr, Texture::D3(raw))
     }
 }
 
@@ -331,22 +380,32 @@ impl core::Factory<R> for Factory {
     fn create_texture_raw(&mut self, desc: core::tex::Descriptor, _hint: Option<core::format::ChannelType>)
                           -> Result<h::RawTexture<R>, core::tex::Error> {
         use gfx_core::tex::{AaMode, Error, Kind};
-        let format = match map_surface(desc.format) {
-            Some(f) => f,
-            None => return Err(Error::Format(desc.format, None))
+        let tparam = TextureParam {
+            levels: desc.levels as winapi::UINT,
+            format: match map_surface(desc.format) {
+                Some(f) => f,
+                None => return Err(Error::Format(desc.format, None))
+            },
+            bind: map_bind(desc.bind),
+            usage: winapi::D3D11_USAGE_DEFAULT, //TODO
+            cpu_access: winapi::D3D11_CPU_ACCESS_FLAG(0), //TODO
         };
-        let bind = map_bind(desc.bind);
         let no_misc = winapi::D3D11_RESOURCE_MISC_FLAG(0);
         let (hr, texture) = match desc.kind {
+            Kind::D1(w) =>
+                self.create_texture_1d(w, 1, tparam, no_misc),
+            Kind::D1Array(w, d) =>
+                self.create_texture_1d(w, d, tparam, no_misc),
             Kind::D2(w, h, aa) =>
-                self.create_texture_2d([w,h], 1, desc.levels, aa, format, bind, no_misc),
+                self.create_texture_2d([w,h], 1, aa, tparam, no_misc),
             Kind::D2Array(w, h, d, aa) =>
-                self.create_texture_2d([w,h], d, desc.levels, aa, format, bind, no_misc),
+                self.create_texture_2d([w,h], d, aa, tparam, no_misc),
+            Kind::D3(w, h, d) =>
+                self.create_texture_3d([w,h,d], tparam, no_misc),
             Kind::Cube(w) =>
-                self.create_texture_2d([w,w], 6*1, desc.levels, AaMode::Single, format, bind, winapi::D3D11_RESOURCE_MISC_TEXTURECUBE),
+                self.create_texture_2d([w,w], 6*1, AaMode::Single, tparam, winapi::D3D11_RESOURCE_MISC_TEXTURECUBE),
             Kind::CubeArray(w, d) =>
-                self.create_texture_2d([w,w], 6*d, desc.levels, AaMode::Single, format, bind, winapi::D3D11_RESOURCE_MISC_TEXTURECUBE),
-            _ => (-1, Texture::D1(ptr::null_mut())), //TODO
+                self.create_texture_2d([w,w], 6*d, AaMode::Single, tparam, winapi::D3D11_RESOURCE_MISC_TEXTURECUBE),
         };
         if winapi::SUCCEEDED(hr) {
             Ok(self.share.handles.borrow_mut().make_texture(texture, desc))
