@@ -50,9 +50,21 @@ impl core::mapping::Raw for RawMapping {
 struct TextureParam {
     levels: winapi::UINT,
     format: winapi::DXGI_FORMAT,
+    bytes_per_texel: winapi::UINT,
     bind: winapi::D3D11_BIND_FLAG,
     usage: winapi::D3D11_USAGE,
     cpu_access: winapi::D3D11_CPU_ACCESS_FLAG,
+    init: *const c_void,
+}
+
+impl TextureParam {
+    fn to_sub_data(&self, w: core::tex::Size, h: core::tex::Size) -> winapi::D3D11_SUBRESOURCE_DATA {
+        winapi::D3D11_SUBRESOURCE_DATA {
+            pSysMem: self.init,
+            SysMemPitch: w as winapi::UINT * self.bytes_per_texel,
+            SysMemSlicePitch: (w * h) as winapi::UINT * self.bytes_per_texel,
+        }
+    }
 }
 
 pub struct Factory {
@@ -133,9 +145,11 @@ impl Factory {
             CPUAccessFlags: tp.cpu_access.0,
             MiscFlags: misc.0,
         };
+        let sub_data = tp.to_sub_data(size, 0);
         let mut raw = ptr::null_mut();
         let hr = unsafe {
-            (*self.share.device).CreateTexture1D(&native_desc, ptr::null(), &mut raw)
+            (*self.share.device).CreateTexture1D(&native_desc,
+                if tp.init != ptr::null() {&sub_data} else {ptr::null()}, &mut raw)
         };
         (hr, Texture::D1(raw))
     }
@@ -156,9 +170,11 @@ impl Factory {
             CPUAccessFlags: tp.cpu_access.0,
             MiscFlags: misc.0,
         };
+        let sub_data = tp.to_sub_data(size[0], size[1]);
         let mut raw = ptr::null_mut();
         let hr = unsafe {
-            (*self.share.device).CreateTexture2D(&native_desc, ptr::null(), &mut raw)
+            (*self.share.device).CreateTexture2D(&native_desc,
+                if tp.init != ptr::null() {&sub_data} else {ptr::null()}, &mut raw)
         };
         (hr, Texture::D2(raw))
     }
@@ -178,11 +194,67 @@ impl Factory {
             CPUAccessFlags: tp.cpu_access.0,
             MiscFlags: misc.0,
         };
+        let sub_data = tp.to_sub_data(size[0], size[1]);
         let mut raw = ptr::null_mut();
         let hr = unsafe {
-            (*self.share.device).CreateTexture3D(&native_desc, ptr::null(), &mut raw)
+            (*self.share.device).CreateTexture3D(&native_desc,
+                if tp.init != ptr::null() {&sub_data} else {ptr::null()}, &mut raw)
         };
         (hr, Texture::D3(raw))
+    }
+
+    fn create_texture_internal(&mut self, desc: core::tex::Descriptor,
+                               init: Option<(&[u8], core::format::ChannelType, bool)>)
+                               -> Result<h::RawTexture<R>, core::tex::Error>
+    {
+        use gfx_core::tex::{AaMode, Error, Kind};
+        let tparam = TextureParam {
+            levels: desc.levels as winapi::UINT,
+            format: match map_surface(desc.format) {
+                Some(f) => f,
+                None => return Err(Error::Format(desc.format, None))
+            },
+            bytes_per_texel: (desc.format.get_bit_size() >> 3) as winapi::UINT,
+            bind: map_bind(desc.bind),
+            usage: match init {
+                Some(_) => winapi::D3D11_USAGE_IMMUTABLE,
+                None    => winapi::D3D11_USAGE_DYNAMIC, //TODO
+            },
+            cpu_access: match init {
+                Some(_) => winapi::D3D11_CPU_ACCESS_FLAG(0),
+                None    => winapi::D3D11_CPU_ACCESS_WRITE, //TODO
+            },
+            init: match init {
+                Some((data, _, _)) => data.as_ptr() as *const c_void,
+                None => ptr::null(),
+            },
+        };
+        let misc = match init {
+            Some((_, _, true)) => winapi::D3D11_RESOURCE_MISC_GENERATE_MIPS,
+            _ => winapi::D3D11_RESOURCE_MISC_FLAG(0),
+        };
+        let (hr, texture) = match desc.kind {
+            Kind::D1(w) =>
+                self.create_texture_1d(w, 1, tparam, misc),
+            Kind::D1Array(w, d) =>
+                self.create_texture_1d(w, d, tparam, misc),
+            Kind::D2(w, h, aa) =>
+                self.create_texture_2d([w,h], 1, aa, tparam, misc),
+            Kind::D2Array(w, h, d, aa) =>
+                self.create_texture_2d([w,h], d, aa, tparam, misc),
+            Kind::D3(w, h, d) =>
+                self.create_texture_3d([w,h,d], tparam, misc),
+            Kind::Cube(w) =>
+                self.create_texture_2d([w,w], 6*1, AaMode::Single, tparam, misc | winapi::D3D11_RESOURCE_MISC_TEXTURECUBE),
+            Kind::CubeArray(w, d) =>
+                self.create_texture_2d([w,w], 6*d, AaMode::Single, tparam, misc | winapi::D3D11_RESOURCE_MISC_TEXTURECUBE),
+        };
+        if winapi::SUCCEEDED(hr) {
+            Ok(self.share.handles.borrow_mut().make_texture(texture, desc))
+        }else {
+            error!("Failed to create a texture with code {:x}", hr);
+            Err(Error::Kind) //we should check for the error code here
+        }
     }
 }
 
@@ -379,40 +451,12 @@ impl core::Factory<R> for Factory {
 
     fn create_texture_raw(&mut self, desc: core::tex::Descriptor, _hint: Option<core::format::ChannelType>)
                           -> Result<h::RawTexture<R>, core::tex::Error> {
-        use gfx_core::tex::{AaMode, Error, Kind};
-        let tparam = TextureParam {
-            levels: desc.levels as winapi::UINT,
-            format: match map_surface(desc.format) {
-                Some(f) => f,
-                None => return Err(Error::Format(desc.format, None))
-            },
-            bind: map_bind(desc.bind),
-            usage: winapi::D3D11_USAGE_DEFAULT, //TODO
-            cpu_access: winapi::D3D11_CPU_ACCESS_FLAG(0), //TODO
-        };
-        let no_misc = winapi::D3D11_RESOURCE_MISC_FLAG(0);
-        let (hr, texture) = match desc.kind {
-            Kind::D1(w) =>
-                self.create_texture_1d(w, 1, tparam, no_misc),
-            Kind::D1Array(w, d) =>
-                self.create_texture_1d(w, d, tparam, no_misc),
-            Kind::D2(w, h, aa) =>
-                self.create_texture_2d([w,h], 1, aa, tparam, no_misc),
-            Kind::D2Array(w, h, d, aa) =>
-                self.create_texture_2d([w,h], d, aa, tparam, no_misc),
-            Kind::D3(w, h, d) =>
-                self.create_texture_3d([w,h,d], tparam, no_misc),
-            Kind::Cube(w) =>
-                self.create_texture_2d([w,w], 6*1, AaMode::Single, tparam, winapi::D3D11_RESOURCE_MISC_TEXTURECUBE),
-            Kind::CubeArray(w, d) =>
-                self.create_texture_2d([w,w], 6*d, AaMode::Single, tparam, winapi::D3D11_RESOURCE_MISC_TEXTURECUBE),
-        };
-        if winapi::SUCCEEDED(hr) {
-            Ok(self.share.handles.borrow_mut().make_texture(texture, desc))
-        }else {
-            error!("Failed to create a texture with code {:x}", hr);
-            Err(Error::Kind) //we should check for the error code here
-        }
+        self.create_texture_internal(desc, None)
+    }
+
+    fn create_texture_with_data(&mut self, desc: core::tex::Descriptor, channel: core::format::ChannelType,
+                                data: &[u8], mipmap: bool) -> Result<core::handle::RawTexture<R>, core::tex::Error> {
+        self.create_texture_internal(desc, Some((data, channel, mipmap)))
     }
 
     fn view_buffer_as_shader_resource_raw(&mut self, hbuf: &h::RawBuffer<R>)
