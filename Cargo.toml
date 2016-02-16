@@ -47,6 +47,10 @@ name = "shadow"
 path = "examples/shadow/main.rs"
 
 [[example]]
+name = "skybox"
+path = "examples/skybox/main.rs"
+
+[[example]]
 name = "terrain"
 path = "examples/terrain/main.rs"
 
