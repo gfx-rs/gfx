@@ -137,6 +137,8 @@ pub enum BufferUpdateError {
 pub enum ResourceViewError {
     /// The corresponding bind flag does not present in the texture.
     NoBindFlag,
+    /// Selected channel type is not supported for this texture.
+    Channel(format::ChannelType),
     /// The backend refused for some reason.
     Unsupported,
 }

@@ -461,7 +461,7 @@ impl core::Factory<R> for Factory {
 
     fn view_buffer_as_shader_resource_raw(&mut self, hbuf: &h::RawBuffer<R>)
                                       -> Result<h::RawShaderResourceView<R>, f::ResourceViewError> {
-        Ok(self.share.handles.borrow_mut().make_buffer_srv((), hbuf)) //TODO
+        Ok(self.share.handles.borrow_mut().make_buffer_srv(native::Srv(ptr::null_mut()), hbuf)) //TODO
     }
 
     fn view_buffer_as_unordered_access_raw(&mut self, _hbuf: &h::RawBuffer<R>)
@@ -469,9 +469,53 @@ impl core::Factory<R> for Factory {
         Err(f::ResourceViewError::Unsupported) //TODO
     }
 
-    fn view_texture_as_shader_resource_raw(&mut self, htex: &h::RawTexture<R>, _desc: core::tex::ResourceDesc)
+    fn view_texture_as_shader_resource_raw(&mut self, htex: &h::RawTexture<R>, desc: core::tex::ResourceDesc)
                                        -> Result<h::RawShaderResourceView<R>, f::ResourceViewError> {
-        Ok(self.share.handles.borrow_mut().make_texture_srv((), htex)) //TODO
+        use winapi::UINT;
+        use gfx_core::tex::{AaMode, Kind};
+
+        let (dim, layers, has_levels) = match htex.get_info().kind {
+            Kind::D1(_) =>
+                (winapi::D3D11_SRV_DIMENSION_TEXTURE1D, 1, true),
+            Kind::D1Array(_, d) =>
+                (winapi::D3D11_SRV_DIMENSION_TEXTURE1DARRAY, d, true),
+            Kind::D2(_, _, AaMode::Single) =>
+                (winapi::D3D11_SRV_DIMENSION_TEXTURE2D, 1, true),
+            Kind::D2(_, _, _) =>
+                (winapi::D3D11_SRV_DIMENSION_TEXTURE2DMS, 1, false),
+            Kind::D2Array(_, _, d, AaMode::Single) =>
+                (winapi::D3D11_SRV_DIMENSION_TEXTURE2DARRAY, d, true),
+            Kind::D2Array(_, _, d, _) =>
+                (winapi::D3D11_SRV_DIMENSION_TEXTURE2DMSARRAY, d, false),
+            Kind::D3(_, _, _) =>
+                (winapi::D3D11_SRV_DIMENSION_TEXTURE3D, 1, true),
+            Kind::Cube(_) =>
+                (winapi::D3D11_SRV_DIMENSION_TEXTURECUBE, 1, true),
+            Kind::CubeArray(_, d) =>
+                (winapi::D3D11_SRV_DIMENSION_TEXTURECUBEARRAY, d, true),
+        };
+
+        let format = core::format::Format(htex.get_info().format, desc.channel);
+        let native_desc = winapi::D3D11_SHADER_RESOURCE_VIEW_DESC {
+            Format: match map_format(format) {
+                Some(fm) => fm,
+                None => return Err(f::ResourceViewError::Channel(desc.channel)),
+            },
+            ViewDimension: dim,
+            u: if has_levels {
+                assert!(desc.max >= desc.min);
+                [desc.min as UINT, (desc.max + 1 - desc.min) as UINT, 0, layers as UINT]
+            }else {
+                [0, layers as UINT, 0, 0]
+            },
+        };
+
+        let mut raw_view = ptr::null_mut();
+        let raw_tex = self.frame_handles.ref_texture(htex).to_resource();
+        unsafe {
+            (*self.share.device).CreateShaderResourceView(raw_tex, &native_desc, &mut raw_view);
+        }
+        Ok(self.share.handles.borrow_mut().make_texture_srv(native::Srv(raw_view), htex))
     }
 
     fn view_texture_as_unordered_access_raw(&mut self, _htex: &h::RawTexture<R>)
@@ -529,20 +573,20 @@ impl core::Factory<R> for Factory {
             ViewDimension: dim,
             u: extra,
         };
-        let mut raw_view: *mut winapi::ID3D11RenderTargetView = ptr::null_mut();
+        let mut raw_view = ptr::null_mut();
         let raw_tex = self.frame_handles.ref_texture(htex).to_resource();
         unsafe {
             (*self.share.device).CreateRenderTargetView(raw_tex, &native_desc, &mut raw_view);
         }
-        let dim = htex.get_info().kind.get_level_dimensions(desc.level);
-        Ok(self.share.handles.borrow_mut().make_rtv(native::Rtv(raw_view), htex, dim))
+        let size = kind.get_level_dimensions(desc.level);
+        Ok(self.share.handles.borrow_mut().make_rtv(native::Rtv(raw_view), htex, size))
     }
 
     fn view_texture_as_depth_stencil_raw(&mut self, htex: &h::RawTexture<R>, _layer: Option<core::target::Layer>)
                                          -> Result<h::RawDepthStencilView<R>, f::TargetViewError> {
 
         //TODO: pass in the descriptor
-        let mut raw_view: *mut winapi::ID3D11DepthStencilView = ptr::null_mut();
+        let mut raw_view = ptr::null_mut();
         let raw_tex = self.frame_handles.ref_texture(htex).to_resource();
         unsafe {
             (*self.share.device).CreateDepthStencilView(raw_tex, ptr::null(), &mut raw_view);
