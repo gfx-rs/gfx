@@ -49,8 +49,7 @@ gfx_pipeline!( pipe {
 //----------------------------------------
 
 pub fn main() {
-    use cgmath::FixedArray;
-    use cgmath::{Matrix, Point3, Vector3};
+    use cgmath::{Point3, Vector3};
     use cgmath::{Transform, AffineMatrix3};
     use glfw::Context;
     use gfx::traits::{Device, Factory, FactoryExt};
@@ -127,9 +126,9 @@ pub fn main() {
         ).unwrap();
 
     let view: AffineMatrix3<f32> = Transform::look_at(
-        &Point3::new(1.5f32, -5.0, 3.0),
-        &Point3::new(0f32, 0.0, 0.0),
-        &Vector3::unit_z(),
+        Point3::new(1.5f32, -5.0, 3.0),
+        Point3::new(0f32, 0.0, 0.0),
+        Vector3::unit_z(),
     );
     let aspect = {
         let (w, h) = window.get_framebuffer_size();
@@ -139,7 +138,7 @@ pub fn main() {
 
     let data = pipe::Data {
         vbuf: vbuf,
-        transform: proj.mul_m(&view.mat).into_fixed(),
+        transform: (proj * view.mat).into(),
         color: (texture_view, factory.create_sampler(sinfo)),
         out_color: main_color.clone(),
         out_depth: main_depth.clone(),

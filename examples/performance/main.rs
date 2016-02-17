@@ -21,9 +21,8 @@ extern crate time;
 extern crate gfx_gl as gl;
 
 use time::precise_time_s;
-use cgmath::FixedArray;
-use cgmath::{Matrix, Point3, Vector3, Matrix3, Matrix4};
-use cgmath::{Transform, AffineMatrix3, Vector4, Array1};
+use cgmath::{SquareMatrix, Matrix, Point3, Vector3, Matrix3, Matrix4};
+use cgmath::{Transform, AffineMatrix3, Vector4};
 pub use gfx::format::{I8Scaled, DepthStencil, Rgba8};
 use glfw::Context;
 use gl::Gl;
@@ -94,9 +93,9 @@ fn gfx_main(mut glfw: glfw::Glfw,
     let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
 
     let view: AffineMatrix3<f32> = Transform::look_at(
-        &Point3::new(0f32, -5.0, 0.0),
-        &Point3::new(0f32, 0.0, 0.0),
-        &Vector3::unit_z(),
+        Point3::new(0f32, -5.0, 0.0),
+        Point3::new(0f32, 0.0, 0.0),
+        Vector3::unit_z(),
     );
     let aspect = {
         let (w, h) = window.get_framebuffer_size();
@@ -106,7 +105,7 @@ fn gfx_main(mut glfw: glfw::Glfw,
 
     let mut data = pipe::Data {
         vbuf: vbuf,
-        transform: cgmath::Matrix4::identity().into_fixed(),
+        transform: cgmath::Matrix4::identity().into(),
         out_color: main_color,
         out_depth: main_depth,
     };
@@ -128,13 +127,12 @@ fn gfx_main(mut glfw: glfw::Glfw,
 
         for x in (-dimension) ..dimension {
             for y in (-dimension) ..dimension {
-                let mut model = Matrix4::from(Matrix3::identity().mul_s(0.01f32));
+                let mut model = Matrix4::from(Matrix3::identity() * 0.01f32);
                 model.w = Vector4::new(x as f32 * 0.05,
                                        0f32,
                                        y as f32 * 0.05,
                                        1f32);
-                data.transform = proj.mul_m(&view.mat)
-                                     .mul_m(&model).into_fixed();
+                data.transform = (proj * view.mat * model).into();
                 encoder.draw(&slice, &pso, &data);
             }
         }
@@ -252,9 +250,9 @@ fn gl_main(mut glfw: glfw::Glfw,
 
     let (w, h) = window.get_framebuffer_size();
     let view: AffineMatrix3<f32> = Transform::look_at(
-        &Point3::new(0f32, -5.0, 0.0),
-        &Point3::new(0f32, 0.0, 0.0),
-        &Vector3::unit_z(),
+        Point3::new(0f32, -5.0, 0.0),
+        Point3::new(0f32, 0.0, 0.0),
+        Vector3::unit_z(),
     );
     let aspect = w as f32 / h as f32;
     let proj = cgmath::perspective(cgmath::deg(45.0f32), aspect, 1.0, 10.0);
@@ -273,19 +271,19 @@ fn gl_main(mut glfw: glfw::Glfw,
 
         for x in (-dimension) ..dimension {
             for y in (-dimension) ..dimension {
-                let mut model = Matrix4::from(Matrix3::identity().mul_s(0.01f32));
+                let mut model = Matrix4::from(Matrix3::identity() * 0.01f32);
                 model.w = Vector4::new(x as f32 * 0.05,
                                        0f32,
                                        y as f32 * 0.05,
                                        1f32);
 
-                let mat = proj.mul_m(&view.mat).mul_m(&model);
+                let mat = proj * view.mat * model;
 
                 unsafe {
                     gl.UniformMatrix4fv(trans_uniform,
                                         1,
                                         gl::FALSE,
-                                        mat.x.ptr());
+                                        mat.as_ptr());
                     gl.DrawArrays(gl::TRIANGLES, 0, 3);
                 }
 

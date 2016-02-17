@@ -26,7 +26,7 @@ use std::io::Cursor;
 pub use gfx::format::Rgba8;
 use gfx::tex::{CubeFace, Kind, ImageInfoCommon};
 
-use cgmath::{FixedArray, AffineMatrix3, Matrix, Matrix4, Transform, EuclideanVector, Vector, Vector3, Point3, Rotation3};
+use cgmath::{AffineMatrix3, SquareMatrix, Matrix4, Transform, Vector3, Point3};
 
 gfx_vertex_struct!( Vertex {
     pos: [f32; 2] = "a_Pos",
@@ -72,17 +72,17 @@ fn load_cubemap<R, F>(factory: &mut F, data: CubemapData) -> Result<gfx::handle:
         where R: gfx::Resources, F: gfx::Factory<R> {
 
     let mut cube_tex = None;
-    
+
     for &(face, img) in data.as_array().iter() {
         let img = image::load(Cursor::new(img), image::JPEG).unwrap().to_rgba();
-        
+
         let (width, height) = img.dimensions();
 
         match cube_tex {
             Some(_) => {},
             None => {
                 cube_tex = Some(factory.create_texture(
-                        gfx::tex::Kind::Cube(width as u16, height as u16),
+                        Kind::Cube(width as u16, height as u16),
                         1,
                         gfx::SHADER_RESOURCE,
                         Some(gfx::format::ChannelType::Unorm)
@@ -102,7 +102,7 @@ fn load_cubemap<R, F>(factory: &mut F, data: CubemapData) -> Result<gfx::handle:
         };
 
         if let Some(ref ctex) = cube_tex {
-            factory.update_texture::<Rgba8>(&ctex, &img_info, gfx::cast_slice(&img), Some(face));
+            factory.update_texture::<Rgba8>(&ctex, &img_info, gfx::cast_slice(&img), Some(face)).unwrap();
         }
     };
 
@@ -137,7 +137,7 @@ pub fn main() {
         down: &include_bytes!("image/negy.jpg")[..],
         front: &include_bytes!("image/posz.jpg")[..],
         back: &include_bytes!("image/negz.jpg")[..],
-        right: &include_bytes!("image/posx.jpg")[..],        
+        right: &include_bytes!("image/posx.jpg")[..],
         left: &include_bytes!("image/negx.jpg")[..],
     }).unwrap();
 
@@ -156,23 +156,15 @@ pub fn main() {
     let mut data = pipe::Data {
         vbuf: vbuf,
         cubemap: (cubemap, sampler),
-        inv_proj: proj.invert().unwrap().into_fixed(),
-        view: Matrix4::identity().into_fixed(),
+        inv_proj: Matrix4::identity().into(),
+        view: Matrix4::identity().into(),
         out: main_color,
     };
 
-    let mut time_start = precise_time_s();
-    let mut time_end;
-
     'main: loop {
-        time_end = time_start;
-        time_start = precise_time_s();
-
-        let delta = (time_start - time_end) as f32;
-
-        // quit when Esc is pressed.
         for event in window.poll_events() {
             match event {
+                // quit when Esc is pressed.
                 glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
                 glutin::Event::Closed => break 'main,
 
@@ -187,13 +179,13 @@ pub fn main() {
             let z = time.cos();
 
             let view: AffineMatrix3<f32> = Transform::look_at(
-                &Point3::new(x, x / 2.0, z),
-                &Point3::new(0.0, 0.0, 0.0),
-                &Vector3::unit_y(),
+                Point3::new(x, x / 2.0, z),
+                Point3::new(0.0, 0.0, 0.0),
+                Vector3::unit_y(),
             );
 
-            data.inv_proj = proj.into_fixed();
-            data.view = view.mat.into_fixed();
+            data.inv_proj = proj.into();
+            data.view = view.mat.into();
         }
 
         encoder.reset();

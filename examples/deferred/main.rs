@@ -38,8 +38,7 @@ extern crate genmesh;
 extern crate noise;
 
 use rand::Rng;
-use cgmath::FixedArray;
-use cgmath::{Matrix, Matrix4, Point3, Vector3, EuclideanVector};
+use cgmath::{SquareMatrix, Matrix4, Point3, Vector3, EuclideanVector, deg};
 use cgmath::{Transform, AffineMatrix3};
 pub use gfx::format::{Depth, I8Scaled, Rgba8};
 use gfx::traits::{Device, Factory, FactoryExt};
@@ -280,9 +279,9 @@ fn calculate_normal(seed: &Seed, x: f32, y: f32)-> [f32; 3] {
     let dzdy = (perlin2(seed, &[x, s_y1]) - perlin2(seed, &[x, s_y0]))/(s_y1 - s_y0);
 
     // cross gradient vectors to get normal
-    let normal = Vector3::new(1.0, 0.0, dzdx).cross(&Vector3::new(0.0, 1.0, dzdy)).normalize();
+    let normal = Vector3::new(1.0, 0.0, dzdx).cross(Vector3::new(0.0, 1.0, dzdy)).normalize();
 
-    return normal.into_fixed();
+    return normal.into();
 }
 
 fn calculate_color(height: f32) -> [f32; 3] {
@@ -372,7 +371,7 @@ pub fn main() {
     );
 
     let aspect = w as f32 / h as f32;
-    let proj = cgmath::perspective(cgmath::deg(60.0f32), aspect, 5.0, 100.0);
+    let proj = cgmath::perspective(deg(60.0f32), aspect, 5.0, 100.0);
 
     let terrain_scale = Vector3::new(25.0, 25.0, 25.0);
     let (terrain_pso, mut terrain_data, terrain_slice) = {
@@ -403,10 +402,10 @@ pub fn main() {
 
         let data = terrain::Data {
             vbuf: vbuf,
-            model: Matrix4::identity().into_fixed(),
-            view: Matrix4::identity().into_fixed(),
-            proj: proj.into_fixed(),
-            cam_pos: Vector3::new(0.0, 0.0, 0.0).into_fixed(),
+            model: Matrix4::identity().into(),
+            view: Matrix4::identity().into(),
+            proj: proj.into(),
+            cam_pos: Vector3::new(0.0, 0.0, 0.0).into(),
             out_position: gpos.target.clone(),
             out_normal: gnormal.target.clone(),
             out_color: gdiffuse.target.clone(),
@@ -499,10 +498,10 @@ pub fn main() {
 
         let data = light::Data {
             vbuf: light_vbuf.clone(),
-            transform: Matrix4::identity().into_fixed(),
+            transform: Matrix4::identity().into(),
             light_pos_buf: light_pos_buffer.clone(),
             radius: 3.0,
-            cam_pos: Vector3::new(0.0, 0.0, 0.0).into_fixed(),
+            cam_pos: Vector3::new(0.0, 0.0, 0.0).into(),
             frame_res: [w as f32, h as f32],
             tex_pos: (gpos.resource.clone(), sampler.clone()),
             tex_normal: (gnormal.resource.clone(), sampler.clone()),
@@ -522,7 +521,7 @@ pub fn main() {
 
         let data = emitter::Data {
             vbuf: light_vbuf.clone(),
-            transform: Matrix4::identity().into_fixed(),
+            transform: Matrix4::identity().into(),
             light_pos_buf: light_pos_buffer.clone(),
             radius: 0.2,
             out_color: res.target.clone(),
@@ -572,17 +571,17 @@ pub fn main() {
                 Point3::new(x * 32.0, y * 32.0, 16.0)
             };
             let view: AffineMatrix3<f32> = Transform::look_at(
-                &cam_pos,
-                &Point3::new(0.0, 0.0, 0.0),
-                &Vector3::unit_z(),
+                cam_pos,
+                Point3::new(0.0, 0.0, 0.0),
+                Vector3::unit_z(),
             );
-            terrain_data.view = view.mat.into_fixed();
-            terrain_data.cam_pos = cam_pos.into_fixed();
+            terrain_data.view = view.mat.into();
+            terrain_data.cam_pos = cam_pos.into();
 
-            light_data.transform = proj.mul_m(&view.mat).into_fixed();
-            light_data.cam_pos = cam_pos.into_fixed();
+            light_data.transform = (proj * view.mat).into();
+            light_data.cam_pos = cam_pos.into();
 
-            emitter_data.transform = proj.mul_m(&view.mat).into_fixed();
+            emitter_data.transform = (proj * view.mat).into();
         }
 
         // Update light positions
