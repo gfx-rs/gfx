@@ -544,9 +544,9 @@ pub fn make_with_storage(gl: &gl::Gl, desc: &Descriptor, cty: ChannelType) ->
 /// Bind a sampler using a given binding anchor.
 /// Used for GL compatibility profile only. The core profile has sampler objects
 pub fn bind_sampler(gl: &gl::Gl, target: GLenum, info: &SamplerInfo) { unsafe {
-    let (min, mag) = filter_to_gl(info.filtering);
+    let (min, mag) = filter_to_gl(info.filter);
 
-    match info.filtering {
+    match info.filter {
         FilterMethod::Anisotropic(fac) =>
             gl.TexParameterf(target, gl::TEXTURE_MAX_ANISOTROPY_EXT, fac as GLfloat),
         _ => ()
@@ -561,6 +561,8 @@ pub fn bind_sampler(gl: &gl::Gl, target: GLenum, info: &SamplerInfo) { unsafe {
     gl.TexParameteri(target, gl::TEXTURE_WRAP_R, wrap_to_gl(r) as GLint);
 
     gl.TexParameterf(target, gl::TEXTURE_LOD_BIAS, info.lod_bias.into());
+    let border: [f32; 4] = info.border.into();
+    gl.TexParameterfv(target, gl::TEXTURE_BORDER_COLOR, &border[0]);
 
     let (min, max) = info.lod_range;
     gl.TexParameterf(target, gl::TEXTURE_MIN_LOD, min.into());
@@ -767,6 +769,7 @@ fn wrap_to_gl(w: WrapMode) -> GLenum {
         WrapMode::Tile   => gl::REPEAT,
         WrapMode::Mirror => gl::MIRRORED_REPEAT,
         WrapMode::Clamp  => gl::CLAMP_TO_EDGE,
+        WrapMode::Border => gl::CLAMP_TO_BORDER,
     }
 }
 
@@ -784,9 +787,9 @@ pub fn make_sampler(gl: &gl::Gl, info: &SamplerInfo) -> Sampler { unsafe {
     let mut name = 0 as Sampler;
     gl.GenSamplers(1, &mut name);
 
-    let (min, mag) = filter_to_gl(info.filtering);
+    let (min, mag) = filter_to_gl(info.filter);
 
-    match info.filtering {
+    match info.filter{
         FilterMethod::Anisotropic(fac) =>
             gl.SamplerParameterf(name, gl::TEXTURE_MAX_ANISOTROPY_EXT, fac as GLfloat),
         _ => ()
@@ -801,6 +804,8 @@ pub fn make_sampler(gl: &gl::Gl, info: &SamplerInfo) -> Sampler { unsafe {
     gl.SamplerParameteri(name, gl::TEXTURE_WRAP_R, wrap_to_gl(r) as GLint);
 
     gl.SamplerParameterf(name, gl::TEXTURE_LOD_BIAS, info.lod_bias.into());
+    let border: [f32; 4] = info.border.into();
+    gl.SamplerParameterfv(name, gl::TEXTURE_BORDER_COLOR, &border[0]);
 
     let (min, max) = info.lod_range;
     gl.SamplerParameterf(name, gl::TEXTURE_MIN_LOD, min.into());

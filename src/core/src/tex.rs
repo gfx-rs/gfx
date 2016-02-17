@@ -236,6 +236,8 @@ pub enum WrapMode {
     Mirror,
     /// Clamp the texture to the value at `0.0` or `1.0` respectively.
     Clamp,
+    /// Use border color.
+    Border,
 }
 
 /// A wrapper for the LOD level of a texture.
@@ -254,35 +256,61 @@ impl Into<f32> for Lod {
     }
 }
 
+/// A wrapper for the 8bpp RGBA color, encoded as u32.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
+pub struct PackedColor(pub u32);
+
+impl From<[f32; 4]> for PackedColor {
+    fn from(c: [f32; 4]) -> PackedColor {
+        PackedColor(c.iter().rev().fold(0, |u, &c| {
+            (u<<8) + (c * 255.0 + 0.5) as u32
+        }))
+    }
+}
+
+impl Into<[f32; 4]> for PackedColor {
+    fn into(self) -> [f32; 4] {
+        let mut out = [0.0; 4];
+        for i in 0 .. 4 {
+            let byte = (self.0 >> (i<<3)) & 0xFF;
+            out[i] = (byte as f32 + 0.5) / 255.0;
+        }
+        out
+    }
+}
+
 /// Specifies how to sample from a texture.
 // TODO: document the details of sampling.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct SamplerInfo {
     /// Filter method to use.
-    pub filtering: FilterMethod,
+    pub filter: FilterMethod,
     /// Wrapping mode for each of the U, V, and W axis (S, T, and R in OpenGL
-    /// speak)
+    /// speak).
     pub wrap_mode: (WrapMode, WrapMode, WrapMode),
     /// This bias is added to every computed mipmap level (N + lod_bias). For
     /// example, if it would select mipmap level 2 and lod_bias is 1, it will
     /// use mipmap level 3.
     pub lod_bias: Lod,
-    /// This range is used to clamp LOD level used for sampling
+    /// This range is used to clamp LOD level used for sampling.
     pub lod_range: (Lod, Lod),
-    /// comparison mode, used primary for a shadow map
+    /// Comparison mode, used primary for a shadow map.
     pub comparison: Option<state::Comparison>,
+    /// Border color is used when one of the wrap modes is set to border.
+    pub border: PackedColor,
 }
 
 impl SamplerInfo {
     /// Create a new sampler description with a given filter method and wrapping mode, using no LOD
     /// modifications.
-    pub fn new(filtering: FilterMethod, wrap: WrapMode) -> SamplerInfo {
+    pub fn new(filter: FilterMethod, wrap: WrapMode) -> SamplerInfo {
         SamplerInfo {
-            filtering: filtering,
+            filter: filter,
             wrap_mode: (wrap, wrap, wrap),
             lod_bias: Lod(0),
             lod_range: (Lod(-8000), Lod(8000)),
             comparison: None,
+            border: PackedColor(0),
         }
     }
 }

@@ -23,7 +23,6 @@ use gfx_core::handle as h;
 use gfx_core::handle::Producer;
 use {Resources as R, Share, Texture, Pipeline, Program, Shader};
 use command::CommandBuffer;
-use data::{map_format, map_surface, map_anti_alias, map_bind};
 use native;
 use mirror::{reflect_shader, reflect_program};
 
@@ -92,6 +91,8 @@ impl Factory {
     fn create_buffer_internal(&self, info: f::BufferInfo, raw_data: Option<*const c_void>)
                               -> Result<h::RawBuffer<R>, f::BufferError> {
         use winapi::d3d11::*;
+        use data::map_bind;
+
         let (usage, cpu) = match info.usage {
             f::BufferUsage::GpuOnly => (D3D11_USAGE_DEFAULT, D3D11_CPU_ACCESS_FLAG(0)),
             f::BufferUsage::Const   => (D3D11_USAGE_IMMUTABLE, D3D11_CPU_ACCESS_FLAG(0)),
@@ -119,6 +120,7 @@ impl Factory {
             SysMemPitch: 0,
             SysMemSlicePitch: 0,
         };
+
         let mut buf = native::Buffer(ptr::null_mut());
         let hr = unsafe {
             (*self.share.device).CreateBuffer(&desc, &sub, &mut buf.0)
@@ -158,6 +160,8 @@ impl Factory {
                          tp: TextureParam, misc: winapi::D3D11_RESOURCE_MISC_FLAG) -> (winapi::HRESULT, Texture)
     {
         use winapi::UINT;
+        use data::map_anti_alias;
+
         let native_desc = winapi::D3D11_TEXTURE2D_DESC {
             Width: size[0] as UINT,
             Height: size[1] as UINT,
@@ -208,6 +212,8 @@ impl Factory {
                                -> Result<h::RawTexture<R>, core::tex::Error>
     {
         use gfx_core::tex::{AaMode, Error, Kind};
+        use data::{map_bind, map_surface};
+
         let tparam = TextureParam {
             levels: desc.levels as winapi::UINT,
             format: match map_surface(desc.format) {
@@ -249,6 +255,7 @@ impl Factory {
             Kind::CubeArray(w, d) =>
                 self.create_texture_2d([w,w], 6*d, AaMode::Single, tparam, misc | winapi::D3D11_RESOURCE_MISC_TEXTURECUBE),
         };
+
         if winapi::SUCCEEDED(hr) {
             Ok(self.share.handles.borrow_mut().make_texture(texture, desc))
         }else {
@@ -379,6 +386,7 @@ impl core::Factory<R> for Factory {
         use std::mem; //temporary
         use winapi::d3dcommon::*;
         use gfx_core::Primitive::*;
+        use data::map_format;
         use state;
 
         let mut layouts = Vec::new();
@@ -459,9 +467,9 @@ impl core::Factory<R> for Factory {
         self.create_texture_internal(desc, Some((data, channel, mipmap)))
     }
 
-    fn view_buffer_as_shader_resource_raw(&mut self, hbuf: &h::RawBuffer<R>)
+    fn view_buffer_as_shader_resource_raw(&mut self, _hbuf: &h::RawBuffer<R>)
                                       -> Result<h::RawShaderResourceView<R>, f::ResourceViewError> {
-        Ok(self.share.handles.borrow_mut().make_buffer_srv(native::Srv(ptr::null_mut()), hbuf)) //TODO
+        Err(f::ResourceViewError::Unsupported) //TODO
     }
 
     fn view_buffer_as_unordered_access_raw(&mut self, _hbuf: &h::RawBuffer<R>)
@@ -473,6 +481,7 @@ impl core::Factory<R> for Factory {
                                        -> Result<h::RawShaderResourceView<R>, f::ResourceViewError> {
         use winapi::UINT;
         use gfx_core::tex::{AaMode, Kind};
+        use data::map_format;
 
         let (dim, layers, has_levels) = match htex.get_info().kind {
             Kind::D1(_) =>
@@ -527,6 +536,7 @@ impl core::Factory<R> for Factory {
                                          -> Result<h::RawRenderTargetView<R>, f::TargetViewError> {
         use winapi::UINT;
         use gfx_core::tex::{AaMode, Kind};
+        use data::map_format;
 
         let kind = htex.get_info().kind;
         let level = desc.level as UINT;
@@ -596,7 +606,36 @@ impl core::Factory<R> for Factory {
     }
 
     fn create_sampler(&mut self, info: core::tex::SamplerInfo) -> h::Sampler<R> {
-        self.share.handles.borrow_mut().make_sampler((), info)
+        use gfx_core::tex::FilterMethod;
+        use data::{FilterOp, map_function, map_filter, map_wrap};
+
+        let op = if info.comparison.is_some() {FilterOp::Comparison} else {FilterOp::Product};
+        let native_desc = winapi::D3D11_SAMPLER_DESC {
+            Filter: map_filter(info.filter, op),
+            AddressU: map_wrap(info.wrap_mode.0),
+            AddressV: map_wrap(info.wrap_mode.1),
+            AddressW: map_wrap(info.wrap_mode.2),
+            MipLODBias: info.lod_bias.into(),
+            MaxAnisotropy: match info.filter {
+                FilterMethod::Anisotropic(max) => max as winapi::UINT,
+                _ => 0,
+            },
+            ComparisonFunc: map_function(info.comparison.unwrap_or(core::state::Comparison::Always)),
+            BorderColor: info.border.into(),
+            MinLOD: info.lod_range.0.into(),
+            MaxLOD: info.lod_range.1.into(),
+        };
+
+        let mut raw_sampler = ptr::null_mut();
+        let hr = unsafe {
+            (*self.share.device).CreateSamplerState(&native_desc, &mut raw_sampler)
+        };
+        if winapi::SUCCEEDED(hr) {
+            self.share.handles.borrow_mut().make_sampler(native::Sampler(raw_sampler), info)
+        }else {
+            error!("Unable to create a sampler with desc {:?}, error {:x}", info, hr);
+            unimplemented!()
+        }
     }
 
     fn update_buffer_raw(&mut self, _buffer: &h::RawBuffer<R>, _data: &[u8],

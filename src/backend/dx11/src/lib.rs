@@ -47,6 +47,10 @@ pub mod native {
     #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
     pub struct Srv(pub *mut ID3D11ShaderResourceView);
     unsafe impl Send for Srv {}
+
+    #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+    pub struct Sampler(pub *mut ID3D11SamplerState);
+    unsafe impl Send for Sampler {}
 }
 
 use std::cell::RefCell;
@@ -118,7 +122,7 @@ impl gfx_core::Resources for Resources {
     type DepthStencilView    = native::Dsv;
     type ShaderResourceView  = native::Srv;
     type UnorderedAccessView = ();
-    type Sampler             = ();
+    type Sampler             = native::Sampler;
     type Fence               = ();
 }
 

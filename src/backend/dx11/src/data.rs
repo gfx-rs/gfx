@@ -15,7 +15,22 @@
 use winapi::*;
 use gfx_core::factory::Bind;
 use gfx_core::format::{Format, SurfaceType};
-use gfx_core::tex::AaMode;
+use gfx_core::state::Comparison;
+use gfx_core::tex::{AaMode, FilterMethod, WrapMode};
+
+
+pub fn map_function(fun: Comparison) -> D3D11_COMPARISON_FUNC {
+    match fun {
+        Comparison::Never => D3D11_COMPARISON_NEVER,
+        Comparison::Less => D3D11_COMPARISON_LESS,
+        Comparison::LessEqual => D3D11_COMPARISON_LESS_EQUAL,
+        Comparison::Equal => D3D11_COMPARISON_EQUAL,
+        Comparison::GreaterEqual => D3D11_COMPARISON_GREATER_EQUAL,
+        Comparison::Greater => D3D11_COMPARISON_GREATER,
+        Comparison::NotEqual => D3D11_COMPARISON_NOT_EQUAL,
+        Comparison::Always => D3D11_COMPARISON_ALWAYS,
+    }
+}
 
 pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
     use gfx_core::format::SurfaceType::*;
@@ -162,4 +177,40 @@ pub fn map_bind(bind: Bind) -> D3D11_BIND_FLAG {
         flags = flags | D3D11_BIND_RENDER_TARGET;
     }
     flags
+}
+
+pub fn map_wrap(wrap: WrapMode) -> D3D11_TEXTURE_ADDRESS_MODE {
+    match wrap {
+        WrapMode::Tile   => D3D11_TEXTURE_ADDRESS_WRAP,
+        WrapMode::Mirror => D3D11_TEXTURE_ADDRESS_MIRROR,
+        WrapMode::Clamp  => D3D11_TEXTURE_ADDRESS_CLAMP,
+        WrapMode::Border => D3D11_TEXTURE_ADDRESS_BORDER,
+    }
+}
+
+pub enum FilterOp {
+    Product,
+    Comparison,
+    //Maximum, TODO
+    //Minimum, TODO
+}
+
+pub fn map_filter(filter: FilterMethod, op: FilterOp) -> D3D11_FILTER {
+    use gfx_core::tex::FilterMethod::*;
+    match op {
+        FilterOp::Product => match filter {
+            Scale          => D3D11_FILTER_MIN_MAG_MIP_POINT,
+            Mipmap         => D3D11_FILTER_MIN_MAG_POINT_MIP_LINEAR,
+            Bilinear       => D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT,
+            Trilinear      => D3D11_FILTER_MIN_MAG_MIP_LINEAR,
+            Anisotropic(_) => D3D11_FILTER_ANISOTROPIC,
+        },
+        FilterOp::Comparison => match filter {
+            Scale          => D3D11_FILTER_COMPARISON_MIN_MAG_MIP_POINT,
+            Mipmap         => D3D11_FILTER_COMPARISON_MIN_MAG_POINT_MIP_LINEAR,
+            Bilinear       => D3D11_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT,
+            Trilinear      => D3D11_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR,
+            Anisotropic(_) => D3D11_FILTER_COMPARISON_ANISOTROPIC,
+        },
+    }
 }

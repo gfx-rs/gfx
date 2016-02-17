@@ -15,6 +15,7 @@
 use std::ptr;
 use winapi::*;
 use gfx_core::{pso, state};
+use data::map_function;
 
 pub fn make_rasterizer(device: *mut ID3D11Device, rast: &state::Rasterizer, use_scissor: bool)
                        -> *const ID3D11RasterizerState {
@@ -62,20 +63,6 @@ pub fn make_rasterizer(device: *mut ID3D11Device, rast: &state::Rasterizer, use_
         error!("Failed to create rasterizer state {:?}", rast);
     }
     handle as *const _
-}
-
-fn map_function(fun: state::Comparison) -> D3D11_COMPARISON_FUNC {
-    use gfx_core::state::Comparison::*;
-    match fun {
-        Never => D3D11_COMPARISON_NEVER,
-        Less => D3D11_COMPARISON_LESS,
-        LessEqual => D3D11_COMPARISON_LESS_EQUAL,
-        Equal => D3D11_COMPARISON_EQUAL,
-        GreaterEqual => D3D11_COMPARISON_GREATER_EQUAL,
-        Greater => D3D11_COMPARISON_GREATER,
-        NotEqual => D3D11_COMPARISON_NOT_EQUAL,
-        Always => D3D11_COMPARISON_ALWAYS,
-    }
 }
 
 fn map_stencil_op(oper: state::StencilOp) -> D3D11_STENCIL_OP {
