@@ -73,7 +73,7 @@ path = "examples/mipmap/main.rs"
 [dev_dependencies]
 env_logger = "*"
 log = "*"
-cgmath = "0.3"
+cgmath = "0.7"
 glutin = ">=0.4.2"
 glfw = "0.3"
 gfx_gl = "0.1"
