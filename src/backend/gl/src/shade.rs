@@ -264,7 +264,7 @@ fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
     }).collect()
 }
 
-fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
+fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program, usage: s::Usage)
                     -> (Vec<s::ConstVar>, Vec<s::TextureVar>, Vec<s::SamplerVar>) {
     let mut uniforms = Vec::new();
     let mut textures = Vec::new();
@@ -324,6 +324,7 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
                     slot: slot as d::ResourceViewSlot,
                     base_type: base,
                     ty: tex_type,
+                    usage: usage,
                 });
                 if tex_type.can_sample() {
                     samplers.push(s::SamplerVar {
@@ -357,7 +358,7 @@ pub fn get_program_log(gl: &gl::Gl, name: super::Program) -> String {
     }
 }
 
-pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities, shaders: &[super::Shader])
+pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities, shaders: &[super::Shader], usage: s::Usage)
                       -> Result<(::Program, s::ProgramInfo), s::CreateProgramError> {
     let name = unsafe { gl.CreateProgram() };
     for &sh in shaders {
@@ -373,7 +374,7 @@ pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities, shaders: &[super::Sha
         if !log.is_empty() {
             warn!("\tLog: {}", log);
         }
-        let (uniforms, textures, samplers) = query_parameters(gl, caps, name);
+        let (uniforms, textures, samplers) = query_parameters(gl, caps, name, usage);
         let info = s::ProgramInfo {
             vertex_attributes: query_attributes(gl, name),
             globals: uniforms,

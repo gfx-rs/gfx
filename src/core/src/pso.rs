@@ -184,7 +184,7 @@ impl<R: Resources> ConstantBufferSet<R> {
 #[derive(Copy, Clone, Debug)]
 pub struct ResourceViewSet<R: Resources>(
     /// Array of SRVs
-    pub [Option<R::ShaderResourceView>; MAX_RESOURCE_VIEWS],
+    pub [Option<(R::ShaderResourceView, Usage)>; MAX_RESOURCE_VIEWS],
 );
 
 impl<R: Resources> ResourceViewSet<R> {

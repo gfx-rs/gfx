@@ -115,8 +115,10 @@ impl Factory {
 
     pub fn create_program_raw(&mut self, shader_set: &d::ShaderSet<R>)
                               -> Result<(gl::types::GLuint, d::shade::ProgramInfo), d::shade::CreateProgramError> {
+        use shade::create_program;
         let frame_handles = &mut self.frame_handles;
         let mut shaders = [0; 3];
+        let usage = shader_set.get_usage();
         let shader_slice = match shader_set {
             &d::ShaderSet::Simple(ref vs, ref ps) => {
                 shaders[0] = *vs.reference(frame_handles);
@@ -130,9 +132,7 @@ impl Factory {
                 &shaders[..3]
             },
         };
-        ::shade::create_program(&self.share.context,
-                                &self.share.capabilities,
-                                shader_slice)
+        create_program(&self.share.context, &self.share.capabilities, shader_slice, usage)
     }
 
     fn view_texture_as_target(&mut self, htex: &handle::RawTexture<R>, level: Level, layer: Option<Layer>)

@@ -222,7 +222,7 @@ pub struct Share {
 /// Temporary data stored between different gfx calls that
 /// can not be separated on the GL backend.
 struct Temp {
-    resource_views: [Option<ResourceView>; d::MAX_RESOURCE_VIEWS],
+    resource_views: [Option<(ResourceView, d::shade::Usage)>; d::MAX_RESOURCE_VIEWS],
     color: s::Color,
 }
 
@@ -451,7 +451,7 @@ impl Device {
                 let gl = &self.share.context;
                 self.temp.resource_views = srvs.0;
                 for i in 0 .. d::MAX_RESOURCE_VIEWS {
-                    if let Some(view) = srvs.0[i] {
+                    if let Some((view, _usage)) = srvs.0[i] {
                         unsafe {
                             gl.ActiveTexture(gl::TEXTURE0 + i as gl::types::GLenum);
                             gl.BindTexture(view.bind, view.object);
@@ -475,7 +475,7 @@ impl Device {
                         } else {
                             assert!(d::MAX_SAMPLERS <= d::MAX_RESOURCE_VIEWS);
                             debug_assert_eq!(s.object, 0);
-                            if let Some(ref view) = self.temp.resource_views[i] {
+                            if let Some((ref view, _)) = self.temp.resource_views[i] {
                                 tex::bind_sampler(gl, view.bind, &s.info);
                             }else {
                                 error!("Trying to bind a sampler to slot {}, when sampler objects are not supported, and no texture is bound there", i);

@@ -114,6 +114,9 @@ pub enum Stage {
     Pixel,
 }
 
+/// A constant static array of all shader stages.
+pub const STAGES: [Stage; 3] = [Stage::Vertex, Stage::Geometry, Stage::Pixel];
+
 // Describing program data
 
 /// Location of a parameter in the program.
@@ -309,7 +312,7 @@ pub struct ConstantBufferVar {
     pub slot: ConstantBufferSlot,
     /// Size (in bytes) of this buffer's data.
     pub size: usize,
-    /// What program stage this buffer can be used in.
+    /// What program stage this buffer is used in.
     pub usage: Usage,
 }
 
@@ -324,6 +327,8 @@ pub struct TextureVar {
     pub base_type: BaseType,
     /// Type of this texture.
     pub ty: TextureType,
+    /// What program stage this texture is used in.
+    pub usage: Usage,
 }
 
 /// Unordered access shader parameter.

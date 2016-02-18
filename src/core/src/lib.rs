@@ -95,6 +95,16 @@ pub enum ShaderSet<R: Resources> {
     //TODO: Tessellated, TessellatedGeometry, TransformFeedback
 }
 
+impl<R: Resources> ShaderSet<R> {
+    /// Return the aggregated stage usage for the set.
+    pub fn get_usage(&self) -> shade::Usage {
+        match self {
+            &ShaderSet::Simple(..) => shade::VERTEX | shade::PIXEL,
+            &ShaderSet::Geometry(..) => shade::VERTEX | shade::GEOMETRY | shade::PIXEL,
+        }
+    }
+}
+
 /// Features that the device supports.
 #[derive(Copy, Clone, Debug)]
 #[allow(missing_docs)] // pretty self-explanatory fields!

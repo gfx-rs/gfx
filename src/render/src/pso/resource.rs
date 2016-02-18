@@ -25,7 +25,7 @@ use super::{DataLink, DataBind, RawDataSet};
 /// but can also be a buffer.
 /// - init: `&str` = name of the resource
 /// - data: `ShaderResourceView<T>`
-pub struct ShaderResource<T>(Option<ResourceViewSlot>, PhantomData<T>);
+pub struct ShaderResource<T>(Option<(ResourceViewSlot, shade::Usage)>, PhantomData<T>);
 /// Unordered access component (UAV). A writable resource (texture/buffer)
 /// with no defined access order across simultaneously executing shaders.
 /// Supported on DX10 and higher.
@@ -56,7 +56,7 @@ impl<'a, T> DataLink<'a> for ShaderResource<T> {
     fn link_resource_view(&mut self, var: &shade::TextureVar, init: &Self::Init)
                           -> Option<Result<(), Format>> {
         if *init == var.name {
-            self.0 = Some(var.slot);
+            self.0 = Some((var.slot, var.usage));
             Some(Ok(())) //TODO: check format
         }else {
             None
@@ -67,8 +67,8 @@ impl<'a, T> DataLink<'a> for ShaderResource<T> {
 impl<R: Resources, T> DataBind<R> for ShaderResource<T> {
     type Data = handle::ShaderResourceView<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
-        if let Some(slot) = self.0 {
-            let value = Some(man.ref_srv(data.raw()).clone());
+        if let Some((slot, usage)) = self.0 {
+            let value = Some((man.ref_srv(data.raw()).clone(), usage));
             out.resource_views.0[slot as usize] = value;
         }
     }

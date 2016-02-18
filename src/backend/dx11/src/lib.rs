@@ -232,7 +232,8 @@ impl Device {
     fn process(&mut self, command: &command::Command, _data_buf: &gfx_core::draw::DataBuffer) {
         use gfx_core::shade::Stage;
         use command::Command::*;
-        let max_cbs = gfx_core::MAX_CONSTANT_BUFFERS as winapi::UINT;
+        let max_cb  = gfx_core::MAX_CONSTANT_BUFFERS as winapi::UINT;
+        let max_srv = gfx_core::MAX_RESOURCE_VIEWS   as winapi::UINT;
         match *command {
             BindProgram(ref prog) => unsafe {
                 (*self.context).VSSetShader(prog.vs, ptr::null_mut(), 0);
@@ -251,13 +252,24 @@ impl Device {
             },
             BindConstantBuffers(stage, ref buffers) => match stage {
                 Stage::Vertex => unsafe {
-                    (*self.context).VSSetConstantBuffers(0, max_cbs, &buffers[0].0);
+                    (*self.context).VSSetConstantBuffers(0, max_cb, &buffers[0].0);
                 },
                 Stage::Geometry => unsafe {
-                    (*self.context).GSSetConstantBuffers(0, max_cbs, &buffers[0].0);
+                    (*self.context).GSSetConstantBuffers(0, max_cb, &buffers[0].0);
                 },
                 Stage::Pixel => unsafe {
-                    (*self.context).PSSetConstantBuffers(0, max_cbs, &buffers[0].0);
+                    (*self.context).PSSetConstantBuffers(0, max_cb, &buffers[0].0);
+                },
+            },
+            BindShaderResources(stage, ref views) => match stage {
+                Stage::Vertex => unsafe {
+                    (*self.context).VSSetShaderResources(0, max_srv, &views[0].0);
+                },
+                Stage::Geometry => unsafe {
+                    (*self.context).GSSetShaderResources(0, max_srv, &views[0].0);
+                },
+                Stage::Pixel => unsafe {
+                    (*self.context).PSSetShaderResources(0, max_srv, &views[0].0);
                 },
             },
             BindPixelTargets(ref colors, ds) => unsafe {
