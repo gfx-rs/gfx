@@ -82,7 +82,7 @@ impl Texture {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Shader {
     object: *mut winapi::ID3D11DeviceChild,
-    //reflection: *const winapi::ID3D11ShaderReflection,
+    reflection: (), //*const winapi::ID3D11ShaderReflection
     code_hash: u64,
 }
 unsafe impl Send for Shader {}

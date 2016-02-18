@@ -17,7 +17,6 @@
 //use dxguid;
 //use winapi;
 use gfx_core::shade;
-use Program;
 
 
 pub fn reflect_shader(_: &[u8]) -> () {}
@@ -34,17 +33,30 @@ pub fn reflect_shader(code: &[u8]) -> *const winapi::ID3D11ShaderReflection {
     reflection
 }*/
 
-
-pub fn reflect_program(_prog: &Program) -> shade::ProgramInfo {
-    let info = shade::ProgramInfo {
-        vertex_attributes: Vec::new(),
-        globals: Vec::new(),
-        constant_buffers: Vec::new(),
-        textures: Vec::new(),
-        unordereds: Vec::new(),
-        samplers: Vec::new(),
-        outputs: Vec::new(),
-        knows_outputs: true,
+pub fn populate_info(_info: &mut shade::ProgramInfo, _stage: shade::Stage, _reflection: ()) {
+    /*TODO: blocked by D3DReflect
+    use std::mem;
+    let usage = stage.into();
+    let shader_desc = unsafe {
+        let mut desc = mem::zeroed();
+        reflection->GetDesc(&mut desc);
+        desc
     };
-    info
+    for i in 0 .. desc.ConstantBuffers {
+        let cb = reflection->GetConstantBufferByIndex(i);
+        let desc = unsafe {
+            let mut desc = mem::zeroed();
+            cb->GetDesc(&mut desc);
+            desc
+        };
+        let var = shade::ConstantBufferVar {
+            name: desc.Name,
+            slot: i,
+            size: desc.Size,
+            usage: usage,
+        };
+        //TODO: search for the existing one
+        info.constant_buffers.push(var);
+    }
+    */
 }

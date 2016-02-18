@@ -24,7 +24,6 @@ use gfx_core::handle::Producer;
 use {Resources as R, Share, Texture, Pipeline, Program, Shader};
 use command::CommandBuffer;
 use native;
-use mirror::{reflect_shader, reflect_program};
 
 
 #[derive(Copy, Clone)]
@@ -297,6 +296,7 @@ impl core::Factory<R> for Factory {
                      -> Result<h::Shader<R>, core::shade::CreateShaderError> {
         use winapi::ID3D11DeviceChild;
         use gfx_core::shade::{CreateShaderError, Stage};
+        use mirror::reflect_shader;
 
         let dev = self.share.device;
         let len = code.len() as winapi::SIZE_T;
@@ -326,7 +326,7 @@ impl core::Factory<R> for Factory {
         };
 
         if winapi::SUCCEEDED(hr) {
-            let _reflection = reflect_shader(code);
+            let reflection = reflect_shader(code);
             let hash = {
                 use std::hash::{Hash, Hasher, SipHasher};
                 let mut hasher = SipHasher::new();
@@ -338,7 +338,7 @@ impl core::Factory<R> for Factory {
             }
             let shader = Shader {
                 object: object,
-                //reflection: reflection,
+                reflection: reflection,
                 code_hash: hash,
             };
             Ok(self.share.handles.borrow_mut().make_shader(shader))
@@ -350,34 +350,47 @@ impl core::Factory<R> for Factory {
     fn create_program(&mut self, shader_set: &core::ShaderSet<R>)
                       -> Result<h::Program<R>, core::shade::CreateProgramError> {
         use winapi::{ID3D11VertexShader, ID3D11GeometryShader, ID3D11PixelShader};
+        use gfx_core::shade::{ProgramInfo, Stage};
+        use mirror::populate_info;
 
+        let mut info = ProgramInfo {
+            vertex_attributes: Vec::new(),
+            globals: Vec::new(),
+            constant_buffers: Vec::new(),
+            textures: Vec::new(),
+            unordereds: Vec::new(),
+            samplers: Vec::new(),
+            outputs: Vec::new(),
+            knows_outputs: true,
+        };
         let fh = &mut self.frame_handles;
         let prog = match shader_set {
             &core::ShaderSet::Simple(ref vs, ref ps) => {
-                let vs_ = vs.reference(fh);
-                let (vs, ps) = (vs_.object, ps.reference(fh).object);
-                unsafe { (*vs).AddRef(); (*ps).AddRef(); }
+                let (vs, ps) = (vs.reference(fh), ps.reference(fh));
+                populate_info(&mut info, Stage::Vertex, vs.reflection);
+                populate_info(&mut info, Stage::Pixel,  ps.reflection);
+                unsafe { (*vs.object).AddRef(); (*ps.object).AddRef(); }
                 Program {
-                    vs: vs as *mut ID3D11VertexShader,
+                    vs: vs.object as *mut ID3D11VertexShader,
                     gs: ptr::null_mut(),
-                    ps: ps as *mut ID3D11PixelShader,
-                    vs_hash: vs_.code_hash,
+                    ps: ps.object as *mut ID3D11PixelShader,
+                    vs_hash: vs.code_hash,
                 }
             },
             &core::ShaderSet::Geometry(ref vs, ref gs, ref ps) => {
-                let vs_ = vs.reference(fh);
-                let (vs, gs, ps) = (vs_.object, gs.reference(fh).object, ps.reference(fh).object);
-                unsafe { (*vs).AddRef(); (*gs).AddRef(); (*ps).AddRef(); }
+                let (vs, gs, ps) = (vs.reference(fh), gs.reference(fh), ps.reference(fh));
+                populate_info(&mut info, Stage::Vertex,   vs.reflection);
+                populate_info(&mut info, Stage::Geometry, gs.reflection);
+                populate_info(&mut info, Stage::Pixel,    ps.reflection);
+                unsafe { (*vs.object).AddRef(); (*gs.object).AddRef(); (*ps.object).AddRef(); }
                 Program {
-                    vs: vs as *mut ID3D11VertexShader,
-                    gs: vs as *mut ID3D11GeometryShader,
-                    ps: ps as *mut ID3D11PixelShader,
-                    vs_hash: vs_.code_hash,
+                    vs: vs.object as *mut ID3D11VertexShader,
+                    gs: vs.object as *mut ID3D11GeometryShader,
+                    ps: ps.object as *mut ID3D11PixelShader,
+                    vs_hash: vs.code_hash,
                 }
             },
         };
-
-        let info = reflect_program(&prog);
         Ok(self.share.handles.borrow_mut().make_program(prog, info))
     }
 
