@@ -469,7 +469,7 @@ impl Device {
             Command::BindSamplers(ss) => {
                 let gl = &self.share.context;
                 for i in 0 .. d::MAX_SAMPLERS {
-                    if let Some(s) = ss.0[i] {
+                    if let Some((s, _usage)) = ss.0[i] {
                         if self.share.capabilities.sampler_objects_supported {
                             unsafe { gl.BindSampler(i as gl::types::GLenum, s.object) };
                         } else {

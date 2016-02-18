@@ -212,7 +212,7 @@ impl<R: Resources> UnorderedViewSet<R> {
 #[derive(Copy, Clone, Debug)]
 pub struct SamplerSet<R: Resources>(
     /// Array of samplers
-    pub [Option<R::Sampler>; MAX_SAMPLERS]
+    pub [Option<(R::Sampler, Usage)>; MAX_SAMPLERS]
 );
 
 impl<R: Resources> SamplerSet<R> {

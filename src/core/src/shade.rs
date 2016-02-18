@@ -349,6 +349,8 @@ pub struct SamplerVar {
     pub slot: SamplerSlot,
     /// Type of this sampler.
     pub ty: SamplerType,
+    /// What program stage this texture is used in.
+    pub usage: Usage,
 }
 
 /// Target output variable.

@@ -331,6 +331,7 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program, u
                         name: real_name,
                         slot: slot as d::SamplerSlot,
                         ty: samp_type,
+                        usage: usage,
                     });
                 }
             },

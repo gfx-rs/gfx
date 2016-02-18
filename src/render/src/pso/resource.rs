@@ -35,7 +35,7 @@ pub struct UnorderedAccess<T>(Option<UnorderedViewSlot>, PhantomData<T>);
 /// Sampler component.
 /// - init: `&str` = name of the sampler
 /// - data: `Sampler`
-pub struct Sampler(Option<SamplerSlot>);
+pub struct Sampler(Option<(SamplerSlot, shade::Usage)>);
 /// A convenience type for a texture paired with a sampler.
 /// It only makes sense for DX9 class hardware, where every texture by default
 /// is bundled with a sampler, hence they are represented by the same name.
@@ -113,7 +113,7 @@ impl<'a> DataLink<'a> for Sampler {
     }
     fn link_sampler(&mut self, var: &shade::SamplerVar, init: &Self::Init) -> Option<()> {
         if *init == var.name {
-            self.0 = Some(var.slot);
+            self.0 = Some((var.slot, var.usage));
             Some(())
         }else {
             None
@@ -124,8 +124,8 @@ impl<'a> DataLink<'a> for Sampler {
 impl<R: Resources> DataBind<R> for Sampler {
     type Data = handle::Sampler<R>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
-        if let Some(slot) = self.0 {
-            let value = Some(man.ref_sampler(data).clone());
+        if let Some((slot, usage)) = self.0 {
+            let value = Some((man.ref_sampler(data).clone(), usage));
             out.samplers.0[slot as usize] = value;
         }
     }

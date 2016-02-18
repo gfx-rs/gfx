@@ -21,7 +21,7 @@ use winapi::{FLOAT, INT, UINT, UINT8, DXGI_FORMAT,
              ID3D11RasterizerState, ID3D11DepthStencilState, ID3D11BlendState};
 use gfx_core::{draw, pso, shade, state, target, tex};
 use gfx_core::{IndexType, VertexCount};
-use gfx_core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS, MAX_RESOURCE_VIEWS, MAX_COLOR_TARGETS};
+use gfx_core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS, MAX_RESOURCE_VIEWS, MAX_SAMPLERS, MAX_COLOR_TARGETS};
 use {native, Resources, InputLayout, Texture, Pipeline, Program};
 
 ///Serialized device command.
@@ -34,6 +34,7 @@ pub enum Command {
     BindVertexBuffers([native::Buffer; MAX_VERTEX_ATTRIBUTES], [UINT; MAX_VERTEX_ATTRIBUTES], [UINT; MAX_VERTEX_ATTRIBUTES]),
     BindConstantBuffers(shade::Stage, [native::Buffer; MAX_CONSTANT_BUFFERS]),
     BindShaderResources(shade::Stage, [native::Srv; MAX_RESOURCE_VIEWS]),
+    BindSamplers(shade::Stage, [native::Sampler; MAX_SAMPLERS]),
     BindPixelTargets([native::Rtv; MAX_COLOR_TARGETS], native::Dsv),
     SetPrimitive(D3D11_PRIMITIVE_TOPOLOGY),
     SetViewport(D3D11_VIEWPORT),
@@ -186,8 +187,24 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
         unimplemented!()
     }
 
-    fn bind_samplers(&mut self, _: pso::SamplerSet<Resources>) {
-        unimplemented!()
+    fn bind_samplers(&mut self, ss: pso::SamplerSet<Resources>) {
+        for &stage in shade::STAGES.iter() {
+            let mut samplers = [native::Sampler(ptr::null_mut()); MAX_SAMPLERS];
+            let mask = stage.into();
+            let mut count = 0;
+            for i in 0 .. MAX_SAMPLERS {
+                match ss.0[i] {
+                    Some((sampler, usage)) if usage.contains(mask) => {
+                        samplers[i] = sampler;
+                        count += 1;
+                    },
+                    _ => ()
+                }
+            }
+            if count != 0 {
+                self.buf.push(Command::BindSamplers(stage, samplers));
+            }
+        }
     }
 
     fn bind_pixel_targets(&mut self, pts: pso::PixelTargetSet<Resources>) {

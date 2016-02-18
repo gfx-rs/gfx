@@ -234,6 +234,7 @@ impl Device {
         use command::Command::*;
         let max_cb  = gfx_core::MAX_CONSTANT_BUFFERS as winapi::UINT;
         let max_srv = gfx_core::MAX_RESOURCE_VIEWS   as winapi::UINT;
+        let max_sm  = gfx_core::MAX_SAMPLERS         as winapi::UINT;
         match *command {
             BindProgram(ref prog) => unsafe {
                 (*self.context).VSSetShader(prog.vs, ptr::null_mut(), 0);
@@ -270,6 +271,17 @@ impl Device {
                 },
                 Stage::Pixel => unsafe {
                     (*self.context).PSSetShaderResources(0, max_srv, &views[0].0);
+                },
+            },
+            BindSamplers(stage, ref samplers) => match stage {
+                Stage::Vertex => unsafe {
+                    (*self.context).VSSetSamplers(0, max_sm, &samplers[0].0);
+                },
+                Stage::Geometry => unsafe {
+                    (*self.context).GSSetSamplers(0, max_sm, &samplers[0].0);
+                },
+                Stage::Pixel => unsafe {
+                    (*self.context).PSSetSamplers(0, max_sm, &samplers[0].0);
                 },
             },
             BindPixelTargets(ref colors, ds) => unsafe {
