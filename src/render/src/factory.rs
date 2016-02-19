@@ -116,16 +116,23 @@ pub trait FactoryExt<R: Resources>: Factory<R> + Sized {
                              primitive: Primitive, rasterizer: Rasterizer, init: I)
                              -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError>
     {
-        let program = match self.create_program(shaders) {
-            Ok(p) => p,
-            Err(e) => return Err(PipelineStateError::Program(ProgramError::Link(e))),
-        };
+        match self.create_program(shaders) {
+            Ok(p) => self.create_pipeline_from_program(&p, primitive, rasterizer, init),
+            Err(e) => Err(PipelineStateError::Program(ProgramError::Link(e))),
+        }
+    }
+
+    /// Create PSO with a given program.
+    fn create_pipeline_from_program<I: pso::PipelineInit>(&mut self, program: &handle::Program<R>,
+                                    primitive: Primitive, rasterizer: Rasterizer, init: I)
+                                    -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError>
+    {
         let mut descriptor = Descriptor::new(primitive, rasterizer);
         let meta = match init.link_to(&mut descriptor, program.get_info()) {
             Ok(m) => m,
             Err(e) => return Err(PipelineStateError::DescriptorInit(e)),
         };
-        let raw = match self.create_pipeline_state_raw(&program, &descriptor) {
+        let raw = match self.create_pipeline_state_raw(program, &descriptor) {
             Ok(raw) => raw,
             Err(e) => return Err(PipelineStateError::DeviceCreate(e)),
         };
