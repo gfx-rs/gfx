@@ -20,7 +20,7 @@ extern crate gfx_window_glutin;
 extern crate glutin;
 
 use std::sync::{Arc, RwLock};
-pub use gfx::format::{Depth, Rgba8, I8Scaled};
+pub use gfx::format::{Depth, Srgb8, I8Scaled};
 use gfx::traits::*;
 
 // Section-1: vertex formats and shader parameters
@@ -55,7 +55,7 @@ gfx_pipeline!( forward {
     num_lights: gfx::Global<i32> = "u_NumLights",
     light_buf: gfx::ConstantBuffer<LightParam> = "b_Lights",
     shadow: gfx::TextureSampler<f32> = "t_Shadow",
-    out_color: gfx::RenderTarget<Rgba8> = "o_Color",
+    out_color: gfx::RenderTarget<Srgb8> = "o_Color",
     out_depth: gfx::DepthTarget<Depth> = gfx::preset::depth::LESS_EQUAL_WRITE,
 });
 
@@ -171,7 +171,7 @@ struct Scene<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
 
 /// Create a full scene
 fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
-                out_color: gfx::handle::RenderTargetView<R, Rgba8>,
+                out_color: gfx::handle::RenderTargetView<R, Srgb8>,
                 out_depth: gfx::handle::DepthStencilView<R, Depth>,
                 shadow_pso: gfx::PipelineState<R, shadow::Meta>)
                 -> Scene<R, F::CommandBuffer>
@@ -386,7 +386,7 @@ pub fn main() {
             .with_gl(glutin::GL_CORE)
             .with_depth_buffer(24); //TODO: derive automatically
     let (window, mut device, mut factory, main_color, main_depth) =
-        gfx_window_glutin::init::<Rgba8, Depth>(builder);
+        gfx_window_glutin::init::<Srgb8, Depth>(builder);
     let mut encoder = factory.create_encoder();
 
     // create PSOs
@@ -512,7 +512,7 @@ pub fn main() {
         }
 
         // draw entities with forward pass
-        encoder.clear(&main_color, [0.1, 0.2, 0.3, 1.0]);
+        encoder.clear(&main_color, [0.1, 0.2, 0.3]);
         encoder.clear_depth(&main_depth, 1.0);
 
         let mx_vp = {
