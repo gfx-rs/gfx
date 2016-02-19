@@ -30,8 +30,7 @@ use glutin::{PollEventsIterator, Event, VirtualKeyCode, ElementState};
 pub use gfx::format::{DepthStencil, Rgba8};
 use gfx::traits::{FactoryExt};
 
-use cgmath::FixedArray;
-use cgmath::{Matrix4, AffineMatrix3};
+use cgmath::{SquareMatrix, Matrix4, AffineMatrix3};
 use cgmath::{Point3, Vector3};
 use cgmath::{Transform};
 
@@ -212,9 +211,9 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
 
         let params = pipe::Data {
             vbuf: vbuf,
-            model: Matrix4::identity().into_fixed(),
-            view: Matrix4::identity().into_fixed(),
-            proj: cgmath::perspective(cgmath::deg(60.0f32), aspect_ratio, 0.1, 4000.0).into_fixed(),
+            model: Matrix4::identity().into(),
+            view: Matrix4::identity().into(),
+            proj: cgmath::perspective(cgmath::deg(60.0f32), aspect_ratio, 0.1, 4000.0).into(),
             tilesheet: (tile_texture, factory.create_sampler_linear()),
             tilemap: tilemap_buf,
             world_size: [width as f32, height as f32, tile_size as f32],
@@ -240,7 +239,7 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
         factory.update_buffer(&self.params.tilemap, &self.data, 0).unwrap();
     }
     pub fn update_view(&mut self, view: &AffineMatrix3<f32>) {
-        self.params.view = view.mat.into_fixed();
+        self.params.view = view.mat.into();
     }
     pub fn update_x_offset(&mut self, amt: f32) {
         self.params.offsets[0] = amt;
@@ -517,9 +516,9 @@ pub fn main() {
 
         // view configuration based on current position
         let view: AffineMatrix3<f32> = Transform::look_at(
-            &Point3::new(x_pos, -y_pos, distance),
-            &Point3::new(x_pos, -y_pos, 0.0),
-            &Vector3::unit_y(),
+            Point3::new(x_pos, -y_pos, distance),
+            Point3::new(x_pos, -y_pos, 0.0),
+            Vector3::unit_y(),
         );
 
         encoder.reset();

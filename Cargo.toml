@@ -18,7 +18,7 @@ name = "gfx_meta"
 gfx_core = { path = "src/render", version = "0.1" }
 gfx_device_gl = { path = "src/backend/gl", version = "0.8" }
 gfx_window_glutin = { path = "src/window/glutin", version = "0.9" }
-gfx_window_glfw = { path = "src/window/glfw", version = "0.6" }
+gfx_window_glfw = { path = "src/window/glfw", version = "0.7" }
 gfx = { path = "src/render", version = "0.9" }
 
 
@@ -47,6 +47,10 @@ name = "shadow"
 path = "examples/shadow/main.rs"
 
 [[example]]
+name = "skybox"
+path = "examples/skybox/main.rs"
+
+[[example]]
 name = "terrain"
 path = "examples/terrain/main.rs"
 
@@ -69,9 +73,9 @@ path = "examples/mipmap/main.rs"
 [dev_dependencies]
 env_logger = "*"
 log = "*"
-cgmath = "0.3"
+cgmath = "0.7"
 glutin = ">=0.4.2"
-glfw = "0.2"
+glfw = "0.3"
 gfx_gl = "0.1"
 rand = "*"
 time = "*"

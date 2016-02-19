@@ -135,7 +135,7 @@ fn create_plane<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F, size: i8
 
 struct Camera {
     mx_view: cgmath::Matrix4<f32>,
-    projection: cgmath::PerspectiveFov<f32, cgmath::Deg<f32>>,
+    projection: cgmath::PerspectiveFov<f32>,
 }
 
 struct Light<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
@@ -176,7 +176,7 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
                 shadow_pso: gfx::PipelineState<R, shadow::Meta>)
                 -> Scene<R, F::CommandBuffer>
 {
-    use cgmath::{FixedArray, Matrix4};
+    use cgmath::{SquareMatrix, Matrix4, deg};
 
     // create shadows
     let (shadow_tex, shadow_resource) = {
@@ -224,12 +224,12 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
     let lights: Vec<_> = light_descs.iter().enumerate().map(|(i, desc)| Light {
         position: desc.pos.clone(),
         mx_view: cgmath::Matrix4::look_at(
-            &desc.pos,
-            &cgmath::Point3::new(0.0, 0.0, 0.0),
-            &cgmath::Vector3::unit_z(),
+            desc.pos,
+            cgmath::Point3::new(0.0, 0.0, 0.0),
+            cgmath::Vector3::unit_z(),
         ),
         projection: cgmath::PerspectiveFov {
-            fovy: cgmath::deg(desc.fov),
+            fovy: deg(desc.fov).into(),
             aspect: 1.0,
             near: near,
             far: far,
@@ -245,9 +245,10 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
         pos: [light.position.x, light.position.y, light.position.z, 1.0],
         color: light.color,
         proj: {
-            use cgmath::{FixedArray, Matrix, Matrix4};
+            use cgmath::Matrix4;
+
             let mx_proj: Matrix4<_> = light.projection.into();
-            mx_proj.mul_m(&light.mx_view).into_fixed()
+            (mx_proj * light.mx_view).into()
         },
     }).collect();
     factory.update_buffer(&light_buf, &light_params, 0).unwrap();
@@ -286,8 +287,8 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
 
     let mut fw_data = forward::Data {
         vbuf: cube_buf.clone(),
-        transform: Matrix4::identity().into_fixed(),
-        model_transform: Matrix4::identity().into_fixed(),
+        transform: Matrix4::identity().into(),
+        model_transform: Matrix4::identity().into(),
         color: [1.0, 1.0, 1.0, 1.0],
         num_lights: lights.len() as i32,
         light_buf: light_buf,
@@ -297,7 +298,7 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
     };
     let mut sh_data = shadow::Data {
         vbuf: cube_buf,
-        transform: Matrix4::identity().into_fixed(),
+        transform: Matrix4::identity().into(),
         // the output here is temporary, will be overwritten for every light source
         out: factory.view_texture_as_depth_stencil(&shadow_tex, None).unwrap(),
     };
@@ -307,7 +308,7 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
         let transform = cgmath::Decomposed {
             disp: desc.offset.clone(),
             rot: cgmath::Quaternion::from_axis_angle(
-                &desc.offset.normalize(),
+                desc.offset.normalize(),
                 cgmath::deg(desc.angle).into(),
             ),
             scale: desc.scale,
@@ -336,12 +337,12 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
     // create camera
     let camera = Camera {
         mx_view: cgmath::Matrix4::look_at(
-            &cgmath::Point3::new(3.0f32, -10.0, 6.0),
-            &cgmath::Point3::new(0f32, 0.0, 0.0),
-            &cgmath::Vector3::unit_z(),
+            cgmath::Point3::new(3.0f32, -10.0, 6.0),
+            cgmath::Point3::new(0f32, 0.0, 0.0),
+            cgmath::Vector3::unit_z(),
         ),
         projection: cgmath::PerspectiveFov {
-            fovy: cgmath::deg(45.0f32),
+            fovy: cgmath::deg(45.0f32).into(),
             aspect: 1.0,
             near: near,
             far: far,
@@ -366,7 +367,7 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
 pub fn main() {
     use std::env;
     use time::precise_time_s;
-    use cgmath::{EuclideanVector, FixedArray, Matrix, Rotation3, Vector};
+    use cgmath::{EuclideanVector, Matrix4, Rotation3};
 
     // initialize
     let mut is_parallel = true;
@@ -434,14 +435,14 @@ pub fn main() {
                         }
                         // rotate all cubes around the axis
                         let rot = cgmath::Decomposed {
-                            disp: cgmath::vec3(0.0, 0.0, 0.0),
+                            scale: 1.0,
                             rot: cgmath::Quaternion::from_axis_angle(
-                                &axis.mul_s(1.0 / len),
+                                axis * (1.0 / len),
                                 cgmath::deg(len * 0.3).into(),
                             ),
-                            scale: 1.0,
-                        }.into();
-                        ent.mx_to_world = ent.mx_to_world.mul_m(&rot);
+                            disp: cgmath::vec3(0.0, 0.0, 0.0)
+                        };
+                        ent.mx_to_world = ent.mx_to_world * Matrix4::from(rot);
                     }
                     last_mouse = cur;
                 },
@@ -474,9 +475,9 @@ pub fn main() {
                         batch.out = light.shadow.clone();
                         batch.transform = {
                             let mx_proj: cgmath::Matrix4<_> = light.projection.into();
-                            let mx_view = mx_proj.mul_m(&light.mx_view);
-                            let mvp = mx_view.mul_m(&ent.mx_to_world);
-                            mvp.into_fixed()
+                            let mx_view = mx_proj * light.mx_view;
+                            let mvp = mx_view * ent.mx_to_world;
+                            mvp.into()
                         };
                         light.encoder.draw(&ent.slice, &subshare.shadow_pso, &batch);
                     }
@@ -501,9 +502,9 @@ pub fn main() {
                     batch.out = light.shadow.clone();
                     batch.transform = {
                         let mx_proj: cgmath::Matrix4<_> = light.projection.into();
-                        let mx_view = mx_proj.mul_m(&light.mx_view);
-                        let mvp = mx_view.mul_m(&ent.mx_to_world);
-                        mvp.into_fixed()
+                        let mx_view = mx_proj * light.mx_view;
+                        let mvp = mx_view * ent.mx_to_world;
+                        mvp.into()
                     };
                     encoder.draw(&ent.slice, &subshare.shadow_pso, &batch);
                 }
@@ -519,13 +520,13 @@ pub fn main() {
             let mut proj = scene.camera.projection;
             proj.aspect = (w as f32) / (h as f32);
             let mx_proj: cgmath::Matrix4<_> = proj.into();
-            mx_proj.mul_m(&scene.camera.mx_view)
+            mx_proj * scene.camera.mx_view
         };
 
         for ent in scene.share.write().unwrap().entities.iter_mut() {
             let batch = &mut ent.batch_forward;
-            batch.transform = mx_vp.mul_m(&ent.mx_to_world).into_fixed();
-            batch.model_transform = ent.mx_to_world.into_fixed();
+            batch.transform = (mx_vp * ent.mx_to_world).into();
+            batch.model_transform = ent.mx_to_world.into();
             encoder.draw(&ent.slice, &forward_pso, batch);
         }
 

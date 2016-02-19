@@ -23,8 +23,7 @@ extern crate genmesh;
 extern crate noise;
 
 use rand::Rng;
-use cgmath::FixedArray;
-use cgmath::{Matrix4, Point3, Vector3};
+use cgmath::{SquareMatrix, Matrix4, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
 pub use gfx::format::{DepthStencil, Rgba8};
 use genmesh::{Vertices, Triangulate};
@@ -104,11 +103,11 @@ pub fn main() {
 
     let mut data = pipe::Data {
         vbuf: vbuf,
-        model: Matrix4::identity().into_fixed(),
-        view: Matrix4::identity().into_fixed(),
+        model: Matrix4::identity().into(),
+        view: Matrix4::identity().into(),
         proj: cgmath::perspective(
             cgmath::deg(60.0f32), aspect_ratio, 0.1, 1000.0
-            ).into_fixed(),
+            ).into(),
         out_color: main_color,
         out_depth: main_depth,
     };
@@ -127,16 +126,16 @@ pub fn main() {
         let x = time.sin();
         let y = time.cos();
         let view: AffineMatrix3<f32> = Transform::look_at(
-            &Point3::new(x * 32.0, y * 32.0, 16.0),
-            &Point3::new(0.0, 0.0, 0.0),
-            &Vector3::unit_z(),
+            Point3::new(x * 32.0, y * 32.0, 16.0),
+            Point3::new(0.0, 0.0, 0.0),
+            Vector3::unit_z(),
         );
 
         encoder.reset();
         encoder.clear(&data.out_color, [0.3, 0.3, 0.3, 1.0]);
         encoder.clear_depth(&data.out_depth, 1.0);
 
-        data.view = view.mat.into_fixed();
+        data.view = view.mat.into();
         encoder.draw(&slice, &pso, &data);
 
         device.submit(encoder.as_buffer());

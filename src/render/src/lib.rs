@@ -37,6 +37,8 @@ pub use gfx_core as core;
 pub use gfx_core::{Device, SubmitInfo, Resources};
 pub use gfx_core::{format, handle, tex};
 pub use gfx_core::factory::{Factory, BufferRole, BufferInfo, BufferUsage,
+                            BufferUpdateError, CombinedError,
+                            ResourceViewError, TargetViewError,
                             SHADER_RESOURCE, UNORDERED_ACCESS, RENDER_TARGET,
                             cast_slice};
 pub use gfx_core::{VertexCount, InstanceCount};
