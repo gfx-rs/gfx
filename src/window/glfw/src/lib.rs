@@ -14,25 +14,29 @@
 
 #[deny(missing_docs)]
 
-extern crate gfx;
+extern crate gfx_core;
 extern crate gfx_device_gl;
 extern crate glfw;
 
-use gfx::tex::{AaMode, Size};
+use gfx_core::format::{Rgba8, DepthStencil, SurfaceType};
+use gfx_core::handle;
+use gfx_core::tex::{AaMode, Size};
 use glfw::Context;
 
 /// Initialize with a window.
 pub fn init(window: &mut glfw::Window) -> (gfx_device_gl::Device, gfx_device_gl::Factory,
-            gfx::handle::RenderTargetView<gfx_device_gl::Resources, gfx::format::Rgba8>,
-            gfx::handle::DepthStencilView<gfx_device_gl::Resources, gfx::format::DepthStencil>)
+            handle::RenderTargetView<gfx_device_gl::Resources, Rgba8>,
+            handle::DepthStencilView<gfx_device_gl::Resources, DepthStencil>)
 {
+    use gfx_core::factory::Phantom;
     window.make_current();
     let (device, factory) = gfx_device_gl::create(|s|
         window.get_proc_address(s) as *const std::os::raw::c_void);
     // create the main color/depth targets
     let (width, height) = window.get_framebuffer_size();
     let dim = (width as Size, height as Size, 1, AaMode::Single);
-    let (color_view, ds_view) = gfx_device_gl::create_main_targets(dim);
+    let (color_view, ds_view) = gfx_device_gl::create_main_targets(
+        dim, SurfaceType::R8_G8_B8_A8, SurfaceType::D24);
     // done
-    (device, factory, color_view, ds_view)
+    (device, factory, Phantom::new(color_view), Phantom::new(ds_view))
 }

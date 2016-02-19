@@ -44,7 +44,7 @@ gfx_pipeline!(pipe {
     vertex: gfx::VertexBuffer<Vertex> = (),
     instance: gfx::InstanceBuffer<Instance> = (),
     scale: gfx::Global<f32> = "u_Scale",
-    out: gfx::RenderTarget<gfx::format::Rgba8> = "o_Color",
+    out: gfx::RenderTarget<gfx::format::Srgb8> = "o_Color",
 });
 
 const MAX_INSTANCE_COUNT: usize = 2048;
@@ -56,7 +56,7 @@ fn main() {
         .with_dimensions(800, 600)
         .with_title("Instancing example".to_string());
     let (window, mut device, mut factory, main_color, _) =
-        gfx_window_glutin::init::<gfx::format::Rgba8>(builder);
+        gfx_window_glutin::init::<gfx::format::Srgb8, gfx::format::Depth>(builder);
     let mut encoder = factory.create_encoder();
 
     let pso = factory.create_pipeline_simple(
@@ -122,7 +122,7 @@ fn main() {
         }
 
         encoder.reset();
-        encoder.clear(&data.out, [0.1, 0.2, 0.3, 1.0]);
+        encoder.clear(&data.out, [0.1, 0.2, 0.3]);
         encoder.draw(&slice, &pso, &data);
 
         device.submit(encoder.as_buffer());
