@@ -79,9 +79,11 @@ impl<R: Resources> Program<R> {
 pub struct RawPipelineState<R: Resources>(Arc<R::PipelineStateObject>, Arc<R::Program>);
 
 /// Raw texture object
+#[derive(Clone, Debug, Hash, PartialEq)]
 pub struct RawTexture<R: Resources>(Arc<R::Texture>, tex::Descriptor);
 
 /// Typed texture object
+#[derive(Clone, Debug, Hash, PartialEq)]
 pub struct Texture<R: Resources, S>(RawTexture<R>, PhantomData<S>);
 
 impl<R: Resources> RawTexture<R> {
