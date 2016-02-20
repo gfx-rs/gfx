@@ -67,7 +67,7 @@ pub fn init_raw(builder: glutin::WindowBuilder,
 
     // create the main color/depth targets
     let dim = get_window_dimensions(&window);
-    let (color_view, ds_view) = gfx_device_gl::create_main_targets(dim, color_format.0, ds_format.0);
+    let (color_view, ds_view) = gfx_device_gl::create_main_targets_raw(dim, color_format.0, ds_format.0);
 
     // done
     (window, device, factory, color_view, ds_view)
@@ -96,7 +96,7 @@ pub fn update_views_raw(window: &glutin::Window, old_dimensions: tex::Dimensions
 {
     let dim = get_window_dimensions(window);
     if dim != old_dimensions {
-        Some(gfx_device_gl::create_main_targets(dim, color_format.0, ds_format.0))
+        Some(gfx_device_gl::create_main_targets_raw(dim, color_format.0, ds_format.0))
     }else {
         None
     }
