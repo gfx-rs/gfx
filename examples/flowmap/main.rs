@@ -22,7 +22,7 @@ extern crate glutin;
 extern crate image;
 
 use std::io::Cursor;
-pub use gfx::format::Rgba8;
+pub use gfx::format::{Rgba8, Srgb8, Depth};
 
 gfx_vertex_struct!( Vertex {
     pos: [f32; 2] = "a_Pos",
@@ -45,7 +45,7 @@ gfx_pipeline!( pipe {
     noise: gfx::TextureSampler<[f32; 4]> = "t_Noise",
     offset0: gfx::Global<f32> = "f_Offset0",
     offset1: gfx::Global<f32> = "f_Offset1",
-    out: gfx::RenderTarget<Rgba8> = "o_Color",
+    out: gfx::RenderTarget<Srgb8> = "o_Color",
 });
 
 fn load_texture<R, F>(factory: &mut F, data: &[u8])
@@ -67,7 +67,7 @@ pub fn main() {
             .with_title("Flowmap example".to_string())
             .with_dimensions(800, 600);
     let (window, mut device, mut factory, main_color, _) =
-        gfx_window_glutin::init::<Rgba8>(builder);
+        gfx_window_glutin::init::<Srgb8, Depth>(builder);
     let mut encoder = factory.create_encoder();
 
     let vertex_data = [
@@ -140,7 +140,7 @@ pub fn main() {
         }
 
         encoder.reset();
-        encoder.clear(&data.out, [0.3, 0.3, 0.3, 1.0]);
+        encoder.clear(&data.out, [0.3, 0.3, 0.3]);
 
         data.offset0 = cycle0;
         data.offset1 = cycle1;

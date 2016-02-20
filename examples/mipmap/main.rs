@@ -17,7 +17,7 @@ extern crate gfx;
 extern crate gfx_window_glutin;
 extern crate glutin;
 
-pub use gfx::format::Rgba8;
+pub use gfx::format::{Srgb8, Depth};
 
 gfx_vertex_struct!( Vertex {
     pos: [f32; 2] = "a_Pos",
@@ -36,7 +36,7 @@ impl Vertex {
 gfx_pipeline!(pipe {
     vbuf: gfx::VertexBuffer<Vertex> = (),
     tex: gfx::TextureSampler<[f32; 3]> = "t_Tex",
-    out: gfx::RenderTarget<Rgba8> = "o_Color",
+    out: gfx::RenderTarget<Srgb8> = "o_Color",
 });
 
 // Larger red dots
@@ -84,7 +84,7 @@ pub fn main() {
         .with_title("Mipmap example".to_string())
         .with_dimensions(800, 600);
     let (window, mut device, mut factory, main_color, _) =
-        gfx_window_glutin::init::<Rgba8>(builder);
+        gfx_window_glutin::init::<Srgb8, Depth>(builder);
     let mut encoder = factory.create_encoder();
 
     let pso = factory.create_pipeline_simple(
@@ -129,7 +129,7 @@ pub fn main() {
         }
 
         encoder.reset();
-        encoder.clear(&data.out, [0.1, 0.2, 0.3, 1.0]);
+        encoder.clear(&data.out, [0.1, 0.2, 0.3]);
         encoder.draw(&slice, &pso, &data);
 
         device.submit(encoder.as_buffer());

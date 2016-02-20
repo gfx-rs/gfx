@@ -60,7 +60,7 @@ impl_channel_type! {
 }
 
 macro_rules! impl_formats {
-    { $($name:ident : $container:ident < $($channel:ident),* > = $data_type:ty [ $($imp_trait:ident),* ] ,)* } => {
+    { $($name:ident : $container:ident < $($channel:ident),* > = $data_type:ty {$alpha_bits:expr} [ $($imp_trait:ident),* ] ,)* } => {
         /// Type of the allocated texture surface. It is supposed to only
         /// carry information about the number of bits per each channel.
         /// The actual types are up to the views to decide and interpret.
@@ -72,11 +72,21 @@ macro_rules! impl_formats {
             $( $name, )*
         }
         impl SurfaceType {
-            /// Return the total number of bits for this format.
+            /// DEPRECATED
             pub fn get_bit_size(&self) -> u8 {
+                self.get_total_bits()
+            }
+            /// Return the total number of bits for this format.
+            pub fn get_total_bits(&self) -> u8 {
                 use std::mem::size_of;
                 match *self {
                     $( SurfaceType::$name => (size_of::<$data_type>() * 8) as u8, )*
+                }
+            }
+            /// Return the number of bits allocated for alpha and stencil.
+            pub fn get_alpha_stencil_bits(&self) -> u8  {
+                match *self {
+                    $( SurfaceType::$name => $alpha_bits, )*
                 }
             }
         }
@@ -106,43 +116,43 @@ macro_rules! impl_formats {
 
 
 impl_formats! {
-    R3_G3_B2        : Vec3<Unorm> = u8  [TextureSurface],
-    R4_G4           : Vec2<Unorm> = u8  [TextureSurface, RenderSurface],
-    R4_G4_B4_A4     : Vec4<Unorm> = u16 [TextureSurface, RenderSurface],
-    R5_G5_B5_A1     : Vec4<Unorm> = u16 [TextureSurface, RenderSurface],
-    R5_G6_B5        : Vec3<Unorm> = u16 [TextureSurface, RenderSurface],
-    R8              : Vec1<Int, Uint, Inorm, Unorm, Iscaled, Uscaled> = u8
+    R3_G3_B2        : Vec3<Unorm> = u8 {2} [TextureSurface],
+    R4_G4           : Vec2<Unorm> = u8 {0}  [TextureSurface, RenderSurface],
+    R4_G4_B4_A4     : Vec4<Unorm> = u16 {4} [TextureSurface, RenderSurface],
+    R5_G5_B5_A1     : Vec4<Unorm> = u16 {1} [TextureSurface, RenderSurface],
+    R5_G6_B5        : Vec3<Unorm> = u16 {0} [TextureSurface, RenderSurface],
+    R8              : Vec1<Int, Uint, Inorm, Unorm, Iscaled, Uscaled> = u8 {0}
         [BufferSurface, TextureSurface, RenderSurface],
-    R8_G8           : Vec2<Int, Uint, Inorm, Unorm, Iscaled, Uscaled> = [u8; 2]
+    R8_G8           : Vec2<Int, Uint, Inorm, Unorm, Iscaled, Uscaled> = [u8; 2] {0}
         [BufferSurface, TextureSurface, RenderSurface],
-    R8_G8_B8        : Vec3<Int, Uint, Inorm, Unorm, Iscaled, Uscaled, Srgb> = [u8; 3]
+    R8_G8_B8        : Vec3<Int, Uint, Inorm, Unorm, Iscaled, Uscaled, Srgb> = [u8; 3] {0}
         [BufferSurface, TextureSurface, RenderSurface],
-    R8_G8_B8_A8     : Vec4<Int, Uint, Inorm, Unorm, Iscaled, Uscaled, Srgb> = [u8; 4]
+    R8_G8_B8_A8     : Vec4<Int, Uint, Inorm, Unorm, Iscaled, Uscaled, Srgb> = [u8; 4] {8}
         [BufferSurface, TextureSurface, RenderSurface],
-    R10_G10_B10_A2  : Vec4<Uint, Unorm> = u32
+    R10_G10_B10_A2  : Vec4<Uint, Unorm> = u32 {2}
         [BufferSurface, TextureSurface, RenderSurface],
-    R11_G11_B10     : Vec4<Unorm, Float> = u32
+    R11_G11_B10     : Vec4<Unorm, Float> = u32 {0}
         [BufferSurface, TextureSurface, RenderSurface],
-    R16             : Vec1<Int, Uint, Inorm, Unorm, Float> = u16
+    R16             : Vec1<Int, Uint, Inorm, Unorm, Float> = u16 {0}
         [BufferSurface, TextureSurface, RenderSurface],
-    R16_G16         : Vec2<Int, Uint, Inorm, Unorm, Float> = [u16; 2]
+    R16_G16         : Vec2<Int, Uint, Inorm, Unorm, Float> = [u16; 2] {0}
         [BufferSurface, TextureSurface, RenderSurface],
-    R16_G16_B16     : Vec2<Int, Uint, Inorm, Unorm, Float> = [u16; 3]
+    R16_G16_B16     : Vec2<Int, Uint, Inorm, Unorm, Float> = [u16; 3] {0}
         [BufferSurface, TextureSurface, RenderSurface],
-    R16_G16_B16_A16 : Vec2<Int, Uint, Inorm, Unorm, Float> = [u16; 4]
+    R16_G16_B16_A16 : Vec2<Int, Uint, Inorm, Unorm, Float> = [u16; 4] {16}
         [BufferSurface, TextureSurface, RenderSurface],
-    R32             : Vec1<Int, Uint, Float> = u32
+    R32             : Vec1<Int, Uint, Float> = u32 {0}
         [BufferSurface, TextureSurface, RenderSurface],
-    R32_G32         : Vec2<Int, Uint, Float> = [u32; 2]
+    R32_G32         : Vec2<Int, Uint, Float> = [u32; 2] {0}
         [BufferSurface, TextureSurface, RenderSurface],
-    R32_G32_B32     : Vec2<Int, Uint, Float> = [u32; 3]
+    R32_G32_B32     : Vec2<Int, Uint, Float> = [u32; 3] {0}
         [BufferSurface, TextureSurface, RenderSurface],
-    R32_G32_B32_A32 : Vec2<Int, Uint, Float> = [u32; 4]
+    R32_G32_B32_A32 : Vec2<Int, Uint, Float> = [u32; 4] {32}
         [BufferSurface, TextureSurface, RenderSurface],
-    D16             : Vec1<Unorm> = F16 [TextureSurface, DepthSurface],
-    D24             : Vec1<Unorm> = f32 [TextureSurface, DepthSurface],
-    D24_S8          : Vec1<Unorm> = (f32, u8) [TextureSurface, DepthSurface, StencilSurface],
-    D32             : Vec1<Unorm, Float> = f32 [TextureSurface, DepthSurface],
+    D16             : Vec1<Unorm> = F16 {0} [TextureSurface, DepthSurface],
+    D24             : Vec1<Unorm> = f32 {8} [TextureSurface, DepthSurface], //hacky stencil bits
+    D24_S8          : Vec1<Unorm> = f32 {8} [TextureSurface, DepthSurface, StencilSurface],
+    D32             : Vec1<Unorm, Float> = f32 {0} [TextureSurface, DepthSurface],
 }
 
 
@@ -331,6 +341,8 @@ pub type Vec4<T> = [T; 4];
 
 /// Standard 8bits RGBA format.
 pub type Rgba8 = (R8_G8_B8_A8, Unorm);
+/// Standard gamma-encoding RGB format.
+pub type Srgb8 = (R8_G8_B8, Srgb);
 /// Standard HDR floating-point format with 10 bits for RGB components
 /// and 2 bits for the alpha.
 pub type Rgb10a2F = (R10_G10_B10_A2, Float);

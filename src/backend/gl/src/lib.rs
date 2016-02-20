@@ -168,29 +168,46 @@ pub fn create<F>(fn_proc: F) -> (Device, Factory) where
     (device, factory)
 }
 
-/// Create the proxy target views (RTV and DSV) for the attachments of the
-/// main framebuffer. These have GL names equal to 0.
+/// DEPRECATED
 pub fn create_main_targets<Tc, Td>(dim: d::tex::Dimensions)
-                           -> (handle::RenderTargetView<Resources, Tc>,
-                               handle::DepthStencilView<Resources, Td>)
+                           -> (handle::RenderTargetView<Resources, Tc>, handle::DepthStencilView<Resources, Td>)
 where
     Tc: d::format::RenderFormat,
     Td: d::format::DepthFormat,
 {
+    use gfx_core::factory::Phantom;
+    let (cv, dv) = create_main_targets_raw(dim, Tc::get_format().0, Td::get_format().0);
+    (Phantom::new(cv), Phantom::new(dv))
+}
+
+/// Create the proxy target views (RTV and DSV) for the attachments of the
+/// main framebuffer. These have GL names equal to 0.
+/// Not supposed to be used by the users directly.
+pub fn create_main_targets_raw(dim: d::tex::Dimensions, color_format: d::format::SurfaceType, depth_format: d::format::SurfaceType)
+                               -> (handle::RawRenderTargetView<Resources>, handle::RawDepthStencilView<Resources>) {
     use gfx_core::handle::Producer;
     let mut temp = handle::Manager::new();
-    let texture = temp.make_texture(
+    let color_tex = temp.make_texture(
         NewTexture::Surface(0),
         d::tex::Descriptor {
             levels: 1,
             kind: d::tex::Kind::D2(dim.0, dim.1, dim.3),
-            format: d::format::SurfaceType::R8_G8_B8_A8,
+            format: color_format,
             bind: d::factory::RENDER_TARGET,
         },
     );
-    let m_color = temp.make_rtv(TargetView::Surface(0), &texture, dim);
-    let m_ds = temp.make_dsv(TargetView::Surface(0), &texture, dim);
-    (d::factory::Phantom::new(m_color), d::factory::Phantom::new(m_ds))
+    let depth_tex = temp.make_texture(
+        NewTexture::Surface(0),
+        d::tex::Descriptor {
+            levels: 1,
+            kind: d::tex::Kind::D2(dim.0, dim.1, dim.3),
+            format: depth_format,
+            bind: d::factory::RENDER_TARGET,
+        },
+    );
+    let m_color = temp.make_rtv(TargetView::Surface(0), &color_tex, dim);
+    let m_ds = temp.make_dsv(TargetView::Surface(0), &depth_tex, dim);
+    (m_color, m_ds)
 }
 
 /// Internal struct of shared data between the device and its factories.

@@ -24,7 +24,7 @@ gfx_vertex_struct!( Vertex {
 
 gfx_pipeline!(pipe {
     vbuf: gfx::VertexBuffer<Vertex> = (),
-    out: gfx::RenderTarget<gfx::format::Rgba8> = "o_Color",
+    out: gfx::RenderTarget<gfx::format::Srgb8> = "o_Color",
 });
 
 pub fn main() {
@@ -33,7 +33,7 @@ pub fn main() {
     let builder = glutin::WindowBuilder::new()
         .with_title("Triangle example".to_string());
     let (window, mut device, mut factory, main_color, _) =
-        gfx_window_glutin::init::<gfx::format::Rgba8>(builder);
+        gfx_window_glutin::init::<gfx::format::Srgb8, gfx::format::Depth>(builder);
     let mut encoder = factory.create_encoder();
 
     let pso = factory.create_pipeline_simple(
@@ -65,7 +65,7 @@ pub fn main() {
         }
 
         encoder.reset();
-        encoder.clear(&data.out, [0.1, 0.2, 0.3, 1.0]);
+        encoder.clear(&data.out, [0.1, 0.2, 0.3]);
         encoder.draw(&slice, &pso, &data);
 
         device.submit(encoder.as_buffer());

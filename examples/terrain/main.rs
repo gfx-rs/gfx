@@ -25,7 +25,7 @@ extern crate noise;
 use rand::Rng;
 use cgmath::{SquareMatrix, Matrix4, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
-pub use gfx::format::{DepthStencil, Rgba8};
+pub use gfx::format::{DepthStencil, Srgb8};
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
 use time::precise_time_s;
@@ -42,7 +42,7 @@ gfx_pipeline!(pipe {
     model: gfx::Global<[[f32; 4]; 4]> = "u_Model",
     view: gfx::Global<[[f32; 4]; 4]> = "u_View",
     proj: gfx::Global<[[f32; 4]; 4]> = "u_Proj",
-    out_color: gfx::RenderTarget<Rgba8> = "o_Color",
+    out_color: gfx::RenderTarget<Srgb8> = "o_Color",
     out_depth: gfx::DepthTarget<DepthStencil> =
         gfx::preset::depth::LESS_EQUAL_WRITE,
 });
@@ -65,7 +65,7 @@ pub fn main() {
     let builder = glutin::WindowBuilder::new()
         .with_title("Terrain example".to_string());
     let (window, mut device, mut factory, main_color, main_depth) =
-        gfx_window_glutin::init::<Rgba8>(builder);
+        gfx_window_glutin::init::<Srgb8, DepthStencil>(builder);
     let mut encoder = factory.create_encoder();
 
     let rand_seed = rand::thread_rng().gen();
@@ -132,7 +132,7 @@ pub fn main() {
         );
 
         encoder.reset();
-        encoder.clear(&data.out_color, [0.3, 0.3, 0.3, 1.0]);
+        encoder.clear(&data.out_color, [0.3, 0.3, 0.3]);
         encoder.clear_depth(&data.out_depth, 1.0);
 
         data.view = view.mat.into();

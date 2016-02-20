@@ -40,7 +40,7 @@ extern crate noise;
 use rand::Rng;
 use cgmath::{SquareMatrix, Matrix4, Point3, Vector3, EuclideanVector, deg};
 use cgmath::{Transform, AffineMatrix3};
-pub use gfx::format::{Depth, I8Scaled, Rgba8};
+pub use gfx::format::{Depth, I8Scaled, Srgb8};
 use gfx::traits::{Device, Factory, FactoryExt};
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{SharedVertex, IndexedPolygon};
@@ -72,7 +72,7 @@ gfx_pipeline!( terrain {
     out_position: gfx::RenderTarget<GFormat> = "o_Position",
     out_normal: gfx::RenderTarget<GFormat> = "o_Normal",
     out_color: gfx::RenderTarget<GFormat> = "o_Color",
-    out_depth: gfx::DepthTarget<gfx::format::Depth> =
+    out_depth: gfx::DepthTarget<Depth> =
         gfx::preset::depth::LESS_EQUAL_WRITE,
 });
 
@@ -124,7 +124,7 @@ gfx_vertex_struct!( BlitVertex {
 gfx_pipeline!( blit {
     vbuf: gfx::VertexBuffer<BlitVertex> = (),
     tex: gfx::TextureSampler<[f32; 4]> = "u_Tex",
-    out: gfx::RenderTarget<Rgba8> = "o_Color",
+    out: gfx::RenderTarget<Srgb8> = "o_Color",
 });
 
 pub static BLIT_VERTEX_SRC: &'static [u8] = b"
@@ -169,7 +169,7 @@ gfx_pipeline!( light {
     tex_diffuse: gfx::TextureSampler<[f32; 4]> = "u_TexDiffuse",
     out_color: gfx::BlendTarget<GFormat> =
         ("o_Color", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
-    out_depth: gfx::DepthTarget<gfx::format::Depth> =
+    out_depth: gfx::DepthTarget<Depth> =
         gfx::preset::depth::LESS_EQUAL_TEST,
 });
 
@@ -235,7 +235,7 @@ gfx_pipeline!( emitter {
     radius: gfx::Global<f32> = "u_Radius",
     out_color: gfx::BlendTarget<GFormat> =
         ("o_Color", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
-    out_depth: gfx::DepthTarget<gfx::format::Depth> =
+    out_depth: gfx::DepthTarget<Depth> =
         gfx::preset::depth::LESS_EQUAL_TEST,
 });
 
@@ -343,7 +343,7 @@ fn create_g_buffer<R: gfx::Resources, F: Factory<R>>(
 pub fn main() {
     env_logger::init().unwrap();
     let (window, mut device, mut factory, main_color, _) =
-        gfx_window_glutin::init::<Rgba8>(glutin::WindowBuilder::new()
+        gfx_window_glutin::init::<Srgb8, Depth>(glutin::WindowBuilder::new()
             .with_title("Deferred rendering example with gfx-rs".to_string())
             .with_dimensions(800, 600)
             .with_gl(glutin::GL_CORE)
@@ -623,7 +623,6 @@ pub fn main() {
         };
         blit_data.tex = (blit_tex.clone(), sampler.clone());
         // Show the result
-        encoder.clear(&main_color, [0.0, 0.0, 0.0, 1.0]);
         encoder.draw(&blit_slice, &blit_pso, &blit_data);
 
         device.submit(encoder.as_buffer());
