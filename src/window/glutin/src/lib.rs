@@ -18,30 +18,42 @@ extern crate gfx_core;
 extern crate gfx_device_gl;
 extern crate glutin;
 
+use gfx_core::{format, handle};
 use gfx_core::tex::Size;
 
 /// Initialize with a window builder.
+/// Generically parametrized version over the main framebuffer format.
 pub fn init<Cf, Df>(builder: glutin::WindowBuilder) ->
-    (glutin::Window, gfx_device_gl::Device, gfx_device_gl::Factory,
-    gfx_core::handle::RenderTargetView<gfx_device_gl::Resources, Cf>,
-    gfx_core::handle::DepthStencilView<gfx_device_gl::Resources, Df>)
+            (glutin::Window, gfx_device_gl::Device, gfx_device_gl::Factory,
+            handle::RenderTargetView<gfx_device_gl::Resources, Cf>,
+            handle::DepthStencilView<gfx_device_gl::Resources, Df>)
 where
-    Cf: gfx_core::format::RenderFormat,
-    Df: gfx_core::format::DepthFormat,
+    Cf: format::RenderFormat,
+    Df: format::DepthFormat,
 {
     use gfx_core::factory::Phantom;
+    let (window, device, factory, color_view, ds_view) = init_raw(builder, Cf::get_format(), Df::get_format());
+    (window, device, factory, Phantom::new(color_view), Phantom::new(ds_view))
+}
 
+
+/// Initialize with a window builder. Raw version.
+pub fn init_raw(builder: glutin::WindowBuilder,
+                color_format: format::Format, ds_format: format::Format) ->
+                (glutin::Window, gfx_device_gl::Device, gfx_device_gl::Factory,
+                handle::RawRenderTargetView<gfx_device_gl::Resources>,
+                handle::RawDepthStencilView<gfx_device_gl::Resources>)
+{
     let window = {
-        let format = Cf::get_format();
-        let color_total_bits = format.0.get_total_bits();
-        let alpha_bits = format.0.get_alpha_stencil_bits();
-        let depth_total_bits = Df::get_format().0.get_total_bits();
-        let stencil_bits = Df::get_format().0.get_alpha_stencil_bits();
+        let color_total_bits = color_format.0.get_total_bits();
+        let alpha_bits = color_format.0.get_alpha_stencil_bits();
+        let depth_total_bits = ds_format.0.get_total_bits();
+        let stencil_bits = ds_format.0.get_alpha_stencil_bits();
         builder
             .with_depth_buffer(depth_total_bits - stencil_bits)
             .with_stencil_buffer(stencil_bits)
             .with_pixel_format(color_total_bits - alpha_bits, alpha_bits)
-            .with_srgb(Some(format.1 == gfx_core::format::ChannelType::Srgb))
+            .with_srgb(Some(color_format.1 == format::ChannelType::Srgb))
             .build()
     }.unwrap();
 
@@ -54,9 +66,8 @@ where
     let aa = window.get_pixel_format().multisampling
                    .unwrap_or(0) as gfx_core::tex::NumSamples;
     let dim = (width as Size, height as Size, 1, aa.into());
-    let (color_view, ds_view) = gfx_device_gl::create_main_targets(
-        dim, Cf::get_format().0, Df::get_format().0);
+    let (color_view, ds_view) = gfx_device_gl::create_main_targets(dim, color_format.0, ds_format.0);
 
     // done
-    (window, device, factory, Phantom::new(color_view), Phantom::new(ds_view))
+    (window, device, factory, color_view, ds_view)
 }
