@@ -70,6 +70,8 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                 (hr, desc)
             };
             assert!(winapi::SUCCEEDED(hr));
+            debug!("Attribute {}, system type {:?}, mask {}, read-write mask {}",
+                convert_str(desc.SemanticName), desc.SystemValueType, desc.Mask, desc.ReadWriteMask);
             if desc.SystemValueType != winapi::D3D_NAME_UNDEFINED {
                 // system value semantic detected, skipping
                 continue
@@ -79,6 +81,27 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                 continue
             }
             info.vertex_attributes.push(s::AttributeVar {
+                name: convert_str(desc.SemanticName),
+                slot: desc.Register as core::AttributeSlot,
+                base_type: map_base_type(desc.ComponentType),
+                container: s::ContainerType::Vector(4), // how to get it?
+            });
+        }
+    }
+    if stage == s::Stage::Pixel {
+        // record pixel outputs
+        for i in 0 .. shader_desc.OutputParameters {
+            let (hr, desc) = unsafe {
+                let mut desc = mem::zeroed();
+                let hr = (*reflection).GetOutputParameterDesc(i as UINT, &mut desc);
+                (hr, desc)
+            };
+            assert!(winapi::SUCCEEDED(hr));
+            if desc.SystemValueType != winapi::D3D_NAME_UNDEFINED {
+                // system value semantic detected, skipping
+                continue
+            }
+            info.outputs.push(s::OutputVar {
                 name: convert_str(desc.SemanticName),
                 slot: desc.Register as core::AttributeSlot,
                 base_type: map_base_type(desc.ComponentType),

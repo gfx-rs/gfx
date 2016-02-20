@@ -358,6 +358,10 @@ pub struct OutputVar {
     pub name: String,
     /// Output color target index.
     pub slot: ColorSlot,
+    /// Type of the output component.
+    pub base_type: BaseType,
+    /// "Scalarness" of this output.
+    pub container: ContainerType,
 }
 
 /// Metadata about a program.
