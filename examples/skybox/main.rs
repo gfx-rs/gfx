@@ -77,12 +77,13 @@ fn load_cubemap<R, F>(factory: &mut F, data: CubemapData) -> Result<gfx::handle:
         let img = image::load(Cursor::new(img), image::JPEG).unwrap().to_rgba();
 
         let (width, height) = img.dimensions();
+        assert_eq!(width, height);
 
         match cube_tex {
             Some(_) => {},
             None => {
                 cube_tex = Some(factory.create_texture(
-                        Kind::Cube(width as u16, height as u16),
+                        Kind::Cube(width as u16),
                         1,
                         gfx::SHADER_RESOURCE,
                         Some(gfx::format::ChannelType::Unorm)

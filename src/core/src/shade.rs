@@ -279,8 +279,6 @@ pub struct AttributeVar {
     pub name: String,
     /// Slot of the vertex attribute.
     pub slot: AttributeSlot,
-    /// Number of elements this attribute represents.
-    pub count: usize,
     /// Type that this attribute is composed of.
     pub base_type: BaseType,
     /// "Scalarness" of this attribute.

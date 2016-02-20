@@ -82,7 +82,7 @@ impl Texture {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Shader {
     object: *mut winapi::ID3D11DeviceChild,
-    reflection: (), //*const winapi::ID3D11ShaderReflection
+    reflection: *mut winapi::ID3D11ShaderReflection,
     code_hash: u64,
 }
 unsafe impl Send for Shader {}
@@ -364,7 +364,7 @@ impl gfx_core::Device for Device {
             |_, _| {}, //buffer
             |_, s| unsafe { //shader
                 (*s.object).Release();
-                //(*s.reflector).Release();
+                (*s.reflection).Release();
             },
             |_, p| unsafe {
                 if p.vs != ptr::null_mut() { (*p.vs).Release(); }

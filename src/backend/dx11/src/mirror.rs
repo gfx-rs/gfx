@@ -12,36 +12,81 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//use std::ptr;
-//use d3dcompiler;
-//use dxguid;
-//use winapi;
-use gfx_core::shade;
+use std::{mem, ptr};
+use d3dcompiler;
+use dxguid;
+use winapi;
+use gfx_core as core;
+use gfx_core::shade as s;
 
 
-pub fn reflect_shader(_: &[u8]) -> () {}
-/*
-pub fn reflect_shader(code: &[u8]) -> *const winapi::ID3D11ShaderReflection {
+pub fn reflect_shader(code: &[u8]) -> *mut winapi::ID3D11ShaderReflection {
     let mut reflection = ptr::null_mut();
     let hr = unsafe {
         d3dcompiler::D3DReflect(code.as_ptr() as *const winapi::VOID,
-            code.len() as winapi::SIZE_T, dxguid::IID_ID3D11ShaderReflection, &mut reflection)
+            code.len() as winapi::SIZE_T, &dxguid::IID_ID3D11ShaderReflection, &mut reflection)
     };
     if !winapi::SUCCEEDED(hr) {
         error!("Shader reflection failed with code {:x}", hr);
     }
-    reflection
-}*/
+    reflection as *mut winapi::ID3D11ShaderReflection
+}
 
-pub fn populate_info(_info: &mut shade::ProgramInfo, _stage: shade::Stage, _reflection: ()) {
-    /*TODO: blocked by D3DReflect
-    use std::mem;
-    let usage = stage.into();
+fn convert_str(pchar: *const i8) -> String {
+    use std::ffi::CStr;
+    unsafe {
+        CStr::from_ptr(pchar).to_string_lossy().into_owned()
+    }
+}
+
+fn map_base_type(ct: winapi::D3D_REGISTER_COMPONENT_TYPE) -> s::BaseType {
+    match ct {
+        winapi::D3D_REGISTER_COMPONENT_UINT32 => s::BaseType::U32,
+        winapi::D3D_REGISTER_COMPONENT_SINT32 => s::BaseType::I32,
+        winapi::D3D_REGISTER_COMPONENT_FLOAT32 => s::BaseType::F32,
+        winapi::D3D_REGISTER_COMPONENT_TYPE(t) => {
+            error!("Unknown register component type {} detected!", t);
+            s::BaseType::F32
+        },
+    }
+}
+
+pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
+                     reflection: *mut winapi::ID3D11ShaderReflection) {
+    use winapi::UINT;
+
+    //let usage = stage.into();
     let shader_desc = unsafe {
         let mut desc = mem::zeroed();
-        reflection->GetDesc(&mut desc);
+        (*reflection).GetDesc(&mut desc);
         desc
     };
+    if stage == s::Stage::Vertex {
+        // record vertex attributes
+        for i in 0 .. shader_desc.InputParameters {
+            let (hr, desc) = unsafe {
+                let mut desc = mem::zeroed();
+                let hr = (*reflection).GetInputParameterDesc(i as UINT, &mut desc);
+                (hr, desc)
+            };
+            assert!(winapi::SUCCEEDED(hr));
+            if desc.SystemValueType != winapi::D3D_NAME_UNDEFINED {
+                // system value semantic detected, skipping
+                continue
+            }
+            if desc.Mask == 0 {
+                // not used, skipping
+                continue
+            }
+            info.vertex_attributes.push(s::AttributeVar {
+                name: convert_str(desc.SemanticName),
+                slot: desc.Register as core::AttributeSlot,
+                base_type: map_base_type(desc.ComponentType),
+                container: s::ContainerType::Vector(4), // how to get it?
+            });
+        }
+    }
+    /*
     for i in 0 .. desc.ConstantBuffers {
         let cb = reflection->GetConstantBufferByIndex(i);
         let desc = unsafe {
@@ -49,7 +94,7 @@ pub fn populate_info(_info: &mut shade::ProgramInfo, _stage: shade::Stage, _refl
             cb->GetDesc(&mut desc);
             desc
         };
-        let var = shade::ConstantBufferVar {
+        let var = s::ConstantBufferVar {
             name: desc.Name,
             slot: i,
             size: desc.Size,
@@ -57,6 +102,5 @@ pub fn populate_info(_info: &mut shade::ProgramInfo, _stage: shade::Stage, _refl
         };
         //TODO: search for the existing one
         info.constant_buffers.push(var);
-    }
-    */
+    }*/
 }

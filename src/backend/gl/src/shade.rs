@@ -187,10 +187,12 @@ fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::AttributeVar> {
             error!("Invalid location {} for attribute {}", loc, real_name);
         }
         info!("\t\tAttrib[{}] = {:?}\t{:?}\t{:?}", loc, real_name, base, container);
+        if size != 1 {
+            error!("Array [{}] attributes are not supported", size);
+        }
         s::AttributeVar {
             name: real_name,
             slot: loc as d::AttributeSlot,
-            count: size as usize,
             base_type: base,
             container: container,
         }
