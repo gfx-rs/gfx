@@ -53,9 +53,8 @@ fn map_base_type(ct: winapi::D3D_REGISTER_COMPONENT_TYPE) -> s::BaseType {
 
 pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                      reflection: *mut winapi::ID3D11ShaderReflection) {
-    use winapi::UINT;
-
-    //let usage = stage.into();
+    use winapi::{UINT, SUCCEEDED};
+    let usage = stage.into();
     let shader_desc = unsafe {
         let mut desc = mem::zeroed();
         (*reflection).GetDesc(&mut desc);
@@ -69,7 +68,7 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                 let hr = (*reflection).GetInputParameterDesc(i as UINT, &mut desc);
                 (hr, desc)
             };
-            assert!(winapi::SUCCEEDED(hr));
+            assert!(SUCCEEDED(hr));
             debug!("Attribute {}, system type {:?}, mask {}, read-write mask {}",
                 convert_str(desc.SemanticName), desc.SystemValueType, desc.Mask, desc.ReadWriteMask);
             if desc.SystemValueType != winapi::D3D_NAME_UNDEFINED {
@@ -96,17 +95,55 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                 let hr = (*reflection).GetOutputParameterDesc(i as UINT, &mut desc);
                 (hr, desc)
             };
-            assert!(winapi::SUCCEEDED(hr));
+            assert!(SUCCEEDED(hr));
+            debug!("Output {}, system type {:?}, mask {}, read-write mask {}",
+                convert_str(desc.SemanticName), desc.SystemValueType, desc.Mask, desc.ReadWriteMask);
             if desc.SystemValueType != winapi::D3D_NAME_UNDEFINED {
                 // system value semantic detected, skipping
                 continue
             }
             info.outputs.push(s::OutputVar {
                 name: convert_str(desc.SemanticName),
-                slot: desc.Register as core::AttributeSlot,
+                slot: desc.Register as core::ColorSlot,
                 base_type: map_base_type(desc.ComponentType),
                 container: s::ContainerType::Vector(4), // how to get it?
             });
+        }
+    }
+    // record resources
+    for i in 0 .. shader_desc.BoundResources {
+        let (hr, res_desc) = unsafe {
+            let mut desc = mem::zeroed();
+            let hr = (*reflection).GetResourceBindingDesc(i as UINT, &mut desc);
+            (hr, desc)
+        };
+        assert!(SUCCEEDED(hr));
+        let name = convert_str(res_desc.Name);
+        debug!("Resource {}, type {:?}", name, res_desc.Type);
+        if res_desc.Type == winapi::D3D_SIT_CBUFFER {
+            if let Some(cb) = info.constant_buffers.iter_mut().find(|cb| cb.name == name) {
+                cb.usage = cb.usage | usage;
+                continue;
+            }
+            let desc = unsafe {
+                let cbuf = (*reflection).GetConstantBufferByName(res_desc.Name);
+                let mut desc = mem::zeroed();
+                let hr = (*cbuf).GetDesc(&mut desc);
+                assert!(SUCCEEDED(hr));
+                desc
+            };
+            info.constant_buffers.push(s::ConstantBufferVar {
+                name: name,
+                slot: res_desc.BindPoint as core::ConstantBufferSlot,
+                size: desc.Size as usize,
+                usage: usage,
+            });
+        }else if res_desc.Type == winapi::D3D_SIT_TEXTURE {
+            //TODO
+        }else if res_desc.Type == winapi::D3D_SIT_SAMPLER {
+            //TODO
+        }else {
+            error!("Unsupported resource type {:?} for {}", res_desc.Type, name);
         }
     }
     /*

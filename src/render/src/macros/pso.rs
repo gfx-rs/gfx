@@ -152,9 +152,12 @@ macro_rules! gfx_pipeline_inner {
                     return Err(InitError::PixelExport(out.slot, None));
                 }
                 if !info.knows_outputs {
-                    let mut out = $crate::core::shade::OutputVar {
+                    use $crate::core::shade as s;
+                    let mut out = s::OutputVar {
                         name: String::new(),
                         slot: 0,
+                        base_type: s::BaseType::F32,
+                        container: s::ContainerType::Vector(4),
                     };
                     $(
                         match meta.$field.link_output(&out, &self.$field) {
