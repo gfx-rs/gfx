@@ -25,17 +25,21 @@ extern crate gfx_device_dx11;
 mod window;
 
 use std::mem;
+use gfx_core::format;
 use gfx_device_dx11::{Device, Factory, Resources};
 
 
-pub struct Window<Cf> {
+pub struct Window<Cv> {
     hwnd: winapi::HWND,
     swap_chain: *mut winapi::IDXGISwapChain,
-    pub driver_type: winapi::D3D_DRIVER_TYPE,
-    pub color_target: gfx_core::handle::RenderTargetView<Resources, Cf>,
+    driver_type: winapi::D3D_DRIVER_TYPE,
+    pub color_target: Cv,
 }
 
-impl<Cf> Window<Cf> {
+pub type WindowRaw = Window<gfx_core::handle::RawRenderTargetView<Resources>>;
+pub type WindowTyped<Cf> = Window<gfx_core::handle::RenderTargetView<Resources, Cf>>;
+
+impl<Cv> Window<Cv> {
     pub fn is_accelerated(&self) -> bool {
         self.driver_type == winapi::D3D_DRIVER_TYPE_HARDWARE
     }
@@ -58,13 +62,41 @@ impl<Cf> Window<Cf> {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct InitError;
+pub enum InitError {
+    /// Unable to create a window.
+    Window,
+    /// Unable to map format to DXGI.
+    Format(format::Format),
+    /// Unable to find a supported driver type.
+    DriverType,
+}
 
-/// Initialize with a given size.
-pub fn init<Cf: gfx_core::format::RenderFormat = gfx_core::format::Rgba8>
-           (title: &str, requested_width: winapi::INT, requested_height: winapi::INT)
-           -> Result<(Window<Cf>, Device, Factory), InitError> {
-    let hwnd = window::create(title, requested_width, requested_height).unwrap();
+/// Initialize with a given size. Typed format version.
+pub fn init<Cf>(title: &str, requested_width: winapi::INT, requested_height: winapi::INT)
+           -> Result<(WindowTyped<Cf>, Device, Factory), InitError>
+where Cf: format::RenderFormat
+{
+    init_raw(title, requested_width, requested_height, Cf::get_format())
+        .map(|(w, device, factory)| {
+            use gfx_core::factory::Phantom;
+            let win = Window {
+                hwnd: w.hwnd,
+                swap_chain: w.swap_chain,
+                driver_type: w.driver_type,
+                color_target: Phantom::new(w.color_target),
+            };
+            (win, device, factory)
+        })
+}
+
+/// Initialize with a given size. Raw format version.
+pub fn init_raw(title: &str, requested_width: winapi::INT, requested_height: winapi::INT,
+                color_format: format::Format)
+                -> Result<(WindowRaw, Device, Factory), InitError> {
+    let hwnd = match window::create(title, requested_width, requested_height) {
+        Ok(h) => h,
+        Err(()) => return Err(InitError::Window),
+    };
     let (width, height) = window::show(hwnd).unwrap();
 
     let driver_types = [
@@ -77,7 +109,10 @@ pub fn init<Cf: gfx_core::format::RenderFormat = gfx_core::format::Rgba8>
         BufferDesc: winapi::DXGI_MODE_DESC {
             Width: width as winapi::UINT,
             Height: height as winapi::UINT,
-            Format: winapi::DXGI_FORMAT_R8G8B8A8_UNORM,
+            Format: match gfx_device_dx11::data::map_format(color_format) {
+                Some(fm) => fm,
+                None => return Err(InitError::Format(color_format)),
+            },
             RefreshRate: winapi::DXGI_RATIONAL {
                 Numerator: 60,
                 Denominator: 1,
@@ -101,13 +136,12 @@ pub fn init<Cf: gfx_core::format::RenderFormat = gfx_core::format::Rgba8>
     for dt in driver_types.iter() {
         match gfx_device_dx11::create(*dt, &swap_desc) {
             Ok((device, factory, chain, color)) => {
-                use gfx_core::factory::Phantom;
                 info!("Success with driver {:?}", *dt);
                 let win = Window {
                     hwnd: hwnd,
                     swap_chain: chain,
                     driver_type: *dt,
-                    color_target: gfx_core::handle::RenderTargetView::new(color),
+                    color_target: color,
                 };
                 return Ok((win, device, factory))
             },
@@ -116,5 +150,5 @@ pub fn init<Cf: gfx_core::format::RenderFormat = gfx_core::format::Rgba8>
             },
         }
     }
-    Err(InitError)
+    Err(InitError::DriverType)
 }

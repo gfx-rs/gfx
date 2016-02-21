@@ -23,7 +23,7 @@ extern crate dxguid;
 extern crate winapi;
 
 mod command;
-mod data;
+pub mod data;
 mod factory;
 mod mirror;
 mod state;
