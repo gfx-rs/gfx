@@ -1,7 +1,7 @@
 [package]
-name = "gfx_meta"
-version = "0.0.1"
-description = "Meta package for GFX"
+name = "gfx_app"
+version = "0.1.0"
+description = "GFX example application framework"
 homepage = "https://github.com/gfx-rs/gfx"
 keywords = ["graphics", "gamedev"]
 license = "Apache-2.0"
@@ -12,9 +12,10 @@ unstable = []
 
 
 [lib]
-name = "gfx_meta"
+name = "gfx_app"
 
 [dependencies]
+glutin = "0.4.8"
 gfx_core = { path = "src/render", version = "0.1.1" }
 gfx_device_gl = { path = "src/backend/gl", version = "0.8.1" }
 gfx_window_glutin = { path = "src/window/glutin", version = "0.9.1" }
@@ -78,9 +79,7 @@ path = "examples/mipmap/main.rs"
 env_logger = "*"
 log = "*"
 cgmath = "0.7"
-glutin = ">=0.4.2"
 glfw = "0.3"
-gfx_gl = "0.1"
 rand = "*"
 time = "*"
 genmesh = "*"

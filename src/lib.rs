@@ -56,12 +56,13 @@ pub trait Application<R: gfx::Resources> {
     fn launch(title: &str, config: Config) where
         Self: Sized + Application<gfx_device_gl::Resources> + Application<gfx_device_dx11::Resources>
     {
-        use gfx::traits::{Device, FactoryExt};
+        use gfx::traits::{Device, Factory, FactoryExt};
         match config.backend {
             Backend::OpenGL2 => {
                 let builder = glutin::WindowBuilder::new()
                     .with_title(title.to_string())
-                    .with_dimensions(config.size.0 as u32, config.size.1 as u32);
+                    .with_dimensions(config.size.0 as u32, config.size.1 as u32)
+                    .with_vsync();
                 let (window, mut device, mut factory, main_color, main_depth) =
                     gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder);
                 let mut encoder = factory.create_encoder();
@@ -87,9 +88,26 @@ pub trait Application<R: gfx::Resources> {
                 }
             },
             Backend::Direct3D11 => {
-                //TODO
+                use gfx::tex::Size;
+                let (window, mut device, mut factory, main_color) =
+                    gfx_window_dxgi::init::<ColorFormat>(title, config.size.0, config.size.1)
+                    .unwrap();
+                let mut encoder = factory.create_encoder();
+                let (_, _, main_depth) = factory.create_depth_stencil(
+                    config.size.0 as Size, config.size.1 as Size
+                    ).unwrap();
+                let mut app = Self::new(factory, Init {
+                    color: main_color,
+                    depth: main_depth,
+                });
+                while window.dispatch() {
+                    encoder.reset();
+                    app.render(&mut encoder);
+                    device.submit(encoder.as_buffer());
+                    window.swap_buffers(1);
+                    device.cleanup();
+                }
             },
         }
     }
 }
-

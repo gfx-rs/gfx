@@ -29,17 +29,13 @@ use gfx_core::format;
 use gfx_device_dx11::{Device, Factory, Resources};
 
 
-pub struct Window<Cv> {
+pub struct Window {
     hwnd: winapi::HWND,
     swap_chain: *mut winapi::IDXGISwapChain,
     driver_type: winapi::D3D_DRIVER_TYPE,
-    pub color_target: Cv,
 }
 
-pub type WindowRaw = Window<gfx_core::handle::RawRenderTargetView<Resources>>;
-pub type WindowTyped<Cf> = Window<gfx_core::handle::RenderTargetView<Resources, Cf>>;
-
-impl<Cv> Window<Cv> {
+impl Window {
     pub fn is_accelerated(&self) -> bool {
         self.driver_type == winapi::D3D_DRIVER_TYPE_HARDWARE
     }
@@ -49,7 +45,7 @@ impl<Cv> Window<Cv> {
     }
 
     pub fn dispatch(&self) -> bool {unsafe {
-        let mut msg: winapi::MSG = mem::uninitialized();
+        let mut msg: winapi::MSG = mem::zeroed();
         while user32::PeekMessageW(&mut msg, self.hwnd, 0, 0, winapi::PM_REMOVE) == winapi::TRUE {
             if (msg.message & 0xFFFF) == winapi::WM_QUIT {
                 return false
@@ -72,27 +68,18 @@ pub enum InitError {
 }
 
 /// Initialize with a given size. Typed format version.
-pub fn init<Cf>(title: &str, requested_width: winapi::INT, requested_height: winapi::INT)
-           -> Result<(WindowTyped<Cf>, Device, Factory), InitError>
+pub fn init<Cf>(title: &str, requested_width: u16, requested_height: u16)
+           -> Result<(Window, Device, Factory, gfx_core::handle::RenderTargetView<Resources, Cf>), InitError>
 where Cf: format::RenderFormat
 {
-    init_raw(title, requested_width, requested_height, Cf::get_format())
-        .map(|(w, device, factory)| {
-            use gfx_core::factory::Phantom;
-            let win = Window {
-                hwnd: w.hwnd,
-                swap_chain: w.swap_chain,
-                driver_type: w.driver_type,
-                color_target: Phantom::new(w.color_target),
-            };
-            (win, device, factory)
-        })
+    use gfx_core::factory::Phantom;
+    init_raw(title, requested_width as winapi::INT, requested_height as winapi::INT, Cf::get_format())
+        .map(|(window, device, factory, color)| (window, device, factory, Phantom::new(color)))
 }
 
 /// Initialize with a given size. Raw format version.
-pub fn init_raw(title: &str, requested_width: winapi::INT, requested_height: winapi::INT,
-                color_format: format::Format)
-                -> Result<(WindowRaw, Device, Factory), InitError> {
+pub fn init_raw(title: &str, requested_width: winapi::INT, requested_height: winapi::INT, color_format: format::Format)
+                -> Result<(Window, Device, Factory, gfx_core::handle::RawRenderTargetView<Resources>), InitError> {
     let hwnd = match window::create(title, requested_width, requested_height) {
         Ok(h) => h,
         Err(()) => return Err(InitError::Window),
@@ -141,9 +128,8 @@ pub fn init_raw(title: &str, requested_width: winapi::INT, requested_height: win
                     hwnd: hwnd,
                     swap_chain: chain,
                     driver_type: *dt,
-                    color_target: color,
                 };
-                return Ok((win, device, factory))
+                return Ok((win, device, factory, color))
             },
             Err(hres) => {
                 info!("Failure with driver {:?}: code {:x}", *dt, hres);
