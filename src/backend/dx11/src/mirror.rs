@@ -55,10 +55,12 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                      reflection: *mut winapi::ID3D11ShaderReflection) {
     use winapi::{UINT, SUCCEEDED};
     let usage = stage.into();
-    let shader_desc = unsafe {
+    let (shader_desc, _feature_level) = unsafe {
         let mut desc = mem::zeroed();
+        let mut level = winapi::D3D_FEATURE_LEVEL_9_1;
         (*reflection).GetDesc(&mut desc);
-        desc
+        (*reflection).GetMinFeatureLevel(&mut level);
+        (desc, level)
     };
     if stage == s::Stage::Vertex {
         // record vertex attributes
@@ -141,26 +143,23 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
         }else if res_desc.Type == winapi::D3D_SIT_TEXTURE {
             //TODO
         }else if res_desc.Type == winapi::D3D_SIT_SAMPLER {
-            //TODO
+            if let Some(s) = info.samplers.iter_mut().find(|s| s.name == name) {
+                s.usage = s.usage | usage;
+                continue;
+            }
+            let cmp = if res_desc.uFlags & winapi::D3D_SIF_COMPARISON_SAMPLER.0 != 0 {
+                s::IsComparison::Compare
+            }else {
+                s::IsComparison::NoCompare
+            };
+            info.samplers.push(s::SamplerVar {
+                name: name,
+                slot: res_desc.BindPoint as core::SamplerSlot,
+                ty: s::SamplerType(cmp, s::IsRect::NoRect),
+                usage: usage,
+            });
         }else {
             error!("Unsupported resource type {:?} for {}", res_desc.Type, name);
         }
     }
-    /*
-    for i in 0 .. desc.ConstantBuffers {
-        let cb = reflection->GetConstantBufferByIndex(i);
-        let desc = unsafe {
-            let mut desc = mem::zeroed();
-            cb->GetDesc(&mut desc);
-            desc
-        };
-        let var = s::ConstantBufferVar {
-            name: desc.Name,
-            slot: i,
-            size: desc.Size,
-            usage: usage,
-        };
-        //TODO: search for the existing one
-        info.constant_buffers.push(var);
-    }*/
 }
