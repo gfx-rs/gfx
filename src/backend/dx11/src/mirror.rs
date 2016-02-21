@@ -39,7 +39,7 @@ fn convert_str(pchar: *const i8) -> String {
     }
 }
 
-fn map_base_type(ct: winapi::D3D_REGISTER_COMPONENT_TYPE) -> s::BaseType {
+fn map_base_type_from_component(ct: winapi::D3D_REGISTER_COMPONENT_TYPE) -> s::BaseType {
     match ct {
         winapi::D3D_REGISTER_COMPONENT_UINT32 => s::BaseType::U32,
         winapi::D3D_REGISTER_COMPONENT_SINT32 => s::BaseType::I32,
@@ -47,7 +47,41 @@ fn map_base_type(ct: winapi::D3D_REGISTER_COMPONENT_TYPE) -> s::BaseType {
         winapi::D3D_REGISTER_COMPONENT_TYPE(t) => {
             error!("Unknown register component type {} detected!", t);
             s::BaseType::F32
-        },
+        }
+    }
+}
+
+fn map_base_type_from_return(rt: winapi::D3D_RESOURCE_RETURN_TYPE) -> s::BaseType {
+    match rt {
+        winapi::D3D_RETURN_TYPE_UINT => s::BaseType::U32,
+        winapi::D3D_RETURN_TYPE_SINT => s::BaseType::I32,
+        winapi::D3D_RETURN_TYPE_FLOAT => s::BaseType::F32,
+        winapi::D3D_RESOURCE_RETURN_TYPE(t) => {
+            error!("Unknown return type {} detected!", t);
+            s::BaseType::F32
+        }
+    }
+}
+
+fn map_texture_type(tt: winapi::D3D_SRV_DIMENSION) -> s::TextureType {
+    use winapi::*;
+    use gfx_core::shade::IsArray::*;
+    use gfx_core::shade::IsMultiSample::*;
+    match tt {
+        D3D_SRV_DIMENSION_BUFFER            => s::TextureType::Buffer,
+        D3D_SRV_DIMENSION_TEXTURE1D         => s::TextureType::D1(NoArray),
+        D3D_SRV_DIMENSION_TEXTURE1DARRAY    => s::TextureType::D1(Array),
+        D3D_SRV_DIMENSION_TEXTURE2D         => s::TextureType::D2(NoArray, NoMultiSample),
+        D3D_SRV_DIMENSION_TEXTURE2DARRAY    => s::TextureType::D2(Array, NoMultiSample),
+        D3D_SRV_DIMENSION_TEXTURE2DMS       => s::TextureType::D2(NoArray, MultiSample),
+        D3D_SRV_DIMENSION_TEXTURE2DMSARRAY  => s::TextureType::D2(Array, MultiSample),
+        D3D_SRV_DIMENSION_TEXTURE3D         => s::TextureType::D3,
+        D3D_SRV_DIMENSION_TEXTURECUBE       => s::TextureType::Cube(NoArray),
+        D3D_SRV_DIMENSION_TEXTURECUBEARRAY  => s::TextureType::Cube(Array),
+        D3D_SRV_DIMENSION(t) => {
+            error!("Unknow texture dimension {}", t);
+            s::TextureType::Buffer
+        }
     }
 }
 
@@ -84,7 +118,7 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
             info.vertex_attributes.push(s::AttributeVar {
                 name: convert_str(desc.SemanticName),
                 slot: desc.Register as core::AttributeSlot,
-                base_type: map_base_type(desc.ComponentType),
+                base_type: map_base_type_from_component(desc.ComponentType),
                 container: s::ContainerType::Vector(4), // how to get it?
             });
         }
@@ -107,7 +141,7 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
             info.outputs.push(s::OutputVar {
                 name: convert_str(desc.SemanticName),
                 slot: desc.Register as core::ColorSlot,
-                base_type: map_base_type(desc.ComponentType),
+                base_type: map_base_type_from_component(desc.ComponentType),
                 container: s::ContainerType::Vector(4), // how to get it?
             });
         }
@@ -141,7 +175,17 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                 usage: usage,
             });
         }else if res_desc.Type == winapi::D3D_SIT_TEXTURE {
-            //TODO
+            if let Some(t) = info.textures.iter_mut().find(|t| t.name == name) {
+                t.usage = t.usage | usage;
+                continue;
+            }
+            info.textures.push(s::TextureVar {
+                name: name,
+                slot: res_desc.BindPoint as core::ResourceViewSlot,
+                base_type: map_base_type_from_return(res_desc.ReturnType),
+                ty: map_texture_type(res_desc.Dimension),
+                usage: usage,
+            });
         }else if res_desc.Type == winapi::D3D_SIT_SAMPLER {
             if let Some(s) = info.samplers.iter_mut().find(|s| s.name == name) {
                 s.usage = s.usage | usage;
