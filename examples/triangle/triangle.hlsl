@@ -7,11 +7,10 @@ struct VsOutput {
 	float3 color: COLOR;
 };
  
-VsOutput Vertex(float2 a_Pos : POSITION, float3 a_Color : COLOR) {
- 	float4 pos = float4(a_Pos, 0.0, 1.0);
+VsOutput Vertex(float2 pos : a_Pos, float3 color : a_Color) {
  	VsOutput output = {
-    	mul(pos, mvp),
-    	a_Color,
+    	mul(float4(pos, 0.0, 1.0), mvp),
+    	color,
     };
  	return output;
 }
