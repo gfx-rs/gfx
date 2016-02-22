@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+extern crate env_logger;
 extern crate glutin;
 extern crate gfx;
 extern crate gfx_device_gl;
@@ -57,6 +58,7 @@ pub trait Application<R: gfx::Resources> {
         Self: Sized + Application<gfx_device_gl::Resources> + Application<gfx_device_dx11::Resources>
     {
         use gfx::traits::{Device, Factory, FactoryExt};
+        env_logger::init().unwrap();
         match config.backend {
             Backend::OpenGL2 => {
                 let builder = glutin::WindowBuilder::new()

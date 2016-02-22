@@ -69,8 +69,10 @@ pub struct ShaderSource<'a> {
     pub glsl_140: Option<&'a [u8]>,
     pub glsl_150: Option<&'a [u8]>,
     pub glsl_430: Option<&'a [u8]>,
-    // TODO: hlsl_sm_N...
-    pub targets: &'a [&'a str],
+    pub hlsl_30: Option<&'a [u8]>,
+    pub hlsl_40: Option<&'a [u8]>,
+    pub hlsl_41: Option<&'a [u8]>,
+    pub hlsl_50: Option<&'a [u8]>,
 }
 
 impl<'a> ShaderSource<'a> {
@@ -83,7 +85,10 @@ impl<'a> ShaderSource<'a> {
             glsl_140: None,
             glsl_150: None,
             glsl_430: None,
-            targets: &[],
+            hlsl_30: None,
+            hlsl_40: None,
+            hlsl_41: None,
+            hlsl_50: None,
         }
     }
 
