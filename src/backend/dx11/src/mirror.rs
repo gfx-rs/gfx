@@ -26,10 +26,11 @@ pub fn reflect_shader(code: &[u8]) -> *mut winapi::ID3D11ShaderReflection {
         d3dcompiler::D3DReflect(code.as_ptr() as *const winapi::VOID,
             code.len() as winapi::SIZE_T, &dxguid::IID_ID3D11ShaderReflection, &mut reflection)
     };
-    if !winapi::SUCCEEDED(hr) {
-        error!("Shader reflection failed with code {:x}", hr);
+    if winapi::SUCCEEDED(hr) {
+        reflection as *mut winapi::ID3D11ShaderReflection
+    }else {
+        panic!("Shader reflection failed with code {:x}", hr);
     }
-    reflection as *mut winapi::ID3D11ShaderReflection
 }
 
 fn convert_str(pchar: *const i8) -> String {
@@ -115,8 +116,12 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                 // not used, skipping
                 continue
             }
+            let name = convert_str(desc.SemanticName);
+            if desc.SemanticIndex != 0 {
+                error!("Semantic {} has non-zero index {} - not supported by the backend", name, desc.SemanticIndex);
+            }
             info.vertex_attributes.push(s::AttributeVar {
-                name: convert_str(desc.SemanticName),
+                name: name,
                 slot: desc.Register as core::AttributeSlot,
                 base_type: map_base_type_from_component(desc.ComponentType),
                 container: s::ContainerType::Vector(4), // how to get it?
@@ -132,18 +137,20 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                 (hr, desc)
             };
             assert!(SUCCEEDED(hr));
+            let name = convert_str(desc.SemanticName);
             debug!("Output {}, system type {:?}, mask {}, read-write mask {}",
-                convert_str(desc.SemanticName), desc.SystemValueType, desc.Mask, desc.ReadWriteMask);
-            if desc.SystemValueType != winapi::D3D_NAME_UNDEFINED {
-                // system value semantic detected, skipping
-                continue
+                name, desc.SystemValueType, desc.Mask, desc.ReadWriteMask);
+            if desc.SystemValueType == winapi::D3D_NAME_TARGET {
+                info.outputs.push(s::OutputVar {
+                    name: format!("Target{}", desc.SemanticIndex), //care!
+                    slot: desc.Register as core::ColorSlot,
+                    base_type: map_base_type_from_component(desc.ComponentType),
+                    container: s::ContainerType::Vector(4), // how to get it?
+                });
+            }else
+            if desc.SystemValueType == winapi::D3D_NAME_UNDEFINED {
+                warn!("Custom PS output semantic is ignored: {}", name)
             }
-            info.outputs.push(s::OutputVar {
-                name: convert_str(desc.SemanticName),
-                slot: desc.Register as core::ColorSlot,
-                base_type: map_base_type_from_component(desc.ComponentType),
-                container: s::ContainerType::Vector(4), // how to get it?
-            });
         }
     }
     // record resources
