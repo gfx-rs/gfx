@@ -51,8 +51,7 @@ pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
             Unorm => DXGI_FORMAT_R8G8_UNORM,
             _ => return None,
         },
-        R8_G8_B8 => return None,
-        R8_G8_B8_A8 => match format.1 {
+        R8_G8_B8 | R8_G8_B8_A8 => match format.1 {
             Int   => DXGI_FORMAT_R8G8B8A8_SINT,
             Uint  => DXGI_FORMAT_R8G8B8A8_UINT,
             Inorm => DXGI_FORMAT_R8G8B8A8_SNORM,

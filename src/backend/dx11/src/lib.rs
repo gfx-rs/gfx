@@ -361,7 +361,7 @@ impl gfx_core::Device for Device {
         use gfx_core::handle::Producer;
         self.frame_handles.clear();
         self.share.handles.borrow_mut().clean_with(&mut (),
-            |_, _| {}, //buffer
+            |_, v| unsafe { (*v.0).Release(); }, //buffer
             |_, s| unsafe { //shader
                 (*s.object).Release();
                 (*s.reflection).Release();
@@ -371,13 +371,19 @@ impl gfx_core::Device for Device {
                 if p.gs != ptr::null_mut() { (*p.gs).Release(); }
                 if p.ps != ptr::null_mut() { (*p.ps).Release(); }
             }, //program
-            |_, _| {}, //PSO
+            |_, v| unsafe { //PSO
+                type Child = *mut winapi::ID3D11DeviceChild;
+                (*v.layout).Release();
+                (*(v.rasterizer as Child)).Release();
+                (*(v.depth_stencil as Child)).Release();
+                (*(v.blend as Child)).Release();
+            },
             |_, v| unsafe { (*v.to_resource()).Release(); },  //texture
-            |_, _| {}, //SRV
+            |_, v| unsafe { (*v.0).Release(); }, //SRV
             |_, _| {}, //UAV
             |_, v| unsafe { (*v.0).Release(); }, //RTV
-            |_, _| {}, //DSV
-            |_, _| {}, //sampler
+            |_, v| unsafe { (*v.0).Release(); }, //DSV
+            |_, v| unsafe { (*v.0).Release(); }, //sampler
             |_, _| {}, //fence
         );
     }
