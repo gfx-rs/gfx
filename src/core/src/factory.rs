@@ -59,12 +59,14 @@ pub enum MapAccess {
 bitflags!(
     /// Bind flags
     flags Bind: u8 {
-        /// The resource can be bound to the shader for reading.
-        const SHADER_RESOURCE  = 0x1,
         /// The resource can be rendered into.
-        const RENDER_TARGET    = 0x2,
+        const RENDER_TARGET    = 0x1,
+        /// The resource can serve as a depth/stencil target.
+        const DEPTH_STENCIL    = 0x2,
+        /// The resource can be bound to the shader for reading.
+        const SHADER_RESOURCE  = 0x4,
         /// The resource can be bound to the shader for writing.
-        const UNORDERED_ACCESS = 0x4,
+        const UNORDERED_ACCESS = 0x8,
     }
 );
 
@@ -146,7 +148,7 @@ pub enum ResourceViewError {
 /// Error creating either a RenderTargetView, or DepthStencilView.
 #[derive(Clone, PartialEq, Debug)]
 pub enum TargetViewError {
-    /// The `RENDER_TARGET` flag does not present in the texture.
+    /// The `RENDER_TARGET`/`DEPTH_STENCIL` flag does not present in the texture.
     NoBindFlag,
     /// Selected mip level doesn't exist.
     BadLevel(target::Level),
@@ -367,7 +369,7 @@ pub trait Factory<R: Resources> {
                                      layer: Option<target::Layer>)
                                      -> Result<handle::DepthStencilView<R, T>, TargetViewError>
     {
-        if !tex.get_info().bind.contains(RENDER_TARGET) {
+        if !tex.get_info().bind.contains(DEPTH_STENCIL) {
             return Err(TargetViewError::NoBindFlag)
         }
         self.view_texture_as_depth_stencil_raw(tex.raw(), layer)
@@ -397,7 +399,7 @@ pub trait Factory<R: Resources> {
                             -> Result<(handle::Texture<R, T::Surface>,
                                        handle::ShaderResourceView<R, T::View>,
                                        handle::RenderTargetView<R, T>
-                               ), CombinedError>
+                                ), CombinedError>
     {
         let kind = tex::Kind::D2(width, height, tex::AaMode::Single);
         let levels = if allocate_mipmap {99} else {1};
@@ -413,11 +415,11 @@ pub trait Factory<R: Resources> {
                             -> Result<(handle::Texture<R, T::Surface>,
                                        handle::ShaderResourceView<R, T::View>,
                                        handle::DepthStencilView<R, T>
-                               ), CombinedError>
+                                ), CombinedError>
     {
         let kind = tex::Kind::D2(width, height, tex::AaMode::Single);
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
-        let tex = try!(self.create_texture(kind, 1, SHADER_RESOURCE | RENDER_TARGET, Some(cty)));
+        let tex = try!(self.create_texture(kind, 1, SHADER_RESOURCE | DEPTH_STENCIL, Some(cty)));
         let resource = try!(self.view_texture_as_shader_resource::<T>(&tex, (0,0), format::Swizzle::new()));
         let target = try!(self.view_texture_as_depth_stencil(&tex, None));
         Ok((tex, resource, target))

@@ -166,14 +166,17 @@ pub fn map_anti_alias(aa: AaMode) -> DXGI_SAMPLE_DESC {
 pub fn map_bind(bind: Bind) -> D3D11_BIND_FLAG {
     use gfx_core::factory as f;
     let mut flags = D3D11_BIND_FLAG(0);
+    if bind.contains(f::RENDER_TARGET) {
+        flags = flags | D3D11_BIND_RENDER_TARGET;
+    }
+    if bind.contains(f::DEPTH_STENCIL) {
+        flags = flags | D3D11_BIND_DEPTH_STENCIL;
+    }
     if bind.contains(f::SHADER_RESOURCE) {
         flags = flags | D3D11_BIND_SHADER_RESOURCE;
     }
     if bind.contains(f::UNORDERED_ACCESS) {
         flags = flags | D3D11_BIND_UNORDERED_ACCESS;
-    }
-    if bind.contains(f::RENDER_TARGET) {
-        flags = flags | D3D11_BIND_RENDER_TARGET;
     }
     flags
 }

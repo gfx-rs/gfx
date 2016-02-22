@@ -203,7 +203,7 @@ pub fn create_main_targets_raw(dim: d::tex::Dimensions, color_format: d::format:
             levels: 1,
             kind: d::tex::Kind::D2(dim.0, dim.1, dim.3),
             format: depth_format,
-            bind: d::factory::RENDER_TARGET,
+            bind: d::factory::DEPTH_STENCIL,
         },
     );
     let m_color = temp.make_rtv(TargetView::Surface(0), &color_tex, dim);

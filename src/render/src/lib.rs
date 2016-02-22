@@ -39,7 +39,7 @@ pub use gfx_core::{format, handle, tex};
 pub use gfx_core::factory::{Factory, BufferRole, BufferInfo, BufferUsage,
                             Bind, BufferError, BufferUpdateError, CombinedError,
                             ResourceViewError, TargetViewError,
-                            SHADER_RESOURCE, UNORDERED_ACCESS, RENDER_TARGET,
+                            RENDER_TARGET, DEPTH_STENCIL, SHADER_RESOURCE, UNORDERED_ACCESS,
                             cast_slice};
 pub use gfx_core::{VertexCount, InstanceCount};
 pub use gfx_core::Primitive;

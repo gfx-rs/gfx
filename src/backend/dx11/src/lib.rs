@@ -155,7 +155,7 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
     use gfx_core::tex;
 
     let mut swap_chain = ptr::null_mut();
-    let create_flags = 0;
+    let create_flags = winapi::D3D11_CREATE_DEVICE_DEBUG; //TODO
     let mut share = Share {
         device: ptr::null_mut(),
         capabilities: gfx_core::Capabilities { //TODO
@@ -185,7 +185,7 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
     let mut context = ptr::null_mut();
     let mut feature_level = winapi::D3D_FEATURE_LEVEL_10_0;
     let hr = unsafe {
-        d3d11::D3D11CreateDeviceAndSwapChain(ptr::null_mut(), driver_type, ptr::null_mut(), create_flags,
+        d3d11::D3D11CreateDeviceAndSwapChain(ptr::null_mut(), driver_type, ptr::null_mut(), create_flags.0,
             &FEATURE_LEVELS[0], FEATURE_LEVELS.len() as winapi::UINT, winapi::D3D11_SDK_VERSION, desc,
             &mut swap_chain, &mut share.device, &mut feature_level, &mut context)
     };

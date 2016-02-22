@@ -57,10 +57,11 @@ struct TextureParam {
 
 impl TextureParam {
     fn to_sub_data(&self, w: core::tex::Size, h: core::tex::Size) -> winapi::D3D11_SUBRESOURCE_DATA {
+        use winapi::UINT;
         winapi::D3D11_SUBRESOURCE_DATA {
             pSysMem: self.init,
-            SysMemPitch: w as winapi::UINT * self.bytes_per_texel,
-            SysMemSlicePitch: (w * h) as winapi::UINT * self.bytes_per_texel,
+            SysMemPitch: w as UINT * self.bytes_per_texel,
+            SysMemSlicePitch: (w as UINT) * (h as UINT) * self.bytes_per_texel,
         }
     }
 }
@@ -103,8 +104,8 @@ impl Factory {
             f::BufferRole::Index    => D3D11_BIND_INDEX_BUFFER,
             f::BufferRole::Uniform  => D3D11_BIND_CONSTANT_BUFFER,
         };
-        if info.bind.contains(f::RENDER_TARGET) {
-            return Err(f::BufferError::UnsupportedBind(f::RENDER_TARGET))
+        if info.bind.contains(f::RENDER_TARGET) | info.bind.contains(f::DEPTH_STENCIL) {
+            return Err(f::BufferError::UnsupportedBind(info.bind))
         }
         let desc = D3D11_BUFFER_DESC {
             ByteWidth: info.size as winapi::UINT,
@@ -147,6 +148,7 @@ impl Factory {
             MiscFlags: misc.0,
         };
         let sub_data = tp.to_sub_data(size, 0);
+        debug!("Creating Texture1D with desc {:?} and sub-data {:?}", native_desc, sub_data);
         let mut raw = ptr::null_mut();
         let hr = unsafe {
             (*self.share.device).CreateTexture1D(&native_desc,
@@ -174,6 +176,7 @@ impl Factory {
             MiscFlags: misc.0,
         };
         let sub_data = tp.to_sub_data(size[0], size[1]);
+        debug!("Creating Texture2D with desc {:?} and sub-data {:?}", native_desc, sub_data);
         let mut raw = ptr::null_mut();
         let hr = unsafe {
             (*self.share.device).CreateTexture2D(&native_desc,
@@ -198,6 +201,7 @@ impl Factory {
             MiscFlags: misc.0,
         };
         let sub_data = tp.to_sub_data(size[0], size[1]);
+        debug!("Creating Texture3D with desc {:?} and sub-data {:?}", native_desc, sub_data);
         let mut raw = ptr::null_mut();
         let hr = unsafe {
             (*self.share.device).CreateTexture3D(&native_desc,
@@ -223,11 +227,11 @@ impl Factory {
             bind: map_bind(desc.bind),
             usage: match init {
                 Some(_) => winapi::D3D11_USAGE_IMMUTABLE,
-                None    => winapi::D3D11_USAGE_DYNAMIC, //TODO
+                None    => winapi::D3D11_USAGE_DEFAULT, //TODO
             },
             cpu_access: match init {
                 Some(_) => winapi::D3D11_CPU_ACCESS_FLAG(0),
-                None    => winapi::D3D11_CPU_ACCESS_WRITE, //TODO
+                None    => winapi::D3D11_CPU_ACCESS_FLAG(0), //TODO
             },
             init: match init {
                 Some((data, _, _)) => data.as_ptr() as *const c_void,
