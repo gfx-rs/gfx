@@ -113,25 +113,15 @@ pub struct Capabilities {
 
     pub max_vertex_count: usize,
     pub max_index_count: usize,
-    pub max_draw_buffers: usize,
     pub max_texture_size: usize,
-    pub max_vertex_attributes: usize,
 
-    /// In GLES it is not allowed to re-bind a buffer to a different
-    /// target than the one it was initialized with.
-    pub buffer_role_change_allowed: bool,
-
-    pub array_buffer_supported: bool,
-    pub fragment_output_supported: bool,
-    pub immutable_storage_supported: bool,
     pub instance_base_supported: bool,
     pub instance_call_supported: bool,
     pub instance_rate_supported: bool,
-    pub render_targets_supported: bool,
-    pub sampler_objects_supported: bool,
-    pub srgb_color_supported: bool,
-    pub uniform_block_supported: bool,
     pub vertex_base_supported: bool,
+    pub srgb_color_supported: bool,
+    pub constant_buffer_supported: bool,
+    pub unordered_access_view_supported: bool,
     pub separate_blending_slots_supported: bool,
 }
 

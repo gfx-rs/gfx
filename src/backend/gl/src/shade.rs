@@ -202,7 +202,7 @@ fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::AttributeVar> {
 
 fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
                 -> Vec<s::ConstantBufferVar> {
-    let num = if caps.uniform_block_supported {
+    let num = if caps.constant_buffer_supported {
         get_program_iv(gl, prog, gl::ACTIVE_UNIFORM_BLOCKS)
     } else {
         0
@@ -274,7 +274,7 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program, u
     let total_num = get_program_iv(gl, prog, gl::ACTIVE_UNIFORMS);
     let indices: Vec<_> = (0..total_num as gl::types::GLuint).collect();
     let mut block_indices: Vec<gl::types::GLint> = repeat(-1 as gl::types::GLint).take(total_num as usize).collect();
-    if caps.uniform_block_supported {
+    if caps.constant_buffer_supported {
         unsafe {
             gl.GetActiveUniformsiv(prog, total_num as gl::types::GLsizei,
                 (&indices[..]).as_ptr(), gl::UNIFORM_BLOCK_INDEX,

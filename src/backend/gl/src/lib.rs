@@ -216,6 +216,7 @@ pub fn create_main_targets_raw(dim: d::tex::Dimensions, color_format: d::format:
 pub struct Share {
     context: gl::Gl,
     capabilities: d::Capabilities,
+    private_caps: info::PrivateCaps,
     handles: RefCell<handle::Manager<Resources>>,
 }
 
@@ -254,7 +255,7 @@ impl Device {
     {
         let gl = gl::Gl::load_with(fn_proc);
         // query information
-        let (info, caps) = info::get(&gl);
+        let (info, caps, private) = info::get(&gl);
         info!("Vendor: {:?}", info.platform_name.vendor);
         info!("Renderer: {:?}", info.platform_name.renderer);
         info!("Version: {:?}", info.version);
@@ -270,7 +271,7 @@ impl Device {
         }
         // create main VAO and bind it
         let mut vao = 0;
-        if caps.array_buffer_supported {
+        if private.array_buffer_supported {
             unsafe {
                 gl.GenVertexArrays(1, &mut vao);
                 gl.BindVertexArray(vao);
@@ -283,6 +284,7 @@ impl Device {
             share: Rc::new(Share {
                 context: gl,
                 capabilities: caps,
+                private_caps: private,
                 handles: RefCell::new(handles),
             }),
             temp: Temp::new(),
@@ -470,7 +472,7 @@ impl Device {
                 let gl = &self.share.context;
                 for i in 0 .. d::MAX_SAMPLERS {
                     if let Some((s, _usage)) = ss.0[i] {
-                        if self.share.capabilities.sampler_objects_supported {
+                        if self.share.private_caps.sampler_objects_supported {
                             unsafe { gl.BindSampler(i as gl::types::GLenum, s.object) };
                         } else {
                             assert!(d::MAX_SAMPLERS <= d::MAX_RESOURCE_VIEWS);
@@ -507,11 +509,10 @@ impl Device {
                 unsafe { gl.BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer) };
             },
             Command::BindFrameBuffer(point, frame_buffer) => {
-                let caps = &self.share.capabilities;
-                let gl = &self.share.context;
-                if !caps.render_targets_supported {
+                if !self.share.private_caps.frame_buffer_supported {
                     error!("Tried to do something with an FBO without FBO support!")
                 }
+                let gl = &self.share.context;
                 unsafe { gl.BindFramebuffer(point, frame_buffer) };
             },
             Command::BindUniform(loc, uniform) => {

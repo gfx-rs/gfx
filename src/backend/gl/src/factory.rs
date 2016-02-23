@@ -255,7 +255,7 @@ impl d::Factory<R> for Factory {
     fn create_texture_raw(&mut self, desc: t::Descriptor, hint: Option<ChannelType>)
                           -> Result<handle::RawTexture<R>, t::Error> {
         use gfx_core::tex::Error;
-        let caps = &self.share.capabilities;
+        let caps = &self.share.private_caps;
         if desc.levels == 0 {
             return Err(Error::Size(0))
         }
@@ -331,7 +331,7 @@ impl d::Factory<R> for Factory {
     }
 
     fn create_sampler(&mut self, info: t::SamplerInfo) -> handle::Sampler<R> {
-        let name = if self.share.capabilities.sampler_objects_supported {
+        let name = if self.share.private_caps.sampler_objects_supported {
             tex::make_sampler(&self.share.context, &info)
         } else {
             0
