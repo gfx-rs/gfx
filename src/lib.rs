@@ -85,7 +85,6 @@ impl<A: Application<gfx_device_gl::Resources>> ApplicationGL2 for A {
 impl<A: Application<gfx_device_dx11::Resources>> ApplicationD3D11 for A {
     fn launch(title: &str, config: Config) {
         use gfx::traits::{Device, Factory, FactoryExt};
-        use gfx::tex::Size;
 
         env_logger::init().unwrap();
         let (window, mut device, mut factory, main_color) =
@@ -93,8 +92,7 @@ impl<A: Application<gfx_device_dx11::Resources>> ApplicationD3D11 for A {
             .unwrap();
         let mut encoder = factory.create_encoder();
         let (_, _, main_depth) = factory.create_depth_stencil(
-            config.size.0 as Size, config.size.1 as Size
-            ).unwrap();
+            window.size.0, window.size.1).unwrap();
 
         let mut app = Self::new(factory, Init {
             color: main_color,

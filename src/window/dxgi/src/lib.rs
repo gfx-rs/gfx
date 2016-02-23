@@ -26,6 +26,7 @@ mod window;
 
 use std::mem;
 use gfx_core::format;
+use gfx_core::tex::Size;
 use gfx_device_dx11::{Device, Factory, Resources};
 
 
@@ -33,6 +34,7 @@ pub struct Window {
     hwnd: winapi::HWND,
     swap_chain: *mut winapi::IDXGISwapChain,
     driver_type: winapi::D3D_DRIVER_TYPE,
+    pub size: (Size, Size),
 }
 
 impl Window {
@@ -128,6 +130,7 @@ pub fn init_raw(title: &str, requested_width: winapi::INT, requested_height: win
                     hwnd: hwnd,
                     swap_chain: chain,
                     driver_type: *dt,
+                    size: (width as Size, height as Size),
                 };
                 return Ok((win, device, factory, color))
             },
