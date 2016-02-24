@@ -30,9 +30,9 @@ where
     Cf: format::RenderFormat,
     Df: format::DepthFormat,
 {
-    use gfx_core::factory::Phantom;
+    use gfx_core::factory::Typed;
     let (window, device, factory, color_view, ds_view) = init_raw(builder, Cf::get_format(), Df::get_format());
-    (window, device, factory, Phantom::new(color_view), Phantom::new(ds_view))
+    (window, device, factory, Typed::new(color_view), Typed::new(ds_view))
 }
 
 fn get_window_dimensions(window: &glutin::Window) -> tex::Dimensions {
@@ -80,12 +80,12 @@ where
     Cf: format::RenderFormat,
     Df: format::DepthFormat,
 {
-    use gfx_core::factory::Phantom;
+    use gfx_core::factory::Typed;
     let dim = color_view.get_dimensions();
     assert_eq!(dim, ds_view.get_dimensions());
     if let Some((cv, dv)) = update_views_raw(window, dim, Cf::get_format(), Df::get_format()) {
-        *color_view = Phantom::new(cv);
-        *ds_view = Phantom::new(dv);
+        *color_view = Typed::new(cv);
+        *ds_view = Typed::new(dv);
     }
 }
 

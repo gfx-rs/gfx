@@ -6,7 +6,7 @@ use gfx_core::factory::{Bind, BufferRole, BufferInfo, BufferUsage};
 use gfx_core::handle::{Buffer, Manager, Producer};
 
 fn mock_buffer<T>(len: usize) -> Buffer<DummyResources, T> {
-    use gfx_core::factory::Phantom;
+    use gfx_core::factory::Typed;
     let mut handler = Manager::new();
     let raw = handler.make_buffer((), BufferInfo {
         role: BufferRole::Vertex,
@@ -15,7 +15,7 @@ fn mock_buffer<T>(len: usize) -> Buffer<DummyResources, T> {
         stride: 0,
         bind: Bind::empty(),
     });
-    Phantom::new(raw)
+    Typed::new(raw)
 }
 
 #[test]

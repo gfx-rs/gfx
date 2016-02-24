@@ -17,7 +17,7 @@
 use std::marker::PhantomData;
 use gfx_core::{ConstantBufferSlot, Resources, MAX_VERTEX_ATTRIBUTES};
 use gfx_core::{handle, pso, shade};
-use gfx_core::factory::Phantom;
+use gfx_core::factory::Typed;
 use gfx_core::format::Format;
 use shade::{ToUniform, Usage};
 use super::{DataLink, DataBind, RawDataSet};

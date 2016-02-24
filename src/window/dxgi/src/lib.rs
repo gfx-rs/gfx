@@ -74,9 +74,9 @@ pub fn init<Cf>(title: &str, requested_width: u16, requested_height: u16)
            -> Result<(Window, Device, Factory, gfx_core::handle::RenderTargetView<Resources, Cf>), InitError>
 where Cf: format::RenderFormat
 {
-    use gfx_core::factory::Phantom;
+    use gfx_core::factory::Typed;
     init_raw(title, requested_width as winapi::INT, requested_height as winapi::INT, Cf::get_format())
-        .map(|(window, device, factory, color)| (window, device, factory, Phantom::new(color)))
+        .map(|(window, device, factory, color)| (window, device, factory, Typed::new(color)))
 }
 
 /// Initialize with a given size. Raw format version.

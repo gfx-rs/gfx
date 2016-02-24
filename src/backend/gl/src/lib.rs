@@ -176,9 +176,9 @@ where
     Tc: d::format::RenderFormat,
     Td: d::format::DepthFormat,
 {
-    use gfx_core::factory::Phantom;
+    use gfx_core::factory::Typed;
     let (cv, dv) = create_main_targets_raw(dim, Tc::get_format().0, Td::get_format().0);
-    (Phantom::new(cv), Phantom::new(dv))
+    (Typed::new(cv), Typed::new(dv))
 }
 
 /// Create the proxy target views (RTV and DSV) for the attachments of the

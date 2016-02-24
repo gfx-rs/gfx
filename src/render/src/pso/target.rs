@@ -17,7 +17,7 @@
 use std::marker::PhantomData;
 use gfx_core::{ColorSlot, Resources};
 use gfx_core::{format, handle, pso, state, target};
-use gfx_core::factory::Phantom;
+use gfx_core::factory::Typed;
 use gfx_core::shade::OutputVar;
 use super::{DataLink, DataBind, RawDataSet};
 

@@ -18,7 +18,7 @@ use std::slice;
 use {gl, tex};
 use gfx_core as d;
 use gfx_core::factory as f;
-use gfx_core::factory::Phantom;
+use gfx_core::factory::Typed;
 use gfx_core::format::ChannelType;
 use gfx_core::handle;
 use gfx_core::handle::Producer;

@@ -17,7 +17,7 @@
 use std::marker::PhantomData;
 use gfx_core::{ResourceViewSlot, UnorderedViewSlot, SamplerSlot, Resources};
 use gfx_core::{handle, shade};
-use gfx_core::factory::Phantom;
+use gfx_core::factory::Typed;
 use gfx_core::format::Format;
 use super::{DataLink, DataBind, RawDataSet};
 

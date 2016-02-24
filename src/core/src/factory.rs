@@ -23,7 +23,7 @@ use draw::CommandBuffer;
 
 /// A service trait used to get the raw data out of
 /// strong types. Not meant for public use.
-pub trait Phantom: Sized {
+pub trait Typed: Sized {
     /// The raw type behind the phantom.
     type Raw;
     /// Crete a new phantom from the raw type.
@@ -205,7 +205,7 @@ pub trait Factory<R: Resources> {
                                 -> Result<handle::RawBuffer<R>, BufferError>;
     fn create_buffer_static<T: Copy>(&mut self, data: &[T], role: BufferRole, bind: Bind) -> Result<handle::Buffer<R, T>, BufferError> {
         self.create_buffer_static_raw(cast_slice(data), mem::size_of::<T>(), role, bind)
-            .map(|raw| Phantom::new(raw))
+            .map(|raw| Typed::new(raw))
     }
     fn create_buffer_dynamic<T>(&mut self, num: usize, role: BufferRole, bind: Bind) -> Result<handle::Buffer<R, T>, BufferError> {
         let stride = mem::size_of::<T>();
@@ -216,7 +216,7 @@ pub trait Factory<R: Resources> {
             size: num * stride,
             stride: stride,
         };
-        self.create_buffer_raw(info).map(|raw| Phantom::new(raw))
+        self.create_buffer_raw(info).map(|raw| Typed::new(raw))
     }
 
     fn create_pipeline_state_raw(&mut self, &handle::Program<R>, &pso::Descriptor)
@@ -304,21 +304,21 @@ pub trait Factory<R: Resources> {
             bind: bind,
         };
         let raw = try!(self.create_texture_raw(desc, channel_hint));
-        Ok(Phantom::new(raw))
+        Ok(Typed::new(raw))
     }
 
     fn view_buffer_as_shader_resource<T>(&mut self, buf: &handle::Buffer<R, T>)
                                       -> Result<handle::ShaderResourceView<R, T>, ResourceViewError>
     {
         //TODO: check bind flags
-        self.view_buffer_as_shader_resource_raw(buf.raw()).map(Phantom::new)
+        self.view_buffer_as_shader_resource_raw(buf.raw()).map(Typed::new)
     }
 
     fn view_buffer_as_unordered_access<T>(&mut self, buf: &handle::Buffer<R, T>)
                                       -> Result<handle::UnorderedAccessView<R, T>, ResourceViewError>
     {
         //TODO: check bind flags
-        self.view_buffer_as_unordered_access_raw(buf.raw()).map(Phantom::new)
+        self.view_buffer_as_unordered_access_raw(buf.raw()).map(Typed::new)
     }
 
     fn view_texture_as_shader_resource<T: format::TextureFormat>(&mut self, tex: &handle::Texture<R, T::Surface>,
@@ -336,7 +336,7 @@ pub trait Factory<R: Resources> {
             swizzle: swizzle,
         };
         self.view_texture_as_shader_resource_raw(tex.raw(), desc)
-            .map(Phantom::new)
+            .map(Typed::new)
     }
 
     fn view_texture_as_unordered_access<T: format::TextureFormat>(&mut self, tex: &handle::Texture<R, T::Surface>)
@@ -346,7 +346,7 @@ pub trait Factory<R: Resources> {
             return Err(ResourceViewError::NoBindFlag)
         }
         self.view_texture_as_unordered_access_raw(tex.raw())
-            .map(Phantom::new)
+            .map(Typed::new)
     }
 
     fn view_texture_as_render_target<T: format::RenderFormat>(&mut self, tex: &handle::Texture<R, T::Surface>,
@@ -362,7 +362,7 @@ pub trait Factory<R: Resources> {
             layer: layer,
         };
         self.view_texture_as_render_target_raw(tex.raw(), desc)
-            .map(Phantom::new)
+            .map(Typed::new)
     }
 
     fn view_texture_as_depth_stencil<T: format::DepthFormat>(&mut self, tex: &handle::Texture<R, T::Surface>,
@@ -373,7 +373,7 @@ pub trait Factory<R: Resources> {
             return Err(TargetViewError::NoBindFlag)
         }
         self.view_texture_as_depth_stencil_raw(tex.raw(), layer)
-            .map(Phantom::new)
+            .map(Typed::new)
     }
 
     fn create_texture_const<T: format::TextureFormat>(&mut self, kind: tex::Kind,
@@ -389,7 +389,7 @@ pub trait Factory<R: Resources> {
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
         let raw = try!(self.create_texture_with_data(desc, cty, cast_slice(data), mipmap));
         let levels = (0, raw.get_info().levels - 1);
-        let tex = Phantom::new(raw);
+        let tex = Typed::new(raw);
         let view = try!(self.view_texture_as_shader_resource::<T>(&tex, levels, format::Swizzle::new()));
         Ok((tex, view))
     }

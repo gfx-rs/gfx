@@ -21,7 +21,7 @@ use draw_state::target::{Depth, Stencil};
 
 use gfx_core::{Device, Factory, IndexType, Resources, SubmitInfo, VertexCount};
 use gfx_core::{draw, format, handle, tex};
-use gfx_core::factory::Phantom;
+use gfx_core::factory::Typed;
 use mesh;
 use pso;
 
