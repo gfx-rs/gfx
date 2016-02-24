@@ -184,7 +184,7 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
         let kind = t::Kind::D2Array(512, 512, MAX_LIGHTS as gfx::Layer, t::AaMode::Single);
         let bind = gfx::SHADER_RESOURCE | gfx::DEPTH_STENCIL;
         let cty = gfx::format::ChannelType::Unorm;
-        let tex = factory.create_texture(kind, 1, bind, Some(cty)).unwrap();
+        let tex = factory.create_texture(kind, 1, bind, gfx::Usage::GpuOnly, Some(cty)).unwrap();
         let resource = factory.view_texture_as_shader_resource::<Depth>(
             &tex, (0, 0), gfx::format::Swizzle::new()).unwrap();
         (tex, resource)

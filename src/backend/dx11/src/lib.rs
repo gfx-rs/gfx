@@ -196,6 +196,7 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
         levels: 1,
         format: gfx_core::format::SurfaceType::R8_G8_B8_A8,
         bind: gfx_core::factory::RENDER_TARGET,
+        usage: gfx_core::factory::Usage::GpuOnly,
     });
 
     let dev = Device {

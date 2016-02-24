@@ -98,10 +98,10 @@ impl Factory {
         let gl = &self.share.context;
         let target = role_to_target(info.role);
         let usage = match info.usage {
-            f::BufferUsage::GpuOnly => gl::STATIC_DRAW,
-            f::BufferUsage::Const   => gl::STATIC_DRAW,
-            f::BufferUsage::Dynamic => gl::DYNAMIC_DRAW,
-            f::BufferUsage::Stream  => gl::STREAM_DRAW,
+            f::Usage::GpuOnly    => gl::STATIC_DRAW,
+            f::Usage::Const      => gl::STATIC_DRAW,
+            f::Usage::Dynamic(_) => gl::DYNAMIC_DRAW,
+            f::Usage::CpuOnly(_) => gl::STREAM_DRAW,
         };
         unsafe {
             gl.BindBuffer(target, buffer);
@@ -143,6 +143,14 @@ impl Factory {
             (&NewTexture::Surface(s), None) => Ok(TargetView::Surface(s)),
             (&NewTexture::Texture(t), Some(l)) => Ok(TargetView::TextureLayer(t, level, l)),
             (&NewTexture::Texture(t), None) => Ok(TargetView::Texture(t, level)),
+        }
+    }
+
+    fn generate_mipmap(&mut self, texture: &handle::RawTexture<R>) {
+        match self.frame_handles.ref_texture(texture) {
+            &NewTexture::Surface(_) => (), // no mip chain
+            &NewTexture::Texture(t) =>
+                tex::generate_mipmap(&self.share.context, texture.get_info().kind, t),
         }
     }
 }
@@ -187,12 +195,12 @@ impl d::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_buffer(name, info))
     }
 
-    fn create_buffer_static_raw(&mut self, data: &[u8], stride: usize, role: f::BufferRole, bind: f::Bind)
-                                -> Result<handle::RawBuffer<R>, f::BufferError> {
+    fn create_buffer_const_raw(&mut self, data: &[u8], stride: usize, role: f::BufferRole, bind: f::Bind)
+                               -> Result<handle::RawBuffer<R>, f::BufferError> {
         let name = self.create_buffer_internal();
         let info = f::BufferInfo {
             role: role,
-            usage: f::BufferUsage::Const,
+            usage: f::Usage::Const,
             bind: bind,
             size: data.len(),
             stride: stride,
@@ -274,6 +282,18 @@ impl d::Factory<R> for Factory {
         };
         Ok(self.share.handles.borrow_mut().make_texture(object, desc))
     }
+
+    fn create_texture_with_data(&mut self, desc: t::Descriptor, channel: ChannelType, data: &[u8], mipmap: bool)
+                                -> Result<handle::RawTexture<R>, t::Error> {
+        let image = desc.to_raw_image_info(channel, 0);
+        let tex = try!(self.create_texture_raw(desc, Some(channel)));
+        try!(self.update_texture_raw(&tex, &image, data, None));
+        if mipmap {
+            self.generate_mipmap(&tex);
+        }
+        Ok(tex)
+    }
+
 
     fn view_buffer_as_shader_resource_raw(&mut self, hbuf: &handle::RawBuffer<R>)
                                       -> Result<handle::RawShaderResourceView<R>, f::ResourceViewError> {
@@ -361,14 +381,6 @@ impl d::Factory<R> for Factory {
         match self.frame_handles.ref_texture(texture) {
             &NewTexture::Surface(_) => Err(t::Error::Data(0)),
             &NewTexture::Texture(t) => tex::update_texture(&self.share.context, t, kind, face, image, data),
-        }
-    }
-
-    fn generate_mipmap_raw(&mut self, texture: &handle::RawTexture<R>) {
-        match self.frame_handles.ref_texture(texture) {
-            &NewTexture::Surface(_) => (), // no mip chain
-            &NewTexture::Texture(t) =>
-                tex::generate_mipmap(&self.share.context, texture.get_info().kind, t),
         }
     }
 

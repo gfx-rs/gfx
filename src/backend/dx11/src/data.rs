@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use winapi::*;
-use gfx_core::factory::Bind;
+use gfx_core::factory::{Bind, MapAccess, Usage};
 use gfx_core::format::{Format, SurfaceType};
 use gfx_core::state::Comparison;
 use gfx_core::tex::{AaMode, FilterMethod, WrapMode};
@@ -179,6 +179,24 @@ pub fn map_bind(bind: Bind) -> D3D11_BIND_FLAG {
         flags = flags | D3D11_BIND_UNORDERED_ACCESS;
     }
     flags
+}
+
+
+pub fn map_access(access: MapAccess) -> D3D11_CPU_ACCESS_FLAG {
+    match access {
+        MapAccess::Readable => D3D11_CPU_ACCESS_READ,
+        MapAccess::Writable => D3D11_CPU_ACCESS_WRITE,
+        MapAccess::RW => D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE,
+    }
+}
+
+pub fn map_usage(usage: Usage) -> (D3D11_USAGE, D3D11_CPU_ACCESS_FLAG) {
+    match usage {
+        Usage::GpuOnly => (D3D11_USAGE_DEFAULT,   D3D11_CPU_ACCESS_FLAG(0)),
+        Usage::Const   => (D3D11_USAGE_IMMUTABLE, D3D11_CPU_ACCESS_FLAG(0)),
+        Usage::Dynamic(access) => (D3D11_USAGE_DYNAMIC, map_access(access)),
+        Usage::CpuOnly(access) => (D3D11_USAGE_STAGING, map_access(access)),
+    }
 }
 
 pub fn map_wrap(wrap: WrapMode) -> D3D11_TEXTURE_ADDRESS_MODE {

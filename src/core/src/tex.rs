@@ -21,7 +21,7 @@
 //! image data.  Image data consists of an array of "texture elements", or
 //! texels.
 
-use factory::Bind;
+use factory::{Bind, Usage};
 use format;
 use state;
 pub use target::{Layer, Level};
@@ -323,6 +323,7 @@ pub struct Descriptor {
     pub levels: Level,
     pub format: format::SurfaceType,
     pub bind: Bind,
+    pub usage: Usage,
 }
 
 impl Descriptor {

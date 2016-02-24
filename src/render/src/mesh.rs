@@ -102,7 +102,7 @@ macro_rules! impl_slice {
         impl<'a, R: Resources> ToIndexSlice<R> for &'a [$ty] {
             fn to_slice<F: Factory<R>>(self, factory: &mut F) -> Slice<R> {
                 //debug_assert!(self.len() <= factory.get_capabilities().max_index_count);
-                factory.create_buffer_static(self, BufferRole::Index, Bind::empty())
+                factory.create_buffer_const(self, BufferRole::Index, Bind::empty())
                        .unwrap().into()
             }
         }

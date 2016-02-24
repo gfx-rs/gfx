@@ -86,6 +86,7 @@ fn load_cubemap<R, F>(factory: &mut F, data: CubemapData) -> Result<gfx::handle:
                         Kind::Cube(width as u16),
                         1,
                         gfx::SHADER_RESOURCE,
+                        gfx::Usage::Dynamic(gfx::MapAccess::Writable),
                         Some(gfx::format::ChannelType::Unorm)
                 ).unwrap())
             }

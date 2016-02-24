@@ -36,9 +36,8 @@ pub use draw_state::target::*;
 pub use gfx_core as core;
 pub use gfx_core::{Device, SubmitInfo, Resources};
 pub use gfx_core::{format, handle, tex};
-pub use gfx_core::factory::{Factory, BufferRole, BufferInfo, BufferUsage,
-                            Bind, BufferError, BufferUpdateError, CombinedError,
-                            ResourceViewError, TargetViewError,
+pub use gfx_core::factory::{Factory, Usage, Bind, MapAccess, ResourceViewError, TargetViewError,
+                            BufferRole, BufferInfo, BufferError, BufferUpdateError, CombinedError,
                             RENDER_TARGET, DEPTH_STENCIL, SHADER_RESOURCE, UNORDERED_ACCESS,
                             cast_slice};
 pub use gfx_core::{VertexCount, InstanceCount};

@@ -91,14 +91,9 @@ impl Factory {
     fn create_buffer_internal(&self, info: f::BufferInfo, raw_data: Option<*const c_void>)
                               -> Result<h::RawBuffer<R>, f::BufferError> {
         use winapi::d3d11::*;
-        use data::map_bind;
+        use data::{map_bind, map_usage};
 
-        let (usage, cpu) = match info.usage {
-            f::BufferUsage::GpuOnly => (D3D11_USAGE_DEFAULT, D3D11_CPU_ACCESS_FLAG(0)),
-            f::BufferUsage::Const   => (D3D11_USAGE_IMMUTABLE, D3D11_CPU_ACCESS_FLAG(0)),
-            f::BufferUsage::Dynamic => (D3D11_USAGE_DYNAMIC, D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE),
-            f::BufferUsage::Stream  => (D3D11_USAGE_STAGING, D3D11_CPU_ACCESS_WRITE),
-        };
+        let (usage, cpu) = map_usage(info.usage);
         let bind = map_bind(info.bind) | match info.role {
             f::BufferRole::Vertex   => D3D11_BIND_VERTEX_BUFFER,
             f::BufferRole::Index    => D3D11_BIND_INDEX_BUFFER,
@@ -211,12 +206,13 @@ impl Factory {
     }
 
     fn create_texture_internal(&mut self, desc: core::tex::Descriptor,
-                               init: Option<(&[u8], core::format::ChannelType, bool)>)
+                               init_opt: Option<(&[u8], core::format::ChannelType, bool)>)
                                -> Result<h::RawTexture<R>, core::tex::Error>
     {
         use gfx_core::tex::{AaMode, Error, Kind};
-        use data::{map_bind, map_surface};
+        use data::{map_bind, map_usage, map_surface};
 
+        let (usage, cpu_access) = map_usage(desc.usage);
         let tparam = TextureParam {
             levels: desc.levels as winapi::UINT,
             format: match map_surface(desc.format) {
@@ -225,20 +221,14 @@ impl Factory {
             },
             bytes_per_texel: (desc.format.get_bit_size() >> 3) as winapi::UINT,
             bind: map_bind(desc.bind),
-            usage: match init {
-                Some(_) => winapi::D3D11_USAGE_IMMUTABLE,
-                None    => winapi::D3D11_USAGE_DEFAULT, //TODO
-            },
-            cpu_access: match init {
-                Some(_) => winapi::D3D11_CPU_ACCESS_FLAG(0),
-                None    => winapi::D3D11_CPU_ACCESS_FLAG(0), //TODO
-            },
-            init: match init {
+            usage: usage,
+            cpu_access: cpu_access,
+            init: match init_opt {
                 Some((data, _, _)) => data.as_ptr() as *const c_void,
                 None => ptr::null(),
             },
         };
-        let misc = match init {
+        let misc = match init_opt {
             Some((_, _, true)) => winapi::D3D11_RESOURCE_MISC_GENERATE_MIPS,
             _ => winapi::D3D11_RESOURCE_MISC_FLAG(0),
         };
@@ -284,11 +274,11 @@ impl core::Factory<R> for Factory {
         self.create_buffer_internal(info, None)
     }
 
-    fn create_buffer_static_raw(&mut self, data: &[u8], stride: usize, role: f::BufferRole, bind: f::Bind)
+    fn create_buffer_const_raw(&mut self, data: &[u8], stride: usize, role: f::BufferRole, bind: f::Bind)
                                 -> Result<h::RawBuffer<R>, f::BufferError> {
         let info = f::BufferInfo {
             role: role,
-            usage: f::BufferUsage::Const,
+            usage: f::Usage::Const,
             bind: bind,
             size: data.len(),
             stride: stride,
@@ -663,10 +653,6 @@ impl core::Factory<R> for Factory {
     fn update_texture_raw(&mut self, _texture: &h::RawTexture<R>, _image: &core::tex::RawImageInfo,
                           _data: &[u8], _face: Option<core::tex::CubeFace>) -> Result<(), core::tex::Error> {
         Ok(()) //TODO
-    }
-
-    fn generate_mipmap_raw(&mut self, _texture: &h::RawTexture<R>) {
-        //TODO
     }
 
     fn map_buffer_raw(&mut self, _buf: &h::RawBuffer<R>, _access: f::MapAccess) -> RawMapping {

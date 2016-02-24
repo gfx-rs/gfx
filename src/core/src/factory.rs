@@ -46,7 +46,8 @@ pub fn cast_slice<A: Copy, B: Copy>(slice: &[A]) -> &[B] {
 
 
 /// Specifies the access allowed to a buffer mapping.
-#[derive(Copy, Clone)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+#[repr(u8)]
 pub enum MapAccess {
     /// Only allow reads.
     Readable,
@@ -83,23 +84,24 @@ pub enum BufferRole {
     Uniform,
 }
 
-/// A hint as to how this buffer will be used.
+/// A hint as to how this buffer/texture will be used.
 ///
 /// The nature of these hints make them very implementation specific. Different drivers on
 /// different hardware will handle them differently. Only careful profiling will tell which is the
 /// best to use for a specific buffer.
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 #[repr(u8)]
-pub enum BufferUsage {
+pub enum Usage {
     /// GPU: read + write, CPU: nothing
     GpuOnly,
     /// GPU: read, CPU: read
     Const,
-    /// This buffer will be updated "frequently", and will be read from multiple times between
-    /// updates.
-    Dynamic,
-    /// This buffer always or almost always be updated after each read.
-    Stream,
+    /// GPU: rw, CPU: as specified. This is the slowest and most restrictive type of buffer.
+    /// Cpu access requires linear tiling, which is slow for GPU operation. Not recommended.
+    Dynamic(MapAccess),
+    /// GPU: nothing, CPU: as specified. Used as a staging buffer, to be copied back and forth
+    /// with on-GPU targets.
+    CpuOnly(MapAccess),
 }
 
 /// An information block that is immutable and associated with each buffer.
@@ -108,7 +110,7 @@ pub struct BufferInfo {
     /// Role
     pub role: BufferRole,
     /// Usage hint
-    pub usage: BufferUsage,
+    pub usage: Usage,
     /// Bind flags
     pub bind: Bind,
     /// Size in bytes
@@ -201,17 +203,30 @@ pub trait Factory<R: Resources> {
 
     // resource creation
     fn create_buffer_raw(&mut self, BufferInfo) -> Result<handle::RawBuffer<R>, BufferError>;
-    fn create_buffer_static_raw(&mut self, data: &[u8], stride: usize, BufferRole, Bind)
+    fn create_buffer_const_raw(&mut self, data: &[u8], stride: usize, BufferRole, Bind)
                                 -> Result<handle::RawBuffer<R>, BufferError>;
-    fn create_buffer_static<T: Copy>(&mut self, data: &[T], role: BufferRole, bind: Bind) -> Result<handle::Buffer<R, T>, BufferError> {
-        self.create_buffer_static_raw(cast_slice(data), mem::size_of::<T>(), role, bind)
+    fn create_buffer_const<T: Copy>(&mut self, data: &[T], role: BufferRole, bind: Bind) -> Result<handle::Buffer<R, T>, BufferError> {
+        self.create_buffer_const_raw(cast_slice(data), mem::size_of::<T>(), role, bind)
             .map(|raw| Typed::new(raw))
     }
-    fn create_buffer_dynamic<T>(&mut self, num: usize, role: BufferRole, bind: Bind) -> Result<handle::Buffer<R, T>, BufferError> {
+    fn create_buffer_dynamic<T>(&mut self, num: usize, role: BufferRole, bind: Bind, map: MapAccess)
+                                -> Result<handle::Buffer<R, T>, BufferError> {
         let stride = mem::size_of::<T>();
         let info = BufferInfo {
             role: role,
-            usage: BufferUsage::Stream,
+            usage: Usage::Dynamic(map),
+            bind: bind,
+            size: num * stride,
+            stride: stride,
+        };
+        self.create_buffer_raw(info).map(|raw| Typed::new(raw))
+    }
+    fn create_buffer_staging<T>(&mut self, num: usize, role: BufferRole, bind: Bind, map: MapAccess)
+                             -> Result<handle::Buffer<R, T>, BufferError> {
+        let stride = mem::size_of::<T>();
+        let info = BufferInfo {
+            role: role,
+            usage: Usage::CpuOnly(map),
             bind: bind,
             size: num * stride,
             stride: stride,
@@ -264,20 +279,10 @@ pub trait Factory<R: Resources> {
             &image.convert(format), cast_slice(data), face)
     }
 
-    fn generate_mipmap_raw(&mut self, &handle::RawTexture<R>);
-
     fn create_texture_raw(&mut self, tex::Descriptor, Option<format::ChannelType>)
                           -> Result<handle::RawTexture<R>, tex::Error>;
-    fn create_texture_with_data(&mut self, desc: tex::Descriptor, channel: format::ChannelType, data: &[u8], mipmap: bool)
-                                -> Result<handle::RawTexture<R>, tex::Error> {
-        let image = desc.to_raw_image_info(channel, 0);
-        let tex = try!(self.create_texture_raw(desc, Some(channel)));
-        try!(self.update_texture_raw(&tex, &image, data, None));
-        if mipmap {
-            self.generate_mipmap_raw(&tex);
-        }
-        Ok(tex)
-    }
+    fn create_texture_with_data(&mut self, tex::Descriptor, format::ChannelType, &[u8], bool)
+                                -> Result<handle::RawTexture<R>, tex::Error>;
 
     fn view_buffer_as_shader_resource_raw(&mut self, &handle::RawBuffer<R>)
         -> Result<handle::RawShaderResourceView<R>, ResourceViewError>;
@@ -293,7 +298,7 @@ pub trait Factory<R: Resources> {
         -> Result<handle::RawDepthStencilView<R>, TargetViewError>;
 
     fn create_texture<S>(&mut self, kind: tex::Kind, levels: target::Level,
-                      bind: Bind, channel_hint: Option<format::ChannelType>)
+                      bind: Bind, usage: Usage, channel_hint: Option<format::ChannelType>)
                       -> Result<handle::Texture<R, S>, tex::Error>
     where S: format::SurfaceTyped
     {
@@ -302,6 +307,7 @@ pub trait Factory<R: Resources> {
             levels: levels,
             format: S::get_surface_type(),
             bind: bind,
+            usage: usage,
         };
         let raw = try!(self.create_texture_raw(desc, channel_hint));
         Ok(Typed::new(raw))
@@ -385,6 +391,7 @@ pub trait Factory<R: Resources> {
             levels: if mipmap {99} else {1},
             format: <T::Surface as format::SurfaceTyped>::get_surface_type(),
             bind: SHADER_RESOURCE,
+            usage: Usage::Const,
         };
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
         let raw = try!(self.create_texture_with_data(desc, cty, cast_slice(data), mipmap));
@@ -404,7 +411,7 @@ pub trait Factory<R: Resources> {
         let kind = tex::Kind::D2(width, height, tex::AaMode::Single);
         let levels = if allocate_mipmap {99} else {1};
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
-        let tex = try!(self.create_texture(kind, levels, SHADER_RESOURCE | RENDER_TARGET, Some(cty)));
+        let tex = try!(self.create_texture(kind, levels, SHADER_RESOURCE | RENDER_TARGET, Usage::GpuOnly, Some(cty)));
         let resource = try!(self.view_texture_as_shader_resource::<T>(&tex, (0, levels), format::Swizzle::new()));
         let target = try!(self.view_texture_as_render_target(&tex, 0, None));
         Ok((tex, resource, target))
@@ -419,9 +426,20 @@ pub trait Factory<R: Resources> {
     {
         let kind = tex::Kind::D2(width, height, tex::AaMode::Single);
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
-        let tex = try!(self.create_texture(kind, 1, SHADER_RESOURCE | DEPTH_STENCIL, Some(cty)));
+        let tex = try!(self.create_texture(kind, 1, SHADER_RESOURCE | DEPTH_STENCIL, Usage::GpuOnly, Some(cty)));
         let resource = try!(self.view_texture_as_shader_resource::<T>(&tex, (0,0), format::Swizzle::new()));
         let target = try!(self.view_texture_as_depth_stencil(&tex, None));
         Ok((tex, resource, target))
+    }
+
+    fn create_depth_stencil_view_only<T: format::DepthFormat + format::TextureFormat>(&mut self,
+                                      width: tex::Size, height: tex::Size)
+                                      -> Result<handle::DepthStencilView<R, T>, CombinedError>
+    {
+        let kind = tex::Kind::D2(width, height, tex::AaMode::Single);
+        let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
+        let tex = try!(self.create_texture(kind, 1, DEPTH_STENCIL, Usage::GpuOnly, Some(cty)));
+        let target = try!(self.view_texture_as_depth_stencil(&tex, None));
+        Ok(target)
     }
 }
