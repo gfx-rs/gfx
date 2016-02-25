@@ -19,7 +19,7 @@ extern crate glutin;
 
 extern crate image;
 
-pub use gfx::format::{Rgba8, Srgb8, DepthStencil};
+pub use gfx::format::{Rgba8, Srgba8, DepthStencil};
 use gfx::traits::{Device, Factory, FactoryExt};
 
 gfx_vertex_struct!( Vertex {
@@ -41,7 +41,7 @@ gfx_pipeline!( pipe {
     lena: gfx::TextureSampler<[f32; 4]> = "t_Lena",
     tint: gfx::TextureSampler<[f32; 4]> = "t_Tint",
     blend: gfx::Global<i32> = "i_Blend",
-    out: gfx::RenderTarget<Srgb8> = "o_Color",
+    out: gfx::RenderTarget<Srgba8> = "o_Color",
 });
 
 fn load_texture<R, F>(factory: &mut F, data: &[u8])
@@ -61,7 +61,7 @@ pub fn main() {
             .with_title("Blending example".to_string())
             .with_dimensions(800, 600);
     let (window, mut device, mut factory, main_color, _) =
-        gfx_window_glutin::init::<Srgb8, DepthStencil>(builder);
+        gfx_window_glutin::init::<Srgba8, DepthStencil>(builder);
     let mut encoder = factory.create_encoder();
 
     // fullscreen quad
@@ -132,7 +132,7 @@ pub fn main() {
         }
 
         encoder.reset();
-        encoder.clear(&data.out, [0.0; 3]);
+        encoder.clear(&data.out, [0.0; 4]);
         encoder.draw(&slice, &pso, &data);
 
         device.submit(encoder.as_buffer());
