@@ -30,6 +30,13 @@ fn get_program_iv(gl: &gl::Gl, name: super::Program, query: gl::types::GLenum) -
     iv
 }
 
+fn get_block_iv(gl: &gl::Gl, name: super::Program, index: gl::types::GLuint,
+                query: gl::types::GLenum) -> gl::types::GLint {
+    let mut iv = 0;
+    unsafe { gl.GetActiveUniformBlockiv(name, index, query, &mut iv) };
+    iv
+}
+
 pub fn get_shader_log(gl: &gl::Gl, name: super::Shader) -> String {
     let mut length = get_shader_iv(gl, name, gl::INFO_LOG_LENGTH);
     if length > 0 {
@@ -197,29 +204,53 @@ fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program) -> Ve
     } else {
         0
     };
-    (0..num as gl::types::GLuint).map(|i| {
-        let mut size = 0;
-        let mut tmp = 0;
-        let mut usage = 0;
-        unsafe {
-            gl.GetActiveUniformBlockiv(prog, i, gl::UNIFORM_BLOCK_NAME_LENGTH, &mut size);
+
+    let bindings: Vec<gl::types::GLuint> = (0..num).map(
+        |idx| get_block_iv(gl, prog, idx as gl::types::GLuint, gl::UNIFORM_BLOCK_BINDING) as gl::types::GLuint
+    ).collect();
+    
+    // check if the shader specifies binding points manually via
+    // `layout(binding = n)`
+    let explicit_binding = bindings.iter().any(|&i| i > 0);
+
+    (0..num as gl::types::GLuint).zip(bindings.iter()).map(|(idx, &bind)| {
+        // the string identifier for the block
+        let name = unsafe {
+            let size = get_block_iv(gl, prog, idx, gl::UNIFORM_BLOCK_NAME_LENGTH);
+            let mut name = String::with_capacity(size as usize);
+            name.extend(repeat('\0').take(size as usize));
+
+            let mut real_size = 0;
+            gl.GetActiveUniformBlockName(prog, idx, size, &mut real_size,
+                (&name[..]).as_ptr() as *mut gl::types::GLchar);
+            name.truncate(real_size as usize);
+            name
+        };
+
+        let usage = {
+            let mut usage = 0;
+
             for (stage, &eval) in [gl::UNIFORM_BLOCK_REFERENCED_BY_VERTEX_SHADER,
                     gl::UNIFORM_BLOCK_REFERENCED_BY_FRAGMENT_SHADER].iter().enumerate() {
-                gl.GetActiveUniformBlockiv(prog, i, eval, &mut tmp);
-                if tmp != 0 {usage |= 1<<stage;}
+                if get_block_iv(gl, prog, idx, eval) != 0 {
+                    usage |= 1 << stage;
+                }
             }
-        }
-        let mut name = String::with_capacity(size as usize); //includes terminating null
-        name.extend(repeat('\0').take(size as usize));
-        let mut actual_name_size = 0;
-        let slot = unsafe {
-            gl.GetActiveUniformBlockName(prog, i, size, &mut actual_name_size,
-                (&name[..]).as_ptr() as *mut gl::types::GLchar);
-            gl.GetActiveUniformBlockiv(prog, i, gl::UNIFORM_BLOCK_DATA_SIZE, &mut size);
-            gl.GetActiveUniformBlockiv(prog, i, gl::UNIFORM_BLOCK_BINDING, &mut tmp);
-            tmp
+
+            usage
         };
-        name.truncate(actual_name_size as usize);
+
+        let size = get_block_iv(gl, prog, idx, gl::UNIFORM_BLOCK_DATA_SIZE);
+
+        // if we don't detect any explicit layout bindings in the program, we
+        // automatically assign them a binding to their respective block indices
+        let slot = if explicit_binding {
+            bind
+        } else {
+            unsafe { gl.UniformBlockBinding(prog, idx, idx); }
+            idx
+        };
+
         info!("\t\tBlock[{}] = '{}' of size {}", slot, name, size);
         s::ConstantBufferVar {
             name: name,

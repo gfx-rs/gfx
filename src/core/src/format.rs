@@ -137,17 +137,17 @@ impl_formats! {
         [BufferSurface, TextureSurface, RenderSurface],
     R16_G16         : Vec2<Int, Uint, Inorm, Unorm, Float> = [u16; 2] {0}
         [BufferSurface, TextureSurface, RenderSurface],
-    R16_G16_B16     : Vec2<Int, Uint, Inorm, Unorm, Float> = [u16; 3] {0}
+    R16_G16_B16     : Vec3<Int, Uint, Inorm, Unorm, Float> = [u16; 3] {0}
         [BufferSurface, TextureSurface, RenderSurface],
-    R16_G16_B16_A16 : Vec2<Int, Uint, Inorm, Unorm, Float> = [u16; 4] {16}
+    R16_G16_B16_A16 : Vec4<Int, Uint, Inorm, Unorm, Float> = [u16; 4] {16}
         [BufferSurface, TextureSurface, RenderSurface],
     R32             : Vec1<Int, Uint, Float> = u32 {0}
         [BufferSurface, TextureSurface, RenderSurface],
     R32_G32         : Vec2<Int, Uint, Float> = [u32; 2] {0}
         [BufferSurface, TextureSurface, RenderSurface],
-    R32_G32_B32     : Vec2<Int, Uint, Float> = [u32; 3] {0}
+    R32_G32_B32     : Vec3<Int, Uint, Float> = [u32; 3] {0}
         [BufferSurface, TextureSurface, RenderSurface],
-    R32_G32_B32_A32 : Vec2<Int, Uint, Float> = [u32; 4] {32}
+    R32_G32_B32_A32 : Vec4<Int, Uint, Float> = [u32; 4] {32}
         [BufferSurface, TextureSurface, RenderSurface],
     D16             : Vec1<Unorm> = F16 {0} [TextureSurface, DepthSurface],
     D24             : Vec1<Unorm> = f32 {8} [TextureSurface, DepthSurface], //hacky stencil bits
@@ -341,8 +341,10 @@ pub type Vec4<T> = [T; 4];
 
 /// Standard 8bits RGBA format.
 pub type Rgba8 = (R8_G8_B8_A8, Unorm);
-/// Standard gamma-encoding RGB format.
+/// Standard 8bit gamma transforming RGB format.
 pub type Srgb8 = (R8_G8_B8, Srgb);
+/// Standard 8bit gamma transforming RGB format with linear alpha.
+pub type Srgba8 = (R8_G8_B8_A8, Srgb);
 /// Standard HDR floating-point format with 10 bits for RGB components
 /// and 2 bits for the alpha.
 pub type Rgb10a2F = (R10_G10_B10_A2, Float);
