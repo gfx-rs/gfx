@@ -169,18 +169,6 @@ pub fn create<F>(fn_proc: F) -> (Device, Factory) where
     (device, factory)
 }
 
-/// DEPRECATED
-pub fn create_main_targets<Tc, Td>(dim: d::tex::Dimensions)
-                           -> (handle::RenderTargetView<Resources, Tc>, handle::DepthStencilView<Resources, Td>)
-where
-    Tc: d::format::RenderFormat,
-    Td: d::format::DepthFormat,
-{
-    use gfx_core::factory::Typed;
-    let (cv, dv) = create_main_targets_raw(dim, Tc::get_format().0, Td::get_format().0);
-    (Typed::new(cv), Typed::new(dv))
-}
-
 /// Create the proxy target views (RTV and DSV) for the attachments of the
 /// main framebuffer. These have GL names equal to 0.
 /// Not supposed to be used by the users directly.

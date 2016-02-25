@@ -219,7 +219,7 @@ impl Factory {
                 Some(f) => f,
                 None => return Err(Error::Format(desc.format, None))
             },
-            bytes_per_texel: (desc.format.get_bit_size() >> 3) as winapi::UINT,
+            bytes_per_texel: (desc.format.get_total_bits() >> 3) as winapi::UINT,
             bind: map_bind(desc.bind),
             usage: usage,
             cpu_access: cpu_access,

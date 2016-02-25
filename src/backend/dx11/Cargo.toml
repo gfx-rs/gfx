@@ -28,7 +28,7 @@ name = "gfx_device_dx11"
 
 [dependencies]
 log = "0.3"
-gfx_core = { path = "../../core", version = "0.1" }
+gfx_core = { path = "../../core", version = "0.2" }
 d3d11-sys = "0.1"
 d3dcompiler-sys = "0.0.1"
 dxguid-sys = "0.0.1"

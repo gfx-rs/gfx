@@ -72,10 +72,6 @@ macro_rules! impl_formats {
             $( $name, )*
         }
         impl SurfaceType {
-            /// DEPRECATED
-            pub fn get_bit_size(&self) -> u8 {
-                self.get_total_bits()
-            }
             /// Return the total number of bits for this format.
             pub fn get_total_bits(&self) -> u8 {
                 use std::mem::size_of;
