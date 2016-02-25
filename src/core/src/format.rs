@@ -341,8 +341,10 @@ pub type Vec4<T> = [T; 4];
 
 /// Standard 8bits RGBA format.
 pub type Rgba8 = (R8_G8_B8_A8, Unorm);
-/// Standard gamma-encoding RGB format.
+/// Standard 8bit gamma transforming RGB format.
 pub type Srgb8 = (R8_G8_B8, Srgb);
+/// Standard 8bit gamma transforming RGB format with linear alpha.
+pub type Srgba8 = (R8_G8_B8_A8, Srgb);
 /// Standard HDR floating-point format with 10 bits for RGB components
 /// and 2 bits for the alpha.
 pub type Rgb10a2F = (R10_G10_B10_A2, Float);
