@@ -427,7 +427,7 @@ impl core::Factory<R> for Factory {
             for (out, inp) in charbuf[charpos..].iter_mut().zip(attrib.name.as_bytes().iter()) {
                 *out = *inp as i8;
             }
-            charpos += attrib.name.as_bytes().len();
+            charpos += attrib.name.as_bytes().len() + 1;
         }
 
         let prog = *self.frame_handles.ref_program(program);
@@ -441,12 +441,16 @@ impl core::Factory<R> for Factory {
 
         let dev = self.share.device;
         let mut vertex_layout = ptr::null_mut();
-        let _hr = unsafe {
+        let hr = unsafe {
             (*dev).CreateInputLayout(
                 layouts.as_ptr(), layouts.len() as winapi::UINT,
                 vs_bin.as_ptr() as *const c_void, vs_bin.len() as winapi::SIZE_T,
                 &mut vertex_layout)
         };
+        if !winapi::SUCCEEDED(hr) {
+            error!("Failed to create input layout from {:?}, error {:x}", layouts, hr);
+            return Err(core::pso::CreationError);
+        }
         let dummy_dsi = core::pso::DepthStencilInfo { depth: None, front: None, back: None };
         //TODO: cache rasterizer, depth-stencil, and blend states
 
@@ -459,6 +463,7 @@ impl core::Factory<R> for Factory {
                 TriangleStrip   => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
             })},
             layout: vertex_layout,
+            attributes: desc.attributes,
             program: prog,
             rasterizer: state::make_rasterizer(dev, &desc.rasterizer, desc.scissor),
             depth_stencil: state::make_depth_stencil(dev, match desc.depth_stencil {

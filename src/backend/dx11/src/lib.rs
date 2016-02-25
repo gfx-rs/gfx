@@ -102,6 +102,7 @@ pub type InputLayout = *mut winapi::ID3D11InputLayout;
 pub struct Pipeline {
     topology: winapi::UINT, //winapi::D3D11_PRIMITIVE_TOPOLOGY,
     layout: InputLayout,
+    attributes: [Option<gfx_core::pso::AttributeDesc>; gfx_core::MAX_VERTEX_ATTRIBUTES],
     program: Program,
     rasterizer: *const winapi::ID3D11RasterizerState,
     depth_stencil: *const winapi::ID3D11DepthStencilState,

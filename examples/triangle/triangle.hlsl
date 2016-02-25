@@ -11,6 +11,6 @@ VsOutput Vertex(float2 pos : a_Pos, float3 color : a_Color) {
  	return output;
 }
 
-float4 Pixel(float3 color: COLOR) : SV_Target {
-	return float4(color, 1.0);
+float4 Pixel(VsOutput pin) : SV_Target {
+	return float4(pin.color, 1.0);
 }

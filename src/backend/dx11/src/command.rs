@@ -111,6 +111,7 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
     fn bind_pipeline_state(&mut self, pso: Pipeline) {
         use std::mem; //temporary
         self.buf.push(Command::SetPrimitive(unsafe{mem::transmute(pso.topology)}));
+        self.cache.attributes = pso.attributes;
         if self.cache.rasterizer != pso.rasterizer {
             self.cache.rasterizer = pso.rasterizer;
             self.buf.push(Command::SetRasterizer(pso.rasterizer));
