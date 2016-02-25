@@ -24,7 +24,7 @@ gfx_vertex_struct!( Vertex {
 
 gfx_pipeline!(pipe {
     vbuf: gfx::VertexBuffer<Vertex> = (),
-    out: gfx::RenderTarget<gfx::format::Srgb8> = "o_Color",
+    out: gfx::RenderTarget<gfx::format::Srgb8> = "Target0",
 });
 
 struct App<R: gfx::Resources> {

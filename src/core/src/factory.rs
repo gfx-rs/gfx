@@ -294,7 +294,7 @@ pub trait Factory<R: Resources> {
         -> Result<handle::RawUnorderedAccessView<R>, ResourceViewError>;
     fn view_texture_as_render_target_raw(&mut self, &handle::RawTexture<R>, tex::RenderDesc)
         -> Result<handle::RawRenderTargetView<R>, TargetViewError>;
-    fn view_texture_as_depth_stencil_raw(&mut self, &handle::RawTexture<R>, Option<target::Layer>)
+    fn view_texture_as_depth_stencil_raw(&mut self, &handle::RawTexture<R>, tex::DepthStencilDesc)
         -> Result<handle::RawDepthStencilView<R>, TargetViewError>;
 
     fn create_texture<S>(&mut self, kind: tex::Kind, levels: target::Level,
@@ -372,14 +372,25 @@ pub trait Factory<R: Resources> {
     }
 
     fn view_texture_as_depth_stencil<T: format::DepthFormat>(&mut self, tex: &handle::Texture<R, T::Surface>,
-                                     layer: Option<target::Layer>)
+                                     level: target::Level, layer: Option<target::Layer>, flags: tex::DepthStencilFlags)
                                      -> Result<handle::DepthStencilView<R, T>, TargetViewError>
     {
         if !tex.get_info().bind.contains(DEPTH_STENCIL) {
             return Err(TargetViewError::NoBindFlag)
         }
-        self.view_texture_as_depth_stencil_raw(tex.raw(), layer)
+        let desc = tex::DepthStencilDesc {
+            level: level,
+            layer: layer,
+            flags: flags,
+        };
+        self.view_texture_as_depth_stencil_raw(tex.raw(), desc)
             .map(Typed::new)
+    }
+
+    fn view_texture_as_depth_stencil_trivial<T: format::DepthFormat>(&mut self, tex: &handle::Texture<R, T::Surface>)
+                                            -> Result<handle::DepthStencilView<R, T>, TargetViewError>
+    {
+        self.view_texture_as_depth_stencil(tex, 0, None, tex::DepthStencilFlags::empty())
     }
 
     fn create_texture_const<T: format::TextureFormat>(&mut self, kind: tex::Kind,
@@ -428,7 +439,7 @@ pub trait Factory<R: Resources> {
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
         let tex = try!(self.create_texture(kind, 1, SHADER_RESOURCE | DEPTH_STENCIL, Usage::GpuOnly, Some(cty)));
         let resource = try!(self.view_texture_as_shader_resource::<T>(&tex, (0,0), format::Swizzle::new()));
-        let target = try!(self.view_texture_as_depth_stencil(&tex, None));
+        let target = try!(self.view_texture_as_depth_stencil_trivial(&tex));
         Ok((tex, resource, target))
     }
 
@@ -439,7 +450,7 @@ pub trait Factory<R: Resources> {
         let kind = tex::Kind::D2(width, height, tex::AaMode::Single);
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
         let tex = try!(self.create_texture(kind, 1, DEPTH_STENCIL, Usage::GpuOnly, Some(cty)));
-        let target = try!(self.view_texture_as_depth_stencil(&tex, None));
+        let target = try!(self.view_texture_as_depth_stencil_trivial(&tex));
         Ok(target)
     }
 }

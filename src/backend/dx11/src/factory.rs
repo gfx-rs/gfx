@@ -397,14 +397,16 @@ impl core::Factory<R> for Factory {
         use state;
 
         let mut layouts = Vec::new();
-        for (i, at_desc) in desc.attributes.iter().enumerate() {
+        let mut charbuf = [0; 256];
+        let mut charpos = 0;
+        for (attrib, at_desc) in program.get_info().vertex_attributes.iter().zip(desc.attributes.iter()) {
             use winapi::UINT;
             let (elem, irate) = match at_desc {
                 &Some((ref el, ir)) => (el, ir),
                 &None => continue,
             };
             layouts.push(winapi::D3D11_INPUT_ELEMENT_DESC {
-                SemanticName: &[0i8] as *const i8, //TODO
+                SemanticName: &charbuf[charpos],
                 SemanticIndex: 0,
                 Format: match map_format(elem.format) {
                     Some(fm) => fm,
@@ -413,7 +415,7 @@ impl core::Factory<R> for Factory {
                         return Err(core::pso::CreationError);
                     }
                 },
-                InputSlot: i as UINT,
+                InputSlot: attrib.slot as UINT,
                 AlignedByteOffset: elem.offset as UINT,
                 InputSlotClass: if irate == 0 {
                     winapi::D3D11_INPUT_PER_VERTEX_DATA
@@ -422,6 +424,10 @@ impl core::Factory<R> for Factory {
                 },
                 InstanceDataStepRate: irate as UINT,
             });
+            for (out, inp) in charbuf[charpos..].iter_mut().zip(attrib.name.as_bytes().iter()) {
+                *out = *inp as i8;
+            }
+            charpos += attrib.name.as_bytes().len();
         }
 
         let prog = *self.frame_handles.ref_program(program);
@@ -540,14 +546,14 @@ impl core::Factory<R> for Factory {
     }
 
     fn view_texture_as_render_target_raw(&mut self, htex: &h::RawTexture<R>, desc: core::tex::RenderDesc)
-                                         -> Result<h::RawRenderTargetView<R>, f::TargetViewError> {
+                                         -> Result<h::RawRenderTargetView<R>, f::TargetViewError>
+    {
         use winapi::UINT;
         use gfx_core::tex::{AaMode, Kind};
         use data::map_format;
 
-        let kind = htex.get_info().kind;
         let level = desc.level as UINT;
-        let (dim, extra) = match (kind, desc.layer) {
+        let (dim, extra) = match (htex.get_info().kind, desc.layer) {
             (Kind::D1(..), None) =>
                 (winapi::D3D11_RTV_DIMENSION_TEXTURE1D, [level, 0, 0]),
             (Kind::D1Array(_, nlayers), Some(lid)) if lid < nlayers =>
@@ -595,20 +601,68 @@ impl core::Factory<R> for Factory {
         unsafe {
             (*self.share.device).CreateRenderTargetView(raw_tex, &native_desc, &mut raw_view);
         }
-        let size = kind.get_level_dimensions(desc.level);
+        let size = htex.get_info().kind.get_level_dimensions(desc.level);
         Ok(self.share.handles.borrow_mut().make_rtv(native::Rtv(raw_view), htex, size))
     }
 
-    fn view_texture_as_depth_stencil_raw(&mut self, htex: &h::RawTexture<R>, _layer: Option<core::target::Layer>)
-                                         -> Result<h::RawDepthStencilView<R>, f::TargetViewError> {
+    fn view_texture_as_depth_stencil_raw(&mut self, htex: &h::RawTexture<R>, desc: core::tex::DepthStencilDesc)
+                                         -> Result<h::RawDepthStencilView<R>, f::TargetViewError>
+    {
+        use winapi::UINT;
+        use gfx_core::tex::{AaMode, Kind};
+        use data::{map_format, map_dsv_flags};
 
-        //TODO: pass in the descriptor
+        let level = desc.level as UINT;
+        let (dim, extra) = match (htex.get_info().kind, desc.layer) {
+            (Kind::D1(..), None) =>
+                (winapi::D3D11_DSV_DIMENSION_TEXTURE1D, [level, 0, 0]),
+            (Kind::D1Array(_, nlayers), Some(lid)) if lid < nlayers =>
+                (winapi::D3D11_DSV_DIMENSION_TEXTURE1DARRAY, [level, lid as UINT, 1+lid as UINT]),
+            (Kind::D1Array(_, nlayers), None) =>
+                (winapi::D3D11_DSV_DIMENSION_TEXTURE1DARRAY, [level, 0, nlayers as UINT]),
+            (Kind::D2(_, _, AaMode::Single), None) =>
+                (winapi::D3D11_DSV_DIMENSION_TEXTURE2D, [level, 0, 0]),
+            (Kind::D2(_, _, _), None) if level == 0 =>
+                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DMS, [0, 0, 0]),
+            (Kind::D2Array(_, _, nlayers, AaMode::Single), None) =>
+                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, 0, nlayers as UINT]),
+            (Kind::D2Array(_, _, nlayers, AaMode::Single), Some(lid)) if lid < nlayers =>
+                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, lid as UINT, 1+lid as UINT]),
+            (Kind::D2Array(_, _, nlayers, _), None) if level == 0 =>
+                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY, [0, nlayers as UINT, 0]),
+            (Kind::D2Array(_, _, nlayers, _), Some(lid)) if level == 0 && lid < nlayers =>
+                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY, [lid as UINT, 1+lid as UINT, 0]),
+            (Kind::D3(..), _) => return Err(f::TargetViewError::Unsupported),
+            (Kind::Cube(..), None) =>
+                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, 0, 6]),
+            (Kind::Cube(..), Some(lid)) if lid < 6 =>
+                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, lid as UINT, 1+lid as UINT]),
+            (Kind::CubeArray(_, nlayers), None) =>
+                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, 0, 6 * nlayers as UINT]),
+            (Kind::CubeArray(_, nlayers), Some(lid)) if lid < nlayers =>
+                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, 6 * lid as UINT, 6 * (1+lid) as UINT]),
+            (_, None) => return Err(f::TargetViewError::BadLevel(desc.level)),
+            (_, Some(lid)) => return Err(f::TargetViewError::BadLayer(lid)),
+        };
+
+        let channel = core::format::ChannelType::Uint; //doesn't matter
+        let format = core::format::Format(htex.get_info().format, channel);
+        let native_desc = winapi::D3D11_DEPTH_STENCIL_VIEW_DESC {
+            Format: match map_format(format) {
+                Some(fm) => fm,
+                None => return Err(f::TargetViewError::Channel(channel)),
+            },
+            ViewDimension: dim,
+            Flags: map_dsv_flags(desc.flags).0,
+            u: extra,
+        };
+
         let mut raw_view = ptr::null_mut();
         let raw_tex = self.frame_handles.ref_texture(htex).to_resource();
         unsafe {
-            (*self.share.device).CreateDepthStencilView(raw_tex, ptr::null(), &mut raw_view);
+            (*self.share.device).CreateDepthStencilView(raw_tex, &native_desc, &mut raw_view);
         }
-        let dim = htex.get_info().kind.get_level_dimensions(0);
+        let dim = htex.get_info().kind.get_level_dimensions(desc.level);
         Ok(self.share.handles.borrow_mut().make_dsv(native::Dsv(raw_view), htex, dim))
     }
 

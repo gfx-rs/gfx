@@ -16,7 +16,7 @@ use winapi::*;
 use gfx_core::factory::{Bind, MapAccess, Usage};
 use gfx_core::format::{Format, SurfaceType};
 use gfx_core::state::Comparison;
-use gfx_core::tex::{AaMode, FilterMethod, WrapMode};
+use gfx_core::tex::{AaMode, FilterMethod, WrapMode, DepthStencilFlags};
 
 
 pub fn map_function(fun: Comparison) -> D3D11_COMPARISON_FUNC {
@@ -233,4 +233,16 @@ pub fn map_filter(filter: FilterMethod, op: FilterOp) -> D3D11_FILTER {
             Anisotropic(_) => D3D11_FILTER_COMPARISON_ANISOTROPIC,
         },
     }
+}
+
+pub fn map_dsv_flags(dsf: DepthStencilFlags) -> D3D11_DSV_FLAG {
+    use gfx_core::tex as t;
+    let mut out = D3D11_DSV_FLAG(0);
+    if dsf.contains(t::RO_DEPTH) {
+        out = out | D3D11_DSV_READ_ONLY_DEPTH;
+    }
+    if dsf.contains(t::RO_STENCIL) {
+        out = out | D3D11_DSV_READ_ONLY_STENCIL;
+    }
+    out
 }

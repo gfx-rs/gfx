@@ -367,3 +367,34 @@ pub struct RenderDesc {
     pub level: Level,
     pub layer: Option<Layer>,
 }
+
+bitflags!(
+    /// Depth-stencil read-only flags
+    flags DepthStencilFlags: u8 {
+        /// Depth is read-only in the view.
+        const RO_DEPTH    = 0x1,
+        /// Stencil is read-only in the view.
+        const RO_STENCIL  = 0x2,
+        /// Both depth and stencil are read-only.
+        const RO_DEPTH_STENCIL = 0x3,
+    }
+);
+
+/// Texture depth-stencil view descriptor.
+#[allow(missing_docs)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+pub struct DepthStencilDesc {
+    pub level: Level,
+    pub layer: Option<Layer>,
+    pub flags: DepthStencilFlags,
+}
+
+impl From<RenderDesc> for DepthStencilDesc {
+    fn from(rd: RenderDesc) -> DepthStencilDesc {
+        DepthStencilDesc {
+            level: rd.level,
+            layer: rd.layer,
+            flags: DepthStencilFlags::empty(),
+        }
+    }
+}

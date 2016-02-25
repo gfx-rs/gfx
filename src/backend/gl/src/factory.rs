@@ -341,9 +341,9 @@ impl d::Factory<R> for Factory {
             })
     }
 
-    fn view_texture_as_depth_stencil_raw(&mut self, htex: &handle::RawTexture<R>, layer: Option<Layer>)
+    fn view_texture_as_depth_stencil_raw(&mut self, htex: &handle::RawTexture<R>, desc: t::DepthStencilDesc)
                                          -> Result<handle::RawDepthStencilView<R>, f::TargetViewError> {
-        self.view_texture_as_target(htex, 0, layer)
+        self.view_texture_as_target(htex, desc.level, desc.layer)
             .map(|view| {
                 let dim = htex.get_info().kind.get_level_dimensions(0);
                 self.share.handles.borrow_mut().make_dsv(view, htex, dim)

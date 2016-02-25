@@ -1,7 +1,3 @@
-cbuffer locals {
-	float4x4 mvp;
-};
-
 struct VsOutput {
 	float4 pos: SV_Position;
 	float3 color: COLOR;
@@ -9,7 +5,7 @@ struct VsOutput {
  
 VsOutput Vertex(float2 pos : a_Pos, float3 color : a_Color) {
  	VsOutput output = {
-    	mul(float4(pos, 0.0, 1.0), mvp),
+    	float4(pos, 0.0, 1.0),
     	color,
     };
  	return output;

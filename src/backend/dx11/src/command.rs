@@ -21,7 +21,9 @@ use winapi::{FLOAT, INT, UINT, UINT8, DXGI_FORMAT,
              ID3D11RasterizerState, ID3D11DepthStencilState, ID3D11BlendState};
 use gfx_core::{draw, pso, shade, state, target, tex};
 use gfx_core::{IndexType, VertexCount};
-use gfx_core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS, MAX_RESOURCE_VIEWS, MAX_SAMPLERS, MAX_COLOR_TARGETS};
+use gfx_core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
+               MAX_RESOURCE_VIEWS, MAX_UNORDERED_VIEWS,
+               MAX_SAMPLERS, MAX_COLOR_TARGETS};
 use {native, Resources, InputLayout, Texture, Pipeline, Program};
 
 ///Serialized device command.
@@ -183,8 +185,22 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
         }
     }
 
-    fn bind_unordered_views(&mut self, _: pso::UnorderedViewSet<Resources>) {
-        unimplemented!()
+    fn bind_unordered_views(&mut self, uvs: pso::UnorderedViewSet<Resources>) {
+        let mut views = [(); MAX_UNORDERED_VIEWS];
+        let mut count = 0;
+        for i in 0 .. MAX_UNORDERED_VIEWS {
+            match uvs.0[i] {
+                Some(view) => {
+                    views[i] = view;
+                    count += 1;
+                },
+                _ => ()
+            }
+        }
+        if count != 0 {
+            unimplemented!()
+            //self.buf.push(Command::BindUnorderedAccess(stage, views));
+        }
     }
 
     fn bind_samplers(&mut self, ss: pso::SamplerSet<Resources>) {

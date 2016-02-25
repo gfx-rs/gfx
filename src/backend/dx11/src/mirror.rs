@@ -97,6 +97,14 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
         (*reflection).GetMinFeatureLevel(&mut level);
         (desc, level)
     };
+    fn mask_to_vector(mask: u8) -> s::ContainerType {
+        s::ContainerType::Vector(match mask {
+            0...1 => 1,
+            2...3 => 2,
+            4...7 => 3,
+            _ => 4,
+        })
+    }
     if stage == s::Stage::Vertex {
         // record vertex attributes
         for i in 0 .. shader_desc.InputParameters {
@@ -124,7 +132,7 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                 name: name,
                 slot: desc.Register as core::AttributeSlot,
                 base_type: map_base_type_from_component(desc.ComponentType),
-                container: s::ContainerType::Vector(4), // how to get it?
+                container: mask_to_vector(desc.Mask),
             });
         }
     }
@@ -145,7 +153,7 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                     name: format!("Target{}", desc.SemanticIndex), //care!
                     slot: desc.Register as core::ColorSlot,
                     base_type: map_base_type_from_component(desc.ComponentType),
-                    container: s::ContainerType::Vector(4), // how to get it?
+                    container: mask_to_vector(desc.Mask),
                 });
             }else
             if desc.SystemValueType == winapi::D3D_NAME_UNDEFINED {

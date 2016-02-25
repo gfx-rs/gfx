@@ -91,7 +91,7 @@ impl<A: Application<gfx_device_dx11::Resources>> ApplicationD3D11 for A {
             gfx_window_dxgi::init::<ColorFormat>(title, config.size.0, config.size.1)
             .unwrap();
         let mut encoder = factory.create_encoder();
-        let (_, _, main_depth) = factory.create_depth_stencil(
+        let main_depth = factory.create_depth_stencil_view_only(
             window.size.0, window.size.1).unwrap();
 
         let mut app = Self::new(factory, Init {
