@@ -75,10 +75,9 @@ fn format_to_gltype(format: NewFormat) -> Result<GLenum, ()> {
     let (fm8, fm16, fm32) = match format.1 {
         C::Int | C::Inorm | C::Iscaled =>
             (gl::BYTE, gl::SHORT, gl::INT),
-        C::Uint | C::Unorm | C::Uscaled =>
+        C::Uint | C::Unorm | C::Uscaled | C::Srgb =>
             (gl::UNSIGNED_BYTE, gl::UNSIGNED_SHORT, gl::UNSIGNED_INT),
         C::Float => (gl::ZERO, gl::HALF_FLOAT, gl::FLOAT),
-        C::Srgb => return Err(()),
     };
     Ok(match format.0 {
         S::R3_G3_B2 => gl::UNSIGNED_BYTE_3_3_2,
