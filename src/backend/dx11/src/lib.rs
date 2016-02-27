@@ -160,7 +160,6 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
     let mut share = Share {
         device: ptr::null_mut(),
         capabilities: gfx_core::Capabilities {
-            shader_model: gfx_core::shade::ShaderModel::Version40,
             max_vertex_count: 0,
             max_index_count: 0,
             max_texture_size: 0,
@@ -223,7 +222,23 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
     Ok((dev, factory, swap_chain, color_target))
 }
 
+pub type ShaderModel = u16;
+
 impl Device {
+    /// Return the maximum supported shader model.
+    pub fn get_shader_model(&self) -> ShaderModel {
+        match self.feature_level {
+            winapi::D3D_FEATURE_LEVEL_10_0 => 40,
+            winapi::D3D_FEATURE_LEVEL_10_1 => 41,
+            winapi::D3D_FEATURE_LEVEL_11_0 => 50,
+            winapi::D3D_FEATURE_LEVEL_11_1 => 51,
+            _ => {
+                error!("Unknown feature level {:?}", self.feature_level);
+                0
+            },
+        }
+    }
+
     fn process(&mut self, command: &command::Command, _data_buf: &gfx_core::draw::DataBuffer) {
         use gfx_core::shade::Stage;
         use command::Command::*;

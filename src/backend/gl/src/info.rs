@@ -13,36 +13,18 @@
 // limitations under the License.
 
 use std::collections::HashSet;
-use std::{cmp, ffi, fmt, mem, str};
+use std::{ffi, fmt, mem, str};
 use gl;
 use gfx_core::Capabilities;
-use gfx_core::shade;
+
 
 /// A version number for a specific component of an OpenGL implementation
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Version {
     pub major: u32,
     pub minor: u32,
     pub revision: Option<u32>,
     pub vendor_info: &'static str,
-}
-
-// FIXME https://github.com/rust-lang/rust/issues/18738
-// derive
-
-impl cmp::Ord for Version {
-    #[inline]
-    fn cmp(&self, other: &Version) -> cmp::Ordering {
-        (&self.major, &self.minor, &self.revision, self.vendor_info)
-            .cmp(&(&other.major, &other.minor, &other.revision, other.vendor_info))
-    }
-}
-impl cmp::PartialOrd for Version {
-    #[inline]
-    fn partial_cmp(&self, other: &Version) -> Option<cmp::Ordering> {
-        (&self.major, &self.minor, &self.revision, self.vendor_info)
-            .partial_cmp(&(&other.major, &other.minor, &other.revision, other.vendor_info))
-    }
 }
 
 impl Version {
@@ -215,24 +197,11 @@ impl Info {
     }
 }
 
-fn to_shader_model(v: &Version) -> shade::ShaderModel {
-    use gfx_core::shade::ShaderModel;
-    match v {
-        v if *v < Version::new(1, 20, None, "") => ShaderModel::Unsupported,
-        v if *v < Version::new(1, 50, None, "") => ShaderModel::Version30,
-        v if *v < Version::new(3,  0, None, "") => ShaderModel::Version40,
-        v if *v < Version::new(4, 30, None, "") => ShaderModel::Version41,
-        _                                       => ShaderModel::Version50,
-    }
-}
-
 /// Load the information pertaining to the driver and the corresponding device
 /// capabilities.
 pub fn get(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
     let info = Info::get(gl);
     let caps = Capabilities {
-        shader_model: to_shader_model(&info.shading_language),
-
         max_vertex_count: get_usize(gl, gl::MAX_ELEMENTS_VERTICES),
         max_index_count:  get_usize(gl, gl::MAX_ELEMENTS_INDICES),
         max_texture_size: get_usize(gl, gl::MAX_TEXTURE_SIZE),

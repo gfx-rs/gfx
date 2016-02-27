@@ -109,8 +109,6 @@ impl<R: Resources> ShaderSet<R> {
 #[derive(Copy, Clone, Debug)]
 #[allow(missing_docs)] // pretty self-explanatory fields!
 pub struct Capabilities {
-    pub shader_model: shade::ShaderModel,
-
     pub max_vertex_count: usize,
     pub max_index_count: usize,
     pub max_texture_size: usize,

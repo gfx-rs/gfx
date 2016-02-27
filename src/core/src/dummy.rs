@@ -47,7 +47,6 @@ impl DummyDevice {
     /// Create a new dummy device
     pub fn new() -> DummyDevice {
         let caps = Capabilities {
-            shader_model: shade::ShaderModel::Unsupported,
             max_vertex_count: 0,
             max_index_count: 0,
             max_texture_size: 0,

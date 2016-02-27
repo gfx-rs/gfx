@@ -439,29 +439,3 @@ pub enum CreateShaderError {
 
 /// An error type for creating programs.
 pub type CreateProgramError = String;
-
-/// Shader model supported by the device, corresponds to the HLSL shader models.
-#[allow(missing_docs)]
-#[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
-pub enum ShaderModel {
-    Unsupported,
-    Version30,
-    Version40,
-    Version41,
-    Version50,
-}
-
-impl ShaderModel {
-    /// Return the shader model as a numeric value.
-    ///
-    /// Model30 turns to 30, etc.
-    pub fn to_number(&self) -> u8 {
-        match *self {
-            ShaderModel::Unsupported => 0,  // before this age
-            ShaderModel::Version30 => 30,
-            ShaderModel::Version40 => 40,
-            ShaderModel::Version41 => 41,
-            ShaderModel::Version50 => 50,
-        }
-    }
-}

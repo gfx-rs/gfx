@@ -22,7 +22,7 @@ use gfx_core::state::{CullFace, Rasterizer};
 use encoder::Encoder;
 use mesh::{Slice, SliceKind, ToIndexSlice};
 use pso;
-use shade::{ProgramError, ShaderSource};
+use shade::ProgramError;
 
 /// Error creating a PipelineState
 #[derive(Clone, PartialEq, Debug)]
@@ -98,20 +98,6 @@ pub trait FactoryExt<R: Resources>: Factory<R> + Sized {
         let set = try!(self.create_shader_set(vs_code, ps_code));
         self.create_program(&set)
             .map_err(|e| ProgramError::Link(e))
-    }
-
-    /// Create a simple program given `ShaderSource` versions of vertex and
-    /// pixel shaders, automatically picking available shader variant.
-    fn link_program_source(&mut self, vs_src: ShaderSource, ps_src: ShaderSource)
-                           -> Result<handle::Program<R>, ProgramError> {
-        use gfx_core::shade::CreateShaderError;
-        let model = self.get_capabilities().shader_model;
-
-        match (vs_src.choose(model), ps_src.choose(model)) {
-            (Ok(vs_code), Ok(ps_code)) => self.link_program(vs_code, ps_code),
-            (Err(_), Ok(_)) => Err(ProgramError::Vertex(CreateShaderError::ModelNotSupported)),
-            (_, Err(_)) => Err(ProgramError::Pixel(CreateShaderError::ModelNotSupported)),
-        }
     }
 
     /// Create a strongly-typed Pipeline State.
