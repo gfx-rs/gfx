@@ -108,7 +108,7 @@ pub fn make_depth_stencil(device: *mut ID3D11Device, dsi: &pso::DepthStencilInfo
     let desc = D3D11_DEPTH_STENCIL_DESC {
         DepthEnable: if dsi.depth.is_some() {TRUE} else {FALSE},
         DepthWriteMask: D3D11_DEPTH_WRITE_MASK(match dsi.depth {
-            Some(ref d) if d.write => !0,
+            Some(ref d) if d.write => 1,
             _ => 0,
         }),
         DepthFunc: match dsi.depth {

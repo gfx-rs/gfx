@@ -236,7 +236,8 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
         }.to_perspective(),
         color: desc.color.clone(),
         shadow: factory.view_texture_as_depth_stencil(
-            &shadow_tex, Some(i as gfx::Layer)).unwrap(),
+            &shadow_tex, 0, Some(i as gfx::Layer), gfx::tex::DepthStencilFlags::empty(),
+            ).unwrap(),
         encoder: factory.create_encoder(),
     }).collect();
 
@@ -300,7 +301,8 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
         vbuf: cube_buf,
         transform: Matrix4::identity().into(),
         // the output here is temporary, will be overwritten for every light source
-        out: factory.view_texture_as_depth_stencil(&shadow_tex, None).unwrap(),
+        out: factory.view_texture_as_depth_stencil(&shadow_tex, 0, None,
+            gfx::tex::DepthStencilFlags::empty()).unwrap(),
     };
 
     let mut entities: Vec<_> = cube_descs.iter().map(|desc| {

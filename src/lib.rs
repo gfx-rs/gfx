@@ -16,9 +16,11 @@ extern crate env_logger;
 extern crate glutin;
 extern crate gfx;
 extern crate gfx_device_gl;
+#[cfg(windows)]
 extern crate gfx_device_dx11;
 extern crate gfx_window_glutin;
 //extern crate gfx_window_glfw;
+#[cfg(windows)]
 extern crate gfx_window_dxgi;
 
 pub mod shade;
@@ -31,21 +33,36 @@ pub struct Init<R: gfx::Resources> {
     pub backend: shade::Backend,
     pub color: gfx::handle::RenderTargetView<R, ColorFormat>,
     pub depth: gfx::handle::DepthStencilView<R, DepthFormat>,
+    pub aspect_ratio: f32,
 }
 
 pub struct Config {
     pub size: (u16, u16),
 }
 
+pub const DEFAULT_CONFIG: Config = Config {
+    size: (800, 520),
+};
+
 pub trait Application<R: gfx::Resources> {
     fn new<F: gfx::Factory<R>>(F, Init<R>) -> Self;
     fn render<C: gfx::CommandBuffer<R>>(&mut self, &mut gfx::Encoder<R, C>);
+    #[cfg(windows)]
+    fn launch_default(name: &str) where Self: ApplicationD3D11 {
+        Self::launch(name, DEFAULT_CONFIG);
+    }
+    #[cfg(linux)]
+    #[cfg(macos)]
+    fn launch_default(name: &str) where Self: ApplicationGL2 {
+        Self::launch(name, DEFAULT_CONFIG);
+    }
 }
 
 pub trait ApplicationGL2 {
     fn launch(&str, Config);
 }
 
+#[cfg(windows)]
 pub trait ApplicationD3D11 {
     fn launch(&str, Config);
 }
@@ -61,11 +78,13 @@ impl<A: Application<gfx_device_gl::Resources>> ApplicationGL2 for A {
             .with_vsync();
         let (window, mut device, mut factory, main_color, main_depth) =
             gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder);
+        let (width, height) = window.get_inner_size().unwrap();
         let mut encoder = factory.create_encoder();
         let mut app = Self::new(factory, Init {
             backend: shade::Backend::Glsl(device.get_info().shading_language),
             color: main_color,
             depth: main_depth,
+            aspect_ratio: width as f32 / height as f32,
         });
         'main: loop {
             // quit when Esc is pressed.
@@ -86,6 +105,7 @@ impl<A: Application<gfx_device_gl::Resources>> ApplicationGL2 for A {
     }
 }
 
+#[cfg(windows)]
 impl<A: Application<gfx_device_dx11::Resources>> ApplicationD3D11 for A {
     fn launch(title: &str, config: Config) {
         use gfx::traits::{Device, Factory, FactoryExt};
@@ -102,6 +122,7 @@ impl<A: Application<gfx_device_dx11::Resources>> ApplicationD3D11 for A {
             backend: shade::Backend::Hlsl(device.get_shader_model()),
             color: main_color,
             depth: main_depth,
+            aspect_ratio: window.size.0 as f32 / window.size.1 as f32,
         });
 
         while window.dispatch() {

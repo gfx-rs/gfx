@@ -36,14 +36,19 @@ struct App<R: gfx::Resources> {
 impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
     fn new<F: gfx::Factory<R>>(mut factory: F, init: gfx_app::Init<R>) -> Self {
         use gfx::traits::FactoryExt;
-        let pso = factory.create_pipeline_simple(
-            //include_bytes!("triangle_150.glslv"),
-            //include_bytes!("triangle_150.glslf"),
-            include_bytes!("data/vertex.fx"),
-            include_bytes!("data/pixel.fx"),
-            gfx::state::CullFace::Nothing,
-            pipe::new()
-            ).unwrap();
+
+        let vs = gfx_app::shade::Source {
+            glsl_120: include_bytes!("triangle_120.glslv"),
+            glsl_150: include_bytes!("triangle_150.glslv"),
+            hlsl_40:  include_bytes!("data/vertex.fx"),
+            .. gfx_app::shade::Source::empty()
+        };
+        let fs = gfx_app::shade::Source {
+            glsl_120: include_bytes!("triangle_120.glslf"),
+            glsl_150: include_bytes!("triangle_150.glslf"),
+            hlsl_40:  include_bytes!("data/pixel.fx"),
+            .. gfx_app::shade::Source::empty()
+        };
 
         let vertex_data = [
             Vertex { pos: [ -0.5, -0.5 ], color: [1.0, 0.0, 0.0] },
@@ -51,8 +56,14 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             Vertex { pos: [  0.0,  0.5 ], color: [0.0, 0.0, 1.0] },
         ];
         let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
+
         App {
-            pso: pso,
+            pso: factory.create_pipeline_simple(
+                vs.select(init.backend).unwrap(),
+                fs.select(init.backend).unwrap(),
+                gfx::state::CullFace::Nothing,
+                pipe::new()
+                ).unwrap(),
             data: pipe::Data {
                 vbuf: vbuf,
                 out: init.color,
@@ -68,7 +79,6 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 }
 
 pub fn main() {
-    <App<_> as gfx_app::ApplicationD3D11>::launch("Triangle example", gfx_app::Config {
-        size: (800, 600),
-    });
+    use gfx_app::Application;
+    App::launch_default("Triangle example");
 }

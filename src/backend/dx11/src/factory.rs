@@ -123,7 +123,7 @@ impl Factory {
         if winapi::SUCCEEDED(hr) {
             Ok(self.share.handles.borrow_mut().make_buffer(buf, info))
         }else {
-            error!("Buffer creation error code {:x}, info: {:?}", hr, info);
+            error!("Buffer creation error code {:x}, info {:?}, desc {:?}", hr, info, desc);
             Err(f::BufferError::Other)
         }
     }
