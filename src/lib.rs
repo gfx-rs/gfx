@@ -21,11 +21,14 @@ extern crate gfx_window_glutin;
 //extern crate gfx_window_glfw;
 extern crate gfx_window_dxgi;
 
+pub mod shade;
+
 
 pub type ColorFormat = gfx::format::Srgb8;
 pub type DepthFormat = gfx::format::DepthStencil;
 
 pub struct Init<R: gfx::Resources> {
+    pub backend: shade::Backend,
     pub color: gfx::handle::RenderTargetView<R, ColorFormat>,
     pub depth: gfx::handle::DepthStencilView<R, DepthFormat>,
 }
@@ -60,6 +63,7 @@ impl<A: Application<gfx_device_gl::Resources>> ApplicationGL2 for A {
             gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder);
         let mut encoder = factory.create_encoder();
         let mut app = Self::new(factory, Init {
+            backend: shade::Backend::Glsl(device.get_info().shading_language),
             color: main_color,
             depth: main_depth,
         });
@@ -95,6 +99,7 @@ impl<A: Application<gfx_device_dx11::Resources>> ApplicationD3D11 for A {
             window.size.0, window.size.1).unwrap();
 
         let mut app = Self::new(factory, Init {
+            backend: shade::Backend::Hlsl(device.get_shader_model()),
             color: main_color,
             depth: main_depth,
         });

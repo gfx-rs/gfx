@@ -34,7 +34,7 @@ pub fn init(window: &mut glfw::Window) -> (gfx_device_gl::Device, gfx_device_gl:
         window.get_proc_address(s) as *const std::os::raw::c_void);
     // create the main color/depth targets
     let (width, height) = window.get_framebuffer_size();
-    let dim = (width as tex::Size, height as tex::Size, 1, tex::AaMode::Single);
+    let dim = (width as Size, height as Size, 1, Single);
     let (color_view, ds_view) = gfx_device_gl::create_main_targets_raw(
         dim, SurfaceType::R8_G8_B8_A8, SurfaceType::D24);
     // done
