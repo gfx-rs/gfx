@@ -37,9 +37,9 @@ gfx_vertex_struct!( Vertex {
 });
 
 gfx_constant_struct!( Locals {
-    u_Model: [[f32; 4]; 4],
-    u_View: [[f32; 4]; 4],
-    u_Proj: [[f32; 4]; 4],
+    model: [[f32; 4]; 4] = "u_Model",
+    view: [[f32; 4]; 4] = "u_View",
+    proj: [[f32; 4]; 4] = "u_Proj",
 });
 
 gfx_pipeline!(pipe {
@@ -143,9 +143,9 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
         self.data.view = view.mat.into();
         let locals = Locals {
-            u_Model: self.data.model,
-            u_View: self.data.view,
-            u_Proj: self.data.proj,
+            model: self.data.model,
+            view: self.data.view,
+            proj: self.data.proj,
         };
 
         encoder.update_buffer(&self.data.locals, &[locals], 0).unwrap();

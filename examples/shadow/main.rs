@@ -42,9 +42,9 @@ impl Vertex {
 const MAX_LIGHTS: usize = 10;
 
 gfx_constant_struct!(LightParam {
-    pos: [f32; 4],
-    color: [f32; 4],
-    proj: [[f32; 4]; 4],
+    pos: [f32; 4] = "pos",
+    color: [f32; 4] = "color",
+    proj: [[f32; 4]; 4] = "proj",
 });
 
 gfx_pipeline!( forward {

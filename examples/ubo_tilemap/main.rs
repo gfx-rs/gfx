@@ -109,7 +109,7 @@ impl InputHandler {
 // [f32;2] won't work as UBO data. Possibly an issue with
 // binding generation
 gfx_constant_struct!(TileMapData {
-    data: [f32; 4],
+    data: [f32; 4] = "data",
 });
 
 impl TileMapData {

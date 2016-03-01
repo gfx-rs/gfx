@@ -70,8 +70,7 @@ fn main() {
     // but leaving the direct creation here for consistency.
     let quad_vertices = factory.create_buffer_const(&QUAD_VERTICES, gfx::BufferRole::Vertex, gfx::Bind::empty()).unwrap();
     let quad_indices = factory.create_buffer_const(&QUAD_INDICES, gfx::BufferRole::Index, gfx::Bind::empty()).unwrap();
-    let quad_instances = factory.create_buffer_dynamic(MAX_INSTANCE_COUNT, gfx::BufferRole::Vertex, gfx::Bind::empty(),
-        gfx::MapAccess::Writable).unwrap();
+    let quad_instances = factory.create_buffer_dynamic(MAX_INSTANCE_COUNT, gfx::BufferRole::Vertex, gfx::Bind::empty()).unwrap();
 
     let instances_per_length: u32 = 32;
     println!("{} instances per length", instances_per_length);

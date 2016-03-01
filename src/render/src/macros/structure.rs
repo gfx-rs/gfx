@@ -15,8 +15,8 @@
 //! Macro for implementing Structure for vertex and constant buffers.
 
 #[macro_export]
-macro_rules! gfx_vertex_struct {
-    ($root:ident {
+macro_rules! gfx_impl_struct {
+    ($runtime_format:ty : $compile_format:path = $root:ident {
         $( $field:ident: $ty:ty = $name:expr, )*
     }) => {
         #[derive(Clone, Copy, Debug)]
@@ -24,8 +24,8 @@ macro_rules! gfx_vertex_struct {
             $( pub $field: $ty, )*
         }
 
-        impl $crate::pso::buffer::Structure<$crate::format::Format> for $root {
-            fn query(name: &str) -> Option<$crate::pso::buffer::Element<$crate::format::Format>> {
+        impl $crate::pso::buffer::Structure<$runtime_format> for $root {
+            fn query(name: &str) -> Option<$crate::pso::buffer::Element<$runtime_format>> {
                 use std::mem::size_of;
                 use $crate::pso::buffer::{Element, ElemOffset, ElemStride};
                 let stride = size_of::<$root>() as ElemStride;
@@ -34,7 +34,7 @@ macro_rules! gfx_vertex_struct {
                 match name {
                 $(
                     $name => Some(Element {
-                        format: <$ty as $crate::format::Formatted>::get_format(),
+                        format: <$ty as $compile_format>::get_format(),
                         offset: ((&tmp.$field as *const _ as usize) - base) as ElemOffset,
                         stride: stride,
                     }),
@@ -47,33 +47,25 @@ macro_rules! gfx_vertex_struct {
 }
 
 #[macro_export]
+macro_rules! gfx_vertex_struct {
+    ($root:ident {
+        $( $field:ident: $ty:ty = $name:expr, )*
+    }) => (gfx_impl_struct!{
+        $crate::format::Format : $crate::format::Formatted =
+        $root {
+            $( $field: $ty = $name, )*
+        }
+    })
+}
+
+#[macro_export]
 macro_rules! gfx_constant_struct {
     ($root:ident {
-        $( $field:ident: $ty:ty, )*
-    }) => {
-        #[derive(Clone, Copy, Debug)]
-        pub struct $root {
-            $( pub $field: $ty, )*
+        $( $field:ident: $ty:ty = $name:expr, )*
+    }) => (gfx_impl_struct!{
+        $crate::shade::ConstFormat : $crate::shade::Formatted =
+        $root {
+            $( $field: $ty = $name, )*
         }
-
-        impl $crate::pso::buffer::Structure<$crate::shade::ConstFormat> for $root {
-            fn query(name: &str) -> Option<$crate::pso::buffer::Element<$crate::shade::ConstFormat>> {
-                use std::mem::size_of;
-                use $crate::pso::buffer::{Element, ElemOffset, ElemStride};
-                let stride = size_of::<$root>() as ElemStride;
-                let tmp: &$root = unsafe{ ::std::mem::uninitialized() };
-                let base = tmp as *const _ as usize;
-                match name {
-                $(
-                    stringify!($field) => Some(Element {
-                        format: <$ty as $crate::shade::Formatted>::get_format(),
-                        offset: ((&tmp.$field as *const _ as usize) - base) as ElemOffset,
-                        stride: stride,
-                    }),
-                )*
-                    _ => None,
-                }
-            }
-        }
-    }
+    })
 }

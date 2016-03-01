@@ -12,7 +12,7 @@ gfx_vertex_struct!(Instance {
 });
 
 gfx_constant_struct!(Local {
-    _pos: [u32; 4],
+    pos: [u32; 4] = "pos",
 });
 
 #[derive(Clone, Debug)]

@@ -62,8 +62,8 @@ fn make_texture<R, F>(factory: &mut F) -> gfx::handle::ShaderResourceView<R, [f3
 {
     let kind = gfx::tex::Kind::D2(4, 4, gfx::tex::AaMode::Single);
     let tex = factory.create_texture(kind, 3, gfx::SHADER_RESOURCE,
-        gfx::Usage::Dynamic(gfx::MapAccess::Writable),
-        Some(gfx::format::ChannelType::Unorm)).unwrap();
+        gfx::Usage::Dynamic, Some(gfx::format::ChannelType::Unorm)
+        ).unwrap();
 
     factory.update_texture::<Rgba8>(&tex, &tex.get_info().to_image_info(0),
         gfx::cast_slice(&L0_DATA), None).unwrap();
