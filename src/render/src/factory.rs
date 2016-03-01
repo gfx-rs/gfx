@@ -16,7 +16,7 @@
 
 use gfx_core::{format, handle, tex};
 use gfx_core::{Primitive, Resources, ShaderSet, VertexCount};
-use gfx_core::factory::{Bind, BufferRole, MapAccess, Factory};
+use gfx_core::factory::{Bind, BufferRole, Factory};
 use gfx_core::pso::{CreationError, Descriptor};
 use gfx_core::state::{CullFace, Rasterizer};
 use encoder::Encoder;
@@ -73,7 +73,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> + Sized {
 
     /// Create a constant buffer for `num` identical elements of type `T`.
     fn create_constant_buffer<T>(&mut self, num: usize) -> handle::Buffer<R, T> {
-        self.create_buffer_dynamic(num, BufferRole::Uniform, Bind::empty(), MapAccess::Writable)
+        self.create_buffer_dynamic(num, BufferRole::Uniform, Bind::empty())
             .unwrap()
     }
 

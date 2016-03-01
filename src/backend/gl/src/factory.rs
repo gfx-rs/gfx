@@ -100,7 +100,7 @@ impl Factory {
         let usage = match info.usage {
             f::Usage::GpuOnly    => gl::STATIC_DRAW,
             f::Usage::Const      => gl::STATIC_DRAW,
-            f::Usage::Dynamic(_) => gl::DYNAMIC_DRAW,
+            f::Usage::Dynamic    => gl::DYNAMIC_DRAW,
             f::Usage::CpuOnly(_) => gl::STREAM_DRAW,
         };
         unsafe {

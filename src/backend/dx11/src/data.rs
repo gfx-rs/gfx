@@ -194,7 +194,7 @@ pub fn map_usage(usage: Usage) -> (D3D11_USAGE, D3D11_CPU_ACCESS_FLAG) {
     match usage {
         Usage::GpuOnly => (D3D11_USAGE_DEFAULT,   D3D11_CPU_ACCESS_FLAG(0)),
         Usage::Const   => (D3D11_USAGE_IMMUTABLE, D3D11_CPU_ACCESS_FLAG(0)),
-        Usage::Dynamic(access) => (D3D11_USAGE_DYNAMIC, map_access(access)),
+        Usage::Dynamic => (D3D11_USAGE_DYNAMIC,   D3D11_CPU_ACCESS_WRITE),
         Usage::CpuOnly(access) => (D3D11_USAGE_STAGING, map_access(access)),
     }
 }

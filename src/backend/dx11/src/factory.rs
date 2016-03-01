@@ -108,7 +108,7 @@ impl Factory {
             BindFlags: bind.0,
             CPUAccessFlags: cpu.0,
             MiscFlags: 0,
-            StructureByteStride: info.stride as winapi::UINT,
+            StructureByteStride: info.size as winapi::UINT,
         };
         let sub = D3D11_SUBRESOURCE_DATA {
             pSysMem: raw_data.unwrap_or(ptr::null()),
@@ -123,7 +123,7 @@ impl Factory {
         if winapi::SUCCEEDED(hr) {
             Ok(self.share.handles.borrow_mut().make_buffer(buf, info))
         }else {
-            error!("Buffer creation error code {:x}, info {:?}, desc {:?}", hr, info, desc);
+            error!("Buffer creation error code {:x}, info {:?}, desc {:?}, sub {:?}", hr, info, desc, sub);
             Err(f::BufferError::Other)
         }
     }

@@ -96,11 +96,10 @@ pub enum Usage {
     GpuOnly,
     /// GPU: read, CPU: read
     Const,
-    /// GPU: rw, CPU: as specified. This is the slowest and most restrictive type of buffer.
-    /// Cpu access requires linear tiling, which is slow for GPU operation. Not recommended.
-    Dynamic(MapAccess),
-    /// GPU: nothing, CPU: as specified. Used as a staging buffer, to be copied back and forth
-    /// with on-GPU targets.
+    /// GPU: read, CPU: write
+    Dynamic,
+    /// GPU: copy only, CPU: as specified. Used as a staging buffer,
+    // to be copied back and forth with on-GPU targets.
     CpuOnly(MapAccess),
 }
 
@@ -209,12 +208,12 @@ pub trait Factory<R: Resources> {
         self.create_buffer_const_raw(cast_slice(data), mem::size_of::<T>(), role, bind)
             .map(|raw| Typed::new(raw))
     }
-    fn create_buffer_dynamic<T>(&mut self, num: usize, role: BufferRole, bind: Bind, map: MapAccess)
+    fn create_buffer_dynamic<T>(&mut self, num: usize, role: BufferRole, bind: Bind)
                                 -> Result<handle::Buffer<R, T>, BufferError> {
         let stride = mem::size_of::<T>();
         let info = BufferInfo {
             role: role,
-            usage: Usage::Dynamic(map),
+            usage: Usage::Dynamic,
             bind: bind,
             size: num * stride,
             stride: stride,
