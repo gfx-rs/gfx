@@ -45,6 +45,7 @@ pub enum Command {
     SetDepthStencil(*const ID3D11DepthStencilState, UINT),
     SetBlend(*const ID3D11BlendState, [FLOAT; 4], UINT),
     // resource updates
+    UpdateBuffer(native::Buffer, draw::DataPointer, usize),
     // drawing
     ClearColor(native::Rtv, [f32; 4]),
     ClearDepthStencil(native::Dsv, D3D11_CLEAR_FLAG, FLOAT, UINT8),
@@ -273,8 +274,8 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
         self.cache.blend_ref = rv.blend;
     }
 
-    fn update_buffer(&mut self, _: native::Buffer, _: draw::DataPointer, _: usize) {
-        unimplemented!()
+    fn update_buffer(&mut self, buf: native::Buffer, data: draw::DataPointer, offset: usize) {
+        self.buf.push(Command::UpdateBuffer(buf, data, offset));
     }
 
     fn update_texture(&mut self, _: Texture, _: tex::Kind, _: Option<tex::CubeFace>,

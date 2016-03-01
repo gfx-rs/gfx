@@ -55,7 +55,7 @@ pub mod native {
 
 use std::cell::RefCell;
 use std::os::raw::c_void;
-use std::ptr;
+use std::{mem, ptr};
 use std::sync::Arc;
 pub use self::factory::Factory;
 use gfx_core::handle as h;
@@ -156,7 +156,7 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
     use gfx_core::tex;
 
     let mut swap_chain = ptr::null_mut();
-    let create_flags = winapi::D3D11_CREATE_DEVICE_DEBUG; //TODO
+    let create_flags = winapi::D3D11_CREATE_DEVICE_FLAG(0); //D3D11_CREATE_DEVICE_DEBUG;
     let mut share = Share {
         device: ptr::null_mut(),
         capabilities: gfx_core::Capabilities {
@@ -239,12 +239,13 @@ impl Device {
         }
     }
 
-    fn process(&mut self, command: &command::Command, _data_buf: &gfx_core::draw::DataBuffer) {
+    fn process(&mut self, command: &command::Command, data_buf: &gfx_core::draw::DataBuffer) {
         use gfx_core::shade::Stage;
         use command::Command::*;
         let max_cb  = gfx_core::MAX_CONSTANT_BUFFERS as winapi::UINT;
         let max_srv = gfx_core::MAX_RESOURCE_VIEWS   as winapi::UINT;
         let max_sm  = gfx_core::MAX_SAMPLERS         as winapi::UINT;
+        debug!("Processing {:?}", command);
         match *command {
             BindProgram(ref prog) => unsafe {
                 (*self.context).VSSetShader(prog.vs, ptr::null_mut(), 0);
@@ -316,6 +317,22 @@ impl Device {
             },
             SetBlend(blend, ref value, mask) => unsafe {
                 (*self.context).OMSetBlendState(blend as *mut _, value, mask);
+            },
+            UpdateBuffer(buffer, pointer, offset) => {
+                let data = data_buf.get_ref(pointer);
+                let map_type = winapi::D3D11_MAP_WRITE_DISCARD;
+                let resource = buffer.0 as *mut winapi::ID3D11Resource;
+                let hr = unsafe {
+                    let mut sub = mem::zeroed();
+                    let hr = (*self.context).Map(resource, 0, map_type, 0, &mut sub);
+                    let dst = (sub.pData as *mut u8).offset(offset as isize);
+                    ptr::copy_nonoverlapping(data.as_ptr(), dst, data.len());
+                    (*self.context).Unmap(resource, 0);
+                    hr
+                };
+                if !winapi::SUCCEEDED(hr) {
+                    error!("Buffer {:?} failed to map, error {:x}", buffer, hr);
+                }
             },
             ClearColor(target, ref data) => unsafe {
                 (*self.context).ClearRenderTargetView(target.0, data);

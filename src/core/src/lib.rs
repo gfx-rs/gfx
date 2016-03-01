@@ -45,7 +45,7 @@ pub const MAX_VERTEX_ATTRIBUTES: usize = 16;
 /// Compile-time maximum number of color targets.
 pub const MAX_COLOR_TARGETS:      usize = 4;
 /// Compile-time maximum number of constant buffers.
-pub const MAX_CONSTANT_BUFFERS: usize = 16;
+pub const MAX_CONSTANT_BUFFERS: usize = 14;
 /// Compile-time maximum number of shader resource views (SRV).
 pub const MAX_RESOURCE_VIEWS: usize = 32;
 /// Compile-time maximum number of unordered access views (UAV).

@@ -14,12 +14,14 @@
 
 
 pub use gfx_device_gl::Version as GlslVersion;
+#[cfg(windows)]
 pub use gfx_device_dx11::ShaderModel as DxShaderModel;
 
 /// Shader backend with version numbers.
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Backend {
     Glsl(GlslVersion),
+    #[cfg(windows)]
     Hlsl(DxShaderModel),
 }
 
@@ -70,6 +72,7 @@ impl<'a> Source<'a> {
                     _ => return Err(())
                 }
             },
+            #[cfg(windows)]
             Backend::Hlsl(model) => match *self {
                 Source { hlsl_50: s, .. } if s != EMPTY && model >= 50 => s,
                 Source { hlsl_41: s, .. } if s != EMPTY && model >= 41 => s,

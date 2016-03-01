@@ -108,22 +108,30 @@ impl Factory {
             BindFlags: bind.0,
             CPUAccessFlags: cpu.0,
             MiscFlags: 0,
-            StructureByteStride: info.size as winapi::UINT,
+            StructureByteStride: 0, //TODO
         };
-        let sub = D3D11_SUBRESOURCE_DATA {
-            pSysMem: raw_data.unwrap_or(ptr::null()),
+        let mut sub = D3D11_SUBRESOURCE_DATA {
+            pSysMem: ptr::null(),
             SysMemPitch: 0,
             SysMemSlicePitch: 0,
         };
+        let sub_raw = match raw_data {
+            Some(data) => {
+                sub.pSysMem = data;
+                &sub as *const _
+            },
+            None => ptr::null(),
+        };
 
+        debug!("Creating Buffer with desc {:?} and sub-data {:?}", desc, sub);
         let mut buf = native::Buffer(ptr::null_mut());
         let hr = unsafe {
-            (*self.share.device).CreateBuffer(&desc, &sub, &mut buf.0)
+            (*self.share.device).CreateBuffer(&desc, sub_raw, &mut buf.0)
         };
         if winapi::SUCCEEDED(hr) {
             Ok(self.share.handles.borrow_mut().make_buffer(buf, info))
         }else {
-            error!("Buffer creation error code {:x}, info {:?}, desc {:?}, sub {:?}", hr, info, desc, sub);
+            error!("Failed to create a buffer with code {:x}", hr);
             Err(f::BufferError::Other)
         }
     }
