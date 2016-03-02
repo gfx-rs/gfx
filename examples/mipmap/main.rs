@@ -14,8 +14,7 @@
 
 #[macro_use]
 extern crate gfx;
-extern crate gfx_window_glutin;
-extern crate glutin;
+extern crate gfx_app;
 
 pub use gfx::format::{Rgba8, Depth};
 
@@ -76,63 +75,67 @@ fn make_texture<R, F>(factory: &mut F) -> gfx::handle::ShaderResourceView<R, [f3
         &tex, (0, 2), gfx::format::Swizzle::new()).unwrap()
 }
 
-pub fn main() {
-    use gfx::traits::{Device, Factory, FactoryExt};
+struct App<R: gfx::Resources> {
+    pso: gfx::PipelineState<R, pipe::Meta>,
+    data: pipe::Data<R>,
+    slice: gfx::Slice<R>,
+}
 
-    let builder = glutin::WindowBuilder::new()
-        .with_title("Mipmap example".to_string())
-        .with_dimensions(800, 600);
-    let (window, mut device, mut factory, main_color, _) =
-        gfx_window_glutin::init::<Rgba8, Depth>(builder);
-    let mut encoder = factory.create_encoder();
+impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
+    fn new<F: gfx::Factory<R>>(mut factory: F, init: gfx_app::Init<R>) -> Self {
+        use gfx::traits::FactoryExt;
 
-    let pso = factory.create_pipeline_simple(
-        include_bytes!("shader/120.glslv"),
-        include_bytes!("shader/120.glslf"),
-        gfx::state::CullFace::Nothing,
-        pipe::new()
-        ).unwrap();
+        let vs = gfx_app::shade::Source {
+            glsl_120: include_bytes!("shader/120.glslv"),
+            hlsl_40:  include_bytes!("data/vertex.fx"),
+            .. gfx_app::shade::Source::empty()
+        };
+        let fs = gfx_app::shade::Source {
+            glsl_120: include_bytes!("shader/120.glslf"),
+            hlsl_40:  include_bytes!("data/pixel.fx"),
+            .. gfx_app::shade::Source::empty()
+        };
 
-    let vertex_data = [
-        Vertex::new([ 0.0,  0.0], [ 0.0,  0.0]),
-        Vertex::new([ 1.0,  0.0], [50.0,  0.0]),
-        Vertex::new([ 1.0,  1.1], [50.0, 50.0]),
+        let vertex_data = [
+            Vertex::new([ 0.0,  0.0], [ 0.0,  0.0]),
+            Vertex::new([ 1.0,  0.0], [50.0,  0.0]),
+            Vertex::new([ 1.0,  1.1], [50.0, 50.0]),
 
-        Vertex::new([ 0.0,  0.0], [  0.0,   0.0]),
-        Vertex::new([-1.0,  0.0], [800.0,   0.0]),
-        Vertex::new([-1.0, -1.0], [800.0, 800.0]),
-    ];
-    let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
+            Vertex::new([ 0.0,  0.0], [  0.0,   0.0]),
+            Vertex::new([-1.0,  0.0], [800.0,   0.0]),
+            Vertex::new([-1.0, -1.0], [800.0, 800.0]),
+        ];
+        let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
 
-    let texture_view = make_texture(&mut factory);
+        let texture_view = make_texture(&mut factory);
+        let sampler = factory.create_sampler(gfx::tex::SamplerInfo::new(
+            gfx::tex::FilterMethod::Trilinear,
+            gfx::tex::WrapMode::Tile,
+        ));
 
-    let sampler = factory.create_sampler(gfx::tex::SamplerInfo::new(
-        gfx::tex::FilterMethod::Trilinear,
-        gfx::tex::WrapMode::Tile,
-    ));
-
-    let data = pipe::Data {
-        vbuf: vbuf,
-        tex: (texture_view, sampler),
-        out: main_color,
-    };
-
-    'main: loop {
-        // quit when Esc is pressed.
-        for event in window.poll_events() {
-            match event {
-                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
-                glutin::Event::Closed => break 'main,
-                _ => {},
-            }
+        App {
+            pso: factory.create_pipeline_simple(
+                vs.select(init.backend).unwrap(),
+                fs.select(init.backend).unwrap(),
+                gfx::state::CullFace::Nothing,
+                pipe::new()
+                ).unwrap(),
+            data: pipe::Data {
+                vbuf: vbuf,
+                tex: (texture_view, sampler),
+                out: init.color,
+            },
+            slice: slice,
         }
-
-        encoder.reset();
-        encoder.clear(&data.out, [0.1, 0.2, 0.3, 1.0]);
-        encoder.draw(&slice, &pso, &data);
-
-        device.submit(encoder.as_buffer());
-        window.swap_buffers().unwrap();
-        device.cleanup();
     }
+
+    fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
+        encoder.clear(&data.out, [0.1, 0.2, 0.3, 1.0]);
+        encoder.draw(&self.slice, &self.pso, &self.data);
+    }
+}
+
+pub fn main() {
+    use gfx_app::Application;
+    App::launch_default("Mipmap example");
 }
