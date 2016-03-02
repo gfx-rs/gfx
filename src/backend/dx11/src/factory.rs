@@ -398,7 +398,6 @@ impl core::Factory<R> for Factory {
 
     fn create_pipeline_state_raw(&mut self, program: &h::Program<R>, desc: &core::pso::Descriptor)
                                  -> Result<h::RawPipelineState<R>, core::pso::CreationError> {
-        use std::mem; //temporary
         use winapi::d3dcommon::*;
         use gfx_core::Primitive::*;
         use data::map_format;
@@ -463,13 +462,13 @@ impl core::Factory<R> for Factory {
         //TODO: cache rasterizer, depth-stencil, and blend states
 
         let pso = Pipeline {
-            topology: unsafe{mem::transmute(match desc.primitive {
+            topology: match desc.primitive {
                 PointList       => D3D11_PRIMITIVE_TOPOLOGY_POINTLIST,
                 LineList        => D3D11_PRIMITIVE_TOPOLOGY_LINELIST,
                 LineStrip       => D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP,
                 TriangleList    => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
                 TriangleStrip   => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
-            })},
+            },
             layout: vertex_layout,
             attributes: desc.attributes,
             program: prog,

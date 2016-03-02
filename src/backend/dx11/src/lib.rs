@@ -100,7 +100,7 @@ pub type InputLayout = *mut winapi::ID3D11InputLayout;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Pipeline {
-    topology: winapi::UINT, //winapi::D3D11_PRIMITIVE_TOPOLOGY,
+    topology: winapi::D3D11_PRIMITIVE_TOPOLOGY,
     layout: InputLayout,
     attributes: [Option<gfx_core::pso::AttributeDesc>; gfx_core::MAX_VERTEX_ATTRIBUTES],
     program: Program,
@@ -300,8 +300,7 @@ impl Device {
                     &colors[0].0, ds.0);
             },
             SetPrimitive(topology) => unsafe {
-                use std::mem; //temporary
-                (*self.context).IASetPrimitiveTopology(mem::transmute(topology));
+                (*self.context).IASetPrimitiveTopology(topology);
             },
             SetViewport(ref viewport) => unsafe {
                 (*self.context).RSSetViewports(1, viewport);

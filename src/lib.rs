@@ -16,11 +16,11 @@ extern crate env_logger;
 extern crate glutin;
 extern crate gfx;
 extern crate gfx_device_gl;
-#[cfg(windows)]
+#[cfg(target_os = "windows")]
 extern crate gfx_device_dx11;
 extern crate gfx_window_glutin;
 //extern crate gfx_window_glfw;
-#[cfg(windows)]
+#[cfg(target_os = "windows")]
 extern crate gfx_window_dxgi;
 
 pub mod shade;
@@ -47,12 +47,11 @@ pub const DEFAULT_CONFIG: Config = Config {
 pub trait Application<R: gfx::Resources> {
     fn new<F: gfx::Factory<R>>(F, Init<R>) -> Self;
     fn render<C: gfx::CommandBuffer<R>>(&mut self, &mut gfx::Encoder<R, C>);
-    #[cfg(windows)]
+    #[cfg(target_os = "windows")]
     fn launch_default(name: &str) where Self: ApplicationD3D11 {
         Self::launch(name, DEFAULT_CONFIG);
     }
-    #[cfg(linux)]
-    #[cfg(macos)]
+    #[cfg(not(target_os = "windows"))]
     fn launch_default(name: &str) where Self: ApplicationGL2 {
         Self::launch(name, DEFAULT_CONFIG);
     }
@@ -62,7 +61,7 @@ pub trait ApplicationGL2 {
     fn launch(&str, Config);
 }
 
-#[cfg(windows)]
+#[cfg(target_os = "windows")]
 pub trait ApplicationD3D11 {
     fn launch(&str, Config);
 }
@@ -105,7 +104,7 @@ impl<A: Application<gfx_device_gl::Resources>> ApplicationGL2 for A {
     }
 }
 
-#[cfg(windows)]
+#[cfg(target_os = "windows")]
 impl<A: Application<gfx_device_dx11::Resources>> ApplicationD3D11 for A {
     fn launch(title: &str, config: Config) {
         use gfx::traits::{Device, Factory, FactoryExt};
