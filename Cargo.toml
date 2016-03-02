@@ -16,6 +16,7 @@ name = "gfx_app"
 
 [dependencies]
 env_logger = "0.3"
+time = "*"
 glutin = "0.4.8"
 gfx_core = { path = "src/render", version = "0.2" }
 gfx_device_gl = { path = "src/backend/gl", version = "0.9" }
@@ -83,8 +84,8 @@ path = "examples/mipmap/main.rs"
 log = "*"
 cgmath = "0.7"
 glfw = "0.3"
+gfx_gl = "0.1"
 rand = "*"
-time = "*"
 genmesh = "*"
 noise = "*"
 image = "*"

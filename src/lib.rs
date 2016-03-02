@@ -13,6 +13,7 @@
 // limitations under the License.
 
 extern crate env_logger;
+extern crate time;
 extern crate glutin;
 extern crate gfx;
 extern crate gfx_device_gl;
@@ -43,6 +44,33 @@ pub struct Config {
 pub const DEFAULT_CONFIG: Config = Config {
     size: (800, 520),
 };
+
+struct Harness {
+    start: f64,
+    num_frames: f64,
+}
+
+impl Harness {
+    fn new() -> Harness {
+        Harness {
+            start: time::precise_time_s(),
+            num_frames: 0.0,
+        }
+    }
+    fn bump(&mut self) {
+        self.num_frames += 1.0;
+    }
+}
+
+impl Drop for Harness {
+    fn drop(&mut self) {
+        let time_end = time::precise_time_s();
+        println!("Avg frame time: {} ms",
+            (time_end - self.start) * 1000.0 / self.num_frames
+        );
+    }
+}
+
 
 pub trait Application<R: gfx::Resources> {
     fn new<F: gfx::Factory<R>>(F, Init<R>) -> Self;
@@ -85,6 +113,8 @@ impl<A: Application<gfx_device_gl::Resources>> ApplicationGL2 for A {
             depth: main_depth,
             aspect_ratio: width as f32 / height as f32,
         });
+
+        let mut harness = Harness::new();
         'main: loop {
             // quit when Esc is pressed.
             for event in window.poll_events() {
@@ -100,6 +130,7 @@ impl<A: Application<gfx_device_gl::Resources>> ApplicationGL2 for A {
             device.submit(encoder.as_buffer());
             window.swap_buffers().unwrap();
             device.cleanup();
+            harness.bump()
         }
     }
 }
@@ -124,12 +155,14 @@ impl<A: Application<gfx_device_dx11::Resources>> ApplicationD3D11 for A {
             aspect_ratio: window.size.0 as f32 / window.size.1 as f32,
         });
 
+        let mut harness = Harness::new();
         while window.dispatch() {
             encoder.reset();
             app.render(&mut encoder);
             device.submit(encoder.as_buffer());
             window.swap_buffers(1);
             device.cleanup();
+            harness.bump();
         }
     }
 }

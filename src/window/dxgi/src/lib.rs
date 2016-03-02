@@ -49,8 +49,10 @@ impl Window {
     pub fn dispatch(&self) -> bool {unsafe {
         let mut msg: winapi::MSG = mem::zeroed();
         while user32::PeekMessageW(&mut msg, self.hwnd, 0, 0, winapi::PM_REMOVE) == winapi::TRUE {
-            if (msg.message & 0xFFFF) == winapi::WM_QUIT {
-                return false
+            match msg.message & 0xFFFF {
+                winapi::WM_QUIT | winapi::WM_CLOSE => return false,
+                winapi::WM_KEYDOWN if msg.wParam as i32 == winapi::VK_ESCAPE => return false,
+                _ => ()
             }
             user32::TranslateMessage(&msg);
             user32::DispatchMessageW(&msg);
