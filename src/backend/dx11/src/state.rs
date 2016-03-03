@@ -60,7 +60,7 @@ pub fn make_rasterizer(device: *mut ID3D11Device, rast: &state::Rasterizer, use_
         (*device).CreateRasterizerState(&desc, &mut handle)
     };
     if !SUCCEEDED(hr) {
-        error!("Failed to create rasterizer state {:?}, descriptor {:?}, code {:x}", rast, desc, hr);
+        error!("Failed to create rasterizer state {:?}, descriptor {:#?}, code {:x}", rast, desc, hr);
     }
     handle as *const _
 }
@@ -127,7 +127,7 @@ pub fn make_depth_stencil(device: *mut ID3D11Device, dsi: &pso::DepthStencilInfo
         (*device).CreateDepthStencilState(&desc, &mut handle)
     };
     if !SUCCEEDED(hr) {
-        error!("Failed to create depth-stencil state {:?}, descriptor {:?}, error {:x}", dsi, desc, hr);
+        error!("Failed to create depth-stencil state {:?}, descriptor {:#?}, error {:x}", dsi, desc, hr);
     }
     handle as *const _
 }
@@ -216,7 +216,7 @@ pub fn make_blend(device: *mut ID3D11Device, targets: &[Option<pso::ColorTargetD
         (*device).CreateBlendState(&desc, &mut handle)
     };
     if !SUCCEEDED(hr) {
-        error!("Failed to create blend state {:?}, descriptor {:?}, error {:x}", targets, desc, hr);
+        error!("Failed to create blend state {:?}, descriptor {:#?}, error {:x}", targets, desc, hr);
     }
     handle as *const _
 }

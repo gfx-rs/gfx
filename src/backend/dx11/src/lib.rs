@@ -39,22 +39,27 @@ pub mod native {
     #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
     pub struct Buffer(pub *mut ID3D11Buffer);
     unsafe impl Send for Buffer {}
+    unsafe impl Sync for Buffer {}
 
     #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
     pub struct Rtv(pub *mut ID3D11RenderTargetView);
     unsafe impl Send for Rtv {}
+    unsafe impl Sync for Rtv {}
 
     #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
     pub struct Dsv(pub *mut ID3D11DepthStencilView);
     unsafe impl Send for Dsv {}
+    unsafe impl Sync for Dsv {}
 
     #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
     pub struct Srv(pub *mut ID3D11ShaderResourceView);
     unsafe impl Send for Srv {}
+    unsafe impl Sync for Srv {}
 
     #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
     pub struct Sampler(pub *mut ID3D11SamplerState);
     unsafe impl Send for Sampler {}
+    unsafe impl Sync for Sampler {}
 }
 
 use std::cell::RefCell;
@@ -72,6 +77,8 @@ pub enum Texture {
     D3(*mut winapi::ID3D11Texture3D),
 }
 unsafe impl Send for Texture {}
+unsafe impl Sync for Texture {}
+
 impl Texture {
     pub fn to_resource(&self) -> *mut winapi::ID3D11Resource {
         type Res = *mut winapi::ID3D11Resource;
@@ -90,6 +97,7 @@ pub struct Shader {
     code_hash: u64,
 }
 unsafe impl Send for Shader {}
+unsafe impl Sync for Shader {}
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Program {
@@ -99,6 +107,7 @@ pub struct Program {
     vs_hash: u64,
 }
 unsafe impl Send for Program {}
+unsafe impl Sync for Program {}
 
 pub type InputLayout = *mut winapi::ID3D11InputLayout;
 
@@ -113,6 +122,7 @@ pub struct Pipeline {
     blend: *const winapi::ID3D11BlendState,
 }
 unsafe impl Send for Pipeline {}
+unsafe impl Sync for Pipeline {}
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Resources {}

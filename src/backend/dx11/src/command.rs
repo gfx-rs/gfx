@@ -65,6 +65,7 @@ struct Cache {
     blend: *const ID3D11BlendState,
     blend_ref: [FLOAT; 4],
 }
+unsafe impl Send for Cache {}
 
 impl Cache {
     fn new() -> Cache {
