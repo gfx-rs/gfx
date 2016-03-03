@@ -31,10 +31,11 @@ use gfx_core::state as s;
 use gfx_core::target::{Layer, Level};
 use command::Command;
 
+pub use self::command::CommandBuffer;
 pub use self::factory::Factory;
 pub use self::info::{Info, PlatformName, Version};
 
-pub mod command;
+mod command;
 mod factory;
 mod info;
 mod shade;

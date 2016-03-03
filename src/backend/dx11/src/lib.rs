@@ -22,11 +22,15 @@ extern crate d3dcompiler;
 extern crate dxguid;
 extern crate winapi;
 
+pub use self::command::CommandBuffer;
+pub use self::data::map_format;
+
 mod command;
-pub mod data;
+mod data;
 mod factory;
 mod mirror;
 mod state;
+
 
 #[doc(hidden)]
 pub mod native {

@@ -100,7 +100,7 @@ pub fn init_raw(title: &str, requested_width: winapi::INT, requested_height: win
         BufferDesc: winapi::DXGI_MODE_DESC {
             Width: width as winapi::UINT,
             Height: height as winapi::UINT,
-            Format: match gfx_device_dx11::data::map_format(color_format) {
+            Format: match gfx_device_dx11::map_format(color_format) {
                 Some(fm) => fm,
                 None => return Err(InitError::Format(color_format)),
             },
