@@ -16,12 +16,10 @@ extern crate time;
 extern crate cgmath;
 #[macro_use]
 extern crate gfx;
-extern crate gfx_window_glutin;
-extern crate glutin;
+extern crate gfx_app;
 
 use std::sync::{Arc, RwLock};
 pub use gfx::format::{Depth, Srgb8, I8Scaled};
-use gfx::traits::*;
 
 // Section-1: vertex formats and shader parameters
 
@@ -364,107 +362,130 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
 }
 
 //----------------------------------------
-// Section-5: main entry point
+// Section-5: application
 
-pub fn main() {
-    use std::env;
-    use time::precise_time_s;
-    use cgmath::{EuclideanVector, Matrix4, Rotation3};
+struct App<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
+    init: gfx_app::Init<R>,
+    is_parallel: bool,
+    forward_pso: gfx::PipelineState<R, forward::Meta>,
+    scene: Scene<R, C>,
+}
 
-    // initialize
-    let mut is_parallel = true;
-    for arg in env::args().skip(1) {
-        if arg == "single" {
-            is_parallel = false;
+impl<R: gfx::Resources, C: gfx::CommandBuffer<R>> App<R, C> {
+    fn rotate(&mut self, axis: cgmath::Vec3<f32>) {
+        let len = axis.length();
+        for ent in self.scene.share.write().unwrap().entities.iter_mut() {
+            if !ent.dynamic {
+                continue
+            }
+            // rotate all cubes around the axis
+            let rot = cgmath::Decomposed {
+                scale: 1.0,
+                rot: cgmath::Quaternion::from_axis_angle(
+                    axis * (1.0 / len),
+                    cgmath::deg(len * 0.3).into(),
+                ),
+                disp: cgmath::vec3(0.0, 0.0, 0.0)
+            };
+            ent.mx_to_world = ent.mx_to_world * Matrix4::from(rot);
         }
     }
-    println!("Running in {}-threaded mode",
-        if is_parallel {"multi"} else {"single"},
-    );
+}
 
-    let builder = glutin::WindowBuilder::new()
-            .with_title("Multi-threaded shadow rendering example with gfx-rs".to_string())
-            .with_dimensions(800, 600)
-            .with_gl(glutin::GL_CORE)
-            .with_depth_buffer(24); //TODO: derive automatically
-    let (window, mut device, mut factory, main_color, main_depth) =
-        gfx_window_glutin::init::<Srgb8, Depth>(builder);
-    let mut encoder = factory.create_encoder();
+impl<R: gfx::Resources, C: gfx::CommandBuffer<R>>
+gfx_app::ApplicationBase<R, C> for App<R, C> {
+    fn new<F>(mut factory: F, init: gfx_app::Init<R>) -> Self where 
+        F: gfx::Factory<R, CommandBuffer=C>
+    {
+        use std::env;
+        use gfx::traits::FactoryExt;
+        use gfx_app::shade::Source;
 
-    // create PSOs
-    let forward_pso = factory.create_pipeline_simple(
-        include_bytes!("shader/forward_150.glslv"),
-        include_bytes!("shader/forward_150.glslf"),
-        gfx::state::CullFace::Back,
-        forward::new()
-        ).unwrap();
-
-    let shadow_shaders = factory.create_shader_set(
-        include_bytes!("shader/shadow_150.glslv"),
-        include_bytes!("shader/shadow_150.glslf")
-        ).unwrap();
-
-    let shadow_pso = factory.create_pipeline_state(
-        &shadow_shaders,
-        gfx::Primitive::TriangleList,
-        gfx::state::Rasterizer::new_fill(gfx::state::CullFace::Back)
-                               .with_offset(1.0, 1),
-        shadow::new()
-        ).unwrap();
-
-    let mut scene = create_scene(&mut factory,
-        main_color.clone(), main_depth.clone(),
-        shadow_pso);
-    let mut last_mouse: (i32, i32) = (0, 0);
-    let time_start = precise_time_s();
-    let mut num_frames = 0f64;
-
-    'main: loop {
-        // process events
-        for event in window.poll_events() {
-            use glutin::{Event, VirtualKeyCode};
-            match event {
-                Event::MouseMoved(cur) => if cur != last_mouse {
-                    let axis = cgmath::vec3(
-                        (cur.0 - last_mouse.0) as f32,
-                        0.0,
-                        (cur.1 - last_mouse.1) as f32,
-                    );
-                    let len = axis.length();
-                    for ent in scene.share.write().unwrap().entities.iter_mut() {
-                        if !ent.dynamic {
-                            continue
-                        }
-                        // rotate all cubes around the axis
-                        let rot = cgmath::Decomposed {
-                            scale: 1.0,
-                            rot: cgmath::Quaternion::from_axis_angle(
-                                axis * (1.0 / len),
-                                cgmath::deg(len * 0.3).into(),
-                            ),
-                            disp: cgmath::vec3(0.0, 0.0, 0.0)
-                        };
-                        ent.mx_to_world = ent.mx_to_world * Matrix4::from(rot);
-                    }
-                    last_mouse = cur;
-                },
-                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Escape)) |
-                Event::Closed => break 'main,
-                _ => {},
+        let mut is_parallel = true;
+        for arg in env::args().skip(1) {
+            if arg == "single" {
+                is_parallel = false;
             }
         }
+        println!("Running in {}-threaded mode",
+            if is_parallel {"multi"} else {"single"},
+        );
 
+        let forward_pso = {
+            let vs = Source {
+                glsl_150: include_bytes!("shader/forward_150.glslv"),
+                hlsl_40:  include_bytes!("data/forward_vs.fx"),
+                .. Source::empty()
+            };
+            let ps = Source {
+                glsl_150: include_bytes!("shader/forward_150.glslf"),
+                hlsl_40:  include_bytes!("data/forward_fs.fx"),
+                .. Source::empty()
+            };
+            factory.create_pipeline_simple(
+                vs.select(init.backend).unwrap(),
+                ps.select(init.backend).unwrap(),
+                gfx::state::CullFace::Back,
+                forward::new()
+                ).unwrap()
+        };
+
+        let shadow_pso = {
+            let vs = Source {
+                glsl_150: include_bytes!("shader/shadow_150.glslv"),
+                hlsl_40:  include_bytes!("data/shadow_vs.fx"),
+                .. Source::empty()
+            };
+            let vs = Source {
+                glsl_150: include_bytes!("shader/shadow_150.glslf"),
+                hlsl_40:  include_bytes!("data/shadow_fs.fx"),
+                .. Source::empty()
+            };
+            factory.create_pipeline_state(
+                &factory.create_shader_set(
+                    vs.select(init.backend).unwrap(),
+                    ps.select(init.backend).unwrap()
+                    ).unwrap(),
+                gfx::Primitive::TriangleList,
+                gfx::state::Rasterizer::new_fill(gfx::state::CullFace::Back)
+                                       .with_offset(1.0, 1),
+                shadow::new()
+                ).unwrap();
+        };
+
+        let encoder = factory.create_encoder();
+        let scene = create_scene(&mut factory,
+            init.color.clone(), init.depth.clone(),
+            shadow_pso);
+
+        App {
+            init: init,
+            is_parallel: is_parallel,
+            forward_pso: forward_pso,
+            encoder: encoder,
+            scene: scene,
+        }
+    }
+
+    fn render<D>(&mut self, device: &mut D) where
+        D: gfx::Device<Resources=R, CommandBuffer=C>
+    {
+        use cgmath::{EuclideanVector, Matrix4, Rotation3};
+
+        self.encoder.reset();
+        self.rotate(cgmath::vec3(0.0, 0.0, 1.0));
         // fill up shadow map for each light
-        if is_parallel {
+        if self.is_parallel {
             use std::thread;
             use std::sync::mpsc;
+
             let (sender_orig, receiver) = mpsc::channel();
             let num = scene.lights.len();
             // run parallel threads
             let _threads: Vec<_> = (0..num).map(|_| {
                 // move the light into the thread scope
-                let mut light = scene.lights.swap_remove(0);
-                let share = scene.share.clone();
+                let mut light = self.scene.lights.swap_remove(0);
+                let share = self.scene.share.clone();
                 let sender = sender_orig.clone();
                 thread::spawn(move || {
                     // clear
@@ -491,14 +512,14 @@ pub fn main() {
             for _ in 0..num {
                 let light = receiver.recv().unwrap();
                 device.submit(light.encoder.as_buffer());
-                scene.lights.push(light);
+                self.scene.lights.push(light);
             }
         } else {
-            for light in scene.lights.iter_mut() {
+            for light in self.scene.lights.iter_mut() {
                 // clear
-                encoder.clear_depth(&light.shadow, 1.0);
+                self.encoder.clear_depth(&light.shadow, 1.0);
                 // fill
-                let subshare = scene.share.read().unwrap();
+                let subshare = self.scene.share.read().unwrap();
                 for ent in subshare.entities.iter() {
                     let mut batch = ent.batch_shadow.clone();
                     batch.out = light.shadow.clone();
@@ -508,40 +529,38 @@ pub fn main() {
                         let mvp = mx_view * ent.mx_to_world;
                         mvp.into()
                     };
-                    encoder.draw(&ent.slice, &subshare.shadow_pso, &batch);
+                    self.encoder.draw(&ent.slice, &subshare.shadow_pso, &batch);
                 }
             }
         }
 
         // draw entities with forward pass
-        encoder.clear(&main_color, [0.1, 0.2, 0.3]);
-        encoder.clear_depth(&main_depth, 1.0);
+        self.encoder.clear(&self.init.color, [0.1, 0.2, 0.3]);
+        self.encoder.clear_depth(&self.init.depth, 1.0);
 
         let mx_vp = {
-            let (w, h) = window.get_inner_size().unwrap();
-            let mut proj = scene.camera.projection;
-            proj.aspect = (w as f32) / (h as f32);
+            let mut proj = self.scene.camera.projection;
+            proj.aspect = self.init.aspect;
             let mx_proj: cgmath::Matrix4<_> = proj.into();
-            mx_proj * scene.camera.mx_view
+            mx_proj * sellf.scene.camera.mx_view
         };
 
-        for ent in scene.share.write().unwrap().entities.iter_mut() {
+        for ent in self.scene.share.write().unwrap().entities.iter_mut() {
             let batch = &mut ent.batch_forward;
             batch.transform = (mx_vp * ent.mx_to_world).into();
             batch.model_transform = ent.mx_to_world.into();
-            encoder.draw(&ent.slice, &forward_pso, batch);
+            self.encoder.draw(&ent.slice, &forward_pso, batch);
         }
 
-        // done
-        device.submit(encoder.as_buffer());
-        window.swap_buffers().unwrap();
-        device.cleanup();
-        encoder.reset();
-        num_frames += 1.0;
+        device.submit(self.encoder.as_buffer());
     }
+}
 
-    let time_end = precise_time_s();
-    println!("Avg frame time: {} ms",
-        (time_end - time_start) * 1000.0 / num_frames
-    );
+//----------------------------------------
+// Section-6: main entry point
+
+pub fn main() {
+    <App<_, _> as gfx_app::ApplicationGL2>::launch(
+        "Multi-threaded shadow rendering example with gfx-rs",
+        gfx_app::DEFAULT_CONFIG);
 }

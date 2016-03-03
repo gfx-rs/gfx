@@ -72,7 +72,8 @@ impl Drop for Harness {
 }
 
 pub trait ApplicationBase<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
-    fn new<F: gfx::Factory<R, CommandBuffer=C>>(F, Init<R>) -> Self;
+    fn new<F>(F, Init<R>) -> Self where
+        F: gfx::Factory<R, CommandBuffer=C>;
     fn render<D>(&mut self, &mut D) where
         D: gfx::Device<Resources=R, CommandBuffer=C>;
 }
@@ -103,8 +104,9 @@ impl<
     C: gfx::CommandBuffer<R>,
     A: Application<R>,
 > ApplicationBase<R, C> for Wrap<R, C, A> {
-    fn new<F: gfx::Factory<R, CommandBuffer=C>>(
-           mut factory: F, init: Init<R>) -> Self {
+    fn new<F>(mut factory: F, init: Init<R>) -> Self where
+        F: gfx::Factory<R, CommandBuffer=C>
+    {
         use gfx::traits::FactoryExt;
         Wrap {
             encoder: factory.create_encoder(),
