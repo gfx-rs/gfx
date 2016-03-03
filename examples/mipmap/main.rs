@@ -40,21 +40,21 @@ gfx_pipeline!(pipe {
 });
 
 // Larger red dots
-const L0_DATA: [u8; 16] = [
-    0x00, 0x00, 0x00, 0x00,
-    0x00, 0xc0, 0xc0, 0x00,
-    0x00, 0xc0, 0xc0, 0x00,
-    0x00, 0x00, 0x00, 0x00,
+const L0_DATA: [[u8; 3]; 16] = [
+    [ 0x00, 0x00, 0x00 ], [ 0x00, 0x00, 0x00 ], [ 0x00, 0x00, 0x00 ], [ 0x00, 0x00, 0x00 ],
+    [ 0x00, 0x00, 0x00 ], [ 0xc0, 0x00, 0x00 ], [ 0xc0, 0x00, 0x00 ], [ 0x00, 0x00, 0x00 ],
+    [ 0x00, 0x00, 0x00 ], [ 0xc0, 0x00, 0x00 ], [ 0xc0, 0x00, 0x00 ], [ 0x00, 0x00, 0x00 ],
+    [ 0x00, 0x00, 0x00 ], [ 0x00, 0x00, 0x00 ], [ 0x00, 0x00, 0x00 ], [ 0x00, 0x00, 0x00 ],
 ];
 
 // Uniform green
-const L1_DATA: [u8; 4] = [
-    0x10, 0x18,
-    0x18, 0x18,
+const L1_DATA: [[u8; 3]; 4] = [
+    [ 0x00, 0xc0, 0x00 ], [ 0x00, 0xc0, 0x00 ],
+    [ 0x00, 0xc0, 0x00 ], [ 0x00, 0xc0, 0x00 ],
 ];
 
 // Uniform blue
-const L2_DATA: [u8; 1] = [ 0x02 ];
+const L2_DATA: [[u8; 3]; 1] = [ [ 0x00, 0x00, 0xc0 ] ];
 
 fn make_texture<R, F>(factory: &mut F) -> gfx::handle::ShaderResourceView<R, [f32; 3]>
         where R: gfx::Resources, 
@@ -64,16 +64,16 @@ fn make_texture<R, F>(factory: &mut F) -> gfx::handle::ShaderResourceView<R, [f3
     let tex = factory.create_texture(kind, 3, gfx::SHADER_RESOURCE,
         Some(gfx::format::ChannelType::Unorm)).unwrap();
 
-    type Rgb332 = (gfx::format::R3_G3_B2, gfx::format::Unorm);
+    type Rgb8 = (gfx::format::R8_G8_B8, gfx::format::Unorm);
 
-    factory.update_texture::<Rgb332>(&tex, &tex.get_info().to_image_info(0),
+    factory.update_texture::<Rgb8>(&tex, &tex.get_info().to_image_info(0),
         gfx::cast_slice(&L0_DATA), None).unwrap();
-    factory.update_texture::<Rgb332>(&tex, &tex.get_info().to_image_info(1),
+    factory.update_texture::<Rgb8>(&tex, &tex.get_info().to_image_info(1),
         gfx::cast_slice(&L1_DATA), None).unwrap();
-    factory.update_texture::<Rgb332>(&tex, &tex.get_info().to_image_info(2),
+    factory.update_texture::<Rgb8>(&tex, &tex.get_info().to_image_info(2),
         gfx::cast_slice(&L2_DATA), None).unwrap();
 
-    factory.view_texture_as_shader_resource::<Rgb332>(
+    factory.view_texture_as_shader_resource::<Rgb8>(
         &tex, (0, 2), gfx::format::Swizzle::new()).unwrap()
 }
 
