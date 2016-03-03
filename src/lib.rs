@@ -96,6 +96,7 @@ pub struct Wrap<R: gfx::Resources, C: gfx::CommandBuffer<R>, A>{
     app: A,
 }
 
+#[cfg(target_os = "windows")]
 pub type WrapD3D11<A> = Wrap<gfx_device_dx11::Resources, gfx_device_dx11::CommandBuffer, A>;
 pub type WrapGL2<A> = Wrap<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer, A>;
 
