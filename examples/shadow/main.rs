@@ -213,9 +213,6 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
         factory.create_sampler(sinfo)
     };
 
-    let (near, far) = (1f32, 20f32);
-    let light_buf = factory.create_constant_buffer(MAX_LIGHTS);
-
     // create lights
     struct LightDesc {
         pos: cgmath::Point3<f32>,
@@ -236,6 +233,7 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
         },
     ];
 
+    let (near, far) = (1f32, 20f32);
     let lights: Vec<_> = light_descs.iter().enumerate().map(|(i, desc)| Light {
         position: desc.pos.clone(),
         mx_view: cgmath::Matrix4::look_at(
@@ -267,6 +265,8 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
             (mx_proj * light.mx_view).into()
         },
     }).collect();
+
+    let light_buf = factory.create_constant_buffer(MAX_LIGHTS);
     factory.update_buffer(&light_buf, &light_params, 0).unwrap();
 
     // create entities
@@ -301,8 +301,8 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
 
     let (cube_buf, cube_slice) = create_cube(factory);
     let locals = ForwardPsLocals {
-        num_lights: lights.len() as i32,
         color: [1.0, 1.0, 1.0, 1.0],
+        num_lights: lights.len() as i32,
     };
 
     let mut fw_data = forward::Data {
@@ -316,6 +316,7 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
         out_color: out_color,
         out_depth: out_depth,
     };
+
     let mut sh_data = shadow::Data {
         vbuf: cube_buf,
         locals: factory.create_constant_buffer(1),
@@ -323,10 +324,6 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
         out: factory.view_texture_as_depth_stencil(&shadow_tex, 0, None,
             gfx::tex::DepthStencilFlags::empty()).unwrap(),
     };
-
-    //color: [1.0, 1.0, 1.0, 1.0],
-    //num_lights: lights.len() as i32,
-
 
     let mut entities: Vec<_> = cube_descs.iter().map(|desc| {
         use cgmath::{EuclideanVector, Rotation3};
@@ -424,17 +421,6 @@ impl<R: gfx::Resources, C: gfx::CommandBuffer<R>> App<R, C> {
 impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
     R: gfx::Resources + 'static,
     C: gfx::CommandBuffer<R> + Send + 'static,
-    R::Buffer: Sync,
-    R::Shader: Sync,
-    R::Program: Sync,
-    R::PipelineStateObject: Sync,
-    R::Texture: Sync,
-    R::ShaderResourceView: Sync,
-    R::UnorderedAccessView: Sync,
-    R::RenderTargetView: Sync,
-    R::DepthStencilView: Sync,
-    R::Sampler: Sync,
-    R::Fence: Sync,
 {
     fn new<F>(mut factory: F, init: gfx_app::Init<R>) -> Self where 
         F: gfx::Factory<R, CommandBuffer=C>

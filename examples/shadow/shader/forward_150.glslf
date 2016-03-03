@@ -32,7 +32,7 @@ void main() {
 	vec3 ambient = vec3(0.05, 0.05, 0.05);
 	// accumulated color
 	vec3 color = ambient;
-	for (int i=0; i<u_NumLights; ++i) {
+	for (int i=0; i<u_NumLights && i<MAX_LIGHTS; ++i) {
 		Light light = u_Lights[i];
 		// project into the light space
 		vec4 light_local = light.proj * vec4(v_Position, 1.0);

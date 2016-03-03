@@ -36,5 +36,5 @@ VsOutput Vertex(int4 pos : a_Pos, int4 normal : a_Normal) {
 }
 
 float4 Pixel(VsOutput In): SV_Target {
-	return float4(1.0,1.0,1.0,1.0);
+	return float4(1.0,1.0,1.0,1.0); //TODO
 }
