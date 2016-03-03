@@ -8,10 +8,12 @@ out vec3 v_Normal;
 // world-space position
 out vec3 v_Position;
 
-// model-view-projection matrix
-uniform mat4 u_Transform;
-// model matrix
-uniform mat4 u_ModelTransform;
+uniform VsLocals {
+	// model-view-projection matrix
+	mat4 u_Transform;
+	// model matrix
+	mat4 u_ModelTransform;
+};
 
 void main() {
 	v_Normal = mat3(u_ModelTransform) * a_Normal;

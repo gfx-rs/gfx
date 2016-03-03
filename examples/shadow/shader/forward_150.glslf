@@ -8,6 +8,13 @@ struct Light {
 	mat4 proj;	// view-projection matrix
 };
 
+uniform PsLocals {
+	// active number of lights
+	int u_NumLights;
+	// material color
+	vec4 u_Color;
+};
+
 //TODO: structured buffer
 uniform b_Lights {
 	Light u_Lights[MAX_LIGHTS];
@@ -15,10 +22,6 @@ uniform b_Lights {
 
 // an array of shadows, one per light
 uniform sampler2DArrayShadow t_Shadow;
-// active number of lights
-uniform int u_NumLights;
-// material color
-uniform vec4 u_Color;
 
 in vec3 v_Normal;
 in vec3 v_Position;

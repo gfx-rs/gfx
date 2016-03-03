@@ -19,23 +19,37 @@ extern crate gfx;
 extern crate gfx_app;
 
 use std::sync::{Arc, RwLock};
-pub use gfx::format::{Depth, Srgb8, I8Scaled};
+pub use gfx::format::{Depth, DepthStencil, Srgb8};
 
 // Section-1: vertex formats and shader parameters
 
 gfx_vertex_struct!( Vertex {
-    pos: [I8Scaled; 3] = "a_Pos",
-    normal: [I8Scaled; 3] = "a_Normal",
+    pos: [i8; 4] = "a_Pos",
+    normal: [i8; 4] = "a_Normal",
 });
 
 impl Vertex {
     fn new(p: [i8; 3], n: [i8; 3]) -> Vertex {
         Vertex {
-            pos: I8Scaled::cast3(p),
-            normal: I8Scaled::cast3(n),
+            pos: [p[0], p[1], p[2], 1],
+            normal: [n[0], n[1], n[2], 0],
         }
     }
 }
+
+gfx_constant_struct!(ForwardVsLocals {
+    transform: [[f32; 4]; 4] = "u_Transform",
+    model_transform: [[f32; 4]; 4] = "u_ModelTransform",
+});
+
+gfx_constant_struct!(ForwardPsLocals {
+    color: [f32; 4] = "u_Color",
+    num_lights: i32 = "u_NumLights",
+});
+
+gfx_constant_struct!(ShadowLocals {
+    transform: [[f32; 4]; 4] = "u_Transform",
+});
 
 const MAX_LIGHTS: usize = 10;
 
@@ -47,20 +61,20 @@ gfx_constant_struct!(LightParam {
 
 gfx_pipeline!( forward {
     vbuf: gfx::VertexBuffer<Vertex> = (),
-    transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
-    model_transform: gfx::Global<[[f32; 4]; 4]> = "u_ModelTransform",
-    color: gfx::Global<[f32; 4]> = "u_Color",
-    num_lights: gfx::Global<i32> = "u_NumLights",
+    vs_locals: gfx::ConstantBuffer<ForwardVsLocals> = "VsLocals",
+    ps_locals: gfx::ConstantBuffer<ForwardPsLocals> = "PsLocals",
     light_buf: gfx::ConstantBuffer<LightParam> = "b_Lights",
     shadow: gfx::TextureSampler<f32> = "t_Shadow",
-    out_color: gfx::RenderTarget<Srgb8> = "o_Color",
-    out_depth: gfx::DepthTarget<Depth> = gfx::preset::depth::LESS_EQUAL_WRITE,
+    out_color: gfx::RenderTarget<Srgb8> = "Target0",
+    out_depth: gfx::DepthTarget<DepthStencil> =
+        gfx::preset::depth::LESS_EQUAL_WRITE,
 });
 
 gfx_pipeline!( shadow {
     vbuf: gfx::VertexBuffer<Vertex> = (),
-    transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
-    out: gfx::DepthTarget<Depth> = gfx::preset::depth::LESS_EQUAL_WRITE,
+    locals: gfx::ConstantBuffer<ShadowLocals> = "Locals",
+    out: gfx::DepthTarget<Depth> =
+        gfx::preset::depth::LESS_EQUAL_WRITE,
 });
 
 //----------------------------------------
@@ -70,6 +84,7 @@ gfx_pipeline!( shadow {
 fn create_cube<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F)
                -> (gfx::handle::Buffer<R, Vertex>, gfx::Slice<R>)
 {
+    use gfx::traits::FactoryExt;
     let vertex_data = [
         // top (0, 0, 1)
         Vertex::new([-1, -1,  1], [0, 0, 1]),
@@ -118,6 +133,7 @@ fn create_cube<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F)
 fn create_plane<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F, size: i8)
                 -> (gfx::handle::Buffer<R, Vertex>, gfx::Slice<R>)
 {
+    use gfx::traits::FactoryExt;
     let vertex_data = [
         Vertex::new([ size, -size,  0], [0, 0, 1]),
         Vertex::new([ size,  size,  0], [0, 0, 1]),
@@ -170,11 +186,12 @@ struct Scene<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
 /// Create a full scene
 fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
                 out_color: gfx::handle::RenderTargetView<R, Srgb8>,
-                out_depth: gfx::handle::DepthStencilView<R, Depth>,
+                out_depth: gfx::handle::DepthStencilView<R, DepthStencil>,
                 shadow_pso: gfx::PipelineState<R, shadow::Meta>)
                 -> Scene<R, F::CommandBuffer>
 {
     use cgmath::{SquareMatrix, Matrix4, deg};
+    use gfx::traits::FactoryExt;
 
     // create shadows
     let (shadow_tex, shadow_resource) = {
@@ -283,13 +300,17 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
     ];
 
     let (cube_buf, cube_slice) = create_cube(factory);
+    let locals = ForwardPsLocals {
+        num_lights: lights.len() as i32,
+        color: [1.0, 1.0, 1.0, 1.0],
+    };
 
     let mut fw_data = forward::Data {
         vbuf: cube_buf.clone(),
-        transform: Matrix4::identity().into(),
-        model_transform: Matrix4::identity().into(),
-        color: [1.0, 1.0, 1.0, 1.0],
-        num_lights: lights.len() as i32,
+        vs_locals: factory.create_constant_buffer(1),
+        ps_locals: factory.create_buffer_const(&[locals],
+            gfx::BufferRole::Uniform, gfx::Bind::empty()
+            ).unwrap(),
         light_buf: light_buf,
         shadow: (shadow_resource, shadow_sampler),
         out_color: out_color,
@@ -297,11 +318,15 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
     };
     let mut sh_data = shadow::Data {
         vbuf: cube_buf,
-        transform: Matrix4::identity().into(),
+        locals: factory.create_constant_buffer(1),
         // the output here is temporary, will be overwritten for every light source
         out: factory.view_texture_as_depth_stencil(&shadow_tex, 0, None,
             gfx::tex::DepthStencilFlags::empty()).unwrap(),
     };
+
+    //color: [1.0, 1.0, 1.0, 1.0],
+    //num_lights: lights.len() as i32,
+
 
     let mut entities: Vec<_> = cube_descs.iter().map(|desc| {
         use cgmath::{EuclideanVector, Rotation3};
@@ -368,11 +393,13 @@ struct App<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
     init: gfx_app::Init<R>,
     is_parallel: bool,
     forward_pso: gfx::PipelineState<R, forward::Meta>,
+    encoder: gfx::Encoder<R, C>,
     scene: Scene<R, C>,
 }
 
 impl<R: gfx::Resources, C: gfx::CommandBuffer<R>> App<R, C> {
-    fn rotate(&mut self, axis: cgmath::Vec3<f32>) {
+    fn rotate(&mut self, axis: cgmath::Vector3<f32>) {
+        use cgmath::{EuclideanVector, Matrix4, Rotation3};
         let len = axis.length();
         for ent in self.scene.share.write().unwrap().entities.iter_mut() {
             if !ent.dynamic {
@@ -392,8 +419,23 @@ impl<R: gfx::Resources, C: gfx::CommandBuffer<R>> App<R, C> {
     }
 }
 
-impl<R: gfx::Resources, C: gfx::CommandBuffer<R>>
-gfx_app::ApplicationBase<R, C> for App<R, C> {
+// Note: these 'static and Sync bounds are unfortunate...
+// We need to figure out how to make it less painful.
+impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
+    R: gfx::Resources + 'static,
+    C: gfx::CommandBuffer<R> + Send + 'static,
+    R::Buffer: Sync,
+    R::Shader: Sync,
+    R::Program: Sync,
+    R::PipelineStateObject: Sync,
+    R::Texture: Sync,
+    R::ShaderResourceView: Sync,
+    R::UnorderedAccessView: Sync,
+    R::RenderTargetView: Sync,
+    R::DepthStencilView: Sync,
+    R::Sampler: Sync,
+    R::Fence: Sync,
+{
     fn new<F>(mut factory: F, init: gfx_app::Init<R>) -> Self where 
         F: gfx::Factory<R, CommandBuffer=C>
     {
@@ -419,7 +461,7 @@ gfx_app::ApplicationBase<R, C> for App<R, C> {
             };
             let ps = Source {
                 glsl_150: include_bytes!("shader/forward_150.glslf"),
-                hlsl_40:  include_bytes!("data/forward_fs.fx"),
+                hlsl_40:  include_bytes!("data/forward_ps.fx"),
                 .. Source::empty()
             };
             factory.create_pipeline_simple(
@@ -436,21 +478,21 @@ gfx_app::ApplicationBase<R, C> for App<R, C> {
                 hlsl_40:  include_bytes!("data/shadow_vs.fx"),
                 .. Source::empty()
             };
-            let vs = Source {
+            let ps = Source {
                 glsl_150: include_bytes!("shader/shadow_150.glslf"),
-                hlsl_40:  include_bytes!("data/shadow_fs.fx"),
+                hlsl_40:  include_bytes!("data/shadow_ps.fx"),
                 .. Source::empty()
             };
-            factory.create_pipeline_state(
-                &factory.create_shader_set(
-                    vs.select(init.backend).unwrap(),
-                    ps.select(init.backend).unwrap()
-                    ).unwrap(),
+            let set = factory.create_shader_set(
+                vs.select(init.backend).unwrap(),
+                ps.select(init.backend).unwrap()
+                ).unwrap();
+            factory.create_pipeline_state(&set,
                 gfx::Primitive::TriangleList,
                 gfx::state::Rasterizer::new_fill(gfx::state::CullFace::Back)
                                        .with_offset(1.0, 1),
                 shadow::new()
-                ).unwrap();
+                ).unwrap()
         };
 
         let encoder = factory.create_encoder();
@@ -470,8 +512,6 @@ gfx_app::ApplicationBase<R, C> for App<R, C> {
     fn render<D>(&mut self, device: &mut D) where
         D: gfx::Device<Resources=R, CommandBuffer=C>
     {
-        use cgmath::{EuclideanVector, Matrix4, Rotation3};
-
         self.encoder.reset();
         self.rotate(cgmath::vec3(0.0, 0.0, 1.0));
         // fill up shadow map for each light
@@ -480,7 +520,7 @@ gfx_app::ApplicationBase<R, C> for App<R, C> {
             use std::sync::mpsc;
 
             let (sender_orig, receiver) = mpsc::channel();
-            let num = scene.lights.len();
+            let num = self.scene.lights.len();
             // run parallel threads
             let _threads: Vec<_> = (0..num).map(|_| {
                 // move the light into the thread scope
@@ -496,12 +536,15 @@ gfx_app::ApplicationBase<R, C> for App<R, C> {
                     for ent in subshare.entities.iter() {
                         let mut batch = ent.batch_shadow.clone();
                         batch.out = light.shadow.clone();
-                        batch.transform = {
-                            let mx_proj: cgmath::Matrix4<_> = light.projection.into();
-                            let mx_view = mx_proj * light.mx_view;
-                            let mvp = mx_view * ent.mx_to_world;
-                            mvp.into()
+                        let locals = ShadowLocals{
+                            transform: {
+                                let mx_proj: cgmath::Matrix4<_> = light.projection.into();
+                                let mx_view = mx_proj * light.mx_view;
+                                let mvp = mx_view * ent.mx_to_world;
+                                mvp.into()
+                            },
                         };
+                        light.encoder.update_buffer(&batch.locals, &[locals], 0).unwrap();
                         light.encoder.draw(&ent.slice, &subshare.shadow_pso, &batch);
                     }
                     sender.send(light).unwrap();
@@ -523,12 +566,15 @@ gfx_app::ApplicationBase<R, C> for App<R, C> {
                 for ent in subshare.entities.iter() {
                     let mut batch = ent.batch_shadow.clone();
                     batch.out = light.shadow.clone();
-                    batch.transform = {
-                        let mx_proj: cgmath::Matrix4<_> = light.projection.into();
-                        let mx_view = mx_proj * light.mx_view;
-                        let mvp = mx_view * ent.mx_to_world;
-                        mvp.into()
+                    let locals = ShadowLocals{
+                        transform: {
+                            let mx_proj: cgmath::Matrix4<_> = light.projection.into();
+                            let mx_view = mx_proj * light.mx_view;
+                            let mvp = mx_view * ent.mx_to_world;
+                            mvp.into()
+                        },
                     };
+                    self.encoder.update_buffer(&batch.locals, &[locals], 0).unwrap();
                     self.encoder.draw(&ent.slice, &subshare.shadow_pso, &batch);
                 }
             }
@@ -540,16 +586,19 @@ gfx_app::ApplicationBase<R, C> for App<R, C> {
 
         let mx_vp = {
             let mut proj = self.scene.camera.projection;
-            proj.aspect = self.init.aspect;
+            proj.aspect = self.init.aspect_ratio;
             let mx_proj: cgmath::Matrix4<_> = proj.into();
-            mx_proj * sellf.scene.camera.mx_view
+            mx_proj * self.scene.camera.mx_view
         };
 
         for ent in self.scene.share.write().unwrap().entities.iter_mut() {
-            let batch = &mut ent.batch_forward;
-            batch.transform = (mx_vp * ent.mx_to_world).into();
-            batch.model_transform = ent.mx_to_world.into();
-            self.encoder.draw(&ent.slice, &forward_pso, batch);
+            let batch = &ent.batch_forward;
+            let locals = ForwardVsLocals {
+                transform: (mx_vp * ent.mx_to_world).into(),
+                model_transform: ent.mx_to_world.into(),
+            };
+            self.encoder.update_buffer(&batch.vs_locals, &[locals], 0).unwrap();
+            self.encoder.draw(&ent.slice, &self.forward_pso, batch);
         }
 
         device.submit(self.encoder.as_buffer());
