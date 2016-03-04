@@ -147,8 +147,9 @@ impl_formats! {
         [BufferSurface, TextureSurface, RenderSurface],
     D16             : Vec1<Unorm> = F16 {0} [TextureSurface, DepthSurface],
     D24             : Vec1<Unorm> = f32 {8} [TextureSurface, DepthSurface], //hacky stencil bits
-    D24_S8          : Vec1<Unorm> = f32 {8} [TextureSurface, DepthSurface, StencilSurface],
-    D32             : Vec1<Unorm, Float> = f32 {0} [TextureSurface, DepthSurface],
+    D24_S8          : Vec1<Unorm, Uint> = u32 {8} [TextureSurface, DepthSurface, StencilSurface],
+    D32             : Vec1<Float> = f32 {0} [TextureSurface, DepthSurface],
+    //D32_S8          : Vec1<Unorm, Float, Uint> = (f32, u32) {32} [TextureSurface, DepthSurface, StencilSurface],
 }
 
 

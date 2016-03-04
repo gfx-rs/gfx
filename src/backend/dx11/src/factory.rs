@@ -93,17 +93,27 @@ impl Factory {
         use winapi::d3d11::*;
         use data::{map_bind, map_usage};
 
-        let (usage, cpu) = map_usage(info.usage);
-        let bind = map_bind(info.bind) | match info.role {
-            f::BufferRole::Vertex   => D3D11_BIND_VERTEX_BUFFER,
-            f::BufferRole::Index    => D3D11_BIND_INDEX_BUFFER,
-            f::BufferRole::Uniform  => D3D11_BIND_CONSTANT_BUFFER,
+        let (subind, size) = match info.role {
+            f::BufferRole::Vertex   => // additional element to prevent OOB warnings by D3D runtime
+                (D3D11_BIND_VERTEX_BUFFER, info.size + info.stride),
+            f::BufferRole::Index    => {
+                if info.stride != 2 && info.stride != 4 {
+                    error!("Only U16 and U32 index buffers are allowed");
+                    return Err(f::BufferError::Other);
+                }
+                (D3D11_BIND_INDEX_BUFFER, info.size)
+            },
+            f::BufferRole::Uniform  => // 16 bit alignment
+                (D3D11_BIND_CONSTANT_BUFFER, (info.size + 0xF) & !0xF),
         };
+
+        let (usage, cpu) = map_usage(info.usage);
+        let bind = map_bind(info.bind) | subind;
         if info.bind.contains(f::RENDER_TARGET) | info.bind.contains(f::DEPTH_STENCIL) {
             return Err(f::BufferError::UnsupportedBind(info.bind))
         }
         let desc = D3D11_BUFFER_DESC {
-            ByteWidth: info.size as winapi::UINT,
+            ByteWidth: size as winapi::UINT,
             Usage: usage,
             BindFlags: bind.0,
             CPUAccessFlags: cpu.0,
@@ -123,7 +133,7 @@ impl Factory {
             None => ptr::null(),
         };
 
-        debug!("Creating Buffer with desc {:?} and sub-data {:?}", desc, sub);
+        debug!("Creating Buffer with desc {:#?} and sub-data {:?}", desc, sub);
         let mut buf = native::Buffer(ptr::null_mut());
         let hr = unsafe {
             (*self.share.device).CreateBuffer(&desc, sub_raw, &mut buf.0)
@@ -151,7 +161,7 @@ impl Factory {
             MiscFlags: misc.0,
         };
         let sub_data = tp.to_sub_data(size, 0);
-        debug!("Creating Texture1D with desc {:?} and sub-data {:?}", native_desc, sub_data);
+        debug!("Creating Texture1D with desc {:#?} and sub-data {:?}", native_desc, sub_data);
         let mut raw = ptr::null_mut();
         let hr = unsafe {
             (*self.share.device).CreateTexture1D(&native_desc,
@@ -179,7 +189,7 @@ impl Factory {
             MiscFlags: misc.0,
         };
         let sub_data = tp.to_sub_data(size[0], size[1]);
-        debug!("Creating Texture2D with desc {:?} and sub-data {:?}", native_desc, sub_data);
+        debug!("Creating Texture2D with desc {:#?} and sub-data {:?}", native_desc, sub_data);
         let mut raw = ptr::null_mut();
         let hr = unsafe {
             (*self.share.device).CreateTexture2D(&native_desc,
@@ -204,7 +214,7 @@ impl Factory {
             MiscFlags: misc.0,
         };
         let sub_data = tp.to_sub_data(size[0], size[1]);
-        debug!("Creating Texture3D with desc {:?} and sub-data {:?}", native_desc, sub_data);
+        debug!("Creating Texture3D with desc {:#?} and sub-data {:?}", native_desc, sub_data);
         let mut raw = ptr::null_mut();
         let hr = unsafe {
             (*self.share.device).CreateTexture3D(&native_desc,
@@ -415,7 +425,7 @@ impl core::Factory<R> for Factory {
             layouts.push(winapi::D3D11_INPUT_ELEMENT_DESC {
                 SemanticName: &charbuf[charpos],
                 SemanticIndex: 0,
-                Format: match map_format(elem.format) {
+                Format: match map_format(elem.format, false) {
                     Some(fm) => fm,
                     None => {
                         error!("Unable to find DXGI format for {:?}", elem.format);
@@ -531,7 +541,7 @@ impl core::Factory<R> for Factory {
 
         let format = core::format::Format(htex.get_info().format, desc.channel);
         let native_desc = winapi::D3D11_SHADER_RESOURCE_VIEW_DESC {
-            Format: match map_format(format) {
+            Format: match map_format(format, false) {
                 Some(fm) => fm,
                 None => return Err(f::ResourceViewError::Channel(desc.channel)),
             },
@@ -601,7 +611,7 @@ impl core::Factory<R> for Factory {
         };
         let format = core::format::Format(htex.get_info().format, desc.channel);
         let native_desc = winapi::D3D11_RENDER_TARGET_VIEW_DESC {
-            Format: match map_format(format) {
+            Format: match map_format(format, true) {
                 Some(fm) => fm,
                 None => return Err(f::TargetViewError::Channel(desc.channel)),
             },
@@ -660,7 +670,7 @@ impl core::Factory<R> for Factory {
         let channel = core::format::ChannelType::Uint; //doesn't matter
         let format = core::format::Format(htex.get_info().format, channel);
         let native_desc = winapi::D3D11_DEPTH_STENCIL_VIEW_DESC {
-            Format: match map_format(format) {
+            Format: match map_format(format, true) {
                 Some(fm) => fm,
                 None => return Err(f::TargetViewError::Channel(channel)),
             },

@@ -220,9 +220,8 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
         frame_handles: h::Manager::new(),
         max_resource_count: None,
     };
-    let _ = dev.feature_level; //TODO
-
     let mut factory = Factory::new(dev.share.clone());
+
     let color_target = {
         use gfx_core::Factory;
         let desc = gfx_core::tex::RenderDesc {

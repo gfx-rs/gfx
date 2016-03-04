@@ -180,7 +180,7 @@ pub fn make_blend(device: *mut ID3D11Device, targets: &[Option<pso::ColorTargetD
         SrcBlendAlpha: D3D11_BLEND_ZERO,
         DestBlendAlpha: D3D11_BLEND_ONE,
         BlendOpAlpha: D3D11_BLEND_OP_ADD,
-        RenderTargetWriteMask: !0,
+        RenderTargetWriteMask: 0xF,
     };
     let mut desc = D3D11_BLEND_DESC {
         AlphaToCoverageEnable: FALSE, //TODO

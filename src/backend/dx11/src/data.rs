@@ -32,7 +32,7 @@ pub fn map_function(fun: Comparison) -> D3D11_COMPARISON_FUNC {
     }
 }
 
-pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
+pub fn map_format(format: Format, is_target: bool) -> Option<DXGI_FORMAT> {
     use gfx_core::format::SurfaceType::*;
     use gfx_core::format::ChannelType::*;
     Some(match format.0 {
@@ -117,9 +117,27 @@ pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
             Float => DXGI_FORMAT_R32G32B32A32_FLOAT,
             _ => return None,
         },
-        D16 => DXGI_FORMAT_D16_UNORM,
-        D24 | D24_S8 => DXGI_FORMAT_D24_UNORM_S8_UINT,
-        D32 => DXGI_FORMAT_D32_FLOAT,
+        D16 => match (is_target, format.1) {
+            (true, _)      => DXGI_FORMAT_D16_UNORM,
+            (false, Unorm) => DXGI_FORMAT_R16_UNORM,
+            _ => return None,
+        },
+        D24 => match (is_target, format.1) {
+            (true, _)      => DXGI_FORMAT_D24_UNORM_S8_UINT,
+            (false, Unorm) => DXGI_FORMAT_R24_UNORM_X8_TYPELESS,
+            _ => return None,
+        },
+        D24_S8 => match (is_target, format.1) {
+            (true, _)      => DXGI_FORMAT_D24_UNORM_S8_UINT,
+            (false, Unorm) => DXGI_FORMAT_R24_UNORM_X8_TYPELESS,
+            (false, Uint)  => DXGI_FORMAT_X24_TYPELESS_G8_UINT,
+            _ => return None,
+        },
+        D32 => match (is_target, format.1) {
+            (true, _)      => DXGI_FORMAT_D32_FLOAT,
+            (false, Float) => DXGI_FORMAT_R32_FLOAT,
+            _ => return None,
+        },
     })
 }
 

@@ -100,7 +100,7 @@ pub fn init_raw(title: &str, requested_width: winapi::INT, requested_height: win
         BufferDesc: winapi::DXGI_MODE_DESC {
             Width: width as winapi::UINT,
             Height: height as winapi::UINT,
-            Format: match gfx_device_dx11::map_format(color_format) {
+            Format: match gfx_device_dx11::map_format(color_format, true) {
                 Some(fm) => fm,
                 None => return Err(InitError::Format(color_format)),
             },
@@ -127,7 +127,7 @@ pub fn init_raw(title: &str, requested_width: winapi::INT, requested_height: win
     for dt in driver_types.iter() {
         match gfx_device_dx11::create(*dt, &swap_desc) {
             Ok((device, factory, chain, color)) => {
-                info!("Success with driver {:?}", *dt);
+                info!("Success with driver {:?}, shader model {}", *dt, device.get_shader_model());
                 let win = Window {
                     hwnd: hwnd,
                     swap_chain: chain,
