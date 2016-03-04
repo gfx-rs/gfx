@@ -9,10 +9,10 @@ struct Light {
 };
 
 uniform PsLocals {
-	// active number of lights
-	int u_NumLights;
 	// material color
 	vec4 u_Color;
+	// active number of lights
+	int u_NumLights;
 };
 
 //TODO: structured buffer

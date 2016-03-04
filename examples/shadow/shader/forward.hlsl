@@ -4,8 +4,8 @@ cbuffer VsLocals {
 }
 
 cbuffer PsLocals {
-    int u_NumLights;
     float4 u_Color;
+    int u_NumLights;
 };
 
 struct Light {

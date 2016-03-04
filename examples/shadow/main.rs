@@ -476,7 +476,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
             factory.create_pipeline_state(&set,
                 gfx::Primitive::TriangleList,
                 gfx::state::Rasterizer::new_fill(gfx::state::CullFace::Back)
-                                       .with_offset(1.0, 1),
+                                       .with_offset(2.0, 1),
                 shadow::new()
                 ).unwrap()
         };
