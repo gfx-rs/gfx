@@ -38,14 +38,14 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         use gfx::traits::FactoryExt;
 
         let vs = gfx_app::shade::Source {
-            glsl_120: include_bytes!("triangle_120.glslv"),
-            glsl_150: include_bytes!("triangle_150.glslv"),
+            glsl_120: include_bytes!("shader/triangle_120.glslv"),
+            glsl_150: include_bytes!("shader/triangle_150.glslv"),
             hlsl_40:  include_bytes!("data/vertex.fx"),
             .. gfx_app::shade::Source::empty()
         };
         let fs = gfx_app::shade::Source {
-            glsl_120: include_bytes!("triangle_120.glslf"),
-            glsl_150: include_bytes!("triangle_150.glslf"),
+            glsl_120: include_bytes!("shader/triangle_120.glslf"),
+            glsl_150: include_bytes!("shader/triangle_150.glslf"),
             hlsl_40:  include_bytes!("data/pixel.fx"),
             .. gfx_app::shade::Source::empty()
         };
