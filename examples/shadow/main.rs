@@ -118,7 +118,7 @@ fn create_cube<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F)
         Vertex::new([ 1, -1, -1], [0, -1, 0]),
     ];
 
-    let index_data: &[u8] = &[
+    let index_data: &[u16] = &[
          0,  1,  2,  2,  3,  0, // top
          4,  5,  6,  6,  7,  4, // bottom
          8,  9, 10, 10, 11,  8, // right
@@ -442,12 +442,12 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
         let forward_pso = {
             let vs = Source {
                 glsl_150: include_bytes!("shader/forward_150.glslv"),
-                hlsl_40:  include_bytes!("data/forward_vs.fx"),
+                hlsl_41:  include_bytes!("data/forward_vs.fx"),
                 .. Source::empty()
             };
             let ps = Source {
                 glsl_150: include_bytes!("shader/forward_150.glslf"),
-                hlsl_40:  include_bytes!("data/forward_ps.fx"),
+                hlsl_41:  include_bytes!("data/forward_ps.fx"),
                 .. Source::empty()
             };
             factory.create_pipeline_simple(
@@ -461,12 +461,12 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
         let shadow_pso = {
             let vs = Source {
                 glsl_150: include_bytes!("shader/shadow_150.glslv"),
-                hlsl_40:  include_bytes!("data/shadow_vs.fx"),
+                hlsl_41:  include_bytes!("data/shadow_vs.fx"),
                 .. Source::empty()
             };
             let ps = Source {
                 glsl_150: include_bytes!("shader/shadow_150.glslf"),
-                hlsl_40:  include_bytes!("data/shadow_ps.fx"),
+                hlsl_41:  include_bytes!("data/shadow_ps.fx"),
                 .. Source::empty()
             };
             let set = factory.create_shader_set(
