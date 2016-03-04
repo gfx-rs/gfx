@@ -94,8 +94,8 @@ impl Factory {
         use data::{map_bind, map_usage};
 
         let (subind, size) = match info.role {
-            f::BufferRole::Vertex   => // additional element to prevent OOB warnings by D3D runtime
-                (D3D11_BIND_VERTEX_BUFFER, info.size + info.stride),
+            f::BufferRole::Vertex   =>
+                (D3D11_BIND_VERTEX_BUFFER, info.size),
             f::BufferRole::Index    => {
                 if info.stride != 2 && info.stride != 4 {
                     error!("Only U16 and U32 index buffers are allowed");

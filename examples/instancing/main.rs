@@ -15,9 +15,8 @@
 extern crate time;
 extern crate rand;
 
-extern crate glutin;
 #[macro_use] extern crate gfx;
-extern crate gfx_window_glutin;
+extern crate gfx_app;
 
 use rand::Rng;
 
@@ -28,7 +27,7 @@ const QUAD_VERTICES: [Vertex; 4] = [
     Vertex { position: [ 0.5,  0.5] },
 ];
 
-const QUAD_INDICES: [u8; 6] = [0, 1, 2, 2, 3, 0];
+const QUAD_INDICES: [u16; 6] = [0, 1, 2, 2, 3, 0];
 
 gfx_vertex_struct!(Vertex {
     position: [f32; 2] = "a_Position",
@@ -40,93 +39,122 @@ gfx_vertex_struct!(Instance {
     color: u32 = "a_Color",
 });
 
+gfx_constant_struct!(Locals {
+    scale: f32 = "u_Scale",
+});
+
 gfx_pipeline!(pipe {
     vertex: gfx::VertexBuffer<Vertex> = (),
     instance: gfx::InstanceBuffer<Instance> = (),
     scale: gfx::Global<f32> = "u_Scale",
-    out: gfx::RenderTarget<gfx::format::Srgb8> = "o_Color",
+    locals: gfx::ConstantBuffer<Locals> = "Locals",
+    out: gfx::RenderTarget<gfx::format::Srgb8> = "Target0",
 });
 
-const MAX_INSTANCE_COUNT: usize = 2048;
-
-fn main() {
-    use gfx::traits::{Device, Factory, FactoryExt};
-
-    let builder = glutin::WindowBuilder::new()
-        .with_dimensions(800, 600)
-        .with_title("Instancing example".to_string());
-    let (window, mut device, mut factory, main_color, _) =
-        gfx_window_glutin::init::<gfx::format::Srgb8, gfx::format::Depth>(builder);
-    let mut encoder = factory.create_encoder();
-
-    let pso = factory.create_pipeline_simple(
-        include_bytes!("instancing_150.glslv"),
-        include_bytes!("instancing_150.glslf"),
-        gfx::state::CullFace::Back,
-        pipe::new()
-        ).unwrap();
-
-    // we could use `factory.create_vertex_buffer_indexed` for the first two
-    // but leaving the direct creation here for consistency.
-    let quad_vertices = factory.create_buffer_const(&QUAD_VERTICES, gfx::BufferRole::Vertex, gfx::Bind::empty()).unwrap();
-    let quad_indices = factory.create_buffer_const(&QUAD_INDICES, gfx::BufferRole::Index, gfx::Bind::empty()).unwrap();
-    let quad_instances = factory.create_buffer_dynamic(MAX_INSTANCE_COUNT, gfx::BufferRole::Vertex, gfx::Bind::empty()).unwrap();
-
-    let instances_per_length: u32 = 32;
-    println!("{} instances per length", instances_per_length);
-    let instance_count = instances_per_length * instances_per_length;
-    println!("{} instances", instance_count);
-    assert!(instance_count as usize <= MAX_INSTANCE_COUNT);
-    let size = 1.6 / instances_per_length as f32;
-    println!("size: {}", size);
+fn fill_instances(attributes: &mut [Instance], instances_per_length: u32, size: f32) {
     let gap = 0.4 / (instances_per_length + 1) as f32;
     println!("gap: {}", gap);
 
-    {
-        let begin = -1. + gap + (size /2.);
-        let mut translate = [begin, begin];
-        let mut rng = rand::StdRng::new().unwrap();
+    let begin = -1. + gap + (size /2.);
+    let mut translate = [begin, begin];
+    let mut rng = rand::StdRng::new().unwrap();
 
-        let length = instances_per_length as usize;
-        let mut attributes = factory.map_buffer_writable(&quad_instances);
-        for x in 0..length {
-            for y in 0..length {
-                let i = x*length + y;
-                attributes.set(i, Instance {
-                    translate: translate,
-                    color: rng.next_u32()
-                });
-                translate[1] += size + gap;
-            }
-            translate[1] = begin;
-            translate[0] += size + gap;
+    let length = instances_per_length as usize;
+    for x in 0..length {
+        for y in 0..length {
+            let i = x*length + y;
+            attributes[i] = Instance {
+                translate: translate,
+                color: rng.next_u32()
+            };
+            translate[1] += size + gap;
+        }
+        translate[1] = begin;
+        translate[0] += size + gap;
+    }
+ }
+
+const MAX_INSTANCE_COUNT: usize = 2048;
+
+struct App<R: gfx::Resources> {
+    pso: gfx::PipelineState<R, pipe::Meta>,
+    data: pipe::Data<R>,
+    slice: gfx::Slice<R>,
+}
+
+impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
+    fn new<F: gfx::Factory<R>>(mut factory: F, init: gfx_app::Init<R>) -> Self {
+        use gfx::traits::FactoryExt;
+
+        let vs = gfx_app::shade::Source {
+            glsl_120: include_bytes!("shader/instancing_120.glslv"),
+            glsl_150: include_bytes!("shader/instancing_150.glslv"),
+            hlsl_40:  include_bytes!("data/vertex.fx"),
+            .. gfx_app::shade::Source::empty()
+        };
+        let fs = gfx_app::shade::Source {
+            glsl_120: include_bytes!("shader/instancing_120.glslf"),
+            glsl_150: include_bytes!("shader/instancing_150.glslf"),
+            hlsl_40:  include_bytes!("data/pixel.fx"),
+            .. gfx_app::shade::Source::empty()
+        };
+
+        let instances_per_length: u32 = 32;
+        println!("{} instances per length", instances_per_length);
+        let instance_count = instances_per_length * instances_per_length;
+        println!("{} instances", instance_count);
+        assert!(instance_count as usize <= MAX_INSTANCE_COUNT);
+         let size = 1.6 / instances_per_length as f32;
+        println!("size: {}", size);
+
+        let use_mapping = false;
+        let quad_instances = if use_mapping {
+            let buf = factory.create_buffer_dynamic(MAX_INSTANCE_COUNT, gfx::BufferRole::Vertex, gfx::Bind::empty()).unwrap();
+            let mut attributes = factory.map_buffer_writable(&buf);
+            fill_instances(attributes.to_mut_slice(), instances_per_length, size);
+            buf
+        }else {
+            let mut attributes = (0..instance_count).map(|_| Instance {
+                translate: [0.0, 0.0],
+                color: 0,
+            }).collect::<Vec<_>>();
+            fill_instances(&mut attributes, instances_per_length, size);
+            factory.create_buffer_const(&attributes, gfx::BufferRole::Vertex, gfx::Bind::empty()).unwrap()
+        };
+
+        let (quad_vertices, mut slice) = factory.create_vertex_buffer_indexed(&QUAD_VERTICES, &QUAD_INDICES[..]);
+        slice.instances = Some((instance_count, 0));
+        let locals = Locals { scale: size };
+
+        App {
+            pso: factory.create_pipeline_simple(
+                vs.select(init.backend).unwrap(),
+                fs.select(init.backend).unwrap(),
+                gfx::state::CullFace::Back,
+                pipe::new()
+                ).unwrap(),
+            data: pipe::Data {
+                vertex: quad_vertices,
+                instance: quad_instances,
+                scale: size,
+                locals: factory.create_buffer_const(&[locals],
+                    gfx::BufferRole::Uniform, gfx::Bind::empty()
+                    ).unwrap(),
+                out: init.color,
+            },
+            slice: slice,
         }
     }
 
-    let data = pipe::Data {
-        vertex: quad_vertices,
-        instance: quad_instances,
-        scale: size,
-        out: main_color,
-    };
-    let mut slice: gfx::Slice<_> = quad_indices.into();
-    slice.instances = Some((instance_count, 0));
-
-    'l: loop {
-        for event in window.poll_events() {
-            match event {
-                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
-                glutin::Event::Closed => break 'l,
-                _ => {}
-            }
-        }
-
-        encoder.reset();
-        encoder.clear(&data.out, [0.1, 0.2, 0.3]);
-        encoder.draw(&slice, &pso, &data);
-
-        device.submit(encoder.as_buffer());
-        window.swap_buffers().unwrap();
-        device.cleanup();
+    fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
+        encoder.clear(&self.data.out, [0.1, 0.2, 0.3]);
+        encoder.draw(&self.slice, &self.pso, &self.data);
     }
+}
+
+pub fn main() {
+    use gfx_app::Application;
+    //use gfx_app::ApplicationGL2;
+    //gfx_app::WrapGL2::<App<_>>::launch("Instancing example", gfx_app::DEFAULT_CONFIG);
+    App::launch_default("Instancing example");
 }

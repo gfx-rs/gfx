@@ -136,7 +136,7 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
                 (Some((buffer, offset)), Some(ref format)) => {
                     buffers[i] = buffer;
                     strides[i] = format.0.stride as UINT;
-                    offsets[i] = format.0.offset as UINT + (offset as UINT);
+                    offsets[i] = offset as UINT;
                 },
                 (_, None) => (),
             }
