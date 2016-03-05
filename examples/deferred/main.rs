@@ -27,11 +27,9 @@
 // Press 1-4 to show the immediate buffers. Press 0 to show the final result.
 
 extern crate cgmath;
-extern crate env_logger;
 #[macro_use]
 extern crate gfx;
-extern crate gfx_window_glutin;
-extern crate glutin;
+extern crate gfx_app;
 extern crate time;
 extern crate rand;
 extern crate genmesh;
@@ -40,7 +38,7 @@ extern crate noise;
 use rand::Rng;
 use cgmath::{SquareMatrix, Matrix4, Point3, Vector3, EuclideanVector, deg};
 use cgmath::{Transform, AffineMatrix3};
-pub use gfx::format::{Depth, I8Scaled, Srgb8};
+pub use gfx::format::{Depth, Srgb8};
 use gfx::traits::{Device, Factory, FactoryExt};
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{SharedVertex, IndexedPolygon};
@@ -63,12 +61,15 @@ gfx_vertex_struct!( TerrainVertex {
     color: [f32; 3] = "a_Color",
 });
 
+gfx_constant_struct!( TerrainLocals {
+    model: [[f32; 4]; 4] = "u_Model",
+    view: [[f32; 4]; 4] = "u_View",
+    proj: [[f32; 4]; 4] = "u_Proj",
+});
+
 gfx_pipeline!( terrain {
     vbuf: gfx::VertexBuffer<TerrainVertex> = (),
-    model: gfx::Global<[[f32; 4]; 4]> = "u_Model",
-    view: gfx::Global<[[f32; 4]; 4]> = "u_View",
-    proj: gfx::Global<[[f32; 4]; 4]> = "u_Proj",
-    cam_pos: gfx::Global<[f32; 3]> = "u_CameraPos",
+    locals: gfx::ConstantBuffer<TerrainLocals> = "TerrainLocals",
     out_position: gfx::RenderTarget<GFormat> = "o_Position",
     out_normal: gfx::RenderTarget<GFormat> = "o_Normal",
     out_color: gfx::RenderTarget<GFormat> = "o_Color",
@@ -79,9 +80,12 @@ gfx_pipeline!( terrain {
 pub static TERRAIN_VERTEX_SRC: &'static [u8] = b"
     #version 150 core
 
-    uniform mat4 u_Model;
-    uniform mat4 u_View;
-    uniform mat4 u_Proj;
+    layout(std140)
+    uniform Locals {
+        mat4 u_Model;
+        mat4 u_View;
+        mat4 u_Proj;
+    };
     in vec3 a_Pos;
     in vec3 a_Normal;
     in vec3 a_Color;
@@ -91,7 +95,7 @@ pub static TERRAIN_VERTEX_SRC: &'static [u8] = b"
 
     void main() {
         v_FragPos = (u_Model * vec4(a_Pos, 1.0)).xyz;
-        v_Normal = a_Normal;
+        v_Normal = mat3(u_Model) * a_Normal;
         v_Color = a_Color;
         gl_Position = u_Proj * u_View * u_Model * vec4(a_Pos, 1.0);
     }
@@ -117,21 +121,21 @@ pub static TERRAIN_FRAGMENT_SRC: &'static [u8] = b"
 ";
 
 gfx_vertex_struct!( BlitVertex {
-    pos: [I8Scaled; 3] = "a_Pos",
-    tex_coord: [I8Scaled; 2] = "a_TexCoord",
+    pos: [i8; 3] = "a_Pos",
+    tex_coord: [i8; 2] = "a_TexCoord",
 });
 
 gfx_pipeline!( blit {
     vbuf: gfx::VertexBuffer<BlitVertex> = (),
-    tex: gfx::TextureSampler<[f32; 4]> = "u_Tex",
+    tex: gfx::TextureSampler<[f32; 4]> = "u_BlitTex",
     out: gfx::RenderTarget<Srgb8> = "o_Color",
 });
 
 pub static BLIT_VERTEX_SRC: &'static [u8] = b"
     #version 150 core
 
-    in vec3 a_Pos;
-    in vec2 a_TexCoord;
+    in ivec3 a_Pos;
+    in ivec2 a_TexCoord;
     out vec2 v_TexCoord;
 
     void main() {
@@ -143,27 +147,36 @@ pub static BLIT_VERTEX_SRC: &'static [u8] = b"
 pub static BLIT_FRAGMENT_SRC: &'static [u8] = b"
     #version 150 core
 
-    uniform sampler2D u_Tex;
+    uniform sampler2D u_BlitTex;
     in vec2 v_TexCoord;
     out vec4 o_Color;
 
     void main() {
-        vec4 tex = texture(u_Tex, v_TexCoord);
+        vec4 tex = texture(u_BlitTex, v_TexCoord);
         o_Color = tex;
     }
 ";
 
 gfx_vertex_struct!( CubeVertex {
-    pos: [I8Scaled; 3] = "a_Pos",
+    pos: [i8; 3] = "a_Pos",
+});
+
+gfx_constant_struct!( CubeLocals {
+    transform: [[f32; 4]; 4] = "u_Transform",
+    radius: f32 = "u_Radius",
+});
+
+gfx_constant_struct!( LightLocals {
+    radius: f32 = "u_Radius",
+    cam_pos: [f32; 3] = "u_CameraPos",
+    frame_res: [f32; 2] = "u_FrameRes",
 });
 
 gfx_pipeline!( light {
     vbuf: gfx::VertexBuffer<CubeVertex> = (),
-    transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
+    locals_vs: gfx::ConstantBuffer<CubeLocals> = "CubeLocals",
+    locals_ps: gfx::ConstantBuffer<LightLocals> = "LightLocals",
     light_pos_buf: gfx::ConstantBuffer<LightInfo> = "u_LightPosBlock",
-    radius: gfx::Global<f32> = "u_Radius",
-    cam_pos: gfx::Global<[f32; 3]> = "u_CameraPos",
-    frame_res: gfx::Global<[f32; 2]> = "u_FrameRes",
     tex_pos: gfx::TextureSampler<[f32; 4]> = "u_TexPos",
     tex_normal: gfx::TextureSampler<[f32; 4]> = "u_TexNormal",
     tex_diffuse: gfx::TextureSampler<[f32; 4]> = "u_TexDiffuse",
@@ -176,10 +189,14 @@ gfx_pipeline!( light {
 pub static LIGHT_VERTEX_SRC: &'static [u8] = b"
     #version 150 core
 
-    uniform mat4 u_Transform;
-    uniform float u_Radius;
-    in vec3 a_Pos;
+    in ivec3 a_Pos;
     out vec3 v_LightPos;
+
+    layout(std140)
+    uniform CubeLocals {
+        mat4 u_Transform;
+        float u_Radius;
+    };
 
     const int NUM_LIGHTS = 250;
     layout(std140)
@@ -196,9 +213,12 @@ pub static LIGHT_VERTEX_SRC: &'static [u8] = b"
 pub static LIGHT_FRAGMENT_SRC: &'static [u8] = b"
     #version 150 core
 
-    uniform float u_Radius;
-    uniform vec3 u_CameraPos;
-    uniform vec2 u_FrameRes;
+    layout(std140)
+    uniform LightLocals {
+        float u_Radius;
+        vec3 u_CameraPos;
+        vec2 u_FrameRes;
+    };
     uniform sampler2D u_TexPos;
     uniform sampler2D u_TexNormal;
     uniform sampler2D u_TexDiffuse;
@@ -230,7 +250,7 @@ pub static LIGHT_FRAGMENT_SRC: &'static [u8] = b"
 
 gfx_pipeline!( emitter {
     vbuf: gfx::VertexBuffer<CubeVertex> = (),
-    transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
+    locals_vs: gfx::ConstantBuffer<CubeLocals> = "CubeLocals",
     light_pos_buf: gfx::ConstantBuffer<LightInfo> = "u_LightPosBlock",
     radius: gfx::Global<f32> = "u_Radius",
     out_color: gfx::BlendTarget<GFormat> =
@@ -242,9 +262,13 @@ gfx_pipeline!( emitter {
 pub static EMITTER_VERTEX_SRC: &'static [u8] = b"
     #version 150 core
 
-    uniform mat4 u_Transform;
-    uniform float u_Radius;
-    in vec3 a_Pos;
+    in ivec3 a_Pos;
+
+    layout(std140)
+    uniform Cube {
+        mat4 u_Transform;
+        float u_Radius;
+    };
 
     const int NUM_LIGHTS = 250;
     layout(std140)
