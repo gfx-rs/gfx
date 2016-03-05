@@ -82,7 +82,7 @@ cbuffer u_LightPosBlock {
 // Light program
 
 cbuffer LightLocals {
-	float RadiusPs: u_Radius;
+	float RadiusM2: u_RadiusM2;
 	float3 CamPos: u_CameraPos;
 	float2 FrameRes: u_FrameRes;
 };

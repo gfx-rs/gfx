@@ -81,7 +81,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             hlsl_40:  include_bytes!("data/vertex.fx"),
             .. gfx_app::shade::Source::empty()
         };
-        let fs = gfx_app::shade::Source {
+        let ps = gfx_app::shade::Source {
             glsl_120: include_bytes!("shader/terrain_120.glslf"),
             glsl_150: include_bytes!("shader/terrain_150.glslf"),
             hlsl_40:  include_bytes!("data/pixel.fx"),
@@ -112,7 +112,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         App {
             pso: factory.create_pipeline_simple(
                 vs.select(init.backend).unwrap(),
-                fs.select(init.backend).unwrap(),
+                ps.select(init.backend).unwrap(),
                 gfx::state::CullFace::Back,
                 pipe::new()
                 ).unwrap(),

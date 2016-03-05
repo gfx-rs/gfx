@@ -206,6 +206,30 @@ macro_rules! gfx_pipeline_inner {
                 out
             }
         }
+
+        pub struct Bundle<R: $crate::Resources> {
+            pub slice: $crate::Slice<R>,
+            pub pso: $crate::PipelineState<R, Meta>,
+            pub data: Data<R>,
+        }
+
+        pub fn bundle<R: $crate::Resources>(slice: $crate::Slice<R>,
+                      pso: $crate::PipelineState<R, Meta>, data: Data<R>)
+                      -> Bundle<R>
+        {
+            Bundle {
+                slice: slice,
+                pso: pso,
+                data: data,
+            }
+        }
+
+        impl<R: $crate::Resources> Bundle<R> {
+            pub fn draw_to<C>(&self, encoder: &mut $crate::Encoder<R, C>) where
+                C: $crate::CommandBuffer<R> {
+                encoder.draw(&self.slice, &self.pso, &self.data);
+            }
+        }
     }
 }
 

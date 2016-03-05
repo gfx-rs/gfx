@@ -29,6 +29,8 @@
 extern crate cgmath;
 #[macro_use]
 extern crate gfx;
+extern crate gfx_window_glutin;
+extern crate glutin;
 extern crate gfx_app;
 extern crate time;
 extern crate rand;
@@ -39,7 +41,6 @@ use rand::Rng;
 use cgmath::{SquareMatrix, Matrix4, Point3, Vector3, EuclideanVector, deg};
 use cgmath::{Transform, AffineMatrix3};
 pub use gfx::format::{Depth, Srgb8};
-use gfx::traits::{Device, Factory, FactoryExt};
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{SharedVertex, IndexedPolygon};
 use time::precise_time_s;
@@ -48,6 +49,9 @@ use noise::{Seed, perlin2};
 
 // Remember to also change the constants in the shaders
 const NUM_LIGHTS: usize = 250;
+const LIGHT_RADIUS: f32 = 3.0;
+const EMITTER_RADIUS: f32 = 0.2;
+const TERRAIN_SCALE: [f32; 3] = [25.0, 25.0, 25.0];
 
 pub type GFormat = [f32; 4];
 
@@ -70,9 +74,9 @@ gfx_constant_struct!( TerrainLocals {
 gfx_pipeline!( terrain {
     vbuf: gfx::VertexBuffer<TerrainVertex> = (),
     locals: gfx::ConstantBuffer<TerrainLocals> = "TerrainLocals",
-    out_position: gfx::RenderTarget<GFormat> = "o_Position",
-    out_normal: gfx::RenderTarget<GFormat> = "o_Normal",
-    out_color: gfx::RenderTarget<GFormat> = "o_Color",
+    out_position: gfx::RenderTarget<GFormat> = "Target0",
+    out_normal: gfx::RenderTarget<GFormat> = "Target1",
+    out_color: gfx::RenderTarget<GFormat> = "Target2",
     out_depth: gfx::DepthTarget<Depth> =
         gfx::preset::depth::LESS_EQUAL_WRITE,
 });
@@ -81,7 +85,7 @@ pub static TERRAIN_VERTEX_SRC: &'static [u8] = b"
     #version 150 core
 
     layout(std140)
-    uniform Locals {
+    uniform TerrainLocals {
         mat4 u_Model;
         mat4 u_View;
         mat4 u_Proj;
@@ -128,7 +132,7 @@ gfx_vertex_struct!( BlitVertex {
 gfx_pipeline!( blit {
     vbuf: gfx::VertexBuffer<BlitVertex> = (),
     tex: gfx::TextureSampler<[f32; 4]> = "u_BlitTex",
-    out: gfx::RenderTarget<Srgb8> = "o_Color",
+    out: gfx::RenderTarget<Srgb8> = "Target0",
 });
 
 pub static BLIT_VERTEX_SRC: &'static [u8] = b"
@@ -167,7 +171,7 @@ gfx_constant_struct!( CubeLocals {
 });
 
 gfx_constant_struct!( LightLocals {
-    radius: f32 = "u_Radius",
+    radius_m2: f32 = "u_Radius",
     cam_pos: [f32; 3] = "u_CameraPos",
     frame_res: [f32; 2] = "u_FrameRes",
 });
@@ -181,7 +185,7 @@ gfx_pipeline!( light {
     tex_normal: gfx::TextureSampler<[f32; 4]> = "u_TexNormal",
     tex_diffuse: gfx::TextureSampler<[f32; 4]> = "u_TexDiffuse",
     out_color: gfx::BlendTarget<GFormat> =
-        ("o_Color", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
+        ("Target0", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
     out_depth: gfx::DepthTarget<Depth> =
         gfx::preset::depth::LESS_EQUAL_TEST,
 });
@@ -215,7 +219,7 @@ pub static LIGHT_FRAGMENT_SRC: &'static [u8] = b"
 
     layout(std140)
     uniform LightLocals {
-        float u_Radius;
+        float u_RadiusM2;
         vec3 u_CameraPos;
         vec2 u_FrameRes;
     };
@@ -240,7 +244,7 @@ pub static LIGHT_FRAGMENT_SRC: &'static [u8] = b"
         float d = max(0.0, dot(n, to_light));
 
         float dist_sq = dot(light - pos, light - pos);
-        float scale = max(0.0, 1.0-dist_sq/(u_Radius*u_Radius));
+        float scale = max(0.0, 1.0-dist_sq * u_RadiusM2);
 
         vec3 res_color = d*vec3(diffuse) + vec3(s);
 
@@ -250,11 +254,10 @@ pub static LIGHT_FRAGMENT_SRC: &'static [u8] = b"
 
 gfx_pipeline!( emitter {
     vbuf: gfx::VertexBuffer<CubeVertex> = (),
-    locals_vs: gfx::ConstantBuffer<CubeLocals> = "CubeLocals",
+    locals: gfx::ConstantBuffer<CubeLocals> = "CubeLocals",
     light_pos_buf: gfx::ConstantBuffer<LightInfo> = "u_LightPosBlock",
-    radius: gfx::Global<f32> = "u_Radius",
     out_color: gfx::BlendTarget<GFormat> =
-        ("o_Color", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
+        ("Target0", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
     out_depth: gfx::DepthTarget<Depth> =
         gfx::preset::depth::LESS_EQUAL_TEST,
 });
@@ -265,7 +268,7 @@ pub static EMITTER_VERTEX_SRC: &'static [u8] = b"
     in ivec3 a_Pos;
 
     layout(std140)
-    uniform Cube {
+    uniform CubeLocals {
         mat4 u_Transform;
         float u_Radius;
     };
@@ -329,16 +332,16 @@ struct ViewPair<R: gfx::Resources, T: gfx::format::Formatted> {
 struct DepthFormat;
 impl gfx::format::Formatted for DepthFormat {
     type Surface = gfx::format::D24;
-    type Channel = gfx::format::Float;
+    type Channel = gfx::format::Unorm;
     type View = [f32; 4];
 
     fn get_format() -> gfx::format::Format {
         use gfx::format as f;
-        f::Format(f::SurfaceType::D24, f::ChannelType::Float)
+        f::Format(f::SurfaceType::D24, f::ChannelType::Unorm)
     }
 }
 
-fn create_g_buffer<R: gfx::Resources, F: Factory<R>>(
+fn create_g_buffer<R: gfx::Resources, F: gfx::Factory<R>>(
                    width: gfx::tex::Size, height: gfx::tex::Size, factory: &mut F)
                    -> (ViewPair<R, GFormat>, ViewPair<R, GFormat>, ViewPair<R, GFormat>,
                        gfx::handle::ShaderResourceView<R, [f32; 4]>, gfx::handle::DepthStencilView<R, Depth>)
@@ -364,293 +367,350 @@ fn create_g_buffer<R: gfx::Resources, F: Factory<R>>(
     (pos, normal, diffuse, depth_srv, depth_rtv)
 }
 
-pub fn main() {
-    env_logger::init().unwrap();
-    let (window, mut device, mut factory, main_color, _) =
-        gfx_window_glutin::init::<Srgb8, Depth>(glutin::WindowBuilder::new()
-            .with_title("Deferred rendering example with gfx-rs".to_string())
-            .with_dimensions(800, 600)
-            .with_gl(glutin::GL_CORE)
-    );
 
-    let (w, h) = {
-        let (w, h) = window.get_inner_size().unwrap();
-        (w as gfx::tex::Size, h as gfx::tex::Size)
-    };
-    let (gpos, gnormal, gdiffuse, depth_resource, depth_target) =
-        create_g_buffer(w, h, &mut factory);
-    let res = {
-        let (_ , srv, rtv) = factory.create_render_target(w, h, false).unwrap();
-        ViewPair{ resource: srv, target: rtv }
-    };
+struct App<R: gfx::Resources> {
+    terrain: terrain::Bundle<R>,
+    blit: blit::Bundle<R>,
+    light: light::Bundle<R>,
+    emitter: emitter::Bundle<R>,
+    intermediate: ViewPair<R, GFormat>,
+    light_pos_vec: Vec<LightInfo>,
+    seed: Seed,
+    debug_buf: Option<gfx::handle::ShaderResourceView<R, [f32; 4]>>,
+}
 
-    let seed = {
-        let rand_seed = rand::thread_rng().gen();
-        Seed::new(rand_seed)
-    };
+impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
+    fn new<F: gfx::Factory<R>>(mut factory: F, init: gfx_app::Init<R>) -> Self {
+        use gfx::traits::FactoryExt;
 
-    let sampler = factory.create_sampler(
-        gfx::tex::SamplerInfo::new(gfx::tex::FilterMethod::Scale,
-                                   gfx::tex::WrapMode::Clamp)
-    );
-
-    let aspect = w as f32 / h as f32;
-    let proj = cgmath::perspective(deg(60.0f32), aspect, 5.0, 100.0);
-
-    let terrain_scale = Vector3::new(25.0, 25.0, 25.0);
-    let (terrain_pso, mut terrain_data, terrain_slice) = {
-        let plane = genmesh::generators::Plane::subdivide(256, 256);
-        let vertex_data: Vec<TerrainVertex> = plane.shared_vertex_iter()
-            .map(|(x, y)| {
-                let h = terrain_scale.z * perlin2(&seed, &[x, y]);
-                TerrainVertex {
-                    pos: [terrain_scale.x * x, terrain_scale.y * y, h],
-                    normal: calculate_normal(&seed, x, y),
-                    color: calculate_color(h),
-                }
-            })
-            .collect();
-
-        let index_data: Vec<u32> = plane.indexed_polygon_iter()
-            .triangulate()
-            .vertices()
-            .map(|i| i as u32)
-            .collect();
-
-        let (vbuf, slice) = factory.create_vertex_buffer_indexed(&vertex_data, &index_data[..]);
-
-        let pso = factory.create_pipeline_simple(
-            TERRAIN_VERTEX_SRC, TERRAIN_FRAGMENT_SRC,
-            gfx::state::CullFace::Back, terrain::new()
-            ).unwrap();
-
-        let data = terrain::Data {
-            vbuf: vbuf,
-            model: Matrix4::identity().into(),
-            view: Matrix4::identity().into(),
-            proj: proj.into(),
-            cam_pos: Vector3::new(0.0, 0.0, 0.0).into(),
-            out_position: gpos.target.clone(),
-            out_normal: gnormal.target.clone(),
-            out_color: gdiffuse.target.clone(),
-            out_depth: depth_target.clone(),
+        let (width, height, _, _) = init.color.get_dimensions();
+        let (gpos, gnormal, gdiffuse, _depth_resource, depth_target) =
+            create_g_buffer(width, height, &mut factory);
+        let res = {
+            let (_ , srv, rtv) = factory.create_render_target(width, height, false).unwrap();
+            ViewPair{ resource: srv, target: rtv }
         };
 
-        (pso, data, slice)
-    };
-
-    let (blit_pso, mut blit_data, blit_slice) = {
-        let vertex_data = [
-            BlitVertex { pos: I8Scaled::cast3([-1, -1, 0]), tex_coord: I8Scaled::cast2([0, 0]) },
-            BlitVertex { pos: I8Scaled::cast3([ 1, -1, 0]), tex_coord: I8Scaled::cast2([1, 0]) },
-            BlitVertex { pos: I8Scaled::cast3([ 1,  1, 0]), tex_coord: I8Scaled::cast2([1, 1]) },
-            BlitVertex { pos: I8Scaled::cast3([-1, -1, 0]), tex_coord: I8Scaled::cast2([0, 0]) },
-            BlitVertex { pos: I8Scaled::cast3([ 1,  1, 0]), tex_coord: I8Scaled::cast2([1, 1]) },
-            BlitVertex { pos: I8Scaled::cast3([-1,  1, 0]), tex_coord: I8Scaled::cast2([0, 1]) },
-        ];
-
-        let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
-
-        let pso = factory.create_pipeline_simple(
-            BLIT_VERTEX_SRC, BLIT_FRAGMENT_SRC,
-            gfx::state::CullFace::Nothing, blit::new()
-            ).unwrap();
-
-        let data = blit::Data {
-            vbuf: vbuf,
-            tex: (gpos.resource.clone(), sampler.clone()),
-            out: main_color.clone(),
+        let seed = {
+            let rand_seed = rand::thread_rng().gen();
+            Seed::new(rand_seed)
         };
 
-        (pso, data, slice)
-    };
+        let sampler = factory.create_sampler(
+            gfx::tex::SamplerInfo::new(gfx::tex::FilterMethod::Scale,
+                                       gfx::tex::WrapMode::Clamp)
+        );
 
-    let light_pos_buffer = factory.create_constant_buffer(NUM_LIGHTS);
+        let terrain = {
+            let plane = genmesh::generators::Plane::subdivide(256, 256);
+            let vertex_data: Vec<TerrainVertex> = plane.shared_vertex_iter()
+                .map(|(x, y)| {
+                    let h = TERRAIN_SCALE[2] * perlin2(&seed, &[x, y]);
+                    TerrainVertex {
+                        pos: [TERRAIN_SCALE[1] * x, TERRAIN_SCALE[2] * y, h],
+                        normal: calculate_normal(&seed, x, y),
+                        color: calculate_color(h),
+                    }
+                })
+                .collect();
 
-    let (light_vbuf, mut light_slice) = {
-        let vertex_data = [
-            // top (0, 0, 1)
-            CubeVertex { pos: I8Scaled::cast3([-1, -1,  1]) },
-            CubeVertex { pos: I8Scaled::cast3([ 1, -1,  1]) },
-            CubeVertex { pos: I8Scaled::cast3([ 1,  1,  1]) },
-            CubeVertex { pos: I8Scaled::cast3([-1,  1,  1]) },
-            // bottom (0, 0, -1)
-            CubeVertex { pos: I8Scaled::cast3([-1,  1, -1]) },
-            CubeVertex { pos: I8Scaled::cast3([ 1,  1, -1]) },
-            CubeVertex { pos: I8Scaled::cast3([ 1, -1, -1]) },
-            CubeVertex { pos: I8Scaled::cast3([-1, -1, -1]) },
-            // right (1, 0, 0)
-            CubeVertex { pos: I8Scaled::cast3([ 1, -1, -1]) },
-            CubeVertex { pos: I8Scaled::cast3([ 1,  1, -1]) },
-            CubeVertex { pos: I8Scaled::cast3([ 1,  1,  1]) },
-            CubeVertex { pos: I8Scaled::cast3([ 1, -1,  1]) },
-            // left (-1, 0, 0)
-            CubeVertex { pos: I8Scaled::cast3([-1, -1,  1]) },
-            CubeVertex { pos: I8Scaled::cast3([-1,  1,  1]) },
-            CubeVertex { pos: I8Scaled::cast3([-1,  1, -1]) },
-            CubeVertex { pos: I8Scaled::cast3([-1, -1, -1]) },
-            // front (0, 1, 0)
-            CubeVertex { pos: I8Scaled::cast3([ 1,  1, -1]) },
-            CubeVertex { pos: I8Scaled::cast3([-1,  1, -1]) },
-            CubeVertex { pos: I8Scaled::cast3([-1,  1,  1]) },
-            CubeVertex { pos: I8Scaled::cast3([ 1,  1,  1]) },
-            // back (0, -1, 0)
-            CubeVertex { pos: I8Scaled::cast3([ 1, -1,  1]) },
-            CubeVertex { pos: I8Scaled::cast3([-1, -1,  1]) },
-            CubeVertex { pos: I8Scaled::cast3([-1, -1, -1]) },
-            CubeVertex { pos: I8Scaled::cast3([ 1, -1, -1]) },
-        ];
+            let index_data: Vec<u32> = plane.indexed_polygon_iter()
+                .triangulate()
+                .vertices()
+                .map(|i| i as u32)
+                .collect();
 
-        let index_data: &[u8] = &[
-             0,  1,  2,  2,  3,  0, // top
-             4,  5,  6,  6,  7,  4, // bottom
-             8,  9, 10, 10, 11,  8, // right
-            12, 13, 14, 14, 15, 12, // left
-            16, 17, 18, 18, 19, 16, // front
-            20, 21, 22, 22, 23, 20, // back
-        ];
+            let (vbuf, slice) = factory.create_vertex_buffer_indexed(&vertex_data, &index_data[..]);
 
-        factory.create_vertex_buffer_indexed(&vertex_data, index_data)
-    };
-    light_slice.instances = Some((NUM_LIGHTS as gfx::InstanceCount, 0));
+            let vs = gfx_app::shade::Source {
+                glsl_150: TERRAIN_VERTEX_SRC,
+                hlsl_40:  include_bytes!("data/terrain_vs.fx"),
+                .. gfx_app::shade::Source::empty()
+            };
+            let ps = gfx_app::shade::Source {
+                glsl_150: TERRAIN_FRAGMENT_SRC,
+                hlsl_40:  include_bytes!("data/terrain_ps.fx"),
+                .. gfx_app::shade::Source::empty()
+            };
 
-    let (light_pso, mut light_data) = {
-        let pso = factory.create_pipeline_simple(
-            LIGHT_VERTEX_SRC, LIGHT_FRAGMENT_SRC,
-            gfx::state::CullFace::Back, light::new()
-            ).unwrap();
+            let pso = factory.create_pipeline_simple(
+                vs.select(init.backend).unwrap(),
+                ps.select(init.backend).unwrap(),
+                gfx::state::CullFace::Back, terrain::new()
+                ).unwrap();
 
-        let data = light::Data {
-            vbuf: light_vbuf.clone(),
-            transform: Matrix4::identity().into(),
-            light_pos_buf: light_pos_buffer.clone(),
-            radius: 3.0,
-            cam_pos: Vector3::new(0.0, 0.0, 0.0).into(),
-            frame_res: [w as f32, h as f32],
-            tex_pos: (gpos.resource.clone(), sampler.clone()),
-            tex_normal: (gnormal.resource.clone(), sampler.clone()),
-            tex_diffuse: (gdiffuse.resource.clone(), sampler.clone()),
-            out_color: res.target.clone(),
-            out_depth: depth_target.clone(),
+            let data = terrain::Data {
+                vbuf: vbuf,
+                locals: factory.create_constant_buffer(1),
+                out_position: gpos.target.clone(),
+                out_normal: gnormal.target.clone(),
+                out_color: gdiffuse.target.clone(),
+                out_depth: depth_target.clone(),
+            };
+
+            terrain::bundle(slice, pso, data)
         };
 
-        (pso, data)
-    };
+        let blit = {
+            let vertex_data = [
+                BlitVertex { pos: [-1, -1, 0], tex_coord: [0, 0] },
+                BlitVertex { pos: [ 1, -1, 0], tex_coord: [1, 0] },
+                BlitVertex { pos: [ 1,  1, 0], tex_coord: [1, 1] },
+                BlitVertex { pos: [-1, -1, 0], tex_coord: [0, 0] },
+                BlitVertex { pos: [ 1,  1, 0], tex_coord: [1, 1] },
+                BlitVertex { pos: [-1,  1, 0], tex_coord: [0, 1] },
+            ];
 
-    let (emitter_pso, mut emitter_data) = {
-        let pso = factory.create_pipeline_simple(
-            EMITTER_VERTEX_SRC, EMITTER_FRAGMENT_SRC,
-            gfx::state::CullFace::Back, emitter::new()
-            ).unwrap();
+            let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
 
-        let data = emitter::Data {
-            vbuf: light_vbuf.clone(),
-            transform: Matrix4::identity().into(),
-            light_pos_buf: light_pos_buffer.clone(),
-            radius: 0.2,
-            out_color: res.target.clone(),
-            out_depth: depth_target.clone(),
+            let vs = gfx_app::shade::Source {
+                glsl_150: BLIT_VERTEX_SRC,
+                hlsl_40:  include_bytes!("data/blit_vs.fx"),
+                .. gfx_app::shade::Source::empty()
+            };
+            let ps = gfx_app::shade::Source {
+                glsl_150: BLIT_FRAGMENT_SRC,
+                hlsl_40:  include_bytes!("data/blit_ps.fx"),
+                .. gfx_app::shade::Source::empty()
+            };
+
+            let pso = factory.create_pipeline_simple(
+                vs.select(init.backend).unwrap(),
+                ps.select(init.backend).unwrap(),
+                gfx::state::CullFace::Nothing, blit::new()
+                ).unwrap();
+
+            let data = blit::Data {
+                vbuf: vbuf,
+                tex: (gpos.resource.clone(), sampler.clone()),
+                out: init.color,
+            };
+
+            blit::bundle(slice, pso, data)
         };
 
-        (pso, data)
-    };
+        let light_pos_buffer = factory.create_constant_buffer(NUM_LIGHTS);
 
-    let mut debug_buf: Option<gfx::handle::ShaderResourceView<_, [f32; 4]>> = None;
+        let (light_vbuf, mut light_slice) = {
+            let vertex_data = [
+                // top (0, 0, 1)
+                CubeVertex { pos: [-1, -1,  1] },
+                CubeVertex { pos: [ 1, -1,  1] },
+                CubeVertex { pos: [ 1,  1,  1] },
+                CubeVertex { pos: [-1,  1,  1] },
+                // bottom (0, 0, -1)
+                CubeVertex { pos: [-1,  1, -1] },
+                CubeVertex { pos: [ 1,  1, -1] },
+                CubeVertex { pos: [ 1, -1, -1] },
+                CubeVertex { pos: [-1, -1, -1] },
+                // right (1, 0, 0)
+                CubeVertex { pos: [ 1, -1, -1] },
+                CubeVertex { pos: [ 1,  1, -1] },
+                CubeVertex { pos: [ 1,  1,  1] },
+                CubeVertex { pos: [ 1, -1,  1] },
+                // left (-1, 0, 0)
+                CubeVertex { pos: [-1, -1,  1] },
+                CubeVertex { pos: [-1,  1,  1] },
+                CubeVertex { pos: [-1,  1, -1] },
+                CubeVertex { pos: [-1, -1, -1] },
+                // front (0, 1, 0)
+                CubeVertex { pos: [ 1,  1, -1] },
+                CubeVertex { pos: [-1,  1, -1] },
+                CubeVertex { pos: [-1,  1,  1] },
+                CubeVertex { pos: [ 1,  1,  1] },
+                // back (0, -1, 0)
+                CubeVertex { pos: [ 1, -1,  1] },
+                CubeVertex { pos: [-1, -1,  1] },
+                CubeVertex { pos: [-1, -1, -1] },
+                CubeVertex { pos: [ 1, -1, -1] },
+            ];
 
-    let mut light_pos_vec: Vec<LightInfo> = (0 ..NUM_LIGHTS).map(|_| {
-        LightInfo{ pos: [0.0, 0.0, 0.0, 0.0] }
-    }).collect();
+            let index_data: &[u8] = &[
+                 0,  1,  2,  2,  3,  0, // top
+                 4,  5,  6,  6,  7,  4, // bottom
+                 8,  9, 10, 10, 11,  8, // right
+                12, 13, 14, 14, 15, 12, // left
+                16, 17, 18, 18, 19, 16, // front
+                20, 21, 22, 22, 23, 20, // back
+            ];
 
-    let mut encoder = factory.create_encoder();
+            factory.create_vertex_buffer_indexed(&vertex_data, index_data)
+        };
+        light_slice.instances = Some((NUM_LIGHTS as gfx::InstanceCount, 0));
 
-    'main: loop {
-        // quit when Esc is pressed.
-        for event in window.poll_events() {
-            use glutin::{Event, VirtualKeyCode};
-            match event {
-                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key1)) =>
-                    debug_buf = Some(gpos.resource.clone()),
-                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key2)) =>
-                    debug_buf = Some(gnormal.resource.clone()),
-                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key3)) =>
-                    debug_buf = Some(gdiffuse.resource.clone()),
-                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key4)) =>
-                    debug_buf = Some(depth_resource.clone()),
-                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key0)) =>
-                    debug_buf = None,
-                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Escape)) |
-                Event::Closed => break 'main,
-                _ => {},
-            }
+        let light = {
+            let vs = gfx_app::shade::Source {
+                glsl_150: LIGHT_VERTEX_SRC,
+                hlsl_40:  include_bytes!("data/light_vs.fx"),
+                .. gfx_app::shade::Source::empty()
+            };
+            let ps = gfx_app::shade::Source {
+                glsl_150: LIGHT_FRAGMENT_SRC,
+                hlsl_40:  include_bytes!("data/light_ps.fx"),
+                .. gfx_app::shade::Source::empty()
+            };
+
+            let pso = factory.create_pipeline_simple(
+                vs.select(init.backend).unwrap(),
+                ps.select(init.backend).unwrap(),
+                gfx::state::CullFace::Back, light::new()
+                ).unwrap();
+
+            let data = light::Data {
+                vbuf: light_vbuf.clone(),
+                locals_vs: factory.create_constant_buffer(1),
+                locals_ps: factory.create_constant_buffer(1),
+                light_pos_buf: light_pos_buffer.clone(),
+                tex_pos: (gpos.resource.clone(), sampler.clone()),
+                tex_normal: (gnormal.resource.clone(), sampler.clone()),
+                tex_diffuse: (gdiffuse.resource.clone(), sampler.clone()),
+                out_color: res.target.clone(),
+                out_depth: depth_target.clone(),
+            };
+
+            light::bundle(light_slice.clone(), pso, data)
+        };
+
+        let emitter = {
+            let vs = gfx_app::shade::Source {
+                glsl_150: EMITTER_VERTEX_SRC,
+                hlsl_40:  include_bytes!("data/emitter_vs.fx"),
+                .. gfx_app::shade::Source::empty()
+            };
+            let ps = gfx_app::shade::Source {
+                glsl_150: EMITTER_FRAGMENT_SRC,
+                hlsl_40:  include_bytes!("data/emitter_ps.fx"),
+                .. gfx_app::shade::Source::empty()
+            };
+
+            let pso = factory.create_pipeline_simple(
+                vs.select(init.backend).unwrap(),
+                ps.select(init.backend).unwrap(),
+                gfx::state::CullFace::Back, emitter::new()
+                ).unwrap();
+
+            let data = emitter::Data {
+                vbuf: light_vbuf.clone(),
+                locals: factory.create_constant_buffer(1),
+                light_pos_buf: light_pos_buffer.clone(),
+                out_color: res.target.clone(),
+                out_depth: depth_target.clone(),
+            };
+
+            emitter::bundle(light_slice, pso, data)
+        };
+
+        App {
+            terrain: terrain,
+            blit: blit,
+            light: light,
+            emitter: emitter,
+            intermediate: res,
+            light_pos_vec: (0 ..NUM_LIGHTS).map(|_| {
+                LightInfo{ pos: [0.0, 0.0, 0.0, 0.0] }
+            }).collect(),
+            seed: {
+                let rand_seed = rand::thread_rng().gen();
+                Seed::new(rand_seed)
+            },
+            debug_buf: None,
         }
+    }
 
+    /*fn update(&mut self) {
+        Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key1)) =>
+            debug_buf = Some(gpos.resource.clone()),
+        Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key2)) =>
+            debug_buf = Some(gnormal.resource.clone()),
+        Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key3)) =>
+            debug_buf = Some(gdiffuse.resource.clone()),
+        Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key4)) =>
+            debug_buf = Some(depth_resource.clone()),
+        Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key0)) =>
+            debug_buf = None,
+    }*/
+
+    fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
         let time = precise_time_s() as f32;
 
         // Update camera position
-        {
-            let cam_pos = {
-                // Slowly circle the center
-                let x = (0.05*time).sin();
-                let y = (0.05*time).cos();
-                Point3::new(x * 32.0, y * 32.0, 16.0)
-            };
-            let view: AffineMatrix3<f32> = Transform::look_at(
-                cam_pos,
-                Point3::new(0.0, 0.0, 0.0),
-                Vector3::unit_z(),
-            );
-            terrain_data.view = view.mat.into();
-            terrain_data.cam_pos = cam_pos.into();
+        let cam_pos = {
+            // Slowly circle the center
+            let x = (0.05*time).sin();
+            let y = (0.05*time).cos();
+            Point3::new(x * 32.0, y * 32.0, 16.0)
+        };
+        let view: AffineMatrix3<f32> = Transform::look_at(
+            cam_pos,
+            Point3::new(0.0, 0.0, 0.0),
+            Vector3::unit_z(),
+        );
+        let terrain_locals = TerrainLocals {
+            model: Matrix4::identity().into(),
+            view: view.mat.into(),
+            proj: Matrix4::identity().into(),
+        };
+        encoder.update_buffer(&self.terrain.data.locals, &[terrain_locals], 0).unwrap();
 
-            light_data.transform = (proj * view.mat).into();
-            light_data.cam_pos = cam_pos.into();
+        let (width, height, _, _) = self.terrain.data.out_depth.get_dimensions();
+        let light_locals = LightLocals {
+            radius_m2: 1.0 / (LIGHT_RADIUS * LIGHT_RADIUS),
+            cam_pos: cam_pos.into(),
+            frame_res: [width as f32, height as f32],
+        };
+        encoder.update_buffer(&self.light.data.locals_ps, &[light_locals], 0).unwrap();
 
-            emitter_data.transform = (proj * view.mat).into();
-        }
+        let aspect = width as f32 / height as f32;
+        let proj = cgmath::perspective(deg(60.0f32), aspect, 5.0, 100.0);
+        let mut cube_locals = [CubeLocals {
+            transform: (proj * view.mat).into(),
+            radius: LIGHT_RADIUS,
+        }];
+        encoder.update_buffer(&self.light.data.locals_vs, &cube_locals, 0).unwrap();
+        cube_locals[0].radius = EMITTER_RADIUS;
+        encoder.update_buffer(&self.emitter.data.locals, &cube_locals, 0).unwrap();
 
         // Update light positions
-        for (i, d) in light_pos_vec.iter_mut().enumerate() {
+        for (i, d) in self.light_pos_vec.iter_mut().enumerate() {
             let (x, y) = {
                 let fi = i as f32;
                 // Distribute lights nicely
                 let r = 1.0 - (fi*fi) / ((NUM_LIGHTS*NUM_LIGHTS) as f32);
                 (r * (0.2*time + i as f32).cos(), r * (0.2*time + i as f32).sin())
             };
-            let h = perlin2(&seed, &[x, y]);
+            let h = perlin2(&self.seed, &[x, y]);
 
-            d.pos[0] = terrain_scale.x * x;
-            d.pos[1] = terrain_scale.y * y;
-            d.pos[2] = terrain_scale.z * h + 0.5;
+            d.pos[0] = TERRAIN_SCALE[0] * x;
+            d.pos[1] = TERRAIN_SCALE[1] * y;
+            d.pos[2] = TERRAIN_SCALE[2] * h + 0.5;
         };
-        factory.update_buffer(&light_pos_buffer, &light_pos_vec, 0)
-               .unwrap();
+        encoder.update_buffer(&self.light.data.light_pos_buf, &self.light_pos_vec, 0).unwrap();
 
-        encoder.reset();
-        encoder.clear_depth(&depth_target, 1.0);
-        encoder.clear(&gpos.target, [0.0, 0.0, 0.0, 1.0]);
-        encoder.clear(&gnormal.target, [0.0, 0.0, 0.0, 1.0]);
-        encoder.clear(&gdiffuse.target, [0.0, 0.0, 0.0, 1.0]);
+        encoder.clear_depth(&self.terrain.data.out_depth, 1.0);
+        encoder.clear(&self.terrain.data.out_position, [0.0, 0.0, 0.0, 1.0]);
+        encoder.clear(&self.terrain.data.out_normal, [0.0, 0.0, 0.0, 1.0]);
+        encoder.clear(&self.terrain.data.out_color, [0.0, 0.0, 0.0, 1.0]);
         // Render the terrain to the geometry buffer
-        encoder.draw(&terrain_slice, &terrain_pso, &terrain_data);
+        self.terrain.draw_to(encoder);
 
-        let blit_tex = match debug_buf {
+        let blit_tex = match self.debug_buf {
             Some(ref tex) => tex,   // Show one of the immediate buffers
             None => {
-                encoder.clear(&res.target, [0.0, 0.0, 0.0, 1.0]);
+                encoder.clear(&self.intermediate.target, [0.0, 0.0, 0.0, 1.0]);
                 // Apply lights
-                encoder.draw(&light_slice, &light_pso, &light_data);
+                self.light.draw_to(encoder);
                 // Draw light emitters
-                encoder.draw(&light_slice, &emitter_pso, &emitter_data);
-
-                &res.resource
+                self.emitter.draw_to(encoder);
+                &self.intermediate.resource
             }
         };
-        blit_data.tex = (blit_tex.clone(), sampler.clone());
+        self.blit.data.tex.0 = blit_tex.clone();
         // Show the result
-        encoder.draw(&blit_slice, &blit_pso, &blit_data);
-
-        device.submit(encoder.as_buffer());
-        window.swap_buffers().unwrap();
-        device.cleanup();
+        self.blit.draw_to(encoder);
     }
+}
+
+pub fn main() {
+    use gfx_app::Application;
+    App::launch_default("Deferred rendering example with gfx-rs");
 }
