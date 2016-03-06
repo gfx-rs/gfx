@@ -21,8 +21,10 @@ glutin = "0.4.8"
 gfx_core = { path = "src/render", version = "0.2" }
 gfx_device_gl = { path = "src/backend/gl", version = "0.9" }
 gfx_window_glutin = { path = "src/window/glutin", version = "0.10" }
-gfx_window_glfw = { path = "src/window/glfw", version = "0.8" }
 gfx = { path = "src/render", version = "0.10" }
+
+[target.x86_64-pc-linux-gnu.dependencies]
+gfx_window_glfw = { path = "src/window/glfw", version = "0.8" }
 
 [target.x86_64-pc-windows-gnu.dependencies]
 gfx_device_dx11 = { path = "src/backend/dx11", version = "0.1" }
@@ -36,7 +38,7 @@ gfx_window_dxgi = { path = "src/window/dxgi", version = "0.1" }
 name = "blend"
 path = "examples/blend/main.rs"
 
-[[example]]
+[[target.x86_64-pc-linux-gnu.example]]
 name = "cube"
 path = "examples/cube/main.rs"
 
@@ -48,7 +50,7 @@ path = "examples/deferred/main.rs"
 name = "flowmap"
 path = "examples/flowmap/main.rs"
 
-[[example]]
+[[target.x86_64-pc-linux-gnu.example]]
 name = "performance"
 path = "examples/performance/main.rs"
 
@@ -83,9 +85,11 @@ path = "examples/mipmap/main.rs"
 [dev_dependencies]
 log = "*"
 cgmath = "0.7"
-glfw = "0.3"
 gfx_gl = "0.1"
 rand = "*"
 genmesh = "*"
 noise = "*"
 image = "*"
+
+[target.x86_64-pc-linux-gnu.dev_dependencies]
+glfw = "0.3"
