@@ -45,6 +45,7 @@ impl core::mapping::Raw for RawMapping {
     }
 }
 
+#[derive(Debug)]
 struct TextureParam {
     levels: winapi::UINT,
     format: winapi::DXGI_FORMAT,
@@ -112,7 +113,7 @@ impl Factory {
         if info.bind.contains(f::RENDER_TARGET) | info.bind.contains(f::DEPTH_STENCIL) {
             return Err(f::BufferError::UnsupportedBind(info.bind))
         }
-        let desc = D3D11_BUFFER_DESC {
+        let native_desc = D3D11_BUFFER_DESC {
             ByteWidth: size as winapi::UINT,
             Usage: usage,
             BindFlags: bind.0,
@@ -133,21 +134,22 @@ impl Factory {
             None => ptr::null(),
         };
 
-        debug!("Creating Buffer with desc {:#?} and sub-data {:?}", desc, sub);
+        debug!("Creating Buffer with info {:?} and sub-data {:?}", info, sub);
         let mut buf = native::Buffer(ptr::null_mut());
         let hr = unsafe {
-            (*self.share.device).CreateBuffer(&desc, sub_raw, &mut buf.0)
+            (*self.share.device).CreateBuffer(&native_desc, sub_raw, &mut buf.0)
         };
         if winapi::SUCCEEDED(hr) {
             Ok(self.share.handles.borrow_mut().make_buffer(buf, info))
         }else {
-            error!("Failed to create a buffer with code {:x}", hr);
+            error!("Failed to create a buffer with desc {:#?}, error {:x}", native_desc, hr);
             Err(f::BufferError::Other)
         }
     }
 
     fn create_texture_1d(&mut self, size: core::tex::Size, array: core::tex::Layer,
-                         tp: TextureParam, misc: winapi::D3D11_RESOURCE_MISC_FLAG) -> (winapi::HRESULT, Texture)
+                         tp: TextureParam, misc: winapi::D3D11_RESOURCE_MISC_FLAG)
+                         -> Result<Texture, winapi::HRESULT>
     {
         use winapi::UINT;
         let native_desc = winapi::D3D11_TEXTURE1D_DESC {
@@ -161,17 +163,24 @@ impl Factory {
             MiscFlags: misc.0,
         };
         let sub_data = tp.to_sub_data(size, 0);
-        debug!("Creating Texture1D with desc {:#?} and sub-data {:?}", native_desc, sub_data);
+        debug!("Creating Texture1D with size {:?}, layer {}, param {:?}, and sub-data {:?}",
+            size, array, tp, sub_data);
         let mut raw = ptr::null_mut();
         let hr = unsafe {
             (*self.share.device).CreateTexture1D(&native_desc,
                 if tp.init != ptr::null() {&sub_data} else {ptr::null()}, &mut raw)
         };
-        (hr, Texture::D1(raw))
+        if winapi::SUCCEEDED(hr) {
+            Ok(Texture::D1(raw))
+        }else {
+            error!("CreateTexture1D failed on {:#?} with error {:x}", native_desc, hr);
+            Err(hr)
+        }
     }
 
     fn create_texture_2d(&mut self, size: [core::tex::Size; 2], array: core::tex::Layer, aa: core::tex::AaMode,
-                         tp: TextureParam, misc: winapi::D3D11_RESOURCE_MISC_FLAG) -> (winapi::HRESULT, Texture)
+                         tp: TextureParam, misc: winapi::D3D11_RESOURCE_MISC_FLAG)
+                         -> Result<Texture, winapi::HRESULT>
     {
         use winapi::UINT;
         use data::map_anti_alias;
@@ -189,17 +198,24 @@ impl Factory {
             MiscFlags: misc.0,
         };
         let sub_data = tp.to_sub_data(size[0], size[1]);
-        debug!("Creating Texture2D with desc {:#?} and sub-data {:?}", native_desc, sub_data);
+        debug!("Creating Texture2D with size {:?}, layer {}, param {:?}, and sub-data {:?}",
+            size, array, tp, sub_data);
         let mut raw = ptr::null_mut();
         let hr = unsafe {
             (*self.share.device).CreateTexture2D(&native_desc,
                 if tp.init != ptr::null() {&sub_data} else {ptr::null()}, &mut raw)
         };
-        (hr, Texture::D2(raw))
+        if winapi::SUCCEEDED(hr) {
+            Ok(Texture::D2(raw))
+        }else {
+            error!("CreateTexture2D failed on {:#?} with error {:x}", native_desc, hr);
+            Err(hr)
+        }
     }
 
     fn create_texture_3d(&mut self, size: [core::tex::Size; 3],
-                         tp: TextureParam, misc: winapi::D3D11_RESOURCE_MISC_FLAG) -> (winapi::HRESULT, Texture)
+                         tp: TextureParam, misc: winapi::D3D11_RESOURCE_MISC_FLAG)
+                         -> Result<Texture, winapi::HRESULT>
     {
         use winapi::UINT;
         let native_desc = winapi::D3D11_TEXTURE3D_DESC {
@@ -214,13 +230,19 @@ impl Factory {
             MiscFlags: misc.0,
         };
         let sub_data = tp.to_sub_data(size[0], size[1]);
-        debug!("Creating Texture3D with desc {:#?} and sub-data {:?}", native_desc, sub_data);
+        debug!("Creating Texture3D with size {:?}, param {:?}, and sub-data {:?}",
+            size, tp, sub_data);
         let mut raw = ptr::null_mut();
         let hr = unsafe {
             (*self.share.device).CreateTexture3D(&native_desc,
                 if tp.init != ptr::null() {&sub_data} else {ptr::null()}, &mut raw)
         };
-        (hr, Texture::D3(raw))
+        if winapi::SUCCEEDED(hr) {
+            Ok(Texture::D3(raw))
+        }else {
+            error!("CreateTexture3D failed on {:#?} with error {:x}", native_desc, hr);
+            Err(hr)
+        }
     }
 
     fn create_texture_internal(&mut self, desc: core::tex::Descriptor,
@@ -250,7 +272,7 @@ impl Factory {
             Some((_, _, true)) => winapi::D3D11_RESOURCE_MISC_GENERATE_MIPS,
             _ => winapi::D3D11_RESOURCE_MISC_FLAG(0),
         };
-        let (hr, texture) = match desc.kind {
+        let texture_result = match desc.kind {
             Kind::D1(w) =>
                 self.create_texture_1d(w, 1, tparam, misc),
             Kind::D1Array(w, d) =>
@@ -267,11 +289,9 @@ impl Factory {
                 self.create_texture_2d([w,w], 6*d, AaMode::Single, tparam, misc | winapi::D3D11_RESOURCE_MISC_TEXTURECUBE),
         };
 
-        if winapi::SUCCEEDED(hr) {
-            Ok(self.share.handles.borrow_mut().make_texture(texture, desc))
-        }else {
-            error!("Failed to create a texture with code {:x}", hr);
-            Err(Error::Kind) //we should check for the error code here
+        match texture_result {
+            Ok(t) => Ok(self.share.handles.borrow_mut().make_texture(t, desc)),
+            Err(_) => Err(Error::Kind),
         }
     }
 }

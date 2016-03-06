@@ -35,7 +35,7 @@ impl Vertex {
 gfx_pipeline!(pipe {
     vbuf: gfx::VertexBuffer<Vertex> = (),
     tex: gfx::TextureSampler<[f32; 4]> = "t_Tex",
-    out: gfx::RenderTarget<Srgba8> = "o_Color",
+    out: gfx::RenderTarget<Srgba8> = "Target0",
 });
 
 // Larger red dots
@@ -61,17 +61,17 @@ fn make_texture<R, F>(factory: &mut F) -> gfx::handle::ShaderResourceView<R, [f3
 {
     let kind = gfx::tex::Kind::D2(4, 4, gfx::tex::AaMode::Single);
     let tex = factory.create_texture(kind, 3, gfx::SHADER_RESOURCE,
-        gfx::Usage::Dynamic, Some(gfx::format::ChannelType::Unorm)
+        gfx::Usage::GpuOnly, Some(gfx::format::ChannelType::Unorm)
         ).unwrap();
 
-    factory.update_texture::<Rgba8>(&tex, &tex.get_info().to_image_info(0),
+    factory.update_texture::<Srgba8>(&tex, &tex.get_info().to_image_info(0),
         gfx::cast_slice(&L0_DATA), None).unwrap();
-    factory.update_texture::<Rgba8>(&tex, &tex.get_info().to_image_info(1),
+    factory.update_texture::<Srgba8>(&tex, &tex.get_info().to_image_info(1),
         gfx::cast_slice(&L1_DATA), None).unwrap();
-    factory.update_texture::<Rgba8>(&tex, &tex.get_info().to_image_info(2),
+    factory.update_texture::<Srgba8>(&tex, &tex.get_info().to_image_info(2),
         gfx::cast_slice(&L2_DATA), None).unwrap();
 
-    factory.view_texture_as_shader_resource::<Rgba8>(
+    factory.view_texture_as_shader_resource::<Srgba8>(
         &tex, (0, 2), gfx::format::Swizzle::new()).unwrap()
 }
 
