@@ -202,6 +202,7 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                 usage: usage,
             });
         }else if res_desc.Type == winapi::D3D_SIT_SAMPLER {
+            let name = name.trim_right_matches('_');
             if let Some(s) = info.samplers.iter_mut().find(|s| s.name == name) {
                 s.usage = s.usage | usage;
                 continue;
@@ -212,7 +213,7 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                 s::IsComparison::NoCompare
             };
             info.samplers.push(s::SamplerVar {
-                name: name,
+                name: name.to_owned(),
                 slot: res_desc.BindPoint as core::SamplerSlot,
                 ty: s::SamplerType(cmp, s::IsRect::NoRect),
                 usage: usage,

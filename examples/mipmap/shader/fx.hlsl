@@ -3,8 +3,8 @@ struct VsOutput {
     float2 uv: TEXCOORD0;
 };
 
-Texture2D<float4> Texture: t_Tex;
-SamplerState Sampler: t_Tex;
+Texture2D<float4> t_Tex;
+SamplerState t_Tex_;
  
 VsOutput Vertex(float2 pos : a_Pos, float2 uv : a_Uv) {
     VsOutput output = {
@@ -15,5 +15,5 @@ VsOutput Vertex(float2 pos : a_Pos, float2 uv : a_Uv) {
 }
 
 float4 Pixel(VsOutput pin) : SV_Target {
-    return Texture.Sample(Sampler, pin.uv);
+    return t_Tex.Sample(t_Tex_, pin.uv);
 }

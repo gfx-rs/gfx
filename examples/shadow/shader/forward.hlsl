@@ -20,8 +20,8 @@ cbuffer Lights {
 	Light u_Lights[MAX_LIGHTS];
 }
 
-Texture2DArray<float> ShadowTex: t_Shadow;
-SamplerComparisonState ShadowSampler: t_Shadow;
+Texture2DArray<float> t_Shadow;
+SamplerComparisonState t_Shadow_;
 
 struct VsOutput {
     float4 pos: SV_Position;
@@ -51,7 +51,7 @@ float4 Pixel(VsOutput In): SV_Target {
 		light_local.xyw = (light_local.xyz/light_local.w + 1.0) / 2.0;
 		light_local.z = i;
 		// do the lookup, using HW PCF and comparison
-		float shadow = ShadowTex.SampleCmpLevelZero(ShadowSampler, light_local.xyz, light_local.w);
+		float shadow = t_Shadow.SampleCmpLevelZero(t_Shadow_, light_local.xyz, light_local.w);
 		// compute Lambertian diffuse term
 		float3 light_dir = normalize(light.pos.xyz - In.world_pos);
 		float diffuse = max(0.0, dot(normal, light_dir));

@@ -422,6 +422,11 @@ impl core::Factory<R> for Factory {
                 &Some((ref el, ir)) => (el, ir),
                 &None => continue,
             };
+            if elem.offset & 1 != 0 {
+                error!("Vertex attribute {} must be aligned to 2 bytes, has offset {}",
+                    attrib.name, elem.offset);
+                return Err(core::pso::CreationError);
+            }
             layouts.push(winapi::D3D11_INPUT_ELEMENT_DESC {
                 SemanticName: &charbuf[charpos],
                 SemanticIndex: 0,
@@ -465,7 +470,7 @@ impl core::Factory<R> for Factory {
                 &mut vertex_layout)
         };
         if !winapi::SUCCEEDED(hr) {
-            error!("Failed to create input layout from {:?}, error {:x}", layouts, hr);
+            error!("Failed to create input layout from {:#?}, error {:x}", layouts, hr);
             return Err(core::pso::CreationError);
         }
         let dummy_dsi = core::pso::DepthStencilInfo { depth: None, front: None, back: None };
@@ -556,8 +561,12 @@ impl core::Factory<R> for Factory {
 
         let mut raw_view = ptr::null_mut();
         let raw_tex = self.frame_handles.ref_texture(htex).to_resource();
-        unsafe {
-            (*self.share.device).CreateShaderResourceView(raw_tex, &native_desc, &mut raw_view);
+        let hr = unsafe {
+            (*self.share.device).CreateShaderResourceView(raw_tex, &native_desc, &mut raw_view)
+        };
+        if !winapi::SUCCEEDED(hr) {
+            error!("Failed to create SRV from {:#?}, error {:x}", native_desc, hr);
+            return Err(f::ResourceViewError::Unsupported);
         }
         Ok(self.share.handles.borrow_mut().make_texture_srv(native::Srv(raw_view), htex))
     }
@@ -620,8 +629,12 @@ impl core::Factory<R> for Factory {
         };
         let mut raw_view = ptr::null_mut();
         let raw_tex = self.frame_handles.ref_texture(htex).to_resource();
-        unsafe {
-            (*self.share.device).CreateRenderTargetView(raw_tex, &native_desc, &mut raw_view);
+        let hr = unsafe {
+            (*self.share.device).CreateRenderTargetView(raw_tex, &native_desc, &mut raw_view)
+        };
+        if !winapi::SUCCEEDED(hr) {
+            error!("Failed to create RTV from {:#?}, error {:x}", native_desc, hr);
+            return Err(f::TargetViewError::Unsupported);
         }
         let size = htex.get_info().kind.get_level_dimensions(desc.level);
         Ok(self.share.handles.borrow_mut().make_rtv(native::Rtv(raw_view), htex, size))
@@ -681,8 +694,12 @@ impl core::Factory<R> for Factory {
 
         let mut raw_view = ptr::null_mut();
         let raw_tex = self.frame_handles.ref_texture(htex).to_resource();
-        unsafe {
-            (*self.share.device).CreateDepthStencilView(raw_tex, &native_desc, &mut raw_view);
+        let hr = unsafe {
+            (*self.share.device).CreateDepthStencilView(raw_tex, &native_desc, &mut raw_view)
+        };
+        if !winapi::SUCCEEDED(hr) {
+            error!("Failed to create DSV from {:#?}, error {:x}", native_desc, hr);
+            return Err(f::TargetViewError::Unsupported);
         }
         let dim = htex.get_info().kind.get_level_dimensions(desc.level);
         Ok(self.share.handles.borrow_mut().make_dsv(native::Dsv(raw_view), htex, dim))
@@ -716,7 +733,7 @@ impl core::Factory<R> for Factory {
         if winapi::SUCCEEDED(hr) {
             self.share.handles.borrow_mut().make_sampler(native::Sampler(raw_sampler), info)
         }else {
-            error!("Unable to create a sampler with desc {:?}, error {:x}", info, hr);
+            error!("Unable to create a sampler with desc {:#?}, error {:x}", info, hr);
             unimplemented!()
         }
     }

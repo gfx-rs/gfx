@@ -92,13 +92,13 @@ pub enum BufferRole {
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 #[repr(u8)]
 pub enum Usage {
-    /// GPU: read + write, CPU: nothing
+    /// GPU: read + write, CPU: copy. Optimal for render targets.
     GpuOnly,
-    /// GPU: read, CPU: read
+    /// GPU: read, CPU: none. Optimal for resourced textures/buffers.
     Const,
-    /// GPU: read, CPU: write
+    /// GPU: read, CPU: write.
     Dynamic,
-    /// GPU: copy only, CPU: as specified. Used as a staging buffer,
+    /// GPU: copy, CPU: as specified. Used as a staging buffer,
     // to be copied back and forth with on-GPU targets.
     CpuOnly(MapAccess),
 }
@@ -422,7 +422,7 @@ pub trait Factory<R: Resources> {
         let levels = if allocate_mipmap {99} else {1};
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
         let tex = try!(self.create_texture(kind, levels, SHADER_RESOURCE | RENDER_TARGET, Usage::GpuOnly, Some(cty)));
-        let resource = try!(self.view_texture_as_shader_resource::<T>(&tex, (0, levels), format::Swizzle::new()));
+        let resource = try!(self.view_texture_as_shader_resource::<T>(&tex, (0, levels-1), format::Swizzle::new()));
         let target = try!(self.view_texture_as_render_target(&tex, 0, None));
         Ok((tex, resource, target))
     }
@@ -437,7 +437,7 @@ pub trait Factory<R: Resources> {
         let kind = tex::Kind::D2(width, height, tex::AaMode::Single);
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
         let tex = try!(self.create_texture(kind, 1, SHADER_RESOURCE | DEPTH_STENCIL, Usage::GpuOnly, Some(cty)));
-        let resource = try!(self.view_texture_as_shader_resource::<T>(&tex, (0,0), format::Swizzle::new()));
+        let resource = try!(self.view_texture_as_shader_resource::<T>(&tex, (0, 0), format::Swizzle::new()));
         let target = try!(self.view_texture_as_depth_stencil_trivial(&tex));
         Ok((tex, resource, target))
     }

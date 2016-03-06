@@ -47,24 +47,24 @@ TerrainOutput TerrainPs(TerrainVarying In) {
 
 // Blit program
 
-Texture2D<float4> BlitTexture: u_BlitTex;
-SamplerState BlitSampler: u_BlitTex;
+Texture2D<float4> t_BlitTex;
+SamplerState t_BlitTex_;
 
 struct BlitVarying {
 	float4 pos: SV_Position;
 	float2 tc: TEXCOORD;
 };
 
-BlitVarying BlitVs(int3 pos: a_Pos, int2 tc: a_TexCoord) {
+BlitVarying BlitVs(int2 pos: a_Pos, int2 tc: a_TexCoord) {
 	BlitVarying output = {
-		float4(pos, 1.0),
+		float4(pos, 0.0, 1.0),
 		tc,
 	};
 	return output;
 }
 
 float4 BlitPs(BlitVarying In): SV_Target {
-	return BlitTexture.Sample(BlitSampler, In.tc);
+	return t_BlitTex.Sample(t_BlitTex_, In.tc);
 }
 
 // common parts

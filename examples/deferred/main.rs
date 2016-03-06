@@ -125,38 +125,38 @@ pub static TERRAIN_FRAGMENT_SRC: &'static [u8] = b"
 ";
 
 gfx_vertex_struct!( BlitVertex {
-    pos: [i8; 3] = "a_Pos",
+    pos: [i8; 2] = "a_Pos",
     tex_coord: [i8; 2] = "a_TexCoord",
 });
 
 gfx_pipeline!( blit {
     vbuf: gfx::VertexBuffer<BlitVertex> = (),
-    tex: gfx::TextureSampler<[f32; 4]> = "u_BlitTex",
+    tex: gfx::TextureSampler<[f32; 4]> = "t_BlitTex",
     out: gfx::RenderTarget<Srgb8> = "Target0",
 });
 
 pub static BLIT_VERTEX_SRC: &'static [u8] = b"
     #version 150 core
 
-    in ivec3 a_Pos;
+    in ivec2 a_Pos;
     in ivec2 a_TexCoord;
     out vec2 v_TexCoord;
 
     void main() {
         v_TexCoord = a_TexCoord;
-        gl_Position = vec4(a_Pos, 1.0);
+        gl_Position = vec4(a_Pos, 0.0, 1.0);
     }
 ";
 
 pub static BLIT_FRAGMENT_SRC: &'static [u8] = b"
     #version 150 core
 
-    uniform sampler2D u_BlitTex;
+    uniform sampler2D t_BlitTex;
     in vec2 v_TexCoord;
     out vec4 o_Color;
 
     void main() {
-        vec4 tex = texture(u_BlitTex, v_TexCoord);
+        vec4 tex = texture(t_BlitTex, v_TexCoord);
         o_Color = tex;
     }
 ";
@@ -453,12 +453,12 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
         let blit = {
             let vertex_data = [
-                BlitVertex { pos: [-1, -1, 0], tex_coord: [0, 0] },
-                BlitVertex { pos: [ 1, -1, 0], tex_coord: [1, 0] },
-                BlitVertex { pos: [ 1,  1, 0], tex_coord: [1, 1] },
-                BlitVertex { pos: [-1, -1, 0], tex_coord: [0, 0] },
-                BlitVertex { pos: [ 1,  1, 0], tex_coord: [1, 1] },
-                BlitVertex { pos: [-1,  1, 0], tex_coord: [0, 1] },
+                BlitVertex { pos: [-1, -1], tex_coord: [0, 0] },
+                BlitVertex { pos: [ 1, -1], tex_coord: [1, 0] },
+                BlitVertex { pos: [ 1,  1], tex_coord: [1, 1] },
+                BlitVertex { pos: [-1, -1], tex_coord: [0, 0] },
+                BlitVertex { pos: [ 1,  1], tex_coord: [1, 1] },
+                BlitVertex { pos: [-1,  1], tex_coord: [0, 1] },
             ];
 
             let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
@@ -525,7 +525,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 CubeVertex { pos: [ 1, -1, -1] },
             ];
 
-            let index_data: &[u8] = &[
+            let index_data: &[u16] = &[
                  0,  1,  2,  2,  3,  0, // top
                  4,  5,  6,  6,  7,  4, // bottom
                  8,  9, 10, 10, 11,  8, // right
