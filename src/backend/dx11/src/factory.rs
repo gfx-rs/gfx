@@ -68,6 +68,7 @@ impl TextureParam {
 }
 
 pub struct Factory {
+    device: *mut winapi::ID3D11Device,
     share: Arc<Share>,
     frame_handles: h::Manager<R>,
     vs_cache: Map<u64, Vec<u8>>,
@@ -75,14 +76,22 @@ pub struct Factory {
 
 impl Clone for Factory {
     fn clone(&self) -> Factory {
-        Factory::new(self.share.clone())
+        unsafe { (*self.device).AddRef(); }
+        Factory::new(self.device, self.share.clone())
+    }
+}
+
+impl Drop for Factory {
+    fn drop(&mut self) {
+        unsafe { (*self.device).Release(); }
     }
 }
 
 impl Factory {
     /// Create a new `Factory`.
-    pub fn new(share: Arc<Share>) -> Factory {
+    pub fn new(device: *mut winapi::ID3D11Device, share: Arc<Share>) -> Factory {
         Factory {
+            device: device,
             share: share,
             frame_handles: h::Manager::new(),
             vs_cache: Map::new(),
@@ -137,7 +146,7 @@ impl Factory {
         debug!("Creating Buffer with info {:?} and sub-data {:?}", info, sub);
         let mut buf = native::Buffer(ptr::null_mut());
         let hr = unsafe {
-            (*self.share.device).CreateBuffer(&native_desc, sub_raw, &mut buf.0)
+            (*self.device).CreateBuffer(&native_desc, sub_raw, &mut buf.0)
         };
         if winapi::SUCCEEDED(hr) {
             Ok(self.share.handles.borrow_mut().make_buffer(buf, info))
@@ -167,7 +176,7 @@ impl Factory {
             size, array, tp, sub_data);
         let mut raw = ptr::null_mut();
         let hr = unsafe {
-            (*self.share.device).CreateTexture1D(&native_desc,
+            (*self.device).CreateTexture1D(&native_desc,
                 if tp.init != ptr::null() {&sub_data} else {ptr::null()}, &mut raw)
         };
         if winapi::SUCCEEDED(hr) {
@@ -202,7 +211,7 @@ impl Factory {
             size, array, tp, sub_data);
         let mut raw = ptr::null_mut();
         let hr = unsafe {
-            (*self.share.device).CreateTexture2D(&native_desc,
+            (*self.device).CreateTexture2D(&native_desc,
                 if tp.init != ptr::null() {&sub_data} else {ptr::null()}, &mut raw)
         };
         if winapi::SUCCEEDED(hr) {
@@ -234,7 +243,7 @@ impl Factory {
             size, tp, sub_data);
         let mut raw = ptr::null_mut();
         let hr = unsafe {
-            (*self.share.device).CreateTexture3D(&native_desc,
+            (*self.device).CreateTexture3D(&native_desc,
                 if tp.init != ptr::null() {&sub_data} else {ptr::null()}, &mut raw)
         };
         if winapi::SUCCEEDED(hr) {
@@ -330,7 +339,7 @@ impl core::Factory<R> for Factory {
         use gfx_core::shade::{CreateShaderError, Stage};
         use mirror::reflect_shader;
 
-        let dev = self.share.device;
+        let dev = self.device;
         let len = code.len() as winapi::SIZE_T;
         let (hr, object) = match stage {
             Stage::Vertex => {
@@ -481,7 +490,7 @@ impl core::Factory<R> for Factory {
             }
         };
 
-        let dev = self.share.device;
+        let dev = self.device;
         let mut vertex_layout = ptr::null_mut();
         let hr = unsafe {
             (*dev).CreateInputLayout(
@@ -582,7 +591,7 @@ impl core::Factory<R> for Factory {
         let mut raw_view = ptr::null_mut();
         let raw_tex = self.frame_handles.ref_texture(htex).to_resource();
         let hr = unsafe {
-            (*self.share.device).CreateShaderResourceView(raw_tex, &native_desc, &mut raw_view)
+            (*self.device).CreateShaderResourceView(raw_tex, &native_desc, &mut raw_view)
         };
         if !winapi::SUCCEEDED(hr) {
             error!("Failed to create SRV from {:#?}, error {:x}", native_desc, hr);
@@ -650,7 +659,7 @@ impl core::Factory<R> for Factory {
         let mut raw_view = ptr::null_mut();
         let raw_tex = self.frame_handles.ref_texture(htex).to_resource();
         let hr = unsafe {
-            (*self.share.device).CreateRenderTargetView(raw_tex, &native_desc, &mut raw_view)
+            (*self.device).CreateRenderTargetView(raw_tex, &native_desc, &mut raw_view)
         };
         if !winapi::SUCCEEDED(hr) {
             error!("Failed to create RTV from {:#?}, error {:x}", native_desc, hr);
@@ -715,7 +724,7 @@ impl core::Factory<R> for Factory {
         let mut raw_view = ptr::null_mut();
         let raw_tex = self.frame_handles.ref_texture(htex).to_resource();
         let hr = unsafe {
-            (*self.share.device).CreateDepthStencilView(raw_tex, &native_desc, &mut raw_view)
+            (*self.device).CreateDepthStencilView(raw_tex, &native_desc, &mut raw_view)
         };
         if !winapi::SUCCEEDED(hr) {
             error!("Failed to create DSV from {:#?}, error {:x}", native_desc, hr);
@@ -748,7 +757,7 @@ impl core::Factory<R> for Factory {
 
         let mut raw_sampler = ptr::null_mut();
         let hr = unsafe {
-            (*self.share.device).CreateSamplerState(&native_desc, &mut raw_sampler)
+            (*self.device).CreateSamplerState(&native_desc, &mut raw_sampler)
         };
         if winapi::SUCCEEDED(hr) {
             self.share.handles.borrow_mut().make_sampler(native::Sampler(raw_sampler), info)
@@ -763,9 +772,41 @@ impl core::Factory<R> for Factory {
         Ok(()) //TODO
     }
 
-    fn update_texture_raw(&mut self, _texture: &h::RawTexture<R>, _image: &core::tex::RawImageInfo,
-                          _data: &[u8], _face: Option<core::tex::CubeFace>) -> Result<(), core::tex::Error> {
-        Ok(()) //TODO
+    fn update_texture_raw(&mut self, texture: &h::RawTexture<R>, image: &core::tex::RawImageInfo,
+                          data: &[u8], face: Option<core::tex::CubeFace>) -> Result<(), core::tex::Error> {
+        use gfx_core::tex::CubeFace::*;
+        use winapi::UINT;
+
+        let dst_resource = self.frame_handles.ref_texture(texture).to_resource();
+        let tdesc = texture.get_info();
+        let (width, height, _, _) = tdesc.kind.get_level_dimensions(image.mipmap);
+        let stride = image.format.0.get_total_bits() as UINT;
+        let row_pitch = width as UINT * stride;
+        let depth_pitch = height as UINT * row_pitch;
+        let array_slice = match face {
+            Some(PosX) => 0,
+            Some(NegX) => 1,
+            Some(PosY) => 2,
+            Some(NegY) => 3,
+            Some(PosZ) => 4,
+            Some(NegZ) => 5,
+            None => 0,
+        };
+        let dst_box = winapi::D3D11_BOX {
+            left:   image.xoffset as UINT,
+            top:    image.yoffset as UINT,
+            front:  image.zoffset as UINT,
+            right:  (image.xoffset + image.width) as UINT,
+            bottom: (image.yoffset + image.height) as UINT,
+            back:   (image.zoffset + image.depth) as UINT,
+        };
+        let subres = array_slice * tdesc.levels + image.mipmap;
+        //unsafe {
+            //let subres = winapi::D3D11CalcSubresource(image.mipmap, array_slice, tdesc.levels);
+            //(*self.share.context).UpdateSubresource(dst_resource, subres, &dst_box, data as *const _, row_pitch, depth_pitch);
+        //};
+        let _ = (dst_resource, subres, &dst_box, data, row_pitch, depth_pitch); //TODO
+        Ok(())
     }
 
     fn map_buffer_raw(&mut self, _buf: &h::RawBuffer<R>, _access: f::MapAccess) -> RawMapping {

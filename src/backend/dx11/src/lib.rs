@@ -144,7 +144,6 @@ impl gfx_core::Resources for Resources {
 /// Internal struct of shared data between the device and its factories.
 #[doc(hidden)]
 pub struct Share {
-    device: *mut winapi::ID3D11Device,
     capabilities: gfx_core::Capabilities,
     handles: RefCell<h::Manager<Resources>>,
 }
@@ -171,8 +170,8 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
 
     let mut swap_chain = ptr::null_mut();
     let create_flags = winapi::D3D11_CREATE_DEVICE_FLAG(0); //D3D11_CREATE_DEVICE_DEBUG;
-    let mut share = Share {
-        device: ptr::null_mut(),
+    let mut device = ptr::null_mut();
+    let share = Share {
         capabilities: gfx_core::Capabilities {
             max_vertex_count: 0,
             max_index_count: 0,
@@ -194,7 +193,7 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
     let hr = unsafe {
         d3d11::D3D11CreateDeviceAndSwapChain(ptr::null_mut(), driver_type, ptr::null_mut(), create_flags.0,
             &FEATURE_LEVELS[0], FEATURE_LEVELS.len() as winapi::UINT, winapi::D3D11_SDK_VERSION, desc,
-            &mut swap_chain, &mut share.device, &mut feature_level, &mut context)
+            &mut swap_chain, &mut device, &mut feature_level, &mut context)
     };
     if !winapi::SUCCEEDED(hr) {
         return Err(hr)
@@ -220,7 +219,7 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
         frame_handles: h::Manager::new(),
         max_resource_count: None,
     };
-    let mut factory = Factory::new(dev.share.clone());
+    let mut factory = Factory::new(device, dev.share.clone());
 
     let color_target = {
         use gfx_core::Factory;

@@ -120,12 +120,12 @@ pub enum FilterMethod {
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 #[allow(missing_docs)]
 pub enum CubeFace {
-    PosZ,
-    NegZ,
     PosX,
     NegX,
     PosY,
-    NegY
+    NegY,
+    PosZ,
+    NegZ,
 }
 
 /// Specifies the kind of a texture storage to be allocated.
