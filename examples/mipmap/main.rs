@@ -17,7 +17,7 @@ extern crate gfx;
 extern crate gfx_window_glutin;
 extern crate glutin;
 
-pub use gfx::format::{Srgb8, Depth};
+pub use gfx::format::{Rgba8, Depth};
 
 gfx_vertex_struct!( Vertex {
     pos: [f32; 2] = "a_Pos",
@@ -35,28 +35,28 @@ impl Vertex {
 
 gfx_pipeline!(pipe {
     vbuf: gfx::VertexBuffer<Vertex> = (),
-    tex: gfx::TextureSampler<[f32; 3]> = "t_Tex",
-    out: gfx::RenderTarget<Srgb8> = "o_Color",
+    tex: gfx::TextureSampler<[f32; 4]> = "t_Tex",
+    out: gfx::RenderTarget<Rgba8> = "o_Color",
 });
 
 // Larger red dots
-const L0_DATA: [u8; 16] = [
-    0x00, 0x00, 0x00, 0x00,
-    0x00, 0xc0, 0xc0, 0x00,
-    0x00, 0xc0, 0xc0, 0x00,
-    0x00, 0x00, 0x00, 0x00,
+const L0_DATA: [[u8; 4]; 16] = [
+    [ 0x00, 0x00, 0x00, 0x00 ], [ 0x00, 0x00, 0x00, 0x00 ], [ 0x00, 0x00, 0x00, 0x00 ], [ 0x00, 0x00, 0x00, 0x00 ],
+    [ 0x00, 0x00, 0x00, 0x00 ], [ 0xc0, 0x00, 0x00, 0x00 ], [ 0xc0, 0x00, 0x00, 0x00 ], [ 0x00, 0x00, 0x00, 0x00 ],
+    [ 0x00, 0x00, 0x00, 0x00 ], [ 0xc0, 0x00, 0x00, 0x00 ], [ 0xc0, 0x00, 0x00, 0x00 ], [ 0x00, 0x00, 0x00, 0x00 ],
+    [ 0x00, 0x00, 0x00, 0x00 ], [ 0x00, 0x00, 0x00, 0x00 ], [ 0x00, 0x00, 0x00, 0x00 ], [ 0x00, 0x00, 0x00, 0x00 ],
 ];
 
 // Uniform green
-const L1_DATA: [u8; 4] = [
-    0x10, 0x18,
-    0x18, 0x18,
+const L1_DATA: [[u8; 4]; 4] = [
+    [ 0x00, 0xc0, 0x00, 0x00 ], [ 0x00, 0xc0, 0x00, 0x00 ],
+    [ 0x00, 0xc0, 0x00, 0x00 ], [ 0x00, 0xc0, 0x00, 0x00 ],
 ];
 
 // Uniform blue
-const L2_DATA: [u8; 1] = [ 0x02 ];
+const L2_DATA: [[u8; 4]; 1] = [ [ 0x00, 0x00, 0xc0, 0x00 ] ];
 
-fn make_texture<R, F>(factory: &mut F) -> gfx::handle::ShaderResourceView<R, [f32; 3]>
+fn make_texture<R, F>(factory: &mut F) -> gfx::handle::ShaderResourceView<R, [f32; 4]>
         where R: gfx::Resources, 
               F: gfx::Factory<R>
 {
@@ -64,16 +64,14 @@ fn make_texture<R, F>(factory: &mut F) -> gfx::handle::ShaderResourceView<R, [f3
     let tex = factory.create_texture(kind, 3, gfx::SHADER_RESOURCE,
         Some(gfx::format::ChannelType::Unorm)).unwrap();
 
-    type Rgb332 = (gfx::format::R3_G3_B2, gfx::format::Unorm);
-
-    factory.update_texture::<Rgb332>(&tex, &tex.get_info().to_image_info(0),
+    factory.update_texture::<Rgba8>(&tex, &tex.get_info().to_image_info(0),
         gfx::cast_slice(&L0_DATA), None).unwrap();
-    factory.update_texture::<Rgb332>(&tex, &tex.get_info().to_image_info(1),
+    factory.update_texture::<Rgba8>(&tex, &tex.get_info().to_image_info(1),
         gfx::cast_slice(&L1_DATA), None).unwrap();
-    factory.update_texture::<Rgb332>(&tex, &tex.get_info().to_image_info(2),
+    factory.update_texture::<Rgba8>(&tex, &tex.get_info().to_image_info(2),
         gfx::cast_slice(&L2_DATA), None).unwrap();
 
-    factory.view_texture_as_shader_resource::<Rgb332>(
+    factory.view_texture_as_shader_resource::<Rgba8>(
         &tex, (0, 2), gfx::format::Swizzle::new()).unwrap()
 }
 
@@ -84,7 +82,7 @@ pub fn main() {
         .with_title("Mipmap example".to_string())
         .with_dimensions(800, 600);
     let (window, mut device, mut factory, main_color, _) =
-        gfx_window_glutin::init::<Srgb8, Depth>(builder);
+        gfx_window_glutin::init::<Rgba8, Depth>(builder);
     let mut encoder = factory.create_encoder();
 
     let pso = factory.create_pipeline_simple(
@@ -129,7 +127,7 @@ pub fn main() {
         }
 
         encoder.reset();
-        encoder.clear(&data.out, [0.1, 0.2, 0.3]);
+        encoder.clear(&data.out, [0.1, 0.2, 0.3, 1.0]);
         encoder.draw(&slice, &pso, &data);
 
         device.submit(encoder.as_buffer());
