@@ -27,7 +27,7 @@ use std::io::Cursor;
 
 use glutin::{PollEventsIterator, Event, VirtualKeyCode, ElementState};
 
-pub use gfx::format::{DepthStencil, Srgb8, Rgba8};
+pub use gfx::format::{DepthStencil, Srgba8, Rgba8};
 use gfx::traits::{FactoryExt};
 
 use cgmath::{SquareMatrix, Matrix4, AffineMatrix3};
@@ -141,7 +141,7 @@ gfx_pipeline!(pipe {
     tilesheet_size: gfx::Global<[f32; 4]> = "u_TilesheetSize",
     offsets: gfx::Global<[f32; 2]> = "u_TileOffsets",
     // output
-    out_color: gfx::RenderTarget<Srgb8> = "o_Color",
+    out_color: gfx::RenderTarget<Srgba8> = "o_Color",
     out_depth: gfx::DepthTarget<DepthStencil> =
         gfx::preset::depth::LESS_EQUAL_WRITE,
 });
@@ -157,7 +157,7 @@ pub struct TileMapPlane<R> where R: gfx::Resources {
 
 impl<R> TileMapPlane<R> where R: gfx::Resources {
     pub fn new<F>(factory: &mut F, width: usize, height: usize, tile_size: usize,
-                  main_color: &gfx::handle::RenderTargetView<R, Srgb8>,
+                  main_color: &gfx::handle::RenderTargetView<R, Srgba8>,
                   main_depth: &gfx::handle::DepthStencilView<R, DepthStencil>,
                   aspect_ratio: f32)
                -> TileMapPlane<R> where F: gfx::Factory<R> {
@@ -265,7 +265,7 @@ pub struct TileMap<R> where R: gfx::Resources {
 
 impl<R: gfx::Resources> TileMap<R> {
     pub fn new<F>(factory: &mut F, tilemap_size: [usize; 2], charmap_size: [usize; 2], tile_size: usize,
-                  main_color: &gfx::handle::RenderTargetView<R, Srgb8>,
+                  main_color: &gfx::handle::RenderTargetView<R, Srgba8>,
                   main_depth: &gfx::handle::DepthStencilView<R, DepthStencil>,
                   aspect_ratio: f32)
                   -> TileMap<R> where F: gfx::Factory<R> {
@@ -434,11 +434,11 @@ pub fn main() {
     let builder = glutin::WindowBuilder::new()
         .with_title("Tilemap example".to_string());
     let (window, mut device, mut factory, main_color, main_depth) =
-        gfx_window_glutin::init::<Srgb8, DepthStencil>(builder);
+        gfx_window_glutin::init::<Srgba8, DepthStencil>(builder);
     let mut encoder = factory.create_encoder();
 
     // clear window contents
-    encoder.clear(&main_color, [0.0, 0.0, 0.0]);
+    encoder.clear(&main_color, [0.0, 0.0, 0.0, 0.0]);
     device.submit(encoder.as_buffer());
     window.swap_buffers().unwrap();
 
@@ -523,7 +523,7 @@ pub fn main() {
 
         encoder.reset();
         encoder.clear(&main_color,
-            [16.0 / 256.0, 14.0 / 256.0, 22.0 / 256.0]);
+            [16.0 / 256.0, 14.0 / 256.0, 22.0 / 256.0, 1.0]);
         encoder.clear_depth(&main_depth, 1.0);
 
         tilemap.update(&view, &mut encoder);

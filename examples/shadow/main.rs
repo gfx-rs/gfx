@@ -19,7 +19,7 @@ extern crate gfx;
 extern crate gfx_app;
 
 use std::sync::{Arc, RwLock};
-pub use gfx::format::{Depth, DepthStencil, Srgb8};
+pub use gfx::format::{Depth, DepthStencil, Srgba8};
 
 // Section-1: vertex formats and shader parameters
 
@@ -65,7 +65,7 @@ gfx_pipeline!( forward {
     ps_locals: gfx::ConstantBuffer<ForwardPsLocals> = "PsLocals",
     light_buf: gfx::ConstantBuffer<LightParam> = "b_Lights",
     shadow: gfx::TextureSampler<f32> = "t_Shadow",
-    out_color: gfx::RenderTarget<Srgb8> = "Target0",
+    out_color: gfx::RenderTarget<Srgba8> = "Target0",
     out_depth: gfx::DepthTarget<DepthStencil> =
         gfx::preset::depth::LESS_EQUAL_WRITE,
 });
@@ -185,7 +185,7 @@ struct Scene<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
 
 /// Create a full scene
 fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
-                out_color: gfx::handle::RenderTargetView<R, Srgb8>,
+                out_color: gfx::handle::RenderTargetView<R, Srgba8>,
                 out_depth: gfx::handle::DepthStencilView<R, DepthStencil>,
                 shadow_pso: gfx::PipelineState<R, shadow::Meta>)
                 -> Scene<R, F::CommandBuffer>
@@ -567,7 +567,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
         }
 
         // draw entities with forward pass
-        self.encoder.clear(&self.init.color, [0.1, 0.2, 0.3]);
+        self.encoder.clear(&self.init.color, [0.1, 0.2, 0.3, 1.0]);
         self.encoder.clear_depth(&self.init.depth, 1.0);
 
         let mx_vp = {

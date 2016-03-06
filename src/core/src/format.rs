@@ -112,7 +112,6 @@ macro_rules! impl_formats {
 
 
 impl_formats! {
-    R3_G3_B2        : Vec3<Unorm> = u8 {2} [TextureSurface],
     R4_G4           : Vec2<Unorm> = u8 {0}  [TextureSurface, RenderSurface],
     R4_G4_B4_A4     : Vec4<Unorm> = u16 {4} [TextureSurface, RenderSurface],
     R5_G5_B5_A1     : Vec4<Unorm> = u16 {1} [TextureSurface, RenderSurface],
@@ -120,8 +119,6 @@ impl_formats! {
     R8              : Vec1<Int, Uint, Inorm, Unorm, Iscaled, Uscaled> = u8 {0}
         [BufferSurface, TextureSurface, RenderSurface],
     R8_G8           : Vec2<Int, Uint, Inorm, Unorm, Iscaled, Uscaled> = [u8; 2] {0}
-        [BufferSurface, TextureSurface, RenderSurface],
-    R8_G8_B8        : Vec3<Int, Uint, Inorm, Unorm, Iscaled, Uscaled, Srgb> = [u8; 3] {0}
         [BufferSurface, TextureSurface, RenderSurface],
     R8_G8_B8_A8     : Vec4<Int, Uint, Inorm, Unorm, Iscaled, Uscaled, Srgb> = [u8; 4] {8}
         [BufferSurface, TextureSurface, RenderSurface],
@@ -339,8 +336,6 @@ pub type Vec4<T> = [T; 4];
 /// Standard 8bits RGBA format.
 pub type Rgba8 = (R8_G8_B8_A8, Unorm);
 /// Standard 8bit gamma transforming RGB format.
-pub type Srgb8 = (R8_G8_B8, Srgb);
-/// Standard 8bit gamma transforming RGB format with linear alpha.
 pub type Srgba8 = (R8_G8_B8_A8, Srgb);
 /// Standard HDR floating-point format with 10 bits for RGB components
 /// and 2 bits for the alpha.
@@ -374,7 +369,6 @@ macro_rules! impl_formats_8bit {
         impl_simple_formats! {$(
             Vec1<$ty> = $channel R8,
             Vec2<$ty> = $channel R8_G8,
-            Vec3<$ty> = $channel R8_G8_B8,
             Vec4<$ty> = $channel R8_G8_B8_A8,
         )*}
     }

@@ -60,8 +60,7 @@ fn format_to_glpixel(format: NewFormat) -> GLenum {
     match format.0 {
         S::R8 | S::R16 | S::R32=> gl::RED,
         S::R4_G4 | S::R8_G8 | S::R16_G16 | S::R32_G32 => gl::RG,
-        S::R8_G8_B8 | S::R16_G16_B16 | S::R32_G32_B32 |
-        S::R3_G3_B2 | S::R5_G6_B5 | S::R11_G11_B10 => gl::RGB,
+        S::R16_G16_B16 | S::R32_G32_B32 | S::R5_G6_B5 | S::R11_G11_B10 => gl::RGB,
         S::R8_G8_B8_A8 | S::R16_G16_B16_A16 | S::R32_G32_B32_A32 |
         S::R4_G4_B4_A4 | S::R5_G5_B5_A1 | S::R10_G10_B10_A2 => gl::RGBA,
         S::D24_S8 => gl::DEPTH_STENCIL,
@@ -80,12 +79,12 @@ fn format_to_gltype(format: NewFormat) -> Result<GLenum, ()> {
         C::Float => (gl::ZERO, gl::HALF_FLOAT, gl::FLOAT),
     };
     Ok(match format.0 {
-        S::R3_G3_B2 => gl::UNSIGNED_BYTE_3_3_2,
+        //S::R3_G3_B2 => gl::UNSIGNED_BYTE_3_3_2,
         S::R4_G4 => return Err(()),
         S::R4_G4_B4_A4 => gl::UNSIGNED_SHORT_4_4_4_4,
         S::R5_G5_B5_A1 => gl::UNSIGNED_SHORT_5_5_5_1,
         S::R5_G6_B5 => gl::UNSIGNED_SHORT_5_6_5,
-        S::R8 | S::R8_G8 | S::R8_G8_B8 | S::R8_G8_B8_A8 => fm8,
+        S::R8 | S::R8_G8 | S::R8_G8_B8_A8 => fm8,
         S::R10_G10_B10_A2 => gl::UNSIGNED_INT_10_10_10_2,
         S::R11_G11_B10 => return Err(()),
         S::R16 | S::R16_G16 | S::R16_G16_B16 | S::R16_G16_B16_A16 => fm16,
@@ -102,10 +101,7 @@ fn format_to_glfull(format: NewFormat) -> Result<GLenum, ()> {
     use gfx_core::format::ChannelType as C;
     let cty = format.1;
     Ok(match format.0 {
-        S::R3_G3_B2 => match cty {
-            C::Unorm => gl::R3_G3_B2,
-            _ => return Err(()),
-        },
+        //S::R3_G3_B2 => gl::R3_G3_B2,
         S::R4_G4 => return Err(()),
         S::R4_G4_B4_A4 => match cty {
             C::Unorm => gl::RGBA4,
@@ -134,14 +130,7 @@ fn format_to_glfull(format: NewFormat) -> Result<GLenum, ()> {
             C::Unorm => gl::RG8,
             _ => return Err(()),
         },
-        S::R8_G8_B8 => match cty {
-            C::Int => gl::RGB8I,
-            C::Inorm => gl::RGB8_SNORM,
-            C::Uint => gl::RGB8UI,
-            C::Unorm => gl::RGB8,
-            C::Srgb => gl::SRGB8,
-            _ => return Err(()),
-        },
+        //S::R8_G8_B8 |
         S::R8_G8_B8_A8 => match cty {
             C::Int => gl::RGBA8I,
             C::Inorm => gl::RGBA8_SNORM,

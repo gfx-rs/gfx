@@ -40,7 +40,8 @@ extern crate noise;
 use rand::Rng;
 use cgmath::{SquareMatrix, Matrix4, Point3, Vector3, EuclideanVector, deg};
 use cgmath::{Transform, AffineMatrix3};
-pub use gfx::format::{Depth, Srgb8};
+pub use gfx::format::Depth;
+pub use gfx_app::ColorFormat;
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{SharedVertex, IndexedPolygon};
 use time::precise_time_s;
@@ -132,7 +133,7 @@ gfx_vertex_struct!( BlitVertex {
 gfx_pipeline!( blit {
     vbuf: gfx::VertexBuffer<BlitVertex> = (),
     tex: gfx::TextureSampler<[f32; 4]> = "t_BlitTex",
-    out: gfx::RenderTarget<Srgb8> = "Target0",
+    out: gfx::RenderTarget<ColorFormat> = "Target0",
 });
 
 pub static BLIT_VERTEX_SRC: &'static [u8] = b"
@@ -162,7 +163,7 @@ pub static BLIT_FRAGMENT_SRC: &'static [u8] = b"
 ";
 
 gfx_vertex_struct!( CubeVertex {
-    pos: [i8; 3] = "a_Pos",
+    pos: [i8; 4] = "a_Pos",
 });
 
 gfx_constant_struct!( CubeLocals {
@@ -494,35 +495,35 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         let (light_vbuf, mut light_slice) = {
             let vertex_data = [
                 // top (0, 0, 1)
-                CubeVertex { pos: [-1, -1,  1] },
-                CubeVertex { pos: [ 1, -1,  1] },
-                CubeVertex { pos: [ 1,  1,  1] },
-                CubeVertex { pos: [-1,  1,  1] },
+                CubeVertex { pos: [-1, -1,  1, 1] },
+                CubeVertex { pos: [ 1, -1,  1, 1] },
+                CubeVertex { pos: [ 1,  1,  1, 1] },
+                CubeVertex { pos: [-1,  1,  1, 1] },
                 // bottom (0, 0, -1)
-                CubeVertex { pos: [-1,  1, -1] },
-                CubeVertex { pos: [ 1,  1, -1] },
-                CubeVertex { pos: [ 1, -1, -1] },
-                CubeVertex { pos: [-1, -1, -1] },
+                CubeVertex { pos: [-1,  1, -1, 1] },
+                CubeVertex { pos: [ 1,  1, -1, 1] },
+                CubeVertex { pos: [ 1, -1, -1, 1] },
+                CubeVertex { pos: [-1, -1, -1, 1] },
                 // right (1, 0, 0)
-                CubeVertex { pos: [ 1, -1, -1] },
-                CubeVertex { pos: [ 1,  1, -1] },
-                CubeVertex { pos: [ 1,  1,  1] },
-                CubeVertex { pos: [ 1, -1,  1] },
+                CubeVertex { pos: [ 1, -1, -1, 1] },
+                CubeVertex { pos: [ 1,  1, -1, 1] },
+                CubeVertex { pos: [ 1,  1,  1, 1] },
+                CubeVertex { pos: [ 1, -1,  1, 1] },
                 // left (-1, 0, 0)
-                CubeVertex { pos: [-1, -1,  1] },
-                CubeVertex { pos: [-1,  1,  1] },
-                CubeVertex { pos: [-1,  1, -1] },
-                CubeVertex { pos: [-1, -1, -1] },
+                CubeVertex { pos: [-1, -1,  1, 1] },
+                CubeVertex { pos: [-1,  1,  1, 1] },
+                CubeVertex { pos: [-1,  1, -1, 1] },
+                CubeVertex { pos: [-1, -1, -1, 1] },
                 // front (0, 1, 0)
-                CubeVertex { pos: [ 1,  1, -1] },
-                CubeVertex { pos: [-1,  1, -1] },
-                CubeVertex { pos: [-1,  1,  1] },
-                CubeVertex { pos: [ 1,  1,  1] },
+                CubeVertex { pos: [ 1,  1, -1, 1] },
+                CubeVertex { pos: [-1,  1, -1, 1] },
+                CubeVertex { pos: [-1,  1,  1, 1] },
+                CubeVertex { pos: [ 1,  1,  1, 1] },
                 // back (0, -1, 0)
-                CubeVertex { pos: [ 1, -1,  1] },
-                CubeVertex { pos: [-1, -1,  1] },
-                CubeVertex { pos: [-1, -1, -1] },
-                CubeVertex { pos: [ 1, -1, -1] },
+                CubeVertex { pos: [ 1, -1,  1, 1] },
+                CubeVertex { pos: [-1, -1,  1, 1] },
+                CubeVertex { pos: [-1, -1, -1, 1] },
+                CubeVertex { pos: [ 1, -1, -1, 1] },
             ];
 
             let index_data: &[u16] = &[

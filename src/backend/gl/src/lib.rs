@@ -327,7 +327,6 @@ impl Device {
         let (count, gl_type) = match elem.format.0 {
             S::R8              => (1, fm8),
             S::R8_G8           => (2, fm8),
-            S::R8_G8_B8        => (3, fm8),
             S::R8_G8_B8_A8     => (4, fm8),
             S::R16             => (1, fm16),
             S::R16_G16         => (1, fm16),

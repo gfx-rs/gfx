@@ -23,7 +23,7 @@ extern crate cgmath;
 extern crate image;
 
 use std::io::Cursor;
-pub use gfx::format::{Srgb8, Depth, Rgba8};
+pub use gfx::format::{Srgba8, Depth, Rgba8};
 use gfx::tex::{CubeFace, Kind, ImageInfoCommon};
 
 use cgmath::{AffineMatrix3, SquareMatrix, Matrix4, Transform, Vector3, Point3};
@@ -45,7 +45,7 @@ gfx_pipeline!( pipe {
     cubemap: gfx::TextureSampler<[f32; 4]> = "t_Cubemap",
     inv_proj: gfx::Global<[[f32; 4]; 4]> = "u_Proj",
     view: gfx::Global<[[f32; 4]; 4]> = "u_WorldToCamera",
-    out: gfx::RenderTarget<Srgb8> = "o_Color",
+    out: gfx::RenderTarget<Srgba8> = "o_Color",
 });
 
 struct CubemapData<'a> {
@@ -121,7 +121,7 @@ pub fn main() {
             .with_dimensions(800, 600)
             .with_gl(glutin::GL_CORE);
     let (window, mut device, mut factory, main_color, _) =
-        gfx_window_glutin::init::<Srgb8, Depth>(builder);
+        gfx_window_glutin::init::<Srgba8, Depth>(builder);
     let (w, h) = window.get_inner_size().unwrap();
 
     let mut encoder = factory.create_encoder();
@@ -191,7 +191,7 @@ pub fn main() {
         }
 
         encoder.reset();
-        encoder.clear(&data.out, [0.3, 0.3, 0.3]);
+        encoder.clear(&data.out, [0.3, 0.3, 0.3, 1.0]);
 
         encoder.draw(&slice, &pso, &data);
 

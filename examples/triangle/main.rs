@@ -24,7 +24,7 @@ gfx_vertex_struct!( Vertex {
 
 gfx_pipeline!(pipe {
     vbuf: gfx::VertexBuffer<Vertex> = (),
-    out: gfx::RenderTarget<gfx::format::Srgb8> = "Target0",
+    out: gfx::RenderTarget<gfx::format::Srgba8> = "Target0",
 });
 
 struct App<R: gfx::Resources> {
@@ -73,7 +73,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
     }
 
     fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
-        encoder.clear(&self.data.out, [0.1, 0.2, 0.3]);
+        encoder.clear(&self.data.out, [0.1, 0.2, 0.3, 1.0]);
         encoder.draw(&self.slice, &self.pso, &self.data);
     }
 }
