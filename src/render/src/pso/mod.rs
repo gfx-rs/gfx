@@ -42,6 +42,7 @@ pub use gfx_core::pso::{Descriptor};
 /// It doesn't have any typing information, since PSO knows what
 /// format and layout to expect from each resource.
 #[allow(missing_docs)]
+#[derive(Debug)]
 pub struct RawDataSet<R: d::Resources>{
     pub vertex_buffers: d::pso::VertexBufferSet<R>,
     pub constant_buffers: d::pso::ConstantBufferSet<R>,

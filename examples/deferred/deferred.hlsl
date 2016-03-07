@@ -92,6 +92,11 @@ struct LightVarying {
 	float3 light_pos: POSITION;
 };
 
+Texture2D<float4> t_Position;
+Texture2D<float4> t_Normal;
+Texture2D<float4> t_Diffuse;
+SamplerState t_Position_;
+
 LightVarying LightVs(int3 pos: a_Pos, uint inst_id: SV_InstanceID) {
 	float3 lpos = offs[inst_id].xyz;
 	LightVarying output = {
@@ -102,7 +107,24 @@ LightVarying LightVs(int3 pos: a_Pos, uint inst_id: SV_InstanceID) {
 }
 
 float4 LightPs(LightVarying In): SV_Target {
-	return float4(1.0,0.0,0.0,1.0); //TODO
+	float2 tc = float2(0, 1) + float2(1, -1) * In.pos.xy / FrameRes;
+	float3 pos = t_Position.Sample(t_Position_, tc).xyz;
+	float3 normal = t_Normal.Sample(t_Position_, tc).xyz;
+	float3 diffuse = t_Diffuse.Sample(t_Position_, tc).xyz;
+
+	float3 light    = In.light_pos;
+	float3 to_light = normalize(light - pos);
+	float3 to_cam   = normalize(CamPos - pos);
+
+	float3 n = normalize(normal);
+	float s = pow(max(0.0, dot(to_cam, reflect(-to_light, n))), 20.0);
+	float d = max(0.0, dot(n, to_light));
+
+	float dist_sq = dot(light - pos, light - pos);
+	float scale = max(0.0, 1.0-dist_sq * RadiusM2);
+
+	float3 res_color = d * diffuse + s;
+	return float4(scale*res_color, 1.0);
 }
 
 // Emitter program

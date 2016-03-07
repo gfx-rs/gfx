@@ -205,16 +205,17 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
         self.command_buffer.bind_pipeline_state(pso.clone());
         let raw_data = user_data.bake(pipeline.get_meta(), &mut self.handles);
         self.command_buffer.bind_vertex_buffers(raw_data.vertex_buffers);
+        self.command_buffer.bind_pixel_targets(raw_data.pixel_targets);
+        self.command_buffer.set_ref_values(raw_data.ref_values);
+        self.command_buffer.set_scissor(raw_data.scissor);
         self.command_buffer.bind_constant_buffers(raw_data.constant_buffers);
         for &(location, value) in &raw_data.global_constants {
             self.command_buffer.bind_global_constant(location, value);
         }
-        self.command_buffer.bind_resource_views(raw_data.resource_views);
         self.command_buffer.bind_unordered_views(raw_data.unordered_views);
+        //Note: it's important to bind RTV, DSV, and UAV before SRV
+        self.command_buffer.bind_resource_views(raw_data.resource_views);
         self.command_buffer.bind_samplers(raw_data.samplers);
-        self.command_buffer.bind_pixel_targets(raw_data.pixel_targets);
-        self.command_buffer.set_ref_values(raw_data.ref_values);
-        self.command_buffer.set_scissor(raw_data.scissor);
         self.draw_slice(slice, slice.instances);
     }
 }

@@ -72,6 +72,7 @@ pub struct Factory {
     share: Arc<Share>,
     frame_handles: h::Manager<R>,
     vs_cache: Map<u64, Vec<u8>>,
+    use_texture_format_hint: bool,
 }
 
 impl Clone for Factory {
@@ -95,6 +96,7 @@ impl Factory {
             share: share,
             frame_handles: h::Manager::new(),
             vs_cache: Map::new(),
+            use_texture_format_hint: false,
         }
     }
 
@@ -117,6 +119,7 @@ impl Factory {
                 (D3D11_BIND_CONSTANT_BUFFER, (info.size + 0xF) & !0xF),
         };
 
+        assert!(size >= info.size);
         let (usage, cpu) = map_usage(info.usage);
         let bind = map_bind(info.bind) | subind;
         if info.bind.contains(f::RENDER_TARGET) | info.bind.contains(f::DEPTH_STENCIL) {
@@ -255,30 +258,37 @@ impl Factory {
     }
 
     fn create_texture_internal(&mut self, desc: core::tex::Descriptor,
-                               init_opt: Option<(&[u8], core::format::ChannelType, bool)>)
+                               hint: Option<core::format::ChannelType>,
+                               init_opt: Option<(&[u8], bool)>)
                                -> Result<h::RawTexture<R>, core::tex::Error>
     {
         use gfx_core::tex::{AaMode, Error, Kind};
-        use data::{map_bind, map_usage, map_surface};
+        use data::{map_bind, map_usage, map_surface, map_format};
 
         let (usage, cpu_access) = map_usage(desc.usage);
         let tparam = TextureParam {
             levels: desc.levels as winapi::UINT,
-            format: match map_surface(desc.format) {
-                Some(f) => f,
-                None => return Err(Error::Format(desc.format, None))
+            format: match (self.use_texture_format_hint, hint) {
+                (true, Some(channel)) => match map_format(core::format::Format(desc.format, channel), true) {
+                    Some(f) => f,
+                    None => return Err(Error::Format(desc.format, Some(channel)))
+                },
+                _ => match map_surface(desc.format) {
+                    Some(f) => f,
+                    None => return Err(Error::Format(desc.format, None))
+                },
             },
             bytes_per_texel: (desc.format.get_total_bits() >> 3) as winapi::UINT,
             bind: map_bind(desc.bind),
             usage: usage,
             cpu_access: cpu_access,
             init: match init_opt {
-                Some((data, _, _)) => data.as_ptr() as *const c_void,
+                Some((data, _)) => data.as_ptr() as *const c_void,
                 None => ptr::null(),
             },
         };
         let misc = match init_opt {
-            Some((_, _, true)) => winapi::D3D11_RESOURCE_MISC_GENERATE_MIPS,
+            Some((_, true)) => winapi::D3D11_RESOURCE_MISC_GENERATE_MIPS,
             _ => winapi::D3D11_RESOURCE_MISC_FLAG(0),
         };
         let texture_result = match desc.kind {
@@ -526,14 +536,14 @@ impl core::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_pso(pso, program))
     }
 
-    fn create_texture_raw(&mut self, desc: core::tex::Descriptor, _hint: Option<core::format::ChannelType>)
+    fn create_texture_raw(&mut self, desc: core::tex::Descriptor, hint: Option<core::format::ChannelType>)
                           -> Result<h::RawTexture<R>, core::tex::Error> {
-        self.create_texture_internal(desc, None)
+        self.create_texture_internal(desc, hint, None)
     }
 
     fn create_texture_with_data(&mut self, desc: core::tex::Descriptor, channel: core::format::ChannelType,
                                 data: &[u8], mipmap: bool) -> Result<core::handle::RawTexture<R>, core::tex::Error> {
-        self.create_texture_internal(desc, Some((data, channel, mipmap)))
+        self.create_texture_internal(desc, Some(channel), Some((data, mipmap)))
     }
 
     fn view_buffer_as_shader_resource_raw(&mut self, _hbuf: &h::RawBuffer<R>)

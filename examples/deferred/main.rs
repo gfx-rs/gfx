@@ -182,9 +182,9 @@ gfx_pipeline!( light {
     locals_vs: gfx::ConstantBuffer<CubeLocals> = "CubeLocals",
     locals_ps: gfx::ConstantBuffer<LightLocals> = "LightLocals",
     light_pos_buf: gfx::ConstantBuffer<LightInfo> = "u_LightPosBlock",
-    tex_pos: gfx::TextureSampler<[f32; 4]> = "u_TexPos",
-    tex_normal: gfx::TextureSampler<[f32; 4]> = "u_TexNormal",
-    tex_diffuse: gfx::TextureSampler<[f32; 4]> = "u_TexDiffuse",
+    tex_pos: gfx::TextureSampler<[f32; 4]> = "t_Position",
+    tex_normal: gfx::TextureSampler<[f32; 4]> = "t_Normal",
+    tex_diffuse: gfx::TextureSampler<[f32; 4]> = "t_Diffuse",
     out_color: gfx::BlendTarget<GFormat> =
         ("Target0", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
     out_depth: gfx::DepthTarget<Depth> =
@@ -224,17 +224,17 @@ pub static LIGHT_FRAGMENT_SRC: &'static [u8] = b"
         vec3 u_CameraPos;
         vec2 u_FrameRes;
     };
-    uniform sampler2D u_TexPos;
-    uniform sampler2D u_TexNormal;
-    uniform sampler2D u_TexDiffuse;
+    uniform sampler2D t_Position;
+    uniform sampler2D t_Normal;
+    uniform sampler2D t_Diffuse;
     in vec3 v_LightPos;
     out vec4 o_Color;
 
     void main() {
         vec2 texCoord = gl_FragCoord.xy / u_FrameRes;
-        vec3 pos     = texture(u_TexPos,     texCoord).xyz;
-        vec3 normal  = texture(u_TexNormal,  texCoord).xyz;
-        vec3 diffuse = texture(u_TexDiffuse, texCoord).xyz;
+        vec3 pos     = texture(t_Position,     texCoord).xyz;
+        vec3 normal  = texture(t_Normal,  texCoord).xyz;
+        vec3 diffuse = texture(t_Diffuse, texCoord).xyz;
 
         vec3 light    = v_LightPos;
         vec3 to_light = normalize(light - pos);
@@ -247,7 +247,7 @@ pub static LIGHT_FRAGMENT_SRC: &'static [u8] = b"
         float dist_sq = dot(light - pos, light - pos);
         float scale = max(0.0, 1.0-dist_sq * u_RadiusM2);
 
-        vec3 res_color = d*vec3(diffuse) + vec3(s);
+        vec3 res_color = d * diffuse + vec3(s);
 
         o_Color = vec4(scale*res_color, 1.0);
     }
@@ -646,14 +646,17 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             Point3::new(0.0, 0.0, 0.0),
             Vector3::unit_z(),
         );
+        let (width, height, _, _) = self.terrain.data.out_depth.get_dimensions();
+        let aspect = width as f32 / height as f32;
+        let proj = cgmath::perspective(deg(60.0f32), aspect, 5.0, 100.0);
+
         let terrain_locals = TerrainLocals {
             model: Matrix4::identity().into(),
             view: view.mat.into(),
-            proj: Matrix4::identity().into(),
+            proj: proj.into(),
         };
         encoder.update_buffer(&self.terrain.data.locals, &[terrain_locals], 0).unwrap();
 
-        let (width, height, _, _) = self.terrain.data.out_depth.get_dimensions();
         let light_locals = LightLocals {
             radius_m2: 1.0 / (LIGHT_RADIUS * LIGHT_RADIUS),
             cam_pos: cam_pos.into(),
@@ -661,8 +664,6 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         };
         encoder.update_buffer(&self.light.data.locals_ps, &[light_locals], 0).unwrap();
 
-        let aspect = width as f32 / height as f32;
-        let proj = cgmath::perspective(deg(60.0f32), aspect, 5.0, 100.0);
         let mut cube_locals = [CubeLocals {
             transform: (proj * view.mat).into(),
             radius: LIGHT_RADIUS,
