@@ -198,12 +198,10 @@ macro_rules! gfx_pipeline_inner {
 
         impl<R: $crate::Resources> $crate::pso::PipelineData<R> for Data<R> {
             type Meta = Meta;
-            fn bake(&self, meta: &Self::Meta, man: &mut $crate::handle::Manager<R>) -> RawDataSet<R> {
-                let mut out = RawDataSet::new();
+            fn bake_to(&self, out: &mut RawDataSet<R>, meta: &Self::Meta, man: &mut $crate::handle::Manager<R>) {
                 $(
-                    meta.$field.bind_to(&mut out, &self.$field, man);
+                    meta.$field.bind_to(out, &self.$field, man);
                 )*
-                out
             }
         }
 

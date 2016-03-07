@@ -70,6 +70,18 @@ impl<R: d::Resources> RawDataSet<R> {
             scissor: d::target::Rect{x:0, y:0, w:1, h:1},
         }
     }
+    /// Clear all contained data.
+    pub fn clear(&mut self) {
+        self.vertex_buffers = d::pso::VertexBufferSet::new();
+        self.constant_buffers.clear();
+        self.global_constants.clear();
+        self.resource_views = d::pso::ResourceViewSet::new();
+        self.unordered_views = d::pso::UnorderedViewSet::new();
+        self.samplers = d::pso::SamplerSet::new();
+        self.pixel_targets = d::pso::PixelTargetSet::new();
+        self.ref_values = Default::default();
+        self.scissor = d::target::Rect{x:0, y:0, w:1, h:1};
+    }
 }
 
 /// Failure to initilize the link between the shader and the data.
@@ -108,8 +120,7 @@ pub trait PipelineData<R: d::Resources> {
     type Meta;
     /// Dump all the contained data into the raw data set,
     /// given the mapping ("meta"), and a handle manager.
-    fn bake(&self, meta: &Self::Meta, &mut d::handle::Manager<R>)
-              -> RawDataSet<R>;
+    fn bake_to(&self, &mut RawDataSet<R>, meta: &Self::Meta, &mut d::handle::Manager<R>);
 }
 
 /// Strongly-typed compiled pipeline state.

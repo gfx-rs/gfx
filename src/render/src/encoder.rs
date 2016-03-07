@@ -45,6 +45,7 @@ pub enum UpdateError<T> {
 pub struct Encoder<R: Resources, C: draw::CommandBuffer<R>> {
     command_buffer: C,
     data_buffer: draw::DataBuffer,
+    raw_pso_data: pso::RawDataSet<R>,
     handles: handle::Manager<R>,
 }
 
@@ -54,6 +55,7 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
         Encoder {
             command_buffer: cb,
             data_buffer: draw::DataBuffer::new(),
+            raw_pso_data: pso::RawDataSet::new(),
             handles: handle::Manager::new(),
         }
     }
@@ -76,6 +78,7 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
         Encoder {
             command_buffer: self.command_buffer.clone_empty(),
             data_buffer: draw::DataBuffer::new(),
+            raw_pso_data: pso::RawDataSet::new(),
             handles: handle::Manager::new(),
         }
     }
@@ -204,19 +207,20 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
         let (pso, _) = self.handles.ref_pso(pipeline.get_handle());
         self.command_buffer.bind_pipeline_state(pso.clone());
         //TODO: make `raw_data` a member to this struct, to re-use the heap allocation
-        let raw_data = user_data.bake(pipeline.get_meta(), &mut self.handles);
-        self.command_buffer.bind_vertex_buffers(raw_data.vertex_buffers);
-        self.command_buffer.bind_pixel_targets(raw_data.pixel_targets);
-        self.command_buffer.set_ref_values(raw_data.ref_values);
-        self.command_buffer.set_scissor(raw_data.scissor);
-        self.command_buffer.bind_constant_buffers(&raw_data.constant_buffers);
-        for &(location, value) in &raw_data.global_constants {
+        self.raw_pso_data.clear();
+        user_data.bake_to(&mut self.raw_pso_data, pipeline.get_meta(), &mut self.handles);
+        self.command_buffer.bind_vertex_buffers(self.raw_pso_data.vertex_buffers.clone());
+        self.command_buffer.bind_pixel_targets(self.raw_pso_data.pixel_targets.clone());
+        self.command_buffer.set_ref_values(self.raw_pso_data.ref_values);
+        self.command_buffer.set_scissor(self.raw_pso_data.scissor);
+        self.command_buffer.bind_constant_buffers(&self.raw_pso_data.constant_buffers);
+        for &(location, value) in &self.raw_pso_data.global_constants {
             self.command_buffer.bind_global_constant(location, value);
         }
-        self.command_buffer.bind_unordered_views(raw_data.unordered_views);
+        self.command_buffer.bind_unordered_views(self.raw_pso_data.unordered_views.clone());
         //Note: it's important to bind RTV, DSV, and UAV before SRV
-        self.command_buffer.bind_resource_views(raw_data.resource_views);
-        self.command_buffer.bind_samplers(raw_data.samplers);
+        self.command_buffer.bind_resource_views(self.raw_pso_data.resource_views.clone());
+        self.command_buffer.bind_samplers(self.raw_pso_data.samplers.clone());
         self.draw_slice(slice, slice.instances);
     }
 }
