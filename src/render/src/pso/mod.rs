@@ -45,7 +45,7 @@ pub use gfx_core::pso::{Descriptor};
 #[derive(Debug)]
 pub struct RawDataSet<R: d::Resources>{
     pub vertex_buffers: d::pso::VertexBufferSet<R>,
-    pub constant_buffers: d::pso::ConstantBufferSet<R>,
+    pub constant_buffers: Vec<d::pso::ConstantBufferParam<R>>,
     pub global_constants: Vec<(d::shade::Location, d::shade::UniformValue)>,
     pub resource_views: d::pso::ResourceViewSet<R>,
     pub unordered_views: d::pso::UnorderedViewSet<R>,
@@ -60,7 +60,7 @@ impl<R: d::Resources> RawDataSet<R> {
     pub fn new() -> RawDataSet<R> {
         RawDataSet {
             vertex_buffers: d::pso::VertexBufferSet::new(),
-            constant_buffers: d::pso::ConstantBufferSet::new(),
+            constant_buffers: Vec::new(),
             global_constants: Vec::new(),
             resource_views: d::pso::ResourceViewSet::new(),
             unordered_views: d::pso::UnorderedViewSet::new(),

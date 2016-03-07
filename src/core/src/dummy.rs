@@ -72,7 +72,7 @@ impl draw::CommandBuffer<DummyResources> for DummyCommandBuffer {
     fn reset(&mut self) {}
     fn bind_pipeline_state(&mut self, _: ()) {}
     fn bind_vertex_buffers(&mut self, _: pso::VertexBufferSet<DummyResources>) {}
-    fn bind_constant_buffers(&mut self, _: pso::ConstantBufferSet<DummyResources>) {}
+    fn bind_constant_buffers(&mut self, _: &[pso::ConstantBufferParam<DummyResources>]) {}
     fn bind_global_constant(&mut self, _: shade::Location, _: shade::UniformValue) {}
     fn bind_resource_views(&mut self, _: pso::ResourceViewSet<DummyResources>) {}
     fn bind_unordered_views(&mut self, _: pso::UnorderedViewSet<DummyResources>) {}

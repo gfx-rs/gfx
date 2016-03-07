@@ -119,7 +119,7 @@ pub trait CommandBuffer<R: Resources> {
     /// Bind a complete set of vertex buffers
     fn bind_vertex_buffers(&mut self, pso::VertexBufferSet<R>);
     /// Bind a complete set of constant buffers
-    fn bind_constant_buffers(&mut self, pso::ConstantBufferSet<R>);
+    fn bind_constant_buffers(&mut self, &[pso::ConstantBufferParam<R>]);
     /// Bind a global constant
     fn bind_global_constant(&mut self, shade::Location, shade::UniformValue);
     /// Bind a complete set of shader resource views

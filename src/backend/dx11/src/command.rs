@@ -144,18 +144,15 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.push(Command::BindVertexBuffers(buffers, strides, offsets));
     }
 
-    fn bind_constant_buffers(&mut self, cbs: pso::ConstantBufferSet<Resources>) {
+    fn bind_constant_buffers(&mut self, cbs: &[pso::ConstantBufferParam<Resources>]) {
         for &stage in shade::STAGES.iter() {
             let mut buffers = [native::Buffer(ptr::null_mut()); MAX_CONSTANT_BUFFERS];
             let mask = stage.into();
             let mut count = 0;
-            for i in 0 .. MAX_CONSTANT_BUFFERS {
-                match cbs.0[i] {
-                    Some((buffer, usage)) if usage.contains(mask) => {
-                        buffers[i] = buffer;
-                        count += 1;
-                    },
-                    _ => ()
+            for cbuf in cbs.iter() {
+                if cbuf.1.contains(mask) {
+                    buffers[cbuf.2 as usize] = cbuf.0;
+                    count += 1;
                 }
             }
             if count != 0 {

@@ -46,7 +46,7 @@ unsafe impl Send for RawOffset {}
 pub enum Command {
     // states
     BindProgram(Program),
-    BindConstantBuffers(c::pso::ConstantBufferSet<Resources>),
+    BindConstantBuffer(c::pso::ConstantBufferParam<Resources>),
     BindResourceViews(c::pso::ResourceViewSet<Resources>),
     BindUnorderedViews(c::pso::UnorderedViewSet<Resources>),
     BindSamplers(c::pso::SamplerSet<Resources>),
@@ -196,8 +196,10 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
         }
     }
 
-    fn bind_constant_buffers(&mut self, cbs: c::pso::ConstantBufferSet<Resources>) {
-        self.buf.push(Command::BindConstantBuffers(cbs));
+    fn bind_constant_buffers(&mut self, cbs: &[c::pso::ConstantBufferParam<Resources>]) {
+        for cbuf in cbs.iter() {
+            self.buf.push(Command::BindConstantBuffer(cbuf.clone()));
+        }
     }
 
     fn bind_global_constant(&mut self, loc: c::shade::Location,

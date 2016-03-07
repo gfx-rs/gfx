@@ -117,8 +117,8 @@ DataBind<R> for ConstantBuffer<T> {
     type Data = handle::Buffer<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
         if let Some((usage, slot)) = self.0 {
-            let value = Some((man.ref_buffer(data.raw()).clone(), usage));
-            out.constant_buffers.0[slot as usize] = value;
+            let buf = man.ref_buffer(data.raw()).clone();
+            out.constant_buffers.push(pso::ConstantBufferParam(buf, usage, slot));
         }
     }
 }

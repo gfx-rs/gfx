@@ -429,15 +429,8 @@ impl Device {
                 let gl = &self.share.context;
                 unsafe { gl.UseProgram(program) };
             },
-            Command::BindConstantBuffers(cbs) => {
-                let gl = &self.share.context;
-                for i in 0 .. d::MAX_CONSTANT_BUFFERS {
-                    if let Some((buffer, _usage)) = cbs.0[i] {
-                        unsafe {
-                            gl.BindBufferBase(gl::UNIFORM_BUFFER, i as gl::types::GLuint, buffer);
-                        }
-                    }
-                }
+            Command::BindConstantBuffer(d::pso::ConstantBufferParam(buffer, _, slot)) => unsafe {
+                self.share.context.BindBufferBase(gl::UNIFORM_BUFFER, slot as gl::types::GLuint, buffer);
             },
             Command::BindResourceViews(srvs) => {
                 let gl = &self.share.context;

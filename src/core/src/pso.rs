@@ -14,9 +14,9 @@
 
 //! Pipeline State Objects
 
-use {MAX_COLOR_TARGETS, MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
+use {MAX_COLOR_TARGETS, MAX_VERTEX_ATTRIBUTES,
      MAX_RESOURCE_VIEWS, MAX_UNORDERED_VIEWS, MAX_SAMPLERS};
-use {ColorSlot, Primitive, Resources};
+use {ConstantBufferSlot, ColorSlot, Primitive, Resources};
 use {format, state as s, tex};
 use shade::Usage;
 
@@ -166,19 +166,9 @@ impl<R: Resources> VertexBufferSet<R> {
     }
 }
 
-/// A complete set of constant buffers to be used for the constants binding in PSO.
+/// A constant buffer run-time parameter for the PSO.
 #[derive(Copy, Clone, Debug)]
-pub struct ConstantBufferSet<R: Resources>(
-    /// Array of buffer handles
-    pub [Option<(R::Buffer, Usage)>; MAX_CONSTANT_BUFFERS]
-);
-
-impl<R: Resources> ConstantBufferSet<R> {
-    /// Create an empty set
-    pub fn new() -> ConstantBufferSet<R> {
-        ConstantBufferSet([None; MAX_CONSTANT_BUFFERS])
-    }
-}
+pub struct ConstantBufferParam<R: Resources>(pub R::Buffer, pub Usage, pub ConstantBufferSlot);
 
 /// A complete set of shader resource views to be used in PSO.
 #[derive(Copy, Clone, Debug)]
