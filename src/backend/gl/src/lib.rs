@@ -211,27 +211,10 @@ pub struct Share {
     handles: RefCell<handle::Manager<Resources>>,
 }
 
-/// Temporary data stored between different gfx calls that
-/// can not be separated on the GL backend.
-struct Temp {
-    resource_views: [Option<(ResourceView, d::shade::Usage)>; d::MAX_RESOURCE_VIEWS],
-    color: s::Color,
-}
-
-impl Temp {
-    fn new() -> Temp {
-        Temp {
-            resource_views: [None; d::MAX_RESOURCE_VIEWS],
-            color: command::COLOR_DEFAULT,
-        }
-    }
-}
-
 /// An OpenGL device with GLSL shaders.
 pub struct Device {
     info: Info,
     share: Rc<Share>,
-    temp: Temp,
     _vao: ArrayBuffer,
     frame_handles: handle::Manager<Resources>,
     max_resource_count: Option<usize>,
@@ -278,7 +261,6 @@ impl Device {
                 private_caps: private,
                 handles: RefCell::new(handles),
             }),
-            temp: Temp::new(),
             _vao: vao,
             frame_handles: handle::Manager::new(),
             max_resource_count: Some(999999),
@@ -425,47 +407,28 @@ impl Device {
                     }
                 }
             },
-            Command::BindProgram(program) => {
-                let gl = &self.share.context;
-                unsafe { gl.UseProgram(program) };
+            Command::BindProgram(program) => unsafe {
+                self.share.context.UseProgram(program);
             },
             Command::BindConstantBuffer(d::pso::ConstantBufferParam(buffer, _, slot)) => unsafe {
                 self.share.context.BindBufferBase(gl::UNIFORM_BUFFER, slot as gl::types::GLuint, buffer);
             },
-            Command::BindResourceViews(srvs) => {
-                let gl = &self.share.context;
-                self.temp.resource_views = srvs.0;
-                for i in 0 .. d::MAX_RESOURCE_VIEWS {
-                    if let Some((view, _usage)) = srvs.0[i] {
-                        unsafe {
-                            gl.ActiveTexture(gl::TEXTURE0 + i as gl::types::GLenum);
-                            gl.BindTexture(view.bind, view.object);
-                        }
-                    }
-                }
+            Command::BindResourceView(d::pso::ResourceViewParam(view, _, slot)) => unsafe {
+                self.share.context.ActiveTexture(gl::TEXTURE0 + slot as gl::types::GLenum);
+                self.share.context.BindTexture(view.bind, view.object);
             },
-            Command::BindUnorderedViews(uavs) => {
-                for i in 0 .. d::MAX_UNORDERED_VIEWS {
-                    if let Some(_view) = uavs.0[i] {
-                        unimplemented!()
-                    }
-                }
-            },
-            Command::BindSamplers(ss) => {
+            Command::BindUnorderedView(_uav) => unimplemented!(),
+            Command::BindSampler(d::pso::SamplerParam(sampler, _, slot), bind_opt) => {
                 let gl = &self.share.context;
-                for i in 0 .. d::MAX_SAMPLERS {
-                    if let Some((s, _usage)) = ss.0[i] {
-                        if self.share.private_caps.sampler_objects_supported {
-                            unsafe { gl.BindSampler(i as gl::types::GLenum, s.object) };
-                        } else {
-                            assert!(d::MAX_SAMPLERS <= d::MAX_RESOURCE_VIEWS);
-                            debug_assert_eq!(s.object, 0);
-                            if let Some((ref view, _)) = self.temp.resource_views[i] {
-                                tex::bind_sampler(gl, view.bind, &s.info);
-                            }else {
-                                error!("Trying to bind a sampler to slot {}, when sampler objects are not supported, and no texture is bound there", i);
-                            }
-                        }
+                if self.share.private_caps.sampler_objects_supported {
+                    unsafe { gl.BindSampler(slot as gl::types::GLuint, sampler.object) };
+                } else {
+                    assert!(d::MAX_SAMPLERS <= d::MAX_RESOURCE_VIEWS);
+                    debug_assert_eq!(sampler.object, 0);
+                    if let Some(bind) = bind_opt {
+                        tex::bind_sampler(gl, bind, &sampler.info);
+                    }else {
+                        error!("Trying to bind a sampler to slot {}, when sampler objects are not supported, and no texture is bound there", slot);
                     }
                 }
             },
@@ -525,9 +488,9 @@ impl Device {
                 if self.share.capabilities.separate_blending_slots_supported {
                     state::bind_blend_slot(&self.share.context, slot, color);
                 }else if slot == 0 {
-                    self.temp.color = color;
+                    //self.temp.color = color; //TODO
                     state::bind_blend(&self.share.context, color);
-                }else if color != self.temp.color {
+                }else if false {
                     error!("Separate blending slots are not supported");
                 }
             },

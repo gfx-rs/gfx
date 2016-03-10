@@ -123,11 +123,11 @@ pub trait CommandBuffer<R: Resources> {
     /// Bind a global constant
     fn bind_global_constant(&mut self, shade::Location, shade::UniformValue);
     /// Bind a complete set of shader resource views
-    fn bind_resource_views(&mut self, pso::ResourceViewSet<R>);
+    fn bind_resource_views(&mut self, &[pso::ResourceViewParam<R>]);
     /// Bind a complete set of unordered access views
-    fn bind_unordered_views(&mut self, pso::UnorderedViewSet<R>);
+    fn bind_unordered_views(&mut self, &[pso::UnorderedViewParam<R>]);
     /// Bind a complete set of samplers
-    fn bind_samplers(&mut self, pso::SamplerSet<R>);
+    fn bind_samplers(&mut self, &[pso::SamplerParam<R>]);
     /// Bind a complete set of pixel targets, including multiple
     /// colors views and an optional depth/stencil view.
     fn bind_pixel_targets(&mut self, pso::PixelTargetSet<R>);

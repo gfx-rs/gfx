@@ -47,9 +47,9 @@ pub enum Command {
     // states
     BindProgram(Program),
     BindConstantBuffer(c::pso::ConstantBufferParam<Resources>),
-    BindResourceViews(c::pso::ResourceViewSet<Resources>),
-    BindUnorderedViews(c::pso::UnorderedViewSet<Resources>),
-    BindSamplers(c::pso::SamplerSet<Resources>),
+    BindResourceView(c::pso::ResourceViewParam<Resources>),
+    BindUnorderedView(c::pso::UnorderedViewParam<Resources>),
+    BindSampler(c::pso::SamplerParam<Resources>, Option<gl::types::GLenum>),
     BindPixelTargets(c::pso::PixelTargetSet<Resources>),
     BindAttribute(c::AttributeSlot, Buffer, c::pso::AttributeDesc),
     BindIndex(Buffer),
@@ -106,7 +106,7 @@ struct Cache {
     primitive: gl::types::GLenum,
     index_type: c::IndexType,
     attributes: [Option<c::pso::AttributeDesc>; c::MAX_VERTEX_ATTRIBUTES],
-    //resource_views: [Option<(Texture, BindAnchor)>; c::MAX_RESOURCE_VIEWS],
+    resource_binds: [Option<gl::types::GLenum>; c::MAX_RESOURCE_VIEWS],
     scissor: bool,
     stencil: Option<s::Stencil>,
     //blend: Option<s::Blend>,
@@ -120,7 +120,7 @@ impl Cache {
             primitive: 0,
             index_type: c::IndexType::U8,
             attributes: [None; c::MAX_VERTEX_ATTRIBUTES],
-            //resource_views: [None; c::MAX_RESOURCE_VIEWS],
+            resource_binds: [None; c::MAX_RESOURCE_VIEWS],
             scissor: false,
             stencil: None,
             cull_face: s::CullFace::Nothing,
@@ -197,8 +197,8 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
     }
 
     fn bind_constant_buffers(&mut self, cbs: &[c::pso::ConstantBufferParam<Resources>]) {
-        for cbuf in cbs.iter() {
-            self.buf.push(Command::BindConstantBuffer(cbuf.clone()));
+        for param in cbs.iter() {
+            self.buf.push(Command::BindConstantBuffer(param.clone()));
         }
     }
 
@@ -207,16 +207,27 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.push(Command::BindUniform(loc, value));
     }
 
-    fn bind_resource_views(&mut self, srvs: c::pso::ResourceViewSet<Resources>) {
-        self.buf.push(Command::BindResourceViews(srvs));
+    fn bind_resource_views(&mut self, srvs: &[c::pso::ResourceViewParam<Resources>]) {
+        for i in 0 .. c::MAX_RESOURCE_VIEWS {
+            self.cache.resource_binds[i] = None;
+        }
+        for param in srvs.iter() {
+            self.cache.resource_binds[param.2 as usize] = Some(param.0.bind);
+            self.buf.push(Command::BindResourceView(param.clone()));
+        }
     }
 
-    fn bind_unordered_views(&mut self, uavs: c::pso::UnorderedViewSet<Resources>) {
-        self.buf.push(Command::BindUnorderedViews(uavs));
+    fn bind_unordered_views(&mut self, uavs: &[c::pso::UnorderedViewParam<Resources>]) {
+        for param in uavs.iter() {
+            self.buf.push(Command::BindUnorderedView(param.clone()));
+        }
     }
 
-    fn bind_samplers(&mut self, ss: c::pso::SamplerSet<Resources>) {
-        self.buf.push(Command::BindSamplers(ss));
+    fn bind_samplers(&mut self, ss: &[c::pso::SamplerParam<Resources>]) {
+        for param in ss.iter() {
+            let bind = self.cache.resource_binds[param.2 as usize];
+            self.buf.push(Command::BindSampler(param.clone(), bind));
+        }
     }
 
     fn bind_pixel_targets(&mut self, pts: c::pso::PixelTargetSet<Resources>) {

@@ -14,9 +14,10 @@
 
 //! Pipeline State Objects
 
-use {MAX_COLOR_TARGETS, MAX_VERTEX_ATTRIBUTES,
-     MAX_RESOURCE_VIEWS, MAX_UNORDERED_VIEWS, MAX_SAMPLERS};
-use {ConstantBufferSlot, ColorSlot, Primitive, Resources};
+use {MAX_COLOR_TARGETS, MAX_VERTEX_ATTRIBUTES};
+use {ConstantBufferSlot, ColorSlot, ResourceViewSlot,
+     UnorderedViewSlot, SamplerSlot,
+     Primitive, Resources};
 use {format, state as s, tex};
 use shade::Usage;
 
@@ -166,51 +167,21 @@ impl<R: Resources> VertexBufferSet<R> {
     }
 }
 
-/// A constant buffer run-time parameter for the PSO.
+/// A constant buffer run-time parameter for PSO.
 #[derive(Copy, Clone, Debug)]
 pub struct ConstantBufferParam<R: Resources>(pub R::Buffer, pub Usage, pub ConstantBufferSlot);
 
-/// A complete set of shader resource views to be used in PSO.
+/// A shader resource view (SRV) run-time parameter for PSO.
 #[derive(Copy, Clone, Debug)]
-pub struct ResourceViewSet<R: Resources>(
-    /// Array of SRVs
-    pub [Option<(R::ShaderResourceView, Usage)>; MAX_RESOURCE_VIEWS],
-);
+pub struct ResourceViewParam<R: Resources>(pub R::ShaderResourceView, pub Usage, pub ResourceViewSlot);
 
-impl<R: Resources> ResourceViewSet<R> {
-    /// Create an empty set
-    pub fn new() -> ResourceViewSet<R> {
-        ResourceViewSet([None; MAX_RESOURCE_VIEWS])
-    }
-}
-
-/// A complete set of unordered access views to be used in PSO.
+/// An unordered access view (UAV) run-time parameter for PSO.
 #[derive(Copy, Clone, Debug)]
-pub struct UnorderedViewSet<R: Resources>(
-    /// Array of UAVs
-    pub [Option<R::UnorderedAccessView>; MAX_UNORDERED_VIEWS],
-);
+pub struct UnorderedViewParam<R: Resources>(pub R::UnorderedAccessView, pub Usage, pub UnorderedViewSlot);
 
-impl<R: Resources> UnorderedViewSet<R> {
-    /// Create an empty set
-    pub fn new() -> UnorderedViewSet<R> {
-        UnorderedViewSet([None; MAX_UNORDERED_VIEWS])
-    }
-}
-
-/// A complete set of samplers to be used for PSO.
+/// A sampler run-time parameter for PSO.
 #[derive(Copy, Clone, Debug)]
-pub struct SamplerSet<R: Resources>(
-    /// Array of samplers
-    pub [Option<(R::Sampler, Usage)>; MAX_SAMPLERS]
-);
-
-impl<R: Resources> SamplerSet<R> {
-    /// Create an empty set
-    pub fn new() -> SamplerSet<R> {
-        SamplerSet([None; MAX_SAMPLERS])
-    }
-}
+pub struct SamplerParam<R: Resources>(pub R::Sampler, pub Usage, pub SamplerSlot);
 
 /// A complete set of render targets to be used for pixel export in PSO.
 #[derive(Copy, Clone, Debug)]

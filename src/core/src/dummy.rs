@@ -74,9 +74,9 @@ impl draw::CommandBuffer<DummyResources> for DummyCommandBuffer {
     fn bind_vertex_buffers(&mut self, _: pso::VertexBufferSet<DummyResources>) {}
     fn bind_constant_buffers(&mut self, _: &[pso::ConstantBufferParam<DummyResources>]) {}
     fn bind_global_constant(&mut self, _: shade::Location, _: shade::UniformValue) {}
-    fn bind_resource_views(&mut self, _: pso::ResourceViewSet<DummyResources>) {}
-    fn bind_unordered_views(&mut self, _: pso::UnorderedViewSet<DummyResources>) {}
-    fn bind_samplers(&mut self, _: pso::SamplerSet<DummyResources>) {}
+    fn bind_resource_views(&mut self, _: &[pso::ResourceViewParam<DummyResources>]) {}
+    fn bind_unordered_views(&mut self, _: &[pso::UnorderedViewParam<DummyResources>]) {}
+    fn bind_samplers(&mut self, _: &[pso::SamplerParam<DummyResources>]) {}
     fn bind_pixel_targets(&mut self, _: pso::PixelTargetSet<DummyResources>) {}
     fn bind_index(&mut self, _: (), _: IndexType) {}
     fn set_scissor(&mut self, _: target::Rect) {}

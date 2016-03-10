@@ -336,6 +336,8 @@ pub struct UnorderedVar {
     pub name: String,
     /// Slot of this unordered variable.
     pub slot: UnorderedViewSlot,
+    /// What program stage this UAV is used in.
+    pub usage: Usage,
 }
 
 /// Sampler shader parameter.

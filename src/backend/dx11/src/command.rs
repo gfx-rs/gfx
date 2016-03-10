@@ -165,18 +165,15 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
         error!("Global constants are not supported");
     }
 
-    fn bind_resource_views(&mut self, rvs: pso::ResourceViewSet<Resources>) {
+    fn bind_resource_views(&mut self, rvs: &[pso::ResourceViewParam<Resources>]) {
         for &stage in shade::STAGES.iter() {
             let mut views = [native::Srv(ptr::null_mut()); MAX_RESOURCE_VIEWS];
             let mask = stage.into();
             let mut count = 0;
-            for i in 0 .. MAX_RESOURCE_VIEWS {
-                match rvs.0[i] {
-                    Some((view, usage)) if usage.contains(mask) => {
-                        views[i] = view;
-                        count += 1;
-                    },
-                    _ => ()
+            for view in rvs.iter() {
+                if view.1.contains(mask) {
+                    views[view.2 as usize] = view.0;
+                    count += 1;
                 }
             }
             if count != 0 {
@@ -185,17 +182,12 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
         }
     }
 
-    fn bind_unordered_views(&mut self, uvs: pso::UnorderedViewSet<Resources>) {
+    fn bind_unordered_views(&mut self, uvs: &[pso::UnorderedViewParam<Resources>]) {
         let mut views = [(); MAX_UNORDERED_VIEWS];
         let mut count = 0;
-        for i in 0 .. MAX_UNORDERED_VIEWS {
-            match uvs.0[i] {
-                Some(view) => {
-                    views[i] = view;
-                    count += 1;
-                },
-                _ => ()
-            }
+        for view in uvs.iter() {
+            views[view.2 as usize] = view.0;
+            count += 1;
         }
         if count != 0 {
             unimplemented!()
@@ -203,18 +195,15 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
         }
     }
 
-    fn bind_samplers(&mut self, ss: pso::SamplerSet<Resources>) {
+    fn bind_samplers(&mut self, ss: &[pso::SamplerParam<Resources>]) {
         for &stage in shade::STAGES.iter() {
             let mut samplers = [native::Sampler(ptr::null_mut()); MAX_SAMPLERS];
             let mask = stage.into();
             let mut count = 0;
-            for i in 0 .. MAX_SAMPLERS {
-                match ss.0[i] {
-                    Some((sampler, usage)) if usage.contains(mask) => {
-                        samplers[i] = sampler;
-                        count += 1;
-                    },
-                    _ => ()
+            for sm in ss.iter() {
+                if sm.1.contains(mask) {
+                    samplers[sm.2 as usize] = sm.0;
+                    count += 1;
                 }
             }
             if count != 0 {

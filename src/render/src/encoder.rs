@@ -217,10 +217,10 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
         for &(location, value) in &self.raw_pso_data.global_constants {
             self.command_buffer.bind_global_constant(location, value);
         }
-        self.command_buffer.bind_unordered_views(self.raw_pso_data.unordered_views.clone());
+        self.command_buffer.bind_unordered_views(&self.raw_pso_data.unordered_views);
         //Note: it's important to bind RTV, DSV, and UAV before SRV
-        self.command_buffer.bind_resource_views(self.raw_pso_data.resource_views.clone());
-        self.command_buffer.bind_samplers(self.raw_pso_data.samplers.clone());
+        self.command_buffer.bind_resource_views(&self.raw_pso_data.resource_views);
+        self.command_buffer.bind_samplers(&self.raw_pso_data.samplers);
         self.draw_slice(slice, slice.instances);
     }
 }

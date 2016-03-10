@@ -47,9 +47,9 @@ pub struct RawDataSet<R: d::Resources>{
     pub vertex_buffers: d::pso::VertexBufferSet<R>,
     pub constant_buffers: Vec<d::pso::ConstantBufferParam<R>>,
     pub global_constants: Vec<(d::shade::Location, d::shade::UniformValue)>,
-    pub resource_views: d::pso::ResourceViewSet<R>,
-    pub unordered_views: d::pso::UnorderedViewSet<R>,
-    pub samplers: d::pso::SamplerSet<R>,
+    pub resource_views: Vec<d::pso::ResourceViewParam<R>>,
+    pub unordered_views: Vec<d::pso::UnorderedViewParam<R>>,
+    pub samplers: Vec<d::pso::SamplerParam<R>>,
     pub pixel_targets: d::pso::PixelTargetSet<R>,
     pub ref_values: d::state::RefValues,
     pub scissor: d::target::Rect,
@@ -62,9 +62,9 @@ impl<R: d::Resources> RawDataSet<R> {
             vertex_buffers: d::pso::VertexBufferSet::new(),
             constant_buffers: Vec::new(),
             global_constants: Vec::new(),
-            resource_views: d::pso::ResourceViewSet::new(),
-            unordered_views: d::pso::UnorderedViewSet::new(),
-            samplers: d::pso::SamplerSet::new(),
+            resource_views: Vec::new(),
+            unordered_views: Vec::new(),
+            samplers: Vec::new(),
             pixel_targets: d::pso::PixelTargetSet::new(),
             ref_values: Default::default(),
             scissor: d::target::Rect{x:0, y:0, w:1, h:1},
@@ -75,9 +75,9 @@ impl<R: d::Resources> RawDataSet<R> {
         self.vertex_buffers = d::pso::VertexBufferSet::new();
         self.constant_buffers.clear();
         self.global_constants.clear();
-        self.resource_views = d::pso::ResourceViewSet::new();
-        self.unordered_views = d::pso::UnorderedViewSet::new();
-        self.samplers = d::pso::SamplerSet::new();
+        self.resource_views.clear();
+        self.unordered_views.clear();
+        self.samplers.clear();
         self.pixel_targets = d::pso::PixelTargetSet::new();
         self.ref_values = Default::default();
         self.scissor = d::target::Rect{x:0, y:0, w:1, h:1};
