@@ -223,7 +223,7 @@ macro_rules! gfx_pipeline_inner {
         }
 
         impl<R: $crate::Resources> Bundle<R> {
-            pub fn draw_to<C>(&self, encoder: &mut $crate::Encoder<R, C>) where
+            pub fn encode<C>(&self, encoder: &mut $crate::Encoder<R, C>) where
                 C: $crate::CommandBuffer<R> {
                 encoder.draw(&self.slice, &self.pso, &self.data);
             }

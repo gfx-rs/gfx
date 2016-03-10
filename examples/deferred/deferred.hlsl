@@ -48,23 +48,13 @@ TerrainOutput TerrainPs(TerrainVarying In) {
 // Blit program
 
 Texture2D<float4> t_BlitTex;
-SamplerState t_BlitTex_;
 
-struct BlitVarying {
-	float4 pos: SV_Position;
-	float2 tc: TEXCOORD;
-};
-
-BlitVarying BlitVs(int2 pos: a_Pos, int2 tc: a_TexCoord) {
-	BlitVarying output = {
-		float4(pos, 0.0, 1.0),
-		tc,
-	};
-	return output;
+float4 BlitVs(int2 pos: a_Pos): SV_Position {
+	return float4(pos, 0.0, 1.0);
 }
 
-float4 BlitPs(BlitVarying In): SV_Target {
-	return t_BlitTex.Sample(t_BlitTex_, In.tc);
+float4 BlitPs(float4 pos: SV_Position): SV_Target {
+	return t_BlitTex.Load(int3(pos.xy, 0));
 }
 
 // common parts
@@ -82,9 +72,7 @@ cbuffer u_LightPosBlock {
 // Light program
 
 cbuffer LightLocals {
-	float RadiusM2: u_RadiusM2;
-	float3 CamPos: u_CameraPos;
-	float2 FrameRes: u_FrameRes;
+	float4 CamPosAndRadius: u_CameraPosAndRadius;
 };
 
 struct LightVarying {
@@ -95,7 +83,6 @@ struct LightVarying {
 Texture2D<float4> t_Position;
 Texture2D<float4> t_Normal;
 Texture2D<float4> t_Diffuse;
-SamplerState t_Position_;
 
 LightVarying LightVs(int3 pos: a_Pos, uint inst_id: SV_InstanceID) {
 	float3 lpos = offs[inst_id].xyz;
@@ -107,21 +94,21 @@ LightVarying LightVs(int3 pos: a_Pos, uint inst_id: SV_InstanceID) {
 }
 
 float4 LightPs(LightVarying In): SV_Target {
-	float2 tc = float2(0, 1) + float2(1, -1) * In.pos.xy / FrameRes;
-	float3 pos = t_Position.Sample(t_Position_, tc).xyz;
-	float3 normal = t_Normal.Sample(t_Position_, tc).xyz;
-	float3 diffuse = t_Diffuse.Sample(t_Position_, tc).xyz;
+	int3 itc = int3(In.pos.xy, 0);
+	float3 pos = t_Position.Load(itc).xyz;
+	float3 normal = t_Normal.Load(itc).xyz;
+	float3 diffuse = t_Diffuse.Load(itc).xyz;
 
 	float3 light    = In.light_pos;
 	float3 to_light = normalize(light - pos);
-	float3 to_cam   = normalize(CamPos - pos);
+	float3 to_cam   = normalize(CamPosAndRadius.xyz - pos);
 
 	float3 n = normalize(normal);
 	float s = pow(max(0.0, dot(to_cam, reflect(-to_light, n))), 20.0);
 	float d = max(0.0, dot(n, to_light));
 
 	float dist_sq = dot(light - pos, light - pos);
-	float scale = max(0.0, 1.0-dist_sq * RadiusM2);
+	float scale = max(0.0, 1.0-dist_sq * CamPosAndRadius.w);
 
 	float3 res_color = d * diffuse + s;
 	return float4(scale*res_color, 1.0);

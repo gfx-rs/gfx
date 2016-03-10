@@ -75,6 +75,8 @@ gfx_constant_struct!( TerrainLocals {
 gfx_pipeline!( terrain {
     vbuf: gfx::VertexBuffer<TerrainVertex> = (),
     locals: gfx::ConstantBuffer<TerrainLocals> = "TerrainLocals",
+    //TODO: reconstruct the position from the depth instead of
+    // storing it in the GBuffer
     out_position: gfx::RenderTarget<GFormat> = "Target0",
     out_normal: gfx::RenderTarget<GFormat> = "Target1",
     out_color: gfx::RenderTarget<GFormat> = "Target2",
@@ -172,9 +174,7 @@ gfx_constant_struct!( CubeLocals {
 });
 
 gfx_constant_struct!( LightLocals {
-    radius_m2: f32 = "u_Radius",
-    cam_pos: [f32; 3] = "u_CameraPos",
-    frame_res: [f32; 2] = "u_FrameRes",
+    cam_pos_and_radius: [f32; 4] = "u_CameraPosAndRadius",
 });
 
 gfx_pipeline!( light {
@@ -211,7 +211,7 @@ pub static LIGHT_VERTEX_SRC: &'static [u8] = b"
 
     void main() {
         v_LightPos = offs[gl_InstanceID].xyz;
-        gl_Position = u_Transform * vec4(u_Radius * a_Pos + offs[gl_InstanceID].xyz, 1.0);
+        gl_Position = u_Transform * vec4(u_Radius * a_Pos + v_LightPos, 1.0);
     }
 ";
 
@@ -220,9 +220,7 @@ pub static LIGHT_FRAGMENT_SRC: &'static [u8] = b"
 
     layout(std140)
     uniform LightLocals {
-        float u_RadiusM2;
-        vec3 u_CameraPos;
-        vec2 u_FrameRes;
+        vec4 u_CameraPosAndRadius;
     };
     uniform sampler2D t_Position;
     uniform sampler2D t_Normal;
@@ -231,21 +229,21 @@ pub static LIGHT_FRAGMENT_SRC: &'static [u8] = b"
     out vec4 o_Color;
 
     void main() {
-        vec2 texCoord = gl_FragCoord.xy / u_FrameRes;
-        vec3 pos     = texture(t_Position,     texCoord).xyz;
-        vec3 normal  = texture(t_Normal,  texCoord).xyz;
-        vec3 diffuse = texture(t_Diffuse, texCoord).xyz;
+        ivec2 itc = ivec2(gl_FragCoord.xy);
+        vec3 pos     = texelFetch(t_Position, itc, 0).xyz;
+        vec3 normal  = texelFetch(t_Normal,   itc, 0).xyz;
+        vec3 diffuse = texelFetch(t_Diffuse,  itc, 0).xyz;
 
         vec3 light    = v_LightPos;
         vec3 to_light = normalize(light - pos);
-        vec3 to_cam   = normalize(u_CameraPos - pos);
+        vec3 to_cam   = normalize(u_CameraPosAndRadius.xyz - pos);
 
         vec3 n = normalize(normal);
         float s = pow(max(0.0, dot(to_cam, reflect(-to_light, n))), 20.0);
         float d = max(0.0, dot(n, to_light));
 
         float dist_sq = dot(light - pos, light - pos);
-        float scale = max(0.0, 1.0-dist_sq * u_RadiusM2);
+        float scale = max(0.0, 1.0 - dist_sq * u_CameraPosAndRadius.w);
 
         vec3 res_color = d * diffuse + vec3(s);
 
@@ -408,7 +406,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 .map(|(x, y)| {
                     let h = TERRAIN_SCALE[2] * perlin2(&seed, &[x, y]);
                     TerrainVertex {
-                        pos: [TERRAIN_SCALE[1] * x, TERRAIN_SCALE[2] * y, h],
+                        pos: [TERRAIN_SCALE[0] * x, TERRAIN_SCALE[1] * y, h],
                         normal: calculate_normal(&seed, x, y),
                         color: calculate_color(h),
                     }
@@ -454,12 +452,9 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
         let blit = {
             let vertex_data = [
-                BlitVertex { pos: [-1, -1], tex_coord: [0, 0] },
+                BlitVertex { pos: [-3, -1], tex_coord: [-1, 0] },
                 BlitVertex { pos: [ 1, -1], tex_coord: [1, 0] },
-                BlitVertex { pos: [ 1,  1], tex_coord: [1, 1] },
-                BlitVertex { pos: [-1, -1], tex_coord: [0, 0] },
-                BlitVertex { pos: [ 1,  1], tex_coord: [1, 1] },
-                BlitVertex { pos: [-1,  1], tex_coord: [0, 1] },
+                BlitVertex { pos: [ 1,  3], tex_coord: [1, 2] },
             ];
 
             let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
@@ -610,10 +605,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             light_pos_vec: (0 ..NUM_LIGHTS).map(|_| {
                 LightInfo{ pos: [0.0, 0.0, 0.0, 0.0] }
             }).collect(),
-            seed: {
-                let rand_seed = rand::thread_rng().gen();
-                Seed::new(rand_seed)
-            },
+            seed: seed,
             debug_buf: None,
         }
     }
@@ -658,9 +650,8 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         encoder.update_buffer(&self.terrain.data.locals, &[terrain_locals], 0).unwrap();
 
         let light_locals = LightLocals {
-            radius_m2: 1.0 / (LIGHT_RADIUS * LIGHT_RADIUS),
-            cam_pos: cam_pos.into(),
-            frame_res: [width as f32, height as f32],
+            cam_pos_and_radius: [cam_pos.x, cam_pos.y, cam_pos.z,
+                1.0 / (LIGHT_RADIUS * LIGHT_RADIUS)],
         };
         encoder.update_buffer(&self.light.data.locals_ps, &[light_locals], 0).unwrap();
 
@@ -693,22 +684,22 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         encoder.clear(&self.terrain.data.out_normal, [0.0, 0.0, 0.0, 1.0]);
         encoder.clear(&self.terrain.data.out_color, [0.0, 0.0, 0.0, 1.0]);
         // Render the terrain to the geometry buffer
-        self.terrain.draw_to(encoder);
+        self.terrain.encode(encoder);
 
         let blit_tex = match self.debug_buf {
             Some(ref tex) => tex,   // Show one of the immediate buffers
             None => {
                 encoder.clear(&self.intermediate.target, [0.0, 0.0, 0.0, 1.0]);
                 // Apply lights
-                self.light.draw_to(encoder);
+                self.light.encode(encoder);
                 // Draw light emitters
-                self.emitter.draw_to(encoder);
+                self.emitter.encode(encoder);
                 &self.intermediate.resource
             }
         };
         self.blit.data.tex.0 = blit_tex.clone();
         // Show the result
-        self.blit.draw_to(encoder);
+        self.blit.encode(encoder);
     }
 }
 

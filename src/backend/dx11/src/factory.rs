@@ -72,6 +72,9 @@ pub struct Factory {
     share: Arc<Share>,
     frame_handles: h::Manager<R>,
     vs_cache: Map<u64, Vec<u8>>,
+    /// Create typed surface formats for the textures. This is useful for debugging
+    /// with PIX, since it doesn't understand typeless formats. This may also prevent
+    /// some valid views to be created because the typed formats can't be reinterpret.
     use_texture_format_hint: bool,
 }
 
@@ -258,7 +261,7 @@ impl Factory {
     }
 
     fn create_texture_internal(&mut self, desc: core::tex::Descriptor,
-                               hint: Option<core::format::ChannelType>,
+                               mut hint: Option<core::format::ChannelType>,
                                init_opt: Option<(&[u8], bool)>)
                                -> Result<h::RawTexture<R>, core::tex::Error>
     {
@@ -266,10 +269,13 @@ impl Factory {
         use data::{map_bind, map_usage, map_surface, map_format};
 
         let (usage, cpu_access) = map_usage(desc.usage);
+        if !self.use_texture_format_hint || desc.bind.contains(f::DEPTH_STENCIL) {
+            hint = None; //can't use typed format
+        }
         let tparam = TextureParam {
             levels: desc.levels as winapi::UINT,
-            format: match (self.use_texture_format_hint, hint) {
-                (true, Some(channel)) => match map_format(core::format::Format(desc.format, channel), true) {
+            format: match hint {
+                Some(channel) => match map_format(core::format::Format(desc.format, channel), true) {
                     Some(f) => f,
                     None => return Err(Error::Format(desc.format, Some(channel)))
                 },
