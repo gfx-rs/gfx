@@ -125,7 +125,7 @@ pub fn init_raw(title: &str, requested_width: winapi::INT, requested_height: win
 
     info!("Creating swap chain of size {}x{}", width, height);
     for dt in driver_types.iter() {
-        match gfx_device_dx11::create(*dt, &swap_desc) {
+        match gfx_device_dx11::create(*dt, &swap_desc, color_format) {
             Ok((device, factory, chain, color)) => {
                 info!("Success with driver {:?}, shader model {}", *dt, device.get_shader_model());
                 let win = Window {

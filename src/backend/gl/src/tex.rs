@@ -72,9 +72,9 @@ fn format_to_gltype(format: NewFormat) -> Result<GLenum, ()> {
     use gfx_core::format::SurfaceType as S;
     use gfx_core::format::ChannelType as C;
     let (fm8, fm16, fm32) = match format.1 {
-        C::Int | C::Inorm | C::Iscaled =>
+        C::Int | C::Inorm =>
             (gl::BYTE, gl::SHORT, gl::INT),
-        C::Uint | C::Unorm | C::Uscaled | C::Srgb =>
+        C::Uint | C::Unorm | C::Srgb =>
             (gl::UNSIGNED_BYTE, gl::UNSIGNED_SHORT, gl::UNSIGNED_INT),
         C::Float => (gl::ZERO, gl::HALF_FLOAT, gl::FLOAT),
     };

@@ -706,4 +706,5 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 pub fn main() {
     use gfx_app::Application;
     App::launch_default("Deferred rendering example with gfx-rs");
+    //use gfx_app::*; WrapGL2::<App<_>>::launch("", DEFAULT_CONFIG);
 }

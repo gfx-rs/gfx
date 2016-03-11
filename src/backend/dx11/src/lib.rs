@@ -163,7 +163,7 @@ static FEATURE_LEVELS: [winapi::D3D_FEATURE_LEVEL; 3] = [
 ];
 
 
-pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHAIN_DESC)
+pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHAIN_DESC, format: gfx_core::format::Format)
               -> Result<(Device, Factory, *mut winapi::IDXGISwapChain, h::RawRenderTargetView<Resources>), winapi::HRESULT> {
     use gfx_core::handle::Producer;
     use gfx_core::tex;
@@ -207,7 +207,7 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
     let color_tex = share.handles.borrow_mut().make_texture(Texture::D2(back_buffer), gfx_core::tex::Descriptor {
         kind: tex::Kind::D2(desc.BufferDesc.Width as tex::Size, desc.BufferDesc.Height as tex::Size, tex::AaMode::Single),
         levels: 1,
-        format: gfx_core::format::SurfaceType::R8_G8_B8_A8,
+        format: format.0,
         bind: gfx_core::factory::RENDER_TARGET,
         usage: gfx_core::factory::Usage::GpuOnly,
     });
@@ -224,7 +224,7 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
     let color_target = {
         use gfx_core::Factory;
         let desc = gfx_core::tex::RenderDesc {
-            channel: gfx_core::format::ChannelType::Unorm,
+            channel: format.1,
             level: 0,
             layer: None,
         };
