@@ -39,7 +39,7 @@ gfx_window_dxgi = { path = "src/window/dxgi", version = "0.1" }
 name = "blend"
 path = "examples/blend/main.rs"
 
-[[target.x86_64-pc-linux-gnu.example]]
+[[example]]
 name = "cube"
 path = "examples/cube/main.rs"
 
