@@ -16,6 +16,7 @@ name = "gfx_app"
 
 [dependencies]
 env_logger = "0.3"
+getopts = "0.2"
 time = "*"
 glutin = "0.4.8"
 gfx_core = { path = "src/core", version = "0.2" }

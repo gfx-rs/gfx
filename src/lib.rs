@@ -13,6 +13,7 @@
 // limitations under the License.
 
 extern crate env_logger;
+extern crate getopts;
 extern crate time;
 extern crate glutin;
 extern crate gfx;
@@ -37,11 +38,20 @@ pub struct Init<R: gfx::Resources> {
     pub aspect_ratio: f32,
 }
 
+pub enum Backend {
+    OpenGL2,
+    Direct3D11 {
+        pix_mode: bool,
+    },
+}
+
 pub struct Config {
+    //pub backend: Backend,
     pub size: (u16, u16),
 }
 
 pub const DEFAULT_CONFIG: Config = Config {
+    //backend: Backend::OpenGL2,
     size: (800, 520),
 };
 
