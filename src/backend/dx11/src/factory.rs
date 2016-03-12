@@ -783,9 +783,23 @@ impl core::Factory<R> for Factory {
         }
     }
 
-    fn update_buffer_raw(&mut self, _buffer: &h::RawBuffer<R>, _data: &[u8],
-                         _offset_bytes: usize) -> Result<(), f::BufferUpdateError> {
-        Ok(()) //TODO
+    fn update_buffer_raw(&mut self, buffer: &h::RawBuffer<R>, data: &[u8],
+                         offset_bytes: usize) -> Result<(), f::BufferUpdateError> {
+        let dst_resource = self.frame_handles.ref_buffer(buffer).0 as *mut winapi::ID3D11Resource;
+        let dst_box = winapi::D3D11_BOX {
+            left:   offset_bytes as winapi::UINT,
+            top:    0,
+            front:  0,
+            right:  (offset_bytes + data.len()) as winapi::UINT,
+            bottom: 1,
+            back:   1,
+        };
+        //unsafe {
+            //(*self.share.context).UpdateSubresource(dst_resource, 0, &dst_box, data as *const _, 0, 0);
+        //};
+        error!("Unlocking `Factory::update_buffer()` is blocked by #897");
+        let _ = (dst_resource, &dst_box, data);
+        Ok(())
     }
 
     fn update_texture_raw(&mut self, texture: &h::RawTexture<R>, image: &core::tex::RawImageInfo,
@@ -821,7 +835,8 @@ impl core::Factory<R> for Factory {
             //let subres = winapi::D3D11CalcSubresource(image.mipmap, array_slice, tdesc.levels);
             //(*self.share.context).UpdateSubresource(dst_resource, subres, &dst_box, data as *const _, row_pitch, depth_pitch);
         //};
-        let _ = (dst_resource, subres, &dst_box, data, row_pitch, depth_pitch); //TODO
+        error!("Unlocking `Factory::update_texture()` is blocked by #897");
+        let _ = (dst_resource, subres, &dst_box, data, row_pitch, depth_pitch);
         Ok(())
     }
 
