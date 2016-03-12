@@ -99,7 +99,7 @@ pub enum Usage {
     /// GPU: read, CPU: write.
     Dynamic,
     /// GPU: copy, CPU: as specified. Used as a staging buffer,
-    // to be copied back and forth with on-GPU targets.
+    /// to be copied back and forth with on-GPU targets.
     CpuOnly(MapAccess),
 }
 

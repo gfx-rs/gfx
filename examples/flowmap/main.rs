@@ -13,12 +13,9 @@
 // limitations under the License.
 
 extern crate time;
-
 #[macro_use]
 extern crate gfx;
-extern crate gfx_window_glutin;
-extern crate glutin;
-
+extern crate gfx_app;
 extern crate image;
 
 use std::io::Cursor;
@@ -38,6 +35,10 @@ impl Vertex {
     }
 }
 
+gfx_constant_struct!( Locals {
+    offsets: [f32; 2] = "u_Offsets",
+});
+
 gfx_pipeline!( pipe {
     vbuf: gfx::VertexBuffer<Vertex> = (),
     color: gfx::TextureSampler<[f32; 4]> = "t_Color",
@@ -45,7 +46,8 @@ gfx_pipeline!( pipe {
     noise: gfx::TextureSampler<[f32; 4]> = "t_Noise",
     offset0: gfx::Global<f32> = "f_Offset0",
     offset1: gfx::Global<f32> = "f_Offset1",
-    out: gfx::RenderTarget<Srgba8> = "o_Color",
+    locals: gfx::ConstantBuffer<Locals> = "Locals",
+    out: gfx::RenderTarget<Srgba8> = "Target0",
 });
 
 fn load_texture<R, F>(factory: &mut F, data: &[u8])
@@ -59,95 +61,100 @@ fn load_texture<R, F>(factory: &mut F, data: &[u8])
     Ok(view)
 }
 
-pub fn main() {
-    use time::precise_time_s;
-    use gfx::traits::{Device, FactoryExt};
+struct App<R: gfx::Resources>{
+    bundle: pipe::Bundle<R>,
+    cycles: [f32; 2],
+    time_start: f64,
+}
 
-    let builder = glutin::WindowBuilder::new()
-            .with_title("Flowmap example".to_string())
-            .with_dimensions(800, 600);
-    let (window, mut device, mut factory, main_color, _) =
-        gfx_window_glutin::init::<Srgba8, Depth>(builder);
-    let mut encoder = factory.create_encoder();
+impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
+    fn new<F: gfx::Factory<R>>(mut factory: F, init: gfx_app::Init<R>) -> Self {
+        use gfx::traits::FactoryExt;
 
-    let vertex_data = [
-        Vertex::new([-1.0, -1.0], [0.0, 0.0]),
-        Vertex::new([ 1.0, -1.0], [1.0, 0.0]),
-        Vertex::new([ 1.0,  1.0], [1.0, 1.0]),
+        let vs = gfx_app::shade::Source {
+            glsl_120: include_bytes!("shader/flowmap_120.glslv"),
+            glsl_150: include_bytes!("shader/flowmap_150.glslv"),
+            hlsl_40:  include_bytes!("data/vertex.fx"),
+            .. gfx_app::shade::Source::empty()
+        };
+        let ps = gfx_app::shade::Source {
+            glsl_120: include_bytes!("shader/flowmap_120.glslf"),
+            glsl_150: include_bytes!("shader/flowmap_150.glslf"),
+            hlsl_40:  include_bytes!("data/pixel.fx"),
+            .. gfx_app::shade::Source::empty()
+        };
 
-        Vertex::new([-1.0, -1.0], [0.0, 0.0]),
-        Vertex::new([ 1.0,  1.0], [1.0, 1.0]),
-        Vertex::new([-1.0,  1.0], [0.0, 1.0]),
-    ];
+        let vertex_data = [
+            Vertex::new([-1.0, -1.0], [0.0, 0.0]),
+            Vertex::new([ 1.0, -1.0], [1.0, 0.0]),
+            Vertex::new([ 1.0,  1.0], [1.0, 1.0]),
 
-    let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
+            Vertex::new([-1.0, -1.0], [0.0, 0.0]),
+            Vertex::new([ 1.0,  1.0], [1.0, 1.0]),
+            Vertex::new([-1.0,  1.0], [0.0, 1.0]),
+        ];
 
-    let water_texture = load_texture(&mut factory, &include_bytes!("image/water.png")[..]).unwrap();
-    let flow_texture  = load_texture(&mut factory, &include_bytes!("image/flow.png")[..]).unwrap();
-    let noise_texture = load_texture(&mut factory, &include_bytes!("image/noise.png")[..]).unwrap();
-    let sampler = factory.create_sampler_linear();
+        let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
 
-    let pso = factory.create_pipeline_simple(
-        include_bytes!("shader/flowmap_150.glslv"),
-        include_bytes!("shader/flowmap_150.glslf"),
-        gfx::state::CullFace::Nothing,
-        pipe::new()
-        ).unwrap();
+        let water_texture = load_texture(&mut factory, &include_bytes!("image/water.png")[..]).unwrap();
+        let flow_texture  = load_texture(&mut factory, &include_bytes!("image/flow.png")[..]).unwrap();
+        let noise_texture = load_texture(&mut factory, &include_bytes!("image/noise.png")[..]).unwrap();
+        let sampler = factory.create_sampler_linear();
 
-    let mut data = pipe::Data {
-        vbuf: vbuf,
-        color: (water_texture, sampler.clone()),
-        flow: (flow_texture, sampler.clone()),
-        noise: (noise_texture, sampler.clone()),
-        offset0: 0f32,
-        offset1: 0.5f32,
-        out: main_color,
-    };
+        let pso = factory.create_pipeline_simple(
+            vs.select(init.backend).unwrap(),
+            ps.select(init.backend).unwrap(),
+            gfx::state::CullFace::Nothing,
+            pipe::new()
+            ).unwrap();
 
-    let mut cycle0 = 0.0f32;
-    let mut cycle1 = 0.5f32;
+        let data = pipe::Data {
+            vbuf: vbuf,
+            color: (water_texture, sampler.clone()),
+            flow: (flow_texture, sampler.clone()),
+            noise: (noise_texture, sampler.clone()),
+            offset0: 0.0,
+            offset1: 0.0,
+            locals: factory.create_constant_buffer(1),
+            out: init.color,
+        };
 
-    let mut time_start = precise_time_s();
-    let mut time_end;
-    'main: loop {
-        time_end = time_start;
-        time_start = precise_time_s();
-
-        let delta = (time_start - time_end) as f32;
-
-        // quit when Esc is pressed.
-        for event in window.poll_events() {
-            match event {
-                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
-                glutin::Event::Closed => break 'main,
-                _ => {},
-            }
+        App {
+            bundle: pipe::bundle(slice, pso, data),
+            cycles: [0.0, 0.5],
+            time_start: time::precise_time_s(),
         }
+    }
+
+    fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
+        let time_end = self.time_start;
+        self.time_start = time::precise_time_s();
+        let delta = (self.time_start - time_end) as f32;
 
         // since we sample our diffuse texture twice we need to lerp between
         // them to get a smooth transition (shouldn't even be noticable).
-
-        // they start half a cycle apart (0.5) and is later used to calculate
+        // They start half a cycle apart (0.5) and is later used to calculate
         // the interpolation amount via `2.0 * abs(cycle0 - .5f)`
-        cycle0 += 0.25f32 * delta;
-        if cycle0 > 1f32 {
-            cycle0 -= 1f32;
+        self.cycles[0] += 0.25 * delta;
+        if self.cycles[0] > 1.0 {
+            self.cycles[0] -= 1.0;
+        }
+        self.cycles[1] += 0.25 * delta;
+        if self.cycles[1] > 1.0 {
+            self.cycles[1] -= 1.0;
         }
 
-        cycle1 += 0.25f32 * delta;
-        if cycle1 > 1f32 {
-            cycle1 -= 1f32;
-        }
+        self.bundle.data.offset0 = self.cycles[0];
+        self.bundle.data.offset1 = self.cycles[1];
+        let locals = Locals { offsets: self.cycles };
+        encoder.update_buffer(&self.bundle.data.locals, &[locals], 0).unwrap();
 
-        encoder.reset();
-        encoder.clear(&data.out, [0.3, 0.3, 0.3, 1.0]);
-
-        data.offset0 = cycle0;
-        data.offset1 = cycle1;
-        encoder.draw(&slice, &pso, &data);
-
-        device.submit(encoder.as_buffer());
-        window.swap_buffers().unwrap();
-        device.cleanup();
+        encoder.clear(&self.bundle.data.out, [0.3, 0.3, 0.3, 1.0]);
+        self.bundle.encode(encoder);
     }
+}
+
+pub fn main() {
+    use gfx_app::Application;
+    App::launch_default("Flowmap example");
 }
