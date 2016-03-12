@@ -1,7 +1,9 @@
 #version 150 core
 
-uniform mat4 u_Proj;
-uniform mat4 u_WorldToCamera;
+uniform Locals {
+	mat4 u_Proj;
+	mat4 u_WorldToCamera;
+};
 
 in vec2 a_Pos;
 

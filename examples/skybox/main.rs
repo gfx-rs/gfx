@@ -18,6 +18,7 @@ extern crate time;
 extern crate gfx;
 extern crate gfx_window_glutin;
 extern crate glutin;
+//extern crate gfx_app;
 extern crate cgmath;
 
 extern crate image;
@@ -26,7 +27,7 @@ use std::io::Cursor;
 pub use gfx::format::{Srgba8, Depth, Rgba8};
 use gfx::tex::{CubeFace, Kind, ImageInfoCommon};
 
-use cgmath::{AffineMatrix3, SquareMatrix, Matrix4, Transform, Vector3, Point3};
+use cgmath::{AffineMatrix3, Transform, Vector3, Point3};
 
 gfx_vertex_struct!( Vertex {
     pos: [f32; 2] = "a_Pos",
@@ -40,11 +41,15 @@ impl Vertex {
     }
 }
 
+gfx_constant_struct!( Locals {
+    inv_proj: [[f32; 4]; 4] = "u_Proj",
+    view: [[f32; 4]; 4] = "u_WorldToCamera",
+});
+
 gfx_pipeline!( pipe {
     vbuf: gfx::VertexBuffer<Vertex> = (),
     cubemap: gfx::TextureSampler<[f32; 4]> = "t_Cubemap",
-    inv_proj: gfx::Global<[[f32; 4]; 4]> = "u_Proj",
-    view: gfx::Global<[[f32; 4]; 4]> = "u_WorldToCamera",
+    locals: gfx::ConstantBuffer<Locals> = "Locals",
     out: gfx::RenderTarget<Srgba8> = "o_Color",
 });
 
@@ -155,11 +160,10 @@ pub fn main() {
         pipe::new()
     ).unwrap();
 
-    let mut data = pipe::Data {
+    let data = pipe::Data {
         vbuf: vbuf,
         cubemap: (cubemap, sampler),
-        inv_proj: Matrix4::identity().into(),
-        view: Matrix4::identity().into(),
+        locals: factory.create_constant_buffer(1),
         out: main_color,
     };
 
@@ -174,6 +178,7 @@ pub fn main() {
             }
         }
 
+        encoder.reset();
         {
             // Update camera position
             let time = precise_time_s() as f32 * 0.25;
@@ -186,11 +191,13 @@ pub fn main() {
                 Vector3::unit_y(),
             );
 
-            data.inv_proj = proj.into();
-            data.view = view.mat.into();
+            let locals = Locals {
+                inv_proj: proj.into(),
+                view: view.mat.into(),
+            };
+            encoder.update_buffer(&data.locals, &[locals], 0).unwrap();
         }
-
-        encoder.reset();
+        
         encoder.clear(&data.out, [0.3, 0.3, 0.3, 1.0]);
 
         encoder.draw(&slice, &pso, &data);
