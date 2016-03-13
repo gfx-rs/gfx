@@ -74,6 +74,10 @@ impl Factory {
         }
     }
 
+    pub fn create_command_buffer(&mut self) -> CommandBuffer {
+        CommandBuffer::new(self.create_fbo_internal())
+    }
+
     fn create_fbo_internal(&mut self) -> gl::types::GLuint {
         let gl = &self.share.context;
         let mut name = 0 as ::FrameBuffer;
@@ -178,15 +182,10 @@ impl d::mapping::Raw for RawMapping {
 
 
 impl d::Factory<R> for Factory {
-    type CommandBuffer = CommandBuffer;
     type Mapper = RawMapping;
 
     fn get_capabilities(&self) -> &d::Capabilities {
         &self.share.capabilities
-    }
-
-    fn create_command_buffer(&mut self) -> CommandBuffer {
-        CommandBuffer::new(self.create_fbo_internal())
     }
 
     fn create_buffer_raw(&mut self, info: f::BufferInfo) -> Result<handle::RawBuffer<R>, f::BufferError> {

@@ -174,7 +174,7 @@ pub trait Resources:          Clone + Hash + Debug + Eq + PartialEq {
 /// All the data needed simultaneously for submitting a command buffer for
 /// execution on a device.
 pub struct SubmitInfo<'a, D>(
-    pub &'a D::CommandBuffer,
+    pub &'a mut D::CommandBuffer,
     pub &'a draw::DataBuffer,
     pub &'a handle::Manager<D::Resources>
 ) where
@@ -190,7 +190,7 @@ pub trait Device: Sized {
     type CommandBuffer: draw::CommandBuffer<Self::Resources>;
 
     /// Returns the capabilities available to the specific API implementation.
-    fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
+    fn get_capabilities(&self) -> &Capabilities;
 
     /// Reset all the states to disabled/default.
     fn reset_state(&mut self);

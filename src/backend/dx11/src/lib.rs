@@ -234,6 +234,121 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
     Ok((dev, factory, swap_chain, color_target))
 }
 
+fn process(ctx: *mut winapi::ID3D11DeviceContext, command: &command::Command, data_buf: &gfx_core::draw::DataBuffer) {
+    use gfx_core::shade::Stage;
+    use command::Command::*;
+    let max_cb  = gfx_core::MAX_CONSTANT_BUFFERS as winapi::UINT;
+    let max_srv = gfx_core::MAX_RESOURCE_VIEWS   as winapi::UINT;
+    let max_sm  = gfx_core::MAX_SAMPLERS         as winapi::UINT;
+    debug!("Processing {:?}", command);
+    match *command {
+        BindProgram(ref prog) => unsafe {
+            (*ctx).VSSetShader(prog.vs, ptr::null_mut(), 0);
+            (*ctx).GSSetShader(prog.gs, ptr::null_mut(), 0);
+            (*ctx).PSSetShader(prog.ps, ptr::null_mut(), 0);
+        },
+        BindInputLayout(layout) => unsafe {
+            (*ctx).IASetInputLayout(layout);
+        },
+        BindIndex(ref buf, format) => unsafe {
+            (*ctx).IASetIndexBuffer(buf.0, format, 0);
+        },
+        BindVertexBuffers(ref buffers, ref strides, ref offsets) => unsafe {
+            (*ctx).IASetVertexBuffers(0, gfx_core::MAX_VERTEX_ATTRIBUTES as winapi::UINT,
+                &buffers[0].0, strides.as_ptr(), offsets.as_ptr());
+        },
+        BindConstantBuffers(stage, ref buffers) => match stage {
+            Stage::Vertex => unsafe {
+                (*ctx).VSSetConstantBuffers(0, max_cb, &buffers[0].0);
+            },
+            Stage::Geometry => unsafe {
+                (*ctx).GSSetConstantBuffers(0, max_cb, &buffers[0].0);
+            },
+            Stage::Pixel => unsafe {
+                (*ctx).PSSetConstantBuffers(0, max_cb, &buffers[0].0);
+            },
+        },
+        BindShaderResources(stage, ref views) => match stage {
+            Stage::Vertex => unsafe {
+                (*ctx).VSSetShaderResources(0, max_srv, &views[0].0);
+            },
+            Stage::Geometry => unsafe {
+                (*ctx).GSSetShaderResources(0, max_srv, &views[0].0);
+            },
+            Stage::Pixel => unsafe {
+                (*ctx).PSSetShaderResources(0, max_srv, &views[0].0);
+            },
+        },
+        BindSamplers(stage, ref samplers) => match stage {
+            Stage::Vertex => unsafe {
+                (*ctx).VSSetSamplers(0, max_sm, &samplers[0].0);
+            },
+            Stage::Geometry => unsafe {
+                (*ctx).GSSetSamplers(0, max_sm, &samplers[0].0);
+            },
+            Stage::Pixel => unsafe {
+                (*ctx).PSSetSamplers(0, max_sm, &samplers[0].0);
+            },
+        },
+        BindPixelTargets(ref colors, ds) => unsafe {
+            (*ctx).OMSetRenderTargets(gfx_core::MAX_COLOR_TARGETS as winapi::UINT,
+                &colors[0].0, ds.0);
+        },
+        SetPrimitive(topology) => unsafe {
+            (*ctx).IASetPrimitiveTopology(topology);
+        },
+        SetViewport(ref viewport) => unsafe {
+            (*ctx).RSSetViewports(1, viewport);
+        },
+        SetScissor(ref rect) => unsafe {
+            (*ctx).RSSetScissorRects(1, rect);
+        },
+        SetRasterizer(rast) => unsafe {
+            (*ctx).RSSetState(rast as *mut _);
+        },
+        SetDepthStencil(ds, value) => unsafe {
+            (*ctx).OMSetDepthStencilState(ds as *mut _, value);
+        },
+        SetBlend(blend, ref value, mask) => unsafe {
+            (*ctx).OMSetBlendState(blend as *mut _, value, mask);
+        },
+        UpdateBuffer(buffer, pointer, offset) => {
+            let data = data_buf.get_ref(pointer);
+            let map_type = winapi::D3D11_MAP_WRITE_DISCARD;
+            let resource = buffer.0 as *mut winapi::ID3D11Resource;
+            let hr = unsafe {
+                let mut sub = mem::zeroed();
+                let hr = (*ctx).Map(resource, 0, map_type, 0, &mut sub);
+                let dst = (sub.pData as *mut u8).offset(offset as isize);
+                ptr::copy_nonoverlapping(data.as_ptr(), dst, data.len());
+                (*ctx).Unmap(resource, 0);
+                hr
+            };
+            if !winapi::SUCCEEDED(hr) {
+                error!("Buffer {:?} failed to map, error {:x}", buffer, hr);
+            }
+        },
+        ClearColor(target, ref data) => unsafe {
+            (*ctx).ClearRenderTargetView(target.0, data);
+        },
+        ClearDepthStencil(target, flags, depth, stencil) => unsafe {
+            (*ctx).ClearDepthStencilView(target.0, flags.0, depth, stencil);
+        },
+        Draw(nvert, svert) => unsafe {
+            (*ctx).Draw(nvert, svert);
+        },
+        DrawInstanced(nvert, ninst, svert, sinst) => unsafe {
+            (*ctx).DrawInstanced(nvert, ninst, svert, sinst);
+        },
+        DrawIndexed(nind, svert, base) => unsafe {
+            (*ctx).DrawIndexed(nind, svert, base);
+        },
+        DrawIndexedInstanced(nind, ninst, sind, base, sinst) => unsafe {
+            (*ctx).DrawIndexedInstanced(nind, ninst, sind, base, sinst);
+        },
+    }
+}
+
 pub type ShaderModel = u16;
 
 impl Device {
@@ -250,128 +365,64 @@ impl Device {
             },
         }
     }
+}
 
-    fn process(&mut self, command: &command::Command, data_buf: &gfx_core::draw::DataBuffer) {
-        use gfx_core::shade::Stage;
-        use command::Command::*;
-        let max_cb  = gfx_core::MAX_CONSTANT_BUFFERS as winapi::UINT;
-        let max_srv = gfx_core::MAX_RESOURCE_VIEWS   as winapi::UINT;
-        let max_sm  = gfx_core::MAX_SAMPLERS         as winapi::UINT;
-        debug!("Processing {:?}", command);
-        match *command {
-            BindProgram(ref prog) => unsafe {
-                (*self.context).VSSetShader(prog.vs, ptr::null_mut(), 0);
-                (*self.context).GSSetShader(prog.gs, ptr::null_mut(), 0);
-                (*self.context).PSSetShader(prog.ps, ptr::null_mut(), 0);
-            },
-            BindInputLayout(layout) => unsafe {
-                (*self.context).IASetInputLayout(layout);
-            },
-            BindIndex(ref buf, format) => unsafe {
-                (*self.context).IASetIndexBuffer(buf.0, format, 0);
-            },
-            BindVertexBuffers(ref buffers, ref strides, ref offsets) => unsafe {
-                (*self.context).IASetVertexBuffers(0, gfx_core::MAX_VERTEX_ATTRIBUTES as winapi::UINT,
-                    &buffers[0].0, strides.as_ptr(), offsets.as_ptr());
-            },
-            BindConstantBuffers(stage, ref buffers) => match stage {
-                Stage::Vertex => unsafe {
-                    (*self.context).VSSetConstantBuffers(0, max_cb, &buffers[0].0);
-                },
-                Stage::Geometry => unsafe {
-                    (*self.context).GSSetConstantBuffers(0, max_cb, &buffers[0].0);
-                },
-                Stage::Pixel => unsafe {
-                    (*self.context).PSSetConstantBuffers(0, max_cb, &buffers[0].0);
-                },
-            },
-            BindShaderResources(stage, ref views) => match stage {
-                Stage::Vertex => unsafe {
-                    (*self.context).VSSetShaderResources(0, max_srv, &views[0].0);
-                },
-                Stage::Geometry => unsafe {
-                    (*self.context).GSSetShaderResources(0, max_srv, &views[0].0);
-                },
-                Stage::Pixel => unsafe {
-                    (*self.context).PSSetShaderResources(0, max_srv, &views[0].0);
-                },
-            },
-            BindSamplers(stage, ref samplers) => match stage {
-                Stage::Vertex => unsafe {
-                    (*self.context).VSSetSamplers(0, max_sm, &samplers[0].0);
-                },
-                Stage::Geometry => unsafe {
-                    (*self.context).GSSetSamplers(0, max_sm, &samplers[0].0);
-                },
-                Stage::Pixel => unsafe {
-                    (*self.context).PSSetSamplers(0, max_sm, &samplers[0].0);
-                },
-            },
-            BindPixelTargets(ref colors, ds) => unsafe {
-                (*self.context).OMSetRenderTargets(gfx_core::MAX_COLOR_TARGETS as winapi::UINT,
-                    &colors[0].0, ds.0);
-            },
-            SetPrimitive(topology) => unsafe {
-                (*self.context).IASetPrimitiveTopology(topology);
-            },
-            SetViewport(ref viewport) => unsafe {
-                (*self.context).RSSetViewports(1, viewport);
-            },
-            SetScissor(ref rect) => unsafe {
-                (*self.context).RSSetScissorRects(1, rect);
-            },
-            SetRasterizer(rast) => unsafe {
-                (*self.context).RSSetState(rast as *mut _);
-            },
-            SetDepthStencil(ds, value) => unsafe {
-                (*self.context).OMSetDepthStencilState(ds as *mut _, value);
-            },
-            SetBlend(blend, ref value, mask) => unsafe {
-                (*self.context).OMSetBlendState(blend as *mut _, value, mask);
-            },
-            UpdateBuffer(buffer, pointer, offset) => {
-                let data = data_buf.get_ref(pointer);
-                let map_type = winapi::D3D11_MAP_WRITE_DISCARD;
-                let resource = buffer.0 as *mut winapi::ID3D11Resource;
-                let hr = unsafe {
-                    let mut sub = mem::zeroed();
-                    let hr = (*self.context).Map(resource, 0, map_type, 0, &mut sub);
-                    let dst = (sub.pData as *mut u8).offset(offset as isize);
-                    ptr::copy_nonoverlapping(data.as_ptr(), dst, data.len());
-                    (*self.context).Unmap(resource, 0);
-                    hr
-                };
-                if !winapi::SUCCEEDED(hr) {
-                    error!("Buffer {:?} failed to map, error {:x}", buffer, hr);
-                }
-            },
-            ClearColor(target, ref data) => unsafe {
-                (*self.context).ClearRenderTargetView(target.0, data);
-            },
-            ClearDepthStencil(target, flags, depth, stencil) => unsafe {
-                (*self.context).ClearDepthStencilView(target.0, flags.0, depth, stencil);
-            },
-            Draw(nvert, svert) => unsafe {
-                (*self.context).Draw(nvert, svert);
-            },
-            DrawInstanced(nvert, ninst, svert, sinst) => unsafe {
-                (*self.context).DrawInstanced(nvert, ninst, svert, sinst);
-            },
-            DrawIndexed(nind, svert, base) => unsafe {
-                (*self.context).DrawIndexed(nind, svert, base);
-            },
-            DrawIndexedInstanced(nind, ninst, sind, base, sinst) => unsafe {
-                (*self.context).DrawIndexedInstanced(nind, ninst, sind, base, sinst);
-            },
-        }
+
+pub struct CommandList(Vec<command::Command>);
+impl CommandList {
+    pub fn new() -> CommandList {
+        CommandList(Vec::new())
+    }
+}
+impl command::Parser for CommandList {
+    fn clone_empty(&self) -> CommandList {
+        CommandList(Vec::with_capacity(self.0.capacity()))
+    }
+    fn reset(&mut self) {
+        self.0.clear();
+    }
+    fn parse(&mut self, com: command::Command) {
+        self.0.push(com);
     }
 }
 
+pub struct DeferredContext(*mut winapi::ID3D11DeviceContext, Option<*mut winapi::ID3D11CommandList>);
+impl DeferredContext {
+    pub fn new(dc: *mut winapi::ID3D11DeviceContext) -> DeferredContext {
+        DeferredContext(dc, None)
+    }
+}
+impl Drop for DeferredContext {
+    fn drop(&mut self) {
+        unsafe { (*self.0).Release() };
+    }
+}
+impl command::Parser for DeferredContext {
+    fn clone_empty(&self) -> DeferredContext {
+        unsafe { (*self.0).AddRef() };
+        DeferredContext(self.0, None)
+    }
+    fn reset(&mut self) {
+        if let Some(cl) = self.1 {
+            unsafe { (*cl).Release() };
+            self.1 = None;
+        }
+        unsafe {
+            (*self.0).ClearState()
+        };
+    }
+    fn parse(&mut self, com: command::Command) {
+        let db = gfx_core::draw::DataBuffer::new(); //TODO
+        process(self.0, &com, &db);
+    }
+}
+
+
 impl gfx_core::Device for Device {
     type Resources = Resources;
-    type CommandBuffer = command::CommandBuffer;
+    type CommandBuffer = command::CommandBuffer<CommandList>;
 
-    fn get_capabilities<'a>(&'a self) -> &'a gfx_core::Capabilities {
+    fn get_capabilities(&self) -> &gfx_core::Capabilities {
         &self.share.capabilities
     }
 
@@ -383,8 +434,8 @@ impl gfx_core::Device for Device {
         let gfx_core::SubmitInfo(cb, db, handles) = submit_info;
         self.frame_handles.extend(handles);
         self.reset_state();
-        for com in &cb.buf {
-            self.process(com, db);
+        for com in &cb.parser.0 {
+            process(self.context, com, db);
         }
         match self.max_resource_count {
             Some(c) if self.frame_handles.count() > c => {
@@ -424,5 +475,53 @@ impl gfx_core::Device for Device {
             |_, v| unsafe { (*v.0).Release(); }, //sampler
             |_, _| {}, //fence
         );
+    }
+}
+
+pub struct Deferred(Device);
+impl From<Device> for Deferred {
+    fn from(device: Device) -> Deferred {
+        Deferred(device)
+    }
+}
+impl gfx_core::Device for Deferred {
+    type Resources = Resources;
+    type CommandBuffer = command::CommandBuffer<DeferredContext>;
+
+    fn get_capabilities<'a>(&'a self) -> &'a gfx_core::Capabilities {
+        &self.0.share.capabilities
+    }
+
+    fn reset_state(&mut self) {}
+
+    fn submit(&mut self, submit_info: gfx_core::SubmitInfo<Self>) {
+        let gfx_core::SubmitInfo(cb, _db, handles) = submit_info;
+        self.0.frame_handles.extend(handles);
+        let cl = match cb.parser.1 {
+            Some(cl) => cl,
+            None => {
+                let mut cl = ptr::null_mut();
+                let hr = unsafe {
+                    (*cb.parser.0).FinishCommandList(winapi::FALSE, &mut cl)
+                };
+                assert!(winapi::SUCCEEDED(hr));
+                cb.parser.1 = Some(cl);
+                cl
+            },
+        };
+        unsafe {
+            (*self.0.context).ExecuteCommandList(cl)
+        };
+        match self.0.max_resource_count {
+            Some(c) if self.0.frame_handles.count() > c => {
+                error!("Way too many resources in the current frame. Did you call Device::cleanup()?");
+                self.0.max_resource_count = None;
+            },
+            _ => (),
+        }
+    }
+
+    fn cleanup(&mut self) {
+        self.0.cleanup();
     }
 }

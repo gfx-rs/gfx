@@ -18,7 +18,6 @@ use std::mem;
 use {handle, format, mapping, pso, shade, target, tex};
 use {Capabilities, Resources};
 use {VertexShader, GeometryShader, PixelShader, ShaderSet};
-use draw::CommandBuffer;
 
 
 /// A service trait used to get the raw data out of
@@ -190,15 +189,11 @@ impl From<TargetViewError> for CombinedError {
 
 #[allow(missing_docs)]
 pub trait Factory<R: Resources> {
-    /// Associated command buffer type
-    type CommandBuffer: CommandBuffer<R>;
     /// Associated mapper type
     type Mapper: Clone + mapping::Raw;
 
     /// Returns the capabilities available to the specific API implementation
-    fn get_capabilities<'a>(&'a self) -> &'a Capabilities;
-
-    fn create_command_buffer(&mut self) -> Self::CommandBuffer;
+    fn get_capabilities(&self) -> &Capabilities;
 
     // resource creation
     fn create_buffer_raw(&mut self, BufferInfo) -> Result<handle::RawBuffer<R>, BufferError>;

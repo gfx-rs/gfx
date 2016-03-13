@@ -19,7 +19,6 @@ use gfx_core::{Primitive, Resources, ShaderSet, VertexCount};
 use gfx_core::factory::{Bind, BufferRole, Factory};
 use gfx_core::pso::{CreationError, Descriptor};
 use gfx_core::state::{CullFace, Rasterizer};
-use encoder::Encoder;
 use mesh::{Slice, SliceKind, ToIndexSlice};
 use pso;
 use shade::ProgramError;
@@ -37,12 +36,7 @@ pub enum PipelineStateError {
 
 
 /// Factory extension trait
-pub trait FactoryExt<R: Resources>: Factory<R> + Sized {
-    /// Create a new graphics command Encoder
-    fn create_encoder(&mut self) -> Encoder<R, Self::CommandBuffer> {
-        Encoder::new(self.create_command_buffer())
-    }
-
+pub trait FactoryExt<R: Resources>: Factory<R> {
     /// Create a vertex buffer with an associated slice.
     fn create_vertex_buffer<T>(&mut self, data: &[T])
                             -> (handle::Buffer<R, T>, Slice<R>) where
@@ -65,6 +59,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> + Sized {
                                     -> (handle::Buffer<R, V>, Slice<R>) where
         V: Copy + pso::buffer::Structure<format::Format>,
         I: ToIndexSlice<R>,
+        Self: Sized,
     {
         let buf = self.create_buffer_const(vd, BufferRole::Vertex, Bind::empty())
                       .unwrap();

@@ -80,48 +80,58 @@ impl Cache {
     }
 }
 
-pub struct CommandBuffer {
-    pub buf: Vec<Command>,
+pub struct CommandBuffer<P> {
+    pub parser: P,
     cache: Cache,
 }
 
-impl CommandBuffer {
-    pub fn new() -> CommandBuffer {
+pub trait Parser: Sized {
+    fn clone_empty(&self) -> Self;
+    fn reset(&mut self);
+    fn parse(&mut self, Command);
+}
+
+impl<P: Parser> From<P> for CommandBuffer<P> {
+    fn from(parser: P) -> CommandBuffer<P> {
         CommandBuffer {
-            buf: Vec::new(),
+            parser: parser,
+            cache: Cache::new(),
+        }
+    }
+}
+
+impl<P: Parser> CommandBuffer<P> {
+    fn flush(&mut self) {
+        let sample_mask = !0; //TODO
+        self.parser.parse(Command::SetDepthStencil(self.cache.depth_stencil, self.cache.stencil_ref));
+        self.parser.parse(Command::SetBlend(self.cache.blend, self.cache.blend_ref, sample_mask));
+    }
+}
+
+impl<P: Parser> draw::CommandBuffer<Resources> for CommandBuffer<P> {
+    fn clone_empty(&self) -> CommandBuffer<P> {
+        CommandBuffer {
+            parser: self.parser.clone_empty(),
             cache: Cache::new(),
         }
     }
 
-    fn flush(&mut self) {
-        let sample_mask = !0; //TODO
-        self.buf.push(Command::SetDepthStencil(self.cache.depth_stencil, self.cache.stencil_ref));
-        self.buf.push(Command::SetBlend(self.cache.blend, self.cache.blend_ref, sample_mask));
-    }
-}
-
-impl draw::CommandBuffer<Resources> for CommandBuffer {
-    fn clone_empty(&self) -> CommandBuffer {
-        CommandBuffer::new()
-    }
-
     fn reset(&mut self) {
-        self.buf.clear();
+        self.parser.reset();
         self.cache = Cache::new();
     }
 
     fn bind_pipeline_state(&mut self, pso: Pipeline) {
-        use std::mem; //temporary
-        self.buf.push(Command::SetPrimitive(unsafe{mem::transmute(pso.topology)}));
+        self.parser.parse(Command::SetPrimitive(pso.topology));
         self.cache.attributes = pso.attributes;
         if self.cache.rasterizer != pso.rasterizer {
             self.cache.rasterizer = pso.rasterizer;
-            self.buf.push(Command::SetRasterizer(pso.rasterizer));
+            self.parser.parse(Command::SetRasterizer(pso.rasterizer));
         }
         self.cache.depth_stencil = pso.depth_stencil;
         self.cache.blend = pso.blend;
-        self.buf.push(Command::BindInputLayout(pso.layout));
-        self.buf.push(Command::BindProgram(pso.program));
+        self.parser.parse(Command::BindInputLayout(pso.layout));
+        self.parser.parse(Command::BindProgram(pso.program));
     }
 
     fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<Resources>) {
@@ -141,7 +151,7 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
                 (_, None) => (),
             }
         }
-        self.buf.push(Command::BindVertexBuffers(buffers, strides, offsets));
+        self.parser.parse(Command::BindVertexBuffers(buffers, strides, offsets));
     }
 
     fn bind_constant_buffers(&mut self, cbs: &[pso::ConstantBufferParam<Resources>]) {
@@ -156,7 +166,7 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
                 }
             }
             if count != 0 {
-                self.buf.push(Command::BindConstantBuffers(stage, buffers));
+                self.parser.parse(Command::BindConstantBuffers(stage, buffers));
             }
         }
     }
@@ -177,7 +187,7 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
                 }
             }
             if count != 0 {
-                self.buf.push(Command::BindShaderResources(stage, views));
+                self.parser.parse(Command::BindShaderResources(stage, views));
             }
         }
     }
@@ -191,7 +201,7 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
         }
         if count != 0 {
             unimplemented!()
-            //self.buf.push(Command::BindUnorderedAccess(stage, views));
+            //self.parser.parse(Command::BindUnorderedAccess(stage, views));
         }
     }
 
@@ -207,7 +217,7 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
                 }
             }
             if count != 0 {
-                self.buf.push(Command::BindSamplers(stage, samplers));
+                self.parser.parse(Command::BindSamplers(stage, samplers));
             }
         }
     }
@@ -230,8 +240,8 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
             }
         }
         let ds = pts.depth.unwrap_or(native::Dsv(ptr::null_mut()));
-        self.buf.push(Command::BindPixelTargets(colors, ds));
-        self.buf.push(Command::SetViewport(viewport));
+        self.parser.parse(Command::BindPixelTargets(colors, ds));
+        self.parser.parse(Command::SetViewport(viewport));
     }
 
     fn bind_index(&mut self, buf: native::Buffer, itype: IndexType) {
@@ -240,11 +250,11 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
             IndexType::U16 => DXGI_FORMAT_R16_UINT,
             IndexType::U32 => DXGI_FORMAT_R32_UINT,
         };
-        self.buf.push(Command::BindIndex(buf, format));
+        self.parser.parse(Command::BindIndex(buf, format));
     }
 
     fn set_scissor(&mut self, rect: target::Rect) {
-        self.buf.push(Command::SetScissor(D3D11_RECT {
+        self.parser.parse(Command::SetScissor(D3D11_RECT {
             left: rect.x as INT,
             top: rect.y as INT,
             right: (rect.x + rect.w) as INT,
@@ -262,7 +272,7 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
     }
 
     fn update_buffer(&mut self, buf: native::Buffer, data: draw::DataPointer, offset: usize) {
-        self.buf.push(Command::UpdateBuffer(buf, data, offset));
+        self.parser.parse(Command::UpdateBuffer(buf, data, offset));
     }
 
     fn update_texture(&mut self, _: Texture, _: tex::Kind, _: Option<tex::CubeFace>,
@@ -273,7 +283,7 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
     fn clear_color(&mut self, target: native::Rtv, value: draw::ClearColor) {
         match value {
             draw::ClearColor::Float(data) => {
-                self.buf.push(Command::ClearColor(target, data));
+                self.parser.parse(Command::ClearColor(target, data));
             },
             _ => {
                 error!("Unable to clear int/uint target");
@@ -286,7 +296,7 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
         let flags = //warning: magic constants ahead
             D3D11_CLEAR_FLAG(if depth.is_some() {1} else {0}) |
             D3D11_CLEAR_FLAG(if stencil.is_some() {2} else {0});
-        self.buf.push(Command::ClearDepthStencil(target, flags,
+        self.parser.parse(Command::ClearDepthStencil(target, flags,
                       depth.unwrap_or_default() as FLOAT,
                       stencil.unwrap_or_default() as UINT8
         ));
@@ -294,7 +304,7 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
 
     fn call_draw(&mut self, start: VertexCount, count: VertexCount, instances: draw::InstanceOption) {
         self.flush();
-        self.buf.push(match instances {
+        self.parser.parse(match instances {
             Some((ninst, offset)) => Command::DrawInstanced(
                 count as UINT, ninst as UINT, start as UINT, offset as UINT),
             None => Command::Draw(count as UINT, start as UINT),
@@ -304,10 +314,11 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
     fn call_draw_indexed(&mut self, start: VertexCount, count: VertexCount,
                          base: VertexCount, instances: draw::InstanceOption) {
         self.flush();
-        self.buf.push(match instances {
+        self.parser.parse(match instances {
             Some((ninst, offset)) => Command::DrawIndexedInstanced(
                 count as UINT, ninst as UINT, start as UINT, base as INT, offset as UINT),
             None => Command::DrawIndexed(count as UINT, start as UINT, base as INT),
         });
     }
+
 }

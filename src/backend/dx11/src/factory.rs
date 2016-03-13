@@ -23,6 +23,7 @@ use gfx_core::handle as h;
 use gfx_core::handle::Producer;
 use {Resources as R, Share, Texture, Pipeline, Program, Shader};
 use command::CommandBuffer;
+use {CommandList, DeferredContext};
 use native;
 
 
@@ -100,6 +101,22 @@ impl Factory {
             frame_handles: h::Manager::new(),
             vs_cache: Map::new(),
             use_texture_format_hint: false,
+        }
+    }
+
+    pub fn create_command_buffer(&self) -> CommandBuffer<CommandList> {
+        CommandList::new().into()
+    }
+
+    pub fn create_command_buffer_native(&self) -> CommandBuffer<DeferredContext> {
+        let mut dc = ptr::null_mut();
+        let hr = unsafe {
+            (*self.device).CreateDeferredContext(0, &mut dc)
+        };
+        if winapi::SUCCEEDED(hr) {
+            DeferredContext::new(dc).into()
+        }else {
+            panic!("Failed to create a deferred context")
         }
     }
 
@@ -322,15 +339,10 @@ impl Factory {
 }
 
 impl core::Factory<R> for Factory {
-    type CommandBuffer = CommandBuffer;
     type Mapper = RawMapping;
 
     fn get_capabilities(&self) -> &core::Capabilities {
         &self.share.capabilities
-    }
-
-    fn create_command_buffer(&mut self) -> CommandBuffer {
-        CommandBuffer::new()
     }
 
     fn create_buffer_raw(&mut self, info: f::BufferInfo) -> Result<h::RawBuffer<R>, f::BufferError> {

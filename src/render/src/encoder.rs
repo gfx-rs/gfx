@@ -49,17 +49,18 @@ pub struct Encoder<R: Resources, C: draw::CommandBuffer<R>> {
     handles: handle::Manager<R>,
 }
 
-impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
-    /// Create a new encoder using a factory.
-    pub fn new(cb: C) -> Encoder<R, C> {
+impl<R: Resources, C: draw::CommandBuffer<R>> From<C> for Encoder<R, C> {
+    fn from(combuf: C) -> Encoder<R, C> {
         Encoder {
-            command_buffer: cb,
+            command_buffer: combuf,
             data_buffer: draw::DataBuffer::new(),
             raw_pso_data: pso::RawDataSet::new(),
             handles: handle::Manager::new(),
         }
     }
+}
 
+impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
     /// Reset all commands for the command buffer re-usal.
     pub fn reset(&mut self) {
         self.command_buffer.reset();
@@ -68,9 +69,9 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
     }
 
     /// Get command and data buffers to be submitted to the device.
-    pub fn as_buffer<D>(&self) -> SubmitInfo<D> where
+    pub fn as_buffer<D>(&mut self) -> SubmitInfo<D> where
         D: Device<Resources=R, CommandBuffer=C> {
-        SubmitInfo(&self.command_buffer, &self.data_buffer, &self.handles)
+        SubmitInfo(&mut self.command_buffer, &self.data_buffer, &self.handles)
     }
 
     /// Clone the renderer shared data but ignore the commands.

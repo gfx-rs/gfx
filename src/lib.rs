@@ -82,8 +82,8 @@ impl Drop for Harness {
 }
 
 pub trait ApplicationBase<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
-    fn new<F>(F, Init<R>) -> Self where
-        F: gfx::Factory<R, CommandBuffer=C>;
+    fn new<F>(F, C, Init<R>) -> Self where
+        F: gfx::Factory<R>;
     fn render<D>(&mut self, &mut D) where
         D: gfx::Device<Resources=R, CommandBuffer=C>;
 }
@@ -107,7 +107,9 @@ pub struct Wrap<R: gfx::Resources, C: gfx::CommandBuffer<R>, A>{
 }
 
 #[cfg(target_os = "windows")]
-pub type WrapD3D11<A> = Wrap<gfx_device_dx11::Resources, gfx_device_dx11::CommandBuffer, A>;
+pub type D3D11CommandBuffer = gfx_device_dx11::CommandBuffer<gfx_device_dx11::DeferredContext>;
+#[cfg(target_os = "windows")]
+pub type WrapD3D11<A> = Wrap<gfx_device_dx11::Resources, D3D11CommandBuffer, A>;
 pub type WrapGL2<A> = Wrap<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer, A>;
 
 impl<
@@ -115,12 +117,11 @@ impl<
     C: gfx::CommandBuffer<R>,
     A: Application<R>,
 > ApplicationBase<R, C> for Wrap<R, C, A> {
-    fn new<F>(mut factory: F, init: Init<R>) -> Self where
-        F: gfx::Factory<R, CommandBuffer=C>
+    fn new<F>(factory: F, combuf: C, init: Init<R>) -> Self where
+        F: gfx::Factory<R>
     {
-        use gfx::traits::FactoryExt;
         Wrap {
-            encoder: factory.create_encoder(),
+            encoder: combuf.into(),
             app: A::new(factory, init),
         }
     }
@@ -155,11 +156,12 @@ impl<
             .with_title(title.to_string())
             .with_dimensions(config.size.0 as u32, config.size.1 as u32)
             .with_vsync();
-        let (window, mut device, factory, main_color, main_depth) =
+        let (window, mut device, mut factory, main_color, main_depth) =
             gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder);
         let (width, height) = window.get_inner_size().unwrap();
+        let combuf = factory.create_command_buffer();
 
-        let mut app = Self::new(factory, Init {
+        let mut app = Self::new(factory, combuf, Init {
             backend: shade::Backend::Glsl(device.get_info().shading_language),
             color: main_color,
             depth: main_depth,
@@ -187,24 +189,26 @@ impl<
 
 #[cfg(target_os = "windows")]
 impl<
-    A: ApplicationBase<gfx_device_dx11::Resources, gfx_device_dx11::CommandBuffer>
+    A: ApplicationBase<gfx_device_dx11::Resources, D3D11CommandBuffer>
 > ApplicationD3D11 for A {
     fn launch(title: &str, config: Config) {
         use gfx::traits::{Device, Factory};
 
         env_logger::init().unwrap();
-        let (window, mut device, mut factory, main_color) =
+        let (window, device, mut factory, main_color) =
             gfx_window_dxgi::init::<ColorFormat>(title, config.size.0, config.size.1)
             .unwrap();
         let main_depth = factory.create_depth_stencil_view_only(
             window.size.0, window.size.1).unwrap();
+        let combuf = factory.create_command_buffer_native();
 
-        let mut app = Self::new(factory, Init {
+        let mut app = Self::new(factory, combuf, Init {
             backend: shade::Backend::Hlsl(device.get_shader_model()),
             color: main_color,
             depth: main_depth,
             aspect_ratio: window.size.0 as f32 / window.size.1 as f32,
         });
+        let mut device: gfx_device_dx11::Deferred = device.into();
 
         let mut harness = Harness::new();
         while window.dispatch() {
