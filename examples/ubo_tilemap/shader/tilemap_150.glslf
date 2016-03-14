@@ -11,10 +11,12 @@ const int TILEMAP_BUF_LENGTH = 2304;
 uniform b_TileMap {
     TileMapData u_Data[TILEMAP_BUF_LENGTH];
 };
+uniform b_PsLocals {
+    vec4 u_WorldSize;
+    vec4 u_TilesheetSize;
+    vec2 u_TileOffsets;
+};
 uniform sampler2D t_TileSheet;
-uniform vec3 u_WorldSize;
-uniform vec4 u_TilesheetSize;
-uniform vec2 u_TileOffsets;
 
 void main() {
     // apply offset to v_BufPos
