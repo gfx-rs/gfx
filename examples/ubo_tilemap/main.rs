@@ -15,17 +15,16 @@
 extern crate cgmath;
 #[macro_use]
 extern crate gfx;
-extern crate gfx_window_glutin;
-extern crate glutin;
+extern crate gfx_app;
 extern crate rand;
 extern crate genmesh;
 extern crate noise;
 extern crate image;
 
-use std::collections::HashMap;
 use std::io::Cursor;
 
-use glutin::{PollEventsIterator, Event, VirtualKeyCode, ElementState};
+//use std::collections::HashMap;
+//use glutin::{PollEventsIterator, Event, VirtualKeyCode, ElementState};
 
 pub use gfx::format::{DepthStencil, Srgba8, Rgba8};
 use gfx::traits::{FactoryExt};
@@ -56,6 +55,7 @@ pub fn load_texture<R, F>(factory: &mut F, data: &[u8])
 
 // this abstraction is provided to get a slightly better API around
 // input handling
+/* TODO: input, blocked by `winit`
 pub struct InputHandler {
     key_map: HashMap<VirtualKeyCode, bool>,
     key_list: Vec<VirtualKeyCode>
@@ -102,7 +102,7 @@ impl InputHandler {
         }
         *self.key_map.get(&key).unwrap()
     }
-}
+}*/
 
 // Actual tilemap data that makes up the elements of the UBO.
 // NOTE: It may be a bug, but it appears that
@@ -168,8 +168,8 @@ pub struct TileMapPlane<R> where R: gfx::Resources {
 
 impl<R> TileMapPlane<R> where R: gfx::Resources {
     pub fn new<F>(factory: &mut F, width: usize, height: usize, tile_size: usize,
-                  main_color: &gfx::handle::RenderTargetView<R, Srgba8>,
-                  main_depth: &gfx::handle::DepthStencilView<R, DepthStencil>,
+                  main_color: gfx::handle::RenderTargetView<R, Srgba8>,
+                  main_depth: gfx::handle::DepthStencilView<R, DepthStencil>,
                   aspect_ratio: f32)
                -> TileMapPlane<R> where F: gfx::Factory<R> {
         // charmap info
@@ -225,21 +225,26 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
             tilemap: factory.create_constant_buffer(TILEMAP_BUF_LENGTH),
             tilemap_cb: factory.create_constant_buffer(1),
             tilesheet: (tile_texture, factory.create_sampler_linear()),
-            out_color: main_color.clone(),
-            out_depth: main_depth.clone(),
+            out_color: main_color,
+            out_depth: main_depth,
         };
 
         let mut charmap_data = Vec::with_capacity(total_size);
         for _ in 0..total_size {
             charmap_data.push(TileMapData::new_empty());
         }
+        let view: AffineMatrix3<f32> = Transform::look_at(
+            Point3::new(0.0, 0.0, 800.0),
+            Point3::new(0.0, 0.0, 0.0),
+            Vector3::unit_y(),
+        );
 
         TileMapPlane {
             slice: slice,
             params: params,
             proj_stuff: ProjectionStuff {
                 model: Matrix4::identity().into(),
-                view: Matrix4::identity().into(),
+                view: view.mat.into(),
                 proj: cgmath::perspective(cgmath::deg(60.0f32), aspect_ratio, 0.1, 4000.0).into(),
             },
             proj_dirty: true,
@@ -266,14 +271,18 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
             self.tm_dirty = false;
         }
     }
+    fn clear<C>(&self, encoder: &mut gfx::Encoder<R, C>) where C: gfx::CommandBuffer<R> {
+        encoder.clear(&self.params.out_color,
+            [16.0 / 256.0, 14.0 / 256.0, 22.0 / 256.0, 1.0]);
+        encoder.clear_depth(&self.params.out_depth, 1.0);
+    }
     pub fn update_view(&mut self, view: &AffineMatrix3<f32>) {
-        let raw = view.mat.into();
-        self.proj_dirty = self.proj_stuff.view != raw;
-        self.proj_stuff.view = raw;
+        self.proj_stuff.view = view.mat.into();
+        self.proj_dirty = true;
     }
     pub fn update_x_offset(&mut self, amt: f32) {
-        self.tm_dirty = true;
         self.tm_stuff.offsets[0] = amt;
+        self.tm_dirty = true;
     }
     pub fn update_y_offset(&mut self, amt: f32) {
         self.tm_stuff.offsets[1] = amt;
@@ -296,36 +305,6 @@ pub struct TileMap<R> where R: gfx::Resources {
 }
 
 impl<R: gfx::Resources> TileMap<R> {
-    pub fn new<F>(factory: &mut F, tilemap_size: [usize; 2], charmap_size: [usize; 2], tile_size: usize,
-                  main_color: &gfx::handle::RenderTargetView<R, Srgba8>,
-                  main_depth: &gfx::handle::DepthStencilView<R, DepthStencil>,
-                  aspect_ratio: f32)
-                  -> TileMap<R> where F: gfx::Factory<R> {
-        let mut tiles = Vec::new();
-        for _ in 0 .. tilemap_size[0]*tilemap_size[1] {
-            tiles.push(TileMapData::new_empty());
-        }
-        let pso = factory.create_pipeline_simple(
-            include_bytes!("shader/tilemap_150.glslv"),
-            include_bytes!("shader/tilemap_150.glslf"),
-            gfx::state::CullFace::Back,
-            pipe::new()
-            ).unwrap();
-
-        // TODO: should probably check that charmap is smaller than tilemap
-        TileMap {
-            tiles: tiles,
-            pso: pso,
-            tilemap_plane: TileMapPlane::new(factory,
-                charmap_size[0], charmap_size[1], tile_size,
-                main_color, main_depth, aspect_ratio),
-            tile_size: tile_size as f32,
-            tilemap_size: tilemap_size,
-            charmap_size: charmap_size,
-            limit_coords: [tilemap_size[0] - charmap_size[0], tilemap_size[1] - charmap_size[1]],
-            focus_coords: [0,0]
-        }
-    }
     pub fn set_focus<F>(&mut self, factory: &mut F, focus: [usize; 2]) where F: gfx::Factory<R> {
         if focus[0] <= self.limit_coords[0] && focus[1] <= self.limit_coords[1] {
             self.focus_coords = focus;
@@ -401,12 +380,6 @@ impl<R: gfx::Resources> TileMap<R> {
         }
         self.tilemap_plane.update_y_offset(new_offset);
     }
-    pub fn update<C>(&mut self, view: &AffineMatrix3<f32>, encoder: &mut gfx::Encoder<R, C>)
-            where C: gfx::CommandBuffer<R> {
-        self.tilemap_plane.update_view(view);
-        self.tilemap_plane.prepare_buffers(encoder);
-        encoder.draw(&self.tilemap_plane.slice, &self.pso, &self.tilemap_plane.params);
-    }
     fn calc_idx(&self, xpos: usize, ypos: usize) -> usize {
         (ypos * self.tilemap_size[0]) + xpos
     }
@@ -417,7 +390,7 @@ impl<R: gfx::Resources> TileMap<R> {
 }
 
 
-pub fn populate_tilemap<R>(tilemap: &mut TileMap<R>, tilemap_size: [usize; 2]) where R: gfx::Resources {
+fn populate_tilemap<R>(tilemap: &mut TileMap<R>, tilemap_size: [usize; 2]) where R: gfx::Resources {
     // paper in with dummy data
     for ypos in 0 .. tilemap_size[1] {
         for xpos in 0 .. tilemap_size[0] {
@@ -461,33 +434,72 @@ pub fn populate_tilemap<R>(tilemap: &mut TileMap<R>, tilemap_size: [usize; 2]) w
     tilemap.set_tile(6,11,[2.0, 2.0, 0.0, 0.0]);
 }
 
+impl<R: gfx::Resources> gfx_app::Application<R> for TileMap<R> {
+    fn new<F: gfx::Factory<R>>(mut factory: F, init: gfx_app::Init<R>) -> Self {
+        use gfx::traits::FactoryExt;
+
+        let vs = gfx_app::shade::Source {
+            glsl_150: include_bytes!("shader/tilemap_150.glslv"),
+            hlsl_40:  include_bytes!("data/vertex.fx"),
+            .. gfx_app::shade::Source::empty()
+        };
+        let ps = gfx_app::shade::Source {
+            glsl_150: include_bytes!("shader/tilemap_150.glslf"),
+            hlsl_40:  include_bytes!("data/pixel.fx"),
+            .. gfx_app::shade::Source::empty()
+        };
+
+        // set up charmap plane and configure its tiles
+        let tilemap_size = [24, 24];
+        let charmap_size = [16, 16];
+        let tile_size = 32;
+
+        let mut tiles = Vec::new();
+        for _ in 0 .. tilemap_size[0]*tilemap_size[1] {
+            tiles.push(TileMapData::new_empty());
+        }
+
+        // TODO: should probably check that charmap is smaller than tilemap
+        let mut tm = TileMap {
+            tiles: tiles,
+            pso: factory.create_pipeline_simple(
+                vs.select(init.backend).unwrap(),
+                ps.select(init.backend).unwrap(),
+                gfx::state::CullFace::Back,
+                pipe::new()
+                ).unwrap(),
+            tilemap_plane: TileMapPlane::new(&mut factory,
+                charmap_size[0], charmap_size[1], tile_size,
+                init.color, init.depth, init.aspect_ratio),
+            tile_size: tile_size as f32,
+            tilemap_size: tilemap_size,
+            charmap_size: charmap_size,
+            limit_coords: [tilemap_size[0] - charmap_size[0], tilemap_size[1] - charmap_size[1]],
+            focus_coords: [0,0]
+        };
+
+        populate_tilemap(&mut tm, tilemap_size);
+        tm.set_focus(&mut factory, [0,0]);
+        tm
+    }
+
+    fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
+        //self.tilemap_plane.update_view(view);
+        self.tilemap_plane.prepare_buffers(encoder);
+
+        self.tilemap_plane.clear(encoder);
+
+        encoder.draw(&self.tilemap_plane.slice, &self.pso, &self.tilemap_plane.params);
+    }
+}
+
 pub fn main() {
-    use gfx::{Device};
+    use gfx_app::Application;
+    TileMap::launch_default("Tilemap example");
+}
 
-    let builder = glutin::WindowBuilder::new()
-        .with_title("Tilemap example".to_string());
-    let (window, mut device, mut factory, main_color, main_depth) =
-        gfx_window_glutin::init::<Srgba8, DepthStencil>(builder);
-    let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
 
-    // clear window contents
-    encoder.clear(&main_color, [0.0, 0.0, 0.0, 0.0]);
-    encoder.flush(&mut device);
-    window.swap_buffers().unwrap();
-
-    // set up charmap plane and configure its tiles
-    let tilemap_size = [24, 24];
-    let aspect_ratio = {
-        let (w, h) = window.get_inner_size().unwrap();
-        w as f32 / h as f32
-    };
-    let mut tilemap = TileMap::new(&mut factory,
-        tilemap_size, [16, 16], 32,
-        &main_color, &main_depth, aspect_ratio);
-    populate_tilemap(&mut tilemap, tilemap_size);
-
-    tilemap.set_focus(&mut factory, [0,0]);
-
+/*pub fn main() {
     // reusable variables for camera position
     let mut distance = 800.0;
     let mut x_pos = 0.0;
@@ -553,15 +565,4 @@ pub fn main() {
             Point3::new(x_pos, -y_pos, 0.0),
             Vector3::unit_y(),
         );
-
-        encoder.clear(&main_color,
-            [16.0 / 256.0, 14.0 / 256.0, 22.0 / 256.0, 1.0]);
-        encoder.clear_depth(&main_depth, 1.0);
-
-        tilemap.update(&view, &mut encoder);
-
-        encoder.flush(&mut device);
-        window.swap_buffers().unwrap();
-        device.cleanup();
-    }
-}
+*/
