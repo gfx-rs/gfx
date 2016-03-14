@@ -15,8 +15,8 @@
 //! Dummy backend implementation to test the code for compile errors
 //! outside of the graphics development environment.
 
-use {Capabilities, Device, Resources, SubmitInfo, IndexType, VertexCount};
-use {draw, pso, shade, target, tex};
+use {Capabilities, Device, Resources, IndexType, VertexCount};
+use {draw, handle, pso, shade, target, tex};
 use state as s;
 
 /// Dummy device which does minimal work, just to allow testing
@@ -96,10 +96,10 @@ impl Device for DummyDevice {
     type Resources = DummyResources;
     type CommandBuffer = DummyCommandBuffer;
 
-    fn get_capabilities<'a>(&'a self) -> &'a Capabilities {
+    fn get_capabilities(&self) -> &Capabilities {
         &self.capabilities
     }
-    fn reset_state(&mut self) {}
-    fn submit(&mut self, _: SubmitInfo<Self>) {}
+    fn pin_submitted_resources(&mut self, _: &handle::Manager<DummyResources>) {}
+    fn submit(&mut self, _: &mut DummyCommandBuffer, _: &draw::DataBuffer) {}
     fn cleanup(&mut self) {}
 }

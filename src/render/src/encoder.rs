@@ -19,7 +19,7 @@
 use std::mem;
 use draw_state::target::{Depth, Stencil};
 
-use gfx_core::{Device, Factory, IndexType, Resources, SubmitInfo, VertexCount};
+use gfx_core::{Device, Factory, IndexType, Resources, VertexCount};
 use gfx_core::{draw, format, handle, tex};
 use gfx_core::factory::Typed;
 use mesh;
@@ -61,17 +61,15 @@ impl<R: Resources, C: draw::CommandBuffer<R>> From<C> for Encoder<R, C> {
 }
 
 impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
-    /// Reset all commands for the command buffer re-usal.
-    pub fn reset(&mut self) {
+    /// Flush the encoded commands onto the device, and clean.
+    pub fn flush<D>(&mut self, device: &mut D) where
+        D: Device<Resources=R, CommandBuffer=C>
+    {
+        device.pin_submitted_resources(&self.handles);
+        device.submit(&mut self.command_buffer, &self.data_buffer);
         self.command_buffer.reset();
         self.data_buffer.clear();
         self.handles.clear();
-    }
-
-    /// Get command and data buffers to be submitted to the device.
-    pub fn as_buffer<D>(&mut self) -> SubmitInfo<D> where
-        D: Device<Resources=R, CommandBuffer=C> {
-        SubmitInfo(&mut self.command_buffer, &self.data_buffer, &self.handles)
     }
 
     /// Clone the renderer shared data but ignore the commands.

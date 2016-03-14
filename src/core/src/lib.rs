@@ -171,17 +171,6 @@ pub trait Resources:          Clone + Hash + Debug + Eq + PartialEq {
     type Fence:               Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
 }
 
-/// All the data needed simultaneously for submitting a command buffer for
-/// execution on a device.
-pub struct SubmitInfo<'a, D>(
-    pub &'a mut D::CommandBuffer,
-    pub &'a draw::DataBuffer,
-    pub &'a handle::Manager<D::Resources>
-) where
-    D: Device,
-    D::CommandBuffer: 'a,
-    D::Resources: 'a;
-
 /// An interface for performing draw calls using a specific graphics API
 pub trait Device: Sized {
     /// Associated resources type.
@@ -192,11 +181,11 @@ pub trait Device: Sized {
     /// Returns the capabilities available to the specific API implementation.
     fn get_capabilities(&self) -> &Capabilities;
 
-    /// Reset all the states to disabled/default.
-    fn reset_state(&mut self);
+    /// Pin everything from this handle manager to live for a frame.
+    fn pin_submitted_resources(&mut self, &handle::Manager<Self::Resources>);
 
     /// Submit a command buffer for execution.
-    fn submit(&mut self, SubmitInfo<Self>);
+    fn submit(&mut self, &mut Self::CommandBuffer, &draw::DataBuffer);
 
     /// Cleanup unused resources, to be called between frames.
     fn cleanup(&mut self);
@@ -209,7 +198,8 @@ pub trait DeviceFence<R: Resources>: Device<Resources=R> where
     /// Submit a command buffer to the stream creating a fence
     /// the fence is signaled after the GPU has executed all commands
     /// in the buffer
-    fn fenced_submit(&mut self, SubmitInfo<Self>, after: Option<handle::Fence<R>>) -> handle::Fence<R>;
+    fn fenced_submit(&mut self, &mut Self::CommandBuffer, &draw::DataBuffer,
+                     after: Option<handle::Fence<R>>) -> handle::Fence<R>;
 
     /// Wait on the supplied fence stalling the current thread until
     /// the fence is satisfied

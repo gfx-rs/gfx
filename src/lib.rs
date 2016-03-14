@@ -129,9 +129,8 @@ impl<
     fn render<D>(&mut self, device: &mut D) where
         D: gfx::Device<Resources=R, CommandBuffer=C>
     {
-        self.encoder.reset();
         self.app.render(&mut self.encoder);
-        device.submit(self.encoder.as_buffer());
+        self.encoder.flush(device);
     }
 }
 

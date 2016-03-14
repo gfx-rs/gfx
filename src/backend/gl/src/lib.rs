@@ -270,7 +270,6 @@ impl Device {
     /// Access the OpenGL directly via a closure. OpenGL types and enumerations
     /// can be found in the `gl` crate.
     pub unsafe fn with_gl<F: FnMut(&gl::Gl)>(&mut self, mut fun: F) {
-        use gfx_core::Device;
         self.reset_state();
         fun(&self.share.context);
     }
@@ -370,6 +369,13 @@ impl Device {
                                            level as gl::types::GLint,
                                            layer as gl::types::GLint);
             },
+        }
+    }
+
+    fn reset_state(&mut self) {
+        let data = d::draw::DataBuffer::new();
+        for com in command::RESET.iter() {
+            self.process(com, &data);
         }
     }
 
@@ -661,30 +667,25 @@ impl d::Device for Device {
     type Resources = Resources;
     type CommandBuffer = command::CommandBuffer;
 
-    fn get_capabilities<'a>(&'a self) -> &'a d::Capabilities {
+    fn get_capabilities(&self) -> &d::Capabilities {
         &self.share.capabilities
     }
 
-    fn reset_state(&mut self) {
-        let data = d::draw::DataBuffer::new();
-        for com in command::RESET.iter() {
-            self.process(com, &data);
-        }
-    }
-
-    fn submit(&mut self, submit_info: d::SubmitInfo<Self>) {
-        let d::SubmitInfo(cb, db, handles) = submit_info;
-        self.frame_handles.extend(handles);
-        self.reset_state();
-        for com in &cb.buf {
-            self.process(com, db);
-        }
+    fn pin_submitted_resources(&mut self, man: &handle::Manager<Resources>) {
+        self.frame_handles.extend(man);
         match self.max_resource_count {
             Some(c) if self.frame_handles.count() > c => {
                 error!("Way too many resources in the current frame. Did you call Device::cleanup()?");
                 self.max_resource_count = None;
             },
             _ => (),
+        }
+    }
+
+    fn submit(&mut self, cb: &mut command::CommandBuffer, db: &d::draw::DataBuffer) {
+        self.reset_state();
+        for com in &cb.buf {
+            self.process(com, db);
         }
     }
 
@@ -713,8 +714,8 @@ impl d::Device for Device {
 }
 
 impl gfx_core::DeviceFence<Resources> for Device {
-    fn fenced_submit(&mut self, info: d::SubmitInfo<Self>, after: Option<handle::Fence<Resources>>)
-                     -> handle::Fence<Resources> {
+    fn fenced_submit(&mut self, cb: &mut command::CommandBuffer, db: &d::draw::DataBuffer,
+                     after: Option<handle::Fence<Resources>>) -> handle::Fence<Resources> {
         //TODO: check capabilities?
         use gfx_core::Device;
         use gfx_core::handle::Producer;
@@ -726,7 +727,7 @@ impl gfx_core::DeviceFence<Resources> for Device {
             }
         }
 
-        self.submit(info);
+        self.submit(cb, db);
 
         let fence = unsafe {
             self.share.context.FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0)

@@ -426,23 +426,21 @@ impl gfx_core::Device for Device {
         &self.share.capabilities
     }
 
-    fn reset_state(&mut self) {
-        unsafe { (*self.context).ClearState(); }
-    }
-
-    fn submit(&mut self, submit_info: gfx_core::SubmitInfo<Self>) {
-        let gfx_core::SubmitInfo(cb, db, handles) = submit_info;
-        self.frame_handles.extend(handles);
-        self.reset_state();
-        for com in &cb.parser.0 {
-            process(self.context, com, db);
-        }
+    fn pin_submitted_resources(&mut self, man: &h::Manager<Resources>) {
+        self.frame_handles.extend(man);
         match self.max_resource_count {
             Some(c) if self.frame_handles.count() > c => {
                 error!("Way too many resources in the current frame. Did you call Device::cleanup()?");
                 self.max_resource_count = None;
             },
             _ => (),
+        }
+    }
+
+    fn submit(&mut self, cb: &mut Self::CommandBuffer, db: &gfx_core::draw::DataBuffer) {
+        unsafe { (*self.context).ClearState(); }
+        for com in &cb.parser.0 {
+            process(self.context, com, db);
         }
     }
 
@@ -488,15 +486,15 @@ impl gfx_core::Device for Deferred {
     type Resources = Resources;
     type CommandBuffer = command::CommandBuffer<DeferredContext>;
 
-    fn get_capabilities<'a>(&'a self) -> &'a gfx_core::Capabilities {
+    fn get_capabilities(&self) -> &gfx_core::Capabilities {
         &self.0.share.capabilities
     }
 
-    fn reset_state(&mut self) {}
+    fn pin_submitted_resources(&mut self, man: &h::Manager<Resources>) {
+        self.0.pin_submitted_resources(man);
+    }
 
-    fn submit(&mut self, submit_info: gfx_core::SubmitInfo<Self>) {
-        let gfx_core::SubmitInfo(cb, _db, handles) = submit_info;
-        self.0.frame_handles.extend(handles);
+    fn submit(&mut self, cb: &mut Self::CommandBuffer, _db: &gfx_core::draw::DataBuffer) {
         let cl = match cb.parser.1 {
             Some(cl) => cl,
             None => {
