@@ -184,11 +184,14 @@ struct Scene<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
 // Section-4: scene construction routines
 
 /// Create a full scene
-fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
+fn create_scene<R, F, C>(factory: &mut F, encoder: &gfx::Encoder<R, C>,
                 out_color: gfx::handle::RenderTargetView<R, Srgba8>,
                 out_depth: gfx::handle::DepthStencilView<R, DepthStencil>,
                 shadow_pso: gfx::PipelineState<R, shadow::Meta>)
-                -> Scene<R, F::CommandBuffer>
+                -> Scene<R, C> where
+    R: gfx::Resources,
+    F: gfx::Factory<R>,
+    C: gfx::CommandBuffer<R>,
 {
     use cgmath::{SquareMatrix, Matrix4, deg};
     use gfx::traits::FactoryExt;
@@ -251,7 +254,7 @@ fn create_scene<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
         shadow: factory.view_texture_as_depth_stencil(
             &shadow_tex, 0, Some(i as gfx::Layer), gfx::tex::DepthStencilFlags::empty(),
             ).unwrap(),
-        encoder: factory.create_encoder(),
+        encoder: encoder.clone_empty(),
     }).collect();
 
     // init light parameters
@@ -422,8 +425,8 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
     R: gfx::Resources + 'static,
     C: gfx::CommandBuffer<R> + Send + 'static,
 {
-    fn new<F>(mut factory: F, init: gfx_app::Init<R>) -> Self where 
-        F: gfx::Factory<R, CommandBuffer=C>
+    fn new<F>(mut factory: F, encoder: gfx::Encoder<R, C>, init: gfx_app::Init<R>) -> Self where
+        F: gfx::Factory<R>
     {
         use std::env;
         use gfx::traits::FactoryExt;
@@ -481,8 +484,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
                 ).unwrap()
         };
 
-        let encoder = factory.create_encoder();
-        let scene = create_scene(&mut factory,
+        let scene = create_scene(&mut factory, &encoder,
             init.color.clone(), init.depth.clone(),
             shadow_pso);
 
@@ -498,7 +500,6 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
     fn render<D>(&mut self, device: &mut D) where
         D: gfx::Device<Resources=R, CommandBuffer=C>
     {
-        self.encoder.reset();
         self.rotate(cgmath::vec3(0.0, 0.0, 1.0));
         // fill up shadow map for each light
         if self.is_parallel {
@@ -515,7 +516,6 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
                 let sender = sender_orig.clone();
                 thread::spawn(move || {
                     // clear
-                    light.encoder.reset();
                     light.encoder.clear_depth(&light.shadow, 1.0);
                     // fill
                     let subshare = share.read().unwrap();
@@ -539,8 +539,8 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
             // wait for the results and execute them
             // put the lights back into the scene
             for _ in 0..num {
-                let light = receiver.recv().unwrap();
-                device.submit(light.encoder.as_buffer());
+                let mut light = receiver.recv().unwrap();
+                light.encoder.flush(device);
                 self.scene.lights.push(light);
             }
         } else {
@@ -587,7 +587,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
             self.encoder.draw(&ent.slice, &self.forward_pso, batch);
         }
 
-        device.submit(self.encoder.as_buffer());
+        self.encoder.flush(device);
     }
 }
 
