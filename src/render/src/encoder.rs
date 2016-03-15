@@ -21,7 +21,7 @@ use draw_state::target::{Depth, Stencil};
 
 use gfx_core::{Device, Factory, IndexType, Resources, VertexCount};
 use gfx_core::{draw, format, handle, tex};
-use gfx_core::factory::Typed;
+use gfx_core::factory::{cast_slice, Typed};
 use mesh;
 use pso;
 
@@ -44,7 +44,6 @@ pub enum UpdateError<T> {
 /// Graphics commands encoder.
 pub struct Encoder<R: Resources, C: draw::CommandBuffer<R>> {
     command_buffer: C,
-    data_buffer: draw::DataBuffer,
     raw_pso_data: pso::RawDataSet<R>,
     handles: handle::Manager<R>,
 }
@@ -53,7 +52,6 @@ impl<R: Resources, C: draw::CommandBuffer<R>> From<C> for Encoder<R, C> {
     fn from(combuf: C) -> Encoder<R, C> {
         Encoder {
             command_buffer: combuf,
-            data_buffer: draw::DataBuffer::new(),
             raw_pso_data: pso::RawDataSet::new(),
             handles: handle::Manager::new(),
         }
@@ -66,9 +64,8 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
         D: Device<Resources=R, CommandBuffer=C>
     {
         device.pin_submitted_resources(&self.handles);
-        device.submit(&mut self.command_buffer, &self.data_buffer);
+        device.submit(&mut self.command_buffer);
         self.command_buffer.reset();
-        self.data_buffer.clear();
         self.handles.clear();
     }
 
@@ -76,7 +73,6 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
     pub fn clone_empty(&self) -> Encoder<R, C> {
         Encoder {
             command_buffer: self.command_buffer.clone_empty(),
-            data_buffer: draw::DataBuffer::new(),
             raw_pso_data: pso::RawDataSet::new(),
             handles: handle::Manager::new(),
         }
@@ -94,10 +90,9 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
         let offset_bytes = elem_size * offset_elements;
         let bound = data.len().wrapping_mul(elem_size) + offset_bytes;
         if bound <= buf.get_info().size {
-            let pointer = self.data_buffer.add_vec(data);
             self.command_buffer.update_buffer(
                 self.handles.ref_buffer(buf.raw()).clone(),
-                pointer, offset_bytes);
+                cast_slice(data), offset_bytes);
             Ok(())
         } else {
             Err(UpdateError::OutOfBounds {
@@ -109,10 +104,12 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
 
     /// Update a buffer with a single structure.
     pub fn update_constant_buffer<T: Copy>(&mut self, buf: &handle::Buffer<R, T>, data: &T) {
-        let pointer = self.data_buffer.add_struct(data);
+        use std::slice;
+        let slice = unsafe {
+            slice::from_raw_parts(data as *const T as *const u8, mem::size_of::<T>())
+        };
         self.command_buffer.update_buffer(
-            self.handles.ref_buffer(buf.raw()).clone(),
-            pointer, 0);
+            self.handles.ref_buffer(buf.raw()).clone(), slice, 0);
     }
 
     /// Update the contents of a texture.
@@ -150,17 +147,16 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
             })
         }
 
-        let pointer = self.data_buffer.add_vec(data);
         self.command_buffer.update_texture(
             self.handles.ref_texture(tex.raw()).clone(),
-            tex.get_info().kind, face, pointer,
+            tex.get_info().kind, face, cast_slice(data),
             img.convert(T::get_format()));
         Ok(())
     }
 
     fn draw_indexed<T>(&mut self, buf: &handle::Buffer<R, T>, ty: IndexType,
-                     slice: &mesh::Slice<R>, base: VertexCount,
-                     instances: draw::InstanceOption) {
+                    slice: &mesh::Slice<R>, base: VertexCount,
+                    instances: draw::InstanceOption) {
         self.command_buffer.bind_index(self.handles.ref_buffer(buf.raw()).clone(), ty);
         self.command_buffer.call_draw_indexed(slice.start, slice.end - slice.start, base, instances);
     }

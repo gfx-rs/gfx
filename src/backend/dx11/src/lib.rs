@@ -234,7 +234,23 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
     Ok((dev, factory, swap_chain, color_target))
 }
 
-fn process(ctx: *mut winapi::ID3D11DeviceContext, command: &command::Command, data_buf: &gfx_core::draw::DataBuffer) {
+fn update_buffer(ctx: *mut winapi::ID3D11DeviceContext, buffer: native::Buffer, data: &[u8], offset: usize) {
+    let map_type = winapi::D3D11_MAP_WRITE_DISCARD;
+    let resource = buffer.0 as *mut winapi::ID3D11Resource;
+    let hr = unsafe {
+        let mut sub = mem::zeroed();
+        let hr = (*ctx).Map(resource, 0, map_type, 0, &mut sub);
+        let dst = (sub.pData as *mut u8).offset(offset as isize);
+        ptr::copy_nonoverlapping(data.as_ptr(), dst, data.len());
+        (*ctx).Unmap(resource, 0);
+        hr
+    };
+    if !winapi::SUCCEEDED(hr) {
+        error!("Buffer {:?} failed to map, error {:x}", buffer, hr);
+    }
+}
+
+fn process(ctx: *mut winapi::ID3D11DeviceContext, command: &command::Command, data_buf: &command::DataBuffer) {
     use gfx_core::shade::Stage;
     use command::Command::*;
     let max_cb  = gfx_core::MAX_CONSTANT_BUFFERS as winapi::UINT;
@@ -313,20 +329,7 @@ fn process(ctx: *mut winapi::ID3D11DeviceContext, command: &command::Command, da
             (*ctx).OMSetBlendState(blend as *mut _, value, mask);
         },
         UpdateBuffer(buffer, pointer, offset) => {
-            let data = data_buf.get_ref(pointer);
-            let map_type = winapi::D3D11_MAP_WRITE_DISCARD;
-            let resource = buffer.0 as *mut winapi::ID3D11Resource;
-            let hr = unsafe {
-                let mut sub = mem::zeroed();
-                let hr = (*ctx).Map(resource, 0, map_type, 0, &mut sub);
-                let dst = (sub.pData as *mut u8).offset(offset as isize);
-                ptr::copy_nonoverlapping(data.as_ptr(), dst, data.len());
-                (*ctx).Unmap(resource, 0);
-                hr
-            };
-            if !winapi::SUCCEEDED(hr) {
-                error!("Buffer {:?} failed to map, error {:x}", buffer, hr);
-            }
+            update_buffer(ctx, buffer, data_buf.get(pointer), offset);
         },
         ClearColor(target, ref data) => unsafe {
             (*ctx).ClearRenderTargetView(target.0, data);
@@ -368,21 +371,26 @@ impl Device {
 }
 
 
-pub struct CommandList(Vec<command::Command>);
+pub struct CommandList(Vec<command::Command>, command::DataBuffer);
 impl CommandList {
     pub fn new() -> CommandList {
-        CommandList(Vec::new())
+        CommandList(Vec::new(), command::DataBuffer::new())
     }
 }
 impl command::Parser for CommandList {
     fn clone_empty(&self) -> CommandList {
-        CommandList(Vec::with_capacity(self.0.capacity()))
+        CommandList(Vec::with_capacity(self.0.capacity()), command::DataBuffer::new())
     }
     fn reset(&mut self) {
         self.0.clear();
+        self.1.reset();
     }
     fn parse(&mut self, com: command::Command) {
         self.0.push(com);
+    }
+    fn update_buffer(&mut self, buf: native::Buffer, data: &[u8], offset: usize) {
+        let ptr = self.1.add(data);
+        self.0.push(command::Command::UpdateBuffer(buf, ptr, offset));
     }
 }
 
@@ -412,8 +420,11 @@ impl command::Parser for DeferredContext {
         };
     }
     fn parse(&mut self, com: command::Command) {
-        let db = gfx_core::draw::DataBuffer::new(); //TODO
+        let db = command::DataBuffer::new(); //not used
         process(self.0, &com, &db);
+    }
+    fn update_buffer(&mut self, buf: native::Buffer, data: &[u8], offset: usize) {
+        update_buffer(self.0, buf, data, offset);
     }
 }
 
@@ -437,10 +448,10 @@ impl gfx_core::Device for Device {
         }
     }
 
-    fn submit(&mut self, cb: &mut Self::CommandBuffer, db: &gfx_core::draw::DataBuffer) {
+    fn submit(&mut self, cb: &mut Self::CommandBuffer) {
         unsafe { (*self.context).ClearState(); }
         for com in &cb.parser.0 {
-            process(self.context, com, db);
+            process(self.context, com, &cb.parser.1);
         }
     }
 
@@ -494,7 +505,7 @@ impl gfx_core::Device for Deferred {
         self.0.pin_submitted_resources(man);
     }
 
-    fn submit(&mut self, cb: &mut Self::CommandBuffer, _db: &gfx_core::draw::DataBuffer) {
+    fn submit(&mut self, cb: &mut Self::CommandBuffer) {
         let cl = match cb.parser.1 {
             Some(cl) => cl,
             None => {

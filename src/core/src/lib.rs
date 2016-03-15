@@ -185,7 +185,7 @@ pub trait Device: Sized {
     fn pin_submitted_resources(&mut self, &handle::Manager<Self::Resources>);
 
     /// Submit a command buffer for execution.
-    fn submit(&mut self, &mut Self::CommandBuffer, &draw::DataBuffer);
+    fn submit(&mut self, &mut Self::CommandBuffer);
 
     /// Cleanup unused resources, to be called between frames.
     fn cleanup(&mut self);
@@ -198,7 +198,7 @@ pub trait DeviceFence<R: Resources>: Device<Resources=R> where
     /// Submit a command buffer to the stream creating a fence
     /// the fence is signaled after the GPU has executed all commands
     /// in the buffer
-    fn fenced_submit(&mut self, &mut Self::CommandBuffer, &draw::DataBuffer,
+    fn fenced_submit(&mut self, &mut Self::CommandBuffer,
                      after: Option<handle::Fence<R>>) -> handle::Fence<R>;
 
     /// Wait on the supplied fence stalling the current thread until

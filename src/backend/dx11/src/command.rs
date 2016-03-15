@@ -26,6 +26,37 @@ use gfx_core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
                MAX_SAMPLERS, MAX_COLOR_TARGETS};
 use {native, Resources, InputLayout, Texture, Pipeline, Program};
 
+/// The place of some data in the data buffer.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct DataPointer {
+    offset: u32,
+    size: u32,
+}
+
+pub struct DataBuffer(Vec<u8>);
+impl DataBuffer {
+    /// Create a new empty data buffer.
+    pub fn new() -> DataBuffer {
+        DataBuffer(Vec::new())
+    }
+    /// Reset the contents.
+    pub fn reset(&mut self) {
+        self.0.clear();
+    }
+    /// Copy a given vector slice into the buffer.
+    pub fn add(&mut self, data: &[u8]) -> DataPointer {
+        self.0.extend_from_slice(data);
+        DataPointer {
+            offset: (self.0.len() - data.len()) as u32,
+            size: data.len() as u32,
+        }
+    }
+    /// Return a reference to a stored data object.
+    pub fn get(&self, ptr: DataPointer) -> &[u8] {
+        &self.0[ptr.offset as usize .. (ptr.offset + ptr.size) as usize]
+    }
+}
+
 ///Serialized device command.
 #[derive(Clone, Copy, Debug)]
 pub enum Command {
@@ -45,7 +76,7 @@ pub enum Command {
     SetDepthStencil(*const ID3D11DepthStencilState, UINT),
     SetBlend(*const ID3D11BlendState, [FLOAT; 4], UINT),
     // resource updates
-    UpdateBuffer(native::Buffer, draw::DataPointer, usize),
+    UpdateBuffer(native::Buffer, DataPointer, usize),
     // drawing
     ClearColor(native::Rtv, [f32; 4]),
     ClearDepthStencil(native::Dsv, D3D11_CLEAR_FLAG, FLOAT, UINT8),
@@ -89,6 +120,7 @@ pub trait Parser: Sized {
     fn clone_empty(&self) -> Self;
     fn reset(&mut self);
     fn parse(&mut self, Command);
+    fn update_buffer(&mut self, native::Buffer, &[u8], usize);
 }
 
 impl<P: Parser> From<P> for CommandBuffer<P> {
@@ -110,10 +142,7 @@ impl<P: Parser> CommandBuffer<P> {
 
 impl<P: Parser> draw::CommandBuffer<Resources> for CommandBuffer<P> {
     fn clone_empty(&self) -> CommandBuffer<P> {
-        CommandBuffer {
-            parser: self.parser.clone_empty(),
-            cache: Cache::new(),
-        }
+        self.parser.clone_empty().into()
     }
 
     fn reset(&mut self) {
@@ -271,12 +300,12 @@ impl<P: Parser> draw::CommandBuffer<Resources> for CommandBuffer<P> {
         self.cache.blend_ref = rv.blend;
     }
 
-    fn update_buffer(&mut self, buf: native::Buffer, data: draw::DataPointer, offset: usize) {
-        self.parser.parse(Command::UpdateBuffer(buf, data, offset));
+    fn update_buffer(&mut self, buf: native::Buffer, data: &[u8], offset: usize) {
+        self.parser.update_buffer(buf, data, offset);
     }
 
     fn update_texture(&mut self, _: Texture, _: tex::Kind, _: Option<tex::CubeFace>,
-                      _: draw::DataPointer, _: tex::RawImageInfo) {
+                      _: &[u8], _: tex::RawImageInfo) {
         unimplemented!()
     }
 

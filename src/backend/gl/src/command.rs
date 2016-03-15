@@ -16,7 +16,7 @@
 
 use gl;
 use gfx_core as c;
-use gfx_core::draw::{ClearColor, DataPointer, InstanceOption};
+use gfx_core::draw;
 use gfx_core::state as s;
 use gfx_core::target::{ColorValue, Depth, Mirror, Rect, Stencil};
 use {Buffer, Program, FrameBuffer, Texture,
@@ -40,6 +40,33 @@ pub type Access = gl::types::GLenum;
 #[derive(Clone, Copy, Debug)]
 pub struct RawOffset(pub *const gl::types::GLvoid);
 unsafe impl Send for RawOffset {}
+
+/// The place of some data in the data buffer.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct DataPointer {
+    offset: u32,
+    size: u32,
+}
+
+pub struct DataBuffer(Vec<u8>);
+impl DataBuffer {
+    /// Create a new empty data buffer.
+    pub fn new() -> DataBuffer {
+        DataBuffer(Vec::new())
+    }
+    /// Copy a given vector slice into the buffer.
+    fn add(&mut self, data: &[u8]) -> DataPointer {
+        self.0.extend_from_slice(data);
+        DataPointer {
+            offset: (self.0.len() - data.len()) as u32,
+            size: data.len() as u32,
+        }
+    }
+    /// Return a reference to a stored data object.
+    pub fn get(&self, ptr: DataPointer) -> &[u8] {
+        &self.0[ptr.offset as usize .. (ptr.offset + ptr.size) as usize]
+    }
+}
 
 ///Serialized device command.
 #[derive(Clone, Copy, Debug)]
@@ -68,10 +95,10 @@ pub enum Command {
     UpdateTexture(Texture, c::tex::Kind, Option<c::tex::CubeFace>,
                   DataPointer, c::tex::RawImageInfo),
     // drawing
-    Clear(Option<ClearColor>, Option<Depth>, Option<Stencil>),
-    Draw(gl::types::GLenum, c::VertexCount, c::VertexCount, InstanceOption),
+    Clear(Option<draw::ClearColor>, Option<Depth>, Option<Stencil>),
+    Draw(gl::types::GLenum, c::VertexCount, c::VertexCount, draw::InstanceOption),
     DrawIndexed(gl::types::GLenum, gl::types::GLenum, RawOffset,
-                c::VertexCount, c::VertexCount, InstanceOption),
+                c::VertexCount, c::VertexCount, draw::InstanceOption),
     Blit(Rect, Rect, Mirror, usize),
 }
 
@@ -132,6 +159,7 @@ impl Cache {
 
 pub struct CommandBuffer {
     pub buf: Vec<Command>,
+    pub data: DataBuffer,
     fbo: FrameBuffer,
     cache: Cache,
 }
@@ -140,6 +168,7 @@ impl CommandBuffer {
     pub fn new(fbo: FrameBuffer) -> CommandBuffer {
         CommandBuffer {
             buf: Vec::new(),
+            data: DataBuffer::new(),
             fbo: fbo,
             cache: Cache::new(),
         }
@@ -159,6 +188,7 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
 
     fn reset(&mut self) {
         self.buf.clear();
+        self.data.0.clear();
         self.cache = Cache::new();
     }
 
@@ -264,23 +294,24 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.push(Command::SetBlendColor(rv.blend));
     }
 
-    fn update_buffer(&mut self, buf: Buffer, data: DataPointer,
-                        offset_bytes: usize) {
-        self.buf.push(Command::UpdateBuffer(buf, data, offset_bytes));
+    fn update_buffer(&mut self, buf: Buffer, data: &[u8], offset_bytes: usize) {
+        let ptr = self.data.add(data);
+        self.buf.push(Command::UpdateBuffer(buf, ptr, offset_bytes));
     }
 
     fn update_texture(&mut self, ntex: NewTexture, kind: c::tex::Kind,
-                      face: Option<c::tex::CubeFace>, data: DataPointer,
+                      face: Option<c::tex::CubeFace>, data: &[u8],
                       img: c::tex::RawImageInfo) {
+        let ptr = self.data.add(data);
         match ntex {
             NewTexture::Texture(t) =>
-                self.buf.push(Command::UpdateTexture(t, kind, face, data, img)),
+                self.buf.push(Command::UpdateTexture(t, kind, face, ptr, img)),
             NewTexture::Surface(s) =>
                 error!("GL: unable to update the contents of a Surface({})", s),
         }
     }
 
-    fn clear_color(&mut self, target: TargetView, value: ClearColor) {
+    fn clear_color(&mut self, target: TargetView, value: draw::ClearColor) {
         // this could be optimized by deferring the actual clear call
         let mut pts = c::pso::PixelTargetSet::new();
         pts.colors[0] = Some(target);
@@ -301,13 +332,13 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
     }
 
     fn call_draw(&mut self, start: c::VertexCount,
-                 count: c::VertexCount, instances: InstanceOption) {
+                 count: c::VertexCount, instances: draw::InstanceOption) {
         self.buf.push(Command::Draw(self.cache.primitive, start, count, instances));
     }
 
     fn call_draw_indexed(&mut self, start: c::VertexCount,
                          count: c::VertexCount, base: c::VertexCount,
-                         instances: InstanceOption) {
+                         instances: draw::InstanceOption) {
         let (offset, gl_index) = match self.cache.index_type {
             c::IndexType::U8  => (start * 1u32, gl::UNSIGNED_BYTE),
             c::IndexType::U16 => (start * 2u32, gl::UNSIGNED_SHORT),

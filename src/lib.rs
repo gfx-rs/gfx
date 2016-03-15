@@ -107,7 +107,9 @@ pub struct Wrap<R: gfx::Resources, C: gfx::CommandBuffer<R>, A>{
 }
 
 #[cfg(target_os = "windows")]
-pub type D3D11CommandBuffer = gfx_device_dx11::CommandBuffer<gfx_device_dx11::CommandList>;
+pub type D3D11CommandBuffer = gfx_device_dx11::CommandBuffer<gfx_device_dx11::DeferredContext>;
+#[cfg(target_os = "windows")]
+pub type D3D11CommandBufferFake = gfx_device_dx11::CommandBuffer<gfx_device_dx11::CommandList>;
 #[cfg(target_os = "windows")]
 pub type WrapD3D11<A> = Wrap<gfx_device_dx11::Resources, D3D11CommandBuffer, A>;
 pub type WrapGL2<A> = Wrap<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer, A>;
@@ -194,14 +196,14 @@ impl<
         use gfx::traits::{Device, Factory};
 
         env_logger::init().unwrap();
-        let (window, mut device, mut factory, main_color) =
+        let (window, device, mut factory, main_color) =
             gfx_window_dxgi::init::<ColorFormat>(title, config.size.0, config.size.1)
             .unwrap();
         let main_depth = factory.create_depth_stencil_view_only(
             window.size.0, window.size.1).unwrap();
-        let combuf = factory.create_command_buffer();
-        //let combuf = factory.create_command_buffer_native();
-        //let mut device: gfx_device_dx11::Deferred = device.into();
+
+        //let combuf = factory.create_command_buffer();
+        let combuf = factory.create_command_buffer_native();
 
         let mut app = Self::new(factory, combuf.into(), Init {
             backend: shade::Backend::Hlsl(device.get_shader_model()),
@@ -209,6 +211,8 @@ impl<
             depth: main_depth,
             aspect_ratio: window.size.0 as f32 / window.size.1 as f32,
         });
+
+        let mut device: gfx_device_dx11::Deferred = device.into();
 
         let mut harness = Harness::new();
         while window.dispatch() {

@@ -43,7 +43,6 @@ pub fn cast_slice<A: Copy, B: Copy>(slice: &[A]) -> &[B] {
     }
 }
 
-
 /// Specifies the access allowed to a buffer mapping.
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 #[repr(u8)]

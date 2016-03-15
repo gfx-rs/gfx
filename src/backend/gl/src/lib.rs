@@ -29,7 +29,7 @@ use gfx_core as d;
 use gfx_core::handle;
 use gfx_core::state as s;
 use gfx_core::target::{Layer, Level};
-use command::Command;
+use command::{Command, DataBuffer};
 
 pub use self::command::CommandBuffer;
 pub use self::factory::Factory;
@@ -373,13 +373,13 @@ impl Device {
     }
 
     fn reset_state(&mut self) {
-        let data = d::draw::DataBuffer::new();
+        let data = DataBuffer::new();
         for com in command::RESET.iter() {
             self.process(com, &data);
         }
     }
 
-    fn process(&mut self, cmd: &Command, data_buf: &d::draw::DataBuffer) {
+    fn process(&mut self, cmd: &Command, data_buf: &DataBuffer) {
         match *cmd {
             Command::Clear(color, depth, stencil) => {
                 let gl = &self.share.context;
@@ -504,12 +504,12 @@ impl Device {
                 state::set_blend_color(&self.share.context, color);
             },
             Command::UpdateBuffer(buffer, pointer, offset) => {
-                let data = data_buf.get_ref(pointer);
+                let data = data_buf.get(pointer);
                 factory::update_sub_buffer(&self.share.context, buffer,
                     data.as_ptr(), data.len(), offset, d::factory::BufferRole::Vertex);
             },
             Command::UpdateTexture(texture, kind, face, pointer, ref image) => {
-                let data = data_buf.get_ref(pointer);
+                let data = data_buf.get(pointer);
                 match tex::update_texture(&self.share.context, texture, kind, face, image, data) {
                     Ok(_) => (),
                     Err(e) => error!("GL: Texture({}) update failed: {:?}", texture, e),
@@ -682,10 +682,10 @@ impl d::Device for Device {
         }
     }
 
-    fn submit(&mut self, cb: &mut command::CommandBuffer, db: &d::draw::DataBuffer) {
+    fn submit(&mut self, cb: &mut command::CommandBuffer) {
         self.reset_state();
         for com in &cb.buf {
-            self.process(com, db);
+            self.process(com, &cb.data);
         }
     }
 
@@ -714,7 +714,7 @@ impl d::Device for Device {
 }
 
 impl gfx_core::DeviceFence<Resources> for Device {
-    fn fenced_submit(&mut self, cb: &mut command::CommandBuffer, db: &d::draw::DataBuffer,
+    fn fenced_submit(&mut self, cb: &mut command::CommandBuffer,
                      after: Option<handle::Fence<Resources>>) -> handle::Fence<Resources> {
         //TODO: check capabilities?
         use gfx_core::Device;
@@ -727,7 +727,7 @@ impl gfx_core::DeviceFence<Resources> for Device {
             }
         }
 
-        self.submit(cb, db);
+        self.submit(cb);
 
         let fence = unsafe {
             self.share.context.FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0)

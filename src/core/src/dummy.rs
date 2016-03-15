@@ -81,9 +81,9 @@ impl draw::CommandBuffer<DummyResources> for DummyCommandBuffer {
     fn bind_index(&mut self, _: (), _: IndexType) {}
     fn set_scissor(&mut self, _: target::Rect) {}
     fn set_ref_values(&mut self, _: s::RefValues) {}
-    fn update_buffer(&mut self, _: (), _: draw::DataPointer, _: usize) {}
+    fn update_buffer(&mut self, _: (), _: &[u8], _: usize) {}
     fn update_texture(&mut self, _: (), _: tex::Kind, _: Option<tex::CubeFace>,
-                      _: draw::DataPointer, _: tex::RawImageInfo) {}
+                      _: &[u8], _: tex::RawImageInfo) {}
     fn clear_color(&mut self, _: (), _: draw::ClearColor) {}
     fn clear_depth_stencil(&mut self, _: (), _: Option<target::Depth>,
                            _: Option<target::Stencil>) {}
@@ -100,6 +100,6 @@ impl Device for DummyDevice {
         &self.capabilities
     }
     fn pin_submitted_resources(&mut self, _: &handle::Manager<DummyResources>) {}
-    fn submit(&mut self, _: &mut DummyCommandBuffer, _: &draw::DataBuffer) {}
+    fn submit(&mut self, _: &mut DummyCommandBuffer) {}
     fn cleanup(&mut self) {}
 }
