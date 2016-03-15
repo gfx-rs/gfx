@@ -190,7 +190,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 inv_proj: self.projection.invert().unwrap().into(),
                 view: view.mat.into(),
             };
-            encoder.update_buffer(&self.bundle.data.locals, &[locals], 0).unwrap();
+            encoder.update_constant_buffer(&self.bundle.data.locals, &locals);
         }
 
         encoder.clear(&self.bundle.data.out, [0.3, 0.3, 0.3, 1.0]);

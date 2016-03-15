@@ -147,7 +147,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         self.bundle.data.offset0 = self.cycles[0];
         self.bundle.data.offset1 = self.cycles[1];
         let locals = Locals { offsets: self.cycles };
-        encoder.update_buffer(&self.bundle.data.locals, &[locals], 0).unwrap();
+        encoder.update_constant_buffer(&self.bundle.data.locals, &locals);
 
         encoder.clear(&self.bundle.data.out, [0.3, 0.3, 0.3, 1.0]);
         self.bundle.encode(encoder);

@@ -263,11 +263,11 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
     }
     fn prepare_buffers<C>(&mut self, encoder: &mut gfx::Encoder<R, C>) where C: gfx::CommandBuffer<R> {
         if self.proj_dirty {
-            encoder.update_buffer(&self.params.projection_cb, &[self.proj_stuff], 0).unwrap();
+            encoder.update_constant_buffer(&self.params.projection_cb, &self.proj_stuff);
             self.proj_dirty = false;
         }
         if self.tm_dirty {
-            encoder.update_buffer(&self.params.tilemap_cb, &[self.tm_stuff], 0).unwrap();
+            encoder.update_constant_buffer(&self.params.tilemap_cb, &self.tm_stuff);
             self.tm_dirty = false;
         }
     }
