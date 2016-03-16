@@ -24,7 +24,7 @@ use gfx_core::{IndexType, VertexCount};
 use gfx_core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
                MAX_RESOURCE_VIEWS, MAX_UNORDERED_VIEWS,
                MAX_SAMPLERS, MAX_COLOR_TARGETS};
-use {native, Resources, InputLayout, Texture, Pipeline, Program};
+use {native, Resources, InputLayout, Buffer, Texture, Pipeline, Program};
 
 /// The place of some data in the data buffer.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -63,7 +63,7 @@ pub enum Command {
     // states
     BindProgram(Program),
     BindInputLayout(InputLayout),
-    BindIndex(native::Buffer, DXGI_FORMAT),
+    BindIndex(Buffer, DXGI_FORMAT),
     BindVertexBuffers([native::Buffer; MAX_VERTEX_ATTRIBUTES], [UINT; MAX_VERTEX_ATTRIBUTES], [UINT; MAX_VERTEX_ATTRIBUTES]),
     BindConstantBuffers(shade::Stage, [native::Buffer; MAX_CONSTANT_BUFFERS]),
     BindShaderResources(shade::Stage, [native::Srv; MAX_RESOURCE_VIEWS]),
@@ -76,7 +76,8 @@ pub enum Command {
     SetDepthStencil(*const ID3D11DepthStencilState, UINT),
     SetBlend(*const ID3D11BlendState, [FLOAT; 4], UINT),
     // resource updates
-    UpdateBuffer(native::Buffer, DataPointer, usize),
+    UpdateBuffer(Buffer, DataPointer, usize),
+    UpdateTexture(Texture, tex::Kind, Option<tex::CubeFace>, DataPointer, tex::RawImageInfo),
     // drawing
     ClearColor(native::Rtv, [f32; 4]),
     ClearDepthStencil(native::Dsv, D3D11_CLEAR_FLAG, FLOAT, UINT8),
@@ -120,7 +121,8 @@ pub trait Parser: Sized {
     fn clone_empty(&self) -> Self;
     fn reset(&mut self);
     fn parse(&mut self, Command);
-    fn update_buffer(&mut self, native::Buffer, &[u8], usize);
+    fn update_buffer(&mut self, Buffer, &[u8], usize);
+    fn update_texture(&mut self, Texture, tex::Kind, Option<tex::CubeFace>, &[u8], tex::RawImageInfo);
 }
 
 impl<P: Parser> From<P> for CommandBuffer<P> {
@@ -173,7 +175,7 @@ impl<P: Parser> draw::CommandBuffer<Resources> for CommandBuffer<P> {
                     error!("No vertex input provided for slot {} of format {:?}", i, fm)
                 },
                 (Some((buffer, offset)), Some(ref format)) => {
-                    buffers[i] = buffer;
+                    buffers[i] = buffer.0;
                     strides[i] = format.0.stride as UINT;
                     offsets[i] = offset as UINT;
                 },
@@ -190,7 +192,7 @@ impl<P: Parser> draw::CommandBuffer<Resources> for CommandBuffer<P> {
             let mut count = 0;
             for cbuf in cbs.iter() {
                 if cbuf.1.contains(mask) {
-                    buffers[cbuf.2 as usize] = cbuf.0;
+                    buffers[cbuf.2 as usize] = (cbuf.0).0;
                     count += 1;
                 }
             }
@@ -273,7 +275,7 @@ impl<P: Parser> draw::CommandBuffer<Resources> for CommandBuffer<P> {
         self.parser.parse(Command::SetViewport(viewport));
     }
 
-    fn bind_index(&mut self, buf: native::Buffer, itype: IndexType) {
+    fn bind_index(&mut self, buf: Buffer, itype: IndexType) {
         let format = match itype {
             IndexType::U8  => DXGI_FORMAT_R8_UINT,
             IndexType::U16 => DXGI_FORMAT_R16_UINT,
@@ -300,13 +302,13 @@ impl<P: Parser> draw::CommandBuffer<Resources> for CommandBuffer<P> {
         self.cache.blend_ref = rv.blend;
     }
 
-    fn update_buffer(&mut self, buf: native::Buffer, data: &[u8], offset: usize) {
+    fn update_buffer(&mut self, buf: Buffer, data: &[u8], offset: usize) {
         self.parser.update_buffer(buf, data, offset);
     }
 
-    fn update_texture(&mut self, _: Texture, _: tex::Kind, _: Option<tex::CubeFace>,
-                      _: &[u8], _: tex::RawImageInfo) {
-        unimplemented!()
+    fn update_texture(&mut self, tex: Texture, kind: tex::Kind, face: Option<tex::CubeFace>,
+                      data: &[u8], image: tex::RawImageInfo) {
+        self.parser.update_texture(tex, kind, face, data, image);
     }
 
     fn clear_color(&mut self, target: native::Rtv, value: draw::ClearColor) {

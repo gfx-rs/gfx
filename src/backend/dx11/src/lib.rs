@@ -27,10 +27,10 @@ pub use self::data::map_format;
 
 mod command;
 mod data;
+mod execute;
 mod factory;
 mod mirror;
 mod state;
-
 
 #[doc(hidden)]
 pub mod native {
@@ -40,6 +40,15 @@ pub mod native {
     pub struct Buffer(pub *mut ID3D11Buffer);
     unsafe impl Send for Buffer {}
     unsafe impl Sync for Buffer {}
+
+    #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+    pub enum Texture {
+        D1(*mut ID3D11Texture1D),
+        D2(*mut ID3D11Texture2D),
+        D3(*mut ID3D11Texture3D),
+    }
+    unsafe impl Send for Texture {}
+    unsafe impl Sync for Texture {}
 
     #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
     pub struct Rtv(pub *mut ID3D11RenderTargetView);
@@ -64,31 +73,30 @@ pub mod native {
 
 use std::cell::RefCell;
 use std::os::raw::c_void;
-use std::{mem, ptr};
+use std::ptr;
 use std::sync::Arc;
 pub use self::factory::Factory;
 use gfx_core::handle as h;
+use gfx_core::factory::Usage;
+use gfx_core::tex;
 
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub enum Texture {
-    D1(*mut winapi::ID3D11Texture1D),
-    D2(*mut winapi::ID3D11Texture2D),
-    D3(*mut winapi::ID3D11Texture3D),
-}
-unsafe impl Send for Texture {}
-unsafe impl Sync for Texture {}
+pub struct Buffer(native::Buffer, Usage);
 
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct Texture(native::Texture, Usage);
 impl Texture {
     pub fn to_resource(&self) -> *mut winapi::ID3D11Resource {
         type Res = *mut winapi::ID3D11Resource;
-        match *self {
-            Texture::D1(t) => t as Res,
-            Texture::D2(t) => t as Res,
-            Texture::D3(t) => t as Res,
+        match self.0 {
+            native::Texture::D1(t) => t as Res,
+            native::Texture::D2(t) => t as Res,
+            native::Texture::D3(t) => t as Res,
         }
     }
 }
+
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Shader {
@@ -128,7 +136,7 @@ unsafe impl Sync for Pipeline {}
 pub enum Resources {}
 
 impl gfx_core::Resources for Resources {
-    type Buffer              = native::Buffer;
+    type Buffer              = Buffer;
     type Shader              = Shader;
     type Program             = Program;
     type PipelineStateObject = Pipeline;
@@ -166,7 +174,6 @@ static FEATURE_LEVELS: [winapi::D3D_FEATURE_LEVEL; 3] = [
 pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHAIN_DESC, format: gfx_core::format::Format)
               -> Result<(Device, Factory, *mut winapi::IDXGISwapChain, h::RawRenderTargetView<Resources>), winapi::HRESULT> {
     use gfx_core::handle::Producer;
-    use gfx_core::tex;
 
     let mut swap_chain = ptr::null_mut();
     let create_flags = winapi::D3D11_CREATE_DEVICE_FLAG(0); //D3D11_CREATE_DEVICE_DEBUG;
@@ -204,12 +211,13 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
         (*swap_chain).GetBuffer(0, &dxguid::IID_ID3D11Texture2D, &mut back_buffer
             as *mut *mut winapi::ID3D11Texture2D as *mut *mut c_void);
     }
-    let color_tex = share.handles.borrow_mut().make_texture(Texture::D2(back_buffer), gfx_core::tex::Descriptor {
+    let raw_tex = Texture(native::Texture::D2(back_buffer), Usage::GpuOnly);
+    let color_tex = share.handles.borrow_mut().make_texture(raw_tex, tex::Descriptor {
         kind: tex::Kind::D2(desc.BufferDesc.Width as tex::Size, desc.BufferDesc.Height as tex::Size, tex::AaMode::Single),
         levels: 1,
         format: format.0,
         bind: gfx_core::factory::RENDER_TARGET,
-        usage: gfx_core::factory::Usage::GpuOnly,
+        usage: raw_tex.1,
     });
 
     let dev = Device {
@@ -223,7 +231,7 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
 
     let color_target = {
         use gfx_core::Factory;
-        let desc = gfx_core::tex::RenderDesc {
+        let desc = tex::RenderDesc {
             channel: format.1,
             level: 0,
             layer: None,
@@ -232,124 +240,6 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
     };
 
     Ok((dev, factory, swap_chain, color_target))
-}
-
-fn update_buffer(ctx: *mut winapi::ID3D11DeviceContext, buffer: native::Buffer, data: &[u8], offset: usize) {
-    let map_type = winapi::D3D11_MAP_WRITE_DISCARD;
-    let resource = buffer.0 as *mut winapi::ID3D11Resource;
-    let hr = unsafe {
-        let mut sub = mem::zeroed();
-        let hr = (*ctx).Map(resource, 0, map_type, 0, &mut sub);
-        let dst = (sub.pData as *mut u8).offset(offset as isize);
-        ptr::copy_nonoverlapping(data.as_ptr(), dst, data.len());
-        (*ctx).Unmap(resource, 0);
-        hr
-    };
-    if !winapi::SUCCEEDED(hr) {
-        error!("Buffer {:?} failed to map, error {:x}", buffer, hr);
-    }
-}
-
-fn process(ctx: *mut winapi::ID3D11DeviceContext, command: &command::Command, data_buf: &command::DataBuffer) {
-    use gfx_core::shade::Stage;
-    use command::Command::*;
-    let max_cb  = gfx_core::MAX_CONSTANT_BUFFERS as winapi::UINT;
-    let max_srv = gfx_core::MAX_RESOURCE_VIEWS   as winapi::UINT;
-    let max_sm  = gfx_core::MAX_SAMPLERS         as winapi::UINT;
-    debug!("Processing {:?}", command);
-    match *command {
-        BindProgram(ref prog) => unsafe {
-            (*ctx).VSSetShader(prog.vs, ptr::null_mut(), 0);
-            (*ctx).GSSetShader(prog.gs, ptr::null_mut(), 0);
-            (*ctx).PSSetShader(prog.ps, ptr::null_mut(), 0);
-        },
-        BindInputLayout(layout) => unsafe {
-            (*ctx).IASetInputLayout(layout);
-        },
-        BindIndex(ref buf, format) => unsafe {
-            (*ctx).IASetIndexBuffer(buf.0, format, 0);
-        },
-        BindVertexBuffers(ref buffers, ref strides, ref offsets) => unsafe {
-            (*ctx).IASetVertexBuffers(0, gfx_core::MAX_VERTEX_ATTRIBUTES as winapi::UINT,
-                &buffers[0].0, strides.as_ptr(), offsets.as_ptr());
-        },
-        BindConstantBuffers(stage, ref buffers) => match stage {
-            Stage::Vertex => unsafe {
-                (*ctx).VSSetConstantBuffers(0, max_cb, &buffers[0].0);
-            },
-            Stage::Geometry => unsafe {
-                (*ctx).GSSetConstantBuffers(0, max_cb, &buffers[0].0);
-            },
-            Stage::Pixel => unsafe {
-                (*ctx).PSSetConstantBuffers(0, max_cb, &buffers[0].0);
-            },
-        },
-        BindShaderResources(stage, ref views) => match stage {
-            Stage::Vertex => unsafe {
-                (*ctx).VSSetShaderResources(0, max_srv, &views[0].0);
-            },
-            Stage::Geometry => unsafe {
-                (*ctx).GSSetShaderResources(0, max_srv, &views[0].0);
-            },
-            Stage::Pixel => unsafe {
-                (*ctx).PSSetShaderResources(0, max_srv, &views[0].0);
-            },
-        },
-        BindSamplers(stage, ref samplers) => match stage {
-            Stage::Vertex => unsafe {
-                (*ctx).VSSetSamplers(0, max_sm, &samplers[0].0);
-            },
-            Stage::Geometry => unsafe {
-                (*ctx).GSSetSamplers(0, max_sm, &samplers[0].0);
-            },
-            Stage::Pixel => unsafe {
-                (*ctx).PSSetSamplers(0, max_sm, &samplers[0].0);
-            },
-        },
-        BindPixelTargets(ref colors, ds) => unsafe {
-            (*ctx).OMSetRenderTargets(gfx_core::MAX_COLOR_TARGETS as winapi::UINT,
-                &colors[0].0, ds.0);
-        },
-        SetPrimitive(topology) => unsafe {
-            (*ctx).IASetPrimitiveTopology(topology);
-        },
-        SetViewport(ref viewport) => unsafe {
-            (*ctx).RSSetViewports(1, viewport);
-        },
-        SetScissor(ref rect) => unsafe {
-            (*ctx).RSSetScissorRects(1, rect);
-        },
-        SetRasterizer(rast) => unsafe {
-            (*ctx).RSSetState(rast as *mut _);
-        },
-        SetDepthStencil(ds, value) => unsafe {
-            (*ctx).OMSetDepthStencilState(ds as *mut _, value);
-        },
-        SetBlend(blend, ref value, mask) => unsafe {
-            (*ctx).OMSetBlendState(blend as *mut _, value, mask);
-        },
-        UpdateBuffer(buffer, pointer, offset) => {
-            update_buffer(ctx, buffer, data_buf.get(pointer), offset);
-        },
-        ClearColor(target, ref data) => unsafe {
-            (*ctx).ClearRenderTargetView(target.0, data);
-        },
-        ClearDepthStencil(target, flags, depth, stencil) => unsafe {
-            (*ctx).ClearDepthStencilView(target.0, flags.0, depth, stencil);
-        },
-        Draw(nvert, svert) => unsafe {
-            (*ctx).Draw(nvert, svert);
-        },
-        DrawInstanced(nvert, ninst, svert, sinst) => unsafe {
-            (*ctx).DrawInstanced(nvert, ninst, svert, sinst);
-        },
-        DrawIndexed(nind, svert, base) => unsafe {
-            (*ctx).DrawIndexed(nind, svert, base);
-        },
-        DrawIndexedInstanced(nind, ninst, sind, base, sinst) => unsafe {
-            (*ctx).DrawIndexedInstanced(nind, ninst, sind, base, sinst);
-        },
-    }
 }
 
 pub type ShaderModel = u16;
@@ -388,9 +278,13 @@ impl command::Parser for CommandList {
     fn parse(&mut self, com: command::Command) {
         self.0.push(com);
     }
-    fn update_buffer(&mut self, buf: native::Buffer, data: &[u8], offset: usize) {
+    fn update_buffer(&mut self, buf: Buffer, data: &[u8], offset: usize) {
         let ptr = self.1.add(data);
         self.0.push(command::Command::UpdateBuffer(buf, ptr, offset));
+    }
+    fn update_texture(&mut self, tex: Texture, kind: tex::Kind, face: Option<tex::CubeFace>, data: &[u8], image: tex::RawImageInfo) {
+        let ptr = self.1.add(data);
+        self.0.push(command::Command::UpdateTexture(tex, kind, face, ptr, image));
     }
 }
 
@@ -421,10 +315,13 @@ impl command::Parser for DeferredContext {
     }
     fn parse(&mut self, com: command::Command) {
         let db = command::DataBuffer::new(); //not used
-        process(self.0, &com, &db);
+        execute::process(self.0, &com, &db);
     }
-    fn update_buffer(&mut self, buf: native::Buffer, data: &[u8], offset: usize) {
-        update_buffer(self.0, buf, data, offset);
+    fn update_buffer(&mut self, buf: Buffer, data: &[u8], offset: usize) {
+        execute::update_buffer(self.0, &buf, data, offset);
+    }
+    fn update_texture(&mut self, tex: Texture, kind: tex::Kind, face: Option<tex::CubeFace>, data: &[u8], image: tex::RawImageInfo) {
+        execute::update_texture(self.0, &tex, kind, face, data, &image);
     }
 }
 
@@ -451,7 +348,7 @@ impl gfx_core::Device for Device {
     fn submit(&mut self, cb: &mut Self::CommandBuffer) {
         unsafe { (*self.context).ClearState(); }
         for com in &cb.parser.0 {
-            process(self.context, com, &cb.parser.1);
+            execute::process(self.context, com, &cb.parser.1);
         }
     }
 
@@ -459,7 +356,7 @@ impl gfx_core::Device for Device {
         use gfx_core::handle::Producer;
         self.frame_handles.clear();
         self.share.handles.borrow_mut().clean_with(&mut (),
-            |_, v| unsafe { (*v.0).Release(); }, //buffer
+            |_, v| unsafe { (*(v.0).0).Release(); }, //buffer
             |_, s| unsafe { //shader
                 (*s.object).Release();
                 (*s.reflection).Release();

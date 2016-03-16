@@ -21,7 +21,7 @@ use gfx_core as core;
 use gfx_core::factory as f;
 use gfx_core::handle as h;
 use gfx_core::handle::Producer;
-use {Resources as R, Share, Texture, Pipeline, Program, Shader};
+use {Resources as R, Share, Buffer, Texture, Pipeline, Program, Shader};
 use command::CommandBuffer;
 use {CommandList, DeferredContext};
 use native;
@@ -167,11 +167,12 @@ impl Factory {
         };
 
         debug!("Creating Buffer with info {:?} and sub-data {:?}", info, sub);
-        let mut buf = native::Buffer(ptr::null_mut());
+        let mut raw_buf = native::Buffer(ptr::null_mut());
         let hr = unsafe {
-            (*self.device).CreateBuffer(&native_desc, sub_raw, &mut buf.0)
+            (*self.device).CreateBuffer(&native_desc, sub_raw, &mut raw_buf.0)
         };
         if winapi::SUCCEEDED(hr) {
+            let buf = Buffer(raw_buf, info.usage);
             Ok(self.share.handles.borrow_mut().make_buffer(buf, info))
         }else {
             error!("Failed to create a buffer with desc {:#?}, error {:x}", native_desc, hr);
@@ -181,7 +182,7 @@ impl Factory {
 
     fn create_texture_1d(&mut self, size: core::tex::Size, array: core::tex::Layer,
                          tp: TextureParam, misc: winapi::D3D11_RESOURCE_MISC_FLAG)
-                         -> Result<Texture, winapi::HRESULT>
+                         -> Result<native::Texture, winapi::HRESULT>
     {
         use winapi::UINT;
         let native_desc = winapi::D3D11_TEXTURE1D_DESC {
@@ -203,7 +204,7 @@ impl Factory {
                 if tp.init != ptr::null() {&sub_data} else {ptr::null()}, &mut raw)
         };
         if winapi::SUCCEEDED(hr) {
-            Ok(Texture::D1(raw))
+            Ok(native::Texture::D1(raw))
         }else {
             error!("CreateTexture1D failed on {:#?} with error {:x}", native_desc, hr);
             Err(hr)
@@ -212,7 +213,7 @@ impl Factory {
 
     fn create_texture_2d(&mut self, size: [core::tex::Size; 2], array: core::tex::Layer, aa: core::tex::AaMode,
                          tp: TextureParam, misc: winapi::D3D11_RESOURCE_MISC_FLAG)
-                         -> Result<Texture, winapi::HRESULT>
+                         -> Result<native::Texture, winapi::HRESULT>
     {
         use winapi::UINT;
         use data::map_anti_alias;
@@ -238,7 +239,7 @@ impl Factory {
                 if tp.init != ptr::null() {&sub_data} else {ptr::null()}, &mut raw)
         };
         if winapi::SUCCEEDED(hr) {
-            Ok(Texture::D2(raw))
+            Ok(native::Texture::D2(raw))
         }else {
             error!("CreateTexture2D failed on {:#?} with error {:x}", native_desc, hr);
             Err(hr)
@@ -247,7 +248,7 @@ impl Factory {
 
     fn create_texture_3d(&mut self, size: [core::tex::Size; 3],
                          tp: TextureParam, misc: winapi::D3D11_RESOURCE_MISC_FLAG)
-                         -> Result<Texture, winapi::HRESULT>
+                         -> Result<native::Texture, winapi::HRESULT>
     {
         use winapi::UINT;
         let native_desc = winapi::D3D11_TEXTURE3D_DESC {
@@ -270,7 +271,7 @@ impl Factory {
                 if tp.init != ptr::null() {&sub_data} else {ptr::null()}, &mut raw)
         };
         if winapi::SUCCEEDED(hr) {
-            Ok(Texture::D3(raw))
+            Ok(native::Texture::D3(raw))
         }else {
             error!("CreateTexture3D failed on {:#?} with error {:x}", native_desc, hr);
             Err(hr)
@@ -332,7 +333,10 @@ impl Factory {
         };
 
         match texture_result {
-            Ok(t) => Ok(self.share.handles.borrow_mut().make_texture(t, desc)),
+            Ok(native) => {
+                let tex = Texture(native, desc.usage);
+                Ok(self.share.handles.borrow_mut().make_texture(tex, desc))
+            },
             Err(_) => Err(Error::Kind),
         }
     }
@@ -793,63 +797,6 @@ impl core::Factory<R> for Factory {
             error!("Unable to create a sampler with desc {:#?}, error {:x}", info, hr);
             unimplemented!()
         }
-    }
-
-    fn update_buffer_raw(&mut self, buffer: &h::RawBuffer<R>, data: &[u8],
-                         offset_bytes: usize) -> Result<(), f::BufferUpdateError> {
-        let dst_resource = self.frame_handles.ref_buffer(buffer).0 as *mut winapi::ID3D11Resource;
-        let dst_box = winapi::D3D11_BOX {
-            left:   offset_bytes as winapi::UINT,
-            top:    0,
-            front:  0,
-            right:  (offset_bytes + data.len()) as winapi::UINT,
-            bottom: 1,
-            back:   1,
-        };
-        //unsafe {
-            //(*self.share.context).UpdateSubresource(dst_resource, 0, &dst_box, data as *const _, 0, 0);
-        //};
-        error!("Unlocking `Factory::update_buffer()` is blocked by #897");
-        let _ = (dst_resource, &dst_box, data);
-        Ok(())
-    }
-
-    fn update_texture_raw(&mut self, texture: &h::RawTexture<R>, image: &core::tex::RawImageInfo,
-                          data: &[u8], face: Option<core::tex::CubeFace>) -> Result<(), core::tex::Error> {
-        use gfx_core::tex::CubeFace::*;
-        use winapi::UINT;
-
-        let dst_resource = self.frame_handles.ref_texture(texture).to_resource();
-        let tdesc = texture.get_info();
-        let (width, height, _, _) = tdesc.kind.get_level_dimensions(image.mipmap);
-        let stride = image.format.0.get_total_bits() as UINT;
-        let row_pitch = width as UINT * stride;
-        let depth_pitch = height as UINT * row_pitch;
-        let array_slice = match face {
-            Some(PosX) => 0,
-            Some(NegX) => 1,
-            Some(PosY) => 2,
-            Some(NegY) => 3,
-            Some(PosZ) => 4,
-            Some(NegZ) => 5,
-            None => 0,
-        };
-        let dst_box = winapi::D3D11_BOX {
-            left:   image.xoffset as UINT,
-            top:    image.yoffset as UINT,
-            front:  image.zoffset as UINT,
-            right:  (image.xoffset + image.width) as UINT,
-            bottom: (image.yoffset + image.height) as UINT,
-            back:   (image.zoffset + image.depth) as UINT,
-        };
-        let subres = array_slice * tdesc.levels + image.mipmap;
-        //unsafe {
-            //let subres = winapi::D3D11CalcSubresource(image.mipmap, array_slice, tdesc.levels);
-            //(*self.share.context).UpdateSubresource(dst_resource, subres, &dst_box, data as *const _, row_pitch, depth_pitch);
-        //};
-        error!("Unlocking `Factory::update_texture()` is blocked by #897");
-        let _ = (dst_resource, subres, &dst_box, data, row_pitch, depth_pitch);
-        Ok(())
     }
 
     fn map_buffer_raw(&mut self, _buf: &h::RawBuffer<R>, _access: f::MapAccess) -> RawMapping {
