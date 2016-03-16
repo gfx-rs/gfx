@@ -177,6 +177,8 @@ struct Share<R: gfx::Resources> {
 struct Scene<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
     camera: Camera,
     lights: Vec<Light<R, C>>,
+    light_dirty: bool,
+    light_buf: gfx::handle::Buffer<R, LightParam>,
     share: Arc<RwLock<Share<R>>>,
 }
 
@@ -256,21 +258,7 @@ fn create_scene<R, F, C>(factory: &mut F, encoder: &gfx::Encoder<R, C>,
             ).unwrap(),
         encoder: encoder.clone_empty(),
     }).collect();
-
-    // init light parameters
-    let light_params: Vec<_> = lights.iter().map(|light| LightParam {
-        pos: [light.position.x, light.position.y, light.position.z, 1.0],
-        color: light.color,
-        proj: {
-            use cgmath::Matrix4;
-
-            let mx_proj: Matrix4<_> = light.projection.into();
-            (mx_proj * light.mx_view).into()
-        },
-    }).collect();
-
     let light_buf = factory.create_constant_buffer(MAX_LIGHTS);
-    factory.update_buffer(&light_buf, &light_params, 0).unwrap();
 
     // create entities
     struct CubeDesc {
@@ -314,7 +302,7 @@ fn create_scene<R, F, C>(factory: &mut F, encoder: &gfx::Encoder<R, C>,
         ps_locals: factory.create_buffer_const(&[locals],
             gfx::BufferRole::Uniform, gfx::Bind::empty()
             ).unwrap(),
-        light_buf: light_buf,
+        light_buf: light_buf.clone(),
         shadow: (shadow_resource, shadow_sampler),
         out_color: out_color,
         out_depth: out_depth,
@@ -382,6 +370,8 @@ fn create_scene<R, F, C>(factory: &mut F, encoder: &gfx::Encoder<R, C>,
     Scene {
         camera: camera,
         lights: lights,
+        light_dirty: true,
+        light_buf: light_buf,
         share: Arc::new(RwLock::new(share)),
     }
 }
@@ -501,6 +491,22 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
         D: gfx::Device<Resources=R, CommandBuffer=C>
     {
         self.rotate(cgmath::vec3(0.0, 0.0, 1.0));
+        if self.scene.light_dirty {
+            // init light parameters
+            let light_params: Vec<_> = self.scene.lights.iter().map(|light| LightParam {
+                pos: [light.position.x, light.position.y, light.position.z, 1.0],
+                color: light.color,
+                proj: {
+                    use cgmath::Matrix4;
+
+                    let mx_proj: Matrix4<_> = light.projection.into();
+                    (mx_proj * light.mx_view).into()
+                },
+            }).collect();
+            self.encoder.update_buffer(&self.scene.light_buf, &light_params, 0).unwrap();
+            self.scene.light_dirty = false;
+        }
+
         // fill up shadow map for each light
         if self.is_parallel {
             use std::thread;

@@ -258,10 +258,10 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
         }
     }
 
-    pub fn update_data<F>(&mut self, factory: &mut F) where F: gfx::Factory<R> {
-        factory.update_buffer(&self.params.tilemap, &self.data, 0).unwrap();
-    }
-    fn prepare_buffers<C>(&mut self, encoder: &mut gfx::Encoder<R, C>) where C: gfx::CommandBuffer<R> {
+    fn prepare_buffers<C>(&mut self, encoder: &mut gfx::Encoder<R, C>, update_data: bool) where C: gfx::CommandBuffer<R> {
+        if update_data {
+            encoder.update_buffer(&self.params.tilemap, &self.data, 0).unwrap();
+        }
         if self.proj_dirty {
             encoder.update_constant_buffer(&self.params.projection_cb, &self.proj_stuff);
             self.proj_dirty = false;
@@ -302,10 +302,11 @@ pub struct TileMap<R> where R: gfx::Resources {
     charmap_size: [usize; 2],
     limit_coords: [usize; 2],
     focus_coords: [usize; 2],
+    focus_dirty: bool,
 }
 
 impl<R: gfx::Resources> TileMap<R> {
-    pub fn set_focus<F>(&mut self, factory: &mut F, focus: [usize; 2]) where F: gfx::Factory<R> {
+    pub fn set_focus(&mut self, focus: [usize; 2]) {
         if focus[0] <= self.limit_coords[0] && focus[1] <= self.limit_coords[1] {
             self.focus_coords = focus;
             let mut charmap_ypos = 0;
@@ -319,12 +320,12 @@ impl<R: gfx::Resources> TileMap<R> {
                 }
                 charmap_ypos += 1;
             }
-            self.tilemap_plane.update_data(factory);
+            self.focus_dirty = true;
         } else {
             panic!("tried to set focus to {:?} with tilemap_size of {:?}", focus, self.tilemap_size);
         }
     }
-    pub fn apply_x_offset<F>(&mut self, factory: &mut F, offset_amt: f32) where F: gfx::Factory<R> {
+    pub fn apply_x_offset(&mut self, offset_amt: f32) {
         let mut new_offset = self.tilemap_plane.tm_stuff.offsets[0] + offset_amt;
         let curr_focus = self.focus_coords;
         let new_x = if new_offset < 0.0 {
@@ -348,11 +349,11 @@ impl<R: gfx::Resources> TileMap<R> {
             self.focus_coords[0]
         };
         if new_x != self.focus_coords[0] {
-            self.set_focus(factory, [new_x, curr_focus[1]]);
+            self.set_focus([new_x, curr_focus[1]]);
         }
         self.tilemap_plane.update_x_offset(new_offset);
     }
-    pub fn apply_y_offset<F>(&mut self, factory: &mut F, offset_amt: f32) where F: gfx::Factory<R> {
+    pub fn apply_y_offset(&mut self, offset_amt: f32) {
         let mut new_offset = self.tilemap_plane.tm_stuff.offsets[1] + offset_amt;
         let curr_focus = self.focus_coords;
         let new_y = if new_offset < 0.0 {
@@ -376,7 +377,7 @@ impl<R: gfx::Resources> TileMap<R> {
             self.focus_coords[1]
         };
         if new_y != self.focus_coords[1] {
-            self.set_focus(factory, [curr_focus[0], new_y]);
+            self.set_focus([curr_focus[0], new_y]);
         }
         self.tilemap_plane.update_y_offset(new_offset);
     }
@@ -475,17 +476,19 @@ impl<R: gfx::Resources> gfx_app::Application<R> for TileMap<R> {
             tilemap_size: tilemap_size,
             charmap_size: charmap_size,
             limit_coords: [tilemap_size[0] - charmap_size[0], tilemap_size[1] - charmap_size[1]],
-            focus_coords: [0,0]
+            focus_coords: [0, 0],
+            focus_dirty: false,
         };
 
         populate_tilemap(&mut tm, tilemap_size);
-        tm.set_focus(&mut factory, [0,0]);
+        tm.set_focus([0, 0]);
         tm
     }
 
     fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
         //self.tilemap_plane.update_view(view);
-        self.tilemap_plane.prepare_buffers(encoder);
+        self.tilemap_plane.prepare_buffers(encoder, self.focus_dirty);
+        self.focus_dirty = false;
 
         self.tilemap_plane.clear(encoder);
 
