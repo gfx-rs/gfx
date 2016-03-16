@@ -245,13 +245,6 @@ pub trait Factory<R: Resources> {
 
     fn create_sampler(&mut self, tex::SamplerInfo) -> handle::Sampler<R>;
 
-    /// Update the information stored in a specific buffer
-    fn update_buffer_raw(&mut self, buf: &handle::RawBuffer<R>, data: &[u8], offset_bytes: usize)
-                         -> Result<(), BufferUpdateError>;
-    fn update_buffer<T: Copy>(&mut self, buf: &handle::Buffer<R, T>, data: &[T], offset_elements: usize)
-                     -> Result<(), BufferUpdateError> {
-        self.update_buffer_raw(buf.raw(), cast_slice(data), mem::size_of::<T>() * offset_elements)
-    }
     fn map_buffer_raw(&mut self, &handle::RawBuffer<R>, MapAccess) -> Self::Mapper;
     fn unmap_buffer_raw(&mut self, Self::Mapper);
     fn map_buffer_readable<T: Copy>(&mut self, &handle::Buffer<R, T>) -> mapping::Readable<T, R, Self> where
@@ -260,17 +253,6 @@ pub trait Factory<R: Resources> {
         Self: Sized;
     fn map_buffer_rw<T: Copy>(&mut self, &handle::Buffer<R, T>) -> mapping::RW<T, R, Self> where
         Self: Sized;
-
-    fn update_texture_raw(&mut self, &handle::RawTexture<R>, &tex::RawImageInfo,
-                          &[u8], Option<tex::CubeFace>) -> Result<(), tex::Error>;
-    fn update_texture<T: format::Formatted>(&mut self, tex: &handle::Texture<R, T::Surface>, image: &tex::NewImageInfo,
-                      data: &[<T::Surface as format::SurfaceTyped>::DataType], face: Option<tex::CubeFace>)
-                      -> Result<(), tex::Error>
-    {
-        let format = T::get_format();
-        self.update_texture_raw(tex.raw(),
-            &image.convert(format), cast_slice(data), face)
-    }
 
     fn create_texture_raw(&mut self, tex::Descriptor, Option<format::ChannelType>)
                           -> Result<handle::RawTexture<R>, tex::Error>;

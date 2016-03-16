@@ -117,7 +117,16 @@ impl Factory {
         }
     }
 
-    pub fn create_program_raw(&mut self, shader_set: &d::ShaderSet<R>)
+    fn update_texture_raw(&mut self, texture: &handle::RawTexture<R>, image: &t::RawImageInfo,
+                          data: &[u8], face: Option<t::CubeFace>) -> Result<(), t::Error> {
+        let kind = texture.get_info().kind;
+        match self.frame_handles.ref_texture(texture) {
+            &NewTexture::Surface(_) => Err(t::Error::Data(0)),
+            &NewTexture::Texture(t) => tex::update_texture(&self.share.context, t, kind, face, image, data),
+        }
+    }
+
+    fn create_program_raw(&mut self, shader_set: &d::ShaderSet<R>)
                               -> Result<(gl::types::GLuint, d::shade::ProgramInfo), d::shade::CreateProgramError> {
         use shade::create_program;
         let frame_handles = &mut self.frame_handles;
@@ -360,27 +369,6 @@ impl d::Factory<R> for Factory {
             info: info.clone(),
         };
         self.share.handles.borrow_mut().make_sampler(sam, info)
-    }
-
-    fn update_buffer_raw(&mut self, buffer: &handle::RawBuffer<R>, data: &[u8],
-                         offset_bytes: usize) -> Result<(), f::BufferUpdateError> {
-        if offset_bytes + data.len() > buffer.get_info().size {
-            Err(f::BufferUpdateError::OutOfBounds)
-        } else {
-            let raw_handle = *self.frame_handles.ref_buffer(buffer);
-            update_sub_buffer(&self.share.context, raw_handle, data.as_ptr(), data.len(),
-                              offset_bytes, buffer.get_info().role);
-            Ok(())
-        }
-    }
-
-    fn update_texture_raw(&mut self, texture: &handle::RawTexture<R>, image: &t::RawImageInfo,
-                          data: &[u8], face: Option<t::CubeFace>) -> Result<(), t::Error> {
-        let kind = texture.get_info().kind;
-        match self.frame_handles.ref_texture(texture) {
-            &NewTexture::Surface(_) => Err(t::Error::Data(0)),
-            &NewTexture::Texture(t) => tex::update_texture(&self.share.context, t, kind, face, image, data),
-        }
     }
 
     fn map_buffer_raw(&mut self, buf: &handle::RawBuffer<R>,
