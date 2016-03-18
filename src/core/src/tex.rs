@@ -119,6 +119,7 @@ pub enum FilterMethod {
 /// The face of a cube texture to do an operation on.
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 #[allow(missing_docs)]
+#[repr(u8)]
 pub enum CubeFace {
     PosX,
     NegX,
@@ -127,6 +128,13 @@ pub enum CubeFace {
     PosZ,
     NegZ,
 }
+
+/// A constant array of cube faces in the order they map to the hardware.
+pub const CUBE_FACES: [CubeFace; 6] = [
+    CubeFace::PosX, CubeFace::NegX,
+    CubeFace::PosY, CubeFace::NegY,
+    CubeFace::PosZ, CubeFace::NegZ,
+];
 
 /// Specifies the kind of a texture storage to be allocated.
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
@@ -168,6 +176,33 @@ impl Kind {
         use std::cmp::max;
         let (w, h, d, _) = self.get_dimensions();
         (max(1, w >> level), max(1, h >> level), max(1, d >> level), AaMode::Single)
+    }
+    /// Count the number of mipmap levels.
+    pub fn get_num_levels(&self) -> Level {
+        use std::cmp::max;
+        let (w, h, d, aa) = self.get_dimensions();
+        let dominant = max(max(w, h), d);
+        if aa == AaMode::Single {
+            (1..).find(|level| dominant>>level <= 1).unwrap()
+        }else {
+            1 // anti-aliased textures can't have mipmaps
+        }
+    }
+    /// Return the number of slices for an array, or None for non-arrays.
+    pub fn get_num_slices(&self) -> Option<Size> {
+        match *self {
+            Kind::D1(..) | Kind::D2(..) | Kind::D3(..) | Kind::Cube(..) => None,
+            Kind::D1Array(_, a) => Some(a),
+            Kind::D2Array(_, _, a, _) => Some(a),
+            Kind::CubeArray(_, a) => Some(a),
+        }
+    }
+    /// Check if it's one of the cube kinds.
+    pub fn is_cube(&self) -> bool {
+        match *self {
+            Kind::Cube(_) | Kind::CubeArray(_, _) => true,
+            _ => false,
+        }
     }
 }
 

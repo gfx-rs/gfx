@@ -347,15 +347,15 @@ fn create_g_buffer<R: gfx::Resources, F: gfx::Factory<R>>(
 {
     use gfx::format::ChannelSource;
     let pos = {
-        let (_ , srv, rtv) = factory.create_render_target(width, height, false).unwrap();
+        let (_ , srv, rtv) = factory.create_render_target(width, height).unwrap();
         ViewPair{ resource: srv, target: rtv }
     };
     let normal = {
-        let (_ , srv, rtv) = factory.create_render_target(width, height, false).unwrap();
+        let (_ , srv, rtv) = factory.create_render_target(width, height).unwrap();
         ViewPair{ resource: srv, target: rtv }
     };
     let diffuse = {
-        let (_ , srv, rtv) = factory.create_render_target(width, height, false).unwrap();
+        let (_ , srv, rtv) = factory.create_render_target(width, height).unwrap();
         ViewPair{ resource: srv, target: rtv }
     };
     let (tex, _srv, depth_rtv) = factory.create_depth_stencil(width, height).unwrap();
@@ -386,7 +386,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         let (gpos, gnormal, gdiffuse, _depth_resource, depth_target) =
             create_g_buffer(width, height, &mut factory);
         let res = {
-            let (_ , srv, rtv) = factory.create_render_target(width, height, false).unwrap();
+            let (_ , srv, rtv) = factory.create_render_target(width, height).unwrap();
             ViewPair{ resource: srv, target: rtv }
         };
 

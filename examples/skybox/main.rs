@@ -23,7 +23,6 @@ extern crate image;
 
 use std::io::Cursor;
 pub use gfx::format::{Srgba8, Depth, Rgba8};
-use gfx::tex::{CubeFace, Kind, ImageInfoCommon};
 
 gfx_vertex_struct!( Vertex {
     pos: [f32; 2] = "a_Pos",
@@ -59,57 +58,23 @@ struct CubemapData<'a> {
 }
 
 impl<'a> CubemapData<'a> {
-    fn as_array(self) -> [(CubeFace, &'a [u8]); 6] {
-        [(CubeFace::PosY, self.up),
-         (CubeFace::NegY, self.down),
-         (CubeFace::PosZ, self.front),
-         (CubeFace::NegZ, self.back),
-         (CubeFace::PosX, self.right),
-         (CubeFace::NegX, self.left)]
+    fn as_array(self) -> [&'a [u8]; 6] {
+        [self.right, self.left, self.up, self.down, self.front, self.back]
     }
 }
 
 fn load_cubemap<R, F>(factory: &mut F, data: CubemapData) -> Result<gfx::handle::ShaderResourceView<R, [f32; 4]>, String>
-        where R: gfx::Resources, F: gfx::Factory<R> {
-
-    let mut cube_tex = None;
-
-    for &(face, img) in data.as_array().iter() {
-        let img = image::load(Cursor::new(img), image::JPEG).unwrap().to_rgba();
-
-        let (width, height) = img.dimensions();
-        assert_eq!(width, height);
-
-        match cube_tex {
-            Some(_) => {},
-            None => {
-                cube_tex = Some(factory.create_texture(
-                        Kind::Cube(width as u16),
-                        1,
-                        gfx::SHADER_RESOURCE,
-                        gfx::Usage::GpuOnly,
-                        Some(gfx::format::ChannelType::Unorm)
-                ).unwrap())
-            }
-        }
-
-        let img_info = ImageInfoCommon {
-            xoffset: 0,
-            yoffset: 0,
-            zoffset: 0,
-            width: width as u16,
-            height: height as u16,
-            format: (),
-            depth: 1,
-            mipmap: 0
-        };
-
-        if let Some(ref ctex) = cube_tex {
-            factory.update_texture::<Rgba8>(&ctex, &img_info, gfx::cast_slice(&img), Some(face)).unwrap();
-        }
-    };
-
-    Ok(factory.view_texture_as_shader_resource::<Rgba8>(&cube_tex.unwrap(), (0, 0), gfx::format::Swizzle::new()).unwrap())
+        where R: gfx::Resources, F: gfx::Factory<R>
+{
+    let images = data.as_array().iter().map(|data| {
+        image::load(Cursor::new(data), image::JPEG).unwrap().to_rgba()
+    }).collect::<Vec<_>>();
+    let data: [&[u8]; 6] = [&images[0], &images[1], &images[2], &images[3], &images[4], &images[5]];
+    let kind = gfx::tex::Kind::Cube(images[0].dimensions().0 as u16);
+    match factory.create_texture_const_u8::<Rgba8>(kind, &data, false) {
+        Ok((_, view)) => Ok(view),
+        Err(_) => Err("Unable to create an immutable cubemap texture".to_owned()),
+    }
 }
 
 struct App<R: gfx::Resources>{

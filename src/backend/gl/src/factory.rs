@@ -291,11 +291,43 @@ impl d::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_texture(object, desc))
     }
 
-    fn create_texture_with_data(&mut self, desc: t::Descriptor, channel: ChannelType, data: &[u8], mipmap: bool)
-                                -> Result<handle::RawTexture<R>, t::Error> {
-        let image = desc.to_raw_image_info(channel, 0);
+    fn create_texture_with_data_raw(&mut self, desc: t::Descriptor, channel: ChannelType,
+                                    data: &[&[u8]], mipmap: bool)
+                                    -> Result<handle::RawTexture<R>, t::Error> {
         let tex = try!(self.create_texture_raw(desc, Some(channel)));
-        try!(self.update_texture_raw(&tex, &image, data, None));
+
+        let opt_slices = desc.kind.get_num_slices();
+        let num_slices = opt_slices.unwrap_or(1) as usize;
+        let num_mips = if mipmap {1} else {desc.levels as usize};
+        let mut cube_faces = [None; 6];
+        let faces: &[_] = if desc.kind.is_cube() {
+            for (cf, orig) in cube_faces.iter_mut().zip(t::CUBE_FACES.iter()) {
+                *cf = Some(*orig);
+            }
+            &cube_faces
+        } else {
+            &cube_faces[..1]
+        };
+        if data.len() != num_slices * faces.len() * num_mips {
+            error!("Texture expects {} slices {} faces {} mips, given {} data chunks instead",
+                num_slices, faces.len(), num_mips, data.len());
+            return Err(t::Error::Data(0))
+        }
+
+        for i in 0 .. num_slices {
+            for (f, &face) in faces.iter().enumerate() {
+                for m in 0 .. num_mips {
+                    let sub = data[(i*faces.len() + f)*num_mips + m];
+                    let mut image = desc.to_raw_image_info(channel, m as t::Level);
+                    if opt_slices.is_some() {
+                        image.zoffset = i as t::Size;
+                        image.depth = 1;
+                    }
+                    try!(self.update_texture_raw(&tex, &image, sub, face));
+                }
+            }
+        }
+
         if mipmap {
             self.generate_mipmap(&tex);
         }

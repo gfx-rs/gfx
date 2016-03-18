@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{ptr, slice};
+use std::{cmp, ptr, slice};
 use std::collections::BTreeMap as Map;
 use std::os::raw::c_void;
 use std::sync::Arc;
@@ -54,18 +54,6 @@ struct TextureParam {
     bind: winapi::D3D11_BIND_FLAG,
     usage: winapi::D3D11_USAGE,
     cpu_access: winapi::D3D11_CPU_ACCESS_FLAG,
-    init: *const c_void,
-}
-
-impl TextureParam {
-    fn to_sub_data(&self, w: core::tex::Size, h: core::tex::Size) -> winapi::D3D11_SUBRESOURCE_DATA {
-        use winapi::UINT;
-        winapi::D3D11_SUBRESOURCE_DATA {
-            pSysMem: self.init,
-            SysMemPitch: w as UINT * self.bytes_per_texel,
-            SysMemSlicePitch: (w as UINT) * (h as UINT) * self.bytes_per_texel,
-        }
-    }
 }
 
 pub struct Factory {
@@ -77,6 +65,7 @@ pub struct Factory {
     /// with PIX, since it doesn't understand typeless formats. This may also prevent
     /// some valid views to be created because the typed formats can't be reinterpret.
     use_texture_format_hint: bool,
+    sub_data_array: Vec<winapi::D3D11_SUBRESOURCE_DATA>,
 }
 
 impl Clone for Factory {
@@ -101,6 +90,7 @@ impl Factory {
             frame_handles: h::Manager::new(),
             vs_cache: Map::new(),
             use_texture_format_hint: false,
+            sub_data_array: Vec::new(),
         }
     }
 
@@ -180,6 +170,16 @@ impl Factory {
         }
     }
 
+    fn update_sub_data(&mut self, w: core::tex::Size, h: core::tex::Size, bpt: winapi::UINT)
+                       -> *const winapi::D3D11_SUBRESOURCE_DATA {
+        use winapi::UINT;
+        for sub in self.sub_data_array.iter_mut() {
+            sub.SysMemPitch = w as UINT * bpt;
+            sub.SysMemSlicePitch = (h as UINT) * sub.SysMemPitch;
+        }
+        self.sub_data_array.as_ptr()
+    }
+
     fn create_texture_1d(&mut self, size: core::tex::Size, array: core::tex::Layer,
                          tp: TextureParam, misc: winapi::D3D11_RESOURCE_MISC_FLAG)
                          -> Result<native::Texture, winapi::HRESULT>
@@ -195,13 +195,23 @@ impl Factory {
             CPUAccessFlags: tp.cpu_access.0,
             MiscFlags: misc.0,
         };
-        let sub_data = tp.to_sub_data(size, 0);
-        debug!("Creating Texture1D with size {:?}, layer {}, param {:?}, and sub-data {:?}",
+        let sub_data = if self.sub_data_array.len() > 0 {
+            let num_data = array as usize * cmp::max(1, tp.levels) as usize;
+            if num_data != self.sub_data_array.len() {
+                error!("Texture1D with {} slices and {} levels is given {} data chunks",
+                    array, tp.levels, self.sub_data_array.len());
+                return Err(winapi::S_OK)
+            }
+            self.update_sub_data(size, 0, tp.bytes_per_texel)
+        }else {
+            ptr::null()
+        };
+
+        debug!("Creating Texture1D with size {:?}, layer {}, param {:?}, and sub-data {:p}",
             size, array, tp, sub_data);
         let mut raw = ptr::null_mut();
         let hr = unsafe {
-            (*self.device).CreateTexture1D(&native_desc,
-                if tp.init != ptr::null() {&sub_data} else {ptr::null()}, &mut raw)
+            (*self.device).CreateTexture1D(&native_desc, sub_data, &mut raw)
         };
         if winapi::SUCCEEDED(hr) {
             Ok(native::Texture::D1(raw))
@@ -230,13 +240,23 @@ impl Factory {
             CPUAccessFlags: tp.cpu_access.0,
             MiscFlags: misc.0,
         };
-        let sub_data = tp.to_sub_data(size[0], size[1]);
-        debug!("Creating Texture2D with size {:?}, layer {}, param {:?}, and sub-data {:?}",
+        let sub_data = if self.sub_data_array.len() > 0 {
+            let num_data = array as usize * cmp::max(1, tp.levels) as usize;
+            if num_data != self.sub_data_array.len() {
+                error!("Texture2D with {} slices and {} levels is given {} data chunks",
+                    array, tp.levels, self.sub_data_array.len());
+                return Err(winapi::S_OK)
+            }
+            self.update_sub_data(size[0], size[1], tp.bytes_per_texel)
+        }else {
+            ptr::null()
+        };
+
+        debug!("Creating Texture2D with size {:?}, layer {}, param {:?}, and sub-data {:p}",
             size, array, tp, sub_data);
         let mut raw = ptr::null_mut();
         let hr = unsafe {
-            (*self.device).CreateTexture2D(&native_desc,
-                if tp.init != ptr::null() {&sub_data} else {ptr::null()}, &mut raw)
+            (*self.device).CreateTexture2D(&native_desc, sub_data, &mut raw)
         };
         if winapi::SUCCEEDED(hr) {
             Ok(native::Texture::D2(raw))
@@ -262,13 +282,22 @@ impl Factory {
             CPUAccessFlags: tp.cpu_access.0,
             MiscFlags: misc.0,
         };
-        let sub_data = tp.to_sub_data(size[0], size[1]);
-        debug!("Creating Texture3D with size {:?}, param {:?}, and sub-data {:?}",
+        let sub_data = if self.sub_data_array.len() > 0 {
+            if cmp::max(1, tp.levels) as usize != self.sub_data_array.len() {
+                error!("Texture3D with {} levels is given {} data chunks",
+                    tp.levels, self.sub_data_array.len());
+                return Err(winapi::S_OK)
+            }
+            self.update_sub_data(size[0], size[1], tp.bytes_per_texel)
+        }else {
+            ptr::null()
+        };
+
+        debug!("Creating Texture3D with size {:?}, param {:?}, and sub-data {:p}",
             size, tp, sub_data);
         let mut raw = ptr::null_mut();
         let hr = unsafe {
-            (*self.device).CreateTexture3D(&native_desc,
-                if tp.init != ptr::null() {&sub_data} else {ptr::null()}, &mut raw)
+            (*self.device).CreateTexture3D(&native_desc, sub_data, &mut raw)
         };
         if winapi::SUCCEEDED(hr) {
             Ok(native::Texture::D3(raw))
@@ -280,7 +309,7 @@ impl Factory {
 
     fn create_texture_internal(&mut self, desc: core::tex::Descriptor,
                                mut hint: Option<core::format::ChannelType>,
-                               init_opt: Option<(&[u8], bool)>)
+                               init_opt: Option<(&[&[u8]], bool)>)
                                -> Result<h::RawTexture<R>, core::tex::Error>
     {
         use gfx_core::tex::{AaMode, Error, Kind};
@@ -290,8 +319,26 @@ impl Factory {
         if !self.use_texture_format_hint || desc.bind.contains(f::DEPTH_STENCIL) {
             hint = None; //can't use typed format
         }
+
+        self.sub_data_array.clear();
+        let gen_mipmap = match init_opt {
+            Some((data, mips)) => {
+                for sub in data.iter() {
+                    self.sub_data_array.push(winapi::D3D11_SUBRESOURCE_DATA {
+                        pSysMem: sub.as_ptr() as *const c_void,
+                        SysMemPitch: 0,
+                        SysMemSlicePitch: 0,
+                    });
+                }
+                mips
+            },
+            None => false,
+        };
+        let misc = if gen_mipmap {winapi::D3D11_RESOURCE_MISC_GENERATE_MIPS}
+            else {winapi::D3D11_RESOURCE_MISC_FLAG(0)};
+
         let tparam = TextureParam {
-            levels: desc.levels as winapi::UINT,
+            levels: if gen_mipmap {0} else {desc.levels as winapi::UINT},
             format: match hint {
                 Some(channel) => match map_format(core::format::Format(desc.format, channel), true) {
                     Some(f) => f,
@@ -306,15 +353,8 @@ impl Factory {
             bind: map_bind(desc.bind),
             usage: usage,
             cpu_access: cpu_access,
-            init: match init_opt {
-                Some((data, _)) => data.as_ptr() as *const c_void,
-                None => ptr::null(),
-            },
         };
-        let misc = match init_opt {
-            Some((_, true)) => winapi::D3D11_RESOURCE_MISC_GENERATE_MIPS,
-            _ => winapi::D3D11_RESOURCE_MISC_FLAG(0),
-        };
+
         let texture_result = match desc.kind {
             Kind::D1(w) =>
                 self.create_texture_1d(w, 1, tparam, misc),
@@ -563,8 +603,8 @@ impl core::Factory<R> for Factory {
         self.create_texture_internal(desc, hint, None)
     }
 
-    fn create_texture_with_data(&mut self, desc: core::tex::Descriptor, channel: core::format::ChannelType,
-                                data: &[u8], mipmap: bool) -> Result<core::handle::RawTexture<R>, core::tex::Error> {
+    fn create_texture_with_data_raw(&mut self, desc: core::tex::Descriptor, channel: core::format::ChannelType,
+                                    data: &[&[u8]], mipmap: bool) -> Result<core::handle::RawTexture<R>, core::tex::Error> {
         self.create_texture_internal(desc, Some(channel), Some((data, mipmap)))
     }
 

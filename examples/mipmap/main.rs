@@ -55,25 +55,6 @@ const L1_DATA: [[u8; 4]; 4] = [
 // Uniform blue
 const L2_DATA: [[u8; 4]; 1] = [ [ 0x00, 0x00, 0xc0, 0x00 ] ];
 
-fn make_texture<R, F>(factory: &mut F) -> gfx::handle::ShaderResourceView<R, [f32; 4]>
-        where R: gfx::Resources, 
-              F: gfx::Factory<R>
-{
-    let kind = gfx::tex::Kind::D2(4, 4, gfx::tex::AaMode::Single);
-    let tex = factory.create_texture(kind, 3, gfx::SHADER_RESOURCE,
-        gfx::Usage::GpuOnly, Some(gfx::format::ChannelType::Unorm)
-        ).unwrap();
-
-    factory.update_texture::<Srgba8>(&tex, &tex.get_info().to_image_info(0),
-        gfx::cast_slice(&L0_DATA), None).unwrap();
-    factory.update_texture::<Srgba8>(&tex, &tex.get_info().to_image_info(1),
-        gfx::cast_slice(&L1_DATA), None).unwrap();
-    factory.update_texture::<Srgba8>(&tex, &tex.get_info().to_image_info(2),
-        gfx::cast_slice(&L2_DATA), None).unwrap();
-
-    factory.view_texture_as_shader_resource::<Srgba8>(
-        &tex, (0, 2), gfx::format::Swizzle::new()).unwrap()
-}
 
 struct App<R: gfx::Resources> {
     pso: gfx::PipelineState<R, pipe::Meta>,
@@ -107,7 +88,10 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         ];
         let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
 
-        let texture_view = make_texture(&mut factory);
+        let kind = gfx::tex::Kind::D2(4, 4, gfx::tex::AaMode::Single);
+        let (_, texture_view) = factory.create_texture_const::<Srgba8>(kind, &[&L0_DATA, &L1_DATA, &L2_DATA], false)
+                                       .unwrap();
+
         let sampler = factory.create_sampler(gfx::tex::SamplerInfo::new(
             gfx::tex::FilterMethod::Trilinear,
             gfx::tex::WrapMode::Tile,

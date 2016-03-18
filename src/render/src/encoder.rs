@@ -19,7 +19,7 @@
 use std::mem;
 use draw_state::target::{Depth, Stencil};
 
-use gfx_core::{Device, Factory, IndexType, Resources, VertexCount};
+use gfx_core::{Device, IndexType, Resources, VertexCount};
 use gfx_core::{draw, format, handle, tex};
 use gfx_core::factory::{cast_slice, Typed};
 use mesh;
