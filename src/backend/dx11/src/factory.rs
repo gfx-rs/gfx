@@ -306,81 +306,6 @@ impl Factory {
             Err(hr)
         }
     }
-
-    fn create_texture_internal(&mut self, desc: core::tex::Descriptor,
-                               mut hint: Option<core::format::ChannelType>,
-                               init_opt: Option<&[&[u8]]>)
-                               -> Result<h::RawTexture<R>, core::tex::Error>
-    {
-        use gfx_core::tex::{AaMode, Error, Kind};
-        use data::{map_bind, map_usage, map_surface, map_format};
-
-        let (usage, cpu_access) = map_usage(desc.usage);
-        if !self.use_texture_format_hint || desc.bind.contains(f::DEPTH_STENCIL) {
-            hint = None; //can't use typed format
-        }
-
-        self.sub_data_array.clear();
-        if let Some(data) = init_opt {
-            for sub in data.iter() {
-                self.sub_data_array.push(winapi::D3D11_SUBRESOURCE_DATA {
-                    pSysMem: sub.as_ptr() as *const c_void,
-                    SysMemPitch: 0,
-                    SysMemSlicePitch: 0,
-                });
-            }
-        };
-        let misc = if desc.usage != f::Usage::Const &&
-            desc.bind.contains(f::RENDER_TARGET | f::SHADER_RESOURCE) &&
-            desc.levels > 1 && init_opt.is_none() {
-            winapi::D3D11_RESOURCE_MISC_GENERATE_MIPS
-        }else {
-            winapi::D3D11_RESOURCE_MISC_FLAG(0)
-        };
-
-        let tparam = TextureParam {
-            levels: desc.levels as winapi::UINT,
-            format: match hint {
-                Some(channel) => match map_format(core::format::Format(desc.format, channel), true) {
-                    Some(f) => f,
-                    None => return Err(Error::Format(desc.format, Some(channel)))
-                },
-                _ => match map_surface(desc.format) {
-                    Some(f) => f,
-                    None => return Err(Error::Format(desc.format, None))
-                },
-            },
-            bytes_per_texel: (desc.format.get_total_bits() >> 3) as winapi::UINT,
-            bind: map_bind(desc.bind),
-            usage: usage,
-            cpu_access: cpu_access,
-        };
-
-        let texture_result = match desc.kind {
-            Kind::D1(w) =>
-                self.create_texture_1d(w, 1, tparam, misc),
-            Kind::D1Array(w, d) =>
-                self.create_texture_1d(w, d, tparam, misc),
-            Kind::D2(w, h, aa) =>
-                self.create_texture_2d([w,h], 1, aa, tparam, misc),
-            Kind::D2Array(w, h, d, aa) =>
-                self.create_texture_2d([w,h], d, aa, tparam, misc),
-            Kind::D3(w, h, d) =>
-                self.create_texture_3d([w,h,d], tparam, misc),
-            Kind::Cube(w) =>
-                self.create_texture_2d([w,w], 6*1, AaMode::Single, tparam, misc | winapi::D3D11_RESOURCE_MISC_TEXTURECUBE),
-            Kind::CubeArray(w, d) =>
-                self.create_texture_2d([w,w], 6*d, AaMode::Single, tparam, misc | winapi::D3D11_RESOURCE_MISC_TEXTURECUBE),
-        };
-
-        match texture_result {
-            Ok(native) => {
-                let tex = Texture(native, desc.usage);
-                Ok(self.share.handles.borrow_mut().make_texture(tex, desc))
-            },
-            Err(_) => Err(Error::Kind),
-        }
-    }
 }
 
 impl core::Factory<R> for Factory {
@@ -599,14 +524,74 @@ impl core::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_pso(pso, program))
     }
 
-    fn create_texture_raw(&mut self, desc: core::tex::Descriptor, hint: Option<core::format::ChannelType>)
-                          -> Result<h::RawTexture<R>, core::tex::Error> {
-        self.create_texture_internal(desc, hint, None)
-    }
+    fn create_texture_raw(&mut self, desc: core::tex::Descriptor, hint: Option<core::format::ChannelType>,
+                          data_opt: Option<&[&[u8]]>) -> Result<h::RawTexture<R>, core::tex::Error> {
+        use gfx_core::tex::{AaMode, Error, Kind};
+        use data::{map_bind, map_usage, map_surface, map_format};
 
-    fn create_texture_with_data_raw(&mut self, desc: core::tex::Descriptor, channel: core::format::ChannelType, data: &[&[u8]])
-                                    -> Result<core::handle::RawTexture<R>, core::tex::Error> {
-        self.create_texture_internal(desc, Some(channel), Some(data))
+        let (usage, cpu_access) = map_usage(desc.usage);
+        let tparam = TextureParam {
+            levels: desc.levels as winapi::UINT,
+            format: match hint {
+                Some(channel) if self.use_texture_format_hint && !desc.bind.contains(f::DEPTH_STENCIL) => {
+                    match map_format(core::format::Format(desc.format, channel), true) {
+                        Some(f) => f,
+                        None => return Err(Error::Format(desc.format, Some(channel)))
+                    }
+                },
+                _ => match map_surface(desc.format) {
+                    Some(f) => f,
+                    None => return Err(Error::Format(desc.format, None))
+                },
+            },
+            bytes_per_texel: (desc.format.get_total_bits() >> 3) as winapi::UINT,
+            bind: map_bind(desc.bind),
+            usage: usage,
+            cpu_access: cpu_access,
+        };
+
+        self.sub_data_array.clear();
+        if let Some(data) = data_opt {
+            for sub in data.iter() {
+                self.sub_data_array.push(winapi::D3D11_SUBRESOURCE_DATA {
+                    pSysMem: sub.as_ptr() as *const c_void,
+                    SysMemPitch: 0,
+                    SysMemSlicePitch: 0,
+                });
+            }
+        };
+        let misc = if desc.usage != f::Usage::Const &&
+            desc.bind.contains(f::RENDER_TARGET | f::SHADER_RESOURCE) &&
+            desc.levels > 1 && data_opt.is_none() {
+            winapi::D3D11_RESOURCE_MISC_GENERATE_MIPS
+        }else {
+            winapi::D3D11_RESOURCE_MISC_FLAG(0)
+        };
+
+        let texture_result = match desc.kind {
+            Kind::D1(w) =>
+                self.create_texture_1d(w, 1, tparam, misc),
+            Kind::D1Array(w, d) =>
+                self.create_texture_1d(w, d, tparam, misc),
+            Kind::D2(w, h, aa) =>
+                self.create_texture_2d([w,h], 1, aa, tparam, misc),
+            Kind::D2Array(w, h, d, aa) =>
+                self.create_texture_2d([w,h], d, aa, tparam, misc),
+            Kind::D3(w, h, d) =>
+                self.create_texture_3d([w,h,d], tparam, misc),
+            Kind::Cube(w) =>
+                self.create_texture_2d([w,w], 6*1, AaMode::Single, tparam, misc | winapi::D3D11_RESOURCE_MISC_TEXTURECUBE),
+            Kind::CubeArray(w, d) =>
+                self.create_texture_2d([w,w], 6*d, AaMode::Single, tparam, misc | winapi::D3D11_RESOURCE_MISC_TEXTURECUBE),
+        };
+
+        match texture_result {
+            Ok(native) => {
+                let tex = Texture(native, desc.usage);
+                Ok(self.share.handles.borrow_mut().make_texture(tex, desc))
+            },
+            Err(_) => Err(Error::Kind),
+        }
     }
 
     fn view_buffer_as_shader_resource_raw(&mut self, _hbuf: &h::RawBuffer<R>)

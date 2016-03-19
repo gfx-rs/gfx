@@ -256,15 +256,10 @@ pub trait Factory<R: Resources> {
 
     /// Create a new empty raw texture with no data. The channel type parameter is a hint,
     /// required to assist backends that have no concept of typeless formats (OpenGL).
-    fn create_texture_raw(&mut self, tex::Descriptor, Option<format::ChannelType>)
-                          -> Result<handle::RawTexture<R>, tex::Error>;
-
-    /// Create a raw texture with initial data, which is arranged according to DX11 convention:
+    /// The initial data, if given, has to be provided for all mip levels and slices:
     /// Slice0.Mip0, Slice0.Mip1, ..., Slice1.Mip0, ...
-    /// If `mipmap` is true, then mipmap chain will be generated automatically,
-    /// and the data is expected to come simply as: Slice0, Slice1, ...
-    fn create_texture_with_data_raw(&mut self, tex::Descriptor, format::ChannelType, data: &[&[u8]])
-                                    -> Result<handle::RawTexture<R>, tex::Error>;
+    fn create_texture_raw(&mut self, tex::Descriptor, Option<format::ChannelType>, Option<&[&[u8]]>)
+                          -> Result<handle::RawTexture<R>, tex::Error>;
 
     fn view_buffer_as_shader_resource_raw(&mut self, &handle::RawBuffer<R>)
         -> Result<handle::RawShaderResourceView<R>, ResourceViewError>;
@@ -291,7 +286,7 @@ pub trait Factory<R: Resources> {
             bind: bind,
             usage: usage,
         };
-        let raw = try!(self.create_texture_raw(desc, channel_hint));
+        let raw = try!(self.create_texture_raw(desc, channel_hint, None));
         Ok(Typed::new(raw))
     }
 
@@ -389,7 +384,7 @@ pub trait Factory<R: Resources> {
             usage: Usage::Const,
         };
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
-        let raw = try!(self.create_texture_with_data_raw(desc, cty, data));
+        let raw = try!(self.create_texture_raw(desc, Some(cty), Some(data)));
         let levels = (0, raw.get_info().levels - 1);
         let tex = Typed::new(raw);
         let view = try!(self.view_texture_as_shader_resource::<T>(&tex, levels, format::Swizzle::new()));

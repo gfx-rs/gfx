@@ -117,15 +117,6 @@ impl Factory {
         }
     }
 
-    fn update_texture_raw(&mut self, texture: &handle::RawTexture<R>, image: &t::RawImageInfo,
-                          data: &[u8], face: Option<t::CubeFace>) -> Result<(), t::Error> {
-        let kind = texture.get_info().kind;
-        match self.frame_handles.ref_texture(texture) {
-            &NewTexture::Surface(_) => Err(t::Error::Data(0)),
-            &NewTexture::Texture(t) => tex::update_texture(&self.share.context, t, kind, face, image, data),
-        }
-    }
-
     fn create_program_raw(&mut self, shader_set: &d::ShaderSet<R>)
                               -> Result<(gl::types::GLuint, d::shade::ProgramInfo), d::shade::CreateProgramError> {
         use shade::create_program;
@@ -260,7 +251,7 @@ impl d::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_pso(pso, program))
     }
 
-    fn create_texture_raw(&mut self, desc: t::Descriptor, hint: Option<ChannelType>)
+    fn create_texture_raw(&mut self, desc: t::Descriptor, hint: Option<ChannelType>, data_opt: Option<&[&[u8]]>)
                           -> Result<handle::RawTexture<R>, t::Error> {
         use gfx_core::tex::Error;
         let caps = &self.share.private_caps;
@@ -269,12 +260,15 @@ impl d::Factory<R> for Factory {
         }
         let cty = hint.unwrap_or(ChannelType::Uint); //careful here
         let gl = &self.share.context;
-        let object = if desc.bind.intersects(f::SHADER_RESOURCE | f::UNORDERED_ACCESS) {
+        let object = if desc.bind.intersects(f::SHADER_RESOURCE | f::UNORDERED_ACCESS) || data_opt.is_some() {
             let name = if caps.immutable_storage_supported {
                 try!(tex::make_with_storage(gl, &desc, cty))
             } else {
                 try!(tex::make_without_storage(gl, &desc, cty))
             };
+            if let Some(data) = data_opt {
+                try!(tex::init_texture_data(gl, name, desc, cty, data));
+            }
             NewTexture::Texture(name)
         }else {
             let name = try!(tex::make_surface(gl, &desc, cty));
@@ -282,46 +276,6 @@ impl d::Factory<R> for Factory {
         };
         Ok(self.share.handles.borrow_mut().make_texture(object, desc))
     }
-
-    fn create_texture_with_data_raw(&mut self, desc: t::Descriptor, channel: ChannelType, data: &[&[u8]])
-                                    -> Result<handle::RawTexture<R>, t::Error> {
-        let tex = try!(self.create_texture_raw(desc, Some(channel)));
-
-        let opt_slices = desc.kind.get_num_slices();
-        let num_slices = opt_slices.unwrap_or(1) as usize;
-        let num_mips = desc.levels as usize;
-        let mut cube_faces = [None; 6];
-        let faces: &[_] = if desc.kind.is_cube() {
-            for (cf, orig) in cube_faces.iter_mut().zip(t::CUBE_FACES.iter()) {
-                *cf = Some(*orig);
-            }
-            &cube_faces
-        } else {
-            &cube_faces[..1]
-        };
-        if data.len() != num_slices * faces.len() * num_mips {
-            error!("Texture expects {} slices {} faces {} mips, given {} data chunks instead",
-                num_slices, faces.len(), num_mips, data.len());
-            return Err(t::Error::Data(0))
-        }
-
-        for i in 0 .. num_slices {
-            for (f, &face) in faces.iter().enumerate() {
-                for m in 0 .. num_mips {
-                    let sub = data[(i*faces.len() + f)*num_mips + m];
-                    let mut image = desc.to_raw_image_info(channel, m as t::Level);
-                    if opt_slices.is_some() {
-                        image.zoffset = i as t::Size;
-                        image.depth = 1;
-                    }
-                    try!(self.update_texture_raw(&tex, &image, sub, face));
-                }
-            }
-        }
-
-        Ok(tex)
-    }
-
 
     fn view_buffer_as_shader_resource_raw(&mut self, hbuf: &handle::RawBuffer<R>)
                                       -> Result<handle::RawShaderResourceView<R>, f::ResourceViewError> {
