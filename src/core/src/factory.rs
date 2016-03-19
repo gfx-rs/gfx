@@ -263,7 +263,7 @@ pub trait Factory<R: Resources> {
     /// Slice0.Mip0, Slice0.Mip1, ..., Slice1.Mip0, ...
     /// If `mipmap` is true, then mipmap chain will be generated automatically,
     /// and the data is expected to come simply as: Slice0, Slice1, ...
-    fn create_texture_with_data_raw(&mut self, tex::Descriptor, format::ChannelType, data: &[&[u8]], mipmap: bool)
+    fn create_texture_with_data_raw(&mut self, tex::Descriptor, format::ChannelType, data: &[&[u8]])
                                     -> Result<handle::RawTexture<R>, tex::Error>;
 
     fn view_buffer_as_shader_resource_raw(&mut self, &handle::RawBuffer<R>)
@@ -375,31 +375,21 @@ pub trait Factory<R: Resources> {
         self.view_texture_as_depth_stencil(tex, 0, None, tex::DepthStencilFlags::empty())
     }
 
-    fn create_texture_const_u8<T: format::TextureFormat>(&mut self, kind: tex::Kind, data: &[&[u8]], generate_mipmap: bool)
+    fn create_texture_const_u8<T: format::TextureFormat>(&mut self, kind: tex::Kind, data: &[&[u8]])
                                -> Result<(handle::Texture<R, T::Surface>, handle::ShaderResourceView<R, T::View>), CombinedError>
     {
         let surface = <T::Surface as format::SurfaceTyped>::get_surface_type();
-        let desc = if generate_mipmap {
-            tex::Descriptor {
-                kind: kind,
-                levels: kind.get_num_levels(),
-                format: surface,
-                bind: SHADER_RESOURCE | RENDER_TARGET,
-                usage: Usage::GpuOnly,
-            }
-        }else {
-            let num_slices = kind.get_num_slices().unwrap_or(1) as usize;
-            let num_faces = if kind.is_cube() {6} else {1};
-            tex::Descriptor {
-                kind: kind,
-                levels: (data.len() / (num_slices * num_faces)) as tex::Level,
-                format: surface,
-                bind: SHADER_RESOURCE,
-                usage: Usage::Const,
-            }
+        let num_slices = kind.get_num_slices().unwrap_or(1) as usize;
+        let num_faces = if kind.is_cube() {6} else {1};
+        let desc = tex::Descriptor {
+            kind: kind,
+            levels: (data.len() / (num_slices * num_faces)) as tex::Level,
+            format: surface,
+            bind: SHADER_RESOURCE,
+            usage: Usage::Const,
         };
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
-        let raw = try!(self.create_texture_with_data_raw(desc, cty, data, generate_mipmap));
+        let raw = try!(self.create_texture_with_data_raw(desc, cty, data));
         let levels = (0, raw.get_info().levels - 1);
         let tex = Typed::new(raw);
         let view = try!(self.view_texture_as_shader_resource::<T>(&tex, levels, format::Swizzle::new()));
@@ -407,7 +397,7 @@ pub trait Factory<R: Resources> {
     }
 
     fn create_texture_const<T: format::TextureFormat>(&mut self, kind: tex::Kind,
-                            data: &[&[<T::Surface as format::SurfaceTyped>::DataType]], generate_mipmap: bool)
+                            data: &[&[<T::Surface as format::SurfaceTyped>::DataType]])
                             -> Result<(handle::Texture<R, T::Surface>, handle::ShaderResourceView<R, T::View>), CombinedError>
     {
         // we can use cast_slice on a 2D slice, have to use a temporary array of slices
@@ -416,7 +406,7 @@ pub trait Factory<R: Resources> {
         for (rd, d) in raw_data.iter_mut().zip(data.iter()) {
             *rd = cast_slice(*d);
         }
-        self.create_texture_const_u8::<T>(kind, &raw_data[.. data.len()], generate_mipmap)
+        self.create_texture_const_u8::<T>(kind, &raw_data[.. data.len()])
     }
 
     fn create_render_target<T: format::RenderFormat + format::TextureFormat>

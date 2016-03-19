@@ -158,14 +158,6 @@ impl Factory {
             (&NewTexture::Texture(t), None) => Ok(TargetView::Texture(t, level)),
         }
     }
-
-    fn generate_mipmap(&mut self, texture: &handle::RawTexture<R>) {
-        match self.frame_handles.ref_texture(texture) {
-            &NewTexture::Surface(_) => (), // no mip chain
-            &NewTexture::Texture(t) =>
-                tex::generate_mipmap(&self.share.context, texture.get_info().kind, t),
-        }
-    }
 }
 
 
@@ -291,14 +283,13 @@ impl d::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_texture(object, desc))
     }
 
-    fn create_texture_with_data_raw(&mut self, desc: t::Descriptor, channel: ChannelType,
-                                    data: &[&[u8]], mipmap: bool)
+    fn create_texture_with_data_raw(&mut self, desc: t::Descriptor, channel: ChannelType, data: &[&[u8]])
                                     -> Result<handle::RawTexture<R>, t::Error> {
         let tex = try!(self.create_texture_raw(desc, Some(channel)));
 
         let opt_slices = desc.kind.get_num_slices();
         let num_slices = opt_slices.unwrap_or(1) as usize;
-        let num_mips = if mipmap {1} else {desc.levels as usize};
+        let num_mips = desc.levels as usize;
         let mut cube_faces = [None; 6];
         let faces: &[_] = if desc.kind.is_cube() {
             for (cf, orig) in cube_faces.iter_mut().zip(t::CUBE_FACES.iter()) {
@@ -328,9 +319,6 @@ impl d::Factory<R> for Factory {
             }
         }
 
-        if mipmap {
-            self.generate_mipmap(&tex);
-        }
         Ok(tex)
     }
 

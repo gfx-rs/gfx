@@ -309,7 +309,7 @@ impl Factory {
 
     fn create_texture_internal(&mut self, desc: core::tex::Descriptor,
                                mut hint: Option<core::format::ChannelType>,
-                               init_opt: Option<(&[&[u8]], bool)>)
+                               init_opt: Option<&[&[u8]]>)
                                -> Result<h::RawTexture<R>, core::tex::Error>
     {
         use gfx_core::tex::{AaMode, Error, Kind};
@@ -321,24 +321,19 @@ impl Factory {
         }
 
         self.sub_data_array.clear();
-        let gen_mipmap = match init_opt {
-            Some((data, mips)) => {
-                for sub in data.iter() {
-                    self.sub_data_array.push(winapi::D3D11_SUBRESOURCE_DATA {
-                        pSysMem: sub.as_ptr() as *const c_void,
-                        SysMemPitch: 0,
-                        SysMemSlicePitch: 0,
-                    });
-                }
-                mips
-            },
-            None => false,
+        if let Some(data) = init_opt {
+            for sub in data.iter() {
+                self.sub_data_array.push(winapi::D3D11_SUBRESOURCE_DATA {
+                    pSysMem: sub.as_ptr() as *const c_void,
+                    SysMemPitch: 0,
+                    SysMemSlicePitch: 0,
+                });
+            }
         };
-        let misc = if gen_mipmap {winapi::D3D11_RESOURCE_MISC_GENERATE_MIPS}
-            else {winapi::D3D11_RESOURCE_MISC_FLAG(0)};
+        let misc = winapi::D3D11_RESOURCE_MISC_FLAG(0);
 
         let tparam = TextureParam {
-            levels: if gen_mipmap {0} else {desc.levels as winapi::UINT},
+            levels: desc.levels as winapi::UINT,
             format: match hint {
                 Some(channel) => match map_format(core::format::Format(desc.format, channel), true) {
                     Some(f) => f,
@@ -603,9 +598,9 @@ impl core::Factory<R> for Factory {
         self.create_texture_internal(desc, hint, None)
     }
 
-    fn create_texture_with_data_raw(&mut self, desc: core::tex::Descriptor, channel: core::format::ChannelType,
-                                    data: &[&[u8]], mipmap: bool) -> Result<core::handle::RawTexture<R>, core::tex::Error> {
-        self.create_texture_internal(desc, Some(channel), Some((data, mipmap)))
+    fn create_texture_with_data_raw(&mut self, desc: core::tex::Descriptor, channel: core::format::ChannelType, data: &[&[u8]])
+                                    -> Result<core::handle::RawTexture<R>, core::tex::Error> {
+        self.create_texture_internal(desc, Some(channel), Some(data))
     }
 
     fn view_buffer_as_shader_resource_raw(&mut self, _hbuf: &h::RawBuffer<R>)

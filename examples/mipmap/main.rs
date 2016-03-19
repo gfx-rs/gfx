@@ -88,9 +88,10 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         ];
         let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
 
-        let kind = gfx::tex::Kind::D2(4, 4, gfx::tex::AaMode::Single);
-        let (_, texture_view) = factory.create_texture_const::<Srgba8>(kind, &[&L0_DATA, &L1_DATA, &L2_DATA], false)
-                                       .unwrap();
+        let (_, texture_view) = factory.create_texture_const::<Srgba8>(
+            gfx::tex::Kind::D2(4, 4, gfx::tex::AaMode::Single),
+            &[&L0_DATA, &L1_DATA, &L2_DATA]
+            ).unwrap();
 
         let sampler = factory.create_sampler(gfx::tex::SamplerInfo::new(
             gfx::tex::FilterMethod::Trilinear,

@@ -120,9 +120,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
         let texels = [[0x20, 0xA0, 0xC0, 0x00]];
         let (_, texture_view) = factory.create_texture_const::<gfx::format::Rgba8>(
-            gfx::tex::Kind::D2(1, 1, gfx::tex::AaMode::Single),
-            &[&texels],
-            false
+            gfx::tex::Kind::D2(1, 1, gfx::tex::AaMode::Single), &[&texels]
             ).unwrap();
 
         let sinfo = gfx::tex::SamplerInfo::new(
