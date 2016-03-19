@@ -515,6 +515,9 @@ impl Device {
                     Err(e) => error!("GL: Texture({}) update failed: {:?}", texture, e),
                 }
             },
+            Command::GenerateMipmap(view) => {
+                tex::generate_mipmap(&self.share.context, view.object, view.bind);
+            },
             Command::Draw(primitive, start, count, instances) => {
                 let gl = &self.share.context;
                 match instances {
@@ -611,7 +614,7 @@ impl Device {
                     },
                 }
             },
-            Command::Blit(mut s_rect, d_rect, mirror, _) => {
+            Command::_Blit(mut s_rect, d_rect, mirror, _) => {
                 type GLint = gl::types::GLint;
                 // mirror
                 let mut s_end_x = s_rect.x + s_rect.w;

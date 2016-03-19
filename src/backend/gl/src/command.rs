@@ -20,7 +20,7 @@ use gfx_core::draw;
 use gfx_core::state as s;
 use gfx_core::target::{ColorValue, Depth, Mirror, Rect, Stencil};
 use {Buffer, Program, FrameBuffer, Texture,
-     NewTexture, Resources, PipelineState, TargetView};
+     NewTexture, Resources, PipelineState, ResourceView, TargetView};
 
 
 fn primitive_to_gl(primitive: c::Primitive) -> gl::types::GLenum {
@@ -94,12 +94,13 @@ pub enum Command {
     UpdateBuffer(Buffer, DataPointer, usize),
     UpdateTexture(Texture, c::tex::Kind, Option<c::tex::CubeFace>,
                   DataPointer, c::tex::RawImageInfo),
+    GenerateMipmap(ResourceView),
     // drawing
     Clear(Option<draw::ClearColor>, Option<Depth>, Option<Stencil>),
     Draw(gl::types::GLenum, c::VertexCount, c::VertexCount, draw::InstanceOption),
     DrawIndexed(gl::types::GLenum, gl::types::GLenum, RawOffset,
                 c::VertexCount, c::VertexCount, draw::InstanceOption),
-    Blit(Rect, Rect, Mirror, usize),
+    _Blit(Rect, Rect, Mirror, usize),
 }
 
 pub const COLOR_DEFAULT: s::Color = s::Color {
@@ -309,6 +310,10 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
             NewTexture::Surface(s) =>
                 error!("GL: unable to update the contents of a Surface({})", s),
         }
+    }
+
+    fn generate_mipmap(&mut self, srv: ResourceView) {
+        self.buf.push(Command::GenerateMipmap(srv));
     }
 
     fn clear_color(&mut self, target: TargetView, value: draw::ClearColor) {

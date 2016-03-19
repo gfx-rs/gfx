@@ -70,6 +70,7 @@ pub trait CommandBuffer<R: Resources> {
     /// Update a texture
     fn update_texture(&mut self, R::Texture, tex::Kind, Option<tex::CubeFace>,
                       data: &[u8], tex::RawImageInfo);
+    fn generate_mipmap(&mut self, R::ShaderResourceView);
     /// Clear color target
     fn clear_color(&mut self, R::RenderTargetView, ClearColor);
     fn clear_depth_stencil(&mut self, R::DepthStencilView,

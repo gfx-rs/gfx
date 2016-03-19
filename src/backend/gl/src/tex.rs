@@ -811,11 +811,8 @@ pub fn make_sampler(gl: &gl::Gl, info: &SamplerInfo) -> Sampler { unsafe {
     name
 }}
 
-pub fn generate_mipmap(gl: &gl::Gl, kind: Kind, name: Texture) { unsafe {
+pub fn generate_mipmap(gl: &gl::Gl, name: Texture, target: gl::types::GLenum) { unsafe {
     //can't fail here, but we need to check for integer formats too
-    let (_, _, _, aa) = kind.get_dimensions();
-    debug_assert!(!aa.needs_resolve());
-    let target = kind_to_gl(kind);
     gl.BindTexture(target, name);
     gl.GenerateMipmap(target);
 }}

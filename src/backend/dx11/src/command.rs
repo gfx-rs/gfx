@@ -78,6 +78,7 @@ pub enum Command {
     // resource updates
     UpdateBuffer(Buffer, DataPointer, usize),
     UpdateTexture(Texture, tex::Kind, Option<tex::CubeFace>, DataPointer, tex::RawImageInfo),
+    GenerateMips(native::Srv),
     // drawing
     ClearColor(native::Rtv, [f32; 4]),
     ClearDepthStencil(native::Dsv, D3D11_CLEAR_FLAG, FLOAT, UINT8),
@@ -309,6 +310,10 @@ impl<P: Parser> draw::CommandBuffer<Resources> for CommandBuffer<P> {
     fn update_texture(&mut self, tex: Texture, kind: tex::Kind, face: Option<tex::CubeFace>,
                       data: &[u8], image: tex::RawImageInfo) {
         self.parser.update_texture(tex, kind, face, data, image);
+    }
+
+    fn generate_mipmap(&mut self, srv: native::Srv) {
+        self.parser.parse(Command::GenerateMips(srv));
     }
 
     fn clear_color(&mut self, target: native::Rtv, value: draw::ClearColor) {

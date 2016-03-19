@@ -84,6 +84,7 @@ impl draw::CommandBuffer<DummyResources> for DummyCommandBuffer {
     fn update_buffer(&mut self, _: (), _: &[u8], _: usize) {}
     fn update_texture(&mut self, _: (), _: tex::Kind, _: Option<tex::CubeFace>,
                       _: &[u8], _: tex::RawImageInfo) {}
+    fn generate_mipmap(&mut self, _: ()) {}
     fn clear_color(&mut self, _: (), _: draw::ClearColor) {}
     fn clear_depth_stencil(&mut self, _: (), _: Option<target::Depth>,
                            _: Option<target::Stencil>) {}

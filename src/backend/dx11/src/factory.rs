@@ -330,7 +330,13 @@ impl Factory {
                 });
             }
         };
-        let misc = winapi::D3D11_RESOURCE_MISC_FLAG(0);
+        let misc = if desc.usage != f::Usage::Const &&
+            desc.bind.contains(f::RENDER_TARGET | f::SHADER_RESOURCE) &&
+            desc.levels > 1 && init_opt.is_none() {
+            winapi::D3D11_RESOURCE_MISC_GENERATE_MIPS
+        }else {
+            winapi::D3D11_RESOURCE_MISC_FLAG(0)
+        };
 
         let tparam = TextureParam {
             levels: desc.levels as winapi::UINT,

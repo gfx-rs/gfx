@@ -194,6 +194,9 @@ pub fn process(ctx: *mut winapi::ID3D11DeviceContext, command: &command::Command
             let data = data_buf.get(pointer);
             update_texture(ctx, tex, kind, face, data, image);
         },
+        GenerateMips(ref srv) => unsafe {
+            (*ctx).GenerateMips(srv.0);
+        },
         ClearColor(target, ref data) => unsafe {
             (*ctx).ClearRenderTargetView(target.0, data);
         },
