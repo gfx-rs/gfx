@@ -21,7 +21,7 @@
 //! image data.  Image data consists of an array of "texture elements", or
 //! texels.
 
-use factory::Bind;
+use factory::{Bind, Usage};
 use format;
 use state;
 pub use target::{Layer, Level};
@@ -43,8 +43,6 @@ pub enum Error {
 
 /// Dimension size
 pub type Size = u16;
-/// Array size
-pub type ArraySize = u8;
 /// Number of bits per component
 pub type Bits = u8;
 /// Number of MSAA samples
@@ -121,14 +119,22 @@ pub enum FilterMethod {
 /// The face of a cube texture to do an operation on.
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 #[allow(missing_docs)]
+#[repr(u8)]
 pub enum CubeFace {
-    PosZ,
-    NegZ,
     PosX,
     NegX,
     PosY,
-    NegY
+    NegY,
+    PosZ,
+    NegZ,
 }
+
+/// A constant array of cube faces in the order they map to the hardware.
+pub const CUBE_FACES: [CubeFace; 6] = [
+    CubeFace::PosX, CubeFace::NegX,
+    CubeFace::PosY, CubeFace::NegY,
+    CubeFace::PosZ, CubeFace::NegZ,
+];
 
 /// Specifies the kind of a texture storage to be allocated.
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
@@ -137,18 +143,18 @@ pub enum Kind {
     D1(Size),
     /// An array of rows of texels. Equivalent to Texture2D except that texels
     /// in a different row are not sampled.
-    D1Array(Size, ArraySize),
+    D1Array(Size, Layer),
     /// A traditional 2D texture, with rows arranged contiguously.
     D2(Size, Size, AaMode),
     /// An array of 2D textures. Equivalent to Texture3D except that texels in
     /// a different depth level are not sampled.
-    D2Array(Size, Size, ArraySize, AaMode),
+    D2Array(Size, Size, Layer, AaMode),
     /// A volume texture, with each 2D layer arranged contiguously.
     D3(Size, Size, Size),
     /// A set of 6 2D textures, one for each face of a cube.
-    Cube(Size, Size),
+    Cube(Size),
     /// An array of Cube textures.
-    CubeArray(Size, Size, ArraySize),
+    CubeArray(Size, Layer),
 }
 
 impl Kind {
@@ -161,8 +167,8 @@ impl Kind {
             Kind::D2(w, h, s) => (w, h, 0, s),
             Kind::D2Array(w, h, a, s) => (w, h, a as Size, s),
             Kind::D3(w, h, d) => (w, h, d, s0),
-            Kind::Cube(w, h) => (w, h, 6, s0),
-            Kind::CubeArray(w, h, a) => (w, h, 6 * (a as Size), s0)
+            Kind::Cube(w) => (w, w, 6, s0),
+            Kind::CubeArray(w, a) => (w, w, 6 * (a as Size), s0)
         }
     }
     /// Get the dimensionality of a particular mipmap level.
@@ -170,7 +176,33 @@ impl Kind {
         use std::cmp::max;
         let (w, h, d, _) = self.get_dimensions();
         (max(1, w >> level), max(1, h >> level), max(1, d >> level), AaMode::Single)
-
+    }
+    /// Count the number of mipmap levels.
+    pub fn get_num_levels(&self) -> Level {
+        use std::cmp::max;
+        let (w, h, d, aa) = self.get_dimensions();
+        let dominant = max(max(w, h), d);
+        if aa == AaMode::Single {
+            (1..).find(|level| dominant>>level <= 1).unwrap()
+        }else {
+            1 // anti-aliased textures can't have mipmaps
+        }
+    }
+    /// Return the number of slices for an array, or None for non-arrays.
+    pub fn get_num_slices(&self) -> Option<Size> {
+        match *self {
+            Kind::D1(..) | Kind::D2(..) | Kind::D3(..) | Kind::Cube(..) => None,
+            Kind::D1Array(_, a) => Some(a),
+            Kind::D2Array(_, _, a, _) => Some(a),
+            Kind::CubeArray(_, a) => Some(a),
+        }
+    }
+    /// Check if it's one of the cube kinds.
+    pub fn is_cube(&self) -> bool {
+        match *self {
+            Kind::Cube(_) | Kind::CubeArray(_, _) => true,
+            _ => false,
+        }
     }
 }
 
@@ -239,6 +271,8 @@ pub enum WrapMode {
     Mirror,
     /// Clamp the texture to the value at `0.0` or `1.0` respectively.
     Clamp,
+    /// Use border color.
+    Border,
 }
 
 /// A wrapper for the LOD level of a texture.
@@ -257,35 +291,61 @@ impl Into<f32> for Lod {
     }
 }
 
+/// A wrapper for the 8bpp RGBA color, encoded as u32.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
+pub struct PackedColor(pub u32);
+
+impl From<[f32; 4]> for PackedColor {
+    fn from(c: [f32; 4]) -> PackedColor {
+        PackedColor(c.iter().rev().fold(0, |u, &c| {
+            (u<<8) + (c * 255.0 + 0.5) as u32
+        }))
+    }
+}
+
+impl Into<[f32; 4]> for PackedColor {
+    fn into(self) -> [f32; 4] {
+        let mut out = [0.0; 4];
+        for i in 0 .. 4 {
+            let byte = (self.0 >> (i<<3)) & 0xFF;
+            out[i] = (byte as f32 + 0.5) / 255.0;
+        }
+        out
+    }
+}
+
 /// Specifies how to sample from a texture.
 // TODO: document the details of sampling.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct SamplerInfo {
     /// Filter method to use.
-    pub filtering: FilterMethod,
+    pub filter: FilterMethod,
     /// Wrapping mode for each of the U, V, and W axis (S, T, and R in OpenGL
-    /// speak)
+    /// speak).
     pub wrap_mode: (WrapMode, WrapMode, WrapMode),
     /// This bias is added to every computed mipmap level (N + lod_bias). For
     /// example, if it would select mipmap level 2 and lod_bias is 1, it will
     /// use mipmap level 3.
     pub lod_bias: Lod,
-    /// This range is used to clamp LOD level used for sampling
+    /// This range is used to clamp LOD level used for sampling.
     pub lod_range: (Lod, Lod),
-    /// comparison mode, used primary for a shadow map
+    /// Comparison mode, used primary for a shadow map.
     pub comparison: Option<state::Comparison>,
+    /// Border color is used when one of the wrap modes is set to border.
+    pub border: PackedColor,
 }
 
 impl SamplerInfo {
     /// Create a new sampler description with a given filter method and wrapping mode, using no LOD
     /// modifications.
-    pub fn new(filtering: FilterMethod, wrap: WrapMode) -> SamplerInfo {
+    pub fn new(filter: FilterMethod, wrap: WrapMode) -> SamplerInfo {
         SamplerInfo {
-            filtering: filtering,
+            filter: filter,
             wrap_mode: (wrap, wrap, wrap),
             lod_bias: Lod(0),
             lod_range: (Lod(-8000), Lod(8000)),
             comparison: None,
+            border: PackedColor(0),
         }
     }
 }
@@ -298,6 +358,7 @@ pub struct Descriptor {
     pub levels: Level,
     pub format: format::SurfaceType,
     pub bind: Bind,
+    pub usage: Usage,
 }
 
 impl Descriptor {
@@ -323,12 +384,52 @@ impl Descriptor {
     }
 }
 
-/// Texture view descriptor.
+/// Texture resource view descriptor.
 #[allow(missing_docs)]
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
-pub struct ViewDesc {
+pub struct ResourceDesc {
     pub channel: format::ChannelType,
     pub min: Level,
     pub max: Level,
     pub swizzle: format::Swizzle,
+}
+
+/// Texture render view descriptor.
+#[allow(missing_docs)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+pub struct RenderDesc {
+    pub channel: format::ChannelType,
+    pub level: Level,
+    pub layer: Option<Layer>,
+}
+
+bitflags!(
+    /// Depth-stencil read-only flags
+    flags DepthStencilFlags: u8 {
+        /// Depth is read-only in the view.
+        const RO_DEPTH    = 0x1,
+        /// Stencil is read-only in the view.
+        const RO_STENCIL  = 0x2,
+        /// Both depth and stencil are read-only.
+        const RO_DEPTH_STENCIL = 0x3,
+    }
+);
+
+/// Texture depth-stencil view descriptor.
+#[allow(missing_docs)]
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+pub struct DepthStencilDesc {
+    pub level: Level,
+    pub layer: Option<Layer>,
+    pub flags: DepthStencilFlags,
+}
+
+impl From<RenderDesc> for DepthStencilDesc {
+    fn from(rd: RenderDesc) -> DepthStencilDesc {
+        DepthStencilDesc {
+            level: rd.level,
+            layer: rd.layer,
+            flags: DepthStencilFlags::empty(),
+        }
+    }
 }

@@ -17,38 +17,35 @@ use gl::types::{GLenum, GLuint, GLint, GLfloat, GLsizei, GLvoid};
 use state;
 use gfx_core::factory::SHADER_RESOURCE;
 use gfx_core::format::{Format as NewFormat, ChannelType};
-use gfx_core::tex::{CubeFace, Kind, Error,
-                    SamplerInfo, ImageInfoCommon, RawImageInfo,
-                    AaMode, FilterMethod, WrapMode,
-                    Level, Dimensions, Descriptor};
+use gfx_core::tex as t;
 
 
-fn cube_face_to_gl(face: CubeFace) -> GLenum {
+fn cube_face_to_gl(face: t::CubeFace) -> GLenum {
     match face {
-        CubeFace::PosZ => gl::TEXTURE_CUBE_MAP_POSITIVE_Z,
-        CubeFace::NegZ => gl::TEXTURE_CUBE_MAP_NEGATIVE_Z,
-        CubeFace::PosX => gl::TEXTURE_CUBE_MAP_POSITIVE_X,
-        CubeFace::NegX => gl::TEXTURE_CUBE_MAP_NEGATIVE_X,
-        CubeFace::PosY => gl::TEXTURE_CUBE_MAP_POSITIVE_Y,
-        CubeFace::NegY => gl::TEXTURE_CUBE_MAP_NEGATIVE_Y,
+        t::CubeFace::PosZ => gl::TEXTURE_CUBE_MAP_POSITIVE_Z,
+        t::CubeFace::NegZ => gl::TEXTURE_CUBE_MAP_NEGATIVE_Z,
+        t::CubeFace::PosX => gl::TEXTURE_CUBE_MAP_POSITIVE_X,
+        t::CubeFace::NegX => gl::TEXTURE_CUBE_MAP_NEGATIVE_X,
+        t::CubeFace::PosY => gl::TEXTURE_CUBE_MAP_POSITIVE_Y,
+        t::CubeFace::NegY => gl::TEXTURE_CUBE_MAP_NEGATIVE_Y,
     }
 }
 
-pub fn kind_to_gl(kind: Kind) -> GLenum {
+pub fn kind_to_gl(kind: t::Kind) -> GLenum {
     match kind {
-        Kind::D1(_) => gl::TEXTURE_1D,
-        Kind::D1Array(_, _) => gl::TEXTURE_1D_ARRAY,
-        Kind::D2(_, _, AaMode::Single) => gl::TEXTURE_2D,
-        Kind::D2(_, _, _) => gl::TEXTURE_2D_MULTISAMPLE,
-        Kind::D2Array(_, _, _, AaMode::Single) => gl::TEXTURE_2D_ARRAY,
-        Kind::D2Array(_, _, _, _) => gl::TEXTURE_2D_MULTISAMPLE_ARRAY,
-        Kind::D3(_, _, _) => gl::TEXTURE_3D,
-        Kind::Cube(_, _) => gl::TEXTURE_CUBE_MAP,
-        Kind::CubeArray(_, _, _) => gl::TEXTURE_CUBE_MAP_ARRAY,
+        t::Kind::D1(_) => gl::TEXTURE_1D,
+        t::Kind::D1Array(_, _) => gl::TEXTURE_1D_ARRAY,
+        t::Kind::D2(_, _, t::AaMode::Single) => gl::TEXTURE_2D,
+        t::Kind::D2(_, _, _) => gl::TEXTURE_2D_MULTISAMPLE,
+        t::Kind::D2Array(_, _, _, t::AaMode::Single) => gl::TEXTURE_2D_ARRAY,
+        t::Kind::D2Array(_, _, _, _) => gl::TEXTURE_2D_MULTISAMPLE_ARRAY,
+        t::Kind::D3(_, _, _) => gl::TEXTURE_3D,
+        t::Kind::Cube(_) => gl::TEXTURE_CUBE_MAP,
+        t::Kind::CubeArray(_, _) => gl::TEXTURE_CUBE_MAP_ARRAY,
     }
 }
 
-fn kind_face_to_gl(kind: Kind, face: Option<CubeFace>) -> GLenum {
+fn kind_face_to_gl(kind: t::Kind, face: Option<t::CubeFace>) -> GLenum {
     match face {
         Some(f) => cube_face_to_gl(f),
         None => kind_to_gl(kind),
@@ -60,8 +57,7 @@ fn format_to_glpixel(format: NewFormat) -> GLenum {
     match format.0 {
         S::R8 | S::R16 | S::R32=> gl::RED,
         S::R4_G4 | S::R8_G8 | S::R16_G16 | S::R32_G32 => gl::RG,
-        S::R8_G8_B8 | S::R16_G16_B16 | S::R32_G32_B32 |
-        S::R3_G3_B2 | S::R5_G6_B5 | S::R11_G11_B10 => gl::RGB,
+        S::R16_G16_B16 | S::R32_G32_B32 | S::R5_G6_B5 | S::R11_G11_B10 => gl::RGB,
         S::R8_G8_B8_A8 | S::R16_G16_B16_A16 | S::R32_G32_B32_A32 |
         S::R4_G4_B4_A4 | S::R5_G5_B5_A1 | S::R10_G10_B10_A2 => gl::RGBA,
         S::D24_S8 => gl::DEPTH_STENCIL,
@@ -73,19 +69,19 @@ fn format_to_gltype(format: NewFormat) -> Result<GLenum, ()> {
     use gfx_core::format::SurfaceType as S;
     use gfx_core::format::ChannelType as C;
     let (fm8, fm16, fm32) = match format.1 {
-        C::Int | C::Inorm | C::Iscaled =>
+        C::Int | C::Inorm =>
             (gl::BYTE, gl::SHORT, gl::INT),
-        C::Uint | C::Unorm | C::Uscaled | C::Srgb =>
+        C::Uint | C::Unorm | C::Srgb =>
             (gl::UNSIGNED_BYTE, gl::UNSIGNED_SHORT, gl::UNSIGNED_INT),
         C::Float => (gl::ZERO, gl::HALF_FLOAT, gl::FLOAT),
     };
     Ok(match format.0 {
-        S::R3_G3_B2 => gl::UNSIGNED_BYTE_3_3_2,
+        //S::R3_G3_B2 => gl::UNSIGNED_BYTE_3_3_2,
         S::R4_G4 => return Err(()),
         S::R4_G4_B4_A4 => gl::UNSIGNED_SHORT_4_4_4_4,
         S::R5_G5_B5_A1 => gl::UNSIGNED_SHORT_5_5_5_1,
         S::R5_G6_B5 => gl::UNSIGNED_SHORT_5_6_5,
-        S::R8 | S::R8_G8 | S::R8_G8_B8 | S::R8_G8_B8_A8 => fm8,
+        S::R8 | S::R8_G8 | S::R8_G8_B8_A8 => fm8,
         S::R10_G10_B10_A2 => gl::UNSIGNED_INT_10_10_10_2,
         S::R11_G11_B10 => return Err(()),
         S::R16 | S::R16_G16 | S::R16_G16_B16 | S::R16_G16_B16_A16 => fm16,
@@ -102,10 +98,7 @@ fn format_to_glfull(format: NewFormat) -> Result<GLenum, ()> {
     use gfx_core::format::ChannelType as C;
     let cty = format.1;
     Ok(match format.0 {
-        S::R3_G3_B2 => match cty {
-            C::Unorm => gl::R3_G3_B2,
-            _ => return Err(()),
-        },
+        //S::R3_G3_B2 => gl::R3_G3_B2,
         S::R4_G4 => return Err(()),
         S::R4_G4_B4_A4 => match cty {
             C::Unorm => gl::RGBA4,
@@ -134,14 +127,7 @@ fn format_to_glfull(format: NewFormat) -> Result<GLenum, ()> {
             C::Unorm => gl::RG8,
             _ => return Err(()),
         },
-        S::R8_G8_B8 => match cty {
-            C::Int => gl::RGB8I,
-            C::Inorm => gl::RGB8_SNORM,
-            C::Uint => gl::RGB8UI,
-            C::Unorm => gl::RGB8,
-            C::Srgb => gl::SRGB8,
-            _ => return Err(()),
-        },
+        //S::R8_G8_B8 |
         S::R8_G8_B8_A8 => match cty {
             C::Int => gl::RGBA8I,
             C::Inorm => gl::RGBA8_SNORM,
@@ -228,7 +214,7 @@ fn set_mipmap_range(gl: &gl::Gl, target: GLenum, (base, max): (u8, u8)) { unsafe
     gl.TexParameteri(target, gl::TEXTURE_MAX_LEVEL, max as GLint);
 }}
 
-fn make_surface_impl(gl: &gl::Gl, format: GLenum, dim: Dimensions)
+fn make_surface_impl(gl: &gl::Gl, format: GLenum, dim: t::Dimensions)
                      -> Result<Surface, ()> {
     let mut name = 0 as GLuint;
     unsafe {
@@ -240,7 +226,7 @@ fn make_surface_impl(gl: &gl::Gl, format: GLenum, dim: Dimensions)
         gl.BindRenderbuffer(target, name);
     }
     match dim.3 {
-        AaMode::Single => unsafe {
+        t::AaMode::Single => unsafe {
             gl.RenderbufferStorage(
                 target,
                 format,
@@ -248,7 +234,7 @@ fn make_surface_impl(gl: &gl::Gl, format: GLenum, dim: Dimensions)
                 dim.1 as GLsizei
             );
         },
-        AaMode::Multi(samples) => unsafe {
+        t::AaMode::Multi(samples) => unsafe {
             gl.RenderbufferStorageMultisample(
                 target,
                 samples as GLsizei,
@@ -257,17 +243,17 @@ fn make_surface_impl(gl: &gl::Gl, format: GLenum, dim: Dimensions)
                 dim.1 as GLsizei
             );
         },
-        AaMode::Coverage(_, _) => return Err(()),
+        t::AaMode::Coverage(_, _) => return Err(()),
     }
 
     Ok(name)
 }
 
 /// Create a render surface.
-pub fn make_surface(gl: &gl::Gl, desc: &Descriptor, cty: ChannelType) ->
-                        Result<Surface, Error> {
+pub fn make_surface(gl: &gl::Gl, desc: &t::Descriptor, cty: ChannelType) ->
+                        Result<Surface, t::Error> {
     let format = NewFormat(desc.format, cty);
-    let format_error = Error::Format(desc.format, Some(cty));
+    let format_error = t::Error::Format(desc.format, Some(cty));
     let fmt = match format_to_glfull(format) {
         Ok(f) => f,
         Err(_) => return Err(format_error),
@@ -276,12 +262,12 @@ pub fn make_surface(gl: &gl::Gl, desc: &Descriptor, cty: ChannelType) ->
         .map_err(|_| format_error)
 }
 
-fn make_widout_storage_impl(gl: &gl::Gl, kind: Kind, format: GLint, pix: GLenum, typ: GLenum,
-                            levels: Level, fixed_sample_locations: bool)
-                            -> Result<Texture, Error> {
+fn make_widout_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLint, pix: GLenum, typ: GLenum,
+                            levels: t::Level, fixed_sample_locations: bool)
+                            -> Result<Texture, t::Error> {
     let (name, target) = make_texture(gl, kind);
     match kind {
-        Kind::D1(w) => unsafe {
+        t::Kind::D1(w) => unsafe {
             gl.TexImage1D(
                 target,
                 0,
@@ -293,7 +279,7 @@ fn make_widout_storage_impl(gl: &gl::Gl, kind: Kind, format: GLint, pix: GLenum,
                 ::std::ptr::null()
             );
         },
-        Kind::D1Array(w, a) => unsafe {
+        t::Kind::D1Array(w, a) => unsafe {
             gl.TexImage2D(
                 target,
                 0,
@@ -306,7 +292,7 @@ fn make_widout_storage_impl(gl: &gl::Gl, kind: Kind, format: GLint, pix: GLenum,
                 ::std::ptr::null()
             );
         },
-        Kind::D2(w, h, AaMode::Single) => unsafe {
+        t::Kind::D2(w, h, t::AaMode::Single) => unsafe {
             gl.TexImage2D(
                 target,
                 0,
@@ -319,7 +305,7 @@ fn make_widout_storage_impl(gl: &gl::Gl, kind: Kind, format: GLint, pix: GLenum,
                 ::std::ptr::null()
             );
         },
-        Kind::D2(w, h, AaMode::Multi(samples)) => unsafe {
+        t::Kind::D2(w, h, t::AaMode::Multi(samples)) => unsafe {
             gl.TexImage2DMultisample(
                 target,
                 samples as GLsizei,
@@ -329,7 +315,7 @@ fn make_widout_storage_impl(gl: &gl::Gl, kind: Kind, format: GLint, pix: GLenum,
                 if fixed_sample_locations {gl::TRUE} else {gl::FALSE}
             );
         },
-        Kind::D2Array(w, h, a, AaMode::Single) => unsafe {
+        t::Kind::D2Array(w, h, a, t::AaMode::Single) => unsafe {
             gl.TexImage3D(
                 target,
                 0,
@@ -343,7 +329,7 @@ fn make_widout_storage_impl(gl: &gl::Gl, kind: Kind, format: GLint, pix: GLenum,
                 ::std::ptr::null()
             );
         },
-        Kind::D2Array(w, h, a, AaMode::Multi(samples)) => unsafe {
+        t::Kind::D2Array(w, h, a, t::AaMode::Multi(samples)) => unsafe {
             gl.TexImage3DMultisample(
                 target,
                 samples as GLsizei,
@@ -354,7 +340,7 @@ fn make_widout_storage_impl(gl: &gl::Gl, kind: Kind, format: GLint, pix: GLenum,
                 if fixed_sample_locations {gl::TRUE} else {gl::FALSE}
             );
         },
-        Kind::D3(w, h, d)  => unsafe {
+        t::Kind::D3(w, h, d)  => unsafe {
             gl.TexImage3D(
                 target,
                 0,
@@ -368,7 +354,7 @@ fn make_widout_storage_impl(gl: &gl::Gl, kind: Kind, format: GLint, pix: GLenum,
                 ::std::ptr::null()
             );
         },
-        Kind::Cube(w, h) => {
+        t::Kind::Cube(w) => {
             for &target in [gl::TEXTURE_CUBE_MAP_POSITIVE_X, gl::TEXTURE_CUBE_MAP_NEGATIVE_X,
                     gl::TEXTURE_CUBE_MAP_POSITIVE_Y, gl::TEXTURE_CUBE_MAP_NEGATIVE_Y,
                     gl::TEXTURE_CUBE_MAP_POSITIVE_Z, gl::TEXTURE_CUBE_MAP_NEGATIVE_Z].iter() {
@@ -377,7 +363,7 @@ fn make_widout_storage_impl(gl: &gl::Gl, kind: Kind, format: GLint, pix: GLenum,
                     0,
                     format,
                     w as GLsizei,
-                    h as GLsizei,
+                    w as GLsizei,
                     0,
                     pix,
                     typ,
@@ -385,9 +371,9 @@ fn make_widout_storage_impl(gl: &gl::Gl, kind: Kind, format: GLint, pix: GLenum,
                 )};
             }
         },
-        Kind::CubeArray(_, _, _) => return Err(Error::Kind),
-        Kind::D2(_, _, aa) => return Err(Error::Samples(aa)),
-        Kind::D2Array(_, _, _, aa) => return Err(Error::Samples(aa)),
+        t::Kind::CubeArray(_, _) => return Err(t::Error::Kind),
+        t::Kind::D2(_, _, aa) => return Err(t::Error::Samples(aa)),
+        t::Kind::D2Array(_, _, _, aa) => return Err(t::Error::Samples(aa)),
     }
 
     set_mipmap_range(gl, target, (0, levels - 1));
@@ -395,17 +381,17 @@ fn make_widout_storage_impl(gl: &gl::Gl, kind: Kind, format: GLint, pix: GLenum,
 }
 
 /// Create a texture, using the descriptor, assuming TexStorage* isn't available.
-pub fn make_without_storage(gl: &gl::Gl, desc: &Descriptor, cty: ChannelType) ->
-                            Result<Texture, Error> {
+pub fn make_without_storage(gl: &gl::Gl, desc: &t::Descriptor, cty: ChannelType) ->
+                            Result<Texture, t::Error> {
     let format = NewFormat(desc.format, cty);
     let gl_format = match format_to_glfull(format) {
         Ok(f) => f as GLint,
-        Err(_) => return Err(Error::Format(desc.format, Some(cty))),
+        Err(_) => return Err(t::Error::Format(desc.format, Some(cty))),
     };
     let gl_pixel_format = format_to_glpixel(format);
     let gl_data_type = match format_to_gltype(format) {
         Ok(t) => t,
-        Err(_) => return Err(Error::Format(desc.format, Some(cty))),
+        Err(_) => return Err(t::Error::Format(desc.format, Some(cty))),
     };
 
     let fixed_loc = desc.bind.contains(SHADER_RESOURCE);
@@ -414,9 +400,9 @@ pub fn make_without_storage(gl: &gl::Gl, desc: &Descriptor, cty: ChannelType) ->
 }
 
 /// Create a texture, assuming TexStorage is available.
-fn make_with_storage_impl(gl: &gl::Gl, kind: Kind, format: GLenum,
-                          levels: Level, fixed_sample_locations: bool)
-                          -> Result<Texture, Error> {
+fn make_with_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLenum,
+                          levels: t::Level, fixed_sample_locations: bool)
+                          -> Result<Texture, t::Error> {
     use std::cmp::max;
 
     fn min(a: u8, b: u8) -> GLint {
@@ -434,7 +420,7 @@ fn make_with_storage_impl(gl: &gl::Gl, kind: Kind, format: GLenum,
 
     let (name, target) = make_texture(gl, kind);
     match kind {
-        Kind::D1(w) => unsafe {
+        t::Kind::D1(w) => unsafe {
             gl.TexStorage1D(
                 target,
                 min(levels, mip_level1(w)),
@@ -442,7 +428,7 @@ fn make_with_storage_impl(gl: &gl::Gl, kind: Kind, format: GLenum,
                 w as GLsizei
             );
         },
-        Kind::D1Array(w, a) => unsafe {
+        t::Kind::D1Array(w, a) => unsafe {
             gl.TexStorage2D(
                 target,
                 min(levels, mip_level1(w)),
@@ -451,7 +437,7 @@ fn make_with_storage_impl(gl: &gl::Gl, kind: Kind, format: GLenum,
                 a as GLsizei
             );
         },
-        Kind::D2(w, h, AaMode::Single) => unsafe {
+        t::Kind::D2(w, h, t::AaMode::Single) => unsafe {
             gl.TexStorage2D(
                 target,
                 min(levels, mip_level2(w, h)),
@@ -460,7 +446,7 @@ fn make_with_storage_impl(gl: &gl::Gl, kind: Kind, format: GLenum,
                 h as GLsizei
             );
         },
-        Kind::D2Array(w, h, a, AaMode::Single) => unsafe {
+        t::Kind::D2Array(w, h, a, t::AaMode::Single) => unsafe {
             gl.TexStorage3D(
                 target,
                 min(levels, mip_level2(w, h)),
@@ -470,7 +456,7 @@ fn make_with_storage_impl(gl: &gl::Gl, kind: Kind, format: GLenum,
                 a as GLsizei
             );
         },
-        Kind::D2(w, h, AaMode::Multi(samples)) => unsafe {
+        t::Kind::D2(w, h, t::AaMode::Multi(samples)) => unsafe {
             gl.TexStorage2DMultisample(
                 target,
                 samples as GLsizei,
@@ -480,7 +466,7 @@ fn make_with_storage_impl(gl: &gl::Gl, kind: Kind, format: GLenum,
                 if fixed_sample_locations {gl::TRUE} else {gl::FALSE}
             );
         },
-        Kind::D2Array(w, h, a, AaMode::Multi(samples)) => unsafe {
+        t::Kind::D2Array(w, h, a, t::AaMode::Multi(samples)) => unsafe {
             gl.TexStorage3DMultisample(
                 target,
                 samples as GLsizei,
@@ -491,7 +477,7 @@ fn make_with_storage_impl(gl: &gl::Gl, kind: Kind, format: GLenum,
                 if fixed_sample_locations {gl::TRUE} else {gl::FALSE}
             );
         },
-        Kind::D3(w, h, d) => unsafe {
+        t::Kind::D3(w, h, d) => unsafe {
             gl.TexStorage3D(
                 target,
                 min(levels, mip_level3(w, h, d)),
@@ -501,18 +487,27 @@ fn make_with_storage_impl(gl: &gl::Gl, kind: Kind, format: GLenum,
                 d as GLsizei
             );
         },
-        Kind::Cube(w, h) => unsafe {
+        t::Kind::Cube(w) => unsafe {
             gl.TexStorage2D(
                 target,
-                min(levels, mip_level2(w, h)),
+                min(levels, mip_level2(w, w)),
                 format,
                 w as GLsizei,
-                h as GLsizei
+                w as GLsizei
             );
         },
-        Kind::CubeArray(..) => return Err(Error::Kind),
-        Kind::D2(_, _, aa) => return Err(Error::Samples(aa)),
-        Kind::D2Array(_, _, _, aa) => return Err(Error::Samples(aa)),
+        t::Kind::CubeArray(w, d) => unsafe {
+            gl.TexStorage3D(
+                target,
+                min(levels, mip_level2(w, w)),
+                format,
+                w as GLsizei,
+                w as GLsizei,
+                d as GLsizei,
+            );
+        },
+        t::Kind::D2(_, _, aa) => return Err(t::Error::Samples(aa)),
+        t::Kind::D2Array(_, _, _, aa) => return Err(t::Error::Samples(aa)),
     }
 
     set_mipmap_range(gl, target, (0, levels - 1));
@@ -521,12 +516,12 @@ fn make_with_storage_impl(gl: &gl::Gl, kind: Kind, format: GLenum,
 }
 
 /// Create a texture, using the descriptor, assuming TexStorage is available.
-pub fn make_with_storage(gl: &gl::Gl, desc: &Descriptor, cty: ChannelType) ->
-                         Result<Texture, Error> {
+pub fn make_with_storage(gl: &gl::Gl, desc: &t::Descriptor, cty: ChannelType) ->
+                         Result<Texture, t::Error> {
     let format = NewFormat(desc.format, cty);
     let gl_format = match format_to_glfull(format) {
         Ok(f) => f,
-        Err(_) => return Err(Error::Format(desc.format, Some(cty))),
+        Err(_) => return Err(t::Error::Format(desc.format, Some(cty))),
     };
     let fixed_loc = desc.bind.contains(SHADER_RESOURCE);
     make_with_storage_impl(gl, desc.kind, gl_format, desc.levels, fixed_loc)
@@ -534,11 +529,11 @@ pub fn make_with_storage(gl: &gl::Gl, desc: &Descriptor, cty: ChannelType) ->
 
 /// Bind a sampler using a given binding anchor.
 /// Used for GL compatibility profile only. The core profile has sampler objects
-pub fn bind_sampler(gl: &gl::Gl, target: GLenum, info: &SamplerInfo) { unsafe {
-    let (min, mag) = filter_to_gl(info.filtering);
+pub fn bind_sampler(gl: &gl::Gl, target: GLenum, info: &t::SamplerInfo) { unsafe {
+    let (min, mag) = filter_to_gl(info.filter);
 
-    match info.filtering {
-        FilterMethod::Anisotropic(fac) =>
+    match info.filter {
+        t::FilterMethod::Anisotropic(fac) =>
             gl.TexParameterf(target, gl::TEXTURE_MAX_ANISOTROPY_EXT, fac as GLfloat),
         _ => ()
     }
@@ -552,6 +547,8 @@ pub fn bind_sampler(gl: &gl::Gl, target: GLenum, info: &SamplerInfo) { unsafe {
     gl.TexParameteri(target, gl::TEXTURE_WRAP_R, wrap_to_gl(r) as GLint);
 
     gl.TexParameterf(target, gl::TEXTURE_LOD_BIAS, info.lod_bias.into());
+    let border: [f32; 4] = info.border.into();
+    gl.TexParameterfv(target, gl::TEXTURE_BORDER_COLOR, &border[0]);
 
     let (min, max) = info.lod_range;
     gl.TexParameterf(target, gl::TEXTURE_MIN_LOD, min.into());
@@ -566,11 +563,11 @@ pub fn bind_sampler(gl: &gl::Gl, target: GLenum, info: &SamplerInfo) { unsafe {
     }
 }}
 
-fn update_texture_impl<F>(gl: &gl::Gl, kind: Kind, target: GLenum, pix: GLenum,
-                       typ: GLenum, img: &ImageInfoCommon<F>, data: *const GLvoid)
-                       -> Result<(), Error> {
+fn update_texture_impl<F>(gl: &gl::Gl, kind: t::Kind, target: GLenum, pix: GLenum,
+                       typ: GLenum, img: &t::ImageInfoCommon<F>, data: *const GLvoid)
+                       -> Result<(), t::Error> {
     Ok(match kind {
-        Kind::D1(_) => unsafe {
+        t::Kind::D1(_) => unsafe {
             gl.TexSubImage1D(
                 target,
                 img.mipmap as GLint,
@@ -581,7 +578,7 @@ fn update_texture_impl<F>(gl: &gl::Gl, kind: Kind, target: GLenum, pix: GLenum,
                 data
             );
         },
-        Kind::D1Array(_, _) | Kind::D2(_, _, AaMode::Single) => unsafe {
+        t::Kind::D1Array(_, _) | t::Kind::D2(_, _, t::AaMode::Single) => unsafe {
             gl.TexSubImage2D(
                 target,
                 img.mipmap as GLint,
@@ -594,7 +591,7 @@ fn update_texture_impl<F>(gl: &gl::Gl, kind: Kind, target: GLenum, pix: GLenum,
                 data
             );
         },
-        Kind::D2Array(_, _, _, AaMode::Single) | Kind::D3(_, _, _) => unsafe {
+        t::Kind::D2Array(_, _, _, t::AaMode::Single) | t::Kind::D3(_, _, _) => unsafe {
             gl.TexSubImage3D(
                 target,
                 img.mipmap as GLint,
@@ -609,7 +606,7 @@ fn update_texture_impl<F>(gl: &gl::Gl, kind: Kind, target: GLenum, pix: GLenum,
                 data
             );
         },
-        Kind::Cube(_, _) => unsafe {
+        t::Kind::Cube(_) => unsafe {
             gl.TexSubImage2D(
                 target,
                 img.mipmap as GLint,
@@ -622,22 +619,22 @@ fn update_texture_impl<F>(gl: &gl::Gl, kind: Kind, target: GLenum, pix: GLenum,
                 data
             );
         },
-        Kind::CubeArray(_, _, _) => return Err(Error::Kind),
-        Kind::D2(_, _, aa) => return Err(Error::Samples(aa)),
-        Kind::D2Array(_, _, _, aa) => return Err(Error::Samples(aa)),
+        t::Kind::CubeArray(_, _) => return Err(t::Error::Kind),
+        t::Kind::D2(_, _, aa) => return Err(t::Error::Samples(aa)),
+        t::Kind::D2Array(_, _, _, aa) => return Err(t::Error::Samples(aa)),
     })
 }
 
 pub fn update_texture(gl: &gl::Gl, name: Texture,
-                      kind: Kind, face: Option<CubeFace>,
-                      img: &RawImageInfo, slice: &[u8])
-                          -> Result<(), Error> {
+                      kind: t::Kind, face: Option<t::CubeFace>,
+                      img: &t::RawImageInfo, slice: &[u8])
+                          -> Result<(), t::Error> {
     //TODO: check size
     let data = slice.as_ptr() as *const GLvoid;
     let pixel_format = format_to_glpixel(img.format);
     let data_type = match format_to_gltype(img.format) {
         Ok(t) => t,
-        Err(_) => return Err(Error::Format(img.format.0, Some(img.format.1))),
+        Err(_) => return Err(t::Error::Format(img.format.0, Some(img.format.1))),
     };
 
     let target = kind_to_gl(kind);
@@ -645,6 +642,43 @@ pub fn update_texture(gl: &gl::Gl, name: Texture,
 
     let target = kind_face_to_gl(kind, face);
     update_texture_impl(gl, kind, target, pixel_format, data_type, img, data)
+}
+
+pub fn init_texture_data(gl: &gl::Gl, name: Texture, desc: t::Descriptor, channel: ChannelType,
+                         data: &[&[u8]]) -> Result<(), t::Error> {
+    let opt_slices = desc.kind.get_num_slices();
+    let num_slices = opt_slices.unwrap_or(1) as usize;
+    let num_mips = desc.levels as usize;
+    let mut cube_faces = [None; 6];
+    let faces: &[_] = if desc.kind.is_cube() {
+        for (cf, orig) in cube_faces.iter_mut().zip(t::CUBE_FACES.iter()) {
+            *cf = Some(*orig);
+        }
+        &cube_faces
+    } else {
+        &cube_faces[..1]
+    };
+    if data.len() != num_slices * faces.len() * num_mips {
+        error!("Texture expects {} slices {} faces {} mips, given {} data chunks instead",
+            num_slices, faces.len(), num_mips, data.len());
+        return Err(t::Error::Data(0))
+    }
+
+    for i in 0 .. num_slices {
+        for (f, &face) in faces.iter().enumerate() {
+            for m in 0 .. num_mips {
+                let sub = data[(i*faces.len() + f)*num_mips + m];
+                let mut image = desc.to_raw_image_info(channel, m as t::Level);
+                if opt_slices.is_some() {
+                    image.zoffset = i as t::Size;
+                    image.depth = 1;
+                }
+                try!(update_texture(gl, name, desc.kind, face, &image, sub));
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /*
@@ -742,7 +776,7 @@ pub fn compressed_update(gl: &gl::Gl, kind: Kind, target: GLenum, img: &ImageInf
 */
 
 /// Common texture creation routine, just creates and binds.
-fn make_texture(gl: &gl::Gl, kind: Kind) -> (Texture, GLuint) {
+fn make_texture(gl: &gl::Gl, kind: t::Kind) -> (Texture, GLuint) {
     let mut name = 0 as GLuint;
     unsafe {
         gl.GenTextures(1, &mut name);
@@ -753,32 +787,33 @@ fn make_texture(gl: &gl::Gl, kind: Kind) -> (Texture, GLuint) {
     (name, target)
 }
 
-fn wrap_to_gl(w: WrapMode) -> GLenum {
+fn wrap_to_gl(w: t::WrapMode) -> GLenum {
     match w {
-        WrapMode::Tile   => gl::REPEAT,
-        WrapMode::Mirror => gl::MIRRORED_REPEAT,
-        WrapMode::Clamp  => gl::CLAMP_TO_EDGE,
+        t::WrapMode::Tile   => gl::REPEAT,
+        t::WrapMode::Mirror => gl::MIRRORED_REPEAT,
+        t::WrapMode::Clamp  => gl::CLAMP_TO_EDGE,
+        t::WrapMode::Border => gl::CLAMP_TO_BORDER,
     }
 }
 
-fn filter_to_gl(f: FilterMethod) -> (GLenum, GLenum) {
+fn filter_to_gl(f: t::FilterMethod) -> (GLenum, GLenum) {
     match f {
-        FilterMethod::Scale => (gl::NEAREST, gl::NEAREST),
-        FilterMethod::Mipmap => (gl::NEAREST_MIPMAP_NEAREST, gl::NEAREST),
-        FilterMethod::Bilinear => (gl::LINEAR, gl::LINEAR),
-        FilterMethod::Trilinear => (gl::LINEAR_MIPMAP_LINEAR, gl::LINEAR),
-        FilterMethod::Anisotropic(..) => (gl::LINEAR_MIPMAP_LINEAR, gl::LINEAR),
+        t::FilterMethod::Scale => (gl::NEAREST, gl::NEAREST),
+        t::FilterMethod::Mipmap => (gl::NEAREST_MIPMAP_NEAREST, gl::NEAREST),
+        t::FilterMethod::Bilinear => (gl::LINEAR, gl::LINEAR),
+        t::FilterMethod::Trilinear => (gl::LINEAR_MIPMAP_LINEAR, gl::LINEAR),
+        t::FilterMethod::Anisotropic(..) => (gl::LINEAR_MIPMAP_LINEAR, gl::LINEAR),
     }
 }
 
-pub fn make_sampler(gl: &gl::Gl, info: &SamplerInfo) -> Sampler { unsafe {
+pub fn make_sampler(gl: &gl::Gl, info: &t::SamplerInfo) -> Sampler { unsafe {
     let mut name = 0 as Sampler;
     gl.GenSamplers(1, &mut name);
 
-    let (min, mag) = filter_to_gl(info.filtering);
+    let (min, mag) = filter_to_gl(info.filter);
 
-    match info.filtering {
-        FilterMethod::Anisotropic(fac) =>
+    match info.filter{
+        t::FilterMethod::Anisotropic(fac) =>
             gl.SamplerParameterf(name, gl::TEXTURE_MAX_ANISOTROPY_EXT, fac as GLfloat),
         _ => ()
     }
@@ -792,6 +827,8 @@ pub fn make_sampler(gl: &gl::Gl, info: &SamplerInfo) -> Sampler { unsafe {
     gl.SamplerParameteri(name, gl::TEXTURE_WRAP_R, wrap_to_gl(r) as GLint);
 
     gl.SamplerParameterf(name, gl::TEXTURE_LOD_BIAS, info.lod_bias.into());
+    let border: [f32; 4] = info.border.into();
+    gl.SamplerParameterfv(name, gl::TEXTURE_BORDER_COLOR, &border[0]);
 
     let (min, max) = info.lod_range;
     gl.SamplerParameterf(name, gl::TEXTURE_MIN_LOD, min.into());
@@ -808,11 +845,8 @@ pub fn make_sampler(gl: &gl::Gl, info: &SamplerInfo) -> Sampler { unsafe {
     name
 }}
 
-pub fn generate_mipmap(gl: &gl::Gl, kind: Kind, name: Texture) { unsafe {
+pub fn generate_mipmap(gl: &gl::Gl, name: Texture, target: gl::types::GLenum) { unsafe {
     //can't fail here, but we need to check for integer formats too
-    let (_, _, _, aa) = kind.get_dimensions();
-    debug_assert!(!aa.needs_resolve());
-    let target = kind_to_gl(kind);
     gl.BindTexture(target, name);
     gl.GenerateMipmap(target);
 }}

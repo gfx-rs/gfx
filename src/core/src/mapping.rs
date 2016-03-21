@@ -78,6 +78,10 @@ impl<'a, T: Copy, R: Resources, F: Factory<R>> Writable<'a, T, R, F> where
         }
         unsafe { self.raw.set(idx, val); }
     }
+    /// Returns a mutable slice of the specified length.
+    pub fn to_mut_slice(&mut self) -> &mut [T] {
+        unsafe { self.raw.to_mut_slice(self.len) }
+    }
 }
 
 impl<'a, T: Copy, R: Resources, F: Factory<R>> Drop for Writable<'a, T, R, F> where

@@ -42,16 +42,17 @@ pub use gfx_core::pso::{Descriptor};
 /// It doesn't have any typing information, since PSO knows what
 /// format and layout to expect from each resource.
 #[allow(missing_docs)]
+#[derive(Debug)]
 pub struct RawDataSet<R: d::Resources>{
     pub vertex_buffers: d::pso::VertexBufferSet<R>,
-    pub constant_buffers: d::pso::ConstantBufferSet<R>,
+    pub constant_buffers: Vec<d::pso::ConstantBufferParam<R>>,
     pub global_constants: Vec<(d::shade::Location, d::shade::UniformValue)>,
-    pub resource_views: d::pso::ResourceViewSet<R>,
-    pub unordered_views: d::pso::UnorderedViewSet<R>,
-    pub samplers: d::pso::SamplerSet<R>,
+    pub resource_views: Vec<d::pso::ResourceViewParam<R>>,
+    pub unordered_views: Vec<d::pso::UnorderedViewParam<R>>,
+    pub samplers: Vec<d::pso::SamplerParam<R>>,
     pub pixel_targets: d::pso::PixelTargetSet<R>,
     pub ref_values: d::state::RefValues,
-    pub scissor: Option<d::target::Rect>,
+    pub scissor: d::target::Rect,
 }
 
 impl<R: d::Resources> RawDataSet<R> {
@@ -59,15 +60,27 @@ impl<R: d::Resources> RawDataSet<R> {
     pub fn new() -> RawDataSet<R> {
         RawDataSet {
             vertex_buffers: d::pso::VertexBufferSet::new(),
-            constant_buffers: d::pso::ConstantBufferSet::new(),
+            constant_buffers: Vec::new(),
             global_constants: Vec::new(),
-            resource_views: d::pso::ResourceViewSet::new(),
-            unordered_views: d::pso::UnorderedViewSet::new(),
-            samplers: d::pso::SamplerSet::new(),
+            resource_views: Vec::new(),
+            unordered_views: Vec::new(),
+            samplers: Vec::new(),
             pixel_targets: d::pso::PixelTargetSet::new(),
             ref_values: Default::default(),
-            scissor: None,
+            scissor: d::target::Rect{x:0, y:0, w:1, h:1},
         }
+    }
+    /// Clear all contained data.
+    pub fn clear(&mut self) {
+        self.vertex_buffers = d::pso::VertexBufferSet::new();
+        self.constant_buffers.clear();
+        self.global_constants.clear();
+        self.resource_views.clear();
+        self.unordered_views.clear();
+        self.samplers.clear();
+        self.pixel_targets = d::pso::PixelTargetSet::new();
+        self.ref_values = Default::default();
+        self.scissor = d::target::Rect{x:0, y:0, w:1, h:1};
     }
 }
 
@@ -107,8 +120,7 @@ pub trait PipelineData<R: d::Resources> {
     type Meta;
     /// Dump all the contained data into the raw data set,
     /// given the mapping ("meta"), and a handle manager.
-    fn bake(&self, meta: &Self::Meta, &mut d::handle::Manager<R>)
-              -> RawDataSet<R>;
+    fn bake_to(&self, &mut RawDataSet<R>, meta: &Self::Meta, &mut d::handle::Manager<R>);
 }
 
 /// Strongly-typed compiled pipeline state.
@@ -164,6 +176,8 @@ pub trait DataLink<'a>: Sized {
                            Option<Result<(), d::format::Format>> { None }
     /// Attempt to link with a sampler.
     fn link_sampler(&mut self, _: &d::shade::SamplerVar, _: &Self::Init) -> Option<()> { None }
+    /// Attempt to enable scissor test.
+    fn link_scissor(&mut self) -> bool { false }
 }
 
 /// The "bind" logic portion of the PSO component.

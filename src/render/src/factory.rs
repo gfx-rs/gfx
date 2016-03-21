@@ -16,13 +16,12 @@
 
 use gfx_core::{format, handle, tex};
 use gfx_core::{Primitive, Resources, ShaderSet, VertexCount};
-use gfx_core::factory::{BufferRole, Factory};
+use gfx_core::factory::{Bind, BufferRole, Factory};
 use gfx_core::pso::{CreationError, Descriptor};
 use gfx_core::state::{CullFace, Rasterizer};
-use encoder::Encoder;
 use mesh::{Slice, SliceKind, ToIndexSlice};
 use pso;
-use shade::{ProgramError, ShaderSource};
+use shade::ProgramError;
 
 /// Error creating a PipelineState
 #[derive(Clone, PartialEq, Debug)]
@@ -37,12 +36,7 @@ pub enum PipelineStateError {
 
 
 /// Factory extension trait
-pub trait FactoryExt<R: Resources>: Factory<R> + Sized {
-    /// Create a new graphics command Encoder
-    fn create_encoder(&mut self) -> Encoder<R, Self::CommandBuffer> {
-        Encoder::create(self)
-    }
-
+pub trait FactoryExt<R: Resources>: Factory<R> {
     /// Create a vertex buffer with an associated slice.
     fn create_vertex_buffer<T>(&mut self, data: &[T])
                             -> (handle::Buffer<R, T>, Slice<R>) where
@@ -50,7 +44,8 @@ pub trait FactoryExt<R: Resources>: Factory<R> + Sized {
     {
         let nv = data.len();
         //debug_assert!(nv <= self.get_capabilities().max_vertex_count);
-        let buf = self.create_buffer_static(data, BufferRole::Vertex);
+        let buf = self.create_buffer_const(data, BufferRole::Vertex, Bind::empty())
+                      .unwrap();
         (buf, Slice {
             start: 0,
             end: nv as VertexCount,
@@ -64,14 +59,17 @@ pub trait FactoryExt<R: Resources>: Factory<R> + Sized {
                                     -> (handle::Buffer<R, V>, Slice<R>) where
         V: Copy + pso::buffer::Structure<format::Format>,
         I: ToIndexSlice<R>,
+        Self: Sized,
     {
-        let buf = self.create_buffer_static(vd, BufferRole::Vertex);
+        let buf = self.create_buffer_const(vd, BufferRole::Vertex, Bind::empty())
+                      .unwrap();
         (buf, id.to_slice(self))
     }
 
     /// Create a constant buffer for `num` identical elements of type `T`.
     fn create_constant_buffer<T>(&mut self, num: usize) -> handle::Buffer<R, T> {
-        self.create_buffer_dynamic(num, BufferRole::Uniform)
+        self.create_buffer_dynamic(num, BufferRole::Uniform, Bind::empty())
+            .unwrap()
     }
 
     /// Create a shader set from a given vs/ps code for multiple shader models.
@@ -95,20 +93,6 @@ pub trait FactoryExt<R: Resources>: Factory<R> + Sized {
         let set = try!(self.create_shader_set(vs_code, ps_code));
         self.create_program(&set)
             .map_err(|e| ProgramError::Link(e))
-    }
-
-    /// Create a simple program given `ShaderSource` versions of vertex and
-    /// pixel shaders, automatically picking available shader variant.
-    fn link_program_source(&mut self, vs_src: ShaderSource, ps_src: ShaderSource)
-                           -> Result<handle::Program<R>, ProgramError> {
-        use gfx_core::shade::CreateShaderError;
-        let model = self.get_capabilities().shader_model;
-
-        match (vs_src.choose(model), ps_src.choose(model)) {
-            (Ok(vs_code), Ok(ps_code)) => self.link_program(vs_code, ps_code),
-            (Err(_), Ok(_)) => Err(ProgramError::Vertex(CreateShaderError::ModelNotSupported)),
-            (_, Err(_)) => Err(ProgramError::Pixel(CreateShaderError::ModelNotSupported)),
-        }
     }
 
     /// Create a strongly-typed Pipeline State.

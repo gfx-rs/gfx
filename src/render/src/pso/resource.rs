@@ -16,8 +16,8 @@
 
 use std::marker::PhantomData;
 use gfx_core::{ResourceViewSlot, UnorderedViewSlot, SamplerSlot, Resources};
-use gfx_core::{handle, shade};
-use gfx_core::factory::Phantom;
+use gfx_core::{handle, pso, shade};
+use gfx_core::factory::Typed;
 use gfx_core::format::Format;
 use super::{DataLink, DataBind, RawDataSet};
 
@@ -25,17 +25,17 @@ use super::{DataLink, DataBind, RawDataSet};
 /// but can also be a buffer.
 /// - init: `&str` = name of the resource
 /// - data: `ShaderResourceView<T>`
-pub struct ShaderResource<T>(Option<ResourceViewSlot>, PhantomData<T>);
+pub struct ShaderResource<T>(Option<(ResourceViewSlot, shade::Usage)>, PhantomData<T>);
 /// Unordered access component (UAV). A writable resource (texture/buffer)
 /// with no defined access order across simultaneously executing shaders.
 /// Supported on DX10 and higher.
 /// - init: `&str` = name of the resource
 /// - data: `UnorderedAccessView<T>`
-pub struct UnorderedAccess<T>(Option<UnorderedViewSlot>, PhantomData<T>);
+pub struct UnorderedAccess<T>(Option<(UnorderedViewSlot, shade::Usage)>, PhantomData<T>);
 /// Sampler component.
 /// - init: `&str` = name of the sampler
 /// - data: `Sampler`
-pub struct Sampler(Option<SamplerSlot>);
+pub struct Sampler(Option<(SamplerSlot, shade::Usage)>);
 /// A convenience type for a texture paired with a sampler.
 /// It only makes sense for DX9 class hardware, where every texture by default
 /// is bundled with a sampler, hence they are represented by the same name.
@@ -56,7 +56,7 @@ impl<'a, T> DataLink<'a> for ShaderResource<T> {
     fn link_resource_view(&mut self, var: &shade::TextureVar, init: &Self::Init)
                           -> Option<Result<(), Format>> {
         if *init == var.name {
-            self.0 = Some(var.slot);
+            self.0 = Some((var.slot, var.usage));
             Some(Ok(())) //TODO: check format
         }else {
             None
@@ -67,9 +67,9 @@ impl<'a, T> DataLink<'a> for ShaderResource<T> {
 impl<R: Resources, T> DataBind<R> for ShaderResource<T> {
     type Data = handle::ShaderResourceView<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
-        if let Some(slot) = self.0 {
-            let value = Some(man.ref_srv(data.raw()).clone());
-            out.resource_views.0[slot as usize] = value;
+        if let Some((slot, usage)) = self.0 {
+            let view = man.ref_srv(data.raw()).clone();
+            out.resource_views.push(pso::ResourceViewParam(view, usage, slot));
         }
     }
 }
@@ -85,7 +85,7 @@ impl<'a, T> DataLink<'a> for UnorderedAccess<T> {
     fn link_unordered_view(&mut self, var: &shade::UnorderedVar, init: &Self::Init)
                            -> Option<Result<(), Format>> {
         if *init == var.name {
-            self.0 = Some(var.slot);
+            self.0 = Some((var.slot, var.usage));
             Some(Ok(())) //TODO: check format
         }else {
             None
@@ -96,9 +96,9 @@ impl<'a, T> DataLink<'a> for UnorderedAccess<T> {
 impl<R: Resources, T> DataBind<R> for UnorderedAccess<T> {
     type Data = handle::UnorderedAccessView<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
-        if let Some(slot) = self.0 {
-            let value = Some(man.ref_uav(data.raw()).clone());
-            out.unordered_views.0[slot as usize] = value;
+        if let Some((slot, usage)) = self.0 {
+            let view =  man.ref_uav(data.raw()).clone();
+            out.unordered_views.push(pso::UnorderedViewParam(view, usage, slot));
         }
     }
 }
@@ -113,7 +113,7 @@ impl<'a> DataLink<'a> for Sampler {
     }
     fn link_sampler(&mut self, var: &shade::SamplerVar, init: &Self::Init) -> Option<()> {
         if *init == var.name {
-            self.0 = Some(var.slot);
+            self.0 = Some((var.slot, var.usage));
             Some(())
         }else {
             None
@@ -124,9 +124,9 @@ impl<'a> DataLink<'a> for Sampler {
 impl<R: Resources> DataBind<R> for Sampler {
     type Data = handle::Sampler<R>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
-        if let Some(slot) = self.0 {
-            let value = Some(man.ref_sampler(data).clone());
-            out.samplers.0[slot as usize] = value;
+        if let Some((slot, usage)) = self.0 {
+            let sm = man.ref_sampler(data).clone();
+            out.samplers.push(pso::SamplerParam(sm, usage, slot));
         }
     }
 }

@@ -114,6 +114,9 @@ pub enum Stage {
     Pixel,
 }
 
+/// A constant static array of all shader stages.
+pub const STAGES: [Stage; 3] = [Stage::Vertex, Stage::Geometry, Stage::Pixel];
+
 // Describing program data
 
 /// Location of a parameter in the program.
@@ -247,6 +250,28 @@ impl<T: BaseTyped> Formatted for T {
 impl_const_vector!(2, 3, 4);
 impl_const_matrix!([2,2], [3,3], [4,4], [4,3]);
 
+bitflags!(
+    /// Parameter usage flags.
+    flags Usage: u8 {
+        /// Used by the vertex shader
+        const VERTEX   = 0x1,
+        /// Used by the geometry shader
+        const GEOMETRY = 0x2,
+        /// Used by the pixel shader
+        const PIXEL    = 0x4,
+    }
+);
+
+impl From<Stage> for Usage {
+    fn from(stage: Stage) -> Usage {
+        match stage {
+            Stage::Vertex => VERTEX,
+            Stage::Geometry => GEOMETRY,
+            Stage::Pixel => PIXEL,
+        }
+    }
+}
+
 /// Vertex information that a shader takes as input.
 #[derive(Clone, PartialEq, Debug)]
 pub struct AttributeVar {
@@ -254,8 +279,6 @@ pub struct AttributeVar {
     pub name: String,
     /// Slot of the vertex attribute.
     pub slot: AttributeSlot,
-    /// Number of elements this attribute represents.
-    pub count: usize,
     /// Type that this attribute is composed of.
     pub base_type: BaseType,
     /// "Scalarness" of this attribute.
@@ -287,8 +310,8 @@ pub struct ConstantBufferVar {
     pub slot: ConstantBufferSlot,
     /// Size (in bytes) of this buffer's data.
     pub size: usize,
-    /// What program stage this buffer can be used in, as a bitflag.
-    pub usage: u8,
+    /// What program stage this buffer is used in.
+    pub usage: Usage,
 }
 
 /// Texture shader parameter.
@@ -302,6 +325,8 @@ pub struct TextureVar {
     pub base_type: BaseType,
     /// Type of this texture.
     pub ty: TextureType,
+    /// What program stage this texture is used in.
+    pub usage: Usage,
 }
 
 /// Unordered access shader parameter.
@@ -311,6 +336,8 @@ pub struct UnorderedVar {
     pub name: String,
     /// Slot of this unordered variable.
     pub slot: UnorderedViewSlot,
+    /// What program stage this UAV is used in.
+    pub usage: Usage,
 }
 
 /// Sampler shader parameter.
@@ -322,6 +349,8 @@ pub struct SamplerVar {
     pub slot: SamplerSlot,
     /// Type of this sampler.
     pub ty: SamplerType,
+    /// What program stage this texture is used in.
+    pub usage: Usage,
 }
 
 /// Target output variable.
@@ -331,6 +360,10 @@ pub struct OutputVar {
     pub name: String,
     /// Output color target index.
     pub slot: ColorSlot,
+    /// Type of the output component.
+    pub base_type: BaseType,
+    /// "Scalarness" of this output.
+    pub container: ContainerType,
 }
 
 /// Metadata about a program.
@@ -400,35 +433,11 @@ impl ConstVar {
 pub enum CreateShaderError {
     /// The device does not support the requested shader model.
     ModelNotSupported,
+    /// The device does not support the shader stage.
+    StageNotSupported(Stage),
     /// The shader failed to compile.
-    ShaderCompilationFailed(String)
+    CompilationFailed(String),
 }
 
 /// An error type for creating programs.
 pub type CreateProgramError = String;
-
-/// Shader model supported by the device, corresponds to the HLSL shader models.
-#[allow(missing_docs)]
-#[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
-pub enum ShaderModel {
-    Unsupported,
-    Version30,
-    Version40,
-    Version41,
-    Version50,
-}
-
-impl ShaderModel {
-    /// Return the shader model as a numeric value.
-    ///
-    /// Model30 turns to 30, etc.
-    pub fn to_number(&self) -> u8 {
-        match *self {
-            ShaderModel::Unsupported => 0,  // before this age
-            ShaderModel::Version30 => 30,
-            ShaderModel::Version40 => 40,
-            ShaderModel::Version41 => 41,
-            ShaderModel::Version50 => 50,
-        }
-    }
-}

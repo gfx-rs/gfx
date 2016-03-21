@@ -13,36 +13,18 @@
 // limitations under the License.
 
 use std::collections::HashSet;
-use std::{cmp, ffi, fmt, mem, str};
+use std::{ffi, fmt, mem, str};
 use gl;
 use gfx_core::Capabilities;
-use gfx_core::shade;
+
 
 /// A version number for a specific component of an OpenGL implementation
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Version {
     pub major: u32,
     pub minor: u32,
     pub revision: Option<u32>,
     pub vendor_info: &'static str,
-}
-
-// FIXME https://github.com/rust-lang/rust/issues/18738
-// derive
-
-impl cmp::Ord for Version {
-    #[inline]
-    fn cmp(&self, other: &Version) -> cmp::Ordering {
-        (&self.major, &self.minor, &self.revision, self.vendor_info)
-            .cmp(&(&other.major, &other.minor, &other.revision, other.vendor_info))
-    }
-}
-impl cmp::PartialOrd for Version {
-    #[inline]
-    fn partial_cmp(&self, other: &Version) -> Option<cmp::Ordering> {
-        (&self.major, &self.minor, &self.revision, self.vendor_info)
-            .partial_cmp(&(&other.major, &other.minor, &other.revision, other.vendor_info))
-    }
 }
 
 impl Version {
@@ -157,6 +139,15 @@ impl PlatformName {
     }
 }
 
+/// Private capabilities that don't need to be exposed.
+#[derive(Debug)]
+pub struct PrivateCaps {
+    pub array_buffer_supported: bool,
+    pub frame_buffer_supported: bool,
+    pub immutable_storage_supported: bool,
+    pub sampler_objects_supported: bool,
+}
+
 /// OpenGL implementation information
 #[derive(Debug)]
 pub struct Info {
@@ -206,46 +197,31 @@ impl Info {
     }
 }
 
-fn to_shader_model(v: &Version) -> shade::ShaderModel {
-    use gfx_core::shade::ShaderModel;
-    match v {
-        v if *v < Version::new(1, 20, None, "") => ShaderModel::Unsupported,
-        v if *v < Version::new(1, 50, None, "") => ShaderModel::Version30,
-        v if *v < Version::new(3,  0, None, "") => ShaderModel::Version40,
-        v if *v < Version::new(4, 30, None, "") => ShaderModel::Version41,
-        _                                       => ShaderModel::Version50,
-    }
-}
-
 /// Load the information pertaining to the driver and the corresponding device
 /// capabilities.
-pub fn get(gl: &gl::Gl) -> (Info, Capabilities) {
+pub fn get(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
     let info = Info::get(gl);
     let caps = Capabilities {
-        shader_model:                   to_shader_model(&info.shading_language),
+        max_vertex_count: get_usize(gl, gl::MAX_ELEMENTS_VERTICES),
+        max_index_count:  get_usize(gl, gl::MAX_ELEMENTS_INDICES),
+        max_texture_size: get_usize(gl, gl::MAX_TEXTURE_SIZE),
 
-        max_vertex_count:               get_usize(gl, gl::MAX_ELEMENTS_VERTICES),
-        max_index_count:                get_usize(gl, gl::MAX_ELEMENTS_INDICES),
-        max_draw_buffers:               get_usize(gl, gl::MAX_DRAW_BUFFERS),
-        max_texture_size:               get_usize(gl, gl::MAX_TEXTURE_SIZE),
-        max_vertex_attributes:          get_usize(gl, gl::MAX_VERTEX_ATTRIBS),
-
-        buffer_role_change_allowed:     true, //TODO
-
-        array_buffer_supported:         info.is_version_or_extension_supported(3, 0, "GL_ARB_vertex_array_object"),
-        fragment_output_supported:      info.is_version_or_extension_supported(3, 0, "GL_EXT_gpu_shader4"),
-        immutable_storage_supported:    info.is_version_or_extension_supported(4, 2, "GL_ARB_texture_storage"),
-        instance_base_supported:        info.is_version_or_extension_supported(4, 2, "GL_ARB_base_instance"),
-        instance_call_supported:        info.is_version_or_extension_supported(3, 1, "GL_ARB_draw_instanced"),
-        instance_rate_supported:        info.is_version_or_extension_supported(3, 3, "GL_ARB_instanced_arrays"),
-        render_targets_supported:       info.is_version_or_extension_supported(3, 0, "GL_ARB_framebuffer_object"),
-        srgb_color_supported:           info.is_version_or_extension_supported(3, 2, "GL_ARB_framebuffer_sRGB"),
-        sampler_objects_supported:      info.is_version_or_extension_supported(3, 3, "GL_ARB_sampler_objects"),
-        uniform_block_supported:        info.is_version_or_extension_supported(3, 0, "GL_ARB_uniform_buffer_object"),
-        vertex_base_supported:          info.is_version_or_extension_supported(3, 2, "GL_ARB_draw_elements_base_vertex"),
+        instance_base_supported:           info.is_version_or_extension_supported(4, 2, "GL_ARB_base_instance"),
+        instance_call_supported:           info.is_version_or_extension_supported(3, 1, "GL_ARB_draw_instanced"),
+        instance_rate_supported:           info.is_version_or_extension_supported(3, 3, "GL_ARB_instanced_arrays"),
+        vertex_base_supported:             info.is_version_or_extension_supported(3, 2, "GL_ARB_draw_elements_base_vertex"),
+        srgb_color_supported:              info.is_version_or_extension_supported(3, 2, "GL_ARB_framebuffer_sRGB"),
+        constant_buffer_supported:         info.is_version_or_extension_supported(3, 0, "GL_ARB_uniform_buffer_object"),
+        unordered_access_view_supported:   info.is_version_or_extension_supported(4, 0, "XXX"), //TODO
         separate_blending_slots_supported: info.is_version_or_extension_supported(4, 0, "GL_ARB_draw_buffers_blend"),
     };
-    (info, caps)
+    let private = PrivateCaps {
+        array_buffer_supported:            info.is_version_or_extension_supported(3, 0, "GL_ARB_vertex_array_object"),
+        frame_buffer_supported:            info.is_version_or_extension_supported(3, 0, "GL_ARB_framebuffer_object"),
+        immutable_storage_supported:       info.is_version_or_extension_supported(4, 2, "GL_ARB_texture_storage"),
+        sampler_objects_supported:         info.is_version_or_extension_supported(3, 3, "GL_ARB_sampler_objects"),
+    };
+    (info, caps, private)
 }
 
 #[cfg(test)]

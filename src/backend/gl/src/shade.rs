@@ -77,7 +77,7 @@ pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: &[u8])
         }
         Ok(name)
     }else {
-        Err(s::CreateShaderError::ShaderCompilationFailed(log))
+        Err(s::CreateShaderError::CompilationFailed(log))
     }
 }
 
@@ -187,10 +187,12 @@ fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::AttributeVar> {
             error!("Invalid location {} for attribute {}", loc, real_name);
         }
         info!("\t\tAttrib[{}] = {:?}\t{:?}\t{:?}", loc, real_name, base, container);
+        if size != 1 {
+            error!("Array [{}] attributes are not supported", size);
+        }
         s::AttributeVar {
             name: real_name,
             slot: loc as d::AttributeSlot,
-            count: size as usize,
             base_type: base,
             container: container,
         }
@@ -198,8 +200,9 @@ fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::AttributeVar> {
     .collect()
 }
 
-fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program) -> Vec<s::ConstantBufferVar> {
-    let num = if caps.uniform_block_supported {
+fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
+                -> Vec<s::ConstantBufferVar> {
+    let num = if caps.constant_buffer_supported {
         get_program_iv(gl, prog, gl::ACTIVE_UNIFORM_BLOCKS)
     } else {
         0
@@ -228,15 +231,17 @@ fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program) -> Ve
         };
 
         let usage = {
-            let mut usage = 0;
-
-            for (stage, &eval) in [gl::UNIFORM_BLOCK_REFERENCED_BY_VERTEX_SHADER,
-                    gl::UNIFORM_BLOCK_REFERENCED_BY_FRAGMENT_SHADER].iter().enumerate() {
+            let usage_list = [
+                (s::VERTEX,   gl::UNIFORM_BLOCK_REFERENCED_BY_VERTEX_SHADER),
+                (s::GEOMETRY, gl::UNIFORM_BLOCK_REFERENCED_BY_GEOMETRY_SHADER),
+                (s::PIXEL,    gl::UNIFORM_BLOCK_REFERENCED_BY_FRAGMENT_SHADER),
+            ];
+            let mut usage = s::Usage::empty();
+            for &(stage, eval) in usage_list.iter() {
                 if get_block_iv(gl, prog, idx, eval) != 0 {
-                    usage |= 1 << stage;
+                    usage = usage | stage;
                 }
             }
-
             usage
         };
 
@@ -261,7 +266,7 @@ fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program) -> Ve
     }).collect()
 }
 
-fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
+fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program, usage: s::Usage)
                     -> (Vec<s::ConstVar>, Vec<s::TextureVar>, Vec<s::SamplerVar>) {
     let mut uniforms = Vec::new();
     let mut textures = Vec::new();
@@ -269,7 +274,7 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
     let total_num = get_program_iv(gl, prog, gl::ACTIVE_UNIFORMS);
     let indices: Vec<_> = (0..total_num as gl::types::GLuint).collect();
     let mut block_indices: Vec<gl::types::GLint> = repeat(-1 as gl::types::GLint).take(total_num as usize).collect();
-    if caps.uniform_block_supported {
+    if caps.constant_buffer_supported {
         unsafe {
             gl.GetActiveUniformsiv(prog, total_num as gl::types::GLsizei,
                 (&indices[..]).as_ptr(), gl::UNIFORM_BLOCK_INDEX,
@@ -321,12 +326,14 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
                     slot: slot as d::ResourceViewSlot,
                     base_type: base,
                     ty: tex_type,
+                    usage: usage,
                 });
                 if tex_type.can_sample() {
                     samplers.push(s::SamplerVar {
                         name: real_name,
                         slot: slot as d::SamplerSlot,
                         ty: samp_type,
+                        usage: usage,
                     });
                 }
             },
@@ -354,7 +361,7 @@ pub fn get_program_log(gl: &gl::Gl, name: super::Program) -> String {
     }
 }
 
-pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities, shaders: &[super::Shader])
+pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities, shaders: &[super::Shader], usage: s::Usage)
                       -> Result<(::Program, s::ProgramInfo), s::CreateProgramError> {
     let name = unsafe { gl.CreateProgram() };
     for &sh in shaders {
@@ -370,7 +377,7 @@ pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities, shaders: &[super::Sha
         if !log.is_empty() {
             warn!("\tLog: {}", log);
         }
-        let (uniforms, textures, samplers) = query_parameters(gl, caps, name);
+        let (uniforms, textures, samplers) = query_parameters(gl, caps, name, usage);
         let info = s::ProgramInfo {
             vertex_attributes: query_attributes(gl, name),
             globals: uniforms,

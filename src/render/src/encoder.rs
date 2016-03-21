@@ -19,9 +19,9 @@
 use std::mem;
 use draw_state::target::{Depth, Stencil};
 
-use gfx_core::{Device, Factory, IndexType, Resources, SubmitInfo, VertexCount};
+use gfx_core::{Device, IndexType, Resources, VertexCount};
 use gfx_core::{draw, format, handle, tex};
-use gfx_core::factory::Phantom;
+use gfx_core::factory::{cast_slice, Typed};
 use mesh;
 use pso;
 
@@ -44,40 +44,36 @@ pub enum UpdateError<T> {
 /// Graphics commands encoder.
 pub struct Encoder<R: Resources, C: draw::CommandBuffer<R>> {
     command_buffer: C,
-    data_buffer: draw::DataBuffer,
+    raw_pso_data: pso::RawDataSet<R>,
     handles: handle::Manager<R>,
 }
 
-impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
-    /// Create a new encoder using a factory.
-    pub fn create<F>(factory: &mut F) -> Encoder<R, C> where
-        F: Factory<R, CommandBuffer = C>
-    {
+impl<R: Resources, C: draw::CommandBuffer<R>> From<C> for Encoder<R, C> {
+    fn from(combuf: C) -> Encoder<R, C> {
         Encoder {
-            command_buffer: factory.create_command_buffer(),
-            data_buffer: draw::DataBuffer::new(),
+            command_buffer: combuf,
+            raw_pso_data: pso::RawDataSet::new(),
             handles: handle::Manager::new(),
         }
     }
+}
 
-    /// Reset all commands for the command buffer re-usal.
-    pub fn reset(&mut self) {
+impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
+    /// Flush the encoded commands onto the device, and clean.
+    pub fn flush<D>(&mut self, device: &mut D) where
+        D: Device<Resources=R, CommandBuffer=C>
+    {
+        device.pin_submitted_resources(&self.handles);
+        device.submit(&mut self.command_buffer);
         self.command_buffer.reset();
-        self.data_buffer.clear();
         self.handles.clear();
-    }
-
-    /// Get command and data buffers to be submitted to the device.
-    pub fn as_buffer<D>(&self) -> SubmitInfo<D> where
-        D: Device<Resources=R, CommandBuffer=C> {
-        SubmitInfo(&self.command_buffer, &self.data_buffer, &self.handles)
     }
 
     /// Clone the renderer shared data but ignore the commands.
     pub fn clone_empty(&self) -> Encoder<R, C> {
         Encoder {
             command_buffer: self.command_buffer.clone_empty(),
-            data_buffer: draw::DataBuffer::new(),
+            raw_pso_data: pso::RawDataSet::new(),
             handles: handle::Manager::new(),
         }
     }
@@ -94,10 +90,9 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
         let offset_bytes = elem_size * offset_elements;
         let bound = data.len().wrapping_mul(elem_size) + offset_bytes;
         if bound <= buf.get_info().size {
-            let pointer = self.data_buffer.add_vec(data);
             self.command_buffer.update_buffer(
                 self.handles.ref_buffer(buf.raw()).clone(),
-                pointer, offset_bytes);
+                cast_slice(data), offset_bytes);
             Ok(())
         } else {
             Err(UpdateError::OutOfBounds {
@@ -109,10 +104,12 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
 
     /// Update a buffer with a single structure.
     pub fn update_constant_buffer<T: Copy>(&mut self, buf: &handle::Buffer<R, T>, data: &T) {
-        let pointer = self.data_buffer.add_struct(data);
+        use std::slice;
+        let slice = unsafe {
+            slice::from_raw_parts(data as *const T as *const u8, mem::size_of::<T>())
+        };
         self.command_buffer.update_buffer(
-            self.handles.ref_buffer(buf.raw()).clone(),
-            pointer, 0);
+            self.handles.ref_buffer(buf.raw()).clone(), slice, 0);
     }
 
     /// Update the contents of a texture.
@@ -150,20 +147,18 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
             })
         }
 
-        let pointer = self.data_buffer.add_vec(data);
         self.command_buffer.update_texture(
             self.handles.ref_texture(tex.raw()).clone(),
-            tex.get_info().kind, face, pointer,
+            tex.get_info().kind, face, cast_slice(data),
             img.convert(T::get_format()));
         Ok(())
     }
 
     fn draw_indexed<T>(&mut self, buf: &handle::Buffer<R, T>, ty: IndexType,
-                     slice: &mesh::Slice<R>, base: VertexCount,
-                     instances: draw::InstanceOption) {
-        self.command_buffer.bind_index(self.handles.ref_buffer(buf.raw()).clone());
-        self.command_buffer.call_draw_indexed(ty,
-            slice.start, slice.end - slice.start, base, instances);
+                    slice: &mesh::Slice<R>, base: VertexCount,
+                    instances: draw::InstanceOption) {
+        self.command_buffer.bind_index(self.handles.ref_buffer(buf.raw()).clone(), ty);
+        self.command_buffer.call_draw_indexed(slice.start, slice.end - slice.start, base, instances);
     }
 
     fn draw_slice(&mut self, slice: &mesh::Slice<R>, instances: draw::InstanceOption) {
@@ -179,45 +174,25 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
         }
     }
 
-    fn clear_all<T>(&mut self,
-                 color: Option<(&handle::RenderTargetView<R, T>, draw::ClearColor)>,
-                 depth: Option<(&handle::DepthStencilView<R, T>, Depth)>,
-                 stencil: Option<(&handle::DepthStencilView<R, T>, Stencil)>)
-    {
-        use gfx_core::pso::PixelTargetSet;
-
-        let mut pts = PixelTargetSet::new();
-        pts.colors[0] = color.map(|(ref view, _)|
-            self.handles.ref_rtv(view.raw()).clone());
-        pts.depth = depth.map(|(ref view, _)|
-            self.handles.ref_dsv(view.raw()).clone());
-        pts.stencil = stencil.map(|(ref view, _)|
-            self.handles.ref_dsv(view.raw()).clone());
-
-        self.command_buffer.bind_pixel_targets(pts);
-
-        self.command_buffer.clear(draw::ClearSet(
-            [color.map(|(_, c)| c), None, None, None],
-            depth.map(|(_, d)| d), stencil.map(|(_, s)| s)
-        ));
-    }
-
     /// Clear a target view with a specified value.
     pub fn clear<T: format::RenderFormat>(&mut self,
                  view: &handle::RenderTargetView<R, T>, value: T::View)
     where T::View: Into<draw::ClearColor> {
-        self.clear_all(Some((view, value.into())), None, None)
+        let target = self.handles.ref_rtv(view.raw()).clone();
+        self.command_buffer.clear_color(target, value.into())
     }
     /// Clear a depth view with a specified value.
     pub fn clear_depth<T: format::DepthFormat>(&mut self,
                        view: &handle::DepthStencilView<R, T>, depth: Depth) {
-        self.clear_all(None, Some((view, depth)), None)
+        let target = self.handles.ref_dsv(view.raw()).clone();
+        self.command_buffer.clear_depth_stencil(target, Some(depth), None)
     }
 
     /// Clear a stencil view with a specified value.
     pub fn clear_stencil<T: format::StencilFormat>(&mut self,
                          view: &handle::DepthStencilView<R, T>, stencil: Stencil) {
-        self.clear_all(None, None, Some((view, stencil)))
+        let target = self.handles.ref_dsv(view.raw()).clone();
+        self.command_buffer.clear_depth_stencil(target, None, Some(stencil))
     }
 
     /// Draw a mesh slice using a typed pipeline state object (PSO).
@@ -226,18 +201,21 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
     {
         let (pso, _) = self.handles.ref_pso(pipeline.get_handle());
         self.command_buffer.bind_pipeline_state(pso.clone());
-        let raw_data = user_data.bake(pipeline.get_meta(), &mut self.handles);
-        self.command_buffer.bind_vertex_buffers(raw_data.vertex_buffers);
-        self.command_buffer.bind_constant_buffers(raw_data.constant_buffers);
-        for &(location, value) in &raw_data.global_constants {
+        //TODO: make `raw_data` a member to this struct, to re-use the heap allocation
+        self.raw_pso_data.clear();
+        user_data.bake_to(&mut self.raw_pso_data, pipeline.get_meta(), &mut self.handles);
+        self.command_buffer.bind_vertex_buffers(self.raw_pso_data.vertex_buffers.clone());
+        self.command_buffer.bind_pixel_targets(self.raw_pso_data.pixel_targets.clone());
+        self.command_buffer.set_ref_values(self.raw_pso_data.ref_values);
+        self.command_buffer.set_scissor(self.raw_pso_data.scissor);
+        self.command_buffer.bind_constant_buffers(&self.raw_pso_data.constant_buffers);
+        for &(location, value) in &self.raw_pso_data.global_constants {
             self.command_buffer.bind_global_constant(location, value);
         }
-        self.command_buffer.bind_resource_views(raw_data.resource_views);
-        self.command_buffer.bind_unordered_views(raw_data.unordered_views);
-        self.command_buffer.bind_samplers(raw_data.samplers);
-        self.command_buffer.bind_pixel_targets(raw_data.pixel_targets);
-        self.command_buffer.set_ref_values(raw_data.ref_values);
-        self.command_buffer.set_scissor(raw_data.scissor);
+        self.command_buffer.bind_unordered_views(&self.raw_pso_data.unordered_views);
+        //Note: it's important to bind RTV, DSV, and UAV before SRV
+        self.command_buffer.bind_resource_views(&self.raw_pso_data.resource_views);
+        self.command_buffer.bind_samplers(&self.raw_pso_data.samplers);
         self.draw_slice(slice, slice.instances);
     }
 }

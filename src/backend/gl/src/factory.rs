@@ -18,7 +18,7 @@ use std::slice;
 use {gl, tex};
 use gfx_core as d;
 use gfx_core::factory as f;
-use gfx_core::factory::Phantom;
+use gfx_core::factory::Typed;
 use gfx_core::format::ChannelType;
 use gfx_core::handle;
 use gfx_core::handle::Producer;
@@ -61,10 +61,7 @@ pub struct Factory {
 
 impl Clone for Factory {
     fn clone(&self) -> Factory {
-        Factory {
-            share: self.share.clone(),
-            frame_handles: handle::Manager::new(),
-        }
+        Factory::new(self.share.clone())
     }
 }
 
@@ -75,6 +72,10 @@ impl Factory {
             share: share,
             frame_handles: handle::Manager::new(),
         }
+    }
+
+    pub fn create_command_buffer(&mut self) -> CommandBuffer {
+        CommandBuffer::new(self.create_fbo_internal())
     }
 
     fn create_fbo_internal(&mut self) -> gl::types::GLuint {
@@ -101,9 +102,10 @@ impl Factory {
         let gl = &self.share.context;
         let target = role_to_target(info.role);
         let usage = match info.usage {
-            f::BufferUsage::Const   => gl::STATIC_DRAW,
-            f::BufferUsage::Dynamic => gl::DYNAMIC_DRAW,
-            f::BufferUsage::Stream  => gl::STREAM_DRAW,
+            f::Usage::GpuOnly    => gl::STATIC_DRAW,
+            f::Usage::Const      => gl::STATIC_DRAW,
+            f::Usage::Dynamic    => gl::DYNAMIC_DRAW,
+            f::Usage::CpuOnly(_) => gl::STREAM_DRAW,
         };
         unsafe {
             gl.BindBuffer(target, buffer);
@@ -115,10 +117,12 @@ impl Factory {
         }
     }
 
-    pub fn create_program_raw(&mut self, shader_set: &d::ShaderSet<R>)
+    fn create_program_raw(&mut self, shader_set: &d::ShaderSet<R>)
                               -> Result<(gl::types::GLuint, d::shade::ProgramInfo), d::shade::CreateProgramError> {
+        use shade::create_program;
         let frame_handles = &mut self.frame_handles;
         let mut shaders = [0; 3];
+        let usage = shader_set.get_usage();
         let shader_slice = match shader_set {
             &d::ShaderSet::Simple(ref vs, ref ps) => {
                 shaders[0] = *vs.reference(frame_handles);
@@ -132,9 +136,7 @@ impl Factory {
                 &shaders[..3]
             },
         };
-        ::shade::create_program(&self.share.context,
-                                &self.share.capabilities,
-                                shader_slice)
+        create_program(&self.share.context, &self.share.capabilities, shader_slice, usage)
     }
 
     fn view_texture_as_target(&mut self, htex: &handle::RawTexture<R>, level: Level, layer: Option<Layer>)
@@ -152,7 +154,7 @@ impl Factory {
 
 #[derive(Copy, Clone)]
 pub struct RawMapping {
-    pub pointer: *mut ::std::os::raw::c_void,
+    pointer: *mut ::std::os::raw::c_void,
     target: gl::types::GLenum,
 }
 
@@ -172,41 +174,31 @@ impl d::mapping::Raw for RawMapping {
 
 
 impl d::Factory<R> for Factory {
-    type CommandBuffer = CommandBuffer;
     type Mapper = RawMapping;
 
     fn get_capabilities(&self) -> &d::Capabilities {
         &self.share.capabilities
     }
 
-    fn create_command_buffer(&mut self) -> CommandBuffer {
-        CommandBuffer::new(self.create_fbo_internal())
-    }
-
-    fn create_buffer_raw(&mut self, size: usize, role: f::BufferRole, usage: f::BufferUsage)
-                         -> handle::RawBuffer<R> {
+    fn create_buffer_raw(&mut self, info: f::BufferInfo) -> Result<handle::RawBuffer<R>, f::BufferError> {
         let name = self.create_buffer_internal();
-        let info = f::BufferInfo {
-            role: role,
-            usage: usage,
-            size: size,
-        };
         self.init_buffer(name, &info);
-        self.share.handles.borrow_mut().make_buffer(name, info)
+        Ok(self.share.handles.borrow_mut().make_buffer(name, info))
     }
 
-    fn create_buffer_static_raw(&mut self, data: &[u8], role: f::BufferRole)
-                                -> handle::RawBuffer<R> {
+    fn create_buffer_const_raw(&mut self, data: &[u8], stride: usize, role: f::BufferRole, bind: f::Bind)
+                               -> Result<handle::RawBuffer<R>, f::BufferError> {
         let name = self.create_buffer_internal();
-
         let info = f::BufferInfo {
             role: role,
-            usage: f::BufferUsage::Const,
+            usage: f::Usage::Const,
+            bind: bind,
             size: data.len(),
+            stride: stride,
         };
         self.init_buffer(name, &info);
         update_sub_buffer(&self.share.context, name, data.as_ptr(), data.len(), 0, role);
-        self.share.handles.borrow_mut().make_buffer(name, info)
+        Ok(self.share.handles.borrow_mut().make_buffer(name, info))
     }
 
     fn create_shader(&mut self, stage: d::shade::Stage, code: &[u8])
@@ -252,27 +244,31 @@ impl d::Factory<R> for Factory {
             program: *self.frame_handles.ref_program(program),
             primitive: desc.primitive,
             input: desc.attributes,
+            scissor: desc.scissor,
             rasterizer: desc.rasterizer,
             output: output,
         };
         Ok(self.share.handles.borrow_mut().make_pso(pso, program))
     }
 
-    fn create_texture_raw(&mut self, desc: t::Descriptor, hint: Option<ChannelType>)
+    fn create_texture_raw(&mut self, desc: t::Descriptor, hint: Option<ChannelType>, data_opt: Option<&[&[u8]]>)
                           -> Result<handle::RawTexture<R>, t::Error> {
         use gfx_core::tex::Error;
-        let caps = &self.share.capabilities;
+        let caps = &self.share.private_caps;
         if desc.levels == 0 {
             return Err(Error::Size(0))
         }
         let cty = hint.unwrap_or(ChannelType::Uint); //careful here
         let gl = &self.share.context;
-        let object = if desc.bind.intersects(f::SHADER_RESOURCE | f::UNORDERED_ACCESS) {
+        let object = if desc.bind.intersects(f::SHADER_RESOURCE | f::UNORDERED_ACCESS) || data_opt.is_some() {
             let name = if caps.immutable_storage_supported {
                 try!(tex::make_with_storage(gl, &desc, cty))
             } else {
                 try!(tex::make_without_storage(gl, &desc, cty))
             };
+            if let Some(data) = data_opt {
+                try!(tex::init_texture_data(gl, name, desc, cty, data));
+            }
             NewTexture::Texture(name)
         }else {
             let name = try!(tex::make_surface(gl, &desc, cty));
@@ -301,7 +297,7 @@ impl d::Factory<R> for Factory {
         Err(f::ResourceViewError::Unsupported) //TODO
     }
 
-    fn view_texture_as_shader_resource_raw(&mut self, htex: &handle::RawTexture<R>, _desc: t::ViewDesc)
+    fn view_texture_as_shader_resource_raw(&mut self, htex: &handle::RawTexture<R>, _desc: t::ResourceDesc)
                                        -> Result<handle::RawShaderResourceView<R>, f::ResourceViewError> {
         match self.frame_handles.ref_texture(htex) {
             &NewTexture::Surface(_) => Err(f::ResourceViewError::NoBindFlag),
@@ -318,18 +314,18 @@ impl d::Factory<R> for Factory {
         Err(f::ResourceViewError::Unsupported) //TODO
     }
 
-    fn view_texture_as_render_target_raw(&mut self, htex: &handle::RawTexture<R>, level: Level, layer: Option<Layer>)
+    fn view_texture_as_render_target_raw(&mut self, htex: &handle::RawTexture<R>, desc: t::RenderDesc)
                                          -> Result<handle::RawRenderTargetView<R>, f::TargetViewError> {
-        self.view_texture_as_target(htex, level, layer)
+        self.view_texture_as_target(htex, desc.level, desc.layer)
             .map(|view| {
-                let dim = htex.get_info().kind.get_level_dimensions(level);
+                let dim = htex.get_info().kind.get_level_dimensions(desc.level);
                 self.share.handles.borrow_mut().make_rtv(view, htex, dim)
             })
     }
 
-    fn view_texture_as_depth_stencil_raw(&mut self, htex: &handle::RawTexture<R>, layer: Option<Layer>)
+    fn view_texture_as_depth_stencil_raw(&mut self, htex: &handle::RawTexture<R>, desc: t::DepthStencilDesc)
                                          -> Result<handle::RawDepthStencilView<R>, f::TargetViewError> {
-        self.view_texture_as_target(htex, 0, layer)
+        self.view_texture_as_target(htex, desc.level, desc.layer)
             .map(|view| {
                 let dim = htex.get_info().kind.get_level_dimensions(0);
                 self.share.handles.borrow_mut().make_dsv(view, htex, dim)
@@ -337,7 +333,7 @@ impl d::Factory<R> for Factory {
     }
 
     fn create_sampler(&mut self, info: t::SamplerInfo) -> handle::Sampler<R> {
-        let name = if self.share.capabilities.sampler_objects_supported {
+        let name = if self.share.private_caps.sampler_objects_supported {
             tex::make_sampler(&self.share.context, &info)
         } else {
             0
@@ -347,35 +343,6 @@ impl d::Factory<R> for Factory {
             info: info.clone(),
         };
         self.share.handles.borrow_mut().make_sampler(sam, info)
-    }
-
-    fn update_buffer_raw(&mut self, buffer: &handle::RawBuffer<R>, data: &[u8],
-                         offset_bytes: usize) -> Result<(), f::BufferUpdateError> {
-        if offset_bytes + data.len() > buffer.get_info().size {
-            Err(f::BufferUpdateError::OutOfBounds)
-        } else {
-            let raw_handle = *self.frame_handles.ref_buffer(buffer);
-            update_sub_buffer(&self.share.context, raw_handle, data.as_ptr(), data.len(),
-                              offset_bytes, buffer.get_info().role);
-            Ok(())
-        }
-    }
-
-    fn update_texture_raw(&mut self, texture: &handle::RawTexture<R>, image: &t::RawImageInfo,
-                          data: &[u8], face: Option<t::CubeFace>) -> Result<(), t::Error> {
-        let kind = texture.get_info().kind;
-        match self.frame_handles.ref_texture(texture) {
-            &NewTexture::Surface(_) => Err(t::Error::Data(0)),
-            &NewTexture::Texture(t) => tex::update_texture(&self.share.context, t, kind, face, image, data),
-        }
-    }
-
-    fn generate_mipmap_raw(&mut self, texture: &handle::RawTexture<R>) {
-        match self.frame_handles.ref_texture(texture) {
-            &NewTexture::Surface(_) => (), // no mip chain
-            &NewTexture::Texture(t) =>
-                tex::generate_mipmap(&self.share.context, texture.get_info().kind, t),
-        }
     }
 
     fn map_buffer_raw(&mut self, buf: &handle::RawBuffer<R>,

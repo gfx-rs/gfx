@@ -4,9 +4,11 @@
 in vec3 a_Pos;
 in vec2 a_BufPos;
 
-uniform mat4 u_Model;
-uniform mat4 u_View;
-uniform mat4 u_Proj;
+uniform b_VsLocals {
+	mat4 u_Model;
+	mat4 u_View;
+	mat4 u_Proj;
+};
 
 out vec2 v_BufPos;
 

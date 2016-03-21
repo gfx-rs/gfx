@@ -152,9 +152,12 @@ macro_rules! gfx_pipeline_inner {
                     return Err(InitError::PixelExport(out.slot, None));
                 }
                 if !info.knows_outputs {
-                    let mut out = $crate::core::shade::OutputVar {
+                    use $crate::core::shade as s;
+                    let mut out = s::OutputVar {
                         name: String::new(),
                         slot: 0,
+                        base_type: s::BaseType::F32,
+                        container: s::ContainerType::Vector(4),
                     };
                     $(
                         match meta.$field.link_output(&out, &self.$field) {
@@ -170,16 +173,21 @@ macro_rules! gfx_pipeline_inner {
                         }
                     )*
                 }
-                // depth-stencil
+                // depth-stencil, scissor
                 for _ in 0 .. 1 {
                     $(
-                      match meta.$field.link_depth_stencil(&self.$field) {
+                        match meta.$field.link_depth_stencil(&self.$field) {
                             Some(d) => {
                                 assert!(meta.$field.is_active());
                                 desc.depth_stencil = Some(d);
                                 continue;
                             },
                             None => (),
+                        }
+                        if meta.$field.link_scissor() {
+                            assert!(meta.$field.is_active());
+                            desc.scissor = true;
+                            continue;
                         }
                     )*
                 }
@@ -190,12 +198,34 @@ macro_rules! gfx_pipeline_inner {
 
         impl<R: $crate::Resources> $crate::pso::PipelineData<R> for Data<R> {
             type Meta = Meta;
-            fn bake(&self, meta: &Self::Meta, man: &mut $crate::handle::Manager<R>) -> RawDataSet<R> {
-                let mut out = RawDataSet::new();
+            fn bake_to(&self, out: &mut RawDataSet<R>, meta: &Self::Meta, man: &mut $crate::handle::Manager<R>) {
                 $(
-                    meta.$field.bind_to(&mut out, &self.$field, man);
+                    meta.$field.bind_to(out, &self.$field, man);
                 )*
-                out
+            }
+        }
+
+        pub struct Bundle<R: $crate::Resources> {
+            pub slice: $crate::Slice<R>,
+            pub pso: $crate::PipelineState<R, Meta>,
+            pub data: Data<R>,
+        }
+
+        pub fn bundle<R: $crate::Resources>(slice: $crate::Slice<R>,
+                      pso: $crate::PipelineState<R, Meta>, data: Data<R>)
+                      -> Bundle<R>
+        {
+            Bundle {
+                slice: slice,
+                pso: pso,
+                data: data,
+            }
+        }
+
+        impl<R: $crate::Resources> Bundle<R> {
+            pub fn encode<C>(&self, encoder: &mut $crate::Encoder<R, C>) where
+                C: $crate::CommandBuffer<R> {
+                encoder.draw(&self.slice, &self.pso, &self.data);
             }
         }
     }

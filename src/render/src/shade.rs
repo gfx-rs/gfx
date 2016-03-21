@@ -14,9 +14,8 @@
 
 //! Shader parameter handling.
 
-pub use gfx_core::shade::{ConstFormat, Formatted};
-use gfx_core::shade::{CreateShaderError, CreateProgramError,
-                      ShaderModel, UniformValue};
+pub use gfx_core::shade::{ConstFormat, Formatted, Usage};
+use gfx_core::shade::{CreateShaderError, CreateProgramError, UniformValue};
 
 #[allow(missing_docs)]
 pub trait ToUniform: Copy {
@@ -58,46 +57,4 @@ pub enum ProgramError {
     Pixel(CreateShaderError),
     /// Unable to link
     Link(CreateProgramError),
-}
-
-/// A type storing shader source for different graphics APIs and versions.
-#[allow(missing_docs)]
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub struct ShaderSource<'a> {
-    pub glsl_120: Option<&'a [u8]>,
-    pub glsl_130: Option<&'a [u8]>,
-    pub glsl_140: Option<&'a [u8]>,
-    pub glsl_150: Option<&'a [u8]>,
-    pub glsl_430: Option<&'a [u8]>,
-    // TODO: hlsl_sm_N...
-    pub targets: &'a [&'a str],
-}
-
-impl<'a> ShaderSource<'a> {
-    /// Create an empty shader source. Useful for specifying the remaining
-    /// structure members upon construction.
-    pub fn empty() -> ShaderSource<'a> {
-        ShaderSource {
-            glsl_120: None,
-            glsl_130: None,
-            glsl_140: None,
-            glsl_150: None,
-            glsl_430: None,
-            targets: &[],
-        }
-    }
-
-    /// Pick one of the stored versions that is the highest supported by the device.
-    pub fn choose(&self, model: ShaderModel) -> Result<&'a [u8], ()> {
-        // following https://www.opengl.org/wiki/Detecting_the_Shader_Model
-        let version = model.to_number();
-        Ok(match *self {
-            ShaderSource { glsl_430: Some(s), .. } if version >= 50 => s,
-            ShaderSource { glsl_150: Some(s), .. } if version >= 40 => s,
-            ShaderSource { glsl_140: Some(s), .. } if version >= 40 => s,
-            ShaderSource { glsl_130: Some(s), .. } if version >= 30 => s,
-            ShaderSource { glsl_120: Some(s), .. } if version >= 20 => s,
-            _ => return Err(()),
-        })
-    }
 }

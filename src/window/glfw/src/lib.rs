@@ -28,7 +28,7 @@ pub fn init(window: &mut glfw::Window) -> (gfx_device_gl::Device, gfx_device_gl:
             handle::RenderTargetView<gfx_device_gl::Resources, Rgba8>,
             handle::DepthStencilView<gfx_device_gl::Resources, DepthStencil>)
 {
-    use gfx_core::factory::Phantom;
+    use gfx_core::factory::Typed;
     window.make_current();
     let (device, factory) = gfx_device_gl::create(|s|
         window.get_proc_address(s) as *const std::os::raw::c_void);
@@ -38,5 +38,5 @@ pub fn init(window: &mut glfw::Window) -> (gfx_device_gl::Device, gfx_device_gl:
     let (color_view, ds_view) = gfx_device_gl::create_main_targets_raw(
         dim, SurfaceType::R8_G8_B8_A8, SurfaceType::D24);
     // done
-    (device, factory, Phantom::new(color_view), Phantom::new(ds_view))
+    (device, factory, Typed::new(color_view), Typed::new(ds_view))
 }

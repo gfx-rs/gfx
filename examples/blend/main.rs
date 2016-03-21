@@ -14,13 +14,10 @@
 
 #[macro_use]
 extern crate gfx;
-extern crate gfx_window_glutin;
-extern crate glutin;
-
+extern crate gfx_app;
 extern crate image;
 
 pub use gfx::format::{Rgba8, Srgba8, DepthStencil};
-use gfx::traits::{Device, Factory, FactoryExt};
 
 gfx_vertex_struct!( Vertex {
     pos: [f32; 2] = "a_Pos",
@@ -36,12 +33,17 @@ impl Vertex {
     }
 }
 
+gfx_constant_struct!( Locals {
+    blend: i32 = "u_Blend",
+});
+
 gfx_pipeline!( pipe {
     vbuf: gfx::VertexBuffer<Vertex> = (),
     lena: gfx::TextureSampler<[f32; 4]> = "t_Lena",
     tint: gfx::TextureSampler<[f32; 4]> = "t_Tint",
     blend: gfx::Global<i32> = "i_Blend",
-    out: gfx::RenderTarget<Srgba8> = "o_Color",
+    locals: gfx::ConstantBuffer<Locals> = "Locals",
+    out: gfx::RenderTarget<Srgba8> = "Target0",
 });
 
 fn load_texture<R, F>(factory: &mut F, data: &[u8])
@@ -52,91 +54,108 @@ fn load_texture<R, F>(factory: &mut F, data: &[u8])
     let img = image::load(Cursor::new(data), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
     let kind = t::Kind::D2(width as t::Size, height as t::Size, t::AaMode::Single);
-    let (_, view) = factory.create_texture_const::<Rgba8>(kind, gfx::cast_slice(&img), false).unwrap();
+    let (_, view) = factory.create_texture_const_u8::<Rgba8>(kind, &[&img]).unwrap();
     Ok(view)
 }
 
-pub fn main() {
-    let builder = glutin::WindowBuilder::new()
-            .with_title("Blending example".to_string())
-            .with_dimensions(800, 600);
-    let (window, mut device, mut factory, main_color, _) =
-        gfx_window_glutin::init::<Srgba8, DepthStencil>(builder);
-    let mut encoder = factory.create_encoder();
+const BLENDS: [&'static str; 9] = [
+    "Screen",
+    "Dodge",
+    "Burn",
+    "Overlay",
+    "Multiply",
+    "Add",
+    "Divide",
+    "Grain Extract",
+    "Grain Merge",
+];
 
-    // fullscreen quad
-    let vertex_data = [
-        Vertex::new([-1.0, -1.0], [0.0, 1.0]),
-        Vertex::new([ 1.0, -1.0], [1.0, 1.0]),
-        Vertex::new([ 1.0,  1.0], [1.0, 0.0]),
+struct App<R: gfx::Resources>{
+    bundle: pipe::Bundle<R>,
+    id: u8,
+}
 
-        Vertex::new([-1.0, -1.0], [0.0, 1.0]),
-        Vertex::new([ 1.0,  1.0], [1.0, 0.0]),
-        Vertex::new([-1.0,  1.0], [0.0, 0.0]),
-    ];
-    let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
+impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
+    fn new<F: gfx::Factory<R>>(mut factory: F, init: gfx_app::Init<R>) -> Self {
+        use gfx::traits::FactoryExt;
 
-    let lena_texture = load_texture(&mut factory, &include_bytes!("image/lena.png")[..]).unwrap();
-    let tint_texture = load_texture(&mut factory, &include_bytes!("image/tint.png")[..]).unwrap();
-    let sampler = factory.create_sampler_linear();
+        let vs = gfx_app::shade::Source {
+            glsl_120: include_bytes!("shader/blend_120.glslv"),
+            glsl_150: include_bytes!("shader/blend_150.glslv"),
+            hlsl_40:  include_bytes!("data/vertex.fx"),
+            .. gfx_app::shade::Source::empty()
+        };
+        let ps = gfx_app::shade::Source {
+            glsl_120: include_bytes!("shader/blend_120.glslf"),
+            glsl_150: include_bytes!("shader/blend_150.glslf"),
+            hlsl_40:  include_bytes!("data/pixel.fx"),
+            .. gfx_app::shade::Source::empty()
+        };
 
-    let pso = factory.create_pipeline_simple(
-        include_bytes!("shader/blend_150.glslv"),
-        include_bytes!("shader/blend_150.glslf"),
-        gfx::state::CullFace::Nothing,
-        pipe::new()
+        // fullscreen quad
+        let vertex_data = [
+            Vertex::new([-1.0, -1.0], [0.0, 1.0]),
+            Vertex::new([ 1.0, -1.0], [1.0, 1.0]),
+            Vertex::new([ 1.0,  1.0], [1.0, 0.0]),
+
+            Vertex::new([-1.0, -1.0], [0.0, 1.0]),
+            Vertex::new([ 1.0,  1.0], [1.0, 0.0]),
+            Vertex::new([-1.0,  1.0], [0.0, 0.0]),
+        ];
+        let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
+
+        let lena_texture = load_texture(&mut factory, &include_bytes!("image/lena.png")[..]).unwrap();
+        let tint_texture = load_texture(&mut factory, &include_bytes!("image/tint.png")[..]).unwrap();
+        let sampler = factory.create_sampler_linear();
+
+        let pso = factory.create_pipeline_simple(
+            vs.select(init.backend).unwrap(),
+            ps.select(init.backend).unwrap(),
+            gfx::state::CullFace::Nothing,
+            pipe::new()
         ).unwrap();
 
-    // we pass a integer to our shader to show what blending function we want
-    // it to use. normally you'd have a shader program per technique, but for
-    // the sake of simplicity we'll just branch on it inside the shader.
+        // we pass a integer to our shader to show what blending function we want
+        // it to use. normally you'd have a shader program per technique, but for
+        // the sake of simplicity we'll just branch on it inside the shader.
 
-    // each index correspond to a conditional branch inside the shader
-    let blends = [
-        (0, "Screen"),
-        (1, "Dodge"),
-        (2, "Burn"),
-        (3, "Overlay"),
-        (4, "Multiply"),
-        (5, "Add"),
-        (6, "Divide"),
-        (7, "Grain Extract"),
-        (8, "Grain Merge")
-    ];
-    let mut blends_cycle = blends.iter().cycle();
-    let blend_func = blends_cycle.next().unwrap();
+        // each index correspond to a conditional branch inside the shader
+        println!("Using '{}' blend equation", BLENDS[0]);
+        let cbuf = factory.create_constant_buffer(1);
 
-    println!("Using '{}' blend equation", blend_func.1);
+        let data = pipe::Data {
+            vbuf: vbuf,
+            lena: (lena_texture, sampler.clone()),
+            tint: (tint_texture, sampler),
+            blend: 0,
+            locals: cbuf,
+            out: init.color,
+        };
 
-    let mut data = pipe::Data {
-        vbuf: vbuf,
-        lena: (lena_texture, sampler.clone()),
-        tint: (tint_texture, sampler),
-        blend: blend_func.0,
-        out: main_color,
-    };
-
-    'main: loop {
-        // quit when Esc is pressed.
-        for event in window.poll_events() {
-            match event {
-                glutin::Event::KeyboardInput(glutin::ElementState::Pressed, _, Some(glutin::VirtualKeyCode::B)) => {
-                    let blend_func = blends_cycle.next().unwrap();
-                    println!("Using '{}' blend equation", blend_func.1);
-                    data.blend = blend_func.0;
-                },
-                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
-                glutin::Event::Closed => break 'main,
-                _ => {},
-            }
+        App {
+            bundle: pipe::bundle(slice, pso, data),
+            id: 0,
         }
-
-        encoder.reset();
-        encoder.clear(&data.out, [0.0; 4]);
-        encoder.draw(&slice, &pso, &data);
-
-        device.submit(encoder.as_buffer());
-        window.swap_buffers().unwrap();
-        device.cleanup();
     }
+
+    //fn update() {
+    // glutin::Event::KeyboardInput(glutin::ElementState::Pressed, _, Some(glutin::VirtualKeyCode::B)) => {
+    //                let blend_func = blends_cycle.next().unwrap();
+    //                println!("Using '{}' blend equation", blend_func.1);
+    //                data.blend = blend_func.0;
+    //            },
+    //
+    //}
+
+    fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
+        let locals = Locals { blend: self.id as i32 };
+        encoder.update_constant_buffer(&self.bundle.data.locals, &locals);
+        encoder.clear(&self.bundle.data.out, [0.0; 4]);
+        self.bundle.encode(encoder);
+    }
+}
+
+pub fn main() {
+    use gfx_app::Application;
+    App::launch_default("Blending example");
 }

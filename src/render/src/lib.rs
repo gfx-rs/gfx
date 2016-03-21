@@ -34,17 +34,15 @@ pub use draw_state::target::*;
 
 // public re-exports
 pub use gfx_core as core;
-pub use gfx_core::{Device, SubmitInfo, Resources};
-pub use gfx_core::{format, handle, tex};
-pub use gfx_core::factory::{Factory, BufferRole, BufferInfo, BufferUsage,
-                            BufferUpdateError, CombinedError,
-                            ResourceViewError, TargetViewError,
-                            SHADER_RESOURCE, UNORDERED_ACCESS, RENDER_TARGET,
-                            cast_slice};
+pub use gfx_core::{Device, Resources, Primitive};
 pub use gfx_core::{VertexCount, InstanceCount};
-pub use gfx_core::Primitive;
 pub use gfx_core::{ShaderSet, VertexShader, HullShader, DomainShader,
                    GeometryShader, PixelShader};
+pub use gfx_core::{format, handle, tex};
+pub use gfx_core::factory::{Factory, Usage, Bind, MapAccess, ResourceViewError, TargetViewError,
+                            BufferRole, BufferInfo, BufferError, BufferUpdateError, CombinedError,
+                            RENDER_TARGET, DEPTH_STENCIL, SHADER_RESOURCE, UNORDERED_ACCESS,
+                            cast_slice};
 pub use gfx_core::draw::{CommandBuffer, InstanceOption};
 pub use gfx_core::shade::{ProgramInfo, UniformValue};
 

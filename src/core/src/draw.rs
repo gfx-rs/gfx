@@ -15,13 +15,9 @@
 //! Command Buffer device interface
 
 use draw_state::target;
-use {MAX_COLOR_TARGETS};
 use {Resources, IndexType, InstanceCount, VertexCount};
 use {pso, shade, tex};
 use state as s;
-
-type Offset = u32;
-type Size = u32;
 
 /// A universal clear color supporting integet formats
 /// as well as the standard floating-point.
@@ -33,83 +29,6 @@ pub enum ClearColor {
     Int([i32; 4]),
     /// Unsigned int vector to clear uvec4 targets.
     Uint([u32; 4]),
-}
-
-/// Complete clear data for a given pixel target set.
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
-pub struct ClearSet(
-    pub [Option<ClearColor>; MAX_COLOR_TARGETS],
-    pub Option<target::Depth>,
-    pub Option<target::Stencil>
-);
-
-/// The place of some data in the data buffer.
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub struct DataPointer(Offset, Size);
-
-/// A buffer of data accompanying the commands. It can be vertex data, texture
-/// updates, uniform blocks, or even some draw states.
-pub struct DataBuffer {
-    buf: Vec<u8>,
-}
-
-impl DataBuffer {
-    /// Create a fresh new data buffer.
-    pub fn new() -> DataBuffer {
-        DataBuffer {
-            buf: Vec::new(),
-        }
-    }
-
-    /// Clear all the data but retain the allocated storage.
-    pub fn clear(&mut self) {
-        unsafe { self.buf.set_len(0); }
-    }
-
-    /// Copy a given structure into the buffer, return the offset and the size.
-    #[cfg(unstable)]
-    #[inline(always)]
-    pub fn add_struct<T: Copy>(&mut self, v: &T) -> DataPointer {
-        use std::slice::ref_slice;
-        self.add_vec(ref_slice(v))
-    }
-
-    /// Copy a given structure into the buffer, return the offset and the size.
-    #[cfg(not(unstable))]
-    pub fn add_struct<T: Copy>(&mut self, v: &T) -> DataPointer {
-        use std::{ptr, mem};
-        let offset = self.buf.len();
-        let size = mem::size_of::<T>();
-        self.buf.reserve(size);
-        unsafe {
-            self.buf.set_len(offset + size);
-            ptr::copy((v as *const T) as *const u8,
-                             &mut self.buf[offset] as *mut u8,
-                             size);
-        };
-        DataPointer(offset as Offset, size as Size)
-    }
-
-    /// Copy a given vector slice into the buffer
-    pub fn add_vec<T: Copy>(&mut self, v: &[T]) -> DataPointer {
-        use std::{ptr, mem};
-        let offset = self.buf.len();
-        let size = mem::size_of::<T>() * v.len();
-        self.buf.reserve(size);
-        unsafe {
-            self.buf.set_len(offset + size);
-            ptr::copy(v.as_ptr() as *const u8,
-                             &mut self.buf[offset] as *mut u8,
-                             size);
-        }
-        DataPointer(offset as Offset, size as Size)
-    }
-
-    /// Return a reference to a stored data object.
-    pub fn get_ref(&self, data: DataPointer) -> &[u8] {
-        let DataPointer(offset, size) = data;
-        &self.buf[offset as usize ..offset as usize + size as usize]
-    }
 }
 
 /// Optional instance parameters
@@ -128,36 +47,38 @@ pub trait CommandBuffer<R: Resources> {
     /// Bind a complete set of vertex buffers
     fn bind_vertex_buffers(&mut self, pso::VertexBufferSet<R>);
     /// Bind a complete set of constant buffers
-    fn bind_constant_buffers(&mut self, pso::ConstantBufferSet<R>);
+    fn bind_constant_buffers(&mut self, &[pso::ConstantBufferParam<R>]);
     /// Bind a global constant
     fn bind_global_constant(&mut self, shade::Location, shade::UniformValue);
     /// Bind a complete set of shader resource views
-    fn bind_resource_views(&mut self, pso::ResourceViewSet<R>);
+    fn bind_resource_views(&mut self, &[pso::ResourceViewParam<R>]);
     /// Bind a complete set of unordered access views
-    fn bind_unordered_views(&mut self, pso::UnorderedViewSet<R>);
+    fn bind_unordered_views(&mut self, &[pso::UnorderedViewParam<R>]);
     /// Bind a complete set of samplers
-    fn bind_samplers(&mut self, pso::SamplerSet<R>);
+    fn bind_samplers(&mut self, &[pso::SamplerParam<R>]);
     /// Bind a complete set of pixel targets, including multiple
     /// colors views and an optional depth/stencil view.
     fn bind_pixel_targets(&mut self, pso::PixelTargetSet<R>);
     /// Bind an index buffer
-    fn bind_index(&mut self, R::Buffer);
-    /// Set scissor test
-    fn set_scissor(&mut self, Option<target::Rect>);
+    fn bind_index(&mut self, R::Buffer, IndexType);
+    /// Set scissor rectangle
+    fn set_scissor(&mut self, target::Rect);
     /// Set reference values for the blending and stencil front/back
     fn set_ref_values(&mut self, s::RefValues);
     /// Update a vertex/index/uniform buffer
-    fn update_buffer(&mut self, R::Buffer, DataPointer, usize);
+    fn update_buffer(&mut self, R::Buffer, data: &[u8], offset: usize);
     /// Update a texture
     fn update_texture(&mut self, R::Texture, tex::Kind, Option<tex::CubeFace>,
-                      DataPointer, tex::RawImageInfo);
-    /// Clear render targets
-    fn clear(&mut self, ClearSet);
+                      data: &[u8], tex::RawImageInfo);
+    fn generate_mipmap(&mut self, R::ShaderResourceView);
+    /// Clear color target
+    fn clear_color(&mut self, R::RenderTargetView, ClearColor);
+    fn clear_depth_stencil(&mut self, R::DepthStencilView,
+                           Option<target::Depth>, Option<target::Stencil>);
     /// Draw a primitive
     fn call_draw(&mut self, VertexCount, VertexCount, InstanceOption);
     /// Draw a primitive with index buffer
-    fn call_draw_indexed(&mut self, IndexType,
-                         VertexCount, VertexCount,
+    fn call_draw_indexed(&mut self, VertexCount, VertexCount,
                          VertexCount, InstanceOption);
 }
 
@@ -198,15 +119,5 @@ impl From<i32> for ClearColor {
 impl From<u32> for ClearColor {
     fn from(v: u32) -> ClearColor {
         ClearColor::Uint([v, 0, 0, 0])
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_data_buffer() {
-        let mut buf = super::DataBuffer::new();
-        assert_eq!(buf.add_struct(&(0u8, false)), super::DataPointer(0, 2));
-        assert_eq!(buf.add_vec(&[5i32, 6i32]), super::DataPointer(2, 8));
     }
 }

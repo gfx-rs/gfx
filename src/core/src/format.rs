@@ -1,4 +1,4 @@
-// Copyright 2015 The Gfx-rs Developers.
+// Copyright 2016 The Gfx-rs Developers.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 //! Applicable to textures, views, and vertex buffers.
 
 //TODO:
+//  DXT 1-5, BC7
 //  ETC2_RGB, // Use the EXT2 algorithm on 3 components.
 //  ETC2_SRGB, // Use the EXT2 algorithm on 4 components (RGBA) in the sRGB color space.
 //  ETC2_EAC_RGBA8, // Use the EXT2 EAC algorithm on 4 components.
@@ -51,8 +52,6 @@ macro_rules! impl_channel_type {
 impl_channel_type! {
     Int     = i32 [TextureChannel, RenderChannel],
     Uint    = u32 [TextureChannel, RenderChannel],
-    Iscaled = f32 [TextureChannel],
-    Uscaled = f32 [TextureChannel],
     Inorm   = f32 [TextureChannel, RenderChannel, BlendChannel],
     Unorm   = f32 [TextureChannel, RenderChannel, BlendChannel],
     Float   = f32 [TextureChannel, RenderChannel, BlendChannel],
@@ -72,10 +71,6 @@ macro_rules! impl_formats {
             $( $name, )*
         }
         impl SurfaceType {
-            /// DEPRECATED
-            pub fn get_bit_size(&self) -> u8 {
-                self.get_total_bits()
-            }
             /// Return the total number of bits for this format.
             pub fn get_total_bits(&self) -> u8 {
                 use std::mem::size_of;
@@ -116,18 +111,15 @@ macro_rules! impl_formats {
 
 
 impl_formats! {
-    R3_G3_B2        : Vec3<Unorm> = u8 {2} [TextureSurface],
     R4_G4           : Vec2<Unorm> = u8 {0}  [TextureSurface, RenderSurface],
     R4_G4_B4_A4     : Vec4<Unorm> = u16 {4} [TextureSurface, RenderSurface],
     R5_G5_B5_A1     : Vec4<Unorm> = u16 {1} [TextureSurface, RenderSurface],
     R5_G6_B5        : Vec3<Unorm> = u16 {0} [TextureSurface, RenderSurface],
-    R8              : Vec1<Int, Uint, Inorm, Unorm, Iscaled, Uscaled> = u8 {0}
+    R8              : Vec1<Int, Uint, Inorm, Unorm> = u8 {0}
         [BufferSurface, TextureSurface, RenderSurface],
-    R8_G8           : Vec2<Int, Uint, Inorm, Unorm, Iscaled, Uscaled> = [u8; 2] {0}
+    R8_G8           : Vec2<Int, Uint, Inorm, Unorm> = [u8; 2] {0}
         [BufferSurface, TextureSurface, RenderSurface],
-    R8_G8_B8        : Vec3<Int, Uint, Inorm, Unorm, Iscaled, Uscaled, Srgb> = [u8; 3] {0}
-        [BufferSurface, TextureSurface, RenderSurface],
-    R8_G8_B8_A8     : Vec4<Int, Uint, Inorm, Unorm, Iscaled, Uscaled, Srgb> = [u8; 4] {8}
+    R8_G8_B8_A8     : Vec4<Int, Uint, Inorm, Unorm, Srgb> = [u8; 4] {8}
         [BufferSurface, TextureSurface, RenderSurface],
     R10_G10_B10_A2  : Vec4<Uint, Unorm> = u32 {2}
         [BufferSurface, TextureSurface, RenderSurface],
@@ -151,8 +143,9 @@ impl_formats! {
         [BufferSurface, TextureSurface, RenderSurface],
     D16             : Vec1<Unorm> = F16 {0} [TextureSurface, DepthSurface],
     D24             : Vec1<Unorm> = f32 {8} [TextureSurface, DepthSurface], //hacky stencil bits
-    D24_S8          : Vec1<Unorm> = f32 {8} [TextureSurface, DepthSurface, StencilSurface],
-    D32             : Vec1<Unorm, Float> = f32 {0} [TextureSurface, DepthSurface],
+    D24_S8          : Vec1<Unorm, Uint> = u32 {8} [TextureSurface, DepthSurface, StencilSurface],
+    D32             : Vec1<Float> = f32 {0} [TextureSurface, DepthSurface],
+    //D32_S8          : Vec1<Unorm, Float, Uint> = (f32, u32) {32} [TextureSurface, DepthSurface, StencilSurface],
 }
 
 
@@ -209,7 +202,7 @@ pub trait StencilSurface: SurfaceTyped {}
 /// Compile-time channel type trait.
 pub trait ChannelTyped {
     /// Shader-visible type that corresponds to this channel.
-    /// For example, normalized and scaled integers are visible as floats.
+    /// For example, normalized integers are visible as floats.
     type ShaderType;
     /// Return the run-time value of the type.
     fn get_channel_type() -> ChannelType;
@@ -322,8 +315,6 @@ macro_rules! alias {
 alias! {
     U8Norm = u8,
     I8Norm = i8,
-    U8Scaled = u8,
-    I8Scaled = i8,
     U16Norm = u16,
     I16Norm = i16,
     F16 = u16, // half-float
@@ -342,8 +333,6 @@ pub type Vec4<T> = [T; 4];
 /// Standard 8bits RGBA format.
 pub type Rgba8 = (R8_G8_B8_A8, Unorm);
 /// Standard 8bit gamma transforming RGB format.
-pub type Srgb8 = (R8_G8_B8, Srgb);
-/// Standard 8bit gamma transforming RGB format with linear alpha.
 pub type Srgba8 = (R8_G8_B8_A8, Srgb);
 /// Standard HDR floating-point format with 10 bits for RGB components
 /// and 2 bits for the alpha.
@@ -377,7 +366,6 @@ macro_rules! impl_formats_8bit {
         impl_simple_formats! {$(
             Vec1<$ty> = $channel R8,
             Vec2<$ty> = $channel R8_G8,
-            Vec3<$ty> = $channel R8_G8_B8,
             Vec4<$ty> = $channel R8_G8_B8_A8,
         )*}
     }
@@ -410,8 +398,6 @@ impl_formats_8bit! {
     i8 = Int,
     U8Norm = Unorm,
     I8Norm = Inorm,
-    U8Scaled = Uscaled,
-    I8Scaled = Iscaled,
 }
 
 impl_formats_16bit! {

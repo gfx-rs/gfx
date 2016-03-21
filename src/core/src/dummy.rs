@@ -15,8 +15,8 @@
 //! Dummy backend implementation to test the code for compile errors
 //! outside of the graphics development environment.
 
-use {Capabilities, Device, Resources, SubmitInfo, IndexType, VertexCount};
-use {draw, pso, shade, target, tex};
+use {Capabilities, Device, Resources, IndexType, VertexCount};
+use {draw, handle, pso, shade, target, tex};
 use state as s;
 
 /// Dummy device which does minimal work, just to allow testing
@@ -47,24 +47,16 @@ impl DummyDevice {
     /// Create a new dummy device
     pub fn new() -> DummyDevice {
         let caps = Capabilities {
-            shader_model: shade::ShaderModel::Unsupported,
             max_vertex_count: 0,
             max_index_count: 0,
-            max_draw_buffers: 0,
             max_texture_size: 0,
-            max_vertex_attributes: 0,
-            buffer_role_change_allowed: false,
-            array_buffer_supported: false,
-            fragment_output_supported: false,
-            immutable_storage_supported: false,
             instance_base_supported: false,
             instance_call_supported: false,
             instance_rate_supported: false,
-            render_targets_supported: false,
-            sampler_objects_supported: false,
-            srgb_color_supported: false,
-            uniform_block_supported: false,
             vertex_base_supported: false,
+            srgb_color_supported: false,
+            constant_buffer_supported: false,
+            unordered_access_view_supported: false,
             separate_blending_slots_supported: false,
         };
         DummyDevice {
@@ -80,22 +72,24 @@ impl draw::CommandBuffer<DummyResources> for DummyCommandBuffer {
     fn reset(&mut self) {}
     fn bind_pipeline_state(&mut self, _: ()) {}
     fn bind_vertex_buffers(&mut self, _: pso::VertexBufferSet<DummyResources>) {}
-    fn bind_constant_buffers(&mut self, _: pso::ConstantBufferSet<DummyResources>) {}
+    fn bind_constant_buffers(&mut self, _: &[pso::ConstantBufferParam<DummyResources>]) {}
     fn bind_global_constant(&mut self, _: shade::Location, _: shade::UniformValue) {}
-    fn bind_resource_views(&mut self, _: pso::ResourceViewSet<DummyResources>) {}
-    fn bind_unordered_views(&mut self, _: pso::UnorderedViewSet<DummyResources>) {}
-    fn bind_samplers(&mut self, _: pso::SamplerSet<DummyResources>) {}
+    fn bind_resource_views(&mut self, _: &[pso::ResourceViewParam<DummyResources>]) {}
+    fn bind_unordered_views(&mut self, _: &[pso::UnorderedViewParam<DummyResources>]) {}
+    fn bind_samplers(&mut self, _: &[pso::SamplerParam<DummyResources>]) {}
     fn bind_pixel_targets(&mut self, _: pso::PixelTargetSet<DummyResources>) {}
-    fn bind_index(&mut self, _: ()) {}
-    fn set_scissor(&mut self, _: Option<target::Rect>) {}
+    fn bind_index(&mut self, _: (), _: IndexType) {}
+    fn set_scissor(&mut self, _: target::Rect) {}
     fn set_ref_values(&mut self, _: s::RefValues) {}
-    fn update_buffer(&mut self, _: (), _: draw::DataPointer, _: usize) {}
+    fn update_buffer(&mut self, _: (), _: &[u8], _: usize) {}
     fn update_texture(&mut self, _: (), _: tex::Kind, _: Option<tex::CubeFace>,
-                      _: draw::DataPointer, _: tex::RawImageInfo) {}
-    fn clear(&mut self, _: draw::ClearSet) {}
+                      _: &[u8], _: tex::RawImageInfo) {}
+    fn generate_mipmap(&mut self, _: ()) {}
+    fn clear_color(&mut self, _: (), _: draw::ClearColor) {}
+    fn clear_depth_stencil(&mut self, _: (), _: Option<target::Depth>,
+                           _: Option<target::Stencil>) {}
     fn call_draw(&mut self, _: VertexCount, _: VertexCount, _: draw::InstanceOption) {}
-    fn call_draw_indexed(&mut self, _: IndexType,
-                         _: VertexCount, _: VertexCount,
+    fn call_draw_indexed(&mut self, _: VertexCount, _: VertexCount,
                          _: VertexCount, _: draw::InstanceOption) {}
 }
 
@@ -103,10 +97,10 @@ impl Device for DummyDevice {
     type Resources = DummyResources;
     type CommandBuffer = DummyCommandBuffer;
 
-    fn get_capabilities<'a>(&'a self) -> &'a Capabilities {
+    fn get_capabilities(&self) -> &Capabilities {
         &self.capabilities
     }
-    fn reset_state(&mut self) {}
-    fn submit(&mut self, _: SubmitInfo<Self>) {}
+    fn pin_submitted_resources(&mut self, _: &handle::Manager<DummyResources>) {}
+    fn submit(&mut self, _: &mut DummyCommandBuffer) {}
     fn cleanup(&mut self) {}
 }

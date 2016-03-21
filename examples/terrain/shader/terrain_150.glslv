@@ -4,9 +4,11 @@ in vec3 a_Pos;
 in vec3 a_Color;
 out vec3 v_Color;
 
-uniform mat4 u_Model;
-uniform mat4 u_View;
-uniform mat4 u_Proj;
+uniform Locals {
+	mat4 u_Model;
+	mat4 u_View;
+	mat4 u_Proj;
+};
 
 void main() {
     v_Color = a_Color;
