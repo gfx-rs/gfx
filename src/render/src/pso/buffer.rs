@@ -22,7 +22,7 @@ use gfx_core::format::Format;
 use shade::{ToUniform, Usage};
 use super::{DataLink, DataBind, RawDataSet};
 
-pub use gfx_core::pso::{Element, ElemOffset, ElemStride};
+pub use gfx_core::pso::{Element, ElemOffset, ElemStride, InstanceRate};
 
 /// A trait to be implemented by any struct having the layout described
 /// in the graphics API, like a vertex buffer.
@@ -33,16 +33,20 @@ pub trait Structure<F> {
 
 type AttributeSlotSet = usize;
 /// Service struct to simplify the implementations of `VertexBuffer` and `InstanceBuffer`.
-pub struct VertexBufferCommon<T, I>(AttributeSlotSet, PhantomData<(T, I)>);
+pub struct VertexBufferCommon<T, I>(RawVertexBuffer, PhantomData<(T, I)>);
 /// Vertex buffer component. Advanced per vertex.
 /// - init: `()`
-/// - data: `BufferHandle<T>`
+/// - data: `Buffer<T>`
 pub type VertexBuffer<T> = VertexBufferCommon<T, [(); 0]>;
 /// Instance buffer component. Same as the vertex buffer but advances per instance.
 pub type InstanceBuffer<T> = VertexBufferCommon<T, [(); 1]>;
+/// Raw vertex/instance buffer component.
+/// - init: ?
+/// - data: `RawBuffer`
+pub struct RawVertexBuffer(AttributeSlotSet);
 /// Constant buffer component.
 /// - init: `&str` = name of the buffer
-/// - data: `BufferHandle<T>`
+/// - data: `Buffer<T>`
 pub struct ConstantBuffer<T: Structure<shade::ConstFormat>>(Option<(Usage, ConstantBufferSlot)>, PhantomData<T>);
 /// Global (uniform) constant component. Describes a free-standing value passed into
 /// the shader, which is not enclosed into any constant buffer. Deprecated in DX10 and higher.
@@ -61,21 +65,16 @@ impl<'a,
 > DataLink<'a> for VertexBufferCommon<T, I> {
     type Init = ();
     fn new() -> Self {
-        VertexBufferCommon(0, PhantomData)
+        VertexBufferCommon(RawVertexBuffer(0), PhantomData)
     }
     fn is_active(&self) -> bool {
-        self.0 != 0
+        self.0.is_active()
     }
     fn link_input(&mut self, at: &shade::AttributeVar, _: &Self::Init) ->
                   Option<Result<pso::AttributeDesc, Format>> {
         T::query(&at.name).map(|el| {
-            self.0 |= 1 << (at.slot as AttributeSlotSet);
-            if match_attribute(at, el.format) {
-                let rate = <I as Default>::default().as_ref().len();
-                Ok((el, rate as pso::InstanceRate))
-            }else {
-                Err(el.format)
-            }
+            let rate = <I as Default>::default().as_ref().len();
+            self.0.link(at, el, rate as InstanceRate)
         })
     }
 }
@@ -83,7 +82,41 @@ impl<'a,
 impl<R: Resources, T, I> DataBind<R> for VertexBufferCommon<T, I> {
     type Data = handle::Buffer<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
-        let value = Some((man.ref_buffer(data.raw()).clone(), 0));
+        self.0.bind_to(out, data.raw(), man)
+    }
+}
+
+impl RawVertexBuffer {
+    fn link(&mut self, at: &shade::AttributeVar, el: Element<Format>, rate: InstanceRate)
+            -> Result<pso::AttributeDesc, Format> {
+        self.0 |= 1 << (at.slot as AttributeSlotSet);
+        if match_attribute(at, el.format) {
+            Ok((el, rate))
+        }else {
+            Err(el.format)
+        }
+    }
+}
+
+impl<'a> DataLink<'a> for RawVertexBuffer {
+    type Init = &'a [(&'a str, Element<Format>, InstanceRate)];
+    fn new() -> Self {
+        RawVertexBuffer(0)
+    }
+    fn is_active(&self) -> bool {
+        self.0 != 0
+    }
+    fn link_input(&mut self, at: &shade::AttributeVar, init: &Self::Init) ->
+                  Option<Result<pso::AttributeDesc, Format>> {
+        init.iter().find(|x| x.0 == &at.name)
+            .map(|x| self.link(at, x.1, x.2))
+    }
+}
+
+impl<R: Resources> DataBind<R> for RawVertexBuffer {
+    type Data = handle::RawBuffer<R>;
+    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
+        let value = Some((man.ref_buffer(data).clone(), 0));
         for i in 0 .. MAX_VERTEX_ATTRIBUTES {
             if (self.0 & (1<<i)) != 0 {
                 out.vertex_buffers.0[i] = value;
@@ -91,6 +124,7 @@ impl<R: Resources, T, I> DataBind<R> for VertexBufferCommon<T, I> {
         }
     }
 }
+
 
 impl<'a, T: Structure<shade::ConstFormat>>
 DataLink<'a> for ConstantBuffer<T> {
