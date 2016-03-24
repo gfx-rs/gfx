@@ -26,6 +26,7 @@ gfx_pipeline!( testpipe {
     _const_locals: gfx::ConstantBuffer<Local> = "Locals",
     _global: gfx::Global<[f32; 4]> = "Global",
     tex_diffuse: gfx::ShaderResource<[f32; 4]> = "Diffuse",
+    raw_tex: gfx::RawShaderResource = "Specular",
     sampler_linear: gfx::Sampler = "Linear",
     buf_frequency: gfx::UnorderedAccess<[f32; 4]> = "Frequency",
     pixel_color: gfx::RenderTarget<fm::Rgba8> = "Color",

@@ -25,7 +25,11 @@ use super::{DataLink, DataBind, RawDataSet};
 /// but can also be a buffer.
 /// - init: `&str` = name of the resource
 /// - data: `ShaderResourceView<T>`
-pub struct ShaderResource<T>(Option<(ResourceViewSlot, shade::Usage)>, PhantomData<T>);
+pub struct ShaderResource<T>(RawShaderResource, PhantomData<T>);
+/// Raw (untyped) shader resource (SRV).
+/// - init: `&str` = name of the resource. This may change in the future.
+/// - data: `RawShaderResourceView`
+pub struct RawShaderResource(Option<(ResourceViewSlot, shade::Usage)>);
 /// Unordered access component (UAV). A writable resource (texture/buffer)
 /// with no defined access order across simultaneously executing shaders.
 /// Supported on DX10 and higher.
@@ -48,7 +52,29 @@ pub struct TextureSampler<T>(ShaderResource<T>, Sampler);
 impl<'a, T> DataLink<'a> for ShaderResource<T> {
     type Init = &'a str;
     fn new() -> Self {
-        ShaderResource(None, PhantomData)
+        ShaderResource(RawShaderResource(None), PhantomData)
+    }
+    fn is_active(&self) -> bool {
+        self.0.is_active()
+    }
+    fn link_resource_view(&mut self, var: &shade::TextureVar, init: &Self::Init)
+                          -> Option<Result<(), Format>> {
+        self.0.link_resource_view(var, init)
+    }
+}
+
+impl<R: Resources, T> DataBind<R> for ShaderResource<T> {
+    type Data = handle::ShaderResourceView<R, T>;
+    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
+        self.0.bind_to(out, data.raw(), man)
+    }
+}
+
+
+impl<'a> DataLink<'a> for RawShaderResource {
+    type Init = &'a str;
+    fn new() -> Self {
+        RawShaderResource(None)
     }
     fn is_active(&self) -> bool {
         self.0.is_some()
@@ -64,15 +90,16 @@ impl<'a, T> DataLink<'a> for ShaderResource<T> {
     }
 }
 
-impl<R: Resources, T> DataBind<R> for ShaderResource<T> {
-    type Data = handle::ShaderResourceView<R, T>;
+impl<R: Resources> DataBind<R> for RawShaderResource {
+    type Data = handle::RawShaderResourceView<R>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
         if let Some((slot, usage)) = self.0 {
-            let view = man.ref_srv(data.raw()).clone();
+            let view = man.ref_srv(data).clone();
             out.resource_views.push(pso::ResourceViewParam(view, usage, slot));
         }
     }
 }
+
 
 impl<'a, T> DataLink<'a> for UnorderedAccess<T> {
     type Init = &'a str;
@@ -103,6 +130,7 @@ impl<R: Resources, T> DataBind<R> for UnorderedAccess<T> {
     }
 }
 
+
 impl<'a> DataLink<'a> for Sampler {
     type Init = &'a str;
     fn new() -> Self {
@@ -130,6 +158,7 @@ impl<R: Resources> DataBind<R> for Sampler {
         }
     }
 }
+
 
 impl<'a, T> DataLink<'a> for TextureSampler<T> {
     type Init = &'a str;
