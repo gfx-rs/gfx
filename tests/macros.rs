@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate gfx;
+pub use gfx::format as fm;
 
 gfx_vertex_struct!(Vertex {
     _x: i8 = "x",
@@ -27,9 +28,12 @@ gfx_pipeline!( testpipe {
     tex_diffuse: gfx::ShaderResource<[f32; 4]> = "Diffuse",
     sampler_linear: gfx::Sampler = "Linear",
     buf_frequency: gfx::UnorderedAccess<[f32; 4]> = "Frequency",
-    pixel_color: gfx::RenderTarget<gfx::format::Rgba8> = "Color",
+    pixel_color: gfx::RenderTarget<fm::Rgba8> = "Color",
     blend_target: gfx::BlendTarget<Rg16> =
         ("o_Color1", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
+    raw_target: gfx::RawRenderTarget = ("o_Color2",
+        fm::Format(fm::SurfaceType::R8_G8_B8_A8, fm::ChannelType::Unorm),
+        gfx::state::MASK_ALL, None),
     depth: gfx::DepthTarget<gfx::format::DepthStencil> =
         gfx::preset::depth::LESS_EQUAL_TEST,
     blend_ref: gfx::BlendRef = (),

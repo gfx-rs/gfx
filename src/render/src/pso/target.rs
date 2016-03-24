@@ -29,6 +29,10 @@ pub struct RenderTarget<T>(Option<ColorSlot>, PhantomData<T>);
 /// - init: (`&str`, `ColorMask`, `Blend` = blending state)
 /// - data: `RenderTargetView<T>`
 pub struct BlendTarget<T>(Option<ColorSlot>, PhantomData<T>);
+/// Raw (untyped) render target component with optional blending.
+/// - init: (`&str`, `Format`, `ColorMask`, `Option<Blend>`)
+/// - data: `RawRenderTargetView`
+pub struct RawRenderTarget(Option<ColorSlot>);
 /// Depth target component.
 /// - init: `Depth` = depth state
 /// - data: `DepthStencilView<T>`
@@ -110,6 +114,39 @@ impl<R: Resources, T> DataBind<R> for BlendTarget<T> {
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
         if let Some(slot) = self.0 {
             out.pixel_targets.add_color(slot, man.ref_rtv(data.raw()), data.raw().get_dimensions());
+        }
+    }
+}
+
+impl<'a> DataLink<'a> for RawRenderTarget {
+    type Init = (&'a str, format::Format, state::ColorMask, Option<state::Blend>);
+    fn new() -> Self {
+        RawRenderTarget(None)
+    }
+    fn is_active(&self) -> bool {
+        self.0.is_some()
+    }
+    fn link_output(&mut self, out: &OutputVar, init: &Self::Init) ->
+                   Option<Result<pso::ColorTargetDesc, format::Format>> {
+        if out.name.is_empty() || &out.name == init.0 {
+            self.0 = Some(out.slot);
+            let desc = (init.1, pso::ColorInfo {
+                mask: init.2,
+                color: init.3.map(|b| b.color),
+                alpha: init.3.map(|b| b.alpha),
+            });
+            Some(Ok(desc))
+        }else {
+            None
+        }
+    }
+}
+
+impl<R: Resources> DataBind<R> for RawRenderTarget {
+    type Data = handle::RawRenderTargetView<R>;
+    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
+        if let Some(slot) = self.0 {
+            out.pixel_targets.add_color(slot, man.ref_rtv(data), data.get_dimensions());
         }
     }
 }
