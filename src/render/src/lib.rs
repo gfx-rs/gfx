@@ -50,12 +50,12 @@ pub use encoder::{Encoder, UpdateError};
 pub use factory::PipelineStateError;
 pub use mesh::{Slice, ToIndexSlice, SliceKind};
 pub use pso::{PipelineState};
-pub use pso::buffer::{VertexBuffer, InstanceBuffer,
+pub use pso::buffer::{VertexBuffer, InstanceBuffer, RawVertexBuffer,
                       ConstantBuffer, Global};
-pub use pso::resource::{ShaderResource, UnorderedAccess,
+pub use pso::resource::{ShaderResource, RawShaderResource, UnorderedAccess,
                         Sampler, TextureSampler};
 pub use pso::target::{DepthStencilTarget, DepthTarget, StencilTarget,
-                      RenderTarget, BlendTarget, BlendRef, Scissor};
+                      RenderTarget, RawRenderTarget, BlendTarget, BlendRef, Scissor};
 
 /// Render commands encoder
 mod encoder;

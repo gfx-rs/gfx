@@ -90,7 +90,7 @@ gfx_gl = "0.1"
 rand = "0.3"
 genmesh = "0.4"
 noise = "0.1"
-image = "0.7"
+image = "0.6"
 
 [target.x86_64-pc-linux-gnu.dev_dependencies]
 glfw = "0.3"
