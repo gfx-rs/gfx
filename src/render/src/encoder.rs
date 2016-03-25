@@ -113,7 +113,7 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
     }
 
     /// Update the contents of a texture.
-    pub fn update_texture<S, T>(&mut self, tex: &handle::Texture<R, T>,
+    pub fn update_texture<S, T>(&mut self, tex: &handle::Texture<R, T::Surface>,
                           face: Option<tex::CubeFace>,
                           img: tex::NewImageInfo, data: &[S::DataType])
                           -> Result<(), UpdateError<[tex::Size; 3]>>
