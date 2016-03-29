@@ -1,0 +1,17 @@
+[package]
+name = "gfx_window_sdl"
+version = "0.1.0"
+description = "SDL2 window for gfx-rs"
+homepage = "https://github.com/gfx-rs/gfx"
+repository = "https://github.com/gfx-rs/gfx"
+keywords = ["graphics", "gamedev"]
+license = "Apache-2.0"
+authors = ["The Gfx-rs Developers"]
+
+[lib]
+name = "gfx_window_sdl"
+
+[dependencies]
+sdl2 = "0.16"
+gfx_core = { path = "../../core", version = "0.2" }
+gfx_device_gl = { path = "../../backend/gl", version = "0.9" }
