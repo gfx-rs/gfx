@@ -114,11 +114,11 @@ pub type D3D11CommandBufferFake = gfx_device_dx11::CommandBuffer<gfx_device_dx11
 pub type WrapD3D11<A> = Wrap<gfx_device_dx11::Resources, D3D11CommandBuffer, A>;
 pub type WrapGL2<A> = Wrap<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer, A>;
 
-impl<
+impl<R, C, A> ApplicationBase<R, C> for Wrap<R, C, A> where
     R: gfx::Resources,
     C: gfx::CommandBuffer<R>,
-    A: Application<R>,
-> ApplicationBase<R, C> for Wrap<R, C, A> {
+    A: Application<R>
+{
     fn new<F>(factory: F, encoder: gfx::Encoder<R, C>, init: Init<R>) -> Self where
         F: gfx::Factory<R>
     {
@@ -146,9 +146,10 @@ pub trait ApplicationD3D11 {
     fn launch(&str, Config);
 }
 
-impl<
-    A: ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer>
-> ApplicationGL2 for A {
+impl<A> ApplicationGL2 for A where
+    A: ApplicationBase<gfx_device_gl::Resources,
+                       gfx_device_gl::CommandBuffer>
+{
     fn launch(title: &str, config: Config) {
         use gfx::traits::Device;
 
