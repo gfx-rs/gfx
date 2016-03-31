@@ -23,6 +23,11 @@ extern crate gfx_window_glutin;
 #[cfg(target_os = "windows")]
 extern crate gfx_window_dxgi;
 
+#[cfg(target_os = "macos")]
+extern crate gfx_device_metal;
+#[cfg(target_os = "macos")]
+extern crate gfx_window_metal;
+
 pub mod shade;
 
 
@@ -41,6 +46,7 @@ pub enum Backend {
     Direct3D11 {
         pix_mode: bool,
     },
+    Metal
 }
 
 pub struct Config {

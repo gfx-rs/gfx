@@ -29,6 +29,10 @@ gfx_window_sdl = { path = "src/window/sdl", version = "0.3" }
 gfx_device_dx11 = { path = "src/backend/dx11", version = "0.3" }
 gfx_window_dxgi = { path = "src/window/dxgi", version = "0.3" }
 
+[target.x86_64-apple-darwin.dependencies]
+gfx_device_metal = { path = "src/backend/dx11", version = "0.1" }
+gfx_window_metal = { path = "src/window/dxgi", version = "0.1" }
+
 [[example]]
 name = "blend"
 path = "examples/blend/main.rs"
