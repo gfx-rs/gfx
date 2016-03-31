@@ -24,7 +24,8 @@ extern crate noise;
 use rand::Rng;
 use cgmath::{SquareMatrix, Matrix4, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
-pub use gfx::format::{DepthStencil, Srgba8};
+pub use gfx::format::{DepthStencil};
+pub use gfx_app::ColorFormat;
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
 use time::precise_time_s;
@@ -48,7 +49,7 @@ gfx_pipeline!(pipe {
     model: gfx::Global<[[f32; 4]; 4]> = "u_Model",
     view: gfx::Global<[[f32; 4]; 4]> = "u_View",
     proj: gfx::Global<[[f32; 4]; 4]> = "u_Proj",
-    out_color: gfx::RenderTarget<Srgba8> = "Target0",
+    out_color: gfx::RenderTarget<ColorFormat> = "Target0",
     out_depth: gfx::DepthTarget<DepthStencil> =
         gfx::preset::depth::LESS_EQUAL_WRITE,
 });

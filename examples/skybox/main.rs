@@ -22,7 +22,8 @@ extern crate cgmath;
 extern crate image;
 
 use std::io::Cursor;
-pub use gfx::format::{Srgba8, Depth, Rgba8};
+pub use gfx_app::ColorFormat;
+pub use gfx::format::{Depth, Rgba8};
 
 gfx_vertex_struct!( Vertex {
     pos: [f32; 2] = "a_Pos",
@@ -45,7 +46,7 @@ gfx_pipeline!( pipe {
     vbuf: gfx::VertexBuffer<Vertex> = (),
     cubemap: gfx::TextureSampler<[f32; 4]> = "t_Cubemap",
     locals: gfx::ConstantBuffer<Locals> = "Locals",
-    out: gfx::RenderTarget<Srgba8> = "Target0",
+    out: gfx::RenderTarget<ColorFormat> = "Target0",
 });
 
 struct CubemapData<'a> {
