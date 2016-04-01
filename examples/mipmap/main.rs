@@ -16,7 +16,8 @@
 extern crate gfx;
 extern crate gfx_app;
 
-pub use gfx::format::{Srgba8, Depth};
+pub use gfx::format::Depth;
+pub use gfx_app::ColorFormat;
 
 gfx_vertex_struct!( Vertex {
     pos: [f32; 2] = "a_Pos",
@@ -35,7 +36,7 @@ impl Vertex {
 gfx_pipeline!(pipe {
     vbuf: gfx::VertexBuffer<Vertex> = (),
     tex: gfx::TextureSampler<[f32; 4]> = "t_Tex",
-    out: gfx::RenderTarget<Srgba8> = "Target0",
+    out: gfx::RenderTarget<ColorFormat> = "Target0",
 });
 
 // Larger red dots
@@ -88,7 +89,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         ];
         let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
 
-        let (_, texture_view) = factory.create_texture_const::<Srgba8>(
+        let (_, texture_view) = factory.create_texture_const::<ColorFormat>(
             gfx::tex::Kind::D2(4, 4, gfx::tex::AaMode::Single),
             &[&L0_DATA, &L1_DATA, &L2_DATA]
             ).unwrap();

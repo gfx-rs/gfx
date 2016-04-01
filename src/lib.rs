@@ -28,7 +28,7 @@ extern crate gfx_window_dxgi;
 pub mod shade;
 
 
-pub type ColorFormat = gfx::format::Srgba8;
+pub type ColorFormat = gfx::format::Rgba8;
 pub type DepthFormat = gfx::format::DepthStencil;
 
 pub struct Init<R: gfx::Resources> {

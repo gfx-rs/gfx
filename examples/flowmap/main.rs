@@ -19,7 +19,8 @@ extern crate gfx_app;
 extern crate image;
 
 use std::io::Cursor;
-pub use gfx::format::{Rgba8, Srgba8, Depth};
+pub use gfx::format::{Rgba8, Depth};
+pub use gfx_app::ColorFormat;
 
 gfx_vertex_struct!( Vertex {
     pos: [f32; 2] = "a_Pos",
@@ -47,7 +48,7 @@ gfx_pipeline!( pipe {
     offset0: gfx::Global<f32> = "f_Offset0",
     offset1: gfx::Global<f32> = "f_Offset1",
     locals: gfx::ConstantBuffer<Locals> = "Locals",
-    out: gfx::RenderTarget<Srgba8> = "Target0",
+    out: gfx::RenderTarget<ColorFormat> = "Target0",
 });
 
 fn load_texture<R, F>(factory: &mut F, data: &[u8])

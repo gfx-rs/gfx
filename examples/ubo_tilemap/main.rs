@@ -26,7 +26,8 @@ use std::io::Cursor;
 //use std::collections::HashMap;
 //use glutin::{PollEventsIterator, Event, VirtualKeyCode, ElementState};
 
-pub use gfx::format::{DepthStencil, Srgba8, Rgba8};
+pub use gfx_app::ColorFormat;
+pub use gfx::format::{DepthStencil, Rgba8};
 use gfx::traits::{FactoryExt};
 
 use cgmath::{SquareMatrix, Matrix4, AffineMatrix3};
@@ -148,7 +149,7 @@ gfx_pipeline!(pipe {
     tilemap_cb: gfx::ConstantBuffer<TilemapStuff> = "b_PsLocals",
     tilesheet: gfx::TextureSampler<[f32; 4]> = "t_TileSheet",
     // output
-    out_color: gfx::RenderTarget<Srgba8> = "Target0",
+    out_color: gfx::RenderTarget<ColorFormat> = "Target0",
     out_depth: gfx::DepthTarget<DepthStencil> =
         gfx::preset::depth::LESS_EQUAL_WRITE,
 });
@@ -168,7 +169,7 @@ pub struct TileMapPlane<R> where R: gfx::Resources {
 
 impl<R> TileMapPlane<R> where R: gfx::Resources {
     pub fn new<F>(factory: &mut F, width: usize, height: usize, tile_size: usize,
-                  main_color: gfx::handle::RenderTargetView<R, Srgba8>,
+                  main_color: gfx::handle::RenderTargetView<R, ColorFormat>,
                   main_depth: gfx::handle::DepthStencilView<R, DepthStencil>,
                   aspect_ratio: f32)
                -> TileMapPlane<R> where F: gfx::Factory<R> {

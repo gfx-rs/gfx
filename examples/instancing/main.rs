@@ -19,6 +19,7 @@ extern crate rand;
 extern crate gfx_app;
 
 use rand::Rng;
+pub use gfx_app::ColorFormat;
 
 const QUAD_VERTICES: [Vertex; 4] = [
     Vertex { position: [-0.5,  0.5] },
@@ -48,7 +49,7 @@ gfx_pipeline!(pipe {
     instance: gfx::InstanceBuffer<Instance> = (),
     scale: gfx::Global<f32> = "u_Scale",
     locals: gfx::ConstantBuffer<Locals> = "Locals",
-    out: gfx::RenderTarget<gfx::format::Srgba8> = "Target0",
+    out: gfx::RenderTarget<ColorFormat> = "Target0",
 });
 
 fn fill_instances(attributes: &mut [Instance], instances_per_length: u32, size: f32) {

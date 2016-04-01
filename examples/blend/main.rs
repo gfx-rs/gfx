@@ -17,7 +17,8 @@ extern crate gfx;
 extern crate gfx_app;
 extern crate image;
 
-pub use gfx::format::{Rgba8, Srgba8, DepthStencil};
+pub use gfx_app::ColorFormat;
+pub use gfx::format::{Rgba8, DepthStencil};
 
 gfx_vertex_struct!( Vertex {
     pos: [f32; 2] = "a_Pos",
@@ -43,7 +44,7 @@ gfx_pipeline!( pipe {
     tint: gfx::TextureSampler<[f32; 4]> = "t_Tint",
     blend: gfx::Global<i32> = "i_Blend",
     locals: gfx::ConstantBuffer<Locals> = "Locals",
-    out: gfx::RenderTarget<Srgba8> = "Target0",
+    out: gfx::RenderTarget<ColorFormat> = "Target0",
 });
 
 fn load_texture<R, F>(factory: &mut F, data: &[u8])
