@@ -205,12 +205,14 @@ macro_rules! gfx_pipeline_inner {
             }
         }
 
+        #[allow(dead_code)]
         pub struct Bundle<R: $crate::Resources> {
             pub slice: $crate::Slice<R>,
             pub pso: $crate::PipelineState<R, Meta>,
             pub data: Data<R>,
         }
 
+        #[allow(dead_code)]
         pub fn bundle<R: $crate::Resources>(slice: $crate::Slice<R>,
                       pso: $crate::PipelineState<R, Meta>, data: Data<R>)
                       -> Bundle<R>
@@ -222,6 +224,7 @@ macro_rules! gfx_pipeline_inner {
             }
         }
 
+        #[allow(dead_code)]
         impl<R: $crate::Resources> Bundle<R> {
             pub fn encode<C>(&self, encoder: &mut $crate::Encoder<R, C>) where
                 C: $crate::CommandBuffer<R> {
