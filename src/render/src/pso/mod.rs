@@ -30,6 +30,7 @@
 pub mod buffer;
 pub mod resource;
 pub mod target;
+pub mod bundle;
 
 use std::default::Default;
 use gfx_core as d;

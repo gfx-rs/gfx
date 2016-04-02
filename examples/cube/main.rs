@@ -18,6 +18,7 @@ extern crate gfx;
 extern crate gfx_app;
 
 pub use gfx_app::{ColorFormat, DepthFormat};
+use gfx::Bundle;
 
 // Declare the vertex format suitable for drawing.
 // Notice the use of FixedPoint.
@@ -52,7 +53,7 @@ gfx_pipeline!( pipe {
 
 //----------------------------------------
 struct App<R: gfx::Resources>{
-    bundle: pipe::Bundle<R>,
+    bundle: Bundle<R, pipe::Data<R>>,
 }
 
 impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
@@ -151,7 +152,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         };
 
         App {
-            bundle: pipe::bundle(slice, pso, data),
+            bundle: Bundle::new(slice, pso, data),
         }
     }
 

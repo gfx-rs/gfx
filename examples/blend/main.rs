@@ -19,6 +19,7 @@ extern crate image;
 
 pub use gfx_app::ColorFormat;
 pub use gfx::format::{Rgba8, DepthStencil};
+use gfx::Bundle;
 
 gfx_vertex_struct!( Vertex {
     pos: [f32; 2] = "a_Pos",
@@ -72,7 +73,7 @@ const BLENDS: [&'static str; 9] = [
 ];
 
 struct App<R: gfx::Resources>{
-    bundle: pipe::Bundle<R>,
+    bundle: Bundle<R, pipe::Data<R>>,
     id: u8,
 }
 
@@ -134,7 +135,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         };
 
         App {
-            bundle: pipe::bundle(slice, pso, data),
+            bundle: Bundle::new(slice, pso, data),
             id: 0,
         }
     }

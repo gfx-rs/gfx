@@ -24,6 +24,7 @@ extern crate image;
 use std::io::Cursor;
 pub use gfx_app::ColorFormat;
 pub use gfx::format::{Depth, Rgba8};
+use gfx::Bundle;
 
 gfx_vertex_struct!( Vertex {
     pos: [f32; 2] = "a_Pos",
@@ -79,7 +80,7 @@ fn load_cubemap<R, F>(factory: &mut F, data: CubemapData) -> Result<gfx::handle:
 }
 
 struct App<R: gfx::Resources>{
-    bundle: pipe::Bundle<R>,
+    bundle: Bundle<R, pipe::Data<R>>,
     projection: cgmath::Matrix4<f32>,
 }
 
@@ -133,7 +134,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         };
 
         App {
-            bundle: pipe::bundle(slice, pso, data),
+            bundle: Bundle::new(slice, pso, data),
             projection: proj,
         }
     }
