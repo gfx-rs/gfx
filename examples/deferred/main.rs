@@ -77,9 +77,9 @@ gfx_pipeline!( terrain {
     locals: gfx::ConstantBuffer<TerrainLocals> = "TerrainLocals",
     //TODO: reconstruct the position from the depth instead of
     // storing it in the GBuffer
-    out_position: gfx::RenderTarget<GFormat> = "o_Position",
-    out_normal: gfx::RenderTarget<GFormat> = "o_Normal",
-    out_color: gfx::RenderTarget<GFormat> = "o_Color",
+    out_position: gfx::RenderTarget<GFormat> = "Target0",
+    out_normal: gfx::RenderTarget<GFormat> = "Target1",
+    out_color: gfx::RenderTarget<GFormat> = "Target2",
     out_depth: gfx::DepthTarget<Depth> =
         gfx::preset::depth::LESS_EQUAL_WRITE,
 });
@@ -114,16 +114,16 @@ pub static TERRAIN_FRAGMENT_SRC: &'static [u8] = b"
     in vec3 v_FragPos;
     in vec3 v_Normal;
     in vec3 v_Color;
-    out vec4 o_Position;
-    out vec4 o_Normal;
-    out vec4 o_Color;
+    out vec4 Target0;
+    out vec4 Target1;
+    out vec4 Target2;
 
     void main() {
         vec3 n = normalize(v_Normal);
 
-        o_Position = vec4(v_FragPos, 0.0);
-        o_Normal = vec4(n, 0.0);
-        o_Color = vec4(v_Color, 1.0);
+        Target0 = vec4(v_FragPos, 0.0);
+        Target1 = vec4(n, 0.0);
+        Target2 = vec4(v_Color, 1.0);
     }
 ";
 
@@ -135,7 +135,7 @@ gfx_vertex_struct!( BlitVertex {
 gfx_pipeline!( blit {
     vbuf: gfx::VertexBuffer<BlitVertex> = (),
     tex: gfx::TextureSampler<[f32; 4]> = "t_BlitTex",
-    out: gfx::RenderTarget<ColorFormat> = "o_Color",
+    out: gfx::RenderTarget<ColorFormat> = "Target0",
 });
 
 pub static BLIT_VERTEX_SRC: &'static [u8] = b"
@@ -156,11 +156,11 @@ pub static BLIT_FRAGMENT_SRC: &'static [u8] = b"
 
     uniform sampler2D t_BlitTex;
     in vec2 v_TexCoord;
-    out vec4 o_Color;
+    out vec4 Target0;
 
     void main() {
         vec4 tex = texture(t_BlitTex, v_TexCoord);
-        o_Color = tex;
+        Target0 = tex;
     }
 ";
 
@@ -186,7 +186,7 @@ gfx_pipeline!( light {
     tex_normal: gfx::TextureSampler<[f32; 4]> = "t_Normal",
     tex_diffuse: gfx::TextureSampler<[f32; 4]> = "t_Diffuse",
     out_color: gfx::BlendTarget<GFormat> =
-        ("o_Color", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
+        ("Target0", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
     out_depth: gfx::DepthTarget<Depth> =
         gfx::preset::depth::LESS_EQUAL_TEST,
 });
@@ -226,7 +226,7 @@ pub static LIGHT_FRAGMENT_SRC: &'static [u8] = b"
     uniform sampler2D t_Normal;
     uniform sampler2D t_Diffuse;
     in vec3 v_LightPos;
-    out vec4 o_Color;
+    out vec4 Target0;
 
     void main() {
         ivec2 itc = ivec2(gl_FragCoord.xy);
@@ -247,7 +247,7 @@ pub static LIGHT_FRAGMENT_SRC: &'static [u8] = b"
 
         vec3 res_color = d * diffuse + vec3(s);
 
-        o_Color = vec4(scale*res_color, 1.0);
+        Target0 = vec4(scale*res_color, 1.0);
     }
 ";
 
@@ -256,7 +256,7 @@ gfx_pipeline!( emitter {
     locals: gfx::ConstantBuffer<CubeLocals> = "CubeLocals",
     light_pos_buf: gfx::ConstantBuffer<LightInfo> = "u_LightPosBlock",
     out_color: gfx::BlendTarget<GFormat> =
-        ("o_Color", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
+        ("Target0", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
     out_depth: gfx::DepthTarget<Depth> =
         gfx::preset::depth::LESS_EQUAL_TEST,
 });
@@ -286,10 +286,10 @@ pub static EMITTER_VERTEX_SRC: &'static [u8] = b"
 pub static EMITTER_FRAGMENT_SRC: &'static [u8] = b"
     #version 150 core
 
-    out vec4 o_Color;
+    out vec4 Target0;
 
     void main() {
-        o_Color = vec4(1.0, 1.0, 1.0, 1.0);
+        Target0 = vec4(1.0, 1.0, 1.0, 1.0);
     }
 ";
 

@@ -8,7 +8,7 @@ uniform float f_Offset0;
 uniform float f_Offset1;
 
 in vec2 v_Uv;
-out vec4 o_Color;
+out vec4 Target0;
 
 void main() {
     // we sample the direction from our flow map, then map it to a [-1, 1] range
@@ -28,5 +28,5 @@ void main() {
     float lerp = 2.0 * abs(f_Offset0 - .5f);
     vec3 result = mix(t0, t1, lerp);
 
-    o_Color = vec4(result, 1.0);
+    Target0 = vec4(result, 1.0);
 }

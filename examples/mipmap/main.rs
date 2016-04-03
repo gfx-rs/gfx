@@ -69,11 +69,13 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
         let vs = gfx_app::shade::Source {
             glsl_120: include_bytes!("shader/120.glslv"),
+            glsl_150: include_bytes!("shader/150.glslv"),
             hlsl_40:  include_bytes!("data/vertex.fx"),
             .. gfx_app::shade::Source::empty()
         };
         let fs = gfx_app::shade::Source {
             glsl_120: include_bytes!("shader/120.glslf"),
+            glsl_150: include_bytes!("shader/150.glslf"),
             hlsl_40:  include_bytes!("data/pixel.fx"),
             .. gfx_app::shade::Source::empty()
         };
