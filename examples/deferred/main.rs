@@ -42,6 +42,7 @@ use cgmath::{SquareMatrix, Matrix4, Point3, Vector3, EuclideanVector, deg};
 use cgmath::{Transform, AffineMatrix3};
 pub use gfx::format::Depth;
 pub use gfx_app::ColorFormat;
+use gfx::Bundle;
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{SharedVertex, IndexedPolygon};
 use time::precise_time_s;
@@ -368,10 +369,10 @@ fn create_g_buffer<R: gfx::Resources, F: gfx::Factory<R>>(
 
 
 struct App<R: gfx::Resources> {
-    terrain: terrain::Bundle<R>,
-    blit: blit::Bundle<R>,
-    light: light::Bundle<R>,
-    emitter: emitter::Bundle<R>,
+    terrain: Bundle<R, terrain::Data<R>>,
+    blit: Bundle<R, blit::Data<R>>,
+    light: Bundle<R, light::Data<R>>,
+    emitter: Bundle<R, emitter::Data<R>>,
     intermediate: ViewPair<R, GFormat>,
     light_pos_vec: Vec<LightInfo>,
     seed: Seed,
@@ -447,7 +448,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 out_depth: depth_target.clone(),
             };
 
-            terrain::bundle(slice, pso, data)
+            Bundle::new(slice, pso, data)
         };
 
         let blit = {
@@ -482,7 +483,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 out: init.color,
             };
 
-            blit::bundle(slice, pso, data)
+            Bundle::new(slice, pso, data)
         };
 
         let light_pos_buffer = factory.create_constant_buffer(NUM_LIGHTS);
@@ -564,7 +565,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 out_depth: depth_target.clone(),
             };
 
-            light::bundle(light_slice.clone(), pso, data)
+            Bundle::new(light_slice.clone(), pso, data)
         };
 
         let emitter = {
@@ -593,7 +594,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 out_depth: depth_target.clone(),
             };
 
-            emitter::bundle(light_slice, pso, data)
+            Bundle::new(light_slice, pso, data)
         };
 
         App {

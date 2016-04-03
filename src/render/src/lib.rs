@@ -56,6 +56,7 @@ pub use pso::resource::{ShaderResource, RawShaderResource, UnorderedAccess,
                         Sampler, TextureSampler};
 pub use pso::target::{DepthStencilTarget, DepthTarget, StencilTarget,
                       RenderTarget, RawRenderTarget, BlendTarget, BlendRef, Scissor};
+pub use pso::bundle::{Bundle};
 
 /// Render commands encoder
 mod encoder;

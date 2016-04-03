@@ -21,6 +21,7 @@ extern crate image;
 use std::io::Cursor;
 pub use gfx::format::{Rgba8, Depth};
 pub use gfx_app::ColorFormat;
+use gfx::Bundle;
 
 gfx_vertex_struct!( Vertex {
     pos: [f32; 2] = "a_Pos",
@@ -63,7 +64,7 @@ fn load_texture<R, F>(factory: &mut F, data: &[u8])
 }
 
 struct App<R: gfx::Resources>{
-    bundle: pipe::Bundle<R>,
+    bundle: Bundle<R, pipe::Data<R>>,
     cycles: [f32; 2],
     time_start: f64,
 }
@@ -121,7 +122,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         };
 
         App {
-            bundle: pipe::bundle(slice, pso, data),
+            bundle: Bundle::new(slice, pso, data),
             cycles: [0.0, 0.5],
             time_start: time::precise_time_s(),
         }
