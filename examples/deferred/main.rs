@@ -77,9 +77,9 @@ gfx_pipeline!( terrain {
     locals: gfx::ConstantBuffer<TerrainLocals> = "TerrainLocals",
     //TODO: reconstruct the position from the depth instead of
     // storing it in the GBuffer
-    out_position: gfx::RenderTarget<GFormat> = "Target0",
-    out_normal: gfx::RenderTarget<GFormat> = "Target1",
-    out_color: gfx::RenderTarget<GFormat> = "Target2",
+    out_position: gfx::RenderTarget<GFormat> = "o_Position",
+    out_normal: gfx::RenderTarget<GFormat> = "o_Normal",
+    out_color: gfx::RenderTarget<GFormat> = "o_Color",
     out_depth: gfx::DepthTarget<Depth> =
         gfx::preset::depth::LESS_EQUAL_WRITE,
 });
@@ -135,7 +135,7 @@ gfx_vertex_struct!( BlitVertex {
 gfx_pipeline!( blit {
     vbuf: gfx::VertexBuffer<BlitVertex> = (),
     tex: gfx::TextureSampler<[f32; 4]> = "t_BlitTex",
-    out: gfx::RenderTarget<ColorFormat> = "Target0",
+    out: gfx::RenderTarget<ColorFormat> = "o_Color",
 });
 
 pub static BLIT_VERTEX_SRC: &'static [u8] = b"
@@ -186,7 +186,7 @@ gfx_pipeline!( light {
     tex_normal: gfx::TextureSampler<[f32; 4]> = "t_Normal",
     tex_diffuse: gfx::TextureSampler<[f32; 4]> = "t_Diffuse",
     out_color: gfx::BlendTarget<GFormat> =
-        ("Target0", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
+        ("o_Color", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
     out_depth: gfx::DepthTarget<Depth> =
         gfx::preset::depth::LESS_EQUAL_TEST,
 });
@@ -256,7 +256,7 @@ gfx_pipeline!( emitter {
     locals: gfx::ConstantBuffer<CubeLocals> = "CubeLocals",
     light_pos_buf: gfx::ConstantBuffer<LightInfo> = "u_LightPosBlock",
     out_color: gfx::BlendTarget<GFormat> =
-        ("Target0", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
+        ("o_Color", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
     out_depth: gfx::DepthTarget<Depth> =
         gfx::preset::depth::LESS_EQUAL_TEST,
 });
