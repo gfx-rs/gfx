@@ -69,7 +69,7 @@ impl<'a, T: format::RenderFormat> DataLink<'a> for RenderTarget<T> {
             self.0 = Some(out.slot);
             let desc = (T::get_format(), state::MASK_ALL.into());
             Some(Ok(desc))
-        }else {
+        } else {
             None
         }
     }

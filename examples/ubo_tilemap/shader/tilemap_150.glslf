@@ -2,7 +2,7 @@
 
 in vec2 v_BufPos;
 
-out vec4 o_Color;
+out vec4 Target0;
 
 struct TileMapData {
     vec4 data;
@@ -41,5 +41,5 @@ void main() {
         texData = vec4(0.0,0.0,0.0,1.0);
     }
 
-    o_Color = texData;
+    Target0 = texData;
 }

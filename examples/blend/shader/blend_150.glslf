@@ -18,7 +18,7 @@ uniform sampler2D t_Tint;
 uniform int i_Blend;
 
 in vec2 v_Uv;
-out vec4 o_Color;
+out vec4 Target0;
 
 void main() {
     // we sample from both textures using the same uv coordinates. since our
@@ -60,5 +60,5 @@ void main() {
             break;
     }
 
-    o_Color = vec4(result, 1.0);
+    Target0 = vec4(result, 1.0);
 }

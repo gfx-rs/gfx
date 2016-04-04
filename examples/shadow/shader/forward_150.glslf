@@ -25,7 +25,7 @@ uniform sampler2DArrayShadow t_Shadow;
 
 in vec3 v_Normal;
 in vec3 v_Position;
-out vec4 o_Color;
+out vec4 Target0;
 
 void main() {
 	vec3 normal = normalize(v_Normal);
@@ -48,5 +48,5 @@ void main() {
 		color += shadow * diffuse * light.color.xyz;
 	}
 	// multiply the light by material color
-    o_Color = vec4(color, 1.0) * u_Color;
+    Target0 = vec4(color, 1.0) * u_Color;
 }

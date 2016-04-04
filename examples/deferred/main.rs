@@ -115,16 +115,16 @@ pub static TERRAIN_FRAGMENT_SRC: &'static [u8] = b"
     in vec3 v_FragPos;
     in vec3 v_Normal;
     in vec3 v_Color;
-    out vec4 o_Position;
-    out vec4 o_Normal;
-    out vec4 o_Color;
+    out vec4 Target0;
+    out vec4 Target1;
+    out vec4 Target2;
 
     void main() {
         vec3 n = normalize(v_Normal);
 
-        o_Position = vec4(v_FragPos, 0.0);
-        o_Normal = vec4(n, 0.0);
-        o_Color = vec4(v_Color, 1.0);
+        Target0 = vec4(v_FragPos, 0.0);
+        Target1 = vec4(n, 0.0);
+        Target2 = vec4(v_Color, 1.0);
     }
 ";
 
@@ -157,11 +157,11 @@ pub static BLIT_FRAGMENT_SRC: &'static [u8] = b"
 
     uniform sampler2D t_BlitTex;
     in vec2 v_TexCoord;
-    out vec4 o_Color;
+    out vec4 Target0;
 
     void main() {
         vec4 tex = texture(t_BlitTex, v_TexCoord);
-        o_Color = tex;
+        Target0 = tex;
     }
 ";
 
@@ -227,7 +227,7 @@ pub static LIGHT_FRAGMENT_SRC: &'static [u8] = b"
     uniform sampler2D t_Normal;
     uniform sampler2D t_Diffuse;
     in vec3 v_LightPos;
-    out vec4 o_Color;
+    out vec4 Target0;
 
     void main() {
         ivec2 itc = ivec2(gl_FragCoord.xy);
@@ -248,7 +248,7 @@ pub static LIGHT_FRAGMENT_SRC: &'static [u8] = b"
 
         vec3 res_color = d * diffuse + vec3(s);
 
-        o_Color = vec4(scale*res_color, 1.0);
+        Target0 = vec4(scale*res_color, 1.0);
     }
 ";
 
@@ -287,10 +287,10 @@ pub static EMITTER_VERTEX_SRC: &'static [u8] = b"
 pub static EMITTER_FRAGMENT_SRC: &'static [u8] = b"
     #version 150 core
 
-    out vec4 o_Color;
+    out vec4 Target0;
 
     void main() {
-        o_Color = vec4(1.0, 1.0, 1.0, 1.0);
+        Target0 = vec4(1.0, 1.0, 1.0, 1.0);
     }
 ";
 
