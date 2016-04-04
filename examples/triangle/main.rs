@@ -14,11 +14,17 @@
 
 #[macro_use]
 extern crate gfx;
-extern crate gfx_app;
+extern crate gfx_window_glutin;
+extern crate gfx_device_gl;
+extern crate glutin;
 
-pub use gfx_app::ColorFormat;
+use gfx::traits::FactoryExt;
+use gfx::Device;
 
-gfx_vertex_struct!( Vertex {
+pub type ColorFormat = gfx::format::Rgba8;
+pub type DepthFormat = gfx::format::DepthStencil;
+
+gfx_vertex_struct!(Vertex {
     pos: [f32; 2] = "a_Pos",
     color: [f32; 3] = "a_Color",
 });
@@ -28,58 +34,51 @@ gfx_pipeline!(pipe {
     out: gfx::RenderTarget<ColorFormat> = "Target0",
 });
 
-struct App<R: gfx::Resources> {
-    pso: gfx::PipelineState<R, pipe::Meta>,
-    data: pipe::Data<R>,
-    slice: gfx::Slice<R>,
-}
+fn triangle() -> [Vertex; 3] { [
+    Vertex { pos: [ -0.5, -0.5 ], color: [1.0, 0.0, 0.0] },
+    Vertex { pos: [  0.5, -0.5 ], color: [0.0, 1.0, 0.0] },
+    Vertex { pos: [  0.0,  0.5 ], color: [0.0, 0.0, 1.0] },
+] }
 
-impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
-    fn new<F: gfx::Factory<R>>(mut factory: F, init: gfx_app::Init<R>) -> Self {
-        use gfx::traits::FactoryExt;
-
-        let vs = gfx_app::shade::Source {
-            glsl_120: include_bytes!("shader/triangle_120.glslv"),
-            glsl_150: include_bytes!("shader/triangle_150.glslv"),
-            hlsl_40:  include_bytes!("data/vertex.fx"),
-            .. gfx_app::shade::Source::empty()
-        };
-        let fs = gfx_app::shade::Source {
-            glsl_120: include_bytes!("shader/triangle_120.glslf"),
-            glsl_150: include_bytes!("shader/triangle_150.glslf"),
-            hlsl_40:  include_bytes!("data/pixel.fx"),
-            .. gfx_app::shade::Source::empty()
-        };
-
-        let vertex_data = [
-            Vertex { pos: [ -0.5, -0.5 ], color: [1.0, 0.0, 0.0] },
-            Vertex { pos: [  0.5, -0.5 ], color: [0.0, 1.0, 0.0] },
-            Vertex { pos: [  0.0,  0.5 ], color: [0.0, 0.0, 1.0] },
-        ];
-        let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
-
-        App {
-            pso: factory.create_pipeline_simple(
-                vs.select(init.backend).unwrap(),
-                fs.select(init.backend).unwrap(),
-                gfx::state::CullFace::Nothing,
-                pipe::new()
-                ).unwrap(),
-            data: pipe::Data {
-                vbuf: vbuf,
-                out: init.color,
-            },
-            slice: slice,
-        }
-    }
-
-    fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
-        encoder.clear(&self.data.out, [0.1, 0.2, 0.3, 1.0]);
-        encoder.draw(&self.slice, &self.pso, &self.data);
-    }
+fn clear_color() -> [f32; 4] {
+    [0.1, 0.2, 0.3, 1.0]
 }
 
 pub fn main() {
-    use gfx_app::Application;
-    App::launch_default("Triangle example");
+    let builder = glutin::WindowBuilder::new()
+        .with_title("Triangle example".to_string())
+        .with_dimensions(1024, 768)
+        .with_vsync();
+    let (window, mut device, mut factory, main_color, _main_depth) =
+        gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder);
+    let command_buffer = factory.create_command_buffer();
+    let mut encoder: gfx::Encoder<_, _> = command_buffer.into();
+    let pso = factory.create_pipeline_simple(
+        include_bytes!("shader/triangle_150.glslv"),
+        include_bytes!("shader/triangle_150.glslf"),
+        gfx::state::CullFace::Nothing,
+        pipe::new()
+    ).unwrap();
+    let (vertex_buffer, slice) = factory.create_vertex_buffer(&triangle());
+    let data = pipe::Data {
+        vbuf: vertex_buffer,
+        out: main_color
+    };
+
+    'main: loop {
+        // loop over events
+        for event in window.poll_events() {
+            match event {
+                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
+                glutin::Event::Closed => break 'main,
+                _ => {},
+            }
+        }
+        // draw a frame
+        encoder.clear(&data.out, clear_color());
+        encoder.draw(&slice, &pso, &data);
+        window.swap_buffers().unwrap();
+        device.cleanup();
+        encoder.flush(&mut device);
+    }
 }
