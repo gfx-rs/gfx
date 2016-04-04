@@ -173,9 +173,11 @@ impl Kind {
     }
     /// Get the dimensionality of a particular mipmap level.
     pub fn get_level_dimensions(&self, level: Level) -> Dimensions {
-        use std::cmp::max;
+        use std::cmp::{max, min};
+        // unused dimensions must stay 0, all others must be at least 1
+        let map = |val| max(min(val, 1), val >> level);
         let (w, h, d, _) = self.get_dimensions();
-        (max(1, w >> level), max(1, h >> level), max(1, d >> level), AaMode::Single)
+        (map(w), map(h), map(d), AaMode::Single)
     }
     /// Count the number of mipmap levels.
     pub fn get_num_levels(&self) -> Level {
