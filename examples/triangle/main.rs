@@ -34,15 +34,13 @@ gfx_pipeline!(pipe {
     out: gfx::RenderTarget<ColorFormat> = "Target0",
 });
 
-fn triangle() -> [Vertex; 3] { [
+const TRIANGLE: [Vertex; 3] = [
     Vertex { pos: [ -0.5, -0.5 ], color: [1.0, 0.0, 0.0] },
     Vertex { pos: [  0.5, -0.5 ], color: [0.0, 1.0, 0.0] },
-    Vertex { pos: [  0.0,  0.5 ], color: [0.0, 0.0, 1.0] },
-] }
+    Vertex { pos: [  0.0,  0.5 ], color: [0.0, 0.0, 1.0] }
+];
 
-fn clear_color() -> [f32; 4] {
-    [0.1, 0.2, 0.3, 1.0]
-}
+const CLEAR_COLOR: [f32; 4] = [0.1, 0.2, 0.3, 1.0];
 
 pub fn main() {
     let builder = glutin::WindowBuilder::new()
@@ -59,7 +57,7 @@ pub fn main() {
         gfx::state::CullFace::Nothing,
         pipe::new()
     ).unwrap();
-    let (vertex_buffer, slice) = factory.create_vertex_buffer(&triangle());
+    let (vertex_buffer, slice) = factory.create_vertex_buffer(&TRIANGLE);
     let data = pipe::Data {
         vbuf: vertex_buffer,
         out: main_color
@@ -75,7 +73,7 @@ pub fn main() {
             }
         }
         // draw a frame
-        encoder.clear(&data.out, clear_color());
+        encoder.clear(&data.out, CLEAR_COLOR);
         encoder.draw(&slice, &pso, &data);
         window.swap_buffers().unwrap();
         device.cleanup();
