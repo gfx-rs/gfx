@@ -39,7 +39,7 @@ fn get_window_dimensions(window: &glutin::Window) -> tex::Dimensions {
     let (width, height) = window.get_inner_size().unwrap();
     let aa = window.get_pixel_format().multisampling
                    .unwrap_or(0) as tex::NumSamples;
-    (width as tex::Size, height as tex::Size, 1, aa.into())
+    ((width as f32 * window.hidpi_factor()) as tex::Size, (height as f32 * window.hidpi_factor()) as tex::Size, 1, aa.into())
 }
 
 /// Initialize with a window builder. Raw version.
