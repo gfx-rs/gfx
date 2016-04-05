@@ -74,8 +74,8 @@ pub fn main() {
         // draw a frame
         encoder.clear(&data.out, CLEAR_COLOR);
         encoder.draw(&slice, &pso, &data);
+        encoder.flush(&mut device);
         window.swap_buffers().unwrap();
         device.cleanup();
-        encoder.flush(&mut device);
     }
 }
