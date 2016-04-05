@@ -49,8 +49,7 @@ pub fn main() {
         .with_vsync();
     let (window, mut device, mut factory, main_color, _main_depth) =
         gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder);
-    let command_buffer = factory.create_command_buffer();
-    let mut encoder: gfx::Encoder<_, _> = command_buffer.into();
+    let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
     let pso = factory.create_pipeline_simple(
         include_bytes!("shader/triangle_150.glslv"),
         include_bytes!("shader/triangle_150.glslf"),
