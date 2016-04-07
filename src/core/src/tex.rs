@@ -233,9 +233,10 @@ pub type NewImageInfo = ImageInfoCommon<()>;
 impl<F> ImageInfoCommon<F> {
     /// Get the total number of texels.
     pub fn get_texel_count(&self) -> usize {
-        self.width as usize *
-        self.height as usize *
-        self.depth as usize
+        use std::cmp::max;
+        max(1, self.width) as usize *
+        max(1, self.height) as usize *
+        max(1, self.depth) as usize
     }
 
     /// Convert into a differently typed format.
