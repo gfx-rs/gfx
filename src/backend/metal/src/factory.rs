@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[macro_use]
 extern crate log;
 extern crate objc;
 extern crate cocoa;
@@ -21,27 +20,6 @@ extern crate gfx_core;
 use cocoa::base::{selector, id, class, nil};
 use cocoa::foundation::{NSUInteger};
 
-mod factory;
-
-pub use self::factory::Factory;
-
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub enum Resources {}
-
-impl gfx_core::Resources for Resources {
-    type Buffer              = ();
-    type Shader              = ();
-    type Program             = ();
-    type PipelineStateObject = ();
-    type Texture             = ();
-    type RenderTargetView    = ();
-    type DepthStencilView    = ();
-    type ShaderResourceView  = ();
-    type UnorderedAccessView = ();
-    type Sampler             = ();
-    type Fence               = ();
-}
-
-pub struct Device {
-    mtl_device: id
+pub struct Factory {
+    device: id
 }
