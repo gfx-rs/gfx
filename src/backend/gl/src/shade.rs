@@ -346,7 +346,7 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program, u
 }
 
 fn query_outputs(gl: &gl::Gl, prog: super::Program) -> Option<Vec<s::OutputVar>> {
-    use std::{str, ptr};
+    use std::ptr;
 
     // check to see if this will work
     if !gl.GetProgramInterfaceiv.is_loaded() {
