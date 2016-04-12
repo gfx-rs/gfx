@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Render target components for the PSO macro.
+//! Render target components for a PSO.
 
 use std::marker::PhantomData;
 use gfx_core::{ColorSlot, Resources};

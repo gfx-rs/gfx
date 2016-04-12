@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Buffer components for PSO macro.
+//! Buffer components for a PSO.
 
 use std::marker::PhantomData;
 use gfx_core::{ConstantBufferSlot, Resources, MAX_VERTEX_ATTRIBUTES};

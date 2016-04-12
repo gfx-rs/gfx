@@ -95,7 +95,8 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
             .map_err(|e| ProgramError::Link(e))
     }
 
-    /// Create a strongly-typed Pipeline State.
+    /// Idem to `create_pipeline_from_program(..)`, but takes a `ShaderSet` as opposed to a shader
+    /// `Program`.  
     fn create_pipeline_state<I: pso::PipelineInit>(&mut self, shaders: &ShaderSet<R>,
                              primitive: Primitive, rasterizer: Rasterizer, init: I)
                              -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError>
@@ -106,7 +107,8 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
         }
     }
 
-    /// Create PSO with a given program.
+    /// Creates a strongly typed `PipelineState` from its `Init` structure, a shader `Program`, a
+    /// primitive type and a `Rasterizer`.
     fn create_pipeline_from_program<I: pso::PipelineInit>(&mut self, program: &handle::Program<R>,
                                     primitive: Primitive, rasterizer: Rasterizer, init: I)
                                     -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError>
@@ -124,8 +126,9 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
         Ok(pso::PipelineState::new(raw, primitive, meta))
     }
 
-    /// Create a simplified version of the Pipeline State,
-    /// which works on triangles, and only has VS and PS shaders in it.
+    /// Creates a strongly typed `PipelineState` from its `Init` structure. Automatically creates a
+    /// shader `Program` from a vertex and pixel shader source, as well as a `Rasterizer` capable
+    /// of rendering triangle faces, that culls following the supplied `CullFace`.
     fn create_pipeline_simple<I: pso::PipelineInit>(&mut self, vs: &[u8], ps: &[u8], cull: CullFace, init: I)
                               -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError>
     {

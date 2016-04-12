@@ -63,7 +63,7 @@ mod encoder;
 mod factory;
 /// Meshes
 mod mesh;
-/// Pipeline states
+// Pipeline states
 pub mod pso;
 /// Shaders
 pub mod shade;
