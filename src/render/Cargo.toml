@@ -30,6 +30,6 @@ path = "src/lib.rs"
 unstable = []
 
 [dependencies]
-draw_state = "0.4"
+draw_state = "0.5"
 log = "0.3"
 gfx_core = { path = "../core", version = "0.2" }

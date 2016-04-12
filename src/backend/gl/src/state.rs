@@ -27,20 +27,7 @@ pub fn bind_raster_method(gl: &gl::Gl, method: s::RasterMethod, offset: Option<s
             unsafe { gl.LineWidth(width as gl::types::GLfloat) };
             (gl::LINE, gl::POLYGON_OFFSET_LINE)
         },
-        RasterMethod::Fill(cull) => {
-            match cull {
-                CullFace::Nothing => unsafe { gl.Disable(gl::CULL_FACE) },
-                CullFace::Front => { unsafe {
-                    gl.Enable(gl::CULL_FACE);
-                    gl.CullFace(gl::FRONT);
-                }},
-                CullFace::Back => { unsafe {
-                    gl.Enable(gl::CULL_FACE);
-                    gl.CullFace(gl::BACK);
-                }},
-            }
-            (gl::FILL, gl::POLYGON_OFFSET_FILL)
-        },
+        RasterMethod::Fill => (gl::FILL, gl::POLYGON_OFFSET_FILL),
     };
 
     unsafe { gl.PolygonMode(gl::FRONT_AND_BACK, gl_draw) };
@@ -64,6 +51,19 @@ pub fn bind_rasterizer(gl: &gl::Gl, r: &s::Rasterizer) {
             FrontFace::CounterClockwise => gl::CCW,
         })
     };
+    
+    match r.cull_face {
+        CullFace::Nothing => unsafe { gl.Disable(gl::CULL_FACE) },
+        CullFace::Front => { unsafe {
+            gl.Enable(gl::CULL_FACE);
+            gl.CullFace(gl::FRONT);
+        }},
+        CullFace::Back => { unsafe {
+            gl.Enable(gl::CULL_FACE);
+            gl.CullFace(gl::BACK);
+        }}
+    }
+        
     bind_raster_method(gl, r.method, r.offset);
     match r.samples {
         Some(_) => unsafe { gl.Enable(gl::MULTISAMPLE) },
