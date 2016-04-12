@@ -15,7 +15,7 @@
 //! A typed high-level graphics pipeline interface.
 //!
 //! # Overview
-//! A `PipelineState` holds all information needed to manage a graphics pipeline. It contain
+//! A `PipelineState` holds all information needed to manage a graphics pipeline. It contains
 //! information about the shaders used, and on how to bind variables to these shaders. A 
 //! `PipelineState` manifests itself in the form of a Pipeline State Object, or PSO in short.
 //!
