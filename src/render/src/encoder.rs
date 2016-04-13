@@ -40,8 +40,20 @@ pub enum UpdateError<T> {
     },
 }
 
-
-/// Graphics commands encoder.
+/// Graphics Command Encoder
+///
+/// # Overview
+/// The `Encoder` is a wrapper structure around a `CommandBuffer`. It is responsible for sending
+/// commands to the `CommandBuffer`. 
+///
+/// # Construction & Handling
+/// The `Encoder` implements `From<CommandBuffer>`, which is how it in constructed. There is no
+/// cross-API way to create a `CommandBuffer`, however, an API back-end should expose a function to
+/// create one in its `Factory` type. See the specific back-end for details on how to construct a
+/// `CommandBuffer`.
+///
+/// The encoder exposes multiple functions that add commands to its internal `CommandBuffer`. To 
+/// submit these commands to the GPU so they can be rendered, call `flush`. 
 pub struct Encoder<R: Resources, C: draw::CommandBuffer<R>> {
     command_buffer: C,
     raw_pso_data: pso::RawDataSet<R>,
@@ -59,7 +71,13 @@ impl<R: Resources, C: draw::CommandBuffer<R>> From<C> for Encoder<R, C> {
 }
 
 impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
-    /// Flush the encoded commands onto the device, and clean.
+    /// Submits the commands in this `Encoder`'s internal `CommandBuffer` to the GPU, so they can
+    /// be executed. 
+    /// 
+    /// Calling `flush` before swapping buffers is critical as without it the commands of the
+    /// internal ´CommandBuffer´ will not be sent to the GPU, and as a result they will not be
+    /// processed. Calling flush too often however will result in a performance hit. It is
+    /// generally recommended to call flush once per frame, after every draw call. 
     pub fn flush<D>(&mut self, device: &mut D) where
         D: Device<Resources=R, CommandBuffer=C>
     {
@@ -174,7 +192,7 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
         }
     }
 
-    /// Clear a target view with a specified value.
+    /// Clears the supplied `RenderTargetView` to the supplied ´ClearColor`.
     pub fn clear<T: format::RenderFormat>(&mut self,
                  view: &handle::RenderTargetView<R, T>, value: T::View)
     where T::View: Into<draw::ClearColor> {
