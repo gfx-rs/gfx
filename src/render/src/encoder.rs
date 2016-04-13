@@ -195,7 +195,7 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
         self.command_buffer.clear_depth_stencil(target, None, Some(stencil))
     }
 
-    /// Draw a mesh slice using a typed pipeline state object (PSO).
+    /// Draws a `mesh::Slice` using a pipeline state object, and its matching `Data` structure.
     pub fn draw<D: pso::PipelineData<R>>(&mut self, slice: &mesh::Slice<R>,
                 pipeline: &pso::PipelineState<R, D::Meta>, user_data: &D)
     {

@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Pipeline State Objects
+//! Raw Pipeline State Objects
+//!
+//! This module contains items used to create and manage a raw pipeline state object. Most users
+//! will want to use the typed and safe `PipelineState`. See the `pso` module inside the `gfx`
+//! crate.
 
 use {MAX_COLOR_TARGETS, MAX_VERTEX_ATTRIBUTES};
 use {ConstantBufferSlot, ColorSlot, ResourceViewSlot,
