@@ -102,8 +102,8 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
             .map_err(|e| ProgramError::Link(e))
     }
 
-    /// Idem to `create_pipeline_from_program(..)`, but takes a `ShaderSet` as opposed to a shader
-    /// `Program`.  
+    /// Similar to `create_pipeline_from_program(..)`, but takes a `ShaderSet` as opposed to a
+    /// shader `Program`.  
     fn create_pipeline_state<I: pso::PipelineInit>(&mut self, shaders: &ShaderSet<R>,
                              primitive: Primitive, rasterizer: Rasterizer, init: I)
                              -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError>

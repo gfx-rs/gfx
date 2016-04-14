@@ -14,7 +14,7 @@
 
 //! Resource factory
 //!
-//! This module exposes the `Factory` trait, used for creating and managing graphics resources and
+//! This module exposes the `Factory` trait, used for creating and managing graphics resources, and
 //! includes several items to facilitate this. 
 
 use std::mem;
@@ -218,7 +218,7 @@ pub trait Factory<R: Resources> {
     /// Associated mapper type
     type Mapper: Clone + mapping::Raw;
 
-    /// Returns the capabilities of this `Factory` This usually depends on the graphics API being
+    /// Returns the capabilities of this `Factory`. This usually depends on the graphics API being
     /// used.
     fn get_capabilities(&self) -> &Capabilities;
 
