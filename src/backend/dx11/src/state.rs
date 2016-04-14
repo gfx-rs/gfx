@@ -26,9 +26,9 @@ pub fn make_rasterizer(device: *mut ID3D11Device, rast: &state::Rasterizer, use_
                 D3D11_FILL_WIREFRAME
             },
             state::RasterMethod::Line(_) => D3D11_FILL_WIREFRAME,
-            state::RasterMethod::Fill(_) => D3D11_FILL_SOLID,
+            state::RasterMethod::Fill => D3D11_FILL_SOLID,
         },
-        CullMode: match rast.method.get_cull_face() {
+        CullMode: match rast.cull_face {
             state::CullFace::Nothing => D3D11_CULL_NONE,
             state::CullFace::Front => D3D11_CULL_FRONT,
             state::CullFace::Back => D3D11_CULL_BACK,

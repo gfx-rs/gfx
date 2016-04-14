@@ -115,7 +115,8 @@ pub const RESET: [Command; 13] = [
     Command::BindFrameBuffer(gl::FRAMEBUFFER, 0),
     Command::SetRasterizer(s::Rasterizer {
         front_face: s::FrontFace::CounterClockwise,
-        method: s::RasterMethod::Fill(s::CullFace::Back),
+        cull_face: s::CullFace::Back,
+        method: s::RasterMethod::Fill,
         offset: None,
         samples: None,
     }),
@@ -194,7 +195,7 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
     }
 
     fn bind_pipeline_state(&mut self, pso: PipelineState) {
-        let cull = pso.rasterizer.method.get_cull_face();
+        let cull = pso.rasterizer.cull_face;
         self.cache.primitive = primitive_to_gl(pso.primitive);
         self.cache.attributes = pso.input;
         self.cache.stencil = pso.output.stencil;
