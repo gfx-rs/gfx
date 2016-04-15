@@ -176,18 +176,13 @@ macro_rules! gfx_pipeline_inner {
                 // depth-stencil, scissor
                 for _ in 0 .. 1 {
                     $(
-                        match meta.$field.link_depth_stencil(&self.$field) {
-                            Some(d) => {
-                                assert!(meta.$field.is_active());
-                                desc.depth_stencil = Some(d);
-                                continue;
-                            },
-                            None => (),
+                        if let Some(d) = meta.$field.link_depth_stencil(&self.$field) {
+                            assert!(meta.$field.is_active());
+                            desc.depth_stencil = Some(d);
                         }
                         if meta.$field.link_scissor() {
                             assert!(meta.$field.is_active());
                             desc.scissor = true;
-                            continue;
                         }
                     )*
                 }
