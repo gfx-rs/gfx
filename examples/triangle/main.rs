@@ -24,15 +24,17 @@ use gfx::Device;
 pub type ColorFormat = gfx::format::Rgba8;
 pub type DepthFormat = gfx::format::DepthStencil;
 
-gfx_vertex_struct!(Vertex {
-    pos: [f32; 2] = "a_Pos",
-    color: [f32; 3] = "a_Color",
-});
+gfx_defines!{
+    vertex Vertex {
+        pos: [f32; 2] = "a_Pos",
+        color: [f32; 3] = "a_Color",
+    }
 
-gfx_pipeline!(pipe {
-    vbuf: gfx::VertexBuffer<Vertex> = (),
-    out: gfx::RenderTarget<ColorFormat> = "Target0",
-});
+    pipeline pipe {
+        vbuf: gfx::VertexBuffer<Vertex> = (),
+        out: gfx::RenderTarget<ColorFormat> = "Target0",
+    }
+}
 
 const TRIANGLE: [Vertex; 3] = [
     Vertex { pos: [ -0.5, -0.5 ], color: [1.0, 0.0, 0.0] },

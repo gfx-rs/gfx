@@ -57,33 +57,35 @@ const TERRAIN_SCALE: [f32; 3] = [25.0, 25.0, 25.0];
 
 pub type GFormat = [f32; 4];
 
-gfx_constant_struct!(LightInfo {
-    pos: [f32; 4] = "pos",
-});
+gfx_defines!{
+    constant LightInfo {
+        pos: [f32; 4] = "pos",
+    }
 
-gfx_vertex_struct!( TerrainVertex {
-    pos: [f32; 3] = "a_Pos",
-    normal: [f32; 3] = "a_Normal",
-    color: [f32; 3] = "a_Color",
-});
+    vertex TerrainVertex {
+        pos: [f32; 3] = "a_Pos",
+        normal: [f32; 3] = "a_Normal",
+        color: [f32; 3] = "a_Color",
+    }
 
-gfx_constant_struct!( TerrainLocals {
-    model: [[f32; 4]; 4] = "u_Model",
-    view: [[f32; 4]; 4] = "u_View",
-    proj: [[f32; 4]; 4] = "u_Proj",
-});
+    constant TerrainLocals {
+        model: [[f32; 4]; 4] = "u_Model",
+        view: [[f32; 4]; 4] = "u_View",
+        proj: [[f32; 4]; 4] = "u_Proj",
+    }
 
-gfx_pipeline!( terrain {
-    vbuf: gfx::VertexBuffer<TerrainVertex> = (),
-    locals: gfx::ConstantBuffer<TerrainLocals> = "TerrainLocals",
-    //TODO: reconstruct the position from the depth instead of
-    // storing it in the GBuffer
-    out_position: gfx::RenderTarget<GFormat> = "Target0",
-    out_normal: gfx::RenderTarget<GFormat> = "Target1",
-    out_color: gfx::RenderTarget<GFormat> = "Target2",
-    out_depth: gfx::DepthTarget<Depth> =
-        gfx::preset::depth::LESS_EQUAL_WRITE,
-});
+    pipeline terrain {
+        vbuf: gfx::VertexBuffer<TerrainVertex> = (),
+        locals: gfx::ConstantBuffer<TerrainLocals> = "TerrainLocals",
+        //TODO: reconstruct the position from the depth instead of
+        // storing it in the GBuffer
+        out_position: gfx::RenderTarget<GFormat> = "Target0",
+        out_normal: gfx::RenderTarget<GFormat> = "Target1",
+        out_color: gfx::RenderTarget<GFormat> = "Target2",
+        out_depth: gfx::DepthTarget<Depth> =
+            gfx::preset::depth::LESS_EQUAL_WRITE,
+    }
+}
 
 pub static TERRAIN_VERTEX_SRC: &'static [u8] = b"
     #version 150 core

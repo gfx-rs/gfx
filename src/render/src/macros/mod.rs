@@ -29,3 +29,35 @@ macro_rules! gfx_format {
         }
     }
 }
+
+
+/// Defines vertex, constant and pipeline formats in one block
+#[macro_export]
+macro_rules! gfx_defines {
+    (vertex $name:ident {
+            $( $field:ident : $ty:ty = $e:expr, )+
+    }) => {
+        gfx_vertex_struct!($name {$($field:$ty = $e,)+});
+    };
+    
+    (constant $name:ident {
+            $( $field:ident : $ty:ty = $e:expr, )+
+    }) => {
+        gfx_constant_struct!($name {$($field:$ty = $e,)+});
+    };
+    
+    (pipeline $name:ident {
+            $( $field:ident : $ty:ty = $e:expr, )+
+    }) => {
+        gfx_pipeline!($name {$($field:$ty = $e,)+});
+    };
+
+    ($keyword:ident $name:ident {
+            $( $field:ident : $ty:ty = $e:expr, )+
+    } $($tail:tt)+) => {
+        gfx_defines! {
+            $keyword $name { $($field : $ty = $e,)+ }
+        }
+        gfx_defines!($($tail)+);
+    }
+}

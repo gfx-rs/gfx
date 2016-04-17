@@ -19,10 +19,18 @@ extern crate gfx_app;
 pub use gfx::format::Depth;
 pub use gfx_app::ColorFormat;
 
-gfx_vertex_struct!( Vertex {
-    pos: [f32; 2] = "a_Pos",
-    uv: [f32; 2] = "a_Uv",
-});
+gfx_defines!{
+    vertex Vertex {
+        pos: [f32; 2] = "a_Pos",
+        uv: [f32; 2] = "a_Uv",
+    }
+
+    pipeline pipe {
+        vbuf: gfx::VertexBuffer<Vertex> = (),
+        tex: gfx::TextureSampler<[f32; 4]> = "t_Tex",
+        out: gfx::RenderTarget<ColorFormat> = "Target0",
+    }
+}
 
 impl Vertex {
     fn new(p: [f32; 2], u: [f32; 2]) -> Vertex {
@@ -32,12 +40,6 @@ impl Vertex {
         }
     }
 }
-
-gfx_pipeline!(pipe {
-    vbuf: gfx::VertexBuffer<Vertex> = (),
-    tex: gfx::TextureSampler<[f32; 4]> = "t_Tex",
-    out: gfx::RenderTarget<ColorFormat> = "Target0",
-});
 
 // Larger red dots
 const L0_DATA: [[u8; 4]; 16] = [

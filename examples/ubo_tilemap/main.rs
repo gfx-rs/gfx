@@ -109,9 +109,41 @@ impl InputHandler {
 // NOTE: It may be a bug, but it appears that
 // [f32;2] won't work as UBO data. Possibly an issue with
 // binding generation
-gfx_constant_struct!(TileMapData {
-    data: [f32; 4] = "data",
-});
+gfx_defines!{
+    constant TileMapData {
+        data: [f32; 4] = "data",
+    }
+
+    constant ProjectionStuff {
+        model: [[f32; 4]; 4] = "u_Model",
+        view: [[f32; 4]; 4] = "u_View",
+        proj: [[f32; 4]; 4] = "u_Proj",
+    }
+
+    constant TilemapStuff {
+        world_size: [f32; 4] = "u_WorldSize",
+        tilesheet_size: [f32; 4] = "u_TilesheetSize",
+        offsets: [f32; 2] = "u_TileOffsets",
+    }
+
+    vertex VertexData {
+        pos: [f32; 3] = "a_Pos",
+        buf_pos: [f32; 2] = "a_BufPos",
+    }
+
+    pipeline pipe {
+        vbuf: gfx::VertexBuffer<VertexData> = (),
+        projection_cb: gfx::ConstantBuffer<ProjectionStuff> = "b_VsLocals",
+        // tilemap stuff
+        tilemap: gfx::ConstantBuffer<TileMapData> = "b_TileMap",
+        tilemap_cb: gfx::ConstantBuffer<TilemapStuff> = "b_PsLocals",
+        tilesheet: gfx::TextureSampler<[f32; 4]> = "t_TileSheet",
+        // output
+        out_color: gfx::RenderTarget<ColorFormat> = "Target0",
+        out_depth: gfx::DepthTarget<DepthStencil> =
+            gfx::preset::depth::LESS_EQUAL_WRITE,
+    }
+}
 
 impl TileMapData {
     pub fn new_empty() -> TileMapData {
@@ -121,38 +153,6 @@ impl TileMapData {
         TileMapData { data: data }
     }
 }
-
-gfx_constant_struct!(ProjectionStuff {
-    model: [[f32; 4]; 4] = "u_Model",
-    view: [[f32; 4]; 4] = "u_View",
-    proj: [[f32; 4]; 4] = "u_Proj",
-});
-
-gfx_constant_struct!(TilemapStuff {
-    world_size: [f32; 4] = "u_WorldSize",
-    tilesheet_size: [f32; 4] = "u_TilesheetSize",
-    offsets: [f32; 2] = "u_TileOffsets",
-});
-
-// Vertex data
-gfx_vertex_struct!( VertexData {
-    pos: [f32; 3] = "a_Pos",
-    buf_pos: [f32; 2] = "a_BufPos",
-});
-
-// Pipeline state definition
-gfx_pipeline!(pipe {
-    vbuf: gfx::VertexBuffer<VertexData> = (),
-    projection_cb: gfx::ConstantBuffer<ProjectionStuff> = "b_VsLocals",
-    // tilemap stuff
-    tilemap: gfx::ConstantBuffer<TileMapData> = "b_TileMap",
-    tilemap_cb: gfx::ConstantBuffer<TilemapStuff> = "b_PsLocals",
-    tilesheet: gfx::TextureSampler<[f32; 4]> = "t_TileSheet",
-    // output
-    out_color: gfx::RenderTarget<ColorFormat> = "Target0",
-    out_depth: gfx::DepthTarget<DepthStencil> =
-        gfx::preset::depth::LESS_EQUAL_WRITE,
-});
 
 // Abstracts the plane mesh and uniform data
 // Also holds a Vec<TileMapData> as a working data

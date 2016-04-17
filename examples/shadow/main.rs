@@ -24,10 +24,50 @@ pub use gfx_app::ColorFormat;
 
 // Section-1: vertex formats and shader parameters
 
-gfx_vertex_struct!( Vertex {
-    pos: [i8; 4] = "a_Pos",
-    normal: [i8; 4] = "a_Normal",
-});
+gfx_defines!{
+    vertex Vertex {
+        pos: [i8; 4] = "a_Pos",
+        normal: [i8; 4] = "a_Normal",
+    }
+
+    constant ForwardVsLocals {
+        transform: [[f32; 4]; 4] = "u_Transform",
+        model_transform: [[f32; 4]; 4] = "u_ModelTransform",
+    }
+
+    constant ForwardPsLocals {
+        color: [f32; 4] = "u_Color",
+        num_lights: i32 = "u_NumLights",
+    }
+
+    constant ShadowLocals {
+        transform: [[f32; 4]; 4] = "u_Transform",
+    }
+
+    constant LightParam {
+        pos: [f32; 4] = "pos",
+        color: [f32; 4] = "color",
+        proj: [[f32; 4]; 4] = "proj",
+    }
+
+    pipeline forward {
+        vbuf: gfx::VertexBuffer<Vertex> = (),
+        vs_locals: gfx::ConstantBuffer<ForwardVsLocals> = "VsLocals",
+        ps_locals: gfx::ConstantBuffer<ForwardPsLocals> = "PsLocals",
+        light_buf: gfx::ConstantBuffer<LightParam> = "b_Lights",
+        shadow: gfx::TextureSampler<f32> = "t_Shadow",
+        out_color: gfx::RenderTarget<ColorFormat> = "Target0",
+        out_depth: gfx::DepthTarget<DepthStencil> =
+            gfx::preset::depth::LESS_EQUAL_WRITE,
+    }
+
+    pipeline shadow {
+        vbuf: gfx::VertexBuffer<Vertex> = (),
+        locals: gfx::ConstantBuffer<ShadowLocals> = "Locals",
+        out: gfx::DepthTarget<Depth> =
+            gfx::preset::depth::LESS_EQUAL_WRITE,
+    }
+}
 
 impl Vertex {
     fn new(p: [i8; 3], n: [i8; 3]) -> Vertex {
@@ -38,45 +78,7 @@ impl Vertex {
     }
 }
 
-gfx_constant_struct!(ForwardVsLocals {
-    transform: [[f32; 4]; 4] = "u_Transform",
-    model_transform: [[f32; 4]; 4] = "u_ModelTransform",
-});
-
-gfx_constant_struct!(ForwardPsLocals {
-    color: [f32; 4] = "u_Color",
-    num_lights: i32 = "u_NumLights",
-});
-
-gfx_constant_struct!(ShadowLocals {
-    transform: [[f32; 4]; 4] = "u_Transform",
-});
-
 const MAX_LIGHTS: usize = 10;
-
-gfx_constant_struct!(LightParam {
-    pos: [f32; 4] = "pos",
-    color: [f32; 4] = "color",
-    proj: [[f32; 4]; 4] = "proj",
-});
-
-gfx_pipeline!( forward {
-    vbuf: gfx::VertexBuffer<Vertex> = (),
-    vs_locals: gfx::ConstantBuffer<ForwardVsLocals> = "VsLocals",
-    ps_locals: gfx::ConstantBuffer<ForwardPsLocals> = "PsLocals",
-    light_buf: gfx::ConstantBuffer<LightParam> = "b_Lights",
-    shadow: gfx::TextureSampler<f32> = "t_Shadow",
-    out_color: gfx::RenderTarget<ColorFormat> = "Target0",
-    out_depth: gfx::DepthTarget<DepthStencil> =
-        gfx::preset::depth::LESS_EQUAL_WRITE,
-});
-
-gfx_pipeline!( shadow {
-    vbuf: gfx::VertexBuffer<Vertex> = (),
-    locals: gfx::ConstantBuffer<ShadowLocals> = "Locals",
-    out: gfx::DepthTarget<Depth> =
-        gfx::preset::depth::LESS_EQUAL_WRITE,
-});
 
 //----------------------------------------
 // Section-2: simple primitives generation

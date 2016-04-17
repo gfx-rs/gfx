@@ -30,27 +30,29 @@ const QUAD_VERTICES: [Vertex; 4] = [
 
 const QUAD_INDICES: [u16; 6] = [0, 1, 2, 2, 3, 0];
 
-gfx_vertex_struct!(Vertex {
-    position: [f32; 2] = "a_Position",
-});
+gfx_defines!{
+    vertex Vertex {
+        position: [f32; 2] = "a_Position",
+    }
 
-// color format: 0xRRGGBBAA
-gfx_vertex_struct!(Instance {
-    translate: [f32; 2] = "a_Translate",
-    color: u32 = "a_Color",
-});
+    // color format: 0xRRGGBBAA
+    vertex Instance {
+        translate: [f32; 2] = "a_Translate",
+        color: u32 = "a_Color",
+    }
 
-gfx_constant_struct!(Locals {
-    scale: f32 = "u_Scale",
-});
+    constant Locals {
+        scale: f32 = "u_Scale",
+    }
 
-gfx_pipeline!(pipe {
-    vertex: gfx::VertexBuffer<Vertex> = (),
-    instance: gfx::InstanceBuffer<Instance> = (),
-    scale: gfx::Global<f32> = "u_Scale",
-    locals: gfx::ConstantBuffer<Locals> = "Locals",
-    out: gfx::RenderTarget<ColorFormat> = "Target0",
-});
+    pipeline pipe {
+        vertex: gfx::VertexBuffer<Vertex> = (),
+        instance: gfx::InstanceBuffer<Instance> = (),
+        scale: gfx::Global<f32> = "u_Scale",
+        locals: gfx::ConstantBuffer<Locals> = "Locals",
+        out: gfx::RenderTarget<ColorFormat> = "Target0",
+    }
+}
 
 fn fill_instances(attributes: &mut [Instance], instances_per_length: u32, size: f32) {
     let gap = 0.4 / (instances_per_length + 1) as f32;
