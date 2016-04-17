@@ -31,4 +31,4 @@ gfx_core = { path = "../../core", version = "0.2" }
 cocoa = "0.2.4"
 libc = "0.2"
 objc = "0.1.8"
-
+metal = { git = "https://github.com/fkaa/metal-rs" }

@@ -19,6 +19,7 @@ extern crate log;
 extern crate objc;
 extern crate cocoa;
 extern crate winit;
+extern crate metal;
 extern crate gfx_core;
 extern crate gfx_device_metal;
 
@@ -26,7 +27,8 @@ use winit::os::macos::WindowExt;
 
 use objc::runtime::{Object, Class, BOOL, YES, NO};
 
-use cocoa::base::{selector, id, class, nil};
+use cocoa::base::id as cocoa_id;
+use cocoa::base::{selector, class};
 use cocoa::foundation::{NSUInteger};
 use cocoa::appkit::{NSApp,
                     NSApplication, NSApplicationActivationPolicyRegular,
@@ -40,11 +42,13 @@ use gfx_core::handle::RawRenderTargetView;
 
 use gfx_device_metal::{Device, Factory, Resources};
 
+use metal::{CAMetalLayer};
+
 use std::mem;
 
 pub struct Window {
-    handle: id,
-    layer: id,
+    handle: cocoa_id,
+    layer: CAMetalLayer,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -65,7 +69,13 @@ pub fn init_raw(title: &str, requested_width: u32, requested_height: u32, color_
         .with_title(title.to_string()).build().unwrap();
 
     unsafe {
-        let wnd: id = mem::transmute(winit_wnd.get_nswindow());
+        let wnd: cocoa_id = mem::transmute(winit_wnd.get_nswindow());
+
+        let layer = CAMetalLayer::layer();
+        layer.set_pixel_format(match gfx_device_metal::map_format(color_format, true) {
+            Some(fm) => fm,
+            None => return Err(InitError::Format(color_format)),
+        });
 
         let view = wnd.contentView();
         view.setWantsLayer(YES);
