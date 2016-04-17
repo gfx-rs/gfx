@@ -15,19 +15,19 @@
 //! Shader parameter handling.
 
 pub use gfx_core::shade::{ConstFormat, Formatted, Usage};
-use gfx_core::shade::{CreateShaderError, CreateProgramError, UniformValue};
+pub use gfx_core::shade as core;
 
 #[allow(missing_docs)]
 pub trait ToUniform: Copy {
-    fn convert(self) -> UniformValue;
+    fn convert(self) -> core::UniformValue;
 }
 
 macro_rules! impl_uniforms {
     { $( $ty_src:ty = $ty_dst:ident ,)* } => {
         $(
         impl ToUniform for $ty_src {
-            fn convert(self) -> UniformValue {
-                UniformValue::$ty_dst(self)
+            fn convert(self) -> core::UniformValue {
+                core::UniformValue::$ty_dst(self)
             }
         }
         )*
@@ -52,9 +52,9 @@ impl_uniforms!{
 #[derive(Clone, PartialEq, Debug)]
 pub enum ProgramError {
     /// Unable to compile the vertex shader
-    Vertex(CreateShaderError),
+    Vertex(core::CreateShaderError),
     /// Unable to compile the pixel shader
-    Pixel(CreateShaderError),
+    Pixel(core::CreateShaderError),
     /// Unable to link
-    Link(CreateProgramError),
+    Link(core::CreateProgramError),
 }

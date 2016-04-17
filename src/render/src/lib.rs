@@ -33,7 +33,6 @@ pub use draw_state::{preset, state};
 pub use draw_state::target::*;
 
 // public re-exports
-pub use gfx_core as core;
 pub use gfx_core::{Device, Resources, Primitive};
 pub use gfx_core::{VertexCount, InstanceCount};
 pub use gfx_core::{ShaderSet, VertexShader, HullShader, DomainShader,

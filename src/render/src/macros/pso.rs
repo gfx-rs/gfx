@@ -152,7 +152,7 @@ macro_rules! gfx_pipeline_inner {
                     return Err(InitError::PixelExport(out.slot, None));
                 }
                 if !info.knows_outputs {
-                    use $crate::core::shade as s;
+                    use $crate::shade::core as s;
                     let mut out = s::OutputVar {
                         name: String::new(),
                         slot: 0,
