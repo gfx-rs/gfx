@@ -12,41 +12,60 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Mesh loading.
+//! Slices
 //!
-//! A `Mesh` describes the geometry of an object. All or part of a `Mesh` can be drawn with a
-//! single draw call. A `Mesh` consists of a series of vertices, each with a certain amount of
-//! user-specified attributes. These attributes are fed into shader programs. The easiest way to
-//! create a mesh is to use the `#[vertex_format]` attribute on a struct, upload them into a
-//! `Buffer`, and then use `Mesh::from`.
+//! See `Slice`-structure documentation for more information on this module.
 
 use gfx_core::handle;
 use gfx_core::{Primitive, Resources, VertexCount};
 use gfx_core::draw::InstanceOption;
 use gfx_core::factory::{Bind, BufferRole, Factory};
 
-/// Description of a subset of `Mesh` data to render.
+/// A `Slice` dictates in which and in what order vertices get processed. It is required for
+/// processing a PSO.
 ///
-/// Only vertices between `start` and `end` are rendered. The
-/// source of the vertex data is dependent on the `kind` value.
+/// # Overview
+/// A `Slice` object in essence dictates in what order the vertices in a `VertexBuffer` get
+/// processed. To do this, it contains an internal index-buffer. This `Buffer` is a list of
+/// indices into this `VertexBuffer` (vertex-index). A vertex-index of 0 represents the first
+/// vertex in the `VertexBuffer`, a vertex-index of 1 represents the second, 2 represents the
+/// third, and so on. The vertex-indices in the index-buffer are read in order; every vertex-index
+/// tells the pipeline which vertex to process next. 
 ///
-/// The `primitive` defines how the mesh contents are interpreted.
-/// For example,  `Point` typed vertex slice can be used to do shape
-/// blending, while still rendereing it as an indexed `TriangleList`.
+/// Because the same index can re-appear multiple times, duplicate-vertices can be avoided. For
+/// instance, if you want to draw a square, you need two triangles, and thus six vertices. Because
+/// the same index can reappear multiple times, this means we can instead use 4 vertices, and 6
+/// vertex-indices.
+///
+/// This index-buffer has a few variants. See the `SliceKind` documentation for a detailed
+/// description.
+///
+/// The `start` and `end` properties say where in the index-buffer to start and stop reading.
+/// Setting `start` to 0, and `end` to the length of the index-buffer, will cause the entire
+/// index-buffer to be processed. 
+///
+/// # Constuction & Handling
+/// The `Slice` structure gets constructed automatically when creating a `VertexBuffer` using a
+/// `Factory`.
+///
+/// A `Slice` buffer is required to process a PSO, as it contains the needed information on in what
+/// order to draw which vertices. As such, every `draw` call on an `Encoder` requires a `Slice`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Slice<R: Resources> {
-    /// Start index of vertices to draw.
+    /// The start index of the index-buffer. Processing will start at this location in the
+    /// index-buffer. 
     pub start: VertexCount,
-    /// End index of vertices to draw.
+    /// The end index in the index-buffer. Processing will stop at this location (exclusive) in
+    /// the index buffer.
     pub end: VertexCount,
     /// Instancing configuration.
     pub instances: InstanceOption,
-    /// Source of the vertex ordering when drawing.
+    /// Represents the type of index-buffer used. 
     pub kind: SliceKind<R>,
 }
 
 impl<R: Resources> Slice<R> {
-    /// Get the number of primitives in this slice.
+    /// Calculates the number of primitives of the specified type in this `Slice`.
     pub fn get_prim_count(&self, prim: Primitive) -> u32 {
         use gfx_core::Primitive::*;
         let nv = (self.end - self.start) as u32;
@@ -60,24 +79,28 @@ impl<R: Resources> Slice<R> {
     }
 }
 
-/// Source of vertex ordering for a slice
+/// Type of index-buffer used in a Slice.
+///
+/// The `Vertex` represents a hypothetical index-buffer from 0 to infinity. In other words, all 
+/// vertices get processed in order. Do note that the `Slice`' `start` and `end` restrictions still
+/// apply for this variant. To render every vertex in the `VertexBuffer`, you would set `start` to
+/// 0, and `end` to the `VertexBuffer`'s length.
+///
+/// The `Index*` variants represent an actual `Buffer` with a list of vertex-indices. The numeric 
+/// suffix specifies the amount of bits to use per index. Each of these also contains a
+/// base-vertex. This is the index of the first vertex in the `VertexBuffer`. This value will be
+/// added to every index in the index-buffer, effectively moving the start of the `VertexBuffer` to
+/// this base-vertex.
 #[derive(Clone, Debug, PartialEq)]
 pub enum SliceKind<R: Resources> {
-    /// Render vertex data directly from the `Mesh`'s buffer.
+    /// Represents a hypothetical index-buffer from 0 to infinity. In other words, all vertices
+    /// get processed in order.
     Vertex,
-    /// The `Index*` buffer contains a list of indices into the `Mesh`
-    /// data, so every vertex attribute does not need to be duplicated, only
-    /// its position in the `Mesh`. The base index is added to this index
-    /// before fetching the vertex from the buffer.  For example, when drawing
-    /// a square, two triangles are needed.  Using only `Vertex`, one
-    /// would need 6 separate vertices, 3 for each triangle. However, two of
-    /// the vertices will be identical, wasting space for the duplicated
-    /// attributes.  Instead, the `Mesh` can store 4 vertices and an
-    /// `Index8` can be used instead.
+    /// An index-buffer with unsigned 8 bit indices. 
     Index8(handle::Buffer<R, u8>, VertexCount),
-    /// As `Index8` but with `u16` indices
+    /// An index-buffer with unsigned 16 bit indices.
     Index16(handle::Buffer<R, u16>, VertexCount),
-    /// As `Index8` but with `u32` indices
+    /// An index-buffer with unsigned 32 bit indices.
     Index32(handle::Buffer<R, u32>, VertexCount),
 }
 

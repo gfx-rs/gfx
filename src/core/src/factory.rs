@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Resource factory.
+//! Resource factory
+//!
+//! This module exposes the `Factory` trait, used for creating and managing graphics resources, and
+//! includes several items to facilitate this. 
 
 use std::mem;
 use {handle, format, mapping, pso, shade, target, tex};
@@ -186,12 +189,37 @@ impl From<TargetViewError> for CombinedError {
     }
 }
 
-#[allow(missing_docs)]
+/// A `Factory` is responsible for creating and managing resources for the context it was created
+/// with. 
+///
+/// # Construction and Handling
+/// A `Factory` is created by using the appropriate functions of the desired graphics backend.
+/// An example using the OpenGL backend and Glutin.
+/// 
+/// ```
+/// extern crate gfx;
+/// extern crate gfx_device_gl;
+/// extern crate gfx_window_glutin;
+/// extern crate glutin;
+///
+/// use gfx::format::{DepthStencil, Rgba8};
+///
+/// let builder = glutin::WindowBuilder::new().with_title("Factory Construction".to_string());
+/// let (window, device, factory, rtv, stv) =
+///     gfx_window_glutin::init::<Rgba8, DepthStencil>(builder);
+/// ```
+///
+/// This factory structure can then be used to create and manage different resources, like buffers,
+/// shader programs and textures. See the individual methods for more information.
+///
+/// Also see `FactoryExt` inside the `gfx` trait for additional methods.
+#[warn(missing_docs)]
 pub trait Factory<R: Resources> {
     /// Associated mapper type
     type Mapper: Clone + mapping::Raw;
 
-    /// Returns the capabilities available to the specific API implementation
+    /// Returns the capabilities of this `Factory`. This usually depends on the graphics API being
+    /// used.
     fn get_capabilities(&self) -> &Capabilities;
 
     // resource creation
@@ -227,18 +255,29 @@ pub trait Factory<R: Resources> {
         self.create_buffer_raw(info).map(|raw| Typed::new(raw))
     }
 
+    /// Creates a new `RawPipelineState`. To create a safely typed `PipelineState`, see the
+    /// `FactoryExt` trait and `pso` module, both in the `gfx` crate.
     fn create_pipeline_state_raw(&mut self, &handle::Program<R>, &pso::Descriptor)
                                  -> Result<handle::RawPipelineState<R>, pso::CreationError>;
+                                 
+    /// Creates a new shader `Program` for the supplied `ShaderSet`.
     fn create_program(&mut self, shader_set: &ShaderSet<R>)
                       -> Result<handle::Program<R>, shade::CreateProgramError>;
+    
+    /// Compiles a shader source into a `Shader` object that can be used to create a shader
+    /// `Program`.
     fn create_shader(&mut self, stage: shade::Stage, code: &[u8]) ->
                      Result<handle::Shader<R>, shade::CreateShaderError>;
+    /// Compiles a `VertexShader` from source.
     fn create_shader_vertex(&mut self, code: &[u8]) -> Result<VertexShader<R>, shade::CreateShaderError> {
         self.create_shader(shade::Stage::Vertex, code).map(|s| VertexShader(s))
     }
+    /// Compiles a `GeometryShader` from source.
     fn create_shader_geometry(&mut self, code: &[u8]) -> Result<GeometryShader<R>, shade::CreateShaderError> {
         self.create_shader(shade::Stage::Geometry, code).map(|s| GeometryShader(s))
     }
+    /// Compiles a `PixelShader` from source. This is the same as what some APIs call a fragment
+    /// shader.
     fn create_shader_pixel(&mut self, code: &[u8]) -> Result<PixelShader<R>, shade::CreateShaderError> {
         self.create_shader(shade::Stage::Pixel, code).map(|s| PixelShader(s))
     }

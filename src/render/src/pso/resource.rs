@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Resource components for PSO macro.
+//! Resource components for a PSO.
 
 use std::marker::PhantomData;
 use gfx_core::{ResourceViewSlot, UnorderedViewSlot, SamplerSlot, Resources};

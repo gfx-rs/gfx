@@ -12,20 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Pipeline State Objects - typed higher-level version.
+//! A typed high-level graphics pipeline interface.
 //!
-//! A typed PSO is defined by a macro (like `gfx_pipeline`)
-//! and generates 3 structures:
-//!  - "init" - containing all the information about resource types,
-//!    formats, layouts - everything needed for PSO initialization.
-//!  - "meta" - mapping the exact shader inputs to the PSO data. The exact
-//!    type of the PSO is `gfx::PipelineState<R, Meta>`.
-//!  - "data" - having the user-provided version of the run-time data
-//!    for PSO rendering, mostly consists of resource handles.
+//! # Overview
+//! A `PipelineState` holds all information needed to manage a graphics pipeline. It contains
+//! information about the shaders used, and on how to bind variables to these shaders. A 
+//! `PipelineState` manifests itself in the form of a Pipeline State Object, or PSO in short.
 //!
-//! A typed PSO is made of individual components, each is represented
-//! by the same-named field in all three generated structures.
-//! The submodules here define these components grouped by area.
+//! A Pipeline State Object exists out of different components. Every component represents
+//! a resource handle: a shader input or output/target. The types of these components can be found
+//! in this module's submodules, grouped by category.
+//!
+//! Before all, a Pipeline State Object must be defined. This is done using the `gfx_pipeline`
+//! macro. This macro creates three different structures:
+//!
+//! - The `Init` structure contains the location of every PSO component. During shader linking,
+//!   this is used to construct the `Meta` structure. 
+//! - The `Meta` structure contains the layout of every PSO. Using the `Meta` structure, the right
+//!   data is mapped to the right components.
+//! - The `Data` structure contains the data of all components, to be sent to the GPU. 
+//!
+//! # Construction and Handling
+//! A Pipeline State Object is constructed by a factory, from its `Init` structure, a `Rasterizer`,
+//! a primitive type and a shader program.
+//!
+//! After construction an `Encoder` can use the PSO along with a `Data` structure matching that
+//! PSO to process the shader pipeline, for instance, using the `draw` method.
 
 pub mod buffer;
 pub mod resource;
@@ -124,7 +136,7 @@ pub trait PipelineData<R: d::Resources> {
     fn bake_to(&self, &mut RawDataSet<R>, meta: &Self::Meta, &mut d::handle::Manager<R>);
 }
 
-/// Strongly-typed compiled pipeline state.
+/// A strongly typed Pipleline State Object. See the module documentation for more information.
 pub struct PipelineState<R: d::Resources, M>(
     d::handle::RawPipelineState<R>, d::Primitive, M);
 

@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Factory extension. Provides resource construction shortcuts.
+//! Factory extension.
+//!
+//! This module serves as an extension to the `factory` module in the `gfx` crate. This module
+//! exposes extension functions and shortcuts to aid with creating and managing graphics resources.
+//! See the `FactoryExt` trait for more information.
 
 use gfx_core::{format, handle, tex};
 use gfx_core::{Primitive, Resources, ShaderSet, VertexCount};
@@ -35,7 +39,8 @@ pub enum PipelineStateError {
 }
 
 
-/// Factory extension trait
+/// This trait is responsible for creating and managing graphics resources, much like the `Factory`
+/// trait in the `gfx` crate. Every `Factory` automatically implements `FactoryExt`. 
 pub trait FactoryExt<R: Resources>: Factory<R> {
     /// Create a vertex buffer with an associated slice.
     fn create_vertex_buffer<T>(&mut self, data: &[T])
@@ -54,7 +59,9 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
         })
     }
 
-    /// Create a vertex buffer with an index, returned by a slice.
+    /// Creates an indexed vertex buffer. The supplied index defines the order of the vertices in
+    /// the buffer. This is mainly useful to prevent duplicates of the same vertex, when that
+    /// vertex is used multiple times.
     fn create_vertex_buffer_indexed<V, I>(&mut self, vd: &[V], id: I)
                                     -> (handle::Buffer<R, V>, Slice<R>) where
         V: Copy + pso::buffer::Structure<format::Format>,
@@ -72,7 +79,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
             .unwrap()
     }
 
-    /// Create a shader set from a given vs/ps code for multiple shader models.
+    /// Creates a `ShaderSet` from the supplied vertex and pixel shader source code.
     fn create_shader_set(&mut self, vs_code: &[u8], ps_code: &[u8])
                          -> Result<ShaderSet<R>, ProgramError> {
         let vs = match self.create_shader_vertex(vs_code) {
@@ -86,7 +93,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
         Ok(ShaderSet::Simple(vs, ps))
     }
 
-    /// Create a simple program given a vertex shader with a pixel one.
+    /// Creates a basic shader `Program` from the supplied vertex and pixel shader source code.
     fn link_program(&mut self, vs_code: &[u8], ps_code: &[u8])
                     -> Result<handle::Program<R>, ProgramError> {
 
@@ -95,7 +102,8 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
             .map_err(|e| ProgramError::Link(e))
     }
 
-    /// Create a strongly-typed Pipeline State.
+    /// Similar to `create_pipeline_from_program(..)`, but takes a `ShaderSet` as opposed to a
+    /// shader `Program`.  
     fn create_pipeline_state<I: pso::PipelineInit>(&mut self, shaders: &ShaderSet<R>,
                              primitive: Primitive, rasterizer: Rasterizer, init: I)
                              -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError>
@@ -106,7 +114,8 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
         }
     }
 
-    /// Create PSO with a given program.
+    /// Creates a strongly typed `PipelineState` from its `Init` structure, a shader `Program`, a
+    /// primitive type and a `Rasterizer`.
     fn create_pipeline_from_program<I: pso::PipelineInit>(&mut self, program: &handle::Program<R>,
                                     primitive: Primitive, rasterizer: Rasterizer, init: I)
                                     -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError>
@@ -124,8 +133,9 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
         Ok(pso::PipelineState::new(raw, primitive, meta))
     }
 
-    /// Create a simplified version of the Pipeline State,
-    /// which works on triangles, and only has VS and PS shaders in it.
+    /// Creates a strongly typed `PipelineState` from its `Init` structure. Automatically creates a
+    /// shader `Program` from a vertex and pixel shader source, as well as a `Rasterizer` capable
+    /// of rendering triangle faces, that culls following the supplied `CullFace`.
     fn create_pipeline_simple<I: pso::PipelineInit>(&mut self, vs: &[u8], ps: &[u8], cull: CullFace, init: I)
                               -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError>
     {
