@@ -21,7 +21,7 @@ use gfx_core::format::{SurfaceType, DepthStencil, Srgba8};
 use gfx_device_gl::Resources;
 
 /// Builds an SDL2 window from a WindowBuilder struct.
-pub fn init<'a>(builder: &mut sdl2::video::WindowBuilder) ->
+pub fn init(builder: &mut sdl2::video::WindowBuilder) ->
     (sdl2::video::Window, sdl2::video::GLContext,
      gfx_device_gl::Device, gfx_device_gl::Factory,
      handle::RenderTargetView<Resources, Srgba8>,
