@@ -234,15 +234,16 @@ pub fn bind_blend(gl: &gl::Gl, color: s::Color) {
 }
 
 pub fn bind_blend_slot(gl: &gl::Gl, slot: ColorSlot, color: s::Color) {
+    //Note: using GL_ARB_draw_buffers_blend methods here instead of GL core
     let buf = slot as gl::types::GLuint;
     match color.blend {
         Some(b) => unsafe {
-            gl.Enablei(gl::BLEND, buf);
-            gl.BlendEquationSeparatei(buf,
+            gl.EnableiARB(gl::BLEND, buf);
+            gl.BlendEquationSeparateiARB(buf,
                 map_equation(b.color.equation),
                 map_equation(b.alpha.equation)
             );
-            gl.BlendFuncSeparatei(buf,
+            gl.BlendFuncSeparateiARB(buf,
                 map_factor(b.color.source),
                 map_factor(b.color.destination),
                 map_factor(b.alpha.source),
@@ -250,10 +251,10 @@ pub fn bind_blend_slot(gl: &gl::Gl, slot: ColorSlot, color: s::Color) {
             );
         },
         None => unsafe {
-            gl.Disablei(gl::BLEND, buf);
+            gl.DisableiARB(gl::BLEND, buf);
         },
     };
-    unsafe { gl.ColorMaski(buf,
+    unsafe { gl.ColorMaskiARB(buf,
         if (color.mask & s::RED  ).is_empty() {gl::FALSE} else {gl::TRUE},
         if (color.mask & s::GREEN).is_empty() {gl::FALSE} else {gl::TRUE},
         if (color.mask & s::BLUE ).is_empty() {gl::FALSE} else {gl::TRUE},
