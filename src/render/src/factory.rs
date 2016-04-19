@@ -54,6 +54,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
         (buf, Slice {
             start: 0,
             end: nv as VertexCount,
+            base_vertex: 0,
             instances: None,
             kind: SliceKind::Vertex,
         })

@@ -42,7 +42,9 @@ use gfx_core::factory::{Bind, BufferRole, Factory};
 ///
 /// The `start` and `end` properties say where in the index-buffer to start and stop reading.
 /// Setting `start` to 0, and `end` to the length of the index-buffer, will cause the entire
-/// index-buffer to be processed. 
+/// index-buffer to be processed. The `base_vertex` dictates the index of the first vertex
+/// in the `VertexBuffer`. This essentially moves the the start of the `VertexBuffer`, to the
+/// vertex with this index.
 ///
 /// # Constuction & Handling
 /// The `Slice` structure gets constructed automatically when creating a `VertexBuffer` using a
@@ -58,6 +60,10 @@ pub struct Slice<R: Resources> {
     /// The end index in the index-buffer. Processing will stop at this location (exclusive) in
     /// the index buffer.
     pub end: VertexCount,
+    /// This is the index of the first vertex in the `VertexBuffer`. This value will be added to
+    /// every index in the index-buffer, effectively moving the start of the `VertexBuffer` to this
+    /// base-vertex.
+    pub base_vertex: VertexCount,
     /// Instancing configuration.
     pub instances: InstanceOption,
     /// Represents the type of index-buffer used. 
@@ -97,11 +103,11 @@ pub enum SliceKind<R: Resources> {
     /// get processed in order.
     Vertex,
     /// An index-buffer with unsigned 8 bit indices. 
-    Index8(handle::Buffer<R, u8>, VertexCount),
+    Index8(handle::Buffer<R, u8>),
     /// An index-buffer with unsigned 16 bit indices.
-    Index16(handle::Buffer<R, u16>, VertexCount),
+    Index16(handle::Buffer<R, u16>),
     /// An index-buffer with unsigned 32 bit indices.
-    Index32(handle::Buffer<R, u32>, VertexCount),
+    Index32(handle::Buffer<R, u32>),
 }
 
 /// A helper trait to build index slices from data.
@@ -117,8 +123,9 @@ macro_rules! impl_slice {
                 Slice {
                     start: 0,
                     end: buf.len() as VertexCount,
+                    base_vertex: 0,
                     instances: None,
-                    kind: SliceKind::$index(buf, 0)
+                    kind: SliceKind::$index(buf)
                 }
             }
         }

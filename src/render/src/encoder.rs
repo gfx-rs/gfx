@@ -183,12 +183,12 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
         match slice.kind {
             slice::SliceKind::Vertex => self.command_buffer.call_draw(
                 slice.start, slice.end - slice.start, instances),
-            slice::SliceKind::Index8(ref buf, base) =>
-                self.draw_indexed(buf, IndexType::U8, slice, base, instances),
-            slice::SliceKind::Index16(ref buf, base) =>
-                self.draw_indexed(buf, IndexType::U16, slice, base, instances),
-            slice::SliceKind::Index32(ref buf, base) =>
-                self.draw_indexed(buf, IndexType::U32, slice, base, instances),
+            slice::SliceKind::Index8(ref buf) =>
+                self.draw_indexed(buf, IndexType::U8, slice, slice.base_vertex, instances),
+            slice::SliceKind::Index16(ref buf) =>
+                self.draw_indexed(buf, IndexType::U16, slice, slice.base_vertex, instances),
+            slice::SliceKind::Index32(ref buf) =>
+                self.draw_indexed(buf, IndexType::U32, slice, slice.base_vertex, instances),
         }
     }
 
