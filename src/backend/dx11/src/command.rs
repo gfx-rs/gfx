@@ -278,7 +278,6 @@ impl<P: Parser> draw::CommandBuffer<Resources> for CommandBuffer<P> {
 
     fn bind_index(&mut self, buf: Buffer, itype: IndexType) {
         let format = match itype {
-            IndexType::U8  => DXGI_FORMAT_R8_UINT,
             IndexType::U16 => DXGI_FORMAT_R16_UINT,
             IndexType::U32 => DXGI_FORMAT_R32_UINT,
         };

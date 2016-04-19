@@ -102,8 +102,6 @@ pub enum SliceKind<R: Resources> {
     /// Represents a hypothetical index-buffer from 0 to infinity. In other words, all vertices
     /// get processed in order.
     Vertex,
-    /// An index-buffer with unsigned 8 bit indices. 
-    Index8(handle::Buffer<R, u8>),
     /// An index-buffer with unsigned 16 bit indices.
     Index16(handle::Buffer<R, u16>),
     /// An index-buffer with unsigned 32 bit indices.
@@ -139,6 +137,5 @@ macro_rules! impl_slice {
     )
 }
 
-impl_slice!(u8, Index8);
 impl_slice!(u16, Index16);
 impl_slice!(u32, Index32);

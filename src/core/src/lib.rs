@@ -150,7 +150,6 @@ pub enum Primitive {
 #[allow(missing_docs)]
 #[repr(u8)]
 pub enum IndexType {
-    U8,
     U16,
     U32,
 }

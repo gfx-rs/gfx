@@ -147,7 +147,7 @@ impl Cache {
     pub fn new() -> Cache {
         Cache {
             primitive: 0,
-            index_type: c::IndexType::U8,
+            index_type: c::IndexType::U16,
             attributes: [None; c::MAX_VERTEX_ATTRIBUTES],
             resource_binds: [None; c::MAX_RESOURCE_VIEWS],
             scissor: false,
@@ -346,7 +346,6 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
                          count: c::VertexCount, base: c::VertexCount,
                          instances: draw::InstanceOption) {
         let (offset, gl_index) = match self.cache.index_type {
-            c::IndexType::U8  => (start * 1u32, gl::UNSIGNED_BYTE),
             c::IndexType::U16 => (start * 2u32, gl::UNSIGNED_SHORT),
             c::IndexType::U32 => (start * 4u32, gl::UNSIGNED_INT),
         };
