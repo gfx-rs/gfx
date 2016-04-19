@@ -24,7 +24,7 @@ gfx_device_gl = { path = "src/backend/gl", version = "0.9" }
 gfx_window_glutin = { path = "src/window/glutin", version = "0.10" }
 gfx = { path = "src/render", version = "0.10.1" }
 
-[target.x86_64-pc-linux-gnu.dependencies]
+[target.x86_64-unknown-linux-gnu.dependencies]
 gfx_window_glfw = { path = "src/window/glfw", version = "0.9" }
 gfx_window_sdl = { path = "src/window/sdl", version = "0.1" }
 
@@ -52,7 +52,7 @@ path = "examples/deferred/main.rs"
 name = "flowmap"
 path = "examples/flowmap/main.rs"
 
-[[target.x86_64-pc-linux-gnu.example]]
+[[example]]
 name = "performance"
 path = "examples/performance/main.rs"
 
@@ -87,11 +87,11 @@ path = "examples/mipmap/main.rs"
 [dev_dependencies]
 log = "0.3"
 cgmath = "0.7"
-gfx_gl = "0.1"
+gfx_gl = "0.3"
 rand = "0.3"
 genmesh = "0.4"
 noise = "0.1"
 image = "0.6"
 
-[target.x86_64-pc-linux-gnu.dev_dependencies]
-glfw = "0.3"
+[target.x86_64-unknown-linux-gnu.dev_dependencies]
+glfw = "0.4"

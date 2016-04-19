@@ -23,7 +23,7 @@ extern crate gfx_gl as gl;
 use time::precise_time_s;
 use cgmath::{SquareMatrix, Matrix, Point3, Vector3, Matrix3, Matrix4};
 use cgmath::{Transform, AffineMatrix3, Vector4};
-pub use gfx::format::{I8Scaled, DepthStencil, Rgba8};
+pub use gfx::format::{DepthStencil, Rgba8};
 use glfw::Context;
 use gl::Gl;
 use gl::types::*;
@@ -37,16 +37,19 @@ use std::iter::repeat;
 use std::ffi::CString;
 
 
-gfx_vertex_struct!( Vertex {
-    pos: [I8Scaled; 3] = "a_Pos",
-});
+gfx_defines!{
+    vertex Vertex {
+        pos: [f32; 3] = "a_Pos",
+    }
 
-gfx_pipeline!(pipe {
-    vbuf: gfx::VertexBuffer<Vertex> = (),
-    transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
-    out_color: gfx::RenderTarget<Rgba8> = "o_Color",
-    out_depth: gfx::DepthTarget<DepthStencil> = gfx::preset::depth::LESS_EQUAL_WRITE,
-});
+    pipeline pipe {
+        vbuf: gfx::VertexBuffer<Vertex> = (),
+        transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
+        out_color: gfx::RenderTarget<Rgba8> = "o_Color",
+        out_depth: gfx::DepthTarget<DepthStencil> =
+            gfx::preset::depth::LESS_EQUAL_WRITE,
+    }
+}
 
 static VERTEX_SRC: &'static [u8] = b"
     #version 150 core
@@ -77,7 +80,7 @@ fn gfx_main(mut glfw: glfw::Glfw,
 
     let (mut device, mut factory, main_color, main_depth) =
         gfx_window_glfw::init(&mut window);
-    let mut encoder = factory.create_encoder();
+    let mut encoder: gfx::Encoder<_,_> = factory.create_command_buffer().into();
 
     let pso = factory.create_pipeline_simple(
         VERTEX_SRC, FRAGMENT_SRC,
@@ -86,9 +89,9 @@ fn gfx_main(mut glfw: glfw::Glfw,
         ).unwrap();
 
     let vertex_data = [
-        Vertex { pos: I8Scaled::cast3([-1,  1, -1]) },
-        Vertex { pos: I8Scaled::cast3([ 1,  1, -1]) },
-        Vertex { pos: I8Scaled::cast3([ 1,  1,  1]) },
+        Vertex { pos: [-1.0,  1.0, -1.0] },
+        Vertex { pos: [ 1.0,  1.0, -1.0] },
+        Vertex { pos: [ 1.0,  1.0,  1.0] },
     ];
     let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
 
@@ -121,7 +124,7 @@ fn gfx_main(mut glfw: glfw::Glfw,
         }
 
         let start = precise_time_s() * 1000.;
-        encoder.reset();
+//        encoder.reset();
         encoder.clear(&data.out_color, [0.3, 0.3, 0.3, 1.0]);
         encoder.clear_depth(&data.out_depth, 1.0);
 
@@ -138,7 +141,7 @@ fn gfx_main(mut glfw: glfw::Glfw,
         }
 
         let pre_submit = precise_time_s() * 1000.;
-        device.submit(encoder.as_buffer());
+        encoder.flush(&mut device);
         let post_submit = precise_time_s() * 1000.;
         window.swap_buffers();
         device.cleanup();
@@ -219,9 +222,9 @@ fn gl_main(mut glfw: glfw::Glfw,
         gl.BindBuffer(gl::ARRAY_BUFFER, vbo);
 
         let vertex_data = vec![
-            Vertex { pos: I8Scaled::cast3([-1,  1, -1]) },
-            Vertex { pos: I8Scaled::cast3([ 1,  1, -1]) },
-            Vertex { pos: I8Scaled::cast3([ 1,  1,  1]) },
+            Vertex { pos: [-1.0,  1.0, -1.0] },
+            Vertex { pos: [ 1.0,  1.0, -1.0] },
+            Vertex { pos: [ 1.0,  1.0,  1.0] },
         ];
 
         gl.BufferData(gl::ARRAY_BUFFER,
