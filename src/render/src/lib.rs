@@ -47,7 +47,7 @@ pub use gfx_core::shade::{ProgramInfo, UniformValue};
 
 pub use encoder::{Encoder, UpdateError};
 pub use factory::PipelineStateError;
-pub use mesh::{Slice, ToIndexSlice, SliceKind};
+pub use slice::{Slice, ToIndexSlice, SliceKind};
 pub use pso::{PipelineState};
 pub use pso::buffer::{VertexBuffer, InstanceBuffer, RawVertexBuffer,
                       ConstantBuffer, Global};
@@ -61,8 +61,8 @@ pub use pso::bundle::{Bundle};
 mod encoder;
 /// Factory extensions
 mod factory;
-/// Meshes
-mod mesh;
+/// Slices
+mod slice;
 // Pipeline states
 pub mod pso;
 /// Shaders

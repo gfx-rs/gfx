@@ -154,7 +154,7 @@ gfx_pipeline!(pipe {
         gfx::preset::depth::LESS_EQUAL_WRITE,
 });
 
-// Abstracts the plane mesh and uniform data
+// Abstracts the plane slice and uniform data
 // Also holds a Vec<TileMapData> as a working data
 // set for consumers
 pub struct TileMapPlane<R> where R: gfx::Resources {
@@ -189,7 +189,7 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
         // set up vertex data
         let plane = Plane::subdivide(width, width);
 
-        // law out the vertices of the plane mesh based on the configured tile size information,
+        // law out the vertices of the plane slice based on the configured tile size information,
         // setting the a_BufPos vertex data for the vertex shader (that ultimate gets passed through
         // to the frag shader as a varying, used to determine the "current tile" and the frag's offset,
         // which is used to calculate the displayed frag color)

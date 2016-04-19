@@ -22,7 +22,7 @@ use draw_state::target::{Depth, Stencil};
 use gfx_core::{Device, IndexType, Resources, VertexCount};
 use gfx_core::{draw, format, handle, tex};
 use gfx_core::factory::{cast_slice, Typed};
-use mesh;
+use slice;
 use pso;
 
 
@@ -173,21 +173,21 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
     }
 
     fn draw_indexed<T>(&mut self, buf: &handle::Buffer<R, T>, ty: IndexType,
-                    slice: &mesh::Slice<R>, base: VertexCount,
+                    slice: &slice::Slice<R>, base: VertexCount,
                     instances: draw::InstanceOption) {
         self.command_buffer.bind_index(self.handles.ref_buffer(buf.raw()).clone(), ty);
         self.command_buffer.call_draw_indexed(slice.start, slice.end - slice.start, base, instances);
     }
 
-    fn draw_slice(&mut self, slice: &mesh::Slice<R>, instances: draw::InstanceOption) {
+    fn draw_slice(&mut self, slice: &slice::Slice<R>, instances: draw::InstanceOption) {
         match slice.kind {
-            mesh::SliceKind::Vertex => self.command_buffer.call_draw(
+            slice::SliceKind::Vertex => self.command_buffer.call_draw(
                 slice.start, slice.end - slice.start, instances),
-            mesh::SliceKind::Index8(ref buf, base) =>
+            slice::SliceKind::Index8(ref buf, base) =>
                 self.draw_indexed(buf, IndexType::U8, slice, base, instances),
-            mesh::SliceKind::Index16(ref buf, base) =>
+            slice::SliceKind::Index16(ref buf, base) =>
                 self.draw_indexed(buf, IndexType::U16, slice, base, instances),
-            mesh::SliceKind::Index32(ref buf, base) =>
+            slice::SliceKind::Index32(ref buf, base) =>
                 self.draw_indexed(buf, IndexType::U32, slice, base, instances),
         }
     }
@@ -213,8 +213,8 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
         self.command_buffer.clear_depth_stencil(target, None, Some(stencil))
     }
 
-    /// Draws a `mesh::Slice` using a pipeline state object, and its matching `Data` structure.
-    pub fn draw<D: pso::PipelineData<R>>(&mut self, slice: &mesh::Slice<R>,
+    /// Draws a `slice::Slice` using a pipeline state object, and its matching `Data` structure.
+    pub fn draw<D: pso::PipelineData<R>>(&mut self, slice: &slice::Slice<R>,
                 pipeline: &pso::PipelineState<R, D::Meta>, user_data: &D)
     {
         let (pso, _) = self.handles.ref_pso(pipeline.get_handle());

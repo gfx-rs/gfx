@@ -23,7 +23,7 @@ use gfx_core::{Primitive, Resources, ShaderSet, VertexCount};
 use gfx_core::factory::{Bind, BufferRole, Factory};
 use gfx_core::pso::{CreationError, Descriptor};
 use gfx_core::state::{CullFace, Rasterizer};
-use mesh::{Slice, SliceKind, ToIndexSlice};
+use slice::{Slice, SliceKind, ToIndexSlice};
 use pso;
 use shade::ProgramError;
 

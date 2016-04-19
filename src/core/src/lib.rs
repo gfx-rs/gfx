@@ -145,7 +145,7 @@ pub enum Primitive {
     //Quad,
 }
 
-/// A type of each index value in the mesh's index buffer
+/// A type of each index value in the slice's index buffer
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 #[allow(missing_docs)]
 #[repr(u8)]
