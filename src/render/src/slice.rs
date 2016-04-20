@@ -37,7 +37,7 @@ use gfx_core::factory::{Bind, BufferRole, Factory};
 /// the same index can reappear multiple times, this means we can instead use 4 vertices, and 6
 /// vertex-indices.
 ///
-/// This index-buffer has a few variants. See the `SliceKind` documentation for a detailed
+/// This index-buffer has a few variants. See the `IndexBuffer` documentation for a detailed
 /// description.
 ///
 /// The `start` and `end` properties say where in the index-buffer to start and stop reading.
@@ -67,7 +67,7 @@ pub struct Slice<R: Resources> {
     /// Instancing configuration.
     pub instances: InstanceOption,
     /// Represents the type of index-buffer used. 
-    pub kind: SliceKind<R>,
+    pub kind: IndexBuffer<R>,
 }
 
 impl<R: Resources> Slice<R> {
@@ -98,7 +98,7 @@ impl<R: Resources> Slice<R> {
 /// added to every index in the index-buffer, effectively moving the start of the `VertexBuffer` to
 /// this base-vertex.
 #[derive(Clone, Debug, PartialEq)]
-pub enum SliceKind<R: Resources> {
+pub enum IndexBuffer<R: Resources> {
     /// Represents a hypothetical index-buffer from 0 to infinity. In other words, all vertices
     /// get processed in order.
     Vertex,
@@ -123,7 +123,7 @@ macro_rules! impl_slice {
                     end: buf.len() as VertexCount,
                     base_vertex: 0,
                     instances: None,
-                    kind: SliceKind::$index(buf)
+                    kind: IndexBuffer::$index(buf)
                 }
             }
         }

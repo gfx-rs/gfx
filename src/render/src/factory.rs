@@ -23,7 +23,7 @@ use gfx_core::{Primitive, Resources, ShaderSet, VertexCount};
 use gfx_core::factory::{Bind, BufferRole, Factory};
 use gfx_core::pso::{CreationError, Descriptor};
 use gfx_core::state::{CullFace, Rasterizer};
-use slice::{Slice, SliceKind, ToIndexSlice};
+use slice::{Slice, IndexBuffer, ToIndexSlice};
 use pso;
 use shade::ProgramError;
 
@@ -56,7 +56,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
             end: nv as VertexCount,
             base_vertex: 0,
             instances: None,
-            kind: SliceKind::Vertex,
+            kind: IndexBuffer::Vertex,
         })
     }
 
