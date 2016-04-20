@@ -20,6 +20,8 @@ use gfx_core::handle;
 use gfx_core::{Primitive, Resources, VertexCount};
 use gfx_core::draw::InstanceOption;
 use gfx_core::factory::{Bind, BufferRole, Factory};
+use format::Format;
+use pso;
 
 /// A `Slice` dictates in which and in what order vertices get processed. It is required for
 /// processing a PSO.
@@ -40,18 +42,18 @@ use gfx_core::factory::{Bind, BufferRole, Factory};
 /// This index-buffer has a few variants. See the `IndexBuffer` documentation for a detailed
 /// description.
 ///
-/// The `start` and `end` properties say where in the index-buffer to start and stop reading.
+/// The `start` and `end` fields say where in the index-buffer to start and stop reading.
 /// Setting `start` to 0, and `end` to the length of the index-buffer, will cause the entire
 /// index-buffer to be processed. The `base_vertex` dictates the index of the first vertex
 /// in the `VertexBuffer`. This essentially moves the the start of the `VertexBuffer`, to the
 /// vertex with this index.
 ///
 /// # Constuction & Handling
-/// The `Slice` structure gets constructed automatically when creating a `VertexBuffer` using a
-/// `Factory`.
+/// The `Slice` structure can be constructed automatically when using a `Factory` to create a
+/// vertex buffer. If needed, it can also be created manually.
 ///
-/// A `Slice` buffer is required to process a PSO, as it contains the needed information on in what
-/// order to draw which vertices. As such, every `draw` call on an `Encoder` requires a `Slice`.
+/// A `Slice` is required to process a PSO, as it contains the needed information on in what order
+/// to draw which vertices. As such, every `draw` call on an `Encoder` requires a `Slice`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Slice<R: Resources> {
     /// The start index of the index-buffer. Processing will start at this location in the
@@ -67,10 +69,22 @@ pub struct Slice<R: Resources> {
     /// Instancing configuration.
     pub instances: InstanceOption,
     /// Represents the type of index-buffer used. 
-    pub kind: IndexBuffer<R>,
+    pub buffer: IndexBuffer<R>,
 }
 
 impl<R: Resources> Slice<R> {
+    /// Creates a new `Slice` to match the supplied vertex buffer, from start to end, in order.
+    pub fn new_match_vertex_buffer<V>(vbuf: &handle::Buffer<R, V>) -> Self
+                                      where V: pso::buffer::Structure<Format> {
+        Slice {
+            start: 0,
+            end: vbuf.len() as u32,
+            base_vertex: 0,
+            instances: None,
+            buffer: IndexBuffer::Auto,
+        }
+    }
+    
     /// Calculates the number of primitives of the specified type in this `Slice`.
     pub fn get_prim_count(&self, prim: Primitive) -> u32 {
         use gfx_core::Primitive::*;
@@ -87,55 +101,73 @@ impl<R: Resources> Slice<R> {
 
 /// Type of index-buffer used in a Slice.
 ///
-/// The `Vertex` represents a hypothetical index-buffer from 0 to infinity. In other words, all 
-/// vertices get processed in order. Do note that the `Slice`' `start` and `end` restrictions still
-/// apply for this variant. To render every vertex in the `VertexBuffer`, you would set `start` to
-/// 0, and `end` to the `VertexBuffer`'s length.
+/// The `Auto` variant represents a hypothetical index-buffer from 0 to infinity. In other words,
+/// all vertices get processed in order. Do note that the `Slice`' `start` and `end` restrictions
+/// still apply for this variant. To render every vertex in the `VertexBuffer`, you would set
+/// `start` to 0, and `end` to the `VertexBuffer`'s length.
 ///
 /// The `Index*` variants represent an actual `Buffer` with a list of vertex-indices. The numeric 
 /// suffix specifies the amount of bits to use per index. Each of these also contains a
 /// base-vertex. This is the index of the first vertex in the `VertexBuffer`. This value will be
 /// added to every index in the index-buffer, effectively moving the start of the `VertexBuffer` to
 /// this base-vertex.
+///
+/// # Construction & Handling
+/// A `IndexBuffer` can be constructed using the `IntoIndexBuffer` trait, from either a slice or a
+/// `Buffer` of integers, using a factory.
+///
+/// An `IndexBuffer` is exclusively used to create `Slice`s.
 #[derive(Clone, Debug, PartialEq)]
 pub enum IndexBuffer<R: Resources> {
     /// Represents a hypothetical index-buffer from 0 to infinity. In other words, all vertices
     /// get processed in order.
-    Vertex,
+    Auto,
     /// An index-buffer with unsigned 16 bit indices.
     Index16(handle::Buffer<R, u16>),
     /// An index-buffer with unsigned 32 bit indices.
     Index32(handle::Buffer<R, u32>),
 }
 
-/// A helper trait to build index slices from data.
-pub trait ToIndexSlice<R: Resources> { //TODO: remove/refactor it
-    /// Make an index slice.
-    fn to_slice<F: Factory<R>>(self, factory: &mut F) -> Slice<R>;
+impl<R: Resources> Default for IndexBuffer<R> {
+    fn default() -> Self {
+        IndexBuffer::Auto
+    }
+}
+/// A helper trait to create `IndexBuffers` from different kinds of data.
+pub trait IntoIndexBuffer<R: Resources> {
+    /// Turns self into an `IndexBuffer`.
+    fn into_index_buffer<F: Factory<R> + ?Sized>(self, factory: &mut F) -> IndexBuffer<R>;
 }
 
-macro_rules! impl_slice {
-    ($ty:ty, $index:ident) => (
-        impl<R: Resources> From<handle::Buffer<R, $ty>> for Slice<R> {
-            fn from(buf: handle::Buffer<R, $ty>) -> Slice<R> {
-                Slice {
-                    start: 0,
-                    end: buf.len() as VertexCount,
-                    base_vertex: 0,
-                    instances: None,
-                    kind: IndexBuffer::$index(buf)
-                }
+impl<R: Resources> IntoIndexBuffer<R> for IndexBuffer<R> {
+    fn into_index_buffer<F: Factory<R> + ?Sized>(self, _: &mut F) -> IndexBuffer<R> {
+        self
+    }
+}
+
+impl<R: Resources> IntoIndexBuffer<R> for () {
+    fn into_index_buffer<F: Factory<R> + ?Sized>(self, _: &mut F) -> IndexBuffer<R> {
+        IndexBuffer::Auto
+    }
+}
+
+macro_rules! impl_index_buffer {
+    ($prim_ty:ty, $buf_ty:ident) => (
+        impl<R: Resources> IntoIndexBuffer<R> for handle::Buffer<R, $prim_ty> {
+            fn into_index_buffer<F: Factory<R> + ?Sized>(self, _: &mut F) -> IndexBuffer<R> {
+                IndexBuffer::$buf_ty(self)
             }
         }
-        impl<'a, R: Resources> ToIndexSlice<R> for &'a [$ty] {
-            fn to_slice<F: Factory<R>>(self, factory: &mut F) -> Slice<R> {
-                //debug_assert!(self.len() <= factory.get_capabilities().max_index_count);
+        
+        impl<'s, R: Resources> IntoIndexBuffer<R> for &'s [$prim_ty] {
+            fn into_index_buffer<F: Factory<R> + ?Sized>(self, factory: &mut F) -> IndexBuffer<R> {
                 factory.create_buffer_const(self, BufferRole::Index, Bind::empty())
-                       .unwrap().into()
+                       .unwrap()
+                       .into_index_buffer(factory)
             }
         }
     )
 }
 
-impl_slice!(u16, Index16);
-impl_slice!(u32, Index32);
+impl_index_buffer!(u16, Index16);
+impl_index_buffer!(u32, Index32);

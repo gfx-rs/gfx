@@ -47,7 +47,7 @@ pub use gfx_core::shade::{ProgramInfo, UniformValue};
 
 pub use encoder::{Encoder, UpdateError};
 pub use factory::PipelineStateError;
-pub use slice::{Slice, ToIndexSlice, IndexBuffer};
+pub use slice::{Slice, IntoIndexBuffer, IndexBuffer};
 pub use pso::{PipelineState};
 pub use pso::buffer::{VertexBuffer, InstanceBuffer, RawVertexBuffer,
                       ConstantBuffer, Global};

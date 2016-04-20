@@ -89,7 +89,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             Vertex::new([-1.0,  0.0], [800.0,   0.0]),
             Vertex::new([-1.0, -1.0], [800.0, 800.0]),
         ];
-        let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
+        let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, ());
 
         let (_, texture_view) = factory.create_texture_const::<ColorFormat>(
             gfx::tex::Kind::D2(4, 4, gfx::tex::AaMode::Single),

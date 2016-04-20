@@ -96,7 +96,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             Vertex::new([-1.0,  1.0], [0.0, 1.0]),
         ];
 
-        let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
+        let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, ());
 
         let water_texture = load_texture(&mut factory, &include_bytes!("image/water.png")[..]).unwrap();
         let flow_texture  = load_texture(&mut factory, &include_bytes!("image/flow.png")[..]).unwrap();

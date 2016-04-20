@@ -90,7 +90,7 @@ fn gfx_main(mut glfw: glfw::Glfw,
         Vertex { pos: I8Scaled::cast3([ 1,  1, -1]) },
         Vertex { pos: I8Scaled::cast3([ 1,  1,  1]) },
     ];
-    let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
+    let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, ());
 
     let view: AffineMatrix3<f32> = Transform::look_at(
         Point3::new(0f32, -5.0, 0.0),

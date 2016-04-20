@@ -216,7 +216,7 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
             .map(|i| i as u32)
             .collect();
 
-        let (vbuf, slice) = factory.create_vertex_buffer_indexed(&vertex_data, &index_data[..]);
+        let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, &index_data[..]);
 
         let tile_texture = load_texture(factory, tilesheet_bytes).unwrap();
 
