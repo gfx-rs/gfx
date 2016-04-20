@@ -420,7 +420,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 .map(|i| i as u32)
                 .collect();
 
-            let (vbuf, slice) = factory.create_vertex_buffer_indexed(&vertex_data, &index_data[..]);
+            let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, &index_data[..]);
 
             let vs = gfx_app::shade::Source {
                 glsl_150: TERRAIN_VERTEX_SRC,
@@ -458,7 +458,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 BlitVertex { pos: [ 1,  3], tex_coord: [1, 2] },
             ];
 
-            let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
+            let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, ());
 
             let vs = gfx_app::shade::Source {
                 glsl_150: BLIT_VERTEX_SRC,
@@ -531,7 +531,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 20, 21, 22, 22, 23, 20, // back
             ];
 
-            factory.create_vertex_buffer_indexed(&vertex_data, index_data)
+            factory.create_vertex_buffer_with_slice(&vertex_data, index_data)
         };
         light_slice.instances = Some((NUM_LIGHTS as gfx::InstanceCount, 0));
 
