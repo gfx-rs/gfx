@@ -238,7 +238,7 @@ pub fn bind_blend_slot(gl: &gl::Gl, slot: ColorSlot, color: s::Color) {
     let buf = slot as gl::types::GLuint;
     match color.blend {
         Some(b) => unsafe {
-            gl.EnableiARB(gl::BLEND, buf);
+            gl.Enablei(gl::BLEND, buf);
             gl.BlendEquationSeparateiARB(buf,
                 map_equation(b.color.equation),
                 map_equation(b.alpha.equation)
@@ -251,10 +251,10 @@ pub fn bind_blend_slot(gl: &gl::Gl, slot: ColorSlot, color: s::Color) {
             );
         },
         None => unsafe {
-            gl.DisableiARB(gl::BLEND, buf);
+            gl.Disablei(gl::BLEND, buf);
         },
     };
-    unsafe { gl.ColorMaskiARB(buf,
+    unsafe { gl.ColorMaski(buf,
         if (color.mask & s::RED  ).is_empty() {gl::FALSE} else {gl::TRUE},
         if (color.mask & s::GREEN).is_empty() {gl::FALSE} else {gl::TRUE},
         if (color.mask & s::BLUE ).is_empty() {gl::FALSE} else {gl::TRUE},
