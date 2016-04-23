@@ -13,6 +13,7 @@
 // limitations under the License.
 
 extern crate env_logger;
+extern crate winit;
 extern crate glutin;
 extern crate gfx;
 extern crate gfx_device_gl;
@@ -99,9 +100,13 @@ pub trait Application<R: gfx::Resources>: Sized {
     fn launch_default(name: &str) where WrapD3D11<Self>: ApplicationD3D11 {
         WrapD3D11::<Self>::launch(name, DEFAULT_CONFIG);
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "linux")]
     fn launch_default(name: &str) where WrapGL2<Self>: ApplicationGL {
         WrapGL2::<Self>::launch(name, DEFAULT_CONFIG);
+    }
+    #[cfg(target_os = "macos")]
+    fn launch_default(name: &str) where WrapMetal<Self>: ApplicationMetal {
+        WrapMetal::<Self>::launch(name, DEFAULT_CONFIG)
     }
 }
 
@@ -110,13 +115,17 @@ pub struct Wrap<R: gfx::Resources, C: gfx::CommandBuffer<R>, A>{
     app: A,
 }
 
+pub type WrapGL2<A> = Wrap<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer, A>;
+
+#[cfg(target_os = "macos")]
+pub type WrapMetal<A> = Wrap<gfx_device_metal::Resources, gfx_device_metal::CommandBuffer, A>;
+
 #[cfg(target_os = "windows")]
 pub type D3D11CommandBuffer = gfx_device_dx11::CommandBuffer<gfx_device_dx11::DeferredContext>;
 #[cfg(target_os = "windows")]
 pub type D3D11CommandBufferFake = gfx_device_dx11::CommandBuffer<gfx_device_dx11::CommandList>;
 #[cfg(target_os = "windows")]
 pub type WrapD3D11<A> = Wrap<gfx_device_dx11::Resources, D3D11CommandBuffer, A>;
-pub type WrapGL2<A> = Wrap<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer, A>;
 
 impl<R, C, A> ApplicationBase<R, C> for Wrap<R, C, A> where
     R: gfx::Resources,
@@ -142,6 +151,11 @@ impl<R, C, A> ApplicationBase<R, C> for Wrap<R, C, A> where
 
 
 pub trait ApplicationGL {
+    fn launch(&str, Config);
+}
+
+#[cfg(target_os = "macos")]
+pub trait ApplicationMetal {
     fn launch(&str, Config);
 }
 
@@ -197,6 +211,49 @@ impl<A> ApplicationGL for A where
             // draw a frame
             app.render(&mut device);
             window.swap_buffers().unwrap();
+            device.cleanup();
+            harness.bump()
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl<
+    A: ApplicationBase<gfx_device_metal::Resources, gfx_device_metal::CommandBuffer>
+> ApplicationMetal for A {
+    fn launch(title: &str, config: Config) {
+        use gfx::traits::{Device, Factory};
+
+        env_logger::init().unwrap();
+        let (window, mut device, mut factory, main_color) =
+            gfx_window_metal::init::<ColorFormat>(title, config.size.0 as u32, config.size.1 as u32)
+            .unwrap();
+
+        let (width, height) = window.get_inner_size().unwrap();
+
+        let main_depth = factory.create_depth_stencil_view_only(width as u16, height as u16).unwrap();
+
+        let cmd_buf = factory.create_command_buffer();
+
+        let mut app = Self::new(factory, cmd_buf.into(), Init {
+            backend: shade::Backend::Metal(device.get_shader_model()),
+            color: main_color,
+            depth: main_depth,
+            aspect_ratio: width as f32 / height as f32
+        });
+
+        let mut harness = Harness::new();
+        'main: loop {
+            for event in window.poll_events() {
+                match event {
+                    winit::Event::KeyboardInput(_, _, Some(winit::VirtualKeyCode::Escape)) |
+                    winit::Event::Closed => break 'main,
+                    _ => {},
+                }
+            }
+
+            app.render(&mut device);
+            //window.swap_buffers().unwrap();
             device.cleanup();
             harness.bump()
         }

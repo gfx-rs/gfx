@@ -14,74 +14,102 @@
 
 #![allow(missing_docs)]
 
-use gfx_core::tex::{Kind, CubeFace, RawImageInfo};
+use gfx_core::{draw, pso, shade, state, target, tex};
+use gfx_core::{IndexType, VertexCount};
+use gfx_core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
+               MAX_RESOURCE_VIEWS, MAX_UNORDERED_VIEWS,
+               MAX_SAMPLERS, MAX_COLOR_TARGETS};
 
-use {Resources, InputLayout, Buffer, Texture, Pipeline, Program};
+use {Resources, InputLayout, Buffer, Texture, Pipeline, Program, Rtv, Srv, Dsv};
 
 use metal::*;
 
-/// The place of some data in the data buffer.
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub struct DataPointer {
-    offset: u32,
-    size: u32,
+pub struct CommandBuffer {
+    cmd_buf: MTLCommandBuffer,
+    encoder: MTLRenderCommandEncoder,
 }
 
-pub struct DataBuffer(Vec<u8>);
-
-impl DataBuffer {
-    /// Create a new empty data buffer.
-    pub fn new() -> DataBuffer {
-        DataBuffer(Vec::new())
+impl draw::CommandBuffer<Resources> for CommandBuffer {
+    fn clone_empty(&self) -> Self {
+        unimplemented!()        
     }
 
-    /// Reset the contents.
-    pub fn reset(&mut self) {
-        self.0.clear();
+    fn reset(&mut self) {
+        
     }
 
-    /// Copy a given vector slice into the buffer.
-    pub fn add(&mut self, data: &[u8]) -> DataPointer {
-        self.0.extend_from_slice(data);
-        DataPointer {
-            offset: (self.0.len() - data.len()) as u32,
-            size: data.len() as u32,
-        }
+    fn bind_pipeline_state(&mut self, pso: Pipeline) {
+        unimplemented!()
     }
 
-    /// Return a reference to a stored data object.
-    pub fn get(&self, ptr: DataPointer) -> &[u8] {
-        &self.0[ptr.offset as usize .. (ptr.offset + ptr.size) as usize]
+    fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<Resources>) {
+        unimplemented!()
     }
-}
 
-///Serialized device command.
-#[derive(Clone, Copy, Debug)]
-pub enum Command {
-    // states
-    BindProgram(Program),
-    BindInputLayout(InputLayout),
-    BindIndex(Buffer),
-    BindVertexBuffers([MTLBuffer; MAX_VERTEX_ATTRIBUTES], [u64; MAX_VERTEX_ATTRIBUTES], [u64; MAX_VERTEX_ATTRIBUTES]),
-    // BindConstantBuffers(shade::Stage, [native::Buffer; MAX_CONSTANT_BUFFERS]),
-    // BindShaderResources(shade::Stage, [native::Srv; MAX_RESOURCE_VIEWS]),
-    // BindSamplers(shade::Stage, [MTLSamplerState; MAX_SAMPLERS]),
-    // BindPixelTargets([native::Rtv; MAX_COLOR_TARGETS], native::Dsv),
-    SetPrimitive(MTLTriangleFillMode),
-    SetViewport(MTLViewport),
-    SetScissor(MTLScissorRect),
-    // SetRasterizer(*const ID3D11RasterizerState),
-    SetDepthStencil(MTLDepthStencilState, u32),
-    // SetBlend(*const ID3D11BlendState, [f32; 4]),
-    // resource updates
-    UpdateBuffer(Buffer, DataPointer, usize),
-    UpdateTexture(Texture, Kind, Option<CubeFace>, DataPointer, RawImageInfo),
-    // GenerateMips(native::Srv),
-    // drawing
-    // ClearColor(native::Rtv, [f32; 4]),
-    // ClearDepthStencil(native::Dsv, D3D11_CLEAR_FLAG, FLOAT, UINT8),
-    Draw(u64, u64),
-    // DrawInstanced(UINT, UINT, UINT, UINT),
-    // DrawIndexed(UINT, UINT, INT),
-    // DrawIndexedInstanced(UINT, UINT, UINT, INT, UINT),
+    fn bind_constant_buffers(&mut self, cb: &[pso::ConstantBufferParam<Resources>]) {
+        unimplemented!()
+    }
+
+    fn bind_global_constant(&mut self, gc: shade::Location, value: shade::UniformValue) {
+        unimplemented!()
+    }
+
+    fn bind_resource_views(&mut self, rvs: &[pso::ResourceViewParam<Resources>]) {
+        unimplemented!()
+    }
+
+    fn bind_unordered_views(&mut self, uvs: &[pso::UnorderedViewParam<Resources>]) {
+        unimplemented!()
+    }
+
+    fn bind_samplers(&mut self, samplers: &[pso::SamplerParam<Resources>]) {
+        unimplemented!()
+    }
+
+    fn bind_pixel_targets(&mut self, targets: pso::PixelTargetSet<Resources>) {
+        unimplemented!()
+    }
+
+    fn bind_index(&mut self, buf: Buffer, itype: IndexType) {
+        unimplemented!()
+    }
+
+    fn set_scissor(&mut self, rect: target::Rect) {
+        unimplemented!()
+    }
+
+    fn set_ref_values(&mut self, vals: state::RefValues) {
+        unimplemented!()
+    }
+
+    fn update_buffer(&mut self, buf: Buffer, data: &[u8], offset: usize) {
+        unimplemented!()
+    }
+
+    fn update_texture(&mut self, tex: Texture, kind: tex::Kind, face: Option<tex::CubeFace>,
+                      data: &[u8], info: tex::RawImageInfo) {
+        unimplemented!()
+    }
+
+    fn generate_mipmap(&mut self, srv: Srv) {
+        unimplemented!()
+    }
+
+    fn clear_color(&mut self, rtv: Rtv, clear: draw::ClearColor) {
+        unimplemented!()
+    }
+
+    fn clear_depth_stencil(&mut self, dsview: Dsv,
+                           depth: Option<target::Depth>, stencil: Option<target::Stencil>) {
+        unimplemented!()
+    }
+
+    fn call_draw(&mut self, start: VertexCount, count: VertexCount, instances: draw::InstanceOption) {
+        unimplemented!()
+    }
+
+    fn call_draw_indexed(&mut self, start: VertexCount, count: VertexCount,
+                         base: VertexCount, instances: draw::InstanceOption) {
+        unimplemented!()
+    }
 }

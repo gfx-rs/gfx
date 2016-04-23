@@ -29,7 +29,7 @@ use objc::runtime::{Object, Class, BOOL, YES, NO};
 
 use cocoa::base::id as cocoa_id;
 use cocoa::base::{selector, class};
-use cocoa::foundation::{NSUInteger};
+use cocoa::foundation::{NSUInteger, NSSize};
 use cocoa::appkit::{NSApp,
                     NSApplication, NSApplicationActivationPolicyRegular,
                     NSWindow, NSTitledWindowMask, NSBackingStoreBuffered,
@@ -37,19 +37,38 @@ use cocoa::appkit::{NSApp,
                     NSApplicationActivateIgnoringOtherApps};
 
 use gfx_core::tex::Size;
-use gfx_core::format::Format;
-use gfx_core::handle::RawRenderTargetView;
+use gfx_core::format::{RenderFormat, Format};
+use gfx_core::handle::{RawRenderTargetView, RenderTargetView};
 
 use gfx_device_metal::{Device, Factory, Resources};
 
-use metal::{CAMetalLayer};
+use metal::{CAMetalDrawable, CAMetalLayer, MTLTexture};
 
+use winit::{Window};
+
+use std::ops::Deref;
 use std::mem;
 
-pub struct Window {
-    handle: cocoa_id,
+pub struct MetalWindow {
+    window: winit::Window,
     layer: CAMetalLayer,
+    drawable: CAMetalDrawable,
+    backbuffer: *mut MTLTexture
 }
+
+impl Deref for MetalWindow {
+    type Target = winit::Window;
+
+    fn deref(&self) -> &winit::Window {
+        &self.window
+    }
+}
+
+impl MetalWindow {
+    pub fn swap_buffers(&self) {
+    }
+}
+
 
 #[derive(Copy, Clone, Debug)]
 pub enum InitError {
@@ -61,28 +80,39 @@ pub enum InitError {
     DriverType,
 }
 
+pub fn init<C: RenderFormat>(title: &str, requested_width: u32, requested_height: u32)
+        -> Result<(winit::Window, Device, Factory, RenderTargetView<Resources, C>), InitError>
+{
+    use gfx_core::factory::Typed;
+
+    init_raw(title, requested_width, requested_height, C::get_format())
+        .map(|(window, device, factory, color)| (window, device, factory, Typed::new(color)))
+}
+
 /// Initialize with a given size. Raw format version.
 pub fn init_raw(title: &str, requested_width: u32, requested_height: u32, color_format: Format)
-        -> Result<(Window, Device, Factory, RawRenderTargetView<Resources>), InitError> {
-    let winit_wnd = winit::WindowBuilder::new()
+        -> Result<(winit::Window, Device, Factory, RawRenderTargetView<Resources>), InitError>
+{
+    let winit_window = winit::WindowBuilder::new()
         .with_dimensions(requested_width, requested_height)
         .with_title(title.to_string()).build().unwrap();
 
     unsafe {
-        let wnd: cocoa_id = mem::transmute(winit_wnd.get_nswindow());
+        let wnd: cocoa_id = mem::transmute(winit_window.get_nswindow());
 
         let layer = CAMetalLayer::layer();
         layer.set_pixel_format(match gfx_device_metal::map_format(color_format, true) {
             Some(fm) => fm,
             None => return Err(InitError::Format(color_format)),
         });
+        let draw_size = winit_window.get_inner_size().unwrap();
+        layer.set_drawable_size(NSSize::new(draw_size.0 as f64, draw_size.1 as f64));
 
         let view = wnd.contentView();
         view.setWantsLayer(YES);
-        // view.setLayer(...);
+        view.setLayer(mem::transmute(layer.0));
 
-        
-    }
-    
+   }
+
     Err(InitError::Window)
 }
