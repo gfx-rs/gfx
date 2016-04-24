@@ -20,7 +20,7 @@
 
 #[macro_use]
 extern crate log;
-extern crate gfx_gl as gl;
+//extern crate gfx_gl as gl;
 extern crate gfx_core;
 
 use std::cell::RefCell;
@@ -744,4 +744,8 @@ impl gfx_core::DeviceFence<Resources> for Device {
             self.share.context.ClientWaitSync(f.0, gl::SYNC_FLUSH_COMMANDS_BIT, 1_000_000_000_000);
         }
     }
+}
+
+mod gl {
+    include!(concat!(env!("OUT_DIR"), "/gl_bindings.rs"));
 }
