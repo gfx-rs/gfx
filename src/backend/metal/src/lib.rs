@@ -25,10 +25,12 @@ use cocoa::foundation::{NSUInteger};
 use metal::*;
 
 use gfx_core::format::Format;
+use gfx_core::factory::Usage;
 use gfx_core::{handle, tex};
 
 use std::cell::RefCell;
 use std::sync::Arc;
+use std::mem;
 
 mod factory;
 mod command;
@@ -45,27 +47,44 @@ pub struct Share {
     handles: RefCell<handle::Manager<Resources>>,
 }
 
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub struct InputLayout {
-    layout: MTLVertexDescriptor
+pub mod native {
+    use metal::*;
+
+    #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+    pub struct Buffer(pub MTLBuffer);
+    unsafe impl Send for Buffer {}
+    unsafe impl Sync for Buffer {}
+
+    #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+    pub struct Texture(pub MTLTexture);
+    unsafe impl Send for Texture {}
+    unsafe impl Sync for Texture {}
+
+    #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+    pub struct Rtv(pub MTLTexture);
+    unsafe impl Send for Rtv {}
+    unsafe impl Sync for Rtv {}
+
+    #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+    pub struct Dsv(pub MTLTexture);
+    unsafe impl Send for Dsv {}
+    unsafe impl Sync for Dsv {}
+
+    #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+    pub struct Srv(pub MTLTexture);
+    unsafe impl Send for Srv {}
+    unsafe impl Sync for Srv {}
 }
 
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+pub struct InputLayout(pub MTLVertexDescriptor);
 unsafe impl Send for InputLayout {}
 unsafe impl Sync for InputLayout {}
-
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Buffer {
-    buf: MTLBuffer
-}
-
-unsafe impl Send for Buffer {}
-unsafe impl Sync for Buffer {}
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Shader {
     func: MTLFunction
 }
-
 unsafe impl Send for Shader {}
 unsafe impl Sync for Shader {}
 
@@ -74,7 +93,6 @@ pub struct Program {
     vs: MTLFunction,
     ps: MTLFunction
 }
-
 unsafe impl Send for Program {}
 unsafe impl Sync for Program {}
 
@@ -82,41 +100,14 @@ unsafe impl Sync for Program {}
 pub struct Pipeline {
     pipeline: MTLRenderPipelineState
 }
-
 unsafe impl Send for Pipeline {}
 unsafe impl Sync for Pipeline {}
 
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Texture {
-    texture: MTLTexture
-}
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct Buffer(native::Buffer, Usage);
 
-unsafe impl Send for Texture {}
-unsafe impl Sync for Texture {}
-
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Rtv {
-    texture: MTLTexture
-}
-
-unsafe impl Send for Rtv {}
-unsafe impl Sync for Rtv {}
-
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Dsv {
-    texture: MTLTexture
-}
-
-unsafe impl Send for Dsv {}
-unsafe impl Sync for Dsv {}
-
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Srv {
-    texture: MTLTexture
-}
-
-unsafe impl Send for Srv {}
-unsafe impl Sync for Srv {}
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct Texture(native::Texture, Usage);
 
 pub struct Device {
     device: MTLDevice,
@@ -135,9 +126,9 @@ impl gfx_core::Resources for Resources {
     type Program             = Program;
     type PipelineStateObject = Pipeline;
     type Texture             = Texture;
-    type RenderTargetView    = Rtv;
-    type DepthStencilView    = Dsv;
-    type ShaderResourceView  = Srv;
+    type RenderTargetView    = native::Rtv;
+    type DepthStencilView    = native::Dsv;
+    type ShaderResourceView  = native::Srv;
     type UnorderedAccessView = ();
     type Sampler             = ();
     type Fence               = ();
@@ -203,7 +194,7 @@ impl gfx_core::Device for Device {
                 (*(v.depth_stencil as Child)).Release();
                 (*(v.blend as Child)).Release();*/
             },
-            |_, v| unsafe { v.texture.release(); },  //texture
+            |_, v| unsafe { (v.0).0.release(); },  //texture
             |_, v| unsafe { /*(*v.0).Release();*/ }, //SRV
             |_, _| {}, //UAV
             |_, v| unsafe { /*(*v.0).Release();*/ }, //RTV
@@ -214,8 +205,8 @@ impl gfx_core::Device for Device {
     }
 }
 
-pub fn create(format: gfx_core::format::Format)
-              -> Result<(Device, Factory), ()> {
+pub fn create(format: gfx_core::format::Format, width: u32, height: u32)
+              -> Result<(Device, Factory, handle::RawRenderTargetView<Resources>, *mut MTLTexture), ()> {
     use gfx_core::handle::Producer;
 
     let share = Share {
@@ -253,6 +244,17 @@ pub fn create(format: gfx_core::format::Format)
         return None;
     };
 
+    let raw_tex = Texture(native::Texture(MTLTexture::nil()), Usage::GpuOnly);
+    let raw_addr: *mut MTLTexture = unsafe { mem::transmute(&(raw_tex.0).0) };
+
+    let color_tex = share.handles.borrow_mut().make_texture(raw_tex, tex::Descriptor {
+        kind: tex::Kind::D2(width as tex::Size, height as tex::Size, tex::AaMode::Single),
+        levels: 1,
+        format: format.0,
+        bind: gfx_core::factory::RENDER_TARGET,
+        usage: raw_tex.1,
+    });
+
     let device = Device {
         device: mtl_device,
         feature_set: get_feature_set(mtl_device).unwrap(),
@@ -262,6 +264,19 @@ pub fn create(format: gfx_core::format::Format)
     };
     let mut factory = Factory::new(mtl_device, device.share.clone());
 
-    Ok((device, factory))
+    let color_target = {
+        use gfx_core::Factory;
+
+        let desc = tex::RenderDesc {
+            channel: format.1,
+            level: 0,
+            layer: None,
+        };
+
+        factory.view_texture_as_render_target_raw(&color_tex, desc).unwrap()
+    };
+
+
+    Ok((device, factory, color_target, raw_addr))
 }
 

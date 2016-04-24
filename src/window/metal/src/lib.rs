@@ -47,12 +47,13 @@ use metal::{CAMetalDrawable, CAMetalLayer, MTLTexture};
 use winit::{Window};
 
 use std::ops::Deref;
+use std::cell::Cell;
 use std::mem;
 
 pub struct MetalWindow {
     window: winit::Window,
     layer: CAMetalLayer,
-    drawable: CAMetalDrawable,
+    drawable: Cell<CAMetalDrawable>,
     backbuffer: *mut MTLTexture
 }
 
@@ -65,7 +66,14 @@ impl Deref for MetalWindow {
 }
 
 impl MetalWindow {
-    pub fn swap_buffers(&self) {
+    pub fn swap_buffers(&self) -> Result<(), ()> {
+        // FIXME: release drawable before swapping
+        // TODO: did we fail to swap buffers?
+        // TODO: come up with alternative to this hack
+
+        self.drawable.set(self.layer.next_drawable().unwrap());
+        unsafe { *self.backbuffer = self.drawable.get().texture(); }
+        Ok(())
     }
 }
 
@@ -81,7 +89,7 @@ pub enum InitError {
 }
 
 pub fn init<C: RenderFormat>(title: &str, requested_width: u32, requested_height: u32)
-        -> Result<(winit::Window, Device, Factory, RenderTargetView<Resources, C>), InitError>
+        -> Result<(MetalWindow, Device, Factory, RenderTargetView<Resources, C>), InitError>
 {
     use gfx_core::factory::Typed;
 
@@ -91,7 +99,7 @@ pub fn init<C: RenderFormat>(title: &str, requested_width: u32, requested_height
 
 /// Initialize with a given size. Raw format version.
 pub fn init_raw(title: &str, requested_width: u32, requested_height: u32, color_format: Format)
-        -> Result<(winit::Window, Device, Factory, RawRenderTargetView<Resources>), InitError>
+        -> Result<(MetalWindow, Device, Factory, RawRenderTargetView<Resources>), InitError>
 {
     let winit_window = winit::WindowBuilder::new()
         .with_dimensions(requested_width, requested_height)
@@ -112,7 +120,15 @@ pub fn init_raw(title: &str, requested_width: u32, requested_height: u32, color_
         view.setWantsLayer(YES);
         view.setLayer(mem::transmute(layer.0));
 
-   }
+        let (device, factory, color, raw_addr) = gfx_device_metal::create(color_format, draw_size.0, draw_size.1).unwrap();
 
-    Err(InitError::Window)
+        let window = MetalWindow {
+            window: winit_window,
+            layer: layer,
+            drawable: Cell::new(CAMetalDrawable::nil()),
+            backbuffer: raw_addr
+        };
+
+        Ok((window, device, factory, color))
+   }
 }

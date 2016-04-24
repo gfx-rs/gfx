@@ -252,7 +252,7 @@ impl<
                 }
             }
 
-            app.render(&mut device);
+            //app.render(&mut device);
             //window.swap_buffers().unwrap();
             device.cleanup();
             harness.bump()

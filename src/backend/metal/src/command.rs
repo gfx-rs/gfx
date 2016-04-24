@@ -20,7 +20,8 @@ use gfx_core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
                MAX_RESOURCE_VIEWS, MAX_UNORDERED_VIEWS,
                MAX_SAMPLERS, MAX_COLOR_TARGETS};
 
-use {Resources, InputLayout, Buffer, Texture, Pipeline, Program, Rtv, Srv, Dsv};
+use {Resources, InputLayout, Buffer, Texture, Pipeline, Program};
+use native::{Rtv, Srv, Dsv};
 
 use metal::*;
 
