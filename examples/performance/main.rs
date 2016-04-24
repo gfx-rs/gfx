@@ -15,15 +15,17 @@
 extern crate cgmath;
 #[macro_use]
 extern crate gfx;
+extern crate gfx_core;
 extern crate gfx_window_glfw;
 extern crate glfw;
 extern crate time;
 extern crate gfx_gl as gl;
+extern crate gfx_device_gl;
 
 use time::precise_time_s;
 use cgmath::{SquareMatrix, Matrix, Point3, Vector3, Matrix3, Matrix4};
-use cgmath::{Transform, AffineMatrix3, Vector4};
-pub use gfx::format::{DepthStencil, Rgba8};
+use cgmath::{Transform, Vector4};
+pub use gfx::format::{DepthStencil, Rgba8 as ColorBuffer};
 use glfw::Context;
 use gl::Gl;
 use gl::types::*;
@@ -32,10 +34,11 @@ use std::ptr;
 use std::str;
 use std::env;
 use std::str::FromStr;
-use std::sync::mpsc::Receiver;
+//use std::sync::mpsc::Receiver;
 use std::iter::repeat;
 use std::ffi::CString;
-
+use gfx_device_gl::{Resources as R, CommandBuffer as CB};
+use gfx_core::Device;
 
 gfx_defines!{
     vertex Vertex {
@@ -45,9 +48,7 @@ gfx_defines!{
     pipeline pipe {
         vbuf: gfx::VertexBuffer<Vertex> = (),
         transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
-        out_color: gfx::RenderTarget<Rgba8> = "o_Color",
-        out_depth: gfx::DepthTarget<DepthStencil> =
-            gfx::preset::depth::LESS_EQUAL_WRITE,
+        out_color: gfx::RenderTarget<ColorBuffer> = "o_Color",
     }
 }
 
@@ -57,8 +58,8 @@ static VERTEX_SRC: &'static [u8] = b"
     uniform mat4 u_Transform;
 
     void main() {
-        gl_Position = u_Transform * vec4(a_Pos, 1.0);
-    }
+        gl_Position = u_Transform * vec4(a_Pos, 1.0); 
+   }
 ";
 
 static FRAGMENT_SRC: &'static [u8] = b"
@@ -66,228 +67,243 @@ static FRAGMENT_SRC: &'static [u8] = b"
     out vec4 o_Color;
 
     void main() {
-        o_Color = vec4(1., 0., 0., 1.);
+        o_Color = vec4(1.0, 0.0, 0.0, 1.0);
     }
 ";
 
+static VERTEX_DATA: &'static [Vertex] = &[
+    Vertex { pos: [-1.0, 0.0, -1.0] },
+    Vertex { pos: [ 1.0, 0.0, -1.0] },
+    Vertex { pos: [-1.0, 0.0,  1.0] },
+];
+
+const CLEAR_COLOR: (f32, f32, f32, f32) = (0.3, 0.3, 0.3, 1.0);
+
 //----------------------------------------
 
-fn gfx_main(mut glfw: glfw::Glfw,
-            mut window: glfw::Window,
-            events: Receiver<(f64, glfw::WindowEvent)>,
-            dimension: i16) {
-    use gfx::traits::{Device, FactoryExt};
+fn transform(x: i16, y: i16, proj_view: &Matrix4<f32>) -> Matrix4<f32> {
+    let mut model = Matrix4::from(Matrix3::identity() * 0.05);
+    model.w = Vector4::new(x as f32 * 0.10,
+                           0f32,
+                           y as f32 * 0.10,
+                           1f32);
+    proj_view * model
+}
 
-    let (mut device, mut factory, main_color, main_depth) =
-        gfx_window_glfw::init(&mut window);
-    let mut encoder: gfx::Encoder<_,_> = factory.create_command_buffer().into();
+trait Renderer: Drop {
+    fn render(&mut self, window: &mut glfw::Window, proj_view: &Matrix4<f32>);
+}
 
-    let pso = factory.create_pipeline_simple(
-        VERTEX_SRC, FRAGMENT_SRC,
-        gfx::state::CullFace::Back,
-        pipe::new()
+struct GFX {
+    device:gfx_device_gl::Device,
+    encoder: gfx::Encoder<R,CB>,
+    data: pipe::Data<R>,
+    pso: gfx::PipelineState<R, pipe::Meta>,
+    slice: gfx::Slice<R>,
+    dimension: i16,
+}
+
+impl GFX {
+    fn new(window: &mut glfw::Window, dimension: i16) -> Self {
+        use gfx::traits::FactoryExt;
+
+        let (device, mut factory, main_color, _) =
+            gfx_window_glfw::init(window);
+        let encoder: gfx::Encoder<_,_> = factory.create_command_buffer().into();
+
+        let pso = factory.create_pipeline_simple(
+            VERTEX_SRC, FRAGMENT_SRC,
+            gfx::state::CullFace::Nothing,
+            pipe::new()
         ).unwrap();
 
-    let vertex_data = [
-        Vertex { pos: [-1.0,  1.0, -1.0] },
-        Vertex { pos: [ 1.0,  1.0, -1.0] },
-        Vertex { pos: [ 1.0,  1.0,  1.0] },
-    ];
-    let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
+        let (vbuf, slice) = factory.create_vertex_buffer(VERTEX_DATA);
 
-    let view: AffineMatrix3<f32> = Transform::look_at(
-        Point3::new(0f32, -5.0, 0.0),
-        Point3::new(0f32, 0.0, 0.0),
-        Vector3::unit_z(),
-    );
-    let aspect = {
-        let (w, h) = window.get_framebuffer_size();
-        w as f32 / h as f32
-    };
-    let proj = cgmath::perspective(cgmath::deg(45.0f32), aspect, 1.0, 10.0);
-
-    let mut data = pipe::Data {
-        vbuf: vbuf,
-        transform: cgmath::Matrix4::identity().into(),
-        out_color: main_color,
-        out_depth: main_depth,
-    };
-
-    while !window.should_close() {
-        glfw.poll_events();
-        for (_, event) in glfw::flush_messages(&events) {
-            match event {
-                glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Action::Press, _) =>
-                    window.set_should_close(true),
-                _ => {},
-            }
+        let data = pipe::Data {
+            vbuf: vbuf,
+            transform: cgmath::Matrix4::identity().into(),
+            out_color: main_color,
+        };
+        
+        GFX {
+            device: device,
+            encoder: encoder,
+            data: data,
+            pso: pso,
+            slice: slice,
+            dimension: dimension,
         }
+    }
+}
 
+impl Renderer for GFX {
+    fn render(&mut self, window: &mut glfw::Window, proj_view:&Matrix4<f32>) {
         let start = precise_time_s() * 1000.;
-//        encoder.reset();
-        encoder.clear(&data.out_color, [0.3, 0.3, 0.3, 1.0]);
-        encoder.clear_depth(&data.out_depth, 1.0);
+        self.encoder.clear(&self.data.out_color, [CLEAR_COLOR.0,
+                                                  CLEAR_COLOR.1,
+                                                  CLEAR_COLOR.2,
+                                                  CLEAR_COLOR.3]);
 
-        for x in (-dimension) ..dimension {
-            for y in (-dimension) ..dimension {
-                let mut model = Matrix4::from(Matrix3::identity() * 0.01f32);
-                model.w = Vector4::new(x as f32 * 0.05,
-                                       0f32,
-                                       y as f32 * 0.05,
-                                       1f32);
-                data.transform = (proj * view.mat * model).into();
-                encoder.draw(&slice, &pso, &data);
+        for x in (-self.dimension) ..self.dimension {
+            for y in (-self.dimension) ..self.dimension {
+                self.data.transform = transform(x, y, proj_view).into();
+                self.encoder.draw(&self.slice, &self.pso, &self.data);
             }
         }
 
         let pre_submit = precise_time_s() * 1000.;
-        encoder.flush(&mut device);
+        self.encoder.flush(&mut self.device);
         let post_submit = precise_time_s() * 1000.;
         window.swap_buffers();
-        device.cleanup();
+        self.device.cleanup();
         let swap = precise_time_s() * 1000.;
 
         println!("total time:\t\t{0:4.2}ms", swap - start);
         println!("\tcreate list:\t{0:4.2}ms", pre_submit - start);
         println!("\tsubmit:\t\t{0:4.2}ms", post_submit - pre_submit);
-        println!("\tgpu wait:\t{0:4.2}ms", swap - post_submit)
+        println!("\tgpu wait:\t{0:4.2}ms", swap - post_submit);
     }
 }
 
-
-fn compile_shader(gl: &Gl, src: &[u8], ty: GLenum) -> GLuint { unsafe {
-    let shader = gl.CreateShader(ty);
-    // Attempt to compile the shader
-    gl.ShaderSource(shader, 1,
-        &(src.as_ptr() as *const i8),
-        &(src.len() as GLint));
-    gl.CompileShader(shader);
-
-    // Get the compile status
-    let mut status = gl::FALSE as GLint;
-    gl.GetShaderiv(shader, gl::COMPILE_STATUS, &mut status);
-
-    // Fail on error
-    if status != (gl::TRUE as GLint) {
-        let mut len: GLint = 0;
-        gl.GetShaderiv(shader, gl::INFO_LOG_LENGTH, &mut len);
-        let mut buf: Vec<u8> = repeat(0u8).take((len as isize).saturating_sub(1) as usize).collect();     // subtract 1 to skip the trailing null character
-        gl.GetShaderInfoLog(shader, len, ptr::null_mut(), buf.as_mut_ptr() as *mut GLchar);
-        panic!("{}", str::from_utf8(&buf).ok().expect("ShaderInfoLog not valid utf8"));
+impl Drop for GFX {
+    fn drop(&mut self) {
     }
-    shader
-}}
+}
 
-fn link_program(gl: &Gl, vs: GLuint, fs: GLuint) -> GLuint { unsafe {
-    let program = gl.CreateProgram();
-    gl.AttachShader(program, vs);
-    gl.AttachShader(program, fs);
-    gl.LinkProgram(program);
-    // Get the link status
-    let mut status = gl::FALSE as GLint;
-    gl.GetProgramiv(program, gl::LINK_STATUS, &mut status);
+struct GL {
+    gl:Gl,
+    trans_uniform:GLint,
+    vs:GLuint,
+    fs:GLuint,
+    program:GLuint,
+    vbo:GLuint,
+    vao:GLuint,
+    dimension:i16,
+}
 
-    // Fail on error
-    if status != (gl::TRUE as GLint) {
-        let mut len: GLint = 0;
-        gl.GetProgramiv(program, gl::INFO_LOG_LENGTH, &mut len);
-        let mut buf: Vec<u8> = repeat(0u8).take((len as isize).saturating_sub(1) as usize).collect();     // subtract 1 to skip the trailing null character
-        gl.GetProgramInfoLog(program, len, ptr::null_mut(), buf.as_mut_ptr() as *mut GLchar);
-        panic!("{}", str::from_utf8(&buf).ok().expect("ProgramInfoLog not valid utf8"));
+impl GL {
+    fn new(window: &mut glfw::Window, dimension: i16) -> Self {
+        let gl = Gl::load_with(|s| window.get_proc_address(s) as *const _);
+
+        fn compile_shader (gl:&Gl, src: &[u8], ty: GLenum) -> GLuint {
+            unsafe {
+                let shader = gl.CreateShader(ty);
+                // Attempt to compile the shader
+                gl.ShaderSource(shader, 1,
+                                &(src.as_ptr() as *const i8),
+                                &(src.len() as GLint));
+                gl.CompileShader(shader);
+
+                // Get the compile status
+                let mut status = gl::FALSE as GLint;
+                gl.GetShaderiv(shader, gl::COMPILE_STATUS, &mut status);
+
+                // Fail on error
+                if status != (gl::TRUE as GLint) {
+                    let mut len: GLint = 0;
+                    gl.GetShaderiv(shader, gl::INFO_LOG_LENGTH, &mut len);
+                    let mut buf: Vec<u8> = repeat(0u8).take((len as isize).saturating_sub(1) as usize).collect();     // subtract 1 to skip the trailing null character
+                    gl.GetShaderInfoLog(shader, len, ptr::null_mut(), buf.as_mut_ptr() as *mut GLchar);
+                    panic!("{}", str::from_utf8(&buf).ok().expect("ShaderInfoLog not valid utf8"));
+                }
+                shader
+            }
+        };
+        
+        // Create GLSL shaders
+        let vs = compile_shader(&gl, VERTEX_SRC, gl::VERTEX_SHADER);
+        let fs = compile_shader(&gl, FRAGMENT_SRC, gl::FRAGMENT_SHADER);
+
+        // Link program
+        let program;
+        unsafe {
+            program = gl.CreateProgram();
+            gl.AttachShader(program, vs);
+            gl.AttachShader(program, fs);
+            gl.LinkProgram(program);
+            // Get the link status
+            let mut status = gl::FALSE as GLint;
+            gl.GetProgramiv(program, gl::LINK_STATUS, &mut status);
+
+            // Fail on error
+            if status != (gl::TRUE as GLint) {
+                let mut len: GLint = 0;
+                gl.GetProgramiv(program, gl::INFO_LOG_LENGTH, &mut len);
+                let mut buf: Vec<u8> = repeat(0u8).take((len as isize).saturating_sub(1) as usize).collect();     // subtract 1 to skip the trailing null character
+                gl.GetProgramInfoLog(program, len, ptr::null_mut(), buf.as_mut_ptr() as *mut GLchar);
+                panic!("{}", str::from_utf8(&buf).ok().expect("ProgramInfoLog not valid utf8"));
+            }
+        }
+
+        let mut vao = 0;
+        let mut vbo = 0;
+
+        let trans_uniform;
+        unsafe {
+            // Create Vertex Array Object
+            gl.GenVertexArrays(1, &mut vao);
+            gl.BindVertexArray(vao);
+
+            // Create a Vertex Buffer Object and copy the vertex data to it
+            gl.GenBuffers(1, &mut vbo);
+            gl.BindBuffer(gl::ARRAY_BUFFER, vbo);
+
+            gl.BufferData(gl::ARRAY_BUFFER,
+                          (VERTEX_DATA.len() * mem::size_of::<Vertex>()) as GLsizeiptr,
+                          mem::transmute(&VERTEX_DATA[0]),
+                          gl::STATIC_DRAW);
+
+            // Use shader program
+            gl.UseProgram(program);
+            let o_color = CString::new("o_Color").unwrap();
+            gl.BindFragDataLocation(program, 0, o_color.as_bytes_with_nul().as_ptr() as *const i8);
+
+            // Specify the layout of the vertex data
+            let a_pos = CString::new("a_Pos").unwrap();
+            gl.BindFragDataLocation(program, 0, a_pos.as_bytes_with_nul().as_ptr() as *const i8);
+
+            let pos_attr = gl.GetAttribLocation(program, a_pos.as_ptr());
+            gl.EnableVertexAttribArray(pos_attr as GLuint);
+            gl.VertexAttribPointer(pos_attr as GLuint, 3, gl::FLOAT,
+                                   gl::FALSE as GLboolean, 0, ptr::null());
+
+            let u_transform = CString::new("u_Transform").unwrap();
+            trans_uniform = gl.GetUniformLocation(program, u_transform.as_bytes_with_nul().as_ptr() as *const i8)
+        };
+
+        GL {
+            gl: gl,
+            vs: vs,
+            fs: fs,
+            program: program,
+            vbo: vbo,
+            vao: vao,
+            trans_uniform: trans_uniform,
+            dimension: dimension,
+        }
     }
-    program
-}}
+}
 
-fn gl_main(mut glfw: glfw::Glfw,
-           mut window: glfw::Window,
-           _: Receiver<(f64, glfw::WindowEvent),>,
-           dimension: i16) {
-    let gl = Gl::load_with(|s| window.get_proc_address(s) as *const _);
-
-    // Create GLSL shaders
-    let vs = compile_shader(&gl, VERTEX_SRC, gl::VERTEX_SHADER);
-    let fs = compile_shader(&gl, FRAGMENT_SRC, gl::FRAGMENT_SHADER);
-    let program = link_program(&gl, vs, fs);
-
-    let mut vao = 0;
-    let mut vbo = 0;
-
-    let trans_uniform = unsafe {
-        // Create Vertex Array Object
-        gl.GenVertexArrays(1, &mut vao);
-        gl.BindVertexArray(vao);
-
-        // Create a Vertex Buffer Object and copy the vertex data to it
-        gl.GenBuffers(1, &mut vbo);
-        gl.BindBuffer(gl::ARRAY_BUFFER, vbo);
-
-        let vertex_data = vec![
-            Vertex { pos: [-1.0,  1.0, -1.0] },
-            Vertex { pos: [ 1.0,  1.0, -1.0] },
-            Vertex { pos: [ 1.0,  1.0,  1.0] },
-        ];
-
-        gl.BufferData(gl::ARRAY_BUFFER,
-                      (vertex_data.len() * mem::size_of::<Vertex>()) as GLsizeiptr,
-                      mem::transmute(&vertex_data[0]),
-                      gl::STATIC_DRAW);
-
-        // Use shader program
-        gl.UseProgram(program);
-        let o_color = CString::new("o_Color").unwrap();
-        gl.BindFragDataLocation(program, 0, o_color.as_bytes_with_nul().as_ptr() as *const i8);
-
-        // Specify the layout of the vertex data
-        let a_pos = CString::new("a_Pos").unwrap();
-        gl.BindFragDataLocation(program, 0, a_pos.as_bytes_with_nul().as_ptr() as *const i8);
-
-        let pos_attr = gl.GetAttribLocation(program, a_pos.as_ptr());
-        gl.EnableVertexAttribArray(pos_attr as GLuint);
-        gl.VertexAttribPointer(pos_attr as GLuint, 3, gl::BYTE,
-                                gl::FALSE as GLboolean, 0, ptr::null());
-
-
-        let u_transform = CString::new("u_Transform").unwrap();
-        gl.GetUniformLocation(program, u_transform.as_bytes_with_nul().as_ptr() as *const i8)
-    };
-
-    let (w, h) = window.get_framebuffer_size();
-    let view: AffineMatrix3<f32> = Transform::look_at(
-        Point3::new(0f32, -5.0, 0.0),
-        Point3::new(0f32, 0.0, 0.0),
-        Vector3::unit_z(),
-    );
-    let aspect = w as f32 / h as f32;
-    let proj = cgmath::perspective(cgmath::deg(45.0f32), aspect, 1.0, 10.0);
-
-    while !window.should_close() {
-        // Poll events
-        glfw.poll_events();
-
+impl Renderer for GL {
+    fn render(&mut self, window: &mut glfw::Window, proj_view: &Matrix4<f32>) {
         let start = precise_time_s() * 1000.;
 
         // Clear the screen to black
         unsafe {
-            gl.ClearColor(0.3, 0.3, 0.3, 1.0);
-            gl.Clear(gl::COLOR_BUFFER_BIT);
+            self.gl.ClearColor(CLEAR_COLOR.0, CLEAR_COLOR.1, CLEAR_COLOR.2, CLEAR_COLOR.3);
+            self.gl.Clear(gl::COLOR_BUFFER_BIT);
         }
-
-        for x in (-dimension) ..dimension {
-            for y in (-dimension) ..dimension {
-                let mut model = Matrix4::from(Matrix3::identity() * 0.01f32);
-                model.w = Vector4::new(x as f32 * 0.05,
-                                       0f32,
-                                       y as f32 * 0.05,
-                                       1f32);
-
-                let mat = proj * view.mat * model;
+        
+        for x in (-self.dimension) ..self.dimension {
+            for y in (-self.dimension) ..self.dimension {
+                let mat:Matrix4<f32> = transform(x, y, proj_view).into();
 
                 unsafe {
-                    gl.UniformMatrix4fv(trans_uniform,
-                                        1,
-                                        gl::FALSE,
-                                        mat.as_ptr());
-                    gl.DrawArrays(gl::TRIANGLES, 0, 3);
+                    self.gl.UniformMatrix4fv(self.trans_uniform,
+                                             1,
+                                             gl::FALSE,
+                                             mat.as_ptr());
+                    self.gl.DrawArrays(gl::TRIANGLES, 0, 3);
                 }
 
             }
@@ -302,20 +318,22 @@ fn gl_main(mut glfw: glfw::Glfw,
         println!("total time:\t\t{0:4.2}ms", swap - start);
         println!("\tsubmit:\t\t{0:4.2}ms", submit - start);
         println!("\tgpu wait:\t{0:4.2}ms", swap - submit)
-
-    }
-
-    // Cleanup
-    unsafe {
-        gl.DeleteProgram(program);
-        gl.DeleteShader(fs);
-        gl.DeleteShader(vs);
-        gl.DeleteBuffers(1, &vbo);
-        gl.DeleteVertexArrays(1, &vao);
     }
 }
 
-pub fn main() {
+impl Drop for GL {
+    fn drop(&mut self) {
+        unsafe {
+            self.gl.DeleteProgram(self.program);
+            self.gl.DeleteShader(self.fs);
+            self.gl.DeleteShader(self.vs);
+            self.gl.DeleteBuffers(1, &self.vbo);
+            self.gl.DeleteVertexArrays(1, &self.vao);
+        }
+    }
+}
+
+fn main() {
     let ref mut args = env::args();
     let args_count = env::args().count();
     if args_count == 1 {
@@ -340,19 +358,51 @@ pub fn main() {
     glfw.window_hint(glfw::WindowHint::OpenGlProfile(glfw::OpenGlProfileHint::Core));
 
     let (mut window, events) = glfw
-        .create_window(640, 480, "Cube example", glfw::WindowMode::Windowed)
+        .create_window(640, 480, "Performance example", glfw::WindowMode::Windowed)
         .expect("Failed to create GLFW window.");
 
     window.make_current();
     glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
     window.set_key_polling(true);
 
-    println!("count is {}", count*count*4);
+    let proj_view = {
+        let view = Matrix4::look_at(
+            Point3::new(0f32, 5.0, -5.0),
+            Point3::new(0f32, 0.0, 0.0),
+            Vector3::unit_z(),
+        );
+
+        let proj = {
+            let aspect = {
+                let (w, h) = window.get_framebuffer_size();
+                w as f32 / h as f32
+            };
+            cgmath::perspective(cgmath::deg(45.0f32), aspect, 1.0, 10.0)
+        };
+        proj * view
+    };
+
+    let mut r: Box<Renderer>;
     match mode.as_ref() {
-        "gfx" => gfx_main(glfw, window, events, count),
-        "gl" => gl_main(glfw, window, events, count),
+        "gfx" => r = Box::new(GFX::new(&mut window, count)),
+        "gl" => r = Box::new(GL::new(&mut window, count)),
         x => {
-            println!("{} is not a known mode", x)
+            panic!("{} is not a known mode", x)
         }
     }
+
+    println!("count is {}", count*count*4);
+    
+    while !window.should_close() {
+        // Poll events
+        glfw.poll_events();
+        for (_, event) in glfw::flush_messages(&events) {
+            match event {
+                glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Action::Press, _) =>
+                    window.set_should_close(true),
+                _ => {},
+            }
+        }
+        r.render(&mut window, &proj_view);
+    }    
 }
