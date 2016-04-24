@@ -34,7 +34,6 @@ use std::ptr;
 use std::str;
 use std::env;
 use std::str::FromStr;
-//use std::sync::mpsc::Receiver;
 use std::iter::repeat;
 use std::ffi::CString;
 use gfx_device_gl::{Resources as R, CommandBuffer as CB};
@@ -117,7 +116,7 @@ impl GFX {
             pipe::new()
         ).unwrap();
 
-        let (vbuf, slice) = factory.create_vertex_buffer(VERTEX_DATA);
+        let (vbuf, slice) = factory.create_vertex_buffer_with_slice(VERTEX_DATA,());
 
         let data = pipe::Data {
             vbuf: vbuf,

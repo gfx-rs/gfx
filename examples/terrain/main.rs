@@ -110,7 +110,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             .map(|i| i as u32)
             .collect();
 
-        let (vbuf, slice) = factory.create_vertex_buffer_indexed(&vertex_data, &index_data[..]);
+        let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, &index_data[..]);
 
         App {
             pso: factory.create_pipeline_simple(

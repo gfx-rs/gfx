@@ -106,7 +106,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             Vertex::new([ 3.0, -1.0]),
             Vertex::new([-1.0,  3.0])
         ];
-        let (vbuf, slice) = factory.create_vertex_buffer(&vertex_data);
+        let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, ());
 
         let cubemap = load_cubemap(&mut factory, CubemapData {
             up: &include_bytes!("image/posy.jpg")[..],

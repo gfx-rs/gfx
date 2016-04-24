@@ -125,7 +125,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             factory.create_buffer_const(&attributes, gfx::BufferRole::Vertex, gfx::Bind::empty()).unwrap()
         };
 
-        let (quad_vertices, mut slice) = factory.create_vertex_buffer_indexed(&QUAD_VERTICES, &QUAD_INDICES[..]);
+        let (quad_vertices, mut slice) = factory.create_vertex_buffer_with_slice(&QUAD_VERTICES, &QUAD_INDICES[..]);
         slice.instances = Some((instance_count, 0));
         let locals = Locals { scale: size };
 

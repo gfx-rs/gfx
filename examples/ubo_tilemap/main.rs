@@ -189,7 +189,7 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
         // set up vertex data
         let plane = Plane::subdivide(width, width);
 
-        // law out the vertices of the plane mesh based on the configured tile size information,
+        // law out the vertices of the plane slice based on the configured tile size information,
         // setting the a_BufPos vertex data for the vertex shader (that ultimate gets passed through
         // to the frag shader as a varying, used to determine the "current tile" and the frag's offset,
         // which is used to calculate the displayed frag color)
@@ -216,7 +216,7 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
             .map(|i| i as u32)
             .collect();
 
-        let (vbuf, slice) = factory.create_vertex_buffer_indexed(&vertex_data, &index_data[..]);
+        let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, &index_data[..]);
 
         let tile_texture = load_texture(factory, tilesheet_bytes).unwrap();
 

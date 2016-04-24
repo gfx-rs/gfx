@@ -130,7 +130,7 @@ fn create_cube<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F)
         20, 21, 22, 22, 23, 20, // back
     ];
 
-    factory.create_vertex_buffer_indexed(&vertex_data, index_data)
+    factory.create_vertex_buffer_with_slice(&vertex_data, index_data)
 }
 
 fn create_plane<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F, size: i8)
@@ -144,7 +144,7 @@ fn create_plane<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F, size: i8
         Vertex::new([-size,  size,  0], [0, 0, 1]),
     ];
 
-    factory.create_vertex_buffer(&vertex_data)
+    factory.create_vertex_buffer_with_slice(&vertex_data, ())
 }
 
 //----------------------------------------

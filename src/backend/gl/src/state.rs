@@ -237,12 +237,13 @@ pub fn bind_blend_slot(gl: &gl::Gl, slot: ColorSlot, color: s::Color) {
     let buf = slot as gl::types::GLuint;
     match color.blend {
         Some(b) => unsafe {
+            //Note: using ARB functions as they are more compatible
             gl.Enablei(gl::BLEND, buf);
-            gl.BlendEquationSeparatei(buf,
+            gl.BlendEquationSeparateiARB(buf,
                 map_equation(b.color.equation),
                 map_equation(b.alpha.equation)
             );
-            gl.BlendFuncSeparatei(buf,
+            gl.BlendFuncSeparateiARB(buf,
                 map_factor(b.color.source),
                 map_factor(b.color.destination),
                 map_factor(b.alpha.source),

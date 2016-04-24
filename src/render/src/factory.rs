@@ -19,11 +19,11 @@
 //! See the `FactoryExt` trait for more information.
 
 use gfx_core::{format, handle, tex};
-use gfx_core::{Primitive, Resources, ShaderSet, VertexCount};
+use gfx_core::{Primitive, Resources, ShaderSet};
 use gfx_core::factory::{Bind, BufferRole, Factory};
 use gfx_core::pso::{CreationError, Descriptor};
 use gfx_core::state::{CullFace, Rasterizer};
-use mesh::{Slice, SliceKind, ToIndexSlice};
+use slice::{Slice, IndexBuffer, IntoIndexBuffer};
 use pso;
 use shade::ProgramError;
 
@@ -42,35 +42,38 @@ pub enum PipelineStateError {
 /// This trait is responsible for creating and managing graphics resources, much like the `Factory`
 /// trait in the `gfx` crate. Every `Factory` automatically implements `FactoryExt`. 
 pub trait FactoryExt<R: Resources>: Factory<R> {
-    /// Create a vertex buffer with an associated slice.
-    fn create_vertex_buffer<T>(&mut self, data: &[T])
-                            -> (handle::Buffer<R, T>, Slice<R>) where
+    /// Create a vertex buffer from the supplied data. A `Slice` will have to manually be
+    /// constructed.
+    fn create_vertex_buffer<T>(&mut self, vertices: &[T])
+                            -> handle::Buffer<R, T> where
                             T: Copy + pso::buffer::Structure<format::Format>
     {
-        let nv = data.len();
         //debug_assert!(nv <= self.get_capabilities().max_vertex_count);
-        let buf = self.create_buffer_const(data, BufferRole::Vertex, Bind::empty())
-                      .unwrap();
-        (buf, Slice {
-            start: 0,
-            end: nv as VertexCount,
-            instances: None,
-            kind: SliceKind::Vertex,
-        })
+        self.create_buffer_const(vertices, BufferRole::Vertex, Bind::empty()).unwrap()
     }
-
-    /// Creates an indexed vertex buffer. The supplied index defines the order of the vertices in
-    /// the buffer. This is mainly useful to prevent duplicates of the same vertex, when that
-    /// vertex is used multiple times.
-    fn create_vertex_buffer_indexed<V, I>(&mut self, vd: &[V], id: I)
-                                    -> (handle::Buffer<R, V>, Slice<R>) where
-        V: Copy + pso::buffer::Structure<format::Format>,
-        I: ToIndexSlice<R>,
-        Self: Sized,
+    
+    /// Shorthand for creating a new vertex buffer from the supplied vertices, together with a
+    /// `Slice` from the supplied indices.
+    fn create_vertex_buffer_with_slice<B, V>(&mut self, vertices: &[V], indices: B)
+                                       -> (handle::Buffer<R, V>, Slice<R>)
+                                       where V: Copy + pso::buffer::Structure<format::Format>,
+                                             B: IntoIndexBuffer<R>
     {
-        let buf = self.create_buffer_const(vd, BufferRole::Vertex, Bind::empty())
-                      .unwrap();
-        (buf, id.to_slice(self))
+        let vertex_buffer = self.create_vertex_buffer(vertices);
+        let index_buffer = indices.into_index_buffer(self);
+        let buffer_length = match index_buffer {
+            IndexBuffer::Auto => vertex_buffer.len(),
+            IndexBuffer::Index16(ref ib) => ib.len(),
+            IndexBuffer::Index32(ref ib) => ib.len(),
+        };
+        
+        (vertex_buffer, Slice {
+            start: 0,
+            end: buffer_length as u32,
+            base_vertex: 0,
+            instances: None,
+            buffer: index_buffer
+        })
     }
 
     /// Create a constant buffer for `num` identical elements of type `T`.

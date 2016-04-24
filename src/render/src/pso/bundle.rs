@@ -1,17 +1,17 @@
-//! Combine mesh data with pipeline state.
+//! Combine slice data with pipeline state.
 //!
-//! Suitable for use when PSO is always used with the same one mesh.
+//! Suitable for use when PSO is always used with the same one slice.
 
 use { Resources, Slice, PipelineState, Encoder, CommandBuffer };
 use super::PipelineData;
 
-/// Mesh-PSO bundle.
+/// Slice-PSO bundle.
 pub struct Bundle<R: Resources, Data: PipelineData<R>> {
-    /// Mesh slice
+    /// Slice
     pub slice: Slice<R>,
     /// Pipeline state
     pub pso: PipelineState<R, Data::Meta>,
-    /// Pipeline data for mesh
+    /// Pipeline data
     pub data: Data,
 }
 

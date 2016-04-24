@@ -58,7 +58,7 @@ pub fn main() {
         gfx::state::CullFace::Nothing,
         pipe::new()
     ).unwrap();
-    let (vertex_buffer, slice) = factory.create_vertex_buffer(&TRIANGLE);
+    let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(&TRIANGLE, ());
     let data = pipe::Data {
         vbuf: vertex_buffer,
         out: main_color
