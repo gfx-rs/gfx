@@ -25,7 +25,7 @@ extern crate gfx_device_gl;
 use time::precise_time_s;
 use cgmath::{SquareMatrix, Matrix, Point3, Vector3, Matrix3, Matrix4};
 use cgmath::{Transform, Vector4};
-pub use gfx::format::{DepthStencil, Rgba8 as ColorBuffer};
+pub use gfx::format::{DepthStencil, Rgba8 as ColorFormat};
 use glfw::Context;
 use gl::Gl;
 use gl::types::*;
@@ -47,7 +47,7 @@ gfx_defines!{
     pipeline pipe {
         vbuf: gfx::VertexBuffer<Vertex> = (),
         transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
-        out_color: gfx::RenderTarget<ColorBuffer> = "o_Color",
+        out_color: gfx::RenderTarget<ColorFormat> = "o_Color",
     }
 }
 
