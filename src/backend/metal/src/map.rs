@@ -14,6 +14,7 @@
 
 use metal::*;
 
+use gfx_core::factory;
 use gfx_core::factory::{Bind, MapAccess, Usage};
 use gfx_core::format::{Format, SurfaceType};
 use gfx_core::state::Comparison;
@@ -48,7 +49,7 @@ pub fn map_format(format: Format, is_target: bool) -> Option<MTLPixelFormat> {
     use gfx_core::format::ChannelType::*;
 
     use metal::MTLPixelFormat::*;
-    
+
     Some(match format.0 {
         R4_G4 | R4_G4_B4_A4 | R5_G5_B5_A1 | R5_G6_B5 => return None,
         R8 => match format.1 {
@@ -206,6 +207,42 @@ pub fn map_surface(surface: SurfaceType) -> Option<MTLPixelFormat> {
     // TODO: handle surface types in metal, look at gl impl.
 
     None
+}
+
+pub fn map_texture_bind(bind: Bind) -> MTLTextureUsage {
+    let mut flags = MTLTextureUsageUnknown;
+
+    if bind.contains(factory::RENDER_TARGET) || bind.contains(factory::DEPTH_STENCIL) {
+        flags = flags | MTLTextureUsageRenderTarget;
+    }
+
+    if bind.contains(factory::SHADER_RESOURCE) {
+        flags = flags | MTLTextureUsageShaderRead;
+    }
+
+    if bind.contains(factory::UNORDERED_ACCESS) {
+        flags = flags | MTLTextureUsageShaderWrite;
+    }
+
+    flags
+}
+
+pub fn map_access(access: MapAccess) -> MTLResourceOptions {
+    match access {
+        MapAccess::Readable => MTLResourceCPUCacheModeDefaultCache,
+        MapAccess::Writable => MTLResourceCPUCacheModeWriteCombined,
+        MapAccess::RW => MTLResourceCPUCacheModeDefaultCache,
+    }
+}
+
+pub fn map_texture_usage(usage: Usage) -> (MTLResourceOptions, MTLStorageMode) {
+    match usage {
+        Usage::GpuOnly => (MTLResourceStorageModePrivate, MTLStorageMode::Private),
+
+        Usage::Const   => (MTLResourceStorageModePrivate, MTLStorageMode::Managed),
+        Usage::Dynamic => (MTLResourceCPUCacheModeDefaultCache, MTLStorageMode::Managed),
+        Usage::CpuOnly(access) => (map_access(access), MTLStorageMode::Managed),
+    }
 }
 
 pub fn map_wrap(wrap: WrapMode) -> MTLSamplerAddressMode {

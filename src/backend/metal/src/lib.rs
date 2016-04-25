@@ -276,7 +276,6 @@ pub fn create(format: gfx_core::format::Format, width: u32, height: u32)
         factory.view_texture_as_render_target_raw(&color_tex, desc).unwrap()
     };
 
-
     Ok((device, factory, color_target, raw_addr))
 }
 

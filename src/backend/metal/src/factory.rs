@@ -21,12 +21,15 @@ use cocoa::foundation::{NSUInteger};
 
 use gfx_core as core;
 use gfx_core::{factory, handle};
+use gfx_core::handle::Producer;
+use gfx_core::handle::Manager;
 
 use metal::*;
 
 use command::CommandBuffer;
 
-use {Resources, Share};
+use {Resources, Share, Texture};
+use native;
 
 #[derive(Copy, Clone)]
 pub struct RawMapping {
@@ -271,8 +274,72 @@ impl core::Factory<Resources> for Factory {
 
     fn create_texture_raw(&mut self, desc: core::tex::Descriptor, hint: Option<core::format::ChannelType>,
                           data_opt: Option<&[&[u8]]>) -> Result<handle::RawTexture<Resources>, core::tex::Error> {
-        /*use gfx_core::tex::{AaMode, Error, Kind};
-        use data::{map_bind, map_usage, map_surface, map_format};
+        use gfx_core::tex::{AaMode, Error, Kind};
+        use map::{map_texture_bind, map_texture_usage, map_format};
+
+        let (resource, storage) = map_texture_usage(desc.usage);
+
+        let descriptor = MTLTextureDescriptor::alloc().init();
+        descriptor.set_mipmap_level_count(desc.levels as u64);
+        descriptor.set_resource_options(resource);
+        descriptor.set_storage_mode(storage);
+
+        descriptor.set_usage(map_texture_bind(desc.bind));
+
+        match desc.kind {
+            Kind::D1(w) => {
+                descriptor.set_width(w as u64);
+                descriptor.set_texture_type(MTLTextureType::D1);
+            },
+            Kind::D1Array(w, d) => {
+                descriptor.set_width(w as u64);
+                descriptor.set_array_length(d as u64);
+                descriptor.set_texture_type(MTLTextureType::D1Array);
+            },
+            Kind::D2(w, h, aa) => {
+                descriptor.set_width(w as u64);
+                descriptor.set_height(h as u64);
+                match aa {
+                    AaMode::Single => {
+                        descriptor.set_texture_type(MTLTextureType::D2);
+                    },
+                    AaMode::Multi(samples) => {
+
+                        descriptor.set_texture_type(MTLTextureType::D2Multisample);
+                        descriptor.set_sample_count(samples as u64);
+                    },
+                    _ => unimplemented!()
+                };
+            },
+            Kind::D2Array(w, h, d, aa) => {
+                descriptor.set_width(w as u64);
+                descriptor.set_height(h as u64);
+                descriptor.set_array_length(d as u64);
+                descriptor.set_texture_type(MTLTextureType::D2Array);
+            },
+            Kind::D3(w, h, d) => {
+                descriptor.set_width(w as u64);
+                descriptor.set_height(h as u64);
+                descriptor.set_depth(d as u64);
+                descriptor.set_texture_type(MTLTextureType::D3);
+            },
+            Kind::Cube(w) => {
+                descriptor.set_width(w as u64);
+                descriptor.set_texture_type(MTLTextureType::Cube);
+            },
+            Kind::CubeArray(w, d) => {
+                descriptor.set_width(w as u64);
+                descriptor.set_array_length(d as u64);
+                descriptor.set_texture_type(MTLTextureType::CubeArray);
+            },
+        };
+
+
+        let tex = Texture(native::Texture(self.device.new_texture(descriptor)), desc.usage);
+        Ok(self.share.handles.borrow_mut().make_texture(tex, desc))
+
+
+        /*        use data::{map_bind, map_usage, map_surface, map_format};
 
         let (usage, cpu_access) = map_usage(desc.usage);
         let tparam = TextureParam {
@@ -295,49 +362,7 @@ impl core::Factory<Resources> for Factory {
             cpu_access: cpu_access,
         };
 
-        self.sub_data_array.clear();
-        if let Some(data) = data_opt {
-            for sub in data.iter() {
-                self.sub_data_array.push(winapi::D3D11_SUBRESOURCE_DATA {
-                    pSysMem: sub.as_ptr() as *const c_void,
-                    SysMemPitch: 0,
-                    SysMemSlicePitch: 0,
-                });
-            }
-        };
-        let misc = if desc.usage != f::Usage::Const &&
-            desc.bind.contains(f::RENDER_TARGET | f::SHADER_RESOURCE) &&
-            desc.levels > 1 && data_opt.is_none() {
-            winapi::D3D11_RESOURCE_MISC_GENERATE_MIPS
-        }else {
-            winapi::D3D11_RESOURCE_MISC_FLAG(0)
-        };
-
-        let texture_result = match desc.kind {
-            Kind::D1(w) =>
-                self.create_texture_1d(w, 1, tparam, misc),
-            Kind::D1Array(w, d) =>
-                self.create_texture_1d(w, d, tparam, misc),
-            Kind::D2(w, h, aa) =>
-                self.create_texture_2d([w,h], 1, aa, tparam, misc),
-            Kind::D2Array(w, h, d, aa) =>
-                self.create_texture_2d([w,h], d, aa, tparam, misc),
-            Kind::D3(w, h, d) =>
-                self.create_texture_3d([w,h,d], tparam, misc),
-            Kind::Cube(w) =>
-                self.create_texture_2d([w,w], 6*1, AaMode::Single, tparam, misc | winapi::D3D11_RESOURCE_MISC_TEXTURECUBE),
-            Kind::CubeArray(w, d) =>
-                self.create_texture_2d([w,w], 6*d, AaMode::Single, tparam, misc | winapi::D3D11_RESOURCE_MISC_TEXTURECUBE),
-        };
-
-        match texture_result {
-            Ok(native) => {
-                let tex = Texture(native, desc.usage);
-                Ok(self.share.handles.borrow_mut().make_texture(tex, desc))
-            },
-            Err(_) => Err(Error::Kind),
-        }*/
-        unimplemented!()
+        */
     }
 
     fn view_buffer_as_shader_resource_raw(&mut self, _hbuf: &handle::RawBuffer<Resources>)
@@ -470,9 +495,11 @@ impl core::Factory<Resources> for Factory {
             error!("Failed to create RTV from {:#?}, error {:x}", native_desc, hr);
             return Err(f::TargetViewError::Unsupported);
         }
-        let size = htex.get_info().kind.get_level_dimensions(desc.level);
         Ok(self.share.handles.borrow_mut().make_rtv(native::Rtv(raw_view), htex, size))*/
-        unimplemented!()
+        //unimplemented!()
+        let raw_tex = self.frame_handles.ref_texture(htex).0;
+        let size = htex.get_info().kind.get_level_dimensions(desc.level);
+        Ok(self.share.handles.borrow_mut().make_rtv(native::Rtv(raw_tex.0), htex, size))
     }
 
     fn view_texture_as_depth_stencil_raw(&mut self, htex: &handle::RawTexture<Resources>, desc: core::tex::DepthStencilDesc)
