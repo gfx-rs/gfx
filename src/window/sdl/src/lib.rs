@@ -21,6 +21,23 @@ use gfx_core::format::{SurfaceType, DepthStencil, Srgba8};
 use gfx_device_gl::Resources;
 
 /// Builds an SDL2 window from a WindowBuilder struct.
+///
+/// # Example
+///
+/// ```
+/// extern crate gfx_window_sdl;
+/// extern crate sdl2;
+/// 
+/// fn main() {
+///     let sdl = sdl2::init().unwrap();
+/// 
+///     let mut builder = sdl.video().unwrap().window("Example", 800, 600);
+///     let (window, glcontext, device, factory, color_view, depth_view) =
+///         gfx_window_sdl::init(&mut builder);
+///
+///     // some code...
+/// }
+/// ```
 pub fn init(builder: &mut sdl2::video::WindowBuilder) ->
     (sdl2::video::Window, sdl2::video::GLContext,
      gfx_device_gl::Device, gfx_device_gl::Factory,
@@ -43,3 +60,4 @@ pub fn init(builder: &mut sdl2::video::WindowBuilder) ->
             dim, SurfaceType::R8_G8_B8_A8, SurfaceType::D24);
     (window, context, device, factory, Typed::new(color_view), Typed::new(ds_view))
 }
+
