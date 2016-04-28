@@ -16,8 +16,8 @@ extern crate cgmath;
 #[macro_use]
 extern crate gfx;
 extern crate gfx_core;
-extern crate gfx_window_glfw;
-extern crate glfw;
+extern crate gfx_window_glutin;
+extern crate glutin;
 extern crate time;
 extern crate gfx_gl as gl;
 extern crate gfx_device_gl;
@@ -26,7 +26,7 @@ use time::precise_time_s;
 use cgmath::{SquareMatrix, Matrix, Point3, Vector3, Matrix3, Matrix4};
 use cgmath::{Transform, Vector4};
 pub use gfx::format::{DepthStencil, Rgba8 as ColorFormat};
-use glfw::Context;
+//use glfw::Context;
 use gl::Gl;
 use gl::types::*;
 use std::mem;
@@ -90,24 +90,41 @@ fn transform(x: i16, y: i16, proj_view: &Matrix4<f32>) -> Matrix4<f32> {
 }
 
 trait Renderer: Drop {
-    fn render(&mut self, window: &mut glfw::Window, proj_view: &Matrix4<f32>);
+    fn render(&mut self, proj_view: &Matrix4<f32>);
+    fn window(&mut self) -> &glutin::Window;
 }
 
+
+
 struct GFX {
+    dimension: i16,
+    window: glutin::Window,
     device:gfx_device_gl::Device,
     encoder: gfx::Encoder<R,CB>,
     data: pipe::Data<R>,
     pso: gfx::PipelineState<R, pipe::Meta>,
     slice: gfx::Slice<R>,
-    dimension: i16,
 }
 
+struct GL {
+    dimension: i16,
+    window: glutin::Window,
+    gl:Gl,
+    trans_uniform:GLint,
+    vs:GLuint,
+    fs:GLuint,
+    program:GLuint,
+    vbo:GLuint,
+    vao:GLuint,
+}
+
+
 impl GFX {
-    fn new(window: &mut glfw::Window, dimension: i16) -> Self {
+    fn new(builder: glutin::WindowBuilder, dimension: i16) -> Self {
         use gfx::traits::FactoryExt;
 
-        let (device, mut factory, main_color, _) =
-            gfx_window_glfw::init(window);
+        let (window, device, mut factory, main_color, _) =
+            gfx_window_glutin::init::<ColorFormat, DepthStencil>(builder);
         let encoder: gfx::Encoder<_,_> = factory.create_command_buffer().into();
 
         let pso = factory.create_pipeline_simple(
@@ -123,20 +140,21 @@ impl GFX {
             transform: cgmath::Matrix4::identity().into(),
             out_color: main_color,
         };
-        
+
         GFX {
+            window: window,
+            dimension: dimension,
             device: device,
             encoder: encoder,
             data: data,
             pso: pso,
             slice: slice,
-            dimension: dimension,
         }
     }
 }
 
 impl Renderer for GFX {
-    fn render(&mut self, window: &mut glfw::Window, proj_view:&Matrix4<f32>) {
+    fn render(&mut self, proj_view: &Matrix4<f32>) {
         let start = precise_time_s() * 1000.;
         self.encoder.clear(&self.data.out_color, [CLEAR_COLOR.0,
                                                   CLEAR_COLOR.1,
@@ -153,7 +171,7 @@ impl Renderer for GFX {
         let pre_submit = precise_time_s() * 1000.;
         self.encoder.flush(&mut self.device);
         let post_submit = precise_time_s() * 1000.;
-        window.swap_buffers();
+        self.window.swap_buffers().unwrap();
         self.device.cleanup();
         let swap = precise_time_s() * 1000.;
 
@@ -162,6 +180,7 @@ impl Renderer for GFX {
         println!("\tsubmit:\t\t{0:4.2}ms", post_submit - pre_submit);
         println!("\tgpu wait:\t{0:4.2}ms", swap - post_submit);
     }
+    fn window(&mut self) -> &glutin::Window { &self.window }
 }
 
 impl Drop for GFX {
@@ -169,21 +188,10 @@ impl Drop for GFX {
     }
 }
 
-struct GL {
-    gl:Gl,
-    trans_uniform:GLint,
-    vs:GLuint,
-    fs:GLuint,
-    program:GLuint,
-    vbo:GLuint,
-    vao:GLuint,
-    dimension:i16,
-}
+
 
 impl GL {
-    fn new(window: &mut glfw::Window, dimension: i16) -> Self {
-        let gl = Gl::load_with(|s| window.get_proc_address(s) as *const _);
-
+    fn new(builder: glutin::WindowBuilder, dimension: i16) -> Self {
         fn compile_shader (gl:&Gl, src: &[u8], ty: GLenum) -> GLuint {
             unsafe {
                 let shader = gl.CreateShader(ty);
@@ -201,13 +209,19 @@ impl GL {
                 if status != (gl::TRUE as GLint) {
                     let mut len: GLint = 0;
                     gl.GetShaderiv(shader, gl::INFO_LOG_LENGTH, &mut len);
-                    let mut buf: Vec<u8> = repeat(0u8).take((len as isize).saturating_sub(1) as usize).collect();     // subtract 1 to skip the trailing null character
+
+                    // allocate a buffer of size (len - 1) to skip the trailing null character
+                    let mut buf: Vec<u8> = repeat(0u8).take((len as usize).saturating_sub(1)).collect();
                     gl.GetShaderInfoLog(shader, len, ptr::null_mut(), buf.as_mut_ptr() as *mut GLchar);
                     panic!("{}", str::from_utf8(&buf).ok().expect("ShaderInfoLog not valid utf8"));
                 }
                 shader
             }
         };
+
+        let window = builder.build().unwrap();
+        unsafe { window.make_current().unwrap() };
+        let gl = Gl::load_with(|s| window.get_proc_address(s) as *const _);
         
         // Create GLSL shaders
         let vs = compile_shader(&gl, VERTEX_SRC, gl::VERTEX_SHADER);
@@ -228,7 +242,9 @@ impl GL {
             if status != (gl::TRUE as GLint) {
                 let mut len: GLint = 0;
                 gl.GetProgramiv(program, gl::INFO_LOG_LENGTH, &mut len);
-                let mut buf: Vec<u8> = repeat(0u8).take((len as isize).saturating_sub(1) as usize).collect();     // subtract 1 to skip the trailing null character
+
+                // allocate a buffer of size (len - 1) to skip the trailing null character
+                let mut buf: Vec<u8> = repeat(0u8).take((len as usize).saturating_sub(1)).collect();
                 gl.GetProgramInfoLog(program, len, ptr::null_mut(), buf.as_mut_ptr() as *mut GLchar);
                 panic!("{}", str::from_utf8(&buf).ok().expect("ProgramInfoLog not valid utf8"));
             }
@@ -271,6 +287,8 @@ impl GL {
         };
 
         GL {
+            window: window,            
+            dimension: dimension,
             gl: gl,
             vs: vs,
             fs: fs,
@@ -278,13 +296,12 @@ impl GL {
             vbo: vbo,
             vao: vao,
             trans_uniform: trans_uniform,
-            dimension: dimension,
         }
     }
 }
 
 impl Renderer for GL {
-    fn render(&mut self, window: &mut glfw::Window, proj_view: &Matrix4<f32>) {
+    fn render(&mut self, proj_view: &Matrix4<f32>) {
         let start = precise_time_s() * 1000.;
 
         // Clear the screen to black
@@ -311,13 +328,14 @@ impl Renderer for GL {
         let submit = precise_time_s() * 1000.;
 
         // Swap buffers
-        window.swap_buffers();
+        self.window.swap_buffers().unwrap();
         let swap = precise_time_s() * 1000.;
 
         println!("total time:\t\t{0:4.2}ms", swap - start);
         println!("\tsubmit:\t\t{0:4.2}ms", submit - start);
         println!("\tgpu wait:\t{0:4.2}ms", swap - submit)
     }
+    fn window(&mut self) -> &glutin::Window { &self.window }
 }
 
 impl Drop for GL {
@@ -349,20 +367,19 @@ fn main() {
 
     let count = ((count as f64).sqrt() / 2.) as i16;
 
-    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS)
-        .ok().expect("Failed to initialize glfw-rs");
+    let builder = glutin::WindowBuilder::new()
+        .with_title("Performance example".to_string())
+        .with_dimensions(800, 600)
+        .with_vsync();
 
-    glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
-    glfw.window_hint(glfw::WindowHint::OpenGlForwardCompat(true));
-    glfw.window_hint(glfw::WindowHint::OpenGlProfile(glfw::OpenGlProfileHint::Core));
-
-    let (mut window, events) = glfw
-        .create_window(640, 480, "Performance example", glfw::WindowMode::Windowed)
-        .expect("Failed to create GLFW window.");
-
-    window.make_current();
-    glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
-    window.set_key_polling(true);
+    let mut r: Box<Renderer>;
+    match mode.as_ref() {
+        "gfx" => r = Box::new(GFX::new(builder, count)),
+        "gl" => r = Box::new(GL::new(builder, count)),
+        x => {
+            panic!("{} is not a known mode", x)
+        }
+    }
 
     let proj_view = {
         let view = Matrix4::look_at(
@@ -373,7 +390,7 @@ fn main() {
 
         let proj = {
             let aspect = {
-                let (w, h) = window.get_framebuffer_size();
+                let (w, h) = r.window().get_inner_size().unwrap();
                 w as f32 / h as f32
             };
             cgmath::perspective(cgmath::deg(45.0f32), aspect, 1.0, 10.0)
@@ -381,27 +398,16 @@ fn main() {
         proj * view
     };
 
-    let mut r: Box<Renderer>;
-    match mode.as_ref() {
-        "gfx" => r = Box::new(GFX::new(&mut window, count)),
-        "gl" => r = Box::new(GL::new(&mut window, count)),
-        x => {
-            panic!("{} is not a known mode", x)
-        }
-    }
-
     println!("count is {}", count*count*4);
-    
-    while !window.should_close() {
-        // Poll events
-        glfw.poll_events();
-        for (_, event) in glfw::flush_messages(&events) {
+
+    'main: loop {
+        for event in r.window().poll_events() {
             match event {
-                glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Action::Press, _) =>
-                    window.set_should_close(true),
+                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
+                glutin::Event::Closed => break 'main,
                 _ => {},
             }
         }
-        r.render(&mut window, &proj_view);
-    }    
+        r.render(&proj_view);
+    }
 }
