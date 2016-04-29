@@ -26,9 +26,23 @@ pub use gfx_app::ColorFormat;
 pub use gfx::format::{Depth, Rgba8};
 use gfx::Bundle;
 
-gfx_vertex_struct!( Vertex {
-    pos: [f32; 2] = "a_Pos",
-});
+gfx_defines!{
+    vertex Vertex {
+        pos: [f32; 2] = "a_Pos",
+    }
+
+    constant Locals {
+        inv_proj: [[f32; 4]; 4] = "u_InvProj",
+        view: [[f32; 4]; 4] = "u_WorldToCamera",
+    }
+
+    pipeline pipe {
+        vbuf: gfx::VertexBuffer<Vertex> = (),
+        cubemap: gfx::TextureSampler<[f32; 4]> = "t_Cubemap",
+        locals: gfx::ConstantBuffer<Locals> = "Locals",
+        out: gfx::RenderTarget<ColorFormat> = "Target0",
+    }
+}
 
 impl Vertex {
     fn new(p: [f32; 2]) -> Vertex {
@@ -37,19 +51,7 @@ impl Vertex {
         }
     }
 }
-
-gfx_constant_struct!( Locals {
-    inv_proj: [[f32; 4]; 4] = "u_InvProj",
-    view: [[f32; 4]; 4] = "u_WorldToCamera",
-});
-
-gfx_pipeline!( pipe {
-    vbuf: gfx::VertexBuffer<Vertex> = (),
-    cubemap: gfx::TextureSampler<[f32; 4]> = "t_Cubemap",
-    locals: gfx::ConstantBuffer<Locals> = "Locals",
-    out: gfx::RenderTarget<ColorFormat> = "Target0",
-});
-
+    
 struct CubemapData<'a> {
     up: &'a [u8],
     down: &'a [u8],

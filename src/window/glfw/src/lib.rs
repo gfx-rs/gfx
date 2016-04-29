@@ -24,9 +24,11 @@ use gfx_core::tex::{AaMode, Size};
 use glfw::Context;
 
 /// Initialize with a window.
-pub fn init(window: &mut glfw::Window) -> (gfx_device_gl::Device, gfx_device_gl::Factory,
-            handle::RenderTargetView<gfx_device_gl::Resources, Rgba8>,
-            handle::DepthStencilView<gfx_device_gl::Resources, DepthStencil>)
+pub fn init(window: &mut glfw::Window) ->
+    (gfx_device_gl::Device,
+     gfx_device_gl::Factory,
+     handle::RenderTargetView<gfx_device_gl::Resources, Rgba8>,
+     handle::DepthStencilView<gfx_device_gl::Resources, DepthStencil>)
 {
     use gfx_core::factory::Typed;
     window.make_current();

@@ -23,10 +23,27 @@ pub use gfx::format::{Rgba8, Depth};
 pub use gfx_app::ColorFormat;
 use gfx::Bundle;
 
-gfx_vertex_struct!( Vertex {
-    pos: [f32; 2] = "a_Pos",
-    uv: [f32; 2] = "a_Uv",
-});
+gfx_defines!{
+    vertex Vertex {
+        pos: [f32; 2] = "a_Pos",
+        uv: [f32; 2] = "a_Uv",
+    }
+
+    constant Locals {
+        offsets: [f32; 2] = "u_Offsets",
+    }
+
+    pipeline pipe {
+        vbuf: gfx::VertexBuffer<Vertex> = (),
+        color: gfx::TextureSampler<[f32; 4]> = "t_Color",
+        flow: gfx::TextureSampler<[f32; 4]> = "t_Flow",
+        noise: gfx::TextureSampler<[f32; 4]> = "t_Noise",
+        offset0: gfx::Global<f32> = "f_Offset0",
+        offset1: gfx::Global<f32> = "f_Offset1",
+        locals: gfx::ConstantBuffer<Locals> = "Locals",
+        out: gfx::RenderTarget<ColorFormat> = "Target0",
+    }
+}
 
 impl Vertex {
     fn new(p: [f32; 2], u: [f32; 2]) -> Vertex {
@@ -36,21 +53,6 @@ impl Vertex {
         }
     }
 }
-
-gfx_constant_struct!( Locals {
-    offsets: [f32; 2] = "u_Offsets",
-});
-
-gfx_pipeline!( pipe {
-    vbuf: gfx::VertexBuffer<Vertex> = (),
-    color: gfx::TextureSampler<[f32; 4]> = "t_Color",
-    flow: gfx::TextureSampler<[f32; 4]> = "t_Flow",
-    noise: gfx::TextureSampler<[f32; 4]> = "t_Noise",
-    offset0: gfx::Global<f32> = "f_Offset0",
-    offset1: gfx::Global<f32> = "f_Offset1",
-    locals: gfx::ConstantBuffer<Locals> = "Locals",
-    out: gfx::RenderTarget<ColorFormat> = "Target0",
-});
 
 fn load_texture<R, F>(factory: &mut F, data: &[u8])
                 -> Result<gfx::handle::ShaderResourceView<R, [f32; 4]>, String>

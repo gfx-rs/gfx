@@ -20,12 +20,31 @@ extern crate gfx_app;
 pub use gfx_app::{ColorFormat, DepthFormat};
 use gfx::Bundle;
 
-// Declare the vertex format suitable for drawing.
+// Declare the vertex format suitable for drawing,
+// as well as the constants used by the shaders
+// and the pipeline state object format.
 // Notice the use of FixedPoint.
-gfx_vertex_struct!( Vertex {
-    pos: [i8; 4] = "a_Pos",
-    tex_coord: [i8; 2] = "a_TexCoord",
-});
+gfx_defines!{
+    vertex Vertex {
+        pos: [i8; 4] = "a_Pos",
+        tex_coord: [i8; 2] = "a_TexCoord",
+    }
+
+    constant Locals {
+        transform: [[f32; 4]; 4] = "u_Transform",
+    }
+
+    pipeline pipe {
+        vbuf: gfx::VertexBuffer<Vertex> = (),
+        transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
+        locals: gfx::ConstantBuffer<Locals> = "Locals",
+        color: gfx::TextureSampler<[f32; 4]> = "t_Color",
+        out_color: gfx::RenderTarget<ColorFormat> = "Target0",
+        out_depth: gfx::DepthTarget<DepthFormat> =
+            gfx::preset::depth::LESS_EQUAL_WRITE,
+    }
+}
+
 
 impl Vertex {
     fn new(p: [i8; 3], t: [i8; 2]) -> Vertex {
@@ -35,21 +54,6 @@ impl Vertex {
         }
     }
 }
-
-gfx_constant_struct!( Locals {
-    transform: [[f32; 4]; 4] = "u_Transform",
-});
-
-gfx_pipeline!( pipe {
-    vbuf: gfx::VertexBuffer<Vertex> = (),
-    transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
-    locals: gfx::ConstantBuffer<Locals> = "Locals",
-    color: gfx::TextureSampler<[f32; 4]> = "t_Color",
-    out_color: gfx::RenderTarget<ColorFormat> = "Target0",
-    out_depth: gfx::DepthTarget<DepthFormat> =
-        gfx::preset::depth::LESS_EQUAL_WRITE,
-});
-
 
 //----------------------------------------
 struct App<R: gfx::Resources>{

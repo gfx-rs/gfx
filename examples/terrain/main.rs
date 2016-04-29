@@ -32,27 +32,29 @@ use time::precise_time_s;
 use noise::{Seed, perlin2};
 
 
-gfx_vertex_struct!( Vertex {
-    pos: [f32; 3] = "a_Pos",
-    color: [f32; 3] = "a_Color",
-});
+gfx_defines!{
+    vertex Vertex {
+        pos: [f32; 3] = "a_Pos",
+        color: [f32; 3] = "a_Color",
+    }
 
-gfx_constant_struct!( Locals {
-    model: [[f32; 4]; 4] = "u_Model",
-    view: [[f32; 4]; 4] = "u_View",
-    proj: [[f32; 4]; 4] = "u_Proj",
-});
+    constant Locals {
+        model: [[f32; 4]; 4] = "u_Model",
+        view: [[f32; 4]; 4] = "u_View",
+        proj: [[f32; 4]; 4] = "u_Proj",
+    }
 
-gfx_pipeline!(pipe {
-    vbuf: gfx::VertexBuffer<Vertex> = (),
-    locals: gfx::ConstantBuffer<Locals> = "Locals",
-    model: gfx::Global<[[f32; 4]; 4]> = "u_Model",
-    view: gfx::Global<[[f32; 4]; 4]> = "u_View",
-    proj: gfx::Global<[[f32; 4]; 4]> = "u_Proj",
-    out_color: gfx::RenderTarget<ColorFormat> = "Target0",
-    out_depth: gfx::DepthTarget<DepthStencil> =
-        gfx::preset::depth::LESS_EQUAL_WRITE,
-});
+    pipeline pipe {
+        vbuf: gfx::VertexBuffer<Vertex> = (),
+        locals: gfx::ConstantBuffer<Locals> = "Locals",
+        model: gfx::Global<[[f32; 4]; 4]> = "u_Model",
+        view: gfx::Global<[[f32; 4]; 4]> = "u_View",
+        proj: gfx::Global<[[f32; 4]; 4]> = "u_Proj",
+        out_color: gfx::RenderTarget<ColorFormat> = "Target0",
+        out_depth: gfx::DepthTarget<DepthStencil> =
+            gfx::preset::depth::LESS_EQUAL_WRITE,
+    }
+}
 
 fn calculate_color(height: f32) -> [f32; 3] {
     if height > 8.0 {
