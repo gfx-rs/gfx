@@ -24,6 +24,35 @@ use gfx_core::tex::{AaMode, Size};
 use glfw::Context;
 
 /// Initialize with a window.
+///
+/// # Example
+///
+/// ```
+/// extern crate gfx_window_glfw;
+/// extern crate glfw;
+/// 
+/// fn main() {
+///     use glfw::Context;
+///
+///     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS)
+///         .ok().expect("Failed to initialize GLFW");
+/// 
+///     glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
+///     glfw.window_hint(glfw::WindowHint::OpenGlForwardCompat(true));
+///     glfw.window_hint(glfw::WindowHint::OpenGlProfile(glfw::OpenGlProfileHint::Core));
+/// 
+///     let (mut window, events) = glfw
+///         .create_window(800, 600, "Example", glfw::WindowMode::Windowed)
+///         .expect("Failed to create GLFW window.");
+/// 
+///     window.make_current();
+///     glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
+///     let (device, mut factory, color_view, depth_view) =
+///         gfx_window_glfw::init(&mut window);
+///
+///     // some code...
+/// }
+/// ```
 pub fn init(window: &mut glfw::Window) ->
     (gfx_device_gl::Device,
      gfx_device_gl::Factory,
