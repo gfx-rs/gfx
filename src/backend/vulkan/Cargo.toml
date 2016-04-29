@@ -1,0 +1,21 @@
+[package]
+name = "gfx_device_vulkan"
+version = "0.1.0"
+description = "Vulkan API backend for gfx-rs"
+homepage = "https://github.com/gfx-rs/gfx"
+repository = "https://github.com/gfx-rs/gfx"
+keywords = ["graphics", "gamedev"]
+license = "Apache-2.0"
+authors = ["The Gfx-rs Developers"]
+build = "build.rs"
+
+[lib]
+name = "gfx_device_vulkan"
+
+[dependencies]
+vk = "0.0.1"
+winit = "0.5"
+gfx_core = { path = "../../core", version = "0.2" }
+
+[build-dependencies]
+vk-sys = { path = "../../../../vulkano/vk-sys" }
