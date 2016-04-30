@@ -467,7 +467,6 @@ impl<R: gfx::Resources> gfx_app::Application<R> for TileMap<R> {
             pso: factory.create_pipeline_simple(
                 vs.select(init.backend).unwrap(),
                 ps.select(init.backend).unwrap(),
-                gfx::state::CullFace::Back,
                 pipe::new()
                 ).unwrap(),
             tilemap_plane: TileMapPlane::new(&mut factory,

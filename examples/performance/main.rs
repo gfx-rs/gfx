@@ -129,7 +129,6 @@ impl GFX {
 
         let pso = factory.create_pipeline_simple(
             VERTEX_SRC, FRAGMENT_SRC,
-            gfx::state::CullFace::Nothing,
             pipe::new()
         ).unwrap();
 

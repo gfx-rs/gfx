@@ -60,7 +60,7 @@ pub enum MapAccess {
 
 bitflags!(
     /// Bind flags
-    flags Bind: u8 {
+    pub flags Bind: u8 {
         /// The resource can be rendered into.
         const RENDER_TARGET    = 0x1,
         /// The resource can serve as a depth/stencil target.
@@ -213,7 +213,7 @@ impl From<TargetViewError> for CombinedError {
 /// shader programs and textures. See the individual methods for more information.
 ///
 /// Also see `FactoryExt` inside the `gfx` trait for additional methods.
-#[warn(missing_docs)]
+#[allow(missing_docs)]
 pub trait Factory<R: Resources> {
     /// Associated mapper type
     type Mapper: Clone + mapping::Raw;

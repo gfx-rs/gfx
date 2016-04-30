@@ -438,7 +438,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             let pso = factory.create_pipeline_simple(
                 vs.select(init.backend).unwrap(),
                 ps.select(init.backend).unwrap(),
-                gfx::state::CullFace::Back, terrain::new()
+                terrain::new()
                 ).unwrap();
 
             let data = terrain::Data {
@@ -476,7 +476,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             let pso = factory.create_pipeline_simple(
                 vs.select(init.backend).unwrap(),
                 ps.select(init.backend).unwrap(),
-                gfx::state::CullFace::Nothing, blit::new()
+                blit::new()
                 ).unwrap();
 
             let data = blit::Data {
@@ -552,7 +552,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             let pso = factory.create_pipeline_simple(
                 vs.select(init.backend).unwrap(),
                 ps.select(init.backend).unwrap(),
-                gfx::state::CullFace::Back, light::new()
+                light::new()
                 ).unwrap();
 
             let data = light::Data {
@@ -585,7 +585,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             let pso = factory.create_pipeline_simple(
                 vs.select(init.backend).unwrap(),
                 ps.select(init.backend).unwrap(),
-                gfx::state::CullFace::Back, emitter::new()
+                emitter::new()
                 ).unwrap();
 
             let data = emitter::Data {

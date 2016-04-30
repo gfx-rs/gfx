@@ -115,7 +115,6 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         let pso = factory.create_pipeline_simple(
             vs.select(init.backend).unwrap(),
             ps.select(init.backend).unwrap(),
-            gfx::state::CullFace::Nothing,
             pipe::new()
         ).unwrap();
 

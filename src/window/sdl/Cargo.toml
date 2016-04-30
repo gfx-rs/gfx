@@ -1,6 +1,6 @@
 [package]
 name = "gfx_window_sdl"
-version = "0.1.0"
+version = "0.2.0"
 description = "SDL2 window for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -12,6 +12,6 @@ authors = ["The Gfx-rs Developers"]
 name = "gfx_window_sdl"
 
 [dependencies]
-sdl2 = "0.16"
-gfx_core = { path = "../../core", version = "0.2" }
-gfx_device_gl = { path = "../../backend/gl", version = "0.9" }
+sdl2 = "0.18"
+gfx_core = { path = "../../core", version = "0.3" }
+gfx_device_gl = { path = "../../backend/gl", version = "0.10" }

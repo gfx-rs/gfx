@@ -55,7 +55,6 @@ pub fn main() {
     let pso = factory.create_pipeline_simple(
         include_bytes!("shader/triangle_150.glslv"),
         include_bytes!("shader/triangle_150.glslf"),
-        gfx::state::CullFace::Nothing,
         pipe::new()
     ).unwrap();
     let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(&TRIANGLE, ());
