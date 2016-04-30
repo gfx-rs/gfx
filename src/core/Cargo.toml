@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx_core"
-version = "0.2.0"
+version = "0.3.0"
 description = "Core library of Gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -27,8 +27,8 @@ name = "gfx_core"
 path = "src/lib.rs"
 
 [dependencies]
-draw_state = "0.5"
-bitflags = "0.4"
+draw_state = "0.6"
+bitflags = "0.6"
 log = "0.3"
 
 [features]

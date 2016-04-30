@@ -449,7 +449,6 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
             factory.create_pipeline_simple(
                 vs.select(init.backend).unwrap(),
                 ps.select(init.backend).unwrap(),
-                gfx::state::CullFace::Back,
                 forward::new()
                 ).unwrap()
         };
@@ -471,7 +470,8 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
                 ).unwrap();
             factory.create_pipeline_state(&set,
                 gfx::Primitive::TriangleList,
-                gfx::state::Rasterizer::new_fill(gfx::state::CullFace::Back)
+                gfx::state::Rasterizer::new_fill()
+                                       .with_cull_back()
                                        .with_offset(2.0, 1),
                 shadow::new()
                 ).unwrap()

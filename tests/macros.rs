@@ -43,9 +43,7 @@ fn _test_pso<R, F>(factory: &mut F) -> gfx::PipelineState<R, testpipe::Meta> whe
     R: gfx::Resources,
     F: gfx::traits::FactoryExt<R>,
 {
-    factory.create_pipeline_simple(&[], &[],
-        gfx::state::CullFace::Nothing, testpipe::new()
-        ).unwrap()
+    factory.create_pipeline_simple(&[], &[], testpipe::new()).unwrap()
 }
 
 
@@ -71,7 +69,5 @@ fn _test_raw<R, F>(factory: &mut F) -> gfx::PipelineState<R, testraw::Meta> wher
             fm::Format(fm::SurfaceType::R8_G8_B8_A8, fm::ChannelType::Unorm),
             gfx::state::MASK_ALL, None),
     };
-    factory.create_pipeline_simple(&[], &[],
-        gfx::state::CullFace::Nothing, init
-        ).unwrap()
+    factory.create_pipeline_simple(&[], &[], init).unwrap()
 }

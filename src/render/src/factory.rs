@@ -18,11 +18,10 @@
 //! exposes extension functions and shortcuts to aid with creating and managing graphics resources.
 //! See the `FactoryExt` trait for more information.
 
-use gfx_core::{format, handle, tex};
+use gfx_core::{format, handle, tex, state};
 use gfx_core::{Primitive, Resources, ShaderSet};
 use gfx_core::factory::{Bind, BufferRole, Factory};
 use gfx_core::pso::{CreationError, Descriptor};
-use gfx_core::state::{CullFace, Rasterizer};
 use slice::{Slice, IndexBuffer, IntoIndexBuffer};
 use pso;
 use shade::ProgramError;
@@ -108,7 +107,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     /// Similar to `create_pipeline_from_program(..)`, but takes a `ShaderSet` as opposed to a
     /// shader `Program`.  
     fn create_pipeline_state<I: pso::PipelineInit>(&mut self, shaders: &ShaderSet<R>,
-                             primitive: Primitive, rasterizer: Rasterizer, init: I)
+                             primitive: Primitive, rasterizer: state::Rasterizer, init: I)
                              -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError>
     {
         match self.create_program(shaders) {
@@ -120,7 +119,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     /// Creates a strongly typed `PipelineState` from its `Init` structure, a shader `Program`, a
     /// primitive type and a `Rasterizer`.
     fn create_pipeline_from_program<I: pso::PipelineInit>(&mut self, program: &handle::Program<R>,
-                                    primitive: Primitive, rasterizer: Rasterizer, init: I)
+                                    primitive: Primitive, rasterizer: state::Rasterizer, init: I)
                                     -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError>
     {
         let mut descriptor = Descriptor::new(primitive, rasterizer);
@@ -138,13 +137,13 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
 
     /// Creates a strongly typed `PipelineState` from its `Init` structure. Automatically creates a
     /// shader `Program` from a vertex and pixel shader source, as well as a `Rasterizer` capable
-    /// of rendering triangle faces, that culls following the supplied `CullFace`.
-    fn create_pipeline_simple<I: pso::PipelineInit>(&mut self, vs: &[u8], ps: &[u8], cull: CullFace, init: I)
+    /// of rendering triangle faces without culling.
+    fn create_pipeline_simple<I: pso::PipelineInit>(&mut self, vs: &[u8], ps: &[u8], init: I)
                               -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError>
     {
         match self.create_shader_set(vs, ps) {
             Ok(ref s) => self.create_pipeline_state(s,
-                Primitive::TriangleList, Rasterizer::new_fill(cull), init),
+                Primitive::TriangleList, state::Rasterizer::new_fill(), init),
             Err(e) => Err(PipelineStateError::Program(e)),
         }
     }

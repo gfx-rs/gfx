@@ -252,7 +252,7 @@ impl_const_matrix!([2,2], [3,3], [4,4], [4,3]);
 
 bitflags!(
     /// Parameter usage flags.
-    flags Usage: u8 {
+    pub flags Usage: u8 {
         /// Used by the vertex shader
         const VERTEX   = 0x1,
         /// Used by the geometry shader
