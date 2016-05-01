@@ -14,5 +14,5 @@ name = "gfx_window_vulkan"
 [dependencies]
 vk = "0.0.1"
 winit = "0.5"
-gfx_core = { path = "../../core", version = "0.2" }
+gfx_core = { path = "../../core", version = "0.3" }
 gfx_device_vulkan = { path = "../../backend/vulkan", version = "0.1" }

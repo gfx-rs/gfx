@@ -13,9 +13,10 @@ build = "build.rs"
 name = "gfx_device_vulkan"
 
 [dependencies]
-vk = "0.0.1"
+vk = "0.0"
+shared_library = "0.1"
 winit = "0.5"
-gfx_core = { path = "../../core", version = "0.2" }
+gfx_core = { path = "../../core", version = "0.3" }
 
 [build-dependencies]
 vk-sys = { path = "../../../../vulkano/vk-sys" }

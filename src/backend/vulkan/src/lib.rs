@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+extern crate shared_library;
 extern crate gfx_core;
 
+use std::{fmt, mem, ptr};
 use std::ffi::CString;
-use std::ptr;
+use std::path::Path;
+use shared_library::dynamic_library::DynamicLibrary;
 
 mod vk {
     #![allow(dead_code)]
@@ -48,15 +51,27 @@ struct PhysicalDeviceInfo {
 }
 
 pub struct Backend {
+    dynamic_lib: DynamicLibrary,
+    library: vk::Static,
     instance: vk::Instance,
-    pointers: vk::InstancePointers,
+    inst_pointers: vk::InstancePointers,
+    functions: vk::EntryPoints,
     devices: Vec<PhysicalDeviceInfo>,
 }
 
-pub fn create(app_info: Option<&ApplicationInfo>) -> Backend {
-    let mut c_app_name: CString;
-    let mut c_engine_name: CString;
-    let mut vk_info: vk::ApplicationInfo;
+pub fn create(app_info: Option<ApplicationInfo>) -> Backend {
+    let c_app_name: CString;
+    let c_engine_name: CString;
+    let vk_info: vk::ApplicationInfo;
+
+    let dynamic_lib = DynamicLibrary::open(Some(Path::new("libvulkan.so"))).unwrap();
+    let lib = vk::Static::load(|name| unsafe {
+        let name = name.to_str().unwrap();
+        dynamic_lib.symbol(name).unwrap()
+    });
+    let entry_points = vk::EntryPoints::load(|name| unsafe {
+        mem::transmute(lib.GetInstanceProcAddr(0, name.as_ptr()))
+    });
 
     let info_ptr = if let Some(info) = app_info {
         c_app_name = CString::new(info.application_name).unwrap();
@@ -68,7 +83,7 @@ pub fn create(app_info: Option<&ApplicationInfo>) -> Backend {
             applicationVersion: info.application_version,
             pEngineName: c_engine_name.as_ptr(),
             engineVersion: info.engine_version,
-            apiVersion: 0x1000, //TODO
+            apiVersion: 0x400000, //TODO
         };
         &vk_info as *const _
     }else {
@@ -86,7 +101,60 @@ pub fn create(app_info: Option<&ApplicationInfo>) -> Backend {
         ppEnabledExtensionNames: ptr::null(), //TODO
     };
 
-    Backend {
+    let instance = unsafe {
+        let mut ptr = mem::uninitialized();
+        let status = entry_points.CreateInstance(&create_info, ptr::null(), &mut ptr);
+        if status != vk::SUCCESS {
+            panic!("vkCreateInstance: {:?}", Error(status));
+        }
+        ptr
+    };
 
+    let inst_ppinters = vk::InstancePointers::load(|name| unsafe {
+        mem::transmute(lib.GetInstanceProcAddr(instance, name.as_ptr()))
+    });
+
+    Backend {
+        dynamic_lib: dynamic_lib,
+        library: lib,
+        instance: instance,
+        inst_pointers: inst_ppinters,
+        functions: entry_points,
+        devices: Vec::new(),
+    }
+}
+
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct Error(vk::Result);
+
+impl fmt::Debug for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self.0 {
+            vk::SUCCESS => "success",
+            vk::NOT_READY => "not ready",
+            vk::TIMEOUT => "timeout",
+            vk::EVENT_SET => "event_set",
+            vk::EVENT_RESET => "event_reset",
+            vk::INCOMPLETE => "incomplete",
+            vk::ERROR_OUT_OF_HOST_MEMORY => "out of host memory",
+            vk::ERROR_OUT_OF_DEVICE_MEMORY => "out of device memory",
+            vk::ERROR_INITIALIZATION_FAILED => "initialization failed",
+            vk::ERROR_DEVICE_LOST => "device lost",
+            vk::ERROR_MEMORY_MAP_FAILED => "memory map failed",
+            vk::ERROR_LAYER_NOT_PRESENT => "layer not present",
+            vk::ERROR_EXTENSION_NOT_PRESENT => "extension not present",
+            vk::ERROR_FEATURE_NOT_PRESENT => "feature not present",
+            vk::ERROR_INCOMPATIBLE_DRIVER => "incompatible driver",
+            vk::ERROR_TOO_MANY_OBJECTS => "too many objects",
+            vk::ERROR_FORMAT_NOT_SUPPORTED => "format not supported",
+            vk::ERROR_SURFACE_LOST_KHR => "surface lost (KHR)",
+            vk::ERROR_NATIVE_WINDOW_IN_USE_KHR => "native window in use (KHR)",
+            vk::SUBOPTIMAL_KHR => "suboptimal (KHR)",
+            vk::ERROR_OUT_OF_DATE_KHR => "out of date (KHR)",
+            vk::ERROR_INCOMPATIBLE_DISPLAY_KHR => "incompatible display (KHR)",
+            vk::ERROR_VALIDATION_FAILED_EXT => "validation failed (EXT)",
+            _ => "unknown",
+        })
     }
 }
