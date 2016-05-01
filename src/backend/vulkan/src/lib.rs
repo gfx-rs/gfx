@@ -41,13 +41,42 @@ pub struct ApplicationInfo<'a> {
     pub engine_version: u32,
 }
 
-
 struct PhysicalDeviceInfo {
     device: vk::PhysicalDevice,
     properties: vk::PhysicalDeviceProperties,
     queue_families: Vec<vk::QueueFamilyProperties>,
     memory: vk::PhysicalDeviceMemoryProperties,
-    //available_features: Features,
+    features: vk::PhysicalDeviceFeatures,
+}
+
+impl PhysicalDeviceInfo {
+    pub fn new(dev: vk::PhysicalDevice, vk: &vk::InstancePointers) -> PhysicalDeviceInfo {
+        PhysicalDeviceInfo {
+            device: dev,
+            properties: unsafe {
+                let mut out = mem::zeroed();
+                vk.GetPhysicalDeviceProperties(dev, &mut out);
+                out
+            },
+            queue_families: unsafe {
+                let mut num = 4;
+                let mut families = Vec::with_capacity(num as usize);
+                vk.GetPhysicalDeviceQueueFamilyProperties(dev, &mut num, families.as_mut_ptr());
+                families.set_len(num as usize);
+                families
+            },
+            memory: unsafe {
+                let mut out = mem::zeroed();
+                vk.GetPhysicalDeviceMemoryProperties(dev, &mut out);
+                out
+            },
+            features: unsafe {
+                let mut out = mem::zeroed();
+                vk.GetPhysicalDeviceFeatures(dev, &mut out);
+                out
+            },
+        }
+    }
 }
 
 pub struct Backend {
@@ -102,7 +131,7 @@ pub fn create(app_info: Option<ApplicationInfo>) -> Backend {
     };
 
     let instance = unsafe {
-        let mut ptr = mem::uninitialized();
+        let mut ptr = mem::zeroed();
         let status = entry_points.CreateInstance(&create_info, ptr::null(), &mut ptr);
         if status != vk::SUCCESS {
             panic!("vkCreateInstance: {:?}", Error(status));
@@ -110,17 +139,29 @@ pub fn create(app_info: Option<ApplicationInfo>) -> Backend {
         ptr
     };
 
-    let inst_ppinters = vk::InstancePointers::load(|name| unsafe {
+    let inst_pointers = vk::InstancePointers::load(|name| unsafe {
         mem::transmute(lib.GetInstanceProcAddr(instance, name.as_ptr()))
     });
+
+    let mut physical_devices: [vk::PhysicalDevice; 4] = unsafe { mem::zeroed() };
+    let mut num = physical_devices.len() as u32;
+    let status = unsafe {
+        inst_pointers.EnumeratePhysicalDevices(instance, &mut num, physical_devices.as_mut_ptr())
+    };
+    if status != vk::SUCCESS {
+        panic!("vkEnumeratePhysicalDevices: {:?}", Error(status));
+    }
+    let devices = physical_devices[..num as usize].iter()
+        .map(|dev| PhysicalDeviceInfo::new(*dev, &inst_pointers))
+        .collect();
 
     Backend {
         dynamic_lib: dynamic_lib,
         library: lib,
         instance: instance,
-        inst_pointers: inst_ppinters,
+        inst_pointers: inst_pointers,
         functions: entry_points,
-        devices: Vec::new(),
+        devices: devices,
     }
 }
 
