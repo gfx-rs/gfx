@@ -26,8 +26,7 @@ use native::{Rtv, Srv, Dsv};
 use metal::*;
 
 pub struct CommandBuffer {
-    cmd_buf: MTLCommandBuffer,
-    encoder: MTLRenderCommandEncoder,
+    pub cmd_buf: MTLCommandBuffer,
 }
 
 impl draw::CommandBuffer<Resources> for CommandBuffer {

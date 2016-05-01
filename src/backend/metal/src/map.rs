@@ -245,6 +245,15 @@ pub fn map_texture_usage(usage: Usage) -> (MTLResourceOptions, MTLStorageMode) {
     }
 }
 
+pub fn map_buffer_usage(usage: Usage) -> MTLResourceOptions {
+    match usage {
+        Usage::GpuOnly => MTLResourceStorageModePrivate,
+        Usage::Const   => MTLResourceCPUCacheModeDefaultCache,
+        Usage::Dynamic => MTLResourceCPUCacheModeDefaultCache,
+        Usage::CpuOnly(access) => map_access(access)
+    }
+}
+
 pub fn map_wrap(wrap: WrapMode) -> MTLSamplerAddressMode {
     use metal::MTLSamplerAddressMode::*;
 

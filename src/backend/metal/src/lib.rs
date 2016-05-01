@@ -14,7 +14,9 @@
 
 #[macro_use]
 extern crate log;
+#[macro_use]
 extern crate objc;
+extern crate objc_foundation;
 extern crate cocoa;
 extern crate gfx_core;
 extern crate metal;

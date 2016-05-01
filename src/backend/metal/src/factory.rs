@@ -15,6 +15,8 @@
 use std::os::raw::c_void;
 use std::sync::Arc;
 use std::slice;
+use std::mem;
+use std::str;
 
 use cocoa::base::{selector, class};
 use cocoa::foundation::{NSUInteger};
@@ -28,7 +30,7 @@ use metal::*;
 
 use command::CommandBuffer;
 
-use {Resources, Share, Texture};
+use {Resources, Share, Texture, Buffer, Shader};
 use native;
 
 #[derive(Copy, Clone)]
@@ -68,7 +70,25 @@ impl Factory {
     }
 
     pub fn create_command_buffer(&self) -> CommandBuffer {
-        unimplemented!()
+        CommandBuffer {
+            cmd_buf: self.queue.new_command_buffer()
+        }
+    }
+
+    fn create_buffer_internal(&self, info: factory::BufferInfo, raw_data: Option<*const c_void>)
+            -> Result<handle::RawBuffer<Resources>, factory::BufferError> {
+        use map::{map_buffer_usage};
+
+        let usage = map_buffer_usage(info.usage);
+
+        if info.bind.contains(factory::RENDER_TARGET) | info.bind.contains(factory::DEPTH_STENCIL) {
+            return Err(factory::BufferError::UnsupportedBind(info.bind))
+        }
+
+        let mut raw_buf = native::Buffer(self.device.new_buffer(info.size as u64, usage));
+
+        let buf = Buffer(raw_buf, info.usage);
+        Ok(self.share.handles.borrow_mut().make_buffer(buf, info))
     }
 
 }
@@ -82,9 +102,7 @@ impl core::Factory<Resources> for Factory {
     }
 
     fn create_buffer_raw(&mut self, info: factory::BufferInfo) -> Result<handle::RawBuffer<Resources>, factory::BufferError> {
-        //self.create_buffer_internal(info, None)
-        unimplemented!()
-
+        self.create_buffer_internal(info, None)
     }
 
     fn create_buffer_const_raw(&mut self, data: &[u8], stride: usize, role: factory::BufferRole, bind: factory::Bind)
@@ -96,46 +114,62 @@ impl core::Factory<Resources> for Factory {
             size: data.len(),
             stride: stride,
         };
-        //self.create_buffer_internal(info, Some(data.as_ptr() as *const c_void))
-        unimplemented!()
-
+        self.create_buffer_internal(info, Some(data.as_ptr() as *const c_void))
     }
 
     fn create_shader(&mut self, stage: core::shade::Stage, code: &[u8])
                      -> Result<handle::Shader<Resources>, core::shade::CreateShaderError> {
         use gfx_core::shade::{CreateShaderError, Stage};
-        /*use mirror::reflect_shader;
 
-        let dev = self.device;
-        let len = code.len() as u64;
-        let (hr, object) = match stage {
-            Stage::Vertex => {
-
+        let lib = match stage {
+            Stage::Vertex | Stage::Pixel => {
+                let src = str::from_utf8(code).unwrap();
+                self.device.new_library_with_source(src, MTLCompileOptions::nil())
             },
-            Stage::Geometry => {
-
-            },
-            Stage::Pixel => {
-
-            },
-            //_ => return Err(CreateShaderError::StageNotSupported(stage))
+            _ => return Err(CreateShaderError::StageNotSupported(stage))
         };
 
-        /*let shader = Shader {
-            object: object,
-            reflection: reflection,
-            code_hash: hash,
+        let shader = Shader {
+            func: lib.get_function(match stage {
+                Stage::Vertex => "vert",
+                Stage::Pixel => "frag",
+                _ => return Err(CreateShaderError::StageNotSupported(stage))
+            }).unwrap()
         };
-        Ok(self.share.handles.borrow_mut().make_shader(shader))*/
 
-        Err(CreateShaderError::CompilationFailed(format!("code {}", 2)))*/
-
-        unimplemented!()
+        Ok(self.share.handles.borrow_mut().make_shader(shader))
     }
 
     fn create_program(&mut self, shader_set: &core::ShaderSet<Resources>)
                       -> Result<handle::Program<Resources>, core::shade::CreateProgramError> {
         use gfx_core::shade::{ProgramInfo, Stage};
+
+        /*let mut info = ProgramInfo {
+            vertex_attributes: Vec::new(),
+            globals: Vec::new(),
+            constant_buffers: Vec::new(),
+            textures: Vec::new(),
+            unordereds: Vec::new(),
+            samplers: Vec::new(),
+            outputs: Vec::new(),
+            knows_outputs: true,
+        };
+
+        let prog = match shader_set {
+            &core::ShaderSet::Simple(ref vs, ref ps) => {
+                let (vs, ps) = (vs.reference(fh), ps.reference(fh));
+                populate_info(&mut info, Stage::Vertex, vs.reflection);
+                populate_info(&mut info, Stage::Pixel,  ps.reflection);
+                unsafe { (*vs.object).AddRef(); (*ps.object).AddRef(); }
+                Program {
+                    vs: vs.object as *mut ID3D11VertexShader,
+                    gs: ptr::null_mut(),
+                    ps: ps.object as *mut ID3D11PixelShader,
+                    vs_hash: vs.code_hash,
+                }
+            },
+
+        }*/
         /*use mirror::populate_info;
 
         let mut info = ProgramInfo {
@@ -337,42 +371,18 @@ impl core::Factory<Resources> for Factory {
 
         let tex = Texture(native::Texture(self.device.new_texture(descriptor)), desc.usage);
         Ok(self.share.handles.borrow_mut().make_texture(tex, desc))
-
-
-        /*        use data::{map_bind, map_usage, map_surface, map_format};
-
-        let (usage, cpu_access) = map_usage(desc.usage);
-        let tparam = TextureParam {
-            levels: desc.levels as winapi::UINT,
-            format: match hint {
-                Some(channel) if self.use_texture_format_hint && !desc.bind.contains(f::DEPTH_STENCIL) => {
-                    match map_format(core::format::Format(desc.format, channel), true) {
-                        Some(f) => f,
-                        None => return Err(Error::Format(desc.format, Some(channel)))
-                    }
-                },
-                _ => match map_surface(desc.format) {
-                    Some(f) => f,
-                    None => return Err(Error::Format(desc.format, None))
-                },
-            },
-            bytes_per_texel: (desc.format.get_total_bits() >> 3) as winapi::UINT,
-            bind: map_bind(desc.bind),
-            usage: usage,
-            cpu_access: cpu_access,
-        };
-
-        */
     }
 
     fn view_buffer_as_shader_resource_raw(&mut self, _hbuf: &handle::RawBuffer<Resources>)
                                       -> Result<handle::RawShaderResourceView<Resources>, factory::ResourceViewError> {
-        Err(factory::ResourceViewError::Unsupported) //TODO
+        unimplemented!()
+        // Err(factory::ResourceViewError::Unsupported) //TODO
     }
 
     fn view_buffer_as_unordered_access_raw(&mut self, _hbuf: &handle::RawBuffer<Resources>)
                                        -> Result<handle::RawUnorderedAccessView<Resources>, factory::ResourceViewError> {
-        Err(factory::ResourceViewError::Unsupported) //TODO
+        unimplemented!()
+        // Err(factory::ResourceViewError::Unsupported) //TODO
     }
 
     fn view_texture_as_shader_resource_raw(&mut self, htex: &handle::RawTexture<Resources>, desc: core::tex::ResourceDesc)
@@ -427,12 +437,15 @@ impl core::Factory<Resources> for Factory {
             return Err(f::ResourceViewError::Unsupported);
         }
         Ok(self.share.handles.borrow_mut().make_texture_srv(native::Srv(raw_view), htex))*/
-        unimplemented!()
+        let raw_tex = self.frame_handles.ref_texture(htex).0;
+        Ok(self.share.handles.borrow_mut().make_texture_srv(native::Srv(raw_tex.0), htex))
+        // unimplemented!()
     }
 
     fn view_texture_as_unordered_access_raw(&mut self, _htex: &handle::RawTexture<Resources>)
                                         -> Result<handle::RawUnorderedAccessView<Resources>, factory::ResourceViewError> {
-        Err(factory::ResourceViewError::Unsupported) //TODO
+        // Err(factory::ResourceViewError::Unsupported) //TODO
+        unimplemented!()
     }
 
     fn view_texture_as_render_target_raw(&mut self, htex: &handle::RawTexture<Resources>, desc: core::tex::RenderDesc)
@@ -565,7 +578,10 @@ impl core::Factory<Resources> for Factory {
         }
         let dim = htex.get_info().kind.get_level_dimensions(desc.level);
         Ok(self.share.handles.borrow_mut().make_dsv(native::Dsv(raw_view), htex, dim))*/
-        unimplemented!()
+        let raw_tex = self.frame_handles.ref_texture(htex).0;
+        let size = htex.get_info().kind.get_level_dimensions(desc.level);
+        Ok(self.share.handles.borrow_mut().make_dsv(native::Dsv(raw_tex.0), htex, size))
+        // unimplemented!()
     }
 
     fn create_sampler(&mut self, info: core::tex::SamplerInfo) -> handle::Sampler<Resources> {

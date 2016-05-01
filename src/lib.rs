@@ -242,7 +242,7 @@ impl<
             aspect_ratio: width as f32 / height as f32
         });
 
-        let mut harness = Harness::new();
+        /*let mut harness = Harness::new();
         'main: loop {
             for event in window.poll_events() {
                 match event {
@@ -256,7 +256,7 @@ impl<
             //window.swap_buffers().unwrap();
             device.cleanup();
             harness.bump()
-        }
+        }*/
     }
 }
 
