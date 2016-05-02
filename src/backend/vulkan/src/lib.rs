@@ -29,18 +29,6 @@ mod vk {
 }
 
 
-/// Information that can be given to the Vulkan driver so that it can identify your application.
-pub struct ApplicationInfo<'a> {
-    /// Name of the application.
-    pub application_name: &'a str,
-    /// An opaque number that contains the version number of the application.
-    pub application_version: u32,
-    /// Name of the engine used to power the application.
-    pub engine_name: &'a str,
-    /// An opaque number that contains the version number of the engine.
-    pub engine_version: u32,
-}
-
 struct PhysicalDeviceInfo {
     device: vk::PhysicalDevice,
     properties: vk::PhysicalDeviceProperties,
@@ -88,11 +76,7 @@ pub struct Backend {
     devices: Vec<PhysicalDeviceInfo>,
 }
 
-pub fn create(app_info: Option<ApplicationInfo>) -> Backend {
-    let c_app_name: CString;
-    let c_engine_name: CString;
-    let vk_info: vk::ApplicationInfo;
-
+pub fn create(app_name: &str, app_version: u32) -> Backend {
     let dynamic_lib = DynamicLibrary::open(Some(Path::new("libvulkan.so"))).unwrap();
     let lib = vk::Static::load(|name| unsafe {
         let name = name.to_str().unwrap();
@@ -102,28 +86,20 @@ pub fn create(app_info: Option<ApplicationInfo>) -> Backend {
         mem::transmute(lib.GetInstanceProcAddr(0, name.as_ptr()))
     });
 
-    let info_ptr = if let Some(info) = app_info {
-        c_app_name = CString::new(info.application_name).unwrap();
-        c_engine_name = CString::new(info.engine_name).unwrap();
-        vk_info = vk::ApplicationInfo {
-            sType: vk::STRUCTURE_TYPE_APPLICATION_INFO,
-            pNext: ptr::null(),
-            pApplicationName: c_app_name.as_ptr(),
-            applicationVersion: info.application_version,
-            pEngineName: c_engine_name.as_ptr(),
-            engineVersion: info.engine_version,
-            apiVersion: 0x400000, //TODO
-        };
-        &vk_info as *const _
-    }else {
-        ptr::null()
+    let app_info = vk::ApplicationInfo {
+        sType: vk::STRUCTURE_TYPE_APPLICATION_INFO,
+        pNext: ptr::null(),
+        pApplicationName: app_name.as_ptr() as *const i8,
+        applicationVersion: app_version,
+        pEngineName: "gfx-rs".as_ptr() as *const i8,
+        engineVersion: 0x1000, //TODO
+        apiVersion: 0x400000, //TODO
     };
-
     let create_info = vk::InstanceCreateInfo {
         sType: vk::STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         pNext: ptr::null(),
         flags: 0,
-        pApplicationInfo: info_ptr,
+        pApplicationInfo: &app_info,
         enabledLayerCount: 0, //TODO
         ppEnabledLayerNames: ptr::null(), //TODO
         enabledExtensionCount: 0, //TODO
