@@ -93,6 +93,7 @@ rand = "0.3"
 genmesh = "0.4"
 noise = "0.1"
 image = "0.6"
+winit = "0.5"
 
 [target.x86_64-unknown-linux-gnu.dev_dependencies]
 glfw = "0.5"

@@ -17,8 +17,10 @@ extern crate winit;
 extern crate gfx_core;
 extern crate gfx_device_vulkan;
 
+
 pub fn init(builder: winit::WindowBuilder) -> (winit::Window) {
     use winit::os::unix::WindowExt;
+    let _ = gfx_device_vulkan::create(&builder.window.title, 1, &[], &["VK_KHR_surface", "VK_KHR_xcb_surface"]);
     let win = builder.build().unwrap();
     //Surface::from_xlib(instance, win.get_xlib_display().unwrap(),
     //                   win.get_xlib_window().unwrap())

@@ -16,8 +16,6 @@ extern crate shared_library;
 extern crate gfx_core;
 
 use std::{fmt, mem, ptr};
-use std::ffi::CString;
-use std::path::Path;
 use shared_library::dynamic_library::DynamicLibrary;
 
 mod vk {
@@ -73,10 +71,13 @@ pub struct Backend {
     instance: vk::Instance,
     inst_pointers: vk::InstancePointers,
     functions: vk::EntryPoints,
-    devices: Vec<PhysicalDeviceInfo>,
+    device: vk::Device,
 }
 
-pub fn create(app_name: &str, app_version: u32) -> Backend {
+pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&str]) -> Backend {
+    use std::ffi::CString;
+    use std::path::Path;
+
     let dynamic_lib = DynamicLibrary::open(Some(Path::new("libvulkan.so"))).unwrap();
     let lib = vk::Static::load(|name| unsafe {
         let name = name.to_str().unwrap();
@@ -95,15 +96,22 @@ pub fn create(app_name: &str, app_version: u32) -> Backend {
         engineVersion: 0x1000, //TODO
         apiVersion: 0x400000, //TODO
     };
+
+    let cstrings = layers.iter().chain(extensions.iter())
+                         .map(|&s| CString::new(s).unwrap())
+                         .collect::<Vec<_>>();
+    let str_pointers = cstrings.iter().map(|s| s.as_ptr())
+                               .collect::<Vec<_>>();
+
     let create_info = vk::InstanceCreateInfo {
         sType: vk::STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         pNext: ptr::null(),
         flags: 0,
         pApplicationInfo: &app_info,
-        enabledLayerCount: 0, //TODO
-        ppEnabledLayerNames: ptr::null(), //TODO
-        enabledExtensionCount: 0, //TODO
-        ppEnabledExtensionNames: ptr::null(), //TODO
+        enabledLayerCount: layers.len() as u32,
+        ppEnabledLayerNames: str_pointers.as_ptr(),
+        enabledExtensionCount: extensions.len() as u32,
+        ppEnabledExtensionNames: str_pointers[layers.len()..].as_ptr(),
     };
 
     let instance = unsafe {
@@ -129,7 +137,41 @@ pub fn create(app_name: &str, app_version: u32) -> Backend {
     }
     let devices = physical_devices[..num as usize].iter()
         .map(|dev| PhysicalDeviceInfo::new(*dev, &inst_pointers))
-        .collect();
+        .collect::<Vec<_>>();
+
+    let device = {
+        let physical = devices[0].device;
+        let ext = CString::new("VK_KHR_swapchain").unwrap();
+        let queue_info = vk::DeviceQueueCreateInfo {
+            sType: vk::STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+            pNext: ptr::null(),
+            flags: 0,
+            queueFamilyIndex: 0,
+            queueCount: 1,
+            pQueuePriorities: &1.0,
+        };
+        let features = unsafe{ mem::zeroed() };
+        let dev_info = vk::DeviceCreateInfo {
+            sType: vk::STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+            pNext: ptr::null(),
+            flags: 0,
+            queueCreateInfoCount: 1,
+            pQueueCreateInfos: &queue_info,
+            enabledLayerCount: 0,
+            ppEnabledLayerNames: ptr::null(),
+            enabledExtensionCount: 1,
+            ppEnabledExtensionNames: &ext.as_ptr(),
+            pEnabledFeatures: &features,
+        };
+        unsafe {
+            let mut out = mem::zeroed();
+            let status = inst_pointers.CreateDevice(physical, &dev_info, ptr::null(), &mut out);
+            if status != vk::SUCCESS {
+                panic!("vkCreateDevice: {:?}", Error(status));
+            }
+            out
+        }
+    };
 
     Backend {
         dynamic_lib: dynamic_lib,
@@ -137,7 +179,7 @@ pub fn create(app_name: &str, app_version: u32) -> Backend {
         instance: instance,
         inst_pointers: inst_pointers,
         functions: entry_points,
-        devices: devices,
+        device: device,
     }
 }
 
