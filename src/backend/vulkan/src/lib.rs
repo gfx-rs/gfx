@@ -18,7 +18,7 @@ extern crate gfx_core;
 use std::{fmt, mem, ptr};
 use shared_library::dynamic_library::DynamicLibrary;
 
-mod vk {
+pub mod vk {
     #![allow(dead_code)]
     #![allow(non_upper_case_globals)]
     #![allow(non_snake_case)]
@@ -72,9 +72,26 @@ pub struct Backend {
     inst_pointers: vk::InstancePointers,
     functions: vk::EntryPoints,
     device: vk::Device,
+    dev_pointers: vk::DevicePointers,
 }
 
-pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&str]) -> Backend {
+impl Backend {
+    pub fn instance(&self) -> vk::Instance {
+        self.instance
+    }
+    pub fn inst_pointers(&self) -> &vk::InstancePointers {
+        &self.inst_pointers
+    }
+    pub fn device(&self) -> vk::Device {
+        self.device
+    }
+    pub fn dev_pointers(&self) -> &vk::DevicePointers {
+        &self.dev_pointers
+    }
+}
+
+pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&str],
+              dev_extensions: &[&str]) -> Backend {
     use std::ffi::CString;
     use std::path::Path;
 
@@ -97,30 +114,32 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
         apiVersion: 0x400000, //TODO
     };
 
-    let cstrings = layers.iter().chain(extensions.iter())
+
+    let instance = {
+        let cstrings = layers.iter().chain(extensions.iter())
                          .map(|&s| CString::new(s).unwrap())
                          .collect::<Vec<_>>();
-    let str_pointers = cstrings.iter().map(|s| s.as_ptr())
-                               .collect::<Vec<_>>();
+        let str_pointers = cstrings.iter().map(|s| s.as_ptr())
+                                   .collect::<Vec<_>>();
 
-    let create_info = vk::InstanceCreateInfo {
-        sType: vk::STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-        pNext: ptr::null(),
-        flags: 0,
-        pApplicationInfo: &app_info,
-        enabledLayerCount: layers.len() as u32,
-        ppEnabledLayerNames: str_pointers.as_ptr(),
-        enabledExtensionCount: extensions.len() as u32,
-        ppEnabledExtensionNames: str_pointers[layers.len()..].as_ptr(),
-    };
-
-    let instance = unsafe {
-        let mut ptr = mem::zeroed();
-        let status = entry_points.CreateInstance(&create_info, ptr::null(), &mut ptr);
-        if status != vk::SUCCESS {
-            panic!("vkCreateInstance: {:?}", Error(status));
+        let create_info = vk::InstanceCreateInfo {
+            sType: vk::STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+            pNext: ptr::null(),
+            flags: 0,
+            pApplicationInfo: &app_info,
+            enabledLayerCount: layers.len() as u32,
+            ppEnabledLayerNames: str_pointers.as_ptr(),
+            enabledExtensionCount: extensions.len() as u32,
+            ppEnabledExtensionNames: str_pointers[layers.len()..].as_ptr(),
+        };
+        unsafe {
+            let mut ptr = mem::zeroed();
+            let status = entry_points.CreateInstance(&create_info, ptr::null(), &mut ptr);
+            if status != vk::SUCCESS {
+                panic!("vkCreateInstance: {:?}", Error(status));
+            }
+            ptr
         }
-        ptr
     };
 
     let inst_pointers = vk::InstancePointers::load(|name| unsafe {
@@ -141,7 +160,12 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
 
     let device = {
         let physical = devices[0].device;
-        let ext = CString::new("VK_KHR_swapchain").unwrap();
+        let cstrings = layers.iter().chain(dev_extensions.iter())
+                         .map(|&s| CString::new(s).unwrap())
+                         .collect::<Vec<_>>();
+        let str_pointers = cstrings.iter().map(|s| s.as_ptr())
+                               .collect::<Vec<_>>();
+
         let queue_info = vk::DeviceQueueCreateInfo {
             sType: vk::STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
             pNext: ptr::null(),
@@ -151,6 +175,7 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
             pQueuePriorities: &1.0,
         };
         let features = unsafe{ mem::zeroed() };
+
         let dev_info = vk::DeviceCreateInfo {
             sType: vk::STRUCTURE_TYPE_DEVICE_CREATE_INFO,
             pNext: ptr::null(),
@@ -159,8 +184,8 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
             pQueueCreateInfos: &queue_info,
             enabledLayerCount: 0,
             ppEnabledLayerNames: ptr::null(),
-            enabledExtensionCount: 1,
-            ppEnabledExtensionNames: &ext.as_ptr(),
+            enabledExtensionCount: str_pointers.len() as u32,
+            ppEnabledExtensionNames: str_pointers.as_ptr(),
             pEnabledFeatures: &features,
         };
         unsafe {
@@ -173,6 +198,10 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
         }
     };
 
+    let dev_pointers = vk::DevicePointers::load(|name| unsafe {
+        inst_pointers.GetDeviceProcAddr(device, name.as_ptr()) as *const _
+    });
+
     Backend {
         dynamic_lib: dynamic_lib,
         library: lib,
@@ -180,12 +209,13 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
         inst_pointers: inst_pointers,
         functions: entry_points,
         device: device,
+        dev_pointers: dev_pointers,
     }
 }
 
 
 #[derive(Clone, PartialEq, Eq)]
-pub struct Error(vk::Result);
+pub struct Error(pub vk::Result);
 
 impl fmt::Debug for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
