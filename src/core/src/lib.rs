@@ -26,6 +26,7 @@ extern crate draw_state;
 
 use std::fmt::Debug;
 use std::hash::Hash;
+use std::any::Any;
 
 pub use draw_state::{state, target};
 pub use self::factory::Factory;
@@ -156,18 +157,18 @@ pub enum IndexType {
 
 /// Resources pertaining to a specific API.
 #[allow(missing_docs)]
-pub trait Resources:          Clone + Hash + Debug + Eq + PartialEq {
-    type Buffer:              Clone + Hash + Debug + Eq + PartialEq + Send + Sync + Copy;
-    type Shader:              Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
-    type Program:             Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
-    type PipelineStateObject: Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
-    type Texture:             Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
-    type ShaderResourceView:  Clone + Hash + Debug + Eq + PartialEq + Send + Sync + Copy;
-    type UnorderedAccessView: Clone + Hash + Debug + Eq + PartialEq + Send + Sync + Copy;
-    type RenderTargetView:    Clone + Hash + Debug + Eq + PartialEq + Send + Sync + Copy;
-    type DepthStencilView:    Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
-    type Sampler:             Clone + Hash + Debug + Eq + PartialEq + Send + Sync + Copy;
-    type Fence:               Clone + Hash + Debug + Eq + PartialEq + Send + Sync;
+pub trait Resources:          Clone + Hash + Debug + Eq + PartialEq + Any {
+    type Buffer:              Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
+    type Shader:              Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
+    type Program:             Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
+    type PipelineStateObject: Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
+    type Texture:             Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
+    type ShaderResourceView:  Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
+    type UnorderedAccessView: Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
+    type RenderTargetView:    Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
+    type DepthStencilView:    Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
+    type Sampler:             Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
+    type Fence:               Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
 }
 
 /// An interface for performing draw calls using a specific graphics API
