@@ -79,7 +79,7 @@ impl<'a,
     }
 }
 
-impl<R: Resources, T, I> DataBind<R> for VertexBufferCommon<T, I> {
+impl<R: Resources, T: Copy, I> DataBind<R> for VertexBufferCommon<T, I> {
     type Data = handle::Buffer<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
         self.0.bind_to(out, data.raw(), man)
@@ -146,7 +146,7 @@ DataLink<'a> for ConstantBuffer<T> {
     }
 }
 
-impl<R: Resources, T: Structure<shade::ConstFormat>>
+impl<R: Resources, T: Structure<shade::ConstFormat> + Copy>
 DataBind<R> for ConstantBuffer<T> {
     type Data = handle::Buffer<R, T>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {

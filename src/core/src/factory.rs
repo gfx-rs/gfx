@@ -230,7 +230,7 @@ pub trait Factory<R: Resources> {
         self.create_buffer_const_raw(cast_slice(data), mem::size_of::<T>(), role, bind)
             .map(|raw| Typed::new(raw))
     }
-    fn create_buffer_dynamic<T>(&mut self, num: usize, role: BufferRole, bind: Bind)
+    fn create_buffer_dynamic<T: Copy>(&mut self, num: usize, role: BufferRole, bind: Bind)
                                 -> Result<handle::Buffer<R, T>, BufferError> {
         let stride = mem::size_of::<T>();
         let info = BufferInfo {
@@ -242,7 +242,7 @@ pub trait Factory<R: Resources> {
         };
         self.create_buffer_raw(info).map(|raw| Typed::new(raw))
     }
-    fn create_buffer_staging<T>(&mut self, num: usize, role: BufferRole, bind: Bind, map: MapAccess)
+    fn create_buffer_staging<T: Copy>(&mut self, num: usize, role: BufferRole, bind: Bind, map: MapAccess)
                              -> Result<handle::Buffer<R, T>, BufferError> {
         let stride = mem::size_of::<T>();
         let info = BufferInfo {
@@ -329,14 +329,14 @@ pub trait Factory<R: Resources> {
         Ok(Typed::new(raw))
     }
 
-    fn view_buffer_as_shader_resource<T>(&mut self, buf: &handle::Buffer<R, T>)
+    fn view_buffer_as_shader_resource<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
                                       -> Result<handle::ShaderResourceView<R, T>, ResourceViewError>
     {
         //TODO: check bind flags
         self.view_buffer_as_shader_resource_raw(buf.raw()).map(Typed::new)
     }
 
-    fn view_buffer_as_unordered_access<T>(&mut self, buf: &handle::Buffer<R, T>)
+    fn view_buffer_as_unordered_access<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
                                       -> Result<handle::UnorderedAccessView<R, T>, ResourceViewError>
     {
         //TODO: check bind flags

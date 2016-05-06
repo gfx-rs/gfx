@@ -172,7 +172,7 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
         Ok(())
     }
 
-    fn draw_indexed<T>(&mut self, buf: &handle::Buffer<R, T>, ty: IndexType,
+    fn draw_indexed<T: Copy>(&mut self, buf: &handle::Buffer<R, T>, ty: IndexType,
                     slice: &slice::Slice<R>, base: VertexCount,
                     instances: draw::InstanceOption) {
         self.command_buffer.bind_index(self.handles.ref_buffer(buf.raw()).clone(), ty);
