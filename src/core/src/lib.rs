@@ -155,7 +155,7 @@ pub enum IndexType {
     U32,
 }
 
-/// Resources pertaining to a specific API.
+/// Different types of a specific API. 
 #[allow(missing_docs)]
 pub trait Resources:          Clone + Hash + Debug + Eq + PartialEq + Any {
     type Buffer:              Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
@@ -171,23 +171,24 @@ pub trait Resources:          Clone + Hash + Debug + Eq + PartialEq + Any {
     type Fence:               Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
 }
 
-/// An interface for performing draw calls using a specific graphics API
+/// A `Device` is responsible for submitting `CommandBuffer`s to the GPU. 
 pub trait Device: Sized {
-    /// Associated resources type.
+    /// Associated `Resources` type.
     type Resources: Resources;
-    /// Associated command buffer type.
+    /// Associated `CommandBuffer` type. Every `Device` type can only work with one `CommandBuffer`
+    /// type.
     type CommandBuffer: draw::CommandBuffer<Self::Resources>;
 
-    /// Returns the capabilities available to the specific API implementation.
+    /// Returns the capabilities of this `Ðevice`.
     fn get_capabilities(&self) -> &Capabilities;
 
     /// Pin everything from this handle manager to live for a frame.
     fn pin_submitted_resources(&mut self, &handle::Manager<Self::Resources>);
 
-    /// Submit a command buffer for execution.
+    /// Submits a `CommandBuffer` to the GPU for execution.
     fn submit(&mut self, &mut Self::CommandBuffer);
 
-    /// Cleanup unused resources, to be called between frames.
+    /// Cleanup unused resources. This should be called between frames. 
     fn cleanup(&mut self);
 }
 
