@@ -14,6 +14,7 @@
 
 use metal::*;
 
+use gfx_core::shade;
 use gfx_core::factory;
 use gfx_core::factory::{Bind, MapAccess, Usage};
 use gfx_core::format::{Format, SurfaceType};
@@ -42,6 +43,56 @@ pub fn map_function(fun: Comparison) -> MTLCompareFunction {
         Comparison::NotEqual => NotEqual,
         Comparison::Always => Always,
     }
+}
+
+pub fn map_topology(primitive: Primitive) -> MTLPrimitiveTopologyClass {
+    match primitive {
+        PointList       => MTLPrimitiveTopologyClass::Point,
+        LineList        => MTLPrimitiveTopologyClass::Line,
+        TriangleList    => MTLPrimitiveTopologyClass::Triangle,
+
+        // TODO: can we work around not having line/triangle strip?
+        LineStrip       => MTLPrimitiveTopologyClass::Unspecified,
+        TriangleStrip   => MTLPrimitiveTopologyClass::Unspecified,
+    }
+}
+
+pub fn map_vertex_format(format: Format) -> Option<MTLVertexFormat> {
+    use gfx_core::format::SurfaceType;
+    use gfx_core::format::ChannelType;
+
+    let (fm8, fm16, fm32) = match format.1 {
+        ChannelType::Int | ChannelType::Inorm =>
+            (MTLVertexFormat::Char, MTLVertexFormat::Short, MTLVertexFormat::Int),
+        ChannelType::Uint | ChannelType::Unorm =>
+            (MTLVertexFormat::UChar, MTLVertexFormat::UShort, MTLVertexFormat::UInt),
+        ChannelType::Float =>
+            (MTLVertexFormat::Invalid, MTLVertexFormat::Half, MTLVertexFormat::Float),
+        ChannelType::Srgb => {
+            error!("Unsupported Srgb channel type");
+            return None;
+        }
+    };
+
+    let (count, mtl_type) = match format.0 {
+        SurfaceType::R8              => (1, fm8),
+        SurfaceType::R8_G8           => (2, fm8),
+        SurfaceType::R8_G8_B8_A8     => (4, fm8),
+        SurfaceType::R16             => (1, fm16),
+        SurfaceType::R16_G16         => (1, fm16),
+        SurfaceType::R16_G16_B16     => (1, fm16),
+        SurfaceType::R16_G16_B16_A16 => (1, fm16),
+        SurfaceType::R32             => (1, fm32),
+        SurfaceType::R32_G32         => (2, fm32),
+        SurfaceType::R32_G32_B32     => (3, fm32),
+        SurfaceType::R32_G32_B32_A32 => (4, fm32),
+        _ => {
+            error!("Unsupported element type: {:?}", format.0);
+            return None;
+        }
+    };
+
+    Some(mtl_type)
 }
 
 pub fn map_format(format: Format, is_target: bool) -> Option<MTLPixelFormat> {
@@ -151,7 +202,10 @@ pub fn map_format(format: Format, is_target: bool) -> Option<MTLPixelFormat> {
 pub fn format_supports_usage(feature_set: MTLFeatureSet, format: MTLPixelFormat, usage: FormatUsage) -> bool {
     use metal::MTLPixelFormat::*;
     use metal::MTLFeatureSet::*;
+
     use FormatUsage::*;
+
+    // TODO: can we simplify this with macros maybe?
 
     match format {
         A8Unorm => {
@@ -207,6 +261,86 @@ pub fn map_surface(surface: SurfaceType) -> Option<MTLPixelFormat> {
     // TODO: handle surface types in metal, look at gl impl.
 
     None
+}
+
+
+pub fn map_container_type(ty: MTLDataType) -> shade::ContainerType {
+    use metal::MTLDataType::*;
+
+    match ty {
+        Float | Half | Int | UInt | Short | UShort | Char | UChar | Bool
+            => shade::ContainerType::Single,
+        Float2 | Half2 | Int2 | UInt2 | Short2 | UShort2 | Char2 | UChar2 | Bool2
+            => shade::ContainerType::Vector(2),
+        Float3 | Half3 | Int3 | UInt3 | Short3 | UShort3 | Char3 | UChar3 | Bool3
+            => shade::ContainerType::Vector(3),
+        Float4 | Half4 | Int4 | UInt4 | Short4 | UShort4 | Char4 | UChar4 | Bool4
+            => shade::ContainerType::Vector(4),
+        Float2x2 | Half2x2
+            => shade::ContainerType::Matrix(shade::MatrixFormat::ColumnMajor, 2, 2),
+        Float2x3 | Half2x3
+            => shade::ContainerType::Matrix(shade::MatrixFormat::ColumnMajor, 2, 3),
+        Float2x4 | Half2x4
+            => shade::ContainerType::Matrix(shade::MatrixFormat::ColumnMajor, 2, 4),
+        Float3x2 | Half3x2
+            => shade::ContainerType::Matrix(shade::MatrixFormat::ColumnMajor, 3, 2),
+        Float3x3 | Half3x3
+            => shade::ContainerType::Matrix(shade::MatrixFormat::ColumnMajor, 3, 3),
+        Float3x4 | Half3x4
+            => shade::ContainerType::Matrix(shade::MatrixFormat::ColumnMajor, 3, 4),
+        Float4x2 | Half4x2
+            => shade::ContainerType::Matrix(shade::MatrixFormat::ColumnMajor, 4, 2),
+        Float4x3 | Half4x3
+            => shade::ContainerType::Matrix(shade::MatrixFormat::ColumnMajor, 4, 3),
+        Float4x4 | Half4x4
+            => shade::ContainerType::Matrix(shade::MatrixFormat::ColumnMajor, 4, 4),
+        _ => {
+            error!("Unknown container type {:?}", ty);
+            shade::ContainerType::Single
+        }
+    }
+}
+
+pub fn map_base_type(ty: MTLDataType) -> shade::BaseType {
+    use metal::MTLDataType::*;
+
+    match ty {
+        Float | Float2 | Float3 | Float4 |
+        Float2x2 | Float2x3 | Float2x4 |
+        Float3x2 | Float3x3 | Float3x4 |
+        Float4x2 | Float4x3 | Float4x4 |
+        Half | Half2 | Half3 | Half4 |
+        Half2x2 | Half2x3 | Half2x4 |
+        Half3x2 | Half3x3 | Half3x4 |
+        Half4x2 | Half4x3 | Half4x4 => shade::BaseType::F32,
+        Int | Int2 | Int3 | Int4 |
+        Short | Short2 | Short3 | Short4 |
+        Char | Char2 | Char3 | Char4 => shade::BaseType::I32,
+        UInt | UInt2 | UInt3 | UInt4 |
+        UShort | UShort2 | UShort3 | UShort4 |
+        UChar | UChar2 | UChar3 | UChar4 => shade::BaseType::U32,
+        Bool | Bool2 | Bool3 | Bool4 => shade::BaseType::Bool,
+        _ => {
+            error!("Unknown base type {:?}", ty);
+            shade::BaseType::I32
+        }
+    }
+}
+
+pub fn map_texture_type(tex_type: MTLTextureType) -> shade::TextureType {
+    use gfx_core::shade::IsArray::*;
+    use gfx_core::shade::IsMultiSample::*;
+
+    match tex_type {
+        MTLTextureType::D1            => shade::TextureType::D1(NoArray),
+        MTLTextureType::D1Array       => shade::TextureType::D1(Array),
+        MTLTextureType::D2            => shade::TextureType::D2(NoArray, NoMultiSample),
+        MTLTextureType::D2Array       => shade::TextureType::D2(Array, NoMultiSample),
+        MTLTextureType::D2Multisample => shade::TextureType::D2(NoArray, MultiSample),
+        MTLTextureType::D3            => shade::TextureType::D3,
+        MTLTextureType::Cube          => shade::TextureType::Cube(NoArray),
+        MTLTextureType::CubeArray     => shade::TextureType::Cube(Array),
+    }
 }
 
 pub fn map_texture_bind(bind: Bind) -> MTLTextureUsage {

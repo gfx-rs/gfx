@@ -33,9 +33,25 @@ fn map_base_type_from_component(ct: MTLDataType) -> shade::BaseType {
     }
 }
 
+pub fn populate_vertex_attributes(info: &mut shade::ProgramInfo, desc: NSArray<MTLVertexAttribute>) {
+    use map::{map_base_type, map_container_type};
+
+    for idx in 0..desc.count() {
+        let attr = desc.object_at(idx);
+
+        info.vertex_attributes.push(shade::AttributeVar {
+            name: attr.name().into(),
+            slot: attr.attribute_index() as gfx_core::AttributeSlot,
+            base_type: map_base_type(attr.attribute_type()),
+            container: map_container_type(attr.attribute_type()),
+        });
+    }
+}
+
 pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage,
                      args: NSArray<MTLArgument>) {
     use gfx_core::shade::Stage;
+    use map::{map_base_type, map_texture_type};
 
     let usage = stage.into();
 
@@ -46,6 +62,7 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage,
 
         match arg.type_() {
             MTLArgumentType::Buffer => {
+                if arg.index() == 30 { continue; }
                 info.constant_buffers.push(shade::ConstantBufferVar {
                     name: name.into(),
                     slot: arg.index() as gfx_core::ConstantBufferSlot,
@@ -54,7 +71,13 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage,
                 });
             },
             MTLArgumentType::Texture => {
-                
+                info.textures.push(shade::TextureVar {
+                    name: name.into(),
+                    slot: arg.index() as gfx_core::ResourceViewSlot,
+                    base_type: map_base_type(arg.texture_data_type()),
+                    ty: map_texture_type(arg.texture_type()),
+                    usage: usage,
+                });
             },
             _ => {}
         }

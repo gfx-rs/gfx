@@ -2,30 +2,23 @@
 
 using namespace metal;
 
-typedef struct {
-    char4 pos;
-    char2 coords;
-} Vertex;
+struct VertexInput {
+    char4 a_Pos       [[ attribute(0) ]];
+    char2 a_TexCoord  [[ attribute(1) ]];
+};
 
-typedef struct {
-    mat4 transform;
-} Locals;
-
-typedef struct {
+struct VertexOut {
     float4 pos [[ position ]];
     float2 coords;
-} VertexOut;
+};
 
-vertex VertexOut vert(constant Locals locals      [[ buffer(0) ]],
-                      device Vertex* vertex_array [[ buffer(1) ]],
-                      unsigned int vid            [[ vertex_id ]])
+vertex VertexOut vert(constant float4x4 &Locals [[ buffer(0) ]],
+                      VertexInput in            [[ stage_in ]])
 {
     VertexOut out;
 
-    Vertex v = vertex_array[vid];
-
-    out.pos = locals.transform * v.pos;
-    out.coords = v.coords;
+    out.pos = Locals * float4(in.a_Pos);
+    out.coords = float2(in.a_TexCoord);
 
     return out;
 }

@@ -125,7 +125,10 @@ impl core::Factory<Resources> for Factory {
         let lib = match stage {
             Stage::Vertex | Stage::Pixel => {
                 let src = str::from_utf8(code).unwrap();
-                self.device.new_library_with_source(src, MTLCompileOptions::nil())
+                match self.device.new_library_with_source(src, MTLCompileOptions::nil()) {
+                    Ok(lib) => lib,
+                    Err(err) => return Err(CreateShaderError::CompilationFailed(err.into()))
+                }
             },
             _ => return Err(CreateShaderError::StageNotSupported(stage))
         };
@@ -155,29 +158,57 @@ impl core::Factory<Resources> for Factory {
                     unordereds: Vec::new(),
                     samplers: Vec::new(),
                     outputs: Vec::new(),
-                    knows_outputs: true,
+                    knows_outputs: false,
                 };
 
                 let fh = &mut self.frame_handles;
-                let (vs, ps) = (vs.reference(fh), ps.reference(fh));
+                let (vs, ps) = (vs.reference(fh).func, ps.reference(fh).func);
 
                 let mut reflection = MTLRenderPipelineReflection::nil();
 
                 // since Metal doesn't allow for fetching shader reflection
                 // without creating a PSO, we're creating a "fake" PSO to get
-                // the reflection, and destroying the PSO afterwards.
+                // the reflection, and destroying it afterwards.
                 //
                 // Tracking: https://forums.developer.apple.com/thread/46535
                 let pso_descriptor = MTLRenderPipelineDescriptor::alloc().init();
-                pso_descriptor.set_vertex_function(vs.func);
-                pso_descriptor.set_fragment_function(ps.func);
+                pso_descriptor.set_vertex_function(vs);
+                pso_descriptor.set_fragment_function(ps);
                 pso_descriptor.color_attachments().object_at(0).set_pixel_format(MTLPixelFormat::BGRA8Unorm);
+
+                // when we use `[[ stage_in ]]` we have to have a vertex
+                // descriptor attached to the PSO descriptor
+                //
+                // dummy values are used for the attributes but the buffer
+                // slot `30` is occupied by the dummy buffer
+                //
+                // TODO: prevent collision between dummy buffers and real
+                //       values
+                let vertex_desc = MTLVertexDescriptor::new();
+
+                let buf = vertex_desc.layouts().object_at(30);
+                buf.set_stride(16);
+                buf.set_step_function(MTLVertexStepFunction::Constant);
+                buf.set_step_rate(0);
+
+                for i in 0..16 {
+                    let attribute = vertex_desc.attributes().object_at(i as usize);
+                    attribute.set_format(MTLVertexFormat::Int4);
+                    attribute.set_offset(0);
+                    attribute.set_buffer_index(30);
+                }
+
+                pso_descriptor.set_vertex_descriptor(vertex_desc);
 
                 let pso = self.device.new_render_pipeline_state_with_reflection(pso_descriptor, &mut reflection).unwrap();
 
                 // fill the `ProgramInfo` struct with goodies
+                mirror::populate_vertex_attributes(&mut info, vs.vertex_attributes());
+
                 mirror::populate_info(&mut info, Stage::Vertex, reflection.vertex_arguments());
                 mirror::populate_info(&mut info, Stage::Pixel,  reflection.fragment_arguments());
+
+                println!("{:?},\n{:?},\n{:?},\n{:?},\n{:?},\n", info.vertex_attributes, info.constant_buffers, info.textures, info.samplers, info.outputs);
 
                 // destroy PSO & reflection object after we're done with
                 // parsing reflection
@@ -188,8 +219,8 @@ impl core::Factory<Resources> for Factory {
 
                 // FIXME: retain functions?
                 let program = Program {
-                    vs: vs.func,
-                    ps: ps.func
+                    vs: vs,
+                    ps: ps
                 };
 
                 (program, info)
@@ -207,18 +238,32 @@ impl core::Factory<Resources> for Factory {
 
     fn create_pipeline_state_raw(&mut self, program: &handle::Program<Resources>, desc: &core::pso::Descriptor)
                                  -> Result<handle::RawPipelineState<Resources>, core::pso::CreationError> {
-        for (attrib, at_desc) in program.get_info().vertex_attributes.iter().zip(desc.attributes.iter()) {
-            let (elem, irate) = match at_desc {
+        use map::{map_vertex_format, map_topology};
+
+        let vertex_desc = MTLVertexDescriptor::new();
+
+        // TODO: instancing
+        let buf = vertex_desc.layouts().object_at(0);
+        buf.set_stride(desc.attributes[0].stride);
+        buf.set_step_function(MTLVertexStepFunction::PerVertex);
+        buf.set_step_rate(1);
+
+        for (attr, attr_desc) in program.get_info().vertex_attributes.iter().zip(desc.attributes.iter()) {
+            let (elem, irate) = match attr_desc {
                 &Some((ref el, ir)) => (el, ir),
                 &None => continue,
             };
 
             if elem.offset & 1 != 0 {
                 error!("Vertex attribute {} must be aligned to 2 bytes, has offset {}",
-                    attrib.name, elem.offset);
+                    attr.name, elem.offset);
                 return Err(core::pso::CreationError);
             }
 
+            let attribute = vertex_desc.attributes.object_at(attr.slot as usize);
+            attribute.set_format(map_vertex_format(elem.format));
+            attribute.set_offset(elem.offset);
+            attribute.set_buffer_index(0);
         }
 
         let prog = self.frame_handles.ref_program(program);
@@ -226,7 +271,13 @@ impl core::Factory<Resources> for Factory {
         let pso_descriptor = MTLRenderPipelineDescriptor::alloc().init();
         pso_descriptor.set_vertex_function(prog.vs);
         pso_descriptor.set_fragment_function(prog.ps);
+        pso_descriptor.set_vertex_descriptor(vertex_desc);
+        pso_descriptor.set_input_primitive_topology(map_topology(desc.primitive));
         pso_descriptor.color_attachments().object_at(0).set_pixel_format(MTLPixelFormat::BGRA8Unorm);
+
+        if let Some(depth_desc) = desc.depth_stencil {
+            // TODO: depthstencil
+        }
 
         let pso = self.device.new_render_pipeline_state(pso_descriptor).unwrap();
 
@@ -235,92 +286,6 @@ impl core::Factory<Resources> for Factory {
         };
 
         Ok(self.share.handles.borrow_mut().make_pso(pso, program))
-        /*use gfx_core::Primitive::*;
-        use data::map_format;
-        use state;
-
-        let mut layouts = Vec::new();
-        let mut charbuf = [0; 256];
-        let mut charpos = 0;
-        for (attrib, at_desc) in program.get_info().vertex_attributes.iter().zip(desc.attributes.iter()) {
-            use winapi::UINT;
-            let (elem, irate) = match at_desc {
-                &Some((ref el, ir)) => (el, ir),
-                &None => continue,
-            };
-            if elem.offset & 1 != 0 {
-                error!("Vertex attribute {} must be aligned to 2 bytes, has offset {}",
-                    attrib.name, elem.offset);
-                return Err(core::pso::CreationError);
-            }
-            layouts.push(winapi::D3D11_INPUT_ELEMENT_DESC {
-                SemanticName: &charbuf[charpos],
-                SemanticIndex: 0,
-                Format: match map_format(elem.format, false) {
-                    Some(fm) => fm,
-                    None => {
-                        error!("Unable to find DXGI format for {:?}", elem.format);
-                        return Err(core::pso::CreationError);
-                    }
-                },
-                InputSlot: attrib.slot as UINT,
-                AlignedByteOffset: elem.offset as UINT,
-                InputSlotClass: if irate == 0 {
-                    winapi::D3D11_INPUT_PER_VERTEX_DATA
-                }else {
-                    winapi::D3D11_INPUT_PER_INSTANCE_DATA
-                },
-                InstanceDataStepRate: irate as UINT,
-            });
-            for (out, inp) in charbuf[charpos..].iter_mut().zip(attrib.name.as_bytes().iter()) {
-                *out = *inp as i8;
-            }
-            charpos += attrib.name.as_bytes().len() + 1;
-        }
-
-        let prog = *self.frame_handles.ref_program(program);
-        let vs_bin = match self.vs_cache.get(&prog.vs_hash) {
-            Some(ref code) => &code[..],
-            None => {
-                error!("VS hash {} is not found in the factory cache", prog.vs_hash);
-                return Err(core::pso::CreationError);
-            }
-        };
-
-        let dev = self.device;
-        let mut vertex_layout = ptr::null_mut();
-        let hr = unsafe {
-            (*dev).CreateInputLayout(
-                layouts.as_ptr(), layouts.len() as winapi::UINT,
-                vs_bin.as_ptr() as *const c_void, vs_bin.len() as winapi::SIZE_T,
-                &mut vertex_layout)
-        };
-        if !winapi::SUCCEEDED(hr) {
-            error!("Failed to create input layout from {:#?}, error {:x}", layouts, hr);
-            return Err(core::pso::CreationError);
-        }
-        let dummy_dsi = core::pso::DepthStencilInfo { depth: None, front: None, back: None };
-        //TODO: cache rasterizer, depth-stencil, and blend states
-
-        let pso = Pipeline {
-            topology: match desc.primitive {
-                PointList       => D3D11_PRIMITIVE_TOPOLOGY_POINTLIST,
-                LineList        => D3D11_PRIMITIVE_TOPOLOGY_LINELIST,
-                LineStrip       => D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP,
-                TriangleList    => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-                TriangleStrip   => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
-            },
-            layout: vertex_layout,
-            attributes: desc.attributes,
-            program: prog,
-            rasterizer: state::make_rasterizer(dev, &desc.rasterizer, desc.scissor),
-            depth_stencil: state::make_depth_stencil(dev, match desc.depth_stencil {
-                Some((_, ref dsi)) => dsi,
-                None => &dummy_dsi,
-            }),
-            blend: state::make_blend(dev, &desc.color_targets),
-        };
-        Ok(self.share.handles.borrow_mut().make_pso(pso, program))*/
     }
 
     fn create_texture_raw(&mut self, desc: core::tex::Descriptor, hint: Option<core::format::ChannelType>,
