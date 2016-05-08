@@ -24,28 +24,28 @@ use gfx_core::shade;
 use metal::*;
 
 fn map_base_type_from_component(ct: MTLDataType) -> shade::BaseType {
+    use metal::MTLDataType::*;
+
     match ct {
         Float | Float2 | Float3 | Float4 |
         Float2x2 | Float2x3 | Float2x4 |
         Float3x2 | Float3x3 | Float3x4 |
-        Float4x2 | Float4x3 | Float4x4 | => shade::BaseType::F32,
+        Float4x2 | Float4x3 | Float4x4 => shade::BaseType::F32,
         _ => shade::BaseType::I32
     }
 }
 
-/*
 pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage,
-                     func: MTLFunction) {
-    let usage = stage.into();
+                     args: NSArray<MTLArgument>) {
+    use gfx_core::shade::Stage;
 
-    if stage == shade::Stage::Vertex {
-        for attr in func.vertex_attributes() {
-            info.vertex_attributes.push(shade::AttributeVar {
-                name: attr.name(),
-                slot: attr.attribute_index() as core::AttributeSlot,
-                base_type: map_base_type_from_component(attr.attribute_type()),
-                container: mask_to_vector(desc.Mask),
-            });
-        }
+    match stage {
+        Stage::Vertex => {
+
+        },
+        Stage::Pixel => {
+
+        },
+        _ => {}
     }
-}*/
+}

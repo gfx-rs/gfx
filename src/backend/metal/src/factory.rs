@@ -30,8 +30,9 @@ use metal::*;
 
 use command::CommandBuffer;
 
-use {Resources, Share, Texture, Buffer, Shader};
+use {Resources, Share, Texture, Buffer, Shader, Program, Pipeline};
 use native;
+use mirror;
 
 #[derive(Copy, Clone)]
 pub struct RawMapping {
@@ -144,78 +145,96 @@ impl core::Factory<Resources> for Factory {
                       -> Result<handle::Program<Resources>, core::shade::CreateProgramError> {
         use gfx_core::shade::{ProgramInfo, Stage};
 
-        /*let mut info = ProgramInfo {
-            vertex_attributes: Vec::new(),
-            globals: Vec::new(),
-            constant_buffers: Vec::new(),
-            textures: Vec::new(),
-            unordereds: Vec::new(),
-            samplers: Vec::new(),
-            outputs: Vec::new(),
-            knows_outputs: true,
-        };
-
-        let prog = match shader_set {
+        let (prog, info) = match shader_set {
             &core::ShaderSet::Simple(ref vs, ref ps) => {
+                let mut info = ProgramInfo {
+                    vertex_attributes: Vec::new(),
+                    globals: Vec::new(),
+                    constant_buffers: Vec::new(),
+                    textures: Vec::new(),
+                    unordereds: Vec::new(),
+                    samplers: Vec::new(),
+                    outputs: Vec::new(),
+                    knows_outputs: true,
+                };
+
+                let fh = &mut self.frame_handles;
                 let (vs, ps) = (vs.reference(fh), ps.reference(fh));
-                populate_info(&mut info, Stage::Vertex, vs.reflection);
-                populate_info(&mut info, Stage::Pixel,  ps.reflection);
-                unsafe { (*vs.object).AddRef(); (*ps.object).AddRef(); }
-                Program {
-                    vs: vs.object as *mut ID3D11VertexShader,
-                    gs: ptr::null_mut(),
-                    ps: ps.object as *mut ID3D11PixelShader,
-                    vs_hash: vs.code_hash,
+
+                let mut reflection = MTLRenderPipelineReflection::nil();
+
+                // since Metal doesn't allow for fetching shader reflection
+                // without creating a PSO, we're creating a "fake" PSO to get
+                // the reflection, and destroying the PSO afterwards.
+                //
+                // Tracking: https://forums.developer.apple.com/thread/46535
+                let pso_descriptor = MTLRenderPipelineDescriptor::alloc().init();
+                pso_descriptor.set_vertex_function(vs.func);
+                pso_descriptor.set_fragment_function(ps.func);
+                pso_descriptor.color_attachments().object_at(0).set_pixel_format(MTLPixelFormat::BGRA8Unorm);
+
+                let pso = self.device.new_render_pipeline_state_with_reflection(pso_descriptor, &mut reflection).unwrap();
+
+                // fill the `ProgramInfo` struct with goodies
+                mirror::populate_info(&mut info, Stage::Vertex, reflection.vertex_arguments());
+                mirror::populate_info(&mut info, Stage::Pixel,  reflection.fragment_arguments());
+
+                // destroy PSO & reflection object after we're done with
+                // parsing reflection
+                unsafe {
+                    pso.release();
+                    reflection.release();
                 }
+
+                // FIXME: retain functions?
+                let program = Program {
+                    vs: vs.func,
+                    ps: ps.func
+                };
+
+                (program, info)
             },
 
-        }*/
-        /*use mirror::populate_info;
+            // Metal only supports vertex + fragment and has some features from
+            // geometry shaders in vertex (layered rendering)
+            //
+            // Tracking: https://forums.developer.apple.com/message/9495
+            _ => { return Err("Metal only supports vertex + fragment shader programs".into()); }
+        };
 
-        let mut info = ProgramInfo {
-            vertex_attributes: Vec::new(),
-            globals: Vec::new(),
-            constant_buffers: Vec::new(),
-            textures: Vec::new(),
-            unordereds: Vec::new(),
-            samplers: Vec::new(),
-            outputs: Vec::new(),
-            knows_outputs: true,
-        };
-        let fh = &mut self.frame_handles;
-        let prog = match shader_set {
-            &core::ShaderSet::Simple(ref vs, ref ps) => {
-                let (vs, ps) = (vs.reference(fh), ps.reference(fh));
-                populate_info(&mut info, Stage::Vertex, vs.reflection);
-                populate_info(&mut info, Stage::Pixel,  ps.reflection);
-                unsafe { (*vs.object).AddRef(); (*ps.object).AddRef(); }
-                Program {
-                    vs: vs.object as *mut ID3D11VertexShader,
-                    gs: ptr::null_mut(),
-                    ps: ps.object as *mut ID3D11PixelShader,
-                    vs_hash: vs.code_hash,
-                }
-            },
-            &core::ShaderSet::Geometry(ref vs, ref gs, ref ps) => {
-                let (vs, gs, ps) = (vs.reference(fh), gs.reference(fh), ps.reference(fh));
-                populate_info(&mut info, Stage::Vertex,   vs.reflection);
-                populate_info(&mut info, Stage::Geometry, gs.reflection);
-                populate_info(&mut info, Stage::Pixel,    ps.reflection);
-                unsafe { (*vs.object).AddRef(); (*gs.object).AddRef(); (*ps.object).AddRef(); }
-                Program {
-                    vs: vs.object as *mut ID3D11VertexShader,
-                    gs: vs.object as *mut ID3D11GeometryShader,
-                    ps: ps.object as *mut ID3D11PixelShader,
-                    vs_hash: vs.code_hash,
-                }
-            },
-        };
-        Ok(self.share.handles.borrow_mut().make_program(prog, info))*/
-        unimplemented!()
+        Ok(self.share.handles.borrow_mut().make_program(prog, info))
     }
 
     fn create_pipeline_state_raw(&mut self, program: &handle::Program<Resources>, desc: &core::pso::Descriptor)
                                  -> Result<handle::RawPipelineState<Resources>, core::pso::CreationError> {
+        for (attrib, at_desc) in program.get_info().vertex_attributes.iter().zip(desc.attributes.iter()) {
+            let (elem, irate) = match at_desc {
+                &Some((ref el, ir)) => (el, ir),
+                &None => continue,
+            };
+
+            if elem.offset & 1 != 0 {
+                error!("Vertex attribute {} must be aligned to 2 bytes, has offset {}",
+                    attrib.name, elem.offset);
+                return Err(core::pso::CreationError);
+            }
+
+        }
+
+        let prog = self.frame_handles.ref_program(program);
+
+        let pso_descriptor = MTLRenderPipelineDescriptor::alloc().init();
+        pso_descriptor.set_vertex_function(prog.vs);
+        pso_descriptor.set_fragment_function(prog.ps);
+        pso_descriptor.color_attachments().object_at(0).set_pixel_format(MTLPixelFormat::BGRA8Unorm);
+
+        let pso = self.device.new_render_pipeline_state(pso_descriptor).unwrap();
+
+        let pso = Pipeline {
+            pipeline: pso
+        };
+
+        Ok(self.share.handles.borrow_mut().make_pso(pso, program))
         /*use gfx_core::Primitive::*;
         use data::map_format;
         use state;
@@ -302,8 +321,6 @@ impl core::Factory<Resources> for Factory {
             blend: state::make_blend(dev, &desc.color_targets),
         };
         Ok(self.share.handles.borrow_mut().make_pso(pso, program))*/
-
-        unimplemented!()
     }
 
     fn create_texture_raw(&mut self, desc: core::tex::Descriptor, hint: Option<core::format::ChannelType>,
@@ -439,7 +456,6 @@ impl core::Factory<Resources> for Factory {
         Ok(self.share.handles.borrow_mut().make_texture_srv(native::Srv(raw_view), htex))*/
         let raw_tex = self.frame_handles.ref_texture(htex).0;
         Ok(self.share.handles.borrow_mut().make_texture_srv(native::Srv(raw_tex.0), htex))
-        // unimplemented!()
     }
 
     fn view_texture_as_unordered_access_raw(&mut self, _htex: &handle::RawTexture<Resources>)
@@ -581,41 +597,34 @@ impl core::Factory<Resources> for Factory {
         let raw_tex = self.frame_handles.ref_texture(htex).0;
         let size = htex.get_info().kind.get_level_dimensions(desc.level);
         Ok(self.share.handles.borrow_mut().make_dsv(native::Dsv(raw_tex.0), htex, size))
-        // unimplemented!()
     }
 
     fn create_sampler(&mut self, info: core::tex::SamplerInfo) -> handle::Sampler<Resources> {
-        /*use gfx_core::tex::FilterMethod;
-        use data::{FilterOp, map_function, map_filter, map_wrap};
+        use gfx_core::tex::FilterMethod;
+        use map::{map_function, map_filter, map_wrap};
 
-        let op = if info.comparison.is_some() {FilterOp::Comparison} else {FilterOp::Product};
-        let native_desc = winapi::D3D11_SAMPLER_DESC {
-            Filter: map_filter(info.filter, op),
-            AddressU: map_wrap(info.wrap_mode.0),
-            AddressV: map_wrap(info.wrap_mode.1),
-            AddressW: map_wrap(info.wrap_mode.2),
-            MipLODBias: info.lod_bias.into(),
-            MaxAnisotropy: match info.filter {
-                FilterMethod::Anisotropic(max) => max as winapi::UINT,
-                _ => 0,
-            },
-            ComparisonFunc: map_function(info.comparison.unwrap_or(core::state::Comparison::Always)),
-            BorderColor: info.border.into(),
-            MinLOD: info.lod_range.0.into(),
-            MaxLOD: info.lod_range.1.into(),
-        };
+        let desc = MTLSamplerDescriptor::new();
 
-        let mut raw_sampler = ptr::null_mut();
-        let hr = unsafe {
-            (*self.device).CreateSamplerState(&native_desc, &mut raw_sampler)
-        };
-        if winapi::SUCCEEDED(hr) {
-            self.share.handles.borrow_mut().make_sampler(native::Sampler(raw_sampler), info)
-        }else {
-            error!("Unable to create a sampler with desc {:#?}, error {:x}", info, hr);
-            unimplemented!()
-        }*/
-        unimplemented!()
+        let (filter, mip) = map_filter(info.filter);
+        desc.set_min_filter(filter);
+        desc.set_mag_filter(filter);
+        desc.set_mip_filter(mip);
+
+        if let FilterMethod::Anisotropic(anisotropy) = info.filter {
+            desc.set_max_anisotropy(anisotropy as u64);
+        }
+
+        desc.set_lod_bias(info.lod_bias.into());
+        desc.set_lod_min_clamp(info.lod_range.0.into());
+        desc.set_lod_max_clamp(info.lod_range.1.into());
+        desc.set_address_mode_s(map_wrap(info.wrap_mode.0));
+        desc.set_address_mode_t(map_wrap(info.wrap_mode.1));
+        desc.set_address_mode_r(map_wrap(info.wrap_mode.2));
+        desc.set_compare_function(map_function(info.comparison.unwrap_or(core::state::Comparison::Always)));
+
+        let sampler = self.device.new_sampler(desc);
+
+        self.share.handles.borrow_mut().make_sampler(native::Sampler(sampler), info)
     }
 
     fn map_buffer_raw(&mut self, _buf: &handle::RawBuffer<Resources>, _access: factory::MapAccess) -> RawMapping {

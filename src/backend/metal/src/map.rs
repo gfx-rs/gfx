@@ -150,7 +150,7 @@ pub fn map_format(format: Format, is_target: bool) -> Option<MTLPixelFormat> {
 
 pub fn format_supports_usage(feature_set: MTLFeatureSet, format: MTLPixelFormat, usage: FormatUsage) -> bool {
     use metal::MTLPixelFormat::*;
-    use metal::MTLFeatureSet::*;    
+    use metal::MTLFeatureSet::*;
     use FormatUsage::*;
 
     match format {
@@ -252,6 +252,24 @@ pub fn map_buffer_usage(usage: Usage) -> MTLResourceOptions {
         Usage::Dynamic => MTLResourceCPUCacheModeDefaultCache,
         Usage::CpuOnly(access) => map_access(access)
     }
+}
+
+pub fn map_filter(filter: FilterMethod) -> (MTLSamplerMinMagFilter, MTLSamplerMipFilter) {
+    use metal::MTLSamplerMinMagFilter::*;
+
+    match filter {
+        FilterMethod::Scale => (MTLSamplerMinMagFilter::Nearest,
+                                MTLSamplerMipFilter::NotMipmapped),
+        FilterMethod::Mipmap => (MTLSamplerMinMagFilter::Nearest,
+                                 MTLSamplerMipFilter::Nearest),
+        FilterMethod::Bilinear => (MTLSamplerMinMagFilter::Linear,
+                                   MTLSamplerMipFilter::NotMipmapped),
+        FilterMethod::Trilinear => (MTLSamplerMinMagFilter::Linear,
+                                    MTLSamplerMipFilter::Linear),
+        FilterMethod::Anisotropic(..) => (MTLSamplerMinMagFilter::Linear,
+                                          MTLSamplerMipFilter::NotMipmapped),
+    }
+
 }
 
 pub fn map_wrap(wrap: WrapMode) -> MTLSamplerAddressMode {

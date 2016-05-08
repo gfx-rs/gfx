@@ -36,6 +36,7 @@ use std::mem;
 
 mod factory;
 mod command;
+mod mirror;
 mod map;
 
 pub use self::command::CommandBuffer;
@@ -61,6 +62,11 @@ pub mod native {
     pub struct Texture(pub MTLTexture);
     unsafe impl Send for Texture {}
     unsafe impl Sync for Texture {}
+
+    #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+    pub struct Sampler(pub MTLSamplerState);
+    unsafe impl Send for Sampler {}
+    unsafe impl Sync for Sampler {}
 
     #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
     pub struct Rtv(pub MTLTexture);
@@ -132,7 +138,7 @@ impl gfx_core::Resources for Resources {
     type DepthStencilView    = native::Dsv;
     type ShaderResourceView  = native::Srv;
     type UnorderedAccessView = ();
-    type Sampler             = ();
+    type Sampler             = native::Sampler;
     type Fence               = ();
 }
 
