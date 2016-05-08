@@ -16,8 +16,6 @@
 use cocoa::base::{selector, class};
 use cocoa::foundation::{NSUInteger};
 
-use objc_foundation::{INSDictionary, NSDictionary, INSArray, NSArray};
-
 use gfx_core;
 use gfx_core::shade;
 
@@ -39,13 +37,26 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage,
                      args: NSArray<MTLArgument>) {
     use gfx_core::shade::Stage;
 
-    match stage {
-        Stage::Vertex => {
+    let usage = stage.into();
 
-        },
-        Stage::Pixel => {
+    for idx in 0..args.count() {
+        let arg = args.object_at(idx);
 
-        },
-        _ => {}
+        let name = arg.name();
+
+        match arg.type_() {
+            MTLArgumentType::Buffer => {
+                info.constant_buffers.push(shade::ConstantBufferVar {
+                    name: name.into(),
+                    slot: arg.index() as gfx_core::ConstantBufferSlot,
+                    size: arg.buffer_data_size() as usize,
+                    usage: usage,
+                });
+            },
+            MTLArgumentType::Texture => {
+                
+            },
+            _ => {}
+        }
     }
 }

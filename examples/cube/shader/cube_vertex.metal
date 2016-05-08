@@ -3,23 +3,29 @@
 using namespace metal;
 
 typedef struct {
-    float2 position;
-    float3 color;
-} vertex_t;
+    char4 pos;
+    char2 coords;
+} Vertex;
 
-struct ColorInOut {
-    float4 position [[position]];
-    float4 color;
-};
+typedef struct {
+    mat4 transform;
+} Locals;
 
-// vertex shader function
-vertex ColorInOut vert(device vertex_t* vertex_array [[ buffer(0) ]],
-                                  unsigned int vid [[ vertex_id ]])
+typedef struct {
+    float4 pos [[ position ]];
+    float2 coords;
+} VertexOut;
+
+vertex VertexOut vert(constant Locals locals      [[ buffer(0) ]],
+                      device Vertex* vertex_array [[ buffer(1) ]],
+                      unsigned int vid            [[ vertex_id ]])
 {
-    ColorInOut out;
+    VertexOut out;
 
-    out.position = float4(float2(vertex_array[vid].position), 0.0, 1.0);
-    out.color = float4(float3(vertex_array[vid].color), 1.0);
+    Vertex v = vertex_array[vid];
+
+    out.pos = locals.transform * v.pos;
+    out.coords = v.coords;
 
     return out;
 }
