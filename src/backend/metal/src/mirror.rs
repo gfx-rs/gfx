@@ -57,12 +57,14 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage,
 
     for idx in 0..args.count() {
         let arg = args.object_at(idx);
-
         let name = arg.name();
 
         match arg.type_() {
             MTLArgumentType::Buffer => {
+                // we skip the buffer with slot 30 which is used in our fake
+                // PSO
                 if arg.index() == 30 { continue; }
+
                 info.constant_buffers.push(shade::ConstantBufferVar {
                     name: name.into(),
                     slot: arg.index() as gfx_core::ConstantBufferSlot,

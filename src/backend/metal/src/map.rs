@@ -14,6 +14,7 @@
 
 use metal::*;
 
+use gfx_core::Primitive;
 use gfx_core::shade;
 use gfx_core::factory;
 use gfx_core::factory::{Bind, MapAccess, Usage};
@@ -47,52 +48,91 @@ pub fn map_function(fun: Comparison) -> MTLCompareFunction {
 
 pub fn map_topology(primitive: Primitive) -> MTLPrimitiveTopologyClass {
     match primitive {
-        PointList       => MTLPrimitiveTopologyClass::Point,
-        LineList        => MTLPrimitiveTopologyClass::Line,
-        TriangleList    => MTLPrimitiveTopologyClass::Triangle,
+        Primitive::PointList       => MTLPrimitiveTopologyClass::Point,
+        Primitive::LineList        => MTLPrimitiveTopologyClass::Line,
+        Primitive::TriangleList    => MTLPrimitiveTopologyClass::Triangle,
 
         // TODO: can we work around not having line/triangle strip?
-        LineStrip       => MTLPrimitiveTopologyClass::Unspecified,
-        TriangleStrip   => MTLPrimitiveTopologyClass::Unspecified,
+        Primitive::LineStrip       => MTLPrimitiveTopologyClass::Unspecified,
+        Primitive::TriangleStrip   => MTLPrimitiveTopologyClass::Unspecified,
     }
 }
 
 pub fn map_vertex_format(format: Format) -> Option<MTLVertexFormat> {
-    use gfx_core::format::SurfaceType;
-    use gfx_core::format::ChannelType;
+    use gfx_core::format::SurfaceType::*;
+    use gfx_core::format::ChannelType::*;
 
-    let (fm8, fm16, fm32) = match format.1 {
-        ChannelType::Int | ChannelType::Inorm =>
-            (MTLVertexFormat::Char, MTLVertexFormat::Short, MTLVertexFormat::Int),
-        ChannelType::Uint | ChannelType::Unorm =>
-            (MTLVertexFormat::UChar, MTLVertexFormat::UShort, MTLVertexFormat::UInt),
-        ChannelType::Float =>
-            (MTLVertexFormat::Invalid, MTLVertexFormat::Half, MTLVertexFormat::Float),
-        ChannelType::Srgb => {
-            error!("Unsupported Srgb channel type");
-            return None;
-        }
-    };
-
-    let (count, mtl_type) = match format.0 {
-        SurfaceType::R8              => (1, fm8),
-        SurfaceType::R8_G8           => (2, fm8),
-        SurfaceType::R8_G8_B8_A8     => (4, fm8),
-        SurfaceType::R16             => (1, fm16),
-        SurfaceType::R16_G16         => (1, fm16),
-        SurfaceType::R16_G16_B16     => (1, fm16),
-        SurfaceType::R16_G16_B16_A16 => (1, fm16),
-        SurfaceType::R32             => (1, fm32),
-        SurfaceType::R32_G32         => (2, fm32),
-        SurfaceType::R32_G32_B32     => (3, fm32),
-        SurfaceType::R32_G32_B32_A32 => (4, fm32),
-        _ => {
-            error!("Unsupported element type: {:?}", format.0);
-            return None;
-        }
-    };
-
-    Some(mtl_type)
+    // TODO: review enums
+    Some(match format.0 {
+        R8_G8 => match format.1 {
+            Int   => MTLVertexFormat::Char2,
+            Uint  => MTLVertexFormat::UChar2,
+            Inorm => MTLVertexFormat::Char2Normalized,
+            Unorm => MTLVertexFormat::UChar2Normalized,
+            _ => return None,
+        },
+        R8_G8_B8_A8 => match format.1 {
+            Int   => MTLVertexFormat::Char4,
+            Uint  => MTLVertexFormat::UChar4,
+            Inorm => MTLVertexFormat::Char4Normalized,
+            Unorm => MTLVertexFormat::UChar4Normalized,
+            _ => return None,
+        },
+        R10_G10_B10_A2 => match format.1 {
+            Inorm => MTLVertexFormat::Int1010102Normalized,
+            Unorm => MTLVertexFormat::UInt1010102Normalized,
+            _ => return None,
+        },
+        R16_G16 => match format.1 {
+            Int   => MTLVertexFormat::Short2,
+            Uint  => MTLVertexFormat::UShort2,
+            Inorm => MTLVertexFormat::Short2Normalized,
+            Unorm => MTLVertexFormat::UShort2Normalized,
+            Float => MTLVertexFormat::Half2,
+            _ => return None,
+        },
+        R16_G16_B16 => match format.1 {
+            Int   => MTLVertexFormat::Short3,
+            Uint  => MTLVertexFormat::UShort3,
+            Inorm => MTLVertexFormat::Short3Normalized,
+            Unorm => MTLVertexFormat::UShort3Normalized,
+            Float => MTLVertexFormat::Half3,
+            _ => return None,
+        },
+        R16_G16_B16_A16 => match format.1 {
+            Int   => MTLVertexFormat::Short4,
+            Uint  => MTLVertexFormat::UShort4,
+            Inorm => MTLVertexFormat::Short4Normalized,
+            Unorm => MTLVertexFormat::UShort4Normalized,
+            Float => MTLVertexFormat::Half4,
+            _ => return None,
+        },
+        R32 => match format.1 {
+            Int   => MTLVertexFormat::Int,
+            Uint  => MTLVertexFormat::UInt,
+            Float => MTLVertexFormat::Float,
+            _ => return None,
+        },
+        R32_G32 => match format.1 {
+            Int   => MTLVertexFormat::Int2,
+            Uint  => MTLVertexFormat::UInt2,
+            Float => MTLVertexFormat::Float2,
+            _ => return None,
+        },
+        R32_G32_B32 => match format.1 {
+            Int   => MTLVertexFormat::Int3,
+            Uint  => MTLVertexFormat::UInt3,
+            Float => MTLVertexFormat::Float3,
+            _ => return None,
+        },
+        R32_G32_B32_A32 => match format.1 {
+            Int   => MTLVertexFormat::Int4,
+            Uint  => MTLVertexFormat::UInt4,
+            Float => MTLVertexFormat::Float4,
+            _ => return None,
+        },
+        _ => return None
+    })
 }
 
 pub fn map_format(format: Format, is_target: bool) -> Option<MTLPixelFormat> {

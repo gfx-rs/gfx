@@ -2,14 +2,14 @@
 
 using namespace metal;
 
-typedef struct {
+struct VertexOut {
     float4 pos [[ position ]];
     float2 coords;
-} VertexOut;
+};
 
-typedef struct {
+struct FragmentOut {
     float4 main [[ color(0) ]];
-} FragmentOut;
+};
 
 fragment FragmentOut frag(VertexOut in             [[ stage_in ]],
                           texture2d<float> t_Color [[ texture(0) ]],

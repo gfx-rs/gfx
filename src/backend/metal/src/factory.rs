@@ -242,9 +242,12 @@ impl core::Factory<Resources> for Factory {
 
         let vertex_desc = MTLVertexDescriptor::new();
 
-        // TODO: instancing
+        // TODO: implement instancing
+        //
+        // TODO: find a better way to set the buffer's stride, step func and
+        //       step rate
         let buf = vertex_desc.layouts().object_at(0);
-        buf.set_stride(desc.attributes[0].stride);
+        buf.set_stride(desc.attributes[0].unwrap().0.stride as u64);
         buf.set_step_function(MTLVertexStepFunction::PerVertex);
         buf.set_step_rate(1);
 
@@ -260,9 +263,10 @@ impl core::Factory<Resources> for Factory {
                 return Err(core::pso::CreationError);
             }
 
-            let attribute = vertex_desc.attributes.object_at(attr.slot as usize);
-            attribute.set_format(map_vertex_format(elem.format));
-            attribute.set_offset(elem.offset);
+            // TODO: handle case when requested vertex format is invalid
+            let attribute = vertex_desc.attributes().object_at(attr.slot as usize);
+            attribute.set_format(map_vertex_format(elem.format).unwrap());
+            attribute.set_offset(elem.offset as u64);
             attribute.set_buffer_index(0);
         }
 
