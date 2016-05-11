@@ -21,33 +21,33 @@ use gfx_device_vulkan::vk;
 
 
 pub fn init(builder: winit::WindowBuilder) -> (winit::Window) {
-    use winit::os::unix::WindowExt;
+    //use winit::os::unix::WindowExt;
     let backend = gfx_device_vulkan::create(&builder.window.title, 1, &[],
         &["VK_KHR_surface", "VK_KHR_xcb_surface"], &["VK_KHR_swapchain"]);
     let (width, height) = builder.window.dimensions.unwrap_or((640, 400));
     let win = builder.build().unwrap();
 
-    let surface = {
-        let vk = backend.inst_pointers();
-        let info = vk::XcbSurfaceCreateInfoKHR   {
-            sType: vk::STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
-            pNext: ptr::null(),
-            flags: 0,
-            connection: ptr::null_mut(), //TODO
-            window: ptr::null_mut(), //TODO
+    if false {
+        let surface = {
+            let vk = backend.inst_pointers();
+            let info = vk::XcbSurfaceCreateInfoKHR   {
+                sType: vk::STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
+                pNext: ptr::null(),
+                flags: 0,
+                connection: ptr::null_mut(), //TODO
+                window: ptr::null_mut(), //TODO
+            };
+
+            unsafe {
+                let mut out = mem::zeroed();
+                let status = vk.CreateXcbSurfaceKHR(backend.instance(), &info, ptr::null(), &mut out);
+                if status != vk::SUCCESS {
+                    panic!("vkCreateXcbSurfaceKHR: {:?}", gfx_device_vulkan::Error(status));
+                }
+                out
+            }
         };
 
-        unsafe {
-            let mut out = mem::zeroed();
-            let status = vk.CreateXcbSurfaceKHR(backend.instance(), &info, ptr::null(), &mut out);
-            if status != vk::SUCCESS {
-                panic!("vkCreateXcbSurfaceKHR: {:?}", gfx_device_vulkan::Error(status));
-            }
-            out
-        }
-    };
-
-    {
         let vk = backend.dev_pointers();
         let mut images: [vk::Image; 2] = [0; 2];
         let mut num = images.len() as u32;
@@ -88,7 +88,6 @@ pub fn init(builder: winit::WindowBuilder) -> (winit::Window) {
         if status != vk::SUCCESS {
             panic!("vkGetSwapchainImagesKHR: {:?}", gfx_device_vulkan::Error(status));
         }
-    };
-
+    }
     win
 }

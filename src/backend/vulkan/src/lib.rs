@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[macro_use]
+extern crate log;
 extern crate shared_library;
 extern crate gfx_core;
 
-use std::{fmt, mem, ptr};
+use std::{fmt, iter, mem, ptr};
 use shared_library::dynamic_library::DynamicLibrary;
 
 pub mod vk {
@@ -158,8 +160,13 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
         .map(|dev| PhysicalDeviceInfo::new(*dev, &inst_pointers))
         .collect::<Vec<_>>();
 
+    let (ph_dev, (qf_id, _))  = devices.iter()
+        .flat_map(|d| iter::repeat(d.device).zip(d.queue_families.iter().enumerate()))
+        .find(|&(_, (_, qf))| qf.queueFlags & vk::QUEUE_GRAPHICS_BIT != 0)
+        .unwrap();
+    info!("Chosen physical device {:p} with queue family {}", ph_dev as *const (), qf_id);
+
     let device = {
-        let physical = devices[0].device;
         let cstrings = layers.iter().chain(dev_extensions.iter())
                          .map(|&s| CString::new(s).unwrap())
                          .collect::<Vec<_>>();
@@ -170,7 +177,7 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
             sType: vk::STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
             pNext: ptr::null(),
             flags: 0,
-            queueFamilyIndex: 0,
+            queueFamilyIndex: qf_id as u32,
             queueCount: 1,
             pQueuePriorities: &1.0,
         };
@@ -190,7 +197,7 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
         };
         unsafe {
             let mut out = mem::zeroed();
-            let status = inst_pointers.CreateDevice(physical, &dev_info, ptr::null(), &mut out);
+            let status = inst_pointers.CreateDevice(ph_dev, &dev_info, ptr::null(), &mut out);
             if status != vk::SUCCESS {
                 panic!("vkCreateDevice: {:?}", Error(status));
             }
@@ -211,6 +218,10 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
         device: device,
         dev_pointers: dev_pointers,
     }
+}
+
+pub struct GraphicsQueue {
+    queue: vk::Queue,
 }
 
 

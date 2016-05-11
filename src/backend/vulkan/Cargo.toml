@@ -13,6 +13,7 @@ build = "build.rs"
 name = "gfx_device_vulkan"
 
 [dependencies]
+log = "0.3"
 vk = "0.0"
 shared_library = "0.1"
 winit = "0.5"
