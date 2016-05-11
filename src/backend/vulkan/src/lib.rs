@@ -20,6 +20,7 @@ extern crate gfx_core;
 use std::{fmt, iter, mem, ptr};
 use shared_library::dynamic_library::DynamicLibrary;
 
+pub mod command;
 pub mod vk {
     #![allow(dead_code)]
     #![allow(non_upper_case_globals)]
@@ -93,7 +94,7 @@ impl Backend {
 }
 
 pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&str],
-              dev_extensions: &[&str]) -> Backend {
+              dev_extensions: &[&str]) -> (Backend, command::GraphicsQueue) {
     use std::ffi::CString;
     use std::path::Path;
 
@@ -209,7 +210,14 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
         inst_pointers.GetDeviceProcAddr(device, name.as_ptr()) as *const _
     });
 
-    Backend {
+    let queue = unsafe {
+        let mut out = mem::zeroed();
+        dev_pointers.GetDeviceQueue(device, qf_id as u32, 0, &mut out);
+        out
+    };
+    let gfx_device = command::GraphicsQueue::new(queue);
+
+    let backend = Backend {
         dynamic_lib: dynamic_lib,
         library: lib,
         instance: instance,
@@ -217,11 +225,9 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
         functions: entry_points,
         device: device,
         dev_pointers: dev_pointers,
-    }
-}
+    };
 
-pub struct GraphicsQueue {
-    queue: vk::Queue,
+    (backend, gfx_device)
 }
 
 
@@ -257,4 +263,22 @@ impl fmt::Debug for Error {
             _ => "unknown",
         })
     }
+}
+
+
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+pub enum Resources {}
+
+impl gfx_core::Resources for Resources {
+    type Buffer               = ();
+    type Shader               = ();
+    type Program              = ();
+    type PipelineStateObject  = ();
+    type Texture              = ();
+    type ShaderResourceView   = ();
+    type UnorderedAccessView  = ();
+    type RenderTargetView     = ();
+    type DepthStencilView     = ();
+    type Sampler              = ();
+    type Fence                = ();
 }

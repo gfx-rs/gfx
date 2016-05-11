@@ -19,13 +19,16 @@ extern crate gfx_device_vulkan;
 use std::{mem, ptr};
 use gfx_device_vulkan::vk;
 
+pub struct Window {
+    pub backend: gfx_device_vulkan::Backend,
+    pub win: winit::Window,
+}
 
-pub fn init(builder: winit::WindowBuilder) -> (winit::Window) {
+pub fn init(builder: winit::WindowBuilder) -> (Window, gfx_device_vulkan::command::GraphicsQueue) {
     //use winit::os::unix::WindowExt;
-    let backend = gfx_device_vulkan::create(&builder.window.title, 1, &[],
+    let (backend, device) = gfx_device_vulkan::create(&builder.window.title, 1, &[],
         &["VK_KHR_surface", "VK_KHR_xcb_surface"], &["VK_KHR_swapchain"]);
     let (width, height) = builder.window.dimensions.unwrap_or((640, 400));
-    let win = builder.build().unwrap();
 
     if false {
         let surface = {
@@ -89,5 +92,10 @@ pub fn init(builder: winit::WindowBuilder) -> (winit::Window) {
             panic!("vkGetSwapchainImagesKHR: {:?}", gfx_device_vulkan::Error(status));
         }
     }
-    win
+
+    let win = Window {
+        backend: backend,
+        win: builder.build().unwrap(),
+    };
+    (win, device)
 }
