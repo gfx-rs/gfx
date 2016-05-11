@@ -24,7 +24,6 @@ pub struct Buffer {
 }
 
 impl draw::CommandBuffer<Resources> for Buffer {
-    fn clone_empty(&self) -> Buffer { Buffer {inner: self.inner} }
     fn reset(&mut self) {}
     fn bind_pipeline_state(&mut self, _: ()) {}
     fn bind_vertex_buffers(&mut self, _: pso::VertexBufferSet<Resources>) {}

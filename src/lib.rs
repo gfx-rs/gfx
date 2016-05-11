@@ -90,9 +90,15 @@ impl Drop for Harness {
     }
 }
 
+pub trait Factory<R: gfx::Resources>: gfx::Factory<R> {
+    type CommandBuffer: gfx::CommandBuffer<R>;
+    fn create_encoder(&mut self) -> gfx::Encoder<R, Self::CommandBuffer>;
+}
+
+
 pub trait ApplicationBase<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
-    fn new<F>(F, gfx::Encoder<R, C>, Init<R>) -> Self where
-        F: gfx::Factory<R>;
+    fn new<F>(F, Init<R>) -> Self where
+        F: Factory<R, CommandBuffer=C>;
     fn render<D>(&mut self, &mut D) where
         D: gfx::Device<Resources=R, CommandBuffer=C>;
 }
@@ -134,11 +140,11 @@ impl<R, C, A> ApplicationBase<R, C> for Wrap<R, C, A> where
     C: gfx::CommandBuffer<R>,
     A: Application<R>
 {
-    fn new<F>(factory: F, encoder: gfx::Encoder<R, C>, init: Init<R>) -> Self where
-        F: gfx::Factory<R>
+    fn new<F>(mut factory: F, init: Init<R>) -> Self where
+        F: Factory<R, CommandBuffer=C>,
     {
         Wrap {
-            encoder: encoder,
+            encoder: factory.create_encoder(),
             app: A::new(factory, init),
         }
     }
@@ -166,6 +172,14 @@ pub trait ApplicationD3D11 {
     fn launch(&str, Config);
 }
 
+
+impl Factory<gfx_device_gl::Resources> for gfx_device_gl::Factory {
+    type CommandBuffer = gfx_device_gl::CommandBuffer;
+    fn create_encoder(&mut self) -> gfx::Encoder<gfx_device_gl::Resources, Self::CommandBuffer> {
+        self.create_command_buffer().into()
+    }
+}
+
 impl<A> ApplicationGL for A where
     A: ApplicationBase<gfx_device_gl::Resources,
                        gfx_device_gl::CommandBuffer>
@@ -189,7 +203,7 @@ impl<A> ApplicationGL for A where
         let combuf = factory.create_command_buffer();
         let shade_lang = device.get_info().shading_language;
 
-        let mut app = Self::new(factory, combuf.into(), Init {
+        let mut app = Self::new(factory, Init {
             backend: if shade_lang.is_embedded {
                 shade::Backend::GlslEs(shade_lang)
             } else {
@@ -216,6 +230,14 @@ impl<A> ApplicationGL for A where
             device.cleanup();
             harness.bump()
         }
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl Factory<gfx_device_metal::Resources> for gfx_device_metal::Factory {
+    type CommandBuffer = gfx_device_meta::CommandBuffer;
+    fn create_encoder(&mut self) -> gfx::Encoder<gfx_device_metal::Resources, Self::CommandBuffer> {
+        self.create_command_buffer().into()
     }
 }
 
@@ -263,6 +285,14 @@ impl<
 }
 
 #[cfg(target_os = "windows")]
+impl Factory<gfx_device_dx11::Resources> for gfx_device_dx11::Factory {
+    type CommandBuffer = D3D11CommandBuffer;
+    fn create_encoder(&mut self) -> gfx::Encoder<gfx_device_dx11::Resources, Self::CommandBuffer> {
+        self.create_command_buffer_native().into()
+    }
+}
+
+#[cfg(target_os = "windows")]
 impl<
     A: ApplicationBase<gfx_device_dx11::Resources, D3D11CommandBuffer>
 > ApplicationD3D11 for A {
@@ -270,22 +300,18 @@ impl<
         use gfx::traits::{Device, Factory};
 
         env_logger::init().unwrap();
-        let (window, device, mut factory, main_color) =
+        let (window, device, factory, main_color) =
             gfx_window_dxgi::init::<ColorFormat>(title, config.size.0, config.size.1)
             .unwrap();
         let main_depth = factory.create_depth_stencil_view_only(
             window.size.0, window.size.1).unwrap();
 
-        //let combuf = factory.create_command_buffer();
-        let combuf = factory.create_command_buffer_native();
-
-        let mut app = Self::new(factory, combuf.into(), Init {
+        let mut app = Self::new(factory, Init {
             backend: shade::Backend::Hlsl(device.get_shader_model()),
             color: main_color,
             depth: main_depth,
             aspect_ratio: window.size.0 as f32 / window.size.1 as f32,
         });
-
         let mut device: gfx_device_dx11::Deferred = device.into();
 
         let mut harness = Harness::new();

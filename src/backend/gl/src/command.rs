@@ -184,10 +184,6 @@ impl CommandBuffer {
 }
 
 impl c::draw::CommandBuffer<Resources> for CommandBuffer {
-    fn clone_empty(&self) -> CommandBuffer {
-        CommandBuffer::new(self.fbo)
-    }
-
     fn reset(&mut self) {
         self.buf.clear();
         self.data.0.clear();

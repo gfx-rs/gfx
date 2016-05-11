@@ -119,7 +119,6 @@ pub struct CommandBuffer<P> {
 }
 
 pub trait Parser: Sized {
-    fn clone_empty(&self) -> Self;
     fn reset(&mut self);
     fn parse(&mut self, Command);
     fn update_buffer(&mut self, Buffer, &[u8], usize);
@@ -144,10 +143,6 @@ impl<P: Parser> CommandBuffer<P> {
 }
 
 impl<P: Parser> draw::CommandBuffer<Resources> for CommandBuffer<P> {
-    fn clone_empty(&self) -> CommandBuffer<P> {
-        self.parser.clone_empty().into()
-    }
-
     fn reset(&mut self) {
         self.parser.reset();
         self.cache = Cache::new();

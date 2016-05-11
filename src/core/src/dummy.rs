@@ -68,7 +68,6 @@ impl DummyDevice {
 /// Dummy command buffer, which ignores all the calls.
 pub struct DummyCommandBuffer;
 impl draw::CommandBuffer<DummyResources> for DummyCommandBuffer {
-    fn clone_empty(&self) -> DummyCommandBuffer { DummyCommandBuffer }
     fn reset(&mut self) {}
     fn bind_pipeline_state(&mut self, _: ()) {}
     fn bind_vertex_buffers(&mut self, _: pso::VertexBufferSet<DummyResources>) {}

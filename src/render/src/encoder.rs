@@ -110,15 +110,6 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
         self.handles.clear();
     }
 
-    /// Clone the renderer shared data but ignore the commands.
-    pub fn clone_empty(&self) -> Encoder<R, C> {
-        Encoder {
-            command_buffer: self.command_buffer.clone_empty(),
-            raw_pso_data: pso::RawDataSet::new(),
-            handles: handle::Manager::new(),
-        }
-    }
-
     /// Update a buffer with a slice of data.
     pub fn update_buffer<T: Pod>(&mut self, buf: &handle::Buffer<R, T>,
                          data: &[T], offset_elements: usize)
