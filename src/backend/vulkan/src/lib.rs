@@ -21,6 +21,7 @@ use std::{fmt, iter, mem, ptr};
 use shared_library::dynamic_library::DynamicLibrary;
 
 pub mod command;
+mod factory;
 pub mod vk {
     #![allow(dead_code)]
     #![allow(non_upper_case_globals)]

@@ -14,7 +14,7 @@
 
 use std::mem;
 use vk;
-use gfx_core::{self, draw, pso, shade, target, tex};
+use gfx_core::{self as core, draw, pso, shade, target, tex};
 use gfx_core::state::RefValues;
 use gfx_core::{IndexType, VertexCount};
 use {Error, Resources};
@@ -53,13 +53,13 @@ impl draw::CommandBuffer<Resources> for Buffer {
 pub struct GraphicsQueue {
     queue: vk::Queue,
     functions: vk::DevicePointers,
-    capabilities: gfx_core::Capabilities,
+    capabilities: core::Capabilities,
 }
 
 impl GraphicsQueue {
     #[doc(hidden)]
     pub fn new(q: vk::Queue, fun: vk::DevicePointers) -> GraphicsQueue {
-        let caps = gfx_core::Capabilities {
+        let caps = core::Capabilities {
             max_vertex_count: 0,
             max_index_count: 0,
             max_texture_size: 0,
@@ -84,15 +84,15 @@ impl GraphicsQueue {
     }
 }
 
-impl gfx_core::Device for GraphicsQueue {
+impl core::Device for GraphicsQueue {
     type Resources = Resources;
     type CommandBuffer = Buffer;
 
-    fn get_capabilities(&self) -> &gfx_core::Capabilities {
+    fn get_capabilities(&self) -> &core::Capabilities {
         &self.capabilities
     }
 
-    fn pin_submitted_resources(&mut self, _: &gfx_core::handle::Manager<Resources>) {}
+    fn pin_submitted_resources(&mut self, _: &core::handle::Manager<Resources>) {}
 
     fn submit(&mut self, com: &mut Buffer) {
         let status = unsafe {
