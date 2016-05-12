@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::slice;
+use std::{mem, ptr, slice};
 use std::os::raw::c_void;
 use gfx_core::{self as core, handle as h, factory as f};
-use {Resources as R};
+use vk;
+use command;
+use {Resources as R, SharePointer};
 
 
 #[derive(Copy, Clone)]
@@ -37,7 +39,33 @@ impl core::mapping::Raw for RawMapping {
     }
 }
 
-struct Factory {
+pub struct Factory {
+    share: SharePointer,
+    command_pool: vk::CommandPool,
+}
+
+impl Factory {
+    pub fn new(share: SharePointer, qf_index: u32) -> Factory {
+        let com_info = vk::CommandPoolCreateInfo {
+            sType: vk::STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+            pNext: ptr::null(),
+            flags: 0,
+            queueFamilyIndex: qf_index,
+        };
+        let com_pool = unsafe {
+            let vk = share.dev_pointers();
+            let mut out = mem::zeroed();
+            assert_eq!(vk::SUCCESS, vk.CreateCommandPool(share.device(), &com_info, ptr::null(), &mut out));
+            out
+        };
+        Factory {
+            share: share,
+            command_pool: com_pool,
+        }
+    }
+    pub fn create_command_buffer(&mut self) -> command::Buffer {
+        unimplemented!()
+    }
 }
 
 impl core::Factory<R> for Factory {

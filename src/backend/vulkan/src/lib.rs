@@ -18,9 +18,13 @@ extern crate shared_library;
 extern crate gfx_core;
 
 use std::{fmt, iter, mem, ptr};
+use std::sync::Arc;
 use shared_library::dynamic_library::DynamicLibrary;
 
-pub mod command;
+pub use self::command::GraphicsQueue;
+pub use self::factory::Factory;
+
+mod command;
 mod factory;
 pub mod vk {
     #![allow(dead_code)]
@@ -69,16 +73,20 @@ impl PhysicalDeviceInfo {
     }
 }
 
-pub struct Backend {
+
+pub struct Share {
     dynamic_lib: DynamicLibrary,
     library: vk::Static,
     instance: vk::Instance,
     inst_pointers: vk::InstancePointers,
     functions: vk::EntryPoints,
     device: vk::Device,
+    dev_pointers: vk::DevicePointers,
 }
 
-impl Backend {
+pub type SharePointer = Arc<Share>;
+
+impl Share {
     pub fn instance(&self) -> vk::Instance {
         self.instance
     }
@@ -88,10 +96,13 @@ impl Backend {
     pub fn device(&self) -> vk::Device {
         self.device
     }
+    pub fn dev_pointers(&self) -> &vk::DevicePointers {
+        &self.dev_pointers
+    }
 }
 
 pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&str],
-              dev_extensions: &[&str]) -> (Backend, command::GraphicsQueue) {
+              dev_extensions: &[&str]) -> (command::GraphicsQueue, factory::Factory) {
     use std::ffi::CString;
     use std::path::Path;
 
@@ -206,24 +217,25 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
     let dev_pointers = vk::DevicePointers::load(|name| unsafe {
         inst_pointers.GetDeviceProcAddr(device, name.as_ptr()) as *const _
     });
-
     let queue = unsafe {
         let mut out = mem::zeroed();
         dev_pointers.GetDeviceQueue(device, qf_id as u32, 0, &mut out);
         out
     };
-    let gfx_device = command::GraphicsQueue::new(queue, dev_pointers);
 
-    let backend = Backend {
+    let share = Arc::new(Share {
         dynamic_lib: dynamic_lib,
         library: lib,
         instance: instance,
         inst_pointers: inst_pointers,
         functions: entry_points,
         device: device,
-    };
+        dev_pointers: dev_pointers,
+    });
+    let gfx_device = command::GraphicsQueue::new(share.clone(), queue);
+    let gfx_factory = factory::Factory::new(share.clone(), qf_id as u32);
 
-    (backend, gfx_device)
+    (gfx_device, gfx_factory)
 }
 
 

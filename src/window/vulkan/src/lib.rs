@@ -19,18 +19,16 @@ extern crate gfx_device_vulkan;
 use std::{mem, ptr};
 use gfx_device_vulkan::vk;
 
-pub struct Window {
-    pub backend: gfx_device_vulkan::Backend,
-    pub win: winit::Window,
-}
 
-pub fn init(builder: winit::WindowBuilder) -> (Window, gfx_device_vulkan::command::GraphicsQueue) {
+pub fn init(builder: winit::WindowBuilder) -> (winit::Window, gfx_device_vulkan::GraphicsQueue, gfx_device_vulkan::Factory) {
     //use winit::os::unix::WindowExt;
-    let (backend, device) = gfx_device_vulkan::create(&builder.window.title, 1, &[],
+    let (device, factory) = gfx_device_vulkan::create(&builder.window.title, 1, &[],
         &["VK_KHR_surface", "VK_KHR_xcb_surface"], &["VK_KHR_swapchain"]);
     let (width, height) = builder.window.dimensions.unwrap_or((640, 400));
+    let win = builder.build().unwrap();
 
     if false {
+        let backend = device.get_share();
         let surface = {
             let vk = backend.inst_pointers();
             let info = vk::XcbSurfaceCreateInfoKHR   {
@@ -51,7 +49,7 @@ pub fn init(builder: winit::WindowBuilder) -> (Window, gfx_device_vulkan::comman
             }
         };
 
-        let vk = device.get_functions();
+        let vk = backend.dev_pointers();
         let mut images: [vk::Image; 2] = [0; 2];
         let mut num = images.len() as u32;
 
@@ -93,9 +91,5 @@ pub fn init(builder: winit::WindowBuilder) -> (Window, gfx_device_vulkan::comman
         }
     }
 
-    let win = Window {
-        backend: backend,
-        win: builder.build().unwrap(),
-    };
-    (win, device)
+    (win, device, factory)
 }

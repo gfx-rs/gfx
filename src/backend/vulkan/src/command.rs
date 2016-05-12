@@ -17,7 +17,7 @@ use vk;
 use gfx_core::{self as core, draw, pso, shade, target, tex};
 use gfx_core::state::RefValues;
 use gfx_core::{IndexType, VertexCount};
-use {Error, Resources};
+use {Error, Resources, Share, SharePointer};
 
 
 pub struct Buffer {
@@ -51,14 +51,14 @@ impl draw::CommandBuffer<Resources> for Buffer {
 
 
 pub struct GraphicsQueue {
+    share: SharePointer,
     queue: vk::Queue,
-    functions: vk::DevicePointers,
     capabilities: core::Capabilities,
 }
 
 impl GraphicsQueue {
     #[doc(hidden)]
-    pub fn new(q: vk::Queue, fun: vk::DevicePointers) -> GraphicsQueue {
+    pub fn new(share: SharePointer, q: vk::Queue) -> GraphicsQueue {
         let caps = core::Capabilities {
             max_vertex_count: 0,
             max_index_count: 0,
@@ -73,14 +73,14 @@ impl GraphicsQueue {
             separate_blending_slots_supported: false,
         };
         GraphicsQueue {
+            share: share,
             queue: q,
-            functions: fun,
             capabilities: caps,
         }
     }
 
-    pub fn get_functions(&self) -> &vk::DevicePointers {
-        &self.functions
+    pub fn get_share(&self) -> &Share {
+        &self.share
     }
 }
 
@@ -95,8 +95,9 @@ impl core::Device for GraphicsQueue {
     fn pin_submitted_resources(&mut self, _: &core::handle::Manager<Resources>) {}
 
     fn submit(&mut self, com: &mut Buffer) {
+        let vk = self.share.dev_pointers();
         let status = unsafe {
-            self.functions.EndCommandBuffer(com.inner)
+            vk.EndCommandBuffer(com.inner)
         };
         if status != vk::SUCCESS {
             panic!("vkEndCommandBuffer: {:?}", Error(status));
@@ -108,7 +109,7 @@ impl core::Device for GraphicsQueue {
             .. unsafe { mem::zeroed() }
         };
         let status = unsafe {
-            self.functions.QueueSubmit(self.queue, 1, &info, 0)
+            vk.QueueSubmit(self.queue, 1, &info, 0)
         };
         if status != vk::SUCCESS {
             panic!("vkQueueSubmit: {:?}", Error(status));
