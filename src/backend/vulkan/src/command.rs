@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::mem;
 use vk;
 use gfx_core::{self, draw, pso, shade, target, tex};
 use gfx_core::state::RefValues;
 use gfx_core::{IndexType, VertexCount};
-use {Resources};
+use {Error, Resources};
 
 
 pub struct Buffer {
@@ -51,12 +52,13 @@ impl draw::CommandBuffer<Resources> for Buffer {
 
 pub struct GraphicsQueue {
     queue: vk::Queue,
+    functions: vk::DevicePointers,
     capabilities: gfx_core::Capabilities,
 }
 
 impl GraphicsQueue {
     #[doc(hidden)]
-    pub fn new(q: vk::Queue) -> GraphicsQueue {
+    pub fn new(q: vk::Queue, fun: vk::DevicePointers) -> GraphicsQueue {
         let caps = gfx_core::Capabilities {
             max_vertex_count: 0,
             max_index_count: 0,
@@ -72,8 +74,13 @@ impl GraphicsQueue {
         };
         GraphicsQueue {
             queue: q,
+            functions: fun,
             capabilities: caps,
         }
+    }
+
+    pub fn get_functions(&self) -> &vk::DevicePointers {
+        &self.functions
     }
 }
 
@@ -84,7 +91,29 @@ impl gfx_core::Device for GraphicsQueue {
     fn get_capabilities(&self) -> &gfx_core::Capabilities {
         &self.capabilities
     }
+
     fn pin_submitted_resources(&mut self, _: &gfx_core::handle::Manager<Resources>) {}
-    fn submit(&mut self, _: &mut Buffer) {}
+
+    fn submit(&mut self, com: &mut Buffer) {
+        let status = unsafe {
+            self.functions.EndCommandBuffer(com.inner)
+        };
+        if status != vk::SUCCESS {
+            panic!("vkEndCommandBuffer: {:?}", Error(status));
+        }
+        let info = vk::SubmitInfo {
+            sType: vk::STRUCTURE_TYPE_SUBMIT_INFO,
+            commandBufferCount: 1,
+            pCommandBuffers: &com.inner,
+            .. unsafe { mem::zeroed() }
+        };
+        let status = unsafe {
+            self.functions.QueueSubmit(self.queue, 1, &info, 0)
+        };
+        if status != vk::SUCCESS {
+            panic!("vkQueueSubmit: {:?}", Error(status));
+        }
+    }
+
     fn cleanup(&mut self) {}
 }

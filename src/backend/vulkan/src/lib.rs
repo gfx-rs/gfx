@@ -75,7 +75,6 @@ pub struct Backend {
     inst_pointers: vk::InstancePointers,
     functions: vk::EntryPoints,
     device: vk::Device,
-    dev_pointers: vk::DevicePointers,
 }
 
 impl Backend {
@@ -87,9 +86,6 @@ impl Backend {
     }
     pub fn device(&self) -> vk::Device {
         self.device
-    }
-    pub fn dev_pointers(&self) -> &vk::DevicePointers {
-        &self.dev_pointers
     }
 }
 
@@ -215,7 +211,7 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
         dev_pointers.GetDeviceQueue(device, qf_id as u32, 0, &mut out);
         out
     };
-    let gfx_device = command::GraphicsQueue::new(queue);
+    let gfx_device = command::GraphicsQueue::new(queue, dev_pointers);
 
     let backend = Backend {
         dynamic_lib: dynamic_lib,
@@ -224,7 +220,6 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
         inst_pointers: inst_pointers,
         functions: entry_points,
         device: device,
-        dev_pointers: dev_pointers,
     };
 
     (backend, gfx_device)

@@ -51,7 +51,7 @@ pub fn init(builder: winit::WindowBuilder) -> (Window, gfx_device_vulkan::comman
             }
         };
 
-        let vk = backend.dev_pointers();
+        let vk = device.get_functions();
         let mut images: [vk::Image; 2] = [0; 2];
         let mut num = images.len() as u32;
 
