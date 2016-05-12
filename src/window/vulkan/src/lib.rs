@@ -22,15 +22,14 @@ use gfx_device_vulkan::vk;
 
 pub fn init(builder: winit::WindowBuilder) -> (winit::Window, gfx_device_vulkan::GraphicsQueue, gfx_device_vulkan::Factory) {
     //use winit::os::unix::WindowExt;
-    let (device, factory) = gfx_device_vulkan::create(&builder.window.title, 1, &[],
+    let (device, factory, backend) = gfx_device_vulkan::create(&builder.window.title, 1, &[],
         &["VK_KHR_surface", "VK_KHR_xcb_surface"], &["VK_KHR_swapchain"]);
     let (width, height) = builder.window.dimensions.unwrap_or((640, 400));
     let win = builder.build().unwrap();
 
     if false {
-        let backend = device.get_share();
         let surface = {
-            let vk = backend.inst_pointers();
+            let (inst, vk) = backend.get_instance();
             let info = vk::XcbSurfaceCreateInfoKHR   {
                 sType: vk::STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
                 pNext: ptr::null(),
@@ -41,15 +40,12 @@ pub fn init(builder: winit::WindowBuilder) -> (winit::Window, gfx_device_vulkan:
 
             unsafe {
                 let mut out = mem::zeroed();
-                let status = vk.CreateXcbSurfaceKHR(backend.instance(), &info, ptr::null(), &mut out);
-                if status != vk::SUCCESS {
-                    panic!("vkCreateXcbSurfaceKHR: {:?}", gfx_device_vulkan::Error(status));
-                }
+                assert_eq!(vk::SUCCESS, vk.CreateXcbSurfaceKHR(inst, &info, ptr::null(), &mut out));
                 out
             }
         };
 
-        let vk = backend.dev_pointers();
+        let (dev, vk) = backend.get_device();
         let mut images: [vk::Image; 2] = [0; 2];
         let mut num = images.len() as u32;
 
@@ -76,19 +72,13 @@ pub fn init(builder: winit::WindowBuilder) -> (winit::Window, gfx_device_vulkan:
 
         let swapchain = unsafe {
             let mut out = mem::zeroed();
-            let status = vk.CreateSwapchainKHR(backend.device(), &info, ptr::null(), &mut out);
-            if status != vk::SUCCESS {
-                panic!("vkCreateSwapchainKHR: {:?}", gfx_device_vulkan::Error(status));
-            }
+            assert_eq!(vk::SUCCESS, vk.CreateSwapchainKHR(dev, &info, ptr::null(), &mut out));
             out
         };
 
-        let status = unsafe {
-            vk.GetSwapchainImagesKHR(backend.device(), swapchain, &mut num, images.as_mut_ptr())
-        };
-        if status != vk::SUCCESS {
-            panic!("vkGetSwapchainImagesKHR: {:?}", gfx_device_vulkan::Error(status));
-        }
+        assert_eq!(vk::SUCCESS, unsafe {
+            vk.GetSwapchainImagesKHR(dev, swapchain, &mut num, images.as_mut_ptr())
+        });
     }
 
     (win, device, factory)

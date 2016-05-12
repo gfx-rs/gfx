@@ -53,9 +53,9 @@ impl Factory {
             queueFamilyIndex: qf_index,
         };
         let com_pool = unsafe {
-            let vk = share.dev_pointers();
+            let (dev, vk) = share.get_device();
             let mut out = mem::zeroed();
-            assert_eq!(vk::SUCCESS, vk.CreateCommandPool(share.device(), &com_info, ptr::null(), &mut out));
+            assert_eq!(vk::SUCCESS, vk.CreateCommandPool(dev, &com_info, ptr::null(), &mut out));
             out
         };
         Factory {
@@ -63,8 +63,30 @@ impl Factory {
             command_pool: com_pool,
         }
     }
+
     pub fn create_command_buffer(&mut self) -> command::Buffer {
-        unimplemented!()
+        let info = vk::CommandBufferAllocateInfo {
+            sType: vk::STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            pNext: ptr::null(),
+            commandPool: self.command_pool,
+            level: vk::COMMAND_BUFFER_LEVEL_PRIMARY,
+            commandBufferCount: 1,
+        };
+        let (dev, vk) = self.share.get_device();
+        unsafe {
+            let mut out = mem::zeroed();
+            assert_eq!(vk::SUCCESS, vk.AllocateCommandBuffers(dev, &info, &mut out));
+            command::Buffer::new(out)
+        }
+    }
+}
+
+impl Drop for Factory {
+    fn drop(&mut self) {
+        let (dev, vk) = self.share.get_device();
+        unsafe {
+            vk.DestroyCommandPool(dev, self.command_pool, ptr::null())
+        };
     }
 }
 

@@ -17,11 +17,26 @@ use vk;
 use gfx_core::{self as core, draw, pso, shade, target, tex};
 use gfx_core::state::RefValues;
 use gfx_core::{IndexType, VertexCount};
-use {Error, Resources, Share, SharePointer};
+use {Resources, SharePointer};
 
 
 pub struct Buffer {
     inner: vk::CommandBuffer,
+}
+
+impl Buffer {
+    #[doc(hidden)]
+    pub fn new(b: vk::CommandBuffer) -> Buffer {
+        Buffer {
+            inner: b,
+        }
+    }
+}
+
+impl Drop for Buffer {
+    fn drop(&mut self) {
+        //TODO
+    }
 }
 
 impl draw::CommandBuffer<Resources> for Buffer {
@@ -78,10 +93,6 @@ impl GraphicsQueue {
             capabilities: caps,
         }
     }
-
-    pub fn get_share(&self) -> &Share {
-        &self.share
-    }
 }
 
 impl core::Device for GraphicsQueue {
@@ -95,25 +106,19 @@ impl core::Device for GraphicsQueue {
     fn pin_submitted_resources(&mut self, _: &core::handle::Manager<Resources>) {}
 
     fn submit(&mut self, com: &mut Buffer) {
-        let vk = self.share.dev_pointers();
-        let status = unsafe {
+        let (_, vk) = self.share.get_device();
+        assert_eq!(vk::SUCCESS, unsafe {
             vk.EndCommandBuffer(com.inner)
-        };
-        if status != vk::SUCCESS {
-            panic!("vkEndCommandBuffer: {:?}", Error(status));
-        }
+        });
         let info = vk::SubmitInfo {
             sType: vk::STRUCTURE_TYPE_SUBMIT_INFO,
             commandBufferCount: 1,
             pCommandBuffers: &com.inner,
             .. unsafe { mem::zeroed() }
         };
-        let status = unsafe {
+        assert_eq!(vk::SUCCESS, unsafe {
             vk.QueueSubmit(self.queue, 1, &info, 0)
-        };
-        if status != vk::SUCCESS {
-            panic!("vkQueueSubmit: {:?}", Error(status));
-        }
+        });
     }
 
     fn cleanup(&mut self) {}

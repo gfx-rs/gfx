@@ -87,22 +87,16 @@ pub struct Share {
 pub type SharePointer = Arc<Share>;
 
 impl Share {
-    pub fn instance(&self) -> vk::Instance {
-        self.instance
+    pub fn get_instance(&self) -> (vk::Instance, &vk::InstancePointers) {
+        (self.instance, &self.inst_pointers)
     }
-    pub fn inst_pointers(&self) -> &vk::InstancePointers {
-        &self.inst_pointers
-    }
-    pub fn device(&self) -> vk::Device {
-        self.device
-    }
-    pub fn dev_pointers(&self) -> &vk::DevicePointers {
-        &self.dev_pointers
+    pub fn get_device(&self) -> (vk::Device, &vk::DevicePointers) {
+        (self.device, &self.dev_pointers)
     }
 }
 
 pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&str],
-              dev_extensions: &[&str]) -> (command::GraphicsQueue, factory::Factory) {
+              dev_extensions: &[&str]) -> (command::GraphicsQueue, factory::Factory, SharePointer) {
     use std::ffi::CString;
     use std::path::Path;
 
@@ -145,10 +139,7 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
         };
         unsafe {
             let mut ptr = mem::zeroed();
-            let status = entry_points.CreateInstance(&create_info, ptr::null(), &mut ptr);
-            if status != vk::SUCCESS {
-                panic!("vkCreateInstance: {:?}", Error(status));
-            }
+            assert_eq!(vk::SUCCESS, entry_points.CreateInstance(&create_info, ptr::null(), &mut ptr));
             ptr
         }
     };
@@ -159,12 +150,9 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
 
     let mut physical_devices: [vk::PhysicalDevice; 4] = unsafe { mem::zeroed() };
     let mut num = physical_devices.len() as u32;
-    let status = unsafe {
+    assert_eq!(vk::SUCCESS, unsafe {
         inst_pointers.EnumeratePhysicalDevices(instance, &mut num, physical_devices.as_mut_ptr())
-    };
-    if status != vk::SUCCESS {
-        panic!("vkEnumeratePhysicalDevices: {:?}", Error(status));
-    }
+    });
     let devices = physical_devices[..num as usize].iter()
         .map(|dev| PhysicalDeviceInfo::new(*dev, &inst_pointers))
         .collect::<Vec<_>>();
@@ -206,10 +194,7 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
         };
         unsafe {
             let mut out = mem::zeroed();
-            let status = inst_pointers.CreateDevice(ph_dev, &dev_info, ptr::null(), &mut out);
-            if status != vk::SUCCESS {
-                panic!("vkCreateDevice: {:?}", Error(status));
-            }
+            assert_eq!(vk::SUCCESS, inst_pointers.CreateDevice(ph_dev, &dev_info, ptr::null(), &mut out));
             out
         }
     };
@@ -235,7 +220,7 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
     let gfx_device = command::GraphicsQueue::new(share.clone(), queue);
     let gfx_factory = factory::Factory::new(share.clone(), qf_id as u32);
 
-    (gfx_device, gfx_factory)
+    (gfx_device, gfx_factory, share)
 }
 
 
