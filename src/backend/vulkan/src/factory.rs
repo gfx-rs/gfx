@@ -16,7 +16,7 @@ use std::{mem, ptr, slice};
 use std::os::raw::c_void;
 use gfx_core::{self as core, handle as h, factory as f};
 use vk;
-use command;
+use {command};
 use {Resources as R, SharePointer};
 
 
@@ -113,9 +113,23 @@ impl core::Factory<R> for Factory {
         unimplemented!()
     }
 
-    fn create_shader(&mut self, _stage: core::shade::Stage, _code: &[u8])
+    fn create_shader(&mut self, _stage: core::shade::Stage, code: &[u8])
                      -> Result<h::Shader<R>, core::shade::CreateShaderError> {
-        unimplemented!()
+        use gfx_core::handle::Producer;
+        let (dev, vk) = self.share.get_device();
+        let info = vk::ShaderModuleCreateInfo {
+            sType: vk::STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+            pNext: ptr::null(),
+            flags: 0,
+            codeSize: code.len(),
+            pCode: code.as_ptr() as *const _,
+        };
+        let shader = unsafe {
+            let mut out = mem::zeroed();
+            assert_eq!(vk::SUCCESS, vk.CreateShaderModule(dev, &info, ptr::null(), &mut out));
+            out
+        };
+        Ok(self.share.handles.borrow_mut().make_shader(shader))
     }
 
     fn create_program(&mut self, _shader_set: &core::ShaderSet<R>)
@@ -125,6 +139,15 @@ impl core::Factory<R> for Factory {
 
     fn create_pipeline_state_raw(&mut self, _program: &h::Program<R>, _desc: &core::pso::Descriptor)
                                  -> Result<h::RawPipelineState<R>, core::pso::CreationError> {
+        /*let shader = native::Shader(vk::PipelineShaderStageCreateInfo {
+            sType: vk::STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            pNext: ptr::null(),
+            flags: 0,
+            stage: 0, //TODO
+            module: !0, //TODO
+            pName: ptr::null(),
+            pSpecializationInfo: ptr::null(),
+        });*/
         unimplemented!()
     }
 

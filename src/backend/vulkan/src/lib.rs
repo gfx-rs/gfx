@@ -18,6 +18,7 @@ extern crate shared_library;
 extern crate gfx_core;
 
 use std::{fmt, iter, mem, ptr};
+use std::cell::RefCell;
 use std::sync::Arc;
 use shared_library::dynamic_library::DynamicLibrary;
 
@@ -38,17 +39,17 @@ pub mod vk {
 
 struct PhysicalDeviceInfo {
     device: vk::PhysicalDevice,
-    properties: vk::PhysicalDeviceProperties,
+    _properties: vk::PhysicalDeviceProperties,
     queue_families: Vec<vk::QueueFamilyProperties>,
-    memory: vk::PhysicalDeviceMemoryProperties,
-    features: vk::PhysicalDeviceFeatures,
+    _memory: vk::PhysicalDeviceMemoryProperties,
+    _features: vk::PhysicalDeviceFeatures,
 }
 
 impl PhysicalDeviceInfo {
     pub fn new(dev: vk::PhysicalDevice, vk: &vk::InstancePointers) -> PhysicalDeviceInfo {
         PhysicalDeviceInfo {
             device: dev,
-            properties: unsafe {
+            _properties: unsafe {
                 let mut out = mem::zeroed();
                 vk.GetPhysicalDeviceProperties(dev, &mut out);
                 out
@@ -60,12 +61,12 @@ impl PhysicalDeviceInfo {
                 families.set_len(num as usize);
                 families
             },
-            memory: unsafe {
+            _memory: unsafe {
                 let mut out = mem::zeroed();
                 vk.GetPhysicalDeviceMemoryProperties(dev, &mut out);
                 out
             },
-            features: unsafe {
+            _features: unsafe {
                 let mut out = mem::zeroed();
                 vk.GetPhysicalDeviceFeatures(dev, &mut out);
                 out
@@ -76,13 +77,13 @@ impl PhysicalDeviceInfo {
 
 
 pub struct Share {
-    dynamic_lib: DynamicLibrary,
-    library: vk::Static,
+    _dynamic_lib: DynamicLibrary,
+    _library: vk::Static,
     instance: vk::Instance,
     inst_pointers: vk::InstancePointers,
-    functions: vk::EntryPoints,
     device: vk::Device,
     dev_pointers: vk::DevicePointers,
+    handles: RefCell<gfx_core::handle::Manager<Resources>>,
 }
 
 pub type SharePointer = Arc<Share>;
@@ -210,13 +211,13 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
     };
 
     let share = Arc::new(Share {
-        dynamic_lib: dynamic_lib,
-        library: lib,
+        _dynamic_lib: dynamic_lib,
+        _library: lib,
         instance: instance,
         inst_pointers: inst_pointers,
-        functions: entry_points,
         device: device,
         dev_pointers: dev_pointers,
+        handles: RefCell::new(gfx_core::handle::Manager::new()),
     });
     let gfx_device = command::GraphicsQueue::new(share.clone(), queue);
     let gfx_factory = factory::Factory::new(share.clone(), qf_id as u32);
@@ -265,7 +266,7 @@ pub enum Resources {}
 
 impl gfx_core::Resources for Resources {
     type Buffer               = ();
-    type Shader               = native::Shader;
+    type Shader               = vk::ShaderModule;
     type Program              = ();
     type PipelineStateObject  = ();
     type Texture              = ();

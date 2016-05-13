@@ -130,5 +130,24 @@ impl core::Device for GraphicsQueue {
         });
     }
 
-    fn cleanup(&mut self) {}
+    fn cleanup(&mut self) {
+        let (dev, mut functions) = self.share.get_device();
+        use gfx_core::handle::Producer;
+        //self.frame_handles.clear();
+        self.share.handles.borrow_mut().clean_with(&mut functions,
+            |_, _v| (), //buffer
+            |vk, s| unsafe { //shader
+                vk.DestroyShaderModule(dev, *s, ptr::null());
+            },
+            |_, _p| (), //program
+            |_, _v| (), //PSO
+            |_, _v| (),  //texture
+            |_, _v| (), //SRV
+            |_, _| (), //UAV
+            |_, _v| (), //RTV
+            |_, _v| (), //DSV
+            |_, _v| (), //sampler
+            |_, _| (), //fence
+        );
+    }
 }
