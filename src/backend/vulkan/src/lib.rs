@@ -26,6 +26,7 @@ pub use self::factory::Factory;
 
 mod command;
 mod factory;
+mod native;
 pub mod vk {
     #![allow(dead_code)]
     #![allow(non_upper_case_globals)]
@@ -264,7 +265,7 @@ pub enum Resources {}
 
 impl gfx_core::Resources for Resources {
     type Buffer               = ();
-    type Shader               = ();
+    type Shader               = native::Shader;
     type Program              = ();
     type PipelineStateObject  = ();
     type Texture              = ();
