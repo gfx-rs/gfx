@@ -65,17 +65,24 @@ impl Factory {
     }
 
     pub fn create_command_buffer(&mut self) -> command::Buffer {
-        let info = vk::CommandBufferAllocateInfo {
+        let alloc_info = vk::CommandBufferAllocateInfo {
             sType: vk::STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
             pNext: ptr::null(),
             commandPool: self.command_pool,
             level: vk::COMMAND_BUFFER_LEVEL_PRIMARY,
             commandBufferCount: 1,
         };
+        let begin_info = vk::CommandBufferBeginInfo {
+            sType: vk::STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+            pNext: ptr::null(),
+            flags: 0,
+            pInheritanceInfo: ptr::null(),
+        };
         let (dev, vk) = self.share.get_device();
         unsafe {
             let mut out = mem::zeroed();
-            assert_eq!(vk::SUCCESS, vk.AllocateCommandBuffers(dev, &info, &mut out));
+            assert_eq!(vk::SUCCESS, vk.AllocateCommandBuffers(dev, &alloc_info, &mut out));
+            assert_eq!(vk::SUCCESS, vk.BeginCommandBuffer(out, &begin_info));
             command::Buffer::new(out)
         }
     }

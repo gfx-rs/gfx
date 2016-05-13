@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::mem;
+use std::{mem, ptr};
 use vk;
 use gfx_core::{self as core, draw, pso, shade, target, tex};
 use gfx_core::state::RefValues;
@@ -110,14 +110,23 @@ impl core::Device for GraphicsQueue {
         assert_eq!(vk::SUCCESS, unsafe {
             vk.EndCommandBuffer(com.inner)
         });
-        let info = vk::SubmitInfo {
+        let submit_info = vk::SubmitInfo {
             sType: vk::STRUCTURE_TYPE_SUBMIT_INFO,
             commandBufferCount: 1,
             pCommandBuffers: &com.inner,
             .. unsafe { mem::zeroed() }
         };
         assert_eq!(vk::SUCCESS, unsafe {
-            vk.QueueSubmit(self.queue, 1, &info, 0)
+            vk.QueueSubmit(self.queue, 1, &submit_info, 0)
+        });
+        let begin_info = vk::CommandBufferBeginInfo {
+            sType: vk::STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+            pNext: ptr::null(),
+            flags: 0,
+            pInheritanceInfo: ptr::null(),
+        };
+        assert_eq!(vk::SUCCESS, unsafe {
+            vk.BeginCommandBuffer(com.inner, &begin_info)
         });
     }
 
