@@ -151,19 +151,23 @@ impl core::Factory<R> for Factory {
         unimplemented!()
     }
 
-    fn create_texture_raw(&mut self, desc: core::tex::Descriptor, _hint: Option<core::format::ChannelType>,
+    fn create_texture_raw(&mut self, desc: core::tex::Descriptor, hint: Option<core::format::ChannelType>,
                           _data_opt: Option<&[&[u8]]>) -> Result<h::RawTexture<R>, core::tex::Error> {
         use gfx_core::handle::Producer;
 
         let (w, h, d, aa) = desc.kind.get_dimensions();
         let slices = desc.kind.get_num_slices();
         let (usage, tiling) = data::map_usage_tiling(desc.usage, desc.bind);
+        let chan_type = hint.unwrap_or(core::format::ChannelType::Uint);
         let image_info = vk::ImageCreateInfo {
             sType: vk::STRUCTURE_TYPE_IMAGE_CREATE_INFO,
             pNext: ptr::null(),
             flags: 0,
             imageType: data::map_image_type(desc.kind),
-            format: 0, //TODO
+            format: match data::map_format(desc.format, chan_type) {
+                Some(f) => f,
+                None => return Err(core::tex::Error::Format(desc.format, hint)),
+            },
             extent: vk::Extent3D {
                 width: w as u32,
                 height: h as u32,
