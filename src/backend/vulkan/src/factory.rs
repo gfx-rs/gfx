@@ -162,7 +162,8 @@ impl core::Factory<R> for Factory {
         let image_info = vk::ImageCreateInfo {
             sType: vk::STRUCTURE_TYPE_IMAGE_CREATE_INFO,
             pNext: ptr::null(),
-            flags: 0,
+            flags: vk::IMAGE_CREATE_MUTABLE_FORMAT_BIT |
+                (if desc.kind.is_cube() {vk::IMAGE_CREATE_CUBE_COMPATIBLE_BIT} else {0}),
             imageType: data::map_image_type(desc.kind),
             format: match data::map_format(desc.format, chan_type) {
                 Some(f) => f,
@@ -181,7 +182,7 @@ impl core::Factory<R> for Factory {
             sharingMode: vk::SHARING_MODE_EXCLUSIVE,
             queueFamilyIndexCount: 0,
             pQueueFamilyIndices: ptr::null(),
-            initialLayout: vk::IMAGE_LAYOUT_PREINITIALIZED,
+            initialLayout: data::map_image_layout(desc.bind),
         };
         let mut alloc_info = vk::MemoryAllocateInfo {
             sType: vk::STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,

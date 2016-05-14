@@ -65,6 +65,16 @@ pub fn map_usage_tiling(gfx_usage: Usage, bind: Bind) -> (vk::ImageUsageFlags, v
     (usage, tiling)
 }
 
+pub fn map_image_layout(bind: Bind) -> vk::ImageLayout {
+    use gfx_core::factory as f;
+    match bind {
+        f::RENDER_TARGET   => vk::IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        f::DEPTH_STENCIL   => vk::IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        f::SHADER_RESOURCE => vk::IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        _                  => vk::IMAGE_LAYOUT_GENERAL,
+    }
+}
+
 pub fn map_format(surface: SurfaceType, chan: ChannelType) -> Option<vk::Format> {
     use gfx_core::format::SurfaceType::*;
     use gfx_core::format::ChannelType::*;
