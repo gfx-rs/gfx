@@ -26,6 +26,7 @@ pub use self::command::GraphicsQueue;
 pub use self::factory::Factory;
 
 mod command;
+mod data;
 mod factory;
 mod native;
 pub mod vk {

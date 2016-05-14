@@ -16,7 +16,7 @@ use std::{mem, ptr, slice};
 use std::os::raw::c_void;
 use gfx_core::{self as core, handle as h, factory as f};
 use vk;
-use {command, native};
+use {command, data, native};
 use {Resources as R, SharePointer};
 
 
@@ -153,49 +153,16 @@ impl core::Factory<R> for Factory {
 
     fn create_texture_raw(&mut self, desc: core::tex::Descriptor, _hint: Option<core::format::ChannelType>,
                           _data_opt: Option<&[&[u8]]>) -> Result<h::RawTexture<R>, core::tex::Error> {
-        use gfx_core::factory::{Usage, RENDER_TARGET, DEPTH_STENCIL, SHADER_RESOURCE, UNORDERED_ACCESS};
         use gfx_core::handle::Producer;
-        use gfx_core::tex::Kind;
 
-        let (w, h, d, _aa) = desc.kind.get_dimensions();
+        let (w, h, d, aa) = desc.kind.get_dimensions();
         let slices = desc.kind.get_num_slices();
-        let im_type = match desc.kind {
-            Kind::D1(..) | Kind::D1Array(..) => vk::IMAGE_TYPE_1D,
-            Kind::D2(..) | Kind::D2Array(..) => vk::IMAGE_TYPE_2D,
-            Kind::D3(..) => vk::IMAGE_TYPE_3D,
-            Kind::Cube(..) | Kind::CubeArray(..) => vk::IMAGE_TYPE_2D,
-        };
-        let mut usage = 0;
-        if desc.bind.contains(RENDER_TARGET) {
-            usage |= vk::IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-        }
-        if desc.bind.contains(DEPTH_STENCIL) {
-            usage |= vk::IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-        }
-        if desc.bind.contains(SHADER_RESOURCE) {
-            usage |= vk::IMAGE_USAGE_SAMPLED_BIT;
-        }
-        if desc.bind.contains(UNORDERED_ACCESS) {
-            usage |= vk::IMAGE_USAGE_STORAGE_BIT;
-        }
-        let tiling = match desc.usage {
-            Usage::Const => vk::IMAGE_TILING_OPTIMAL,
-            Usage::GpuOnly => {
-                //TODO: not always needed
-                usage |= vk::IMAGE_USAGE_TRANSFER_SRC_BIT | vk::IMAGE_USAGE_TRANSFER_DST_BIT;
-                vk::IMAGE_TILING_OPTIMAL
-            },
-            Usage::Dynamic => {
-                usage |= vk::IMAGE_USAGE_TRANSFER_DST_BIT;
-                vk::IMAGE_TILING_LINEAR
-            },
-            Usage::CpuOnly(_) => vk::IMAGE_TILING_LINEAR,
-        };
+        let (usage, tiling) = data::map_usage_tiling(desc.usage, desc.bind);
         let image_info = vk::ImageCreateInfo {
             sType: vk::STRUCTURE_TYPE_IMAGE_CREATE_INFO,
             pNext: ptr::null(),
             flags: 0,
-            imageType: im_type,
+            imageType: data::map_image_type(desc.kind),
             format: 0, //TODO
             extent: vk::Extent3D {
                 width: w as u32,
@@ -204,7 +171,7 @@ impl core::Factory<R> for Factory {
             },
             mipLevels: desc.levels as u32,
             arrayLayers: slices.unwrap_or(1) as u32,
-            samples: vk::SAMPLE_COUNT_1_BIT, //TODO
+            samples: aa.get_num_fragments() as vk::SampleCountFlagBits,
             tiling: tiling,
             usage: usage,
             sharingMode: vk::SHARING_MODE_EXCLUSIVE,
