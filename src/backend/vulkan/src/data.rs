@@ -14,7 +14,8 @@
 
 use gfx_core::factory::{Bind, MapAccess, Usage};
 use gfx_core::format::{SurfaceType, ChannelType};
-use gfx_core::tex::Kind;
+use gfx_core::tex::{FilterMethod, Kind, PackedColor, WrapMode};
+use gfx_core::state;
 use vk;
 
 
@@ -203,4 +204,46 @@ pub fn map_format(surface: SurfaceType, chan: ChannelType) -> Option<vk::Format>
             _ => return None,
         },
     })
+}
+
+pub fn map_filter(filter: FilterMethod) -> (vk::Filter, vk::Filter, vk::SamplerMipmapMode, f32) {
+    match filter {
+        FilterMethod::Scale          => (vk::FILTER_NEAREST, vk::FILTER_NEAREST, vk::SAMPLER_MIPMAP_MODE_NEAREST, 0.0),
+        FilterMethod::Mipmap         => (vk::FILTER_NEAREST, vk::FILTER_NEAREST, vk::SAMPLER_MIPMAP_MODE_LINEAR,  0.0),
+        FilterMethod::Bilinear       => (vk::FILTER_LINEAR,  vk::FILTER_LINEAR,  vk::SAMPLER_MIPMAP_MODE_NEAREST, 0.0),
+        FilterMethod::Trilinear      => (vk::FILTER_LINEAR,  vk::FILTER_LINEAR,  vk::SAMPLER_MIPMAP_MODE_LINEAR,  0.0),
+        FilterMethod::Anisotropic(a) => (vk::FILTER_LINEAR,  vk::FILTER_LINEAR,  vk::SAMPLER_MIPMAP_MODE_LINEAR,  a as f32),
+    }
+}
+
+pub fn map_wrap(wrap: WrapMode) -> vk::SamplerAddressMode {
+    match wrap {
+        WrapMode::Tile   => vk::SAMPLER_ADDRESS_MODE_REPEAT,
+        WrapMode::Mirror => vk::SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT,
+        WrapMode::Clamp  => vk::SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        WrapMode::Border => vk::SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+    }
+}
+
+pub fn map_border_color(col: PackedColor) -> Option<vk::BorderColor> {
+    match col.0 {
+        0x00000000 => Some(vk::BORDER_COLOR_FLOAT_TRANSPARENT_BLACK),
+        0xFF000000 => Some(vk::BORDER_COLOR_FLOAT_OPAQUE_BLACK),
+        0xFFFFFFFF => Some(vk::BORDER_COLOR_FLOAT_OPAQUE_WHITE),
+        _ => None
+    }
+}
+
+pub fn map_comparison(fun: state::Comparison) -> vk::CompareOp {
+    use gfx_core::state::Comparison::*;
+    match fun {
+        Never        => vk::COMPARE_OP_NEVER,
+        Less         => vk::COMPARE_OP_LESS,
+        LessEqual    => vk::COMPARE_OP_LESS_OR_EQUAL,
+        Equal        => vk::COMPARE_OP_EQUAL,
+        GreaterEqual => vk::COMPARE_OP_GREATER_OR_EQUAL,
+        Greater      => vk::COMPARE_OP_GREATER,
+        NotEqual     => vk::COMPARE_OP_NOT_EQUAL,
+        Always       => vk::COMPARE_OP_ALWAYS,
+    }
 }

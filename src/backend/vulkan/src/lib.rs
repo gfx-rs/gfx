@@ -275,6 +275,6 @@ impl gfx_core::Resources for Resources {
     type UnorderedAccessView  = ();
     type RenderTargetView     = ();
     type DepthStencilView     = ();
-    type Sampler              = ();
+    type Sampler              = vk::Sampler;
     type Fence                = ();
 }

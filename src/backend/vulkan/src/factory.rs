@@ -14,7 +14,7 @@
 
 use std::{mem, ptr, slice};
 use std::os::raw::c_void;
-use gfx_core::{self as core, handle as h, factory as f};
+use gfx_core::{self as core, handle as h, factory as f, state};
 use vk;
 use {command, data, native};
 use {Resources as R, SharePointer};
@@ -237,8 +237,44 @@ impl core::Factory<R> for Factory {
         unimplemented!()
     }
 
-    fn create_sampler(&mut self, _info: core::tex::SamplerInfo) -> h::Sampler<R> {
-        unimplemented!()
+    fn create_sampler(&mut self, info: core::tex::SamplerInfo) -> h::Sampler<R> {
+        use gfx_core::handle::Producer;
+
+        let (min, mag, mip, aniso) = data::map_filter(info.filter);
+        let native_info = vk::SamplerCreateInfo {
+            sType: vk::STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+            pNext: ptr::null(),
+            flags: 0,
+            magFilter: mag,
+            minFilter: min,
+            mipmapMode: mip,
+            addressModeU: data::map_wrap(info.wrap_mode.0),
+            addressModeV: data::map_wrap(info.wrap_mode.1),
+            addressModeW: data::map_wrap(info.wrap_mode.2),
+            mipLodBias: info.lod_bias.into(),
+            anisotropyEnable: if aniso > 0.0 { vk::TRUE } else { vk::FALSE },
+            maxAnisotropy: aniso,
+            compareEnable: if info.comparison.is_some() { vk::TRUE } else { vk::FALSE },
+            compareOp: data::map_comparison(info.comparison.unwrap_or(state::Comparison::Never)),
+            minLod: info.lod_range.0.into(),
+            maxLod: info.lod_range.1.into(),
+            borderColor: match data::map_border_color(info.border) {
+                Some(bc) => bc,
+                None => {
+                    error!("Unsupported border color {:x}", info.border.0);
+                    vk::BORDER_COLOR_FLOAT_TRANSPARENT_BLACK
+                }
+            },
+            unnormalizedCoordinates: vk::FALSE,
+        };
+
+        let (dev, vk) = self.share.get_device();
+        let sampler = unsafe {
+            let mut out = mem::zeroed();
+            assert_eq!(vk::SUCCESS, vk.CreateSampler(dev, &native_info, ptr::null(), &mut out));
+            out
+        };
+        self.share.handles.borrow_mut().make_sampler(sampler, info)
     }
 
     fn map_buffer_raw(&mut self, _buf: &h::RawBuffer<R>, _access: f::MapAccess) -> RawMapping {
