@@ -17,6 +17,7 @@ use vk;
 use gfx_core::{self as core, draw, pso, shade, target, tex};
 use gfx_core::state::RefValues;
 use gfx_core::{IndexType, VertexCount};
+use native;
 use {Resources, SharePointer};
 
 
@@ -53,7 +54,7 @@ impl draw::CommandBuffer<Resources> for Buffer {
     fn set_scissor(&mut self, _: target::Rect) {}
     fn set_ref_values(&mut self, _: RefValues) {}
     fn update_buffer(&mut self, _: (), _: &[u8], _: usize) {}
-    fn update_texture(&mut self, _: (), _: tex::Kind, _: Option<tex::CubeFace>,
+    fn update_texture(&mut self, _: native::Texture, _: tex::Kind, _: Option<tex::CubeFace>,
                       _: &[u8], _: tex::RawImageInfo) {}
     fn generate_mipmap(&mut self, _: ()) {}
     fn clear_color(&mut self, _: (), _: draw::ClearColor) {}
@@ -141,7 +142,10 @@ impl core::Device for GraphicsQueue {
             },
             |_, _p| (), //program
             |_, _v| (), //PSO
-            |_, _v| (),  //texture
+            |vk, t| unsafe { //texture
+                vk.DestroyImage(dev, t.image, ptr::null());
+                vk.FreeMemory(dev, t.memory, ptr::null());
+            },
             |_, _v| (), //SRV
             |_, _| (), //UAV
             |_, _v| (), //RTV

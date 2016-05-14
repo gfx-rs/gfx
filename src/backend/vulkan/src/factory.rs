@@ -16,7 +16,7 @@ use std::{mem, ptr, slice};
 use std::os::raw::c_void;
 use gfx_core::{self as core, handle as h, factory as f};
 use vk;
-use {command};
+use {command, native};
 use {Resources as R, SharePointer};
 
 
@@ -151,9 +151,86 @@ impl core::Factory<R> for Factory {
         unimplemented!()
     }
 
-    fn create_texture_raw(&mut self, _desc: core::tex::Descriptor, _hint: Option<core::format::ChannelType>,
+    fn create_texture_raw(&mut self, desc: core::tex::Descriptor, _hint: Option<core::format::ChannelType>,
                           _data_opt: Option<&[&[u8]]>) -> Result<h::RawTexture<R>, core::tex::Error> {
-        unimplemented!()
+        use gfx_core::factory::{Usage, RENDER_TARGET, DEPTH_STENCIL, SHADER_RESOURCE, UNORDERED_ACCESS};
+        use gfx_core::handle::Producer;
+        use gfx_core::tex::Kind;
+
+        let (w, h, d, _aa) = desc.kind.get_dimensions();
+        let slices = desc.kind.get_num_slices();
+        let im_type = match desc.kind {
+            Kind::D1(..) | Kind::D1Array(..) => vk::IMAGE_TYPE_1D,
+            Kind::D2(..) | Kind::D2Array(..) => vk::IMAGE_TYPE_2D,
+            Kind::D3(..) => vk::IMAGE_TYPE_3D,
+            Kind::Cube(..) | Kind::CubeArray(..) => vk::IMAGE_TYPE_2D,
+        };
+        let mut usage = 0;
+        if desc.bind.contains(RENDER_TARGET) {
+            usage |= vk::IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        }
+        if desc.bind.contains(DEPTH_STENCIL) {
+            usage |= vk::IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+        }
+        if desc.bind.contains(SHADER_RESOURCE) {
+            usage |= vk::IMAGE_USAGE_SAMPLED_BIT;
+        }
+        if desc.bind.contains(UNORDERED_ACCESS) {
+            usage |= vk::IMAGE_USAGE_STORAGE_BIT;
+        }
+        let tiling = match desc.usage {
+            Usage::Const => vk::IMAGE_TILING_OPTIMAL,
+            Usage::GpuOnly => {
+                //TODO: not always needed
+                usage |= vk::IMAGE_USAGE_TRANSFER_SRC_BIT | vk::IMAGE_USAGE_TRANSFER_DST_BIT;
+                vk::IMAGE_TILING_OPTIMAL
+            },
+            Usage::Dynamic => {
+                usage |= vk::IMAGE_USAGE_TRANSFER_DST_BIT;
+                vk::IMAGE_TILING_LINEAR
+            },
+            Usage::CpuOnly(_) => vk::IMAGE_TILING_LINEAR,
+        };
+        let image_info = vk::ImageCreateInfo {
+            sType: vk::STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            pNext: ptr::null(),
+            flags: 0,
+            imageType: im_type,
+            format: 0, //TODO
+            extent: vk::Extent3D {
+                width: w as u32,
+                height: h as u32,
+                depth: if slices.is_none() {d as u32} else {1},
+            },
+            mipLevels: desc.levels as u32,
+            arrayLayers: slices.unwrap_or(1) as u32,
+            samples: vk::SAMPLE_COUNT_1_BIT, //TODO
+            tiling: tiling,
+            usage: usage,
+            sharingMode: vk::SHARING_MODE_EXCLUSIVE,
+            queueFamilyIndexCount: 0,
+            pQueueFamilyIndices: ptr::null(),
+            initialLayout: vk::IMAGE_LAYOUT_PREINITIALIZED,
+        };
+        let mut alloc_info = vk::MemoryAllocateInfo {
+            sType: vk::STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+            pNext: ptr::null(),
+            allocationSize: 0,
+            memoryTypeIndex: 0, //TODO
+        };
+        let (dev, vk) = self.share.get_device();
+        let tex = unsafe {
+            let mut image = mem::zeroed();
+            assert_eq!(vk::SUCCESS, vk.CreateImage(dev, &image_info, ptr::null(), &mut image));
+            let mut reqs = mem::zeroed();
+            vk.GetImageMemoryRequirements(dev, image, &mut reqs);
+            alloc_info.allocationSize = reqs.size;
+            let mut mem = mem::zeroed();
+            assert_eq!(vk::SUCCESS, vk.AllocateMemory(dev, &alloc_info, ptr::null(), &mut mem));
+            assert_eq!(vk::SUCCESS, vk.BindImageMemory(dev, image, mem, 0));
+            native::Texture { image: image, memory: mem }
+        };
+        Ok(self.share.handles.borrow_mut().make_texture(tex, desc))
     }
 
     fn view_buffer_as_shader_resource_raw(&mut self, _hbuf: &h::RawBuffer<R>)

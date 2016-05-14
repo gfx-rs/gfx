@@ -12,8 +12,54 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//use std::ffi::CStr;
-//use std::{fmt, hash};
-//use vk;
+use std::ffi::CStr;
+use std::{fmt, hash};
+use vk;
 
 //Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
+
+
+pub struct Shader(pub vk::PipelineShaderStageCreateInfo);
+
+impl Clone for Shader {
+    fn clone(&self) -> Shader {
+        Shader(vk::PipelineShaderStageCreateInfo {
+            .. self.0
+        })
+    }
+}
+
+impl fmt::Debug for Shader {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let name = unsafe { CStr::from_ptr(self.0.pName) }.to_str().unwrap();
+        write!(f, "Shader({}, {}, {})", self.0.stage, name, self.0.module)
+    }
+}
+
+impl hash::Hash for Shader {
+    fn hash<H>(&self, state: &mut H) where H: hash::Hasher {
+        self.0.stage.hash(state);
+        //self.0.pName.hash(state);
+        self.0.module.hash(state);
+    }
+}
+
+impl PartialEq for Shader {
+    fn eq(&self, other: &Shader) -> bool {
+        self.0.stage == other.0.stage &&
+        self.0.module == other.0.module
+    }
+}
+
+impl Eq for Shader {}
+unsafe impl Send for Shader {}
+unsafe impl Sync for Shader {}
+
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+pub struct Texture {
+    pub image: vk::Image,
+    pub memory: vk::DeviceMemory,
+}
+unsafe impl Send for Texture {}
+unsafe impl Sync for Texture {}

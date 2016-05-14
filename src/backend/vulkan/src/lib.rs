@@ -114,9 +114,9 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
     let app_info = vk::ApplicationInfo {
         sType: vk::STRUCTURE_TYPE_APPLICATION_INFO,
         pNext: ptr::null(),
-        pApplicationName: app_name.as_ptr() as *const i8,
+        pApplicationName: app_name.as_ptr() as *const _,
         applicationVersion: app_version,
-        pEngineName: "gfx-rs".as_ptr() as *const i8,
+        pEngineName: "gfx-rs".as_ptr() as *const _,
         engineVersion: 0x1000, //TODO
         apiVersion: 0x400000, //TODO
     };
@@ -269,7 +269,7 @@ impl gfx_core::Resources for Resources {
     type Shader               = vk::ShaderModule;
     type Program              = ();
     type PipelineStateObject  = ();
-    type Texture              = ();
+    type Texture              = native::Texture;
     type ShaderResourceView   = ();
     type UnorderedAccessView  = ();
     type RenderTargetView     = ();
