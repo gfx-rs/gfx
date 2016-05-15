@@ -13,6 +13,7 @@
 // limitations under the License.
 
 extern crate winit;
+extern crate xcb;
 extern crate gfx_core;
 extern crate gfx_device_vulkan;
 
@@ -20,66 +21,139 @@ use std::{mem, ptr};
 use gfx_device_vulkan::vk;
 
 
-pub fn init(builder: winit::WindowBuilder) -> (winit::Window, gfx_device_vulkan::GraphicsQueue, gfx_device_vulkan::Factory) {
-    //use winit::os::unix::WindowExt;
-    let (device, factory, backend) = gfx_device_vulkan::create(&builder.window.title, 1, &[],
+pub fn init_winit(builder: winit::WindowBuilder) -> (winit::Window, gfx_device_vulkan::GraphicsQueue, gfx_device_vulkan::Factory) {
+    let (device, factory, _backend) = gfx_device_vulkan::create(&builder.window.title, 1, &[],
         &["VK_KHR_surface", "VK_KHR_xcb_surface"], &["VK_KHR_swapchain"]);
-    let (width, height) = builder.window.dimensions.unwrap_or((640, 400));
     let win = builder.build().unwrap();
+    (win, device, factory)
+}
 
-    if false {
-        let surface = {
-            let (inst, vk) = backend.get_instance();
-            let info = vk::XcbSurfaceCreateInfoKHR   {
-                sType: vk::STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
-                pNext: ptr::null(),
-                flags: 0,
-                connection: ptr::null_mut(), //TODO
-                window: ptr::null_mut(), //TODO
-            };
+pub struct Window {
+    connection: xcb::Connection,
+    _foreground: u32,
+    window: u32,
+    _swapchain: vk::SwapchainKHR,
+    _images: Vec<vk::Image>,
+}
 
-            unsafe {
-                let mut out = mem::zeroed();
-                assert_eq!(vk::SUCCESS, vk.CreateXcbSurfaceKHR(inst, &info, ptr::null(), &mut out));
-                out
-            }
+impl Window {
+    pub fn wait_draw(&mut self) -> Option<bool> {
+        let ev = match self.connection.wait_for_event() {
+            Some(ev) => ev,
+            None => return None,
         };
+        //self.connection.flush();
+        match ev.response_type() & 0x80 {
+            xcb::EXPOSE => Some(true),
+            xcb::KEY_PRESS => None,
+            _ => Some(false)
+        }
+    }
+}
 
-        let (dev, vk) = backend.get_device();
-        let mut images: [vk::Image; 2] = [0; 2];
-        let mut num = images.len() as u32;
+impl Drop for Window {
+    fn drop(&mut self) {
+        xcb::unmap_window(&self.connection, self.window);
+        xcb::destroy_window(&self.connection, self.window);
+        self.connection.flush();
+    }
+}
 
-        let info = vk::SwapchainCreateInfoKHR {
-            sType: vk::STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+pub fn init_xcb(title: &str, width: u32, height: u32) -> (Window, gfx_device_vulkan::GraphicsQueue, gfx_device_vulkan::Factory) {
+    let (device, factory, backend) = gfx_device_vulkan::create(title, 1, &[],
+        &["VK_KHR_surface", "VK_KHR_xcb_surface"], &["VK_KHR_swapchain"]);
+
+    let (conn, screen_num) = xcb::Connection::connect(None).unwrap();
+    let (window, foreground) = {
+        let setup = conn.get_setup();
+        let screen = setup.roots().nth(screen_num as usize).unwrap();
+
+        let foreground = conn.generate_id();
+        xcb::create_gc(&conn, foreground, screen.root(), &[
+                (xcb::GC_FOREGROUND, screen.black_pixel()),
+                (xcb::GC_GRAPHICS_EXPOSURES, 0),
+        ]);
+
+        let win = conn.generate_id();
+        xcb::create_window(&conn,
+            xcb::COPY_FROM_PARENT as u8,
+            win,
+            screen.root(),
+            0, 0,
+            width as u16, height as u16,
+            10,
+            xcb::WINDOW_CLASS_INPUT_OUTPUT as u16,
+            screen.root_visual(), &[
+                (xcb::CW_BACK_PIXEL, screen.white_pixel()),
+                (xcb::CW_EVENT_MASK, xcb::EVENT_MASK_KEY_PRESS | xcb::EVENT_MASK_EXPOSURE),
+            ]
+        );
+        (win, foreground)
+    };
+
+    xcb::map_window(&conn, window);
+    xcb::change_property(&conn, xcb::PROP_MODE_REPLACE as u8, window,
+        xcb::ATOM_WM_NAME, xcb::ATOM_STRING, 8, title.as_bytes());
+    conn.flush();
+
+    let surface = {
+        let (inst, vk) = backend.get_instance();
+        let info = vk::XcbSurfaceCreateInfoKHR {
+            sType: vk::STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
             pNext: ptr::null(),
             flags: 0,
-            surface: surface,
-            minImageCount: num,
-            imageFormat: vk::FORMAT_R8G8B8A8_UNORM,
-            imageColorSpace: vk::COLORSPACE_SRGB_NONLINEAR_KHR,
-            imageExtent: vk::Extent2D { width: width, height: height },
-            imageArrayLayers: 1,
-            imageUsage: vk::IMAGE_USAGE_COLOR_ATTACHMENT_BIT | vk::IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-            imageSharingMode: vk::SHARING_MODE_EXCLUSIVE,
-            queueFamilyIndexCount: 1,
-            pQueueFamilyIndices: &0,
-            preTransform: vk::SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
-            compositeAlpha: vk::COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-            presentMode: vk::PRESENT_MODE_FIFO_RELAXED_KHR,
-            clipped: vk::TRUE,
-            oldSwapchain: 0,
+            connection: conn.get_raw_conn() as *const _,
+            window: window,
         };
 
-        let swapchain = unsafe {
+        unsafe {
             let mut out = mem::zeroed();
-            assert_eq!(vk::SUCCESS, vk.CreateSwapchainKHR(dev, &info, ptr::null(), &mut out));
+            assert_eq!(vk::SUCCESS, vk.CreateXcbSurfaceKHR(inst, &info, ptr::null(), &mut out));
             out
-        };
+        }
+    };
 
-        assert_eq!(vk::SUCCESS, unsafe {
-            vk.GetSwapchainImagesKHR(dev, swapchain, &mut num, images.as_mut_ptr())
-        });
-    }
+    let (dev, vk) = backend.get_device();
+    let mut images: [vk::Image; 2] = [0; 2];
+    let mut num = images.len() as u32;
 
+    let info = vk::SwapchainCreateInfoKHR {
+        sType: vk::STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        pNext: ptr::null(),
+        flags: 0,
+        surface: surface,
+        minImageCount: num,
+        imageFormat: vk::FORMAT_R8G8B8A8_UNORM,
+        imageColorSpace: vk::COLORSPACE_SRGB_NONLINEAR_KHR,
+        imageExtent: vk::Extent2D { width: width, height: height },
+        imageArrayLayers: 1,
+        imageUsage: vk::IMAGE_USAGE_COLOR_ATTACHMENT_BIT | vk::IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+        imageSharingMode: vk::SHARING_MODE_EXCLUSIVE,
+        queueFamilyIndexCount: 1,
+        pQueueFamilyIndices: &0,
+        preTransform: vk::SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
+        compositeAlpha: vk::COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+        presentMode: vk::PRESENT_MODE_FIFO_RELAXED_KHR,
+        clipped: vk::TRUE,
+        oldSwapchain: 0,
+    };
+
+    let swapchain = unsafe {
+        let mut out = mem::zeroed();
+        assert_eq!(vk::SUCCESS, vk.CreateSwapchainKHR(dev, &info, ptr::null(), &mut out));
+        out
+    };
+
+    assert_eq!(vk::SUCCESS, unsafe {
+        vk.GetSwapchainImagesKHR(dev, swapchain, &mut num, images.as_mut_ptr())
+    });
+
+    let win = Window {
+        connection: conn,
+        _foreground: foreground,
+        window: window,
+        _swapchain: swapchain,
+        _images: images[..num as usize].to_vec(),
+    };
     (win, device, factory)
 }
