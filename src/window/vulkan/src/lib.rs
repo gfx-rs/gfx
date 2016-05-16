@@ -14,11 +14,11 @@
 
 extern crate winit;
 extern crate xcb;
+extern crate vk_sys as vk;
 extern crate gfx_core;
 extern crate gfx_device_vulkan;
 
 use std::{mem, ptr};
-use gfx_device_vulkan::vk;
 
 
 pub fn init_winit(builder: winit::WindowBuilder) -> (winit::Window, gfx_device_vulkan::GraphicsQueue, gfx_device_vulkan::Factory) {
@@ -84,7 +84,7 @@ pub fn init_xcb(title: &str, width: u32, height: u32) -> (Window, gfx_device_vul
             10,
             xcb::WINDOW_CLASS_INPUT_OUTPUT as u16,
             screen.root_visual(), &[
-                (xcb::CW_BACK_PIXEL, screen.white_pixel()),
+                (xcb::CW_BACK_PIXEL, screen.black_pixel()),
                 (xcb::CW_EVENT_MASK, xcb::EVENT_MASK_KEY_PRESS | xcb::EVENT_MASK_EXPOSURE),
             ]
         );
@@ -103,7 +103,7 @@ pub fn init_xcb(title: &str, width: u32, height: u32) -> (Window, gfx_device_vul
             pNext: ptr::null(),
             flags: 0,
             connection: conn.get_raw_conn() as *const _,
-            window: window,
+            window: window as *const _, //HACK! TODO: fix the bindings
         };
 
         unsafe {

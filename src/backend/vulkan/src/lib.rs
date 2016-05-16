@@ -16,6 +16,7 @@
 extern crate log;
 extern crate shared_library;
 extern crate gfx_core;
+extern crate vk_sys as vk;
 
 use std::{fmt, iter, mem, ptr};
 use std::cell::RefCell;
@@ -29,13 +30,6 @@ mod command;
 mod data;
 mod factory;
 mod native;
-pub mod vk {
-    #![allow(dead_code)]
-    #![allow(non_upper_case_globals)]
-    #![allow(non_snake_case)]
-    #![allow(non_camel_case_types)]
-    include!(concat!(env!("OUT_DIR"), "/vk_bindings.rs"));
-}
 
 
 struct PhysicalDeviceInfo {
@@ -103,7 +97,7 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
     use std::ffi::CString;
     use std::path::Path;
 
-    let dynamic_lib = DynamicLibrary::open(Some(Path::new("libvulkan.so"))).unwrap();
+    let dynamic_lib = DynamicLibrary::open(Some(Path::new("libvulkan.so.1"))).unwrap();
     let lib = vk::Static::load(|name| unsafe {
         let name = name.to_str().unwrap();
         dynamic_lib.symbol(name).unwrap()
