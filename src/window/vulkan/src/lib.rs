@@ -19,6 +19,7 @@ extern crate gfx_core;
 extern crate gfx_device_vulkan;
 
 use std::{mem, ptr};
+use gfx_core::format;
 
 
 pub fn init_winit(builder: winit::WindowBuilder) -> (winit::Window, gfx_device_vulkan::GraphicsQueue, gfx_device_vulkan::Factory) {
@@ -33,7 +34,7 @@ pub struct Window {
     _foreground: u32,
     window: u32,
     _swapchain: vk::SwapchainKHR,
-    _images: Vec<vk::Image>,
+    _targets: Vec<gfx_core::handle::RenderTargetView<gfx_device_vulkan::Resources, format::Rgba8>>,
 }
 
 impl Window {
@@ -60,7 +61,7 @@ impl Drop for Window {
 }
 
 pub fn init_xcb(title: &str, width: u32, height: u32) -> (Window, gfx_device_vulkan::GraphicsQueue, gfx_device_vulkan::Factory) {
-    let (device, factory, backend) = gfx_device_vulkan::create(title, 1, &[],
+    let (device, mut factory, backend) = gfx_device_vulkan::create(title, 1, &[],
         &["VK_KHR_surface", "VK_KHR_xcb_surface"], &["VK_KHR_swapchain"]);
 
     let (conn, screen_num) = xcb::Connection::connect(None).unwrap();
@@ -117,7 +118,7 @@ pub fn init_xcb(title: &str, width: u32, height: u32) -> (Window, gfx_device_vul
     let mut images: [vk::Image; 2] = [0; 2];
     let mut num = images.len() as u32;
 
-    let info = vk::SwapchainCreateInfoKHR {
+    let swapchain_info = vk::SwapchainCreateInfoKHR {
         sType: vk::STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
         pNext: ptr::null(),
         flags: 0,
@@ -140,7 +141,7 @@ pub fn init_xcb(title: &str, width: u32, height: u32) -> (Window, gfx_device_vul
 
     let swapchain = unsafe {
         let mut out = mem::zeroed();
-        assert_eq!(vk::SUCCESS, vk.CreateSwapchainKHR(dev, &info, ptr::null(), &mut out));
+        assert_eq!(vk::SUCCESS, vk.CreateSwapchainKHR(dev, &swapchain_info, ptr::null(), &mut out));
         out
     };
 
@@ -148,12 +149,19 @@ pub fn init_xcb(title: &str, width: u32, height: u32) -> (Window, gfx_device_vul
         vk.GetSwapchainImagesKHR(dev, swapchain, &mut num, images.as_mut_ptr())
     });
 
+    let format = format::Format(format::SurfaceType::R8_G8_B8_A8, format::ChannelType::Unorm);
+    let targets = images[.. num as usize].iter().map(|image| {
+        use gfx_core::factory::Typed;
+        let raw_view = factory.view_swapchain_image(*image, format, (width, height)).unwrap();
+        Typed::new(raw_view)
+    }).collect();
+
     let win = Window {
         connection: conn,
         _foreground: foreground,
         window: window,
         _swapchain: swapchain,
-        _images: images[..num as usize].to_vec(),
+        _targets: targets,
     };
     (win, device, factory)
 }
