@@ -610,6 +610,7 @@ impl core::Factory<R> for Factory {
         use winapi::UINT;
         use gfx_core::tex::{AaMode, Kind};
         use data::map_format;
+        //TODO: support desc.layer parsing
 
         let (dim, layers, has_levels) = match htex.get_info().kind {
             Kind::D1(_) =>

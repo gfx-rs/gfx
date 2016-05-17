@@ -42,6 +42,7 @@ impl core::mapping::Raw for RawMapping {
 pub struct Factory {
     share: SharePointer,
     command_pool: vk::CommandPool,
+    frame_handles: h::Manager<R>,
 }
 
 impl Factory {
@@ -61,6 +62,7 @@ impl Factory {
         Factory {
             share: share,
             command_pool: com_pool,
+            frame_handles: h::Manager::new(),
         }
     }
 
@@ -215,9 +217,50 @@ impl core::Factory<R> for Factory {
         Err(f::ResourceViewError::Unsupported) //TODO
     }
 
-    fn view_texture_as_shader_resource_raw(&mut self, _htex: &h::RawTexture<R>, _desc: core::tex::ResourceDesc)
+    fn view_texture_as_shader_resource_raw(&mut self, htex: &h::RawTexture<R>, desc: core::tex::ResourceDesc)
                                        -> Result<h::RawShaderResourceView<R>, f::ResourceViewError> {
-        unimplemented!()
+        use gfx_core::handle::Producer;
+
+        let raw_tex = self.frame_handles.ref_texture(htex);
+        let td = htex.get_info();
+        let info = vk::ImageViewCreateInfo {
+            sType: vk::STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            pNext: ptr::null(),
+            flags: 0,
+            image: raw_tex.image,
+            viewType: match data::map_image_view_type(td.kind, desc.layer) {
+                Ok(vt) => vt,
+                Err(e) => return Err(f::ResourceViewError::Layer(e)),
+            },
+            format: match data::map_format(td.format, desc.channel) {
+                Some(f) => f,
+                None => return Err(f::ResourceViewError::Channel(desc.channel)),
+            },
+            components: vk::ComponentMapping {
+                r: vk::COMPONENT_SWIZZLE_R,
+                g: vk::COMPONENT_SWIZZLE_G,
+                b: vk::COMPONENT_SWIZZLE_B,
+                a: vk::COMPONENT_SWIZZLE_A,
+            },
+            subresourceRange: vk::ImageSubresourceRange {
+                aspectMask: data::map_image_aspect(td.format, desc.channel),
+                baseMipLevel: desc.min as u32,
+                levelCount: (desc.max + 1 - desc.min) as u32,
+                baseArrayLayer: desc.layer.unwrap_or(0) as u32,
+                layerCount: match desc.layer {
+                    Some(_) => 1,
+                    None => td.kind.get_num_slices().unwrap_or(1) as u32,
+                },
+            },
+        };
+
+        let (dev, vk) = self.share.get_device();
+        let view = unsafe {
+            let mut out = mem::zeroed();
+            assert_eq!(vk::SUCCESS, vk.CreateImageView(dev, &info, ptr::null(), &mut out));
+            out
+        };
+        Ok(self.share.handles.borrow_mut().make_texture_srv(view, htex))
     }
 
     fn view_texture_as_unordered_access_raw(&mut self, _htex: &h::RawTexture<R>)

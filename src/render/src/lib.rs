@@ -40,7 +40,7 @@ pub use gfx_core::{ShaderSet, VertexShader, HullShader, DomainShader,
 pub use gfx_core::{format, handle, tex};
 pub use gfx_core::factory::{Factory, Typed, Usage, Bind, MapAccess,
                             BufferRole, BufferInfo, BufferError, BufferUpdateError,
-                            ResourceViewError, TargetViewError,  CombinedError,
+                            LayerError, ResourceViewError, TargetViewError,  CombinedError,
                             RENDER_TARGET, DEPTH_STENCIL, SHADER_RESOURCE, UNORDERED_ACCESS,
                             cast_slice};
 pub use gfx_core::draw::{CommandBuffer, InstanceOption};

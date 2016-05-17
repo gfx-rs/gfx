@@ -218,7 +218,7 @@ impl Kind {
         }
     }
     /// Return the number of slices for an array, or None for non-arrays.
-    pub fn get_num_slices(&self) -> Option<Size> {
+    pub fn get_num_slices(&self) -> Option<Layer> {
         match *self {
             Kind::D1(..) | Kind::D2(..) | Kind::D3(..) | Kind::Cube(..) => None,
             Kind::D1Array(_, a) => Some(a),
@@ -419,6 +419,7 @@ impl Descriptor {
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 pub struct ResourceDesc {
     pub channel: format::ChannelType,
+    pub layer: Option<Layer>,
     pub min: Level,
     pub max: Level,
     pub swizzle: format::Swizzle,

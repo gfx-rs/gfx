@@ -265,7 +265,7 @@ impl gfx_core::Resources for Resources {
     type Program              = ();
     type PipelineStateObject  = ();
     type Texture              = native::Texture;
-    type ShaderResourceView   = ();
+    type ShaderResourceView   = vk::ImageView; //TODO: buffer view
     type UnorderedAccessView  = ();
     type RenderTargetView     = ();
     type DepthStencilView     = ();

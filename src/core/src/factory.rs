@@ -152,7 +152,7 @@ impl Error for BufferError {
 }
 
 /// An error happening on buffer updates.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum BufferUpdateError {
     /// Trying to change the contents outside of the allocation.
     OutOfBounds,
@@ -173,6 +173,15 @@ impl Error for BufferUpdateError {
     }
 }
 
+/// An error associated with selected texture layer.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum LayerError {
+    /// The source texture kind doesn't support array slices.
+    NotExpected(tex::Kind),
+    /// Selected layer is outside of the provided range.
+    OutOfBounds(target::Layer, target::Layer),
+}
+
 /// Error creating either a ShaderResourceView, or UnorderedAccessView.
 #[derive(Clone, PartialEq, Debug)]
 pub enum ResourceViewError {
@@ -180,6 +189,8 @@ pub enum ResourceViewError {
     NoBindFlag,
     /// Selected channel type is not supported for this texture.
     Channel(format::ChannelType),
+    /// Selected layer can not be viewed for this texture.
+    Layer(LayerError),
     /// The backend was refused for some reason.
     Unsupported,
 }
@@ -212,7 +223,7 @@ pub enum TargetViewError {
     /// Selected mip level doesn't exist.
     BadLevel(target::Level),
     /// Selected array layer doesn't exist.
-    BadLayer(target::Layer),
+    Layer(LayerError),
     /// Selected channel type is not supported for this texture.
     Channel(format::ChannelType),
     /// The backend was refused for some reason.
@@ -454,6 +465,7 @@ pub trait Factory<R: Resources> {
         assert!(levels.0 <= levels.1);
         let desc = tex::ResourceDesc {
             channel: <T::Channel as format::ChannelTyped>::get_channel_type(),
+            layer: None,
             min: levels.0,
             max: levels.1,
             swizzle: swizzle,

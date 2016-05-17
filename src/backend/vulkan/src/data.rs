@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use gfx_core::factory::{Bind, MapAccess, Usage};
+use gfx_core::factory::{Bind, MapAccess, Usage, LayerError};
 use gfx_core::format::{SurfaceType, ChannelType};
-use gfx_core::tex::{FilterMethod, Kind, PackedColor, WrapMode};
+use gfx_core::tex::{FilterMethod, Kind, Layer, PackedColor, WrapMode};
 use gfx_core::state;
 use vk;
 
@@ -25,6 +25,37 @@ pub fn map_image_type(kind: Kind) -> vk::ImageType {
         Kind::D2(..) | Kind::D2Array(..) => vk::IMAGE_TYPE_2D,
         Kind::D3(..) => vk::IMAGE_TYPE_3D,
         Kind::Cube(..) | Kind::CubeArray(..) => vk::IMAGE_TYPE_2D,
+    }
+}
+
+pub fn map_image_view_type(kind: Kind, layer: Option<Layer>) -> Result<vk::ImageViewType, LayerError> {
+    match (kind, layer) {
+        (Kind::D1(..), Some(_)) | (Kind::D2(..), Some(_)) | (Kind::D3(..), Some(_)) |
+        (Kind::Cube(..), Some(_)) => Err(LayerError::NotExpected(kind)),
+        (Kind::D1Array(_, n),       Some(l)) if n<=l => Err(LayerError::OutOfBounds(l, n)),
+        (Kind::D2Array(_, _, n, _), Some(l)) if n<=l => Err(LayerError::OutOfBounds(l, n)),
+        (Kind::CubeArray(_, n),     Some(l)) if n<=l => Err(LayerError::OutOfBounds(l, n)),
+        (Kind::D1(..), None) | (Kind::D1Array(..), Some(_)) => Ok(vk::IMAGE_VIEW_TYPE_1D),
+        (Kind::D1Array(..), None) => Ok(vk::IMAGE_VIEW_TYPE_1D_ARRAY),
+        (Kind::D2(..), None) | (Kind::D2Array(..), Some(_)) => Ok(vk::IMAGE_VIEW_TYPE_2D),
+        (Kind::D2Array(..), None) => Ok(vk::IMAGE_VIEW_TYPE_2D_ARRAY),
+        (Kind::D3(..), None) => Ok(vk::IMAGE_VIEW_TYPE_3D),
+        (Kind::Cube(..), None) | (Kind::CubeArray(..), Some(_)) => Ok(vk::IMAGE_VIEW_TYPE_CUBE),
+        (Kind::CubeArray(..), None) => Ok(vk::IMAGE_VIEW_TYPE_CUBE_ARRAY),
+    }
+}
+
+pub fn map_image_aspect(surface: SurfaceType, channel: ChannelType) -> vk::ImageAspectFlags {
+    match surface {
+        SurfaceType::D16 | SurfaceType::D24 | SurfaceType::D24_S8 | SurfaceType::D32 => match channel {
+            ChannelType::Float => vk::IMAGE_ASPECT_DEPTH_BIT,
+            ChannelType::Uint  => vk::IMAGE_ASPECT_STENCIL_BIT,
+            _ => {
+                error!("Unexpected depth/stencil channel {:?}", channel);
+                vk::IMAGE_ASPECT_DEPTH_BIT
+            }
+        },
+        _ => vk::IMAGE_ASPECT_COLOR_BIT,
     }
 }
 
