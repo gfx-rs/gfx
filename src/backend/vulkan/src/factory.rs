@@ -88,6 +88,74 @@ impl Factory {
             command::Buffer::new(out)
         }
     }
+
+    fn view_texture(&mut self, htex: &h::RawTexture<R>, desc: core::tex::ResourceDesc, is_target: bool)
+                    -> Result<vk::ImageView, f::ResourceViewError> {
+        let raw_tex = self.frame_handles.ref_texture(htex);
+        let td = htex.get_info();
+        let info = vk::ImageViewCreateInfo {
+            sType: vk::STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            pNext: ptr::null(),
+            flags: 0,
+            image: raw_tex.image,
+            viewType: match data::map_image_view_type(td.kind, desc.layer) {
+                Ok(vt) => vt,
+                Err(e) => return Err(f::ResourceViewError::Layer(e)),
+            },
+            format: match data::map_format(td.format, desc.channel) {
+                Some(f) => f,
+                None => return Err(f::ResourceViewError::Channel(desc.channel)),
+            },
+            components: data::map_swizzle(desc.swizzle),
+            subresourceRange: vk::ImageSubresourceRange {
+                aspectMask: data::map_image_aspect(td.format, desc.channel, is_target),
+                baseMipLevel: desc.min as u32,
+                levelCount: (desc.max + 1 - desc.min) as u32,
+                baseArrayLayer: desc.layer.unwrap_or(0) as u32,
+                layerCount: match desc.layer {
+                    Some(_) => 1,
+                    None => td.kind.get_num_slices().unwrap_or(1) as u32,
+                },
+            },
+        };
+
+        let (dev, vk) = self.share.get_device();
+        Ok(unsafe {
+            let mut out = mem::zeroed();
+            assert_eq!(vk::SUCCESS, vk.CreateImageView(dev, &info, ptr::null(), &mut out));
+            out
+        })
+    }
+
+
+    #[doc(hidden)]
+    pub fn view_swapchain_image(&mut self, image: vk::Image, format: core::format::Format, size: (u32, u32))
+                                -> Result<h::RawRenderTargetView<R>, f::TargetViewError> {
+        use gfx_core::Factory;
+        use gfx_core::handle::Producer;
+        use gfx_core::tex as t;
+
+        let raw_tex = native::Texture {
+            image: image,
+            memory: 0,
+        };
+        let tex_desc = t::Descriptor {
+            kind: t::Kind::D2(size.0 as t::Size, size.1 as t::Size, t::AaMode::Single),
+            levels: 1,
+            format: format.0,
+            bind: f::RENDER_TARGET,
+            usage: f::Usage::GpuOnly,
+        };
+        let tex = self.frame_handles.make_texture(raw_tex, tex_desc);
+        let view_desc = t::RenderDesc {
+            channel: format.1,
+            level: 0,
+            layer: None,
+        };
+
+        self.view_texture_as_render_target_raw(&tex, view_desc)
+    }
+
 }
 
 impl Drop for Factory {
@@ -220,47 +288,8 @@ impl core::Factory<R> for Factory {
     fn view_texture_as_shader_resource_raw(&mut self, htex: &h::RawTexture<R>, desc: core::tex::ResourceDesc)
                                        -> Result<h::RawShaderResourceView<R>, f::ResourceViewError> {
         use gfx_core::handle::Producer;
-
-        let raw_tex = self.frame_handles.ref_texture(htex);
-        let td = htex.get_info();
-        let info = vk::ImageViewCreateInfo {
-            sType: vk::STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            pNext: ptr::null(),
-            flags: 0,
-            image: raw_tex.image,
-            viewType: match data::map_image_view_type(td.kind, desc.layer) {
-                Ok(vt) => vt,
-                Err(e) => return Err(f::ResourceViewError::Layer(e)),
-            },
-            format: match data::map_format(td.format, desc.channel) {
-                Some(f) => f,
-                None => return Err(f::ResourceViewError::Channel(desc.channel)),
-            },
-            components: vk::ComponentMapping {
-                r: vk::COMPONENT_SWIZZLE_R,
-                g: vk::COMPONENT_SWIZZLE_G,
-                b: vk::COMPONENT_SWIZZLE_B,
-                a: vk::COMPONENT_SWIZZLE_A,
-            },
-            subresourceRange: vk::ImageSubresourceRange {
-                aspectMask: data::map_image_aspect(td.format, desc.channel),
-                baseMipLevel: desc.min as u32,
-                levelCount: (desc.max + 1 - desc.min) as u32,
-                baseArrayLayer: desc.layer.unwrap_or(0) as u32,
-                layerCount: match desc.layer {
-                    Some(_) => 1,
-                    None => td.kind.get_num_slices().unwrap_or(1) as u32,
-                },
-            },
-        };
-
-        let (dev, vk) = self.share.get_device();
-        let view = unsafe {
-            let mut out = mem::zeroed();
-            assert_eq!(vk::SUCCESS, vk.CreateImageView(dev, &info, ptr::null(), &mut out));
-            out
-        };
-        Ok(self.share.handles.borrow_mut().make_texture_srv(view, htex))
+        self.view_texture(htex, desc, false).map(|view|
+            self.share.handles.borrow_mut().make_texture_srv(view, htex))
     }
 
     fn view_texture_as_unordered_access_raw(&mut self, _htex: &h::RawTexture<R>)
@@ -268,10 +297,28 @@ impl core::Factory<R> for Factory {
         Err(f::ResourceViewError::Unsupported) //TODO
     }
 
-    fn view_texture_as_render_target_raw(&mut self, _htex: &h::RawTexture<R>, _desc: core::tex::RenderDesc)
+    fn view_texture_as_render_target_raw(&mut self, htex: &h::RawTexture<R>, desc: core::tex::RenderDesc)
                                          -> Result<h::RawRenderTargetView<R>, f::TargetViewError>
     {
-        unimplemented!()
+        use gfx_core::handle::Producer;
+        let rdesc = core::tex::ResourceDesc {
+            channel: desc.channel,
+            layer: desc.layer,
+            min: 0,
+            max: 0,
+            swizzle: core::format::Swizzle::new(),
+        };
+        let mut dim = htex.get_info().kind.get_dimensions();
+        if rdesc.layer.is_some() {
+            dim.2 = 1; // slice of the depth/array
+        }
+        match self.view_texture(htex, rdesc, true) {
+            Ok(view) => Ok(self.share.handles.borrow_mut().make_rtv(view, htex, dim)),
+            Err(f::ResourceViewError::NoBindFlag) => Err(f::TargetViewError::NoBindFlag),
+            Err(f::ResourceViewError::Channel(ct)) => Err(f::TargetViewError::Channel(ct)),
+            Err(f::ResourceViewError::Layer(le))   => Err(f::TargetViewError::Layer(le)),
+            Err(f::ResourceViewError::Unsupported) => Err(f::TargetViewError::Unsupported),
+        }
     }
 
     fn view_texture_as_depth_stencil_raw(&mut self, _htex: &h::RawTexture<R>, _desc: core::tex::DepthStencilDesc)

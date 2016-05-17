@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use gfx_core::factory::{Bind, MapAccess, Usage, LayerError};
-use gfx_core::format::{SurfaceType, ChannelType};
+use gfx_core::format::{SurfaceType, ChannelType, Swizzle, ChannelSource};
 use gfx_core::tex::{FilterMethod, Kind, Layer, PackedColor, WrapMode};
 use gfx_core::state;
 use vk;
@@ -45,17 +45,38 @@ pub fn map_image_view_type(kind: Kind, layer: Option<Layer>) -> Result<vk::Image
     }
 }
 
-pub fn map_image_aspect(surface: SurfaceType, channel: ChannelType) -> vk::ImageAspectFlags {
+pub fn map_image_aspect(surface: SurfaceType, channel: ChannelType, is_target: bool) -> vk::ImageAspectFlags {
     match surface {
-        SurfaceType::D16 | SurfaceType::D24 | SurfaceType::D24_S8 | SurfaceType::D32 => match channel {
-            ChannelType::Float => vk::IMAGE_ASPECT_DEPTH_BIT,
-            ChannelType::Uint  => vk::IMAGE_ASPECT_STENCIL_BIT,
+        SurfaceType::D16 | SurfaceType::D24 | SurfaceType::D24_S8 | SurfaceType::D32 => match (is_target, channel) {
+            (true, _) => vk::IMAGE_ASPECT_DEPTH_BIT | vk::IMAGE_ASPECT_STENCIL_BIT,
+            (false, ChannelType::Float) => vk::IMAGE_ASPECT_DEPTH_BIT,
+            (false, ChannelType::Uint)  => vk::IMAGE_ASPECT_STENCIL_BIT,
             _ => {
                 error!("Unexpected depth/stencil channel {:?}", channel);
                 vk::IMAGE_ASPECT_DEPTH_BIT
             }
         },
         _ => vk::IMAGE_ASPECT_COLOR_BIT,
+    }
+}
+
+pub fn map_channel_source(source: ChannelSource) -> vk::ComponentSwizzle {
+    match source {
+        ChannelSource::Zero => vk::COMPONENT_SWIZZLE_ZERO,
+        ChannelSource::One  => vk::COMPONENT_SWIZZLE_ONE,
+        ChannelSource::X    => vk::COMPONENT_SWIZZLE_R,
+        ChannelSource::Y    => vk::COMPONENT_SWIZZLE_G,
+        ChannelSource::Z    => vk::COMPONENT_SWIZZLE_B,
+        ChannelSource::W    => vk::COMPONENT_SWIZZLE_A,
+    }
+}
+
+pub fn map_swizzle(swizzle: Swizzle) -> vk::ComponentMapping {
+    vk::ComponentMapping {
+        r: map_channel_source(swizzle.0),
+        g: map_channel_source(swizzle.1),
+        b: map_channel_source(swizzle.2),
+        a: map_channel_source(swizzle.3),
     }
 }
 
