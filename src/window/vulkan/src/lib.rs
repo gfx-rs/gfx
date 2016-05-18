@@ -29,25 +29,83 @@ pub fn init_winit(builder: winit::WindowBuilder) -> (winit::Window, gfx_device_v
     (win, device, factory)
 }
 
+pub type TargetHandle = gfx_core::handle::RenderTargetView<gfx_device_vulkan::Resources, format::Rgba8>;
+
+pub struct SwapTarget {
+    _image: vk::Image,
+    target: TargetHandle,
+    _fence: vk::Fence,
+}
+
 pub struct Window {
     connection: xcb::Connection,
     _foreground: u32,
     window: u32,
-    _swapchain: vk::SwapchainKHR,
-    _targets: Vec<gfx_core::handle::RenderTargetView<gfx_device_vulkan::Resources, format::Rgba8>>,
+    swapchain: vk::SwapchainKHR,
+    targets: Vec<SwapTarget>,
+    queue: gfx_device_vulkan::GraphicsQueue,
+}
+
+pub struct Frame<'a> {
+    window: &'a mut Window,
+    target_id: u32,
+}
+
+impl<'a> Frame<'a> {
+    pub fn get_target(&self) -> TargetHandle {
+        self.window.targets[self.target_id as usize].target.clone()
+    }
+    pub fn get_queue(&mut self) -> &mut gfx_device_vulkan::GraphicsQueue {
+        &mut self.window.queue
+    }
+}
+
+impl<'a> Drop for Frame<'a> {
+    fn drop(&mut self) {
+        let mut result = vk::SUCCESS;
+        let info = vk::PresentInfoKHR {
+            sType: vk::STRUCTURE_TYPE_PRESENT_INFO_KHR,
+            pNext: ptr::null(),
+            waitSemaphoreCount: 0,
+            pWaitSemaphores: ptr::null(),
+            swapchainCount: 1,
+            pSwapchains: &self.window.swapchain,
+            pImageIndices: &self.target_id,
+            pResults: &mut result,
+        };
+        let (_dev, vk) = self.window.queue.get_share().get_device();
+        unsafe {
+            vk.QueuePresentKHR(self.window.queue.get_queue(), &info);
+        }
+        assert_eq!(vk::SUCCESS, result);
+    }
 }
 
 impl Window {
-    pub fn wait_draw(&mut self) -> Option<bool> {
+    pub fn wait_draw(&mut self) -> Result<Option<Frame>, ()> {
         let ev = match self.connection.wait_for_event() {
             Some(ev) => ev,
-            None => return None,
+            None => return Err(()),
         };
         //self.connection.flush();
         match ev.response_type() & 0x80 {
-            xcb::EXPOSE => Some(true),
-            xcb::KEY_PRESS => None,
-            _ => Some(false)
+            xcb::EXPOSE => Ok(Some(self.start_frame())),
+            xcb::KEY_PRESS => Err(()),
+            _ => Ok(None)
+        }
+    }
+
+    pub fn start_frame(&mut self) -> Frame {
+        //TODO: handle window resize
+        let index = unsafe {
+            let (dev, vk) = self.queue.get_share().get_device();
+            let mut i = 0;
+            vk.AcquireNextImageKHR(dev, self.swapchain, 60, 0, 0, &mut i);
+            i
+        };
+        Frame {
+            window: self,
+            target_id: index,
         }
     }
 }
@@ -60,7 +118,7 @@ impl Drop for Window {
     }
 }
 
-pub fn init_xcb(title: &str, width: u32, height: u32) -> (Window, gfx_device_vulkan::GraphicsQueue, gfx_device_vulkan::Factory) {
+pub fn init_xcb(title: &str, width: u32, height: u32) -> (Window, gfx_device_vulkan::Factory) {
     let (device, mut factory, backend) = gfx_device_vulkan::create(title, 1, &[],
         &["VK_KHR_surface", "VK_KHR_xcb_surface"], &["VK_KHR_swapchain"]);
 
@@ -153,15 +211,20 @@ pub fn init_xcb(title: &str, width: u32, height: u32) -> (Window, gfx_device_vul
     let targets = images[.. num as usize].iter().map(|image| {
         use gfx_core::factory::Typed;
         let raw_view = factory.view_swapchain_image(*image, format, (width, height)).unwrap();
-        Typed::new(raw_view)
+        SwapTarget {
+            _image: *image,
+            target: Typed::new(raw_view),
+            _fence: factory.create_fence(true),
+        }
     }).collect();
 
     let win = Window {
         connection: conn,
         _foreground: foreground,
         window: window,
-        _swapchain: swapchain,
-        _targets: targets,
+        swapchain: swapchain,
+        targets: targets,
+        queue: device,
     };
-    (win, device, factory)
+    (win, factory)
 }

@@ -270,5 +270,5 @@ impl gfx_core::Resources for Resources {
     type RenderTargetView     = vk::ImageView;
     type DepthStencilView     = ();
     type Sampler              = vk::Sampler;
-    type Fence                = ();
+    type Fence                = vk::Fence;
 }

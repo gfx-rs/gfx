@@ -18,7 +18,7 @@ use gfx_core::{self as core, draw, pso, shade, target, tex};
 use gfx_core::state::RefValues;
 use gfx_core::{IndexType, VertexCount};
 use native;
-use {Resources, SharePointer};
+use {Resources, Share, SharePointer};
 
 
 pub struct Buffer {
@@ -93,6 +93,14 @@ impl GraphicsQueue {
             queue: q,
             capabilities: caps,
         }
+    }
+    #[doc(hidden)]
+    pub fn get_share(&self) -> &Share {
+        &self.share
+    }
+    #[doc(hidden)]
+    pub fn get_queue(&self) -> vk::Queue {
+        self.queue
     }
 }
 

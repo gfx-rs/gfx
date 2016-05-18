@@ -50,7 +50,7 @@ impl Factory {
         let com_info = vk::CommandPoolCreateInfo {
             sType: vk::STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
             pNext: ptr::null(),
-            flags: 0,
+            flags: vk::COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
             queueFamilyIndex: qf_index,
         };
         let com_pool = unsafe {
@@ -156,6 +156,19 @@ impl Factory {
         self.view_texture_as_render_target_raw(&tex, view_desc)
     }
 
+    pub fn create_fence(&mut self, signalled: bool) -> vk::Fence {
+        let info = vk::FenceCreateInfo {
+            sType: vk::STRUCTURE_TYPE_FENCE_CREATE_INFO,
+            pNext: ptr::null(),
+            flags: if signalled { vk::FENCE_CREATE_SIGNALED_BIT } else { 0 },
+        };
+        let (dev, vk) = self.share.get_device();
+        unsafe {
+            let mut out = mem::zeroed();
+            assert_eq!(vk::SUCCESS, vk.CreateFence(dev, &info, ptr::null(), &mut out));
+            out
+        }
+    }
 }
 
 impl Drop for Factory {
