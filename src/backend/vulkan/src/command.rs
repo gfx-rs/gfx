@@ -23,13 +23,17 @@ use {Resources, Share, SharePointer};
 
 pub struct Buffer {
     inner: vk::CommandBuffer,
+    family: u32,
+    share: SharePointer,
 }
 
 impl Buffer {
     #[doc(hidden)]
-    pub fn new(b: vk::CommandBuffer) -> Buffer {
+    pub fn new(b: vk::CommandBuffer, f: u32, s: SharePointer) -> Buffer {
         Buffer {
             inner: b,
+            family: f,
+            share: s,
         }
     }
 }
@@ -37,6 +41,43 @@ impl Buffer {
 impl Drop for Buffer {
     fn drop(&mut self) {
         //TODO
+    }
+}
+
+impl Buffer {
+    pub fn image_barrier(&mut self, image: vk::Image, aspect: vk::ImageAspectFlags,
+                         old_layout: vk::ImageLayout, new_layout: vk::ImageLayout) {
+        let barrier = vk::ImageMemoryBarrier {
+            sType: vk::STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            pNext: ptr::null(),
+            srcAccessMask: if old_layout == vk::IMAGE_LAYOUT_PREINITIALIZED || new_layout == vk::IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL {
+                vk::ACCESS_HOST_WRITE_BIT | vk::ACCESS_TRANSFER_WRITE_BIT
+            } else {0},
+            dstAccessMask: match new_layout {
+                vk::IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL | vk::IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL =>
+                    vk::ACCESS_TRANSFER_READ_BIT | vk::ACCESS_HOST_WRITE_BIT | vk::ACCESS_TRANSFER_WRITE_BIT,
+                vk::IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL => vk::ACCESS_SHADER_READ_BIT,
+                _ => 0,
+            },
+            oldLayout: old_layout,
+            newLayout: new_layout,
+            srcQueueFamilyIndex: self.family,
+            dstQueueFamilyIndex: self.family,
+            image: image,
+            subresourceRange: vk::ImageSubresourceRange {
+                aspectMask: aspect,
+                baseMipLevel: 0,
+                levelCount: 1,
+                baseArrayLayer: 0,
+                layerCount: 1,
+            },
+        };
+        let (_dev, vk) = self.share.get_device();
+        unsafe {
+            vk.CmdPipelineBarrier(self.inner,
+                vk::PIPELINE_STAGE_TOP_OF_PIPE_BIT, vk::PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
+                0, ptr::null(), 0, ptr::null(), 1, &barrier);
+        }
     }
 }
 
@@ -68,13 +109,14 @@ impl draw::CommandBuffer<Resources> for Buffer {
 
 pub struct GraphicsQueue {
     share: SharePointer,
+    family: u32,
     queue: vk::Queue,
     capabilities: core::Capabilities,
 }
 
 impl GraphicsQueue {
     #[doc(hidden)]
-    pub fn new(share: SharePointer, q: vk::Queue) -> GraphicsQueue {
+    pub fn new(share: SharePointer, q: vk::Queue, qf_id: u32) -> GraphicsQueue {
         let caps = core::Capabilities {
             max_vertex_count: 0,
             max_index_count: 0,
@@ -90,6 +132,7 @@ impl GraphicsQueue {
         };
         GraphicsQueue {
             share: share,
+            family: qf_id,
             queue: q,
             capabilities: caps,
         }
@@ -115,6 +158,7 @@ impl core::Device for GraphicsQueue {
     fn pin_submitted_resources(&mut self, _: &core::handle::Manager<Resources>) {}
 
     fn submit(&mut self, com: &mut Buffer) {
+        assert_eq!(self.family, com.family);
         let (_, vk) = self.share.get_device();
         assert_eq!(vk::SUCCESS, unsafe {
             vk.EndCommandBuffer(com.inner)

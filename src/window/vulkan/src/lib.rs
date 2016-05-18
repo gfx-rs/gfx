@@ -88,7 +88,7 @@ impl Window {
             None => return Err(()),
         };
         //self.connection.flush();
-        match ev.response_type() & 0x80 {
+        match ev.response_type() & 0x7F {
             xcb::EXPOSE => Ok(Some(self.start_frame())),
             xcb::KEY_PRESS => Err(()),
             _ => Ok(None)
@@ -100,7 +100,7 @@ impl Window {
         let index = unsafe {
             let (dev, vk) = self.queue.get_share().get_device();
             let mut i = 0;
-            vk.AcquireNextImageKHR(dev, self.swapchain, 60, 0, 0, &mut i);
+            assert_eq!(vk::SUCCESS, vk.AcquireNextImageKHR(dev, self.swapchain, 60, 0, 0, &mut i));
             i
         };
         Frame {
@@ -119,7 +119,7 @@ impl Drop for Window {
 }
 
 pub fn init_xcb(title: &str, width: u32, height: u32) -> (Window, gfx_device_vulkan::Factory) {
-    let (device, mut factory, backend) = gfx_device_vulkan::create(title, 1, &[],
+    let (mut device, mut factory, backend) = gfx_device_vulkan::create(title, 1, &[],
         &["VK_KHR_surface", "VK_KHR_xcb_surface"], &["VK_KHR_swapchain"]);
 
     let (conn, screen_num) = xcb::Connection::connect(None).unwrap();
@@ -207,9 +207,12 @@ pub fn init_xcb(title: &str, width: u32, height: u32) -> (Window, gfx_device_vul
         vk.GetSwapchainImagesKHR(dev, swapchain, &mut num, images.as_mut_ptr())
     });
 
+    let mut cbuf = factory.create_command_buffer();
+
     let format = format::Format(format::SurfaceType::R8_G8_B8_A8, format::ChannelType::Unorm);
     let targets = images[.. num as usize].iter().map(|image| {
         use gfx_core::factory::Typed;
+        cbuf.image_barrier(*image, vk::IMAGE_ASPECT_COLOR_BIT, vk::IMAGE_LAYOUT_UNDEFINED, vk::IMAGE_LAYOUT_PRESENT_SRC_KHR);
         let raw_view = factory.view_swapchain_image(*image, format, (width, height)).unwrap();
         SwapTarget {
             _image: *image,
@@ -217,6 +220,11 @@ pub fn init_xcb(title: &str, width: u32, height: u32) -> (Window, gfx_device_vul
             _fence: factory.create_fence(true),
         }
     }).collect();
+
+    {
+        use gfx_core::Device;
+        device.submit(&mut cbuf);
+    }
 
     let win = Window {
         connection: conn,

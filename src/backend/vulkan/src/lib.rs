@@ -214,7 +214,7 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
         dev_pointers: dev_pointers,
         handles: RefCell::new(gfx_core::handle::Manager::new()),
     });
-    let gfx_device = command::GraphicsQueue::new(share.clone(), queue);
+    let gfx_device = command::GraphicsQueue::new(share.clone(), queue, qf_id as u32);
     let gfx_factory = factory::Factory::new(share.clone(), qf_id as u32);
 
     (gfx_device, gfx_factory, share)

@@ -41,6 +41,7 @@ impl core::mapping::Raw for RawMapping {
 
 pub struct Factory {
     share: SharePointer,
+    qf_index: u32,
     command_pool: vk::CommandPool,
     frame_handles: h::Manager<R>,
 }
@@ -61,6 +62,7 @@ impl Factory {
         };
         Factory {
             share: share,
+            qf_index: qf_index,
             command_pool: com_pool,
             frame_handles: h::Manager::new(),
         }
@@ -81,12 +83,13 @@ impl Factory {
             pInheritanceInfo: ptr::null(),
         };
         let (dev, vk) = self.share.get_device();
-        unsafe {
+        let buf = unsafe {
             let mut out = mem::zeroed();
             assert_eq!(vk::SUCCESS, vk.AllocateCommandBuffers(dev, &alloc_info, &mut out));
             assert_eq!(vk::SUCCESS, vk.BeginCommandBuffer(out, &begin_info));
-            command::Buffer::new(out)
-        }
+            out
+        };
+        command::Buffer::new(buf, self.qf_index, self.share.clone())
     }
 
     fn view_texture(&mut self, htex: &h::RawTexture<R>, desc: core::tex::ResourceDesc, is_target: bool)
