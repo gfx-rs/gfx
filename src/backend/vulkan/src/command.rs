@@ -98,9 +98,22 @@ impl draw::CommandBuffer<Resources> for Buffer {
     fn update_texture(&mut self, _: native::Texture, _: tex::Kind, _: Option<tex::CubeFace>,
                       _: &[u8], _: tex::RawImageInfo) {}
     fn generate_mipmap(&mut self, _: native::TextureView) {}
-    fn clear_color(&mut self, _: native::TextureView, _: draw::ClearColor) {}
+
+    fn clear_color(&mut self, tv: native::TextureView, color: draw::ClearColor) {
+        let (_, vk) = self.share.get_device();
+        let value = match color {
+            draw::ClearColor::Float(v) => vk::ClearColorValue::float32(v),
+            draw::ClearColor::Int(v)   => vk::ClearColorValue::int32(v),
+            draw::ClearColor::Uint(v)  => vk::ClearColorValue::uint32(v),
+        };
+        unsafe {
+            vk.CmdClearColorImage(self.inner, tv.image, tv.layout, &value, 1, &tv.sub_range);
+        }
+    }
+
     fn clear_depth_stencil(&mut self, _: (), _: Option<target::Depth>,
                            _: Option<target::Stencil>) {}
+
     fn call_draw(&mut self, _: VertexCount, _: VertexCount, _: draw::InstanceOption) {}
     fn call_draw_indexed(&mut self, _: VertexCount, _: VertexCount,
                          _: VertexCount, _: draw::InstanceOption) {}

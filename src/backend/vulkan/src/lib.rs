@@ -161,11 +161,11 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
     info!("Chosen physical device {:p} with queue family {}", ph_dev as *const (), qf_id);
 
     let device = {
-        let cstrings = layers.iter().chain(dev_extensions.iter())
-                         .map(|&s| CString::new(s).unwrap())
-                         .collect::<Vec<_>>();
+        let cstrings = dev_extensions.iter()
+                                     .map(|&s| CString::new(s).unwrap())
+                                     .collect::<Vec<_>>();
         let str_pointers = cstrings.iter().map(|s| s.as_ptr())
-                               .collect::<Vec<_>>();
+                                   .collect::<Vec<_>>();
 
         let queue_info = vk::DeviceQueueCreateInfo {
             sType: vk::STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
