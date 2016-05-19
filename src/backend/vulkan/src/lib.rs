@@ -265,9 +265,9 @@ impl gfx_core::Resources for Resources {
     type Program              = ();
     type PipelineStateObject  = ();
     type Texture              = native::Texture;
-    type ShaderResourceView   = vk::ImageView; //TODO: buffer view
+    type ShaderResourceView   = native::TextureView; //TODO: buffer view
     type UnorderedAccessView  = ();
-    type RenderTargetView     = vk::ImageView;
+    type RenderTargetView     = native::TextureView;
     type DepthStencilView     = ();
     type Sampler              = vk::Sampler;
     type Fence                = vk::Fence;

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{mem, ptr, slice};
+use std::{cell, mem, ptr, slice};
 use std::os::raw::c_void;
 use gfx_core::{self as core, handle as h, factory as f, state};
 use vk;
@@ -93,7 +93,7 @@ impl Factory {
     }
 
     fn view_texture(&mut self, htex: &h::RawTexture<R>, desc: core::tex::ResourceDesc, is_target: bool)
-                    -> Result<vk::ImageView, f::ResourceViewError> {
+                    -> Result<native::TextureView, f::ResourceViewError> {
         let raw_tex = self.frame_handles.ref_texture(htex);
         let td = htex.get_info();
         let info = vk::ImageViewCreateInfo {
@@ -123,10 +123,16 @@ impl Factory {
         };
 
         let (dev, vk) = self.share.get_device();
-        Ok(unsafe {
+        let view = unsafe {
             let mut out = mem::zeroed();
             assert_eq!(vk::SUCCESS, vk.CreateImageView(dev, &info, ptr::null(), &mut out));
             out
+        };
+        Ok(native::TextureView {
+            image: raw_tex.image,
+            view: view,
+            layout: raw_tex.layout.get(), //care!
+            sub_range: info.subresourceRange,
         })
     }
 
@@ -140,6 +146,7 @@ impl Factory {
 
         let raw_tex = native::Texture {
             image: image,
+            layout: cell::Cell::new(vk::IMAGE_LAYOUT_GENERAL),
             memory: 0,
         };
         let tex_desc = t::Descriptor {
@@ -286,7 +293,11 @@ impl core::Factory<R> for Factory {
             let mut mem = mem::zeroed();
             assert_eq!(vk::SUCCESS, vk.AllocateMemory(dev, &alloc_info, ptr::null(), &mut mem));
             assert_eq!(vk::SUCCESS, vk.BindImageMemory(dev, image, mem, 0));
-            native::Texture { image: image, memory: mem }
+            native::Texture {
+                image: image,
+                layout: cell::Cell::new(image_info.initialLayout),
+                memory: mem,
+            }
         };
         Ok(self.share.handles.borrow_mut().make_texture(tex, desc))
     }

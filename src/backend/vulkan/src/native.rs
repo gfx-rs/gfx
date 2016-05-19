@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::ffi::CStr;
-use std::{fmt, hash};
+use std::{cell, fmt, hash};
 use vk;
 
 //Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
@@ -56,10 +56,28 @@ unsafe impl Send for Shader {}
 unsafe impl Sync for Shader {}
 
 
-#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Texture {
     pub image: vk::Image,
+    pub layout: cell::Cell<vk::ImageLayout>,
     pub memory: vk::DeviceMemory,
+}
+impl hash::Hash for Texture {
+    fn hash<H>(&self, state: &mut H) where H: hash::Hasher {
+        self.image.hash(state);
+        self.layout.get().hash(state);
+        self.memory.hash(state);
+    }
 }
 unsafe impl Send for Texture {}
 unsafe impl Sync for Texture {}
+
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+pub struct TextureView {
+    pub image: vk::Image,
+    pub view: vk::ImageView,
+    pub layout: vk::ImageLayout,
+    pub sub_range: vk::ImageSubresourceRange,
+}
+unsafe impl Send for TextureView {}
+unsafe impl Sync for TextureView {}

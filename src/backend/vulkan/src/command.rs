@@ -97,8 +97,8 @@ impl draw::CommandBuffer<Resources> for Buffer {
     fn update_buffer(&mut self, _: (), _: &[u8], _: usize) {}
     fn update_texture(&mut self, _: native::Texture, _: tex::Kind, _: Option<tex::CubeFace>,
                       _: &[u8], _: tex::RawImageInfo) {}
-    fn generate_mipmap(&mut self, _: vk::ImageView) {}
-    fn clear_color(&mut self, _: vk::ImageView, _: draw::ClearColor) {}
+    fn generate_mipmap(&mut self, _: native::TextureView) {}
+    fn clear_color(&mut self, _: native::TextureView, _: draw::ClearColor) {}
     fn clear_depth_stencil(&mut self, _: (), _: Option<target::Depth>,
                            _: Option<target::Stencil>) {}
     fn call_draw(&mut self, _: VertexCount, _: VertexCount, _: draw::InstanceOption) {}
@@ -199,11 +199,11 @@ impl core::Device for GraphicsQueue {
                 vk.FreeMemory(dev, t.memory, ptr::null());
             }},
             |vk, v| unsafe { //SRV
-                vk.DestroyImageView(dev, *v, ptr::null());
+                vk.DestroyImageView(dev, v.view, ptr::null());
             },
             |_, _| (), //UAV
             |vk, v| unsafe { //RTV
-                vk.DestroyImageView(dev, *v, ptr::null());
+                vk.DestroyImageView(dev, v.view, ptr::null());
             },
             |_, _v| (), //DSV
             |_, _v| (), //sampler
