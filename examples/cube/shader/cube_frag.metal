@@ -19,7 +19,7 @@ fragment FragmentOut frag(VertexOut in             [[ stage_in ]],
 
     float4 t = t_Color.sample(sampler, in.coords);
     float blend = dot(in.coords - float2(0.5, 0.5), in.coords - float2(0.5, 0.5));
-    out.main = mix(t, float4(0.0, 0.0, 0.0, 0.0), blend * 1.0);
+    out.main = float4(1.0, 0.0, 0.0, 1.0);//mix(t, float4(0.0, 0.0, 0.0, 0.0), blend * 1.0);
 
     return out;
 };

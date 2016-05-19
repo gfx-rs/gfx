@@ -16,6 +16,7 @@
 
 #[macro_use]
 extern crate log;
+#[macro_use]
 extern crate objc;
 extern crate cocoa;
 extern crate winit;
@@ -42,7 +43,7 @@ use gfx_core::handle::{RawRenderTargetView, RenderTargetView};
 
 use gfx_device_metal::{Device, Factory, Resources};
 
-use metal::{CAMetalDrawable, CAMetalLayer, MTLTexture};
+use metal::*;
 
 use winit::{Window};
 
@@ -53,7 +54,7 @@ use std::mem;
 pub struct MetalWindow {
     window: winit::Window,
     layer: CAMetalLayer,
-    drawable: Cell<CAMetalDrawable>,
+    drawable: *mut CAMetalDrawable,
     backbuffer: *mut MTLTexture
 }
 
@@ -71,8 +72,33 @@ impl MetalWindow {
         // TODO: did we fail to swap buffers?
         // TODO: come up with alternative to this hack
 
-        self.drawable.set(self.layer.next_drawable().unwrap());
-        unsafe { *self.backbuffer = self.drawable.get().texture(); }
+        unsafe {
+            println!("{}", "====== PRE ======");
+            println!(" backptr: {:p}", self.backbuffer);
+            println!("backbuff: {:?}", *self.backbuffer);
+            //println!("     tex: {:?}", self.drawable.get().texture());
+
+            let drawable = self.layer.next_drawable().unwrap();
+
+            // not getting released!!
+            if !(*self.drawable).is_null() {
+                println!("{}", "RELLLEEEASSSEEEEE°!");
+                (*self.drawable).release();
+            }
+
+            (*self.drawable).0 = drawable.0;
+
+            (*self.backbuffer).0 = drawable.texture().0;
+
+            println!("{}", "====== POST ======");
+            println!(" backptr: {:p}", self.backbuffer);
+            println!("backbuff: {:?}", *self.backbuffer);
+            //println!("     tex: {:?}", self.drawable.get().texture());
+
+
+
+        }
+
         Ok(())
     }
 }
@@ -109,6 +135,7 @@ pub fn init_raw(title: &str, requested_width: u32, requested_height: u32, color_
         let wnd: cocoa_id = mem::transmute(winit_window.get_nswindow());
 
         let layer = CAMetalLayer::layer();
+        layer.set_pixel_format(MTLPixelFormat::BGRA8Unorm);
         /*layer.set_pixel_format(match gfx_device_metal::map_format(color_format, true) {
             Some(fm) => fm,
             None => return Err(InitError::Format(color_format)),
@@ -120,14 +147,27 @@ pub fn init_raw(title: &str, requested_width: u32, requested_height: u32, color_
         view.setWantsLayer(YES);
         view.setLayer(mem::transmute(layer.0));
 
-        let (device, factory, color, raw_addr) = gfx_device_metal::create(color_format, draw_size.0, draw_size.1).unwrap();
+        let (mut device, factory, color, daddr, addr) = gfx_device_metal::create(color_format, draw_size.0, draw_size.1).unwrap();
+        layer.set_device(device.device);
 
+        let drawable = layer.next_drawable().unwrap();
+
+        println!("{:p}", &mut device);
         let window = MetalWindow {
             window: winit_window,
             layer: layer,
-            drawable: Cell::new(CAMetalDrawable::nil()),
-            backbuffer: raw_addr
+            drawable: daddr,
+            backbuffer: addr
         };
+
+
+        //*addr = mem::transmute(10u64);
+        println!("{:?}", color);
+
+        (*daddr).0 = drawable.0;
+        (*addr).0 = drawable.texture().0;
+        println!("{:?}", *window.backbuffer);
+        //*addr = tex;
 
         Ok((window, device, factory, color))
     }

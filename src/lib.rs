@@ -252,8 +252,8 @@ impl<
                 }
             }
 
-            //app.render(&mut device);
-            //window.swap_buffers().unwrap();
+            app.render(&mut device);
+            window.swap_buffers().unwrap();
             device.cleanup();
             harness.bump()
         }

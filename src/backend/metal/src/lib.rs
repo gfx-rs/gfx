@@ -33,6 +33,7 @@ use gfx_core::{handle, tex};
 use std::cell::RefCell;
 use std::sync::Arc;
 use std::mem;
+use std::ptr;
 
 mod factory;
 mod command;
@@ -59,7 +60,7 @@ pub mod native {
     unsafe impl Sync for Buffer {}
 
     #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-    pub struct Texture(pub MTLTexture);
+    pub struct Texture(pub *mut MTLTexture);
     unsafe impl Send for Texture {}
     unsafe impl Sync for Texture {}
 
@@ -69,17 +70,17 @@ pub mod native {
     unsafe impl Sync for Sampler {}
 
     #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-    pub struct Rtv(pub MTLTexture);
+    pub struct Rtv(pub *mut MTLTexture);
     unsafe impl Send for Rtv {}
     unsafe impl Sync for Rtv {}
 
     #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-    pub struct Dsv(pub MTLTexture);
+    pub struct Dsv(pub *mut MTLTexture);
     unsafe impl Send for Dsv {}
     unsafe impl Sync for Dsv {}
 
     #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-    pub struct Srv(pub MTLTexture);
+    pub struct Srv(pub *mut MTLTexture);
     unsafe impl Send for Srv {}
     unsafe impl Sync for Srv {}
 }
@@ -118,7 +119,9 @@ pub struct Buffer(native::Buffer, Usage);
 pub struct Texture(native::Texture, Usage);
 
 pub struct Device {
-    device: MTLDevice,
+    pub device: MTLDevice,
+    pub drawable: *mut CAMetalDrawable,
+    pub backbuffer: *mut MTLTexture,
     feature_set: MTLFeatureSet,
     share: Arc<Share>,
     frame_handles: handle::Manager<Resources>,
@@ -179,7 +182,7 @@ impl gfx_core::Device for Device {
     }
 
     fn submit(&mut self, cb: &mut Self::CommandBuffer) {
-
+        cb.commit(unsafe { *self.drawable });
     }
 
     fn cleanup(&mut self) {
@@ -202,7 +205,7 @@ impl gfx_core::Device for Device {
                 (*(v.depth_stencil as Child)).Release();
                 (*(v.blend as Child)).Release();*/
             },
-            |_, v| unsafe { (v.0).0.release(); },  //texture
+            |_, v| unsafe { (*(v.0).0).release(); },  //texture
             |_, v| unsafe { /*(*v.0).Release();*/ }, //SRV
             |_, _| {}, //UAV
             |_, v| unsafe { /*(*v.0).Release();*/ }, //RTV
@@ -214,7 +217,7 @@ impl gfx_core::Device for Device {
 }
 
 pub fn create(format: gfx_core::format::Format, width: u32, height: u32)
-              -> Result<(Device, Factory, handle::RawRenderTargetView<Resources>, *mut MTLTexture), ()> {
+              -> Result<(Device, Factory, handle::RawRenderTargetView<Resources>, *mut CAMetalDrawable, *mut MTLTexture), ()> {
     use gfx_core::handle::Producer;
 
     let share = Share {
@@ -252,10 +255,24 @@ pub fn create(format: gfx_core::format::Format, width: u32, height: u32)
         return None;
     };
 
-    let raw_tex = Texture(native::Texture(MTLTexture::nil()), Usage::GpuOnly);
-    let raw_addr: *mut MTLTexture = unsafe { mem::transmute(&(raw_tex.0).0) };
+    let bb = Box::into_raw(Box::new(MTLTexture::nil()));
+    let d = Box::into_raw(Box::new(CAMetalDrawable::nil()));
 
-    let color_tex = share.handles.borrow_mut().make_texture(raw_tex, tex::Descriptor {
+    let mut device = Device {
+        device: mtl_device,
+        feature_set: get_feature_set(mtl_device).unwrap(),
+        share: Arc::new(share),
+        frame_handles: handle::Manager::new(),
+        max_resource_count: None,
+
+        drawable: d,
+        backbuffer: bb
+    };
+
+    //let raw_addr: *mut MTLTexture = ptr::null_mut();//&mut MTLTexture::nil();//unsafe { mem::transmute(&(raw_tex.0).0) };
+    let raw_tex = Texture(native::Texture(bb), Usage::GpuOnly);
+
+    let color_tex = device.share.handles.borrow_mut().make_texture(raw_tex, tex::Descriptor {
         kind: tex::Kind::D2(width as tex::Size, height as tex::Size, tex::AaMode::Single),
         levels: 1,
         format: format.0,
@@ -263,13 +280,7 @@ pub fn create(format: gfx_core::format::Format, width: u32, height: u32)
         usage: raw_tex.1,
     });
 
-    let device = Device {
-        device: mtl_device,
-        feature_set: get_feature_set(mtl_device).unwrap(),
-        share: Arc::new(share),
-        frame_handles: handle::Manager::new(),
-        max_resource_count: None,
-    };
+
     let mut factory = Factory::new(mtl_device, device.share.clone());
 
     let color_target = {
@@ -284,6 +295,6 @@ pub fn create(format: gfx_core::format::Format, width: u32, height: u32)
         factory.view_texture_as_render_target_raw(&color_tex, desc).unwrap()
     };
 
-    Ok((device, factory, color_target, raw_addr))
+    Ok((device, factory, color_target, d, bb))
 }
 

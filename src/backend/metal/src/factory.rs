@@ -71,9 +71,7 @@ impl Factory {
     }
 
     pub fn create_command_buffer(&self) -> CommandBuffer {
-        CommandBuffer {
-            cmd_buf: self.queue.new_command_buffer()
-        }
+        CommandBuffer::new(self.queue)
     }
 
     fn create_buffer_internal(&self, info: factory::BufferInfo, raw_data: Option<*const c_void>)
@@ -355,7 +353,7 @@ impl core::Factory<Resources> for Factory {
         };
 
 
-        let tex = Texture(native::Texture(self.device.new_texture(descriptor)), desc.usage);
+        let tex = Texture(native::Texture(&mut self.device.new_texture(descriptor)), desc.usage);
         Ok(self.share.handles.borrow_mut().make_texture(tex, desc))
     }
 
@@ -436,65 +434,6 @@ impl core::Factory<Resources> for Factory {
     fn view_texture_as_render_target_raw(&mut self, htex: &handle::RawTexture<Resources>, desc: core::tex::RenderDesc)
                                          -> Result<handle::RawRenderTargetView<Resources>, factory::TargetViewError>
     {
-        /*use winapi::UINT;
-        use gfx_core::tex::{AaMode, Kind};
-        use data::map_format;
-
-        let level = desc.level as UINT;
-        let (dim, extra) = match (htex.get_info().kind, desc.layer) {
-            (Kind::D1(..), None) =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE1D, [level, 0, 0]),
-            (Kind::D1Array(_, nlayers), Some(lid)) if lid < nlayers =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE1DARRAY, [level, lid as UINT, 1+lid as UINT]),
-            (Kind::D1Array(_, nlayers), None) =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE1DARRAY, [level, 0, nlayers as UINT]),
-            (Kind::D2(_, _, AaMode::Single), None) =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2D, [level, 0, 0]),
-            (Kind::D2(_, _, _), None) if level == 0 =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DMS, [0, 0, 0]),
-            (Kind::D2Array(_, _, nlayers, AaMode::Single), None) =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, 0, nlayers as UINT]),
-            (Kind::D2Array(_, _, nlayers, AaMode::Single), Some(lid)) if lid < nlayers =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, lid as UINT, 1+lid as UINT]),
-            (Kind::D2Array(_, _, nlayers, _), None) if level == 0 =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY, [0, nlayers as UINT, 0]),
-            (Kind::D2Array(_, _, nlayers, _), Some(lid)) if level == 0 && lid < nlayers =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY, [lid as UINT, 1+lid as UINT, 0]),
-            (Kind::D3(_, _, depth), None) =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE3D, [level, 0, depth as UINT]),
-            (Kind::D3(_, _, depth), Some(lid)) if lid < depth =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE3D, [level, lid as UINT, 1+lid as UINT]),
-            (Kind::Cube(..), None) =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, 0, 6]),
-            (Kind::Cube(..), Some(lid)) if lid < 6 =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, lid as UINT, 1+lid as UINT]),
-            (Kind::CubeArray(_, nlayers), None) =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, 0, 6 * nlayers as UINT]),
-            (Kind::CubeArray(_, nlayers), Some(lid)) if lid < nlayers =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, 6 * lid as UINT, 6 * (1+lid) as UINT]),
-            (_, None) => return Err(f::TargetViewError::BadLevel(desc.level)),
-            (_, Some(lid)) => return Err(f::TargetViewError::BadLayer(lid)),
-        };
-        let format = core::format::Format(htex.get_info().format, desc.channel);
-        let native_desc = winapi::D3D11_RENDER_TARGET_VIEW_DESC {
-            Format: match map_format(format, true) {
-                Some(fm) => fm,
-                None => return Err(f::TargetViewError::Channel(desc.channel)),
-            },
-            ViewDimension: dim,
-            u: extra,
-        };
-        let mut raw_view = ptr::null_mut();
-        let raw_tex = self.frame_handles.ref_texture(htex).to_resource();
-        let hr = unsafe {
-            (*self.device).CreateRenderTargetView(raw_tex, &native_desc, &mut raw_view)
-        };
-        if !winapi::SUCCEEDED(hr) {
-            error!("Failed to create RTV from {:#?}, error {:x}", native_desc, hr);
-            return Err(f::TargetViewError::Unsupported);
-        }
-        Ok(self.share.handles.borrow_mut().make_rtv(native::Rtv(raw_view), htex, size))*/
-        //unimplemented!()
         let raw_tex = self.frame_handles.ref_texture(htex).0;
         let size = htex.get_info().kind.get_level_dimensions(desc.level);
         Ok(self.share.handles.borrow_mut().make_rtv(native::Rtv(raw_tex.0), htex, size))

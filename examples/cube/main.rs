@@ -45,7 +45,6 @@ gfx_defines!{
     }
 }
 
-
 impl Vertex {
     fn new(p: [i8; 3], t: [i8; 2]) -> Vertex {
         Vertex {
