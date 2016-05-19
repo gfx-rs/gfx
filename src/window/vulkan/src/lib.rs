@@ -18,7 +18,9 @@ extern crate vk_sys as vk;
 extern crate gfx_core;
 extern crate gfx_device_vulkan;
 
+use std::ffi::CStr;
 use std::{mem, ptr};
+use std::os::raw;
 use gfx_core::format;
 
 
@@ -41,6 +43,7 @@ pub struct Window {
     connection: xcb::Connection,
     _foreground: u32,
     window: u32,
+    _debug_callback: Option<vk::DebugReportCallbackEXT>,
     swapchain: vk::SwapchainKHR,
     targets: Vec<SwapTarget>,
     queue: gfx_device_vulkan::GraphicsQueue,
@@ -118,9 +121,61 @@ impl Drop for Window {
     }
 }
 
+const LAYERS: &'static [&'static str] = &[
+];
+const LAYERS_DEBUG: &'static [&'static str] = &[
+    "VK_LAYER_LUNARG_standard_validation",
+];
+const EXTENSIONS: &'static [&'static str] = &[
+    "VK_KHR_surface",
+    "VK_KHR_xcb_surface",
+];
+const EXTENSIONS_DEBUG: &'static [&'static str] = &[
+    "VK_KHR_surface",
+    "VK_KHR_xcb_surface",
+    "VK_EXT_debug_report",
+];
+const DEV_EXTENSIONS: &'static [&'static str] = &[
+    "VK_KHR_swapchain",
+];
+
+extern "system" fn callback(flags: vk::DebugReportFlagsEXT,
+                            _ob_type: vk::DebugReportObjectTypeEXT, _object: u64, _location: usize,
+                            _msg_code: i32, layer_prefix_c: *const raw::c_char,
+                            description_c: *const raw::c_char, _user_data: *mut raw::c_void) -> u32
+{
+    let layer_prefix = unsafe { CStr::from_ptr(layer_prefix_c) }.to_str().unwrap();
+    let description  = unsafe { CStr::from_ptr(description_c)  }.to_str().unwrap();
+    println!("Vk flags {:x} in layer {}: {}", flags, layer_prefix, description);
+    vk::FALSE
+}
+
 pub fn init_xcb(title: &str, width: u32, height: u32) -> (Window, gfx_device_vulkan::Factory) {
-    let (mut device, mut factory, backend) = gfx_device_vulkan::create(title, 1, &[],
-        &["VK_KHR_surface", "VK_KHR_xcb_surface"], &["VK_KHR_swapchain"]);
+    let debug = true;
+    let (mut device, mut factory, backend) = gfx_device_vulkan::create(title, 1,
+        if debug {LAYERS_DEBUG} else {LAYERS},
+        if debug {EXTENSIONS_DEBUG} else {EXTENSIONS},
+        DEV_EXTENSIONS);
+
+    let debug_callback = if debug {
+        let info = vk::DebugReportCallbackCreateInfoEXT {
+            sType: vk::STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT,
+            pNext: ptr::null(),
+            flags: vk::DEBUG_REPORT_INFORMATION_BIT_EXT | vk::DEBUG_REPORT_WARNING_BIT_EXT |
+                   vk::DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT | vk::DEBUG_REPORT_ERROR_BIT_EXT |
+                   vk::DEBUG_REPORT_DEBUG_BIT_EXT,
+            pfnCallback: callback,
+            pUserData: ptr::null_mut(),
+        };
+        let (inst, vk) = backend.get_instance();
+        Some(unsafe {
+            let mut out = mem::zeroed();
+            assert_eq!(vk::SUCCESS, vk.CreateDebugReportCallbackEXT(inst, &info, ptr::null(), &mut out));
+            out
+        })
+    }else {
+        None
+    };
 
     let (conn, screen_num) = xcb::Connection::connect(None).unwrap();
     let (window, foreground) = {
@@ -230,6 +285,7 @@ pub fn init_xcb(title: &str, width: u32, height: u32) -> (Window, gfx_device_vul
         connection: conn,
         _foreground: foreground,
         window: window,
+        _debug_callback: debug_callback,
         swapchain: swapchain,
         targets: targets,
         queue: device,
