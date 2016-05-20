@@ -285,7 +285,6 @@ impl core::Factory<R> for Factory {
         use gfx_core::handle::Producer;
         let (dev, vk) = self.share.get_device();
 
-        let pipeline = 0;
         let set_layout = {
             let info = vk::DescriptorSetLayoutCreateInfo {
                 sType: vk::STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -328,6 +327,26 @@ impl core::Factory<R> for Factory {
             let mut out = 0;
             assert_eq!(vk::SUCCESS, unsafe {
                 vk.CreateDescriptorPool(dev, &info, ptr::null(), &mut out)
+            });
+            out
+        };
+        let pipeline = {
+            let info = vk::GraphicsPipelineCreateInfo {
+                sType: vk::STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+                pNext: ptr::null(),
+                flags: 0,
+                stageCount: 0,
+                pStages: ptr::null(), //TODO
+                layout: pipe_layout,
+                renderPass: 0, //TODO
+                subpass: 0,
+                basePipelineHandle: 0,
+                basePipelineIndex: 0,
+                .. unsafe { mem::zeroed() } //TODO
+            };
+            let mut out = 0;
+            assert_eq!(vk::SUCCESS, unsafe {
+                vk.CreateGraphicsPipelines(dev, 0, 1, &info, ptr::null(), &mut out)
             });
             out
         };

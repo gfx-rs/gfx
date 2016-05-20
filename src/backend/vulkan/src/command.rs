@@ -210,7 +210,12 @@ impl core::Device for GraphicsQueue {
                 vk.DestroyShaderModule(dev, *s, ptr::null());
             },
             |_, _p| (), //program
-            |_, _v| (), //PSO
+            |vk, p| unsafe { //PSO
+                vk.DestroyPipeline(dev, p.pipeline, ptr::null());
+                vk.DestroyPipelineLayout(dev, p.pipe_layout, ptr::null());
+                vk.DestroyDescriptorSetLayout(dev, p.desc_layout, ptr::null());
+                vk.DestroyDescriptorPool(dev, p.desc_pool, ptr::null());
+            },
             |vk, t| if t.memory != 0 {unsafe { //texture
                 vk.DestroyImage(dev, t.image, ptr::null());
                 vk.FreeMemory(dev, t.memory, ptr::null());
