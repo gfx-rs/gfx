@@ -196,6 +196,7 @@ impl core::Device for GraphicsQueue {
         });
     }
 
+    //note: this should really live elsewhere (Factory?)
     fn cleanup(&mut self) {
         let (dev, mut functions) = self.share.get_device();
         use gfx_core::handle::Producer;

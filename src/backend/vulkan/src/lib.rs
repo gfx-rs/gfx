@@ -27,7 +27,7 @@ pub use self::command::GraphicsQueue;
 pub use self::factory::Factory;
 
 mod command;
-mod data;
+pub mod data;
 mod factory;
 mod native;
 
@@ -36,7 +36,7 @@ struct PhysicalDeviceInfo {
     device: vk::PhysicalDevice,
     _properties: vk::PhysicalDeviceProperties,
     queue_families: Vec<vk::QueueFamilyProperties>,
-    _memory: vk::PhysicalDeviceMemoryProperties,
+    memory: vk::PhysicalDeviceMemoryProperties,
     _features: vk::PhysicalDeviceFeatures,
 }
 
@@ -56,7 +56,7 @@ impl PhysicalDeviceInfo {
                 families.set_len(num as usize);
                 families
             },
-            _memory: unsafe {
+            memory: unsafe {
                 let mut out = mem::zeroed();
                 vk.GetPhysicalDeviceMemoryProperties(dev, &mut out);
                 out
@@ -154,11 +154,18 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
         .map(|dev| PhysicalDeviceInfo::new(*dev, &inst_pointers))
         .collect::<Vec<_>>();
 
-    let (ph_dev, (qf_id, _))  = devices.iter()
-        .flat_map(|d| iter::repeat(d.device).zip(d.queue_families.iter().enumerate()))
+    let (dev, (qf_id, _))  = devices.iter()
+        .flat_map(|d| iter::repeat(d).zip(d.queue_families.iter().enumerate()))
         .find(|&(_, (_, qf))| qf.queueFlags & vk::QUEUE_GRAPHICS_BIT != 0)
         .unwrap();
-    info!("Chosen physical device {:p} with queue family {}", ph_dev as *const (), qf_id);
+    info!("Chosen physical device {:?} with queue family {}", dev.device, qf_id);
+
+    let mvid_id = dev.memory.memoryTypes.iter().take(dev.memory.memoryTypeCount as usize)
+                            .position(|mt| mt.propertyFlags & vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT != 0)
+                            .unwrap() as u32;
+    let msys_id = dev.memory.memoryTypes.iter().take(dev.memory.memoryTypeCount as usize)
+                            .position(|mt| mt.propertyFlags & vk::MEMORY_PROPERTY_HOST_COHERENT_BIT != 0)
+                            .unwrap() as u32;
 
     let device = {
         let cstrings = dev_extensions.iter()
@@ -191,7 +198,7 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
         };
         unsafe {
             let mut out = mem::zeroed();
-            assert_eq!(vk::SUCCESS, inst_pointers.CreateDevice(ph_dev, &dev_info, ptr::null(), &mut out));
+            assert_eq!(vk::SUCCESS, inst_pointers.CreateDevice(dev.device, &dev_info, ptr::null(), &mut out));
             out
         }
     };
@@ -215,7 +222,7 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
         handles: RefCell::new(gfx_core::handle::Manager::new()),
     });
     let gfx_device = command::GraphicsQueue::new(share.clone(), queue, qf_id as u32);
-    let gfx_factory = factory::Factory::new(share.clone(), qf_id as u32);
+    let gfx_factory = factory::Factory::new(share.clone(), qf_id as u32, mvid_id, msys_id);
 
     (gfx_device, gfx_factory, share)
 }

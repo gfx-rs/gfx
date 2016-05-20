@@ -41,13 +41,15 @@ impl core::mapping::Raw for RawMapping {
 
 pub struct Factory {
     share: SharePointer,
-    qf_index: u32,
+    queue_family_index: u32,
+    mem_video_id: u32,
+    mem_system_id: u32,
     command_pool: vk::CommandPool,
     frame_handles: h::Manager<R>,
 }
 
 impl Factory {
-    pub fn new(share: SharePointer, qf_index: u32) -> Factory {
+    pub fn new(share: SharePointer, qf_index: u32, mvid: u32, msys: u32) -> Factory {
         let com_info = vk::CommandPoolCreateInfo {
             sType: vk::STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
             pNext: ptr::null(),
@@ -62,7 +64,9 @@ impl Factory {
         };
         Factory {
             share: share,
-            qf_index: qf_index,
+            queue_family_index: qf_index,
+            mem_video_id: mvid,
+            mem_system_id: msys,
             command_pool: com_pool,
             frame_handles: h::Manager::new(),
         }
@@ -89,7 +93,7 @@ impl Factory {
             assert_eq!(vk::SUCCESS, vk.BeginCommandBuffer(out, &begin_info));
             out
         };
-        command::Buffer::new(buf, self.qf_index, self.share.clone())
+        command::Buffer::new(buf, self.queue_family_index, self.share.clone())
     }
 
     fn view_texture(&mut self, htex: &h::RawTexture<R>, desc: core::tex::ResourceDesc, is_target: bool)
@@ -281,7 +285,11 @@ impl core::Factory<R> for Factory {
             sType: vk::STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
             pNext: ptr::null(),
             allocationSize: 0,
-            memoryTypeIndex: 0, //TODO
+            memoryTypeIndex: if let f::Usage::CpuOnly(_) = desc.usage {
+                self.mem_system_id
+            }else {
+                self.mem_video_id
+            },
         };
         let (dev, vk) = self.share.get_device();
         let tex = unsafe {

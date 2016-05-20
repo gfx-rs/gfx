@@ -31,7 +31,8 @@ pub fn init_winit(builder: winit::WindowBuilder) -> (winit::Window, gfx_device_v
     (win, device, factory)
 }
 
-pub type TargetHandle = gfx_core::handle::RenderTargetView<gfx_device_vulkan::Resources, format::Rgba8>;
+pub type TargetFormat = format::Srgba8;
+pub type TargetHandle = gfx_core::handle::RenderTargetView<gfx_device_vulkan::Resources, TargetFormat>;
 
 pub struct SwapTarget {
     _image: vk::Image,
@@ -151,7 +152,7 @@ extern "system" fn callback(flags: vk::DebugReportFlagsEXT,
 }
 
 pub fn init_xcb(title: &str, width: u32, height: u32) -> (Window, gfx_device_vulkan::Factory) {
-    let debug = true;
+    let debug = false;
     let (mut device, mut factory, backend) = gfx_device_vulkan::create(title, 1,
         if debug {LAYERS_DEBUG} else {LAYERS},
         if debug {EXTENSIONS_DEBUG} else {EXTENSIONS},
@@ -230,6 +231,7 @@ pub fn init_xcb(title: &str, width: u32, height: u32) -> (Window, gfx_device_vul
     let (dev, vk) = backend.get_device();
     let mut images: [vk::Image; 2] = [0; 2];
     let mut num = images.len() as u32;
+    let format = <TargetFormat as format::Formatted>::get_format();
 
     let swapchain_info = vk::SwapchainCreateInfoKHR {
         sType: vk::STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
@@ -237,7 +239,7 @@ pub fn init_xcb(title: &str, width: u32, height: u32) -> (Window, gfx_device_vul
         flags: 0,
         surface: surface,
         minImageCount: num,
-        imageFormat: vk::FORMAT_R8G8B8A8_UNORM,
+        imageFormat: gfx_device_vulkan::data::map_format(format.0, format.1).unwrap(),
         imageColorSpace: vk::COLORSPACE_SRGB_NONLINEAR_KHR,
         imageExtent: vk::Extent2D { width: width, height: height },
         imageArrayLayers: 1,
@@ -264,7 +266,6 @@ pub fn init_xcb(title: &str, width: u32, height: u32) -> (Window, gfx_device_vul
 
     let mut cbuf = factory.create_command_buffer();
 
-    let format = format::Format(format::SurfaceType::R8_G8_B8_A8, format::ChannelType::Unorm);
     let targets = images[.. num as usize].iter().map(|image| {
         use gfx_core::factory::Typed;
         cbuf.image_barrier(*image, vk::IMAGE_ASPECT_COLOR_BIT, vk::IMAGE_LAYOUT_UNDEFINED, vk::IMAGE_LAYOUT_PRESENT_SRC_KHR);
