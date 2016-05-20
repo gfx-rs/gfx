@@ -134,11 +134,11 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
             enabledExtensionCount: extensions.len() as u32,
             ppEnabledExtensionNames: str_pointers[layers.len()..].as_ptr(),
         };
-        unsafe {
-            let mut ptr = mem::zeroed();
-            assert_eq!(vk::SUCCESS, entry_points.CreateInstance(&create_info, ptr::null(), &mut ptr));
-            ptr
-        }
+        let mut out = 0;
+        assert_eq!(vk::SUCCESS, unsafe {
+            entry_points.CreateInstance(&create_info, ptr::null(), &mut out)
+        });
+        out
     };
 
     let inst_pointers = vk::InstancePointers::load(|name| unsafe {
@@ -196,11 +196,11 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
             ppEnabledExtensionNames: str_pointers.as_ptr(),
             pEnabledFeatures: &features,
         };
-        unsafe {
-            let mut out = mem::zeroed();
-            assert_eq!(vk::SUCCESS, inst_pointers.CreateDevice(dev.device, &dev_info, ptr::null(), &mut out));
-            out
-        }
+        let mut out = 0;
+        assert_eq!(vk::SUCCESS, unsafe {
+            inst_pointers.CreateDevice(dev.device, &dev_info, ptr::null(), &mut out)
+        });
+        out
     };
 
     let dev_pointers = vk::DevicePointers::load(|name| unsafe {

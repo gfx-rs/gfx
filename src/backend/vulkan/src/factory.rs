@@ -56,12 +56,11 @@ impl Factory {
             flags: vk::COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
             queueFamilyIndex: qf_index,
         };
-        let com_pool = unsafe {
+        let mut com_pool = 0;
+        assert_eq!(vk::SUCCESS, unsafe {
             let (dev, vk) = share.get_device();
-            let mut out = mem::zeroed();
-            assert_eq!(vk::SUCCESS, vk.CreateCommandPool(dev, &com_info, ptr::null(), &mut out));
-            out
-        };
+            vk.CreateCommandPool(dev, &com_info, ptr::null(), &mut com_pool)
+        });
         Factory {
             share: share,
             queue_family_index: qf_index,
@@ -87,12 +86,13 @@ impl Factory {
             pInheritanceInfo: ptr::null(),
         };
         let (dev, vk) = self.share.get_device();
-        let buf = unsafe {
-            let mut out = mem::zeroed();
-            assert_eq!(vk::SUCCESS, vk.AllocateCommandBuffers(dev, &alloc_info, &mut out));
-            assert_eq!(vk::SUCCESS, vk.BeginCommandBuffer(out, &begin_info));
-            out
-        };
+        let mut buf = 0;
+        assert_eq!(vk::SUCCESS, unsafe {
+            vk.AllocateCommandBuffers(dev, &alloc_info, &mut buf)
+        });
+        assert_eq!(vk::SUCCESS, unsafe {
+            vk.BeginCommandBuffer(buf, &begin_info)
+        });
         command::Buffer::new(buf, self.queue_family_index, self.share.clone())
     }
 
@@ -127,11 +127,10 @@ impl Factory {
         };
 
         let (dev, vk) = self.share.get_device();
-        let view = unsafe {
-            let mut out = mem::zeroed();
-            assert_eq!(vk::SUCCESS, vk.CreateImageView(dev, &info, ptr::null(), &mut out));
-            out
-        };
+        let mut view = 0;
+        assert_eq!(vk::SUCCESS, unsafe {
+            vk.CreateImageView(dev, &info, ptr::null(), &mut view)
+        });
         Ok(native::TextureView {
             image: raw_tex.image,
             view: view,
@@ -177,11 +176,11 @@ impl Factory {
             flags: if signalled { vk::FENCE_CREATE_SIGNALED_BIT } else { 0 },
         };
         let (dev, vk) = self.share.get_device();
-        unsafe {
-            let mut out = mem::zeroed();
-            assert_eq!(vk::SUCCESS, vk.CreateFence(dev, &info, ptr::null(), &mut out));
-            out
-        }
+        let mut fence = 0;
+        assert_eq!(vk::SUCCESS, unsafe {
+            vk.CreateFence(dev, &info, ptr::null(), &mut fence)
+        });
+        fence
     }
 
     fn alloc(&self, usage: f::Usage, reqs: vk::MemoryRequirements) -> vk::DeviceMemory {
@@ -196,11 +195,11 @@ impl Factory {
             },
         };
         let (dev, vk) = self.share.get_device();
-        unsafe {
-            let mut out = mem::zeroed();
-            assert_eq!(vk::SUCCESS, vk.AllocateMemory(dev, &info, ptr::null(), &mut out));
-            out
-        }
+        let mut mem = 0;
+        assert_eq!(vk::SUCCESS, unsafe {
+            vk.AllocateMemory(dev, &info, ptr::null(), &mut mem)
+        });
+        mem
     }
 }
 
@@ -234,12 +233,14 @@ impl core::Factory<R> for Factory {
             pQueueFamilyIndices: &self.queue_family_index,
         };
         let (dev, vk) = self.share.get_device();
-        let (buf, reqs) = unsafe {
-            let mut buf = mem::zeroed();
-            assert_eq!(vk::SUCCESS, vk.CreateBuffer(dev, &native_info, ptr::null(), &mut buf));
-            let mut reqs = mem::zeroed();
-            vk.GetBufferMemoryRequirements(dev, buf, &mut reqs);
-            (buf, reqs)
+        let mut buf = 0;
+        assert_eq!(vk::SUCCESS, unsafe {
+            vk.CreateBuffer(dev, &native_info, ptr::null(), &mut buf)
+        });
+        let reqs = unsafe {
+            let mut out = mem::zeroed();
+            vk.GetBufferMemoryRequirements(dev, buf, &mut out);
+            out
         };
         let buffer = native::Buffer {
             buffer: buf,
@@ -344,12 +345,14 @@ impl core::Factory<R> for Factory {
             initialLayout: data::map_image_layout(desc.bind),
         };
         let (dev, vk) = self.share.get_device();
-        let (image, reqs) = unsafe {
-            let mut image = mem::zeroed();
-            assert_eq!(vk::SUCCESS, vk.CreateImage(dev, &image_info, ptr::null(), &mut image));
-            let mut reqs = mem::zeroed();
-            vk.GetImageMemoryRequirements(dev, image, &mut reqs);
-            (image, reqs)
+        let mut image = 0;
+        assert_eq!(vk::SUCCESS, unsafe {
+            vk.CreateImage(dev, &image_info, ptr::null(), &mut image)
+        });
+        let reqs = unsafe {
+            let mut out = mem::zeroed();
+            vk.GetImageMemoryRequirements(dev, image, &mut out);
+            out
         };
         let tex = native::Texture {
             image: image,
@@ -446,11 +449,10 @@ impl core::Factory<R> for Factory {
         };
 
         let (dev, vk) = self.share.get_device();
-        let sampler = unsafe {
-            let mut out = mem::zeroed();
-            assert_eq!(vk::SUCCESS, vk.CreateSampler(dev, &native_info, ptr::null(), &mut out));
-            out
-        };
+        let mut sampler = 0;
+        assert_eq!(vk::SUCCESS, unsafe {
+            vk.CreateSampler(dev, &native_info, ptr::null(), &mut sampler)
+        });
         self.share.handles.borrow_mut().make_sampler(sampler, info)
     }
 

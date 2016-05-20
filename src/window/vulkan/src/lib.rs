@@ -19,7 +19,7 @@ extern crate gfx_core;
 extern crate gfx_device_vulkan;
 
 use std::ffi::CStr;
-use std::{mem, ptr};
+use std::ptr;
 use std::os::raw;
 use gfx_core::format;
 
@@ -169,11 +169,11 @@ pub fn init_xcb(title: &str, width: u32, height: u32) -> (Window, gfx_device_vul
             pUserData: ptr::null_mut(),
         };
         let (inst, vk) = backend.get_instance();
-        Some(unsafe {
-            let mut out = mem::zeroed();
-            assert_eq!(vk::SUCCESS, vk.CreateDebugReportCallbackEXT(inst, &info, ptr::null(), &mut out));
-            out
-        })
+        let mut out = 0;
+        assert_eq!(vk::SUCCESS, unsafe {
+            vk.CreateDebugReportCallbackEXT(inst, &info, ptr::null(), &mut out)
+        });
+        Some(out)
     }else {
         None
     };
@@ -220,12 +220,11 @@ pub fn init_xcb(title: &str, width: u32, height: u32) -> (Window, gfx_device_vul
             connection: conn.get_raw_conn() as *const _,
             window: window as *const _, //HACK! TODO: fix the bindings
         };
-
-        unsafe {
-            let mut out = mem::zeroed();
-            assert_eq!(vk::SUCCESS, vk.CreateXcbSurfaceKHR(inst, &info, ptr::null(), &mut out));
-            out
-        }
+        let mut out = 0;
+        assert_eq!(vk::SUCCESS, unsafe {
+            vk.CreateXcbSurfaceKHR(inst, &info, ptr::null(), &mut out)
+        });
+        out
     };
 
     let (dev, vk) = backend.get_device();
@@ -254,11 +253,10 @@ pub fn init_xcb(title: &str, width: u32, height: u32) -> (Window, gfx_device_vul
         oldSwapchain: 0,
     };
 
-    let swapchain = unsafe {
-        let mut out = mem::zeroed();
-        assert_eq!(vk::SUCCESS, vk.CreateSwapchainKHR(dev, &swapchain_info, ptr::null(), &mut out));
-        out
-    };
+    let mut swapchain = 0;
+    assert_eq!(vk::SUCCESS, unsafe {
+        vk.CreateSwapchainKHR(dev, &swapchain_info, ptr::null(), &mut swapchain)
+    });
 
     assert_eq!(vk::SUCCESS, unsafe {
         vk.GetSwapchainImagesKHR(dev, swapchain, &mut num, images.as_mut_ptr())
