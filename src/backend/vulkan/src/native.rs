@@ -93,7 +93,8 @@ unsafe impl Sync for TextureView {}
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub struct Pipeline {
-    pipeline: vk::Pipeline,
-    desc_layout: vk::DescriptorSetLayout,
-    desc_pool: vk::DescriptorPool,
+    pub pipeline: vk::Pipeline,
+    pub pipe_layout: vk::PipelineLayout,
+    pub desc_layout: vk::DescriptorSetLayout,
+    pub desc_pool: vk::DescriptorPool,
 }

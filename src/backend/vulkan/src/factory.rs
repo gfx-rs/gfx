@@ -280,12 +280,13 @@ impl core::Factory<R> for Factory {
         unimplemented!()
     }
 
-    fn create_pipeline_state_raw(&mut self, _program: &h::Program<R>, _desc: &core::pso::Descriptor)
+    fn create_pipeline_state_raw(&mut self, program: &h::Program<R>, _desc: &core::pso::Descriptor)
                                  -> Result<h::RawPipelineState<R>, core::pso::CreationError> {
         use gfx_core::handle::Producer;
         let (dev, vk) = self.share.get_device();
 
-        let layout = {
+        let pipeline = 0;
+        let set_layout = {
             let info = vk::DescriptorSetLayoutCreateInfo {
                 sType: vk::STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
                 pNext: ptr::null(),
@@ -299,6 +300,37 @@ impl core::Factory<R> for Factory {
             });
             out
         };
+        let pipe_layout = {
+            let info = vk::PipelineLayoutCreateInfo {
+                sType: vk::STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+                pNext: ptr::null(),
+                flags: 0,
+                setLayoutCount: 1,
+                pSetLayouts: &set_layout,
+                pushConstantRangeCount: 0,
+                pPushConstantRanges: ptr::null(),
+            };
+            let mut out = 0;
+            assert_eq!(vk::SUCCESS, unsafe {
+                vk.CreatePipelineLayout(dev, &info, ptr::null(), &mut out)
+            });
+            out
+        };
+        let pool = {
+            let info = vk::DescriptorPoolCreateInfo {
+                sType: vk::STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+                pNext: ptr::null(),
+                flags: 0,
+                maxSets: 100, //TODO
+                poolSizeCount: 0,
+                pPoolSizes: ptr::null(),
+            };
+            let mut out = 0;
+            assert_eq!(vk::SUCCESS, unsafe {
+                vk.CreateDescriptorPool(dev, &info, ptr::null(), &mut out)
+            });
+            out
+        };
         /*let shader = native::Shader(vk::PipelineShaderStageCreateInfo {
             sType: vk::STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             pNext: ptr::null(),
@@ -308,7 +340,13 @@ impl core::Factory<R> for Factory {
             pName: ptr::null(),
             pSpecializationInfo: ptr::null(),
         });*/
-        unimplemented!()
+        let pso = native::Pipeline {
+            pipeline: pipeline,
+            pipe_layout: pipe_layout,
+            desc_layout: set_layout,
+            desc_pool: pool,
+        };
+        Ok(self.share.handles.borrow_mut().make_pso(pso, program))
     }
 
     fn create_texture_raw(&mut self, desc: core::tex::Descriptor, hint: Option<core::format::ChannelType>,
