@@ -90,3 +90,10 @@ pub struct TextureView {
 }
 unsafe impl Send for TextureView {}
 unsafe impl Sync for TextureView {}
+
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+pub struct Pipeline {
+    pipeline: vk::Pipeline,
+    desc_layout: vk::DescriptorSetLayout,
+    desc_pool: vk::DescriptorPool,
+}

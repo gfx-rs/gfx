@@ -83,7 +83,7 @@ impl Buffer {
 
 impl draw::CommandBuffer<Resources> for Buffer {
     fn reset(&mut self) {}
-    fn bind_pipeline_state(&mut self, _: ()) {}
+    fn bind_pipeline_state(&mut self, _: native::Pipeline) {}
     fn bind_vertex_buffers(&mut self, _: pso::VertexBufferSet<Resources>) {}
     fn bind_constant_buffers(&mut self, _: &[pso::ConstantBufferParam<Resources>]) {}
     fn bind_global_constant(&mut self, _: shade::Location, _: shade::UniformValue) {}

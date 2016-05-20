@@ -270,7 +270,7 @@ impl gfx_core::Resources for Resources {
     type Buffer               = native::Buffer;
     type Shader               = vk::ShaderModule;
     type Program              = ();
-    type PipelineStateObject  = ();
+    type PipelineStateObject  = native::Pipeline;
     type Texture              = native::Texture;
     type ShaderResourceView   = native::TextureView; //TODO: buffer view
     type UnorderedAccessView  = ();

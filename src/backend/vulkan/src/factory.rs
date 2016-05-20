@@ -259,7 +259,6 @@ impl core::Factory<R> for Factory {
     fn create_shader(&mut self, _stage: core::shade::Stage, code: &[u8])
                      -> Result<h::Shader<R>, core::shade::CreateShaderError> {
         use gfx_core::handle::Producer;
-        let (dev, vk) = self.share.get_device();
         let info = vk::ShaderModuleCreateInfo {
             sType: vk::STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
             pNext: ptr::null(),
@@ -267,11 +266,11 @@ impl core::Factory<R> for Factory {
             codeSize: code.len(),
             pCode: code.as_ptr() as *const _,
         };
-        let shader = unsafe {
-            let mut out = mem::zeroed();
-            assert_eq!(vk::SUCCESS, vk.CreateShaderModule(dev, &info, ptr::null(), &mut out));
-            out
-        };
+        let (dev, vk) = self.share.get_device();
+        let mut shader = 0;
+        assert_eq!(vk::SUCCESS, unsafe {
+            vk.CreateShaderModule(dev, &info, ptr::null(), &mut shader)
+        });
         Ok(self.share.handles.borrow_mut().make_shader(shader))
     }
 
@@ -282,6 +281,23 @@ impl core::Factory<R> for Factory {
 
     fn create_pipeline_state_raw(&mut self, _program: &h::Program<R>, _desc: &core::pso::Descriptor)
                                  -> Result<h::RawPipelineState<R>, core::pso::CreationError> {
+        use gfx_core::handle::Producer;
+        let (dev, vk) = self.share.get_device();
+
+        let layout = {
+            let info = vk::DescriptorSetLayoutCreateInfo {
+                sType: vk::STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+                pNext: ptr::null(),
+                flags: 0,
+                bindingCount: 0,
+                pBindings: ptr::null(), //TODO
+            };
+            let mut out = 0;
+            assert_eq!(vk::SUCCESS, unsafe {
+                vk.CreateDescriptorSetLayout(dev, &info, ptr::null(), &mut out)
+            });
+            out
+        };
         /*let shader = native::Shader(vk::PipelineShaderStageCreateInfo {
             sType: vk::STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             pNext: ptr::null(),
