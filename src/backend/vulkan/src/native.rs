@@ -56,6 +56,15 @@ unsafe impl Send for Shader {}
 unsafe impl Sync for Shader {}
 
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct Buffer {
+    pub buffer: vk::Buffer,
+    pub memory: vk::DeviceMemory,
+}
+unsafe impl Send for Buffer {}
+unsafe impl Sync for Buffer {}
+
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Texture {
     pub image: vk::Image,

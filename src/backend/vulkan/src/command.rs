@@ -91,10 +91,10 @@ impl draw::CommandBuffer<Resources> for Buffer {
     fn bind_unordered_views(&mut self, _: &[pso::UnorderedViewParam<Resources>]) {}
     fn bind_samplers(&mut self, _: &[pso::SamplerParam<Resources>]) {}
     fn bind_pixel_targets(&mut self, _: pso::PixelTargetSet<Resources>) {}
-    fn bind_index(&mut self, _: (), _: IndexType) {}
+    fn bind_index(&mut self, _: native::Buffer, _: IndexType) {}
     fn set_scissor(&mut self, _: target::Rect) {}
     fn set_ref_values(&mut self, _: RefValues) {}
-    fn update_buffer(&mut self, _: (), _: &[u8], _: usize) {}
+    fn update_buffer(&mut self, _: native::Buffer, _: &[u8], _: usize) {}
     fn update_texture(&mut self, _: native::Texture, _: tex::Kind, _: Option<tex::CubeFace>,
                       _: &[u8], _: tex::RawImageInfo) {}
     fn generate_mipmap(&mut self, _: native::TextureView) {}
@@ -202,7 +202,10 @@ impl core::Device for GraphicsQueue {
         use gfx_core::handle::Producer;
         //self.frame_handles.clear();
         self.share.handles.borrow_mut().clean_with(&mut functions,
-            |_, _v| (), //buffer
+            |vk, b| unsafe { //buffer
+                vk.DestroyBuffer(dev, b.buffer, ptr::null());
+                vk.FreeMemory(dev, b.memory, ptr::null());
+            },
             |vk, s| unsafe { //shader
                 vk.DestroyShaderModule(dev, *s, ptr::null());
             },

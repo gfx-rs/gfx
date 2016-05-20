@@ -183,6 +183,25 @@ impl Factory {
             out
         }
     }
+
+    fn alloc(&mut self, usage: f::Usage, size: vk::DeviceSize) -> vk::DeviceMemory {
+        let info = vk::MemoryAllocateInfo {
+            sType: vk::STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+            pNext: ptr::null(),
+            allocationSize: size,
+            memoryTypeIndex: if let f::Usage::CpuOnly(_) = usage {
+                self.mem_system_id
+            }else {
+                self.mem_video_id
+            },
+        };
+        let (dev, vk) = self.share.get_device();
+        unsafe {
+            let mut out = mem::zeroed();
+            assert_eq!(vk::SUCCESS, vk.AllocateMemory(dev, &info, ptr::null(), &mut out));
+            out
+        }
+    }
 }
 
 impl Drop for Factory {
@@ -201,8 +220,30 @@ impl core::Factory<R> for Factory {
         unimplemented!()
     }
 
-    fn create_buffer_raw(&mut self, _info: f::BufferInfo) -> Result<h::RawBuffer<R>, f::BufferError> {
-        unimplemented!()
+    fn create_buffer_raw(&mut self, info: f::BufferInfo) -> Result<h::RawBuffer<R>, f::BufferError> {
+        use gfx_core::handle::Producer;
+        let mem = self.alloc(info.usage, info.size as vk::DeviceSize);
+        let (usage, _) = data::map_usage_tiling(info.usage, info.bind);
+        let native_info = vk::BufferCreateInfo {
+            sType: vk::STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            pNext: ptr::null(),
+            flags: 0,
+            size: info.size as vk::DeviceSize,
+            usage: usage,
+            sharingMode: vk::SHARING_MODE_EXCLUSIVE,
+            queueFamilyIndexCount: 1,
+            pQueueFamilyIndices: &self.queue_family_index,
+        };
+        let (dev, vk) = self.share.get_device();
+        let buf = native::Buffer {
+            buffer: unsafe {
+                let mut out = mem::zeroed();
+                assert_eq!(vk::SUCCESS, vk.CreateBuffer(dev, &native_info, ptr::null(), &mut out));
+                out
+            },
+            memory: mem,
+        };
+        Ok(self.share.handles.borrow_mut().make_buffer(buf, info))
     }
 
     fn create_buffer_const_raw(&mut self, _data: &[u8], _stride: usize, _role: f::BufferRole, _bind: f::Bind)
@@ -281,32 +322,23 @@ impl core::Factory<R> for Factory {
             pQueueFamilyIndices: ptr::null(),
             initialLayout: data::map_image_layout(desc.bind),
         };
-        let mut alloc_info = vk::MemoryAllocateInfo {
-            sType: vk::STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-            pNext: ptr::null(),
-            allocationSize: 0,
-            memoryTypeIndex: if let f::Usage::CpuOnly(_) = desc.usage {
-                self.mem_system_id
-            }else {
-                self.mem_video_id
-            },
-        };
-        let (dev, vk) = self.share.get_device();
-        let tex = unsafe {
+        let (image, reqs) = unsafe {
+            let (dev, vk) = self.share.get_device();
             let mut image = mem::zeroed();
             assert_eq!(vk::SUCCESS, vk.CreateImage(dev, &image_info, ptr::null(), &mut image));
             let mut reqs = mem::zeroed();
             vk.GetImageMemoryRequirements(dev, image, &mut reqs);
-            alloc_info.allocationSize = reqs.size;
-            let mut mem = mem::zeroed();
-            assert_eq!(vk::SUCCESS, vk.AllocateMemory(dev, &alloc_info, ptr::null(), &mut mem));
-            assert_eq!(vk::SUCCESS, vk.BindImageMemory(dev, image, mem, 0));
-            native::Texture {
-                image: image,
-                layout: cell::Cell::new(image_info.initialLayout),
-                memory: mem,
-            }
+            (image, reqs)
         };
+        let tex = native::Texture {
+            image: image,
+            layout: cell::Cell::new(image_info.initialLayout),
+            memory: self.alloc(desc.usage, reqs.size),
+        };
+        let (dev, vk) = self.share.get_device();
+        assert_eq!(vk::SUCCESS, unsafe {
+            vk.BindImageMemory(dev, image, tex.memory, 0)
+        });
         Ok(self.share.handles.borrow_mut().make_texture(tex, desc))
     }
 

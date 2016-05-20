@@ -267,7 +267,7 @@ impl fmt::Debug for Error {
 pub enum Resources {}
 
 impl gfx_core::Resources for Resources {
-    type Buffer               = ();
+    type Buffer               = native::Buffer;
     type Shader               = vk::ShaderModule;
     type Program              = ();
     type PipelineStateObject  = ();
