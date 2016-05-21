@@ -24,6 +24,8 @@ use {ConstantBufferSlot, ColorSlot, ResourceViewSlot,
      Primitive, Resources};
 use {format, state as s, tex};
 use shade::Usage;
+use std::error::Error;
+use std::fmt;
 
 
 /// An offset inside a vertex buffer, in bytes.
@@ -32,6 +34,18 @@ pub type BufferOffset = usize;
 /// Error types happening upon PSO creation on the device side.
 #[derive(Clone, PartialEq, Debug)]
 pub struct CreationError;
+
+impl fmt::Display for CreationError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.description())
+    }
+}
+
+impl Error for CreationError {
+    fn description(&self) -> &str {
+        "Could not create PSO on device."
+    }
+}
 
 /// Color output configuration of the PSO.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]

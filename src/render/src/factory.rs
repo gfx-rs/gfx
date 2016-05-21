@@ -25,6 +25,8 @@ use gfx_core::pso::{CreationError, Descriptor};
 use slice::{Slice, IndexBuffer, IntoIndexBuffer};
 use pso;
 use shade::ProgramError;
+use std::error::Error;
+use std::fmt;
 
 /// Error creating a PipelineState
 #[derive(Clone, PartialEq, Debug)]
@@ -37,6 +39,52 @@ pub enum PipelineStateError {
     DeviceCreate(CreationError),
 }
 
+impl fmt::Display for PipelineStateError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            PipelineStateError::Program(ref e) => write!(f, "{}: {}", self.description(), e),
+            PipelineStateError::DescriptorInit(ref e) => write!(f, "{}: {}", self.description(), e),
+            PipelineStateError::DeviceCreate(ref e) => write!(f, "{}: {}", self.description(), e),
+        }
+    }
+}
+
+impl Error for PipelineStateError {
+    fn description(&self) -> &str {
+        match *self {
+            PipelineStateError::Program(_) => "Shader program failed to link",
+            PipelineStateError::DescriptorInit(_) =>
+                "Unable to create PSO descriptor due to mismatched formats",
+            PipelineStateError::DeviceCreate(_) => "Device failed to create the handle give the descriptor",
+        }
+    }
+
+    fn cause(&self) -> Option<&Error> {
+        match *self {
+            PipelineStateError::Program(ref program_error) => Some(program_error),
+            PipelineStateError::DescriptorInit(ref init_error) => Some(init_error),
+            PipelineStateError::DeviceCreate(ref creation_error) => Some(creation_error),
+        }
+    }
+}
+
+impl From<ProgramError> for PipelineStateError {
+    fn from(e: ProgramError) -> Self {
+        PipelineStateError::Program(e)
+    }
+}
+
+impl From<pso::InitError> for PipelineStateError {
+    fn from(e: pso::InitError) -> Self {
+        PipelineStateError::DescriptorInit(e)
+    }
+}
+
+impl From<CreationError> for PipelineStateError {
+    fn from(e: CreationError) -> Self {
+        PipelineStateError::DeviceCreate(e)
+    }
+}
 
 /// This trait is responsible for creating and managing graphics resources, much like the `Factory`
 /// trait in the `gfx` crate. Every `Factory` automatically implements `FactoryExt`. 
@@ -100,8 +148,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
                     -> Result<handle::Program<R>, ProgramError> {
 
         let set = try!(self.create_shader_set(vs_code, ps_code));
-        self.create_program(&set)
-            .map_err(|e| ProgramError::Link(e))
+        self.create_program(&set).map_err(|e| ProgramError::Link(e))
     }
 
     /// Similar to `create_pipeline_from_program(..)`, but takes a `ShaderSet` as opposed to a
@@ -110,10 +157,8 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
                              primitive: Primitive, rasterizer: state::Rasterizer, init: I)
                              -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError>
     {
-        match self.create_program(shaders) {
-            Ok(p) => self.create_pipeline_from_program(&p, primitive, rasterizer, init),
-            Err(e) => Err(PipelineStateError::Program(ProgramError::Link(e))),
-        }
+        let program = try!(self.create_program(shaders).map_err(|e| ProgramError::Link(e)));
+        self.create_pipeline_from_program(&program, primitive, rasterizer, init)
     }
 
     /// Creates a strongly typed `PipelineState` from its `Init` structure, a shader `Program`, a
@@ -123,14 +168,8 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
                                     -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError>
     {
         let mut descriptor = Descriptor::new(primitive, rasterizer);
-        let meta = match init.link_to(&mut descriptor, program.get_info()) {
-            Ok(m) => m,
-            Err(e) => return Err(PipelineStateError::DescriptorInit(e)),
-        };
-        let raw = match self.create_pipeline_state_raw(program, &descriptor) {
-            Ok(raw) => raw,
-            Err(e) => return Err(PipelineStateError::DeviceCreate(e)),
-        };
+        let meta = try!(init.link_to(&mut descriptor, program.get_info()));
+        let raw = try!(self.create_pipeline_state_raw(program, &descriptor));
 
         Ok(pso::PipelineState::new(raw, primitive, meta))
     }
@@ -141,11 +180,9 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     fn create_pipeline_simple<I: pso::PipelineInit>(&mut self, vs: &[u8], ps: &[u8], init: I)
                               -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError>
     {
-        match self.create_shader_set(vs, ps) {
-            Ok(ref s) => self.create_pipeline_state(s,
-                Primitive::TriangleList, state::Rasterizer::new_fill(), init),
-            Err(e) => Err(PipelineStateError::Program(e)),
-        }
+        let set = try!(self.create_shader_set(vs, ps));
+        self.create_pipeline_state(&set, Primitive::TriangleList, state::Rasterizer::new_fill(),
+                                   init)
     }
 
     /// Create a linear sampler with clamping to border.

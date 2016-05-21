@@ -16,8 +16,11 @@
 
 #![deny(missing_docs)]
 
-use std::mem;
 use draw_state::target::{Depth, Stencil};
+use std::any::Any;
+use std::error::Error;
+use std::fmt;
+use std::mem;
 
 use gfx_core::{Device, IndexType, Resources, VertexCount};
 use gfx_core::{draw, format, handle, tex};
@@ -38,6 +41,26 @@ pub enum UpdateError<T> {
         target: usize,
         slice: usize,
     },
+}
+
+impl<T: Any + fmt::Debug + fmt::Display> fmt::Display for UpdateError<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            UpdateError::OutOfBounds {ref target, ref source} =>
+                write!(f, "Write to {} from {} is out of bounds", target, source),
+            UpdateError::UnitCountMismatch {ref target, ref slice} =>
+                write!(f, "{}: expected {}, found {}", self.description(), target, slice),
+        }
+    }
+}
+
+impl<T: Any + fmt::Debug + fmt::Display> Error for UpdateError<T> {
+    fn description(&self) -> &str {
+        match *self {
+            UpdateError::OutOfBounds {..} => "Write to data is out of bounds",
+            UpdateError::UnitCountMismatch {..} => "Unit count mismatch",
+        }
+    }
 }
 
 /// Graphics Command Encoder

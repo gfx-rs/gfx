@@ -45,6 +45,8 @@ pub mod target;
 pub mod bundle;
 
 use std::default::Default;
+use std::error::Error;
+use std::fmt;
 use gfx_core as d;
 pub use gfx_core::pso::{Descriptor};
 
@@ -114,6 +116,35 @@ pub enum InitError {
     Sampler(d::SamplerSlot, Option<()>),
     /// Pixel target mismatch.
     PixelExport(d::ColorSlot, Option<d::format::Format>),
+}
+
+impl fmt::Display for InitError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let desc = self.description();
+        match *self {
+            InitError::VertexImport(slot, format) => write!(f, "{}: ({:?}, {:?})", desc, slot, format),
+            InitError::ConstantBuffer(slot, opt) => write!(f, "{}: ({:?}, {:?})", desc, slot, opt),
+            InitError::GlobalConstant(slot, opt) => write!(f, "{}: ({:?}, {:?})", desc, slot, opt),
+            InitError::ResourceView(slot, opt) => write!(f, "{}: ({:?}, {:?})", desc, slot, opt),
+            InitError::UnorderedView(slot, opt) => write!(f, "{}: ({:?}, {:?})", desc, slot, opt),
+            InitError::Sampler(slot, opt) => write!(f, "{}: ({:?}, {:?})", desc, slot, opt),
+            InitError::PixelExport(slot, format) => write!(f, "{}: ({:?}, {:?})", desc, slot, format),
+        }
+    }
+}
+
+impl Error for InitError {
+    fn description(&self) -> &str {
+        match *self {
+            InitError::VertexImport(..) => "Vertex attribute mismatch",
+            InitError::ConstantBuffer(..) => "Constant buffer mismatch",
+            InitError::GlobalConstant(..) => "Global constant mismatch",
+            InitError::ResourceView(..) => "Shader resource view mismatch",
+            InitError::UnorderedView(..) => "Unordered access view mismatch",
+            InitError::Sampler(..) => "Sampler mismatch",
+            InitError::PixelExport(..) => "Pixel target mismatch",
+        }
+    }
 }
 
 /// A service trait implemented by the "init" structure of PSO.

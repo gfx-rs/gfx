@@ -17,6 +17,7 @@
 #![allow(missing_docs)]
 
 use std::fmt;
+use std::error::Error;
 use {AttributeSlot, ColorSlot, ConstantBufferSlot, ResourceViewSlot,
      SamplerSlot, UnorderedViewSlot};
 
@@ -400,6 +401,28 @@ pub enum CompatibilityError {
     ErrorContainer,
 }
 
+impl fmt::Display for CompatibilityError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.description())
+    }
+}
+
+impl Error for CompatibilityError {
+    fn description(&self) -> &str {
+        match *self {
+            CompatibilityError::ErrorArraySize =>
+                "Array sizes differ between the value and the var \
+                 (trying to upload a vec2 as a vec4, etc)",
+            CompatibilityError::ErrorBaseType =>
+                "Base types differ between the value and the var \
+                 (trying to upload a f32 as a u16, etc)",
+            CompatibilityError::ErrorContainer =>
+                "Container-ness differs between the value and the var \
+                 (trying to upload a scalar as a vec4, etc)",
+        }
+    }
+}
+
 impl ConstVar {
     /// Whether a value is compatible with this variable. That is, whether the value can be stored
     /// in this variable.
@@ -437,6 +460,27 @@ pub enum CreateShaderError {
     StageNotSupported(Stage),
     /// The shader failed to compile.
     CompilationFailed(String),
+}
+
+impl fmt::Display for CreateShaderError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let desc = self.description();
+        match *self {
+            CreateShaderError::StageNotSupported(ref stage) => write!(f, "{}: {:?}", desc, stage),
+            CreateShaderError::CompilationFailed(ref string) => write!(f, "{}: {}", desc, string),
+            _ => write!(f, "{}", desc),
+        }
+    }
+}
+
+impl Error for CreateShaderError {
+    fn description(&self) -> &str {
+        match *self {
+            CreateShaderError::ModelNotSupported => "The device does not support the requested shader model",
+            CreateShaderError::StageNotSupported(_) => "The device does not support the shader stage",
+            CreateShaderError::CompilationFailed(_) => "The shader failed to compile",
+        }
+    }
 }
 
 /// An error type for creating programs.
