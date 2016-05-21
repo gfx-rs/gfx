@@ -51,7 +51,7 @@ impl fmt::Display for Error {
             Error::Samples(aa) => write!(f, "{}: {:?}", self.description(), aa),
             Error::Size(size) => write!(f, "{}: {}", self.description(), size),
             Error::Data(data) => write!(f, "{}: {}", self.description(), data),
-            _ => write!(f, "{}", desc),
+            _ => write!(f, "{}", self.description()),
         }
     }
 }
