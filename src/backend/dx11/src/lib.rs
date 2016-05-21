@@ -416,7 +416,7 @@ impl gfx_core::Device for Deferred {
             },
         };
         unsafe {
-            (*self.0.context).ExecuteCommandList(cl)
+            (*self.0.context).ExecuteCommandList(cl, winapi::TRUE)
         };
         match self.0.max_resource_count {
             Some(c) if self.0.frame_handles.count() > c => {
