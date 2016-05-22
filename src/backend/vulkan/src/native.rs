@@ -63,10 +63,11 @@ pub struct TextureView {
 unsafe impl Send for TextureView {}
 unsafe impl Sync for TextureView {}
 
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub struct Pipeline {
     pub pipeline: vk::Pipeline,
     pub pipe_layout: vk::PipelineLayout,
     pub desc_layout: vk::DescriptorSetLayout,
     pub desc_pool: vk::DescriptorPool,
+    pub program: gfx_core::handle::Program<R>,
 }

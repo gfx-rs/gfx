@@ -201,6 +201,46 @@ impl Factory {
         });
         mem
     }
+
+    fn get_shader_stages(&mut self, program: &h::Program<R>) -> Vec<vk::PipelineShaderStageCreateInfo> {
+        let prog = self.frame_handles.ref_program(program);
+        let entry_name = b"main\0"; //TODO
+        let mut stages = Vec::with_capacity(3);
+        if true {
+            stages.push(vk::PipelineShaderStageCreateInfo {
+                sType: vk::STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                pNext: ptr::null(),
+                flags: 0,
+                stage: vk::SHADER_STAGE_VERTEX_BIT,
+                module: *prog.vertex.reference(&mut self.frame_handles),
+                pName: entry_name.as_ptr() as *const i8,
+                pSpecializationInfo: ptr::null(),
+            });
+        }
+        if let Some(ref geom) = prog.geometry {
+            stages.push(vk::PipelineShaderStageCreateInfo {
+                sType: vk::STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                pNext: ptr::null(),
+                flags: 0,
+                stage: vk::SHADER_STAGE_GEOMETRY_BIT,
+                module: *geom.reference(&mut self.frame_handles),
+                pName: entry_name.as_ptr() as *const i8,
+                pSpecializationInfo: ptr::null(),
+            });
+        }
+        if true {
+            stages.push(vk::PipelineShaderStageCreateInfo {
+                sType: vk::STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                pNext: ptr::null(),
+                flags: 0,
+                stage: vk::SHADER_STAGE_FRAGMENT_BIT,
+                module: *prog.pixel.reference(&mut self.frame_handles),
+                pName: entry_name.as_ptr() as *const i8,
+                pSpecializationInfo: ptr::null(),
+            });
+        }
+        stages
+    }
 }
 
 impl Drop for Factory {
@@ -308,6 +348,7 @@ impl core::Factory<R> for Factory {
     fn create_pipeline_state_raw(&mut self, program: &h::Program<R>, _desc: &core::pso::Descriptor)
                                  -> Result<h::RawPipelineState<R>, core::pso::CreationError> {
         use gfx_core::handle::Producer;
+        let stages = self.get_shader_stages(program);
         let (dev, vk) = self.share.get_device();
 
         let set_layout = {
@@ -360,8 +401,8 @@ impl core::Factory<R> for Factory {
                 sType: vk::STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
                 pNext: ptr::null(),
                 flags: 0,
-                stageCount: 0,
-                pStages: ptr::null(), //TODO
+                stageCount: stages.len() as u32,
+                pStages: stages.as_ptr(),
                 layout: pipe_layout,
                 renderPass: 0, //TODO
                 subpass: 0,
@@ -375,20 +416,12 @@ impl core::Factory<R> for Factory {
             });
             out
         };
-        /*let shader = native::Shader(vk::PipelineShaderStageCreateInfo {
-            sType: vk::STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-            pNext: ptr::null(),
-            flags: 0,
-            stage: 0, //TODO
-            module: !0, //TODO
-            pName: ptr::null(),
-            pSpecializationInfo: ptr::null(),
-        });*/
         let pso = native::Pipeline {
             pipeline: pipeline,
             pipe_layout: pipe_layout,
             desc_layout: set_layout,
             desc_pool: pool,
+            program: program.clone(),
         };
         Ok(self.share.handles.borrow_mut().make_pso(pso, program))
     }

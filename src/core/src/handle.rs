@@ -16,7 +16,7 @@
 
 //! Device resource handles
 
-use std::mem;
+use std::{cmp, hash, mem};
 use std::marker::PhantomData;
 use std::sync::Arc;
 use {shade, tex, Resources};
@@ -66,13 +66,26 @@ impl<R: Resources, T> Buffer<R, T> {
 pub struct Shader<R: Resources>(Arc<R::Shader>);
 
 /// Program Handle
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Program<R: Resources>(Arc<R::Program>, shade::ProgramInfo);
 
+// custom implementations due to the limitations of `ProgramInfo`
 impl<R: Resources> Program<R> {
     /// Get program info
     pub fn get_info(&self) -> &shade::ProgramInfo { &self.1 }
 }
+impl<R: Resources> hash::Hash for Program<R> {
+    fn hash<H>(&self, state: &mut H) where H: hash::Hasher {
+        self.0.hash(state);
+    }
+}
+impl<R: Resources> cmp::PartialEq for Program<R> {
+    fn eq(&self, other: &Program<R>) -> bool {
+        self.0.eq(&other.0)
+    }
+}
+impl<R: Resources> cmp::Eq for Program<R> {}
+
 
 /// Raw Pipeline State Handle
 #[derive(Clone, Debug, PartialEq)]
