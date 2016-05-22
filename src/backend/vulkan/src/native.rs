@@ -69,5 +69,6 @@ pub struct Pipeline {
     pub pipe_layout: vk::PipelineLayout,
     pub desc_layout: vk::DescriptorSetLayout,
     pub desc_pool: vk::DescriptorPool,
+    pub render_pass: vk::RenderPass,
     pub program: gfx_core::handle::Program<R>,
 }

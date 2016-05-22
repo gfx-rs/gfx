@@ -396,6 +396,24 @@ impl core::Factory<R> for Factory {
             });
             out
         };
+        let render_pass = {
+            let info = vk::RenderPassCreateInfo {
+                sType: vk::STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+                pNext: ptr::null(),
+                flags: 0,
+                attachmentCount: 0, //TODO
+                pAttachments: ptr::null(),
+                subpassCount: 0,
+                pSubpasses: ptr::null(),
+                dependencyCount: 0,
+                pDependencies: ptr::null(),
+            };
+            let mut out = 0;
+            assert_eq!(vk::SUCCESS, unsafe {
+                vk.CreateRenderPass(dev, &info, ptr::null(), &mut out)
+            });
+            out
+        };
         let pipeline = {
             let info = vk::GraphicsPipelineCreateInfo {
                 sType: vk::STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
@@ -404,7 +422,7 @@ impl core::Factory<R> for Factory {
                 stageCount: stages.len() as u32,
                 pStages: stages.as_ptr(),
                 layout: pipe_layout,
-                renderPass: 0, //TODO
+                renderPass: render_pass,
                 subpass: 0,
                 basePipelineHandle: 0,
                 basePipelineIndex: 0,
@@ -421,6 +439,7 @@ impl core::Factory<R> for Factory {
             pipe_layout: pipe_layout,
             desc_layout: set_layout,
             desc_pool: pool,
+            render_pass: render_pass,
             program: program.clone(),
         };
         Ok(self.share.handles.borrow_mut().make_pso(pso, program))
