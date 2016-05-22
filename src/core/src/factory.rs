@@ -17,6 +17,8 @@
 //! This module exposes the `Factory` trait, used for creating and managing graphics resources, and
 //! includes several items to facilitate this. 
 
+use std::error::Error;
+use std::fmt;
 use std::mem;
 use {handle, format, mapping, pso, shade, target, tex};
 use {Capabilities, Resources};
@@ -129,6 +131,25 @@ pub enum BufferError {
     Other,
 }
 
+impl fmt::Display for BufferError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let BufferError::UnsupportedBind(ref bind) = *self {
+            write!(f, "{}: {:?}", self.description(), bind)
+        } else {
+            write!(f, "{}", self.description())
+        }
+    }
+}
+
+impl Error for BufferError {
+    fn description(&self) -> &str {
+        match *self {
+            BufferError::UnsupportedBind(_) => "Bind flags are not supported",
+            BufferError::Other => "An unknown error occurred",
+        }
+    }
+}
+
 /// An error happening on buffer updates.
 #[derive(Clone, PartialEq, Debug)]
 pub enum BufferUpdateError {
@@ -136,21 +157,56 @@ pub enum BufferUpdateError {
     OutOfBounds,
 }
 
+impl fmt::Display for BufferUpdateError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.description())
+    }
+}
+
+impl Error for BufferUpdateError {
+    fn description(&self) -> &str {
+        match *self {
+            BufferUpdateError::OutOfBounds =>
+                "Tried to change the buffer contents outside of the allocation",
+        }
+    }
+}
+
 /// Error creating either a ShaderResourceView, or UnorderedAccessView.
 #[derive(Clone, PartialEq, Debug)]
 pub enum ResourceViewError {
-    /// The corresponding bind flag does not present in the texture.
+    /// The corresponding bind flag is not present in the texture.
     NoBindFlag,
     /// Selected channel type is not supported for this texture.
     Channel(format::ChannelType),
-    /// The backend refused for some reason.
+    /// The backend was refused for some reason.
     Unsupported,
+}
+
+impl fmt::Display for ResourceViewError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let ResourceViewError::Channel(ref channel_type) = *self {
+            write!(f, "{}: {:?}", self.description(), channel_type)
+        } else {
+            write!(f, "{}", self.description())
+        }
+    }
+}
+
+impl Error for ResourceViewError {
+    fn description(&self) -> &str {
+        match *self {
+            ResourceViewError::NoBindFlag => "The corresponding bind flag is not present in the texture",
+            ResourceViewError::Channel(_) => "Selected channel type is not supported for this texture",
+            ResourceViewError::Unsupported => "The backend was refused for some reason",
+        }
+    }
 }
 
 /// Error creating either a RenderTargetView, or DepthStencilView.
 #[derive(Clone, PartialEq, Debug)]
 pub enum TargetViewError {
-    /// The `RENDER_TARGET`/`DEPTH_STENCIL` flag does not present in the texture.
+    /// The `RENDER_TARGET`/`DEPTH_STENCIL` flag is not present in the texture.
     NoBindFlag,
     /// Selected mip level doesn't exist.
     BadLevel(target::Level),
@@ -158,8 +214,37 @@ pub enum TargetViewError {
     BadLayer(target::Layer),
     /// Selected channel type is not supported for this texture.
     Channel(format::ChannelType),
-    /// The backend refused for some reason.
+    /// The backend was refused for some reason.
     Unsupported,
+}
+
+impl fmt::Display for TargetViewError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let description = self.description();
+        match *self {
+            TargetViewError::BadLevel(ref level) => write!(f, "{}: {}", description, level),
+            TargetViewError::BadLayer(ref layer) => write!(f, "{}: {}", description, layer),
+            TargetViewError::Channel(ref channel)  => write!(f, "{}: {:?}", description, channel),
+            _ => write!(f, "{}", description)
+        }
+    }
+}
+
+impl Error for TargetViewError {
+    fn description(&self) -> &str {
+        match *self {
+            TargetViewError::NoBindFlag =>
+                "The `RENDER_TARGET`/`DEPTH_STENCIL` flag is not present in the texture",
+            TargetViewError::BadLevel(_) =>
+                "Selected mip level doesn't exist",
+            TargetViewError::BadLayer(_) =>
+                "Selected array layer doesn't exist",
+            TargetViewError::Channel(_) =>
+                "Selected channel type is not supported for this texture",
+            TargetViewError::Unsupported =>
+                "The backend was refused for some reason",
+        }
+    }
 }
 
 /// An error from creating textures with views at the same time.
@@ -171,6 +256,34 @@ pub enum CombinedError {
     Resource(ResourceViewError),
     /// Failed to create RTV or DSV.
     Target(TargetViewError),
+}
+
+impl fmt::Display for CombinedError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            CombinedError::Texture(ref e) => write!(f, "{}: {}", self.description(), e),
+            CombinedError::Resource(ref e) => write!(f, "{}: {}", self.description(), e),
+            CombinedError::Target(ref e) => write!(f, "{}: {}", self.description(), e),
+        }
+    }
+}
+
+impl Error for CombinedError {
+    fn description(&self) -> &str {
+        match *self {
+            CombinedError::Texture(_) => "Failed to create the raw texture",
+            CombinedError::Resource(_) => "Failed to create SRV or UAV",
+            CombinedError::Target(_) => "Failed to create RTV or DSV",
+        }
+    }
+
+    fn cause(&self) -> Option<&Error> {
+        match *self {
+            CombinedError::Texture(ref e) => Some(e),
+            CombinedError::Resource(ref e) => Some(e),
+            CombinedError::Target(ref e) => Some(e),
+        }
+    }
 }
 
 impl From<tex::Error> for CombinedError {

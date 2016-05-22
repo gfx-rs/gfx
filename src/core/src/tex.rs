@@ -21,6 +21,8 @@
 //! image data.  Image data consists of an array of "texture elements", or
 //! texels.
 
+use std::error::Error as StdError;
+use std::fmt;
 use factory::{Bind, Usage};
 use format;
 use state;
@@ -39,6 +41,31 @@ pub enum Error {
     Size(Size),
     /// The given data has a different size than the target texture slice.
     Data(usize),
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Error::Format(surf, chan) => write!(f, "{}: ({:?}, {:?})",
+                                                self.description(), surf, chan),
+            Error::Samples(aa) => write!(f, "{}: {:?}", self.description(), aa),
+            Error::Size(size) => write!(f, "{}: {}", self.description(), size),
+            Error::Data(data) => write!(f, "{}: {}", self.description(), data),
+            _ => write!(f, "{}", self.description()),
+        }
+    }
+}
+
+impl StdError for Error {
+    fn description(&self) -> &str {
+        match *self {
+            Error::Format(..) => "Failed to map a given format to the device",
+            Error::Kind => "The kind doesn't support a particular operation",
+            Error::Samples(_) => "Failed to map a given multisampled kind to the device",
+            Error::Size(_) => "Unsupported size in one of the dimensions",
+            Error::Data(_) => "The given data has a different size than the target texture slice",
+        }
+    }
 }
 
 /// Dimension size

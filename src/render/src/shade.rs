@@ -16,6 +16,8 @@
 
 pub use gfx_core::shade::{ConstFormat, Formatted, Usage};
 pub use gfx_core::shade as core;
+use std::error::Error;
+use std::fmt;
 
 #[allow(missing_docs)]
 pub trait ToUniform: Copy {
@@ -57,4 +59,32 @@ pub enum ProgramError {
     Pixel(core::CreateShaderError),
     /// Unable to link
     Link(core::CreateProgramError),
+}
+
+impl fmt::Display for ProgramError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            ProgramError::Vertex(ref e) => write!(f, "{}: {}", self.description(), e),
+            ProgramError::Pixel(ref e) => write!(f, "{}: {}", self.description(), e),
+            ProgramError::Link(ref e) => write!(f, "{}: {}", self.description(), e),
+        }
+    }
+}
+
+impl Error for ProgramError {
+    fn description(&self) -> &str {
+        match *self {
+            ProgramError::Vertex(_) => "Unable to compile the vertex shader",
+            ProgramError::Pixel(_) => "Unable to compile the pixel shader",
+            ProgramError::Link(_) => "Unable to link",
+        }
+    }
+
+    fn cause(&self) -> Option<&Error> {
+        match *self {
+            ProgramError::Vertex(ref e) => Some(e),
+            ProgramError::Pixel(ref e) => Some(e),
+            _ => None,
+        }
+    }
 }
