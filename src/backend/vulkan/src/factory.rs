@@ -183,6 +183,38 @@ impl Factory {
         fence
     }
 
+    fn create_buffer_impl(&mut self, info: &f::BufferInfo) -> native::Buffer {
+        let (usage, _) = data::map_usage_tiling(info.usage, info.bind);
+        let native_info = vk::BufferCreateInfo {
+            sType: vk::STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            pNext: ptr::null(),
+            flags: 0,
+            size: info.size as vk::DeviceSize,
+            usage: usage,
+            sharingMode: vk::SHARING_MODE_EXCLUSIVE,
+            queueFamilyIndexCount: 1,
+            pQueueFamilyIndices: &self.queue_family_index,
+        };
+        let (dev, vk) = self.share.get_device();
+        let mut buf = 0;
+        assert_eq!(vk::SUCCESS, unsafe {
+            vk.CreateBuffer(dev, &native_info, ptr::null(), &mut buf)
+        });
+        let reqs = unsafe {
+            let mut out = mem::zeroed();
+            vk.GetBufferMemoryRequirements(dev, buf, &mut out);
+            out
+        };
+        let mem = self.alloc(info.usage, reqs);
+        assert_eq!(vk::SUCCESS, unsafe {
+            vk.BindBufferMemory(dev, buf, mem, 0)
+        });
+        native::Buffer {
+            buffer: buf,
+            memory: mem,
+        }
+    }
+
     fn alloc(&self, usage: f::Usage, reqs: vk::MemoryRequirements) -> vk::DeviceMemory {
         let info = vk::MemoryAllocateInfo {
             sType: vk::STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
@@ -261,40 +293,29 @@ impl core::Factory<R> for Factory {
 
     fn create_buffer_raw(&mut self, info: f::BufferInfo) -> Result<h::RawBuffer<R>, f::BufferError> {
         use gfx_core::handle::Producer;
-        let (usage, _) = data::map_usage_tiling(info.usage, info.bind);
-        let native_info = vk::BufferCreateInfo {
-            sType: vk::STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            pNext: ptr::null(),
-            flags: 0,
-            size: info.size as vk::DeviceSize,
-            usage: usage,
-            sharingMode: vk::SHARING_MODE_EXCLUSIVE,
-            queueFamilyIndexCount: 1,
-            pQueueFamilyIndices: &self.queue_family_index,
-        };
-        let (dev, vk) = self.share.get_device();
-        let mut buf = 0;
-        assert_eq!(vk::SUCCESS, unsafe {
-            vk.CreateBuffer(dev, &native_info, ptr::null(), &mut buf)
-        });
-        let reqs = unsafe {
-            let mut out = mem::zeroed();
-            vk.GetBufferMemoryRequirements(dev, buf, &mut out);
-            out
-        };
-        let buffer = native::Buffer {
-            buffer: buf,
-            memory: self.alloc(info.usage, reqs),
-        };
-        assert_eq!(vk::SUCCESS, unsafe {
-            vk.BindBufferMemory(dev, buf, buffer.memory, 0)
-        });
+        let buffer = self.create_buffer_impl(&info);
         Ok(self.share.handles.borrow_mut().make_buffer(buffer, info))
     }
 
-    fn create_buffer_const_raw(&mut self, _data: &[u8], _stride: usize, _role: f::BufferRole, _bind: f::Bind)
+    fn create_buffer_const_raw(&mut self, data: &[u8], stride: usize, role: f::BufferRole, bind: f::Bind)
                                -> Result<h::RawBuffer<R>, f::BufferError> {
-        unimplemented!()
+        use gfx_core::handle::Producer;
+        let info = f::BufferInfo {
+            role: role,
+            usage: f::Usage::Const,
+            bind: bind,
+            size: data.len(),
+            stride: stride,
+        };
+        let buffer = self.create_buffer_impl(&info);
+        let (dev, vk) = self.share.get_device();
+        unsafe {
+            let mut ptr = ptr::null_mut();
+            assert_eq!(vk::SUCCESS, vk.MapMemory(dev, buffer.memory, 0, data.len() as u64, 0, &mut ptr));
+            ptr::copy_nonoverlapping(data.as_ptr(), ptr as *mut u8, data.len());
+            vk.UnmapMemory(dev, buffer.memory);
+        }
+        Ok(self.share.handles.borrow_mut().make_buffer(buffer, info))
     }
 
     fn create_shader(&mut self, _stage: core::shade::Stage, code: &[u8])
@@ -421,12 +442,20 @@ impl core::Factory<R> for Factory {
                 flags: 0,
                 stageCount: stages.len() as u32,
                 pStages: stages.as_ptr(),
+                pVertexInputState: ptr::null(), //TODO
+                pInputAssemblyState: ptr::null(), //TODO
+                pTessellationState: ptr::null(),
+                pViewportState: ptr::null(), //TODO
+                pRasterizationState: ptr::null(), //TODO
+                pMultisampleState: ptr::null(), //TODO
+                pDepthStencilState: ptr::null(), //TODO
+                pColorBlendState: ptr::null(), //TODO
+                pDynamicState: ptr::null(),
                 layout: pipe_layout,
                 renderPass: render_pass,
                 subpass: 0,
                 basePipelineHandle: 0,
                 basePipelineIndex: 0,
-                .. unsafe { mem::zeroed() } //TODO
             };
             let mut out = 0;
             assert_eq!(vk::SUCCESS, unsafe {
