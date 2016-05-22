@@ -12,48 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ffi::CStr;
-use std::{cell, fmt, hash};
+use std::{cell, hash};
 use vk;
+use gfx_core;
+use Resources as R;
 
-//Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
 
-
-pub struct Shader(pub vk::PipelineShaderStageCreateInfo);
-
-impl Clone for Shader {
-    fn clone(&self) -> Shader {
-        Shader(vk::PipelineShaderStageCreateInfo {
-            .. self.0
-        })
-    }
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Program {
+    pub vertex: gfx_core::VertexShader<R>,
+    pub geometry: Option<gfx_core::GeometryShader<R>>,
+    pub pixel: gfx_core::PixelShader<R>,
 }
-
-impl fmt::Debug for Shader {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let name = unsafe { CStr::from_ptr(self.0.pName) }.to_str().unwrap();
-        write!(f, "Shader({}, {}, {})", self.0.stage, name, self.0.module)
-    }
-}
-
-impl hash::Hash for Shader {
-    fn hash<H>(&self, state: &mut H) where H: hash::Hasher {
-        self.0.stage.hash(state);
-        //self.0.pName.hash(state);
-        self.0.module.hash(state);
-    }
-}
-
-impl PartialEq for Shader {
-    fn eq(&self, other: &Shader) -> bool {
-        self.0.stage == other.0.stage &&
-        self.0.module == other.0.module
-    }
-}
-
-impl Eq for Shader {}
-unsafe impl Send for Shader {}
-unsafe impl Sync for Shader {}
+unsafe impl Send for Program {}
+unsafe impl Sync for Program {}
 
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]

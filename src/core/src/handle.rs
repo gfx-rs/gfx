@@ -33,7 +33,7 @@ impl<R: Resources> RawBuffer<R> {
 }
 
 /// Type-safe buffer handle
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Buffer<R: Resources, T>(RawBuffer<R>, PhantomData<T>);
 
 impl<R: Resources, T> Typed for Buffer<R, T> {
@@ -62,7 +62,7 @@ impl<R: Resources, T> Buffer<R, T> {
 }
 
 /// Shader Handle
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Shader<R: Resources>(Arc<R::Shader>);
 
 /// Program Handle
@@ -79,11 +79,11 @@ impl<R: Resources> Program<R> {
 pub struct RawPipelineState<R: Resources>(Arc<R::PipelineStateObject>, Arc<R::Program>);
 
 /// Raw texture object
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct RawTexture<R: Resources>(Arc<R::Texture>, tex::Descriptor);
 
 /// Typed texture object
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Texture<R: Resources, S>(RawTexture<R>, PhantomData<S>);
 
 impl<R: Resources> RawTexture<R> {
@@ -106,18 +106,18 @@ impl<R: Resources, S> Texture<R, S> {
     pub fn get_info(&self) -> &tex::Descriptor { self.raw().get_info() }
 }
 
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 enum ViewSource<R: Resources> {
     Buffer(Arc<R::Buffer>),
     Texture(Arc<R::Texture>),
 }
 
 /// Raw Shader Resource View Handle
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct RawShaderResourceView<R: Resources>(Arc<R::ShaderResourceView>, ViewSource<R>);
 
 /// Type-safe Shader Resource View Handle
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct ShaderResourceView<R: Resources, T>(RawShaderResourceView<R>, PhantomData<T>);
 
 impl<R: Resources, T> Typed for ShaderResourceView<R, T> {
@@ -131,11 +131,11 @@ impl<R: Resources, T> Typed for ShaderResourceView<R, T> {
 }
 
 /// Raw Unordered Access View Handle
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct RawUnorderedAccessView<R: Resources>(Arc<R::UnorderedAccessView>, ViewSource<R>);
 
 /// Type-safe Unordered Access View Handle
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct UnorderedAccessView<R: Resources, T>(RawUnorderedAccessView<R>, PhantomData<T>);
 
 impl<R: Resources, T> Typed for UnorderedAccessView<R, T> {
@@ -213,7 +213,7 @@ impl<R: Resources, T> Typed for DepthStencilView<R, T> {
 }
 
 /// Sampler Handle
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Sampler<R: Resources>(Arc<R::Sampler>, tex::SamplerInfo);
 
 impl<R: Resources> Sampler<R> {
@@ -222,7 +222,7 @@ impl<R: Resources> Sampler<R> {
 }
 
 /// Fence Handle
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Fence<R: Resources>(Arc<R::Fence>);
 
 /// Stores reference-counted resources used in a command buffer.

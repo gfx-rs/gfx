@@ -253,7 +253,7 @@ impl core::Factory<R> for Factory {
     }
 
     fn create_buffer_const_raw(&mut self, _data: &[u8], _stride: usize, _role: f::BufferRole, _bind: f::Bind)
-                                -> Result<h::RawBuffer<R>, f::BufferError> {
+                               -> Result<h::RawBuffer<R>, f::BufferError> {
         unimplemented!()
     }
 
@@ -275,9 +275,34 @@ impl core::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_shader(shader))
     }
 
-    fn create_program(&mut self, _shader_set: &core::ShaderSet<R>)
+    fn create_program(&mut self, shader_set: &core::ShaderSet<R>)
                       -> Result<h::Program<R>, core::shade::CreateProgramError> {
-        unimplemented!()
+        use gfx_core::handle::Producer;
+        use gfx_core::shade as s;
+
+        let prog = match shader_set.clone() {
+            core::ShaderSet::Simple(vs, ps) => native::Program {
+                vertex: vs,
+                geometry: None,
+                pixel: ps,
+            },
+            core::ShaderSet::Geometry(vs, gs, ps) => native::Program {
+                vertex: vs,
+                geometry: Some(gs),
+                pixel: ps,
+            },
+        };
+        let info = s::ProgramInfo {
+            vertex_attributes: Vec::new(),
+            globals: Vec::new(),
+            constant_buffers: Vec::new(),
+            textures: Vec::new(),
+            unordereds: Vec::new(),
+            samplers: Vec::new(),
+            outputs: Vec::new(),
+            knows_outputs: false,
+        };
+        Ok(self.share.handles.borrow_mut().make_program(prog, info))
     }
 
     fn create_pipeline_state_raw(&mut self, program: &h::Program<R>, _desc: &core::pso::Descriptor)
