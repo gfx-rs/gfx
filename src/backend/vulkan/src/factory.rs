@@ -491,14 +491,30 @@ impl core::Factory<R> for Factory {
             out
         };
         let pipeline = {
-            let vertex_bindings = desc.vertex_buffers.iter().enumerate().filter_map(|(i, at)|
-                at.map(|a| vk::VertexInputBindingDescription {
-                    binding: i as u32,
-                    stride: a.stride as u32,
-                    inputRate: a.rate as vk::VertexInputRate,
-                })
-            ).collect::<Vec<_>>();
-            let vertex_attributes = Vec::new();
+            let mut vertex_bindings = Vec::new();
+            for (i, vbuf) in desc.vertex_buffers.iter().enumerate() {
+                if let &Some(v) = vbuf {
+                    vertex_bindings.push(vk::VertexInputBindingDescription {
+                        binding: i as u32,
+                        stride: v.stride as u32,
+                        inputRate: v.rate as vk::VertexInputRate,
+                    });
+                }
+            }
+            let mut vertex_attributes = Vec::new();
+            for (i, attr) in desc.attributes.iter().enumerate() {
+                if let &Some(a) = attr {
+                    vertex_attributes.push(vk::VertexInputAttributeDescription {
+                        location: i as u32,
+                        binding: a.0 as u32,
+                        format: match data::map_format(a.1.format.0, a.1.format.1) {
+                            Some(fm) => fm,
+                            None => return Err(core::pso::CreationError),
+                        },
+                        offset: a.1.offset as u32,
+                    });
+                }
+            }
             let vertex_input = vk::PipelineVertexInputStateCreateInfo {
                 sType: vk::STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
                 pNext: ptr::null(),
