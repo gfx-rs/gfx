@@ -137,7 +137,7 @@ pub type AttributeDesc = (Element<format::Format>, InstanceRate);
 /// PSO color target descriptor
 pub type ColorTargetDesc = (format::Format, ColorInfo);
 /// PSO depth-stencil target descriptor
-pub type DepthStencilDesc = (format::SurfaceType, DepthStencilInfo);
+pub type DepthStencilDesc = (format::Format, DepthStencilInfo);
 
 /// All the information surrounding a shader program that is required
 /// for PSO creation, including the formats of vertex buffers and pixel targets;

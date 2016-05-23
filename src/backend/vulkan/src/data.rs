@@ -119,11 +119,12 @@ pub fn map_usage_tiling(gfx_usage: Usage, bind: Bind) -> (vk::ImageUsageFlags, v
 }
 
 pub fn map_image_layout(bind: Bind) -> vk::ImageLayout {
-    use gfx_core::factory as f;
+    //use gfx_core::factory as f;
+    // can't use optimal layouts for the fact PSO descriptor doesn't know about them
     match bind {
-        f::RENDER_TARGET   => vk::IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        f::DEPTH_STENCIL   => vk::IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-        f::SHADER_RESOURCE => vk::IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        //f::RENDER_TARGET   => vk::IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        //f::DEPTH_STENCIL   => vk::IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        //f::SHADER_RESOURCE => vk::IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         _                  => vk::IMAGE_LAYOUT_GENERAL,
     }
 }

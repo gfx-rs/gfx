@@ -237,7 +237,7 @@ impl Factory {
     fn get_shader_stages(&mut self, program: &h::Program<R>) -> Vec<vk::PipelineShaderStageCreateInfo> {
         let prog = self.frame_handles.ref_program(program);
         let entry_name = b"main\0"; //TODO
-        let mut stages = Vec::with_capacity(3);
+        let mut stages = Vec::new();
         if true {
             stages.push(vk::PipelineShaderStageCreateInfo {
                 sType: vk::STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -366,7 +366,7 @@ impl core::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_program(prog, info))
     }
 
-    fn create_pipeline_state_raw(&mut self, program: &h::Program<R>, _desc: &core::pso::Descriptor)
+    fn create_pipeline_state_raw(&mut self, program: &h::Program<R>, desc: &core::pso::Descriptor)
                                  -> Result<h::RawPipelineState<R>, core::pso::CreationError> {
         use gfx_core::handle::Producer;
         let stages = self.get_shader_stages(program);
@@ -418,12 +418,45 @@ impl core::Factory<R> for Factory {
             out
         };
         let render_pass = {
+            let mut attachments = Vec::new();
+            for col in desc.color_targets.iter().filter_map(|c| c.as_ref()) {
+                attachments.push(vk::AttachmentDescription {
+                    flags: 0,
+                    format: match data::map_format((col.0).0, (col.0).1) {
+                        Some(fm) => fm,
+                        None => return Err(core::pso::CreationError),
+                    },
+                    samples: vk::SAMPLE_COUNT_1_BIT, //TODO
+                    loadOp: vk::ATTACHMENT_LOAD_OP_LOAD,
+                    storeOp: vk::ATTACHMENT_STORE_OP_STORE,
+                    stencilLoadOp: vk::ATTACHMENT_LOAD_OP_DONT_CARE,
+                    stencilStoreOp: vk::ATTACHMENT_STORE_OP_DONT_CARE,
+                    initialLayout: vk::IMAGE_LAYOUT_GENERAL, //TODO
+                    finalLayout: vk::IMAGE_LAYOUT_GENERAL,
+                });
+            }
+            if let Some(ds) = desc.depth_stencil {
+                attachments.push(vk::AttachmentDescription {
+                    flags: 0,
+                    format: match data::map_format((ds.0).0, (ds.0).1) {
+                        Some(fm) => fm,
+                        None => return Err(core::pso::CreationError),
+                    },
+                    samples: vk::SAMPLE_COUNT_1_BIT, //TODO
+                    loadOp: vk::ATTACHMENT_LOAD_OP_LOAD,
+                    storeOp: vk::ATTACHMENT_STORE_OP_STORE,
+                    stencilLoadOp: vk::ATTACHMENT_LOAD_OP_LOAD,
+                    stencilStoreOp: vk::ATTACHMENT_STORE_OP_STORE,
+                    initialLayout: vk::IMAGE_LAYOUT_GENERAL, //TODO
+                    finalLayout: vk::IMAGE_LAYOUT_GENERAL,
+                });
+            }
             let info = vk::RenderPassCreateInfo {
                 sType: vk::STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
                 pNext: ptr::null(),
                 flags: 0,
-                attachmentCount: 0, //TODO
-                pAttachments: ptr::null(),
+                attachmentCount: attachments.len() as u32,
+                pAttachments: attachments.as_ptr(),
                 subpassCount: 0,
                 pSubpasses: ptr::null(),
                 dependencyCount: 0,
@@ -482,7 +515,7 @@ impl core::Factory<R> for Factory {
         let slices = desc.kind.get_num_slices();
         let (usage, tiling) = data::map_usage_tiling(desc.usage, desc.bind);
         let chan_type = hint.unwrap_or(core::format::ChannelType::Uint);
-        let image_info = vk::ImageCreateInfo {
+        let info = vk::ImageCreateInfo {
             sType: vk::STRUCTURE_TYPE_IMAGE_CREATE_INFO,
             pNext: ptr::null(),
             flags: vk::IMAGE_CREATE_MUTABLE_FORMAT_BIT |
@@ -510,7 +543,7 @@ impl core::Factory<R> for Factory {
         let (dev, vk) = self.share.get_device();
         let mut image = 0;
         assert_eq!(vk::SUCCESS, unsafe {
-            vk.CreateImage(dev, &image_info, ptr::null(), &mut image)
+            vk.CreateImage(dev, &info, ptr::null(), &mut image)
         });
         let reqs = unsafe {
             let mut out = mem::zeroed();
@@ -519,7 +552,7 @@ impl core::Factory<R> for Factory {
         };
         let tex = native::Texture {
             image: image,
-            layout: cell::Cell::new(image_info.initialLayout),
+            layout: cell::Cell::new(info.initialLayout),
             memory: self.alloc(desc.usage, reqs),
         };
         assert_eq!(vk::SUCCESS, unsafe {
