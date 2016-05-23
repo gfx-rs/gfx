@@ -19,7 +19,7 @@ use gfx_core as c;
 use gfx_core::draw;
 use gfx_core::state as s;
 use gfx_core::target::{ColorValue, Depth, Mirror, Rect, Stencil};
-use {Buffer, Program, FrameBuffer, Texture,
+use {Buffer, BufferElement, Program, FrameBuffer, Texture,
      NewTexture, Resources, PipelineState, ResourceView, TargetView};
 
 
@@ -68,6 +68,7 @@ impl DataBuffer {
     }
 }
 
+
 ///Serialized device command.
 #[derive(Clone, Copy, Debug)]
 pub enum Command {
@@ -78,7 +79,7 @@ pub enum Command {
     BindUnorderedView(c::pso::UnorderedViewParam<Resources>),
     BindSampler(c::pso::SamplerParam<Resources>, Option<gl::types::GLenum>),
     BindPixelTargets(c::pso::PixelTargetSet<Resources>),
-    BindAttribute(c::AttributeSlot, Buffer, c::pso::AttributeDesc),
+    BindAttribute(c::AttributeSlot, Buffer, BufferElement),
     BindIndex(Buffer),
     BindFrameBuffer(Access, FrameBuffer),
     BindUniform(c::shade::Location, c::shade::UniformValue),
@@ -134,7 +135,7 @@ pub const RESET: [Command; 13] = [
 struct Cache {
     primitive: gl::types::GLenum,
     index_type: c::IndexType,
-    attributes: [Option<c::pso::AttributeDesc>; c::MAX_VERTEX_ATTRIBUTES],
+    attributes: [Option<BufferElement>; c::MAX_VERTEX_ATTRIBUTES],
     resource_binds: [Option<gl::types::GLenum>; c::MAX_RESOURCE_VIEWS],
     scissor: bool,
     stencil: Option<s::Stencil>,
@@ -215,9 +216,9 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
                 (None, Some(fm)) => {
                     error!("No vertex input provided for slot {} of format {:?}", i, fm)
                 },
-                (Some((buffer, offset)), Some(mut format)) => {
-                    format.0.offset += offset as gl::types::GLuint;
-                    self.buf.push(Command::BindAttribute(i as c::AttributeSlot, buffer, format));
+                (Some((buffer, offset)), Some(mut bel)) => {
+                    bel.elem.offset += offset as gl::types::GLuint;
+                    self.buf.push(Command::BindAttribute(i as c::AttributeSlot, buffer, bel));
                 },
                 (_, None) => (),
             }

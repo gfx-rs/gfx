@@ -491,13 +491,30 @@ impl core::Factory<R> for Factory {
             out
         };
         let pipeline = {
+            let vertex_bindings = desc.vertex_buffers.iter().enumerate().filter_map(|(i, at)|
+                at.map(|a| vk::VertexInputBindingDescription {
+                    binding: i as u32,
+                    stride: a.stride as u32,
+                    inputRate: a.rate as vk::VertexInputRate,
+                })
+            ).collect::<Vec<_>>();
+            let vertex_attributes = Vec::new();
+            let vertex_input = vk::PipelineVertexInputStateCreateInfo {
+                sType: vk::STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+                pNext: ptr::null(),
+                flags: 0,
+                vertexBindingDescriptionCount: vertex_bindings.len() as u32,
+                pVertexBindingDescriptions: vertex_bindings.as_ptr(),
+                vertexAttributeDescriptionCount: vertex_attributes.len() as u32,
+                pVertexAttributeDescriptions: vertex_attributes.as_ptr(),
+            };
             let info = vk::GraphicsPipelineCreateInfo {
                 sType: vk::STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
                 pNext: ptr::null(),
                 flags: 0,
                 stageCount: stages.len() as u32,
                 pStages: stages.as_ptr(),
-                pVertexInputState: ptr::null(), //TODO
+                pVertexInputState: &vertex_input,
                 pInputAssemblyState: ptr::null(), //TODO
                 pTessellationState: ptr::null(),
                 pViewportState: ptr::null(), //TODO

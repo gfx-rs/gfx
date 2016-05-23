@@ -28,6 +28,9 @@ use std::error::Error;
 use std::fmt;
 
 
+/// Maximum number of vertex buffers used in a PSO definition.
+pub const MAX_VERTEX_BUFFERS: usize = 4;
+
 /// An offset inside a vertex buffer, in bytes.
 pub type BufferOffset = usize;
 
@@ -114,6 +117,8 @@ impl From<(s::Depth, s::Stencil)> for DepthStencilInfo {
     }
 }
 
+/// Index of a vertex buffer.
+pub type BufferIndex = u8;
 /// Offset of an attribute from the start of the buffer, in bytes
 pub type ElemOffset = u32;
 /// Offset between attribute values, in bytes
@@ -128,12 +133,19 @@ pub struct Element<F> {
     pub format: F,
     /// Offset from the beginning of the container, in bytes
     pub offset: ElemOffset,
+}
+
+/// Vertex buffer descriptor
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct BufferDesc {
     /// Total container size, in bytes
     pub stride: ElemStride,
+    /// Rate of the input for the given buffer
+    pub rate: InstanceRate,
 }
 
 /// PSO vertex attribute descriptor
-pub type AttributeDesc = (Element<format::Format>, InstanceRate);
+pub type AttributeDesc = (BufferIndex, Element<format::Format>);
 /// PSO color target descriptor
 pub type ColorTargetDesc = (format::Format, ColorInfo);
 /// PSO depth-stencil target descriptor
@@ -149,6 +161,8 @@ pub struct Descriptor {
     pub rasterizer: s::Rasterizer,
     /// Enable scissor test
     pub scissor: bool,
+    /// Vertex buffers
+    pub vertex_buffers: [Option<BufferDesc>; MAX_VERTEX_BUFFERS],
     /// Vertex attributes
     pub attributes: [Option<AttributeDesc>; MAX_VERTEX_ATTRIBUTES],
     /// Render target views (RTV)
@@ -164,6 +178,7 @@ impl Descriptor {
             primitive: primitive,
             rasterizer: rast,
             scissor: false,
+            vertex_buffers: [None; MAX_VERTEX_BUFFERS],
             attributes: [None; MAX_VERTEX_ATTRIBUTES],
             color_targets: [None; MAX_COLOR_TARGETS],
             depth_stencil: None,

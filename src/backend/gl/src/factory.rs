@@ -28,7 +28,8 @@ use gfx_core::tex as t;
 
 use command::{CommandBuffer, COLOR_DEFAULT};
 use {Resources as R, Share, OutputMerger};
-use {Buffer, FatSampler, NewTexture, PipelineState, ResourceView, TargetView};
+use {Buffer, BufferElement, FatSampler, NewTexture,
+     PipelineState, ResourceView, TargetView};
 
 
 fn role_to_target(role: f::BufferRole) -> gl::types::GLenum {
@@ -261,10 +262,17 @@ impl d::Factory<R> for Factory {
                 }
             }
         }
+        let mut inputs = [None; d::MAX_VERTEX_ATTRIBUTES];
+        for i in 0 .. d::MAX_VERTEX_ATTRIBUTES {
+            inputs[i] = desc.attributes[i].map(|at| BufferElement {
+                desc: desc.vertex_buffers[at.0 as usize].unwrap(),
+                elem: at.1,
+            });
+        }
         let pso = PipelineState {
             program: *self.frame_handles.ref_program(program),
             primitive: desc.primitive,
-            input: desc.attributes,
+            input: inputs,
             scissor: desc.scissor,
             rasterizer: desc.rasterizer,
             output: output,

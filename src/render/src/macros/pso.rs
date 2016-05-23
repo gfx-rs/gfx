@@ -43,6 +43,14 @@ macro_rules! gfx_pipeline_inner {
                     $( $field: <$ty as DataLink<'a>>::new(), )*
                 };
                 // v#
+                let mut _num_vb = 0;
+                $(
+                     if let Some(vd) = meta.$field.link_vertex_buffer(_num_vb, &self.$field) {
+                        assert!(meta.$field.is_active());
+                        desc.vertex_buffers[_num_vb as usize] = Some(vd);
+                        _num_vb += 1;
+                    }
+                )*
                 for at in &info.vertex_attributes {
                     $(
                         match meta.$field.link_input(at, &self.$field) {

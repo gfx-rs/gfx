@@ -22,7 +22,7 @@ use gfx_core::format::Format;
 use shade::{ToUniform, Usage};
 use super::{DataLink, DataBind, ElementError, RawDataSet};
 
-pub use gfx_core::pso::{Element, ElemOffset, ElemStride, InstanceRate};
+pub use gfx_core::pso::{BufferIndex, Element, ElemOffset, ElemStride, InstanceRate};
 
 /// A trait to be implemented by any struct having the layout described
 /// in the graphics API, like a vertex buffer.
@@ -41,9 +41,9 @@ pub type VertexBuffer<T> = VertexBufferCommon<T, [(); 0]>;
 /// Instance buffer component. Same as the vertex buffer but advances per instance.
 pub type InstanceBuffer<T> = VertexBufferCommon<T, [(); 1]>;
 /// Raw vertex/instance buffer component.
-/// - init: ?
+/// - init: `(&[&str, element], stride, inst_rate)`
 /// - data: `RawBuffer`
-pub struct RawVertexBuffer(AttributeSlotSet);
+pub struct RawVertexBuffer(Option<BufferIndex>, AttributeSlotSet);
 /// Constant buffer component.
 /// - init: `&str` = name of the buffer
 /// - data: `Buffer<T>`
@@ -65,16 +65,25 @@ impl<'a,
 > DataLink<'a> for VertexBufferCommon<T, I> {
     type Init = ();
     fn new() -> Self {
-        VertexBufferCommon(RawVertexBuffer(0), PhantomData)
+        VertexBufferCommon(DataLink::new(), PhantomData)
     }
     fn is_active(&self) -> bool {
         self.0.is_active()
     }
+    fn link_vertex_buffer(&mut self, index: BufferIndex, _: &Self::Init)
+                          -> Option<pso::BufferDesc> {
+        use std::mem;
+        (self.0).0 = Some(index);
+        let rate = <I as Default>::default().as_ref().len();
+        Some(pso::BufferDesc {
+            stride: mem::size_of::<T>() as ElemStride,
+            rate: rate as InstanceRate,
+        })
+    }
     fn link_input(&mut self, at: &shade::AttributeVar, _: &Self::Init) ->
                   Option<Result<pso::AttributeDesc, Format>> {
         T::query(&at.name).map(|el| {
-            let rate = <I as Default>::default().as_ref().len();
-            self.0.link(at, el, rate as InstanceRate)
+            self.0.link(at, el)
         })
     }
 }
@@ -87,11 +96,11 @@ impl<R: Resources, T, I> DataBind<R> for VertexBufferCommon<T, I> {
 }
 
 impl RawVertexBuffer {
-    fn link(&mut self, at: &shade::AttributeVar, el: Element<Format>, rate: InstanceRate)
+    fn link(&mut self, at: &shade::AttributeVar, el: Element<Format>)
             -> Result<pso::AttributeDesc, Format> {
-        self.0 |= 1 << (at.slot as AttributeSlotSet);
+        self.1 |= 1 << (at.slot as AttributeSlotSet);
         if match_attribute(at, el.format) {
-            Ok((el, rate))
+            Ok((self.0.unwrap(), el))
         }else {
             Err(el.format)
         }
@@ -99,17 +108,25 @@ impl RawVertexBuffer {
 }
 
 impl<'a> DataLink<'a> for RawVertexBuffer {
-    type Init = &'a [(&'a str, Element<Format>, InstanceRate)];
+    type Init = (&'a [(&'a str, Element<Format>)], ElemStride, InstanceRate);
     fn new() -> Self {
-        RawVertexBuffer(0)
+        RawVertexBuffer(None, 0)
     }
     fn is_active(&self) -> bool {
-        self.0 != 0
+        self.0.is_some()
+    }
+    fn link_vertex_buffer(&mut self, index: BufferIndex, init: &Self::Init)
+                          -> Option<pso::BufferDesc> {
+        self.0 = Some(index);
+        Some(pso::BufferDesc {
+            stride: init.1,
+            rate: init.2,
+        })
     }
     fn link_input(&mut self, at: &shade::AttributeVar, init: &Self::Init) ->
                   Option<Result<pso::AttributeDesc, Format>> {
-        init.iter().find(|x| x.0 == &at.name)
-            .map(|x| self.link(at, x.1, x.2))
+        init.0.iter().find(|x| x.0 == &at.name)
+            .map(|x| self.link(at, x.1))
     }
 }
 
@@ -118,7 +135,7 @@ impl<R: Resources> DataBind<R> for RawVertexBuffer {
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
         let value = Some((man.ref_buffer(data).clone(), 0));
         for i in 0 .. MAX_VERTEX_ATTRIBUTES {
-            if (self.0 & (1<<i)) != 0 {
+            if (self.1 & (1<<i)) != 0 {
                 out.vertex_buffers.0[i] = value;
             }
         }

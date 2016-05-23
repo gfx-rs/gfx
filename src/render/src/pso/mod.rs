@@ -245,6 +245,9 @@ pub trait DataLink<'a>: Sized {
     fn new() -> Self;
     /// Check if this link is actually used by the shader.
     fn is_active(&self) -> bool;
+    /// Attempt to link with a vertex buffer containing multiple attributes.
+    fn link_vertex_buffer(&mut self, _: d::pso::BufferIndex, _: &Self::Init) ->
+                          Option<d::pso::BufferDesc> { None }
     /// Attempt to link with a vertex attribute.
     fn link_input(&mut self, _: &d::shade::AttributeVar, _: &Self::Init) ->
                   Option<Result<d::pso::AttributeDesc, d::format::Format>> { None }
