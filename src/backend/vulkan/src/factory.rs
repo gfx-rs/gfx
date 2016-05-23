@@ -419,7 +419,13 @@ impl core::Factory<R> for Factory {
         };
         let render_pass = {
             let mut attachments = Vec::new();
+            let mut color_refs = Vec::new();
             for col in desc.color_targets.iter().filter_map(|c| c.as_ref()) {
+                let layout = vk::IMAGE_LAYOUT_GENERAL; //TODO
+                color_refs.push(vk::AttachmentReference {
+                    attachment: attachments.len() as u32,
+                    layout: layout,
+                });
                 attachments.push(vk::AttachmentDescription {
                     flags: 0,
                     format: match data::map_format((col.0).0, (col.0).1) {
@@ -431,10 +437,14 @@ impl core::Factory<R> for Factory {
                     storeOp: vk::ATTACHMENT_STORE_OP_STORE,
                     stencilLoadOp: vk::ATTACHMENT_LOAD_OP_DONT_CARE,
                     stencilStoreOp: vk::ATTACHMENT_STORE_OP_DONT_CARE,
-                    initialLayout: vk::IMAGE_LAYOUT_GENERAL, //TODO
-                    finalLayout: vk::IMAGE_LAYOUT_GENERAL,
+                    initialLayout: layout,
+                    finalLayout: layout,
                 });
             }
+            let ds_ref = vk::AttachmentReference {
+                attachment: attachments.len() as u32,
+                layout: vk::IMAGE_LAYOUT_GENERAL, //TODO
+            };
             if let Some(ds) = desc.depth_stencil {
                 attachments.push(vk::AttachmentDescription {
                     flags: 0,
@@ -451,14 +461,26 @@ impl core::Factory<R> for Factory {
                     finalLayout: vk::IMAGE_LAYOUT_GENERAL,
                 });
             }
+            let subpass = vk::SubpassDescription {
+                flags: 0,
+                pipelineBindPoint: vk::PIPELINE_BIND_POINT_GRAPHICS,
+                inputAttachmentCount: 0,
+                pInputAttachments: ptr::null(),
+                colorAttachmentCount: color_refs.len() as u32,
+                pColorAttachments: color_refs.as_ptr(),
+                pResolveAttachments: ptr::null(),
+                pDepthStencilAttachment: if desc.depth_stencil.is_some() {&ds_ref} else {ptr::null()},
+                preserveAttachmentCount: 0,
+                pPreserveAttachments: ptr::null(),
+            };
             let info = vk::RenderPassCreateInfo {
                 sType: vk::STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
                 pNext: ptr::null(),
                 flags: 0,
                 attachmentCount: attachments.len() as u32,
                 pAttachments: attachments.as_ptr(),
-                subpassCount: 0,
-                pSubpasses: ptr::null(),
+                subpassCount: 1,
+                pSubpasses: &subpass,
                 dependencyCount: 0,
                 pDependencies: ptr::null(),
             };
