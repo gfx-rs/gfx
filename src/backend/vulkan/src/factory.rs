@@ -524,6 +524,13 @@ impl core::Factory<R> for Factory {
                 vertexAttributeDescriptionCount: vertex_attributes.len() as u32,
                 pVertexAttributeDescriptions: vertex_attributes.as_ptr(),
             };
+            let input_assembly = vk::PipelineInputAssemblyStateCreateInfo {
+                sType: vk::STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+                pNext: ptr::null(),
+                flags: 0,
+                topology: data::map_topology(desc.primitive),
+                primitiveRestartEnable: vk::FALSE,
+            };
             let info = vk::GraphicsPipelineCreateInfo {
                 sType: vk::STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
                 pNext: ptr::null(),
@@ -531,7 +538,7 @@ impl core::Factory<R> for Factory {
                 stageCount: stages.len() as u32,
                 pStages: stages.as_ptr(),
                 pVertexInputState: &vertex_input,
-                pInputAssemblyState: ptr::null(), //TODO
+                pInputAssemblyState: &input_assembly,
                 pTessellationState: ptr::null(),
                 pViewportState: ptr::null(), //TODO
                 pRasterizationState: ptr::null(), //TODO

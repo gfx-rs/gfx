@@ -15,7 +15,7 @@
 use gfx_core::factory::{Bind, MapAccess, Usage, LayerError};
 use gfx_core::format::{SurfaceType, ChannelType, Swizzle, ChannelSource};
 use gfx_core::tex::{FilterMethod, Kind, Layer, PackedColor, WrapMode};
-use gfx_core::state;
+use gfx_core::{state, Primitive};
 use vk;
 
 
@@ -298,5 +298,15 @@ pub fn map_comparison(fun: state::Comparison) -> vk::CompareOp {
         Greater      => vk::COMPARE_OP_GREATER,
         NotEqual     => vk::COMPARE_OP_NOT_EQUAL,
         Always       => vk::COMPARE_OP_ALWAYS,
+    }
+}
+
+pub fn map_topology(prim: Primitive) -> vk::PrimitiveTopology {
+    match prim {
+        Primitive::PointList     => vk::PRIMITIVE_TOPOLOGY_POINT_LIST,
+        Primitive::LineList      => vk::PRIMITIVE_TOPOLOGY_LINE_LIST,
+        Primitive::LineStrip     => vk::PRIMITIVE_TOPOLOGY_LINE_STRIP,
+        Primitive::TriangleList  => vk::PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        Primitive::TriangleStrip => vk::PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
     }
 }
