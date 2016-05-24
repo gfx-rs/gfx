@@ -576,7 +576,17 @@ impl core::Factory<R> for Factory {
                     depthBiasSlopeFactor: desc.rasterizer.offset.map_or(0.0, |off| off.0 as f32),
                     lineWidth: line_width,
                 },
-                pMultisampleState: ptr::null(), //TODO
+                pMultisampleState: &vk::PipelineMultisampleStateCreateInfo {
+                    sType: vk::STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+                    pNext: ptr::null(),
+                    flags: 0,
+                    rasterizationSamples: vk::SAMPLE_COUNT_1_BIT, //TODO
+                    sampleShadingEnable: vk::FALSE,
+                    minSampleShading: 0.0,
+                    pSampleMask: ptr::null(),
+                    alphaToCoverageEnable: vk::FALSE,
+                    alphaToOneEnable: vk::FALSE,
+                },
                 pDepthStencilState: ptr::null(), //TODO
                 pColorBlendState: ptr::null(), //TODO
                 pDynamicState: &vk::PipelineDynamicStateCreateInfo {
