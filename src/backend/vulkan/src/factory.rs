@@ -461,18 +461,6 @@ impl core::Factory<R> for Factory {
                     finalLayout: vk::IMAGE_LAYOUT_GENERAL,
                 });
             }
-            let subpass = vk::SubpassDescription {
-                flags: 0,
-                pipelineBindPoint: vk::PIPELINE_BIND_POINT_GRAPHICS,
-                inputAttachmentCount: 0,
-                pInputAttachments: ptr::null(),
-                colorAttachmentCount: color_refs.len() as u32,
-                pColorAttachments: color_refs.as_ptr(),
-                pResolveAttachments: ptr::null(),
-                pDepthStencilAttachment: if desc.depth_stencil.is_some() {&ds_ref} else {ptr::null()},
-                preserveAttachmentCount: 0,
-                pPreserveAttachments: ptr::null(),
-            };
             let info = vk::RenderPassCreateInfo {
                 sType: vk::STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
                 pNext: ptr::null(),
@@ -480,7 +468,18 @@ impl core::Factory<R> for Factory {
                 attachmentCount: attachments.len() as u32,
                 pAttachments: attachments.as_ptr(),
                 subpassCount: 1,
-                pSubpasses: &subpass,
+                pSubpasses: &vk::SubpassDescription {
+                    flags: 0,
+                    pipelineBindPoint: vk::PIPELINE_BIND_POINT_GRAPHICS,
+                    inputAttachmentCount: 0,
+                    pInputAttachments: ptr::null(),
+                    colorAttachmentCount: color_refs.len() as u32,
+                    pColorAttachments: color_refs.as_ptr(),
+                    pResolveAttachments: ptr::null(),
+                    pDepthStencilAttachment: if desc.depth_stencil.is_some() {&ds_ref} else {ptr::null()},
+                    preserveAttachmentCount: 0,
+                    pPreserveAttachments: ptr::null(),
+                },
                 dependencyCount: 0,
                 pDependencies: ptr::null(),
             };
@@ -515,37 +514,64 @@ impl core::Factory<R> for Factory {
                     });
                 }
             }
-            let vertex_input = vk::PipelineVertexInputStateCreateInfo {
-                sType: vk::STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-                pNext: ptr::null(),
-                flags: 0,
-                vertexBindingDescriptionCount: vertex_bindings.len() as u32,
-                pVertexBindingDescriptions: vertex_bindings.as_ptr(),
-                vertexAttributeDescriptionCount: vertex_attributes.len() as u32,
-                pVertexAttributeDescriptions: vertex_attributes.as_ptr(),
-            };
-            let input_assembly = vk::PipelineInputAssemblyStateCreateInfo {
-                sType: vk::STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-                pNext: ptr::null(),
-                flags: 0,
-                topology: data::map_topology(desc.primitive),
-                primitiveRestartEnable: vk::FALSE,
-            };
             let info = vk::GraphicsPipelineCreateInfo {
                 sType: vk::STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
                 pNext: ptr::null(),
                 flags: 0,
                 stageCount: stages.len() as u32,
                 pStages: stages.as_ptr(),
-                pVertexInputState: &vertex_input,
-                pInputAssemblyState: &input_assembly,
+                pVertexInputState: &vk::PipelineVertexInputStateCreateInfo {
+                    sType: vk::STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+                    pNext: ptr::null(),
+                    flags: 0,
+                    vertexBindingDescriptionCount: vertex_bindings.len() as u32,
+                    pVertexBindingDescriptions: vertex_bindings.as_ptr(),
+                    vertexAttributeDescriptionCount: vertex_attributes.len() as u32,
+                    pVertexAttributeDescriptions: vertex_attributes.as_ptr(),
+                },
+                pInputAssemblyState: &vk::PipelineInputAssemblyStateCreateInfo {
+                    sType: vk::STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+                    pNext: ptr::null(),
+                    flags: 0,
+                    topology: data::map_topology(desc.primitive),
+                    primitiveRestartEnable: vk::FALSE,
+                },
                 pTessellationState: ptr::null(),
-                pViewportState: ptr::null(), //TODO
+                pViewportState: &vk::PipelineViewportStateCreateInfo {
+                    sType: vk::STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+                    pNext: ptr::null(),
+                    flags: 0,
+                    viewportCount: 1,
+                    pViewports: &vk::Viewport {
+                        x: 0.0,
+                        y: 0.0,
+                        width: 1.0,
+                        height: 1.0,
+                        minDepth: 0.0,
+                        maxDepth: 1.0,
+                    },
+                    scissorCount: 1,
+                    pScissors: &vk::Rect2D {
+                        offset: vk::Offset2D {
+                            x: 0, y: 0,
+                        },
+                        extent: vk::Extent2D {
+                            width: 1, height: 1,
+                        },
+                    },
+                },
                 pRasterizationState: ptr::null(), //TODO
                 pMultisampleState: ptr::null(), //TODO
                 pDepthStencilState: ptr::null(), //TODO
                 pColorBlendState: ptr::null(), //TODO
-                pDynamicState: ptr::null(),
+                pDynamicState: &vk::PipelineDynamicStateCreateInfo {
+                    sType: vk::STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+                    pNext: ptr::null(),
+                    flags: 0,
+                    dynamicStateCount: 1,
+                    pDynamicStates: [vk::DYNAMIC_STATE_VIEWPORT, vk::DYNAMIC_STATE_SCISSOR,
+                        vk::DYNAMIC_STATE_STENCIL_REFERENCE].as_ptr(),
+                },
                 layout: pipe_layout,
                 renderPass: render_pass,
                 subpass: 0,
