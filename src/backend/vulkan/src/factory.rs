@@ -514,6 +514,7 @@ impl core::Factory<R> for Factory {
                     });
                 }
             }
+            let (polygon, line_width) = data::map_polygon_mode(desc.rasterizer.method);
             let info = vk::GraphicsPipelineCreateInfo {
                 sType: vk::STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
                 pNext: ptr::null(),
@@ -560,7 +561,21 @@ impl core::Factory<R> for Factory {
                         },
                     },
                 },
-                pRasterizationState: ptr::null(), //TODO
+                pRasterizationState: &vk::PipelineRasterizationStateCreateInfo {
+                    sType: vk::STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+                    pNext: ptr::null(),
+                    flags: 0,
+                    depthClampEnable: vk::TRUE,
+                    rasterizerDiscardEnable: vk::FALSE,
+                    polygonMode: polygon,
+                    cullMode: data::map_cull_face(desc.rasterizer.cull_face),
+                    frontFace: data::map_front_face(desc.rasterizer.front_face),
+                    depthBiasEnable: if desc.rasterizer.offset.is_some() { vk::TRUE } else { vk::FALSE },
+                    depthBiasConstantFactor: desc.rasterizer.offset.map_or(0.0, |off| off.1 as f32),
+                    depthBiasClamp: 1.0,
+                    depthBiasSlopeFactor: desc.rasterizer.offset.map_or(0.0, |off| off.0 as f32),
+                    lineWidth: line_width,
+                },
                 pMultisampleState: ptr::null(), //TODO
                 pDepthStencilState: ptr::null(), //TODO
                 pColorBlendState: ptr::null(), //TODO

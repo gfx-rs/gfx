@@ -310,3 +310,26 @@ pub fn map_topology(prim: Primitive) -> vk::PrimitiveTopology {
         Primitive::TriangleStrip => vk::PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
     }
 }
+
+pub fn map_polygon_mode(rm: state::RasterMethod) -> (vk::PolygonMode, f32) {
+    match rm {
+        state::RasterMethod::Point   => (vk::POLYGON_MODE_POINT, 1.0),
+        state::RasterMethod::Line(w) => (vk::POLYGON_MODE_LINE, w as f32),
+        state::RasterMethod::Fill    => (vk::POLYGON_MODE_FILL, 1.0),
+    }
+}
+
+pub fn map_cull_face(cf: state::CullFace) -> vk::CullModeFlagBits {
+    match cf {
+        state::CullFace::Nothing => vk::CULL_MODE_NONE,
+        state::CullFace::Front   => vk::CULL_MODE_FRONT_BIT,
+        state::CullFace::Back    => vk::CULL_MODE_BACK_BIT,
+    }
+}
+
+pub fn map_front_face(ff: state::FrontFace) -> vk::FrontFace {
+    match ff {
+        state::FrontFace::Clockwise        => vk::FRONT_FACE_CLOCKWISE,
+        state::FrontFace::CounterClockwise => vk::FRONT_FACE_COUNTER_CLOCKWISE,
+    }
+}
