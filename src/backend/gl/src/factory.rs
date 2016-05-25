@@ -136,7 +136,8 @@ impl Factory {
                 &shaders[..3]
             },
         };
-        create_program(&self.share.context, &self.share.capabilities, shader_slice, usage)
+        create_program(&self.share.context, &self.share.capabilities,
+                       &self.share.private_caps, shader_slice, usage)
     }
 
     fn view_texture_as_target(&mut self, htex: &handle::RawTexture<R>, level: Level, layer: Option<Layer>)
