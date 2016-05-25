@@ -14,7 +14,7 @@
 
 use std::{cell, mem, ptr, slice};
 use std::os::raw::c_void;
-use gfx_core::{self as core, handle as h, factory as f, state};
+use gfx_core::{self as core, handle as h, factory as f, pso, state};
 use vk;
 use {command, data, native};
 use {Resources as R, SharePointer};
@@ -366,8 +366,8 @@ impl core::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_program(prog, info))
     }
 
-    fn create_pipeline_state_raw(&mut self, program: &h::Program<R>, desc: &core::pso::Descriptor)
-                                 -> Result<h::RawPipelineState<R>, core::pso::CreationError> {
+    fn create_pipeline_state_raw(&mut self, program: &h::Program<R>, desc: &pso::Descriptor)
+                                 -> Result<h::RawPipelineState<R>, pso::CreationError> {
         use gfx_core::handle::Producer;
         let stages = self.get_shader_stages(program);
         let (dev, vk) = self.share.get_device();
@@ -430,7 +430,7 @@ impl core::Factory<R> for Factory {
                     flags: 0,
                     format: match data::map_format((col.0).0, (col.0).1) {
                         Some(fm) => fm,
-                        None => return Err(core::pso::CreationError),
+                        None => return Err(pso::CreationError),
                     },
                     samples: vk::SAMPLE_COUNT_1_BIT, //TODO
                     loadOp: vk::ATTACHMENT_LOAD_OP_LOAD,
@@ -450,7 +450,7 @@ impl core::Factory<R> for Factory {
                     flags: 0,
                     format: match data::map_format((ds.0).0, (ds.0).1) {
                         Some(fm) => fm,
-                        None => return Err(core::pso::CreationError),
+                        None => return Err(pso::CreationError),
                     },
                     samples: vk::SAMPLE_COUNT_1_BIT, //TODO
                     loadOp: vk::ATTACHMENT_LOAD_OP_LOAD,
@@ -508,7 +508,7 @@ impl core::Factory<R> for Factory {
                         binding: a.0 as u32,
                         format: match data::map_format(a.1.format.0, a.1.format.1) {
                             Some(fm) => fm,
-                            None => return Err(core::pso::CreationError),
+                            None => return Err(pso::CreationError),
                         },
                         offset: a.1.offset as u32,
                     });
@@ -587,7 +587,39 @@ impl core::Factory<R> for Factory {
                     alphaToCoverageEnable: vk::FALSE,
                     alphaToOneEnable: vk::FALSE,
                 },
-                pDepthStencilState: ptr::null(), //TODO
+                pDepthStencilState: &vk::PipelineDepthStencilStateCreateInfo {
+                    sType: vk::STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+                    pNext: ptr::null(),
+                    flags: 0,
+                    depthTestEnable: match desc.depth_stencil {
+                        Some((_, pso::DepthStencilInfo { depth: Some(_), ..} )) => vk::TRUE,
+                        _ => vk::FALSE,
+                    },
+                    depthWriteEnable: match desc.depth_stencil {
+                        Some((_, pso::DepthStencilInfo { depth: Some(state::Depth { write: true, ..}), ..} )) => vk::TRUE,
+                        _ => vk::FALSE,
+                    },
+                    depthCompareOp: match desc.depth_stencil {
+                        Some((_, pso::DepthStencilInfo { depth: Some(state::Depth { fun, ..}), ..} )) => data::map_comparison(fun),
+                        _ => vk::COMPARE_OP_NEVER,
+                    },
+                    depthBoundsTestEnable: vk::FALSE,
+                    stencilTestEnable: match desc.depth_stencil {
+                        Some((_, pso::DepthStencilInfo { front: Some(_), ..} )) => vk::TRUE,
+                        Some((_, pso::DepthStencilInfo { back: Some(_), ..} )) => vk::TRUE,
+                        _ => vk::FALSE,
+                    },
+                    front: match desc.depth_stencil {
+                        Some((_, pso::DepthStencilInfo { front: Some(ref s), ..} )) => data::map_stencil_side(s),
+                        _ => unsafe { mem::zeroed() },
+                    },
+                    back: match desc.depth_stencil {
+                        Some((_, pso::DepthStencilInfo { back: Some(ref s), ..} )) => data::map_stencil_side(s),
+                        _ => unsafe { mem::zeroed() },
+                    },
+                    minDepthBounds: 0.0,
+                    maxDepthBounds: 1.0,
+                },
                 pColorBlendState: ptr::null(), //TODO
                 pDynamicState: &vk::PipelineDynamicStateCreateInfo {
                     sType: vk::STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,

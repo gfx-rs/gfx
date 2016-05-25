@@ -333,3 +333,29 @@ pub fn map_front_face(ff: state::FrontFace) -> vk::FrontFace {
         state::FrontFace::CounterClockwise => vk::FRONT_FACE_COUNTER_CLOCKWISE,
     }
 }
+
+pub fn map_stencil_op(op: state::StencilOp) -> vk::StencilOp {
+    use gfx_core::state::StencilOp::*;
+    match op {
+        Keep           => vk::STENCIL_OP_KEEP,
+        Zero           => vk::STENCIL_OP_ZERO,
+        Replace        => vk::STENCIL_OP_REPLACE,
+        IncrementClamp => vk::STENCIL_OP_INCREMENT_AND_CLAMP,
+        IncrementWrap  => vk::STENCIL_OP_INCREMENT_AND_WRAP,
+        DecrementClamp => vk::STENCIL_OP_DECREMENT_AND_CLAMP,
+        DecrementWrap  => vk::STENCIL_OP_DECREMENT_AND_WRAP,
+        Invert         => vk::STENCIL_OP_INVERT,
+    }
+}
+
+pub fn map_stencil_side(side: &state::StencilSide) -> vk::StencilOpState {
+    vk::StencilOpState {
+        failOp: map_stencil_op(side.op_fail),
+        passOp: map_stencil_op(side.op_pass),
+        depthFailOp: map_stencil_op(side.op_depth_fail),
+        compareOp: map_comparison(side.fun),
+        compareMask: side.mask_read as u32,
+        writeMask: side.mask_write as u32,
+        reference: 0,
+    }
+}
