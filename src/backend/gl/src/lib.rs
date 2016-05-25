@@ -239,9 +239,13 @@ impl Device {
             debug!("- {}", *extension);
         }
         // initialize permanent states
+        if caps.srgb_color_supported {
+            unsafe {
+                gl.Enable(gl::FRAMEBUFFER_SRGB);
+            }
+        }
         unsafe {
             gl.PixelStorei(gl::UNPACK_ALIGNMENT, 1);
-            gl.Enable(gl::FRAMEBUFFER_SRGB);
         }
         // create main VAO and bind it
         let mut vao = 0;
