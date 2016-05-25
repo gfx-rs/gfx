@@ -15,7 +15,8 @@
 use std::iter::repeat;
 use gfx_core as d;
 use gfx_core::shade as s;
-use super::gl;
+use info::PrivateCaps;
+use gl;
 
 
 fn get_shader_iv(gl: &gl::Gl, name: super::Shader, query: gl::types::GLenum) -> gl::types::GLint {
@@ -345,48 +346,56 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program, u
     (uniforms, textures, samplers)
 }
 
-fn query_outputs(gl: &gl::Gl, prog: super::Program) -> Option<Vec<s::OutputVar>> {
+fn query_outputs(gl: &gl::Gl, prog: super::Program) -> Vec<s::OutputVar> {
     use std::ptr;
 
-    // check to see if this will work
-    if !gl.GetProgramInterfaceiv.is_loaded() {
-        return None;
-    }
-
+    let mut num_slots = 0;
     unsafe {
-        let mut num_slots = 0;
         gl.GetProgramInterfaceiv(prog, gl::PROGRAM_OUTPUT, gl::ACTIVE_RESOURCES, &mut num_slots);
-        let mut out = Vec::with_capacity(num_slots as usize);
-        for i in 0..num_slots {
-            let i = i as u32;
-            let mut length = 0;
-            gl.GetProgramResourceiv(prog, gl::PROGRAM_OUTPUT, i, 1, &gl::NAME_LENGTH, 1, ptr::null_mut(), &mut length);
-
-            let mut name = String::with_capacity(length as usize);
-            name.extend(repeat('\0').take(length as usize));
-            gl.GetProgramResourceName(prog, gl::PROGRAM_OUTPUT, i as u32, length, ptr::null_mut(), (&name[..]).as_ptr() as *mut gl::types::GLchar);
-
-            // remove the \0
-            name.pop();
-
-            let mut index = 0;
-            gl.GetProgramResourceiv(prog, gl::PROGRAM_OUTPUT, i, 1, &gl::LOCATION, 1, ptr::null_mut(), &mut index);
-
-            let mut _type = 0;
-            gl.GetProgramResourceiv(prog, gl::PROGRAM_OUTPUT, i, 1, &gl::TYPE, 1, ptr::null_mut(), &mut _type);
-
-            if let StorageType::Var(base, container) = StorageType::new(_type as u32) {
-                out.push(s::OutputVar{
-                    name: name,
-                    slot: index as u8,
-                    base_type: base,
-                    container: container,
-                });
-            }
-
-        }
-        Some(out)
     }
+    let mut out = Vec::with_capacity(num_slots as usize);
+    for i in 0..num_slots as u32 {
+        let mut length = 0;
+        unsafe {
+            gl.GetProgramResourceiv(prog, gl::PROGRAM_OUTPUT, i, 1, &gl::NAME_LENGTH, 1, ptr::null_mut(), &mut length);
+        }
+
+        let mut name = String::with_capacity(length as usize);
+        name.extend(repeat('\0').take(length as usize));
+        unsafe {
+            gl.GetProgramResourceName(prog, gl::PROGRAM_OUTPUT, i, length, ptr::null_mut(),
+                                     (&name[..]).as_ptr() as *mut gl::types::GLchar);
+        }
+
+        // remove the \0
+        name.pop();
+
+        let mut index = 0;
+        let mut type_ = 0;
+        unsafe {
+            gl.GetProgramResourceiv(prog, gl::PROGRAM_OUTPUT, i, 1, &gl::LOCATION, 1, ptr::null_mut(), &mut index);
+            gl.GetProgramResourceiv(prog, gl::PROGRAM_OUTPUT, i, 1, &gl::TYPE,     1, ptr::null_mut(), &mut type_);
+        }
+
+        // special index reported for GLSL 120 to 140 shaders
+        if index == !0 {
+            assert!(name.starts_with("gl_Frag"));
+            index = if name.starts_with("gl_FragData") {
+                (name.chars().nth(12).unwrap() as i32) - ('0' as i32)
+            }else { 0 };
+            name = format!("Target{}", index);
+        }
+
+        if let StorageType::Var(base, container) = StorageType::new(type_ as u32) {
+            out.push(s::OutputVar{
+                name: name,
+                slot: index as u8,
+                base_type: base,
+                container: container,
+            });
+        }
+    }
+    out
 }
 
 pub fn get_program_log(gl: &gl::Gl, name: super::Program) -> String {
@@ -405,7 +414,8 @@ pub fn get_program_log(gl: &gl::Gl, name: super::Program) -> String {
     }
 }
 
-pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities, shaders: &[super::Shader], usage: s::Usage)
+pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities, private: &PrivateCaps,
+                      shaders: &[super::Shader], usage: s::Usage)
                       -> Result<(::Program, s::ProgramInfo), s::CreateProgramError> {
     let name = unsafe { gl.CreateProgram() };
     for &sh in shaders {
@@ -433,11 +443,11 @@ pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities, shaders: &[super::Sha
             outputs: Vec::new(),
             knows_outputs: false,
         };
-
-        if let Some(output) = query_outputs(gl, name) {
-            info.outputs = output;
+        if private.program_interface_supported {
+            info.outputs = query_outputs(gl, name);
             info.knows_outputs = true;
         }
+        debug!("Program {} reflection: {:?}", name, info);
 
         Ok((name, info))
     } else {
