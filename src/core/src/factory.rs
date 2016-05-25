@@ -182,6 +182,24 @@ pub enum LayerError {
     OutOfBounds(target::Layer, target::Layer),
 }
 
+impl fmt::Display for LayerError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            LayerError::NotExpected(kind) => write!(f, "{}: {:?}", self.description(), kind),
+            LayerError::OutOfBounds(layer, count) => write!(f, "{}: {}/{}", self.description(), layer, count),
+        }
+    }
+}
+
+impl Error for LayerError {
+    fn description(&self) -> &str {
+        match *self {
+            LayerError::NotExpected(_) => "The source texture kind doesn't support array slices",
+            LayerError::OutOfBounds(_, _) => "Selected layer is outside of the provided range",
+        }
+    }
+}
+
 /// Error creating either a ShaderResourceView, or UnorderedAccessView.
 #[derive(Clone, PartialEq, Debug)]
 pub enum ResourceViewError {
@@ -197,10 +215,10 @@ pub enum ResourceViewError {
 
 impl fmt::Display for ResourceViewError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if let ResourceViewError::Channel(ref channel_type) = *self {
-            write!(f, "{}: {:?}", self.description(), channel_type)
-        } else {
-            write!(f, "{}", self.description())
+        match *self {
+            ResourceViewError::Channel(ref channel_type) => write!(f, "{}: {:?}", self.description(), channel_type),
+            ResourceViewError::Layer(ref le) => write!(f, "{}: {}", self.description(), le),
+            _ => write!(f, "{}", self.description())
         }
     }
 }
@@ -210,6 +228,7 @@ impl Error for ResourceViewError {
         match *self {
             ResourceViewError::NoBindFlag => "The corresponding bind flag is not present in the texture",
             ResourceViewError::Channel(_) => "Selected channel type is not supported for this texture",
+            ResourceViewError::Layer(_) => "Selected layer can not be viewed for this texture",
             ResourceViewError::Unsupported => "The backend was refused for some reason",
         }
     }
@@ -221,7 +240,7 @@ pub enum TargetViewError {
     /// The `RENDER_TARGET`/`DEPTH_STENCIL` flag is not present in the texture.
     NoBindFlag,
     /// Selected mip level doesn't exist.
-    BadLevel(target::Level),
+    Level(target::Level),
     /// Selected array layer doesn't exist.
     Layer(LayerError),
     /// Selected channel type is not supported for this texture.
@@ -234,8 +253,8 @@ impl fmt::Display for TargetViewError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let description = self.description();
         match *self {
-            TargetViewError::BadLevel(ref level) => write!(f, "{}: {}", description, level),
-            TargetViewError::BadLayer(ref layer) => write!(f, "{}: {}", description, layer),
+            TargetViewError::Level(ref level) => write!(f, "{}: {}", description, level),
+            TargetViewError::Layer(ref layer) => write!(f, "{}: {}", description, layer),
             TargetViewError::Channel(ref channel)  => write!(f, "{}: {:?}", description, channel),
             _ => write!(f, "{}", description)
         }
@@ -247,9 +266,9 @@ impl Error for TargetViewError {
         match *self {
             TargetViewError::NoBindFlag =>
                 "The `RENDER_TARGET`/`DEPTH_STENCIL` flag is not present in the texture",
-            TargetViewError::BadLevel(_) =>
+            TargetViewError::Level(_) =>
                 "Selected mip level doesn't exist",
-            TargetViewError::BadLayer(_) =>
+            TargetViewError::Layer(_) =>
                 "Selected array layer doesn't exist",
             TargetViewError::Channel(_) =>
                 "Selected channel type is not supported for this texture",
