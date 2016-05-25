@@ -62,7 +62,7 @@ impl<'a> Source<'a> {
     pub fn select(&self, backend: Backend) -> Result<&'a [u8], ()> {
         Ok(match backend {
             Backend::Glsl(version) => {
-                let v = version.major * 100 + version.minor * 10;
+                let v = version.major * 100 + version.minor;
                 match *self {
                     Source { glsl_430: s, .. } if s != EMPTY && v >= 430 => s,
                     Source { glsl_150: s, .. } if s != EMPTY && v >= 150 => s,
