@@ -111,8 +111,17 @@ impl draw::CommandBuffer<Resources> for Buffer {
         }
     }
 
-    fn clear_depth_stencil(&mut self, _: native::TextureView, _: Option<target::Depth>,
-                           _: Option<target::Stencil>) {}
+    fn clear_depth_stencil(&mut self, tv: native::TextureView, depth: Option<target::Depth>,
+                           stencil: Option<target::Stencil>) {
+        let (_, vk) = self.share.get_device();
+        let value = vk::ClearDepthStencilValue {
+            depth: depth.unwrap_or(1.0), //TODO
+            stencil: stencil.unwrap_or(0) as u32, //TODO
+        };
+        unsafe {
+            vk.CmdClearDepthStencilImage(self.inner, tv.image, tv.layout, &value, 1, &tv.sub_range);
+        }
+    }
 
     fn call_draw(&mut self, _: VertexCount, _: VertexCount, _: draw::InstanceOption) {}
     fn call_draw_indexed(&mut self, _: VertexCount, _: VertexCount,
@@ -227,7 +236,9 @@ impl core::Device for GraphicsQueue {
             |vk, v| unsafe { //RTV
                 vk.DestroyImageView(dev, v.view, ptr::null());
             },
-            |_, _v| (), //DSV
+            |vk, v| unsafe { //DSV
+                vk.DestroyImageView(dev, v.view, ptr::null());
+            },
             |_, _v| (), //sampler
             |_, _| (), //fence
         );
