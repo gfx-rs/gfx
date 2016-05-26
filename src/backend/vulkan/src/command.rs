@@ -111,7 +111,7 @@ impl draw::CommandBuffer<Resources> for Buffer {
         }
     }
 
-    fn clear_depth_stencil(&mut self, _: (), _: Option<target::Depth>,
+    fn clear_depth_stencil(&mut self, _: native::TextureView, _: Option<target::Depth>,
                            _: Option<target::Stencil>) {}
 
     fn call_draw(&mut self, _: VertexCount, _: VertexCount, _: draw::InstanceOption) {}

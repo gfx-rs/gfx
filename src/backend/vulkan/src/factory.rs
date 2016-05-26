@@ -15,6 +15,8 @@
 use std::{cell, mem, ptr, slice};
 use std::os::raw::c_void;
 use gfx_core::{self as core, handle as h, factory as f, pso, state};
+use gfx_core::format::ChannelType;
+use gfx_core::target::Layer;
 use vk;
 use {command, data, native};
 use {Resources as R, SharePointer};
@@ -136,6 +138,24 @@ impl Factory {
             view: view,
             layout: raw_tex.layout.get(), //care!
             sub_range: info.subresourceRange,
+        })
+    }
+
+    fn view_target(&mut self, htex: &h::RawTexture<R>, channel: ChannelType, layer: Option<Layer>)
+                   -> Result<native::TextureView, f::TargetViewError>
+    {
+        let rdesc = core::tex::ResourceDesc {
+            channel: channel,
+            layer: layer,
+            min: 0,
+            max: 0,
+            swizzle: core::format::Swizzle::new(),
+        };
+        self.view_texture(htex, rdesc, true).map_err(|err| match err {
+            f::ResourceViewError::NoBindFlag  => f::TargetViewError::NoBindFlag,
+            f::ResourceViewError::Channel(ct) => f::TargetViewError::Channel(ct),
+            f::ResourceViewError::Layer(le)   => f::TargetViewError::Layer(le),
+            f::ResourceViewError::Unsupported => f::TargetViewError::Unsupported,
         })
     }
 
@@ -751,30 +771,25 @@ impl core::Factory<R> for Factory {
                                          -> Result<h::RawRenderTargetView<R>, f::TargetViewError>
     {
         use gfx_core::handle::Producer;
-        let rdesc = core::tex::ResourceDesc {
-            channel: desc.channel,
-            layer: desc.layer,
-            min: 0,
-            max: 0,
-            swizzle: core::format::Swizzle::new(),
-        };
         let mut dim = htex.get_info().kind.get_dimensions();
-        if rdesc.layer.is_some() {
+        if desc.layer.is_some() {
             dim.2 = 1; // slice of the depth/array
         }
-        match self.view_texture(htex, rdesc, true) {
-            Ok(view) => Ok(self.share.handles.borrow_mut().make_rtv(view, htex, dim)),
-            Err(f::ResourceViewError::NoBindFlag) => Err(f::TargetViewError::NoBindFlag),
-            Err(f::ResourceViewError::Channel(ct)) => Err(f::TargetViewError::Channel(ct)),
-            Err(f::ResourceViewError::Layer(le))   => Err(f::TargetViewError::Layer(le)),
-            Err(f::ResourceViewError::Unsupported) => Err(f::TargetViewError::Unsupported),
-        }
+        self.view_target(htex, desc.channel, desc.layer).map(|view|
+            self.share.handles.borrow_mut().make_rtv(view, htex, dim))
     }
 
-    fn view_texture_as_depth_stencil_raw(&mut self, _htex: &h::RawTexture<R>, _desc: core::tex::DepthStencilDesc)
+    fn view_texture_as_depth_stencil_raw(&mut self, htex: &h::RawTexture<R>, desc: core::tex::DepthStencilDesc)
                                          -> Result<h::RawDepthStencilView<R>, f::TargetViewError>
     {
-        unimplemented!()
+        use gfx_core::handle::Producer;
+        let mut dim = htex.get_info().kind.get_dimensions();
+        if desc.layer.is_some() {
+            dim.2 = 1; // slice of the depth/array
+        }
+        let channel = ChannelType::Unorm; //TODO
+        self.view_target(htex, channel, desc.layer).map(|view|
+            self.share.handles.borrow_mut().make_dsv(view, htex, dim))
     }
 
     fn create_sampler(&mut self, info: core::tex::SamplerInfo) -> h::Sampler<R> {

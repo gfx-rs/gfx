@@ -50,7 +50,7 @@ pub fn map_image_aspect(surface: SurfaceType, channel: ChannelType, is_target: b
     match surface {
         SurfaceType::D16 | SurfaceType::D24 | SurfaceType::D24_S8 | SurfaceType::D32 => match (is_target, channel) {
             (true, _) => vk::IMAGE_ASPECT_DEPTH_BIT | vk::IMAGE_ASPECT_STENCIL_BIT,
-            (false, ChannelType::Float) => vk::IMAGE_ASPECT_DEPTH_BIT,
+            (false, ChannelType::Float) | (false, ChannelType::Unorm) => vk::IMAGE_ASPECT_DEPTH_BIT,
             (false, ChannelType::Uint)  => vk::IMAGE_ASPECT_STENCIL_BIT,
             _ => {
                 error!("Unexpected depth/stencil channel {:?}", channel);

@@ -275,7 +275,7 @@ impl gfx_core::Resources for Resources {
     type ShaderResourceView   = native::TextureView; //TODO: buffer view
     type UnorderedAccessView  = ();
     type RenderTargetView     = native::TextureView;
-    type DepthStencilView     = ();
+    type DepthStencilView     = native::TextureView;
     type Sampler              = vk::Sampler;
     type Fence                = vk::Fence;
 }
