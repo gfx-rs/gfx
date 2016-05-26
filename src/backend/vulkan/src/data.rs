@@ -14,6 +14,7 @@
 
 use gfx_core::factory::{Bind, MapAccess, Usage, LayerError};
 use gfx_core::format::{SurfaceType, ChannelType, Swizzle, ChannelSource};
+use gfx_core::pso::ColorInfo;
 use gfx_core::tex::{FilterMethod, Kind, Layer, PackedColor, WrapMode};
 use gfx_core::{state, Primitive};
 use vk;
@@ -357,5 +358,55 @@ pub fn map_stencil_side(side: &state::StencilSide) -> vk::StencilOpState {
         compareMask: side.mask_read as u32,
         writeMask: side.mask_write as u32,
         reference: 0,
+    }
+}
+
+pub fn map_blend_factor(factor: state::Factor) -> vk::BlendFactor {
+    use gfx_core::state::Factor::*;
+    use gfx_core::state::BlendValue::*;
+    match factor {
+        Zero                  => vk::BLEND_FACTOR_ZERO,
+        One                   => vk::BLEND_FACTOR_ONE,
+        SourceAlphaSaturated  => vk::BLEND_FACTOR_SRC_ALPHA_SATURATE,
+        ZeroPlus(SourceColor) => vk::BLEND_FACTOR_SRC_COLOR,
+        ZeroPlus(SourceAlpha) => vk::BLEND_FACTOR_SRC_ALPHA,
+        ZeroPlus(DestColor)   => vk::BLEND_FACTOR_DST_COLOR,
+        ZeroPlus(DestAlpha)   => vk::BLEND_FACTOR_DST_ALPHA,
+        ZeroPlus(ConstColor)  => vk::BLEND_FACTOR_CONSTANT_COLOR,
+        ZeroPlus(ConstAlpha)  => vk::BLEND_FACTOR_CONSTANT_ALPHA,
+        OneMinus(SourceColor) => vk::BLEND_FACTOR_ONE_MINUS_SRC_COLOR,
+        OneMinus(SourceAlpha) => vk::BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+        OneMinus(DestColor)   => vk::BLEND_FACTOR_ONE_MINUS_DST_COLOR,
+        OneMinus(DestAlpha)   => vk::BLEND_FACTOR_ONE_MINUS_DST_ALPHA,
+        OneMinus(ConstColor)  => vk::BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR,
+        OneMinus(ConstAlpha)  => vk::BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA,
+    }
+}
+
+pub fn map_blend_op(op: state::Equation) -> vk::BlendOp {
+    use gfx_core::state::Equation::*;
+    match op {
+        Add    => vk::BLEND_OP_ADD,
+        Sub    => vk::BLEND_OP_SUBTRACT,
+        RevSub => vk::BLEND_OP_REVERSE_SUBTRACT,
+        Min    => vk::BLEND_OP_MIN,
+        Max    => vk::BLEND_OP_MAX,
+    }
+}
+
+pub fn map_blend(ci: &ColorInfo) -> vk::PipelineColorBlendAttachmentState {
+    vk::PipelineColorBlendAttachmentState {
+        blendEnable: if ci.color.is_some() || ci.alpha.is_some() { vk::TRUE } else { vk::FALSE },
+        srcColorBlendFactor: ci.color.map_or(0, |c| map_blend_factor(c.source)),
+        dstColorBlendFactor: ci.color.map_or(0, |c| map_blend_factor(c.destination)),
+        colorBlendOp: ci.color.map_or(0, |c| map_blend_op(c.equation)),
+        srcAlphaBlendFactor: ci.alpha.map_or(0, |a| map_blend_factor(a.source)),
+        dstAlphaBlendFactor: ci.alpha.map_or(0, |a| map_blend_factor(a.destination)),
+        alphaBlendOp: ci.alpha.map_or(0, |a| map_blend_op(a.equation)),
+        colorWriteMask:
+            if ci.mask.contains(state::RED)   {vk::COLOR_COMPONENT_R_BIT} else {0} |
+            if ci.mask.contains(state::GREEN) {vk::COLOR_COMPONENT_G_BIT} else {0} |
+            if ci.mask.contains(state::BLUE)  {vk::COLOR_COMPONENT_B_BIT} else {0} |
+            if ci.mask.contains(state::ALPHA) {vk::COLOR_COMPONENT_A_BIT} else {0},
     }
 }

@@ -514,6 +514,12 @@ impl core::Factory<R> for Factory {
                     });
                 }
             }
+            let mut attachments = Vec::new();
+            for ocd in desc.color_targets.iter() {
+                if let &Some(ref cd) = ocd {
+                    attachments.push(data::map_blend(&cd.1));
+                }
+            }
             let (polygon, line_width) = data::map_polygon_mode(desc.rasterizer.method);
             let info = vk::GraphicsPipelineCreateInfo {
                 sType: vk::STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
@@ -620,14 +626,27 @@ impl core::Factory<R> for Factory {
                     minDepthBounds: 0.0,
                     maxDepthBounds: 1.0,
                 },
-                pColorBlendState: ptr::null(), //TODO
+                pColorBlendState: &vk::PipelineColorBlendStateCreateInfo {
+                    sType: vk::STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+                    pNext: ptr::null(),
+                    flags: 0,
+                    logicOpEnable: vk::FALSE,
+                    logicOp: vk::LOGIC_OP_CLEAR,
+                    attachmentCount: attachments.len() as u32,
+                    pAttachments: attachments.as_ptr(),
+                    blendConstants: [0.0; 4],
+                },
                 pDynamicState: &vk::PipelineDynamicStateCreateInfo {
                     sType: vk::STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
                     pNext: ptr::null(),
                     flags: 0,
                     dynamicStateCount: 1,
-                    pDynamicStates: [vk::DYNAMIC_STATE_VIEWPORT, vk::DYNAMIC_STATE_SCISSOR,
-                        vk::DYNAMIC_STATE_STENCIL_REFERENCE].as_ptr(),
+                    pDynamicStates: [
+                        vk::DYNAMIC_STATE_VIEWPORT,
+                        vk::DYNAMIC_STATE_SCISSOR,
+                        vk::DYNAMIC_STATE_BLEND_CONSTANTS,
+                        vk::DYNAMIC_STATE_STENCIL_REFERENCE,
+                        ].as_ptr(),
                 },
                 layout: pipe_layout,
                 renderPass: render_pass,
