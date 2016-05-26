@@ -36,6 +36,10 @@ gfx_window_dxgi = { path = "src/window/dxgi", version = "0.2" }
 gfx_device_dx11 = { path = "src/backend/dx11", version = "0.2" }
 gfx_window_dxgi = { path = "src/window/dxgi", version = "0.2" }
 
+[target.i686-pc-windows-msvc.dependencies]
+gfx_device_dx11 = { path = "src/backend/dx11", version = "0.2" }
+gfx_window_dxgi = { path = "src/window/dxgi", version = "0.2" }
+
 [[example]]
 name = "blend"
 path = "examples/blend/main.rs"
