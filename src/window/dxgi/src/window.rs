@@ -20,18 +20,6 @@ use user32;
 use winapi::*;
 
 
-unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: UINT, wp: WPARAM, lp: LPARAM) -> LRESULT {
-    match msg {
-        WM_CREATE => {
-            // Set the window pointer into the creation parameters
-            let cs: &CREATESTRUCTW = mem::transmute(lp);
-            user32::SetWindowLongPtrW(hwnd, GWLP_USERDATA, mem::transmute(cs.lpCreateParams));
-            0
-        },
-        _ => user32::DefWindowProcW(hwnd, msg, wp, lp)
-    }
-}
-
 pub fn create(name: &str, width: INT, height: INT) -> Result<HWND, ()> {
     let class_name = name.to_wide_null();
     let window_name = name.to_wide_null();
@@ -40,7 +28,7 @@ pub fn create(name: &str, width: INT, height: INT) -> Result<HWND, ()> {
 
         user32::RegisterClassW(&WNDCLASSW {
             style: CS_DBLCLKS | CS_HREDRAW | CS_VREDRAW,
-            lpfnWndProc: Some(wnd_proc),
+            lpfnWndProc: Some(user32::DefWindowProcW),
             cbWndExtra: 0,
             hInstance: hinst,
             lpszClassName: class_name.as_ptr(),
