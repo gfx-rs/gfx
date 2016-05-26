@@ -27,7 +27,9 @@ pub enum Backend {
     #[cfg(target_os = "windows")]
     Hlsl(DxShaderModel),
     #[cfg(target_os = "macos")]
-    Msl(MetalShaderModel)
+    Msl(MetalShaderModel),
+    #[cfg(feature = "vulkan")]
+    Vulkan,
 }
 
 pub const EMPTY: &'static [u8] = &[];
@@ -48,7 +50,8 @@ pub struct Source<'a> {
     pub hlsl_41 : &'a [u8],
     pub hlsl_50 : &'a [u8],
     pub msl_10  : &'a [u8],
-    pub msl_11  : &'a [u8]
+    pub msl_11  : &'a [u8],
+    pub vulkan  : &'a [u8],
 }
 
 impl<'a> Source<'a> {
@@ -69,7 +72,8 @@ impl<'a> Source<'a> {
             hlsl_41:  EMPTY,
             hlsl_50:  EMPTY,
             msl_10:   EMPTY,
-            msl_11:   EMPTY
+            msl_11:   EMPTY,
+            vulkan:   EMPTY,
         }
     }
 
@@ -109,7 +113,12 @@ impl<'a> Source<'a> {
                 Source { msl_11: s, .. } if s != EMPTY && revision >= 11 => s,
                 Source { msl_10: s, .. } if s != EMPTY && revision >= 10 => s,
                 _ => return Err(())
-            }
+            },
+            #[cfg(feature = "vulkan")]
+            Backend::Vulkan => match *self {
+                Source { vulkan: s, .. } if s != EMPTY => s,
+                _ => return Err(())
+            },
         })
     }
 }

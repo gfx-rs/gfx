@@ -17,12 +17,18 @@ extern crate winit;
 extern crate glutin;
 extern crate gfx;
 extern crate gfx_device_gl;
-#[cfg(target_os = "windows")]
-extern crate gfx_device_dx11;
 extern crate gfx_window_glutin;
 //extern crate gfx_window_glfw;
+
+#[cfg(target_os = "windows")]
+extern crate gfx_device_dx11;
 #[cfg(target_os = "windows")]
 extern crate gfx_window_dxgi;
+
+#[cfg(feature = "vulkan")]
+extern crate gfx_device_vulkan;
+#[cfg(feature = "vulkan")]
+extern crate gfx_window_vulkan;
 
 #[cfg(target_os = "macos")]
 extern crate gfx_device_metal;
@@ -106,14 +112,18 @@ pub trait ApplicationBase<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
 pub trait Application<R: gfx::Resources>: Sized {
     fn new<F: gfx::Factory<R>>(F, Init<R>) -> Self;
     fn render<C: gfx::CommandBuffer<R>>(&mut self, &mut gfx::Encoder<R, C>);
-    #[cfg(target_os = "windows")]
+    #[cfg(feature = "vulkan")]
+    fn launch_default(name: &str) where WrapVulkan<Self>: ApplicationVulkan {
+        WrapVulkan::<Self>::launch(name, DEFAULT_CONFIG);
+    }
+    /*#[cfg(target_os = "windows")]
     fn launch_default(name: &str) where WrapD3D11<Self>: ApplicationD3D11 {
         WrapD3D11::<Self>::launch(name, DEFAULT_CONFIG);
     }
     #[cfg(not(target_os = "windows"))]
     fn launch_default(name: &str) where WrapGL2<Self>: ApplicationGL {
         WrapGL2::<Self>::launch(name, DEFAULT_CONFIG);
-    }
+    }*/
     /*#[cfg(target_os = "macos")]
     fn launch_default(name: &str) where WrapMetal<Self>: ApplicationMetal {
         WrapMetal::<Self>::launch(name, DEFAULT_CONFIG)
@@ -134,6 +144,9 @@ pub type D3D11CommandBufferFake = gfx_device_dx11::CommandBuffer<gfx_device_dx11
 #[cfg(target_os = "windows")]
 pub type WrapD3D11<A> = Wrap<gfx_device_dx11::Resources, D3D11CommandBuffer, A>;
 pub type WrapGL2<A> = Wrap<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer, A>;
+#[cfg(feature = "vulkan")]
+pub type WrapVulkan<A> = Wrap<gfx_device_vulkan::Resources, gfx_device_vulkan::CommandBuffer, A>;
+
 
 impl<R, C, A> ApplicationBase<R, C> for Wrap<R, C, A> where
     R: gfx::Resources,

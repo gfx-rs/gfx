@@ -31,32 +31,31 @@ pub fn init_winit(builder: winit::WindowBuilder) -> (winit::Window, gfx_device_v
     (win, device, factory)
 }
 
-pub type TargetFormat = format::Srgba8;
-pub type TargetHandle = gfx_core::handle::RenderTargetView<gfx_device_vulkan::Resources, TargetFormat>;
+pub type TargetHandle<T> = gfx_core::handle::RenderTargetView<gfx_device_vulkan::Resources, T>;
 
-pub struct SwapTarget {
+pub struct SwapTarget<T> {
     _image: vk::Image,
-    target: TargetHandle,
+    target: TargetHandle<T>,
     _fence: vk::Fence,
 }
 
-pub struct Window {
+pub struct Window<T> {
     connection: xcb::Connection,
     _foreground: u32,
     window: u32,
     _debug_callback: Option<vk::DebugReportCallbackEXT>,
     swapchain: vk::SwapchainKHR,
-    targets: Vec<SwapTarget>,
+    targets: Vec<SwapTarget<T>>,
     queue: gfx_device_vulkan::GraphicsQueue,
 }
 
-pub struct Frame<'a> {
-    window: &'a mut Window,
+pub struct Frame<'a, T: 'a> {
+    window: &'a mut Window<T>,
     target_id: u32,
 }
 
-impl<'a> Frame<'a> {
-    pub fn get_target(&self) -> TargetHandle {
+impl<'a, T: Clone> Frame<'a, T> {
+    pub fn get_target(&self) -> TargetHandle<T> {
         self.window.targets[self.target_id as usize].target.clone()
     }
     pub fn get_queue(&mut self) -> &mut gfx_device_vulkan::GraphicsQueue {
@@ -64,7 +63,7 @@ impl<'a> Frame<'a> {
     }
 }
 
-impl<'a> Drop for Frame<'a> {
+impl<'a, T> Drop for Frame<'a, T> {
     fn drop(&mut self) {
         let mut result = vk::SUCCESS;
         let info = vk::PresentInfoKHR {
@@ -85,8 +84,8 @@ impl<'a> Drop for Frame<'a> {
     }
 }
 
-impl Window {
-    pub fn wait_draw(&mut self) -> Result<Option<Frame>, ()> {
+impl<T: Clone> Window<T> {
+    pub fn wait_draw(&mut self) -> Result<Option<Frame<T>>, ()> {
         let ev = match self.connection.wait_for_event() {
             Some(ev) => ev,
             None => return Err(()),
@@ -99,7 +98,7 @@ impl Window {
         }
     }
 
-    pub fn start_frame(&mut self) -> Frame {
+    pub fn start_frame(&mut self) -> Frame<T> {
         //TODO: handle window resize
         let index = unsafe {
             let (dev, vk) = self.queue.get_share().get_device();
@@ -112,9 +111,13 @@ impl Window {
             target_id: index,
         }
     }
+
+    pub fn get_any_target(&self) -> TargetHandle<T> {
+        self.targets[0].target.clone()
+    }
 }
 
-impl Drop for Window {
+impl<T> Drop for Window<T> {
     fn drop(&mut self) {
         xcb::unmap_window(&self.connection, self.window);
         xcb::destroy_window(&self.connection, self.window);
@@ -151,7 +154,8 @@ extern "system" fn callback(flags: vk::DebugReportFlagsEXT,
     vk::FALSE
 }
 
-pub fn init_xcb(title: &str, width: u32, height: u32) -> (Window, gfx_device_vulkan::Factory) {
+pub fn init_xcb<T: gfx_core::format::RenderFormat>(title: &str, width: u32, height: u32)
+                -> (Window<T>, gfx_device_vulkan::Factory) {
     let debug = false;
     let (mut device, mut factory, backend) = gfx_device_vulkan::create(title, 1,
         if debug {LAYERS_DEBUG} else {LAYERS},
@@ -230,7 +234,7 @@ pub fn init_xcb(title: &str, width: u32, height: u32) -> (Window, gfx_device_vul
     let (dev, vk) = backend.get_device();
     let mut images: [vk::Image; 2] = [0; 2];
     let mut num = images.len() as u32;
-    let format = <TargetFormat as format::Formatted>::get_format();
+    let format = <T as format::Formatted>::get_format();
 
     let swapchain_info = vk::SwapchainCreateInfoKHR {
         sType: vk::STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,

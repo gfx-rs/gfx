@@ -8,6 +8,8 @@ license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
 
 [features]
+default = ["vulkan"]
+vulkan = []
 unstable = []
 
 

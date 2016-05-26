@@ -23,7 +23,7 @@ use std::cell::RefCell;
 use std::sync::Arc;
 use shared_library::dynamic_library::DynamicLibrary;
 
-pub use self::command::GraphicsQueue;
+pub use self::command::{GraphicsQueue, Buffer as CommandBuffer};
 pub use self::factory::Factory;
 
 mod command;
