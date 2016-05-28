@@ -20,7 +20,7 @@ pub use gfx_device_dx11::ShaderModel as DxShaderModel;
 pub use gfx_device_metal::ShaderModel as MetalShaderModel;
 
 /// Shader backend with version numbers.
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Backend {
     Glsl(GlslVersion),
     GlslEs(GlslVersion),
@@ -54,6 +54,9 @@ pub struct Source<'a> {
     pub vulkan  : &'a [u8],
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SelectError(Backend);
+
 impl<'a> Source<'a> {
     /// Create an empty shader source. Useful for specifying the remaining
     /// structure members upon construction.
@@ -78,7 +81,7 @@ impl<'a> Source<'a> {
     }
 
     /// Pick one of the stored versions that is the highest supported by the backend.
-    pub fn select(&self, backend: Backend) -> Result<&'a [u8], ()> {
+    pub fn select(&self, backend: Backend) -> Result<&'a [u8], SelectError> {
         Ok(match backend {
             Backend::Glsl(version) => {
                 let v = version.major * 100 + version.minor;
@@ -88,7 +91,7 @@ impl<'a> Source<'a> {
                     Source { glsl_140: s, .. } if s != EMPTY && v >= 140 => s,
                     Source { glsl_130: s, .. } if s != EMPTY && v >= 130 => s,
                     Source { glsl_120: s, .. } if s != EMPTY && v >= 120 => s,
-                    _ => return Err(())
+                    _ => return Err(SelectError(backend))
                 }
             },
             Backend::GlslEs(version) => {
@@ -106,7 +109,7 @@ impl<'a> Source<'a> {
                 Source { hlsl_41: s, .. } if s != EMPTY && model >= 41 => s,
                 Source { hlsl_40: s, .. } if s != EMPTY && model >= 40 => s,
                 Source { hlsl_30: s, .. } if s != EMPTY && model >= 30 => s,
-                _ => return Err(())
+                _ => Err(SelectError(backend))
             },
             #[cfg(target_os = "macos")]
             Backend::Msl(revision) => match *self {
@@ -117,7 +120,7 @@ impl<'a> Source<'a> {
             #[cfg(feature = "vulkan")]
             Backend::Vulkan => match *self {
                 Source { vulkan: s, .. } if s != EMPTY => s,
-                _ => return Err(())
+                _ => return Err(SelectError(backend))
             },
         })
     }

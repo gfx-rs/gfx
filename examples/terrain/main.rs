@@ -82,6 +82,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             glsl_150: include_bytes!("shader/terrain_150.glslv"),
             hlsl_40:  include_bytes!("data/vertex.fx"),
             msl_11: include_bytes!("shader/terrain_vertex.metal"),
+            vulkan:   include_bytes!("data/vert.spv"),
             .. gfx_app::shade::Source::empty()
         };
         let ps = gfx_app::shade::Source {
@@ -89,6 +90,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             glsl_150: include_bytes!("shader/terrain_150.glslf"),
             hlsl_40:  include_bytes!("data/pixel.fx"),
             msl_11: include_bytes!("shader/terrain_frag.metal"),
+            vulkan:   include_bytes!("data/frag.spv"),
             .. gfx_app::shade::Source::empty()
         };
 
