@@ -14,11 +14,12 @@
 
 use metal::*;
 
-use gfx_core::Primitive;
+use gfx_core::state;
+use gfx_core::{IndexType, Primitive};
 use gfx_core::shade;
 use gfx_core::factory;
 use gfx_core::factory::{Bind, MapAccess, Usage};
-use gfx_core::format::{Format, SurfaceType};
+use gfx_core::format::{Format, ChannelType, SurfaceType};
 use gfx_core::state::Comparison;
 use gfx_core::tex::{AaMode, FilterMethod, WrapMode, DepthStencilFlags};
 
@@ -29,6 +30,54 @@ pub enum FormatUsage {
     Msaa,
     Resolve,
     Blend
+}
+
+pub fn map_winding(wind: state::FrontFace) -> MTLWinding {
+    match wind {
+        state::FrontFace::Clockwise => MTLWinding::Clockwise,
+        state::FrontFace::CounterClockwise => MTLWinding::CounterClockwise,
+    }
+}
+
+pub fn map_cull(cull: state::CullFace) -> MTLCullMode {
+    match cull {
+        state::CullFace::Nothing => MTLCullMode::None,
+        state::CullFace::Front => MTLCullMode::Front,
+        state::CullFace::Back => MTLCullMode::Back,
+    }
+}
+
+pub fn map_fill(fill: state::RasterMethod) -> MTLTriangleFillMode {
+    match fill {
+        state::RasterMethod::Point => {
+            error!("Point rasterization is not supported");
+            MTLTriangleFillMode::Fill
+        },
+        state::RasterMethod::Line(_) => MTLTriangleFillMode::Lines,
+        state::RasterMethod::Fill => MTLTriangleFillMode::Fill,
+    }
+}
+
+pub fn map_index_type(ty: IndexType) -> MTLIndexType {
+    match ty {
+        IndexType::U16 => MTLIndexType::UInt16,
+        IndexType::U32 => MTLIndexType::UInt32
+    }
+}
+
+pub fn map_stencil_op(op: state::StencilOp) -> MTLStencilOperation {
+    use gfx_core:: state::StencilOp::*;
+
+    match op {
+        Keep => MTLStencilOperation::Keep,
+        Zero => MTLStencilOperation::Zero,
+        Replace => MTLStencilOperation::Replace,
+        IncrementClamp => MTLStencilOperation::IncrementClamp,
+        IncrementWrap => MTLStencilOperation::IncrementWrap,
+        DecrementClamp => MTLStencilOperation::DecrementClamp,
+        DecrementWrap => MTLStencilOperation::DecrementWrap,
+        Invert => MTLStencilOperation::Invert,
+    }
 }
 
 pub fn map_function(fun: Comparison) -> MTLCompareFunction {
@@ -239,6 +288,22 @@ pub fn map_format(format: Format, is_target: bool) -> Option<MTLPixelFormat> {
     })
 }
 
+pub fn map_channel_hint(hint: SurfaceType) -> Option<ChannelType> {
+    use gfx_core::format::SurfaceType::*;
+    use gfx_core::format::ChannelType::*;
+
+    Some(match hint {
+        R4_G4 | R4_G4_B4_A4 | R5_G5_B5_A1 | R5_G6_B5 | R16_G16_B16 |
+        R32_G32_B32 | D16 => return None,
+        R8 | R8_G8 | R8_G8_B8_A8 | R10_G10_B10_A2 | R16 | R16_G16 |
+        R16_G16_B16_A16 | R32 | R32_G32 | R32_G32_B32_A32 => Uint,
+        R11_G11_B10 => Float,
+        D24 => Unorm,
+        D24_S8 => Unorm,
+        D32 => Float,
+    })
+}
+
 pub fn format_supports_usage(feature_set: MTLFeatureSet, format: MTLPixelFormat, usage: FormatUsage) -> bool {
     use metal::MTLPixelFormat::*;
     use metal::MTLFeatureSet::*;
@@ -297,10 +362,16 @@ pub fn format_supports_usage(feature_set: MTLFeatureSet, format: MTLPixelFormat,
     }*/
 }
 
-pub fn map_surface(surface: SurfaceType) -> Option<MTLPixelFormat> {
-    // TODO: handle surface types in metal, look at gl impl.
+pub fn map_depth_surface(surface: SurfaceType) -> Option<MTLPixelFormat> {
+    use gfx_core::format::SurfaceType::*;
 
-    None
+    use metal::MTLPixelFormat::*;
+
+    Some(match surface {
+        D24_S8 => Depth24Unorm_Stencil8,
+        D32 => Depth32Float,
+        _ => return None
+    })
 }
 
 

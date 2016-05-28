@@ -12,7 +12,8 @@ struct VertexOut {
     float2 coords;
 };
 
-vertex VertexOut vert(constant float4x4 &Locals [[ buffer(0) ]],
+vertex VertexOut vert(constant float4x4 &Locals [[ buffer(1) ]],
+                      uint vid                  [[ vertex_id ]],
                       VertexInput in            [[ stage_in ]])
 {
     VertexOut out;

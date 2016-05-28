@@ -87,7 +87,8 @@ pub enum Command {
     ClearDepthStencil(native::Dsv, f32, u8),
 }
 
-pub enum Draw {
+#[derive(Clone, Copy, Debug)]
+enum Draw {
     Normal(u64, u64),
     Instanced(u64, u64, u64, u64),
     Indexed(u64, u64, u64),
@@ -98,7 +99,9 @@ unsafe impl Send for Command {}
 
 struct Cache {
     targets: Option<pso::PixelTargetSet<Resources>>,
-    clear: draw::ClearColor
+    clear: draw::ClearColor,
+    clear_depth: f32,
+    clear_stencil: u8
 }
 
 unsafe impl Send for Cache {}
@@ -107,7 +110,9 @@ impl Cache {
     fn new() -> Cache {
         Cache {
             targets: None,
-            clear: draw::ClearColor::Float([0.0f32; 4])
+            clear: draw::ClearColor::Float([0.0f32; 4]),
+            clear_depth: 1f32,
+            clear_stencil: 0
         }
     }
 }
@@ -120,6 +125,7 @@ pub struct CommandBuffer {
 
     buf: Vec<Command>,
     data: DataBuffer,
+    index_buf: Option<(Buffer, IndexType)>,
 
     cache: Cache,
     encoding: bool
@@ -134,6 +140,7 @@ impl CommandBuffer {
             render_encoder: MTLRenderCommandEncoder::nil(),
             buf: Vec::new(),
             data: DataBuffer::new(),
+            index_buf: None,
             cache: Cache::new(),
             encoding: false
         }
@@ -181,6 +188,17 @@ impl CommandBuffer {
                     }
                 }
 
+                if let Some(depth) = targets.depth {
+                    let attachment = render_pass_descriptor.depth_attachment();
+                    attachment.set_texture(unsafe { *(depth.0) });
+                    attachment.set_clear_depth(self.cache.clear_depth as f64);
+                    attachment.set_store_action(MTLStoreAction::DontCare);
+                    attachment.set_load_action(MTLLoadAction::Clear);
+                }
+
+                // TODO: wrong precision?
+                render_pass_descriptor.stencil_attachment().set_clear_stencil(self.cache.clear_stencil as u32);
+
                 let enc = self.mtl_buf.new_render_command_encoder(render_pass_descriptor);
                 self.render_encoder = enc;
                 self.encoding = true;
@@ -208,12 +226,22 @@ impl CommandBuffer {
             match cmd {
                 Command::BindPipeline(pso) => {
                     encoder.set_render_pipeline_state(pso.pipeline);
+                    encoder.set_front_facing_winding(pso.winding);
+                    encoder.set_cull_mode(pso.cull);
+                    encoder.set_triangle_fill_mode(pso.fill);
+
+                    if let Some(depth_state) = pso.depth_stencil {
+                        encoder.set_depth_stencil_state(depth_state);
+                    }
                 },
                 Command::BindIndex(buf) => {
+                    println!("{}, {:?}", "index oops", buf);
                 },
                 Command::BindVertexBuffers(bufs, offsets, indices) => {
                     for i in 0..MAX_VERTEX_ATTRIBUTES {
-                        encoder.set_vertex_buffer(indices[i], offsets[i], bufs[i].0);
+                        if !bufs[i].0.is_null() {
+                            encoder.set_vertex_buffer(indices[i], offsets[i], bufs[i].0);
+                        }
                     }
                 },
                 Command::BindConstantBuffers(stage, cbufs) => {
@@ -234,16 +262,47 @@ impl CommandBuffer {
                     }
                 },
                 Command::BindShaderResources(stage, srvs) => {
+                    if let Stage::Vertex = stage {
+                        for i in 0..MAX_RESOURCE_VIEWS {
+                            if !srvs[i].0.is_null() {
+                                encoder.set_vertex_texture(i as u64, unsafe { *srvs[i].0 });
+                            }
+                        }
+                    }
+
+                    if let Stage::Pixel = stage {
+                        for i in 0..MAX_RESOURCE_VIEWS {
+                            if !srvs[i].0.is_null() {
+                                encoder.set_fragment_texture(i as u64, unsafe { *srvs[i].0 });
+                            }
+                        }
+                    }
                 },
                 Command::BindSamplers(stage, samplers) => {
+                    if let Stage::Vertex = stage {
+                        for i in 0..MAX_SAMPLERS {
+                            if !samplers[i].0.is_null() {
+                                encoder.set_vertex_sampler_state(i as u64, samplers[i].0);
+                            }
+                        }
+                    }
+
+                    if let Stage::Pixel = stage {
+                        for i in 0..MAX_SAMPLERS {
+                            if !samplers[i].0.is_null() {
+                                encoder.set_fragment_sampler_state(i as u64, samplers[i].0);
+                            }
+                        }
+                    }
                 },
                 Command::BindPixelTargets(rtvs, dsv) => {
+                    println!("pixel trg: {:?} . . . {:?}", rtvs, dsv);
                 },
                 Command::SetViewport(viewport) => {
                     encoder.set_viewport(viewport);
                 },
                 Command::SetScissor(rect) => {
-                    encoder.set_scissor_rect(rect);
+                    // encoder.set_scissor_rect(rect);
                 },
                 Command::SetBlend(blend, mask) => {
                     // TODO: do stencil mask
@@ -263,6 +322,8 @@ impl CommandBuffer {
             }
         }
 
+        use map::map_index_type;
+
         match draw {
             Draw::Normal(count, start) => {
                 encoder.draw_primitives(MTLPrimitiveType::Triangle, start, count)
@@ -270,8 +331,12 @@ impl CommandBuffer {
             Draw::Instanced(count, ninst, start, offset) => {
                 encoder.draw_primitives_instanced(MTLPrimitiveType::Triangle, start, count, ninst);
             },
-            Draw::Indexed(count, start, base) => {},
-            Draw::IndexedInstanced(count, ninst, start, base, offset) => {}
+            Draw::Indexed(count, start, base) => {
+                encoder.draw_indexed_primitives(MTLPrimitiveType::Triangle, count, map_index_type(self.index_buf.unwrap().1), ((self.index_buf.unwrap().0).0).0, start);
+            },
+            Draw::IndexedInstanced(count, ninst, start, base, offset) => {
+                unimplemented!();
+            }
         }
 
         self.buf.clear();
@@ -296,7 +361,7 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
         let mut offsets = [0; MAX_VERTEX_ATTRIBUTES];
         let mut indices = [0; MAX_VERTEX_ATTRIBUTES];
 
-        for i in 0 .. MAX_VERTEX_ATTRIBUTES {
+        for i in 0 .. 1 {
             if let Some((buffer, offset)) = vbs.0[i] {
                 buffers[i] = buffer.0;
                 offsets[i] = offset as u64;
@@ -366,6 +431,15 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
     }
 
     fn bind_pixel_targets(&mut self, targets: pso::PixelTargetSet<Resources>) {
+        self.buf.push(Command::SetViewport(MTLViewport {
+            originX: 0f64,
+            originY: 0f64,
+            width: targets.size.0 as f64,
+            height: targets.size.1 as f64,
+            znear: 0f64,
+            zfar: 1f64
+        }));
+
         if let Some(targets) = self.cache.targets {
             self.cache.targets = Some(targets);
 
@@ -383,7 +457,7 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
     }
 
     fn bind_index(&mut self, buf: Buffer, idx_type: IndexType) {
-        self.buf.push(Command::BindIndex(buf));
+        self.index_buf = Some((buf, idx_type));
     }
 
     fn set_scissor(&mut self, rect: target::Rect) {
@@ -432,11 +506,8 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
 
     fn clear_depth_stencil(&mut self, target: Dsv,
                            depth: Option<target::Depth>, stencil: Option<target::Stencil>) {
-        self.buf.push(Command::ClearDepthStencil(
-            target,
-            depth.unwrap_or_default() as f32,
-            stencil.unwrap_or_default() as u8
-        ));
+        self.cache.clear_depth = depth.unwrap_or_default();
+        self.cache.clear_stencil = stencil.unwrap_or_default();
     }
 
     fn call_draw(&mut self, start: VertexCount, count: VertexCount, instances: draw::InstanceOption) {

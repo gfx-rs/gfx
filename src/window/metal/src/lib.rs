@@ -73,30 +73,15 @@ impl MetalWindow {
         // TODO: come up with alternative to this hack
 
         unsafe {
-            println!("{}", "====== PRE ======");
-            println!(" backptr: {:p}", self.backbuffer);
-            println!("backbuff: {:?}", *self.backbuffer);
-            //println!("     tex: {:?}", self.drawable.get().texture());
-
             let drawable = self.layer.next_drawable().unwrap();
 
-            // not getting released!!
             if !(*self.drawable).is_null() {
-                println!("{}", "RELLLEEEASSSEEEEE°!");
                 (*self.drawable).release();
             }
 
             (*self.drawable).0 = drawable.0;
 
             (*self.backbuffer).0 = drawable.texture().0;
-
-            println!("{}", "====== POST ======");
-            println!(" backptr: {:p}", self.backbuffer);
-            println!("backbuff: {:?}", *self.backbuffer);
-            //println!("     tex: {:?}", self.drawable.get().texture());
-
-
-
         }
 
         Ok(())

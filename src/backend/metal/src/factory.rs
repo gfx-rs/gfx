@@ -84,12 +84,56 @@ impl Factory {
             return Err(factory::BufferError::UnsupportedBind(info.bind))
         }
 
-        let mut raw_buf = native::Buffer(self.device.new_buffer(info.size as u64, usage));
+        let mut raw_buf = if let Some(data) = raw_data {
+            self.device.new_buffer_with_data(unsafe { mem::transmute(data) }, info.size as u64, usage)
+        } else {
+            self.device.new_buffer(info.size as u64, usage)
+        };
 
-        let buf = Buffer(raw_buf, info.usage);
+        let buf = Buffer(native::Buffer(raw_buf), info.usage);
         Ok(self.share.handles.borrow_mut().make_buffer(buf, info))
     }
 
+    pub fn make_depth_stencil(&self, info: &core::pso::DepthStencilInfo) -> MTLDepthStencilState {
+        use map::{map_function, map_stencil_op};
+
+        let desc = MTLDepthStencilDescriptor::alloc().init();
+        desc.set_depth_write_enabled(info.depth.is_some());
+        desc.set_depth_compare_function(match info.depth {
+            Some(ref depth) => map_function(depth.fun),
+            None => MTLCompareFunction::Never
+        });
+
+        if let Some(stencil) = info.front {
+            let front = MTLStencilDescriptor::alloc().init();
+            front.set_stencil_compare_function(map_function(stencil.fun));
+            front.set_stencil_failure_operation(map_stencil_op(stencil.op_fail));
+            front.set_depth_failure_operation(map_stencil_op(stencil.op_depth_fail));
+            front.set_depth_stencil_pass_operation(map_stencil_op(stencil.op_pass));
+
+            // TODO: wrong type?
+            front.set_read_mask(stencil.mask_read as u32);
+            front.set_write_mask(stencil.mask_write as u32);
+
+            desc.set_front_face_stencil(front);
+        };
+
+        if let Some(stencil) = info.back {
+            let back = MTLStencilDescriptor::alloc().init();
+            back.set_stencil_compare_function(map_function(stencil.fun));
+            back.set_stencil_failure_operation(map_stencil_op(stencil.op_fail));
+            back.set_depth_failure_operation(map_stencil_op(stencil.op_depth_fail));
+            back.set_depth_stencil_pass_operation(map_stencil_op(stencil.op_pass));
+
+            // TODO: wrong type?
+            back.set_read_mask(stencil.mask_read as u32);
+            back.set_write_mask(stencil.mask_write as u32);
+
+            desc.set_back_face_stencil(back);
+        };
+
+        self.device.new_depth_stencil_state(desc)
+    }
 }
 
 
@@ -236,10 +280,12 @@ impl core::Factory<Resources> for Factory {
 
     fn create_pipeline_state_raw(&mut self, program: &handle::Program<Resources>, desc: &core::pso::Descriptor)
                                  -> Result<handle::RawPipelineState<Resources>, core::pso::CreationError> {
-        use map::{map_vertex_format, map_topology};
+        use map::{map_depth_surface, map_vertex_format, map_topology,
+                  map_winding, map_cull, map_fill};
 
         let vertex_desc = MTLVertexDescriptor::new();
 
+        println!("att: {:?}", desc.attributes);
         // TODO: implement instancing
         //
         // TODO: find a better way to set the buffer's stride, step func and
@@ -279,12 +325,19 @@ impl core::Factory<Resources> for Factory {
 
         if let Some(depth_desc) = desc.depth_stencil {
             // TODO: depthstencil
+
+            // pso_descriptor.set_depth_attachment_pixel_format(MTLPixelFormat::Depth32Float);
+            pso_descriptor.set_depth_attachment_pixel_format(map_depth_surface(depth_desc.0).unwrap());
         }
 
         let pso = self.device.new_render_pipeline_state(pso_descriptor).unwrap();
 
         let pso = Pipeline {
-            pipeline: pso
+            pipeline: pso,
+            depth_stencil: desc.depth_stencil.map(|desc| self.make_depth_stencil(&desc.1)),
+            winding: map_winding(desc.rasterizer.front_face),
+            cull: map_cull(desc.rasterizer.cull_face),
+            fill: map_fill(desc.rasterizer.method)
         };
 
         Ok(self.share.handles.borrow_mut().make_pso(pso, program))
@@ -293,7 +346,8 @@ impl core::Factory<Resources> for Factory {
     fn create_texture_raw(&mut self, desc: core::tex::Descriptor, hint: Option<core::format::ChannelType>,
                           data_opt: Option<&[&[u8]]>) -> Result<handle::RawTexture<Resources>, core::tex::Error> {
         use gfx_core::tex::{AaMode, Error, Kind};
-        use map::{map_texture_bind, map_texture_usage, map_format};
+        use map::{map_channel_hint, map_texture_bind, map_texture_usage,
+                  map_format};
 
         let (resource, storage) = map_texture_usage(desc.usage);
 
@@ -301,7 +355,7 @@ impl core::Factory<Resources> for Factory {
         descriptor.set_mipmap_level_count(desc.levels as u64);
         descriptor.set_resource_options(resource);
         descriptor.set_storage_mode(storage);
-
+        descriptor.set_pixel_format(map_format(core::format::Format(desc.format, hint.unwrap_or(map_channel_hint(desc.format).unwrap())), true).unwrap());
         descriptor.set_usage(map_texture_bind(desc.bind));
 
         match desc.kind {
@@ -352,8 +406,77 @@ impl core::Factory<Resources> for Factory {
             },
         };
 
+        let raw_tex = self.device.new_texture(descriptor);
 
-        let tex = Texture(native::Texture(&mut self.device.new_texture(descriptor)), desc.usage);
+        if let Some(data) = data_opt {
+            let region = match desc.kind {
+                Kind::D1(w) => MTLRegion {
+                    origin: MTLOrigin {
+                        x: 0,
+                        y: 0,
+                        z: 0
+                    },
+                    size: MTLSize {
+                        width: w as u64,
+                        height: 1,
+                        depth: 1
+                    }
+                },
+                Kind::D1Array(w, d) => MTLRegion {
+                    origin: MTLOrigin {
+                        x: 0,
+                        y: 0,
+                        z: 0
+                    },
+                    size: MTLSize {
+                        width: w as u64,
+                        height: 1,
+                        depth: d as u64
+                    }
+                },
+                Kind::D2(w, h, _) => MTLRegion {
+                    origin: MTLOrigin {
+                        x: 0,
+                        y: 0,
+                        z: 0
+                    },
+                    size: MTLSize {
+                        width: w as u64,
+                        height: h as u64,
+                        depth: 1
+                    }
+                },
+                Kind::D2Array(w, h, d, _) => MTLRegion {
+                    origin: MTLOrigin {
+                        x: 0,
+                        y: 0,
+                        z: 0
+                    },
+                    size: MTLSize {
+                        width: w as u64,
+                        height: h as u64,
+                        depth: d as u64
+                    }
+                },
+                Kind::D3(w, h, d) => MTLRegion {
+                    origin: MTLOrigin {
+                        x: 0,
+                        y: 0,
+                        z: 0
+                    },
+                    size: MTLSize {
+                        width: w as u64,
+                        height: h as u64,
+                        depth: d as u64
+                    }
+                },
+                _ => unimplemented!()
+            };
+
+            raw_tex.replace_region(region, 0, 4, data.as_ptr() as *const _);
+        }
+
+        let tex = Texture(native::Texture(Box::into_raw(Box::new(raw_tex))), desc.usage);
         Ok(self.share.handles.borrow_mut().make_texture(tex, desc))
     }
 

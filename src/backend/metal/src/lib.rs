@@ -107,7 +107,11 @@ unsafe impl Sync for Program {}
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Pipeline {
-    pipeline: MTLRenderPipelineState
+    pipeline: MTLRenderPipelineState,
+    depth_stencil: Option<MTLDepthStencilState>,
+    winding: MTLWinding,
+    cull: MTLCullMode,
+    fill: MTLTriangleFillMode
 }
 unsafe impl Send for Pipeline {}
 unsafe impl Sync for Pipeline {}

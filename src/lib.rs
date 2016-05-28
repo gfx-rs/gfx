@@ -33,6 +33,10 @@ pub mod shade;
 
 
 pub type ColorFormat = gfx::format::Rgba8;
+
+#[cfg(target_os = "macos")]
+pub type DepthFormat = gfx::format::Depth32F;
+#[cfg(not(target_os = "macos"))]
 pub type DepthFormat = gfx::format::DepthStencil;
 
 pub struct Init<R: gfx::Resources> {

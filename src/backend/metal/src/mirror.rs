@@ -81,7 +81,19 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage,
                     usage: usage,
                 });
             },
+            MTLArgumentType::Sampler => {
+                let name = name.trim_right_matches('_');
+
+                info.samplers.push(shade::SamplerVar {
+                    name: name.into(),
+                    slot: arg.index() as gfx_core::SamplerSlot,
+                    ty: shade::SamplerType(shade::IsComparison::NoCompare,
+                                           shade::IsRect::NoRect),
+                    usage: usage,
+                });
+            },
             _ => {}
+
         }
     }
 }
