@@ -393,12 +393,57 @@ impl core::Factory<R> for Factory {
         let (dev, vk) = self.share.get_device();
 
         let set_layout = {
+            let mut bindings = Vec::new();
+            for (i, cb) in desc.constant_buffers.iter().enumerate() {
+                if let &Some(usage) = cb {
+                    bindings.push(vk::DescriptorSetLayoutBinding {
+                        binding: i as u32,
+                        descriptorType: vk::DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                        descriptorCount: 1,
+                        stageFlags: data::map_stage(usage),
+                        pImmutableSamplers: ptr::null(),
+                    });
+                }
+            }
+            for (i, srv) in desc.resource_views.iter().enumerate() {
+                if let &Some(usage) = srv {
+                    bindings.push(vk::DescriptorSetLayoutBinding {
+                        binding: i as u32,
+                        descriptorType: vk::DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                        descriptorCount: 1,
+                        stageFlags: data::map_stage(usage),
+                        pImmutableSamplers: ptr::null(),
+                    });
+                }
+            }
+            for (i, uav) in desc.unordered_views.iter().enumerate() {
+                if let &Some(usage) = uav {
+                    bindings.push(vk::DescriptorSetLayoutBinding {
+                        binding: i as u32,
+                        descriptorType: vk::DESCRIPTOR_TYPE_STORAGE_IMAGE, //TODO: buffer views
+                        descriptorCount: 1,
+                        stageFlags: data::map_stage(usage),
+                        pImmutableSamplers: ptr::null(),
+                    });
+                }
+            }
+            for (i, sam) in desc.samplers.iter().enumerate() {
+                if let &Some(usage) = sam {
+                    bindings.push(vk::DescriptorSetLayoutBinding {
+                        binding: i as u32,
+                        descriptorType: vk::DESCRIPTOR_TYPE_SAMPLER,
+                        descriptorCount: 1,
+                        stageFlags: data::map_stage(usage),
+                        pImmutableSamplers: ptr::null(),
+                    });
+                }
+            }
             let info = vk::DescriptorSetLayoutCreateInfo {
                 sType: vk::STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
                 pNext: ptr::null(),
                 flags: 0,
-                bindingCount: 0,
-                pBindings: ptr::null(), //TODO
+                bindingCount: bindings.len() as u32,
+                pBindings: bindings.as_ptr(),
             };
             let mut out = 0;
             assert_eq!(vk::SUCCESS, unsafe {

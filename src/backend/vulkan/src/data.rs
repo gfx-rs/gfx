@@ -16,7 +16,7 @@ use gfx_core::factory::{Bind, MapAccess, Usage, LayerError};
 use gfx_core::format::{SurfaceType, ChannelType, Swizzle, ChannelSource};
 use gfx_core::pso::ColorInfo;
 use gfx_core::tex::{FilterMethod, Kind, Layer, PackedColor, WrapMode};
-use gfx_core::{state, Primitive};
+use gfx_core::{shade, state, Primitive};
 use vk;
 
 
@@ -409,4 +409,10 @@ pub fn map_blend(ci: &ColorInfo) -> vk::PipelineColorBlendAttachmentState {
             if ci.mask.contains(state::BLUE)  {vk::COLOR_COMPONENT_B_BIT} else {0} |
             if ci.mask.contains(state::ALPHA) {vk::COLOR_COMPONENT_A_BIT} else {0},
     }
+}
+
+pub fn map_stage(usage: shade::Usage) -> vk::ShaderStageFlags {
+    (if usage.contains(shade::VERTEX)   { vk::SHADER_STAGE_VERTEX_BIT   } else { 0 }) |
+    (if usage.contains(shade::GEOMETRY) { vk::SHADER_STAGE_GEOMETRY_BIT } else { 0 }) |
+    (if usage.contains(shade::PIXEL)    { vk::SHADER_STAGE_FRAGMENT_BIT } else { 0 })
 }

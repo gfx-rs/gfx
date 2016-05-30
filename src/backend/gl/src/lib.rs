@@ -77,7 +77,7 @@ impl d::Resources for Resources {
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct BufferElement {
-    pub desc: d::pso::BufferDesc,
+    pub desc: d::pso::VertexBufferDesc,
     pub elem: d::pso::Element<d::format::Format>,
 }
 
