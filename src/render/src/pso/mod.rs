@@ -247,13 +247,13 @@ pub trait DataLink<'a>: Sized {
     fn is_active(&self) -> bool;
     /// Attempt to link with a vertex buffer containing multiple attributes.
     fn link_vertex_buffer(&mut self, _: d::pso::BufferIndex, _: &Self::Init) ->
-                          Option<d::pso::BufferDesc> { None }
+                          Option<d::pso::VertexBufferDesc> { None }
     /// Attempt to link with a vertex attribute.
     fn link_input(&mut self, _: &d::shade::AttributeVar, _: &Self::Init) ->
                   Option<Result<d::pso::AttributeDesc, d::format::Format>> { None }
     /// Attempt to link with a constant buffer.
     fn link_constant_buffer<'b>(&mut self, _: &'b d::shade::ConstantBufferVar, _: &Self::Init) ->
-                            Option<Result<(), ElementError<&'b str>>> { None }
+                            Option<Result<d::pso::ConstantBufferDesc, ElementError<&'b str>>> { None }
     /// Attempt to link with a global constant.
     fn link_global_constant(&mut self, _: &d::shade::ConstVar, _: &Self::Init) ->
                             Option<Result<(), d::shade::UniformValue>> { None }
@@ -265,12 +265,13 @@ pub trait DataLink<'a>: Sized {
                           Option<d::pso::DepthStencilDesc> { None }
     /// Attempt to link with a shader resource (SRV).
     fn link_resource_view(&mut self, _: &d::shade::TextureVar, _: &Self::Init) ->
-                          Option<Result<(), d::format::Format>> { None }
+                          Option<Result<d::pso::ResourceViewDesc, d::format::Format>> { None }
     /// Attempt to link with an unordered access (UAV).
     fn link_unordered_view(&mut self, _: &d::shade::UnorderedVar, _: &Self::Init) ->
-                           Option<Result<(), d::format::Format>> { None }
+                           Option<Result<d::pso::UnorderedViewDesc, d::format::Format>> { None }
     /// Attempt to link with a sampler.
-    fn link_sampler(&mut self, _: &d::shade::SamplerVar, _: &Self::Init) -> Option<()> { None }
+    fn link_sampler(&mut self, _: &d::shade::SamplerVar, _: &Self::Init)
+                    -> Option<d::pso::SamplerDesc> { None }
     /// Attempt to enable scissor test.
     fn link_scissor(&mut self) -> bool { false }
 }

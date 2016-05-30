@@ -71,11 +71,11 @@ impl<'a,
         self.0.is_active()
     }
     fn link_vertex_buffer(&mut self, index: BufferIndex, _: &Self::Init)
-                          -> Option<pso::BufferDesc> {
+                          -> Option<pso::VertexBufferDesc> {
         use std::mem;
         (self.0).0 = Some(index);
         let rate = <I as Default>::default().as_ref().len();
-        Some(pso::BufferDesc {
+        Some(pso::VertexBufferDesc {
             stride: mem::size_of::<T>() as ElemStride,
             rate: rate as InstanceRate,
         })
@@ -116,9 +116,9 @@ impl<'a> DataLink<'a> for RawVertexBuffer {
         self.0.is_some()
     }
     fn link_vertex_buffer(&mut self, index: BufferIndex, init: &Self::Init)
-                          -> Option<pso::BufferDesc> {
+                          -> Option<pso::VertexBufferDesc> {
         self.0 = Some(index);
-        Some(pso::BufferDesc {
+        Some(pso::VertexBufferDesc {
             stride: init.1,
             rate: init.2,
         })
@@ -153,7 +153,7 @@ DataLink<'a> for ConstantBuffer<T> {
         self.0.is_some()
     }
     fn link_constant_buffer<'b>(&mut self, cb: &'b shade::ConstantBufferVar, init: &Self::Init)
-                            -> Option<Result<(), ElementError<&'b str>>> {
+                            -> Option<Result<pso::ConstantBufferDesc, ElementError<&'b str>>> {
         if &cb.name == *init {
             for el in cb.elements.iter() {
                 return Some(Err(match T::query(&el.name) {
@@ -164,7 +164,7 @@ DataLink<'a> for ConstantBuffer<T> {
                 }))
             }
             self.0 = Some((cb.usage, cb.slot));
-            Some(Ok(()))
+            Some(Ok(cb.usage))
         }else {
             None
         }

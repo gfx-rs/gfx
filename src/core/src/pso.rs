@@ -18,7 +18,8 @@
 //! will want to use the typed and safe `PipelineState`. See the `pso` module inside the `gfx`
 //! crate.
 
-use {MAX_COLOR_TARGETS, MAX_VERTEX_ATTRIBUTES};
+use {MAX_COLOR_TARGETS, MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
+     MAX_RESOURCE_VIEWS, MAX_UNORDERED_VIEWS, MAX_SAMPLERS};
 use {ConstantBufferSlot, ColorSlot, ResourceViewSlot,
      UnorderedViewSlot, SamplerSlot,
      Primitive, Resources};
@@ -137,7 +138,7 @@ pub struct Element<F> {
 
 /// Vertex buffer descriptor
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct BufferDesc {
+pub struct VertexBufferDesc {
     /// Total container size, in bytes
     pub stride: ElemStride,
     /// Rate of the input for the given buffer
@@ -146,6 +147,14 @@ pub struct BufferDesc {
 
 /// PSO vertex attribute descriptor
 pub type AttributeDesc = (BufferIndex, Element<format::Format>);
+/// PSO constant buffer descriptor
+pub type ConstantBufferDesc = Usage;
+/// PSO shader resource view descriptor
+pub type ResourceViewDesc = Usage;
+/// PSO unordered access view descriptor
+pub type UnorderedViewDesc = Usage;
+/// PSO sampler descriptor
+pub type SamplerDesc = Usage;
 /// PSO color target descriptor
 pub type ColorTargetDesc = (format::Format, ColorInfo);
 /// PSO depth-stencil target descriptor
@@ -162,9 +171,17 @@ pub struct Descriptor {
     /// Enable scissor test
     pub scissor: bool,
     /// Vertex buffers
-    pub vertex_buffers: [Option<BufferDesc>; MAX_VERTEX_BUFFERS],
+    pub vertex_buffers: [Option<VertexBufferDesc>; MAX_VERTEX_BUFFERS],
     /// Vertex attributes
     pub attributes: [Option<AttributeDesc>; MAX_VERTEX_ATTRIBUTES],
+    /// Constant buffers
+    pub constant_buffers: [Option<ConstantBufferDesc>; MAX_CONSTANT_BUFFERS],
+    /// Shader resource views
+    pub resource_views: [Option<ResourceViewDesc>; MAX_RESOURCE_VIEWS],
+    /// Unordered access views
+    pub unordered_views: [Option<UnorderedViewDesc>; MAX_UNORDERED_VIEWS],
+    /// Samplers
+    pub samplers: [Option<SamplerDesc>; MAX_SAMPLERS],
     /// Render target views (RTV)
     pub color_targets: [Option<ColorTargetDesc>; MAX_COLOR_TARGETS],
     /// Depth stencil view (DSV)
@@ -180,6 +197,10 @@ impl Descriptor {
             scissor: false,
             vertex_buffers: [None; MAX_VERTEX_BUFFERS],
             attributes: [None; MAX_VERTEX_ATTRIBUTES],
+            constant_buffers: [None; MAX_CONSTANT_BUFFERS],
+            resource_views: [None; MAX_RESOURCE_VIEWS],
+            unordered_views: [None; MAX_UNORDERED_VIEWS],
+            samplers: [None; MAX_SAMPLERS],
             color_targets: [None; MAX_COLOR_TARGETS],
             depth_stencil: None,
         }

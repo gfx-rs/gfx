@@ -45,9 +45,9 @@ macro_rules! gfx_pipeline_inner {
                 // v#
                 let mut _num_vb = 0;
                 $(
-                     if let Some(vd) = meta.$field.link_vertex_buffer(_num_vb, &self.$field) {
+                     if let Some(d) = meta.$field.link_vertex_buffer(_num_vb, &self.$field) {
                         assert!(meta.$field.is_active());
-                        desc.vertex_buffers[_num_vb as usize] = Some(vd);
+                        desc.vertex_buffers[_num_vb as usize] = Some(d);
                         _num_vb += 1;
                     }
                 )*
@@ -71,8 +71,9 @@ macro_rules! gfx_pipeline_inner {
                 for cb in &info.constant_buffers {
                     $(
                         match meta.$field.link_constant_buffer(cb, &self.$field) {
-                            Some(Ok(())) => {
+                            Some(Ok(d)) => {
                                 assert!(meta.$field.is_active());
+                                desc.constant_buffers[cb.slot as usize] = Some(d);
                                 continue;
                             },
                             Some(Err(e)) => return Err(
@@ -103,8 +104,9 @@ macro_rules! gfx_pipeline_inner {
                 for srv in &info.textures {
                     $(
                         match meta.$field.link_resource_view(srv, &self.$field) {
-                            Some(Ok(())) => {
+                            Some(Ok(d)) => {
                                 assert!(meta.$field.is_active());
+                                desc.resource_views[srv.slot as usize] = Some(d);
                                 continue;
                             },
                             Some(Err(_)) => return Err(
@@ -119,8 +121,9 @@ macro_rules! gfx_pipeline_inner {
                 for uav in &info.unordereds {
                     $(
                         match meta.$field.link_unordered_view(uav, &self.$field) {
-                            Some(Ok(())) => {
+                            Some(Ok(d)) => {
                                 assert!(meta.$field.is_active());
+                                desc.unordered_views[uav.slot as usize] = Some(d);
                                 continue;
                             },
                             Some(Err(_)) => return Err(
@@ -135,8 +138,9 @@ macro_rules! gfx_pipeline_inner {
                 for sm in &info.samplers {
                     $(
                         match meta.$field.link_sampler(sm, &self.$field) {
-                            Some(()) => {
+                            Some(d) => {
                                 assert!(meta.$field.is_active());
+                                desc.samplers[sm.slot as usize] = Some(d);
                                 continue;
                             },
                             None => (),
