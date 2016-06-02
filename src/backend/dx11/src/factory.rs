@@ -400,6 +400,7 @@ impl core::Factory<R> for Factory {
             unordereds: Vec::new(),
             samplers: Vec::new(),
             outputs: Vec::new(),
+            output_depth: false,
             knows_outputs: true,
         };
         let fh = &mut self.frame_handles;
