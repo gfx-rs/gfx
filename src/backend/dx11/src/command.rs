@@ -16,7 +16,7 @@
 
 use std::ptr;
 use winapi::{FLOAT, INT, UINT, UINT8, DXGI_FORMAT,
-             DXGI_FORMAT_R8_UINT, DXGI_FORMAT_R16_UINT, DXGI_FORMAT_R32_UINT,
+             DXGI_FORMAT_R16_UINT, DXGI_FORMAT_R32_UINT,
              D3D11_CLEAR_FLAG, D3D11_PRIMITIVE_TOPOLOGY, D3D11_VIEWPORT, D3D11_RECT,
              ID3D11RasterizerState, ID3D11DepthStencilState, ID3D11BlendState};
 use gfx_core::{draw, pso, shade, state, target, tex};

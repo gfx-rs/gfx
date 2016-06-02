@@ -148,16 +148,19 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
             let name = convert_str(desc.SemanticName);
             debug!("Output {}, system type {:?}, mask {}, read-write mask {}",
                 name, desc.SystemValueType, desc.Mask, desc.ReadWriteMask);
-            if desc.SystemValueType == winapi::D3D_NAME_TARGET {
-                info.outputs.push(s::OutputVar {
-                    name: format!("Target{}", desc.SemanticIndex), //care!
-                    slot: desc.Register as core::ColorSlot,
-                    base_type: map_base_type_from_component(desc.ComponentType),
-                    container: mask_to_vector(desc.Mask),
-                });
-            }else
-            if desc.SystemValueType == winapi::D3D_NAME_UNDEFINED {
-                warn!("Custom PS output semantic is ignored: {}", name)
+            match desc.SystemValueType {
+                winapi::D3D_NAME_TARGET =>
+                    info.outputs.push(s::OutputVar {
+                        name: format!("Target{}", desc.SemanticIndex), //care!
+                        slot: desc.Register as core::ColorSlot,
+                        base_type: map_base_type_from_component(desc.ComponentType),
+                        container: mask_to_vector(desc.Mask),
+                    }),
+                winapi::D3D_NAME_DEPTH => info.output_depth = true,
+                winapi::D3D_NAME_UNDEFINED =>
+                    warn!("Custom PS output semantic is ignored: {}", name),
+                _ =>
+                    warn!("Unhandled PS output semantic {} of type {:?}", name, desc.SystemValueType),
             }
         }
     }

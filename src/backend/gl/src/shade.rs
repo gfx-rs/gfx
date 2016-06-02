@@ -346,9 +346,10 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program, u
     (uniforms, textures, samplers)
 }
 
-fn query_outputs(gl: &gl::Gl, prog: super::Program) -> Vec<s::OutputVar> {
+fn query_outputs(gl: &gl::Gl, prog: super::Program) -> (Vec<s::OutputVar>, bool) {
     use std::ptr;
 
+    let mut out_depth = false;
     let mut num_slots = 0;
     unsafe {
         gl.GetProgramInterfaceiv(prog, gl::PROGRAM_OUTPUT, gl::ACTIVE_RESOURCES, &mut num_slots);
@@ -379,11 +380,17 @@ fn query_outputs(gl: &gl::Gl, prog: super::Program) -> Vec<s::OutputVar> {
 
         // special index reported for GLSL 120 to 140 shaders
         if index == !0 {
-            assert!(name.starts_with("gl_Frag"));
-            index = if name.starts_with("gl_FragData") {
-                (name.chars().nth(12).unwrap() as i32) - ('0' as i32)
-            }else { 0 };
-            name = format!("Target{}", index);
+            if name.starts_with("gl_FragData") {
+                let index = (name.chars().nth(12).unwrap() as i32) - ('0' as i32);
+                name = format!("Target{}", index);
+            }else
+            if &name == "gl_FragDepth" {
+                out_depth = true;
+                continue;
+            }else {
+                warn!("Unhandled GLSL built-in: {}", name);
+                continue;
+            }
         }
 
         if let StorageType::Var(base, container) = StorageType::new(type_ as u32) {
@@ -395,7 +402,7 @@ fn query_outputs(gl: &gl::Gl, prog: super::Program) -> Vec<s::OutputVar> {
             });
         }
     }
-    out
+    (out, out_depth)
 }
 
 pub fn get_program_log(gl: &gl::Gl, name: super::Program) -> String {
@@ -441,10 +448,13 @@ pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities, private: &PrivateCaps
             unordereds: Vec::new(), //TODO
             samplers: samplers,
             outputs: Vec::new(),
+            output_depth: false,
             knows_outputs: false,
         };
         if private.program_interface_supported {
-            info.outputs = query_outputs(gl, name);
+            let (outs, od) = query_outputs(gl, name);
+            info.outputs = outs;
+            info.output_depth = od;
             info.knows_outputs = true;
         }
         debug!("Program {} reflection: {:?}", name, info);

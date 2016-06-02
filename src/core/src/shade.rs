@@ -384,6 +384,8 @@ pub struct ProgramInfo {
     pub samplers: Vec<SamplerVar>,
     /// Output targets in the program
     pub outputs: Vec<OutputVar>,
+    /// A flag indicating that the pixel shader manually assigns the depth.
+    pub output_depth: bool,
     /// A hacky flag to make sure the clients know we are
     /// unable to actually get the output variable info
     pub knows_outputs: bool,
