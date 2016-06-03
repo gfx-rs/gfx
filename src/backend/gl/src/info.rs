@@ -229,7 +229,6 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
 #[cfg(test)]
 mod tests {
     use super::Version;
-    use super::to_shader_model;
 
     #[test]
     fn test_version_parse() {
@@ -244,15 +243,5 @@ mod tests {
         assert_eq!(Version::parse("1.2. h3l1o. W0rld"), Ok(Version::new(1, 2, None, "h3l1o. W0rld")));
         assert_eq!(Version::parse("1.2.3.h3l1o. W0rld"), Ok(Version::new(1, 2, Some(3), "W0rld")));
         assert_eq!(Version::parse("1.2.3 h3l1o. W0rld"), Ok(Version::new(1, 2, Some(3), "h3l1o. W0rld")));
-    }
-
-    #[test]
-    fn test_shader_model() {
-        use gfx_core::shade::ShaderModel;
-        assert_eq!(to_shader_model(&Version::parse("1.10").unwrap()), ShaderModel::Unsupported);
-        assert_eq!(to_shader_model(&Version::parse("1.20").unwrap()), ShaderModel::Version30);
-        assert_eq!(to_shader_model(&Version::parse("1.50").unwrap()), ShaderModel::Version40);
-        assert_eq!(to_shader_model(&Version::parse("3.00").unwrap()), ShaderModel::Version41);
-        assert_eq!(to_shader_model(&Version::parse("4.30").unwrap()), ShaderModel::Version50);
     }
 }

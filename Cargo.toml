@@ -10,7 +10,6 @@ authors = ["The Gfx-rs Developers"]
 [features]
 unstable = []
 
-
 [lib]
 name = "gfx_app"
 

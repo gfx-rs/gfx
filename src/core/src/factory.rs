@@ -306,26 +306,13 @@ impl From<TargetViewError> for CombinedError {
 /// with. 
 ///
 /// # Construction and Handling
-/// A `Factory` is created by using the appropriate functions of the desired graphics backend.
-/// An example using the OpenGL backend and Glutin.
-/// 
-/// ```
-/// extern crate gfx;
-/// extern crate gfx_device_gl;
-/// extern crate gfx_window_glutin;
-/// extern crate glutin;
-///
-/// use gfx::format::{DepthStencil, Rgba8};
-///
-/// let builder = glutin::WindowBuilder::new().with_title("Factory Construction".to_string());
-/// let (window, device, factory, rtv, stv) =
-///     gfx_window_glutin::init::<Rgba8, DepthStencil>(builder);
-/// ```
+/// A `Factory` is typically created along with other objects using a helper function of the
+/// appropriate gfx_window module (e.g. gfx_window_glutin::init()).
 ///
 /// This factory structure can then be used to create and manage different resources, like buffers,
 /// shader programs and textures. See the individual methods for more information.
 ///
-/// Also see `FactoryExt` inside the `gfx` trait for additional methods.
+/// Also see the `FactoryExt` trait inside the `gfx` module for additional methods.
 #[allow(missing_docs)]
 pub trait Factory<R: Resources> {
     /// Associated mapper type
