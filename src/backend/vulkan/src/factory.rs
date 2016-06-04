@@ -74,28 +74,7 @@ impl Factory {
     }
 
     pub fn create_command_buffer(&mut self) -> command::Buffer {
-        let alloc_info = vk::CommandBufferAllocateInfo {
-            sType: vk::STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-            pNext: ptr::null(),
-            commandPool: self.command_pool,
-            level: vk::COMMAND_BUFFER_LEVEL_PRIMARY,
-            commandBufferCount: 1,
-        };
-        let begin_info = vk::CommandBufferBeginInfo {
-            sType: vk::STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-            pNext: ptr::null(),
-            flags: 0,
-            pInheritanceInfo: ptr::null(),
-        };
-        let (dev, vk) = self.share.get_device();
-        let mut buf = 0;
-        assert_eq!(vk::SUCCESS, unsafe {
-            vk.AllocateCommandBuffers(dev, &alloc_info, &mut buf)
-        });
-        assert_eq!(vk::SUCCESS, unsafe {
-            vk.BeginCommandBuffer(buf, &begin_info)
-        });
-        command::Buffer::new(buf, self.queue_family_index, self.share.clone())
+        command::Buffer::new(self.command_pool, self.queue_family_index, self.share.clone())
     }
 
     fn view_texture(&mut self, htex: &h::RawTexture<R>, desc: core::tex::ResourceDesc, is_target: bool)
@@ -381,6 +360,7 @@ impl core::Factory<R> for Factory {
             unordereds: Vec::new(),
             samplers: Vec::new(),
             outputs: Vec::new(),
+            output_depth: false,
             knows_outputs: false,
         };
         Ok(self.share.handles.borrow_mut().make_program(prog, info))

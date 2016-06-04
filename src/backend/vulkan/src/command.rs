@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::{mem, ptr};
+use std::collections::hash_map::{HashMap, Entry};
 use vk;
 use gfx_core::{self as core, draw, pso, shade, target, tex};
 use gfx_core::state::RefValues;
@@ -23,24 +24,63 @@ use {Resources, Share, SharePointer};
 
 pub struct Buffer {
     inner: vk::CommandBuffer,
+    parent_pool: vk::CommandPool,
     family: u32,
     share: SharePointer,
+    last_render_pass: vk::RenderPass,
+    fbo_cache: HashMap<pso::PixelTargetSet<Resources>, vk::Framebuffer>,
+    temp_attachments: Vec<vk::ImageView>,
 }
 
 impl Buffer {
     #[doc(hidden)]
-    pub fn new(b: vk::CommandBuffer, f: u32, s: SharePointer) -> Buffer {
+    pub fn new(pool: vk::CommandPool, family: u32, share: SharePointer) -> Buffer {
+        let alloc_info = vk::CommandBufferAllocateInfo {
+            sType: vk::STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            pNext: ptr::null(),
+            commandPool: pool,
+            level: vk::COMMAND_BUFFER_LEVEL_PRIMARY,
+            commandBufferCount: 1,
+        };
+        let begin_info = vk::CommandBufferBeginInfo {
+            sType: vk::STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+            pNext: ptr::null(),
+            flags: 0,
+            pInheritanceInfo: ptr::null(),
+        };
         Buffer {
-            inner: b,
-            family: f,
-            share: s,
+            inner: {
+                let (dev, vk) = share.get_device();
+                let mut buf = 0;
+                assert_eq!(vk::SUCCESS, unsafe {
+                    vk.AllocateCommandBuffers(dev, &alloc_info, &mut buf)
+                });
+                assert_eq!(vk::SUCCESS, unsafe {
+                    vk.BeginCommandBuffer(buf, &begin_info)
+                });
+                buf
+            },
+            parent_pool: pool,
+            family: family,
+            share: share,
+            last_render_pass: 0,
+            fbo_cache: HashMap::new(),
+            temp_attachments: Vec::new(),
         }
     }
 }
 
 impl Drop for Buffer {
     fn drop(&mut self) {
-        //TODO
+        let (dev, vk) = self.share.get_device();
+        unsafe {
+            vk.FreeCommandBuffers(dev, self.parent_pool, 1, &self.inner);
+        }
+        for &fbo in self.fbo_cache.values() {
+            unsafe {
+                vk.DestroyFramebuffer(dev, fbo, ptr::null());
+            }
+        }
     }
 }
 
@@ -82,15 +122,102 @@ impl Buffer {
 }
 
 impl draw::CommandBuffer<Resources> for Buffer {
-    fn reset(&mut self) {}
-    fn bind_pipeline_state(&mut self, _: native::Pipeline) {}
+    fn reset(&mut self) {
+        let (_, vk) = self.share.get_device();
+        assert_eq!(vk::SUCCESS, unsafe {
+            vk.ResetCommandBuffer(self.inner, 0)
+        });
+    }
+
+    fn bind_pipeline_state(&mut self, pso: native::Pipeline) {
+        let (_, vk) = self.share.get_device();
+        self.last_render_pass = pso.render_pass;
+        unsafe {
+            vk.CmdBindPipeline(self.inner, vk::PIPELINE_BIND_POINT_GRAPHICS, pso.pipeline);
+        }
+    }
+
     fn bind_vertex_buffers(&mut self, _: pso::VertexBufferSet<Resources>) {}
     fn bind_constant_buffers(&mut self, _: &[pso::ConstantBufferParam<Resources>]) {}
     fn bind_global_constant(&mut self, _: shade::Location, _: shade::UniformValue) {}
     fn bind_resource_views(&mut self, _: &[pso::ResourceViewParam<Resources>]) {}
     fn bind_unordered_views(&mut self, _: &[pso::UnorderedViewParam<Resources>]) {}
     fn bind_samplers(&mut self, _: &[pso::SamplerParam<Resources>]) {}
-    fn bind_pixel_targets(&mut self, _: pso::PixelTargetSet<Resources>) {}
+
+    fn bind_pixel_targets(&mut self, pts: pso::PixelTargetSet<Resources>) {
+        let (dev, vk) = self.share.get_device();
+        let vp = vk::Viewport {
+            x: 0.0,
+            y: 0.0,
+            width: pts.size.0 as f32,
+            height: pts.size.1 as f32,
+            minDepth: 0.0,
+            maxDepth: 1.0,
+        };
+        let fbo = match self.fbo_cache.entry(pts) {
+            Entry::Occupied(oe) => *oe.get(),
+            Entry::Vacant(ve) => {
+                let mut ats = &mut self.temp_attachments;
+                ats.clear();
+                for color in pts.colors.iter() {
+                    if let &Some(ref tv) = color {
+                        ats.push(tv.view);
+                    }
+                }
+                match (pts.depth, pts.stencil) {
+                    (None, None) => (),
+                    (Some(vd), Some(vs)) => {
+                        if vd != vs {
+                            error!("Different depth and stencil are not supported")
+                        }
+                        ats.push(vd.view);
+                    },
+                    (Some(vd), None) => ats.push(vd.view),
+                    (None, Some(vs)) => ats.push(vs.view),
+                }
+                let info = vk::FramebufferCreateInfo {
+                    sType: vk::STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+                    pNext: ptr::null(),
+                    flags: 0,
+                    renderPass: self.last_render_pass,
+                    attachmentCount: ats.len() as u32,
+                    pAttachments: ats.as_ptr(),
+                    width: pts.size.0 as u32,
+                    height: pts.size.1 as u32,
+                    layers: pts.size.2 as u32,
+                };
+                let mut out = 0;
+                assert_eq!(vk::SUCCESS, unsafe {
+                    vk.CreateFramebuffer(dev, &info, ptr::null(), &mut out)
+                });
+                *ve.insert(out)
+            },
+        };
+        let rp_info = vk::RenderPassBeginInfo {
+            sType: vk::STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+            pNext: ptr::null(),
+            renderPass: self.last_render_pass,
+            framebuffer: fbo,
+            renderArea: vk::Rect2D {
+                offset: vk::Offset2D {
+                    x: 0,
+                    y: 0,
+                },
+                extent: vk::Extent2D {
+                    width: pts.size.0 as u32,
+                    height: pts.size.1 as u32,
+                },
+            },
+            clearValueCount: 0,
+            pClearValues: ptr::null(),
+        };
+        unsafe {
+            vk.CmdSetViewport(self.inner, 0, 1, &vp);
+            vk.CmdBeginRenderPass(self.inner, &rp_info, vk::SUBPASS_CONTENTS_INLINE);
+        }
+        //TODO: EndRenderPass
+    }
+
     fn bind_index(&mut self, _: native::Buffer, _: IndexType) {}
     fn set_scissor(&mut self, _: target::Rect) {}
     fn set_ref_values(&mut self, _: RefValues) {}
