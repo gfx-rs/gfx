@@ -27,7 +27,7 @@ pub enum Backend {
     #[cfg(target_os = "windows")]
     Hlsl(DxShaderModel),
     #[cfg(target_os = "macos")]
-    Metal(MetalShaderModel)
+    Msl(MetalShaderModel)
 }
 
 pub const EMPTY: &'static [u8] = &[];
@@ -47,8 +47,8 @@ pub struct Source<'a> {
     pub hlsl_40 : &'a [u8],
     pub hlsl_41 : &'a [u8],
     pub hlsl_50 : &'a [u8],
-    pub metal_10: &'a [u8],
-    pub metal_11: &'a [u8]
+    pub msl_10  : &'a [u8],
+    pub msl_11  : &'a [u8]
 }
 
 impl<'a> Source<'a> {
@@ -68,8 +68,8 @@ impl<'a> Source<'a> {
             hlsl_40:  EMPTY,
             hlsl_41:  EMPTY,
             hlsl_50:  EMPTY,
-            metal_10: EMPTY,
-            metal_11: EMPTY
+            msl_10:   EMPTY,
+            msl_11:   EMPTY
         }
     }
 
@@ -105,9 +105,9 @@ impl<'a> Source<'a> {
                 _ => return Err(())
             },
             #[cfg(target_os = "macos")]
-            Backend::Metal(revision) => match *self {
-                Source { metal_11: s, .. } if s != EMPTY && revision >= 11 => s,
-                Source { metal_10: s, .. } if s != EMPTY && revision >= 10 => s,
+            Backend::Msl(revision) => match *self {
+                Source { msl_11: s, .. } if s != EMPTY && revision >= 11 => s,
+                Source { msl_10: s, .. } if s != EMPTY && revision >= 10 => s,
                 _ => return Err(())
             }
         })

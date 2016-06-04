@@ -45,6 +45,7 @@ gfx_defines!{
     }
 }
 
+
 impl Vertex {
     fn new(p: [i8; 3], t: [i8; 2]) -> Vertex {
         Vertex {
@@ -70,7 +71,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             glsl_150: include_bytes!("shader/cube_150.glslv"),
             glsl_es_100: include_bytes!("shader/cube_100_es.glslv"),
             hlsl_40:  include_bytes!("data/vertex.fx"),
-            metal_11: include_bytes!("shader/cube_vertex.metal"),
+            msl_11: include_bytes!("shader/cube_vertex.metal"),
             .. gfx_app::shade::Source::empty()
         };
         let ps = gfx_app::shade::Source {
@@ -78,7 +79,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             glsl_150: include_bytes!("shader/cube_150.glslf"),
             glsl_es_100: include_bytes!("shader/cube_100_es.glslf"),
             hlsl_40:  include_bytes!("data/pixel.fx"),
-            metal_11: include_bytes!("shader/cube_frag.metal"),
+            msl_11: include_bytes!("shader/cube_frag.metal"),
             .. gfx_app::shade::Source::empty()
         };
 

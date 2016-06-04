@@ -137,7 +137,6 @@ pub fn init_raw(title: &str, requested_width: u32, requested_height: u32, color_
 
         let drawable = layer.next_drawable().unwrap();
 
-        println!("{:p}", &mut device);
         let window = MetalWindow {
             window: winit_window,
             layer: layer,
@@ -145,14 +144,8 @@ pub fn init_raw(title: &str, requested_width: u32, requested_height: u32, color_
             backbuffer: addr
         };
 
-
-        //*addr = mem::transmute(10u64);
-        println!("{:?}", color);
-
         (*daddr).0 = drawable.0;
         (*addr).0 = drawable.texture().0;
-        println!("{:?}", *window.backbuffer);
-        //*addr = tex;
 
         Ok((window, device, factory, color))
     }

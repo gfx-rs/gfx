@@ -235,7 +235,7 @@ impl core::Factory<Resources> for Factory {
 
                 for i in 0..16 {
                     let attribute = vertex_desc.attributes().object_at(i as usize);
-                    attribute.set_format(MTLVertexFormat::Int4);
+                    attribute.set_format(MTLVertexFormat::Char4);
                     attribute.set_offset(0);
                     attribute.set_buffer_index(30);
                 }
@@ -473,7 +473,8 @@ impl core::Factory<Resources> for Factory {
                 _ => unimplemented!()
             };
 
-            raw_tex.replace_region(region, 0, 4, data.as_ptr() as *const _);
+            // TODO: handle the data better
+            raw_tex.replace_region(region, 0, 4 * region.size.width, data[0].as_ptr() as *const _);
         }
 
         let tex = Texture(native::Texture(Box::into_raw(Box::new(raw_tex))), desc.usage);

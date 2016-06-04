@@ -119,17 +119,15 @@ pub struct Wrap<R: gfx::Resources, C: gfx::CommandBuffer<R>, A>{
     app: A,
 }
 
-pub type WrapGL2<A> = Wrap<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer, A>;
-
 #[cfg(target_os = "macos")]
 pub type WrapMetal<A> = Wrap<gfx_device_metal::Resources, gfx_device_metal::CommandBuffer, A>;
-
 #[cfg(target_os = "windows")]
 pub type D3D11CommandBuffer = gfx_device_dx11::CommandBuffer<gfx_device_dx11::DeferredContext>;
 #[cfg(target_os = "windows")]
 pub type D3D11CommandBufferFake = gfx_device_dx11::CommandBuffer<gfx_device_dx11::CommandList>;
 #[cfg(target_os = "windows")]
 pub type WrapD3D11<A> = Wrap<gfx_device_dx11::Resources, D3D11CommandBuffer, A>;
+pub type WrapGL2<A> = Wrap<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer, A>;
 
 impl<R, C, A> ApplicationBase<R, C> for Wrap<R, C, A> where
     R: gfx::Resources,
@@ -240,7 +238,7 @@ impl<
         let cmd_buf = factory.create_command_buffer();
 
         let mut app = Self::new(factory, cmd_buf.into(), Init {
-            backend: shade::Backend::Metal(device.get_shader_model()),
+            backend: shade::Backend::Msl(device.get_shader_model()),
             color: main_color,
             depth: main_depth,
             aspect_ratio: width as f32 / height as f32

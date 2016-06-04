@@ -154,7 +154,7 @@ impl CommandBuffer {
 
         self.mtl_buf.present_drawable(drawable);
         self.mtl_buf.commit();
-        self.mtl_buf.wait_until_completed();
+        //self.mtl_buf.wait_until_completed();
 
         unsafe {
             self.mtl_buf.release();
