@@ -24,7 +24,7 @@ use gfx_device_gl::Resources;
 ///
 /// # Example
 ///
-/// ```
+/// ```no_run
 /// extern crate gfx_window_sdl;
 /// extern crate sdl2;
 /// 

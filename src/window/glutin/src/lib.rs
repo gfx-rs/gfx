@@ -23,6 +23,25 @@ use gfx_device_gl::Resources as R;
 
 /// Initialize with a window builder.
 /// Generically parametrized version over the main framebuffer format.
+///
+/// # Example
+///
+/// ```no_run
+/// extern crate gfx_core;
+/// extern crate gfx_device_gl;
+/// extern crate gfx_window_glutin;
+/// extern crate glutin;
+///
+/// use gfx_core::format::{DepthStencil, Rgba8};
+///
+/// fn main() {
+///     let builder = glutin::WindowBuilder::new().with_title("Example".to_string());
+///     let (window, device, factory, rtv, stv) =
+///         gfx_window_glutin::init::<Rgba8, DepthStencil>(builder);
+///
+///     // your code
+/// }
+/// ```
 pub fn init<Cf, Df>(builder: glutin::WindowBuilder) ->
             (glutin::Window, gfx_device_gl::Device, gfx_device_gl::Factory,
             handle::RenderTargetView<R, Cf>, handle::DepthStencilView<R, Df>)

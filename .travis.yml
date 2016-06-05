@@ -1,14 +1,14 @@
-sudo: false
+sudo: required
 language: rust
 rust:
-- stable
-- nightly
+  - stable
+  - nightly
 before_script:
-- pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
+  - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
 notifications:
   webhooks:
     urls:
-    - https://webhooks.gitter.im/e/7479b6691b7e5e40716a
+      - https://webhooks.gitter.im/e/7479b6691b7e5e40716a
     on_success: always
     on_failure: always
     on_start: false
@@ -18,24 +18,31 @@ before_install:
 addons:
   apt:
     sources:
-    # install a newer cmake since at this time Travis only has version 2.8.7
-    - kalakris-cmake
+      # install a newer cmake since at this time Travis only has version 2.8.7
+      - kalakris-cmake
+      # add a repository for libsdl2-dev
+      - sourceline: 'ppa:zoogie/sdl2-snapshots'
     packages:
-    - xdotool
-    - cmake
-    - libxxf86vm-dev
-    - libxinerama-dev
-    - libxinerama1
-    - libxcursor-dev
-    - libxcursor1
+      - xdotool
+      - cmake
+      - libxxf86vm-dev
+      - libxinerama-dev
+      - libxinerama1
+      - libxcursor-dev
+      - libxcursor1
+      - libsdl2-dev
 script:
-- |
-  travis-cargo build &&
-  travis-cargo test &&
-  travis-cargo bench &&
-  travis-cargo doc -- -j 1
+  - travis-cargo build
+  - travis-cargo test -- -p gfx_core
+  - travis-cargo test -- -p gfx
+  - travis-cargo test -- -p gfx_device_gl
+  - travis-cargo test -- -p gfx_window_glutin
+  - travis-cargo test -- -p gfx_window_glfw
+  - travis-cargo test -- -p gfx_window_sdl
+  - travis-cargo test
 after_success:
-- travis-cargo --only nightly doc-upload
+  - travis-cargo doc -- -j 1
+  - travis-cargo --only nightly doc-upload
 env:
   global:
-  - secure: eYm18Lr7+FYFgY9Cj/LFyL0WaC/zesBE8pywho9c+ByUEMwaZ9QCbsaX3H+IBNQCTSCImiKj+zuj+uIPyOTIiC5OPY0cvziWcBvyAlrwnwT7oBm8X9CPDCuspRVGO52CoksI1oYNkEc1xaL9PIUw6GMXhVCAIkQI7tMbq+kWxDQ=
+    - secure: eYm18Lr7+FYFgY9Cj/LFyL0WaC/zesBE8pywho9c+ByUEMwaZ9QCbsaX3H+IBNQCTSCImiKj+zuj+uIPyOTIiC5OPY0cvziWcBvyAlrwnwT7oBm8X9CPDCuspRVGO52CoksI1oYNkEc1xaL9PIUw6GMXhVCAIkQI7tMbq+kWxDQ=

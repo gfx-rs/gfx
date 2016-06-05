@@ -27,7 +27,7 @@ use glfw::Context;
 ///
 /// # Example
 ///
-/// ```
+/// ```no_run
 /// extern crate gfx_window_glfw;
 /// extern crate glfw;
 /// 
