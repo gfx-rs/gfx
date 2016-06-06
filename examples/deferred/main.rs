@@ -68,10 +68,42 @@ gfx_defines!{
         color: [f32; 3] = "a_Color",
     }
 
+    vertex BlitVertex {
+        pos: [i8; 2] = "a_Pos",
+        tex_coord: [i8; 2] = "a_TexCoord",
+    }
+
+    vertex CubeVertex {
+        pos: [i8; 4] = "a_Pos",
+    }
+
+    constant LightLocals {
+        cam_pos_and_radius: [f32; 4] = "u_CameraPosAndRadius",
+    }
+
     constant TerrainLocals {
         model: [[f32; 4]; 4] = "u_Model",
         view: [[f32; 4]; 4] = "u_View",
         proj: [[f32; 4]; 4] = "u_Proj",
+    }
+
+    constant CubeLocals {
+        transform: [[f32; 4]; 4] = "u_Transform",
+        radius: f32 = "u_Radius",
+    }
+
+    pipeline light {
+        vbuf: gfx::VertexBuffer<CubeVertex> = (),
+        locals_vs: gfx::ConstantBuffer<CubeLocals> = "CubeLocals",
+        locals_ps: gfx::ConstantBuffer<LightLocals> = "LightLocals",
+        light_pos_buf: gfx::ConstantBuffer<LightInfo> = "u_LightPosBlock",
+        tex_pos: gfx::TextureSampler<[f32; 4]> = "t_Position",
+        tex_normal: gfx::TextureSampler<[f32; 4]> = "t_Normal",
+        tex_diffuse: gfx::TextureSampler<[f32; 4]> = "t_Diffuse",
+        out_color: gfx::BlendTarget<GFormat> =
+            ("Target0", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
+        out_depth: gfx::DepthTarget<Depth> =
+            gfx::preset::depth::LESS_EQUAL_TEST,
     }
 
     pipeline terrain {
@@ -85,216 +117,23 @@ gfx_defines!{
         out_depth: gfx::DepthTarget<Depth> =
             gfx::preset::depth::LESS_EQUAL_WRITE,
     }
+
+    pipeline blit {
+        vbuf: gfx::VertexBuffer<BlitVertex> = (),
+        tex: gfx::TextureSampler<[f32; 4]> = "t_BlitTex",
+        out: gfx::RenderTarget<ColorFormat> = "Target0",
+    }
+
+    pipeline emitter {
+        vbuf: gfx::VertexBuffer<CubeVertex> = (),
+        locals: gfx::ConstantBuffer<CubeLocals> = "CubeLocals",
+        light_pos_buf: gfx::ConstantBuffer<LightInfo> = "u_LightPosBlock",
+        out_color: gfx::BlendTarget<GFormat> =
+            ("Target0", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
+        out_depth: gfx::DepthTarget<Depth> =
+            gfx::preset::depth::LESS_EQUAL_TEST,
+    }
 }
-
-pub static TERRAIN_VERTEX_SRC: &'static [u8] = b"
-    #version 150 core
-
-    layout(std140)
-    uniform TerrainLocals {
-        mat4 u_Model;
-        mat4 u_View;
-        mat4 u_Proj;
-    };
-    in vec3 a_Pos;
-    in vec3 a_Normal;
-    in vec3 a_Color;
-    out vec3 v_FragPos;
-    out vec3 v_Normal;
-    out vec3 v_Color;
-
-    void main() {
-        v_FragPos = (u_Model * vec4(a_Pos, 1.0)).xyz;
-        v_Normal = mat3(u_Model) * a_Normal;
-        v_Color = a_Color;
-        gl_Position = u_Proj * u_View * u_Model * vec4(a_Pos, 1.0);
-    }
-";
-
-pub static TERRAIN_FRAGMENT_SRC: &'static [u8] = b"
-    #version 150 core
-
-    in vec3 v_FragPos;
-    in vec3 v_Normal;
-    in vec3 v_Color;
-    out vec4 Target0;
-    out vec4 Target1;
-    out vec4 Target2;
-
-    void main() {
-        vec3 n = normalize(v_Normal);
-
-        Target0 = vec4(v_FragPos, 0.0);
-        Target1 = vec4(n, 0.0);
-        Target2 = vec4(v_Color, 1.0);
-    }
-";
-
-gfx_vertex_struct!( BlitVertex {
-    pos: [i8; 2] = "a_Pos",
-    tex_coord: [i8; 2] = "a_TexCoord",
-});
-
-gfx_pipeline!( blit {
-    vbuf: gfx::VertexBuffer<BlitVertex> = (),
-    tex: gfx::TextureSampler<[f32; 4]> = "t_BlitTex",
-    out: gfx::RenderTarget<ColorFormat> = "Target0",
-});
-
-pub static BLIT_VERTEX_SRC: &'static [u8] = b"
-    #version 150 core
-
-    in ivec2 a_Pos;
-    in ivec2 a_TexCoord;
-    out vec2 v_TexCoord;
-
-    void main() {
-        v_TexCoord = a_TexCoord;
-        gl_Position = vec4(a_Pos, 0.0, 1.0);
-    }
-";
-
-pub static BLIT_FRAGMENT_SRC: &'static [u8] = b"
-    #version 150 core
-
-    uniform sampler2D t_BlitTex;
-    in vec2 v_TexCoord;
-    out vec4 Target0;
-
-    void main() {
-        vec4 tex = texture(t_BlitTex, v_TexCoord);
-        Target0 = tex;
-    }
-";
-
-gfx_vertex_struct!( CubeVertex {
-    pos: [i8; 4] = "a_Pos",
-});
-
-gfx_constant_struct!( CubeLocals {
-    transform: [[f32; 4]; 4] = "u_Transform",
-    radius: f32 = "u_Radius",
-});
-
-gfx_constant_struct!( LightLocals {
-    cam_pos_and_radius: [f32; 4] = "u_CameraPosAndRadius",
-});
-
-gfx_pipeline!( light {
-    vbuf: gfx::VertexBuffer<CubeVertex> = (),
-    locals_vs: gfx::ConstantBuffer<CubeLocals> = "CubeLocals",
-    locals_ps: gfx::ConstantBuffer<LightLocals> = "LightLocals",
-    light_pos_buf: gfx::ConstantBuffer<LightInfo> = "u_LightPosBlock",
-    tex_pos: gfx::TextureSampler<[f32; 4]> = "t_Position",
-    tex_normal: gfx::TextureSampler<[f32; 4]> = "t_Normal",
-    tex_diffuse: gfx::TextureSampler<[f32; 4]> = "t_Diffuse",
-    out_color: gfx::BlendTarget<GFormat> =
-        ("Target0", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
-    out_depth: gfx::DepthTarget<Depth> =
-        gfx::preset::depth::LESS_EQUAL_TEST,
-});
-
-pub static LIGHT_VERTEX_SRC: &'static [u8] = b"
-    #version 150 core
-
-    in ivec3 a_Pos;
-    out vec3 v_LightPos;
-
-    layout(std140)
-    uniform CubeLocals {
-        mat4 u_Transform;
-        float u_Radius;
-    };
-
-    const int NUM_LIGHTS = 250;
-    layout(std140)
-    uniform u_LightPosBlock {
-        vec4 offs[NUM_LIGHTS];
-    };
-
-    void main() {
-        v_LightPos = offs[gl_InstanceID].xyz;
-        gl_Position = u_Transform * vec4(u_Radius * a_Pos + v_LightPos, 1.0);
-    }
-";
-
-pub static LIGHT_FRAGMENT_SRC: &'static [u8] = b"
-    #version 150 core
-
-    layout(std140)
-    uniform LightLocals {
-        vec4 u_CameraPosAndRadius;
-    };
-    uniform sampler2D t_Position;
-    uniform sampler2D t_Normal;
-    uniform sampler2D t_Diffuse;
-    in vec3 v_LightPos;
-    out vec4 Target0;
-
-    void main() {
-        ivec2 itc = ivec2(gl_FragCoord.xy);
-        vec3 pos     = texelFetch(t_Position, itc, 0).xyz;
-        vec3 normal  = texelFetch(t_Normal,   itc, 0).xyz;
-        vec3 diffuse = texelFetch(t_Diffuse,  itc, 0).xyz;
-
-        vec3 light    = v_LightPos;
-        vec3 to_light = normalize(light - pos);
-        vec3 to_cam   = normalize(u_CameraPosAndRadius.xyz - pos);
-
-        vec3 n = normalize(normal);
-        float s = pow(max(0.0, dot(to_cam, reflect(-to_light, n))), 20.0);
-        float d = max(0.0, dot(n, to_light));
-
-        float dist_sq = dot(light - pos, light - pos);
-        float scale = max(0.0, 1.0 - dist_sq * u_CameraPosAndRadius.w);
-
-        vec3 res_color = d * diffuse + vec3(s);
-
-        Target0 = vec4(scale*res_color, 1.0);
-    }
-";
-
-gfx_pipeline!( emitter {
-    vbuf: gfx::VertexBuffer<CubeVertex> = (),
-    locals: gfx::ConstantBuffer<CubeLocals> = "CubeLocals",
-    light_pos_buf: gfx::ConstantBuffer<LightInfo> = "u_LightPosBlock",
-    out_color: gfx::BlendTarget<GFormat> =
-        ("Target0", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
-    out_depth: gfx::DepthTarget<Depth> =
-        gfx::preset::depth::LESS_EQUAL_TEST,
-});
-
-pub static EMITTER_VERTEX_SRC: &'static [u8] = b"
-    #version 150 core
-
-    in ivec3 a_Pos;
-
-    layout(std140)
-    uniform CubeLocals {
-        mat4 u_Transform;
-        float u_Radius;
-    };
-
-    const int NUM_LIGHTS = 250;
-    layout(std140)
-    uniform u_LightPosBlock {
-        vec4 offs[NUM_LIGHTS];
-    };
-
-    void main() {
-        gl_Position = u_Transform * vec4(u_Radius * a_Pos + offs[gl_InstanceID].xyz, 1.0);
-    }
-";
-
-pub static EMITTER_FRAGMENT_SRC: &'static [u8] = b"
-    #version 150 core
-
-    out vec4 Target0;
-
-    void main() {
-        Target0 = vec4(1.0, 1.0, 1.0, 1.0);
-    }
-";
 
 fn calculate_normal(seed: &Seed, x: f32, y: f32)-> [f32; 3] {
     // determine sample points
@@ -425,12 +264,12 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, &index_data[..]);
 
             let vs = gfx_app::shade::Source {
-                glsl_150: TERRAIN_VERTEX_SRC,
+                glsl_150: include_bytes!("shader/terrain.glslv"),
                 hlsl_40:  include_bytes!("data/terrain_vs.fx"),
                 .. gfx_app::shade::Source::empty()
             };
             let ps = gfx_app::shade::Source {
-                glsl_150: TERRAIN_FRAGMENT_SRC,
+                glsl_150: include_bytes!("shader/terrain.glslf"),
                 hlsl_40:  include_bytes!("data/terrain_ps.fx"),
                 .. gfx_app::shade::Source::empty()
             };
@@ -463,12 +302,12 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, ());
 
             let vs = gfx_app::shade::Source {
-                glsl_150: BLIT_VERTEX_SRC,
+                glsl_150: include_bytes!("shader/blit.glslv"),
                 hlsl_40:  include_bytes!("data/blit_vs.fx"),
                 .. gfx_app::shade::Source::empty()
             };
             let ps = gfx_app::shade::Source {
-                glsl_150: BLIT_FRAGMENT_SRC,
+                glsl_150: include_bytes!("shader/blit.glslf"),
                 hlsl_40:  include_bytes!("data/blit_ps.fx"),
                 .. gfx_app::shade::Source::empty()
             };
@@ -539,12 +378,12 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
         let light = {
             let vs = gfx_app::shade::Source {
-                glsl_150: LIGHT_VERTEX_SRC,
+                glsl_150: include_bytes!("shader/light.glslv"),
                 hlsl_40:  include_bytes!("data/light_vs.fx"),
                 .. gfx_app::shade::Source::empty()
             };
             let ps = gfx_app::shade::Source {
-                glsl_150: LIGHT_FRAGMENT_SRC,
+                glsl_150: include_bytes!("shader/light.glslf"),
                 hlsl_40:  include_bytes!("data/light_ps.fx"),
                 .. gfx_app::shade::Source::empty()
             };
@@ -572,12 +411,12 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
         let emitter = {
             let vs = gfx_app::shade::Source {
-                glsl_150: EMITTER_VERTEX_SRC,
+                glsl_150: include_bytes!("shader/emitter.glslv"),
                 hlsl_40:  include_bytes!("data/emitter_vs.fx"),
                 .. gfx_app::shade::Source::empty()
             };
             let ps = gfx_app::shade::Source {
-                glsl_150: EMITTER_FRAGMENT_SRC,
+                glsl_150: include_bytes!("shader/emitter.glslf"),
                 hlsl_40:  include_bytes!("data/emitter_ps.fx"),
                 .. gfx_app::shade::Source::empty()
             };
