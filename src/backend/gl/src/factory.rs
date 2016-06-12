@@ -259,6 +259,14 @@ impl d::Factory<R> for Factory {
         if desc.levels == 0 {
             return Err(Error::Size(0))
         }
+        let dim = desc.kind.get_dimensions();
+        let max_size = self.share.capabilities.max_texture_size;
+        if dim.0 as usize > max_size {
+            return Err(Error::Size(dim.0));
+        }
+        if dim.1 as usize > max_size {
+            return Err(Error::Size(dim.1));
+        }
         let cty = hint.unwrap_or(ChannelType::Uint); //careful here
         let gl = &self.share.context;
         let object = if desc.bind.intersects(f::SHADER_RESOURCE | f::UNORDERED_ACCESS) || data_opt.is_some() {
