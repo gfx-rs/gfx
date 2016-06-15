@@ -67,11 +67,14 @@ impl Version {
     /// and will try to recover at least the first two version numbers without
     /// resulting in an `Err`.
     pub fn parse(mut src: &'static str) -> Result<Version, &'static str> {
-        let es_signature = "OpenGL ES ";
-        let is_es = src.starts_with(es_signature);
-        if is_es {
-            src = &src[es_signature.len()..];
-        }
+        let es_sig = " ES ";
+        let is_es = match src.find(es_sig) {
+            Some(pos) => {
+                src = &src[pos + es_sig.len() ..];
+                true
+            },
+            None => false,
+        };
         let (version, vendor_info) = match src.find(' ') {
             Some(i) => (&src[..i], &src[i+1..]),
             None => (src, ""),
@@ -263,5 +266,6 @@ mod tests {
         assert_eq!(Version::parse("1.2.3 h3l1o. W0rld"), Ok(Version::new(1, 2, Some(3), "h3l1o. W0rld")));
         assert_eq!(Version::parse("OpenGL ES 3.1"), Ok(Version::new_embedded(3, 1, "")));
         assert_eq!(Version::parse("OpenGL ES 2.0 Google Nexus"), Ok(Version::new_embedded(2, 0, "Google Nexus")));
+        assert_eq!(Version::parse("GLSL ES 1.1"), Ok(Version::new_embedded(1, 1, "")));
     }
 }
