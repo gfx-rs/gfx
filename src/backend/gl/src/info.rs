@@ -40,6 +40,16 @@ impl Version {
             vendor_info: vendor_info,
         }
     }
+    /// Create a new OpenGL ES version number
+    pub fn new_embedded(major: u32, minor: u32, vendor_info: &'static str) -> Version {
+        Version {
+            is_embedded: true,
+            major: major,
+            minor: minor,
+            revision: None,
+            vendor_info: vendor_info,
+        }
+    }
 
     /// According to the OpenGL specification, the version information is
     /// expected to follow the following syntax:
@@ -63,7 +73,7 @@ impl Version {
             src = &src[es_signature.len()..];
         }
         let (version, vendor_info) = match src.find(' ') {
-            Some(i) => src.split_at(i),
+            Some(i) => (&src[..i], &src[i+1..]),
             None => (src, ""),
         };
 
@@ -251,5 +261,7 @@ mod tests {
         assert_eq!(Version::parse("1.2. h3l1o. W0rld"), Ok(Version::new(1, 2, None, "h3l1o. W0rld")));
         assert_eq!(Version::parse("1.2.3.h3l1o. W0rld"), Ok(Version::new(1, 2, Some(3), "W0rld")));
         assert_eq!(Version::parse("1.2.3 h3l1o. W0rld"), Ok(Version::new(1, 2, Some(3), "h3l1o. W0rld")));
+        assert_eq!(Version::parse("OpenGL ES 3.1"), Ok(Version::new_embedded(3, 1, "")));
+        assert_eq!(Version::parse("OpenGL ES 2.0 Google Nexus"), Ok(Version::new_embedded(2, 0, "Google Nexus")));
     }
 }
