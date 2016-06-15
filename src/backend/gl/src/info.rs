@@ -21,6 +21,7 @@ use gfx_core::Capabilities;
 /// A version number for a specific component of an OpenGL implementation
 #[derive(Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Version {
+    pub is_embedded: bool,
     pub major: u32,
     pub minor: u32,
     pub revision: Option<u32>,
@@ -32,6 +33,7 @@ impl Version {
     pub fn new(major: u32, minor: u32, revision: Option<u32>,
                vendor_info: &'static str) -> Version {
         Version {
+            is_embedded: false,
             major: major,
             minor: minor,
             revision: revision,
@@ -54,9 +56,14 @@ impl Version {
     /// Note that this function is intentionally lenient in regards to parsing,
     /// and will try to recover at least the first two version numbers without
     /// resulting in an `Err`.
-    pub fn parse(src: &'static str) -> Result<Version, &'static str> {
+    pub fn parse(mut src: &'static str) -> Result<Version, &'static str> {
+        let es_signature = "OpenGL ES ";
+        let is_es = src.starts_with(es_signature);
+        if is_es {
+            src = &src[es_signature.len()..];
+        }
         let (version, vendor_info) = match src.find(' ') {
-            Some(i) => (&src[..i], &src[(i + 1)..]),
+            Some(i) => src.split_at(i),
             None => (src, ""),
         };
 
@@ -69,6 +76,7 @@ impl Version {
 
         match (major, minor, revision) {
             (Some(major), Some(minor), revision) => Ok(Version {
+                is_embedded: is_es,
                 major: major,
                 minor: minor,
                 revision: revision,
