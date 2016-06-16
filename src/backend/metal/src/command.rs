@@ -41,6 +41,7 @@ pub struct DataPointer {
 }
 
 pub struct DataBuffer(Vec<u8>);
+
 impl DataBuffer {
     /// Create a new empty data buffer.
     pub fn new() -> DataBuffer {
@@ -97,6 +98,7 @@ enum Draw {
 
 unsafe impl Send for Command {}
 
+#[derive(Debug)]
 struct Cache {
     targets: Option<pso::PixelTargetSet<Resources>>,
     clear: draw::ClearColor,
@@ -111,113 +113,141 @@ impl Cache {
         Cache {
             targets: None,
             clear: draw::ClearColor::Float([0.0f32; 4]),
-            clear_depth: 1f32,
+            clear_depth: 0f32,
             clear_stencil: 0
         }
+    }
+
+    fn clear(&mut self) {
+        self.targets = None;
+        self.clear = draw::ClearColor::Float([0.0f32; 4]);
+        self.clear_depth = 0f32;
+        self.clear_stencil = 0;
     }
 }
 
 pub struct CommandBuffer {
     mtl_queue: MTLCommandQueue,
-    mtl_buf: MTLCommandBuffer,
-    render_pass_descriptor: MTLRenderPassDescriptor,
+    mtl_buf: *mut MTLCommandBuffer,
+
+    master_encoder: *mut MTLParallelRenderCommandEncoder,
     render_encoder: MTLRenderCommandEncoder,
+    render_pass_descriptor: MTLRenderPassDescriptor,
 
     buf: Vec<Command>,
     data: DataBuffer,
     index_buf: Option<(Buffer, IndexType)>,
-
     cache: Cache,
-    encoding: bool
+    encoding: bool,
+    root: bool
 }
+
+unsafe impl Send for CommandBuffer {}
 
 impl CommandBuffer {
     pub fn new(queue: MTLCommandQueue) -> Self {
         CommandBuffer {
             mtl_queue: queue,
-            mtl_buf: queue.new_command_buffer(),
-            render_pass_descriptor: MTLRenderPassDescriptor::new(),
+            mtl_buf: Box::into_raw(Box::new(MTLCommandBuffer::nil())),
+
+            master_encoder: Box::into_raw(Box::new(MTLParallelRenderCommandEncoder::nil())),
             render_encoder: MTLRenderCommandEncoder::nil(),
+            render_pass_descriptor: MTLRenderPassDescriptor::nil(),
+
             buf: Vec::new(),
             data: DataBuffer::new(),
             index_buf: None,
             cache: Cache::new(),
-            encoding: false
+            encoding: false,
+            root: false
         }
     }
 
     pub fn commit(&mut self, drawable: CAMetalDrawable) {
-        if self.encoding {
-            self.render_encoder.end_encoding();
-            self.encoding = false;
-        }
-
-        self.mtl_buf.present_drawable(drawable);
-        self.mtl_buf.commit();
-        //self.mtl_buf.wait_until_completed();
-
         unsafe {
-            self.mtl_buf.release();
-            self.render_encoder.release();
-        }
+            if self.encoding {
+                println!("{}", "encode end");
+                self.render_encoder.end_encoding();
 
-        self.mtl_buf = MTLCommandBuffer::nil();
-        self.render_encoder = MTLRenderCommandEncoder::nil();
+                if self.root {
+                    println!("{}", "woop");
+                    (*self.master_encoder).end_encoding();
+
+                    (*self.mtl_buf).present_drawable(drawable);
+                    (*self.mtl_buf).commit();
+
+                    //(*self.master_encoder).release();
+                    //(*self.mtl_buf).release();
+
+                    *self.master_encoder = MTLParallelRenderCommandEncoder::nil();
+                    *self.mtl_buf = MTLCommandBuffer::nil();
+
+                    self.root = false;
+                }
+
+                self.render_encoder = MTLRenderCommandEncoder::nil();
+
+                self.encoding = false;
+            }
+
+            self.cache.clear();
+            self.buf.clear();
+        }
     }
 
     pub fn render_encoder(&mut self) -> Option<MTLRenderCommandEncoder> {
-        if self.render_encoder.is_null() {
-            if let Some(targets) = self.cache.targets {
+        unsafe {
+            if (*self.master_encoder).is_null() {
                 let render_pass_descriptor = MTLRenderPassDescriptor::new();
 
-                for i in 0..MAX_COLOR_TARGETS {
-                    if let Some(color) = targets.colors[i] {
-                        let attachment = render_pass_descriptor.color_attachments().object_at(i);
-                        attachment.set_texture(unsafe { *(color.0) });
+                if let Some(targets) = self.cache.targets {
+                    for i in 0..MAX_COLOR_TARGETS {
+                        if let Some(color) = targets.colors[i] {
+                            let attachment = render_pass_descriptor.color_attachments().object_at(i);
+                            attachment.set_texture(*(color.0));
 
+                            attachment.set_store_action(MTLStoreAction::Store);
+                            attachment.set_load_action(MTLLoadAction::Clear);
+
+                            if let draw::ClearColor::Float(vals) = self.cache.clear {
+                                attachment.set_clear_color(MTLClearColor::new(vals[0] as f64, vals[1] as f64, vals[2] as f64, vals[3] as f64));
+                            }
+                        }
+                    }
+
+                    if let Some(depth) = targets.depth {
+                        let attachment = render_pass_descriptor.depth_attachment();
+                        attachment.set_texture(*(depth.0));
+                        attachment.set_clear_depth(self.cache.clear_depth as f64);
                         attachment.set_store_action(MTLStoreAction::Store);
                         attachment.set_load_action(MTLLoadAction::Clear);
-
-                        if let draw::ClearColor::Float(vals) = self.cache.clear {
-                            attachment.set_clear_color(MTLClearColor::new(
-                                vals[0] as f64,
-                                vals[1] as f64,
-                                vals[2] as f64,
-                                vals[3] as f64));
-                        }
                     }
                 }
 
-                if let Some(depth) = targets.depth {
-                    let attachment = render_pass_descriptor.depth_attachment();
-                    attachment.set_texture(unsafe { *(depth.0) });
-                    attachment.set_clear_depth(self.cache.clear_depth as f64);
-                    attachment.set_store_action(MTLStoreAction::DontCare);
-                    attachment.set_load_action(MTLLoadAction::Clear);
-                }
+                //render_pass_descriptor.stencil_attachment().set_clear_stencil(self.cache.clear_stencil as u32);
 
-                // TODO: wrong precision?
-                render_pass_descriptor.stencil_attachment().set_clear_stencil(self.cache.clear_stencil as u32);
+                *self.master_encoder = (*self.mtl_buf).new_parallel_render_command_encoder(render_pass_descriptor);
+                self.root = true;
 
-                let enc = self.mtl_buf.new_render_command_encoder(render_pass_descriptor);
-                self.render_encoder = enc;
-                self.encoding = true;
-                unsafe {
-                    render_pass_descriptor.release();
-                }
-
-                Some(enc)
-            } else {
-                None
+                //render_pass_descriptor.release();
             }
-        } else {
+
+            if self.render_encoder.is_null() {
+                self.render_encoder = (*self.master_encoder).render_command_encoder();
+            }
+
+            self.encoding = true;
+
             Some(self.render_encoder)
         }
     }
 
     fn draw(&mut self, draw: Draw) {
-        if self.mtl_buf.is_null() {
-            self.mtl_buf = self.mtl_queue.new_command_buffer();
+        unsafe {
+            if (*self.mtl_buf).is_null() {
+                *self.mtl_buf = self.mtl_queue.new_command_buffer();
+                //(*self.mtl_buf).retain();
+            }
         }
 
         let encoder = self.render_encoder().unwrap();
@@ -324,6 +354,7 @@ impl CommandBuffer {
 
         use map::map_index_type;
 
+        println!("{:?}", draw);
         match draw {
             Draw::Normal(count, start) => {
                 encoder.draw_primitives(MTLPrimitiveType::Triangle, start, count)
@@ -339,17 +370,34 @@ impl CommandBuffer {
             }
         }
 
-        self.buf.clear();
+        //self.cache.clear();
+        //self.buf.clear();
     }
 }
 
 impl draw::CommandBuffer<Resources> for CommandBuffer {
     fn clone_empty(&self) -> Self {
-        unimplemented!()
+        CommandBuffer {
+            mtl_queue: self.mtl_queue,
+            mtl_buf: self.mtl_buf,
+
+            master_encoder: self.master_encoder,
+            render_pass_descriptor: MTLRenderPassDescriptor::nil(),
+            render_encoder: MTLRenderCommandEncoder::nil(),
+
+            buf: Vec::new(),
+            data: DataBuffer::new(),
+            index_buf: None,
+
+            cache: Cache::new(),
+            encoding: false,
+            root: false
+        }
     }
 
     fn reset(&mut self) {
-
+        self.cache.clear();
+        self.buf.clear();
     }
 
     fn bind_pipeline_state(&mut self, pso: Pipeline) {
@@ -440,16 +488,26 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
             zfar: 1f64
         }));
 
-        if let Some(targets) = self.cache.targets {
-            self.cache.targets = Some(targets);
+        if let Some(cache_targets) = self.cache.targets {
+            if cache_targets != targets {
+                self.cache.targets = Some(targets);
 
-            unsafe {
-                if self.encoding {
-                    self.render_encoder.end_encoding();
-                    self.encoding = false;
+                unsafe {
+                    if self.encoding {
+                        println!("{}", "BPT End encode");
+                        self.render_encoder.end_encoding();
+
+                        if self.root {
+                            (*self.master_encoder).end_encoding();
+                            //(*self.master_encoder).release();
+                            *self.master_encoder = MTLParallelRenderCommandEncoder::nil();
+                        }
+
+                        self.encoding = false;
+                    }
+                    //self.render_encoder.release();
+                    self.render_encoder = MTLRenderCommandEncoder::nil();
                 }
-                self.render_encoder.release();
-                self.render_encoder = MTLRenderCommandEncoder::nil();
             }
         } else {
             self.cache.targets = Some(targets);
@@ -482,9 +540,9 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
 
         unsafe {
             let dst = (contents as *mut u8).offset(offset as isize);
-            ptr::copy_nonoverlapping(data.as_ptr(), dst, data.len());
+            ptr::copy(data.as_ptr(), dst, data.len());
 
-            // (buf.0).0.invalidate_range(NSRange::new(offset as u64, data.len() as u64));
+            //(buf.0).0.invalidate_range(NSRange::new(offset as u64, data.len() as u64));
         }
         // let ptr = self.data.add(data);
         // self.buf.push(Command::UpdateBuffer(buf, ptr, offset));

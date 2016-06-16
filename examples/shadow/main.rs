@@ -18,8 +18,13 @@ extern crate gfx;
 extern crate gfx_app;
 
 use std::sync::{Arc, RwLock};
-pub use gfx::format::{Depth, DepthStencil};
-pub use gfx_app::ColorFormat;
+pub use gfx::format::{DepthStencil};
+pub use gfx_app::{ColorFormat, DepthFormat};
+
+#[cfg(target_os="macos")]
+pub use gfx::format::Depth32F as Depth;
+#[cfg(not(target_os="macos"))]
+pub use gfx::format::Depth;
 
 // Section-1: vertex formats and shader parameters
 
@@ -37,6 +42,7 @@ gfx_defines!{
     constant ForwardPsLocals {
         color: [f32; 4] = "u_Color",
         num_lights: i32 = "u_NumLights",
+        _padding: [i32; 3] = "",
     }
 
     constant ShadowLocals {
@@ -56,7 +62,7 @@ gfx_defines!{
         light_buf: gfx::ConstantBuffer<LightParam> = "b_Lights",
         shadow: gfx::TextureSampler<f32> = "t_Shadow",
         out_color: gfx::RenderTarget<ColorFormat> = "Target0",
-        out_depth: gfx::DepthTarget<DepthStencil> =
+        out_depth: gfx::DepthTarget<DepthFormat> =
             gfx::preset::depth::LESS_EQUAL_WRITE,
     }
 
@@ -190,7 +196,7 @@ struct Scene<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
 /// Create a full scene
 fn create_scene<R, F, C>(factory: &mut F, encoder: &gfx::Encoder<R, C>,
                 out_color: gfx::handle::RenderTargetView<R, ColorFormat>,
-                out_depth: gfx::handle::DepthStencilView<R, DepthStencil>,
+                out_depth: gfx::handle::DepthStencilView<R, DepthFormat>,
                 shadow_pso: gfx::PipelineState<R, shadow::Meta>)
                 -> Scene<R, C> where
     R: gfx::Resources,
@@ -296,6 +302,7 @@ fn create_scene<R, F, C>(factory: &mut F, encoder: &gfx::Encoder<R, C>,
     let locals = ForwardPsLocals {
         color: [1.0, 1.0, 1.0, 1.0],
         num_lights: lights.len() as i32,
+        _padding: [0i32; 3]
     };
 
     let mut fw_data = forward::Data {
@@ -341,13 +348,7 @@ fn create_scene<R, F, C>(factory: &mut F, encoder: &gfx::Encoder<R, C>,
     fw_data.vbuf = plane_buf.clone();
     sh_data.vbuf = plane_buf;
 
-    entities.push(Entity {
-        dynamic: false,
-        mx_to_world: Matrix4::identity(),
-        batch_forward: fw_data,
-        batch_shadow: sh_data,
-        slice: plane_slice,
-    });
+
 
     // create camera
     let camera = Camera {
@@ -438,11 +439,13 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
             let vs = Source {
                 glsl_150: include_bytes!("shader/forward_150.glslv"),
                 hlsl_41:  include_bytes!("data/forward_vs.fx"),
+                msl_11:   include_bytes!("shader/forward_vertex.metal"),
                 .. Source::empty()
             };
             let ps = Source {
                 glsl_150: include_bytes!("shader/forward_150.glslf"),
                 hlsl_41:  include_bytes!("data/forward_ps.fx"),
+                msl_11:   include_bytes!("shader/forward_frag.metal"),
                 .. Source::empty()
             };
             factory.create_pipeline_simple(
@@ -456,11 +459,13 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
             let vs = Source {
                 glsl_150: include_bytes!("shader/shadow_150.glslv"),
                 hlsl_41:  include_bytes!("data/shadow_vs.fx"),
+                msl_11:   include_bytes!("shader/shadow_vertex.metal"),
                 .. Source::empty()
             };
             let ps = Source {
                 glsl_150: include_bytes!("shader/shadow_150.glslf"),
                 hlsl_41:  include_bytes!("data/shadow_ps.fx"),
+                msl_11:   b"\n",
                 .. Source::empty()
             };
             let set = factory.create_shader_set(
@@ -493,7 +498,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
         D: gfx::Device<Resources=R, CommandBuffer=C>
     {
         self.rotate(cgmath::vec3(0.0, 0.0, 1.0));
-        if self.scene.light_dirty {
+        /*if self.scene.light_dirty {
             // init light parameters
             let light_params: Vec<_> = self.scene.lights.iter().map(|light| LightParam {
                 pos: [light.position.x, light.position.y, light.position.z, 1.0],
@@ -507,7 +512,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
             }).collect();
             self.encoder.update_buffer(&self.scene.light_buf, &light_params, 0).unwrap();
             self.scene.light_dirty = false;
-        }
+        }*/
 
         // fill up shadow map for each light
         if self.is_parallel {
@@ -552,7 +557,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
                 self.scene.lights.push(light);
             }
         } else {
-            for light in self.scene.lights.iter_mut() {
+            /*for light in self.scene.lights.iter_mut() {
                 // clear
                 self.encoder.clear_depth(&light.shadow, 1.0);
                 // fill
@@ -571,7 +576,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
                     self.encoder.update_constant_buffer(&batch.locals, &locals);
                     self.encoder.draw(&ent.slice, &subshare.shadow_pso, &batch);
                 }
-            }
+            }*/
         }
 
         // draw entities with forward pass
@@ -591,7 +596,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
                 transform: (mx_vp * ent.mx_to_world).into(),
                 model_transform: ent.mx_to_world.into(),
             };
-            self.encoder.update_constant_buffer(&batch.vs_locals, &locals);
+            self.encoder.update_buffer(&batch.vs_locals, &locals, idx);
             self.encoder.draw(&ent.slice, &self.forward_pso, batch);
         }
 

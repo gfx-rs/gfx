@@ -180,7 +180,7 @@ impl core::Factory<Resources> for Factory {
                 Stage::Vertex => "vert",
                 Stage::Pixel => "frag",
                 _ => return Err(CreateShaderError::StageNotSupported(stage))
-            }).unwrap()
+            })
         };
 
         Ok(self.share.handles.borrow_mut().make_shader(shader))
@@ -215,7 +215,9 @@ impl core::Factory<Resources> for Factory {
                 // Tracking: https://forums.developer.apple.com/thread/46535
                 let pso_descriptor = MTLRenderPipelineDescriptor::alloc().init();
                 pso_descriptor.set_vertex_function(vs);
-                pso_descriptor.set_fragment_function(ps);
+                if !ps.is_null() {
+                    pso_descriptor.set_fragment_function(ps);
+                }
                 pso_descriptor.color_attachments().object_at(0).set_pixel_format(MTLPixelFormat::BGRA8Unorm);
 
                 // when we use `[[ stage_in ]]` we have to have a vertex
@@ -255,8 +257,8 @@ impl core::Factory<Resources> for Factory {
                 // destroy PSO & reflection object after we're done with
                 // parsing reflection
                 unsafe {
-                    pso.release();
-                    reflection.release();
+                    //pso.release();
+                    //reflection.release();
                 }
 
                 // FIXME: retain functions?
@@ -317,15 +319,22 @@ impl core::Factory<Resources> for Factory {
         let prog = self.frame_handles.ref_program(program);
 
         let pso_descriptor = MTLRenderPipelineDescriptor::alloc().init();
+        println!("{:?}", prog.ps);
         pso_descriptor.set_vertex_function(prog.vs);
-        pso_descriptor.set_fragment_function(prog.ps);
+        if !prog.ps.is_null() {
+            pso_descriptor.set_fragment_function(prog.ps);
+        }
         pso_descriptor.set_vertex_descriptor(vertex_desc);
         pso_descriptor.set_input_primitive_topology(map_topology(desc.primitive));
-        pso_descriptor.color_attachments().object_at(0).set_pixel_format(MTLPixelFormat::BGRA8Unorm);
+        if !prog.ps.is_null() {
+            pso_descriptor.color_attachments().object_at(0).set_pixel_format(MTLPixelFormat::BGRA8Unorm);
+        } else {
+            pso_descriptor.color_attachments().object_at(0).set_pixel_format(MTLPixelFormat::Invalid);
+        }
 
         if let Some(depth_desc) = desc.depth_stencil {
             // TODO: depthstencil
-
+            println!("{:?}", depth_desc);
             // pso_descriptor.set_depth_attachment_pixel_format(MTLPixelFormat::Depth32Float);
             pso_descriptor.set_depth_attachment_pixel_format(map_depth_surface(depth_desc.0).unwrap());
         }

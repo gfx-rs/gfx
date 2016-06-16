@@ -53,6 +53,7 @@ use std::mem;
 
 pub struct MetalWindow {
     window: winit::Window,
+    pool: Cell<NSAutoreleasePool>,
     layer: CAMetalLayer,
     drawable: *mut CAMetalDrawable,
     backbuffer: *mut MTLTexture
@@ -73,15 +74,25 @@ impl MetalWindow {
         // TODO: come up with alternative to this hack
 
         unsafe {
+            use std::time;
+
+            let t = time::Instant::now();
+
+            self.pool.get().release();
+            println!("\tpool:release - {}", t.elapsed().subsec_nanos() as f32 / 1000000f32);
+            self.pool.set(NSAutoreleasePool::alloc().init());
+
             let drawable = self.layer.next_drawable().unwrap();
+            println!("\tlayer:next - {}", t.elapsed().subsec_nanos() as f32 / 1000000f32);
+            //drawable.retain();
 
-            if !(*self.drawable).is_null() {
+            /*if !(*self.drawable).is_null() {
                 (*self.drawable).release();
-            }
+            }*/
 
-            (*self.drawable).0 = drawable.0;
+            *self.drawable = drawable;
 
-            (*self.backbuffer).0 = drawable.texture().0;
+            *self.backbuffer = drawable.texture();
         }
 
         Ok(())
@@ -127,6 +138,8 @@ pub fn init_raw(title: &str, requested_width: u32, requested_height: u32, color_
         });*/
         let draw_size = winit_window.get_inner_size().unwrap();
         layer.set_drawable_size(NSSize::new(draw_size.0 as f64, draw_size.1 as f64));
+        layer.set_presents_with_transaction(false);
+        layer.remove_all_animations();
 
         let view = wnd.contentView();
         view.setWantsLayer(YES);
@@ -137,8 +150,11 @@ pub fn init_raw(title: &str, requested_width: u32, requested_height: u32, color_
 
         let drawable = layer.next_drawable().unwrap();
 
+        let pool = NSAutoreleasePool::alloc().init();
+
         let window = MetalWindow {
             window: winit_window,
+            pool: Cell::new(pool),
             layer: layer,
             drawable: daddr,
             backbuffer: addr

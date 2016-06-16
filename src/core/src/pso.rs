@@ -202,7 +202,7 @@ pub struct UnorderedViewParam<R: Resources>(pub R::UnorderedAccessView, pub Usag
 pub struct SamplerParam<R: Resources>(pub R::Sampler, pub Usage, pub SamplerSlot);
 
 /// A complete set of render targets to be used for pixel export in PSO.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct PixelTargetSet<R: Resources> {
     /// Array of color target views
     pub colors: [Option<R::RenderTargetView>; MAX_COLOR_TARGETS],

@@ -199,8 +199,8 @@ impl gfx_core::Device for Device {
                 (*s.reflection).Release();*/
             },
             |_, p| unsafe {
-                if !p.vs.is_null() { p.vs.release(); }
-                if !p.ps.is_null() { p.ps.release(); }
+                //if !p.vs.is_null() { p.vs.release(); }
+                //if !p.ps.is_null() { p.ps.release(); }
             }, //program
             |_, v| unsafe { //PSO
                 /*type Child = *mut winapi::ID3D11DeviceChild;
@@ -209,7 +209,7 @@ impl gfx_core::Device for Device {
                 (*(v.depth_stencil as Child)).Release();
                 (*(v.blend as Child)).Release();*/
             },
-            |_, v| unsafe { (*(v.0).0).release(); },  //texture
+            |_, v| unsafe { /*(*(v.0).0).release();*/ },  //texture
             |_, v| unsafe { /*(*v.0).Release();*/ }, //SRV
             |_, _| {}, //UAV
             |_, v| unsafe { /*(*v.0).Release();*/ }, //RTV
