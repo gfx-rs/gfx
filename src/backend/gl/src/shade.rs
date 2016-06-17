@@ -389,8 +389,12 @@ fn query_outputs(gl: &gl::Gl, prog: super::Program) -> (Vec<s::OutputVar>, bool)
         // special index reported for GLSL 120 to 140 shaders
         if index == !0 {
             if name.starts_with("gl_FragData") {
-                let index = (name.chars().nth(12).unwrap() as i32) - ('0' as i32);
+                index = (name.chars().nth(12).unwrap() as i32) - ('0' as i32);
                 name = format!("Target{}", index);
+            }else
+            if &name == "gl_FragColor" {
+                index = 0;
+                name = "Target0".to_owned();
             }else
             if &name == "gl_FragDepth" {
                 out_depth = true;
