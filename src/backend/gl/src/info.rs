@@ -68,7 +68,7 @@ impl Version {
     /// resulting in an `Err`.
     pub fn parse(mut src: &'static str) -> Result<Version, &'static str> {
         let es_sig = " ES ";
-        let is_es = match src.find(es_sig) {
+        let is_es = match src.rfind(es_sig) {
             Some(pos) => {
                 src = &src[pos + es_sig.len() ..];
                 true
@@ -206,7 +206,7 @@ impl Info {
     }
 
     pub fn is_version_supported(&self, major: u32, minor: u32) -> bool {
-        self.version >= Version::new(major, minor, None, "")
+        !self.version.is_embedded && self.version >= Version::new(major, minor, None, "")
     }
 
     /// Returns `true` if the implementation supports the extension
