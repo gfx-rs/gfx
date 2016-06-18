@@ -17,7 +17,7 @@ name = "gfx_app"
 env_logger = "0.3"
 getopts = "0.2"
 time = "0.1"
-glutin = "0.5"
+glutin = "0.6"
 gfx_core = { path = "src/core", version = "0.3" }
 gfx_device_gl = { path = "src/backend/gl", version = "0.10" }
 gfx_window_glutin = { path = "src/window/glutin", version = "0.11" }
