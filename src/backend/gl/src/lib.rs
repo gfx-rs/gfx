@@ -480,7 +480,7 @@ impl Device {
                 state::bind_draw_color_buffers(&self.share.context, mask);
             },
             Command::SetRasterizer(rast) => {
-                state::bind_rasterizer(&self.share.context, &rast);
+                state::bind_rasterizer(&self.share.context, &rast, self.info.version.is_embedded);
             },
             Command::SetViewport(rect) => {
                 state::bind_viewport(&self.share.context, rect);

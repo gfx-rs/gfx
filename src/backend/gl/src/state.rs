@@ -44,7 +44,7 @@ pub fn bind_raster_method(gl: &gl::Gl, method: s::RasterMethod, offset: Option<s
     }
 }
 
-pub fn bind_rasterizer(gl: &gl::Gl, r: &s::Rasterizer) {
+pub fn bind_rasterizer(gl: &gl::Gl, r: &s::Rasterizer, is_embedded: bool) {
     unsafe {
         gl.FrontFace(match r.front_face {
             FrontFace::Clockwise => gl::CW,
@@ -63,8 +63,10 @@ pub fn bind_rasterizer(gl: &gl::Gl, r: &s::Rasterizer) {
             gl.CullFace(gl::BACK);
         }}
     }
-        
-    bind_raster_method(gl, r.method, r.offset);
+
+    if !is_embedded {
+        bind_raster_method(gl, r.method, r.offset);
+    }
     match r.samples {
         Some(_) => unsafe { gl.Enable(gl::MULTISAMPLE) },
         None => unsafe { gl.Disable(gl::MULTISAMPLE) },
