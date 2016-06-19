@@ -436,7 +436,7 @@ impl Device {
                     assert!(d::MAX_SAMPLERS <= d::MAX_RESOURCE_VIEWS);
                     debug_assert_eq!(sampler.object, 0);
                     if let Some(bind) = bind_opt {
-                        tex::bind_sampler(gl, bind, &sampler.info);
+                        tex::bind_sampler(gl, bind, &sampler.info, self.info.version.is_embedded);
                     }else {
                         error!("Trying to bind a sampler to slot {}, when sampler objects are not supported, and no texture is bound there", slot);
                     }
