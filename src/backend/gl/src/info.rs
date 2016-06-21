@@ -209,6 +209,10 @@ impl Info {
         !self.version.is_embedded && self.version >= Version::new(major, minor, None, "")
     }
 
+    pub fn is_embedded_version_supported(&self, major: u32, minor: u32) -> bool {
+        self.version.is_embedded && self.version >= Version::new(major, minor, None, "")
+    }
+
     /// Returns `true` if the implementation supports the extension
     pub fn is_extension_supported(&self, s: &'static str) -> bool {
         self.extensions.contains(&s)
@@ -239,7 +243,8 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
     };
     let private = PrivateCaps {
         array_buffer_supported:            info.is_version_or_extension_supported(3, 0, "GL_ARB_vertex_array_object"),
-        frame_buffer_supported:            info.is_version_or_extension_supported(3, 0, "GL_ARB_framebuffer_object"),
+        frame_buffer_supported:            info.is_version_or_extension_supported(3, 0, "GL_ARB_framebuffer_object") |
+                                           info.is_embedded_version_supported(2, 0),
         immutable_storage_supported:       info.is_version_or_extension_supported(4, 2, "GL_ARB_texture_storage"),
         sampler_objects_supported:         info.is_version_or_extension_supported(3, 3, "GL_ARB_sampler_objects"),
         program_interface_supported:       info.is_version_or_extension_supported(4, 3, "GL_ARB_program_interface_query"),
