@@ -7,7 +7,7 @@ cbuffer Locals {
 	float4x4 u_Transform;
 };
 
-VsOutput Vertex(int4 pos: a_Pos, int2 tc: a_TexCoord) {
+VsOutput Vertex(float4 pos: a_Pos, float2 tc: a_TexCoord) {
     VsOutput output = {
     	mul(u_Transform, pos),
     	tc,

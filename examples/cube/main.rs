@@ -26,8 +26,8 @@ use gfx::Bundle;
 // Notice the use of FixedPoint.
 gfx_defines!{
     vertex Vertex {
-        pos: [i8; 4] = "a_Pos",
-        tex_coord: [i8; 2] = "a_TexCoord",
+        pos: [f32; 4] = "a_Pos",
+        tex_coord: [f32; 2] = "a_TexCoord",
     }
 
     constant Locals {
@@ -49,8 +49,8 @@ gfx_defines!{
 impl Vertex {
     fn new(p: [i8; 3], t: [i8; 2]) -> Vertex {
         Vertex {
-            pos: [p[0], p[1], p[2], 1],
-            tex_coord: t,
+            pos: [p[0] as f32, p[1] as f32, p[2] as f32, 1.0],
+            tex_coord: [t[0] as f32, t[1] as f32],
         }
     }
 }
