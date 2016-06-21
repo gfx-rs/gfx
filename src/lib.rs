@@ -154,9 +154,14 @@ impl<A> ApplicationGL for A where
         use gfx::traits::Device;
 
         env_logger::init().unwrap();
+        let gl_version = glutin::GlRequest::GlThenGles {
+            opengl_version: (3, 2), //TODO: try more versions
+            opengles_version: (2, 0),
+        };
         let builder = glutin::WindowBuilder::new()
             .with_title(title.to_string())
             .with_dimensions(config.size.0 as u32, config.size.1 as u32)
+            .with_gl(gl_version)
             .with_vsync();
         let (window, mut device, mut factory, main_color, main_depth) =
             gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder);
