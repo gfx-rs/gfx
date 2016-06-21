@@ -552,10 +552,10 @@ pub fn bind_sampler(gl: &gl::Gl, target: GLenum, info: &t::SamplerInfo, is_embed
     gl.TexParameteri(target, gl::TEXTURE_WRAP_R, wrap_to_gl(r) as GLint);
 
     if !is_embedded {
+        let border: [f32; 4] = info.border.into();
+        gl.TexParameterfv(target, gl::TEXTURE_BORDER_COLOR, &border[0]);
         gl.TexParameterf(target, gl::TEXTURE_LOD_BIAS, info.lod_bias.into());
     }
-    let border: [f32; 4] = info.border.into();
-    gl.TexParameterfv(target, gl::TEXTURE_BORDER_COLOR, &border[0]);
 
     let (min, max) = info.lod_range;
     gl.TexParameterf(target, gl::TEXTURE_MIN_LOD, min.into());
