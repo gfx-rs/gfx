@@ -1,8 +1,8 @@
-#version 150 core
+#version 100
 
-in vec4 a_Pos;
-in vec2 a_TexCoord;
-out vec2 v_TexCoord;
+attribute vec4 a_Pos;
+attribute vec2 a_TexCoord;
+varying vec2 v_TexCoord;
 
 uniform mat4 u_Transform;
 

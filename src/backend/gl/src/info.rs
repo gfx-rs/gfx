@@ -21,6 +21,7 @@ use gfx_core::Capabilities;
 /// A version number for a specific component of an OpenGL implementation
 #[derive(Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Version {
+    pub is_embedded: bool,
     pub major: u32,
     pub minor: u32,
     pub revision: Option<u32>,
@@ -32,9 +33,20 @@ impl Version {
     pub fn new(major: u32, minor: u32, revision: Option<u32>,
                vendor_info: &'static str) -> Version {
         Version {
+            is_embedded: false,
             major: major,
             minor: minor,
             revision: revision,
+            vendor_info: vendor_info,
+        }
+    }
+    /// Create a new OpenGL ES version number
+    pub fn new_embedded(major: u32, minor: u32, vendor_info: &'static str) -> Version {
+        Version {
+            is_embedded: true,
+            major: major,
+            minor: minor,
+            revision: None,
             vendor_info: vendor_info,
         }
     }
@@ -54,9 +66,17 @@ impl Version {
     /// Note that this function is intentionally lenient in regards to parsing,
     /// and will try to recover at least the first two version numbers without
     /// resulting in an `Err`.
-    pub fn parse(src: &'static str) -> Result<Version, &'static str> {
+    pub fn parse(mut src: &'static str) -> Result<Version, &'static str> {
+        let es_sig = " ES ";
+        let is_es = match src.rfind(es_sig) {
+            Some(pos) => {
+                src = &src[pos + es_sig.len() ..];
+                true
+            },
+            None => false,
+        };
         let (version, vendor_info) = match src.find(' ') {
-            Some(i) => (&src[..i], &src[(i + 1)..]),
+            Some(i) => (&src[..i], &src[i+1..]),
             None => (src, ""),
         };
 
@@ -69,6 +89,7 @@ impl Version {
 
         match (major, minor, revision) {
             (Some(major), Some(minor), revision) => Ok(Version {
+                is_embedded: is_es,
                 major: major,
                 minor: minor,
                 revision: revision,
@@ -185,7 +206,11 @@ impl Info {
     }
 
     pub fn is_version_supported(&self, major: u32, minor: u32) -> bool {
-        self.version >= Version::new(major, minor, None, "")
+        !self.version.is_embedded && self.version >= Version::new(major, minor, None, "")
+    }
+
+    pub fn is_embedded_version_supported(&self, major: u32, minor: u32) -> bool {
+        self.version.is_embedded && self.version >= Version::new(major, minor, None, "")
     }
 
     /// Returns `true` if the implementation supports the extension
@@ -218,7 +243,8 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
     };
     let private = PrivateCaps {
         array_buffer_supported:            info.is_version_or_extension_supported(3, 0, "GL_ARB_vertex_array_object"),
-        frame_buffer_supported:            info.is_version_or_extension_supported(3, 0, "GL_ARB_framebuffer_object"),
+        frame_buffer_supported:            info.is_version_or_extension_supported(3, 0, "GL_ARB_framebuffer_object") |
+                                           info.is_embedded_version_supported(2, 0),
         immutable_storage_supported:       info.is_version_or_extension_supported(4, 2, "GL_ARB_texture_storage"),
         sampler_objects_supported:         info.is_version_or_extension_supported(3, 3, "GL_ARB_sampler_objects"),
         program_interface_supported:       info.is_version_or_extension_supported(4, 3, "GL_ARB_program_interface_query"),
@@ -243,5 +269,8 @@ mod tests {
         assert_eq!(Version::parse("1.2. h3l1o. W0rld"), Ok(Version::new(1, 2, None, "h3l1o. W0rld")));
         assert_eq!(Version::parse("1.2.3.h3l1o. W0rld"), Ok(Version::new(1, 2, Some(3), "W0rld")));
         assert_eq!(Version::parse("1.2.3 h3l1o. W0rld"), Ok(Version::new(1, 2, Some(3), "h3l1o. W0rld")));
+        assert_eq!(Version::parse("OpenGL ES 3.1"), Ok(Version::new_embedded(3, 1, "")));
+        assert_eq!(Version::parse("OpenGL ES 2.0 Google Nexus"), Ok(Version::new_embedded(2, 0, "Google Nexus")));
+        assert_eq!(Version::parse("GLSL ES 1.1"), Ok(Version::new_embedded(1, 1, "")));
     }
 }

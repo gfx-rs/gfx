@@ -534,7 +534,7 @@ pub fn make_with_storage(gl: &gl::Gl, desc: &t::Descriptor, cty: ChannelType) ->
 
 /// Bind a sampler using a given binding anchor.
 /// Used for GL compatibility profile only. The core profile has sampler objects
-pub fn bind_sampler(gl: &gl::Gl, target: GLenum, info: &t::SamplerInfo) { unsafe {
+pub fn bind_sampler(gl: &gl::Gl, target: GLenum, info: &t::SamplerInfo, is_embedded: bool) { unsafe {
     let (min, mag) = filter_to_gl(info.filter);
 
     match info.filter {
@@ -551,9 +551,11 @@ pub fn bind_sampler(gl: &gl::Gl, target: GLenum, info: &t::SamplerInfo) { unsafe
     gl.TexParameteri(target, gl::TEXTURE_WRAP_T, wrap_to_gl(t) as GLint);
     gl.TexParameteri(target, gl::TEXTURE_WRAP_R, wrap_to_gl(r) as GLint);
 
-    gl.TexParameterf(target, gl::TEXTURE_LOD_BIAS, info.lod_bias.into());
-    let border: [f32; 4] = info.border.into();
-    gl.TexParameterfv(target, gl::TEXTURE_BORDER_COLOR, &border[0]);
+    if !is_embedded {
+        let border: [f32; 4] = info.border.into();
+        gl.TexParameterfv(target, gl::TEXTURE_BORDER_COLOR, &border[0]);
+        gl.TexParameterf(target, gl::TEXTURE_LOD_BIAS, info.lod_bias.into());
+    }
 
     let (min, max) = info.lod_range;
     gl.TexParameterf(target, gl::TEXTURE_MIN_LOD, min.into());

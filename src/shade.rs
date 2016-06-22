@@ -21,6 +21,7 @@ pub use gfx_device_dx11::ShaderModel as DxShaderModel;
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Backend {
     Glsl(GlslVersion),
+    GlslEs(GlslVersion),
     #[cfg(target_os = "windows")]
     Hlsl(DxShaderModel),
 }
@@ -35,6 +36,9 @@ pub struct Source<'a> {
     pub glsl_140: &'a [u8],
     pub glsl_150: &'a [u8],
     pub glsl_430: &'a [u8],
+    pub glsl_es_100: &'a [u8],
+    pub glsl_es_200: &'a [u8],
+    pub glsl_es_300: &'a [u8],
     pub hlsl_30 : &'a [u8],
     pub hlsl_40 : &'a [u8],
     pub hlsl_41 : &'a [u8],
@@ -51,6 +55,9 @@ impl<'a> Source<'a> {
             glsl_140: EMPTY,
             glsl_150: EMPTY,
             glsl_430: EMPTY,
+            glsl_es_100: EMPTY,
+            glsl_es_200: EMPTY,
+            glsl_es_300: EMPTY,
             hlsl_30:  EMPTY,
             hlsl_40:  EMPTY,
             hlsl_41:  EMPTY,
@@ -69,6 +76,15 @@ impl<'a> Source<'a> {
                     Source { glsl_140: s, .. } if s != EMPTY && v >= 140 => s,
                     Source { glsl_130: s, .. } if s != EMPTY && v >= 130 => s,
                     Source { glsl_120: s, .. } if s != EMPTY && v >= 120 => s,
+                    _ => return Err(())
+                }
+            },
+            Backend::GlslEs(version) => {
+                let v = version.major * 100 + version.minor;
+                match *self {
+                    Source { glsl_es_100: s, .. } if s != EMPTY && v >= 100 => s,
+                    Source { glsl_es_200: s, .. } if s != EMPTY && v >= 200 => s,
+                    Source { glsl_es_300: s, .. } if s != EMPTY && v >= 300 => s,
                     _ => return Err(())
                 }
             },

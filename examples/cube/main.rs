@@ -26,8 +26,8 @@ use gfx::Bundle;
 // Notice the use of FixedPoint.
 gfx_defines!{
     vertex Vertex {
-        pos: [i8; 4] = "a_Pos",
-        tex_coord: [i8; 2] = "a_TexCoord",
+        pos: [f32; 4] = "a_Pos",
+        tex_coord: [f32; 2] = "a_TexCoord",
     }
 
     constant Locals {
@@ -49,8 +49,8 @@ gfx_defines!{
 impl Vertex {
     fn new(p: [i8; 3], t: [i8; 2]) -> Vertex {
         Vertex {
-            pos: [p[0], p[1], p[2], 1],
-            tex_coord: t,
+            pos: [p[0] as f32, p[1] as f32, p[2] as f32, 1.0],
+            tex_coord: [t[0] as f32, t[1] as f32],
         }
     }
 }
@@ -69,12 +69,14 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         let vs = gfx_app::shade::Source {
             glsl_120: include_bytes!("shader/cube_120.glslv"),
             glsl_150: include_bytes!("shader/cube_150.glslv"),
+            glsl_es_100: include_bytes!("shader/cube_100_es.glslv"),
             hlsl_40:  include_bytes!("data/vertex.fx"),
             .. gfx_app::shade::Source::empty()
         };
         let ps = gfx_app::shade::Source {
             glsl_120: include_bytes!("shader/cube_120.glslf"),
             glsl_150: include_bytes!("shader/cube_150.glslf"),
+            glsl_es_100: include_bytes!("shader/cube_100_es.glslf"),
             hlsl_40:  include_bytes!("data/pixel.fx"),
             .. gfx_app::shade::Source::empty()
         };

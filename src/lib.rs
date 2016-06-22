@@ -96,7 +96,7 @@ pub trait Application<R: gfx::Resources>: Sized {
         WrapD3D11::<Self>::launch(name, DEFAULT_CONFIG);
     }
     #[cfg(not(target_os = "windows"))]
-    fn launch_default(name: &str) where WrapGL2<Self>: ApplicationGL2 {
+    fn launch_default(name: &str) where WrapGL2<Self>: ApplicationGL {
         WrapGL2::<Self>::launch(name, DEFAULT_CONFIG);
     }
 }
@@ -137,7 +137,7 @@ impl<R, C, A> ApplicationBase<R, C> for Wrap<R, C, A> where
 }
 
 
-pub trait ApplicationGL2 {
+pub trait ApplicationGL {
     fn launch(&str, Config);
 }
 
@@ -146,7 +146,7 @@ pub trait ApplicationD3D11 {
     fn launch(&str, Config);
 }
 
-impl<A> ApplicationGL2 for A where
+impl<A> ApplicationGL for A where
     A: ApplicationBase<gfx_device_gl::Resources,
                        gfx_device_gl::CommandBuffer>
 {
@@ -154,17 +154,27 @@ impl<A> ApplicationGL2 for A where
         use gfx::traits::Device;
 
         env_logger::init().unwrap();
+        let gl_version = glutin::GlRequest::GlThenGles {
+            opengl_version: (3, 2), //TODO: try more versions
+            opengles_version: (2, 0),
+        };
         let builder = glutin::WindowBuilder::new()
             .with_title(title.to_string())
             .with_dimensions(config.size.0 as u32, config.size.1 as u32)
+            .with_gl(gl_version)
             .with_vsync();
         let (window, mut device, mut factory, main_color, main_depth) =
             gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder);
         let (width, height) = window.get_inner_size().unwrap();
         let combuf = factory.create_command_buffer();
+        let shade_lang = device.get_info().shading_language;
 
         let mut app = Self::new(factory, combuf.into(), Init {
-            backend: shade::Backend::Glsl(device.get_info().shading_language),
+            backend: if shade_lang.is_embedded {
+                shade::Backend::GlslEs(shade_lang)
+            } else {
+                shade::Backend::Glsl(shade_lang)
+            },
             color: main_color,
             depth: main_depth,
             aspect_ratio: width as f32 / height as f32,

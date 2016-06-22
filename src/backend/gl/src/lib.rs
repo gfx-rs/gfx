@@ -436,7 +436,7 @@ impl Device {
                     assert!(d::MAX_SAMPLERS <= d::MAX_RESOURCE_VIEWS);
                     debug_assert_eq!(sampler.object, 0);
                     if let Some(bind) = bind_opt {
-                        tex::bind_sampler(gl, bind, &sampler.info);
+                        tex::bind_sampler(gl, bind, &sampler.info, self.info.version.is_embedded);
                     }else {
                         error!("Trying to bind a sampler to slot {}, when sampler objects are not supported, and no texture is bound there", slot);
                     }
@@ -480,7 +480,7 @@ impl Device {
                 state::bind_draw_color_buffers(&self.share.context, mask);
             },
             Command::SetRasterizer(rast) => {
-                state::bind_rasterizer(&self.share.context, &rast);
+                state::bind_rasterizer(&self.share.context, &rast, self.info.version.is_embedded);
             },
             Command::SetViewport(rect) => {
                 state::bind_viewport(&self.share.context, rect);
