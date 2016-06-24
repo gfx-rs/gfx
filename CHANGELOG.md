@@ -16,7 +16,13 @@
 - v0.10.2 (2016-04-15)
   - fixed get_texel_count (#937)
 
-### Version 0.11.0 ()
+### Version 0.11.0 (2016-04-30)
   - modified `Slice` API (#955)
   - fixed GL blending where it's not in the core (#953)
   - raw PSO components for vertex buffers and render targets
+
+### Version 0.12.0 (2016-06-23)
+  - Android / GLES support (#993)
+  - GL unsigned int samplers (#991)
+  - better errors (#976)
+  - better GLSL pre core reflection

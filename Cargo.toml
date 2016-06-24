@@ -1,6 +1,6 @@
 [package]
 name = "gfx_app"
-version = "0.2.0"
+version = "0.3.0"
 description = "GFX example application framework"
 homepage = "https://github.com/gfx-rs/gfx"
 keywords = ["graphics", "gamedev"]
@@ -15,21 +15,20 @@ name = "gfx_app"
 
 [dependencies]
 env_logger = "0.3"
-getopts = "0.2"
 time = "0.1"
 glutin = "0.6"
-gfx_core = { path = "src/core", version = "0.3" }
-gfx_device_gl = { path = "src/backend/gl", version = "0.10" }
-gfx_window_glutin = { path = "src/window/glutin", version = "0.11" }
-gfx = { path = "src/render", version = "0.11" }
+gfx_core = { path = "src/core", version = "0.4" }
+gfx_device_gl = { path = "src/backend/gl", version = "0.11" }
+gfx_window_glutin = { path = "src/window/glutin", version = "0.12" }
+gfx = { path = "src/render", version = "0.12" }
 
 [target.'cfg(unix)'.dependencies]
-gfx_window_glfw = { path = "src/window/glfw", version = "0.10" }
-gfx_window_sdl = { path = "src/window/sdl", version = "0.2" }
+gfx_window_glfw = { path = "src/window/glfw", version = "0.11" }
+gfx_window_sdl = { path = "src/window/sdl", version = "0.3" }
 
 [target.'cfg(windows)'.dependencies]
-gfx_device_dx11 = { path = "src/backend/dx11", version = "0.2" }
-gfx_window_dxgi = { path = "src/window/dxgi", version = "0.2" }
+gfx_device_dx11 = { path = "src/backend/dx11", version = "0.3" }
+gfx_window_dxgi = { path = "src/window/dxgi", version = "0.3" }
 
 [[example]]
 name = "blend"

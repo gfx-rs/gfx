@@ -1,4 +1,4 @@
-# Copyright 2015 The Gfx-rs Developers.
+# Copyright 2016 The Gfx-rs Developers.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,9 +13,8 @@
 # limitations under the License.
 
 [package]
-
 name = "gfx_device_gl"
-version = "0.10.1"
+version = "0.11.0"
 description = "OpenGL backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -29,4 +28,4 @@ name = "gfx_device_gl"
 [dependencies]
 log = "0.3"
 gfx_gl = "0.3.1"
-gfx_core = { path = "../../core", version = "0.3" }
+gfx_core = { path = "../../core", version = "0.4" }
