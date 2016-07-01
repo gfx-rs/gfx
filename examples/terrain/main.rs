@@ -28,7 +28,7 @@ pub use gfx::format::{DepthStencil};
 pub use gfx_app::ColorFormat;
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
-use time::precise_time_s;
+use std::time::{UNIX_EPOCH, SystemTime};
 use noise::{Seed, perlin2};
 
 
@@ -134,7 +134,11 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
     }
 
     fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
-        let time = precise_time_s() as f32;
+        let time = match SystemTime::now().duration_since(UNIX_EPOCH) {
+            Ok(dur) => dur,
+            Err(err) => err.duration(),
+        };
+        let time = time.as_secs() as f32 + time.subsec_nanos() as f32 / 1000_000_000.0;
         let x = time.sin();
         let y = time.cos();
         let view: AffineMatrix3<f32> = Transform::look_at(

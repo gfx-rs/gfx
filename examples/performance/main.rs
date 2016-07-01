@@ -22,7 +22,6 @@ extern crate time;
 extern crate gfx_gl as gl;
 extern crate gfx_device_gl;
 
-use time::precise_time_s;
 use cgmath::{SquareMatrix, Matrix, Point3, Vector3, Matrix3, Matrix4};
 use cgmath::{Transform, Vector4};
 pub use gfx::format::{DepthStencil, Rgba8 as ColorFormat};
@@ -36,6 +35,7 @@ use std::env;
 use std::str::FromStr;
 use std::iter::repeat;
 use std::ffi::CString;
+use std::time::Instant;
 use gfx_device_gl::{Resources as R, CommandBuffer as CB};
 use gfx_core::Device;
 
@@ -152,9 +152,13 @@ impl GFX {
     }
 }
 
+fn duration_to_f64(dur: Duration) -> f64 {
+   dur.as_secs() as f64 + dur.subsec_nanos() as f64 / 1000_000_000.0
+}
+
 impl Renderer for GFX {
     fn render(&mut self, proj_view: &Matrix4<f32>) {
-        let start = precise_time_s() * 1000.;
+        let start = Instant::now();
         self.encoder.clear(&self.data.out_color, [CLEAR_COLOR.0,
                                                   CLEAR_COLOR.1,
                                                   CLEAR_COLOR.2,
@@ -167,17 +171,17 @@ impl Renderer for GFX {
             }
         }
 
-        let pre_submit = precise_time_s() * 1000.;
+        let pre_submit = start.elapsed();
         self.encoder.flush(&mut self.device);
-        let post_submit = precise_time_s() * 1000.;
+        let post_submit = start.elapsed();
         self.window.swap_buffers().unwrap();
         self.device.cleanup();
-        let swap = precise_time_s() * 1000.;
+        let swap = start.elapsed();
 
-        println!("total time:\t\t{0:4.2}ms", swap - start);
-        println!("\tcreate list:\t{0:4.2}ms", pre_submit - start);
-        println!("\tsubmit:\t\t{0:4.2}ms", post_submit - pre_submit);
-        println!("\tgpu wait:\t{0:4.2}ms", swap - post_submit);
+        println!("total time:\t\t{0:4.2}ms", duration_to_f64(swap));
+        println!("\tcreate list:\t{0:4.2}ms", duration_to_f64(pre_submit));
+        println!("\tsubmit:\t\t{0:4.2}ms", duration_to_f64(post_submit - pre_submit));
+        println!("\tgpu wait:\t{0:4.2}ms", duration_to_f64(swap - post_submit));
     }
     fn window(&mut self) -> &glutin::Window { &self.window }
 }

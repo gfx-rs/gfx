@@ -13,7 +13,6 @@
 // limitations under the License.
 
 extern crate env_logger;
-extern crate time;
 extern crate glutin;
 extern crate gfx;
 extern crate gfx_device_gl;
@@ -55,14 +54,14 @@ pub const DEFAULT_CONFIG: Config = Config {
 };
 
 struct Harness {
-    start: f64,
+    start: std::time::Instant,
     num_frames: f64,
 }
 
 impl Harness {
     fn new() -> Harness {
         Harness {
-            start: time::precise_time_s(),
+            start: std::time::Instant::now(),
             num_frames: 0.0,
         }
     }
@@ -73,9 +72,9 @@ impl Harness {
 
 impl Drop for Harness {
     fn drop(&mut self) {
-        let time_end = time::precise_time_s();
+        let time_end = self.start.elapsed();
         println!("Avg frame time: {} ms",
-            (time_end - self.start) * 1000.0 / self.num_frames
+            ((time_end.as_secs() * 1000) as f64 + (time_end.subsec_nanos() / 1000_000) as f64) / self.num_frames
         );
     }
 }
