@@ -24,7 +24,7 @@ extern crate gfx_core;
 
 /// public re-exported traits
 pub mod traits {
-    pub use gfx_core::{Device, Factory, DeviceFence};
+    pub use gfx_core::{Device, Factory, DeviceFence, Pod};
     pub use factory::FactoryExt;
 }
 

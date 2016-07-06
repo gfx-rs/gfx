@@ -23,7 +23,7 @@ use std::fmt;
 use std::mem;
 
 use gfx_core::{Device, IndexType, Resources, VertexCount};
-use gfx_core::{draw, format, handle, tex};
+use gfx_core::{draw, format, handle, tex, Pod};
 use gfx_core::factory::{cast_slice, Typed};
 use slice;
 use pso;
@@ -120,7 +120,7 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
     }
 
     /// Update a buffer with a slice of data.
-    pub fn update_buffer<T: Copy>(&mut self, buf: &handle::Buffer<R, T>,
+    pub fn update_buffer<T: Pod>(&mut self, buf: &handle::Buffer<R, T>,
                          data: &[T], offset_elements: usize)
                          -> Result<(), UpdateError<usize>>
     {

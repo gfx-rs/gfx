@@ -24,6 +24,8 @@ macro_rules! gfx_impl_struct {
             $( pub $field: $ty, )*
         }
 
+        unsafe impl $crate::traits::Pod for $root {}
+
         impl $crate::pso::buffer::Structure<$runtime_format> for $root {
             fn query(name: &str) -> Option<$crate::pso::buffer::Element<$runtime_format>> {
                 use std::mem::size_of;

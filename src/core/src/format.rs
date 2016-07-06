@@ -20,7 +20,7 @@
 //  ETC2_RGB, // Use the EXT2 algorithm on 3 components.
 //  ETC2_SRGB, // Use the EXT2 algorithm on 4 components (RGBA) in the sRGB color space.
 //  ETC2_EAC_RGBA8, // Use the EXT2 EAC algorithm on 4 components.
-
+use Pod;
 
 macro_rules! impl_channel_type {
     { $($name:ident = $shader_type:ident [ $($imp_trait:ident),* ] ,)* } => {
@@ -184,7 +184,7 @@ pub struct Format(pub SurfaceType, pub ChannelType);
 /// Compile-time surface type trait.
 pub trait SurfaceTyped {
     /// The corresponding data type to be passed from CPU.
-    type DataType: Copy;
+    type DataType: Pod;
     /// Return the run-time value of the type.
     fn get_surface_type() -> SurfaceType;
 }
@@ -289,6 +289,9 @@ macro_rules! alias {
                     $name(v)
                 }
             }
+
+            unsafe impl Pod for $name {}
+
             impl $name {
                 /// Convert a 2-element slice.
                 pub fn cast2(v: [$ty; 2]) -> [$name; 2] {
