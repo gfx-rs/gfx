@@ -21,7 +21,7 @@ use std::error::Error;
 use std::fmt;
 use std::mem;
 use {handle, format, mapping, pso, shade, target, tex};
-use {Capabilities, Resources};
+use {Capabilities, Resources, Pod};
 use {VertexShader, GeometryShader, PixelShader, ShaderSet};
 
 
@@ -38,7 +38,7 @@ pub trait Typed: Sized {
 
 
 /// Cast a slice from one POD type to another.
-pub fn cast_slice<A: Copy, B: Copy>(slice: &[A]) -> &[B] {
+pub fn cast_slice<A: Pod, B: Pod>(slice: &[A]) -> &[B] {
     use std::slice;
     let raw_len = mem::size_of::<A>().wrapping_mul(slice.len());
     let len = raw_len / mem::size_of::<B>();
@@ -326,7 +326,7 @@ pub trait Factory<R: Resources> {
     fn create_buffer_raw(&mut self, BufferInfo) -> Result<handle::RawBuffer<R>, BufferError>;
     fn create_buffer_const_raw(&mut self, data: &[u8], stride: usize, BufferRole, Bind)
                                 -> Result<handle::RawBuffer<R>, BufferError>;
-    fn create_buffer_const<T: Copy>(&mut self, data: &[T], role: BufferRole, bind: Bind) -> Result<handle::Buffer<R, T>, BufferError> {
+    fn create_buffer_const<T: Pod>(&mut self, data: &[T], role: BufferRole, bind: Bind) -> Result<handle::Buffer<R, T>, BufferError> {
         self.create_buffer_const_raw(cast_slice(data), mem::size_of::<T>(), role, bind)
             .map(|raw| Typed::new(raw))
     }

@@ -18,7 +18,7 @@
 //! exposes extension functions and shortcuts to aid with creating and managing graphics resources.
 //! See the `FactoryExt` trait for more information.
 
-use gfx_core::{format, handle, tex, state};
+use gfx_core::{format, handle, tex, state, Pod};
 use gfx_core::{Primitive, Resources, ShaderSet};
 use gfx_core::factory::{Bind, BufferRole, Factory};
 use gfx_core::pso::{CreationError, Descriptor};
@@ -93,7 +93,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     /// constructed.
     fn create_vertex_buffer<T>(&mut self, vertices: &[T])
                             -> handle::Buffer<R, T> where
-                            T: Copy + pso::buffer::Structure<format::Format>
+                            T: Pod + pso::buffer::Structure<format::Format>
     {
         //debug_assert!(nv <= self.get_capabilities().max_vertex_count);
         self.create_buffer_const(vertices, BufferRole::Vertex, Bind::empty()).unwrap()
@@ -103,7 +103,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     /// `Slice` from the supplied indices.
     fn create_vertex_buffer_with_slice<B, V>(&mut self, vertices: &[V], indices: B)
                                        -> (handle::Buffer<R, V>, Slice<R>)
-                                       where V: Copy + pso::buffer::Structure<format::Format>,
+                                       where V: Pod + pso::buffer::Structure<format::Format>,
                                              B: IntoIndexBuffer<R>
     {
         let vertex_buffer = self.create_vertex_buffer(vertices);
