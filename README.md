@@ -40,12 +40,11 @@
 - Modern graphics APIs, whilst providing a great degree of flexibility and a high level of performance, often have a much higher barrier to entry than traditional [fixed-function](https://en.wikipedia.org/wiki/Fixed-function) APIs.
 - Graphics APIs like OpenGL still [require the developer to 'bind' and 'unbind' objects](http://www.arcsynthesis.org/gltut/Basics/Intro%20What%20is%20OpenGL.html#d0e887) in order to perform operations on them. This results in a large amount of boiler plate code, and brings with it the usual problems associated with global state.
 
-## Getting started x
+## Getting started
 
 The gfx-rs git repository contains a number of examples.
 Those examples are automatically downloaded if you clone the gfx directory:
 
-	$ mkdir <my_dir>
 	$ cd <my_dir>
 	$ git clone https://github.com/gfx-rs/gfx
 
