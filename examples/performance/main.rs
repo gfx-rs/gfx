@@ -18,7 +18,6 @@ extern crate gfx;
 extern crate gfx_core;
 extern crate gfx_window_glutin;
 extern crate glutin;
-extern crate time;
 extern crate gfx_gl as gl;
 extern crate gfx_device_gl;
 
@@ -35,7 +34,7 @@ use std::env;
 use std::str::FromStr;
 use std::iter::repeat;
 use std::ffi::CString;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use gfx_device_gl::{Resources as R, CommandBuffer as CB};
 use gfx_core::Device;
 
@@ -303,9 +302,13 @@ impl GL {
     }
 }
 
+fn duration_to_ms(dur: Duration) -> f64 {
+    (dur.as_secs() * 1000) as f64 + dur.subsec_nanos() as f64 / 1000_000.0
+}
+
 impl Renderer for GL {
     fn render(&mut self, proj_view: &Matrix4<f32>) {
-        let start = precise_time_s() * 1000.;
+        let start = Instant::now();
 
         // Clear the screen to black
         unsafe {
@@ -328,15 +331,15 @@ impl Renderer for GL {
             }
         }
 
-        let submit = precise_time_s() * 1000.;
+        let submit = start.elapsed();
 
         // Swap buffers
         self.window.swap_buffers().unwrap();
-        let swap = precise_time_s() * 1000.;
+        let swap = start.elapsed();
 
-        println!("total time:\t\t{0:4.2}ms", swap - start);
-        println!("\tsubmit:\t\t{0:4.2}ms", submit - start);
-        println!("\tgpu wait:\t{0:4.2}ms", swap - submit)
+        println!("total time:\t\t{0:4.2}ms", duration_to_ms(swap));
+        println!("\tsubmit:\t\t{0:4.2}ms", duration_to_ms(submit));
+        println!("\tgpu wait:\t{0:4.2}ms", duration_to_ms(swap - submit));
     }
     fn window(&mut self) -> &glutin::Window { &self.window }
 }
