@@ -42,17 +42,48 @@
 
 ## Getting started
 
-Add the following to your `Cargo.toml`:
+The gfx-rs git repository contains a number of examples.
+Those examples are automatically downloaded if you clone the gfx directory:
 
-~~~toml
-[dependencies]
-gfx = "*"
-~~~
+	$ cd <my_dir>
+	$ git clone https://github.com/gfx-rs/gfx
 
-See the [cube example](https://github.com/gfx-rs/gfx/tree/master/examples/cube) for a typical context
-initialization with [glfw](https://github.com/PistonDevelopers/glfw-rs) and the [triangle example](https://github.com/gfx-rs/gfx/tree/master/examples/triangle) for initialization with [glutin](https://github.com/tomaka/glutin/).
+where `<my_dir>` is a directory name of your choice. Once gfx is downloaded you can build any of the gfx examples.
+The examples are listed in the `<my_dir>/gfx/Cargo.toml` file.
+For example try:
 
-links to stuff here!
+	$ cd gfx
+	$ cargo run --example cube
+
+If you compile the the example for the first time, it may take some while since all dependencies must be compiled too.
+
+If you want to build your own stand-alone gfx program, add the following to your new `Cargo.toml`:
+
+	[dependencies]
+	gfx = "*"
+
+
+For gfx to work, it need access to the graphics system of the OS. This is typically provided through the some window initialization API.
+gfx can use a couple of those to acquire graphical contexts.
+For example; [glfw](https://github.com/PistonDevelopers/glfw-rs) or [glutin](https://github.com/tomaka/glutin/).
+
+To see how the graphic context is acquired, see the [cube example](https://github.com/gfx-rs/gfx/tree/master/examples/cube) or the [triangle example](https://github.com/gfx-rs/gfx/tree/master/examples/triangle).
+
+To use `glfw` or `glutin`, your `Cargo.toml` must be extended with the following dependencies:
+
+	[dependencies]
+	...
+	glutin ="*"
+	gfx_window_glutin = "*"
+
+or
+
+	[dependencies]
+	...
+	glfw = "*"
+	gfx_window_glfw = "*"
+
+You may want to inspect `<my_dir>/gfx/Cargo.toml` for other modules typically used in gfx programs.
 
 ## Who's using it?
 
