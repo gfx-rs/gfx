@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate time;
-
 #[macro_use]
 extern crate gfx;
 extern crate gfx_app;
@@ -22,6 +20,7 @@ extern crate cgmath;
 extern crate image;
 
 use std::io::Cursor;
+use std::time::{SystemTime, UNIX_EPOCH};
 pub use gfx_app::ColorFormat;
 pub use gfx::format::{Depth, Rgba8};
 use gfx::Bundle;
@@ -144,7 +143,11 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         {
             use cgmath::{AffineMatrix3, SquareMatrix, Transform, Vector3, Point3};
             // Update camera position
-            let time = time::precise_time_s() as f32 * 0.25;
+            let time = match SystemTime::now().duration_since(UNIX_EPOCH) {
+                Ok(dur) => dur,
+                Err(err) => err.duration(),
+            };
+            let time = (time.as_secs() as f32 + time.subsec_nanos() as f32 / 1000_000_000.0) * 0.25;
             let x = time.sin();
             let z = time.cos();
 
