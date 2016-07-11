@@ -16,7 +16,6 @@ extern crate cgmath;
 #[macro_use]
 extern crate gfx;
 extern crate gfx_app;
-extern crate time;
 extern crate rand;
 extern crate genmesh;
 extern crate noise;
