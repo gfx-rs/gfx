@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate time;
 #[macro_use]
 extern crate gfx;
 extern crate gfx_app;
 extern crate image;
 
 use std::io::Cursor;
+use std::time::Instant;
 pub use gfx::format::{Rgba8, Depth};
 pub use gfx_app::ColorFormat;
 use gfx::Bundle;
@@ -68,7 +68,7 @@ fn load_texture<R, F>(factory: &mut F, data: &[u8])
 struct App<R: gfx::Resources>{
     bundle: Bundle<R, pipe::Data<R>>,
     cycles: [f32; 2],
-    time_start: f64,
+    time_start: Instant,
 }
 
 impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
@@ -125,14 +125,14 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         App {
             bundle: Bundle::new(slice, pso, data),
             cycles: [0.0, 0.5],
-            time_start: time::precise_time_s(),
+            time_start: Instant::now(),
         }
     }
 
     fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
-        let time_end = self.time_start;
-        self.time_start = time::precise_time_s();
-        let delta = (self.time_start - time_end) as f32;
+        let delta = self.time_start.elapsed();
+        self.time_start = Instant::now();
+        let delta = delta.as_secs() as f32 + delta.subsec_nanos() as f32 / 1000_000_000.0;
 
         // since we sample our diffuse texture twice we need to lerp between
         // them to get a smooth transition (shouldn't even be noticable).
