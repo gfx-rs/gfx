@@ -168,6 +168,7 @@ pub struct PrivateCaps {
     pub immutable_storage_supported: bool,
     pub sampler_objects_supported: bool,
     pub program_interface_supported: bool,
+    pub buffer_storage_supported: bool,
 }
 
 /// OpenGL implementation information
@@ -248,6 +249,7 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
         immutable_storage_supported:       info.is_version_or_extension_supported(4, 2, "GL_ARB_texture_storage"),
         sampler_objects_supported:         info.is_version_or_extension_supported(3, 3, "GL_ARB_sampler_objects"),
         program_interface_supported:       info.is_version_or_extension_supported(4, 3, "GL_ARB_program_interface_query"),
+        buffer_storage_supported:          info.is_version_or_extension_supported(4, 4, "GL_ARB_program_interface_query"),
     };
     (info, caps, private)
 }
