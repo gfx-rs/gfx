@@ -44,7 +44,7 @@ pub use gfx_app::ColorFormat;
 use gfx::Bundle;
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{SharedVertex, IndexedPolygon};
-use std::time::{UNIX_EPOCH, SystemTime};
+use std::time::{Instant};
 
 use noise::{Seed, perlin2};
 
@@ -217,6 +217,7 @@ struct App<R: gfx::Resources> {
     light_pos_vec: Vec<LightInfo>,
     seed: Seed,
     debug_buf: Option<gfx::handle::ShaderResourceView<R, [f32; 4]>>,
+    start_time: Instant,
 }
 
 impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
@@ -448,6 +449,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             }).collect(),
             seed: seed,
             debug_buf: None,
+            start_time: Instant::now(),
         }
     }
 
@@ -465,11 +467,8 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
     }*/
 
     fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
-        let time = match SystemTime::now().duration_since(UNIX_EPOCH) {
-            Ok(dur) => dur,
-            Err(err) => err.duration(),
-        };
-        let time = time.as_secs() as f32 + time.subsec_nanos() as f32 / 1000_000_000.0;
+        let elapsed = self.start_time.elapsed();
+        let time = elapsed.as_secs() as f32 + elapsed.subsec_nanos() as f32 / 1000_000_000.0;
 
         // Update camera position
         let cam_pos = {

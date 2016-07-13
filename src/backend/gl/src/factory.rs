@@ -101,19 +101,35 @@ impl Factory {
     fn init_buffer(&mut self, buffer: Buffer, info: &f::BufferInfo) {
         let gl = &self.share.context;
         let target = role_to_target(info.role);
-        let usage = match info.usage {
-            f::Usage::GpuOnly    => gl::STATIC_DRAW,
-            f::Usage::Const      => gl::STATIC_DRAW,
-            f::Usage::Dynamic    => gl::DYNAMIC_DRAW,
-            f::Usage::CpuOnly(_) => gl::STREAM_DRAW,
-        };
-        unsafe {
-            gl.BindBuffer(target, buffer);
-            gl.BufferData(target,
-                info.size as gl::types::GLsizeiptr,
-                0 as *const gl::types::GLvoid,
-                usage
-            );
+        if self.share.private_caps.buffer_storage_supported {
+            let usage = match info.usage {
+                f::Usage::GpuOnly    => 0,
+                _                    => gl::MAP_WRITE_BIT | gl::DYNAMIC_STORAGE_BIT,
+            };
+            unsafe {
+                gl.BindBuffer(target, buffer);
+                gl.BufferStorage(target,
+                    info.size as gl::types::GLsizeiptr,
+                    0 as *const gl::types::GLvoid,
+                    usage
+                );
+            }
+        }
+        else {
+            let usage = match info.usage {
+                f::Usage::GpuOnly    => gl::STATIC_DRAW,
+                f::Usage::Const      => gl::STATIC_DRAW,
+                f::Usage::Dynamic    => gl::DYNAMIC_DRAW,
+                f::Usage::CpuOnly(_) => gl::STREAM_DRAW,
+            };
+            unsafe {
+                gl.BindBuffer(target, buffer);
+                gl.BufferData(target,
+                    info.size as gl::types::GLsizeiptr,
+                    0 as *const gl::types::GLvoid,
+                    usage
+                );
+            }
         }
     }
 
