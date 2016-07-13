@@ -20,7 +20,7 @@ extern crate cgmath;
 extern crate image;
 
 use std::io::Cursor;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant};
 pub use gfx_app::ColorFormat;
 pub use gfx::format::{Depth, Rgba8};
 use gfx::Bundle;
@@ -50,7 +50,7 @@ impl Vertex {
         }
     }
 }
-    
+
 struct CubemapData<'a> {
     up: &'a [u8],
     down: &'a [u8],
@@ -83,6 +83,7 @@ fn load_cubemap<R, F>(factory: &mut F, data: CubemapData) -> Result<gfx::handle:
 struct App<R: gfx::Resources>{
     bundle: Bundle<R, pipe::Data<R>>,
     projection: cgmath::Matrix4<f32>,
+    start_time: Instant,
 }
 
 impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
@@ -136,6 +137,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         App {
             bundle: Bundle::new(slice, pso, data),
             projection: proj,
+            start_time: Instant::now(),
         }
     }
 
@@ -143,11 +145,8 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         {
             use cgmath::{AffineMatrix3, SquareMatrix, Transform, Vector3, Point3};
             // Update camera position
-            let time = match SystemTime::now().duration_since(UNIX_EPOCH) {
-                Ok(dur) => dur,
-                Err(err) => err.duration(),
-            };
-            let time = (time.as_secs() as f32 + time.subsec_nanos() as f32 / 1000_000_000.0) * 0.25;
+            let elapsed = self.start_time.elapsed();
+            let time = (elapsed.as_secs() as f32 + elapsed.subsec_nanos() as f32 / 1000_000_000.0) * 0.25;
             let x = time.sin();
             let z = time.cos();
 

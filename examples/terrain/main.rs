@@ -27,7 +27,7 @@ pub use gfx::format::{DepthStencil};
 pub use gfx_app::ColorFormat;
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
-use std::time::{UNIX_EPOCH, SystemTime};
+use std::time::{Instant};
 use noise::{Seed, perlin2};
 
 
@@ -71,6 +71,7 @@ struct App<R: gfx::Resources> {
     pso: gfx::PipelineState<R, pipe::Meta>,
     data: pipe::Data<R>,
     slice: gfx::Slice<R>,
+    start_time: Instant,
 }
 
 impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
@@ -129,15 +130,13 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 out_depth: init.depth,
             },
             slice: slice,
+            start_time: Instant::now(),
         }
     }
 
     fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
-        let time = match SystemTime::now().duration_since(UNIX_EPOCH) {
-            Ok(dur) => dur,
-            Err(err) => err.duration(),
-        };
-        let time = time.as_secs() as f32 + time.subsec_nanos() as f32 / 1000_000_000.0;
+        let elapsed = self.start_time.elapsed();
+        let time = elapsed.as_secs() as f32 + elapsed.subsec_nanos() as f32 / 1000_000_000.0;
         let x = time.sin();
         let y = time.cos();
         let view: AffineMatrix3<f32> = Transform::look_at(
