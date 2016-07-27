@@ -44,7 +44,7 @@ pub mod tex;
 /// Compile-time maximum number of vertex attributes.
 pub const MAX_VERTEX_ATTRIBUTES: usize = 16;
 /// Compile-time maximum number of color targets.
-pub const MAX_COLOR_TARGETS:      usize = 4;
+pub const MAX_COLOR_TARGETS: usize = 4;
 /// Compile-time maximum number of constant buffers.
 pub const MAX_CONSTANT_BUFFERS: usize = 14;
 /// Compile-time maximum number of shader resource views (SRV).

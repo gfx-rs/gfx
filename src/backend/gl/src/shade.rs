@@ -288,7 +288,7 @@ fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program,
                     let real_name = el_name[..length as usize].to_string();
                     let (base, container) = match StorageType::new(storage) {
                         StorageType::Var(base, cont) => {
-                            info!("\t\t\tElement at {} = '{}'\t{:?}\t{:?}", *offset, real_name, base, cont);
+                            info!("\t\t\tElement at {}\t= '{}'\t{:?}\t{:?}", *offset, real_name, base, cont);
                             (base, cont)
                         },
                         _ => {
