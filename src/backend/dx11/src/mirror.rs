@@ -114,7 +114,7 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                 (hr, desc)
             };
             assert!(SUCCEEDED(hr));
-            debug!("Attribute {}, system type {:?}, mask {}, read-write mask {}",
+            info!("\tAttribute {}, system type {:?}, mask {}, read-write mask {}",
                 convert_str(desc.SemanticName), desc.SystemValueType, desc.Mask, desc.ReadWriteMask);
             if desc.SystemValueType != winapi::D3D_NAME_UNDEFINED {
                 // system value semantic detected, skipping
@@ -146,7 +146,7 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
             };
             assert!(SUCCEEDED(hr));
             let name = convert_str(desc.SemanticName);
-            debug!("Output {}, system type {:?}, mask {}, read-write mask {}",
+            info!("\tOutput {}, system type {:?}, mask {}, read-write mask {}",
                 name, desc.SystemValueType, desc.Mask, desc.ReadWriteMask);
             match desc.SystemValueType {
                 winapi::D3D_NAME_TARGET =>
@@ -173,14 +173,16 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
         };
         assert!(SUCCEEDED(hr));
         let name = convert_str(res_desc.Name);
-        debug!("Resource {}, type {:?}", name, res_desc.Type);
+        info!("\tResource {}, type {:?}", name, res_desc.Type);
         if res_desc.Type == winapi::D3D_SIT_CBUFFER {
             if let Some(cb) = info.constant_buffers.iter_mut().find(|cb| cb.name == name) {
                 cb.usage = cb.usage | usage;
                 continue;
             }
+            let cbuf = unsafe {
+                (*reflection).GetConstantBufferByName(res_desc.Name)
+            };
             let desc = unsafe {
-                let cbuf = (*reflection).GetConstantBufferByName(res_desc.Name);
                 let mut desc = mem::zeroed();
                 let hr = (*cbuf).GetDesc(&mut desc);
                 assert!(SUCCEEDED(hr));
@@ -191,6 +193,24 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                 slot: res_desc.BindPoint as core::ConstantBufferSlot,
                 size: desc.Size as usize,
                 usage: usage,
+                elements: (0 .. desc.Variables).map(|i| {
+                    let vd = unsafe {
+                        let var = (*cbuf).GetVariableByIndex(i);
+                        let mut vd = mem::zeroed();
+                        let hr1 = (*var).GetDesc(&mut vd);
+                        assert!(SUCCEEDED(hr1));
+                        vd
+                    };
+                    let el_name = convert_str(vd.Name);
+                    info!("\t\tElement at {}\t= '{}'", vd.StartOffset, el_name);
+                    s::ConstVar {
+                        name: el_name,
+                        location: vd.StartOffset as s::Location,
+                        count: 1, //TODO
+                        base_type: s::BaseType::F32, //TODO
+                        container: s::ContainerType::Single, //TODO
+                    }
+                }).collect(),
             });
         }else if res_desc.Type == winapi::D3D_SIT_TEXTURE {
             if let Some(t) = info.textures.iter_mut().find(|t| t.name == name) {

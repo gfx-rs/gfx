@@ -42,7 +42,7 @@ macro_rules! gfx_impl_struct {
                             let array_id: ElemOffset = s.parse().unwrap();
                             let sub_name = match split.next() {
                                 Some(s) if s.starts_with('.') => &s[1..],
-                                _ => &name,
+                                _ => name,
                             };
                             (sub_name, array_id * (stride as ElemOffset))
                         },
