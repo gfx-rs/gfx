@@ -147,6 +147,18 @@ impl Error for InitError {
     }
 }
 
+/// Error matching an element inside the constant buffer.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ElementError<'a> {
+    /// Element not found.
+    NotFound(&'a str),
+    /// Element offset mismatch.
+    Offset(&'a str, d::pso::ElemOffset),
+    /// Element format mismatch.
+    Format(&'a str, d::shade::ConstFormat),
+}
+
+
 /// A service trait implemented by the "init" structure of PSO.
 pub trait PipelineInit {
     /// The associated "meta" struct.
@@ -201,8 +213,8 @@ pub trait DataLink<'a>: Sized {
     fn link_input(&mut self, _: &d::shade::AttributeVar, _: &Self::Init) ->
                   Option<Result<d::pso::AttributeDesc, d::format::Format>> { None }
     /// Attempt to link with a constant buffer.
-    fn link_constant_buffer(&mut self, _: &d::shade::ConstantBufferVar, _: &Self::Init) ->
-                            Option<Result<(), d::shade::ConstFormat>> { None }
+    fn link_constant_buffer<'b>(&mut self, _: &'b d::shade::ConstantBufferVar, _: &Self::Init) ->
+                            Option<Result<(), ElementError<'b>>> { None }
     /// Attempt to link with a global constant.
     fn link_global_constant(&mut self, _: &d::shade::ConstVar, _: &Self::Init) ->
                             Option<Result<(), d::shade::UniformValue>> { None }
