@@ -64,9 +64,13 @@ cbuffer CubeLocals {
 	float Radius: u_Radius;
 };
 
+struct LightInfo {
+	float4 pos;
+};
+
 #define NUM_LIGHTS	250
 cbuffer u_LightPosBlock {
-	float4 offs[NUM_LIGHTS];
+	LightInfo lights[NUM_LIGHTS];
 };
 
 // Light program
@@ -85,7 +89,7 @@ Texture2D<float4> t_Normal;
 Texture2D<float4> t_Diffuse;
 
 LightVarying LightVs(int3 pos: a_Pos, uint inst_id: SV_InstanceID) {
-	float3 lpos = offs[inst_id].xyz;
+	float3 lpos = lights[inst_id].pos.xyz;
 	LightVarying output = {
 		mul(Transform, float4(Radius * float3(pos) + lpos, 1.0)),
 		lpos,
@@ -117,7 +121,7 @@ float4 LightPs(LightVarying In): SV_Target {
 // Emitter program
 
 float4 EmitterVs(int3 pos: a_Pos, uint inst_id: SV_InstanceID): SV_Position {
-	float3 lpos = offs[inst_id].xyz;
+	float3 lpos = lights[inst_id].pos.xyz;
 	return mul(Transform, float4(Radius * float3(pos) + lpos, 1.0));
 }
 
