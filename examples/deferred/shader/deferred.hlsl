@@ -20,17 +20,17 @@ struct TerrainOutput {
 };
 
 cbuffer TerrainLocals {
-	float4x4 Model: u_Model;
-	float4x4 View: u_View;
-	float4x4 Proj: u_Proj;
+	float4x4 u_Model;
+	float4x4 u_View;
+	float4x4 u_Proj;
 };
  
 TerrainVarying TerrainVs(TerrainInput In) {
-	float4 fpos = mul(Model, float4(In.pos, 1.0));
+	float4 fpos = mul(u_Model, float4(In.pos, 1.0));
 	TerrainVarying output = {
-		mul(Proj, mul(View, fpos)),
+		mul(u_Proj, mul(u_View, fpos)),
 		fpos.xyz,
-		mul(Model, float4(In.normal, 0.0)).xyz,
+		mul(u_Model, float4(In.normal, 0.0)).xyz,
 		In.color,
 	};
 	return output;
@@ -60,8 +60,8 @@ float4 BlitPs(float4 pos: SV_Position): SV_Target {
 // common parts
 
 cbuffer CubeLocals {
-	float4x4 Transform: u_Transform;
-	float Radius: u_Radius;
+	float4x4 u_Transform;
+	float u_Radius;
 };
 
 struct LightInfo {
@@ -69,14 +69,14 @@ struct LightInfo {
 };
 
 #define NUM_LIGHTS	250
-cbuffer u_LightPosBlock {
-	LightInfo lights[NUM_LIGHTS];
+cbuffer LightPosBlock {
+	LightInfo u_Lights[NUM_LIGHTS];
 };
 
 // Light program
 
 cbuffer LightLocals {
-	float4 CamPosAndRadius: u_CameraPosAndRadius;
+	float4 u_CamPosAndRadius;
 };
 
 struct LightVarying {
@@ -89,9 +89,9 @@ Texture2D<float4> t_Normal;
 Texture2D<float4> t_Diffuse;
 
 LightVarying LightVs(int3 pos: a_Pos, uint inst_id: SV_InstanceID) {
-	float3 lpos = lights[inst_id].pos.xyz;
+	float3 lpos = u_Lights[inst_id].pos.xyz;
 	LightVarying output = {
-		mul(Transform, float4(Radius * float3(pos) + lpos, 1.0)),
+		mul(u_Transform, float4(u_Radius * float3(pos) + lpos, 1.0)),
 		lpos,
 	};
 	return output;
@@ -105,14 +105,14 @@ float4 LightPs(LightVarying In): SV_Target {
 
 	float3 light    = In.light_pos;
 	float3 to_light = normalize(light - pos);
-	float3 to_cam   = normalize(CamPosAndRadius.xyz - pos);
+	float3 to_cam   = normalize(u_CamPosAndRadius.xyz - pos);
 
 	float3 n = normalize(normal);
 	float s = pow(max(0.0, dot(to_cam, reflect(-to_light, n))), 20.0);
 	float d = max(0.0, dot(n, to_light));
 
 	float dist_sq = dot(light - pos, light - pos);
-	float scale = max(0.0, 1.0-dist_sq * CamPosAndRadius.w);
+	float scale = max(0.0, 1.0-dist_sq * u_CamPosAndRadius.w);
 
 	float3 res_color = d * diffuse + s;
 	return float4(scale*res_color, 1.0);
@@ -121,8 +121,8 @@ float4 LightPs(LightVarying In): SV_Target {
 // Emitter program
 
 float4 EmitterVs(int3 pos: a_Pos, uint inst_id: SV_InstanceID): SV_Position {
-	float3 lpos = lights[inst_id].pos.xyz;
-	return mul(Transform, float4(Radius * float3(pos) + lpos, 1.0));
+	float3 lpos = u_Lights[inst_id].pos.xyz;
+	return mul(u_Transform, float4(u_Radius * float3(pos) + lpos, 1.0));
 }
 
 float4 EmitterPs(): SV_Target {

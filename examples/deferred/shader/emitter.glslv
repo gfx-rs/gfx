@@ -14,10 +14,10 @@ struct LightInfo {
 
 const int NUM_LIGHTS = 250;
 layout(std140)
-uniform u_LightPosBlock {
-	LightInfo lights[NUM_LIGHTS];
+uniform LightPosBlock {
+	LightInfo u_Lights[NUM_LIGHTS];
 };
 
 void main() {
-	gl_Position = u_Transform * vec4(u_Radius * a_Pos + lights[gl_InstanceID].pos.xyz, 1.0);
+	gl_Position = u_Transform * vec4(u_Radius * a_Pos + u_Lights[gl_InstanceID].pos.xyz, 1.0);
 }
