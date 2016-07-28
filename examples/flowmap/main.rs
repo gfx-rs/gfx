@@ -79,12 +79,14 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             glsl_120: include_bytes!("shader/flowmap_120.glslv"),
             glsl_150: include_bytes!("shader/flowmap_150.glslv"),
             hlsl_40:  include_bytes!("data/vertex.fx"),
+            msl_11:   include_bytes!("shader/flowmap_vertex.metal"),
             .. gfx_app::shade::Source::empty()
         };
         let ps = gfx_app::shade::Source {
             glsl_120: include_bytes!("shader/flowmap_120.glslf"),
             glsl_150: include_bytes!("shader/flowmap_150.glslf"),
             hlsl_40:  include_bytes!("data/pixel.fx"),
+            msl_11:   include_bytes!("shader/flowmap_frag.metal"),
             .. gfx_app::shade::Source::empty()
         };
 

@@ -16,6 +16,8 @@
 pub use gfx_device_gl::Version as GlslVersion;
 #[cfg(target_os = "windows")]
 pub use gfx_device_dx11::ShaderModel as DxShaderModel;
+#[cfg(target_os = "macos")]
+pub use gfx_device_metal::ShaderModel as MetalShaderModel;
 
 /// Shader backend with version numbers.
 #[derive(Copy, Clone, PartialEq, Debug)]
@@ -24,6 +26,8 @@ pub enum Backend {
     GlslEs(GlslVersion),
     #[cfg(target_os = "windows")]
     Hlsl(DxShaderModel),
+    #[cfg(target_os = "macos")]
+    Msl(MetalShaderModel)
 }
 
 pub const EMPTY: &'static [u8] = &[];
@@ -43,6 +47,8 @@ pub struct Source<'a> {
     pub hlsl_40 : &'a [u8],
     pub hlsl_41 : &'a [u8],
     pub hlsl_50 : &'a [u8],
+    pub msl_10  : &'a [u8],
+    pub msl_11  : &'a [u8]
 }
 
 impl<'a> Source<'a> {
@@ -62,6 +68,8 @@ impl<'a> Source<'a> {
             hlsl_40:  EMPTY,
             hlsl_41:  EMPTY,
             hlsl_50:  EMPTY,
+            msl_10:   EMPTY,
+            msl_11:   EMPTY
         }
     }
 
@@ -96,6 +104,12 @@ impl<'a> Source<'a> {
                 Source { hlsl_30: s, .. } if s != EMPTY && model >= 30 => s,
                 _ => return Err(())
             },
+            #[cfg(target_os = "macos")]
+            Backend::Msl(revision) => match *self {
+                Source { msl_11: s, .. } if s != EMPTY && revision >= 11 => s,
+                Source { msl_10: s, .. } if s != EMPTY && revision >= 10 => s,
+                _ => return Err(())
+            }
         })
     }
 }
