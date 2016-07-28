@@ -173,11 +173,9 @@ impl CommandBuffer {
     pub fn commit(&mut self, drawable: CAMetalDrawable) {
         unsafe {
             if self.encoding {
-                println!("{}", "encode end");
                 self.render_encoder.end_encoding();
 
                 if self.root {
-                    println!("{}", "woop");
                     (*self.master_encoder).end_encoding();
 
                     (*self.mtl_buf).present_drawable(drawable);
@@ -361,7 +359,6 @@ impl CommandBuffer {
 
         use map::map_index_type;
 
-        println!("{:?}", draw);
         match draw {
             Draw::Normal(count, start) => {
                 encoder.draw_primitives(MTLPrimitiveType::Triangle, start, count)
@@ -504,7 +501,6 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
 
                 unsafe {
                     if self.encoding {
-                        println!("{}", "BPT End encode");
                         self.render_encoder.end_encoding();
 
                         if self.root {

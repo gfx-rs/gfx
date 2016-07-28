@@ -348,7 +348,13 @@ fn create_scene<R, F, C>(factory: &mut F, encoder: &gfx::Encoder<R, C>,
     fw_data.vbuf = plane_buf.clone();
     sh_data.vbuf = plane_buf;
 
-
+    entities.push(Entity {
+        dynamic: false,
+        mx_to_world: Matrix4::identity(),
+        batch_forward: fw_data,
+        batch_shadow: sh_data,
+        slice: plane_slice,
+    });
 
     // create camera
     let camera = Camera {
@@ -498,7 +504,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
         D: gfx::Device<Resources=R, CommandBuffer=C>
     {
         self.rotate(cgmath::vec3(0.0, 0.0, 1.0));
-        /*if self.scene.light_dirty {
+        if self.scene.light_dirty {
             // init light parameters
             let light_params: Vec<_> = self.scene.lights.iter().map(|light| LightParam {
                 pos: [light.position.x, light.position.y, light.position.z, 1.0],
@@ -512,7 +518,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
             }).collect();
             self.encoder.update_buffer(&self.scene.light_buf, &light_params, 0).unwrap();
             self.scene.light_dirty = false;
-        }*/
+        }
 
         // fill up shadow map for each light
         if self.is_parallel {
@@ -557,7 +563,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
                 self.scene.lights.push(light);
             }
         } else {
-            /*for light in self.scene.lights.iter_mut() {
+            for light in self.scene.lights.iter_mut() {
                 // clear
                 self.encoder.clear_depth(&light.shadow, 1.0);
                 // fill
@@ -576,7 +582,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
                     self.encoder.update_constant_buffer(&batch.locals, &locals);
                     self.encoder.draw(&ent.slice, &subshare.shadow_pso, &batch);
                 }
-            }*/
+            }
         }
 
         // draw entities with forward pass

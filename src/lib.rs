@@ -254,16 +254,9 @@ impl<
                 }
             }
 
-            use std::time;
-
-            let t = time::Instant::now();
-
             app.render(&mut device);
-            println!("app:render - {}", t.elapsed().subsec_nanos() as f32 / 1000000f32);
             window.swap_buffers().unwrap();
-            println!("app:render - {}", t.elapsed().subsec_nanos() as f32 / 1000000f32);
             device.cleanup();
-            println!("app:render - {}", t.elapsed().subsec_nanos() as f32 / 1000000f32);
             harness.bump()
         }
     }

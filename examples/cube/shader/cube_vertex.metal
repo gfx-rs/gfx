@@ -3,8 +3,8 @@
 using namespace metal;
 
 struct VertexInput {
-    char4 a_Pos       [[ attribute(0) ]];
-    char2 a_TexCoord  [[ attribute(1) ]];
+    float4 a_Pos       [[ attribute(0) ]];
+    float2 a_TexCoord  [[ attribute(1) ]];
 };
 
 struct VertexOut {
@@ -18,8 +18,8 @@ vertex VertexOut vert(constant float4x4 &Locals [[ buffer(1) ]],
 {
     VertexOut out;
 
-    out.pos = Locals * float4(in.a_Pos);
-    out.coords = float2(in.a_TexCoord);
+    out.pos = Locals * in.a_Pos;
+    out.coords = in.a_TexCoord;
 
     return out;
 }
