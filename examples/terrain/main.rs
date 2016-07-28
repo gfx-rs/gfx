@@ -24,12 +24,11 @@ use rand::Rng;
 use cgmath::{SquareMatrix, Matrix4, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
 pub use gfx::format::{DepthStencil};
-pub use gfx_app::ColorFormat;
+pub use gfx_app::{ColorFormat, DepthFormat};
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
 use std::time::{Instant};
 use noise::{Seed, perlin2};
-
 
 gfx_defines!{
     vertex Vertex {
@@ -50,7 +49,7 @@ gfx_defines!{
         view: gfx::Global<[[f32; 4]; 4]> = "u_View",
         proj: gfx::Global<[[f32; 4]; 4]> = "u_Proj",
         out_color: gfx::RenderTarget<ColorFormat> = "Target0",
-        out_depth: gfx::DepthTarget<DepthStencil> =
+        out_depth: gfx::DepthTarget<DepthFormat> =
             gfx::preset::depth::LESS_EQUAL_WRITE,
     }
 }
@@ -82,12 +81,14 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             glsl_120: include_bytes!("shader/terrain_120.glslv"),
             glsl_150: include_bytes!("shader/terrain_150.glslv"),
             hlsl_40:  include_bytes!("data/vertex.fx"),
+            msl_11: include_bytes!("shader/terrain_vertex.metal"),
             .. gfx_app::shade::Source::empty()
         };
         let ps = gfx_app::shade::Source {
             glsl_120: include_bytes!("shader/terrain_120.glslf"),
             glsl_150: include_bytes!("shader/terrain_150.glslf"),
             hlsl_40:  include_bytes!("data/pixel.fx"),
+            msl_11: include_bytes!("shader/terrain_frag.metal"),
             .. gfx_app::shade::Source::empty()
         };
 
