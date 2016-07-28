@@ -54,6 +54,7 @@ impl core::mapping::Raw for RawMapping {
 }
 
 pub struct Factory {
+    drawable: *mut CAMetalDrawable,
     device: MTLDevice,
     queue: MTLCommandQueue,
     share: Arc<Share>,
@@ -61,8 +62,9 @@ pub struct Factory {
 }
 
 impl Factory {
-    pub fn new(device: MTLDevice, share: Arc<Share>) -> Factory {
+    pub fn new(device: MTLDevice, share: Arc<Share>, drawable: *mut CAMetalDrawable) -> Factory {
         Factory {
+            drawable: drawable,
             device: device,
             queue: device.new_command_queue(),
             share: share,
@@ -71,7 +73,7 @@ impl Factory {
     }
 
     pub fn create_command_buffer(&self) -> CommandBuffer {
-        CommandBuffer::new(self.queue)
+        CommandBuffer::new(self.queue, self.drawable)
     }
 
     fn create_buffer_internal(&self, info: factory::BufferInfo, raw_data: Option<*const c_void>)

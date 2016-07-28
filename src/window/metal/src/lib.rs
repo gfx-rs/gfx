@@ -53,7 +53,6 @@ use std::mem;
 
 pub struct MetalWindow {
     window: winit::Window,
-    pool: Cell<NSAutoreleasePool>,
     layer: CAMetalLayer,
     drawable: *mut CAMetalDrawable,
     backbuffer: *mut MTLTexture
@@ -74,21 +73,15 @@ impl MetalWindow {
         // TODO: come up with alternative to this hack
 
         unsafe {
-            use std::time;
-
-            let t = time::Instant::now();
-
-            self.pool.get().release();
-            println!("\tpool:release - {}", t.elapsed().subsec_nanos() as f32 / 1000000f32);
-            self.pool.set(NSAutoreleasePool::alloc().init());
+            //self.pool.get().drain();
+            //self.pool.set(NSAutoreleasePool::alloc().init());
 
             let drawable = self.layer.next_drawable().unwrap();
-            println!("\tlayer:next - {}", t.elapsed().subsec_nanos() as f32 / 1000000f32);
             //drawable.retain();
 
-            /*if !(*self.drawable).is_null() {
+            if !(*self.drawable).is_null() {
                 (*self.drawable).release();
-            }*/
+            }
 
             *self.drawable = drawable;
 
@@ -150,11 +143,9 @@ pub fn init_raw(title: &str, requested_width: u32, requested_height: u32, color_
 
         let drawable = layer.next_drawable().unwrap();
 
-        let pool = NSAutoreleasePool::alloc().init();
 
         let window = MetalWindow {
             window: winit_window,
-            pool: Cell::new(pool),
             layer: layer,
             drawable: daddr,
             backbuffer: addr

@@ -285,7 +285,7 @@ pub fn create(format: gfx_core::format::Format, width: u32, height: u32)
     });
 
 
-    let mut factory = Factory::new(mtl_device, device.share.clone());
+    let mut factory = Factory::new(mtl_device, device.share.clone(), d);
 
     let color_target = {
         use gfx_core::Factory;

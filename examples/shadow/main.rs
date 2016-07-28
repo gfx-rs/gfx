@@ -596,7 +596,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
                 transform: (mx_vp * ent.mx_to_world).into(),
                 model_transform: ent.mx_to_world.into(),
             };
-            self.encoder.update_buffer(&batch.vs_locals, &locals, idx);
+            self.encoder.update_constant_buffer(&batch.vs_locals, &locals);
             self.encoder.draw(&ent.slice, &self.forward_pso, batch);
         }
 

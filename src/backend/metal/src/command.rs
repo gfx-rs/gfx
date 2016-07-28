@@ -31,6 +31,7 @@ use native::{Rtv, Srv, Dsv};
 
 use metal::*;
 
+use std::collections::HashSet;
 use std::ptr;
 
 /// The place of some data in the data buffer.
@@ -134,18 +135,21 @@ pub struct CommandBuffer {
     render_encoder: MTLRenderCommandEncoder,
     render_pass_descriptor: MTLRenderPassDescriptor,
 
+    drawable: *mut CAMetalDrawable,
+    in_use: HashSet<Buffer>,
     buf: Vec<Command>,
     data: DataBuffer,
     index_buf: Option<(Buffer, IndexType)>,
     cache: Cache,
     encoding: bool,
-    root: bool
+    root: bool,
+    pool: NSAutoreleasePool
 }
 
 unsafe impl Send for CommandBuffer {}
 
 impl CommandBuffer {
-    pub fn new(queue: MTLCommandQueue) -> Self {
+    pub fn new(queue: MTLCommandQueue, drawable: *mut CAMetalDrawable) -> Self {
         CommandBuffer {
             mtl_queue: queue,
             mtl_buf: Box::into_raw(Box::new(MTLCommandBuffer::nil())),
@@ -154,12 +158,15 @@ impl CommandBuffer {
             render_encoder: MTLRenderCommandEncoder::nil(),
             render_pass_descriptor: MTLRenderPassDescriptor::nil(),
 
+            drawable: drawable,
+            in_use: HashSet::new(),
             buf: Vec::new(),
             data: DataBuffer::new(),
             index_buf: None,
             cache: Cache::new(),
             encoding: false,
-            root: false
+            root: false,
+            pool: NSAutoreleasePool::nil()
         }
     }
 
@@ -176,12 +183,12 @@ impl CommandBuffer {
                     (*self.mtl_buf).present_drawable(drawable);
                     (*self.mtl_buf).commit();
 
-                    //(*self.master_encoder).release();
-                    //(*self.mtl_buf).release();
+                    //(*self.master_encoder).autorelease();
+                    (*self.mtl_buf).release();
 
                     *self.master_encoder = MTLParallelRenderCommandEncoder::nil();
                     *self.mtl_buf = MTLCommandBuffer::nil();
-
+                    self.pool.release();
                     self.root = false;
                 }
 
@@ -225,7 +232,7 @@ impl CommandBuffer {
                 }
 
                 //render_pass_descriptor.stencil_attachment().set_clear_stencil(self.cache.clear_stencil as u32);
-
+                self.pool = NSAutoreleasePool::alloc().init();
                 *self.master_encoder = (*self.mtl_buf).new_parallel_render_command_encoder(render_pass_descriptor);
                 self.root = true;
 
@@ -385,13 +392,16 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
             render_pass_descriptor: MTLRenderPassDescriptor::nil(),
             render_encoder: MTLRenderCommandEncoder::nil(),
 
+            drawable: self.drawable,
+            in_use: HashSet::new(),
             buf: Vec::new(),
             data: DataBuffer::new(),
             index_buf: None,
 
             cache: Cache::new(),
             encoding: false,
-            root: false
+            root: false,
+            pool: NSAutoreleasePool::nil()
         }
     }
 
@@ -536,6 +546,37 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
     }
 
     fn update_buffer(&mut self, buf: Buffer, data: &[u8], offset: usize) {
+        if self.in_use.contains(&buf) {
+            unsafe {
+                if self.encoding {
+                    self.render_encoder.end_encoding();
+
+                    if self.root {
+                        (*self.master_encoder).end_encoding();
+                        //(*self.master_encoder).release();
+                        *self.master_encoder = MTLParallelRenderCommandEncoder::nil();
+
+                        (*self.mtl_buf).present_drawable(*self.drawable);
+                        (*self.mtl_buf).commit();
+                        (*self.mtl_buf).wait_until_completed();
+                        (*self.mtl_buf).release();
+
+                        *self.master_encoder = MTLParallelRenderCommandEncoder::nil();
+                        *self.mtl_buf = MTLCommandBuffer::nil();
+
+                        self.pool.release();
+                    }
+
+                    self.encoding = false;
+                }
+                //self.render_encoder.release();
+                self.render_encoder = MTLRenderCommandEncoder::nil();
+            }
+            self.in_use.clear();
+        }
+
+        self.in_use.insert(buf);
+
         let contents = (buf.0).0.contents();
 
         unsafe {
