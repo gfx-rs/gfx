@@ -101,39 +101,54 @@ impl<R: d::Resources> RawDataSet<R> {
 
 /// Failure to initilize the link between the shader and the data.
 #[derive(Clone, PartialEq, Debug)]
-pub enum InitError {
+pub enum InitError<S> {
     /// Vertex attribute mismatch.
-    VertexImport(d::AttributeSlot, Option<d::format::Format>),
+    VertexImport(S, Option<d::format::Format>),
     /// Constant buffer mismatch.
-    ConstantBuffer(d::ConstantBufferSlot, Option<()>),
+    ConstantBuffer(S, Option<()>),
     /// Global constant mismatch.
-    GlobalConstant(d::shade::Location, Option<()>),
+    GlobalConstant(S, Option<()>),
     /// Shader resource view mismatch.
-    ResourceView(d::ResourceViewSlot, Option<()>),
+    ResourceView(S, Option<()>),
     /// Unordered access view mismatch.
-    UnorderedView(d::UnorderedViewSlot, Option<()>),
+    UnorderedView(S, Option<()>),
     /// Sampler mismatch.
-    Sampler(d::SamplerSlot, Option<()>),
+    Sampler(S, Option<()>),
     /// Pixel target mismatch.
-    PixelExport(d::ColorSlot, Option<d::format::Format>),
+    PixelExport(S, Option<d::format::Format>),
 }
 
-impl fmt::Display for InitError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let desc = self.description();
-        match *self {
-            InitError::VertexImport(slot, format) => write!(f, "{}: ({:?}, {:?})", desc, slot, format),
-            InitError::ConstantBuffer(slot, opt) => write!(f, "{}: ({:?}, {:?})", desc, slot, opt),
-            InitError::GlobalConstant(slot, opt) => write!(f, "{}: ({:?}, {:?})", desc, slot, opt),
-            InitError::ResourceView(slot, opt) => write!(f, "{}: ({:?}, {:?})", desc, slot, opt),
-            InitError::UnorderedView(slot, opt) => write!(f, "{}: ({:?}, {:?})", desc, slot, opt),
-            InitError::Sampler(slot, opt) => write!(f, "{}: ({:?}, {:?})", desc, slot, opt),
-            InitError::PixelExport(slot, format) => write!(f, "{}: ({:?}, {:?})", desc, slot, format),
+impl<'a> From<InitError<&'a str>> for InitError<String> {
+    fn from(other: InitError<&'a str>) -> InitError<String> {
+        use self::InitError::*;
+        match other {
+            VertexImport(s, v) => VertexImport(s.to_owned(), v),
+            ConstantBuffer(s, v) => ConstantBuffer(s.to_owned(), v),
+            GlobalConstant(s, v) => GlobalConstant(s.to_owned(), v),
+            ResourceView(s, v) => ResourceView(s.to_owned(), v),
+            UnorderedView(s, v) => UnorderedView(s.to_owned(), v),
+            Sampler(s, v) => Sampler(s.to_owned(), v),
+            PixelExport(s, v) => PixelExport(s.to_owned(), v),
         }
     }
 }
 
-impl Error for InitError {
+impl<S: Error> fmt::Display for InitError<S> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let desc = self.description();
+        match *self {
+            InitError::VertexImport(ref name, format) => write!(f, "{}: ({}, {:?})", desc, name, format),
+            InitError::ConstantBuffer(ref name, opt) => write!(f, "{}: ({}, {:?})", desc, name, opt),
+            InitError::GlobalConstant(ref name, opt) => write!(f, "{}: ({}, {:?})", desc, name, opt),
+            InitError::ResourceView(ref name, opt) => write!(f, "{}: ({}, {:?})", desc, name, opt),
+            InitError::UnorderedView(ref name, opt) => write!(f, "{}: ({}, {:?})", desc, name, opt),
+            InitError::Sampler(ref name, opt) => write!(f, "{}: ({}, {:?})", desc, name, opt),
+            InitError::PixelExport(ref name, format) => write!(f, "{}: ({}, {:?})", desc, name, format),
+        }
+    }
+}
+
+impl<S: Error> Error for InitError<S> {
     fn description(&self) -> &str {
         match *self {
             InitError::VertexImport(..) => "Vertex attribute mismatch",
@@ -166,8 +181,8 @@ pub trait PipelineInit {
     /// Attempt to map a PSO descriptor to a give shader program,
     /// represented by `ProgramInfo`. Returns an instance of the
     /// "meta" struct upon successful mapping.
-    fn link_to(&self, &mut Descriptor, &d::shade::ProgramInfo)
-               -> Result<Self::Meta, InitError>;
+    fn link_to<'a>(&self, &mut Descriptor, &'a d::shade::ProgramInfo)
+               -> Result<Self::Meta, InitError<&'a str>>;
 }
 
 /// a service trait implemented the "data" structure of PSO.

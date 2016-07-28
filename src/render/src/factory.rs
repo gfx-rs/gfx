@@ -30,16 +30,16 @@ use std::fmt;
 
 /// Error creating a PipelineState
 #[derive(Clone, PartialEq, Debug)]
-pub enum PipelineStateError {
+pub enum PipelineStateError<S> {
     /// Shader program failed to link.
     Program(ProgramError),
     /// Unable to create PSO descriptor due to mismatched formats.
-    DescriptorInit(pso::InitError),
+    DescriptorInit(pso::InitError<S>),
     /// Device failed to create the handle give the descriptor.
     DeviceCreate(CreationError),
 }
 
-impl fmt::Display for PipelineStateError {
+impl<S: Error> fmt::Display for PipelineStateError<S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             PipelineStateError::Program(ref e) => write!(f, "{}: {}", self.description(), e),
@@ -49,7 +49,7 @@ impl fmt::Display for PipelineStateError {
     }
 }
 
-impl Error for PipelineStateError {
+impl<S: Error> Error for PipelineStateError<S> {
     fn description(&self) -> &str {
         match *self {
             PipelineStateError::Program(_) => "Shader program failed to link",
@@ -68,19 +68,19 @@ impl Error for PipelineStateError {
     }
 }
 
-impl From<ProgramError> for PipelineStateError {
+impl<S> From<ProgramError> for PipelineStateError<S> {
     fn from(e: ProgramError) -> Self {
         PipelineStateError::Program(e)
     }
 }
 
-impl From<pso::InitError> for PipelineStateError {
-    fn from(e: pso::InitError) -> Self {
+impl<S> From<pso::InitError<S>> for PipelineStateError<S> {
+    fn from(e: pso::InitError<S>) -> Self {
         PipelineStateError::DescriptorInit(e)
     }
 }
 
-impl From<CreationError> for PipelineStateError {
+impl<S> From<CreationError> for PipelineStateError<S> {
     fn from(e: CreationError) -> Self {
         PipelineStateError::DeviceCreate(e)
     }
@@ -155,17 +155,24 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     /// shader `Program`.  
     fn create_pipeline_state<I: pso::PipelineInit>(&mut self, shaders: &ShaderSet<R>,
                              primitive: Primitive, rasterizer: state::Rasterizer, init: I)
-                             -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError>
+                             -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError<String>>
     {
         let program = try!(self.create_program(shaders).map_err(|e| ProgramError::Link(e)));
-        self.create_pipeline_from_program(&program, primitive, rasterizer, init)
+        self.create_pipeline_from_program(&program, primitive, rasterizer, init).map_err(|error| {
+            use self::PipelineStateError::*;
+            match error {
+                Program(e) => Program(e),
+                DescriptorInit(e) => DescriptorInit(e.into()),
+                DeviceCreate(e) => DeviceCreate(e),
+            }
+        })
     }
 
     /// Creates a strongly typed `PipelineState` from its `Init` structure, a shader `Program`, a
     /// primitive type and a `Rasterizer`.
-    fn create_pipeline_from_program<I: pso::PipelineInit>(&mut self, program: &handle::Program<R>,
+    fn create_pipeline_from_program<'a, I: pso::PipelineInit>(&mut self, program: &'a handle::Program<R>,
                                     primitive: Primitive, rasterizer: state::Rasterizer, init: I)
-                                    -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError>
+                                    -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError<&'a str>>
     {
         let mut descriptor = Descriptor::new(primitive, rasterizer);
         let meta = try!(init.link_to(&mut descriptor, program.get_info()));
@@ -178,7 +185,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     /// shader `Program` from a vertex and pixel shader source, as well as a `Rasterizer` capable
     /// of rendering triangle faces without culling.
     fn create_pipeline_simple<I: pso::PipelineInit>(&mut self, vs: &[u8], ps: &[u8], init: I)
-                              -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError>
+                              -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError<String>>
     {
         let set = try!(self.create_shader_set(vs, ps));
         self.create_pipeline_state(&set, Primitive::TriangleList, state::Rasterizer::new_fill(),
