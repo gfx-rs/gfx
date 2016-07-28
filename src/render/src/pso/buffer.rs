@@ -136,7 +136,7 @@ DataLink<'a> for ConstantBuffer<T> {
         self.0.is_some()
     }
     fn link_constant_buffer<'b>(&mut self, cb: &'b shade::ConstantBufferVar, init: &Self::Init)
-                            -> Option<Result<(), ElementError<'b>>> {
+                            -> Option<Result<(), ElementError<&'b str>>> {
         if &cb.name == *init {
             for el in cb.elements.iter() {
                 return Some(Err(match T::query(&el.name) {

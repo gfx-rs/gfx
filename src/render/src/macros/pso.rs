@@ -36,8 +36,8 @@ macro_rules! gfx_pipeline_inner {
 
         impl<'a> $crate::pso::PipelineInit for Init<'a> {
             type Meta = Meta;
-            fn link_to<'s>(&self, desc: &mut Descriptor, info: &'a $crate::ProgramInfo)
-                       -> Result<Self::Meta, InitError<&'a str>>
+            fn link_to<'s>(&self, desc: &mut Descriptor, info: &'s $crate::ProgramInfo)
+                       -> Result<Self::Meta, InitError<&'s str>>
             {
                 let mut meta = Meta {
                     $( $field: <$ty as DataLink<'a>>::new(), )*
@@ -67,8 +67,8 @@ macro_rules! gfx_pipeline_inner {
                                 assert!(meta.$field.is_active());
                                 continue;
                             },
-                            Some(Err(_)) => return Err(
-                                InitError::ConstantBuffer(&cb.name, Some(()))
+                            Some(Err(e)) => return Err(
+                                InitError::ConstantBuffer(&cb.name, Some(e))
                             ),
                             None => (),
                         }
@@ -169,7 +169,7 @@ macro_rules! gfx_pipeline_inner {
                                 out.slot += 1;
                             },
                             Some(Err(fm)) => return Err(
-                                InitError::PixelExport(&out.name, Some(fm))
+                                InitError::PixelExport(&"!known", Some(fm))
                             ),
                             None => (),
                         }
