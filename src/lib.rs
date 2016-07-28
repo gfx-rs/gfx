@@ -104,14 +104,14 @@ pub trait Application<R: gfx::Resources>: Sized {
     fn launch_default(name: &str) where WrapD3D11<Self>: ApplicationD3D11 {
         WrapD3D11::<Self>::launch(name, DEFAULT_CONFIG);
     }
-    #[cfg(target_os = "linux")]
+    #[cfg(not(target_os = "windows"))]
     fn launch_default(name: &str) where WrapGL2<Self>: ApplicationGL {
         WrapGL2::<Self>::launch(name, DEFAULT_CONFIG);
     }
-    #[cfg(target_os = "macos")]
+    /*#[cfg(target_os = "macos")]
     fn launch_default(name: &str) where WrapMetal<Self>: ApplicationMetal {
         WrapMetal::<Self>::launch(name, DEFAULT_CONFIG)
-    }
+    }*/
 }
 
 pub struct Wrap<R: gfx::Resources, C: gfx::CommandBuffer<R>, A>{
