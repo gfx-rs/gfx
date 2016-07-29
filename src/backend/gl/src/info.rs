@@ -169,6 +169,7 @@ pub struct PrivateCaps {
     pub sampler_objects_supported: bool,
     pub program_interface_supported: bool,
     pub buffer_storage_supported: bool,
+    pub clear_buffer_supported: bool,
 }
 
 /// OpenGL implementation information
@@ -239,7 +240,7 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
         vertex_base_supported:             info.is_version_or_extension_supported(3, 2, "GL_ARB_draw_elements_base_vertex"),
         srgb_color_supported:              info.is_version_or_extension_supported(3, 2, "GL_ARB_framebuffer_sRGB"),
         constant_buffer_supported:         info.is_version_or_extension_supported(3, 1, "GL_ARB_uniform_buffer_object"),
-        unordered_access_view_supported:   info.is_version_or_extension_supported(4, 0, "XXX"), //TODO
+        unordered_access_view_supported:   info.is_version_supported(4, 0), //TODO: extension
         separate_blending_slots_supported: info.is_version_or_extension_supported(4, 0, "GL_ARB_draw_buffers_blend"),
     };
     let private = PrivateCaps {
@@ -250,6 +251,8 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
         sampler_objects_supported:         info.is_version_or_extension_supported(3, 3, "GL_ARB_sampler_objects"),
         program_interface_supported:       info.is_version_or_extension_supported(4, 3, "GL_ARB_program_interface_query"),
         buffer_storage_supported:          info.is_version_or_extension_supported(4, 4, "GL_ARB_buffer_storage"),
+        clear_buffer_supported:            info.is_version_supported(3, 0) |  //TODO: extension
+                                           info.is_embedded_version_supported(3, 0),
     };
     (info, caps, private)
 }

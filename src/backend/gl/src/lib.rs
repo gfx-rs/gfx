@@ -387,33 +387,66 @@ impl Device {
         match *cmd {
             Command::Clear(color, depth, stencil) => {
                 let gl = &self.share.context;
-                if let Some(c) = color {
-                    use gfx_core::draw::ClearColor;
-                    let slot = 0;
-                    state::unlock_color_mask(gl);
-                    match c {
-                        ClearColor::Float(v) => unsafe {
-                            gl.ClearBufferfv(gl::COLOR, slot, &v[0]);
-                        },
-                        ClearColor::Int(v) => unsafe {
-                            gl.ClearBufferiv(gl::COLOR, slot, &v[0]);
-                        },
-                        ClearColor::Uint(v) => unsafe {
-                            gl.ClearBufferuiv(gl::COLOR, slot, &v[0]);
-                        },
+                if self.share.private_caps.clear_buffer_supported {
+                    if let Some(c) = color {
+                        let slot = 0; //TODO?
+                        state::unlock_color_mask(gl);
+                        match c {
+                            d::draw::ClearColor::Float(v) => unsafe {
+                                gl.ClearBufferfv(gl::COLOR, slot, &v[0]);
+                            },
+                            d::draw::ClearColor::Int(v) => unsafe {
+                                gl.ClearBufferiv(gl::COLOR, slot, &v[0]);
+                            },
+                            d::draw::ClearColor::Uint(v) => unsafe {
+                                gl.ClearBufferuiv(gl::COLOR, slot, &v[0]);
+                            },
+                        }
                     }
-                }
-                if let Some(ref d) = depth {
-                    unsafe {
-                        gl.DepthMask(gl::TRUE);
-                        gl.ClearBufferfv(gl::DEPTH, 0, d);
+                    if let Some(ref d) = depth {
+                        unsafe {
+                            gl.DepthMask(gl::TRUE);
+                            gl.ClearBufferfv(gl::DEPTH, 0, d);
+                        }
                     }
-                }
-                if let Some(s) = stencil {
-                    let v = s as gl::types::GLint;
+                    if let Some(s) = stencil {
+                        let v = s as gl::types::GLint;
+                        unsafe {
+                            gl.StencilMask(gl::types::GLuint::max_value());
+                            gl.ClearBufferiv(gl::STENCIL, 0, &v);
+                        }
+                    }
+                } else {
+                    let mut flags = 0;
+                    if let Some(col) = color {
+                        flags |= gl::COLOR_BUFFER_BIT;
+                        let v = if let d::draw::ClearColor::Float(v) = col {
+                            v
+                        } else {
+                            warn!("Integer clears are not supported on GL2");
+                            [0.0, 0.0, 0.0, 0.0]
+                        };
+                        state::unlock_color_mask(gl);
+                        unsafe {
+                            gl.ClearColor(v[0], v[1], v[2], v[3]);
+                        }
+                    }
+                    if let Some(d) = depth {
+                        flags |= gl::DEPTH_BUFFER_BIT;
+                        unsafe  {
+                            gl.DepthMask(gl::TRUE);
+                            gl.ClearDepth(d as gl::types::GLdouble);
+                        }
+                    }
+                    if let Some(s) = stencil {
+                        flags |= gl::STENCIL_BUFFER_BIT;
+                        unsafe  {
+                            gl.StencilMask(gl::types::GLuint::max_value());
+                            gl.ClearStencil(s as gl::types::GLint);
+                        }
+                    }
                     unsafe {
-                        gl.StencilMask(gl::types::GLuint::max_value());
-                        gl.ClearBufferiv(gl::STENCIL, 0, &v);
+                        gl.Clear(flags);
                     }
                 }
             },
