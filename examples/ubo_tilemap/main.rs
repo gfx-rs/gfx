@@ -26,8 +26,7 @@ use std::io::Cursor;
 //use std::collections::HashMap;
 //use glutin::{PollEventsIterator, Event, VirtualKeyCode, ElementState};
 
-pub use gfx_app::ColorFormat;
-pub use gfx::format::{DepthStencil, Rgba8};
+pub use gfx_app::{ColorFormat, DepthFormat};
 use gfx::traits::{FactoryExt};
 
 use cgmath::{SquareMatrix, Matrix4, AffineMatrix3};
@@ -45,7 +44,9 @@ pub const TILEMAP_BUF_LENGTH: usize = 4096;
 // texture loading boilerplate
 pub fn load_texture<R, F>(factory: &mut F, data: &[u8])
                     -> Result<gfx::handle::ShaderResourceView<R, [f32; 4]>, String>
-        where R: gfx::Resources, F: gfx::Factory<R> {
+        where R: gfx::Resources, F: gfx::Factory<R>
+{
+    use gfx::format::Rgba8;
     use gfx::tex as t;
     let img = image::load(Cursor::new(data), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
@@ -140,7 +141,7 @@ gfx_defines!{
         tilesheet: gfx::TextureSampler<[f32; 4]> = "t_TileSheet",
         // output
         out_color: gfx::RenderTarget<ColorFormat> = "Target0",
-        out_depth: gfx::DepthTarget<DepthStencil> =
+        out_depth: gfx::DepthTarget<DepthFormat> =
             gfx::preset::depth::LESS_EQUAL_WRITE,
     }
 }
@@ -170,7 +171,7 @@ pub struct TileMapPlane<R> where R: gfx::Resources {
 impl<R> TileMapPlane<R> where R: gfx::Resources {
     pub fn new<F>(factory: &mut F, width: usize, height: usize, tile_size: usize,
                   main_color: gfx::handle::RenderTargetView<R, ColorFormat>,
-                  main_depth: gfx::handle::DepthStencilView<R, DepthStencil>,
+                  main_depth: gfx::handle::DepthStencilView<R, DepthFormat>,
                   aspect_ratio: f32)
                -> TileMapPlane<R> where F: gfx::Factory<R> {
         // charmap info
