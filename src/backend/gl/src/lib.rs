@@ -498,11 +498,12 @@ impl Device {
                 unsafe { gl.BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer) };
             },
             Command::BindFrameBuffer(point, frame_buffer) => {
-                if !self.share.private_caps.frame_buffer_supported {
-                    error!("Tried to do something with an FBO without FBO support!")
+                if self.share.private_caps.frame_buffer_supported {
+                    let gl = &self.share.context;
+                    unsafe { gl.BindFramebuffer(point, frame_buffer) };
+                } else if frame_buffer != 0 {
+                    error!("Tried to bind FBO {} without FBO support!", frame_buffer);
                 }
-                let gl = &self.share.context;
-                unsafe { gl.BindFramebuffer(point, frame_buffer) };
             },
             Command::BindUniform(loc, uniform) => {
                 let gl = &self.share.context;
