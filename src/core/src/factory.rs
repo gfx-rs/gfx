@@ -83,7 +83,7 @@ pub enum BufferRole {
     Vertex,
     /// Index buffer
     Index,
-    /// Uniform block buffer
+    /// Uniform block buffer //TODO: rename to `Constant`
     Uniform,
 }
 
@@ -129,6 +129,7 @@ pub enum BufferError {
     UnsupportedBind(Bind),
     /// Unknown other error.
     Other,
+    //todo: unsupported role
 }
 
 impl fmt::Display for BufferError {

@@ -198,6 +198,10 @@ impl d::Factory<R> for Factory {
     }
 
     fn create_buffer_raw(&mut self, info: f::BufferInfo) -> Result<handle::RawBuffer<R>, f::BufferError> {
+        if !self.share.capabilities.constant_buffer_supported && info.role == f::BufferRole::Uniform {
+            error!("Constant buffers are not supported by this GL version");
+            return Err(f::BufferError::Other);
+        }
         let name = self.create_buffer_internal();
         self.init_buffer(name, &info);
         Ok(self.share.handles.borrow_mut().make_buffer(name, info))
