@@ -74,7 +74,7 @@ pub struct Slice<R: Resources> {
 
 impl<R: Resources> Slice<R> {
     /// Creates a new `Slice` to match the supplied vertex buffer, from start to end, in order.
-    pub fn new_match_vertex_buffer<V>(vbuf: &handle::Buffer<R, V>) -> Self
+    pub fn new_match_vertex_buffer<V: Copy>(vbuf: &handle::Buffer<R, V>) -> Self
                                       where V: pso::buffer::Structure<Format> {
         Slice {
             start: 0,

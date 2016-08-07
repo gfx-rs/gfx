@@ -5,7 +5,7 @@ use gfx_core::dummy::DummyResources;
 use gfx_core::factory::{Bind, BufferRole, BufferInfo, Usage};
 use gfx_core::handle::{Buffer, Manager, Producer};
 
-fn mock_buffer<T>(len: usize) -> Buffer<DummyResources, T> {
+fn mock_buffer<T: Copy>(len: usize) -> Buffer<DummyResources, T> {
     use gfx_core::factory::Typed;
     let mut handler = Manager::new();
     let raw = handler.make_buffer((), BufferInfo {

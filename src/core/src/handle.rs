@@ -32,11 +32,11 @@ impl<R: Resources> RawBuffer<R> {
     pub fn get_info(&self) -> &BufferInfo { &self.1 }
 }
 
-/// Type-safe buffer handle
+/// Type-safe reference to a buffer on the GPU.
 #[derive(Clone, Debug, Hash, PartialEq)]
-pub struct Buffer<R: Resources, T>(RawBuffer<R>, PhantomData<T>);
+pub struct Buffer<R: Resources, T: Copy>(RawBuffer<R>, PhantomData<T>);
 
-impl<R: Resources, T> Typed for Buffer<R, T> {
+impl<R: Resources, T: Copy> Typed for Buffer<R, T> {
     type Raw = RawBuffer<R>;
     fn new(handle: RawBuffer<R>) -> Buffer<R, T> {
         Buffer(handle, PhantomData)
@@ -46,7 +46,7 @@ impl<R: Resources, T> Typed for Buffer<R, T> {
     }
 }
 
-impl<R: Resources, T> Buffer<R, T> {
+impl<R: Resources, T: Copy> Buffer<R, T> {
     /// Get the associated information about the buffer
     pub fn get_info(&self) -> &BufferInfo {
         self.0.get_info()
