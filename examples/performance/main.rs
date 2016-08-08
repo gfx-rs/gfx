@@ -177,10 +177,10 @@ impl Renderer for GFX {
         self.device.cleanup();
         let swap = start.elapsed();
 
-        println!("total time:\t\t{0:4.2}ms", duration_to_f64(swap));
-        println!("\tcreate list:\t{0:4.2}ms", duration_to_f64(pre_submit));
-        println!("\tsubmit:\t\t{0:4.2}ms", duration_to_f64(post_submit - pre_submit));
-        println!("\tgpu wait:\t{0:4.2}ms", duration_to_f64(swap - post_submit));
+        println!("total time:\t\t{0:4.2}ms", duration_to_ms(swap));
+        println!("\tcreate list:\t{0:4.2}ms", duration_to_ms(pre_submit));
+        println!("\tsubmit:\t\t{0:4.2}ms", duration_to_ms(post_submit - pre_submit));
+        println!("\tgpu wait:\t{0:4.2}ms", duration_to_ms(swap - post_submit));
     }
     fn window(&mut self) -> &glutin::Window { &self.window }
 }
