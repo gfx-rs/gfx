@@ -86,6 +86,27 @@ fn map_texture_type(tt: winapi::D3D_SRV_DIMENSION) -> s::TextureType {
     }
 }
 
+fn map_container(class: winapi::D3D_SHADER_VARIABLE_CLASS, rows: u32, cols: u32) -> s::ContainerType {
+    use gfx_core::shade::Dimension as Dim;
+    //TODO: use `match` when winapi allows
+    if class == winapi::D3D_SVC_SCALAR {
+        s::ContainerType::Single
+    } else if class == winapi::D3D_SVC_VECTOR {
+        s::ContainerType::Vector(cols as Dim)
+    } else if class == winapi::D3D_SVC_MATRIX_ROWS {
+        s::ContainerType::Matrix(s::MatrixFormat::RowMajor, rows as Dim, cols as Dim)
+    } else if class == winapi::D3D_SVC_MATRIX_COLUMNS {
+        s::ContainerType::Matrix(s::MatrixFormat::ColumnMajor, rows as Dim, cols as Dim)
+    } else  {
+        error!("Unexpected class to classify as container: {:?}", class);
+        s::ContainerType::Single
+    }
+}
+
+fn map_base_type(_svt: winapi::D3D_SHADER_VARIABLE_TYPE) -> s::BaseType {
+    s::BaseType::F32 //TODO
+}
+
 pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                      reflection: *mut winapi::ID3D11ShaderReflection) {
     use winapi::{UINT, SUCCEEDED};
@@ -231,8 +252,8 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                             name: format!("{}[{}].{}", el_name, j, mem_name),
                             location: (base_offset + mem_desc.Offset) as s::Location,
                             count: mem_desc.Elements as usize,
-                            base_type: s::BaseType::F32, //TODO
-                            container: s::ContainerType::Single, //TODO
+                            base_type: map_base_type(mem_desc.Type),
+                            container: map_container(mem_desc.Class, mem_desc.Rows, mem_desc.Columns),
                         })
                     }
                 } else {
@@ -240,8 +261,8 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                         name: el_name,
                         location: var_desc.StartOffset as s::Location,
                         count: vtype_desc.Elements as usize,
-                        base_type: s::BaseType::F32, //TODO
-                        container: s::ContainerType::Single, //TODO
+                        base_type: map_base_type(vtype_desc.Type),
+                        container: map_container(vtype_desc.Class, vtype_desc.Rows, vtype_desc.Columns),
                     })
                 }
             }
