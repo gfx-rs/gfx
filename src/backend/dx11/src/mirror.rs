@@ -86,19 +86,19 @@ fn map_texture_type(tt: winapi::D3D_SRV_DIMENSION) -> s::TextureType {
     }
 }
 
-fn map_container(class: winapi::D3D_SHADER_VARIABLE_CLASS, rows: u32, cols: u32) -> s::ContainerType {
+fn map_container(stype: &winapi::D3D11_SHADER_TYPE_DESC) -> s::ContainerType {
     use gfx_core::shade::Dimension as Dim;
     //TODO: use `match` when winapi allows
-    if class == winapi::D3D_SVC_SCALAR {
+    if stype.Class == winapi::D3D_SVC_SCALAR {
         s::ContainerType::Single
-    } else if class == winapi::D3D_SVC_VECTOR {
-        s::ContainerType::Vector(cols as Dim)
-    } else if class == winapi::D3D_SVC_MATRIX_ROWS {
-        s::ContainerType::Matrix(s::MatrixFormat::RowMajor, rows as Dim, cols as Dim)
-    } else if class == winapi::D3D_SVC_MATRIX_COLUMNS {
-        s::ContainerType::Matrix(s::MatrixFormat::ColumnMajor, rows as Dim, cols as Dim)
+    } else if stype.Class == winapi::D3D_SVC_VECTOR {
+        s::ContainerType::Vector(stype.Columns as Dim)
+    } else if stype.Class == winapi::D3D_SVC_MATRIX_ROWS {
+        s::ContainerType::Matrix(s::MatrixFormat::RowMajor, stype.Rows as Dim, stype.Columns as Dim)
+    } else if stype.Class == winapi::D3D_SVC_MATRIX_COLUMNS {
+        s::ContainerType::Matrix(s::MatrixFormat::ColumnMajor, stype.Rows as Dim, stype.Columns as Dim)
     } else  {
-        error!("Unexpected class to classify as container: {:?}", class);
+        error!("Unexpected type to classify as container: {:?}", stype);
         s::ContainerType::Single
     }
 }
@@ -232,6 +232,7 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                 let el_name = convert_str(var_desc.Name);
                 debug!("\t\tElement at {}\t= '{}'", var_desc.StartOffset, el_name);
                 if vtype_desc.Class == winapi::D3D_SVC_STRUCT {
+                    let stride = var_desc.Size / vtype_desc.Elements;
                     for j in 0 .. vtype_desc.Members {
                         let member = unsafe {
                             (*vtype).GetMemberTypeByIndex(j)
@@ -247,14 +248,18 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                         };
                         let mem_name = convert_str(mem_name_ptr); //mem_desc.Name
                         debug!("\t\t\tMember at {}\t= '{}'", mem_desc.Offset, mem_name);
-                        let base_offset = var_desc.StartOffset + j * var_desc.Size;
-                        elements.push(s::ConstVar {
-                            name: format!("{}[{}].{}", el_name, j, mem_name),
-                            location: (base_offset + mem_desc.Offset) as s::Location,
-                            count: mem_desc.Elements as usize,
-                            base_type: map_base_type(mem_desc.Type),
-                            container: map_container(mem_desc.Class, mem_desc.Rows, mem_desc.Columns),
-                        })
+                        let btype = map_base_type(mem_desc.Type);
+                        let container = map_container(&mem_desc);
+                        for k in 0 .. vtype_desc.Elements {
+                            let offset = var_desc.StartOffset + k * stride + mem_desc.Offset;
+                            elements.push(s::ConstVar {
+                                name: format!("{}[{}].{}", el_name, k, mem_name),
+                                location: offset as s::Location,
+                                count: mem_desc.Elements as usize,
+                                base_type: btype,
+                                container: container,
+                            })
+                        }
                     }
                 } else {
                     elements.push(s::ConstVar {
@@ -262,7 +267,7 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                         location: var_desc.StartOffset as s::Location,
                         count: vtype_desc.Elements as usize,
                         base_type: map_base_type(vtype_desc.Type),
-                        container: map_container(vtype_desc.Class, vtype_desc.Rows, vtype_desc.Columns),
+                        container: map_container(&vtype_desc),
                     })
                 }
             }
