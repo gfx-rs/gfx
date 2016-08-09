@@ -188,29 +188,69 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                 assert!(SUCCEEDED(hr));
                 desc
             };
+            let mut elements = Vec::new();
+            for i in 0 .. desc.Variables {
+                let var = unsafe {
+                    (*cbuf).GetVariableByIndex(i)
+                };
+                let var_desc = unsafe {
+                    let mut vd = mem::zeroed();
+                    let hr1 = (*var).GetDesc(&mut vd);
+                    assert!(SUCCEEDED(hr1));
+                    vd
+                };
+                let vtype = unsafe {
+                    (*var).GetType()
+                };
+                let vtype_desc = unsafe {
+                    let mut vtd = mem::zeroed();
+                    let hr2 = (*vtype).GetDesc(&mut vtd);
+                    assert!(SUCCEEDED(hr2));
+                    vtd
+                };
+                let el_name = convert_str(var_desc.Name);
+                debug!("\t\tElement at {}\t= '{}'", var_desc.StartOffset, el_name);
+                if vtype_desc.Class == winapi::D3D_SVC_STRUCT {
+                    for j in 0 .. vtype_desc.Members {
+                        let member = unsafe {
+                            (*vtype).GetMemberTypeByIndex(j)
+                        };
+                        let mem_name_ptr = unsafe {
+                            (*vtype).GetMemberTypeName(j)
+                        };
+                        let mem_desc = unsafe {
+                            let mut mtd = mem::zeroed();
+                            let hr3 = (*member).GetDesc(&mut mtd);
+                            assert!(SUCCEEDED(hr3));
+                            mtd
+                        };
+                        let mem_name = convert_str(mem_name_ptr); //mem_desc.Name
+                        debug!("\t\t\tMember at {}\t= '{}'", mem_desc.Offset, mem_name);
+                        let base_offset = var_desc.StartOffset + j * var_desc.Size;
+                        elements.push(s::ConstVar {
+                            name: format!("{}[{}].{}", el_name, j, mem_name),
+                            location: (base_offset + mem_desc.Offset) as s::Location,
+                            count: mem_desc.Elements as usize,
+                            base_type: s::BaseType::F32, //TODO
+                            container: s::ContainerType::Single, //TODO
+                        })
+                    }
+                } else {
+                    elements.push(s::ConstVar {
+                        name: el_name,
+                        location: var_desc.StartOffset as s::Location,
+                        count: vtype_desc.Elements as usize,
+                        base_type: s::BaseType::F32, //TODO
+                        container: s::ContainerType::Single, //TODO
+                    })
+                }
+            }
             info.constant_buffers.push(s::ConstantBufferVar {
                 name: name,
                 slot: res_desc.BindPoint as core::ConstantBufferSlot,
                 size: desc.Size as usize,
                 usage: usage,
-                elements: (0 .. desc.Variables).map(|i| {
-                    let vd = unsafe {
-                        let var = (*cbuf).GetVariableByIndex(i);
-                        let mut vd = mem::zeroed();
-                        let hr1 = (*var).GetDesc(&mut vd);
-                        assert!(SUCCEEDED(hr1));
-                        vd
-                    };
-                    let el_name = convert_str(vd.Name);
-                    info!("\t\tElement at {}\t= '{}'", vd.StartOffset, el_name);
-                    s::ConstVar {
-                        name: el_name,
-                        location: vd.StartOffset as s::Location,
-                        count: 1, //TODO
-                        base_type: s::BaseType::F32, //TODO
-                        container: s::ContainerType::Single, //TODO
-                    }
-                }).collect(),
+                elements: elements,
             });
         }else if res_desc.Type == winapi::D3D_SIT_TEXTURE {
             if let Some(t) = info.textures.iter_mut().find(|t| t.name == name) {

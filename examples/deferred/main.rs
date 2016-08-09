@@ -77,7 +77,7 @@ gfx_defines!{
     }
 
     constant LightLocals {
-        cam_pos_and_radius: [f32; 4] = "u_CameraPosAndRadius",
+        cam_pos_and_radius: [f32; 4] = "u_CamPosAndRadius",
     }
 
     constant TerrainLocals {
