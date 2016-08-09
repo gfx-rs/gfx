@@ -209,7 +209,8 @@ fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::AttributeVar> {
     .collect()
 }
 
-fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
+fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program,
+                block_indices: &[gl::types::GLint], block_offsets: &[gl::types::GLint])
                 -> Vec<s::ConstantBufferVar> {
     let num = if caps.constant_buffer_supported {
         get_program_iv(gl, prog, gl::ACTIVE_UNIFORM_BLOCKS)
@@ -225,7 +226,11 @@ fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
     // `layout(binding = n)`
     let explicit_binding = bindings.iter().any(|&i| i > 0);
 
-    (0..num as gl::types::GLuint).zip(bindings.iter()).map(|(idx, &bind)| {
+    let max_len = get_program_iv(gl, prog, gl::ACTIVE_UNIFORM_MAX_LENGTH);
+    let mut el_name = String::with_capacity(max_len as usize);
+    el_name.extend(repeat('\0').take(max_len as usize));
+
+    (0 .. num as gl::types::GLuint).zip(bindings.iter()).map(|(idx, &bind)| {
         // the string identifier for the block
         let name = unsafe {
             let size = get_block_iv(gl, prog, idx, gl::UNIFORM_BLOCK_NAME_LENGTH);
@@ -254,7 +259,7 @@ fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
             usage
         };
 
-        let size = get_block_iv(gl, prog, idx, gl::UNIFORM_BLOCK_DATA_SIZE);
+        let total_size = get_block_iv(gl, prog, idx, gl::UNIFORM_BLOCK_DATA_SIZE);
 
         // if we don't detect any explicit layout bindings in the program, we
         // automatically assign them a binding to their respective block indices
@@ -265,29 +270,62 @@ fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program)
             idx
         };
 
-        info!("\t\tBlock[{}] = '{}' of size {}", slot, name, size);
+        info!("\t\tBlock[{}] = '{}' of size {}", slot, name, total_size);
         s::ConstantBufferVar {
             name: name,
             slot: slot as d::ConstantBufferSlot,
-            size: size as usize,
+            size: total_size as usize,
             usage: usage,
+            elements: block_indices.iter().zip(block_offsets.iter()).enumerate().filter_map(|(i, (parent, offset))| {
+                if *parent == idx as gl::types::GLint {
+                    let mut length = 0;
+                    let mut size = 0;
+                    let mut storage = 0;
+                    unsafe {
+                        let raw = (&el_name[..]).as_ptr() as *mut gl::types::GLchar;
+                        gl.GetActiveUniform(prog, i as gl::types::GLuint, max_len, &mut length, &mut size, &mut storage, raw);
+                    };
+                    let real_name = el_name[..length as usize].to_string();
+                    let (base, container) = match StorageType::new(storage) {
+                        StorageType::Var(base, cont) => {
+                            info!("\t\t\tElement at {}\t= '{}'\t{:?}\t{:?}", *offset, real_name, base, cont);
+                            (base, cont)
+                        },
+                        _ => {
+                            error!("Unrecognized element storage: {}", storage);
+                            (s::BaseType::F32, s::ContainerType::Single)
+                        },
+                    };
+                    Some(s::ConstVar {
+                        name: real_name,
+                        location: *offset as s::Location,
+                        count: size as usize,
+                        base_type: base,
+                        container: container,
+                    })
+                } else { None }
+            }).collect()
         }
     }).collect()
 }
 
 fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program, usage: s::Usage)
-                    -> (Vec<s::ConstVar>, Vec<s::TextureVar>, Vec<s::SamplerVar>) {
+                    -> (Vec<s::ConstVar>, Vec<s::TextureVar>, Vec<s::SamplerVar>, Vec<gl::types::GLint>, Vec<gl::types::GLint>) {
     let mut uniforms = Vec::new();
     let mut textures = Vec::new();
     let mut samplers = Vec::new();
     let total_num = get_program_iv(gl, prog, gl::ACTIVE_UNIFORMS);
     let indices: Vec<_> = (0..total_num as gl::types::GLuint).collect();
-    let mut block_indices: Vec<gl::types::GLint> = repeat(-1 as gl::types::GLint).take(total_num as usize).collect();
+    let mut block_indices = vec![-1 as gl::types::GLint; total_num as usize];
+    let mut block_offsets = vec![-1 as gl::types::GLint; total_num as usize];
     if caps.constant_buffer_supported {
         unsafe {
             gl.GetActiveUniformsiv(prog, total_num as gl::types::GLsizei,
                 (&indices[..]).as_ptr(), gl::UNIFORM_BLOCK_INDEX,
                 block_indices.as_mut_ptr());
+            gl.GetActiveUniformsiv(prog, total_num as gl::types::GLsizei,
+                (&indices[..]).as_ptr(), gl::UNIFORM_OFFSET,
+                block_offsets.as_mut_ptr());
         }
         //TODO: UNIFORM_IS_ROW_MAJOR
     }
@@ -351,7 +389,7 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program, u
             },
         }
     }
-    (uniforms, textures, samplers)
+    (uniforms, textures, samplers, block_indices, block_offsets)
 }
 
 fn query_outputs(gl: &gl::Gl, prog: super::Program) -> (Vec<s::OutputVar>, bool) {
@@ -451,11 +489,12 @@ pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities, private: &PrivateCaps
             warn!("\tLog: {}", log);
         }
 
-        let (uniforms, textures, samplers) = query_parameters(gl, caps, name, usage);
+        let (uniforms, textures, samplers, block_indices, block_offsets) =
+            query_parameters(gl, caps, name, usage);
         let mut info = s::ProgramInfo {
             vertex_attributes: query_attributes(gl, name),
             globals: uniforms,
-            constant_buffers: query_blocks(gl, caps, name),
+            constant_buffers: query_blocks(gl, caps, name, &block_indices, &block_offsets),
             textures: textures,
             unordereds: Vec::new(), //TODO
             samplers: samplers,

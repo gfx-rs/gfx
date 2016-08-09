@@ -8,12 +8,16 @@ uniform CubeLocals {
 	float u_Radius;
 };
 
+struct LightInfo {
+	vec4 pos;
+};
+
 const int NUM_LIGHTS = 250;
 layout(std140)
-uniform u_LightPosBlock {
-	vec4 offs[NUM_LIGHTS];
+uniform LightPosBlock {
+	LightInfo u_Lights[NUM_LIGHTS];
 };
 
 void main() {
-	gl_Position = u_Transform * vec4(u_Radius * a_Pos + offs[gl_InstanceID].xyz, 1.0);
+	gl_Position = u_Transform * vec4(u_Radius * a_Pos + u_Lights[gl_InstanceID].pos.xyz, 1.0);
 }

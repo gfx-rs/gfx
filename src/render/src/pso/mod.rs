@@ -99,53 +99,101 @@ impl<R: d::Resources> RawDataSet<R> {
     }
 }
 
+/// Error matching an element inside the constant buffer.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ElementError<S> {
+    /// Element not found.
+    NotFound(S),
+    /// Element offset mismatch.
+    Offset(S, d::pso::ElemOffset),
+    /// Element format mismatch.
+    Format(S, d::shade::ConstFormat),
+}
+
+impl<'a> From<ElementError<&'a str>> for ElementError<String> {
+    fn from(other: ElementError<&'a str>) -> ElementError<String> {
+        use self::ElementError::*;
+        match other {
+            NotFound(s) => NotFound(s.to_owned()),
+            Offset(s, v) => Offset(s.to_owned(), v),
+            Format(s, v) => Format(s.to_owned(), v),
+        }
+    }
+}
+
+
 /// Failure to initilize the link between the shader and the data.
 #[derive(Clone, PartialEq, Debug)]
-pub enum InitError {
+pub enum InitError<S> {
     /// Vertex attribute mismatch.
-    VertexImport(d::AttributeSlot, Option<d::format::Format>),
+    VertexImport(S, Option<d::format::Format>),
     /// Constant buffer mismatch.
-    ConstantBuffer(d::ConstantBufferSlot, Option<()>),
+    ConstantBuffer(S, Option<ElementError<S>>),
     /// Global constant mismatch.
-    GlobalConstant(d::shade::Location, Option<()>),
+    GlobalConstant(S, Option<()>),
     /// Shader resource view mismatch.
-    ResourceView(d::ResourceViewSlot, Option<()>),
+    ResourceView(S, Option<()>),
     /// Unordered access view mismatch.
-    UnorderedView(d::UnorderedViewSlot, Option<()>),
+    UnorderedView(S, Option<()>),
     /// Sampler mismatch.
-    Sampler(d::SamplerSlot, Option<()>),
+    Sampler(S, Option<()>),
     /// Pixel target mismatch.
-    PixelExport(d::ColorSlot, Option<d::format::Format>),
+    PixelExport(S, Option<d::format::Format>),
 }
 
-impl fmt::Display for InitError {
+impl<'a> From<InitError<&'a str>> for InitError<String> {
+    fn from(other: InitError<&'a str>) -> InitError<String> {
+        use self::InitError::*;
+        match other {
+            VertexImport(s, v) => VertexImport(s.to_owned(), v),
+            ConstantBuffer(s, v) => ConstantBuffer(s.to_owned(), v.map(|e| e.into())),
+            GlobalConstant(s, v) => GlobalConstant(s.to_owned(), v),
+            ResourceView(s, v) => ResourceView(s.to_owned(), v),
+            UnorderedView(s, v) => UnorderedView(s.to_owned(), v),
+            Sampler(s, v) => Sampler(s.to_owned(), v),
+            PixelExport(s, v) => PixelExport(s.to_owned(), v),
+        }
+    }
+}
+
+impl<S: Error> fmt::Display for InitError<S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::InitError::*;
         let desc = self.description();
         match *self {
-            InitError::VertexImport(slot, format) => write!(f, "{}: ({:?}, {:?})", desc, slot, format),
-            InitError::ConstantBuffer(slot, opt) => write!(f, "{}: ({:?}, {:?})", desc, slot, opt),
-            InitError::GlobalConstant(slot, opt) => write!(f, "{}: ({:?}, {:?})", desc, slot, opt),
-            InitError::ResourceView(slot, opt) => write!(f, "{}: ({:?}, {:?})", desc, slot, opt),
-            InitError::UnorderedView(slot, opt) => write!(f, "{}: ({:?}, {:?})", desc, slot, opt),
-            InitError::Sampler(slot, opt) => write!(f, "{}: ({:?}, {:?})", desc, slot, opt),
-            InitError::PixelExport(slot, format) => write!(f, "{}: ({:?}, {:?})", desc, slot, format),
+            VertexImport(ref name, format) => write!(f, "{}: ({}, {:?})", desc, name, format),
+            ConstantBuffer(ref name, ref opt) => write!(f, "{}: ({}, {:?})", desc, name, opt),
+            GlobalConstant(ref name, opt) => write!(f, "{}: ({}, {:?})", desc, name, opt),
+            ResourceView(ref name, opt) => write!(f, "{}: ({}, {:?})", desc, name, opt),
+            UnorderedView(ref name, opt) => write!(f, "{}: ({}, {:?})", desc, name, opt),
+            Sampler(ref name, opt) => write!(f, "{}: ({}, {:?})", desc, name, opt),
+            PixelExport(ref name, format) => write!(f, "{}: ({}, {:?})", desc, name, format),
         }
     }
 }
 
-impl Error for InitError {
+impl<S: Error> Error for InitError<S> {
     fn description(&self) -> &str {
+        use self::InitError::*;
         match *self {
-            InitError::VertexImport(..) => "Vertex attribute mismatch",
-            InitError::ConstantBuffer(..) => "Constant buffer mismatch",
-            InitError::GlobalConstant(..) => "Global constant mismatch",
-            InitError::ResourceView(..) => "Shader resource view mismatch",
-            InitError::UnorderedView(..) => "Unordered access view mismatch",
-            InitError::Sampler(..) => "Sampler mismatch",
-            InitError::PixelExport(..) => "Pixel target mismatch",
+            VertexImport(_, None) => "Vertex attribute not found",
+            VertexImport(..) => "Vertex attribute format mismatch",
+            ConstantBuffer(_, None) => "Constant buffer not found",
+            ConstantBuffer(..) => "Constant buffer element mismatch",
+            GlobalConstant(_, None) => "Global constant not found",
+            GlobalConstant(..) => "Global constant format mismatch",
+            ResourceView(_, None) => "Shader resource view not found",
+            ResourceView(..) => "Shader resource view mismatch",
+            UnorderedView(_, None) => "Unordered access view not found",
+            UnorderedView(..) => "Unordered access view mismatch",
+            Sampler(_, None) => "Sampler not found",
+            Sampler(..) => "Sampler mismatch",
+            PixelExport(_, None) => "Pixel target not found",
+            PixelExport(..) => "Pixel target mismatch",
         }
     }
 }
+
 
 /// A service trait implemented by the "init" structure of PSO.
 pub trait PipelineInit {
@@ -154,8 +202,8 @@ pub trait PipelineInit {
     /// Attempt to map a PSO descriptor to a give shader program,
     /// represented by `ProgramInfo`. Returns an instance of the
     /// "meta" struct upon successful mapping.
-    fn link_to(&self, &mut Descriptor, &d::shade::ProgramInfo)
-               -> Result<Self::Meta, InitError>;
+    fn link_to<'s>(&self, &mut Descriptor, &'s d::shade::ProgramInfo)
+               -> Result<Self::Meta, InitError<&'s str>>;
 }
 
 /// a service trait implemented the "data" structure of PSO.
@@ -201,8 +249,8 @@ pub trait DataLink<'a>: Sized {
     fn link_input(&mut self, _: &d::shade::AttributeVar, _: &Self::Init) ->
                   Option<Result<d::pso::AttributeDesc, d::format::Format>> { None }
     /// Attempt to link with a constant buffer.
-    fn link_constant_buffer(&mut self, _: &d::shade::ConstantBufferVar, _: &Self::Init) ->
-                            Option<Result<(), d::shade::ConstFormat>> { None }
+    fn link_constant_buffer<'b>(&mut self, _: &'b d::shade::ConstantBufferVar, _: &Self::Init) ->
+                            Option<Result<(), ElementError<&'b str>>> { None }
     /// Attempt to link with a global constant.
     fn link_global_constant(&mut self, _: &d::shade::ConstVar, _: &Self::Init) ->
                             Option<Result<(), d::shade::UniformValue>> { None }

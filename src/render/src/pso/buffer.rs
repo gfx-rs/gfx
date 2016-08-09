@@ -20,7 +20,7 @@ use gfx_core::{handle, pso, shade};
 use gfx_core::factory::Typed;
 use gfx_core::format::Format;
 use shade::{ToUniform, Usage};
-use super::{DataLink, DataBind, RawDataSet};
+use super::{DataLink, DataBind, ElementError, RawDataSet};
 
 pub use gfx_core::pso::{Element, ElemOffset, ElemStride, InstanceRate};
 
@@ -135,9 +135,17 @@ DataLink<'a> for ConstantBuffer<T> {
     fn is_active(&self) -> bool {
         self.0.is_some()
     }
-    fn link_constant_buffer(&mut self, cb: &shade::ConstantBufferVar, init: &Self::Init) ->
-                            Option<Result<(), shade::ConstFormat>> {
+    fn link_constant_buffer<'b>(&mut self, cb: &'b shade::ConstantBufferVar, init: &Self::Init)
+                            -> Option<Result<(), ElementError<&'b str>>> {
         if &cb.name == *init {
+            for el in cb.elements.iter() {
+                return Some(Err(match T::query(&el.name) {
+                    Some(e) if e.offset != el.location as pso::ElemOffset =>
+                        ElementError::Offset(&el.name, el.location as pso::ElemOffset),
+                    None => ElementError::NotFound(&el.name),
+                    Some(_) => continue, //TODO: check format
+                }))
+            }
             self.0 = Some((cb.usage, cb.slot));
             Some(Ok(()))
         }else {

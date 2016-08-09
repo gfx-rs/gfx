@@ -293,6 +293,7 @@ pub struct ConstVar {
     /// Name of this constant.
     pub name: String,
     /// Location of this constant in the program.
+    /// For constant buffer elements, it's the offset in bytes.
     pub location: Location,
     /// Number of elements this constant represents.
     pub count: usize,
@@ -313,6 +314,8 @@ pub struct ConstantBufferVar {
     pub size: usize,
     /// What program stage this buffer is used in.
     pub usage: Usage,
+    /// List of individual elements in this buffer.
+    pub elements: Vec<ConstVar>,
 }
 
 /// Texture shader parameter.

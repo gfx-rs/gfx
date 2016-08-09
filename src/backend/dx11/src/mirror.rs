@@ -86,6 +86,27 @@ fn map_texture_type(tt: winapi::D3D_SRV_DIMENSION) -> s::TextureType {
     }
 }
 
+fn map_container(stype: &winapi::D3D11_SHADER_TYPE_DESC) -> s::ContainerType {
+    use gfx_core::shade::Dimension as Dim;
+    //TODO: use `match` when winapi allows
+    if stype.Class == winapi::D3D_SVC_SCALAR {
+        s::ContainerType::Single
+    } else if stype.Class == winapi::D3D_SVC_VECTOR {
+        s::ContainerType::Vector(stype.Columns as Dim)
+    } else if stype.Class == winapi::D3D_SVC_MATRIX_ROWS {
+        s::ContainerType::Matrix(s::MatrixFormat::RowMajor, stype.Rows as Dim, stype.Columns as Dim)
+    } else if stype.Class == winapi::D3D_SVC_MATRIX_COLUMNS {
+        s::ContainerType::Matrix(s::MatrixFormat::ColumnMajor, stype.Rows as Dim, stype.Columns as Dim)
+    } else  {
+        error!("Unexpected type to classify as container: {:?}", stype);
+        s::ContainerType::Single
+    }
+}
+
+fn map_base_type(_svt: winapi::D3D_SHADER_VARIABLE_TYPE) -> s::BaseType {
+    s::BaseType::F32 //TODO
+}
+
 pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                      reflection: *mut winapi::ID3D11ShaderReflection) {
     use winapi::{UINT, SUCCEEDED};
@@ -114,7 +135,7 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                 (hr, desc)
             };
             assert!(SUCCEEDED(hr));
-            debug!("Attribute {}, system type {:?}, mask {}, read-write mask {}",
+            info!("\tAttribute {}, system type {:?}, mask {}, read-write mask {}",
                 convert_str(desc.SemanticName), desc.SystemValueType, desc.Mask, desc.ReadWriteMask);
             if desc.SystemValueType != winapi::D3D_NAME_UNDEFINED {
                 // system value semantic detected, skipping
@@ -146,7 +167,7 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
             };
             assert!(SUCCEEDED(hr));
             let name = convert_str(desc.SemanticName);
-            debug!("Output {}, system type {:?}, mask {}, read-write mask {}",
+            info!("\tOutput {}, system type {:?}, mask {}, read-write mask {}",
                 name, desc.SystemValueType, desc.Mask, desc.ReadWriteMask);
             match desc.SystemValueType {
                 winapi::D3D_NAME_TARGET =>
@@ -173,24 +194,89 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
         };
         assert!(SUCCEEDED(hr));
         let name = convert_str(res_desc.Name);
-        debug!("Resource {}, type {:?}", name, res_desc.Type);
+        info!("\tResource {}, type {:?}", name, res_desc.Type);
         if res_desc.Type == winapi::D3D_SIT_CBUFFER {
             if let Some(cb) = info.constant_buffers.iter_mut().find(|cb| cb.name == name) {
                 cb.usage = cb.usage | usage;
                 continue;
             }
+            let cbuf = unsafe {
+                (*reflection).GetConstantBufferByName(res_desc.Name)
+            };
             let desc = unsafe {
-                let cbuf = (*reflection).GetConstantBufferByName(res_desc.Name);
                 let mut desc = mem::zeroed();
                 let hr = (*cbuf).GetDesc(&mut desc);
                 assert!(SUCCEEDED(hr));
                 desc
             };
+            let mut elements = Vec::new();
+            for i in 0 .. desc.Variables {
+                let var = unsafe {
+                    (*cbuf).GetVariableByIndex(i)
+                };
+                let var_desc = unsafe {
+                    let mut vd = mem::zeroed();
+                    let hr1 = (*var).GetDesc(&mut vd);
+                    assert!(SUCCEEDED(hr1));
+                    vd
+                };
+                let vtype = unsafe {
+                    (*var).GetType()
+                };
+                let vtype_desc = unsafe {
+                    let mut vtd = mem::zeroed();
+                    let hr2 = (*vtype).GetDesc(&mut vtd);
+                    assert!(SUCCEEDED(hr2));
+                    vtd
+                };
+                let el_name = convert_str(var_desc.Name);
+                debug!("\t\tElement at {}\t= '{}'", var_desc.StartOffset, el_name);
+                if vtype_desc.Class == winapi::D3D_SVC_STRUCT {
+                    let stride = var_desc.Size / vtype_desc.Elements;
+                    for j in 0 .. vtype_desc.Members {
+                        let member = unsafe {
+                            (*vtype).GetMemberTypeByIndex(j)
+                        };
+                        let mem_name_ptr = unsafe {
+                            (*vtype).GetMemberTypeName(j)
+                        };
+                        let mem_desc = unsafe {
+                            let mut mtd = mem::zeroed();
+                            let hr3 = (*member).GetDesc(&mut mtd);
+                            assert!(SUCCEEDED(hr3));
+                            mtd
+                        };
+                        let mem_name = convert_str(mem_name_ptr); //mem_desc.Name
+                        debug!("\t\t\tMember at {}\t= '{}'", mem_desc.Offset, mem_name);
+                        let btype = map_base_type(mem_desc.Type);
+                        let container = map_container(&mem_desc);
+                        for k in 0 .. vtype_desc.Elements {
+                            let offset = var_desc.StartOffset + k * stride + mem_desc.Offset;
+                            elements.push(s::ConstVar {
+                                name: format!("{}[{}].{}", el_name, k, mem_name),
+                                location: offset as s::Location,
+                                count: mem_desc.Elements as usize,
+                                base_type: btype,
+                                container: container,
+                            })
+                        }
+                    }
+                } else {
+                    elements.push(s::ConstVar {
+                        name: el_name,
+                        location: var_desc.StartOffset as s::Location,
+                        count: vtype_desc.Elements as usize,
+                        base_type: map_base_type(vtype_desc.Type),
+                        container: map_container(&vtype_desc),
+                    })
+                }
+            }
             info.constant_buffers.push(s::ConstantBufferVar {
                 name: name,
                 slot: res_desc.BindPoint as core::ConstantBufferSlot,
                 size: desc.Size as usize,
                 usage: usage,
+                elements: elements,
             });
         }else if res_desc.Type == winapi::D3D_SIT_TEXTURE {
             if let Some(t) = info.textures.iter_mut().find(|t| t.name == name) {

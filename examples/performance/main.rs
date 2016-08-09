@@ -21,8 +21,7 @@ extern crate glutin;
 extern crate gfx_gl as gl;
 extern crate gfx_device_gl;
 
-use cgmath::{SquareMatrix, Matrix, Point3, Vector3, Matrix3, Matrix4};
-use cgmath::{Transform, Vector4};
+use cgmath::{SquareMatrix, Matrix, Point3, Vector3, Matrix3, Matrix4, Vector4};
 pub use gfx::format::{DepthStencil, Rgba8 as ColorFormat};
 //use glfw::Context;
 use gl::Gl;

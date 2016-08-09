@@ -36,7 +36,9 @@ macro_rules! gfx_pipeline_inner {
 
         impl<'a> $crate::pso::PipelineInit for Init<'a> {
             type Meta = Meta;
-            fn link_to(&self, desc: &mut Descriptor, info: &$crate::ProgramInfo) -> Result<Self::Meta, InitError> {
+            fn link_to<'s>(&self, desc: &mut Descriptor, info: &'s $crate::ProgramInfo)
+                       -> Result<Self::Meta, InitError<&'s str>>
+            {
                 let mut meta = Meta {
                     $( $field: <$ty as DataLink<'a>>::new(), )*
                 };
@@ -50,12 +52,12 @@ macro_rules! gfx_pipeline_inner {
                                 continue;
                             },
                             Some(Err(fm)) => return Err(
-                                InitError::VertexImport(at.slot, Some(fm))
+                                InitError::VertexImport(&at.name, Some(fm))
                             ),
                             None => (),
                         }
                     )*
-                    return Err(InitError::VertexImport(at.slot, None));
+                    return Err(InitError::VertexImport(&at.name, None));
                 }
                 // c#
                 for cb in &info.constant_buffers {
@@ -65,13 +67,13 @@ macro_rules! gfx_pipeline_inner {
                                 assert!(meta.$field.is_active());
                                 continue;
                             },
-                            Some(Err(_)) => return Err(
-                                InitError::ConstantBuffer(cb.slot, Some(()))
+                            Some(Err(e)) => return Err(
+                                InitError::ConstantBuffer(&cb.name, Some(e))
                             ),
                             None => (),
                         }
                     )*
-                    return Err(InitError::ConstantBuffer(cb.slot, None));
+                    return Err(InitError::ConstantBuffer(&cb.name, None));
                 }
                 // global constants
                 for gc in &info.globals {
@@ -82,12 +84,12 @@ macro_rules! gfx_pipeline_inner {
                                 continue;
                             },
                             Some(Err(_)) => return Err(
-                                InitError::GlobalConstant(gc.location, Some(()))
+                                InitError::GlobalConstant(&gc.name, Some(()))
                             ),
                             None => (),
                         }
                     )*
-                    return Err(InitError::GlobalConstant(gc.location, None));
+                    return Err(InitError::GlobalConstant(&gc.name, None));
                 }
                 // t#
                 for srv in &info.textures {
@@ -98,12 +100,12 @@ macro_rules! gfx_pipeline_inner {
                                 continue;
                             },
                             Some(Err(_)) => return Err(
-                                InitError::ResourceView(srv.slot, Some(()))
+                                InitError::ResourceView(&srv.name, Some(()))
                             ),
                             None => (),
                         }
                     )*
-                    return Err(InitError::ResourceView(srv.slot, None));
+                    return Err(InitError::ResourceView(&srv.name, None));
                 }
                 // u#
                 for uav in &info.unordereds {
@@ -114,12 +116,12 @@ macro_rules! gfx_pipeline_inner {
                                 continue;
                             },
                             Some(Err(_)) => return Err(
-                                InitError::UnorderedView(uav.slot, Some(()))
+                                InitError::UnorderedView(&uav.name, Some(()))
                             ),
                             None => (),
                         }
                     )*
-                    return Err(InitError::UnorderedView(uav.slot, None));
+                    return Err(InitError::UnorderedView(&uav.name, None));
                 }
                 // s#
                 for sm in &info.samplers {
@@ -132,7 +134,7 @@ macro_rules! gfx_pipeline_inner {
                             None => (),
                         }
                     )*
-                    return Err(InitError::Sampler(sm.slot, None));
+                    return Err(InitError::Sampler(&sm.name, None));
                 }
                 // color targets
                 for out in &info.outputs {
@@ -144,12 +146,12 @@ macro_rules! gfx_pipeline_inner {
                                 continue;
                             },
                             Some(Err(fm)) => return Err(
-                                InitError::PixelExport(out.slot, Some(fm))
+                                InitError::PixelExport(&out.name, Some(fm))
                             ),
                             None => (),
                         }
                     )*
-                    return Err(InitError::PixelExport(out.slot, None));
+                    return Err(InitError::PixelExport(&out.name, None));
                 }
                 if !info.knows_outputs {
                     use $crate::shade::core as s;
@@ -167,7 +169,7 @@ macro_rules! gfx_pipeline_inner {
                                 out.slot += 1;
                             },
                             Some(Err(fm)) => return Err(
-                                InitError::PixelExport(out.slot, Some(fm))
+                                InitError::PixelExport(&"!known", Some(fm))
                             ),
                             None => (),
                         }

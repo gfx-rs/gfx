@@ -77,7 +77,7 @@ gfx_defines!{
     }
 
     constant LightLocals {
-        cam_pos_and_radius: [f32; 4] = "u_CameraPosAndRadius",
+        cam_pos_and_radius: [f32; 4] = "u_CamPosAndRadius",
     }
 
     constant TerrainLocals {
@@ -95,7 +95,7 @@ gfx_defines!{
         vbuf: gfx::VertexBuffer<CubeVertex> = (),
         locals_vs: gfx::ConstantBuffer<CubeLocals> = "CubeLocals",
         locals_ps: gfx::ConstantBuffer<LightLocals> = "LightLocals",
-        light_pos_buf: gfx::ConstantBuffer<LightInfo> = "u_LightPosBlock",
+        light_pos_buf: gfx::ConstantBuffer<LightInfo> = "LightPosBlock",
         tex_pos: gfx::TextureSampler<[f32; 4]> = "t_Position",
         tex_normal: gfx::TextureSampler<[f32; 4]> = "t_Normal",
         tex_diffuse: gfx::TextureSampler<[f32; 4]> = "t_Diffuse",
@@ -126,7 +126,7 @@ gfx_defines!{
     pipeline emitter {
         vbuf: gfx::VertexBuffer<CubeVertex> = (),
         locals: gfx::ConstantBuffer<CubeLocals> = "CubeLocals",
-        light_pos_buf: gfx::ConstantBuffer<LightInfo> = "u_LightPosBlock",
+        light_pos_buf: gfx::ConstantBuffer<LightInfo> = "LightPosBlock",
         out_color: gfx::BlendTarget<GFormat> =
             ("Target0", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
         out_depth: gfx::DepthTarget<Depth> =
