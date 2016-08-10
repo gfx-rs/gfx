@@ -243,7 +243,7 @@ pub fn init_xcb<T: gfx_core::format::RenderFormat>(title: &str, width: u32, heig
         surface: surface,
         minImageCount: num,
         imageFormat: gfx_device_vulkan::data::map_format(format.0, format.1).unwrap(),
-        imageColorSpace: vk::COLORSPACE_SRGB_NONLINEAR_KHR,
+        imageColorSpace: vk::COLOR_SPACE_SRGB_NONLINEAR_KHR,
         imageExtent: vk::Extent2D { width: width, height: height },
         imageArrayLayers: 1,
         imageUsage: vk::IMAGE_USAGE_COLOR_ATTACHMENT_BIT | vk::IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
