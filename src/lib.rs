@@ -112,21 +112,21 @@ pub trait ApplicationBase<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
 pub trait Application<R: gfx::Resources>: Sized {
     fn new<F: gfx::Factory<R>>(F, Init<R>) -> Self;
     fn render<C: gfx::CommandBuffer<R>>(&mut self, &mut gfx::Encoder<R, C>);
-    #[cfg(feature = "vulkan")]
-    fn launch_default(name: &str) where WrapVulkan<Self>: ApplicationVulkan {
-        WrapVulkan::<Self>::launch(name, DEFAULT_CONFIG);
-    }
-    /*#[cfg(target_os = "windows")]
+    #[cfg(target_os = "windows")]
     fn launch_default(name: &str) where WrapD3D11<Self>: ApplicationD3D11 {
         WrapD3D11::<Self>::launch(name, DEFAULT_CONFIG);
     }
     #[cfg(not(target_os = "windows"))]
     fn launch_default(name: &str) where WrapGL2<Self>: ApplicationGL {
         WrapGL2::<Self>::launch(name, DEFAULT_CONFIG);
-    }*/
+    }
     /*#[cfg(target_os = "macos")]
     fn launch_default(name: &str) where WrapMetal<Self>: ApplicationMetal {
         WrapMetal::<Self>::launch(name, DEFAULT_CONFIG)
+    }*/
+    /*#[cfg(feature = "vulkan")]
+    fn launch_default(name: &str) where WrapVulkan<Self>: ApplicationVulkan {
+        WrapVulkan::<Self>::launch(name, DEFAULT_CONFIG);
     }*/
 }
 
