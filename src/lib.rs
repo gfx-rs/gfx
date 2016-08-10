@@ -25,15 +25,15 @@ extern crate gfx_device_dx11;
 #[cfg(target_os = "windows")]
 extern crate gfx_window_dxgi;
 
-#[cfg(feature = "vulkan")]
-extern crate gfx_device_vulkan;
-#[cfg(feature = "vulkan")]
-extern crate gfx_window_vulkan;
-
 #[cfg(target_os = "macos")]
 extern crate gfx_device_metal;
 #[cfg(target_os = "macos")]
 extern crate gfx_window_metal;
+
+#[cfg(feature = "vulkan")]
+extern crate gfx_device_vulkan;
+#[cfg(feature = "vulkan")]
+extern crate gfx_window_vulkan;
 
 pub mod shade;
 
@@ -175,17 +175,6 @@ pub trait ApplicationGL {
     fn launch(&str, Config);
 }
 
-#[cfg(target_os = "macos")]
-pub trait ApplicationMetal {
-    fn launch(&str, Config);
-}
-
-#[cfg(target_os = "windows")]
-pub trait ApplicationD3D11 {
-    fn launch(&str, Config);
-}
-
-
 impl Factory<gfx_device_gl::Resources> for gfx_device_gl::Factory {
     type CommandBuffer = gfx_device_gl::CommandBuffer;
     fn create_encoder(&mut self) -> gfx::Encoder<gfx_device_gl::Resources, Self::CommandBuffer> {
@@ -210,10 +199,9 @@ impl<A> ApplicationGL for A where
             .with_dimensions(config.size.0 as u32, config.size.1 as u32)
             .with_gl(gl_version)
             .with_vsync();
-        let (window, mut device, mut factory, main_color, main_depth) =
+        let (window, mut device, factory, main_color, main_depth) =
             gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder);
         let (width, height) = window.get_inner_size().unwrap();
-        let combuf = factory.create_command_buffer();
         let shade_lang = device.get_info().shading_language;
 
         let mut app = Self::new(factory, Init {
@@ -244,6 +232,58 @@ impl<A> ApplicationGL for A where
             harness.bump()
         }
     }
+}
+
+
+#[cfg(target_os = "windows")]
+pub trait ApplicationD3D11 {
+    fn launch(&str, Config);
+}
+
+#[cfg(target_os = "windows")]
+impl Factory<gfx_device_dx11::Resources> for gfx_device_dx11::Factory {
+    type CommandBuffer = D3D11CommandBuffer;
+    fn create_encoder(&mut self) -> gfx::Encoder<gfx_device_dx11::Resources, Self::CommandBuffer> {
+        self.create_command_buffer_native().into()
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl<
+    A: ApplicationBase<gfx_device_dx11::Resources, D3D11CommandBuffer>
+> ApplicationD3D11 for A {
+    fn launch(title: &str, config: Config) {
+        use gfx::traits::{Device, Factory};
+
+        env_logger::init().unwrap();
+        let (window, device, factory, main_color) =
+            gfx_window_dxgi::init::<ColorFormat>(title, config.size.0, config.size.1)
+            .unwrap();
+        let main_depth = factory.create_depth_stencil_view_only(
+            window.size.0, window.size.1).unwrap();
+
+        let mut app = Self::new(factory, Init {
+            backend: shade::Backend::Hlsl(device.get_shader_model()),
+            color: main_color,
+            depth: main_depth,
+            aspect_ratio: window.size.0 as f32 / window.size.1 as f32,
+        });
+        let mut device: gfx_device_dx11::Deferred = device.into();
+
+        let mut harness = Harness::new();
+        while window.dispatch() {
+            app.render(&mut device);
+            window.swap_buffers(1);
+            device.cleanup();
+            harness.bump();
+        }
+    }
+}
+
+
+#[cfg(target_os = "macos")]
+pub trait ApplicationMetal {
+    fn launch(&str, Config);
 }
 
 #[cfg(target_os = "macos")]
@@ -297,42 +337,45 @@ impl<
     }
 }
 
-#[cfg(target_os = "windows")]
-impl Factory<gfx_device_dx11::Resources> for gfx_device_dx11::Factory {
-    type CommandBuffer = D3D11CommandBuffer;
-    fn create_encoder(&mut self) -> gfx::Encoder<gfx_device_dx11::Resources, Self::CommandBuffer> {
-        self.create_command_buffer_native().into()
+
+#[cfg(feature = "vulkan")]
+pub trait ApplicationVulkan {
+    fn launch(&str, Config);
+}
+
+#[cfg(feature = "vulkan")]
+impl Factory<gfx_device_vulkan::Resources> for gfx_device_vulkan::Factory {
+    type CommandBuffer = gfx_device_vulkan::CommandBuffer;
+    fn create_encoder(&mut self) -> gfx::Encoder<gfx_device_vulkan::Resources, Self::CommandBuffer> {
+        self.create_command_buffer().into()
     }
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(feature = "vulkan")]
 impl<
-    A: ApplicationBase<gfx_device_dx11::Resources, D3D11CommandBuffer>
-> ApplicationD3D11 for A {
+    A: ApplicationBase<gfx_device_vulkan::Resources, gfx_device_vulkan::CommandBuffer>
+> ApplicationVulkan for A {
     fn launch(title: &str, config: Config) {
         use gfx::traits::{Device, Factory};
 
         env_logger::init().unwrap();
-        let (window, device, factory, main_color) =
-            gfx_window_dxgi::init::<ColorFormat>(title, config.size.0, config.size.1)
-            .unwrap();
-        let main_depth = factory.create_depth_stencil_view_only(
-            window.size.0, window.size.1).unwrap();
+        let (mut win, mut factory) = gfx_window_vulkan::init_xcb::<ColorFormat>(title, config.size.0 as u32, config.size.1 as u32);
+        let main_depth = factory.create_depth_stencil::<DepthFormat>(config.size.0, config.size.1).unwrap();
 
         let mut app = Self::new(factory, Init {
-            backend: shade::Backend::Hlsl(device.get_shader_model()),
-            color: main_color,
-            depth: main_depth,
-            aspect_ratio: window.size.0 as f32 / window.size.1 as f32,
+            backend: shade::Backend::Vulkan,
+            color: win.get_any_target(),
+            depth: main_depth.2,
+            aspect_ratio: config.size.0 as f32 / config.size.1 as f32, //TODO
         });
-        let mut device: gfx_device_dx11::Deferred = device.into();
 
         let mut harness = Harness::new();
-        while window.dispatch() {
-            app.render(&mut device);
-            window.swap_buffers(1);
-            device.cleanup();
-            harness.bump();
+        while let Ok(frame_opt) = win.wait_draw() {
+            if let Some(mut frame) = frame_opt {
+                app.render(frame.get_queue());
+                frame.get_queue().cleanup();
+                harness.bump();
+            }
         }
     }
 }

@@ -15,5 +15,5 @@ name = "gfx_window_vulkan"
 winit = "0.5"
 xcb = "0.7"
 vk-sys = { path = "../../../../vulkano/vk-sys" }
-gfx_core = { path = "../../core", version = "0.3" }
+gfx_core = { path = "../../core", version = "0.4" }
 gfx_device_vulkan = { path = "../../backend/vulkan", version = "0.1" }

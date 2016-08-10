@@ -100,7 +100,7 @@ impl<'a> Source<'a> {
                     Source { glsl_es_100: s, .. } if s != EMPTY && v >= 100 => s,
                     Source { glsl_es_200: s, .. } if s != EMPTY && v >= 200 => s,
                     Source { glsl_es_300: s, .. } if s != EMPTY && v >= 300 => s,
-                    _ => return Err(())
+                    _ => return Err(SelectError(backend))
                 }
             },
             #[cfg(target_os = "windows")]
@@ -115,7 +115,7 @@ impl<'a> Source<'a> {
             Backend::Msl(revision) => match *self {
                 Source { msl_11: s, .. } if s != EMPTY && revision >= 11 => s,
                 Source { msl_10: s, .. } if s != EMPTY && revision >= 10 => s,
-                _ => return Err(())
+                _ => return Err(SelectError(backend))
             },
             #[cfg(feature = "vulkan")]
             Backend::Vulkan => match *self {

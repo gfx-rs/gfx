@@ -17,4 +17,4 @@ vk = "0.0"
 vk-sys = { path = "../../../../vulkano/vk-sys" }
 shared_library = "0.1"
 winit = "0.5"
-gfx_core = { path = "../../core", version = "0.3" }
+gfx_core = { path = "../../core", version = "0.4" }
