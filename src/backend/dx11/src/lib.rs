@@ -123,6 +123,7 @@ pub type InputLayout = *mut winapi::ID3D11InputLayout;
 pub struct Pipeline {
     topology: winapi::D3D11_PRIMITIVE_TOPOLOGY,
     layout: InputLayout,
+    vertex_buffers: [Option<gfx_core::pso::VertexBufferDesc>; gfx_core::pso::MAX_VERTEX_BUFFERS],
     attributes: [Option<gfx_core::pso::AttributeDesc>; gfx_core::MAX_VERTEX_ATTRIBUTES],
     program: Program,
     rasterizer: *const winapi::ID3D11RasterizerState,

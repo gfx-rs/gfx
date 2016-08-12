@@ -256,7 +256,7 @@ impl<
         use gfx::traits::{Device, Factory};
 
         env_logger::init().unwrap();
-        let (window, device, factory, main_color) =
+        let (window, device, mut factory, main_color) =
             gfx_window_dxgi::init::<ColorFormat>(title, config.size.0, config.size.1)
             .unwrap();
         let main_depth = factory.create_depth_stencil_view_only(

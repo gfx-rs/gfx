@@ -109,7 +109,7 @@ impl<'a> Source<'a> {
                 Source { hlsl_41: s, .. } if s != EMPTY && model >= 41 => s,
                 Source { hlsl_40: s, .. } if s != EMPTY && model >= 40 => s,
                 Source { hlsl_30: s, .. } if s != EMPTY && model >= 30 => s,
-                _ => Err(SelectError(backend))
+                _ => return Err(SelectError(backend))
             },
             #[cfg(target_os = "macos")]
             Backend::Msl(revision) => match *self {
