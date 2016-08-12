@@ -446,8 +446,11 @@ impl core::Factory<R> for Factory {
         let mut charpos = 0;
         for (attrib, at_desc) in program.get_info().vertex_attributes.iter().zip(desc.attributes.iter()) {
             use winapi::UINT;
-            let (elem, irate) = match at_desc {
-                &Some((ref el, ir)) => (el, ir),
+            let (bdesc, elem) = match at_desc {
+                &Some((buf_id, ref el)) => match desc.vertex_buffers[buf_id as usize] {
+                    Some(ref bd) => (bd, el),
+                    None => return Err(core::pso::CreationError),
+                },
                 &None => continue,
             };
             if elem.offset & 1 != 0 {
@@ -467,12 +470,12 @@ impl core::Factory<R> for Factory {
                 },
                 InputSlot: attrib.slot as UINT,
                 AlignedByteOffset: elem.offset as UINT,
-                InputSlotClass: if irate == 0 {
+                InputSlotClass: if bdesc.rate == 0 {
                     winapi::D3D11_INPUT_PER_VERTEX_DATA
                 }else {
                     winapi::D3D11_INPUT_PER_INSTANCE_DATA
                 },
-                InstanceDataStepRate: irate as UINT,
+                InstanceDataStepRate: bdesc.rate as UINT,
             });
             for (out, inp) in charbuf[charpos..].iter_mut().zip(attrib.name.as_bytes().iter()) {
                 *out = *inp as i8;
@@ -513,6 +516,7 @@ impl core::Factory<R> for Factory {
                 TriangleStrip   => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
             },
             layout: vertex_layout,
+            vertex_buffers: desc.vertex_buffers,
             attributes: desc.attributes,
             program: prog,
             rasterizer: state::make_rasterizer(dev, &desc.rasterizer, desc.scissor),
@@ -610,6 +614,7 @@ impl core::Factory<R> for Factory {
         use winapi::UINT;
         use gfx_core::tex::{AaMode, Kind};
         use data::map_format;
+        //TODO: support desc.layer parsing
 
         let (dim, layers, has_levels) = match htex.get_info().kind {
             Kind::D1(_) =>
@@ -703,8 +708,8 @@ impl core::Factory<R> for Factory {
                 (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, 0, 6 * nlayers as UINT]),
             (Kind::CubeArray(_, nlayers), Some(lid)) if lid < nlayers =>
                 (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, 6 * lid as UINT, 6 * (1+lid) as UINT]),
-            (_, None) => return Err(f::TargetViewError::BadLevel(desc.level)),
-            (_, Some(lid)) => return Err(f::TargetViewError::BadLayer(lid)),
+            (_, None) => return Err(f::TargetViewError::Level(desc.level)),
+            (_, Some(lid)) => return Err(f::TargetViewError::Layer(f::LayerError::OutOfBounds(lid, 0))), //TODO
         };
         let format = core::format::Format(htex.get_info().format, desc.channel);
         let native_desc = winapi::D3D11_RENDER_TARGET_VIEW_DESC {
@@ -764,8 +769,8 @@ impl core::Factory<R> for Factory {
                 (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, 0, 6 * nlayers as UINT]),
             (Kind::CubeArray(_, nlayers), Some(lid)) if lid < nlayers =>
                 (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, 6 * lid as UINT, 6 * (1+lid) as UINT]),
-            (_, None) => return Err(f::TargetViewError::BadLevel(desc.level)),
-            (_, Some(lid)) => return Err(f::TargetViewError::BadLayer(lid)),
+            (_, None) => return Err(f::TargetViewError::Level(desc.level)),
+            (_, Some(lid)) => return Err(f::TargetViewError::Layer(f::LayerError::OutOfBounds(lid, 0))), //TODO
         };
 
         let channel = core::format::ChannelType::Uint; //doesn't matter

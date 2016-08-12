@@ -194,14 +194,13 @@ struct Scene<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
 // Section-4: scene construction routines
 
 /// Create a full scene
-fn create_scene<R, F, C>(factory: &mut F, encoder: &gfx::Encoder<R, C>,
+fn create_scene<R, F>(factory: &mut F,
                 out_color: gfx::handle::RenderTargetView<R, ColorFormat>,
                 out_depth: gfx::handle::DepthStencilView<R, DepthFormat>,
                 shadow_pso: gfx::PipelineState<R, shadow::Meta>)
-                -> Scene<R, C> where
+                -> Scene<R, F::CommandBuffer> where
     R: gfx::Resources,
-    F: gfx::Factory<R>,
-    C: gfx::CommandBuffer<R>,
+    F: gfx_app::Factory<R>,
 {
     use cgmath::{SquareMatrix, Matrix4, deg};
     use gfx::traits::FactoryExt;
@@ -264,7 +263,7 @@ fn create_scene<R, F, C>(factory: &mut F, encoder: &gfx::Encoder<R, C>,
         shadow: factory.view_texture_as_depth_stencil(
             &shadow_tex, 0, Some(i as gfx::Layer), gfx::tex::DepthStencilFlags::empty(),
             ).unwrap(),
-        encoder: encoder.clone_empty(),
+        encoder: factory.create_encoder(),
     }).collect();
     let light_buf = factory.create_constant_buffer(MAX_LIGHTS);
 
@@ -424,8 +423,8 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
     R: gfx::Resources + 'static,
     C: gfx::CommandBuffer<R> + Send + 'static,
 {
-    fn new<F>(mut factory: F, encoder: gfx::Encoder<R, C>, init: gfx_app::Init<R>) -> Self where
-        F: gfx::Factory<R>
+    fn new<F>(mut factory: F, init: gfx_app::Init<R>) -> Self where
+        F: gfx_app::Factory<R, CommandBuffer=C>,
     {
         use std::env;
         use gfx::traits::FactoryExt;
@@ -487,7 +486,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
                 ).unwrap()
         };
 
-        let scene = create_scene(&mut factory, &encoder,
+        let scene = create_scene(&mut factory,
             init.color.clone(), init.depth.clone(),
             shadow_pso);
 
@@ -495,7 +494,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
             init: init,
             is_parallel: is_parallel,
             forward_pso: forward_pso,
-            encoder: encoder,
+            encoder: factory.create_encoder(),
             scene: scene,
         }
     }

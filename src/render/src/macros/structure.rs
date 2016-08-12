@@ -29,8 +29,7 @@ macro_rules! gfx_impl_struct {
         impl $crate::pso::buffer::Structure<$runtime_format> for $root {
             fn query(name: &str) -> Option<$crate::pso::buffer::Element<$runtime_format>> {
                 use std::mem::size_of;
-                use $crate::pso::buffer::{Element, ElemOffset, ElemStride};
-                let stride = size_of::<$root>() as ElemStride;
+                use $crate::pso::buffer::{Element, ElemOffset};
                 let tmp: &$root = unsafe{ ::std::mem::uninitialized() };
                 let base = tmp as *const _ as usize;
                 //HACK: special treatment of array queries
@@ -44,7 +43,7 @@ macro_rules! gfx_impl_struct {
                                 Some(s) if s.starts_with('.') => &s[1..],
                                 _ => name,
                             };
-                            (sub_name, array_id * (stride as ElemOffset))
+                            (sub_name, array_id * (size_of::<$root>() as ElemOffset))
                         },
                         None => (name, 0),
                     }
@@ -54,7 +53,6 @@ macro_rules! gfx_impl_struct {
                     $name => Some(Element {
                         format: <$ty as $compile_format>::get_format(),
                         offset: ((&tmp.$field as *const _ as usize) - base) as ElemOffset + big_offset,
-                        stride: stride,
                     }),
                 )*
                     _ => None,

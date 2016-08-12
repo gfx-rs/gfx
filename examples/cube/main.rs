@@ -72,6 +72,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             glsl_es_100: include_bytes!("shader/cube_100_es.glslv"),
             hlsl_40:  include_bytes!("data/vertex.fx"),
             msl_11: include_bytes!("shader/cube_vertex.metal"),
+            vulkan:   include_bytes!("data/vert.spv"),
             .. gfx_app::shade::Source::empty()
         };
         let ps = gfx_app::shade::Source {
@@ -80,6 +81,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             glsl_es_100: include_bytes!("shader/cube_100_es.glslf"),
             hlsl_40:  include_bytes!("data/pixel.fx"),
             msl_11: include_bytes!("shader/cube_frag.metal"),
+            vulkan:   include_bytes!("data/frag.spv"),
             .. gfx_app::shade::Source::empty()
         };
 

@@ -145,7 +145,7 @@ impl<'a, T: format::DepthFormat> DataLink<'a> for DepthTarget<T> {
     fn new() -> Self { DepthTarget(PhantomData) }
     fn is_active(&self) -> bool { true }
     fn link_depth_stencil(&mut self, init: &Self::Init) -> Option<pso::DepthStencilDesc> {
-        Some((T::get_format().0, (*init).into()))
+        Some((T::get_format(), (*init).into()))
     }
 }
 
@@ -162,7 +162,7 @@ impl<'a, T: format::StencilFormat> DataLink<'a> for StencilTarget<T> {
     fn new() -> Self { StencilTarget(PhantomData) }
     fn is_active(&self) -> bool { true }
     fn link_depth_stencil(&mut self, init: &Self::Init) -> Option<pso::DepthStencilDesc> {
-        Some((T::get_format().0, (*init).into()))
+        Some((T::get_format(), (*init).into()))
     }
 }
 
@@ -180,7 +180,7 @@ impl<'a, T: format::DepthStencilFormat> DataLink<'a> for DepthStencilTarget<T> {
     fn new() -> Self { DepthStencilTarget(PhantomData) }
     fn is_active(&self) -> bool { true }
     fn link_depth_stencil(&mut self, init: &Self::Init) -> Option<pso::DepthStencilDesc> {
-        Some((T::get_format().0, (*init).into()))
+        Some((T::get_format(), (*init).into()))
     }
 }
 

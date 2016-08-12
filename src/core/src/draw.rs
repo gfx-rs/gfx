@@ -38,8 +38,6 @@ pub type InstanceOption = Option<(InstanceCount, VertexCount)>;
 /// efficient API-specific manner, to be ready for execution on the device.
 #[allow(missing_docs)]
 pub trait CommandBuffer<R: Resources> {
-    /// Clone as an empty buffer
-    fn clone_empty(&self) -> Self;
     /// Reset the command buffer contents, retain the allocated storage
     fn reset(&mut self);
     /// Bind a pipeline state object

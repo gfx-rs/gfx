@@ -32,13 +32,15 @@ addons:
       - libxcursor1
       - libsdl2-dev
 script:
-  - travis-cargo build
+  - travis-cargo build -- --features vulkan
   - travis-cargo test -- -p gfx_core
   - travis-cargo test -- -p gfx
   - travis-cargo test -- -p gfx_device_gl
   - travis-cargo test -- -p gfx_window_glutin
   - travis-cargo test -- -p gfx_window_glfw
   - travis-cargo test -- -p gfx_window_sdl
+# - travis-cargo test -- -p gfx_device_vulkan
+# - travis-cargo test -- -p gfx_window_vulkan
   - travis-cargo test
 after_success:
   - travis-cargo doc -- -j 1

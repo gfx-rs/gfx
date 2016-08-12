@@ -75,6 +75,7 @@ pub type SamplerSlot = u8;
 macro_rules! define_shaders {
     ($($name:ident),+) => {$(
         #[allow(missing_docs)]
+        #[derive(Clone, Debug, Eq, Hash, PartialEq)]
         pub struct $name<R: Resources>(handle::Shader<R>);
         impl<R: Resources> $name<R> {
             #[allow(missing_docs)]
@@ -88,6 +89,7 @@ macro_rules! define_shaders {
 define_shaders!(VertexShader, HullShader, DomainShader, GeometryShader, PixelShader);
 
 /// A complete set of shaders to link a program.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum ShaderSet<R: Resources> {
     /// Simple program: Vs-Ps
     Simple(VertexShader<R>, PixelShader<R>),

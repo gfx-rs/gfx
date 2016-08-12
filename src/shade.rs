@@ -20,14 +20,16 @@ pub use gfx_device_dx11::ShaderModel as DxShaderModel;
 pub use gfx_device_metal::ShaderModel as MetalShaderModel;
 
 /// Shader backend with version numbers.
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Backend {
     Glsl(GlslVersion),
     GlslEs(GlslVersion),
     #[cfg(target_os = "windows")]
     Hlsl(DxShaderModel),
     #[cfg(target_os = "macos")]
-    Msl(MetalShaderModel)
+    Msl(MetalShaderModel),
+    #[cfg(feature = "vulkan")]
+    Vulkan,
 }
 
 pub const EMPTY: &'static [u8] = &[];
@@ -48,8 +50,12 @@ pub struct Source<'a> {
     pub hlsl_41 : &'a [u8],
     pub hlsl_50 : &'a [u8],
     pub msl_10  : &'a [u8],
-    pub msl_11  : &'a [u8]
+    pub msl_11  : &'a [u8],
+    pub vulkan  : &'a [u8],
 }
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SelectError(Backend);
 
 impl<'a> Source<'a> {
     /// Create an empty shader source. Useful for specifying the remaining
@@ -69,12 +75,13 @@ impl<'a> Source<'a> {
             hlsl_41:  EMPTY,
             hlsl_50:  EMPTY,
             msl_10:   EMPTY,
-            msl_11:   EMPTY
+            msl_11:   EMPTY,
+            vulkan:   EMPTY,
         }
     }
 
     /// Pick one of the stored versions that is the highest supported by the backend.
-    pub fn select(&self, backend: Backend) -> Result<&'a [u8], ()> {
+    pub fn select(&self, backend: Backend) -> Result<&'a [u8], SelectError> {
         Ok(match backend {
             Backend::Glsl(version) => {
                 let v = version.major * 100 + version.minor;
@@ -84,7 +91,7 @@ impl<'a> Source<'a> {
                     Source { glsl_140: s, .. } if s != EMPTY && v >= 140 => s,
                     Source { glsl_130: s, .. } if s != EMPTY && v >= 130 => s,
                     Source { glsl_120: s, .. } if s != EMPTY && v >= 120 => s,
-                    _ => return Err(())
+                    _ => return Err(SelectError(backend))
                 }
             },
             Backend::GlslEs(version) => {
@@ -93,7 +100,7 @@ impl<'a> Source<'a> {
                     Source { glsl_es_100: s, .. } if s != EMPTY && v >= 100 => s,
                     Source { glsl_es_200: s, .. } if s != EMPTY && v >= 200 => s,
                     Source { glsl_es_300: s, .. } if s != EMPTY && v >= 300 => s,
-                    _ => return Err(())
+                    _ => return Err(SelectError(backend))
                 }
             },
             #[cfg(target_os = "windows")]
@@ -102,14 +109,19 @@ impl<'a> Source<'a> {
                 Source { hlsl_41: s, .. } if s != EMPTY && model >= 41 => s,
                 Source { hlsl_40: s, .. } if s != EMPTY && model >= 40 => s,
                 Source { hlsl_30: s, .. } if s != EMPTY && model >= 30 => s,
-                _ => return Err(())
+                _ => return Err(SelectError(backend))
             },
             #[cfg(target_os = "macos")]
             Backend::Msl(revision) => match *self {
                 Source { msl_11: s, .. } if s != EMPTY && revision >= 11 => s,
                 Source { msl_10: s, .. } if s != EMPTY && revision >= 10 => s,
-                _ => return Err(())
-            }
+                _ => return Err(SelectError(backend))
+            },
+            #[cfg(feature = "vulkan")]
+            Backend::Vulkan => match *self {
+                Source { vulkan: s, .. } if s != EMPTY => s,
+                _ => return Err(SelectError(backend))
+            },
         })
     }
 }

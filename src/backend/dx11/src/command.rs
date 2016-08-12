@@ -91,7 +91,7 @@ pub enum Command {
 unsafe impl Send for Command {}
 
 struct Cache {
-    attributes: [Option<pso::AttributeDesc>; MAX_VERTEX_ATTRIBUTES],
+    attrib_strides: [Option<pso::ElemStride>; MAX_VERTEX_ATTRIBUTES],
     rasterizer: *const ID3D11RasterizerState,
     depth_stencil: *const ID3D11DepthStencilState,
     stencil_ref: UINT,
@@ -103,7 +103,7 @@ unsafe impl Send for Cache {}
 impl Cache {
     fn new() -> Cache {
         Cache {
-            attributes: [None; MAX_VERTEX_ATTRIBUTES],
+            attrib_strides: [None; MAX_VERTEX_ATTRIBUTES],
             rasterizer: ptr::null(),
             depth_stencil: ptr::null(),
             stencil_ref: 0,
@@ -119,7 +119,6 @@ pub struct CommandBuffer<P> {
 }
 
 pub trait Parser: Sized {
-    fn clone_empty(&self) -> Self;
     fn reset(&mut self);
     fn parse(&mut self, Command);
     fn update_buffer(&mut self, Buffer, &[u8], usize);
@@ -144,10 +143,6 @@ impl<P: Parser> CommandBuffer<P> {
 }
 
 impl<P: Parser> draw::CommandBuffer<Resources> for CommandBuffer<P> {
-    fn clone_empty(&self) -> CommandBuffer<P> {
-        self.parser.clone_empty().into()
-    }
-
     fn reset(&mut self) {
         self.parser.reset();
         self.cache = Cache::new();
@@ -155,7 +150,15 @@ impl<P: Parser> draw::CommandBuffer<Resources> for CommandBuffer<P> {
 
     fn bind_pipeline_state(&mut self, pso: Pipeline) {
         self.parser.parse(Command::SetPrimitive(pso.topology));
-        self.cache.attributes = pso.attributes;
+        for (stride, ad_option) in self.cache.attrib_strides.iter_mut().zip(pso.attributes.iter()) {
+            *stride = ad_option.map(|(buf_id, _)| match pso.vertex_buffers[buf_id as usize] {
+                Some(ref bdesc) => bdesc.stride,
+                None => {
+                    error!("Unexpected use of buffer id {}", buf_id);
+                    0
+                },
+            });
+        }
         if self.cache.rasterizer != pso.rasterizer {
             self.cache.rasterizer = pso.rasterizer;
             self.parser.parse(Command::SetRasterizer(pso.rasterizer));
@@ -167,17 +170,18 @@ impl<P: Parser> draw::CommandBuffer<Resources> for CommandBuffer<P> {
     }
 
     fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<Resources>) {
+        //Note: assumes `bind_pipeline_state` is called prior
         let mut buffers = [native::Buffer(ptr::null_mut()); MAX_VERTEX_ATTRIBUTES];
         let mut strides = [0; MAX_VERTEX_ATTRIBUTES];
         let mut offsets = [0; MAX_VERTEX_ATTRIBUTES];
         for i in 0 .. MAX_VERTEX_ATTRIBUTES {
-            match (vbs.0[i], self.cache.attributes[i]) {
-                (None, Some(fm)) => {
-                    error!("No vertex input provided for slot {} of format {:?}", i, fm)
+            match (vbs.0[i], self.cache.attrib_strides[i]) {
+                (None, Some(stride)) => {
+                    error!("No vertex input provided for slot {} with stride {}", i, stride)
                 },
-                (Some((buffer, offset)), Some(ref format)) => {
+                (Some((buffer, offset)), Some(stride)) => {
                     buffers[i] = buffer.0;
-                    strides[i] = format.0.stride as UINT;
+                    strides[i] = stride as UINT;
                     offsets[i] = offset as UINT;
                 },
                 (_, None) => (),

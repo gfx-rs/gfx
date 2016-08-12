@@ -18,7 +18,8 @@
 //! will want to use the typed and safe `PipelineState`. See the `pso` module inside the `gfx`
 //! crate.
 
-use {MAX_COLOR_TARGETS, MAX_VERTEX_ATTRIBUTES};
+use {MAX_COLOR_TARGETS, MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
+     MAX_RESOURCE_VIEWS, MAX_UNORDERED_VIEWS, MAX_SAMPLERS};
 use {ConstantBufferSlot, ColorSlot, ResourceViewSlot,
      UnorderedViewSlot, SamplerSlot,
      Primitive, Resources};
@@ -27,6 +28,9 @@ use shade::Usage;
 use std::error::Error;
 use std::fmt;
 
+
+/// Maximum number of vertex buffers used in a PSO definition.
+pub const MAX_VERTEX_BUFFERS: usize = 4;
 
 /// An offset inside a vertex buffer, in bytes.
 pub type BufferOffset = usize;
@@ -114,6 +118,8 @@ impl From<(s::Depth, s::Stencil)> for DepthStencilInfo {
     }
 }
 
+/// Index of a vertex buffer.
+pub type BufferIndex = u8;
 /// Offset of an attribute from the start of the buffer, in bytes
 pub type ElemOffset = u32;
 /// Offset between attribute values, in bytes
@@ -128,16 +134,31 @@ pub struct Element<F> {
     pub format: F,
     /// Offset from the beginning of the container, in bytes
     pub offset: ElemOffset,
+}
+
+/// Vertex buffer descriptor
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct VertexBufferDesc {
     /// Total container size, in bytes
     pub stride: ElemStride,
+    /// Rate of the input for the given buffer
+    pub rate: InstanceRate,
 }
 
 /// PSO vertex attribute descriptor
-pub type AttributeDesc = (Element<format::Format>, InstanceRate);
+pub type AttributeDesc = (BufferIndex, Element<format::Format>);
+/// PSO constant buffer descriptor
+pub type ConstantBufferDesc = Usage;
+/// PSO shader resource view descriptor
+pub type ResourceViewDesc = Usage;
+/// PSO unordered access view descriptor
+pub type UnorderedViewDesc = Usage;
+/// PSO sampler descriptor
+pub type SamplerDesc = Usage;
 /// PSO color target descriptor
 pub type ColorTargetDesc = (format::Format, ColorInfo);
 /// PSO depth-stencil target descriptor
-pub type DepthStencilDesc = (format::SurfaceType, DepthStencilInfo);
+pub type DepthStencilDesc = (format::Format, DepthStencilInfo);
 
 /// All the information surrounding a shader program that is required
 /// for PSO creation, including the formats of vertex buffers and pixel targets;
@@ -149,8 +170,18 @@ pub struct Descriptor {
     pub rasterizer: s::Rasterizer,
     /// Enable scissor test
     pub scissor: bool,
+    /// Vertex buffers
+    pub vertex_buffers: [Option<VertexBufferDesc>; MAX_VERTEX_BUFFERS],
     /// Vertex attributes
     pub attributes: [Option<AttributeDesc>; MAX_VERTEX_ATTRIBUTES],
+    /// Constant buffers
+    pub constant_buffers: [Option<ConstantBufferDesc>; MAX_CONSTANT_BUFFERS],
+    /// Shader resource views
+    pub resource_views: [Option<ResourceViewDesc>; MAX_RESOURCE_VIEWS],
+    /// Unordered access views
+    pub unordered_views: [Option<UnorderedViewDesc>; MAX_UNORDERED_VIEWS],
+    /// Samplers
+    pub samplers: [Option<SamplerDesc>; MAX_SAMPLERS],
     /// Render target views (RTV)
     pub color_targets: [Option<ColorTargetDesc>; MAX_COLOR_TARGETS],
     /// Depth stencil view (DSV)
@@ -164,7 +195,12 @@ impl Descriptor {
             primitive: primitive,
             rasterizer: rast,
             scissor: false,
+            vertex_buffers: [None; MAX_VERTEX_BUFFERS],
             attributes: [None; MAX_VERTEX_ATTRIBUTES],
+            constant_buffers: [None; MAX_CONSTANT_BUFFERS],
+            resource_views: [None; MAX_RESOURCE_VIEWS],
+            unordered_views: [None; MAX_UNORDERED_VIEWS],
+            samplers: [None; MAX_SAMPLERS],
             color_targets: [None; MAX_COLOR_TARGETS],
             depth_stencil: None,
         }
@@ -202,7 +238,7 @@ pub struct UnorderedViewParam<R: Resources>(pub R::UnorderedAccessView, pub Usag
 pub struct SamplerParam<R: Resources>(pub R::Sampler, pub Usage, pub SamplerSlot);
 
 /// A complete set of render targets to be used for pixel export in PSO.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub struct PixelTargetSet<R: Resources> {
     /// Array of color target views
     pub colors: [Option<R::RenderTargetView>; MAX_COLOR_TARGETS],

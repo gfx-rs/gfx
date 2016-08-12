@@ -60,10 +60,9 @@ fn _test_raw<R, F>(factory: &mut F) -> gfx::PipelineState<R, testraw::Meta> wher
     let special = gfx::pso::buffer::Element {
         format: fm::Format(fm::SurfaceType::R32, fm::ChannelType::Float),
         offset: 0,
-        stride: 12,
     };
     let init = testraw::Init {
-        vertex: &[("a_Special", special, 0)],
+        vertex: (&[("a_Special", special)], 12, 0),
         tex: "Specular",
         target: ("o_Color2",
             fm::Format(fm::SurfaceType::R8_G8_B8_A8, fm::ChannelType::Unorm),

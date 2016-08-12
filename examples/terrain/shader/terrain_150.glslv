@@ -13,4 +13,5 @@ uniform Locals {
 void main() {
     v_Color = a_Color;
     gl_Position = u_Proj * u_View * u_Model * vec4(a_Pos, 1.0);
+    gl_ClipDistance[0] = 1.0;
 }

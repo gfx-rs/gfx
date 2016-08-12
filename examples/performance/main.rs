@@ -150,10 +150,6 @@ impl GFX {
     }
 }
 
-fn duration_to_f64(dur: Duration) -> f64 {
-   dur.as_secs() as f64 + dur.subsec_nanos() as f64 / 1000_000_000.0
-}
-
 impl Renderer for GFX {
     fn render(&mut self, proj_view: &Matrix4<f32>) {
         let start = Instant::now();

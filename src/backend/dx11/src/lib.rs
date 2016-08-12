@@ -123,6 +123,7 @@ pub type InputLayout = *mut winapi::ID3D11InputLayout;
 pub struct Pipeline {
     topology: winapi::D3D11_PRIMITIVE_TOPOLOGY,
     layout: InputLayout,
+    vertex_buffers: [Option<gfx_core::pso::VertexBufferDesc>; gfx_core::pso::MAX_VERTEX_BUFFERS],
     attributes: [Option<gfx_core::pso::AttributeDesc>; gfx_core::MAX_VERTEX_ATTRIBUTES],
     program: Program,
     rasterizer: *const winapi::ID3D11RasterizerState,
@@ -268,9 +269,6 @@ impl CommandList {
     }
 }
 impl command::Parser for CommandList {
-    fn clone_empty(&self) -> CommandList {
-        CommandList(Vec::with_capacity(self.0.capacity()), command::DataBuffer::new())
-    }
     fn reset(&mut self) {
         self.0.clear();
         self.1.reset();
@@ -300,10 +298,6 @@ impl Drop for DeferredContext {
     }
 }
 impl command::Parser for DeferredContext {
-    fn clone_empty(&self) -> DeferredContext {
-        unsafe { (*self.0).AddRef() };
-        DeferredContext(self.0, None)
-    }
     fn reset(&mut self) {
         if let Some(cl) = self.1 {
             unsafe { (*cl).Release() };

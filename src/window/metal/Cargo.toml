@@ -31,5 +31,5 @@ cocoa = "0.2.4"
 objc = "0.1.8"
 winit = "0.5.1"
 metal = { git = "https://github.com/fkaa/metal-rs" }
-gfx_core = { path = "../../core", version = "0.4" }
+gfx_core = { path = "../../core", version = "0.5" }
 gfx_device_metal = { path = "../../backend/metal", version = "0.1" }

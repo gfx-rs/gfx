@@ -76,6 +76,12 @@ impl d::Resources for Resources {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct BufferElement {
+    pub desc: d::pso::VertexBufferDesc,
+    pub elem: d::pso::Element<d::format::Format>,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct OutputMerger {
     pub draw_mask: u32,
     pub stencil: Option<s::Stencil>,
@@ -87,7 +93,7 @@ pub struct OutputMerger {
 pub struct PipelineState {
     program: Program,
     primitive: d::Primitive,
-    input: [Option<d::pso::AttributeDesc>; d::MAX_VERTEX_ATTRIBUTES],
+    input: [Option<BufferElement>; d::MAX_VERTEX_ATTRIBUTES],
     scissor: bool,
     rasterizer: s::Rasterizer,
     output: OutputMerger,
@@ -294,11 +300,10 @@ impl Device {
         &self.info
     }
 
-    fn bind_attribute(&mut self, slot: d::AttributeSlot, buffer: Buffer,
-                      (elem, instance_rate): d::pso::AttributeDesc) {
+    fn bind_attribute(&mut self, slot: d::AttributeSlot, buffer: Buffer, bel: BufferElement) {
         use gfx_core::format::SurfaceType as S;
         use gfx_core::format::ChannelType as C;
-        let (fm8, fm16, fm32) = match elem.format.1 {
+        let (fm8, fm16, fm32) = match bel.elem.format.1 {
             C::Int | C::Inorm =>
                 (gl::BYTE, gl::SHORT, gl::INT),
             C::Uint | C::Unorm =>
@@ -309,7 +314,7 @@ impl Device {
                 return
             }
         };
-        let (count, gl_type) = match elem.format.0 {
+        let (count, gl_type) = match bel.elem.format.0 {
             S::R8              => (1, fm8),
             S::R8_G8           => (2, fm8),
             S::R8_G8_B8_A8     => (4, fm8),
@@ -322,15 +327,15 @@ impl Device {
             S::R32_G32_B32     => (3, fm32),
             S::R32_G32_B32_A32 => (4, fm32),
             _ => {
-                error!("Unsupported element type: {:?}", elem.format.0);
+                error!("Unsupported element type: {:?}", bel.elem.format.0);
                 return
             }
         };
         let gl = &self.share.context;
         unsafe { gl.BindBuffer(gl::ARRAY_BUFFER, buffer) };
-        let offset = elem.offset as *const gl::types::GLvoid;
-        let stride = elem.stride as gl::types::GLint;
-        match elem.format.1 {
+        let offset = bel.elem.offset as *const gl::types::GLvoid;
+        let stride = bel.desc.stride as gl::types::GLint;
+        match bel.elem.format.1 {
             C::Int | C::Uint => unsafe {
                 gl.VertexAttribIPointer(slot as gl::types::GLuint,
                     count, gl_type, stride, offset);
@@ -352,8 +357,8 @@ impl Device {
         unsafe { gl.EnableVertexAttribArray(slot as gl::types::GLuint) };
         if self.share.capabilities.instance_rate_supported {
             unsafe { gl.VertexAttribDivisor(slot as gl::types::GLuint,
-                instance_rate as gl::types::GLuint) };
-        }else if instance_rate != 0 {
+                bel.desc.rate as gl::types::GLuint) };
+        }else if bel.desc.rate != 0 {
             error!("Instanced arrays are not supported");
         }
     }
@@ -490,8 +495,8 @@ impl Device {
                     self.bind_target(point, gl::STENCIL_ATTACHMENT, stencil);
                 }
             },
-            Command::BindAttribute(slot, buffer, desc) => {
-                self.bind_attribute(slot, buffer, desc);
+            Command::BindAttribute(slot, buffer,  bel) => {
+                self.bind_attribute(slot, buffer, bel);
             },
             Command::BindIndex(buffer) => {
                 let gl = &self.share.context;
