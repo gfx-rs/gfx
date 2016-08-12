@@ -1,10 +1,20 @@
-sudo: required
+sudo: false
+os:
+  - linux
+  - osx
 language: rust
+cache: cargo
 rust:
   - stable
   - nightly
+matrix:
+  allow_failures:
+    - os: osx # temporarily
 before_script:
-  - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
+  - pip install 'travis-cargo<0.2' --user
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then export PATH=$HOME/.local/bin:$PATH ; fi
+  - ls $HOME/Library/Python
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then export PATH=$HOME/Library/Python/2.7/bin:$PATH ; fi
 notifications:
   webhooks:
     urls:
@@ -13,8 +23,8 @@ notifications:
     on_failure: always
     on_start: false
 before_install:
-  - "export DISPLAY=:99.0"
-  - "sh -e /etc/init.d/xvfb start"
+#  - "export DISPLAY=:99.0"
+#  - "sh -e /etc/init.d/xvfb start"
 addons:
   apt:
     sources:
