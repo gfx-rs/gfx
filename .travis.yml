@@ -13,7 +13,6 @@ matrix:
 before_script:
   - pip install 'travis-cargo<0.2' --user
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then export PATH=$HOME/.local/bin:$PATH ; fi
-  - ls $HOME/Library/Python
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then export PATH=$HOME/Library/Python/2.7/bin:$PATH ; fi
 notifications:
   webhooks:
@@ -44,16 +43,17 @@ addons:
       - libsdl2-dev
 script:
   - export RUST_BACKTRACE=1
-  - travis-cargo build -- --features vulkan
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then travis-cargo build -- --features vulkan ; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then travis-cargo build ; fi
   - travis-cargo test -- -p gfx_core
   - travis-cargo test -- -p gfx
   - travis-cargo test -- -p gfx_device_gl
   - travis-cargo test -- -p gfx_window_glutin
   - travis-cargo test -- -p gfx_window_glfw
-  - travis-cargo test -- -p gfx_window_sdl
-  - travis-cargo test -- -p gfx_device_vulkan --features vulkan
-  - travis-cargo test -- -p gfx_window_vulkan --features vulkan
-  - travis-cargo test -- --features vulkan
+# - travis-cargo test -- --features sdl -p gfx_window_sdl
+# - travis-cargo test -- -p gfx_device_vulkan
+# - travis-cargo test -- -p gfx_window_vulkan
+  - travis-cargo test
 after_success:
   - travis-cargo doc -- -j 1
   - travis-cargo --only nightly doc-upload
