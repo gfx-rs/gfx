@@ -9,6 +9,7 @@ authors = ["The Gfx-rs Developers"]
 
 [features]
 default = []
+sdl = ["gfx_window_sdl"]
 vulkan = ["gfx_device_vulkan", "gfx_window_vulkan"]
 unstable = []
 
@@ -35,9 +36,13 @@ path = "src/window/vulkan"
 version = "0.1"
 optional = true
 
+[dependencies.gfx_window_sdl]
+path = "src/window/sdl"
+version = "0.4"
+optional = true
+
 [target.'cfg(unix)'.dependencies]
 gfx_window_glfw = { path = "src/window/glfw", version = "0.12" }
-gfx_window_sdl = { path = "src/window/sdl", version = "0.4" }
 
 [target.'cfg(windows)'.dependencies]
 gfx_device_dx11 = { path = "src/backend/dx11", version = "0.4" }
@@ -46,6 +51,7 @@ gfx_window_dxgi = { path = "src/window/dxgi", version = "0.4" }
 [target.x86_64-apple-darwin.dependencies]
 gfx_device_metal = { path = "src/backend/metal", version = "0.1" }
 gfx_window_metal = { path = "src/window/metal", version = "0.1" }
+
 
 [[example]]
 name = "blend"
@@ -105,5 +111,5 @@ noise = "0.1"
 image = "0.6"
 winit = "0.5"
 
-[target.x86_64-unknown-linux-gnu.dev_dependencies]
+[target.'cfg(unix)'.dev_dependencies]
 glfw = "0.5"
