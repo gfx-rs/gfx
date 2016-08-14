@@ -380,6 +380,7 @@ impl<
             }
 
             let mut frame = win.start_frame();
+            app.render(frame.get_queue());
             frame.get_queue().cleanup();
             harness.bump();
         }
