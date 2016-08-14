@@ -112,11 +112,11 @@ pub trait ApplicationBase<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
 pub trait Application<R: gfx::Resources>: Sized {
     fn new<F: gfx::Factory<R>>(F, Init<R>) -> Self;
     fn render<C: gfx::CommandBuffer<R>>(&mut self, &mut gfx::Encoder<R, C>);
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", not(feature = "vulkan")))]
     fn launch_default(name: &str) where WrapD3D11<Self>: ApplicationD3D11 {
         WrapD3D11::<Self>::launch(name, DEFAULT_CONFIG);
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(all(not(target_os = "windows"), not(feature = "vulkan")))]
     fn launch_default(name: &str) where WrapGL2<Self>: ApplicationGL {
         WrapGL2::<Self>::launch(name, DEFAULT_CONFIG);
     }
@@ -124,10 +124,10 @@ pub trait Application<R: gfx::Resources>: Sized {
     fn launch_default(name: &str) where WrapMetal<Self>: ApplicationMetal {
         WrapMetal::<Self>::launch(name, DEFAULT_CONFIG)
     }*/
-    /*#[cfg(feature = "vulkan")]
+    #[cfg(feature = "vulkan")]
     fn launch_default(name: &str) where WrapVulkan<Self>: ApplicationVulkan {
         WrapVulkan::<Self>::launch(name, DEFAULT_CONFIG);
-    }*/
+    }
 }
 
 pub struct Wrap<R: gfx::Resources, C: gfx::CommandBuffer<R>, A>{
@@ -359,7 +359,7 @@ impl<
         use gfx::traits::{Device, Factory};
 
         env_logger::init().unwrap();
-        let (mut win, mut factory) = gfx_window_vulkan::init_xcb::<ColorFormat>(title, config.size.0 as u32, config.size.1 as u32);
+        let (mut win, mut factory) = gfx_window_vulkan::init::<ColorFormat>(title, config.size.0 as u32, config.size.1 as u32);
         let main_depth = factory.create_depth_stencil::<DepthFormat>(config.size.0, config.size.1).unwrap();
 
         let mut app = Self::new(factory, Init {
@@ -370,12 +370,18 @@ impl<
         });
 
         let mut harness = Harness::new();
-        while let Ok(frame_opt) = win.wait_draw() {
-            if let Some(mut frame) = frame_opt {
-                app.render(frame.get_queue());
-                frame.get_queue().cleanup();
-                harness.bump();
+        'main: loop {
+            for event in win.get_window().poll_events() {
+                match event {
+                    winit::Event::KeyboardInput(_, _, Some(winit::VirtualKeyCode::Escape)) |
+                    winit::Event::Closed => break 'main,
+                    _ => {},
+                }
             }
+
+            let mut frame = win.start_frame();
+            frame.get_queue().cleanup();
+            harness.bump();
         }
     }
 }

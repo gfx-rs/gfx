@@ -13,23 +13,22 @@
 // limitations under the License.
 
 extern crate winit;
-extern crate xcb;
 extern crate vk_sys as vk;
 extern crate gfx_core;
 extern crate gfx_device_vulkan;
+
+#[cfg(unix)]
+extern crate xcb;
+#[cfg(target_os = "windows")]
+extern crate kernel32;
 
 use std::ffi::CStr;
 use std::ptr;
 use std::os::raw;
 use gfx_core::format;
 
-
-pub fn init_winit(builder: winit::WindowBuilder) -> (winit::Window, gfx_device_vulkan::GraphicsQueue, gfx_device_vulkan::Factory) {
-    let (device, factory, _backend) = gfx_device_vulkan::create(&builder.window.title, 1, &[],
-        &["VK_KHR_surface", "VK_KHR_xcb_surface"], &["VK_KHR_swapchain"]);
-    let win = builder.build().unwrap();
-    (win, device, factory)
-}
+#[cfg(target_os = "windows")]
+use winit::os::windows::WindowExt;
 
 pub type TargetHandle<T> = gfx_core::handle::RenderTargetView<gfx_device_vulkan::Resources, T>;
 
@@ -40,9 +39,7 @@ pub struct SwapTarget<T> {
 }
 
 pub struct Window<T> {
-    connection: xcb::Connection,
-    _foreground: u32,
-    window: u32,
+    window: winit::Window,
     _debug_callback: Option<vk::DebugReportCallbackEXT>,
     swapchain: vk::SwapchainKHR,
     targets: Vec<SwapTarget<T>>,
@@ -85,21 +82,8 @@ impl<'a, T> Drop for Frame<'a, T> {
 }
 
 impl<T: Clone> Window<T> {
-    pub fn wait_draw(&mut self) -> Result<Option<Frame<T>>, ()> {
-        let ev = match self.connection.wait_for_event() {
-            Some(ev) => ev,
-            None => return Err(()),
-        };
-        //self.connection.flush();
-        match ev.response_type() & 0x7F {
-            xcb::EXPOSE => Ok(Some(self.start_frame())),
-            xcb::KEY_PRESS => Err(()),
-            _ => Ok(None)
-        }
-    }
-
     pub fn start_frame(&mut self) -> Frame<T> {
-        //TODO: handle window resize
+        //TODO: handle window resize (requires swapchain recreation)
         let index = unsafe {
             let (dev, vk) = self.queue.get_share().get_device();
             let mut i = 0;
@@ -115,13 +99,9 @@ impl<T: Clone> Window<T> {
     pub fn get_any_target(&self) -> TargetHandle<T> {
         self.targets[0].target.clone()
     }
-}
 
-impl<T> Drop for Window<T> {
-    fn drop(&mut self) {
-        xcb::unmap_window(&self.connection, self.window);
-        xcb::destroy_window(&self.connection, self.window);
-        self.connection.flush();
+    pub fn get_window(&mut self) -> &mut winit::Window {
+        &mut self.window
     }
 }
 
@@ -154,8 +134,12 @@ extern "system" fn callback(flags: vk::DebugReportFlagsEXT,
     vk::FALSE
 }
 
-pub fn init_xcb<T: gfx_core::format::RenderFormat>(title: &str, width: u32, height: u32)
+pub fn init<T: gfx_core::format::RenderFormat>(title: &str, width: u32, height: u32)
                 -> (Window<T>, gfx_device_vulkan::Factory) {
+    let window = winit::WindowBuilder::new()
+        .with_dimensions(width, height)
+        .with_title(title.to_string()).build().unwrap();
+
     let debug = false;
     let (mut device, mut factory, backend) = gfx_device_vulkan::create(title, 1,
         if debug {LAYERS_DEBUG} else {LAYERS},
@@ -182,54 +166,7 @@ pub fn init_xcb<T: gfx_core::format::RenderFormat>(title: &str, width: u32, heig
         None
     };
 
-    let (conn, screen_num) = xcb::Connection::connect(None).unwrap();
-    let (window, foreground) = {
-        let setup = conn.get_setup();
-        let screen = setup.roots().nth(screen_num as usize).unwrap();
-
-        let foreground = conn.generate_id();
-        xcb::create_gc(&conn, foreground, screen.root(), &[
-                (xcb::GC_FOREGROUND, screen.black_pixel()),
-                (xcb::GC_GRAPHICS_EXPOSURES, 0),
-        ]);
-
-        let win = conn.generate_id();
-        xcb::create_window(&conn,
-            xcb::COPY_FROM_PARENT as u8,
-            win,
-            screen.root(),
-            0, 0,
-            width as u16, height as u16,
-            10,
-            xcb::WINDOW_CLASS_INPUT_OUTPUT as u16,
-            screen.root_visual(), &[
-                (xcb::CW_BACK_PIXEL, screen.black_pixel()),
-                (xcb::CW_EVENT_MASK, xcb::EVENT_MASK_KEY_PRESS | xcb::EVENT_MASK_EXPOSURE),
-            ]
-        );
-        (win, foreground)
-    };
-
-    xcb::map_window(&conn, window);
-    xcb::change_property(&conn, xcb::PROP_MODE_REPLACE as u8, window,
-        xcb::ATOM_WM_NAME, xcb::ATOM_STRING, 8, title.as_bytes());
-    conn.flush();
-
-    let surface = {
-        let (inst, vk) = backend.get_instance();
-        let info = vk::XcbSurfaceCreateInfoKHR {
-            sType: vk::STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
-            pNext: ptr::null(),
-            flags: 0,
-            connection: conn.get_raw_conn() as *const _,
-            window: window as *const _, //HACK! TODO: fix the bindings
-        };
-        let mut out = 0;
-        assert_eq!(vk::SUCCESS, unsafe {
-            vk.CreateXcbSurfaceKHR(inst, &info, ptr::null(), &mut out)
-        });
-        out
-    };
+    let surface = create_surface(backend.clone(), &window);
 
     let (dev, vk) = backend.get_device();
     let mut images: [vk::Image; 2] = [0; 2];
@@ -285,8 +222,6 @@ pub fn init_xcb<T: gfx_core::format::RenderFormat>(title: &str, width: u32, heig
     }
 
     let win = Window {
-        connection: conn,
-        _foreground: foreground,
         window: window,
         _debug_callback: debug_callback,
         swapchain: swapchain,
@@ -294,4 +229,38 @@ pub fn init_xcb<T: gfx_core::format::RenderFormat>(title: &str, width: u32, heig
         queue: device,
     };
     (win, factory)
+}
+
+#[cfg(target_os = "windows")]
+fn create_surface(backend: gfx_device_vulkan::SharePointer, window: &winit::Window) -> vk::SurfaceKHR {
+    let (inst, vk) = backend.get_instance();
+    let info = vk::Win32SurfaceCreateInfoKHR {
+        sType: vk::STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
+        pNext: ptr::null(),
+        flags: 0,
+        hinstance: unsafe { kernel32::GetModuleHandleW(ptr::null()) } as *mut _,
+        hwnd: window.get_hwnd() as *mut _,
+    };
+    let mut out = 0;
+    assert_eq!(vk::SUCCESS, unsafe {
+        vk.CreateWin32SurfaceKHR(inst, &info, ptr::null(), &mut out)
+    });
+    out
+}
+
+#[cfg(unix)]
+fn create_surface(backend: gfx_device_vulkan::SharePointer, win: &winit::Window) -> vk::SurfaceKHR {
+    let (inst, vk) = backend.get_instance();
+    let info = vk::XcbSurfaceCreateInfoKHR {
+        sType: vk::STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
+        pNext: ptr::null(),
+        flags: 0,
+        connection: window.get_xcb_connection() as *const _,
+        window: window.get_xlib_window() as *const _,
+    };
+    let mut out = 0;
+    assert_eq!(vk::SUCCESS, unsafe {
+        vk.CreateXcbSurfaceKHR(inst, &info, ptr::null(), &mut out)
+    });
+    out
 }
