@@ -27,6 +27,8 @@ use std::ptr;
 use std::os::raw;
 use gfx_core::format;
 
+#[cfg(unix)]
+use winit::os::unix::WindowExt;
 #[cfg(target_os = "windows")]
 use winit::os::windows::WindowExt;
 
@@ -249,14 +251,14 @@ fn create_surface(backend: gfx_device_vulkan::SharePointer, window: &winit::Wind
 }
 
 #[cfg(unix)]
-fn create_surface(backend: gfx_device_vulkan::SharePointer, win: &winit::Window) -> vk::SurfaceKHR {
+fn create_surface(backend: gfx_device_vulkan::SharePointer, window: &winit::Window) -> vk::SurfaceKHR {
     let (inst, vk) = backend.get_instance();
     let info = vk::XcbSurfaceCreateInfoKHR {
         sType: vk::STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
         pNext: ptr::null(),
         flags: 0,
-        connection: window.get_xcb_connection() as *const _,
-        window: window.get_xlib_window() as *const _,
+        connection: window.get_xcb_connection().unwrap() as *const _,
+        window: window.get_xlib_window().unwrap() as *const _,
     };
     let mut out = 0;
     assert_eq!(vk::SUCCESS, unsafe {
