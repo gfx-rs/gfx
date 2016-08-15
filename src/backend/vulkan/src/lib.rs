@@ -97,7 +97,13 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
     use std::ffi::CString;
     use std::path::Path;
 
-    let dynamic_lib = DynamicLibrary::open(Some(Path::new("libvulkan.so.1"))).unwrap();
+    let dynamic_lib = DynamicLibrary::open(Some(
+            if cfg!(target_os = "windows") {
+                Path::new("vulkan-1.dll")
+            } else {
+                Path::new("libvulkan.so.1")
+            }
+        )).expect("Unable to open vulkan shared library");
     let lib = vk::Static::load(|name| unsafe {
         let name = name.to_str().unwrap();
         dynamic_lib.symbol(name).unwrap()

@@ -39,9 +39,9 @@ script:
   - travis-cargo test -- -p gfx_window_glutin
   - travis-cargo test -- -p gfx_window_glfw
   - travis-cargo test -- -p gfx_window_sdl
-# - travis-cargo test -- -p gfx_device_vulkan
-# - travis-cargo test -- -p gfx_window_vulkan
-  - travis-cargo test
+  - travis-cargo test -- -p gfx_device_vulkan --features vulkan
+  - travis-cargo test -- -p gfx_window_vulkan --features vulkan
+  - travis-cargo test -- --features vulkan
 after_success:
   - travis-cargo doc -- -j 1
   - travis-cargo --only nightly doc-upload
