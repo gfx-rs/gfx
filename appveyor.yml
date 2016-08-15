@@ -15,7 +15,7 @@ install:
   - rustc -vV
   - cargo -vV
 build_script:
-  - cargo build
+  - cargo build --features vulkan
 test_script:
   - cargo test -p gfx_core
   - cargo test -p gfx
@@ -23,4 +23,6 @@ test_script:
   - cargo test -p gfx_window_dxgi
   - cargo test -p gfx_device_gl
   - cargo test -p gfx_window_glutin
-  - cargo test
+  - cargo test -p gfx_device_vulkan --features vulkan
+  - cargo test -p gfx_window_vulkan --features vulkan
+  - cargo test --features vulkan
