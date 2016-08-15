@@ -21,6 +21,7 @@ extern crate vk_sys as vk;
 use std::{fmt, iter, mem, ptr};
 use std::cell::RefCell;
 use std::sync::Arc;
+use std::ffi::CStr;
 use shared_library::dynamic_library::DynamicLibrary;
 
 pub use self::command::{GraphicsQueue, Buffer as CommandBuffer};
@@ -92,6 +93,17 @@ impl Share {
     }
 }
 
+const SURFACE_EXTENSIONS: &'static [&'static str] = &[
+    // Platform-specific WSI extensions
+    "VK_KHR_xlib_surface",
+    "VK_KHR_xcb_surface",
+    "VK_KHR_wayland_surface",
+    "VK_KHR_mir_surface",
+    "VK_KHR_android_surface",
+    "VK_KHR_win32_surface",
+];
+
+
 pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&str],
               dev_extensions: &[&str]) -> (command::GraphicsQueue, factory::Factory, SharePointer) {
     use std::ffi::CString;
@@ -122,12 +134,38 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
         apiVersion: 0x400000, //TODO
     };
 
+    let instance_extensions = {
+        let mut num = 0;
+        assert_eq!(vk::SUCCESS, unsafe {
+            entry_points.EnumerateInstanceExtensionProperties(ptr::null(), &mut num, ptr::null_mut())
+        });
+        let mut out = Vec::with_capacity(num as usize);
+        assert_eq!(vk::SUCCESS, unsafe {
+            entry_points.EnumerateInstanceExtensionProperties(ptr::null(), &mut num, out.as_mut_ptr())
+        });
+        unsafe { out.set_len(num as usize); }
+        out
+    };
 
+    // Check our surface extensions against the available extensions
+    let surface_extensions = SURFACE_EXTENSIONS.iter().filter(|ext| {
+        for inst_ext in instance_extensions.iter() {
+            unsafe {
+                if CStr::from_ptr(inst_ext.extensionName.as_ptr()) == CStr::from_ptr(ext.as_ptr() as *const i8) {
+                    return true;
+                }
+            }
+        }
+        false
+    }).map(|s| *s).collect::<Vec<_>>();
+    
     let instance = {
         let cstrings = layers.iter().chain(extensions.iter())
+                                    .chain(surface_extensions.iter())
                          .map(|&s| CString::new(s).unwrap())
                          .collect::<Vec<_>>();
-        let str_pointers = cstrings.iter().map(|s| s.as_ptr())
+        let str_pointers = cstrings.iter()
+                                   .map(|s| s.as_ptr())
                                    .collect::<Vec<_>>();
 
         let create_info = vk::InstanceCreateInfo {
@@ -137,7 +175,7 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
             pApplicationInfo: &app_info,
             enabledLayerCount: layers.len() as u32,
             ppEnabledLayerNames: str_pointers.as_ptr(),
-            enabledExtensionCount: extensions.len() as u32,
+            enabledExtensionCount: (extensions.len() + surface_extensions.len()) as u32,
             ppEnabledExtensionNames: str_pointers[layers.len()..].as_ptr(),
         };
         let mut out = 0;

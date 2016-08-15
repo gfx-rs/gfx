@@ -114,11 +114,9 @@ const LAYERS_DEBUG: &'static [&'static str] = &[
 ];
 const EXTENSIONS: &'static [&'static str] = &[
     "VK_KHR_surface",
-    "VK_KHR_xcb_surface",
 ];
 const EXTENSIONS_DEBUG: &'static [&'static str] = &[
     "VK_KHR_surface",
-    "VK_KHR_xcb_surface",
     "VK_EXT_debug_report",
 ];
 const DEV_EXTENSIONS: &'static [&'static str] = &[
