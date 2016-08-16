@@ -294,6 +294,10 @@ impl GraphicsQueue {
     pub fn get_queue(&self) -> vk::Queue {
         self.queue
     }
+    #[doc(hidden)]
+    pub fn get_family(&self) -> u32 {
+        self.family
+    }
 }
 
 impl core::Device for GraphicsQueue {

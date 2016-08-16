@@ -80,6 +80,7 @@ pub struct Share {
     inst_pointers: vk::InstancePointers,
     device: vk::Device,
     dev_pointers: vk::DevicePointers,
+    physical_device: vk::PhysicalDevice,
     handles: RefCell<gfx_core::handle::Manager<Resources>>,
 }
 
@@ -91,6 +92,9 @@ impl Share {
     }
     pub fn get_device(&self) -> (vk::Device, &vk::DevicePointers) {
         (self.device, &self.dev_pointers)
+    }
+    pub fn get_physical_device(&self) -> vk::PhysicalDevice {
+        self.physical_device
     }
 }
 
@@ -273,6 +277,7 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
         inst_pointers: inst_pointers,
         device: device,
         dev_pointers: dev_pointers,
+        physical_device: dev.device,
         handles: RefCell::new(gfx_core::handle::Manager::new()),
     });
     let gfx_device = command::GraphicsQueue::new(share.clone(), queue, qf_id as u32);

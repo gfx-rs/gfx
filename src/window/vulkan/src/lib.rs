@@ -173,6 +173,58 @@ pub fn init<T: gfx_core::format::RenderFormat>(title: &str, width: u32, height: 
     let mut num = images.len() as u32;
     let format = <T as format::Formatted>::get_format();
 
+    let surface_capabilities = {
+        let (_, vk) = backend.get_instance();
+        let dev = backend.get_physical_device();
+        let mut capabilities: vk::SurfaceCapabilitiesKHR = unsafe { std::mem::uninitialized() };
+        assert_eq!(vk::SUCCESS, unsafe {
+            vk.GetPhysicalDeviceSurfaceCapabilitiesKHR(dev, surface, &mut capabilities)
+        });
+        capabilities
+    };
+
+    // Determine whether a queue family of a physical device supports presentation to a given surface 
+    let supports_presentation = {
+        let (_, vk) = backend.get_instance();
+        let dev = backend.get_physical_device();
+        let mut supported = 0;
+        assert_eq!(vk::SUCCESS, unsafe {
+            vk.GetPhysicalDeviceSurfaceSupportKHR(dev, device.get_family(), surface, &mut supported)
+        });
+        supported != 0
+    };
+
+    let surface_formats = {
+        let (_, vk) = backend.get_instance();
+        let dev = backend.get_physical_device();
+        let mut num = 0;
+        assert_eq!(vk::SUCCESS, unsafe {
+            vk.GetPhysicalDeviceSurfaceFormatsKHR(dev, surface, &mut num, ptr::null_mut())
+        });
+        let mut formats = Vec::with_capacity(num as usize);
+        assert_eq!(vk::SUCCESS, unsafe {
+            vk.GetPhysicalDeviceSurfaceFormatsKHR(dev, surface, &mut num, formats.as_mut_ptr())
+        });
+        unsafe { formats.set_len(num as usize); }
+        formats
+    };
+
+    let present_modes = {
+        let (_, vk) = backend.get_instance();
+        let dev = backend.get_physical_device();
+        let mut num = 0;
+        assert_eq!(vk::SUCCESS, unsafe {
+            vk.GetPhysicalDeviceSurfacePresentModesKHR(dev, surface, &mut num, ptr::null_mut())
+        });
+        let mut modes = Vec::with_capacity(num as usize);
+        assert_eq!(vk::SUCCESS, unsafe {
+            vk.GetPhysicalDeviceSurfacePresentModesKHR(dev, surface, &mut num, modes.as_mut_ptr())
+        });
+        unsafe { modes.set_len(num as usize); }
+        modes
+    };
+
+    // TODO: Use the queried information to check if our values are supported before creating the swapchain
     let swapchain_info = vk::SwapchainCreateInfoKHR {
         sType: vk::STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
         pNext: ptr::null(),
@@ -183,13 +235,13 @@ pub fn init<T: gfx_core::format::RenderFormat>(title: &str, width: u32, height: 
         imageColorSpace: vk::COLOR_SPACE_SRGB_NONLINEAR_KHR,
         imageExtent: vk::Extent2D { width: width, height: height },
         imageArrayLayers: 1,
-        imageUsage: vk::IMAGE_USAGE_COLOR_ATTACHMENT_BIT | vk::IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+        imageUsage: vk::IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         imageSharingMode: vk::SHARING_MODE_EXCLUSIVE,
         queueFamilyIndexCount: 1,
         pQueueFamilyIndices: &0,
         preTransform: vk::SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
         compositeAlpha: vk::COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-        presentMode: vk::PRESENT_MODE_FIFO_RELAXED_KHR,
+        presentMode: vk::PRESENT_MODE_FIFO_KHR, // required to be supported
         clipped: vk::TRUE,
         oldSwapchain: 0,
     };
