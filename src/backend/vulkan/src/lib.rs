@@ -51,7 +51,8 @@ impl PhysicalDeviceInfo {
                 out
             },
             queue_families: unsafe {
-                let mut num = 4;
+                let mut num = 0;
+                vk.GetPhysicalDeviceQueueFamilyProperties(dev, &mut num, ptr::null_mut());
                 let mut families = Vec::with_capacity(num as usize);
                 vk.GetPhysicalDeviceQueueFamilyProperties(dev, &mut num, families.as_mut_ptr());
                 families.set_len(num as usize);
@@ -189,12 +190,20 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
         mem::transmute(lib.GetInstanceProcAddr(instance, name.as_ptr()))
     });
 
-    let mut physical_devices: [vk::PhysicalDevice; 4] = unsafe { mem::zeroed() };
-    let mut num = physical_devices.len() as u32;
-    assert_eq!(vk::SUCCESS, unsafe {
-        inst_pointers.EnumeratePhysicalDevices(instance, &mut num, physical_devices.as_mut_ptr())
-    });
-    let devices = physical_devices[..num as usize].iter()
+    let physical_devices = {
+        let mut num = 0;
+        assert_eq!(vk::SUCCESS, unsafe {
+            inst_pointers.EnumeratePhysicalDevices(instance, &mut num, ptr::null_mut())
+        });
+        let mut devices = Vec::with_capacity(num as usize);
+        assert_eq!(vk::SUCCESS, unsafe {
+            inst_pointers.EnumeratePhysicalDevices(instance, &mut num, devices.as_mut_ptr())
+        });
+        unsafe { devices.set_len(num as usize); }
+        devices
+    };
+    
+    let devices = physical_devices.iter()
         .map(|dev| PhysicalDeviceInfo::new(*dev, &inst_pointers))
         .collect::<Vec<_>>();
 
