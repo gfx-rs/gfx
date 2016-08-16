@@ -67,6 +67,7 @@ fn format_to_glpixel(format: NewFormat) -> GLenum {
         S::R4_G4_B4_A4 | S::R5_G5_B5_A1 | S::R10_G10_B10_A2 => rgba,
         S::D24_S8 => gl::DEPTH_STENCIL,
         S::D16 | S::D24 | S::D32 => gl::DEPTH,
+        S::B8_G8_R8_A8 => unimplemented!(), // TODO
     }
 }
 
@@ -91,6 +92,7 @@ fn format_to_gltype(format: NewFormat) -> Result<GLenum, ()> {
         S::R11_G11_B10 => return Err(()),
         S::R16 | S::R16_G16 | S::R16_G16_B16 | S::R16_G16_B16_A16 => fm16,
         S::R32 | S::R32_G32 | S::R32_G32_B32 | S::R32_G32_B32_A32 => fm32,
+        S::B8_G8_R8_A8 => return Err(()), // TODO
         S::D16 => gl::UNSIGNED_SHORT,
         S::D24 => gl::UNSIGNED_INT,
         S::D24_S8 => gl::UNSIGNED_INT_24_8,
@@ -206,6 +208,7 @@ fn format_to_glfull(format: NewFormat) -> Result<GLenum, ()> {
             C::Float => gl::RGBA32F,
             _ => return Err(()),
         },
+        S::B8_G8_R8_A8 => return Err(()), // TODO
         // depth-stencil
         S::D16 => gl::DEPTH_COMPONENT16,
         S::D24 => gl::DEPTH_COMPONENT24,
