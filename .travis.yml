@@ -19,12 +19,13 @@ addons:
   apt:
     sources:
       # install a newer cmake since at this time Travis only has version 2.8.7
-      - kalakris-cmake
-      # add a repository for libsdl2-dev
+      - george-edison55-precise-backports
+      # add a repository for libsdl2-dev (enable sudo before uncommenting this)
       - sourceline: 'ppa:zoogie/sdl2-snapshots'
     packages:
       - xdotool
       - cmake
+      - cmake-data
       - libxxf86vm-dev
       - libxinerama-dev
       - libxinerama1
@@ -32,6 +33,7 @@ addons:
       - libxcursor1
       - libsdl2-dev
 script:
+  - export RUST_BACKTRACE=1
   - travis-cargo build -- --features vulkan
   - travis-cargo test -- -p gfx_core
   - travis-cargo test -- -p gfx
