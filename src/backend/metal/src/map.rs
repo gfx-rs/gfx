@@ -267,6 +267,7 @@ pub fn map_format(format: Format, is_target: bool) -> Option<MTLPixelFormat> {
             Float => RGBA32Float,
             _ => return None,
         },
+        B8_G8_R8_A8 => return None,
         D16 => return None,
         D24 => match (is_target, format.1) {
             // TODO: stencil?
@@ -298,6 +299,7 @@ pub fn map_channel_hint(hint: SurfaceType) -> Option<ChannelType> {
         R8 | R8_G8 | R8_G8_B8_A8 | R10_G10_B10_A2 | R16 | R16_G16 |
         R16_G16_B16_A16 | R32 | R32_G32 | R32_G32_B32_A32 => Uint,
         R11_G11_B10 => Float,
+        B8_G8_R8_A8 => Unorm,
         D24 => Unorm,
         D24_S8 => Unorm,
         D32 => Float,

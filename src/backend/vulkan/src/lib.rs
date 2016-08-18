@@ -21,6 +21,7 @@ extern crate vk_sys as vk;
 use std::{fmt, iter, mem, ptr};
 use std::cell::RefCell;
 use std::sync::Arc;
+use std::ffi::CStr;
 use shared_library::dynamic_library::DynamicLibrary;
 
 pub use self::command::{GraphicsQueue, Buffer as CommandBuffer};
@@ -50,7 +51,8 @@ impl PhysicalDeviceInfo {
                 out
             },
             queue_families: unsafe {
-                let mut num = 4;
+                let mut num = 0;
+                vk.GetPhysicalDeviceQueueFamilyProperties(dev, &mut num, ptr::null_mut());
                 let mut families = Vec::with_capacity(num as usize);
                 vk.GetPhysicalDeviceQueueFamilyProperties(dev, &mut num, families.as_mut_ptr());
                 families.set_len(num as usize);
@@ -78,6 +80,7 @@ pub struct Share {
     inst_pointers: vk::InstancePointers,
     device: vk::Device,
     dev_pointers: vk::DevicePointers,
+    physical_device: vk::PhysicalDevice,
     handles: RefCell<gfx_core::handle::Manager<Resources>>,
 }
 
@@ -90,7 +93,21 @@ impl Share {
     pub fn get_device(&self) -> (vk::Device, &vk::DevicePointers) {
         (self.device, &self.dev_pointers)
     }
+    pub fn get_physical_device(&self) -> vk::PhysicalDevice {
+        self.physical_device
+    }
 }
+
+const SURFACE_EXTENSIONS: &'static [&'static str] = &[
+    // Platform-specific WSI extensions
+    "VK_KHR_xlib_surface",
+    "VK_KHR_xcb_surface",
+    "VK_KHR_wayland_surface",
+    "VK_KHR_mir_surface",
+    "VK_KHR_android_surface",
+    "VK_KHR_win32_surface",
+];
+
 
 pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&str],
               dev_extensions: &[&str]) -> (command::GraphicsQueue, factory::Factory, SharePointer) {
@@ -122,12 +139,33 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
         apiVersion: 0x400000, //TODO
     };
 
+    let instance_extensions = {
+        let mut num = 0;
+        assert_eq!(vk::SUCCESS, unsafe {
+            entry_points.EnumerateInstanceExtensionProperties(ptr::null(), &mut num, ptr::null_mut())
+        });
+        let mut out = Vec::with_capacity(num as usize);
+        assert_eq!(vk::SUCCESS, unsafe {
+            entry_points.EnumerateInstanceExtensionProperties(ptr::null(), &mut num, out.as_mut_ptr())
+        });
+        unsafe { out.set_len(num as usize); }
+        out
+    };
 
+    // Check our surface extensions against the available extensions
+    let surface_extensions = SURFACE_EXTENSIONS.iter().filter_map(|ext| {
+        instance_extensions.iter().find(|inst_ext| {
+            unsafe { CStr::from_ptr(inst_ext.extensionName.as_ptr()) == CStr::from_ptr(ext.as_ptr() as *const i8) }
+        }).and_then(|_| Some(*ext))
+    }).collect::<Vec<&str>>();
+    
     let instance = {
         let cstrings = layers.iter().chain(extensions.iter())
+                                    .chain(surface_extensions.iter())
                          .map(|&s| CString::new(s).unwrap())
                          .collect::<Vec<_>>();
-        let str_pointers = cstrings.iter().map(|s| s.as_ptr())
+        let str_pointers = cstrings.iter()
+                                   .map(|s| s.as_ptr())
                                    .collect::<Vec<_>>();
 
         let create_info = vk::InstanceCreateInfo {
@@ -137,7 +175,7 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
             pApplicationInfo: &app_info,
             enabledLayerCount: layers.len() as u32,
             ppEnabledLayerNames: str_pointers.as_ptr(),
-            enabledExtensionCount: extensions.len() as u32,
+            enabledExtensionCount: (extensions.len() + surface_extensions.len()) as u32,
             ppEnabledExtensionNames: str_pointers[layers.len()..].as_ptr(),
         };
         let mut out = 0;
@@ -151,12 +189,20 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
         mem::transmute(lib.GetInstanceProcAddr(instance, name.as_ptr()))
     });
 
-    let mut physical_devices: [vk::PhysicalDevice; 4] = unsafe { mem::zeroed() };
-    let mut num = physical_devices.len() as u32;
-    assert_eq!(vk::SUCCESS, unsafe {
-        inst_pointers.EnumeratePhysicalDevices(instance, &mut num, physical_devices.as_mut_ptr())
-    });
-    let devices = physical_devices[..num as usize].iter()
+    let physical_devices = {
+        let mut num = 0;
+        assert_eq!(vk::SUCCESS, unsafe {
+            inst_pointers.EnumeratePhysicalDevices(instance, &mut num, ptr::null_mut())
+        });
+        let mut devices = Vec::with_capacity(num as usize);
+        assert_eq!(vk::SUCCESS, unsafe {
+            inst_pointers.EnumeratePhysicalDevices(instance, &mut num, devices.as_mut_ptr())
+        });
+        unsafe { devices.set_len(num as usize); }
+        devices
+    };
+    
+    let devices = physical_devices.iter()
         .map(|dev| PhysicalDeviceInfo::new(*dev, &inst_pointers))
         .collect::<Vec<_>>();
 
@@ -167,7 +213,8 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
     info!("Chosen physical device {:?} with queue family {}", dev.device, qf_id);
 
     let mvid_id = dev.memory.memoryTypes.iter().take(dev.memory.memoryTypeCount as usize)
-                            .position(|mt| mt.propertyFlags & vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT != 0)
+                            .position(|mt| (mt.propertyFlags & vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT != 0)
+                                        && (mt.propertyFlags & vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT != 0))
                             .unwrap() as u32;
     let msys_id = dev.memory.memoryTypes.iter().take(dev.memory.memoryTypeCount as usize)
                             .position(|mt| mt.propertyFlags & vk::MEMORY_PROPERTY_HOST_COHERENT_BIT != 0)
@@ -225,6 +272,7 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
         inst_pointers: inst_pointers,
         device: device,
         dev_pointers: dev_pointers,
+        physical_device: dev.device,
         handles: RefCell::new(gfx_core::handle::Manager::new()),
     });
     let gfx_device = command::GraphicsQueue::new(share.clone(), queue, qf_id as u32);

@@ -37,8 +37,10 @@ extern crate gfx_window_vulkan;
 
 pub mod shade;
 
-
+#[cfg(not(feature = "vulkan"))]
 pub type ColorFormat = gfx::format::Rgba8;
+#[cfg(feature = "vulkan")]
+pub type ColorFormat = gfx::format::Bgra8;
 
 #[cfg(target_os = "macos")]
 pub type DepthFormat = gfx::format::Depth32F;

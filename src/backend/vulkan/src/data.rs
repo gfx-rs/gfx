@@ -241,6 +241,10 @@ pub fn map_format(surface: SurfaceType, chan: ChannelType) -> Option<vk::Format>
             Float => vk::FORMAT_R32G32B32A32_SFLOAT,
             _ => return None,
         },
+        B8_G8_R8_A8 => match chan {
+            Unorm => vk::FORMAT_B8G8R8A8_UNORM,
+            _ => return None,
+        },
         D16 => match chan {
             Unorm  => vk::FORMAT_D16_UNORM,
             _ => return None,

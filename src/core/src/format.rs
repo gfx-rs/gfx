@@ -141,6 +141,8 @@ impl_formats! {
         [BufferSurface, TextureSurface, RenderSurface],
     R32_G32_B32_A32 : Vec4<Int, Uint, Float> = [u32; 4] {32}
         [BufferSurface, TextureSurface, RenderSurface],
+    B8_G8_R8_A8     : Vec4<Unorm> = [u8; 4] {32}
+        [BufferSurface, TextureSurface, RenderSurface],
     D16             : Vec1<Unorm> = F16 {0} [TextureSurface, DepthSurface],
     D24             : Vec1<Unorm> = f32 {8} [TextureSurface, DepthSurface], //hacky stencil bits
     D24_S8          : Vec1<Unorm, Uint> = u32 {8} [TextureSurface, DepthSurface, StencilSurface],
@@ -344,6 +346,8 @@ pub type Rgb10a2F = (R10_G10_B10_A2, Float);
 pub type Rgba16F = (R16_G16_B16_A16, Float);
 /// Standard 32-bit floating-point RGBA format.
 pub type Rgba32F = (R32_G32_B32_A32, Float);
+/// Standard 8bits BGRA format.
+pub type Bgra8 = (B8_G8_R8_A8, Unorm);
 /// Standard 24-bit depth format.
 pub type Depth = (D24, Unorm);
 /// Standard 24-bit depth format with 8-bit stencil.
