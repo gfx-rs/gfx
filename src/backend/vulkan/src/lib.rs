@@ -153,16 +153,11 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
     };
 
     // Check our surface extensions against the available extensions
-    let surface_extensions = SURFACE_EXTENSIONS.iter().filter(|ext| {
-        for inst_ext in instance_extensions.iter() {
-            unsafe {
-                if CStr::from_ptr(inst_ext.extensionName.as_ptr()) == CStr::from_ptr(ext.as_ptr() as *const i8) {
-                    return true;
-                }
-            }
-        }
-        false
-    }).map(|s| *s).collect::<Vec<_>>();
+    let surface_extensions = SURFACE_EXTENSIONS.iter().filter_map(|ext| {
+        instance_extensions.iter().find(|inst_ext| {
+            unsafe { CStr::from_ptr(inst_ext.extensionName.as_ptr()) == CStr::from_ptr(ext.as_ptr() as *const i8) }
+        }).and_then(|_| Some(*ext))
+    }).collect::<Vec<&str>>();
     
     let instance = {
         let cstrings = layers.iter().chain(extensions.iter())
