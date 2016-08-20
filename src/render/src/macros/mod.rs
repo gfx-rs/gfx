@@ -59,5 +59,15 @@ macro_rules! gfx_defines {
             $keyword $name { $($field : $ty = $e,)+ }
         }
         gfx_defines!($($tail)+);
-    }
+    };
+    
+    ($keyword:ident $name:ident {
+            $( $field:ident : $ty:ty = $e:expr ),*
+    }) => {
+        gfx_defines! {
+            $keyword $name {
+                $($field : $ty = $e ,)*
+            }
+        }
+    };
 }
