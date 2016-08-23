@@ -24,7 +24,7 @@ extern crate gfx_core;
 
 /// public re-exported traits
 pub mod traits {
-    pub use gfx_core::{Device, Factory, DeviceFence, Pod};
+    pub use gfx_core::{Device, Factory, Pod};
     pub use factory::FactoryExt;
 }
 
@@ -38,7 +38,7 @@ pub use gfx_core::{VertexCount, InstanceCount};
 pub use gfx_core::{ShaderSet, VertexShader, HullShader, DomainShader,
                    GeometryShader, PixelShader};
 pub use gfx_core::{format, handle, tex};
-pub use gfx_core::factory::{Factory, Typed, Usage, Bind, MapAccess,
+pub use gfx_core::factory::{Factory, Typed, Usage, Bind,
                             BufferRole, BufferInfo, BufferError, BufferUpdateError,
                             LayerError, ResourceViewError, TargetViewError,  CombinedError,
                             RENDER_TARGET, DEPTH_STENCIL, SHADER_RESOURCE, UNORDERED_ACCESS,

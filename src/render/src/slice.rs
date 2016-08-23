@@ -161,7 +161,7 @@ macro_rules! impl_index_buffer {
         
         impl<'s, R: Resources> IntoIndexBuffer<R> for &'s [$prim_ty] {
             fn into_index_buffer<F: Factory<R> + ?Sized>(self, factory: &mut F) -> IndexBuffer<R> {
-                factory.create_buffer_const(self, BufferRole::Index, Bind::empty())
+                factory.create_buffer_immutable(self, BufferRole::Index, Bind::empty())
                        .unwrap()
                        .into_index_buffer(factory)
             }

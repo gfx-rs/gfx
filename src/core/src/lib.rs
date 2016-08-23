@@ -170,7 +170,8 @@ pub trait Resources:          Clone + Hash + Debug + Eq + PartialEq + Any {
     type RenderTargetView:    Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
     type DepthStencilView:    Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
     type Sampler:             Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
-    type Fence:               Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
+    type Fence:               Clone + Hash + Debug + Eq + PartialEq + Any + Fence;
+    type Mapping:             Debug + Any + mapping::Backend;
 }
 
 /// A `Device` is responsible for submitting `CommandBuffer`s to the GPU. 
@@ -188,25 +189,27 @@ pub trait Device: Sized {
     fn pin_submitted_resources(&mut self, &handle::Manager<Self::Resources>);
 
     /// Submits a `CommandBuffer` to the GPU for execution.
-    fn submit(&mut self, &mut Self::CommandBuffer);
+    fn submit(&mut self, &mut Self::CommandBuffer,
+                         mapped_reads: &[handle::RawMapping<Self::Resources>],
+                         mapped_writes: &[handle::RawMapping<Self::Resources>]);
+
+    /// Submits a `CommandBuffer` to the GPU for execution.
+    /// returns a fence that is signaled after the GPU has executed all commands
+    fn fenced_submit(&mut self,
+                     &mut Self::CommandBuffer,
+                     mapped_reads: &[handle::RawMapping<Self::Resources>],
+                     mapped_writes: &[handle::RawMapping<Self::Resources>],
+                     after: Option<handle::Fence<Self::Resources>>)
+                     -> handle::Fence<Self::Resources>;
 
     /// Cleanup unused resources. This should be called between frames. 
     fn cleanup(&mut self);
 }
 
-/// Extension to the Device that allows for submitting of commands
-/// around a fence
-pub trait DeviceFence<R: Resources>: Device<Resources=R> where
-    <Self as Device>::CommandBuffer: draw::CommandBuffer<R> {
-    /// Submit a command buffer to the stream creating a fence
-    /// the fence is signaled after the GPU has executed all commands
-    /// in the buffer
-    fn fenced_submit(&mut self, &mut Self::CommandBuffer,
-                     after: Option<handle::Fence<R>>) -> handle::Fence<R>;
-
-    /// Wait on the supplied fence stalling the current thread until
-    /// the fence is satisfied
-    fn fence_wait(&mut self, fence: &handle::Fence<R>);
+/// Operations that must be provided by a fence.
+pub trait Fence {
+    /// Stalls the current thread until the fence is satisfied
+    fn wait(&self);
 }
 
 /// A trait for plain-old-data types.

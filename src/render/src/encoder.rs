@@ -17,10 +17,9 @@
 #![deny(missing_docs)]
 
 use draw_state::target::{Depth, Stencil};
-use std::any::Any;
 use std::error::Error;
-use std::fmt;
-use std::mem;
+use std::any::Any;
+use std::{fmt, mem};
 
 use gfx_core::{Device, IndexType, Resources, VertexCount};
 use gfx_core::{draw, format, handle, tex, Pod};
@@ -80,6 +79,7 @@ impl<T: Any + fmt::Debug + fmt::Display> Error for UpdateError<T> {
 pub struct Encoder<R: Resources, C: draw::CommandBuffer<R>> {
     command_buffer: C,
     raw_pso_data: pso::RawDataSet<R>,
+    access_info: pso::AccessInfo<R>,
     handles: handle::Manager<R>,
 }
 
@@ -88,6 +88,7 @@ impl<R: Resources, C: draw::CommandBuffer<R>> From<C> for Encoder<R, C> {
         Encoder {
             command_buffer: combuf,
             raw_pso_data: pso::RawDataSet::new(),
+            access_info: pso::AccessInfo::new(),
             handles: handle::Manager::new(),
         }
     }
@@ -105,8 +106,11 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
         D: Device<Resources=R, CommandBuffer=C>
     {
         device.pin_submitted_resources(&self.handles);
-        device.submit(&mut self.command_buffer);
+        device.submit(&mut self.command_buffer,
+                      &self.access_info.mapped_reads[..],
+                      &self.access_info.mapped_writes[..]);
         self.command_buffer.reset();
+        self.access_info.clear();
         self.handles.clear();
     }
 
@@ -233,7 +237,7 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
         self.command_buffer.bind_pipeline_state(pso.clone());
         //TODO: make `raw_data` a member to this struct, to re-use the heap allocation
         self.raw_pso_data.clear();
-        user_data.bake_to(&mut self.raw_pso_data, pipeline.get_meta(), &mut self.handles);
+        user_data.bake_to(&mut self.raw_pso_data, pipeline.get_meta(), &mut self.handles, &mut self.access_info);
         self.command_buffer.bind_vertex_buffers(self.raw_pso_data.vertex_buffers.clone());
         self.command_buffer.bind_pixel_targets(self.raw_pso_data.pixel_targets.clone());
         self.command_buffer.set_ref_values(self.raw_pso_data.ref_values);

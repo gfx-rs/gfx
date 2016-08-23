@@ -50,6 +50,44 @@ use std::fmt;
 use gfx_core as d;
 pub use gfx_core::pso::{Descriptor};
 
+/// Informations about what is accessed in the pipeline
+#[derive(Debug)]
+pub struct AccessInfo<R: d::Resources> {
+    /// The GPU will read from buffers with these mappings
+    pub mapped_reads: Vec<d::handle::RawMapping<R>>,
+    /// The GPU will write from buffers with these mappings
+    pub mapped_writes: Vec<d::handle::RawMapping<R>>,
+}
+
+impl<R: d::Resources> AccessInfo<R> {
+    /// Creates empty access informations
+    pub fn new() -> Self {
+        AccessInfo {
+            mapped_reads: Vec::new(),
+            mapped_writes: Vec::new(),
+        }
+    }
+
+    /// Clear access informations
+    pub fn clear(&mut self) {
+        self.mapped_reads.clear();
+        self.mapped_writes.clear();
+    }
+
+    /// Register a buffer read access
+    pub fn buffer_read(&mut self, buffer: &d::handle::RawBuffer<R>) {
+        if let Some(mapping) = buffer.mapping() {
+            self.mapped_reads.push(mapping);
+        }
+    }
+
+    /// Register a buffer write access
+    pub fn buffer_write(&mut self, buffer: &d::handle::RawBuffer<R>) {
+        if let Some(mapping) = buffer.mapping() {
+            self.mapped_writes.push(mapping);
+        }
+    }
+}
 
 /// A complete set of raw data that needs to be specified at run-time
 /// whenever we draw something with a PSO. This is what "data" struct
@@ -212,7 +250,11 @@ pub trait PipelineData<R: d::Resources> {
     type Meta;
     /// Dump all the contained data into the raw data set,
     /// given the mapping ("meta"), and a handle manager.
-    fn bake_to(&self, &mut RawDataSet<R>, meta: &Self::Meta, &mut d::handle::Manager<R>);
+    fn bake_to(&self,
+               &mut RawDataSet<R>,
+               &Self::Meta,
+               &mut d::handle::Manager<R>,
+               &mut AccessInfo<R>);
 }
 
 /// A strongly typed Pipleline State Object. See the module documentation for more information.
@@ -282,5 +324,9 @@ pub trait DataBind<R: d::Resources> {
     /// The associated "data" type - a member of the PSO "data" struct.
     type Data;
     /// Dump the given data into the raw data set.
-    fn bind_to(&self, &mut RawDataSet<R>, &Self::Data, &mut d::handle::Manager<R>);
+    fn bind_to(&self,
+               &mut RawDataSet<R>,
+               &Self::Data,
+               &mut d::handle::Manager<R>,
+               &mut AccessInfo<R>);
 }

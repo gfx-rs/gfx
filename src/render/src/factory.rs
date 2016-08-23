@@ -96,7 +96,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
                             T: Pod + pso::buffer::Structure<format::Format>
     {
         //debug_assert!(nv <= self.get_capabilities().max_vertex_count);
-        self.create_buffer_const(vertices, BufferRole::Vertex, Bind::empty()).unwrap()
+        self.create_buffer_immutable(vertices, BufferRole::Vertex, Bind::empty()).unwrap()
     }
     
     /// Shorthand for creating a new vertex buffer from the supplied vertices, together with a

@@ -16,7 +16,7 @@
 //! outside of the graphics development environment.
 
 use {Capabilities, Device, Resources, IndexType, VertexCount};
-use {draw, handle, pso, shade, target, tex};
+use {draw, handle, mapping, pso, shade, target, tex};
 use state as s;
 
 /// Dummy device which does minimal work, just to allow testing
@@ -40,7 +40,26 @@ impl Resources for DummyResources {
     type RenderTargetView     = ();
     type DepthStencilView     = ();
     type Sampler              = ();
-    type Fence                = ();
+    type Fence                = DummyFence;
+    type Mapping              = DummyMapping;
+}
+
+/// Dummy fence that does nothing.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct DummyFence;
+
+impl ::Fence for DummyFence {
+    fn wait(&self) {}
+}
+
+/// Dummy mapping which will crash on use.
+#[derive(Debug)]
+pub struct DummyMapping;
+
+impl mapping::Backend for DummyMapping {
+    unsafe fn set<T>(&self, _index: usize, _val: T) { unimplemented!() }
+    unsafe fn slice<'a, 'b, T>(&'a self, _len: usize) -> &'b [T] { unimplemented!() }
+    unsafe fn mut_slice<'a, 'b, T>(&'a self, _len: usize) -> &'b mut [T] { unimplemented!() }
 }
 
 impl DummyDevice {
@@ -100,6 +119,18 @@ impl Device for DummyDevice {
         &self.capabilities
     }
     fn pin_submitted_resources(&mut self, _: &handle::Manager<DummyResources>) {}
-    fn submit(&mut self, _: &mut DummyCommandBuffer) {}
+    fn submit(&mut self, _: &mut DummyCommandBuffer,
+                         _mapped_reads: &[handle::RawMapping<Self::Resources>],
+                         _mapped_writes: &[handle::RawMapping<Self::Resources>]) {}
+
+    fn fenced_submit(&mut self,
+                     _: &mut Self::CommandBuffer,
+                     _mapped_reads: &[handle::RawMapping<Self::Resources>],
+                     _mapped_writes: &[handle::RawMapping<Self::Resources>],
+                     _after: Option<handle::Fence<Self::Resources>>)
+                     -> handle::Fence<Self::Resources> {
+        unimplemented!()
+    }
+
     fn cleanup(&mut self) {}
 }

@@ -20,9 +20,8 @@ use gfx_core as d;
 use gfx_core::factory as f;
 use gfx_core::factory::Typed;
 use gfx_core::format::ChannelType;
-use gfx_core::handle;
-use gfx_core::handle::Producer;
-use gfx_core::mapping::Builder;
+use gfx_core::mapping::{self, Builder};
+use gfx_core::handle::{self, Producer};
 use gfx_core::target::{Layer, Level};
 use gfx_core::tex as t;
 
@@ -37,6 +36,22 @@ fn role_to_target(role: f::BufferRole) -> gl::types::GLenum {
         f::BufferRole::Vertex  => gl::ARRAY_BUFFER,
         f::BufferRole::Index   => gl::ELEMENT_ARRAY_BUFFER,
         f::BufferRole::Uniform => gl::UNIFORM_BUFFER,
+    }
+}
+
+fn access_to_map_bits(access: mapping::Access) -> gl::types::GLenum {
+    let mut r = 0;
+    if access.contains(mapping::READABLE) { r |= gl::MAP_READ_BIT; }
+    if access.contains(mapping::WRITABLE) { r |= gl::MAP_WRITE_BIT; }
+    r
+}
+
+pub fn access_to_gl(access: mapping::Access) -> gl::types::GLenum {
+    match access {
+        mapping::RW => gl::READ_WRITE,
+        mapping::READABLE => gl::READ_ONLY,
+        mapping::WRITABLE => gl::WRITE_ONLY,
+        _ => unreachable!(),
     }
 }
 
@@ -100,12 +115,16 @@ impl Factory {
     }
 
     fn init_buffer(&mut self, buffer: Buffer, info: &f::BufferInfo) {
+        use gfx_core::factory::Usage::*;
+
         let gl = &self.share.context;
         let target = role_to_target(info.role);
         if self.share.private_caps.buffer_storage_supported {
             let usage = match info.usage {
-                f::Usage::GpuOnly    => 0,
-                _                    => gl::MAP_WRITE_BIT | gl::DYNAMIC_STORAGE_BIT,
+                GpuOnly | Immutable => 0,
+                Dynamic => gl::MAP_WRITE_BIT | gl::MAP_PERSISTENT_BIT | gl::DYNAMIC_STORAGE_BIT,
+                Persistent(access) => access_to_map_bits(access) | gl::MAP_PERSISTENT_BIT,
+                CpuOnly(_) => gl::DYNAMIC_STORAGE_BIT,
             };
             unsafe {
                 gl.BindBuffer(target, buffer);
@@ -118,10 +137,23 @@ impl Factory {
         }
         else {
             let usage = match info.usage {
-                f::Usage::GpuOnly    => gl::STATIC_DRAW,
-                f::Usage::Const      => gl::STATIC_DRAW,
-                f::Usage::Dynamic    => gl::DYNAMIC_DRAW,
-                f::Usage::CpuOnly(_) => gl::STREAM_DRAW,
+                GpuOnly => gl::STATIC_DRAW,
+                Immutable => gl::STATIC_DRAW,
+                Dynamic => gl::STREAM_DRAW,
+                Persistent(access) => {
+                    match access {
+                        mapping::RW => gl::DYNAMIC_COPY,
+                        mapping::READABLE => gl::DYNAMIC_READ,
+                        mapping::WRITABLE => gl::DYNAMIC_DRAW,
+                        _ => unreachable!(),
+                    }
+                }
+                CpuOnly(access) => {
+                    match access {
+                        mapping::READABLE => gl::STREAM_READ,
+                        _ => gl::DYNAMIC_DRAW,
+                    }
+                }
             };
             unsafe {
                 gl.BindBuffer(target, buffer);
@@ -169,31 +201,35 @@ impl Factory {
     }
 }
 
-
-#[derive(Copy, Clone)]
-pub struct RawMapping {
-    pointer: *mut ::std::os::raw::c_void,
-    target: gl::types::GLenum,
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum MappingKind {
+    Persistent,
+    Temporary,
 }
 
-impl d::mapping::Raw for RawMapping {
+#[derive(Copy, Clone, Debug)]
+pub struct BackendMapping {
+    pub kind: MappingKind,
+    pub pointer: *mut ::std::os::raw::c_void,
+    pub target: gl::types::GLenum,
+    pub is_mapped: bool,
+}
+
+impl mapping::Backend for BackendMapping {
     unsafe fn set<T>(&self, index: usize, val: T) {
         *(self.pointer as *mut T).offset(index as isize) = val;
     }
 
-    unsafe fn to_slice<T>(&self, len: usize) -> &[T] {
+    unsafe fn slice<'a, 'b, T>(&'a self, len: usize) -> &'b [T] {
         slice::from_raw_parts(self.pointer as *const T, len)
     }
 
-    unsafe fn to_mut_slice<T>(&self, len: usize) -> &mut [T] {
+    unsafe fn mut_slice<'a, 'b, T>(&'a self, len: usize) -> &'b mut [T] {
         slice::from_raw_parts_mut(self.pointer as *mut T, len)
     }
 }
 
-
 impl d::Factory<R> for Factory {
-    type Mapper = RawMapping;
-
     fn get_capabilities(&self) -> &d::Capabilities {
         &self.share.capabilities
     }
@@ -208,12 +244,12 @@ impl d::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_buffer(name, info))
     }
 
-    fn create_buffer_const_raw(&mut self, data: &[u8], stride: usize, role: f::BufferRole, bind: f::Bind)
+    fn create_buffer_immutable_raw(&mut self, data: &[u8], stride: usize, role: f::BufferRole, bind: f::Bind)
                                -> Result<handle::RawBuffer<R>, f::BufferError> {
         let name = self.create_buffer_internal();
         let info = f::BufferInfo {
             role: role,
-            usage: f::Usage::Const,
+            usage: f::Usage::Immutable,
             bind: bind,
             size: data.len(),
             stride: stride,
@@ -382,42 +418,49 @@ impl d::Factory<R> for Factory {
         self.share.handles.borrow_mut().make_sampler(sam, info)
     }
 
-    fn map_buffer_raw(&mut self, buf: &handle::RawBuffer<R>,
-                      access: f::MapAccess) -> RawMapping {
+    fn map_buffer_raw(&mut self, buf: &handle::RawBuffer<R>, access: mapping::Access)
+                      -> Result<handle::RawMapping<R>, mapping::Error> {
         let gl = &self.share.context;
-        let raw_handle = *self.frame_handles.ref_buffer(buf);
-        unsafe { gl.BindBuffer(gl::ARRAY_BUFFER, raw_handle) };
-        let ptr = unsafe { gl.MapBuffer(gl::ARRAY_BUFFER, match access {
-            f::MapAccess::Readable => gl::READ_ONLY,
-            f::MapAccess::Writable => gl::WRITE_ONLY,
-            f::MapAccess::RW => gl::READ_WRITE
-        }) } as *mut ::std::os::raw::c_void;
-        RawMapping {
-            pointer: ptr,
-            target: gl::ARRAY_BUFFER
-        }
-    }
+        let raw_handle = *buf.resource();
 
-    fn unmap_buffer_raw(&mut self, map: RawMapping) {
-        let gl = &self.share.context;
-        unsafe { gl.UnmapBuffer(map.target) };
+        try!(buf.valid_access(access));
+
+        let target = gl::ARRAY_BUFFER;
+        let (kind, gl_access) = if self.share.private_caps.buffer_storage_supported {
+            (MappingKind::Persistent,
+             access_to_gl(access) | gl::MAP_PERSISTENT_BIT | gl::MAP_FLUSH_EXPLICIT_BIT)
+        } else {
+            (MappingKind::Temporary, access_to_gl(access))
+        };
+
+        let ptr = unsafe {
+            gl.BindBuffer(target, raw_handle);
+            gl.MapBuffer(target, gl_access) } as *mut ::std::os::raw::c_void;
+
+        let res = BackendMapping {
+            kind: kind,
+            pointer: ptr,
+            target: target,
+            is_mapped: true,
+        };
+        Ok(self.share.handles.borrow_mut().make_mapping(res, access, buf))
     }
 
     fn map_buffer_readable<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
-                           -> d::mapping::Readable<T, R, Factory> {
-        let map = self.map_buffer_raw(buf.raw(), f::MapAccess::Readable);
-        self.map_readable(map, buf.len())
+                                    -> Result<mapping::Readable<R, T>, mapping::Error> {
+        let map = try!(self.map_buffer_raw(buf.raw(), mapping::READABLE));
+        Ok(self.map_readable(map, buf.len()))
     }
 
     fn map_buffer_writable<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
-                                    -> d::mapping::Writable<T, R, Factory> {
-        let map = self.map_buffer_raw(buf.raw(), f::MapAccess::Writable);
-        self.map_writable(map, buf.len())
+                                    -> Result<mapping::Writable<R, T>, mapping::Error> {
+        let map = try!(self.map_buffer_raw(buf.raw(), mapping::WRITABLE));
+        Ok(self.map_writable(map, buf.len()))
     }
 
     fn map_buffer_rw<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
-                              -> d::mapping::RW<T, R, Factory> {
-        let map = self.map_buffer_raw(buf.raw(), f::MapAccess::RW);
-        self.map_read_write(map, buf.len())
+                              -> Result<mapping::RWable<R, T>, mapping::Error> {
+        let map = try!(self.map_buffer_raw(buf.raw(), mapping::RW));
+        Ok(self.map_read_write(map, buf.len()))
     }
 }
