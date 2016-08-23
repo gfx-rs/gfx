@@ -380,28 +380,6 @@ impl CommandBuffer {
 }
 
 impl draw::CommandBuffer<Resources> for CommandBuffer {
-    fn clone_empty(&self) -> Self {
-        CommandBuffer {
-            mtl_queue: self.mtl_queue,
-            mtl_buf: self.mtl_buf,
-
-            master_encoder: self.master_encoder,
-            render_pass_descriptor: MTLRenderPassDescriptor::nil(),
-            render_encoder: MTLRenderCommandEncoder::nil(),
-
-            drawable: self.drawable,
-            in_use: HashSet::new(),
-            buf: Vec::new(),
-            data: DataBuffer::new(),
-            index_buf: None,
-
-            cache: Cache::new(),
-            encoding: false,
-            root: false,
-            pool: NSAutoreleasePool::nil()
-        }
-    }
-
     fn reset(&mut self) {
         self.cache.clear();
         self.buf.clear();
