@@ -14,17 +14,17 @@
 
 #![allow(missing_docs)]
 
-use cocoa::foundation::NSRange;
+//use cocoa::foundation::NSRange;
 
 use gfx_core::{draw, pso, shade, state, target, tex};
 use gfx_core::{IndexType, VertexCount};
 use gfx_core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
-               MAX_RESOURCE_VIEWS, MAX_UNORDERED_VIEWS,
+               MAX_RESOURCE_VIEWS,
                MAX_SAMPLERS, MAX_COLOR_TARGETS};
 
 use gfx_core::shade::Stage;
 
-use {Resources, InputLayout, Buffer, Texture, Pipeline, Program};
+use {Resources, Buffer, Texture, Pipeline};
 
 use native;
 use native::{Rtv, Srv, Dsv};
@@ -49,7 +49,7 @@ impl DataBuffer {
         DataBuffer(Vec::new())
     }
     /// Reset the contents.
-    pub fn reset(&mut self) {
+    pub fn _reset(&mut self) {
         self.0.clear();
     }
     /// Copy a given vector slice into the buffer.
@@ -61,7 +61,7 @@ impl DataBuffer {
         }
     }
     /// Return a reference to a stored data object.
-    pub fn get(&self, ptr: DataPointer) -> &[u8] {
+    pub fn _get(&self, ptr: DataPointer) -> &[u8] {
         &self.0[ptr.offset as usize .. (ptr.offset + ptr.size) as usize]
     }
 }
@@ -70,23 +70,23 @@ impl DataBuffer {
 #[derive(Clone, Copy, Debug)]
 pub enum Command {
     BindPipeline(Pipeline),
-    BindIndex(Buffer),
+    _BindIndex(Buffer),
     BindVertexBuffers([native::Buffer; MAX_VERTEX_ATTRIBUTES], [u64; MAX_VERTEX_ATTRIBUTES], [u64; MAX_VERTEX_ATTRIBUTES]),
     BindConstantBuffers(shade::Stage, [native::Buffer; MAX_CONSTANT_BUFFERS]),
     BindShaderResources(shade::Stage, [native::Srv; MAX_RESOURCE_VIEWS]),
     BindSamplers(shade::Stage, [native::Sampler; MAX_SAMPLERS]),
-    BindPixelTargets([native::Rtv; MAX_COLOR_TARGETS], native::Dsv),
+    _BindPixelTargets([native::Rtv; MAX_COLOR_TARGETS], native::Dsv),
     SetViewport(MTLViewport),
     SetScissor(MTLScissorRect),
-    SetBlend([f32; 4], u64),
+    _SetBlend([f32; 4], u64),
 
     // TODO: can we skip storing these? should have no side-effect to process
     //       directly
-    UpdateBuffer(Buffer, DataPointer, usize),
+    _UpdateBuffer(Buffer, DataPointer, usize),
     UpdateTexture(Texture, tex::Kind, Option<tex::CubeFace>, DataPointer, tex::RawImageInfo),
     // GenerateMips(native::Srv),
-    ClearColor(native::Rtv, [f32; 4]),
-    ClearDepthStencil(native::Dsv, f32, u8),
+    _ClearColor(native::Rtv, [f32; 4]),
+    _ClearDepthStencil(native::Dsv, f32, u8),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -133,7 +133,7 @@ pub struct CommandBuffer {
 
     master_encoder: *mut MTLParallelRenderCommandEncoder,
     render_encoder: MTLRenderCommandEncoder,
-    render_pass_descriptor: MTLRenderPassDescriptor,
+    _render_pass_descriptor: MTLRenderPassDescriptor,
 
     drawable: *mut CAMetalDrawable,
     in_use: HashSet<Buffer>,
@@ -156,7 +156,7 @@ impl CommandBuffer {
 
             master_encoder: Box::into_raw(Box::new(MTLParallelRenderCommandEncoder::nil())),
             render_encoder: MTLRenderCommandEncoder::nil(),
-            render_pass_descriptor: MTLRenderPassDescriptor::nil(),
+            _render_pass_descriptor: MTLRenderPassDescriptor::nil(),
 
             drawable: drawable,
             in_use: HashSet::new(),
@@ -269,7 +269,7 @@ impl CommandBuffer {
                         encoder.set_depth_stencil_state(depth_state);
                     }
                 },
-                Command::BindIndex(buf) => {
+                Command::_BindIndex(buf) => {
                     println!("{}, {:?}", "index oops", buf);
                 },
                 Command::BindVertexBuffers(bufs, offsets, indices) => {
@@ -330,29 +330,29 @@ impl CommandBuffer {
                         }
                     }
                 },
-                Command::BindPixelTargets(rtvs, dsv) => {
+                Command::_BindPixelTargets(rtvs, dsv) => {
                     println!("pixel trg: {:?} . . . {:?}", rtvs, dsv);
                 },
                 Command::SetViewport(viewport) => {
                     encoder.set_viewport(viewport);
                 },
-                Command::SetScissor(rect) => {
+                Command::SetScissor(_rect) => {
                     // encoder.set_scissor_rect(rect);
                 },
-                Command::SetBlend(blend, mask) => {
+                Command::_SetBlend(blend, _mask) => {
                     // TODO: do stencil mask
 
                     encoder.set_blend_color(blend[0], blend[1], blend[2], blend[3]);
                 },
-                Command::UpdateBuffer(buf, data, offset) => {
-
+                Command::_UpdateBuffer(_buf, _data, _offset) => {
+                    //TODO
                 },
-                Command::UpdateTexture(tex, kind, face, data, info) => {
+                Command::UpdateTexture(_tex, _kind, _face, _data, _info) => {
                 },
                 // GenerateMips(native::Srv),
-                Command::ClearColor(target, value) => {
+                Command::_ClearColor(_target, _value) => {
                 },
-                Command::ClearDepthStencil(target, depth, stencil) => {
+                Command::_ClearDepthStencil(_target, _depth, _stencil) => {
                 },
             }
         }
@@ -363,14 +363,14 @@ impl CommandBuffer {
             Draw::Normal(count, start) => {
                 encoder.draw_primitives(MTLPrimitiveType::Triangle, start, count)
             },
-            Draw::Instanced(count, ninst, start, offset) => {
+            Draw::Instanced(count, ninst, start, _offset) => {
                 encoder.draw_primitives_instanced(MTLPrimitiveType::Triangle, start, count, ninst);
             },
-            Draw::Indexed(count, start, base) => {
+            Draw::Indexed(count, start, _base) => {
                 encoder.draw_indexed_primitives(MTLPrimitiveType::Triangle, count, map_index_type(self.index_buf.unwrap().1), ((self.index_buf.unwrap().0).0).0, start);
             },
-            Draw::IndexedInstanced(count, ninst, start, base, offset) => {
-                unimplemented!();
+            Draw::IndexedInstanced(_count, _ninst, _start, _base, _offset) => {
+                unimplemented!()
             }
         }
 
@@ -421,7 +421,7 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
         }
     }
 
-    fn bind_global_constant(&mut self, gc: shade::Location, value: shade::UniformValue) {
+    fn bind_global_constant(&mut self, _gc: shade::Location, _value: shade::UniformValue) {
         unimplemented!()
     }
 
@@ -442,7 +442,7 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
         }
     }
 
-    fn bind_unordered_views(&mut self, uvs: &[pso::UnorderedViewParam<Resources>]) {
+    fn bind_unordered_views(&mut self, _uvs: &[pso::UnorderedViewParam<Resources>]) {
         // TODO: UAVs
     }
 
@@ -569,15 +569,15 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.push(Command::UpdateTexture(tex, kind, face, ptr, info));
     }
 
-    fn generate_mipmap(&mut self, srv: Srv) {
+    fn generate_mipmap(&mut self, _srv: Srv) {
         unimplemented!()
     }
 
-    fn clear_color(&mut self, target: Rtv, value: draw::ClearColor) {
+    fn clear_color(&mut self, _target: Rtv, value: draw::ClearColor) {
         self.cache.clear = value;
     }
 
-    fn clear_depth_stencil(&mut self, target: Dsv,
+    fn clear_depth_stencil(&mut self, _target: Dsv,
                            depth: Option<target::Depth>, stencil: Option<target::Stencil>) {
         self.cache.clear_depth = depth.unwrap_or_default();
         self.cache.clear_stencil = stencil.unwrap_or_default();

@@ -18,13 +18,13 @@ use std::slice;
 use std::mem;
 use std::str;
 
-use cocoa::base::{selector, class};
-use cocoa::foundation::{NSUInteger};
+//use cocoa::base::{selector, class};
+//use cocoa::foundation::{NSUInteger};
 
 use gfx_core as core;
 use gfx_core::{factory, handle};
 use gfx_core::handle::Producer;
-use gfx_core::handle::Manager;
+//use gfx_core::handle::Manager;
 
 use metal::*;
 
@@ -33,6 +33,8 @@ use command::CommandBuffer;
 use {Resources, Share, Texture, Buffer, Shader, Program, Pipeline};
 use native;
 use mirror;
+
+pub const DUMMY_BUFFER_SLOT: u64 = 30;
 
 #[derive(Copy, Clone)]
 pub struct RawMapping {
@@ -86,7 +88,7 @@ impl Factory {
             return Err(factory::BufferError::UnsupportedBind(info.bind))
         }
 
-        let mut raw_buf = if let Some(data) = raw_data {
+        let raw_buf = if let Some(data) = raw_data {
             self.device.new_buffer_with_data(unsafe { mem::transmute(data) }, info.size as u64, usage)
         } else {
             self.device.new_buffer(info.size as u64, usage)
@@ -227,13 +229,13 @@ impl core::Factory<Resources> for Factory {
                 // descriptor attached to the PSO descriptor
                 //
                 // dummy values are used for the attributes but the buffer
-                // slot `30` is occupied by the dummy buffer
+                // slot `DUMMY_BUFFER_SLOT` is occupied by the dummy buffer
                 //
                 // TODO: prevent collision between dummy buffers and real
                 //       values
                 let vertex_desc = MTLVertexDescriptor::new();
 
-                let buf = vertex_desc.layouts().object_at(30);
+                let buf = vertex_desc.layouts().object_at(DUMMY_BUFFER_SLOT as usize);
                 buf.set_stride(16);
                 buf.set_step_function(MTLVertexStepFunction::Constant);
                 buf.set_step_rate(0);
@@ -242,12 +244,12 @@ impl core::Factory<Resources> for Factory {
                     let attribute = vertex_desc.attributes().object_at(i as usize);
                     attribute.set_format(MTLVertexFormat::Char4);
                     attribute.set_offset(0);
-                    attribute.set_buffer_index(30);
+                    attribute.set_buffer_index(DUMMY_BUFFER_SLOT);
                 }
 
                 pso_descriptor.set_vertex_descriptor(vertex_desc);
 
-                let pso = self.device.new_render_pipeline_state_with_reflection(pso_descriptor, &mut reflection).unwrap();
+                let _pso = self.device.new_render_pipeline_state_with_reflection(pso_descriptor, &mut reflection).unwrap();
 
                 // fill the `ProgramInfo` struct with goodies
                 mirror::populate_vertex_attributes(&mut info, vs.vertex_attributes());
@@ -259,10 +261,10 @@ impl core::Factory<Resources> for Factory {
 
                 // destroy PSO & reflection object after we're done with
                 // parsing reflection
-                unsafe {
+                //unsafe {
                     //pso.release();
                     //reflection.release();
-                }
+                //}
 
                 // FIXME: retain functions?
                 let program = Program {
@@ -356,7 +358,7 @@ impl core::Factory<Resources> for Factory {
 
     fn create_texture_raw(&mut self, desc: core::tex::Descriptor, hint: Option<core::format::ChannelType>,
                           data_opt: Option<&[&[u8]]>) -> Result<handle::RawTexture<Resources>, core::tex::Error> {
-        use gfx_core::tex::{AaMode, Error, Kind};
+        use gfx_core::tex::{AaMode, Kind};
         use map::{map_channel_hint, map_texture_bind, map_texture_usage,
                   map_format};
 
@@ -394,7 +396,7 @@ impl core::Factory<Resources> for Factory {
                     _ => unimplemented!()
                 };
             },
-            Kind::D2Array(w, h, d, aa) => {
+            Kind::D2Array(w, h, d, _aa) => {
                 descriptor.set_width(w as u64);
                 descriptor.set_height(h as u64);
                 descriptor.set_array_length(d as u64);
@@ -504,7 +506,7 @@ impl core::Factory<Resources> for Factory {
         // Err(factory::ResourceViewError::Unsupported) //TODO
     }
 
-    fn view_texture_as_shader_resource_raw(&mut self, htex: &handle::RawTexture<Resources>, desc: core::tex::ResourceDesc)
+    fn view_texture_as_shader_resource_raw(&mut self, htex: &handle::RawTexture<Resources>, _desc: core::tex::ResourceDesc)
                                        -> Result<handle::RawShaderResourceView<Resources>, factory::ResourceViewError> {
         /*use winapi::UINT;
         use gfx_core::tex::{AaMode, Kind};

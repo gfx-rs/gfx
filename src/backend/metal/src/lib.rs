@@ -21,19 +21,18 @@ extern crate cocoa;
 extern crate gfx_core;
 extern crate metal;
 
-use cocoa::base::{selector, class};
-use cocoa::foundation::{NSUInteger};
+//use cocoa::base::{selector, class};
+//use cocoa::foundation::{NSUInteger};
 
 use metal::*;
 
-use gfx_core::format::Format;
+//use gfx_core::format::Format;
 use gfx_core::factory::Usage;
 use gfx_core::{handle, tex};
 
 use std::cell::RefCell;
 use std::sync::Arc;
-use std::mem;
-use std::ptr;
+//use std::{mem, ptr};
 
 mod factory;
 mod command;
@@ -193,28 +192,28 @@ impl gfx_core::Device for Device {
         use gfx_core::handle::Producer;
         self.frame_handles.clear();
         self.share.handles.borrow_mut().clean_with(&mut (),
-            |_, v| unsafe { /*v.0.release();*/ }, //buffer
-            |_, s| unsafe { //shader
+            |_, _v| { /*v.0.release();*/ }, //buffer
+            |_, _s| { //shader
                 /*(*s.object).Release();
                 (*s.reflection).Release();*/
             },
-            |_, p| unsafe {
+            |_, _p| {
                 //if !p.vs.is_null() { p.vs.release(); }
                 //if !p.ps.is_null() { p.ps.release(); }
             }, //program
-            |_, v| unsafe { //PSO
+            |_, _v| { //PSO
                 /*type Child = *mut winapi::ID3D11DeviceChild;
                 (*v.layout).Release();
                 (*(v.rasterizer as Child)).Release();
                 (*(v.depth_stencil as Child)).Release();
                 (*(v.blend as Child)).Release();*/
             },
-            |_, v| unsafe { /*(*(v.0).0).release();*/ },  //texture
-            |_, v| unsafe { /*(*v.0).Release();*/ }, //SRV
+            |_, _v| { /*(*(v.0).0).release();*/ },  //texture
+            |_, _v| { /*(*v.0).Release();*/ }, //SRV
             |_, _| {}, //UAV
-            |_, v| unsafe { /*(*v.0).Release();*/ }, //RTV
-            |_, v| unsafe { /*(*v.0).Release();*/ }, //DSV
-            |_, v| unsafe { /*v.sampler.release();*/ }, //sampler
+            |_, _v| { /*(*v.0).Release();*/ }, //RTV
+            |_, _v| { /*(*v.0).Release();*/ }, //DSV
+            |_, _v| { /*v.sampler.release();*/ }, //sampler
             |_, _| {}, //fence
         );
     }
@@ -243,7 +242,7 @@ pub fn create(format: gfx_core::format::Format, width: u32, height: u32)
 
     let mtl_device = create_system_default_device();
 
-    let get_feature_set = |device: MTLDevice| -> Option<MTLFeatureSet> {
+    let get_feature_set = |_device: MTLDevice| -> Option<MTLFeatureSet> {
         use metal::MTLFeatureSet::*;
 
         let feature_sets = vec![OSX_GPUFamily1_v1, iOS_GPUFamily3_v1,
@@ -262,7 +261,7 @@ pub fn create(format: gfx_core::format::Format, width: u32, height: u32)
     let bb = Box::into_raw(Box::new(MTLTexture::nil()));
     let d = Box::into_raw(Box::new(CAMetalDrawable::nil()));
 
-    let mut device = Device {
+    let device = Device {
         device: mtl_device,
         feature_set: get_feature_set(mtl_device).unwrap(),
         share: Arc::new(share),
