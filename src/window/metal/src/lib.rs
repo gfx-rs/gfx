@@ -26,18 +26,14 @@ extern crate gfx_device_metal;
 
 use winit::os::macos::WindowExt;
 
-use objc::runtime::{Object, Class, BOOL, YES, NO};
+use objc::runtime::{YES};
 
 use cocoa::base::id as cocoa_id;
-use cocoa::base::{selector, class};
-use cocoa::foundation::{NSUInteger, NSSize};
-use cocoa::appkit::{NSApp,
-                    NSApplication, NSApplicationActivationPolicyRegular,
-                    NSWindow, NSTitledWindowMask, NSBackingStoreBuffered,
-                    NSMenu, NSMenuItem, NSRunningApplication, NSView,
-                    NSApplicationActivateIgnoringOtherApps};
+//use cocoa::base::{selector, class};
+use cocoa::foundation::{NSSize};
+use cocoa::appkit::{NSWindow, NSView};
 
-use gfx_core::tex::Size;
+//use gfx_core::tex::Size;
 use gfx_core::format::{RenderFormat, Format};
 use gfx_core::handle::{RawRenderTargetView, RenderTargetView};
 
@@ -45,10 +41,10 @@ use gfx_device_metal::{Device, Factory, Resources};
 
 use metal::*;
 
-use winit::{Window};
+//use winit::{Window};
 
 use std::ops::Deref;
-use std::cell::Cell;
+//use std::cell::Cell;
 use std::mem;
 
 pub struct MetalWindow {
@@ -138,11 +134,10 @@ pub fn init_raw(title: &str, requested_width: u32, requested_height: u32, color_
         view.setWantsLayer(YES);
         view.setLayer(mem::transmute(layer.0));
 
-        let (mut device, factory, color, daddr, addr) = gfx_device_metal::create(color_format, draw_size.0, draw_size.1).unwrap();
+        let (device, factory, color, daddr, addr) = gfx_device_metal::create(color_format, draw_size.0, draw_size.1).unwrap();
         layer.set_device(device.device);
 
         let drawable = layer.next_drawable().unwrap();
-
 
         let window = MetalWindow {
             window: winit_window,
