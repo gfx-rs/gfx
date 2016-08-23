@@ -118,6 +118,8 @@ pub fn process(ctx: *mut winapi::ID3D11DeviceContext, command: &command::Command
     match *command {
         BindProgram(ref prog) => unsafe {
             (*ctx).VSSetShader(prog.vs, ptr::null_mut(), 0);
+            (*ctx).HSSetShader(prog.hs, ptr::null_mut(), 0);
+            (*ctx).DSSetShader(prog.ds, ptr::null_mut(), 0);
             (*ctx).GSSetShader(prog.gs, ptr::null_mut(), 0);
             (*ctx).PSSetShader(prog.ps, ptr::null_mut(), 0);
         },
@@ -135,6 +137,12 @@ pub fn process(ctx: *mut winapi::ID3D11DeviceContext, command: &command::Command
             Stage::Vertex => unsafe {
                 (*ctx).VSSetConstantBuffers(0, max_cb, &buffers[0].0);
             },
+            Stage::Hull => unsafe {
+                (*ctx).HSSetConstantBuffers(0, max_cb, &buffers[0].0);
+            },
+            Stage::Domain => unsafe {
+                (*ctx).DSSetConstantBuffers(0, max_cb, &buffers[0].0);
+            },
             Stage::Geometry => unsafe {
                 (*ctx).GSSetConstantBuffers(0, max_cb, &buffers[0].0);
             },
@@ -146,6 +154,12 @@ pub fn process(ctx: *mut winapi::ID3D11DeviceContext, command: &command::Command
             Stage::Vertex => unsafe {
                 (*ctx).VSSetShaderResources(0, max_srv, &views[0].0);
             },
+            Stage::Hull => unsafe {
+                (*ctx).HSSetShaderResources(0, max_srv, &views[0].0);
+            },
+            Stage::Domain => unsafe {
+                (*ctx).DSSetShaderResources(0, max_srv, &views[0].0);
+            },
             Stage::Geometry => unsafe {
                 (*ctx).GSSetShaderResources(0, max_srv, &views[0].0);
             },
@@ -156,6 +170,12 @@ pub fn process(ctx: *mut winapi::ID3D11DeviceContext, command: &command::Command
         BindSamplers(stage, ref samplers) => match stage {
             Stage::Vertex => unsafe {
                 (*ctx).VSSetSamplers(0, max_sm, &samplers[0].0);
+            },
+            Stage::Hull => unsafe {
+                (*ctx).HSSetSamplers(0, max_sm, &samplers[0].0);
+            },
+            Stage::Domain => unsafe {
+                (*ctx).DSSetSamplers(0, max_sm, &samplers[0].0);
             },
             Stage::Geometry => unsafe {
                 (*ctx).GSSetSamplers(0, max_sm, &samplers[0].0);

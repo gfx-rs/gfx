@@ -172,7 +172,7 @@ impl Factory {
                               -> Result<(gl::types::GLuint, d::shade::ProgramInfo), d::shade::CreateProgramError> {
         use shade::create_program;
         let frame_handles = &mut self.frame_handles;
-        let mut shaders = [0; 3];
+        let mut shaders = [0; 5];
         let usage = shader_set.get_usage();
         let shader_slice = match shader_set {
             &d::ShaderSet::Simple(ref vs, ref ps) => {
@@ -185,6 +185,13 @@ impl Factory {
                 shaders[1] = *gs.reference(frame_handles);
                 shaders[2] = *ps.reference(frame_handles);
                 &shaders[..3]
+            },
+            &d::ShaderSet::Tessellated(ref vs, ref hs, ref ds, ref ps) => {
+                shaders[0] = *vs.reference(frame_handles);
+                shaders[1] = *hs.reference(frame_handles);
+                shaders[2] = *ds.reference(frame_handles);
+                shaders[3] = *ps.reference(frame_handles);
+                &shaders[..4]
             },
         };
         create_program(&self.share.context, &self.share.capabilities,

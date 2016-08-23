@@ -111,12 +111,14 @@ pub enum ContainerType {
 #[repr(u8)]
 pub enum Stage {
     Vertex,
+    Hull,
+    Domain,
     Geometry,
     Pixel,
 }
 
 /// A constant static array of all shader stages.
-pub const STAGES: [Stage; 3] = [Stage::Vertex, Stage::Geometry, Stage::Pixel];
+pub const STAGES: [Stage; 5] = [Stage::Vertex, Stage::Hull, Stage::Domain, Stage::Geometry, Stage::Pixel];
 
 // Describing program data
 
@@ -260,6 +262,11 @@ bitflags!(
         const GEOMETRY = 0x2,
         /// Used by the pixel shader
         const PIXEL    = 0x4,
+        /// Used by the hull shader
+        const HULL    = 0x8,
+        /// Used by the pixel shader
+        const DOMAIN    = 0x16,
+
     }
 );
 
@@ -269,6 +276,8 @@ impl From<Stage> for Usage {
             Stage::Vertex => VERTEX,
             Stage::Geometry => GEOMETRY,
             Stage::Pixel => PIXEL,
+            Stage::Hull => HULL,
+            Stage::Domain => DOMAIN,
         }
     }
 }

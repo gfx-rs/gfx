@@ -237,6 +237,14 @@ pub trait Factory<R: Resources> {
     fn create_shader_vertex(&mut self, code: &[u8]) -> Result<VertexShader<R>, shade::CreateShaderError> {
         self.create_shader(shade::Stage::Vertex, code).map(|s| VertexShader(s))
     }
+    /// Compiles a `HullShader` from source.
+    fn create_shader_hull(&mut self, code: &[u8]) -> Result<HullShader<R>, shade::CreateShaderError> {
+        self.create_shader(shade::Stage::Hull, code).map(|s| HullShader(s))
+    }
+    /// Compiles a `VertexShader` from source.
+    fn create_shader_domain(&mut self, code: &[u8]) -> Result<DomainShader<R>, shade::CreateShaderError> {
+        self.create_shader(shade::Stage::Domain, code).map(|s| DomainShader(s))
+    }
     /// Compiles a `GeometryShader` from source.
     fn create_shader_geometry(&mut self, code: &[u8]) -> Result<GeometryShader<R>, shade::CreateShaderError> {
         self.create_shader(shade::Stage::Geometry, code).map(|s| GeometryShader(s))

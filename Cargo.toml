@@ -92,6 +92,10 @@ name = "terrain"
 path = "examples/terrain/main.rs"
 
 [[example]]
+name = "terrain_tessellated"
+path = "examples/terrain_tessellated/main.rs"
+
+[[example]]
 name = "triangle"
 path = "examples/triangle/main.rs"
 
