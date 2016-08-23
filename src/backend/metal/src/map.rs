@@ -21,7 +21,7 @@ use gfx_core::factory;
 use gfx_core::factory::{Bind, MapAccess, Usage};
 use gfx_core::format::{Format, ChannelType, SurfaceType};
 use gfx_core::state::Comparison;
-use gfx_core::tex::{AaMode, FilterMethod, WrapMode, DepthStencilFlags};
+use gfx_core::tex::{FilterMethod, WrapMode};
 
 pub enum FormatUsage {
     Sample,
@@ -322,7 +322,7 @@ pub fn format_supports_usage(feature_set: MTLFeatureSet, format: MTLPixelFormat,
             }
         },
         R8Unorm => true,
-        R8Unorm_sRGB => {
+        _ => {
             match feature_set {
                 iOS_GPUFamily1_v1 |
                 iOS_GPUFamily1_v2 => {
@@ -502,8 +502,6 @@ pub fn map_buffer_usage(usage: Usage) -> MTLResourceOptions {
 }
 
 pub fn map_filter(filter: FilterMethod) -> (MTLSamplerMinMagFilter, MTLSamplerMipFilter) {
-    use metal::MTLSamplerMinMagFilter::*;
-
     match filter {
         FilterMethod::Scale => (MTLSamplerMinMagFilter::Nearest,
                                 MTLSamplerMipFilter::NotMipmapped),

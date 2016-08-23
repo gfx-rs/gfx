@@ -13,15 +13,16 @@
 // limitations under the License.
 
 
-use cocoa::base::{selector, class};
-use cocoa::foundation::{NSUInteger};
+//use cocoa::base::{selector, class};
+//use cocoa::foundation::{NSUInteger};
 
 use gfx_core;
 use gfx_core::shade;
+use factory::DUMMY_BUFFER_SLOT;
 
 use metal::*;
 
-fn map_base_type_from_component(ct: MTLDataType) -> shade::BaseType {
+fn _map_base_type_from_component(ct: MTLDataType) -> shade::BaseType {
     use metal::MTLDataType::*;
 
     match ct {
@@ -50,7 +51,7 @@ pub fn populate_vertex_attributes(info: &mut shade::ProgramInfo, desc: NSArray<M
 
 pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage,
                      args: NSArray<MTLArgument>) {
-    use gfx_core::shade::Stage;
+//    use gfx_core::shade::Stage;
     use map::{map_base_type, map_texture_type};
 
     let usage = stage.into();
@@ -61,15 +62,15 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage,
 
         match arg.type_() {
             MTLArgumentType::Buffer => {
-                // we skip the buffer with slot 30 which is used in our fake
-                // PSO
-                if arg.index() == 30 { continue; }
+                // we skip the dummy buffer, which is used in our fake PSO
+                if arg.index() == DUMMY_BUFFER_SLOT { continue; }
 
                 info.constant_buffers.push(shade::ConstantBufferVar {
                     name: name.into(),
                     slot: arg.index() as gfx_core::ConstantBufferSlot,
                     size: arg.buffer_data_size() as usize,
                     usage: usage,
+                    elements: Vec::new(), //TODO!
                 });
             },
             MTLArgumentType::Texture => {

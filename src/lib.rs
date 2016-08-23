@@ -290,7 +290,7 @@ pub trait ApplicationMetal {
 
 #[cfg(target_os = "macos")]
 impl Factory<gfx_device_metal::Resources> for gfx_device_metal::Factory {
-    type CommandBuffer = gfx_device_meta::CommandBuffer;
+    type CommandBuffer = gfx_device_metal::CommandBuffer;
     fn create_encoder(&mut self) -> gfx::Encoder<gfx_device_metal::Resources, Self::CommandBuffer> {
         self.create_command_buffer().into()
     }
@@ -312,9 +312,7 @@ impl<
 
         let main_depth = factory.create_depth_stencil_view_only(width as u16, height as u16).unwrap();
 
-        let cmd_buf = factory.create_command_buffer();
-
-        let mut app = Self::new(factory, cmd_buf.into(), Init {
+        let mut app = Self::new(factory, Init {
             backend: shade::Backend::Msl(device.get_shader_model()),
             color: main_color,
             depth: main_depth,
