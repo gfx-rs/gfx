@@ -291,18 +291,17 @@ impl core::Factory<Resources> for Factory {
         let vertex_desc = MTLVertexDescriptor::new();
 
         println!("att: {:?}", desc.attributes);
-        // TODO: implement instancing
-        //
         // TODO: find a better way to set the buffer's stride, step func and
         //       step rate
         let buf = vertex_desc.layouts().object_at(0);
-        buf.set_stride(desc.attributes[0].unwrap().0.stride as u64);
-        buf.set_step_function(MTLVertexStepFunction::PerVertex);
-        buf.set_step_rate(1);
+        let vat = desc.vertex_buffers[desc.attributes[0].unwrap().0 as usize].unwrap();
+        buf.set_stride(vat.stride as u64);
+        buf.set_step_function(if vat.rate > 0 {MTLVertexStepFunction::PerInstance} else {MTLVertexStepFunction::PerVertex});
+        buf.set_step_rate(vat.rate as u64);
 
         for (attr, attr_desc) in program.get_info().vertex_attributes.iter().zip(desc.attributes.iter()) {
-            let (elem, irate) = match attr_desc {
-                &Some((ref el, ir)) => (el, ir),
+            let elem = match attr_desc {
+                &Some((_, el)) => el,
                 &None => continue,
             };
 
@@ -339,7 +338,7 @@ impl core::Factory<Resources> for Factory {
             // TODO: depthstencil
             println!("{:?}", depth_desc);
             // pso_descriptor.set_depth_attachment_pixel_format(MTLPixelFormat::Depth32Float);
-            pso_descriptor.set_depth_attachment_pixel_format(map_depth_surface(depth_desc.0).unwrap());
+            pso_descriptor.set_depth_attachment_pixel_format(map_depth_surface((depth_desc.0).0).unwrap());
         }
 
         let pso = self.device.new_render_pipeline_state(pso_descriptor).unwrap();
