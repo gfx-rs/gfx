@@ -40,6 +40,7 @@ pub enum UpdateError<T> {
         target: usize,
         slice: usize,
     },
+    IsMapped,
 }
 
 impl<T: Any + fmt::Debug + fmt::Display> fmt::Display for UpdateError<T> {
@@ -49,6 +50,7 @@ impl<T: Any + fmt::Debug + fmt::Display> fmt::Display for UpdateError<T> {
                 write!(f, "Write to {} from {} is out of bounds", target, source),
             UpdateError::UnitCountMismatch {ref target, ref slice} =>
                 write!(f, "{}: expected {}, found {}", self.description(), target, slice),
+            UpdateError::IsMapped => write!(f, "Attempting to update mapped memory"),
         }
     }
 }
@@ -58,6 +60,7 @@ impl<T: Any + fmt::Debug + fmt::Display> Error for UpdateError<T> {
         match *self {
             UpdateError::OutOfBounds {..} => "Write to data is out of bounds",
             UpdateError::UnitCountMismatch {..} => "Unit count mismatch",
+            UpdateError::IsMapped => "Attempting to update mapped memory",
         }
     }
 }
@@ -119,9 +122,9 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
                          data: &[T], offset_elements: usize)
                          -> Result<(), UpdateError<usize>>
     {
-        if data.is_empty() {
-            return Ok(())
-        }
+        if data.is_empty() { return Ok(()); }
+        if buf.raw().mapping().is_some() { return Err(UpdateError::IsMapped); }
+
         let elem_size = mem::size_of::<T>();
         let offset_bytes = elem_size * offset_elements;
         let bound = data.len().wrapping_mul(elem_size) + offset_bytes;
@@ -139,13 +142,17 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
     }
 
     /// Update a buffer with a single structure.
-    pub fn update_constant_buffer<T: Copy>(&mut self, buf: &handle::Buffer<R, T>, data: &T) {
+    pub fn update_constant_buffer<T: Copy>(&mut self, buf: &handle::Buffer<R, T>, data: &T) -> Result<(), UpdateError<usize>> {
         use std::slice;
+
+        if buf.raw().mapping().is_some() { return Err(UpdateError::IsMapped); }
+
         let slice = unsafe {
             slice::from_raw_parts(data as *const T as *const u8, mem::size_of::<T>())
         };
         self.command_buffer.update_buffer(
             self.handles.ref_buffer(buf.raw()).clone(), slice, 0);
+        Ok(())
     }
 
     /// Update the contents of a texture.
@@ -158,9 +165,7 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
         S::DataType: Copy,
         T: format::Formatted<Surface = S>,
     {
-        if data.is_empty() {
-            return Ok(())
-        }
+        if data.is_empty() { return Ok(()); }
 
         let target_count = img.get_texel_count();
         if target_count != data.len() {
