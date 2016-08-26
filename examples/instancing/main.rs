@@ -53,7 +53,7 @@ gfx_defines!{
     }
 }
 
-fn fill_instances(attributes: &mut [Instance], instances_per_length: u32, size: f32) {
+fn fill_instances(instances: &mut [Instance], instances_per_length: u32, size: f32) {
     let gap = 0.4 / (instances_per_length + 1) as f32;
     println!("gap: {}", gap);
 
@@ -65,7 +65,7 @@ fn fill_instances(attributes: &mut [Instance], instances_per_length: u32, size: 
     for x in 0..length {
         for y in 0..length {
             let i = x*length + y;
-            attributes[i] = Instance {
+            instances[i] = Instance {
                 translate: translate,
                 color: rng.next_u32()
             };
@@ -76,12 +76,21 @@ fn fill_instances(attributes: &mut [Instance], instances_per_length: u32, size: 
     }
  }
 
+fn update_instances(instances: &mut [Instance]) {
+    let mut rng = rand::StdRng::new().unwrap();
+    for instance in instances {
+        instance.color = rng.next_u32();
+    }
+}
+
 const MAX_INSTANCE_COUNT: usize = 2048;
 
 struct App<R: gfx::Resources> {
     pso: gfx::PipelineState<R, pipe::Meta>,
     data: pipe::Data<R>,
     slice: gfx::Slice<R>,
+    mapping: gfx::mapping::RWable<R, Instance>,
+    counter: u16,
 }
 
 impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
@@ -109,24 +118,17 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
          let size = 1.6 / instances_per_length as f32;
         println!("size: {}", size);
 
-        let use_mapping = false;
-        let quad_instances = if use_mapping {
-            // using RW just to be able to get a slice
-            let buf = factory.create_buffer_persistent(MAX_INSTANCE_COUNT, gfx::BufferRole::Vertex, gfx::Bind::empty(), gfx::mapping::RW).unwrap();
-            let mut attributes = factory.map_buffer_rw(&buf).unwrap();
-            let mut attributes = attributes.read_write();
-            fill_instances(&mut attributes, instances_per_length, size);
-            buf
-        }else {
-            let mut attributes = (0..instance_count).map(|_| Instance {
-                translate: [0.0, 0.0],
-                color: 0,
-            }).collect::<Vec<_>>();
-            fill_instances(&mut attributes, instances_per_length, size);
-            factory.create_buffer_immutable(&attributes, gfx::BufferRole::Vertex, gfx::Bind::empty()).unwrap()
-        };
+        let (instance_buffer, mut instance_mapping) = factory
+            .create_buffer_persistent_rw(MAX_INSTANCE_COUNT,
+                                         gfx::BufferRole::Vertex,
+                                         gfx::Bind::empty());
+        {
+            let mut instances = instance_mapping.read_write();
+            fill_instances(&mut instances, instances_per_length, size);
+        }
 
-        let (quad_vertices, mut slice) = factory.create_vertex_buffer_with_slice(&QUAD_VERTICES, &QUAD_INDICES[..]);
+        let (quad_vertices, mut slice) = factory
+            .create_vertex_buffer_with_slice(&QUAD_VERTICES, &QUAD_INDICES[..]);
         slice.instances = Some((instance_count, 0));
         let locals = Locals { scale: size };
 
@@ -138,7 +140,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 ).unwrap(),
             data: pipe::Data {
                 vertex: quad_vertices,
-                instance: quad_instances,
+                instance: instance_buffer,
                 scale: size,
                 locals: factory.create_buffer_immutable(&[locals],
                     gfx::BufferRole::Uniform, gfx::Bind::empty()
@@ -146,10 +148,20 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 out: init.color,
             },
             slice: slice,
+            mapping: instance_mapping,
+            counter: 0,
         }
     }
 
     fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
+        if self.counter == 120 { // TODO: use frame delta time ?
+            let mut instances = self.mapping.read_write();
+            update_instances(&mut instances);
+            self.counter = 0;
+        } else {
+            self.counter += 1;
+        }
+
         encoder.clear(&self.data.out, [0.1, 0.2, 0.3, 1.0]);
         encoder.draw(&self.slice, &self.pso, &self.data);
     }

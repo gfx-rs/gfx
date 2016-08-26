@@ -433,16 +433,23 @@ impl d::Factory<R> for Factory {
         try!(buf.valid_access(access));
 
         let target = gl::ARRAY_BUFFER;
-        let (kind, gl_access) = if self.share.private_caps.buffer_storage_supported {
-            (MappingKind::Persistent,
-             access_to_gl(access) | gl::MAP_PERSISTENT_BIT | gl::MAP_FLUSH_EXPLICIT_BIT)
+        let (kind, ptr) = if self.share.private_caps.buffer_storage_supported {
+            let access = access_to_map_bits(access) |
+                         gl::MAP_PERSISTENT_BIT |
+                         gl::MAP_FLUSH_EXPLICIT_BIT;
+            let size = buf.get_info().size as isize;
+            let ptr = unsafe {
+                gl.BindBuffer(target, raw_handle);
+                gl.MapBufferRange(target, 0, size, access)
+            } as *mut ::std::os::raw::c_void;
+            (MappingKind::Persistent, ptr)
         } else {
-            (MappingKind::Temporary, access_to_gl(access))
+            let ptr = unsafe {
+                gl.BindBuffer(target, raw_handle);
+                gl.MapBuffer(target, access_to_gl(access))
+            } as *mut ::std::os::raw::c_void;
+            (MappingKind::Temporary, ptr)
         };
-
-        let ptr = unsafe {
-            gl.BindBuffer(target, raw_handle);
-            gl.MapBuffer(target, gl_access) } as *mut ::std::os::raw::c_void;
 
         let res = BackendMapping {
             kind: kind,

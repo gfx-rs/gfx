@@ -18,7 +18,7 @@
 //! exposes extension functions and shortcuts to aid with creating and managing graphics resources.
 //! See the `FactoryExt` trait for more information.
 
-use gfx_core::{format, handle, tex, state, Pod};
+use gfx_core::{format, handle, mapping, tex, state, Pod};
 use gfx_core::{Primitive, Resources, ShaderSet};
 use gfx_core::factory::{Bind, BufferRole, Factory};
 use gfx_core::pso::{CreationError, Descriptor};
@@ -127,6 +127,48 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     fn create_constant_buffer<T>(&mut self, num: usize) -> handle::Buffer<R, T> {
         self.create_buffer_dynamic(num, BufferRole::Uniform, Bind::empty())
             .unwrap()
+    }
+
+    /// Creates and maps a readable persistent buffer.
+    fn create_buffer_persistent_readable<T>(&mut self,
+                                            num: usize,
+                                            role: BufferRole,
+                                            bind: Bind) -> (handle::Buffer<R, T>,
+                                                            mapping::Readable<R, T>)
+        where T: Copy
+    {
+        let buffer = self.create_buffer_persistent(num, role, bind, mapping::READABLE)
+            .unwrap();
+        let mapping = self.map_buffer_readable(&buffer).unwrap();
+        (buffer, mapping)
+    }
+
+    /// Creates and maps a writable persistent buffer.
+    fn create_buffer_persistent_writable<T>(&mut self,
+                                            num: usize,
+                                            role: BufferRole,
+                                            bind: Bind) -> (handle::Buffer<R, T>,
+                                                            mapping::Writable<R, T>)
+        where T: Copy
+    {
+        let buffer = self.create_buffer_persistent(num, role, bind, mapping::WRITABLE)
+            .unwrap();
+        let mapping = self.map_buffer_writable(&buffer).unwrap();
+        (buffer, mapping)
+    }
+
+    /// Creates and maps an rw persistent buffer.
+    fn create_buffer_persistent_rw<T>(&mut self,
+                                      num: usize,
+                                      role: BufferRole,
+                                      bind: Bind) -> (handle::Buffer<R, T>,
+                                                      mapping::RWable<R, T>)
+        where T: Copy
+    {
+        let buffer = self.create_buffer_persistent(num, role, bind, mapping::RW)
+            .unwrap();
+        let mapping = self.map_buffer_rw(&buffer).unwrap();
+        (buffer, mapping)
     }
 
     /// Creates a `ShaderSet` from the supplied vertex and pixel shader source code.
