@@ -109,9 +109,7 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
         D: Device<Resources=R, CommandBuffer=C>
     {
         device.pin_submitted_resources(&self.handles);
-        device.submit(&mut self.command_buffer,
-                      &self.access_info.mapped_reads[..],
-                      &self.access_info.mapped_writes[..]);
+        device.submit(&mut self.command_buffer, &self.access_info);
         self.command_buffer.reset();
         self.access_info.clear();
         self.handles.clear();

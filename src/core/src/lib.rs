@@ -190,15 +190,13 @@ pub trait Device: Sized {
 
     /// Submits a `CommandBuffer` to the GPU for execution.
     fn submit(&mut self, &mut Self::CommandBuffer,
-                         mapped_reads: &[handle::RawMapping<Self::Resources>],
-                         mapped_writes: &[handle::RawMapping<Self::Resources>]);
+                         access: &pso::AccessInfo<Self::Resources>);
 
     /// Submits a `CommandBuffer` to the GPU for execution.
     /// returns a fence that is signaled after the GPU has executed all commands
     fn fenced_submit(&mut self,
                      &mut Self::CommandBuffer,
-                     mapped_reads: &[handle::RawMapping<Self::Resources>],
-                     mapped_writes: &[handle::RawMapping<Self::Resources>],
+                     access: &pso::AccessInfo<Self::Resources>,
                      after: Option<handle::Fence<Self::Resources>>)
                      -> handle::Fence<Self::Resources>;
 

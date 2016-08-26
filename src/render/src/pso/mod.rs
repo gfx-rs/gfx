@@ -50,44 +50,8 @@ use std::fmt;
 use gfx_core as d;
 pub use gfx_core::pso::{Descriptor};
 
-/// Informations about what is accessed in the pipeline
-#[derive(Debug)]
-pub struct AccessInfo<R: d::Resources> {
-    /// The GPU will read from buffers with these mappings
-    pub mapped_reads: Vec<d::handle::RawMapping<R>>,
-    /// The GPU will write from buffers with these mappings
-    pub mapped_writes: Vec<d::handle::RawMapping<R>>,
-}
-
-impl<R: d::Resources> AccessInfo<R> {
-    /// Creates empty access informations
-    pub fn new() -> Self {
-        AccessInfo {
-            mapped_reads: Vec::new(),
-            mapped_writes: Vec::new(),
-        }
-    }
-
-    /// Clear access informations
-    pub fn clear(&mut self) {
-        self.mapped_reads.clear();
-        self.mapped_writes.clear();
-    }
-
-    /// Register a buffer read access
-    pub fn buffer_read(&mut self, buffer: &d::handle::RawBuffer<R>) {
-        if let Some(mapping) = buffer.mapping() {
-            self.mapped_reads.push(mapping);
-        }
-    }
-
-    /// Register a buffer write access
-    pub fn buffer_write(&mut self, buffer: &d::handle::RawBuffer<R>) {
-        if let Some(mapping) = buffer.mapping() {
-            self.mapped_writes.push(mapping);
-        }
-    }
-}
+/// Informations about what is accessed by the pipeline
+pub type AccessInfo<R> = ::gfx_core::pso::AccessInfo<R>;
 
 /// A complete set of raw data that needs to be specified at run-time
 /// whenever we draw something with a PSO. This is what "data" struct

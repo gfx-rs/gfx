@@ -221,8 +221,8 @@ impl<R: Resources, T: ToUniform> DataBind<R> for Global<T> {
     fn bind_to(&self,
                out: &mut RawDataSet<R>,
                data: &Self::Data,
-               man: &mut handle::Manager<R>,
-               access: &mut AccessInfo<R>) {
+               _: &mut handle::Manager<R>,
+               _: &mut AccessInfo<R>) {
         if let Some(loc) = self.0 {
             let value = data.convert();
             out.global_constants.push((loc, value));

@@ -100,7 +100,7 @@ impl<R: Resources> DataBind<R> for RawShaderResource {
                out: &mut RawDataSet<R>,
                data: &Self::Data,
                man: &mut handle::Manager<R>,
-               access: &mut AccessInfo<R>) {
+               _: &mut AccessInfo<R>) {
         // TODO: register buffer view source access
         if let Some((slot, usage)) = self.0 {
             let view = man.ref_srv(data).clone();
@@ -135,7 +135,7 @@ impl<R: Resources, T> DataBind<R> for UnorderedAccess<T> {
                out: &mut RawDataSet<R>,
                data: &Self::Data,
                man: &mut handle::Manager<R>,
-               access: &mut AccessInfo<R>) {
+               _: &mut AccessInfo<R>) {
         // TODO: register buffer view source access
         if let Some((slot, usage)) = self.0 {
             let view =  man.ref_uav(data.raw()).clone();
@@ -170,7 +170,7 @@ impl<R: Resources> DataBind<R> for Sampler {
                out: &mut RawDataSet<R>,
                data: &Self::Data,
                man: &mut handle::Manager<R>,
-               access: &mut AccessInfo<R>) {
+               _: &mut AccessInfo<R>) {
         if let Some((slot, usage)) = self.0 {
             let sm = man.ref_sampler(data).clone();
             out.samplers.push(pso::SamplerParam(sm, usage, slot));

@@ -81,7 +81,7 @@ impl<R: Resources, T> DataBind<R> for RenderTarget<T> {
                out: &mut RawDataSet<R>,
                data: &Self::Data,
                man: &mut handle::Manager<R>,
-               access: &mut AccessInfo<R>) {
+               _: &mut AccessInfo<R>) {
         if let Some(slot) = self.0 {
             out.pixel_targets.add_color(slot, man.ref_rtv(data.raw()), data.raw().get_dimensions());
         }
@@ -144,7 +144,7 @@ impl<R: Resources> DataBind<R> for RawRenderTarget {
                out: &mut RawDataSet<R>,
                data: &Self::Data,
                man: &mut handle::Manager<R>,
-               access: &mut AccessInfo<R>) {
+               _: &mut AccessInfo<R>) {
         if let Some(slot) = self.0 {
             out.pixel_targets.add_color(slot, man.ref_rtv(data), data.get_dimensions());
         }
@@ -167,7 +167,7 @@ impl<R: Resources, T> DataBind<R> for DepthTarget<T> {
                out: &mut RawDataSet<R>,
                data: &Self::Data,
                man: &mut handle::Manager<R>,
-               access: &mut AccessInfo<R>) {
+               _: &mut AccessInfo<R>) {
         let dsv = data.raw();
         out.pixel_targets.add_depth_stencil(man.ref_dsv(dsv), true, false, dsv.get_dimensions());
     }
@@ -188,7 +188,7 @@ impl<R: Resources, T> DataBind<R> for StencilTarget<T> {
                out: &mut RawDataSet<R>,
                data: &Self::Data,
                man: &mut handle::Manager<R>,
-               access: &mut AccessInfo<R>) {
+               _: &mut AccessInfo<R>) {
         let dsv = data.0.raw();
         out.pixel_targets.add_depth_stencil(man.ref_dsv(dsv), false, true, dsv.get_dimensions());
         out.ref_values.stencil = data.1;
@@ -210,7 +210,7 @@ impl<R: Resources, T> DataBind<R> for DepthStencilTarget<T> {
                out: &mut RawDataSet<R>,
                data: &Self::Data,
                man: &mut handle::Manager<R>,
-               access: &mut AccessInfo<R>) {
+               _: &mut AccessInfo<R>) {
         let dsv = data.0.raw();
         out.pixel_targets.add_depth_stencil(man.ref_dsv(dsv), true, true, dsv.get_dimensions());
         out.ref_values.stencil = data.1;
@@ -230,8 +230,8 @@ impl<R: Resources> DataBind<R> for Scissor {
     fn bind_to(&self,
                out: &mut RawDataSet<R>,
                data: &Self::Data,
-               man: &mut handle::Manager<R>,
-               access: &mut AccessInfo<R>) {
+               _: &mut handle::Manager<R>,
+               _: &mut AccessInfo<R>) {
         out.scissor = *data;
     }
 }
@@ -247,8 +247,8 @@ impl<R: Resources> DataBind<R> for BlendRef {
     fn bind_to(&self,
                out: &mut RawDataSet<R>,
                data: &Self::Data,
-               man: &mut handle::Manager<R>,
-               access: &mut AccessInfo<R>) {
+               _: &mut handle::Manager<R>,
+               _: &mut AccessInfo<R>) {
         out.ref_values.blend = *data;
     }
 }

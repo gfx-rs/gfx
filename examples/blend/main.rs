@@ -152,7 +152,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
     fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
         let locals = Locals { blend: self.id as i32 };
-        encoder.update_constant_buffer(&self.bundle.data.locals, &locals);
+        encoder.update_constant_buffer(&self.bundle.data.locals, &locals).unwrap();
         encoder.clear(&self.bundle.data.out, [0.0; 4]);
         self.bundle.encode(encoder);
     }

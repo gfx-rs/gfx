@@ -852,10 +852,10 @@ impl d::Device for Device {
     }
 
     fn submit(&mut self, cb: &mut command::CommandBuffer,
-                         mapped_reads: &[handle::RawMapping<Resources>],
-                         mapped_writes: &[handle::RawMapping<Resources>]) {
-        self.handle_write_syncs(mapped_reads);
+                         access: &d::pso::AccessInfo<Resources>) {
+        self.handle_write_syncs(access.mapped_reads());
         self.no_fence_submit(cb);
+        let mapped_writes = access.mapped_writes();
         if mapped_writes.len() > 0 {
             self.place_memory_barrier();
             let fence = self.place_fence();
@@ -865,8 +865,7 @@ impl d::Device for Device {
 
     fn fenced_submit(&mut self,
                      cb: &mut command::CommandBuffer,
-                     mapped_reads: &[handle::RawMapping<Resources>],
-                     mapped_writes: &[handle::RawMapping<Resources>],
+                     access: &d::pso::AccessInfo<Resources>,
                      after: Option<handle::Fence<Resources>>) -> handle::Fence<Resources> {
 
         if let Some(fence) = after {
@@ -877,8 +876,9 @@ impl d::Device for Device {
             unsafe { self.share.context.WaitSync(f.raw.0, 0, timeout); }
         }
 
-        self.handle_write_syncs(mapped_reads);
+        self.handle_write_syncs(access.mapped_reads());
         self.no_fence_submit(cb);
+        let mapped_writes = access.mapped_writes();
         if mapped_writes.len() > 0 { self.place_memory_barrier(); }
         let fence = self.place_fence();
         self.handle_read_syncs(mapped_writes, &fence);

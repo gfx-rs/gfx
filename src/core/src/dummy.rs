@@ -120,13 +120,11 @@ impl Device for DummyDevice {
     }
     fn pin_submitted_resources(&mut self, _: &handle::Manager<DummyResources>) {}
     fn submit(&mut self, _: &mut DummyCommandBuffer,
-                         _mapped_reads: &[handle::RawMapping<Self::Resources>],
-                         _mapped_writes: &[handle::RawMapping<Self::Resources>]) {}
+                         _: &pso::AccessInfo<Self::Resources>) {}
 
     fn fenced_submit(&mut self,
                      _: &mut Self::CommandBuffer,
-                     _mapped_reads: &[handle::RawMapping<Self::Resources>],
-                     _mapped_writes: &[handle::RawMapping<Self::Resources>],
+                     _: &pso::AccessInfo<Self::Resources>,
                      _after: Option<handle::Fence<Self::Resources>>)
                      -> handle::Fence<Self::Resources> {
         unimplemented!()
