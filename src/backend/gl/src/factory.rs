@@ -107,18 +107,26 @@ impl Factory {
     fn create_buffer_internal(&mut self) -> Buffer {
         let gl = &self.share.context;
         let mut name = 0 as Buffer;
-        unsafe {
-            gl.GenBuffers(1, &mut name);
-        }
+        unsafe { gl.GenBuffers(1, &mut name); }
         info!("\tCreated buffer {}", name);
         name
     }
 
-    fn init_buffer(&mut self, buffer: Buffer, info: &f::BufferInfo) {
+    fn init_buffer(&mut self,
+                   buffer: Buffer,
+                   info: &f::BufferInfo,
+                   data: Option<&[u8]>) {
         use gfx_core::factory::Usage::*;
 
         let gl = &self.share.context;
         let target = role_to_target(info.role);
+        let data = if let Some(data) = data {
+            debug_assert!(data.len() == info.size);
+            data.as_ptr() as *const gl::types::GLvoid
+        } else {
+            0 as *const gl::types::GLvoid
+        };
+
         if self.share.private_caps.buffer_storage_supported {
             let usage = match info.usage {
                 GpuOnly | Immutable => 0,
@@ -130,7 +138,7 @@ impl Factory {
                 gl.BindBuffer(target, buffer);
                 gl.BufferStorage(target,
                     info.size as gl::types::GLsizeiptr,
-                    0 as *const gl::types::GLvoid,
+                    data,
                     usage
                 );
             }
@@ -159,7 +167,7 @@ impl Factory {
                 gl.BindBuffer(target, buffer);
                 gl.BufferData(target,
                     info.size as gl::types::GLsizeiptr,
-                    0 as *const gl::types::GLvoid,
+                    data,
                     usage
                 );
             }
@@ -240,7 +248,7 @@ impl d::Factory<R> for Factory {
             return Err(f::BufferError::Other);
         }
         let name = self.create_buffer_internal();
-        self.init_buffer(name, &info);
+        self.init_buffer(name, &info, None);
         Ok(self.share.handles.borrow_mut().make_buffer(name, info))
     }
 
@@ -254,8 +262,7 @@ impl d::Factory<R> for Factory {
             size: data.len(),
             stride: stride,
         };
-        self.init_buffer(name, &info);
-        update_sub_buffer(&self.share.context, name, data.as_ptr(), data.len(), 0, role);
+        self.init_buffer(name, &info, Some(data));
         Ok(self.share.handles.borrow_mut().make_buffer(name, info))
     }
 

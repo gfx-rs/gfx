@@ -37,7 +37,7 @@ pub use gfx_core::{Device, Resources, Primitive};
 pub use gfx_core::{VertexCount, InstanceCount};
 pub use gfx_core::{ShaderSet, VertexShader, HullShader, DomainShader,
                    GeometryShader, PixelShader};
-pub use gfx_core::{format, handle, tex};
+pub use gfx_core::{format, handle, tex, mapping};
 pub use gfx_core::factory::{Factory, Typed, Usage, Bind,
                             BufferRole, BufferInfo, BufferError, BufferUpdateError,
                             LayerError, ResourceViewError, TargetViewError,  CombinedError,

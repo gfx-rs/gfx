@@ -307,7 +307,7 @@ fn create_scene<R, F>(factory: &mut F,
     let mut fw_data = forward::Data {
         vbuf: cube_buf.clone(),
         vs_locals: factory.create_constant_buffer(1),
-        ps_locals: factory.create_buffer_const(&[locals],
+        ps_locals: factory.create_buffer_immutable(&[locals],
             gfx::BufferRole::Uniform, gfx::Bind::empty()
             ).unwrap(),
         light_buf: light_buf.clone(),
@@ -521,6 +521,8 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
 
         // fill up shadow map for each light
         if self.is_parallel {
+            unimplemented!() // FIXME: add mapping Send bound
+            /*
             use std::thread;
             use std::sync::mpsc;
 
@@ -561,6 +563,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
                 light.encoder.flush(device);
                 self.scene.lights.push(light);
             }
+            */
         } else {
             for light in self.scene.lights.iter_mut() {
                 // clear

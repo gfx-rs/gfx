@@ -93,7 +93,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         ];
         let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, ());
 
-        let (_, texture_view) = factory.create_texture_const::<ColorFormat>(
+        let (_, texture_view) = factory.create_texture_immutable::<ColorFormat>(
             gfx::tex::Kind::D2(4, 4, gfx::tex::AaMode::Single),
             &[&L0_DATA, &L1_DATA, &L2_DATA]
             ).unwrap();

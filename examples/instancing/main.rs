@@ -111,9 +111,11 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
         let use_mapping = false;
         let quad_instances = if use_mapping {
-            let buf = factory.create_buffer_dynamic(MAX_INSTANCE_COUNT, gfx::BufferRole::Vertex, gfx::Bind::empty()).unwrap();
-            let mut attributes = factory.map_buffer_writable(&buf);
-            fill_instances(attributes.to_mut_slice(), instances_per_length, size);
+            // using RW just to be able to get a slice
+            let buf = factory.create_buffer_persistent(MAX_INSTANCE_COUNT, gfx::BufferRole::Vertex, gfx::Bind::empty(), gfx::mapping::RW).unwrap();
+            let mut attributes = factory.map_buffer_rw(&buf).unwrap();
+            let mut attributes = attributes.read_write();
+            fill_instances(&mut attributes, instances_per_length, size);
             buf
         }else {
             let mut attributes = (0..instance_count).map(|_| Instance {
@@ -121,7 +123,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 color: 0,
             }).collect::<Vec<_>>();
             fill_instances(&mut attributes, instances_per_length, size);
-            factory.create_buffer_const(&attributes, gfx::BufferRole::Vertex, gfx::Bind::empty()).unwrap()
+            factory.create_buffer_immutable(&attributes, gfx::BufferRole::Vertex, gfx::Bind::empty()).unwrap()
         };
 
         let (quad_vertices, mut slice) = factory.create_vertex_buffer_with_slice(&QUAD_VERTICES, &QUAD_INDICES[..]);
@@ -138,7 +140,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 vertex: quad_vertices,
                 instance: quad_instances,
                 scale: size,
-                locals: factory.create_buffer_const(&[locals],
+                locals: factory.create_buffer_immutable(&[locals],
                     gfx::BufferRole::Uniform, gfx::Bind::empty()
                     ).unwrap(),
                 out: init.color,
