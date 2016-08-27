@@ -270,7 +270,7 @@ pub fn init<T: gfx_core::format::RenderFormat>(title: &str, width: u32, height: 
 
     {
         use gfx_core::Device;
-        device.submit(&mut cbuf);
+        device.submit(&mut cbuf, &gfx_core::pso::AccessInfo::new());
     }
 
     let win = Window {

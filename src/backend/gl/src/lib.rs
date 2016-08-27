@@ -775,33 +775,42 @@ impl Device {
 
     fn handle_mapped_gpu_reads(&mut self, mappings: &[handle::RawMapping<Resources>]) {
         let gl = &self.share.context;
-        for mapping in mappings {
-            let mut inner = mapping.access()
-                .expect("user error: mapping still in use on submit");
+        if self.share.private_caps.buffer_storage_supported {
+            // MappingKind::Persistent
+            for mapping in mappings {
+                let mut inner = mapping.access()
+                    .expect("user error: mapping still in use on submit");
 
-            match inner.resource.kind {
-                MappingKind::Persistent => {
-                    if inner.status.cpu { unsafe {
+                if inner.status.cpu {
+                    unsafe {
                         gl.BindBuffer(inner.resource.target, *inner.buffer.resource());
                         let size = inner.buffer.get_info().size as isize;
                         gl.FlushMappedBufferRange(inner.resource.target, 0, size);
-                    } }
-                }
-                MappingKind::Temporary => factory::temporary_ensure_unmapped(&mut inner),
-            }
+                    }
 
-            inner.status.cpu = false;
+                    inner.status.cpu = false;
+                }
+            }
+        } else {
+            // MappingKind::Temporary
+            for mapping in mappings {
+                let mut inner = mapping.access()
+                    .expect("user error: mapping still in use on submit");
+
+                factory::temporary_ensure_unmapped(&mut inner);
+                inner.status.cpu = false;
+            }
         }
     }
 
     fn mapped_gpu_writes_prepass(&mut self, mappings: &[handle::RawMapping<Resources>]) {
-        for mapping in mappings {
-            let mut inner = mapping.access()
-                .expect("user error: mapping still in use on submit");
+        if !self.share.private_caps.buffer_storage_supported {
+            // MappingKind::Temporary
+            for mapping in mappings {
+                let mut inner = mapping.access()
+                    .expect("user error: mapping still in use on submit");
 
-            match inner.resource.kind {
-                MappingKind::Persistent => {}
-                MappingKind::Temporary => factory::temporary_ensure_unmapped(&mut inner),
+                factory::temporary_ensure_unmapped(&mut inner);
             }
         }
     }
@@ -809,17 +818,15 @@ impl Device {
     fn handle_mapped_gpu_writes(&mut self,
                                 mappings: &[handle::RawMapping<Resources>],
                                 fence: &handle::Fence<Resources>) {
-        for mapping in mappings {
-            let mut inner = mapping.access()
-                .expect("user error: mapping still in use on submit");
+        if self.share.private_caps.buffer_storage_supported {
+            // MappingKind::Persistent
+            for mapping in mappings {
+                let mut inner = mapping.access()
+                    .expect("user error: mapping still in use on submit");
 
-            match inner.resource.kind {
-                MappingKind::Persistent => {
-                    if inner.access.contains(mapping::READABLE) {
-                        inner.status.gpu = Some(fence.clone());
-                    }
+                if inner.access.contains(mapping::READABLE) {
+                    inner.status.gpu = Some(fence.clone());
                 }
-                MappingKind::Temporary => {}
             }
         }
     }
@@ -899,17 +906,12 @@ impl d::Device for Device {
             |_, _| {}, //RTV
             |_, _| {}, //DSV
             |gl, v| unsafe { if v.object != 0 { gl.DeleteSamplers(1, &v.object) }},
-            |gl, v| unsafe { gl.DeleteSync(v.raw.0) },
-            |gl, raw_mapping| {
-                let inner = raw_mapping.access().unwrap();
+            |gl, fence| unsafe { gl.DeleteSync(fence.raw.0) },
+            |_, raw_mapping| {
+                let mut inner = raw_mapping.access().unwrap();
                 match inner.resource.kind {
                     MappingKind::Persistent => (),
-                    MappingKind::Temporary => {
-                        if inner.resource.is_mapped { unsafe {
-                            gl.BindBuffer(inner.resource.target, *inner.buffer.resource());
-                            gl.UnmapBuffer(inner.resource.target);
-                        } }
-                    }
+                    MappingKind::Temporary => factory::temporary_ensure_unmapped(&mut inner),
                 }
             },
         );

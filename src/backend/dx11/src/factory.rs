@@ -18,7 +18,8 @@ use std::os::raw::c_void;
 use std::sync::Arc;
 use winapi;
 use gfx_core as core;
-use gfx_core::factory as f;
+use gfx_core::mapping::{self, Builder};
+use gfx_core::factory::{self as f, Typed};
 use gfx_core::handle as h;
 use gfx_core::handle::Producer;
 use {Resources as R, Share, Buffer, Texture, Pipeline, Program, Shader};
@@ -27,21 +28,21 @@ use {CommandList, DeferredContext};
 use native;
 
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct RawMapping {
     pointer: *mut c_void,
 }
 
-impl core::mapping::Raw for RawMapping {
+impl core::mapping::Backend<R> for RawMapping {
     unsafe fn set<T>(&self, index: usize, val: T) {
         *(self.pointer as *mut T).offset(index as isize) = val;
     }
 
-    unsafe fn to_slice<T>(&self, len: usize) -> &[T] {
+    unsafe fn slice<'a, 'b, T>(&'a self, len: usize) -> &'b [T] {
         slice::from_raw_parts(self.pointer as *const T, len)
     }
 
-    unsafe fn to_mut_slice<T>(&self, len: usize) -> &mut [T] {
+    unsafe fn mut_slice<'a, 'b, T>(&'a self, len: usize) -> &'b mut [T] {
         slice::from_raw_parts_mut(self.pointer as *mut T, len)
     }
 }
@@ -309,8 +310,6 @@ impl Factory {
 }
 
 impl core::Factory<R> for Factory {
-    type Mapper = RawMapping;
-
     fn get_capabilities(&self) -> &core::Capabilities {
         &self.share.capabilities
     }
@@ -319,11 +318,11 @@ impl core::Factory<R> for Factory {
         self.create_buffer_internal(info, None)
     }
 
-    fn create_buffer_const_raw(&mut self, data: &[u8], stride: usize, role: f::BufferRole, bind: f::Bind)
+    fn create_buffer_immutable_raw(&mut self, data: &[u8], stride: usize, role: f::BufferRole, bind: f::Bind)
                                 -> Result<h::RawBuffer<R>, f::BufferError> {
         let info = f::BufferInfo {
             role: role,
-            usage: f::Usage::Const,
+            usage: f::Usage::Immutable,
             bind: bind,
             size: data.len(),
             stride: stride,
@@ -565,7 +564,7 @@ impl core::Factory<R> for Factory {
                 });
             }
         };
-        let misc = if desc.usage != f::Usage::Const &&
+        let misc = if desc.usage != f::Usage::Immutable &&
             desc.bind.contains(f::RENDER_TARGET | f::SHADER_RESOURCE) &&
             desc.levels > 1 && data_opt.is_none() {
             winapi::D3D11_RESOURCE_MISC_GENERATE_MIPS
@@ -831,26 +830,26 @@ impl core::Factory<R> for Factory {
         }
     }
 
-    fn map_buffer_raw(&mut self, _buf: &h::RawBuffer<R>, _access: f::MapAccess) -> RawMapping {
+    fn map_buffer_raw(&mut self, buffer: &h::RawBuffer<R>, access: mapping::Access)
+                      -> Result<h::RawMapping<R>, mapping::Error> {
         unimplemented!()
     }
 
-    fn unmap_buffer_raw(&mut self, _map: RawMapping) {
-        unimplemented!()
+    fn map_buffer_readable<T: Copy>(&mut self, buf: &h::Buffer<R, T>)
+                                    -> Result<mapping::Readable<R, T>, mapping::Error> {
+        let map = try!(self.map_buffer_raw(buf.raw(), mapping::READABLE));
+        Ok(self.map_readable(map, buf.len()))
     }
 
-    fn map_buffer_readable<T: Copy>(&mut self, _buf: &h::Buffer<R, T>)
-                           -> core::mapping::Readable<T, R, Factory> {
-        unimplemented!()
+    fn map_buffer_writable<T: Copy>(&mut self, buf: &h::Buffer<R, T>)
+                                    -> Result<mapping::Writable<R, T>, mapping::Error> {
+        let map = try!(self.map_buffer_raw(buf.raw(), mapping::WRITABLE));
+        Ok(self.map_writable(map, buf.len()))
     }
 
-    fn map_buffer_writable<T: Copy>(&mut self, _buf: &h::Buffer<R, T>)
-                                    -> core::mapping::Writable<T, R, Factory> {
-        unimplemented!()
-    }
-
-    fn map_buffer_rw<T: Copy>(&mut self, _buf: &h::Buffer<R, T>)
-                              -> core::mapping::RW<T, R, Factory> {
-        unimplemented!()
+    fn map_buffer_rw<T: Copy>(&mut self, buf: &h::Buffer<R, T>)
+                              -> Result<mapping::RWable<R, T>, mapping::Error> {
+        let map = try!(self.map_buffer_raw(buf.raw(), mapping::RW));
+        Ok(self.map_read_write(map, buf.len()))
     }
 }

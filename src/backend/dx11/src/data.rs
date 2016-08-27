@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use winapi::*;
-use gfx_core::factory::{Bind, MapAccess, Usage};
+use gfx_core::mapping;
+use gfx_core::factory::{Bind, Usage};
 use gfx_core::format::{Format, SurfaceType};
 use gfx_core::state::Comparison;
 use gfx_core::tex::{AaMode, FilterMethod, WrapMode, DepthStencilFlags};
@@ -205,19 +206,21 @@ pub fn map_bind(bind: Bind) -> D3D11_BIND_FLAG {
 }
 
 
-pub fn map_access(access: MapAccess) -> D3D11_CPU_ACCESS_FLAG {
+pub fn map_access(access: mapping::Access) -> D3D11_CPU_ACCESS_FLAG {
     match access {
-        MapAccess::Readable => D3D11_CPU_ACCESS_READ,
-        MapAccess::Writable => D3D11_CPU_ACCESS_WRITE,
-        MapAccess::RW => D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE,
+        mapping::READABLE => D3D11_CPU_ACCESS_READ,
+        mapping::WRITABLE => D3D11_CPU_ACCESS_WRITE,
+        mapping::RW => D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE,
+        _ => unreachable!(),
     }
 }
 
 pub fn map_usage(usage: Usage) -> (D3D11_USAGE, D3D11_CPU_ACCESS_FLAG) {
     match usage {
         Usage::GpuOnly => (D3D11_USAGE_DEFAULT,   D3D11_CPU_ACCESS_FLAG(0)),
-        Usage::Const   => (D3D11_USAGE_IMMUTABLE, D3D11_CPU_ACCESS_FLAG(0)),
+        Usage::Immutable => (D3D11_USAGE_IMMUTABLE, D3D11_CPU_ACCESS_FLAG(0)),
         Usage::Dynamic => (D3D11_USAGE_DYNAMIC,   D3D11_CPU_ACCESS_WRITE),
+        Usage::Persistent(access) => unimplemented!(),
         Usage::CpuOnly(access) => (D3D11_USAGE_STAGING, map_access(access)),
     }
 }
