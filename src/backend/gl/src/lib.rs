@@ -773,7 +773,7 @@ impl Device {
         }
     }
 
-    fn handle_write_syncs(&mut self, mappings: &[handle::RawMapping<Resources>]) {
+    fn handle_mapped_gpu_reads(&mut self, mappings: &[handle::RawMapping<Resources>]) {
         let gl = &self.share.context;
         for mapping in mappings {
             let mut inner = mapping.access()
@@ -787,24 +787,28 @@ impl Device {
                         gl.FlushMappedBufferRange(inner.resource.target, 0, size);
                     } }
                 }
-                MappingKind::Temporary => {
-                    if inner.resource.is_mapped {
-                        unsafe {
-                            gl.BindBuffer(inner.resource.target, *inner.buffer.resource());
-                            gl.UnmapBuffer(inner.resource.target);
-                        }
-                        inner.resource.is_mapped = false;
-                    }
-                }
+                MappingKind::Temporary => factory::temporary_ensure_unmapped(&mut inner),
             }
 
             inner.status.cpu = false;
         }
     }
 
-    fn handle_read_syncs(&mut self, mappings: &[handle::RawMapping<Resources>],
-                                    fence: &handle::Fence<Resources>) {
-        let gl = &self.share.context;
+    fn mapped_gpu_writes_prepass(&mut self, mappings: &[handle::RawMapping<Resources>]) {
+        for mapping in mappings {
+            let mut inner = mapping.access()
+                .expect("user error: mapping still in use on submit");
+
+            match inner.resource.kind {
+                MappingKind::Persistent => {}
+                MappingKind::Temporary => factory::temporary_ensure_unmapped(&mut inner),
+            }
+        }
+    }
+
+    fn handle_mapped_gpu_writes(&mut self,
+                                mappings: &[handle::RawMapping<Resources>],
+                                fence: &handle::Fence<Resources>) {
         for mapping in mappings {
             let mut inner = mapping.access()
                 .expect("user error: mapping still in use on submit");
@@ -815,18 +819,7 @@ impl Device {
                         inner.status.gpu = Some(fence.clone());
                     }
                 }
-                MappingKind::Temporary => {
-                    // TODO: this could be done on later user access for performance
-                    if !inner.resource.is_mapped {
-                        let access = factory::access_to_gl(inner.access);
-                        unsafe {
-                            gl.BindBuffer(inner.resource.target, *inner.buffer.resource());
-                            inner.resource.pointer = gl.MapBuffer(inner.resource.target, access)
-                                as *mut ::std::os::raw::c_void;
-                        }
-                        inner.resource.is_mapped = true;
-                    }
-                }
+                MappingKind::Temporary => {}
             }
         }
     }
@@ -853,13 +846,14 @@ impl d::Device for Device {
 
     fn submit(&mut self, cb: &mut command::CommandBuffer,
                          access: &d::pso::AccessInfo<Resources>) {
-        self.handle_write_syncs(access.mapped_reads());
-        self.no_fence_submit(cb);
+        self.handle_mapped_gpu_reads(access.mapped_reads());
         let mapped_writes = access.mapped_writes();
+        self.mapped_gpu_writes_prepass(mapped_writes);
+        self.no_fence_submit(cb);
         if mapped_writes.len() > 0 {
             self.place_memory_barrier();
             let fence = self.place_fence();
-            self.handle_read_syncs(mapped_writes, &fence);
+            self.handle_mapped_gpu_writes(mapped_writes, &fence);
         }
     }
 
@@ -876,12 +870,13 @@ impl d::Device for Device {
             unsafe { self.share.context.WaitSync(f.raw.0, 0, timeout); }
         }
 
-        self.handle_write_syncs(access.mapped_reads());
-        self.no_fence_submit(cb);
+        self.handle_mapped_gpu_reads(access.mapped_reads());
         let mapped_writes = access.mapped_writes();
+        self.mapped_gpu_writes_prepass(mapped_writes);
+        self.no_fence_submit(cb);
         if mapped_writes.len() > 0 { self.place_memory_barrier(); }
         let fence = self.place_fence();
-        self.handle_read_syncs(mapped_writes, &fence);
+        self.handle_mapped_gpu_writes(mapped_writes, &fence);
         fence
     }
 

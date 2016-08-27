@@ -23,13 +23,18 @@ use {Resources, Factory};
 use {handle, factory};
 
 /// Unsafe, backend-provided operations for a buffer mapping
-pub trait Backend {
+pub trait Backend<R: Resources> {
     /// Set the element at `index` to `val`. Not bounds-checked.
     unsafe fn set<T>(&self, index: usize, val: T);
     /// Returns a slice of the specified length.
     unsafe fn slice<'a, 'b, T>(&'a self, len: usize) -> &'b [T];
     /// Returns a mutable slice of the specified length.
     unsafe fn mut_slice<'a, 'b, T>(&'a self, len: usize) -> &'b mut [T];
+
+    /// Hook before user read access
+    fn before_read(&mut RawInner<R>) {}
+    /// Hook before user write access
+    fn before_write(&mut RawInner<R>) {}
 }
 
 bitflags!(
@@ -114,6 +119,7 @@ impl<R: Resources> Raw<R> {
 
     unsafe fn read<T: Copy>(&self, len: usize) -> Reader<R, T> {
         let mut inner = self.access().unwrap();
+        R::Mapping::before_read(&mut inner);
         inner.status.read();
 
         Reader {
@@ -124,6 +130,7 @@ impl<R: Resources> Raw<R> {
 
     unsafe fn write<T: Copy>(&self, len: usize) -> Writer<R, T> {
         let mut inner = self.access().unwrap();
+        R::Mapping::before_write(&mut inner);
         inner.status.write();
 
         Writer {
@@ -135,6 +142,8 @@ impl<R: Resources> Raw<R> {
 
     unsafe fn read_write<T: Copy>(&self, len: usize) -> RWer<R, T> {
         let mut inner = self.access().unwrap();
+        R::Mapping::before_read(&mut inner);
+        R::Mapping::before_write(&mut inner);
         inner.status.read();
         inner.status.write();
 

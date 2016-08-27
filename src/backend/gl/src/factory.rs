@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::rc::Rc;
-use std::slice;
+use std::{slice, fmt};
 
 use {gl, tex};
 use gfx_core as d;
@@ -46,7 +46,7 @@ fn access_to_map_bits(access: mapping::Access) -> gl::types::GLenum {
     r
 }
 
-pub fn access_to_gl(access: mapping::Access) -> gl::types::GLenum {
+fn access_to_gl(access: mapping::Access) -> gl::types::GLenum {
     match access {
         mapping::RW => gl::READ_WRITE,
         mapping::READABLE => gl::READ_ONLY,
@@ -215,15 +215,42 @@ pub enum MappingKind {
     Temporary,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone)]
 pub struct BackendMapping {
     pub kind: MappingKind,
     pub pointer: *mut ::std::os::raw::c_void,
     pub target: gl::types::GLenum,
     pub is_mapped: bool,
+    pub share: Rc<Share>,
 }
 
-impl mapping::Backend for BackendMapping {
+fn temporary_ensure_mapped(inner: &mut mapping::RawInner<R>) {
+    let gl = &inner.resource.share.context;
+    if !inner.resource.is_mapped {
+        let access = access_to_gl(inner.access);
+        unsafe {
+            gl.BindBuffer(inner.resource.target, *inner.buffer.resource());
+            inner.resource.pointer = gl.MapBuffer(inner.resource.target, access)
+                as *mut ::std::os::raw::c_void;
+        }
+
+        inner.resource.is_mapped = true;
+    }
+}
+
+pub fn temporary_ensure_unmapped(inner: &mut mapping::RawInner<R>) {
+    let gl = &inner.resource.share.context;
+    if inner.resource.is_mapped {
+        unsafe {
+            gl.BindBuffer(inner.resource.target, *inner.buffer.resource());
+            gl.UnmapBuffer(inner.resource.target);
+        }
+
+        inner.resource.is_mapped = false;
+    }
+}
+
+impl mapping::Backend<R> for BackendMapping {
     unsafe fn set<T>(&self, index: usize, val: T) {
         *(self.pointer as *mut T).offset(index as isize) = val;
     }
@@ -234,6 +261,26 @@ impl mapping::Backend for BackendMapping {
 
     unsafe fn mut_slice<'a, 'b, T>(&'a self, len: usize) -> &'b mut [T] {
         slice::from_raw_parts_mut(self.pointer as *mut T, len)
+    }
+
+    fn before_read(inner: &mut mapping::RawInner<R>) {
+        match inner.resource.kind {
+            MappingKind::Temporary => temporary_ensure_mapped(inner),
+            MappingKind::Persistent => (),
+        }
+    }
+
+    fn before_write(inner: &mut mapping::RawInner<R>) {
+        match inner.resource.kind {
+            MappingKind::Temporary => temporary_ensure_mapped(inner),
+            MappingKind::Persistent => (),
+        }
+    }
+}
+
+impl fmt::Debug for BackendMapping {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "BackendMapping {{ kind: {:?}, pointer: {:?}, target: {:?}, is_mapped: {:?} , .. }}", self.kind, self.pointer, self.target, self.is_mapped)
     }
 }
 
@@ -456,6 +503,7 @@ impl d::Factory<R> for Factory {
             pointer: ptr,
             target: target,
             is_mapped: true,
+            share: self.share.clone(),
         };
         Ok(self.share.handles.borrow_mut().make_mapping(res, access, buf))
     }
