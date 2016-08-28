@@ -299,21 +299,13 @@ impl GraphicsQueue {
         self.family
     }
 
-    fn place_memory_barrier(&mut self) {
-        unimplemented!()
-    }
-
-    fn place_fence(&mut self) -> handle::Fence<Resources> {
-        unimplemented!()
-    }
-
-    fn flush_mappings(&mut self, mappings: &[handle::RawMapping<Resources>]) {
+    fn ensure_mappings_flushed(&mut self, mappings: &[handle::RawMapping<Resources>]) {
         let (dev, vk) = self.share.get_device();
         for mapping in mappings {
             let mut inner = mapping.access()
                 .expect("user error: mapping still in use on submit");
 
-            if inner.status.cpu {
+            if inner.status.cpu_write {
                 let memory_range = vk::MappedMemoryRange {
                     sType: vk::STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
                     pNext: ptr::null(),
@@ -325,7 +317,7 @@ impl GraphicsQueue {
                     vk.FlushMappedMemoryRanges(dev, 1, &memory_range)
                 });
 
-                inner.status.cpu = false;
+                inner.status.cpu_write = false;
             }
         }
     }
@@ -351,16 +343,14 @@ impl GraphicsQueue {
         }
     }
 
-    fn setup_mappings_read_fence(&mut self,
-                                 mappings: &[handle::RawMapping<Resources>],
-                                 fence: &handle::Fence<Resources>) {
+    fn track_mapped_gpu_access(&mut self,
+                               mappings: &[handle::RawMapping<Resources>],
+                               fence: &handle::Fence<Resources>) {
         for mapping in mappings {
             let mut inner = mapping.access()
                 .expect("user error: mapping still in use on submit");
 
-            if inner.access.contains(mapping::READABLE) {
-                inner.status.gpu = Some(fence.clone());
-            }
+            inner.status.gpu_access = Some(fence.clone());
         }
     }
 }
@@ -386,7 +376,7 @@ impl core::Device for GraphicsQueue {
             vk.EndCommandBuffer(com.inner)
         });
 
-        self.flush_mappings(access.mapped_reads());
+        self.ensure_mappings_flushed(access.mapped_reads());
 
         let submit_info = vk::SubmitInfo {
             sType: vk::STRUCTURE_TYPE_SUBMIT_INFO,
@@ -398,13 +388,7 @@ impl core::Device for GraphicsQueue {
             vk.QueueSubmit(self.queue, 1, &submit_info, 0)
         });
 
-        let mapped_writes = access.mapped_writes();
-        if mapped_writes.len() > 0 {
-            self.place_memory_barrier();
-            self.invalidate_mappings(mapped_writes);
-            let fence = self.place_fence();
-            self.setup_mappings_read_fence(mapped_writes, &fence);
-        }
+        // TODO: memory barrier, invalidation and fence
 
         let begin_info = vk::CommandBufferBeginInfo {
             sType: vk::STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,

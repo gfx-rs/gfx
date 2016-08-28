@@ -27,7 +27,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::{cmp, hash, fmt};
 use gfx_core as d;
-use gfx_core::{mapping, handle};
+use gfx_core::handle;
 use gfx_core::state as s;
 use gfx_core::target::{Layer, Level};
 use command::{Command, DataBuffer};
@@ -427,25 +427,6 @@ impl Device {
         }
     }
 
-    fn place_fence(&mut self) -> handle::Fence<Resources> {
-        use gfx_core::handle::Producer;
-
-        let gl = &self.share.context;
-        let fence = unsafe {
-            gl.FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0)
-        };
-        self.frame_handles.make_fence(Fence {
-            raw: RawFence(fence),
-            share: self.share.clone(),
-        })
-    }
-
-    fn place_memory_barrier(&mut self) {
-        let gl = &self.share.context;
-        // TODO: other flags ?
-        unsafe { gl.MemoryBarrier(gl::CLIENT_MAPPED_BUFFER_BARRIER_BIT); }
-    }
-
     fn process(&mut self, cmd: &Command, data_buf: &DataBuffer) {
         match *cmd {
             Command::Clear(color, depth, stencil) => {
@@ -773,61 +754,97 @@ impl Device {
         }
     }
 
-    fn handle_mapped_gpu_reads(&mut self, mappings: &[handle::RawMapping<Resources>]) {
-        let gl = &self.share.context;
+    fn before_submit(&mut self, gpu_access: &d::pso::AccessInfo<Resources>) {
         if self.share.private_caps.buffer_storage_supported {
             // MappingKind::Persistent
-            for mapping in mappings {
-                let mut inner = mapping.access()
-                    .expect("user error: mapping still in use on submit");
+            self.ensure_mappings_flushed(gpu_access.mapped_reads());
+        } else {
+            // MappingKind::Temporary
+            self.ensure_mappings_unmapped(gpu_access.mapped_reads());
+            self.ensure_mappings_unmapped(gpu_access.mapped_writes());
+        }
+    }
 
-                if inner.status.cpu {
-                    unsafe {
-                        gl.BindBuffer(inner.resource.target, *inner.buffer.resource());
-                        let size = inner.buffer.get_info().size as isize;
-                        gl.FlushMappedBufferRange(inner.resource.target, 0, size);
-                    }
+    // MappingKind::Persistent
+    fn ensure_mappings_flushed(&mut self, mappings: &[handle::RawMapping<Resources>]) {
+        let gl = &self.share.context;
+        for mapping in mappings {
+            let mut inner = mapping.access()
+                .expect("user error: mapping still in use on submit");
 
-                    inner.status.cpu = false;
+            if inner.status.cpu_write {
+                unsafe {
+                    gl.BindBuffer(inner.resource.target, *inner.buffer.resource());
+                    let size = inner.buffer.get_info().size as isize;
+                    gl.FlushMappedBufferRange(inner.resource.target, 0, size);
                 }
+
+                inner.status.cpu_write = false;
+            }
+        }
+    }
+
+    // MappingKind::Temporary
+    fn ensure_mappings_unmapped(&mut self, mappings: &[handle::RawMapping<Resources>]) {
+        for mapping in mappings {
+            let mut inner = mapping.access()
+                .expect("user error: mapping still in use on submit");
+
+            factory::temporary_ensure_unmapped(&mut inner);
+        }
+    }
+
+    fn after_submit(&mut self, gpu_access: &d::pso::AccessInfo<Resources>)
+                               -> Option<handle::Fence<Resources>>
+    {
+        if self.share.private_caps.buffer_storage_supported {
+            // MappingKind::Persistent
+            if (gpu_access.mapped_reads().len() + gpu_access.mapped_writes().len()) > 0 {
+                if gpu_access.mapped_writes().len() > 0 {
+                    self.place_memory_barrier();
+                }
+
+                let fence = self.place_fence();
+                self.track_mapped_gpu_access(gpu_access.mapped_reads(), &fence);
+                self.track_mapped_gpu_access(gpu_access.mapped_writes(), &fence);
+                Some(fence)
+            } else {
+                None
             }
         } else {
             // MappingKind::Temporary
-            for mapping in mappings {
-                let mut inner = mapping.access()
-                    .expect("user error: mapping still in use on submit");
-
-                factory::temporary_ensure_unmapped(&mut inner);
-                inner.status.cpu = false;
-            }
+            None
         }
     }
 
-    fn mapped_gpu_writes_prepass(&mut self, mappings: &[handle::RawMapping<Resources>]) {
-        if !self.share.private_caps.buffer_storage_supported {
-            // MappingKind::Temporary
-            for mapping in mappings {
-                let mut inner = mapping.access()
-                    .expect("user error: mapping still in use on submit");
-
-                factory::temporary_ensure_unmapped(&mut inner);
-            }
-        }
+    fn place_memory_barrier(&mut self) {
+        let gl = &self.share.context;
+        // TODO: other flags ?
+        unsafe { gl.MemoryBarrier(gl::CLIENT_MAPPED_BUFFER_BARRIER_BIT); }
     }
 
-    fn handle_mapped_gpu_writes(&mut self,
-                                mappings: &[handle::RawMapping<Resources>],
-                                fence: &handle::Fence<Resources>) {
-        if self.share.private_caps.buffer_storage_supported {
-            // MappingKind::Persistent
-            for mapping in mappings {
-                let mut inner = mapping.access()
-                    .expect("user error: mapping still in use on submit");
+    fn place_fence(&mut self) -> handle::Fence<Resources> {
+        use gfx_core::handle::Producer;
 
-                if inner.access.contains(mapping::READABLE) {
-                    inner.status.gpu = Some(fence.clone());
-                }
-            }
+        let gl = &self.share.context;
+        let fence = unsafe {
+            gl.FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0)
+        };
+        self.frame_handles.make_fence(Fence {
+            raw: RawFence(fence),
+            share: self.share.clone(),
+        })
+    }
+
+    // MappingKind::Persistent
+    fn track_mapped_gpu_access(&mut self,
+                               mappings: &[handle::RawMapping<Resources>],
+                               fence: &handle::Fence<Resources>) {
+        for mapping in mappings {
+            let mut inner = mapping.access()
+                .expect("user error: mapping still in use on submit");
+
+            inner.status.gpu_access = Some(fence.clone());
         }
     }
 }
@@ -853,15 +870,9 @@ impl d::Device for Device {
 
     fn submit(&mut self, cb: &mut command::CommandBuffer,
                          access: &d::pso::AccessInfo<Resources>) {
-        self.handle_mapped_gpu_reads(access.mapped_reads());
-        let mapped_writes = access.mapped_writes();
-        self.mapped_gpu_writes_prepass(mapped_writes);
+        self.before_submit(access);
         self.no_fence_submit(cb);
-        if mapped_writes.len() > 0 {
-            self.place_memory_barrier();
-            let fence = self.place_fence();
-            self.handle_mapped_gpu_writes(mapped_writes, &fence);
-        }
+        self.after_submit(access);
     }
 
     fn fenced_submit(&mut self,
@@ -877,14 +888,10 @@ impl d::Device for Device {
             unsafe { self.share.context.WaitSync(f.raw.0, 0, timeout); }
         }
 
-        self.handle_mapped_gpu_reads(access.mapped_reads());
-        let mapped_writes = access.mapped_writes();
-        self.mapped_gpu_writes_prepass(mapped_writes);
+        self.before_submit(access);
         self.no_fence_submit(cb);
-        if mapped_writes.len() > 0 { self.place_memory_barrier(); }
-        let fence = self.place_fence();
-        self.handle_mapped_gpu_writes(mapped_writes, &fence);
-        fence
+        let fence_opt = self.after_submit(access);
+        fence_opt.unwrap_or_else(|| self.place_fence())
     }
 
     fn cleanup(&mut self) {

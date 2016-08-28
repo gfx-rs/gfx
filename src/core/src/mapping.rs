@@ -51,27 +51,26 @@ bitflags!(
 
 #[derive(Debug)]
 #[allow(missing_docs)]
-pub struct ModificationStatus<R: Resources> {
-    pub cpu: bool,
-    pub gpu: Option<handle::Fence<R>>,
+pub struct Status<R: Resources> {
+    pub cpu_write: bool,
+    pub gpu_access: Option<handle::Fence<R>>,
 }
 
-impl<R: Resources> ModificationStatus<R> {
+impl<R: Resources> Status<R> {
     fn clean() -> Self {
-        ModificationStatus {
-            cpu: false,
-            gpu: None,
+        Status {
+            cpu_write: false,
+            gpu_access: None,
         }
     }
 
-    fn read(&mut self) {
-        if let Some(fence) = self.gpu.take() {
-            fence.wait();
-        }
+    fn access(&mut self) {
+        self.gpu_access.take().map(|fence| fence.wait());
     }
 
-    fn write(&mut self) {
-        self.cpu = true;
+    fn write_access(&mut self) {
+        self.access();
+        self.cpu_write = true;
     }
 }
 
@@ -88,7 +87,7 @@ pub struct RawInner<R: Resources> {
     pub resource: R::Mapping,
     pub buffer: handle::RawBuffer<R>,
     pub access: Access,
-    pub status: ModificationStatus<R>,
+    pub status: Status<R>,
 }
 
 impl<R: Resources> Drop for RawInner<R> {
@@ -109,7 +108,7 @@ impl<R: Resources> Raw<R> {
             resource: res,
             buffer: buf.clone(),
             access: access,
-            status: ModificationStatus::clean(),
+            status: Status::clean(),
         }))
     }
 
@@ -120,7 +119,7 @@ impl<R: Resources> Raw<R> {
     unsafe fn read<T: Copy>(&self, len: usize) -> Reader<R, T> {
         let mut inner = self.access().unwrap();
         R::Mapping::before_read(&mut inner);
-        inner.status.read();
+        inner.status.access();
 
         Reader {
             slice: inner.resource.slice(len),
@@ -131,7 +130,7 @@ impl<R: Resources> Raw<R> {
     unsafe fn write<T: Copy>(&self, len: usize) -> Writer<R, T> {
         let mut inner = self.access().unwrap();
         R::Mapping::before_write(&mut inner);
-        inner.status.write();
+        inner.status.write_access();
 
         Writer {
             len: len,
@@ -144,8 +143,7 @@ impl<R: Resources> Raw<R> {
         let mut inner = self.access().unwrap();
         R::Mapping::before_read(&mut inner);
         R::Mapping::before_write(&mut inner);
-        inner.status.read();
-        inner.status.write();
+        inner.status.write_access();
 
         RWer {
             slice: inner.resource.mut_slice(len),
