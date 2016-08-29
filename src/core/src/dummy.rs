@@ -56,7 +56,7 @@ impl ::Fence for DummyFence {
 #[derive(Debug)]
 pub struct DummyMapping;
 
-impl mapping::Backend<DummyResources> for DummyMapping {
+impl mapping::Gate<DummyResources> for DummyMapping {
     unsafe fn set<T>(&self, _index: usize, _val: T) { unimplemented!() }
     unsafe fn slice<'a, 'b, T>(&'a self, _len: usize) -> &'b [T] { unimplemented!() }
     unsafe fn mut_slice<'a, 'b, T>(&'a self, _len: usize) -> &'b mut [T] { unimplemented!() }

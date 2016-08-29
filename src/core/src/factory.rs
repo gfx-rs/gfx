@@ -89,7 +89,7 @@ pub enum Usage {
     Immutable,
     /// GPU: read, CPU: write.
     Dynamic,
-    /// GPU: read + write, CPU: as specified. The more accesses you use, the more synchronisation needs to be done.
+    /// GPU: read + write, CPU: as specified.
     Persistent(mapping::Access),
     /// GPU: copy, CPU: as specified. Used as a staging buffer,
     /// to be copied back and forth with on-GPU targets.
@@ -100,12 +100,9 @@ impl Usage {
     /// Is the requested mapping access matching the expected usage ?
     pub fn valid_access(&self, access: mapping::Access) -> Result<(), mapping::Error> {
         use self::Usage::*;
-        let invalid_access = || Err(mapping::Error::InvalidAccess(access, *self));
         match *self {
-            GpuOnly | Immutable | CpuOnly(_) => invalid_access(),
-            Dynamic if access.contains(mapping::READABLE) => invalid_access(),
-            Persistent(a) if !a.contains(access) => invalid_access(),
-            _ => Ok(()),
+            Persistent(a) if a.contains(access) => Ok(()),
+            _ => Err(mapping::Error::InvalidAccess(access, *self)),
         }
     }
 }

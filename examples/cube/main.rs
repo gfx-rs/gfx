@@ -167,7 +167,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
     fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
         let locals = Locals { transform: self.bundle.data.transform };
-        encoder.update_constant_buffer(&self.bundle.data.locals, &locals).unwrap();
+        encoder.update_constant_buffer(&self.bundle.data.locals, &locals);
         encoder.clear(&self.bundle.data.out_color, [0.1, 0.2, 0.3, 1.0]);
         encoder.clear_depth(&self.bundle.data.out_depth, 1.0);
         self.bundle.encode(encoder);

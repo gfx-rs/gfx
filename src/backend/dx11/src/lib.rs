@@ -148,7 +148,7 @@ impl gfx_core::Resources for Resources {
     type UnorderedAccessView = ();
     type Sampler             = native::Sampler;
     type Fence               = Fence;
-    type Mapping             = factory::RawMapping;
+    type Mapping             = factory::MappingGate;
 }
 
 /// Internal struct of shared data between the device and its factories.

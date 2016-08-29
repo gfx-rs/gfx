@@ -491,7 +491,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             view: view.mat.into(),
             proj: proj.into(),
         };
-        encoder.update_constant_buffer(&self.terrain.data.locals, &terrain_locals).unwrap();
+        encoder.update_constant_buffer(&self.terrain.data.locals, &terrain_locals);
 
         let light_locals = LightLocals {
             cam_pos_and_radius: [cam_pos.x, cam_pos.y, cam_pos.z,
@@ -503,9 +503,9 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             transform: (proj * view.mat).into(),
             radius: LIGHT_RADIUS,
         };
-        encoder.update_constant_buffer(&self.light.data.locals_vs, &cube_locals).unwrap();
+        encoder.update_constant_buffer(&self.light.data.locals_vs, &cube_locals);
         cube_locals.radius = EMITTER_RADIUS;
-        encoder.update_constant_buffer(&self.emitter.data.locals, &cube_locals).unwrap();
+        encoder.update_constant_buffer(&self.emitter.data.locals, &cube_locals);
 
         // Update light positions
         for (i, d) in self.light_pos_vec.iter_mut().enumerate() {

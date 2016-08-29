@@ -23,7 +23,7 @@ use {Resources, Factory};
 use {handle, factory};
 
 /// Unsafe, backend-provided operations for a buffer mapping
-pub trait Backend<R: Resources> {
+pub trait Gate<R: Resources> {
     /// Set the element at `index` to `val`. Not bounds-checked.
     unsafe fn set<T>(&self, index: usize, val: T);
     /// Returns a slice of the specified length.
@@ -79,6 +79,8 @@ impl<R: Resources> Status<R> {
 pub enum Error {
     /// The requested mapping access did not match the expected usage.
     InvalidAccess(Access, factory::Usage),
+    /// The memory was already mapped
+    AlreadyMapped,
 }
 
 #[derive(Debug)]

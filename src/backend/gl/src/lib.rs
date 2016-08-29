@@ -61,6 +61,11 @@ impl RawFence {
     fn wait(&self, gl: &gl::Gl) {
         unsafe {
             let timeout = 1_000_000_000_000;
+            // TODO: use the return value of this call
+            // TODO:
+            // This can be called by multiple objects wanting to ensure they have exclusive
+            // access to a resource. How much does this call costs ? The status of the fence
+            // could be cached to avoid calling this more than once (in core or in the backend ?).
             gl.ClientWaitSync(self.0, gl::SYNC_FLUSH_COMMANDS_BIT, timeout);
         }
     }
@@ -111,7 +116,7 @@ impl d::Resources for Resources {
     type UnorderedAccessView = ();
     type Sampler             = FatSampler;
     type Fence               = Fence;
-    type Mapping             = factory::BackendMapping;
+    type Mapping             = factory::MappingGate;
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -917,7 +922,7 @@ impl d::Device for Device {
             |_, raw_mapping| {
                 let mut inner = raw_mapping.access().unwrap();
                 match inner.resource.kind {
-                    MappingKind::Persistent => (),
+                    MappingKind::Persistent => (), // TODO: maybe flush the mapped memory here ?
                     MappingKind::Temporary => factory::temporary_ensure_unmapped(&mut inner),
                 }
             },

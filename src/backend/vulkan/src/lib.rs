@@ -332,7 +332,7 @@ impl gfx_core::Resources for Resources {
     type DepthStencilView     = native::TextureView;
     type Sampler              = vk::Sampler;
     type Fence                = Fence;
-    type Mapping              = factory::RawMapping;
+    type Mapping              = factory::MappingGate;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

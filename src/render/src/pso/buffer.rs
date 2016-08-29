@@ -147,7 +147,7 @@ impl<R: Resources> DataBind<R> for RawVertexBuffer {
                 out.vertex_buffers.0[i] = value;
             }
         }
-        access.buffer_read(data);
+        if self.1 != 0 { access.buffer_read(data); }
     }
 }
 
@@ -191,8 +191,8 @@ DataBind<R> for ConstantBuffer<T> {
         if let Some((usage, slot)) = self.0 {
             let buf = man.ref_buffer(data.raw()).clone();
             out.constant_buffers.push(pso::ConstantBufferParam(buf, usage, slot));
+            access.buffer_read(data.raw())
         }
-        access.buffer_read(data.raw())
     }
 }
 

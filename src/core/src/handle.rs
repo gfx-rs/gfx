@@ -59,10 +59,14 @@ impl<R: Resources> RawBuffer<R> {
     }
 
     /// Needs to be called internally after the buffer is mapped
-    fn was_mapped(&self, raw: &RawMapping<R>) {
+    fn was_mapped(&self, raw: &RawMapping<R>) -> Result<(), mapping::Error> {
         let mut weak_opt = self.mapping_opt();
-        if weak_opt.is_some() { panic!("attempted to map a buffer twice"); }
-        *weak_opt = Some(Arc::downgrade(&raw.0));
+        if weak_opt.is_some() {
+            Err(mapping::Error::AlreadyMapped)
+        } else {
+            *weak_opt = Some(Arc::downgrade(&raw.0));
+            Ok(())
+        }
     }
 
     /// Needs to be called internally after the buffer is unmapped
@@ -393,7 +397,7 @@ pub trait Producer<R: Resources> {
     fn make_fence(&mut self, name: R::Fence) -> Fence<R>;
     fn make_mapping(&mut self, res: R::Mapping,
                                access: mapping::Access,
-                               buf: &RawBuffer<R>) -> RawMapping<R>;
+                               buf: &RawBuffer<R>) -> Result<RawMapping<R>, mapping::Error>;
 
     /// Walk through all the handles, keep ones that are reference elsewhere
     /// and call the provided delete function (resource-specific) for others
@@ -504,12 +508,12 @@ impl<R: Resources> Producer<R> for Manager<R> {
 
     fn make_mapping(&mut self, res: R::Mapping,
                                access: mapping::Access,
-                               buf: &RawBuffer<R>) -> RawMapping<R> {
+                               buf: &RawBuffer<R>) -> Result<RawMapping<R>, mapping::Error> {
         let r = Arc::new(mapping::Raw::new(res, access, buf));
         self.mappings.push(r.clone());
         let raw = RawMapping(r);
-        buf.was_mapped(&raw);
-        raw
+        try!(buf.was_mapped(&raw));
+        Ok(raw)
     }
 
     fn clean_with<T,

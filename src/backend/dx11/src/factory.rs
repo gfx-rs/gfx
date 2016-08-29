@@ -29,11 +29,11 @@ use native;
 
 
 #[derive(Copy, Clone, Debug)]
-pub struct RawMapping {
+pub struct MappingGate {
     pointer: *mut c_void,
 }
 
-impl core::mapping::Backend<R> for RawMapping {
+impl core::mapping::Gate<R> for MappingGate {
     unsafe fn set<T>(&self, index: usize, val: T) {
         *(self.pointer as *mut T).offset(index as isize) = val;
     }

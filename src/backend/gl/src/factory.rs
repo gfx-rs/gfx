@@ -115,12 +115,12 @@ impl Factory {
     fn init_buffer(&mut self,
                    buffer: Buffer,
                    info: &f::BufferInfo,
-                   data: Option<&[u8]>) {
+                   data_opt: Option<&[u8]>) {
         use gfx_core::factory::Usage::*;
 
         let gl = &self.share.context;
         let target = role_to_target(info.role);
-        let data = if let Some(data) = data {
+        let data_ptr = if let Some(data) = data_opt {
             debug_assert!(data.len() == info.size);
             data.as_ptr() as *const gl::types::GLvoid
         } else {
@@ -130,7 +130,7 @@ impl Factory {
         if self.share.private_caps.buffer_storage_supported {
             let usage = match info.usage {
                 GpuOnly | Immutable => 0,
-                Dynamic => gl::MAP_WRITE_BIT | gl::MAP_PERSISTENT_BIT | gl::DYNAMIC_STORAGE_BIT,
+                Dynamic => gl::DYNAMIC_STORAGE_BIT,
                 Persistent(access) => access_to_map_bits(access) | gl::MAP_PERSISTENT_BIT,
                 CpuOnly(_) => gl::DYNAMIC_STORAGE_BIT,
             };
@@ -138,7 +138,7 @@ impl Factory {
                 gl.BindBuffer(target, buffer);
                 gl.BufferStorage(target,
                     info.size as gl::types::GLsizeiptr,
-                    data,
+                    data_ptr,
                     usage
                 );
             }
@@ -148,26 +148,22 @@ impl Factory {
                 GpuOnly => gl::STATIC_DRAW,
                 Immutable => gl::STATIC_DRAW,
                 Dynamic => gl::STREAM_DRAW,
-                Persistent(access) => {
-                    match access {
-                        mapping::RW => gl::DYNAMIC_COPY,
-                        mapping::READABLE => gl::DYNAMIC_READ,
-                        mapping::WRITABLE => gl::DYNAMIC_DRAW,
-                        _ => unreachable!(),
-                    }
-                }
-                CpuOnly(access) => {
-                    match access {
-                        mapping::READABLE => gl::STREAM_READ,
-                        _ => gl::DYNAMIC_DRAW,
-                    }
+                Persistent(access) => match access {
+                    mapping::RW => gl::DYNAMIC_COPY,
+                    mapping::READABLE => gl::DYNAMIC_READ,
+                    mapping::WRITABLE => gl::DYNAMIC_DRAW,
+                    _ => unreachable!(),
+                },
+                CpuOnly(access) => match access {
+                    mapping::READABLE => gl::STREAM_READ,
+                    _ => gl::DYNAMIC_DRAW,
                 }
             };
             unsafe {
                 gl.BindBuffer(target, buffer);
                 gl.BufferData(target,
                     info.size as gl::types::GLsizeiptr,
-                    data,
+                    data_ptr,
                     usage
                 );
             }
@@ -216,7 +212,7 @@ pub enum MappingKind {
 }
 
 #[derive(Clone)]
-pub struct BackendMapping {
+pub struct MappingGate {
     pub kind: MappingKind,
     pub pointer: *mut ::std::os::raw::c_void,
     pub target: gl::types::GLenum,
@@ -250,7 +246,7 @@ pub fn temporary_ensure_unmapped(inner: &mut mapping::RawInner<R>) {
     }
 }
 
-impl mapping::Backend<R> for BackendMapping {
+impl mapping::Gate<R> for MappingGate {
     unsafe fn set<T>(&self, index: usize, val: T) {
         *(self.pointer as *mut T).offset(index as isize) = val;
     }
@@ -278,9 +274,9 @@ impl mapping::Backend<R> for BackendMapping {
     }
 }
 
-impl fmt::Debug for BackendMapping {
+impl fmt::Debug for MappingGate {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "BackendMapping {{ kind: {:?}, pointer: {:?}, target: {:?}, is_mapped: {:?} , .. }}", self.kind, self.pointer, self.target, self.is_mapped)
+        write!(f, "MappingGate {{ kind: {:?}, pointer: {:?}, target: {:?}, is_mapped: {:?} , .. }}", self.kind, self.pointer, self.target, self.is_mapped)
     }
 }
 
@@ -479,7 +475,7 @@ impl d::Factory<R> for Factory {
 
         try!(buf.valid_access(access));
 
-        let target = gl::ARRAY_BUFFER;
+        let target = role_to_target(buf.get_info().role);
         let (kind, ptr) = if self.share.private_caps.buffer_storage_supported {
             let access = access_to_map_bits(access) |
                          gl::MAP_PERSISTENT_BIT |
@@ -498,14 +494,14 @@ impl d::Factory<R> for Factory {
             (MappingKind::Temporary, ptr)
         };
 
-        let res = BackendMapping {
+        let res = MappingGate {
             kind: kind,
             pointer: ptr,
             target: target,
             is_mapped: true,
             share: self.share.clone(),
         };
-        Ok(self.share.handles.borrow_mut().make_mapping(res, access, buf))
+        self.share.handles.borrow_mut().make_mapping(res, access, buf)
     }
 
     fn map_buffer_readable<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)

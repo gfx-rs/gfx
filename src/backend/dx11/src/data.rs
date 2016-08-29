@@ -207,12 +207,10 @@ pub fn map_bind(bind: Bind) -> D3D11_BIND_FLAG {
 
 
 pub fn map_access(access: mapping::Access) -> D3D11_CPU_ACCESS_FLAG {
-    match access {
-        mapping::READABLE => D3D11_CPU_ACCESS_READ,
-        mapping::WRITABLE => D3D11_CPU_ACCESS_WRITE,
-        mapping::RW => D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE,
-        _ => unreachable!(),
-    }
+    let mut r = D3D11_CPU_ACCESS_FLAG(0);
+    if access.contains(mapping::READABLE) { r = r | D3D11_CPU_ACCESS_READ }
+    if access.contains(mapping::WRITABLE) { r = r | D3D11_CPU_ACCESS_WRITE }
+    r
 }
 
 pub fn map_usage(usage: Usage) -> (D3D11_USAGE, D3D11_CPU_ACCESS_FLAG) {

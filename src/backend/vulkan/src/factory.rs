@@ -25,11 +25,11 @@ use {Resources as R, SharePointer};
 
 
 #[derive(Copy, Clone, Debug)]
-pub struct RawMapping {
+pub struct MappingGate {
     pointer: *mut c_void,
 }
 
-impl mapping::Backend<R> for RawMapping {
+impl mapping::Gate<R> for MappingGate {
     unsafe fn set<T>(&self, index: usize, val: T) {
         *(self.pointer as *mut T).offset(index as isize) = val;
     }
@@ -872,8 +872,8 @@ impl core::Factory<R> for Factory {
             vk.MapMemory(dev, buf.resource().memory, offset, vk::WHOLE_SIZE, flags, &mut pointer)
         });
 
-        let m = RawMapping { pointer: pointer };
-        Ok(self.share.handles.borrow_mut().make_mapping(m, access, buf))
+        let m = MappingGate { pointer: pointer };
+        self.share.handles.borrow_mut().make_mapping(m, access, buf)
     }
 
     fn map_buffer_readable<T: Copy>(&mut self, buf: &h::Buffer<R, T>)

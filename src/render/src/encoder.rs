@@ -140,17 +140,16 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
     }
 
     /// Update a buffer with a single structure.
-    pub fn update_constant_buffer<T: Copy>(&mut self, buf: &handle::Buffer<R, T>, data: &T) -> Result<(), UpdateError<usize>> {
+    pub fn update_constant_buffer<T: Copy>(&mut self, buf: &handle::Buffer<R, T>, data: &T) {
         use std::slice;
 
-        if buf.raw().mapping().is_some() { return Err(UpdateError::IsMapped); }
+        if buf.raw().mapping().is_some() { panic!("{}", UpdateError::IsMapped::<usize>); }
 
         let slice = unsafe {
             slice::from_raw_parts(data as *const T as *const u8, mem::size_of::<T>())
         };
         self.command_buffer.update_buffer(
             self.handles.ref_buffer(buf.raw()).clone(), slice, 0);
-        Ok(())
     }
 
     /// Update the contents of a texture.

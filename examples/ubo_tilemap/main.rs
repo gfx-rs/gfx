@@ -265,11 +265,11 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
             encoder.update_buffer(&self.params.tilemap, &self.data, 0).unwrap();
         }
         if self.proj_dirty {
-            encoder.update_constant_buffer(&self.params.projection_cb, &self.proj_stuff).unwrap();
+            encoder.update_constant_buffer(&self.params.projection_cb, &self.proj_stuff);
             self.proj_dirty = false;
         }
         if self.tm_dirty {
-            encoder.update_constant_buffer(&self.params.tilemap_cb, &self.tm_stuff).unwrap();
+            encoder.update_constant_buffer(&self.params.tilemap_cb, &self.tm_stuff);
             self.tm_dirty = false;
         }
     }
