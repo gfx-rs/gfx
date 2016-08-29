@@ -95,6 +95,7 @@ impl<R: Resources> Slice<R> {
             LineStrip => (nv-1),
             TriangleList => nv / 3,
             TriangleStrip => (nv-2) / 3,
+            QuadList => nv / 4,
         }
     }
 }

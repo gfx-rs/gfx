@@ -95,7 +95,9 @@ pub enum ShaderSet<R: Resources> {
     Simple(VertexShader<R>, PixelShader<R>),
     /// Geometry shader programs: Vs-Gs-Ps
     Geometry(VertexShader<R>, GeometryShader<R>, PixelShader<R>),
-    //TODO: Tessellated, TessellatedGeometry, TransformFeedback
+    /// Tessellated TODO: Tessellated, TessellatedGeometry, TransformFeedback
+    Tessellated(VertexShader<R>, HullShader<R>, DomainShader<R>, PixelShader<R>),
+
 }
 
 impl<R: Resources> ShaderSet<R> {
@@ -104,6 +106,7 @@ impl<R: Resources> ShaderSet<R> {
         match self {
             &ShaderSet::Simple(..) => shade::VERTEX | shade::PIXEL,
             &ShaderSet::Geometry(..) => shade::VERTEX | shade::GEOMETRY | shade::PIXEL,
+            &ShaderSet::Tessellated(..) => shade::VERTEX | shade::HULL | shade::DOMAIN | shade::PIXEL,
         }
     }
 }
@@ -145,7 +148,9 @@ pub enum Primitive {
     /// Every three consecutive vertices represent a single triangle. For example, with `[a, b, c,
     /// d]`, `a`, `b`, and `c` form a triangle, and `b`, `c`, and `d` form a triangle.
     TriangleStrip,
-    //Quad,
+    /// Quad,
+    /// 4 point quad patch
+    QuadList
 }
 
 /// A type of each index value in the slice's index buffer
