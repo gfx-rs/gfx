@@ -50,6 +50,8 @@ use std::fmt;
 use gfx_core as d;
 pub use gfx_core::pso::{Descriptor};
 
+/// Informations about what is accessed by the pipeline
+pub type AccessInfo<R> = ::gfx_core::pso::AccessInfo<R>;
 
 /// A complete set of raw data that needs to be specified at run-time
 /// whenever we draw something with a PSO. This is what "data" struct
@@ -212,7 +214,11 @@ pub trait PipelineData<R: d::Resources> {
     type Meta;
     /// Dump all the contained data into the raw data set,
     /// given the mapping ("meta"), and a handle manager.
-    fn bake_to(&self, &mut RawDataSet<R>, meta: &Self::Meta, &mut d::handle::Manager<R>);
+    fn bake_to(&self,
+               &mut RawDataSet<R>,
+               &Self::Meta,
+               &mut d::handle::Manager<R>,
+               &mut AccessInfo<R>);
 }
 
 /// A strongly typed Pipleline State Object. See the module documentation for more information.
@@ -282,5 +288,9 @@ pub trait DataBind<R: d::Resources> {
     /// The associated "data" type - a member of the PSO "data" struct.
     type Data;
     /// Dump the given data into the raw data set.
-    fn bind_to(&self, &mut RawDataSet<R>, &Self::Data, &mut d::handle::Manager<R>);
+    fn bind_to(&self,
+               &mut RawDataSet<R>,
+               &Self::Data,
+               &mut d::handle::Manager<R>,
+               &mut AccessInfo<R>);
 }

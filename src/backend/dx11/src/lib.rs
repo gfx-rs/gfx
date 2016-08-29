@@ -147,7 +147,8 @@ impl gfx_core::Resources for Resources {
     type ShaderResourceView  = native::Srv;
     type UnorderedAccessView = ();
     type Sampler             = native::Sampler;
-    type Fence               = ();
+    type Fence               = Fence;
+    type Mapping             = factory::MappingGate;
 }
 
 /// Internal struct of shared data between the device and its factories.
@@ -339,27 +340,40 @@ impl gfx_core::Device for Device {
         }
     }
 
-    fn submit(&mut self, cb: &mut Self::CommandBuffer) {
+    fn submit(&mut self,
+              cb: &mut Self::CommandBuffer,
+              _: &gfx_core::pso::AccessInfo<Resources>)
+    {
         unsafe { (*self.context).ClearState(); }
         for com in &cb.parser.0 {
             execute::process(self.context, com, &cb.parser.1);
         }
     }
 
+    fn fenced_submit(&mut self,
+                     _: &mut Self::CommandBuffer,
+                     _: &gfx_core::pso::AccessInfo<Resources>,
+                     _after: Option<h::Fence<Resources>>) -> h::Fence<Resources>
+    {
+        unimplemented!()
+    }
+
     fn cleanup(&mut self) {
         use gfx_core::handle::Producer;
+
         self.frame_handles.clear();
         self.share.handles.borrow_mut().clean_with(&mut (),
-            |_, v| unsafe { (*(v.0).0).Release(); }, //buffer
+            |_, buffer| unsafe { (*(buffer.resource.0).0).Release(); },
             |_, s| unsafe { //shader
                 (*s.object).Release();
                 (*s.reflection).Release();
             },
-            |_, p| unsafe {
+            |_, program| unsafe {
+                let p = program.resource;
                 if p.vs != ptr::null_mut() { (*p.vs).Release(); }
                 if p.gs != ptr::null_mut() { (*p.gs).Release(); }
                 if p.ps != ptr::null_mut() { (*p.ps).Release(); }
-            }, //program
+            },
             |_, v| unsafe { //PSO
                 type Child = *mut winapi::ID3D11DeviceChild;
                 (*v.layout).Release();
@@ -367,13 +381,14 @@ impl gfx_core::Device for Device {
                 (*(v.depth_stencil as Child)).Release();
                 (*(v.blend as Child)).Release();
             },
-            |_, v| unsafe { (*v.to_resource()).Release(); },  //texture
+            |_, texture| unsafe { (*texture.resource.to_resource()).Release(); },
             |_, v| unsafe { (*v.0).Release(); }, //SRV
             |_, _| {}, //UAV
             |_, v| unsafe { (*v.0).Release(); }, //RTV
             |_, v| unsafe { (*v.0).Release(); }, //DSV
             |_, v| unsafe { (*v.0).Release(); }, //sampler
-            |_, _| {}, //fence
+            |_, _fence| {},
+            |_, _mapping| {},
         );
     }
 }
@@ -396,7 +411,10 @@ impl gfx_core::Device for Deferred {
         self.0.pin_submitted_resources(man);
     }
 
-    fn submit(&mut self, cb: &mut Self::CommandBuffer) {
+    fn submit(&mut self,
+              cb: &mut Self::CommandBuffer,
+              _: &gfx_core::pso::AccessInfo<Resources>)
+    {
         let cl = match cb.parser.1 {
             Some(cl) => cl,
             None => {
@@ -421,7 +439,24 @@ impl gfx_core::Device for Deferred {
         }
     }
 
+    fn fenced_submit(&mut self,
+                     _: &mut Self::CommandBuffer,
+                     _: &gfx_core::pso::AccessInfo<Resources>,
+                     _after: Option<h::Fence<Resources>>) -> h::Fence<Resources>
+    {
+        unimplemented!()
+    }
+
     fn cleanup(&mut self) {
         self.0.cleanup();
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Fence(());
+
+impl gfx_core::Fence for Fence {
+    fn wait(&self) {
+        unimplemented!()
     }
 }

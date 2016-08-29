@@ -19,7 +19,7 @@ macro_rules! gfx_pipeline_inner {
     {
         $( $field:ident: $ty:ty, )*
     } => {
-        use $crate::pso::{DataLink, DataBind, Descriptor, InitError, RawDataSet};
+        use $crate::pso::{DataLink, DataBind, Descriptor, InitError, RawDataSet, AccessInfo};
 
         #[derive(Clone, Debug)]
         pub struct Data<R: $crate::Resources> {
@@ -207,9 +207,13 @@ macro_rules! gfx_pipeline_inner {
 
         impl<R: $crate::Resources> $crate::pso::PipelineData<R> for Data<R> {
             type Meta = Meta;
-            fn bake_to(&self, out: &mut RawDataSet<R>, meta: &Self::Meta, man: &mut $crate::handle::Manager<R>) {
+            fn bake_to(&self,
+                       out: &mut RawDataSet<R>,
+                       meta: &Self::Meta,
+                       man: &mut $crate::handle::Manager<R>,
+                       access: &mut AccessInfo<R>) {
                 $(
-                    meta.$field.bind_to(out, &self.$field, man);
+                    meta.$field.bind_to(out, &self.$field, man, access);
                 )*
             }
         }

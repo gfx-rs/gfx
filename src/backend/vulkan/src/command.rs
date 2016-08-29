@@ -15,7 +15,7 @@
 use std::{mem, ptr};
 use std::collections::hash_map::{HashMap, Entry};
 use vk;
-use gfx_core::{self as core, draw, pso, shade, target, tex};
+use gfx_core::{self as core, draw, pso, shade, target, tex, handle, mapping};
 use gfx_core::state::RefValues;
 use gfx_core::{IndexType, VertexCount};
 use native;
@@ -298,6 +298,61 @@ impl GraphicsQueue {
     pub fn get_family(&self) -> u32 {
         self.family
     }
+
+    fn ensure_mappings_flushed(&mut self, mappings: &[handle::RawMapping<Resources>]) {
+        let (dev, vk) = self.share.get_device();
+        for mapping in mappings {
+            let mut inner = mapping.access()
+                .expect("user error: mapping still in use on submit");
+
+            if inner.status.cpu_write {
+                let memory_range = vk::MappedMemoryRange {
+                    sType: vk::STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+                    pNext: ptr::null(),
+                    memory: inner.buffer.resource().memory,
+                    offset: 0,
+                    size: vk::WHOLE_SIZE,
+                };
+                assert_eq!(vk::SUCCESS, unsafe {
+                    vk.FlushMappedMemoryRanges(dev, 1, &memory_range)
+                });
+
+                inner.status.cpu_write = false;
+            }
+        }
+    }
+
+    fn invalidate_mappings(&mut self, mappings: &[handle::RawMapping<Resources>]) {
+        let (dev, vk) = self.share.get_device();
+        for mapping in mappings {
+            let inner = mapping.access()
+                .expect("user error: mapping still in use on submit");
+
+            if inner.access.contains(mapping::READABLE) {
+                let memory_range = vk::MappedMemoryRange {
+                    sType: vk::STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+                    pNext: ptr::null(),
+                    memory: inner.buffer.resource().memory,
+                    offset: 0,
+                    size: vk::WHOLE_SIZE,
+                };
+                assert_eq!(vk::SUCCESS, unsafe {
+                    vk.InvalidateMappedMemoryRanges(dev, 1, &memory_range)
+                });
+            }
+        }
+    }
+
+    fn track_mapped_gpu_access(&mut self,
+                               mappings: &[handle::RawMapping<Resources>],
+                               fence: &handle::Fence<Resources>) {
+        for mapping in mappings {
+            let mut inner = mapping.access()
+                .expect("user error: mapping still in use on submit");
+
+            inner.status.gpu_access = Some(fence.clone());
+        }
+    }
 }
 
 impl core::Device for GraphicsQueue {
@@ -310,12 +365,19 @@ impl core::Device for GraphicsQueue {
 
     fn pin_submitted_resources(&mut self, _: &core::handle::Manager<Resources>) {}
 
-    fn submit(&mut self, com: &mut Buffer) {
+    fn submit(&mut self,
+              com: &mut Buffer,
+              access: &core::pso::AccessInfo<Resources>)
+    {
         assert_eq!(self.family, com.family);
-        let (_, vk) = self.share.get_device();
+        let share = self.share.clone();
+        let (_, vk) = share.get_device();
         assert_eq!(vk::SUCCESS, unsafe {
             vk.EndCommandBuffer(com.inner)
         });
+
+        self.ensure_mappings_flushed(access.mapped_reads());
+
         let submit_info = vk::SubmitInfo {
             sType: vk::STRUCTURE_TYPE_SUBMIT_INFO,
             commandBufferCount: 1,
@@ -325,6 +387,9 @@ impl core::Device for GraphicsQueue {
         assert_eq!(vk::SUCCESS, unsafe {
             vk.QueueSubmit(self.queue, 1, &submit_info, 0)
         });
+
+        // TODO: memory barrier, invalidation and fence
+
         let begin_info = vk::CommandBufferBeginInfo {
             sType: vk::STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
             pNext: ptr::null(),
@@ -336,15 +401,24 @@ impl core::Device for GraphicsQueue {
         });
     }
 
+    fn fenced_submit(&mut self,
+                     _: &mut Buffer,
+                     _: &core::pso::AccessInfo<Resources>,
+                     _after: Option<handle::Fence<Resources>>)
+                     -> handle::Fence<Resources>
+    {
+        unimplemented!()
+    }
+
     //note: this should really live elsewhere (Factory?)
     fn cleanup(&mut self) {
         let (dev, mut functions) = self.share.get_device();
         use gfx_core::handle::Producer;
         //self.frame_handles.clear();
         self.share.handles.borrow_mut().clean_with(&mut functions,
-            |vk, b| unsafe { //buffer
-                vk.DestroyBuffer(dev, b.buffer, ptr::null());
-                vk.FreeMemory(dev, b.memory, ptr::null());
+            |vk, buffer| unsafe {
+                vk.DestroyBuffer(dev, buffer.resource.buffer, ptr::null());
+                vk.FreeMemory(dev, buffer.resource.memory, ptr::null());
             },
             |vk, s| unsafe { //shader
                 vk.DestroyShaderModule(dev, *s, ptr::null());
@@ -356,10 +430,10 @@ impl core::Device for GraphicsQueue {
                 vk.DestroyDescriptorSetLayout(dev, p.desc_layout, ptr::null());
                 vk.DestroyDescriptorPool(dev, p.desc_pool, ptr::null());
             },
-            |vk, t| if t.memory != 0 {unsafe { //texture
-                vk.DestroyImage(dev, t.image, ptr::null());
-                vk.FreeMemory(dev, t.memory, ptr::null());
-            }},
+            |vk, texture| if texture.resource.memory != 0 { unsafe {
+                vk.DestroyImage(dev, texture.resource.image, ptr::null());
+                vk.FreeMemory(dev, texture.resource.memory, ptr::null());
+            } },
             |vk, v| unsafe { //SRV
                 vk.DestroyImageView(dev, v.view, ptr::null());
             },
@@ -371,7 +445,13 @@ impl core::Device for GraphicsQueue {
                 vk.DestroyImageView(dev, v.view, ptr::null());
             },
             |_, _v| (), //sampler
-            |_, _| (), //fence
+            |vk, fence| unsafe {
+                vk.DestroyFence(dev, fence.0, ptr::null());
+            },
+            |vk, raw_mapping| {
+                let inner = raw_mapping.access().unwrap();
+                unsafe { vk.UnmapMemory(dev, inner.buffer.resource().memory); }
+            }
         );
     }
 }

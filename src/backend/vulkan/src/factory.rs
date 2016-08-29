@@ -14,7 +14,9 @@
 
 use std::{cell, mem, ptr, slice};
 use std::os::raw::c_void;
-use gfx_core::{self as core, handle as h, factory as f, pso, state};
+use gfx_core::{self as core, handle as h, factory as f, pso, state, mapping};
+use gfx_core::factory::Typed;
+use gfx_core::mapping::Builder;
 use gfx_core::format::ChannelType;
 use gfx_core::target::Layer;
 use vk;
@@ -22,21 +24,21 @@ use {command, data, native};
 use {Resources as R, SharePointer};
 
 
-#[derive(Copy, Clone)]
-pub struct RawMapping {
+#[derive(Copy, Clone, Debug)]
+pub struct MappingGate {
     pointer: *mut c_void,
 }
 
-impl core::mapping::Raw for RawMapping {
+impl mapping::Gate<R> for MappingGate {
     unsafe fn set<T>(&self, index: usize, val: T) {
         *(self.pointer as *mut T).offset(index as isize) = val;
     }
 
-    unsafe fn to_slice<T>(&self, len: usize) -> &[T] {
+    unsafe fn slice<'a, 'b, T>(&'a self, len: usize) -> &'b [T] {
         slice::from_raw_parts(self.pointer as *const T, len)
     }
 
-    unsafe fn to_mut_slice<T>(&self, len: usize) -> &mut [T] {
+    unsafe fn mut_slice<'a, 'b, T>(&'a self, len: usize) -> &'b mut [T] {
         slice::from_raw_parts_mut(self.pointer as *mut T, len)
     }
 }
@@ -284,8 +286,6 @@ impl Drop for Factory {
 }
 
 impl core::Factory<R> for Factory {
-    type Mapper = RawMapping;
-
     fn get_capabilities(&self) -> &core::Capabilities {
         unimplemented!()
     }
@@ -296,12 +296,12 @@ impl core::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_buffer(buffer, info))
     }
 
-    fn create_buffer_const_raw(&mut self, data: &[u8], stride: usize, role: f::BufferRole, bind: f::Bind)
+    fn create_buffer_immutable_raw(&mut self, data: &[u8], stride: usize, role: f::BufferRole, bind: f::Bind)
                                -> Result<h::RawBuffer<R>, f::BufferError> {
         use gfx_core::handle::Producer;
         let info = f::BufferInfo {
             role: role,
-            usage: f::Usage::Const,
+            usage: f::Usage::Immutable,
             bind: bind,
             size: data.len(),
             stride: stride,
@@ -856,26 +856,41 @@ impl core::Factory<R> for Factory {
         self.share.handles.borrow_mut().make_sampler(sampler, info)
     }
 
-    fn map_buffer_raw(&mut self, _buf: &h::RawBuffer<R>, _access: f::MapAccess) -> RawMapping {
-        unimplemented!()
+    fn map_buffer_raw(&mut self, buf: &h::RawBuffer<R>, access: mapping::Access)
+                      -> Result<h::RawMapping<R>, mapping::Error> {
+        // TODO: ensure the buffer is properly created in regard to the expected mapping
+        // (in particular VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT should be set).
+        use gfx_core::handle::Producer;
+
+        let (dev, vk) = self.share.get_device();
+        try!(buf.valid_access(access));
+
+        let offset = 0;
+        let flags = 0;
+        let mut pointer = ptr::null_mut();
+        assert_eq!(vk::SUCCESS, unsafe {
+            vk.MapMemory(dev, buf.resource().memory, offset, vk::WHOLE_SIZE, flags, &mut pointer)
+        });
+
+        let m = MappingGate { pointer: pointer };
+        self.share.handles.borrow_mut().make_mapping(m, access, buf)
     }
 
-    fn unmap_buffer_raw(&mut self, _map: RawMapping) {
-        unimplemented!()
+    fn map_buffer_readable<T: Copy>(&mut self, buf: &h::Buffer<R, T>)
+                                    -> Result<mapping::Readable<R, T>, mapping::Error> {
+        let map = try!(self.map_buffer_raw(buf.raw(), mapping::READABLE));
+        Ok(self.map_readable(map, buf.len()))
     }
 
-    fn map_buffer_readable<T: Copy>(&mut self, _buf: &h::Buffer<R, T>)
-                           -> core::mapping::Readable<T, R, Factory> {
-        unimplemented!()
+    fn map_buffer_writable<T: Copy>(&mut self, buf: &h::Buffer<R, T>)
+                                    -> Result<mapping::Writable<R, T>, mapping::Error> {
+        let map = try!(self.map_buffer_raw(buf.raw(), mapping::WRITABLE));
+        Ok(self.map_writable(map, buf.len()))
     }
 
-    fn map_buffer_writable<T: Copy>(&mut self, _buf: &h::Buffer<R, T>)
-                                    -> core::mapping::Writable<T, R, Factory> {
-        unimplemented!()
-    }
-
-    fn map_buffer_rw<T: Copy>(&mut self, _buf: &h::Buffer<R, T>)
-                              -> core::mapping::RW<T, R, Factory> {
-        unimplemented!()
+    fn map_buffer_rw<T: Copy>(&mut self, buf: &h::Buffer<R, T>)
+                              -> Result<mapping::RWable<R, T>, mapping::Error> {
+        let map = try!(self.map_buffer_raw(buf.raw(), mapping::RW));
+        Ok(self.map_read_write(map, buf.len()))
     }
 }

@@ -19,7 +19,7 @@ use gfx_core::{ResourceViewSlot, UnorderedViewSlot, SamplerSlot, Resources};
 use gfx_core::{handle, pso, shade};
 use gfx_core::factory::Typed;
 use gfx_core::format::Format;
-use super::{DataLink, DataBind, RawDataSet};
+use super::{DataLink, DataBind, RawDataSet, AccessInfo};
 
 /// Shader resource component (SRV). Typically is a view into some texture,
 /// but can also be a buffer.
@@ -65,8 +65,12 @@ impl<'a, T> DataLink<'a> for ShaderResource<T> {
 
 impl<R: Resources, T> DataBind<R> for ShaderResource<T> {
     type Data = handle::ShaderResourceView<R, T>;
-    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
-        self.0.bind_to(out, data.raw(), man)
+    fn bind_to(&self,
+               out: &mut RawDataSet<R>,
+               data: &Self::Data,
+               man: &mut handle::Manager<R>,
+               access: &mut AccessInfo<R>) {
+        self.0.bind_to(out, data.raw(), man, access)
     }
 }
 
@@ -92,7 +96,12 @@ impl<'a> DataLink<'a> for RawShaderResource {
 
 impl<R: Resources> DataBind<R> for RawShaderResource {
     type Data = handle::RawShaderResourceView<R>;
-    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
+    fn bind_to(&self,
+               out: &mut RawDataSet<R>,
+               data: &Self::Data,
+               man: &mut handle::Manager<R>,
+               _: &mut AccessInfo<R>) {
+        // TODO: register buffer view source access
         if let Some((slot, usage)) = self.0 {
             let view = man.ref_srv(data).clone();
             out.resource_views.push(pso::ResourceViewParam(view, usage, slot));
@@ -122,7 +131,12 @@ impl<'a, T> DataLink<'a> for UnorderedAccess<T> {
 
 impl<R: Resources, T> DataBind<R> for UnorderedAccess<T> {
     type Data = handle::UnorderedAccessView<R, T>;
-    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
+    fn bind_to(&self,
+               out: &mut RawDataSet<R>,
+               data: &Self::Data,
+               man: &mut handle::Manager<R>,
+               _: &mut AccessInfo<R>) {
+        // TODO: register buffer view source access
         if let Some((slot, usage)) = self.0 {
             let view =  man.ref_uav(data.raw()).clone();
             out.unordered_views.push(pso::UnorderedViewParam(view, usage, slot));
@@ -152,7 +166,11 @@ impl<'a> DataLink<'a> for Sampler {
 
 impl<R: Resources> DataBind<R> for Sampler {
     type Data = handle::Sampler<R>;
-    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
+    fn bind_to(&self,
+               out: &mut RawDataSet<R>,
+               data: &Self::Data,
+               man: &mut handle::Manager<R>,
+               _: &mut AccessInfo<R>) {
         if let Some((slot, usage)) = self.0 {
             let sm = man.ref_sampler(data).clone();
             out.samplers.push(pso::SamplerParam(sm, usage, slot));
@@ -180,8 +198,12 @@ impl<'a, T> DataLink<'a> for TextureSampler<T> {
 
 impl<R: Resources, T> DataBind<R> for TextureSampler<T> {
     type Data = (handle::ShaderResourceView<R, T>, handle::Sampler<R>);
-    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
-        self.0.bind_to(out, &data.0, man);
-        self.1.bind_to(out, &data.1, man);
+    fn bind_to(&self,
+               out: &mut RawDataSet<R>,
+               data: &Self::Data,
+               man: &mut handle::Manager<R>,
+               access: &mut AccessInfo<R>) {
+        self.0.bind_to(out, &data.0, man, access);
+        self.1.bind_to(out, &data.1, man, access);
     }
 }

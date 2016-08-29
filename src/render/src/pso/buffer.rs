@@ -20,7 +20,7 @@ use gfx_core::{handle, pso, shade};
 use gfx_core::factory::Typed;
 use gfx_core::format::Format;
 use shade::{ToUniform, Usage};
-use super::{DataLink, DataBind, ElementError, RawDataSet};
+use super::{DataLink, DataBind, ElementError, RawDataSet, AccessInfo};
 
 pub use gfx_core::pso::{BufferIndex, Element, ElemOffset, ElemStride, InstanceRate};
 
@@ -90,8 +90,12 @@ impl<'a,
 
 impl<R: Resources, T, I> DataBind<R> for VertexBufferCommon<T, I> {
     type Data = handle::Buffer<R, T>;
-    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
-        self.0.bind_to(out, data.raw(), man)
+    fn bind_to(&self,
+               out: &mut RawDataSet<R>,
+               data: &Self::Data,
+               man: &mut handle::Manager<R>,
+               access: &mut AccessInfo<R>) {
+        self.0.bind_to(out, data.raw(), man, access)
     }
 }
 
@@ -132,13 +136,18 @@ impl<'a> DataLink<'a> for RawVertexBuffer {
 
 impl<R: Resources> DataBind<R> for RawVertexBuffer {
     type Data = handle::RawBuffer<R>;
-    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
+    fn bind_to(&self,
+               out: &mut RawDataSet<R>,
+               data: &Self::Data,
+               man: &mut handle::Manager<R>,
+               access: &mut AccessInfo<R>) {
         let value = Some((man.ref_buffer(data).clone(), 0));
         for i in 0 .. MAX_VERTEX_ATTRIBUTES {
             if (self.1 & (1<<i)) != 0 {
                 out.vertex_buffers.0[i] = value;
             }
         }
+        if self.1 != 0 { access.buffer_read(data); }
     }
 }
 
@@ -174,10 +183,15 @@ DataLink<'a> for ConstantBuffer<T> {
 impl<R: Resources, T: Structure<shade::ConstFormat>>
 DataBind<R> for ConstantBuffer<T> {
     type Data = handle::Buffer<R, T>;
-    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
+    fn bind_to(&self,
+               out: &mut RawDataSet<R>,
+               data: &Self::Data,
+               man: &mut handle::Manager<R>,
+               access: &mut AccessInfo<R>) {
         if let Some((usage, slot)) = self.0 {
             let buf = man.ref_buffer(data.raw()).clone();
             out.constant_buffers.push(pso::ConstantBufferParam(buf, usage, slot));
+            access.buffer_read(data.raw())
         }
     }
 }
@@ -204,7 +218,11 @@ impl<'a, T: ToUniform> DataLink<'a> for Global<T> {
 
 impl<R: Resources, T: ToUniform> DataBind<R> for Global<T> {
     type Data = T;
-    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, _: &mut handle::Manager<R>) {
+    fn bind_to(&self,
+               out: &mut RawDataSet<R>,
+               data: &Self::Data,
+               _: &mut handle::Manager<R>,
+               _: &mut AccessInfo<R>) {
         if let Some(loc) = self.0 {
             let value = data.convert();
             out.global_constants.push((loc, value));

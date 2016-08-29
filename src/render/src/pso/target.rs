@@ -19,7 +19,7 @@ use gfx_core::{ColorSlot, Resources};
 use gfx_core::{format, handle, pso, state, target};
 use gfx_core::factory::Typed;
 use gfx_core::shade::OutputVar;
-use super::{DataLink, DataBind, RawDataSet};
+use super::{DataLink, DataBind, RawDataSet, AccessInfo};
 
 /// Render target component. Typically points to a color-formatted texture.
 /// - init: `&str` = name of the target
@@ -77,7 +77,11 @@ impl<'a, T: format::RenderFormat> DataLink<'a> for RenderTarget<T> {
 
 impl<R: Resources, T> DataBind<R> for RenderTarget<T> {
     type Data = handle::RenderTargetView<R, T>;
-    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
+    fn bind_to(&self,
+               out: &mut RawDataSet<R>,
+               data: &Self::Data,
+               man: &mut handle::Manager<R>,
+               _: &mut AccessInfo<R>) {
         if let Some(slot) = self.0 {
             out.pixel_targets.add_color(slot, man.ref_rtv(data.raw()), data.raw().get_dimensions());
         }
@@ -101,8 +105,12 @@ impl<'a, T: format::BlendFormat> DataLink<'a> for BlendTarget<T> {
 
 impl<R: Resources, T> DataBind<R> for BlendTarget<T> {
     type Data = handle::RenderTargetView<R, T>;
-    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
-        self.0.bind_to(out, data.raw(), man)
+    fn bind_to(&self,
+               out: &mut RawDataSet<R>,
+               data: &Self::Data,
+               man: &mut handle::Manager<R>,
+               access: &mut AccessInfo<R>) {
+        self.0.bind_to(out, data.raw(), man, access)
     }
 }
 
@@ -132,7 +140,11 @@ impl<'a> DataLink<'a> for RawRenderTarget {
 
 impl<R: Resources> DataBind<R> for RawRenderTarget {
     type Data = handle::RawRenderTargetView<R>;
-    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
+    fn bind_to(&self,
+               out: &mut RawDataSet<R>,
+               data: &Self::Data,
+               man: &mut handle::Manager<R>,
+               _: &mut AccessInfo<R>) {
         if let Some(slot) = self.0 {
             out.pixel_targets.add_color(slot, man.ref_rtv(data), data.get_dimensions());
         }
@@ -151,7 +163,11 @@ impl<'a, T: format::DepthFormat> DataLink<'a> for DepthTarget<T> {
 
 impl<R: Resources, T> DataBind<R> for DepthTarget<T> {
     type Data = handle::DepthStencilView<R, T>;
-    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
+    fn bind_to(&self,
+               out: &mut RawDataSet<R>,
+               data: &Self::Data,
+               man: &mut handle::Manager<R>,
+               _: &mut AccessInfo<R>) {
         let dsv = data.raw();
         out.pixel_targets.add_depth_stencil(man.ref_dsv(dsv), true, false, dsv.get_dimensions());
     }
@@ -168,7 +184,11 @@ impl<'a, T: format::StencilFormat> DataLink<'a> for StencilTarget<T> {
 
 impl<R: Resources, T> DataBind<R> for StencilTarget<T> {
     type Data = (handle::DepthStencilView<R, T>, (target::Stencil, target::Stencil));
-    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
+    fn bind_to(&self,
+               out: &mut RawDataSet<R>,
+               data: &Self::Data,
+               man: &mut handle::Manager<R>,
+               _: &mut AccessInfo<R>) {
         let dsv = data.0.raw();
         out.pixel_targets.add_depth_stencil(man.ref_dsv(dsv), false, true, dsv.get_dimensions());
         out.ref_values.stencil = data.1;
@@ -186,7 +206,11 @@ impl<'a, T: format::DepthStencilFormat> DataLink<'a> for DepthStencilTarget<T> {
 
 impl<R: Resources, T> DataBind<R> for DepthStencilTarget<T> {
     type Data = (handle::DepthStencilView<R, T>, (target::Stencil, target::Stencil));
-    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
+    fn bind_to(&self,
+               out: &mut RawDataSet<R>,
+               data: &Self::Data,
+               man: &mut handle::Manager<R>,
+               _: &mut AccessInfo<R>) {
         let dsv = data.0.raw();
         out.pixel_targets.add_depth_stencil(man.ref_dsv(dsv), true, true, dsv.get_dimensions());
         out.ref_values.stencil = data.1;
@@ -203,7 +227,11 @@ impl<'a> DataLink<'a> for Scissor {
 
 impl<R: Resources> DataBind<R> for Scissor {
     type Data = target::Rect;
-    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, _: &mut handle::Manager<R>) {
+    fn bind_to(&self,
+               out: &mut RawDataSet<R>,
+               data: &Self::Data,
+               _: &mut handle::Manager<R>,
+               _: &mut AccessInfo<R>) {
         out.scissor = *data;
     }
 }
@@ -216,7 +244,11 @@ impl<'a> DataLink<'a> for BlendRef {
 
 impl<R: Resources> DataBind<R> for BlendRef {
     type Data = target::ColorValue;
-    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, _: &mut handle::Manager<R>) {
+    fn bind_to(&self,
+               out: &mut RawDataSet<R>,
+               data: &Self::Data,
+               _: &mut handle::Manager<R>,
+               _: &mut AccessInfo<R>) {
         out.ref_values.blend = *data;
     }
 }

@@ -331,5 +331,15 @@ impl gfx_core::Resources for Resources {
     type RenderTargetView     = native::TextureView;
     type DepthStencilView     = native::TextureView;
     type Sampler              = vk::Sampler;
-    type Fence                = vk::Fence;
+    type Fence                = Fence;
+    type Mapping              = factory::MappingGate;
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Fence(vk::Fence);
+
+impl gfx_core::Fence for Fence {
+    fn wait(&self) {
+        unimplemented!()
+    }
 }

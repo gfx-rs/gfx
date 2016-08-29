@@ -23,7 +23,7 @@ use {MAX_COLOR_TARGETS, MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
 use {ConstantBufferSlot, ColorSlot, ResourceViewSlot,
      UnorderedViewSlot, SamplerSlot,
      Primitive, Resources};
-use {format, state as s, tex};
+use {handle, format, state as s, tex};
 use shade::Usage;
 use std::error::Error;
 use std::fmt;
@@ -281,3 +281,51 @@ impl<R: Resources> PixelTargetSet<R> {
         self.size = max(self.size, dim);
     }
 }
+
+/// Informations about what is accessed by the pipeline
+#[derive(Debug)]
+pub struct AccessInfo<R: Resources> {
+    mapped_reads: Vec<handle::RawMapping<R>>,
+    mapped_writes: Vec<handle::RawMapping<R>>,
+}
+
+impl<R: Resources> AccessInfo<R> {
+    /// Creates empty access informations
+    pub fn new() -> Self {
+        AccessInfo {
+            mapped_reads: Vec::new(),
+            mapped_writes: Vec::new(),
+        }
+    }
+
+    /// Clear access informations
+    pub fn clear(&mut self) {
+        self.mapped_reads.clear();
+        self.mapped_writes.clear();
+    }
+
+    /// Register a buffer read access
+    pub fn buffer_read(&mut self, buffer: &handle::RawBuffer<R>) {
+        if let Some(mapping) = buffer.mapping() {
+            self.mapped_reads.push(mapping);
+        }
+    }
+
+    /// Register a buffer write access
+    pub fn buffer_write(&mut self, buffer: &handle::RawBuffer<R>) {
+        if let Some(mapping) = buffer.mapping() {
+            self.mapped_writes.push(mapping);
+        }
+    }
+
+    /// Returns a slice of mappings associated to buffers that The GPU will read from
+    pub fn mapped_reads(&self) -> &[handle::RawMapping<R>] {
+        &self.mapped_reads[..]
+    }
+
+    /// Returns a slice of mappings associated to buffers that The GPU will write to
+    pub fn mapped_writes(&self) -> &[handle::RawMapping<R>] {
+        &self.mapped_writes[..]
+    }
+}
+

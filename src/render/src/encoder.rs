@@ -17,10 +17,9 @@
 #![deny(missing_docs)]
 
 use draw_state::target::{Depth, Stencil};
-use std::any::Any;
 use std::error::Error;
-use std::fmt;
-use std::mem;
+use std::any::Any;
+use std::{fmt, mem};
 
 use gfx_core::{Device, IndexType, Resources, VertexCount};
 use gfx_core::{draw, format, handle, tex, Pod};
@@ -41,6 +40,7 @@ pub enum UpdateError<T> {
         target: usize,
         slice: usize,
     },
+    IsMapped,
 }
 
 impl<T: Any + fmt::Debug + fmt::Display> fmt::Display for UpdateError<T> {
@@ -50,6 +50,7 @@ impl<T: Any + fmt::Debug + fmt::Display> fmt::Display for UpdateError<T> {
                 write!(f, "Write to {} from {} is out of bounds", target, source),
             UpdateError::UnitCountMismatch {ref target, ref slice} =>
                 write!(f, "{}: expected {}, found {}", self.description(), target, slice),
+            UpdateError::IsMapped => write!(f, "Attempting to update mapped memory"),
         }
     }
 }
@@ -59,6 +60,7 @@ impl<T: Any + fmt::Debug + fmt::Display> Error for UpdateError<T> {
         match *self {
             UpdateError::OutOfBounds {..} => "Write to data is out of bounds",
             UpdateError::UnitCountMismatch {..} => "Unit count mismatch",
+            UpdateError::IsMapped => "Attempting to update mapped memory",
         }
     }
 }
@@ -80,6 +82,7 @@ impl<T: Any + fmt::Debug + fmt::Display> Error for UpdateError<T> {
 pub struct Encoder<R: Resources, C: draw::CommandBuffer<R>> {
     command_buffer: C,
     raw_pso_data: pso::RawDataSet<R>,
+    access_info: pso::AccessInfo<R>,
     handles: handle::Manager<R>,
 }
 
@@ -88,6 +91,7 @@ impl<R: Resources, C: draw::CommandBuffer<R>> From<C> for Encoder<R, C> {
         Encoder {
             command_buffer: combuf,
             raw_pso_data: pso::RawDataSet::new(),
+            access_info: pso::AccessInfo::new(),
             handles: handle::Manager::new(),
         }
     }
@@ -105,8 +109,9 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
         D: Device<Resources=R, CommandBuffer=C>
     {
         device.pin_submitted_resources(&self.handles);
-        device.submit(&mut self.command_buffer);
+        device.submit(&mut self.command_buffer, &self.access_info);
         self.command_buffer.reset();
+        self.access_info.clear();
         self.handles.clear();
     }
 
@@ -115,9 +120,9 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
                          data: &[T], offset_elements: usize)
                          -> Result<(), UpdateError<usize>>
     {
-        if data.is_empty() {
-            return Ok(())
-        }
+        if data.is_empty() { return Ok(()); }
+        if buf.raw().mapping().is_some() { return Err(UpdateError::IsMapped); }
+
         let elem_size = mem::size_of::<T>();
         let offset_bytes = elem_size * offset_elements;
         let bound = data.len().wrapping_mul(elem_size) + offset_bytes;
@@ -137,6 +142,9 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
     /// Update a buffer with a single structure.
     pub fn update_constant_buffer<T: Copy>(&mut self, buf: &handle::Buffer<R, T>, data: &T) {
         use std::slice;
+
+        if buf.raw().mapping().is_some() { panic!("{}", UpdateError::IsMapped::<usize>); }
+
         let slice = unsafe {
             slice::from_raw_parts(data as *const T as *const u8, mem::size_of::<T>())
         };
@@ -154,9 +162,7 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
         S::DataType: Copy,
         T: format::Formatted<Surface = S>,
     {
-        if data.is_empty() {
-            return Ok(())
-        }
+        if data.is_empty() { return Ok(()); }
 
         let target_count = img.get_texel_count();
         if target_count != data.len() {
@@ -233,7 +239,7 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
         self.command_buffer.bind_pipeline_state(pso.clone());
         //TODO: make `raw_data` a member to this struct, to re-use the heap allocation
         self.raw_pso_data.clear();
-        user_data.bake_to(&mut self.raw_pso_data, pipeline.get_meta(), &mut self.handles);
+        user_data.bake_to(&mut self.raw_pso_data, pipeline.get_meta(), &mut self.handles, &mut self.access_info);
         self.command_buffer.bind_vertex_buffers(self.raw_pso_data.vertex_buffers.clone());
         self.command_buffer.bind_pixel_targets(self.raw_pso_data.pixel_targets.clone());
         self.command_buffer.set_ref_values(self.raw_pso_data.ref_values);

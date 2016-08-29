@@ -48,18 +48,6 @@ pub fn cast_slice<A: Pod, B: Pod>(slice: &[A]) -> &[B] {
     }
 }
 
-/// Specifies the access allowed to a buffer mapping.
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
-#[repr(u8)]
-pub enum MapAccess {
-    /// Only allow reads.
-    Readable,
-    /// Only allow writes.
-    Writable,
-    /// Allow full access.
-    RW
-}
-
 bitflags!(
     /// Bind flags
     pub flags Bind: u8 {
@@ -98,12 +86,25 @@ pub enum Usage {
     /// GPU: read + write, CPU: copy. Optimal for render targets.
     GpuOnly,
     /// GPU: read, CPU: none. Optimal for resourced textures/buffers.
-    Const,
+    Immutable,
     /// GPU: read, CPU: write.
     Dynamic,
+    /// GPU: read + write, CPU: as specified.
+    Persistent(mapping::Access),
     /// GPU: copy, CPU: as specified. Used as a staging buffer,
     /// to be copied back and forth with on-GPU targets.
-    CpuOnly(MapAccess),
+    CpuOnly(mapping::Access),
+}
+
+impl Usage {
+    /// Is the requested mapping access matching the expected usage ?
+    pub fn valid_access(&self, access: mapping::Access) -> Result<(), mapping::Error> {
+        use self::Usage::*;
+        match *self {
+            Persistent(a) if a.contains(access) => Ok(()),
+            _ => Err(mapping::Error::InvalidAccess(access, *self)),
+        }
+    }
 }
 
 /// An information block that is immutable and associated with each buffer.
@@ -346,19 +347,17 @@ impl From<TargetViewError> for CombinedError {
 /// Also see the `FactoryExt` trait inside the `gfx` module for additional methods.
 #[allow(missing_docs)]
 pub trait Factory<R: Resources> {
-    /// Associated mapper type
-    type Mapper: Clone + mapping::Raw;
-
     /// Returns the capabilities of this `Factory`. This usually depends on the graphics API being
     /// used.
     fn get_capabilities(&self) -> &Capabilities;
 
     // resource creation
     fn create_buffer_raw(&mut self, BufferInfo) -> Result<handle::RawBuffer<R>, BufferError>;
-    fn create_buffer_const_raw(&mut self, data: &[u8], stride: usize, BufferRole, Bind)
-                                -> Result<handle::RawBuffer<R>, BufferError>;
-    fn create_buffer_const<T: Pod>(&mut self, data: &[T], role: BufferRole, bind: Bind) -> Result<handle::Buffer<R, T>, BufferError> {
-        self.create_buffer_const_raw(cast_slice(data), mem::size_of::<T>(), role, bind)
+    fn create_buffer_immutable_raw(&mut self, data: &[u8], stride: usize, BufferRole, Bind)
+                                   -> Result<handle::RawBuffer<R>, BufferError>;
+    fn create_buffer_immutable<T: Pod>(&mut self, data: &[T], role: BufferRole, bind: Bind)
+                                       -> Result<handle::Buffer<R, T>, BufferError> {
+        self.create_buffer_immutable_raw(cast_slice(data), mem::size_of::<T>(), role, bind)
             .map(|raw| Typed::new(raw))
     }
     fn create_buffer_dynamic<T>(&mut self, num: usize, role: BufferRole, bind: Bind)
@@ -373,8 +372,20 @@ pub trait Factory<R: Resources> {
         };
         self.create_buffer_raw(info).map(|raw| Typed::new(raw))
     }
-    fn create_buffer_staging<T>(&mut self, num: usize, role: BufferRole, bind: Bind, map: MapAccess)
-                             -> Result<handle::Buffer<R, T>, BufferError> {
+    fn create_buffer_persistent<T>(&mut self, num: usize, role: BufferRole, bind: Bind, map: mapping::Access)
+                                   -> Result<handle::Buffer<R, T>, BufferError> {
+        let stride = mem::size_of::<T>();
+        let info = BufferInfo {
+            role: role,
+            usage: Usage::Persistent(map),
+            bind: bind,
+            size: num * stride,
+            stride: stride,
+        };
+        self.create_buffer_raw(info).map(Typed::new)
+    }
+    fn create_buffer_staging<T>(&mut self, num: usize, role: BufferRole, bind: Bind, map: mapping::Access)
+                                -> Result<handle::Buffer<R, T>, BufferError> {
         let stride = mem::size_of::<T>();
         let info = BufferInfo {
             role: role,
@@ -415,14 +426,14 @@ pub trait Factory<R: Resources> {
 
     fn create_sampler(&mut self, tex::SamplerInfo) -> handle::Sampler<R>;
 
-    fn map_buffer_raw(&mut self, &handle::RawBuffer<R>, MapAccess) -> Self::Mapper;
-    fn unmap_buffer_raw(&mut self, Self::Mapper);
-    fn map_buffer_readable<T: Copy>(&mut self, &handle::Buffer<R, T>) -> mapping::Readable<T, R, Self> where
-        Self: Sized;
-    fn map_buffer_writable<T: Copy>(&mut self, &handle::Buffer<R, T>) -> mapping::Writable<T, R, Self> where
-        Self: Sized;
-    fn map_buffer_rw<T: Copy>(&mut self, &handle::Buffer<R, T>) -> mapping::RW<T, R, Self> where
-        Self: Sized;
+    fn map_buffer_raw(&mut self, &handle::RawBuffer<R>, mapping::Access)
+                      -> Result<handle::RawMapping<R>, mapping::Error>;
+    fn map_buffer_readable<T: Copy>(&mut self, &handle::Buffer<R, T>)
+                                    -> Result<mapping::Readable<R, T>, mapping::Error>;
+    fn map_buffer_writable<T: Copy>(&mut self, &handle::Buffer<R, T>)
+                                    -> Result<mapping::Writable<R, T>, mapping::Error>;
+    fn map_buffer_rw<T: Copy>(&mut self, &handle::Buffer<R, T>)
+                              -> Result<mapping::RWable<R, T>, mapping::Error>;
 
     /// Create a new empty raw texture with no data. The channel type parameter is a hint,
     /// required to assist backends that have no concept of typeless formats (OpenGL).
@@ -541,8 +552,10 @@ pub trait Factory<R: Resources> {
         self.view_texture_as_depth_stencil(tex, 0, None, tex::DepthStencilFlags::empty())
     }
 
-    fn create_texture_const_u8<T: format::TextureFormat>(&mut self, kind: tex::Kind, data: &[&[u8]])
-                               -> Result<(handle::Texture<R, T::Surface>, handle::ShaderResourceView<R, T::View>), CombinedError>
+    fn create_texture_immutable_u8<T: format::TextureFormat>(&mut self, kind: tex::Kind, data: &[&[u8]])
+                                   -> Result<(handle::Texture<R, T::Surface>,
+                                              handle::ShaderResourceView<R, T::View>),
+                                             CombinedError>
     {
         let surface = <T::Surface as format::SurfaceTyped>::get_surface_type();
         let num_slices = kind.get_num_slices().unwrap_or(1) as usize;
@@ -552,7 +565,7 @@ pub trait Factory<R: Resources> {
             levels: (data.len() / (num_slices * num_faces)) as tex::Level,
             format: surface,
             bind: SHADER_RESOURCE,
-            usage: Usage::Const,
+            usage: Usage::Immutable,
         };
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
         let raw = try!(self.create_texture_raw(desc, Some(cty), Some(data)));
@@ -562,9 +575,12 @@ pub trait Factory<R: Resources> {
         Ok((tex, view))
     }
 
-    fn create_texture_const<T: format::TextureFormat>(&mut self, kind: tex::Kind,
-                            data: &[&[<T::Surface as format::SurfaceTyped>::DataType]])
-                            -> Result<(handle::Texture<R, T::Surface>, handle::ShaderResourceView<R, T::View>), CombinedError>
+    fn create_texture_immutable<T: format::TextureFormat>(
+        &mut self,
+        kind: tex::Kind,
+        data: &[&[<T::Surface as format::SurfaceTyped>::DataType]])
+        -> Result<(handle::Texture<R, T::Surface>, handle::ShaderResourceView<R, T::View>),
+                  CombinedError>
     {
         // we can use cast_slice on a 2D slice, have to use a temporary array of slices
         let mut raw_data: [&[u8]; 0x100] = [&[]; 0x100];
@@ -572,7 +588,7 @@ pub trait Factory<R: Resources> {
         for (rd, d) in raw_data.iter_mut().zip(data.iter()) {
             *rd = cast_slice(*d);
         }
-        self.create_texture_const_u8::<T>(kind, &raw_data[.. data.len()])
+        self.create_texture_immutable_u8::<T>(kind, &raw_data[.. data.len()])
     }
 
     fn create_render_target<T: format::RenderFormat + format::TextureFormat>

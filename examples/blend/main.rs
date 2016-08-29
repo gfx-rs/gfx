@@ -58,7 +58,7 @@ fn load_texture<R, F>(factory: &mut F, data: &[u8])
     let img = image::load(Cursor::new(data), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
     let kind = t::Kind::D2(width as t::Size, height as t::Size, t::AaMode::Single);
-    let (_, view) = factory.create_texture_const_u8::<Rgba8>(kind, &[&img]).unwrap();
+    let (_, view) = factory.create_texture_immutable_u8::<Rgba8>(kind, &[&img]).unwrap();
     Ok(view)
 }
 

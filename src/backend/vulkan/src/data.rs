@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use gfx_core::factory::{Bind, MapAccess, Usage, LayerError};
+use gfx_core::factory::{Bind, Usage, LayerError};
 use gfx_core::format::{SurfaceType, ChannelType, Swizzle, ChannelSource};
 use gfx_core::pso::ColorInfo;
 use gfx_core::tex::{FilterMethod, Kind, Layer, PackedColor, WrapMode};
-use gfx_core::{shade, state, Primitive};
+use gfx_core::{shade, state, mapping, Primitive};
 use vk;
 
 
@@ -97,7 +97,7 @@ pub fn map_usage_tiling(gfx_usage: Usage, bind: Bind) -> (vk::ImageUsageFlags, v
         usage |= vk::IMAGE_USAGE_STORAGE_BIT;
     }
     let tiling = match gfx_usage {
-        Usage::Const => vk::IMAGE_TILING_OPTIMAL,
+        Usage::Immutable => vk::IMAGE_TILING_OPTIMAL,
         Usage::GpuOnly => {
             //TODO: not always needed
             usage |= vk::IMAGE_USAGE_TRANSFER_SRC_BIT | vk::IMAGE_USAGE_TRANSFER_DST_BIT;
@@ -107,12 +107,10 @@ pub fn map_usage_tiling(gfx_usage: Usage, bind: Bind) -> (vk::ImageUsageFlags, v
             usage |= vk::IMAGE_USAGE_TRANSFER_DST_BIT;
             vk::IMAGE_TILING_LINEAR
         },
-        Usage::CpuOnly(map) => {
-            usage |= match map {
-                MapAccess::Readable => vk::IMAGE_USAGE_TRANSFER_DST_BIT,
-                MapAccess::Writable => vk::IMAGE_USAGE_TRANSFER_SRC_BIT,
-                MapAccess::RW => vk::IMAGE_USAGE_TRANSFER_SRC_BIT | vk::IMAGE_USAGE_TRANSFER_DST_BIT,
-            };
+        Usage::Persistent(access) => unimplemented!(),
+        Usage::CpuOnly(access) => {
+            if access.contains(mapping::READABLE) { usage |= vk::IMAGE_USAGE_TRANSFER_DST_BIT }
+            if access.contains(mapping::WRITABLE) { usage |= vk::IMAGE_USAGE_TRANSFER_SRC_BIT }
             vk::IMAGE_TILING_LINEAR
         },
     };

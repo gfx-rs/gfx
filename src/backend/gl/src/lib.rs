@@ -25,11 +25,13 @@ extern crate gfx_core;
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::{cmp, hash, fmt};
 use gfx_core as d;
 use gfx_core::handle;
 use gfx_core::state as s;
 use gfx_core::target::{Layer, Level};
 use command::{Command, DataBuffer};
+use factory::MappingKind;
 
 pub use self::command::CommandBuffer;
 pub use self::factory::Factory;
@@ -53,10 +55,51 @@ pub type Texture        = gl::types::GLuint;
 pub type Sampler        = gl::types::GLuint;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct Fence(gl::types::GLsync);
+struct RawFence(gl::types::GLsync);
 
-unsafe impl Send for Fence {}
-unsafe impl Sync for Fence {}
+impl RawFence {
+    fn wait(&self, gl: &gl::Gl) {
+        unsafe {
+            let timeout = 1_000_000_000_000;
+            // TODO: use the return value of this call
+            // TODO:
+            // This can be called by multiple objects wanting to ensure they have exclusive
+            // access to a resource. How much does this call costs ? The status of the fence
+            // could be cached to avoid calling this more than once (in core or in the backend ?).
+            gl.ClientWaitSync(self.0, gl::SYNC_FLUSH_COMMANDS_BIT, timeout);
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct Fence {
+    raw: RawFence,
+    share: Rc<Share>,
+}
+
+impl cmp::PartialEq for Fence {
+    fn eq(&self, other: &Fence) -> bool { self.raw.eq(&other.raw) }
+}
+
+impl cmp::Eq for Fence {}
+
+impl hash::Hash for Fence {
+    fn hash<H>(&self, state: &mut H) where H: hash::Hasher {
+        self.raw.hash(state);
+    }
+}
+
+impl fmt::Debug for Fence {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        self.raw.fmt(f)
+    }
+}
+
+impl d::Fence for Fence {
+    fn wait(&self) {
+        self.raw.wait(&self.share.context);
+    }
+}
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Resources {}
@@ -73,6 +116,7 @@ impl d::Resources for Resources {
     type UnorderedAccessView = ();
     type Sampler             = FatSampler;
     type Fence               = Fence;
+    type Mapping             = factory::MappingGate;
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -707,6 +751,107 @@ impl Device {
         }
         self.check(cmd);
     }
+
+    fn no_fence_submit(&mut self, cb: &mut command::CommandBuffer) {
+        self.reset_state();
+        for com in &cb.buf {
+            self.process(com, &cb.data);
+        }
+    }
+
+    fn before_submit(&mut self, gpu_access: &d::pso::AccessInfo<Resources>) {
+        if self.share.private_caps.buffer_storage_supported {
+            // MappingKind::Persistent
+            self.ensure_mappings_flushed(gpu_access.mapped_reads());
+        } else {
+            // MappingKind::Temporary
+            self.ensure_mappings_unmapped(gpu_access.mapped_reads());
+            self.ensure_mappings_unmapped(gpu_access.mapped_writes());
+        }
+    }
+
+    // MappingKind::Persistent
+    fn ensure_mappings_flushed(&mut self, mappings: &[handle::RawMapping<Resources>]) {
+        let gl = &self.share.context;
+        for mapping in mappings {
+            let mut inner = mapping.access()
+                .expect("user error: mapping still in use on submit");
+
+            if inner.status.cpu_write {
+                unsafe {
+                    gl.BindBuffer(inner.resource.target, *inner.buffer.resource());
+                    let size = inner.buffer.get_info().size as isize;
+                    gl.FlushMappedBufferRange(inner.resource.target, 0, size);
+                }
+
+                inner.status.cpu_write = false;
+            }
+        }
+    }
+
+    // MappingKind::Temporary
+    fn ensure_mappings_unmapped(&mut self, mappings: &[handle::RawMapping<Resources>]) {
+        for mapping in mappings {
+            let mut inner = mapping.access()
+                .expect("user error: mapping still in use on submit");
+
+            factory::temporary_ensure_unmapped(&mut inner);
+        }
+    }
+
+    fn after_submit(&mut self, gpu_access: &d::pso::AccessInfo<Resources>)
+                               -> Option<handle::Fence<Resources>>
+    {
+        if self.share.private_caps.buffer_storage_supported {
+            // MappingKind::Persistent
+            if (gpu_access.mapped_reads().len() + gpu_access.mapped_writes().len()) > 0 {
+                if gpu_access.mapped_writes().len() > 0 {
+                    self.place_memory_barrier();
+                }
+
+                let fence = self.place_fence();
+                self.track_mapped_gpu_access(gpu_access.mapped_reads(), &fence);
+                self.track_mapped_gpu_access(gpu_access.mapped_writes(), &fence);
+                Some(fence)
+            } else {
+                None
+            }
+        } else {
+            // MappingKind::Temporary
+            None
+        }
+    }
+
+    fn place_memory_barrier(&mut self) {
+        let gl = &self.share.context;
+        // TODO: other flags ?
+        unsafe { gl.MemoryBarrier(gl::CLIENT_MAPPED_BUFFER_BARRIER_BIT); }
+    }
+
+    fn place_fence(&mut self) -> handle::Fence<Resources> {
+        use gfx_core::handle::Producer;
+
+        let gl = &self.share.context;
+        let fence = unsafe {
+            gl.FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0)
+        };
+        self.frame_handles.make_fence(Fence {
+            raw: RawFence(fence),
+            share: self.share.clone(),
+        })
+    }
+
+    // MappingKind::Persistent
+    fn track_mapped_gpu_access(&mut self,
+                               mappings: &[handle::RawMapping<Resources>],
+                               fence: &handle::Fence<Resources>) {
+        for mapping in mappings {
+            let mut inner = mapping.access()
+                .expect("user error: mapping still in use on submit");
+
+            inner.status.gpu_access = Some(fence.clone());
+        }
+    }
 }
 
 impl d::Device for Device {
@@ -728,24 +873,43 @@ impl d::Device for Device {
         }
     }
 
-    fn submit(&mut self, cb: &mut command::CommandBuffer) {
-        self.reset_state();
-        for com in &cb.buf {
-            self.process(com, &cb.data);
+    fn submit(&mut self, cb: &mut command::CommandBuffer,
+                         access: &d::pso::AccessInfo<Resources>) {
+        self.before_submit(access);
+        self.no_fence_submit(cb);
+        self.after_submit(access);
+    }
+
+    fn fenced_submit(&mut self,
+                     cb: &mut command::CommandBuffer,
+                     access: &d::pso::AccessInfo<Resources>,
+                     after: Option<handle::Fence<Resources>>) -> handle::Fence<Resources> {
+
+        if let Some(fence) = after {
+            let f = self.frame_handles.ref_fence(&fence);
+            let timeout = 1_000_000_000_000;
+            // FIXME: should we use 'glFlush' here ?
+            // see https://www.opengl.org/wiki/Sync_Object
+            unsafe { self.share.context.WaitSync(f.raw.0, 0, timeout); }
         }
+
+        self.before_submit(access);
+        self.no_fence_submit(cb);
+        let fence_opt = self.after_submit(access);
+        fence_opt.unwrap_or_else(|| self.place_fence())
     }
 
     fn cleanup(&mut self) {
         use gfx_core::handle::Producer;
         self.frame_handles.clear();
         self.share.handles.borrow_mut().clean_with(&mut &self.share.context,
-            |gl, v| unsafe { gl.DeleteBuffers(1, v) },
+            |gl, raw_buffer| unsafe { gl.DeleteBuffers(1, &raw_buffer.resource) },
             |gl, v| unsafe { gl.DeleteShader(*v) },
-            |gl, v| unsafe { gl.DeleteProgram(*v) },
+            |gl, program| unsafe { gl.DeleteProgram(program.resource) },
             |_, _| {}, //PSO
-            |gl, v| match v {
-                &NewTexture::Surface(ref suf) => unsafe { gl.DeleteRenderbuffers(1, suf) },
-                &NewTexture::Texture(ref tex) => unsafe { gl.DeleteTextures(1, tex) },
+            |gl, raw_texture| match raw_texture.resource {
+                NewTexture::Surface(ref suf) => unsafe { gl.DeleteRenderbuffers(1, suf) },
+                NewTexture::Texture(ref tex) => unsafe { gl.DeleteTextures(1, tex) },
             }, // new texture
             |gl, v| if v.owned {
                 unsafe { gl.DeleteTextures(1, &v.object) }
@@ -754,37 +918,14 @@ impl d::Device for Device {
             |_, _| {}, //RTV
             |_, _| {}, //DSV
             |gl, v| unsafe { if v.object != 0 { gl.DeleteSamplers(1, &v.object) }},
-            |gl, v| unsafe { gl.DeleteSync(v.0) },
+            |gl, fence| unsafe { gl.DeleteSync(fence.raw.0) },
+            |_, raw_mapping| {
+                let mut inner = raw_mapping.access().unwrap();
+                match inner.resource.kind {
+                    MappingKind::Persistent => (), // TODO: maybe flush the mapped memory here ?
+                    MappingKind::Temporary => factory::temporary_ensure_unmapped(&mut inner),
+                }
+            },
         );
-    }
-}
-
-impl gfx_core::DeviceFence<Resources> for Device {
-    fn fenced_submit(&mut self, cb: &mut command::CommandBuffer,
-                     after: Option<handle::Fence<Resources>>) -> handle::Fence<Resources> {
-        //TODO: check capabilities?
-        use gfx_core::Device;
-        use gfx_core::handle::Producer;
-
-        unsafe {
-            if let Some(fence) = after {
-                let f = self.frame_handles.ref_fence(&fence);
-                self.share.context.WaitSync(f.0, 0, 1_000_000_000_000);
-            }
-        }
-
-        self.submit(cb);
-
-        let fence = unsafe {
-            self.share.context.FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0)
-        };
-        self.frame_handles.make_fence(Fence(fence))
-    }
-
-    fn fence_wait(&mut self, fence: &handle::Fence<Resources>) {
-        let f = self.frame_handles.ref_fence(fence);
-        unsafe {
-            self.share.context.ClientWaitSync(f.0, gl::SYNC_FLUSH_COMMANDS_BIT, 1_000_000_000_000);
-        }
     }
 }

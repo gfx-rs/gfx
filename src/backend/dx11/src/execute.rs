@@ -14,8 +14,8 @@
 
 use std::{mem, ptr};
 use winapi;
-use gfx_core::tex;
-use gfx_core::factory::{MapAccess, Usage};
+use gfx_core::{tex, mapping};
+use gfx_core::factory::Usage;
 use command;
 use {Buffer, Texture};
 
@@ -24,7 +24,7 @@ pub fn update_buffer(context: *mut winapi::ID3D11DeviceContext, buffer: &Buffer,
                      data: &[u8], offset_bytes: usize) {
     let dst_resource = (buffer.0).0 as *mut winapi::ID3D11Resource;
     match buffer.1 {
-        Usage::Const | Usage::CpuOnly(MapAccess::Readable) => {
+        Usage::Immutable | Usage::CpuOnly(mapping::READABLE) => {
             error!("Unable to update an immutable buffer {:?}", buffer);
         },
         Usage::GpuOnly => {
@@ -41,6 +41,7 @@ pub fn update_buffer(context: *mut winapi::ID3D11DeviceContext, buffer: &Buffer,
                 (*context).UpdateSubresource(dst_resource, 0, &dst_box, ptr, 0, 0)
             };
         },
+        Usage::Persistent(_) => unimplemented!(),
         Usage::Dynamic | Usage::CpuOnly(_) => {
             let map_type = winapi::D3D11_MAP_WRITE_DISCARD;
             let hr = unsafe {
@@ -77,7 +78,7 @@ pub fn update_texture(context: *mut winapi::ID3D11DeviceContext, texture: &Textu
     let dst_resource = texture.to_resource();
 
     match texture.1 {
-        Usage::Const | Usage::CpuOnly(MapAccess::Readable) => {
+        Usage::Immutable | Usage::CpuOnly(mapping::READABLE) => {
             error!("Unable to update an immutable texture {:?}", texture);
         },
         Usage::GpuOnly => {
@@ -99,7 +100,7 @@ pub fn update_texture(context: *mut winapi::ID3D11DeviceContext, texture: &Textu
                 (*context).UpdateSubresource(dst_resource, subres, &dst_box, ptr, row_pitch, depth_pitch)
             };
         },
-        Usage::Dynamic | Usage::CpuOnly(_) => unimplemented!(),
+        Usage::Dynamic | Usage::CpuOnly(_) | Usage::Persistent(_) => unimplemented!(),
     }
     
 }
