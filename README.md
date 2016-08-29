@@ -18,7 +18,10 @@
 </p>
 <p align="center">
   <a href="https://travis-ci.org/gfx-rs/gfx">
-      <img src="https://img.shields.io/travis/gfx-rs/gfx/master.svg?style=flat-square" alt="Build Status">
+      <img src="https://img.shields.io/travis/gfx-rs/gfx/master.svg?style=flat-square" alt="Travis Build Status">
+  </a>
+  <a href="https://ci.appveyor.com/project/kvark/gfx">
+      <img src="https://ci.appveyor.com/api/projects/status/ryn5ee3aumpmbw5l?svg=true" alt="AppVeyor Build Status">
   </a>
   <a href="https://crates.io/crates/gfx">
       <img src="http://meritbadge.herokuapp.com/gfx?style=flat-square" alt="crates.io">
@@ -39,6 +42,42 @@
 - Providing type safe wrappers around platform-specific APIs is feasible, but only pushes the problem of platform independence to a higher level of abstraction, often to the game or rendering engine.
 - Modern graphics APIs, whilst providing a great degree of flexibility and a high level of performance, often have a much higher barrier to entry than traditional [fixed-function](https://en.wikipedia.org/wiki/Fixed-function) APIs.
 - Graphics APIs like OpenGL still [require the developer to 'bind' and 'unbind' objects](http://www.arcsynthesis.org/gltut/Basics/Intro%20What%20is%20OpenGL.html#d0e887) in order to perform operations on them. This results in a large amount of boiler plate code, and brings with it the usual problems associated with global state.
+
+## Features
+
+Graphics backends:
+  - OpenGL 2.1+
+  - OpenGL ES2+ ([works](https://github.com/gfx-rs/gfx/pull/993) on Android)
+  - Direct3D 11
+  - [Metal](https://developer.apple.com/metal/) (WIP 75%)
+  - [Vulkan](https://www.khronos.org/vulkan/) (WIP 40%)
+
+Hardware features:
+  - [x] off-screen render targets
+  - [x] multisampling
+  - [x] instancing
+  - [x] geometry shaders
+  - [ ] tessellation ([WIP](https://github.com/gfx-rs/gfx/pull/1027))
+  - [ ] persistent mapping ([WIP](https://github.com/gfx-rs/gfx/pull/1026))
+
+## Who's using it?
+
+Biggest open-source projects are:
+  - [Amethyst](https://github.com/amethyst/amethyst) engine
+  - Piston engine - [2d graphics](https://github.com/PistonDevelopers/gfx_graphics)
+  - [Zone of Control](https://github.com/ozkriff/zoc) game
+  - [Vange-rs](https://github.com/kvark/vange-rs) game
+  - [Claymore](https://github.com/kvark/claymore) game/engine
+
+Shiny screens, including some older projects:
+<p align="center">
+  <img src="https://raw.githubusercontent.com/csherratt/snowmew/master/.screenshot.jpg" height="160" alt="Snowmew"/>
+  <img src="https://github.com/PistonDevelopers/hematite/blob/master/screenshot.png" height="160" alt="Hematite"/>
+  <img src="https://github.com/kvark/vange-rs/blob/master/etc/shots/Road10-debug-shape.png" height="160" alt="Vange-rs"/>
+  <img src="https://github.com/kvark/claymore/raw/master/etc/screens/7-forest.jpg" height="160" alt="Claymore"/>
+  <img src="https://camo.githubusercontent.com/fb8c95650fba27061e58e76f17ff8460a41b3312/687474703a2f2f692e696d6775722e636f6d2f504f68534c77682e706e67" height="160" alt="ZoC"/>
+  <img src="https://raw.githubusercontent.com/csherratt/petri/master/petri.png" height="160" alt="Petri"/>
+</p>
 
 ## Getting started
 
@@ -69,29 +108,16 @@ For example; [glfw](https://github.com/PistonDevelopers/glfw-rs) or [glutin](htt
 
 To see how the graphic context is acquired, see the [cube example](https://github.com/gfx-rs/gfx/tree/master/examples/cube) or the [triangle example](https://github.com/gfx-rs/gfx/tree/master/examples/triangle).
 
-To use `glfw` or `glutin`, your `Cargo.toml` must be extended with the following dependencies:
+To use `glutin`, for example, your `Cargo.toml` must be extended with the following dependencies:
 
 	[dependencies]
 	...
 	glutin ="*"
 	gfx_window_glutin = "*"
 
-or
-
-	[dependencies]
-	...
-	glfw = "*"
-	gfx_window_glfw = "*"
-
 You may want to inspect `<my_dir>/gfx/Cargo.toml` for other modules typically used in gfx programs.
-
-## Who's using it?
-
-People are!
-![](https://raw.githubusercontent.com/csherratt/snowmew/master/.screenshot.jpg)
 
 ## Note
 
-gfx is still in the early stages of development. Help is most appreciated.
-
-If you are interested in helping out, you can contact the developers on [Gitter](https://gitter.im/gfx-rs/gfx). See [contrib.md](info/contrib.md) for contact information and contribution guidelines.
+gfx is still in development. API may change with new backends/features to be implemented.
+If you are interested in helping out, please contact the developers on [Gitter](https://gitter.im/gfx-rs/gfx).
