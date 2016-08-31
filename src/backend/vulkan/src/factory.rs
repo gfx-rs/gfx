@@ -14,11 +14,12 @@
 
 use std::{cell, mem, ptr, slice};
 use std::os::raw::c_void;
-use gfx_core::{self as core, handle as h, factory as f, pso, state, mapping};
-use gfx_core::factory::Typed;
-use gfx_core::mapping::Builder;
-use gfx_core::format::ChannelType;
-use gfx_core::target::Layer;
+use core::{self, handle as h, pso, state, texture, buffer};
+use core::memory::{self, Bind, Typed};
+use core::factory::{self as f};
+use core::mapping::{self, Builder};
+use core::format::ChannelType;
+use core::target::Layer;
 use vk;
 use {command, data, native};
 use {Resources as R, SharePointer};
@@ -79,7 +80,7 @@ impl Factory {
         command::Buffer::new(self.command_pool, self.queue_family_index, self.share.clone())
     }
 
-    fn view_texture(&mut self, htex: &h::RawTexture<R>, desc: core::tex::ResourceDesc, is_target: bool)
+    fn view_texture(&mut self, htex: &h::RawTexture<R>, desc: texture::ResourceDesc, is_target: bool)
                     -> Result<native::TextureView, f::ResourceViewError> {
         let raw_tex = self.frame_handles.ref_texture(htex);
         let td = htex.get_info();
@@ -125,7 +126,7 @@ impl Factory {
     fn view_target(&mut self, htex: &h::RawTexture<R>, channel: ChannelType, layer: Option<Layer>)
                    -> Result<native::TextureView, f::TargetViewError>
     {
-        let rdesc = core::tex::ResourceDesc {
+        let rdesc = texture::ResourceDesc {
             channel: channel,
             layer: layer,
             min: 0,
@@ -144,21 +145,21 @@ impl Factory {
     #[doc(hidden)]
     pub fn view_swapchain_image(&mut self, image: vk::Image, format: core::format::Format, size: (u32, u32))
                                 -> Result<h::RawRenderTargetView<R>, f::TargetViewError> {
-        use gfx_core::Factory;
-        use gfx_core::handle::Producer;
-        use gfx_core::tex as t;
+        use core::Factory;
+        use core::handle::Producer;
+        use core::texture as t;
 
         let raw_tex = native::Texture {
             image: image,
             layout: cell::Cell::new(vk::IMAGE_LAYOUT_GENERAL),
             memory: 0,
         };
-        let tex_desc = t::Descriptor {
+        let tex_desc = t::Info {
             kind: t::Kind::D2(size.0 as t::Size, size.1 as t::Size, t::AaMode::Single),
             levels: 1,
             format: format.0,
-            bind: f::RENDER_TARGET,
-            usage: f::Usage::GpuOnly,
+            bind: memory::RENDER_TARGET,
+            usage: memory::Usage::GpuOnly,
         };
         let tex = self.frame_handles.make_texture(raw_tex, tex_desc);
         let view_desc = t::RenderDesc {
@@ -184,7 +185,7 @@ impl Factory {
         fence
     }
 
-    fn create_buffer_impl(&mut self, info: &f::BufferInfo) -> native::Buffer {
+    fn create_buffer_impl(&mut self, info: &buffer::Info) -> native::Buffer {
         let (usage, _) = data::map_usage_tiling(info.usage, info.bind);
         let native_info = vk::BufferCreateInfo {
             sType: vk::STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -216,12 +217,12 @@ impl Factory {
         }
     }
 
-    fn alloc(&self, usage: f::Usage, reqs: vk::MemoryRequirements) -> vk::DeviceMemory {
+    fn alloc(&self, usage: memory::Usage, reqs: vk::MemoryRequirements) -> vk::DeviceMemory {
         let info = vk::MemoryAllocateInfo {
             sType: vk::STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
             pNext: ptr::null(),
             allocationSize: reqs.size,
-            memoryTypeIndex: if let f::Usage::CpuOnly(_) = usage {
+            memoryTypeIndex: if let memory::Usage::CpuOnly(_) = usage {
                 self.mem_system_id
             }else {
                 self.mem_video_id
@@ -290,18 +291,18 @@ impl core::Factory<R> for Factory {
         unimplemented!()
     }
 
-    fn create_buffer_raw(&mut self, info: f::BufferInfo) -> Result<h::RawBuffer<R>, f::BufferError> {
-        use gfx_core::handle::Producer;
+    fn create_buffer_raw(&mut self, info: buffer::Info) -> Result<h::RawBuffer<R>, buffer::CreationError> {
+        use core::handle::Producer;
         let buffer = self.create_buffer_impl(&info);
         Ok(self.share.handles.borrow_mut().make_buffer(buffer, info))
     }
 
-    fn create_buffer_immutable_raw(&mut self, data: &[u8], stride: usize, role: f::BufferRole, bind: f::Bind)
-                               -> Result<h::RawBuffer<R>, f::BufferError> {
-        use gfx_core::handle::Producer;
-        let info = f::BufferInfo {
+    fn create_buffer_immutable_raw(&mut self, data: &[u8], stride: usize, role: buffer::Role, bind: Bind)
+                               -> Result<h::RawBuffer<R>, buffer::CreationError> {
+        use core::handle::Producer;
+        let info = buffer::Info {
             role: role,
-            usage: f::Usage::Immutable,
+            usage: memory::Usage::Immutable,
             bind: bind,
             size: data.len(),
             stride: stride,
@@ -319,7 +320,7 @@ impl core::Factory<R> for Factory {
 
     fn create_shader(&mut self, _stage: core::shade::Stage, code: &[u8])
                      -> Result<h::Shader<R>, core::shade::CreateShaderError> {
-        use gfx_core::handle::Producer;
+        use core::handle::Producer;
         let info = vk::ShaderModuleCreateInfo {
             sType: vk::STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
             pNext: ptr::null(),
@@ -337,8 +338,8 @@ impl core::Factory<R> for Factory {
 
     fn create_program(&mut self, shader_set: &core::ShaderSet<R>)
                       -> Result<h::Program<R>, core::shade::CreateProgramError> {
-        use gfx_core::handle::Producer;
-        use gfx_core::shade as s;
+        use core::handle::Producer;
+        use core::shade as s;
 
         let prog = match shader_set.clone() {
             core::ShaderSet::Simple(vs, ps) => native::Program {
@@ -368,7 +369,7 @@ impl core::Factory<R> for Factory {
 
     fn create_pipeline_state_raw(&mut self, program: &h::Program<R>, desc: &pso::Descriptor)
                                  -> Result<h::RawPipelineState<R>, pso::CreationError> {
-        use gfx_core::handle::Producer;
+        use core::handle::Producer;
         let stages = self.get_shader_stages(program);
         let (dev, vk) = self.share.get_device();
 
@@ -716,9 +717,9 @@ impl core::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_pso(pso, program))
     }
 
-    fn create_texture_raw(&mut self, desc: core::tex::Descriptor, hint: Option<core::format::ChannelType>,
-                          _data_opt: Option<&[&[u8]]>) -> Result<h::RawTexture<R>, core::tex::Error> {
-        use gfx_core::handle::Producer;
+    fn create_texture_raw(&mut self, desc: texture::Info, hint: Option<core::format::ChannelType>,
+                          _data_opt: Option<&[&[u8]]>) -> Result<h::RawTexture<R>, texture::CreationError> {
+        use core::handle::Producer;
 
         let (w, h, d, aa) = desc.kind.get_dimensions();
         let slices = desc.kind.get_num_slices();
@@ -732,7 +733,7 @@ impl core::Factory<R> for Factory {
             imageType: data::map_image_type(desc.kind),
             format: match data::map_format(desc.format, chan_type) {
                 Some(f) => f,
-                None => return Err(core::tex::Error::Format(desc.format, hint)),
+                None => return Err(texture::CreationError::Format(desc.format, hint)),
             },
             extent: vk::Extent3D {
                 width: w as u32,
@@ -780,9 +781,9 @@ impl core::Factory<R> for Factory {
         Err(f::ResourceViewError::Unsupported) //TODO
     }
 
-    fn view_texture_as_shader_resource_raw(&mut self, htex: &h::RawTexture<R>, desc: core::tex::ResourceDesc)
+    fn view_texture_as_shader_resource_raw(&mut self, htex: &h::RawTexture<R>, desc: texture::ResourceDesc)
                                        -> Result<h::RawShaderResourceView<R>, f::ResourceViewError> {
-        use gfx_core::handle::Producer;
+        use core::handle::Producer;
         self.view_texture(htex, desc, false).map(|view|
             self.share.handles.borrow_mut().make_texture_srv(view, htex))
     }
@@ -792,10 +793,10 @@ impl core::Factory<R> for Factory {
         Err(f::ResourceViewError::Unsupported) //TODO
     }
 
-    fn view_texture_as_render_target_raw(&mut self, htex: &h::RawTexture<R>, desc: core::tex::RenderDesc)
+    fn view_texture_as_render_target_raw(&mut self, htex: &h::RawTexture<R>, desc: texture::RenderDesc)
                                          -> Result<h::RawRenderTargetView<R>, f::TargetViewError>
     {
-        use gfx_core::handle::Producer;
+        use core::handle::Producer;
         let mut dim = htex.get_info().kind.get_dimensions();
         if desc.layer.is_some() {
             dim.2 = 1; // slice of the depth/array
@@ -804,10 +805,10 @@ impl core::Factory<R> for Factory {
             self.share.handles.borrow_mut().make_rtv(view, htex, dim))
     }
 
-    fn view_texture_as_depth_stencil_raw(&mut self, htex: &h::RawTexture<R>, desc: core::tex::DepthStencilDesc)
+    fn view_texture_as_depth_stencil_raw(&mut self, htex: &h::RawTexture<R>, desc: texture::DepthStencilDesc)
                                          -> Result<h::RawDepthStencilView<R>, f::TargetViewError>
     {
-        use gfx_core::handle::Producer;
+        use core::handle::Producer;
         let mut dim = htex.get_info().kind.get_dimensions();
         if desc.layer.is_some() {
             dim.2 = 1; // slice of the depth/array
@@ -817,8 +818,8 @@ impl core::Factory<R> for Factory {
             self.share.handles.borrow_mut().make_dsv(view, htex, dim))
     }
 
-    fn create_sampler(&mut self, info: core::tex::SamplerInfo) -> h::Sampler<R> {
-        use gfx_core::handle::Producer;
+    fn create_sampler(&mut self, info: texture::SamplerInfo) -> h::Sampler<R> {
+        use core::handle::Producer;
 
         let (min, mag, mip, aniso) = data::map_filter(info.filter);
         let native_info = vk::SamplerCreateInfo {
@@ -856,41 +857,40 @@ impl core::Factory<R> for Factory {
         self.share.handles.borrow_mut().make_sampler(sampler, info)
     }
 
-    fn map_buffer_raw(&mut self, buf: &h::RawBuffer<R>, access: mapping::Access)
+    fn map_buffer_raw(&mut self, buf: &h::RawBuffer<R>, access: memory::Access)
                       -> Result<h::RawMapping<R>, mapping::Error> {
         // TODO: ensure the buffer is properly created in regard to the expected mapping
         // (in particular VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT should be set).
-        use gfx_core::handle::Producer;
+        use core::handle::Producer;
 
         let (dev, vk) = self.share.get_device();
-        try!(buf.valid_access(access));
+        self.share.handles.borrow_mut().make_mapping(access, buf, || {
+            let offset = 0;
+            let flags = 0;
+            let mut pointer = ptr::null_mut();
+            assert_eq!(vk::SUCCESS, unsafe {
+                vk.MapMemory(dev, buf.resource().memory, offset, vk::WHOLE_SIZE, flags, &mut pointer)
+            });
 
-        let offset = 0;
-        let flags = 0;
-        let mut pointer = ptr::null_mut();
-        assert_eq!(vk::SUCCESS, unsafe {
-            vk.MapMemory(dev, buf.resource().memory, offset, vk::WHOLE_SIZE, flags, &mut pointer)
-        });
-
-        let m = MappingGate { pointer: pointer };
-        self.share.handles.borrow_mut().make_mapping(m, access, buf)
+            MappingGate { pointer: pointer }
+        })
     }
 
     fn map_buffer_readable<T: Copy>(&mut self, buf: &h::Buffer<R, T>)
                                     -> Result<mapping::Readable<R, T>, mapping::Error> {
-        let map = try!(self.map_buffer_raw(buf.raw(), mapping::READABLE));
+        let map = try!(self.map_buffer_raw(buf.raw(), memory::READ));
         Ok(self.map_readable(map, buf.len()))
     }
 
     fn map_buffer_writable<T: Copy>(&mut self, buf: &h::Buffer<R, T>)
                                     -> Result<mapping::Writable<R, T>, mapping::Error> {
-        let map = try!(self.map_buffer_raw(buf.raw(), mapping::WRITABLE));
+        let map = try!(self.map_buffer_raw(buf.raw(), memory::WRITE));
         Ok(self.map_writable(map, buf.len()))
     }
 
     fn map_buffer_rw<T: Copy>(&mut self, buf: &h::Buffer<R, T>)
                               -> Result<mapping::RWable<R, T>, mapping::Error> {
-        let map = try!(self.map_buffer_raw(buf.raw(), mapping::RW));
+        let map = try!(self.map_buffer_raw(buf.raw(), memory::RW));
         Ok(self.map_read_write(map, buf.len()))
     }
 }

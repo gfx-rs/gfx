@@ -21,16 +21,52 @@
 //! image data.  Image data consists of an array of "texture elements", or
 //! texels.
 
-use std::error::Error as StdError;
-use std::fmt;
-use factory::{Bind, Usage};
-use format;
-use state;
+use std::error::Error;
+use std::{fmt, cmp, hash};
+use memory::{Bind, Usage};
+use {format, state, target, Resources};
 pub use target::{Layer, Level};
+
+/// Untyped texture
+#[derive(Debug)]
+pub struct Raw<R: Resources> {
+    resource: R::Texture,
+    info: Info,
+}
+
+impl<R: Resources> Raw<R> {
+    #[doc(hidden)]
+    pub fn new(resource: R::Texture, info: Info) -> Self {
+        Raw {
+            resource: resource,
+            info: info,
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn resource(&self) -> &R::Texture { &self.resource }
+
+    /// Get texture descriptor
+    pub fn get_info(&self) -> &Info { &self.info }
+}
+
+impl<R: Resources + cmp::PartialEq> cmp::PartialEq for Raw<R> {
+    fn eq(&self, other: &Self) -> bool {
+        self.resource().eq(other.resource())
+    }
+}
+
+impl<R: Resources + cmp::Eq> cmp::Eq for Raw<R> {}
+
+impl<R: Resources + hash::Hash> hash::Hash for Raw<R> {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        self.resource().hash(state);
+    }
+}
 
 /// Pure texture object creation error.
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub enum Error {
+pub enum CreationError {
     /// Failed to map a given format to the device.
     Format(format::SurfaceType, Option<format::ChannelType>),
     /// The kind doesn't support a particular operation.
@@ -43,27 +79,54 @@ pub enum Error {
     Data(usize),
 }
 
-impl fmt::Display for Error {
+impl fmt::Display for CreationError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Error::Format(surf, chan) => write!(f, "{}: ({:?}, {:?})",
+            CreationError::Format(surf, chan) => write!(f, "{}: ({:?}, {:?})",
                                                 self.description(), surf, chan),
-            Error::Samples(aa) => write!(f, "{}: {:?}", self.description(), aa),
-            Error::Size(size) => write!(f, "{}: {}", self.description(), size),
-            Error::Data(data) => write!(f, "{}: {}", self.description(), data),
+            CreationError::Samples(aa) => write!(f, "{}: {:?}", self.description(), aa),
+            CreationError::Size(size) => write!(f, "{}: {}", self.description(), size),
+            CreationError::Data(data) => write!(f, "{}: {}", self.description(), data),
             _ => write!(f, "{}", self.description()),
         }
     }
 }
 
-impl StdError for Error {
+impl Error for CreationError {
     fn description(&self) -> &str {
         match *self {
-            Error::Format(..) => "Failed to map a given format to the device",
-            Error::Kind => "The kind doesn't support a particular operation",
-            Error::Samples(_) => "Failed to map a given multisampled kind to the device",
-            Error::Size(_) => "Unsupported size in one of the dimensions",
-            Error::Data(_) => "The given data has a different size than the target texture slice",
+            CreationError::Format(..) => "Failed to map a given format to the device",
+            CreationError::Kind => "The kind doesn't support a particular operation",
+            CreationError::Samples(_) => "Failed to map a given multisampled kind to the device",
+            CreationError::Size(_) => "Unsupported size in one of the dimensions",
+            CreationError::Data(_) => "The given data has a different size than the target texture slice",
+        }
+    }
+}
+
+/// An error associated with selected texture layer.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum LayerError {
+    /// The source texture kind doesn't support array slices.
+    NotExpected(Kind),
+    /// Selected layer is outside of the provided range.
+    OutOfBounds(target::Layer, target::Layer),
+}
+
+impl fmt::Display for LayerError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            LayerError::NotExpected(kind) => write!(f, "{}: {:?}", self.description(), kind),
+            LayerError::OutOfBounds(layer, count) => write!(f, "{}: {}/{}", self.description(), layer, count),
+        }
+    }
+}
+
+impl Error for LayerError {
+    fn description(&self) -> &str {
+        match *self {
+            LayerError::NotExpected(_) => "The source texture kind doesn't support array slices",
+            LayerError::OutOfBounds(_, _) => "Selected layer is outside of the provided range",
         }
     }
 }
@@ -383,7 +446,7 @@ impl SamplerInfo {
 /// Texture storage descriptor.
 #[allow(missing_docs)]
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
-pub struct Descriptor {
+pub struct Info {
     pub kind: Kind,
     pub levels: Level,
     pub format: format::SurfaceType,
@@ -391,7 +454,7 @@ pub struct Descriptor {
     pub usage: Usage,
 }
 
-impl Descriptor {
+impl Info {
     /// Get image info for a given mip.
     pub fn to_image_info(&self, mip: Level) -> NewImageInfo {
         let (w, h, d, _) = self.kind.get_level_dimensions(mip);

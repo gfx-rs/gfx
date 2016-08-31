@@ -14,8 +14,8 @@
 
 use std::{mem, ptr};
 use winapi;
-use gfx_core::{tex, mapping};
-use gfx_core::factory::Usage;
+use core::{self, texture as tex, memory};
+use core::memory::Usage;
 use command;
 use {Buffer, Texture};
 
@@ -24,7 +24,7 @@ pub fn update_buffer(context: *mut winapi::ID3D11DeviceContext, buffer: &Buffer,
                      data: &[u8], offset_bytes: usize) {
     let dst_resource = (buffer.0).0 as *mut winapi::ID3D11Resource;
     match buffer.1 {
-        Usage::Immutable | Usage::CpuOnly(mapping::READABLE) => {
+        Usage::Immutable | Usage::CpuOnly(memory::READ) => {
             error!("Unable to update an immutable buffer {:?}", buffer);
         },
         Usage::GpuOnly => {
@@ -61,7 +61,7 @@ pub fn update_buffer(context: *mut winapi::ID3D11DeviceContext, buffer: &Buffer,
 
 pub fn update_texture(context: *mut winapi::ID3D11DeviceContext, texture: &Texture, kind: tex::Kind,
                       face: Option<tex::CubeFace>, data: &[u8], image: &tex::RawImageInfo) {
-    use gfx_core::tex::CubeFace::*;
+    use core::texture::CubeFace::*;
     use winapi::UINT;
 
     let array_slice = match face {
@@ -78,7 +78,7 @@ pub fn update_texture(context: *mut winapi::ID3D11DeviceContext, texture: &Textu
     let dst_resource = texture.to_resource();
 
     match texture.1 {
-        Usage::Immutable | Usage::CpuOnly(mapping::READABLE) => {
+        Usage::Immutable | Usage::CpuOnly(memory::READ) => {
             error!("Unable to update an immutable texture {:?}", texture);
         },
         Usage::GpuOnly => {
@@ -108,8 +108,7 @@ pub fn update_texture(context: *mut winapi::ID3D11DeviceContext, texture: &Textu
 
 pub fn process(ctx: *mut winapi::ID3D11DeviceContext, command: &command::Command, data_buf: &command::DataBuffer) {
     use winapi::UINT;
-    use gfx_core as core;
-    use gfx_core::shade::Stage;
+    use core::shade::Stage;
     use command::Command::*;
 
     let max_cb  = core::MAX_CONSTANT_BUFFERS as UINT;

@@ -18,15 +18,16 @@
 //! exposes extension functions and shortcuts to aid with creating and managing graphics resources.
 //! See the `FactoryExt` trait for more information.
 
-use gfx_core::{format, handle, mapping, tex, state, Pod};
-use gfx_core::{Primitive, Resources, ShaderSet};
-use gfx_core::factory::{Bind, BufferRole, Factory};
-use gfx_core::pso::{CreationError, Descriptor};
+use std::error::Error;
+use std::fmt;
+use core::{buffer, format, handle, mapping, texture, state};
+use core::{Primitive, Resources, ShaderSet};
+use core::factory::Factory;
+use core::pso::{CreationError, Descriptor};
+use core::memory::{self, Bind, Pod};
 use slice::{Slice, IndexBuffer, IntoIndexBuffer};
 use pso;
 use shade::ProgramError;
-use std::error::Error;
-use std::fmt;
 
 /// Error creating a PipelineState
 #[derive(Clone, PartialEq, Debug)]
@@ -96,7 +97,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
                             T: Pod + pso::buffer::Structure<format::Format>
     {
         //debug_assert!(nv <= self.get_capabilities().max_vertex_count);
-        self.create_buffer_immutable(vertices, BufferRole::Vertex, Bind::empty()).unwrap()
+        self.create_buffer_immutable(vertices, buffer::Role::Vertex, Bind::empty()).unwrap()
     }
     
     /// Shorthand for creating a new vertex buffer from the supplied vertices, together with a
@@ -125,19 +126,19 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
 
     /// Create a constant buffer for `num` identical elements of type `T`.
     fn create_constant_buffer<T>(&mut self, num: usize) -> handle::Buffer<R, T> {
-        self.create_buffer_dynamic(num, BufferRole::Uniform, Bind::empty())
+        self.create_buffer_dynamic(num, buffer::Role::Constant, Bind::empty())
             .unwrap()
     }
 
     /// Creates and maps a readable persistent buffer.
     fn create_buffer_persistent_readable<T>(&mut self,
                                             num: usize,
-                                            role: BufferRole,
+                                            role: buffer::Role,
                                             bind: Bind) -> (handle::Buffer<R, T>,
                                                             mapping::Readable<R, T>)
         where T: Copy
     {
-        let buffer = self.create_buffer_persistent(num, role, bind, mapping::READABLE)
+        let buffer = self.create_buffer_persistent(num, role, bind, memory::READ)
             .unwrap();
         let mapping = self.map_buffer_readable(&buffer).unwrap();
         (buffer, mapping)
@@ -146,12 +147,12 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     /// Creates and maps a writable persistent buffer.
     fn create_buffer_persistent_writable<T>(&mut self,
                                             num: usize,
-                                            role: BufferRole,
+                                            role: buffer::Role,
                                             bind: Bind) -> (handle::Buffer<R, T>,
                                                             mapping::Writable<R, T>)
         where T: Copy
     {
-        let buffer = self.create_buffer_persistent(num, role, bind, mapping::WRITABLE)
+        let buffer = self.create_buffer_persistent(num, role, bind, memory::WRITE)
             .unwrap();
         let mapping = self.map_buffer_writable(&buffer).unwrap();
         (buffer, mapping)
@@ -160,12 +161,12 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     /// Creates and maps an rw persistent buffer.
     fn create_buffer_persistent_rw<T>(&mut self,
                                       num: usize,
-                                      role: BufferRole,
+                                      role: buffer::Role,
                                       bind: Bind) -> (handle::Buffer<R, T>,
                                                       mapping::RWable<R, T>)
         where T: Copy
     {
-        let buffer = self.create_buffer_persistent(num, role, bind, mapping::RW)
+        let buffer = self.create_buffer_persistent(num, role, bind, memory::RW)
             .unwrap();
         let mapping = self.map_buffer_rw(&buffer).unwrap();
         (buffer, mapping)
@@ -236,9 +237,9 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
 
     /// Create a linear sampler with clamping to border.
     fn create_sampler_linear(&mut self) -> handle::Sampler<R> {
-        self.create_sampler(tex::SamplerInfo::new(
-            tex::FilterMethod::Trilinear,
-            tex::WrapMode::Clamp,
+        self.create_sampler(texture::SamplerInfo::new(
+            texture::FilterMethod::Trilinear,
+            texture::WrapMode::Clamp,
         ))
     }
 }

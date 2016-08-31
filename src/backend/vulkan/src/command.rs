@@ -15,9 +15,9 @@
 use std::{mem, ptr};
 use std::collections::hash_map::{HashMap, Entry};
 use vk;
-use gfx_core::{self as core, draw, pso, shade, target, tex, handle, mapping};
-use gfx_core::state::RefValues;
-use gfx_core::{IndexType, VertexCount};
+use core::{self, command, pso, shade, target, texture as tex, handle, memory};
+use core::state::RefValues;
+use core::{IndexType, VertexCount};
 use native;
 use {Resources, Share, SharePointer};
 
@@ -121,7 +121,7 @@ impl Buffer {
     }
 }
 
-impl draw::CommandBuffer<Resources> for Buffer {
+impl command::Buffer<Resources> for Buffer {
     fn reset(&mut self) {
         let (_, vk) = self.share.get_device();
         assert_eq!(vk::SUCCESS, unsafe {
@@ -226,12 +226,12 @@ impl draw::CommandBuffer<Resources> for Buffer {
                       _: &[u8], _: tex::RawImageInfo) {}
     fn generate_mipmap(&mut self, _: native::TextureView) {}
 
-    fn clear_color(&mut self, tv: native::TextureView, color: draw::ClearColor) {
+    fn clear_color(&mut self, tv: native::TextureView, color: command::ClearColor) {
         let (_, vk) = self.share.get_device();
         let value = match color {
-            draw::ClearColor::Float(v) => vk::ClearColorValue::float32(v),
-            draw::ClearColor::Int(v)   => vk::ClearColorValue::int32(v),
-            draw::ClearColor::Uint(v)  => vk::ClearColorValue::uint32(v),
+            command::ClearColor::Float(v) => vk::ClearColorValue::float32(v),
+            command::ClearColor::Int(v)   => vk::ClearColorValue::int32(v),
+            command::ClearColor::Uint(v)  => vk::ClearColorValue::uint32(v),
         };
         unsafe {
             vk.CmdClearColorImage(self.inner, tv.image, tv.layout, &value, 1, &tv.sub_range);
@@ -250,9 +250,9 @@ impl draw::CommandBuffer<Resources> for Buffer {
         }
     }
 
-    fn call_draw(&mut self, _: VertexCount, _: VertexCount, _: draw::InstanceOption) {}
+    fn call_draw(&mut self, _: VertexCount, _: VertexCount, _: Option<command::InstanceParams>) {}
     fn call_draw_indexed(&mut self, _: VertexCount, _: VertexCount,
-                         _: VertexCount, _: draw::InstanceOption) {}
+                         _: VertexCount, _: Option<command::InstanceParams>) {}
 }
 
 
@@ -328,7 +328,7 @@ impl GraphicsQueue {
             let inner = mapping.access()
                 .expect("user error: mapping still in use on submit");
 
-            if inner.access.contains(mapping::READABLE) {
+            if inner.access.contains(memory::READ) {
                 let memory_range = vk::MappedMemoryRange {
                     sType: vk::STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
                     pNext: ptr::null(),
@@ -413,12 +413,12 @@ impl core::Device for GraphicsQueue {
     //note: this should really live elsewhere (Factory?)
     fn cleanup(&mut self) {
         let (dev, mut functions) = self.share.get_device();
-        use gfx_core::handle::Producer;
+        use core::handle::Producer;
         //self.frame_handles.clear();
         self.share.handles.borrow_mut().clean_with(&mut functions,
             |vk, buffer| unsafe {
-                vk.DestroyBuffer(dev, buffer.resource.buffer, ptr::null());
-                vk.FreeMemory(dev, buffer.resource.memory, ptr::null());
+                vk.DestroyBuffer(dev, buffer.resource().buffer, ptr::null());
+                vk.FreeMemory(dev, buffer.resource().memory, ptr::null());
             },
             |vk, s| unsafe { //shader
                 vk.DestroyShaderModule(dev, *s, ptr::null());
@@ -430,9 +430,9 @@ impl core::Device for GraphicsQueue {
                 vk.DestroyDescriptorSetLayout(dev, p.desc_layout, ptr::null());
                 vk.DestroyDescriptorPool(dev, p.desc_pool, ptr::null());
             },
-            |vk, texture| if texture.resource.memory != 0 { unsafe {
-                vk.DestroyImage(dev, texture.resource.image, ptr::null());
-                vk.FreeMemory(dev, texture.resource.memory, ptr::null());
+            |vk, texture| if texture.resource().memory != 0 { unsafe {
+                vk.DestroyImage(dev, texture.resource().image, ptr::null());
+                vk.FreeMemory(dev, texture.resource().memory, ptr::null());
             } },
             |vk, v| unsafe { //SRV
                 vk.DestroyImageView(dev, v.view, ptr::null());

@@ -31,15 +31,17 @@ use std::any::Any;
 pub use draw_state::{state, target};
 pub use self::factory::Factory;
 
-pub mod draw;
+pub mod buffer;
+pub mod command;
 pub mod dummy;
 pub mod factory;
 pub mod format;
 pub mod handle;
 pub mod mapping;
+pub mod memory;
 pub mod pso;
 pub mod shade;
-pub mod tex;
+pub mod texture;
 
 /// Compile-time maximum number of vertex attributes.
 pub const MAX_VERTEX_ATTRIBUTES: usize = 16;
@@ -180,7 +182,7 @@ pub trait Device: Sized {
     type Resources: Resources;
     /// Associated `CommandBuffer` type. Every `Device` type can only work with one `CommandBuffer`
     /// type.
-    type CommandBuffer: draw::CommandBuffer<Self::Resources>;
+    type CommandBuffer: command::Buffer<Self::Resources>;
 
     /// Returns the capabilities of this `Ðevice`.
     fn get_capabilities(&self) -> &Capabilities;
@@ -189,6 +191,7 @@ pub trait Device: Sized {
     fn pin_submitted_resources(&mut self, &handle::Manager<Self::Resources>);
 
     /// Submits a `CommandBuffer` to the GPU for execution.
+
     fn submit(&mut self, &mut Self::CommandBuffer,
                          access: &pso::AccessInfo<Self::Resources>);
 
@@ -208,20 +211,4 @@ pub trait Device: Sized {
 pub trait Fence {
     /// Stalls the current thread until the fence is satisfied
     fn wait(&self);
-}
-
-/// A trait for plain-old-data types.
-///
-/// A POD type does not have invalid bit patterns and can be safely
-/// created from arbitrary bit pattern.
-pub unsafe trait Pod {}
-
-macro_rules! impl_pod {
-    ( ty = $($ty:ty)* ) => { $( unsafe impl Pod for $ty {} )* };
-    ( ar = $($tt:expr)* ) => { $( unsafe impl<T: Pod> Pod for [T; $tt] {} )* };
-}
-
-impl_pod! { ty = isize usize i8 u8 i16 u16 i32 u32 i64 u64 f32 f64 }
-impl_pod! { ar =
-    0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32
 }

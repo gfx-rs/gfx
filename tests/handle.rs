@@ -1,15 +1,16 @@
-extern crate gfx_core;
+extern crate gfx_core as core;
 
 use std::mem;
-use gfx_core::dummy::DummyResources;
-use gfx_core::factory::{Bind, BufferRole, BufferInfo, Usage};
-use gfx_core::handle::{Buffer, Manager, Producer};
+use core::dummy::DummyResources;
+use core::buffer;
+use core::memory::{Bind, Usage};
+use core::handle::{Buffer, Manager, Producer};
 
 fn mock_buffer<T>(len: usize) -> Buffer<DummyResources, T> {
-    use gfx_core::factory::Typed;
+    use core::memory::Typed;
     let mut handler = Manager::new();
-    let raw = handler.make_buffer((), BufferInfo {
-        role: BufferRole::Vertex,
+    let raw = handler.make_buffer((), buffer::Info {
+        role: buffer::Role::Vertex,
         usage: Usage::Immutable,
         size: mem::size_of::<T>() * len,
         stride: 0,

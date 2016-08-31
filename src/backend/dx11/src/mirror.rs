@@ -16,9 +16,7 @@ use std::{mem, ptr};
 use d3dcompiler;
 use dxguid;
 use winapi;
-use gfx_core as core;
-use gfx_core::shade as s;
-
+use core::{self, shade as s};
 
 pub fn reflect_shader(code: &[u8]) -> *mut winapi::ID3D11ShaderReflection {
     let mut reflection = ptr::null_mut();
@@ -66,8 +64,8 @@ fn map_base_type_from_return(rt: winapi::D3D_RESOURCE_RETURN_TYPE) -> s::BaseTyp
 
 fn map_texture_type(tt: winapi::D3D_SRV_DIMENSION) -> s::TextureType {
     use winapi::*;
-    use gfx_core::shade::IsArray::*;
-    use gfx_core::shade::IsMultiSample::*;
+    use core::shade::IsArray::*;
+    use core::shade::IsMultiSample::*;
     match tt {
         D3D_SRV_DIMENSION_BUFFER            => s::TextureType::Buffer,
         D3D_SRV_DIMENSION_TEXTURE1D         => s::TextureType::D1(NoArray),
@@ -87,7 +85,7 @@ fn map_texture_type(tt: winapi::D3D_SRV_DIMENSION) -> s::TextureType {
 }
 
 fn map_container(stype: &winapi::D3D11_SHADER_TYPE_DESC) -> s::ContainerType {
-    use gfx_core::shade::Dimension as Dim;
+    use core::shade::Dimension as Dim;
     //TODO: use `match` when winapi allows
     if stype.Class == winapi::D3D_SVC_SCALAR {
         s::ContainerType::Single

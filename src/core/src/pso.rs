@@ -23,7 +23,7 @@ use {MAX_COLOR_TARGETS, MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
 use {ConstantBufferSlot, ColorSlot, ResourceViewSlot,
      UnorderedViewSlot, SamplerSlot,
      Primitive, Resources};
-use {handle, format, state as s, tex};
+use {handle, format, state as s, texture};
 use shade::Usage;
 use std::error::Error;
 use std::fmt;
@@ -247,7 +247,7 @@ pub struct PixelTargetSet<R: Resources> {
     /// Stencil target view
     pub stencil: Option<R::DepthStencilView>,
     /// Rendering dimensions
-    pub size: tex::Dimensions,
+    pub size: texture::Dimensions,
 }
 
 impl<R: Resources> PixelTargetSet<R> {
@@ -257,12 +257,12 @@ impl<R: Resources> PixelTargetSet<R> {
             colors: [None; MAX_COLOR_TARGETS],
             depth: None,
             stencil: None,
-            size: (0, 0, 0, tex::AaMode::Single),
+            size: (0, 0, 0, texture::AaMode::Single),
         }
     }
     /// Add a color view to the specified slot
     pub fn add_color(&mut self, slot: ColorSlot, view: &R::RenderTargetView,
-                     dim: tex::Dimensions) {
+                     dim: texture::Dimensions) {
         use std::cmp::max;
         self.colors[slot as usize] = Some(view.clone());
         self.size = max(self.size, dim);
@@ -270,7 +270,7 @@ impl<R: Resources> PixelTargetSet<R> {
     /// Add a depth or stencil view to the specified slot
     pub fn add_depth_stencil(&mut self, view: &R::DepthStencilView,
                              has_depth: bool, has_stencil: bool,
-                             dim: tex::Dimensions) {
+                             dim: texture::Dimensions) {
         use std::cmp::max;
         if has_depth {
             self.depth = Some(view.clone());

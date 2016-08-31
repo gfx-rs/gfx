@@ -23,7 +23,7 @@ use std::io::Cursor;
 use std::time::{Instant};
 pub use gfx_app::ColorFormat;
 pub use gfx::format::{Depth, Rgba8};
-use gfx::Bundle;
+use gfx::{Bundle, texture};
 
 gfx_defines!{
     vertex Vertex {
@@ -73,7 +73,7 @@ fn load_cubemap<R, F>(factory: &mut F, data: CubemapData) -> Result<gfx::handle:
         image::load(Cursor::new(data), image::JPEG).unwrap().to_rgba()
     }).collect::<Vec<_>>();
     let data: [&[u8]; 6] = [&images[0], &images[1], &images[2], &images[3], &images[4], &images[5]];
-    let kind = gfx::tex::Kind::Cube(images[0].dimensions().0 as u16);
+    let kind = texture::Kind::Cube(images[0].dimensions().0 as u16);
     match factory.create_texture_immutable_u8::<Rgba8>(kind, &data) {
         Ok((_, view)) => Ok(view),
         Err(_) => Err("Unable to create an immutable cubemap texture".to_owned()),

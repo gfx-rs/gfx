@@ -18,7 +18,7 @@ extern crate gfx;
 extern crate gfx_app;
 
 pub use gfx_app::{ColorFormat, DepthFormat};
-use gfx::Bundle;
+use gfx::{Bundle, texture};
 
 // Declare the vertex format suitable for drawing,
 // as well as the constants used by the shaders
@@ -131,12 +131,12 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
         let texels = [[0x20, 0xA0, 0xC0, 0x00]];
         let (_, texture_view) = factory.create_texture_immutable::<gfx::format::Rgba8>(
-            gfx::tex::Kind::D2(1, 1, gfx::tex::AaMode::Single), &[&texels]
+            texture::Kind::D2(1, 1, texture::AaMode::Single), &[&texels]
             ).unwrap();
 
-        let sinfo = gfx::tex::SamplerInfo::new(
-            gfx::tex::FilterMethod::Bilinear,
-            gfx::tex::WrapMode::Clamp);
+        let sinfo = texture::SamplerInfo::new(
+            texture::FilterMethod::Bilinear,
+            texture::WrapMode::Clamp);
 
         let pso = factory.create_pipeline_simple(
             vs.select(init.backend).unwrap(),

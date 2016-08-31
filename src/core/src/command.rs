@@ -14,10 +14,8 @@
 
 //! Command Buffer device interface
 
-use draw_state::target;
 use {Resources, IndexType, InstanceCount, VertexCount};
-use {pso, shade, tex};
-use state as s;
+use {state, target, pso, shade, texture};
 
 /// A universal clear color supporting integet formats
 /// as well as the standard floating-point.
@@ -31,13 +29,13 @@ pub enum ClearColor {
     Uint([u32; 4]),
 }
 
-/// Optional instance parameters
-pub type InstanceOption = Option<(InstanceCount, VertexCount)>;
+/// Optional instance parameters: (instance count, buffer offset)
+pub type InstanceParams = (InstanceCount, VertexCount);
 
 /// An interface of the abstract command buffer. It collects commands in an
 /// efficient API-specific manner, to be ready for execution on the device.
 #[allow(missing_docs)]
-pub trait CommandBuffer<R: Resources> {
+pub trait Buffer<R: Resources> {
     /// Reset the command buffer contents, retain the allocated storage
     fn reset(&mut self);
     /// Bind a pipeline state object
@@ -62,22 +60,21 @@ pub trait CommandBuffer<R: Resources> {
     /// Set scissor rectangle
     fn set_scissor(&mut self, target::Rect);
     /// Set reference values for the blending and stencil front/back
-    fn set_ref_values(&mut self, s::RefValues);
+    fn set_ref_values(&mut self, state::RefValues);
     /// Update a vertex/index/uniform buffer
     fn update_buffer(&mut self, R::Buffer, data: &[u8], offset: usize);
     /// Update a texture
-    fn update_texture(&mut self, R::Texture, tex::Kind, Option<tex::CubeFace>,
-                      data: &[u8], tex::RawImageInfo);
+    fn update_texture(&mut self, R::Texture, texture::Kind, Option<texture::CubeFace>,
+                      data: &[u8], texture::RawImageInfo);
     fn generate_mipmap(&mut self, R::ShaderResourceView);
     /// Clear color target
     fn clear_color(&mut self, R::RenderTargetView, ClearColor);
     fn clear_depth_stencil(&mut self, R::DepthStencilView,
                            Option<target::Depth>, Option<target::Stencil>);
     /// Draw a primitive
-    fn call_draw(&mut self, VertexCount, VertexCount, InstanceOption);
+    fn call_draw(&mut self, VertexCount, VertexCount, Option<InstanceParams>);
     /// Draw a primitive with index buffer
-    fn call_draw_indexed(&mut self, VertexCount, VertexCount,
-                         VertexCount, InstanceOption);
+    fn call_draw_indexed(&mut self, VertexCount, VertexCount, VertexCount, Option<InstanceParams>);
 }
 
 macro_rules! impl_clear {

@@ -15,16 +15,14 @@
 #![allow(missing_docs)]
 
 use gl;
-use gfx_core as c;
-use gfx_core::draw;
-use gfx_core::state as s;
-use gfx_core::target::{ColorValue, Depth, Mirror, Rect, Stencil};
+use core::{self as c, command, state as s};
+use core::target::{ColorValue, Depth, Mirror, Rect, Stencil};
 use {Buffer, BufferElement, Program, FrameBuffer, Texture,
      NewTexture, Resources, PipelineState, ResourceView, TargetView};
 
 
 fn primitive_to_gl(primitive: c::Primitive) -> gl::types::GLenum {
-    use gfx_core::Primitive::*;
+    use core::Primitive::*;
     match primitive {
         PointList => gl::POINTS,
         LineList => gl::LINES,
@@ -93,14 +91,14 @@ pub enum Command {
     SetBlendColor(ColorValue),
     // resource updates
     UpdateBuffer(Buffer, DataPointer, usize),
-    UpdateTexture(Texture, c::tex::Kind, Option<c::tex::CubeFace>,
-                  DataPointer, c::tex::RawImageInfo),
+    UpdateTexture(Texture, c::texture::Kind, Option<c::texture::CubeFace>,
+                  DataPointer, c::texture::RawImageInfo),
     GenerateMipmap(ResourceView),
     // drawing
-    Clear(Option<draw::ClearColor>, Option<Depth>, Option<Stencil>),
-    Draw(gl::types::GLenum, c::VertexCount, c::VertexCount, draw::InstanceOption),
+    Clear(Option<command::ClearColor>, Option<Depth>, Option<Stencil>),
+    Draw(gl::types::GLenum, c::VertexCount, c::VertexCount, Option<command::InstanceParams>),
     DrawIndexed(gl::types::GLenum, gl::types::GLenum, RawOffset,
-                c::VertexCount, c::VertexCount, draw::InstanceOption),
+                c::VertexCount, c::VertexCount, Option<command::InstanceParams>),
     _Blit(Rect, Rect, Mirror, usize),
 }
 
@@ -184,7 +182,7 @@ impl CommandBuffer {
     }
 }
 
-impl c::draw::CommandBuffer<Resources> for CommandBuffer {
+impl command::Buffer<Resources> for CommandBuffer {
     fn reset(&mut self) {
         self.buf.clear();
         self.data.0.clear();
@@ -298,9 +296,9 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.push(Command::UpdateBuffer(buf, ptr, offset_bytes));
     }
 
-    fn update_texture(&mut self, ntex: NewTexture, kind: c::tex::Kind,
-                      face: Option<c::tex::CubeFace>, data: &[u8],
-                      img: c::tex::RawImageInfo) {
+    fn update_texture(&mut self, ntex: NewTexture, kind: c::texture::Kind,
+                      face: Option<c::texture::CubeFace>, data: &[u8],
+                      img: c::texture::RawImageInfo) {
         let ptr = self.data.add(data);
         match ntex {
             NewTexture::Texture(t) =>
@@ -314,7 +312,7 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
         self.buf.push(Command::GenerateMipmap(srv));
     }
 
-    fn clear_color(&mut self, target: TargetView, value: draw::ClearColor) {
+    fn clear_color(&mut self, target: TargetView, value: command::ClearColor) {
         // this could be optimized by deferring the actual clear call
         let mut pts = c::pso::PixelTargetSet::new();
         pts.colors[0] = Some(target);
@@ -335,13 +333,13 @@ impl c::draw::CommandBuffer<Resources> for CommandBuffer {
     }
 
     fn call_draw(&mut self, start: c::VertexCount,
-                 count: c::VertexCount, instances: draw::InstanceOption) {
+                 count: c::VertexCount, instances: Option<command::InstanceParams>) {
         self.buf.push(Command::Draw(self.cache.primitive, start, count, instances));
     }
 
     fn call_draw_indexed(&mut self, start: c::VertexCount,
                          count: c::VertexCount, base: c::VertexCount,
-                         instances: draw::InstanceOption) {
+                         instances: Option<command::InstanceParams>) {
         let (offset, gl_index) = match self.cache.index_type {
             c::IndexType::U16 => (start * 2u32, gl::UNSIGNED_SHORT),
             c::IndexType::U32 => (start * 4u32, gl::UNSIGNED_INT),

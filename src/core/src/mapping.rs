@@ -20,9 +20,10 @@ use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Mutex, MutexGuard};
 use {Resources, Factory};
-use {handle, factory};
+use {memory, handle};
 
 /// Unsafe, backend-provided operations for a buffer mapping
+#[doc(hidden)]
 pub trait Gate<R: Resources> {
     /// Set the element at `index` to `val`. Not bounds-checked.
     unsafe fn set<T>(&self, index: usize, val: T);
@@ -37,20 +38,23 @@ pub trait Gate<R: Resources> {
     fn before_write(&mut RawInner<R>) {}
 }
 
-bitflags!(
-    /// Specifies the access allowed to a buffer mapping.
-    pub flags Access: u8 {
-        /// Allow reads.
-        const READABLE  = 0x1,
-        /// Allow writes.
-        const WRITABLE  = 0x2,
-        /// Allow full access.
-        const RW        = 0x3,
+fn valid_access(access: memory::Access, usage: memory::Usage) -> Result<(), Error> {
+    use memory::Usage::*;
+    match usage {
+        Persistent(a) if a.contains(access) => Ok(()),
+        _ => Err(Error::InvalidAccess(access, usage)),
     }
-);
+}
+
+/// Would mapping this buffer with this memory access be an error ?
+fn is_ok<R: Resources>(access: memory::Access, buffer: &handle::RawBuffer<R>) -> Result<(), Error> {
+    try!(valid_access(access, buffer.get_info().usage));
+    if buffer.mapping().is_some() { Err(Error::AlreadyMapped) }
+    else { Ok(()) }
+}
 
 #[derive(Debug)]
-#[allow(missing_docs)]
+#[doc(hidden)]
 pub struct Status<R: Resources> {
     pub cpu_write: bool,
     pub gpu_access: Option<handle::Fence<R>>,
@@ -78,17 +82,17 @@ impl<R: Resources> Status<R> {
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Error {
     /// The requested mapping access did not match the expected usage.
-    InvalidAccess(Access, factory::Usage),
+    InvalidAccess(memory::Access, memory::Usage),
     /// The memory was already mapped
     AlreadyMapped,
 }
 
 #[derive(Debug)]
-#[allow(missing_docs)]
+#[doc(hidden)]
 pub struct RawInner<R: Resources> {
     pub resource: R::Mapping,
     pub buffer: handle::RawBuffer<R>,
-    pub access: Access,
+    pub access: memory::Access,
     pub status: Status<R>,
 }
 
@@ -100,20 +104,23 @@ impl<R: Resources> Drop for RawInner<R> {
 
 /// Raw mapping providing status tracking
 #[derive(Debug)]
-#[allow(missing_docs)]
 pub struct Raw<R: Resources>(Mutex<RawInner<R>>);
 
-#[allow(missing_docs)]
 impl<R: Resources> Raw<R> {
-    pub fn new(res: R::Mapping, access: Access, buf: &handle::RawBuffer<R>) -> Self {
-        Raw(Mutex::new(RawInner {
-            resource: res,
-            buffer: buf.clone(),
+    #[doc(hidden)]
+    pub fn new<F>(access: memory::Access, buffer: &handle::RawBuffer<R>, f: F) -> Result<Self, Error>
+        where F: FnOnce() -> R::Mapping
+    {
+        try!(is_ok(access, buffer));
+        Ok(Raw(Mutex::new(RawInner {
+            resource: f(),
+            buffer: buffer.clone(),
             access: access,
             status: Status::clean(),
-        }))
+        })))
     }
 
+    #[doc(hidden)]
     pub fn access(&self) -> Option<MutexGuard<RawInner<R>>> {
         self.0.try_lock().ok()
     }
@@ -157,7 +164,7 @@ impl<R: Resources> Raw<R> {
 /// Mapping reader
 pub struct Reader<'a, R: Resources, T: 'a + Copy> {
     slice: &'a [T],
-    inner: MutexGuard<'a, RawInner<R>>,
+    #[allow(dead_code)] inner: MutexGuard<'a, RawInner<R>>,
 }
 
 impl<'a, R: Resources, T: 'a + Copy> Deref for Reader<'a, R, T> {
@@ -186,7 +193,7 @@ impl<'a, R: Resources, T: 'a + Copy> Writer<'a, R, T> {
 /// Mapping reader & writer
 pub struct RWer<'a, R: Resources, T: 'a + Copy> {
     slice: &'a mut [T],
-    inner: MutexGuard<'a, RawInner<R>>,
+    #[allow(dead_code)] inner: MutexGuard<'a, RawInner<R>>,
 }
 
 impl<'a, R: Resources, T: 'a + Copy> Deref for RWer<'a, R, T> {
@@ -253,7 +260,7 @@ impl<R: Resources, T: Copy> RWable<R, T> {
 
 /// A service trait with methods for mapping already implemented.
 /// To be used by device back ends.
-#[allow(missing_docs)]
+#[doc(hidden)]
 pub trait Builder<R: Resources>: Factory<R> {
     fn map_readable<T: Copy>(&mut self, handle::RawMapping<R>, usize) -> Readable<R, T>;
     fn map_writable<T: Copy>(&mut self, handle::RawMapping<R>, usize) -> Writable<R, T>;

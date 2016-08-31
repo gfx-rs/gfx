@@ -16,14 +16,12 @@ use std::rc::Rc;
 use std::{slice, fmt};
 
 use {gl, tex};
-use gfx_core as d;
-use gfx_core::factory as f;
-use gfx_core::factory::Typed;
-use gfx_core::format::ChannelType;
-use gfx_core::mapping::{self, Builder};
-use gfx_core::handle::{self, Producer};
-use gfx_core::target::{Layer, Level};
-use gfx_core::tex as t;
+use core::{self as d, factory as f, texture as t, buffer};
+use core::memory::{self, Bind, SHADER_RESOURCE, UNORDERED_ACCESS, Typed};
+use core::format::ChannelType;
+use core::mapping::{self, Builder};
+use core::handle::{self, Producer};
+use core::target::{Layer, Level};
 
 use command::{CommandBuffer, COLOR_DEFAULT};
 use {Resources as R, Share, OutputMerger};
@@ -31,32 +29,32 @@ use {Buffer, BufferElement, FatSampler, NewTexture,
      PipelineState, ResourceView, TargetView};
 
 
-fn role_to_target(role: f::BufferRole) -> gl::types::GLenum {
+fn role_to_target(role: buffer::Role) -> gl::types::GLenum {
     match role {
-        f::BufferRole::Vertex  => gl::ARRAY_BUFFER,
-        f::BufferRole::Index   => gl::ELEMENT_ARRAY_BUFFER,
-        f::BufferRole::Uniform => gl::UNIFORM_BUFFER,
+        buffer::Role::Vertex   => gl::ARRAY_BUFFER,
+        buffer::Role::Index    => gl::ELEMENT_ARRAY_BUFFER,
+        buffer::Role::Constant => gl::UNIFORM_BUFFER,
     }
 }
 
-fn access_to_map_bits(access: mapping::Access) -> gl::types::GLenum {
+fn access_to_map_bits(access: memory::Access) -> gl::types::GLenum {
     let mut r = 0;
-    if access.contains(mapping::READABLE) { r |= gl::MAP_READ_BIT; }
-    if access.contains(mapping::WRITABLE) { r |= gl::MAP_WRITE_BIT; }
+    if access.contains(memory::READ) { r |= gl::MAP_READ_BIT; }
+    if access.contains(memory::WRITE) { r |= gl::MAP_WRITE_BIT; }
     r
 }
 
-fn access_to_gl(access: mapping::Access) -> gl::types::GLenum {
+fn access_to_gl(access: memory::Access) -> gl::types::GLenum {
     match access {
-        mapping::RW => gl::READ_WRITE,
-        mapping::READABLE => gl::READ_ONLY,
-        mapping::WRITABLE => gl::WRITE_ONLY,
+        memory::RW => gl::READ_WRITE,
+        memory::READ => gl::READ_ONLY,
+        memory::WRITE => gl::WRITE_ONLY,
         _ => unreachable!(),
     }
 }
 
 pub fn update_sub_buffer(gl: &gl::Gl, buffer: Buffer, address: *const u8,
-                         size: usize, offset: usize, role: f::BufferRole) {
+                         size: usize, offset: usize, role: buffer::Role) {
     let target = role_to_target(role);
     unsafe {
         gl.BindBuffer(target, buffer);
@@ -114,9 +112,9 @@ impl Factory {
 
     fn init_buffer(&mut self,
                    buffer: Buffer,
-                   info: &f::BufferInfo,
+                   info: &buffer::Info,
                    data_opt: Option<&[u8]>) {
-        use gfx_core::factory::Usage::*;
+        use core::memory::Usage::*;
 
         let gl = &self.share.context;
         let target = role_to_target(info.role);
@@ -149,13 +147,13 @@ impl Factory {
                 Immutable => gl::STATIC_DRAW,
                 Dynamic => gl::STREAM_DRAW,
                 Persistent(access) => match access {
-                    mapping::RW => gl::DYNAMIC_COPY,
-                    mapping::READABLE => gl::DYNAMIC_READ,
-                    mapping::WRITABLE => gl::DYNAMIC_DRAW,
+                    memory::RW => gl::DYNAMIC_COPY,
+                    memory::READ => gl::DYNAMIC_READ,
+                    memory::WRITE => gl::DYNAMIC_DRAW,
                     _ => unreachable!(),
                 },
                 CpuOnly(access) => match access {
-                    mapping::READABLE => gl::STREAM_READ,
+                    memory::READ => gl::STREAM_READ,
                     _ => gl::DYNAMIC_DRAW,
                 }
             };
@@ -280,27 +278,27 @@ impl fmt::Debug for MappingGate {
     }
 }
 
-impl d::Factory<R> for Factory {
+impl f::Factory<R> for Factory {
     fn get_capabilities(&self) -> &d::Capabilities {
         &self.share.capabilities
     }
 
-    fn create_buffer_raw(&mut self, info: f::BufferInfo) -> Result<handle::RawBuffer<R>, f::BufferError> {
-        if !self.share.capabilities.constant_buffer_supported && info.role == f::BufferRole::Uniform {
+    fn create_buffer_raw(&mut self, info: buffer::Info) -> Result<handle::RawBuffer<R>, buffer::CreationError> {
+        if !self.share.capabilities.constant_buffer_supported && info.role == buffer::Role::Constant {
             error!("Constant buffers are not supported by this GL version");
-            return Err(f::BufferError::Other);
+            return Err(buffer::CreationError::Other);
         }
         let name = self.create_buffer_internal();
         self.init_buffer(name, &info, None);
         Ok(self.share.handles.borrow_mut().make_buffer(name, info))
     }
 
-    fn create_buffer_immutable_raw(&mut self, data: &[u8], stride: usize, role: f::BufferRole, bind: f::Bind)
-                               -> Result<handle::RawBuffer<R>, f::BufferError> {
+    fn create_buffer_immutable_raw(&mut self, data: &[u8], stride: usize, role: buffer::Role, bind: Bind)
+                               -> Result<handle::RawBuffer<R>, buffer::CreationError> {
         let name = self.create_buffer_internal();
-        let info = f::BufferInfo {
+        let info = buffer::Info {
             role: role,
-            usage: f::Usage::Immutable,
+            usage: memory::Usage::Immutable,
             bind: bind,
             size: data.len(),
             stride: stride,
@@ -323,7 +321,7 @@ impl d::Factory<R> for Factory {
 
     fn create_pipeline_state_raw(&mut self, program: &handle::Program<R>, desc: &d::pso::Descriptor)
                                  -> Result<handle::RawPipelineState<R>, d::pso::CreationError> {
-        use gfx_core::state as s;
+        use core::state as s;
         let mut output = OutputMerger {
             draw_mask: 0,
             stencil: match desc.depth_stencil {
@@ -366,24 +364,24 @@ impl d::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_pso(pso, program))
     }
 
-    fn create_texture_raw(&mut self, desc: t::Descriptor, hint: Option<ChannelType>, data_opt: Option<&[&[u8]]>)
-                          -> Result<handle::RawTexture<R>, t::Error> {
-        use gfx_core::tex::Error;
+    fn create_texture_raw(&mut self, desc: t::Info, hint: Option<ChannelType>, data_opt: Option<&[&[u8]]>)
+                          -> Result<handle::RawTexture<R>, t::CreationError> {
+        use core::texture::CreationError;
         let caps = &self.share.private_caps;
         if desc.levels == 0 {
-            return Err(Error::Size(0))
+            return Err(CreationError::Size(0))
         }
         let dim = desc.kind.get_dimensions();
         let max_size = self.share.capabilities.max_texture_size;
         if dim.0 as usize > max_size {
-            return Err(Error::Size(dim.0));
+            return Err(CreationError::Size(dim.0));
         }
         if dim.1 as usize > max_size {
-            return Err(Error::Size(dim.1));
+            return Err(CreationError::Size(dim.1));
         }
         let cty = hint.unwrap_or(ChannelType::Uint); //careful here
         let gl = &self.share.context;
-        let object = if desc.bind.intersects(f::SHADER_RESOURCE | f::UNORDERED_ACCESS) || data_opt.is_some() {
+        let object = if desc.bind.intersects(SHADER_RESOURCE | UNORDERED_ACCESS) || data_opt.is_some() {
             let name = if caps.immutable_storage_supported {
                 try!(tex::make_with_storage(gl, &desc, cty))
             } else {
@@ -468,57 +466,57 @@ impl d::Factory<R> for Factory {
         self.share.handles.borrow_mut().make_sampler(sam, info)
     }
 
-    fn map_buffer_raw(&mut self, buf: &handle::RawBuffer<R>, access: mapping::Access)
+    fn map_buffer_raw(&mut self, buf: &handle::RawBuffer<R>, access: memory::Access)
                       -> Result<handle::RawMapping<R>, mapping::Error> {
         let gl = &self.share.context;
-        let raw_handle = *buf.resource();
 
-        try!(buf.valid_access(access));
+        self.share.handles.borrow_mut().make_mapping(access, buf, || {
+            let raw_handle = *buf.resource();
 
-        let target = role_to_target(buf.get_info().role);
-        let (kind, ptr) = if self.share.private_caps.buffer_storage_supported {
-            let access = access_to_map_bits(access) |
-                         gl::MAP_PERSISTENT_BIT |
-                         gl::MAP_FLUSH_EXPLICIT_BIT;
-            let size = buf.get_info().size as isize;
-            let ptr = unsafe {
-                gl.BindBuffer(target, raw_handle);
-                gl.MapBufferRange(target, 0, size, access)
-            } as *mut ::std::os::raw::c_void;
-            (MappingKind::Persistent, ptr)
-        } else {
-            let ptr = unsafe {
-                gl.BindBuffer(target, raw_handle);
-                gl.MapBuffer(target, access_to_gl(access))
-            } as *mut ::std::os::raw::c_void;
-            (MappingKind::Temporary, ptr)
-        };
+            let target = role_to_target(buf.get_info().role);
+            let (kind, ptr) = if self.share.private_caps.buffer_storage_supported {
+                let access = access_to_map_bits(access) |
+                            gl::MAP_PERSISTENT_BIT |
+                            gl::MAP_FLUSH_EXPLICIT_BIT;
+                let size = buf.get_info().size as isize;
+                let ptr = unsafe {
+                    gl.BindBuffer(target, raw_handle);
+                    gl.MapBufferRange(target, 0, size, access)
+                } as *mut ::std::os::raw::c_void;
+                (MappingKind::Persistent, ptr)
+            } else {
+                let ptr = unsafe {
+                    gl.BindBuffer(target, raw_handle);
+                    gl.MapBuffer(target, access_to_gl(access))
+                } as *mut ::std::os::raw::c_void;
+                (MappingKind::Temporary, ptr)
+            };
 
-        let res = MappingGate {
-            kind: kind,
-            pointer: ptr,
-            target: target,
-            is_mapped: true,
-            share: self.share.clone(),
-        };
-        self.share.handles.borrow_mut().make_mapping(res, access, buf)
+            MappingGate {
+                kind: kind,
+                pointer: ptr,
+                target: target,
+                is_mapped: true,
+                share: self.share.clone(),
+            }
+        })
     }
 
     fn map_buffer_readable<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
                                     -> Result<mapping::Readable<R, T>, mapping::Error> {
-        let map = try!(self.map_buffer_raw(buf.raw(), mapping::READABLE));
+        let map = try!(self.map_buffer_raw(buf.raw(), memory::READ));
         Ok(self.map_readable(map, buf.len()))
     }
 
     fn map_buffer_writable<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
                                     -> Result<mapping::Writable<R, T>, mapping::Error> {
-        let map = try!(self.map_buffer_raw(buf.raw(), mapping::WRITABLE));
+        let map = try!(self.map_buffer_raw(buf.raw(), memory::WRITE));
         Ok(self.map_writable(map, buf.len()))
     }
 
     fn map_buffer_rw<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
                               -> Result<mapping::RWable<R, T>, mapping::Error> {
-        let map = try!(self.map_buffer_raw(buf.raw(), mapping::RW));
+        let map = try!(self.map_buffer_raw(buf.raw(), memory::RW));
         Ok(self.map_read_write(map, buf.len()))
     }
 }

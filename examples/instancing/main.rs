@@ -120,7 +120,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
         let (instance_buffer, mut instance_mapping) = factory
             .create_buffer_persistent_rw(MAX_INSTANCE_COUNT,
-                                         gfx::BufferRole::Vertex,
+                                         gfx::buffer::Role::Vertex,
                                          gfx::Bind::empty());
         {
             let mut instances = instance_mapping.read_write();
@@ -142,9 +142,9 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 vertex: quad_vertices,
                 instance: instance_buffer,
                 scale: size,
-                locals: factory.create_buffer_immutable(&[locals],
-                    gfx::BufferRole::Uniform, gfx::Bind::empty()
-                    ).unwrap(),
+                locals: factory
+                    .create_buffer_immutable(&[locals], gfx::buffer::Role::Constant, gfx::Bind::empty())
+                    .unwrap(),
                 out: init.color,
             },
             slice: slice,

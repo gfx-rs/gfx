@@ -16,6 +16,7 @@
 extern crate gfx;
 extern crate gfx_app;
 
+use gfx::texture;
 pub use gfx::format::Depth;
 pub use gfx_app::ColorFormat;
 
@@ -94,13 +95,13 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, ());
 
         let (_, texture_view) = factory.create_texture_immutable::<ColorFormat>(
-            gfx::tex::Kind::D2(4, 4, gfx::tex::AaMode::Single),
+            texture::Kind::D2(4, 4, texture::AaMode::Single),
             &[&L0_DATA, &L1_DATA, &L2_DATA]
             ).unwrap();
 
-        let sampler = factory.create_sampler(gfx::tex::SamplerInfo::new(
-            gfx::tex::FilterMethod::Trilinear,
-            gfx::tex::WrapMode::Tile,
+        let sampler = factory.create_sampler(texture::SamplerInfo::new(
+            texture::FilterMethod::Trilinear,
+            texture::WrapMode::Tile,
         ));
 
         App {

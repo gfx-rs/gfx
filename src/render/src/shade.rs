@@ -14,10 +14,9 @@
 
 //! Shader parameter handling.
 
-pub use gfx_core::shade::{ConstFormat, Formatted, Usage};
-pub use gfx_core::shade as core;
 use std::error::Error;
 use std::fmt;
+pub use core::shade::{self as core, ConstFormat, Formatted, Usage};
 
 #[allow(missing_docs)]
 pub trait ToUniform: Copy {

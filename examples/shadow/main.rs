@@ -207,19 +207,20 @@ fn create_scene<R, F>(factory: &mut F,
 
     // create shadows
     let (shadow_tex, shadow_resource) = {
-        use gfx::tex as t;
+        use gfx::texture as t;
         let kind = t::Kind::D2Array(512, 512, MAX_LIGHTS as gfx::Layer, t::AaMode::Single);
         let bind = gfx::SHADER_RESOURCE | gfx::DEPTH_STENCIL;
         let cty = gfx::format::ChannelType::Unorm;
-        let tex = factory.create_texture(kind, 1, bind, gfx::Usage::GpuOnly, Some(cty)).unwrap();
+        let tex = factory.create_texture(kind, 1, bind, gfx::memory::Usage::GpuOnly, Some(cty)).unwrap();
         let resource = factory.view_texture_as_shader_resource::<Depth>(
             &tex, (0, 0), gfx::format::Swizzle::new()).unwrap();
         (tex, resource)
     };
     let shadow_sampler = {
-        let mut sinfo = gfx::tex::SamplerInfo::new(
-            gfx::tex::FilterMethod::Bilinear,
-            gfx::tex::WrapMode::Clamp
+        use gfx::texture as t;
+        let mut sinfo = t::SamplerInfo::new(
+            t::FilterMethod::Bilinear,
+            t::WrapMode::Clamp
         );
         sinfo.comparison = Some(gfx::state::Comparison::LessEqual);
         factory.create_sampler(sinfo)
@@ -261,7 +262,7 @@ fn create_scene<R, F>(factory: &mut F,
         }.to_perspective(),
         color: desc.color.clone(),
         shadow: factory.view_texture_as_depth_stencil(
-            &shadow_tex, 0, Some(i as gfx::Layer), gfx::tex::DepthStencilFlags::empty(),
+            &shadow_tex, 0, Some(i as gfx::Layer), gfx::texture::DepthStencilFlags::empty(),
             ).unwrap(),
         encoder: factory.create_encoder(),
     }).collect();
@@ -308,7 +309,7 @@ fn create_scene<R, F>(factory: &mut F,
         vbuf: cube_buf.clone(),
         vs_locals: factory.create_constant_buffer(1),
         ps_locals: factory.create_buffer_immutable(&[locals],
-            gfx::BufferRole::Uniform, gfx::Bind::empty()
+            gfx::buffer::Role::Constant, gfx::Bind::empty()
             ).unwrap(),
         light_buf: light_buf.clone(),
         shadow: (shadow_resource, shadow_sampler),
@@ -321,7 +322,7 @@ fn create_scene<R, F>(factory: &mut F,
         locals: factory.create_constant_buffer(1),
         // the output here is temporary, will be overwritten for every light source
         out: factory.view_texture_as_depth_stencil(&shadow_tex, 0, None,
-            gfx::tex::DepthStencilFlags::empty()).unwrap(),
+            gfx::texture::DepthStencilFlags::empty()).unwrap(),
     };
 
     let mut entities: Vec<_> = cube_descs.iter().map(|desc| {

@@ -14,7 +14,7 @@
 
 use std::ptr;
 use winapi::*;
-use gfx_core::{pso, state};
+use core::{pso, state};
 use data::map_function;
 
 pub fn make_rasterizer(device: *mut ID3D11Device, rast: &state::Rasterizer, use_scissor: bool)
@@ -66,7 +66,7 @@ pub fn make_rasterizer(device: *mut ID3D11Device, rast: &state::Rasterizer, use_
 }
 
 fn map_stencil_op(oper: state::StencilOp) -> D3D11_STENCIL_OP {
-    use gfx_core::state::StencilOp::*;
+    use core::state::StencilOp::*;
     match oper {
         Keep => D3D11_STENCIL_OP_KEEP,
         Zero => D3D11_STENCIL_OP_ZERO,
@@ -133,8 +133,8 @@ pub fn make_depth_stencil(device: *mut ID3D11Device, dsi: &pso::DepthStencilInfo
 }
 
 fn map_blend_factor(factor: state::Factor, scalar: bool) -> D3D11_BLEND {
-    use gfx_core::state::BlendValue::*;
-    use gfx_core::state::Factor::*;
+    use core::state::BlendValue::*;
+    use core::state::Factor::*;
     match factor {
         Zero => D3D11_BLEND_ZERO,
         One => D3D11_BLEND_ONE,
@@ -160,7 +160,7 @@ fn map_blend_factor(factor: state::Factor, scalar: bool) -> D3D11_BLEND {
 }
 
 fn map_blend_op(equation: state::Equation) -> D3D11_BLEND_OP {
-    use gfx_core::state::Equation::*;
+    use core::state::Equation::*;
     match equation {
         Add => D3D11_BLEND_OP_ADD,
         Sub => D3D11_BLEND_OP_SUBTRACT,

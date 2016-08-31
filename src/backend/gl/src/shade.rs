@@ -13,8 +13,7 @@
 // limitations under the License.
 
 use std::iter::repeat;
-use gfx_core as d;
-use gfx_core::shade as s;
+use core::{self as c, shade as s};
 use info::PrivateCaps;
 use gl;
 
@@ -91,11 +90,11 @@ enum StorageType {
 
 impl StorageType {
     fn new(storage: gl::types::GLenum) -> StorageType {
-        use gfx_core::shade::{BaseType, ContainerType, TextureType, SamplerType, MatrixFormat};
-        use gfx_core::shade::IsArray::*;
-        use gfx_core::shade::IsRect::*;
-        use gfx_core::shade::IsComparison::*;
-        use gfx_core::shade::IsMultiSample::*;
+        use core::shade::{BaseType, ContainerType, TextureType, SamplerType, MatrixFormat};
+        use core::shade::IsArray::*;
+        use core::shade::IsRect::*;
+        use core::shade::IsComparison::*;
+        use core::shade::IsMultiSample::*;
         use self::StorageType::*;
         match storage {
             gl::FLOAT                        => Var(BaseType::F32,  ContainerType::Single),
@@ -201,7 +200,7 @@ fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::AttributeVar> {
         }
         s::AttributeVar {
             name: real_name,
-            slot: loc as d::AttributeSlot,
+            slot: loc as c::AttributeSlot,
             base_type: base,
             container: container,
         }
@@ -209,7 +208,7 @@ fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::AttributeVar> {
     .collect()
 }
 
-fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program,
+fn query_blocks(gl: &gl::Gl, caps: &c::Capabilities, prog: super::Program,
                 block_indices: &[gl::types::GLint], block_offsets: &[gl::types::GLint])
                 -> Vec<s::ConstantBufferVar> {
     let num = if caps.constant_buffer_supported {
@@ -273,7 +272,7 @@ fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program,
         info!("\t\tBlock[{}] = '{}' of size {}", slot, name, total_size);
         s::ConstantBufferVar {
             name: name,
-            slot: slot as d::ConstantBufferSlot,
+            slot: slot as c::ConstantBufferSlot,
             size: total_size as usize,
             usage: usage,
             elements: block_indices.iter().zip(block_offsets.iter()).enumerate().filter_map(|(i, (parent, offset))| {
@@ -309,7 +308,7 @@ fn query_blocks(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program,
     }).collect()
 }
 
-fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program, usage: s::Usage)
+fn query_parameters(gl: &gl::Gl, caps: &c::Capabilities, prog: super::Program, usage: s::Usage)
                     -> (Vec<s::ConstVar>, Vec<s::TextureVar>, Vec<s::SamplerVar>, Vec<gl::types::GLint>, Vec<gl::types::GLint>) {
     let mut uniforms = Vec::new();
     let mut textures = Vec::new();
@@ -370,7 +369,7 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program, u
                 info!("\t\tSampler[{}] = '{}'\t{:?}\t{:?}", slot, real_name, base, tex_type);
                 textures.push(s::TextureVar {
                     name: real_name.clone(),
-                    slot: slot as d::ResourceViewSlot,
+                    slot: slot as c::ResourceViewSlot,
                     base_type: base,
                     ty: tex_type,
                     usage: usage,
@@ -378,7 +377,7 @@ fn query_parameters(gl: &gl::Gl, caps: &d::Capabilities, prog: super::Program, u
                 if tex_type.can_sample() {
                     samplers.push(s::SamplerVar {
                         name: real_name,
-                        slot: slot as d::SamplerSlot,
+                        slot: slot as c::SamplerSlot,
                         ty: samp_type,
                         usage: usage,
                     });
@@ -471,7 +470,7 @@ pub fn get_program_log(gl: &gl::Gl, name: super::Program) -> String {
     }
 }
 
-pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities, private: &PrivateCaps,
+pub fn create_program(gl: &gl::Gl, caps: &c::Capabilities, private: &PrivateCaps,
                       shaders: &[super::Shader], usage: s::Usage)
                       -> Result<(::Program, s::ProgramInfo), s::CreateProgramError> {
     let name = unsafe { gl.CreateProgram() };
@@ -517,7 +516,7 @@ pub fn create_program(gl: &gl::Gl, caps: &d::Capabilities, private: &PrivateCaps
 }
 
 pub fn bind_uniform(gl: &gl::Gl, loc: gl::types::GLint, uniform: s::UniformValue) {
-    use gfx_core::shade::UniformValue;
+    use core::shade::UniformValue;
     match uniform {
         UniformValue::I32(val) => unsafe { gl.Uniform1i(loc, val) },
         UniformValue::F32(val) => unsafe { gl.Uniform1f(loc, val) },

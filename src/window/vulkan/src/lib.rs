@@ -14,8 +14,8 @@
 
 extern crate winit;
 extern crate vk_sys as vk;
-extern crate gfx_core;
-extern crate gfx_device_vulkan;
+extern crate gfx_core as core;
+extern crate gfx_device_vulkan as device_vulkan;
 
 #[cfg(unix)]
 extern crate xcb;
@@ -25,14 +25,15 @@ extern crate kernel32;
 use std::ffi::CStr;
 use std::ptr;
 use std::os::raw;
-use gfx_core::format;
+use core::format;
+use core::memory::Typed;
 
 #[cfg(unix)]
 use winit::os::unix::WindowExt;
 #[cfg(target_os = "windows")]
 use winit::os::windows::WindowExt;
 
-pub type TargetHandle<T> = gfx_core::handle::RenderTargetView<gfx_device_vulkan::Resources, T>;
+pub type TargetHandle<T> = core::handle::RenderTargetView<device_vulkan::Resources, T>;
 
 pub struct SwapTarget<T> {
     _image: vk::Image,
@@ -45,7 +46,7 @@ pub struct Window<T> {
     _debug_callback: Option<vk::DebugReportCallbackEXT>,
     swapchain: vk::SwapchainKHR,
     targets: Vec<SwapTarget<T>>,
-    queue: gfx_device_vulkan::GraphicsQueue,
+    queue: device_vulkan::GraphicsQueue,
 }
 
 pub struct Frame<'a, T: 'a> {
@@ -57,7 +58,7 @@ impl<'a, T: Clone> Frame<'a, T> {
     pub fn get_target(&self) -> TargetHandle<T> {
         self.window.targets[self.target_id as usize].target.clone()
     }
-    pub fn get_queue(&mut self) -> &mut gfx_device_vulkan::GraphicsQueue {
+    pub fn get_queue(&mut self) -> &mut device_vulkan::GraphicsQueue {
         &mut self.window.queue
     }
 }
@@ -134,14 +135,14 @@ extern "system" fn callback(flags: vk::DebugReportFlagsEXT,
     vk::FALSE
 }
 
-pub fn init<T: gfx_core::format::RenderFormat>(title: &str, width: u32, height: u32)
-                -> (Window<T>, gfx_device_vulkan::Factory) {
+pub fn init<T: core::format::RenderFormat>(title: &str, width: u32, height: u32)
+                -> (Window<T>, device_vulkan::Factory) {
     let window = winit::WindowBuilder::new()
         .with_dimensions(width, height)
         .with_title(title.to_string()).build().unwrap();
 
     let debug = false;
-    let (mut device, mut factory, backend) = gfx_device_vulkan::create(title, 1,
+    let (mut device, mut factory, backend) = device_vulkan::create(title, 1,
         if debug {LAYERS_DEBUG} else {LAYERS},
         if debug {EXTENSIONS_DEBUG} else {EXTENSIONS},
         DEV_EXTENSIONS);
@@ -231,7 +232,7 @@ pub fn init<T: gfx_core::format::RenderFormat>(title: &str, width: u32, height: 
         flags: 0,
         surface: surface,
         minImageCount: num,
-        imageFormat: gfx_device_vulkan::data::map_format(format.0, format.1).unwrap(),
+        imageFormat: device_vulkan::data::map_format(format.0, format.1).unwrap(),
         imageColorSpace: vk::COLOR_SPACE_SRGB_NONLINEAR_KHR,
         imageExtent: vk::Extent2D { width: width, height: height },
         imageArrayLayers: 1,
@@ -258,7 +259,6 @@ pub fn init<T: gfx_core::format::RenderFormat>(title: &str, width: u32, height: 
     let mut cbuf = factory.create_command_buffer();
 
     let targets = images[.. num as usize].iter().map(|image| {
-        use gfx_core::factory::Typed;
         cbuf.image_barrier(*image, vk::IMAGE_ASPECT_COLOR_BIT, vk::IMAGE_LAYOUT_UNDEFINED, vk::IMAGE_LAYOUT_PRESENT_SRC_KHR);
         let raw_view = factory.view_swapchain_image(*image, format, (width, height)).unwrap();
         SwapTarget {
@@ -269,8 +269,8 @@ pub fn init<T: gfx_core::format::RenderFormat>(title: &str, width: u32, height: 
     }).collect();
 
     {
-        use gfx_core::Device;
-        device.submit(&mut cbuf, &gfx_core::pso::AccessInfo::new());
+        use core::Device;
+        device.submit(&mut cbuf, &core::pso::AccessInfo::new());
     }
 
     let win = Window {
@@ -284,7 +284,7 @@ pub fn init<T: gfx_core::format::RenderFormat>(title: &str, width: u32, height: 
 }
 
 #[cfg(target_os = "windows")]
-fn create_surface(backend: gfx_device_vulkan::SharePointer, window: &winit::Window) -> vk::SurfaceKHR {
+fn create_surface(backend: device_vulkan::SharePointer, window: &winit::Window) -> vk::SurfaceKHR {
     let (inst, vk) = backend.get_instance();
     let info = vk::Win32SurfaceCreateInfoKHR {
         sType: vk::STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
@@ -301,7 +301,7 @@ fn create_surface(backend: gfx_device_vulkan::SharePointer, window: &winit::Wind
 }
 
 #[cfg(unix)]
-fn create_surface(backend: gfx_device_vulkan::SharePointer, window: &winit::Window) -> vk::SurfaceKHR {
+fn create_surface(backend: device_vulkan::SharePointer, window: &winit::Window) -> vk::SurfaceKHR {
     let (inst, vk) = backend.get_instance();
     let info = vk::XcbSurfaceCreateInfoKHR {
         sType: vk::STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,

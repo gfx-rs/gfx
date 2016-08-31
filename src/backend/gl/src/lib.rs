@@ -21,15 +21,14 @@
 #[macro_use]
 extern crate log;
 extern crate gfx_gl as gl;
-extern crate gfx_core;
+extern crate gfx_core as core;
 
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::{cmp, hash, fmt};
-use gfx_core as d;
-use gfx_core::handle;
-use gfx_core::state as s;
-use gfx_core::target::{Layer, Level};
+use core::{self as c, handle, state as s, format, pso, texture, memory, command as com, buffer};
+use core::memory::{RENDER_TARGET, DEPTH_STENCIL};
+use core::target::{Layer, Level};
 use command::{Command, DataBuffer};
 use factory::MappingKind;
 
@@ -95,7 +94,7 @@ impl fmt::Debug for Fence {
     }
 }
 
-impl d::Fence for Fence {
+impl c::Fence for Fence {
     fn wait(&self) {
         self.raw.wait(&self.share.context);
     }
@@ -104,7 +103,7 @@ impl d::Fence for Fence {
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Resources {}
 
-impl d::Resources for Resources {
+impl c::Resources for Resources {
     type Buffer              = Buffer;
     type Shader              = Shader;
     type Program             = Program;
@@ -121,8 +120,8 @@ impl d::Resources for Resources {
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct BufferElement {
-    pub desc: d::pso::VertexBufferDesc,
-    pub elem: d::pso::Element<d::format::Format>,
+    pub desc: c::pso::VertexBufferDesc,
+    pub elem: c::pso::Element<format::Format>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -130,14 +129,14 @@ pub struct OutputMerger {
     pub draw_mask: u32,
     pub stencil: Option<s::Stencil>,
     pub depth: Option<s::Depth>,
-    pub colors: [s::Color; d::MAX_COLOR_TARGETS],
+    pub colors: [s::Color; c::MAX_COLOR_TARGETS],
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct PipelineState {
     program: Program,
-    primitive: d::Primitive,
-    input: [Option<BufferElement>; d::MAX_VERTEX_ATTRIBUTES],
+    primitive: c::Primitive,
+    input: [Option<BufferElement>; c::MAX_VERTEX_ATTRIBUTES],
     scissor: bool,
     rasterizer: s::Rasterizer,
     output: OutputMerger,
@@ -157,7 +156,7 @@ pub struct ResourceView {
 }
 
 impl ResourceView {
-    pub fn new_texture(t: Texture, kind: d::tex::Kind) -> ResourceView {
+    pub fn new_texture(t: Texture, kind: texture::Kind) -> ResourceView {
         ResourceView {
             object: t,
             bind: tex::kind_to_gl(kind),
@@ -176,7 +175,7 @@ impl ResourceView {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct FatSampler {
     object: Sampler,
-    info: d::tex::SamplerInfo,
+    info: texture::SamplerInfo,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -223,28 +222,28 @@ pub fn create<F>(fn_proc: F) -> (Device, Factory) where
 /// Create the proxy target views (RTV and DSV) for the attachments of the
 /// main framebuffer. These have GL names equal to 0.
 /// Not supposed to be used by the users directly.
-pub fn create_main_targets_raw(dim: d::tex::Dimensions, color_format: d::format::SurfaceType, depth_format: d::format::SurfaceType)
+pub fn create_main_targets_raw(dim: texture::Dimensions, color_format: format::SurfaceType, depth_format: format::SurfaceType)
                                -> (handle::RawRenderTargetView<Resources>, handle::RawDepthStencilView<Resources>) {
-    use gfx_core::handle::Producer;
+    use core::handle::Producer;
     let mut temp = handle::Manager::new();
     let color_tex = temp.make_texture(
         NewTexture::Surface(0),
-        d::tex::Descriptor {
+        texture::Info {
             levels: 1,
-            kind: d::tex::Kind::D2(dim.0, dim.1, dim.3),
+            kind: texture::Kind::D2(dim.0, dim.1, dim.3),
             format: color_format,
-            bind: d::factory::RENDER_TARGET,
-            usage: d::factory::Usage::GpuOnly,
+            bind: RENDER_TARGET,
+            usage: memory::Usage::GpuOnly,
         },
     );
     let depth_tex = temp.make_texture(
         NewTexture::Surface(0),
-        d::tex::Descriptor {
+        texture::Info {
             levels: 1,
-            kind: d::tex::Kind::D2(dim.0, dim.1, dim.3),
+            kind: texture::Kind::D2(dim.0, dim.1, dim.3),
             format: depth_format,
-            bind: d::factory::DEPTH_STENCIL,
-            usage: d::factory::Usage::GpuOnly,
+            bind: DEPTH_STENCIL,
+            usage: memory::Usage::GpuOnly,
         },
     );
     let m_color = temp.make_rtv(TargetView::Surface(0), &color_tex, dim);
@@ -256,7 +255,7 @@ pub fn create_main_targets_raw(dim: d::tex::Dimensions, color_format: d::format:
 #[doc(hidden)]
 pub struct Share {
     context: gl::Gl,
-    capabilities: d::Capabilities,
+    capabilities: c::Capabilities,
     private_caps: info::PrivateCaps,
     handles: RefCell<handle::Manager<Resources>>,
 }
@@ -344,9 +343,9 @@ impl Device {
         &self.info
     }
 
-    fn bind_attribute(&mut self, slot: d::AttributeSlot, buffer: Buffer, bel: BufferElement) {
-        use gfx_core::format::SurfaceType as S;
-        use gfx_core::format::ChannelType as C;
+    fn bind_attribute(&mut self, slot: c::AttributeSlot, buffer: Buffer, bel: BufferElement) {
+        use core::format::SurfaceType as S;
+        use core::format::ChannelType as C;
         let (fm8, fm16, fm32) = match bel.elem.format.1 {
             C::Int | C::Inorm =>
                 (gl::BYTE, gl::SHORT, gl::INT),
@@ -441,13 +440,13 @@ impl Device {
                         let slot = 0; //TODO?
                         state::unlock_color_mask(gl);
                         match c {
-                            d::draw::ClearColor::Float(v) => unsafe {
+                            com::ClearColor::Float(v) => unsafe {
                                 gl.ClearBufferfv(gl::COLOR, slot, &v[0]);
                             },
-                            d::draw::ClearColor::Int(v) => unsafe {
+                            com::ClearColor::Int(v) => unsafe {
                                 gl.ClearBufferiv(gl::COLOR, slot, &v[0]);
                             },
-                            d::draw::ClearColor::Uint(v) => unsafe {
+                            com::ClearColor::Uint(v) => unsafe {
                                 gl.ClearBufferuiv(gl::COLOR, slot, &v[0]);
                             },
                         }
@@ -469,7 +468,7 @@ impl Device {
                     let mut flags = 0;
                     if let Some(col) = color {
                         flags |= gl::COLOR_BUFFER_BIT;
-                        let v = if let d::draw::ClearColor::Float(v) = col {
+                        let v = if let com::ClearColor::Float(v) = col {
                             v
                         } else {
                             warn!("Integer clears are not supported on GL2");
@@ -502,20 +501,20 @@ impl Device {
             Command::BindProgram(program) => unsafe {
                 self.share.context.UseProgram(program);
             },
-            Command::BindConstantBuffer(d::pso::ConstantBufferParam(buffer, _, slot)) => unsafe {
+            Command::BindConstantBuffer(pso::ConstantBufferParam(buffer, _, slot)) => unsafe {
                 self.share.context.BindBufferBase(gl::UNIFORM_BUFFER, slot as gl::types::GLuint, buffer);
             },
-            Command::BindResourceView(d::pso::ResourceViewParam(view, _, slot)) => unsafe {
+            Command::BindResourceView(pso::ResourceViewParam(view, _, slot)) => unsafe {
                 self.share.context.ActiveTexture(gl::TEXTURE0 + slot as gl::types::GLenum);
                 self.share.context.BindTexture(view.bind, view.object);
             },
             Command::BindUnorderedView(_uav) => unimplemented!(),
-            Command::BindSampler(d::pso::SamplerParam(sampler, _, slot), bind_opt) => {
+            Command::BindSampler(pso::SamplerParam(sampler, _, slot), bind_opt) => {
                 let gl = &self.share.context;
                 if self.share.private_caps.sampler_objects_supported {
                     unsafe { gl.BindSampler(slot as gl::types::GLuint, sampler.object) };
                 } else {
-                    assert!(d::MAX_SAMPLERS <= d::MAX_RESOURCE_VIEWS);
+                    assert!(c::MAX_SAMPLERS <= c::MAX_RESOURCE_VIEWS);
                     debug_assert_eq!(sampler.object, 0);
                     if let Some(bind) = bind_opt {
                         tex::bind_sampler(gl, bind, &sampler.info, self.info.version.is_embedded);
@@ -526,7 +525,7 @@ impl Device {
             },
             Command::BindPixelTargets(pts) => {
                 let point = gl::DRAW_FRAMEBUFFER;
-                for i in 0 .. d::MAX_COLOR_TARGETS {
+                for i in 0 .. c::MAX_COLOR_TARGETS {
                     if let Some(ref target) = pts.colors[i] {
                         let att = gl::COLOR_ATTACHMENT0 + i as gl::types::GLuint;
                         self.bind_target(point, att, target);
@@ -593,7 +592,7 @@ impl Device {
             Command::UpdateBuffer(buffer, pointer, offset) => {
                 let data = data_buf.get(pointer);
                 factory::update_sub_buffer(&self.share.context, buffer,
-                    data.as_ptr(), data.len(), offset, d::factory::BufferRole::Vertex);
+                    data.as_ptr(), data.len(), offset, buffer::Role::Vertex);
             },
             Command::UpdateTexture(texture, kind, face, pointer, ref image) => {
                 let data = data_buf.get(pointer);
@@ -706,11 +705,11 @@ impl Device {
                 // mirror
                 let mut s_end_x = s_rect.x + s_rect.w;
                 let mut s_end_y = s_rect.y + s_rect.h;
-                if mirror.intersects(d::target::MIRROR_X) {
+                if mirror.intersects(c::target::MIRROR_X) {
                     s_end_x = s_rect.x;
                     s_rect.x += s_rect.w;
                 }
-                if mirror.intersects(d::target::MIRROR_Y) {
+                if mirror.intersects(c::target::MIRROR_Y) {
                     s_end_y = s_rect.y;
                     s_rect.y += s_rect.h;
                 }
@@ -759,7 +758,7 @@ impl Device {
         }
     }
 
-    fn before_submit(&mut self, gpu_access: &d::pso::AccessInfo<Resources>) {
+    fn before_submit(&mut self, gpu_access: &pso::AccessInfo<Resources>) {
         if self.share.private_caps.buffer_storage_supported {
             // MappingKind::Persistent
             self.ensure_mappings_flushed(gpu_access.mapped_reads());
@@ -799,7 +798,7 @@ impl Device {
         }
     }
 
-    fn after_submit(&mut self, gpu_access: &d::pso::AccessInfo<Resources>)
+    fn after_submit(&mut self, gpu_access: &pso::AccessInfo<Resources>)
                                -> Option<handle::Fence<Resources>>
     {
         if self.share.private_caps.buffer_storage_supported {
@@ -829,7 +828,7 @@ impl Device {
     }
 
     fn place_fence(&mut self) -> handle::Fence<Resources> {
-        use gfx_core::handle::Producer;
+        use core::handle::Producer;
 
         let gl = &self.share.context;
         let fence = unsafe {
@@ -854,11 +853,11 @@ impl Device {
     }
 }
 
-impl d::Device for Device {
+impl c::Device for Device {
     type Resources = Resources;
     type CommandBuffer = command::CommandBuffer;
 
-    fn get_capabilities(&self) -> &d::Capabilities {
+    fn get_capabilities(&self) -> &c::Capabilities {
         &self.share.capabilities
     }
 
@@ -874,7 +873,7 @@ impl d::Device for Device {
     }
 
     fn submit(&mut self, cb: &mut command::CommandBuffer,
-                         access: &d::pso::AccessInfo<Resources>) {
+                         access: &pso::AccessInfo<Resources>) {
         self.before_submit(access);
         self.no_fence_submit(cb);
         self.after_submit(access);
@@ -882,7 +881,7 @@ impl d::Device for Device {
 
     fn fenced_submit(&mut self,
                      cb: &mut command::CommandBuffer,
-                     access: &d::pso::AccessInfo<Resources>,
+                     access: &pso::AccessInfo<Resources>,
                      after: Option<handle::Fence<Resources>>) -> handle::Fence<Resources> {
 
         if let Some(fence) = after {
@@ -900,16 +899,16 @@ impl d::Device for Device {
     }
 
     fn cleanup(&mut self) {
-        use gfx_core::handle::Producer;
+        use core::handle::Producer;
         self.frame_handles.clear();
         self.share.handles.borrow_mut().clean_with(&mut &self.share.context,
-            |gl, raw_buffer| unsafe { gl.DeleteBuffers(1, &raw_buffer.resource) },
+            |gl, raw_buffer| unsafe { gl.DeleteBuffers(1, raw_buffer.resource()) },
             |gl, v| unsafe { gl.DeleteShader(*v) },
-            |gl, program| unsafe { gl.DeleteProgram(program.resource) },
+            |gl, program| unsafe { gl.DeleteProgram(*program.resource()) },
             |_, _| {}, //PSO
-            |gl, raw_texture| match raw_texture.resource {
-                NewTexture::Surface(ref suf) => unsafe { gl.DeleteRenderbuffers(1, suf) },
-                NewTexture::Texture(ref tex) => unsafe { gl.DeleteTextures(1, tex) },
+            |gl, raw_texture| match raw_texture.resource() {
+                &NewTexture::Surface(ref suf) => unsafe { gl.DeleteRenderbuffers(1, suf) },
+                &NewTexture::Texture(ref tex) => unsafe { gl.DeleteTextures(1, tex) },
             }, // new texture
             |gl, v| if v.owned {
                 unsafe { gl.DeleteTextures(1, &v.object) }

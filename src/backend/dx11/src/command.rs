@@ -19,11 +19,11 @@ use winapi::{FLOAT, INT, UINT, UINT8, DXGI_FORMAT,
              DXGI_FORMAT_R16_UINT, DXGI_FORMAT_R32_UINT,
              D3D11_CLEAR_FLAG, D3D11_PRIMITIVE_TOPOLOGY, D3D11_VIEWPORT, D3D11_RECT,
              ID3D11RasterizerState, ID3D11DepthStencilState, ID3D11BlendState};
-use gfx_core::{draw, pso, shade, state, target, tex};
-use gfx_core::{IndexType, VertexCount};
-use gfx_core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
-               MAX_RESOURCE_VIEWS, MAX_UNORDERED_VIEWS,
-               MAX_SAMPLERS, MAX_COLOR_TARGETS};
+use core::{command, pso, shade, state, target, texture as tex};
+use core::{IndexType, VertexCount};
+use core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
+           MAX_RESOURCE_VIEWS, MAX_UNORDERED_VIEWS,
+           MAX_SAMPLERS, MAX_COLOR_TARGETS};
 use {native, Resources, InputLayout, Buffer, Texture, Pipeline, Program};
 
 /// The place of some data in the data buffer.
@@ -142,7 +142,7 @@ impl<P: Parser> CommandBuffer<P> {
     }
 }
 
-impl<P: Parser> draw::CommandBuffer<Resources> for CommandBuffer<P> {
+impl<P: Parser> command::Buffer<Resources> for CommandBuffer<P> {
     fn reset(&mut self) {
         self.parser.reset();
         self.cache = Cache::new();
@@ -319,9 +319,9 @@ impl<P: Parser> draw::CommandBuffer<Resources> for CommandBuffer<P> {
         self.parser.parse(Command::GenerateMips(srv));
     }
 
-    fn clear_color(&mut self, target: native::Rtv, value: draw::ClearColor) {
+    fn clear_color(&mut self, target: native::Rtv, value: command::ClearColor) {
         match value {
-            draw::ClearColor::Float(data) => {
+            command::ClearColor::Float(data) => {
                 self.parser.parse(Command::ClearColor(target, data));
             },
             _ => {
@@ -341,7 +341,7 @@ impl<P: Parser> draw::CommandBuffer<Resources> for CommandBuffer<P> {
         ));
     }
 
-    fn call_draw(&mut self, start: VertexCount, count: VertexCount, instances: draw::InstanceOption) {
+    fn call_draw(&mut self, start: VertexCount, count: VertexCount, instances: Option<command::InstanceParams>) {
         self.flush();
         self.parser.parse(match instances {
             Some((ninst, offset)) => Command::DrawInstanced(
@@ -351,7 +351,7 @@ impl<P: Parser> draw::CommandBuffer<Resources> for CommandBuffer<P> {
     }
 
     fn call_draw_indexed(&mut self, start: VertexCount, count: VertexCount,
-                         base: VertexCount, instances: draw::InstanceOption) {
+                         base: VertexCount, instances: Option<command::InstanceParams>) {
         self.flush();
         self.parser.parse(match instances {
             Some((ninst, offset)) => Command::DrawIndexedInstanced(
