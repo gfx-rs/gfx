@@ -20,7 +20,7 @@
 //  ETC2_RGB, // Use the EXT2 algorithm on 3 components.
 //  ETC2_SRGB, // Use the EXT2 algorithm on 4 components (RGBA) in the sRGB color space.
 //  ETC2_EAC_RGBA8, // Use the EXT2 EAC algorithm on 4 components.
-use Pod;
+use memory::Pod;
 
 macro_rules! impl_channel_type {
     { $($name:ident = $shader_type:ident [ $($imp_trait:ident),* ] ,)* } => {

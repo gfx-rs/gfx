@@ -14,92 +14,25 @@
 
 #![deny(missing_docs, missing_copy_implementations)]
 
-//! Device resource handles
+//! Resource handles
 
-use std::{cmp, hash, mem, ops};
+use std::ops;
 use std::marker::PhantomData;
-use std::sync::{Arc, Weak, Mutex, MutexGuard};
-use {mapping, shade, tex, Resources};
-use factory::{BufferInfo, Typed};
+use std::sync::{Arc, Weak};
+use {buffer, mapping, shade, texture, Resources};
+use memory::{self, Typed};
 
+/// Untyped buffer handle
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct RawBuffer<R: Resources>(Arc<buffer::Raw<R>>);
 
-/// Raw (untyped) Buffer Handle
-#[derive(Clone, Debug)]
-pub struct RawBuffer<R: Resources>(Arc<RawBufferData<R>>);
-
-/// Raw buffer handle data
-#[derive(Debug)]
-#[allow(missing_docs)]
-pub struct RawBufferData<R: Resources> {
-    pub resource: R::Buffer,
-    pub info: BufferInfo,
-    pub mapping: Mutex<Option<Weak<mapping::Raw<R>>>>
-}
-
-impl<R: Resources> RawBuffer<R> {
-    /// Get raw buffer resource
-    pub fn resource(&self) -> &R::Buffer { &(self.0).resource }
-
-    /// Get raw buffer info
-    pub fn get_info(&self) -> &BufferInfo { &(self.0).info }
-
-    /// Is the requested mapping access matching the expected usage ?
-    pub fn valid_access(&self, access: mapping::Access) -> Result<(), mapping::Error> {
-        self.get_info().usage.valid_access(access)
-    }
-
-    fn mapping_opt(&self) -> MutexGuard<Option<Weak<mapping::Raw<R>>>> {
-        (self.0).mapping.lock().unwrap()
-    }
-
-    /// Get current mapping
-    pub fn mapping(&self) -> Option<RawMapping<R>> {
-        let weak_opt = self.mapping_opt();
-        weak_opt.as_ref().map(|w| RawMapping(w.upgrade().unwrap()))
-    }
-
-    /// Needs to be called internally after the buffer is mapped
-    fn was_mapped(&self, raw: &RawMapping<R>) -> Result<(), mapping::Error> {
-        let mut weak_opt = self.mapping_opt();
-        if weak_opt.is_some() {
-            Err(mapping::Error::AlreadyMapped)
-        } else {
-            *weak_opt = Some(Arc::downgrade(&raw.0));
-            Ok(())
-        }
-    }
-
-    /// Needs to be called internally after the buffer is unmapped
-    pub fn was_unmapped(&self) {
-        let mut weak_opt = self.mapping_opt();
-        *weak_opt = None;
-    }
-
-    /// Get the number of elements in the buffer.
-    ///
-    /// Fails if `T` is zero-sized.
-    pub unsafe fn len<T>(&self) -> usize {
-        assert!(mem::size_of::<T>() != 0, "Cannot determine the length of zero-sized buffers.");
-        self.get_info().size / mem::size_of::<T>()
-    }
-}
-
-impl<R: Resources + cmp::PartialEq> cmp::PartialEq for RawBuffer<R> {
-    fn eq(&self, other: &Self) -> bool {
-        self.resource().eq(other.resource())
-    }
-}
-
-impl<R: Resources + cmp::Eq> cmp::Eq for RawBuffer<R> {}
-
-impl<R: Resources + hash::Hash> hash::Hash for RawBuffer<R> {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        self.resource().hash(state);
-    }
+impl<R: Resources> ops::Deref for RawBuffer<R> {
+    type Target = buffer::Raw<R>;
+    fn deref(&self) -> &Self::Target { &self.0 }
 }
 
 /// Type-safe buffer handle
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Buffer<R: Resources, T>(RawBuffer<R>, PhantomData<T>);
 
 impl<R: Resources, T> Typed for Buffer<R, T> {
@@ -107,22 +40,19 @@ impl<R: Resources, T> Typed for Buffer<R, T> {
     fn new(handle: RawBuffer<R>) -> Buffer<R, T> {
         Buffer(handle, PhantomData)
     }
-    fn raw(&self) -> &RawBuffer<R> {
-        &self.0
-    }
+
+    fn raw(&self) -> &RawBuffer<R> { &self.0 }
 }
 
 impl<R: Resources, T> Buffer<R, T> {
     /// Get the associated information about the buffer
-    pub fn get_info(&self) -> &BufferInfo {
-        self.0.get_info()
-    }
+    pub fn get_info(&self) -> &buffer::Info { self.raw().get_info() }
 
     /// Get the number of elements in the buffer.
     ///
     /// Fails if `T` is zero-sized.
     pub fn len(&self) -> usize {
-        unsafe { self.0.len::<T>() }
+        unsafe { self.raw().len::<T>() }
     }
 }
 
@@ -131,77 +61,25 @@ impl<R: Resources, T> Buffer<R, T> {
 pub struct Shader<R: Resources>(Arc<R::Shader>);
 
 /// Program Handle
-#[derive(Clone, Debug)]
-pub struct Program<R: Resources>(Arc<ProgramData<R>>);
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Program<R: Resources>(Arc<shade::Program<R>>);
 
-/// Program handle data
-#[derive(Debug)]
-#[allow(missing_docs)]
-pub struct ProgramData<R: Resources> {
-    pub resource: R::Program,
-    pub info: shade::ProgramInfo,
+impl<R: Resources> ops::Deref for Program<R> {
+    type Target = shade::Program<R>;
+    fn deref(&self) -> &Self::Target { &self.0 }
 }
-
-// custom implementations due to the limitations of `ProgramInfo`
-impl<R: Resources> Program<R> {
-    /// Get program resource
-    pub fn resource(&self) -> &R::Program { &(self.0).resource }
-
-    /// Get program info
-    pub fn get_info(&self) -> &shade::ProgramInfo { &(self.0).info }
-}
-
-impl<R: Resources + hash::Hash> hash::Hash for Program<R> {
-    fn hash<H>(&self, state: &mut H) where H: hash::Hasher {
-        self.resource().hash(state);
-    }
-}
-
-impl<R: Resources + cmp::PartialEq> cmp::PartialEq for Program<R> {
-    fn eq(&self, other: &Program<R>) -> bool {
-        self.resource().eq(other.resource())
-    }
-}
-
-impl<R: Resources + cmp::Eq> cmp::Eq for Program<R> {}
-
 
 /// Raw Pipeline State Handle
 #[derive(Clone, Debug, PartialEq)]
 pub struct RawPipelineState<R: Resources>(Arc<R::PipelineStateObject>, Program<R>);
 
 /// Raw texture handle
-#[derive(Clone, Debug)]
-pub struct RawTexture<R: Resources>(Arc<RawTextureData<R>>);
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct RawTexture<R: Resources>(Arc<texture::Raw<R>>);
 
-/// Raw texture handle data
-#[derive(Debug)]
-#[allow(missing_docs)]
-pub struct RawTextureData<R: Resources> {
-    pub resource: R::Texture,
-    pub info: tex::Descriptor,
-}
-
-impl<R: Resources> RawTexture<R> {
-    /// Get texture resource
-    pub fn resource(&self) -> &R::Texture { &(self.0).resource }
-
-    /// Get texture descriptor
-    pub fn get_info(&self) -> &tex::Descriptor { &(self.0).info }
-}
-
-impl<R: Resources + cmp::PartialEq> cmp::PartialEq for RawTexture<R> {
-    fn eq(&self, other: &Self) -> bool {
-        self.resource().eq(other.resource())
-    }
-}
-
-impl<R: Resources + cmp::Eq> cmp::Eq for RawTexture<R> {}
-
-impl<R: Resources + hash::Hash> hash::Hash for RawTexture<R> {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        self.resource().hash(state);
-    }
+impl<R: Resources> ops::Deref for RawTexture<R> {
+    type Target = texture::Raw<R>;
+    fn deref(&self) -> &Self::Target { &self.0 }
 }
 
 /// Typed texture object
@@ -213,14 +91,13 @@ impl<R: Resources, S> Typed for Texture<R, S> {
     fn new(handle: RawTexture<R>) -> Texture<R, S> {
         Texture(handle, PhantomData)
     }
-    fn raw(&self) -> &RawTexture<R> {
-        &self.0
-    }
+
+    fn raw(&self) -> &RawTexture<R> { &self.0 }
 }
 
 impl<R: Resources, S> Texture<R, S> {
     /// Get texture descriptor
-    pub fn get_info(&self) -> &tex::Descriptor { self.raw().get_info() }
+    pub fn get_info(&self) -> &texture::Info { self.raw().get_info() }
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -242,9 +119,8 @@ impl<R: Resources, T> Typed for ShaderResourceView<R, T> {
     fn new(handle: RawShaderResourceView<R>) -> ShaderResourceView<R, T> {
         ShaderResourceView(handle, PhantomData)
     }
-    fn raw(&self) -> &RawShaderResourceView<R> {
-        &self.0
-    }
+
+    fn raw(&self) -> &RawShaderResourceView<R> { &self.0 }
 }
 
 /// Raw Unordered Access View Handle
@@ -260,31 +136,28 @@ impl<R: Resources, T> Typed for UnorderedAccessView<R, T> {
     fn new(handle: RawUnorderedAccessView<R>) -> UnorderedAccessView<R, T> {
         UnorderedAccessView(handle, PhantomData)
     }
-    fn raw(&self) -> &RawUnorderedAccessView<R> {
-        &self.0
-    }
+
+    fn raw(&self) -> &RawUnorderedAccessView<R> { &self.0 }
 }
 
 /// Raw RTV
+// TODO: Arc it all
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct RawRenderTargetView<R: Resources>(Arc<R::RenderTargetView>, RawTexture<R>, tex::Dimensions);
+pub struct RawRenderTargetView<R: Resources>(Arc<R::RenderTargetView>, RawTexture<R>, texture::Dimensions);
 
 impl<R: Resources> RawRenderTargetView<R> {
     /// Get target dimensions
-    pub fn get_dimensions(&self) -> tex::Dimensions {
-        self.2
-    }
+    pub fn get_dimensions(&self) -> texture::Dimensions { self.2 }
 }
 
 /// Raw DSV
+// TODO: Arc it all
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct RawDepthStencilView<R: Resources>(Arc<R::DepthStencilView>, RawTexture<R>, tex::Dimensions);
+pub struct RawDepthStencilView<R: Resources>(Arc<R::DepthStencilView>, RawTexture<R>, texture::Dimensions);
 
 impl<R: Resources> RawDepthStencilView<R> {
     /// Get target dimensions
-    pub fn get_dimensions(&self) -> tex::Dimensions {
-        self.2
-    }
+    pub fn get_dimensions(&self) -> texture::Dimensions { self.2 }
 }
 
 /// Typed RTV
@@ -293,9 +166,7 @@ pub struct RenderTargetView<R: Resources, T>(RawRenderTargetView<R>, PhantomData
 
 impl<R: Resources, T> RenderTargetView<R, T> {
     /// Get target dimensions
-    pub fn get_dimensions(&self) -> tex::Dimensions {
-        self.raw().get_dimensions()
-    }
+    pub fn get_dimensions(&self) -> texture::Dimensions { self.raw().get_dimensions() }
 }
 
 impl<R: Resources, T> Typed for RenderTargetView<R, T> {
@@ -303,9 +174,8 @@ impl<R: Resources, T> Typed for RenderTargetView<R, T> {
     fn new(h: RawRenderTargetView<R>) -> RenderTargetView<R, T> {
         RenderTargetView(h, PhantomData)
     }
-    fn raw(&self) -> &RawRenderTargetView<R> {
-        &self.0
-    }
+
+    fn raw(&self) -> &RawRenderTargetView<R> { &self.0 }
 }
 
 /// Typed DSV
@@ -314,9 +184,7 @@ pub struct DepthStencilView<R: Resources, T>(RawDepthStencilView<R>, PhantomData
 
 impl<R: Resources, T> DepthStencilView<R, T> {
     /// Get target dimensions
-    pub fn get_dimensions(&self) -> tex::Dimensions {
-        self.raw().get_dimensions()
-    }
+    pub fn get_dimensions(&self) -> texture::Dimensions { self.raw().get_dimensions() }
 }
 
 impl<R: Resources, T> Typed for DepthStencilView<R, T> {
@@ -324,18 +192,18 @@ impl<R: Resources, T> Typed for DepthStencilView<R, T> {
     fn new(h: RawDepthStencilView<R>) -> DepthStencilView<R, T> {
         DepthStencilView(h, PhantomData)
     }
-    fn raw(&self) -> &RawDepthStencilView<R> {
-        &self.0
-    }
+
+    fn raw(&self) -> &RawDepthStencilView<R> { &self.0 }
 }
 
 /// Sampler Handle
+// TODO: Arc it all
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Sampler<R: Resources>(Arc<R::Sampler>, tex::SamplerInfo);
+pub struct Sampler<R: Resources>(Arc<R::Sampler>, texture::SamplerInfo);
 
 impl<R: Resources> Sampler<R> {
     /// Get sampler info
-    pub fn get_info(&self) -> &tex::SamplerInfo { &self.1 }
+    pub fn get_info(&self) -> &texture::SamplerInfo { &self.1 }
 }
 
 /// Fence Handle
@@ -354,6 +222,18 @@ impl<R: Resources> Fence<R> {
 #[derive(Debug)]
 pub struct RawMapping<R: Resources>(Arc<mapping::Raw<R>>);
 
+impl<R: Resources> RawMapping<R> {
+    #[doc(hidden)]
+    pub fn downgrade(&self) -> Weak<mapping::Raw<R>> {
+        Arc::downgrade(&self.0)
+    }
+
+    #[doc(hidden)]
+    pub fn upgrade(weak: &Weak<mapping::Raw<R>>) -> Self {
+        RawMapping(weak.upgrade().unwrap())
+    }
+}
+
 impl<R: Resources> ops::Deref for RawMapping<R> {
     type Target = mapping::Raw<R>;
     fn deref(&self) -> &Self::Target { &self.0 }
@@ -365,11 +245,11 @@ impl<R: Resources> ops::Deref for RawMapping<R> {
 /// and the Renderer during CommandBuffer population.
 #[allow(missing_docs)]
 pub struct Manager<R: Resources> {
-    buffers:       Vec<Arc<RawBufferData<R>>>,
+    buffers:       Vec<Arc<buffer::Raw<R>>>,
     shaders:       Vec<Arc<R::Shader>>,
-    programs:      Vec<Arc<ProgramData<R>>>,
+    programs:      Vec<Arc<shade::Program<R>>>,
     psos:          Vec<Arc<R::PipelineStateObject>>,
-    textures:      Vec<Arc<RawTextureData<R>>>,
+    textures:      Vec<Arc<texture::Raw<R>>>,
     srvs:          Vec<Arc<R::ShaderResourceView>>,
     uavs:          Vec<Arc<R::UnorderedAccessView>>,
     rtvs:          Vec<Arc<R::RenderTargetView>>,
@@ -382,31 +262,32 @@ pub struct Manager<R: Resources> {
 /// A service trait to be used by the device implementation
 #[allow(missing_docs)]
 pub trait Producer<R: Resources> {
-    fn make_buffer(&mut self, R::Buffer, BufferInfo) -> RawBuffer<R>;
+    fn make_buffer(&mut self, R::Buffer, buffer::Info) -> RawBuffer<R>;
     fn make_shader(&mut self, R::Shader) -> Shader<R>;
     fn make_program(&mut self, R::Program, shade::ProgramInfo) -> Program<R>;
     fn make_pso(&mut self, R::PipelineStateObject, &Program<R>) -> RawPipelineState<R>;
-    fn make_texture(&mut self, R::Texture, tex::Descriptor) -> RawTexture<R>;
+    fn make_texture(&mut self, R::Texture, texture::Info) -> RawTexture<R>;
     fn make_buffer_srv(&mut self, R::ShaderResourceView, &RawBuffer<R>) -> RawShaderResourceView<R>;
     fn make_texture_srv(&mut self, R::ShaderResourceView, &RawTexture<R>) -> RawShaderResourceView<R>;
     fn make_buffer_uav(&mut self, R::UnorderedAccessView, &RawBuffer<R>) -> RawUnorderedAccessView<R>;
     fn make_texture_uav(&mut self, R::UnorderedAccessView, &RawTexture<R>) -> RawUnorderedAccessView<R>;
-    fn make_rtv(&mut self, R::RenderTargetView, &RawTexture<R>, tex::Dimensions) -> RawRenderTargetView<R>;
-    fn make_dsv(&mut self, R::DepthStencilView, &RawTexture<R>, tex::Dimensions) -> RawDepthStencilView<R>;
-    fn make_sampler(&mut self, R::Sampler, tex::SamplerInfo) -> Sampler<R>;
+    fn make_rtv(&mut self, R::RenderTargetView, &RawTexture<R>, texture::Dimensions) -> RawRenderTargetView<R>;
+    fn make_dsv(&mut self, R::DepthStencilView, &RawTexture<R>, texture::Dimensions) -> RawDepthStencilView<R>;
+    fn make_sampler(&mut self, R::Sampler, texture::SamplerInfo) -> Sampler<R>;
     fn make_fence(&mut self, name: R::Fence) -> Fence<R>;
-    fn make_mapping(&mut self, res: R::Mapping,
-                               access: mapping::Access,
-                               buf: &RawBuffer<R>) -> Result<RawMapping<R>, mapping::Error>;
+    fn make_mapping<F>(&mut self, access: memory::Access,
+                       buf: &RawBuffer<R>,
+                       f: F) -> Result<RawMapping<R>, mapping::Error>
+        where F: FnOnce() -> R::Mapping;
 
     /// Walk through all the handles, keep ones that are reference elsewhere
     /// and call the provided delete function (resource-specific) for others
     fn clean_with<T,
-        A: Fn(&mut T, &RawBufferData<R>),
+        A: Fn(&mut T, &buffer::Raw<R>),
         B: Fn(&mut T, &R::Shader),
-        C: Fn(&mut T, &ProgramData<R>),
+        C: Fn(&mut T, &shade::Program<R>),
         D: Fn(&mut T, &R::PipelineStateObject),
-        E: Fn(&mut T, &RawTextureData<R>),
+        E: Fn(&mut T, &texture::Raw<R>),
         F: Fn(&mut T, &R::ShaderResourceView),
         G: Fn(&mut T, &R::UnorderedAccessView),
         H: Fn(&mut T, &R::RenderTargetView),
@@ -418,12 +299,8 @@ pub trait Producer<R: Resources> {
 }
 
 impl<R: Resources> Producer<R> for Manager<R> {
-    fn make_buffer(&mut self, res: R::Buffer, info: BufferInfo) -> RawBuffer<R> {
-        let r = Arc::new(RawBufferData {
-            resource: res,
-            info: info,
-            mapping: Mutex::new(None)
-        });
+    fn make_buffer(&mut self, res: R::Buffer, info: buffer::Info) -> RawBuffer<R> {
+        let r = Arc::new(buffer::Raw::new(res, info));
         self.buffers.push(r.clone());
         RawBuffer(r)
     }
@@ -435,10 +312,7 @@ impl<R: Resources> Producer<R> for Manager<R> {
     }
 
     fn make_program(&mut self, res: R::Program, info: shade::ProgramInfo) -> Program<R> {
-        let r = Arc::new(ProgramData {
-            resource: res,
-            info: info,
-        });
+        let r = Arc::new(shade::Program::new(res, info));
         self.programs.push(r.clone());
         Program(r)
     }
@@ -449,11 +323,8 @@ impl<R: Resources> Producer<R> for Manager<R> {
         RawPipelineState(r, program.clone())
     }
 
-    fn make_texture(&mut self, res: R::Texture, desc: tex::Descriptor) -> RawTexture<R> {
-        let r = Arc::new(RawTextureData {
-            resource: res,
-            info: desc,
-        });
+    fn make_texture(&mut self, res: R::Texture, info: texture::Info) -> RawTexture<R> {
+        let r = Arc::new(texture::Raw::new(res, info));
         self.textures.push(r.clone());
         RawTexture(r)
     }
@@ -482,19 +353,19 @@ impl<R: Resources> Producer<R> for Manager<R> {
         RawUnorderedAccessView(r, ViewSource::Texture(tex.clone()))
     }
 
-    fn make_rtv(&mut self, res: R::RenderTargetView, tex: &RawTexture<R>, dim: tex::Dimensions) -> RawRenderTargetView<R> {
+    fn make_rtv(&mut self, res: R::RenderTargetView, tex: &RawTexture<R>, dim: texture::Dimensions) -> RawRenderTargetView<R> {
         let r = Arc::new(res);
         self.rtvs.push(r.clone());
         RawRenderTargetView(r, tex.clone(), dim)
     }
 
-    fn make_dsv(&mut self, res: R::DepthStencilView, tex: &RawTexture<R>, dim: tex::Dimensions) -> RawDepthStencilView<R> {
+    fn make_dsv(&mut self, res: R::DepthStencilView, tex: &RawTexture<R>, dim: texture::Dimensions) -> RawDepthStencilView<R> {
         let r = Arc::new(res);
         self.dsvs.push(r.clone());
         RawDepthStencilView(r, tex.clone(), dim)
     }
 
-    fn make_sampler(&mut self, res: R::Sampler, info: tex::SamplerInfo) -> Sampler<R> {
+    fn make_sampler(&mut self, res: R::Sampler, info: texture::SamplerInfo) -> Sampler<R> {
         let r = Arc::new(res);
         self.samplers.push(r.clone());
         Sampler(r, info)
@@ -506,22 +377,24 @@ impl<R: Resources> Producer<R> for Manager<R> {
         Fence(r)
     }
 
-    fn make_mapping(&mut self, res: R::Mapping,
-                               access: mapping::Access,
-                               buf: &RawBuffer<R>) -> Result<RawMapping<R>, mapping::Error> {
-        let r = Arc::new(mapping::Raw::new(res, access, buf));
+    fn make_mapping<F>(&mut self, access: memory::Access,
+                       buf: &RawBuffer<R>,
+                       f: F) -> Result<RawMapping<R>, mapping::Error>
+        where F: FnOnce() -> R::Mapping
+    {
+        let r = Arc::new(try!(mapping::Raw::new(access, buf, f)));
         self.mappings.push(r.clone());
         let raw = RawMapping(r);
-        try!(buf.was_mapped(&raw));
+        buf.was_mapped(&raw);
         Ok(raw)
     }
 
     fn clean_with<T,
-        A: Fn(&mut T, &RawBufferData<R>),
+        A: Fn(&mut T, &buffer::Raw<R>),
         B: Fn(&mut T, &R::Shader),
-        C: Fn(&mut T, &ProgramData<R>),
+        C: Fn(&mut T, &shade::Program<R>),
         D: Fn(&mut T, &R::PipelineStateObject),
-        E: Fn(&mut T, &RawTextureData<R>),
+        E: Fn(&mut T, &texture::Raw<R>),
         F: Fn(&mut T, &R::ShaderResourceView),
         G: Fn(&mut T, &R::UnorderedAccessView),
         H: Fn(&mut T, &R::RenderTargetView),

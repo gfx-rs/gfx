@@ -16,10 +16,10 @@
 
 #![allow(missing_docs)]
 
-use std::fmt;
+use std::{fmt, cmp, hash};
 use std::error::Error;
-use {AttributeSlot, ColorSlot, ConstantBufferSlot, ResourceViewSlot,
-     SamplerSlot, UnorderedViewSlot};
+use {Resources};
+use {AttributeSlot, ColorSlot, ConstantBufferSlot, ResourceViewSlot, SamplerSlot, UnorderedViewSlot};
 
 /// Number of components in a container type (vectors/matrices)
 pub type Dimension = u8;
@@ -392,6 +392,43 @@ pub struct ProgramInfo {
     /// A hacky flag to make sure the clients know we are
     /// unable to actually get the output variable info
     pub knows_outputs: bool,
+}
+
+/// A program
+#[derive(Debug)]
+pub struct Program<R: Resources> {
+    resource: R::Program,
+    info: ProgramInfo,
+}
+
+impl<R: Resources> Program<R> {
+    #[doc(hidden)]
+    pub fn new(resource: R::Program, info: ProgramInfo) -> Self {
+        Program {
+            resource: resource,
+            info: info,
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn resource(&self) -> &R::Program { &self.resource }
+
+    /// Get program info
+    pub fn get_info(&self) -> &ProgramInfo { &self.info }
+}
+
+impl<R: Resources + cmp::PartialEq> cmp::PartialEq for Program<R> {
+    fn eq(&self, other: &Program<R>) -> bool {
+        self.resource().eq(other.resource())
+    }
+}
+
+impl<R: Resources + cmp::Eq> cmp::Eq for Program<R> {}
+
+impl<R: Resources + hash::Hash> hash::Hash for Program<R> {
+    fn hash<H>(&self, state: &mut H) where H: hash::Hasher {
+        self.resource().hash(state);
+    }
 }
 
 /// Error type for trying to store a UniformValue in a ConstVar.
