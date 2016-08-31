@@ -1,10 +1,19 @@
-sudo: required
+sudo: false
+os:
+  - linux
+  - osx
 language: rust
+cache: cargo
 rust:
   - stable
   - nightly
+matrix:
+  allow_failures:
+    - os: osx # temporarily
 before_script:
-  - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
+  - pip install 'travis-cargo<0.2' --user
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then export PATH=$HOME/.local/bin:$PATH ; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then export PATH=$HOME/Library/Python/2.7/bin:$PATH ; fi
 notifications:
   webhooks:
     urls:
@@ -13,15 +22,15 @@ notifications:
     on_failure: always
     on_start: false
 before_install:
-  - "export DISPLAY=:99.0"
-  - "sh -e /etc/init.d/xvfb start"
+#  - "export DISPLAY=:99.0"
+#  - "sh -e /etc/init.d/xvfb start"
 addons:
   apt:
     sources:
       # install a newer cmake since at this time Travis only has version 2.8.7
       - george-edison55-precise-backports
       # add a repository for libsdl2-dev (enable sudo before uncommenting this)
-      - sourceline: 'ppa:zoogie/sdl2-snapshots'
+      #- sourceline: 'ppa:zoogie/sdl2-snapshots'
     packages:
       - xdotool
       - cmake
@@ -31,19 +40,22 @@ addons:
       - libxinerama1
       - libxcursor-dev
       - libxcursor1
-      - libsdl2-dev
+      - libglfw-dev
+      #- libsdl2-dev
+      - libx11-xcb-dev
 script:
   - export RUST_BACKTRACE=1
-  - travis-cargo build -- --features vulkan
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then travis-cargo build -- --features vulkan ; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then travis-cargo build ; fi
   - travis-cargo test -- -p gfx_core
   - travis-cargo test -- -p gfx
   - travis-cargo test -- -p gfx_device_gl
   - travis-cargo test -- -p gfx_window_glutin
   - travis-cargo test -- -p gfx_window_glfw
-  - travis-cargo test -- -p gfx_window_sdl
-  - travis-cargo test -- -p gfx_device_vulkan --features vulkan
-  - travis-cargo test -- -p gfx_window_vulkan --features vulkan
-  - travis-cargo test -- --features vulkan
+# - travis-cargo test -- --features sdl -p gfx_window_sdl
+# - travis-cargo test -- -p gfx_device_vulkan
+# - travis-cargo test -- -p gfx_window_vulkan
+  - travis-cargo test
 after_success:
   - travis-cargo doc -- -j 1
   - travis-cargo --only nightly doc-upload
