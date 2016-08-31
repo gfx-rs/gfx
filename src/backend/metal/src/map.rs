@@ -14,14 +14,12 @@
 
 use metal::*;
 
-use gfx_core::state;
-use gfx_core::{IndexType, Primitive};
-use gfx_core::shade;
-use gfx_core::factory;
-use gfx_core::factory::{Bind, MapAccess, Usage};
-use gfx_core::format::{Format, ChannelType, SurfaceType};
-use gfx_core::state::Comparison;
-use gfx_core::tex::{FilterMethod, WrapMode};
+use core::{state, shade, factory};
+use core::{IndexType, Primitive};
+use core::memory::{Bind, Access, Usage};
+use core::format::{Format, ChannelType, SurfaceType};
+use core::state::Comparison;
+use core::texture::{FilterMethod, WrapMode};
 
 pub enum FormatUsage {
     Sample,
@@ -66,7 +64,7 @@ pub fn map_index_type(ty: IndexType) -> MTLIndexType {
 }
 
 pub fn map_stencil_op(op: state::StencilOp) -> MTLStencilOperation {
-    use gfx_core:: state::StencilOp::*;
+    use core::state::StencilOp::*;
 
     match op {
         Keep => MTLStencilOperation::Keep,
@@ -108,8 +106,8 @@ pub fn map_topology(primitive: Primitive) -> MTLPrimitiveTopologyClass {
 }
 
 pub fn map_vertex_format(format: Format) -> Option<MTLVertexFormat> {
-    use gfx_core::format::SurfaceType::*;
-    use gfx_core::format::ChannelType::*;
+    use core::format::SurfaceType::*;
+    use core::format::ChannelType::*;
 
     // TODO: review enums
     Some(match format.0 {
@@ -185,8 +183,8 @@ pub fn map_vertex_format(format: Format) -> Option<MTLVertexFormat> {
 }
 
 pub fn map_format(format: Format, is_target: bool) -> Option<MTLPixelFormat> {
-    use gfx_core::format::SurfaceType::*;
-    use gfx_core::format::ChannelType::*;
+    use core::format::SurfaceType::*;
+    use core::format::ChannelType::*;
 
     use metal::MTLPixelFormat::*;
 
@@ -290,8 +288,8 @@ pub fn map_format(format: Format, is_target: bool) -> Option<MTLPixelFormat> {
 }
 
 pub fn map_channel_hint(hint: SurfaceType) -> Option<ChannelType> {
-    use gfx_core::format::SurfaceType::*;
-    use gfx_core::format::ChannelType::*;
+    use core::format::SurfaceType::*;
+    use core::format::ChannelType::*;
 
     Some(match hint {
         R4_G4 | R4_G4_B4_A4 | R5_G5_B5_A1 | R5_G6_B5 | R16_G16_B16 |
@@ -365,7 +363,7 @@ pub fn format_supports_usage(feature_set: MTLFeatureSet, format: MTLPixelFormat,
 }
 
 pub fn map_depth_surface(surface: SurfaceType) -> Option<MTLPixelFormat> {
-    use gfx_core::format::SurfaceType::*;
+    use core::format::SurfaceType::*;
 
     use metal::MTLPixelFormat::*;
 
@@ -441,8 +439,8 @@ pub fn map_base_type(ty: MTLDataType) -> shade::BaseType {
 }
 
 pub fn map_texture_type(tex_type: MTLTextureType) -> shade::TextureType {
-    use gfx_core::shade::IsArray::*;
-    use gfx_core::shade::IsMultiSample::*;
+    use core::shade::IsArray::*;
+    use ore::shade::IsMultiSample::*;
 
     match tex_type {
         MTLTextureType::D1            => shade::TextureType::D1(NoArray),

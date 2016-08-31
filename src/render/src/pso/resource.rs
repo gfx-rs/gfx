@@ -15,10 +15,10 @@
 //! Resource components for a PSO.
 
 use std::marker::PhantomData;
-use gfx_core::{ResourceViewSlot, UnorderedViewSlot, SamplerSlot, Resources};
-use gfx_core::{handle, pso, shade};
-use gfx_core::factory::Typed;
-use gfx_core::format::Format;
+use core::{ResourceViewSlot, UnorderedViewSlot, SamplerSlot, Resources};
+use core::{handle, pso, shade};
+use core::memory::Typed;
+use core::format::Format;
 use super::{DataLink, DataBind, RawDataSet, AccessInfo};
 
 /// Shader resource component (SRV). Typically is a view into some texture,

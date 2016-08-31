@@ -21,9 +21,9 @@ use std::error::Error;
 use std::any::Any;
 use std::{fmt, mem};
 
-use gfx_core::{Device, IndexType, Resources, VertexCount};
-use gfx_core::{draw, format, handle, tex, Pod};
-use gfx_core::factory::{cast_slice, Typed};
+use core::{Device, IndexType, Resources, VertexCount};
+use core::{command, format, handle, texture};
+use core::memory::{cast_slice, Typed, Pod};
 use slice;
 use pso;
 
@@ -79,14 +79,14 @@ impl<T: Any + fmt::Debug + fmt::Display> Error for UpdateError<T> {
 ///
 /// The encoder exposes multiple functions that add commands to its internal `CommandBuffer`. To 
 /// submit these commands to the GPU so they can be rendered, call `flush`. 
-pub struct Encoder<R: Resources, C: draw::CommandBuffer<R>> {
+pub struct Encoder<R: Resources, C: command::Buffer<R>> {
     command_buffer: C,
     raw_pso_data: pso::RawDataSet<R>,
     access_info: pso::AccessInfo<R>,
     handles: handle::Manager<R>,
 }
 
-impl<R: Resources, C: draw::CommandBuffer<R>> From<C> for Encoder<R, C> {
+impl<R: Resources, C: command::Buffer<R>> From<C> for Encoder<R, C> {
     fn from(combuf: C) -> Encoder<R, C> {
         Encoder {
             command_buffer: combuf,
@@ -97,7 +97,7 @@ impl<R: Resources, C: draw::CommandBuffer<R>> From<C> for Encoder<R, C> {
     }
 }
 
-impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
+impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
     /// Submits the commands in this `Encoder`'s internal `CommandBuffer` to the GPU, so they can
     /// be executed. 
     /// 
@@ -154,9 +154,9 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
 
     /// Update the contents of a texture.
     pub fn update_texture<S, T>(&mut self, tex: &handle::Texture<R, T::Surface>,
-                          face: Option<tex::CubeFace>,
-                          img: tex::NewImageInfo, data: &[S::DataType])
-                          -> Result<(), UpdateError<[tex::Size; 3]>>
+                          face: Option<texture::CubeFace>,
+                          img: texture::NewImageInfo, data: &[S::DataType])
+                          -> Result<(), UpdateError<[texture::Size; 3]>>
     where
         S: format::SurfaceTyped,
         S::DataType: Copy,
@@ -194,12 +194,12 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
 
     fn draw_indexed<T>(&mut self, buf: &handle::Buffer<R, T>, ty: IndexType,
                     slice: &slice::Slice<R>, base: VertexCount,
-                    instances: draw::InstanceOption) {
+                    instances: Option<command::InstanceParams>) {
         self.command_buffer.bind_index(self.handles.ref_buffer(buf.raw()).clone(), ty);
         self.command_buffer.call_draw_indexed(slice.start, slice.end - slice.start, base, instances);
     }
 
-    fn draw_slice(&mut self, slice: &slice::Slice<R>, instances: draw::InstanceOption) {
+    fn draw_slice(&mut self, slice: &slice::Slice<R>, instances: Option<command::InstanceParams>) {
         match slice.buffer {
             slice::IndexBuffer::Auto => self.command_buffer.call_draw(
                 slice.start + slice.base_vertex, slice.end - slice.start, instances),
@@ -213,7 +213,7 @@ impl<R: Resources, C: draw::CommandBuffer<R>> Encoder<R, C> {
     /// Clears the supplied `RenderTargetView` to the supplied `ClearColor`.
     pub fn clear<T: format::RenderFormat>(&mut self,
                  view: &handle::RenderTargetView<R, T>, value: T::View)
-    where T::View: Into<draw::ClearColor> {
+    where T::View: Into<command::ClearColor> {
         let target = self.handles.ref_rtv(view.raw()).clone();
         self.command_buffer.clear_color(target, value.into())
     }

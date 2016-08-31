@@ -41,7 +41,7 @@ use cgmath::{SquareMatrix, Matrix4, Point3, Vector3, EuclideanVector, deg};
 use cgmath::{Transform, AffineMatrix3};
 pub use gfx::format::Depth;
 pub use gfx_app::ColorFormat;
-use gfx::Bundle;
+use gfx::{Bundle, texture};
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{SharedVertex, IndexedPolygon};
 use std::time::{Instant};
@@ -182,7 +182,7 @@ impl gfx::format::Formatted for DepthFormat {
 }
 
 fn create_g_buffer<R: gfx::Resources, F: gfx::Factory<R>>(
-                   width: gfx::tex::Size, height: gfx::tex::Size, factory: &mut F)
+                   width: texture::Size, height: texture::Size, factory: &mut F)
                    -> (ViewPair<R, GFormat>, ViewPair<R, GFormat>, ViewPair<R, GFormat>,
                        gfx::handle::ShaderResourceView<R, [f32; 4]>, gfx::handle::DepthStencilView<R, Depth>)
 {
@@ -238,8 +238,8 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         };
 
         let sampler = factory.create_sampler(
-            gfx::tex::SamplerInfo::new(gfx::tex::FilterMethod::Scale,
-                                       gfx::tex::WrapMode::Clamp)
+            texture::SamplerInfo::new(texture::FilterMethod::Scale,
+                                       texture::WrapMode::Clamp)
         );
 
         let terrain = {

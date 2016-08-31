@@ -14,17 +14,13 @@
 
 use std::os::raw::c_void;
 use std::sync::Arc;
-use std::slice;
-use std::mem;
-use std::str;
+use std::{mem, slice, str};
 
 //use cocoa::base::{selector, class};
 //use cocoa::foundation::{NSUInteger};
 
-use gfx_core as core;
-use gfx_core::{factory, handle};
-use gfx_core::handle::Producer;
-//use gfx_core::handle::Manager;
+use core::{self, factory};
+use core::handle::{self, Producer};
 
 use metal::*;
 
@@ -166,7 +162,7 @@ impl core::Factory<Resources> for Factory {
 
     fn create_shader(&mut self, stage: core::shade::Stage, code: &[u8])
                      -> Result<handle::Shader<Resources>, core::shade::CreateShaderError> {
-        use gfx_core::shade::{CreateShaderError, Stage};
+        use core::shade::{CreateShaderError, Stage};
 
         let lib = match stage {
             Stage::Vertex | Stage::Pixel => {
@@ -192,7 +188,7 @@ impl core::Factory<Resources> for Factory {
 
     fn create_program(&mut self, shader_set: &core::ShaderSet<Resources>)
                       -> Result<handle::Program<Resources>, core::shade::CreateProgramError> {
-        use gfx_core::shade::{ProgramInfo, Stage};
+        use core::shade::{ProgramInfo, Stage};
 
         let (prog, info) = match shader_set {
             &core::ShaderSet::Simple(ref vs, ref ps) => {
@@ -356,9 +352,9 @@ impl core::Factory<Resources> for Factory {
         Ok(self.share.handles.borrow_mut().make_pso(pso, program))
     }
 
-    fn create_texture_raw(&mut self, desc: core::tex::Descriptor, hint: Option<core::format::ChannelType>,
-                          data_opt: Option<&[&[u8]]>) -> Result<handle::RawTexture<Resources>, core::tex::Error> {
-        use gfx_core::tex::{AaMode, Kind};
+    fn create_texture_raw(&mut self, desc: core::texture::Descriptor, hint: Option<core::format::ChannelType>,
+                          data_opt: Option<&[&[u8]]>) -> Result<handle::RawTexture<Resources>, core::texture::Error> {
+        use core::texture::{AaMode, Kind};
         use map::{map_channel_hint, map_texture_bind, map_texture_usage,
                   map_format};
 
@@ -506,10 +502,10 @@ impl core::Factory<Resources> for Factory {
         // Err(factory::ResourceViewError::Unsupported) //TODO
     }
 
-    fn view_texture_as_shader_resource_raw(&mut self, htex: &handle::RawTexture<Resources>, _desc: core::tex::ResourceDesc)
+    fn view_texture_as_shader_resource_raw(&mut self, htex: &handle::RawTexture<Resources>, _desc: core::texture::ResourceDesc)
                                        -> Result<handle::RawShaderResourceView<Resources>, factory::ResourceViewError> {
         /*use winapi::UINT;
-        use gfx_core::tex::{AaMode, Kind};
+        use core::texture::{AaMode, Kind};
         use data::map_format;
 
         let (dim, layers, has_levels) = match htex.get_info().kind {
@@ -568,7 +564,7 @@ impl core::Factory<Resources> for Factory {
         unimplemented!()
     }
 
-    fn view_texture_as_render_target_raw(&mut self, htex: &handle::RawTexture<Resources>, desc: core::tex::RenderDesc)
+    fn view_texture_as_render_target_raw(&mut self, htex: &handle::RawTexture<Resources>, desc: core::texture::RenderDesc)
                                          -> Result<handle::RawRenderTargetView<Resources>, factory::TargetViewError>
     {
         let raw_tex = self.frame_handles.ref_texture(htex).0;
@@ -576,11 +572,11 @@ impl core::Factory<Resources> for Factory {
         Ok(self.share.handles.borrow_mut().make_rtv(native::Rtv(raw_tex.0), htex, size))
     }
 
-    fn view_texture_as_depth_stencil_raw(&mut self, htex: &handle::RawTexture<Resources>, desc: core::tex::DepthStencilDesc)
+    fn view_texture_as_depth_stencil_raw(&mut self, htex: &handle::RawTexture<Resources>, desc: core::texture::DepthStencilDesc)
                                          -> Result<handle::RawDepthStencilView<Resources>, factory::TargetViewError>
     {
         /*use winapi::UINT;
-        use gfx_core::tex::{AaMode, Kind};
+        use core::texture::{AaMode, Kind};
         use data::{map_format, map_dsv_flags};
 
         let level = desc.level as UINT;
@@ -644,8 +640,8 @@ impl core::Factory<Resources> for Factory {
         Ok(self.share.handles.borrow_mut().make_dsv(native::Dsv(raw_tex.0), htex, size))
     }
 
-    fn create_sampler(&mut self, info: core::tex::SamplerInfo) -> handle::Sampler<Resources> {
-        use gfx_core::tex::FilterMethod;
+    fn create_sampler(&mut self, info: core::texture::SamplerInfo) -> handle::Sampler<Resources> {
+        use core::texture::FilterMethod;
         use map::{map_function, map_filter, map_wrap};
 
         let desc = MTLSamplerDescriptor::new();

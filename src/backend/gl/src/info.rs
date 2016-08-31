@@ -15,7 +15,7 @@
 use std::collections::HashSet;
 use std::{ffi, fmt, mem, str};
 use gl;
-use gfx_core::Capabilities;
+use core::Capabilities;
 
 
 /// A version number for a specific component of an OpenGL implementation

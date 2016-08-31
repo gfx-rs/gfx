@@ -16,8 +16,7 @@
 //use cocoa::base::{selector, class};
 //use cocoa::foundation::{NSUInteger};
 
-use gfx_core;
-use gfx_core::shade;
+use core::{self, shade};
 use factory::DUMMY_BUFFER_SLOT;
 
 use metal::*;
@@ -42,7 +41,7 @@ pub fn populate_vertex_attributes(info: &mut shade::ProgramInfo, desc: NSArray<M
 
         info.vertex_attributes.push(shade::AttributeVar {
             name: attr.name().into(),
-            slot: attr.attribute_index() as gfx_core::AttributeSlot,
+            slot: attr.attribute_index() as core::AttributeSlot,
             base_type: map_base_type(attr.attribute_type()),
             container: map_container_type(attr.attribute_type()),
         });
@@ -51,7 +50,7 @@ pub fn populate_vertex_attributes(info: &mut shade::ProgramInfo, desc: NSArray<M
 
 pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage,
                      args: NSArray<MTLArgument>) {
-//    use gfx_core::shade::Stage;
+//    use core::shade::Stage;
     use map::{map_base_type, map_texture_type};
 
     let usage = stage.into();
@@ -67,7 +66,7 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage,
 
                 info.constant_buffers.push(shade::ConstantBufferVar {
                     name: name.into(),
-                    slot: arg.index() as gfx_core::ConstantBufferSlot,
+                    slot: arg.index() as core::ConstantBufferSlot,
                     size: arg.buffer_data_size() as usize,
                     usage: usage,
                     elements: Vec::new(), //TODO!
@@ -76,7 +75,7 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage,
             MTLArgumentType::Texture => {
                 info.textures.push(shade::TextureVar {
                     name: name.into(),
-                    slot: arg.index() as gfx_core::ResourceViewSlot,
+                    slot: arg.index() as core::ResourceViewSlot,
                     base_type: map_base_type(arg.texture_data_type()),
                     ty: map_texture_type(arg.texture_type()),
                     usage: usage,
@@ -87,7 +86,7 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage,
 
                 info.samplers.push(shade::SamplerVar {
                     name: name.into(),
-                    slot: arg.index() as gfx_core::SamplerSlot,
+                    slot: arg.index() as core::SamplerSlot,
                     ty: shade::SamplerType(shade::IsComparison::NoCompare,
                                            shade::IsRect::NoRect),
                     usage: usage,

@@ -15,10 +15,10 @@
 //! Render target components for a PSO.
 
 use std::marker::PhantomData;
-use gfx_core::{ColorSlot, Resources};
-use gfx_core::{format, handle, pso, state, target};
-use gfx_core::factory::Typed;
-use gfx_core::shade::OutputVar;
+use core::{ColorSlot, Resources};
+use core::{format, handle, pso, state, target};
+use core::memory::Typed;
+use core::shade::OutputVar;
 use super::{DataLink, DataBind, RawDataSet, AccessInfo};
 
 /// Render target component. Typically points to a color-formatted texture.

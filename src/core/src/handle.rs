@@ -260,7 +260,7 @@ pub struct Manager<R: Resources> {
 }
 
 /// A service trait to be used by the device implementation
-#[allow(missing_docs)]
+#[doc(hidden)]
 pub trait Producer<R: Resources> {
     fn make_buffer(&mut self, R::Buffer, buffer::Info) -> RawBuffer<R>;
     fn make_shader(&mut self, R::Shader) -> Shader<R>;

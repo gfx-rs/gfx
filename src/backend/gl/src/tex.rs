@@ -15,9 +15,9 @@
 use {gl, Surface, Texture, Sampler};
 use gl::types::{GLenum, GLuint, GLint, GLfloat, GLsizei, GLvoid};
 use state;
-use gfx_core::factory::SHADER_RESOURCE;
-use gfx_core::format::{Format as NewFormat, ChannelType};
-use gfx_core::tex as t;
+use core::memory::SHADER_RESOURCE;
+use core::format::{Format as NewFormat, ChannelType};
+use core::texture as t;
 
 
 fn cube_face_to_gl(face: t::CubeFace) -> GLenum {
@@ -53,8 +53,8 @@ fn kind_face_to_gl(kind: t::Kind, face: Option<t::CubeFace>) -> GLenum {
 }
 
 fn format_to_glpixel(format: NewFormat) -> GLenum {
-    use gfx_core::format::SurfaceType as S;
-    use gfx_core::format::ChannelType as C;
+    use core::format::SurfaceType as S;
+    use core::format::ChannelType as C;
     let (r, rg, rgb, rgba) = match format.1 {
         C::Int | C::Uint => (gl::RED_INTEGER, gl::RG_INTEGER, gl::RGB_INTEGER, gl::RGBA_INTEGER),
         _ => (gl::RED, gl::RG, gl::RGB, gl::RGBA),
@@ -72,8 +72,8 @@ fn format_to_glpixel(format: NewFormat) -> GLenum {
 }
 
 fn format_to_gltype(format: NewFormat) -> Result<GLenum, ()> {
-    use gfx_core::format::SurfaceType as S;
-    use gfx_core::format::ChannelType as C;
+    use core::format::SurfaceType as S;
+    use core::format::ChannelType as C;
     let (fm8, fm16, fm32) = match format.1 {
         C::Int | C::Inorm =>
             (gl::BYTE, gl::SHORT, gl::INT),
@@ -101,8 +101,8 @@ fn format_to_gltype(format: NewFormat) -> Result<GLenum, ()> {
 }
 
 fn format_to_glfull(format: NewFormat) -> Result<GLenum, ()> {
-    use gfx_core::format::SurfaceType as S;
-    use gfx_core::format::ChannelType as C;
+    use core::format::SurfaceType as S;
+    use core::format::ChannelType as C;
     let cty = format.1;
     Ok(match format.0 {
         //S::R3_G3_B2 => gl::R3_G3_B2,
@@ -258,10 +258,10 @@ fn make_surface_impl(gl: &gl::Gl, format: GLenum, dim: t::Dimensions)
 }
 
 /// Create a render surface.
-pub fn make_surface(gl: &gl::Gl, desc: &t::Descriptor, cty: ChannelType) ->
-                        Result<Surface, t::Error> {
+pub fn make_surface(gl: &gl::Gl, desc: &t::Info, cty: ChannelType) ->
+                        Result<Surface, t::CreationError> {
     let format = NewFormat(desc.format, cty);
-    let format_error = t::Error::Format(desc.format, Some(cty));
+    let format_error = t::CreationError::Format(desc.format, Some(cty));
     let fmt = match format_to_glfull(format) {
         Ok(f) => f,
         Err(_) => return Err(format_error),
@@ -272,7 +272,7 @@ pub fn make_surface(gl: &gl::Gl, desc: &t::Descriptor, cty: ChannelType) ->
 
 fn make_widout_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLint, pix: GLenum, typ: GLenum,
                             levels: t::Level, fixed_sample_locations: bool)
-                            -> Result<Texture, t::Error> {
+                            -> Result<Texture, t::CreationError> {
     let (name, target) = make_texture(gl, kind);
     match kind {
         t::Kind::D1(w) => unsafe {
@@ -379,9 +379,9 @@ fn make_widout_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLint, pix: GLen
                 )};
             }
         },
-        t::Kind::CubeArray(_, _) => return Err(t::Error::Kind),
-        t::Kind::D2(_, _, aa) => return Err(t::Error::Samples(aa)),
-        t::Kind::D2Array(_, _, _, aa) => return Err(t::Error::Samples(aa)),
+        t::Kind::CubeArray(_, _) => return Err(t::CreationError::Kind),
+        t::Kind::D2(_, _, aa) => return Err(t::CreationError::Samples(aa)),
+        t::Kind::D2Array(_, _, _, aa) => return Err(t::CreationError::Samples(aa)),
     }
 
     set_mipmap_range(gl, target, (0, levels - 1));
@@ -389,17 +389,17 @@ fn make_widout_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLint, pix: GLen
 }
 
 /// Create a texture, using the descriptor, assuming TexStorage* isn't available.
-pub fn make_without_storage(gl: &gl::Gl, desc: &t::Descriptor, cty: ChannelType) ->
-                            Result<Texture, t::Error> {
+pub fn make_without_storage(gl: &gl::Gl, desc: &t::Info, cty: ChannelType) ->
+                            Result<Texture, t::CreationError> {
     let format = NewFormat(desc.format, cty);
     let gl_format = match format_to_glfull(format) {
         Ok(f) => f as GLint,
-        Err(_) => return Err(t::Error::Format(desc.format, Some(cty))),
+        Err(_) => return Err(t::CreationError::Format(desc.format, Some(cty))),
     };
     let gl_pixel_format = format_to_glpixel(format);
     let gl_data_type = match format_to_gltype(format) {
         Ok(t) => t,
-        Err(_) => return Err(t::Error::Format(desc.format, Some(cty))),
+        Err(_) => return Err(t::CreationError::Format(desc.format, Some(cty))),
     };
 
     let fixed_loc = desc.bind.contains(SHADER_RESOURCE);
@@ -410,7 +410,7 @@ pub fn make_without_storage(gl: &gl::Gl, desc: &t::Descriptor, cty: ChannelType)
 /// Create a texture, assuming TexStorage is available.
 fn make_with_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLenum,
                           levels: t::Level, fixed_sample_locations: bool)
-                          -> Result<Texture, t::Error> {
+                          -> Result<Texture, t::CreationError> {
     use std::cmp::max;
 
     fn min(a: u8, b: u8) -> GLint {
@@ -514,8 +514,8 @@ fn make_with_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLenum,
                 d as GLsizei,
             );
         },
-        t::Kind::D2(_, _, aa) => return Err(t::Error::Samples(aa)),
-        t::Kind::D2Array(_, _, _, aa) => return Err(t::Error::Samples(aa)),
+        t::Kind::D2(_, _, aa) => return Err(t::CreationError::Samples(aa)),
+        t::Kind::D2Array(_, _, _, aa) => return Err(t::CreationError::Samples(aa)),
     }
 
     set_mipmap_range(gl, target, (0, levels - 1));
@@ -524,12 +524,12 @@ fn make_with_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLenum,
 }
 
 /// Create a texture, using the descriptor, assuming TexStorage is available.
-pub fn make_with_storage(gl: &gl::Gl, desc: &t::Descriptor, cty: ChannelType) ->
-                         Result<Texture, t::Error> {
+pub fn make_with_storage(gl: &gl::Gl, desc: &t::Info, cty: ChannelType) ->
+                         Result<Texture, t::CreationError> {
     let format = NewFormat(desc.format, cty);
     let gl_format = match format_to_glfull(format) {
         Ok(f) => f,
-        Err(_) => return Err(t::Error::Format(desc.format, Some(cty))),
+        Err(_) => return Err(t::CreationError::Format(desc.format, Some(cty))),
     };
     let fixed_loc = desc.bind.contains(SHADER_RESOURCE);
     make_with_storage_impl(gl, desc.kind, gl_format, desc.levels, fixed_loc)
@@ -575,7 +575,7 @@ pub fn bind_sampler(gl: &gl::Gl, target: GLenum, info: &t::SamplerInfo, is_embed
 
 fn update_texture_impl<F>(gl: &gl::Gl, kind: t::Kind, target: GLenum, pix: GLenum,
                        typ: GLenum, img: &t::ImageInfoCommon<F>, data: *const GLvoid)
-                       -> Result<(), t::Error> {
+                       -> Result<(), t::CreationError> {
     Ok(match kind {
         t::Kind::D1(_) => unsafe {
             gl.TexSubImage1D(
@@ -629,22 +629,22 @@ fn update_texture_impl<F>(gl: &gl::Gl, kind: t::Kind, target: GLenum, pix: GLenu
                 data
             );
         },
-        t::Kind::CubeArray(_, _) => return Err(t::Error::Kind),
-        t::Kind::D2(_, _, aa) => return Err(t::Error::Samples(aa)),
-        t::Kind::D2Array(_, _, _, aa) => return Err(t::Error::Samples(aa)),
+        t::Kind::CubeArray(_, _) => return Err(t::CreationError::Kind),
+        t::Kind::D2(_, _, aa) => return Err(t::CreationError::Samples(aa)),
+        t::Kind::D2Array(_, _, _, aa) => return Err(t::CreationError::Samples(aa)),
     })
 }
 
 pub fn update_texture(gl: &gl::Gl, name: Texture,
                       kind: t::Kind, face: Option<t::CubeFace>,
                       img: &t::RawImageInfo, slice: &[u8])
-                          -> Result<(), t::Error> {
+                          -> Result<(), t::CreationError> {
     //TODO: check size
     let data = slice.as_ptr() as *const GLvoid;
     let pixel_format = format_to_glpixel(img.format);
     let data_type = match format_to_gltype(img.format) {
         Ok(t) => t,
-        Err(_) => return Err(t::Error::Format(img.format.0, Some(img.format.1))),
+        Err(_) => return Err(t::CreationError::Format(img.format.0, Some(img.format.1))),
     };
 
     let target = kind_to_gl(kind);
@@ -654,8 +654,8 @@ pub fn update_texture(gl: &gl::Gl, name: Texture,
     update_texture_impl(gl, kind, target, pixel_format, data_type, img, data)
 }
 
-pub fn init_texture_data(gl: &gl::Gl, name: Texture, desc: t::Descriptor, channel: ChannelType,
-                         data: &[&[u8]]) -> Result<(), t::Error> {
+pub fn init_texture_data(gl: &gl::Gl, name: Texture, desc: t::Info, channel: ChannelType,
+                         data: &[&[u8]]) -> Result<(), t::CreationError> {
     let opt_slices = desc.kind.get_num_slices();
     let num_slices = opt_slices.unwrap_or(1) as usize;
     let num_mips = desc.levels as usize;
@@ -671,7 +671,7 @@ pub fn init_texture_data(gl: &gl::Gl, name: Texture, desc: t::Descriptor, channe
     if data.len() != num_slices * faces.len() * num_mips {
         error!("Texture expects {} slices {} faces {} mips, given {} data chunks instead",
             num_slices, faces.len(), num_mips, data.len());
-        return Err(t::Error::Data(0))
+        return Err(t::CreationError::Data(0))
     }
 
     for i in 0 .. num_slices {

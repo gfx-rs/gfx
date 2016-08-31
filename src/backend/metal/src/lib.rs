@@ -18,7 +18,7 @@ extern crate log;
 extern crate objc;
 extern crate objc_foundation;
 extern crate cocoa;
-extern crate gfx_core;
+extern crate gfx_core as core;
 extern crate metal;
 
 //use cocoa::base::{selector, class};
@@ -26,9 +26,8 @@ extern crate metal;
 
 use metal::*;
 
-//use gfx_core::format::Format;
-use gfx_core::factory::Usage;
-use gfx_core::{handle, tex};
+use core::{handle, texture as tex};
+use core::memory::{self, Usage};
 
 use std::cell::RefCell;
 use std::sync::Arc;
@@ -46,7 +45,7 @@ pub use self::map::*;
 /// Internal struct of shared data between the device and its factories.
 #[doc(hidden)]
 pub struct Share {
-    capabilities: gfx_core::Capabilities,
+    capabilities: core::Capabilities,
     handles: RefCell<handle::Manager<Resources>>,
 }
 
@@ -134,7 +133,7 @@ pub struct Device {
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Resources {}
 
-impl gfx_core::Resources for Resources {
+impl core::Resources for Resources {
     type Buffer              = Buffer;
     type Shader              = Shader;
     type Program             = Program;
@@ -165,11 +164,11 @@ impl Device {
     }
 }
 
-impl gfx_core::Device for Device {
+impl core::Device for Device {
     type Resources = Resources;
     type CommandBuffer = command::CommandBuffer;
 
-    fn get_capabilities(&self) -> &gfx_core::Capabilities {
+    fn get_capabilities(&self) -> &core::Capabilities {
         &self.share.capabilities
     }
 
@@ -189,7 +188,7 @@ impl gfx_core::Device for Device {
     }
 
     fn cleanup(&mut self) {
-        use gfx_core::handle::Producer;
+        use core::handle::Producer;
         self.frame_handles.clear();
         self.share.handles.borrow_mut().clean_with(&mut (),
             |_, _v| { /*v.0.release();*/ }, //buffer
@@ -219,12 +218,12 @@ impl gfx_core::Device for Device {
     }
 }
 
-pub fn create(format: gfx_core::format::Format, width: u32, height: u32)
+pub fn create(format: core::format::Format, width: u32, height: u32)
               -> Result<(Device, Factory, handle::RawRenderTargetView<Resources>, *mut CAMetalDrawable, *mut MTLTexture), ()> {
-    use gfx_core::handle::Producer;
+    use core::handle::Producer;
 
     let share = Share {
-        capabilities: gfx_core::Capabilities {
+        capabilities: core::Capabilities {
             max_vertex_count: 0,
             max_index_count: 0,
             max_texture_size: 0,
@@ -279,7 +278,7 @@ pub fn create(format: gfx_core::format::Format, width: u32, height: u32)
         kind: tex::Kind::D2(width as tex::Size, height as tex::Size, tex::AaMode::Single),
         levels: 1,
         format: format.0,
-        bind: gfx_core::factory::RENDER_TARGET,
+        bind: memory::RENDER_TARGET,
         usage: raw_tex.1,
     });
 
@@ -287,7 +286,7 @@ pub fn create(format: gfx_core::format::Format, width: u32, height: u32)
     let mut factory = Factory::new(mtl_device, device.share.clone(), d);
 
     let color_target = {
-        use gfx_core::Factory;
+        use core::Factory;
 
         let desc = tex::RenderDesc {
             channel: format.1,

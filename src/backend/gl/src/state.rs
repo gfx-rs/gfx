@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use gfx_core::{MAX_COLOR_TARGETS, ColorSlot};
-use gfx_core::state as s;
-use gfx_core::state::{BlendValue, Comparison, CullFace, Equation,
-                      Offset, RasterMethod, StencilOp, FrontFace};
-use gfx_core::target::{ColorValue, Rect, Stencil};
+use core::{MAX_COLOR_TARGETS, ColorSlot};
+use core::state as s;
+use core::state::{BlendValue, Comparison, CullFace, Equation,
+                  Offset, RasterMethod, StencilOp, FrontFace};
+use core::target::{ColorValue, Rect, Stencil};
 use gl;
 
 

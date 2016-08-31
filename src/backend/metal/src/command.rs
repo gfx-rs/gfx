@@ -16,11 +16,11 @@
 
 //use cocoa::foundation::NSRange;
 
-use gfx_core::{draw, pso, shade, state, target, tex};
-use gfx_core::{IndexType, VertexCount};
-use gfx_core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
-               MAX_RESOURCE_VIEWS,
-               MAX_SAMPLERS, MAX_COLOR_TARGETS};
+use core::{command, pso, shade, state, target, texture as tex};
+use core::{IndexType, VertexCount};
+use core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
+           MAX_RESOURCE_VIEWS,
+           MAX_SAMPLERS, MAX_COLOR_TARGETS};
 
 use gfx_core::shade::Stage;
 
@@ -102,7 +102,7 @@ unsafe impl Send for Command {}
 #[derive(Debug)]
 struct Cache {
     targets: Option<pso::PixelTargetSet<Resources>>,
-    clear: draw::ClearColor,
+    clear: command::ClearColor,
     clear_depth: f32,
     clear_stencil: u8
 }
@@ -113,7 +113,7 @@ impl Cache {
     fn new() -> Cache {
         Cache {
             targets: None,
-            clear: draw::ClearColor::Float([0.0f32; 4]),
+            clear: command::ClearColor::Float([0.0f32; 4]),
             clear_depth: 0f32,
             clear_stencil: 0
         }
@@ -121,7 +121,7 @@ impl Cache {
 
     fn clear(&mut self) {
         self.targets = None;
-        self.clear = draw::ClearColor::Float([0.0f32; 4]);
+        self.clear = command::ClearColor::Float([0.0f32; 4]);
         self.clear_depth = 0f32;
         self.clear_stencil = 0;
     }
@@ -214,7 +214,7 @@ impl CommandBuffer {
                             attachment.set_store_action(MTLStoreAction::Store);
                             attachment.set_load_action(MTLLoadAction::Clear);
 
-                            if let draw::ClearColor::Float(vals) = self.cache.clear {
+                            if let command::ClearColor::Float(vals) = self.cache.clear {
                                 attachment.set_clear_color(MTLClearColor::new(vals[0] as f64, vals[1] as f64, vals[2] as f64, vals[3] as f64));
                             }
                         }
@@ -379,7 +379,7 @@ impl CommandBuffer {
     }
 }
 
-impl draw::CommandBuffer<Resources> for CommandBuffer {
+impl command::CommandBuffer<Resources> for CommandBuffer {
     fn reset(&mut self) {
         self.cache.clear();
         self.buf.clear();
@@ -573,7 +573,7 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
         unimplemented!()
     }
 
-    fn clear_color(&mut self, _target: Rtv, value: draw::ClearColor) {
+    fn clear_color(&mut self, _target: Rtv, value: command::ClearColor) {
         self.cache.clear = value;
     }
 
@@ -583,7 +583,7 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
         self.cache.clear_stencil = stencil.unwrap_or_default();
     }
 
-    fn call_draw(&mut self, start: VertexCount, count: VertexCount, instances: draw::InstanceOption) {
+    fn call_draw(&mut self, start: VertexCount, count: VertexCount, instances: Option<command::InstanceParams>) {
         self.draw(match instances {
             Some((ninst, offset)) => Draw::Instanced(
                 count as u64, ninst as u64, start as u64, offset as u64),
@@ -592,7 +592,7 @@ impl draw::CommandBuffer<Resources> for CommandBuffer {
     }
 
     fn call_draw_indexed(&mut self, start: VertexCount, count: VertexCount,
-                         base: VertexCount, instances: draw::InstanceOption) {
+                         base: VertexCount, instances: Option<command::InstanceParams>) {
         self.draw(match instances {
             Some((ninst, offset)) => Draw::IndexedInstanced(
                 count as u64, ninst as u64, start as u64, base as u64, offset as u64),

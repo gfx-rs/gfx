@@ -20,11 +20,12 @@
 #[macro_use]
 extern crate log;
 extern crate draw_state;
-extern crate gfx_core;
+extern crate gfx_core as core;
 
 /// public re-exported traits
 pub mod traits {
-    pub use gfx_core::{Device, Factory, Pod};
+    pub use core::{Device, Factory};
+    pub use core::memory::Pod;
     pub use factory::FactoryExt;
 }
 
@@ -33,18 +34,14 @@ pub use draw_state::{preset, state};
 pub use draw_state::target::*;
 
 // public re-exports
-pub use gfx_core::{Device, Resources, Primitive};
-pub use gfx_core::{VertexCount, InstanceCount};
-pub use gfx_core::{ShaderSet, VertexShader, HullShader, DomainShader,
-                   GeometryShader, PixelShader};
-pub use gfx_core::{format, handle, tex, mapping};
-pub use gfx_core::factory::{Factory, Typed, Usage, Bind,
-                            BufferRole, BufferInfo, BufferError, BufferUpdateError,
-                            LayerError, ResourceViewError, TargetViewError,  CombinedError,
-                            RENDER_TARGET, DEPTH_STENCIL, SHADER_RESOURCE, UNORDERED_ACCESS,
-                            cast_slice};
-pub use gfx_core::draw::{CommandBuffer, InstanceOption};
-pub use gfx_core::shade::{ProgramInfo, UniformValue};
+pub use core::{Device, Resources, Primitive};
+pub use core::{VertexCount, InstanceCount};
+pub use core::{ShaderSet, VertexShader, HullShader, DomainShader, GeometryShader, PixelShader};
+pub use core::{buffer, format, handle, texture, mapping};
+pub use core::factory::{Factory, ResourceViewError, TargetViewError, CombinedError};
+pub use core::memory::{self, Bind, RENDER_TARGET, DEPTH_STENCIL, SHADER_RESOURCE, UNORDERED_ACCESS};
+pub use core::command::{Buffer as CommandBuffer, InstanceParams};
+pub use core::shade::{ProgramInfo, UniformValue};
 
 pub use encoder::{Encoder, UpdateError};
 pub use factory::PipelineStateError;

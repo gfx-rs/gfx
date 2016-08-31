@@ -21,8 +21,8 @@ extern crate objc;
 extern crate cocoa;
 extern crate winit;
 extern crate metal;
-extern crate gfx_core;
-extern crate gfx_device_metal;
+extern crate gfx_core as core;
+extern crate gfx_device_metal as device_metal;
 
 use winit::os::macos::WindowExt;
 
@@ -33,11 +33,11 @@ use cocoa::base::id as cocoa_id;
 use cocoa::foundation::{NSSize};
 use cocoa::appkit::{NSWindow, NSView};
 
-//use gfx_core::tex::Size;
-use gfx_core::format::{RenderFormat, Format};
-use gfx_core::handle::{RawRenderTargetView, RenderTargetView};
+use core::format::{RenderFormat, Format};
+use core::handle::{RawRenderTargetView, RenderTargetView};
+use core::memory::Typed;
 
-use gfx_device_metal::{Device, Factory, Resources};
+use device_metal::{Device, Factory, Resources};
 
 use metal::*;
 
@@ -102,8 +102,6 @@ pub enum InitError {
 pub fn init<C: RenderFormat>(title: &str, requested_width: u32, requested_height: u32)
         -> Result<(MetalWindow, Device, Factory, RenderTargetView<Resources, C>), InitError>
 {
-    use gfx_core::factory::Typed;
-
     init_raw(title, requested_width, requested_height, C::get_format())
         .map(|(window, device, factory, color)| (window, device, factory, Typed::new(color)))
 }
@@ -134,7 +132,7 @@ pub fn init_raw(title: &str, requested_width: u32, requested_height: u32, color_
         view.setWantsLayer(YES);
         view.setLayer(mem::transmute(layer.0));
 
-        let (device, factory, color, daddr, addr) = gfx_device_metal::create(color_format, draw_size.0, draw_size.1).unwrap();
+        let (device, factory, color, daddr, addr) = device_metal::create(color_format, draw_size.0, draw_size.1).unwrap();
         layer.set_device(device.device);
 
         let drawable = layer.next_drawable().unwrap();

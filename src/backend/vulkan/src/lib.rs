@@ -15,7 +15,7 @@
 #[macro_use]
 extern crate log;
 extern crate shared_library;
-extern crate gfx_core;
+extern crate gfx_core as core;
 extern crate vk_sys as vk;
 
 use std::{fmt, iter, mem, ptr};
@@ -81,7 +81,7 @@ pub struct Share {
     device: vk::Device,
     dev_pointers: vk::DevicePointers,
     physical_device: vk::PhysicalDevice,
-    handles: RefCell<gfx_core::handle::Manager<Resources>>,
+    handles: RefCell<core::handle::Manager<Resources>>,
 }
 
 pub type SharePointer = Arc<Share>;
@@ -273,7 +273,7 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
         device: device,
         dev_pointers: dev_pointers,
         physical_device: dev.device,
-        handles: RefCell::new(gfx_core::handle::Manager::new()),
+        handles: RefCell::new(core::handle::Manager::new()),
     });
     let gfx_device = command::GraphicsQueue::new(share.clone(), queue, qf_id as u32);
     let gfx_factory = factory::Factory::new(share.clone(), qf_id as u32, mvid_id, msys_id);
@@ -320,7 +320,7 @@ impl fmt::Debug for Error {
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Resources {}
 
-impl gfx_core::Resources for Resources {
+impl core::Resources for Resources {
     type Buffer               = native::Buffer;
     type Shader               = vk::ShaderModule;
     type Program              = native::Program;
@@ -338,7 +338,7 @@ impl gfx_core::Resources for Resources {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Fence(vk::Fence);
 
-impl gfx_core::Fence for Fence {
+impl core::Fence for Fence {
     fn wait(&self) {
         unimplemented!()
     }

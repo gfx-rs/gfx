@@ -13,12 +13,13 @@
 // limitations under the License.
 
 extern crate sdl2;
-extern crate gfx_core;
-extern crate gfx_device_gl;
+extern crate gfx_core as core;
+extern crate gfx_device_gl as device_gl;
 
-use gfx_core::handle;
-use gfx_core::format::{SurfaceType, DepthStencil, Srgba8};
-use gfx_device_gl::Resources;
+use core::handle;
+use core::format::{SurfaceType, DepthStencil, Srgba8};
+use core::memory::Typed;
+use device_gl::Resources;
 
 /// Builds an SDL2 window from a WindowBuilder struct.
 ///
@@ -40,23 +41,22 @@ use gfx_device_gl::Resources;
 /// ```
 pub fn init(builder: &mut sdl2::video::WindowBuilder) ->
     (sdl2::video::Window, sdl2::video::GLContext,
-     gfx_device_gl::Device, gfx_device_gl::Factory,
+     device_gl::Device, device_gl::Factory,
      handle::RenderTargetView<Resources, Srgba8>,
      handle::DepthStencilView<Resources, DepthStencil>)
 {
-    use gfx_core::factory::Typed;
-    use gfx_core::tex::{AaMode, Size};
+    use core::texture::{AaMode, Size};
 
     let window = builder.opengl().build().unwrap(); //TODO: use actual settings
     let context = window.gl_create_context().unwrap();
 
-    let (device, factory) = gfx_device_gl::create(|s| {
+    let (device, factory) = device_gl::create(|s| {
         window.subsystem().gl_get_proc_address(s) as *const std::os::raw::c_void
     });
 
     let (width, height) = window.drawable_size();
     let dim = (width as Size, height as Size, 1, AaMode::Single);
-    let (color_view, ds_view) = gfx_device_gl::create_main_targets_raw(
+    let (color_view, ds_view) = device_gl::create_main_targets_raw(
             dim, SurfaceType::R8_G8_B8_A8, SurfaceType::D24);
     (window, context, device, factory, Typed::new(color_view), Typed::new(ds_view))
 }

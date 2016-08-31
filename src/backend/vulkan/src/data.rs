@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use gfx_core::factory::{Bind, Usage, LayerError};
-use gfx_core::format::{SurfaceType, ChannelType, Swizzle, ChannelSource};
-use gfx_core::pso::ColorInfo;
-use gfx_core::tex::{FilterMethod, Kind, Layer, PackedColor, WrapMode};
-use gfx_core::{shade, state, mapping, Primitive};
+use core::{shade, state, memory, Primitive};
+use core::memory::{Bind, Usage};
+use core::format::{SurfaceType, ChannelType, Swizzle, ChannelSource};
+use core::pso::ColorInfo;
+use core::texture::{FilterMethod, Kind, Layer, LayerError, PackedColor, WrapMode};
 use vk;
 
 
@@ -82,18 +82,17 @@ pub fn map_swizzle(swizzle: Swizzle) -> vk::ComponentMapping {
 }
 
 pub fn map_usage_tiling(gfx_usage: Usage, bind: Bind) -> (vk::ImageUsageFlags, vk::ImageTiling) {
-    use gfx_core::factory as f;
     let mut usage = 0;
-    if bind.contains(f::RENDER_TARGET) {
+    if bind.contains(memory::RENDER_TARGET) {
         usage |= vk::IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     }
-    if bind.contains(f::DEPTH_STENCIL) {
+    if bind.contains(memory::DEPTH_STENCIL) {
         usage |= vk::IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
     }
-    if bind.contains(f::SHADER_RESOURCE) {
+    if bind.contains(memory::SHADER_RESOURCE) {
         usage |= vk::IMAGE_USAGE_SAMPLED_BIT;
     }
-    if bind.contains(f::UNORDERED_ACCESS) {
+    if bind.contains(memory::UNORDERED_ACCESS) {
         usage |= vk::IMAGE_USAGE_STORAGE_BIT;
     }
     let tiling = match gfx_usage {
@@ -109,8 +108,8 @@ pub fn map_usage_tiling(gfx_usage: Usage, bind: Bind) -> (vk::ImageUsageFlags, v
         },
         Usage::Persistent(access) => unimplemented!(),
         Usage::CpuOnly(access) => {
-            if access.contains(mapping::READABLE) { usage |= vk::IMAGE_USAGE_TRANSFER_DST_BIT }
-            if access.contains(mapping::WRITABLE) { usage |= vk::IMAGE_USAGE_TRANSFER_SRC_BIT }
+            if access.contains(memory::READ) { usage |= vk::IMAGE_USAGE_TRANSFER_DST_BIT }
+            if access.contains(memory::WRITE) { usage |= vk::IMAGE_USAGE_TRANSFER_SRC_BIT }
             vk::IMAGE_TILING_LINEAR
         },
     };
@@ -129,8 +128,8 @@ pub fn map_image_layout(bind: Bind) -> vk::ImageLayout {
 }
 
 pub fn map_format(surface: SurfaceType, chan: ChannelType) -> Option<vk::Format> {
-    use gfx_core::format::SurfaceType::*;
-    use gfx_core::format::ChannelType::*;
+    use core::format::SurfaceType::*;
+    use core::format::ChannelType::*;
     Some(match surface {
         R4_G4 => match chan {
             Unorm => vk::FORMAT_R4G4_UNORM_PACK8,
@@ -291,7 +290,7 @@ pub fn map_border_color(col: PackedColor) -> Option<vk::BorderColor> {
 }
 
 pub fn map_comparison(fun: state::Comparison) -> vk::CompareOp {
-    use gfx_core::state::Comparison::*;
+    use core::state::Comparison::*;
     match fun {
         Never        => vk::COMPARE_OP_NEVER,
         Less         => vk::COMPARE_OP_LESS,
@@ -338,7 +337,7 @@ pub fn map_front_face(ff: state::FrontFace) -> vk::FrontFace {
 }
 
 pub fn map_stencil_op(op: state::StencilOp) -> vk::StencilOp {
-    use gfx_core::state::StencilOp::*;
+    use core::state::StencilOp::*;
     match op {
         Keep           => vk::STENCIL_OP_KEEP,
         Zero           => vk::STENCIL_OP_ZERO,
@@ -364,8 +363,8 @@ pub fn map_stencil_side(side: &state::StencilSide) -> vk::StencilOpState {
 }
 
 pub fn map_blend_factor(factor: state::Factor) -> vk::BlendFactor {
-    use gfx_core::state::Factor::*;
-    use gfx_core::state::BlendValue::*;
+    use core::state::Factor::*;
+    use core::state::BlendValue::*;
     match factor {
         Zero                  => vk::BLEND_FACTOR_ZERO,
         One                   => vk::BLEND_FACTOR_ONE,
@@ -386,7 +385,7 @@ pub fn map_blend_factor(factor: state::Factor) -> vk::BlendFactor {
 }
 
 pub fn map_blend_op(op: state::Equation) -> vk::BlendOp {
-    use gfx_core::state::Equation::*;
+    use core::state::Equation::*;
     match op {
         Add    => vk::BLEND_OP_ADD,
         Sub    => vk::BLEND_OP_SUBTRACT,

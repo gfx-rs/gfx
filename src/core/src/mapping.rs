@@ -104,11 +104,10 @@ impl<R: Resources> Drop for RawInner<R> {
 
 /// Raw mapping providing status tracking
 #[derive(Debug)]
-#[allow(missing_docs)]
 pub struct Raw<R: Resources>(Mutex<RawInner<R>>);
 
-#[allow(missing_docs)]
 impl<R: Resources> Raw<R> {
+    #[doc(hidden)]
     pub fn new<F>(access: memory::Access, buffer: &handle::RawBuffer<R>, f: F) -> Result<Self, Error>
         where F: FnOnce() -> R::Mapping
     {
@@ -121,6 +120,7 @@ impl<R: Resources> Raw<R> {
         })))
     }
 
+    #[doc(hidden)]
     pub fn access(&self) -> Option<MutexGuard<RawInner<R>>> {
         self.0.try_lock().ok()
     }
@@ -260,7 +260,7 @@ impl<R: Resources, T: Copy> RWable<R, T> {
 
 /// A service trait with methods for mapping already implemented.
 /// To be used by device back ends.
-#[allow(missing_docs)]
+#[doc(hidden)]
 pub trait Builder<R: Resources>: Factory<R> {
     fn map_readable<T: Copy>(&mut self, handle::RawMapping<R>, usize) -> Readable<R, T>;
     fn map_writable<T: Copy>(&mut self, handle::RawMapping<R>, usize) -> Writable<R, T>;

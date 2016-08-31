@@ -17,11 +17,10 @@ use std::collections::BTreeMap as Map;
 use std::os::raw::c_void;
 use std::sync::Arc;
 use winapi;
-use gfx_core as core;
-use gfx_core::mapping::{self, Builder};
-use gfx_core::factory::{self as f, Typed};
-use gfx_core::handle as h;
-use gfx_core::handle::Producer;
+use core::{self, factory as f, buffer, texture};
+use core::mapping::{self, Builder};
+use core::memory::{self, Bind, Typed};
+use core::handle::{self as h, Producer};
 use {Resources as R, Share, Buffer, Texture, Pipeline, Program, Shader};
 use command::CommandBuffer;
 use {CommandList, DeferredContext};
@@ -111,30 +110,30 @@ impl Factory {
         }
     }
 
-    fn create_buffer_internal(&self, info: f::BufferInfo, raw_data: Option<*const c_void>)
-                              -> Result<h::RawBuffer<R>, f::BufferError> {
+    fn create_buffer_internal(&self, info: buffer::Info, raw_data: Option<*const c_void>)
+                              -> Result<h::RawBuffer<R>, buffer::CreationError> {
         use winapi::d3d11::*;
         use data::{map_bind, map_usage};
 
         let (subind, size) = match info.role {
-            f::BufferRole::Vertex   =>
+            buffer::Role::Vertex   =>
                 (D3D11_BIND_VERTEX_BUFFER, info.size),
-            f::BufferRole::Index    => {
+            buffer::Role::Index    => {
                 if info.stride != 2 && info.stride != 4 {
                     error!("Only U16 and U32 index buffers are allowed");
-                    return Err(f::BufferError::Other);
+                    return Err(buffer::CreationError::Other);
                 }
                 (D3D11_BIND_INDEX_BUFFER, info.size)
             },
-            f::BufferRole::Uniform  => // 16 bit alignment
+            buffer::Role::Constant  => // 16 bit alignment
                 (D3D11_BIND_CONSTANT_BUFFER, (info.size + 0xF) & !0xF),
         };
 
         assert!(size >= info.size);
         let (usage, cpu) = map_usage(info.usage);
         let bind = map_bind(info.bind) | subind;
-        if info.bind.contains(f::RENDER_TARGET) | info.bind.contains(f::DEPTH_STENCIL) {
-            return Err(f::BufferError::UnsupportedBind(info.bind))
+        if info.bind.contains(memory::RENDER_TARGET) | info.bind.contains(memory::DEPTH_STENCIL) {
+            return Err(buffer::CreationError::UnsupportedBind(info.bind))
         }
         let native_desc = D3D11_BUFFER_DESC {
             ByteWidth: size as winapi::UINT,
@@ -167,11 +166,11 @@ impl Factory {
             Ok(self.share.handles.borrow_mut().make_buffer(buf, info))
         }else {
             error!("Failed to create a buffer with desc {:#?}, error {:x}", native_desc, hr);
-            Err(f::BufferError::Other)
+            Err(buffer::CreationError::Other)
         }
     }
 
-    fn update_sub_data(&mut self, w: core::tex::Size, h: core::tex::Size, bpt: winapi::UINT)
+    fn update_sub_data(&mut self, w: texture::Size, h: texture::Size, bpt: winapi::UINT)
                        -> *const winapi::D3D11_SUBRESOURCE_DATA {
         use winapi::UINT;
         for sub in self.sub_data_array.iter_mut() {
@@ -181,7 +180,7 @@ impl Factory {
         self.sub_data_array.as_ptr()
     }
 
-    fn create_texture_1d(&mut self, size: core::tex::Size, array: core::tex::Layer,
+    fn create_texture_1d(&mut self, size: texture::Size, array: texture::Layer,
                          tp: TextureParam, misc: winapi::D3D11_RESOURCE_MISC_FLAG)
                          -> Result<native::Texture, winapi::HRESULT>
     {
@@ -222,7 +221,7 @@ impl Factory {
         }
     }
 
-    fn create_texture_2d(&mut self, size: [core::tex::Size; 2], array: core::tex::Layer, aa: core::tex::AaMode,
+    fn create_texture_2d(&mut self, size: [texture::Size; 2], array: texture::Layer, aa: texture::AaMode,
                          tp: TextureParam, misc: winapi::D3D11_RESOURCE_MISC_FLAG)
                          -> Result<native::Texture, winapi::HRESULT>
     {
@@ -267,7 +266,7 @@ impl Factory {
         }
     }
 
-    fn create_texture_3d(&mut self, size: [core::tex::Size; 3],
+    fn create_texture_3d(&mut self, size: [texture::Size; 3],
                          tp: TextureParam, misc: winapi::D3D11_RESOURCE_MISC_FLAG)
                          -> Result<native::Texture, winapi::HRESULT>
     {
@@ -314,15 +313,15 @@ impl core::Factory<R> for Factory {
         &self.share.capabilities
     }
 
-    fn create_buffer_raw(&mut self, info: f::BufferInfo) -> Result<h::RawBuffer<R>, f::BufferError> {
+    fn create_buffer_raw(&mut self, info: buffer::Info) -> Result<h::RawBuffer<R>, buffer::CreationError> {
         self.create_buffer_internal(info, None)
     }
 
-    fn create_buffer_immutable_raw(&mut self, data: &[u8], stride: usize, role: f::BufferRole, bind: f::Bind)
-                                -> Result<h::RawBuffer<R>, f::BufferError> {
-        let info = f::BufferInfo {
+    fn create_buffer_immutable_raw(&mut self, data: &[u8], stride: usize, role: buffer::Role, bind: Bind)
+                                -> Result<h::RawBuffer<R>, buffer::CreationError> {
+        let info = buffer::Info {
             role: role,
-            usage: f::Usage::Immutable,
+            usage: memory::Usage::Immutable,
             bind: bind,
             size: data.len(),
             stride: stride,
@@ -333,7 +332,7 @@ impl core::Factory<R> for Factory {
     fn create_shader(&mut self, stage: core::shade::Stage, code: &[u8])
                      -> Result<h::Shader<R>, core::shade::CreateShaderError> {
         use winapi::ID3D11DeviceChild;
-        use gfx_core::shade::{CreateShaderError, Stage};
+        use core::shade::{CreateShaderError, Stage};
         use mirror::reflect_shader;
 
         let dev = self.device;
@@ -388,7 +387,7 @@ impl core::Factory<R> for Factory {
     fn create_program(&mut self, shader_set: &core::ShaderSet<R>)
                       -> Result<h::Program<R>, core::shade::CreateProgramError> {
         use winapi::{ID3D11VertexShader, ID3D11GeometryShader, ID3D11PixelShader};
-        use gfx_core::shade::{ProgramInfo, Stage};
+        use core::shade::{ProgramInfo, Stage};
         use mirror::populate_info;
 
         let mut info = ProgramInfo {
@@ -436,7 +435,7 @@ impl core::Factory<R> for Factory {
     fn create_pipeline_state_raw(&mut self, program: &h::Program<R>, desc: &core::pso::Descriptor)
                                  -> Result<h::RawPipelineState<R>, core::pso::CreationError> {
         use winapi::d3dcommon::*;
-        use gfx_core::Primitive::*;
+        use core::Primitive::*;
         use data::map_format;
         use state;
 
@@ -528,24 +527,24 @@ impl core::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_pso(pso, program))
     }
 
-    fn create_texture_raw(&mut self, desc: core::tex::Descriptor, hint: Option<core::format::ChannelType>,
-                          data_opt: Option<&[&[u8]]>) -> Result<h::RawTexture<R>, core::tex::Error> {
-        use gfx_core::tex::{AaMode, Error, Kind};
+    fn create_texture_raw(&mut self, desc: texture::Info, hint: Option<core::format::ChannelType>,
+                          data_opt: Option<&[&[u8]]>) -> Result<h::RawTexture<R>, texture::CreationError> {
+        use core::texture::{AaMode, CreationError, Kind};
         use data::{map_bind, map_usage, map_surface, map_format};
 
         let (usage, cpu_access) = map_usage(desc.usage);
         let tparam = TextureParam {
             levels: desc.levels as winapi::UINT,
             format: match hint {
-                Some(channel) if self.use_texture_format_hint && !desc.bind.contains(f::DEPTH_STENCIL) => {
+                Some(channel) if self.use_texture_format_hint && !desc.bind.contains(memory::DEPTH_STENCIL) => {
                     match map_format(core::format::Format(desc.format, channel), true) {
                         Some(f) => f,
-                        None => return Err(Error::Format(desc.format, Some(channel)))
+                        None => return Err(CreationError::Format(desc.format, Some(channel)))
                     }
                 },
                 _ => match map_surface(desc.format) {
                     Some(f) => f,
-                    None => return Err(Error::Format(desc.format, None))
+                    None => return Err(CreationError::Format(desc.format, None))
                 },
             },
             bytes_per_texel: (desc.format.get_total_bits() >> 3) as winapi::UINT,
@@ -564,8 +563,8 @@ impl core::Factory<R> for Factory {
                 });
             }
         };
-        let misc = if desc.usage != f::Usage::Immutable &&
-            desc.bind.contains(f::RENDER_TARGET | f::SHADER_RESOURCE) &&
+        let misc = if desc.usage != memory::Usage::Immutable &&
+            desc.bind.contains(memory::RENDER_TARGET | memory::SHADER_RESOURCE) &&
             desc.levels > 1 && data_opt.is_none() {
             winapi::D3D11_RESOURCE_MISC_GENERATE_MIPS
         }else {
@@ -594,7 +593,7 @@ impl core::Factory<R> for Factory {
                 let tex = Texture(native, desc.usage);
                 Ok(self.share.handles.borrow_mut().make_texture(tex, desc))
             },
-            Err(_) => Err(Error::Kind),
+            Err(_) => Err(CreationError::Kind),
         }
     }
 
@@ -608,10 +607,10 @@ impl core::Factory<R> for Factory {
         Err(f::ResourceViewError::Unsupported) //TODO
     }
 
-    fn view_texture_as_shader_resource_raw(&mut self, htex: &h::RawTexture<R>, desc: core::tex::ResourceDesc)
+    fn view_texture_as_shader_resource_raw(&mut self, htex: &h::RawTexture<R>, desc: texture::ResourceDesc)
                                        -> Result<h::RawShaderResourceView<R>, f::ResourceViewError> {
         use winapi::UINT;
-        use gfx_core::tex::{AaMode, Kind};
+        use core::texture::{AaMode, Kind};
         use data::map_format;
         //TODO: support desc.layer parsing
 
@@ -668,11 +667,11 @@ impl core::Factory<R> for Factory {
         Err(f::ResourceViewError::Unsupported) //TODO
     }
 
-    fn view_texture_as_render_target_raw(&mut self, htex: &h::RawTexture<R>, desc: core::tex::RenderDesc)
+    fn view_texture_as_render_target_raw(&mut self, htex: &h::RawTexture<R>, desc: texture::RenderDesc)
                                          -> Result<h::RawRenderTargetView<R>, f::TargetViewError>
     {
         use winapi::UINT;
-        use gfx_core::tex::{AaMode, Kind};
+        use core::texture::{AaMode, Kind};
         use data::map_format;
 
         let level = desc.level as UINT;
@@ -708,7 +707,7 @@ impl core::Factory<R> for Factory {
             (Kind::CubeArray(_, nlayers), Some(lid)) if lid < nlayers =>
                 (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, 6 * lid as UINT, 6 * (1+lid) as UINT]),
             (_, None) => return Err(f::TargetViewError::Level(desc.level)),
-            (_, Some(lid)) => return Err(f::TargetViewError::Layer(f::LayerError::OutOfBounds(lid, 0))), //TODO
+            (_, Some(lid)) => return Err(f::TargetViewError::Layer(texture::LayerError::OutOfBounds(lid, 0))), //TODO
         };
         let format = core::format::Format(htex.get_info().format, desc.channel);
         let native_desc = winapi::D3D11_RENDER_TARGET_VIEW_DESC {
@@ -732,11 +731,11 @@ impl core::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_rtv(native::Rtv(raw_view), htex, size))
     }
 
-    fn view_texture_as_depth_stencil_raw(&mut self, htex: &h::RawTexture<R>, desc: core::tex::DepthStencilDesc)
+    fn view_texture_as_depth_stencil_raw(&mut self, htex: &h::RawTexture<R>, desc: texture::DepthStencilDesc)
                                          -> Result<h::RawDepthStencilView<R>, f::TargetViewError>
     {
         use winapi::UINT;
-        use gfx_core::tex::{AaMode, Kind};
+        use core::texture::{AaMode, Kind};
         use data::{map_format, map_dsv_flags};
 
         let level = desc.level as UINT;
@@ -769,7 +768,7 @@ impl core::Factory<R> for Factory {
             (Kind::CubeArray(_, nlayers), Some(lid)) if lid < nlayers =>
                 (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, 6 * lid as UINT, 6 * (1+lid) as UINT]),
             (_, None) => return Err(f::TargetViewError::Level(desc.level)),
-            (_, Some(lid)) => return Err(f::TargetViewError::Layer(f::LayerError::OutOfBounds(lid, 0))), //TODO
+            (_, Some(lid)) => return Err(f::TargetViewError::Layer(texture::LayerError::OutOfBounds(lid, 0))), //TODO
         };
 
         let channel = core::format::ChannelType::Uint; //doesn't matter
@@ -797,8 +796,8 @@ impl core::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_dsv(native::Dsv(raw_view), htex, dim))
     }
 
-    fn create_sampler(&mut self, info: core::tex::SamplerInfo) -> h::Sampler<R> {
-        use gfx_core::tex::FilterMethod;
+    fn create_sampler(&mut self, info: texture::SamplerInfo) -> h::Sampler<R> {
+        use core::texture::FilterMethod;
         use data::{FilterOp, map_function, map_filter, map_wrap};
 
         let op = if info.comparison.is_some() {FilterOp::Comparison} else {FilterOp::Product};
@@ -830,26 +829,26 @@ impl core::Factory<R> for Factory {
         }
     }
 
-    fn map_buffer_raw(&mut self, buffer: &h::RawBuffer<R>, access: mapping::Access)
+    fn map_buffer_raw(&mut self, buffer: &h::RawBuffer<R>, access: memory::Access)
                       -> Result<h::RawMapping<R>, mapping::Error> {
         unimplemented!()
     }
 
     fn map_buffer_readable<T: Copy>(&mut self, buf: &h::Buffer<R, T>)
                                     -> Result<mapping::Readable<R, T>, mapping::Error> {
-        let map = try!(self.map_buffer_raw(buf.raw(), mapping::READABLE));
+        let map = try!(self.map_buffer_raw(buf.raw(), memory::READ));
         Ok(self.map_readable(map, buf.len()))
     }
 
     fn map_buffer_writable<T: Copy>(&mut self, buf: &h::Buffer<R, T>)
                                     -> Result<mapping::Writable<R, T>, mapping::Error> {
-        let map = try!(self.map_buffer_raw(buf.raw(), mapping::WRITABLE));
+        let map = try!(self.map_buffer_raw(buf.raw(), memory::WRITE));
         Ok(self.map_writable(map, buf.len()))
     }
 
     fn map_buffer_rw<T: Copy>(&mut self, buf: &h::Buffer<R, T>)
                               -> Result<mapping::RWable<R, T>, mapping::Error> {
-        let map = try!(self.map_buffer_raw(buf.raw(), mapping::RW));
+        let map = try!(self.map_buffer_raw(buf.raw(), memory::RW));
         Ok(self.map_read_write(map, buf.len()))
     }
 }

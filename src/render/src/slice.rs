@@ -16,10 +16,11 @@
 //!
 //! See `Slice`-structure documentation for more information on this module.
 
-use gfx_core::handle;
-use gfx_core::{Primitive, Resources, VertexCount};
-use gfx_core::draw::InstanceOption;
-use gfx_core::factory::{Bind, BufferRole, Factory};
+use core::{handle, buffer};
+use core::{Primitive, Resources, VertexCount};
+use core::command::InstanceParams;
+use core::factory::Factory;
+use core::memory::Bind;
 use format::Format;
 use pso;
 
@@ -67,7 +68,7 @@ pub struct Slice<R: Resources> {
     /// base-vertex.
     pub base_vertex: VertexCount,
     /// Instancing configuration.
-    pub instances: InstanceOption,
+    pub instances: Option<InstanceParams>,
     /// Represents the type of index-buffer used. 
     pub buffer: IndexBuffer<R>,
 }
@@ -87,7 +88,7 @@ impl<R: Resources> Slice<R> {
     
     /// Calculates the number of primitives of the specified type in this `Slice`.
     pub fn get_prim_count(&self, prim: Primitive) -> u32 {
-        use gfx_core::Primitive::*;
+        use core::Primitive::*;
         let nv = (self.end - self.start) as u32;
         match prim {
             PointList => nv,
@@ -161,7 +162,7 @@ macro_rules! impl_index_buffer {
         
         impl<'s, R: Resources> IntoIndexBuffer<R> for &'s [$prim_ty] {
             fn into_index_buffer<F: Factory<R> + ?Sized>(self, factory: &mut F) -> IndexBuffer<R> {
-                factory.create_buffer_immutable(self, BufferRole::Index, Bind::empty())
+                factory.create_buffer_immutable(self, buffer::Role::Index, Bind::empty())
                        .unwrap()
                        .into_index_buffer(factory)
             }

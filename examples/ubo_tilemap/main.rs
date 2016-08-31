@@ -47,7 +47,7 @@ pub fn load_texture<R, F>(factory: &mut F, data: &[u8])
         where R: gfx::Resources, F: gfx::Factory<R>
 {
     use gfx::format::Rgba8;
-    use gfx::tex as t;
+    use gfx::texture as t;
     let img = image::load(Cursor::new(data), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
     let kind = t::Kind::D2(width as t::Size, height as t::Size, t::AaMode::Single);

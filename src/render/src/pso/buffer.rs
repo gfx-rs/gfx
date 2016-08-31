@@ -15,14 +15,14 @@
 //! Buffer components for a PSO.
 
 use std::marker::PhantomData;
-use gfx_core::{ConstantBufferSlot, Resources, MAX_VERTEX_ATTRIBUTES};
-use gfx_core::{handle, pso, shade};
-use gfx_core::factory::Typed;
-use gfx_core::format::Format;
+use core::{ConstantBufferSlot, Resources, MAX_VERTEX_ATTRIBUTES};
+use core::{handle, pso, shade};
+use core::memory::Typed;
+use core::format::Format;
 use shade::{ToUniform, Usage};
 use super::{DataLink, DataBind, ElementError, RawDataSet, AccessInfo};
 
-pub use gfx_core::pso::{BufferIndex, Element, ElemOffset, ElemStride, InstanceRate};
+pub use core::pso::{BufferIndex, Element, ElemOffset, ElemStride, InstanceRate};
 
 /// A trait to be implemented by any struct having the layout described
 /// in the graphics API, like a vertex buffer.

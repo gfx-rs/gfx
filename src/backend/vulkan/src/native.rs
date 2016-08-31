@@ -14,15 +14,15 @@
 
 use std::{cell, hash};
 use vk;
-use gfx_core;
+use core;
 use Resources as R;
 
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Program {
-    pub vertex: gfx_core::VertexShader<R>,
-    pub geometry: Option<gfx_core::GeometryShader<R>>,
-    pub pixel: gfx_core::PixelShader<R>,
+    pub vertex: core::VertexShader<R>,
+    pub geometry: Option<core::GeometryShader<R>>,
+    pub pixel: core::PixelShader<R>,
 }
 unsafe impl Send for Program {}
 unsafe impl Sync for Program {}
@@ -70,5 +70,5 @@ pub struct Pipeline {
     pub desc_layout: vk::DescriptorSetLayout,
     pub desc_pool: vk::DescriptorPool,
     pub render_pass: vk::RenderPass,
-    pub program: gfx_core::handle::Program<R>,
+    pub program: core::handle::Program<R>,
 }
