@@ -3,8 +3,6 @@ language: rust
 rust:
   - stable
   - nightly
-before_script:
-  - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
 notifications:
   webhooks:
     urls:
@@ -34,19 +32,13 @@ addons:
       - libsdl2-dev
 script:
   - export RUST_BACKTRACE=1
-  - travis-cargo build -- --features vulkan
-  - travis-cargo test -- -p gfx_core
-  - travis-cargo test -- -p gfx
-  - travis-cargo test -- -p gfx_device_gl
-  - travis-cargo test -- -p gfx_window_glutin
-  - travis-cargo test -- -p gfx_window_glfw
-  - travis-cargo test -- -p gfx_window_sdl
-  - travis-cargo test -- -p gfx_device_vulkan --features vulkan
-  - travis-cargo test -- -p gfx_window_vulkan --features vulkan
-  - travis-cargo test -- --features vulkan
-after_success:
-  - travis-cargo doc -- -j 1
-  - travis-cargo --only nightly doc-upload
-env:
-  global:
-    - secure: eYm18Lr7+FYFgY9Cj/LFyL0WaC/zesBE8pywho9c+ByUEMwaZ9QCbsaX3H+IBNQCTSCImiKj+zuj+uIPyOTIiC5OPY0cvziWcBvyAlrwnwT7oBm8X9CPDCuspRVGO52CoksI1oYNkEc1xaL9PIUw6GMXhVCAIkQI7tMbq+kWxDQ=
+  - cargo build --features vulkan
+  - cargo test -p gfx_core
+  - cargo test -p gfx
+  - cargo test -p gfx_device_gl
+  - cargo test -p gfx_window_glutin
+  - cargo test -p gfx_window_glfw
+  - cargo test -p gfx_window_sdl
+  - cargo test -p gfx_device_vulkan --features vulkan
+  - cargo test -p gfx_window_vulkan --features vulkan
+  - cargo test --features vulkan
