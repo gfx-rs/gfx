@@ -17,6 +17,9 @@
   <img src="info/logo.png">
 </p>
 <p align="center">
+  <a href="https://docs.rs/gfx">
+      <img src="https://docs.rs/gfx/badge.svg" alt="Documentation on docs.rs">
+  </a>
   <a href="https://travis-ci.org/gfx-rs/gfx">
       <img src="https://img.shields.io/travis/gfx-rs/gfx/master.svg?style=flat-square" alt="Travis Build Status">
   </a>
@@ -30,7 +33,7 @@
     <img src="https://img.shields.io/badge/GITTER-join%20chat-green.svg?style=flat-square" alt="Gitter Chat">
   </a>
   <br>
-  <strong><a href="http://gfx-rs.github.io/gfx/gfx/index.html">Documentation</a> | <a href="http://gfx-rs.github.io/">Blog</a> </strong>
+  <strong><a href="http://docs.rs/gfx">Documentation</a> | <a href="http://gfx-rs.github.io/">Blog</a> </strong>
 </p>
 
 ## gfx-rs
