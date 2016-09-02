@@ -257,7 +257,7 @@ impl<R: Resources> PixelTargetSet<R> {
             colors: [None; MAX_COLOR_TARGETS],
             depth: None,
             stencil: None,
-            size: (0, 0, 0, texture::AaMode::Single),
+            size: (1, 1, 1, texture::AaMode::Single),
         }
     }
     /// Add a color view to the specified slot
