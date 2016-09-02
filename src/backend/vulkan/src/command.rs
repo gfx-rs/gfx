@@ -146,11 +146,12 @@ impl command::Buffer<Resources> for Buffer {
 
     fn bind_pixel_targets(&mut self, pts: pso::PixelTargetSet<Resources>) {
         let (dev, vk) = self.share.get_device();
+        let view = pts.get_view();
         let vp = vk::Viewport {
             x: 0.0,
             y: 0.0,
-            width: pts.size.0 as f32,
-            height: pts.size.1 as f32,
+            width: view.0 as f32,
+            height: view.1 as f32,
             minDepth: 0.0,
             maxDepth: 1.0,
         };
@@ -182,9 +183,9 @@ impl command::Buffer<Resources> for Buffer {
                     renderPass: self.last_render_pass,
                     attachmentCount: ats.len() as u32,
                     pAttachments: ats.as_ptr(),
-                    width: pts.size.0 as u32,
-                    height: pts.size.1 as u32,
-                    layers: pts.size.2 as u32,
+                    width: view.0 as u32,
+                    height: view.1 as u32,
+                    layers: view.2 as u32,
                 };
                 let mut out = 0;
                 assert_eq!(vk::SUCCESS, unsafe {
@@ -204,8 +205,8 @@ impl command::Buffer<Resources> for Buffer {
                     y: 0,
                 },
                 extent: vk::Extent2D {
-                    width: pts.size.0 as u32,
-                    height: pts.size.1 as u32,
+                    width: view.0 as u32,
+                    height: view.1 as u32,
                 },
             },
             clearValueCount: 0,

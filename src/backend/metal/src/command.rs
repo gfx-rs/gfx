@@ -464,11 +464,12 @@ impl command::CommandBuffer<Resources> for CommandBuffer {
     }
 
     fn bind_pixel_targets(&mut self, targets: pso::PixelTargetSet<Resources>) {
+        let view = targets.get_view();
         self.buf.push(Command::SetViewport(MTLViewport {
             originX: 0f64,
             originY: 0f64,
-            width: targets.size.0 as f64,
-            height: targets.size.1 as f64,
+            width: view.0 as f64,
+            height: view.1 as f64,
             znear: 0f64,
             zfar: 1f64
         }));

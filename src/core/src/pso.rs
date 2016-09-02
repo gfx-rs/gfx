@@ -247,7 +247,7 @@ pub struct PixelTargetSet<R: Resources> {
     /// Stencil target view
     pub stencil: Option<R::DepthStencilView>,
     /// Rendering dimensions
-    pub size: texture::Dimensions,
+    pub dimensions: Option<texture::Dimensions>,
 }
 
 impl<R: Resources> PixelTargetSet<R> {
@@ -257,28 +257,45 @@ impl<R: Resources> PixelTargetSet<R> {
             colors: [None; MAX_COLOR_TARGETS],
             depth: None,
             stencil: None,
-            size: (0, 0, 0, texture::AaMode::Single),
+            dimensions: None,
         }
     }
+
     /// Add a color view to the specified slot
-    pub fn add_color(&mut self, slot: ColorSlot, view: &R::RenderTargetView,
+    pub fn add_color(&mut self,
+                     slot: ColorSlot,
+                     view: &R::RenderTargetView,
                      dim: texture::Dimensions) {
-        use std::cmp::max;
         self.colors[slot as usize] = Some(view.clone());
-        self.size = max(self.size, dim);
+        self.set_dimensions(dim);
     }
+
     /// Add a depth or stencil view to the specified slot
-    pub fn add_depth_stencil(&mut self, view: &R::DepthStencilView,
-                             has_depth: bool, has_stencil: bool,
+    pub fn add_depth_stencil(&mut self,
+                             view: &R::DepthStencilView,
+                             has_depth: bool,
+                             has_stencil: bool,
                              dim: texture::Dimensions) {
-        use std::cmp::max;
         if has_depth {
             self.depth = Some(view.clone());
         }
         if has_stencil {
             self.stencil = Some(view.clone());
         }
-        self.size = max(self.size, dim);
+        self.set_dimensions(dim);
+    }
+
+    fn set_dimensions(&mut self, dim: texture::Dimensions) {
+        debug_assert!(self.dimensions.map(|d| d == dim).unwrap_or(true));
+        self.dimensions = Some(dim);
+    }
+
+    /// Get the rendering view (returns values > 0)
+    pub fn get_view(&self) -> (u16, u16, u16) {
+        use std::cmp::max;
+        self.dimensions
+            .map(|(w, h, d, _)| (max(w, 1), max(h, 1), max(d, 1)))
+            .unwrap_or((1, 1, 1))
     }
 }
 

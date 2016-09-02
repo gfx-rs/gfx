@@ -264,11 +264,17 @@ impl<P: Parser> command::Buffer<Resources> for CommandBuffer<P> {
                 error!("Depth and stencil views have to be the same");
             }
         }
+
+        let view = pts.get_view();
         let viewport = D3D11_VIEWPORT {
-            TopLeftX: 0.0, TopLeftY: 0.0,
-            Width: pts.size.0 as f32, Height: pts.size.1 as f32,
-            MinDepth: 0.0, MaxDepth: 1.0,
+            TopLeftX: 0.0,
+            TopLeftY: 0.0,
+            Width: view.0 as f32,
+            Height: view.1 as f32,
+            MinDepth: 0.0,
+            MaxDepth: 1.0,
         };
+
         let mut colors = [native::Rtv(ptr::null_mut()); MAX_COLOR_TARGETS];
         for i in 0 .. MAX_COLOR_TARGETS {
             if let Some(c) = pts.colors[i] {

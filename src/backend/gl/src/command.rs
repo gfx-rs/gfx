@@ -264,15 +264,17 @@ impl command::Buffer<Resources> for CommandBuffer {
             self.is_main_target(pts.stencil);
         if is_main {
             self.buf.push(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, 0));
-        }else {
+        } else {
             let num = pts.colors.iter().position(|c| c.is_none())
                          .unwrap_or(pts.colors.len()) as c::ColorSlot;
             self.buf.push(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, self.fbo));
             self.buf.push(Command::BindPixelTargets(pts));
             self.buf.push(Command::SetDrawColorBuffers(num));
         }
+        let view = pts.get_view();
         self.buf.push(Command::SetViewport(Rect {
-            x: 0, y: 0, w: pts.size.0, h: pts.size.1}));
+            x: 0, y: 0, w: view.0, h: view.1
+        }));
     }
 
     fn bind_index(&mut self, buf: Buffer, itype: c::IndexType) {
