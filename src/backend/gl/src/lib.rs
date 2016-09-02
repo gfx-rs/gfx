@@ -424,6 +424,11 @@ impl Device {
         }
     }
 
+    fn unbind_target(&mut self, point: gl::types::GLenum, attachment: gl::types::GLenum) {
+        let gl = &self.share.context;
+        unsafe { gl.FramebufferTexture(point, attachment, 0, 0) };
+    }
+
     fn reset_state(&mut self) {
         let data = DataBuffer::new();
         for com in command::RESET.iter() {
@@ -526,9 +531,11 @@ impl Device {
             Command::BindPixelTargets(pts) => {
                 let point = gl::DRAW_FRAMEBUFFER;
                 for i in 0 .. c::MAX_COLOR_TARGETS {
+                    let att = gl::COLOR_ATTACHMENT0 + i as gl::types::GLuint;
                     if let Some(ref target) = pts.colors[i] {
-                        let att = gl::COLOR_ATTACHMENT0 + i as gl::types::GLuint;
                         self.bind_target(point, att, target);
+                    } else {
+                        self.unbind_target(point, att);
                     }
                 }
                 if let Some(ref depth) = pts.depth {
