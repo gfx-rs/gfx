@@ -263,23 +263,26 @@ impl<R: Resources> PixelTargetSet<R> {
     /// Add a color view to the specified slot
     pub fn add_color(&mut self, slot: ColorSlot, view: &R::RenderTargetView,
                      dim: texture::Dimensions) {
-        use std::cmp::max;
         self.colors[slot as usize] = Some(view.clone());
-        self.size = max(self.size, dim);
+        self.size = dim_individual_max(self.size, dim);
     }
     /// Add a depth or stencil view to the specified slot
     pub fn add_depth_stencil(&mut self, view: &R::DepthStencilView,
                              has_depth: bool, has_stencil: bool,
                              dim: texture::Dimensions) {
-        use std::cmp::max;
         if has_depth {
             self.depth = Some(view.clone());
         }
         if has_stencil {
             self.stencil = Some(view.clone());
         }
-        self.size = max(self.size, dim);
+        self.size = dim_individual_max(self.size, dim);
     }
+}
+
+fn dim_individual_max(a: texture::Dimensions, b: texture::Dimensions) -> texture::Dimensions {
+    use std::cmp::max;
+    (max(a.0, b.0), max(a.1, b.1), max(a.2, b.2), max(a.3, b.3))
 }
 
 /// Informations about what is accessed by the pipeline
