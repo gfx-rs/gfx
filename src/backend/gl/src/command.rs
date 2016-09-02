@@ -258,21 +258,25 @@ impl command::Buffer<Resources> for CommandBuffer {
     }
 
     fn bind_pixel_targets(&mut self, pts: c::pso::PixelTargetSet<Resources>) {
+        use std::cmp::max;
+
         let is_main = pts.colors.iter().skip(1).find(|c| c.is_some()).is_none() &&
             self.is_main_target(pts.colors[0]) &&
             self.is_main_target(pts.depth) &&
             self.is_main_target(pts.stencil);
         if is_main {
             self.buf.push(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, 0));
-        }else {
+        } else {
             let num = pts.colors.iter().position(|c| c.is_none())
                          .unwrap_or(pts.colors.len()) as c::ColorSlot;
             self.buf.push(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, self.fbo));
             self.buf.push(Command::BindPixelTargets(pts));
             self.buf.push(Command::SetDrawColorBuffers(num));
         }
+        let dim = pts.unwrap_dimensions();
         self.buf.push(Command::SetViewport(Rect {
-            x: 0, y: 0, w: pts.size.0, h: pts.size.1}));
+            x: 0, y: 0, w: max(dim.0, 1), h: max(dim.1, 1)
+        }));
     }
 
     fn bind_index(&mut self, buf: Buffer, itype: c::IndexType) {

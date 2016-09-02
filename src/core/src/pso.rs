@@ -247,7 +247,7 @@ pub struct PixelTargetSet<R: Resources> {
     /// Stencil target view
     pub stencil: Option<R::DepthStencilView>,
     /// Rendering dimensions
-    pub size: texture::Dimensions,
+    pub dimensions: Option<texture::Dimensions>,
 }
 
 impl<R: Resources> PixelTargetSet<R> {
@@ -257,28 +257,42 @@ impl<R: Resources> PixelTargetSet<R> {
             colors: [None; MAX_COLOR_TARGETS],
             depth: None,
             stencil: None,
-            size: (0, 0, 0, texture::AaMode::Single),
+            dimensions: None,
         }
     }
+
     /// Add a color view to the specified slot
-    pub fn add_color(&mut self, slot: ColorSlot, view: &R::RenderTargetView,
+    pub fn add_color(&mut self,
+                     slot: ColorSlot,
+                     view: &R::RenderTargetView,
                      dim: texture::Dimensions) {
-        use std::cmp::max;
         self.colors[slot as usize] = Some(view.clone());
-        self.size = max(self.size, dim);
+        self.set_dimensions(dim);
     }
+
     /// Add a depth or stencil view to the specified slot
-    pub fn add_depth_stencil(&mut self, view: &R::DepthStencilView,
-                             has_depth: bool, has_stencil: bool,
+    pub fn add_depth_stencil(&mut self,
+                             view: &R::DepthStencilView,
+                             has_depth: bool,
+                             has_stencil: bool,
                              dim: texture::Dimensions) {
-        use std::cmp::max;
         if has_depth {
             self.depth = Some(view.clone());
         }
         if has_stencil {
             self.stencil = Some(view.clone());
         }
-        self.size = max(self.size, dim);
+        self.set_dimensions(dim);
+    }
+
+    fn set_dimensions(&mut self, dim: texture::Dimensions) {
+        debug_assert!(self.dimensions.map(|d| d == dim).unwrap_or(true));
+        self.dimensions = Some(dim);
+    }
+
+    /// Get the rendering dimensions or empty ones
+    pub fn unwrap_dimensions(&self) -> texture::Dimensions {
+        self.dimensions.unwrap_or((0, 0, 0, texture::AaMode::Single))
     }
 }
 
