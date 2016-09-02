@@ -290,9 +290,12 @@ impl<R: Resources> PixelTargetSet<R> {
         self.dimensions = Some(dim);
     }
 
-    /// Get the rendering dimensions or empty ones
-    pub fn unwrap_dimensions(&self) -> texture::Dimensions {
-        self.dimensions.unwrap_or((0, 0, 0, texture::AaMode::Single))
+    /// Get the rendering view (returns values > 0)
+    pub fn get_view(&self) -> (u16, u16, u16) {
+        use std::cmp::max;
+        self.dimensions
+            .map(|(w, h, d, _)| (max(w, 1), max(h, 1), max(d, 1)))
+            .unwrap_or((1, 1, 1))
     }
 }
 

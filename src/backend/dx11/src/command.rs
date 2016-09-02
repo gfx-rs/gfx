@@ -259,20 +259,18 @@ impl<P: Parser> command::Buffer<Resources> for CommandBuffer<P> {
     }
 
     fn bind_pixel_targets(&mut self, pts: pso::PixelTargetSet<Resources>) {
-        use std::cmp::max;
-
         if let (Some(ref d), Some(ref s)) = (pts.depth, pts.stencil) {
             if d != s {
                 error!("Depth and stencil views have to be the same");
             }
         }
 
-        let dim = pts.unwrap_dimensions();
+        let view = pts.get_view();
         let viewport = D3D11_VIEWPORT {
             TopLeftX: 0.0,
             TopLeftY: 0.0,
-            Width: max(dim.0, 1) as f32,
-            Height: max(dim.1, 1) as f32,
+            Width: view.0 as f32,
+            Height: view.1 as f32,
             MinDepth: 0.0,
             MaxDepth: 1.0,
         };
