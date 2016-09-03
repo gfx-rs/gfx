@@ -16,13 +16,21 @@ use std::{cell, hash};
 use vk;
 use core;
 use Resources as R;
+use mirror::SpirvReflection;
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Shader {
+    pub shader: vk::ShaderModule,
+    pub reflection: SpirvReflection,
+}
+unsafe impl Send for Shader {}
+unsafe impl Sync for Shader {}
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Program {
-    pub vertex: core::VertexShader<R>,
-    pub geometry: Option<core::GeometryShader<R>>,
-    pub pixel: core::PixelShader<R>,
+    pub vertex: vk::ShaderModule,
+    pub geometry: Option<vk::ShaderModule>,
+    pub pixel: vk::ShaderModule,
 }
 unsafe impl Send for Program {}
 unsafe impl Sync for Program {}

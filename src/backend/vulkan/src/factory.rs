@@ -246,18 +246,18 @@ impl Factory {
                 pNext: ptr::null(),
                 flags: 0,
                 stage: vk::SHADER_STAGE_VERTEX_BIT,
-                module: *prog.vertex.reference(&mut self.frame_handles),
+                module: prog.vertex,
                 pName: entry_name.as_ptr() as *const i8,
                 pSpecializationInfo: ptr::null(),
             });
         }
-        if let Some(ref geom) = prog.geometry {
+        if let Some(geom) = prog.geometry {
             stages.push(vk::PipelineShaderStageCreateInfo {
                 sType: vk::STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                 pNext: ptr::null(),
                 flags: 0,
                 stage: vk::SHADER_STAGE_GEOMETRY_BIT,
-                module: *geom.reference(&mut self.frame_handles),
+                module: geom,
                 pName: entry_name.as_ptr() as *const i8,
                 pSpecializationInfo: ptr::null(),
             });
@@ -268,7 +268,7 @@ impl Factory {
                 pNext: ptr::null(),
                 flags: 0,
                 stage: vk::SHADER_STAGE_FRAGMENT_BIT,
-                module: *prog.pixel.reference(&mut self.frame_handles),
+                module: prog.pixel,
                 pName: entry_name.as_ptr() as *const i8,
                 pSpecializationInfo: ptr::null(),
             });
@@ -321,6 +321,8 @@ impl core::Factory<R> for Factory {
     fn create_shader(&mut self, _stage: core::shade::Stage, code: &[u8])
                      -> Result<h::Shader<R>, core::shade::CreateShaderError> {
         use core::handle::Producer;
+        use mirror::reflect_spirv_module;
+        use native::Shader;
         let info = vk::ShaderModuleCreateInfo {
             sType: vk::STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
             pNext: ptr::null(),
@@ -333,6 +335,11 @@ impl core::Factory<R> for Factory {
         assert_eq!(vk::SUCCESS, unsafe {
             vk.CreateShaderModule(dev, &info, ptr::null(), &mut shader)
         });
+        let reflection = reflect_spirv_module(code);
+        let shader = Shader {
+            shader: shader,
+            reflection: reflection,
+        };
         Ok(self.share.handles.borrow_mut().make_shader(shader))
     }
 
@@ -340,20 +347,9 @@ impl core::Factory<R> for Factory {
                       -> Result<h::Program<R>, core::shade::CreateProgramError> {
         use core::handle::Producer;
         use core::shade as s;
+        use mirror::populate_info;
 
-        let prog = match shader_set.clone() {
-            core::ShaderSet::Simple(vs, ps) => native::Program {
-                vertex: vs,
-                geometry: None,
-                pixel: ps,
-            },
-            core::ShaderSet::Geometry(vs, gs, ps) => native::Program {
-                vertex: vs,
-                geometry: Some(gs),
-                pixel: ps,
-            },
-        };
-        let info = s::ProgramInfo {
+        let mut info = s::ProgramInfo {
             vertex_attributes: Vec::new(),
             globals: Vec::new(),
             constant_buffers: Vec::new(),
@@ -364,6 +360,32 @@ impl core::Factory<R> for Factory {
             output_depth: false,
             knows_outputs: false,
         };
+
+        let fh = &mut self.frame_handles;
+        let prog = match shader_set.clone() {
+            core::ShaderSet::Simple(vs, ps) => {
+                let (vs, ps) = (vs.reference(fh), ps.reference(fh));
+                populate_info(&mut info, s::Stage::Vertex, &vs.reflection);
+                populate_info(&mut info, s::Stage::Pixel, &ps.reflection);
+                native::Program {
+                    vertex: vs.shader,
+                    geometry: None,
+                    pixel: ps.shader,
+                }
+            }
+            core::ShaderSet::Geometry(vs, gs, ps) => {
+                let (vs, gs, ps) = (vs.reference(fh), gs.reference(fh), ps.reference(fh));
+                populate_info(&mut info, s::Stage::Vertex, &vs.reflection);
+                populate_info(&mut info, s::Stage::Geometry, &gs.reflection);
+                populate_info(&mut info, s::Stage::Pixel, &ps.reflection);
+                native::Program {
+                    vertex: vs.shader,
+                    geometry: Some(gs.shader),
+                    pixel: ps.shader,
+                }
+            },
+        };
+
         Ok(self.share.handles.borrow_mut().make_program(prog, info))
     }
 

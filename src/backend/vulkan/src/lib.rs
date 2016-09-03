@@ -17,6 +17,7 @@ extern crate log;
 extern crate shared_library;
 extern crate gfx_core as core;
 extern crate vk_sys as vk;
+extern crate spirv_utils;
 
 use std::{fmt, iter, mem, ptr};
 use std::cell::RefCell;
@@ -31,7 +32,7 @@ mod command;
 pub mod data;
 mod factory;
 mod native;
-
+mod mirror;
 
 struct PhysicalDeviceInfo {
     device: vk::PhysicalDevice,
@@ -322,7 +323,7 @@ pub enum Resources {}
 
 impl core::Resources for Resources {
     type Buffer               = native::Buffer;
-    type Shader               = vk::ShaderModule;
+    type Shader               = native::Shader;
     type Program              = native::Program;
     type PipelineStateObject  = native::Pipeline;
     type Texture              = native::Texture;
