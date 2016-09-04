@@ -23,12 +23,14 @@ pub struct EntryPoint {
 pub enum Ty {
     Basic(BaseType, ContainerType),
     Image(BaseType, TextureType),
+    Struct(Vec<Type>),
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Type {
     id: desc::Id,
     ty: Ty,
+    decoration: Vec<instruction::Decoration>,
 }
 
 fn map_execution_model_to_stage(model: desc::ExecutionModel) -> Option<shade::Stage> {
@@ -53,6 +55,17 @@ fn map_name_by_id<'a>(module: &'a spirv_utils::RawModule, id: desc::Id) -> Optio
     }).next()
 }
 
+fn map_member_name_by_id<'a>(module: &'a spirv_utils::RawModule, id: desc::Id, member_id: u32) -> Option<&'a str> {
+    module.uses(id).filter_map(|instr| {
+        match *instr {
+            instruction::Instruction::MemberName { ref name, member, .. } if member == member_id => {
+                Some(&name[..])
+            },
+            _ => None,
+        }
+    }).next()
+}
+
 fn map_decorations_by_id(module: &spirv_utils::RawModule, id: desc::Id) -> Vec<instruction::Decoration> {
     module.uses(id).filter_map(|instr| {
         match *instr {
@@ -65,14 +78,91 @@ fn map_decorations_by_id(module: &spirv_utils::RawModule, id: desc::Id) -> Vec<i
     }).collect::<Vec<_>>()
 }
 
+fn map_member_decorations_by_id(module: &spirv_utils::RawModule, id: desc::Id, member_id: u32) -> Vec<instruction::Decoration> {
+    module.uses(id).filter_map(|instr| {
+        match *instr {
+            instruction::Instruction::MemberDecorate { ref decoration, member, .. } if member == member_id => {
+                Some(decoration.clone())
+            },
+            // TODO: GroupDecorations
+            _ => None,
+        }
+    }).collect::<Vec<_>>()
+}
+
 fn map_scalar_to_basetype(instr: &instruction::Instruction) -> Option<BaseType> {
     use spirv_utils::instruction::Instruction;
     match *instr {
-        Instruction::TypeBool { result_type } => Some(BaseType::Bool),
-        Instruction::TypeInt { result_type, width: 32, signed: false } => Some(BaseType::U32),
-        Instruction::TypeInt { result_type, width: 32, signed: true } => Some(BaseType::I32),
-        Instruction::TypeFloat { result_type, width: 32 } => Some(BaseType::F32),
-        Instruction::TypeFloat { result_type, width: 64 } => Some(BaseType::F64),
+        Instruction::TypeBool { .. } => Some(BaseType::Bool),
+        Instruction::TypeInt { width: 32, signed: false, .. } => Some(BaseType::U32),
+        Instruction::TypeInt { width: 32, signed: true, .. } => Some(BaseType::I32),
+        Instruction::TypeFloat { width: 32, ..} => Some(BaseType::F32),
+        Instruction::TypeFloat { width: 64, ..} => Some(BaseType::F64),
+
+        _ => None,
+    }
+}
+
+fn map_instruction_to_type(module: &spirv_utils::RawModule, instr: &instruction::Instruction) -> Option<Type> {
+    use spirv_utils::instruction::Instruction;
+    match *instr {
+        Instruction::TypeBool { result_type } => {
+            Some(Type {
+                id: result_type.into(),
+                ty: Ty::Basic(BaseType::Bool, ContainerType::Single),
+                decoration: map_decorations_by_id(&module, result_type.into()),
+            })
+        },
+        Instruction::TypeInt { result_type, width: 32, signed: false } => {
+            Some(Type {
+                id: result_type.into(),
+                ty: Ty::Basic(BaseType::U32, ContainerType::Single),
+                decoration: map_decorations_by_id(&module, result_type.into()),
+            })
+        },
+        Instruction::TypeInt { result_type, width: 32, signed: true } => {
+            Some(Type {
+                id: result_type.into(),
+                ty: Ty::Basic(BaseType::I32, ContainerType::Single),
+                decoration: map_decorations_by_id(&module, result_type.into()),
+            })
+        },
+        Instruction::TypeFloat { result_type, width: 32 } => {
+            Some(Type {
+                id: result_type.into(),
+                ty: Ty::Basic(BaseType::F32, ContainerType::Single),
+                decoration: map_decorations_by_id(&module, result_type.into()),
+            })
+        },
+        Instruction::TypeFloat { result_type, width: 64 } => {
+            Some(Type {
+                id: result_type.into(),
+                ty: Ty::Basic(BaseType::F64, ContainerType::Single),
+                decoration: map_decorations_by_id(&module, result_type.into()),
+            })
+        },
+        Instruction::TypeVector { result_type, type_id, len } => {
+            let comp_ty = module.def(type_id).unwrap();
+            Some(Type {
+                id: result_type.into(),
+                ty: Ty::Basic(map_scalar_to_basetype(comp_ty).unwrap(), ContainerType::Vector(len as u8)),
+                decoration: map_decorations_by_id(&module, result_type.into()),
+            })
+        },
+        Instruction::TypeMatrix { result_type, type_id, cols } => {
+            // TODO:
+            None
+        },
+        Instruction::TypeStruct { result_type, ref fields } => {
+            Some(Type {
+                id: result_type.into(),
+                ty: Ty::Struct(
+                    fields.iter().filter_map(|field| // TODO: should be `map` only, just for testing due to unsupported types
+                        map_instruction_to_type(module, module.def(*field).unwrap())
+                    ).collect::<Vec<_>>()),
+                decoration: map_decorations_by_id(&module, result_type.into()),
+            })
+        },
 
         _ => None,
     }
@@ -105,7 +195,6 @@ pub fn reflect_spirv_module(code: &[u8]) -> SpirvReflection {
                 }
             },
             Instruction::Variable { result_type, result_id, storage_class, .. } => {
-                let name = map_name_by_id(&module, result_id.into()).unwrap(); // every variable MUST have an name annotation
                 let decoration = map_decorations_by_id(&module, result_id.into());
                 let ty = {
                     // remove indirection layer as the type of every variable is a OpTypePointer
@@ -113,6 +202,18 @@ pub fn reflect_spirv_module(code: &[u8]) -> SpirvReflection {
                     match *ptr_ty {
                         Instruction::TypePointer { ref pointee, .. } => *pointee,
                         _ => unreachable!(), // SPIR-V module would be invalid
+                    }
+                };
+
+                // Every variable MUST have an name annotation
+                // `glslang` seems to emit empty strings for uniforms with struct type,
+                // therefore we need to retrieve the name from the struct decl
+                let name = {
+                    let name = map_name_by_id(&module, result_id.into()).unwrap();
+                    if name.is_empty() {
+                        map_name_by_id(&module, ty.into()).unwrap()
+                    } else {
+                        name
                     }
                 };
 
@@ -125,50 +226,18 @@ pub fn reflect_spirv_module(code: &[u8]) -> SpirvReflection {
                 });
             },
 
-            // Reflect types
-            Instruction::TypeBool { result_type } => {
-                types.push(Type {
-                    id: result_type.into(),
-                    ty: Ty::Basic(BaseType::Bool, ContainerType::Single),
-                })
+            _ => {
+                // Reflect types
+                if let Some(ty) = map_instruction_to_type(&module, instr) {
+                    types.push(ty);
+                }
             },
-            Instruction::TypeInt { result_type, width: 32, signed: false } => {
-                types.push(Type {
-                    id: result_type.into(),
-                    ty: Ty::Basic(BaseType::U32, ContainerType::Single),
-                })
-            },
-            Instruction::TypeInt { result_type, width: 32, signed: true } => {
-                types.push(Type {
-                    id: result_type.into(),
-                    ty: Ty::Basic(BaseType::I32, ContainerType::Single),
-                })
-            },
-            Instruction::TypeFloat { result_type, width: 32 } => {
-                types.push(Type {
-                    id: result_type.into(),
-                    ty: Ty::Basic(BaseType::F32, ContainerType::Single),
-                })
-            },
-            Instruction::TypeFloat { result_type, width: 64 } => {
-                types.push(Type {
-                    id: result_type.into(),
-                    ty: Ty::Basic(BaseType::F64, ContainerType::Single),
-                })
-            },
-            Instruction::TypeVector { result_type, type_id, len } => {
-                let comp_ty = module.def(type_id).unwrap();
-                types.push(Type {
-                    id: result_type.into(),
-                    ty: Ty::Basic(map_scalar_to_basetype(comp_ty).unwrap(), ContainerType::Vector(len as u8)),
-                })
-            },
-            _ => (),
         }
     }
 
     println!("{:?}", entry_points);
     println!("{:?}", variables);
+    println!("{:?}", types);
 
     SpirvReflection {
         entry_points: entry_points,
@@ -181,7 +250,6 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage, reflect
     if stage == shade::Stage::Vertex {
         // record vertex attributes
         if let Some(entry_point) = reflection.entry_points.iter().find(|ep| ep.name == "main" && ep.stage == stage) {
-            println!("{:?}", entry_point);
             for attrib in entry_point.interface.iter() {
                 if let Some(var) = reflection.variables.iter().find(|var| var.id == *attrib && var.storage_class == desc::StorageClass::Input) {
                     let attrib_name = var.name.clone();
@@ -205,13 +273,37 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage, reflect
     } else if stage == shade::Stage::Pixel {
         // record pixel outputs
         if let Some(entry_point) = reflection.entry_points.iter().find(|ep| ep.name == "main" && ep.stage == stage) {
-            for attrib in entry_point.interface.iter() {
-                if let Some(var) = reflection.variables.iter().find(|var| var.id == *attrib && var.storage_class == desc::StorageClass::Output) {
-                    // TODO:
+            for out in entry_point.interface.iter() {
+                if let Some(var) = reflection.variables.iter().find(|var| var.id == *out && var.storage_class == desc::StorageClass::Output) {
+                    let target_name = var.name.clone();
+                    let slot = var.decoration.iter().filter_map(|dec| match *dec {
+                                    instruction::Decoration::Location(slot) => Some(slot),
+                                    _ => None,
+                                }).next().expect("Missing location decoration");
+
+                    let ty = reflection.types.iter().find(|ty| ty.id == var.ty).unwrap();
+                    if let Ty::Basic(base, container) = ty.ty {
+                        info.outputs.push(shade::OutputVar {
+                            name: target_name,
+                            slot: slot as core::ColorSlot,
+                            base_type: base,
+                            container: container,
+                        });
+                    }
                 }
             }
         }
     }
 
-    // TODO: handle other resources
+    // Handle resources
+    // We use only one descriptor set currently
+    for var in reflection.variables.iter() {
+        use spirv_utils::desc::StorageClass::*;
+        match var.storage_class {
+            Uniform | UniformConstant => {
+
+            },
+            _ => (),
+        }
+    }
 }
