@@ -104,7 +104,7 @@ fn map_scalar_to_basetype(instr: &instruction::Instruction) -> Option<BaseType> 
 }
 
 fn map_instruction_to_type(module: &spirv_utils::RawModule, instr: &instruction::Instruction) -> Option<Type> {
-    use spirv_utils::instruction::Instruction;
+    use spirv_utils::instruction::{Decoration, Instruction};
     match *instr {
         Instruction::TypeBool { result_type } => {
             Some(Type {
@@ -150,14 +150,35 @@ fn map_instruction_to_type(module: &spirv_utils::RawModule, instr: &instruction:
             })
         },
         Instruction::TypeMatrix { result_type, type_id, cols } => {
-            // TODO:
-            None
+            let (base, rows) = match *module.def(type_id).unwrap() {
+                Instruction::TypeVector { type_id, len, .. } => {
+                    let comp_ty = module.def(type_id).unwrap();
+                    (map_scalar_to_basetype(comp_ty).unwrap(), len)
+                },
+                _ => unreachable!(), // SPIR-V module would be invalid
+            };
+
+            let decoration = map_decorations_by_id(&module, result_type.into());
+
+            // NOTE: temporary value, changes might be needed later depending on the decorations of the variable
+            let matrix_format = if decoration.iter().find(|deco| **deco == Decoration::RowMajor).is_some() {
+                shade::MatrixFormat::RowMajor
+            } else {
+                shade::MatrixFormat::ColumnMajor
+            };
+
+            Some(Type {
+                id: result_type.into(),
+                ty: Ty::Basic(base, ContainerType::Matrix(matrix_format, rows as u8, cols as u8)),
+                decoration: decoration,
+            })
+
         },
         Instruction::TypeStruct { result_type, ref fields } => {
             Some(Type {
                 id: result_type.into(),
                 ty: Ty::Struct(
-                    fields.iter().filter_map(|field| // TODO: should be `map` only, just for testing due to unsupported types
+                    fields.iter().filter_map(|field| // TODO: should be `map()`, currently to ignore unsupported types
                         map_instruction_to_type(module, module.def(*field).unwrap())
                     ).collect::<Vec<_>>()),
                 decoration: map_decorations_by_id(&module, result_type.into()),
@@ -301,7 +322,29 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage, reflect
         use spirv_utils::desc::StorageClass::*;
         match var.storage_class {
             Uniform | UniformConstant => {
+                if let Some(ty) = reflection.types.iter().find(|ty| ty.id == var.ty) {
+                    // constant buffers
+                    if let Ty::Struct(ref fields) = ty.ty {
+                        let mut elements = Vec::new();
+                        for field in fields {
+                            // TODO:
+                        }
 
+                        let buffer_name = var.name.clone();
+                        let slot = var.decoration.iter().filter_map(|dec| match *dec {
+                                        instruction::Decoration::Binding(slot) => Some(slot),
+                                        _ => None,
+                                    }).next().expect("Missing binding decoration");
+
+                        info.constant_buffers.push(shade::ConstantBufferVar {
+                            name: buffer_name,
+                            slot: slot as core::ConstantBufferSlot,
+                            size: 0, // TODO:
+                            usage: shade::VERTEX | shade::GEOMETRY | shade::PIXEL, // TODO:
+                            elements: elements,
+                        });
+                    }
+                }
             },
             _ => (),
         }
