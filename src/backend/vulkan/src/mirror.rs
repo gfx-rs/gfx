@@ -24,6 +24,7 @@ pub enum Ty {
     Basic(BaseType, ContainerType),
     Image(BaseType, TextureType),
     Struct(Vec<Type>),
+    Sampler,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -90,6 +91,21 @@ fn map_member_decorations_by_id(module: &spirv_utils::RawModule, id: desc::Id, m
     }).collect::<Vec<_>>()
 }
 
+fn map_image_to_texture_type(dim: desc::Dim, arrayed: bool, multisampled: bool) -> TextureType {
+    use spirv_utils::desc::Dim;
+    let arrayed = if arrayed { shade::IsArray::Array } else { shade::IsArray::NoArray };
+    let multisampled = if multisampled { shade::IsMultiSample::MultiSample } else { shade::IsMultiSample::NoMultiSample };
+    match dim {
+        Dim::_1D => shade::TextureType::D1(arrayed),
+        Dim::_2D => shade::TextureType::D2(arrayed, multisampled),
+        Dim::_3D => shade::TextureType::D3,
+        Dim::Cube => shade::TextureType::Cube(arrayed),
+        Dim::Buffer => shade::TextureType::Buffer,
+
+        _ => unimplemented!(),
+    }
+}
+
 fn map_scalar_to_basetype(instr: &instruction::Instruction) -> Option<BaseType> {
     use spirv_utils::instruction::Instruction;
     match *instr {
@@ -105,49 +121,25 @@ fn map_scalar_to_basetype(instr: &instruction::Instruction) -> Option<BaseType> 
 
 fn map_instruction_to_type(module: &spirv_utils::RawModule, instr: &instruction::Instruction) -> Option<Type> {
     use spirv_utils::instruction::{Decoration, Instruction};
-    match *instr {
+    let id_ty = match *instr {
         Instruction::TypeBool { result_type } => {
-            Some(Type {
-                id: result_type.into(),
-                ty: Ty::Basic(BaseType::Bool, ContainerType::Single),
-                decoration: map_decorations_by_id(&module, result_type.into()),
-            })
+            Some((result_type, Ty::Basic(BaseType::Bool, ContainerType::Single)))
         },
         Instruction::TypeInt { result_type, width: 32, signed: false } => {
-            Some(Type {
-                id: result_type.into(),
-                ty: Ty::Basic(BaseType::U32, ContainerType::Single),
-                decoration: map_decorations_by_id(&module, result_type.into()),
-            })
+            Some((result_type, Ty::Basic(BaseType::U32, ContainerType::Single)))
         },
         Instruction::TypeInt { result_type, width: 32, signed: true } => {
-            Some(Type {
-                id: result_type.into(),
-                ty: Ty::Basic(BaseType::I32, ContainerType::Single),
-                decoration: map_decorations_by_id(&module, result_type.into()),
-            })
+            Some((result_type, Ty::Basic(BaseType::I32, ContainerType::Single)))
         },
         Instruction::TypeFloat { result_type, width: 32 } => {
-            Some(Type {
-                id: result_type.into(),
-                ty: Ty::Basic(BaseType::F32, ContainerType::Single),
-                decoration: map_decorations_by_id(&module, result_type.into()),
-            })
+            Some((result_type, Ty::Basic(BaseType::F32, ContainerType::Single)))
         },
         Instruction::TypeFloat { result_type, width: 64 } => {
-            Some(Type {
-                id: result_type.into(),
-                ty: Ty::Basic(BaseType::F64, ContainerType::Single),
-                decoration: map_decorations_by_id(&module, result_type.into()),
-            })
+            Some((result_type, Ty::Basic(BaseType::F64, ContainerType::Single)))
         },
         Instruction::TypeVector { result_type, type_id, len } => {
             let comp_ty = module.def(type_id).unwrap();
-            Some(Type {
-                id: result_type.into(),
-                ty: Ty::Basic(map_scalar_to_basetype(comp_ty).unwrap(), ContainerType::Vector(len as u8)),
-                decoration: map_decorations_by_id(&module, result_type.into()),
-            })
+            Some((result_type, Ty::Basic(map_scalar_to_basetype(comp_ty).unwrap(), ContainerType::Vector(len as u8))))
         },
         Instruction::TypeMatrix { result_type, type_id, cols } => {
             let (base, rows) = match *module.def(type_id).unwrap() {
@@ -167,25 +159,36 @@ fn map_instruction_to_type(module: &spirv_utils::RawModule, instr: &instruction:
                 shade::MatrixFormat::ColumnMajor
             };
 
-            Some(Type {
-                id: result_type.into(),
-                ty: Ty::Basic(base, ContainerType::Matrix(matrix_format, rows as u8, cols as u8)),
-                decoration: decoration,
-            })
-
+            Some((result_type, Ty::Basic(base, ContainerType::Matrix(matrix_format, rows as u8, cols as u8))))
         },
         Instruction::TypeStruct { result_type, ref fields } => {
-            Some(Type {
-                id: result_type.into(),
-                ty: Ty::Struct(
+            Some((
+                result_type,
+                Ty::Struct(
                     fields.iter().filter_map(|field| // TODO: should be `map()`, currently to ignore unsupported types
                         map_instruction_to_type(module, module.def(*field).unwrap())
-                    ).collect::<Vec<_>>()),
-                decoration: map_decorations_by_id(&module, result_type.into()),
-            })
+                    ).collect::<Vec<_>>()
+                )
+            ))
+        },
+        Instruction::TypeSampler { result_type } => {
+            Some((result_type, Ty::Sampler))
+        },
+        Instruction::TypeImage { result_type, type_id, dim, arrayed, multisampled, .. } => {
+            Some((result_type, Ty::Image(map_scalar_to_basetype(module.def(type_id).unwrap()).unwrap(), map_image_to_texture_type(dim, arrayed, multisampled))))
         },
 
         _ => None,
+    };
+
+    if let Some((id, ty)) = id_ty {
+        Some(Type {
+            id: id.into(),
+            ty: ty,
+            decoration: map_decorations_by_id(&module, id.into()),
+        })
+    } else {
+        None
     }
 }
 
@@ -256,10 +259,6 @@ pub fn reflect_spirv_module(code: &[u8]) -> SpirvReflection {
         }
     }
 
-    println!("{:?}", entry_points);
-    println!("{:?}", variables);
-    println!("{:?}", types);
-
     SpirvReflection {
         entry_points: entry_points,
         variables: variables,
@@ -324,25 +323,60 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage, reflect
             Uniform | UniformConstant => {
                 if let Some(ty) = reflection.types.iter().find(|ty| ty.id == var.ty) {
                     // constant buffers
-                    if let Ty::Struct(ref fields) = ty.ty {
-                        let mut elements = Vec::new();
-                        for field in fields {
-                            // TODO:
-                        }
+                    match ty.ty {
+                        Ty::Struct(ref fields) => {
+                            let mut elements = Vec::new();
+                            for field in fields {
+                                // TODO:
+                            }
 
-                        let buffer_name = var.name.clone();
-                        let slot = var.decoration.iter().filter_map(|dec| match *dec {
-                                        instruction::Decoration::Binding(slot) => Some(slot),
-                                        _ => None,
-                                    }).next().expect("Missing binding decoration");
+                            let buffer_name = var.name.clone();
+                            let slot = var.decoration.iter().filter_map(|dec| match *dec {
+                                            instruction::Decoration::Binding(slot) => Some(slot),
+                                            _ => None,
+                                        }).next().expect("Missing binding decoration");
 
-                        info.constant_buffers.push(shade::ConstantBufferVar {
-                            name: buffer_name,
-                            slot: slot as core::ConstantBufferSlot,
-                            size: 0, // TODO:
-                            usage: shade::VERTEX | shade::GEOMETRY | shade::PIXEL, // TODO:
-                            elements: elements,
-                        });
+                            info.constant_buffers.push(shade::ConstantBufferVar {
+                                name: buffer_name,
+                                slot: slot as core::ConstantBufferSlot,
+                                size: 0, // TODO:
+                                usage: shade::VERTEX | shade::GEOMETRY | shade::PIXEL, // TODO:
+                                elements: elements,
+                            });
+                        },
+
+                        Ty::Sampler => {
+                            let sampler_name = var.name.trim_right_matches('_');
+                            let slot = var.decoration.iter().filter_map(|dec| match *dec {
+                                            instruction::Decoration::Binding(slot) => Some(slot),
+                                            _ => None,
+                                        }).next().expect("Missing binding decoration");
+
+                            info.samplers.push(shade::SamplerVar {
+                                name: sampler_name.to_owned(),
+                                slot: slot as core::SamplerSlot,
+                                ty: shade::SamplerType(shade::IsComparison::NoCompare, shade::IsRect::NoRect), // TODO:
+                                usage: shade::VERTEX | shade::GEOMETRY | shade::PIXEL, // TODO:
+                            });
+                        },
+
+                        Ty::Image(base_type, texture_type) => {
+                            let texture_name = var.name.clone();
+                            let slot = var.decoration.iter().filter_map(|dec| match *dec {
+                                            instruction::Decoration::Binding(slot) => Some(slot),
+                                            _ => None,
+                                        }).next().expect("Missing binding decoration");
+
+                            info.textures.push(shade::TextureVar {
+                                name: texture_name,
+                                slot: slot as core::ResourceViewSlot,
+                                base_type: base_type,
+                                ty: texture_type,
+                                usage: shade::VERTEX | shade::GEOMETRY | shade::PIXEL, // TODO:
+                            });
+                        },
+
+                        _ => (),
                     }
                 }
             },
