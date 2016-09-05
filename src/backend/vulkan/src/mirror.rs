@@ -123,19 +123,19 @@ fn map_instruction_to_type(module: &spirv_utils::RawModule, instr: &instruction:
     use spirv_utils::instruction::{Decoration, Instruction};
     let id_ty = match *instr {
         Instruction::TypeBool { result_type } => {
-            Some((result_type, Ty::Basic(BaseType::Bool, ContainerType::Single)))
+            Some((result_type, Ty::Basic(map_scalar_to_basetype(instr).unwrap(), ContainerType::Single)))
         },
         Instruction::TypeInt { result_type, width: 32, signed: false } => {
-            Some((result_type, Ty::Basic(BaseType::U32, ContainerType::Single)))
+            Some((result_type, Ty::Basic(map_scalar_to_basetype(instr).unwrap(), ContainerType::Single)))
         },
         Instruction::TypeInt { result_type, width: 32, signed: true } => {
-            Some((result_type, Ty::Basic(BaseType::I32, ContainerType::Single)))
+            Some((result_type, Ty::Basic(map_scalar_to_basetype(instr).unwrap(), ContainerType::Single)))
         },
         Instruction::TypeFloat { result_type, width: 32 } => {
-            Some((result_type, Ty::Basic(BaseType::F32, ContainerType::Single)))
+            Some((result_type, Ty::Basic(map_scalar_to_basetype(instr).unwrap(), ContainerType::Single)))
         },
         Instruction::TypeFloat { result_type, width: 64 } => {
-            Some((result_type, Ty::Basic(BaseType::F64, ContainerType::Single)))
+            Some((result_type, Ty::Basic(map_scalar_to_basetype(instr).unwrap(), ContainerType::Single)))
         },
         Instruction::TypeVector { result_type, type_id, len } => {
             let comp_ty = module.def(type_id).unwrap();
@@ -181,15 +181,11 @@ fn map_instruction_to_type(module: &spirv_utils::RawModule, instr: &instruction:
         _ => None,
     };
 
-    if let Some((id, ty)) = id_ty {
-        Some(Type {
+    id_ty.map(|(id, ty)| Type {
             id: id.into(),
             ty: ty,
             decoration: map_decorations_by_id(&module, id.into()),
         })
-    } else {
-        None
-    }
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -216,6 +212,8 @@ pub fn reflect_spirv_module(code: &[u8]) -> SpirvReflection {
                         stage: stage,
                         interface: interface.clone(),
                     });
+                } else {
+                    error!("Unsupported execution model: {:?}", execution_model);
                 }
             },
             Instruction::Variable { result_type, result_id, storage_class, .. } => {
@@ -251,7 +249,7 @@ pub fn reflect_spirv_module(code: &[u8]) -> SpirvReflection {
             },
 
             _ => {
-                // Reflect types
+                // Reflect types, if we have OpTypeXXX
                 if let Some(ty) = map_instruction_to_type(&module, instr) {
                     types.push(ty);
                 }
@@ -271,22 +269,28 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage, reflect
         // record vertex attributes
         if let Some(entry_point) = reflection.entry_points.iter().find(|ep| ep.name == "main" && ep.stage == stage) {
             for attrib in entry_point.interface.iter() {
-                if let Some(var) = reflection.variables.iter().find(|var| var.id == *attrib && var.storage_class == desc::StorageClass::Input) {
-                    let attrib_name = var.name.clone();
-                    let slot = var.decoration.iter().filter_map(|dec| match *dec {
-                                    instruction::Decoration::Location(slot) => Some(slot),
-                                    _ => None,
-                                }).next().expect("Missing location decoration");
+                if let Some(var) = reflection.variables.iter().find(|var| var.id == *attrib) {
+                    if var.storage_class == desc::StorageClass::Input {
+                        let attrib_name = var.name.clone();
+                        let slot = var.decoration.iter().filter_map(|dec| match *dec {
+                                        instruction::Decoration::Location(slot) => Some(slot),
+                                        _ => None,
+                                    }).next().expect("Missing location decoration");
 
-                    let ty = reflection.types.iter().find(|ty| ty.id == var.ty).unwrap();
-                    if let Ty::Basic(base, container) = ty.ty {
-                        info.vertex_attributes.push(shade::AttributeVar {
-                            name: attrib_name,
-                            slot: slot as core::AttributeSlot,
-                            base_type: base,
-                            container: container,
-                        });
+                        let ty = reflection.types.iter().find(|ty| ty.id == var.ty).unwrap();
+                        if let Ty::Basic(base, container) = ty.ty {
+                            info.vertex_attributes.push(shade::AttributeVar {
+                                name: attrib_name,
+                                slot: slot as core::AttributeSlot,
+                                base_type: base,
+                                container: container,
+                            });
+                        } else {
+                            error!("Unsupported type as vertex attribute: {:?}", ty.ty);
+                        }
                     }
+                } else {
+                    error!("Missing vertex attribute reflection: {:?}", attrib);
                 }
             }
         }
@@ -294,22 +298,28 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage, reflect
         // record pixel outputs
         if let Some(entry_point) = reflection.entry_points.iter().find(|ep| ep.name == "main" && ep.stage == stage) {
             for out in entry_point.interface.iter() {
-                if let Some(var) = reflection.variables.iter().find(|var| var.id == *out && var.storage_class == desc::StorageClass::Output) {
-                    let target_name = var.name.clone();
-                    let slot = var.decoration.iter().filter_map(|dec| match *dec {
-                                    instruction::Decoration::Location(slot) => Some(slot),
-                                    _ => None,
-                                }).next().expect("Missing location decoration");
+                if let Some(var) = reflection.variables.iter().find(|var| var.id == *out) {
+                    if var.storage_class == desc::StorageClass::Output {
+                        let target_name = var.name.clone();
+                        let slot = var.decoration.iter().filter_map(|dec| match *dec {
+                                        instruction::Decoration::Location(slot) => Some(slot),
+                                        _ => None,
+                                    }).next().expect("Missing location decoration");
 
-                    let ty = reflection.types.iter().find(|ty| ty.id == var.ty).unwrap();
-                    if let Ty::Basic(base, container) = ty.ty {
-                        info.outputs.push(shade::OutputVar {
-                            name: target_name,
-                            slot: slot as core::ColorSlot,
-                            base_type: base,
-                            container: container,
-                        });
+                        let ty = reflection.types.iter().find(|ty| ty.id == var.ty).unwrap();
+                        if let Ty::Basic(base, container) = ty.ty {
+                            info.outputs.push(shade::OutputVar {
+                                name: target_name,
+                                slot: slot as core::ColorSlot,
+                                base_type: base,
+                                container: container,
+                            });
+                        } else {
+                            error!("Unsupported type as pixel shader output: {:?}", ty.ty);
+                        }
                     }
+                } else {
+                    error!("Missing pixel shader output reflection: {:?}", out);
                 }
             }
         }
@@ -378,6 +388,8 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage, reflect
 
                         _ => (),
                     }
+                } else {
+                    error!("Unsupported uniform type: {:?}", var.ty);
                 }
             },
             _ => (),
