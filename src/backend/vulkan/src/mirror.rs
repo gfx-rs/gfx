@@ -267,31 +267,30 @@ pub fn reflect_spirv_module(code: &[u8]) -> SpirvReflection {
 pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage, reflection: &SpirvReflection) {
     if stage == shade::Stage::Vertex {
         // record vertex attributes
-        if let Some(entry_point) = reflection.entry_points.iter().find(|ep| ep.name == "main" && ep.stage == stage) {
-            for attrib in entry_point.interface.iter() {
-                if let Some(var) = reflection.variables.iter().find(|var| var.id == *attrib) {
-                    if var.storage_class == desc::StorageClass::Input {
-                        let attrib_name = var.name.clone();
-                        let slot = var.decoration.iter().filter_map(|dec| match *dec {
-                                        instruction::Decoration::Location(slot) => Some(slot),
-                                        _ => None,
-                                    }).next().expect("Missing location decoration");
+        let entry_point = reflection.entry_points.iter().find(|ep| ep.name == "main" && ep.stage == stage).expect("Couln't find entry point!");
+        for attrib in entry_point.interface.iter() {
+            if let Some(var) = reflection.variables.iter().find(|var| var.id == *attrib) {
+                if var.storage_class == desc::StorageClass::Input {
+                    let attrib_name = var.name.clone();
+                    let slot = var.decoration.iter().filter_map(|dec| match *dec {
+                                    instruction::Decoration::Location(slot) => Some(slot),
+                                    _ => None,
+                                }).next().expect("Missing location decoration");
 
-                        let ty = reflection.types.iter().find(|ty| ty.id == var.ty).unwrap();
-                        if let Ty::Basic(base, container) = ty.ty {
-                            info.vertex_attributes.push(shade::AttributeVar {
-                                name: attrib_name,
-                                slot: slot as core::AttributeSlot,
-                                base_type: base,
-                                container: container,
-                            });
-                        } else {
-                            error!("Unsupported type as vertex attribute: {:?}", ty.ty);
-                        }
+                    let ty = reflection.types.iter().find(|ty| ty.id == var.ty).unwrap();
+                    if let Ty::Basic(base, container) = ty.ty {
+                        info.vertex_attributes.push(shade::AttributeVar {
+                            name: attrib_name,
+                            slot: slot as core::AttributeSlot,
+                            base_type: base,
+                            container: container,
+                        });
+                    } else {
+                        error!("Unsupported type as vertex attribute: {:?}", ty.ty);
                     }
-                } else {
-                    error!("Missing vertex attribute reflection: {:?}", attrib);
                 }
+            } else {
+                error!("Missing vertex attribute reflection: {:?}", attrib);
             }
         }
     } else if stage == shade::Stage::Pixel {
