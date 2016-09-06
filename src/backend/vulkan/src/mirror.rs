@@ -198,7 +198,7 @@ pub struct SpirvReflection {
 pub fn reflect_spirv_module(code: &[u8]) -> SpirvReflection {
     use spirv_utils::instruction::Instruction;
 
-    let module = spirv_utils::RawModule::read_module(code).unwrap();
+    let module = spirv_utils::RawModule::read_module(code).expect("Unable to parse SPIR-V module");
 
     let mut entry_points = Vec::new();
     let mut variables = Vec::new();
@@ -231,9 +231,9 @@ pub fn reflect_spirv_module(code: &[u8]) -> SpirvReflection {
                 // `glslang` seems to emit empty strings for uniforms with struct type,
                 // therefore we need to retrieve the name from the struct decl
                 let name = {
-                    let name = map_name_by_id(&module, result_id.into()).unwrap();
+                    let name = map_name_by_id(&module, result_id.into()).expect("Missing name annotation");
                     if name.is_empty() {
-                        map_name_by_id(&module, ty.into()).unwrap()
+                        map_name_by_id(&module, ty.into()).expect("Missing name annotation")
                     } else {
                         name
                     }
@@ -272,11 +272,10 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage, reflect
             if let Some(var) = reflection.variables.iter().find(|var| var.id == *attrib) {
                 if var.storage_class == desc::StorageClass::Input {
                     let attrib_name = var.name.clone();
-                    let slot = var.decoration.iter().filter_map(|dec| match *dec {
-                                    instruction::Decoration::Location(slot) => Some(slot),
-                                    _ => None,
-                                }).next().expect("Missing location decoration");
-
+                    let slot = var.decoration.iter()
+                                     .find(|dec| if let &instruction::Decoration::Location(..) = *dec { true } else { false })
+                                     .map(|dec| if let instruction::Decoration::Location(slot) = *dec { Some(slot) } else { None })
+                                     .expect("Missing location decoration").unwrap();
                     let ty = reflection.types.iter().find(|ty| ty.id == var.ty).unwrap();
                     if let Ty::Basic(base, container) = ty.ty {
                         info.vertex_attributes.push(shade::AttributeVar {
@@ -300,11 +299,10 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage, reflect
                 if let Some(var) = reflection.variables.iter().find(|var| var.id == *out) {
                     if var.storage_class == desc::StorageClass::Output {
                         let target_name = var.name.clone();
-                        let slot = var.decoration.iter().filter_map(|dec| match *dec {
-                                        instruction::Decoration::Location(slot) => Some(slot),
-                                        _ => None,
-                                    }).next().expect("Missing location decoration");
-
+                        let slot = var.decoration.iter()
+                                         .find(|dec| if let &instruction::Decoration::Location(..) = *dec { true } else { false })
+                                         .map(|dec| if let instruction::Decoration::Location(slot) = *dec { Some(slot) } else { None })
+                                         .expect("Missing location decoration").unwrap();
                         let ty = reflection.types.iter().find(|ty| ty.id == var.ty).unwrap();
                         if let Ty::Basic(base, container) = ty.ty {
                             info.outputs.push(shade::OutputVar {
@@ -340,11 +338,10 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage, reflect
                             }
 
                             let buffer_name = var.name.clone();
-                            let slot = var.decoration.iter().filter_map(|dec| match *dec {
-                                            instruction::Decoration::Binding(slot) => Some(slot),
-                                            _ => None,
-                                        }).next().expect("Missing binding decoration");
-
+                            let slot = var.decoration.iter()
+                                             .find(|dec| if let &instruction::Decoration::Binding(..) = *dec { true } else { false })
+                                             .map(|dec| if let instruction::Decoration::Binding(slot) = *dec { Some(slot) } else { None })
+                                             .expect("Missing binding decoration").unwrap();
                             info.constant_buffers.push(shade::ConstantBufferVar {
                                 name: buffer_name,
                                 slot: slot as core::ConstantBufferSlot,
@@ -356,11 +353,10 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage, reflect
 
                         Ty::Sampler => {
                             let sampler_name = var.name.trim_right_matches('_');
-                            let slot = var.decoration.iter().filter_map(|dec| match *dec {
-                                            instruction::Decoration::Binding(slot) => Some(slot),
-                                            _ => None,
-                                        }).next().expect("Missing binding decoration");
-
+                            let slot = var.decoration.iter()
+                                             .find(|dec| if let &instruction::Decoration::Binding(..) = *dec { true } else { false })
+                                             .map(|dec| if let instruction::Decoration::Binding(slot) = *dec { Some(slot) } else { None })
+                                             .expect("Missing binding decoration").unwrap();
                             info.samplers.push(shade::SamplerVar {
                                 name: sampler_name.to_owned(),
                                 slot: slot as core::SamplerSlot,
@@ -371,11 +367,10 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage, reflect
 
                         Ty::Image(base_type, texture_type) => {
                             let texture_name = var.name.clone();
-                            let slot = var.decoration.iter().filter_map(|dec| match *dec {
-                                            instruction::Decoration::Binding(slot) => Some(slot),
-                                            _ => None,
-                                        }).next().expect("Missing binding decoration");
-
+                            let slot = var.decoration.iter()
+                                             .find(|dec| if let &instruction::Decoration::Binding(..) = *dec { true } else { false })
+                                             .map(|dec| if let instruction::Decoration::Binding(slot) = *dec { Some(slot) } else { None })
+                                             .expect("Missing binding decoration").unwrap();
                             info.textures.push(shade::TextureVar {
                                 name: texture_name,
                                 slot: slot as core::ResourceViewSlot,
