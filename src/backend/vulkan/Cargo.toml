@@ -18,3 +18,4 @@ vk-sys = { git = "https://github.com/sectopod/vulkano", branch = "bind" }
 shared_library = "0.1"
 winit = "0.5"
 gfx_core = { path = "../../core", version = "0.5" }
+spirv-utils = { git = "https://github.com/msiglreith/spirv-utils.git", branch = "gfx" }

@@ -422,7 +422,7 @@ impl core::Device for GraphicsQueue {
                 vk.FreeMemory(dev, buffer.resource().memory, ptr::null());
             },
             |vk, s| unsafe { //shader
-                vk.DestroyShaderModule(dev, *s, ptr::null());
+                vk.DestroyShaderModule(dev, s.shader, ptr::null());
             },
             |_, _p| (), //program
             |vk, p| unsafe { //PSO

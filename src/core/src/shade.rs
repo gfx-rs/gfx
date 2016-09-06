@@ -25,31 +25,31 @@ use {AttributeSlot, ColorSlot, ConstantBufferSlot, ResourceViewSlot, SamplerSlot
 pub type Dimension = u8;
 
 /// Whether the sampler samples an array texture.
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum IsArray { Array, NoArray }
 
 /// Whether the sampler compares the depth value upon sampling.
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum IsComparison { Compare, NoCompare }
 
 /// Whether the sampler samples a multisample texture.
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum IsMultiSample { MultiSample, NoMultiSample }
 
 /// Whether the sampler samples a rectangle texture.
 ///
 /// Rectangle textures are the same as 2D textures, but accessed with absolute texture coordinates
 /// (as opposed to the usual, normalized to [0, 1]).
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum IsRect { Rect, NoRect }
 
 /// Whether the matrix is column or row major.
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum MatrixFormat { ColumnMajor, RowMajor }
 
 /// A type of the texture variable.
 /// This has to match the actual data we bind to the shader.
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum TextureType {
     /// Sample from a buffer.
     Buffer,
@@ -83,7 +83,7 @@ pub struct SamplerType(pub IsComparison, pub IsRect);
 
 /// Base type of this shader parameter.
 #[allow(missing_docs)]
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum BaseType {
     I32,
     U32,
@@ -93,7 +93,7 @@ pub enum BaseType {
 }
 
 /// Number of components this parameter represents.
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum ContainerType {
     /// Scalar value
     Single,
@@ -107,7 +107,7 @@ pub enum ContainerType {
 
 /// Which program stage this shader represents.
 #[allow(missing_docs)]
-#[derive(Copy, Clone, Debug, Hash, PartialEq)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Stage {
     Vertex,
