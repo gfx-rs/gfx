@@ -49,11 +49,11 @@
 ## Features
 
 Graphics backends:
-  - OpenGL 2.1+
-  - OpenGL ES2+ ([works](https://github.com/gfx-rs/gfx/pull/993) on Android)
-  - Direct3D 11
-  - [Metal](https://developer.apple.com/metal/) (WIP 75%)
-  - [Vulkan](https://www.khronos.org/vulkan/) (WIP 40%)
+  - [OpenGL 2.1+](src/backend/gl)
+  - [OpenGL ES2+](src/backend/gl) ([works](https://github.com/gfx-rs/gfx/pull/993) on Android)
+  - [Direct3D 11](src/backend/dx11)
+  - [Metal](src/backend/metal) (WIP 75%)
+  - [Vulkan](src/backend/vulkan) (WIP 40%)
 
 Hardware features:
   - [x] off-screen render targets
