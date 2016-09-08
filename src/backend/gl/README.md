@@ -4,7 +4,7 @@
 
 ## GLSL Mirroring
 
-PSO Component | GLSL component
+PSO component | GLSL component
 --------------|----------------
 `Vertex/InstanceBuffer` | a collection of vertex shader inputs
 `ConstantBuffer` | [Uniform Buffer Object](https://www.opengl.org/wiki/Uniform_Buffer_Object)
@@ -15,20 +15,19 @@ PSO Component | GLSL component
 `Scissor` | not visible
 `BlendRef` | not visible
 
-`TextureSampler`'s are accessible with the following  [GLSL samplers](https://www.opengl.org/wiki/Sampler_(GLSL)):
+`TextureSampler`s correspond to the following [GLSL samplers](https://www.opengl.org/wiki/Sampler_(GLSL)), when you see a *g* preceding a sampler name, it represents any of the 3 possible prefixes (nothing for float, i for signed integer, and u for unsigned integer):
 
-Texture type | GLSL sampler
+Texture Kind | GLSL sampler
 -------------|-------------
-Texture | sampler *Kind*
-Kind::D1 | sampler1D
-Kind::D1Array | sampler1DArray
-Kind::D2 | sampler2D, sampler2DMS
-Kind::D2Array | sampler2DArray, sampler2DMSArray
-Kind::D3 | sampler3D
-Kind::Cube | samplerCube
-Kind::CubeArray | samplerCubeArray
-Buffer | samplerBuffer
-Depth/Stencil | sampler *Kind* Shadow
+`D1` | *g*sampler1D, sampler1DShadow
+`D1Array` | *g*sampler1DArray, sampler1DArrayShadow
+`D2` | *g*sampler2D, *g*sampler2DMS, sampler2DShadow
+`D2Array` | *g*sampler2DArray, *g*sampler2DMSArray, sampler2DArrayShadow
+`D3` | *g*sampler3D
+`Cube` | *g*samplerCube, samplerCubeShadow
+`CubeArray` | *g*samplerCubeArray, samplerCubeArrayShadow
+
+Buffer resource views are seen as *g*samplerBuffer.
 
 Rust basic type | GLSL (1.3 and above)
 ----------------|---------------------
