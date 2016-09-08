@@ -47,7 +47,11 @@ pub struct RawVertexBuffer(AttributeSlotSet);
 /// Constant buffer component.
 /// - init: `&str` = name of the buffer
 /// - data: `Buffer<T>`
-pub struct ConstantBuffer<T: Structure<shade::ConstFormat>>(Option<(Usage, ConstantBufferSlot)>, PhantomData<T>);
+pub struct ConstantBuffer<T: Structure<shade::ConstFormat>>(RawConstantBuffer, PhantomData<T>);
+/// Raw constant buffer component.
+/// - init: `&str` = name of the buffer
+/// - data: `RawBuffer`
+pub struct RawConstantBuffer(Option<(Usage, ConstantBufferSlot)>);
 /// Global (uniform) constant component. Describes a free-standing value passed into
 /// the shader, which is not enclosed into any constant buffer. Deprecated in DX10 and higher.
 /// - init: `&str` = name of the constant
@@ -130,13 +134,35 @@ impl<'a, T: Structure<shade::ConstFormat>>
 DataLink<'a> for ConstantBuffer<T> {
     type Init = &'a str;
     fn new() -> Self {
-        ConstantBuffer(None, PhantomData)
+        ConstantBuffer(RawConstantBuffer::new(), PhantomData)
+    }
+    fn is_active(&self) -> bool {
+        self.0.is_active()
+    }
+    fn link_constant_buffer(&mut self, cb: &shade::ConstantBufferVar, init: &Self::Init) ->
+                            Option<Result<(), shade::ConstFormat>> {
+        self.0.link_constant_buffer(cb, init)
+    }
+}
+
+impl<R: Resources, T: Structure<shade::ConstFormat>>
+DataBind<R> for ConstantBuffer<T> {
+    type Data = handle::Buffer<R, T>;
+    fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
+        self.0.bind_to(out, data.raw(), man)
+    }
+}
+
+impl<'a> DataLink<'a> for RawConstantBuffer {
+    type Init = &'a str;
+    fn new() -> Self {
+        RawConstantBuffer(None)
     }
     fn is_active(&self) -> bool {
         self.0.is_some()
     }
-    fn link_constant_buffer(&mut self, cb: &shade::ConstantBufferVar, init: &Self::Init) ->
-                            Option<Result<(), shade::ConstFormat>> {
+    fn link_constant_buffer<'b>(&mut self, cb: &'b shade::ConstantBufferVar, init: &Self::Init)
+                            -> Option<Result<(), shade::ConstFormat>> {
         if &cb.name == *init {
             self.0 = Some((cb.usage, cb.slot));
             Some(Ok(()))
@@ -146,12 +172,11 @@ DataLink<'a> for ConstantBuffer<T> {
     }
 }
 
-impl<R: Resources, T: Structure<shade::ConstFormat>>
-DataBind<R> for ConstantBuffer<T> {
-    type Data = handle::Buffer<R, T>;
+impl<R: Resources> DataBind<R> for RawConstantBuffer {
+    type Data = handle::RawBuffer<R>;
     fn bind_to(&self, out: &mut RawDataSet<R>, data: &Self::Data, man: &mut handle::Manager<R>) {
         if let Some((usage, slot)) = self.0 {
-            let buf = man.ref_buffer(data.raw()).clone();
+            let buf = man.ref_buffer(data).clone();
             out.constant_buffers.push(pso::ConstantBufferParam(buf, usage, slot));
         }
     }

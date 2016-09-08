@@ -49,6 +49,7 @@ fn _test_pso<R, F>(factory: &mut F) -> gfx::PipelineState<R, testpipe::Meta> whe
 
 gfx_pipeline_base!( testraw {
     vertex: gfx::RawVertexBuffer,
+    cbuf: gfx::RawConstantBuffer,
     tex: gfx::RawShaderResource,
     target: gfx::RawRenderTarget,
 });
@@ -64,6 +65,7 @@ fn _test_raw<R, F>(factory: &mut F) -> gfx::PipelineState<R, testraw::Meta> wher
     };
     let init = testraw::Init {
         vertex: &[("a_Special", special, 0)],
+        cbuf: "Locals",
         tex: "Specular",
         target: ("o_Color2",
             fm::Format(fm::SurfaceType::R8_G8_B8_A8, fm::ChannelType::Unorm),
