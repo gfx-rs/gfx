@@ -40,14 +40,19 @@ pub struct VertexBufferCommon<T, I>(RawVertexBuffer, PhantomData<(T, I)>);
 pub type VertexBuffer<T> = VertexBufferCommon<T, [(); 0]>;
 /// Instance buffer component. Same as the vertex buffer but advances per instance.
 pub type InstanceBuffer<T> = VertexBufferCommon<T, [(); 1]>;
-/// Raw vertex/instance buffer component.
+/// Raw vertex/instance buffer component. Can be used when the formats of vertex attributes
+/// are not known at compile time.
 /// - init: `(&[&str, element], stride, inst_rate)`
 /// - data: `RawBuffer`
 pub struct RawVertexBuffer(Option<BufferIndex>, AttributeSlotSet);
 /// Constant buffer component.
 /// - init: `&str` = name of the buffer
 /// - data: `Buffer<T>`
-pub struct ConstantBuffer<T: Structure<shade::ConstFormat>>(Option<(Usage, ConstantBufferSlot)>, PhantomData<T>);
+pub struct ConstantBuffer<T: Structure<shade::ConstFormat>>(RawConstantBuffer, PhantomData<T>);
+/// Raw constant buffer component.
+/// - init: `&str` = name of the buffer
+/// - data: `RawBuffer`
+pub struct RawConstantBuffer(Option<(Usage, ConstantBufferSlot)>);
 /// Global (uniform) constant component. Describes a free-standing value passed into
 /// the shader, which is not enclosed into any constant buffer. Deprecated in DX10 and higher.
 /// - init: `&str` = name of the constant
@@ -156,27 +161,27 @@ impl<'a, T: Structure<shade::ConstFormat>>
 DataLink<'a> for ConstantBuffer<T> {
     type Init = &'a str;
     fn new() -> Self {
-        ConstantBuffer(None, PhantomData)
+        ConstantBuffer(RawConstantBuffer::new(), PhantomData)
     }
     fn is_active(&self) -> bool {
-        self.0.is_some()
+        self.0.is_active()
     }
     fn link_constant_buffer<'b>(&mut self, cb: &'b shade::ConstantBufferVar, init: &Self::Init)
                             -> Option<Result<pso::ConstantBufferDesc, ElementError<&'b str>>> {
-        if &cb.name == *init {
+        let raw_out = self.0.link_constant_buffer(cb, init);
+        if raw_out.is_some() {
             for el in cb.elements.iter() {
-                return Some(Err(match T::query(&el.name) {
+                let err = match T::query(&el.name) {
                     Some(e) if e.offset != el.location as pso::ElemOffset =>
-                        ElementError::Offset(&el.name, el.location as pso::ElemOffset),
-                    None => ElementError::NotFound(&el.name),
+                        ElementError::Offset(el.name.as_str(), el.location as pso::ElemOffset),
+                    None => ElementError::NotFound(el.name.as_str()),
                     Some(_) => continue, //TODO: check format
-                }))
+                };
+                self.0 = RawConstantBuffer::new();
+                return Some(Err(err));
             }
-            self.0 = Some((cb.usage, cb.slot));
-            Some(Ok(cb.usage))
-        }else {
-            None
         }
+        raw_out
     }
 }
 
@@ -188,10 +193,40 @@ DataBind<R> for ConstantBuffer<T> {
                data: &Self::Data,
                man: &mut handle::Manager<R>,
                access: &mut AccessInfo<R>) {
+        self.0.bind_to(out, data.raw(), man, access)
+    }
+}
+
+impl<'a> DataLink<'a> for RawConstantBuffer {
+    type Init = &'a str;
+    fn new() -> Self {
+        RawConstantBuffer(None)
+    }
+    fn is_active(&self) -> bool {
+        self.0.is_some()
+    }
+    fn link_constant_buffer<'b>(&mut self, cb: &'b shade::ConstantBufferVar, init: &Self::Init)
+                            -> Option<Result<pso::ConstantBufferDesc, ElementError<&'b str>>> {
+        if &cb.name == *init {
+            self.0 = Some((cb.usage, cb.slot));
+            Some(Ok(cb.usage))
+        }else {
+            None
+        }
+    }
+}
+
+impl<R: Resources> DataBind<R> for RawConstantBuffer {
+    type Data = handle::RawBuffer<R>;
+    fn bind_to(&self,
+               out: &mut RawDataSet<R>,
+               data: &Self::Data,
+               man: &mut handle::Manager<R>,
+               access: &mut AccessInfo<R>) {
         if let Some((usage, slot)) = self.0 {
-            let buf = man.ref_buffer(data.raw()).clone();
+            let buf = man.ref_buffer(data).clone();
             out.constant_buffers.push(pso::ConstantBufferParam(buf, usage, slot));
-            access.buffer_read(data.raw())
+            access.buffer_read(data)
         }
     }
 }

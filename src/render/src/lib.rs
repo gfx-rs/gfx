@@ -48,7 +48,7 @@ pub use factory::PipelineStateError;
 pub use slice::{Slice, IntoIndexBuffer, IndexBuffer};
 pub use pso::{PipelineState};
 pub use pso::buffer::{VertexBuffer, InstanceBuffer, RawVertexBuffer,
-                      ConstantBuffer, Global};
+                      ConstantBuffer, RawConstantBuffer, Global};
 pub use pso::resource::{ShaderResource, RawShaderResource, UnorderedAccess,
                         Sampler, TextureSampler};
 pub use pso::target::{DepthStencilTarget, DepthTarget, StencilTarget,
