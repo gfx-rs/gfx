@@ -72,7 +72,7 @@ impl Factory {
     }
 
     pub fn create_command_buffer(&self) -> CommandBuffer {
-        CommandBuffer::new(self.queue, self.drawable)
+        CommandBuffer::new(self.device, self.queue, self.drawable)
     }
 
     fn create_buffer_internal(&self,
@@ -87,14 +87,14 @@ impl Factory {
             return Err(buffer::CreationError::UnsupportedBind(info.bind));
         }
 
-        let raw_buf = if let Some(data) = raw_data {
+        let mut raw_buf = if let Some(data) = raw_data {
             self.device
                 .new_buffer_with_data(unsafe { mem::transmute(data) }, info.size as u64, usage)
         } else {
             self.device.new_buffer(info.size as u64, usage)
         };
 
-        let buf = Buffer(native::Buffer(raw_buf), info.usage);
+        let buf = Buffer(native::Buffer(Box::into_raw(Box::new(raw_buf))), info.usage);
         Ok(self.share.handles.borrow_mut().make_buffer(buf, info))
     }
 
@@ -233,7 +233,7 @@ impl core::Factory<Resources> for Factory {
                 }
                 pso_descriptor.color_attachments()
                     .object_at(0)
-                    .set_pixel_format(MTLPixelFormat::BGRA8Unorm);
+                    .set_pixel_format(MTLPixelFormat::BGRA8Unorm_sRGB);
 
                 // when we use `[[ stage_in ]]` we have to have a vertex
                 // descriptor attached to the PSO descriptor
@@ -311,18 +311,13 @@ impl core::Factory<Resources> for Factory {
 
         let vertex_desc = MTLVertexDescriptor::new();
 
-        println!("att: {:?}", desc.attributes);
         // TODO: find a better way to set the buffer's stride, step func and
         //       step rate
         let buf = vertex_desc.layouts().object_at(0);
         let vat = desc.vertex_buffers[desc.attributes[0].unwrap().0 as usize].unwrap();
         buf.set_stride(vat.stride as u64);
-        buf.set_step_function(if vat.rate > 0 {
-            MTLVertexStepFunction::PerInstance
-        } else {
-            MTLVertexStepFunction::PerVertex
-        });
-        buf.set_step_rate(vat.rate as u64);
+        buf.set_step_function(if vat.rate > 0 {MTLVertexStepFunction::PerInstance} else {MTLVertexStepFunction::PerVertex});
+        buf.set_step_rate(1);
 
         for (attr, attr_desc) in program.get_info()
             .vertex_attributes
@@ -358,9 +353,7 @@ impl core::Factory<Resources> for Factory {
         pso_descriptor.set_vertex_descriptor(vertex_desc);
         pso_descriptor.set_input_primitive_topology(map_topology(desc.primitive));
         if !prog.ps.is_null() {
-            pso_descriptor.color_attachments()
-                .object_at(0)
-                .set_pixel_format(MTLPixelFormat::BGRA8Unorm);
+            pso_descriptor.color_attachments().object_at(0).set_pixel_format(MTLPixelFormat::BGRA8Unorm_sRGB);
         } else {
             pso_descriptor.color_attachments()
                 .object_at(0)
@@ -382,6 +375,19 @@ impl core::Factory<Resources> for Factory {
             winding: map_winding(desc.rasterizer.front_face),
             cull: map_cull(desc.rasterizer.cull_face),
             fill: map_fill(desc.rasterizer.method),
+            alpha_to_one: false,
+            alpha_to_coverage: false,
+            depth_bias: if let Some(ref offset) = desc.rasterizer.offset {
+                offset.0
+            } else {
+                0
+            },
+            slope_scaled_depth_bias: if let Some(ref offset) = desc.rasterizer.offset {
+                offset.1
+            } else {
+                0
+            },
+            depth_clip: true
         };
 
         Ok(self.share.handles.borrow_mut().make_pso(pso, program))
@@ -612,7 +618,7 @@ impl core::Factory<Resources> for Factory {
          -> Result<handle::RawRenderTargetView<Resources>, factory::TargetViewError> {
         let raw_tex = self.frame_handles.ref_texture(htex).0;
         let size = htex.get_info().kind.get_level_dimensions(desc.level);
-        Ok(self.share.handles.borrow_mut().make_rtv(native::Rtv(raw_tex.0), htex, size))
+        Ok(self.share.handles.borrow_mut().make_rtv(native::Rtv(raw_tex.0, Box::into_raw(Box::new(None))), htex, size))
     }
 
     fn view_texture_as_depth_stencil_raw
@@ -682,7 +688,7 @@ impl core::Factory<Resources> for Factory {
         // Ok(self.share.handles.borrow_mut().make_dsv(native::Dsv(raw_view), htex, dim))
         let raw_tex = self.frame_handles.ref_texture(htex).0;
         let size = htex.get_info().kind.get_level_dimensions(desc.level);
-        Ok(self.share.handles.borrow_mut().make_dsv(native::Dsv(raw_tex.0), htex, size))
+        Ok(self.share.handles.borrow_mut().make_dsv(native::Dsv(raw_tex.0, desc.layer, Box::into_raw(Box::new(Some(0f32)))), htex, size))
     }
 
     fn create_sampler(&mut self, info: core::texture::SamplerInfo) -> handle::Sampler<Resources> {

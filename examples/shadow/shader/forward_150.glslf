@@ -45,7 +45,7 @@ void main() {
 		vec3 light_dir = normalize(light.pos.xyz - v_Position);
 		float diffuse = max(0.0, dot(normal, light_dir));
 		// add light contribution
-		color += shadow * diffuse * light.color.xyz;
+		color = light_local.xyw;//+= shadow * diffuse * light.color.xyz;
 	}
 	// multiply the light by material color
     Target0 = vec4(color, 1.0) * u_Color;

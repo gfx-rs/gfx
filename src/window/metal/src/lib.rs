@@ -117,13 +117,17 @@ pub fn init_raw(title: &str, requested_width: u32, requested_height: u32, color_
     unsafe {
         let wnd: cocoa_id = mem::transmute(winit_window.get_nswindow());
 
-        let layer = CAMetalLayer::layer();
-        layer.set_pixel_format(MTLPixelFormat::BGRA8Unorm);
+        let layer = CAMetalLayer::new();
+        layer.set_pixel_format(MTLPixelFormat::BGRA8Unorm_sRGB);
         /*layer.set_pixel_format(match gfx_device_metal::map_format(color_format, true) {
             Some(fm) => fm,
             None => return Err(InitError::Format(color_format)),
         });*/
         let draw_size = winit_window.get_inner_size().unwrap();
+        layer.set_edge_antialiasing_mask(0);
+        layer.set_masks_to_bounds(true);
+        //layer.set_magnification_filter(kCAFilterNearest);
+        //layer.set_minification_filter(kCAFilterNearest);
         layer.set_drawable_size(NSSize::new(draw_size.0 as f64, draw_size.1 as f64));
         layer.set_presents_with_transaction(false);
         layer.remove_all_animations();

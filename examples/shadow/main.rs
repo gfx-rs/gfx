@@ -21,9 +21,9 @@ use std::sync::{Arc, RwLock};
 pub use gfx::format::{DepthStencil};
 pub use gfx_app::{ColorFormat, DepthFormat};
 
-#[cfg(target_os="macos")]
+#[cfg(feature="metal")]
 pub use gfx::format::Depth32F as Depth;
-#[cfg(not(target_os="macos"))]
+#[cfg(not(feature="metal"))]
 pub use gfx::format::Depth;
 
 // Section-1: vertex formats and shader parameters
@@ -487,7 +487,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
                 gfx::Primitive::TriangleList,
                 gfx::state::Rasterizer::new_fill()
                                        .with_cull_back()
-                                       .with_offset(2.0, 1),
+                                       .with_offset(2.0, 2),
                 shadow::new()
                 ).unwrap()
         };
@@ -622,7 +622,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
 // Section-6: main entry point
 
 pub fn main() {
-    <App<_, _> as gfx_app::ApplicationGL>::launch(
+    <App<_, _> as gfx_app::ApplicationMetal>::launch(
         "Multi-threaded shadow rendering example with gfx-rs",
         gfx_app::DEFAULT_CONFIG);
 }

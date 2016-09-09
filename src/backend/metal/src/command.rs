@@ -14,17 +14,16 @@
 
 #![allow(missing_docs)]
 
-// use cocoa::foundation::NSRange;
-
-use core::{command, pso, shade, state, target, texture as tex};
-use core::{IndexType, VertexCount};
-use core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS, MAX_RESOURCE_VIEWS, MAX_SAMPLERS,
-           MAX_COLOR_TARGETS};
-
-use core::shade::Stage;
+use gfx_core::{draw, pso, shade, state, target, tex};
+use gfx_core::{IndexType, VertexCount};
+use gfx_core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
+               MAX_RESOURCE_VIEWS,
+               MAX_SAMPLERS, MAX_COLOR_TARGETS};
 
 
 use {Resources, Buffer, Texture, Pipeline};
+
+use encoder::MetalEncoder;
 
 use native;
 use native::{Rtv, Srv, Dsv};
@@ -101,6 +100,7 @@ enum Draw {
 
 unsafe impl Send for Command {}
 
+<<<<<<< 7b084cfbb95e3e4d1ea51e91746fc75b2efb3be3
 #[derive(Debug)]
 struct Cache {
     targets: Option<pso::PixelTargetSet<Resources>>,
@@ -129,15 +129,14 @@ impl Cache {
     }
 }
 
+=======
+>>>>>>> MTL - rewrite encoder into something manageable
 pub struct CommandBuffer {
-    mtl_queue: MTLCommandQueue,
-    mtl_buf: *mut MTLCommandBuffer,
-
-    master_encoder: *mut MTLParallelRenderCommandEncoder,
-    render_encoder: MTLRenderCommandEncoder,
-    _render_pass_descriptor: MTLRenderPassDescriptor,
-
+    queue: MTLCommandQueue,
+    device: MTLDevice,
+    encoder: MetalEncoder,
     drawable: *mut CAMetalDrawable,
+<<<<<<< 7b084cfbb95e3e4d1ea51e91746fc75b2efb3be3
     in_use: HashSet<Buffer>,
     buf: Vec<Command>,
     data: DataBuffer,
@@ -146,21 +145,21 @@ pub struct CommandBuffer {
     encoding: bool,
     root: bool,
     pool: NSAutoreleasePool,
+=======
+    should_restore: bool
+>>>>>>> MTL - rewrite encoder into something manageable
 }
 
 unsafe impl Send for CommandBuffer {}
 
 impl CommandBuffer {
-    pub fn new(queue: MTLCommandQueue, drawable: *mut CAMetalDrawable) -> Self {
+    pub fn new(device: MTLDevice, queue: MTLCommandQueue, drawable: *mut CAMetalDrawable) -> Self {
         CommandBuffer {
-            mtl_queue: queue,
-            mtl_buf: Box::into_raw(Box::new(MTLCommandBuffer::nil())),
-
-            master_encoder: Box::into_raw(Box::new(MTLParallelRenderCommandEncoder::nil())),
-            render_encoder: MTLRenderCommandEncoder::nil(),
-            _render_pass_descriptor: MTLRenderPassDescriptor::nil(),
-
+            device: device,
+            queue: queue,
+            encoder: MetalEncoder::new(queue.new_command_buffer()),
             drawable: drawable,
+<<<<<<< 7b084cfbb95e3e4d1ea51e91746fc75b2efb3be3
             in_use: HashSet::new(),
             buf: Vec::new(),
             data: DataBuffer::new(),
@@ -169,10 +168,14 @@ impl CommandBuffer {
             encoding: false,
             root: false,
             pool: NSAutoreleasePool::nil(),
+=======
+            should_restore: false
+>>>>>>> MTL - rewrite encoder into something manageable
         }
     }
 
     pub fn commit(&mut self, drawable: CAMetalDrawable) {
+<<<<<<< 7b084cfbb95e3e4d1ea51e91746fc75b2efb3be3
         unsafe {
             if self.encoding {
                 self.render_encoder.end_encoding();
@@ -247,13 +250,18 @@ impl CommandBuffer {
             if self.render_encoder.is_null() {
                 self.render_encoder = (*self.master_encoder).render_command_encoder();
             }
+=======
+        self.encoder.end_encoding();
+        self.encoder.commit_command_buffer(drawable, false);
+        self.encoder.reset();
+>>>>>>> MTL - rewrite encoder into something manageable
 
-            self.encoding = true;
+        self.encoder.start_command_buffer(self.queue.new_command_buffer());
 
-            Some(self.render_encoder)
-        }
+        self.should_restore = false;
     }
 
+<<<<<<< 7b084cfbb95e3e4d1ea51e91746fc75b2efb3be3
     fn draw(&mut self, draw: Draw) {
         unsafe {
             if (*self.mtl_buf).is_null() {
@@ -382,47 +390,69 @@ impl CommandBuffer {
 
         // self.cache.clear();
         // self.buf.clear();
+=======
+    fn ensure_render_encoder(&mut self) {
+        if !self.encoder.is_render_encoding() {
+            self.encoder.begin_render_encoding();
+        }
+
+        if self.should_restore {
+            self.encoder.restore_render_state();
+            self.should_restore = false;
+        }
+>>>>>>> MTL - rewrite encoder into something manageable
     }
 }
 
 impl command::Buffer<Resources> for CommandBuffer {
     fn reset(&mut self) {
-        self.cache.clear();
-        self.buf.clear();
+        self.encoder.reset();
     }
 
     fn bind_pipeline_state(&mut self, pso: Pipeline) {
-        self.buf.push(Command::BindPipeline(pso));
+        self.encoder.set_render_pipeline_state(pso.pipeline);
+        self.encoder.set_front_facing_winding(pso.winding);
+        self.encoder.set_cull_mode(pso.cull);
+        self.encoder.set_triangle_fill_mode(pso.fill);
+
+        self.encoder.set_depth_bias(pso.depth_bias as f32 ,
+                                    pso.slope_scaled_depth_bias as f32,
+                                    0f32);
+
+
+        if let Some(depth_state) = pso.depth_stencil {
+            self.encoder.set_depth_stencil_state(depth_state);
+        }
+
+        //self.buf.push(Command::BindPipeline(pso));
     }
 
     fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<Resources>) {
+<<<<<<< 7b084cfbb95e3e4d1ea51e91746fc75b2efb3be3
         let mut buffers = [native::Buffer(MTLBuffer::nil()); MAX_VERTEX_ATTRIBUTES];
         let mut offsets = [0; MAX_VERTEX_ATTRIBUTES];
         let mut indices = [0; MAX_VERTEX_ATTRIBUTES];
 
+=======
+>>>>>>> MTL - rewrite encoder into something manageable
         for i in 0..1 {
             if let Some((buffer, offset)) = vbs.0[i] {
-                buffers[i] = buffer.0;
-                offsets[i] = offset as u64;
-                indices[i] = i as u64;
+                self.encoder.set_vertex_buffer(i as u64, offset as u64, unsafe { *(buffer.0).0 });
             }
         }
-        self.buf.push(Command::BindVertexBuffers(buffers, offsets, indices));
     }
 
     fn bind_constant_buffers(&mut self, cbs: &[pso::ConstantBufferParam<Resources>]) {
         for &stage in [Stage::Vertex, Stage::Pixel].iter() {
-            let mut buffers = [native::Buffer(MTLBuffer::nil()); MAX_CONSTANT_BUFFERS];
             let mask = stage.into();
-            let mut count = 0;
-            for cbuf in cbs.iter() {
-                if cbuf.1.contains(mask) {
-                    buffers[cbuf.2 as usize] = (cbuf.0).0;
-                    count += 1;
+            for cb in cbs.iter() {
+                if cb.1.contains(mask) {
+                    if let Stage::Vertex = stage {
+                        self.encoder.set_vertex_buffer(cb.2 as u64, 0, unsafe { *((cb.0).0).0 });
+                    } else {
+                        self.encoder.set_fragment_buffer(cb.2 as u64, 0, unsafe { *((cb.0).0).0 });
+                    }
                 }
-            }
-            if count != 0 {
-                self.buf.push(Command::BindConstantBuffers(stage, buffers));
             }
         }
     }
@@ -433,17 +463,15 @@ impl command::Buffer<Resources> for CommandBuffer {
 
     fn bind_resource_views(&mut self, rvs: &[pso::ResourceViewParam<Resources>]) {
         for &stage in [Stage::Vertex, Stage::Pixel].iter() {
-            let mut views = [native::Srv(ptr::null_mut()); MAX_RESOURCE_VIEWS];
             let mask = stage.into();
-            let mut count = 0;
             for view in rvs.iter() {
                 if view.1.contains(mask) {
-                    views[view.2 as usize] = view.0;
-                    count += 1;
+                    if let Stage::Vertex = stage {
+                        self.encoder.set_vertex_texture(view.2 as u64, unsafe { *(view.0).0 });
+                    } else {
+                        self.encoder.set_fragment_texture(view.2 as u64, unsafe { *(view.0).0 });
+                    }
                 }
-            }
-            if count != 0 {
-                self.buf.push(Command::BindShaderResources(stage, views));
             }
         }
     }
@@ -453,23 +481,24 @@ impl command::Buffer<Resources> for CommandBuffer {
     }
 
     fn bind_samplers(&mut self, ss: &[pso::SamplerParam<Resources>]) {
+        use std::f32;
+
         for &stage in [Stage::Vertex, Stage::Pixel].iter() {
-            let mut samplers = [native::Sampler(MTLSamplerState::nil()); MAX_SAMPLERS];
             let mask = stage.into();
-            let mut count = 0;
-            for sm in ss.iter() {
-                if sm.1.contains(mask) {
-                    samplers[sm.2 as usize] = sm.0;
-                    count += 1;
+            for sampler in ss.iter() {
+                if sampler.1.contains(mask) {
+                    if let Stage::Vertex = stage {
+                        self.encoder.set_vertex_sampler_state(sampler.2 as u64, 0f32, f32::MAX, (sampler.0).0);
+                    } else {
+                        self.encoder.set_fragment_sampler_state(sampler.2 as u64, 0f32, f32::MAX, (sampler.0).0)
+                    }
                 }
-            }
-            if count != 0 {
-                self.buf.push(Command::BindSamplers(stage, samplers));
             }
         }
     }
 
     fn bind_pixel_targets(&mut self, targets: pso::PixelTargetSet<Resources>) {
+<<<<<<< 7b084cfbb95e3e4d1ea51e91746fc75b2efb3be3
         let view = targets.get_view();
         self.buf.push(Command::SetViewport(MTLViewport {
             originX: 0f64,
@@ -479,15 +508,49 @@ impl command::Buffer<Resources> for CommandBuffer {
             znear: 0f64,
             zfar: 1f64,
         }));
+=======
+        // TODO(fkaa): cache here to see if we're actually changing targets!
+        self.encoder.end_encoding();
+        self.should_restore = true;
 
-        if let Some(cache_targets) = self.cache.targets {
-            if cache_targets != targets {
-                self.cache.targets = Some(targets);
+        let render_pass_descriptor = MTLRenderPassDescriptor::new();
 
-                unsafe {
-                    if self.encoding {
-                        self.render_encoder.end_encoding();
+        for i in 0..MAX_COLOR_TARGETS {
+            if let Some(color) = targets.colors[i] {
+                let attachment = render_pass_descriptor.color_attachments().object_at(i);
+                attachment.set_texture(unsafe { *(color.0) });
+                attachment.set_store_action(MTLStoreAction::Store);
 
+                let clear = unsafe { *color.1 };
+
+                if let Some(vals) = clear {
+                    attachment.set_load_action(MTLLoadAction::Clear);
+                    attachment.set_clear_color(
+                        MTLClearColor::new(vals[0] as f64 / 255.0,
+                                           vals[1] as f64 / 255.0,
+                                           vals[2] as f64 / 255.0,
+                                           vals[3] as f64 / 255.0)
+                    );
+
+                    // we reset the clear color to give the effect of being a
+                    // "per-frame" operation
+                    unsafe { *color.1 = None; }
+                } else {
+                    // if no clear has been specified, we simply load the
+                    // previous content
+                    attachment.set_load_action(MTLLoadAction::Load);
+                }
+>>>>>>> MTL - rewrite encoder into something manageable
+
+                //unsafe { *color.1 = [0; 4]; }
+            }
+        }
+
+        if let Some(depth) = targets.depth {
+            let attachment = render_pass_descriptor.depth_attachment();
+            attachment.set_texture(unsafe { *(depth.0) });
+
+<<<<<<< 7b084cfbb95e3e4d1ea51e91746fc75b2efb3be3
                         if self.root {
                             (*self.master_encoder).end_encoding();
                             // (*self.master_encoder).release();
@@ -499,50 +562,87 @@ impl command::Buffer<Resources> for CommandBuffer {
                     // self.render_encoder.release();
                     self.render_encoder = MTLRenderCommandEncoder::nil();
                 }
+=======
+            if let Some(layer) = depth.1 {
+                attachment.set_slice(layer as u64);
             }
-        } else {
-            self.cache.targets = Some(targets);
+
+            attachment.set_store_action(MTLStoreAction::Store);
+
+            let clear = unsafe { *depth.2 };
+
+            if let Some(val) = clear {
+                attachment.set_load_action(MTLLoadAction::Clear);
+                attachment.set_clear_depth(val as f64);
+
+                // same here, clear should not be persistent across frames
+                unsafe { *depth.2 = None; }
+            } else {
+                // see above
+                attachment.set_load_action(MTLLoadAction::Load);
+>>>>>>> MTL - rewrite encoder into something manageable
+            }
         }
+
+        self.encoder.set_render_pass_descriptor(render_pass_descriptor);
+        //self.encoder.begin_render_encoding();
+        //self.encoder.restore_render_state();
+        self.encoder.set_viewport(MTLViewport {
+            originX: 0f64,
+            originY: 0f64,
+            width: targets.size.0 as f64,
+            height: targets.size.1 as f64,
+            znear: 0f64,
+            zfar: 1f64
+        });
     }
 
     fn bind_index(&mut self, buf: Buffer, idx_type: IndexType) {
-        self.index_buf = Some((buf, idx_type));
+        use map::map_index_type;
+
+        self.encoder.set_index_buffer(unsafe { *(buf.0).0 }, map_index_type(idx_type));
     }
 
     fn set_scissor(&mut self, rect: target::Rect) {
-        self.buf.push(Command::SetScissor(MTLScissorRect {
+        // TODO(fkaa): why are getting 1x1 scissor?
+        /*self.encoder.set_scissor_rect(MTLScissorRect {
             x: rect.x as u64,
             y: rect.y as u64,
             width: (rect.x + rect.w) as u64,
             height: (rect.y + rect.h) as u64,
-        }));
+        });*/
     }
 
     fn set_ref_values(&mut self, vals: state::RefValues) {
-        if vals.stencil.0 != vals.stencil.1 {
+        //self.encoder.set_stencil_front_back_reference_value(vals.stencil.0, vals.stencil.1);
+        /*if vals.stencil.0 != vals.stencil.1 {
             error!("Unable to set different stencil ref values for front ({}) and back ({})",
+<<<<<<< 7b084cfbb95e3e4d1ea51e91746fc75b2efb3be3
                    vals.stencil.0,
                    vals.stencil.1);
         }
+=======
+                vals.stencil.0, vals.stencil.1);
+        }*/
+>>>>>>> MTL - rewrite encoder into something manageable
         // TODO: blend/stencil
     }
 
     fn update_buffer(&mut self, buf: Buffer, data: &[u8], offset: usize) {
-        if self.in_use.contains(&buf) {
-            unsafe {
-                if self.encoding {
-                    self.render_encoder.end_encoding();
+        use map::{map_buffer_usage};
 
+<<<<<<< 7b084cfbb95e3e4d1ea51e91746fc75b2efb3be3
                     if self.root {
                         (*self.master_encoder).end_encoding();
                         // (*self.master_encoder).release();
                         *self.master_encoder = MTLParallelRenderCommandEncoder::nil();
+=======
+        debug_assert!(!unsafe { *(*(buf.0).0) }.is_null(), "Buffer must be non-nil");
+>>>>>>> MTL - rewrite encoder into something manageable
 
-                        (*self.mtl_buf).present_drawable(*self.drawable);
-                        (*self.mtl_buf).commit();
-                        (*self.mtl_buf).wait_until_completed();
-                        (*self.mtl_buf).release();
+        let b = unsafe { *(buf.0).0 };
 
+<<<<<<< 7b084cfbb95e3e4d1ea51e91746fc75b2efb3be3
                         *self.master_encoder = MTLParallelRenderCommandEncoder::nil();
                         *self.mtl_buf = MTLCommandBuffer::nil();
 
@@ -553,24 +653,38 @@ impl command::Buffer<Resources> for CommandBuffer {
                 }
                 // self.render_encoder.release();
                 self.render_encoder = MTLRenderCommandEncoder::nil();
+=======
+        if offset == 0 && data.len() == b.length() as usize {
+            unsafe {
+                //b.release();
+                *(buf.0).0 = self.device.new_buffer_with_data(
+                    data.as_ptr() as _,
+                    data.len() as _,
+                    map_buffer_usage(buf.1));
             }
-            self.in_use.clear();
-        }
+        } else {
+            if self.encoder.is_buffer_bound(b) {
+                self.encoder.end_encoding();
+                //self.encoder.commit_command_buffer(CAMetalDrawable::nil(), true);
+                self.should_restore = true;
+>>>>>>> MTL - rewrite encoder into something manageable
+            }
 
-        self.in_use.insert(buf);
+            let contents = b.contents();
 
-        let contents = (buf.0).0.contents();
-
-        unsafe {
-            let dst = (contents as *mut u8).offset(offset as isize);
-            ptr::copy(data.as_ptr(), dst, data.len());
-
+<<<<<<< 7b084cfbb95e3e4d1ea51e91746fc75b2efb3be3
             // (buf.0).0.invalidate_range(NSRange::new(offset as u64, data.len() as u64));
+=======
+            unsafe {
+                let dst = (contents as *mut u8).offset(offset as isize);
+                ptr::copy(data.as_ptr(), dst, data.len());
+                //(buf.0).0.invalidate_range(NSRange::new(offset as u64, data.len() as u64));
+            }
+>>>>>>> MTL - rewrite encoder into something manageable
         }
-        // let ptr = self.data.add(data);
-        // self.buf.push(Command::UpdateBuffer(buf, ptr, offset));
     }
 
+<<<<<<< 7b084cfbb95e3e4d1ea51e91746fc75b2efb3be3
     fn update_texture(&mut self,
                       tex: Texture,
                       kind: tex::Kind,
@@ -579,12 +693,19 @@ impl command::Buffer<Resources> for CommandBuffer {
                       info: tex::RawImageInfo) {
         let ptr = self.data.add(data);
         self.buf.push(Command::UpdateTexture(tex, kind, face, ptr, info));
+=======
+    fn update_texture(&mut self, tex: Texture, kind: tex::Kind, face: Option<tex::CubeFace>,
+                      data: &[u8], info: tex::RawImageInfo) {
+        //let ptr = self.data.add(data);
+        //self.buf.push(Command::UpdateTexture(tex, kind, face, ptr, info));
+>>>>>>> MTL - rewrite encoder into something manageable
     }
 
     fn generate_mipmap(&mut self, _srv: Srv) {
         unimplemented!()
     }
 
+<<<<<<< 7b084cfbb95e3e4d1ea51e91746fc75b2efb3be3
     fn clear_color(&mut self, _target: Rtv, value: command::ClearColor) {
         self.cache.clear = value;
     }
@@ -624,5 +745,65 @@ impl command::Buffer<Resources> for CommandBuffer {
             }
             None => Draw::Indexed(count as u64, start as u64, base as u64),
         });
+=======
+    fn clear_color(&mut self, target: Rtv, value: draw::ClearColor) {
+        match value {
+            draw::ClearColor::Float(val) => {
+                unsafe {
+                    *target.1 = Some([(val[0] * 255.0) as u8,
+                                      (val[1] * 255.0) as u8,
+                                      (val[2] * 255.0) as u8,
+                                      (val[3] * 255.0) as u8]);
+                }
+            },
+            _ => { unimplemented!(); }
+        }
+    }
+
+    fn clear_depth_stencil(&mut self, target: Dsv,
+                           depth: Option<target::Depth>, stencil: Option<target::Stencil>) {
+        unsafe {
+            *target.2 = Some(depth.unwrap_or_default());
+        }
+        //self.cache.clear_depth = depth.unwrap_or_default();
+        //self.cache.clear_stencil = stencil.unwrap_or_default();
+    }
+
+    fn call_draw(&mut self, start: VertexCount, count: VertexCount, instances: draw::InstanceOption) {
+        self.encoder.begin_render_encoding();
+        self.encoder.restore_render_state();
+
+        match instances {
+            Some((ninst, offset)) => {
+                self.encoder.draw_instanced(count as u64,
+                                            ninst as u64,
+                                            start as u64);
+            },
+            None => {
+                self.encoder.draw(start as u64,
+                                  count as u64);
+            }
+        }
+    }
+
+    fn call_draw_indexed(&mut self, start: VertexCount, count: VertexCount,
+                         base: VertexCount, instances: draw::InstanceOption) {
+        self.encoder.begin_render_encoding();
+        self.encoder.restore_render_state();
+
+        match instances {
+            Some((ninst, offset)) => {
+                /*self.encoder.draw_indexed_instanced(count as u64,
+                                                    ninst as u64,
+                                                    start as u64,
+                                                    base as u64,
+                                                    offset as u64);*/
+            },
+            None => {
+                self.encoder.draw_indexed(count as u64,
+                                          start as u64);
+            }
+        }
+>>>>>>> MTL - rewrite encoder into something manageable
     }
 }

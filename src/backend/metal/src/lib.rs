@@ -20,6 +20,7 @@ extern crate objc_foundation;
 extern crate cocoa;
 extern crate gfx_core as core;
 extern crate metal;
+extern crate bit_set;
 
 // use cocoa::base::{selector, class};
 // use cocoa::foundation::{NSUInteger};
@@ -34,6 +35,7 @@ use std::sync::Arc;
 // use std::{mem, ptr};
 
 mod factory;
+mod encoder;
 mod command;
 mod mirror;
 mod map;
@@ -53,7 +55,7 @@ pub mod native {
     use metal::*;
 
     #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-    pub struct Buffer(pub MTLBuffer);
+    pub struct Buffer(pub *mut MTLBuffer);
     unsafe impl Send for Buffer {}
     unsafe impl Sync for Buffer {}
 
@@ -67,13 +69,18 @@ pub mod native {
     unsafe impl Send for Sampler {}
     unsafe impl Sync for Sampler {}
 
+    // HACK(fkaa): Cache the clear color inside the `Rtv` type, since metal
+    //             requires it for the renderpass creation
+    //
+    // FIXME(fkaa): Use f32 for clear color instead? Need to wrap in newtype
+    //              first because no `Eq` or `Hash` for f32..
     #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-    pub struct Rtv(pub *mut MTLTexture);
+    pub struct Rtv(pub *mut MTLTexture, pub *mut Option<[u8; 4]>);
     unsafe impl Send for Rtv {}
     unsafe impl Sync for Rtv {}
 
     #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-    pub struct Dsv(pub *mut MTLTexture);
+    pub struct Dsv(pub *mut MTLTexture, pub Option<u16>, pub *mut Option<f32>);
     unsafe impl Send for Dsv {}
     unsafe impl Sync for Dsv {}
 
@@ -110,6 +117,11 @@ pub struct Pipeline {
     winding: MTLWinding,
     cull: MTLCullMode,
     fill: MTLTriangleFillMode,
+    alpha_to_one: bool,
+    alpha_to_coverage: bool,
+    depth_bias: i32,
+    slope_scaled_depth_bias: i32,
+    depth_clip: bool,
 }
 unsafe impl Send for Pipeline {}
 unsafe impl Sync for Pipeline {}
