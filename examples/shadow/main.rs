@@ -431,7 +431,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
         use gfx::traits::FactoryExt;
         use gfx_app::shade::Source;
 
-        let mut is_parallel = true;
+        let mut is_parallel = false;
         for arg in env::args().skip(1) {
             if arg == "single" {
                 is_parallel = false;
