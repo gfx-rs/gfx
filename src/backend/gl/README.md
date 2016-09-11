@@ -2,6 +2,12 @@
 
 [OpenGL](https://www.khronos.org/opengl/) backend for gfx.
 
+## Normalized Coordinates
+
+Render | Depth | Texture
+-------|-------|--------
+![render_coordinates](../../../info/gl_render_coordinates.png) | ![depth_coordinates](../../../info/gl_depth_coordinates.png) | ![texture_coordinates](../../../info/gl_texture_coordinates.png)
+
 ## GLSL Mirroring
 
 PSO component | GLSL component
