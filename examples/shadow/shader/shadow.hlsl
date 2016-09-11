@@ -3,7 +3,9 @@ cbuffer Locals {
 };
 
 float4 Vertex(int4 pos : a_Pos): SV_Position {
-    return mul(u_Transform, float4(pos));
+    float4 ndc = mul(u_Transform, float4(pos));
+    ndc.z = (ndc.z + ndc.w) * 0.5;
+    return ndc;
 }
 
 void Pixel() {}

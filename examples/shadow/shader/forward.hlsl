@@ -16,7 +16,7 @@ struct Light {
 
 static const int MAX_LIGHTS = 10;
 
-cbuffer Lights {
+cbuffer b_Lights {
 	Light u_Lights[MAX_LIGHTS];
 }
 
@@ -49,6 +49,7 @@ float4 Pixel(VsOutput In): SV_Target {
 		float4 light_local = mul(light.proj, float4(In.world_pos, 1.0));
 		// compute texture coordinates for shadow lookup
 		light_local.xyw = (light_local.xyz/light_local.w + 1.0) / 2.0;
+		light_local.y = 1.0 - light_local.y;
 		light_local.z = i;
 		// do the lookup, using HW PCF and comparison
 		float shadow = t_Shadow.SampleCmpLevelZero(t_Shadow_, light_local.xyz, light_local.w);
