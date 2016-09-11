@@ -97,7 +97,7 @@ For example try:
 	$ cd gfx
 	$ cargo run --example cube
 
-If you compile the the example for the first time, it may take some while since all dependencies must be compiled too.
+If you compile the example for the first time, it may take some while since all dependencies must be compiled too.
 
 If you want to build your own stand-alone gfx program, add the following to your new `Cargo.toml`:
 
@@ -105,7 +105,7 @@ If you want to build your own stand-alone gfx program, add the following to your
 	gfx = "*"
 
 
-For gfx to work, it need access to the graphics system of the OS. This is typically provided through the some window initialization API.
+For gfx to work, it needs access to the graphics system of the OS. This is typically provided through some window initialization API.
 gfx can use a couple of those to acquire graphical contexts.
 For example; [glfw](https://github.com/PistonDevelopers/glfw-rs) or [glutin](https://github.com/tomaka/glutin/).
 
