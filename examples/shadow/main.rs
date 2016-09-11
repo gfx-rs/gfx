@@ -149,7 +149,12 @@ fn create_plane<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F, size: i8
         Vertex::new([-size,  size,  0], [0, 0, 1]),
     ];
 
-    factory.create_vertex_buffer_with_slice(&vertex_data, ())
+    let index_data: &[u16] = &[
+        0, 1, 2,
+        2, 1, 3
+    ];
+
+    factory.create_vertex_buffer_with_slice(&vertex_data, index_data)
 }
 
 //----------------------------------------
