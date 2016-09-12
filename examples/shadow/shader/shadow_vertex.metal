@@ -9,6 +9,8 @@ struct VertexInput {
 vertex float4 vert(constant float4x4& Locals [[ buffer(1) ]],
                    VertexInput in            [[ stage_in ]])
 {
-    return Locals * float4(in.a_Pos);
+    float4 ndc = Locals * float4(in.a_Pos);
+    ndc.z = (ndc.z + ndc.w) * 0.5;
+    return ndc;
 }
 

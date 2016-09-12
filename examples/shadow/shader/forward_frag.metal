@@ -46,14 +46,13 @@ fragment FragmentOut frag(constant Locals& PsLocals [[ buffer(2) ]],
 
         float4 light_local = light.proj * float4(in.position, 1.0);
         light_local.xyw = (light_local.xyz / light_local.w + 1.0) / 2.0;
-        light_local.y = light_local.y;
-        //light_local.z = i;
+        light_local.y = 1.0 - light_local.y;
 
         float shadow = t_Shadow.sample_compare(s, light_local.xy, i, light_local.w);
         float3 light_dir = normalize(light.pos.xyz - in.position);
         float diffuse = max(0.0, dot(normal, light_dir));
 
-        color += shadow *  b_Lights[i].color.xyz;
+        color += shadow * diffuse * b_Lights[i].color.xyz;
     }
 
     out.main = float4(color, 1.0) * PsLocals.u_Color;

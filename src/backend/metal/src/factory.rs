@@ -378,12 +378,12 @@ impl core::Factory<Resources> for Factory {
             alpha_to_one: false,
             alpha_to_coverage: false,
             depth_bias: if let Some(ref offset) = desc.rasterizer.offset {
-                offset.0
+                offset.1
             } else {
                 0
             },
             slope_scaled_depth_bias: if let Some(ref offset) = desc.rasterizer.offset {
-                offset.1
+                offset.0
             } else {
                 0
             },
