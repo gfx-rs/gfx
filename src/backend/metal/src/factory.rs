@@ -235,6 +235,9 @@ impl core::Factory<Resources> for Factory {
                     .object_at(0)
                     .set_pixel_format(MTLPixelFormat::BGRA8Unorm_sRGB);
 
+
+
+
                 // when we use `[[ stage_in ]]` we have to have a vertex
                 // descriptor attached to the PSO descriptor
                 //
@@ -250,12 +253,23 @@ impl core::Factory<Resources> for Factory {
                 buf.set_step_function(MTLVertexStepFunction::Constant);
                 buf.set_step_rate(0);
 
-                for i in 0..16 {
-                    let attribute = vertex_desc.attributes().object_at(i as usize);
-                    attribute.set_format(MTLVertexFormat::Char4);
+                mirror::populate_vertex_attributes(&mut info, vs.vertex_attributes());
+
+                for attr in info.vertex_attributes.iter() {
+                    // TODO: handle case when requested vertex format is invalid
+                    println!("{:?}: {:?}", attr.slot, mirror::map_base_type_to_format(attr.base_type));
+                    let attribute = vertex_desc.attributes().object_at(attr.slot as usize);
+                    attribute.set_format(mirror::map_base_type_to_format(attr.base_type));
                     attribute.set_offset(0);
                     attribute.set_buffer_index(DUMMY_BUFFER_SLOT);
                 }
+
+                /*for i in 0..16 {
+                    let attribute = vertex_desc.attributes().object_at(i as usize);
+                    attribute.set_format(MTLVertexFormat::Float);
+                    attribute.set_offset(0);
+                    attribute.set_buffer_index(DUMMY_BUFFER_SLOT);
+                }*/
 
                 pso_descriptor.set_vertex_descriptor(vertex_desc);
 
@@ -264,7 +278,6 @@ impl core::Factory<Resources> for Factory {
                     .unwrap();
 
                 // fill the `ProgramInfo` struct with goodies
-                mirror::populate_vertex_attributes(&mut info, vs.vertex_attributes());
 
                 mirror::populate_info(&mut info, Stage::Vertex, reflection.vertex_arguments());
                 mirror::populate_info(&mut info, Stage::Pixel, reflection.fragment_arguments());
@@ -311,20 +324,29 @@ impl core::Factory<Resources> for Factory {
 
         let vertex_desc = MTLVertexDescriptor::new();
 
+        let mut vb_count = 0;
+        for vb in desc.vertex_buffers.iter() {
+            if let &Some(vbuf) = vb {
+                let buf = vertex_desc.layouts().object_at(vb_count as usize);
+                buf.set_stride(vbuf.stride as u64);
+                if vbuf.rate > 0 {
+                    buf.set_step_function(MTLVertexStepFunction::PerInstance);
+                    buf.set_step_rate(vbuf.rate as u64);
+                } else {
+                    buf.set_step_function(MTLVertexStepFunction::PerVertex);
+                    buf.set_step_rate(1);
+                }
+
+                vb_count += 1;
+            }
+        }
         // TODO: find a better way to set the buffer's stride, step func and
         //       step rate
-        let buf = vertex_desc.layouts().object_at(0);
-        let vat = desc.vertex_buffers[desc.attributes[0].unwrap().0 as usize].unwrap();
-        buf.set_stride(vat.stride as u64);
-        buf.set_step_function(if vat.rate > 0 {MTLVertexStepFunction::PerInstance} else {MTLVertexStepFunction::PerVertex});
-        buf.set_step_rate(1);
 
-        for (attr, attr_desc) in program.get_info()
-            .vertex_attributes
-            .iter()
-            .zip(desc.attributes.iter()) {
-            let elem = match attr_desc {
-                &Some((_, el)) => el,
+
+        for (attr, attr_desc) in program.get_info().vertex_attributes.iter().zip(desc.attributes.iter()) {
+            let (idx, elem) = match attr_desc {
+                &Some((idx, el)) => (idx, el),
                 &None => continue,
             };
 
@@ -339,13 +361,12 @@ impl core::Factory<Resources> for Factory {
             let attribute = vertex_desc.attributes().object_at(attr.slot as usize);
             attribute.set_format(map_vertex_format(elem.format).unwrap());
             attribute.set_offset(elem.offset as u64);
-            attribute.set_buffer_index(0);
+            attribute.set_buffer_index(idx as u64);
         }
 
         let prog = self.frame_handles.ref_program(program);
 
         let pso_descriptor = MTLRenderPipelineDescriptor::alloc().init();
-        println!("{:?}", prog.ps);
         pso_descriptor.set_vertex_function(prog.vs);
         if !prog.ps.is_null() {
             pso_descriptor.set_fragment_function(prog.ps);

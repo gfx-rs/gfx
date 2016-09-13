@@ -21,13 +21,16 @@ use factory::DUMMY_BUFFER_SLOT;
 
 use metal::*;
 
-fn _map_base_type_from_component(ct: MTLDataType) -> shade::BaseType {
-    use metal::MTLDataType::*;
+pub fn map_base_type_to_format(ty: shade::BaseType) -> MTLVertexFormat {
+    use metal::MTLVertexFormat::*;
+    use gfx_core::shade::BaseType::*;
 
-    match ct {
-        Float | Float2 | Float3 | Float4 | Float2x2 | Float2x3 | Float2x4 | Float3x2 |
-        Float3x3 | Float3x4 | Float4x2 | Float4x3 | Float4x4 => shade::BaseType::F32,
-        _ => shade::BaseType::I32,
+    match ty {
+        I32 => MTLVertexFormat::Int,
+        U32 => MTLVertexFormat::UInt,
+        F32 => MTLVertexFormat::Float,
+        Bool => MTLVertexFormat::Char2,
+        F64 => { unimplemented!() }
     }
 }
 

@@ -515,14 +515,16 @@ impl MetalEncoder {
         }
     }
 
-    pub fn draw_indexed_instanced(&self, index_count: u64, index_type: MTLIndexType, index_buffer: MTLBuffer, index_buffer_offset: u64, instance_count: u64) {
+    pub fn draw_indexed_instanced(&self, index_count: u64, index_buffer_offset: u64, instance_count: u64, base_vertex: i64, base_instance: u64) {
         if let Some((buf, ty)) = self.cache.index_buffer {
             self.render.draw_indexed_primitives_instanced(MTLPrimitiveType::Triangle,
                                                           index_count,
-                                                          index_type,
-                                                          index_buffer,
+                                                          ty,
+                                                          buf,
                                                           index_buffer_offset,
-                                                          instance_count);
+                                                          instance_count,
+                                                          base_vertex,
+                                                          base_instance);
         } else {
             error!("Cannot draw indexed primitives without a index buffer bound");
         }
