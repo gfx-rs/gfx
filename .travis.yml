@@ -8,8 +8,8 @@ os:
   - osx
 notifications:
   webhooks:
-    #urls:
-    #  - https://webhooks.gitter.im/e/7479b6691b7e5e40716a
+    urls:
+      - https://webhooks.gitter.im/e/7479b6691b7e5e40716a
     on_success: always
     on_failure: always
     on_start: false
