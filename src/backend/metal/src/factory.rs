@@ -32,26 +32,25 @@ use mirror;
 
 pub const DUMMY_BUFFER_SLOT: u64 = 30;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct RawMapping {
     pointer: *mut c_void,
 }
 
-impl<T> core::mapping::Gate<T> for RawMapping
-    where T: core::Resources
-{
-    unsafe fn set(&self, index: usize, val: T) {
+impl mapping::Gate<Resources> for RawMapping {
+    unsafe fn set<T>(&self, index: usize, val: T) {
         *(self.pointer as *mut T).offset(index as isize) = val;
     }
 
-    unsafe fn slice(&self, len: usize) -> &[T] {
+    unsafe fn slice<'a, 'b, T>(&'a self, len: usize) -> &'b [T] {
         slice::from_raw_parts(self.pointer as *const T, len)
     }
 
-    unsafe fn mut_slice(&self, len: usize) -> &mut [T] {
+    unsafe fn mut_slice<'a, 'b, T>(&'a self, len: usize) -> &'b mut [T] {
         slice::from_raw_parts_mut(self.pointer as *mut T, len)
     }
 }
+
 
 pub struct Factory {
     drawable: *mut CAMetalDrawable,
@@ -143,8 +142,6 @@ impl Factory {
 
 
 impl core::Factory<Resources> for Factory {
-    // type Mapper = RawMapping;
-
     fn get_capabilities(&self) -> &core::Capabilities {
         &self.share.capabilities
     }
@@ -720,25 +717,25 @@ impl core::Factory<Resources> for Factory {
     fn map_buffer_raw(&mut self,
                       _buf: &handle::RawBuffer<Resources>,
                       _access: memory::Access)
-                      -> RawMapping {
+                      -> Result<handle::RawMapping<Resources>, mapping::Error> {
         unimplemented!()
     }
 
     fn map_buffer_readable<T: Copy>(&mut self,
                                     _buf: &handle::Buffer<Resources, T>)
-                                    -> core::mapping::Readable<Resources, T> {
+                                    -> Result<mapping::Readable<Resources, T>, mapping::Error> {
         unimplemented!()
     }
 
     fn map_buffer_writable<T: Copy>(&mut self,
                                     _buf: &handle::Buffer<Resources, T>)
-                                    -> core::mapping::Writable<Resources, T> {
+                                    -> Result<mapping::Writable<Resources, T>, mapping::Error> {
         unimplemented!()
     }
 
     fn map_buffer_rw<T: Copy>(&mut self,
                               _buf: &handle::Buffer<Resources, T>)
-                              -> core::mapping::RWer<Resources, T> {
+                              -> Result<mapping::RWable<Resources, T>, mapping::Error> {
         unimplemented!()
     }
 }

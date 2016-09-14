@@ -130,6 +130,15 @@ pub struct Device {
     max_resource_count: Option<usize>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Fence;
+
+impl core::Fence for Fence {
+    fn wait(&self) {
+        unimplemented!()
+    }
+}
+
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Resources {}
 
@@ -144,7 +153,8 @@ impl core::Resources for Resources {
     type ShaderResourceView = native::Srv;
     type UnorderedAccessView = ();
     type Sampler = native::Sampler;
-    type Fence = ();
+    type Fence = Fence;
+    type Mapping = factory::RawMapping;
 }
 
 pub type ShaderModel = u16;
@@ -184,9 +194,18 @@ impl core::Device for Device {
         }
     }
 
-    fn submit(&mut self, cb: &mut Self::CommandBuffer) {
+    fn submit(&mut self, cb: &mut command::CommandBuffer, _: &core::pso::AccessInfo<Resources>) {
         cb.commit(unsafe { *self.drawable });
     }
+
+    fn fenced_submit(&mut self,
+                     _: &mut Self::CommandBuffer,
+                     _: &core::pso::AccessInfo<Resources>,
+                     _after: Option<handle::Fence<Resources>>)
+                     -> handle::Fence<Resources> {
+        unimplemented!()
+    }
+
 
     fn cleanup(&mut self) {
         use core::handle::Producer;
@@ -226,7 +245,12 @@ impl core::Device for Device {
                                                    |_, _v| {
                                                        // v.sampler.release();
                                                    }, // sampler
-                                                   |_, _| {} /* fence */);
+                                                   |_, _| {
+                                                       // fence
+                                                   },
+                                                   |_, _| {
+                                                       // raw mapping
+                                                   });
     }
 }
 

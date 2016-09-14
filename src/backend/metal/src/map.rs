@@ -14,10 +14,10 @@
 
 use metal::*;
 
-use core::{state, shade, factory};
+use core::{state, shade};
 use core::{IndexType, Primitive};
 use core::memory;
-use core::memory::{Access, Bind, Usage};
+use core::memory::{Bind, Usage};
 use core::format::{Format, ChannelType, SurfaceType};
 use core::state::Comparison;
 use core::texture::{FilterMethod, WrapMode};
@@ -516,25 +516,27 @@ pub fn map_access(access: memory::Access) -> MTLResourceOptions {
         memory::READ => MTLResourceCPUCacheModeDefaultCache,
         memory::WRITE => MTLResourceCPUCacheModeWriteCombined,
         memory::RW => MTLResourceCPUCacheModeDefaultCache,
+        _ => unreachable!(),
     }
 }
 
 pub fn map_texture_usage(usage: Usage) -> (MTLResourceOptions, MTLStorageMode) {
     match usage {
         Usage::GpuOnly => (MTLResourceStorageModePrivate, MTLStorageMode::Private),
-
-        Usage::Const => (MTLResourceStorageModePrivate, MTLStorageMode::Managed),
+        Usage::Immutable => (MTLResourceStorageModePrivate, MTLStorageMode::Managed),
         Usage::Dynamic => (MTLResourceCPUCacheModeDefaultCache, MTLStorageMode::Managed),
         Usage::CpuOnly(access) => (map_access(access), MTLStorageMode::Managed),
+        Usage::Persistent(access) => (map_access(access), MTLStorageMode::Managed),
     }
 }
 
 pub fn map_buffer_usage(usage: Usage) -> MTLResourceOptions {
     match usage {
         Usage::GpuOnly => MTLResourceStorageModePrivate,
-        Usage::Const => MTLResourceCPUCacheModeDefaultCache,
+        Usage::Immutable => MTLResourceCPUCacheModeDefaultCache,
         Usage::Dynamic => MTLResourceCPUCacheModeDefaultCache,
         Usage::CpuOnly(access) => map_access(access),
+        Usage::Persistent(access) => map_access(access),
     }
 }
 

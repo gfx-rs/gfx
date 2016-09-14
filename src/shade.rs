@@ -17,7 +17,7 @@ pub use gfx_device_gl::Version as GlslVersion;
 #[cfg(target_os = "windows")]
 pub use gfx_device_dx11::ShaderModel as DxShaderModel;
 #[cfg(target_os = "macos")]
-// pub use gfx_device_metal::ShaderModel as MetalShaderModel;
+pub use gfx_device_metal::ShaderModel as MetalShaderModel;
 /// Shader backend with version numbers.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Backend {
@@ -26,7 +26,7 @@ pub enum Backend {
     #[cfg(target_os = "windows")]
     Hlsl(DxShaderModel),
     #[cfg(target_os = "macos")]
-    //    Msl(MetalShaderModel),
+    Msl(MetalShaderModel),
     #[cfg(feature = "vulkan")]
     Vulkan,
 }
@@ -113,13 +113,13 @@ impl<'a> Source<'a> {
                 }
             }
             #[cfg(target_os = "macos")]
-            /*Backend::Msl(revision) => {
+            Backend::Msl(revision) => {
                 match *self {
                     Source { msl_11: s, .. } if s != EMPTY && revision >= 11 => s,
                     Source { msl_10: s, .. } if s != EMPTY && revision >= 10 => s,
                     _ => return Err(SelectError(backend)),
                 }
-            }*/
+            }
             #[cfg(feature = "vulkan")]
             Backend::Vulkan => {
                 match *self {
