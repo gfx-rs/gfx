@@ -21,8 +21,8 @@ extern crate cocoa;
 extern crate gfx_core as core;
 extern crate metal;
 
-//use cocoa::base::{selector, class};
-//use cocoa::foundation::{NSUInteger};
+// use cocoa::base::{selector, class};
+// use cocoa::foundation::{NSUInteger};
 
 use metal::*;
 
@@ -31,7 +31,7 @@ use core::memory::{self, Usage};
 
 use std::cell::RefCell;
 use std::sync::Arc;
-//use std::{mem, ptr};
+// use std::{mem, ptr};
 
 mod factory;
 mod command;
@@ -90,7 +90,7 @@ unsafe impl Sync for InputLayout {}
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Shader {
-    func: MTLFunction
+    func: MTLFunction,
 }
 unsafe impl Send for Shader {}
 unsafe impl Sync for Shader {}
@@ -98,7 +98,7 @@ unsafe impl Sync for Shader {}
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Program {
     vs: MTLFunction,
-    ps: MTLFunction
+    ps: MTLFunction,
 }
 unsafe impl Send for Program {}
 unsafe impl Sync for Program {}
@@ -109,7 +109,7 @@ pub struct Pipeline {
     depth_stencil: Option<MTLDepthStencilState>,
     winding: MTLWinding,
     cull: MTLCullMode,
-    fill: MTLTriangleFillMode
+    fill: MTLTriangleFillMode,
 }
 unsafe impl Send for Pipeline {}
 unsafe impl Sync for Pipeline {}
@@ -134,17 +134,17 @@ pub struct Device {
 pub enum Resources {}
 
 impl core::Resources for Resources {
-    type Buffer              = Buffer;
-    type Shader              = Shader;
-    type Program             = Program;
+    type Buffer = Buffer;
+    type Shader = Shader;
+    type Program = Program;
     type PipelineStateObject = Pipeline;
-    type Texture             = Texture;
-    type RenderTargetView    = native::Rtv;
-    type DepthStencilView    = native::Dsv;
-    type ShaderResourceView  = native::Srv;
+    type Texture = Texture;
+    type RenderTargetView = native::Rtv;
+    type DepthStencilView = native::Dsv;
+    type ShaderResourceView = native::Srv;
     type UnorderedAccessView = ();
-    type Sampler             = native::Sampler;
-    type Fence               = ();
+    type Sampler = native::Sampler;
+    type Fence = ();
 }
 
 pub type ShaderModel = u16;
@@ -176,9 +176,10 @@ impl core::Device for Device {
         self.frame_handles.extend(man);
         match self.max_resource_count {
             Some(c) if self.frame_handles.count() > c => {
-                error!("Way too many resources in the current frame. Did you call Device::cleanup()?");
+                error!("Way too many resources in the current frame. Did you call \
+                        Device::cleanup()?");
                 self.max_resource_count = None;
-            },
+            }
             _ => (),
         }
     }
@@ -191,35 +192,53 @@ impl core::Device for Device {
         use core::handle::Producer;
         self.frame_handles.clear();
         self.share.handles.borrow_mut().clean_with(&mut (),
-            |_, _v| { /*v.0.release();*/ }, //buffer
-            |_, _s| { //shader
+                                                   |_, _v| {
+                                                       // v.0.release();
+                                                   }, // buffer
+                                                   |_, _s| { //shader
                 /*(*s.object).Release();
                 (*s.reflection).Release();*/
             },
-            |_, _p| {
-                //if !p.vs.is_null() { p.vs.release(); }
-                //if !p.ps.is_null() { p.ps.release(); }
-            }, //program
-            |_, _v| { //PSO
+                                                   |_, _p| {
+                                                       // if !p.vs.is_null() { p.vs.release(); }
+                                                       // if !p.ps.is_null() { p.ps.release(); }
+                                                   }, // program
+                                                   |_, _v| { //PSO
                 /*type Child = *mut winapi::ID3D11DeviceChild;
                 (*v.layout).Release();
                 (*(v.rasterizer as Child)).Release();
                 (*(v.depth_stencil as Child)).Release();
                 (*(v.blend as Child)).Release();*/
             },
-            |_, _v| { /*(*(v.0).0).release();*/ },  //texture
-            |_, _v| { /*(*v.0).Release();*/ }, //SRV
-            |_, _| {}, //UAV
-            |_, _v| { /*(*v.0).Release();*/ }, //RTV
-            |_, _v| { /*(*v.0).Release();*/ }, //DSV
-            |_, _v| { /*v.sampler.release();*/ }, //sampler
-            |_, _| {}, //fence
-        );
+                                                   |_, _v| {
+                                                       // (*(v.0).0).release();
+                                                   }, // texture
+                                                   |_, _v| {
+                                                       // (*v.0).Release();
+                                                   }, // SRV
+                                                   |_, _| {}, // UAV
+                                                   |_, _v| {
+                                                       // (*v.0).Release();
+                                                   }, // RTV
+                                                   |_, _v| {
+                                                       // (*v.0).Release();
+                                                   }, // DSV
+                                                   |_, _v| {
+                                                       // v.sampler.release();
+                                                   }, // sampler
+                                                   |_, _| {} /* fence */);
     }
 }
 
-pub fn create(format: core::format::Format, width: u32, height: u32)
-              -> Result<(Device, Factory, handle::RawRenderTargetView<Resources>, *mut CAMetalDrawable, *mut MTLTexture), ()> {
+pub fn create(format: core::format::Format,
+              width: u32,
+              height: u32)
+              -> Result<(Device,
+                         Factory,
+                         handle::RawRenderTargetView<Resources>,
+                         *mut CAMetalDrawable,
+                         *mut MTLTexture),
+                        ()> {
     use core::handle::Producer;
 
     let share = Share {
@@ -244,9 +263,12 @@ pub fn create(format: core::format::Format, width: u32, height: u32)
     let get_feature_set = |_device: MTLDevice| -> Option<MTLFeatureSet> {
         use metal::MTLFeatureSet::*;
 
-        let feature_sets = vec![OSX_GPUFamily1_v1, iOS_GPUFamily3_v1,
-                                iOS_GPUFamily2_v2, iOS_GPUFamily2_v1,
-                                iOS_GPUFamily1_v2, iOS_GPUFamily1_v1];
+        let feature_sets = vec![OSX_GPUFamily1_v1,
+                                iOS_GPUFamily3_v1,
+                                iOS_GPUFamily2_v2,
+                                iOS_GPUFamily2_v1,
+                                iOS_GPUFamily1_v2,
+                                iOS_GPUFamily1_v1];
 
         for feature in feature_sets.into_iter() {
             if mtl_device.supports_feature_set(feature) {
@@ -268,19 +290,23 @@ pub fn create(format: core::format::Format, width: u32, height: u32)
         max_resource_count: None,
 
         drawable: d,
-        backbuffer: bb
+        backbuffer: bb,
     };
 
-    //let raw_addr: *mut MTLTexture = ptr::null_mut();//&mut MTLTexture::nil();//unsafe { mem::transmute(&(raw_tex.0).0) };
+    // let raw_addr: *mut MTLTexture = ptr::null_mut();//&mut MTLTexture::nil();//unsafe { mem::transmute(&(raw_tex.0).0) };
     let raw_tex = Texture(native::Texture(bb), Usage::GpuOnly);
 
-    let color_tex = device.share.handles.borrow_mut().make_texture(raw_tex, tex::Descriptor {
-        kind: tex::Kind::D2(width as tex::Size, height as tex::Size, tex::AaMode::Single),
-        levels: 1,
-        format: format.0,
-        bind: memory::RENDER_TARGET,
-        usage: raw_tex.1,
-    });
+    let color_tex =
+        device.share.handles.borrow_mut().make_texture(raw_tex,
+                                                       tex::Info {
+                                                           kind: tex::Kind::D2(width as tex::Size,
+                                                                               height as tex::Size,
+                                                                               tex::AaMode::Single),
+                                                           levels: 1,
+                                                           format: format.0,
+                                                           bind: memory::RENDER_TARGET,
+                                                           usage: raw_tex.1,
+                                                       });
 
 
     let mut factory = Factory::new(mtl_device, device.share.clone(), d);
@@ -299,4 +325,3 @@ pub fn create(format: core::format::Format, width: u32, height: u32)
 
     Ok((device, factory, color_target, d, bb))
 }
-

@@ -13,8 +13,8 @@
 // limitations under the License.
 
 
-//use cocoa::base::{selector, class};
-//use cocoa::foundation::{NSUInteger};
+// use cocoa::base::{selector, class};
+// use cocoa::foundation::{NSUInteger};
 
 use core::{self, shade};
 use factory::DUMMY_BUFFER_SLOT;
@@ -25,15 +25,14 @@ fn _map_base_type_from_component(ct: MTLDataType) -> shade::BaseType {
     use metal::MTLDataType::*;
 
     match ct {
-        Float | Float2 | Float3 | Float4 |
-        Float2x2 | Float2x3 | Float2x4 |
-        Float3x2 | Float3x3 | Float3x4 |
-        Float4x2 | Float4x3 | Float4x4 => shade::BaseType::F32,
-        _ => shade::BaseType::I32
+        Float | Float2 | Float3 | Float4 | Float2x2 | Float2x3 | Float2x4 | Float3x2 |
+        Float3x3 | Float3x4 | Float4x2 | Float4x3 | Float4x4 => shade::BaseType::F32,
+        _ => shade::BaseType::I32,
     }
 }
 
-pub fn populate_vertex_attributes(info: &mut shade::ProgramInfo, desc: NSArray<MTLVertexAttribute>) {
+pub fn populate_vertex_attributes(info: &mut shade::ProgramInfo,
+                                  desc: NSArray<MTLVertexAttribute>) {
     use map::{map_base_type, map_container_type};
 
     for idx in 0..desc.count() {
@@ -48,9 +47,10 @@ pub fn populate_vertex_attributes(info: &mut shade::ProgramInfo, desc: NSArray<M
     }
 }
 
-pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage,
+pub fn populate_info(info: &mut shade::ProgramInfo,
+                     stage: shade::Stage,
                      args: NSArray<MTLArgument>) {
-//    use core::shade::Stage;
+    //    use core::shade::Stage;
     use map::{map_base_type, map_texture_type};
 
     let usage = stage.into();
@@ -62,16 +62,18 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage,
         match arg.type_() {
             MTLArgumentType::Buffer => {
                 // we skip the dummy buffer, which is used in our fake PSO
-                if arg.index() == DUMMY_BUFFER_SLOT { continue; }
+                if arg.index() == DUMMY_BUFFER_SLOT {
+                    continue;
+                }
 
                 info.constant_buffers.push(shade::ConstantBufferVar {
                     name: name.into(),
                     slot: arg.index() as core::ConstantBufferSlot,
                     size: arg.buffer_data_size() as usize,
                     usage: usage,
-                    elements: Vec::new(), //TODO!
+                    elements: Vec::new(), // TODO!
                 });
-            },
+            }
             MTLArgumentType::Texture => {
                 info.textures.push(shade::TextureVar {
                     name: name.into(),
@@ -80,18 +82,17 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage,
                     ty: map_texture_type(arg.texture_type()),
                     usage: usage,
                 });
-            },
+            }
             MTLArgumentType::Sampler => {
                 let name = name.trim_right_matches('_');
 
                 info.samplers.push(shade::SamplerVar {
                     name: name.into(),
                     slot: arg.index() as core::SamplerSlot,
-                    ty: shade::SamplerType(shade::IsComparison::NoCompare,
-                                           shade::IsRect::NoRect),
+                    ty: shade::SamplerType(shade::IsComparison::NoCompare, shade::IsRect::NoRect),
                     usage: usage,
                 });
-            },
+            }
             _ => {}
 
         }

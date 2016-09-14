@@ -14,15 +14,15 @@
 
 #![allow(missing_docs)]
 
-//use cocoa::foundation::NSRange;
+// use cocoa::foundation::NSRange;
 
 use core::{command, pso, shade, state, target, texture as tex};
 use core::{IndexType, VertexCount};
-use core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
-           MAX_RESOURCE_VIEWS,
-           MAX_SAMPLERS, MAX_COLOR_TARGETS};
+use core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS, MAX_RESOURCE_VIEWS, MAX_SAMPLERS,
+           MAX_COLOR_TARGETS};
 
-use gfx_core::shade::Stage;
+use core::shade::Stage;
+
 
 use {Resources, Buffer, Texture, Pipeline};
 
@@ -62,16 +62,18 @@ impl DataBuffer {
     }
     /// Return a reference to a stored data object.
     pub fn _get(&self, ptr: DataPointer) -> &[u8] {
-        &self.0[ptr.offset as usize .. (ptr.offset + ptr.size) as usize]
+        &self.0[ptr.offset as usize..(ptr.offset + ptr.size) as usize]
     }
 }
 
-///Serialized device command.
+/// Serialized device command.
 #[derive(Clone, Copy, Debug)]
 pub enum Command {
     BindPipeline(Pipeline),
     _BindIndex(Buffer),
-    BindVertexBuffers([native::Buffer; MAX_VERTEX_ATTRIBUTES], [u64; MAX_VERTEX_ATTRIBUTES], [u64; MAX_VERTEX_ATTRIBUTES]),
+    BindVertexBuffers([native::Buffer; MAX_VERTEX_ATTRIBUTES],
+                      [u64; MAX_VERTEX_ATTRIBUTES],
+                      [u64; MAX_VERTEX_ATTRIBUTES]),
     BindConstantBuffers(shade::Stage, [native::Buffer; MAX_CONSTANT_BUFFERS]),
     BindShaderResources(shade::Stage, [native::Srv; MAX_RESOURCE_VIEWS]),
     BindSamplers(shade::Stage, [native::Sampler; MAX_SAMPLERS]),
@@ -104,7 +106,7 @@ struct Cache {
     targets: Option<pso::PixelTargetSet<Resources>>,
     clear: command::ClearColor,
     clear_depth: f32,
-    clear_stencil: u8
+    clear_stencil: u8,
 }
 
 unsafe impl Send for Cache {}
@@ -115,7 +117,7 @@ impl Cache {
             targets: None,
             clear: command::ClearColor::Float([0.0f32; 4]),
             clear_depth: 0f32,
-            clear_stencil: 0
+            clear_stencil: 0,
         }
     }
 
@@ -143,7 +145,7 @@ pub struct CommandBuffer {
     cache: Cache,
     encoding: bool,
     root: bool,
-    pool: NSAutoreleasePool
+    pool: NSAutoreleasePool,
 }
 
 unsafe impl Send for CommandBuffer {}
@@ -166,7 +168,7 @@ impl CommandBuffer {
             cache: Cache::new(),
             encoding: false,
             root: false,
-            pool: NSAutoreleasePool::nil()
+            pool: NSAutoreleasePool::nil(),
         }
     }
 
@@ -181,7 +183,7 @@ impl CommandBuffer {
                     (*self.mtl_buf).present_drawable(drawable);
                     (*self.mtl_buf).commit();
 
-                    //(*self.master_encoder).autorelease();
+                    // (*self.master_encoder).autorelease();
                     (*self.mtl_buf).release();
 
                     *self.master_encoder = MTLParallelRenderCommandEncoder::nil();
@@ -208,14 +210,18 @@ impl CommandBuffer {
                 if let Some(targets) = self.cache.targets {
                     for i in 0..MAX_COLOR_TARGETS {
                         if let Some(color) = targets.colors[i] {
-                            let attachment = render_pass_descriptor.color_attachments().object_at(i);
+                            let attachment = render_pass_descriptor.color_attachments()
+                                .object_at(i);
                             attachment.set_texture(*(color.0));
 
                             attachment.set_store_action(MTLStoreAction::Store);
                             attachment.set_load_action(MTLLoadAction::Clear);
 
                             if let command::ClearColor::Float(vals) = self.cache.clear {
-                                attachment.set_clear_color(MTLClearColor::new(vals[0] as f64, vals[1] as f64, vals[2] as f64, vals[3] as f64));
+                                attachment.set_clear_color(MTLClearColor::new(vals[0] as f64,
+                                                                              vals[1] as f64,
+                                                                              vals[2] as f64,
+                                                                              vals[3] as f64));
                             }
                         }
                     }
@@ -229,12 +235,13 @@ impl CommandBuffer {
                     }
                 }
 
-                //render_pass_descriptor.stencil_attachment().set_clear_stencil(self.cache.clear_stencil as u32);
+                // render_pass_descriptor.stencil_attachment().set_clear_stencil(self.cache.clear_stencil as u32);
                 self.pool = NSAutoreleasePool::alloc().init();
-                *self.master_encoder = (*self.mtl_buf).new_parallel_render_command_encoder(render_pass_descriptor);
+                *self.master_encoder = (*self.mtl_buf)
+                    .new_parallel_render_command_encoder(render_pass_descriptor);
                 self.root = true;
 
-                //render_pass_descriptor.release();
+                // render_pass_descriptor.release();
             }
 
             if self.render_encoder.is_null() {
@@ -251,7 +258,7 @@ impl CommandBuffer {
         unsafe {
             if (*self.mtl_buf).is_null() {
                 *self.mtl_buf = self.mtl_queue.new_command_buffer();
-                //(*self.mtl_buf).retain();
+                // (*self.mtl_buf).retain();
             }
         }
 
@@ -268,17 +275,17 @@ impl CommandBuffer {
                     if let Some(depth_state) = pso.depth_stencil {
                         encoder.set_depth_stencil_state(depth_state);
                     }
-                },
+                }
                 Command::_BindIndex(buf) => {
                     println!("{}, {:?}", "index oops", buf);
-                },
+                }
                 Command::BindVertexBuffers(bufs, offsets, indices) => {
                     for i in 0..MAX_VERTEX_ATTRIBUTES {
                         if !bufs[i].0.is_null() {
                             encoder.set_vertex_buffer(indices[i], offsets[i], bufs[i].0);
                         }
                     }
-                },
+                }
                 Command::BindConstantBuffers(stage, cbufs) => {
                     if let Stage::Vertex = stage {
                         for i in 0..MAX_CONSTANT_BUFFERS {
@@ -295,7 +302,7 @@ impl CommandBuffer {
                             }
                         }
                     }
-                },
+                }
                 Command::BindShaderResources(stage, srvs) => {
                     if let Stage::Vertex = stage {
                         for i in 0..MAX_RESOURCE_VIEWS {
@@ -312,7 +319,7 @@ impl CommandBuffer {
                             }
                         }
                     }
-                },
+                }
                 Command::BindSamplers(stage, samplers) => {
                     if let Stage::Vertex = stage {
                         for i in 0..MAX_SAMPLERS {
@@ -329,31 +336,28 @@ impl CommandBuffer {
                             }
                         }
                     }
-                },
+                }
                 Command::_BindPixelTargets(rtvs, dsv) => {
                     println!("pixel trg: {:?} . . . {:?}", rtvs, dsv);
-                },
+                }
                 Command::SetViewport(viewport) => {
                     encoder.set_viewport(viewport);
-                },
+                }
                 Command::SetScissor(_rect) => {
                     // encoder.set_scissor_rect(rect);
-                },
+                }
                 Command::_SetBlend(blend, _mask) => {
                     // TODO: do stencil mask
 
                     encoder.set_blend_color(blend[0], blend[1], blend[2], blend[3]);
-                },
+                }
                 Command::_UpdateBuffer(_buf, _data, _offset) => {
-                    //TODO
-                },
-                Command::UpdateTexture(_tex, _kind, _face, _data, _info) => {
-                },
+                    // TODO
+                }
+                Command::UpdateTexture(_tex, _kind, _face, _data, _info) => {}
                 // GenerateMips(native::Srv),
-                Command::_ClearColor(_target, _value) => {
-                },
-                Command::_ClearDepthStencil(_target, _depth, _stencil) => {
-                },
+                Command::_ClearColor(_target, _value) => {}
+                Command::_ClearDepthStencil(_target, _depth, _stencil) => {}
             }
         }
 
@@ -362,24 +366,26 @@ impl CommandBuffer {
         match draw {
             Draw::Normal(count, start) => {
                 encoder.draw_primitives(MTLPrimitiveType::Triangle, start, count)
-            },
+            }
             Draw::Instanced(count, ninst, start, _offset) => {
                 encoder.draw_primitives_instanced(MTLPrimitiveType::Triangle, start, count, ninst);
-            },
-            Draw::Indexed(count, start, _base) => {
-                encoder.draw_indexed_primitives(MTLPrimitiveType::Triangle, count, map_index_type(self.index_buf.unwrap().1), ((self.index_buf.unwrap().0).0).0, start);
-            },
-            Draw::IndexedInstanced(_count, _ninst, _start, _base, _offset) => {
-                unimplemented!()
             }
+            Draw::Indexed(count, start, _base) => {
+                encoder.draw_indexed_primitives(MTLPrimitiveType::Triangle,
+                                                count,
+                                                map_index_type(self.index_buf.unwrap().1),
+                                                ((self.index_buf.unwrap().0).0).0,
+                                                start);
+            }
+            Draw::IndexedInstanced(_count, _ninst, _start, _base, _offset) => unimplemented!(),
         }
 
-        //self.cache.clear();
-        //self.buf.clear();
+        // self.cache.clear();
+        // self.buf.clear();
     }
 }
 
-impl command::CommandBuffer<Resources> for CommandBuffer {
+impl command::Buffer<Resources> for CommandBuffer {
     fn reset(&mut self) {
         self.cache.clear();
         self.buf.clear();
@@ -394,7 +400,7 @@ impl command::CommandBuffer<Resources> for CommandBuffer {
         let mut offsets = [0; MAX_VERTEX_ATTRIBUTES];
         let mut indices = [0; MAX_VERTEX_ATTRIBUTES];
 
-        for i in 0 .. 1 {
+        for i in 0..1 {
             if let Some((buffer, offset)) = vbs.0[i] {
                 buffers[i] = buffer.0;
                 offsets[i] = offset as u64;
@@ -471,7 +477,7 @@ impl command::CommandBuffer<Resources> for CommandBuffer {
             width: view.0 as f64,
             height: view.1 as f64,
             znear: 0f64,
-            zfar: 1f64
+            zfar: 1f64,
         }));
 
         if let Some(cache_targets) = self.cache.targets {
@@ -484,13 +490,13 @@ impl command::CommandBuffer<Resources> for CommandBuffer {
 
                         if self.root {
                             (*self.master_encoder).end_encoding();
-                            //(*self.master_encoder).release();
+                            // (*self.master_encoder).release();
                             *self.master_encoder = MTLParallelRenderCommandEncoder::nil();
                         }
 
                         self.encoding = false;
                     }
-                    //self.render_encoder.release();
+                    // self.render_encoder.release();
                     self.render_encoder = MTLRenderCommandEncoder::nil();
                 }
             }
@@ -515,7 +521,8 @@ impl command::CommandBuffer<Resources> for CommandBuffer {
     fn set_ref_values(&mut self, vals: state::RefValues) {
         if vals.stencil.0 != vals.stencil.1 {
             error!("Unable to set different stencil ref values for front ({}) and back ({})",
-                vals.stencil.0, vals.stencil.1);
+                   vals.stencil.0,
+                   vals.stencil.1);
         }
         // TODO: blend/stencil
     }
@@ -528,7 +535,7 @@ impl command::CommandBuffer<Resources> for CommandBuffer {
 
                     if self.root {
                         (*self.master_encoder).end_encoding();
-                        //(*self.master_encoder).release();
+                        // (*self.master_encoder).release();
                         *self.master_encoder = MTLParallelRenderCommandEncoder::nil();
 
                         (*self.mtl_buf).present_drawable(*self.drawable);
@@ -544,7 +551,7 @@ impl command::CommandBuffer<Resources> for CommandBuffer {
 
                     self.encoding = false;
                 }
-                //self.render_encoder.release();
+                // self.render_encoder.release();
                 self.render_encoder = MTLRenderCommandEncoder::nil();
             }
             self.in_use.clear();
@@ -558,14 +565,18 @@ impl command::CommandBuffer<Resources> for CommandBuffer {
             let dst = (contents as *mut u8).offset(offset as isize);
             ptr::copy(data.as_ptr(), dst, data.len());
 
-            //(buf.0).0.invalidate_range(NSRange::new(offset as u64, data.len() as u64));
+            // (buf.0).0.invalidate_range(NSRange::new(offset as u64, data.len() as u64));
         }
         // let ptr = self.data.add(data);
         // self.buf.push(Command::UpdateBuffer(buf, ptr, offset));
     }
 
-    fn update_texture(&mut self, tex: Texture, kind: tex::Kind, face: Option<tex::CubeFace>,
-                      data: &[u8], info: tex::RawImageInfo) {
+    fn update_texture(&mut self,
+                      tex: Texture,
+                      kind: tex::Kind,
+                      face: Option<tex::CubeFace>,
+                      data: &[u8],
+                      info: tex::RawImageInfo) {
         let ptr = self.data.add(data);
         self.buf.push(Command::UpdateTexture(tex, kind, face, ptr, info));
     }
@@ -578,25 +589,39 @@ impl command::CommandBuffer<Resources> for CommandBuffer {
         self.cache.clear = value;
     }
 
-    fn clear_depth_stencil(&mut self, _target: Dsv,
-                           depth: Option<target::Depth>, stencil: Option<target::Stencil>) {
+    fn clear_depth_stencil(&mut self,
+                           _target: Dsv,
+                           depth: Option<target::Depth>,
+                           stencil: Option<target::Stencil>) {
         self.cache.clear_depth = depth.unwrap_or_default();
         self.cache.clear_stencil = stencil.unwrap_or_default();
     }
 
-    fn call_draw(&mut self, start: VertexCount, count: VertexCount, instances: Option<command::InstanceParams>) {
+    fn call_draw(&mut self,
+                 start: VertexCount,
+                 count: VertexCount,
+                 instances: Option<command::InstanceParams>) {
         self.draw(match instances {
-            Some((ninst, offset)) => Draw::Instanced(
-                count as u64, ninst as u64, start as u64, offset as u64),
+            Some((ninst, offset)) => {
+                Draw::Instanced(count as u64, ninst as u64, start as u64, offset as u64)
+            }
             None => Draw::Normal(count as u64, start as u64),
         });
     }
 
-    fn call_draw_indexed(&mut self, start: VertexCount, count: VertexCount,
-                         base: VertexCount, instances: Option<command::InstanceParams>) {
+    fn call_draw_indexed(&mut self,
+                         start: VertexCount,
+                         count: VertexCount,
+                         base: VertexCount,
+                         instances: Option<command::InstanceParams>) {
         self.draw(match instances {
-            Some((ninst, offset)) => Draw::IndexedInstanced(
-                count as u64, ninst as u64, start as u64, base as u64, offset as u64),
+            Some((ninst, offset)) => {
+                Draw::IndexedInstanced(count as u64,
+                                       ninst as u64,
+                                       start as u64,
+                                       base as u64,
+                                       offset as u64)
+            }
             None => Draw::Indexed(count as u64, start as u64, base as u64),
         });
     }

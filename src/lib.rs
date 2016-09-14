@@ -26,9 +26,10 @@ extern crate gfx_device_dx11;
 extern crate gfx_window_dxgi;
 
 #[cfg(target_os = "macos")]
-// extern crate gfx_device_metal;
+extern crate gfx_device_metal;
 #[cfg(target_os = "macos")]
-// extern crate gfx_window_metal;
+extern crate gfx_window_metal;
+
 #[cfg(feature = "vulkan")]
 extern crate gfx_device_vulkan;
 #[cfg(feature = "vulkan")]
@@ -139,7 +140,7 @@ pub struct Wrap<R: gfx::Resources, C: gfx::CommandBuffer<R>, A> {
 }
 
 #[cfg(target_os = "macos")]
-// pub type WrapMetal<A> = Wrap<gfx_device_metal::Resources, gfx_device_metal::CommandBuffer, A>;
+pub type WrapMetal<A> = Wrap<gfx_device_metal::Resources, gfx_device_metal::CommandBuffer, A>;
 #[cfg(target_os = "windows")]
 pub type D3D11CommandBuffer = gfx_device_dx11::CommandBuffer<gfx_device_dx11::DeferredContext>;
 #[cfg(target_os = "windows")]
@@ -288,52 +289,55 @@ pub trait ApplicationMetal {
 }
 
 #[cfg(target_os = "macos")]
-// impl Factory<gfx_device_metal::Resources> for gfx_device_metal::Factory {
-// type CommandBuffer = gfx_device_metal::CommandBuffer;
-// fn create_encoder(&mut self) -> gfx::Encoder<gfx_device_metal::Resources, Self::CommandBuffer> {
-// self.create_command_buffer().into()
-// }
-// }
+impl Factory<gfx_device_metal::Resources> for gfx_device_metal::Factory {
+    type CommandBuffer = gfx_device_metal::CommandBuffer;
+    fn create_encoder(&mut self) -> gfx::Encoder<gfx_device_metal::Resources, Self::CommandBuffer> {
+        self.create_command_buffer().into()
+    }
+}
+
 #[cfg(target_os = "macos")]
-// impl<
-// A: ApplicationBase<gfx_device_metal::Resources, gfx_device_metal::CommandBuffer>
-// > ApplicationMetal for A {
-// fn launch(title: &str, config: Config) {
-// use gfx::traits::{Device, Factory};
-//
-// env_logger::init().unwrap();
-// let (window, mut device, mut factory, main_color) =
-// gfx_window_metal::init::<ColorFormat>(title, config.size.0 as u32, config.size.1 as u32)
-// .unwrap();
-//
-// let (width, height) = window.get_inner_size().unwrap();
-//
-// let main_depth = factory.create_depth_stencil_view_only(width as u16, height as u16).unwrap();
-//
-// let mut app = Self::new(factory, Init {
-// backend: shade::Backend::Msl(device.get_shader_model()),
-// color: main_color,
-// depth: main_depth,
-// aspect_ratio: width as f32 / height as f32
-// });
-//
-// let mut harness = Harness::new();
-// 'main: loop {
-// for event in window.poll_events() {
-// match event {
-// winit::Event::KeyboardInput(_, _, Some(winit::VirtualKeyCode::Escape)) |
-// winit::Event::Closed => break 'main,
-// _ => {},
-// }
-// }
-//
-// app.render(&mut device);
-// window.swap_buffers().unwrap();
-// device.cleanup();
-// harness.bump()
-// }
-// }
-// }
+impl<
+    A: ApplicationBase<gfx_device_metal::Resources, gfx_device_metal::CommandBuffer>
+> ApplicationMetal for A {
+    fn launch(title: &str, config: Config) {
+        use gfx::traits::{Device, Factory};
+
+        env_logger::init().unwrap();
+        let (window, mut device, mut factory, main_color) =
+            gfx_window_metal::init::<ColorFormat>(title, config.size.0 as u32, config.size.1 as u32)
+            .unwrap();
+
+        let (width, height) = window.get_inner_size().unwrap();
+
+        let main_depth = factory.create_depth_stencil_view_only(width as u16, height as u16).unwrap();
+
+        let mut app = Self::new(factory, Init {
+            backend: shade::Backend::Msl(device.get_shader_model()),
+            color: main_color,
+            depth: main_depth,
+            aspect_ratio: width as f32 / height as f32
+        });
+
+        let mut harness = Harness::new();
+        'main: loop {
+            for event in window.poll_events() {
+                match event {
+                    winit::Event::KeyboardInput(_, _, Some(winit::VirtualKeyCode::Escape)) |
+                    winit::Event::Closed => break 'main,
+                    _ => {},
+                }
+            }
+
+            app.render(&mut device);
+            window.swap_buffers().unwrap();
+            device.cleanup();
+            harness.bump()
+        }
+    }
+}
+
+
 #[cfg(feature = "vulkan")]
 pub trait ApplicationVulkan {
     fn launch(&str, Config);
