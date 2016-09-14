@@ -17,8 +17,7 @@ pub use gfx_device_gl::Version as GlslVersion;
 #[cfg(target_os = "windows")]
 pub use gfx_device_dx11::ShaderModel as DxShaderModel;
 #[cfg(target_os = "macos")]
-pub use gfx_device_metal::ShaderModel as MetalShaderModel;
-
+// pub use gfx_device_metal::ShaderModel as MetalShaderModel;
 /// Shader backend with version numbers.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Backend {
@@ -27,7 +26,7 @@ pub enum Backend {
     #[cfg(target_os = "windows")]
     Hlsl(DxShaderModel),
     #[cfg(target_os = "macos")]
-    Msl(MetalShaderModel),
+    //    Msl(MetalShaderModel),
     #[cfg(feature = "vulkan")]
     Vulkan,
 }
@@ -45,13 +44,13 @@ pub struct Source<'a> {
     pub glsl_es_100: &'a [u8],
     pub glsl_es_200: &'a [u8],
     pub glsl_es_300: &'a [u8],
-    pub hlsl_30 : &'a [u8],
-    pub hlsl_40 : &'a [u8],
-    pub hlsl_41 : &'a [u8],
-    pub hlsl_50 : &'a [u8],
-    pub msl_10  : &'a [u8],
-    pub msl_11  : &'a [u8],
-    pub vulkan  : &'a [u8],
+    pub hlsl_30: &'a [u8],
+    pub hlsl_40: &'a [u8],
+    pub hlsl_41: &'a [u8],
+    pub hlsl_50: &'a [u8],
+    pub msl_10: &'a [u8],
+    pub msl_11: &'a [u8],
+    pub vulkan: &'a [u8],
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -70,13 +69,13 @@ impl<'a> Source<'a> {
             glsl_es_100: EMPTY,
             glsl_es_200: EMPTY,
             glsl_es_300: EMPTY,
-            hlsl_30:  EMPTY,
-            hlsl_40:  EMPTY,
-            hlsl_41:  EMPTY,
-            hlsl_50:  EMPTY,
-            msl_10:   EMPTY,
-            msl_11:   EMPTY,
-            vulkan:   EMPTY,
+            hlsl_30: EMPTY,
+            hlsl_40: EMPTY,
+            hlsl_41: EMPTY,
+            hlsl_50: EMPTY,
+            msl_10: EMPTY,
+            msl_11: EMPTY,
+            vulkan: EMPTY,
         }
     }
 
@@ -91,37 +90,43 @@ impl<'a> Source<'a> {
                     Source { glsl_140: s, .. } if s != EMPTY && v >= 140 => s,
                     Source { glsl_130: s, .. } if s != EMPTY && v >= 130 => s,
                     Source { glsl_120: s, .. } if s != EMPTY && v >= 120 => s,
-                    _ => return Err(SelectError(backend))
+                    _ => return Err(SelectError(backend)),
                 }
-            },
+            }
             Backend::GlslEs(version) => {
                 let v = version.major * 100 + version.minor;
                 match *self {
                     Source { glsl_es_100: s, .. } if s != EMPTY && v >= 100 => s,
                     Source { glsl_es_200: s, .. } if s != EMPTY && v >= 200 => s,
                     Source { glsl_es_300: s, .. } if s != EMPTY && v >= 300 => s,
-                    _ => return Err(SelectError(backend))
+                    _ => return Err(SelectError(backend)),
                 }
-            },
+            }
             #[cfg(target_os = "windows")]
-            Backend::Hlsl(model) => match *self {
-                Source { hlsl_50: s, .. } if s != EMPTY && model >= 50 => s,
-                Source { hlsl_41: s, .. } if s != EMPTY && model >= 41 => s,
-                Source { hlsl_40: s, .. } if s != EMPTY && model >= 40 => s,
-                Source { hlsl_30: s, .. } if s != EMPTY && model >= 30 => s,
-                _ => return Err(SelectError(backend))
-            },
+            Backend::Hlsl(model) => {
+                match *self {
+                    Source { hlsl_50: s, .. } if s != EMPTY && model >= 50 => s,
+                    Source { hlsl_41: s, .. } if s != EMPTY && model >= 41 => s,
+                    Source { hlsl_40: s, .. } if s != EMPTY && model >= 40 => s,
+                    Source { hlsl_30: s, .. } if s != EMPTY && model >= 30 => s,
+                    _ => return Err(SelectError(backend)),
+                }
+            }
             #[cfg(target_os = "macos")]
-            Backend::Msl(revision) => match *self {
-                Source { msl_11: s, .. } if s != EMPTY && revision >= 11 => s,
-                Source { msl_10: s, .. } if s != EMPTY && revision >= 10 => s,
-                _ => return Err(SelectError(backend))
-            },
+            /*Backend::Msl(revision) => {
+                match *self {
+                    Source { msl_11: s, .. } if s != EMPTY && revision >= 11 => s,
+                    Source { msl_10: s, .. } if s != EMPTY && revision >= 10 => s,
+                    _ => return Err(SelectError(backend)),
+                }
+            }*/
             #[cfg(feature = "vulkan")]
-            Backend::Vulkan => match *self {
-                Source { vulkan: s, .. } if s != EMPTY => s,
-                _ => return Err(SelectError(backend))
-            },
+            Backend::Vulkan => {
+                match *self {
+                    Source { vulkan: s, .. } if s != EMPTY => s,
+                    _ => return Err(SelectError(backend)),
+                }
+            }
         })
     }
 }
