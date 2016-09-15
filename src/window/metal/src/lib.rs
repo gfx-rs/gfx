@@ -110,6 +110,8 @@ pub fn init<C: RenderFormat>(title: &str, requested_width: u32, requested_height
 pub fn init_raw(title: &str, requested_width: u32, requested_height: u32, color_format: Format)
         -> Result<(MetalWindow, Device, Factory, RawRenderTargetView<Resources>), InitError>
 {
+    use gfx_device_metal::map_format;
+
     let winit_window = winit::WindowBuilder::new()
         .with_dimensions(requested_width, requested_height)
         .with_title(title.to_string()).build().unwrap();
@@ -118,11 +120,10 @@ pub fn init_raw(title: &str, requested_width: u32, requested_height: u32, color_
         let wnd: cocoa_id = mem::transmute(winit_window.get_nswindow());
 
         let layer = CAMetalLayer::new();
-        layer.set_pixel_format(MTLPixelFormat::BGRA8Unorm_sRGB);
-        /*layer.set_pixel_format(match gfx_device_metal::map_format(color_format, true) {
+        layer.set_pixel_format(match gfx_device_metal::map_format(color_format, true) {
             Some(fm) => fm,
             None => return Err(InitError::Format(color_format)),
-        });*/
+        });
         let draw_size = winit_window.get_inner_size().unwrap();
         layer.set_edge_antialiasing_mask(0);
         layer.set_masks_to_bounds(true);

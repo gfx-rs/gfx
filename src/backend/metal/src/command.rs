@@ -169,7 +169,7 @@ impl command::Buffer<Resources> for CommandBuffer {
     fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<Resources>) {
         for i in 0..MAX_VERTEX_ATTRIBUTES {
             if let Some((buffer, offset)) = vbs.0[i] {
-                self.encoder.set_vertex_buffer(i as u64, offset as u64, unsafe { *(buffer.0).0 });
+                self.encoder.set_vertex_buffer(30 - i as u64, offset as u64, unsafe { *(buffer.0).0 });
             }
         }
     }

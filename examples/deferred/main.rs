@@ -39,7 +39,6 @@ extern crate noise;
 use rand::Rng;
 use cgmath::{SquareMatrix, Matrix4, Point3, Vector3, EuclideanVector, deg};
 use cgmath::{Transform, AffineMatrix3};
-pub use gfx::format::Depth;
 pub use gfx_app::ColorFormat;
 use gfx::{Bundle, texture};
 use genmesh::{Vertices, Triangulate};
@@ -47,6 +46,11 @@ use genmesh::generators::{SharedVertex, IndexedPolygon};
 use std::time::{Instant};
 
 use noise::{Seed, perlin2};
+
+#[cfg(feature="metal")]
+pub use gfx::format::Depth32F as Depth;
+#[cfg(not(feature="metal"))]
+pub use gfx::format::Depth;
 
 // Remember to also change the constants in the shaders
 const NUM_LIGHTS: usize = 250;
@@ -68,8 +72,7 @@ gfx_defines!{
     }
 
     vertex BlitVertex {
-        pos: [i8; 2] = "a_Pos",
-        tex_coord: [i8; 2] = "a_TexCoord",
+        pos_tex: [i8; 4] = "a_PosTexCoord",
     }
 
     vertex CubeVertex {
@@ -89,6 +92,7 @@ gfx_defines!{
     constant CubeLocals {
         transform: [[f32; 4]; 4] = "u_Transform",
         radius: f32 = "u_Radius",
+        _padding: [f32; 3] = "",
     }
 
     pipeline light {
@@ -171,7 +175,11 @@ struct ViewPair<R: gfx::Resources, T: gfx::format::Formatted> {
 // need a custom depth format in order to view SRV depth as float4
 struct DepthFormat;
 impl gfx::format::Formatted for DepthFormat {
+    #[cfg(feature="metal")]
+    type Surface = gfx::format::D32;
+    #[cfg(not(feature="metal"))]
     type Surface = gfx::format::D24;
+
     type Channel = gfx::format::Unorm;
     type View = [f32; 4];
 
@@ -266,11 +274,13 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             let vs = gfx_app::shade::Source {
                 glsl_150: include_bytes!("shader/terrain.glslv"),
                 hlsl_40:  include_bytes!("data/terrain_vs.fx"),
+                msl_11:   include_bytes!("shader/terrain_vertex.metal"),
                 .. gfx_app::shade::Source::empty()
             };
             let ps = gfx_app::shade::Source {
                 glsl_150: include_bytes!("shader/terrain.glslf"),
                 hlsl_40:  include_bytes!("data/terrain_ps.fx"),
+                msl_11:   include_bytes!("shader/terrain_frag.metal"),
                 .. gfx_app::shade::Source::empty()
             };
 
@@ -294,9 +304,9 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
         let blit = {
             let vertex_data = [
-                BlitVertex { pos: [-3, -1], tex_coord: [-1, 0] },
-                BlitVertex { pos: [ 1, -1], tex_coord: [1, 0] },
-                BlitVertex { pos: [ 1,  3], tex_coord: [1, 2] },
+                BlitVertex { pos_tex: [-3, -1, -1, 0] },
+                BlitVertex { pos_tex: [ 1, -1,  1, 0] },
+                BlitVertex { pos_tex: [ 1,  3,  1, 2] },
             ];
 
             let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, ());
@@ -304,11 +314,13 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             let vs = gfx_app::shade::Source {
                 glsl_150: include_bytes!("shader/blit.glslv"),
                 hlsl_40:  include_bytes!("data/blit_vs.fx"),
+                msl_11:   include_bytes!("shader/blit_vertex.metal"),
                 .. gfx_app::shade::Source::empty()
             };
             let ps = gfx_app::shade::Source {
                 glsl_150: include_bytes!("shader/blit.glslf"),
                 hlsl_40:  include_bytes!("data/blit_ps.fx"),
+                msl_11:   include_bytes!("shader/blit_frag.metal"),
                 .. gfx_app::shade::Source::empty()
             };
 
@@ -380,11 +392,13 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             let vs = gfx_app::shade::Source {
                 glsl_150: include_bytes!("shader/light.glslv"),
                 hlsl_40:  include_bytes!("data/light_vs.fx"),
+                msl_11:   include_bytes!("shader/light_vertex.metal"),
                 .. gfx_app::shade::Source::empty()
             };
             let ps = gfx_app::shade::Source {
                 glsl_150: include_bytes!("shader/light.glslf"),
                 hlsl_40:  include_bytes!("data/light_ps.fx"),
+                msl_11:   include_bytes!("shader/light_frag.metal"),
                 .. gfx_app::shade::Source::empty()
             };
 
@@ -413,11 +427,13 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             let vs = gfx_app::shade::Source {
                 glsl_150: include_bytes!("shader/emitter.glslv"),
                 hlsl_40:  include_bytes!("data/emitter_vs.fx"),
+                msl_11:   include_bytes!("shader/emitter_vertex.metal"),
                 .. gfx_app::shade::Source::empty()
             };
             let ps = gfx_app::shade::Source {
                 glsl_150: include_bytes!("shader/emitter.glslf"),
                 hlsl_40:  include_bytes!("data/emitter_ps.fx"),
+                msl_11:   include_bytes!("shader/emitter_frag.metal"),
                 .. gfx_app::shade::Source::empty()
             };
 
@@ -502,6 +518,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         let mut cube_locals = CubeLocals {
             transform: (proj * view.mat).into(),
             radius: LIGHT_RADIUS,
+            _padding: [0.0; 3]
         };
         encoder.update_constant_buffer(&self.light.data.locals_vs, &cube_locals);
         cube_locals.radius = EMITTER_RADIUS;

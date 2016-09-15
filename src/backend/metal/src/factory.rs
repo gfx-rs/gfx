@@ -102,7 +102,11 @@ impl Factory {
         use map::{map_function, map_stencil_op};
 
         let desc = MTLDepthStencilDescriptor::alloc().init();
-        desc.set_depth_write_enabled(info.depth.is_some());
+        println!("{:?}", info.depth);
+        desc.set_depth_write_enabled(match info.depth {
+            Some(ref depth) => depth.write,
+            None => false
+        });
         desc.set_depth_compare_function(match info.depth {
             Some(ref depth) => map_function(depth.fun),
             None => MTLCompareFunction::Never,
@@ -314,20 +318,20 @@ impl core::Factory<Resources> for Factory {
         Ok(self.share.handles.borrow_mut().make_program(prog, info))
     }
 
-    fn create_pipeline_state_raw
-        (&mut self,
-         program: &handle::Program<Resources>,
-         desc: &core::pso::Descriptor)
-         -> Result<handle::RawPipelineState<Resources>, core::pso::CreationError> {
-        use map::{map_depth_surface, map_vertex_format, map_topology, map_winding, map_cull,
-                  map_fill};
+    fn create_pipeline_state_raw(&mut self, program: &handle::Program<Resources>, desc: &core::pso::Descriptor)
+                                 -> Result<handle::RawPipelineState<Resources>, core::pso::CreationError> {
+        use map::{map_depth_surface, map_vertex_format, map_topology,
+                  map_winding, map_cull, map_fill, map_format, map_blend_op,
+                  map_blend_factor, map_write_mask};
+
+        use gfx_core::{MAX_COLOR_TARGETS};
 
         let vertex_desc = MTLVertexDescriptor::new();
 
         let mut vb_count = 0;
         for vb in desc.vertex_buffers.iter() {
             if let &Some(vbuf) = vb {
-                let buf = vertex_desc.layouts().object_at(vb_count as usize);
+                let buf = vertex_desc.layouts().object_at(DUMMY_BUFFER_SLOT as usize - vb_count as usize);
                 buf.set_stride(vbuf.stride as u64);
                 if vbuf.rate > 0 {
                     buf.set_step_function(MTLVertexStepFunction::PerInstance);
@@ -361,24 +365,40 @@ impl core::Factory<Resources> for Factory {
             let attribute = vertex_desc.attributes().object_at(attr.slot as usize);
             attribute.set_format(map_vertex_format(elem.format).unwrap());
             attribute.set_offset(elem.offset as u64);
-            attribute.set_buffer_index(idx as u64);
+            attribute.set_buffer_index(DUMMY_BUFFER_SLOT as u64 - idx as u64);
         }
 
         let prog = self.frame_handles.ref_program(program);
 
         let pso_descriptor = MTLRenderPipelineDescriptor::alloc().init();
         pso_descriptor.set_vertex_function(prog.vs);
+
         if !prog.ps.is_null() {
             pso_descriptor.set_fragment_function(prog.ps);
         }
         pso_descriptor.set_vertex_descriptor(vertex_desc);
         pso_descriptor.set_input_primitive_topology(map_topology(desc.primitive));
-        if !prog.ps.is_null() {
-            pso_descriptor.color_attachments().object_at(0).set_pixel_format(MTLPixelFormat::BGRA8Unorm_sRGB);
-        } else {
-            pso_descriptor.color_attachments()
-                .object_at(0)
-                .set_pixel_format(MTLPixelFormat::Invalid);
+
+        for idx in 0..MAX_COLOR_TARGETS {
+            if let Some(color) = desc.color_targets[idx] {
+                let attachment = pso_descriptor.color_attachments().object_at(idx);
+                attachment.set_pixel_format(map_format(color.0, true).unwrap());
+                attachment.set_blending_enabled(color.1.color.is_some() || color.1.alpha.is_some());
+
+                attachment.set_write_mask(map_write_mask(color.1.mask));
+
+                if let Some(blend) = color.1.color {
+                    attachment.set_source_rgb_blend_factor(map_blend_factor(blend.source, false));
+                    attachment.set_destination_rgb_blend_factor(map_blend_factor(blend.destination, false));
+                    attachment.set_rgb_blend_operation(map_blend_op(blend.equation));
+                }
+
+                if let Some(blend) = color.1.alpha {
+                    attachment.set_source_alpha_blend_factor(map_blend_factor(blend.source, true));
+                    attachment.set_destination_alpha_blend_factor(map_blend_factor(blend.destination, true));
+                    attachment.set_alpha_blend_operation(map_blend_op(blend.equation));
+                }
+            }
         }
 
         if let Some(depth_desc) = desc.depth_stencil {

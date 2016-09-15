@@ -20,7 +20,10 @@ vertex VertexOut vert(VertexInput     in     [[ stage_in ]],
     VertexOut out;
 
     out.pos = float4((in.a_Position * Locals) + in.a_Translate, 0.0, 1.0);
-    out.color = unpack_unorm4x8_to_float(in.a_Color);
+    out.color = float4(in.a_Color >> 24,
+                      (in.a_Color >> 16) & 0x000000FF,
+                      (in.a_Color >> 8)  & 0x000000FF,
+                       in.a_Color        & 0x000000FF) / 255.0;
 
     return out;
 }
