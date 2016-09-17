@@ -345,7 +345,7 @@ pub fn create(format: core::format::Format,
                                                        });
 
 
-    let mut factory = Factory::new(mtl_device, device.share.clone(), d);
+    let mut factory = Factory::new(mtl_device, device.share.clone());
 
     let color_target = {
         use core::Factory;

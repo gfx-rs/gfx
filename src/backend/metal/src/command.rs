@@ -14,7 +14,7 @@
 
 #![allow(missing_docs)]
 
-use cocoa::foundation::NSRange;
+//use cocoa::foundation::NSRange;
 
 use core::{pso, shade, state, target, texture, command};
 use core::{IndexType, VertexCount};
@@ -27,31 +27,27 @@ use {Resources, Buffer, Texture, Pipeline};
 
 use encoder::MetalEncoder;
 
-use native;
 use native::{Rtv, Srv, Dsv};
 
 use metal::*;
 
-use std::collections::HashSet;
 use std::ptr;
 
 pub struct CommandBuffer {
     queue: MTLCommandQueue,
     device: MTLDevice,
     encoder: MetalEncoder,
-    drawable: *mut CAMetalDrawable,
     should_restore: bool
 }
 
 unsafe impl Send for CommandBuffer {}
 
 impl CommandBuffer {
-    pub fn new(device: MTLDevice, queue: MTLCommandQueue, drawable: *mut CAMetalDrawable) -> Self {
+    pub fn new(device: MTLDevice, queue: MTLCommandQueue) -> Self {
         CommandBuffer {
             device: device,
             queue: queue,
             encoder: MetalEncoder::new(queue.new_command_buffer()),
-            drawable: drawable,
             should_restore: false
         }
     }
@@ -287,9 +283,6 @@ impl command::Buffer<Resources> for CommandBuffer {
 
                 // invalidate old buffer in cache
                 self.encoder.invalidate_buffer(b);
-
-                // and release so we don't leak and get kernel panic..
-                b.release();
             }
         } else {
             // TODO(fkaa): how do we (eventually) handle updating buffers when

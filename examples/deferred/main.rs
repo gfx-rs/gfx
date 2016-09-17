@@ -92,7 +92,6 @@ gfx_defines!{
     constant CubeLocals {
         transform: [[f32; 4]; 4] = "u_Transform",
         radius: f32 = "u_Radius",
-        _padding: [f32; 3] = "",
     }
 
     pipeline light {
@@ -518,7 +517,6 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         let mut cube_locals = CubeLocals {
             transform: (proj * view.mat).into(),
             radius: LIGHT_RADIUS,
-            _padding: [0.0; 3]
         };
         encoder.update_constant_buffer(&self.light.data.locals_vs, &cube_locals);
         cube_locals.radius = EMITTER_RADIUS;

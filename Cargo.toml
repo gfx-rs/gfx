@@ -9,7 +9,7 @@ authors = ["The Gfx-rs Developers"]
 documentation = "https://docs.rs/gfx"
 
 [features]
-default = ["metal"]
+default = []
 vulkan = ["gfx_device_vulkan", "gfx_window_vulkan"]
 metal = ["gfx_device_metal", "gfx_window_metal"]
 unstable = []

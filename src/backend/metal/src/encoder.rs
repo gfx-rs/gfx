@@ -14,19 +14,6 @@
 
 #![allow(missing_docs)]
 
-use core::{pso, shade, state, target};
-use core::{IndexType, VertexCount};
-use core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
-               MAX_RESOURCE_VIEWS,
-               MAX_SAMPLERS, MAX_COLOR_TARGETS};
-
-use core::shade::Stage;
-
-use {Resources, Buffer, Texture, Pipeline};
-
-use native;
-use native::{Rtv, Srv, Dsv};
-
 use metal::*;
 
 use std::mem;
@@ -62,7 +49,7 @@ impl MetalTextureBindings {
 
     pub fn insert(&mut self, index: usize, texture: MTLTexture) {
         self.textures[index] = texture;
-        self.bound[index / 32] |= (1 << (index % 32));
+        self.bound[index / 32] |= 1 << (index % 32);
     }
 
     pub fn reset(&mut self) {
@@ -90,7 +77,7 @@ impl MetalBufferBindings {
     pub fn insert(&mut self, index: usize, offset: u64, buffer: MTLBuffer) {
         self.buffers[index] = buffer;
         self.offsets[index] = offset;
-        self.bound |= (1 << index);
+        self.bound |= 1 << index;
     }
 
     pub fn is_bound(&self, buffer: MTLBuffer) -> bool {
@@ -134,7 +121,7 @@ impl MetalSamplerBindings {
         self.samplers[index] = sampler;
         self.min_lods[index] = lod_min;
         self.max_lods[index] = lod_max;
-        self.bound |= (1 << index);
+        self.bound |= 1 << index;
     }
 
     pub fn reset(&mut self) {
@@ -360,9 +347,7 @@ impl MetalEncoder {
     pub fn start_command_buffer(&mut self, buf: MTLCommandBuffer) {
         debug_assert!(!buf.is_null(), "New Command Buffer must be non-nil");
 
-        unsafe {
-            self.command_buffer = buf;
-        }
+        self.command_buffer = buf;
     }
 
     pub fn commit_command_buffer(&mut self, drawable: CAMetalDrawable, wait: bool) {
@@ -423,10 +408,6 @@ impl MetalEncoder {
 
     pub fn set_render_pipeline_state(&mut self, pso: MTLRenderPipelineState) {
         self.cache.render = pso;
-    }
-
-    pub fn set_viewport_cache(&mut self, viewport: MTLViewport) {
-        self.cache.viewport = Some(viewport);
     }
 
     pub fn set_viewport(&mut self, viewport: MTLViewport) {

@@ -55,7 +55,6 @@ impl mapping::Gate<Resources> for RawMapping {
 
 
 pub struct Factory {
-    drawable: *mut CAMetalDrawable,
     device: MTLDevice,
     queue: MTLCommandQueue,
     share: Arc<Share>,
@@ -63,9 +62,8 @@ pub struct Factory {
 }
 
 impl Factory {
-    pub fn new(device: MTLDevice, share: Arc<Share>, drawable: *mut CAMetalDrawable) -> Factory {
+    pub fn new(device: MTLDevice, share: Arc<Share>) -> Factory {
         Factory {
-            drawable: drawable,
             device: device,
             queue: device.new_command_queue(),
             share: share,
@@ -74,7 +72,7 @@ impl Factory {
     }
 
     pub fn create_command_buffer(&self) -> CommandBuffer {
-        CommandBuffer::new(self.device, self.queue, self.drawable)
+        CommandBuffer::new(self.device, self.queue)
     }
 
     fn create_buffer_internal(&self,
@@ -89,7 +87,7 @@ impl Factory {
             return Err(buffer::CreationError::UnsupportedBind(info.bind));
         }
 
-        let mut raw_buf = if let Some(data) = raw_data {
+        let raw_buf = if let Some(data) = raw_data {
             self.device
                 .new_buffer_with_data(unsafe { mem::transmute(data) }, info.size as u64, usage)
         } else {

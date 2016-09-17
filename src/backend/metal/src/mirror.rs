@@ -22,7 +22,6 @@ use factory::DUMMY_BUFFER_SLOT;
 use metal::*;
 
 pub fn map_base_type_to_format(ty: shade::BaseType) -> MTLVertexFormat {
-    use metal::MTLVertexFormat::*;
     use core::shade::BaseType::*;
 
     match ty {
