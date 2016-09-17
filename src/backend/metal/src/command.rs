@@ -14,12 +14,14 @@
 
 #![allow(missing_docs)]
 
-use gfx_core::{draw, pso, shade, state, target, tex};
-use gfx_core::{IndexType, VertexCount};
-use gfx_core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
-               MAX_RESOURCE_VIEWS,
-               MAX_SAMPLERS, MAX_COLOR_TARGETS};
+use cocoa::foundation::NSRange;
 
+use core::{pso, shade, state, target, texture, command};
+use core::{IndexType, VertexCount};
+use core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS, MAX_RESOURCE_VIEWS,
+           MAX_SAMPLERS, MAX_COLOR_TARGETS};
+
+use core::shade::Stage;
 
 use {Resources, Buffer, Texture, Pipeline};
 
@@ -32,73 +34,6 @@ use metal::*;
 
 use std::collections::HashSet;
 use std::ptr;
-
-/// The place of some data in the data buffer.
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub struct DataPointer {
-    offset: u32,
-    size: u32,
-}
-
-pub struct DataBuffer(Vec<u8>);
-
-impl DataBuffer {
-    /// Create a new empty data buffer.
-    pub fn new() -> DataBuffer {
-        DataBuffer(Vec::new())
-    }
-    /// Reset the contents.
-    pub fn _reset(&mut self) {
-        self.0.clear();
-    }
-    /// Copy a given vector slice into the buffer.
-    pub fn add(&mut self, data: &[u8]) -> DataPointer {
-        self.0.extend_from_slice(data);
-        DataPointer {
-            offset: (self.0.len() - data.len()) as u32,
-            size: data.len() as u32,
-        }
-    }
-    /// Return a reference to a stored data object.
-    pub fn _get(&self, ptr: DataPointer) -> &[u8] {
-        &self.0[ptr.offset as usize..(ptr.offset + ptr.size) as usize]
-    }
-}
-
-/// Serialized device command.
-#[derive(Clone, Copy, Debug)]
-pub enum Command {
-    BindPipeline(Pipeline),
-    _BindIndex(Buffer),
-    BindVertexBuffers([native::Buffer; MAX_VERTEX_ATTRIBUTES],
-                      [u64; MAX_VERTEX_ATTRIBUTES],
-                      [u64; MAX_VERTEX_ATTRIBUTES]),
-    BindConstantBuffers(shade::Stage, [native::Buffer; MAX_CONSTANT_BUFFERS]),
-    BindShaderResources(shade::Stage, [native::Srv; MAX_RESOURCE_VIEWS]),
-    BindSamplers(shade::Stage, [native::Sampler; MAX_SAMPLERS]),
-    _BindPixelTargets([native::Rtv; MAX_COLOR_TARGETS], native::Dsv),
-    SetViewport(MTLViewport),
-    SetScissor(MTLScissorRect),
-    _SetBlend([f32; 4], u64),
-
-    // TODO: can we skip storing these? should have no side-effect to process
-    //       directly
-    _UpdateBuffer(Buffer, DataPointer, usize),
-    UpdateTexture(Texture, tex::Kind, Option<tex::CubeFace>, DataPointer, tex::RawImageInfo),
-    // GenerateMips(native::Srv),
-    _ClearColor(native::Rtv, [f32; 4]),
-    _ClearDepthStencil(native::Dsv, f32, u8),
-}
-
-#[derive(Clone, Copy, Debug)]
-enum Draw {
-    Normal(u64, u64),
-    Instanced(u64, u64, u64, u64),
-    Indexed(u64, u64, u64),
-    IndexedInstanced(u64, u64, u64, u64, u64),
-}
-
-unsafe impl Send for Command {}
 
 pub struct CommandBuffer {
     queue: MTLCommandQueue,
@@ -126,12 +61,14 @@ impl CommandBuffer {
         self.encoder.commit_command_buffer(drawable, false);
         self.encoder.reset();
 
-        self.encoder.start_command_buffer(self.queue.new_command_buffer());
-
         self.should_restore = false;
     }
 
     fn ensure_render_encoder(&mut self) {
+        if !self.encoder.has_command_buffer() {
+            self.encoder.start_command_buffer(self.queue.new_command_buffer());
+        }
+
         if !self.encoder.is_render_encoding() {
             self.encoder.begin_render_encoding();
         }
@@ -154,21 +91,22 @@ impl command::Buffer<Resources> for CommandBuffer {
         self.encoder.set_cull_mode(pso.cull);
         self.encoder.set_triangle_fill_mode(pso.fill);
 
+        // TODO(fkaa): do we need max value?
         self.encoder.set_depth_bias(pso.depth_bias as f32 ,
                                     pso.slope_scaled_depth_bias as f32,
                                     0f32);
 
-
         if let Some(depth_state) = pso.depth_stencil {
             self.encoder.set_depth_stencil_state(depth_state);
         }
-
-        //self.buf.push(Command::BindPipeline(pso));
     }
 
     fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<Resources>) {
         for i in 0..MAX_VERTEX_ATTRIBUTES {
             if let Some((buffer, offset)) = vbs.0[i] {
+                // TODO(fkaa): is it okay if we cascade downwards with vertex
+                //             buffers? don't want to collide with user defined
+                //             values on accident!
                 self.encoder.set_vertex_buffer(30 - i as u64, offset as u64, unsafe { *(buffer.0).0 });
             }
         }
@@ -219,6 +157,7 @@ impl command::Buffer<Resources> for CommandBuffer {
             let mask = stage.into();
             for sampler in ss.iter() {
                 if sampler.1.contains(mask) {
+                    // TODO(fkaa): what about min/max lods?
                     if let Stage::Vertex = stage {
                         self.encoder.set_vertex_sampler_state(sampler.2 as u64, 0f32, f32::MAX, (sampler.0).0);
                     } else {
@@ -261,8 +200,6 @@ impl command::Buffer<Resources> for CommandBuffer {
                     // previous content
                     attachment.set_load_action(MTLLoadAction::Load);
                 }
-
-                //unsafe { *color.1 = [0; 4]; }
             }
         }
 
@@ -274,6 +211,7 @@ impl command::Buffer<Resources> for CommandBuffer {
                 attachment.set_slice(layer as u64);
             }
 
+            // do we need to handle any other cases?
             attachment.set_store_action(MTLStoreAction::Store);
 
             let clear = unsafe { *depth.2 };
@@ -291,21 +229,22 @@ impl command::Buffer<Resources> for CommandBuffer {
         }
 
         self.encoder.set_render_pass_descriptor(render_pass_descriptor);
-        //self.encoder.begin_render_encoding();
-        //self.encoder.restore_render_state();
-        self.encoder.set_viewport(MTLViewport {
-            originX: 0f64,
-            originY: 0f64,
-            width: targets.size.0 as f64,
-            height: targets.size.1 as f64,
-            znear: 0f64,
-            zfar: 1f64
-        });
+        if let Some(dim) = targets.dimensions {
+            self.encoder.set_viewport(MTLViewport {
+                originX: 0f64,
+                originY: 0f64,
+                width: dim.0 as f64,
+                height: dim.1 as f64,
+                znear: 0f64,
+                zfar: 1f64
+            });
+        }
     }
 
     fn bind_index(&mut self, buf: Buffer, idx_type: IndexType) {
         use map::map_index_type;
 
+        // TODO(fkaa): pass wrapper instead
         self.encoder.set_index_buffer(unsafe { *(buf.0).0 }, map_index_type(idx_type));
     }
 
@@ -320,11 +259,9 @@ impl command::Buffer<Resources> for CommandBuffer {
     }
 
     fn set_ref_values(&mut self, vals: state::RefValues) {
-        //self.encoder.set_stencil_front_back_reference_value(vals.stencil.0, vals.stencil.1);
-        /*if vals.stencil.0 != vals.stencil.1 {
-            error!("Unable to set different stencil ref values for front ({}) and back ({})",
-                vals.stencil.0, vals.stencil.1);
-        }*/
+        // FIXME: wrong types?
+        // self.encoder.set_stencil_front_back_reference_value(vals.stencil.0, vals.stencil.1);
+
         // TODO: blend/stencil
     }
 
@@ -335,48 +272,71 @@ impl command::Buffer<Resources> for CommandBuffer {
 
         let b = unsafe { *(buf.0).0 };
 
+        // we can create a new buffer to avoid synchronization when:
+        //   * buffer is write-only
+        //   * we are replacing all the contents of the buffer
+        //
+        // TODO(fkaa): maybe have an upper limit to prevent from thrashing?
         if offset == 0 && data.len() == b.length() as usize {
             unsafe {
-                //b.release();
+                // TODO(fkaa): ensure the creation flags are identical
                 *(buf.0).0 = self.device.new_buffer_with_data(
                     data.as_ptr() as _,
                     data.len() as _,
                     map_buffer_usage(buf.1));
+
+                // invalidate old buffer in cache
+                self.encoder.invalidate_buffer(b);
+
+                // and release so we don't leak and get kernel panic..
+                b.release();
             }
         } else {
-            if self.encoder.is_buffer_bound(b) {
-                self.encoder.end_encoding();
-                //self.encoder.commit_command_buffer(CAMetalDrawable::nil(), true);
-                self.should_restore = true;
-            }
+            // TODO(fkaa): how do we (eventually) handle updating buffers when
+            //             we have multiple encoders? enqueue cmd buffers and
+            //             rely on their synchronization?
+
+            // TODO(fkaa): perhaps we can keep track of in-use buffers in some
+            //             higher-level place and query here to prevent from
+            //             stalling encoding when buffer is not in use
+
+            // TODO(fkaa): need to have a better way of keeping track of
+            //             internal cmd buffers, not good to commit/request
+            //             constantly
+
+            // FIXME: slow :-(
+            self.encoder.end_encoding();
+            self.encoder.commit_command_buffer(CAMetalDrawable::nil(), true);
+            self.should_restore = true;
 
             let contents = b.contents();
 
             unsafe {
                 let dst = (contents as *mut u8).offset(offset as isize);
                 ptr::copy(data.as_ptr(), dst, data.len());
-                //(buf.0).0.invalidate_range(NSRange::new(offset as u64, data.len() as u64));
+
+                // TODO(fkaa): notify *only if* buffer has managed storage mode:
+                // b.did_modify_range(NSRange::new(offset as u64, data.len() as u64));
             }
         }
     }
 
     fn update_texture(&mut self,
                       tex: Texture,
-                      kind: tex::Kind,
-                      face: Option<tex::CubeFace>,
+                      kind: texture::Kind,
+                      face: Option<texture::CubeFace>,
                       data: &[u8],
-                      info: tex::RawImageInfo) {
-        //let ptr = self.data.add(data);
-        //self.buf.push(Command::UpdateTexture(tex, kind, face, ptr, info));
+                      info: texture::RawImageInfo) {
+        unimplemented!()
     }
 
     fn generate_mipmap(&mut self, _srv: Srv) {
         unimplemented!()
     }
 
-    fn clear_color(&mut self, target: Rtv, value: draw::ClearColor) {
+    fn clear_color(&mut self, target: Rtv, value: command::ClearColor) {
         match value {
-            draw::ClearColor::Float(val) => {
+            command::ClearColor::Float(val) => {
                 unsafe {
                     *target.1 = Some([(val[0] * 255.0) as u8,
                                       (val[1] * 255.0) as u8,
@@ -393,13 +353,10 @@ impl command::Buffer<Resources> for CommandBuffer {
         unsafe {
             *target.2 = Some(depth.unwrap_or_default());
         }
-        //self.cache.clear_depth = depth.unwrap_or_default();
-        //self.cache.clear_stencil = stencil.unwrap_or_default();
     }
 
-    fn call_draw(&mut self, start: VertexCount, count: VertexCount, instances: draw::InstanceOption) {
-        self.encoder.begin_render_encoding();
-        self.encoder.restore_render_state();
+    fn call_draw(&mut self, start: VertexCount, count: VertexCount, instances: Option<command::InstanceParams>) {
+        self.ensure_render_encoder();
 
         match instances {
             Some((ninst, offset)) => {
@@ -415,9 +372,8 @@ impl command::Buffer<Resources> for CommandBuffer {
     }
 
     fn call_draw_indexed(&mut self, start: VertexCount, count: VertexCount,
-                         base: VertexCount, instances: draw::InstanceOption) {
-        self.encoder.begin_render_encoding();
-        self.encoder.restore_render_state();
+                         base: VertexCount, instances: Option<command::InstanceParams>) {
+        self.ensure_render_encoder();
 
         match instances {
             Some((ninst, offset)) => {

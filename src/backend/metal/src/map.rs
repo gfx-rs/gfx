@@ -527,10 +527,10 @@ pub fn map_texture_usage(usage: Usage) -> (MTLResourceOptions, MTLStorageMode) {
 pub fn map_buffer_usage(usage: Usage) -> MTLResourceOptions {
     match usage {
         Usage::GpuOnly => MTLResourceStorageModePrivate,
-        Usage::Immutable => MTLResourceCPUCacheModeDefaultCache,
-        Usage::Dynamic => MTLResourceCPUCacheModeDefaultCache,
-        Usage::CpuOnly(access) => map_access(access),
-        Usage::Persistent(access) => map_access(access),
+        Usage::Immutable => MTLResourceCPUCacheModeDefaultCache | MTLResourceStorageModeManaged,
+        Usage::Dynamic => MTLResourceCPUCacheModeDefaultCache | MTLResourceStorageModeManaged,
+        Usage::CpuOnly(access) => map_access(access) | MTLResourceStorageModeManaged,
+        Usage::Persistent(access) => map_access(access) | MTLResourceStorageModeManaged,
     }
 }
 
@@ -583,8 +583,9 @@ pub fn map_write_mask(mask: state::ColorMask) -> MTLColorWriteMask {
 }
 
 pub fn map_blend_factor(factor: state::Factor, scalar: bool) -> MTLBlendFactor {
-    use gfx_core::state::BlendValue::*;
-    use gfx_core::state::Factor::*;
+    use core::state::BlendValue::*;
+    use core::state::Factor::*;
+
     match factor {
         Zero => MTLBlendFactor::Zero,
         One => MTLBlendFactor::One,
@@ -610,7 +611,8 @@ pub fn map_blend_factor(factor: state::Factor, scalar: bool) -> MTLBlendFactor {
 }
 
 pub fn map_blend_op(equation: state::Equation) -> MTLBlendOperation {
-    use gfx_core::state::Equation::*;
+    use core::state::Equation::*;
+
     match equation {
         Add => MTLBlendOperation::Add,
         Sub => MTLBlendOperation::Subtract,

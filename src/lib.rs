@@ -116,27 +116,18 @@ pub trait Application<R: gfx::Resources>: Sized {
     {
         WrapD3D11::<Self>::launch(name, DEFAULT_CONFIG);
     }
-<<<<<<< 7b084cfbb95e3e4d1ea51e91746fc75b2efb3be3
-    #[cfg(all(not(target_os = "windows"), not(feature = "vulkan")))]
+    #[cfg(all(not(target_os = "windows"), not(feature = "vulkan"), not(feature = "metal")))]
     fn launch_default(name: &str)
         where WrapGL2<Self>: ApplicationGL
     {
         WrapGL2::<Self>::launch(name, DEFAULT_CONFIG);
     }
-    // #[cfg(target_os = "macos")]
-    // fn launch_default(name: &str) where WrapMetal<Self>: ApplicationMetal {
-    // WrapMetal::<Self>::launch(name, DEFAULT_CONFIG)
-    // }
-=======
-    #[cfg(all(not(target_os = "windows"), not(feature = "vulkan"), not(feature = "metal")))]
-    fn launch_default(name: &str) where WrapGL2<Self>: ApplicationGL {
-        WrapGL2::<Self>::launch(name, DEFAULT_CONFIG);
-    }
     #[cfg(feature = "metal")]
-    fn launch_default(name: &str) where WrapMetal<Self>: ApplicationMetal {
+    fn launch_default(name: &str)
+        where WrapMetal<Self>: ApplicationMetal
+    {
         WrapMetal::<Self>::launch(name, DEFAULT_CONFIG)
     }
->>>>>>> MTL - rewrite encoder into something manageable
     #[cfg(feature = "vulkan")]
     fn launch_default(name: &str)
         where WrapVulkan<Self>: ApplicationVulkan

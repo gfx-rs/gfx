@@ -21,6 +21,8 @@ use std::{mem, slice, str};
 
 use core::{self, buffer, factory, mapping, memory};
 use core::handle::{self, Producer};
+use core::mapping::Builder;
+use core::memory::Typed;
 
 use metal::*;
 
@@ -324,7 +326,7 @@ impl core::Factory<Resources> for Factory {
                   map_winding, map_cull, map_fill, map_format, map_blend_op,
                   map_blend_factor, map_write_mask};
 
-        use gfx_core::{MAX_COLOR_TARGETS};
+        use core::{MAX_COLOR_TARGETS};
 
         let vertex_desc = MTLVertexDescriptor::new();
 
@@ -753,8 +755,8 @@ impl core::Factory<Resources> for Factory {
         desc.set_address_mode_s(map_wrap(info.wrap_mode.0));
         desc.set_address_mode_t(map_wrap(info.wrap_mode.1));
         desc.set_address_mode_r(map_wrap(info.wrap_mode.2));
-        desc.set_compare_function(map_function(info.comparison
-            .unwrap_or(core::state::Comparison::Always)));
+        desc.set_compare_function(map_function(info.comparison.unwrap_or(
+                    core::state::Comparison::Always)));
 
         let sampler = self.device.new_sampler(desc);
 
@@ -762,27 +764,31 @@ impl core::Factory<Resources> for Factory {
     }
 
     fn map_buffer_raw(&mut self,
-                      _buf: &handle::RawBuffer<Resources>,
-                      _access: memory::Access)
+                      buf: &handle::RawBuffer<Resources>,
+                      access: memory::Access)
                       -> Result<handle::RawMapping<Resources>, mapping::Error> {
+        // TODO(fkaa): if we have a way to track buffers in use (added on
+        //             scheduling of command buffers, removed on completion),
+        //             we could block while in use on both sides. would need
+        //             a state for each mode (`in-use` vs. `mapped`).
         unimplemented!()
     }
 
-    fn map_buffer_readable<T: Copy>(&mut self,
-                                    _buf: &handle::Buffer<Resources, T>)
+    fn map_buffer_readable<T: Copy>(&mut self, buf: &handle::Buffer<Resources, T>)
                                     -> Result<mapping::Readable<Resources, T>, mapping::Error> {
-        unimplemented!()
+        let map = try!(self.map_buffer_raw(buf.raw(), memory::READ));
+        Ok(self.map_readable(map, buf.len()))
     }
 
-    fn map_buffer_writable<T: Copy>(&mut self,
-                                    _buf: &handle::Buffer<Resources, T>)
+    fn map_buffer_writable<T: Copy>(&mut self, buf: &handle::Buffer<Resources, T>)
                                     -> Result<mapping::Writable<Resources, T>, mapping::Error> {
-        unimplemented!()
+        let map = try!(self.map_buffer_raw(buf.raw(), memory::WRITE));
+        Ok(self.map_writable(map, buf.len()))
     }
 
-    fn map_buffer_rw<T: Copy>(&mut self,
-                              _buf: &handle::Buffer<Resources, T>)
+    fn map_buffer_rw<T: Copy>(&mut self, buf: &handle::Buffer<Resources, T>)
                               -> Result<mapping::RWable<Resources, T>, mapping::Error> {
-        unimplemented!()
+        let map = try!(self.map_buffer_raw(buf.raw(), memory::RW));
+        Ok(self.map_read_write(map, buf.len()))
     }
 }

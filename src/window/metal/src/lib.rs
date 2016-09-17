@@ -44,14 +44,15 @@ use metal::*;
 //use winit::{Window};
 
 use std::ops::Deref;
-//use std::cell::Cell;
+use std::cell::Cell;
 use std::mem;
 
 pub struct MetalWindow {
     window: winit::Window,
     layer: CAMetalLayer,
     drawable: *mut CAMetalDrawable,
-    backbuffer: *mut MTLTexture
+    backbuffer: *mut MTLTexture,
+    pool: Cell<NSAutoreleasePool>
 }
 
 impl Deref for MetalWindow {
@@ -64,20 +65,15 @@ impl Deref for MetalWindow {
 
 impl MetalWindow {
     pub fn swap_buffers(&self) -> Result<(), ()> {
-        // FIXME: release drawable before swapping
         // TODO: did we fail to swap buffers?
         // TODO: come up with alternative to this hack
 
         unsafe {
-            //self.pool.get().drain();
-            //self.pool.set(NSAutoreleasePool::alloc().init());
+            self.pool.get().release();
+            self.pool.set(NSAutoreleasePool::alloc().init());
 
             let drawable = self.layer.next_drawable().unwrap();
             //drawable.retain();
-
-            if !(*self.drawable).is_null() {
-                (*self.drawable).release();
-            }
 
             *self.drawable = drawable;
 
@@ -110,7 +106,7 @@ pub fn init<C: RenderFormat>(title: &str, requested_width: u32, requested_height
 pub fn init_raw(title: &str, requested_width: u32, requested_height: u32, color_format: Format)
         -> Result<(MetalWindow, Device, Factory, RawRenderTargetView<Resources>), InitError>
 {
-    use gfx_device_metal::map_format;
+    use device_metal::map_format;
 
     let winit_window = winit::WindowBuilder::new()
         .with_dimensions(requested_width, requested_height)
@@ -120,7 +116,7 @@ pub fn init_raw(title: &str, requested_width: u32, requested_height: u32, color_
         let wnd: cocoa_id = mem::transmute(winit_window.get_nswindow());
 
         let layer = CAMetalLayer::new();
-        layer.set_pixel_format(match gfx_device_metal::map_format(color_format, true) {
+        layer.set_pixel_format(match map_format(color_format, true) {
             Some(fm) => fm,
             None => return Err(InitError::Format(color_format)),
         });
@@ -146,7 +142,8 @@ pub fn init_raw(title: &str, requested_width: u32, requested_height: u32, color_
             window: winit_window,
             layer: layer,
             drawable: daddr,
-            backbuffer: addr
+            backbuffer: addr,
+            pool: Cell::new(NSAutoreleasePool::alloc().init())
         };
 
         (*daddr).0 = drawable.0;

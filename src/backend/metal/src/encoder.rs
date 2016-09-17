@@ -14,13 +14,13 @@
 
 #![allow(missing_docs)]
 
-use gfx_core::{draw, pso, shade, state, target, tex};
-use gfx_core::{IndexType, VertexCount};
-use gfx_core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
+use core::{pso, shade, state, target};
+use core::{IndexType, VertexCount};
+use core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
                MAX_RESOURCE_VIEWS,
                MAX_SAMPLERS, MAX_COLOR_TARGETS};
 
-use gfx_core::shade::Stage;
+use core::shade::Stage;
 
 use {Resources, Buffer, Texture, Pipeline};
 
@@ -98,6 +98,10 @@ impl MetalBufferBindings {
             Some(idx) => self.bound & (1 << idx) != 0,
             None => false
         }
+    }
+
+    pub fn invalidate(&mut self, buffer: MTLBuffer) {
+        self.buffers.iter().position(|&b| b == buffer).map(|idx | { self.bound &= !(1 << idx) });
     }
 
     pub fn reset(&mut self) {
@@ -349,21 +353,21 @@ impl MetalEncoder {
         !self.render.is_null()
     }
 
+    pub fn has_command_buffer(&self) -> bool {
+        !self.command_buffer.is_null()
+    }
+
     pub fn start_command_buffer(&mut self, buf: MTLCommandBuffer) {
         debug_assert!(!buf.is_null(), "New Command Buffer must be non-nil");
 
         unsafe {
-            buf.retain();
-            let old = self.command_buffer;
             self.command_buffer = buf;
-            old.release();
         }
     }
 
     pub fn commit_command_buffer(&mut self, drawable: CAMetalDrawable, wait: bool) {
         debug_assert!(!self.command_buffer.is_null(), "Command Buffer must be non-nil");
 
-        // TODO(fkaa): commit
         if !drawable.is_null() {
             self.command_buffer.present_drawable(drawable);
         }
@@ -374,9 +378,6 @@ impl MetalEncoder {
             self.command_buffer.wait_until_completed();
         }
 
-        unsafe {
-            self.command_buffer.release();
-        }
         self.command_buffer = MTLCommandBuffer::nil();
     }
 
@@ -391,7 +392,7 @@ impl MetalEncoder {
         unsafe {
             if !self.render.is_null() {
                 self.render.end_encoding();
-                self.render.release();
+                //self.render.release();
                 self.render = MTLRenderCommandEncoder::nil();
             }
 
@@ -412,6 +413,12 @@ impl MetalEncoder {
 
     pub fn is_buffer_bound(&mut self, buf: MTLBuffer) -> bool {
         self.cache.buffer_bindings.iter().any(|binds| binds.is_bound(buf))
+    }
+
+    pub fn invalidate_buffer(&mut self, buf: MTLBuffer) {
+        for binds in self.cache.buffer_bindings.iter_mut() {
+            binds.invalidate(buf);
+        }
     }
 
     pub fn set_render_pipeline_state(&mut self, pso: MTLRenderPipelineState) {
@@ -466,7 +473,6 @@ impl MetalEncoder {
         self.cache.stencil_front_back_ref = Some((front, back));
     }
 
-    // TODO(fkaa): cut down on unnecessary binds for shader resources
     pub fn set_vertex_texture(&mut self, index: u64, texture: MTLTexture) {
         self.cache.texture_bindings[VS_IDX].insert(index as usize, texture);
     }

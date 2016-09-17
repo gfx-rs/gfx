@@ -23,7 +23,7 @@ use metal::*;
 
 pub fn map_base_type_to_format(ty: shade::BaseType) -> MTLVertexFormat {
     use metal::MTLVertexFormat::*;
-    use gfx_core::shade::BaseType::*;
+    use core::shade::BaseType::*;
 
     match ty {
         I32 => MTLVertexFormat::Int,
