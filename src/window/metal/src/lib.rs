@@ -20,7 +20,7 @@ extern crate log;
 extern crate objc;
 extern crate cocoa;
 extern crate winit;
-extern crate metal;
+extern crate metal_rs as metal;
 extern crate gfx_core as core;
 extern crate gfx_device_metal as device_metal;
 

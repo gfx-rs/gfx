@@ -19,7 +19,7 @@ extern crate objc;
 extern crate objc_foundation;
 extern crate cocoa;
 extern crate gfx_core as core;
-extern crate metal;
+extern crate metal_rs as metal;
 extern crate bit_set;
 
 // use cocoa::base::{selector, class};
