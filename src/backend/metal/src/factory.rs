@@ -21,16 +21,18 @@ use std::{mem, slice, str};
 
 use core::{self, buffer, factory, mapping, memory};
 use core::handle::{self, Producer};
+use core::mapping::Builder;
+use core::memory::Typed;
 
 use metal::*;
 
 use command::CommandBuffer;
 
+use MTL_MAX_BUFFER_BINDINGS;
+
 use {Resources, Share, Texture, Buffer, Shader, Program, Pipeline};
 use native;
 use mirror;
-
-pub const DUMMY_BUFFER_SLOT: u64 = 30;
 
 #[derive(Copy, Clone, Debug)]
 pub struct RawMapping {
@@ -53,7 +55,6 @@ impl mapping::Gate<Resources> for RawMapping {
 
 
 pub struct Factory {
-    drawable: *mut CAMetalDrawable,
     device: MTLDevice,
     queue: MTLCommandQueue,
     share: Arc<Share>,
@@ -61,9 +62,8 @@ pub struct Factory {
 }
 
 impl Factory {
-    pub fn new(device: MTLDevice, share: Arc<Share>, drawable: *mut CAMetalDrawable) -> Factory {
+    pub fn new(device: MTLDevice, share: Arc<Share>) -> Factory {
         Factory {
-            drawable: drawable,
             device: device,
             queue: device.new_command_queue(),
             share: share,
@@ -72,7 +72,7 @@ impl Factory {
     }
 
     pub fn create_command_buffer(&self) -> CommandBuffer {
-        CommandBuffer::new(self.queue, self.drawable)
+        CommandBuffer::new(self.device, self.queue)
     }
 
     fn create_buffer_internal(&self,
@@ -94,7 +94,7 @@ impl Factory {
             self.device.new_buffer(info.size as u64, usage)
         };
 
-        let buf = Buffer(native::Buffer(raw_buf), info.usage);
+        let buf = Buffer(native::Buffer(Box::into_raw(Box::new(raw_buf))), info.usage);
         Ok(self.share.handles.borrow_mut().make_buffer(buf, info))
     }
 
@@ -102,7 +102,10 @@ impl Factory {
         use map::{map_function, map_stencil_op};
 
         let desc = MTLDepthStencilDescriptor::alloc().init();
-        desc.set_depth_write_enabled(info.depth.is_some());
+        desc.set_depth_write_enabled(match info.depth {
+            Some(ref depth) => depth.write,
+            None => false
+        });
         desc.set_depth_compare_function(match info.depth {
             Some(ref depth) => map_function(depth.fun),
             None => MTLCompareFunction::Never,
@@ -233,28 +236,25 @@ impl core::Factory<Resources> for Factory {
                 }
                 pso_descriptor.color_attachments()
                     .object_at(0)
-                    .set_pixel_format(MTLPixelFormat::BGRA8Unorm);
+                    .set_pixel_format(MTLPixelFormat::BGRA8Unorm_sRGB);
 
-                // when we use `[[ stage_in ]]` we have to have a vertex
-                // descriptor attached to the PSO descriptor
-                //
-                // dummy values are used for the attributes but the buffer
-                // slot `DUMMY_BUFFER_SLOT` is occupied by the dummy buffer
-                //
                 // TODO: prevent collision between dummy buffers and real
                 //       values
                 let vertex_desc = MTLVertexDescriptor::new();
 
-                let buf = vertex_desc.layouts().object_at(DUMMY_BUFFER_SLOT as usize);
+                let buf = vertex_desc.layouts().object_at((MTL_MAX_BUFFER_BINDINGS - 1) as usize);
                 buf.set_stride(16);
                 buf.set_step_function(MTLVertexStepFunction::Constant);
                 buf.set_step_rate(0);
 
-                for i in 0..16 {
-                    let attribute = vertex_desc.attributes().object_at(i as usize);
-                    attribute.set_format(MTLVertexFormat::Char4);
+                mirror::populate_vertex_attributes(&mut info, vs.vertex_attributes());
+
+                for attr in info.vertex_attributes.iter() {
+                    // TODO: handle case when requested vertex format is invalid
+                    let attribute = vertex_desc.attributes().object_at(attr.slot as usize);
+                    attribute.set_format(mirror::map_base_type_to_format(attr.base_type));
                     attribute.set_offset(0);
-                    attribute.set_buffer_index(DUMMY_BUFFER_SLOT);
+                    attribute.set_buffer_index((MTL_MAX_BUFFER_BINDINGS - 1) as u64);
                 }
 
                 pso_descriptor.set_vertex_descriptor(vertex_desc);
@@ -264,17 +264,9 @@ impl core::Factory<Resources> for Factory {
                     .unwrap();
 
                 // fill the `ProgramInfo` struct with goodies
-                mirror::populate_vertex_attributes(&mut info, vs.vertex_attributes());
 
                 mirror::populate_info(&mut info, Stage::Vertex, reflection.vertex_arguments());
                 mirror::populate_info(&mut info, Stage::Pixel, reflection.fragment_arguments());
-
-                println!("{:?},\n{:?},\n{:?},\n{:?},\n{:?},\n",
-                         info.vertex_attributes,
-                         info.constant_buffers,
-                         info.textures,
-                         info.samplers,
-                         info.outputs);
 
                 // destroy PSO & reflection object after we're done with
                 // parsing reflection
@@ -301,35 +293,39 @@ impl core::Factory<Resources> for Factory {
         Ok(self.share.handles.borrow_mut().make_program(prog, info))
     }
 
-    fn create_pipeline_state_raw
-        (&mut self,
-         program: &handle::Program<Resources>,
-         desc: &core::pso::Descriptor)
-         -> Result<handle::RawPipelineState<Resources>, core::pso::CreationError> {
-        use map::{map_depth_surface, map_vertex_format, map_topology, map_winding, map_cull,
-                  map_fill};
+    fn create_pipeline_state_raw(&mut self, program: &handle::Program<Resources>, desc: &core::pso::Descriptor)
+                                 -> Result<handle::RawPipelineState<Resources>, core::pso::CreationError> {
+        use map::{map_depth_surface, map_vertex_format, map_topology,
+                  map_winding, map_cull, map_fill, map_format, map_blend_op,
+                  map_blend_factor, map_write_mask};
+
+        use core::{MAX_COLOR_TARGETS};
 
         let vertex_desc = MTLVertexDescriptor::new();
 
-        println!("att: {:?}", desc.attributes);
+        let mut vb_count = 0;
+        for vb in desc.vertex_buffers.iter() {
+            if let &Some(vbuf) = vb {
+                let buf = vertex_desc.layouts().object_at((MTL_MAX_BUFFER_BINDINGS - 1) as usize - vb_count);
+                buf.set_stride(vbuf.stride as u64);
+                if vbuf.rate > 0 {
+                    buf.set_step_function(MTLVertexStepFunction::PerInstance);
+                    buf.set_step_rate(vbuf.rate as u64);
+                } else {
+                    buf.set_step_function(MTLVertexStepFunction::PerVertex);
+                    buf.set_step_rate(1);
+                }
+
+                vb_count += 1;
+            }
+        }
         // TODO: find a better way to set the buffer's stride, step func and
         //       step rate
-        let buf = vertex_desc.layouts().object_at(0);
-        let vat = desc.vertex_buffers[desc.attributes[0].unwrap().0 as usize].unwrap();
-        buf.set_stride(vat.stride as u64);
-        buf.set_step_function(if vat.rate > 0 {
-            MTLVertexStepFunction::PerInstance
-        } else {
-            MTLVertexStepFunction::PerVertex
-        });
-        buf.set_step_rate(vat.rate as u64);
 
-        for (attr, attr_desc) in program.get_info()
-            .vertex_attributes
-            .iter()
-            .zip(desc.attributes.iter()) {
-            let elem = match attr_desc {
-                &Some((_, el)) => el,
+
+        for (attr, attr_desc) in program.get_info().vertex_attributes.iter().zip(desc.attributes.iter()) {
+            let (idx, elem) = match attr_desc {
+                &Some((idx, el)) => (idx, el),
                 &None => continue,
             };
 
@@ -344,32 +340,44 @@ impl core::Factory<Resources> for Factory {
             let attribute = vertex_desc.attributes().object_at(attr.slot as usize);
             attribute.set_format(map_vertex_format(elem.format).unwrap());
             attribute.set_offset(elem.offset as u64);
-            attribute.set_buffer_index(0);
+            attribute.set_buffer_index((MTL_MAX_BUFFER_BINDINGS - 1) as u64 - idx as u64);
         }
 
         let prog = self.frame_handles.ref_program(program);
 
         let pso_descriptor = MTLRenderPipelineDescriptor::alloc().init();
-        println!("{:?}", prog.ps);
         pso_descriptor.set_vertex_function(prog.vs);
+
         if !prog.ps.is_null() {
             pso_descriptor.set_fragment_function(prog.ps);
         }
         pso_descriptor.set_vertex_descriptor(vertex_desc);
         pso_descriptor.set_input_primitive_topology(map_topology(desc.primitive));
-        if !prog.ps.is_null() {
-            pso_descriptor.color_attachments()
-                .object_at(0)
-                .set_pixel_format(MTLPixelFormat::BGRA8Unorm);
-        } else {
-            pso_descriptor.color_attachments()
-                .object_at(0)
-                .set_pixel_format(MTLPixelFormat::Invalid);
+
+        for idx in 0..MAX_COLOR_TARGETS {
+            if let Some(color) = desc.color_targets[idx] {
+                let attachment = pso_descriptor.color_attachments().object_at(idx);
+                attachment.set_pixel_format(map_format(color.0, true).unwrap());
+                attachment.set_blending_enabled(color.1.color.is_some() || color.1.alpha.is_some());
+
+                attachment.set_write_mask(map_write_mask(color.1.mask));
+
+                if let Some(blend) = color.1.color {
+                    attachment.set_source_rgb_blend_factor(map_blend_factor(blend.source, false));
+                    attachment.set_destination_rgb_blend_factor(map_blend_factor(blend.destination, false));
+                    attachment.set_rgb_blend_operation(map_blend_op(blend.equation));
+                }
+
+                if let Some(blend) = color.1.alpha {
+                    attachment.set_source_alpha_blend_factor(map_blend_factor(blend.source, true));
+                    attachment.set_destination_alpha_blend_factor(map_blend_factor(blend.destination, true));
+                    attachment.set_alpha_blend_operation(map_blend_op(blend.equation));
+                }
+            }
         }
 
         if let Some(depth_desc) = desc.depth_stencil {
             // TODO: depthstencil
-            println!("{:?}", depth_desc);
             // pso_descriptor.set_depth_attachment_pixel_format(MTLPixelFormat::Depth32Float);
             pso_descriptor.set_depth_attachment_pixel_format(map_depth_surface((depth_desc.0).0).unwrap());
         }
@@ -382,6 +390,19 @@ impl core::Factory<Resources> for Factory {
             winding: map_winding(desc.rasterizer.front_face),
             cull: map_cull(desc.rasterizer.cull_face),
             fill: map_fill(desc.rasterizer.method),
+            alpha_to_one: false,
+            alpha_to_coverage: false,
+            depth_bias: if let Some(ref offset) = desc.rasterizer.offset {
+                offset.1
+            } else {
+                0
+            },
+            slope_scaled_depth_bias: if let Some(ref offset) = desc.rasterizer.offset {
+                offset.0
+            } else {
+                0
+            },
+            depth_clip: true
         };
 
         Ok(self.share.handles.borrow_mut().make_pso(pso, program))
@@ -612,7 +633,7 @@ impl core::Factory<Resources> for Factory {
          -> Result<handle::RawRenderTargetView<Resources>, factory::TargetViewError> {
         let raw_tex = self.frame_handles.ref_texture(htex).0;
         let size = htex.get_info().kind.get_level_dimensions(desc.level);
-        Ok(self.share.handles.borrow_mut().make_rtv(native::Rtv(raw_tex.0), htex, size))
+        Ok(self.share.handles.borrow_mut().make_rtv(native::Rtv(raw_tex.0, Box::into_raw(Box::new(None))), htex, size))
     }
 
     fn view_texture_as_depth_stencil_raw
@@ -682,7 +703,7 @@ impl core::Factory<Resources> for Factory {
         // Ok(self.share.handles.borrow_mut().make_dsv(native::Dsv(raw_view), htex, dim))
         let raw_tex = self.frame_handles.ref_texture(htex).0;
         let size = htex.get_info().kind.get_level_dimensions(desc.level);
-        Ok(self.share.handles.borrow_mut().make_dsv(native::Dsv(raw_tex.0), htex, size))
+        Ok(self.share.handles.borrow_mut().make_dsv(native::Dsv(raw_tex.0, desc.layer, Box::into_raw(Box::new(Some(0f32)))), htex, size))
     }
 
     fn create_sampler(&mut self, info: core::texture::SamplerInfo) -> handle::Sampler<Resources> {
@@ -706,8 +727,8 @@ impl core::Factory<Resources> for Factory {
         desc.set_address_mode_s(map_wrap(info.wrap_mode.0));
         desc.set_address_mode_t(map_wrap(info.wrap_mode.1));
         desc.set_address_mode_r(map_wrap(info.wrap_mode.2));
-        desc.set_compare_function(map_function(info.comparison
-            .unwrap_or(core::state::Comparison::Always)));
+        desc.set_compare_function(map_function(info.comparison.unwrap_or(
+                    core::state::Comparison::Always)));
 
         let sampler = self.device.new_sampler(desc);
 
@@ -715,27 +736,31 @@ impl core::Factory<Resources> for Factory {
     }
 
     fn map_buffer_raw(&mut self,
-                      _buf: &handle::RawBuffer<Resources>,
-                      _access: memory::Access)
+                      buf: &handle::RawBuffer<Resources>,
+                      access: memory::Access)
                       -> Result<handle::RawMapping<Resources>, mapping::Error> {
+        // TODO(fkaa): if we have a way to track buffers in use (added on
+        //             scheduling of command buffers, removed on completion),
+        //             we could block while in use on both sides. would need
+        //             a state for each mode (`in-use` vs. `mapped`).
         unimplemented!()
     }
 
-    fn map_buffer_readable<T: Copy>(&mut self,
-                                    _buf: &handle::Buffer<Resources, T>)
+    fn map_buffer_readable<T: Copy>(&mut self, buf: &handle::Buffer<Resources, T>)
                                     -> Result<mapping::Readable<Resources, T>, mapping::Error> {
-        unimplemented!()
+        let map = try!(self.map_buffer_raw(buf.raw(), memory::READ));
+        Ok(self.map_readable(map, buf.len()))
     }
 
-    fn map_buffer_writable<T: Copy>(&mut self,
-                                    _buf: &handle::Buffer<Resources, T>)
+    fn map_buffer_writable<T: Copy>(&mut self, buf: &handle::Buffer<Resources, T>)
                                     -> Result<mapping::Writable<Resources, T>, mapping::Error> {
-        unimplemented!()
+        let map = try!(self.map_buffer_raw(buf.raw(), memory::WRITE));
+        Ok(self.map_writable(map, buf.len()))
     }
 
-    fn map_buffer_rw<T: Copy>(&mut self,
-                              _buf: &handle::Buffer<Resources, T>)
+    fn map_buffer_rw<T: Copy>(&mut self, buf: &handle::Buffer<Resources, T>)
                               -> Result<mapping::RWable<Resources, T>, mapping::Error> {
-        unimplemented!()
+        let map = try!(self.map_buffer_raw(buf.raw(), memory::RW));
+        Ok(self.map_read_write(map, buf.len()))
     }
 }

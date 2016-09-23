@@ -21,9 +21,9 @@ use std::sync::{Arc, RwLock};
 pub use gfx::format::{DepthStencil};
 pub use gfx_app::{ColorFormat, DepthFormat};
 
-#[cfg(target_os="macos")]
+#[cfg(feature="metal")]
 pub use gfx::format::Depth32F as Depth;
-#[cfg(not(target_os="macos"))]
+#[cfg(not(feature="metal"))]
 pub use gfx::format::Depth;
 
 // Section-1: vertex formats and shader parameters

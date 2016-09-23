@@ -49,8 +49,8 @@ TerrainOutput TerrainPs(TerrainVarying In) {
 
 Texture2D<float4> t_BlitTex;
 
-float4 BlitVs(int2 pos: a_Pos): SV_Position {
-	return float4(pos, 0.0, 1.0);
+float4 BlitVs(int4 pos: a_PosTexCoord): SV_Position {
+	return float4(pos.xy, 0.0, 1.0);
 }
 
 float4 BlitPs(float4 pos: SV_Position): SV_Target {

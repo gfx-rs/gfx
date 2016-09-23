@@ -100,12 +100,14 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         let vs = gfx_app::shade::Source {
             glsl_120: include_bytes!("shader/instancing_120.glslv"),
             glsl_150: include_bytes!("shader/instancing_150.glslv"),
+            msl_11:   include_bytes!("shader/instancing_vertex.metal"),
             hlsl_40:  include_bytes!("data/vertex.fx"),
             .. gfx_app::shade::Source::empty()
         };
         let fs = gfx_app::shade::Source {
             glsl_120: include_bytes!("shader/instancing_120.glslf"),
             glsl_150: include_bytes!("shader/instancing_150.glslf"),
+            msl_11:   include_bytes!("shader/instancing_frag.metal"),
             hlsl_40:  include_bytes!("data/pixel.fx"),
             .. gfx_app::shade::Source::empty()
         };

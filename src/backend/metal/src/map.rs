@@ -211,67 +211,61 @@ pub fn map_format(format: Format, is_target: bool) -> Option<MTLPixelFormat> {
 
     Some(match format.0 {
         R4_G4 | R4_G4_B4_A4 | R5_G5_B5_A1 | R5_G6_B5 => return None,
-        R8 => {
-            match format.1 {
-                Int => R8Sint,
-                Uint => R8Uint,
-                Inorm => R8Snorm,
-                Unorm => R8Unorm,
-                _ => return None,
-            }
-        }
-        R8_G8 => {
-            match format.1 {
-                Int => RG8Sint,
-                Uint => RG8Uint,
-                Inorm => RG8Snorm,
-                Unorm => RG8Unorm,
-                _ => return None,
-            }
-        }
-        R8_G8_B8_A8 => {
-            match format.1 {
-                Int => RGBA8Sint,
-                Uint => RGBA8Uint,
-                Inorm => RGBA8Snorm,
-                Unorm => RGBA8Unorm,
-                Srgb => RGBA8Unorm_sRGB,
-                _ => return None,
-            }
-        }
-        R10_G10_B10_A2 => {
-            match format.1 {
-                Uint => RGB10A2Uint,
-                Unorm => RGB10A2Unorm,
-                _ => return None,
-            }
-        }
-        R11_G11_B10 => {
-            match format.1 {
-                Float => RG11B10Float,
-                _ => return None,
-            }
-        }
-        R16 => {
-            match format.1 {
-                Int => R16Sint,
-                Uint => R16Uint,
-                Inorm => R16Snorm,
-                Unorm => R16Unorm,
-                Float => R16Float,
-                _ => return None,
-            }
-        }
-        R16_G16 => {
-            match format.1 {
-                Int => RG16Sint,
-                Uint => RG16Uint,
-                Inorm => RG16Snorm,
-                Unorm => RG16Unorm,
-                Float => RG16Float,
-                _ => return None,
-            }
-        }
+        R8 => match format.1 {
+            Int   => R8Sint,
+            Uint  => R8Uint,
+            Inorm => R8Snorm,
+            Unorm => R8Unorm,
+            _ => return None,
+        },
+        R8_G8 => match format.1 {
+            Int   => RG8Sint,
+            Uint  => RG8Uint,
+            Inorm => RG8Snorm,
+            Unorm => RG8Unorm,
+            _ => return None,
+        },
+        R8_G8_B8_A8 => match format.1 {
+            Int   => RGBA8Sint,
+            Uint  => RGBA8Uint,
+            Inorm => RGBA8Snorm,
+            Unorm => if is_target {
+                         BGRA8Unorm
+                     } else {
+                         RGBA8Unorm
+                     },
+            Srgb  => if is_target {
+                         BGRA8Unorm_sRGB
+                     } else {
+                         RGBA8Unorm_sRGB
+                     },
+            _ => return None,
+        },
+        R10_G10_B10_A2 => match format.1 {
+            Uint  => RGB10A2Uint,
+            Unorm => RGB10A2Unorm,
+            _ => return None,
+        },
+        R11_G11_B10 => match format.1 {
+            Float => RG11B10Float,
+            _ => return None,
+        },
+        R16 => match format.1 {
+            Int   => R16Sint,
+            Uint  => R16Uint,
+            Inorm => R16Snorm,
+            Unorm => R16Unorm,
+            Float => R16Float,
+            _ => return None,
+        },
+        R16_G16 => match format.1 {
+            Int   => RG16Sint,
+            Uint  => RG16Uint,
+            Inorm => RG16Snorm,
+            Unorm => RG16Unorm,
+            Float => RG16Float,
+            _ => return None,
+        },
         R16_G16_B16 => return None,
         R16_G16_B16_A16 => {
             match format.1 {
@@ -533,10 +527,10 @@ pub fn map_texture_usage(usage: Usage) -> (MTLResourceOptions, MTLStorageMode) {
 pub fn map_buffer_usage(usage: Usage) -> MTLResourceOptions {
     match usage {
         Usage::GpuOnly => MTLResourceStorageModePrivate,
-        Usage::Immutable => MTLResourceCPUCacheModeDefaultCache,
-        Usage::Dynamic => MTLResourceCPUCacheModeDefaultCache,
-        Usage::CpuOnly(access) => map_access(access),
-        Usage::Persistent(access) => map_access(access),
+        Usage::Immutable => MTLResourceCPUCacheModeDefaultCache | MTLResourceStorageModeManaged,
+        Usage::Dynamic => MTLResourceCPUCacheModeDefaultCache | MTLResourceStorageModeManaged,
+        Usage::CpuOnly(access) => map_access(access) | MTLResourceStorageModeManaged,
+        Usage::Persistent(access) => map_access(access) | MTLResourceStorageModeManaged,
     }
 }
 
@@ -563,5 +557,67 @@ pub fn map_wrap(wrap: WrapMode) -> MTLSamplerAddressMode {
         WrapMode::Mirror => MirrorRepeat, // TODO: MirrorClampToEdge?
         WrapMode::Clamp => ClampToEdge, // TODO: MirrorClampToEdge, ClampToZero?
         WrapMode::Border => ClampToZero, // TODO: what border?
+    }
+}
+
+pub fn map_write_mask(mask: state::ColorMask) -> MTLColorWriteMask {
+    let mut mtl_mask = MTLColorWriteMaskNone;
+
+    if mask.contains(state::RED) {
+        mtl_mask.insert(MTLColorWriteMaskRed);
+    }
+
+    if mask.contains(state::GREEN) {
+        mtl_mask.insert(MTLColorWriteMaskGreen);
+    }
+
+    if mask.contains(state::BLUE) {
+        mtl_mask.insert(MTLColorWriteMaskBlue);
+    }
+
+    if mask.contains(state::ALPHA) {
+        mtl_mask.insert(MTLColorWriteMaskAlpha);
+    }
+
+    mtl_mask
+}
+
+pub fn map_blend_factor(factor: state::Factor, scalar: bool) -> MTLBlendFactor {
+    use core::state::BlendValue::*;
+    use core::state::Factor::*;
+
+    match factor {
+        Zero => MTLBlendFactor::Zero,
+        One => MTLBlendFactor::One,
+        SourceAlphaSaturated => MTLBlendFactor::SourceAlphaSaturated,
+        ZeroPlus(SourceColor) if !scalar => MTLBlendFactor::SourceColor,
+        ZeroPlus(SourceAlpha) => MTLBlendFactor::SourceAlpha,
+        ZeroPlus(DestColor) if !scalar => MTLBlendFactor::DestinationColor,
+        ZeroPlus(DestAlpha) => MTLBlendFactor::DestinationAlpha,
+        ZeroPlus(ConstColor) if !scalar => MTLBlendFactor::BlendColor,
+        ZeroPlus(ConstAlpha) => MTLBlendFactor::BlendAlpha,
+        OneMinus(SourceColor) if !scalar => MTLBlendFactor::OneMinusSourceColor,
+        OneMinus(SourceAlpha) => MTLBlendFactor::OneMinusSourceAlpha,
+        OneMinus(DestColor) if !scalar => MTLBlendFactor::OneMinusDestinationColor,
+        OneMinus(DestAlpha) => MTLBlendFactor::OneMinusDestinationAlpha,
+        OneMinus(ConstColor) if !scalar => MTLBlendFactor::OneMinusBlendColor,
+        OneMinus(ConstAlpha) => MTLBlendFactor::OneMinusBlendAlpha,
+        _ => {
+            error!("Invalid blend factor requested for {}: {:?}",
+                if scalar {"alpha"} else {"color"}, factor);
+            MTLBlendFactor::Zero
+        }
+    }
+}
+
+pub fn map_blend_op(equation: state::Equation) -> MTLBlendOperation {
+    use core::state::Equation::*;
+
+    match equation {
+        Add => MTLBlendOperation::Add,
+        Sub => MTLBlendOperation::Subtract,
+        RevSub => MTLBlendOperation::ReverseSubtract,
+        Min => MTLBlendOperation::Min,
+        Max => MTLBlendOperation::Max,
     }
 }

@@ -236,12 +236,12 @@ impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
                 pipeline: &pso::PipelineState<R, D::Meta>, user_data: &D)
     {
         let (pso, _) = self.handles.ref_pso(pipeline.get_handle());
-        self.command_buffer.bind_pipeline_state(pso.clone());
         //TODO: make `raw_data` a member to this struct, to re-use the heap allocation
         self.raw_pso_data.clear();
         user_data.bake_to(&mut self.raw_pso_data, pipeline.get_meta(), &mut self.handles, &mut self.access_info);
-        self.command_buffer.bind_vertex_buffers(self.raw_pso_data.vertex_buffers.clone());
         self.command_buffer.bind_pixel_targets(self.raw_pso_data.pixel_targets.clone());
+        self.command_buffer.bind_pipeline_state(pso.clone());
+        self.command_buffer.bind_vertex_buffers(self.raw_pso_data.vertex_buffers.clone());
         self.command_buffer.set_ref_values(self.raw_pso_data.ref_values);
         self.command_buffer.set_scissor(self.raw_pso_data.scissor);
         self.command_buffer.bind_constant_buffers(&self.raw_pso_data.constant_buffers);

@@ -25,9 +25,9 @@ extern crate gfx_device_dx11;
 #[cfg(target_os = "windows")]
 extern crate gfx_window_dxgi;
 
-#[cfg(target_os = "macos")]
+#[cfg(feature = "metal")]
 extern crate gfx_device_metal;
-#[cfg(target_os = "macos")]
+#[cfg(feature = "metal")]
 extern crate gfx_window_metal;
 
 #[cfg(feature = "vulkan")]
@@ -42,9 +42,9 @@ pub type ColorFormat = gfx::format::Rgba8;
 #[cfg(feature = "vulkan")]
 pub type ColorFormat = gfx::format::Bgra8;
 
-#[cfg(target_os = "macos")]
+#[cfg(feature = "metal")]
 pub type DepthFormat = gfx::format::Depth32F;
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(feature = "metal"))]
 pub type DepthFormat = gfx::format::DepthStencil;
 
 pub struct Init<R: gfx::Resources> {
@@ -116,16 +116,18 @@ pub trait Application<R: gfx::Resources>: Sized {
     {
         WrapD3D11::<Self>::launch(name, DEFAULT_CONFIG);
     }
-    #[cfg(all(not(target_os = "windows"), not(feature = "vulkan")))]
+    #[cfg(all(not(target_os = "windows"), not(feature = "vulkan"), not(feature = "metal")))]
     fn launch_default(name: &str)
         where WrapGL2<Self>: ApplicationGL
     {
         WrapGL2::<Self>::launch(name, DEFAULT_CONFIG);
     }
-    // #[cfg(target_os = "macos")]
-    // fn launch_default(name: &str) where WrapMetal<Self>: ApplicationMetal {
-    // WrapMetal::<Self>::launch(name, DEFAULT_CONFIG)
-    // }
+    #[cfg(feature = "metal")]
+    fn launch_default(name: &str)
+        where WrapMetal<Self>: ApplicationMetal
+    {
+        WrapMetal::<Self>::launch(name, DEFAULT_CONFIG)
+    }
     #[cfg(feature = "vulkan")]
     fn launch_default(name: &str)
         where WrapVulkan<Self>: ApplicationVulkan
@@ -139,7 +141,7 @@ pub struct Wrap<R: gfx::Resources, C: gfx::CommandBuffer<R>, A> {
     app: A,
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(feature = "metal")]
 pub type WrapMetal<A> = Wrap<gfx_device_metal::Resources, gfx_device_metal::CommandBuffer, A>;
 #[cfg(target_os = "windows")]
 pub type D3D11CommandBuffer = gfx_device_dx11::CommandBuffer<gfx_device_dx11::DeferredContext>;
@@ -283,12 +285,12 @@ impl<A: ApplicationBase<gfx_device_dx11::Resources, D3D11CommandBuffer>> Applica
 }
 
 
-#[cfg(target_os = "macos")]
+#[cfg(feature = "metal")]
 pub trait ApplicationMetal {
     fn launch(&str, Config);
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(feature = "metal")]
 impl Factory<gfx_device_metal::Resources> for gfx_device_metal::Factory {
     type CommandBuffer = gfx_device_metal::CommandBuffer;
     fn create_encoder(&mut self) -> gfx::Encoder<gfx_device_metal::Resources, Self::CommandBuffer> {
@@ -296,7 +298,7 @@ impl Factory<gfx_device_metal::Resources> for gfx_device_metal::Factory {
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(feature = "metal")]
 impl<
     A: ApplicationBase<gfx_device_metal::Resources, gfx_device_metal::CommandBuffer>
 > ApplicationMetal for A {
