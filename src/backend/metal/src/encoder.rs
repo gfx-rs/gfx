@@ -18,10 +18,8 @@ use metal::*;
 
 use std::mem;
 
-// Grabbed from https://developer.apple.com/metal/limits/
-const MTL_MAX_TEXTURE_BINDINGS: usize = 128;
-const MTL_MAX_BUFFER_BINDINGS: usize = 31;
-const MTL_MAX_SAMPLER_BINDINGS: usize = 16;
+use super::{MTL_MAX_BUFFER_BINDINGS, MTL_MAX_TEXTURE_BINDINGS,
+            MTL_MAX_SAMPLER_BINDINGS};
 
 const MTL_MAX_TEXTURE_BINDINGS_SZ: usize = MTL_MAX_TEXTURE_BINDINGS / 32;
 
@@ -102,8 +100,6 @@ impl MetalBufferBindings {
 #[derive(Copy, Clone)]
 pub struct MetalSamplerBindings {
     samplers: [MTLSamplerState; MTL_MAX_SAMPLER_BINDINGS],
-    min_lods: [f32; MTL_MAX_SAMPLER_BINDINGS],
-    max_lods: [f32; MTL_MAX_SAMPLER_BINDINGS],
     bound: u16
 }
 
@@ -111,23 +107,17 @@ impl MetalSamplerBindings {
     pub fn new() -> Self {
         MetalSamplerBindings {
             samplers: [MTLSamplerState::nil(); MTL_MAX_SAMPLER_BINDINGS],
-            min_lods: [0f32; MTL_MAX_SAMPLER_BINDINGS],
-            max_lods: [0f32; MTL_MAX_SAMPLER_BINDINGS],
             bound: 0u16
         }
     }
 
-    pub fn insert(&mut self, index: usize, lod_min: f32, lod_max: f32, sampler: MTLSamplerState) {
+    pub fn insert(&mut self, index: usize, sampler: MTLSamplerState) {
         self.samplers[index] = sampler;
-        self.min_lods[index] = lod_min;
-        self.max_lods[index] = lod_max;
         self.bound |= 1 << index;
     }
 
     pub fn reset(&mut self) {
         self.samplers = [MTLSamplerState::nil(); MTL_MAX_SAMPLER_BINDINGS];
-        self.min_lods = [0f32; MTL_MAX_SAMPLER_BINDINGS];
-        self.max_lods = [0f32; MTL_MAX_SAMPLER_BINDINGS];
         self.bound = 0;
     }
 }
@@ -309,14 +299,12 @@ impl MetalEncoder {
 
             for idx in 0..MTL_MAX_SAMPLER_BINDINGS {
                 let sampler = self.cache.sampler_bindings[stage].samplers[idx];
-                let min = self.cache.sampler_bindings[stage].min_lods[idx];
-                let max = self.cache.sampler_bindings[stage].max_lods[idx];
 
                 if !sampler.is_null() {
                     if stage == VS_IDX {
-                        self.render.set_vertex_sampler_state_with_lod(idx as u64, min, max, sampler);
+                        self.render.set_vertex_sampler_state(idx as u64, sampler);
                     } else {
-                        self.render.set_fragment_sampler_state_with_lod(idx as u64, min, max, sampler);
+                        self.render.set_fragment_sampler_state(idx as u64, sampler);
                     }
                 }
             }
@@ -470,12 +458,12 @@ impl MetalEncoder {
         self.cache.buffer_bindings[FS_IDX].insert(index as usize, offset, buffer);
     }
 
-    pub fn set_vertex_sampler_state(&mut self, index: u64, lod_min: f32, lod_max: f32, sampler: MTLSamplerState) {
-        self.cache.sampler_bindings[VS_IDX].insert(index as usize, lod_min, lod_max, sampler);
+    pub fn set_vertex_sampler_state(&mut self, index: u64, sampler: MTLSamplerState) {
+        self.cache.sampler_bindings[VS_IDX].insert(index as usize, sampler);
     }
 
-    pub fn set_fragment_sampler_state(&mut self, index: u64, lod_min: f32, lod_max: f32, sampler: MTLSamplerState) {
-        self.cache.sampler_bindings[FS_IDX].insert(index as usize, lod_min, lod_max, sampler);
+    pub fn set_fragment_sampler_state(&mut self, index: u64, sampler: MTLSamplerState) {
+        self.cache.sampler_bindings[FS_IDX].insert(index as usize, sampler);
     }
 
     pub fn set_index_buffer(&mut self, buf: MTLBuffer, idx_type: MTLIndexType) {

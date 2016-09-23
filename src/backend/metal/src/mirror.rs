@@ -17,7 +17,6 @@
 // use cocoa::foundation::{NSUInteger};
 
 use core::{self, shade};
-use factory::DUMMY_BUFFER_SLOT;
 
 use metal::*;
 
@@ -52,7 +51,6 @@ pub fn populate_vertex_attributes(info: &mut shade::ProgramInfo,
 pub fn populate_info(info: &mut shade::ProgramInfo,
                      stage: shade::Stage,
                      args: NSArray<MTLArgument>) {
-    //    use core::shade::Stage;
     use map::{map_base_type, map_texture_type};
 
     let usage = stage.into();
@@ -63,8 +61,7 @@ pub fn populate_info(info: &mut shade::ProgramInfo,
 
         match arg.type_() {
             MTLArgumentType::Buffer => {
-                // we skip the dummy buffer, which is used in our fake PSO
-                if arg.index() == DUMMY_BUFFER_SLOT {
+                if name.starts_with("vertexBuffer.") {
                     continue;
                 }
 

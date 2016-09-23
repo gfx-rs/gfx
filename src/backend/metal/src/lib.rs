@@ -44,6 +44,11 @@ pub use self::command::CommandBuffer;
 pub use self::factory::Factory;
 pub use self::map::*;
 
+// Grabbed from https://developer.apple.com/metal/limits/
+const MTL_MAX_TEXTURE_BINDINGS: usize = 128;
+const MTL_MAX_BUFFER_BINDINGS: usize = 31;
+const MTL_MAX_SAMPLER_BINDINGS: usize = 16;
+
 /// Internal struct of shared data between the device and its factories.
 #[doc(hidden)]
 pub struct Share {

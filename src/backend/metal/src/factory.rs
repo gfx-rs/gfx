@@ -28,11 +28,11 @@ use metal::*;
 
 use command::CommandBuffer;
 
+use MTL_MAX_BUFFER_BINDINGS;
+
 use {Resources, Share, Texture, Buffer, Shader, Program, Pipeline};
 use native;
 use mirror;
-
-pub const DUMMY_BUFFER_SLOT: u64 = 30;
 
 #[derive(Copy, Clone, Debug)]
 pub struct RawMapping {
@@ -102,7 +102,6 @@ impl Factory {
         use map::{map_function, map_stencil_op};
 
         let desc = MTLDepthStencilDescriptor::alloc().init();
-        println!("{:?}", info.depth);
         desc.set_depth_write_enabled(match info.depth {
             Some(ref depth) => depth.write,
             None => false
@@ -239,20 +238,11 @@ impl core::Factory<Resources> for Factory {
                     .object_at(0)
                     .set_pixel_format(MTLPixelFormat::BGRA8Unorm_sRGB);
 
-
-
-
-                // when we use `[[ stage_in ]]` we have to have a vertex
-                // descriptor attached to the PSO descriptor
-                //
-                // dummy values are used for the attributes but the buffer
-                // slot `DUMMY_BUFFER_SLOT` is occupied by the dummy buffer
-                //
                 // TODO: prevent collision between dummy buffers and real
                 //       values
                 let vertex_desc = MTLVertexDescriptor::new();
 
-                let buf = vertex_desc.layouts().object_at(DUMMY_BUFFER_SLOT as usize);
+                let buf = vertex_desc.layouts().object_at((MTL_MAX_BUFFER_BINDINGS - 1) as usize);
                 buf.set_stride(16);
                 buf.set_step_function(MTLVertexStepFunction::Constant);
                 buf.set_step_rate(0);
@@ -261,19 +251,11 @@ impl core::Factory<Resources> for Factory {
 
                 for attr in info.vertex_attributes.iter() {
                     // TODO: handle case when requested vertex format is invalid
-                    println!("{:?}: {:?}", attr.slot, mirror::map_base_type_to_format(attr.base_type));
                     let attribute = vertex_desc.attributes().object_at(attr.slot as usize);
                     attribute.set_format(mirror::map_base_type_to_format(attr.base_type));
                     attribute.set_offset(0);
-                    attribute.set_buffer_index(DUMMY_BUFFER_SLOT);
+                    attribute.set_buffer_index((MTL_MAX_BUFFER_BINDINGS - 1) as u64);
                 }
-
-                /*for i in 0..16 {
-                    let attribute = vertex_desc.attributes().object_at(i as usize);
-                    attribute.set_format(MTLVertexFormat::Float);
-                    attribute.set_offset(0);
-                    attribute.set_buffer_index(DUMMY_BUFFER_SLOT);
-                }*/
 
                 pso_descriptor.set_vertex_descriptor(vertex_desc);
 
@@ -285,13 +267,6 @@ impl core::Factory<Resources> for Factory {
 
                 mirror::populate_info(&mut info, Stage::Vertex, reflection.vertex_arguments());
                 mirror::populate_info(&mut info, Stage::Pixel, reflection.fragment_arguments());
-
-                println!("{:?},\n{:?},\n{:?},\n{:?},\n{:?},\n",
-                         info.vertex_attributes,
-                         info.constant_buffers,
-                         info.textures,
-                         info.samplers,
-                         info.outputs);
 
                 // destroy PSO & reflection object after we're done with
                 // parsing reflection
@@ -331,7 +306,7 @@ impl core::Factory<Resources> for Factory {
         let mut vb_count = 0;
         for vb in desc.vertex_buffers.iter() {
             if let &Some(vbuf) = vb {
-                let buf = vertex_desc.layouts().object_at(DUMMY_BUFFER_SLOT as usize - vb_count as usize);
+                let buf = vertex_desc.layouts().object_at((MTL_MAX_BUFFER_BINDINGS - 1) as usize - vb_count);
                 buf.set_stride(vbuf.stride as u64);
                 if vbuf.rate > 0 {
                     buf.set_step_function(MTLVertexStepFunction::PerInstance);
@@ -365,7 +340,7 @@ impl core::Factory<Resources> for Factory {
             let attribute = vertex_desc.attributes().object_at(attr.slot as usize);
             attribute.set_format(map_vertex_format(elem.format).unwrap());
             attribute.set_offset(elem.offset as u64);
-            attribute.set_buffer_index(DUMMY_BUFFER_SLOT as u64 - idx as u64);
+            attribute.set_buffer_index((MTL_MAX_BUFFER_BINDINGS - 1) as u64 - idx as u64);
         }
 
         let prog = self.frame_handles.ref_program(program);
@@ -403,7 +378,6 @@ impl core::Factory<Resources> for Factory {
 
         if let Some(depth_desc) = desc.depth_stencil {
             // TODO: depthstencil
-            println!("{:?}", depth_desc);
             // pso_descriptor.set_depth_attachment_pixel_format(MTLPixelFormat::Depth32Float);
             pso_descriptor.set_depth_attachment_pixel_format(map_depth_surface((depth_desc.0).0).unwrap());
         }

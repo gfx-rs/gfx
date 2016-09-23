@@ -27,6 +27,8 @@ use {Resources, Buffer, Texture, Pipeline};
 
 use encoder::MetalEncoder;
 
+use MTL_MAX_BUFFER_BINDINGS;
+
 use native::{Rtv, Srv, Dsv};
 
 use metal::*;
@@ -98,12 +100,13 @@ impl command::Buffer<Resources> for CommandBuffer {
     }
 
     fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<Resources>) {
+        let mut vb_count = 0;
         for i in 0..MAX_VERTEX_ATTRIBUTES {
             if let Some((buffer, offset)) = vbs.0[i] {
-                // TODO(fkaa): is it okay if we cascade downwards with vertex
-                //             buffers? don't want to collide with user defined
-                //             values on accident!
-                self.encoder.set_vertex_buffer(30 - i as u64, offset as u64, unsafe { *(buffer.0).0 });
+                // TODO(fkaa): assign vertex buffers depending on what slots are
+                //             occupied? is it possible?
+                self.encoder.set_vertex_buffer((MTL_MAX_BUFFER_BINDINGS - 1) as u64 - vb_count, offset as u64, unsafe { *(buffer.0).0 });
+                vb_count += 1;
             }
         }
     }
@@ -113,10 +116,14 @@ impl command::Buffer<Resources> for CommandBuffer {
             let mask = stage.into();
             for cb in cbs.iter() {
                 if cb.1.contains(mask) {
-                    if let Stage::Vertex = stage {
-                        self.encoder.set_vertex_buffer(cb.2 as u64, 0, unsafe { *((cb.0).0).0 });
-                    } else {
-                        self.encoder.set_fragment_buffer(cb.2 as u64, 0, unsafe { *((cb.0).0).0 });
+                    match stage {
+                        Stage::Vertex => {
+                            self.encoder.set_vertex_buffer(cb.2 as u64, 0, unsafe { *((cb.0).0).0 });
+                        },
+                        Stage::Pixel => {
+                            self.encoder.set_fragment_buffer(cb.2 as u64, 0, unsafe { *((cb.0).0).0 });
+                        },
+                        _ => { unimplemented!() }
                     }
                 }
             }
@@ -132,10 +139,14 @@ impl command::Buffer<Resources> for CommandBuffer {
             let mask = stage.into();
             for view in rvs.iter() {
                 if view.1.contains(mask) {
-                    if let Stage::Vertex = stage {
-                        self.encoder.set_vertex_texture(view.2 as u64, unsafe { *(view.0).0 });
-                    } else {
-                        self.encoder.set_fragment_texture(view.2 as u64, unsafe { *(view.0).0 });
+                    match stage {
+                        Stage::Vertex => {
+                            self.encoder.set_vertex_texture(view.2 as u64, unsafe { *(view.0).0 });
+                        },
+                        Stage::Pixel => {
+                            self.encoder.set_fragment_texture(view.2 as u64, unsafe { *(view.0).0 });
+                        },
+                        _ => { unimplemented!() }
                     }
                 }
             }
@@ -153,11 +164,14 @@ impl command::Buffer<Resources> for CommandBuffer {
             let mask = stage.into();
             for sampler in ss.iter() {
                 if sampler.1.contains(mask) {
-                    // TODO(fkaa): what about min/max lods?
-                    if let Stage::Vertex = stage {
-                        self.encoder.set_vertex_sampler_state(sampler.2 as u64, 0f32, f32::MAX, (sampler.0).0);
-                    } else {
-                        self.encoder.set_fragment_sampler_state(sampler.2 as u64, 0f32, f32::MAX, (sampler.0).0)
+                    match stage {
+                        Stage::Vertex => {
+                            self.encoder.set_vertex_sampler_state(sampler.2 as u64, (sampler.0).0);
+                        },
+                        Stage::Pixel => {
+                            self.encoder.set_fragment_sampler_state(sampler.2 as u64, (sampler.0).0)
+                        },
+                        _ => { unimplemented!() }
                     }
                 }
             }
