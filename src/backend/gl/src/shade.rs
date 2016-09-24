@@ -478,6 +478,15 @@ pub fn create_program(gl: &gl::Gl, caps: &c::Capabilities, private: &PrivateCaps
         unsafe { gl.AttachShader(name, sh) };
     }
 
+    if !private.program_interface_supported {
+        for i in 0..c::MAX_COLOR_TARGETS {
+            let color_name = format!("Target{}\0", i);
+            unsafe {
+                gl.BindFragDataLocation(name, i as u32, (&color_name[..]).as_ptr() as *mut gl::types::GLchar);
+            }
+         }
+    }
+
     unsafe { gl.LinkProgram(name) };
     info!("\tLinked program {}", name);
 
