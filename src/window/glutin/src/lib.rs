@@ -59,13 +59,21 @@ where
 ///
 /// # Example (using Piston to create the window)
 ///
+/// ```no_run
+/// extern crate piston;
+/// extern crate glutin_window;
+/// extern crate gfx_window_glutin;
+///
+/// // Create window with Piston
 /// let settings = piston::window::WindowSettings::new("Example", [800, 600]);
 /// let mut glutin_window = glutin_window::GlutinWindow::new(&settings).unwrap();
 ///
+/// // Initialise gfx
 /// let (mut device, mut factory, main_color, main_depth) =
 ///     gfx_window_glutin::init_existing::<ColorFormat, DepthFormat>(&glutin_window.window);
 ///
 /// let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
+/// ```
 pub fn init_existing<Cf, Df>(window: &glutin::Window) ->
             (device_gl::Device, device_gl::Factory,
             handle::RenderTargetView<R, Cf>, handle::DepthStencilView<R, Df>)
