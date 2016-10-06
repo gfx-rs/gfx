@@ -54,6 +54,29 @@ where
     (window, device, factory, Typed::new(color_view), Typed::new(ds_view))
 }
 
+/// Initialize with an existing Glutin window.
+/// Generically parametrized version over the main framebuffer format.
+///
+/// # Example (using Piston to create the window)
+///
+/// let settings = piston::window::WindowSettings::new("Example", [800, 600]);
+/// let mut glutin_window = glutin_window::GlutinWindow::new(&settings).unwrap();
+///
+/// let (mut device, mut factory, main_color, main_depth) =
+///     gfx_window_glutin::init_existing::<ColorFormat, DepthFormat>(&glutin_window.window);
+///
+/// let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
+pub fn init_existing<Cf, Df>(window: &glutin::Window) ->
+            (device_gl::Device, device_gl::Factory,
+            handle::RenderTargetView<R, Cf>, handle::DepthStencilView<R, Df>)
+where
+    Cf: format::RenderFormat,
+    Df: format::DepthFormat,
+{
+    let (device, factory, color_view, ds_view) = init_existing_raw(window, Cf::get_format(), Df::get_format());
+    (device, factory, Typed::new(color_view), Typed::new(ds_view))
+}
+
 fn get_window_dimensions(window: &glutin::Window) -> texture::Dimensions {
     let (width, height) = window.get_inner_size().unwrap();
     let aa = window.get_pixel_format().multisampling
@@ -80,16 +103,27 @@ pub fn init_raw(builder: glutin::WindowBuilder,
             .build()
     }.unwrap();
 
+    let (device, factory, color_view, ds_view) = init_existing_raw(&window, color_format, ds_format);
+
+    (window, device, factory, color_view, ds_view)
+}
+
+/// Initialize with an existing Glutin window. Raw version.
+pub fn init_existing_raw(window: &glutin::Window,
+                color_format: format::Format, ds_format: format::Format) ->
+                (device_gl::Device, device_gl::Factory,
+                handle::RawRenderTargetView<R>, handle::RawDepthStencilView<R>)
+{
     unsafe { window.make_current().unwrap() };
     let (device, factory) = device_gl::create(|s|
         window.get_proc_address(s) as *const std::os::raw::c_void);
 
     // create the main color/depth targets
-    let dim = get_window_dimensions(&window);
+    let dim = get_window_dimensions(window);
     let (color_view, ds_view) = device_gl::create_main_targets_raw(dim, color_format.0, ds_format.0);
 
     // done
-    (window, device, factory, color_view, ds_view)
+    (device, factory, color_view, ds_view)
 }
 
 /// Update the internal dimensions of the main framebuffer targets. Generic version over the format.
