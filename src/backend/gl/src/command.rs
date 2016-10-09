@@ -78,6 +78,7 @@ pub enum Command {
     BindSampler(c::pso::SamplerParam<Resources>, Option<gl::types::GLenum>),
     BindPixelTargets(c::pso::PixelTargetSet<Resources>),
     BindAttribute(c::AttributeSlot, Buffer, BufferElement),
+    UnbindAttribute(c::AttributeSlot),
     BindIndex(Buffer),
     BindFrameBuffer(Access, FrameBuffer),
     BindUniform(c::shade::Location, c::shade::UniformValue),
@@ -109,7 +110,7 @@ pub const COLOR_DEFAULT: s::Color = s::Color {
 
 pub const RESET: [Command; 13] = [
     Command::BindProgram(0),
-    // BindAttribute
+    //Command::UnbindAttribute, //not needed, handled by the cache
     Command::BindIndex(0),
     Command::BindFrameBuffer(gl::FRAMEBUFFER, 0),
     Command::SetRasterizer(s::Rasterizer {
@@ -163,6 +164,7 @@ pub struct CommandBuffer {
     pub data: DataBuffer,
     fbo: FrameBuffer,
     cache: Cache,
+    active_attribs: usize,
 }
 
 impl CommandBuffer {
@@ -172,6 +174,7 @@ impl CommandBuffer {
             data: DataBuffer::new(),
             fbo: fbo,
             cache: Cache::new(),
+            active_attribs: 0,
         }
     }
     fn is_main_target(&self, tv: Option<TargetView>) -> bool {
@@ -187,6 +190,7 @@ impl command::Buffer<Resources> for CommandBuffer {
         self.buf.clear();
         self.data.0.clear();
         self.cache = Cache::new();
+        self.active_attribs = (1 << c::MAX_VERTEX_ATTRIBUTES) - 1;
     }
 
     fn bind_pipeline_state(&mut self, pso: PipelineState) {
@@ -217,6 +221,11 @@ impl command::Buffer<Resources> for CommandBuffer {
                 (Some((buffer, offset)), Some(mut bel)) => {
                     bel.elem.offset += offset as gl::types::GLuint;
                     self.buf.push(Command::BindAttribute(i as c::AttributeSlot, buffer, bel));
+                    self.active_attribs |= 1<<i;
+                },
+                (_, None) if self.active_attribs & (1<<i) != 0 => {
+                    self.buf.push(Command::UnbindAttribute(i as c::AttributeSlot));
+                    self.active_attribs ^= 1<<i;
                 },
                 (_, None) => (),
             }
