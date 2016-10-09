@@ -548,6 +548,9 @@ impl Device {
             Command::BindAttribute(slot, buffer,  bel) => {
                 self.bind_attribute(slot, buffer, bel);
             },
+            Command::UnbindAttribute(slot) => unsafe {
+                self.share.context.DisableVertexAttribArray(slot as gl::types::GLuint);
+            },
             Command::BindIndex(buffer) => {
                 let gl = &self.share.context;
                 unsafe { gl.BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer) };
