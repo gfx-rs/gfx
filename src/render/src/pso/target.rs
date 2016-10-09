@@ -22,34 +22,42 @@ use core::shade::OutputVar;
 use super::{DataLink, DataBind, RawDataSet, AccessInfo};
 
 /// Render target component. Typically points to a color-formatted texture.
+///
 /// - init: `&str` = name of the target
 /// - data: `RenderTargetView<T>`
 pub struct RenderTarget<T>(Option<ColorSlot>, PhantomData<T>);
 /// Render target component with active blending mode.
+///
 /// - init: (`&str`, `ColorMask`, `Blend` = blending state)
 /// - data: `RenderTargetView<T>`
 pub struct BlendTarget<T>(RawRenderTarget, PhantomData<T>);
 /// Raw (untyped) render target component with optional blending.
+///
 /// - init: (`&str`, `Format`, `ColorMask`, `Option<Blend>`)
 /// - data: `RawRenderTargetView`
 pub struct RawRenderTarget(Option<ColorSlot>);
 /// Depth target component.
+///
 /// - init: `Depth` = depth state
 /// - data: `DepthStencilView<T>`
 pub struct DepthTarget<T>(PhantomData<T>);
 /// Stencil target component.
+///
 /// - init: `Stencil` = stencil state
 /// - data: (`DepthStencilView<T>`, `(front, back)` = stencil reference values)
 pub struct StencilTarget<T>(PhantomData<T>);
 /// Depth + stencil target component.
+///
 /// - init: (`Depth` = depth state, `Stencil` = stencil state)
 /// - data: (`DepthStencilView<T>`, `(front, back)` = stencil reference values)
 pub struct DepthStencilTarget<T>(PhantomData<T>);
 /// Scissor component. Sets up the scissor test for rendering.
+///
 /// - init: `()`
 /// - data: `Rect` = target area
 pub struct Scissor(bool);
 /// Blend reference component. Sets up the reference color for blending.
+///
 /// - init: `()`
 /// - data: `ColorValue`
 pub struct BlendRef;

@@ -23,20 +23,24 @@ use super::{DataLink, DataBind, RawDataSet, AccessInfo};
 
 /// Shader resource component (SRV). Typically is a view into some texture,
 /// but can also be a buffer.
+///
 /// - init: `&str` = name of the resource
 /// - data: `ShaderResourceView<T>`
 pub struct ShaderResource<T>(RawShaderResource, PhantomData<T>);
 /// Raw (untyped) shader resource (SRV).
+///
 /// - init: `&str` = name of the resource. This may change in the future.
 /// - data: `RawShaderResourceView`
 pub struct RawShaderResource(Option<(ResourceViewSlot, shade::Usage)>);
 /// Unordered access component (UAV). A writable resource (texture/buffer)
 /// with no defined access order across simultaneously executing shaders.
 /// Supported on DX10 and higher.
+///
 /// - init: `&str` = name of the resource
 /// - data: `UnorderedAccessView<T>`
 pub struct UnorderedAccess<T>(Option<(UnorderedViewSlot, shade::Usage)>, PhantomData<T>);
 /// Sampler component.
+///
 /// - init: `&str` = name of the sampler
 /// - data: `Sampler`
 pub struct Sampler(Option<(SamplerSlot, shade::Usage)>);
@@ -44,6 +48,7 @@ pub struct Sampler(Option<(SamplerSlot, shade::Usage)>);
 /// It only makes sense for DX9 class hardware, where every texture by default
 /// is bundled with a sampler, hence they are represented by the same name.
 /// In DX10 and higher samplers are totally separated from the textures.
+///
 /// - init: `&str` = name of the sampler/texture (assuming they match)
 /// - data: (`ShaderResourceView<T>`, `Sampler`)
 pub struct TextureSampler<T>(ShaderResource<T>, Sampler);
