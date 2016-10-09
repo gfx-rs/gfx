@@ -39,13 +39,13 @@ macro_rules! gfx_defines {
     }) => {
         gfx_vertex_struct!($name {$($field:$ty = $e,)+});
     };
-    
+
     (constant $name:ident {
             $( $field:ident : $ty:ty = $e:expr, )+
     }) => {
         gfx_constant_struct!($name {$($field:$ty = $e,)+});
     };
-    
+
     (pipeline $name:ident {
             $( $field:ident : $ty:ty = $e:expr, )+
     }) => {
@@ -60,7 +60,7 @@ macro_rules! gfx_defines {
         }
         gfx_defines!($($tail)+);
     };
-    
+
     ($keyword:ident $name:ident {
             $( $field:ident : $ty:ty = $e:expr ),*
     }) => {

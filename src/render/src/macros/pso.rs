@@ -45,7 +45,7 @@ macro_rules! gfx_pipeline_inner {
                 // v#
                 let mut _num_vb = 0;
                 $(
-                     if let Some(d) = meta.$field.link_vertex_buffer(_num_vb, &self.$field) {
+                    if let Some(d) = meta.$field.link_vertex_buffer(_num_vb, &self.$field) {
                         assert!(meta.$field.is_active());
                         desc.vertex_buffers[_num_vb as usize] = Some(d);
                         _num_vb += 1;
