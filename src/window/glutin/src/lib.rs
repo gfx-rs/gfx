@@ -59,7 +59,7 @@ where
 ///
 /// # Example (using Piston to create the window)
 ///
-/// ```no_run
+/// ```rust,ignore
 /// extern crate piston;
 /// extern crate glutin_window;
 /// extern crate gfx_window_glutin;
