@@ -423,7 +423,7 @@ impl core::Factory<R> for Factory {
                 unsafe { (*vs.object).AddRef(); (*gs.object).AddRef(); (*ps.object).AddRef(); }
                 Program {
                     vs: vs.object as *mut ID3D11VertexShader,
-                    gs: vs.object as *mut ID3D11GeometryShader,
+                    gs: gs.object as *mut ID3D11GeometryShader,
                     ps: ps.object as *mut ID3D11PixelShader,
                     vs_hash: vs.code_hash,
                 }
