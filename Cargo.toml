@@ -103,6 +103,10 @@ path = "examples/ubo_tilemap/main.rs"
 name = "mipmap"
 path = "examples/mipmap/main.rs"
 
+[[example]]
+name = "particle"
+path = "examples/particle/main.rs"
+
 [dev_dependencies]
 log = "0.3"
 cgmath = "0.7"
