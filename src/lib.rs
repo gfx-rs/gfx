@@ -235,7 +235,7 @@ impl<A> ApplicationGL for A
             app.render(&mut device);
             window.swap_buffers().unwrap();
             device.cleanup();
-            harness.bump()
+            harness.bump();
         }
     }
 }
@@ -275,7 +275,16 @@ impl<A: ApplicationBase<gfx_device_dx11::Resources, D3D11CommandBuffer>> Applica
         let mut device: gfx_device_dx11::Deferred = device.into();
 
         let mut harness = Harness::new();
-        while window.dispatch() {
+        'main: loop {
+            // quit when Esc is pressed.
+            for event in window.poll_events() {
+                match event {
+                    winit::Event::KeyboardInput(_, _, Some(winit::VirtualKeyCode::Escape)) |
+                    winit::Event::Closed => break 'main,
+                    _ => {}
+                }
+            }
+            // draw a frame
             app.render(&mut device);
             window.swap_buffers(1);
             device.cleanup();
@@ -334,7 +343,7 @@ impl<
             app.render(&mut device);
             window.swap_buffers().unwrap();
             device.cleanup();
-            harness.bump()
+            harness.bump();
         }
     }
 }
