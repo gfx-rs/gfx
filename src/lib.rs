@@ -235,7 +235,7 @@ impl<A> ApplicationGL for A
             app.render(&mut device);
             window.swap_buffers().unwrap();
             device.cleanup();
-            harness.bump()
+            harness.bump();
         }
     }
 }
@@ -288,7 +288,7 @@ impl<A: ApplicationBase<gfx_device_dx11::Resources, D3D11CommandBuffer>> Applica
             app.render(&mut device);
             window.swap_buffers(1);
             device.cleanup();
-            harness.bump()
+            harness.bump();
         }
     }
 }
@@ -343,7 +343,7 @@ impl<
             app.render(&mut device);
             window.swap_buffers().unwrap();
             device.cleanup();
-            harness.bump()
+            harness.bump();
         }
     }
 }

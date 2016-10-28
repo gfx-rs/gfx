@@ -16,8 +16,6 @@
 
 #[macro_use]
 extern crate log;
-extern crate kernel32;
-extern crate user32;
 extern crate winapi;
 extern crate winit;
 extern crate gfx_core as core;
