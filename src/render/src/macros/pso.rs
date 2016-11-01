@@ -226,9 +226,9 @@ macro_rules! gfx_pipeline_base {
         $( $field:ident: $ty:ty, )*
     }) => {
         pub mod $module {
-            use $crate;
             #[allow(unused_imports)]
             use super::*;
+            use super::gfx;
             gfx_pipeline_inner!{ $(
                 $field: $ty,
             )*}
@@ -242,9 +242,9 @@ macro_rules! gfx_pipeline {
         $( $field:ident: $ty:ty = $value:expr, )*
     }) => {
         pub mod $module {
-            use $crate;
             #[allow(unused_imports)]
             use super::*;
+            use super::gfx;
             gfx_pipeline_inner!{ $(
                 $field: $ty,
             )*}
