@@ -60,16 +60,6 @@ pub enum Backend {
     Metal,
 }
 
-pub struct Config {
-    // pub backend: Backend,
-    pub size: (u16, u16),
-}
-
-pub const DEFAULT_CONFIG: Config = Config {
-    // backend: Backend::OpenGL2,
-    size: (800, 520),
-};
-
 struct Harness {
     start: std::time::Instant,
     num_frames: f64,
@@ -105,38 +95,46 @@ pub trait Factory<R: gfx::Resources>: gfx::Factory<R> {
 pub trait ApplicationBase<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
     fn new<F>(F, Init<R>) -> Self where F: Factory<R, CommandBuffer = C>;
     fn render<D>(&mut self, &mut D) where D: gfx::Device<Resources = R, CommandBuffer = C>;
+    fn on(&mut self, winit::Event) -> bool;
 }
+
+#[cfg(all(not(target_os = "windows"), not(feature = "vulkan"), not(feature = "metal")))]
+pub type DefaultResources = gfx_device_gl::Resources;
 
 pub trait Application<R: gfx::Resources>: Sized {
     fn new<F: gfx::Factory<R>>(F, Init<R>) -> Self;
     fn render<C: gfx::CommandBuffer<R>>(&mut self, &mut gfx::Encoder<R, C>);
+    fn on(&mut self, event: winit::Event) -> bool {
+        match event {
+            winit::Event::KeyboardInput(_, _, Some(winit::VirtualKeyCode::Escape)) |
+            winit::Event::Closed => false,
+            _ => true
+        }
+    }
+
+    fn launch_simple(name: &str) where Self: Application<DefaultResources> {
+        let wb = winit::WindowBuilder::new().with_title(name);
+        <Self as Application<DefaultResources>>::launch_default(wb)
+    }
     #[cfg(all(target_os = "windows", not(feature = "vulkan")))]
-    fn launch_default(name: &str)
-        where WrapD3D11<Self>: ApplicationD3D11
-    {
-        WrapD3D11::<Self>::launch(name, DEFAULT_CONFIG);
+    fn launch_default(wb: winit::WindowBuilder) where WrapD3D11<Self>: ApplicationD3D11 {
+        WrapD3D11::<Self>::launch_d3d11(wb);
     }
     #[cfg(all(not(target_os = "windows"), not(feature = "vulkan"), not(feature = "metal")))]
-    fn launch_default(name: &str)
-        where WrapGL2<Self>: ApplicationGL
-    {
-        WrapGL2::<Self>::launch(name, DEFAULT_CONFIG);
+    fn launch_default(wb: winit::WindowBuilder) where Self: Application<gfx_device_gl::Resources> {
+        Wrap::<_, _, Self>::launch_gl3(wb);
     }
     #[cfg(feature = "metal")]
-    fn launch_default(name: &str)
-        where WrapMetal<Self>: ApplicationMetal
-    {
-        WrapMetal::<Self>::launch(name, DEFAULT_CONFIG)
+    fn launch_default(wb: winit::WindowBuilder) where WrapMetal<Self>: ApplicationMetal {
+        WrapMetal::<Self>::launch_metal(wb)
     }
     #[cfg(feature = "vulkan")]
-    fn launch_default(name: &str)
-        where WrapVulkan<Self>: ApplicationVulkan
-    {
-        WrapVulkan::<Self>::launch(name, DEFAULT_CONFIG);
+    fn launch_default(wb: winit::WindowBuilder) where WrapVulkan<Self>: ApplicationVulkan {
+        WrapVulkan::<Self>::launch_vulkan(wb);
     }
 }
 
-pub struct Wrap<R: gfx::Resources, C: gfx::CommandBuffer<R>, A> {
+pub struct Wrap<R: gfx::Resources, C, A> {
     encoder: gfx::Encoder<R, C>,
     app: A,
 }
@@ -149,49 +147,10 @@ pub type D3D11CommandBuffer = gfx_device_dx11::CommandBuffer<gfx_device_dx11::De
 pub type D3D11CommandBufferFake = gfx_device_dx11::CommandBuffer<gfx_device_dx11::CommandList>;
 #[cfg(target_os = "windows")]
 pub type WrapD3D11<A> = Wrap<gfx_device_dx11::Resources, D3D11CommandBuffer, A>;
-pub type WrapGL2<A> = Wrap<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer, A>;
-#[cfg(feature = "vulkan")]
-pub type WrapVulkan<A> = Wrap<gfx_device_vulkan::Resources, gfx_device_vulkan::CommandBuffer, A>;
 
-
-impl<R, C, A> ApplicationBase<R, C> for Wrap<R, C, A>
-    where R: gfx::Resources,
-          C: gfx::CommandBuffer<R>,
-          A: Application<R>
-{
-    fn new<F>(mut factory: F, init: Init<R>) -> Self
-        where F: Factory<R, CommandBuffer = C>
-    {
-        Wrap {
-            encoder: factory.create_encoder(),
-            app: A::new(factory, init),
-        }
-    }
-
-    fn render<D>(&mut self, device: &mut D)
-        where D: gfx::Device<Resources = R, CommandBuffer = C>
-    {
-        self.app.render(&mut self.encoder);
-        self.encoder.flush(device);
-    }
-}
-
-
-pub trait ApplicationGL {
-    fn launch(&str, Config);
-}
-
-impl Factory<gfx_device_gl::Resources> for gfx_device_gl::Factory {
-    type CommandBuffer = gfx_device_gl::CommandBuffer;
-    fn create_encoder(&mut self) -> gfx::Encoder<gfx_device_gl::Resources, Self::CommandBuffer> {
-        self.create_command_buffer().into()
-    }
-}
-
-impl<A> ApplicationGL for A
-    where A: ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer>
-{
-    fn launch(title: &str, config: Config) {
+impl<A: Application<gfx_device_gl::Resources>>
+Wrap<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer, A> {
+    pub fn launch_gl3(wb: winit::WindowBuilder) {
         use gfx::traits::Device;
 
         env_logger::init().unwrap();
@@ -199,11 +158,9 @@ impl<A> ApplicationGL for A
             opengl_version: (3, 2), // TODO: try more versions
             opengles_version: (2, 0),
         };
-        let builder = glutin::WindowBuilder::new()
-            .with_title(title.to_string())
-            .with_dimensions(config.size.0 as u32, config.size.1 as u32)
-            .with_gl(gl_version)
-            .with_vsync();
+        let builder = glutin::WindowBuilder::from_winit_builder(wb)
+                                            .with_gl(gl_version)
+                                            .with_vsync();
         let (window, mut device, factory, main_color, main_depth) =
             gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder);
         let (width, height) = window.get_inner_size().unwrap();
@@ -240,10 +197,45 @@ impl<A> ApplicationGL for A
     }
 }
 
+#[cfg(feature = "vulkan")]
+pub type WrapVulkan<A> = Wrap<gfx_device_vulkan::Resources, gfx_device_vulkan::CommandBuffer, A>;
+
+impl<R, C, A> ApplicationBase<R, C> for Wrap<R, C, A>
+    where R: gfx::Resources,
+          C: gfx::CommandBuffer<R>,
+          A: Application<R>
+{
+    fn new<F>(mut factory: F, init: Init<R>) -> Self
+        where F: Factory<R, CommandBuffer = C>
+    {
+        Wrap {
+            encoder: factory.create_encoder(),
+            app: A::new(factory, init),
+        }
+    }
+
+    fn render<D>(&mut self, device: &mut D)
+        where D: gfx::Device<Resources = R, CommandBuffer = C>
+    {
+        self.app.render(&mut self.encoder);
+        self.encoder.flush(device);
+    }
+
+    fn on(&mut self, event: winit::Event) -> bool {
+        self.app.on(event)
+    }
+}
+
+impl Factory<gfx_device_gl::Resources> for gfx_device_gl::Factory {
+    type CommandBuffer = gfx_device_gl::CommandBuffer;
+    fn create_encoder(&mut self) -> gfx::Encoder<gfx_device_gl::Resources, Self::CommandBuffer> {
+        self.create_command_buffer().into()
+    }
+}
 
 #[cfg(target_os = "windows")]
 pub trait ApplicationD3D11 {
-    fn launch(&str, Config);
+    fn launch_d3d11(winit::WindowBuilder);
 }
 
 #[cfg(target_os = "windows")]
@@ -256,12 +248,12 @@ impl Factory<gfx_device_dx11::Resources> for gfx_device_dx11::Factory {
 
 #[cfg(target_os = "windows")]
 impl<A: ApplicationBase<gfx_device_dx11::Resources, D3D11CommandBuffer>> ApplicationD3D11 for A {
-    fn launch(title: &str, config: Config) {
+    fn launch_d3d11(wb: winit::WindowBuilder) {
         use gfx::traits::{Device, Factory};
 
         env_logger::init().unwrap();
         let (window, device, mut factory, main_color) =
-            gfx_window_dxgi::init::<ColorFormat>(title, config.size.0, config.size.1).unwrap();
+            gfx_window_dxgi::init::<ColorFormat>(wb).unwrap();
         let main_depth = factory.create_depth_stencil_view_only(window.size.0, window.size.1)
             .unwrap();
 
@@ -296,7 +288,7 @@ impl<A: ApplicationBase<gfx_device_dx11::Resources, D3D11CommandBuffer>> Applica
 
 #[cfg(feature = "metal")]
 pub trait ApplicationMetal {
-    fn launch(&str, Config);
+    fn launch_metal(winit::WindowBuilder);
 }
 
 #[cfg(feature = "metal")]
@@ -311,13 +303,12 @@ impl Factory<gfx_device_metal::Resources> for gfx_device_metal::Factory {
 impl<
     A: ApplicationBase<gfx_device_metal::Resources, gfx_device_metal::CommandBuffer>
 > ApplicationMetal for A {
-    fn launch(title: &str, config: Config) {
+    fn launch_metal(wb: winit::WindowBuilder) {
         use gfx::traits::{Device, Factory};
 
         env_logger::init().unwrap();
-        let (window, mut device, mut factory, main_color) =
-            gfx_window_metal::init::<ColorFormat>(title, config.size.0 as u32, config.size.1 as u32)
-            .unwrap();
+        let (window, mut device, mut factory, main_color) = gfx_window_metal::init::<ColorFormat>(wb)
+                                                                                   .unwrap();
 
         let (width, height) = window.get_inner_size().unwrap();
 
@@ -351,14 +342,13 @@ impl<
 
 #[cfg(feature = "vulkan")]
 pub trait ApplicationVulkan {
-    fn launch(&str, Config);
+    fn launch_vulkan(winit::WindowBuilder);
 }
 
 #[cfg(feature = "vulkan")]
 impl Factory<gfx_device_vulkan::Resources> for gfx_device_vulkan::Factory {
     type CommandBuffer = gfx_device_vulkan::CommandBuffer;
-    fn create_encoder(&mut self)
-                      -> gfx::Encoder<gfx_device_vulkan::Resources, Self::CommandBuffer> {
+    fn create_encoder(&mut self) -> gfx::Encoder<gfx_device_vulkan::Resources, Self::CommandBuffer> {
         self.create_command_buffer().into()
     }
 }
@@ -367,18 +357,19 @@ impl Factory<gfx_device_vulkan::Resources> for gfx_device_vulkan::Factory {
 impl<
     A: ApplicationBase<gfx_device_vulkan::Resources, gfx_device_vulkan::CommandBuffer>
 > ApplicationVulkan for A {
-    fn launch(title: &str, config: Config) {
+    fn launch(wb: winit::WindowBuilder) {
         use gfx::traits::{Device, Factory};
 
         env_logger::init().unwrap();
-        let (mut win, mut factory) = gfx_window_vulkan::init::<ColorFormat>(title, config.size.0 as u32, config.size.1 as u32);
-        let main_depth = factory.create_depth_stencil::<DepthFormat>(config.size.0, config.size.1).unwrap();
+        let (mut win, mut factory) = gfx_window_vulkan::init::<ColorFormat>(wb);
+        let (width, height) = win.get_size();
+        let main_depth = factory.create_depth_stencil::<DepthFormat>(width, height).unwrap();
 
         let mut app = Self::new(factory, Init {
             backend: shade::Backend::Vulkan,
             color: win.get_any_target(),
             depth: main_depth.2,
-            aspect_ratio: config.size.0 as f32 / config.size.1 as f32, //TODO
+            aspect_ratio: width as f32 / height as f32, //TODO
         });
 
         let mut harness = Harness::new();

@@ -29,7 +29,7 @@ name = "gfx_window_metal"
 log = "0.3"
 cocoa = "0.5.0"
 objc = "0.1.8"
-winit = "0.5.1"
+winit = "0.5"
 metal-rs = "0.1"
 gfx_core = { path = "../../core", version = "0.5" }
 gfx_device_metal = { path = "../../backend/metal", version = "0.1" }
