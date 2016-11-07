@@ -26,6 +26,6 @@ authors = ["The Gfx-rs Developers"]
 name = "gfx_window_glutin"
 
 [dependencies]
-glutin = "0.6"
+glutin = "0.7"
 gfx_core = { path = "../../core", version = "0.5" }
 gfx_device_gl = { path = "../../backend/gl", version = "0.12" }
