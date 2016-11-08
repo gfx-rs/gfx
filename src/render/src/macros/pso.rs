@@ -235,12 +235,12 @@ macro_rules! gfx_pipeline_base {
         }
     };
 	
-	($module:ident {
+    ($module:ident {
         $( $field:ident: $ty:ty, )*
     }) => {
         gfx_pipeline_base! {
-			gfx : $module { $( $field: $ty, )*}
-		}
+            gfx : $module { $( $field: $ty, )*}
+        }
     }
 }
 
@@ -264,13 +264,13 @@ macro_rules! gfx_pipeline {
         }
     };
 	
-	($module:ident {
+    ($module:ident {
         $( $field:ident: $ty:ty = $value:expr, )*
     }) => {
         gfx_pipeline! {
-			gfx : $module {
-				$( $field: $ty = $value, )*
-			}
-		}
+            gfx : $module {
+                $( $field: $ty = $value, )*
+            }
+        }
     }
 }
