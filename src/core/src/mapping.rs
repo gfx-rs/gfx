@@ -202,7 +202,7 @@ impl<'a, R: Resources, T: 'a + Copy> Deref for RWer<'a, R, T> {
     fn deref(&self) -> &[T] { &*self.slice }
 }
 
-impl<'a, R: Resources, T: Copy> DerefMut for RWer<'a, R, T> {
+impl<'a, R: Resources, T: 'a + Copy> DerefMut for RWer<'a, R, T> {
     fn deref_mut(&mut self) -> &mut [T] { self.slice }
 }
 
