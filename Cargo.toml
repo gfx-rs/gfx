@@ -72,6 +72,10 @@ name = "flowmap"
 path = "examples/flowmap/main.rs"
 
 [[example]]
+name = "gamma"
+path = "examples/gamma/main.rs"
+
+[[example]]
 name = "performance"
 path = "examples/performance/main.rs"
 
