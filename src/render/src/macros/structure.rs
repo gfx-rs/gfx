@@ -18,8 +18,20 @@
 macro_rules! gfx_impl_struct {
     ($runtime_format:ty : $compile_format:path = $root:ident {
         $( $field:ident: $ty:ty = $name:expr, )*
+    }) => (gfx_impl_struct_meta! {
+        impl_struct_meta $runtime_format : $compile_format = $root {
+            $( $field : $ty = $name, )*
+        }
+    })
+}
+
+#[macro_export]
+macro_rules! gfx_impl_struct_meta {
+    ($(#[$attr:meta])* impl_struct_meta $runtime_format:ty : $compile_format:path = $root:ident {
+        $( $field:ident: $ty:ty = $name:expr, )*
     }) => {
         #[derive(Clone, Copy, Debug)]
+        $(#[$attr])*
         pub struct $root {
             $( pub $field: $ty, )*
         }
@@ -66,7 +78,19 @@ macro_rules! gfx_impl_struct {
 macro_rules! gfx_vertex_struct {
     ($root:ident {
         $( $field:ident: $ty:ty = $name:expr, )*
-    }) => (gfx_impl_struct!{
+    }) => (gfx_vertex_struct_meta! {
+        vertex_struct_meta $root {
+            $( $field : $ty = $name, )*
+        }
+    })
+}
+
+#[macro_export]
+macro_rules! gfx_vertex_struct_meta {
+    ($(#[$attr:meta])* vertex_struct_meta $root:ident {
+        $( $field:ident: $ty:ty = $name:expr, )*
+    }) => (gfx_impl_struct_meta!{
+        $(#[$attr])* impl_struct_meta
         $crate::format::Format : $crate::format::Formatted =
         $root {
             $( $field: $ty = $name, )*
@@ -78,7 +102,19 @@ macro_rules! gfx_vertex_struct {
 macro_rules! gfx_constant_struct {
     ($root:ident {
         $( $field:ident: $ty:ty = $name:expr, )*
-    }) => (gfx_impl_struct!{
+    }) => (gfx_constant_struct_meta!{
+        constant_struct_meta $root {
+            $( $field : $ty = $name, )*
+        }
+    })
+}
+
+#[macro_export]
+macro_rules! gfx_constant_struct_meta {
+    ($(#[$attr:meta])* constant_struct_meta $root:ident {
+        $( $field:ident: $ty:ty = $name:expr, )*
+    }) => (gfx_impl_struct_meta!{
+        $(#[$attr])* impl_struct_meta
         $crate::shade::ConstFormat : $crate::shade::Formatted =
         $root {
             $( $field: $ty = $name, )*
