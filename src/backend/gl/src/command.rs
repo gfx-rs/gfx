@@ -77,6 +77,7 @@ pub enum Command {
     BindUnorderedView(c::pso::UnorderedViewParam<Resources>),
     BindSampler(c::pso::SamplerParam<Resources>, Option<gl::types::GLenum>),
     BindPixelTargets(c::pso::PixelTargetSet<Resources>),
+    BindVao,
     BindAttribute(c::AttributeSlot, Buffer, BufferElement),
     UnbindAttribute(c::AttributeSlot),
     BindIndex(Buffer),
@@ -213,6 +214,7 @@ impl command::Buffer<Resources> for CommandBuffer {
     }
 
     fn bind_vertex_buffers(&mut self, vbs: c::pso::VertexBufferSet<Resources>) {
+        self.buf.push(Command::BindVao);
         for i in 0 .. c::MAX_VERTEX_ATTRIBUTES {
             match (vbs.0[i], self.cache.attributes[i]) {
                 (None, Some(fm)) => {
