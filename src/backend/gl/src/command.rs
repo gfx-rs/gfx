@@ -109,8 +109,9 @@ pub const COLOR_DEFAULT: s::Color = s::Color {
     blend: None,
 };
 
-pub const RESET: [Command; 13] = [
+pub const RESET: [Command; 14] = [
     Command::BindProgram(0),
+    Command::BindVao,
     //Command::UnbindAttribute, //not needed, handled by the cache
     Command::BindIndex(0),
     Command::BindFrameBuffer(gl::FRAMEBUFFER, 0),
@@ -214,7 +215,6 @@ impl command::Buffer<Resources> for CommandBuffer {
     }
 
     fn bind_vertex_buffers(&mut self, vbs: c::pso::VertexBufferSet<Resources>) {
-        self.buf.push(Command::BindVao);
         for i in 0 .. c::MAX_VERTEX_ATTRIBUTES {
             match (vbs.0[i], self.cache.attributes[i]) {
                 (None, Some(fm)) => {
