@@ -109,6 +109,8 @@ unsafe impl Sync for Shader {}
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Program {
     vs: *mut winapi::ID3D11VertexShader,
+    hs: *mut winapi::ID3D11HullShader,
+    ds: *mut winapi::ID3D11DomainShader,
     gs: *mut winapi::ID3D11GeometryShader,
     ps: *mut winapi::ID3D11PixelShader,
     vs_hash: u64,
@@ -370,6 +372,8 @@ impl core::Device for Device {
             |_, program| unsafe {
                 let p = program.resource();
                 if p.vs != ptr::null_mut() { (*p.vs).Release(); }
+                if p.hs != ptr::null_mut() { (*p.hs).Release(); }
+                if p.ds != ptr::null_mut() { (*p.ds).Release(); }
                 if p.gs != ptr::null_mut() { (*p.gs).Release(); }
                 if p.ps != ptr::null_mut() { (*p.ps).Release(); }
             },

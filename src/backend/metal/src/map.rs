@@ -101,8 +101,9 @@ pub fn map_topology(primitive: Primitive) -> MTLPrimitiveTopologyClass {
         Primitive::TriangleList => MTLPrimitiveTopologyClass::Triangle,
 
         // TODO: can we work around not having line/triangle strip?
-        Primitive::LineStrip => MTLPrimitiveTopologyClass::Unspecified,
-        Primitive::TriangleStrip => MTLPrimitiveTopologyClass::Unspecified,
+        Primitive::LineStrip |
+        Primitive::TriangleStrip |
+        Primitive::QuadList => MTLPrimitiveTopologyClass::Unspecified,
     }
 }
 

@@ -384,6 +384,7 @@ impl core::Factory<R> for Factory {
                     pixel: ps.shader,
                 }
             },
+            core::ShaderSet::Tessellated(..) => unimplemented!(),
         };
 
         Ok(self.share.handles.borrow_mut().make_program(prog, info))

@@ -30,6 +30,7 @@ fn primitive_to_gl(primitive: c::Primitive) -> gl::types::GLenum {
         TriangleList => gl::TRIANGLES,
         TriangleStrip => gl::TRIANGLE_STRIP,
         //TriangleFan => gl::TRIANGLE_FAN,
+        QuadList => gl::PATCHES
     }
 }
 

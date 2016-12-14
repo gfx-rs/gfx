@@ -186,6 +186,31 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
         Ok(ShaderSet::Simple(vs, ps))
     }
 
+    /// Mainly for testing
+    fn create_shader_set_tessellation(&mut self, vs_code: &[u8], hs_code: &[u8], ds_code: &[u8], ps_code: &[u8])
+                         -> Result<ShaderSet<R>, ProgramError> {
+        let vs = match self.create_shader_vertex(vs_code) {
+            Ok(s) => s,
+            Err(e) => return Err(ProgramError::Vertex(e)),
+        };
+
+        let hs = match self.create_shader_hull(hs_code) {
+            Ok(s) => s,
+            Err(e) => return Err(ProgramError::Hull(e)),
+        };
+
+        let ds = match self.create_shader_domain(ds_code) {
+            Ok(s) => s,
+            Err(e) => return Err(ProgramError::Domain(e)),
+        };
+
+        let ps = match self.create_shader_pixel(ps_code) {
+            Ok(s) => s,
+            Err(e) => return Err(ProgramError::Pixel(e)),
+        };
+        Ok(ShaderSet::Tessellated(vs, hs, ds, ps))
+    }
+
     /// Creates a basic shader `Program` from the supplied vertex and pixel shader source code.
     fn link_program(&mut self, vs_code: &[u8], ps_code: &[u8])
                     -> Result<handle::Program<R>, ProgramError> {

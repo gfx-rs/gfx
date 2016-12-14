@@ -345,6 +345,20 @@ impl core::Factory<R> for Factory {
                 };
                 (hr, ret as *mut ID3D11DeviceChild)
             },
+            Stage::Hull => {
+                let mut ret = ptr::null_mut();
+                let hr = unsafe {
+                    (*dev).CreateHullShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
+                };
+                (hr, ret as *mut ID3D11DeviceChild)
+            },
+            Stage::Domain => {
+                let mut ret = ptr::null_mut();
+                let hr = unsafe {
+                    (*dev).CreateDomainShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
+                };
+                (hr, ret as *mut ID3D11DeviceChild)
+            },
             Stage::Geometry => {
                 let mut ret = ptr::null_mut();
                 let hr = unsafe {
@@ -365,8 +379,9 @@ impl core::Factory<R> for Factory {
         if winapi::SUCCEEDED(hr) {
             let reflection = reflect_shader(code);
             let hash = {
-                use std::hash::{Hash, Hasher, SipHasher};
-                let mut hasher = SipHasher::new();
+                use std::collections::hash_map::DefaultHasher;
+                use std::hash::{Hash, Hasher};
+                let mut hasher = DefaultHasher::new();
                 code.hash(&mut hasher);
                 hasher.finish()
             };
@@ -386,7 +401,7 @@ impl core::Factory<R> for Factory {
 
     fn create_program(&mut self, shader_set: &core::ShaderSet<R>)
                       -> Result<h::Program<R>, core::shade::CreateProgramError> {
-        use winapi::{ID3D11VertexShader, ID3D11GeometryShader, ID3D11PixelShader};
+        use winapi::{ID3D11VertexShader, ID3D11HullShader, ID3D11DomainShader, ID3D11GeometryShader, ID3D11PixelShader};
         use core::shade::{ProgramInfo, Stage};
         use mirror::populate_info;
 
@@ -410,6 +425,8 @@ impl core::Factory<R> for Factory {
                 unsafe { (*vs.object).AddRef(); (*ps.object).AddRef(); }
                 Program {
                     vs: vs.object as *mut ID3D11VertexShader,
+                    hs: ptr::null_mut(),
+                    ds: ptr::null_mut(),
                     gs: ptr::null_mut(),
                     ps: ps.object as *mut ID3D11PixelShader,
                     vs_hash: vs.code_hash,
@@ -423,11 +440,30 @@ impl core::Factory<R> for Factory {
                 unsafe { (*vs.object).AddRef(); (*gs.object).AddRef(); (*ps.object).AddRef(); }
                 Program {
                     vs: vs.object as *mut ID3D11VertexShader,
+                    hs: ptr::null_mut(),
+                    ds: ptr::null_mut(),
                     gs: gs.object as *mut ID3D11GeometryShader,
                     ps: ps.object as *mut ID3D11PixelShader,
                     vs_hash: vs.code_hash,
                 }
             },
+            &core::ShaderSet::Tessellated(ref vs, ref hs, ref ds, ref ps) => {
+                let (vs, hs, ds, ps) = (vs.reference(fh), hs.reference(fh), ds.reference(fh), ps.reference(fh));
+              
+			  populate_info(&mut info, Stage::Vertex,   vs.reflection);
+                populate_info(&mut info, Stage::Hull, hs.reflection);
+                populate_info(&mut info, Stage::Domain, ds.reflection);
+                populate_info(&mut info, Stage::Pixel,    ps.reflection);
+                unsafe { (*vs.object).AddRef(); (*hs.object).AddRef(); (*ds.object).AddRef(); (*ps.object).AddRef(); }
+                Program {
+                    vs: vs.object as *mut ID3D11VertexShader,
+                    hs: hs.object as *mut ID3D11HullShader,
+                    ds: ds.object as *mut ID3D11DomainShader,
+                    gs: ptr::null_mut(),
+                    ps: ps.object as *mut ID3D11PixelShader,
+                    vs_hash: vs.code_hash,
+                }
+            }
         };
         Ok(self.share.handles.borrow_mut().make_program(prog, info))
     }
@@ -512,6 +548,7 @@ impl core::Factory<R> for Factory {
                 LineStrip       => D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP,
                 TriangleList    => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
                 TriangleStrip   => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+                QuadList   => D3D11_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST,
             },
             layout: vertex_layout,
             vertex_buffers: desc.vertex_buffers,
@@ -829,7 +866,7 @@ impl core::Factory<R> for Factory {
         }
     }
 
-    fn map_buffer_raw(&mut self, buffer: &h::RawBuffer<R>, access: memory::Access)
+    fn map_buffer_raw(&mut self, _buffer: &h::RawBuffer<R>, _access: memory::Access)
                       -> Result<h::RawMapping<R>, mapping::Error> {
         unimplemented!()
     }
