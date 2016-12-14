@@ -20,7 +20,8 @@
 use std::error::Error;
 use std::{mem, fmt};
 use {buffer, handle, format, mapping, pso, shade, target, texture};
-use {Capabilities, Resources, VertexShader, GeometryShader, PixelShader, ShaderSet};
+use {Capabilities, Resources, ShaderSet,
+     VertexShader, HullShader, DomainShader, GeometryShader, PixelShader};
 use memory::{self, Usage, Typed, Pod, cast_slice};
 use memory::{Bind, RENDER_TARGET, DEPTH_STENCIL, SHADER_RESOURCE, UNORDERED_ACCESS};
 

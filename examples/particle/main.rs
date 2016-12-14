@@ -186,7 +186,8 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 }
 
 pub fn main() {
-    use gfx_app::{Application, ApplicationGL, DEFAULT_CONFIG, WrapGL2};
-    App::launch_default("Particle example");
+    //use gfx_app::{Application, ApplicationGL, DEFAULT_CONFIG, WrapGL2};
     //WrapGL2::<App<_>>::launch("Particle example", DEFAULT_CONFIG);
+    use gfx_app::Application;
+    App::launch_default("Particle example");
 }

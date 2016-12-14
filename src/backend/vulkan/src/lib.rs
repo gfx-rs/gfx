@@ -214,11 +214,11 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
     info!("Chosen physical device {:?} with queue family {}", dev.device, qf_id);
 
     let mvid_id = dev.memory.memoryTypes.iter().take(dev.memory.memoryTypeCount as usize)
-                            .position(|mt| (mt.propertyFlags & vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT != 0)
-                                        && (mt.propertyFlags & vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT != 0))
+                            .position(|mt| (mt.propertyFlags & vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT != 0))
                             .unwrap() as u32;
     let msys_id = dev.memory.memoryTypes.iter().take(dev.memory.memoryTypeCount as usize)
-                            .position(|mt| mt.propertyFlags & vk::MEMORY_PROPERTY_HOST_COHERENT_BIT != 0)
+                            .position(|mt| (mt.propertyFlags & vk::MEMORY_PROPERTY_HOST_COHERENT_BIT != 0)
+                                        && (mt.propertyFlags & vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT != 0))
                             .unwrap() as u32;
 
     let device = {

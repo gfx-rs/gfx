@@ -25,7 +25,7 @@ use cgmath::{SquareMatrix, Matrix4, Point3, Vector3};
 use cgmath::{Transform, AffineMatrix3};
 pub use gfx::format::{DepthStencil};
 pub use gfx_app::{ColorFormat, DepthFormat};
-use genmesh::{Vertices, Triangulate};
+use genmesh::Vertices;
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
 use std::time::{Instant};
 use noise::{Seed, perlin2};
