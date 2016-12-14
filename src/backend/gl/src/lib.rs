@@ -264,7 +264,7 @@ pub struct Share {
 pub struct Device {
     info: Info,
     share: Rc<Share>,
-    _vao: ArrayBuffer,
+    vao: ArrayBuffer,
     frame_handles: handle::Manager<Resources>,
     max_resource_count: Option<usize>,
 }
@@ -315,7 +315,7 @@ impl Device {
                 private_caps: private,
                 handles: RefCell::new(handles),
             }),
-            _vao: vao,
+            vao: vao,
             frame_handles: handle::Manager::new(),
             max_resource_count: Some(999999),
         }
@@ -544,6 +544,12 @@ impl Device {
                 }
                 if let Some(ref stencil) = pts.stencil {
                     self.bind_target(point, gl::STENCIL_ATTACHMENT, stencil);
+                }
+            },
+            Command::BindVao => {
+                let gl = &self.share.context;
+                unsafe {
+                    gl.BindVertexArray(self.vao);
                 }
             },
             Command::BindAttribute(slot, buffer,  bel) => {

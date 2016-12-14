@@ -77,6 +77,7 @@ pub enum Command {
     BindUnorderedView(c::pso::UnorderedViewParam<Resources>),
     BindSampler(c::pso::SamplerParam<Resources>, Option<gl::types::GLenum>),
     BindPixelTargets(c::pso::PixelTargetSet<Resources>),
+    BindVao,
     BindAttribute(c::AttributeSlot, Buffer, BufferElement),
     UnbindAttribute(c::AttributeSlot),
     BindIndex(Buffer),
@@ -108,8 +109,9 @@ pub const COLOR_DEFAULT: s::Color = s::Color {
     blend: None,
 };
 
-pub const RESET: [Command; 13] = [
+pub const RESET: [Command; 14] = [
     Command::BindProgram(0),
+    Command::BindVao,
     //Command::UnbindAttribute, //not needed, handled by the cache
     Command::BindIndex(0),
     Command::BindFrameBuffer(gl::FRAMEBUFFER, 0),
