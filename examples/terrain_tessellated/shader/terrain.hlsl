@@ -37,13 +37,13 @@ float4 Pixel(VsOutput pin) : SV_Target {
 //--------------------------------------------------------------------------------------
 struct HS_CONSTANT_DATA_OUTPUT
 {
-    float Edges[4]             : SV_TessFactor;
+    float Edges[4]            : SV_TessFactor;
     float Inside [2]          : SV_InsideTessFactor;
 };
 
 
 HS_CONSTANT_DATA_OUTPUT ConstantHS( InputPatch<VsOutput, 4> ip,
-                                          uint PatchID : SV_PrimitiveID )
+                                    uint PatchID : SV_PrimitiveID )
 {
 	float g_fTessellationFactor = 8.0;
     HS_CONSTANT_DATA_OUTPUT Output;

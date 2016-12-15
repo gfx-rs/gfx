@@ -540,6 +540,7 @@ impl core::Factory<R> for Factory {
         }
         let dummy_dsi = core::pso::DepthStencilInfo { depth: None, front: None, back: None };
         //TODO: cache rasterizer, depth-stencil, and blend states
+        let caps = &self.share.capabilities;
 
         let pso = Pipeline {
             topology: match desc.primitive {
@@ -548,7 +549,12 @@ impl core::Factory<R> for Factory {
                 LineStrip       => D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP,
                 TriangleList    => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
                 TriangleStrip   => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
-                QuadList   => D3D11_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST,
+                PatchList(num)  => {
+                    if num == 0 || (num as usize) > caps.max_patch_size {
+                        return Err(core::pso::CreationError)
+                    }
+                    D3D_PRIMITIVE_TOPOLOGY(D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST.0 + (num as u32) - 1)
+                },
             },
             layout: vertex_layout,
             vertex_buffers: desc.vertex_buffers,

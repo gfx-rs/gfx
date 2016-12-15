@@ -271,6 +271,7 @@ impl GraphicsQueue {
             max_vertex_count: 0,
             max_index_count: 0,
             max_texture_size: 0,
+            max_patch_size: 0,
             instance_base_supported: false,
             instance_call_supported: false,
             instance_rate_supported: false,

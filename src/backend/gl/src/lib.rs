@@ -606,6 +606,12 @@ impl Device {
             Command::SetBlendColor(color) => {
                 state::set_blend_color(&self.share.context, color);
             },
+            Command::SetPatches(num) => {
+                let gl = &self.share.context;
+                unsafe {
+                    gl.PatchParameteri(gl::PATCH_VERTICES, num as gl::types::GLint);
+                }
+            },
             Command::UpdateBuffer(buffer, pointer, offset) => {
                 let data = data_buf.get(pointer);
                 factory::update_sub_buffer(&self.share.context, buffer,

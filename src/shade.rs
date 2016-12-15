@@ -40,6 +40,7 @@ pub struct Source<'a> {
     pub glsl_130: &'a [u8],
     pub glsl_140: &'a [u8],
     pub glsl_150: &'a [u8],
+    pub glsl_400: &'a [u8],
     pub glsl_430: &'a [u8],
     pub glsl_es_100: &'a [u8],
     pub glsl_es_200: &'a [u8],
@@ -65,6 +66,7 @@ impl<'a> Source<'a> {
             glsl_130: EMPTY,
             glsl_140: EMPTY,
             glsl_150: EMPTY,
+            glsl_400: EMPTY,
             glsl_430: EMPTY,
             glsl_es_100: EMPTY,
             glsl_es_200: EMPTY,
@@ -86,6 +88,7 @@ impl<'a> Source<'a> {
                 let v = version.major * 100 + version.minor;
                 match *self {
                     Source { glsl_430: s, .. } if s != EMPTY && v >= 430 => s,
+                    Source { glsl_400: s, .. } if s != EMPTY && v >= 400 => s,
                     Source { glsl_150: s, .. } if s != EMPTY && v >= 150 => s,
                     Source { glsl_140: s, .. } if s != EMPTY && v >= 140 => s,
                     Source { glsl_130: s, .. } if s != EMPTY && v >= 130 => s,
