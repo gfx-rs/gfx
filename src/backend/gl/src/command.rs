@@ -92,6 +92,7 @@ pub enum Command {
     SetStencilState(Option<s::Stencil>, (Stencil, Stencil), s::CullFace),
     SetBlendState(c::ColorSlot, s::Color),
     SetBlendColor(ColorValue),
+    SetPatches(u8),
     // resource updates
     UpdateBuffer(Buffer, DataPointer, usize),
     UpdateTexture(Texture, c::texture::Kind, Option<c::texture::CubeFace>,
@@ -212,6 +213,9 @@ impl command::Buffer<Resources> for CommandBuffer {
             if pso.output.draw_mask & (1<<i) != 0 {
                 self.buf.push(Command::SetBlendState(i as c::ColorSlot, pso.output.colors[i]));
             }
+        }
+        if let c::Primitive::QuadList = pso.primitive {
+            self.buf.push(Command::SetPatches(4));
         }
     }
 

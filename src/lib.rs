@@ -209,17 +209,17 @@ impl<A> ApplicationGL for A
         let (width, height) = window.get_inner_size().unwrap();
         let shade_lang = device.get_info().shading_language;
 
-        let mut app = Self::new(factory,
-                                Init {
-                                    backend: if shade_lang.is_embedded {
-                                        shade::Backend::GlslEs(shade_lang)
-                                    } else {
-                                        shade::Backend::Glsl(shade_lang)
-                                    },
-                                    color: main_color,
-                                    depth: main_depth,
-                                    aspect_ratio: width as f32 / height as f32,
-                                });
+        let init = Init {
+            backend: if shade_lang.is_embedded {
+                shade::Backend::GlslEs(shade_lang)
+            } else {
+                shade::Backend::Glsl(shade_lang)
+            },
+            color: main_color,
+            depth: main_depth,
+            aspect_ratio: width as f32 / height as f32,
+        };
+        let mut app = Self::new(factory, init);
 
         let mut harness = Harness::new();
         'main: loop {

@@ -78,32 +78,28 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         use gfx::traits::FactoryExt;
 
         let vs = gfx_app::shade::Source {
-            glsl_120: include_bytes!("shader/terrain_120.glslv"),
-            glsl_150: include_bytes!("shader/terrain_150.glslv"),
+            glsl_150: include_bytes!("shader/terrain.glslv"), //v = vertex
             hlsl_40:  include_bytes!("data/vertex.fx"),
             msl_11: include_bytes!("shader/terrain_vertex.metal"),
             vulkan:   include_bytes!("data/vert.spv"),
             .. gfx_app::shade::Source::empty()
         };
         let hs = gfx_app::shade::Source {
-            glsl_120: include_bytes!("shader/terrain_120.glslf"),
-            glsl_150: include_bytes!("shader/terrain_150.glslf"),
+            glsl_150: include_bytes!("shader/terrain.glslc"), //c = tess control
             hlsl_50:  include_bytes!("data/hull.fx"),
             msl_11: include_bytes!("shader/terrain_frag.metal"),
             vulkan:   include_bytes!("data/frag.spv"),
             .. gfx_app::shade::Source::empty()
         };
         let ds = gfx_app::shade::Source {
-            glsl_120: include_bytes!("shader/terrain_120.glslf"),
-            glsl_150: include_bytes!("shader/terrain_150.glslf"),
+            glsl_150: include_bytes!("shader/terrain.glsle"), //e = tess evaluation
             hlsl_50:  include_bytes!("data/domain.fx"),
             msl_11: include_bytes!("shader/terrain_frag.metal"),
             vulkan:   include_bytes!("data/frag.spv"),
             .. gfx_app::shade::Source::empty()
         };
         let ps = gfx_app::shade::Source {
-            glsl_120: include_bytes!("shader/terrain_120.glslf"),
-            glsl_150: include_bytes!("shader/terrain_150.glslf"),
+            glsl_150: include_bytes!("shader/terrain.glslf"), //f = fragment
             hlsl_40:  include_bytes!("data/pixel.fx"),
             msl_11: include_bytes!("shader/terrain_frag.metal"),
             vulkan:   include_bytes!("data/frag.spv"),
@@ -130,7 +126,12 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             .collect();
 
         let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, &index_data[..]);
-        let set = (factory.create_shader_set_tessellation(&vs.select(init.backend).unwrap(), &hs.select(init.backend).unwrap(), &ds.select(init.backend).unwrap(), &ps.select(init.backend).unwrap())).unwrap();
+        let set = factory.create_shader_set_tessellation(
+            &vs.select(init.backend).unwrap(),
+            &hs.select(init.backend).unwrap(),
+            &ds.select(init.backend).unwrap(),
+            &ps.select(init.backend).unwrap()
+        ).unwrap();
         let mut fillmode = gfx::state::Rasterizer::new_fill();
         fillmode.method = gfx::state::RasterMethod::Line(1);
         App {
