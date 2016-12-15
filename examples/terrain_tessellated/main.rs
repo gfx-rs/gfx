@@ -135,8 +135,8 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         let mut fillmode = gfx::state::Rasterizer::new_fill();
         fillmode.method = gfx::state::RasterMethod::Line(1);
         App {
-            pso: factory.create_pipeline_state(&set, gfx::Primitive::QuadList, fillmode,
-                                   pipe::new()).unwrap(),
+            pso: factory.create_pipeline_state(&set,
+                gfx::Primitive::PatchList(4), fillmode, pipe::new()).unwrap(),
             data: pipe::Data {
                 vbuf: vbuf,
                 locals: factory.create_constant_buffer(1),

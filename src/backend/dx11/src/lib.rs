@@ -186,6 +186,7 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
             max_vertex_count: 0,
             max_index_count: 0,
             max_texture_size: 0,
+            max_patch_size: 32, //hard-coded in D3D11
             instance_base_supported: false,
             instance_call_supported: false,
             instance_rate_supported: false,

@@ -60,6 +60,8 @@ pub const MAX_SAMPLERS: usize = 16;
 pub type VertexCount = u32;
 /// Draw number of instances
 pub type InstanceCount = u32;
+/// Number of vertices in a patch
+pub type PatchSize = u8;
 
 /// Slot for an attribute.
 pub type AttributeSlot = u8;
@@ -113,6 +115,7 @@ impl<R: Resources> ShaderSet<R> {
     }
 }
 
+//TODO: use the appropriate units for max vertex count, etc
 /// Features that the device supports.
 #[derive(Copy, Clone, Debug)]
 #[allow(missing_docs)] // pretty self-explanatory fields!
@@ -120,6 +123,7 @@ pub struct Capabilities {
     pub max_vertex_count: usize,
     pub max_index_count: usize,
     pub max_texture_size: usize,
+    pub max_patch_size: usize,
 
     pub instance_base_supported: bool,
     pub instance_call_supported: bool,
@@ -150,9 +154,9 @@ pub enum Primitive {
     /// Every three consecutive vertices represent a single triangle. For example, with `[a, b, c,
     /// d]`, `a`, `b`, and `c` form a triangle, and `b`, `c`, and `d` form a triangle.
     TriangleStrip,
-    /// Quad,
-    /// 4 point quad patch
-    QuadList
+    /// Patch list,
+    /// used with shaders capable of producing primitives on their own (tessellation)
+    PatchList(PatchSize),
 }
 
 /// A type of each index value in the slice's index buffer

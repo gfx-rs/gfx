@@ -88,15 +88,15 @@ impl<R: Resources> Slice<R> {
     
     /// Calculates the number of primitives of the specified type in this `Slice`.
     pub fn get_prim_count(&self, prim: Primitive) -> u32 {
-        use core::Primitive::*;
+        use core::Primitive as p;
         let nv = (self.end - self.start) as u32;
         match prim {
-            PointList => nv,
-            LineList => nv / 2,
-            LineStrip => (nv-1),
-            TriangleList => nv / 3,
-            TriangleStrip => (nv-2) / 3,
-            QuadList => nv / 4,
+            p::PointList => nv,
+            p::LineList => nv / 2,
+            p::LineStrip => (nv-1),
+            p::TriangleList => nv / 3,
+            p::TriangleStrip => (nv-2) / 3,
+            p::PatchList(num) => nv / (num as u32),
         }
     }
 }

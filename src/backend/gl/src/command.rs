@@ -30,7 +30,7 @@ fn primitive_to_gl(primitive: c::Primitive) -> gl::types::GLenum {
         TriangleList => gl::TRIANGLES,
         TriangleStrip => gl::TRIANGLE_STRIP,
         //TriangleFan => gl::TRIANGLE_FAN,
-        QuadList => gl::PATCHES
+        PatchList(_) => gl::PATCHES
     }
 }
 
@@ -92,7 +92,7 @@ pub enum Command {
     SetStencilState(Option<s::Stencil>, (Stencil, Stencil), s::CullFace),
     SetBlendState(c::ColorSlot, s::Color),
     SetBlendColor(ColorValue),
-    SetPatches(u8),
+    SetPatches(c::PatchSize),
     // resource updates
     UpdateBuffer(Buffer, DataPointer, usize),
     UpdateTexture(Texture, c::texture::Kind, Option<c::texture::CubeFace>,
@@ -214,8 +214,8 @@ impl command::Buffer<Resources> for CommandBuffer {
                 self.buf.push(Command::SetBlendState(i as c::ColorSlot, pso.output.colors[i]));
             }
         }
-        if let c::Primitive::QuadList = pso.primitive {
-            self.buf.push(Command::SetPatches(4));
+        if let c::Primitive::PatchList(num) = pso.primitive {
+            self.buf.push(Command::SetPatches(num));
         }
     }
 

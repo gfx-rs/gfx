@@ -329,6 +329,12 @@ impl f::Factory<R> for Factory {
     fn create_pipeline_state_raw(&mut self, program: &handle::Program<R>, desc: &d::pso::Descriptor)
                                  -> Result<handle::RawPipelineState<R>, d::pso::CreationError> {
         use core::state as s;
+        let caps = &self.share.capabilities;
+        match desc.primitive {
+            d::Primitive::PatchList(num) if num == 0 || (num as usize) > caps.max_patch_size =>
+                return Err(d::pso::CreationError),
+            _ => ()
+        }
         let mut output = OutputMerger {
             draw_mask: 0,
             stencil: match desc.depth_stencil {

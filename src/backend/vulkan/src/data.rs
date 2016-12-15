@@ -310,7 +310,7 @@ pub fn map_topology(prim: Primitive) -> vk::PrimitiveTopology {
         Primitive::LineStrip     => vk::PRIMITIVE_TOPOLOGY_LINE_STRIP,
         Primitive::TriangleList  => vk::PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         Primitive::TriangleStrip => vk::PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
-        Primitive::QuadList      => vk::PRIMITIVE_TOPOLOGY_PATCH_LIST,
+        Primitive::PatchList(_)  => vk::PRIMITIVE_TOPOLOGY_PATCH_LIST,
     }
 }
 
