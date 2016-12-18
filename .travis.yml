@@ -1,5 +1,6 @@
-sudo: required
+sudo: false
 language: rust
+cache: cargo
 rust:
   - stable
   - nightly
@@ -25,7 +26,7 @@ addons:
       # install a newer cmake since at this time Travis only has version 2.8.7
       - george-edison55-precise-backports
       # add a repository for libsdl2-dev (enable sudo before uncommenting this)
-      - sourceline: 'ppa:zoogie/sdl2-snapshots'
+      #- sourceline: 'ppa:zoogie/sdl2-snapshots'
     packages:
       - xdotool
       - cmake
@@ -35,7 +36,8 @@ addons:
       - libxinerama1
       - libxcursor-dev
       - libxcursor1
-      - libsdl2-dev
+      #- libsdl2-dev
+      - libglfw-dev
 script:
   - export RUST_BACKTRACE=1
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo build --features vulkan; else cargo build; fi
@@ -44,7 +46,5 @@ script:
   - cargo test -p gfx_device_gl
   - cargo test -p gfx_window_glutin
   - cargo test -p gfx_window_glfw
-  - cargo test -p gfx_window_sdl
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo test -p gfx_device_vulkan --features vulkan; fi
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo test -p gfx_window_vulkan --features vulkan; fi
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo test --features vulkan; fi
+  #- cargo test -p gfx_window_sdl
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo test --features vulkan; cargo test -p gfx_device_vulkan --features vulkan; cargo test -p gfx_window_vulkan --features vulkan; fi
