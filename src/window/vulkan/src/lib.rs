@@ -17,8 +17,6 @@ extern crate vk_sys as vk;
 extern crate gfx_core as core;
 extern crate gfx_device_vulkan as device_vulkan;
 
-#[cfg(unix)]
-extern crate xcb;
 #[cfg(target_os = "windows")]
 extern crate kernel32;
 
