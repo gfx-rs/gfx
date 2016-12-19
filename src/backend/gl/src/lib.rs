@@ -25,7 +25,6 @@ extern crate gfx_core as core;
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::{cmp, hash, fmt};
 use core::{self as c, handle, state as s, format, pso, texture, memory, command as com, buffer};
 use core::memory::{RENDER_TARGET, DEPTH_STENCIL};
 use core::target::{Layer, Level};
@@ -53,52 +52,10 @@ pub type Surface        = gl::types::GLuint;
 pub type Texture        = gl::types::GLuint;
 pub type Sampler        = gl::types::GLuint;
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-struct RawFence(gl::types::GLsync);
-
-impl RawFence {
-    fn wait(&self, gl: &gl::Gl) {
-        unsafe {
-            let timeout = 1_000_000_000_000;
-            // TODO: use the return value of this call
-            // TODO:
-            // This can be called by multiple objects wanting to ensure they have exclusive
-            // access to a resource. How much does this call costs ? The status of the fence
-            // could be cached to avoid calling this more than once (in core or in the backend ?).
-            gl.ClientWaitSync(self.0, gl::SYNC_FLUSH_COMMANDS_BIT, timeout);
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct Fence {
-    raw: RawFence,
-    share: Rc<Share>,
-}
-
-impl cmp::PartialEq for Fence {
-    fn eq(&self, other: &Fence) -> bool { self.raw.eq(&other.raw) }
-}
-
-impl cmp::Eq for Fence {}
-
-impl hash::Hash for Fence {
-    fn hash<H>(&self, state: &mut H) where H: hash::Hasher {
-        self.raw.hash(state);
-    }
-}
-
-impl fmt::Debug for Fence {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        self.raw.fmt(f)
-    }
-}
-
-impl c::Fence for Fence {
-    fn wait(&self) {
-        self.raw.wait(&self.share.context);
-    }
-}
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Fence(gl::types::GLsync);
+unsafe impl Send for Fence {}
+unsafe impl Sync for Fence {}
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Resources {}
@@ -817,7 +774,7 @@ impl Device {
             let mut inner = mapping.access()
                 .expect("user error: mapping still in use on submit");
 
-            factory::temporary_ensure_unmapped(&mut inner);
+            factory::temporary_ensure_unmapped(&mut inner, &self.share.context);
         }
     }
 
@@ -857,10 +814,7 @@ impl Device {
         let fence = unsafe {
             gl.FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0)
         };
-        self.frame_handles.make_fence(Fence {
-            raw: RawFence(fence),
-            share: self.share.clone(),
-        })
+        self.frame_handles.make_fence(Fence(fence))
     }
 
     // MappingKind::Persistent
@@ -912,13 +866,18 @@ impl c::Device for Device {
             let timeout = 1_000_000_000_000;
             // FIXME: should we use 'glFlush' here ?
             // see https://www.opengl.org/wiki/Sync_Object
-            unsafe { self.share.context.WaitSync(f.raw.0, 0, timeout); }
+            unsafe { self.share.context.WaitSync(f.0, 0, timeout); }
         }
 
         self.before_submit(access);
         self.no_fence_submit(cb);
         let fence_opt = self.after_submit(access);
         fence_opt.unwrap_or_else(|| self.place_fence())
+    }
+
+    fn wait_fence(&mut self, fence: &handle::Fence<Self::Resources>) {
+        factory::wait_fence(self.frame_handles.ref_fence(&fence),
+                            &self.share.context);
     }
 
     fn cleanup(&mut self) {
@@ -940,12 +899,12 @@ impl c::Device for Device {
             |_, _| {}, //RTV
             |_, _| {}, //DSV
             |gl, v| unsafe { if v.object != 0 { gl.DeleteSamplers(1, &v.object) }},
-            |gl, fence| unsafe { gl.DeleteSync(fence.raw.0) },
-            |_, raw_mapping| {
+            |gl, fence| unsafe { gl.DeleteSync(fence.0) },
+            |gl, raw_mapping| {
                 let mut inner = raw_mapping.access().unwrap();
                 match inner.resource.kind {
                     MappingKind::Persistent => (), // TODO: maybe flush the mapped memory here ?
-                    MappingKind::Temporary => factory::temporary_ensure_unmapped(&mut inner),
+                    MappingKind::Temporary => factory::temporary_ensure_unmapped(&mut inner, gl),
                 }
             },
         );

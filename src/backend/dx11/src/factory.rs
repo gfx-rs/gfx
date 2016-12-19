@@ -27,10 +27,13 @@ use {CommandList, DeferredContext};
 use native;
 
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MappingGate {
     pointer: *mut c_void,
 }
+
+unsafe impl Send for MappingGate {}
+unsafe impl Sync for MappingGate {}
 
 impl core::mapping::Gate<R> for MappingGate {
     unsafe fn set<T>(&self, index: usize, val: T) {
@@ -878,13 +881,13 @@ impl core::Factory<R> for Factory {
     }
 
     fn map_buffer_readable<T: Copy>(&mut self, buf: &h::Buffer<R, T>)
-                                    -> Result<mapping::Readable<R, T>, mapping::Error> {
+                                    -> Result<mapping::ReadableOnly<R, T>, mapping::Error> {
         let map = try!(self.map_buffer_raw(buf.raw(), memory::READ));
         Ok(self.map_readable(map, buf.len()))
     }
 
     fn map_buffer_writable<T: Copy>(&mut self, buf: &h::Buffer<R, T>)
-                                    -> Result<mapping::Writable<R, T>, mapping::Error> {
+                                    -> Result<mapping::WritableOnly<R, T>, mapping::Error> {
         let map = try!(self.map_buffer_raw(buf.raw(), memory::WRITE));
         Ok(self.map_writable(map, buf.len()))
     }
@@ -893,5 +896,26 @@ impl core::Factory<R> for Factory {
                               -> Result<mapping::RWable<R, T>, mapping::Error> {
         let map = try!(self.map_buffer_raw(buf.raw(), memory::RW));
         Ok(self.map_read_write(map, buf.len()))
+    }
+
+    fn read_mapping<'a, 'b, M, T>(&'a mut self, _: &'b mut M)
+                                  -> mapping::Reader<'b, R, T>
+        where M: mapping::Readable<R, T>, T: Copy
+    {
+        unimplemented!()
+    }
+
+    fn write_mapping<'a, 'b, M, T>(&'a mut self, _: &'b mut M)
+                                   -> mapping::Writer<'b, R, T>
+        where M: mapping::Writable<R, T>, T: Copy
+    {
+        unimplemented!()
+    }
+
+    fn rw_mapping<'a, 'b, T>(&'a mut self, _: &'b mut mapping::RWable<R, T>)
+                             -> mapping::RWer<'b, R, T>
+        where T: Copy
+    {
+        unimplemented!()
     }
 }

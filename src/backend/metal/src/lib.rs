@@ -150,12 +150,6 @@ pub struct Device {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Fence;
 
-impl core::Fence for Fence {
-    fn wait(&self) {
-        unimplemented!()
-    }
-}
-
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Resources {}
 
@@ -223,6 +217,9 @@ impl core::Device for Device {
         unimplemented!()
     }
 
+    fn wait_fence(&mut self, fence: &h::Fence<Self::Resources>) {
+        unimplemented!()
+    }
 
     fn cleanup(&mut self) {
         use core::handle::Producer;

@@ -31,11 +31,6 @@ pub trait Gate<R: Resources> {
     unsafe fn slice<'a, 'b, T>(&'a self, len: usize) -> &'b [T];
     /// Returns a mutable slice of the specified length.
     unsafe fn mut_slice<'a, 'b, T>(&'a self, len: usize) -> &'b mut [T];
-
-    /// Hook before user read access
-    fn before_read(&mut RawInner<R>) {}
-    /// Hook before user write access
-    fn before_write(&mut RawInner<R>) {}
 }
 
 fn valid_access(access: memory::Access, usage: memory::Usage) -> Result<(), Error> {
@@ -68,12 +63,16 @@ impl<R: Resources> Status<R> {
         }
     }
 
-    fn access(&mut self) {
-        self.gpu_access.take().map(|fence| fence.wait());
+    fn access<F>(&mut self, wait_fence: F)
+        where F: FnOnce(handle::Fence<R>)
+    {
+        self.gpu_access.take().map(wait_fence);
     }
 
-    fn write_access(&mut self) {
-        self.access();
+    fn write_access<F>(&mut self, wait_fence: F)
+        where F: FnOnce(handle::Fence<R>)
+    {
+        self.access(wait_fence);
         self.cpu_write = true;
     }
 }
@@ -125,10 +124,16 @@ impl<R: Resources> Raw<R> {
         self.0.try_lock().ok()
     }
 
-    unsafe fn read<T: Copy>(&self, len: usize) -> Reader<R, T> {
+    unsafe fn read<T: Copy, F, H>(&self,
+                                  len: usize,
+                                  wait_fence: F,
+                                  hook: H) -> Reader<R, T>
+        where F: FnOnce(handle::Fence<R>),
+              H: FnOnce(&mut RawInner<R>)
+    {
         let mut inner = self.access().unwrap();
-        R::Mapping::before_read(&mut inner);
-        inner.status.access();
+        hook(&mut inner);
+        inner.status.access(wait_fence);
 
         Reader {
             slice: inner.resource.slice(len),
@@ -136,10 +141,16 @@ impl<R: Resources> Raw<R> {
         }
     }
 
-    unsafe fn write<T: Copy>(&self, len: usize) -> Writer<R, T> {
+    unsafe fn write<T: Copy, F, H>(&self,
+                                   len: usize,
+                                   wait_fence: F,
+                                   hook: H) -> Writer<R, T>
+        where F: FnOnce(handle::Fence<R>),
+              H: FnOnce(&mut RawInner<R>)
+    {
         let mut inner = self.access().unwrap();
-        R::Mapping::before_write(&mut inner);
-        inner.status.write_access();
+        hook(&mut inner);
+        inner.status.write_access(wait_fence);
 
         Writer {
             len: len,
@@ -148,11 +159,16 @@ impl<R: Resources> Raw<R> {
         }
     }
 
-    unsafe fn read_write<T: Copy>(&self, len: usize) -> RWer<R, T> {
+    unsafe fn read_write<T: Copy, F, H>(&self,
+                                        len: usize,
+                                        wait_fence: F,
+                                        hook: H) -> RWer<R, T>
+        where F: FnOnce(handle::Fence<R>),
+              H: FnOnce(&mut RawInner<R>)
+    {
         let mut inner = self.access().unwrap();
-        R::Mapping::before_read(&mut inner);
-        R::Mapping::before_write(&mut inner);
-        inner.status.write_access();
+        hook(&mut inner);
+        inner.status.write_access(wait_fence);
 
         RWer {
             slice: inner.resource.mut_slice(len),
@@ -207,30 +223,58 @@ impl<'a, R: Resources, T: 'a + Copy> DerefMut for RWer<'a, R, T> {
 }
 
 /// Readable mapping.
-pub struct Readable<R: Resources, T: Copy> {
-    raw: handle::RawMapping<R>,
-    len: usize,
-    phantom: PhantomData<T>,
-}
-
-impl<R: Resources, T: Copy> Readable<R, T> {
-    /// Acquire a mapping Reader
-    pub fn read(&mut self) -> Reader<R, T> {
-        unsafe { self.raw.read::<T>(self.len) }
-    }
+pub trait Readable<R: Resources, T: Copy> {
+    #[doc(hidden)]
+    unsafe fn read<F, H>(&mut self,
+                         wait_fence: F,
+                         hook: H) -> Reader<R, T>
+        where F: FnOnce(handle::Fence<R>),
+              H: FnOnce(&mut RawInner<R>);
 }
 
 /// Writable mapping.
-pub struct Writable<R: Resources, T: Copy> {
+pub trait Writable<R: Resources, T: Copy> {
+    #[doc(hidden)]
+    unsafe fn write<F, H>(&mut self,
+                          wait_fence: F,
+                          hook: H) -> Writer<R, T>
+        where F: FnOnce(handle::Fence<R>),
+              H: FnOnce(&mut RawInner<R>);
+}
+
+/// Readable only mapping.
+pub struct ReadableOnly<R: Resources, T: Copy> {
     raw: handle::RawMapping<R>,
     len: usize,
     phantom: PhantomData<T>,
 }
 
-impl<R: Resources, T: Copy> Writable<R, T> {
-    /// Acquire a mapping Writer
-    pub fn write(&mut self) -> Writer<R, T> {
-        unsafe { self.raw.write::<T>(self.len) }
+impl<R: Resources, T: Copy> Readable<R, T> for ReadableOnly<R, T> {
+    unsafe fn read<F, H>(&mut self,
+                         wait_fence: F,
+                         hook: H) -> Reader<R, T>
+        where F: FnOnce(handle::Fence<R>),
+              H: FnOnce(&mut RawInner<R>)
+    {
+        self.raw.read(self.len, wait_fence, hook)
+    }
+}
+
+/// Writable only mapping.
+pub struct WritableOnly<R: Resources, T: Copy> {
+    raw: handle::RawMapping<R>,
+    len: usize,
+    phantom: PhantomData<T>,
+}
+
+impl<R: Resources, T: Copy> Writable<R, T> for WritableOnly<R, T> {
+    unsafe fn write<F, H>(&mut self,
+                          wait_fence: F,
+                          hook: H) -> Writer<R, T>
+        where F: FnOnce(handle::Fence<R>),
+              H: FnOnce(&mut RawInner<R>)
+    {
+        self.raw.write(self.len, wait_fence, hook)
     }
 }
 
@@ -242,19 +286,36 @@ pub struct RWable<R: Resources, T: Copy> {
 }
 
 impl<R: Resources, T: Copy> RWable<R, T> {
-    /// Acquire a mapping Reader
-    pub fn read(&mut self) -> Reader<R, T> {
-        unsafe { self.raw.read::<T>(self.len) }
+    #[doc(hidden)]
+    pub unsafe fn read_write<F, H>(&mut self,
+                                   wait_fence: F,
+                                   hook: H) -> RWer<R, T>
+        where F: FnOnce(handle::Fence<R>),
+              H: FnOnce(&mut RawInner<R>)
+    {
+        self.raw.read_write(self.len, wait_fence, hook)
     }
+}
 
-    /// Acquire a mapping Writer
-    pub fn write(&mut self) -> Writer<R, T> {
-        unsafe { self.raw.write::<T>(self.len) }
+impl<R: Resources, T: Copy> Readable<R, T> for RWable<R, T> {
+    unsafe fn read<F, H>(&mut self,
+                         wait_fence: F,
+                         hook: H) -> Reader<R, T>
+        where F: FnOnce(handle::Fence<R>),
+              H: FnOnce(&mut RawInner<R>)
+    {
+        self.raw.read(self.len, wait_fence, hook)
     }
+}
 
-    /// Acquire a mapping reader & writer
-    pub fn read_write(&mut self) -> RWer<R, T> {
-        unsafe { self.raw.read_write::<T>(self.len) }
+impl<R: Resources, T: Copy> Writable<R, T> for RWable<R, T> {
+    unsafe fn write<F, H>(&mut self,
+                          wait_fence: F,
+                          hook: H) -> Writer<R, T>
+        where F: FnOnce(handle::Fence<R>),
+              H: FnOnce(&mut RawInner<R>)
+    {
+        self.raw.write(self.len, wait_fence, hook)
     }
 }
 
@@ -262,22 +323,22 @@ impl<R: Resources, T: Copy> RWable<R, T> {
 /// To be used by device back ends.
 #[doc(hidden)]
 pub trait Builder<R: Resources>: Factory<R> {
-    fn map_readable<T: Copy>(&mut self, handle::RawMapping<R>, usize) -> Readable<R, T>;
-    fn map_writable<T: Copy>(&mut self, handle::RawMapping<R>, usize) -> Writable<R, T>;
+    fn map_readable<T: Copy>(&mut self, handle::RawMapping<R>, usize) -> ReadableOnly<R, T>;
+    fn map_writable<T: Copy>(&mut self, handle::RawMapping<R>, usize) -> WritableOnly<R, T>;
     fn map_read_write<T: Copy>(&mut self, handle::RawMapping<R>, usize) -> RWable<R, T>;
 }
 
 impl<R: Resources, F: Factory<R>> Builder<R> for F {
-    fn map_readable<T: Copy>(&mut self, raw: handle::RawMapping<R>, len: usize) -> Readable<R, T> {
-        Readable {
+    fn map_readable<T: Copy>(&mut self, raw: handle::RawMapping<R>, len: usize) -> ReadableOnly<R, T> {
+        ReadableOnly {
             raw: raw,
             len: len,
             phantom: PhantomData,
         }
     }
 
-    fn map_writable<T: Copy>(&mut self, raw: handle::RawMapping<R>, len: usize) -> Writable<R, T> {
-        Writable {
+    fn map_writable<T: Copy>(&mut self, raw: handle::RawMapping<R>, len: usize) -> WritableOnly<R, T> {
+        WritableOnly {
             raw: raw,
             len: len,
             phantom: PhantomData,
