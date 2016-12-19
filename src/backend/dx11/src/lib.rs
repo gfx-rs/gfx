@@ -290,6 +290,7 @@ impl command::Parser for CommandList {
 }
 
 pub struct DeferredContext(*mut winapi::ID3D11DeviceContext, Option<*mut winapi::ID3D11CommandList>);
+unsafe impl Send for DeferredContext {}
 impl DeferredContext {
     pub fn new(dc: *mut winapi::ID3D11DeviceContext) -> DeferredContext {
         DeferredContext(dc, None)

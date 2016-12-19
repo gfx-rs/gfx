@@ -118,7 +118,7 @@ pub struct CommandBuffer<P> {
     cache: Cache,
 }
 
-pub trait Parser: Sized {
+pub trait Parser: Sized + Send {
     fn reset(&mut self);
     fn parse(&mut self, Command);
     fn update_buffer(&mut self, Buffer, &[u8], usize);

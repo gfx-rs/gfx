@@ -141,6 +141,7 @@ struct Cache {
     attributes: [Option<BufferElement>; c::MAX_VERTEX_ATTRIBUTES],
     resource_binds: [Option<gl::types::GLenum>; c::MAX_RESOURCE_VIEWS],
     scissor: bool,
+    target_dim: (u16, u16, u16),
     stencil: Option<s::Stencil>,
     //blend: Option<s::Blend>,
     cull_face: s::CullFace,
@@ -155,6 +156,7 @@ impl Cache {
             attributes: [None; c::MAX_VERTEX_ATTRIBUTES],
             resource_binds: [None; c::MAX_RESOURCE_VIEWS],
             scissor: false,
+            target_dim: (0, 0, 0),
             stencil: None,
             cull_face: s::CullFace::Nothing,
             //blend: None,
@@ -288,6 +290,7 @@ impl command::Buffer<Resources> for CommandBuffer {
             self.buf.push(Command::SetDrawColorBuffers(num));
         }
         let view = pts.get_view();
+        self.cache.target_dim = view;
         self.buf.push(Command::SetViewport(Rect {
             x: 0, y: 0, w: view.0, h: view.1
         }));
@@ -299,8 +302,17 @@ impl command::Buffer<Resources> for CommandBuffer {
     }
 
     fn set_scissor(&mut self, rect: Rect) {
+        use std::cmp;
         self.buf.push(Command::SetScissor(
-            if self.cache.scissor {Some(rect)} else {None}
+            if self.cache.scissor {
+                Some(Rect {
+                    // inverting the Y axis in order to match D3D11
+                    y: cmp::max(self.cache.target_dim.1, rect.y + rect.h) - rect.y - rect.h,
+                    .. rect
+                })
+            } else {
+                None //TODO: assert?
+            }
         ));
     }
 
