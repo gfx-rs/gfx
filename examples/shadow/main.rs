@@ -436,7 +436,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
         use gfx::traits::FactoryExt;
         use gfx_app::shade::Source;
 
-        let mut is_parallel = false;
+        let mut is_parallel = true;
         for arg in env::args().skip(1) {
             if arg == "single" {
                 is_parallel = false;
@@ -527,8 +527,6 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
 
         // fill up shadow map for each light
         if self.is_parallel {
-            unimplemented!() // FIXME: add mapping Send bound
-            /*
             use std::thread;
             use std::sync::mpsc;
 
@@ -569,7 +567,6 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
                 light.encoder.flush(device);
                 self.scene.lights.push(light);
             }
-            */
         } else {
             for light in self.scene.lights.iter_mut() {
                 // clear

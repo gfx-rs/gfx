@@ -412,6 +412,10 @@ impl core::Device for GraphicsQueue {
         unimplemented!()
     }
 
+    fn wait_fence(&mut self, fence: &handle::Fence<Self::Resources>) {
+        unimplemented!()
+    }
+
     //note: this should really live elsewhere (Factory?)
     fn cleanup(&mut self) {
         let (dev, mut functions) = self.share.get_device();

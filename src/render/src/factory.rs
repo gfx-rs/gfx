@@ -135,7 +135,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
                                             num: usize,
                                             role: buffer::Role,
                                             bind: Bind) -> (handle::Buffer<R, T>,
-                                                            mapping::Readable<R, T>)
+                                                            mapping::ReadableOnly<R, T>)
         where T: Copy
     {
         let buffer = self.create_buffer_persistent(num, role, bind, memory::READ)
@@ -149,7 +149,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
                                             num: usize,
                                             role: buffer::Role,
                                             bind: Bind) -> (handle::Buffer<R, T>,
-                                                            mapping::Writable<R, T>)
+                                                            mapping::WritableOnly<R, T>)
         where T: Copy
     {
         let buffer = self.create_buffer_persistent(num, role, bind, memory::WRITE)

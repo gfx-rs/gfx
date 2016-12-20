@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::rc::Rc;
-use std::{slice, fmt};
+use std::slice;
 
 use {gl, tex};
 use core::{self as d, factory as f, texture as t, buffer};
@@ -26,7 +26,7 @@ use core::target::{Layer, Level};
 use command::{CommandBuffer, COLOR_DEFAULT};
 use {Resources as R, Share, OutputMerger};
 use {Buffer, BufferElement, FatSampler, NewTexture,
-     PipelineState, ResourceView, TargetView};
+     PipelineState, ResourceView, TargetView, Fence};
 
 
 fn role_to_target(role: buffer::Role) -> gl::types::GLenum {
@@ -210,46 +210,23 @@ impl Factory {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum MappingKind {
     Persistent,
     Temporary,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[allow(missing_copy_implementations)]
 pub struct MappingGate {
     pub kind: MappingKind,
     pub pointer: *mut ::std::os::raw::c_void,
     pub target: gl::types::GLenum,
     pub is_mapped: bool,
-    pub share: Rc<Share>,
 }
 
-fn temporary_ensure_mapped(inner: &mut mapping::RawInner<R>) {
-    let gl = &inner.resource.share.context;
-    if !inner.resource.is_mapped {
-        let access = access_to_gl(inner.access);
-        unsafe {
-            gl.BindBuffer(inner.resource.target, *inner.buffer.resource());
-            inner.resource.pointer = gl.MapBuffer(inner.resource.target, access)
-                as *mut ::std::os::raw::c_void;
-        }
-
-        inner.resource.is_mapped = true;
-    }
-}
-
-pub fn temporary_ensure_unmapped(inner: &mut mapping::RawInner<R>) {
-    let gl = &inner.resource.share.context;
-    if inner.resource.is_mapped {
-        unsafe {
-            gl.BindBuffer(inner.resource.target, *inner.buffer.resource());
-            gl.UnmapBuffer(inner.resource.target);
-        }
-
-        inner.resource.is_mapped = false;
-    }
-}
+unsafe impl Send for MappingGate {}
+unsafe impl Sync for MappingGate {}
 
 impl mapping::Gate<R> for MappingGate {
     unsafe fn set<T>(&self, index: usize, val: T) {
@@ -263,25 +240,31 @@ impl mapping::Gate<R> for MappingGate {
     unsafe fn mut_slice<'a, 'b, T>(&'a self, len: usize) -> &'b mut [T] {
         slice::from_raw_parts_mut(self.pointer as *mut T, len)
     }
+}
 
-    fn before_read(inner: &mut mapping::RawInner<R>) {
-        match inner.resource.kind {
-            MappingKind::Temporary => temporary_ensure_mapped(inner),
-            MappingKind::Persistent => (),
+pub fn temporary_ensure_mapped(inner: &mut mapping::RawInner<R>,
+                               gl: &gl::Gl) {
+    if !inner.resource.is_mapped {
+        let access = access_to_gl(inner.access);
+        unsafe {
+            gl.BindBuffer(inner.resource.target, *inner.buffer.resource());
+            inner.resource.pointer = gl.MapBuffer(inner.resource.target, access)
+                as *mut ::std::os::raw::c_void;
         }
-    }
 
-    fn before_write(inner: &mut mapping::RawInner<R>) {
-        match inner.resource.kind {
-            MappingKind::Temporary => temporary_ensure_mapped(inner),
-            MappingKind::Persistent => (),
-        }
+        inner.resource.is_mapped = true;
     }
 }
 
-impl fmt::Debug for MappingGate {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "MappingGate {{ kind: {:?}, pointer: {:?}, target: {:?}, is_mapped: {:?} , .. }}", self.kind, self.pointer, self.target, self.is_mapped)
+pub fn temporary_ensure_unmapped(inner: &mut mapping::RawInner<R>,
+                                 gl: &gl::Gl) {
+    if inner.resource.is_mapped {
+        unsafe {
+            gl.BindBuffer(inner.resource.target, *inner.buffer.resource());
+            gl.UnmapBuffer(inner.resource.target);
+        }
+
+        inner.resource.is_mapped = false;
     }
 }
 
@@ -510,19 +493,18 @@ impl f::Factory<R> for Factory {
                 pointer: ptr,
                 target: target,
                 is_mapped: true,
-                share: self.share.clone(),
             }
         })
     }
 
     fn map_buffer_readable<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
-                                    -> Result<mapping::Readable<R, T>, mapping::Error> {
+                                    -> Result<mapping::ReadableOnly<R, T>, mapping::Error> {
         let map = try!(self.map_buffer_raw(buf.raw(), memory::READ));
         Ok(self.map_readable(map, buf.len()))
     }
 
     fn map_buffer_writable<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
-                                    -> Result<mapping::Writable<R, T>, mapping::Error> {
+                                    -> Result<mapping::WritableOnly<R, T>, mapping::Error> {
         let map = try!(self.map_buffer_raw(buf.raw(), memory::WRITE));
         Ok(self.map_writable(map, buf.len()))
     }
@@ -531,5 +513,62 @@ impl f::Factory<R> for Factory {
                               -> Result<mapping::RWable<R, T>, mapping::Error> {
         let map = try!(self.map_buffer_raw(buf.raw(), memory::RW));
         Ok(self.map_read_write(map, buf.len()))
+    }
+
+    fn read_mapping<'a, 'b, M, T>(&'a mut self, m: &'b mut M)
+                                  -> mapping::Reader<'b, R, T>
+        where M: mapping::Readable<R, T>, T: Copy
+    {
+        let gl = &self.share.context;
+        let handles = &mut self.frame_handles;
+        unsafe {
+            m.read(|fence| wait_fence(&handles.ref_fence(&fence), gl),
+                   |inner| match inner.resource.kind {
+                       MappingKind::Temporary => temporary_ensure_mapped(inner, gl),
+                       MappingKind::Persistent => (),
+                   })
+        }
+    }
+
+    fn write_mapping<'a, 'b, M, T>(&'a mut self, m: &'b mut M)
+                                   -> mapping::Writer<'b, R, T>
+        where M: mapping::Writable<R, T>, T: Copy
+    {
+        let gl = &self.share.context;
+        let handles = &mut self.frame_handles;
+        unsafe {
+            m.write(|fence| wait_fence(&handles.ref_fence(&fence), gl),
+                    |inner| match inner.resource.kind {
+                        MappingKind::Temporary => temporary_ensure_mapped(inner, gl),
+                        MappingKind::Persistent => (),
+                    })
+        }
+    }
+
+    fn rw_mapping<'a, 'b, T>(&'a mut self, m: &'b mut mapping::RWable<R, T>)
+                             -> mapping::RWer<'b, R, T>
+        where T: Copy
+    {
+        let gl = &self.share.context;
+        let handles = &mut self.frame_handles;
+        unsafe {
+            m.read_write(|fence| wait_fence(&handles.ref_fence(&fence), gl),
+                         |inner| match inner.resource.kind {
+                             MappingKind::Temporary => temporary_ensure_mapped(inner, gl),
+                             MappingKind::Persistent => (),
+                         })
+        }
+    }
+}
+
+pub fn wait_fence(fence: &Fence, gl: &gl::Gl) {
+    let timeout = 1_000_000_000_000;
+    // TODO: use the return value of this call
+    // TODO:
+    // This can be called by multiple objects wanting to ensure they have exclusive
+    // access to a resource. How much does this call costs ? The status of the fence
+    // could be cached to avoid calling this more than once (in core or in the backend ?).
+    unsafe {
+        gl.ClientWaitSync(fence.0, gl::SYNC_FLUSH_COMMANDS_BIT, timeout);
     }
 }

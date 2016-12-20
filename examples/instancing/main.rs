@@ -76,21 +76,12 @@ fn fill_instances(instances: &mut [Instance], instances_per_length: u32, size: f
     }
  }
 
-fn update_instances(instances: &mut [Instance]) {
-    let mut rng = rand::StdRng::new().unwrap();
-    for instance in instances {
-        instance.color = rng.next_u32();
-    }
-}
-
 const MAX_INSTANCE_COUNT: usize = 2048;
 
 struct App<R: gfx::Resources> {
     pso: gfx::PipelineState<R, pipe::Meta>,
     data: pipe::Data<R>,
     slice: gfx::Slice<R>,
-    mapping: gfx::mapping::RWable<R, Instance>,
-    counter: u16,
 }
 
 impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
@@ -125,7 +116,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                                          gfx::buffer::Role::Vertex,
                                          gfx::Bind::empty());
         {
-            let mut instances = instance_mapping.read_write();
+            let mut instances = factory.rw_mapping(&mut instance_mapping);
             fill_instances(&mut instances, instances_per_length, size);
         }
 
@@ -150,20 +141,10 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 out: init.color,
             },
             slice: slice,
-            mapping: instance_mapping,
-            counter: 0,
         }
     }
 
     fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
-        if self.counter == 120 { // TODO: use frame delta time ?
-            let mut instances = self.mapping.read_write();
-            update_instances(&mut instances);
-            self.counter = 0;
-        } else {
-            self.counter += 1;
-        }
-
         encoder.clear(&self.data.out, [0.1, 0.2, 0.3, 1.0]);
         encoder.draw(&self.slice, &self.pso, &self.data);
     }

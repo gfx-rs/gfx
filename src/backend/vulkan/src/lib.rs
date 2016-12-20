@@ -338,9 +338,3 @@ impl core::Resources for Resources {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Fence(vk::Fence);
-
-impl core::Fence for Fence {
-    fn wait(&self) {
-        unimplemented!()
-    }
-}

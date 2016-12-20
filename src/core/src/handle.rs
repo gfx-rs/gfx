@@ -207,19 +207,11 @@ impl<R: Resources> Sampler<R> {
 }
 
 /// Fence Handle
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Fence<R: Resources>(Arc<R::Fence>);
 
-impl<R: Resources> Fence<R> {
-    /// Waits for the fence to be signaled
-    pub fn wait(&self) {
-        use Fence as FenceTrait;
-        self.0.wait();
-    }
-}
-
 /// Raw Mapping handle
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RawMapping<R: Resources>(Arc<mapping::Raw<R>>);
 
 impl<R: Resources> RawMapping<R> {

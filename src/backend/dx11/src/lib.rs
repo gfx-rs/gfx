@@ -361,6 +361,10 @@ impl core::Device for Device {
         unimplemented!()
     }
 
+    fn wait_fence(&mut self, fence: &h::Fence<Self::Resources>) {
+        unimplemented!()
+    }
+
     fn cleanup(&mut self) {
         use core::handle::Producer;
 
@@ -452,6 +456,10 @@ impl core::Device for Deferred {
         unimplemented!()
     }
 
+    fn wait_fence(&mut self, fence: &h::Fence<Self::Resources>) {
+        unimplemented!()
+    }
+
     fn cleanup(&mut self) {
         self.0.cleanup();
     }
@@ -459,9 +467,3 @@ impl core::Device for Deferred {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Fence(());
-
-impl core::Fence for Fence {
-    fn wait(&self) {
-        unimplemented!()
-    }
-}
