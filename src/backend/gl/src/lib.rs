@@ -217,6 +217,19 @@ pub struct Share {
     handles: RefCell<handle::Manager<Resources>>,
 }
 
+impl Share {
+    /// Fails during a debug build if the implementation's error flag was set.
+    pub fn check(&self, cmd: &Command) {
+        if cfg!(debug_assertions) {
+            let gl = &self.context;
+            let err = Error::from_error_code(unsafe { gl.GetError() });
+            if err != Error::NoError {
+                panic!("Error after executing command {:?}: {:?}", cmd, err);
+            }
+        }
+    }
+}
+
 /// An OpenGL device with GLSL shaders.
 pub struct Device {
     info: Info,
@@ -283,17 +296,6 @@ impl Device {
     pub unsafe fn with_gl<F: FnMut(&gl::Gl)>(&mut self, mut fun: F) {
         self.reset_state();
         fun(&self.share.context);
-    }
-
-    /// Fails during a debug build if the implementation's error flag was set.
-    fn check(&mut self, cmd: &Command) {
-        if cfg!(debug_assertions) {
-            let gl = &self.share.context;
-            let err = Error::from_error_code(unsafe { gl.GetError() });
-            if err != Error::NoError {
-                panic!("Error after executing command {:?}: {:?}", cmd, err);
-            }
-        }
     }
 
     /// Get the OpenGL-specific driver information
@@ -728,7 +730,7 @@ impl Device {
                 ) };
             },
         }
-        self.check(cmd);
+        self.share.check(cmd);
     }
 
     fn no_fence_submit(&mut self, cb: &mut command::CommandBuffer) {
