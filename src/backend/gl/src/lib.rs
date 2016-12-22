@@ -25,7 +25,7 @@ extern crate gfx_core as core;
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use core::{self as c, handle, state as s, format, pso, texture, memory, command as com, buffer};
+use core::{self as c, handle, state as s, format, pso, texture, memory, command as com, buffer, mapping};
 use core::memory::{RENDER_TARGET, DEPTH_STENCIL};
 use core::target::{Layer, Level};
 use command::{Command, DataBuffer};
@@ -758,15 +758,13 @@ impl Device {
             let mut inner = mapping.access()
                 .expect("user error: mapping still in use on submit");
 
-            if inner.status.cpu_write {
-                unsafe {
-                    gl.BindBuffer(inner.resource.target, *inner.buffer.resource());
-                    let size = inner.buffer.get_info().size as isize;
-                    gl.FlushMappedBufferRange(inner.resource.target, 0, size);
-                }
-
-                inner.status.cpu_write = false;
-            }
+            let mapping::RawInner { ref mut resource, ref buffer, .. } = *inner;
+            let target = resource.target;
+            resource.status.ensure_flushed(|| unsafe {
+                gl.BindBuffer(target, *buffer.resource());
+                let size = buffer.get_info().size as isize;
+                gl.FlushMappedBufferRange(target, 0, size);
+            });
         }
     }
 
@@ -827,7 +825,7 @@ impl Device {
             let mut inner = mapping.access()
                 .expect("user error: mapping still in use on submit");
 
-            inner.status.gpu_access = Some(fence.clone());
+            inner.resource.status.gpu_access(fence.clone());
         }
     }
 }

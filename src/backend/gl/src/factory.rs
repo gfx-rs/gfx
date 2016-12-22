@@ -216,13 +216,15 @@ pub enum MappingKind {
     Temporary,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Debug, Eq, Hash, PartialEq)]
 #[allow(missing_copy_implementations)]
 pub struct MappingGate {
     pub kind: MappingKind,
     pub pointer: *mut ::std::os::raw::c_void,
     pub target: gl::types::GLenum,
-    pub is_mapped: bool,
+    // TODO: put those inside the kind enum or something ?
+    pub status: mapping::Status<R>, // Persistent Only
+    pub is_mapped: bool, // Temporary Only
 }
 
 unsafe impl Send for MappingGate {}
@@ -492,6 +494,7 @@ impl f::Factory<R> for Factory {
                 kind: kind,
                 pointer: ptr,
                 target: target,
+                status: mapping::Status::clean(),
                 is_mapped: true,
             }
         })
@@ -522,11 +525,12 @@ impl f::Factory<R> for Factory {
         let gl = &self.share.context;
         let handles = &mut self.frame_handles;
         unsafe {
-            m.read(|fence| wait_fence(&handles.ref_fence(&fence), gl),
-                   |inner| match inner.resource.kind {
-                       MappingKind::Temporary => temporary_ensure_mapped(inner, gl),
-                       MappingKind::Persistent => (),
-                   })
+            m.read(|inner| { match inner.resource.kind {
+                MappingKind::Temporary => temporary_ensure_mapped(inner, gl),
+                MappingKind::Persistent =>
+                    inner.resource.status.cpu_access(
+                        |fence| wait_fence(&handles.ref_fence(&fence), gl))
+            }})
         }
     }
 
@@ -537,11 +541,12 @@ impl f::Factory<R> for Factory {
         let gl = &self.share.context;
         let handles = &mut self.frame_handles;
         unsafe {
-            m.write(|fence| wait_fence(&handles.ref_fence(&fence), gl),
-                    |inner| match inner.resource.kind {
-                        MappingKind::Temporary => temporary_ensure_mapped(inner, gl),
-                        MappingKind::Persistent => (),
-                    })
+            m.write(|inner| { match inner.resource.kind {
+                MappingKind::Temporary => temporary_ensure_mapped(inner, gl),
+                MappingKind::Persistent =>
+                    inner.resource.status.cpu_write_access(
+                        |fence| wait_fence(&handles.ref_fence(&fence), gl))
+            }})
         }
     }
 
@@ -552,11 +557,12 @@ impl f::Factory<R> for Factory {
         let gl = &self.share.context;
         let handles = &mut self.frame_handles;
         unsafe {
-            m.read_write(|fence| wait_fence(&handles.ref_fence(&fence), gl),
-                         |inner| match inner.resource.kind {
-                             MappingKind::Temporary => temporary_ensure_mapped(inner, gl),
-                             MappingKind::Persistent => (),
-                         })
+            m.read_write(|inner| { match inner.resource.kind {
+                MappingKind::Temporary => temporary_ensure_mapped(inner, gl),
+                MappingKind::Persistent =>
+                    inner.resource.status.cpu_write_access(
+                        |fence| wait_fence(&handles.ref_fence(&fence), gl))
+            }})
         }
     }
 }
