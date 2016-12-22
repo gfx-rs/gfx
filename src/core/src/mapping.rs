@@ -36,7 +36,7 @@ pub trait Gate<R: Resources> {
 fn valid_access(access: memory::Access, usage: memory::Usage) -> Result<(), Error> {
     use memory::Usage::*;
     match usage {
-        Persistent(a) if a.contains(access) => Ok(()),
+        Mappable(a) if a.contains(access) => Ok(()),
         _ => Err(Error::InvalidAccess(access, usage)),
     }
 }

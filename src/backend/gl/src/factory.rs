@@ -129,7 +129,7 @@ impl Factory {
             let usage = match info.usage {
                 GpuOnly | Immutable => 0,
                 Dynamic => gl::DYNAMIC_STORAGE_BIT,
-                Persistent(access) => access_to_map_bits(access) | gl::MAP_PERSISTENT_BIT,
+                Mappable(access) => access_to_map_bits(access) | gl::MAP_PERSISTENT_BIT,
                 CpuOnly(_) => gl::DYNAMIC_STORAGE_BIT,
             };
             unsafe {
@@ -146,7 +146,7 @@ impl Factory {
                 GpuOnly => gl::STATIC_DRAW,
                 Immutable => gl::STATIC_DRAW,
                 Dynamic => gl::STREAM_DRAW,
-                Persistent(access) => match access {
+                Mappable(access) => match access {
                     memory::RW => gl::DYNAMIC_COPY,
                     memory::READ => gl::DYNAMIC_READ,
                     memory::WRITE => gl::DYNAMIC_DRAW,

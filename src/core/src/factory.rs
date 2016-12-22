@@ -196,12 +196,12 @@ pub trait Factory<R: Resources> {
         };
         self.create_buffer_raw(info).map(|raw| Typed::new(raw))
     }
-    fn create_buffer_persistent<T>(&mut self, num: usize, role: buffer::Role, bind: Bind, map: memory::Access)
+    fn create_buffer_mappable<T>(&mut self, num: usize, role: buffer::Role, bind: Bind, map: memory::Access)
                                    -> Result<handle::Buffer<R, T>, buffer::CreationError> {
         let stride = mem::size_of::<T>();
         let info = buffer::Info {
             role: role,
-            usage: Usage::Persistent(map),
+            usage: Usage::Mappable(map),
             bind: bind,
             size: num * stride,
             stride: stride,

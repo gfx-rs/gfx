@@ -41,7 +41,7 @@ pub fn update_buffer(context: *mut winapi::ID3D11DeviceContext, buffer: &Buffer,
                 (*context).UpdateSubresource(dst_resource, 0, &dst_box, ptr, 0, 0)
             };
         },
-        Usage::Persistent(_) => unimplemented!(),
+        Usage::Mappable(_) => unimplemented!(),
         Usage::Dynamic | Usage::CpuOnly(_) => {
             let map_type = winapi::D3D11_MAP_WRITE_DISCARD;
             let hr = unsafe {
@@ -100,7 +100,7 @@ pub fn update_texture(context: *mut winapi::ID3D11DeviceContext, texture: &Textu
                 (*context).UpdateSubresource(dst_resource, subres, &dst_box, ptr, row_pitch, depth_pitch)
             };
         },
-        Usage::Dynamic | Usage::CpuOnly(_) | Usage::Persistent(_) => unimplemented!(),
+        Usage::Dynamic | Usage::CpuOnly(_) | Usage::Mappable(_) => unimplemented!(),
     }
     
 }
