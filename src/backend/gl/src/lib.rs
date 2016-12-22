@@ -760,7 +760,12 @@ impl Device {
 
             let mapping::RawInner { ref mut resource, ref buffer, .. } = *inner;
             let target = resource.target;
-            resource.status.ensure_flushed(|| unsafe {
+            let status = match &mut resource.kind {
+                &mut MappingKind::Persistent(ref mut status) => status,
+                _ => panic!("expected persistent mapping"),
+            };
+
+            status.ensure_flushed(|| unsafe {
                 gl.BindBuffer(target, *buffer.resource());
                 let size = buffer.get_info().size as isize;
                 gl.FlushMappedBufferRange(target, 0, size);
@@ -825,7 +830,11 @@ impl Device {
             let mut inner = mapping.access()
                 .expect("user error: mapping still in use on submit");
 
-            inner.resource.status.gpu_access(fence.clone());
+            let status = match &mut inner.resource.kind {
+                &mut MappingKind::Persistent(ref mut status) => status,
+                _ => panic!("expected persistent mapping"),
+            };
+            status.gpu_access(fence.clone());
         }
     }
 }
@@ -903,8 +912,8 @@ impl c::Device for Device {
             |gl, raw_mapping| {
                 let mut inner = raw_mapping.access().unwrap();
                 match inner.resource.kind {
-                    MappingKind::Persistent => (), // TODO: maybe flush the mapped memory here ?
-                    MappingKind::Temporary => factory::temporary_ensure_unmapped(&mut inner, gl),
+                    MappingKind::Persistent(_) => (), // TODO: maybe flush the mapped memory here ?
+                    MappingKind::Temporary {..} => factory::temporary_ensure_unmapped(&mut inner, gl),
                 }
             },
         );

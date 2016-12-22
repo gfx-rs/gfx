@@ -210,10 +210,10 @@ impl Factory {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub enum MappingKind {
-    Persistent,
-    Temporary,
+    Persistent(mapping::Status<R>),
+    Temporary { is_mapped: bool },
 }
 
 #[derive(Debug, Eq, Hash, PartialEq)]
@@ -222,9 +222,6 @@ pub struct MappingGate {
     pub kind: MappingKind,
     pub pointer: *mut ::std::os::raw::c_void,
     pub target: gl::types::GLenum,
-    // TODO: put those inside the kind enum or something ?
-    pub status: mapping::Status<R>, // Persistent Only
-    pub is_mapped: bool, // Temporary Only
 }
 
 unsafe impl Send for MappingGate {}
@@ -244,29 +241,37 @@ impl mapping::Gate<R> for MappingGate {
     }
 }
 
-pub fn temporary_ensure_mapped(inner: &mut mapping::RawInner<R>,
+pub fn temporary_ensure_mapped(is_mapped: &mut bool,
+                               pointer: &mut *mut ::std::os::raw::c_void,
+                               target: gl::types::GLenum,
+                               buffer: gl::types::GLuint,
+                               access: memory::Access,
                                gl: &gl::Gl) {
-    if !inner.resource.is_mapped {
-        let access = access_to_gl(inner.access);
+    if !*is_mapped {
+        let access = access_to_gl(access);
         unsafe {
-            gl.BindBuffer(inner.resource.target, *inner.buffer.resource());
-            inner.resource.pointer = gl.MapBuffer(inner.resource.target, access)
-                as *mut ::std::os::raw::c_void;
+            gl.BindBuffer(target, buffer);
+            *pointer = gl.MapBuffer(target, access) as *mut ::std::os::raw::c_void;
         }
 
-        inner.resource.is_mapped = true;
+        *is_mapped = true;
     }
 }
 
 pub fn temporary_ensure_unmapped(inner: &mut mapping::RawInner<R>,
                                  gl: &gl::Gl) {
-    if inner.resource.is_mapped {
+    let is_mapped = match inner.resource.kind {
+        MappingKind::Temporary { ref mut is_mapped } => is_mapped,
+        _ => panic!("expected temporary mapping"),
+    };
+
+    if *is_mapped {
         unsafe {
             gl.BindBuffer(inner.resource.target, *inner.buffer.resource());
             gl.UnmapBuffer(inner.resource.target);
         }
 
-        inner.resource.is_mapped = false;
+        *is_mapped = false;
     }
 }
 
@@ -481,21 +486,20 @@ impl f::Factory<R> for Factory {
                     gl.BindBuffer(target, raw_handle);
                     gl.MapBufferRange(target, 0, size, access)
                 } as *mut ::std::os::raw::c_void;
-                (MappingKind::Persistent, ptr)
+                (MappingKind::Persistent(mapping::Status::clean()), ptr)
             } else {
+                // TODO: do we really want to map it at once ?
                 let ptr = unsafe {
                     gl.BindBuffer(target, raw_handle);
                     gl.MapBuffer(target, access_to_gl(access))
                 } as *mut ::std::os::raw::c_void;
-                (MappingKind::Temporary, ptr)
+                (MappingKind::Temporary { is_mapped: true }, ptr)
             };
 
             MappingGate {
                 kind: kind,
                 pointer: ptr,
                 target: target,
-                status: mapping::Status::clean(),
-                is_mapped: true,
             }
         })
     }
@@ -525,12 +529,17 @@ impl f::Factory<R> for Factory {
         let gl = &self.share.context;
         let handles = &mut self.frame_handles;
         unsafe {
-            m.read(|inner| { match inner.resource.kind {
-                MappingKind::Temporary => temporary_ensure_mapped(inner, gl),
-                MappingKind::Persistent =>
-                    inner.resource.status.cpu_access(
-                        |fence| wait_fence(&handles.ref_fence(&fence), gl))
-            }})
+            m.read(|inner| match inner.resource.kind {
+                MappingKind::Persistent(ref mut status) =>
+                    status.cpu_access(|fence| wait_fence(&handles.ref_fence(&fence), gl)),
+                MappingKind::Temporary { ref mut is_mapped } =>
+                    temporary_ensure_mapped(is_mapped,
+                                            &mut inner.resource.pointer,
+                                            inner.resource.target,
+                                            *inner.buffer.resource(),
+                                            inner.access,
+                                            gl),
+            })
         }
     }
 
@@ -541,12 +550,17 @@ impl f::Factory<R> for Factory {
         let gl = &self.share.context;
         let handles = &mut self.frame_handles;
         unsafe {
-            m.write(|inner| { match inner.resource.kind {
-                MappingKind::Temporary => temporary_ensure_mapped(inner, gl),
-                MappingKind::Persistent =>
-                    inner.resource.status.cpu_write_access(
-                        |fence| wait_fence(&handles.ref_fence(&fence), gl))
-            }})
+            m.write(|inner| match inner.resource.kind {
+                MappingKind::Persistent(ref mut status) =>
+                    status.cpu_write_access(|fence| wait_fence(&handles.ref_fence(&fence), gl)),
+                MappingKind::Temporary { ref mut is_mapped } =>
+                    temporary_ensure_mapped(is_mapped,
+                                            &mut inner.resource.pointer,
+                                            inner.resource.target,
+                                            *inner.buffer.resource(),
+                                            inner.access,
+                                            gl),
+            })
         }
     }
 
@@ -557,12 +571,17 @@ impl f::Factory<R> for Factory {
         let gl = &self.share.context;
         let handles = &mut self.frame_handles;
         unsafe {
-            m.read_write(|inner| { match inner.resource.kind {
-                MappingKind::Temporary => temporary_ensure_mapped(inner, gl),
-                MappingKind::Persistent =>
-                    inner.resource.status.cpu_write_access(
-                        |fence| wait_fence(&handles.ref_fence(&fence), gl))
-            }})
+            m.read_write(|inner| match inner.resource.kind {
+                MappingKind::Persistent(ref mut status) =>
+                    status.cpu_write_access(|fence| wait_fence(&handles.ref_fence(&fence), gl)),
+                MappingKind::Temporary { ref mut is_mapped } =>
+                    temporary_ensure_mapped(is_mapped,
+                                            &mut inner.resource.pointer,
+                                            inner.resource.target,
+                                            *inner.buffer.resource(),
+                                            inner.access,
+                                            gl),
+            })
         }
     }
 }
