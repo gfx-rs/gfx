@@ -25,9 +25,10 @@ use {command, data, native};
 use {Resources as R, SharePointer};
 
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct MappingGate {
-    pointer: *mut c_void,
+    pub pointer: *mut c_void,
+    pub status: mapping::Status<R>,
 }
 
 unsafe impl Send for MappingGate {}
@@ -898,7 +899,10 @@ impl core::Factory<R> for Factory {
                 vk.MapMemory(dev, buf.resource().memory, offset, vk::WHOLE_SIZE, flags, &mut pointer)
             });
 
-            MappingGate { pointer: pointer }
+            MappingGate {
+                pointer: pointer,
+                status: mapping::Status::clean(),
+            }
         })
     }
 

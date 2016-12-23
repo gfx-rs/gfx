@@ -521,7 +521,7 @@ pub fn map_texture_usage(usage: Usage) -> (MTLResourceOptions, MTLStorageMode) {
         Usage::Immutable => (MTLResourceStorageModePrivate, MTLStorageMode::Managed),
         Usage::Dynamic => (MTLResourceCPUCacheModeDefaultCache, MTLStorageMode::Managed),
         Usage::CpuOnly(access) => (map_access(access), MTLStorageMode::Managed),
-        Usage::Persistent(access) => (map_access(access), MTLStorageMode::Managed),
+        Usage::Mappable(access) => (map_access(access), MTLStorageMode::Managed),
     }
 }
 
@@ -531,7 +531,7 @@ pub fn map_buffer_usage(usage: Usage) -> MTLResourceOptions {
         Usage::Immutable => MTLResourceCPUCacheModeDefaultCache | MTLResourceStorageModeManaged,
         Usage::Dynamic => MTLResourceCPUCacheModeDefaultCache | MTLResourceStorageModeManaged,
         Usage::CpuOnly(access) => map_access(access) | MTLResourceStorageModeManaged,
-        Usage::Persistent(access) => map_access(access) | MTLResourceStorageModeManaged,
+        Usage::Mappable(access) => map_access(access) | MTLResourceStorageModeManaged,
     }
 }
 

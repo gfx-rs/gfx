@@ -106,7 +106,7 @@ pub fn map_usage_tiling(gfx_usage: Usage, bind: Bind) -> (vk::ImageUsageFlags, v
             usage |= vk::IMAGE_USAGE_TRANSFER_DST_BIT;
             vk::IMAGE_TILING_LINEAR
         },
-        Usage::Persistent(access) => unimplemented!(),
+        Usage::Mappable(access) => unimplemented!(),
         Usage::CpuOnly(access) => {
             if access.contains(memory::READ) { usage |= vk::IMAGE_USAGE_TRANSFER_DST_BIT }
             if access.contains(memory::WRITE) { usage |= vk::IMAGE_USAGE_TRANSFER_SRC_BIT }

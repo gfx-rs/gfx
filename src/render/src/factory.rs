@@ -130,43 +130,43 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
             .unwrap()
     }
 
-    /// Creates and maps a readable persistent buffer.
-    fn create_buffer_persistent_readable<T>(&mut self,
-                                            num: usize,
-                                            role: buffer::Role,
-                                            bind: Bind) -> (handle::Buffer<R, T>,
-                                                            mapping::ReadableOnly<R, T>)
+    /// Creates and maps a readable buffer.
+    fn create_mapped_buffer_readable<T>(&mut self,
+                                        num: usize,
+                                        role: buffer::Role,
+                                        bind: Bind) -> (handle::Buffer<R, T>,
+                                                        mapping::ReadableOnly<R, T>)
         where T: Copy
     {
-        let buffer = self.create_buffer_persistent(num, role, bind, memory::READ)
+        let buffer = self.create_buffer_mappable(num, role, bind, memory::READ)
             .unwrap();
         let mapping = self.map_buffer_readable(&buffer).unwrap();
         (buffer, mapping)
     }
 
-    /// Creates and maps a writable persistent buffer.
-    fn create_buffer_persistent_writable<T>(&mut self,
-                                            num: usize,
-                                            role: buffer::Role,
-                                            bind: Bind) -> (handle::Buffer<R, T>,
-                                                            mapping::WritableOnly<R, T>)
+    /// Creates and maps a writable buffer.
+    fn create_mapped_buffer_writable<T>(&mut self,
+                                        num: usize,
+                                        role: buffer::Role,
+                                        bind: Bind) -> (handle::Buffer<R, T>,
+                                                        mapping::WritableOnly<R, T>)
         where T: Copy
     {
-        let buffer = self.create_buffer_persistent(num, role, bind, memory::WRITE)
+        let buffer = self.create_buffer_mappable(num, role, bind, memory::WRITE)
             .unwrap();
         let mapping = self.map_buffer_writable(&buffer).unwrap();
         (buffer, mapping)
     }
 
-    /// Creates and maps an rw persistent buffer.
-    fn create_buffer_persistent_rw<T>(&mut self,
-                                      num: usize,
-                                      role: buffer::Role,
-                                      bind: Bind) -> (handle::Buffer<R, T>,
-                                                      mapping::RWable<R, T>)
+    /// Creates and maps a readable and writable buffer.
+    fn create_mapped_buffer_rw<T>(&mut self,
+                                  num: usize,
+                                  role: buffer::Role,
+                                  bind: Bind) -> (handle::Buffer<R, T>,
+                                                  mapping::RWable<R, T>)
         where T: Copy
     {
-        let buffer = self.create_buffer_persistent(num, role, bind, memory::RW)
+        let buffer = self.create_buffer_mappable(num, role, bind, memory::RW)
             .unwrap();
         let mapping = self.map_buffer_rw(&buffer).unwrap();
         (buffer, mapping)

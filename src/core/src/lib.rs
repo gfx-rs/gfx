@@ -182,7 +182,7 @@ pub trait Resources:          Clone + Hash + Debug + Eq + PartialEq + Any {
     type DepthStencilView:    Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
     type Sampler:             Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
     type Fence:               Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
-    type Mapping:             Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + mapping::Gate<Self>;
+    type Mapping:             Hash + Debug + Eq + PartialEq + Any + Send + Sync + mapping::Gate<Self>;
 }
 
 /// A `Device` is responsible for submitting `CommandBuffer`s to the GPU. 
