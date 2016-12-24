@@ -35,6 +35,7 @@ extern crate gfx_app;
 extern crate rand;
 extern crate genmesh;
 extern crate noise;
+extern crate winit;
 
 use rand::Rng;
 use cgmath::{SquareMatrix, Matrix4, Point3, Vector3, EuclideanVector, deg};
@@ -43,9 +44,9 @@ pub use gfx_app::ColorFormat;
 use gfx::{Bundle, texture};
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{SharedVertex, IndexedPolygon};
-use std::time::{Instant};
-
 use noise::{Seed, perlin2};
+use std::time::{Instant};
+use winit::{Event, VirtualKeyCode, WindowBuilder};
 
 #[cfg(feature="metal")]
 pub use gfx::format::Depth32F as Depth;
@@ -223,6 +224,7 @@ struct App<R: gfx::Resources> {
     intermediate: ViewPair<R, GFormat>,
     light_pos_vec: Vec<LightInfo>,
     seed: Seed,
+    depth_resource: gfx::handle::ShaderResourceView<R, [f32; 4]>,
     debug_buf: Option<gfx::handle::ShaderResourceView<R, [f32; 4]>>,
     start_time: Instant,
 }
@@ -232,7 +234,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         use gfx::traits::FactoryExt;
 
         let (width, height, _, _) = init.color.get_dimensions();
-        let (gpos, gnormal, gdiffuse, _depth_resource, depth_target) =
+        let (gpos, gnormal, gdiffuse, depth_resource, depth_target) =
             create_g_buffer(width, height, &mut factory);
         let res = {
             let (_ , srv, rtv) = factory.create_render_target(width, height).unwrap();
@@ -463,23 +465,11 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 LightInfo{ pos: [0.0, 0.0, 0.0, 0.0] }
             }).collect(),
             seed: seed,
+            depth_resource: depth_resource,
             debug_buf: None,
             start_time: Instant::now(),
         }
     }
-
-    /*fn update(&mut self) {
-        Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key1)) =>
-            debug_buf = Some(gpos.resource.clone()),
-        Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key2)) =>
-            debug_buf = Some(gnormal.resource.clone()),
-        Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key3)) =>
-            debug_buf = Some(gdiffuse.resource.clone()),
-        Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key4)) =>
-            debug_buf = Some(depth_resource.clone()),
-        Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key0)) =>
-            debug_buf = None,
-    }*/
 
     fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
         let elapsed = self.start_time.elapsed();
@@ -560,9 +550,30 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         // Show the result
         self.blit.encode(encoder);
     }
+
+    fn on(&mut self, event: Event) -> bool {
+        match event {
+            Event::Closed |
+            Event::KeyboardInput(_, _, Some(VirtualKeyCode::Escape)) =>
+                return false,
+            Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key1)) =>
+                self.debug_buf = Some(self.light.data.tex_pos.0.clone()),
+            Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key2)) =>
+                self.debug_buf = Some(self.light.data.tex_normal.0.clone()),
+            Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key3)) =>
+                self.debug_buf = Some(self.light.data.tex_diffuse.0.clone()),
+            Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key4)) =>
+                self.debug_buf = Some(self.depth_resource.clone()),
+            Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key0)) =>
+                self.debug_buf = None,
+            _ => (),
+        }
+        true
+    }
 }
 
 pub fn main() {
     use gfx_app::Application;
-    App::launch_default("Deferred rendering example with gfx-rs");
+    let wb = WindowBuilder::new().with_title("Deferred rendering example with gfx-rs");
+    App::launch_default(wb);
 }
