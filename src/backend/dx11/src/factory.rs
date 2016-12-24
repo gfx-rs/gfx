@@ -133,7 +133,13 @@ impl Factory {
         };
 
         assert!(size >= info.size);
-        let (usage, cpu) = map_usage(info.usage);
+        
+        let (usage, cpu) = map_usage(info.usage).map_err(|e|{
+	        match e {
+	        	mapping::Error::Unsupported => buffer::CreationError::UnsupportedUsage(info.usage),
+	        	_ => buffer::CreationError::Other,
+        	}
+        })?;
         let bind = map_bind(info.bind) | subind;
         if info.bind.contains(memory::RENDER_TARGET) | info.bind.contains(memory::DEPTH_STENCIL) {
             return Err(buffer::CreationError::UnsupportedBind(info.bind))
@@ -167,7 +173,7 @@ impl Factory {
         if winapi::SUCCEEDED(hr) {
             let buf = Buffer(raw_buf, info.usage);
             Ok(self.share.handles.borrow_mut().make_buffer(buf, info))
-        }else {
+        } else {
             error!("Failed to create a buffer with desc {:#?}, error {:x}", native_desc, hr);
             Err(buffer::CreationError::Other)
         }
@@ -578,7 +584,7 @@ impl core::Factory<R> for Factory {
         use core::texture::{AaMode, CreationError, Kind};
         use data::{map_bind, map_usage, map_surface, map_format};
 
-        let (usage, cpu_access) = map_usage(desc.usage);
+        let (usage, cpu_access) = map_usage(desc.usage).map_err(|_|{texture::CreationError::Usage(desc.usage)})?;
         let tparam = TextureParam {
             levels: desc.levels as winapi::UINT,
             format: match hint {

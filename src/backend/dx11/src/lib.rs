@@ -497,7 +497,9 @@ impl core::Device for Deferred {
         self.0.pin_submitted_resources(man);
     }
 
-    fn submit(&mut self, cb: &mut Self::CommandBuffer, _: &core::pso::AccessInfo<Resources>) {
+    fn submit(&mut self, cb: &mut Self::CommandBuffer, access: &core::pso::AccessInfo<Resources>) {
+        self.0.before_submit(access);
+
         let cl = match cb.parser.1 {
             Some(cl) => cl,
             None => {
@@ -527,7 +529,7 @@ impl core::Device for Deferred {
         unimplemented!()
     }
 
-    fn wait_fence(&mut self, fence: &h::Fence<Self::Resources>) {
+    fn wait_fence(&mut self, _fence: &h::Fence<Self::Resources>) {
         unimplemented!()
     }
 

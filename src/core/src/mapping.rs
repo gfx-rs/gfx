@@ -120,9 +120,6 @@ impl<R: Resources> Raw<R> {
         sync(&mut inner);
 
         Writer {
-            // len: len,
-            // inner: inner,
-            // phantom: PhantomData,
             slice: inner.resource.mut_slice(len),
             inner: inner,
         }
@@ -155,23 +152,6 @@ impl<'a, R: Resources, T: 'a + Copy> Deref for Reader<'a, R, T> {
         self.slice
     }
 }
-
-// Mapping writer
-// pub struct Writer<'a, R: Resources, T: 'a + Copy> {
-// len: usize,
-// inner: MutexGuard<'a, RawInner<R>>,
-// phantom: PhantomData<T>,
-// }
-//
-// impl<'a, R: Resources, T: 'a + Copy> Writer<'a, R, T> {
-// Set a value in the buffer
-// pub fn set(&mut self, index: usize, value: T) {
-// if index >= self.len {
-// panic!("tried to write out of bounds of a mapped buffer");
-// }
-// unsafe { self.inner.resource.set(index, value); }
-// }
-// }
 
 /// Mapping writer.
 /// Currently is not possible to make write-only slice so while it is technically possible
