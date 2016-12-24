@@ -180,12 +180,9 @@ Wrap<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer, A> {
 
         let mut harness = Harness::new();
         'main: loop {
-            // quit when Esc is pressed.
             for event in window.poll_events() {
-                match event {
-                    glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
-                    glutin::Event::Closed => break 'main,
-                    _ => {}
+                if !app.on(event) {
+                    break 'main
                 }
             }
             // draw a frame

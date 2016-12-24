@@ -19,6 +19,7 @@ extern crate gfx_app;
 extern crate rand;
 extern crate genmesh;
 extern crate noise;
+extern crate winit;
 
 use rand::Rng;
 use cgmath::{SquareMatrix, Matrix4, Point3, Vector3};
@@ -164,5 +165,5 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
 pub fn main() {
     use gfx_app::Application;
-    App::launch_default("Terrain example");
+    App::launch_default(winit::WindowBuilder::new().with_title("Terrain example"));
 }
