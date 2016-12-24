@@ -946,13 +946,19 @@ pub fn ensure_mapped(pointer: &mut *mut ::std::os::raw::c_void,
 		    
 		    
         let hr = unsafe {
-	    	(*ctx).Map(raw_handle.to_resource() as *mut winapi::d3d11::ID3D11Resource, 0, winapi::d3d11::D3D11_MAP_WRITE_DISCARD, 0, &mut sres)
+	    	(*ctx).Map(
+	    		raw_handle.to_resource() as *mut winapi::d3d11::ID3D11Resource, 
+	    		0, 
+	    		winapi::d3d11::D3D11_MAP_WRITE_DISCARD, 
+	    		0, 
+	    		&mut sres
+	    	)
 	    };
 	    
 	    if winapi::SUCCEEDED(hr) {
 			*pointer = sres.pData;
         } else {
-            //println!("Unable to map a buffer {:?} with access {:?}, error {:x}", buffer, access, hr);
+            panic!("Unable to map a buffer {:?}, error {:x}", buffer, hr);
         }
     }
 }
