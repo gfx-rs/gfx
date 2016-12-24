@@ -10,3 +10,4 @@ target/
 # Service
 Cargo.lock
 *.swp
+/.project

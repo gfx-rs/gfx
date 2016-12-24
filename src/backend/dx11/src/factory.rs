@@ -869,15 +869,20 @@ impl core::Factory<R> for Factory {
         };
         if winapi::SUCCEEDED(hr) {
             self.share.handles.borrow_mut().make_sampler(native::Sampler(raw_sampler), info)
-        }else {
+        } else {
             error!("Unable to create a sampler with desc {:#?}, error {:x}", info, hr);
             unimplemented!()
         }
     }
 
-    fn map_buffer_raw(&mut self, _buffer: &h::RawBuffer<R>, _access: memory::Access)
+    fn map_buffer_raw(&mut self, buf: &h::RawBuffer<R>, access: memory::Access)
                       -> Result<h::RawMapping<R>, mapping::Error> {
-        unimplemented!()
+        //ensure_mapped(ptr::null(), buffer, self);
+        self.share.handles.borrow_mut().make_mapping(access, buf, || {
+            MappingGate {
+                pointer: ptr::null_mut(),
+            }
+        })
     }
 
     fn map_buffer_readable<T: Copy>(&mut self, buf: &h::Buffer<R, T>)
@@ -902,20 +907,63 @@ impl core::Factory<R> for Factory {
                                   -> mapping::Reader<'b, R, T>
         where M: mapping::Readable<R, T>, T: Copy
     {
-        unimplemented!()
+        panic!("Read access mapping buffers are unsupported in DX11!")
     }
 
-    fn write_mapping<'a, 'b, M, T>(&'a mut self, _: &'b mut M)
+    fn write_mapping<'a, 'b, M, T>(&'a mut self, m: &'b mut M)
                                    -> mapping::Writer<'b, R, T>
         where M: mapping::Writable<R, T>, T: Copy
     {
-        unimplemented!()
+        unsafe {
+            m.write(|inner| ensure_mapped(&mut inner.resource.pointer, &inner.buffer, self))
+        }
     }
 
     fn rw_mapping<'a, 'b, T>(&'a mut self, _: &'b mut mapping::RWable<R, T>)
                              -> mapping::RWer<'b, R, T>
         where T: Copy
     {
-        unimplemented!()
+        panic!("Read access mapping buffers are unsupported in DX11!")
+    }
+}
+
+pub fn ensure_mapped(pointer: &mut *mut ::std::os::raw::c_void,                               
+                               buffer: &h::RawBuffer<R>,
+							factory: &Factory) {
+    if pointer.is_null() {
+    	let raw_handle = *buffer.resource();              	
+        let mut ctx = ptr::null_mut();
+	        
+	    unsafe {
+	    	(*factory.device).GetImmediateContext(&mut ctx);
+	    }
+	    
+    	let mut sres = winapi::d3d11::D3D11_MAPPED_SUBRESOURCE {
+		    pData: ptr::null_mut(),
+		    RowPitch: 0,
+		    DepthPitch: 0,
+	    };
+		    
+		    
+        let hr = unsafe {
+	    	(*ctx).Map(raw_handle.to_resource() as *mut winapi::d3d11::ID3D11Resource, 0, winapi::d3d11::D3D11_MAP_WRITE_DISCARD, 0, &mut sres)
+	    };
+	    
+	    if winapi::SUCCEEDED(hr) {
+			*pointer = sres.pData;
+        } else {
+            //println!("Unable to map a buffer {:?} with access {:?}, error {:x}", buffer, access, hr);
+        }
+    }
+}
+
+pub fn ensure_unmapped(inner: &mut mapping::RawInner<R>, context: *mut winapi::ID3D11DeviceContext) {
+    if !inner.resource.pointer.is_null() {
+        let raw_handle = *inner.buffer.resource();              	
+        unsafe {
+            (*context).Unmap(raw_handle.to_resource() as *mut winapi::d3d11::ID3D11Resource, 0);
+        }
+
+        inner.resource.pointer = ptr::null_mut();
     }
 }
