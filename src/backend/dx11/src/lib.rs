@@ -485,6 +485,21 @@ impl From<Device> for Deferred {
         Deferred(device)
     }
 }
+impl Deferred {
+	pub fn before_submit(&mut self, gpu_access: &core::pso::AccessInfo<Resources>) {
+        self.ensure_mappings_unmapped(gpu_access.mapped_reads());
+        self.ensure_mappings_unmapped(gpu_access.mapped_writes());
+    }
+
+    fn ensure_mappings_unmapped(&mut self, mappings: &[core::handle::RawMapping<Resources>]) {
+        for mapping in mappings {
+            let mut inner = mapping.access()
+                .expect("user error: mapping still in use on submit");
+
+            factory::ensure_unmapped(&mut inner, self.0.context);
+        }
+    }
+}
 impl core::Device for Deferred {
     type Resources = Resources;
     type CommandBuffer = command::CommandBuffer<DeferredContext>;
@@ -497,7 +512,9 @@ impl core::Device for Deferred {
         self.0.pin_submitted_resources(man);
     }
 
-    fn submit(&mut self, cb: &mut Self::CommandBuffer, _: &core::pso::AccessInfo<Resources>) {
+    fn submit(&mut self, cb: &mut Self::CommandBuffer, access: &core::pso::AccessInfo<Resources>) {
+        self.before_submit(access);
+
         let cl = match cb.parser.1 {
             Some(cl) => cl,
             None => {
@@ -527,7 +544,7 @@ impl core::Device for Deferred {
         unimplemented!()
     }
 
-    fn wait_fence(&mut self, fence: &h::Fence<Self::Resources>) {
+    fn wait_fence(&mut self, _fence: &h::Fence<Self::Resources>) {
         unimplemented!()
     }
 
