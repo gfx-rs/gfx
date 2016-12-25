@@ -120,7 +120,7 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
                                         .with_vsync();
     let (window, mut device, factory, main_color, main_depth) =
         gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder);
-    let (width, height) = window.get_inner_size().unwrap();
+    let (width, height) = window.get_inner_size_points().unwrap();
     let shade_lang = device.get_info().shading_language;
 
     let init = Init {
@@ -213,14 +213,15 @@ pub fn launch_metal<A>(wb: winit::WindowBuilder) where
 A: Sized + ApplicationBase<gfx_device_metal::Resources, gfx_device_metal::CommandBuffer>
 {
     use gfx::traits::{Device, Factory};
+    use gfx::texture::Size;
 
     env_logger::init().unwrap();
     let (window, mut device, mut factory, main_color) = gfx_window_metal::init::<ColorFormat>(wb)
                                                                                 .unwrap();
-    let (width, height) = window.get_inner_size().unwrap();
-    let main_depth = factory.create_depth_stencil_view_only(width as u16, height as u16).unwrap();
+    let (width, height) = window.get_inner_size_points().unwrap();
+    let main_depth = factory.create_depth_stencil_view_only(width as Size, height as Size).unwrap();
 
-    let mut app = Self::new(factory, Init {
+    let mut app = A::new(factory, Init {
         backend: shade::Backend::Msl(device.get_shader_model()),
         color: main_color,
         depth: main_depth,
@@ -255,13 +256,14 @@ pub fn launch_vulkan<A>(wb: winit::WindowBuilder) where
 A: Sized + ApplicationBase<gfx_device_vulkan::Resources, gfx_device_vulkan::CommandBuffer>
 {
     use gfx::traits::{Device, Factory};
+    use gfx::texture::Size;
 
     env_logger::init().unwrap();
     let (mut win, mut factory) = gfx_window_vulkan::init::<ColorFormat>(wb);
     let (width, height) = win.get_size();
-    let main_depth = factory.create_depth_stencil::<DepthFormat>(width, height).unwrap();
+    let main_depth = factory.create_depth_stencil::<DepthFormat>(width as Size, height as Size).unwrap();
 
-    let mut app = Self::new(factory, Init {
+    let mut app = A::new(factory, Init {
         backend: shade::Backend::Vulkan,
         color: win.get_any_target(),
         depth: main_depth.2,
@@ -270,7 +272,7 @@ A: Sized + ApplicationBase<gfx_device_vulkan::Resources, gfx_device_vulkan::Comm
 
     let mut harness = Harness::new();
     loop {
-        for event in window.poll_events() {
+        for event in win.get_window().poll_events() {
             if !app.on(event) {
                 return
             }

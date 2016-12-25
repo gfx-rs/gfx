@@ -104,6 +104,10 @@ impl<T: Clone> Window<T> {
     pub fn get_window(&mut self) -> &mut winit::Window {
         &mut self.window
     }
+
+    pub fn get_size(&self) -> (u32, u32) {
+        self.window.get_inner_size_points().unwrap()
+    }
 }
 
 const LAYERS: &'static [&'static str] = &[
@@ -133,14 +137,13 @@ extern "system" fn callback(flags: vk::DebugReportFlagsEXT,
     vk::FALSE
 }
 
-pub fn init<T: core::format::RenderFormat>(title: &str, width: u32, height: u32)
+pub fn init<T: core::format::RenderFormat>(wb: winit::WindowBuilder)
                 -> (Window<T>, device_vulkan::Factory) {
-    let window = winit::WindowBuilder::new()
-        .with_dimensions(width, height)
-        .with_title(title.to_string()).build().unwrap();
+    let title = wb.window.title.clone();
+    let window = wb.build().unwrap();
 
     let debug = false;
-    let (mut device, mut factory, backend) = device_vulkan::create(title, 1,
+    let (mut device, mut factory, backend) = device_vulkan::create(&title, 1,
         if debug {LAYERS_DEBUG} else {LAYERS},
         if debug {EXTENSIONS_DEBUG} else {EXTENSIONS},
         DEV_EXTENSIONS);
@@ -222,6 +225,8 @@ pub fn init<T: core::format::RenderFormat>(title: &str, width: u32, height: u32)
         unsafe { modes.set_len(num as usize); }
         modes
     };
+
+    let (width, height) = window.get_inner_size_points().unwrap();
 
     // TODO: Use the queried information to check if our values are supported before creating the swapchain
     let swapchain_info = vk::SwapchainCreateInfoKHR {
