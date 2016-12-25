@@ -90,22 +90,23 @@ impl<S> From<CreationError> for PipelineStateError<S> {
 /// This trait is responsible for creating and managing graphics resources, much like the `Factory`
 /// trait in the `gfx` crate. Every `Factory` automatically implements `FactoryExt`. 
 pub trait FactoryExt<R: Resources>: Factory<R> {
-    /// Create a vertex buffer from the supplied data. A `Slice` will have to manually be
-    /// constructed.
+    /// Creates an immutable vertex buffer from the supplied vertices.
+    /// A `Slice` will have to manually be constructed.
     fn create_vertex_buffer<T>(&mut self, vertices: &[T])
-                            -> handle::Buffer<R, T> where
-                            T: Pod + pso::buffer::Structure<format::Format>
+                               -> handle::Buffer<R, T>
+        where T: Pod + pso::buffer::Structure<format::Format>
     {
         //debug_assert!(nv <= self.get_capabilities().max_vertex_count);
-        self.create_buffer_immutable(vertices, buffer::Role::Vertex, Bind::empty()).unwrap()
+        self.create_buffer_immutable(vertices, buffer::Role::Vertex, Bind::empty())
+            .unwrap()
     }
     
-    /// Shorthand for creating a new vertex buffer from the supplied vertices, together with a
-    /// `Slice` from the supplied indices.
+    /// Creates an immutable vertex buffer from the supplied vertices,
+    /// together with a `Slice` from the supplied indices.
     fn create_vertex_buffer_with_slice<B, V>(&mut self, vertices: &[V], indices: B)
-                                       -> (handle::Buffer<R, V>, Slice<R>)
-                                       where V: Pod + pso::buffer::Structure<format::Format>,
-                                             B: IntoIndexBuffer<R>
+                                             -> (handle::Buffer<R, V>, Slice<R>)
+        where V: Pod + pso::buffer::Structure<format::Format>,
+              B: IntoIndexBuffer<R>
     {
         let vertex_buffer = self.create_vertex_buffer(vertices);
         let index_buffer = indices.into_index_buffer(self);
