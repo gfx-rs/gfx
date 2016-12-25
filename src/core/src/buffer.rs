@@ -149,25 +149,3 @@ impl Error for CreationError {
         }
     }
 }
-
-/// An error happening on buffer updates.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum UpdateError {
-    /// Trying to change the contents outside of the allocation.
-    OutOfBounds,
-}
-
-impl fmt::Display for UpdateError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.description())
-    }
-}
-
-impl Error for UpdateError {
-    fn description(&self) -> &str {
-        match *self {
-            UpdateError::OutOfBounds =>
-                "Tried to change the buffer contents outside of the allocation",
-        }
-    }
-}
