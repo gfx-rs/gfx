@@ -123,7 +123,7 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
     let (width, height) = window.get_inner_size_points().unwrap();
     let shade_lang = device.get_info().shading_language;
 
-    let init = Init {
+    let mut app = A::new(factory, Init {
         backend: if shade_lang.is_embedded {
             shade::Backend::GlslEs(shade_lang)
         } else {
@@ -132,8 +132,7 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
         color: main_color,
         depth: main_depth,
         aspect_ratio: width as f32 / height as f32,
-    };
-    let mut app = A::new(factory, init);
+    });
 
     let mut harness = Harness::new();
     loop {
@@ -176,13 +175,12 @@ A: Sized + ApplicationBase<gfx_device_dx11::Resources, D3D11CommandBuffer>
     let main_depth = factory.create_depth_stencil_view_only(window.size.0, window.size.1)
                             .unwrap();
 
-    let mut app = Self::new(factory,
-                            Init {
-                                backend: shade::Backend::Hlsl(device.get_shader_model()),
-                                color: main_color,
-                                depth: main_depth,
-                                aspect_ratio: window.size.0 as f32 / window.size.1 as f32,
-                            });
+    let mut app = A::new(factory, Init {
+        backend: shade::Backend::Hlsl(device.get_shader_model()),
+        color: main_color,
+        depth: main_depth,
+        aspect_ratio: window.size.0 as f32 / window.size.1 as f32,
+    });
     let mut device = gfx_device_dx11::Deferred::from(device);
 
     let mut harness = Harness::new();

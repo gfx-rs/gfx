@@ -217,7 +217,7 @@ impl core::Device for Device {
         unimplemented!()
     }
 
-    fn wait_fence(&mut self, fence: &h::Fence<Self::Resources>) {
+    fn wait_fence(&mut self, fence: &handle::Fence<Self::Resources>) {
         unimplemented!()
     }
 
