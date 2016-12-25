@@ -95,22 +95,20 @@ pub enum InitError {
     DriverType,
 }
 
-pub fn init<C: RenderFormat>(title: &str, requested_width: u32, requested_height: u32)
+pub fn init<C: RenderFormat>(wb: winit::WindowBuilder)
         -> Result<(MetalWindow, Device, Factory, RenderTargetView<Resources, C>), InitError>
 {
-    init_raw(title, requested_width, requested_height, C::get_format())
+    init_raw(wb, C::get_format())
         .map(|(window, device, factory, color)| (window, device, factory, Typed::new(color)))
 }
 
 /// Initialize with a given size. Raw format version.
-pub fn init_raw(title: &str, requested_width: u32, requested_height: u32, color_format: Format)
+pub fn init_raw(wb: winit::WindowBuilder, color_format: Format)
         -> Result<(MetalWindow, Device, Factory, RawRenderTargetView<Resources>), InitError>
 {
     use device_metal::map_format;
 
-    let winit_window = winit::WindowBuilder::new()
-        .with_dimensions(requested_width, requested_height)
-        .with_title(title.to_string()).build().unwrap();
+    let winit_window = wb.build().unwrap();
 
     unsafe {
         let wnd: cocoa_id = mem::transmute(winit_window.get_nswindow());

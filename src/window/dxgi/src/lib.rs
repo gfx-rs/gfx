@@ -60,24 +60,18 @@ pub enum InitError {
 }
 
 /// Initialize with a given size. Typed format version.
-pub fn init<Cf>(title: &str, requested_width: u16, requested_height: u16)
+pub fn init<Cf>(wb: winit::WindowBuilder)
            -> Result<(Window, Device, Factory, core::handle::RenderTargetView<Resources, Cf>), InitError>
 where Cf: format::RenderFormat
 {
-    init_raw(title, requested_width as winapi::INT, requested_height as winapi::INT, Cf::get_format())
+    init_raw(wb, Cf::get_format())
         .map(|(window, device, factory, color)| (window, device, factory, Typed::new(color)))
 }
 
 /// Initialize with a given size. Raw format version.
-pub fn init_raw(title: &str, requested_width: winapi::INT, requested_height: winapi::INT, color_format: format::Format)
+pub fn init_raw(wb: winit::WindowBuilder, color_format: format::Format)
                 -> Result<(Window, Device, Factory, core::handle::RawRenderTargetView<Resources>), InitError> {
-    let inner = match winit::WindowBuilder::new()
-        .with_title(title.to_owned())
-        .with_dimensions(requested_width as u32, requested_height as u32)
-        .with_min_dimensions(requested_width as u32, requested_height as u32)
-        .with_max_dimensions(requested_width as u32, requested_height as u32)
-        .build()
-    {
+    let inner = match wb.build() {
         Ok(w) => w,
         Err(_) => return Err(InitError::Window),
     };

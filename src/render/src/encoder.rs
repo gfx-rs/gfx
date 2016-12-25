@@ -79,14 +79,14 @@ impl<T: Any + fmt::Debug + fmt::Display> Error for UpdateError<T> {
 ///
 /// The encoder exposes multiple functions that add commands to its internal `CommandBuffer`. To 
 /// submit these commands to the GPU so they can be rendered, call `flush`. 
-pub struct Encoder<R: Resources, C: command::Buffer<R>> {
+pub struct Encoder<R: Resources, C> {
     command_buffer: C,
     raw_pso_data: pso::RawDataSet<R>,
     access_info: pso::AccessInfo<R>,
     handles: handle::Manager<R>,
 }
 
-impl<R: Resources, C: command::Buffer<R>> From<C> for Encoder<R, C> {
+impl<R: Resources, C> From<C> for Encoder<R, C> {
     fn from(combuf: C) -> Encoder<R, C> {
         Encoder {
             command_buffer: combuf,

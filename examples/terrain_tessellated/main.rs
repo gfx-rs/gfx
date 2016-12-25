@@ -180,5 +180,5 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
 pub fn main() {
     use gfx_app::Application;
-    App::launch_default("Terrain example");
+    App::launch_simple("Terrain tessellation example");
 }
