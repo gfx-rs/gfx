@@ -44,11 +44,8 @@ fn valid_access(access: memory::Access, usage: memory::Usage) -> Result<(), Erro
 /// Would mapping this buffer with this memory access be an error ?
 fn is_ok<R: Resources>(access: memory::Access, buffer: &handle::RawBuffer<R>) -> Result<(), Error> {
     try!(valid_access(access, buffer.get_info().usage));
-    if buffer.mapping().is_some() {
-        Err(Error::AlreadyMapped)
-    } else {
-        Ok(())
-    }
+    if buffer.mapping().is_some() { Err(Error::AlreadyMapped) }
+    else { Ok(()) }
 }
 
 /// Error mapping a buffer.
@@ -82,10 +79,7 @@ pub struct Raw<R: Resources>(Mutex<RawInner<R>>);
 
 impl<R: Resources> Raw<R> {
     #[doc(hidden)]
-    pub fn new<F>(access: memory::Access,
-                  buffer: &handle::RawBuffer<R>,
-                  f: F)
-                  -> Result<Self, Error>
+    pub fn new<F>(access: memory::Access, buffer: &handle::RawBuffer<R>, f: F) -> Result<Self, Error>
         where F: FnOnce() -> R::Mapping
     {
         try!(is_ok(access, buffer));
@@ -141,16 +135,13 @@ impl<R: Resources> Raw<R> {
 /// Mapping reader
 pub struct Reader<'a, R: Resources, T: 'a + Copy> {
     slice: &'a [T],
-    #[allow(dead_code)]
-    inner: MutexGuard<'a, RawInner<R>>,
+    #[allow(dead_code)] inner: MutexGuard<'a, RawInner<R>>,
 }
 
 impl<'a, R: Resources, T: 'a + Copy> Deref for Reader<'a, R, T> {
     type Target = [T];
 
-    fn deref(&self) -> &[T] {
-        self.slice
-    }
+    fn deref(&self) -> &[T] { self.slice }
 }
 
 /// Mapping writer.
@@ -161,34 +152,31 @@ pub type Writer<'a, R, T> = RWer<'a, R, T>;
 /// Mapping reader & writer
 pub struct RWer<'a, R: Resources, T: 'a + Copy> {
     slice: &'a mut [T],
-    #[allow(dead_code)]
-    inner: MutexGuard<'a, RawInner<R>>,
+    #[allow(dead_code)] inner: MutexGuard<'a, RawInner<R>>,
 }
 
 impl<'a, R: Resources, T: 'a + Copy> Deref for RWer<'a, R, T> {
     type Target = [T];
 
-    fn deref(&self) -> &[T] {
-        &*self.slice
-    }
+    fn deref(&self) -> &[T] { &*self.slice }
 }
 
 impl<'a, R: Resources, T: 'a + Copy> DerefMut for RWer<'a, R, T> {
-    fn deref_mut(&mut self) -> &mut [T] {
-        self.slice
-    }
+    fn deref_mut(&mut self) -> &mut [T] { self.slice }
 }
 
 /// Readable mapping.
 pub trait Readable<R: Resources, T: Copy> {
     #[doc(hidden)]
-    unsafe fn read<S>(&mut self, sync: S) -> Reader<R, T> where S: FnOnce(&mut RawInner<R>);
+    unsafe fn read<S>(&mut self, sync: S) -> Reader<R, T>
+        where S: FnOnce(&mut RawInner<R>);
 }
 
 /// Writable mapping.
 pub trait Writable<R: Resources, T: Copy> {
     #[doc(hidden)]
-    unsafe fn write<S>(&mut self, sync: S) -> Writer<R, T> where S: FnOnce(&mut RawInner<R>);
+    unsafe fn write<S>(&mut self, sync: S) -> Writer<R, T>
+        where S: FnOnce(&mut RawInner<R>);
 }
 
 /// Readable only mapping.
@@ -263,10 +251,7 @@ pub trait Builder<R: Resources>: Factory<R> {
 }
 
 impl<R: Resources, F: Factory<R>> Builder<R> for F {
-    fn map_readable<T: Copy>(&mut self,
-                             raw: handle::RawMapping<R>,
-                             len: usize)
-                             -> ReadableOnly<R, T> {
+    fn map_readable<T: Copy>(&mut self, raw: handle::RawMapping<R>, len: usize) -> ReadableOnly<R, T> {
         ReadableOnly {
             raw: raw,
             len: len,
@@ -274,10 +259,7 @@ impl<R: Resources, F: Factory<R>> Builder<R> for F {
         }
     }
 
-    fn map_writable<T: Copy>(&mut self,
-                             raw: handle::RawMapping<R>,
-                             len: usize)
-                             -> WritableOnly<R, T> {
+    fn map_writable<T: Copy>(&mut self, raw: handle::RawMapping<R>, len: usize) -> WritableOnly<R, T> {
         WritableOnly {
             raw: raw,
             len: len,

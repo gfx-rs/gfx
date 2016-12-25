@@ -135,11 +135,11 @@ pub enum CreationError {
 
 impl fmt::Display for CreationError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    	match *self {
-    		CreationError::UnsupportedBind(ref bind) => write!(f, "{}: {:?}", self.description(), bind),
-    		CreationError::UnsupportedUsage(usage) => write!(f, "{}: {:?}", self.description(), usage),
-    		_ => write!(f, "{}", self.description()),
-    	}
+        match *self {
+            CreationError::UnsupportedBind(ref bind) => write!(f, "{}: {:?}", self.description(), bind),
+            CreationError::UnsupportedUsage(usage) => write!(f, "{}: {:?}", self.description(), usage),
+            _ => write!(f, "{}", self.description()),
+        }
     }
 }
 

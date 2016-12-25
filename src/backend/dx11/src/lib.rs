@@ -146,18 +146,18 @@ unsafe impl Sync for Pipeline {}
 pub enum Resources {}
 
 impl core::Resources for Resources {
-    type Buffer = Buffer;
-    type Shader = Shader;
-    type Program = Program;
+    type Buffer              = Buffer;
+    type Shader              = Shader;
+    type Program             = Program;
     type PipelineStateObject = Pipeline;
-    type Texture = Texture;
-    type RenderTargetView = native::Rtv;
-    type DepthStencilView = native::Dsv;
-    type ShaderResourceView = native::Srv;
+    type Texture             = Texture;
+    type RenderTargetView    = native::Rtv;
+    type DepthStencilView    = native::Dsv;
+    type ShaderResourceView  = native::Srv;
     type UnorderedAccessView = ();
-    type Sampler = native::Sampler;
-    type Fence = Fence;
-    type Mapping = factory::MappingGate;
+    type Sampler             = native::Sampler;
+    type Fence               = Fence;
+    type Mapping             = factory::MappingGate;
 }
 
 /// Internal struct of shared data between the device and its factories.
@@ -175,19 +175,15 @@ pub struct Device {
     max_resource_count: Option<usize>,
 }
 
-static FEATURE_LEVELS: [winapi::D3D_FEATURE_LEVEL; 3] = [winapi::D3D_FEATURE_LEVEL_11_0,
-                                                         winapi::D3D_FEATURE_LEVEL_10_1,
-                                                         winapi::D3D_FEATURE_LEVEL_10_0];
+static FEATURE_LEVELS: [winapi::D3D_FEATURE_LEVEL; 3] = [
+    winapi::D3D_FEATURE_LEVEL_11_0,
+    winapi::D3D_FEATURE_LEVEL_10_1,
+    winapi::D3D_FEATURE_LEVEL_10_0,
+];
 
 
-pub fn create(driver_type: winapi::D3D_DRIVER_TYPE,
-              desc: &winapi::DXGI_SWAP_CHAIN_DESC,
-              format: core::format::Format)
-              -> Result<(Device,
-                         Factory,
-                         *mut winapi::IDXGISwapChain,
-                         h::RawRenderTargetView<Resources>),
-                        winapi::HRESULT> {
+pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHAIN_DESC, format: core::format::Format)
+              -> Result<(Device, Factory, *mut winapi::IDXGISwapChain, h::RawRenderTargetView<Resources>), winapi::HRESULT> {
     use core::handle::Producer;
 
     let mut swap_chain = ptr::null_mut();
@@ -214,43 +210,27 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE,
     let mut context = ptr::null_mut();
     let mut feature_level = winapi::D3D_FEATURE_LEVEL_10_0;
     let hr = unsafe {
-        d3d11::D3D11CreateDeviceAndSwapChain(ptr::null_mut(),
-                                             driver_type,
-                                             ptr::null_mut(),
-                                             create_flags.0,
-                                             &FEATURE_LEVELS[0],
-                                             FEATURE_LEVELS.len() as winapi::UINT,
-                                             winapi::D3D11_SDK_VERSION,
-                                             desc,
-                                             &mut swap_chain,
-                                             &mut device,
-                                             &mut feature_level,
-                                             &mut context)
+        d3d11::D3D11CreateDeviceAndSwapChain(ptr::null_mut(), driver_type, ptr::null_mut(), create_flags.0,
+            &FEATURE_LEVELS[0], FEATURE_LEVELS.len() as winapi::UINT, winapi::D3D11_SDK_VERSION, desc,
+            &mut swap_chain, &mut device, &mut feature_level, &mut context)
     };
     if !winapi::SUCCEEDED(hr) {
-        return Err(hr);
+        return Err(hr)
     }
 
     let mut back_buffer: *mut winapi::ID3D11Texture2D = ptr::null_mut();
     unsafe {
-        (*swap_chain)
-            .GetBuffer(0,
-                       &dxguid::IID_ID3D11Texture2D,
-                       &mut back_buffer as *mut *mut winapi::ID3D11Texture2D as *mut *mut c_void);
+        (*swap_chain).GetBuffer(0, &dxguid::IID_ID3D11Texture2D, &mut back_buffer
+            as *mut *mut winapi::ID3D11Texture2D as *mut *mut c_void);
     }
     let raw_tex = Texture(native::Texture::D2(back_buffer), Usage::GpuOnly);
-    let color_tex = share.handles
-        .borrow_mut()
-        .make_texture(raw_tex,
-                      tex::Info {
-                          kind: tex::Kind::D2(desc.BufferDesc.Width as tex::Size,
-                                              desc.BufferDesc.Height as tex::Size,
-                                              tex::AaMode::Single),
-                          levels: 1,
-                          format: format.0,
-                          bind: memory::RENDER_TARGET,
-                          usage: raw_tex.1,
-                      });
+    let color_tex = share.handles.borrow_mut().make_texture(raw_tex, tex::Info {
+        kind: tex::Kind::D2(desc.BufferDesc.Width as tex::Size, desc.BufferDesc.Height as tex::Size, tex::AaMode::Single),
+        levels: 1,
+        format: format.0,
+        bind: memory::RENDER_TARGET,
+        usage: raw_tex.1,
+    });
 
     let dev = Device {
         context: context,
@@ -287,7 +267,7 @@ impl Device {
             _ => {
                 error!("Unknown feature level {:?}", self.feature_level);
                 0
-            }
+            },
         }
     }
 
@@ -298,14 +278,11 @@ impl Device {
 
     fn ensure_mappings_unmapped(&mut self, mappings: &[core::handle::RawMapping<Resources>]) {
         for mapping in mappings {
-            let mut inner = mapping.access()
-                .expect("user error: mapping still in use on submit");
-
+            let mut inner = mapping.access().expect("user error: mapping still in use on submit");
             factory::ensure_unmapped(&mut inner, self.context);
         }
     }
 }
-
 
 pub struct CommandList(Vec<command::Command>, command::DataBuffer);
 impl CommandList {
@@ -325,19 +302,13 @@ impl command::Parser for CommandList {
         let ptr = self.1.add(data);
         self.0.push(command::Command::UpdateBuffer(buf, ptr, offset));
     }
-    fn update_texture(&mut self,
-                      tex: Texture,
-                      kind: tex::Kind,
-                      face: Option<tex::CubeFace>,
-                      data: &[u8],
-                      image: tex::RawImageInfo) {
+    fn update_texture(&mut self, tex: Texture, kind: tex::Kind, face: Option<tex::CubeFace>, data: &[u8], image: tex::RawImageInfo) {
         let ptr = self.1.add(data);
         self.0.push(command::Command::UpdateTexture(tex, kind, face, ptr, image));
     }
 }
 
-pub struct DeferredContext(*mut winapi::ID3D11DeviceContext,
-                           Option<*mut winapi::ID3D11CommandList>);
+pub struct DeferredContext(*mut winapi::ID3D11DeviceContext, Option<*mut winapi::ID3D11CommandList>);
 unsafe impl Send for DeferredContext {}
 impl DeferredContext {
     pub fn new(dc: *mut winapi::ID3D11DeviceContext) -> DeferredContext {
@@ -355,7 +326,9 @@ impl command::Parser for DeferredContext {
             unsafe { (*cl).Release() };
             self.1 = None;
         }
-        unsafe { (*self.0).ClearState() };
+        unsafe {
+            (*self.0).ClearState()
+        };
     }
     fn parse(&mut self, com: command::Command) {
         let db = command::DataBuffer::new(); //not used
@@ -364,12 +337,7 @@ impl command::Parser for DeferredContext {
     fn update_buffer(&mut self, buf: Buffer, data: &[u8], offset: usize) {
         execute::update_buffer(self.0, &buf, data, offset);
     }
-    fn update_texture(&mut self,
-                      tex: Texture,
-                      kind: tex::Kind,
-                      face: Option<tex::CubeFace>,
-                      data: &[u8],
-                      image: tex::RawImageInfo) {
+    fn update_texture(&mut self, tex: Texture, kind: tex::Kind, face: Option<tex::CubeFace>, data: &[u8], image: tex::RawImageInfo) {
         execute::update_texture(self.0, &tex, kind, face, data, &image);
     }
 }
@@ -387,20 +355,19 @@ impl core::Device for Device {
         self.frame_handles.extend(man);
         match self.max_resource_count {
             Some(c) if self.frame_handles.count() > c => {
-                error!("Way too many resources in the current frame. Did you call \
-                        Device::cleanup()?");
+                error!("Way too many resources in the current frame. Did you call Device::cleanup()?");
                 self.max_resource_count = None;
-            }
+            },
             _ => (),
         }
     }
 
-    fn submit(&mut self, cb: &mut Self::CommandBuffer, access: &core::pso::AccessInfo<Resources>) {
-        self.before_submit(access);
-
-        unsafe {
-            (*self.context).ClearState();
-        }
+    fn submit(&mut self,
+              cb: &mut Self::CommandBuffer,
+              access: &core::pso::AccessInfo<Resources>)
+    {
+    	self.before_submit(access);
+        unsafe { (*self.context).ClearState(); }
         for com in &cb.parser.0 {
             execute::process(self.context, com, &cb.parser.1);
         }
@@ -409,8 +376,8 @@ impl core::Device for Device {
     fn fenced_submit(&mut self,
                      _: &mut Self::CommandBuffer,
                      _: &core::pso::AccessInfo<Resources>,
-                     _after: Option<h::Fence<Resources>>)
-                     -> h::Fence<Resources> {
+                     _after: Option<h::Fence<Resources>>) -> h::Fence<Resources>
+    {
         unimplemented!()
     }
 
@@ -422,60 +389,39 @@ impl core::Device for Device {
         use core::handle::Producer;
 
         self.frame_handles.clear();
-        self.share.handles.borrow_mut().clean_with(&mut (),
-                                                   |_, buffer| unsafe {
-                                                       (*(buffer.resource().0).0).Release();
-                                                   },
-                                                   |_, s| unsafe {
-                                                       // shader
-                                                       (*s.object).Release();
-                                                       (*s.reflection).Release();
-                                                   },
-                                                   |_, program| unsafe {
-            let p = program.resource();
-            if p.vs != ptr::null_mut() {
-                (*p.vs).Release();
-            }
-            if p.hs != ptr::null_mut() {
-                (*p.hs).Release();
-            }
-            if p.ds != ptr::null_mut() {
-                (*p.ds).Release();
-            }
-            if p.gs != ptr::null_mut() {
-                (*p.gs).Release();
-            }
-            if p.ps != ptr::null_mut() {
-                (*p.ps).Release();
-            }
-        },
-                                                   |_, v| unsafe {
-            // PSO
-            type Child = *mut winapi::ID3D11DeviceChild;
-            (*v.layout).Release();
-            (*(v.rasterizer as Child)).Release();
-            (*(v.depth_stencil as Child)).Release();
-            (*(v.blend as Child)).Release();
-        },
-                                                   |_, texture| unsafe {
-                                                       (*texture.resource().to_resource())
-                                                           .Release();
-                                                   },
-                                                   |_, v| unsafe {
-                                                       (*v.0).Release();
-                                                   }, // SRV
-                                                   |_, _| {}, // UAV
-                                                   |_, v| unsafe {
-                                                       (*v.0).Release();
-                                                   }, // RTV
-                                                   |_, v| unsafe {
-                                                       (*v.0).Release();
-                                                   }, // DSV
-                                                   |_, v| unsafe {
-                                                       (*v.0).Release();
-                                                   }, // sampler
-                                                   |_, _fence| {},
-                                                   |_, _mapping| {});
+        self.share.handles.borrow_mut().clean_with(&mut self.context,
+            |_, buffer| unsafe { (*(buffer.resource().0).0).Release(); },
+            |_, s| unsafe { //shader
+                (*s.object).Release();
+                (*s.reflection).Release();
+            },
+            |_, program| unsafe {
+                let p = program.resource();
+                if p.vs != ptr::null_mut() { (*p.vs).Release(); }
+                if p.hs != ptr::null_mut() { (*p.hs).Release(); }
+                if p.ds != ptr::null_mut() { (*p.ds).Release(); }
+                if p.gs != ptr::null_mut() { (*p.gs).Release(); }
+                if p.ps != ptr::null_mut() { (*p.ps).Release(); }
+            },
+            |_, v| unsafe { //PSO
+                type Child = *mut winapi::ID3D11DeviceChild;
+                (*v.layout).Release();
+                (*(v.rasterizer as Child)).Release();
+                (*(v.depth_stencil as Child)).Release();
+                (*(v.blend as Child)).Release();
+            },
+            |_, texture| unsafe { (*texture.resource().to_resource()).Release(); },
+            |_, v| unsafe { (*v.0).Release(); }, //SRV
+            |_, _| {}, //UAV
+            |_, v| unsafe { (*v.0).Release(); }, //RTV
+            |_, v| unsafe { (*v.0).Release(); }, //DSV
+            |_, v| unsafe { (*v.0).Release(); }, //sampler
+            |_, _fence| {},
+            |ctx, mapping| {
+	            let mut inner = mapping.access().expect("user error: mapping still in use on submit");
+	            factory::ensure_unmapped(&mut inner, *ctx);
+            },
+        );
     }
 }
 
@@ -497,26 +443,31 @@ impl core::Device for Deferred {
         self.0.pin_submitted_resources(man);
     }
 
-    fn submit(&mut self, cb: &mut Self::CommandBuffer, access: &core::pso::AccessInfo<Resources>) {
+    fn submit(&mut self,
+              cb: &mut Self::CommandBuffer,
+              access: &core::pso::AccessInfo<Resources>)
+    {
         self.0.before_submit(access);
-
         let cl = match cb.parser.1 {
             Some(cl) => cl,
             None => {
                 let mut cl = ptr::null_mut();
-                let hr = unsafe { (*cb.parser.0).FinishCommandList(winapi::FALSE, &mut cl) };
+                let hr = unsafe {
+                    (*cb.parser.0).FinishCommandList(winapi::FALSE, &mut cl)
+                };
                 assert!(winapi::SUCCEEDED(hr));
                 cb.parser.1 = Some(cl);
                 cl
-            }
+            },
         };
-        unsafe { (*self.0.context).ExecuteCommandList(cl, winapi::TRUE) };
+        unsafe {
+            (*self.0.context).ExecuteCommandList(cl, winapi::TRUE)
+        };
         match self.0.max_resource_count {
             Some(c) if self.0.frame_handles.count() > c => {
-                error!("Way too many resources in the current frame. Did you call \
-                        Device::cleanup()?");
+                error!("Way too many resources in the current frame. Did you call Device::cleanup()?");
                 self.0.max_resource_count = None;
-            }
+            },
             _ => (),
         }
     }
@@ -524,8 +475,8 @@ impl core::Device for Deferred {
     fn fenced_submit(&mut self,
                      _: &mut Self::CommandBuffer,
                      _: &core::pso::AccessInfo<Resources>,
-                     _after: Option<h::Fence<Resources>>)
-                     -> h::Fence<Resources> {
+                     _after: Option<h::Fence<Resources>>) -> h::Fence<Resources>
+    {
         unimplemented!()
     }
 

@@ -135,10 +135,10 @@ impl Factory {
         assert!(size >= info.size);
         
         let (usage, cpu) = map_usage(info.usage).map_err(|e|{
-	        match e {
-	        	mapping::Error::Unsupported => buffer::CreationError::UnsupportedUsage(info.usage),
-	        	_ => buffer::CreationError::Other,
-        	}
+            match e {
+                mapping::Error::Unsupported => buffer::CreationError::UnsupportedUsage(info.usage),
+                _ => buffer::CreationError::Other,
+            }
         })?;
         let bind = map_bind(info.bind) | subind;
         if info.bind.contains(memory::RENDER_TARGET) | info.bind.contains(memory::DEPTH_STENCIL) {
@@ -459,7 +459,7 @@ impl core::Factory<R> for Factory {
             &core::ShaderSet::Tessellated(ref vs, ref hs, ref ds, ref ps) => {
                 let (vs, hs, ds, ps) = (vs.reference(fh), hs.reference(fh), ds.reference(fh), ps.reference(fh));
               
-			  populate_info(&mut info, Stage::Vertex,   vs.reflection);
+              populate_info(&mut info, Stage::Vertex,   vs.reflection);
                 populate_info(&mut info, Stage::Hull, hs.reflection);
                 populate_info(&mut info, Stage::Domain, ds.reflection);
                 populate_info(&mut info, Stage::Pixel,    ps.reflection);
@@ -883,7 +883,6 @@ impl core::Factory<R> for Factory {
 
     fn map_buffer_raw(&mut self, buf: &h::RawBuffer<R>, access: memory::Access)
                       -> Result<h::RawMapping<R>, mapping::Error> {
-        //ensure_mapped(ptr::null(), buffer, self);
         self.share.handles.borrow_mut().make_mapping(access, buf, || {
             MappingGate {
                 pointer: ptr::null_mut(),
@@ -913,7 +912,7 @@ impl core::Factory<R> for Factory {
                                   -> mapping::Reader<'b, R, T>
         where M: mapping::Readable<R, T>, T: Copy
     {
-        panic!("Read access mapping buffers are unsupported in DX11!")
+        unreachable!();
     }
 
     fn write_mapping<'a, 'b, M, T>(&'a mut self, m: &'b mut M)
@@ -929,40 +928,40 @@ impl core::Factory<R> for Factory {
                              -> mapping::RWer<'b, R, T>
         where T: Copy
     {
-        panic!("Read access mapping buffers are unsupported in DX11!")
+        unreachable!();
     }
 }
 
 pub fn ensure_mapped(pointer: &mut *mut ::std::os::raw::c_void,                               
                                buffer: &h::RawBuffer<R>,
-							factory: &Factory) {
+                            factory: &Factory) {
     if pointer.is_null() {
-    	let raw_handle = *buffer.resource();              	
+        let raw_handle = *buffer.resource();                  
         let mut ctx = ptr::null_mut();
-	        
-	    unsafe {
-	    	(*factory.device).GetImmediateContext(&mut ctx);
-	    }
-	    
-    	let mut sres = winapi::d3d11::D3D11_MAPPED_SUBRESOURCE {
-		    pData: ptr::null_mut(),
-		    RowPitch: 0,
-		    DepthPitch: 0,
-	    };
-		    
-		    
+            
+        unsafe {
+            (*factory.device).GetImmediateContext(&mut ctx);
+        }
+        
+        let mut sres = winapi::d3d11::D3D11_MAPPED_SUBRESOURCE {
+            pData: ptr::null_mut(),
+            RowPitch: 0,
+            DepthPitch: 0,
+        };
+            
+            
         let hr = unsafe {
-	    	(*ctx).Map(
-	    		raw_handle.to_resource() as *mut winapi::d3d11::ID3D11Resource, 
-	    		0, 
-	    		winapi::d3d11::D3D11_MAP_WRITE_DISCARD, 
-	    		0, 
-	    		&mut sres
-	    	)
-	    };
-	    
-	    if winapi::SUCCEEDED(hr) {
-			*pointer = sres.pData;
+            (*ctx).Map(
+                raw_handle.to_resource() as *mut winapi::d3d11::ID3D11Resource, 
+                0, 
+                winapi::d3d11::D3D11_MAP_WRITE_DISCARD, 
+                0, 
+                &mut sres
+            )
+        };
+        
+        if winapi::SUCCEEDED(hr) {
+            *pointer = sres.pData;
         } else {
             panic!("Unable to map a buffer {:?}, error {:x}", buffer, hr);
         }
@@ -971,7 +970,7 @@ pub fn ensure_mapped(pointer: &mut *mut ::std::os::raw::c_void,
 
 pub fn ensure_unmapped(inner: &mut mapping::RawInner<R>, context: *mut winapi::ID3D11DeviceContext) {
     if !inner.resource.pointer.is_null() {
-        let raw_handle = *inner.buffer.resource();              	
+        let raw_handle = *inner.buffer.resource();                  
         unsafe {
             (*context).Unmap(raw_handle.to_resource() as *mut winapi::d3d11::ID3D11Resource, 0);
         }
