@@ -16,6 +16,7 @@
 extern crate gfx;
 extern crate gfx_app;
 extern crate image;
+extern crate winit;
 
 pub use gfx_app::ColorFormat;
 pub use gfx::format::{Rgba8, DepthStencil};
@@ -141,24 +142,33 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         }
     }
 
-    //fn update() {
-    // glutin::Event::KeyboardInput(glutin::ElementState::Pressed, _, Some(glutin::VirtualKeyCode::B)) => {
-    //                let blend_func = blends_cycle.next().unwrap();
-    //                println!("Using '{}' blend equation", blend_func.1);
-    //                data.blend = blend_func.0;
-    //            },
-    //
-    //}
-
     fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
+        self.bundle.data.blend = (self.id as i32).into();
         let locals = Locals { blend: self.id as i32 };
         encoder.update_constant_buffer(&self.bundle.data.locals, &locals);
         encoder.clear(&self.bundle.data.out, [0.0; 4]);
         self.bundle.encode(encoder);
     }
+
+    fn on(&mut self, event: winit::Event) -> bool {
+        match event {
+            winit::Event::KeyboardInput(_, _, Some(winit::VirtualKeyCode::Escape)) |
+            winit::Event::Closed => false,
+            winit::Event::KeyboardInput(winit::ElementState::Pressed, _, Some(winit::VirtualKeyCode::B)) => {
+                self.id += 1;
+                if self.id as usize >= BLENDS.len() {
+                    self.id = 0;
+                }
+                println!("Using '{}' blend equation", BLENDS[self.id as usize]);
+                true
+            },
+            _ => true
+        }
+    }
 }
 
 pub fn main() {
     use gfx_app::Application;
-    App::launch_default("Blending example");
+    let wb = winit::WindowBuilder::new().with_title("Blending example");
+    App::launch_default(wb);
 }

@@ -152,7 +152,5 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
 pub fn main() {
     use gfx_app::Application;
-    //use gfx_app::ApplicationGL2;
-    //gfx_app::WrapGL2::<App<_>>::launch("Instancing example", gfx_app::DEFAULT_CONFIG);
-    App::launch_default("Instancing example");
+    App::launch_simple("Instancing example");
 }

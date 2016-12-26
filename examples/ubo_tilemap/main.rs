@@ -20,11 +20,9 @@ extern crate rand;
 extern crate genmesh;
 extern crate noise;
 extern crate image;
+extern crate winit;
 
 use std::io::Cursor;
-
-//use std::collections::HashMap;
-//use glutin::{PollEventsIterator, Event, VirtualKeyCode, ElementState};
 
 pub use gfx_app::{ColorFormat, DepthFormat};
 use gfx::traits::{FactoryExt};
@@ -54,57 +52,6 @@ pub fn load_texture<R, F>(factory: &mut F, data: &[u8])
     let (_, view) = factory.create_texture_immutable_u8::<Rgba8>(kind, &[&img]).unwrap();
     Ok(view)
 }
-
-// this abstraction is provided to get a slightly better API around
-// input handling
-/* TODO: input, blocked by `winit`
-pub struct InputHandler {
-    key_map: HashMap<VirtualKeyCode, bool>,
-    key_list: Vec<VirtualKeyCode>
-}
-
-impl InputHandler {
-    pub fn new() -> InputHandler {
-        InputHandler {
-            key_map: HashMap::new(),
-            key_list: Vec::new()
-        }
-    }
-    pub fn update(& mut self, events: PollEventsIterator) {
-        for event in events {
-            match event {
-                Event::KeyboardInput(ElementState::Pressed, _, key_opt) => {
-                    let pressed_key = key_opt.unwrap();
-                    if self.key_map.contains_key(&pressed_key) {
-                        self.key_map.insert(pressed_key, true);
-                    } else {
-                        println!("unknown key {:?} pressed", key_opt);
-                    }
-                },
-                Event::KeyboardInput(ElementState::Released, _, key_opt) => {
-                    let released_key = key_opt.unwrap();
-                    if self.key_map.contains_key(&released_key) {
-                        self.key_map.insert(released_key, false);
-                    }
-                },
-                _ => {}
-            }
-        }
-    }
-    pub fn watch(&mut self, key: VirtualKeyCode) {
-        if self.key_map.contains_key(&key) {
-            panic!("watching key that is already tracked");
-        }
-        self.key_map.insert(key, false);
-        self.key_list.push(key);
-    }
-    pub fn is_pressed(&self, key: VirtualKeyCode) -> bool {
-        if self.key_map.contains_key(&key) == false {
-            panic!("checking keydown for key that isn't being tracked");
-        }
-        *self.key_map.get(&key).unwrap()
-    }
-}*/
 
 // Actual tilemap data that makes up the elements of the UBO.
 // NOTE: It may be a bug, but it appears that
@@ -292,6 +239,15 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
     }
 }
 
+#[derive(Clone)]
+struct InputState {
+    distance: f32,
+    x_pos: f32,
+    y_pos: f32,
+    move_amt: f32,
+    offset_amt: f32,
+}
+
 // Encapsulates the TileMapPlane and holds state for the current
 // visible set of tiles. Is responsible for updating the UBO
 // within the TileMapData when the visible set of tiles changes
@@ -305,6 +261,7 @@ pub struct TileMap<R> where R: gfx::Resources {
     limit_coords: [usize; 2],
     focus_coords: [usize; 2],
     focus_dirty: bool,
+    input: InputState,
 }
 
 impl<R: gfx::Resources> TileMap<R> {
@@ -479,6 +436,13 @@ impl<R: gfx::Resources> gfx_app::Application<R> for TileMap<R> {
             limit_coords: [tilemap_size[0] - charmap_size[0], tilemap_size[1] - charmap_size[1]],
             focus_coords: [0, 0],
             focus_dirty: false,
+            input: InputState {
+                distance: 800.0,
+                x_pos: 0.0,
+                y_pos: 0.0,
+                move_amt: 10.0,
+                offset_amt: 1.0,
+            },
         };
 
         populate_tilemap(&mut tm, tilemap_size);
@@ -487,7 +451,14 @@ impl<R: gfx::Resources> gfx_app::Application<R> for TileMap<R> {
     }
 
     fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
-        //self.tilemap_plane.update_view(view);
+        // view configuration based on current position
+        let view: AffineMatrix3<f32> = Transform::look_at(
+            Point3::new(self.input.x_pos, -self.input.y_pos, self.input.distance),
+            Point3::new(self.input.x_pos, -self.input.y_pos, 0.0),
+            Vector3::unit_y(),
+        );
+
+        self.tilemap_plane.update_view(&view);
         self.tilemap_plane.prepare_buffers(encoder, self.focus_dirty);
         self.focus_dirty = false;
 
@@ -495,78 +466,58 @@ impl<R: gfx::Resources> gfx_app::Application<R> for TileMap<R> {
 
         encoder.draw(&self.tilemap_plane.slice, &self.pso, &self.tilemap_plane.params);
     }
+
+    fn on(&mut self, event: winit::Event) -> bool {
+        use winit::VirtualKeyCode as Key;
+        use winit::Event::{KeyboardInput, Closed};
+        use winit::ElementState::Pressed;
+        let i = self.input.clone();
+        match event {
+            // quit when Esc is pressed.
+            Closed |
+            KeyboardInput(Pressed, _, Some(Key::Escape)) => {
+                return false
+            }
+            // zooming in/out
+            KeyboardInput(Pressed, _, Some(Key::Equals)) => {
+                self.input.distance -= i.move_amt;
+            }
+            KeyboardInput(Pressed, _, Some(Key::Minus)) => {
+                self.input.distance += i.move_amt;
+            }
+            // panning around
+            KeyboardInput(Pressed, _, Some(Key::Up)) => {
+                self.input.y_pos -= i.move_amt;
+            }
+            KeyboardInput(Pressed, _, Some(Key::Down)) => {
+                self.input.y_pos += i.move_amt;
+            }
+            KeyboardInput(Pressed, _, Some(Key::Left)) => {
+                self.input.x_pos -= i.move_amt;
+            }
+            KeyboardInput(Pressed, _, Some(Key::Right)) => {
+                self.input.x_pos += i.move_amt;
+            }
+            KeyboardInput(Pressed, _, Some(Key::W)) => {
+                self.apply_y_offset(i.offset_amt);
+            }
+            KeyboardInput(Pressed, _, Some(Key::S)) => {
+                self.apply_y_offset(-i.offset_amt);
+            }
+            KeyboardInput(Pressed, _, Some(Key::D)) => {
+                self.apply_x_offset(i.offset_amt);
+            }
+            KeyboardInput(Pressed, _, Some(Key::A)) => {
+                self.apply_x_offset(-i.offset_amt);
+            }
+            _ => ()
+        }
+        true
+    }
 }
 
 pub fn main() {
     use gfx_app::Application;
-    TileMap::launch_default("Tilemap example");
+    let wb = winit::WindowBuilder::new().with_title("Tilemap example");
+    TileMap::launch_default(wb);
 }
-
-
-/*pub fn main() {
-    // reusable variables for camera position
-    let mut distance = 800.0;
-    let mut x_pos = 0.0;
-    let mut y_pos = 0.0;
-    let move_amt = 10.0;
-    let offset_amt = 1.0;
-    // input handling
-    let mut handler = InputHandler::new();
-    handler.watch(glutin::VirtualKeyCode::Escape);
-    handler.watch(glutin::VirtualKeyCode::Up);
-    handler.watch(glutin::VirtualKeyCode::Down);
-    handler.watch(glutin::VirtualKeyCode::Left);
-    handler.watch(glutin::VirtualKeyCode::Right);
-    handler.watch(glutin::VirtualKeyCode::Equals);
-    handler.watch(glutin::VirtualKeyCode::Minus);
-    handler.watch(glutin::VirtualKeyCode::W);
-    handler.watch(glutin::VirtualKeyCode::S);
-    handler.watch(glutin::VirtualKeyCode::A);
-    handler.watch(glutin::VirtualKeyCode::D);
-    'main: loop {
-        // input handler
-        handler.update(window.poll_events());
-        // quit when Esc is pressed.
-        if handler.is_pressed(glutin::VirtualKeyCode::Escape) {
-            break 'main;
-        }
-        // zooming in/out
-        if handler.is_pressed(glutin::VirtualKeyCode::Equals) {
-            distance -= move_amt;
-        }
-        if handler.is_pressed(glutin::VirtualKeyCode::Minus) {
-            distance += move_amt;
-        }
-        // panning around
-        if handler.is_pressed(glutin::VirtualKeyCode::Up) {
-            y_pos -= move_amt;
-        }
-        if handler.is_pressed(glutin::VirtualKeyCode::Down) {
-            y_pos += move_amt;
-        }
-        if handler.is_pressed(glutin::VirtualKeyCode::Left) {
-            x_pos -= move_amt;
-        }
-        if handler.is_pressed(glutin::VirtualKeyCode::Right) {
-            x_pos += move_amt;
-        }
-        if handler.is_pressed(glutin::VirtualKeyCode::W) {
-            tilemap.apply_y_offset(&mut factory, offset_amt);
-        }
-        if handler.is_pressed(glutin::VirtualKeyCode::S) {
-            tilemap.apply_y_offset(&mut factory, -offset_amt);
-        }
-        if handler.is_pressed(glutin::VirtualKeyCode::D) {
-            tilemap.apply_x_offset(&mut factory, offset_amt);
-        }
-        if handler.is_pressed(glutin::VirtualKeyCode::A) {
-            tilemap.apply_x_offset(&mut factory, -offset_amt);
-        }
-
-        // view configuration based on current position
-        let view: AffineMatrix3<f32> = Transform::look_at(
-            Point3::new(x_pos, -y_pos, distance),
-            Point3::new(x_pos, -y_pos, 0.0),
-            Vector3::unit_y(),
-        );
-*/

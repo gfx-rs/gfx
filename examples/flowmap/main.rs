@@ -161,5 +161,5 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
 pub fn main() {
     use gfx_app::Application;
-    App::launch_default("Flowmap example");
+    App::launch_simple("Flowmap example");
 }

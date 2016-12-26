@@ -39,6 +39,9 @@ pub struct RawMapping {
     pointer: *mut c_void,
 }
 
+unsafe impl Send for RawMapping {}
+unsafe impl Sync for RawMapping {}
+
 impl mapping::Gate<Resources> for RawMapping {
     unsafe fn set<T>(&self, index: usize, val: T) {
         *(self.pointer as *mut T).offset(index as isize) = val;
