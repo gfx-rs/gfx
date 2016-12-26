@@ -55,6 +55,8 @@ pub enum Error {
     InvalidAccess(memory::Access, memory::Usage),
     /// The memory was already mapped
     AlreadyMapped,
+    /// Desired mapping access not supported for the current backend.
+    Unsupported,
 }
 
 #[derive(Debug)]
@@ -112,9 +114,8 @@ impl<R: Resources> Raw<R> {
         sync(&mut inner);
 
         Writer {
-            len: len,
+            slice: inner.resource.mut_slice(len),
             inner: inner,
-            phantom: PhantomData,
         }
     }
 
@@ -143,22 +144,10 @@ impl<'a, R: Resources, T: 'a + Copy> Deref for Reader<'a, R, T> {
     fn deref(&self) -> &[T] { self.slice }
 }
 
-/// Mapping writer
-pub struct Writer<'a, R: Resources, T: 'a + Copy> {
-    len: usize,
-    inner: MutexGuard<'a, RawInner<R>>,
-    phantom: PhantomData<T>,
-}
-
-impl<'a, R: Resources, T: 'a + Copy> Writer<'a, R, T> {
-    /// Set a value in the buffer
-    pub fn set(&mut self, index: usize, value: T) {
-        if index >= self.len {
-            panic!("tried to write out of bounds of a mapped buffer");
-        }
-        unsafe { self.inner.resource.set(index, value); }
-    }
-}
+/// Mapping writer.
+/// Currently is not possible to make write-only slice so while it is technically possible
+/// to read from Writer, it will lead to an undefined behavior. Please do not read from it.
+pub type Writer<'a, R, T> = RWer<'a, R, T>;
 
 /// Mapping reader & writer
 pub struct RWer<'a, R: Resources, T: 'a + Copy> {
@@ -224,7 +213,7 @@ impl<R: Resources, T: Copy> Writable<R, T> for WritableOnly<R, T> {
 pub struct RWable<R: Resources, T: Copy> {
     raw: handle::RawMapping<R>,
     len: usize,
-    phantom: PhantomData<T>
+    phantom: PhantomData<T>,
 }
 
 impl<R: Resources, T: Copy> RWable<R, T> {
