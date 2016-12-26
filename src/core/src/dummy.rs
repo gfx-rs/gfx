@@ -47,12 +47,8 @@ impl Resources for DummyResources {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct DummyFence;
 
-impl ::Fence for DummyFence {
-    fn wait(&self) {}
-}
-
 /// Dummy mapping which will crash on use.
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct DummyMapping;
 
 impl mapping::Gate<DummyResources> for DummyMapping {
@@ -68,6 +64,7 @@ impl DummyDevice {
             max_vertex_count: 0,
             max_index_count: 0,
             max_texture_size: 0,
+            max_patch_size: 0,
             instance_base_supported: false,
             instance_call_supported: false,
             instance_rate_supported: false,
@@ -126,6 +123,10 @@ impl Device for DummyDevice {
                      _: &pso::AccessInfo<Self::Resources>,
                      _after: Option<handle::Fence<Self::Resources>>)
                      -> handle::Fence<Self::Resources> {
+        unimplemented!()
+    }
+
+    fn wait_fence(&mut self, _: &handle::Fence<Self::Resources>) {
         unimplemented!()
     }
 

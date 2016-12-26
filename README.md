@@ -60,14 +60,16 @@ Hardware features:
   - [x] multisampling
   - [x] instancing
   - [x] geometry shaders
-  - [ ] tessellation ([WIP](https://github.com/gfx-rs/gfx/pull/1027))
-  - [ ] persistent mapping ([WIP](https://github.com/gfx-rs/gfx/pull/1026))
+  - [x] tessellation
+  - [ ] computing
+  - [x] persistent mapping
 
 ## Who's using it?
 
 Biggest open-source projects are:
   - [Amethyst](https://github.com/amethyst/amethyst) engine
   - Piston engine - [2d graphics](https://github.com/PistonDevelopers/gfx_graphics)
+  - [LazyBox](https://github.com/lazybox/lazybox) engine
   - [Zone of Control](https://github.com/ozkriff/zoc) game
   - [Vange-rs](https://github.com/kvark/vange-rs) game
   - [Claymore](https://github.com/kvark/claymore) game/engine
@@ -76,6 +78,7 @@ Shiny screens, including some older projects:
 <p align="center">
   <img src="https://raw.githubusercontent.com/csherratt/snowmew/master/.screenshot.jpg" height="160" alt="Snowmew"/>
   <img src="https://github.com/PistonDevelopers/hematite/blob/master/screenshot.png" height="160" alt="Hematite"/>
+  <img src="http://image.prntscr.com/image/2f1ec5d477e042dda2c29323c9f49ab4.png" height="160" alt="LazyBox"/>
   <img src="https://github.com/kvark/vange-rs/blob/master/etc/shots/Road10-debug-shape.png" height="160" alt="Vange-rs"/>
   <img src="https://github.com/kvark/claymore/raw/master/etc/screens/7-forest.jpg" height="160" alt="Claymore"/>
   <img src="https://camo.githubusercontent.com/fb8c95650fba27061e58e76f17ff8460a41b3312/687474703a2f2f692e696d6775722e636f6d2f504f68534c77682e706e67" height="160" alt="ZoC"/>
@@ -102,7 +105,7 @@ If you compile the example for the first time, it may take some while since all 
 If you want to build your own stand-alone gfx program, add the following to your new `Cargo.toml`:
 
 	[dependencies]
-	gfx = "*"
+	gfx = "0.12"
 
 
 For gfx to work, it needs access to the graphics system of the OS. This is typically provided through some window initialization API.

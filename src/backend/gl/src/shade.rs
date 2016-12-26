@@ -57,6 +57,8 @@ pub fn create_shader(gl: &gl::Gl, stage: s::Stage, data: &[u8])
                      -> Result<super::Shader, s::CreateShaderError> {
     let target = match stage {
         s::Stage::Vertex => gl::VERTEX_SHADER,
+        s::Stage::Hull => gl::TESS_CONTROL_SHADER,
+        s::Stage::Domain => gl::TESS_EVALUATION_SHADER,
         s::Stage::Geometry => gl::GEOMETRY_SHADER,
         s::Stage::Pixel => gl::FRAGMENT_SHADER,
     };

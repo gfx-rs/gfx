@@ -16,15 +16,12 @@
 
 #[macro_use]
 extern crate log;
-extern crate kernel32;
-extern crate user32;
 extern crate winapi;
+extern crate winit;
 extern crate gfx_core as core;
 extern crate gfx_device_dx11 as device_dx11;
 
-mod window;
-
-use std::mem;
+use winit::os::windows::WindowExt;
 use core::format;
 use core::memory::Typed;
 use core::texture::Size;
@@ -32,7 +29,7 @@ use device_dx11::{Device, Factory, Resources};
 
 
 pub struct Window {
-    hwnd: winapi::HWND,
+    inner: winit::Window,
     swap_chain: *mut winapi::IDXGISwapChain,
     driver_type: winapi::D3D_DRIVER_TYPE,
     pub size: (Size, Size),
@@ -47,19 +44,9 @@ impl Window {
         unsafe{ (*self.swap_chain).Present(wait as winapi::UINT, 0) };
     }
 
-    pub fn dispatch(&self) -> bool {unsafe {
-        let mut msg: winapi::MSG = mem::zeroed();
-        while user32::PeekMessageW(&mut msg, self.hwnd, 0, 0, winapi::PM_REMOVE) == winapi::TRUE {
-            match msg.message & 0xFFFF {
-                winapi::WM_QUIT | winapi::WM_CLOSE => return false,
-                winapi::WM_KEYDOWN if msg.wParam as i32 == winapi::VK_ESCAPE => return false,
-                _ => ()
-            }
-            user32::TranslateMessage(&msg);
-            user32::DispatchMessageW(&msg);
-        }
-        true
-    }}
+    pub fn poll_events(&self) -> winit::PollEventsIterator {
+        self.inner.poll_events()
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -73,22 +60,22 @@ pub enum InitError {
 }
 
 /// Initialize with a given size. Typed format version.
-pub fn init<Cf>(title: &str, requested_width: u16, requested_height: u16)
+pub fn init<Cf>(wb: winit::WindowBuilder)
            -> Result<(Window, Device, Factory, core::handle::RenderTargetView<Resources, Cf>), InitError>
 where Cf: format::RenderFormat
 {
-    init_raw(title, requested_width as winapi::INT, requested_height as winapi::INT, Cf::get_format())
+    init_raw(wb, Cf::get_format())
         .map(|(window, device, factory, color)| (window, device, factory, Typed::new(color)))
 }
 
 /// Initialize with a given size. Raw format version.
-pub fn init_raw(title: &str, requested_width: winapi::INT, requested_height: winapi::INT, color_format: format::Format)
+pub fn init_raw(wb: winit::WindowBuilder, color_format: format::Format)
                 -> Result<(Window, Device, Factory, core::handle::RawRenderTargetView<Resources>), InitError> {
-    let hwnd = match window::create(title, requested_width, requested_height) {
-        Ok(h) => h,
-        Err(()) => return Err(InitError::Window),
+    let inner = match wb.build() {
+        Ok(w) => w,
+        Err(_) => return Err(InitError::Window),
     };
-    let (width, height) = window::show(hwnd).unwrap();
+    let (width, height) = inner.get_inner_size_pixels().unwrap();
 
     let driver_types = [
         winapi::D3D_DRIVER_TYPE_HARDWARE,
@@ -117,7 +104,7 @@ pub fn init_raw(title: &str, requested_width: winapi::INT, requested_height: win
         },
         BufferUsage: winapi::DXGI_USAGE_RENDER_TARGET_OUTPUT,
         BufferCount: 1,
-        OutputWindow: hwnd,
+        OutputWindow: inner.get_hwnd() as winapi::HWND,
         Windowed: winapi::TRUE,
         SwapEffect: winapi::DXGI_SWAP_EFFECT_DISCARD,
         Flags: 0,
@@ -129,7 +116,7 @@ pub fn init_raw(title: &str, requested_width: winapi::INT, requested_height: win
             Ok((device, factory, chain, color)) => {
                 info!("Success with driver {:?}, shader model {}", *dt, device.get_shader_model());
                 let win = Window {
-                    hwnd: hwnd,
+                    inner: inner,
                     swap_chain: chain,
                     driver_type: *dt,
                     size: (width as Size, height as Size),

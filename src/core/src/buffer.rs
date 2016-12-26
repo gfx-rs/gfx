@@ -128,15 +128,17 @@ pub enum CreationError {
     UnsupportedBind(memory::Bind),
     /// Unknown other error.
     Other,
+    /// Usage mode is not supported
+    UnsupportedUsage(memory::Usage),
     // TODO: unsupported role
 }
 
 impl fmt::Display for CreationError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if let CreationError::UnsupportedBind(ref bind) = *self {
-            write!(f, "{}: {:?}", self.description(), bind)
-        } else {
-            write!(f, "{}", self.description())
+        match *self {
+            CreationError::UnsupportedBind(ref bind) => write!(f, "{}: {:?}", self.description(), bind),
+            CreationError::UnsupportedUsage(usage) => write!(f, "{}: {:?}", self.description(), usage),
+            _ => write!(f, "{}", self.description()),
         }
     }
 }
@@ -146,28 +148,7 @@ impl Error for CreationError {
         match *self {
             CreationError::UnsupportedBind(_) => "Bind flags are not supported",
             CreationError::Other => "An unknown error occurred",
-        }
-    }
-}
-
-/// An error happening on buffer updates.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum UpdateError {
-    /// Trying to change the contents outside of the allocation.
-    OutOfBounds,
-}
-
-impl fmt::Display for UpdateError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.description())
-    }
-}
-
-impl Error for UpdateError {
-    fn description(&self) -> &str {
-        match *self {
-            UpdateError::OutOfBounds =>
-                "Tried to change the buffer contents outside of the allocation",
+            CreationError::UnsupportedUsage(_) => "Requested memory usage mode is not supported",
         }
     }
 }

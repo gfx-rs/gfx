@@ -26,3 +26,13 @@
   - GL unsigned int samplers (#991)
   - better errors (#976)
   - better GLSL pre core reflection
+
+### Version 0.13.0 (2016-12-18)
+  - experimental Metal backend (#969, #1049, #1050)
+  - persistent mapping (#1026)
+  - tessellation support (#1027, #1088)
+  - new examples: gamma, particle, terrain_tessellated
+  - better PSO error messages, constant offset checks (#1004)
+  - unified scissor: now Y-reversed on GL (#1092)
+  - "const" resources are now called "immutable"
+  - faster handle clones and cleaner core  API (#1031)

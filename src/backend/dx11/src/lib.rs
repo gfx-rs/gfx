@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//#[deny(missing_docs)]
+// #[deny(missing_docs)]
 
 #[macro_use]
 extern crate log;
@@ -82,6 +82,14 @@ use core::memory::{self, Usage};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Buffer(native::Buffer, Usage);
+impl Buffer {
+    pub fn to_resource(&self) -> *mut winapi::ID3D11Resource {
+        type Res = *mut winapi::ID3D11Resource;
+        match self.0 {
+            native::Buffer(t) => t as Res,
+        }
+    }
+}
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Texture(native::Texture, Usage);
@@ -109,6 +117,8 @@ unsafe impl Sync for Shader {}
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Program {
     vs: *mut winapi::ID3D11VertexShader,
+    hs: *mut winapi::ID3D11HullShader,
+    ds: *mut winapi::ID3D11DomainShader,
     gs: *mut winapi::ID3D11GeometryShader,
     ps: *mut winapi::ID3D11PixelShader,
     vs_hash: u64,
@@ -184,6 +194,7 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
             max_vertex_count: 0,
             max_index_count: 0,
             max_texture_size: 0,
+            max_patch_size: 32, // hard-coded in D3D11
             instance_base_supported: false,
             instance_call_supported: false,
             instance_rate_supported: false,
@@ -259,8 +270,19 @@ impl Device {
             },
         }
     }
-}
 
+    pub fn before_submit(&mut self, gpu_access: &core::pso::AccessInfo<Resources>) {
+        self.ensure_mappings_unmapped(gpu_access.mapped_reads());
+        self.ensure_mappings_unmapped(gpu_access.mapped_writes());
+    }
+
+    fn ensure_mappings_unmapped(&mut self, mappings: &[core::handle::RawMapping<Resources>]) {
+        for mapping in mappings {
+            let mut inner = mapping.access().expect("user error: mapping still in use on submit");
+            factory::ensure_unmapped(&mut inner, self.context);
+        }
+    }
+}
 
 pub struct CommandList(Vec<command::Command>, command::DataBuffer);
 impl CommandList {
@@ -287,6 +309,7 @@ impl command::Parser for CommandList {
 }
 
 pub struct DeferredContext(*mut winapi::ID3D11DeviceContext, Option<*mut winapi::ID3D11CommandList>);
+unsafe impl Send for DeferredContext {}
 impl DeferredContext {
     pub fn new(dc: *mut winapi::ID3D11DeviceContext) -> DeferredContext {
         DeferredContext(dc, None)
@@ -341,8 +364,9 @@ impl core::Device for Device {
 
     fn submit(&mut self,
               cb: &mut Self::CommandBuffer,
-              _: &core::pso::AccessInfo<Resources>)
+              access: &core::pso::AccessInfo<Resources>)
     {
+    	self.before_submit(access);
         unsafe { (*self.context).ClearState(); }
         for com in &cb.parser.0 {
             execute::process(self.context, com, &cb.parser.1);
@@ -357,11 +381,15 @@ impl core::Device for Device {
         unimplemented!()
     }
 
+    fn wait_fence(&mut self, _fence: &h::Fence<Self::Resources>) {
+        unimplemented!()
+    }
+
     fn cleanup(&mut self) {
         use core::handle::Producer;
 
         self.frame_handles.clear();
-        self.share.handles.borrow_mut().clean_with(&mut (),
+        self.share.handles.borrow_mut().clean_with(&mut self.context,
             |_, buffer| unsafe { (*(buffer.resource().0).0).Release(); },
             |_, s| unsafe { //shader
                 (*s.object).Release();
@@ -370,6 +398,8 @@ impl core::Device for Device {
             |_, program| unsafe {
                 let p = program.resource();
                 if p.vs != ptr::null_mut() { (*p.vs).Release(); }
+                if p.hs != ptr::null_mut() { (*p.hs).Release(); }
+                if p.ds != ptr::null_mut() { (*p.ds).Release(); }
                 if p.gs != ptr::null_mut() { (*p.gs).Release(); }
                 if p.ps != ptr::null_mut() { (*p.ps).Release(); }
             },
@@ -387,7 +417,10 @@ impl core::Device for Device {
             |_, v| unsafe { (*v.0).Release(); }, //DSV
             |_, v| unsafe { (*v.0).Release(); }, //sampler
             |_, _fence| {},
-            |_, _mapping| {},
+            |ctx, mapping| {
+	            let mut inner = mapping.access().expect("user error: mapping still in use on submit");
+	            factory::ensure_unmapped(&mut inner, *ctx);
+            },
         );
     }
 }
@@ -412,8 +445,9 @@ impl core::Device for Deferred {
 
     fn submit(&mut self,
               cb: &mut Self::CommandBuffer,
-              _: &core::pso::AccessInfo<Resources>)
+              access: &core::pso::AccessInfo<Resources>)
     {
+        self.0.before_submit(access);
         let cl = match cb.parser.1 {
             Some(cl) => cl,
             None => {
@@ -446,6 +480,10 @@ impl core::Device for Deferred {
         unimplemented!()
     }
 
+    fn wait_fence(&mut self, _fence: &h::Fence<Self::Resources>) {
+        unimplemented!()
+    }
+
     fn cleanup(&mut self) {
         self.0.cleanup();
     }
@@ -453,9 +491,3 @@ impl core::Device for Deferred {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Fence(());
-
-impl core::Fence for Fence {
-    fn wait(&self) {
-        unimplemented!()
-    }
-}

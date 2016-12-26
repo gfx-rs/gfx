@@ -30,6 +30,7 @@ fn primitive_to_gl(primitive: c::Primitive) -> gl::types::GLenum {
         TriangleList => gl::TRIANGLES,
         TriangleStrip => gl::TRIANGLE_STRIP,
         //TriangleFan => gl::TRIANGLE_FAN,
+        PatchList(_) => gl::PATCHES
     }
 }
 
@@ -77,6 +78,7 @@ pub enum Command {
     BindUnorderedView(c::pso::UnorderedViewParam<Resources>),
     BindSampler(c::pso::SamplerParam<Resources>, Option<gl::types::GLenum>),
     BindPixelTargets(c::pso::PixelTargetSet<Resources>),
+    BindVao,
     BindAttribute(c::AttributeSlot, Buffer, BufferElement),
     UnbindAttribute(c::AttributeSlot),
     BindIndex(Buffer),
@@ -90,6 +92,7 @@ pub enum Command {
     SetStencilState(Option<s::Stencil>, (Stencil, Stencil), s::CullFace),
     SetBlendState(c::ColorSlot, s::Color),
     SetBlendColor(ColorValue),
+    SetPatches(c::PatchSize),
     // resource updates
     UpdateBuffer(Buffer, DataPointer, usize),
     UpdateTexture(Texture, c::texture::Kind, Option<c::texture::CubeFace>,
@@ -108,8 +111,9 @@ pub const COLOR_DEFAULT: s::Color = s::Color {
     blend: None,
 };
 
-pub const RESET: [Command; 13] = [
+pub const RESET: [Command; 14] = [
     Command::BindProgram(0),
+    Command::BindVao,
     //Command::UnbindAttribute, //not needed, handled by the cache
     Command::BindIndex(0),
     Command::BindFrameBuffer(gl::FRAMEBUFFER, 0),
@@ -137,6 +141,7 @@ struct Cache {
     attributes: [Option<BufferElement>; c::MAX_VERTEX_ATTRIBUTES],
     resource_binds: [Option<gl::types::GLenum>; c::MAX_RESOURCE_VIEWS],
     scissor: bool,
+    target_dim: (u16, u16, u16),
     stencil: Option<s::Stencil>,
     //blend: Option<s::Blend>,
     cull_face: s::CullFace,
@@ -151,6 +156,7 @@ impl Cache {
             attributes: [None; c::MAX_VERTEX_ATTRIBUTES],
             resource_binds: [None; c::MAX_RESOURCE_VIEWS],
             scissor: false,
+            target_dim: (0, 0, 0),
             stencil: None,
             cull_face: s::CullFace::Nothing,
             //blend: None,
@@ -209,6 +215,9 @@ impl command::Buffer<Resources> for CommandBuffer {
             if pso.output.draw_mask & (1<<i) != 0 {
                 self.buf.push(Command::SetBlendState(i as c::ColorSlot, pso.output.colors[i]));
             }
+        }
+        if let c::Primitive::PatchList(num) = pso.primitive {
+            self.buf.push(Command::SetPatches(num));
         }
     }
 
@@ -281,6 +290,7 @@ impl command::Buffer<Resources> for CommandBuffer {
             self.buf.push(Command::SetDrawColorBuffers(num));
         }
         let view = pts.get_view();
+        self.cache.target_dim = view;
         self.buf.push(Command::SetViewport(Rect {
             x: 0, y: 0, w: view.0, h: view.1
         }));
@@ -292,8 +302,17 @@ impl command::Buffer<Resources> for CommandBuffer {
     }
 
     fn set_scissor(&mut self, rect: Rect) {
+        use std::cmp;
         self.buf.push(Command::SetScissor(
-            if self.cache.scissor {Some(rect)} else {None}
+            if self.cache.scissor {
+                Some(Rect {
+                    // inverting the Y axis in order to match D3D11
+                    y: cmp::max(self.cache.target_dim.1, rect.y + rect.h) - rect.y - rect.h,
+                    .. rect
+                })
+            } else {
+                None //TODO: assert?
+            }
         ));
     }
 
