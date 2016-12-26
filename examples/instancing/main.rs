@@ -112,11 +112,11 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         println!("size: {}", size);
 
         let (instance_buffer, mut instance_mapping) = factory
-            .create_mapped_buffer_rw(MAX_INSTANCE_COUNT,
+            .create_mapped_buffer_writable(MAX_INSTANCE_COUNT,
                                      gfx::buffer::Role::Vertex,
                                      gfx::Bind::empty());
         {
-            let mut instances = factory.rw_mapping(&mut instance_mapping);
+            let mut instances = factory.write_mapping(&mut instance_mapping);
             fill_instances(&mut instances, instances_per_length, size);
         }
 

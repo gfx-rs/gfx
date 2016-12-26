@@ -132,8 +132,14 @@ impl Factory {
                 (D3D11_BIND_CONSTANT_BUFFER, (info.size + 0xF) & !0xF),
         };
 
-        assert!(size >= info.size);
-        let (usage, cpu) = map_usage(info.usage);
+        assert!(size >= info.size);        
+        let (usage, cpu) = match map_usage(info.usage) {
+            Ok((usage, cpu)) => (usage, cpu),
+            Err(e) => return Err(match e {
+                mapping::Error::Unsupported => buffer::CreationError::UnsupportedUsage(info.usage),
+                _ => buffer::CreationError::Other,
+            }),
+        };
         let bind = map_bind(info.bind) | subind;
         if info.bind.contains(memory::RENDER_TARGET) | info.bind.contains(memory::DEPTH_STENCIL) {
             return Err(buffer::CreationError::UnsupportedBind(info.bind))
@@ -167,7 +173,7 @@ impl Factory {
         if winapi::SUCCEEDED(hr) {
             let buf = Buffer(raw_buf, info.usage);
             Ok(self.share.handles.borrow_mut().make_buffer(buf, info))
-        }else {
+        } else {
             error!("Failed to create a buffer with desc {:#?}, error {:x}", native_desc, hr);
             Err(buffer::CreationError::Other)
         }
@@ -453,10 +459,10 @@ impl core::Factory<R> for Factory {
             &core::ShaderSet::Tessellated(ref vs, ref hs, ref ds, ref ps) => {
                 let (vs, hs, ds, ps) = (vs.reference(fh), hs.reference(fh), ds.reference(fh), ps.reference(fh));
               
-			  populate_info(&mut info, Stage::Vertex,   vs.reflection);
-                populate_info(&mut info, Stage::Hull, hs.reflection);
+                populate_info(&mut info, Stage::Vertex, vs.reflection);
+                populate_info(&mut info, Stage::Hull,   hs.reflection);
                 populate_info(&mut info, Stage::Domain, ds.reflection);
-                populate_info(&mut info, Stage::Pixel,    ps.reflection);
+                populate_info(&mut info, Stage::Pixel,  ps.reflection);
                 unsafe { (*vs.object).AddRef(); (*hs.object).AddRef(); (*ds.object).AddRef(); (*ps.object).AddRef(); }
                 Program {
                     vs: vs.object as *mut ID3D11VertexShader,
@@ -577,8 +583,12 @@ impl core::Factory<R> for Factory {
                           data_opt: Option<&[&[u8]]>) -> Result<h::RawTexture<R>, texture::CreationError> {
         use core::texture::{AaMode, CreationError, Kind};
         use data::{map_bind, map_usage, map_surface, map_format};
-
-        let (usage, cpu_access) = map_usage(desc.usage);
+        
+        let (usage, cpu_access) = match map_usage(desc.usage) {
+            Ok((usage, cpu)) => (usage, cpu),
+            // TODO split into specific Errors when there are any
+            Err(_) => { return Err(texture::CreationError::Usage(desc.usage)) }
+        };
         let tparam = TextureParam {
             levels: desc.levels as winapi::UINT,
             format: match hint {
@@ -869,15 +879,19 @@ impl core::Factory<R> for Factory {
         };
         if winapi::SUCCEEDED(hr) {
             self.share.handles.borrow_mut().make_sampler(native::Sampler(raw_sampler), info)
-        }else {
+        } else {
             error!("Unable to create a sampler with desc {:#?}, error {:x}", info, hr);
             unimplemented!()
         }
     }
 
-    fn map_buffer_raw(&mut self, _buffer: &h::RawBuffer<R>, _access: memory::Access)
+    fn map_buffer_raw(&mut self, buf: &h::RawBuffer<R>, access: memory::Access)
                       -> Result<h::RawMapping<R>, mapping::Error> {
-        unimplemented!()
+        self.share.handles.borrow_mut().make_mapping(access, buf, || {
+            MappingGate {
+                pointer: ptr::null_mut(),
+            }
+        })
     }
 
     fn map_buffer_readable<T: Copy>(&mut self, buf: &h::Buffer<R, T>)
@@ -902,20 +916,69 @@ impl core::Factory<R> for Factory {
                                   -> mapping::Reader<'b, R, T>
         where M: mapping::Readable<R, T>, T: Copy
     {
-        unimplemented!()
+        unreachable!();
     }
 
-    fn write_mapping<'a, 'b, M, T>(&'a mut self, _: &'b mut M)
+    fn write_mapping<'a, 'b, M, T>(&'a mut self, m: &'b mut M)
                                    -> mapping::Writer<'b, R, T>
         where M: mapping::Writable<R, T>, T: Copy
     {
-        unimplemented!()
+        unsafe {
+            m.write(|inner| ensure_mapped(&mut inner.resource.pointer, &inner.buffer, self))
+        }
     }
 
     fn rw_mapping<'a, 'b, T>(&'a mut self, _: &'b mut mapping::RWable<R, T>)
                              -> mapping::RWer<'b, R, T>
         where T: Copy
     {
-        unimplemented!()
+        unreachable!();
+    }
+}
+
+pub fn ensure_mapped(pointer: &mut *mut ::std::os::raw::c_void,                               
+                               buffer: &h::RawBuffer<R>,
+                            factory: &Factory) {
+    if pointer.is_null() {
+        let raw_handle = *buffer.resource();                  
+        let mut ctx = ptr::null_mut();
+            
+        unsafe {
+            (*factory.device).GetImmediateContext(&mut ctx);
+        }
+        
+        let mut sres = winapi::d3d11::D3D11_MAPPED_SUBRESOURCE {
+            pData: ptr::null_mut(),
+            RowPitch: 0,
+            DepthPitch: 0,
+        };
+            
+            
+        let hr = unsafe {
+            (*ctx).Map(
+                raw_handle.to_resource() as *mut winapi::d3d11::ID3D11Resource, 
+                0, 
+                winapi::d3d11::D3D11_MAP_WRITE_DISCARD, 
+                0, 
+                &mut sres
+            )
+        };
+        
+        if winapi::SUCCEEDED(hr) {
+            *pointer = sres.pData;
+        } else {
+            panic!("Unable to map a buffer {:?}, error {:x}", buffer, hr);
+        }
+    }
+}
+
+pub fn ensure_unmapped(inner: &mut mapping::RawInner<R>, context: *mut winapi::ID3D11DeviceContext) {
+    if !inner.resource.pointer.is_null() {
+        let raw_handle = *inner.buffer.resource();                  
+        unsafe {
+            (*context).Unmap(raw_handle.to_resource() as *mut winapi::d3d11::ID3D11Resource, 0);
+        }
+
+        inner.resource.pointer = ptr::null_mut();
     }
 }
