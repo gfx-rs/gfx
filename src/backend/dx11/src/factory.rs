@@ -134,12 +134,16 @@ impl Factory {
 
         assert!(size >= info.size);
         
-        let (usage, cpu) = map_usage(info.usage).map_err(|e|{
-            match e {
+        let usage_result = map_usage(info.usage);
+        if let Err(e) = usage_result {
+        	let e = match e {
                 mapping::Error::Unsupported => buffer::CreationError::UnsupportedUsage(info.usage),
                 _ => buffer::CreationError::Other,
-            }
-        })?;
+            };
+        	return Err(e);
+        }
+        let (usage, cpu) = usage_result.unwrap();
+        
         let bind = map_bind(info.bind) | subind;
         if info.bind.contains(memory::RENDER_TARGET) | info.bind.contains(memory::DEPTH_STENCIL) {
             return Err(buffer::CreationError::UnsupportedBind(info.bind))
@@ -459,10 +463,10 @@ impl core::Factory<R> for Factory {
             &core::ShaderSet::Tessellated(ref vs, ref hs, ref ds, ref ps) => {
                 let (vs, hs, ds, ps) = (vs.reference(fh), hs.reference(fh), ds.reference(fh), ps.reference(fh));
               
-              populate_info(&mut info, Stage::Vertex,   vs.reflection);
-                populate_info(&mut info, Stage::Hull, hs.reflection);
+                populate_info(&mut info, Stage::Vertex, vs.reflection);
+                populate_info(&mut info, Stage::Hull,   hs.reflection);
                 populate_info(&mut info, Stage::Domain, ds.reflection);
-                populate_info(&mut info, Stage::Pixel,    ps.reflection);
+                populate_info(&mut info, Stage::Pixel,  ps.reflection);
                 unsafe { (*vs.object).AddRef(); (*hs.object).AddRef(); (*ds.object).AddRef(); (*ps.object).AddRef(); }
                 Program {
                     vs: vs.object as *mut ID3D11VertexShader,
@@ -583,8 +587,13 @@ impl core::Factory<R> for Factory {
                           data_opt: Option<&[&[u8]]>) -> Result<h::RawTexture<R>, texture::CreationError> {
         use core::texture::{AaMode, CreationError, Kind};
         use data::{map_bind, map_usage, map_surface, map_format};
-
-        let (usage, cpu_access) = map_usage(desc.usage).map_err(|_|{texture::CreationError::Usage(desc.usage)})?;
+        
+        let usage_result = map_usage(desc.usage);
+        if usage_result.is_err() {
+        	// TODO split into specific Errors when there are any
+        	return Err(texture::CreationError::Usage(desc.usage))
+        }
+        let (usage, cpu_access) = usage_result.unwrap();
         let tparam = TextureParam {
             levels: desc.levels as winapi::UINT,
             format: match hint {
