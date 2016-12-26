@@ -60,6 +60,8 @@ pub const MAX_SAMPLERS: usize = 16;
 pub type VertexCount = u32;
 /// Draw number of instances
 pub type InstanceCount = u32;
+/// Number of vertices in a patch
+pub type PatchSize = u8;
 
 /// Slot for an attribute.
 pub type AttributeSlot = u8;
@@ -97,7 +99,9 @@ pub enum ShaderSet<R: Resources> {
     Simple(VertexShader<R>, PixelShader<R>),
     /// Geometry shader programs: Vs-Gs-Ps
     Geometry(VertexShader<R>, GeometryShader<R>, PixelShader<R>),
-    //TODO: Tessellated, TessellatedGeometry, TransformFeedback
+    /// Tessellated TODO: Tessellated, TessellatedGeometry, TransformFeedback
+    Tessellated(VertexShader<R>, HullShader<R>, DomainShader<R>, PixelShader<R>),
+
 }
 
 impl<R: Resources> ShaderSet<R> {
@@ -106,10 +110,12 @@ impl<R: Resources> ShaderSet<R> {
         match self {
             &ShaderSet::Simple(..) => shade::VERTEX | shade::PIXEL,
             &ShaderSet::Geometry(..) => shade::VERTEX | shade::GEOMETRY | shade::PIXEL,
+            &ShaderSet::Tessellated(..) => shade::VERTEX | shade::HULL | shade::DOMAIN | shade::PIXEL,
         }
     }
 }
 
+//TODO: use the appropriate units for max vertex count, etc
 /// Features that the device supports.
 #[derive(Copy, Clone, Debug)]
 #[allow(missing_docs)] // pretty self-explanatory fields!
@@ -117,6 +123,7 @@ pub struct Capabilities {
     pub max_vertex_count: usize,
     pub max_index_count: usize,
     pub max_texture_size: usize,
+    pub max_patch_size: usize,
 
     pub instance_base_supported: bool,
     pub instance_call_supported: bool,
@@ -147,7 +154,9 @@ pub enum Primitive {
     /// Every three consecutive vertices represent a single triangle. For example, with `[a, b, c,
     /// d]`, `a`, `b`, and `c` form a triangle, and `b`, `c`, and `d` form a triangle.
     TriangleStrip,
-    //Quad,
+    /// Patch list,
+    /// used with shaders capable of producing primitives on their own (tessellation)
+    PatchList(PatchSize),
 }
 
 /// A type of each index value in the slice's index buffer
@@ -172,8 +181,8 @@ pub trait Resources:          Clone + Hash + Debug + Eq + PartialEq + Any {
     type RenderTargetView:    Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
     type DepthStencilView:    Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
     type Sampler:             Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
-    type Fence:               Clone + Hash + Debug + Eq + PartialEq + Any + Fence;
-    type Mapping:             Debug + Any + mapping::Gate<Self>;
+    type Fence:               Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
+    type Mapping:             Hash + Debug + Eq + PartialEq + Any + Send + Sync + mapping::Gate<Self>;
 }
 
 /// A `Device` is responsible for submitting `CommandBuffer`s to the GPU. 
@@ -203,12 +212,9 @@ pub trait Device: Sized {
                      after: Option<handle::Fence<Self::Resources>>)
                      -> handle::Fence<Self::Resources>;
 
+    /// Stalls the current thread until the fence is satisfied
+    fn wait_fence(&mut self, &handle::Fence<Self::Resources>);
+
     /// Cleanup unused resources. This should be called between frames. 
     fn cleanup(&mut self);
-}
-
-/// Operations that must be provided by a fence.
-pub trait Fence {
-    /// Stalls the current thread until the fence is satisfied
-    fn wait(&self);
 }

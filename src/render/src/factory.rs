@@ -90,22 +90,23 @@ impl<S> From<CreationError> for PipelineStateError<S> {
 /// This trait is responsible for creating and managing graphics resources, much like the `Factory`
 /// trait in the `gfx` crate. Every `Factory` automatically implements `FactoryExt`. 
 pub trait FactoryExt<R: Resources>: Factory<R> {
-    /// Create a vertex buffer from the supplied data. A `Slice` will have to manually be
-    /// constructed.
+    /// Creates an immutable vertex buffer from the supplied vertices.
+    /// A `Slice` will have to manually be constructed.
     fn create_vertex_buffer<T>(&mut self, vertices: &[T])
-                            -> handle::Buffer<R, T> where
-                            T: Pod + pso::buffer::Structure<format::Format>
+                               -> handle::Buffer<R, T>
+        where T: Pod + pso::buffer::Structure<format::Format>
     {
         //debug_assert!(nv <= self.get_capabilities().max_vertex_count);
-        self.create_buffer_immutable(vertices, buffer::Role::Vertex, Bind::empty()).unwrap()
+        self.create_buffer_immutable(vertices, buffer::Role::Vertex, Bind::empty())
+            .unwrap()
     }
     
-    /// Shorthand for creating a new vertex buffer from the supplied vertices, together with a
-    /// `Slice` from the supplied indices.
+    /// Creates an immutable vertex buffer from the supplied vertices,
+    /// together with a `Slice` from the supplied indices.
     fn create_vertex_buffer_with_slice<B, V>(&mut self, vertices: &[V], indices: B)
-                                       -> (handle::Buffer<R, V>, Slice<R>)
-                                       where V: Pod + pso::buffer::Structure<format::Format>,
-                                             B: IntoIndexBuffer<R>
+                                             -> (handle::Buffer<R, V>, Slice<R>)
+        where V: Pod + pso::buffer::Structure<format::Format>,
+              B: IntoIndexBuffer<R>
     {
         let vertex_buffer = self.create_vertex_buffer(vertices);
         let index_buffer = indices.into_index_buffer(self);
@@ -130,43 +131,43 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
             .unwrap()
     }
 
-    /// Creates and maps a readable persistent buffer.
-    fn create_buffer_persistent_readable<T>(&mut self,
-                                            num: usize,
-                                            role: buffer::Role,
-                                            bind: Bind) -> (handle::Buffer<R, T>,
-                                                            mapping::Readable<R, T>)
+    /// Creates and maps a readable buffer.
+    fn create_mapped_buffer_readable<T>(&mut self,
+                                        num: usize,
+                                        role: buffer::Role,
+                                        bind: Bind) -> (handle::Buffer<R, T>,
+                                                        mapping::ReadableOnly<R, T>)
         where T: Copy
     {
-        let buffer = self.create_buffer_persistent(num, role, bind, memory::READ)
+        let buffer = self.create_buffer_mappable(num, role, bind, memory::READ)
             .unwrap();
         let mapping = self.map_buffer_readable(&buffer).unwrap();
         (buffer, mapping)
     }
 
-    /// Creates and maps a writable persistent buffer.
-    fn create_buffer_persistent_writable<T>(&mut self,
-                                            num: usize,
-                                            role: buffer::Role,
-                                            bind: Bind) -> (handle::Buffer<R, T>,
-                                                            mapping::Writable<R, T>)
+    /// Creates and maps a writable buffer.
+    fn create_mapped_buffer_writable<T>(&mut self,
+                                        num: usize,
+                                        role: buffer::Role,
+                                        bind: Bind) -> (handle::Buffer<R, T>,
+                                                        mapping::WritableOnly<R, T>)
         where T: Copy
     {
-        let buffer = self.create_buffer_persistent(num, role, bind, memory::WRITE)
+        let buffer = self.create_buffer_mappable(num, role, bind, memory::WRITE)
             .unwrap();
         let mapping = self.map_buffer_writable(&buffer).unwrap();
         (buffer, mapping)
     }
 
-    /// Creates and maps an rw persistent buffer.
-    fn create_buffer_persistent_rw<T>(&mut self,
-                                      num: usize,
-                                      role: buffer::Role,
-                                      bind: Bind) -> (handle::Buffer<R, T>,
-                                                      mapping::RWable<R, T>)
+    /// Creates and maps a readable and writable buffer.
+    fn create_mapped_buffer_rw<T>(&mut self,
+                                  num: usize,
+                                  role: buffer::Role,
+                                  bind: Bind) -> (handle::Buffer<R, T>,
+                                                  mapping::RWable<R, T>)
         where T: Copy
     {
-        let buffer = self.create_buffer_persistent(num, role, bind, memory::RW)
+        let buffer = self.create_buffer_mappable(num, role, bind, memory::RW)
             .unwrap();
         let mapping = self.map_buffer_rw(&buffer).unwrap();
         (buffer, mapping)
@@ -184,6 +185,31 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
             Err(e) => return Err(ProgramError::Pixel(e)),
         };
         Ok(ShaderSet::Simple(vs, ps))
+    }
+
+    /// Mainly for testing
+    fn create_shader_set_tessellation(&mut self, vs_code: &[u8], hs_code: &[u8], ds_code: &[u8], ps_code: &[u8])
+                         -> Result<ShaderSet<R>, ProgramError> {
+        let vs = match self.create_shader_vertex(vs_code) {
+            Ok(s) => s,
+            Err(e) => return Err(ProgramError::Vertex(e)),
+        };
+
+        let hs = match self.create_shader_hull(hs_code) {
+            Ok(s) => s,
+            Err(e) => return Err(ProgramError::Hull(e)),
+        };
+
+        let ds = match self.create_shader_domain(ds_code) {
+            Ok(s) => s,
+            Err(e) => return Err(ProgramError::Domain(e)),
+        };
+
+        let ps = match self.create_shader_pixel(ps_code) {
+            Ok(s) => s,
+            Err(e) => return Err(ProgramError::Pixel(e)),
+        };
+        Ok(ShaderSet::Tessellated(vs, hs, ds, ps))
     }
 
     /// Creates a basic shader `Program` from the supplied vertex and pixel shader source code.

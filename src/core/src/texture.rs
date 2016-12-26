@@ -77,6 +77,8 @@ pub enum CreationError {
     Size(Size),
     /// The given data has a different size than the target texture slice.
     Data(usize),
+    /// The mentioned usage mode is not supported
+    Usage(Usage),
 }
 
 impl fmt::Display for CreationError {
@@ -87,6 +89,7 @@ impl fmt::Display for CreationError {
             CreationError::Samples(aa) => write!(f, "{}: {:?}", self.description(), aa),
             CreationError::Size(size) => write!(f, "{}: {}", self.description(), size),
             CreationError::Data(data) => write!(f, "{}: {}", self.description(), data),
+            CreationError::Usage(usage) => write!(f, "{}: {:?}", self.description(), usage),
             _ => write!(f, "{}", self.description()),
         }
     }
@@ -100,6 +103,7 @@ impl Error for CreationError {
             CreationError::Samples(_) => "Failed to map a given multisampled kind to the device",
             CreationError::Size(_) => "Unsupported size in one of the dimensions",
             CreationError::Data(_) => "The given data has a different size than the target texture slice",
+            CreationError::Usage(_) => "The expected texture usage mode is not supported by a graphic API",
         }
     }
 }

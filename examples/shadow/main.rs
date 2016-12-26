@@ -16,6 +16,7 @@ extern crate cgmath;
 #[macro_use]
 extern crate gfx;
 extern crate gfx_app;
+extern crate winit;
 
 use std::sync::{Arc, RwLock};
 pub use gfx::format::{DepthStencil};
@@ -436,7 +437,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
         use gfx::traits::FactoryExt;
         use gfx_app::shade::Source;
 
-        let mut is_parallel = false;
+        let mut is_parallel = true;
         for arg in env::args().skip(1) {
             if arg == "single" {
                 is_parallel = false;
@@ -527,8 +528,6 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
 
         // fill up shadow map for each light
         if self.is_parallel {
-            unimplemented!() // FIXME: add mapping Send bound
-            /*
             use std::thread;
             use std::sync::mpsc;
 
@@ -569,7 +568,6 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
                 light.encoder.flush(device);
                 self.scene.lights.push(light);
             }
-            */
         } else {
             for light in self.scene.lights.iter_mut() {
                 // clear
@@ -616,13 +614,21 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
 
         self.encoder.flush(device);
     }
+
+    fn on(&mut self, event: winit::Event) -> bool {
+        match event {
+            winit::Event::KeyboardInput(_, _, Some(winit::VirtualKeyCode::Escape)) |
+            winit::Event::Closed => false,
+            _ => true
+        }
+    }
 }
 
 //----------------------------------------
 // Section-6: main entry point
 
 pub fn main() {
-    <App<_, _> as gfx_app::ApplicationGL>::launch(
-        "Multi-threaded shadow rendering example with gfx-rs",
-        gfx_app::DEFAULT_CONFIG);
+    let wb = winit::WindowBuilder::new().with_title(
+        "Multi-threaded shadow rendering example with gfx-rs");
+    gfx_app::launch_gl3::<App<_, _>>(wb);
 }

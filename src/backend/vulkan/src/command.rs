@@ -15,7 +15,7 @@
 use std::{mem, ptr};
 use std::collections::hash_map::{HashMap, Entry};
 use vk;
-use core::{self, command, pso, shade, target, texture as tex, handle, memory};
+use core::{self, command, pso, shade, target, texture as tex, handle, memory, mapping};
 use core::state::RefValues;
 use core::{IndexType, VertexCount};
 use native;
@@ -271,6 +271,7 @@ impl GraphicsQueue {
             max_vertex_count: 0,
             max_index_count: 0,
             max_texture_size: 0,
+            max_patch_size: 0,
             instance_base_supported: false,
             instance_call_supported: false,
             instance_rate_supported: false,
@@ -306,20 +307,19 @@ impl GraphicsQueue {
             let mut inner = mapping.access()
                 .expect("user error: mapping still in use on submit");
 
-            if inner.status.cpu_write {
+            let mapping::RawInner { ref mut resource, ref buffer, .. } = *inner;
+            resource.status.ensure_flushed(|| {
                 let memory_range = vk::MappedMemoryRange {
                     sType: vk::STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
                     pNext: ptr::null(),
-                    memory: inner.buffer.resource().memory,
+                    memory: buffer.resource().memory,
                     offset: 0,
                     size: vk::WHOLE_SIZE,
                 };
                 assert_eq!(vk::SUCCESS, unsafe {
                     vk.FlushMappedMemoryRanges(dev, 1, &memory_range)
                 });
-
-                inner.status.cpu_write = false;
-            }
+            });
         }
     }
 
@@ -351,7 +351,7 @@ impl GraphicsQueue {
             let mut inner = mapping.access()
                 .expect("user error: mapping still in use on submit");
 
-            inner.status.gpu_access = Some(fence.clone());
+            inner.resource.status.gpu_access(fence.clone());
         }
     }
 }
@@ -408,6 +408,10 @@ impl core::Device for GraphicsQueue {
                      _after: Option<handle::Fence<Resources>>)
                      -> handle::Fence<Resources>
     {
+        unimplemented!()
+    }
+
+    fn wait_fence(&mut self, fence: &handle::Fence<Self::Resources>) {
         unimplemented!()
     }
 

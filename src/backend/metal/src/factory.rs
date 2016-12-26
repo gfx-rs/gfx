@@ -34,10 +34,13 @@ use {Resources, Share, Texture, Buffer, Shader, Program, Pipeline};
 use native;
 use mirror;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RawMapping {
     pointer: *mut c_void,
 }
+
+unsafe impl Send for RawMapping {}
+unsafe impl Sync for RawMapping {}
 
 impl mapping::Gate<Resources> for RawMapping {
     unsafe fn set<T>(&self, index: usize, val: T) {
@@ -747,13 +750,13 @@ impl core::Factory<Resources> for Factory {
     }
 
     fn map_buffer_readable<T: Copy>(&mut self, buf: &handle::Buffer<Resources, T>)
-                                    -> Result<mapping::Readable<Resources, T>, mapping::Error> {
+                                    -> Result<mapping::ReadableOnly<Resources, T>, mapping::Error> {
         let map = try!(self.map_buffer_raw(buf.raw(), memory::READ));
         Ok(self.map_readable(map, buf.len()))
     }
 
     fn map_buffer_writable<T: Copy>(&mut self, buf: &handle::Buffer<Resources, T>)
-                                    -> Result<mapping::Writable<Resources, T>, mapping::Error> {
+                                    -> Result<mapping::WritableOnly<Resources, T>, mapping::Error> {
         let map = try!(self.map_buffer_raw(buf.raw(), memory::WRITE));
         Ok(self.map_writable(map, buf.len()))
     }
@@ -762,5 +765,26 @@ impl core::Factory<Resources> for Factory {
                               -> Result<mapping::RWable<Resources, T>, mapping::Error> {
         let map = try!(self.map_buffer_raw(buf.raw(), memory::RW));
         Ok(self.map_read_write(map, buf.len()))
+    }
+
+    fn read_mapping<'a, 'b, M, T>(&'a mut self, _: &'b mut M)
+                                  -> mapping::Reader<'b, Resources, T>
+        where M: mapping::Readable<Resources, T>, T: Copy
+    {
+        unimplemented!()
+    }
+
+    fn write_mapping<'a, 'b, M, T>(&'a mut self, _: &'b mut M)
+                                   -> mapping::Writer<'b, Resources, T>
+        where M: mapping::Writable<Resources, T>, T: Copy
+    {
+        unimplemented!()
+    }
+
+    fn rw_mapping<'a, 'b, T>(&'a mut self, _: &'b mut mapping::RWable<Resources, T>)
+                             -> mapping::RWer<'b, Resources, T>
+        where T: Copy
+    {
+        unimplemented!()
     }
 }

@@ -31,7 +31,7 @@ pub enum Usage {
     /// GPU: read, CPU: write.
     Dynamic,
     /// GPU: read + write, CPU: as specified.
-    Persistent(Access),
+    Mappable(Access),
     /// GPU: copy, CPU: as specified. Used for staged memory, to be copied back and forth with on-GPU targets.
     CpuOnly(Access),
 }

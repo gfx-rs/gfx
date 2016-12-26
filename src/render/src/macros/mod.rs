@@ -34,16 +34,16 @@ macro_rules! gfx_format {
 /// Defines vertex, constant and pipeline formats in one block
 #[macro_export]
 macro_rules! gfx_defines {
-    (vertex $name:ident {
+    ($(#[$attr:meta])* vertex $name:ident {
             $( $field:ident : $ty:ty = $e:expr, )+
     }) => {
-        gfx_vertex_struct!($name {$($field:$ty = $e,)+});
+        gfx_vertex_struct_meta!($(#[$attr])* vertex_struct_meta $name {$($field:$ty = $e,)+});
     };
 
-    (constant $name:ident {
+    ($(#[$attr:meta])* constant $name:ident {
             $( $field:ident : $ty:ty = $e:expr, )+
     }) => {
-        gfx_constant_struct!($name {$($field:$ty = $e,)+});
+        gfx_constant_struct_meta!($(#[$attr])* constant_struct_meta $name {$($field:$ty = $e,)+});
     };
 
     (pipeline $name:ident {
@@ -52,6 +52,29 @@ macro_rules! gfx_defines {
         gfx_pipeline!($name {$($field:$ty = $e,)+});
     };
 
+    // The recursive case for vertex structs
+    ($(#[$attr:meta])* vertex $name:ident {
+            $( $field:ident : $ty:ty = $e:expr, )+
+    } $($tail:tt)+) => {
+        gfx_defines! {
+            $(#[$attr])*
+            vertex $name { $($field : $ty = $e,)+ }
+        }
+        gfx_defines!($($tail)+);
+    };
+
+    // The recursive case for constant structs
+    ($(#[$attr:meta])* constant $name:ident {
+            $( $field:ident : $ty:ty = $e:expr, )+
+    } $($tail:tt)+) => {
+        gfx_defines! {
+            $(#[$attr])*
+            constant $name { $($field : $ty = $e,)+ }
+        }
+        gfx_defines!($($tail)+);
+    };
+
+    // The recursive case for the other keywords
     ($keyword:ident $name:ident {
             $( $field:ident : $ty:ty = $e:expr, )+
     } $($tail:tt)+) => {
@@ -59,15 +82,5 @@ macro_rules! gfx_defines {
             $keyword $name { $($field : $ty = $e,)+ }
         }
         gfx_defines!($($tail)+);
-    };
-
-    ($keyword:ident $name:ident {
-            $( $field:ident : $ty:ty = $e:expr ),*
-    }) => {
-        gfx_defines! {
-            $keyword $name {
-                $($field : $ty = $e ,)*
-            }
-        }
     };
 }

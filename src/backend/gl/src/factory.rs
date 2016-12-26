@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::rc::Rc;
-use std::{slice, fmt};
+use std::slice;
 
 use {gl, tex};
 use core::{self as d, factory as f, texture as t, buffer};
@@ -26,7 +26,7 @@ use core::target::{Layer, Level};
 use command::{CommandBuffer, COLOR_DEFAULT};
 use {Resources as R, Share, OutputMerger};
 use {Buffer, BufferElement, FatSampler, NewTexture,
-     PipelineState, ResourceView, TargetView};
+     PipelineState, ResourceView, TargetView, Fence};
 
 
 fn role_to_target(role: buffer::Role) -> gl::types::GLenum {
@@ -129,7 +129,7 @@ impl Factory {
             let usage = match info.usage {
                 GpuOnly | Immutable => 0,
                 Dynamic => gl::DYNAMIC_STORAGE_BIT,
-                Persistent(access) => access_to_map_bits(access) | gl::MAP_PERSISTENT_BIT,
+                Mappable(access) => access_to_map_bits(access) | gl::MAP_PERSISTENT_BIT,
                 CpuOnly(_) => gl::DYNAMIC_STORAGE_BIT,
             };
             unsafe {
@@ -146,7 +146,7 @@ impl Factory {
                 GpuOnly => gl::STATIC_DRAW,
                 Immutable => gl::STATIC_DRAW,
                 Dynamic => gl::STREAM_DRAW,
-                Persistent(access) => match access {
+                Mappable(access) => match access {
                     memory::RW => gl::DYNAMIC_COPY,
                     memory::READ => gl::DYNAMIC_READ,
                     memory::WRITE => gl::DYNAMIC_DRAW,
@@ -172,7 +172,7 @@ impl Factory {
                               -> Result<(gl::types::GLuint, d::shade::ProgramInfo), d::shade::CreateProgramError> {
         use shade::create_program;
         let frame_handles = &mut self.frame_handles;
-        let mut shaders = [0; 3];
+        let mut shaders = [0; 5];
         let usage = shader_set.get_usage();
         let shader_slice = match shader_set {
             &d::ShaderSet::Simple(ref vs, ref ps) => {
@@ -185,6 +185,13 @@ impl Factory {
                 shaders[1] = *gs.reference(frame_handles);
                 shaders[2] = *ps.reference(frame_handles);
                 &shaders[..3]
+            },
+            &d::ShaderSet::Tessellated(ref vs, ref hs, ref ds, ref ps) => {
+                shaders[0] = *vs.reference(frame_handles);
+                shaders[1] = *hs.reference(frame_handles);
+                shaders[2] = *ds.reference(frame_handles);
+                shaders[3] = *ps.reference(frame_handles);
+                &shaders[..4]
             },
         };
         create_program(&self.share.context, &self.share.capabilities,
@@ -203,46 +210,22 @@ impl Factory {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub enum MappingKind {
-    Persistent,
-    Temporary,
+    Persistent(mapping::Status<R>),
+    Temporary { is_mapped: bool },
 }
 
-#[derive(Clone)]
+#[derive(Debug, Eq, Hash, PartialEq)]
+#[allow(missing_copy_implementations)]
 pub struct MappingGate {
     pub kind: MappingKind,
     pub pointer: *mut ::std::os::raw::c_void,
     pub target: gl::types::GLenum,
-    pub is_mapped: bool,
-    pub share: Rc<Share>,
 }
 
-fn temporary_ensure_mapped(inner: &mut mapping::RawInner<R>) {
-    let gl = &inner.resource.share.context;
-    if !inner.resource.is_mapped {
-        let access = access_to_gl(inner.access);
-        unsafe {
-            gl.BindBuffer(inner.resource.target, *inner.buffer.resource());
-            inner.resource.pointer = gl.MapBuffer(inner.resource.target, access)
-                as *mut ::std::os::raw::c_void;
-        }
-
-        inner.resource.is_mapped = true;
-    }
-}
-
-pub fn temporary_ensure_unmapped(inner: &mut mapping::RawInner<R>) {
-    let gl = &inner.resource.share.context;
-    if inner.resource.is_mapped {
-        unsafe {
-            gl.BindBuffer(inner.resource.target, *inner.buffer.resource());
-            gl.UnmapBuffer(inner.resource.target);
-        }
-
-        inner.resource.is_mapped = false;
-    }
-}
+unsafe impl Send for MappingGate {}
+unsafe impl Sync for MappingGate {}
 
 impl mapping::Gate<R> for MappingGate {
     unsafe fn set<T>(&self, index: usize, val: T) {
@@ -256,25 +239,39 @@ impl mapping::Gate<R> for MappingGate {
     unsafe fn mut_slice<'a, 'b, T>(&'a self, len: usize) -> &'b mut [T] {
         slice::from_raw_parts_mut(self.pointer as *mut T, len)
     }
+}
 
-    fn before_read(inner: &mut mapping::RawInner<R>) {
-        match inner.resource.kind {
-            MappingKind::Temporary => temporary_ensure_mapped(inner),
-            MappingKind::Persistent => (),
+pub fn temporary_ensure_mapped(is_mapped: &mut bool,
+                               pointer: &mut *mut ::std::os::raw::c_void,
+                               target: gl::types::GLenum,
+                               buffer: gl::types::GLuint,
+                               access: memory::Access,
+                               gl: &gl::Gl) {
+    if !*is_mapped {
+        let access = access_to_gl(access);
+        unsafe {
+            gl.BindBuffer(target, buffer);
+            *pointer = gl.MapBuffer(target, access) as *mut ::std::os::raw::c_void;
         }
-    }
 
-    fn before_write(inner: &mut mapping::RawInner<R>) {
-        match inner.resource.kind {
-            MappingKind::Temporary => temporary_ensure_mapped(inner),
-            MappingKind::Persistent => (),
-        }
+        *is_mapped = true;
     }
 }
 
-impl fmt::Debug for MappingGate {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "MappingGate {{ kind: {:?}, pointer: {:?}, target: {:?}, is_mapped: {:?} , .. }}", self.kind, self.pointer, self.target, self.is_mapped)
+pub fn temporary_ensure_unmapped(inner: &mut mapping::RawInner<R>,
+                                 gl: &gl::Gl) {
+    let is_mapped = match inner.resource.kind {
+        MappingKind::Temporary { ref mut is_mapped } => is_mapped,
+        _ => panic!("expected temporary mapping"),
+    };
+
+    if *is_mapped {
+        unsafe {
+            gl.BindBuffer(inner.resource.target, *inner.buffer.resource());
+            gl.UnmapBuffer(inner.resource.target);
+        }
+
+        *is_mapped = false;
     }
 }
 
@@ -322,6 +319,12 @@ impl f::Factory<R> for Factory {
     fn create_pipeline_state_raw(&mut self, program: &handle::Program<R>, desc: &d::pso::Descriptor)
                                  -> Result<handle::RawPipelineState<R>, d::pso::CreationError> {
         use core::state as s;
+        let caps = &self.share.capabilities;
+        match desc.primitive {
+            d::Primitive::PatchList(num) if num == 0 || (num as usize) > caps.max_patch_size =>
+                return Err(d::pso::CreationError),
+            _ => ()
+        }
         let mut output = OutputMerger {
             draw_mask: 0,
             stencil: match desc.depth_stencil {
@@ -483,33 +486,32 @@ impl f::Factory<R> for Factory {
                     gl.BindBuffer(target, raw_handle);
                     gl.MapBufferRange(target, 0, size, access)
                 } as *mut ::std::os::raw::c_void;
-                (MappingKind::Persistent, ptr)
+                (MappingKind::Persistent(mapping::Status::clean()), ptr)
             } else {
+                // TODO: do we really want to map it at once ?
                 let ptr = unsafe {
                     gl.BindBuffer(target, raw_handle);
                     gl.MapBuffer(target, access_to_gl(access))
                 } as *mut ::std::os::raw::c_void;
-                (MappingKind::Temporary, ptr)
+                (MappingKind::Temporary { is_mapped: true }, ptr)
             };
 
             MappingGate {
                 kind: kind,
                 pointer: ptr,
                 target: target,
-                is_mapped: true,
-                share: self.share.clone(),
             }
         })
     }
 
     fn map_buffer_readable<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
-                                    -> Result<mapping::Readable<R, T>, mapping::Error> {
+                                    -> Result<mapping::ReadableOnly<R, T>, mapping::Error> {
         let map = try!(self.map_buffer_raw(buf.raw(), memory::READ));
         Ok(self.map_readable(map, buf.len()))
     }
 
     fn map_buffer_writable<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
-                                    -> Result<mapping::Writable<R, T>, mapping::Error> {
+                                    -> Result<mapping::WritableOnly<R, T>, mapping::Error> {
         let map = try!(self.map_buffer_raw(buf.raw(), memory::WRITE));
         Ok(self.map_writable(map, buf.len()))
     }
@@ -518,5 +520,80 @@ impl f::Factory<R> for Factory {
                               -> Result<mapping::RWable<R, T>, mapping::Error> {
         let map = try!(self.map_buffer_raw(buf.raw(), memory::RW));
         Ok(self.map_read_write(map, buf.len()))
+    }
+
+    fn read_mapping<'a, 'b, M, T>(&'a mut self, m: &'b mut M)
+                                  -> mapping::Reader<'b, R, T>
+        where M: mapping::Readable<R, T>, T: Copy
+    {
+        let gl = &self.share.context;
+        let handles = &mut self.frame_handles;
+        unsafe {
+            m.read(|inner| match inner.resource.kind {
+                MappingKind::Persistent(ref mut status) =>
+                    status.cpu_access(|fence| wait_fence(&handles.ref_fence(&fence), gl)),
+                MappingKind::Temporary { ref mut is_mapped } =>
+                    temporary_ensure_mapped(is_mapped,
+                                            &mut inner.resource.pointer,
+                                            inner.resource.target,
+                                            *inner.buffer.resource(),
+                                            inner.access,
+                                            gl),
+            })
+        }
+    }
+
+    fn write_mapping<'a, 'b, M, T>(&'a mut self, m: &'b mut M)
+                                   -> mapping::Writer<'b, R, T>
+        where M: mapping::Writable<R, T>, T: Copy
+    {
+        let gl = &self.share.context;
+        let handles = &mut self.frame_handles;
+        unsafe {
+            m.write(|inner| match inner.resource.kind {
+                MappingKind::Persistent(ref mut status) =>
+                    status.cpu_write_access(|fence| wait_fence(&handles.ref_fence(&fence), gl)),
+                MappingKind::Temporary { ref mut is_mapped } =>
+                    temporary_ensure_mapped(is_mapped,
+                                            &mut inner.resource.pointer,
+                                            inner.resource.target,
+                                            *inner.buffer.resource(),
+                                            inner.access,
+                                            gl),
+            })
+        }
+    }
+
+    fn rw_mapping<'a, 'b, T>(&'a mut self, m: &'b mut mapping::RWable<R, T>)
+                             -> mapping::RWer<'b, R, T>
+        where T: Copy
+    {
+        let gl = &self.share.context;
+        let handles = &mut self.frame_handles;
+        unsafe {
+            m.read_write(|inner| match inner.resource.kind {
+                MappingKind::Persistent(ref mut status) =>
+                    status.cpu_write_access(|fence| wait_fence(&handles.ref_fence(&fence), gl)),
+                MappingKind::Temporary { ref mut is_mapped } =>
+                    temporary_ensure_mapped(is_mapped,
+                                            &mut inner.resource.pointer,
+                                            inner.resource.target,
+                                            *inner.buffer.resource(),
+                                            inner.access,
+                                            gl),
+            })
+        }
+    }
+}
+
+pub fn wait_fence(fence: &Fence, gl: &gl::Gl) {
+    let timeout = 1_000_000_000_000;
+    // TODO: use the return value of this call
+    // TODO:
+    // This can be called by multiple objects wanting to ensure they have exclusive
+    // access to a resource. How much does this call costs ? The status of the fence
+    // could be cached to avoid calling this more than once (in core or in the backend ?).
+    unsafe {
+        gl.ClientWaitSync(fence.0, gl::SYNC_FLUSH_COMMANDS_BIT, timeout);
     }
 }
