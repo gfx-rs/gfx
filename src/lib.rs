@@ -47,8 +47,7 @@ pub type DepthFormat = gfx::format::Depth32F;
 #[cfg(not(feature = "metal"))]
 pub type DepthFormat = gfx::format::DepthStencil;
 
-pub struct Init<R: gfx::Resources> {
-    pub backend: shade::Backend,
+pub struct WindowTargets<R: gfx::Resources> {
     pub color: gfx::handle::RenderTargetView<R, ColorFormat>,
     pub depth: gfx::handle::DepthStencilView<R, DepthFormat>,
     pub aspect_ratio: f32,
@@ -92,10 +91,10 @@ pub trait Factory<R: gfx::Resources>: gfx::Factory<R> {
 }
 
 pub trait ApplicationBase<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
-    fn new<F>(F, Init<R>) -> Self where F: Factory<R, CommandBuffer = C>;
+    fn new<F>(F, shade::Backend, WindowTargets<R>) -> Self where F: Factory<R, CommandBuffer = C>;
     fn render<D>(&mut self, &mut D) where D: gfx::Device<Resources = R, CommandBuffer = C>;
     fn on(&mut self, winit::Event) -> bool;
-    fn on_update_window_size(&mut self, color: gfx::handle::RenderTargetView<R, ColorFormat>, depth: gfx::handle::DepthStencilView<R, DepthFormat>, aspect_ratio: f32);
+    fn on_resize(&mut self, WindowTargets<R>);
 }
 
 
@@ -124,12 +123,12 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
     let (width, height) = window.get_inner_size_points().unwrap();
     let shade_lang = device.get_info().shading_language;
 
-    let mut app = A::new(factory, Init {
-        backend: if shade_lang.is_embedded {
-            shade::Backend::GlslEs(shade_lang)
-        } else {
-            shade::Backend::Glsl(shade_lang)
-        },
+    let backend = if shade_lang.is_embedded {
+        shade::Backend::GlslEs(shade_lang)
+    } else {
+        shade::Backend::Glsl(shade_lang)
+    }; 
+    let mut app = A::new(factory, backend, WindowTargets {
         color: main_color,
         depth: main_depth,
         aspect_ratio: width as f32 / height as f32,
@@ -139,10 +138,13 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
     loop {
         for event in window.poll_events() {
             if let winit::Event::Resized(width, height) = event {
-                let new_color = panic!();
-                let new_depth = panic!();
+                let (new_color, new_depth) = gfx_window_glutin::new_views(&window);
                 let new_aspect_ratio = width as f32 / height as f32;
-                app.on_update_window_size(new_color, new_depth, new_aspect_ratio);
+                app.on_resize(WindowTargets {
+                    color: new_color,
+                    depth: new_depth,
+                    aspect_ratio: new_aspect_ratio
+                });
             }
             if !app.on(event) {
                 return
@@ -182,8 +184,8 @@ A: Sized + ApplicationBase<gfx_device_dx11::Resources, D3D11CommandBuffer>
     let main_depth = factory.create_depth_stencil_view_only(window.size.0, window.size.1)
                             .unwrap();
 
-    let mut app = A::new(factory, Init {
-        backend: shade::Backend::Hlsl(device.get_shader_model()),
+    let backend = shade::Backend::Hlsl(device.get_shader_model()); 
+    let mut app = A::new(factory, backend, WindowTargets {
         color: main_color,
         depth: main_depth,
         aspect_ratio: window.size.0 as f32 / window.size.1 as f32,
@@ -226,8 +228,8 @@ A: Sized + ApplicationBase<gfx_device_metal::Resources, gfx_device_metal::Comman
     let (width, height) = window.get_inner_size_points().unwrap();
     let main_depth = factory.create_depth_stencil_view_only(width as Size, height as Size).unwrap();
 
-    let mut app = A::new(factory, Init {
-        backend: shade::Backend::Msl(device.get_shader_model()),
+    let backend = shade::Backend::Msl(device.get_shader_model()); 
+    let mut app = A::new(factory, backend, WindowTargets {
         color: main_color,
         depth: main_depth,
         aspect_ratio: width as f32 / height as f32
@@ -268,8 +270,8 @@ A: Sized + ApplicationBase<gfx_device_vulkan::Resources, gfx_device_vulkan::Comm
     let (width, height) = win.get_size();
     let main_depth = factory.create_depth_stencil::<DepthFormat>(width as Size, height as Size).unwrap();
 
-    let mut app = A::new(factory, Init {
-        backend: shade::Backend::Vulkan,
+    let backend = shade::Backend::Vulkan;
+    let mut app = A::new(factory, backend, WindowTargets {
         color: win.get_any_target(),
         depth: main_depth.2,
         aspect_ratio: width as f32 / height as f32, //TODO
@@ -300,9 +302,9 @@ pub type DefaultResources = gfx_device_metal::Resources;
 pub type DefaultResources = gfx_device_vulkan::Resources;
 
 pub trait Application<R: gfx::Resources>: Sized {
-    fn new<F: gfx::Factory<R>>(F, Init<R>) -> Self;
+    fn new<F: gfx::Factory<R>>(F, shade::Backend, WindowTargets<R>) -> Self;
     fn render<C: gfx::CommandBuffer<R>>(&mut self, &mut gfx::Encoder<R, C>);
-    fn on_update_window_size(&mut self, color: gfx::handle::RenderTargetView<R, ColorFormat>, depth: gfx::handle::DepthStencilView<R, DepthFormat>, aspect_ratio: f32);
+    fn on_resize(&mut self, WindowTargets<R>);
     fn on(&mut self, event: winit::Event) -> bool {
         match event {
             winit::Event::KeyboardInput(_, _, Some(winit::VirtualKeyCode::Escape)) |
@@ -343,12 +345,12 @@ impl<R, C, A> ApplicationBase<R, C> for Wrap<R, C, A>
           C: gfx::CommandBuffer<R>,
           A: Application<R>
 {
-    fn new<F>(mut factory: F, init: Init<R>) -> Self
+    fn new<F>(mut factory: F, backend: shade::Backend, window_targets: WindowTargets<R>) -> Self
         where F: Factory<R, CommandBuffer = C>
     {
         Wrap {
             encoder: factory.create_encoder(),
-            app: A::new(factory, init),
+            app: A::new(factory, backend, window_targets),
         }
     }
 
@@ -363,7 +365,7 @@ impl<R, C, A> ApplicationBase<R, C> for Wrap<R, C, A>
         self.app.on(event)
     }
 
-    fn on_update_window_size(&mut self, color: gfx::handle::RenderTargetView<R, ColorFormat>, depth: gfx::handle::DepthStencilView<R, DepthFormat>, aspect_ratio: f32) {
-        self.app.on_update_window_size(color, depth, aspect_ratio);
+    fn on_resize(&mut self, window_targets: WindowTargets<R>) {
+        self.app.on_resize(window_targets);
     }
 }

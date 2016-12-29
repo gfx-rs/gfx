@@ -85,7 +85,7 @@ where
     (device, factory, Typed::new(color_view), Typed::new(ds_view))
 }
 
-fn get_window_dimensions(window: &glutin::Window) -> texture::Dimensions {
+pub fn get_window_dimensions(window: &glutin::Window) -> texture::Dimensions {
     let (width, height) = window.get_inner_size().unwrap();
     let aa = window.get_pixel_format().multisampling
                    .unwrap_or(0) as texture::NumSamples;
@@ -160,4 +160,19 @@ pub fn update_views_raw(window: &glutin::Window, old_dimensions: texture::Dimens
     }else {
         None
     }
+}
+
+/// Create new main target views based on the current size of the window.
+/// Best called just after a WindowResize event.
+pub fn new_views<Cf, Df>(window: &glutin::Window)
+        -> (handle::RenderTargetView<R, Cf>, handle::DepthStencilView<R, Df>) where
+    Cf: format::RenderFormat,
+    Df: format::DepthFormat,
+{
+    let dim = get_window_dimensions(window);
+    let color_format = Cf::get_format();
+    let depth_format = Df::get_format();
+    let (color_view_raw, depth_view_raw) =
+        device_gl::create_main_targets_raw(dim, color_format.0, depth_format.0);
+    (Typed::new(color_view_raw), Typed::new(depth_view_raw))
 }
