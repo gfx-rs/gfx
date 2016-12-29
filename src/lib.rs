@@ -95,6 +95,7 @@ pub trait ApplicationBase<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
     fn new<F>(F, Init<R>) -> Self where F: Factory<R, CommandBuffer = C>;
     fn render<D>(&mut self, &mut D) where D: gfx::Device<Resources = R, CommandBuffer = C>;
     fn on(&mut self, winit::Event) -> bool;
+    fn on_update_window_size(&mut self, color: gfx::handle::RenderTargetView<R, ColorFormat>, depth: gfx::handle::DepthStencilView<R, DepthFormat>, aspect_ratio: f32);
 }
 
 
@@ -137,6 +138,12 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
     let mut harness = Harness::new();
     loop {
         for event in window.poll_events() {
+            if let winit::Event::Resized(width, height) = event {
+                let new_color = panic!();
+                let new_depth = panic!();
+                let new_aspect_ratio = width as f32 / height as f32;
+                app.on_update_window_size(new_color, new_depth, new_aspect_ratio);
+            }
             if !app.on(event) {
                 return
             }
@@ -295,6 +302,7 @@ pub type DefaultResources = gfx_device_vulkan::Resources;
 pub trait Application<R: gfx::Resources>: Sized {
     fn new<F: gfx::Factory<R>>(F, Init<R>) -> Self;
     fn render<C: gfx::CommandBuffer<R>>(&mut self, &mut gfx::Encoder<R, C>);
+    fn on_update_window_size(&mut self, color: gfx::handle::RenderTargetView<R, ColorFormat>, depth: gfx::handle::DepthStencilView<R, DepthFormat>, aspect_ratio: f32);
     fn on(&mut self, event: winit::Event) -> bool {
         match event {
             winit::Event::KeyboardInput(_, _, Some(winit::VirtualKeyCode::Escape)) |
@@ -353,5 +361,9 @@ impl<R, C, A> ApplicationBase<R, C> for Wrap<R, C, A>
 
     fn on(&mut self, event: winit::Event) -> bool {
         self.app.on(event)
+    }
+
+    fn on_update_window_size(&mut self, color: gfx::handle::RenderTargetView<R, ColorFormat>, depth: gfx::handle::DepthStencilView<R, DepthFormat>, aspect_ratio: f32) {
+        self.app.on_update_window_size(color, depth, aspect_ratio);
     }
 }
