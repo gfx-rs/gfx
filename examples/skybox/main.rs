@@ -87,7 +87,7 @@ struct App<R: gfx::Resources>{
 }
 
 impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
-    fn new<F: gfx::Factory<R>>(mut factory: F, init: gfx_app::Init<R>) -> Self {
+    fn new<F: gfx::Factory<R>>(mut factory: F, backend: gfx_app::shade::Backend, window_targets: gfx_app::WindowTargets<R>) -> Self {
         use gfx::traits::FactoryExt;
 
         let vs = gfx_app::shade::Source {
@@ -119,11 +119,11 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
         let sampler = factory.create_sampler_linear();
 
-        let proj = cgmath::perspective(cgmath::deg(60.0f32), init.aspect_ratio, 0.01, 100.0);
+        let proj = cgmath::perspective(cgmath::deg(60.0f32), window_targets.aspect_ratio, 0.01, 100.0);
 
         let pso = factory.create_pipeline_simple(
-            vs.select(init.backend).unwrap(),
-            ps.select(init.backend).unwrap(),
+            vs.select(backend).unwrap(),
+            ps.select(backend).unwrap(),
             pipe::new()
         ).unwrap();
 
@@ -131,7 +131,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             vbuf: vbuf,
             cubemap: (cubemap, sampler),
             locals: factory.create_constant_buffer(1),
-            out: init.color,
+            out: window_targets.color,
         };
 
         App {
@@ -166,6 +166,8 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         encoder.clear(&self.bundle.data.out, [0.3, 0.3, 0.3, 1.0]);
         self.bundle.encode(encoder);
     }
+
+    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {}
 }
 
 pub fn main() {

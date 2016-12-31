@@ -61,7 +61,7 @@ struct App<R: gfx::Resources>{
 }
 
 impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
-    fn new<F: gfx::Factory<R>>(mut factory: F, init: gfx_app::Init<R>) -> Self {
+    fn new<F: gfx::Factory<R>>(mut factory: F, backend: gfx_app::shade::Backend, window_targets: gfx_app::WindowTargets<R>) -> Self {
         use cgmath::{Point3, Vector3};
         use cgmath::{Transform, AffineMatrix3};
         use gfx::traits::FactoryExt;
@@ -139,8 +139,8 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             texture::WrapMode::Clamp);
 
         let pso = factory.create_pipeline_simple(
-            vs.select(init.backend).unwrap(),
-            ps.select(init.backend).unwrap(),
+            vs.select(backend).unwrap(),
+            ps.select(backend).unwrap(),
             pipe::new()
         ).unwrap();
 
@@ -149,15 +149,15 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             Point3::new(0f32, 0.0, 0.0),
             Vector3::unit_z(),
         );
-        let proj = cgmath::perspective(cgmath::deg(45.0f32), init.aspect_ratio, 1.0, 10.0);
+        let proj = cgmath::perspective(cgmath::deg(45.0f32), window_targets.aspect_ratio, 1.0, 10.0);
 
         let data = pipe::Data {
             vbuf: vbuf,
             transform: (proj * view.mat).into(),
             locals: factory.create_constant_buffer(1),
             color: (texture_view, factory.create_sampler(sinfo)),
-            out_color: init.color,
-            out_depth: init.depth,
+            out_color: window_targets.color,
+            out_depth: window_targets.depth,
         };
 
         App {
@@ -172,6 +172,9 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         encoder.clear_depth(&self.bundle.data.out_depth, 1.0);
         self.bundle.encode(encoder);
     }
+
+    // TODO: replace proj matrix on resize
+    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {}
 }
 
 pub fn main() {

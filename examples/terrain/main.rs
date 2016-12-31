@@ -75,7 +75,7 @@ struct App<R: gfx::Resources> {
 }
 
 impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
-    fn new<F: gfx::Factory<R>>(mut factory: F, init: gfx_app::Init<R>) -> Self {
+    fn new<F: gfx::Factory<R>>(mut factory: F, backend: gfx_app::shade::Backend, window_targets: gfx_app::WindowTargets<R>) -> Self {
         use gfx::traits::FactoryExt;
 
         let vs = gfx_app::shade::Source {
@@ -118,8 +118,8 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
         App {
             pso: factory.create_pipeline_simple(
-                vs.select(init.backend).unwrap(),
-                ps.select(init.backend).unwrap(),
+                vs.select(backend).unwrap(),
+                ps.select(backend).unwrap(),
                 pipe::new()
                 ).unwrap(),
             data: pipe::Data {
@@ -128,10 +128,10 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 model: Matrix4::identity().into(),
                 view: Matrix4::identity().into(),
                 proj: cgmath::perspective(
-                    cgmath::deg(60.0f32), init.aspect_ratio, 0.1, 1000.0
+                    cgmath::deg(60.0f32), window_targets.aspect_ratio, 0.1, 1000.0
                     ).into(),
-                out_color: init.color,
-                out_depth: init.depth,
+                out_color: window_targets.color,
+                out_depth: window_targets.depth,
             },
             slice: slice,
             start_time: Instant::now(),
@@ -161,6 +161,8 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         encoder.clear_depth(&self.data.out_depth, 1.0);
         encoder.draw(&self.slice, &self.pso, &self.data);
     }
+
+    fn  on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {}
 }
 
 pub fn main() {

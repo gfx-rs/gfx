@@ -395,7 +395,7 @@ fn create_scene<R, F>(factory: &mut F,
 // Section-5: application
 
 struct App<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
-    init: gfx_app::Init<R>,
+    window_targets: gfx_app::WindowTargets<R>,
     is_parallel: bool,
     forward_pso: gfx::PipelineState<R, forward::Meta>,
     encoder: gfx::Encoder<R, C>,
@@ -430,7 +430,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
     R: gfx::Resources + 'static,
     C: gfx::CommandBuffer<R> + Send + 'static,
 {
-    fn new<F>(mut factory: F, init: gfx_app::Init<R>) -> Self where
+    fn new<F>(mut factory: F, backend: gfx_app::shade::Backend, window_targets: gfx_app::WindowTargets<R>) -> Self where
         F: gfx_app::Factory<R, CommandBuffer=C>,
     {
         use std::env;
@@ -461,8 +461,8 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
                 .. Source::empty()
             };
             factory.create_pipeline_simple(
-                vs.select(init.backend).unwrap(),
-                ps.select(init.backend).unwrap(),
+                vs.select(backend).unwrap(),
+                ps.select(backend).unwrap(),
                 forward::new()
                 ).unwrap()
         };
@@ -481,8 +481,8 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
                 .. Source::empty()
             };
             let set = factory.create_shader_set(
-                vs.select(init.backend).unwrap(),
-                ps.select(init.backend).unwrap()
+                vs.select(backend).unwrap(),
+                ps.select(backend).unwrap()
                 ).unwrap();
             factory.create_pipeline_state(&set,
                 gfx::Primitive::TriangleList,
@@ -494,11 +494,12 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
         };
 
         let scene = create_scene(&mut factory,
-            init.color.clone(), init.depth.clone(),
+            window_targets.color.clone(),
+            window_targets.depth.clone(),
             shadow_pso);
 
         App {
-            init: init,
+            window_targets: window_targets,
             is_parallel: is_parallel,
             forward_pso: forward_pso,
             encoder: factory.create_encoder(),
@@ -592,12 +593,12 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
         }
 
         // draw entities with forward pass
-        self.encoder.clear(&self.init.color, [0.1, 0.2, 0.3, 1.0]);
-        self.encoder.clear_depth(&self.init.depth, 1.0);
+        self.encoder.clear(&self.window_targets.color, [0.1, 0.2, 0.3, 1.0]);
+        self.encoder.clear_depth(&self.window_targets.depth, 1.0);
 
         let mx_vp = {
             let mut proj = self.scene.camera.projection;
-            proj.aspect = self.init.aspect_ratio;
+            proj.aspect = self.window_targets.aspect_ratio;
             let mx_proj: cgmath::Matrix4<_> = proj.into();
             mx_proj * self.scene.camera.mx_view
         };
@@ -622,6 +623,8 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
             _ => true
         }
     }
+
+    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {}
 }
 
 //----------------------------------------
