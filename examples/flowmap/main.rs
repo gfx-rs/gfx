@@ -158,7 +158,9 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         self.bundle.encode(encoder);
     }
 
-    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {}
+    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {
+        self.bundle.data.out = window_targets.color;
+    }
 }
 
 pub fn main() {

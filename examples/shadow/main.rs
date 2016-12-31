@@ -624,7 +624,9 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
         }
     }
 
-    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {}
+    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {
+        // TODO
+    }
 }
 
 //----------------------------------------

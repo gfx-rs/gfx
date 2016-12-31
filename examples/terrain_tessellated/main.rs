@@ -177,7 +177,9 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         encoder.draw(&self.slice, &self.pso, &self.data);
     }
 
-    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {}
+    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {
+        // TODO
+    }
 }
 
 pub fn main() {
