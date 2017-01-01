@@ -27,6 +27,9 @@ use memory::{Bind, Usage};
 use {format, state, target, Resources};
 pub use target::{Layer, Level};
 
+/// Maximum accessible mipmap level of a texture.
+pub const MAX_LEVEL: Level = 15;
+
 /// Untyped texture
 #[derive(Debug)]
 pub struct Raw<R: Resources> {
@@ -162,7 +165,7 @@ impl From<NumSamples> for AaMode {
     fn from(ns: NumSamples) -> AaMode {
         if ns > 1 {
             AaMode::Multi(ns)
-        }else {
+        } else {
             AaMode::Single
         }
     }
@@ -269,7 +272,7 @@ impl Kind {
     pub fn get_level_dimensions(&self, level: Level) -> Dimensions {
         use std::cmp::{max, min};
         // unused dimensions must stay 0, all others must be at least 1
-        let map = |val| max(min(val, 1), val >> level);
+        let map = |val| max(min(val, 1), val >> min(level, MAX_LEVEL));
         let (w, h, d, _) = self.get_dimensions();
         (map(w), map(h), map(d), AaMode::Single)
     }
