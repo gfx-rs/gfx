@@ -219,14 +219,15 @@ pub struct Share {
 
 impl Share {
     /// Fails during a debug build if the implementation's error flag was set.
-    pub fn check(&self, cmd: &Command) {
+    pub fn check(&self) -> Result<(), Error> {
         if cfg!(debug_assertions) {
             let gl = &self.context;
             let err = Error::from_error_code(unsafe { gl.GetError() });
             if err != Error::NoError {
-                panic!("Error after executing command {:?}: {:?}", cmd, err);
+                return Err(err)
             }
         }
+        Ok(())
     }
 }
 
@@ -275,16 +276,21 @@ impl Device {
                 gl.BindVertexArray(vao);
             }
         }
+        // create the shared context
         let handles = handle::Manager::new();
+        let share = Share {
+            context: gl,
+            capabilities: caps,
+            private_caps: private,
+            handles: RefCell::new(handles),
+        };
+        if let Err(err) = share.check() {
+            panic!("Error {:?} after initialization", err)
+        }
         // create the device
         Device {
             info: info,
-            share: Rc::new(Share {
-                context: gl,
-                capabilities: caps,
-                private_caps: private,
-                handles: RefCell::new(handles),
-            }),
+            share: Rc::new(share),
             vao: vao,
             frame_handles: handle::Manager::new(),
             max_resource_count: Some(999999),
@@ -730,7 +736,9 @@ impl Device {
                 ) };
             },
         }
-        self.share.check(cmd);
+        if let Err(err) = self.share.check() {
+            panic!("Error {:?} executing command: {:?}", err, cmd)
+        }
     }
 
     fn no_fence_submit(&mut self, cb: &mut command::CommandBuffer) {
