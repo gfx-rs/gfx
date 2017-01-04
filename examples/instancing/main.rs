@@ -85,7 +85,7 @@ struct App<R: gfx::Resources> {
 }
 
 impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
-    fn new<F: gfx::Factory<R>>(mut factory: F, init: gfx_app::Init<R>) -> Self {
+    fn new<F: gfx::Factory<R>>(mut factory: F, backend: gfx_app::shade::Backend, window_targets: gfx_app::WindowTargets<R>) -> Self {
         use gfx::traits::FactoryExt;
 
         let vs = gfx_app::shade::Source {
@@ -127,8 +127,8 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
         App {
             pso: factory.create_pipeline_simple(
-                vs.select(init.backend).unwrap(),
-                fs.select(init.backend).unwrap(),
+                vs.select(backend).unwrap(),
+                fs.select(backend).unwrap(),
                 pipe::new()
                 ).unwrap(),
             data: pipe::Data {
@@ -138,7 +138,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 locals: factory
                     .create_buffer_immutable(&[locals], gfx::buffer::Role::Constant, gfx::Bind::empty())
                     .unwrap(),
-                out: init.color,
+                out: window_targets.color,
             },
             slice: slice,
         }
@@ -147,6 +147,10 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
     fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
         encoder.clear(&self.data.out, [0.1, 0.2, 0.3, 1.0]);
         encoder.draw(&self.slice, &self.pso, &self.data);
+    }
+
+    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {
+        self.data.out = window_targets.color;
     }
 }
 

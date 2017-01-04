@@ -159,7 +159,7 @@ fn calculate_color(height: f32) -> [f32; 3] {
     if height > 8.0 {
         [0.9, 0.9, 0.9] // white
     } else if height > 0.0 {
-        [0.7, 0.7, 0.7] // greay
+        [0.7, 0.7, 0.7] // grey
     } else if height > -5.0 {
         [0.2, 0.7, 0.2] // green
     } else {
@@ -230,10 +230,10 @@ struct App<R: gfx::Resources> {
 }
 
 impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
-    fn new<F: gfx::Factory<R>>(mut factory: F, init: gfx_app::Init<R>) -> Self {
+    fn new<F: gfx::Factory<R>>(mut factory: F, backend: gfx_app::shade::Backend, window_targets: gfx_app::WindowTargets<R>) -> Self {
         use gfx::traits::FactoryExt;
 
-        let (width, height, _, _) = init.color.get_dimensions();
+        let (width, height, _, _) = window_targets.color.get_dimensions();
         let (gpos, gnormal, gdiffuse, depth_resource, depth_target) =
             create_g_buffer(width, height, &mut factory);
         let res = {
@@ -286,8 +286,8 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             };
 
             let pso = factory.create_pipeline_simple(
-                vs.select(init.backend).unwrap(),
-                ps.select(init.backend).unwrap(),
+                vs.select(backend).unwrap(),
+                ps.select(backend).unwrap(),
                 terrain::new()
                 ).unwrap();
 
@@ -326,15 +326,15 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             };
 
             let pso = factory.create_pipeline_simple(
-                vs.select(init.backend).unwrap(),
-                ps.select(init.backend).unwrap(),
+                vs.select(backend).unwrap(),
+                ps.select(backend).unwrap(),
                 blit::new()
                 ).unwrap();
 
             let data = blit::Data {
                 vbuf: vbuf,
                 tex: (gpos.resource.clone(), sampler.clone()),
-                out: init.color,
+                out: window_targets.color,
             };
 
             Bundle::new(slice, pso, data)
@@ -404,8 +404,8 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             };
 
             let pso = factory.create_pipeline_simple(
-                vs.select(init.backend).unwrap(),
-                ps.select(init.backend).unwrap(),
+                vs.select(backend).unwrap(),
+                ps.select(backend).unwrap(),
                 light::new()
                 ).unwrap();
 
@@ -439,8 +439,8 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             };
 
             let pso = factory.create_pipeline_simple(
-                vs.select(init.backend).unwrap(),
-                ps.select(init.backend).unwrap(),
+                vs.select(backend).unwrap(),
+                ps.select(backend).unwrap(),
                 emitter::new()
                 ).unwrap();
 
@@ -570,6 +570,9 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         }
         true
     }
+
+    // TODO
+    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {}
 }
 
 pub fn main() {

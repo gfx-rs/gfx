@@ -75,11 +75,11 @@ fn create_shader_set<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F, vs_
 }
 
 impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
-    fn new<F: gfx::Factory<R>>(mut factory: F, init: gfx_app::Init<R>) -> Self {
+    fn new<F: gfx::Factory<R>>(mut factory: F, backend: gfx_app::shade::Backend, window_targets: gfx_app::WindowTargets<R>) -> Self {
         use gfx::traits::FactoryExt;
 
         // Compute the aspect ratio so that our particles aren't stretched
-        let (width, height, _, _) = init.color.get_dimensions();
+        let (width, height, _, _) = window_targets.color.get_dimensions();
         let aspect = (height as f32)/(width as f32);
 
         // Load in our vertex, geometry and pixel shaders
@@ -101,9 +101,9 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
         let shader_set = create_shader_set(
             &mut factory,
-            vs.select(init.backend).unwrap(),
-            gs.select(init.backend).unwrap(),
-            ps.select(init.backend).unwrap(),
+            vs.select(backend).unwrap(),
+            gs.select(backend).unwrap(),
+            ps.select(backend).unwrap(),
         );
 
         // Create 4096 particles, using one point vertex per particle
@@ -126,7 +126,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         let data = particles::Data {
             vbuf: vbuf,
             locals: factory.create_constant_buffer(1),
-            out_color: init.color,
+            out_color: window_targets.color,
         };
 
         // Initialize the particles with random colours
@@ -182,6 +182,10 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         encoder.clear(&self.bundle.data.out_color, [0.1, 0.2, 0.3, 1.0]);
         // Draw the particles!
         self.bundle.encode(encoder);
+    }
+
+    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {
+        self.bundle.data.out_color = window_targets.color;
     }
 }
 

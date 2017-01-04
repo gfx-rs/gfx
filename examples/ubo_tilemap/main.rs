@@ -395,7 +395,7 @@ fn populate_tilemap<R>(tilemap: &mut TileMap<R>, tilemap_size: [usize; 2]) where
 }
 
 impl<R: gfx::Resources> gfx_app::Application<R> for TileMap<R> {
-    fn new<F: gfx::Factory<R>>(mut factory: F, init: gfx_app::Init<R>) -> Self {
+    fn new<F: gfx::Factory<R>>(mut factory: F, backend: gfx_app::shade::Backend, window_targets: gfx_app::WindowTargets<R>) -> Self {
         use gfx::traits::FactoryExt;
 
         let vs = gfx_app::shade::Source {
@@ -423,13 +423,13 @@ impl<R: gfx::Resources> gfx_app::Application<R> for TileMap<R> {
         let mut tm = TileMap {
             tiles: tiles,
             pso: factory.create_pipeline_simple(
-                vs.select(init.backend).unwrap(),
-                ps.select(init.backend).unwrap(),
+                vs.select(backend).unwrap(),
+                ps.select(backend).unwrap(),
                 pipe::new()
                 ).unwrap(),
             tilemap_plane: TileMapPlane::new(&mut factory,
                 charmap_size[0], charmap_size[1], tile_size,
-                init.color, init.depth, init.aspect_ratio),
+                window_targets.color, window_targets.depth, window_targets.aspect_ratio),
             tile_size: tile_size as f32,
             tilemap_size: tilemap_size,
             charmap_size: charmap_size,
@@ -513,6 +513,10 @@ impl<R: gfx::Resources> gfx_app::Application<R> for TileMap<R> {
             _ => ()
         }
         true
+    }
+
+    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {
+        // TODO
     }
 }
 
