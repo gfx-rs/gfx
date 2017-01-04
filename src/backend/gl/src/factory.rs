@@ -166,10 +166,13 @@ impl Factory {
                 );
             }
         }
+        if let Err(err) = self.share.check() {
+            panic!("Error {:?} creating buffer: {:?}", err, info)
+        }
     }
 
     fn create_program_raw(&mut self, shader_set: &d::ShaderSet<R>)
-                              -> Result<(gl::types::GLuint, d::shade::ProgramInfo), d::shade::CreateProgramError> {
+                          -> Result<(gl::types::GLuint, d::shade::ProgramInfo), d::shade::CreateProgramError> {
         use shade::create_program;
         let frame_handles = &mut self.frame_handles;
         let mut shaders = [0; 5];
@@ -194,8 +197,12 @@ impl Factory {
                 &shaders[..4]
             },
         };
-        create_program(&self.share.context, &self.share.capabilities,
-                       &self.share.private_caps, shader_slice, usage)
+        let result = create_program(&self.share.context, &self.share.capabilities,
+                                    &self.share.private_caps, shader_slice, usage);
+        if let Err(err) = self.share.check() {
+            panic!("Error {:?} creating program: {:?}", err, shader_set)
+        }
+        result
     }
 
     fn view_texture_as_target(&mut self, htex: &handle::RawTexture<R>, level: Level, layer: Option<Layer>)
@@ -398,6 +405,9 @@ impl f::Factory<R> for Factory {
             let name = try!(tex::make_surface(gl, &desc, cty));
             NewTexture::Surface(name)
         };
+        if let Err(err) = self.share.check() {
+            panic!("Error {:?} creating texture: {:?}, hint: {:?}", err, desc, hint)
+        }
         Ok(self.share.handles.borrow_mut().make_texture(object, desc))
     }
 
@@ -413,6 +423,9 @@ impl f::Factory<R> for Factory {
             gl.TexBuffer(gl::TEXTURE_BUFFER, format, buf_name);
         }
         let view = ResourceView::new_buffer(name);
+        if let Err(err) = self.share.check() {
+            panic!("Error {:?} creating buffer SRV: {:?}", err, hbuf.get_info())
+        }
         Ok(self.share.handles.borrow_mut().make_buffer_srv(view, hbuf))
     }
 
@@ -466,14 +479,17 @@ impl f::Factory<R> for Factory {
             object: name,
             info: info.clone(),
         };
+        if let Err(err) = self.share.check() {
+            panic!("Error {:?} creating sampler: {:?}", err, info)
+        }
         self.share.handles.borrow_mut().make_sampler(sam, info)
     }
 
     fn map_buffer_raw(&mut self, buf: &handle::RawBuffer<R>, access: memory::Access)
                       -> Result<handle::RawMapping<R>, mapping::Error> {
-        let gl = &self.share.context;
-
+        let share = &self.share;
         self.share.handles.borrow_mut().make_mapping(access, buf, || {
+            let gl = &share.context;
             let raw_handle = *buf.resource();
 
             let target = role_to_target(buf.get_info().role);
@@ -495,6 +511,9 @@ impl f::Factory<R> for Factory {
                 } as *mut ::std::os::raw::c_void;
                 (MappingKind::Temporary { is_mapped: true }, ptr)
             };
+            if let Err(err) = share.check() {
+                panic!("Error {:?} mapping buffer: {:?}, with access: {:?}", err, buf.get_info(), access)
+            }
 
             MappingGate {
                 kind: kind,
