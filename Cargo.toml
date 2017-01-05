@@ -20,6 +20,7 @@ unstable = []
 name = "gfx_app"
 
 [dependencies]
+log = "0.3"
 env_logger = "0.3"
 glutin = "0.7.1"
 winit = "0.5.1"
@@ -121,7 +122,6 @@ name = "particle"
 path = "examples/particle/main.rs"
 
 [dev_dependencies]
-log = "0.3"
 cgmath = "0.7"
 gfx_gl = "0.3"
 rand = "0.3"

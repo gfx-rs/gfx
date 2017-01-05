@@ -49,7 +49,7 @@ pub fn main() {
         .with_title("Gamma example".to_string())
         .with_dimensions(1024, 768)
         .with_vsync();
-    let (window, mut device, mut factory, main_color, _main_depth) =
+    let (window, mut device, mut factory, main_color, mut main_depth) =
         gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder);
     let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
     let pso = factory.create_pipeline_simple(
@@ -58,7 +58,7 @@ pub fn main() {
         pipe::new()
     ).unwrap();
     let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(&QUAD, &[0u16, 1, 2, 2, 3, 0] as &[u16]);
-    let data = pipe::Data {
+    let mut data = pipe::Data {
         vbuf: vertex_buffer,
         out: main_color
     };
@@ -69,6 +69,9 @@ pub fn main() {
             match event {
                 glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
                 glutin::Event::Closed => break 'main,
+                glutin::Event::Resized(_width, _height) => {
+                    gfx_window_glutin::update_views(&window, &mut data.out, &mut main_depth);
+                },
                 _ => {},
             }
         }

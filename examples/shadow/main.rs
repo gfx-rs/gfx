@@ -395,7 +395,7 @@ fn create_scene<R, F>(factory: &mut F,
 // Section-5: application
 
 struct App<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
-    init: gfx_app::Init<R>,
+    window_targets: gfx_app::WindowTargets<R>,
     is_parallel: bool,
     forward_pso: gfx::PipelineState<R, forward::Meta>,
     encoder: gfx::Encoder<R, C>,
@@ -430,8 +430,8 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
     R: gfx::Resources + 'static,
     C: gfx::CommandBuffer<R> + Send + 'static,
 {
-    fn new<F>(mut factory: F, init: gfx_app::Init<R>) -> Self where
-        F: gfx_app::Factory<R, CommandBuffer=C>,
+    fn new<F>(factory: &mut F, backend: gfx_app::shade::Backend, window_targets: gfx_app::WindowTargets<R>) -> Self
+    where F: gfx_app::Factory<R, CommandBuffer=C>,
     {
         use std::env;
         use gfx::traits::FactoryExt;
@@ -461,8 +461,8 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
                 .. Source::empty()
             };
             factory.create_pipeline_simple(
-                vs.select(init.backend).unwrap(),
-                ps.select(init.backend).unwrap(),
+                vs.select(backend).unwrap(),
+                ps.select(backend).unwrap(),
                 forward::new()
                 ).unwrap()
         };
@@ -481,8 +481,8 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
                 .. Source::empty()
             };
             let set = factory.create_shader_set(
-                vs.select(init.backend).unwrap(),
-                ps.select(init.backend).unwrap()
+                vs.select(backend).unwrap(),
+                ps.select(backend).unwrap()
                 ).unwrap();
             factory.create_pipeline_state(&set,
                 gfx::Primitive::TriangleList,
@@ -493,12 +493,13 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
                 ).unwrap()
         };
 
-        let scene = create_scene(&mut factory,
-            init.color.clone(), init.depth.clone(),
+        let scene = create_scene(factory,
+            window_targets.color.clone(),
+            window_targets.depth.clone(),
             shadow_pso);
 
         App {
-            init: init,
+            window_targets: window_targets,
             is_parallel: is_parallel,
             forward_pso: forward_pso,
             encoder: factory.create_encoder(),
@@ -516,9 +517,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
                 pos: [light.position.x, light.position.y, light.position.z, 1.0],
                 color: light.color,
                 proj: {
-                    use cgmath::Matrix4;
-
-                    let mx_proj: Matrix4<_> = light.projection.into();
+                    let mx_proj = cgmath::Matrix4::from(light.projection);
                     (mx_proj * light.mx_view).into()
                 },
             }).collect();
@@ -592,12 +591,12 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
         }
 
         // draw entities with forward pass
-        self.encoder.clear(&self.init.color, [0.1, 0.2, 0.3, 1.0]);
-        self.encoder.clear_depth(&self.init.depth, 1.0);
+        self.encoder.clear(&self.window_targets.color, [0.1, 0.2, 0.3, 1.0]);
+        self.encoder.clear_depth(&self.window_targets.depth, 1.0);
 
         let mx_vp = {
             let mut proj = self.scene.camera.projection;
-            proj.aspect = self.init.aspect_ratio;
+            proj.aspect = self.window_targets.aspect_ratio;
             let mx_proj: cgmath::Matrix4<_> = proj.into();
             mx_proj * self.scene.camera.mx_view
         };
@@ -615,12 +614,24 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
         self.encoder.flush(device);
     }
 
-    fn on(&mut self, event: winit::Event) -> bool {
+    fn get_exit_key() -> Option<winit::VirtualKeyCode> {
+        Some(winit::VirtualKeyCode::Escape)
+    }
+
+    fn on(&mut self, event: winit::Event) {
         match event {
-            winit::Event::KeyboardInput(_, _, Some(winit::VirtualKeyCode::Escape)) |
-            winit::Event::Closed => false,
-            _ => true
+            _ => () //TODO
         }
+    }
+
+    fn on_resize<F>(&mut self, _factory: &mut F, window_targets: gfx_app::WindowTargets<R>)
+    where F: gfx_app::Factory<R, CommandBuffer=C>
+    {
+        for ent in self.scene.share.write().unwrap().entities.iter_mut() {
+            ent.batch_forward.out_color = window_targets.color.clone();
+            ent.batch_forward.out_depth = window_targets.depth.clone();
+        }
+        self.window_targets = window_targets;
     }
 }
 

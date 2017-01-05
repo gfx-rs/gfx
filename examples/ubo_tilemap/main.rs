@@ -117,9 +117,7 @@ pub struct TileMapPlane<R> where R: gfx::Resources {
 
 impl<R> TileMapPlane<R> where R: gfx::Resources {
     pub fn new<F>(factory: &mut F, width: usize, height: usize, tile_size: usize,
-                  main_color: gfx::handle::RenderTargetView<R, ColorFormat>,
-                  main_depth: gfx::handle::DepthStencilView<R, DepthFormat>,
-                  aspect_ratio: f32)
+                  targets: gfx_app::WindowTargets<R>)
                -> TileMapPlane<R> where F: gfx::Factory<R> {
         // charmap info
         let half_width = (tile_size * width) / 2;
@@ -174,8 +172,8 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
             tilemap: factory.create_constant_buffer(TILEMAP_BUF_LENGTH),
             tilemap_cb: factory.create_constant_buffer(1),
             tilesheet: (tile_texture, factory.create_sampler_linear()),
-            out_color: main_color,
-            out_depth: main_depth,
+            out_color: targets.color,
+            out_depth: targets.depth,
         };
 
         let mut charmap_data = Vec::with_capacity(total_size);
@@ -194,7 +192,7 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
             proj_stuff: ProjectionStuff {
                 model: Matrix4::identity().into(),
                 view: view.mat.into(),
-                proj: cgmath::perspective(cgmath::deg(60.0f32), aspect_ratio, 0.1, 4000.0).into(),
+                proj: cgmath::perspective(cgmath::deg(60.0f32), targets.aspect_ratio, 0.1, 4000.0).into(),
             },
             proj_dirty: true,
             tm_stuff: TilemapStuff {
@@ -205,6 +203,13 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
             tm_dirty: true,
             data: charmap_data,
         }
+    }
+
+    fn resize(&mut self, targets: gfx_app::WindowTargets<R>) {
+        self.params.out_color = targets.color;
+        self.params.out_depth = targets.depth;
+        self.proj_stuff.proj = cgmath::perspective(cgmath::deg(60.0f32), targets.aspect_ratio, 0.1, 4000.0).into();
+        self.proj_dirty = true;
     }
 
     fn prepare_buffers<C>(&mut self, encoder: &mut gfx::Encoder<R, C>, update_data: bool) where C: gfx::CommandBuffer<R> {
@@ -395,7 +400,8 @@ fn populate_tilemap<R>(tilemap: &mut TileMap<R>, tilemap_size: [usize; 2]) where
 }
 
 impl<R: gfx::Resources> gfx_app::Application<R> for TileMap<R> {
-    fn new<F: gfx::Factory<R>>(mut factory: F, init: gfx_app::Init<R>) -> Self {
+    fn new<F: gfx::Factory<R>>(factory: &mut F, backend: gfx_app::shade::Backend,
+           window_targets: gfx_app::WindowTargets<R>) -> Self {
         use gfx::traits::FactoryExt;
 
         let vs = gfx_app::shade::Source {
@@ -423,13 +429,13 @@ impl<R: gfx::Resources> gfx_app::Application<R> for TileMap<R> {
         let mut tm = TileMap {
             tiles: tiles,
             pso: factory.create_pipeline_simple(
-                vs.select(init.backend).unwrap(),
-                ps.select(init.backend).unwrap(),
+                vs.select(backend).unwrap(),
+                ps.select(backend).unwrap(),
                 pipe::new()
                 ).unwrap(),
-            tilemap_plane: TileMapPlane::new(&mut factory,
+            tilemap_plane: TileMapPlane::new(factory,
                 charmap_size[0], charmap_size[1], tile_size,
-                init.color, init.depth, init.aspect_ratio),
+                window_targets),
             tile_size: tile_size as f32,
             tilemap_size: tilemap_size,
             charmap_size: charmap_size,
@@ -467,17 +473,12 @@ impl<R: gfx::Resources> gfx_app::Application<R> for TileMap<R> {
         encoder.draw(&self.tilemap_plane.slice, &self.pso, &self.tilemap_plane.params);
     }
 
-    fn on(&mut self, event: winit::Event) -> bool {
+    fn on(&mut self, event: winit::Event) {
         use winit::VirtualKeyCode as Key;
-        use winit::Event::{KeyboardInput, Closed};
+        use winit::Event::KeyboardInput;
         use winit::ElementState::Pressed;
         let i = self.input.clone();
         match event {
-            // quit when Esc is pressed.
-            Closed |
-            KeyboardInput(Pressed, _, Some(Key::Escape)) => {
-                return false
-            }
             // zooming in/out
             KeyboardInput(Pressed, _, Some(Key::Equals)) => {
                 self.input.distance -= i.move_amt;
@@ -512,7 +513,10 @@ impl<R: gfx::Resources> gfx_app::Application<R> for TileMap<R> {
             }
             _ => ()
         }
-        true
+    }
+
+    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {
+        self.tilemap_plane.resize(window_targets);
     }
 }
 

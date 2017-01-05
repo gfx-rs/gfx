@@ -97,6 +97,15 @@ impl Factory {
         }
     }
 
+    #[doc(hidden)]
+    pub fn wrap_back_buffer(&mut self, back_buffer: *mut winapi::ID3D11Texture2D, info: texture::Info,
+                            desc: texture::RenderDesc) -> h::RawRenderTargetView<R> {
+        use core::Factory;
+        let raw_tex = Texture(native::Texture::D2(back_buffer), info.usage);
+        let color_tex = self.share.handles.borrow_mut().make_texture(raw_tex, info);
+        self.view_texture_as_render_target_raw(&color_tex, desc).unwrap()
+    }
+
     pub fn create_command_buffer(&self) -> CommandBuffer<CommandList> {
         CommandList::new().into()
     }
