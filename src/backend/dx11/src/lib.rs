@@ -24,6 +24,7 @@ extern crate winapi;
 
 pub use self::command::CommandBuffer;
 pub use self::data::map_format;
+pub use self::factory::Factory;
 
 mod command;
 mod data;
@@ -72,12 +73,10 @@ pub mod native {
 }
 
 use std::cell::RefCell;
-use std::os::raw::c_void;
 use std::ptr;
 use std::sync::Arc;
-pub use self::factory::Factory;
 use core::{handle as h, texture as tex};
-use core::memory::{self, Usage};
+use core::memory::Usage;
 
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -181,11 +180,8 @@ static FEATURE_LEVELS: [winapi::D3D_FEATURE_LEVEL; 3] = [
     winapi::D3D_FEATURE_LEVEL_10_0,
 ];
 
-
-pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHAIN_DESC, format: core::format::Format)
-              -> Result<(Device, Factory, *mut winapi::IDXGISwapChain, h::RawRenderTargetView<Resources>), winapi::HRESULT> {
-    use core::handle::Producer;
-
+pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHAIN_DESC)
+              -> Result<(Device, Factory, *mut winapi::IDXGISwapChain), winapi::HRESULT> {
     let mut swap_chain = ptr::null_mut();
     let create_flags = winapi::D3D11_CREATE_DEVICE_FLAG(0); //D3D11_CREATE_DEVICE_DEBUG;
     let mut device = ptr::null_mut();
@@ -218,20 +214,6 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
         return Err(hr)
     }
 
-    let mut back_buffer: *mut winapi::ID3D11Texture2D = ptr::null_mut();
-    unsafe {
-        (*swap_chain).GetBuffer(0, &dxguid::IID_ID3D11Texture2D, &mut back_buffer
-            as *mut *mut winapi::ID3D11Texture2D as *mut *mut c_void);
-    }
-    let raw_tex = Texture(native::Texture::D2(back_buffer), Usage::GpuOnly);
-    let color_tex = share.handles.borrow_mut().make_texture(raw_tex, tex::Info {
-        kind: tex::Kind::D2(desc.BufferDesc.Width as tex::Size, desc.BufferDesc.Height as tex::Size, tex::AaMode::Single),
-        levels: 1,
-        format: format.0,
-        bind: memory::RENDER_TARGET,
-        usage: raw_tex.1,
-    });
-
     let dev = Device {
         context: context,
         feature_level: feature_level,
@@ -239,19 +221,9 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
         frame_handles: h::Manager::new(),
         max_resource_count: None,
     };
-    let mut factory = Factory::new(device, dev.share.clone());
+    let factory = Factory::new(device, dev.share.clone());
 
-    let color_target = {
-        use core::Factory;
-        let desc = tex::RenderDesc {
-            channel: format.1,
-            level: 0,
-            layer: None,
-        };
-        factory.view_texture_as_render_target_raw(&color_tex, desc).unwrap()
-    };
-
-    Ok((dev, factory, swap_chain, color_target))
+    Ok((dev, factory, swap_chain))
 }
 
 pub type ShaderModel = u16;
@@ -280,6 +252,12 @@ impl Device {
         for mapping in mappings {
             let mut inner = mapping.access().expect("user error: mapping still in use on submit");
             factory::ensure_unmapped(&mut inner, self.context);
+        }
+    }
+
+    pub fn clear_state(&self) {
+        unsafe {
+            (*self.context).ClearState();
         }
     }
 }
@@ -431,6 +409,12 @@ impl From<Device> for Deferred {
         Deferred(device)
     }
 }
+impl Deferred {
+    pub fn clear_state(&self) {
+        self.0.clear_state();
+    }
+}
+
 impl core::Device for Deferred {
     type Resources = Resources;
     type CommandBuffer = command::CommandBuffer<DeferredContext>;

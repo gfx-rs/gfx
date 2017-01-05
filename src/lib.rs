@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[macro_use]
+extern crate log;
 extern crate env_logger;
 extern crate winit;
 extern crate glutin;
@@ -143,11 +145,10 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
                 winit::Event::KeyboardInput(winit::ElementState::Pressed, _, key) if key == A::get_exit_key() => return,
                 winit::Event::Resized(width, height) => {
                     let (new_color, new_depth) = gfx_window_glutin::new_views(&window);
-                    let new_aspect_ratio = width as f32 / height as f32;
                     app.on_resize(WindowTargets {
                         color: new_color,
                         depth: new_depth,
-                        aspect_ratio: new_aspect_ratio
+                        aspect_ratio: width as f32 / height as f32,
                     });
                 },
                 _ => app.on(event),
@@ -182,13 +183,13 @@ A: Sized + ApplicationBase<gfx_device_dx11::Resources, D3D11CommandBuffer>
     use gfx::traits::{Device, Factory};
 
     env_logger::init().unwrap();
-    let (window, device, mut factory, main_color) =
+    let (mut window, device, mut factory, main_color) =
         gfx_window_dxgi::init::<ColorFormat>(wb).unwrap();
     let main_depth = factory.create_depth_stencil_view_only(window.size.0, window.size.1)
                             .unwrap();
 
     let backend = shade::Backend::Hlsl(device.get_shader_model()); 
-    let mut app = A::new(factory, backend, WindowTargets {
+    let mut app = A::new(factory.clone(), backend, WindowTargets {
         color: main_color,
         depth: main_depth,
         aspect_ratio: window.size.0 as f32 / window.size.1 as f32,
@@ -197,10 +198,33 @@ A: Sized + ApplicationBase<gfx_device_dx11::Resources, D3D11CommandBuffer>
 
     let mut harness = Harness::new();
     loop {
+        let mut new_size = None;
         for event in window.poll_events() {
-            if !app.on(event) {
-                return
+            match event {
+                winit::Event::Closed => return,
+                winit::Event::KeyboardInput(winit::ElementState::Pressed, _, key) if key == A::get_exit_key() => return,
+                winit::Event::Resized(width, height) => {
+                    // working around the borrow checker: window is already borrowed here
+                    new_size = Some((width as gfx::texture::Size, height as gfx::texture::Size));
+                    break;
+                },
+                _ => app.on(event),
             }
+        }
+        if let Some((width, height)) = new_size {
+            device.clear_state();
+            match window.resize_swap_chain(&mut factory, width, height) {
+                Ok(new_color) => {
+                    let new_depth = factory.create_depth_stencil_view_only(width, height).unwrap();
+                    app.on_resize(WindowTargets {
+                        color: new_color,
+                        depth: new_depth,
+                        aspect_ratio: width as f32 / height as f32,
+                    });
+                },
+                Err(hr) => error!("Resize failed with code {:X}", hr),
+            }
+            continue;
         }
         app.render(&mut device);
         window.swap_buffers(1);
@@ -241,8 +265,13 @@ A: Sized + ApplicationBase<gfx_device_metal::Resources, gfx_device_metal::Comman
     let mut harness = Harness::new();
     loop {
         for event in window.poll_events() {
-            if !app.on(event) {
-                return
+            match event {
+                winit::Event::Closed => return,
+                winit::Event::KeyboardInput(winit::ElementState::Pressed, _, key) if key == A::get_exit_key() => return,
+                winit::Event::Resized(_width, _height) => {
+                    warn!("TODO: resize on Metal");
+                },
+                _ => app.on(event),
             }
         }
         app.render(&mut device);
@@ -283,8 +312,13 @@ A: Sized + ApplicationBase<gfx_device_vulkan::Resources, gfx_device_vulkan::Comm
     let mut harness = Harness::new();
     loop {
         for event in win.get_window().poll_events() {
-            if !app.on(event) {
-                return
+            match event {
+                winit::Event::Closed => return,
+                winit::Event::KeyboardInput(winit::ElementState::Pressed, _, key) if key == A::get_exit_key() => return,
+                winit::Event::Resized(_width, _height) => {
+                    warn!("TODO: resize on Vulkan");
+                },
+                _ => app.on(event),
             }
         }
         let mut frame = win.start_frame();

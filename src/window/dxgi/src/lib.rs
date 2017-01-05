@@ -16,14 +16,15 @@
 
 #[macro_use]
 extern crate log;
+extern crate dxguid;
 extern crate winapi;
 extern crate winit;
 extern crate gfx_core as core;
 extern crate gfx_device_dx11 as device_dx11;
 
+use std::ptr;
 use winit::os::windows::WindowExt;
-use core::format;
-use core::memory::Typed;
+use core::{format, handle as h, memory, texture as tex};
 use core::texture::Size;
 use device_dx11::{Device, Factory, Resources};
 
@@ -32,6 +33,7 @@ pub struct Window {
     inner: winit::Window,
     swap_chain: *mut winapi::IDXGISwapChain,
     driver_type: winapi::D3D_DRIVER_TYPE,
+    color_format: format::Format,
     pub size: (Size, Size),
 }
 
@@ -41,11 +43,53 @@ impl Window {
     }
 
     pub fn swap_buffers(&self, wait: u8) {
-        unsafe{ (*self.swap_chain).Present(wait as winapi::UINT, 0) };
+        assert_eq!(winapi::S_OK, unsafe {
+            (*self.swap_chain).Present(wait as winapi::UINT, 0)
+        });
     }
 
     pub fn poll_events(&self) -> winit::PollEventsIterator {
         self.inner.poll_events()
+    }
+
+    fn make_back_buffer(&self, factory: &mut Factory) -> h::RawRenderTargetView<Resources> {
+        let mut back_buffer: *mut winapi::ID3D11Texture2D = ptr::null_mut();
+        assert_eq!(winapi::S_OK, unsafe {
+            (*self.swap_chain).GetBuffer(0, &dxguid::IID_ID3D11Texture2D,
+                &mut back_buffer as *mut *mut winapi::ID3D11Texture2D as *mut *mut _)
+        });
+
+        let info = tex::Info {
+            kind: tex::Kind::D2(self.size.0, self.size.1, tex::AaMode::Single),
+            levels: 1,
+            format: self.color_format.0,
+            bind: memory::RENDER_TARGET,
+            usage: memory::Usage::GpuOnly,
+        };
+        let desc = tex::RenderDesc {
+            channel: self.color_format.1,
+            level: 0,
+            layer: None,
+        };
+        factory.wrap_back_buffer(back_buffer, info, desc)
+    }
+
+    pub fn resize_swap_chain<Cf>(&mut self, factory: &mut Factory, width: Size, height: Size)
+                             -> Result<h::RenderTargetView<Resources, Cf>, winapi::HRESULT>
+    where Cf: format::RenderFormat
+    {
+        let result = unsafe {
+            (*self.swap_chain).ResizeBuffers(0,
+                width as winapi::UINT, height as winapi::UINT,
+                winapi::DXGI_FORMAT_UNKNOWN, 0)
+        };
+        if result == winapi::S_OK {
+            self.size = (width, height);
+            let raw = self.make_back_buffer(factory);
+            Ok(memory::Typed::new(raw))
+        } else {
+            Err(result)
+        }
     }
 }
 
@@ -61,16 +105,16 @@ pub enum InitError {
 
 /// Initialize with a given size. Typed format version.
 pub fn init<Cf>(wb: winit::WindowBuilder)
-           -> Result<(Window, Device, Factory, core::handle::RenderTargetView<Resources, Cf>), InitError>
+           -> Result<(Window, Device, Factory, h::RenderTargetView<Resources, Cf>), InitError>
 where Cf: format::RenderFormat
 {
     init_raw(wb, Cf::get_format())
-        .map(|(window, device, factory, color)| (window, device, factory, Typed::new(color)))
+        .map(|(window, device, factory, color)| (window, device, factory, memory::Typed::new(color)))
 }
 
 /// Initialize with a given size. Raw format version.
 pub fn init_raw(wb: winit::WindowBuilder, color_format: format::Format)
-                -> Result<(Window, Device, Factory, core::handle::RawRenderTargetView<Resources>), InitError> {
+                -> Result<(Window, Device, Factory, h::RawRenderTargetView<Resources>), InitError> {
     let inner = match wb.build() {
         Ok(w) => w,
         Err(_) => return Err(InitError::Window),
@@ -112,15 +156,17 @@ pub fn init_raw(wb: winit::WindowBuilder, color_format: format::Format)
 
     info!("Creating swap chain of size {}x{}", width, height);
     for dt in driver_types.iter() {
-        match device_dx11::create(*dt, &swap_desc, color_format) {
-            Ok((device, factory, chain, color)) => {
+        match device_dx11::create(*dt, &swap_desc) {
+            Ok((device, mut factory, chain)) => {
                 info!("Success with driver {:?}, shader model {}", *dt, device.get_shader_model());
                 let win = Window {
                     inner: inner,
                     swap_chain: chain,
                     driver_type: *dt,
+                    color_format: color_format,
                     size: (width as Size, height as Size),
                 };
+                let color = win.make_back_buffer(&mut factory);
                 return Ok((win, device, factory, color))
             },
             Err(hres) => {
