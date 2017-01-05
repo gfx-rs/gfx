@@ -93,7 +93,8 @@ pub trait Factory<R: gfx::Resources>: gfx::Factory<R> {
 pub trait ApplicationBase<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
     fn new<F>(F, shade::Backend, WindowTargets<R>) -> Self where F: Factory<R, CommandBuffer = C>;
     fn render<D>(&mut self, &mut D) where D: gfx::Device<Resources = R, CommandBuffer = C>;
-    fn on(&mut self, winit::Event) -> bool;
+    fn get_exit_key() -> Option<winit::VirtualKeyCode>;
+    fn on(&mut self, winit::Event);
     fn on_resize(&mut self, WindowTargets<R>);
 }
 
@@ -137,17 +138,19 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
     let mut harness = Harness::new();
     loop {
         for event in window.poll_events() {
-            if let winit::Event::Resized(width, height) = event {
-                let (new_color, new_depth) = gfx_window_glutin::new_views(&window);
-                let new_aspect_ratio = width as f32 / height as f32;
-                app.on_resize(WindowTargets {
-                    color: new_color,
-                    depth: new_depth,
-                    aspect_ratio: new_aspect_ratio
-                });
-            }
-            if !app.on(event) {
-                return
+            match event {
+                winit::Event::Closed => return,
+                winit::Event::KeyboardInput(winit::ElementState::Pressed, _, key) if key == A::get_exit_key() => return,
+                winit::Event::Resized(width, height) => {
+                    let (new_color, new_depth) = gfx_window_glutin::new_views(&window);
+                    let new_aspect_ratio = width as f32 / height as f32;
+                    app.on_resize(WindowTargets {
+                        color: new_color,
+                        depth: new_depth,
+                        aspect_ratio: new_aspect_ratio
+                    });
+                },
+                _ => app.on(event),
             }
         }
         // draw a frame
@@ -304,14 +307,11 @@ pub type DefaultResources = gfx_device_vulkan::Resources;
 pub trait Application<R: gfx::Resources>: Sized {
     fn new<F: gfx::Factory<R>>(F, shade::Backend, WindowTargets<R>) -> Self;
     fn render<C: gfx::CommandBuffer<R>>(&mut self, &mut gfx::Encoder<R, C>);
-    fn on_resize(&mut self, WindowTargets<R>);
-    fn on(&mut self, event: winit::Event) -> bool {
-        match event {
-            winit::Event::KeyboardInput(_, _, Some(winit::VirtualKeyCode::Escape)) |
-            winit::Event::Closed => false,
-            _ => true
-        }
+    fn get_exit_key() -> Option<winit::VirtualKeyCode> {
+        Some(winit::VirtualKeyCode::Escape)
     }
+    fn on_resize(&mut self, WindowTargets<R>);
+    fn on(&mut self, _event: winit::Event) {}
 
     fn launch_simple(name: &str) where Self: Application<DefaultResources> {
         let wb = winit::WindowBuilder::new().with_title(name);
@@ -361,7 +361,11 @@ impl<R, C, A> ApplicationBase<R, C> for Wrap<R, C, A>
         self.encoder.flush(device);
     }
 
-    fn on(&mut self, event: winit::Event) -> bool {
+    fn get_exit_key() -> Option<winit::VirtualKeyCode> {
+        A::get_exit_key()
+    }
+
+    fn on(&mut self, event: winit::Event) {
         self.app.on(event)
     }
 
