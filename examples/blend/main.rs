@@ -81,7 +81,8 @@ struct App<R: gfx::Resources>{
 }
 
 impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
-    fn new<F: gfx::Factory<R>>(mut factory: F, backend: gfx_app::shade::Backend, window_targets: gfx_app::WindowTargets<R>) -> Self {
+    fn new<F: gfx::Factory<R>>(factory: &mut F, backend: gfx_app::shade::Backend,
+           window_targets: gfx_app::WindowTargets<R>) -> Self {
         use gfx::traits::FactoryExt;
 
         let vs = gfx_app::shade::Source {
@@ -109,8 +110,8 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         ];
         let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, ());
 
-        let lena_texture = load_texture(&mut factory, &include_bytes!("image/lena.png")[..]).unwrap();
-        let tint_texture = load_texture(&mut factory, &include_bytes!("image/tint.png")[..]).unwrap();
+        let lena_texture = load_texture(factory, &include_bytes!("image/lena.png")[..]).unwrap();
+        let tint_texture = load_texture(factory, &include_bytes!("image/tint.png")[..]).unwrap();
         let sampler = factory.create_sampler_linear();
 
         let pso = factory.create_pipeline_simple(
@@ -150,19 +151,16 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         self.bundle.encode(encoder);
     }
 
-    fn on(&mut self, event: winit::Event) -> bool {
+    fn on(&mut self, event: winit::Event) {
         match event {
-            winit::Event::KeyboardInput(_, _, Some(winit::VirtualKeyCode::Escape)) |
-            winit::Event::Closed => false,
             winit::Event::KeyboardInput(winit::ElementState::Pressed, _, Some(winit::VirtualKeyCode::B)) => {
                 self.id += 1;
                 if self.id as usize >= BLENDS.len() {
                     self.id = 0;
                 }
                 println!("Using '{}' blend equation", BLENDS[self.id as usize]);
-                true
             },
-            _ => true
+            _ => ()
         }
     }
 

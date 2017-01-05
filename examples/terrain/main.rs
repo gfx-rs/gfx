@@ -75,7 +75,8 @@ struct App<R: gfx::Resources> {
 }
 
 impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
-    fn new<F: gfx::Factory<R>>(mut factory: F, backend: gfx_app::shade::Backend, window_targets: gfx_app::WindowTargets<R>) -> Self {
+    fn new<F: gfx::Factory<R>>(factory: &mut F, backend: gfx_app::shade::Backend,
+           window_targets: gfx_app::WindowTargets<R>) -> Self {
         use gfx::traits::FactoryExt;
 
         let vs = gfx_app::shade::Source {
@@ -162,8 +163,12 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         encoder.draw(&self.slice, &self.pso, &self.data);
     }
 
-    fn  on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {
-        // TODO
+    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {
+        self.data.out_color = window_targets.color;
+        self.data.out_depth = window_targets.depth;
+        self.data.proj = cgmath::perspective(
+            cgmath::deg(60.0f32), window_targets.aspect_ratio, 0.1, 1000.0
+            ).into();
     }
 }
 

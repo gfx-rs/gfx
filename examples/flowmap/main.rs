@@ -72,7 +72,8 @@ struct App<R: gfx::Resources>{
 }
 
 impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
-    fn new<F: gfx::Factory<R>>(mut factory: F, backend: gfx_app::shade::Backend, window_targets: gfx_app::WindowTargets<R>) -> Self {
+    fn new<F: gfx::Factory<R>>(factory: &mut F, backend: gfx_app::shade::Backend,
+           window_targets: gfx_app::WindowTargets<R>) -> Self {
         use gfx::traits::FactoryExt;
 
         let vs = gfx_app::shade::Source {
@@ -102,9 +103,9 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
         let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, ());
 
-        let water_texture = load_texture(&mut factory, &include_bytes!("image/water.png")[..]).unwrap();
-        let flow_texture  = load_texture(&mut factory, &include_bytes!("image/flow.png")[..]).unwrap();
-        let noise_texture = load_texture(&mut factory, &include_bytes!("image/noise.png")[..]).unwrap();
+        let water_texture = load_texture(factory, &include_bytes!("image/water.png")[..]).unwrap();
+        let flow_texture  = load_texture(factory, &include_bytes!("image/flow.png")[..]).unwrap();
+        let noise_texture = load_texture(factory, &include_bytes!("image/noise.png")[..]).unwrap();
         let sampler = factory.create_sampler_linear();
 
         let pso = factory.create_pipeline_simple(

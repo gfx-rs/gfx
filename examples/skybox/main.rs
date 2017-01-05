@@ -87,7 +87,8 @@ struct App<R: gfx::Resources>{
 }
 
 impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
-    fn new<F: gfx::Factory<R>>(mut factory: F, backend: gfx_app::shade::Backend, window_targets: gfx_app::WindowTargets<R>) -> Self {
+    fn new<F: gfx::Factory<R>>(factory: &mut F, backend: gfx_app::shade::Backend,
+           window_targets: gfx_app::WindowTargets<R>) -> Self {
         use gfx::traits::FactoryExt;
 
         let vs = gfx_app::shade::Source {
@@ -108,7 +109,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         ];
         let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, ());
 
-        let cubemap = load_cubemap(&mut factory, CubemapData {
+        let cubemap = load_cubemap(factory, CubemapData {
             up: &include_bytes!("image/posy.jpg")[..],
             down: &include_bytes!("image/negy.jpg")[..],
             front: &include_bytes!("image/posz.jpg")[..],
@@ -168,7 +169,8 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
     }
 
     fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {
-        // TODO
+        self.bundle.data.out = window_targets.color;
+        self.projection = cgmath::perspective(cgmath::deg(60.0f32), window_targets.aspect_ratio, 0.01, 100.0);
     }
 }
 

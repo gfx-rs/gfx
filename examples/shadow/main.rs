@@ -430,8 +430,8 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
     R: gfx::Resources + 'static,
     C: gfx::CommandBuffer<R> + Send + 'static,
 {
-    fn new<F>(mut factory: F, backend: gfx_app::shade::Backend, window_targets: gfx_app::WindowTargets<R>) -> Self where
-        F: gfx_app::Factory<R, CommandBuffer=C>,
+    fn new<F>(factory: &mut F, backend: gfx_app::shade::Backend, window_targets: gfx_app::WindowTargets<R>) -> Self
+    where F: gfx_app::Factory<R, CommandBuffer=C>,
     {
         use std::env;
         use gfx::traits::FactoryExt;
@@ -493,7 +493,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
                 ).unwrap()
         };
 
-        let scene = create_scene(&mut factory,
+        let scene = create_scene(factory,
             window_targets.color.clone(),
             window_targets.depth.clone(),
             shadow_pso);
@@ -517,9 +517,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
                 pos: [light.position.x, light.position.y, light.position.z, 1.0],
                 color: light.color,
                 proj: {
-                    use cgmath::Matrix4;
-
-                    let mx_proj: Matrix4<_> = light.projection.into();
+                    let mx_proj = cgmath::Matrix4::from(light.projection);
                     (mx_proj * light.mx_view).into()
                 },
             }).collect();
@@ -616,16 +614,24 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
         self.encoder.flush(device);
     }
 
-    fn on(&mut self, event: winit::Event) -> bool {
+    fn get_exit_key() -> Option<winit::VirtualKeyCode> {
+        Some(winit::VirtualKeyCode::Escape)
+    }
+
+    fn on(&mut self, event: winit::Event) {
         match event {
-            winit::Event::KeyboardInput(_, _, Some(winit::VirtualKeyCode::Escape)) |
-            winit::Event::Closed => false,
-            _ => true
+            _ => () //TODO
         }
     }
 
-    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {
-        // TODO
+    fn on_resize<F>(&mut self, _factory: &mut F, window_targets: gfx_app::WindowTargets<R>)
+    where F: gfx_app::Factory<R, CommandBuffer=C>
+    {
+        for ent in self.scene.share.write().unwrap().entities.iter_mut() {
+            ent.batch_forward.out_color = window_targets.color.clone();
+            ent.batch_forward.out_depth = window_targets.depth.clone();
+        }
+        self.window_targets = window_targets;
     }
 }
 

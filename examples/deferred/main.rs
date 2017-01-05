@@ -230,12 +230,13 @@ struct App<R: gfx::Resources> {
 }
 
 impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
-    fn new<F: gfx::Factory<R>>(mut factory: F, backend: gfx_app::shade::Backend, window_targets: gfx_app::WindowTargets<R>) -> Self {
+    fn new<F: gfx::Factory<R>>(factory: &mut F, backend: gfx_app::shade::Backend,
+           window_targets: gfx_app::WindowTargets<R>) -> Self {
         use gfx::traits::FactoryExt;
 
         let (width, height, _, _) = window_targets.color.get_dimensions();
         let (gpos, gnormal, gdiffuse, depth_resource, depth_target) =
-            create_g_buffer(width, height, &mut factory);
+            create_g_buffer(width, height, factory);
         let res = {
             let (_ , srv, rtv) = factory.create_render_target(width, height).unwrap();
             ViewPair{ resource: srv, target: rtv }
@@ -551,11 +552,8 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         self.blit.encode(encoder);
     }
 
-    fn on(&mut self, event: Event) -> bool {
+    fn on(&mut self, event: Event) {
         match event {
-            Event::Closed |
-            Event::KeyboardInput(_, _, Some(VirtualKeyCode::Escape)) =>
-                return false,
             Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key1)) =>
                 self.debug_buf = Some(self.light.data.tex_pos.0.clone()),
             Event::KeyboardInput(_, _, Some(VirtualKeyCode::Key2)) =>
@@ -568,11 +566,37 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 self.debug_buf = None,
             _ => (),
         }
-        true
     }
 
-    // TODO
-    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {}
+    fn on_resize_ext<F: gfx::Factory<R>>(&mut self, factory: &mut F, window_targets: gfx_app::WindowTargets<R>) {
+        let (width, height, _, _) = window_targets.color.get_dimensions();
+
+        let (gpos, gnormal, gdiffuse, depth_resource, depth_target) =
+            create_g_buffer(width, height, factory);
+        self.intermediate = {
+            let (_ , srv, rtv) = factory.create_render_target(width, height).unwrap();
+            ViewPair{ resource: srv, target: rtv }
+        };
+
+        self.terrain.data.out_position = gpos.target.clone();
+        self.terrain.data.out_normal = gnormal.target.clone();
+        self.terrain.data.out_color = gdiffuse.target.clone();
+        self.terrain.data.out_depth = depth_target.clone();
+
+        self.blit.data.out = window_targets.color;
+        self.blit.data.tex.0 = gpos.resource.clone();
+
+        self.light.data.tex_pos.0 = gpos.resource.clone();
+        self.light.data.tex_normal.0 = gnormal.resource.clone();
+        self.light.data.tex_diffuse.0 = gdiffuse.resource.clone();
+        self.light.data.out_color = self.intermediate.target.clone();
+        self.light.data.out_depth = depth_target.clone();
+
+        self.emitter.data.out_color = self.intermediate.target.clone();
+        self.emitter.data.out_depth = depth_target.clone();
+
+        self.depth_resource = depth_resource;
+    }
 }
 
 pub fn main() {

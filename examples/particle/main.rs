@@ -75,7 +75,8 @@ fn create_shader_set<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F, vs_
 }
 
 impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
-    fn new<F: gfx::Factory<R>>(mut factory: F, backend: gfx_app::shade::Backend, window_targets: gfx_app::WindowTargets<R>) -> Self {
+    fn new<F: gfx::Factory<R>>(factory: &mut F, backend: gfx_app::shade::Backend,
+           window_targets: gfx_app::WindowTargets<R>) -> Self {
         use gfx::traits::FactoryExt;
 
         // Compute the aspect ratio so that our particles aren't stretched
@@ -100,7 +101,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         };
 
         let shader_set = create_shader_set(
-            &mut factory,
+            factory,
             vs.select(backend).unwrap(),
             gs.select(backend).unwrap(),
             ps.select(backend).unwrap(),
