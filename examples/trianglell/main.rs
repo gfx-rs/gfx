@@ -15,11 +15,13 @@
 extern crate gfx_corell;
 
 #[cfg(target_os = "windows")]
-extern crate gfx_device_dx12ll;
+extern crate gfx_device_dx12ll as dx12;
 #[cfg(feature = "vulkanll")]
-extern crate gfx_device_vulkanll;
+extern crate gfx_device_vulkanll as vulkan;
 
 extern crate winit;
+
+use gfx_corell::{Instance, PhysicalDevice};
 
 fn main() {
     let window = winit::WindowBuilder::new()
@@ -27,6 +29,11 @@ fn main() {
         .with_title("triangle (Low Level)".to_string())
         .build()
         .unwrap();
+
+    let instance = dx12::Instance::create();
+    for device in instance.enumerate_physical_devices() {
+        println!("{:?}", device.get_info());
+    }
 
     'main: loop {
         for event in window.poll_events() {

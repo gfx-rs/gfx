@@ -67,6 +67,8 @@ pub enum IndexType {
 pub trait Instance {
     type B: Backend;
 
+    fn create() -> Self;
+
     // TODO: Use an iterator instead of Vec?
     fn enumerate_physical_devices(&self) -> Vec<<<Self as Instance>::B as Backend>::PhysicalDevice>;
 }
@@ -75,6 +77,19 @@ pub trait PhysicalDevice {
     type B: Backend;
 
     fn open(&self) -> (<<Self as PhysicalDevice>::B as Backend>::Device, Vec<<<Self as PhysicalDevice>::B as Backend>::CommandQueue>);
+    fn get_info(&self) -> PhysicalDeviceInfo;
+}
+
+#[derive(Clone, Debug)]
+pub struct PhysicalDeviceInfo {
+    /// Phyiscal device name
+    pub name: String,
+    /// Vendor PCI id of the physical device
+    pub vendor: usize,
+    /// PCI id of the physical device
+    pub device: usize,
+    /// The device is based on a software rasterizer
+    pub software_rendering: bool,
 }
 
 pub trait Device {
@@ -85,7 +100,7 @@ pub trait CommandQueue {
     type B: Backend;
 
     /// Submits a `CommandBuffer` to the GPU queue for execution.
-    fn submit(&mut self, &mut <<Self as CommandQueue>::B as Backend>::CommandBuffer);
+    fn submit(&mut self, cmd_buffer: &<<Self as CommandQueue>::B as Backend>::CommandBuffer);
 }
 
 pub trait SwapChain {

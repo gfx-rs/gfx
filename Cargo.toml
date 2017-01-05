@@ -11,7 +11,7 @@ documentation = "https://docs.rs/gfx"
 [features]
 default = []
 sdl = ["gfx_window_sdl"]
-vulkan = ["gfx_device_vulkan", "gfx_window_vulkan"]
+vulkan = ["gfx_device_vulkan", "gfx_device_vulkanll", "gfx_window_vulkan"]
 metal = ["gfx_device_metal", "gfx_window_metal"]
 unstable = []
 
