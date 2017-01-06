@@ -16,7 +16,7 @@ extern crate gfx_corell;
 
 #[cfg(target_os = "windows")]
 extern crate gfx_device_dx12ll as dx12;
-#[cfg(feature = "vulkanll")]
+#[cfg(feature = "vulkan")]
 extern crate gfx_device_vulkanll as vulkan;
 
 extern crate winit;
