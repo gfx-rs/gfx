@@ -23,7 +23,7 @@ use std::{fmt, mem};
 
 use core::{Device, IndexType, Resources, VertexCount};
 use core::{command, format, handle, texture};
-use core::memory::{self, cast_slice, Typed, Pod, Usage};
+use core::memory::{self, cast_slice, Typed, Pod};
 use slice;
 use pso;
 
@@ -39,17 +39,14 @@ pub enum UpdateError<T> {
         target: usize,
         slice: usize,
     },
-    InvalidUsage(Usage),
-    IsMapped,
+    NoBindFlag,
 }
 
-// check for `InvalidUsage` and `IsMapped`
-fn update_is_ok(usage: Usage) -> Result<(), UpdateError<usize>> {
-    // TODO: will need to rethink this with #970
-    match usage {
-        Usage::Dynamic => Ok(()),
-        Usage::CpuOnly(access) if access.contains(memory::WRITE) => Ok(()),
-        _ => Err(UpdateError::InvalidUsage(usage)),
+fn check_update_bound<T>(bind: memory::Bind) -> Result<(), UpdateError<T>> {
+    if bind.contains(memory::TRANSFER_DST) {
+        Ok(())
+    } else {
+        Err(UpdateError::NoBindFlag)
     }
 }
 
@@ -60,9 +57,7 @@ impl<T: Any + fmt::Debug + fmt::Display> fmt::Display for UpdateError<T> {
                 write!(f, "Write to {} from {} is out of bounds", target, source),
             UpdateError::UnitCountMismatch {ref target, ref slice} =>
                 write!(f, "{}: expected {}, found {}", self.description(), target, slice),
-            UpdateError::InvalidUsage(usage) =>
-                write!(f, "{}: {:?}", self.description(), usage),
-            UpdateError::IsMapped => write!(f, "{}", self.description()),
+            _ => write!(f, "{}", self.description()),
         }
     }
 }
@@ -72,8 +67,7 @@ impl<T: Any + fmt::Debug + fmt::Display> Error for UpdateError<T> {
         match *self {
             UpdateError::OutOfBounds {..} => "Write to data is out of bounds",
             UpdateError::UnitCountMismatch {..} => "Unit count mismatch",
-            UpdateError::InvalidUsage(_) => "This memory usage does not allow updates",
-            UpdateError::IsMapped => "Attempting to update mapped memory",
+            UpdateError::NoBindFlag => "The `TRANSFER_DST` flag is not present",
         }
     }
 }
@@ -134,7 +128,7 @@ impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
                          -> Result<(), UpdateError<usize>>
     {
         if data.is_empty() { return Ok(()); }
-        try!(update_is_ok(buf.raw().get_info().usage));
+        try!(check_update_bound(buf.raw().get_info().bind));
 
         let elem_size = mem::size_of::<T>();
         let offset_bytes = elem_size * offset_elements;
@@ -156,7 +150,7 @@ impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
     pub fn update_constant_buffer<T: Copy>(&mut self, buf: &handle::Buffer<R, T>, data: &T) {
         use std::slice;
 
-        update_is_ok(buf.raw().get_info().usage).unwrap();
+        check_update_bound::<usize>(buf.raw().get_info().bind).unwrap();
 
         let slice = unsafe {
             slice::from_raw_parts(data as *const T as *const u8, mem::size_of::<T>())
@@ -176,7 +170,7 @@ impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
         T: format::Formatted<Surface = S>,
     {
         if data.is_empty() { return Ok(()); }
-        update_is_ok(tex.raw().get_info().usage).unwrap();
+        try!(check_update_bound(tex.raw().get_info().bind));
 
         let target_count = img.get_texel_count();
         if target_count != data.len() {

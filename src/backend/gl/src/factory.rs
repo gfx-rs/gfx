@@ -13,13 +13,12 @@
 // limitations under the License.
 
 use std::rc::Rc;
-use std::slice;
+use std::{slice, ptr};
 
 use {gl, tex};
-use core::{self as d, factory as f, texture as t, buffer};
+use core::{self as d, factory as f, texture as t, buffer, mapping};
 use core::memory::{self, Bind, SHADER_RESOURCE, UNORDERED_ACCESS, Typed};
 use core::format::ChannelType;
-use core::mapping::{self, Builder};
 use core::handle::{self, Producer};
 use core::target::{Layer, Level};
 
@@ -34,6 +33,7 @@ fn role_to_target(role: buffer::Role) -> gl::types::GLenum {
         buffer::Role::Vertex   => gl::ARRAY_BUFFER,
         buffer::Role::Index    => gl::ELEMENT_ARRAY_BUFFER,
         buffer::Role::Constant => gl::UNIFORM_BUFFER,
+        buffer::Role::Staging  => gl::ARRAY_BUFFER,
     }
 }
 
@@ -126,12 +126,16 @@ impl Factory {
         };
 
         if self.share.private_caps.buffer_storage_supported {
-            let usage = match info.usage {
-                GpuOnly | Immutable => 0,
-                Dynamic => gl::DYNAMIC_STORAGE_BIT,
-                Mappable(access) => access_to_map_bits(access) | gl::MAP_PERSISTENT_BIT,
-                CpuOnly(_) => gl::DYNAMIC_STORAGE_BIT,
+            let mut usage = match info.usage {
+                Data => 0,
+                Upload => access_to_map_bits(memory::WRITE) | gl::MAP_PERSISTENT_BIT,
+                Download => access_to_map_bits(memory::READ) | gl::MAP_PERSISTENT_BIT,
             };
+            if info.bind.contains(memory::TRANSFER_DST) {
+                // is this really what we want ?
+                // this is not needed for glCopyBufferSubData
+                usage |= gl::DYNAMIC_STORAGE_BIT;
+            }
             unsafe {
                 gl.BindBuffer(target, buffer);
                 gl.BufferStorage(target,
@@ -143,19 +147,9 @@ impl Factory {
         }
         else {
             let usage = match info.usage {
-                GpuOnly => gl::STATIC_DRAW,
-                Immutable => gl::STATIC_DRAW,
-                Dynamic => gl::STREAM_DRAW,
-                Mappable(access) => match access {
-                    memory::RW => gl::DYNAMIC_COPY,
-                    memory::READ => gl::DYNAMIC_READ,
-                    memory::WRITE => gl::DYNAMIC_DRAW,
-                    _ => unreachable!(),
-                },
-                CpuOnly(access) => match access {
-                    memory::READ => gl::STREAM_READ,
-                    _ => gl::DYNAMIC_DRAW,
-                }
+                Data => gl::STATIC_DRAW,
+                Upload => gl::DYNAMIC_DRAW,
+                Download => gl::STREAM_READ,
             };
             unsafe {
                 gl.BindBuffer(target, buffer);
@@ -220,6 +214,7 @@ impl Factory {
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum MappingKind {
     Persistent(mapping::Status<R>),
+    // TODO: use null pointer instead of boolean ?
     Temporary { is_mapped: bool },
 }
 
@@ -228,6 +223,8 @@ pub enum MappingKind {
 pub struct MappingGate {
     pub kind: MappingKind,
     pub pointer: *mut ::std::os::raw::c_void,
+    // TODO: is there any point in using something else than `GL_ARRAY_BUFFER`
+    // for mapping target ?
     pub target: gl::types::GLenum,
 }
 
@@ -302,7 +299,7 @@ impl f::Factory<R> for Factory {
         let name = self.create_buffer_internal();
         let info = buffer::Info {
             role: role,
-            usage: memory::Usage::Immutable,
+            usage: memory::Usage::Data,
             bind: bind,
             size: data.len(),
             stride: stride,
@@ -504,12 +501,7 @@ impl f::Factory<R> for Factory {
                 } as *mut ::std::os::raw::c_void;
                 (MappingKind::Persistent(mapping::Status::clean()), ptr)
             } else {
-                // TODO: do we really want to map it at once ?
-                let ptr = unsafe {
-                    gl.BindBuffer(target, raw_handle);
-                    gl.MapBuffer(target, access_to_gl(access))
-                } as *mut ::std::os::raw::c_void;
-                (MappingKind::Temporary { is_mapped: true }, ptr)
+                (MappingKind::Temporary { is_mapped: false }, ptr::null_mut())
             };
             if let Err(err) = share.check() {
                 panic!("Error {:?} mapping buffer: {:?}, with access: {:?}", err, buf.get_info(), access)
@@ -521,24 +513,6 @@ impl f::Factory<R> for Factory {
                 target: target,
             }
         })
-    }
-
-    fn map_buffer_readable<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
-                                    -> Result<mapping::ReadableOnly<R, T>, mapping::Error> {
-        let map = try!(self.map_buffer_raw(buf.raw(), memory::READ));
-        Ok(self.map_readable(map, buf.len()))
-    }
-
-    fn map_buffer_writable<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
-                                    -> Result<mapping::WritableOnly<R, T>, mapping::Error> {
-        let map = try!(self.map_buffer_raw(buf.raw(), memory::WRITE));
-        Ok(self.map_writable(map, buf.len()))
-    }
-
-    fn map_buffer_rw<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
-                              -> Result<mapping::RWable<R, T>, mapping::Error> {
-        let map = try!(self.map_buffer_raw(buf.raw(), memory::RW));
-        Ok(self.map_read_write(map, buf.len()))
     }
 
     fn read_mapping<'a, 'b, M, T>(&'a mut self, m: &'b mut M)
@@ -570,27 +544,6 @@ impl f::Factory<R> for Factory {
         let handles = &mut self.frame_handles;
         unsafe {
             m.write(|inner| match inner.resource.kind {
-                MappingKind::Persistent(ref mut status) =>
-                    status.cpu_write_access(|fence| wait_fence(&handles.ref_fence(&fence), gl)),
-                MappingKind::Temporary { ref mut is_mapped } =>
-                    temporary_ensure_mapped(is_mapped,
-                                            &mut inner.resource.pointer,
-                                            inner.resource.target,
-                                            *inner.buffer.resource(),
-                                            inner.access,
-                                            gl),
-            })
-        }
-    }
-
-    fn rw_mapping<'a, 'b, T>(&'a mut self, m: &'b mut mapping::RWable<R, T>)
-                             -> mapping::RWer<'b, R, T>
-        where T: Copy
-    {
-        let gl = &self.share.context;
-        let handles = &mut self.frame_handles;
-        unsafe {
-            m.read_write(|inner| match inner.resource.kind {
                 MappingKind::Persistent(ref mut status) =>
                     status.cpu_write_access(|fence| wait_fence(&handles.ref_fence(&fence), gl)),
                 MappingKind::Temporary { ref mut is_mapped } =>

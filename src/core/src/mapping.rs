@@ -19,7 +19,7 @@
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Mutex, MutexGuard};
-use {Resources, Factory};
+use Resources;
 use {memory, handle};
 
 /// Unsafe, backend-provided operations for a buffer mapping
@@ -36,7 +36,8 @@ pub trait Gate<R: Resources> {
 fn valid_access(access: memory::Access, usage: memory::Usage) -> Result<(), Error> {
     use memory::Usage::*;
     match usage {
-        Mappable(a) if a.contains(access) => Ok(()),
+        Upload if access == memory::WRITE => Ok(()),
+        Download if access == memory::READ => Ok(()),
         _ => Err(Error::InvalidAccess(access, usage)),
     }
 }
@@ -165,6 +166,8 @@ impl<'a, R: Resources, T: 'a + Copy> DerefMut for RWer<'a, R, T> {
     fn deref_mut(&mut self) -> &mut [T] { self.slice }
 }
 
+// TODO: should we keep the RW mapping stuff ?
+
 /// Readable mapping.
 pub trait Readable<R: Resources, T: Copy> {
     #[doc(hidden)]
@@ -186,6 +189,17 @@ pub struct ReadableOnly<R: Resources, T: Copy> {
     phantom: PhantomData<T>,
 }
 
+impl<R: Resources, T: Copy> ReadableOnly<R, T> {
+    #[doc(hidden)]
+    pub fn new(raw: handle::RawMapping<R>, len: usize) -> Self {
+        ReadableOnly {
+            raw: raw,
+            len: len,
+            phantom: PhantomData,
+        }
+    }
+}
+
 impl<R: Resources, T: Copy> Readable<R, T> for ReadableOnly<R, T> {
     unsafe fn read<S>(&mut self, sync: S) -> Reader<R, T>
         where S: FnOnce(&mut RawInner<R>)
@@ -199,6 +213,17 @@ pub struct WritableOnly<R: Resources, T: Copy> {
     raw: handle::RawMapping<R>,
     len: usize,
     phantom: PhantomData<T>,
+}
+
+impl<R: Resources, T: Copy> WritableOnly<R, T> {
+    #[doc(hidden)]
+    pub fn new(raw: handle::RawMapping<R>, len: usize) -> Self {
+        WritableOnly {
+            raw: raw,
+            len: len,
+            phantom: PhantomData,
+        }
+    }
 }
 
 impl<R: Resources, T: Copy> Writable<R, T> for WritableOnly<R, T> {
@@ -217,6 +242,15 @@ pub struct RWable<R: Resources, T: Copy> {
 }
 
 impl<R: Resources, T: Copy> RWable<R, T> {
+    #[doc(hidden)]
+    pub fn new(raw: handle::RawMapping<R>, len: usize) -> Self {
+        RWable {
+            raw: raw,
+            len: len,
+            phantom: PhantomData,
+        }
+    }
+
     #[doc(hidden)]
     pub unsafe fn read_write<S>(&mut self, sync: S) -> RWer<R, T>
         where S: FnOnce(&mut RawInner<R>)
@@ -238,41 +272,6 @@ impl<R: Resources, T: Copy> Writable<R, T> for RWable<R, T> {
         where S: FnOnce(&mut RawInner<R>)
     {
         self.raw.write(self.len, sync)
-    }
-}
-
-/// A service trait with methods for mapping already implemented.
-/// To be used by device back ends.
-#[doc(hidden)]
-pub trait Builder<R: Resources>: Factory<R> {
-    fn map_readable<T: Copy>(&mut self, handle::RawMapping<R>, usize) -> ReadableOnly<R, T>;
-    fn map_writable<T: Copy>(&mut self, handle::RawMapping<R>, usize) -> WritableOnly<R, T>;
-    fn map_read_write<T: Copy>(&mut self, handle::RawMapping<R>, usize) -> RWable<R, T>;
-}
-
-impl<R: Resources, F: Factory<R>> Builder<R> for F {
-    fn map_readable<T: Copy>(&mut self, raw: handle::RawMapping<R>, len: usize) -> ReadableOnly<R, T> {
-        ReadableOnly {
-            raw: raw,
-            len: len,
-            phantom: PhantomData,
-        }
-    }
-
-    fn map_writable<T: Copy>(&mut self, raw: handle::RawMapping<R>, len: usize) -> WritableOnly<R, T> {
-        WritableOnly {
-            raw: raw,
-            len: len,
-            phantom: PhantomData,
-        }
-    }
-
-    fn map_read_write<T: Copy>(&mut self, raw: handle::RawMapping<R>, len: usize) -> RWable<R, T> {
-        RWable {
-            raw: raw,
-            len: len,
-            phantom: PhantomData,
-        }
     }
 }
 

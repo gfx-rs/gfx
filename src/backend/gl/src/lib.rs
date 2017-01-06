@@ -190,7 +190,7 @@ pub fn create_main_targets_raw(dim: texture::Dimensions, color_format: format::S
             kind: texture::Kind::D2(dim.0, dim.1, dim.3),
             format: color_format,
             bind: RENDER_TARGET,
-            usage: memory::Usage::GpuOnly,
+            usage: memory::Usage::Data,
         },
     );
     let depth_tex = temp.make_texture(
@@ -200,7 +200,7 @@ pub fn create_main_targets_raw(dim: texture::Dimensions, color_format: format::S
             kind: texture::Kind::D2(dim.0, dim.1, dim.3),
             format: depth_format,
             bind: DEPTH_STENCIL,
-            usage: memory::Usage::GpuOnly,
+            usage: memory::Usage::Data,
         },
     );
     let m_color = temp.make_rtv(TargetView::Surface(0), &color_tex, dim);

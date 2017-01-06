@@ -93,7 +93,7 @@ impl<R: Resources + hash::Hash> hash::Hash for Raw<R> {
     }
 }
 
-/// Role of the memory buffer. GLES doesn't allow chaning bind points for buffers.
+/// Role of the memory buffer.
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 #[repr(u8)]
 pub enum Role {
@@ -103,6 +103,8 @@ pub enum Role {
     Index,
     /// Constant buffer
     Constant,
+    /// Staging buffer
+    Staging,
 }
 
 /// An information block that is immutable and associated to each buffer.

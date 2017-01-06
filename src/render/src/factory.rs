@@ -125,51 +125,40 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
         })
     }
 
-    /// Create a constant buffer for `num` identical elements of type `T`.
-    fn create_constant_buffer<T>(&mut self, num: usize) -> handle::Buffer<R, T> {
-        self.create_buffer_dynamic(num, buffer::Role::Constant, Bind::empty())
-            .unwrap()
-    }
-
-    /// Creates and maps a readable buffer.
-    fn create_mapped_buffer_readable<T>(&mut self,
-                                        num: usize,
-                                        role: buffer::Role,
-                                        bind: Bind) -> (handle::Buffer<R, T>,
-                                                        mapping::ReadableOnly<R, T>)
+    /// Creates a constant buffer for `num` identical elements of type `T`.
+    fn create_constant_buffer<T>(&mut self, num: usize)
+                                 -> (handle::Buffer<R, T>,
+                                     mapping::WritableOnly<R, T>)
         where T: Copy
     {
-        let buffer = self.create_buffer_mappable(num, role, bind, memory::READ)
-            .unwrap();
-        let mapping = self.map_buffer_readable(&buffer).unwrap();
-        (buffer, mapping)
+        self.create_upload_buffer(num, buffer::Role::Constant, Bind::empty())
     }
 
-    /// Creates and maps a writable buffer.
-    fn create_mapped_buffer_writable<T>(&mut self,
-                                        num: usize,
-                                        role: buffer::Role,
-                                        bind: Bind) -> (handle::Buffer<R, T>,
-                                                        mapping::WritableOnly<R, T>)
+    /// Creates and maps an upload buffer.
+    fn create_upload_buffer<T>(&mut self,
+                               num: usize,
+                               role: buffer::Role,
+                               bind: Bind) -> (handle::Buffer<R, T>,
+                                               mapping::WritableOnly<R, T>)
         where T: Copy
     {
-        let buffer = self.create_buffer_mappable(num, role, bind, memory::WRITE)
+        let buffer = self.create_buffer(num, role, memory::Usage::Upload, bind)
             .unwrap();
         let mapping = self.map_buffer_writable(&buffer).unwrap();
         (buffer, mapping)
     }
 
-    /// Creates and maps a readable and writable buffer.
-    fn create_mapped_buffer_rw<T>(&mut self,
-                                  num: usize,
-                                  role: buffer::Role,
-                                  bind: Bind) -> (handle::Buffer<R, T>,
-                                                  mapping::RWable<R, T>)
+    /// Creates and maps a download buffer.
+    fn create_download_buffer<T>(&mut self,
+                                 num: usize,
+                                 role: buffer::Role,
+                                 bind: Bind) -> (handle::Buffer<R, T>,
+                                                 mapping::ReadableOnly<R, T>)
         where T: Copy
     {
-        let buffer = self.create_buffer_mappable(num, role, bind, memory::RW)
+        let buffer = self.create_buffer(num, role, memory::Usage::Download, bind)
             .unwrap();
-        let mapping = self.map_buffer_rw(&buffer).unwrap();
+        let mapping = self.map_buffer_readable(&buffer).unwrap();
         (buffer, mapping)
     }
 
