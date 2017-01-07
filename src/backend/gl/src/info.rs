@@ -229,11 +229,12 @@ impl Info {
 /// capabilities.
 pub fn get(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
     let info = Info::get(gl);
+    let tessellation_supported =           info.is_version_or_extension_supported(4, 0, "GL_ARB_tessellation_shader");
     let caps = Capabilities {
         max_vertex_count: get_usize(gl, gl::MAX_ELEMENTS_VERTICES),
         max_index_count:  get_usize(gl, gl::MAX_ELEMENTS_INDICES),
         max_texture_size: get_usize(gl, gl::MAX_TEXTURE_SIZE),
-        max_patch_size: get_usize(gl, gl::MAX_PATCH_VERTICES),
+        max_patch_size: if tessellation_supported { get_usize(gl, gl::MAX_PATCH_VERTICES) } else {0},
 
         instance_base_supported:           info.is_version_or_extension_supported(4, 2, "GL_ARB_base_instance"),
         instance_call_supported:           info.is_version_or_extension_supported(3, 1, "GL_ARB_draw_instanced"),
