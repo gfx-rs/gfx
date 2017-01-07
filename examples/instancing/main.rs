@@ -112,13 +112,16 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
          let size = 1.6 / instances_per_length as f32;
         println!("size: {}", size);
 
-        let (instance_buffer, mut instance_mapping) = factory
-            .create_mapped_buffer_writable(MAX_INSTANCE_COUNT,
-                                     gfx::buffer::Role::Vertex,
-                                     gfx::Bind::empty());
+        // the buffer might not be device local, for faster GPU access
+        // one may want to transfer its contents to a buffer that is
+        let instances = factory
+            .create_buffer(MAX_INSTANCE_COUNT,
+                           gfx::buffer::Role::Vertex,
+                           gfx::memory::Usage::Upload,
+                           gfx::Bind::empty()).unwrap();
         {
-            let mut instances = factory.write_mapping(&mut instance_mapping);
-            fill_instances(&mut instances, instances_per_length, size);
+            let mut writer = factory.write_mapping(&instances).unwrap();
+            fill_instances(&mut writer, instances_per_length, size);
         }
 
         let (quad_vertices, mut slice) = factory
@@ -134,7 +137,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 ).unwrap(),
             data: pipe::Data {
                 vertex: quad_vertices,
-                instance: instance_buffer,
+                instance: instances,
                 scale: size,
                 locals: factory
                     .create_buffer_immutable(&[locals], gfx::buffer::Role::Constant, gfx::Bind::empty())

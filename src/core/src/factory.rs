@@ -22,7 +22,7 @@ use std::{mem, fmt};
 use {buffer, handle, format, mapping, pso, shade, target, texture};
 use {Capabilities, Resources, ShaderSet,
      VertexShader, HullShader, DomainShader, GeometryShader, PixelShader};
-use memory::{self, Usage, Typed, Pod, cast_slice};
+use memory::{Usage, Typed, Pod, cast_slice};
 use memory::{Bind, RENDER_TARGET, DEPTH_STENCIL, SHADER_RESOURCE, UNORDERED_ACCESS};
 
 /// Error creating either a ShaderResourceView, or UnorderedAccessView.
@@ -234,28 +234,17 @@ pub trait Factory<R: Resources> {
 
     fn create_sampler(&mut self, texture::SamplerInfo) -> handle::Sampler<R>;
 
-    fn map_buffer_raw(&mut self, &handle::RawBuffer<R>, memory::Access)
-                      -> Result<handle::RawMapping<R>, mapping::Error>;
-    fn map_buffer_readable<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
-                                    -> Result<mapping::ReadableOnly<R, T>, mapping::Error> {
-        let map = try!(self.map_buffer_raw(buf.raw(), memory::READ));
-        Ok(mapping::ReadableOnly::new(map, buf.len()))
-    }
-    fn map_buffer_writable<T: Copy>(&mut self, buf: &handle::Buffer<R, T>)
-                                    -> Result<mapping::WritableOnly<R, T>, mapping::Error> {
-        let map = try!(self.map_buffer_raw(buf.raw(), memory::WRITE));
-        Ok(mapping::WritableOnly::new(map, buf.len()))
-    }
-
     /// Acquire a mapping Reader
-    fn read_mapping<'a, 'b, M, T>(&'a mut self, m: &'b mut M)
-                                  -> mapping::Reader<'b, R, T>
-        where M: mapping::Readable<R, T>, T: Copy;
+    fn read_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<R, T>)
+                               -> Result<mapping::Reader<'b, R, T>,
+                                         mapping::Error>
+        where T: Copy;
 
     /// Acquire a mapping Writer
-    fn write_mapping<'a, 'b, M, T>(&'a mut self, m: &'b mut M)
-                                   -> mapping::Writer<'b, R, T>
-        where M: mapping::Writable<R, T>, T: Copy;
+    fn write_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<R, T>)
+                                -> Result<mapping::Writer<'b, R, T>,
+                                          mapping::Error>
+        where T: Copy;
 
     /// Create a new empty raw texture with no data. The channel type parameter is a hint,
     /// required to assist backends that have no concept of typeless formats (OpenGL).

@@ -18,9 +18,9 @@
 
 use std::ops;
 use std::marker::PhantomData;
-use std::sync::{Arc, Weak};
-use {buffer, mapping, shade, texture, Resources};
-use memory::{self, Typed};
+use std::sync::Arc;
+use {buffer, shade, texture, Resources};
+use memory::Typed;
 
 /// Untyped buffer handle
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -210,27 +210,6 @@ impl<R: Resources> Sampler<R> {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Fence<R: Resources>(Arc<R::Fence>);
 
-/// Raw Mapping handle
-#[derive(Clone, Debug)]
-pub struct RawMapping<R: Resources>(Arc<mapping::Raw<R>>);
-
-impl<R: Resources> RawMapping<R> {
-    #[doc(hidden)]
-    pub fn downgrade(&self) -> Weak<mapping::Raw<R>> {
-        Arc::downgrade(&self.0)
-    }
-
-    #[doc(hidden)]
-    pub fn upgrade(weak: &Weak<mapping::Raw<R>>) -> Self {
-        RawMapping(weak.upgrade().unwrap())
-    }
-}
-
-impl<R: Resources> ops::Deref for RawMapping<R> {
-    type Target = mapping::Raw<R>;
-    fn deref(&self) -> &Self::Target { &self.0 }
-}
-
 /// Stores reference-counted resources used in a command buffer.
 /// Seals actual resource names behind the interface, automatically
 /// referencing them both by the Factory on resource creation
@@ -248,13 +227,15 @@ pub struct Manager<R: Resources> {
     dsvs:          Vec<Arc<R::DepthStencilView>>,
     samplers:      Vec<Arc<R::Sampler>>,
     fences:        Vec<Arc<R::Fence>>,
-    mappings:      Vec<Arc<mapping::Raw<R>>>,
 }
 
 /// A service trait to be used by the device implementation
 #[doc(hidden)]
 pub trait Producer<R: Resources> {
-    fn make_buffer(&mut self, R::Buffer, buffer::Info) -> RawBuffer<R>;
+    fn make_buffer(&mut self,
+                   R::Buffer,
+                   buffer::Info,
+                   Option<R::Mapping>) -> RawBuffer<R>;
     fn make_shader(&mut self, R::Shader) -> Shader<R>;
     fn make_program(&mut self, R::Program, shade::ProgramInfo) -> Program<R>;
     fn make_pso(&mut self, R::PipelineStateObject, &Program<R>) -> RawPipelineState<R>;
@@ -267,10 +248,6 @@ pub trait Producer<R: Resources> {
     fn make_dsv(&mut self, R::DepthStencilView, &RawTexture<R>, texture::Dimensions) -> RawDepthStencilView<R>;
     fn make_sampler(&mut self, R::Sampler, texture::SamplerInfo) -> Sampler<R>;
     fn make_fence(&mut self, name: R::Fence) -> Fence<R>;
-    fn make_mapping<F>(&mut self, access: memory::Access,
-                       buf: &RawBuffer<R>,
-                       f: F) -> Result<RawMapping<R>, mapping::Error>
-        where F: FnOnce() -> R::Mapping;
 
     /// Walk through all the handles, keep ones that are reference elsewhere
     /// and call the provided delete function (resource-specific) for others
@@ -286,13 +263,15 @@ pub trait Producer<R: Resources> {
         I: Fn(&mut T, &R::DepthStencilView),
         J: Fn(&mut T, &R::Sampler),
         K: Fn(&mut T, &R::Fence),
-        L: Fn(&mut T, &mapping::Raw<R>),
-    >(&mut self, &mut T, A, B, C, D, E, F, G, H, I, J, K, L);
+    >(&mut self, &mut T, A, B, C, D, E, F, G, H, I, J, K);
 }
 
 impl<R: Resources> Producer<R> for Manager<R> {
-    fn make_buffer(&mut self, res: R::Buffer, info: buffer::Info) -> RawBuffer<R> {
-        let r = Arc::new(buffer::Raw::new(res, info));
+    fn make_buffer(&mut self,
+                   res: R::Buffer,
+                   info: buffer::Info,
+                   mapping: Option<R::Mapping>) -> RawBuffer<R> {
+        let r = Arc::new(buffer::Raw::new(res, info, mapping));
         self.buffers.push(r.clone());
         RawBuffer(r)
     }
@@ -369,18 +348,6 @@ impl<R: Resources> Producer<R> for Manager<R> {
         Fence(r)
     }
 
-    fn make_mapping<F>(&mut self, access: memory::Access,
-                       buf: &RawBuffer<R>,
-                       f: F) -> Result<RawMapping<R>, mapping::Error>
-        where F: FnOnce() -> R::Mapping
-    {
-        let r = Arc::new(try!(mapping::Raw::new(access, buf, f)));
-        self.mappings.push(r.clone());
-        let raw = RawMapping(r);
-        buf.was_mapped(&raw);
-        Ok(raw)
-    }
-
     fn clean_with<T,
         A: Fn(&mut T, &buffer::Raw<R>),
         B: Fn(&mut T, &R::Shader),
@@ -393,8 +360,7 @@ impl<R: Resources> Producer<R> for Manager<R> {
         I: Fn(&mut T, &R::DepthStencilView),
         J: Fn(&mut T, &R::Sampler),
         K: Fn(&mut T, &R::Fence),
-        L: Fn(&mut T, &mapping::Raw<R>),
-    >(&mut self, param: &mut T, fa: A, fb: B, fc: C, fd: D, fe: E, ff: F, fg: G, fh: H, fi: I, fj: J, fk: K, fl: L) {
+    >(&mut self, param: &mut T, fa: A, fb: B, fc: C, fd: D, fe: E, ff: F, fg: G, fh: H, fi: I, fj: J, fk: K) {
         fn clean_vec<X, Param, Fun>(param: &mut Param, vector: &mut Vec<Arc<X>>, fun: Fun)
             where Fun: Fn(&mut Param, &X)
         {
@@ -423,7 +389,6 @@ impl<R: Resources> Producer<R> for Manager<R> {
         clean_vec(param, &mut self.dsvs,          fi);
         clean_vec(param, &mut self.samplers,      fj);
         clean_vec(param, &mut self.fences,        fk);
-        clean_vec(param, &mut self.mappings,      fl);
     }
 }
 
@@ -442,7 +407,6 @@ impl<R: Resources> Manager<R> {
             dsvs: Vec::new(),
             samplers: Vec::new(),
             fences: Vec::new(),
-            mappings: Vec::new(),
         }
     }
     /// Clear all references
@@ -458,7 +422,6 @@ impl<R: Resources> Manager<R> {
         self.dsvs.clear();
         self.samplers.clear();
         self.fences.clear();
-        self.mappings.clear();
     }
     /// Extend with all references of another handle manager
     pub fn extend(&mut self, other: &Manager<R>) {
@@ -473,7 +436,6 @@ impl<R: Resources> Manager<R> {
         self.dsvs     .extend(other.dsvs     .iter().map(|h| h.clone()));
         self.samplers .extend(other.samplers .iter().map(|h| h.clone()));
         self.fences   .extend(other.fences   .iter().map(|h| h.clone()));
-        self.mappings .extend(other.mappings .iter().map(|h| h.clone()));
     }
     /// Count the total number of referenced resources
     pub fn count(&self) -> usize {
@@ -487,8 +449,7 @@ impl<R: Resources> Manager<R> {
         self.rtvs.len() +
         self.dsvs.len() +
         self.samplers.len() +
-        self.fences.len() +
-        self.mappings.len()
+        self.fences.len()
     }
     /// Reference a buffer
     pub fn ref_buffer<'a>(&mut self, handle: &'a RawBuffer<R>) -> &'a R::Buffer {

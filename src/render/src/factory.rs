@@ -20,7 +20,7 @@
 
 use std::error::Error;
 use std::fmt;
-use core::{buffer, format, handle, mapping, texture, state};
+use core::{buffer, format, handle, texture, state};
 use core::{Primitive, Resources, ShaderSet};
 use core::factory::Factory;
 use core::pso::{CreationError, Descriptor};
@@ -126,40 +126,13 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     }
 
     /// Creates a constant buffer for `num` identical elements of type `T`.
-    fn create_constant_buffer<T>(&mut self, num: usize)
-                                 -> (handle::Buffer<R, T>,
-                                     mapping::WritableOnly<R, T>)
+    fn create_constant_buffer<T>(&mut self, num: usize) -> handle::Buffer<R, T>
         where T: Copy
     {
-        self.create_upload_buffer(num, buffer::Role::Constant, Bind::empty())
-    }
-
-    /// Creates and maps an upload buffer.
-    fn create_upload_buffer<T>(&mut self,
-                               num: usize,
-                               role: buffer::Role,
-                               bind: Bind) -> (handle::Buffer<R, T>,
-                                               mapping::WritableOnly<R, T>)
-        where T: Copy
-    {
-        let buffer = self.create_buffer(num, role, memory::Usage::Upload, bind)
-            .unwrap();
-        let mapping = self.map_buffer_writable(&buffer).unwrap();
-        (buffer, mapping)
-    }
-
-    /// Creates and maps a download buffer.
-    fn create_download_buffer<T>(&mut self,
-                                 num: usize,
-                                 role: buffer::Role,
-                                 bind: Bind) -> (handle::Buffer<R, T>,
-                                                 mapping::ReadableOnly<R, T>)
-        where T: Copy
-    {
-        let buffer = self.create_buffer(num, role, memory::Usage::Download, bind)
-            .unwrap();
-        let mapping = self.map_buffer_readable(&buffer).unwrap();
-        (buffer, mapping)
+        self.create_buffer(num,
+                           buffer::Role::Constant,
+                           memory::Usage::Data,
+                           memory::TRANSFER_DST).unwrap()
     }
 
     /// Creates a `ShaderSet` from the supplied vertex and pixel shader source code.

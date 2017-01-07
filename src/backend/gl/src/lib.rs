@@ -25,7 +25,7 @@ extern crate gfx_core as core;
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use core::{self as c, handle, state as s, format, pso, texture, memory, command as com, buffer, mapping};
+use core::{self as c, handle, state as s, format, pso, texture, memory, command as com, buffer};
 use core::memory::{RENDER_TARGET, DEPTH_STENCIL};
 use core::target::{Layer, Level};
 use command::{Command, DataBuffer};
@@ -760,15 +760,13 @@ impl Device {
     }
 
     // MappingKind::Persistent
-    fn ensure_mappings_flushed(&mut self, mappings: &[handle::RawMapping<Resources>]) {
+    fn ensure_mappings_flushed(&mut self, buffers: &[handle::RawBuffer<Resources>]) {
         let gl = &self.share.context;
-        for mapping in mappings {
-            let mut inner = mapping.access()
-                .expect("user error: mapping still in use on submit");
+        for buffer in buffers {
+            let mut mapping = buffer.lock_mapping().unwrap();
 
-            let mapping::RawInner { ref mut resource, ref buffer, .. } = *inner;
-            let target = resource.target;
-            let status = match &mut resource.kind {
+            let target = factory::role_to_target(buffer.get_info().role);
+            let status = match &mut mapping.kind {
                 &mut MappingKind::Persistent(ref mut status) => status,
                 _ => panic!("expected persistent mapping"),
             };
@@ -782,12 +780,15 @@ impl Device {
     }
 
     // MappingKind::Temporary
-    fn ensure_mappings_unmapped(&mut self, mappings: &[handle::RawMapping<Resources>]) {
-        for mapping in mappings {
-            let mut inner = mapping.access()
-                .expect("user error: mapping still in use on submit");
+    fn ensure_mappings_unmapped(&mut self, buffers: &[handle::RawBuffer<Resources>]) {
+        for buffer in buffers {
+            let mut mapping = buffer.lock_mapping().unwrap();
 
-            factory::temporary_ensure_unmapped(&mut inner, &self.share.context);
+            let target = factory::role_to_target(buffer.get_info().role);
+            factory::temporary_ensure_unmapped(&mut mapping.pointer,
+                                               target,
+                                               *buffer.resource(),
+                                               &self.share.context);
         }
     }
 
@@ -832,13 +833,13 @@ impl Device {
 
     // MappingKind::Persistent
     fn track_mapped_gpu_access(&mut self,
-                               mappings: &[handle::RawMapping<Resources>],
+                               buffers: &[handle::RawBuffer<Resources>],
                                fence: &handle::Fence<Resources>) {
-        for mapping in mappings {
-            let mut inner = mapping.access()
+        for buffer in buffers {
+            let mut mapping = buffer.lock_mapping()
                 .expect("user error: mapping still in use on submit");
 
-            let status = match &mut inner.resource.kind {
+            let status = match &mut mapping.kind {
                 &mut MappingKind::Persistent(ref mut status) => status,
                 _ => panic!("expected persistent mapping"),
             };
@@ -901,7 +902,21 @@ impl c::Device for Device {
         use core::handle::Producer;
         self.frame_handles.clear();
         self.share.handles.borrow_mut().clean_with(&mut &self.share.context,
-            |gl, raw_buffer| unsafe { gl.DeleteBuffers(1, raw_buffer.resource()) },
+            |gl, buffer| {
+                buffer.lock_mapping().map(|mut mapping| {
+                    match mapping.kind {
+                        MappingKind::Persistent(_) => (),
+                        MappingKind::Temporary => {
+                            let target = factory::role_to_target(buffer.get_info().role);
+                            factory::temporary_ensure_unmapped(&mut mapping.pointer,
+                                                               target,
+                                                               *buffer.resource(),
+                                                               gl);
+                        }
+                    }
+                });
+                unsafe { gl.DeleteBuffers(1, buffer.resource()) }
+            },
             |gl, v| unsafe { gl.DeleteShader(*v) },
             |gl, program| unsafe { gl.DeleteProgram(*program.resource()) },
             |_, _| {}, //PSO
@@ -917,13 +932,6 @@ impl c::Device for Device {
             |_, _| {}, //DSV
             |gl, v| unsafe { if v.object != 0 { gl.DeleteSamplers(1, &v.object) }},
             |gl, fence| unsafe { gl.DeleteSync(fence.0) },
-            |gl, raw_mapping| {
-                let mut inner = raw_mapping.access().unwrap();
-                match inner.resource.kind {
-                    MappingKind::Persistent(_) => (), // TODO: maybe flush the mapped memory here ?
-                    MappingKind::Temporary {..} => factory::temporary_ensure_unmapped(&mut inner, gl),
-                }
-            },
         );
     }
 }

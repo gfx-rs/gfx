@@ -302,8 +302,8 @@ impl<R: Resources> PixelTargetSet<R> {
 /// Informations about what is accessed by the pipeline
 #[derive(Debug)]
 pub struct AccessInfo<R: Resources> {
-    mapped_reads: Vec<handle::RawMapping<R>>,
-    mapped_writes: Vec<handle::RawMapping<R>>,
+    mapped_reads: Vec<handle::RawBuffer<R>>,
+    mapped_writes: Vec<handle::RawBuffer<R>>,
 }
 
 impl<R: Resources> AccessInfo<R> {
@@ -323,25 +323,25 @@ impl<R: Resources> AccessInfo<R> {
 
     /// Register a buffer read access
     pub fn buffer_read(&mut self, buffer: &handle::RawBuffer<R>) {
-        if let Some(mapping) = buffer.mapping() {
-            self.mapped_reads.push(mapping);
+        if buffer.is_mapped() {
+            self.mapped_reads.push(buffer.clone());
         }
     }
 
     /// Register a buffer write access
     pub fn buffer_write(&mut self, buffer: &handle::RawBuffer<R>) {
-        if let Some(mapping) = buffer.mapping() {
-            self.mapped_writes.push(mapping);
+        if buffer.is_mapped() {
+            self.mapped_writes.push(buffer.clone());
         }
     }
 
     /// Returns a slice of mappings associated to buffers that The GPU will read from
-    pub fn mapped_reads(&self) -> &[handle::RawMapping<R>] {
+    pub fn mapped_reads(&self) -> &[handle::RawBuffer<R>] {
         &self.mapped_reads[..]
     }
 
     /// Returns a slice of mappings associated to buffers that The GPU will write to
-    pub fn mapped_writes(&self) -> &[handle::RawMapping<R>] {
+    pub fn mapped_writes(&self) -> &[handle::RawBuffer<R>] {
         &self.mapped_writes[..]
     }
 }

@@ -16,11 +16,10 @@
 
 //! Memory mapping
 
-use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::MutexGuard;
 use Resources;
-use {memory, handle};
+use {memory, buffer, handle};
 
 /// Unsafe, backend-provided operations for a buffer mapping
 #[doc(hidden)]
@@ -33,6 +32,13 @@ pub trait Gate<R: Resources> {
     unsafe fn mut_slice<'a, 'b, T>(&'a self, len: usize) -> &'b mut [T];
 }
 
+/// Error accessing a mapping.
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+pub enum Error {
+    /// The requested mapping access did not match the expected usage.
+    InvalidAccess(memory::Access, memory::Usage),
+}
+
 fn valid_access(access: memory::Access, usage: memory::Usage) -> Result<(), Error> {
     use memory::Usage::*;
     match usage {
@@ -42,101 +48,40 @@ fn valid_access(access: memory::Access, usage: memory::Usage) -> Result<(), Erro
     }
 }
 
-/// Would mapping this buffer with this memory access be an error ?
-fn is_ok<R: Resources>(access: memory::Access, buffer: &handle::RawBuffer<R>) -> Result<(), Error> {
-    try!(valid_access(access, buffer.get_info().usage));
-    if buffer.mapping().is_some() { Err(Error::AlreadyMapped) }
-    else { Ok(()) }
-}
-
-/// Error mapping a buffer.
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub enum Error {
-    /// The requested mapping access did not match the expected usage.
-    InvalidAccess(memory::Access, memory::Usage),
-    /// The memory was already mapped
-    AlreadyMapped,
-    /// Desired mapping access not supported for the current backend.
-    Unsupported,
-}
-
-#[derive(Debug)]
 #[doc(hidden)]
-pub struct RawInner<R: Resources> {
-    pub resource: R::Mapping,
-    pub buffer: handle::RawBuffer<R>,
-    pub access: memory::Access,
+pub unsafe fn read<R, T, S>(buffer: &buffer::Raw<R>, sync: S)
+                            -> Result<Reader<R, T>, Error>
+    where R: Resources, T: Copy, S: FnOnce(&mut R::Mapping)
+{
+    try!(valid_access(memory::READ, buffer.get_info().usage));
+    let mut mapping = buffer.lock_mapping().unwrap();
+    sync(&mut mapping);
+
+    Ok(Reader {
+        slice: mapping.slice(buffer.len::<T>()),
+        mapping: mapping,
+    })
 }
 
-impl<R: Resources> Drop for RawInner<R> {
-    fn drop(&mut self) {
-        self.buffer.was_unmapped();
-    }
-}
+#[doc(hidden)]
+pub unsafe fn write<R, T, S>(buffer: &buffer::Raw<R>, sync: S)
+                             -> Result<Writer<R, T>, Error>
+    where R: Resources, T: Copy, S: FnOnce(&mut R::Mapping)
+{
+    try!(valid_access(memory::WRITE, buffer.get_info().usage));
+    let mut mapping = buffer.lock_mapping().unwrap();
+    sync(&mut mapping);
 
-/// Raw mapping providing status tracking
-#[derive(Debug)]
-pub struct Raw<R: Resources>(Mutex<RawInner<R>>);
-
-impl<R: Resources> Raw<R> {
-    #[doc(hidden)]
-    pub fn new<F>(access: memory::Access, buffer: &handle::RawBuffer<R>, f: F) -> Result<Self, Error>
-        where F: FnOnce() -> R::Mapping
-    {
-        try!(is_ok(access, buffer));
-        Ok(Raw(Mutex::new(RawInner {
-            resource: f(),
-            buffer: buffer.clone(),
-            access: access,
-        })))
-    }
-
-    #[doc(hidden)]
-    pub fn access(&self) -> Option<MutexGuard<RawInner<R>>> {
-        self.0.try_lock().ok()
-    }
-
-    unsafe fn read<T: Copy, S>(&self, len: usize, sync: S) -> Reader<R, T>
-        where S: FnOnce(&mut RawInner<R>)
-    {
-        let mut inner = self.access().unwrap();
-        sync(&mut inner);
-
-        Reader {
-            slice: inner.resource.slice(len),
-            inner: inner,
-        }
-    }
-
-    unsafe fn write<T: Copy, S>(&self, len: usize, sync: S) -> Writer<R, T>
-        where S: FnOnce(&mut RawInner<R>)
-    {
-        let mut inner = self.access().unwrap();
-        sync(&mut inner);
-
-        Writer {
-            slice: inner.resource.mut_slice(len),
-            inner: inner,
-        }
-    }
-
-    unsafe fn read_write<T: Copy, S>(&self, len: usize, sync: S) -> RWer<R, T>
-        where S: FnOnce(&mut RawInner<R>)
-    {
-        let mut inner = self.access().unwrap();
-        sync(&mut inner);
-
-        RWer {
-            slice: inner.resource.mut_slice(len),
-            inner: inner,
-        }
-    }
+    Ok(Writer {
+        slice: mapping.mut_slice(buffer.len::<T>()),
+        mapping: mapping,
+    })
 }
 
 /// Mapping reader
 pub struct Reader<'a, R: Resources, T: 'a + Copy> {
     slice: &'a [T],
-    #[allow(dead_code)] inner: MutexGuard<'a, RawInner<R>>,
+    #[allow(dead_code)] mapping: MutexGuard<'a, R::Mapping>,
 }
 
 impl<'a, R: Resources, T: 'a + Copy> Deref for Reader<'a, R, T> {
@@ -148,131 +93,19 @@ impl<'a, R: Resources, T: 'a + Copy> Deref for Reader<'a, R, T> {
 /// Mapping writer.
 /// Currently is not possible to make write-only slice so while it is technically possible
 /// to read from Writer, it will lead to an undefined behavior. Please do not read from it.
-pub type Writer<'a, R, T> = RWer<'a, R, T>;
-
-/// Mapping reader & writer
-pub struct RWer<'a, R: Resources, T: 'a + Copy> {
+pub struct Writer<'a, R: Resources, T: 'a + Copy> {
     slice: &'a mut [T],
-    #[allow(dead_code)] inner: MutexGuard<'a, RawInner<R>>,
+    #[allow(dead_code)] mapping: MutexGuard<'a, R::Mapping>,
 }
 
-impl<'a, R: Resources, T: 'a + Copy> Deref for RWer<'a, R, T> {
+impl<'a, R: Resources, T: 'a + Copy> Deref for Writer<'a, R, T> {
     type Target = [T];
 
     fn deref(&self) -> &[T] { &*self.slice }
 }
 
-impl<'a, R: Resources, T: 'a + Copy> DerefMut for RWer<'a, R, T> {
+impl<'a, R: Resources, T: 'a + Copy> DerefMut for Writer<'a, R, T> {
     fn deref_mut(&mut self) -> &mut [T] { self.slice }
-}
-
-// TODO: should we keep the RW mapping stuff ?
-
-/// Readable mapping.
-pub trait Readable<R: Resources, T: Copy> {
-    #[doc(hidden)]
-    unsafe fn read<S>(&mut self, sync: S) -> Reader<R, T>
-        where S: FnOnce(&mut RawInner<R>);
-}
-
-/// Writable mapping.
-pub trait Writable<R: Resources, T: Copy> {
-    #[doc(hidden)]
-    unsafe fn write<S>(&mut self, sync: S) -> Writer<R, T>
-        where S: FnOnce(&mut RawInner<R>);
-}
-
-/// Readable only mapping.
-pub struct ReadableOnly<R: Resources, T: Copy> {
-    raw: handle::RawMapping<R>,
-    len: usize,
-    phantom: PhantomData<T>,
-}
-
-impl<R: Resources, T: Copy> ReadableOnly<R, T> {
-    #[doc(hidden)]
-    pub fn new(raw: handle::RawMapping<R>, len: usize) -> Self {
-        ReadableOnly {
-            raw: raw,
-            len: len,
-            phantom: PhantomData,
-        }
-    }
-}
-
-impl<R: Resources, T: Copy> Readable<R, T> for ReadableOnly<R, T> {
-    unsafe fn read<S>(&mut self, sync: S) -> Reader<R, T>
-        where S: FnOnce(&mut RawInner<R>)
-    {
-        self.raw.read(self.len, sync)
-    }
-}
-
-/// Writable only mapping.
-pub struct WritableOnly<R: Resources, T: Copy> {
-    raw: handle::RawMapping<R>,
-    len: usize,
-    phantom: PhantomData<T>,
-}
-
-impl<R: Resources, T: Copy> WritableOnly<R, T> {
-    #[doc(hidden)]
-    pub fn new(raw: handle::RawMapping<R>, len: usize) -> Self {
-        WritableOnly {
-            raw: raw,
-            len: len,
-            phantom: PhantomData,
-        }
-    }
-}
-
-impl<R: Resources, T: Copy> Writable<R, T> for WritableOnly<R, T> {
-    unsafe fn write<S>(&mut self, sync: S) -> Writer<R, T>
-        where S: FnOnce(&mut RawInner<R>)
-    {
-        self.raw.write(self.len, sync)
-    }
-}
-
-/// Readable & writable mapping.
-pub struct RWable<R: Resources, T: Copy> {
-    raw: handle::RawMapping<R>,
-    len: usize,
-    phantom: PhantomData<T>,
-}
-
-impl<R: Resources, T: Copy> RWable<R, T> {
-    #[doc(hidden)]
-    pub fn new(raw: handle::RawMapping<R>, len: usize) -> Self {
-        RWable {
-            raw: raw,
-            len: len,
-            phantom: PhantomData,
-        }
-    }
-
-    #[doc(hidden)]
-    pub unsafe fn read_write<S>(&mut self, sync: S) -> RWer<R, T>
-        where S: FnOnce(&mut RawInner<R>)
-    {
-        self.raw.read_write(self.len, sync)
-    }
-}
-
-impl<R: Resources, T: Copy> Readable<R, T> for RWable<R, T> {
-    unsafe fn read<S>(&mut self, sync: S) -> Reader<R, T>
-        where S: FnOnce(&mut RawInner<R>)
-    {
-        self.raw.read(self.len, sync)
-    }
-}
-
-impl<R: Resources, T: Copy> Writable<R, T> for RWable<R, T> {
-    unsafe fn write<S>(&mut self, sync: S) -> Writer<R, T>
-        where S: FnOnce(&mut RawInner<R>)
-    {
-        self.raw.write(self.len, sync)
-    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
