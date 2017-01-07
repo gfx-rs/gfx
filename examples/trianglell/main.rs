@@ -14,10 +14,10 @@
 
 extern crate gfx_corell;
 
-#[cfg(target_os = "windows")]
-extern crate gfx_device_dx12ll as dx12;
+#[cfg(all(target_os = "windows", not(feature = "vulkan")))]
+extern crate gfx_device_dx12ll as back;
 #[cfg(feature = "vulkan")]
-extern crate gfx_device_vulkanll as vulkan;
+extern crate gfx_device_vulkanll as back;
 
 extern crate winit;
 
@@ -30,10 +30,15 @@ fn main() {
         .build()
         .unwrap();
 
-    let instance = dx12::Instance::create();
-    for device in instance.enumerate_physical_devices() {
+    // instantiate backend
+    let instance = back::Instance::create();
+    let physical_devices = instance.enumerate_physical_devices();
+    for device in &physical_devices {
         println!("{:?}", device.get_info());
     }
+
+    // build a new device and associated command queues
+    let (device, queues) = physical_devices[0].open();
 
     'main: loop {
         for event in window.poll_events() {

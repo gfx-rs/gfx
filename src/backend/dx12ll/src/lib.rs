@@ -37,16 +37,52 @@ impl core::PhysicalDevice for PhysicalDevice {
     type B = Backend;
 
     fn open(&self) -> (Device, Vec<CommandQueue>) {
-        unimplemented!()
+        // Create D3D12 device
+        let mut device = ComPtr::<winapi::ID3D12Device>::new(ptr::null_mut());
+        let hr = unsafe {
+            d3d12::D3D12CreateDevice(
+                self.adapter.as_mut_ptr() as *mut _ as *mut winapi::IUnknown,
+                winapi::D3D_FEATURE_LEVEL_12_0, // TODO: correct feature level?
+                &dxguid::IID_ID3D12Device,
+                device.as_mut() as *mut *mut _ as *mut *mut c_void,
+            )
+        };
+        if !winapi::SUCCEEDED(hr) {
+            error!("error on device creation: {:?}", hr);
+        }
+
+        // Create command queues
+        // TODO: Let the users decide how many and which queues they want to create
+        let mut queue = ComPtr::<winapi::ID3D12CommandQueue>::new(ptr::null_mut());
+        let queue_desc = winapi::D3D12_COMMAND_QUEUE_DESC {
+            Type: winapi::D3D12_COMMAND_LIST_TYPE_DIRECT,
+            Priority: 0,
+            Flags: winapi::D3D12_COMMAND_QUEUE_FLAG_NONE,
+            NodeMask: 0,
+        };
+
+        let hr = unsafe {
+            device.CreateCommandQueue(
+                &queue_desc,
+                &dxguid::IID_ID3D12CommandQueue,
+                queue.as_mut() as *mut *mut _ as *mut *mut c_void,
+            )
+        };
+
+        if !winapi::SUCCEEDED(hr) {
+            error!("error on queue creation: {:?}", hr);
+        }
+
+        (Device { inner: device }, vec![CommandQueue { inner: queue }])
     }
 
-    fn get_info(&self) -> core::PhysicalDeviceInfo {
-        self.info.clone()
+    fn get_info(&self) -> &core::PhysicalDeviceInfo {
+        &self.info
     }
 }
 
 pub struct Device {
-
+    inner: ComPtr<winapi::ID3D12Device>,
 }
 
 impl core::Device for Device {
@@ -54,7 +90,7 @@ impl core::Device for Device {
 }
 
 pub struct CommandQueue {
-
+    inner: ComPtr<winapi::ID3D12CommandQueue>,
 }
 
 impl core::CommandQueue for CommandQueue {
@@ -65,15 +101,23 @@ impl core::CommandQueue for CommandQueue {
     }
 }
 
-pub struct SwapChain {
+pub struct Surface {
 
+}
+
+impl core::Surface for Surface {
+
+}
+
+pub struct SwapChain {
+    inner: ComPtr<winapi::IDXGISwapChain1>,
 }
 
 impl core::SwapChain for SwapChain {
     type B = Backend;
 
     fn present(&mut self) {
-        unimplemented!()
+        unsafe { self.inner.Present(1, 0); }
     }
 }
 
@@ -186,6 +230,7 @@ impl core::Backend for Backend {
     type Instance = Instance;
     type PhysicalDevice = PhysicalDevice;
     type Resources = Resources;
+    type Surface = Surface;
     type SwapChain = SwapChain;
 }
 

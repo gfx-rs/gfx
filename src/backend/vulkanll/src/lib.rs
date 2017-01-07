@@ -35,8 +35,8 @@ impl core::PhysicalDevice for PhysicalDevice {
         unimplemented!()
     }
 
-    fn get_info(&self) -> core::PhysicalDeviceInfo {
-        self.info.clone()
+    fn get_info(&self) -> &core::PhysicalDeviceInfo {
+        &self.info
     }
 }
 
@@ -58,6 +58,14 @@ impl core::CommandQueue for CommandQueue {
     fn submit(&mut self, cmd_buffer: &()) {
         unimplemented!()
     }
+}
+
+pub struct Surface {
+
+}
+
+impl core::Surface for Surface {
+    
 }
 
 pub struct SwapChain {
@@ -188,6 +196,7 @@ impl core::Backend for Backend {
     type Instance = Instance;
     type PhysicalDevice = PhysicalDevice;
     type Resources = Resources;
+    type Surface = Surface;
     type SwapChain = SwapChain;
 }
 

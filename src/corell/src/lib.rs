@@ -64,20 +64,28 @@ pub enum IndexType {
     U32,
 }
 
+/// An `Instance` holds per-application state for a specific backend
 pub trait Instance {
     type B: Backend;
 
+    /// Instantiate a new `Instance`, this is our entry point for applications
     fn create() -> Self;
 
     // TODO: Use an iterator instead of Vec?
+    /// Enumerate all available devices supporting this backend 
     fn enumerate_physical_devices(&self) -> Vec<<<Self as Instance>::B as Backend>::PhysicalDevice>;
 }
 
+// TODO: Name might be a bit misleading as we might also support
+// software devices (e.g D3D12's WARP) and maybe multi-GPUs in the future (not part of Vulkan 1.0)
+// D3D12's `Adapter` would be a possible alternative
 pub trait PhysicalDevice {
     type B: Backend;
 
+    // TODO: Let the users decide how many and which queues they want to create
     fn open(&self) -> (<<Self as PhysicalDevice>::B as Backend>::Device, Vec<<<Self as PhysicalDevice>::B as Backend>::CommandQueue>);
-    fn get_info(&self) -> PhysicalDeviceInfo;
+
+    fn get_info(&self) -> &PhysicalDeviceInfo;
 }
 
 #[derive(Clone, Debug)]
@@ -103,6 +111,13 @@ pub trait CommandQueue {
     fn submit(&mut self, cmd_buffer: &<<Self as CommandQueue>::B as Backend>::CommandBuffer);
 }
 
+/// A `Surface` abstracts the surface of a native window, which will be presented
+pub trait Surface {
+
+}
+
+/// The `SwapChain` is the backend representation of the surface.
+/// It consists of multiple buffers, which will be presented on the surface.
 pub trait SwapChain {
     type B: Backend;
 
@@ -127,10 +142,16 @@ pub trait Resources:          Clone + Hash + Debug + Eq + PartialEq + Any {
 /// Different types of a specific API.
 pub trait Backend {
     type CommandBuffer;
+    // TODO: probably need to split this into multiple subqueue types (rendering, compute, transfer/copy)
+    // Vulkan allows multiple combinations of these 3
+    // D3D12 has a 3D queue which supports all 3 types, Compute queue with compute and transfer support and a Copy queue
+    // Older APIs don't have the concept of queues anyway
+    // Metal ?
     type CommandQueue: CommandQueue;
     type Device: Device;
     type Instance: Instance;
     type PhysicalDevice: PhysicalDevice;
     type Resources: Resources;
+    type Surface: Surface;
     type SwapChain: SwapChain;
 }
