@@ -19,9 +19,9 @@ extern crate kernel32;
 extern crate lazy_static;
 extern crate winit;
 
-use ash::version::{EntryV1_0, InstanceV1_0, V1_0};
+use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0, V1_0};
 use ash::vk;
-use ash::Entry;
+use ash::{Entry, LoadingError};
 
 use std::ffi::{CStr, CString};
 use std::iter;
@@ -30,18 +30,78 @@ use std::ptr;
 use std::sync::Arc;
 
 lazy_static! {
-    static ref VK_ENTRY: Result<Entry<V1_0>, ash::entry::LoadingError> = Entry::new();
+    static ref VK_ENTRY: Result<Entry<V1_0>, LoadingError> = Entry::new();
 }
 
 pub struct PhysicalDevice {
+    handle: vk::PhysicalDevice,
+    queue_families: Vec<vk::QueueFamilyProperties>,
     info: core::PhysicalDeviceInfo,
+    instance: Arc<InstanceInner>,
 }
 
 impl core::PhysicalDevice for PhysicalDevice {
     type B = Backend;
 
     fn open(&self) -> (Device, Vec<CommandQueue>) {
-        unimplemented!()
+        let queue_infos = self.queue_families.iter()
+            .enumerate()
+            .map(|(i, queue_family)| {
+                vk::DeviceQueueCreateInfo {
+                    s_type: vk::StructureType::DeviceQueueCreateInfo,
+                    p_next: ptr::null(),
+                    flags: vk::DeviceQueueCreateFlags::empty(),
+                    queue_family_index: i as u32,
+                    queue_count: queue_family.queue_count,
+                    p_queue_priorities: &1.0,
+                }
+            }).collect::<Vec<_>>();
+
+        // Create device
+        let device_extensions = &["VK_KHR_swapchain"];
+
+        let device = {
+            let cstrings = device_extensions.iter()
+                                    .map(|&s| CString::new(s).unwrap())
+                                    .collect::<Vec<_>>();
+
+            let str_pointers = cstrings.iter()
+                                    .map(|s| s.as_ptr())
+                                    .collect::<Vec<_>>();
+
+            let features = unsafe { mem::zeroed() };
+            let info = vk::DeviceCreateInfo {
+                s_type: vk::StructureType::DeviceCreateInfo,
+                p_next: ptr::null(),
+                flags: vk::DeviceCreateFlags::empty(),
+                queue_create_info_count: queue_infos.len() as u32,
+                p_queue_create_infos: queue_infos.as_ptr(),
+                enabled_layer_count: 0,
+                pp_enabled_layer_names: ptr::null(),
+                enabled_extension_count: str_pointers.len() as u32,
+                pp_enabled_extension_names: str_pointers.as_ptr(),
+                p_enabled_features: &features,
+            };
+
+            unsafe {
+                self.instance.0.create_device(self.handle, &info, None)
+                    .expect("Error on device creation")
+            }
+        };
+
+        // Create associated command queues
+        let queues = queue_infos.iter().flat_map(|info| {
+                (0..info.queue_count).map(|id| {
+                    let queue = unsafe { device.get_device_queue(info.queue_family_index, id) };
+                    CommandQueue { }
+                }).collect::<Vec<_>>()
+            }).collect();
+
+        let device = Device {
+            inner: Arc::new(DeviceInner(device)),
+        };
+
+        (device, queues)
     }
 
     fn get_info(&self) -> &core::PhysicalDeviceInfo {
@@ -49,8 +109,15 @@ impl core::PhysicalDevice for PhysicalDevice {
     }
 }
 
-pub struct Device {
+struct DeviceInner(ash::Device<V1_0>);
+impl Drop for DeviceInner {
+    fn drop(&mut self) {
+        unsafe { self.0.destroy_device(None); }
+    }
+}
 
+pub struct Device {
+    inner: Arc<DeviceInner>,
 }
 
 impl core::Device for Device {
@@ -146,7 +213,9 @@ impl core::Surface for Surface {
     fn build_swapchain<T: core::format::RenderFormat>(
                     &self, width: u32, height: u32,
                     present_queue: &CommandQueue) -> SwapChain {
-        unimplemented!()
+        SwapChain {
+
+        }
     }
 }
 
@@ -158,7 +227,7 @@ impl core::SwapChain for SwapChain {
     type B = Backend;
 
     fn present(&mut self) {
-        unimplemented!()
+        // unimplemented!()
     }
 }
 
@@ -261,8 +330,13 @@ impl core::Instance for Instance {
                     software_rendering: properties.device_type == vk::PhysicalDeviceType::Cpu,
                 };
 
+                let queue_families = self.inner.0.get_physical_device_queue_family_properties(device);
+
                 PhysicalDevice {
+                    handle: device,
+                    queue_families: queue_families,
                     info: info,
+                    instance: self.inner.clone(),
                 }
             })
             .collect()
