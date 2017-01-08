@@ -20,12 +20,17 @@ extern crate dxgi;
 extern crate dxguid;
 extern crate gfx_corell as core;
 extern crate winapi;
+extern crate winit;
 
 use comptr::ComPtr;
 use std::ptr;
 use std::os::raw::c_void;
 use std::os::windows::ffi::OsStringExt;
 use std::ffi::OsString;
+use winapi::BOOL;
+use winit::os::windows::WindowExt;
+
+mod data;
 
 #[derive(Clone)]
 pub struct PhysicalDevice {
@@ -102,11 +107,61 @@ impl core::CommandQueue for CommandQueue {
 }
 
 pub struct Surface {
-
+    factory: ComPtr<winapi::IDXGIFactory4>,
+    wnd_handle: winapi::HWND,
 }
 
 impl core::Surface for Surface {
+    type B = Backend;
+    type Window = winit::Window;
 
+    fn from_window(window: &winit::Window, instance: &Instance) -> Surface {
+        Surface {
+            factory: instance.inner.clone(),
+            wnd_handle: window.get_hwnd() as *mut _,
+        }
+    }
+
+    fn build_swapchain<T: core::format::RenderFormat>(&self, width: u32, height: u32, present_queue: &CommandQueue) -> SwapChain {
+        let mut swap_chain = ComPtr::<winapi::IDXGISwapChain1>::new(ptr::null_mut());
+
+        // TODO: double-check values
+        let desc = winapi::DXGI_SWAP_CHAIN_DESC1 {
+            AlphaMode: winapi::DXGI_ALPHA_MODE(0),
+            BufferCount: 2,
+            Width: width,
+            Height: height,
+            Format: data::map_format(T::get_format(), true).unwrap(), // TODO: error handling
+            Flags: 0,
+            BufferUsage: winapi::DXGI_USAGE_RENDER_TARGET_OUTPUT,
+            SampleDesc: winapi::DXGI_SAMPLE_DESC {
+                Count: 1,
+                Quality: 0,
+            },
+            Scaling: winapi::DXGI_SCALING(0),
+            Stereo: false as BOOL,
+            SwapEffect: winapi::DXGI_SWAP_EFFECT(4), // TODO: FLIP_DISCARD
+        };
+
+        let hr = unsafe {
+            (**self.factory.as_ref()).CreateSwapChainForHwnd(
+                present_queue.inner.as_mut_ptr() as *mut _ as *mut winapi::IUnknown,
+                self.wnd_handle,
+                &desc,
+                ptr::null(),
+                ptr::null_mut(),
+                swap_chain.as_mut() as *mut *mut _,
+            )
+        };
+
+        if !winapi::SUCCEEDED(hr) {
+            error!("error on swapchain creation {:x}", hr);
+        }
+
+        SwapChain {
+            inner: swap_chain,
+        }
+    }
 }
 
 pub struct SwapChain {

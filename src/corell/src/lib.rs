@@ -113,7 +113,14 @@ pub trait CommandQueue {
 
 /// A `Surface` abstracts the surface of a native window, which will be presented
 pub trait Surface {
+    type B: Backend;
+    type Window;
 
+    fn from_window(window: &Self::Window, instance: &<<Self as Surface>::B as Backend>::Instance) -> Self;
+
+    fn build_swapchain<T: format::RenderFormat>(&self,
+        width: u32, height: u32,
+        present_queue: &<<Self as Surface>::B as Backend>::CommandQueue) -> <<Self as Surface>::B as Backend>::SwapChain;
 }
 
 /// The `SwapChain` is the backend representation of the surface.

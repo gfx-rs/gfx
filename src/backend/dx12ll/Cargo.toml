@@ -34,3 +34,4 @@ dxgi-sys = "0.2"
 dxguid-sys = "0.2"
 comptr = { git = "https://github.com/msiglreith/comptr-rs.git" }
 winapi = "0.2"
+winit = "0.5"

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+extern crate env_logger;
 extern crate gfx_corell;
-
 #[cfg(all(target_os = "windows", not(feature = "vulkan")))]
 extern crate gfx_device_dx12ll as back;
 #[cfg(feature = "vulkan")]
@@ -21,9 +21,12 @@ extern crate gfx_device_vulkanll as back;
 
 extern crate winit;
 
-use gfx_corell::{Instance, PhysicalDevice};
+use gfx_corell::{Instance, PhysicalDevice, Surface, SwapChain};
+
+pub type ColorFormat = gfx_corell::format::Rgba8;
 
 fn main() {
+    env_logger::init().unwrap();
     let window = winit::WindowBuilder::new()
         .with_dimensions(1024, 768)
         .with_title("triangle (Low Level)".to_string())
@@ -40,6 +43,9 @@ fn main() {
     // build a new device and associated command queues
     let (device, queues) = physical_devices[0].open();
 
+    let surface = back::Surface::from_window(&window, &instance);
+    let mut swap_chain = surface.build_swapchain::<ColorFormat>(1024, 768, &queues[0]);
+
     'main: loop {
         for event in window.poll_events() {
             match event {
@@ -49,6 +55,6 @@ fn main() {
             }
         }
 
-        // swap_chain.present();
+        swap_chain.present();
     }
 }
