@@ -27,8 +27,12 @@ name = "gfx_device_vulkanll"
 
 [dependencies]
 log = "0.3"
+lazy_static = "0.2"
 shared_library = "0.1"
 gfx_corell = { path = "../../corell", version = "0.1.0" }
-ash = "0.14.0"
+ash = { path = "../../../../../ash-master" } #"0.14.0"
 spirv-utils = { git = "https://github.com/msiglreith/spirv-utils.git", branch = "gfx" }
 winit = "0.5"
+
+[target.'cfg(windows)'.dependencies]
+kernel32-sys = "0.2.2"

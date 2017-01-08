@@ -12,17 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate gfx_corell as core;
 extern crate ash;
+extern crate gfx_corell as core;
+extern crate kernel32;
+#[macro_use]
+extern crate lazy_static;
+extern crate winit;
 
 use ash::version::{EntryV1_0, InstanceV1_0, V1_0};
 use ash::vk;
+use ash::Entry;
 
 use std::ffi::{CStr, CString};
 use std::iter;
 use std::mem;
 use std::ptr;
 use std::sync::Arc;
+
+lazy_static! {
+    static ref VK_ENTRY: Result<Entry<V1_0>, ash::entry::LoadingError> = Entry::new();
+}
 
 pub struct PhysicalDevice {
     info: core::PhysicalDeviceInfo,
@@ -60,12 +69,85 @@ impl core::CommandQueue for CommandQueue {
     }
 }
 
-pub struct Surface {
+struct SurfaceInner {
+    handle: vk::SurfaceKHR,
+    instance: Arc<InstanceInner>,
+    loader: vk::SurfaceFn,
+}
 
+impl Drop for SurfaceInner {
+    fn drop(&mut self) {
+        unsafe { self.loader.destroy_surface_khr(self.instance.0.handle(), self.handle, ptr::null()); }
+    }
+}
+
+pub struct Surface {
+    // Vk (EXT) specs [29.2.7 Platform-Independent Information]
+    // For vkDestroySurfaceKHR: Host access to surface must be externally synchronized
+    inner: Arc<SurfaceInner>,
+}
+
+impl Surface {
+    fn from_raw(instance: &Instance, surface: vk::SurfaceKHR) -> Surface {
+        let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
+
+        let loader = vk::SurfaceFn::load(|name| {
+                unsafe {
+                    mem::transmute(entry.get_instance_proc_addr(
+                        instance.inner.0.handle(),
+                        name.as_ptr()))
+                }
+            }).expect("Unable to load surface functions");
+
+        let inner = Arc::new(SurfaceInner {
+            handle: surface,
+            instance: instance.inner.clone(),
+            loader: loader,
+        });
+
+        Surface {
+            inner: inner,
+        }
+    }
 }
 
 impl core::Surface for Surface {
-    
+    type B = Backend;
+    type Window = winit::Window;
+
+    #[cfg(target_os = "windows")]
+    fn from_window(window: &winit::Window, instance: &Instance) -> Surface {
+        use winit::os::windows::WindowExt;
+        let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
+        let win32_loader = ash::extensions::Win32Surface::new(entry, &instance.inner.0)
+                        .expect("Unable to load win32 surface functions");
+
+        let surface = unsafe {
+            let info = vk::Win32SurfaceCreateInfoKHR {
+                s_type: vk::StructureType::Win32SurfaceCreateInfoKhr,
+                p_next: ptr::null(),
+                flags: vk::Win32SurfaceCreateFlagsKHR::empty(),
+                hinstance: unsafe { kernel32::GetModuleHandleW(ptr::null()) } as *mut _,
+                hwnd: window.get_hwnd() as *mut _,
+            };
+
+            win32_loader.create_win32_surface_khr(&info, None)
+                .expect("Error on surface creation")
+        };
+
+        Self::from_raw(instance, surface)
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    fn from_window(window: &winit::Window, instance: &Instance) -> Surface {
+        unimplemented!()
+    }
+
+    fn build_swapchain<T: core::format::RenderFormat>(
+                    &self, width: u32, height: u32,
+                    present_queue: &CommandQueue) -> SwapChain {
+        unimplemented!()
+    }
 }
 
 pub struct SwapChain {
@@ -111,7 +193,7 @@ impl core::Instance for Instance {
 
     fn create() -> Instance {
         // TODO: return errors instead of panic
-        let entry = ash::Entry::new().expect("Unable to load vulkan entry points");
+        let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
 
         let app_info = vk::ApplicationInfo {
             s_type: vk::StructureType::ApplicationInfo,
