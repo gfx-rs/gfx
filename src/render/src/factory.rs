@@ -131,8 +131,8 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     {
         self.create_buffer(num,
                            buffer::Role::Constant,
-                           memory::Usage::Data,
-                           memory::TRANSFER_DST).unwrap()
+                           memory::Usage::Dynamic,
+                           Bind::empty()).unwrap()
     }
 
     /// Creates a `ShaderSet` from the supplied vertex and pixel shader source code.

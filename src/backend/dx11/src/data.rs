@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use winapi::*;
-use core::mapping::Error;
 use core::memory::{self, Bind, Usage};
 use core::format::{Format, SurfaceType};
 use core::state::Comparison;
@@ -204,7 +203,6 @@ pub fn map_bind(bind: Bind) -> D3D11_BIND_FLAG {
     flags
 }
 
-
 pub fn map_access(access: memory::Access) -> D3D11_CPU_ACCESS_FLAG {
     let mut r = D3D11_CPU_ACCESS_FLAG(0);
     if access.contains(memory::READ) { r = r | D3D11_CPU_ACCESS_READ }
@@ -212,19 +210,16 @@ pub fn map_access(access: memory::Access) -> D3D11_CPU_ACCESS_FLAG {
     r
 }
 
-pub fn map_usage(usage: Usage) -> Result<(D3D11_USAGE, D3D11_CPU_ACCESS_FLAG), Error> {
+pub fn map_usage(usage: Usage, bind: Bind) -> (D3D11_USAGE, D3D11_CPU_ACCESS_FLAG) {
     match usage {
-        Usage::GpuOnly => Ok((D3D11_USAGE_DEFAULT, D3D11_CPU_ACCESS_FLAG(0))),
-        Usage::Immutable => Ok((D3D11_USAGE_IMMUTABLE, D3D11_CPU_ACCESS_FLAG(0))),
-        Usage::Dynamic => Ok((D3D11_USAGE_DYNAMIC, D3D11_CPU_ACCESS_WRITE)),
-        Usage::Mappable(access) => {
-            if access.contains(memory::READ) {
-                Err(Error::Unsupported)
-            } else {
-                Ok((D3D11_USAGE_DYNAMIC, D3D11_CPU_ACCESS_WRITE))
-            }
-        }
-        Usage::CpuOnly(access) => Ok((D3D11_USAGE_STAGING, map_access(access))),
+        Usage::Data => if bind.is_mutable() {
+            (D3D11_USAGE_DEFAULT, D3D11_CPU_ACCESS_FLAG(0))
+        } else {
+            (D3D11_USAGE_IMMUTABLE, D3D11_CPU_ACCESS_FLAG(0))
+        },
+        Usage::Dynamic => (D3D11_USAGE_DYNAMIC, D3D11_CPU_ACCESS_WRITE),
+        Usage::Upload => (D3D11_USAGE_STAGING, D3D11_CPU_ACCESS_WRITE),
+        Usage::Download => (D3D11_USAGE_STAGING, D3D11_CPU_ACCESS_READ),
     }
 }
 

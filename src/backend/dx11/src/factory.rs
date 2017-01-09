@@ -17,8 +17,7 @@ use std::collections::BTreeMap as Map;
 use std::os::raw::c_void;
 use std::sync::Arc;
 use winapi;
-use core::{self, factory as f, buffer, texture};
-use core::mapping::{self, Builder};
+use core::{self, factory as f, buffer, texture, mapping};
 use core::memory::{self, Bind, Typed};
 use core::handle::{self as h, Producer};
 use {Resources as R, Share, Buffer, Texture, Pipeline, Program, Shader};
@@ -101,7 +100,7 @@ impl Factory {
     pub fn wrap_back_buffer(&mut self, back_buffer: *mut winapi::ID3D11Texture2D, info: texture::Info,
                             desc: texture::RenderDesc) -> h::RawRenderTargetView<R> {
         use core::Factory;
-        let raw_tex = Texture(native::Texture::D2(back_buffer), info.usage);
+        let raw_tex = Texture(native::Texture::D2(back_buffer));
         let color_tex = self.share.handles.borrow_mut().make_texture(raw_tex, info);
         self.view_texture_as_render_target_raw(&color_tex, desc).unwrap()
     }
@@ -139,16 +138,12 @@ impl Factory {
             },
             buffer::Role::Constant  => // 16 bit alignment
                 (D3D11_BIND_CONSTANT_BUFFER, (info.size + 0xF) & !0xF),
+            buffer::Role::Staging =>
+                (D3D11_BIND_FLAG(0), info.size)
         };
 
         assert!(size >= info.size);        
-        let (usage, cpu) = match map_usage(info.usage) {
-            Ok((usage, cpu)) => (usage, cpu),
-            Err(e) => return Err(match e {
-                mapping::Error::Unsupported => buffer::CreationError::UnsupportedUsage(info.usage),
-                _ => buffer::CreationError::Other,
-            }),
-        };
+        let (usage, cpu) = map_usage(info.usage, info.bind);
         let bind = map_bind(info.bind) | subind;
         if info.bind.contains(memory::RENDER_TARGET) | info.bind.contains(memory::DEPTH_STENCIL) {
             return Err(buffer::CreationError::UnsupportedBind(info.bind))
@@ -180,8 +175,15 @@ impl Factory {
             (*self.device).CreateBuffer(&native_desc, sub_raw, &mut raw_buf.0)
         };
         if winapi::SUCCEEDED(hr) {
-            let buf = Buffer(raw_buf, info.usage);
-            Ok(self.share.handles.borrow_mut().make_buffer(buf, info))
+            let buf = Buffer(raw_buf);
+
+            use core::memory::Usage::*;
+            let mapping = match info.usage {
+                Data | Dynamic => None,
+                Upload | Download => Some(MappingGate { pointer: ptr::null_mut() }),
+            };
+
+            Ok(self.share.handles.borrow_mut().make_buffer(buf, info, mapping))
         } else {
             error!("Failed to create a buffer with desc {:#?}, error {:x}", native_desc, hr);
             Err(buffer::CreationError::Other)
@@ -339,7 +341,7 @@ impl core::Factory<R> for Factory {
                                 -> Result<h::RawBuffer<R>, buffer::CreationError> {
         let info = buffer::Info {
             role: role,
-            usage: memory::Usage::Immutable,
+            usage: memory::Usage::Data,
             bind: bind,
             size: data.len(),
             stride: stride,
@@ -593,11 +595,7 @@ impl core::Factory<R> for Factory {
         use core::texture::{AaMode, CreationError, Kind};
         use data::{map_bind, map_usage, map_surface, map_format};
         
-        let (usage, cpu_access) = match map_usage(desc.usage) {
-            Ok((usage, cpu)) => (usage, cpu),
-            // TODO split into specific Errors when there are any
-            Err(_) => { return Err(texture::CreationError::Usage(desc.usage)) }
-        };
+        let (usage, cpu_access) = map_usage(desc.usage, desc.bind);
         let tparam = TextureParam {
             levels: desc.levels as winapi::UINT,
             format: match hint {
@@ -628,7 +626,7 @@ impl core::Factory<R> for Factory {
                 });
             }
         };
-        let misc = if desc.usage != memory::Usage::Immutable &&
+        let misc = if usage != winapi::D3D11_USAGE_IMMUTABLE &&
             desc.bind.contains(memory::RENDER_TARGET | memory::SHADER_RESOURCE) &&
             desc.levels > 1 && data_opt.is_none() {
             winapi::D3D11_RESOURCE_MISC_GENERATE_MIPS
@@ -655,7 +653,7 @@ impl core::Factory<R> for Factory {
 
         match texture_result {
             Ok(native) => {
-                let tex = Texture(native, desc.usage);
+                let tex = Texture(native);
                 Ok(self.share.handles.borrow_mut().make_texture(tex, desc))
             },
             Err(_) => Err(CreationError::Kind),
@@ -894,61 +892,31 @@ impl core::Factory<R> for Factory {
         }
     }
 
-    fn map_buffer_raw(&mut self, buf: &h::RawBuffer<R>, access: memory::Access)
-                      -> Result<h::RawMapping<R>, mapping::Error> {
-        self.share.handles.borrow_mut().make_mapping(access, buf, || {
-            MappingGate {
-                pointer: ptr::null_mut(),
-            }
-        })
-    }
-
-    fn map_buffer_readable<T: Copy>(&mut self, buf: &h::Buffer<R, T>)
-                                    -> Result<mapping::ReadableOnly<R, T>, mapping::Error> {
-        let map = try!(self.map_buffer_raw(buf.raw(), memory::READ));
-        Ok(self.map_readable(map, buf.len()))
-    }
-
-    fn map_buffer_writable<T: Copy>(&mut self, buf: &h::Buffer<R, T>)
-                                    -> Result<mapping::WritableOnly<R, T>, mapping::Error> {
-        let map = try!(self.map_buffer_raw(buf.raw(), memory::WRITE));
-        Ok(self.map_writable(map, buf.len()))
-    }
-
-    fn map_buffer_rw<T: Copy>(&mut self, buf: &h::Buffer<R, T>)
-                              -> Result<mapping::RWable<R, T>, mapping::Error> {
-        let map = try!(self.map_buffer_raw(buf.raw(), memory::RW));
-        Ok(self.map_read_write(map, buf.len()))
-    }
-
-    fn read_mapping<'a, 'b, M, T>(&'a mut self, _: &'b mut M)
-                                  -> mapping::Reader<'b, R, T>
-        where M: mapping::Readable<R, T>, T: Copy
-    {
-        unreachable!();
-    }
-
-    fn write_mapping<'a, 'b, M, T>(&'a mut self, m: &'b mut M)
-                                   -> mapping::Writer<'b, R, T>
-        where M: mapping::Writable<R, T>, T: Copy
+    fn read_mapping<'a, 'b, T>(&'a mut self, buf: &'b h::Buffer<R, T>)
+                               -> Result<mapping::Reader<'b, R, T>,
+                                         mapping::Error>
+        where T: Copy
     {
         unsafe {
-            m.write(|inner| ensure_mapped(&mut inner.resource.pointer, &inner.buffer, self))
+            mapping::read(buf.raw(), |mut m| ensure_mapped(&mut m, buf.raw(), self))
         }
     }
 
-    fn rw_mapping<'a, 'b, T>(&'a mut self, _: &'b mut mapping::RWable<R, T>)
-                             -> mapping::RWer<'b, R, T>
+    fn write_mapping<'a, 'b, T>(&'a mut self, buf: &'b h::Buffer<R, T>)
+                               -> Result<mapping::Writer<'b, R, T>,
+                                         mapping::Error>
         where T: Copy
     {
-        unreachable!();
+        unsafe {
+            mapping::write(buf.raw(), |mut m| ensure_mapped(&mut m, buf.raw(), self))
+        }
     }
 }
 
-pub fn ensure_mapped(pointer: &mut *mut ::std::os::raw::c_void,                               
-                               buffer: &h::RawBuffer<R>,
-                            factory: &Factory) {
-    if pointer.is_null() {
+pub fn ensure_mapped(mapping: &mut MappingGate,
+                     buffer: &h::RawBuffer<R>,
+                     factory: &Factory) {
+    if mapping.pointer.is_null() {
         let raw_handle = *buffer.resource();                  
         let mut ctx = ptr::null_mut();
             
@@ -962,32 +930,29 @@ pub fn ensure_mapped(pointer: &mut *mut ::std::os::raw::c_void,
             DepthPitch: 0,
         };
             
-            
+        let dst = raw_handle.to_resource() as *mut winapi::d3d11::ID3D11Resource;
+        let map_type = winapi::d3d11::D3D11_MAP_WRITE; // no DISCARD because we are STAGING
         let hr = unsafe {
-            (*ctx).Map(
-                raw_handle.to_resource() as *mut winapi::d3d11::ID3D11Resource, 
-                0, 
-                winapi::d3d11::D3D11_MAP_WRITE_DISCARD, 
-                0, 
-                &mut sres
-            )
+            (*ctx).Map(dst, 0, map_type, 0, &mut sres)
         };
         
         if winapi::SUCCEEDED(hr) {
-            *pointer = sres.pData;
+            mapping.pointer = sres.pData;
         } else {
             panic!("Unable to map a buffer {:?}, error {:x}", buffer, hr);
         }
     }
 }
 
-pub fn ensure_unmapped(inner: &mut mapping::RawInner<R>, context: *mut winapi::ID3D11DeviceContext) {
-    if !inner.resource.pointer.is_null() {
-        let raw_handle = *inner.buffer.resource();                  
+pub fn ensure_unmapped(mapping: &mut MappingGate,
+                       buffer: &buffer::Raw<R>,
+                       context: *mut winapi::ID3D11DeviceContext) {
+    if !mapping.pointer.is_null() {
+        let raw_handle = *buffer.resource();
         unsafe {
             (*context).Unmap(raw_handle.to_resource() as *mut winapi::d3d11::ID3D11Resource, 0);
         }
 
-        inner.resource.pointer = ptr::null_mut();
+        mapping.pointer = ptr::null_mut();
     }
 }

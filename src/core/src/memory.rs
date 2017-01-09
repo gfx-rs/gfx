@@ -20,14 +20,17 @@ use std::mem;
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 #[repr(u8)]
 pub enum Usage {
-    /// Full speed GPU access, no mapping.
+    /// Full speed GPU access.
     /// Optimal for render targets and resourced memory.
     Data,
+    /// CPU to GPU data flow with update commands.
+    /// Used for dynamic buffer data, typically constant buffers.
+    Dynamic,
     /// CPU to GPU data flow with mapping.
-    /// Used for [staging for] upload to GPU.
+    /// Used for staging for upload to GPU.
     Upload,
     /// GPU to CPU data flow with mapping.
-    /// Used for [staging for] download from GPU.
+    /// Used for staging for download from GPU.
     Download,
 }
 
@@ -60,6 +63,14 @@ bitflags!(
         const TRANSFER_DST     = 0x20,
     }
 );
+
+impl Bind {
+    /// Is this memory bound to be mutated ?
+    pub fn is_mutable(&self) -> bool {
+        let mutable = TRANSFER_DST | UNORDERED_ACCESS | RENDER_TARGET | DEPTH_STENCIL;
+        self.intersects(mutable)
+    }
+}
 
 /// A service trait used to get the raw data out of strong types.
 /// Not meant for public use.

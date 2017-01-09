@@ -126,16 +126,13 @@ impl Factory {
         };
 
         if self.share.private_caps.buffer_storage_supported {
-            let mut usage = match info.usage {
+            let usage = match info.usage {
                 Data => 0,
+                // TODO: we could use mapping instead of glBufferSubData
+                Dynamic => gl::DYNAMIC_STORAGE_BIT,
                 Upload => access_to_map_bits(memory::WRITE) | gl::MAP_PERSISTENT_BIT,
                 Download => access_to_map_bits(memory::READ) | gl::MAP_PERSISTENT_BIT,
             };
-            if info.bind.contains(memory::TRANSFER_DST) {
-                // is this really what we want ?
-                // this is not needed for glCopyBufferSubData
-                usage |= gl::DYNAMIC_STORAGE_BIT;
-            }
             unsafe {
                 gl.BindBuffer(target, buffer);
                 gl.BufferStorage(target,
@@ -148,6 +145,7 @@ impl Factory {
         else {
             let usage = match info.usage {
                 Data => gl::STATIC_DRAW,
+                Dynamic => gl::DYNAMIC_DRAW,
                 Upload => gl::STREAM_DRAW,
                 Download => gl::STREAM_READ,
             };
@@ -165,7 +163,7 @@ impl Factory {
         }
 
         let mapping_access = match info.usage {
-            Data => None,
+            Data | Dynamic => None,
             Upload => Some(memory::WRITE),
             Download => Some(memory::READ),
         };

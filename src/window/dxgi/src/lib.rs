@@ -64,7 +64,7 @@ impl Window {
             levels: 1,
             format: self.color_format.0,
             bind: memory::RENDER_TARGET,
-            usage: memory::Usage::GpuOnly,
+            usage: memory::Usage::Data,
         };
         let desc = tex::RenderDesc {
             channel: self.color_format.1,

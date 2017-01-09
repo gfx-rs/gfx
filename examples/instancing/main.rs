@@ -112,17 +112,23 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
          let size = 1.6 / instances_per_length as f32;
         println!("size: {}", size);
 
-        // the buffer might not be device local, for faster GPU access
-        // one may want to transfer its contents to a buffer that is
+        let staging = factory
+            .create_buffer(MAX_INSTANCE_COUNT,
+                           gfx::buffer::Role::Staging,
+                           gfx::memory::Usage::Upload,
+                           gfx::TRANSFER_SRC).unwrap();
+        {
+            let mut writer = factory.write_mapping(&staging).unwrap();
+            fill_instances(&mut writer, instances_per_length, size);
+        }
+
         let instances = factory
             .create_buffer(MAX_INSTANCE_COUNT,
                            gfx::buffer::Role::Vertex,
-                           gfx::memory::Usage::Upload,
-                           gfx::Bind::empty()).unwrap();
-        {
-            let mut writer = factory.write_mapping(&instances).unwrap();
-            fill_instances(&mut writer, instances_per_length, size);
-        }
+                           gfx::memory::Usage::Data,
+                           gfx::TRANSFER_DST).unwrap();
+
+        unimplemented!(); // transfer data
 
         let (quad_vertices, mut slice) = factory
             .create_vertex_buffer_with_slice(&QUAD_VERTICES, &QUAD_INDICES[..]);
