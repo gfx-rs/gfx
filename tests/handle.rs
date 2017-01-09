@@ -15,7 +15,7 @@ fn mock_buffer<T>(len: usize) -> Buffer<DummyResources, T> {
         size: mem::size_of::<T>() * len,
         stride: 0,
         bind: Bind::empty(),
-    });
+    }, None);
     Typed::new(raw)
 }
 
@@ -39,7 +39,6 @@ fn test_cleanup() {
     man.clean_with(&mut count,
         |_,_| (),
         |b,_| { *b += 1; },
-        |_,_| (),
         |_,_| (),
         |_,_| (),
         |_,_| (),
