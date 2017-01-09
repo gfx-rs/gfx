@@ -898,7 +898,9 @@ impl core::Factory<R> for Factory {
         where T: Copy
     {
         unsafe {
-            mapping::read(buf.raw(), |mut m| ensure_mapped(&mut m, buf.raw(), self))
+            mapping::read(buf.raw(), |mut m| {
+                ensure_mapped(&mut m, buf.raw(), winapi::d3d11::D3D11_MAP_READ, self)
+            })
         }
     }
 
@@ -908,13 +910,17 @@ impl core::Factory<R> for Factory {
         where T: Copy
     {
         unsafe {
-            mapping::write(buf.raw(), |mut m| ensure_mapped(&mut m, buf.raw(), self))
+            mapping::write(buf.raw(), |mut m| {
+                // not MAP_WRITE_DISCARD because we are STAGING
+                ensure_mapped(&mut m, buf.raw(), winapi::d3d11::D3D11_MAP_WRITE, self)
+            })
         }
     }
 }
 
 pub fn ensure_mapped(mapping: &mut MappingGate,
                      buffer: &h::RawBuffer<R>,
+                     map_type: winapi::d3d11::D3D11_MAP,
                      factory: &Factory) {
     if mapping.pointer.is_null() {
         let raw_handle = *buffer.resource();                  
@@ -931,7 +937,6 @@ pub fn ensure_mapped(mapping: &mut MappingGate,
         };
             
         let dst = raw_handle.to_resource() as *mut winapi::d3d11::ID3D11Resource;
-        let map_type = winapi::d3d11::D3D11_MAP_WRITE; // no DISCARD because we are STAGING
         let hr = unsafe {
             (*ctx).Map(dst, 0, map_type, 0, &mut sres)
         };

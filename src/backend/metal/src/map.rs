@@ -515,23 +515,29 @@ pub fn map_access(access: memory::Access) -> MTLResourceOptions {
     }
 }
 
-pub fn map_texture_usage(usage: Usage) -> (MTLResourceOptions, MTLStorageMode) {
+pub fn map_texture_usage(usage: Usage, bind: Bind) -> (MTLResourceOptions, MTLStorageMode) {
     match usage {
-        Usage::GpuOnly => (MTLResourceStorageModePrivate, MTLStorageMode::Private),
-        Usage::Immutable => (MTLResourceStorageModePrivate, MTLStorageMode::Managed),
+        Usage::Data => if bind.is_mutable() {
+            (MTLResourceStorageModePrivate, MTLStorageMode::Private)
+        } else {
+            (MTLResourceStorageModePrivate, MTLStorageMode::Managed)
+        },
         Usage::Dynamic => (MTLResourceCPUCacheModeDefaultCache, MTLStorageMode::Managed),
-        Usage::CpuOnly(access) => (map_access(access), MTLStorageMode::Managed),
-        Usage::Mappable(access) => (map_access(access), MTLStorageMode::Managed),
+        Usage::Upload => (map_access(memory::WRITE), MTLStorageMode::Managed),
+        Usage::Download => (map_access(memory::READ), MTLStorageMode::Managed),
     }
 }
 
-pub fn map_buffer_usage(usage: Usage) -> MTLResourceOptions {
+pub fn map_buffer_usage(usage: Usage, bind: Bind) -> MTLResourceOptions {
     match usage {
-        Usage::GpuOnly => MTLResourceStorageModePrivate,
-        Usage::Immutable => MTLResourceCPUCacheModeDefaultCache | MTLResourceStorageModeManaged,
+        Usage::Data => if bind.is_mutable() {
+            MTLResourceStorageModePrivate
+        } else {
+            MTLResourceCPUCacheModeDefaultCache | MTLResourceStorageModeManaged
+        },
         Usage::Dynamic => MTLResourceCPUCacheModeDefaultCache | MTLResourceStorageModeManaged,
-        Usage::CpuOnly(access) => map_access(access) | MTLResourceStorageModeManaged,
-        Usage::Mappable(access) => map_access(access) | MTLResourceStorageModeManaged,
+        Usage::Upload => map_access(memory::WRITE) | MTLResourceStorageModeManaged,
+        Usage::Download => map_access(memory::READ) | MTLResourceStorageModeManaged,
     }
 }
 

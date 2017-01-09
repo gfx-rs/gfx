@@ -15,7 +15,7 @@
 use std::{mem, ptr};
 use std::collections::hash_map::{HashMap, Entry};
 use vk;
-use core::{self, command, pso, shade, target, texture as tex, handle, memory, mapping};
+use core::{self, command, pso, shade, target, texture as tex, handle};
 use core::state::RefValues;
 use core::{IndexType, VertexCount};
 use native;
@@ -301,14 +301,13 @@ impl GraphicsQueue {
         self.family
     }
 
-    fn ensure_mappings_flushed(&mut self, mappings: &[handle::RawMapping<Resources>]) {
+    fn ensure_mappings_flushed(&mut self, buffers: &[handle::RawBuffer<Resources>]) {
         let (dev, vk) = self.share.get_device();
-        for mapping in mappings {
-            let mut inner = mapping.access()
-                .expect("user error: mapping still in use on submit");
+        for buffer in buffers {
+            // TODO: check if the lock needs to be kept longer
+            let mut mapping = buffer.lock_mapping().unwrap();
 
-            let mapping::RawInner { ref mut resource, ref buffer, .. } = *inner;
-            resource.status.ensure_flushed(|| {
+            mapping.status.ensure_flushed(|| {
                 let memory_range = vk::MappedMemoryRange {
                     sType: vk::STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
                     pNext: ptr::null(),
@@ -323,35 +322,32 @@ impl GraphicsQueue {
         }
     }
 
-    fn invalidate_mappings(&mut self, mappings: &[handle::RawMapping<Resources>]) {
+    fn invalidate_mappings(&mut self, buffers: &[handle::RawBuffer<Resources>]) {
         let (dev, vk) = self.share.get_device();
-        for mapping in mappings {
-            let inner = mapping.access()
-                .expect("user error: mapping still in use on submit");
+        for buffer in buffers {
+            // TODO: check if the lock needs to be kept longer
+            let mapping = buffer.lock_mapping().unwrap();
 
-            if inner.access.contains(memory::READ) {
-                let memory_range = vk::MappedMemoryRange {
-                    sType: vk::STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-                    pNext: ptr::null(),
-                    memory: inner.buffer.resource().memory,
-                    offset: 0,
-                    size: vk::WHOLE_SIZE,
-                };
-                assert_eq!(vk::SUCCESS, unsafe {
-                    vk.InvalidateMappedMemoryRanges(dev, 1, &memory_range)
-                });
-            }
+            let memory_range = vk::MappedMemoryRange {
+                sType: vk::STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+                pNext: ptr::null(),
+                memory: buffer.resource().memory,
+                offset: 0,
+                size: vk::WHOLE_SIZE,
+            };
+            assert_eq!(vk::SUCCESS, unsafe {
+                vk.InvalidateMappedMemoryRanges(dev, 1, &memory_range)
+            });
         }
     }
 
     fn track_mapped_gpu_access(&mut self,
-                               mappings: &[handle::RawMapping<Resources>],
+                               buffers: &[handle::RawBuffer<Resources>],
                                fence: &handle::Fence<Resources>) {
-        for mapping in mappings {
-            let mut inner = mapping.access()
-                .expect("user error: mapping still in use on submit");
-
-            inner.resource.status.gpu_access(fence.clone());
+        for buffer in buffers {
+            // TODO: check if the lock needs to be kept longer
+            let mut mapping = buffer.lock_mapping().unwrap();
+            mapping.status.gpu_access(fence.clone());
         }
     }
 }
@@ -422,6 +418,9 @@ impl core::Device for GraphicsQueue {
         //self.frame_handles.clear();
         self.share.handles.borrow_mut().clean_with(&mut functions,
             |vk, buffer| unsafe {
+                if buffer.is_mapped() {
+                    vk.UnmapMemory(dev, buffer.resource().memory);
+                }
                 vk.DestroyBuffer(dev, buffer.resource().buffer, ptr::null());
                 vk.FreeMemory(dev, buffer.resource().memory, ptr::null());
             },
@@ -453,10 +452,6 @@ impl core::Device for GraphicsQueue {
             |vk, fence| unsafe {
                 vk.DestroyFence(dev, fence.0, ptr::null());
             },
-            |vk, raw_mapping| {
-                let inner = raw_mapping.access().unwrap();
-                unsafe { vk.UnmapMemory(dev, inner.buffer.resource().memory); }
-            }
         );
     }
 }

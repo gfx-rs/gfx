@@ -293,7 +293,7 @@ impl command::Buffer<Resources> for CommandBuffer {
                 *(buf.0).0 = self.device.new_buffer_with_data(
                     data.as_ptr() as _,
                     data.len() as _,
-                    map_buffer_usage(buf.1));
+                    unimplemented!());//map_buffer_usage(buf.1));
 
                 // invalidate old buffer in cache
                 self.encoder.invalidate_buffer(b);
