@@ -22,21 +22,8 @@ use {Buffer, Texture};
 pub fn update_buffer(context: *mut winapi::ID3D11DeviceContext, buffer: &Buffer,
                      data: &[u8], offset_bytes: usize) {
     let dst_resource = (buffer.0).0 as *mut winapi::ID3D11Resource;
-    /* TODO: do we want to allow updates for Data ?
-    let dst_box = winapi::D3D11_BOX {
-        left:   offset_bytes as winapi::UINT,
-        top:    0,
-        front:  0,
-        right:  (offset_bytes + data.len()) as winapi::UINT,
-        bottom: 1,
-        back:   1,
-    };
-    let ptr = data.as_ptr() as *const _;
-    unsafe {
-        (*context).UpdateSubresource(dst_resource, 0, &dst_box, ptr, 0, 0)
-    };
-    */
 
+    // DYNAMIC only
     let map_type = winapi::D3D11_MAP_WRITE_DISCARD;
     let hr = unsafe {
         let mut sub = mem::zeroed();
@@ -68,33 +55,20 @@ pub fn update_texture(context: *mut winapi::ID3D11DeviceContext, texture: &Textu
     let num_mipmap_levels = 1; //TODO
     let subres = array_slice * num_mipmap_levels + (image.mipmap as UINT);
     let dst_resource = texture.to_resource();
-
-    /* TODO: do we want to allow updates for Data ?
     let (width, height, _, _) = kind.get_level_dimensions(image.mipmap);
-    let stride = image.format.0.get_total_bits() as UINT;
-    let row_pitch = width as UINT * stride;
-    let depth_pitch = height as UINT * row_pitch;
-    let dst_box = winapi::D3D11_BOX {
-        left:   image.xoffset as UINT,
-        top:    image.yoffset as UINT,
-        front:  image.zoffset as UINT,
-        right:  (image.xoffset + image.width) as UINT,
-        bottom: (image.yoffset + image.height) as UINT,
-        back:   (image.zoffset + image.depth) as UINT,
-    };
-    let ptr = data.as_ptr() as *const _;
-    unsafe {
-        //let subres = winapi::D3D11CalcSubresource(image.mipmap, array_slice, num_mipmap_levels);
-        (*context).UpdateSubresource(dst_resource, subres, &dst_box, ptr, row_pitch, depth_pitch)
-    };
-    */
+    let stride = image.format.0.get_total_bits() as usize;
+    let row_pitch = width as usize * stride;
+    let depth_pitch = height as usize * row_pitch;
 
-    // FIXME: probably wrong
+    // DYNAMIC only
+    let offset_bytes = image.xoffset as usize +
+                       image.yoffset as usize * row_pitch +
+                       image.zoffset as usize * depth_pitch;
     let map_type = winapi::D3D11_MAP_WRITE_DISCARD;
     let hr = unsafe {
         let mut sub = mem::zeroed();
         let hr = (*context).Map(dst_resource, subres, map_type, 0, &mut sub);
-        let dst = sub.pData as *mut u8;
+        let dst = (sub.pData as *mut u8).offset(offset_bytes as isize);
         ptr::copy_nonoverlapping(data.as_ptr(), dst, data.len());
         (*context).Unmap(dst_resource, 0);
         hr
@@ -102,7 +76,6 @@ pub fn update_texture(context: *mut winapi::ID3D11DeviceContext, texture: &Textu
     if !winapi::SUCCEEDED(hr) {
         error!("Texture {:?} failed to map, error {:x}", texture, hr);
     }
-
 }
 
 

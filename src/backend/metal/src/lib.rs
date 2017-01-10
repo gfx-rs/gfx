@@ -261,9 +261,6 @@ impl core::Device for Device {
                                                    }, // sampler
                                                    |_, _| {
                                                        // fence
-                                                   },
-                                                   |_, _| {
-                                                       // raw mapping
                                                    });
     }
 }

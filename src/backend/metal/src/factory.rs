@@ -21,7 +21,6 @@ use std::{mem, slice, str};
 
 use core::{self, buffer, factory, mapping, memory};
 use core::handle::{self, Producer};
-use core::mapping::Builder;
 use core::memory::Typed;
 
 use metal::*;
@@ -745,16 +744,16 @@ impl core::Factory<Resources> for Factory {
         self.share.handles.borrow_mut().make_sampler(native::Sampler(sampler), info)
     }
 
-    fn read_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<R, T>)
-                               -> Result<mapping::Reader<'b, R, T>,
+    fn read_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<Resources, T>)
+                               -> Result<mapping::Reader<'b, Resources, T>,
                                          mapping::Error>
         where T: Copy
     {
         unimplemented!()
     }
 
-    fn write_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<R, T>)
-                                -> Result<mapping::Writer<'b, R, T>,
+    fn write_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<Resources, T>)
+                                -> Result<mapping::Writer<'b, Resources, T>,
                                           mapping::Error>
         where T: Copy
     {
