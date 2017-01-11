@@ -21,7 +21,6 @@ use std::{mem, slice, str};
 
 use core::{self, buffer, factory, mapping, memory};
 use core::handle::{self, Producer};
-use core::mapping::Builder;
 use core::memory::Typed;
 
 use metal::*;
@@ -84,7 +83,7 @@ impl Factory {
                               -> Result<handle::RawBuffer<Resources>, buffer::CreationError> {
         use map::map_buffer_usage;
 
-        let usage = map_buffer_usage(info.usage);
+        let usage = map_buffer_usage(info.usage, info.bind);
 
         if info.bind.contains(memory::RENDER_TARGET) | info.bind.contains(memory::DEPTH_STENCIL) {
             return Err(buffer::CreationError::UnsupportedBind(info.bind));
@@ -98,7 +97,14 @@ impl Factory {
         };
 
         let buf = Buffer(native::Buffer(Box::into_raw(Box::new(raw_buf))), info.usage);
-        Ok(self.share.handles.borrow_mut().make_buffer(buf, info))
+
+        // TODO(fkaa): if we have a way to track buffers in use (added on
+        //             scheduling of command buffers, removed on completion),
+        //             we could block while in use on both sides. would need
+        //             a state for each mode (`in-use` vs. `mapped`).
+        let mapping = None;
+
+        Ok(self.share.handles.borrow_mut().make_buffer(buf, info, mapping))
     }
 
     pub fn make_depth_stencil(&self, info: &core::pso::DepthStencilInfo) -> MTLDepthStencilState {
@@ -167,7 +173,7 @@ impl core::Factory<Resources> for Factory {
          -> Result<handle::RawBuffer<Resources>, buffer::CreationError> {
         let info = buffer::Info {
             role: role,
-            usage: memory::Usage::Immutable,
+            usage: memory::Usage::Data,
             bind: bind,
             size: data.len(),
             stride: stride,
@@ -420,7 +426,7 @@ impl core::Factory<Resources> for Factory {
         use core::texture::{AaMode, Kind};
         use map::{map_channel_hint, map_texture_bind, map_texture_usage, map_format};
 
-        let (resource, storage) = map_texture_usage(desc.usage);
+        let (resource, storage) = map_texture_usage(desc.usage, desc.bind);
 
         let descriptor = MTLTextureDescriptor::alloc().init();
         descriptor.set_mipmap_level_count(desc.levels as u64);
@@ -738,51 +744,17 @@ impl core::Factory<Resources> for Factory {
         self.share.handles.borrow_mut().make_sampler(native::Sampler(sampler), info)
     }
 
-    fn map_buffer_raw(&mut self,
-                      buf: &handle::RawBuffer<Resources>,
-                      access: memory::Access)
-                      -> Result<handle::RawMapping<Resources>, mapping::Error> {
-        // TODO(fkaa): if we have a way to track buffers in use (added on
-        //             scheduling of command buffers, removed on completion),
-        //             we could block while in use on both sides. would need
-        //             a state for each mode (`in-use` vs. `mapped`).
-        unimplemented!()
-    }
-
-    fn map_buffer_readable<T: Copy>(&mut self, buf: &handle::Buffer<Resources, T>)
-                                    -> Result<mapping::ReadableOnly<Resources, T>, mapping::Error> {
-        let map = try!(self.map_buffer_raw(buf.raw(), memory::READ));
-        Ok(self.map_readable(map, buf.len()))
-    }
-
-    fn map_buffer_writable<T: Copy>(&mut self, buf: &handle::Buffer<Resources, T>)
-                                    -> Result<mapping::WritableOnly<Resources, T>, mapping::Error> {
-        let map = try!(self.map_buffer_raw(buf.raw(), memory::WRITE));
-        Ok(self.map_writable(map, buf.len()))
-    }
-
-    fn map_buffer_rw<T: Copy>(&mut self, buf: &handle::Buffer<Resources, T>)
-                              -> Result<mapping::RWable<Resources, T>, mapping::Error> {
-        let map = try!(self.map_buffer_raw(buf.raw(), memory::RW));
-        Ok(self.map_read_write(map, buf.len()))
-    }
-
-    fn read_mapping<'a, 'b, M, T>(&'a mut self, _: &'b mut M)
-                                  -> mapping::Reader<'b, Resources, T>
-        where M: mapping::Readable<Resources, T>, T: Copy
+    fn read_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<Resources, T>)
+                               -> Result<mapping::Reader<'b, Resources, T>,
+                                         mapping::Error>
+        where T: Copy
     {
         unimplemented!()
     }
 
-    fn write_mapping<'a, 'b, M, T>(&'a mut self, _: &'b mut M)
-                                   -> mapping::Writer<'b, Resources, T>
-        where M: mapping::Writable<Resources, T>, T: Copy
-    {
-        unimplemented!()
-    }
-
-    fn rw_mapping<'a, 'b, T>(&'a mut self, _: &'b mut mapping::RWable<Resources, T>)
-                             -> mapping::RWer<'b, Resources, T>
+    fn write_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<Resources, T>)
+                                -> Result<mapping::Writer<'b, Resources, T>,
+                                          mapping::Error>
         where T: Copy
     {
         unimplemented!()

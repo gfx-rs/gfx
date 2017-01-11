@@ -16,24 +16,22 @@
 
 use std::mem;
 
-/// A hint as to how this memory will be used.
-///
-/// The nature of these hints make them very implementation specific. Different drivers on
-/// different hardware will handle them differently. Only careful profiling will tell which is the
-/// best to use.
+/// How this memory will be used.
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 #[repr(u8)]
 pub enum Usage {
-    /// GPU: read + write, CPU: copy. Optimal for render targets.
-    GpuOnly,
-    /// GPU: read, CPU: none. Optimal for resourced memory.
-    Immutable,
-    /// GPU: read, CPU: write.
+    /// Full speed GPU access.
+    /// Optimal for render targets and resourced memory.
+    Data,
+    /// CPU to GPU data flow with update commands.
+    /// Used for dynamic buffer data, typically constant buffers.
     Dynamic,
-    /// GPU: read + write, CPU: as specified.
-    Mappable(Access),
-    /// GPU: copy, CPU: as specified. Used for staged memory, to be copied back and forth with on-GPU targets.
-    CpuOnly(Access),
+    /// CPU to GPU data flow with mapping.
+    /// Used for staging for upload to GPU.
+    Upload,
+    /// GPU to CPU data flow with mapping.
+    /// Used for staging for download from GPU.
+    Download,
 }
 
 bitflags!(
@@ -59,8 +57,20 @@ bitflags!(
         const SHADER_RESOURCE  = 0x4,
         /// Can be bound to the shader for writing.
         const UNORDERED_ACCESS = 0x8,
+        /// Can be transfered from.
+        const TRANSFER_SRC     = 0x10,
+        /// Can be transfered into.
+        const TRANSFER_DST     = 0x20,
     }
 );
+
+impl Bind {
+    /// Is this memory bound to be mutated ?
+    pub fn is_mutable(&self) -> bool {
+        let mutable = TRANSFER_DST | UNORDERED_ACCESS | RENDER_TARGET | DEPTH_STENCIL;
+        self.intersects(mutable)
+    }
+}
 
 /// A service trait used to get the raw data out of strong types.
 /// Not meant for public use.

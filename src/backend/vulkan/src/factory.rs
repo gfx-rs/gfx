@@ -14,10 +14,9 @@
 
 use std::{cell, mem, ptr, slice};
 use std::os::raw::c_void;
-use core::{self, handle as h, pso, state, texture, buffer};
-use core::memory::{self, Bind, Typed};
+use core::{self, handle as h, pso, state, texture, buffer, mapping};
+use core::memory::{self, Bind};
 use core::factory::{self as f};
-use core::mapping::{self, Builder};
 use core::format::ChannelType;
 use core::target::Layer;
 use vk;
@@ -163,7 +162,7 @@ impl Factory {
             levels: 1,
             format: format.0,
             bind: memory::RENDER_TARGET,
-            usage: memory::Usage::GpuOnly,
+            usage: memory::Usage::Data,
         };
         let tex = self.frame_handles.make_texture(raw_tex, tex_desc);
         let view_desc = t::RenderDesc {
@@ -189,7 +188,7 @@ impl Factory {
         fence
     }
 
-    fn create_buffer_impl(&mut self, info: &buffer::Info) -> native::Buffer {
+    fn create_buffer_impl(&mut self, info: &buffer::Info) -> (native::Buffer, Option<MappingGate>) {
         let (usage, _) = data::map_usage_tiling(info.usage, info.bind);
         let native_info = vk::BufferCreateInfo {
             sType: vk::STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -215,21 +214,43 @@ impl Factory {
         assert_eq!(vk::SUCCESS, unsafe {
             vk.BindBufferMemory(dev, buf, mem, 0)
         });
-        native::Buffer {
+
+        use core::memory::Usage::*;
+        let mapping = match info.usage {
+            Data | Dynamic => None,
+            Upload | Download => Some({
+                let mut m = MappingGate {
+                    pointer: ptr::null_mut(),
+                    status: mapping::Status::clean(),
+                };
+
+                let offset = 0;
+                let flags = 0;
+                assert_eq!(vk::SUCCESS, unsafe {
+                    vk.MapMemory(dev, mem, offset, vk::WHOLE_SIZE, flags, &mut m.pointer)
+                });
+
+                m
+            }),
+        };
+
+        (native::Buffer {
             buffer: buf,
             memory: mem,
-        }
+        }, mapping)
     }
 
     fn alloc(&self, usage: memory::Usage, reqs: vk::MemoryRequirements) -> vk::DeviceMemory {
+        use core::memory::Usage::*;
         let info = vk::MemoryAllocateInfo {
             sType: vk::STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
             pNext: ptr::null(),
             allocationSize: reqs.size,
-            memoryTypeIndex: if let memory::Usage::CpuOnly(_) = usage {
-                self.mem_system_id
-            }else {
-                self.mem_video_id
+            memoryTypeIndex: match usage {
+                // TODO: more fine-grained memory selection
+                // HOST_CACHED if possible for Download
+                Upload | Download => self.mem_system_id,
+                Data | Dynamic => self.mem_video_id,
             },
         };
         let (dev, vk) = self.share.get_device();
@@ -297,8 +318,8 @@ impl core::Factory<R> for Factory {
 
     fn create_buffer_raw(&mut self, info: buffer::Info) -> Result<h::RawBuffer<R>, buffer::CreationError> {
         use core::handle::Producer;
-        let buffer = self.create_buffer_impl(&info);
-        Ok(self.share.handles.borrow_mut().make_buffer(buffer, info))
+        let (buffer, mapping) = self.create_buffer_impl(&info);
+        Ok(self.share.handles.borrow_mut().make_buffer(buffer, info, mapping))
     }
 
     fn create_buffer_immutable_raw(&mut self, data: &[u8], stride: usize, role: buffer::Role, bind: Bind)
@@ -306,20 +327,21 @@ impl core::Factory<R> for Factory {
         use core::handle::Producer;
         let info = buffer::Info {
             role: role,
-            usage: memory::Usage::Immutable,
+            usage: memory::Usage::Data,
             bind: bind,
             size: data.len(),
             stride: stride,
         };
-        let buffer = self.create_buffer_impl(&info);
+        let (buffer, mapping) = self.create_buffer_impl(&info);
         let (dev, vk) = self.share.get_device();
         unsafe {
+            // FIXME
             let mut ptr = ptr::null_mut();
             assert_eq!(vk::SUCCESS, vk.MapMemory(dev, buffer.memory, 0, data.len() as u64, 0, &mut ptr));
             ptr::copy_nonoverlapping(data.as_ptr(), ptr as *mut u8, data.len());
             vk.UnmapMemory(dev, buffer.memory);
         }
-        Ok(self.share.handles.borrow_mut().make_buffer(buffer, info))
+        Ok(self.share.handles.borrow_mut().make_buffer(buffer, info, mapping))
     }
 
     fn create_shader(&mut self, _stage: core::shade::Stage, code: &[u8])
@@ -884,62 +906,17 @@ impl core::Factory<R> for Factory {
         self.share.handles.borrow_mut().make_sampler(sampler, info)
     }
 
-    fn map_buffer_raw(&mut self, buf: &h::RawBuffer<R>, access: memory::Access)
-                      -> Result<h::RawMapping<R>, mapping::Error> {
-        // TODO: ensure the buffer is properly created in regard to the expected mapping
-        // (in particular VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT should be set).
-        use core::handle::Producer;
-
-        let (dev, vk) = self.share.get_device();
-        self.share.handles.borrow_mut().make_mapping(access, buf, || {
-            let offset = 0;
-            let flags = 0;
-            let mut pointer = ptr::null_mut();
-            assert_eq!(vk::SUCCESS, unsafe {
-                vk.MapMemory(dev, buf.resource().memory, offset, vk::WHOLE_SIZE, flags, &mut pointer)
-            });
-
-            MappingGate {
-                pointer: pointer,
-                status: mapping::Status::clean(),
-            }
-        })
-    }
-
-    fn map_buffer_readable<T: Copy>(&mut self, buf: &h::Buffer<R, T>)
-                                    -> Result<mapping::ReadableOnly<R, T>, mapping::Error> {
-        let map = try!(self.map_buffer_raw(buf.raw(), memory::READ));
-        Ok(self.map_readable(map, buf.len()))
-    }
-
-    fn map_buffer_writable<T: Copy>(&mut self, buf: &h::Buffer<R, T>)
-                                    -> Result<mapping::WritableOnly<R, T>, mapping::Error> {
-        let map = try!(self.map_buffer_raw(buf.raw(), memory::WRITE));
-        Ok(self.map_writable(map, buf.len()))
-    }
-
-    fn map_buffer_rw<T: Copy>(&mut self, buf: &h::Buffer<R, T>)
-                              -> Result<mapping::RWable<R, T>, mapping::Error> {
-        let map = try!(self.map_buffer_raw(buf.raw(), memory::RW));
-        Ok(self.map_read_write(map, buf.len()))
-    }
-
-    fn read_mapping<'a, 'b, M, T>(&'a mut self, _: &'b mut M)
-                                  -> mapping::Reader<'b, R, T>
-        where M: mapping::Readable<R, T>, T: Copy
+    fn read_mapping<'a, 'b, T>(&'a mut self, _: &'b h::Buffer<R, T>)
+                               -> Result<mapping::Reader<'b, R, T>,
+                                         mapping::Error>
+        where T: Copy
     {
         unimplemented!()
     }
 
-    fn write_mapping<'a, 'b, M, T>(&'a mut self, _: &'b mut M)
-                                   -> mapping::Writer<'b, R, T>
-        where M: mapping::Writable<R, T>, T: Copy
-    {
-        unimplemented!()
-    }
-
-    fn rw_mapping<'a, 'b, T>(&'a mut self, _: &'b mut mapping::RWable<R, T>)
-                             -> mapping::RWer<'b, R, T>
+    fn write_mapping<'a, 'b, T>(&'a mut self, _: &'b h::Buffer<R, T>)
+                                -> Result<mapping::Writer<'b, R, T>,
+                                          mapping::Error>
         where T: Copy
     {
         unimplemented!()

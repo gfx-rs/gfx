@@ -261,9 +261,6 @@ impl core::Device for Device {
                                                    }, // sampler
                                                    |_, _| {
                                                        // fence
-                                                   },
-                                                   |_, _| {
-                                                       // raw mapping
                                                    });
     }
 }
@@ -333,7 +330,7 @@ pub fn create(format: core::format::Format,
     };
 
     // let raw_addr: *mut MTLTexture = ptr::null_mut();//&mut MTLTexture::nil();//unsafe { mem::transmute(&(raw_tex.0).0) };
-    let raw_tex = Texture(native::Texture(bb), Usage::GpuOnly);
+    let raw_tex = Texture(native::Texture(bb), Usage::Data);
 
     let color_tex =
         device.share.handles.borrow_mut().make_texture(raw_tex,

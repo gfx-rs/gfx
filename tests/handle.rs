@@ -11,11 +11,11 @@ fn mock_buffer<T>(len: usize) -> Buffer<DummyResources, T> {
     let mut handler = Manager::new();
     let raw = handler.make_buffer((), buffer::Info {
         role: buffer::Role::Vertex,
-        usage: Usage::Immutable,
+        usage: Usage::Data,
         size: mem::size_of::<T>() * len,
         stride: 0,
         bind: Bind::empty(),
-    });
+    }, None);
     Typed::new(raw)
 }
 
@@ -39,7 +39,6 @@ fn test_cleanup() {
     man.clean_with(&mut count,
         |_,_| (),
         |b,_| { *b += 1; },
-        |_,_| (),
         |_,_| (),
         |_,_| (),
         |_,_| (),

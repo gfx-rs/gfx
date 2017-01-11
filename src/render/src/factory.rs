@@ -20,7 +20,7 @@
 
 use std::error::Error;
 use std::fmt;
-use core::{buffer, format, handle, mapping, texture, state};
+use core::{buffer, format, handle, texture, state};
 use core::{Primitive, Resources, ShaderSet};
 use core::factory::Factory;
 use core::pso::{CreationError, Descriptor};
@@ -125,52 +125,14 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
         })
     }
 
-    /// Create a constant buffer for `num` identical elements of type `T`.
-    fn create_constant_buffer<T>(&mut self, num: usize) -> handle::Buffer<R, T> {
-        self.create_buffer_dynamic(num, buffer::Role::Constant, Bind::empty())
-            .unwrap()
-    }
-
-    /// Creates and maps a readable buffer.
-    fn create_mapped_buffer_readable<T>(&mut self,
-                                        num: usize,
-                                        role: buffer::Role,
-                                        bind: Bind) -> (handle::Buffer<R, T>,
-                                                        mapping::ReadableOnly<R, T>)
+    /// Creates a constant buffer for `num` identical elements of type `T`.
+    fn create_constant_buffer<T>(&mut self, num: usize) -> handle::Buffer<R, T>
         where T: Copy
     {
-        let buffer = self.create_buffer_mappable(num, role, bind, memory::READ)
-            .unwrap();
-        let mapping = self.map_buffer_readable(&buffer).unwrap();
-        (buffer, mapping)
-    }
-
-    /// Creates and maps a writable buffer.
-    fn create_mapped_buffer_writable<T>(&mut self,
-                                        num: usize,
-                                        role: buffer::Role,
-                                        bind: Bind) -> (handle::Buffer<R, T>,
-                                                        mapping::WritableOnly<R, T>)
-        where T: Copy
-    {
-        let buffer = self.create_buffer_mappable(num, role, bind, memory::WRITE)
-            .unwrap();
-        let mapping = self.map_buffer_writable(&buffer).unwrap();
-        (buffer, mapping)
-    }
-
-    /// Creates and maps a readable and writable buffer.
-    fn create_mapped_buffer_rw<T>(&mut self,
-                                  num: usize,
-                                  role: buffer::Role,
-                                  bind: Bind) -> (handle::Buffer<R, T>,
-                                                  mapping::RWable<R, T>)
-        where T: Copy
-    {
-        let buffer = self.create_buffer_mappable(num, role, bind, memory::RW)
-            .unwrap();
-        let mapping = self.map_buffer_rw(&buffer).unwrap();
-        (buffer, mapping)
+        self.create_buffer(num,
+                           buffer::Role::Constant,
+                           memory::Usage::Dynamic,
+                           Bind::empty()).unwrap()
     }
 
     /// Creates a `ShaderSet` from the supplied vertex and pixel shader source code.

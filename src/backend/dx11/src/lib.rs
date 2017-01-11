@@ -76,11 +76,9 @@ use std::cell::RefCell;
 use std::ptr;
 use std::sync::Arc;
 use core::{handle as h, texture as tex};
-use core::memory::Usage;
-
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct Buffer(native::Buffer, Usage);
+pub struct Buffer(native::Buffer);
 impl Buffer {
     pub fn to_resource(&self) -> *mut winapi::ID3D11Resource {
         type Res = *mut winapi::ID3D11Resource;
@@ -91,7 +89,7 @@ impl Buffer {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct Texture(native::Texture, Usage);
+pub struct Texture(native::Texture);
 impl Texture {
     pub fn to_resource(&self) -> *mut winapi::ID3D11Resource {
         type Res = *mut winapi::ID3D11Resource;
@@ -248,10 +246,10 @@ impl Device {
         self.ensure_mappings_unmapped(gpu_access.mapped_writes());
     }
 
-    fn ensure_mappings_unmapped(&mut self, mappings: &[core::handle::RawMapping<Resources>]) {
-        for mapping in mappings {
-            let mut inner = mapping.access().expect("user error: mapping still in use on submit");
-            factory::ensure_unmapped(&mut inner, self.context);
+    fn ensure_mappings_unmapped(&mut self, buffers: &[core::handle::RawBuffer<Resources>]) {
+        for buffer in buffers {
+            let mut mapping = buffer.lock_mapping().unwrap();
+            factory::ensure_unmapped(&mut mapping, buffer, self.context);
         }
     }
 
@@ -368,7 +366,10 @@ impl core::Device for Device {
 
         self.frame_handles.clear();
         self.share.handles.borrow_mut().clean_with(&mut self.context,
-            |_, buffer| unsafe { (*(buffer.resource().0).0).Release(); },
+            |ctx, buffer| {
+                buffer.lock_mapping().map(|mut m| factory::ensure_unmapped(&mut m, buffer, *ctx));
+                unsafe { (*(buffer.resource().0).0).Release(); }
+            },
             |_, s| unsafe { //shader
                 (*s.object).Release();
                 (*s.reflection).Release();
@@ -395,10 +396,6 @@ impl core::Device for Device {
             |_, v| unsafe { (*v.0).Release(); }, //DSV
             |_, v| unsafe { (*v.0).Release(); }, //sampler
             |_, _fence| {},
-            |ctx, mapping| {
-	            let mut inner = mapping.access().expect("user error: mapping still in use on submit");
-	            factory::ensure_unmapped(&mut inner, *ctx);
-            },
         );
     }
 }

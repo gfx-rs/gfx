@@ -39,7 +39,8 @@ pub use core::{VertexCount, InstanceCount};
 pub use core::{ShaderSet, VertexShader, HullShader, DomainShader, GeometryShader, PixelShader};
 pub use core::{buffer, format, handle, texture, mapping};
 pub use core::factory::{Factory, ResourceViewError, TargetViewError, CombinedError};
-pub use core::memory::{self, Bind, RENDER_TARGET, DEPTH_STENCIL, SHADER_RESOURCE, UNORDERED_ACCESS};
+pub use core::memory::{self, Bind, TRANSFER_SRC, TRANSFER_DST, RENDER_TARGET,
+                       DEPTH_STENCIL, SHADER_RESOURCE, UNORDERED_ACCESS};
 pub use core::command::{Buffer as CommandBuffer, InstanceParams};
 pub use core::shade::{ProgramInfo, UniformValue};
 

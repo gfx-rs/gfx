@@ -83,6 +83,12 @@ pub fn map_swizzle(swizzle: Swizzle) -> vk::ComponentMapping {
 
 pub fn map_usage_tiling(gfx_usage: Usage, bind: Bind) -> (vk::ImageUsageFlags, vk::ImageTiling) {
     let mut usage = 0;
+    if bind.contains(memory::TRANSFER_SRC) {
+        usage |= vk::IMAGE_USAGE_TRANSFER_SRC_BIT;
+    }
+    if bind.contains(memory::TRANSFER_DST) {
+        usage |= vk::IMAGE_USAGE_TRANSFER_DST_BIT;
+    }
     if bind.contains(memory::RENDER_TARGET) {
         usage |= vk::IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     }
@@ -96,22 +102,12 @@ pub fn map_usage_tiling(gfx_usage: Usage, bind: Bind) -> (vk::ImageUsageFlags, v
         usage |= vk::IMAGE_USAGE_STORAGE_BIT;
     }
     let tiling = match gfx_usage {
-        Usage::Immutable => vk::IMAGE_TILING_OPTIMAL,
-        Usage::GpuOnly => {
-            //TODO: not always needed
-            usage |= vk::IMAGE_USAGE_TRANSFER_SRC_BIT | vk::IMAGE_USAGE_TRANSFER_DST_BIT;
-            vk::IMAGE_TILING_OPTIMAL
-        },
+        Usage::Data => vk::IMAGE_TILING_OPTIMAL,
         Usage::Dynamic => {
             usage |= vk::IMAGE_USAGE_TRANSFER_DST_BIT;
             vk::IMAGE_TILING_LINEAR
         },
-        Usage::Mappable(access) => unimplemented!(),
-        Usage::CpuOnly(access) => {
-            if access.contains(memory::READ) { usage |= vk::IMAGE_USAGE_TRANSFER_DST_BIT }
-            if access.contains(memory::WRITE) { usage |= vk::IMAGE_USAGE_TRANSFER_SRC_BIT }
-            vk::IMAGE_TILING_LINEAR
-        },
+        Usage::Upload | Usage::Download => vk::IMAGE_TILING_LINEAR,
     };
     (usage, tiling)
 }

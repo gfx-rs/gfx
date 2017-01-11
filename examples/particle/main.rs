@@ -111,9 +111,11 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         let mut particles = vec![Vertex::new(); 4096];
 
         // Create a dynamic vertex buffer to hold the particle data
-        let vbuf = factory.create_buffer_dynamic(
-            particles.len(), buffer::Role::Vertex, Bind::empty()
-        ).expect("Failed to create vertex buffer");
+        let vbuf = factory.create_buffer(particles.len(),
+                                         buffer::Role::Vertex,
+                                         gfx::memory::Usage::Dynamic,
+                                         Bind::empty())
+            .expect("Failed to create vertex buffer");
         let slice = Slice::new_match_vertex_buffer(&vbuf);
 
         // Construct our pipeline state

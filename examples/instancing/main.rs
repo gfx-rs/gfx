@@ -112,14 +112,23 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
          let size = 1.6 / instances_per_length as f32;
         println!("size: {}", size);
 
-        let (instance_buffer, mut instance_mapping) = factory
-            .create_mapped_buffer_writable(MAX_INSTANCE_COUNT,
-                                     gfx::buffer::Role::Vertex,
-                                     gfx::Bind::empty());
+        let staging = factory
+            .create_buffer(MAX_INSTANCE_COUNT,
+                           gfx::buffer::Role::Staging,
+                           gfx::memory::Usage::Upload,
+                           gfx::TRANSFER_SRC).unwrap();
         {
-            let mut instances = factory.write_mapping(&mut instance_mapping);
-            fill_instances(&mut instances, instances_per_length, size);
+            let mut writer = factory.write_mapping(&staging).unwrap();
+            fill_instances(&mut writer, instances_per_length, size);
         }
+
+        let instances = factory
+            .create_buffer(MAX_INSTANCE_COUNT,
+                           gfx::buffer::Role::Vertex,
+                           gfx::memory::Usage::Data,
+                           gfx::TRANSFER_DST).unwrap();
+
+        unimplemented!(); // transfer data
 
         let (quad_vertices, mut slice) = factory
             .create_vertex_buffer_with_slice(&QUAD_VERTICES, &QUAD_INDICES[..]);
@@ -134,7 +143,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 ).unwrap(),
             data: pipe::Data {
                 vertex: quad_vertices,
-                instance: instance_buffer,
+                instance: instances,
                 scale: size,
                 locals: factory
                     .create_buffer_immutable(&[locals], gfx::buffer::Role::Constant, gfx::Bind::empty())

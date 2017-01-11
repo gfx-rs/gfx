@@ -22,7 +22,7 @@ use std::{mem, fmt};
 use {buffer, handle, format, mapping, pso, shade, target, texture};
 use {Capabilities, Resources, ShaderSet,
      VertexShader, HullShader, DomainShader, GeometryShader, PixelShader};
-use memory::{self, Usage, Typed, Pod, cast_slice};
+use memory::{Usage, Typed, Pod, cast_slice};
 use memory::{Bind, RENDER_TARGET, DEPTH_STENCIL, SHADER_RESOURCE, UNORDERED_ACCESS};
 
 /// Error creating either a ShaderResourceView, or UnorderedAccessView.
@@ -184,36 +184,12 @@ pub trait Factory<R: Resources> {
         self.create_buffer_immutable_raw(cast_slice(data), mem::size_of::<T>(), role, bind)
             .map(|raw| Typed::new(raw))
     }
-    fn create_buffer_dynamic<T>(&mut self, num: usize, role: buffer::Role, bind: Bind)
-                                -> Result<handle::Buffer<R, T>, buffer::CreationError> {
+    fn create_buffer<T>(&mut self, num: usize, role: buffer::Role, usage: Usage, bind: Bind)
+                        -> Result<handle::Buffer<R, T>, buffer::CreationError> {
         let stride = mem::size_of::<T>();
         let info = buffer::Info {
             role: role,
-            usage: Usage::Dynamic,
-            bind: bind,
-            size: num * stride,
-            stride: stride,
-        };
-        self.create_buffer_raw(info).map(|raw| Typed::new(raw))
-    }
-    fn create_buffer_mappable<T>(&mut self, num: usize, role: buffer::Role, bind: Bind, map: memory::Access)
-                                   -> Result<handle::Buffer<R, T>, buffer::CreationError> {
-        let stride = mem::size_of::<T>();
-        let info = buffer::Info {
-            role: role,
-            usage: Usage::Mappable(map),
-            bind: bind,
-            size: num * stride,
-            stride: stride,
-        };
-        self.create_buffer_raw(info).map(Typed::new)
-    }
-    fn create_buffer_staging<T>(&mut self, num: usize, role: buffer::Role, bind: Bind, map: memory::Access)
-                                -> Result<handle::Buffer<R, T>, buffer::CreationError> {
-        let stride = mem::size_of::<T>();
-        let info = buffer::Info {
-            role: role,
-            usage: Usage::CpuOnly(map),
+            usage: usage,
             bind: bind,
             size: num * stride,
             stride: stride,
@@ -258,28 +234,16 @@ pub trait Factory<R: Resources> {
 
     fn create_sampler(&mut self, texture::SamplerInfo) -> handle::Sampler<R>;
 
-    fn map_buffer_raw(&mut self, &handle::RawBuffer<R>, memory::Access)
-                      -> Result<handle::RawMapping<R>, mapping::Error>;
-    fn map_buffer_readable<T: Copy>(&mut self, &handle::Buffer<R, T>)
-                                    -> Result<mapping::ReadableOnly<R, T>, mapping::Error>;
-    fn map_buffer_writable<T: Copy>(&mut self, &handle::Buffer<R, T>)
-                                    -> Result<mapping::WritableOnly<R, T>, mapping::Error>;
-    fn map_buffer_rw<T: Copy>(&mut self, &handle::Buffer<R, T>)
-                              -> Result<mapping::RWable<R, T>, mapping::Error>;
-
     /// Acquire a mapping Reader
-    fn read_mapping<'a, 'b, M, T>(&'a mut self, m: &'b mut M)
-                                  -> mapping::Reader<'b, R, T>
-        where M: mapping::Readable<R, T>, T: Copy;
+    fn read_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<R, T>)
+                               -> Result<mapping::Reader<'b, R, T>,
+                                         mapping::Error>
+        where T: Copy;
 
     /// Acquire a mapping Writer
-    fn write_mapping<'a, 'b, M, T>(&'a mut self, m: &'b mut M)
-                                   -> mapping::Writer<'b, R, T>
-        where M: mapping::Writable<R, T>, T: Copy;
-
-    /// Acquire a mapping reader & writer
-    fn rw_mapping<'a, 'b, T>(&'a mut self, m: &'b mut mapping::RWable<R, T>)
-                             -> mapping::RWer<'b, R, T>
+    fn write_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<R, T>)
+                                -> Result<mapping::Writer<'b, R, T>,
+                                          mapping::Error>
         where T: Copy;
 
     /// Create a new empty raw texture with no data. The channel type parameter is a hint,
@@ -412,7 +376,7 @@ pub trait Factory<R: Resources> {
             levels: (data.len() / (num_slices * num_faces)) as texture::Level,
             format: surface,
             bind: SHADER_RESOURCE,
-            usage: Usage::Immutable,
+            usage: Usage::Data,
         };
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
         let raw = try!(self.create_texture_raw(desc, Some(cty), Some(data)));
@@ -448,7 +412,7 @@ pub trait Factory<R: Resources> {
         let kind = texture::Kind::D2(width, height, texture::AaMode::Single);
         let levels = 1;
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
-        let tex = try!(self.create_texture(kind, levels, SHADER_RESOURCE | RENDER_TARGET, Usage::GpuOnly, Some(cty)));
+        let tex = try!(self.create_texture(kind, levels, SHADER_RESOURCE | RENDER_TARGET, Usage::Data, Some(cty)));
         let resource = try!(self.view_texture_as_shader_resource::<T>(&tex, (0, levels-1), format::Swizzle::new()));
         let target = try!(self.view_texture_as_render_target(&tex, 0, None));
         Ok((tex, resource, target))
@@ -463,7 +427,7 @@ pub trait Factory<R: Resources> {
     {
         let kind = texture::Kind::D2(width, height, texture::AaMode::Single);
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
-        let tex = try!(self.create_texture(kind, 1, SHADER_RESOURCE | DEPTH_STENCIL, Usage::GpuOnly, Some(cty)));
+        let tex = try!(self.create_texture(kind, 1, SHADER_RESOURCE | DEPTH_STENCIL, Usage::Data, Some(cty)));
         let resource = try!(self.view_texture_as_shader_resource::<T>(&tex, (0, 0), format::Swizzle::new()));
         let target = try!(self.view_texture_as_depth_stencil_trivial(&tex));
         Ok((tex, resource, target))
@@ -475,7 +439,7 @@ pub trait Factory<R: Resources> {
     {
         let kind = texture::Kind::D2(width, height, texture::AaMode::Single);
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
-        let tex = try!(self.create_texture(kind, 1, DEPTH_STENCIL, Usage::GpuOnly, Some(cty)));
+        let tex = try!(self.create_texture(kind, 1, DEPTH_STENCIL, Usage::Data, Some(cty)));
         let target = try!(self.view_texture_as_depth_stencil_trivial(&tex));
         Ok(target)
     }

@@ -15,26 +15,28 @@
 //! Memory buffers
 
 use std::error::Error;
-use std::sync::{Weak, Mutex, MutexGuard};
+use std::sync::{Mutex, MutexGuard};
 use std::{mem, fmt, cmp, hash};
-use {memory, mapping, handle};
-use {Resources};
+use memory;
+use Resources;
 
 /// Untyped buffer
 #[derive(Debug)]
 pub struct Raw<R: Resources> {
     resource: R::Buffer,
     info: Info,
-    mapping: Mutex<Option<Weak<mapping::Raw<R>>>>,
+    mapping: Option<Mutex<R::Mapping>>,
 }
 
 impl<R: Resources> Raw<R> {
     #[doc(hidden)]
-    pub fn new(resource: R::Buffer, info: Info) -> Self {
+    pub fn new(resource: R::Buffer,
+               info: Info,
+               mapping: Option<R::Mapping>) -> Self {
         Raw {
             resource: resource,
             info: info,
-            mapping: Mutex::new(None),
+            mapping: mapping.map(|m| Mutex::new(m)),
         }
     }
 
@@ -44,29 +46,15 @@ impl<R: Resources> Raw<R> {
     /// Get buffer info
     pub fn get_info(&self) -> &Info { &self.info }
 
-    fn mapping_opt(&self) -> MutexGuard<Option<Weak<mapping::Raw<R>>>> {
-        self.mapping.lock().unwrap()
+    /// Is this buffer mapped ?
+    pub fn is_mapped(&self) -> bool {
+        self.mapping.is_some()
     }
 
-    /// Get the current buffer mapping
+    /// Lock the current buffer mapping
     #[doc(hidden)]
-    pub fn mapping(&self) -> Option<handle::RawMapping<R>> {
-        let weak_opt = self.mapping_opt();
-        weak_opt.as_ref().map(|w| handle::RawMapping::upgrade(w))
-    }
-
-    /// Needs to be called internally after the buffer is mapped
-    #[doc(hidden)]
-    pub fn was_mapped(&self, raw: &handle::RawMapping<R>) {
-        let mut weak_opt = self.mapping_opt();
-        *weak_opt = Some(raw.downgrade());
-    }
-
-    /// Needs to be called internally after the buffer is unmapped
-    #[doc(hidden)]
-    pub fn was_unmapped(&self) {
-        let mut weak_opt = self.mapping_opt();
-        *weak_opt = None;
+    pub fn lock_mapping(&self) -> Option<MutexGuard<R::Mapping>> {
+        self.mapping.as_ref().map(|m| m.lock().unwrap())
     }
 
     /// Get the number of elements in the buffer.
@@ -93,7 +81,7 @@ impl<R: Resources + hash::Hash> hash::Hash for Raw<R> {
     }
 }
 
-/// Role of the memory buffer. GLES doesn't allow chaning bind points for buffers.
+/// Role of the memory buffer.
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 #[repr(u8)]
 pub enum Role {
@@ -103,6 +91,8 @@ pub enum Role {
     Index,
     /// Constant buffer
     Constant,
+    /// Staging buffer
+    Staging,
 }
 
 /// An information block that is immutable and associated to each buffer.
