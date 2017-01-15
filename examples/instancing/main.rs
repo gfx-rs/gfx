@@ -13,6 +13,7 @@
 // limitations under the License.
 
 extern crate rand;
+extern crate winit;
 
 #[macro_use] extern crate gfx;
 extern crate gfx_app;
@@ -82,6 +83,8 @@ struct App<R: gfx::Resources> {
     pso: gfx::PipelineState<R, pipe::Meta>,
     data: pipe::Data<R>,
     slice: gfx::Slice<R>,
+    upload: gfx::handle::Buffer<R, Instance>,
+    uploading: bool, // TODO: not needed if we have the encoder everywhere
 }
 
 impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
@@ -112,23 +115,18 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
          let size = 1.6 / instances_per_length as f32;
         println!("size: {}", size);
 
-        let staging = factory
-            .create_buffer(MAX_INSTANCE_COUNT,
-                           gfx::buffer::Role::Staging,
-                           gfx::memory::Usage::Upload,
-                           gfx::TRANSFER_SRC).unwrap();
+        let upload = factory.create_upload_buffer(instance_count as usize).unwrap();
         {
-            let mut writer = factory.write_mapping(&staging).unwrap();
+            let mut writer = factory.write_mapping(&upload).unwrap();
             fill_instances(&mut writer, instances_per_length, size);
         }
 
         let instances = factory
-            .create_buffer(MAX_INSTANCE_COUNT,
+            .create_buffer(instance_count as usize,
                            gfx::buffer::Role::Vertex,
                            gfx::memory::Usage::Data,
                            gfx::TRANSFER_DST).unwrap();
 
-        unimplemented!(); // transfer data
 
         let (quad_vertices, mut slice) = factory
             .create_vertex_buffer_with_slice(&QUAD_VERTICES, &QUAD_INDICES[..]);
@@ -151,13 +149,23 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 out: window_targets.color,
             },
             slice: slice,
+            upload: upload,
+            uploading: true,
         }
     }
 
     fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
+        if self.uploading {
+            encoder.copy_buffer(&self.upload, &self.data.instance,
+                                0, 0, self.upload.len()).unwrap();
+            self.uploading = false;
+        }
+
         encoder.clear(&self.data.out, [0.1, 0.2, 0.3, 1.0]);
         encoder.draw(&self.slice, &self.pso, &self.data);
     }
+
+    // TODO: rerandomize instance data on event, needs factory
 
     fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {
         self.data.out = window_targets.color;
@@ -166,5 +174,6 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
 pub fn main() {
     use gfx_app::Application;
-    App::launch_simple("Instancing example");
+    let wb = winit::WindowBuilder::new().with_title("Instancing example");
+    App::launch_default(wb);
 }

@@ -80,6 +80,7 @@ use core::{handle as h, texture as tex};
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Buffer(native::Buffer);
 impl Buffer {
+    // TODO: 'as_resource' would be better ?
     pub fn to_resource(&self) -> *mut winapi::ID3D11Resource {
         type Res = *mut winapi::ID3D11Resource;
         match self.0 {
@@ -91,6 +92,7 @@ impl Buffer {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Texture(native::Texture);
 impl Texture {
+    // TODO: 'as_resource' would be better ?
     pub fn to_resource(&self) -> *mut winapi::ID3D11Resource {
         type Res = *mut winapi::ID3D11Resource;
         match self.0 {

@@ -16,7 +16,7 @@
 
 //! Resource handles
 
-use std::ops;
+use std::{ops, cmp, hash};
 use std::marker::PhantomData;
 use std::sync::Arc;
 use {buffer, shade, texture, Resources};
@@ -32,8 +32,18 @@ impl<R: Resources> ops::Deref for RawBuffer<R> {
 }
 
 /// Type-safe buffer handle
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug)]
 pub struct Buffer<R: Resources, T>(RawBuffer<R>, PhantomData<T>);
+
+impl<R: Resources, T> cmp::PartialEq for Buffer<R, T> {
+    fn eq(&self, other: &Self) -> bool { self.0.eq(&other.0) }
+}
+
+impl<R: Resources, T> cmp::Eq for Buffer<R, T> {}
+
+impl<R: Resources, T> hash::Hash for Buffer<R, T> {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) { self.0.hash(state) }
+}
 
 impl<R: Resources, T> Typed for Buffer<R, T> {
     type Raw = RawBuffer<R>;
@@ -84,6 +94,7 @@ impl<R: Resources> ops::Deref for RawTexture<R> {
 
 /// Typed texture object
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
+// TODO: manual Eq & Hash impl because PhantomData
 pub struct Texture<R: Resources, S>(RawTexture<R>, PhantomData<S>);
 
 impl<R: Resources, S> Typed for Texture<R, S> {
@@ -112,6 +123,7 @@ pub struct RawShaderResourceView<R: Resources>(Arc<R::ShaderResourceView>, ViewS
 
 /// Type-safe Shader Resource View Handle
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
+// TODO: manual Eq & Hash impl because PhantomData
 pub struct ShaderResourceView<R: Resources, T>(RawShaderResourceView<R>, PhantomData<T>);
 
 impl<R: Resources, T> Typed for ShaderResourceView<R, T> {
@@ -129,6 +141,7 @@ pub struct RawUnorderedAccessView<R: Resources>(Arc<R::UnorderedAccessView>, Vie
 
 /// Type-safe Unordered Access View Handle
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
+// TODO: manual Eq & Hash impl because PhantomData
 pub struct UnorderedAccessView<R: Resources, T>(RawUnorderedAccessView<R>, PhantomData<T>);
 
 impl<R: Resources, T> Typed for UnorderedAccessView<R, T> {
@@ -162,6 +175,7 @@ impl<R: Resources> RawDepthStencilView<R> {
 
 /// Typed RTV
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
+// TODO: manual Eq & Hash impl because PhantomData
 pub struct RenderTargetView<R: Resources, T>(RawRenderTargetView<R>, PhantomData<T>);
 
 impl<R: Resources, T> RenderTargetView<R, T> {
@@ -180,6 +194,7 @@ impl<R: Resources, T> Typed for RenderTargetView<R, T> {
 
 /// Typed DSV
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
+// TODO: manual Eq & Hash impl because PhantomData
 pub struct DepthStencilView<R: Resources, T>(RawDepthStencilView<R>, PhantomData<T>);
 
 impl<R: Resources, T> DepthStencilView<R, T> {

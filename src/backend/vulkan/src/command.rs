@@ -222,6 +222,25 @@ impl command::Buffer<Resources> for Buffer {
     fn bind_index(&mut self, _: native::Buffer, _: IndexType) {}
     fn set_scissor(&mut self, _: target::Rect) {}
     fn set_ref_values(&mut self, _: RefValues) {}
+
+    fn copy_buffer(&mut self, src: native::Buffer, dst: native::Buffer,
+                   src_offset_bytes: usize, dst_offset_bytes: usize,
+                   size_bytes: usize) {
+        let (_, vk) = self.share.get_device();
+        let regions = &[
+            vk::BufferCopy {
+                srcOffset: src_offset_bytes as vk::DeviceSize,
+                dstOffset: dst_offset_bytes as vk::DeviceSize,
+                size: size_bytes as vk::DeviceSize,
+            }
+        ];
+        unsafe {
+            vk.CmdCopyBuffer(self.inner, src.buffer, dst.buffer,
+                             regions.len() as u32, regions.as_ptr());
+        }
+        unimplemented!(); // TODO: synchronisation
+    }
+
     fn update_buffer(&mut self, _: native::Buffer, _: &[u8], _: usize) {}
     fn update_texture(&mut self, _: native::Texture, _: tex::Kind, _: Option<tex::CubeFace>,
                       _: &[u8], _: tex::RawImageInfo) {}

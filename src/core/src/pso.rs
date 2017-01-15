@@ -302,8 +302,10 @@ impl<R: Resources> PixelTargetSet<R> {
 /// Informations about what is accessed by the pipeline
 #[derive(Debug)]
 pub struct AccessInfo<R: Resources> {
-    mapped_reads: Vec<handle::RawBuffer<R>>,
-    mapped_writes: Vec<handle::RawBuffer<R>>,
+    #[doc(hidden)]
+    pub mapped_reads: Vec<handle::RawBuffer<R>>,
+    #[doc(hidden)]
+    pub mapped_writes: Vec<handle::RawBuffer<R>>,
 }
 
 impl<R: Resources> AccessInfo<R> {

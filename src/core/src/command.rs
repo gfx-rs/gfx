@@ -61,6 +61,10 @@ pub trait Buffer<R: Resources> {
     fn set_scissor(&mut self, target::Rect);
     /// Set reference values for the blending and stencil front/back
     fn set_ref_values(&mut self, state::RefValues);
+    /// Copy part of a buffer to another
+    fn copy_buffer(&mut self, src: R::Buffer, dst: R::Buffer,
+                   src_offset_bytes: usize, dst_offset_bytes: usize,
+                   size_bytes: usize);
     /// Update a vertex/index/uniform buffer
     fn update_buffer(&mut self, R::Buffer, data: &[u8], offset: usize);
     /// Update a texture

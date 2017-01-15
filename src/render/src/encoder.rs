@@ -23,9 +23,63 @@ use std::{fmt, mem};
 
 use core::{Device, IndexType, Resources, VertexCount};
 use core::{command, format, handle, texture};
-use core::memory::{cast_slice, Typed, Pod, Usage};
+use core::memory::{self, cast_slice, Typed, Pod, Usage};
 use slice;
 use pso;
+
+/// An error occuring in memory copies.
+#[allow(missing_docs)]
+#[derive(Clone, Debug, PartialEq)]
+pub enum CopyError {
+    OutOfSrcBounds {
+        size: usize,
+        copy_end: usize,
+    },
+    OutOfDstBounds {
+        size: usize,
+        copy_end: usize,
+    },
+    Overlap {
+        src_offset: usize,
+        dst_offset: usize,
+        size: usize,
+    },
+    NoSrcBindFlag,
+    NoDstBindFlag,
+}
+
+pub type CopyResult = Result<(), CopyError>;
+
+impl fmt::Display for CopyError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::CopyError::*;
+        match *self {
+            OutOfSrcBounds { ref size, ref copy_end } =>
+                write!(f, "{}: {} / {}", self.description(), copy_end, size),
+            OutOfDstBounds { ref size, ref copy_end } =>
+                write!(f, "{}: {} / {}", self.description(), copy_end, size),
+            Overlap { ref src_offset, ref dst_offset, ref size } =>
+                write!(f, "{}: [{} - {}] to [{} - {}]",
+                       self.description(),
+                       src_offset, src_offset + size,
+                       dst_offset, dst_offset + size),
+            _ => write!(f, "{}", self.description())
+        }
+    }
+}
+
+impl Error for CopyError {
+    fn description(&self) -> &str {
+        use self::CopyError::*;
+        match *self {
+            OutOfSrcBounds {..} => "Copy source is out of bounds",
+            OutOfDstBounds {..} => "Copy destination is out of bounds",
+            Overlap {..} => "Copy source and destination are overlapping",
+            NoSrcBindFlag => "Copy source is missing `TRANSFER_SRC`",
+            NoDstBindFlag => "Copy destination is missing `TRANSFER_DST`",
+        }
+    }
+}
 
 /// An error occuring in buffer/texture updates.
 #[allow(missing_docs)]
@@ -121,6 +175,56 @@ impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
         self.command_buffer.reset();
         self.access_info.clear();
         self.handles.clear();
+    }
+
+    /// Copy part of a buffer to another
+    pub fn copy_buffer<T: Pod>(&mut self, src: &handle::Buffer<R, T>, dst: &handle::Buffer<R, T>,
+                               src_offset: usize, dst_offset: usize, size: usize) -> CopyResult {
+        if !src.get_info().bind.contains(memory::TRANSFER_SRC) {
+            return Err(CopyError::NoSrcBindFlag);
+        }
+        if !dst.get_info().bind.contains(memory::TRANSFER_DST) {
+            return Err(CopyError::NoDstBindFlag);
+        }
+        let size_bytes = mem::size_of::<T>() * size;
+        let src_offset_bytes = mem::size_of::<T>() * src_offset;
+        let src_copy_end = src_offset_bytes + size_bytes;
+        if src_copy_end > src.get_info().size {
+            return Err(CopyError::OutOfSrcBounds {
+                size: src.get_info().size,
+                copy_end: src_copy_end,
+            });
+        }
+        let dst_offset_bytes = mem::size_of::<T>() * dst_offset;
+        let dst_copy_end = dst_offset_bytes + size_bytes;
+        if dst_copy_end > dst.get_info().size {
+            return Err(CopyError::OutOfDstBounds {
+                size: dst.get_info().size,
+                copy_end: dst_copy_end,
+            });
+        }
+        if src == dst &&
+           src_offset_bytes < dst_copy_end &&
+           dst_offset_bytes < src_copy_end
+        {
+            return Err(CopyError::Overlap {
+                src_offset: src_offset_bytes,
+                dst_offset: dst_offset_bytes,
+                size: size_bytes,
+            });
+        }
+        // TODO: should we use an HashSet instead of a Vec ?
+        if src.raw().is_mapped() {
+            self.access_info.mapped_reads.push(src.raw().clone());
+        }
+        if dst.raw().is_mapped() {
+            self.access_info.mapped_writes.push(dst.raw().clone());
+        }
+        self.command_buffer.copy_buffer(
+            self.handles.ref_buffer(src.raw()).clone(),
+            self.handles.ref_buffer(dst.raw()).clone(),
+            src_offset_bytes, dst_offset_bytes, size_bytes);
+        Ok(())
     }
 
     /// Update a buffer with a slice of data.

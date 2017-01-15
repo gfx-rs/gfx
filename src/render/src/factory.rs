@@ -135,6 +135,26 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
                            Bind::empty()).unwrap()
     }
 
+    /// Creates an upload buffer for `num` elements of type `T`.
+    fn create_upload_buffer<T>(&mut self, num: usize)
+                               -> Result<handle::Buffer<R, T>, buffer::CreationError>
+    {
+        self.create_buffer(num,
+                           buffer::Role::Staging,
+                           memory::Usage::Upload,
+                           memory::TRANSFER_SRC)
+    }
+
+    /// Creates a download buffer for `num` elements of type `T`.
+    fn create_download_buffer<T>(&mut self, num: usize)
+                                 -> Result<handle::Buffer<R, T>, buffer::CreationError>
+    {
+        self.create_buffer(num,
+                           buffer::Role::Staging,
+                           memory::Usage::Download,
+                           memory::TRANSFER_DST)
+    }
+
     /// Creates a `ShaderSet` from the supplied vertex and pixel shader source code.
     fn create_shader_set(&mut self, vs_code: &[u8], ps_code: &[u8])
                          -> Result<ShaderSet<R>, ProgramError> {

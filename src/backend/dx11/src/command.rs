@@ -75,6 +75,7 @@ pub enum Command {
     SetRasterizer(*const ID3D11RasterizerState),
     SetDepthStencil(*const ID3D11DepthStencilState, UINT),
     SetBlend(*const ID3D11BlendState, [FLOAT; 4], UINT),
+    CopyBuffer(Buffer, Buffer, UINT, UINT, UINT),
     // resource updates
     UpdateBuffer(Buffer, DataPointer, usize),
     UpdateTexture(Texture, tex::Kind, Option<tex::CubeFace>, DataPointer, tex::RawImageInfo),
@@ -310,6 +311,15 @@ impl<P: Parser> command::Buffer<Resources> for CommandBuffer<P> {
         }
         self.cache.stencil_ref = rv.stencil.0 as UINT;
         self.cache.blend_ref = rv.blend;
+    }
+
+    fn copy_buffer(&mut self, src: Buffer, dst: Buffer,
+                   src_offset_bytes: usize, dst_offset_bytes: usize,
+                   size_bytes: usize) {
+        self.parser.parse(Command::CopyBuffer(src, dst,
+                                              src_offset_bytes as UINT,
+                                              dst_offset_bytes as UINT,
+                                              size_bytes as UINT));
     }
 
     fn update_buffer(&mut self, buf: Buffer, data: &[u8], offset: usize) {

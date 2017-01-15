@@ -95,6 +95,9 @@ impl command::Buffer<DummyResources> for DummyCommandBuffer {
     fn bind_index(&mut self, _: (), _: IndexType) {}
     fn set_scissor(&mut self, _: target::Rect) {}
     fn set_ref_values(&mut self, _: state::RefValues) {}
+    fn copy_buffer(&mut self, _: (), _: (),
+                   _: usize, _: usize,
+                   _: usize) {}
     fn update_buffer(&mut self, _: (), _: &[u8], _: usize) {}
     fn update_texture(&mut self, _: (), _: texture::Kind, _: Option<texture::CubeFace>,
                       _: &[u8], _: texture::RawImageInfo) {}
