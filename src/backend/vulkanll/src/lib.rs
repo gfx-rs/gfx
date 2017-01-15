@@ -14,45 +14,78 @@
 
 extern crate ash;
 extern crate gfx_corell as core;
-extern crate kernel32;
 #[macro_use]
 extern crate lazy_static;
 extern crate winit;
 
+#[cfg(target_os = "windows")]
+extern crate kernel32;
+
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0, V1_0};
 use ash::vk;
 use ash::{Entry, LoadingError};
-
+use core::format;
 use std::ffi::{CStr, CString};
 use std::iter;
 use std::mem;
 use std::ptr;
 use std::sync::Arc;
+use std::rc::Rc;
+use std::cell::RefCell;
+use std::collections::VecDeque;
+
+mod data;
 
 lazy_static! {
     static ref VK_ENTRY: Result<Entry<V1_0>, LoadingError> = Entry::new();
 }
 
+pub struct QueueFamily {
+    instance: Arc<InstanceInner>,
+    device: vk::PhysicalDevice,
+    family_index: u32,
+    queue_count: u32,
+}
+
+impl core::QueueFamily for QueueFamily {
+    type Surface = Surface;
+
+    fn supports_present(&self, surface: &Self::Surface) -> bool {
+        unsafe {
+            let mut support = mem::uninitialized();
+            surface.inner.loader.get_physical_device_surface_support_khr(
+                self.device,
+                self.family_index,
+                surface.inner.handle,
+                &mut support);
+            support == vk::VK_TRUE
+        }
+    }
+
+    fn num_queues(&self) -> u32 {
+        self.queue_count
+    }
+}
+
 pub struct PhysicalDevice {
     handle: vk::PhysicalDevice,
-    queue_families: Vec<vk::QueueFamilyProperties>,
+    queue_families: Vec<QueueFamily>,
     info: core::PhysicalDeviceInfo,
     instance: Arc<InstanceInner>,
 }
 
 impl core::PhysicalDevice for PhysicalDevice {
     type B = Backend;
+    type QueueFamily = QueueFamily;
 
-    fn open(&self) -> (Device, Vec<CommandQueue>) {
-        let queue_infos = self.queue_families.iter()
-            .enumerate()
-            .map(|(i, queue_family)| {
+    fn open<'a>(&self, queue_descs: Vec<(&'a Self::QueueFamily, u32)>) -> (Device, Vec<CommandQueue>) {
+        let queue_infos = queue_descs.iter().map(|&(family, queue_count)| {
                 vk::DeviceQueueCreateInfo {
                     s_type: vk::StructureType::DeviceQueueCreateInfo,
                     p_next: ptr::null(),
                     flags: vk::DeviceQueueCreateFlags::empty(),
-                    queue_family_index: i as u32,
-                    queue_count: queue_family.queue_count,
+                    queue_family_index: family.family_index,
+                    queue_count: queue_count,
                     p_queue_priorities: &1.0,
                 }
             }).collect::<Vec<_>>();
@@ -60,7 +93,7 @@ impl core::PhysicalDevice for PhysicalDevice {
         // Create device
         let device_extensions = &["VK_KHR_swapchain"];
 
-        let device = {
+        let device_raw = {
             let cstrings = device_extensions.iter()
                                     .map(|&s| CString::new(s).unwrap())
                                     .collect::<Vec<_>>();
@@ -89,23 +122,30 @@ impl core::PhysicalDevice for PhysicalDevice {
             }
         };
 
-        // Create associated command queues
-        let queues = queue_infos.iter().flat_map(|info| {
-                (0..info.queue_count).map(|id| {
-                    let queue = unsafe { device.get_device_queue(info.queue_family_index, id) };
-                    CommandQueue { }
-                }).collect::<Vec<_>>()
-            }).collect();
-
         let device = Device {
-            inner: Arc::new(DeviceInner(device)),
+            inner: Arc::new(DeviceInner(device_raw)),
         };
+
+        // Create associated command queues
+        let queues = queue_descs.iter().flat_map(|&(family, num)| {
+            (0..num).map(|id| {
+                let queue = unsafe { device.inner.0.get_device_queue(family.family_index, id) };
+                CommandQueue {
+                    inner: CommandQueueInner(Rc::new(RefCell::new(queue))),
+                    device: device.inner.clone(),
+                }
+            }).collect::<Vec<_>>()
+        }).collect();
 
         (device, queues)
     }
 
     fn get_info(&self) -> &core::PhysicalDeviceInfo {
         &self.info
+    }
+
+    fn get_queue_families(&self) -> &Vec<Self::QueueFamily> {
+        &self.queue_families
     }
 }
 
@@ -121,11 +161,19 @@ pub struct Device {
 }
 
 impl core::Device for Device {
-
 }
 
-pub struct CommandQueue {
+// TODO: vk::Queue needs to be externally synchronized on vkQueueSubmit.
+//   We need to find a good way to prevent this, preferable without locking.
+//   Current approach is based on Rc and RefCell not implementing Sync and submit requires mutable access.
+//   So we can clone the inner command queue for the swapchain which also needs it for present.
+//   We internally build some sort of dependency graph using reference counting to unsure everything lives long enough.
+#[derive(Clone)]
+struct CommandQueueInner(Rc<RefCell<vk::Queue>>);
 
+pub struct CommandQueue {
+    inner: CommandQueueInner,
+    device: Arc<DeviceInner>,
 }
 
 impl core::CommandQueue for CommandQueue {
@@ -213,21 +261,130 @@ impl core::Surface for Surface {
     fn build_swapchain<T: core::format::RenderFormat>(
                     &self, width: u32, height: u32,
                     present_queue: &CommandQueue) -> SwapChain {
-        SwapChain {
+        let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
+        let loader = vk::SwapchainFn::load(|name| {
+                unsafe {
+                    mem::transmute(entry.get_instance_proc_addr(
+                        self.inner.instance.0.handle(),
+                        name.as_ptr()))
+                }
+            }).expect("Unable to load swapchain functions");
 
+        // TODO: check for better ones if available
+        let present_mode = vk::PresentModeKHR::Fifo; // required to be supported
+
+        let format = <T as format::Formatted>::get_format();
+
+        let info = vk::SwapchainCreateInfoKHR {
+            s_type: vk::StructureType::SwapchainCreateInfoKhr,
+            p_next: ptr::null(),
+            flags: vk::SwapchainCreateFlagsKHR::empty(),
+            surface: self.inner.handle,
+            min_image_count: 2, // TODO: let the user specify the value
+            image_format: data::map_format(format.0, format.1).unwrap(),
+            image_color_space: vk::ColorSpaceKHR::SrgbNonlinear,
+            image_extent: vk::Extent2D { width: width, height: height },
+            image_array_layers: 1,
+            image_usage: vk::IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+            image_sharing_mode: vk::SharingMode::Exclusive,
+            queue_family_index_count: 0,
+            p_queue_family_indices: ptr::null(),
+            pre_transform: vk::SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
+            composite_alpha: vk::COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+            present_mode: present_mode,
+            clipped: 1,
+            old_swapchain: vk::SwapchainKHR::null(), 
+        };
+
+        let swapchain = unsafe {
+            let mut swapchain = mem::uninitialized();
+            assert_eq!(vk::Result::Success, unsafe {
+                loader.create_swapchain_khr(
+                    present_queue.device.0.handle(),
+                    &info,
+                    ptr::null(),
+                    &mut swapchain)
+            });
+            swapchain
+        };
+
+        let swapchain_images = unsafe {
+            // TODO: error handling
+            let mut count = 0;
+            loader.get_swapchain_images_khr(
+                present_queue.device.0.handle(),
+                swapchain,
+                &mut count,
+                ptr::null_mut());
+
+            let mut v = Vec::with_capacity(count as vk::size_t);
+            loader.get_swapchain_images_khr(
+                present_queue.device.0.handle(),
+                swapchain,
+                &mut count,
+                v.as_mut_ptr());
+
+            v.set_len(count as vk::size_t);
+            v
+        };
+
+        SwapChain {
+            inner: swapchain,
+            present_queue: present_queue.inner.clone(),
+            device: present_queue.device.clone(),
+            swapchain_fn: loader,
+            images: swapchain_images,
+            frame_queue: VecDeque::new(),
         }
     }
 }
 
 pub struct SwapChain {
+    inner: vk::SwapchainKHR,
+    device: Arc<DeviceInner>,
+    present_queue: CommandQueueInner,
+    swapchain_fn: vk::SwapchainFn,
+    images: Vec<vk::Image>,
 
+    // Queued up frames for presentation
+    frame_queue: VecDeque<usize>,
 }
 
 impl core::SwapChain for SwapChain {
     type B = Backend;
 
+    fn acquire_frame(&mut self) -> core::Frame {
+        unimplemented!()
+    }
+
     fn present(&mut self) {
-        // unimplemented!()
+        let frame = self.frame_queue.pop_front().expect("No frame currently queued up. Need to acquire a frame first.");
+
+        let info = vk::PresentInfoKHR {
+            s_type: vk::StructureType::PresentInfoKhr,
+            p_next: ptr::null(),
+            wait_semaphore_count: 0,
+            p_wait_semaphores: ptr::null(),
+            swapchain_count: 1,
+            p_swapchains: &self.inner,
+            p_image_indices: &(frame as u32),
+            p_results: ptr::null_mut(),
+        };
+        unsafe {
+            self.swapchain_fn.queue_present_khr(*self.present_queue.0.borrow(), &info);
+        }
+        // TODO: handle result and return code
+    }
+}
+
+impl Drop for SwapChain {
+    fn drop(&mut self) {
+        unsafe {
+            self.swapchain_fn.destroy_swapchain_khr(
+                self.device.0.handle(),
+                self.inner,
+                std::ptr::null());
+        }
     }
 }
 
@@ -276,6 +433,7 @@ impl core::Instance for Instance {
 
         let instance_extensions = entry.enumerate_instance_extension_properties()
                                        .expect("Unable to enumerate instance extensions");
+
         // Check our surface extensions against the available extensions
         let surface_extensions = SURFACE_EXTENSIONS.iter().filter_map(|ext| {
             instance_extensions.iter().find(|inst_ext| {
@@ -330,7 +488,17 @@ impl core::Instance for Instance {
                     software_rendering: properties.device_type == vk::PhysicalDeviceType::Cpu,
                 };
 
-                let queue_families = self.inner.0.get_physical_device_queue_family_properties(device);
+                let queue_families = self.inner.0.get_physical_device_queue_family_properties(device)
+                                                 .iter()
+                                                 .enumerate()
+                                                 .map(|(i, queue_family)| {
+                                                    QueueFamily {
+                                                        instance: self.inner.clone(),
+                                                        device: device,
+                                                        family_index: i as u32,
+                                                        queue_count: queue_family.queue_count,
+                                                    }
+                                                 }).collect();
 
                 PhysicalDevice {
                     handle: device,

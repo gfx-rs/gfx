@@ -81,11 +81,14 @@ pub trait Instance {
 // D3D12's `Adapter` would be a possible alternative
 pub trait PhysicalDevice {
     type B: Backend;
+    type QueueFamily: QueueFamily;
 
-    // TODO: Let the users decide how many and which queues they want to create
-    fn open(&self) -> (<<Self as PhysicalDevice>::B as Backend>::Device, Vec<<<Self as PhysicalDevice>::B as Backend>::CommandQueue>);
+    fn open<'a>(&self, queue_descs: Vec<(&'a Self::QueueFamily, u32)>)
+            -> (<<Self as PhysicalDevice>::B as Backend>::Device, Vec<<<Self as PhysicalDevice>::B as Backend>::CommandQueue>);
 
     fn get_info(&self) -> &PhysicalDeviceInfo;
+
+    fn get_queue_families(&self) -> &Vec<Self::QueueFamily>;
 }
 
 #[derive(Clone, Debug)]
@@ -100,8 +103,19 @@ pub struct PhysicalDeviceInfo {
     pub software_rendering: bool,
 }
 
+pub trait QueueFamily: 'static {
+    type Surface: Surface;
+
+    /// Check if the queue family supports presentation to a surface
+    fn supports_present(&self, surface: &Self::Surface) -> bool;
+
+    /// Return the number of available queues of this family
+    // TODO: some backends like d3d12 support infinite software queues (verify)
+    fn num_queues(&self) -> u32;
+}
+
 pub trait Device {
-    
+
 }
 
 pub trait CommandQueue {
@@ -123,11 +137,15 @@ pub trait Surface {
         present_queue: &<<Self as Surface>::B as Backend>::CommandQueue) -> <<Self as Surface>::B as Backend>::SwapChain;
 }
 
+/// Handle to a backbuffer of the swapchain.
+pub struct Frame(usize);
+
 /// The `SwapChain` is the backend representation of the surface.
 /// It consists of multiple buffers, which will be presented on the surface.
 pub trait SwapChain {
     type B: Backend;
 
+    fn acquire_frame(&mut self) -> Frame;
     fn present(&mut self);
 }
 

@@ -33,15 +33,34 @@ use winit::os::windows::WindowExt;
 mod data;
 
 #[derive(Clone)]
+pub struct QueueFamily;
+
+impl core::QueueFamily for QueueFamily {
+    type Surface = Surface;
+
+    fn supports_present(&self, _surface: &Surface) -> bool {
+        // 
+        true
+    }
+
+    fn num_queues(&self) -> u32 {
+        // TODO: actually infinite, need to find a good way to handle this
+        1
+    }
+}
+
+#[derive(Clone)]
 pub struct PhysicalDevice {
     adapter: ComPtr<winapi::IDXGIAdapter2>,
     info: core::PhysicalDeviceInfo,
+    queue_families: Vec<QueueFamily>,
 }
 
 impl core::PhysicalDevice for PhysicalDevice {
     type B = Backend;
+    type QueueFamily = QueueFamily;
 
-    fn open(&self) -> (Device, Vec<CommandQueue>) {
+    fn open(&self, queue_descs: Vec<(&QueueFamily, u32)>) -> (Device, Vec<CommandQueue>) {
         // Create D3D12 device
         let mut device = ComPtr::<winapi::ID3D12Device>::new(ptr::null_mut());
         let hr = unsafe {
@@ -57,32 +76,41 @@ impl core::PhysicalDevice for PhysicalDevice {
         }
 
         // Create command queues
-        // TODO: Let the users decide how many and which queues they want to create
-        let mut queue = ComPtr::<winapi::ID3D12CommandQueue>::new(ptr::null_mut());
-        let queue_desc = winapi::D3D12_COMMAND_QUEUE_DESC {
-            Type: winapi::D3D12_COMMAND_LIST_TYPE_DIRECT,
-            Priority: 0,
-            Flags: winapi::D3D12_COMMAND_QUEUE_FLAG_NONE,
-            NodeMask: 0,
-        };
+        let queues = queue_descs.iter().flat_map(|&(_family, queue_count)| {
+            (0..queue_count).map(|_| {
+                let mut queue = ComPtr::<winapi::ID3D12CommandQueue>::new(ptr::null_mut());
+                let queue_desc = winapi::D3D12_COMMAND_QUEUE_DESC {
+                    Type: winapi::D3D12_COMMAND_LIST_TYPE_DIRECT, // TODO: correct queue type
+                    Priority: 0,
+                    Flags: winapi::D3D12_COMMAND_QUEUE_FLAG_NONE,
+                    NodeMask: 0,
+                };
 
-        let hr = unsafe {
-            device.CreateCommandQueue(
-                &queue_desc,
-                &dxguid::IID_ID3D12CommandQueue,
-                queue.as_mut() as *mut *mut _ as *mut *mut c_void,
-            )
-        };
+                let hr = unsafe {
+                    device.CreateCommandQueue(
+                        &queue_desc,
+                        &dxguid::IID_ID3D12CommandQueue,
+                        queue.as_mut() as *mut *mut _ as *mut *mut c_void,
+                    )
+                };
 
-        if !winapi::SUCCEEDED(hr) {
-            error!("error on queue creation: {:?}", hr);
-        }
+                if !winapi::SUCCEEDED(hr) {
+                    error!("error on queue creation: {:?}", hr);
+                }
 
-        (Device { inner: device }, vec![CommandQueue { inner: queue }])
+                CommandQueue { inner: queue }
+            }).collect::<Vec<_>>()
+        }).collect();
+
+        (Device { inner: device }, queues)
     }
 
     fn get_info(&self) -> &core::PhysicalDeviceInfo {
         &self.info
+    }
+
+    fn get_queue_families(&self) -> &Vec<QueueFamily> {
+        &self.queue_families
     }
 }
 
@@ -168,8 +196,12 @@ pub struct SwapChain {
     inner: ComPtr<winapi::IDXGISwapChain1>,
 }
 
-impl core::SwapChain for SwapChain {
+impl<'a> core::SwapChain for SwapChain{
     type B = Backend;
+
+    fn acquire_frame(&mut self) -> core::Frame {
+        unimplemented!()
+    }
 
     fn present(&mut self) {
         unsafe { self.inner.Present(1, 0); }
@@ -259,6 +291,7 @@ impl core::Instance for Instance {
                     PhysicalDevice {
                         adapter: adapter,
                         info: info,
+                        queue_families: vec![QueueFamily], // TODO:
                     });
             }
 
