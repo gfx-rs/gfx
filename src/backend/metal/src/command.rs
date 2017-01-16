@@ -275,6 +275,13 @@ impl command::Buffer<Resources> for CommandBuffer {
         // TODO: blend/stencil
     }
 
+    #[allow(dead_code)]
+    fn copy_buffer(&mut self, src: Buffer, dst: Buffer,
+                   src_offset_bytes: usize, dst_offset_bytes: usize,
+                   size_bytes: usize) {
+        unimplemented!()
+    }
+
     fn update_buffer(&mut self, buf: Buffer, data: &[u8], offset: usize) {
         use map::{map_buffer_usage};
 

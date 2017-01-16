@@ -93,6 +93,9 @@ pub enum Command {
     SetBlendState(c::ColorSlot, s::Color),
     SetBlendColor(ColorValue),
     SetPatches(c::PatchSize),
+    CopyBuffer(Buffer, Buffer,
+               gl::types::GLintptr, gl::types::GLintptr,
+               gl::types::GLsizeiptr),
     // resource updates
     UpdateBuffer(Buffer, DataPointer, usize),
     UpdateTexture(Texture, c::texture::Kind, Option<c::texture::CubeFace>,
@@ -319,6 +322,15 @@ impl command::Buffer<Resources> for CommandBuffer {
     fn set_ref_values(&mut self, rv: s::RefValues) {
         self.buf.push(Command::SetStencilState(self.cache.stencil, rv.stencil, self.cache.cull_face));
         self.buf.push(Command::SetBlendColor(rv.blend));
+    }
+
+    fn copy_buffer(&mut self, src: Buffer, dst: Buffer,
+                   src_offset_bytes: usize, dst_offset_bytes: usize,
+                   size_bytes: usize) {
+        self.buf.push(Command::CopyBuffer(src, dst,
+                                          src_offset_bytes as gl::types::GLintptr,
+                                          dst_offset_bytes as gl::types::GLintptr,
+                                          size_bytes as gl::types::GLsizeiptr));
     }
 
     fn update_buffer(&mut self, buf: Buffer, data: &[u8], offset_bytes: usize) {

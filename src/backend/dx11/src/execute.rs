@@ -13,11 +13,30 @@
 // limitations under the License.
 
 use std::{mem, ptr};
-use winapi;
+use winapi::{self, UINT};
 use core::{self, texture as tex};
 use command;
 use {Buffer, Texture};
 
+fn copy_buffer(context: *mut winapi::ID3D11DeviceContext,
+               src: &Buffer, dst: &Buffer,
+               src_offset: UINT, dst_offset: UINT,
+               size: UINT) {
+    let src_resource = src.to_resource();
+    let dst_resource = dst.to_resource();
+    let src_box = winapi::D3D11_BOX {
+        left: src_offset,
+        right: src_offset + size,
+        top: 0,
+        bottom: 1,
+        front: 0,
+        back: 1,
+    };
+    unsafe {
+        (*context).CopySubresourceRegion(dst_resource, 0, dst_offset, 0, 0,
+                                         src_resource, 0, &src_box)
+    };
+}
 
 pub fn update_buffer(context: *mut winapi::ID3D11DeviceContext, buffer: &Buffer,
                      data: &[u8], offset_bytes: usize) {
@@ -178,6 +197,9 @@ pub fn process(ctx: *mut winapi::ID3D11DeviceContext, command: &command::Command
         },
         SetBlend(blend, ref value, mask) => unsafe {
             (*ctx).OMSetBlendState(blend as *mut _, value, mask);
+        },
+        CopyBuffer(ref src, ref dst, src_offset, dst_offset, size) => {
+            copy_buffer(ctx, src, dst, src_offset, dst_offset, size);
         },
         UpdateBuffer(ref buffer, pointer, offset) => {
             let data = data_buf.get(pointer);
