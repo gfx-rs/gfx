@@ -535,4 +535,23 @@ impl Error for CreateShaderError {
 }
 
 /// An error type for creating programs.
-pub type CreateProgramError = String;
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CreateProgramError(String);
+
+impl fmt::Display for CreateProgramError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.pad(&self.0)
+    }
+}
+
+impl Error for CreateProgramError {
+    fn description(&self) -> &str {
+        &self.0
+    }
+}
+
+impl<S: Into<String>> From<S> for CreateProgramError {
+    fn from(s: S) -> CreateProgramError {
+        CreateProgramError(s.into())
+    }
+}

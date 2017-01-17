@@ -522,7 +522,7 @@ pub fn create_program(gl: &gl::Gl, caps: &c::Capabilities, private: &PrivateCaps
 
         Ok((name, info))
     } else {
-        Err(log)
+        Err(log.into())
     }
 }
 
