@@ -158,7 +158,7 @@ impl<'a> From<InitError<&'a str>> for InitError<String> {
     }
 }
 
-impl<S: Error> fmt::Display for InitError<S> {
+impl<S: fmt::Debug + fmt::Display> fmt::Display for InitError<S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use self::InitError::*;
         let desc = self.description();
@@ -174,7 +174,7 @@ impl<S: Error> fmt::Display for InitError<S> {
     }
 }
 
-impl<S: Error> Error for InitError<S> {
+impl<S: fmt::Debug + fmt::Display> Error for InitError<S> {
     fn description(&self) -> &str {
         use self::InitError::*;
         match *self {
