@@ -57,6 +57,14 @@ impl Error for ResourceViewError {
             ResourceViewError::Unsupported => "The backend was refused for some reason",
         }
     }
+
+    fn cause(&self) -> Option<&Error> {
+        if let ResourceViewError::Layer(ref e) = *self {
+            Some(e)
+        } else {
+            None
+        }
+    }
 }
 
 /// Error creating either a RenderTargetView, or DepthStencilView.
@@ -99,6 +107,14 @@ impl Error for TargetViewError {
                 "Selected channel type is not supported for this texture",
             TargetViewError::Unsupported =>
                 "The backend was refused for some reason",
+        }
+    }
+
+    fn cause(&self) -> Option<&Error> {
+        if let TargetViewError::Layer(ref e) = *self {
+            Some(e)
+        } else {
+            None
         }
     }
 }

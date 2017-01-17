@@ -13,6 +13,9 @@
 // limitations under the License.
 
 
+use std::error::Error;
+use std::fmt;
+
 pub use gfx_device_gl::Version as GlslVersion;
 #[cfg(target_os = "windows")]
 pub use gfx_device_dx11::ShaderModel as DxShaderModel;
@@ -54,8 +57,21 @@ pub struct Source<'a> {
     pub vulkan: &'a [u8],
 }
 
+/// Error selecting a backend.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SelectError(Backend);
+
+impl fmt::Display for SelectError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "An error occurred when selecting the {:?} backend", self.0)
+    }
+}
+
+impl Error for SelectError {
+    fn description(&self) -> &str {
+        "An error occurred when selecting a backend"
+    }
+}
 
 impl<'a> Source<'a> {
     /// Create an empty shader source. Useful for specifying the remaining
