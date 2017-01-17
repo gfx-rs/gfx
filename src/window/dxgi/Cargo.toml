@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx_window_dxgi"
-version = "0.6.0"
+version = "0.7.0"
 description = "DXGI window for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -32,5 +32,5 @@ user32-sys = "0.1"
 dxguid-sys = "0.2"
 winapi = "0.2"
 winit = "0.5.2"
-gfx_core = { path = "../../core", version = "0.5" }
-gfx_device_dx11 = { path = "../../backend/dx11", version = "0.4" }
+gfx_core = { path = "../../core", version = "0.6" }
+gfx_device_dx11 = { path = "../../backend/dx11", version = "0.5" }

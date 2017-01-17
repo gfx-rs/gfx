@@ -24,10 +24,10 @@ log = "0.3"
 env_logger = "0.3"
 glutin = "0.7.1"
 winit = "0.5.1"
-gfx_core = { path = "src/core", version = "0.5" }
-gfx = { path = "src/render", version = "0.13.1" }
-gfx_device_gl = { path = "src/backend/gl", version = "0.12" }
-gfx_window_glutin = { path = "src/window/glutin", version = "0.13" }
+gfx_core = { path = "src/core", version = "0.6" }
+gfx = { path = "src/render", version = "0.14" }
+gfx_device_gl = { path = "src/backend/gl", version = "0.13" }
+gfx_window_glutin = { path = "src/window/glutin", version = "0.14" }
 
 [dependencies.gfx_device_vulkan]
 path = "src/backend/vulkan"
@@ -55,11 +55,11 @@ version = "0.4"
 optional = true
 
 [target.'cfg(unix)'.dependencies]
-gfx_window_glfw = { path = "src/window/glfw", version = "0.12" }
+gfx_window_glfw = { path = "src/window/glfw", version = "0.13" }
 
 [target.'cfg(windows)'.dependencies]
-gfx_device_dx11 = { path = "src/backend/dx11", version = "0.4" }
-gfx_window_dxgi = { path = "src/window/dxgi", version = "0.6" }
+gfx_device_dx11 = { path = "src/backend/dx11", version = "0.5" }
+gfx_window_dxgi = { path = "src/window/dxgi", version = "0.7" }
 
 [[example]]
 name = "blend"
@@ -131,4 +131,4 @@ image = "0.6"
 winit = "0.5"
 
 [target.x86_64-unknown-linux-gnu.dev_dependencies]
-glfw = "0.11"
+glfw = "0.12"
