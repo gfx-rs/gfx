@@ -40,7 +40,17 @@ pub enum PipelineStateError<S> {
     DeviceCreate(CreationError),
 }
 
-impl<S: Error> fmt::Display for PipelineStateError<S> {
+impl<'a> From<PipelineStateError<&'a str>> for PipelineStateError<String> {
+    fn from(pse: PipelineStateError<&'a str>) -> PipelineStateError<String> {
+        match pse {
+            PipelineStateError::Program(e) => PipelineStateError::Program(e),
+            PipelineStateError::DescriptorInit(e) => PipelineStateError::DescriptorInit(e.into()),
+            PipelineStateError::DeviceCreate(e) => PipelineStateError::DeviceCreate(e),
+        }
+    }
+}
+
+impl<S: fmt::Debug + fmt::Display> fmt::Display for PipelineStateError<S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             PipelineStateError::Program(ref e) => write!(f, "{}: {}", self.description(), e),
@@ -50,7 +60,7 @@ impl<S: Error> fmt::Display for PipelineStateError<S> {
     }
 }
 
-impl<S: Error> Error for PipelineStateError<S> {
+impl<S: fmt::Debug + fmt::Display> Error for PipelineStateError<S> {
     fn description(&self) -> &str {
         match *self {
             PipelineStateError::Program(_) => "Shader program failed to link",
