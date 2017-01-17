@@ -93,7 +93,7 @@ impl Error for ProgramError {
             ProgramError::Hull(ref e) => Some(e),
             ProgramError::Domain(ref e) => Some(e),
             ProgramError::Pixel(ref e) => Some(e),
-            _ => None,
+            ProgramError::Link(ref e) => Some(e),
         }
     }
 }
