@@ -43,3 +43,4 @@
   - redesigned resource usage model for next-gen compatibility (#1123)
   - buffer copy support (#1129)
   - fixed and improved some errors (#1137, #1138)
+  - application launcher revamp and resize support (#1121)
