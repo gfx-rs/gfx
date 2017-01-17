@@ -265,6 +265,11 @@ impl core::Device for Device {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum InitError {
+    FeatureSet,
+}
+
 pub fn create(format: core::format::Format,
               width: u32,
               height: u32)
@@ -273,7 +278,7 @@ pub fn create(format: core::format::Format,
                          handle::RawRenderTargetView<Resources>,
                          *mut CAMetalDrawable,
                          *mut MTLTexture),
-                        ()> {
+                        InitError> {
     use core::handle::Producer;
 
     let share = Share {
@@ -295,32 +300,28 @@ pub fn create(format: core::format::Format,
     };
 
     let mtl_device = create_system_default_device();
-
-    let get_feature_set = |_device: MTLDevice| -> Option<MTLFeatureSet> {
+    let feature_sets = {
         use metal::MTLFeatureSet::*;
-
-        let feature_sets = vec![OSX_GPUFamily1_v1,
-                                iOS_GPUFamily3_v1,
-                                iOS_GPUFamily2_v2,
-                                iOS_GPUFamily2_v1,
-                                iOS_GPUFamily1_v2,
-                                iOS_GPUFamily1_v1];
-
-        for feature in feature_sets.into_iter() {
-            if mtl_device.supports_feature_set(feature) {
-                return Some(feature);
-            }
-        }
-
-        return None;
+        [OSX_GPUFamily1_v1,
+         //OSX_GPUFamily1_v2,
+         iOS_GPUFamily3_v1,
+         iOS_GPUFamily2_v2,
+         iOS_GPUFamily2_v1,
+         iOS_GPUFamily1_v2,
+         iOS_GPUFamily1_v1]
     };
+    let selected_set = feature_sets.into_iter()
+                                   .find(|&&f| mtl_device.supports_feature_set(f));
 
     let bb = Box::into_raw(Box::new(MTLTexture::nil()));
     let d = Box::into_raw(Box::new(CAMetalDrawable::nil()));
 
     let device = Device {
         device: mtl_device,
-        feature_set: get_feature_set(mtl_device).unwrap(),
+        feature_set: match selected_set {
+            Some(&set) => set,
+            None => return Err(InitError::FeatureSet),
+        },
         share: Arc::new(share),
         frame_handles: handle::Manager::new(),
         max_resource_count: None,
@@ -332,18 +333,16 @@ pub fn create(format: core::format::Format,
     // let raw_addr: *mut MTLTexture = ptr::null_mut();//&mut MTLTexture::nil();//unsafe { mem::transmute(&(raw_tex.0).0) };
     let raw_tex = Texture(native::Texture(bb), Usage::Data);
 
-    let color_tex =
-        device.share.handles.borrow_mut().make_texture(raw_tex,
-                                                       tex::Info {
-                                                           kind: tex::Kind::D2(width as tex::Size,
-                                                                               height as tex::Size,
-                                                                               tex::AaMode::Single),
-                                                           levels: 1,
-                                                           format: format.0,
-                                                           bind: memory::RENDER_TARGET,
-                                                           usage: raw_tex.1,
-                                                       });
-
+    let color_info = tex::Info {
+        kind: tex::Kind::D2(width as tex::Size,
+                            height as tex::Size,
+                            tex::AaMode::Single),
+        levels: 1,
+        format: format.0,
+        bind: memory::RENDER_TARGET,
+        usage: raw_tex.1,
+    };
+    let color_tex = device.share.handles.borrow_mut().make_texture(raw_tex, color_info);
 
     let mut factory = Factory::new(mtl_device, device.share.clone());
 
