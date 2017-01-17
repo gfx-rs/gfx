@@ -27,5 +27,5 @@ name = "gfx_window_sdl"
 
 [dependencies]
 sdl2 = "0.27"
-gfx_core = { path = "../../core", version = "0.5" }
-gfx_device_gl = { path = "../../backend/gl", version = "0.12" }
+gfx_core = { path = "../../core", version = "0.6" }
+gfx_device_gl = { path = "../../backend/gl", version = "0.13" }
