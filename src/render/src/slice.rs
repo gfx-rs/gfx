@@ -99,6 +99,19 @@ impl<R: Resources> Slice<R> {
             p::PatchList(num) => nv / (num as u32),
         }
     }
+
+    /// Divides one slice into two at an index.
+    ///
+    /// The first will contain the range in the index-buffer [self.start, mid) (excluding the index mid itself) and the
+    /// second will contain the range [mid, self.end).
+    pub fn split_at(&self, mid: VertexCount) -> (Self, Self) {
+        let mut first = self.clone();
+        let mut second = self.clone();
+        first.end = mid;
+        second.start = mid;
+
+        (first, second)
+    }
 }
 
 /// Type of index-buffer used in a Slice.
