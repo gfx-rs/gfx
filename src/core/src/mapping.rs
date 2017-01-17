@@ -16,6 +16,8 @@
 
 //! Memory mapping
 
+use std::error::Error as StdError;
+use std::fmt;
 use std::ops::{Deref, DerefMut};
 use std::sync::MutexGuard;
 use Resources;
@@ -37,6 +39,22 @@ pub trait Gate<R: Resources> {
 pub enum Error {
     /// The requested mapping access did not match the expected usage.
     InvalidAccess(memory::Access, memory::Usage),
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Error::InvalidAccess(ref access, ref usage) => {
+                write!(f, "{}: access = {:?}, usage = {:?}", self.description(), access, usage)
+            }
+        }
+    }
+}
+
+impl StdError for Error {
+    fn description(&self) -> &str {
+        "The requested mapping access did not match the expected usage"
+    }
 }
 
 fn valid_access(access: memory::Access, usage: memory::Usage) -> Result<(), Error> {

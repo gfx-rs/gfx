@@ -112,6 +112,26 @@ pub enum ElementError<S> {
     Format(S, c::shade::ConstFormat),
 }
 
+impl<S: fmt::Debug + fmt::Display> fmt::Display for ElementError<S> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            ElementError::NotFound(ref s) => write!(f, "{}: {:?}", self.description(), s),
+            ElementError::Offset(ref s, ref offset) => write!(f, "{}: ({:?}, {:?})", self.description(), s, offset),
+            ElementError::Format(ref s, ref format) => write!(f, "{}: ({:?}, {:?})", self.description(), s, format),
+        }
+    }
+}
+
+impl<S: fmt::Debug + fmt::Display> Error for ElementError<S> {
+    fn description(&self) -> &str {
+        match *self {
+            ElementError::NotFound(_) => "Element not found",
+            ElementError::Offset(..) => "Element offset mismatch",
+            ElementError::Format(..) => "Element format mismatch",
+        }
+    }
+}
+
 impl<'a> From<ElementError<&'a str>> for ElementError<String> {
     fn from(other: ElementError<&'a str>) -> ElementError<String> {
         use self::ElementError::*;
@@ -122,7 +142,6 @@ impl<'a> From<ElementError<&'a str>> for ElementError<String> {
         }
     }
 }
-
 
 /// Failure to initilize the link between the shader and the data.
 #[derive(Clone, PartialEq, Debug)]
@@ -158,7 +177,7 @@ impl<'a> From<InitError<&'a str>> for InitError<String> {
     }
 }
 
-impl<S: Error> fmt::Display for InitError<S> {
+impl<S: fmt::Debug + fmt::Display> fmt::Display for InitError<S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use self::InitError::*;
         let desc = self.description();
@@ -174,7 +193,7 @@ impl<S: Error> fmt::Display for InitError<S> {
     }
 }
 
-impl<S: Error> Error for InitError<S> {
+impl<S: fmt::Debug + fmt::Display> Error for InitError<S> {
     fn description(&self) -> &str {
         use self::InitError::*;
         match *self {
@@ -192,6 +211,14 @@ impl<S: Error> Error for InitError<S> {
             Sampler(..) => "Sampler mismatch",
             PixelExport(_, None) => "Pixel target not found",
             PixelExport(..) => "Pixel target mismatch",
+        }
+    }
+
+    fn cause(&self) -> Option<&Error> {
+        if let InitError::ConstantBuffer(_, Some(ref e)) = *self {
+            Some(e)
+        } else {
+            None
         }
     }
 }
