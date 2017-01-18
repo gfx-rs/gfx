@@ -29,6 +29,7 @@ use metal::*;
 
 use core::{handle, texture as tex};
 use core::memory::{self, Usage};
+use core::command::AccessInfo;
 
 use std::cell::RefCell;
 use std::sync::Arc;
@@ -205,13 +206,13 @@ impl core::Device for Device {
         }
     }
 
-    fn submit(&mut self, cb: &mut command::CommandBuffer, _: &core::pso::AccessInfo<Resources>) {
+    fn submit(&mut self, cb: &mut command::CommandBuffer, _: &AccessInfo<Resources>) {
         cb.commit(unsafe { *self.drawable });
     }
 
     fn fenced_submit(&mut self,
                      _: &mut Self::CommandBuffer,
-                     _: &core::pso::AccessInfo<Resources>,
+                     _: &AccessInfo<Resources>,
                      _after: Option<handle::Fence<Resources>>)
                      -> handle::Fence<Resources> {
         unimplemented!()

@@ -76,6 +76,7 @@ use std::cell::RefCell;
 use std::ptr;
 use std::sync::Arc;
 use core::{handle as h, texture as tex};
+use core::command::AccessInfo;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Buffer(native::Buffer);
@@ -243,13 +244,8 @@ impl Device {
         }
     }
 
-    pub fn before_submit(&mut self, gpu_access: &core::pso::AccessInfo<Resources>) {
-        self.ensure_mappings_unmapped(gpu_access.mapped_reads());
-        self.ensure_mappings_unmapped(gpu_access.mapped_writes());
-    }
-
-    fn ensure_mappings_unmapped(&mut self, buffers: &[core::handle::RawBuffer<Resources>]) {
-        for buffer in buffers {
+    pub fn before_submit(&mut self, gpu_access: &AccessInfo<Resources>) {
+        for buffer in gpu_access.mapped_reads().chain(gpu_access.mapped_writes()) {
             let mut mapping = buffer.lock_mapping().unwrap();
             factory::ensure_unmapped(&mut mapping, buffer, self.context);
         }
@@ -342,7 +338,7 @@ impl core::Device for Device {
 
     fn submit(&mut self,
               cb: &mut Self::CommandBuffer,
-              access: &core::pso::AccessInfo<Resources>)
+              access: &AccessInfo<Resources>)
     {
     	self.before_submit(access);
         unsafe { (*self.context).ClearState(); }
@@ -353,7 +349,7 @@ impl core::Device for Device {
 
     fn fenced_submit(&mut self,
                      _: &mut Self::CommandBuffer,
-                     _: &core::pso::AccessInfo<Resources>,
+                     _: &AccessInfo<Resources>,
                      _after: Option<h::Fence<Resources>>) -> h::Fence<Resources>
     {
         unimplemented!()
@@ -428,7 +424,7 @@ impl core::Device for Deferred {
 
     fn submit(&mut self,
               cb: &mut Self::CommandBuffer,
-              access: &core::pso::AccessInfo<Resources>)
+              access: &AccessInfo<Resources>)
     {
         self.0.before_submit(access);
         let cl = match cb.parser.1 {
@@ -457,7 +453,7 @@ impl core::Device for Deferred {
 
     fn fenced_submit(&mut self,
                      _: &mut Self::CommandBuffer,
-                     _: &core::pso::AccessInfo<Resources>,
+                     _: &AccessInfo<Resources>,
                      _after: Option<h::Fence<Resources>>) -> h::Fence<Resources>
     {
         unimplemented!()

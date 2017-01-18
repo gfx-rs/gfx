@@ -761,21 +761,20 @@ impl Device {
         }
     }
 
-    fn before_submit(&mut self, gpu_access: &pso::AccessInfo<Resources>) {
+    fn before_submit(&mut self, gpu_access: &com::AccessInfo<Resources>) {
         if self.share.private_caps.buffer_storage_supported {
             // MappingKind::Persistent
-            self.ensure_mappings_flushed(gpu_access.mapped_reads());
+            self.ensure_mappings_flushed(gpu_access);
         } else {
             // MappingKind::Temporary
-            self.ensure_mappings_unmapped(gpu_access.mapped_reads());
-            self.ensure_mappings_unmapped(gpu_access.mapped_writes());
+            self.ensure_mappings_unmapped(gpu_access);
         }
     }
 
     // MappingKind::Persistent
-    fn ensure_mappings_flushed(&mut self, buffers: &[handle::RawBuffer<Resources>]) {
+    fn ensure_mappings_flushed(&mut self, gpu_access: &com::AccessInfo<Resources>) {
         let gl = &self.share.context;
-        for buffer in buffers {
+        for buffer in gpu_access.mapped_reads() {
             let mut mapping = buffer.lock_mapping().unwrap();
 
             let target = factory::role_to_target(buffer.get_info().role);
@@ -793,8 +792,8 @@ impl Device {
     }
 
     // MappingKind::Temporary
-    fn ensure_mappings_unmapped(&mut self, buffers: &[handle::RawBuffer<Resources>]) {
-        for buffer in buffers {
+    fn ensure_mappings_unmapped(&mut self, gpu_access: &com::AccessInfo<Resources>) {
+        for buffer in gpu_access.mapped_reads().chain(gpu_access.mapped_writes()) {
             let mut mapping = buffer.lock_mapping().unwrap();
 
             let target = factory::role_to_target(buffer.get_info().role);
@@ -805,19 +804,18 @@ impl Device {
         }
     }
 
-    fn after_submit(&mut self, gpu_access: &pso::AccessInfo<Resources>)
+    fn after_submit(&mut self, gpu_access: &com::AccessInfo<Resources>)
                                -> Option<handle::Fence<Resources>>
     {
         if self.share.private_caps.buffer_storage_supported {
             // MappingKind::Persistent
-            if (gpu_access.mapped_reads().len() + gpu_access.mapped_writes().len()) > 0 {
-                if gpu_access.mapped_writes().len() > 0 {
+            if gpu_access.has_mapped_reads() || gpu_access.has_mapped_writes() {
+                if gpu_access.has_mapped_writes() {
                     self.place_memory_barrier();
                 }
 
                 let fence = self.place_fence();
-                self.track_mapped_gpu_access(gpu_access.mapped_reads(), &fence);
-                self.track_mapped_gpu_access(gpu_access.mapped_writes(), &fence);
+                self.track_mapped_gpu_access(gpu_access, &fence);
                 Some(fence)
             } else {
                 None
@@ -846,9 +844,9 @@ impl Device {
 
     // MappingKind::Persistent
     fn track_mapped_gpu_access(&mut self,
-                               buffers: &[handle::RawBuffer<Resources>],
+                               gpu_access: &com::AccessInfo<Resources>,
                                fence: &handle::Fence<Resources>) {
-        for buffer in buffers {
+        for buffer in gpu_access.mapped_reads().chain(gpu_access.mapped_writes()) {
             let mut mapping = buffer.lock_mapping()
                 .expect("user error: mapping still in use on submit");
 
@@ -881,7 +879,7 @@ impl c::Device for Device {
     }
 
     fn submit(&mut self, cb: &mut command::CommandBuffer,
-                         access: &pso::AccessInfo<Resources>) {
+                         access: &com::AccessInfo<Resources>) {
         self.before_submit(access);
         self.no_fence_submit(cb);
         self.after_submit(access);
@@ -889,7 +887,7 @@ impl c::Device for Device {
 
     fn fenced_submit(&mut self,
                      cb: &mut command::CommandBuffer,
-                     access: &pso::AccessInfo<Resources>,
+                     access: &com::AccessInfo<Resources>,
                      after: Option<handle::Fence<Resources>>) -> handle::Fence<Resources> {
 
         if let Some(fence) = after {

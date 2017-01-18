@@ -144,7 +144,7 @@ impl<T: Any + fmt::Debug + fmt::Display> Error for UpdateError<T> {
 pub struct Encoder<R: Resources, C> {
     command_buffer: C,
     raw_pso_data: pso::RawDataSet<R>,
-    access_info: pso::AccessInfo<R>,
+    access_info: command::AccessInfo<R>,
     handles: handle::Manager<R>,
 }
 
@@ -153,7 +153,7 @@ impl<R: Resources, C> From<C> for Encoder<R, C> {
         Encoder {
             command_buffer: combuf,
             raw_pso_data: pso::RawDataSet::new(),
-            access_info: pso::AccessInfo::new(),
+            access_info: command::AccessInfo::new(),
             handles: handle::Manager::new(),
         }
     }
@@ -214,7 +214,6 @@ impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
                 size: size_bytes,
             });
         }
-        // TODO: should we use an HashSet instead of a Vec ?
         self.access_info.buffer_read(src.raw());
         self.access_info.buffer_write(dst.raw());
 
