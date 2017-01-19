@@ -21,7 +21,7 @@ extern crate gfx_device_vulkanll as back;
 
 extern crate winit;
 
-use gfx_corell::{Instance, PhysicalDevice, Surface, SwapChain, QueueFamily};
+use gfx_corell::{Instance, Adapter, Surface, SwapChain, QueueFamily};
 
 pub type ColorFormat = gfx_corell::format::Rgba8;
 
@@ -35,8 +35,10 @@ fn main() {
 
     // instantiate backend
     let instance = back::Instance::create();
-    let physical_devices = instance.enumerate_physical_devices();
-    let queue_descs = physical_devices[0].get_queue_families().iter().map(|family| { (family, family.num_queues()) }).collect();
+    let physical_devices = instance.enumerate_adapters();
+    let surface = instance.create_surface(&window);
+
+    let queue_descs = physical_devices[0].get_queue_families().map(|family| { (family, family.num_queues()) });
     
     for device in &physical_devices {
         println!("{:?}", device.get_info());
@@ -45,8 +47,7 @@ fn main() {
     // build a new device and associated command queues
     let (device, queues) = physical_devices[0].open(queue_descs);
 
-    let surface = back::Surface::from_window(&window, &instance);
-    let mut swap_chain = surface.build_swapchain::<ColorFormat>(1024, 768, &queues[0]);
+    let mut swap_chain = surface.build_swapchain::<ColorFormat>(&queues[0]);
 
     'main: loop {
         for event in window.poll_events() {

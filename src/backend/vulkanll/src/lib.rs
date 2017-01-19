@@ -44,6 +44,7 @@ pub struct QueueFamily {
     instance: Arc<InstanceInner>,
     device: vk::PhysicalDevice,
     family_index: u32,
+    queue_type: vk::QueueFlags,
     queue_count: u32,
 }
 
@@ -67,26 +68,29 @@ impl core::QueueFamily for QueueFamily {
     }
 }
 
-pub struct PhysicalDevice {
+pub struct Adapter {
     handle: vk::PhysicalDevice,
     queue_families: Vec<QueueFamily>,
-    info: core::PhysicalDeviceInfo,
+    info: core::AdapterInfo,
     instance: Arc<InstanceInner>,
 }
 
-impl core::PhysicalDevice for PhysicalDevice {
-    type B = Backend;
+impl core::Adapter for Adapter {
+    type CommandQueue = CommandQueue;
+    type Device = Device;
     type QueueFamily = QueueFamily;
 
-    fn open<'a>(&self, queue_descs: Vec<(&'a Self::QueueFamily, u32)>) -> (Device, Vec<CommandQueue>) {
-        let queue_infos = queue_descs.iter().map(|&(family, queue_count)| {
+    fn open<'a, I>(&self, queue_descs: I) -> (Device, Vec<CommandQueue>)
+        where I: Iterator<Item=(&'a QueueFamily, u32)>
+    {
+        let queue_infos = queue_descs.map(|(family, queue_count)| {
                 vk::DeviceQueueCreateInfo {
                     s_type: vk::StructureType::DeviceQueueCreateInfo,
                     p_next: ptr::null(),
                     flags: vk::DeviceQueueCreateFlags::empty(),
                     queue_family_index: family.family_index,
                     queue_count: queue_count,
-                    p_queue_priorities: &1.0,
+                    p_queue_priorities: vec![0.0f32; queue_count as usize].as_ptr(),
                 }
             }).collect::<Vec<_>>();
 
@@ -127,9 +131,11 @@ impl core::PhysicalDevice for PhysicalDevice {
         };
 
         // Create associated command queues
-        let queues = queue_descs.iter().flat_map(|&(family, num)| {
-            (0..num).map(|id| {
-                let queue = unsafe { device.inner.0.get_device_queue(family.family_index, id) };
+        let queues = queue_infos.iter().flat_map(|info| {
+            (0..info.queue_count).map(|id| {
+                let queue = unsafe {
+                    device.inner.0.get_device_queue(info.queue_family_index, id)
+                };
                 CommandQueue {
                     inner: CommandQueueInner(Rc::new(RefCell::new(queue))),
                     device: device.inner.clone(),
@@ -140,12 +146,12 @@ impl core::PhysicalDevice for PhysicalDevice {
         (device, queues)
     }
 
-    fn get_info(&self) -> &core::PhysicalDeviceInfo {
+    fn get_info(&self) -> &core::AdapterInfo {
         &self.info
     }
 
-    fn get_queue_families(&self) -> &Vec<Self::QueueFamily> {
-        &self.queue_families
+    fn get_queue_families(&self) -> std::slice::Iter<Self::QueueFamily> {
+        self.queue_families.iter()
     }
 }
 
@@ -177,7 +183,7 @@ pub struct CommandQueue {
 }
 
 impl core::CommandQueue for CommandQueue {
-    type B = Backend;
+    type CommandBuffer = ();
 
     fn submit(&mut self, cmd_buffer: &()) {
         unimplemented!()
@@ -200,10 +206,12 @@ pub struct Surface {
     // Vk (EXT) specs [29.2.7 Platform-Independent Information]
     // For vkDestroySurfaceKHR: Host access to surface must be externally synchronized
     inner: Arc<SurfaceInner>,
+    width: u32,
+    height: u32,
 }
 
 impl Surface {
-    fn from_raw(instance: &Instance, surface: vk::SurfaceKHR) -> Surface {
+    fn from_raw(instance: &Instance, surface: vk::SurfaceKHR, (width, height): (u32, u32)) -> Surface {
         let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
 
         let loader = vk::SurfaceFn::load(|name| {
@@ -222,44 +230,17 @@ impl Surface {
 
         Surface {
             inner: inner,
+            width: width,
+            height: height,
         }
     }
 }
 
 impl core::Surface for Surface {
-    type B = Backend;
-    type Window = winit::Window;
+    type CommandQueue = CommandQueue;
+    type SwapChain = SwapChain;
 
-    #[cfg(target_os = "windows")]
-    fn from_window(window: &winit::Window, instance: &Instance) -> Surface {
-        use winit::os::windows::WindowExt;
-        let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
-        let win32_loader = ash::extensions::Win32Surface::new(entry, &instance.inner.0)
-                        .expect("Unable to load win32 surface functions");
-
-        let surface = unsafe {
-            let info = vk::Win32SurfaceCreateInfoKHR {
-                s_type: vk::StructureType::Win32SurfaceCreateInfoKhr,
-                p_next: ptr::null(),
-                flags: vk::Win32SurfaceCreateFlagsKHR::empty(),
-                hinstance: unsafe { kernel32::GetModuleHandleW(ptr::null()) } as *mut _,
-                hwnd: window.get_hwnd() as *mut _,
-            };
-
-            win32_loader.create_win32_surface_khr(&info, None)
-                .expect("Error on surface creation")
-        };
-
-        Self::from_raw(instance, surface)
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    fn from_window(window: &winit::Window, instance: &Instance) -> Surface {
-        unimplemented!()
-    }
-
-    fn build_swapchain<T: core::format::RenderFormat>(
-                    &self, width: u32, height: u32,
+    fn build_swapchain<T: core::format::RenderFormat>(&self,
                     present_queue: &CommandQueue) -> SwapChain {
         let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
         let loader = vk::SwapchainFn::load(|name| {
@@ -283,7 +264,10 @@ impl core::Surface for Surface {
             min_image_count: 2, // TODO: let the user specify the value
             image_format: data::map_format(format.0, format.1).unwrap(),
             image_color_space: vk::ColorSpaceKHR::SrgbNonlinear,
-            image_extent: vk::Extent2D { width: width, height: height },
+            image_extent: vk::Extent2D {
+                width: self.width,
+                height: self.height
+            },
             image_array_layers: 1,
             image_usage: vk::IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
             image_sharing_mode: vk::SharingMode::Exclusive,
@@ -351,7 +335,6 @@ pub struct SwapChain {
 }
 
 impl core::SwapChain for SwapChain {
-    type B = Backend;
 
     fn acquire_frame(&mut self) -> core::Frame {
         unimplemented!()
@@ -415,7 +398,9 @@ pub struct Instance {
 }
 
 impl core::Instance for Instance {
-    type B = Backend;
+    type Adapter = Adapter;
+    type Surface = Surface;
+    type Window = winit::Window;
 
     fn create() -> Instance {
         // TODO: return errors instead of panic
@@ -469,9 +454,9 @@ impl core::Instance for Instance {
         }
     }
 
-    fn enumerate_physical_devices(&self) -> Vec<PhysicalDevice> {
+    fn enumerate_adapters(&self) -> Vec<Adapter> {
         self.inner.0.enumerate_physical_devices()
-            .expect("Unable to enumerate physical devices")
+            .expect("Unable to enumerate adapter")
             .iter()
             .map(|&device| {
                 // TODO: add an ash function for this
@@ -481,7 +466,7 @@ impl core::Instance for Instance {
                     out
                 };
 
-                let info = core::PhysicalDeviceInfo {
+                let info = core::AdapterInfo {
                     name: String::new(), // TODO: retrieve name
                     vendor: properties.vendor_id as usize,
                     device: properties.device_id as usize,
@@ -496,11 +481,12 @@ impl core::Instance for Instance {
                                                         instance: self.inner.clone(),
                                                         device: device,
                                                         family_index: i as u32,
+                                                        queue_type: queue_family.queue_flags,
                                                         queue_count: queue_family.queue_count,
                                                     }
                                                  }).collect();
 
-                PhysicalDevice {
+                Adapter {
                     handle: device,
                     queue_families: queue_families,
                     info: info,
@@ -508,6 +494,34 @@ impl core::Instance for Instance {
                 }
             })
             .collect()
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    fn create_surface(&self, window: &winit::Window) -> Surface {
+        unimplemented!()
+    }
+
+    #[cfg(target_os = "windows")]
+    fn create_surface(&self, window: &winit::Window) -> Surface {
+        use winit::os::windows::WindowExt;
+        let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
+        let win32_loader = ash::extensions::Win32Surface::new(entry, &self.inner.0)
+                        .expect("Unable to load win32 surface functions");
+
+        let surface = unsafe {
+            let info = vk::Win32SurfaceCreateInfoKHR {
+                s_type: vk::StructureType::Win32SurfaceCreateInfoKhr,
+                p_next: ptr::null(),
+                flags: vk::Win32SurfaceCreateFlagsKHR::empty(),
+                hinstance: unsafe { kernel32::GetModuleHandleW(ptr::null()) } as *mut _,
+                hwnd: window.get_hwnd() as *mut _,
+            };
+
+            win32_loader.create_win32_surface_khr(&info, None)
+                .expect("Error on surface creation")
+        };
+
+        Surface::from_raw(self, surface, window.get_inner_size_pixels().unwrap())
     }
 }
 
@@ -518,7 +532,7 @@ impl core::Backend for Backend {
     type CommandQueue = CommandQueue;
     type Device = Device;
     type Instance = Instance;
-    type PhysicalDevice = PhysicalDevice;
+    type Adapter = Adapter;
     type Resources = Resources;
     type Surface = Surface;
     type SwapChain = SwapChain;

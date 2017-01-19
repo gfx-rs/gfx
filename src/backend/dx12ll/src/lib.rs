@@ -50,17 +50,20 @@ impl core::QueueFamily for QueueFamily {
 }
 
 #[derive(Clone)]
-pub struct PhysicalDevice {
+pub struct Adapter {
     adapter: ComPtr<winapi::IDXGIAdapter2>,
-    info: core::PhysicalDeviceInfo,
+    info: core::AdapterInfo,
     queue_families: Vec<QueueFamily>,
 }
 
-impl core::PhysicalDevice for PhysicalDevice {
-    type B = Backend;
+impl core::Adapter for Adapter {
+    type CommandQueue = CommandQueue;
+    type Device = Device;
     type QueueFamily = QueueFamily;
 
-    fn open(&self, queue_descs: Vec<(&QueueFamily, u32)>) -> (Device, Vec<CommandQueue>) {
+    fn open<'a, I>(&self, queue_descs: I) -> (Device, Vec<CommandQueue>)
+        where I: Iterator<Item=(&'a QueueFamily, u32)>
+    {
         // Create D3D12 device
         let mut device = ComPtr::<winapi::ID3D12Device>::new(ptr::null_mut());
         let hr = unsafe {
@@ -76,7 +79,7 @@ impl core::PhysicalDevice for PhysicalDevice {
         }
 
         // Create command queues
-        let queues = queue_descs.iter().flat_map(|&(_family, queue_count)| {
+        let queues = queue_descs.flat_map(|(_family, queue_count)| {
             (0..queue_count).map(|_| {
                 let mut queue = ComPtr::<winapi::ID3D12CommandQueue>::new(ptr::null_mut());
                 let queue_desc = winapi::D3D12_COMMAND_QUEUE_DESC {
@@ -105,12 +108,12 @@ impl core::PhysicalDevice for PhysicalDevice {
         (Device { inner: device }, queues)
     }
 
-    fn get_info(&self) -> &core::PhysicalDeviceInfo {
+    fn get_info(&self) -> &core::AdapterInfo {
         &self.info
     }
 
-    fn get_queue_families(&self) -> &Vec<QueueFamily> {
-        &self.queue_families
+    fn get_queue_families(&self) -> std::slice::Iter<QueueFamily> {
+        self.queue_families.iter()
     }
 }
 
@@ -127,7 +130,7 @@ pub struct CommandQueue {
 }
 
 impl core::CommandQueue for CommandQueue {
-    type B = Backend;
+    type CommandBuffer = ();
 
     fn submit(&mut self, cmd_buffer: &()) {
         unimplemented!()
@@ -137,28 +140,23 @@ impl core::CommandQueue for CommandQueue {
 pub struct Surface {
     factory: ComPtr<winapi::IDXGIFactory4>,
     wnd_handle: winapi::HWND,
+    width: u32,
+    height: u32,
 }
 
 impl core::Surface for Surface {
-    type B = Backend;
-    type Window = winit::Window;
+    type CommandQueue = CommandQueue;
+    type SwapChain = SwapChain;
 
-    fn from_window(window: &winit::Window, instance: &Instance) -> Surface {
-        Surface {
-            factory: instance.inner.clone(),
-            wnd_handle: window.get_hwnd() as *mut _,
-        }
-    }
-
-    fn build_swapchain<T: core::format::RenderFormat>(&self, width: u32, height: u32, present_queue: &CommandQueue) -> SwapChain {
+    fn build_swapchain<T: core::format::RenderFormat>(&self, present_queue: &CommandQueue) -> SwapChain {
         let mut swap_chain = ComPtr::<winapi::IDXGISwapChain1>::new(ptr::null_mut());
 
         // TODO: double-check values
         let desc = winapi::DXGI_SWAP_CHAIN_DESC1 {
             AlphaMode: winapi::DXGI_ALPHA_MODE(0),
             BufferCount: 2,
-            Width: width,
-            Height: height,
+            Width: self.width,
+            Height: self.height,
             Format: data::map_format(T::get_format(), true).unwrap(), // TODO: error handling
             Flags: 0,
             BufferUsage: winapi::DXGI_USAGE_RENDER_TARGET_OUTPUT,
@@ -197,8 +195,6 @@ pub struct SwapChain {
 }
 
 impl<'a> core::SwapChain for SwapChain{
-    type B = Backend;
-
     fn acquire_frame(&mut self) -> core::Frame {
         unimplemented!()
     }
@@ -210,11 +206,13 @@ impl<'a> core::SwapChain for SwapChain{
 
 pub struct Instance {
     inner: ComPtr<winapi::IDXGIFactory4>,
-    physical_devices: Vec<PhysicalDevice>,
+    adapters: Vec<Adapter>,
 }
 
 impl core::Instance for Instance {
-    type B = Backend;
+    type Adapter = Adapter;
+    type Surface = Surface;
+    type Window = winit::Window;
 
     fn create() -> Instance {
         // Enable debug layer
@@ -280,7 +278,7 @@ impl core::Instance for Instance {
                     name.to_string_lossy().into_owned()
                 };
 
-                let info = core::PhysicalDeviceInfo {
+                let info = core::AdapterInfo {
                     name: device_name,
                     vendor: desc.VendorId as usize,
                     device: desc.DeviceId as usize,
@@ -288,7 +286,7 @@ impl core::Instance for Instance {
                 };
 
                 devices.push(
-                    PhysicalDevice {
+                    Adapter {
                         adapter: adapter,
                         info: info,
                         queue_families: vec![QueueFamily], // TODO:
@@ -300,12 +298,22 @@ impl core::Instance for Instance {
 
         Instance {
             inner: dxgi_factory,
-            physical_devices: devices,
+            adapters: devices,
         }
     }
 
-    fn enumerate_physical_devices(&self) -> Vec<PhysicalDevice> {
-        self.physical_devices.clone()
+    fn enumerate_adapters(&self) -> Vec<Adapter> {
+        self.adapters.clone()
+    }
+
+    fn create_surface(&self, window: &winit::Window) -> Surface {
+        let (width, height) = window.get_inner_size_pixels().unwrap();
+        Surface {
+            factory: self.inner.clone(),
+            wnd_handle: window.get_hwnd() as *mut _,
+            width: width,
+            height: height,
+        }
     }
 }
 
@@ -316,7 +324,7 @@ impl core::Backend for Backend {
     type CommandQueue = CommandQueue;
     type Device = Device;
     type Instance = Instance;
-    type PhysicalDevice = PhysicalDevice;
+    type Adapter = Adapter;
     type Resources = Resources;
     type Surface = Surface;
     type SwapChain = SwapChain;

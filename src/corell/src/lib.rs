@@ -18,6 +18,7 @@ extern crate log;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::any::Any;
+use std::slice::Iter;
 
 pub mod command;
 pub mod factory;
@@ -66,34 +67,36 @@ pub enum IndexType {
 
 /// An `Instance` holds per-application state for a specific backend
 pub trait Instance {
-    type B: Backend;
+    type Adapter: Adapter;
+    type Surface: Surface;
+    type Window;
 
     /// Instantiate a new `Instance`, this is our entry point for applications
     fn create() -> Self;
 
-    // TODO: Use an iterator instead of Vec?
     /// Enumerate all available devices supporting this backend 
-    fn enumerate_physical_devices(&self) -> Vec<<<Self as Instance>::B as Backend>::PhysicalDevice>;
+    fn enumerate_adapters(&self) -> Vec<Self::Adapter>;
+
+    /// Create a new surface from a native window.
+    fn create_surface(&self, window: &Self::Window) -> Self::Surface;
 }
 
-// TODO: Name might be a bit misleading as we might also support
-// software devices (e.g D3D12's WARP) and maybe multi-GPUs in the future (not part of Vulkan 1.0)
-// D3D12's `Adapter` would be a possible alternative
-pub trait PhysicalDevice {
-    type B: Backend;
+pub trait Adapter {
+    type CommandQueue: CommandQueue;
+    type Device: Device;
     type QueueFamily: QueueFamily;
 
-    fn open<'a>(&self, queue_descs: Vec<(&'a Self::QueueFamily, u32)>)
-            -> (<<Self as PhysicalDevice>::B as Backend>::Device, Vec<<<Self as PhysicalDevice>::B as Backend>::CommandQueue>);
+    fn open<'a, I>(&self, queue_descs: I) -> (Self::Device, Vec<Self::CommandQueue>)
+        where I: Iterator<Item=(&'a Self::QueueFamily, u32)>;
 
-    fn get_info(&self) -> &PhysicalDeviceInfo;
+    fn get_info(&self) -> &AdapterInfo;
 
-    fn get_queue_families(&self) -> &Vec<Self::QueueFamily>;
+    fn get_queue_families(&self) -> Iter<Self::QueueFamily>;
 }
 
 #[derive(Clone, Debug)]
-pub struct PhysicalDeviceInfo {
-    /// Phyiscal device name
+pub struct AdapterInfo {
+    /// Adapter name
     pub name: String,
     /// Vendor PCI id of the physical device
     pub vendor: usize,
@@ -119,22 +122,19 @@ pub trait Device {
 }
 
 pub trait CommandQueue {
-    type B: Backend;
+    type CommandBuffer;
 
     /// Submits a `CommandBuffer` to the GPU queue for execution.
-    fn submit(&mut self, cmd_buffer: &<<Self as CommandQueue>::B as Backend>::CommandBuffer);
+    fn submit(&mut self, cmd_buffer: &Self::CommandBuffer);
 }
 
 /// A `Surface` abstracts the surface of a native window, which will be presented
 pub trait Surface {
-    type B: Backend;
-    type Window;
+    type CommandQueue: CommandQueue;
+    type SwapChain: SwapChain;
 
-    fn from_window(window: &Self::Window, instance: &<<Self as Surface>::B as Backend>::Instance) -> Self;
-
-    fn build_swapchain<T: format::RenderFormat>(&self,
-        width: u32, height: u32,
-        present_queue: &<<Self as Surface>::B as Backend>::CommandQueue) -> <<Self as Surface>::B as Backend>::SwapChain;
+    fn build_swapchain<T: format::RenderFormat>(&self, present_queue: &Self::CommandQueue)
+        -> Self::SwapChain;
 }
 
 /// Handle to a backbuffer of the swapchain.
@@ -143,8 +143,6 @@ pub struct Frame(usize);
 /// The `SwapChain` is the backend representation of the surface.
 /// It consists of multiple buffers, which will be presented on the surface.
 pub trait SwapChain {
-    type B: Backend;
-
     fn acquire_frame(&mut self) -> Frame;
     fn present(&mut self);
 }
@@ -175,7 +173,7 @@ pub trait Backend {
     type CommandQueue: CommandQueue;
     type Device: Device;
     type Instance: Instance;
-    type PhysicalDevice: PhysicalDevice;
+    type Adapter: Adapter;
     type Resources: Resources;
     type Surface: Surface;
     type SwapChain: SwapChain;
