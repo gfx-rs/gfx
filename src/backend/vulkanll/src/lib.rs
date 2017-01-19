@@ -379,15 +379,15 @@ impl Drop for InstanceInner {
 }
 
 const SURFACE_EXTENSIONS: &'static [&'static str] = &[
-    "VK_KHR_surface",
+    vk::VK_KHR_SURFACE_EXTENSION_NAME,
 
     // Platform-specific WSI extensions
-    "VK_KHR_xlib_surface",
-    "VK_KHR_xcb_surface",
-    "VK_KHR_wayland_surface",
-    "VK_KHR_mir_surface",
-    "VK_KHR_android_surface",
-    "VK_KHR_win32_surface",
+    vk::VK_KHR_XLIB_SURFACE_EXTENSION_NAME,
+    vk::VK_KHR_XCB_SURFACE_EXTENSION_NAME,
+    vk::VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME,
+    vk::VK_KHR_MIR_SURFACE_EXTENSION_NAME,
+    vk::VK_KHR_ANDROID_SURFACE_EXTENSION_NAME,
+    vk::VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
 ];
 
 pub struct Instance {
@@ -395,6 +395,9 @@ pub struct Instance {
     // Externally Synchronized Parameters: The `instance` parameter in `vkDestroyInstance`
     // `Arc` ensures that we only call drop once
     inner: Arc<InstanceInner>,
+
+    /// Supported surface extensions of this instance.
+    surface_extensions: Vec<&'static str>,
 }
 
 impl core::Instance for Instance {
@@ -451,6 +454,7 @@ impl core::Instance for Instance {
 
         Instance {
             inner: Arc::new(InstanceInner(instance)),
+            surface_extensions: surface_extensions,
         }
     }
 
@@ -460,11 +464,7 @@ impl core::Instance for Instance {
             .iter()
             .map(|&device| {
                 // TODO: add an ash function for this
-                let properties = unsafe {
-                    let mut out = mem::zeroed();
-                    self.inner.0.fp_v1_0().get_physical_device_properties(device, &mut out);
-                    out
-                };
+                let properties = self.inner.0.get_physical_device_properties(device);
 
                 let info = core::AdapterInfo {
                     name: String::new(), // TODO: retrieve name
@@ -498,7 +498,38 @@ impl core::Instance for Instance {
 
     #[cfg(not(target_os = "windows"))]
     fn create_surface(&self, window: &winit::Window) -> Surface {
-        unimplemented!()
+        let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
+
+        let surface = self.surface_extensions.iter().map(|&extension| {
+            match extension {
+                vk::VK_KHR_XLIB_SURFACE_EXTENSION_NAME => {
+                    use winit::os::unix::WindowExt;
+                    let xlib_loader = if let Ok(loader) = ash::extensions::XlibSurface::new(entry, &self.inner.0) {
+                        loader
+                    } else {
+                        return None;
+                    };
+
+                    unsafe {
+                        let info = vk::XlibSurfaceCreateInfoKHR {
+                            s_type: vk::StructureType::XlibSurfaceCreateInfoKhr,
+                            p_next: ptr::null(),
+                            flags: vk::XlibSurfaceCreateFlagsKHR::empty(),
+                            window: window.get_xlib_window().unwrap() as *const _,
+                            dpy: window.get_xlib_display().unwrap() as *const _,
+                        };
+
+                        xlib_loader.create_xlib_surface_khr(&info, None).ok()
+                    }
+                },
+                // TODO: other platforms
+                _ => None,
+            }
+        }).find(|x| x.is_some())
+          .expect("Unable to find a surface implementation.")
+          .unwrap();
+
+        Surface::from_raw(self, surface, window.get_inner_size_pixels().unwrap())
     }
 
     #[cfg(target_os = "windows")]
