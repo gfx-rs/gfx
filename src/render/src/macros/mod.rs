@@ -31,7 +31,99 @@ macro_rules! gfx_format {
 }
 
 
-/// Defines vertex, constant and pipeline formats in one block
+/// Defines vertex, constant and pipeline formats in one block.
+///
+/// # Example
+///
+/// ```{.rust}
+/// #[macro_use]
+/// extern crate gfx;
+///
+/// gfx_defines! {
+///     vertex Vertex {
+///         pos: [f32; 4] = "a_Pos",
+///         tex_coord: [f32; 2] = "a_TexCoord",
+///     }
+///     
+///     constant Locals {
+///         transform: [[f32; 4]; 4] = "u_Transform",
+///     }
+///
+///     pipeline pipe {
+///         vbuf: gfx::VertexBuffer<Vertex> = (),
+///         transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
+///         locals: gfx::ConstantBuffer<Locals> = "Locals",
+///         color: gfx::TextureSampler<[f32; 4]> = "t_Color",
+///         out_color: gfx::RenderTarget<gfx::format::Rgba8> = "Target0",
+///         out_depth: gfx::DepthTarget<gfx::format::DepthStencil> = 
+///             gfx::preset::depth::LESS_EQUAL_WRITE,
+///     }
+/// }
+///
+/// impl Vertex {
+///     fn new(p: [i8; 3], tex: [i8; 2]) -> Vertex {
+///         Vertex {
+///             pos: [p[0] as f32, p[1] as f32, p[2] as f32, 1.0f32],
+///             tex_coord: [tex[0] as f32, tex[1] as f32],
+///         }
+///     }
+/// }
+///
+/// fn main() {
+///     let vertex_data = [
+///         Vertex::new([-1, -1, 1], [0, 0]),
+///         Vertex::new([ 1, -1, 1], [1, 0]),
+///         // Add more vertices..
+///     ];
+/// }
+/// ```
+/// `vertex` and `constant` structures defined with `gfx_defines!`
+/// can be extended with attributes:
+///
+/// ```{.rust}
+/// #[macro_use]
+/// extern crate gfx;
+///
+/// gfx_defines! {
+///     #[derive(Default)]
+///     vertex Vertex {
+///         pos: [f32; 4] = "a_Pos",
+///         tex_coord: [f32; 2] = "a_TexCoord",
+///     }
+/// }
+///
+/// fn main() {
+///     let vertex = Vertex::default();
+///     assert_eq!(vertex.pos[0], 0f32);
+///     assert_eq!(vertex.tex_coord[0], 0f32);
+/// }
+/// ```
+///
+/// # `pipe`
+///
+/// The `pipeline state object` can consist of:
+///
+/// - A single vertex buffer object to hold the vertices.
+/// - Single or multiple constant buffer objects.
+/// - Single or multiple global buffer objects.
+/// - Single or multiple samplers such as texture samplers.
+/// - [Render](pso/target/struct.RenderTarget.html), [blend](pso/target/struct.BlendTarget.html), 
+///   [depth](pso/target/struct.DepthTarget.html) and [stencil](pso/target/struct.StencilTarget.html) targets
+/// - A shader resource view (SRV, DX11)
+/// - A unordered access view (UAV, DX11, not yet implemented in OpenGL backend)
+/// - Scissors rectangle value (DX11)
+///
+/// Structure of a `pipeline state object` can be defined
+/// freely but should at the very least consist of one vertex buffer object.
+///
+/// # `vertex`
+///
+/// Defines the vertex format
+///
+/// # `constant`
+///
+/// Defines constants values 
+///
 #[macro_export]
 macro_rules! gfx_defines {
     ($(#[$attr:meta])* vertex $name:ident {
