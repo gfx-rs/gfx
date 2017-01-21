@@ -26,6 +26,7 @@ use comptr::ComPtr;
 use std::ptr;
 use std::os::raw::c_void;
 use std::os::windows::ffi::OsStringExt;
+use std::collections::VecDeque;
 use std::ffi::OsString;
 use winapi::BOOL;
 use winit::os::windows::WindowExt;
@@ -186,17 +187,25 @@ impl core::Surface for Surface {
 
         SwapChain {
             inner: swap_chain,
+            next_frame: 0,
+            frame_queue: VecDeque::new(),
         }
     }
 }
 
 pub struct SwapChain {
     inner: ComPtr<winapi::IDXGISwapChain1>,
+    next_frame: usize,
+    frame_queue: VecDeque<usize>,
 }
 
 impl<'a> core::SwapChain for SwapChain{
     fn acquire_frame(&mut self) -> core::Frame {
-        unimplemented!()
+        // TODO: we need to block this at some point?
+        let index = self.next_frame;
+        self.frame_queue.push_back(index);
+        self.next_frame = (self.next_frame + 1) % 2; // TODO: remove magic swap buffer count
+        core::Frame::new(index)
     }
 
     fn present(&mut self) {

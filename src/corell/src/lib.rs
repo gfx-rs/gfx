@@ -74,38 +74,45 @@ pub trait Instance {
     /// Instantiate a new `Instance`, this is our entry point for applications
     fn create() -> Self;
 
-    /// Enumerate all available devices supporting this backend 
+    /// Enumerate all available adapters supporting this backend 
     fn enumerate_adapters(&self) -> Vec<Self::Adapter>;
 
     /// Create a new surface from a native window.
     fn create_surface(&self, window: &Self::Window) -> Self::Surface;
 }
 
+/// Represents a physical or virtual device, which is capable of running the backend.
 pub trait Adapter {
     type CommandQueue: CommandQueue;
     type Device: Device;
     type QueueFamily: QueueFamily;
 
+    /// Create a new device and command queues.
     fn open<'a, I>(&self, queue_descs: I) -> (Self::Device, Vec<Self::CommandQueue>)
         where I: Iterator<Item=(&'a Self::QueueFamily, u32)>;
 
+    /// Get the `AdapterInfo` for this adapater.
     fn get_info(&self) -> &AdapterInfo;
 
+    /// Return the supported queue families for this adapter.
     fn get_queue_families(&self) -> Iter<Self::QueueFamily>;
 }
 
+/// Information about a backend adapater.
 #[derive(Clone, Debug)]
 pub struct AdapterInfo {
     /// Adapter name
     pub name: String,
-    /// Vendor PCI id of the physical device
+    /// Vendor PCI id of the adapter
     pub vendor: usize,
-    /// PCI id of the physical device
+    /// PCI id of the adapter
     pub device: usize,
     /// The device is based on a software rasterizer
     pub software_rendering: bool,
 }
 
+/// `QueueFamily` denotes a group of command queues provided by the backend
+/// with the same properties/type.
 pub trait QueueFamily: 'static {
     type Surface: Surface;
 
@@ -139,6 +146,13 @@ pub trait Surface {
 
 /// Handle to a backbuffer of the swapchain.
 pub struct Frame(usize);
+
+impl Frame {
+    #[doc(hidden)]
+    pub fn new(id: usize) -> Self {
+        Frame(id)
+    }
+}
 
 /// The `SwapChain` is the backend representation of the surface.
 /// It consists of multiple buffers, which will be presented on the surface.

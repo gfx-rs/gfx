@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[macro_use]
+extern crate log;
+
 extern crate ash;
 extern crate gfx_corell as core;
 #[macro_use]
@@ -95,7 +98,7 @@ impl core::Adapter for Adapter {
             }).collect::<Vec<_>>();
 
         // Create device
-        let device_extensions = &["VK_KHR_swapchain"];
+        let device_extensions = &[vk::VK_KHR_SWAPCHAIN_EXTENSION_NAME,];
 
         let device_raw = {
             let cstrings = device_extensions.iter()
@@ -130,7 +133,7 @@ impl core::Adapter for Adapter {
             inner: Arc::new(DeviceInner(device_raw)),
         };
 
-        // Create associated command queues
+        // Create associated command queues for each queue type
         let queues = queue_infos.iter().flat_map(|info| {
             (0..info.queue_count).map(|id| {
                 let queue = unsafe {
@@ -169,11 +172,11 @@ pub struct Device {
 impl core::Device for Device {
 }
 
-// TODO: vk::Queue needs to be externally synchronized on vkQueueSubmit.
-//   We need to find a good way to prevent this, preferable without locking.
-//   Current approach is based on Rc and RefCell not implementing Sync and submit requires mutable access.
-//   So we can clone the inner command queue for the swapchain which also needs it for present.
-//   We internally build some sort of dependency graph using reference counting to unsure everything lives long enough.
+// # Synchronization
+//  vk::Queue needs to be externally synchronized on vkQueueSubmit.
+//  Current approach is based on Rc and RefCell not implementing Sync and submit requires mutable access.
+//  So we can clone the inner command queue for the swapchain which also needs it for present.
+//  We internally build some sort of dependency graph using reference counting to unsure everything lives long enough.
 #[derive(Clone)]
 struct CommandQueueInner(Rc<RefCell<vk::Queue>>);
 
@@ -312,6 +315,8 @@ impl core::Surface for Surface {
             v
         };
 
+        // TODO: create image views for the swapchain images
+
         SwapChain {
             inner: swapchain,
             present_queue: present_queue.inner.clone(),
@@ -335,14 +340,29 @@ pub struct SwapChain {
 }
 
 impl core::SwapChain for SwapChain {
-
     fn acquire_frame(&mut self) -> core::Frame {
-        unimplemented!()
+        // TODO: handle synchronization, requires a fence or semaphore
+        // TODO: error handling
+        let index = unsafe {
+            let mut index = mem::uninitialized();
+            self.swapchain_fn.acquire_next_image_khr(
+                    self.device.0.handle(),
+                    self.inner,
+                    std::u64::MAX, // will block if no image is available
+                    vk::Semaphore::null(),
+                    vk::Fence::null(),
+                    &mut index);
+            index
+        };
+
+        self.frame_queue.push_back(index as usize);
+        core::Frame::new(index as usize)
     }
 
     fn present(&mut self) {
         let frame = self.frame_queue.pop_front().expect("No frame currently queued up. Need to acquire a frame first.");
 
+        // TODO: ensure correct image layout (present)
         let info = vk::PresentInfoKHR {
             s_type: vk::StructureType::PresentInfoKhr,
             p_next: ptr::null(),
@@ -463,11 +483,16 @@ impl core::Instance for Instance {
             .expect("Unable to enumerate adapter")
             .iter()
             .map(|&device| {
-                // TODO: add an ash function for this
                 let properties = self.inner.0.get_physical_device_properties(device);
+                let name = unsafe {
+                    CStr::from_ptr(properties.device_name.as_ptr())
+                            .to_str()
+                            .expect("Invalid UTF-8 string")
+                            .to_owned()
+                };
 
                 let info = core::AdapterInfo {
-                    name: String::new(), // TODO: retrieve name
+                    name: name,
                     vendor: properties.vendor_id as usize,
                     device: properties.device_id as usize,
                     software_rendering: properties.device_type == vk::PhysicalDeviceType::Cpu,
@@ -516,7 +541,7 @@ impl core::Instance for Instance {
                             p_next: ptr::null(),
                             flags: vk::XlibSurfaceCreateFlagsKHR::empty(),
                             window: window.get_xlib_window().unwrap() as *const _,
-                            dpy: window.get_xlib_display().unwrap() as *const _,
+                            dpy: window.get_xlib_display().unwrap() as *mut _,
                         };
 
                         xlib_loader.create_xlib_surface_khr(&info, None).ok()
