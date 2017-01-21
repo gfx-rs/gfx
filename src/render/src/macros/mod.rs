@@ -51,6 +51,8 @@ macro_rules! gfx_format {
 ///
 ///     pipeline pipe {
 ///         vbuf: gfx::VertexBuffer<Vertex> = (),
+///         // Global buffers are added for compatibility when
+///         // constant buffers are not supported.
 ///         transform: gfx::Global<[[f32; 4]; 4]> = "u_Transform",
 ///         locals: gfx::ConstantBuffer<Locals> = "Locals",
 ///         color: gfx::TextureSampler<[f32; 4]> = "t_Color",
@@ -101,29 +103,35 @@ macro_rules! gfx_format {
 ///
 /// # `pipe`
 ///
-/// The `pipeline state object` can consist of:
+/// The `pipeline state object` or `pso` can consist of the following
+/// `pso` components:
 ///
-/// - A single vertex buffer object to hold the vertices.
-/// - Single or multiple constant buffer objects.
-/// - Single or multiple global buffer objects.
-/// - Single or multiple samplers such as texture samplers.
+/// - A single [vertex buffer](pso/buffer/type.VertexBuffer.html) component to hold the vertices.
+/// - A single [instance buffer](pso/buffer/type.InstanceBuffer.html) component.
+/// - Single or multiple [constant buffer](pso/buffer/struct.ConstantBuffer.html) components. (DX11 and OpenGL3)
+/// - Single or multiple [global buffer](pos/buffer/struct.Global.html) components.
+/// - Single or multiple [samplers](pos/resource/struct.Sampler.html) 
+///   such as [texture samplers](pso/resource/struct.TextureSampler.html].
 /// - [Render](pso/target/struct.RenderTarget.html), [blend](pso/target/struct.BlendTarget.html), 
 ///   [depth](pso/target/struct.DepthTarget.html) and [stencil](pso/target/struct.StencilTarget.html) targets
-/// - A shader resource view (SRV, DX11)
-/// - A unordered access view (UAV, DX11, not yet implemented in OpenGL backend)
-/// - Scissors rectangle value (DX11)
+/// - A [shader resource view](pso/resource/struct.ShaderResource.html) (SRV, DX11)
+/// - A [unordered access view](pso/resource/struct.UnorderedAccess.html) (UAV, DX11, not yet implemented in the OpenGL backend)
+/// - A [scissor](pso/target/struct.Scissor.html) rectangle value (DX11)
 ///
 /// Structure of a `pipeline state object` can be defined
 /// freely but should at the very least consist of one vertex buffer object.
 ///
 /// # `vertex`
 ///
-/// Defines the vertex format
+/// Defines a vertex format to be passed onto a vertex buffer. Similar
+/// to `pipeline state objects` multiple vertex formats can be set.
 ///
 /// # `constant`
 ///
-/// Defines constants values 
-///
+/// Defines a structure for shader constant data. This constant data
+/// is then appended into a constant buffer in the `pso`. Constant buffers
+/// are only supported by DirectX 11 and OpenGL backend uses it's own
+/// Uniform Buffer Object which requires OpenGL 3.1.
 #[macro_export]
 macro_rules! gfx_defines {
     ($(#[$attr:meta])* vertex $name:ident {
