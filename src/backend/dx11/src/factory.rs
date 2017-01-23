@@ -569,6 +569,10 @@ impl core::Factory<R> for Factory {
                 LineStrip       => D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP,
                 TriangleList    => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
                 TriangleStrip   => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+                LineListAdjacency        => D3D11_PRIMITIVE_TOPOLOGY_LINELIST_ADJ,
+                LineStripAdjacency       => D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ,
+                TriangleListAdjacency    => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST_ADJ,
+                TriangleStripAdjacency   => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP_ADJ,
                 PatchList(num)  => {
                     if num == 0 || (num as usize) > caps.max_patch_size {
                         return Err(core::pso::CreationError)

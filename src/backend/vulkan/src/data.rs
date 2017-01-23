@@ -306,6 +306,10 @@ pub fn map_topology(prim: Primitive) -> vk::PrimitiveTopology {
         Primitive::LineStrip     => vk::PRIMITIVE_TOPOLOGY_LINE_STRIP,
         Primitive::TriangleList  => vk::PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         Primitive::TriangleStrip => vk::PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
+        Primitive::LineListAdjacency      => vk::PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY,
+        Primitive::LineStripAdjacency     => vk::PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY,
+        Primitive::TriangleListAdjacency  => vk::PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY,
+        Primitive::TriangleStripAdjacency => vk::PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY,
         Primitive::PatchList(_)  => vk::PRIMITIVE_TOPOLOGY_PATCH_LIST,
     }
 }
