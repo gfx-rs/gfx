@@ -26,13 +26,16 @@ There is also a [Waffle board](https://waffle.io/gfx-rs/gfx-rs), which you can u
 
 Finally, feel free to hop on [#rust-gamedev](http://chat.mibbit.com/?server=irc.mozilla.org&channel=%23rust-gamedev).
 
-### Issues
+### Directory Structure 
 
-Labels are formatted as "M-render", where "M" is a category among those:
-  * **T** = Type: *bug*, *discussion*, *doc*, *feature*, *optimization*, *refactor*
-  * **S** = Status: *blocked*, *duplicate*, *invalid*, *ready*, *working*
-  * **D** = Difficulty: *easy*, *hard*, *medium*
-  * **M** = Module: *device*, *user*, *render*, *structure*
+* _examples_ : GFX's examples
+* _tests_ : GFX's tests
+* _info_ : Information and documentation
+* _src_ : gfx_app, an application framework for GFX
+* _src/core_ : gfx_core, core structures and the interface that backends must provide
+* _src/backend_ : The backends implementations
+* _src/render_ : The main gfx package
+* _src/window_ : Different backends to create windows and initialize their graphics
 
 ### Code
 
