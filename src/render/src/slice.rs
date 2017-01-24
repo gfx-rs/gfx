@@ -96,6 +96,10 @@ impl<R: Resources> Slice<R> {
             p::LineStrip => (nv-1),
             p::TriangleList => nv / 3,
             p::TriangleStrip => (nv-2) / 3,
+            p::LineListAdjacency => nv / 4,
+            p::LineStripAdjacency => (nv-3),
+            p::TriangleListAdjacency => nv / 6,
+            p::TriangleStripAdjacency => (nv-4) / 2,
             p::PatchList(num) => nv / (num as u32),
         }
     }

@@ -154,6 +154,26 @@ pub enum Primitive {
     /// Every three consecutive vertices represent a single triangle. For example, with `[a, b, c,
     /// d]`, `a`, `b`, and `c` form a triangle, and `b`, `c`, and `d` form a triangle.
     TriangleStrip,
+    /// Each quadtruplet of vertices represent a single line segment with adjacency information.
+    /// For example, with `[a, b, c, d]`, `b` and `c` form a line, and `a` and `d` are the adjacent
+    /// vertices.
+    LineListAdjacency,
+    /// Every four consecutive vertices represent a single line segment with adjacency information.
+    /// For example, with `[a, b, c, d, e]`, `[a, b, c, d]` form a line segment with adjacency, and
+    /// `[b, c, d, e]` form a line segment with adjacency.
+    LineStripAdjacency,
+    /// Each sextuplet of vertices represent a single traingle with adjacency information. For
+    /// example, with `[a, b, c, d, e, f]`, `a`, `c`, and `e` form a traingle, and `b`, `d`, and
+    /// `f` are the adjacent vertices, where `b` is adjacent to the edge formed by `a` and `c`, `d`
+    /// is adjacent to the edge `c` and `e`, and `f` is adjacent to the edge `e` and `a`.
+    TriangleListAdjacency,
+    /// Every even-numbered vertex (every other starting from the first) represents an additional
+    /// vertex for the triangle strip, while odd-numbered vertices (every other starting from the
+    /// second) represent adjacent vertices. For example, with `[a, b, c, d, e, f, g, h]`, `[a, c,
+    /// e, g]` form a triangle strip, and `[b, d, f, h]` are the adjacent vertices, where `b`, `d`,
+    /// and `f` are adjacent to the first triangle in the strip, and `d`, `f`, and `h` are adjacent
+    /// to the second.
+    TriangleStripAdjacency,
     /// Patch list,
     /// used with shaders capable of producing primitives on their own (tessellation)
     PatchList(PatchSize),
