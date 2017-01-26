@@ -11,7 +11,7 @@ documentation = "https://docs.rs/gfx"
 [features]
 default = []
 sdl = ["gfx_window_sdl"]
-vulkan = ["gfx_device_vulkan", "gfx_window_vulkan"]
+vulkan = ["gfx_device_vulkan", "gfx_device_vulkanll", "gfx_window_vulkan"]
 metal = ["gfx_device_metal", "gfx_window_metal"]
 unstable = []
 
@@ -25,12 +25,18 @@ env_logger = "0.3"
 glutin = "0.7.1"
 winit = "0.5.1"
 gfx_core = { path = "src/core", version = "0.6" }
+gfx_corell = { path = "src/corell", version = "0.1" }
 gfx = { path = "src/render", version = "0.14" }
 gfx_device_gl = { path = "src/backend/gl", version = "0.13" }
 gfx_window_glutin = { path = "src/window/glutin", version = "0.14" }
 
 [dependencies.gfx_device_vulkan]
 path = "src/backend/vulkan"
+version = "0.1"
+optional = true
+
+[dependencies.gfx_device_vulkanll]
+path = "src/backend/vulkanll"
 version = "0.1"
 optional = true
 
@@ -59,6 +65,7 @@ gfx_window_glfw = { path = "src/window/glfw", version = "0.13" }
 
 [target.'cfg(windows)'.dependencies]
 gfx_device_dx11 = { path = "src/backend/dx11", version = "0.5" }
+gfx_device_dx12ll = { path = "src/backend/dx12ll", version = "0.1" }
 gfx_window_dxgi = { path = "src/window/dxgi", version = "0.6" }
 
 [[example]]
@@ -120,6 +127,11 @@ path = "examples/mipmap/main.rs"
 [[example]]
 name = "particle"
 path = "examples/particle/main.rs"
+
+[[example]]
+name = "trianglell"
+path = "examples/trianglell/main.rs"
+
 
 [dev_dependencies]
 cgmath = "0.7"
