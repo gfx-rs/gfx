@@ -24,7 +24,7 @@ extern crate gfx_device_dx11 as device_dx11;
 
 use std::ptr;
 use winit::os::windows::WindowExt;
-use core::{format, handle as h, memory, texture as tex};
+use core::{format, handle as h, factory as f, memory, texture as tex};
 use core::texture::Size;
 use device_dx11::{Device, Factory, Resources};
 
@@ -175,4 +175,23 @@ pub fn init_raw(wb: winit::WindowBuilder, color_format: format::Format)
         }
     }
     Err(InitError::DriverType)
+}
+
+/// Update the internal dimensions of the main framebuffer targets. Generic version over the format.
+pub fn update_views<Cf>(window: &mut Window, factory: &mut Factory, device: &mut Device, width: u16, height: u16)
+            -> Result<h::RenderTargetView<Resources, Cf>, f::TargetViewError>
+where Cf: format::RenderFormat
+{
+    use core::Device;
+    
+    factory.cleanup();
+    device.clear_state();
+    device.cleanup();
+    
+    window.resize_swap_chain::<Cf>(factory, width, height)
+        .map_err(|hr| {
+            error!("Resize failed with code {:X}", hr);
+            f::TargetViewError::NotDetached
+        }
+    )    
 }
