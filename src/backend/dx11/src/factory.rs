@@ -326,6 +326,10 @@ impl Factory {
             Err(hr)
         }
     }
+    
+    pub fn cleanup(&mut self) {
+        self.frame_handles.clear();
+    }    
 }
 
 impl core::Factory<R> for Factory {
