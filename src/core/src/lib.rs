@@ -27,6 +27,7 @@ extern crate draw_state;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::any::Any;
+use std::slice::Iter;
 
 pub use draw_state::{state, target};
 pub use self::factory::Factory;
@@ -237,4 +238,108 @@ pub trait Device: Sized {
 
     /// Cleanup unused resources. This should be called between frames. 
     fn cleanup(&mut self);
+}
+
+
+/// An `Instance` holds per-application state for a specific backend
+pub trait Instance {
+    /// Associated `Adapter` type.
+    type Adapter: Adapter;
+    /// Associated `Surface` type.
+    type Surface: Surface;
+
+    /// Associated native `Window` type.
+    type Window;
+
+    /// Instantiate a new `Instance`, this is our entry point for applications
+    fn create() -> Self;
+
+    /// Enumerate all available adapters supporting this backend 
+    fn enumerate_adapters(&self) -> Vec<Self::Adapter>;
+
+    /// Create a new surface from a native window.
+    fn create_surface(&self, window: &Self::Window) -> Self::Surface;
+}
+
+/// Represents a physical or virtual device, which is capable of running the backend.
+pub trait Adapter {
+    /// Associated `CommandQueue` type.
+    type CommandQueue: CommandQueue;
+    /// Associated `Device` type.
+    type Device: Device;
+    /// Associated `QueueFamily` type.
+    type QueueFamily: QueueFamily;
+
+    /// Create a new device and command queues.
+    fn open<'a, I>(&self, queue_descs: I) -> (Self::Device, Vec<Self::CommandQueue>)
+        where I: Iterator<Item=(&'a Self::QueueFamily, u32)>;
+
+    /// Get the `AdapterInfo` for this adapater.
+    fn get_info(&self) -> &AdapterInfo;
+
+    /// Return the supported queue families for this adapter.
+    fn get_queue_families(&self) -> Iter<Self::QueueFamily>;
+}
+
+/// Information about a backend adapater.
+#[derive(Clone, Debug)]
+pub struct AdapterInfo {
+    /// Adapter name
+    pub name: String,
+    /// Vendor PCI id of the adapter
+    pub vendor: usize,
+    /// PCI id of the adapter
+    pub device: usize,
+    /// The device is based on a software rasterizer
+    pub software_rendering: bool,
+}
+
+/// `QueueFamily` denotes a group of command queues provided by the backend
+/// with the same properties/type.
+pub trait QueueFamily: 'static {
+    /// Associated `Surface` type.
+    type Surface: Surface;
+
+    /// Check if the queue family supports presentation to a surface
+    fn supports_present(&self, surface: &Self::Surface) -> bool;
+
+    /// Return the number of available queues of this family
+    // TODO: some backends like d3d12 support infinite software queues (verify)
+    fn num_queues(&self) -> u32;
+}
+
+/// Dummy trait for command queues.
+/// CommandBuffers will be later submitted to command queues instead of the device.
+pub trait CommandQueue { }
+
+/// A `Surface` abstracts the surface of a native window, which will be presented
+pub trait Surface {
+    /// Associated `CommandQueue` type.
+    type CommandQueue: CommandQueue;
+    /// Associated `SwapChain` type.
+    type SwapChain: SwapChain;
+
+    /// Create a new swapchain from the current surface with an associated present queue.
+    fn build_swapchain<T: format::RenderFormat>(&self, present_queue: &Self::CommandQueue)
+        -> Self::SwapChain;
+}
+
+/// Handle to a backbuffer of the swapchain.
+pub struct Frame(usize);
+
+impl Frame {
+    #[doc(hidden)]
+    pub fn new(id: usize) -> Self {
+        Frame(id)
+    }
+}
+
+/// The `SwapChain` is the backend representation of the surface.
+/// It consists of multiple buffers, which will be presented on the surface.
+pub trait SwapChain {
+    /// Acquire a new frame for rendering. This needs to be called before presenting.
+    fn acquire_frame(&mut self) -> Frame;
+
+    /// Present one acquired frame in FIFO order.
+    fn present(&mut self);
 }
