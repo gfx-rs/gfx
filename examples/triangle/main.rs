@@ -12,16 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+extern crate cgmath;
 #[macro_use]
 extern crate gfx;
-extern crate gfx_window_glutin;
-extern crate glutin;
+extern crate gfx_app;
 
-use gfx::traits::FactoryExt;
-use gfx::Device;
-
-pub type ColorFormat = gfx::format::Rgba8;
-pub type DepthFormat = gfx::format::DepthStencil;
+pub use gfx_app::{ColorFormat, DepthFormat};
+use gfx::{Bundle, texture};
 
 gfx_defines!{
     vertex Vertex {
@@ -43,42 +40,56 @@ const TRIANGLE: [Vertex; 3] = [
 
 const CLEAR_COLOR: [f32; 4] = [0.1, 0.2, 0.3, 1.0];
 
-pub fn main() {
-    let builder = glutin::WindowBuilder::new()
-        .with_title("Triangle example".to_string())
-        .with_dimensions(1024, 768)
-        .with_vsync();
-    let (window, mut device, mut factory, main_color, mut main_depth) =
-        gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder);
-    let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
-    let pso = factory.create_pipeline_simple(
-        include_bytes!("shader/triangle_150.glslv"),
-        include_bytes!("shader/triangle_150.glslf"),
-        pipe::new()
-    ).unwrap();
-    let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(&TRIANGLE, ());
-    let mut data = pipe::Data {
-        vbuf: vertex_buffer,
-        out: main_color
-    };
+struct App<R: gfx::Resources>{
+    bundle: Bundle<R, pipe::Data<R>>,
+}
 
-    'main: loop {
-        // loop over events
-        for event in window.poll_events() {
-            match event {
-                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
-                glutin::Event::Closed => break 'main,
-                glutin::Event::Resized(_width, _height) => {
-                    gfx_window_glutin::update_views(&window, &mut data.out, &mut main_depth);
-                },
-                _ => {},
-            }
+impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
+    fn new<F: gfx::Factory<R>>(factory: &mut F, backend: gfx_app::shade::Backend, window_targets: gfx_app::WindowTargets<R>) -> Self {
+        use gfx::traits::FactoryExt;
+
+        let vs = gfx_app::shade::Source {
+            glsl_120: include_bytes!("shader/triangle_120.glslv"),
+            glsl_150: include_bytes!("shader/triangle_150.glslv"),
+            msl_11: include_bytes!("shader/triangle_vertex.metal"),
+            .. gfx_app::shade::Source::empty()
+        };
+        let ps = gfx_app::shade::Source {
+            glsl_120: include_bytes!("shader/triangle_120.glslf"),
+            glsl_150: include_bytes!("shader/triangle_150.glslf"),
+            msl_11: include_bytes!("shader/triangle_frag.metal"),
+            .. gfx_app::shade::Source::empty()
+        };
+
+        let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&TRIANGLE, ());
+
+        let pso = factory.create_pipeline_simple(
+            vs.select(backend).unwrap(),
+            ps.select(backend).unwrap(),
+            pipe::new()
+        ).unwrap();
+
+        let data = pipe::Data {
+            vbuf: vbuf,
+            out: window_targets.color,
+        };
+
+        App {
+            bundle: Bundle::new(slice, pso, data),
         }
-        // draw a frame
-        encoder.clear(&data.out, CLEAR_COLOR);
-        encoder.draw(&slice, &pso, &data);
-        encoder.flush(&mut device);
-        window.swap_buffers().unwrap();
-        device.cleanup();
     }
+
+    fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
+        encoder.clear(&self.bundle.data.out, CLEAR_COLOR);
+        self.bundle.encode(encoder);
+    }
+
+    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {
+        self.bundle.data.out = window_targets.color;
+    }
+}
+
+pub fn main() {
+    use gfx_app::Application;
+    App::launch_simple("Triangle example");
 }

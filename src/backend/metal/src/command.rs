@@ -34,12 +34,17 @@ use native::{Rtv, Srv, Dsv};
 use metal::*;
 
 use std::ptr;
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 
 pub struct CommandBuffer {
     queue: MTLCommandQueue,
     device: MTLDevice,
     encoder: MetalEncoder,
-    should_restore: bool
+    should_restore: bool,
+    // TODO: Probably use a more specialized structure, definitely drop SipHash
+    rtv_clear: HashMap<Rtv, MTLClearColor>,
+    dsv_clear: HashMap<Dsv, (Option<f32>, Option<u8>)>,
 }
 
 unsafe impl Send for CommandBuffer {}
@@ -50,11 +55,22 @@ impl CommandBuffer {
             device: device,
             queue: queue,
             encoder: MetalEncoder::new(queue.new_command_buffer()),
-            should_restore: false
+            should_restore: false,
+            rtv_clear: HashMap::new(),
+            dsv_clear: HashMap::new(),
         }
     }
 
     pub fn commit(&mut self, drawable: CAMetalDrawable) {
+        if !self.rtv_clear.is_empty() || !self.dsv_clear.is_empty() {
+            // TODO: should we can find a way to clear buffers anyway (e.g. by issuing a no-op render pass)?
+            warn!("There were unprocessed clear operations in this CommandBuffer. Metal only allows clearing \
+            during pixel target binding, so you must bind targets to a render pass between requesting a clear \
+            and committing the CommandBuffer.");
+            self.rtv_clear.clear();
+            self.dsv_clear.clear();
+        }
+
         self.encoder.end_encoding();
         self.encoder.commit_command_buffer(drawable, false);
         self.encoder.reset();
@@ -189,22 +205,12 @@ impl command::Buffer<Resources> for CommandBuffer {
             if let Some(color) = targets.colors[i] {
                 let attachment = render_pass_descriptor.color_attachments().object_at(i);
                 attachment.set_texture(unsafe { *(color.0) });
-                attachment.set_store_action(MTLStoreAction::Store);
+                attachment.set_store_action(MTLStoreAction::Store); // TODO: Multisample?
 
-                let clear = unsafe { *color.1 };
-
-                if let Some(vals) = clear {
+                if let Entry::Occupied(clear_entry) = self.rtv_clear.entry(color) {
+                    // This attachement will handle the desired clear option
                     attachment.set_load_action(MTLLoadAction::Clear);
-                    attachment.set_clear_color(
-                        MTLClearColor::new(vals[0] as f64 / 255.0,
-                                           vals[1] as f64 / 255.0,
-                                           vals[2] as f64 / 255.0,
-                                           vals[3] as f64 / 255.0)
-                    );
-
-                    // we reset the clear color to give the effect of being a
-                    // "per-frame" operation
-                    unsafe { *color.1 = None; }
+                    attachment.set_clear_color(clear_entry.remove_entry().1);
                 } else {
                     // if no clear has been specified, we simply load the
                     // previous content
@@ -214,27 +220,64 @@ impl command::Buffer<Resources> for CommandBuffer {
         }
 
         if let Some(depth) = targets.depth {
+            let stencil_attachment = if let Some(stencil) = targets.stencil {
+                debug_assert!(depth == stencil, "Depth and stencil targets must be the same if both are present");
+                Some(render_pass_descriptor.stencil_attachment())
+            } else {
+                None
+            };
+
             let attachment = render_pass_descriptor.depth_attachment();
             attachment.set_texture(unsafe { *(depth.0) });
+            if let Some(stencil_attachment) = stencil_attachment {
+                stencil_attachment.set_texture(unsafe { *(depth.0) });
+            }
 
             if let Some(layer) = depth.1 {
                 attachment.set_slice(layer as u64);
+                if let Some(stencil_attachment) = stencil_attachment {
+                    stencil_attachment.set_slice(layer as u64);
+                }
             }
 
             // do we need to handle any other cases?
             attachment.set_store_action(MTLStoreAction::Store);
+            if let Some(stencil_attachment) = stencil_attachment {
+                stencil_attachment.set_store_action(MTLStoreAction::Store);
+            }
 
-            let clear = unsafe { *depth.2 };
+            if let Entry::Occupied(mut clear_entry) = self.dsv_clear.entry(depth) {
+                if let Some(depth_value) = clear_entry.get().0 {
+                    attachment.set_load_action(MTLLoadAction::Clear);
+                    attachment.set_clear_depth(depth_value as f64);
+                } else {
+                     attachment.set_load_action(MTLLoadAction::Load);
+                }
 
-            if let Some(val) = clear {
-                attachment.set_load_action(MTLLoadAction::Clear);
-                attachment.set_clear_depth(val as f64);
-
-                // same here, clear should not be persistent across frames
-                unsafe { *depth.2 = None; }
+                // It may be the case that we have a stencil clear command for this buffer
+                // queued but a stencil attachment is not requested. In that case, the 
+                // stencil clear must be preserved for future attachments, but the depth 
+                // clear has been processed already and must be removed.
+                if let Some(stencil_value) = clear_entry.get().1 {
+                    if let Some(stencil_attachment) = stencil_attachment {
+                        stencil_attachment.set_load_action(MTLLoadAction::Clear);
+                        stencil_attachment.set_clear_stencil(stencil_value as u32);
+                        clear_entry.remove();
+                    } else {
+                        clear_entry.get_mut().0 = None;
+                    }
+                } else {
+                    if let Some(stencil_attachment) = stencil_attachment {
+                        stencil_attachment.set_load_action(MTLLoadAction::Load);
+                    }
+                    clear_entry.remove();
+                }
             } else {
                 // see above
                 attachment.set_load_action(MTLLoadAction::Load);
+                if let Some(stencil_attachment) = stencil_attachment {
+                    stencil_attachment.set_load_action(MTLLoadAction::Load);
+                }
             }
         }
 
@@ -270,7 +313,7 @@ impl command::Buffer<Resources> for CommandBuffer {
 
     fn set_ref_values(&mut self, vals: state::RefValues) {
         // FIXME: wrong types?
-        // self.encoder.set_stencil_front_back_reference_value(vals.stencil.0, vals.stencil.1);
+        self.encoder.set_stencil_front_back_reference_value(vals.stencil.0 as u32, vals.stencil.1 as u32);
 
         // TODO: blend/stencil
     }
@@ -300,7 +343,7 @@ impl command::Buffer<Resources> for CommandBuffer {
                 *(buf.0).0 = self.device.new_buffer_with_data(
                     data.as_ptr() as _,
                     data.len() as _,
-                    unimplemented!());//map_buffer_usage(buf.1));
+                    map_buffer_usage(buf.1, buf.2));
 
                 // invalidate old buffer in cache
                 self.encoder.invalidate_buffer(b);
@@ -349,23 +392,24 @@ impl command::Buffer<Resources> for CommandBuffer {
     }
 
     fn clear_color(&mut self, target: Rtv, value: command::ClearColor) {
-        match value {
-            command::ClearColor::Float(val) => {
-                unsafe {
-                    *target.1 = Some([(val[0] * 255.0) as u8,
-                                      (val[1] * 255.0) as u8,
-                                      (val[2] * 255.0) as u8,
-                                      (val[3] * 255.0) as u8]);
-                }
-            },
-            _ => { unimplemented!(); }
-        }
+        let double_value = match value {
+            command::ClearColor::Float(val) => MTLClearColor::new(val[0] as f64, val[1] as f64, val[2] as f64, val[3] as f64),
+            command::ClearColor::Int(val) => MTLClearColor::new(val[0] as f64, val[1] as f64, val[2] as f64, val[3] as f64),
+            command::ClearColor::Uint(val) => MTLClearColor::new(val[0] as f64, val[1] as f64, val[2] as f64, val[3] as f64),
+        };
+
+        self.rtv_clear.insert(target, double_value);
     }
 
     fn clear_depth_stencil(&mut self, target: Dsv,
                            depth: Option<target::Depth>, stencil: Option<target::Stencil>) {
-        unsafe {
-            *target.2 = Some(depth.unwrap_or_default());
+        match self.dsv_clear.entry(target) {
+            Entry::Occupied(mut entry) => { 
+                let new_depth = depth.or(entry.get().0);
+                let new_stencil = stencil.or(entry.get().1);
+                entry.insert((new_depth, new_stencil)); 
+            },
+            Entry::Vacant(entry) => { entry.insert((depth, stencil)); },
         }
     }
 
