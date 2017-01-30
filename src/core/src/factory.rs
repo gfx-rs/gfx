@@ -255,12 +255,16 @@ pub trait Factory<R: Resources> {
     fn create_sampler(&mut self, texture::SamplerInfo) -> handle::Sampler<R>;
 
     /// Acquire a mapping Reader
+    ///
+    /// Any access overlap will panic (including device access during submission)
     fn read_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<R, T>)
                                -> Result<mapping::Reader<'b, R, T>,
                                          mapping::Error>
         where T: Copy;
 
     /// Acquire a mapping Writer
+    ///
+    /// Any access overlap will panic (including device access during submission)
     fn write_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<R, T>)
                                 -> Result<mapping::Writer<'b, R, T>,
                                           mapping::Error>

@@ -52,9 +52,12 @@ impl<R: Resources> Raw<R> {
     }
 
     /// Lock the current buffer mapping
+    ///
+    /// Panics if it was already locked
     #[doc(hidden)]
     pub fn lock_mapping(&self) -> Option<MutexGuard<R::Mapping>> {
-        self.mapping.as_ref().map(|m| m.lock().unwrap())
+        self.mapping.as_ref()
+            .map(|m| m.try_lock().expect("buffer mapping access overlap"))
     }
 
     /// Get the number of elements in the buffer.
