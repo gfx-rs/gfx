@@ -34,8 +34,7 @@ use native::{Rtv, Srv, Dsv};
 use metal::*;
 
 use std::ptr;
-use std::collections::HashMap;
-use std::collections::hash_map::Entry;
+use std::collections::hash_map::{HashMap, Entry};
 
 pub struct CommandBuffer {
     queue: MTLCommandQueue,
@@ -207,10 +206,10 @@ impl command::Buffer<Resources> for CommandBuffer {
                 attachment.set_texture(unsafe { *(color.0) });
                 attachment.set_store_action(MTLStoreAction::Store); // TODO: Multisample?
 
-                if let Entry::Occupied(clear_entry) = self.rtv_clear.entry(color) {
+                if let Some(clear_color) = self.rtv_clear.remove(&color) {
                     // This attachement will handle the desired clear option
                     attachment.set_load_action(MTLLoadAction::Clear);
-                    attachment.set_clear_color(clear_entry.remove_entry().1);
+                    attachment.set_clear_color(clear_color);
                 } else {
                     // if no clear has been specified, we simply load the
                     // previous content
