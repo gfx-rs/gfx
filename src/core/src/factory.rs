@@ -80,6 +80,8 @@ pub enum TargetViewError {
     Channel(format::ChannelType),
     /// The backend was refused for some reason.
     Unsupported,
+    /// The RTV cannot be changed due to the references to it existing.
+    NotDetached
 }
 
 impl fmt::Display for TargetViewError {
@@ -107,6 +109,8 @@ impl Error for TargetViewError {
                 "Selected channel type is not supported for this texture",
             TargetViewError::Unsupported =>
                 "The backend was refused for some reason",
+            TargetViewError::NotDetached =>
+                "The RTV cannot be changed due to the references to it existing",    
         }
     }
 

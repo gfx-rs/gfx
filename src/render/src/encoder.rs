@@ -144,7 +144,7 @@ impl<T: Any + fmt::Debug + fmt::Display> Error for UpdateError<T> {
 pub struct Encoder<R: Resources, C> {
     command_buffer: C,
     raw_pso_data: pso::RawDataSet<R>,
-    access_info: pso::AccessInfo<R>,
+    access_info: command::AccessInfo<R>,
     handles: handle::Manager<R>,
 }
 
@@ -153,7 +153,7 @@ impl<R: Resources, C> From<C> for Encoder<R, C> {
         Encoder {
             command_buffer: combuf,
             raw_pso_data: pso::RawDataSet::new(),
-            access_info: pso::AccessInfo::new(),
+            access_info: command::AccessInfo::new(),
             handles: handle::Manager::new(),
         }
     }
@@ -186,6 +186,7 @@ impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
         if !dst.get_info().bind.contains(memory::TRANSFER_DST) {
             return Err(CopyError::NoDstBindFlag);
         }
+
         let size_bytes = mem::size_of::<T>() * size;
         let src_offset_bytes = mem::size_of::<T>() * src_offset;
         let src_copy_end = src_offset_bytes + size_bytes;
@@ -213,13 +214,9 @@ impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
                 size: size_bytes,
             });
         }
-        // TODO: should we use an HashSet instead of a Vec ?
-        if src.raw().is_mapped() {
-            self.access_info.mapped_reads.push(src.raw().clone());
-        }
-        if dst.raw().is_mapped() {
-            self.access_info.mapped_writes.push(dst.raw().clone());
-        }
+        self.access_info.buffer_read(src.raw());
+        self.access_info.buffer_write(dst.raw());
+
         self.command_buffer.copy_buffer(
             self.handles.ref_buffer(src.raw()).clone(),
             self.handles.ref_buffer(dst.raw()).clone(),
@@ -308,6 +305,7 @@ impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
     fn draw_indexed<T>(&mut self, buf: &handle::Buffer<R, T>, ty: IndexType,
                     slice: &slice::Slice<R>, base: VertexCount,
                     instances: Option<command::InstanceParams>) {
+        self.access_info.buffer_read(buf.raw());
         self.command_buffer.bind_index(self.handles.ref_buffer(buf.raw()).clone(), ty);
         self.command_buffer.call_draw_indexed(slice.start, slice.end - slice.start, base, instances);
     }

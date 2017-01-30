@@ -49,9 +49,7 @@ use std::error::Error;
 use std::fmt;
 use core as c;
 pub use core::pso::Descriptor;
-
-#[doc(hidden)]
-pub type AccessInfo<R> = c::pso::AccessInfo<R>;
+pub use core::command::AccessInfo;
 
 /// A complete set of raw data that needs to be specified at run-time
 /// whenever we draw something with a PSO. This is what "data" struct

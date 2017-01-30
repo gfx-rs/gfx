@@ -16,7 +16,8 @@
 //! outside of the graphics development environment.
 
 use {Capabilities, Device, Resources, IndexType, VertexCount};
-use {state, target, command, handle, mapping, pso, shade, texture};
+use {state, target, handle, mapping, pso, shade, texture};
+use command::{self, AccessInfo};
 
 /// Dummy device which does minimal work, just to allow testing
 /// gfx-rs apps for compilation.
@@ -119,11 +120,11 @@ impl Device for DummyDevice {
     }
     fn pin_submitted_resources(&mut self, _: &handle::Manager<DummyResources>) {}
     fn submit(&mut self, _: &mut DummyCommandBuffer,
-                         _: &pso::AccessInfo<Self::Resources>) {}
+                         _: &AccessInfo<Self::Resources>) {}
 
     fn fenced_submit(&mut self,
                      _: &mut Self::CommandBuffer,
-                     _: &pso::AccessInfo<Self::Resources>,
+                     _: &AccessInfo<Self::Resources>,
                      _after: Option<handle::Fence<Self::Resources>>)
                      -> handle::Fence<Self::Resources> {
         unimplemented!()

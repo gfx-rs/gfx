@@ -126,4 +126,4 @@ You may want to inspect `<my_dir>/gfx/Cargo.toml` for other modules typically us
 ## Note
 
 gfx is still in development. API may change with new backends/features to be implemented.
-If you are interested in helping out, please contact the developers on [Gitter](https://gitter.im/gfx-rs/gfx).
+If you are interested in helping out, checkout [contrib.md](info/contrib.md) and do not hesitate to contact the developers on [Gitter](https://gitter.im/gfx-rs/gfx).

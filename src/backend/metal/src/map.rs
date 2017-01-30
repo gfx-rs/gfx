@@ -104,6 +104,13 @@ pub fn map_topology(primitive: Primitive) -> MTLPrimitiveTopologyClass {
         Primitive::LineStrip |
         Primitive::TriangleStrip |
         Primitive::PatchList(_) => MTLPrimitiveTopologyClass::Unspecified,
+
+        // Metal does not support geometry shaders and hence does not support
+        // adjacency primitives
+        Primitive::LineListAdjacency |
+        Primitive::LineStripAdjacency |
+        Primitive::TriangleListAdjacency |
+        Primitive::TriangleStripAdjacency => MTLPrimitiveTopologyClass::Unspecified,
     }
 }
 

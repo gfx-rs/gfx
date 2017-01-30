@@ -14,8 +14,9 @@
 
 //! Command Buffer device interface
 
+use std::collections::hash_set::{self, HashSet};
 use {Resources, IndexType, InstanceCount, VertexCount};
-use {state, target, pso, shade, texture};
+use {state, target, pso, shade, texture, handle};
 
 /// A universal clear color supporting integet formats
 /// as well as the standard floating-point.
@@ -120,3 +121,63 @@ impl From<u32> for ClearColor {
         ClearColor::Uint([v, 0, 0, 0])
     }
 }
+
+/// Informations about what is accessed by a bunch of commands.
+#[derive(Debug)]
+pub struct AccessInfo<R: Resources> {
+    mapped_reads: HashSet<handle::RawBuffer<R>>,
+    mapped_writes: HashSet<handle::RawBuffer<R>>,
+}
+
+impl<R: Resources> AccessInfo<R> {
+    /// Creates empty access informations
+    pub fn new() -> Self {
+        AccessInfo {
+            mapped_reads: HashSet::new(),
+            mapped_writes: HashSet::new(),
+        }
+    }
+
+    /// Clear access informations
+    pub fn clear(&mut self) {
+        self.mapped_reads.clear();
+        self.mapped_writes.clear();
+    }
+
+    /// Register a buffer read access
+    pub fn buffer_read(&mut self, buffer: &handle::RawBuffer<R>) {
+        if buffer.is_mapped() {
+            self.mapped_reads.insert(buffer.clone());
+        }
+    }
+
+    /// Register a buffer write access
+    pub fn buffer_write(&mut self, buffer: &handle::RawBuffer<R>) {
+        if buffer.is_mapped() {
+            self.mapped_writes.insert(buffer.clone());
+        }
+    }
+
+    /// Returns the mapped buffers that The GPU will read from
+    pub fn mapped_reads(&self) -> AccessInfoBuffers<R> {
+        self.mapped_reads.iter()
+    }
+
+    /// Returns the mapped buffers that The GPU will write to
+    pub fn mapped_writes(&self) -> AccessInfoBuffers<R> {
+        self.mapped_writes.iter()
+    }
+
+    /// Is there any mapped buffer reads ?
+    pub fn has_mapped_reads(&self) -> bool {
+        !self.mapped_reads.is_empty()
+    }
+
+    /// Is there any mapped buffer writes ?
+    pub fn has_mapped_writes(&self) -> bool {
+        !self.mapped_writes.is_empty()
+    }
+}
+
+#[allow(missing_docs)]
+pub type AccessInfoBuffers<'a, R> = hash_set::Iter<'a, handle::RawBuffer<R>>;

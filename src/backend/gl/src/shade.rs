@@ -227,7 +227,9 @@ fn query_blocks(gl: &gl::Gl, caps: &c::Capabilities, prog: super::Program,
     // `layout(binding = n)`
     let explicit_binding = bindings.iter().any(|&i| i > 0);
 
-    let max_len = get_program_iv(gl, prog, gl::ACTIVE_UNIFORM_MAX_LENGTH);
+    // Some implementations seem to return the length of the uniform name without
+    // null termination. Therefore we allocate an extra byte here.
+    let max_len = get_program_iv(gl, prog, gl::ACTIVE_UNIFORM_MAX_LENGTH) + 1;
     let mut el_name = String::with_capacity(max_len as usize);
     el_name.extend(repeat('\0').take(max_len as usize));
 
@@ -522,7 +524,7 @@ pub fn create_program(gl: &gl::Gl, caps: &c::Capabilities, private: &PrivateCaps
 
         Ok((name, info))
     } else {
-        Err(log)
+        Err(log.into())
     }
 }
 

@@ -29,6 +29,10 @@ fn primitive_to_gl(primitive: c::Primitive) -> gl::types::GLenum {
         LineStrip => gl::LINE_STRIP,
         TriangleList => gl::TRIANGLES,
         TriangleStrip => gl::TRIANGLE_STRIP,
+        LineListAdjacency => gl::LINES_ADJACENCY,
+        LineStripAdjacency => gl::LINE_STRIP_ADJACENCY,
+        TriangleListAdjacency => gl::TRIANGLES_ADJACENCY,
+        TriangleStripAdjacency => gl::TRIANGLE_STRIP_ADJACENCY,
         //TriangleFan => gl::TRIANGLE_FAN,
         PatchList(_) => gl::PATCHES
     }
