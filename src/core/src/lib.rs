@@ -27,7 +27,6 @@ extern crate draw_state;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::any::Any;
-use std::slice::Iter;
 
 pub use draw_state::{state, target};
 pub use self::factory::Factory;
@@ -240,35 +239,17 @@ pub trait Device: Sized {
     fn cleanup(&mut self);
 }
 
-
-/// An `Instance` holds per-application state for a specific backend
-pub trait Instance {
-    /// Associated `Adapter` type.
-    type Adapter: Adapter;
-    /// Associated `Surface` type.
-    type Surface: Surface;
-
-    /// Associated native `Window` type.
-    type Window;
-
-    /// Instantiate a new `Instance`, this is our entry point for applications
-    fn create() -> Self;
-
-    /// Enumerate all available adapters supporting this backend 
-    fn enumerate_adapters(&self) -> Vec<Self::Adapter>;
-
-    /// Create a new surface from a native window.
-    fn create_surface(&self, window: &Self::Window) -> Self::Surface;
-}
-
 /// Represents a physical or virtual device, which is capable of running the backend.
-pub trait Adapter {
+pub trait Adapter: Sized {
     /// Associated `CommandQueue` type.
     type CommandQueue: CommandQueue;
     /// Associated `Device` type.
     type Device: Device;
     /// Associated `QueueFamily` type.
     type QueueFamily: QueueFamily;
+
+    /// Enumerate all available adapters supporting this backend 
+    fn enumerate_adapters() -> Vec<Self>;
 
     /// Create a new device and command queues.
     fn open<'a, I>(&self, queue_descs: I) -> (Self::Device, Vec<Self::CommandQueue>)
@@ -278,7 +259,7 @@ pub trait Adapter {
     fn get_info(&self) -> &AdapterInfo;
 
     /// Return the supported queue families for this adapter.
-    fn get_queue_families(&self) -> Iter<Self::QueueFamily>;
+    fn get_queue_families(&self) -> &[Self::QueueFamily];
 }
 
 /// Information about a backend adapater.
@@ -318,6 +299,11 @@ pub trait Surface {
     type CommandQueue: CommandQueue;
     /// Associated `SwapChain` type.
     type SwapChain: SwapChain;
+    /// Associated native `Window` type.
+    type Window;
+
+    /// Create a new surface from a native window.
+    fn from_window(window: &Self::Window) -> Self;
 
     /// Create a new swapchain from the current surface with an associated present queue.
     fn build_swapchain<T: format::RenderFormat>(&self, present_queue: &Self::CommandQueue)
