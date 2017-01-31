@@ -248,8 +248,8 @@ impl core::Factory<Resources> for Factory {
                     .set_pixel_format(MTLPixelFormat::BGRA8Unorm_sRGB);
 
                 // We need fake depth attachments in case explicit writes to the depth buffer are required
-                pso_descriptor.set_depth_attachment_pixel_format(MTLPixelFormat::Depth24Unorm_Stencil8);
-                pso_descriptor.set_stencil_attachment_pixel_format(MTLPixelFormat::Depth24Unorm_Stencil8);
+                pso_descriptor.set_depth_attachment_pixel_format(MTLPixelFormat::Depth32Float_Stencil8);
+                pso_descriptor.set_stencil_attachment_pixel_format(MTLPixelFormat::Depth32Float_Stencil8);
 
                 // TODO: prevent collision between dummy buffers and real
                 //       values
