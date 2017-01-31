@@ -28,7 +28,7 @@ extern crate bit_set;
 use metal::*;
 
 use core::{handle, texture as tex};
-use core::memory::{self, Usage};
+use core::memory::{self, Usage, Bind};
 use core::command::AccessInfo;
 
 use std::cell::RefCell;
@@ -75,18 +75,13 @@ pub mod native {
     unsafe impl Send for Sampler {}
     unsafe impl Sync for Sampler {}
 
-    // HACK(fkaa): Cache the clear color inside the `Rtv` type, since metal
-    //             requires it for the renderpass creation
-    //
-    // FIXME(fkaa): Use f32 for clear color instead? Need to wrap in newtype
-    //              first because no `Eq` or `Hash` for f32..
     #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-    pub struct Rtv(pub *mut MTLTexture, pub *mut Option<[u8; 4]>);
+    pub struct Rtv(pub *mut MTLTexture);
     unsafe impl Send for Rtv {}
     unsafe impl Sync for Rtv {}
 
     #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-    pub struct Dsv(pub *mut MTLTexture, pub Option<u16>, pub *mut Option<f32>);
+    pub struct Dsv(pub *mut MTLTexture, pub Option<u16>);
     unsafe impl Send for Dsv {}
     unsafe impl Sync for Dsv {}
 
@@ -133,7 +128,7 @@ unsafe impl Send for Pipeline {}
 unsafe impl Sync for Pipeline {}
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct Buffer(native::Buffer, Usage);
+pub struct Buffer(native::Buffer, Usage, Bind);
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Texture(native::Texture, Usage);
