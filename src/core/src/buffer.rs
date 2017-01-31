@@ -15,9 +15,8 @@
 //! Memory buffers
 
 use std::error::Error;
-use std::sync::{Mutex, MutexGuard};
 use std::{mem, fmt, cmp, hash};
-use memory;
+use {memory, mapping};
 use Resources;
 
 /// Untyped buffer
@@ -25,7 +24,7 @@ use Resources;
 pub struct Raw<R: Resources> {
     resource: R::Buffer,
     info: Info,
-    mapping: Option<Mutex<R::Mapping>>,
+    mapping: Option<mapping::Raw<R>>,
 }
 
 impl<R: Resources> Raw<R> {
@@ -36,7 +35,7 @@ impl<R: Resources> Raw<R> {
         Raw {
             resource: resource,
             info: info,
-            mapping: mapping.map(|m| Mutex::new(m)),
+            mapping: mapping.map(|m| mapping::Raw::new(m)),
         }
     }
 
@@ -51,13 +50,9 @@ impl<R: Resources> Raw<R> {
         self.mapping.is_some()
     }
 
-    /// Lock the current buffer mapping
-    ///
-    /// Panics if it was already locked
     #[doc(hidden)]
-    pub fn lock_mapping(&self) -> Option<MutexGuard<R::Mapping>> {
+    pub fn mapping(&self) -> Option<&mapping::Raw<R>> {
         self.mapping.as_ref()
-            .map(|m| m.try_lock().expect("buffer mapping access overlap"))
     }
 
     /// Get the number of elements in the buffer.

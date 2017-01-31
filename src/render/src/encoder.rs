@@ -21,7 +21,7 @@ use std::error::Error;
 use std::any::Any;
 use std::{fmt, mem};
 
-use core::{Device, IndexType, Resources, VertexCount};
+use core::{Device, SubmissionResult, IndexType, Resources, VertexCount};
 use core::{command, format, handle, texture};
 use core::memory::{self, cast_slice, Typed, Pod, Usage};
 use slice;
@@ -167,11 +167,23 @@ impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
     /// internal ´CommandBuffer´ will not be sent to the GPU, and as a result they will not be
     /// processed. Calling flush too often however will result in a performance hit. It is
     /// generally recommended to call flush once per frame, when all draw calls have been made. 
-    pub fn flush<D>(&mut self, device: &mut D) where
-        D: Device<Resources=R, CommandBuffer=C>
+    pub fn flush<D>(&mut self, device: &mut D)
+        where D: Device<Resources=R, CommandBuffer=C>
+    {
+        self.flush_no_reset(device).unwrap();
+        self.reset();
+    }
+
+    /// Like `flush` but keeps the encoded commands.
+    pub fn flush_no_reset<D>(&mut self, device: &mut D) -> SubmissionResult<()>
+        where D: Device<Resources=R, CommandBuffer=C>
     {
         device.pin_submitted_resources(&self.handles);
-        device.submit(&mut self.command_buffer, &self.access_info);
+        device.submit(&mut self.command_buffer, &self.access_info)
+    }
+
+    /// Resets the encoded commands.
+    pub fn reset(&mut self) {
         self.command_buffer.reset();
         self.access_info.clear();
         self.handles.clear();

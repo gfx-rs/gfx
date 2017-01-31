@@ -16,9 +16,9 @@ use std::{mem, ptr};
 use std::collections::hash_map::{HashMap, Entry};
 use vk;
 use core::{self, pso, shade, target, texture as tex, handle};
-use core::command::{self, AccessInfo};
+use core::command::{self, AccessInfo, AccessGuard};
 use core::state::RefValues;
-use core::{IndexType, VertexCount};
+use core::{IndexType, VertexCount, SubmissionResult};
 use native;
 use {Resources, Share, SharePointer};
 
@@ -321,12 +321,9 @@ impl GraphicsQueue {
         self.family
     }
 
-    fn ensure_mappings_flushed(&mut self, access: &AccessInfo<Resources>) {
+    fn ensure_mappings_flushed(&mut self, access: &mut AccessGuard<Resources>) {
         let (dev, vk) = self.share.get_device();
-        for buffer in access.mapped_reads() {
-            // TODO: check if the lock needs to be kept longer
-            let mut mapping = buffer.lock_mapping().unwrap();
-
+        for (buffer, mapping) in access.access_mapped_reads() {
             mapping.status.ensure_flushed(|| {
                 let memory_range = vk::MappedMemoryRange {
                     sType: vk::STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
@@ -342,12 +339,9 @@ impl GraphicsQueue {
         }
     }
 
-    fn invalidate_mappings(&mut self, access: &AccessInfo<Resources>) {
+    fn invalidate_mappings(&mut self, access: &mut AccessGuard<Resources>) {
         let (dev, vk) = self.share.get_device();
         for buffer in access.mapped_writes() {
-            // TODO: check if the lock needs to be kept longer
-            let mapping = buffer.lock_mapping().unwrap();
-
             let memory_range = vk::MappedMemoryRange {
                 sType: vk::STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
                 pNext: ptr::null(),
@@ -362,11 +356,9 @@ impl GraphicsQueue {
     }
 
     fn track_mapped_gpu_access(&mut self,
-                               access: &AccessInfo<Resources>,
+                               access: &mut AccessGuard<Resources>,
                                fence: &handle::Fence<Resources>) {
-        for buffer in access.mapped_reads().chain(access.mapped_writes()) {
-            // TODO: check if the lock needs to be kept longer
-            let mut mapping = buffer.lock_mapping().unwrap();
+        for (_, mapping) in access.access_mapped() {
             mapping.status.gpu_access(fence.clone());
         }
     }
@@ -384,7 +376,7 @@ impl core::Device for GraphicsQueue {
 
     fn submit(&mut self,
               com: &mut Buffer,
-              access: &AccessInfo<Resources>)
+              access: &AccessInfo<Resources>) -> SubmissionResult<()>
     {
         assert_eq!(self.family, com.family);
         let share = self.share.clone();
@@ -393,7 +385,8 @@ impl core::Device for GraphicsQueue {
             vk.EndCommandBuffer(com.inner)
         });
 
-        self.ensure_mappings_flushed(access);
+        let mut access = try!(access.take_accesses());
+        self.ensure_mappings_flushed(&mut access);
 
         let submit_info = vk::SubmitInfo {
             sType: vk::STRUCTURE_TYPE_SUBMIT_INFO,
@@ -416,13 +409,14 @@ impl core::Device for GraphicsQueue {
         assert_eq!(vk::SUCCESS, unsafe {
             vk.BeginCommandBuffer(com.inner, &begin_info)
         });
+        Ok(())
     }
 
     fn fenced_submit(&mut self,
                      _: &mut Buffer,
                      _: &AccessInfo<Resources>,
                      _after: Option<handle::Fence<Resources>>)
-                     -> handle::Fence<Resources>
+                     -> SubmissionResult<handle::Fence<Resources>>
     {
         unimplemented!()
     }

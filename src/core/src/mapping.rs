@@ -18,8 +18,9 @@
 
 use std::error::Error as StdError;
 use std::fmt;
+use std::cell::UnsafeCell;
 use std::ops::{Deref, DerefMut};
-use std::sync::MutexGuard;
+use std::sync::atomic::{self, AtomicBool};
 use Resources;
 use {memory, buffer, handle};
 
@@ -39,31 +40,115 @@ pub trait Gate<R: Resources> {
 pub enum Error {
     /// The requested mapping access did not match the expected usage.
     InvalidAccess(memory::Access, memory::Usage),
+    /// The requested mapping access overlaps with another.
+    AccessOverlap,
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::Error::*;
         match *self {
-            Error::InvalidAccess(ref access, ref usage) => {
+            InvalidAccess(ref access, ref usage) => {
                 write!(f, "{}: access = {:?}, usage = {:?}", self.description(), access, usage)
             }
+            AccessOverlap => write!(f, "{}", self.description())
         }
     }
 }
 
 impl StdError for Error {
     fn description(&self) -> &str {
-        "The requested mapping access did not match the expected usage"
+        use self::Error::*;
+        match *self {
+            InvalidAccess(..) => "The requested mapping access did not match the expected usage",
+            AccessOverlap => "The requested mapping access overlaps with another"
+        }
     }
 }
 
-fn valid_access(access: memory::Access, usage: memory::Usage) -> Result<(), Error> {
+#[doc(hidden)]
+#[derive(Debug)]
+pub struct Raw<R: Resources> {
+    resource: UnsafeCell<R::Mapping>,
+    accessible: AtomicBool,
+}
+
+#[doc(hidden)]
+impl<R: Resources> Raw<R> {
+    pub fn new(resource: R::Mapping) -> Self {
+        Raw {
+            resource: UnsafeCell::new(resource),
+            accessible: AtomicBool::new(true),
+        }
+    }
+
+    pub unsafe fn take_access(&self) -> bool {
+        self.accessible.swap(false, atomic::Ordering::Relaxed)
+    }
+
+    pub unsafe fn release_access(&self) {
+        if cfg!(debug) {
+            assert!(self.accessible.swap(true, atomic::Ordering::Relaxed) == false);
+        } else {
+            self.accessible.store(true, atomic::Ordering::Relaxed)
+        }
+    }
+
+    pub unsafe fn use_access(&self) -> &mut R::Mapping {
+        &mut *self.resource.get()
+    }
+}
+
+unsafe impl<R: Resources> Sync for Raw<R> {}
+
+struct Guard<'a, R: Resources> {
+    raw: &'a Raw<R>,
+}
+
+impl<'a, R: Resources> Guard<'a, R> {
+    fn new(raw: &'a Raw<R>) -> Result<Self, Error> {
+        unsafe {
+            if raw.take_access() {
+                Ok(Guard { raw: raw })
+            } else {
+                Err(Error::AccessOverlap)
+            }
+        }
+    }
+}
+
+impl<'a, R: Resources> Deref for Guard<'a, R> {
+    type Target = R::Mapping;
+    fn deref(&self) -> &R::Mapping {
+        unsafe { self.raw.use_access() }
+    }
+}
+
+impl<'a, R: Resources> DerefMut for Guard<'a, R> {
+    fn deref_mut(&mut self) -> &mut R::Mapping {
+        unsafe { self.raw.use_access() }
+    }
+}
+
+impl<'a, R: Resources> Drop for Guard<'a, R> {
+    fn drop(&mut self) {
+        unsafe { self.raw.release_access(); }
+    }
+}
+
+fn take_access_checked<R>(access: memory::Access, buffer: &buffer::Raw<R>)
+                          -> Result<Guard<R>, Error>
+    where R: Resources
+{
+    let usage = buffer.get_info().usage;
     use memory::Usage::*;
     match usage {
-        Upload if access == memory::WRITE => Ok(()),
-        Download if access == memory::READ => Ok(()),
-        _ => Err(Error::InvalidAccess(access, usage)),
+        Upload if access == memory::WRITE => (),
+        Download if access == memory::READ => (),
+        _ => return Err(Error::InvalidAccess(access, usage)),
     }
+
+    Guard::new(buffer.mapping().unwrap())
 }
 
 #[doc(hidden)]
@@ -71,8 +156,7 @@ pub unsafe fn read<R, T, S>(buffer: &buffer::Raw<R>, sync: S)
                             -> Result<Reader<R, T>, Error>
     where R: Resources, T: Copy, S: FnOnce(&mut R::Mapping)
 {
-    try!(valid_access(memory::READ, buffer.get_info().usage));
-    let mut mapping = buffer.lock_mapping().unwrap();
+    let mut mapping = try!(take_access_checked(memory::READ, buffer));
     sync(&mut mapping);
 
     Ok(Reader {
@@ -86,8 +170,7 @@ pub unsafe fn write<R, T, S>(buffer: &buffer::Raw<R>, sync: S)
                              -> Result<Writer<R, T>, Error>
     where R: Resources, T: Copy, S: FnOnce(&mut R::Mapping)
 {
-    try!(valid_access(memory::WRITE, buffer.get_info().usage));
-    let mut mapping = buffer.lock_mapping().unwrap();
+    let mut mapping = try!(take_access_checked(memory::WRITE, buffer));
     sync(&mut mapping);
 
     Ok(Writer {
@@ -99,7 +182,7 @@ pub unsafe fn write<R, T, S>(buffer: &buffer::Raw<R>, sync: S)
 /// Mapping reader
 pub struct Reader<'a, R: Resources, T: 'a + Copy> {
     slice: &'a [T],
-    #[allow(dead_code)] mapping: MutexGuard<'a, R::Mapping>,
+    #[allow(dead_code)] mapping: Guard<'a, R>,
 }
 
 impl<'a, R: Resources, T: 'a + Copy> Deref for Reader<'a, R, T> {
@@ -113,7 +196,7 @@ impl<'a, R: Resources, T: 'a + Copy> Deref for Reader<'a, R, T> {
 /// to read from Writer, it will lead to an undefined behavior. Please do not read from it.
 pub struct Writer<'a, R: Resources, T: 'a + Copy> {
     slice: &'a mut [T],
-    #[allow(dead_code)] mapping: MutexGuard<'a, R::Mapping>,
+    #[allow(dead_code)] mapping: Guard<'a, R>,
 }
 
 impl<'a, R: Resources, T: 'a + Copy> Deref for Writer<'a, R, T> {

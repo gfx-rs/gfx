@@ -273,7 +273,7 @@ pub fn init<T: core::format::RenderFormat>(wb: winit::WindowBuilder)
 
     {
         use core::Device;
-        device.submit(&mut cbuf, &core::command::AccessInfo::new());
+        device.submit(&mut cbuf, &core::command::AccessInfo::new()).unwrap();
     }
 
     let win = Window {

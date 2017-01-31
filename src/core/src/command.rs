@@ -14,8 +14,10 @@
 
 //! Command Buffer device interface
 
+use std::ops::Deref;
 use std::collections::hash_set::{self, HashSet};
-use {Resources, IndexType, InstanceCount, VertexCount};
+use {Resources, IndexType, InstanceCount, VertexCount,
+     SubmissionResult, SubmissionError};
 use {state, target, pso, shade, texture, handle};
 
 /// A universal clear color supporting integet formats
@@ -177,7 +179,99 @@ impl<R: Resources> AccessInfo<R> {
     pub fn has_mapped_writes(&self) -> bool {
         !self.mapped_writes.is_empty()
     }
+
+    /// Takes all the accesses necessary for submission
+    pub fn take_accesses(&self) -> SubmissionResult<AccessGuard<R>> {
+        for buffer in self.mapped_reads().chain(self.mapped_writes()) {
+            unsafe {
+                if !buffer.mapping().unwrap().take_access() {
+                    return Err(SubmissionError::AccessOverlap);
+                }
+            }
+        }
+        Ok(AccessGuard { inner: self })
+    }
 }
 
 #[allow(missing_docs)]
 pub type AccessInfoBuffers<'a, R> = hash_set::Iter<'a, handle::RawBuffer<R>>;
+
+#[allow(missing_docs)]
+pub struct AccessGuard<'a, R: Resources> {
+    inner: &'a AccessInfo<R>,
+}
+
+#[allow(missing_docs)]
+impl<'a, R: Resources> AccessGuard<'a, R> {
+    /// Returns the mapped buffers that The GPU will read from,
+    /// with exclusive acces to their mapping
+    pub fn access_mapped_reads(&mut self) -> AccessGuardBuffers<R> {
+        AccessGuardBuffers {
+            buffers: self.inner.mapped_reads()
+        }
+    }
+
+    /// Returns the mapped buffers that The GPU will write to,
+    /// with exclusive acces to their mapping
+    pub fn access_mapped_writes(&mut self) -> AccessGuardBuffers<R> {
+        AccessGuardBuffers {
+            buffers: self.inner.mapped_writes()
+        }
+    }
+
+    pub fn access_mapped(&mut self) -> AccessGuardBuffersChain<R> {
+        AccessGuardBuffersChain {
+            fst: self.inner.mapped_reads(),
+            snd: self.inner.mapped_writes(),
+        }
+    }
+}
+
+impl<'a, R: Resources> Deref for AccessGuard<'a, R> {
+    type Target = AccessInfo<R>;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<'a, R: Resources> Drop for AccessGuard<'a, R> {
+    fn drop(&mut self) {
+        for buffer in self.inner.mapped_reads().chain(self.inner.mapped_writes()) {
+            unsafe {
+                buffer.mapping().unwrap().release_access();
+            }
+        }
+    }
+}
+
+#[allow(missing_docs)]
+pub struct AccessGuardBuffers<'a, R: Resources> {
+    buffers: AccessInfoBuffers<'a, R>
+}
+
+impl<'a, R: Resources> Iterator for AccessGuardBuffers<'a, R> {
+    type Item = (&'a handle::RawBuffer<R>, &'a mut R::Mapping);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.buffers.next().map(|buffer| unsafe {
+            (buffer, buffer.mapping().unwrap().use_access())
+        })
+    }
+}
+
+#[allow(missing_docs)]
+pub struct AccessGuardBuffersChain<'a, R: Resources> {
+    fst: AccessInfoBuffers<'a, R>,
+    snd: AccessInfoBuffers<'a, R>
+}
+
+impl<'a, R: Resources> Iterator for AccessGuardBuffersChain<'a, R> {
+    type Item = (&'a handle::RawBuffer<R>, &'a mut R::Mapping);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.fst.next().or_else(|| self.snd.next())
+            .map(|buffer| unsafe {
+                (buffer, buffer.mapping().unwrap().use_access())
+            })
+    }
+}

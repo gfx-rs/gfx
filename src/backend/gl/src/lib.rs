@@ -761,26 +761,27 @@ impl Device {
         }
     }
 
-    fn before_submit(&mut self, gpu_access: &com::AccessInfo<Resources>) {
+    fn before_submit<'a>(&mut self, gpu_access: &'a com::AccessInfo<Resources>)
+                         -> c::SubmissionResult<com::AccessGuard<'a, Resources>> {
+        let mut gpu_access = try!(gpu_access.take_accesses());
         if self.share.private_caps.buffer_storage_supported {
             // MappingKind::Persistent
-            self.ensure_mappings_flushed(gpu_access);
+            self.ensure_mappings_flushed(&mut gpu_access);
         } else {
             // MappingKind::Temporary
-            self.ensure_mappings_unmapped(gpu_access);
+            self.ensure_mappings_unmapped(&mut gpu_access);
         }
+        Ok(gpu_access)
     }
 
     // MappingKind::Persistent
-    fn ensure_mappings_flushed(&mut self, gpu_access: &com::AccessInfo<Resources>) {
+    fn ensure_mappings_flushed(&mut self, gpu_access: &mut com::AccessGuard<Resources>) {
         let gl = &self.share.context;
-        for buffer in gpu_access.mapped_reads() {
-            let mut mapping = buffer.lock_mapping().unwrap();
-
+        for (buffer, mapping) in gpu_access.access_mapped_reads() {
             let target = factory::role_to_target(buffer.get_info().role);
             let status = match &mut mapping.kind {
                 &mut MappingKind::Persistent(ref mut status) => status,
-                _ => panic!("expected persistent mapping"),
+                _ => unreachable!(),
             };
 
             status.ensure_flushed(|| unsafe {
@@ -792,10 +793,8 @@ impl Device {
     }
 
     // MappingKind::Temporary
-    fn ensure_mappings_unmapped(&mut self, gpu_access: &com::AccessInfo<Resources>) {
-        for buffer in gpu_access.mapped_reads().chain(gpu_access.mapped_writes()) {
-            let mut mapping = buffer.lock_mapping().unwrap();
-
+    fn ensure_mappings_unmapped(&mut self, gpu_access: &mut com::AccessGuard<Resources>) {
+        for (buffer, mapping) in gpu_access.access_mapped() {
             let target = factory::role_to_target(buffer.get_info().role);
             factory::temporary_ensure_unmapped(&mut mapping.pointer,
                                                target,
@@ -804,8 +803,8 @@ impl Device {
         }
     }
 
-    fn after_submit(&mut self, gpu_access: &com::AccessInfo<Resources>)
-                               -> Option<handle::Fence<Resources>>
+    fn after_submit(&mut self, gpu_access: &mut com::AccessGuard<Resources>)
+                    -> Option<handle::Fence<Resources>>
     {
         if self.share.private_caps.buffer_storage_supported {
             // MappingKind::Persistent
@@ -844,15 +843,12 @@ impl Device {
 
     // MappingKind::Persistent
     fn track_mapped_gpu_access(&mut self,
-                               gpu_access: &com::AccessInfo<Resources>,
+                               gpu_access: &mut com::AccessGuard<Resources>,
                                fence: &handle::Fence<Resources>) {
-        for buffer in gpu_access.mapped_reads().chain(gpu_access.mapped_writes()) {
-            let mut mapping = buffer.lock_mapping()
-                .expect("user error: mapping still in use on submit");
-
+        for (_, mapping) in gpu_access.access_mapped() {
             let status = match &mut mapping.kind {
                 &mut MappingKind::Persistent(ref mut status) => status,
-                _ => panic!("expected persistent mapping"),
+                _ => unreachable!(),
             };
             status.gpu_access(fence.clone());
         }
@@ -878,17 +874,21 @@ impl c::Device for Device {
         }
     }
 
-    fn submit(&mut self, cb: &mut command::CommandBuffer,
-                         access: &com::AccessInfo<Resources>) {
-        self.before_submit(access);
+    fn submit(&mut self,
+              cb: &mut command::CommandBuffer,
+              access: &com::AccessInfo<Resources>) -> c::SubmissionResult<()>
+    {
+        let mut access = try!(self.before_submit(access));
         self.no_fence_submit(cb);
-        self.after_submit(access);
+        self.after_submit(&mut access);
+        Ok(())
     }
 
     fn fenced_submit(&mut self,
                      cb: &mut command::CommandBuffer,
                      access: &com::AccessInfo<Resources>,
-                     after: Option<handle::Fence<Resources>>) -> handle::Fence<Resources> {
+                     after: Option<handle::Fence<Resources>>)
+                     -> c::SubmissionResult<handle::Fence<Resources>> {
 
         if let Some(fence) = after {
             let f = self.frame_handles.ref_fence(&fence);
@@ -898,10 +898,10 @@ impl c::Device for Device {
             unsafe { self.share.context.WaitSync(f.0, 0, timeout); }
         }
 
-        self.before_submit(access);
+        let mut access = try!(self.before_submit(access));
         self.no_fence_submit(cb);
-        let fence_opt = self.after_submit(access);
-        fence_opt.unwrap_or_else(|| self.place_fence())
+        let fence_opt = self.after_submit(&mut access);
+        Ok(fence_opt.unwrap_or_else(|| self.place_fence()))
     }
 
     fn wait_fence(&mut self, fence: &handle::Fence<Self::Resources>) {
@@ -914,7 +914,9 @@ impl c::Device for Device {
         self.frame_handles.clear();
         self.share.handles.borrow_mut().clean_with(&mut &self.share.context,
             |gl, buffer| {
-                buffer.lock_mapping().map(|mut mapping| {
+                buffer.mapping().map(|raw| {
+                    // we have exclusive access because it's the last reference
+                    let mapping = unsafe { raw.use_access() };
                     match mapping.kind {
                         MappingKind::Persistent(_) => (),
                         MappingKind::Temporary => {

@@ -28,8 +28,9 @@ extern crate bit_set;
 use metal::*;
 
 use core::{handle, texture as tex};
+use core::SubmissionResult;
 use core::memory::{self, Usage, Bind};
-use core::command::AccessInfo;
+use core::command::{AccessInfo, AccessGuard};
 
 use std::cell::RefCell;
 use std::sync::Arc;
@@ -201,15 +202,19 @@ impl core::Device for Device {
         }
     }
 
-    fn submit(&mut self, cb: &mut command::CommandBuffer, _: &AccessInfo<Resources>) {
+    fn submit(&mut self,
+              cb: &mut command::CommandBuffer,
+              access: &AccessInfo<Resources>) -> SubmissionResult<()> {
+        let _guard = try!(access.take_accesses());
         cb.commit(unsafe { *self.drawable });
+        Ok(())
     }
 
     fn fenced_submit(&mut self,
                      _: &mut Self::CommandBuffer,
                      _: &AccessInfo<Resources>,
                      _after: Option<handle::Fence<Resources>>)
-                     -> handle::Fence<Resources> {
+                     -> SubmissionResult<handle::Fence<Resources>> {
         unimplemented!()
     }
 

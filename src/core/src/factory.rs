@@ -256,7 +256,7 @@ pub trait Factory<R: Resources> {
 
     /// Acquire a mapping Reader
     ///
-    /// Any access overlap will panic (including device access during submission)
+    /// See `write_mapping` for more information.
     fn read_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<R, T>)
                                -> Result<mapping::Reader<'b, R, T>,
                                          mapping::Error>
@@ -264,7 +264,11 @@ pub trait Factory<R: Resources> {
 
     /// Acquire a mapping Writer
     ///
-    /// Any access overlap will panic (including device access during submission)
+    /// While holding this writer, you hold CPU-side exclusive access.
+    /// Any access overlap will result in an error.
+    /// Submitting commands involving this buffer to the device
+    /// implicitly requires exclusive access. Additionally,
+    /// further access will be stalled until execution completion.
     fn write_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<R, T>)
                                 -> Result<mapping::Writer<'b, R, T>,
                                           mapping::Error>
