@@ -24,7 +24,8 @@ extern crate log;
 extern crate draw_state;
 //extern crate num;
 
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
+use std::error::Error;
 use std::hash::Hash;
 use std::any::Any;
 
@@ -205,6 +206,33 @@ pub trait Resources:          Clone + Hash + Debug + Eq + PartialEq + Any {
     type Mapping:             Hash + Debug + Eq + PartialEq + Any + Send + Sync + mapping::Gate<Self>;
 }
 
+#[derive(Clone, Debug, PartialEq)]
+#[allow(missing_docs)]
+pub enum SubmissionError {
+    AccessOverlap,
+}
+
+impl fmt::Display for SubmissionError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::SubmissionError::*;
+        match *self {
+            AccessOverlap => write!(f, "{}", self.description()),
+        }
+    }
+}
+
+impl Error for SubmissionError {
+    fn description(&self) -> &str {
+        use self::SubmissionError::*;
+        match *self {
+            AccessOverlap => "A resource access overlaps with another"
+        }
+    }
+}
+
+#[allow(missing_docs)]
+pub type SubmissionResult<T> = Result<T, SubmissionError>;
+
 /// A `Device` is responsible for submitting `CommandBuffer`s to the GPU. 
 pub trait Device: Sized {
     /// Associated `Resources` type.
@@ -220,9 +248,10 @@ pub trait Device: Sized {
     fn pin_submitted_resources(&mut self, &handle::Manager<Self::Resources>);
 
     /// Submits a `CommandBuffer` to the GPU for execution.
-
-    fn submit(&mut self, &mut Self::CommandBuffer,
-                         access: &command::AccessInfo<Self::Resources>);
+    fn submit(&mut self,
+              &mut Self::CommandBuffer,
+              access: &command::AccessInfo<Self::Resources>)
+              -> SubmissionResult<()>;
 
     /// Submits a `CommandBuffer` to the GPU for execution.
     /// returns a fence that is signaled after the GPU has executed all commands
@@ -230,7 +259,7 @@ pub trait Device: Sized {
                      &mut Self::CommandBuffer,
                      access: &command::AccessInfo<Self::Resources>,
                      after: Option<handle::Fence<Self::Resources>>)
-                     -> handle::Fence<Self::Resources>;
+                     -> SubmissionResult<handle::Fence<Self::Resources>>;
 
     /// Stalls the current thread until the fence is satisfied
     fn wait_fence(&mut self, &handle::Fence<Self::Resources>);

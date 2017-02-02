@@ -255,12 +255,20 @@ pub trait Factory<R: Resources> {
     fn create_sampler(&mut self, texture::SamplerInfo) -> handle::Sampler<R>;
 
     /// Acquire a mapping Reader
+    ///
+    /// See `write_mapping` for more information.
     fn read_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<R, T>)
                                -> Result<mapping::Reader<'b, R, T>,
                                          mapping::Error>
         where T: Copy;
 
     /// Acquire a mapping Writer
+    ///
+    /// While holding this writer, you hold CPU-side exclusive access.
+    /// Any access overlap will result in an error.
+    /// Submitting commands involving this buffer to the device
+    /// implicitly requires exclusive access. Additionally,
+    /// further access will be stalled until execution completion.
     fn write_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<R, T>)
                                 -> Result<mapping::Writer<'b, R, T>,
                                           mapping::Error>

@@ -15,7 +15,7 @@
 //! Dummy backend implementation to test the code for compile errors
 //! outside of the graphics development environment.
 
-use {Capabilities, Device, Resources, IndexType, VertexCount};
+use {Capabilities, Device, SubmissionResult, Resources, IndexType, VertexCount};
 use {state, target, handle, mapping, pso, shade, texture};
 use command::{self, AccessInfo};
 
@@ -119,14 +119,18 @@ impl Device for DummyDevice {
         &self.capabilities
     }
     fn pin_submitted_resources(&mut self, _: &handle::Manager<DummyResources>) {}
-    fn submit(&mut self, _: &mut DummyCommandBuffer,
-                         _: &AccessInfo<Self::Resources>) {}
+    fn submit(&mut self,
+              _: &mut DummyCommandBuffer,
+              _: &AccessInfo<Self::Resources>)
+              -> SubmissionResult<()> {
+        unimplemented!()
+    }
 
     fn fenced_submit(&mut self,
                      _: &mut Self::CommandBuffer,
                      _: &AccessInfo<Self::Resources>,
                      _after: Option<handle::Fence<Self::Resources>>)
-                     -> handle::Fence<Self::Resources> {
+                     -> SubmissionResult<handle::Fence<Self::Resources>> {
         unimplemented!()
     }
 
