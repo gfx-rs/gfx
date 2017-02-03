@@ -16,12 +16,11 @@
 extern crate log;
 extern crate sdl2;
 extern crate gfx_core as core;
-extern crate gfx_device_gl as device_gl;
+extern crate gfx_device_gl;
 
 use core::handle;
-use core::format::{Format, SurfaceType, DepthStencil, RenderFormat, Srgb};
-use core::memory::Typed;
-use device_gl::Resources;
+use core::format::{ChannelType, DepthFormat, Format, RenderFormat};
+pub use gfx_device_gl::{Device, Factory, Resources};
 use sdl2::video::{DisplayMode, GLContext, Window, WindowBuilder, WindowBuildError};
 use sdl2::pixels::PixelFormatEnum;
 
@@ -44,8 +43,7 @@ impl From<WindowBuildError> for InitError {
     }
 }
 
-fn sdl2_pixel_format_from_gfx(format: Format) -> Option<PixelFormatEnum>
-{
+fn sdl2_pixel_format_from_gfx(format: Format) -> Option<PixelFormatEnum> {
     use core::format::SurfaceType::*;
     use sdl2::pixels::PixelFormatEnum as SdlFmt;
 
@@ -68,8 +66,11 @@ fn sdl2_pixel_format_from_gfx(format: Format) -> Option<PixelFormatEnum>
     }
 }
 
+pub type InitRawOk = (Window, GLContext, Device, Factory,
+    handle::RawRenderTargetView<Resources>, handle::RawDepthStencilView<Resources>);
+
 pub type InitOk<Cf, Df> =
-    (Window, GLContext, device_gl::Device, device_gl::Factory,
+    (Window, GLContext, Device, Factory,
      handle::RenderTargetView<Resources, Cf>,
      handle::DepthStencilView<Resources, Df>);
 
@@ -84,40 +85,56 @@ pub type InitOk<Cf, Df> =
 /// fn main() {
 ///     let sdl = sdl2::init().unwrap();
 ///
-///     let mut builder = sdl.video().unwrap().window("Example", 800, 600);
+///     let builder = sdl.video().unwrap().window("Example", 800, 600);
 ///     let (window, glcontext, device, factory, color_view, depth_view) =
-///         gfx_window_sdl::init(&mut builder).expect("gfx_window_sdl::init failed!");
+///         gfx_window_sdl::init(builder).expect("gfx_window_sdl::init failed!");
 ///
 ///     // some code...
 /// }
 /// ```
-pub fn init<Cf>(builder: &mut WindowBuilder) -> Result<InitOk<Cf, DepthStencil>, InitError>
+pub fn init<Cf, Df>(builder: WindowBuilder) -> Result<InitOk<Cf, Df>, InitError>
 where
-    Cf: RenderFormat<Channel = Srgb>,
+    Cf: RenderFormat,
+    Df: DepthFormat,
 {
-    // TODO: Support different color channel types and/or other depth formats if possible
+    use core::memory::Typed;
+    init_raw(builder, Cf::get_format(), Df::get_format())
+        .map(|(w, gl, d, f, color_view, ds_view)|
+            (w, gl, d, f, Typed::new(color_view), Typed::new(ds_view)))
+}
+
+pub fn init_raw(mut builder: WindowBuilder, cf: Format, df: Format)
+                -> Result<InitRawOk, InitError> {
     use core::texture::{AaMode, Size};
 
     let mut window = builder.opengl().build()?;
 
     let display_mode = DisplayMode {
-        format: sdl2_pixel_format_from_gfx(Cf::get_format())
+        format: sdl2_pixel_format_from_gfx(cf)
                     .ok_or(InitError::PixelFormatUnsupportedError)?,
         ..window.display_mode()?
     };
     window.set_display_mode((Some(display_mode)))?;
-    window.subsystem().gl_attr().set_framebuffer_srgb_compatible(true);
+    {
+        let depth_total_bits = df.0.get_total_bits();
+        let stencil_bits = df.0.get_alpha_stencil_bits();
+        let attr = window.subsystem().gl_attr();
+        attr.set_framebuffer_srgb_compatible(cf.1 == ChannelType::Srgb);
+        attr.set_alpha_size(cf.0.get_alpha_stencil_bits());
+        attr.set_depth_size(depth_total_bits - stencil_bits);
+        attr.set_stencil_size(stencil_bits);
+        attr.set_context_flags().set();
+    }
 
     let context = window.gl_create_context()?;
 
-    let (device, factory) = device_gl::create(|s| {
+    let (device, factory) = gfx_device_gl::create(|s| {
         window.subsystem().gl_get_proc_address(s) as *const std::os::raw::c_void
     });
 
     let (width, height) = window.drawable_size();
     let dim = (width as Size, height as Size, 1, AaMode::Single);
-    let (color_view, ds_view) = device_gl::create_main_targets_raw(
-            dim, SurfaceType::R8_G8_B8_A8, SurfaceType::D24);
+    let (color_view, ds_view) = gfx_device_gl::create_main_targets_raw(dim, cf.0, df.0);
 
-    Ok((window, context, device, factory, Typed::new(color_view), Typed::new(ds_view)))
+    Ok((window, context, device, factory, color_view, ds_view))
 }
