@@ -25,6 +25,7 @@ use gfx_corell::{Instance, Adapter, Surface, SwapChain, QueueFamily};
 
 pub type ColorFormat = gfx_corell::format::Rgba8;
 
+#[cfg(any(feature = "vulkan", target_os = "windows"))]
 fn main() {
     env_logger::init().unwrap();
     let window = winit::WindowBuilder::new()
@@ -66,3 +67,6 @@ fn main() {
         swap_chain.present();
     }
 }
+
+#[cfg(not(any(feature = "vulkan", target_os = "windows")))]
+fn main() {}
