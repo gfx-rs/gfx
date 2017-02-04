@@ -87,6 +87,11 @@ macro_rules! define_shaders {
             pub fn reference(&self, man: &mut handle::Manager<R>) -> &R::Shader {
                 man.ref_shader(&self.0)
             }
+
+            #[doc(hidden)]
+            pub fn new(shader: handle::Shader<R>) -> Self {
+                $name(shader)
+            }
         }
     )+}
 }

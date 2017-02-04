@@ -15,6 +15,7 @@
 use std::os::raw::c_void;
 use std::sync::Arc;
 use std::{mem, slice, str};
+use std::path::Path;
 
 // use cocoa::base::{selector, class};
 // use cocoa::foundation::{NSUInteger};
@@ -29,7 +30,7 @@ use command::CommandBuffer;
 
 use MTL_MAX_BUFFER_BINDINGS;
 
-use {Resources, Share, Texture, Buffer, Shader, Program, Pipeline};
+use {Resources, Share, Texture, Buffer, Shader, Program, ShaderLibrary, Pipeline};
 use native;
 use mirror;
 
@@ -149,6 +150,62 @@ impl Factory {
         };
 
         self.device.new_depth_stencil_state(desc)
+    }
+
+    pub fn create_library<P: AsRef<Path>>
+        (&mut self,
+         file: P)
+         -> Result<ShaderLibrary, core::shade::CreateShaderError> {
+        use core::shade::CreateShaderError;
+
+        match self.device.new_library_with_file(file) {
+            Ok(lib) => Ok(ShaderLibrary { lib: lib }),
+            Err(err) => Err(CreateShaderError::CompilationFailed(err.into())),
+        }
+    }
+
+    fn create_shader_from_library<S: AsRef<str>>
+        (&mut self,
+         stage: core::shade::Stage,
+         library: &ShaderLibrary,
+         function_name: S)
+         -> Result<handle::Shader<Resources>, core::shade::CreateShaderError> {
+        use core::shade::{CreateShaderError, Stage};
+
+        match stage {
+            Stage::Vertex | Stage::Pixel => (),
+            _ => return Err(CreateShaderError::StageNotSupported(stage)),
+        }
+
+        let shader = Shader {
+            func: library.lib.get_function(function_name.as_ref()),
+        };
+
+        Ok(self.share.handles.borrow_mut().make_shader(shader))
+    }
+
+    pub fn create_shader_vertex_from_library<S: AsRef<str>>
+        (&mut self,
+         library: &ShaderLibrary,
+         function_name: S)
+        -> Result<core::VertexShader<Resources>, core::shade::CreateShaderError> {
+        self.create_shader_from_library(
+            core::shade::Stage::Vertex,
+            library,
+            function_name)
+            .map(|s| core::VertexShader::new(s))
+    }
+
+    pub fn create_shader_pixel_from_library<S: AsRef<str>>
+        (&mut self,
+         library: &ShaderLibrary,
+         function_name: S)
+         -> Result<core::PixelShader<Resources>, core::shade::CreateShaderError> {
+        self.create_shader_from_library(
+            core::shade::Stage::Pixel,
+            library,
+            function_name)
+            .map(|s| core::PixelShader::new(s))
     }
 }
 
