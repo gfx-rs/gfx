@@ -112,6 +112,27 @@ pub struct Program {
 unsafe impl Send for Program {}
 unsafe impl Sync for Program {}
 
+pub struct ShaderLibrary {
+    lib: MTLLibrary,
+}
+unsafe impl Send for ShaderLibrary {}
+unsafe impl Sync for ShaderLibrary {}
+
+// ShaderLibrary isn't handled via Device.cleanup(). Not really an issue since it will usually
+// live for the entire application lifetime and be cloned rarely.
+impl Drop for ShaderLibrary {
+    fn drop(&mut self) {
+        unsafe { self.lib.release() };
+    }
+}
+
+impl Clone for ShaderLibrary {
+    fn clone(&self) -> Self {
+        unsafe { self.lib.retain() };
+        ShaderLibrary { lib: self.lib }
+    }
+}
+
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Pipeline {
     pipeline: MTLRenderPipelineState,
