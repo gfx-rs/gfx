@@ -332,7 +332,7 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage, reflect
                     // constant buffers
                     match ty.ty {
                         Ty::Struct(ref fields) => {
-                            let mut elements = Vec::new();
+                            let elements = Vec::new();
                             for field in fields {
                                 // TODO:
                             }

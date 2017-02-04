@@ -430,7 +430,7 @@ impl core::Device for GraphicsQueue {
         let (dev, mut functions) = self.share.get_device();
         use core::handle::Producer;
         //self.frame_handles.clear();
-        self.share.handles.borrow_mut().clean_with(&mut functions,
+        self.share.handles.lock().unwrap().clean_with(&mut functions,
             |vk, buffer| unsafe {
                 if buffer.is_mapped() {
                     vk.UnmapMemory(dev, buffer.resource().memory);
