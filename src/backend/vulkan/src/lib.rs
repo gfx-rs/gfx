@@ -20,8 +20,7 @@ extern crate vk_sys as vk;
 extern crate spirv_utils;
 
 use std::{fmt, iter, mem, ptr};
-use std::cell::RefCell;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::ffi::CStr;
 use shared_library::dynamic_library::DynamicLibrary;
 
@@ -82,7 +81,7 @@ pub struct Share {
     device: vk::Device,
     dev_pointers: vk::DevicePointers,
     physical_device: vk::PhysicalDevice,
-    handles: RefCell<core::handle::Manager<Resources>>,
+    handles: Mutex<core::handle::Manager<Resources>>,
 }
 
 pub type SharePointer = Arc<Share>;
@@ -274,7 +273,7 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
         device: device,
         dev_pointers: dev_pointers,
         physical_device: dev.device,
-        handles: RefCell::new(core::handle::Manager::new()),
+        handles: Mutex::new(core::handle::Manager::new()),
     });
     let gfx_device = command::GraphicsQueue::new(share.clone(), queue, qf_id as u32);
     let gfx_factory = factory::Factory::new(share.clone(), qf_id as u32, mvid_id, msys_id);

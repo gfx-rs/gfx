@@ -319,7 +319,7 @@ impl core::Factory<R> for Factory {
     fn create_buffer_raw(&mut self, info: buffer::Info) -> Result<h::RawBuffer<R>, buffer::CreationError> {
         use core::handle::Producer;
         let (buffer, mapping) = self.create_buffer_impl(&info);
-        Ok(self.share.handles.borrow_mut().make_buffer(buffer, info, mapping))
+        Ok(self.share.handles.lock().unwrap().make_buffer(buffer, info, mapping))
     }
 
     fn create_buffer_immutable_raw(&mut self, data: &[u8], stride: usize, role: buffer::Role, bind: Bind)
@@ -341,7 +341,7 @@ impl core::Factory<R> for Factory {
             ptr::copy_nonoverlapping(data.as_ptr(), ptr as *mut u8, data.len());
             vk.UnmapMemory(dev, buffer.memory);
         }
-        Ok(self.share.handles.borrow_mut().make_buffer(buffer, info, mapping))
+        Ok(self.share.handles.lock().unwrap().make_buffer(buffer, info, mapping))
     }
 
     fn create_shader(&mut self, _stage: core::shade::Stage, code: &[u8])
@@ -366,7 +366,7 @@ impl core::Factory<R> for Factory {
             shader: shader,
             reflection: reflection,
         };
-        Ok(self.share.handles.borrow_mut().make_shader(shader))
+        Ok(self.share.handles.lock().unwrap().make_shader(shader))
     }
 
     fn create_program(&mut self, shader_set: &core::ShaderSet<R>)
@@ -413,7 +413,7 @@ impl core::Factory<R> for Factory {
             core::ShaderSet::Tessellated(..) => unimplemented!(),
         };
 
-        Ok(self.share.handles.borrow_mut().make_program(prog, info))
+        Ok(self.share.handles.lock().unwrap().make_program(prog, info))
     }
 
     fn create_pipeline_state_raw(&mut self, program: &h::Program<R>, desc: &pso::Descriptor)
@@ -763,7 +763,7 @@ impl core::Factory<R> for Factory {
             render_pass: render_pass,
             program: program.clone(),
         };
-        Ok(self.share.handles.borrow_mut().make_pso(pso, program))
+        Ok(self.share.handles.lock().unwrap().make_pso(pso, program))
     }
 
     fn create_texture_raw(&mut self, desc: texture::Info, hint: Option<core::format::ChannelType>,
@@ -817,7 +817,7 @@ impl core::Factory<R> for Factory {
         assert_eq!(vk::SUCCESS, unsafe {
             vk.BindImageMemory(dev, image, tex.memory, 0)
         });
-        Ok(self.share.handles.borrow_mut().make_texture(tex, desc))
+        Ok(self.share.handles.lock().unwrap().make_texture(tex, desc))
     }
 
     fn view_buffer_as_shader_resource_raw(&mut self, _hbuf: &h::RawBuffer<R>)
@@ -834,7 +834,7 @@ impl core::Factory<R> for Factory {
                                        -> Result<h::RawShaderResourceView<R>, f::ResourceViewError> {
         use core::handle::Producer;
         self.view_texture(htex, desc, false).map(|view|
-            self.share.handles.borrow_mut().make_texture_srv(view, htex))
+            self.share.handles.lock().unwrap().make_texture_srv(view, htex))
     }
 
     fn view_texture_as_unordered_access_raw(&mut self, _htex: &h::RawTexture<R>)
@@ -851,7 +851,7 @@ impl core::Factory<R> for Factory {
             dim.2 = 1; // slice of the depth/array
         }
         self.view_target(htex, desc.channel, desc.layer).map(|view|
-            self.share.handles.borrow_mut().make_rtv(view, htex, dim))
+            self.share.handles.lock().unwrap().make_rtv(view, htex, dim))
     }
 
     fn view_texture_as_depth_stencil_raw(&mut self, htex: &h::RawTexture<R>, desc: texture::DepthStencilDesc)
@@ -864,7 +864,7 @@ impl core::Factory<R> for Factory {
         }
         let channel = ChannelType::Unorm; //TODO
         self.view_target(htex, channel, desc.layer).map(|view|
-            self.share.handles.borrow_mut().make_dsv(view, htex, dim))
+            self.share.handles.lock().unwrap().make_dsv(view, htex, dim))
     }
 
     fn create_sampler(&mut self, info: texture::SamplerInfo) -> h::Sampler<R> {
@@ -903,7 +903,7 @@ impl core::Factory<R> for Factory {
         assert_eq!(vk::SUCCESS, unsafe {
             vk.CreateSampler(dev, &native_info, ptr::null(), &mut sampler)
         });
-        self.share.handles.borrow_mut().make_sampler(sampler, info)
+        self.share.handles.lock().unwrap().make_sampler(sampler, info)
     }
 
     fn read_mapping<'a, 'b, T>(&'a mut self, _: &'b h::Buffer<R, T>)
