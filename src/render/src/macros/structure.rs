@@ -30,6 +30,7 @@ macro_rules! gfx_impl_struct_meta {
     ($(#[$attr:meta])* impl_struct_meta $runtime_format:ty : $compile_format:path = $root:ident {
         $( $field:ident: $ty:ty = $name:expr, )*
     }) => {
+        #[allow(missing_docs)]
         #[derive(Clone, Copy, Debug)]
         $(#[$attr])*
         pub struct $root {

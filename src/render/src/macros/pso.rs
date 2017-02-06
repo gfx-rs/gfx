@@ -225,6 +225,7 @@ macro_rules! gfx_pipeline_base {
     ($module:ident {
         $( $field:ident: $ty:ty, )*
     }) => {
+        #[allow(missing_docs)]
         pub mod $module {
             #[allow(unused_imports)]
             use super::*;
@@ -241,6 +242,7 @@ macro_rules! gfx_pipeline {
     ($module:ident {
         $( $field:ident: $ty:ty = $value:expr, )*
     }) => {
+        #[allow(missing_docs)]
         pub mod $module {
             #[allow(unused_imports)]
             use super::*;
