@@ -42,11 +42,6 @@ script:
   - export RUST_BACKTRACE=1
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo build --features vulkan; else cargo build; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cargo build --features metal; else cargo build; fi
-  - cargo test -p gfx_core
-  - cargo test -p gfx
-  - cargo test -p gfx_device_gl
-  - cargo test -p gfx_window_glutin
-  - cargo test -p gfx_window_glfw
-  #- cargo test -p gfx_window_sdl
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo test --features vulkan; cargo test -p gfx_device_vulkan --features vulkan; cargo test -p gfx_window_vulkan --features vulkan; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cargo test --features metal; cargo test -p gfx_device_metal --features metal; cargo test -p gfx_window_metal --features metal; fi
+  - cargo test --all
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo test --all --features vulkan; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cargo test --all --features metal; fi
