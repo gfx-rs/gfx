@@ -1,0 +1,11 @@
+[package]
+name = "gfx_macros"
+version = "0.1.0"
+authors = ["The Gfx-rs Developers"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "0.11"
+quote = "0.3"
