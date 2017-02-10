@@ -178,7 +178,11 @@ DataLink<'a> for ConstantBuffer<T> {
             for el in cb.elements.iter() {
                 let err = match T::query(&el.name) {
                     Some(e) if e.offset != el.location as pso::ElemOffset =>
-                        ElementError::Offset(el.name.as_str(), el.location as pso::ElemOffset),
+                        ElementError::Offset {
+                            name: el.name.as_str(),
+                            shader_offset: el.location as pso::ElemOffset,
+                            code_offset: e.offset,
+                        },
                     None => ElementError::NotFound(el.name.as_str()),
                     Some(_) => continue, //TODO: check format
                 };
