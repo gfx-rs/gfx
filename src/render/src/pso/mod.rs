@@ -105,17 +105,33 @@ pub enum ElementError<S> {
     /// Element not found.
     NotFound(S),
     /// Element offset mismatch.
-    Offset(S, c::pso::ElemOffset),
+    Offset {
+        /// Element name.
+        name: S,
+        /// Element byte offset in the shader-side constant buffer.
+        shader_offset: c::pso::ElemOffset,
+        /// Element byte offset in the code-side constant buffer.
+        code_offset: c::pso::ElemOffset
+    },
     /// Element format mismatch.
-    Format(S, c::shade::ConstFormat),
+    Format {
+        /// Element name.
+        name: S,
+        /// Element format in the shader-side constant buffer.
+        shader_format: c::shade::ConstFormat,
+        /// Element format in the code-side constant buffer.
+        code_format: c::shade::ConstFormat,
+    },
 }
 
 impl<S: fmt::Debug + fmt::Display> fmt::Display for ElementError<S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             ElementError::NotFound(ref s) => write!(f, "{}: {:?}", self.description(), s),
-            ElementError::Offset(ref s, ref offset) => write!(f, "{}: ({:?}, {:?})", self.description(), s, offset),
-            ElementError::Format(ref s, ref format) => write!(f, "{}: ({:?}, {:?})", self.description(), s, format),
+            ElementError::Offset{ ref name, ref shader_offset, ref code_offset } =>
+                write!(f, "{}: ({:?}, {:?}, {:?})", self.description(), name, shader_offset, code_offset),
+            ElementError::Format{ ref name, ref shader_format, ref code_format } =>
+                write!(f, "{}: ({:?}, {:?}, {:?})", self.description(), name, shader_format, code_format),
         }
     }
 }
@@ -124,8 +140,8 @@ impl<S: fmt::Debug + fmt::Display> Error for ElementError<S> {
     fn description(&self) -> &str {
         match *self {
             ElementError::NotFound(_) => "Element not found",
-            ElementError::Offset(..) => "Element offset mismatch",
-            ElementError::Format(..) => "Element format mismatch",
+            ElementError::Offset{..} => "Element offset mismatch",
+            ElementError::Format{..} => "Element format mismatch",
         }
     }
 }
@@ -135,8 +151,16 @@ impl<'a> From<ElementError<&'a str>> for ElementError<String> {
         use self::ElementError::*;
         match other {
             NotFound(s) => NotFound(s.to_owned()),
-            Offset(s, v) => Offset(s.to_owned(), v),
-            Format(s, v) => Format(s.to_owned(), v),
+            Offset{ name, shader_offset, code_offset } => Offset{
+                name: name.to_owned(),
+                shader_offset: shader_offset,
+                code_offset: code_offset,
+            },
+            Format{ name, shader_format, code_format } => Format{
+                name: name.to_owned(),
+                shader_format: shader_format,
+                code_format: code_format,
+            },
         }
     }
 }
