@@ -118,7 +118,7 @@ impl Factory {
 
         let gl = &self.share.context;
         let target = role_to_target(info.role);
-        let data_ptr = if let Some(data) = data_opt {
+        let mut data_ptr = if let Some(data) = data_opt {
             debug_assert!(data.len() == info.size);
             data.as_ptr() as *const gl::types::GLvoid
         } else {
@@ -133,10 +133,17 @@ impl Factory {
                 Upload => access_to_map_bits(memory::WRITE) | gl::MAP_PERSISTENT_BIT,
                 Download => access_to_map_bits(memory::READ) | gl::MAP_PERSISTENT_BIT,
             };
+            let size = if info.size == 0 {
+                // we are not allowed to pass size=0 into `glBufferStorage`
+                data_ptr = 0 as *const _;
+                1
+            } else {
+                info.size as gl::types::GLsizeiptr
+            };
             unsafe {
                 gl.BindBuffer(target, buffer);
                 gl.BufferStorage(target,
-                    info.size as gl::types::GLsizeiptr,
+                    size,
                     data_ptr,
                     usage
                 );
