@@ -41,9 +41,10 @@ macro_rules! gfx_impl_struct_meta {
 
         impl $crate::pso::buffer::Structure<$runtime_format> for $root {
             fn query(name: &str) -> Option<$crate::pso::buffer::Element<$runtime_format>> {
-                use std::mem::size_of;
+                use std::mem::{size_of, transmute};
                 use $crate::pso::buffer::{Element, ElemOffset};
-                let tmp: &$root = unsafe{ ::std::mem::uninitialized() };
+                // using "1" here as a simple non-zero pointer addres
+                let tmp: &$root = unsafe{ transmute(1usize) };
                 let base = tmp as *const _ as usize;
                 //HACK: special treatment of array queries
                 let (sub_name, big_offset) = {
