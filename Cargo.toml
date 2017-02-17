@@ -139,7 +139,7 @@ gfx_gl = "0.3"
 rand = "0.3"
 genmesh = "0.4"
 noise = "0.1"
-image = "0.6"
+image = "0.12.3"
 winit = "0.5"
 
 [target.x86_64-unknown-linux-gnu.dev_dependencies]
