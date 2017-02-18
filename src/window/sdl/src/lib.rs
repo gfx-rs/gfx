@@ -79,15 +79,18 @@ pub type InitOk<Cf, Df> =
 /// # Example
 ///
 /// ```no_run
+/// extern crate gfx_core;
 /// extern crate gfx_window_sdl;
 /// extern crate sdl2;
+///
+/// use gfx_core::format::{DepthStencil, Rgba8};
 ///
 /// fn main() {
 ///     let sdl = sdl2::init().unwrap();
 ///
 ///     let builder = sdl.video().unwrap().window("Example", 800, 600);
 ///     let (window, glcontext, device, factory, color_view, depth_view) =
-///         gfx_window_sdl::init(builder).expect("gfx_window_sdl::init failed!");
+///         gfx_window_sdl::init::<Rgba8, DepthStencil>(builder).expect("gfx_window_sdl::init failed!");
 ///
 ///     // some code...
 /// }
