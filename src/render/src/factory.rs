@@ -110,7 +110,17 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
         self.create_buffer_immutable(vertices, buffer::Role::Vertex, Bind::empty())
             .unwrap()
     }
-    
+
+    /// Creates an immutable index buffer from the supplied vertices.
+    ///
+    /// The paramater `indices` is typically a &[u16] or &[u32] slice.
+    fn create_index_buffer<T>(&mut self, indices: T)
+                              -> IndexBuffer<R>
+        where T: IntoIndexBuffer<R>
+    {
+        indices.into_index_buffer(self)
+    }
+
     /// Creates an immutable vertex buffer from the supplied vertices,
     /// together with a `Slice` from the supplied indices.
     fn create_vertex_buffer_with_slice<B, V>(&mut self, vertices: &[V], indices: B)
@@ -119,7 +129,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
               B: IntoIndexBuffer<R>
     {
         let vertex_buffer = self.create_vertex_buffer(vertices);
-        let index_buffer = indices.into_index_buffer(self);
+        let index_buffer = self.create_index_buffer(indices);
         let buffer_length = match index_buffer {
             IndexBuffer::Auto => vertex_buffer.len(),
             IndexBuffer::Index16(ref ib) => ib.len(),
