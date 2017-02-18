@@ -201,6 +201,7 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
             constant_buffer_supported: true,
             unordered_access_view_supported: false,
             separate_blending_slots_supported: false,
+            copy_buffer_supported: true,
         },
         handles: RefCell::new(h::Manager::new()),
     };
