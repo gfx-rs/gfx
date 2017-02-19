@@ -395,7 +395,7 @@ impl core::Device for Device {
                 (*(v.depth_stencil as Child)).Release();
                 (*(v.blend as Child)).Release();
             },
-            |_, texture| unsafe { (*texture.resource().to_resource()).Release(); },
+            |_, texture| unsafe { (*texture.resource().as_resource()).Release(); },
             |_, v| unsafe { (*v.0).Release(); }, //SRV
             |_, _| {}, //UAV
             |_, v| unsafe { (*v.0).Release(); }, //RTV

@@ -22,8 +22,8 @@ fn copy_buffer(context: *mut winapi::ID3D11DeviceContext,
                src: &Buffer, dst: &Buffer,
                src_offset: UINT, dst_offset: UINT,
                size: UINT) {
-    let src_resource = src.to_resource();
-    let dst_resource = dst.to_resource();
+    let src_resource = src.as_resource();
+    let dst_resource = dst.as_resource();
     let src_box = winapi::D3D11_BOX {
         left: src_offset,
         right: src_offset + size,
