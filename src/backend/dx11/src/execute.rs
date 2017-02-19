@@ -73,7 +73,7 @@ pub fn update_texture(context: *mut winapi::ID3D11DeviceContext, texture: &Textu
     };
     let num_mipmap_levels = 1; //TODO
     let subres = array_slice * num_mipmap_levels + (image.mipmap as UINT);
-    let dst_resource = texture.to_resource();
+    let dst_resource = texture.as_resource();
     let (width, height, _, _) = kind.get_level_dimensions(image.mipmap);
     let stride = image.format.0.get_total_bits() as usize;
     let row_pitch = width as usize * stride;
