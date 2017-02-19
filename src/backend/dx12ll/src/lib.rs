@@ -1,4 +1,4 @@
-// Copyright 2016 The Gfx-rs Developers.
+// Copyright 2017 The Gfx-rs Developers.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,6 +32,9 @@ use winapi::BOOL;
 use winit::os::windows::WindowExt;
 
 mod data;
+mod factory;
+mod native;
+mod state;
 
 #[derive(Clone)]
 pub struct QueueFamily;
@@ -344,10 +347,10 @@ pub enum Resources { }
 
 impl core::Resources for Resources {
     type Buffer = ();
-    type Shader = ();
+    type ShaderLib = native::ShaderLib;
     type RenderPass = ();
-    type PipelineLayout = ();
-    type PipelineStateObject = ();
+    type PipelineSignature = native::PipelineSignature;
+    type PipelineStateObject = native::Pipeline;
     type Image = ();
     type ShaderResourceView = ();
     type UnorderedAccessView = ();

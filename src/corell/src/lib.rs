@@ -14,16 +14,25 @@
 
 #[macro_use]
 extern crate log;
+extern crate draw_state;
 
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::any::Any;
 use std::slice::Iter;
 
+pub use draw_state::state;
+pub use self::factory::Factory;
+
 pub mod command;
 pub mod factory;
 pub mod format;
 pub mod memory;
+pub mod pso;
+pub mod shade;
+
+/// Compile-time maximum number of color targets.
+pub const MAX_COLOR_TARGETS: usize = 8; // Limited by D3D12
 
 /// Draw vertex count.
 pub type VertexCount = u32;
@@ -63,6 +72,11 @@ pub enum Primitive {
 pub enum IndexType {
     U16,
     U32,
+}
+
+pub struct SubPass<'a, R: Resources> {
+    pub index: usize,
+    pub main_pass: &'a R::RenderPass,
 }
 
 /// An `Instance` holds per-application state for a specific backend
@@ -162,18 +176,18 @@ pub trait SwapChain {
 }
 
 /// Different resource types of a specific API. 
-pub trait Resources:          Clone + Hash + Debug + Eq + PartialEq + Any {
-    type Buffer:              Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
-    type Shader:              Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
-    type RenderPass:          Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
-    type PipelineLayout:      Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
-    type PipelineStateObject: Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
-    type Image:               Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
-    type ShaderResourceView:  Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
-    type UnorderedAccessView: Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
-    type RenderTargetView:    Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
-    type DepthStencilView:    Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
-    type Sampler:             Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
+pub trait Resources:          Clone + Hash + Debug + Any {
+    type Buffer:              Clone + Hash + Debug + Any + Send + Sync + Copy;
+    type ShaderLib:           Clone + Hash + Debug + Any + Send + Sync;
+    type RenderPass:          Clone + Hash + Debug + Any + Send + Sync;
+    type PipelineSignature:   Clone + Hash + Debug + Any + Send + Sync;
+    type PipelineStateObject: Clone + Hash + Debug + Any + Send + Sync;
+    type Image:               Clone + Hash + Debug + Any + Send + Sync;
+    type ShaderResourceView:  Clone + Hash + Debug + Any + Send + Sync + Copy;
+    type UnorderedAccessView: Clone + Hash + Debug + Any + Send + Sync + Copy;
+    type RenderTargetView:    Clone + Hash + Debug + Any + Send + Sync + Copy;
+    type DepthStencilView:    Clone + Hash + Debug + Any + Send + Sync;
+    type Sampler:             Clone + Hash + Debug + Any + Send + Sync + Copy;
 }
 
 /// Different types of a specific API.

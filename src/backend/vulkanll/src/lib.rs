@@ -1,4 +1,4 @@
-// Copyright 2016 The Gfx-rs Developers.
+// Copyright 2017 The Gfx-rs Developers.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,9 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 
 mod data;
+mod factory;
+mod native;
+mod state;
 
 lazy_static! {
     static ref VK_ENTRY: Result<Entry<V1_0>, LoadingError> = Entry::new();
@@ -599,9 +602,9 @@ pub enum Resources { }
 
 impl core::Resources for Resources {
     type Buffer = ();
-    type Shader = ();
-    type RenderPass = ();
-    type PipelineLayout = ();
+    type ShaderLib = native::ShaderLib;
+    type RenderPass = native::RenderPass;
+    type PipelineSignature = native::PipelineSignature;
     type PipelineStateObject = ();
     type Image = ();
     type ShaderResourceView = ();
