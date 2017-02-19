@@ -244,6 +244,9 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
         constant_buffer_supported:         info.is_version_or_extension_supported(3, 1, "GL_ARB_uniform_buffer_object"),
         unordered_access_view_supported:   info.is_version_supported(4, 0), //TODO: extension
         separate_blending_slots_supported: info.is_version_or_extension_supported(4, 0, "GL_ARB_draw_buffers_blend"),
+        copy_buffer_supported:             info.is_version_or_extension_supported(3, 1, "GL_ARB_copy_buffer") |
+                                           info.is_embedded_version_supported(3, 0) |
+                                          (info.is_embedded_version_supported(2, 0) & info.is_extension_supported("GL_NV_copy_buffer")),
     };
     let private = PrivateCaps {
         array_buffer_supported:            info.is_version_or_extension_supported(3, 0, "GL_ARB_vertex_array_object"),
@@ -253,8 +256,7 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
         sampler_objects_supported:         info.is_version_or_extension_supported(3, 3, "GL_ARB_sampler_objects"),
         program_interface_supported:       info.is_version_or_extension_supported(4, 3, "GL_ARB_program_interface_query"),
         buffer_storage_supported:          info.is_version_or_extension_supported(4, 4, "GL_ARB_buffer_storage"),
-        clear_buffer_supported:            info.is_version_supported(3, 0) |  //TODO: extension
-                                           info.is_embedded_version_supported(3, 0),
+        clear_buffer_supported:            info.is_version_supported(3, 0) | info.is_embedded_version_supported(3, 0),
     };
     (info, caps, private)
 }

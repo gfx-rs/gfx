@@ -580,7 +580,6 @@ impl Device {
             Command::CopyBuffer(src, dst, src_offset, dst_offset, size) => {
                 let gl = &self.share.context;
                 unsafe {
-                    // TODO: check capabilities (during encoding ?)
                     gl.BindBuffer(gl::COPY_READ_BUFFER, src);
                     gl.BindBuffer(gl::COPY_WRITE_BUFFER, dst);
                     gl.CopyBufferSubData(gl::COPY_READ_BUFFER,
@@ -589,7 +588,7 @@ impl Device {
                                          dst_offset,
                                          size);
                 }
-            }
+            },
             Command::UpdateBuffer(buffer, pointer, offset) => {
                 let data = data_buf.get(pointer);
                 factory::update_sub_buffer(&self.share.context, buffer,

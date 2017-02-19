@@ -74,6 +74,7 @@ impl DummyDevice {
             constant_buffer_supported: false,
             unordered_access_view_supported: false,
             separate_blending_slots_supported: false,
+            copy_buffer_supported: false,
         };
         DummyDevice {
             capabilities: caps,

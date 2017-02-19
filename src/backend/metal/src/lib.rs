@@ -317,6 +317,7 @@ pub fn create(format: core::format::Format,
             constant_buffer_supported: true,
             unordered_access_view_supported: false,
             separate_blending_slots_supported: false,
+            copy_buffer_supported: true,
         },
         handles: RefCell::new(handle::Manager::new()),
     };

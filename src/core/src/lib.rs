@@ -139,6 +139,7 @@ pub struct Capabilities {
     pub constant_buffer_supported: bool,
     pub unordered_access_view_supported: bool,
     pub separate_blending_slots_supported: bool,
+    pub copy_buffer_supported: bool,
 }
 
 /// Describes what geometric primitives are created from vertex data.
