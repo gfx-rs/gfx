@@ -43,9 +43,10 @@ impl Window {
     }
 
     pub fn swap_buffers(&self, wait: u8) {
-        assert_eq!(winapi::S_OK, unsafe {
-            (*self.swap_chain).Present(wait as winapi::UINT, 0)
-        });
+        match unsafe {(*self.swap_chain).Present(wait as winapi::UINT, 0)} {
+            winapi::S_OK | winapi::DXGI_STATUS_OCCLUDED => {}
+            hr => panic!("Present Error: {:X}", hr)
+        }
     }
 
     pub fn poll_events(&self) -> winit::PollEventsIterator {
@@ -177,17 +178,32 @@ pub fn init_raw(wb: winit::WindowBuilder, color_format: format::Format)
     Err(InitError::DriverType)
 }
 
+pub trait DeviceExt: core::Device {
+    fn clear_state(&self);
+}
+
+impl DeviceExt for device_dx11::Deferred {
+     fn clear_state(&self) {
+         self.clear_state();
+     }
+}
+
+impl DeviceExt for Device {
+    fn clear_state(&self) {
+        self.clear_state();
+    }
+}
+
 /// Update the internal dimensions of the main framebuffer targets. Generic version over the format.
-pub fn update_views<Cf>(window: &mut Window, factory: &mut Factory, device: &mut Device, width: u16, height: u16)
+pub fn update_views<Cf, D>(window: &mut Window, factory: &mut Factory, device: &mut D, width: u16, height: u16)
             -> Result<h::RenderTargetView<Resources, Cf>, f::TargetViewError>
-where Cf: format::RenderFormat
+where Cf: format::RenderFormat, D: DeviceExt
 {
-    use core::Device;
     
     factory.cleanup();
     device.clear_state();
     device.cleanup();
-    
+
     window.resize_swap_chain::<Cf>(factory, width, height)
         .map_err(|hr| {
             error!("Resize failed with code {:X}", hr);
