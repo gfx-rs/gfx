@@ -677,7 +677,7 @@ impl core::Factory<Resources> for Factory {
         // };
         //
         // let mut raw_view = ptr::null_mut();
-        // let raw_tex = self.frame_handles.ref_texture(htex).to_resource();
+        // let raw_tex = self.frame_handles.ref_texture(htex).as_resource();
         // let hr = unsafe {
         // (*self.device).CreateShaderResourceView(raw_tex, &native_desc, &mut raw_view)
         // };
@@ -763,7 +763,7 @@ impl core::Factory<Resources> for Factory {
         // };
         //
         // let mut raw_view = ptr::null_mut();
-        // let raw_tex = self.frame_handles.ref_texture(htex).to_resource();
+        // let raw_tex = self.frame_handles.ref_texture(htex).as_resource();
         // let hr = unsafe {
         // (*self.device).CreateDepthStencilView(raw_tex, &native_desc, &mut raw_view)
         // };

@@ -82,8 +82,7 @@ use core::command::{AccessInfo, AccessGuard};
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Buffer(native::Buffer);
 impl Buffer {
-    // TODO: 'as_resource' would be better ?
-    pub fn to_resource(&self) -> *mut winapi::ID3D11Resource {
+    pub fn as_resource(&self) -> *mut winapi::ID3D11Resource {
         type Res = *mut winapi::ID3D11Resource;
         match self.0 {
             native::Buffer(t) => t as Res,
@@ -94,8 +93,7 @@ impl Buffer {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Texture(native::Texture);
 impl Texture {
-    // TODO: 'as_resource' would be better ?
-    pub fn to_resource(&self) -> *mut winapi::ID3D11Resource {
+    pub fn as_resource(&self) -> *mut winapi::ID3D11Resource {
         type Res = *mut winapi::ID3D11Resource;
         match self.0 {
             native::Texture::D1(t) => t as Res,
@@ -397,7 +395,7 @@ impl core::Device for Device {
                 (*(v.depth_stencil as Child)).Release();
                 (*(v.blend as Child)).Release();
             },
-            |_, texture| unsafe { (*texture.resource().to_resource()).Release(); },
+            |_, texture| unsafe { (*texture.resource().as_resource()).Release(); },
             |_, v| unsafe { (*v.0).Release(); }, //SRV
             |_, _| {}, //UAV
             |_, v| unsafe { (*v.0).Release(); }, //RTV

@@ -722,7 +722,7 @@ impl core::Factory<R> for Factory {
         };
 
         let mut raw_view = ptr::null_mut();
-        let raw_tex = self.frame_handles.ref_texture(htex).to_resource();
+        let raw_tex = self.frame_handles.ref_texture(htex).as_resource();
         let hr = unsafe {
             (*self.device).CreateShaderResourceView(raw_tex, &native_desc, &mut raw_view)
         };
@@ -790,7 +790,7 @@ impl core::Factory<R> for Factory {
             u: extra,
         };
         let mut raw_view = ptr::null_mut();
-        let raw_tex = self.frame_handles.ref_texture(htex).to_resource();
+        let raw_tex = self.frame_handles.ref_texture(htex).as_resource();
         let hr = unsafe {
             (*self.device).CreateRenderTargetView(raw_tex, &native_desc, &mut raw_view)
         };
@@ -855,7 +855,7 @@ impl core::Factory<R> for Factory {
         };
 
         let mut raw_view = ptr::null_mut();
-        let raw_tex = self.frame_handles.ref_texture(htex).to_resource();
+        let raw_tex = self.frame_handles.ref_texture(htex).as_resource();
         let hr = unsafe {
             (*self.device).CreateDepthStencilView(raw_tex, &native_desc, &mut raw_view)
         };
@@ -944,7 +944,7 @@ pub fn ensure_mapped(mapping: &mut MappingGate,
             DepthPitch: 0,
         };
             
-        let dst = raw_handle.to_resource() as *mut winapi::d3d11::ID3D11Resource;
+        let dst = raw_handle.as_resource() as *mut winapi::d3d11::ID3D11Resource;
         let hr = unsafe {
             (*ctx).Map(dst, 0, map_type, 0, &mut sres)
         };
@@ -963,7 +963,7 @@ pub fn ensure_unmapped(mapping: &mut MappingGate,
     if !mapping.pointer.is_null() {
         let raw_handle = *buffer.resource();
         unsafe {
-            (*context).Unmap(raw_handle.to_resource() as *mut winapi::d3d11::ID3D11Resource, 0);
+            (*context).Unmap(raw_handle.as_resource() as *mut winapi::d3d11::ID3D11Resource, 0);
         }
 
         mapping.pointer = ptr::null_mut();
