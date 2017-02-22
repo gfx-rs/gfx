@@ -27,23 +27,6 @@ pub struct Factory {
 }
 
 impl core::Factory<R> for Factory {
-    fn create_shader_library<'a, 'b>(&mut self, sources: shade::LibrarySource<'a, 'b>) -> Result<native::ShaderLib, shade::CreateShaderError> {
-        /*
-        let info = vk::ShaderModuleCreateInfo {
-            s_type: vk::StructureType::ShaderModuleCreateInfo,
-            p_next: ptr::null(),
-            flags: vk::ShaderModuleCreateFlags::empty(),
-            code_size: code.len(),
-            p_code: code.as_ptr() as *const _,
-        };
-
-        let shader = unsafe { self.device.0.create_shader_module(&info, None) };
-        */
-
-        // TODO:
-        unimplemented!()
-    }
-
     fn create_renderpass(&mut self) -> native::RenderPass {
         unimplemented!()
     }
@@ -71,15 +54,17 @@ impl core::Factory<R> for Factory {
                 });
 
                 // Pixel stage
-                stages.push(vk::PipelineShaderStageCreateInfo {
-                    s_type: vk::StructureType::PipelineShaderStageCreateInfo,
-                    p_next: ptr::null(),
-                    flags: vk::PipelineShaderStageCreateFlags::empty(),
-                    stage: vk::SHADER_STAGE_FRAGMENT_BIT,
-                    module: shader_lib.inner,
-                    p_name: desc.shader_entries.pixel_shader.as_bytes().as_ptr() as *const i8,
-                    p_specialization_info: ptr::null(),
-                });
+                if let Some(pixel_shader) = desc.shader_entries.pixel_shader {
+                    stages.push(vk::PipelineShaderStageCreateInfo {
+                        s_type: vk::StructureType::PipelineShaderStageCreateInfo,
+                        p_next: ptr::null(),
+                        flags: vk::PipelineShaderStageCreateFlags::empty(),
+                        stage: vk::SHADER_STAGE_FRAGMENT_BIT,
+                        module: shader_lib.inner,
+                        p_name: pixel_shader.as_bytes().as_ptr() as *const i8,
+                        p_specialization_info: ptr::null(),
+                    });
+                }
 
                 // Geometry stage
                 if let Some(geometry_shader) = desc.shader_entries.geometry_shader {

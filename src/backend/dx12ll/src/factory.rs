@@ -27,21 +27,19 @@ use core::pso::{self, EntryPoint, GraphicsShaderSet};
 use {data, state, native};
 use {Device, Resources as R};
 
-impl core::Factory<R> for Device {
-    fn create_shader_library<'a, 'b>(&mut self, sources: shade::LibrarySource<'a, 'b>) -> Result<native::ShaderLib, shade::CreateShaderError> {
-        match sources {
-            shade::LibrarySource::Module(_) => {
-                Err(shade::CreateShaderError::LibrarySourceNotSupported)
-            }
-            shade::LibrarySource::Composed(shaders) => {
-                let mut shader_map = BTreeMap::new();
-                for &(entry_point, byte_code) in shaders {
-                    shader_map.insert(entry_point, byte_code.into());
-                }
-                Ok(native::ShaderLib { shaders: shader_map })
-            }
+impl Device {
+    pub fn create_shader_library<'a, 'b>(&mut self, shaders: &[(EntryPoint, &[u8])]) -> Result<native::ShaderLib, shade::CreateShaderError> {
+        let mut shader_map = BTreeMap::new();
+        // TODO: handle entry points with the same name
+        for &(entry_point, byte_code) in shaders {
+            shader_map.insert(entry_point, byte_code.into());
         }
+        Ok(native::ShaderLib { shaders: shader_map })
     }
+}
+
+impl core::Factory<R> for Device {
+    
 
     fn create_renderpass(&mut self) -> () {
         unimplemented!()
@@ -103,7 +101,7 @@ impl core::Factory<R> for Device {
             };
 
             let vs = build_shader(shader_lib, Some(desc.shader_entries.vertex_shader));
-            let ps = build_shader(shader_lib, Some(desc.shader_entries.pixel_shader));
+            let ps = build_shader(shader_lib, desc.shader_entries.pixel_shader);
             let gs = build_shader(shader_lib, desc.shader_entries.geometry_shader);
             let ds = build_shader(shader_lib, desc.shader_entries.domain_shader);
             let hs = build_shader(shader_lib, desc.shader_entries.hull_shader);

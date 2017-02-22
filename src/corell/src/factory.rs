@@ -26,9 +26,6 @@ pub trait Factory<R: Resources> {
     // fn allocate_memory(&mut self);
 
     ///
-    fn create_shader_library<'a, 'b>(&mut self, sources: shade::LibrarySource<'a, 'b>) -> Result<R::ShaderLib, shade::CreateShaderError>;
-
-    ///
     fn create_renderpass(&mut self) -> R::RenderPass;
 
     ///

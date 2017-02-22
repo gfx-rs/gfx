@@ -25,11 +25,6 @@ pub enum Stage {
     Compute,
 }
 
-pub enum LibrarySource<'a, 'b: 'a> {
-    Module(&'a [u8]),
-    Composed(&'a [(&'static str, &'b [u8])]),
-}
-
 /// An error type for creating shaders.
 #[derive(Clone, PartialEq, Debug)]
 pub enum CreateShaderError {

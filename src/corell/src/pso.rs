@@ -116,7 +116,7 @@ pub struct GraphicsShaderSet {
     pub hull_shader: Option<EntryPoint>,
     pub domain_shader: Option<EntryPoint>,
     pub geometry_shader: Option<EntryPoint>,
-    pub pixel_shader: EntryPoint,
+    pub pixel_shader: Option<EntryPoint>,
 }
 
 pub struct GraphicsPipelineDesc {
