@@ -18,10 +18,13 @@ use winapi;
 
 use std::collections::BTreeMap;
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash)]
 pub struct ShaderLib {
-    pub shaders: BTreeMap<pso::EntryPoint, Vec<u8>>,
+    pub shaders: BTreeMap<pso::EntryPoint, ComPtr<winapi::ID3DBlob>>,
 }
+
+unsafe impl Send for ShaderLib {}
+unsafe impl Sync for ShaderLib {}
 
 #[derive(Clone, Debug, Hash)]
 pub struct Pipeline {

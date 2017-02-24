@@ -14,17 +14,19 @@
 
 use comptr::ComPtr;
 use d3d12;
+use d3dcompiler;
 use dxguid;
 use winapi;
 
-use std::ptr;
+use std::ffi;
+use std::{mem, ptr};
 use std::os::raw::c_void;
 use std::collections::BTreeMap;
 
 use core::{self, shade};
 use core::SubPass;
 use core::pso::{self, EntryPoint, GraphicsShaderSet};
-use {data, state, native};
+use {data, state, mirror, native};
 use {Device, Resources as R};
 
 impl Device {
@@ -32,17 +34,64 @@ impl Device {
         let mut shader_map = BTreeMap::new();
         // TODO: handle entry points with the same name
         for &(entry_point, byte_code) in shaders {
-            shader_map.insert(entry_point, byte_code.into());
+            let mut blob = ComPtr::<winapi::ID3DBlob>::new(ptr::null_mut());
+            let hr = unsafe {
+                d3dcompiler::D3DCreateBlob(
+                    byte_code.len() as u64,
+                    blob.as_mut() as *mut *mut _)
+            };
+            println!("{:?}", hr); // TODO: error handling
+            unsafe {
+                ptr::copy(
+                    byte_code.as_ptr(),
+                    blob.GetBufferPointer() as *mut u8,
+                    byte_code.len());
+            }
+            shader_map.insert(entry_point, blob);
+        }
+        Ok(native::ShaderLib { shaders: shader_map })
+    }
+
+    pub fn create_shader_library_from_hlsl<'a, 'b>(&mut self, shaders: &[(EntryPoint, shade::Stage, &[u8])]) -> Result<native::ShaderLib, shade::CreateShaderError> {
+        let stage_to_str = |stage| {
+            match stage {
+                shade::Stage::Vertex => "vs_5_0",
+                shade::Stage::Pixel => "ps_5_0",
+                _ => unimplemented!(),
+            }
+        };
+
+        let mut shader_map = BTreeMap::new();
+        // TODO: handle entry points with the same name
+        for &(entry_point, stage, byte_code) in shaders {
+            let mut blob = ComPtr::<winapi::ID3DBlob>::new(ptr::null_mut());
+            let mut error = ComPtr::<winapi::ID3DBlob>::new(ptr::null_mut());
+			let entry = ffi::CString::new(entry_point).unwrap();
+            let hr = unsafe {
+                d3dcompiler::D3DCompile(
+                    byte_code.as_ptr() as *const _,
+                    byte_code.len() as u64,
+                    ptr::null(),
+                    ptr::null(),
+                    ptr::null_mut(),
+                    entry.as_ptr() as *const _,
+                    stage_to_str(stage).as_ptr() as *const i8,
+                    1,
+                    0,
+                    blob.as_mut() as *mut *mut _,
+                    error.as_mut() as *mut *mut _) // TODO: error handling
+            };
+
+            shader_map.insert(entry_point, blob);
         }
         Ok(native::ShaderLib { shaders: shader_map })
     }
 }
 
 impl core::Factory<R> for Device {
-    
-
     fn create_renderpass(&mut self) -> () {
-        unimplemented!()
+        // unimplemented!()
+        ()
     }
 
     fn create_pipeline_signature(&mut self) -> native::PipelineSignature {
@@ -87,8 +136,8 @@ impl core::Factory<R> for Device {
                 match shader {
                     Some(shader) => {
                         winapi::D3D12_SHADER_BYTECODE {
-                            pShaderBytecode: shader.as_ptr() as *const _,
-                            BytecodeLength: shader.len() as u64,
+                            pShaderBytecode: unsafe { (&mut *shader.as_mut_ptr()).GetBufferPointer() as *const _ },
+                            BytecodeLength: unsafe { (&mut *shader.as_mut_ptr()).GetBufferSize() as u64 },
                         }
                     }
                     None => {
@@ -106,6 +155,46 @@ impl core::Factory<R> for Device {
             let ds = build_shader(shader_lib, desc.shader_entries.domain_shader);
             let hs = build_shader(shader_lib, desc.shader_entries.hull_shader);
 
+            // Define input element descriptions
+            let mut vs_reflect = mirror::reflect_shader(&vs);
+            let input_element_descs = {
+                let input_descs = mirror::reflect_input_elements(&mut vs_reflect);
+
+                let mut input_element_descs = Vec::new();
+                for (input_desc, attrib) in input_descs.iter().zip(desc.attributes.iter()) {
+                    let vertex_buffer_desc = if let Some(buffer_desc) = desc.vertex_buffers.get(attrib.0 as usize) {
+                        buffer_desc
+                    } else {
+                        error!("Couldn't find associated vertex buffer description {:?}", attrib.0);
+                        return Err(pso::CreationError);
+                    };
+
+                    let slot_class = match vertex_buffer_desc.rate {
+                        0 => winapi::D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+                        _ => winapi::D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA,
+                    };
+
+                    input_element_descs.push(winapi::D3D12_INPUT_ELEMENT_DESC {
+                        SemanticName: input_desc.semantic_name,
+                        SemanticIndex: input_desc.semantic_index,
+                        Format: match data::map_format(attrib.1.format, false) {
+                            Some(fm) => fm,
+                            None => {
+                                error!("Unable to find DXGI format for {:?}", attrib.1.format);
+                                return Err(core::pso::CreationError);
+                            }
+                        },
+                        InputSlot: input_desc.input_slot,
+                        AlignedByteOffset: attrib.1.offset,
+                        InputSlotClass: slot_class,
+                        InstanceDataStepRate: vertex_buffer_desc.rate as u32,
+                    });
+                }
+
+                input_element_descs
+            };
+
+            //
             let (rtvs, num_rtvs) = {
                 let mut rtvs = [winapi::DXGI_FORMAT_UNKNOWN; 8];
                 let mut num_rtvs = 0;
@@ -114,6 +203,7 @@ impl core::Factory<R> for Device {
                         Some((format, _)) => {
                             *rtv = data::map_format(format, true)
                                     .unwrap_or(winapi::DXGI_FORMAT_UNKNOWN);
+                            num_rtvs += 1;   
                         }
                         None => break,
                     }
@@ -150,8 +240,8 @@ impl core::Factory<R> for Device {
                         }
                     }),
                 InputLayout: winapi::D3D12_INPUT_LAYOUT_DESC {
-                    pInputElementDescs: ptr::null(), // TODO
-                    NumElements: 0, // TODO
+                    pInputElementDescs: input_element_descs.as_ptr(),
+                    NumElements: input_element_descs.len() as u32,
                 },
                 IBStripCutValue: winapi::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED,
                 PrimitiveTopologyType: state::map_primitive_topology(desc.primitive),

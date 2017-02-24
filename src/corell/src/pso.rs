@@ -119,6 +119,36 @@ pub struct GraphicsShaderSet {
     pub pixel_shader: Option<EntryPoint>,
 }
 
+/// Vertex buffer descriptor
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct VertexBufferDesc {
+    /// Total container size, in bytes
+    pub stride: ElemStride,
+    /// Rate of the input for the given buffer
+    pub rate: InstanceRate,
+}
+
+/// Index of a vertex buffer.
+pub type BufferIndex = u8;
+/// Offset of an attribute from the start of the buffer, in bytes
+pub type ElemOffset = u32;
+/// Offset between attribute values, in bytes
+pub type ElemStride = u8;
+/// The number of instances between each subsequent attribute value
+pub type InstanceRate = u8;
+
+/// A struct element descriptor.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct Element<F> {
+    /// Element format
+    pub format: F,
+    /// Offset from the beginning of the container, in bytes
+    pub offset: ElemOffset,
+}
+
+/// PSO vertex attribute descriptor
+pub type AttributeDesc = (BufferIndex, Element<format::Format>);
+
 pub struct GraphicsPipelineDesc {
     /// Type of the primitive
     pub primitive: Primitive,
@@ -131,6 +161,10 @@ pub struct GraphicsPipelineDesc {
     /// Render target views (RTV)
     /// The entries are supposed to be contiguous, starting from 0
     pub color_targets: [Option<ColorTargetDesc>; MAX_COLOR_TARGETS],
+    /// Vertex buffers
+    pub vertex_buffers: Vec<VertexBufferDesc>,
+    /// Vertex attributes
+    pub attributes: Vec<AttributeDesc>,
 }
 
 impl GraphicsPipelineDesc {
@@ -142,6 +176,8 @@ impl GraphicsPipelineDesc {
             depth_stencil: None,
             shader_entries: shader_entries,
             color_targets: [None; MAX_COLOR_TARGETS],
+            vertex_buffers: Vec::new(),
+            attributes: Vec::new(),
         }
     }
 }

@@ -16,6 +16,7 @@
 extern crate log;
 extern crate comptr;
 extern crate d3d12;
+extern crate d3dcompiler;
 extern crate dxgi;
 extern crate dxguid;
 extern crate gfx_corell as core;
@@ -33,6 +34,7 @@ use winit::os::windows::WindowExt;
 
 mod data;
 mod factory;
+mod mirror;
 mod native;
 mod state;
 
@@ -228,15 +230,17 @@ impl core::Instance for Instance {
 
     fn create() -> Instance {
         // Enable debug layer
-        let mut debug_controller = ComPtr::<winapi::ID3D12Debug>::new(ptr::null_mut());
-        let hr = unsafe {
-            d3d12::D3D12GetDebugInterface(
-                &dxguid::IID_ID3D12Debug,
-                debug_controller.as_mut() as *mut *mut _ as *mut *mut c_void)
-        };
+        {
+            let mut debug_controller = ComPtr::<winapi::ID3D12Debug>::new(ptr::null_mut());
+            let hr = unsafe {
+                d3d12::D3D12GetDebugInterface(
+                    &dxguid::IID_ID3D12Debug,
+                    debug_controller.as_mut() as *mut *mut _ as *mut *mut c_void)
+            };
 
-        if winapi::SUCCEEDED(hr) {
-            unsafe { debug_controller.EnableDebugLayer() };
+            if winapi::SUCCEEDED(hr) {
+                unsafe { debug_controller.EnableDebugLayer() };
+            }
         }
 
         // Create DXGI factory
