@@ -32,8 +32,8 @@ struct Vertex {
     a_Color: [f32; 3],
 }
 
-#[cfg(any(feature = "vulkan", target_os = "windows"))]fn main() {
-    env_logger::init().unwrap();
+#[cfg(any(feature = "vulkan", target_os = "windows"))]
+fn main() {    env_logger::init().unwrap();
     let window = winit::WindowBuilder::new()
         .with_dimensions(1024, 768)
         .with_title("triangle (Low Level)".to_string())
@@ -55,12 +55,19 @@ struct Vertex {
     let (mut device, queues) = physical_devices[0].open(queue_descs);
     let mut swap_chain = surface.build_swapchain::<ColorFormat>(&queues[0]);
 
-    // dx12ll specific
+    #[cfg(all(target_os = "windows", not(feature = "vulkan")))]
     let shader_lib = device.create_shader_library(&[
-                ("vs_main", include_bytes!("data/vs_main.o")),
-                ("ps_main", include_bytes!("data/ps_main.o"))]
+            ("vs_main", include_bytes!("data/vs_main.o")),
+            ("ps_main", include_bytes!("data/ps_main.o"))]
         ).expect("Error on creating shader lib");
 
+    #[cfg(feature = "vulkan")]
+    let shader_lib = device.create_shader_library(&[
+            ("vs_main", include_bytes!("data/vs_main.spv")),
+            ("ps_main", include_bytes!("data/ps_main.spv"))]
+        ).expect("Error on creating shader lib");
+
+    // dx12 runtime shader compilation
     /*
     let shader_lib = device.create_shader_library_from_hlsl(&[
                 ("vs_main", shade::Stage::Vertex, include_bytes!("shader/triangle.hlsl")),

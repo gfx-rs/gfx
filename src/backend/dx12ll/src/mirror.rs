@@ -21,7 +21,6 @@ use std::{mem, ptr};
 use core::{shade};
 
 pub fn reflect_shader(code: &winapi::D3D12_SHADER_BYTECODE) -> ComPtr<winapi::ID3D12ShaderReflection> {
-    println!("{:?}", code);
     let mut reflection = ComPtr::<winapi::ID3D12ShaderReflection>::new(ptr::null_mut());
     let hr = unsafe {
         d3dcompiler::D3DReflect(
@@ -53,18 +52,12 @@ pub fn reflect_input_elements(
         desc
     };
 
-    // DEBUG:
-    println!("{:?}", shader_desc);
-
     (0 .. shader_desc.InputParameters).map(|i| {
         let input_desc = unsafe {
             let mut desc = mem::zeroed();
             vertex_reflection.GetInputParameterDesc(i, &mut desc);
             desc
         };
-
-        // DEBUG:
-        println!("{:?}", input_desc);
 
         InputElemDesc {
             semantic_name: input_desc.SemanticName,

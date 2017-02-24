@@ -16,23 +16,82 @@ use ash::vk;
 use ash::version::DeviceV1_0;
 use std::{mem, ptr};
 use std::sync::Arc;
+use std::collections::BTreeMap;
 
-use core::{self, pso, shade, state as s};
+use core::{self, shade, state as s};
 use core::SubPass;
+use core::pso::{self, EntryPoint};
 use {native, state};
-use {DeviceInner, Resources as R};
+use {Device, Resources as R};
 
-pub struct Factory {
-    device: Arc<DeviceInner>,
+impl Device {
+    pub fn create_shader_library(&mut self, shaders: &[(EntryPoint, &[u8])]) -> Result<native::ShaderLib, shade::CreateShaderError> {
+        let mut shader_map = BTreeMap::new();
+        // TODO: handle entry points with the same name
+        for &(entry_point, byte_code) in shaders {
+            // TODO: unimplemented!()
+            // shader_map.insert(entry_point, blob);
+        }
+        Ok(native::ShaderLib { shaders: shader_map })
+    }
 }
 
-impl core::Factory<R> for Factory {
+impl core::Factory<R> for Device {
     fn create_renderpass(&mut self) -> native::RenderPass {
-        unimplemented!()
+        // TODO:
+        // Dummy renderpass only
+        let subpass_desc = vk::SubpassDescription {
+            flags: vk::SubpassDescriptionFlags::empty(),
+            pipeline_bind_point: vk::PipelineBindPoint::Graphics,
+            input_attachment_count: 0, // TODO
+            p_input_attachments: ptr::null(), // TODO
+            color_attachment_count: 0, // TODO
+            p_color_attachments: ptr::null(), // TODO
+            p_resolve_attachments: ptr::null(), // TODO
+            p_depth_stencil_attachment: ptr::null(), // TODO
+            preserve_attachment_count: 0, // TODO
+            p_preserve_attachments: ptr::null(), // TODO
+        };
+
+        let info = vk::RenderPassCreateInfo {
+            s_type: vk::StructureType::RenderPassCreateInfo,
+            p_next: ptr::null(),
+            flags: vk::RenderPassCreateFlags::empty(),
+            attachment_count: 0, // TODO
+            p_attachments: ptr::null(), // TODO
+            subpass_count: 1, // TODO
+            p_subpasses: &subpass_desc, // TODO
+            dependency_count: 0, // TODO
+            p_dependencies: ptr::null(), // TODO
+        };
+
+        let renderpass = unsafe {
+            self.inner.0.create_render_pass(&info, None)
+                .expect("Error on render pass creation") // TODO: handle this better
+        };
+
+        native::RenderPass { inner: renderpass }
     }
 
     fn create_pipeline_signature(&mut self) -> native::PipelineSignature {
-        unimplemented!()
+        // TODO:
+        // Dummy signature only
+        let info = vk::PipelineLayoutCreateInfo {
+            s_type: vk::StructureType::PipelineLayoutCreateInfo,
+            p_next: ptr::null(),
+            flags: vk::PipelineLayoutCreateFlags::empty(),
+            set_layout_count: 0, // TODO
+            p_set_layouts: ptr::null(), // TODO
+            push_constant_range_count: 0, // TODO
+            p_push_constant_ranges: ptr::null(), // TODO
+        };
+
+        let layout = unsafe {
+            self.inner.0.create_pipeline_layout(&info, None)
+                .expect("Error on pipeline signature creation") // TODO: handle this better
+        };
+
+        native::PipelineSignature { layout: layout }
     }
 
     fn create_graphics_pipelines<'a>(&mut self, descs: &[(&native::ShaderLib, &native::PipelineSignature, SubPass<'a, R>, &pso::GraphicsPipelineDesc)])
@@ -43,24 +102,28 @@ impl core::Factory<R> for Factory {
                 let mut stages = Vec::new();
 
                 // Vertex stage
+                let vs_module = if let Some(module) = shader_lib.shaders.get(&desc.shader_entries.vertex_shader)
+                    { module } else { return Err(pso::CreationError) };
                 stages.push(vk::PipelineShaderStageCreateInfo {
                     s_type: vk::StructureType::PipelineShaderStageCreateInfo,
                     p_next: ptr::null(),
                     flags: vk::PipelineShaderStageCreateFlags::empty(),
                     stage: vk::SHADER_STAGE_VERTEX_BIT,
-                    module: shader_lib.inner,
+                    module: *vs_module,
                     p_name: desc.shader_entries.vertex_shader.as_bytes().as_ptr() as *const i8,
                     p_specialization_info: ptr::null(),
                 });
 
                 // Pixel stage
                 if let Some(pixel_shader) = desc.shader_entries.pixel_shader {
+                    let ps_module = if let Some(module) = shader_lib.shaders.get(&pixel_shader)
+                        { module } else { return Err(pso::CreationError) };
                     stages.push(vk::PipelineShaderStageCreateInfo {
                         s_type: vk::StructureType::PipelineShaderStageCreateInfo,
                         p_next: ptr::null(),
                         flags: vk::PipelineShaderStageCreateFlags::empty(),
                         stage: vk::SHADER_STAGE_FRAGMENT_BIT,
-                        module: shader_lib.inner,
+                        module: *ps_module,
                         p_name: pixel_shader.as_bytes().as_ptr() as *const i8,
                         p_specialization_info: ptr::null(),
                     });
@@ -68,12 +131,14 @@ impl core::Factory<R> for Factory {
 
                 // Geometry stage
                 if let Some(geometry_shader) = desc.shader_entries.geometry_shader {
+                    let gs_module = if let Some(module) = shader_lib.shaders.get(&geometry_shader)
+                        { module } else { return Err(pso::CreationError) };
                     stages.push(vk::PipelineShaderStageCreateInfo {
                         s_type: vk::StructureType::PipelineShaderStageCreateInfo,
                         p_next: ptr::null(),
                         flags: vk::PipelineShaderStageCreateFlags::empty(),
                         stage: vk::SHADER_STAGE_GEOMETRY_BIT,
-                        module: shader_lib.inner,
+                        module: *gs_module,
                         p_name: geometry_shader.as_bytes().as_ptr() as *const i8,
                         p_specialization_info: ptr::null(),
                     });
@@ -81,12 +146,14 @@ impl core::Factory<R> for Factory {
 
                 // Domain stage
                 if let Some(domain_shader) = desc.shader_entries.domain_shader {
+                    let ds_module = if let Some(module) = shader_lib.shaders.get(&domain_shader)
+                        { module } else { return Err(pso::CreationError) };
                     stages.push(vk::PipelineShaderStageCreateInfo {
                         s_type: vk::StructureType::PipelineShaderStageCreateInfo,
                         p_next: ptr::null(),
                         flags: vk::PipelineShaderStageCreateFlags::empty(),
                         stage: vk::SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
-                        module: shader_lib.inner,
+                        module: *ds_module,
                         p_name: domain_shader.as_bytes().as_ptr() as *const i8,
                         p_specialization_info: ptr::null(),
                     });
@@ -94,12 +161,14 @@ impl core::Factory<R> for Factory {
 
                 // Hull stage
                 if let Some(hull_shader) = desc.shader_entries.hull_shader {
+                    let hs_module = if let Some(module) = shader_lib.shaders.get(&hull_shader)
+                        { module } else { return Err(pso::CreationError) };
                     stages.push(vk::PipelineShaderStageCreateInfo {
                         s_type: vk::StructureType::PipelineShaderStageCreateInfo,
                         p_next: ptr::null(),
                         flags: vk::PipelineShaderStageCreateFlags::empty(),
                         stage: vk::SHADER_STAGE_TESSELLATION_CONTROL_BIT,
-                        module: shader_lib.inner,
+                        module: *hs_module,
                         p_name: hull_shader.as_bytes().as_ptr() as *const i8,
                         p_specialization_info: ptr::null(),
                     });
@@ -111,7 +180,7 @@ impl core::Factory<R> for Factory {
             let (polygon_mode, line_width) = state::map_polygon_mode(desc.rasterizer.method);
             let dynamic_states = [];
 
-            vk::GraphicsPipelineCreateInfo {
+            Ok(vk::GraphicsPipelineCreateInfo {
                 s_type: vk::StructureType::GraphicsPipelineCreateInfo,
                 p_next: ptr::null(),
                 flags: vk::PipelineCreateFlags::empty(),
@@ -222,10 +291,12 @@ impl core::Factory<R> for Factory {
                 subpass: subpass.index as u32,
                 base_pipeline_handle: vk::Pipeline::null(),
                 base_pipeline_index: -1,
-            }
+            })
         }).collect::<Vec<_>>();
         
-        unimplemented!()
+        // TODO: create the pipelines!
+
+        Vec::new()
     }
 
     fn create_compute_pipelines(&mut self) -> Vec<Result<(), pso::CreationError>> {

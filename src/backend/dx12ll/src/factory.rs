@@ -25,12 +25,12 @@ use std::collections::BTreeMap;
 
 use core::{self, shade};
 use core::SubPass;
-use core::pso::{self, EntryPoint, GraphicsShaderSet};
+use core::pso::{self, EntryPoint};
 use {data, state, mirror, native};
 use {Device, Resources as R};
 
 impl Device {
-    pub fn create_shader_library<'a, 'b>(&mut self, shaders: &[(EntryPoint, &[u8])]) -> Result<native::ShaderLib, shade::CreateShaderError> {
+    pub fn create_shader_library(&mut self, shaders: &[(EntryPoint, &[u8])]) -> Result<native::ShaderLib, shade::CreateShaderError> {
         let mut shader_map = BTreeMap::new();
         // TODO: handle entry points with the same name
         for &(entry_point, byte_code) in shaders {
@@ -40,7 +40,8 @@ impl Device {
                     byte_code.len() as u64,
                     blob.as_mut() as *mut *mut _)
             };
-            println!("{:?}", hr); // TODO: error handling
+            // TODO: error handling
+
             unsafe {
                 ptr::copy(
                     byte_code.as_ptr(),
@@ -52,7 +53,7 @@ impl Device {
         Ok(native::ShaderLib { shaders: shader_map })
     }
 
-    pub fn create_shader_library_from_hlsl<'a, 'b>(&mut self, shaders: &[(EntryPoint, shade::Stage, &[u8])]) -> Result<native::ShaderLib, shade::CreateShaderError> {
+    pub fn create_shader_library_from_hlsl(&mut self, shaders: &[(EntryPoint, shade::Stage, &[u8])]) -> Result<native::ShaderLib, shade::CreateShaderError> {
         let stage_to_str = |stage| {
             match stage {
                 shade::Stage::Vertex => "vs_5_0",
