@@ -18,11 +18,10 @@
 //! will want to use the typed and safe `PipelineState`. See the `pso` module inside the `gfx`
 //! crate.
 
-use {MAX_COLOR_TARGETS, MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
-     MAX_RESOURCE_VIEWS, MAX_UNORDERED_VIEWS, MAX_SAMPLERS};
-use {ConstantBufferSlot, ColorSlot, ResourceViewSlot,
-     UnorderedViewSlot, SamplerSlot,
-     Primitive, Resources};
+use {MAX_COLOR_TARGETS, MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS, MAX_RESOURCE_VIEWS,
+     MAX_UNORDERED_VIEWS, MAX_SAMPLERS};
+use {ConstantBufferSlot, ColorSlot, ResourceViewSlot, UnorderedViewSlot, SamplerSlot, Primitive,
+     Resources};
 use {format, state as s, texture};
 use shade::Usage;
 use std::error::Error;
@@ -222,19 +221,23 @@ impl<R: Resources> VertexBufferSet<R> {
 }
 
 /// A constant buffer run-time parameter for PSO.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ConstantBufferParam<R: Resources>(pub R::Buffer, pub Usage, pub ConstantBufferSlot);
 
 /// A shader resource view (SRV) run-time parameter for PSO.
-#[derive(Copy, Clone, Debug)]
-pub struct ResourceViewParam<R: Resources>(pub R::ShaderResourceView, pub Usage, pub ResourceViewSlot);
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct ResourceViewParam<R: Resources>(pub R::ShaderResourceView,
+                                           pub Usage,
+                                           pub ResourceViewSlot);
 
 /// An unordered access view (UAV) run-time parameter for PSO.
-#[derive(Copy, Clone, Debug)]
-pub struct UnorderedViewParam<R: Resources>(pub R::UnorderedAccessView, pub Usage, pub UnorderedViewSlot);
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct UnorderedViewParam<R: Resources>(pub R::UnorderedAccessView,
+                                            pub Usage,
+                                            pub UnorderedViewSlot);
 
 /// A sampler run-time parameter for PSO.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct SamplerParam<R: Resources>(pub R::Sampler, pub Usage, pub SamplerSlot);
 
 /// A complete set of render targets to be used for pixel export in PSO.
