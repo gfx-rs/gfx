@@ -192,9 +192,11 @@ struct GlState {
     blend_color: Option<ColorValue>,
     viewport: Option<Rect>,
     rasterizer: Option<s::Rasterizer>,
-    stencil_state: Option<(Option<s::Stencil>, (Stencil, Stencil), s::CullFace)>,
+    stencil_enabled: Option<s::Stencil>,
+    stencil_state: Option<((Stencil, Stencil), s::CullFace)>,
     framebuffer: Option<(Access, FrameBuffer)>,
     index: Buffer,
+    attribute: Option<(c::AttributeSlot, Buffer, BufferElement)>,
 }
 
 impl GlState {
@@ -210,9 +212,11 @@ impl GlState {
             blend_color: None,
             viewport: None,
             rasterizer: None,
+            stencil_enabled: None,
             stencil_state: None,
             framebuffer: None,
             index: 0,
+            attribute: None,
         }
     }
 
@@ -254,8 +258,15 @@ impl GlState {
                 }
                 self.vao_bound = true;
             }
-            Command::BindAttribute(_attribute_slot, _buffer, _buffer_element) => {
-                return;
+            Command::BindAttribute(attribute_slot, buffer, buffer_element) => {
+                // BUGGO: This can potentially bind many different
+                // attributes but we only record the latest one,
+                // we'll have to keep a map of all attributes
+                // to do this right.
+                if self.attribute == Some((attribute_slot, buffer, buffer_element)) {
+                    return;
+                }
+                self.attribute = Some((attribute_slot, buffer, buffer_element));
             }
             Command::UnbindAttribute(_attribute_slot) => (),
             Command::BindIndex(buffer) => {
@@ -297,10 +308,34 @@ impl GlState {
                 self.depth_state = option_depth;
             }
             Command::SetStencilState(option_stencil, stencils, cullface) => {
-                if self.stencil_state == Some((option_stencil, stencils, cullface)) {
-                    return;
+                // This is a little more complex 'cause if option_stencil
+                // is None the stencil state is disabled, it it's Some
+                // then it's enabled and parameters are set.
+                // That's actually bad because it makes it impossible
+                // to completely remove all redundant calls if the
+                // stencil is enabled;
+                // we'll be re-enabling it over and over.
+                // BUGGO: This isn't actually removing all the
+                // bogus glDisable(cap = GL_STENCIL_TEST) calls,
+                // look into it more.
+                if option_stencil.is_none() {
+                    // Check if we need to disable stencil state,
+                    // if so do so.
+                    if self.stencil_enabled.is_some() {
+                        self.stencil_state = None;
+                        // continue and push the command
+                    } else {
+                        // stenciling is disabled, don't bother
+                        // doing anything else with it.
+                        return;
+                    }
+                } else {
+                    if self.stencil_state == Some((stencils, cullface)) {
+                        return;
+                    } else {
+                        self.stencil_state = Some((stencils, cullface));
+                    }
                 }
-                self.stencil_state = Some((option_stencil, stencils, cullface));
             }
             Command::SetBlendState(color_slot, color) => {
                 if let Some(bs) = self.blend_state {
