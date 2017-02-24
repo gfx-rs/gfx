@@ -318,22 +318,18 @@ impl GlState {
                 // BUGGO: This isn't actually removing all the
                 // bogus glDisable(cap = GL_STENCIL_TEST) calls,
                 // look into it more.
-                if option_stencil.is_none() {
-                    // Check if we need to disable stencil state,
-                    // if so do so.
-                    if self.stencil_enabled.is_some() {
-                        self.stencil_state = None;
-                        // continue and push the command
-                    } else {
-                        // stenciling is disabled, don't bother
-                        // doing anything else with it.
-                        return;
-                    }
+                if let Some(stencil) = option_stencil {
+                    // Enable stenciling
+                    // BUGGO:
+                    // We don't bother optimizing this case yet
+                    // because it's a PITA, so we just continue.
                 } else {
-                    if self.stencil_state == Some((stencils, cullface)) {
+                    // Disable stenciling
+                    if self.stencil_enabled == option_stencil {
+                        // Already disabled, all good.
                         return;
                     } else {
-                        self.stencil_state = Some((stencils, cullface));
+                        self.stencil_enabled = option_stencil;
                     }
                 }
             }
@@ -548,8 +544,10 @@ impl command::Buffer<Resources> for CommandBuffer {
     }
 
     fn set_ref_values(&mut self, rv: s::RefValues) {
-        self.buf
-            .push(Command::SetStencilState(self.cache.stencil, rv.stencil, self.cache.cull_face));
+        self.saved_state.filter_push(&mut self.buf,
+                                     Command::SetStencilState(self.cache.stencil,
+                                                              rv.stencil,
+                                                              self.cache.cull_face));
         self.saved_state.filter_push(&mut self.buf, Command::SetBlendColor(rv.blend));
     }
 
