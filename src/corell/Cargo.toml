@@ -28,3 +28,4 @@ path = "src/lib.rs"
 
 [dependencies]
 log = "0.3"
+draw_state = "0.6"

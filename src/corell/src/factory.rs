@@ -12,24 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use Resources;
+use {pso, shade};
+use {Resources, SubPass};
 
 /// A `Factory` is responsible for creating and managing resources for the backend it was created
-/// with. 
-///
-/// # Construction and Handling
-/// A `Factory` is typically created along with other objects using a helper function of the
-/// appropriate gfx_window module (e.g. gfx_window_glutin::init()).
+/// with.
 ///
 /// This factory structure can then be used to create and manage different resources, like buffers,
-/// shader programs and textures. See the individual methods for more information.
-///
-/// Also see the `FactoryExt` trait inside the `gfx` module for additional methods.
+/// pipelines and textures. See the individual methods for more information.
 #[allow(missing_docs)]
 pub trait Factory<R: Resources> {
     /// 
-    fn allocate_memory(&mut self);
+    // fn allocate_memory(&mut self);
 
     ///
-    fn create_shader(&mut self, code: &[u8]);
+    fn create_renderpass(&mut self) -> R::RenderPass;
+
+    ///
+    fn create_pipeline_signature(&mut self) -> R::PipelineSignature;
+
+    ///
+    fn create_graphics_pipelines<'a>(&mut self, &[(&R::ShaderLib, &R::PipelineSignature, SubPass<'a, R>, &pso::GraphicsPipelineDesc)])
+            -> Vec<Result<R::PipelineStateObject, pso::CreationError>>;
+
+    ///
+    fn create_compute_pipelines(&mut self) -> Vec<Result<R::PipelineStateObject, pso::CreationError>>;
 }
