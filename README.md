@@ -105,7 +105,7 @@ If you compile the example for the first time, it may take some while since all 
 If you want to build your own stand-alone gfx program, add the following to your new `Cargo.toml`:
 
 	[dependencies]
-	gfx = "0.13"
+	gfx = "0.14"
 
 
 For gfx to work, it needs access to the graphics system of the OS. This is typically provided through some window initialization API.
@@ -121,7 +121,9 @@ To use `glutin`, for example, your `Cargo.toml` must be extended with the follow
 	glutin ="*"
 	gfx_window_glutin = "*"
 
-You may want to inspect `<my_dir>/gfx/Cargo.toml` for other modules typically used in gfx programs.
+You may want to inspect `<my_dir>/gfx/Cargo.toml` for other crates typically used in gfx programs.
+
+Alternatively, an excellent introduction into gfx and its related crates can be found [here](https://wiki.alopex.li/LearningGfx).
 
 ## Note
 
