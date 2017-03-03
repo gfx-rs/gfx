@@ -26,7 +26,6 @@ extern crate gfx_core as core;
 use std::cell::RefCell;
 use std::rc::Rc;
 use core::{self as c, handle, state as s, format, pso, texture, memory, command as com, buffer};
-use core::memory::{RENDER_TARGET, DEPTH_STENCIL};
 use core::target::{Layer, Level};
 use command::{Command, DataBuffer};
 use factory::MappingKind;
@@ -189,7 +188,7 @@ pub fn create_main_targets_raw(dim: texture::Dimensions, color_format: format::S
             levels: 1,
             kind: texture::Kind::D2(dim.0, dim.1, dim.3),
             format: color_format,
-            bind: RENDER_TARGET,
+            bind: memory::RENDER_TARGET | memory::TRANSFER_SRC,
             usage: memory::Usage::Data,
         },
     );
@@ -199,7 +198,7 @@ pub fn create_main_targets_raw(dim: texture::Dimensions, color_format: format::S
             levels: 1,
             kind: texture::Kind::D2(dim.0, dim.1, dim.3),
             format: depth_format,
-            bind: DEPTH_STENCIL,
+            bind: memory::DEPTH_STENCIL | memory::TRANSFER_SRC,
             usage: memory::Usage::Data,
         },
     );
@@ -587,6 +586,18 @@ impl Device {
                                          src_offset,
                                          dst_offset,
                                          size);
+                }
+            },
+            Command::CopyBufferToTexture(src, src_offset, dst, kind, face, img) => {
+                match tex::copy_from_buffer(&self.share.context, dst, kind, face, &img, src, src_offset) {
+                    Ok(_) => (),
+                    Err(e) => error!("GL: {:?} failed: {:?}", cmd, e)
+                }
+            },
+            Command::CopyTextureToBuffer(src, kind, face, img, dst, dst_offset) => {
+                match tex::copy_to_buffer(&self.share.context, src, kind, face, &img, dst, dst_offset) {
+                    Ok(_) => (),
+                    Err(e) => error!("GL: {:?} failed: {:?}", cmd, e)
                 }
             },
             Command::UpdateBuffer(buffer, pointer, offset) => {

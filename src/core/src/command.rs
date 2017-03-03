@@ -68,6 +68,16 @@ pub trait Buffer<R: Resources>: Send {
     fn copy_buffer(&mut self, src: R::Buffer, dst: R::Buffer,
                    src_offset_bytes: usize, dst_offset_bytes: usize,
                    size_bytes: usize);
+    /// Copy part of a buffer to a texture
+    fn copy_buffer_to_texture(&mut self,
+                              src: R::Buffer, src_offset_bytes: usize,
+                              dst: R::Texture, texture::Kind,
+                              Option<texture::CubeFace>, texture::RawImageInfo);
+    /// Copy part of a texture to a buffer
+    fn copy_texture_to_buffer(&mut self,
+                              src: R::Texture, texture::Kind,
+                              Option<texture::CubeFace>, texture::RawImageInfo,
+                              dst: R::Buffer, dst_offset_bytes: usize);
     /// Update a vertex/index/uniform buffer
     fn update_buffer(&mut self, R::Buffer, data: &[u8], offset: usize);
     /// Update a texture

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use {gl, Surface, Texture, Sampler};
+use {gl, Surface, Texture, NewTexture, Buffer, Sampler};
 use gl::types::{GLenum, GLuint, GLint, GLfloat, GLsizei, GLvoid};
 use state;
 use core::memory::SHADER_RESOURCE;
@@ -573,7 +573,7 @@ pub fn bind_sampler(gl: &gl::Gl, target: GLenum, info: &t::SamplerInfo, is_embed
     }
 }}
 
-fn update_texture_impl<F>(gl: &gl::Gl, kind: t::Kind, target: GLenum, pix: GLenum,
+fn tex_sub_image<F>(gl: &gl::Gl, kind: t::Kind, target: GLenum, pix: GLenum,
                        typ: GLenum, img: &t::ImageInfoCommon<F>, data: *const GLvoid)
                        -> Result<(), t::CreationError> {
     Ok(match kind {
@@ -635,6 +635,87 @@ fn update_texture_impl<F>(gl: &gl::Gl, kind: t::Kind, target: GLenum, pix: GLenu
     })
 }
 
+pub fn copy_from_buffer(gl: &gl::Gl,
+                        dst: Texture,
+                        kind: t::Kind,
+                        face: Option<t::CubeFace>,
+                        img: &t::RawImageInfo,
+                        src: Buffer, src_offset: gl::types::GLintptr)
+                        -> Result<(), t::CreationError>
+{
+    // will be treated as a byte offset into the buffer object's data store
+    let data = src_offset as *const GLvoid;
+    unsafe { gl.BindBuffer(gl::PIXEL_UNPACK_BUFFER, src); }
+
+    let pixel_format = format_to_glpixel(img.format);
+    let data_type = match format_to_gltype(img.format) {
+        Ok(t) => t,
+        Err(_) => return Err(t::CreationError::Format(img.format.0, Some(img.format.1))),
+    };
+
+    let target = kind_to_gl(kind);
+    unsafe { gl.BindTexture(target, dst); }
+
+    let target = kind_face_to_gl(kind, face);
+    tex_sub_image(gl, kind, target, pixel_format, data_type, img, data)
+}
+
+pub fn copy_to_buffer(gl: &gl::Gl,
+                      src: NewTexture,
+                      kind: t::Kind,
+                      face: Option<t::CubeFace>,
+                      img: &t::RawImageInfo,
+                      dst: Buffer, dst_offset: gl::types::GLintptr)
+                      -> Result<(), t::CreationError>
+{
+    let data = dst_offset as *mut GLvoid;
+    unsafe { gl.BindBuffer(gl::PIXEL_PACK_BUFFER, dst); }
+
+    let pixel_format = format_to_glpixel(img.format);
+    let data_type = match format_to_gltype(img.format) {
+        Ok(t) => t,
+        Err(_) => return Err(t::CreationError::Format(img.format.0, Some(img.format.1))),
+    };
+
+    match src {
+        NewTexture::Texture(t) => {
+            let target = kind_to_gl(kind);
+            unsafe { gl.BindTexture(target, t); }
+
+            let target = kind_face_to_gl(kind, face);
+            // FIXME: can't specify image offsets
+            let (w, h, d, _) = kind.get_dimensions();
+            debug_assert!(img.xoffset == 0 &&
+                          img.yoffset == 0 &&
+                          img.zoffset == 0 &&
+                          img.width == w &&
+                          img.height == h &&
+                          img.depth == d);
+            unsafe {
+                gl.GetTexImage(target,
+                               img.mipmap as GLint,
+                               pixel_format,
+                               data_type,
+                               data);
+            }
+        }
+        NewTexture::Surface(s) => {
+            unsafe {
+                gl.BindFramebuffer(gl::READ_FRAMEBUFFER, s);
+                gl.ReadPixels(img.xoffset as GLint,
+                              img.yoffset as GLint,
+                              img.width as GLint,
+                              img.height as GLint,
+                              pixel_format,
+                              data_type,
+                              data);
+            }
+        }
+    }
+
+    Ok(())
+}
+
 pub fn update_texture(gl: &gl::Gl, name: Texture,
                       kind: t::Kind, face: Option<t::CubeFace>,
                       img: &t::RawImageInfo, slice: &[u8])
@@ -651,7 +732,7 @@ pub fn update_texture(gl: &gl::Gl, name: Texture,
     unsafe { gl.BindTexture(target, name) };
 
     let target = kind_face_to_gl(kind, face);
-    update_texture_impl(gl, kind, target, pixel_format, data_type, img, data)
+    tex_sub_image(gl, kind, target, pixel_format, data_type, img, data)
 }
 
 pub fn init_texture_data(gl: &gl::Gl, name: Texture, desc: t::Info, channel: ChannelType,

@@ -30,14 +30,14 @@ use pso;
 /// An error occuring in memory copies.
 #[allow(missing_docs)]
 #[derive(Clone, Debug, PartialEq)]
-pub enum CopyError {
+pub enum CopyError<S, D> {
     OutOfSrcBounds {
-        size: usize,
-        copy_end: usize,
+        size: S,
+        copy_end: S,
     },
     OutOfDstBounds {
-        size: usize,
-        copy_end: usize,
+        size: D,
+        copy_end: D,
     },
     Overlap {
         src_offset: usize,
@@ -48,9 +48,13 @@ pub enum CopyError {
     NoDstBindFlag,
 }
 
-pub type CopyResult = Result<(), CopyError>;
+pub type CopyBufferResult = Result<(), CopyError<usize, usize>>;
+pub type CopyBufferTextureResult = Result<(), CopyError<usize, [texture::Size; 3]>>;
+pub type CopyTextureBufferResult = Result<(), CopyError<[texture::Size; 3], usize>>;
 
-impl fmt::Display for CopyError {
+impl<S, D> fmt::Display for CopyError<S, D>
+    where S: fmt::Debug + fmt::Display, D: fmt::Debug + fmt::Display
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use self::CopyError::*;
         match *self {
@@ -68,7 +72,9 @@ impl fmt::Display for CopyError {
     }
 }
 
-impl Error for CopyError {
+impl<S, D> Error for CopyError<S, D>
+    where S: fmt::Debug + fmt::Display, D: fmt::Debug + fmt::Display
+{
     fn description(&self) -> &str {
         use self::CopyError::*;
         match *self {
@@ -191,7 +197,7 @@ impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
 
     /// Copy part of a buffer to another
     pub fn copy_buffer<T: Pod>(&mut self, src: &handle::Buffer<R, T>, dst: &handle::Buffer<R, T>,
-                               src_offset: usize, dst_offset: usize, size: usize) -> CopyResult {
+                               src_offset: usize, dst_offset: usize, size: usize) -> CopyBufferResult {
         if !src.get_info().bind.contains(memory::TRANSFER_SRC) {
             return Err(CopyError::NoSrcBindFlag);
         }
@@ -233,6 +239,91 @@ impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
             self.handles.ref_buffer(src.raw()).clone(),
             self.handles.ref_buffer(dst.raw()).clone(),
             src_offset_bytes, dst_offset_bytes, size_bytes);
+        Ok(())
+    }
+
+    /// Copy part of a buffer to a texture
+    pub fn copy_buffer_to_texture_raw(
+        &mut self, src: &handle::RawBuffer<R>, src_offset_bytes: usize,
+        dst: &handle::RawTexture<R>, face: Option<texture::CubeFace>, info: texture::RawImageInfo)
+        -> CopyBufferTextureResult
+    {
+        if !src.get_info().bind.contains(memory::TRANSFER_SRC) {
+            return Err(CopyError::NoSrcBindFlag);
+        }
+        if !dst.get_info().bind.contains(memory::TRANSFER_DST) {
+            return Err(CopyError::NoDstBindFlag);
+        }
+
+        let size_bytes = info.get_byte_count();
+        let src_copy_end = src_offset_bytes + size_bytes;
+        if src_copy_end > src.get_info().size {
+            return Err(CopyError::OutOfSrcBounds {
+                size: src.get_info().size,
+                copy_end: src_copy_end,
+            });
+        }
+
+        let dim = dst.get_info().kind.get_dimensions();
+        if !info.is_inside(dim) {
+            let (w, h, d, _) = dim;
+            return Err(CopyError::OutOfDstBounds {
+                size: [w, h, d],
+                copy_end: [info.xoffset + info.width,
+                           info.yoffset + info.height,
+                           info.zoffset + info.depth]
+            });
+        }
+
+        self.access_info.buffer_read(src);
+
+        self.command_buffer.copy_buffer_to_texture(
+            self.handles.ref_buffer(src).clone(), src_offset_bytes,
+            self.handles.ref_texture(dst).clone(), dst.get_info().kind,
+            face, info);
+        Ok(())
+    }
+
+    /// Copy part of a texture to a buffer
+    pub fn copy_texture_to_buffer_raw(
+        &mut self, src: &handle::RawTexture<R>,
+        face: Option<texture::CubeFace>, info: texture::RawImageInfo,
+        dst: &handle::RawBuffer<R>, dst_offset_bytes: usize)
+        -> CopyTextureBufferResult
+    {
+        if !src.get_info().bind.contains(memory::TRANSFER_SRC) {
+            return Err(CopyError::NoSrcBindFlag);
+        }
+        if !dst.get_info().bind.contains(memory::TRANSFER_DST) {
+            return Err(CopyError::NoDstBindFlag);
+        }
+
+        let size_bytes = info.get_byte_count();
+        let dst_copy_end = dst_offset_bytes + size_bytes;
+        if dst_copy_end > dst.get_info().size {
+            return Err(CopyError::OutOfDstBounds {
+                size: dst.get_info().size,
+                copy_end: dst_copy_end,
+            });
+        }
+
+        let dim = src.get_info().kind.get_dimensions();
+        if !info.is_inside(dim) {
+            let (w, h, d, _) = dim;
+            return Err(CopyError::OutOfSrcBounds {
+                size: [w, h, d],
+                copy_end: [info.xoffset + info.width,
+                           info.yoffset + info.height,
+                           info.zoffset + info.depth]
+            });
+        }
+
+        self.access_info.buffer_write(dst);
+
+        self.command_buffer.copy_texture_to_buffer(
+            self.handles.ref_texture(src).clone(), src.get_info().kind,
+            face, info,
+            self.handles.ref_buffer(dst).clone(), dst_offset_bytes);
         Ok(())
     }
 
