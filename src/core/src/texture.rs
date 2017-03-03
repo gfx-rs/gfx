@@ -361,6 +361,14 @@ impl<F> ImageInfoCommon<F> {
     }
 }
 
+impl RawImageInfo {
+    /// Get the total number of bytes.
+    pub fn get_byte_count(&self) -> usize {
+        let texel_bytes = self.format.0.get_total_bits() / 8;
+        self.get_texel_count() * (texel_bytes as usize)
+    }
+}
+
 /// Specifies how texture coordinates outside the range `[0, 1]` are handled.
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 pub enum WrapMode {

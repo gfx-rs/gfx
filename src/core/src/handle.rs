@@ -161,6 +161,9 @@ pub struct RawRenderTargetView<R: Resources>(Arc<R::RenderTargetView>, RawTextur
 impl<R: Resources> RawRenderTargetView<R> {
     /// Get target dimensions
     pub fn get_dimensions(&self) -> texture::Dimensions { self.2 }
+
+    /// Get the associated texture
+    pub fn get_texture(&self) -> &RawTexture<R> { &self.1 }
 }
 
 /// Raw DSV
@@ -171,6 +174,9 @@ pub struct RawDepthStencilView<R: Resources>(Arc<R::DepthStencilView>, RawTextur
 impl<R: Resources> RawDepthStencilView<R> {
     /// Get target dimensions
     pub fn get_dimensions(&self) -> texture::Dimensions { self.2 }
+
+    /// Get the associated texture
+    pub fn get_texture(&self) -> &RawTexture<R> { &self.1 }
 }
 
 /// Typed RTV

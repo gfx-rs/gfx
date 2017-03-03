@@ -100,6 +100,16 @@ pub enum Command {
     CopyBuffer(Buffer, Buffer,
                gl::types::GLintptr, gl::types::GLintptr,
                gl::types::GLsizeiptr),
+    CopyBufferToTexture(Buffer, gl::types::GLintptr,
+                        Texture,
+                        c::texture::Kind,
+                        Option<c::texture::CubeFace>,
+                        c::texture::RawImageInfo),
+    CopyTextureToBuffer(NewTexture,
+                        c::texture::Kind,
+                        Option<c::texture::CubeFace>,
+                        c::texture::RawImageInfo,
+                        Buffer, gl::types::GLintptr),
     // resource updates
     UpdateBuffer(Buffer, DataPointer, usize),
     UpdateTexture(Texture, c::texture::Kind, Option<c::texture::CubeFace>,
@@ -335,6 +345,35 @@ impl command::Buffer<Resources> for CommandBuffer {
                                           src_offset_bytes as gl::types::GLintptr,
                                           dst_offset_bytes as gl::types::GLintptr,
                                           size_bytes as gl::types::GLsizeiptr));
+    }
+
+    fn copy_buffer_to_texture(&mut self,
+                              src: Buffer, src_offset_bytes: usize,
+                              dst: NewTexture,
+                              kind: c::texture::Kind,
+                              face: Option<c::texture::CubeFace>,
+                              img: c::texture::RawImageInfo) {
+        match dst {
+            NewTexture::Texture(t) =>
+                self.buf.push(Command::CopyBufferToTexture(
+                    src, src_offset_bytes as gl::types::GLintptr,
+                    t, kind, face, img
+                )),
+            NewTexture::Surface(s) =>
+                error!("GL: Cannot copy to a Surface({})", s)
+        }
+    }
+
+    fn copy_texture_to_buffer(&mut self,
+                              src: NewTexture,
+                              kind: c::texture::Kind,
+                              face: Option<c::texture::CubeFace>,
+                              img: c::texture::RawImageInfo,
+                              dst: Buffer, dst_offset_bytes: usize) {
+        self.buf.push(Command::CopyTextureToBuffer(
+            src, kind, face, img,
+            dst, dst_offset_bytes as gl::types::GLintptr
+        ));
     }
 
     fn update_buffer(&mut self, buf: Buffer, data: &[u8], offset_bytes: usize) {
