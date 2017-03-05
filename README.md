@@ -33,7 +33,7 @@
     <img src="https://img.shields.io/badge/GITTER-join%20chat-green.svg?style=flat-square" alt="Gitter Chat">
   </a>
   <br>
-  <strong><a href="http://docs.rs/gfx">Documentation</a> | <a href="http://gfx-rs.github.io/">Blog</a> </strong>
+  <strong><a href="http://docs.rs/gfx">Documentation</a> | <a href="https://wiki.alopex.li/LearningGfx">Tutorial</a> <a href="http://gfx-rs.github.io/">Blog</a> </strong>
 </p>
 
 ## gfx-rs
@@ -76,13 +76,13 @@ Biggest open-source projects are:
 
 Shiny screens, including some older projects:
 <p align="center">
-  <img src="https://raw.githubusercontent.com/csherratt/snowmew/master/.screenshot.jpg" height="160" alt="Snowmew"/>
+  <!--img src="https://raw.githubusercontent.com/csherratt/snowmew/master/.screenshot.jpg" height="160" alt="Snowmew"/-->
   <img src="https://github.com/PistonDevelopers/hematite/blob/master/screenshot.png" height="160" alt="Hematite"/>
   <img src="http://image.prntscr.com/image/2f1ec5d477e042dda2c29323c9f49ab4.png" height="160" alt="LazyBox"/>
   <img src="https://github.com/kvark/vange-rs/blob/master/etc/shots/Road10-debug-shape.png" height="160" alt="Vange-rs"/>
   <img src="https://github.com/kvark/claymore/raw/master/etc/screens/7-forest.jpg" height="160" alt="Claymore"/>
   <img src="https://camo.githubusercontent.com/fb8c95650fba27061e58e76f17ff8460a41b3312/687474703a2f2f692e696d6775722e636f6d2f504f68534c77682e706e67" height="160" alt="ZoC"/>
-  <img src="https://raw.githubusercontent.com/csherratt/petri/master/petri.png" height="160" alt="Petri"/>
+  <!--img src="https://raw.githubusercontent.com/csherratt/petri/master/petri.png" height="160" alt="Petri"/-->
 </p>
 
 ## Getting started
