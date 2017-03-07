@@ -21,7 +21,7 @@ use std::hash::Hash;
 use std::any::Any;
 use std::slice::Iter;
 
-pub use draw_state::state;
+pub use draw_state::{state, target};
 pub use self::factory::Factory;
 
 pub mod command;
