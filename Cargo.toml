@@ -27,7 +27,7 @@ winit = "0.5.1"
 gfx_core = { path = "src/core", version = "0.6" }
 gfx_corell = { path = "src/corell", version = "0.1" }
 gfx = { path = "src/render", version = "0.14" }
-gfx_macros = { path = "src/macros", version = "0.1" }
+gfx_macros = { path = "src/macros", version = "0.2" }
 gfx_device_gl = { path = "src/backend/gl", version = "0.13" }
 gfx_window_glutin = { path = "src/window/glutin", version = "0.14" }
 

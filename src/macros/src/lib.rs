@@ -7,7 +7,7 @@ extern crate syn;
 use proc_macro::TokenStream;
 
 
-#[proc_macro_derive(GfxVertexFormat)]
+#[proc_macro_derive(VertexData)]
 pub fn vertex(input: TokenStream) -> TokenStream {
     let s = input.to_string();
     let ast = syn::parse_macro_input(&s).unwrap();
@@ -15,7 +15,7 @@ pub fn vertex(input: TokenStream) -> TokenStream {
     gen.parse().unwrap()
 }
 
-#[proc_macro_derive(GfxConstantBuffer)]
+#[proc_macro_derive(ConstantBuffer)]
 pub fn constant(input: TokenStream) -> TokenStream {
     let s = input.to_string();
     let ast = syn::parse_macro_input(&s).unwrap();
