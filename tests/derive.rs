@@ -1,12 +1,12 @@
 extern crate gfx;
 #[macro_use] extern crate gfx_macros;
 
-#[derive(GfxVertexFormat)]
+#[derive(VertexData)]
 struct Vertex {
-    pad: [u8; 4],
+    pos: [u8; 4],
 }
 
-#[derive(GfxConstantBuffer)]
+#[derive(ConstantBuffer)]
 struct Constant {
     transform: [[f32; 4]; 4],
 }
