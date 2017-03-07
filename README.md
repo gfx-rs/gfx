@@ -33,7 +33,7 @@
     <img src="https://img.shields.io/badge/GITTER-join%20chat-green.svg?style=flat-square" alt="Gitter Chat">
   </a>
   <br>
-  <strong><a href="http://docs.rs/gfx">Documentation</a> | <a href="https://wiki.alopex.li/LearningGfx">Tutorial</a> <a href="http://gfx-rs.github.io/">Blog</a> </strong>
+  <strong><a href="http://docs.rs/gfx">Documentation</a> | <a href="https://wiki.alopex.li/LearningGfx">Tutorial</a> | <a href="http://gfx-rs.github.io/">Blog</a> </strong>
 </p>
 
 ## gfx-rs
