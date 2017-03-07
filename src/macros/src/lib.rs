@@ -6,10 +6,25 @@ extern crate syn;
 
 use proc_macro::TokenStream;
 
-#[proc_macro_derive(GfxStruct)]
-pub fn structure(input: TokenStream) -> TokenStream {
+
+#[proc_macro_derive(GfxVertexFormat)]
+pub fn vertex(input: TokenStream) -> TokenStream {
     let s = input.to_string();
     let ast = syn::parse_macro_input(&s).unwrap();
+    let gen = structure(ast, quote!(gfx::format::Formatted), quote!(gfx::format::Format));
+    gen.parse().unwrap()
+}
+
+#[proc_macro_derive(GfxConstantBuffer)]
+pub fn constant(input: TokenStream) -> TokenStream {
+    let s = input.to_string();
+    let ast = syn::parse_macro_input(&s).unwrap();
+    let gen = structure(ast, quote!(gfx::shade::Formatted), quote!(gfx::shade::ConstFormat));
+    gen.parse().unwrap()
+}
+
+fn structure(ast: syn::DeriveInput, ty_compile: quote::Tokens, ty_run: quote::Tokens)
+             -> quote::Tokens {
     let name = &ast.ident;
     let fields = match ast.body {
         syn::Body::Struct(syn::VariantData::Struct(ref fields)) => fields,
@@ -20,14 +35,14 @@ pub fn structure(input: TokenStream) -> TokenStream {
         let ty = &field.ty;
         quote! {
             stringify!(#ident) => Some(Element {
-                format: <#ty as gfx::format::Formatted>::get_format(),
+                format: <#ty as #ty_compile>::get_format(),
                 offset: ((&tmp.#ident as *const _ as usize) - base) as ElemOffset + big_offset,
             }),
         }
     });
-    let gen = quote! {
-        impl gfx::pso::buffer::Structure<gfx::format::Format> for #name {
-            fn query(field_name: &str) -> Option<gfx::pso::buffer::Element<gfx::format::Format>> {
+    quote! {
+        impl gfx::pso::buffer::Structure<#ty_run> for #name {
+            fn query(field_name: &str) -> Option<gfx::pso::buffer::Element<#ty_run>> {
                 use std::mem::{size_of, transmute};
                 use gfx::pso::buffer::{Element, ElemOffset};
                 let tmp: &#name = unsafe { transmute(1usize) };
@@ -53,6 +68,5 @@ pub fn structure(input: TokenStream) -> TokenStream {
                 }
             }
         }
-    };
-    gen.parse().unwrap()
+    }
 }
