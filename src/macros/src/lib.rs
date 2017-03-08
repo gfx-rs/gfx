@@ -28,7 +28,7 @@ fn structure(ast: syn::DeriveInput, ty_compile: quote::Tokens, ty_run: quote::To
     let name = &ast.ident;
     let fields = match ast.body {
         syn::Body::Struct(syn::VariantData::Struct(ref fields)) => fields,
-        _ => panic!("`GfxStruct` can only be derived for structs"),
+        _ => panic!("gfx-rs custom derives can only be casted on structs"),
     };
     let match_name = fields.iter().map(|field| {
         let ident = &field.ident;
@@ -45,6 +45,7 @@ fn structure(ast: syn::DeriveInput, ty_compile: quote::Tokens, ty_run: quote::To
             fn query(field_name: &str) -> Option<gfx::pso::buffer::Element<#ty_run>> {
                 use std::mem::{size_of, transmute};
                 use gfx::pso::buffer::{Element, ElemOffset};
+                // using an address of 1 as a simplest non-zero pointer to avoid UB
                 let tmp: &#name = unsafe { transmute(1usize) };
                 let base = tmp as *const _ as usize;
                 let (sub_name, big_offset) = {
