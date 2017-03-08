@@ -317,10 +317,29 @@ impl command::Buffer<Resources> for CommandBuffer {
         // TODO: blend/stencil
     }
 
-    #[allow(dead_code)]
+    #[allow(unused_variables)]
     fn copy_buffer(&mut self, src: Buffer, dst: Buffer,
                    src_offset_bytes: usize, dst_offset_bytes: usize,
                    size_bytes: usize) {
+        unimplemented!()
+    }
+
+    #[allow(unused_variables)]
+    fn copy_buffer_to_texture(&mut self, src: Buffer, src_offset_bytes: usize,
+                              dst: Texture,
+                              kind: texture::Kind,
+                              face: Option<texture::CubeFace>,
+                              img: texture::RawImageInfo) {
+        unimplemented!()
+    }
+
+    #[allow(unused_variables)]
+    fn copy_texture_to_buffer(&mut self,
+                              src: Texture,
+                              kind: texture::Kind,
+                              face: Option<texture::CubeFace>,
+                              img: texture::RawImageInfo,
+                              dst: Buffer, dst_offset_bytes: usize) {
         unimplemented!()
     }
 

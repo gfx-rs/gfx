@@ -59,20 +59,7 @@ pub fn update_buffer(context: *mut winapi::ID3D11DeviceContext, buffer: &Buffer,
 
 pub fn update_texture(context: *mut winapi::ID3D11DeviceContext, texture: &Texture, kind: tex::Kind,
                       face: Option<tex::CubeFace>, data: &[u8], image: &tex::RawImageInfo) {
-    use core::texture::CubeFace::*;
-    use winapi::UINT;
-
-    let array_slice = match face {
-        Some(PosX) => 0,
-        Some(NegX) => 1,
-        Some(PosY) => 2,
-        Some(NegY) => 3,
-        Some(PosZ) => 4,
-        Some(NegZ) => 5,
-        None => 0,
-    };
-    let num_mipmap_levels = 1; //TODO
-    let subres = array_slice * num_mipmap_levels + (image.mipmap as UINT);
+    let subres = texture_subres(face, image);
     let dst_resource = texture.as_resource();
     let (width, height, _, _) = kind.get_level_dimensions(image.mipmap);
     let stride = image.format.0.get_total_bits() as usize;
@@ -97,6 +84,21 @@ pub fn update_texture(context: *mut winapi::ID3D11DeviceContext, texture: &Textu
     }
 }
 
+fn texture_subres(face: Option<tex::CubeFace>, image: &tex::RawImageInfo) -> winapi::UINT {
+    use core::texture::CubeFace::*;
+
+    let array_slice = match face {
+        Some(PosX) => 0,
+        Some(NegX) => 1,
+        Some(PosY) => 2,
+        Some(NegY) => 3,
+        Some(PosZ) => 4,
+        Some(NegZ) => 5,
+        None => 0,
+    };
+    let num_mipmap_levels = 1; //TODO
+    array_slice * num_mipmap_levels + (image.mipmap as UINT)
+}
 
 pub fn process(ctx: *mut winapi::ID3D11DeviceContext, command: &command::Command, data_buf: &command::DataBuffer) {
     use winapi::UINT;
