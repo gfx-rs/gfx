@@ -322,6 +322,25 @@ impl<P: Parser> command::Buffer<Resources> for CommandBuffer<P> {
                                               size_bytes as UINT));
     }
 
+    #[allow(unused_variables)]
+    fn copy_buffer_to_texture(&mut self, src: Buffer, src_offset_bytes: usize,
+                              dst: Texture,
+                              kind: tex::Kind,
+                              face: Option<tex::CubeFace>,
+                              img: tex::RawImageInfo) {
+        unimplemented!()
+    }
+
+    #[allow(unused_variables)]
+    fn copy_texture_to_buffer(&mut self,
+                              src: Texture,
+                              kind: tex::Kind,
+                              face: Option<tex::CubeFace>,
+                              img: tex::RawImageInfo,
+                              dst: Buffer, dst_offset_bytes: usize) {
+        unimplemented!()
+    }
+
     fn update_buffer(&mut self, buf: Buffer, data: &[u8], offset: usize) {
         self.parser.update_buffer(buf, data, offset);
     }
