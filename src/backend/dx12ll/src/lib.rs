@@ -145,7 +145,7 @@ pub struct CommandQueue {
 
 impl core::CommandQueue for CommandQueue {
     type CommandBuffers = CommandBuffers;
-    unsafe fn submit(&mut self, cmd_buffer: &CommandBuffer) {
+    unsafe fn submit(&mut self, cmd_buffer: &native::CommandBuffer) {
         unimplemented!()
     }
 }
@@ -340,15 +340,6 @@ impl core::Instance for Instance {
     }
 }
 
-pub struct CommandBuffer;
-pub struct GeneralCommandBuffer(CommandBuffer);
-impl std::ops::Deref for GeneralCommandBuffer {
-    type Target = CommandBuffer;
-    fn deref(&self) -> &CommandBuffer {
-        &self.0
-    }
-}
-
 pub enum Backend { }
 impl core::Backend for Backend {
     type CommandBuffers = CommandBuffers;
@@ -363,11 +354,11 @@ impl core::Backend for Backend {
 
 pub enum CommandBuffers { }
 impl core::CommandBuffers for CommandBuffers {
-    type CommandBuffer = CommandBuffer;
-    type GeneralCommandBuffer = GeneralCommandBuffer;
-    type GraphicsCommandBuffer = GeneralCommandBuffer;
-    type ComputeCommandBuffer = GeneralCommandBuffer;
-    type TransferCommandBuffer = GeneralCommandBuffer;
+    type CommandBuffer = native::CommandBuffer;
+    type GeneralCommandBuffer = native::GeneralCommandBuffer;
+    type GraphicsCommandBuffer = native::GraphicsCommandBuffer;
+    type ComputeCommandBuffer = native::ComputeCommandBuffer;
+    type TransferCommandBuffer = native::TransferCommandBuffer;
 }
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]

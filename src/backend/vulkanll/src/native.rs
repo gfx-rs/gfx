@@ -15,6 +15,7 @@
 use core::pso;
 use vk;
 use std::collections::BTreeMap;
+use std::ops::Deref;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct ShaderLib {
@@ -40,3 +41,37 @@ pub struct RenderPass {
 unsafe impl Send for RenderPass {}
 unsafe impl Sync for RenderPass {}
 
+// TODO
+pub struct CommandBuffer;
+
+pub struct GeneralCommandBuffer(CommandBuffer);
+impl Deref for GeneralCommandBuffer {
+    type Target = CommandBuffer;
+    fn deref(&self) -> &CommandBuffer {
+        &self.0
+    }
+}
+
+pub struct GraphicsCommandBuffer(CommandBuffer);
+impl Deref for GraphicsCommandBuffer {
+    type Target = CommandBuffer;
+    fn deref(&self) -> &CommandBuffer {
+        &self.0
+    }
+}
+
+pub struct ComputeCommandBuffer(CommandBuffer);
+impl Deref for ComputeCommandBuffer {
+    type Target = CommandBuffer;
+    fn deref(&self) -> &CommandBuffer {
+        &self.0
+    }
+}
+
+pub struct TransferCommandBuffer(CommandBuffer);
+impl Deref for TransferCommandBuffer {
+    type Target = CommandBuffer;
+    fn deref(&self) -> &CommandBuffer {
+        &self.0
+    }
+}

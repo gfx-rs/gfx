@@ -17,6 +17,7 @@ use comptr::ComPtr;
 use winapi;
 
 use std::collections::BTreeMap;
+use std::ops::Deref;
 
 #[derive(Clone, Debug, Hash)]
 pub struct ShaderLib {
@@ -39,3 +40,38 @@ pub struct PipelineSignature {
 }
 unsafe impl Send for PipelineSignature {}
 unsafe impl Sync for PipelineSignature {}
+
+// TODO
+pub struct CommandBuffer;
+
+pub struct GeneralCommandBuffer(CommandBuffer);
+impl Deref for GeneralCommandBuffer {
+    type Target = CommandBuffer;
+    fn deref(&self) -> &CommandBuffer {
+        &self.0
+    }
+}
+
+pub struct GraphicsCommandBuffer(CommandBuffer);
+impl Deref for GraphicsCommandBuffer {
+    type Target = CommandBuffer;
+    fn deref(&self) -> &CommandBuffer {
+        &self.0
+    }
+}
+
+pub struct ComputeCommandBuffer(CommandBuffer);
+impl Deref for ComputeCommandBuffer {
+    type Target = CommandBuffer;
+    fn deref(&self) -> &CommandBuffer {
+        &self.0
+    }
+}
+
+pub struct TransferCommandBuffer(CommandBuffer);
+impl Deref for TransferCommandBuffer {
+    type Target = CommandBuffer;
+    fn deref(&self) -> &CommandBuffer {
+        &self.0
+    }
+}
