@@ -27,9 +27,9 @@ use core::{self, shade};
 use core::SubPass;
 use core::pso::{self, EntryPoint};
 use {data, state, mirror, native};
-use {Device, Resources as R};
+use {Factory, Resources as R};
 
-impl Device {
+impl Factory {
     pub fn create_shader_library(&mut self, shaders: &[(EntryPoint, &[u8])]) -> Result<native::ShaderLib, shade::CreateShaderError> {
         let mut shader_map = BTreeMap::new();
         // TODO: handle entry points with the same name
@@ -89,7 +89,7 @@ impl Device {
     }
 }
 
-impl core::Factory<R> for Device {
+impl core::Factory<R> for Factory {
     fn create_renderpass(&mut self) -> () {
         // unimplemented!()
         ()

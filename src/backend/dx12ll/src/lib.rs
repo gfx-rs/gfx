@@ -32,6 +32,7 @@ use std::ffi::OsString;
 use winapi::BOOL;
 use winit::os::windows::WindowExt;
 
+mod command;
 mod data;
 mod factory;
 mod mirror;
@@ -64,10 +65,11 @@ pub struct Adapter {
 
 impl core::Adapter for Adapter {
     type CommandQueue = CommandQueue;
-    type Device = Device;
+    type Resources = Resources;
+    type Factory = Factory;
     type QueueFamily = QueueFamily;
 
-    fn open<'a, I>(&self, queue_descs: I) -> (Device, Vec<CommandQueue>)
+    fn open<'a, I>(&self, queue_descs: I) -> core::Device<Resources, Factory, CommandQueue>
         where I: Iterator<Item=(&'a QueueFamily, u32)>
     {
         // Create D3D12 device
@@ -84,8 +86,9 @@ impl core::Adapter for Adapter {
             error!("error on device creation: {:?}", hr);
         }
 
+        // TODO: other queue types
         // Create command queues
-        let queues = queue_descs.flat_map(|(_family, queue_count)| {
+        let mut general_queues = queue_descs.flat_map(|(_family, queue_count)| {
             (0..queue_count).map(|_| {
                 let mut queue = ComPtr::<winapi::ID3D12CommandQueue>::new(ptr::null_mut());
                 let queue_desc = winapi::D3D12_COMMAND_QUEUE_DESC {
@@ -107,11 +110,20 @@ impl core::Adapter for Adapter {
                     error!("error on queue creation: {:?}", hr);
                 }
 
-                CommandQueue { inner: queue }
+               unsafe { core::GeneralQueue::new(CommandQueue { inner: queue }) }
             }).collect::<Vec<_>>()
         }).collect();
 
-        (Device { inner: device }, queues)
+        let factory = Factory { inner: device };
+
+        core::Device {
+            factory: factory,
+            general_queues: general_queues,
+            graphics_queues: Vec::new(),
+            compute_queues: Vec::new(),
+            transfer_queues: Vec::new(),
+            _marker: std::marker::PhantomData,
+        }
     }
 
     fn get_info(&self) -> &core::AdapterInfo {
@@ -123,12 +135,8 @@ impl core::Adapter for Adapter {
     }
 }
 
-pub struct Device {
+pub struct Factory {
     inner: ComPtr<winapi::ID3D12Device>,
-}
-
-impl core::Device for Device {
-
 }
 
 pub struct CommandQueue {
@@ -136,9 +144,8 @@ pub struct CommandQueue {
 }
 
 impl core::CommandQueue for CommandQueue {
-    type CommandBuffer = ();
-
-    fn submit(&mut self, cmd_buffer: &()) {
+    type CommandBuffers = CommandBuffers;
+    unsafe fn submit(&mut self, cmd_buffer: &CommandBuffer) {
         unimplemented!()
     }
 }
@@ -151,7 +158,7 @@ pub struct Surface {
 }
 
 impl core::Surface for Surface {
-    type CommandQueue = CommandQueue;
+    type Queue = CommandQueue;
     type SwapChain = SwapChain;
 
     fn build_swapchain<T: core::format::RenderFormat>(&self, present_queue: &CommandQueue) -> SwapChain {
@@ -210,7 +217,7 @@ impl<'a> core::SwapChain for SwapChain{
         let index = self.next_frame;
         self.frame_queue.push_back(index);
         self.next_frame = (self.next_frame + 1) % 2; // TODO: remove magic swap buffer count
-        core::Frame::new(index)
+        unsafe { core::Frame::new(index) }
     }
 
     fn present(&mut self) {
@@ -333,12 +340,20 @@ impl core::Instance for Instance {
     }
 }
 
-pub enum Backend { }
+pub struct CommandBuffer;
+pub struct GeneralCommandBuffer(CommandBuffer);
+impl std::ops::Deref for GeneralCommandBuffer {
+    type Target = CommandBuffer;
+    fn deref(&self) -> &CommandBuffer {
+        &self.0
+    }
+}
 
+pub enum Backend { }
 impl core::Backend for Backend {
-    type CommandBuffer = ();
+    type CommandBuffers = CommandBuffers;
     type CommandQueue = CommandQueue;
-    type Device = Device;
+    type Factory = Factory;
     type Instance = Instance;
     type Adapter = Adapter;
     type Resources = Resources;
@@ -346,9 +361,17 @@ impl core::Backend for Backend {
     type SwapChain = SwapChain;
 }
 
+pub enum CommandBuffers { }
+impl core::CommandBuffers for CommandBuffers {
+    type CommandBuffer = CommandBuffer;
+    type GeneralCommandBuffer = GeneralCommandBuffer;
+    type GraphicsCommandBuffer = GeneralCommandBuffer;
+    type ComputeCommandBuffer = GeneralCommandBuffer;
+    type TransferCommandBuffer = GeneralCommandBuffer;
+}
+
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Resources { }
-
 impl core::Resources for Resources {
     type Buffer = ();
     type ShaderLib = native::ShaderLib;
