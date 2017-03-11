@@ -21,7 +21,7 @@ extern crate gfx_device_vulkanll as back;
 
 extern crate winit;
 
-use gfx_corell::{format, pso, queue, shade, state, Device,
+use gfx_corell::{format, pso, queue, shade, state, CommandQueue, Device,
     Primitive, Instance, Adapter, Surface, SwapChain, QueueFamily, Factory, SubPass};
 use gfx_corell::format::Formatted;
 
@@ -114,8 +114,8 @@ fn main() {    env_logger::init().unwrap();
 
     println!("{:?}", pipelines);
 
-    let mutgraphics_pool = queue::GraphicsCommandPool::<back::CommandPool>::from_queue(&mut general_queues[0], 16);
-
+    let mut graphics_pool = queue::GraphicsCommandPool::<back::CommandPool>::from_queue(&mut general_queues[0], 16);
+    let mut cmd_buffer = graphics_pool.acquire_command_buffer();
 
     //
     'main: loop {
@@ -129,7 +129,8 @@ fn main() {    env_logger::init().unwrap();
 
         let frame = swap_chain.acquire_frame();
 
-        // rendering
+        // TODO: rendering
+        general_queues[0].submit_graphics(&mut cmd_buffer);
 
         // present frame
         swap_chain.present();

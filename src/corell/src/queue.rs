@@ -63,6 +63,22 @@ impl<Q: CommandQueue> DerefMut for GeneralQueue<Q> {
     }
 }
 
+impl<Q: CommandQueue> Into<GraphicsQueue<Q>> for GeneralQueue<Q> {
+    fn into(self) -> GraphicsQueue<Q> {
+        GraphicsQueue(self.0)
+    }
+}
+impl<Q: CommandQueue> Into<ComputeQueue<Q>> for GeneralQueue<Q> {
+    fn into(self) -> ComputeQueue<Q> {
+        ComputeQueue(self.0)
+    }
+}
+impl<Q: CommandQueue> Into<TransferQueue<Q>> for GeneralQueue<Q> {
+    fn into(self) -> TransferQueue<Q> {
+        TransferQueue(self.0)
+    }
+}
+
 /// Graphics command queue, which can execute graphics and transfer command buffers.
 pub struct GraphicsQueue<Q: CommandQueue>(Q);
 impl<Q: CommandQueue> GraphicsQueue<Q> {
@@ -94,6 +110,12 @@ impl<Q: CommandQueue> DerefMut for GraphicsQueue<Q> {
     }
 }
 
+impl<Q: CommandQueue> Into<TransferQueue<Q>> for GraphicsQueue<Q> {
+    fn into(self) -> TransferQueue<Q> {
+        TransferQueue(self.0)
+    }
+}
+
 /// Compute command queue, which can execute compute and transfer command buffers.
 pub struct ComputeQueue<Q: CommandQueue>(Q);
 impl<Q: CommandQueue> ComputeQueue<Q> {
@@ -122,6 +144,12 @@ impl<Q: CommandQueue> Deref for ComputeQueue<Q> {
 impl<Q: CommandQueue> DerefMut for ComputeQueue<Q> {
     fn deref_mut(&mut self) -> &mut Q {
         &mut self.0
+    }
+}
+
+impl<Q: CommandQueue> Into<TransferQueue<Q>> for ComputeQueue<Q> {
+    fn into(self) -> TransferQueue<Q> {
+        TransferQueue(self.0)
     }
 }
 
