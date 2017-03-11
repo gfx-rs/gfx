@@ -33,4 +33,4 @@ libc = "0.2"
 objc = "0.2"
 objc-foundation = "0.1"
 bit-set = "0.4"
-metal-rs = { git = "https://github.com/fkaa/metal-rs", rev = "5263898c2ce1fb8263653272014366eba45ef88d" }
+metal-rs = "0.3"
