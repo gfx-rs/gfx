@@ -21,7 +21,7 @@ extern crate gfx_device_vulkanll as back;
 
 extern crate winit;
 
-use gfx_corell::{format, pso, shade, state, Device,
+use gfx_corell::{format, pso, queue, shade, state, Device,
     Primitive, Instance, Adapter, Surface, SwapChain, QueueFamily, Factory, SubPass};
 use gfx_corell::format::Formatted;
 
@@ -52,7 +52,7 @@ fn main() {    env_logger::init().unwrap();
     }
 
     // build a new device and associated command queues
-    let Device { mut factory, general_queues, .. } = physical_devices[0].open(queue_descs);
+    let Device { mut factory, mut general_queues, .. } = physical_devices[0].open(queue_descs);
     let mut swap_chain = surface.build_swapchain::<ColorFormat>(&general_queues[0]);
 
     #[cfg(all(target_os = "windows", not(feature = "vulkan")))]
@@ -113,6 +113,9 @@ fn main() {    env_logger::init().unwrap();
     ]);
 
     println!("{:?}", pipelines);
+
+    let mutgraphics_pool = queue::GraphicsCommandPool::<back::CommandPool>::from_queue(&mut general_queues[0], 16);
+
 
     //
     'main: loop {

@@ -75,3 +75,11 @@ impl Deref for TransferCommandBuffer {
         &self.0
     }
 }
+
+pub struct SubpassCommandBuffer(CommandBuffer);
+impl Deref for SubpassCommandBuffer {
+    type Target = CommandBuffer;
+    fn deref(&self) -> &CommandBuffer {
+        &self.0
+    }
+}

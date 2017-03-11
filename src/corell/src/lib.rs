@@ -24,12 +24,15 @@ use std::ops::{Deref, DerefMut};
 
 pub use draw_state::{state, target};
 pub use self::factory::Factory;
+pub use queue::{GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
+use command::{GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer, SubpassCommandBuffer};
 
 pub mod command;
 pub mod factory;
 pub mod format;
 pub mod memory;
 pub mod pso;
+pub mod queue;
 pub mod shade;
 
 /// Compile-time maximum number of color targets.
@@ -149,121 +152,20 @@ pub trait QueueFamily: 'static {
     fn num_queues(&self) -> u32;
 }
 
+// TODO
+/// `CommandBuffers` are submitted to a `CommandQueue` and executed in-order of submission.
+/// `CommandQueue`s may run in parallel and need to be explicitly synchronized.
 pub trait CommandQueue {
-    type CommandBuffers: CommandBuffers;
+    type R: Resources;
+    type CommandBuffer; // Base command buffer
+    type GeneralCommandBuffer: Deref<Target=Self::CommandBuffer>; // : GraphicsCommandBuffer<Self::R> + ComputeCommandBuffer<Self::R> + Deref<Target=Self::CommandBuffer>;
+    type GraphicsCommandBuffer: Deref<Target=Self::CommandBuffer>; // : GraphicsCommandBuffer<Self::R> + Deref<Target=Self::CommandBuffer>;
+    type ComputeCommandBuffer: Deref<Target=Self::CommandBuffer>; // : ComputeCommandBuffer<Self::R> + Deref<Target=Self::CommandBuffer>;
+    type TransferCommandBuffer: Deref<Target=Self::CommandBuffer>; // : TransferCommandBuffer<Self::R> + Deref<Target=Self::CommandBuffer>;
+    type SubpassCommandBuffer: Deref<Target=Self::CommandBuffer>; // : SubpassCommandBuffer<Self::R> + Deref<Target=Self::CommandBuffer>;
 
-    unsafe fn submit(&mut self, cmd_buffer: &<<Self as CommandQueue>::CommandBuffers as CommandBuffers>::CommandBuffer);
-}
-
-pub struct GeneralQueue<Q: CommandQueue>(Q);
-impl<Q: CommandQueue> GeneralQueue<Q> {
-    #[doc(hidden)]
-    pub unsafe fn new(queue: Q) -> Self {
-        GeneralQueue(queue)
-    }
-
-    pub fn submit_general(&mut self, cmd_buffer: &<<Q as CommandQueue>::CommandBuffers as CommandBuffers>::GeneralCommandBuffer) {
-        unsafe { self.submit(&cmd_buffer) }
-    }
-    pub fn submit_graphics(&mut self, cmd_buffer: &<<Q as CommandQueue>::CommandBuffers as CommandBuffers>::GraphicsCommandBuffer) {
-        unsafe { self.submit(&cmd_buffer) }
-    }
-    pub fn submit_compute(&mut self, cmd_buffer: &<<Q as CommandQueue>::CommandBuffers as CommandBuffers>::ComputeCommandBuffer) {
-        unsafe { self.submit(&cmd_buffer) }
-    }
-    pub fn submit_tranfer(&mut self, cmd_buffer: &<<Q as CommandQueue>::CommandBuffers as CommandBuffers>::TransferCommandBuffer) {
-        unsafe { self.submit(&cmd_buffer) }
-    }
-}
-
-impl<Q: CommandQueue> Deref for GeneralQueue<Q> {
-    type Target = Q;
-    fn deref(&self) -> &Q {
-        &self.0
-    }
-}
-impl<Q: CommandQueue> DerefMut for GeneralQueue<Q> {
-    fn deref_mut(&mut self) -> &mut Q {
-        &mut self.0
-    }
-}
-
-pub struct GraphicsQueue<Q: CommandQueue>(Q);
-impl<Q: CommandQueue> GraphicsQueue<Q> {
-    #[doc(hidden)]
-    pub unsafe fn new(queue: Q) -> Self {
-        GraphicsQueue(queue)
-    }
-
-    pub fn submit_graphics(&mut self, cmd_buffer: &<<Q as CommandQueue>::CommandBuffers as CommandBuffers>::GraphicsCommandBuffer) {
-        unsafe { self.submit(&cmd_buffer) }
-    }
-    pub fn submit_tranfer(&mut self, cmd_buffer: &<<Q as CommandQueue>::CommandBuffers as CommandBuffers>::TransferCommandBuffer) {
-        unsafe { self.submit(&cmd_buffer) }
-    }
-}
-
-impl<Q: CommandQueue> Deref for GraphicsQueue<Q> {
-    type Target = Q;
-    fn deref(&self) -> &Q {
-        &self.0
-    }
-}
-impl<Q: CommandQueue> DerefMut for GraphicsQueue<Q> {
-    fn deref_mut(&mut self) -> &mut Q {
-        &mut self.0
-    }
-}
-
-pub struct ComputeQueue<Q: CommandQueue>(Q);
-impl<Q: CommandQueue> ComputeQueue<Q> {
-    #[doc(hidden)]
-    pub unsafe fn new(queue: Q) -> Self {
-        ComputeQueue(queue)
-    }
-
-    pub fn submit_compute(&mut self, cmd_buffer: &<<Q as CommandQueue>::CommandBuffers as CommandBuffers>::ComputeCommandBuffer) {
-        unsafe { self.submit(&cmd_buffer) }
-    }
-    pub fn submit_tranfer(&mut self, cmd_buffer: &<<Q as CommandQueue>::CommandBuffers as CommandBuffers>::TransferCommandBuffer) {
-        unsafe { self.submit(&cmd_buffer) }
-    }
-}
-
-impl<Q: CommandQueue> Deref for ComputeQueue<Q> {
-    type Target = Q;
-    fn deref(&self) -> &Q {
-        &self.0
-    }
-}
-impl<Q: CommandQueue> DerefMut for ComputeQueue<Q> {
-    fn deref_mut(&mut self) -> &mut Q {
-        &mut self.0
-    }
-}
-
-pub struct TransferQueue<Q: CommandQueue>(Q);
-impl<Q: CommandQueue> TransferQueue<Q> {
-    #[doc(hidden)]
-    pub unsafe fn new(queue: Q) -> Self {
-        TransferQueue(queue)
-    }
-
-    pub fn submit_tranfer(&mut self, cmd_buffer: &<<Q as CommandQueue>::CommandBuffers as CommandBuffers>::TransferCommandBuffer) {
-        unsafe { self.submit(&cmd_buffer) }
-    }
-}
-
-impl<Q: CommandQueue> Deref for TransferQueue<Q> {
-    type Target = Q;
-    fn deref(&self) -> &Q {
-        &self.0
-    }
-}
-impl<Q: CommandQueue> DerefMut for TransferQueue<Q> {
-    fn deref_mut(&mut self) -> &mut Q {
-        &mut self.0
-    }
+    /// Submit a command buffer to queue.
+    unsafe fn submit(&mut self, cmd_buffer: &<Self as CommandQueue>::CommandBuffer);
 }
 
 /// A `Surface` abstracts the surface of a native window, which will be presented
@@ -307,17 +209,8 @@ pub trait Resources:          Clone + Hash + Debug + Any {
     type Sampler:             Clone + Hash + Debug + Any + Send + Sync + Copy;
 }
 
-pub trait CommandBuffers {
-    type CommandBuffer;
-    type GeneralCommandBuffer: Deref<Target=Self::CommandBuffer>;
-    type GraphicsCommandBuffer: Deref<Target=Self::CommandBuffer>;
-    type ComputeCommandBuffer: Deref<Target=Self::CommandBuffer>;
-    type TransferCommandBuffer: Deref<Target=Self::CommandBuffer>;
-}
-
 /// Different types of a specific API.
 pub trait Backend {
-    type CommandBuffers: CommandBuffers;
     type CommandQueue: CommandQueue;
     type Factory: Factory<Self::Resources>;
     type Instance: Instance;

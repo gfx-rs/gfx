@@ -144,10 +144,27 @@ pub struct CommandQueue {
 }
 
 impl core::CommandQueue for CommandQueue {
-    type CommandBuffers = CommandBuffers;
+    type R = Resources;
+    type CommandBuffer = native::CommandBuffer;
+    type GeneralCommandBuffer = native::GeneralCommandBuffer;
+    type GraphicsCommandBuffer = native::GraphicsCommandBuffer;
+    type ComputeCommandBuffer = native::ComputeCommandBuffer;
+    type TransferCommandBuffer = native::TransferCommandBuffer;
+    type SubpassCommandBuffer = native::SubpassCommandBuffer;
+
     unsafe fn submit(&mut self, cmd_buffer: &native::CommandBuffer) {
         unimplemented!()
     }
+}
+
+pub struct CommandPool;
+
+impl core::queue::CommandPool for CommandPool {
+    type Q = CommandQueue;
+
+    fn from_queue(queue: &mut CommandQueue, capacity: usize) -> CommandPool { unimplemented!() }
+    fn reset(&mut self) { unimplemented!() }
+    fn reserve(&mut self, allocated: usize) { unimplemented!() }
 }
 
 pub struct Surface {
@@ -342,7 +359,6 @@ impl core::Instance for Instance {
 
 pub enum Backend { }
 impl core::Backend for Backend {
-    type CommandBuffers = CommandBuffers;
     type CommandQueue = CommandQueue;
     type Factory = Factory;
     type Instance = Instance;
@@ -350,15 +366,6 @@ impl core::Backend for Backend {
     type Resources = Resources;
     type Surface = Surface;
     type SwapChain = SwapChain;
-}
-
-pub enum CommandBuffers { }
-impl core::CommandBuffers for CommandBuffers {
-    type CommandBuffer = native::CommandBuffer;
-    type GeneralCommandBuffer = native::GeneralCommandBuffer;
-    type GraphicsCommandBuffer = native::GraphicsCommandBuffer;
-    type ComputeCommandBuffer = native::ComputeCommandBuffer;
-    type TransferCommandBuffer = native::TransferCommandBuffer;
 }
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
