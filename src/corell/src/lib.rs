@@ -31,6 +31,7 @@ pub mod command;
 pub mod factory;
 pub mod format;
 pub mod memory;
+pub mod pool;
 pub mod pso;
 pub mod queue;
 pub mod shade;
@@ -162,10 +163,20 @@ pub trait CommandQueue {
     type GraphicsCommandBuffer: Deref<Target=Self::CommandBuffer>; // : GraphicsCommandBuffer<Self::R> + Deref<Target=Self::CommandBuffer>;
     type ComputeCommandBuffer: Deref<Target=Self::CommandBuffer>; // : ComputeCommandBuffer<Self::R> + Deref<Target=Self::CommandBuffer>;
     type TransferCommandBuffer: Deref<Target=Self::CommandBuffer>; // : TransferCommandBuffer<Self::R> + Deref<Target=Self::CommandBuffer>;
-    type SubpassCommandBuffer: Deref<Target=Self::CommandBuffer>; // : SubpassCommandBuffer<Self::R> + Deref<Target=Self::CommandBuffer>;
+    type SubpassCommandBuffer; // : SubpassCommandBuffer<Self::R>;
 
     /// Submit a command buffer to queue.
     unsafe fn submit(&mut self, cmd_buffer: &<Self as CommandQueue>::CommandBuffer);
+}
+
+/// `CommandPool` can allocate command buffers of a specific type only.
+/// The allocated command buffers are associated with the creating command queue.
+pub trait CommandPool {
+    type Q: CommandQueue;
+
+    fn from_queue(queue: &mut Self::Q, capacity: usize) -> Self;
+    fn reset(&mut self);
+    fn reserve(&mut self, additional: usize);
 }
 
 /// A `Surface` abstracts the surface of a native window, which will be presented

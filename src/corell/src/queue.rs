@@ -12,17 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Queue and Command Pool handling.
+//! Command queue types.
 //!
-//! There are different types of queues, which can create and take specific command buffers.
+//! There are different types of queues, which can create and submit associated command buffers.
 
 use std::ops::{Deref, DerefMut};
-use {CommandQueue, Resources};
-
-pub trait GeneralPoolSupport { type Queue: CommandQueue; }
-pub trait ComputePoolSupport { type Queue: CommandQueue; }
-pub trait GraphicsPoolSupport { type Queue: CommandQueue; }
-pub trait TransferPoolSupport { type Queue: CommandQueue; }
+use {CommandQueue};
+use pool::{GeneralPoolSupport, GraphicsPoolSupport, ComputePoolSupport, TransferPoolSupport};
 
 /// General command queue, which can execute graphics, compute and transfer command buffers.
 pub struct GeneralQueue<Q: CommandQueue>(Q);
@@ -177,70 +173,5 @@ impl<Q: CommandQueue> Deref for TransferQueue<Q> {
 impl<Q: CommandQueue> DerefMut for TransferQueue<Q> {
     fn deref_mut(&mut self) -> &mut Q {
         &mut self.0
-    }
-}
-
-/// `CommandPool` can allocate command buffers of a specific type only.
-/// The allocated command buffers are associated with the creating command queue.
-pub trait CommandPool {
-    type Q: CommandQueue;
-
-    fn from_queue(queue: &mut Self::Q, capacity: usize) -> Self;
-    fn reset(&mut self);
-    fn reserve(&mut self, additional: usize);
-}
-
-/// General command pool can allocate general command buffers.
-pub struct GeneralCommandPool<P: CommandPool>(P);
-impl<P: CommandPool> GeneralCommandPool<P> { 
-    pub fn from_queue<Q: GeneralPoolSupport + DerefMut<Target=<P as CommandPool>::Q>>(mut queue: &mut Q, capacity: usize) -> Self {
-        GeneralCommandPool(P::from_queue(&mut queue, capacity))
-    }
-    pub fn acquire_command_buffer(&mut self) -> &mut <<P as CommandPool>::Q as CommandQueue>::GeneralCommandBuffer {
-        unimplemented!()
-    }
-}
-
-/// Graphics command pool can allocate graphics command buffers.
-pub struct GraphicsCommandPool<P: CommandPool>(P);
-impl<P: CommandPool> GraphicsCommandPool<P> { 
-    pub fn from_queue<Q: GraphicsPoolSupport + DerefMut<Target=<P as CommandPool>::Q>>(mut queue: &mut Q, capacity: usize) -> Self {
-        GraphicsCommandPool(P::from_queue(&mut queue, capacity))
-    }
-    pub fn acquire_command_buffer(&mut self) -> &mut <<P as CommandPool>::Q as CommandQueue>::GraphicsCommandBuffer {
-        unimplemented!()
-    }
-}
-
-/// Compute command pool can allocate compute command buffers.
-pub struct ComputeCommandPool<P: CommandPool>(P);
-impl<P: CommandPool> ComputeCommandPool<P> { 
-    pub fn from_queue<Q: ComputePoolSupport + DerefMut<Target=<P as CommandPool>::Q>>(mut queue: &mut Q, capacity: usize) -> Self {
-        ComputeCommandPool(P::from_queue(&mut queue, capacity))
-    }
-    pub fn acquire_command_buffer(&mut self) -> &mut <<P as CommandPool>::Q as CommandQueue>::ComputeCommandBuffer {
-        unimplemented!()
-    }
-}
-
-/// Transfer command pool can allocate transfer command buffers.
-pub struct TransferCommandPool<P: CommandPool>(P);
-impl<P: CommandPool> TransferCommandPool<P> { 
-    pub fn from_queue<Q: TransferPoolSupport + DerefMut<Target=<P as CommandPool>::Q>>(mut queue: &mut Q, capacity: usize) -> Self {
-        TransferCommandPool(P::from_queue(&mut queue, capacity))
-    }
-    pub fn acquire_command_buffer(&mut self) -> &mut <<P as CommandPool>::Q as CommandQueue>::TransferCommandBuffer {
-        unimplemented!()
-    }
-}
-
-/// Subpass command pool can allocate subpass command buffers.
-pub struct SubpassCommandPool<P: CommandPool>(P);
-impl<P: CommandPool> SubpassCommandPool<P> { 
-    pub fn from_queue<Q: GraphicsPoolSupport + DerefMut<Target=<P as CommandPool>::Q>>(mut queue: &mut Q, capacity: usize) -> Self {
-        SubpassCommandPool(P::from_queue(&mut queue, capacity))
-    }
-    pub fn acquire_command_buffer(&mut self) -> &mut <<P as CommandPool>::Q as CommandQueue>::SubpassCommandBuffer {
-        unimplemented!()
     }
 }

@@ -41,8 +41,9 @@ pub struct PipelineSignature {
 unsafe impl Send for PipelineSignature {}
 unsafe impl Sync for PipelineSignature {}
 
-// TODO
-pub struct CommandBuffer;
+pub struct CommandBuffer {
+    pub inner: ComPtr<winapi::ID3D12GraphicsCommandList>,
+}
 
 pub struct GeneralCommandBuffer(CommandBuffer);
 impl Deref for GeneralCommandBuffer {

@@ -75,3 +75,5 @@ impl Deref for TransferCommandBuffer {
         &self.0
     }
 }
+
+pub struct SubpassCommandBuffer(CommandBuffer);

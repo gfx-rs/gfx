@@ -21,7 +21,7 @@ extern crate gfx_device_vulkanll as back;
 
 extern crate winit;
 
-use gfx_corell::{format, pso, queue, shade, state, CommandQueue, Device,
+use gfx_corell::{format, pso, pool, shade, state, Device,
     Primitive, Instance, Adapter, Surface, SwapChain, QueueFamily, Factory, SubPass};
 use gfx_corell::format::Formatted;
 
@@ -33,7 +33,8 @@ struct Vertex {
 }
 
 #[cfg(any(feature = "vulkan", target_os = "windows"))]
-fn main() {    env_logger::init().unwrap();
+fn main() {
+    env_logger::init().unwrap();
     let window = winit::WindowBuilder::new()
         .with_dimensions(1024, 768)
         .with_title("triangle (Low Level)".to_string())
@@ -114,7 +115,7 @@ fn main() {    env_logger::init().unwrap();
 
     println!("{:?}", pipelines);
 
-    let mut graphics_pool = queue::GraphicsCommandPool::<back::CommandPool>::from_queue(&mut general_queues[0], 16);
+    let mut graphics_pool = pool::GraphicsCommandPool::<back::CommandPool>::from_queue(&mut general_queues[0], 16);
     let mut cmd_buffer = graphics_pool.acquire_command_buffer();
 
     //

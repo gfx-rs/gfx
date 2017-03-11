@@ -159,7 +159,7 @@ impl core::CommandQueue for CommandQueue {
 
 pub struct CommandPool;
 
-impl core::queue::CommandPool for CommandPool {
+impl core::CommandPool for CommandPool {
     type Q = CommandQueue;
 
     fn from_queue(queue: &mut CommandQueue, capacity: usize) -> CommandPool { unimplemented!() }
