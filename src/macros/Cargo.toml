@@ -21,6 +21,7 @@ repository = "https://github.com/gfx-rs/gfx"
 keywords = ["graphics", "gamedev"]
 license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
+documentation = "https://docs.rs/gfx_macros"
 categories = ["rendering::graphics-api"]
 
 [lib]
