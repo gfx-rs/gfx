@@ -41,6 +41,8 @@ fn structure(ast: syn::DeriveInput, ty_compile: quote::Tokens, ty_run: quote::To
         }
     });
     quote! {
+        unsafe impl gfx::traits::Pod for #name {}
+        
         impl gfx::pso::buffer::Structure<#ty_run> for #name {
             fn query(field_name: &str) -> Option<gfx::pso::buffer::Element<#ty_run>> {
                 use std::mem::{size_of, transmute};
