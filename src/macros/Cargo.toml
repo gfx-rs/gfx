@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx_macros"
-version = "0.2.0"
+version = "0.2.1"
 description = "Custom derive macros for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
