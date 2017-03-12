@@ -27,6 +27,7 @@ use comptr::ComPtr;
 use std::ptr;
 use std::os::raw::c_void;
 use std::os::windows::ffi::OsStringExt;
+use std::ops::Deref;
 use std::collections::VecDeque;
 use std::ffi::OsString;
 use winapi::BOOL;
@@ -37,7 +38,10 @@ mod data;
 mod factory;
 mod mirror;
 mod native;
+mod pool;
 mod state;
+
+pub use pool::{GeneralCommandPool, GraphicsCommandPool};
 
 #[derive(Clone)]
 pub struct QueueFamily;
@@ -83,7 +87,7 @@ impl core::Adapter for Adapter {
             )
         };
         if !winapi::SUCCEEDED(hr) {
-            error!("error on device creation: {:?}", hr);
+            error!("error on device creation: {:x}", hr);
         }
 
         // TODO: other queue types
@@ -107,10 +111,18 @@ impl core::Adapter for Adapter {
                 };
 
                 if !winapi::SUCCEEDED(hr) {
-                    error!("error on queue creation: {:?}", hr);
+                    error!("error on queue creation: {:x}", hr);
                 }
 
-               unsafe { core::GeneralQueue::new(CommandQueue { inner: queue }) }
+                unsafe {
+                    core::GeneralQueue::new(
+                        CommandQueue {
+                            inner: queue,
+                            device: device.clone(),
+                            list_type: winapi::D3D12_COMMAND_LIST_TYPE_DIRECT, // TODO
+                        }
+                    )
+                }
             }).collect::<Vec<_>>()
         }).collect();
 
@@ -141,6 +153,8 @@ pub struct Factory {
 
 pub struct CommandQueue {
     inner: ComPtr<winapi::ID3D12CommandQueue>,
+    device: ComPtr<winapi::ID3D12Device>,
+    list_type: winapi::D3D12_COMMAND_LIST_TYPE,
 }
 
 impl core::CommandQueue for CommandQueue {
@@ -152,19 +166,9 @@ impl core::CommandQueue for CommandQueue {
     type TransferCommandBuffer = native::TransferCommandBuffer;
     type SubpassCommandBuffer = native::SubpassCommandBuffer;
 
-    unsafe fn submit(&mut self, cmd_buffer: &native::CommandBuffer) {
+    unsafe fn submit<C: Deref<Target=native::CommandBuffer>>(&mut self, cmd_buffer: &C) {
         unimplemented!()
     }
-}
-
-pub struct CommandPool;
-
-impl core::CommandPool for CommandPool {
-    type Q = CommandQueue;
-
-    fn from_queue(queue: &mut CommandQueue, capacity: usize) -> CommandPool { unimplemented!() }
-    fn reset(&mut self) { unimplemented!() }
-    fn reserve(&mut self, allocated: usize) { unimplemented!() }
 }
 
 pub struct Surface {

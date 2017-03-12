@@ -18,7 +18,6 @@
 
 use std::ops::{Deref, DerefMut};
 use {CommandQueue};
-use pool::{GeneralPoolSupport, GraphicsPoolSupport, ComputePoolSupport, TransferPoolSupport};
 
 /// General command queue, which can execute graphics, compute and transfer command buffers.
 pub struct GeneralQueue<Q: CommandQueue>(Q);
@@ -29,23 +28,18 @@ impl<Q: CommandQueue> GeneralQueue<Q> {
     }
 
     pub fn submit_general(&mut self, cmd_buffer: &<Q as CommandQueue>::GeneralCommandBuffer) {
-        unsafe { self.submit(&cmd_buffer) }
+        unsafe { self.submit(cmd_buffer) }
     }
     pub fn submit_graphics(&mut self, cmd_buffer: &<Q as CommandQueue>::GraphicsCommandBuffer) {
-        unsafe { self.submit(&cmd_buffer) }
+        unsafe { self.submit(cmd_buffer) }
     }
     pub fn submit_compute(&mut self, cmd_buffer: &<Q as CommandQueue>::ComputeCommandBuffer) {
-        unsafe { self.submit(&cmd_buffer) }
+        unsafe { self.submit(cmd_buffer) }
     }
     pub fn submit_tranfer(&mut self, cmd_buffer: &<Q as CommandQueue>::TransferCommandBuffer) {
-        unsafe { self.submit(&cmd_buffer) }
+        unsafe { self.submit(cmd_buffer) }
     }
 }
-
-impl<Q: CommandQueue> GeneralPoolSupport for GeneralQueue<Q> { type Queue = Q; }
-impl<Q: CommandQueue> ComputePoolSupport for GeneralQueue<Q> { type Queue = Q; }
-impl<Q: CommandQueue> GraphicsPoolSupport for GeneralQueue<Q> { type Queue = Q; }
-impl<Q: CommandQueue> TransferPoolSupport for GeneralQueue<Q> { type Queue = Q; }
 
 impl<Q: CommandQueue> Deref for GeneralQueue<Q> {
     type Target = Q;
@@ -84,15 +78,12 @@ impl<Q: CommandQueue> GraphicsQueue<Q> {
     }
 
     pub fn submit_graphics(&mut self, cmd_buffer: &<Q as CommandQueue>::GraphicsCommandBuffer) {
-        unsafe { self.submit(&cmd_buffer) }
+        unsafe { self.submit(cmd_buffer) }
     }
     pub fn submit_tranfer(&mut self, cmd_buffer: &<Q as CommandQueue>::TransferCommandBuffer) {
-        unsafe { self.submit(&cmd_buffer) }
+        unsafe { self.submit(cmd_buffer) }
     }
 }
-
-impl<Q: CommandQueue> GraphicsPoolSupport for GraphicsQueue<Q> { type Queue = Q; }
-impl<Q: CommandQueue> TransferPoolSupport for GraphicsQueue<Q> { type Queue = Q; }
 
 impl<Q: CommandQueue> Deref for GraphicsQueue<Q> {
     type Target = Q;
@@ -121,15 +112,12 @@ impl<Q: CommandQueue> ComputeQueue<Q> {
     }
 
     pub fn submit_compute(&mut self, cmd_buffer: &<Q as CommandQueue>::ComputeCommandBuffer) {
-        unsafe { self.submit(&cmd_buffer) }
+        unsafe { self.submit(cmd_buffer) }
     }
     pub fn submit_tranfer(&mut self, cmd_buffer: &<Q as CommandQueue>::TransferCommandBuffer) {
-        unsafe { self.submit(&cmd_buffer) }
+        unsafe { self.submit(cmd_buffer) }
     }
 }
-
-impl<Q: CommandQueue> ComputePoolSupport for ComputeQueue<Q> { type Queue = Q; }
-impl<Q: CommandQueue> TransferPoolSupport for ComputeQueue<Q> { type Queue = Q; }
 
 impl<Q: CommandQueue> Deref for ComputeQueue<Q> {
     type Target = Q;
@@ -158,11 +146,9 @@ impl<Q: CommandQueue> TransferQueue<Q> {
     }
 
     pub fn submit_tranfer(&mut self, cmd_buffer: &<Q as CommandQueue>::TransferCommandBuffer) {
-        unsafe { self.submit(&cmd_buffer) }
+        unsafe { self.submit(cmd_buffer) }
     }
 }
-
-impl<Q: CommandQueue> TransferPoolSupport for TransferQueue<Q> { type Queue = Q; }
 
 impl<Q: CommandQueue> Deref for TransferQueue<Q> {
     type Target = Q;

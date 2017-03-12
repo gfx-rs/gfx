@@ -21,7 +21,7 @@ extern crate gfx_device_vulkanll as back;
 
 extern crate winit;
 
-use gfx_corell::{format, pso, pool, shade, state, Device,
+use gfx_corell::{format, pso, pool, shade, state, Device, CommandPool, GraphicsCommandPool,
     Primitive, Instance, Adapter, Surface, SwapChain, QueueFamily, Factory, SubPass};
 use gfx_corell::format::Formatted;
 
@@ -115,7 +115,7 @@ fn main() {
 
     println!("{:?}", pipelines);
 
-    let mut graphics_pool = pool::GraphicsCommandPool::<back::CommandPool>::from_queue(&mut general_queues[0], 16);
+    let mut graphics_pool = back::GraphicsCommandPool::from_queue(&mut general_queues[0], 16);
     let mut cmd_buffer = graphics_pool.acquire_command_buffer();
 
     //

@@ -25,6 +25,7 @@ use std::ops::{Deref, DerefMut};
 pub use draw_state::{state, target};
 pub use self::factory::Factory;
 pub use queue::{GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
+pub use pool::{GeneralCommandPool, GraphicsCommandPool};
 use command::{GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer, SubpassCommandBuffer};
 
 pub mod command;
@@ -166,15 +167,16 @@ pub trait CommandQueue {
     type SubpassCommandBuffer; // : SubpassCommandBuffer<Self::R>;
 
     /// Submit a command buffer to queue.
-    unsafe fn submit(&mut self, cmd_buffer: &<Self as CommandQueue>::CommandBuffer);
+    unsafe fn submit<C: Deref<Target=Self::CommandBuffer>>(&mut self, cmd_buffer: &C);
 }
 
 /// `CommandPool` can allocate command buffers of a specific type only.
 /// The allocated command buffers are associated with the creating command queue.
 pub trait CommandPool {
-    type Q: CommandQueue;
+    type Queue: CommandQueue;
+    type PoolBuffer;
 
-    fn from_queue(queue: &mut Self::Q, capacity: usize) -> Self;
+    fn acquire_command_buffer(&mut self) -> &mut Self::PoolBuffer;
     fn reset(&mut self);
     fn reserve(&mut self, additional: usize);
 }

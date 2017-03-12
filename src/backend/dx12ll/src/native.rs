@@ -45,7 +45,7 @@ pub struct CommandBuffer {
     pub inner: ComPtr<winapi::ID3D12GraphicsCommandList>,
 }
 
-pub struct GeneralCommandBuffer(CommandBuffer);
+pub struct GeneralCommandBuffer(pub CommandBuffer);
 impl Deref for GeneralCommandBuffer {
     type Target = CommandBuffer;
     fn deref(&self) -> &CommandBuffer {
@@ -53,7 +53,7 @@ impl Deref for GeneralCommandBuffer {
     }
 }
 
-pub struct GraphicsCommandBuffer(CommandBuffer);
+pub struct GraphicsCommandBuffer(pub CommandBuffer);
 impl Deref for GraphicsCommandBuffer {
     type Target = CommandBuffer;
     fn deref(&self) -> &CommandBuffer {
@@ -61,7 +61,7 @@ impl Deref for GraphicsCommandBuffer {
     }
 }
 
-pub struct ComputeCommandBuffer(CommandBuffer);
+pub struct ComputeCommandBuffer(pub CommandBuffer);
 impl Deref for ComputeCommandBuffer {
     type Target = CommandBuffer;
     fn deref(&self) -> &CommandBuffer {
@@ -69,7 +69,7 @@ impl Deref for ComputeCommandBuffer {
     }
 }
 
-pub struct TransferCommandBuffer(CommandBuffer);
+pub struct TransferCommandBuffer(pub CommandBuffer);
 impl Deref for TransferCommandBuffer {
     type Target = CommandBuffer;
     fn deref(&self) -> &CommandBuffer {
@@ -77,7 +77,7 @@ impl Deref for TransferCommandBuffer {
     }
 }
 
-pub struct SubpassCommandBuffer(CommandBuffer);
+pub struct SubpassCommandBuffer(pub CommandBuffer);
 impl Deref for SubpassCommandBuffer {
     type Target = CommandBuffer;
     fn deref(&self) -> &CommandBuffer {

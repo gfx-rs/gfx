@@ -12,65 +12,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::DerefMut;
+use std::ops::{DerefMut};
 use {CommandPool, CommandQueue};
-
-pub trait GeneralPoolSupport { type Queue: CommandQueue; }
-pub trait ComputePoolSupport { type Queue: CommandQueue; }
-pub trait GraphicsPoolSupport { type Queue: CommandQueue; }
-pub trait TransferPoolSupport { type Queue: CommandQueue; }
+pub use queue::{GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
 
 /// General command pool can allocate general command buffers.
-pub struct GeneralCommandPool<P: CommandPool>(P);
-impl<P: CommandPool> GeneralCommandPool<P> { 
-    pub fn from_queue<Q: GeneralPoolSupport + DerefMut<Target=<P as CommandPool>::Q>>(mut queue: &mut Q, capacity: usize) -> Self {
-        GeneralCommandPool(P::from_queue(&mut queue, capacity))
-    }
-    pub fn acquire_command_buffer(&mut self) -> &mut <<P as CommandPool>::Q as CommandQueue>::GeneralCommandBuffer {
-        unimplemented!()
-    }
+pub trait GeneralCommandPool: CommandPool {
+    fn from_queue<Q>(queue: &mut Q, capacity: usize) -> Self
+        where Q: Into<GeneralQueue<<Self as CommandPool>::Queue>> +
+                 DerefMut<Target=<Self as CommandPool>::Queue>;
 }
 
 /// Graphics command pool can allocate graphics command buffers.
-pub struct GraphicsCommandPool<P: CommandPool>(P);
-impl<P: CommandPool> GraphicsCommandPool<P> { 
-    pub fn from_queue<Q: GraphicsPoolSupport + DerefMut<Target=<P as CommandPool>::Q>>(mut queue: &mut Q, capacity: usize) -> Self {
-        GraphicsCommandPool(P::from_queue(&mut queue, capacity))
-    }
-    pub fn acquire_command_buffer(&mut self) -> &mut <<P as CommandPool>::Q as CommandQueue>::GraphicsCommandBuffer {
-        unimplemented!()
-    }
+pub trait GraphicsCommandPool: CommandPool {
+    fn from_queue<Q>(queue: &mut Q, capacity: usize) -> Self
+        where Q: Into<GraphicsQueue<<Self as CommandPool>::Queue>> +
+                 DerefMut<Target=<Self as CommandPool>::Queue>;
 }
 
 /// Compute command pool can allocate compute command buffers.
-pub struct ComputeCommandPool<P: CommandPool>(P);
-impl<P: CommandPool> ComputeCommandPool<P> { 
-    pub fn from_queue<Q: ComputePoolSupport + DerefMut<Target=<P as CommandPool>::Q>>(mut queue: &mut Q, capacity: usize) -> Self {
-        ComputeCommandPool(P::from_queue(&mut queue, capacity))
-    }
-    pub fn acquire_command_buffer(&mut self) -> &mut <<P as CommandPool>::Q as CommandQueue>::ComputeCommandBuffer {
-        unimplemented!()
-    }
+pub trait ComputeCommandPool: CommandPool {
+    fn from_queue<Q>(queue: &mut Q, capacity: usize) -> Self
+        where Q: Into<ComputeQueue<<Self as CommandPool>::Queue>> +
+                 DerefMut<Target=<Self as CommandPool>::Queue>;
 }
 
 /// Transfer command pool can allocate transfer command buffers.
-pub struct TransferCommandPool<P: CommandPool>(P);
-impl<P: CommandPool> TransferCommandPool<P> { 
-    pub fn from_queue<Q: TransferPoolSupport + DerefMut<Target=<P as CommandPool>::Q>>(mut queue: &mut Q, capacity: usize) -> Self {
-        TransferCommandPool(P::from_queue(&mut queue, capacity))
-    }
-    pub fn acquire_command_buffer(&mut self) -> &mut <<P as CommandPool>::Q as CommandQueue>::TransferCommandBuffer {
-        unimplemented!()
-    }
+pub trait TransferCommandPool: CommandPool {
+    fn from_queue<Q>(queue: &mut Q, capacity: usize) -> Self
+        where Q: Into<TransferQueue<<Self as CommandPool>::Queue>> +
+                 DerefMut<Target=<Self as CommandPool>::Queue>;
 }
 
 /// Subpass command pool can allocate subpass command buffers.
-pub struct SubpassCommandPool<P: CommandPool>(P);
-impl<P: CommandPool> SubpassCommandPool<P> { 
-    pub fn from_queue<Q: GraphicsPoolSupport + DerefMut<Target=<P as CommandPool>::Q>>(mut queue: &mut Q, capacity: usize) -> Self {
-        SubpassCommandPool(P::from_queue(&mut queue, capacity))
-    }
-    pub fn acquire_command_buffer(&mut self) -> &mut <<P as CommandPool>::Q as CommandQueue>::SubpassCommandBuffer {
-        unimplemented!()
-    }
+pub trait SubpassCommandPool: CommandPool {
+    fn from_queue<Q>(queue: &mut Q, capacity: usize) -> Self
+        where Q: Into<GraphicsQueue<<Self as CommandPool>::Queue>> +
+                 DerefMut<Target=<Self as CommandPool>::Queue>;
 }
