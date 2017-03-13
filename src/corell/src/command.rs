@@ -47,7 +47,6 @@ impl<'a, C: CommandBuffer> Encoder<'a, C> {
         Encoder(buffer)
     }
 
-    // TODO: return submission object
     pub fn finish(self) -> Submit<C> {
         Submit(unsafe { self.0.end() })
     }
@@ -71,7 +70,6 @@ impl<'a, C> DerefMut for Encoder<'a, C>
     }
 }
 
-// TODO: DON'T take a reference! Probably needs to be done for each backend /:
 pub struct Submit<C: CommandBuffer>(C::SubmitInfo);
 impl<C: CommandBuffer> Submit<C> {
     #[doc(hidden)]
