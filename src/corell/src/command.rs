@@ -14,6 +14,7 @@
 
 //! Command Buffer device interface
 
+use std::ops::{Deref, DerefMut};
 use {state, pso, target};
 use {IndexType, InstanceCount, VertexCount, Resources};
 
@@ -38,12 +39,53 @@ pub struct BufferCopy {
 /// Optional instance parameters: (instance count, buffer offset)
 pub type InstanceParams = (InstanceCount, VertexCount);
 
+pub struct Encoder<'a, C: CommandBuffer + 'a>(&'a mut C);
+
+impl<'a, C: CommandBuffer> Encoder<'a, C> {
+    #[doc(hidden)]
+    pub unsafe fn new(buffer: &'a mut C) -> Self {
+        Encoder(buffer)
+    }
+
+    // TODO: return submission object
+    pub fn finish(self) -> Submit<C> {
+        Submit(unsafe { self.0.end() })
+    }
+}
+
+impl<'a, C> Deref for Encoder<'a, C>
+    where C: CommandBuffer
+{
+    type Target = C;
+
+    fn deref(&self) -> &C {
+        self.0
+    }
+}
+
+impl<'a, C> DerefMut for Encoder<'a, C>
+    where C: CommandBuffer
+{
+    fn deref_mut(&mut self) -> &mut C {
+        self.0
+    }
+}
+
+// TODO: DON'T take a reference! Probably needs to be done for each backend /:
+pub struct Submit<C: CommandBuffer>(C::SubmitInfo);
+impl<C: CommandBuffer> Submit<C> {
+    #[doc(hidden)]
+    pub unsafe fn get_info(&self) -> &C::SubmitInfo {
+        &self.0
+    }
+}
+
 pub trait GraphicsCommandBuffer<R: Resources> : PrimaryCommandBuffer<R> {
-    fn clear_depth_stencil(&mut self, R::DepthStencilView, Option<target::Depth>, Option<target::Stencil>);
+    fn clear_depth_stencil(&mut self, &R::DepthStencilView, Option<target::Depth>, Option<target::Stencil>);
 
     fn resolve_image(&mut self);
 
-    fn bind_index_buffer(&mut self, R::Buffer, IndexType);
+    fn bind_index_buffer(&mut self, &R::Buffer, IndexType);
     fn bind_vertex_buffers(&mut self, pso::VertexBufferSet<R>);
 
     fn set_viewports(&mut self, &[target::Rect]);
@@ -63,14 +105,14 @@ pub trait SubpassCommandBuffer<R: Resources> : SecondaryCommandBuffer<R> {
     fn draw_indirect(&mut self);
     fn draw_indexed_indirect(&mut self);
 
-    fn bind_index_buffer(&mut self, R::Buffer, IndexType);
+    fn bind_index_buffer(&mut self, &R::Buffer, IndexType);
     fn bind_vertex_buffers(&mut self, pso::VertexBufferSet<R>);
 
     fn set_viewports(&mut self, &[target::Rect]);
     fn set_scissors(&mut self, &[target::Rect]);
     fn set_ref_values(&mut self, state::RefValues);
 
-    fn bind_pipeline(&mut self, R::PipelineStateObject);
+    fn bind_pipeline(&mut self, &R::PipelineStateObject);
     fn bind_descriptor_sets(&mut self);
     fn push_constants(&mut self);
 }
@@ -81,29 +123,37 @@ pub trait ComputeCommandBuffer<R: Resources> : ProcessingCommandBuffer<R> {
 }
 
 pub trait ProcessingCommandBuffer<R: Resources> : TransferCommandBuffer<R> {
-    fn clear_color(&mut self, R::RenderTargetView, ClearColor);
+    fn clear_color(&mut self, &R::RenderTargetView, ClearColor);
     fn clear_buffer(&mut self);
 
-    fn bind_pipeline(&mut self, R::PipelineStateObject);
+    // TODO: consider splitting compute and graphics pso
+    fn bind_pipeline(&mut self, &R::PipelineStateObject);
     fn bind_descriptor_sets(&mut self);
     fn push_constants(&mut self);
 }
 
 pub trait TransferCommandBuffer<R: Resources> : PrimaryCommandBuffer<R> {
-    fn update_buffer(&mut self, R::Buffer, data: &[u8], offset: usize);
-    fn copy_buffer(&mut self, src: R::Buffer, dest: R::Buffer, &[BufferCopy]);
-    fn copy_image(&mut self, src: R::Image, dest: R::Image);
+    fn update_buffer(&mut self, &R::Buffer, data: &[u8], offset: usize);
+    fn copy_buffer(&mut self, src: &R::Buffer, dest: &R::Buffer, &[BufferCopy]);
+    fn copy_image(&mut self, src: &R::Image, dest: &R::Image);
     fn copy_buffer_to_image(&mut self);
     fn copy_image_to_buffer(&mut self); 
 }
 
-pub trait PrimaryCommandBuffer<R: Resources> {
+pub trait PrimaryCommandBuffer<R: Resources>: CommandBuffer {
     fn pipeline_barrier(&mut self);
     fn execute_commands(&mut self);
 }
 
-pub trait SecondaryCommandBuffer<R: Resources> {
+pub trait SecondaryCommandBuffer<R: Resources>: CommandBuffer {
     fn pipeline_barrier(&mut self);
+}
+
+pub trait CommandBuffer {
+    type SubmitInfo;
+
+    #[doc(hidden)]
+    unsafe fn end(&mut self) -> Self::SubmitInfo;
 }
 
 // Ignore for the moment (:

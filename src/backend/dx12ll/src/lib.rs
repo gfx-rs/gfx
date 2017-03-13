@@ -33,6 +33,8 @@ use std::ffi::OsString;
 use winapi::BOOL;
 use winit::os::windows::WindowExt;
 
+use core::command::Submit;
+
 mod command;
 mod data;
 mod factory;
@@ -159,15 +161,21 @@ pub struct CommandQueue {
 
 impl core::CommandQueue for CommandQueue {
     type R = Resources;
-    type CommandBuffer = native::CommandBuffer;
+    type SubmitInfo = command::SubmitInfo;
     type GeneralCommandBuffer = native::GeneralCommandBuffer;
     type GraphicsCommandBuffer = native::GraphicsCommandBuffer;
     type ComputeCommandBuffer = native::ComputeCommandBuffer;
     type TransferCommandBuffer = native::TransferCommandBuffer;
     type SubpassCommandBuffer = native::SubpassCommandBuffer;
 
-    unsafe fn submit<C: Deref<Target=native::CommandBuffer>>(&mut self, cmd_buffer: &C) {
-        unimplemented!()
+    unsafe fn submit<C>(&mut self, cmd_buffers: &[Submit<C>])
+        where C: core::CommandBuffer<SubmitInfo = command::SubmitInfo>
+    {
+        let mut command_lists = cmd_buffers.iter().map(|cmd_buffer| {
+            cmd_buffer.get_info().0.as_mut_ptr()
+        }).collect::<Vec<_>>();
+
+        self.inner.ExecuteCommandLists(command_lists.len() as u32, command_lists.as_mut_ptr() as *mut *mut _);
     }
 }
 

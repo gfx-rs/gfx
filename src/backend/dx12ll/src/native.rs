@@ -46,41 +46,11 @@ pub struct CommandBuffer {
 }
 
 pub struct GeneralCommandBuffer(pub CommandBuffer);
-impl Deref for GeneralCommandBuffer {
-    type Target = CommandBuffer;
-    fn deref(&self) -> &CommandBuffer {
-        &self.0
-    }
-}
 
 pub struct GraphicsCommandBuffer(pub CommandBuffer);
-impl Deref for GraphicsCommandBuffer {
-    type Target = CommandBuffer;
-    fn deref(&self) -> &CommandBuffer {
-        &self.0
-    }
-}
 
 pub struct ComputeCommandBuffer(pub CommandBuffer);
-impl Deref for ComputeCommandBuffer {
-    type Target = CommandBuffer;
-    fn deref(&self) -> &CommandBuffer {
-        &self.0
-    }
-}
 
 pub struct TransferCommandBuffer(pub CommandBuffer);
-impl Deref for TransferCommandBuffer {
-    type Target = CommandBuffer;
-    fn deref(&self) -> &CommandBuffer {
-        &self.0
-    }
-}
 
 pub struct SubpassCommandBuffer(pub CommandBuffer);
-impl Deref for SubpassCommandBuffer {
-    type Target = CommandBuffer;
-    fn deref(&self) -> &CommandBuffer {
-        &self.0
-    }
-}

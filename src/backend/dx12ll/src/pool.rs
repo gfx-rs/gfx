@@ -20,6 +20,7 @@ use std::ops::DerefMut;
 use winapi;
 
 use core::{self, pool};
+use core::command::Encoder;
 use core::{CommandPool, GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
 use native::{self, GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer, SubpassCommandBuffer};
 use CommandQueue;
@@ -95,7 +96,7 @@ macro_rules! impl_pool {
             type Queue = CommandQueue;
             type PoolBuffer = $buffer;
 
-            fn acquire_command_buffer(&mut self) -> &mut $buffer {
+            fn acquire_command_buffer<'a>(&'a mut self) -> Encoder<'a, $buffer> {
                 let available_lists = self.command_lists.len() as isize - self.next_list as isize;
                 if available_lists <= 0 {
                     self.reserve((-available_lists) as usize + 1);
@@ -104,7 +105,7 @@ macro_rules! impl_pool {
                 let list = &mut self.command_lists[self.next_list];
                 self.next_list += 1;
 
-                list
+                unsafe { Encoder::new(list) }
             }
 
             fn reset(&mut self) {

@@ -20,13 +20,14 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::any::Any;
 use std::slice::Iter;
-use std::ops::{Deref, DerefMut};
+use std::ops::{Deref};
 
 pub use draw_state::{state, target};
 pub use self::factory::Factory;
 pub use queue::{GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
 pub use pool::{GeneralCommandPool, GraphicsCommandPool};
-use command::{GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer, SubpassCommandBuffer};
+pub use command::{CommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer,
+    SubpassCommandBuffer, ProcessingCommandBuffer, PrimaryCommandBuffer, SecondaryCommandBuffer};
 
 pub mod command;
 pub mod factory;
@@ -154,30 +155,39 @@ pub trait QueueFamily: 'static {
     fn num_queues(&self) -> u32;
 }
 
-// TODO
+// TODO: trait bounds
 /// `CommandBuffers` are submitted to a `CommandQueue` and executed in-order of submission.
 /// `CommandQueue`s may run in parallel and need to be explicitly synchronized.
 pub trait CommandQueue {
     type R: Resources;
-    type CommandBuffer; // Base command buffer
-    type GeneralCommandBuffer: Deref<Target=Self::CommandBuffer>; // : GraphicsCommandBuffer<Self::R> + ComputeCommandBuffer<Self::R> + Deref<Target=Self::CommandBuffer>;
-    type GraphicsCommandBuffer: Deref<Target=Self::CommandBuffer>; // : GraphicsCommandBuffer<Self::R> + Deref<Target=Self::CommandBuffer>;
-    type ComputeCommandBuffer: Deref<Target=Self::CommandBuffer>; // : ComputeCommandBuffer<Self::R> + Deref<Target=Self::CommandBuffer>;
-    type TransferCommandBuffer: Deref<Target=Self::CommandBuffer>; // : TransferCommandBuffer<Self::R> + Deref<Target=Self::CommandBuffer>;
-    type SubpassCommandBuffer; // : SubpassCommandBuffer<Self::R>;
+    type SubmitInfo;
+    type GeneralCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo>; // : GraphicsCommandBuffer<Self::R> + ComputeCommandBuffer<Self::R> + Deref<Target=Self::CommandBuffer>;
+    type GraphicsCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo>; // : GraphicsCommandBuffer<Self::R> + Deref<Target=Self::CommandBuffer>;
+    type ComputeCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo>; // : ComputeCommandBuffer<Self::R> + Deref<Target=Self::CommandBuffer>;
+    type TransferCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo>; // : TransferCommandBuffer<Self::R> + Deref<Target=Self::CommandBuffer>;
+    type SubpassCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo>; // : SubpassCommandBuffer<Self::R>;
 
-    /// Submit a command buffer to queue.
-    unsafe fn submit<C: Deref<Target=Self::CommandBuffer>>(&mut self, cmd_buffer: &C);
+    /// Submit command buffers to queue for execution.
+    unsafe fn submit<C>(&mut self, cmd_buffers: &[command::Submit<C>])
+        where C: CommandBuffer<SubmitInfo = Self::SubmitInfo>;
 }
 
 /// `CommandPool` can allocate command buffers of a specific type only.
 /// The allocated command buffers are associated with the creating command queue.
 pub trait CommandPool {
     type Queue: CommandQueue;
-    type PoolBuffer;
+    type PoolBuffer: command::CommandBuffer;
 
-    fn acquire_command_buffer(&mut self) -> &mut Self::PoolBuffer;
+    /// Get a command buffer for recording.
+    ///
+    /// You can only record to one command buffer per pool at the same time.
+    /// If more command buffers are requested than allocated, new buffers will be reserved.
+    fn acquire_command_buffer<'a>(&'a mut self) -> command::Encoder<'a, Self::PoolBuffer>;
+
+    /// Reset the command pool and the corresponding command buffers.
     fn reset(&mut self);
+
+    /// Reserve an additional amount of command buffers.
     fn reserve(&mut self, additional: usize);
 }
 
