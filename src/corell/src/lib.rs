@@ -155,17 +155,16 @@ pub trait QueueFamily: 'static {
     fn num_queues(&self) -> u32;
 }
 
-// TODO: trait bounds
 /// `CommandBuffers` are submitted to a `CommandQueue` and executed in-order of submission.
 /// `CommandQueue`s may run in parallel and need to be explicitly synchronized.
 pub trait CommandQueue {
     type R: Resources;
     type SubmitInfo;
-    type GeneralCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo>; // : GraphicsCommandBuffer<Self::R> + ComputeCommandBuffer<Self::R> + Deref<Target=Self::CommandBuffer>;
-    type GraphicsCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo>; // : GraphicsCommandBuffer<Self::R> + Deref<Target=Self::CommandBuffer>;
-    type ComputeCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo>; // : ComputeCommandBuffer<Self::R> + Deref<Target=Self::CommandBuffer>;
-    type TransferCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo>; // : TransferCommandBuffer<Self::R> + Deref<Target=Self::CommandBuffer>;
-    type SubpassCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo>; // : SubpassCommandBuffer<Self::R>;
+    type GeneralCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo> + GraphicsCommandBuffer<Self::R> + ComputeCommandBuffer<Self::R>;
+    type GraphicsCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo> + GraphicsCommandBuffer<Self::R>;
+    type ComputeCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo> + ComputeCommandBuffer<Self::R>;
+    type TransferCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo> + TransferCommandBuffer<Self::R>;
+    type SubpassCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo>; // + SubpassCommandBuffer<Self::R>;
 
     /// Submit command buffers to queue for execution.
     unsafe fn submit<C>(&mut self, cmd_buffers: &[command::Submit<C>])
@@ -182,9 +181,11 @@ pub trait CommandPool {
     ///
     /// You can only record to one command buffer per pool at the same time.
     /// If more command buffers are requested than allocated, new buffers will be reserved.
+    /// The command buffer will be returned in 'recording' state.
     fn acquire_command_buffer<'a>(&'a mut self) -> command::Encoder<'a, Self::PoolBuffer>;
 
     /// Reset the command pool and the corresponding command buffers.
+    // TODO: synchronization: can't free pool if command buffer still in use (pool memory still in use)
     fn reset(&mut self);
 
     /// Reserve an additional amount of command buffers.
@@ -219,17 +220,17 @@ pub trait SwapChain {
 
 /// Different resource types of a specific API. 
 pub trait Resources:          Clone + Hash + Debug + Any {
-    type Buffer:              Clone + Hash + Debug + Any + Send + Sync + Copy;
-    type ShaderLib:           Clone + Hash + Debug + Any + Send + Sync;
-    type RenderPass:          Clone + Hash + Debug + Any + Send + Sync;
-    type PipelineSignature:   Clone + Hash + Debug + Any + Send + Sync;
-    type PipelineStateObject: Clone + Hash + Debug + Any + Send + Sync;
-    type Image:               Clone + Hash + Debug + Any + Send + Sync;
-    type ShaderResourceView:  Clone + Hash + Debug + Any + Send + Sync + Copy;
-    type UnorderedAccessView: Clone + Hash + Debug + Any + Send + Sync + Copy;
-    type RenderTargetView:    Clone + Hash + Debug + Any + Send + Sync + Copy;
-    type DepthStencilView:    Clone + Hash + Debug + Any + Send + Sync;
-    type Sampler:             Clone + Hash + Debug + Any + Send + Sync + Copy;
+    type ShaderLib:           Clone + Debug + Any + Send + Sync;
+    type RenderPass:          Clone + Debug + Any + Send + Sync;
+    type PipelineSignature:   Clone + Debug + Any + Send + Sync;
+    type PipelineStateObject: Clone + Debug + Any + Send + Sync;
+    type Buffer:              Clone + Debug + Any + Send + Sync;
+    type Image:               Clone + Debug + Any + Send + Sync;
+    type ShaderResourceView:  Clone + Debug + Any + Send + Sync;
+    type UnorderedAccessView: Clone + Debug + Any + Send + Sync;
+    type RenderTargetView:    Clone + Debug + Any + Send + Sync;
+    type DepthStencilView:    Clone + Debug + Any + Send + Sync;
+    type Sampler:             Clone + Debug + Any + Send + Sync;
 }
 
 /// Different types of a specific API.

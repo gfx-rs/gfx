@@ -30,9 +30,13 @@ pub enum ClearColor {
     Uint([u32; 4]),
 }
 
+/// Region of two buffers for copying.
 pub struct BufferCopy {
+    /// Buffer region source offset.
     pub src: usize,
-    pub dest: usize,
+    /// Buffer region destionation offset.
+    pub dst: usize,
+    /// Region size.
     pub size: usize,
 }
 
@@ -81,6 +85,7 @@ impl<C: CommandBuffer> Submit<C> {
 pub trait GraphicsCommandBuffer<R: Resources> : PrimaryCommandBuffer<R> {
     fn clear_depth_stencil(&mut self, &R::DepthStencilView, Option<target::Depth>, Option<target::Stencil>);
 
+    // TODO: investigate how `blit_image` can be emulated on d3d12 e.g compute shader. (useful for mipmap generation)
     fn resolve_image(&mut self);
 
     fn bind_index_buffer(&mut self, &R::Buffer, IndexType);
@@ -132,7 +137,9 @@ pub trait ProcessingCommandBuffer<R: Resources> : TransferCommandBuffer<R> {
 
 pub trait TransferCommandBuffer<R: Resources> : PrimaryCommandBuffer<R> {
     fn update_buffer(&mut self, &R::Buffer, data: &[u8], offset: usize);
-    fn copy_buffer(&mut self, src: &R::Buffer, dest: &R::Buffer, &[BufferCopy]);
+
+    // TODO: memory aliasing or overlapping regions will result in undefined behavior!
+    fn copy_buffer(&mut self, src: &R::Buffer, dest: &R::Buffer, regions: Option<&[BufferCopy]>);
     fn copy_image(&mut self, src: &R::Image, dest: &R::Image);
     fn copy_buffer_to_image(&mut self);
     fn copy_image_to_buffer(&mut self); 

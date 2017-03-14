@@ -54,3 +54,23 @@ pub struct ComputeCommandBuffer(pub CommandBuffer);
 pub struct TransferCommandBuffer(pub CommandBuffer);
 
 pub struct SubpassCommandBuffer(pub CommandBuffer);
+
+#[derive(Clone, Debug, Hash)]
+pub struct Buffer {
+    pub resource: ComPtr<winapi::ID3D12Resource>,
+    pub size: u32,
+}
+unsafe impl Send for Buffer {}
+unsafe impl Sync for Buffer {}
+
+#[derive(Clone, Debug, Hash)]
+pub struct Image {
+    pub resource: ComPtr<winapi::ID3D12Resource>,
+}
+unsafe impl Send for Image {}
+unsafe impl Sync for Image {}
+
+#[derive(Clone, Debug)]
+pub struct RenderTargetView {
+    pub handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
+}

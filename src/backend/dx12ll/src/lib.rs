@@ -383,15 +383,15 @@ impl core::Backend for Backend {
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Resources { }
 impl core::Resources for Resources {
-    type Buffer = ();
     type ShaderLib = native::ShaderLib;
     type RenderPass = ();
     type PipelineSignature = native::PipelineSignature;
     type PipelineStateObject = native::Pipeline;
-    type Image = ();
+    type Buffer = native::Buffer;
+    type Image = native::Image;
     type ShaderResourceView = ();
     type UnorderedAccessView = ();
-    type RenderTargetView = ();
+    type RenderTargetView = native::RenderTargetView;
     type DepthStencilView = ();
     type Sampler = ();
 }

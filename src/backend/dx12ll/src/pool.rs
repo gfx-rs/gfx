@@ -55,7 +55,10 @@ impl CommandAllocator {
         }
     }
 
-    fn reset(&mut self) { unimplemented!() }
+    // Reset command allocator
+    fn reset(&mut self) {
+        unsafe { self.inner.Reset(); }
+    }
     
     fn create_command_list(&mut self) -> ComPtr<winapi::ID3D12GraphicsCommandList> {
         // allocate command lists
@@ -109,7 +112,12 @@ macro_rules! impl_pool {
             }
 
             fn reset(&mut self) {
-                unimplemented!()
+                self.allocator.reset();
+
+                // Reset used command lists
+                for cmd_list in &mut self.command_lists[..self.next_list] {
+                    unsafe { cmd_list.0.inner.Reset(self.allocator.inner.as_mut_ptr(), ptr::null_mut()); }
+                }
             }
 
             fn reserve(&mut self, additional: usize) {
