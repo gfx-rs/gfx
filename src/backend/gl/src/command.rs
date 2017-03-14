@@ -225,39 +225,9 @@ impl GlState {
     /// and not push redundant commands.
     fn filter_push(&mut self, buf: &mut Vec<Command>, cmd: Command) {
         match cmd {
-            Command::BindProgram(program) => {
-                if program == self.program {
-                    return;
-                }
-                self.program = program;
-            }
-            Command::BindConstantBuffer(constant_buffer) => {
-                if let Some(cb) = self.constant_buffer {
-                    if cb == constant_buffer {
-                        return;
-                    }
-                }
-                self.constant_buffer = Some(constant_buffer);
-            }
-            Command::BindResourceView(resource_view) => {
-                if let Some(rv) = self.resource_view {
-                    if rv == resource_view {
-                        return;
-                    }
-                }
-                self.resource_view = Some(resource_view);
-            }
             Command::BindUnorderedView(_unordered_view) => (),
             Command::BindSampler(_sampler_param, _resources) => (),
             Command::BindPixelTargets(_pixel_target_set) => (),
-            Command::BindVao => {
-                // TODO: Double-check this is where the
-                // EnableVertexAttrib stuff happens.
-                if self.vao_bound {
-                    return;
-                }
-                self.vao_bound = true;
-            }
             Command::BindAttribute(attribute_slot, buffer, buffer_element) => {
                 // BUGGO: This can potentially bind many different
                 // attributes but we only record the latest one,
@@ -371,6 +341,45 @@ impl GlState {
         }
         buf.push(cmd);
     }
+
+    fn bind_program(&mut self, buf: &mut Vec<Command>, program: Program) {
+        if program == self.program {
+            return;
+        }
+        self.program = program;
+        buf.push(Command::BindProgram(program));
+    }
+
+    fn bind_constant_buffer(&mut self, buf: &mut Vec<Command>, constant_buffer: c::pso::ConstantBufferParam<Resources>) {
+        if let Some(cb) = self.constant_buffer {
+            if cb == constant_buffer {
+                return;
+            }
+        }
+        self.constant_buffer = Some(constant_buffer);
+        buf.push(Command::BindConstantBuffer(constant_buffer));
+    }
+
+    fn bind_resource_view(&mut self, buf: &mut Vec<Command>, resource_view: c::pso::ResourceViewParam<Resources>) {
+        if let Some(rv) = self.resource_view {
+            if rv == resource_view {
+                return;
+            }
+        }
+        self.resource_view = Some(resource_view);
+        buf.push(Command::BindResourceView(resource_view));
+    }
+
+    fn bind_vao(&mut self, buf: &mut Vec<Command>) {
+        // TODO: Double-check this is where the
+        // EnableVertexAttrib stuff happens.
+        if self.vao_bound {
+                    return;
+                }
+        self.vao_bound = true;
+        buf.push(Command::BindVao);
+    }
+    
 }
 
 
@@ -418,7 +427,7 @@ impl command::Buffer<Resources> for CommandBuffer {
         self.cache.stencil = pso.output.stencil;
         self.cache.cull_face = cull;
         self.cache.draw_mask = pso.output.draw_mask;
-        self.saved_state.filter_push(&mut self.buf, Command::BindProgram(pso.program));
+        self.saved_state.bind_program(&mut self.buf, pso.program);
         self.cache.scissor = pso.scissor;
         self.saved_state.filter_push(&mut self.buf, Command::SetRasterizer(pso.rasterizer));
         self.saved_state.filter_push(&mut self.buf, Command::SetDepthState(pso.output.depth));
@@ -462,7 +471,7 @@ impl command::Buffer<Resources> for CommandBuffer {
 
     fn bind_constant_buffers(&mut self, cbs: &[c::pso::ConstantBufferParam<Resources>]) {
         for param in cbs.iter() {
-            self.saved_state.filter_push(&mut self.buf, Command::BindConstantBuffer(param.clone()));
+            self.saved_state.bind_constant_buffer(&mut self.buf, param.clone());
         }
     }
 
@@ -476,7 +485,7 @@ impl command::Buffer<Resources> for CommandBuffer {
         }
         for param in srvs.iter() {
             self.cache.resource_binds[param.2 as usize] = Some(param.0.bind);
-            self.saved_state.filter_push(&mut self.buf, Command::BindResourceView(param.clone()));
+            self.saved_state.bind_resource_view(&mut self.buf, param.clone());
         }
     }
 
