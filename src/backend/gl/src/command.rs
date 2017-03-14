@@ -224,121 +224,6 @@ impl GlState {
     /// attempts to keep track of the current state
     /// and not push redundant commands.
     fn filter_push(&mut self, buf: &mut Vec<Command>, cmd: Command) {
-        match cmd {
-            Command::BindUnorderedView(_unordered_view) => (),
-            Command::BindSampler(_sampler_param, _resources) => (),
-            Command::BindPixelTargets(_pixel_target_set) => (),
-            Command::BindAttribute(attribute_slot, buffer, buffer_element) => {
-                // BUGGO: This can potentially bind many different
-                // attributes but we only record the latest one,
-                // we'll have to keep a map of all attributes
-                // to do this right.
-                if self.attribute == Some((attribute_slot, buffer, buffer_element)) {
-                    return;
-                }
-                self.attribute = Some((attribute_slot, buffer, buffer_element));
-            }
-            Command::UnbindAttribute(_attribute_slot) => (),
-            Command::BindIndex(buffer) => {
-                if self.index == buffer {
-                    return;
-                }
-                self.index = buffer;
-            }
-            Command::BindFrameBuffer(access, fb) => {
-                if self.framebuffer == Some((access, fb)) {
-                    return;
-                }
-                self.framebuffer = Some((access, fb));
-            }
-            Command::BindUniform(_location, _value) => (),
-            Command::SetDrawColorBuffers(_color_slot) => (),
-            Command::SetRasterizer(rasterizer) => {
-                if self.rasterizer == Some(rasterizer) {
-                    return;
-                }
-                self.rasterizer = Some(rasterizer);
-            }
-            Command::SetViewport(rect) => {
-                if self.viewport == Some(rect) {
-                    return;
-                }
-                self.viewport = Some(rect);
-            }
-            Command::SetScissor(option_rect) => {
-                if self.scissor_test == option_rect {
-                    return;
-                }
-                self.scissor_test = option_rect;
-            }
-            Command::SetDepthState(option_depth) => {
-                if self.depth_state == option_depth {
-                    return;
-                }
-                self.depth_state = option_depth;
-            }
-            Command::SetStencilState(option_stencil, stencils, cullface) => {
-                // This is a little more complex 'cause if option_stencil
-                // is None the stencil state is disabled, it it's Some
-                // then it's enabled and parameters are set.
-                // That's actually bad because it makes it impossible
-                // to completely remove all redundant calls if the
-                // stencil is enabled;
-                // we'll be re-enabling it over and over.
-                // BUGGO: This isn't actually removing all the
-                // bogus glDisable(cap = GL_STENCIL_TEST) calls,
-                // look into it more.
-                if let Some(stencil) = option_stencil {
-                    // Enable stenciling
-                    // BUGGO:
-                    // We don't bother optimizing this case yet
-                    // because it's a PITA, so we just continue.
-                } else {
-                    // Disable stenciling
-                    if self.stencil_enabled == option_stencil {
-                        // Already disabled, all good.
-                        return;
-                    } else {
-                        self.stencil_enabled = option_stencil;
-                    }
-                }
-            }
-            Command::SetBlendState(color_slot, color) => {
-                if let Some(bs) = self.blend_state {
-                    if bs == (color_slot, color) {
-                        return;
-                    }
-                }
-                self.blend_state = Some((color_slot, color));
-            }
-            Command::SetBlendColor(color_value) => {
-                if self.blend_color == Some(color_value) {
-                    return;
-                }
-                self.blend_color = Some(color_value);
-            }
-            Command::SetPatches(_patch_size) => (),
-            // CopyBuffer(Buffer, Buffer, gl::types::GLintptr, gl::types::GLintptr, gl::types::GLsizeiptr),
-            // resource updates
-            // UpdateBuffer(Buffer, DataPointer, usize),
-            // UpdateTexture(Texture,
-            //               c::texture::Kind,
-            //               Option<c::texture::CubeFace>,
-            //               DataPointer,
-            //               c::texture::RawImageInfo),
-            // GenerateMipmap(ResourceView),
-            // // drawing
-            // Clear(Option<command::ClearColor>, Option<Depth>, Option<Stencil>),
-            // Draw(gl::types::GLenum, c::VertexCount, c::VertexCount, Option<command::InstanceParams>),
-            // DrawIndexed(gl::types::GLenum,
-            //             gl::types::GLenum,
-            //             RawOffset,
-            //             c::VertexCount,
-            //             c::VertexCount,
-            //             Option<command::InstanceParams>),
-            // _Blit(Rect, Rect, Mirror, usize) => (),
-            _ => (),
-        }
         buf.push(cmd);
     }
 
@@ -378,6 +263,109 @@ impl GlState {
                 }
         self.vao_bound = true;
         buf.push(Command::BindVao);
+    }
+
+    // fn bind_attribute(&mut self, buf: &mut Vec<Command>, attribute_slot: c::AttributeSlot, buffer: Buffer, buffer_element: BufferElement) {
+    //     // BUGGO: This can potentially bind many different
+    //     // attributes but we only record the latest one,
+    //     // we'll have to keep a map of all attributes
+    //     // to do this right.
+    //     if self.attribute == Some((attribute_slot, buffer, buffer_element)) {
+    //         return;
+    //     }
+    //     self.attribute = Some((attribute_slot, buffer, buffer_element));
+    //     buf.push(Command::BindAttribute(attribute_slot, buffer, buffer_element));
+    // }
+
+    fn bind_index(&mut self, buf: &mut Vec<Command>, buffer: Buffer) {
+        if self.index == buffer {
+            return;
+        }
+        self.index = buffer;
+        buf.push(Command::BindIndex(buffer));
+    }
+
+    fn bind_framebuffer(&mut self, buf: &mut Vec<Command>, access: Access, fb: FrameBuffer) {
+
+        if self.framebuffer == Some((access, fb)) {
+            return;
+        }
+        self.framebuffer = Some((access, fb));
+        buf.push(Command::BindFrameBuffer(access, fb));
+    }
+
+    fn set_rasterizer(&mut self, buf: &mut Vec<Command>, rasterizer: s::Rasterizer) {
+        if self.rasterizer == Some(rasterizer) {
+            return;
+        }
+        self.rasterizer = Some(rasterizer);
+        buf.push(Command::SetRasterizer(rasterizer));
+    }
+
+    fn set_viewport(&mut self, buf: &mut Vec<Command>, rect: Rect) {
+        if self.viewport == Some(rect) {
+            return;
+        }
+        self.viewport = Some(rect);
+        buf.push(Command::SetViewport(rect));
+    }
+
+    fn set_scissor(&mut self, buf: &mut Vec<Command>, rect: Option<Rect>) {
+        if self.scissor_test == rect {
+            return;
+        }
+        self.scissor_test = rect;
+        buf.push(Command::SetScissor(rect));
+    }
+    fn set_depth_state(&mut self, buf: &mut Vec<Command>, depth: Option<s::Depth>) {
+        if self.depth_state == depth {
+            return;
+        }
+        self.depth_state = depth;
+        buf.push(Command::SetDepthState(depth));
+    }
+    fn set_stencil_state(&mut self, buf: &mut Vec<Command>, option_stencil: Option<s::Stencil>, stencils: (Stencil, Stencil), cullface: s:: CullFace) {
+        // This is a little more complex 'cause if option_stencil
+        // is None the stencil state is disabled, it it's Some
+        // then it's enabled and parameters are set.
+        // That's actually bad because it makes it impossible
+        // to completely remove all redundant calls if the
+        // stencil is enabled;
+        // we'll be re-enabling it over and over.
+        // BUGGO: This isn't actually removing all the
+        // bogus glDisable(cap = GL_STENCIL_TEST) calls,
+        // look into it more.
+        if let Some(stencil) = option_stencil {
+            // Enable stenciling
+            // BUGGO:
+            // We don't bother optimizing this case yet
+            // because it's a PITA, so we just continue.
+        } else {
+            // Disable stenciling
+            if self.stencil_enabled == option_stencil {
+                // Already disabled, all good.
+                return;
+            } else {
+                self.stencil_enabled = option_stencil;
+            }
+                }
+        buf.push(Command::SetStencilState(option_stencil, stencils, cullface));
+    }
+    fn set_blend_state(&mut self, buf: &mut Vec<Command>, color_slot: c::ColorSlot, color: s::Color) {
+        if let Some(bs) = self.blend_state {
+            if bs == (color_slot, color) {
+                return;
+            }
+        }
+        self.blend_state = Some((color_slot, color));
+        buf.push(Command::SetBlendState(color_slot, color));
+    }
+    fn set_blend_color(&mut self, buf: &mut Vec<Command>, color_value: ColorValue) {
+        if self.blend_color == Some(color_value) {
+            return;
+        }
+        self.blend_color = Some(color_value);
+        buf.push(Command::SetBlendColor(color_value));
     }
     
 }
@@ -429,15 +417,15 @@ impl command::Buffer<Resources> for CommandBuffer {
         self.cache.draw_mask = pso.output.draw_mask;
         self.saved_state.bind_program(&mut self.buf, pso.program);
         self.cache.scissor = pso.scissor;
-        self.saved_state.filter_push(&mut self.buf, Command::SetRasterizer(pso.rasterizer));
-        self.saved_state.filter_push(&mut self.buf, Command::SetDepthState(pso.output.depth));
-        self.saved_state.filter_push(&mut self.buf,
-                                     Command::SetStencilState(pso.output.stencil, (0, 0), cull));
+        self.saved_state.set_rasterizer(&mut self.buf, pso.rasterizer);
+        self.saved_state.set_depth_state(&mut self.buf, pso.output.depth);
+        self.saved_state.set_stencil_state(&mut self.buf,
+                                     pso.output.stencil, (0, 0), cull);
         for i in 0..c::MAX_COLOR_TARGETS {
             if pso.output.draw_mask & (1 << i) != 0 {
-                self.saved_state.filter_push(&mut self.buf,
-                                             Command::SetBlendState(i as c::ColorSlot,
-                                                                    pso.output.colors[i]));
+                self.saved_state.set_blend_state(&mut self.buf,
+                                            i as c::ColorSlot,
+                                            pso.output.colors[i]);
             }
         }
         if let c::Primitive::PatchList(num) = pso.primitive {
@@ -515,20 +503,20 @@ impl command::Buffer<Resources> for CommandBuffer {
                 .iter()
                 .position(|c| c.is_none())
                 .unwrap_or(pts.colors.len()) as c::ColorSlot;
-            self.saved_state.filter_push(&mut self.buf,
-                                         Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, self.fbo));
+            self.saved_state.bind_framebuffer(&mut self.buf,
+                                         gl::DRAW_FRAMEBUFFER, self.fbo);
             self.saved_state.filter_push(&mut self.buf, Command::BindPixelTargets(pts));
             self.saved_state.filter_push(&mut self.buf, Command::SetDrawColorBuffers(num));
         }
         let view = pts.get_view();
         self.cache.target_dim = view;
-        self.saved_state.filter_push(&mut self.buf,
-                                     Command::SetViewport(Rect {
+        self.saved_state.set_viewport(&mut self.buf,
+                                     Rect {
                                          x: 0,
                                          y: 0,
                                          w: view.0,
                                          h: view.1,
-                                     }));
+                                     });
     }
 
     fn bind_index(&mut self, buf: Buffer, itype: c::IndexType) {
@@ -538,8 +526,8 @@ impl command::Buffer<Resources> for CommandBuffer {
 
     fn set_scissor(&mut self, rect: Rect) {
         use std::cmp;
-        self.saved_state.filter_push(&mut self.buf,
-                                     Command::SetScissor(if self.cache.scissor {
+        self.saved_state.set_scissor(&mut self.buf,
+                                     if self.cache.scissor {
                                          Some(Rect {
                                              // inverting the Y axis in order to match D3D11
                                              y: cmp::max(self.cache.target_dim.1, rect.y + rect.h) -
@@ -549,15 +537,15 @@ impl command::Buffer<Resources> for CommandBuffer {
                                          })
                                      } else {
                                          None //TODO: assert?
-                                     }));
+                                     });
     }
 
     fn set_ref_values(&mut self, rv: s::RefValues) {
-        self.saved_state.filter_push(&mut self.buf,
-                                     Command::SetStencilState(self.cache.stencil,
+        self.saved_state.set_stencil_state(&mut self.buf,
+                                     self.cache.stencil,
                                                               rv.stencil,
-                                                              self.cache.cull_face));
-        self.saved_state.filter_push(&mut self.buf, Command::SetBlendColor(rv.blend));
+                                                              self.cache.cull_face);
+        self.saved_state.set_blend_color(&mut self.buf, rv.blend);
     }
 
     fn copy_buffer(&mut self,
