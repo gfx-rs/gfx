@@ -28,6 +28,7 @@ use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0, V1_0};
 use ash::vk;
 use ash::{Entry, LoadingError};
 use core::format;
+use core::command::Submit;
 use std::ffi::{CStr, CString};
 use std::iter;
 use std::mem;
@@ -37,10 +38,15 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 
+mod command;
 mod data;
 mod factory;
 mod native;
+mod pool;
 mod state;
+
+pub use pool::{GeneralCommandPool, GraphicsCommandPool,
+    ComputeCommandPool, TransferCommandPool, SubpassCommandPool};
 
 lazy_static! {
     static ref VK_ENTRY: Result<Entry<V1_0>, LoadingError> = Entry::new();
@@ -198,26 +204,18 @@ pub struct CommandQueue {
 
 impl core::CommandQueue for CommandQueue {
     type R = Resources;
-    type CommandBuffer = native::CommandBuffer;
+    type SubmitInfo = command::SubmitInfo;
     type GeneralCommandBuffer = native::GeneralCommandBuffer;
     type GraphicsCommandBuffer = native::GraphicsCommandBuffer;
     type ComputeCommandBuffer = native::ComputeCommandBuffer;
     type TransferCommandBuffer = native::TransferCommandBuffer;
     type SubpassCommandBuffer = native::SubpassCommandBuffer;
 
-    unsafe fn submit(&mut self, cmd_buffer: &native::CommandBuffer) {
+    unsafe fn submit<C>(&mut self, cmd_buffers: &[Submit<C>])
+        where C: core::CommandBuffer<SubmitInfo = command::SubmitInfo>
+    {
         unimplemented!()
     }
-}
-
-pub struct CommandPool;
-
-impl core::CommandPool for CommandPool {
-    type Q = CommandQueue;
-
-    fn from_queue(queue: &mut CommandQueue, capacity: usize) -> CommandPool { unimplemented!() }
-    fn reset(&mut self) { unimplemented!() }
-    fn reserve(&mut self, allocated: usize) { unimplemented!() }
 }
 
 struct SurfaceInner {
@@ -622,12 +620,12 @@ impl core::Backend for Backend {
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Resources { }
 impl core::Resources for Resources {
-    type Buffer = ();
     type ShaderLib = native::ShaderLib;
     type RenderPass = native::RenderPass;
     type PipelineSignature = native::PipelineSignature;
     type PipelineStateObject = ();
-    type Image = ();
+    type Buffer = native::Buffer;
+    type Image = native::Image;
     type ShaderResourceView = ();
     type UnorderedAccessView = ();
     type RenderTargetView = ();

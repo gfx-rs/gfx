@@ -17,7 +17,6 @@ use comptr::ComPtr;
 use winapi;
 
 use std::collections::BTreeMap;
-use std::ops::Deref;
 
 #[derive(Clone, Debug, Hash)]
 pub struct ShaderLib {

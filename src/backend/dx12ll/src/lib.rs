@@ -43,7 +43,8 @@ mod native;
 mod pool;
 mod state;
 
-pub use pool::{GeneralCommandPool, GraphicsCommandPool};
+pub use pool::{GeneralCommandPool, GraphicsCommandPool,
+    ComputeCommandPool, TransferCommandPool, SubpassCommandPool};
 
 #[derive(Clone)]
 pub struct QueueFamily;

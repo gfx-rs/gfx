@@ -43,6 +43,10 @@ pub struct BufferCopy {
 /// Optional instance parameters: (instance count, buffer offset)
 pub type InstanceParams = (InstanceCount, VertexCount);
 
+/// Encoder wrapper for a command buffer, providing a safe interface.
+///
+/// After finishing recording the encoder will be consumed and returns a thread-free `Submit` handle.
+/// This handle can be sent to a command queue for execution.
 pub struct Encoder<'a, C: CommandBuffer + 'a>(&'a mut C);
 
 impl<'a, C: CommandBuffer> Encoder<'a, C> {
@@ -51,6 +55,7 @@ impl<'a, C: CommandBuffer> Encoder<'a, C> {
         Encoder(buffer)
     }
 
+    /// Finish recording commands to the command buffers.
     pub fn finish(self) -> Submit<C> {
         Submit(unsafe { self.0.end() })
     }

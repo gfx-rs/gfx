@@ -21,9 +21,8 @@ extern crate gfx_device_vulkanll as back;
 
 extern crate winit;
 
-use gfx_corell::{format, pso, pool, shade, state, Device, CommandPool, GraphicsCommandPool,
-    Primitive, Instance, Adapter, Surface, SwapChain, QueueFamily, Factory, SubPass,
-    PrimaryCommandBuffer};
+use gfx_corell::{format, pso, state, Device, CommandPool, GraphicsCommandPool,
+    Primitive, Instance, Adapter, Surface, SwapChain, QueueFamily, Factory, SubPass};
 use gfx_corell::format::Formatted;
 
 pub type ColorFormat = gfx_corell::format::Rgba8;

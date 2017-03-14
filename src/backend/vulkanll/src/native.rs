@@ -41,39 +41,22 @@ pub struct RenderPass {
 unsafe impl Send for RenderPass {}
 unsafe impl Sync for RenderPass {}
 
-// TODO
-pub struct CommandBuffer;
-
-pub struct GeneralCommandBuffer(CommandBuffer);
-impl Deref for GeneralCommandBuffer {
-    type Target = CommandBuffer;
-    fn deref(&self) -> &CommandBuffer {
-        &self.0
-    }
+pub struct CommandBuffer {
+    pub inner: vk::CommandBuffer,
 }
 
-pub struct GraphicsCommandBuffer(CommandBuffer);
-impl Deref for GraphicsCommandBuffer {
-    type Target = CommandBuffer;
-    fn deref(&self) -> &CommandBuffer {
-        &self.0
-    }
-}
+pub struct GeneralCommandBuffer(pub CommandBuffer);
 
-pub struct ComputeCommandBuffer(CommandBuffer);
-impl Deref for ComputeCommandBuffer {
-    type Target = CommandBuffer;
-    fn deref(&self) -> &CommandBuffer {
-        &self.0
-    }
-}
+pub struct GraphicsCommandBuffer(pub CommandBuffer);
 
-pub struct TransferCommandBuffer(CommandBuffer);
-impl Deref for TransferCommandBuffer {
-    type Target = CommandBuffer;
-    fn deref(&self) -> &CommandBuffer {
-        &self.0
-    }
-}
+pub struct ComputeCommandBuffer(pub CommandBuffer);
 
-pub struct SubpassCommandBuffer(CommandBuffer);
+pub struct TransferCommandBuffer(pub CommandBuffer);
+
+pub struct SubpassCommandBuffer(pub CommandBuffer);
+
+#[derive(Clone, Debug, Hash)]
+pub struct Buffer(pub vk::Buffer);
+
+#[derive(Clone, Debug, Hash)]
+pub struct Image(pub vk::Image);
