@@ -28,11 +28,11 @@ unsafe impl Send for ShaderLib {}
 unsafe impl Sync for ShaderLib {}
 
 #[derive(Clone, Debug, Hash)]
-pub struct PipelineSignature {
+pub struct PipelineLayout {
     pub layout: vk::PipelineLayout,
 }
-unsafe impl Send for PipelineSignature {}
-unsafe impl Sync for PipelineSignature {}
+unsafe impl Send for PipelineLayout {}
+unsafe impl Sync for PipelineLayout {}
 
 #[derive(Clone, Debug, Hash)]
 pub struct RenderPass {

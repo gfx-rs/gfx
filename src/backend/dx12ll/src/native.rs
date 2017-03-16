@@ -34,11 +34,11 @@ unsafe impl Send for Pipeline {}
 unsafe impl Sync for Pipeline {}
 
 #[derive(Clone, Debug, Hash)]
-pub struct PipelineSignature {
+pub struct PipelineLayout {
     pub inner: ComPtr<winapi::ID3D12RootSignature>,
 }
-unsafe impl Send for PipelineSignature {}
-unsafe impl Sync for PipelineSignature {}
+unsafe impl Send for PipelineLayout {}
+unsafe impl Sync for PipelineLayout {}
 
 pub struct CommandBuffer {
     pub inner: ComPtr<winapi::ID3D12GraphicsCommandList>,

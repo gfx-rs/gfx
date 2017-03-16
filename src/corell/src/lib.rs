@@ -222,7 +222,7 @@ pub trait SwapChain {
 pub trait Resources:          Clone + Hash + Debug + Any {
     type ShaderLib:           Clone + Debug + Any + Send + Sync;
     type RenderPass:          Clone + Debug + Any + Send + Sync;
-    type PipelineSignature:   Clone + Debug + Any + Send + Sync;
+    type PipelineLayout:      Clone + Debug + Any + Send + Sync;
     type PipelineStateObject: Clone + Debug + Any + Send + Sync;
     type Buffer:              Clone + Debug + Any + Send + Sync;
     type Image:               Clone + Debug + Any + Send + Sync;

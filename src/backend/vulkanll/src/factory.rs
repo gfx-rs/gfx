@@ -73,7 +73,7 @@ impl core::Factory<R> for Factory {
         native::RenderPass { inner: renderpass }
     }
 
-    fn create_pipeline_signature(&mut self) -> native::PipelineSignature {
+    fn create_pipeline_layout(&mut self) -> native::PipelineLayout {
         // TODO:
         // Dummy signature only
         let info = vk::PipelineLayoutCreateInfo {
@@ -91,10 +91,10 @@ impl core::Factory<R> for Factory {
                 .expect("Error on pipeline signature creation") // TODO: handle this better
         };
 
-        native::PipelineSignature { layout: layout }
+        native::PipelineLayout { layout: layout }
     }
 
-    fn create_graphics_pipelines<'a>(&mut self, descs: &[(&native::ShaderLib, &native::PipelineSignature, SubPass<'a, R>, &pso::GraphicsPipelineDesc)])
+    fn create_graphics_pipelines<'a>(&mut self, descs: &[(&native::ShaderLib, &native::PipelineLayout, SubPass<'a, R>, &pso::GraphicsPipelineDesc)])
         -> Vec<Result<(), pso::CreationError>>
     {
         let infos = descs.iter().map(|&(shader_lib, signature, ref subpass, desc)| {

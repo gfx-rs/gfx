@@ -28,16 +28,16 @@ impl<Q: CommandQueue> GeneralQueue<Q> {
         GeneralQueue(queue)
     }
 
-    pub fn submit_general(&mut self, cmd_buffers: &[Submit<<Q as CommandQueue>::GeneralCommandBuffer>]) {
+    pub fn submit_general(&mut self, cmd_buffers: &[Submit<Q::GeneralCommandBuffer>]) {
         unsafe { self.submit(cmd_buffers) }
     }
-    pub fn submit_graphics(&mut self, cmd_buffers: &[Submit<<Q as CommandQueue>::GraphicsCommandBuffer>]) {
+    pub fn submit_graphics(&mut self, cmd_buffers: &[Submit<Q::GraphicsCommandBuffer>]) {
         unsafe { self.submit(cmd_buffers) }
     }
-    pub fn submit_compute(&mut self, cmd_buffers: &[Submit<<Q as CommandQueue>::ComputeCommandBuffer>]) {
+    pub fn submit_compute(&mut self, cmd_buffers: &[Submit<Q::ComputeCommandBuffer>]) {
         unsafe { self.submit(cmd_buffers) }
     }
-    pub fn submit_tranfer(&mut self, cmd_buffers: &[Submit<<Q as CommandQueue>::TransferCommandBuffer>]) {
+    pub fn submit_tranfer(&mut self, cmd_buffers: &[Submit<Q::TransferCommandBuffer>]) {
         unsafe { self.submit(cmd_buffers) }
     }
 }
@@ -78,10 +78,10 @@ impl<Q: CommandQueue> GraphicsQueue<Q> {
         GraphicsQueue(queue)
     }
 
-    pub fn submit_graphics(&mut self, cmd_buffers: &[Submit<<Q as CommandQueue>::GraphicsCommandBuffer>]) {
+    pub fn submit_graphics(&mut self, cmd_buffers: &[Submit<Q::GraphicsCommandBuffer>]) {
         unsafe { self.submit(cmd_buffers) }
     }
-    pub fn submit_tranfer(&mut self, cmd_buffers: &[Submit<<Q as CommandQueue>::TransferCommandBuffer>]) {
+    pub fn submit_tranfer(&mut self, cmd_buffers: &[Submit<Q::TransferCommandBuffer>]) {
         unsafe { self.submit(cmd_buffers) }
     }
 }
@@ -112,10 +112,10 @@ impl<Q: CommandQueue> ComputeQueue<Q> {
         ComputeQueue(queue)
     }
 
-    pub fn submit_compute(&mut self, cmd_buffers: &[Submit<<Q as CommandQueue>::ComputeCommandBuffer>]) {
+    pub fn submit_compute(&mut self, cmd_buffers: &[Submit<Q::ComputeCommandBuffer>]) {
         unsafe { self.submit(cmd_buffers) }
     }
-    pub fn submit_tranfer(&mut self, cmd_buffers: &[Submit<<Q as CommandQueue>::TransferCommandBuffer>]) {
+    pub fn submit_tranfer(&mut self, cmd_buffers: &[Submit<Q::TransferCommandBuffer>]) {
         unsafe { self.submit(cmd_buffers) }
     }
 }
@@ -146,7 +146,7 @@ impl<Q: CommandQueue> TransferQueue<Q> {
         TransferQueue(queue)
     }
 
-    pub fn submit_tranfer(&mut self, cmd_buffers: &[Submit<<Q as CommandQueue>::TransferCommandBuffer>]) {
+    pub fn submit_tranfer(&mut self, cmd_buffers: &[Submit<Q::TransferCommandBuffer>]) {
         unsafe { self.submit(cmd_buffers) }
     }
 }

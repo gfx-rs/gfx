@@ -622,7 +622,7 @@ pub enum Resources { }
 impl core::Resources for Resources {
     type ShaderLib = native::ShaderLib;
     type RenderPass = native::RenderPass;
-    type PipelineSignature = native::PipelineSignature;
+    type PipelineLayout = native::PipelineLayout;
     type PipelineStateObject = ();
     type Buffer = native::Buffer;
     type Image = native::Image;

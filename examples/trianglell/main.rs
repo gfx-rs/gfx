@@ -84,7 +84,7 @@ fn main() {
         pixel_shader: Some("ps_main"),
     };
 
-    let pipeline_signature = factory.create_pipeline_signature();
+    let pipeline_layout = factory.create_pipeline_layout();
     let render_pass = factory.create_renderpass();
 
     //
@@ -110,7 +110,7 @@ fn main() {
 
     //
     let pipelines = factory.create_graphics_pipelines(&[
-        (&shader_lib, &pipeline_signature, SubPass { index: 0, main_pass: &render_pass }, &pipeline_desc)
+        (&shader_lib, &pipeline_layout, SubPass { index: 0, main_pass: &render_pass }, &pipeline_desc)
     ]);
 
     println!("{:?}", pipelines);
