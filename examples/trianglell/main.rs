@@ -21,9 +21,10 @@ extern crate gfx_device_vulkanll as back;
 
 extern crate winit;
 
-use gfx_corell::{format, pso, state, Device, CommandPool, GraphicsCommandPool,
+use gfx_corell::{command, format, pso, state, Device, CommandPool, GraphicsCommandPool, ProcessingCommandBuffer, PrimaryCommandBuffer,
     Primitive, Instance, Adapter, Surface, SwapChain, QueueFamily, Factory, SubPass};
 use gfx_corell::format::Formatted;
+use gfx_corell::memory::{self, ImageBarrier};
 
 pub type ColorFormat = gfx_corell::format::Rgba8;
 
@@ -117,6 +118,10 @@ fn main() {
 
     let mut graphics_pool = back::GraphicsCommandPool::from_queue(&mut general_queues[0], 16);
 
+    let frame_rtvs = swap_chain.get_images().iter().map(|image| {
+        factory.view_image_as_render_target(&image).unwrap()
+    }).collect::<Vec<_>>();
+
     //
     'main: loop {
         for event in window.poll_events() {
@@ -127,11 +132,38 @@ fn main() {
             }
         }
 
+        graphics_pool.reset();
+
         let frame = swap_chain.acquire_frame();
 
         // TODO: rendering
         let submit = {
             let mut cmd_buffer = graphics_pool.acquire_command_buffer();
+
+            {
+                let backbuffer_barrier = ImageBarrier {
+                    state_src: memory::PRESENT,
+                    state_dst: memory::RENDER_TARGET_CLEAR,
+
+                    image: &swap_chain.get_images()[frame.id()],
+                };
+
+                cmd_buffer.pipeline_barrier(&[], &[], &[backbuffer_barrier]);
+            }
+            
+            cmd_buffer.clear_color(&frame_rtvs[frame.id()], command::ClearColor::Float([0.2, 0.2, 0.2, 1.0]));
+
+            {
+                let backbuffer_barrier = ImageBarrier {
+                    state_src: memory::RENDER_TARGET_CLEAR,
+                    state_dst: memory::PRESENT,
+
+                    image: &swap_chain.get_images()[frame.id()],
+                };
+
+                cmd_buffer.pipeline_barrier(&[], &[], &[backbuffer_barrier]);
+            }
+            
             cmd_buffer.finish()
         };
 
@@ -139,6 +171,9 @@ fn main() {
 
         // present frame
         swap_chain.present();
+
+        let sleep = std::time::Duration::from_millis(1000);
+        std::thread::sleep(sleep);
     }
 }
 

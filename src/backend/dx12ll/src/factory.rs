@@ -23,7 +23,7 @@ use std::{mem, ptr};
 use std::os::raw::c_void;
 use std::collections::BTreeMap;
 
-use core::{self, shade};
+use core::{self, shade, factory as f};
 use core::SubPass;
 use core::pso::{self, EntryPoint};
 use {data, state, mirror, native};
@@ -281,5 +281,25 @@ impl core::Factory<R> for Factory {
 
     fn create_compute_pipelines(&mut self) -> Vec<Result<native::Pipeline, pso::CreationError>> {
         unimplemented!()
+    }
+
+    fn view_image_as_render_target(&mut self, image: &native::Image) -> Result<native::RenderTargetView, f::TargetViewError> {
+        // TODO: basic implementation only, needs checks and multiple heaps
+        let mut handle = winapi::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: 0 };
+        unsafe { self.rtv_heap.GetCPUDescriptorHandleForHeapStart(&mut handle) };
+        handle.ptr += self.next_rtv as u64 * self.rtv_handle_size;
+
+        // create descriptor
+        unsafe {
+            self.inner.CreateRenderTargetView(
+                image.resource.as_mut_ptr(),
+                ptr::null_mut(),
+                handle
+            );
+        }
+
+        let rtv = native::RenderTargetView { handle: handle };
+        self.next_rtv += 1;
+        Ok(rtv)
     }
 }

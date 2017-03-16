@@ -17,7 +17,8 @@ use std::ptr;
 use winapi;
 use winapi::*;
 
-use core::{self, command, pso, state, target, IndexType, VertexCount};
+use core::{self, command, memory, pso, state, target, IndexType, VertexCount};
+use data;
 use native::{self, CommandBuffer, GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer, SubpassCommandBuffer};
 use {Resources as R};
 
@@ -29,8 +30,36 @@ impl CommandBuffer {
         SubmitInfo(self.inner.clone())
     }
 
-    fn pipeline_barrier(&mut self) {
-        unimplemented!()
+    fn pipeline_barrier<'a>(&mut self, memory_barriers: &[memory::MemoryBarrier],
+        buffer_barriers: &[memory::BufferBarrier<'a, R>], image_barriers: &[memory::ImageBarrier<'a, R>])
+    {
+        let mut transition_barriers = Vec::new();
+
+        // TODO: very experimental state!
+        for barrier in image_barriers {
+            let state_src = data::map_resource_state(barrier.state_src);
+            let state_dst = data::map_resource_state(barrier.state_dst);
+
+            transition_barriers.push(
+                winapi::D3D12_RESOURCE_BARRIER {
+                    Type: winapi::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+                    Flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_NONE,
+                    u: winapi::D3D12_RESOURCE_TRANSITION_BARRIER {
+                        pResource: barrier.image.resource.as_mut_ptr(),
+                        Subresource: winapi::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                        StateBefore: state_src,
+                        StateAfter: state_dst,
+                    },
+                }
+            );
+        }
+
+        unsafe {
+            self.inner.ResourceBarrier(
+                transition_barriers.len() as UINT,
+                transition_barriers.as_ptr(),
+            );
+        }
     }
 
     fn execute_commands(&mut self) {
@@ -254,8 +283,10 @@ impl_cmd_buffer!(SubpassCommandBuffer);
 macro_rules! impl_primary_cmd_buffer {
     ($buffer:ident) => (
         impl core::PrimaryCommandBuffer<R> for $buffer {
-            fn pipeline_barrier(&mut self) {
-                self.0.pipeline_barrier()
+            fn pipeline_barrier<'a>(&mut self, memory_barriers: &[memory::MemoryBarrier],
+                buffer_barriers: &[memory::BufferBarrier<'a, R>], image_barriers: &[memory::ImageBarrier<'a, R>])
+            {
+                self.0.pipeline_barrier(memory_barriers, buffer_barriers, image_barriers)
             }
 
             fn execute_commands(&mut self) {

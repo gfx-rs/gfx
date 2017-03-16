@@ -15,6 +15,14 @@
 use {pso, shade};
 use {Resources, SubPass};
 
+/// Error creating either a ShaderResourceView, or UnorderedAccessView.
+#[derive(Clone, PartialEq, Debug)]
+pub enum ResourceViewError { }
+
+/// Error creating either a RenderTargetView, or DepthStencilView.
+#[derive(Clone, PartialEq, Debug)]
+pub enum TargetViewError { }
+
 /// A `Factory` is responsible for creating and managing resources for the backend it was created
 /// with.
 ///
@@ -37,4 +45,7 @@ pub trait Factory<R: Resources> {
 
     ///
     fn create_compute_pipelines(&mut self) -> Vec<Result<R::PipelineStateObject, pso::CreationError>>;
+
+    ///
+    fn view_image_as_render_target(&mut self, image: &R::Image) -> Result<R::RenderTargetView, TargetViewError>;
 }

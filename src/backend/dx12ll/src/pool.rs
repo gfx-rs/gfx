@@ -108,16 +108,14 @@ macro_rules! impl_pool {
                 let list = &mut self.command_lists[self.next_list];
                 self.next_list += 1;
 
+                // reset to initial state
+                unsafe { list.0.inner.Reset(self.allocator.inner.as_mut_ptr(), ptr::null_mut()); }
                 unsafe { Encoder::new(list) }
             }
 
             fn reset(&mut self) {
+                // reset only allocator, as command lists will be reset on acquire.
                 self.allocator.reset();
-
-                // Reset used command lists
-                for cmd_list in &mut self.command_lists[..self.next_list] {
-                    unsafe { cmd_list.0.inner.Reset(self.allocator.inner.as_mut_ptr(), ptr::null_mut()); }
-                }
             }
 
             fn reserve(&mut self, additional: usize) {

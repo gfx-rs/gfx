@@ -73,3 +73,9 @@ unsafe impl Sync for Image {}
 pub struct RenderTargetView {
     pub handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
 }
+
+#[derive(Debug)]
+pub struct Fence;
+
+#[derive(Debug)]
+pub struct Semaphore;

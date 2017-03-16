@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #[macro_use]
+extern crate bitflags;
+#[macro_use]
 extern crate log;
 extern crate draw_state;
 
@@ -209,28 +211,36 @@ impl Frame {
     pub unsafe fn new(id: usize) -> Self {
         Frame(id)
     }
+
+    pub fn id(&self) -> usize { self.0 }
 }
 
 /// The `SwapChain` is the backend representation of the surface.
 /// It consists of multiple buffers, which will be presented on the surface.
 pub trait SwapChain {
+    type Image;
+
+    fn get_images(&mut self) -> &[Self::Image];
     fn acquire_frame(&mut self) -> Frame;
     fn present(&mut self);
 }
 
+
 /// Different resource types of a specific API. 
 pub trait Resources:          Clone + Hash + Debug + Any {
-    type ShaderLib:           Clone + Debug + Any + Send + Sync;
-    type RenderPass:          Clone + Debug + Any + Send + Sync;
-    type PipelineLayout:      Clone + Debug + Any + Send + Sync;
-    type PipelineStateObject: Clone + Debug + Any + Send + Sync;
-    type Buffer:              Clone + Debug + Any + Send + Sync;
-    type Image:               Clone + Debug + Any + Send + Sync;
-    type ShaderResourceView:  Clone + Debug + Any + Send + Sync;
-    type UnorderedAccessView: Clone + Debug + Any + Send + Sync;
-    type RenderTargetView:    Clone + Debug + Any + Send + Sync;
-    type DepthStencilView:    Clone + Debug + Any + Send + Sync;
-    type Sampler:             Clone + Debug + Any + Send + Sync;
+    type ShaderLib:           Debug + Any + Send + Sync;
+    type RenderPass:          Debug + Any + Send + Sync;
+    type PipelineLayout:      Debug + Any + Send + Sync;
+    type PipelineStateObject: Debug + Any + Send + Sync;
+    type Buffer:              Debug + Any + Send + Sync;
+    type Image:               Debug + Any + Send + Sync;
+    type ShaderResourceView:  Debug + Any + Send + Sync;
+    type UnorderedAccessView: Debug + Any + Send + Sync;
+    type RenderTargetView:    Debug + Any + Send + Sync;
+    type DepthStencilView:    Debug + Any + Send + Sync;
+    type Sampler:             Debug + Any + Send + Sync;
+    type Semaphore:           Debug + Any + Send + Sync;
+    type Fence:               Debug + Any + Send + Sync;
 }
 
 /// Different types of a specific API.

@@ -129,7 +129,7 @@ impl core::Adapter for Adapter {
             }).collect::<Vec<_>>()
         }).collect();
 
-        let factory = Factory { inner: device };
+        let factory = Factory::new(device);
 
         core::Device {
             factory: factory,
@@ -152,6 +152,45 @@ impl core::Adapter for Adapter {
 
 pub struct Factory {
     inner: ComPtr<winapi::ID3D12Device>,
+
+    rtv_heap: ComPtr<winapi::ID3D12DescriptorHeap>, // TODO: temporary cpu heap
+    rtv_handle_size: u64,
+    next_rtv: usize
+}
+
+impl Factory {
+    fn new(mut device: ComPtr<winapi::ID3D12Device>) -> Factory {
+        let rtv_heap = {
+            let heap_desc = winapi::D3D12_DESCRIPTOR_HEAP_DESC {
+                Type: winapi::D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+                NumDescriptors: 64,
+                Flags: winapi::D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+                NodeMask: 0,
+            };
+
+            let mut heap = ComPtr::<winapi::ID3D12DescriptorHeap>::new(ptr::null_mut());
+            unsafe {
+                device.CreateDescriptorHeap(
+                    &heap_desc,
+                    &dxguid::IID_ID3D12DescriptorHeap,
+                    heap.as_mut() as *mut *mut _ as *mut *mut c_void,
+                );
+            }
+
+            heap
+        };
+
+        let rtv_descriptor_size = unsafe {
+            device.GetDescriptorHandleIncrementSize(winapi::D3D12_DESCRIPTOR_HEAP_TYPE_RTV) as u64
+        };
+
+        Factory {
+            inner: device,
+            rtv_heap: rtv_heap,
+            rtv_handle_size: rtv_descriptor_size,
+            next_rtv: 0,
+        }
+    }
 }
 
 pub struct CommandQueue {
@@ -193,11 +232,12 @@ impl core::Surface for Surface {
 
     fn build_swapchain<T: core::format::RenderFormat>(&self, present_queue: &CommandQueue) -> SwapChain {
         let mut swap_chain = ComPtr::<winapi::IDXGISwapChain1>::new(ptr::null_mut());
+        let buffer_count = 2; // TODO: user-defined value
 
         // TODO: double-check values
         let desc = winapi::DXGI_SWAP_CHAIN_DESC1 {
             AlphaMode: winapi::DXGI_ALPHA_MODE(0),
-            BufferCount: 2,
+            BufferCount: buffer_count,
             Width: self.width,
             Height: self.height,
             Format: data::map_format(T::get_format(), true).unwrap(), // TODO: error handling
@@ -227,27 +267,55 @@ impl core::Surface for Surface {
             error!("error on swapchain creation {:x}", hr);
         }
 
+        let mut swap_chain = ComPtr::<winapi::IDXGISwapChain3>::new(swap_chain.as_mut_ptr() as *mut winapi::IDXGISwapChain3);
+
+        // Get backbuffer images
+        let backbuffers = (0..buffer_count).map(|i| {
+            let mut resource = ComPtr::<winapi::ID3D12Resource>::new(ptr::null_mut());
+            unsafe {
+                swap_chain.GetBuffer(
+                    i,
+                    &dxguid::IID_ID3D12Resource,
+                    resource.as_mut() as *mut *mut _ as *mut *mut c_void);
+            }
+
+            native::Image { resource: resource }
+        }).collect::<Vec<_>>();
+
         SwapChain {
             inner: swap_chain,
             next_frame: 0,
             frame_queue: VecDeque::new(),
+            images: backbuffers,
         }
     }
 }
 
 pub struct SwapChain {
-    inner: ComPtr<winapi::IDXGISwapChain1>,
+    inner: ComPtr<winapi::IDXGISwapChain3>,
     next_frame: usize,
     frame_queue: VecDeque<usize>,
+    images: Vec<native::Image>,
 }
 
 impl<'a> core::SwapChain for SwapChain{
+    type Image = native::Image;
+
+    fn get_images(&mut self) -> &[native::Image] {
+        &self.images
+    }
+
     fn acquire_frame(&mut self) -> core::Frame {
-        // TODO: we need to block this at some point?
+        // TODO: we need to block this at some point? (running out of backbuffers)
+        let num_images = self.images.len();
         let index = self.next_frame;
         self.frame_queue.push_back(index);
-        self.next_frame = (self.next_frame + 1) % 2; // TODO: remove magic swap buffer count
-        unsafe { core::Frame::new(index) }
+        self.next_frame = (self.next_frame + 1) % num_images;
+        unsafe { core::Frame::new(index) };
+
+        // TODO:
+        let index = unsafe { self.inner.GetCurrentBackBufferIndex() };
+        unsafe { core::Frame::new(index as usize) }
     }
 
     fn present(&mut self) {
@@ -395,4 +463,6 @@ impl core::Resources for Resources {
     type RenderTargetView = native::RenderTargetView;
     type DepthStencilView = ();
     type Sampler = ();
+    type Fence = ();
+    type Semaphore = ();
 }

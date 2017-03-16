@@ -15,7 +15,7 @@
 //! Command Buffer device interface
 
 use std::ops::{Deref, DerefMut};
-use {state, pso, target};
+use {memory, state, pso, target};
 use {IndexType, InstanceCount, VertexCount, Resources};
 
 /// A universal clear color supporting integet formats
@@ -151,7 +151,7 @@ pub trait TransferCommandBuffer<R: Resources> : PrimaryCommandBuffer<R> {
 }
 
 pub trait PrimaryCommandBuffer<R: Resources>: CommandBuffer {
-    fn pipeline_barrier(&mut self);
+    fn pipeline_barrier<'a>(&mut self, &[memory::MemoryBarrier], &[memory::BufferBarrier<'a, R>], &[memory::ImageBarrier<'a, R>]);
     fn execute_commands(&mut self);
 }
 
