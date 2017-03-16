@@ -21,7 +21,7 @@ extern crate gfx_device_vulkanll as back;
 
 extern crate winit;
 
-use gfx_corell::{format, pso, shade, state,
+use gfx_corell::{format, pso, state, Device, CommandPool, GraphicsCommandPool,
     Primitive, Instance, Adapter, Surface, SwapChain, QueueFamily, Factory, SubPass};
 use gfx_corell::format::Formatted;
 
@@ -33,7 +33,8 @@ struct Vertex {
 }
 
 #[cfg(any(feature = "vulkan", target_os = "windows"))]
-fn main() {    env_logger::init().unwrap();
+fn main() {
+    env_logger::init().unwrap();
     let window = winit::WindowBuilder::new()
         .with_dimensions(1024, 768)
         .with_title("triangle (Low Level)".to_string())
@@ -52,24 +53,24 @@ fn main() {    env_logger::init().unwrap();
     }
 
     // build a new device and associated command queues
-    let (mut device, queues) = physical_devices[0].open(queue_descs);
-    let mut swap_chain = surface.build_swapchain::<ColorFormat>(&queues[0]);
+    let Device { mut factory, mut general_queues, .. } = physical_devices[0].open(queue_descs);
+    let mut swap_chain = surface.build_swapchain::<ColorFormat>(&general_queues[0]);
 
     #[cfg(all(target_os = "windows", not(feature = "vulkan")))]
-    let shader_lib = device.create_shader_library(&[
+    let shader_lib = factory.create_shader_library(&[
             ("vs_main", include_bytes!("data/vs_main.o")),
             ("ps_main", include_bytes!("data/ps_main.o"))]
         ).expect("Error on creating shader lib");
 
     #[cfg(feature = "vulkan")]
-    let shader_lib = device.create_shader_library(&[
+    let shader_lib = factory.create_shader_library(&[
             ("vs_main", include_bytes!("data/vs_main.spv")),
             ("ps_main", include_bytes!("data/ps_main.spv"))]
         ).expect("Error on creating shader lib");
 
     // dx12 runtime shader compilation
     /*
-    let shader_lib = device.create_shader_library_from_hlsl(&[
+    let shader_lib = factory.create_shader_library_from_hlsl(&[
                 ("vs_main", shade::Stage::Vertex, include_bytes!("shader/triangle.hlsl")),
                 ("ps_main", shade::Stage::Pixel, include_bytes!("shader/triangle.hlsl"))]
         ).expect("Error on creating shader lib");
@@ -83,8 +84,8 @@ fn main() {    env_logger::init().unwrap();
         pixel_shader: Some("ps_main"),
     };
 
-    let pipeline_signature = device.create_pipeline_signature();
-    let render_pass = device.create_renderpass();
+    let pipeline_layout = factory.create_pipeline_layout();
+    let render_pass = factory.create_renderpass();
 
     //
     let mut pipeline_desc = pso::GraphicsPipelineDesc::new(
@@ -108,11 +109,13 @@ fn main() {    env_logger::init().unwrap();
     }));
 
     //
-    let pipelines = device.create_graphics_pipelines(&[
-        (&shader_lib, &pipeline_signature, SubPass { index: 0, main_pass: &render_pass }, &pipeline_desc)
+    let pipelines = factory.create_graphics_pipelines(&[
+        (&shader_lib, &pipeline_layout, SubPass { index: 0, main_pass: &render_pass }, &pipeline_desc)
     ]);
 
     println!("{:?}", pipelines);
+
+    let mut graphics_pool = back::GraphicsCommandPool::from_queue(&mut general_queues[0], 16);
 
     //
     'main: loop {
@@ -126,7 +129,13 @@ fn main() {    env_logger::init().unwrap();
 
         let frame = swap_chain.acquire_frame();
 
-        // rendering
+        // TODO: rendering
+        let submit = {
+            let mut cmd_buffer = graphics_pool.acquire_command_buffer();
+            cmd_buffer.finish()
+        };
+
+        general_queues[0].submit_graphics(&[submit]);
 
         // present frame
         swap_chain.present();

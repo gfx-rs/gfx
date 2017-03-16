@@ -27,16 +27,24 @@ use comptr::ComPtr;
 use std::ptr;
 use std::os::raw::c_void;
 use std::os::windows::ffi::OsStringExt;
+use std::ops::Deref;
 use std::collections::VecDeque;
 use std::ffi::OsString;
 use winapi::BOOL;
 use winit::os::windows::WindowExt;
 
+use core::command::Submit;
+
+mod command;
 mod data;
 mod factory;
 mod mirror;
 mod native;
+mod pool;
 mod state;
+
+pub use pool::{GeneralCommandPool, GraphicsCommandPool,
+    ComputeCommandPool, TransferCommandPool, SubpassCommandPool};
 
 #[derive(Clone)]
 pub struct QueueFamily;
@@ -64,10 +72,11 @@ pub struct Adapter {
 
 impl core::Adapter for Adapter {
     type CommandQueue = CommandQueue;
-    type Device = Device;
+    type Resources = Resources;
+    type Factory = Factory;
     type QueueFamily = QueueFamily;
 
-    fn open<'a, I>(&self, queue_descs: I) -> (Device, Vec<CommandQueue>)
+    fn open<'a, I>(&self, queue_descs: I) -> core::Device<Resources, Factory, CommandQueue>
         where I: Iterator<Item=(&'a QueueFamily, u32)>
     {
         // Create D3D12 device
@@ -81,11 +90,12 @@ impl core::Adapter for Adapter {
             )
         };
         if !winapi::SUCCEEDED(hr) {
-            error!("error on device creation: {:?}", hr);
+            error!("error on device creation: {:x}", hr);
         }
 
+        // TODO: other queue types
         // Create command queues
-        let queues = queue_descs.flat_map(|(_family, queue_count)| {
+        let mut general_queues = queue_descs.flat_map(|(_family, queue_count)| {
             (0..queue_count).map(|_| {
                 let mut queue = ComPtr::<winapi::ID3D12CommandQueue>::new(ptr::null_mut());
                 let queue_desc = winapi::D3D12_COMMAND_QUEUE_DESC {
@@ -104,14 +114,31 @@ impl core::Adapter for Adapter {
                 };
 
                 if !winapi::SUCCEEDED(hr) {
-                    error!("error on queue creation: {:?}", hr);
+                    error!("error on queue creation: {:x}", hr);
                 }
 
-                CommandQueue { inner: queue }
+                unsafe {
+                    core::GeneralQueue::new(
+                        CommandQueue {
+                            inner: queue,
+                            device: device.clone(),
+                            list_type: winapi::D3D12_COMMAND_LIST_TYPE_DIRECT, // TODO
+                        }
+                    )
+                }
             }).collect::<Vec<_>>()
         }).collect();
 
-        (Device { inner: device }, queues)
+        let factory = Factory { inner: device };
+
+        core::Device {
+            factory: factory,
+            general_queues: general_queues,
+            graphics_queues: Vec::new(),
+            compute_queues: Vec::new(),
+            transfer_queues: Vec::new(),
+            _marker: std::marker::PhantomData,
+        }
     }
 
     fn get_info(&self) -> &core::AdapterInfo {
@@ -123,23 +150,33 @@ impl core::Adapter for Adapter {
     }
 }
 
-pub struct Device {
+pub struct Factory {
     inner: ComPtr<winapi::ID3D12Device>,
-}
-
-impl core::Device for Device {
-
 }
 
 pub struct CommandQueue {
     inner: ComPtr<winapi::ID3D12CommandQueue>,
+    device: ComPtr<winapi::ID3D12Device>,
+    list_type: winapi::D3D12_COMMAND_LIST_TYPE,
 }
 
 impl core::CommandQueue for CommandQueue {
-    type CommandBuffer = ();
+    type R = Resources;
+    type SubmitInfo = command::SubmitInfo;
+    type GeneralCommandBuffer = native::GeneralCommandBuffer;
+    type GraphicsCommandBuffer = native::GraphicsCommandBuffer;
+    type ComputeCommandBuffer = native::ComputeCommandBuffer;
+    type TransferCommandBuffer = native::TransferCommandBuffer;
+    type SubpassCommandBuffer = native::SubpassCommandBuffer;
 
-    fn submit(&mut self, cmd_buffer: &()) {
-        unimplemented!()
+    unsafe fn submit<C>(&mut self, cmd_buffers: &[Submit<C>])
+        where C: core::CommandBuffer<SubmitInfo = command::SubmitInfo>
+    {
+        let mut command_lists = cmd_buffers.iter().map(|cmd_buffer| {
+            cmd_buffer.get_info().0.as_mut_ptr()
+        }).collect::<Vec<_>>();
+
+        self.inner.ExecuteCommandLists(command_lists.len() as u32, command_lists.as_mut_ptr() as *mut *mut _);
     }
 }
 
@@ -151,7 +188,7 @@ pub struct Surface {
 }
 
 impl core::Surface for Surface {
-    type CommandQueue = CommandQueue;
+    type Queue = CommandQueue;
     type SwapChain = SwapChain;
 
     fn build_swapchain<T: core::format::RenderFormat>(&self, present_queue: &CommandQueue) -> SwapChain {
@@ -210,7 +247,7 @@ impl<'a> core::SwapChain for SwapChain{
         let index = self.next_frame;
         self.frame_queue.push_back(index);
         self.next_frame = (self.next_frame + 1) % 2; // TODO: remove magic swap buffer count
-        core::Frame::new(index)
+        unsafe { core::Frame::new(index) }
     }
 
     fn present(&mut self) {
@@ -334,11 +371,9 @@ impl core::Instance for Instance {
 }
 
 pub enum Backend { }
-
 impl core::Backend for Backend {
-    type CommandBuffer = ();
     type CommandQueue = CommandQueue;
-    type Device = Device;
+    type Factory = Factory;
     type Instance = Instance;
     type Adapter = Adapter;
     type Resources = Resources;
@@ -348,17 +383,16 @@ impl core::Backend for Backend {
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Resources { }
-
 impl core::Resources for Resources {
-    type Buffer = ();
     type ShaderLib = native::ShaderLib;
     type RenderPass = ();
-    type PipelineSignature = native::PipelineSignature;
+    type PipelineLayout = native::PipelineLayout;
     type PipelineStateObject = native::Pipeline;
-    type Image = ();
+    type Buffer = native::Buffer;
+    type Image = native::Image;
     type ShaderResourceView = ();
     type UnorderedAccessView = ();
-    type RenderTargetView = ();
+    type RenderTargetView = native::RenderTargetView;
     type DepthStencilView = ();
     type Sampler = ();
 }

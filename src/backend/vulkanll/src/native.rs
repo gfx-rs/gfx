@@ -15,6 +15,7 @@
 use core::pso;
 use vk;
 use std::collections::BTreeMap;
+use std::ops::Deref;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct ShaderLib {
@@ -27,11 +28,11 @@ unsafe impl Send for ShaderLib {}
 unsafe impl Sync for ShaderLib {}
 
 #[derive(Clone, Debug, Hash)]
-pub struct PipelineSignature {
+pub struct PipelineLayout {
     pub layout: vk::PipelineLayout,
 }
-unsafe impl Send for PipelineSignature {}
-unsafe impl Sync for PipelineSignature {}
+unsafe impl Send for PipelineLayout {}
+unsafe impl Sync for PipelineLayout {}
 
 #[derive(Clone, Debug, Hash)]
 pub struct RenderPass {
@@ -40,3 +41,22 @@ pub struct RenderPass {
 unsafe impl Send for RenderPass {}
 unsafe impl Sync for RenderPass {}
 
+pub struct CommandBuffer {
+    pub inner: vk::CommandBuffer,
+}
+
+pub struct GeneralCommandBuffer(pub CommandBuffer);
+
+pub struct GraphicsCommandBuffer(pub CommandBuffer);
+
+pub struct ComputeCommandBuffer(pub CommandBuffer);
+
+pub struct TransferCommandBuffer(pub CommandBuffer);
+
+pub struct SubpassCommandBuffer(pub CommandBuffer);
+
+#[derive(Clone, Debug, Hash)]
+pub struct Buffer(pub vk::Buffer);
+
+#[derive(Clone, Debug, Hash)]
+pub struct Image(pub vk::Image);

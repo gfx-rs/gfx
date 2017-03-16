@@ -16,8 +16,11 @@ use std::error::Error;
 use std::fmt;
 
 use {format, state};
-use Primitive;
+use {Primitive, Resources};
 use MAX_COLOR_TARGETS;
+
+/// An offset inside a vertex buffer, in bytes.
+pub type BufferOffset = usize;
 
 /// Error types happening upon PSO creation on the device side.
 #[derive(Clone, PartialEq, Debug)]
@@ -179,5 +182,19 @@ impl GraphicsPipelineDesc {
             vertex_buffers: Vec::new(),
             attributes: Vec::new(),
         }
+    }
+}
+
+/// A complete set of vertex buffers to be used for vertex import in PSO.
+#[derive(Clone, Debug)]
+pub struct VertexBufferSet<R: Resources>(
+    /// Array of buffer handles with offsets in them
+    pub Vec<(R::Buffer, BufferOffset)>,
+);
+
+impl<R: Resources> VertexBufferSet<R> {
+    /// Create an empty set
+    pub fn new() -> VertexBufferSet<R> {
+        VertexBufferSet(Vec::new())
     }
 }

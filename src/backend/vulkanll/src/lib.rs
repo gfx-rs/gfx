@@ -28,6 +28,7 @@ use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0, V1_0};
 use ash::vk;
 use ash::{Entry, LoadingError};
 use core::format;
+use core::command::Submit;
 use std::ffi::{CStr, CString};
 use std::iter;
 use std::mem;
@@ -37,10 +38,15 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 
+mod command;
 mod data;
 mod factory;
 mod native;
+mod pool;
 mod state;
+
+pub use pool::{GeneralCommandPool, GraphicsCommandPool,
+    ComputeCommandPool, TransferCommandPool, SubpassCommandPool};
 
 lazy_static! {
     static ref VK_ENTRY: Result<Entry<V1_0>, LoadingError> = Entry::new();
@@ -83,10 +89,11 @@ pub struct Adapter {
 
 impl core::Adapter for Adapter {
     type CommandQueue = CommandQueue;
-    type Device = Device;
+    type Resources = Resources;
+    type Factory = Factory;
     type QueueFamily = QueueFamily;
 
-    fn open<'a, I>(&self, queue_descs: I) -> (Device, Vec<CommandQueue>)
+    fn open<'a, I>(&self, queue_descs: I) -> core::Device<Resources, Factory, CommandQueue>
         where I: Iterator<Item=(&'a QueueFamily, u32)>
     {
         let queue_infos = queue_descs.map(|(family, queue_count)| {
@@ -132,7 +139,7 @@ impl core::Adapter for Adapter {
             }
         };
 
-        let device = Device {
+        let factory = Factory {
             inner: Arc::new(DeviceInner(device_raw)),
         };
 
@@ -140,16 +147,26 @@ impl core::Adapter for Adapter {
         let queues = queue_infos.iter().flat_map(|info| {
             (0..info.queue_count).map(|id| {
                 let queue = unsafe {
-                    device.inner.0.get_device_queue(info.queue_family_index, id)
+                    factory.inner.0.get_device_queue(info.queue_family_index, id)
                 };
-                CommandQueue {
-                    inner: CommandQueueInner(Rc::new(RefCell::new(queue))),
-                    device: device.inner.clone(),
+                // TODO:
+                unsafe {
+                    core::GeneralQueue::new(CommandQueue {
+                        inner: CommandQueueInner(Rc::new(RefCell::new(queue))),
+                        device: factory.inner.clone(),
+                    })
                 }
             }).collect::<Vec<_>>()
         }).collect();
 
-        (device, queues)
+        core::Device {
+            factory: factory,
+            general_queues: queues,
+            graphics_queues: Vec::new(),
+            compute_queues: Vec::new(),
+            transfer_queues: Vec::new(),
+            _marker: std::marker::PhantomData,
+        }
     }
 
     fn get_info(&self) -> &core::AdapterInfo {
@@ -168,11 +185,8 @@ impl Drop for DeviceInner {
     }
 }
 
-pub struct Device {
+pub struct Factory {
     inner: Arc<DeviceInner>,
-}
-
-impl core::Device for Device {
 }
 
 // # Synchronization
@@ -189,9 +203,17 @@ pub struct CommandQueue {
 }
 
 impl core::CommandQueue for CommandQueue {
-    type CommandBuffer = ();
+    type R = Resources;
+    type SubmitInfo = command::SubmitInfo;
+    type GeneralCommandBuffer = native::GeneralCommandBuffer;
+    type GraphicsCommandBuffer = native::GraphicsCommandBuffer;
+    type ComputeCommandBuffer = native::ComputeCommandBuffer;
+    type TransferCommandBuffer = native::TransferCommandBuffer;
+    type SubpassCommandBuffer = native::SubpassCommandBuffer;
 
-    fn submit(&mut self, cmd_buffer: &()) {
+    unsafe fn submit<C>(&mut self, cmd_buffers: &[Submit<C>])
+        where C: core::CommandBuffer<SubmitInfo = command::SubmitInfo>
+    {
         unimplemented!()
     }
 }
@@ -243,7 +265,7 @@ impl Surface {
 }
 
 impl core::Surface for Surface {
-    type CommandQueue = CommandQueue;
+    type Queue = CommandQueue;
     type SwapChain = SwapChain;
 
     fn build_swapchain<T: core::format::RenderFormat>(&self,
@@ -359,7 +381,7 @@ impl core::SwapChain for SwapChain {
         };
 
         self.frame_queue.push_back(index as usize);
-        core::Frame::new(index as usize)
+        unsafe { core::Frame::new(index as usize) }
     }
 
     fn present(&mut self) {
@@ -585,11 +607,9 @@ impl core::Instance for Instance {
 }
 
 pub enum Backend { }
-
 impl core::Backend for Backend {
-    type CommandBuffer = ();
     type CommandQueue = CommandQueue;
-    type Device = Device;
+    type Factory = Factory;
     type Instance = Instance;
     type Adapter = Adapter;
     type Resources = Resources;
@@ -599,14 +619,13 @@ impl core::Backend for Backend {
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Resources { }
-
 impl core::Resources for Resources {
-    type Buffer = ();
     type ShaderLib = native::ShaderLib;
     type RenderPass = native::RenderPass;
-    type PipelineSignature = native::PipelineSignature;
+    type PipelineLayout = native::PipelineLayout;
     type PipelineStateObject = ();
-    type Image = ();
+    type Buffer = native::Buffer;
+    type Image = native::Image;
     type ShaderResourceView = ();
     type UnorderedAccessView = ();
     type RenderTargetView = ();

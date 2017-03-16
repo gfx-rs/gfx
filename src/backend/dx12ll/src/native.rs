@@ -34,8 +34,42 @@ unsafe impl Send for Pipeline {}
 unsafe impl Sync for Pipeline {}
 
 #[derive(Clone, Debug, Hash)]
-pub struct PipelineSignature {
+pub struct PipelineLayout {
     pub inner: ComPtr<winapi::ID3D12RootSignature>,
 }
-unsafe impl Send for PipelineSignature {}
-unsafe impl Sync for PipelineSignature {}
+unsafe impl Send for PipelineLayout {}
+unsafe impl Sync for PipelineLayout {}
+
+pub struct CommandBuffer {
+    pub inner: ComPtr<winapi::ID3D12GraphicsCommandList>,
+}
+
+pub struct GeneralCommandBuffer(pub CommandBuffer);
+
+pub struct GraphicsCommandBuffer(pub CommandBuffer);
+
+pub struct ComputeCommandBuffer(pub CommandBuffer);
+
+pub struct TransferCommandBuffer(pub CommandBuffer);
+
+pub struct SubpassCommandBuffer(pub CommandBuffer);
+
+#[derive(Clone, Debug, Hash)]
+pub struct Buffer {
+    pub resource: ComPtr<winapi::ID3D12Resource>,
+    pub size: u32,
+}
+unsafe impl Send for Buffer {}
+unsafe impl Sync for Buffer {}
+
+#[derive(Clone, Debug, Hash)]
+pub struct Image {
+    pub resource: ComPtr<winapi::ID3D12Resource>,
+}
+unsafe impl Send for Image {}
+unsafe impl Sync for Image {}
+
+#[derive(Clone, Debug)]
+pub struct RenderTargetView {
+    pub handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
+}

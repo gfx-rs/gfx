@@ -27,9 +27,9 @@ use core::{self, shade};
 use core::SubPass;
 use core::pso::{self, EntryPoint};
 use {data, state, mirror, native};
-use {Device, Resources as R};
+use {Factory, Resources as R};
 
-impl Device {
+impl Factory {
     pub fn create_shader_library(&mut self, shaders: &[(EntryPoint, &[u8])]) -> Result<native::ShaderLib, shade::CreateShaderError> {
         let mut shader_map = BTreeMap::new();
         // TODO: handle entry points with the same name
@@ -89,13 +89,13 @@ impl Device {
     }
 }
 
-impl core::Factory<R> for Device {
+impl core::Factory<R> for Factory {
     fn create_renderpass(&mut self) -> () {
         // unimplemented!()
         ()
     }
 
-    fn create_pipeline_signature(&mut self) -> native::PipelineSignature {
+    fn create_pipeline_layout(&mut self) -> native::PipelineLayout {
         let desc = winapi::D3D12_ROOT_SIGNATURE_DESC {
             NumParameters: 0,
             pParameters: ptr::null(),
@@ -124,10 +124,10 @@ impl core::Factory<R> for Device {
                 signature.as_mut() as *mut *mut _ as *mut *mut c_void);
         }
 
-        native::PipelineSignature { inner: signature }
+        native::PipelineLayout { inner: signature }
     }
 
-    fn create_graphics_pipelines<'a>(&mut self, descs: &[(&native::ShaderLib, &native::PipelineSignature, SubPass<'a, R>, &pso::GraphicsPipelineDesc)])
+    fn create_graphics_pipelines<'a>(&mut self, descs: &[(&native::ShaderLib, &native::PipelineLayout, SubPass<'a, R>, &pso::GraphicsPipelineDesc)])
         -> Vec<Result<native::Pipeline, pso::CreationError>>
     {
         descs.iter().map(|&(shader_lib, ref signature, _, ref desc)| {

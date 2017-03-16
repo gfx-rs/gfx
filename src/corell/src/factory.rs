@@ -29,10 +29,10 @@ pub trait Factory<R: Resources> {
     fn create_renderpass(&mut self) -> R::RenderPass;
 
     ///
-    fn create_pipeline_signature(&mut self) -> R::PipelineSignature;
+    fn create_pipeline_layout(&mut self) -> R::PipelineLayout;
 
     ///
-    fn create_graphics_pipelines<'a>(&mut self, &[(&R::ShaderLib, &R::PipelineSignature, SubPass<'a, R>, &pso::GraphicsPipelineDesc)])
+    fn create_graphics_pipelines<'a>(&mut self, &[(&R::ShaderLib, &R::PipelineLayout, SubPass<'a, R>, &pso::GraphicsPipelineDesc)])
             -> Vec<Result<R::PipelineStateObject, pso::CreationError>>;
 
     ///

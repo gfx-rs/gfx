@@ -20,15 +20,22 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::any::Any;
 use std::slice::Iter;
+use std::ops::{Deref};
 
-pub use draw_state::state;
+pub use draw_state::{state, target};
 pub use self::factory::Factory;
+pub use queue::{GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
+pub use pool::{GeneralCommandPool, GraphicsCommandPool};
+pub use command::{CommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer,
+    SubpassCommandBuffer, ProcessingCommandBuffer, PrimaryCommandBuffer, SecondaryCommandBuffer};
 
 pub mod command;
 pub mod factory;
 pub mod format;
 pub mod memory;
+pub mod pool;
 pub mod pso;
+pub mod queue;
 pub mod shade;
 
 /// Compile-time maximum number of color targets.
@@ -95,14 +102,24 @@ pub trait Instance {
     fn create_surface(&self, window: &Self::Window) -> Self::Surface;
 }
 
+pub struct Device<R: Resources, F: Factory<R>, Q: CommandQueue> {
+    pub factory: F,
+    pub general_queues: Vec<GeneralQueue<Q>>,
+    pub graphics_queues: Vec<GraphicsQueue<Q>>,
+    pub compute_queues: Vec<ComputeQueue<Q>>,
+    pub transfer_queues: Vec<TransferQueue<Q>>,
+    pub _marker: std::marker::PhantomData<*const R>
+}
+
 /// Represents a physical or virtual device, which is capable of running the backend.
 pub trait Adapter {
     type CommandQueue: CommandQueue;
-    type Device: Device;
+    type Resources: Resources;
+    type Factory: Factory<Self::Resources>;
     type QueueFamily: QueueFamily;
 
     /// Create a new device and command queues.
-    fn open<'a, I>(&self, queue_descs: I) -> (Self::Device, Vec<Self::CommandQueue>)
+    fn open<'a, I>(&self, queue_descs: I) -> Device<Self::Resources, Self::Factory, Self::CommandQueue>
         where I: Iterator<Item=(&'a Self::QueueFamily, u32)>;
 
     /// Get the `AdapterInfo` for this adapater.
@@ -138,23 +155,49 @@ pub trait QueueFamily: 'static {
     fn num_queues(&self) -> u32;
 }
 
-pub trait Device {
+/// `CommandBuffers` are submitted to a `CommandQueue` and executed in-order of submission.
+/// `CommandQueue`s may run in parallel and need to be explicitly synchronized.
+pub trait CommandQueue {
+    type R: Resources;
+    type SubmitInfo;
+    type GeneralCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo> + GraphicsCommandBuffer<Self::R> + ComputeCommandBuffer<Self::R>;
+    type GraphicsCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo> + GraphicsCommandBuffer<Self::R>;
+    type ComputeCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo> + ComputeCommandBuffer<Self::R>;
+    type TransferCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo> + TransferCommandBuffer<Self::R>;
+    type SubpassCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo>; // + SubpassCommandBuffer<Self::R>;
 
+    /// Submit command buffers to queue for execution.
+    unsafe fn submit<C>(&mut self, cmd_buffers: &[command::Submit<C>])
+        where C: CommandBuffer<SubmitInfo = Self::SubmitInfo>;
 }
 
-pub trait CommandQueue {
-    type CommandBuffer;
+/// `CommandPool` can allocate command buffers of a specific type only.
+/// The allocated command buffers are associated with the creating command queue.
+pub trait CommandPool {
+    type Queue: CommandQueue;
+    type PoolBuffer: command::CommandBuffer;
 
-    /// Submits a `CommandBuffer` to the GPU queue for execution.
-    fn submit(&mut self, cmd_buffer: &Self::CommandBuffer);
+    /// Get a command buffer for recording.
+    ///
+    /// You can only record to one command buffer per pool at the same time.
+    /// If more command buffers are requested than allocated, new buffers will be reserved.
+    /// The command buffer will be returned in 'recording' state.
+    fn acquire_command_buffer<'a>(&'a mut self) -> command::Encoder<'a, Self::PoolBuffer>;
+
+    /// Reset the command pool and the corresponding command buffers.
+    // TODO: synchronization: can't free pool if command buffer still in use (pool memory still in use)
+    fn reset(&mut self);
+
+    /// Reserve an additional amount of command buffers.
+    fn reserve(&mut self, additional: usize);
 }
 
 /// A `Surface` abstracts the surface of a native window, which will be presented
 pub trait Surface {
-    type CommandQueue: CommandQueue;
+    type Queue;
     type SwapChain: SwapChain;
 
-    fn build_swapchain<T: format::RenderFormat>(&self, present_queue: &Self::CommandQueue)
+    fn build_swapchain<T: format::RenderFormat>(&self, present_queue: &Self::Queue)
         -> Self::SwapChain;
 }
 
@@ -163,7 +206,7 @@ pub struct Frame(usize);
 
 impl Frame {
     #[doc(hidden)]
-    pub fn new(id: usize) -> Self {
+    pub unsafe fn new(id: usize) -> Self {
         Frame(id)
     }
 }
@@ -177,29 +220,23 @@ pub trait SwapChain {
 
 /// Different resource types of a specific API. 
 pub trait Resources:          Clone + Hash + Debug + Any {
-    type Buffer:              Clone + Hash + Debug + Any + Send + Sync + Copy;
-    type ShaderLib:           Clone + Hash + Debug + Any + Send + Sync;
-    type RenderPass:          Clone + Hash + Debug + Any + Send + Sync;
-    type PipelineSignature:   Clone + Hash + Debug + Any + Send + Sync;
-    type PipelineStateObject: Clone + Hash + Debug + Any + Send + Sync;
-    type Image:               Clone + Hash + Debug + Any + Send + Sync;
-    type ShaderResourceView:  Clone + Hash + Debug + Any + Send + Sync + Copy;
-    type UnorderedAccessView: Clone + Hash + Debug + Any + Send + Sync + Copy;
-    type RenderTargetView:    Clone + Hash + Debug + Any + Send + Sync + Copy;
-    type DepthStencilView:    Clone + Hash + Debug + Any + Send + Sync;
-    type Sampler:             Clone + Hash + Debug + Any + Send + Sync + Copy;
+    type ShaderLib:           Clone + Debug + Any + Send + Sync;
+    type RenderPass:          Clone + Debug + Any + Send + Sync;
+    type PipelineLayout:      Clone + Debug + Any + Send + Sync;
+    type PipelineStateObject: Clone + Debug + Any + Send + Sync;
+    type Buffer:              Clone + Debug + Any + Send + Sync;
+    type Image:               Clone + Debug + Any + Send + Sync;
+    type ShaderResourceView:  Clone + Debug + Any + Send + Sync;
+    type UnorderedAccessView: Clone + Debug + Any + Send + Sync;
+    type RenderTargetView:    Clone + Debug + Any + Send + Sync;
+    type DepthStencilView:    Clone + Debug + Any + Send + Sync;
+    type Sampler:             Clone + Debug + Any + Send + Sync;
 }
 
 /// Different types of a specific API.
 pub trait Backend {
-    type CommandBuffer;
-    // TODO: probably need to split this into multiple subqueue types (rendering, compute, transfer/copy)
-    // Vulkan allows multiple combinations of these 3
-    // D3D12 has a 3D queue which supports all 3 types, Compute queue with compute and transfer support and a Copy queue
-    // Older APIs don't have the concept of queues anyway
-    // Metal ?
     type CommandQueue: CommandQueue;
-    type Device: Device;
+    type Factory: Factory<Self::Resources>;
     type Instance: Instance;
     type Adapter: Adapter;
     type Resources: Resources;
