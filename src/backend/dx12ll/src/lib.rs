@@ -453,15 +453,17 @@ impl core::Backend for Backend {
 pub enum Resources { }
 impl core::Resources for Resources {
     type ShaderLib = native::ShaderLib;
-    type RenderPass = ();
+    type RenderPass = native::RenderPass;
     type PipelineLayout = native::PipelineLayout;
-    type PipelineStateObject = native::Pipeline;
+    type GraphicsPipeline = native::GraphicsPipeline;
+    type ComputePipeline = native::ComputePipeline;
     type Buffer = native::Buffer;
     type Image = native::Image;
     type ShaderResourceView = ();
     type UnorderedAccessView = ();
     type RenderTargetView = native::RenderTargetView;
-    type DepthStencilView = ();
+    type DepthStencilView = native::DepthStencilView;
+    type FrameBuffer = native::FrameBuffer;
     type Sampler = ();
     type Fence = ();
     type Semaphore = ();

@@ -154,6 +154,7 @@ impl core::Adapter for Adapter {
                     core::GeneralQueue::new(CommandQueue {
                         inner: CommandQueueInner(Rc::new(RefCell::new(queue))),
                         device: factory.inner.clone(),
+                        family_index: info.queue_family_index,
                     })
                 }
             }).collect::<Vec<_>>()
@@ -178,7 +179,8 @@ impl core::Adapter for Adapter {
     }
 }
 
-struct DeviceInner(ash::Device<V1_0>);
+#[doc(hidden)]
+pub struct DeviceInner(ash::Device<V1_0>);
 impl Drop for DeviceInner {
     fn drop(&mut self) {
         unsafe { self.0.destroy_device(None); }
@@ -200,6 +202,7 @@ struct CommandQueueInner(Rc<RefCell<vk::Queue>>);
 pub struct CommandQueue {
     inner: CommandQueueInner,
     device: Arc<DeviceInner>,
+    family_index: u32,
 }
 
 impl core::CommandQueue for CommandQueue {
@@ -337,10 +340,11 @@ impl core::Surface for Surface {
                 v.as_mut_ptr());
 
             v.set_len(count as vk::size_t);
-            v
+            v.into_iter().map(|image| native::Image(image))
+                    .collect::<Vec<_>>()
         };
 
-        // TODO: create image views for the swapchain images
+        // TODO: set initial resource states to Present
 
         SwapChain {
             inner: swapchain,
@@ -358,13 +362,19 @@ pub struct SwapChain {
     device: Arc<DeviceInner>,
     present_queue: CommandQueueInner,
     swapchain_fn: vk::SwapchainFn,
-    images: Vec<vk::Image>,
+    images: Vec<native::Image>,
 
     // Queued up frames for presentation
     frame_queue: VecDeque<usize>,
 }
 
 impl core::SwapChain for SwapChain {
+    type Image = native::Image;
+
+    fn get_images(&mut self) -> &[native::Image] {
+       &self.images
+    }
+
     fn acquire_frame(&mut self) -> core::Frame {
         // TODO: handle synchronization, requires a fence or semaphore
         // TODO: error handling
@@ -623,12 +633,15 @@ impl core::Resources for Resources {
     type ShaderLib = native::ShaderLib;
     type RenderPass = native::RenderPass;
     type PipelineLayout = native::PipelineLayout;
-    type PipelineStateObject = ();
+    type FrameBuffer = native::FrameBuffer;    type GraphicsPipeline = native::GraphicsPipeline;
+    type ComputePipeline = native::ComputePipeline;
     type Buffer = native::Buffer;
     type Image = native::Image;
     type ShaderResourceView = ();
     type UnorderedAccessView = ();
-    type RenderTargetView = ();
-    type DepthStencilView = ();
+    type RenderTargetView = native::RenderTargetView;
+    type DepthStencilView = native::DepthStencilView;
     type Sampler = ();
+    type Semaphore = ();
+    type Fence = ();
 }

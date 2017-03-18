@@ -16,7 +16,7 @@
 
 use std::ops::{Deref, DerefMut};
 use {memory, state, pso, target};
-use {IndexType, InstanceCount, VertexCount, Resources};
+use {IndexType, InstanceCount, VertexCount, VertexOffset, Resources};
 
 /// A universal clear color supporting integet formats
 /// as well as the standard floating-point.
@@ -28,6 +28,16 @@ pub enum ClearColor {
     Int([i32; 4]),
     /// Unsigned int vector to clear uvec4 targets.
     Uint([u32; 4]),
+}
+
+pub struct ClearDepthStencil {
+    pub depth: f32,
+    pub stencil: u32,
+}
+
+pub struct ClearValue {
+    pub color: ClearColor,
+    pub depth_stencil: ClearDepthStencil,
 }
 
 /// Region of two buffers for copying.
@@ -99,17 +109,23 @@ pub trait GraphicsCommandBuffer<R: Resources> : PrimaryCommandBuffer<R> {
     fn set_viewports(&mut self, &[target::Rect]);
     fn set_scissors(&mut self, &[target::Rect]);
     fn set_ref_values(&mut self, state::RefValues);
+
+    fn bind_graphics_pipeline(&mut self, &R::GraphicsPipeline);
 }
 
-pub trait RenderPassEncoder<C: GraphicsCommandBuffer<R>, R: Resources> {
-    fn begin(&mut C, &R::RenderPass) -> Self;
+pub trait RenderPassEncoder<'cb, 'rp, 'fb, C: GraphicsCommandBuffer<R> + 'cb, R: Resources> {
+    fn begin(command_buffer: &'cb mut C,
+             render_pass: &'rp R::RenderPass,
+             framebuffer: &'fb R::FrameBuffer,
+             render_area: target::Rect,
+             clear_values: &[ClearValue]) -> Self;
     fn next_subpass(&mut self);
 }
 
 pub trait SubpassCommandBuffer<R: Resources> : SecondaryCommandBuffer<R> {
     fn clear_attachment(&mut self);
     fn draw(&mut self, start: VertexCount, count: VertexCount, Option<InstanceParams>);
-    fn draw_indexed(&mut self, start: VertexCount, count: VertexCount, base: VertexCount, Option<InstanceParams>);
+    fn draw_indexed(&mut self, start: VertexCount, count: VertexCount, base: VertexOffset, Option<InstanceParams>);
     fn draw_indirect(&mut self);
     fn draw_indexed_indirect(&mut self);
 
@@ -120,12 +136,13 @@ pub trait SubpassCommandBuffer<R: Resources> : SecondaryCommandBuffer<R> {
     fn set_scissors(&mut self, &[target::Rect]);
     fn set_ref_values(&mut self, state::RefValues);
 
-    fn bind_pipeline(&mut self, &R::PipelineStateObject);
+    fn bind_graphics_pipeline(&mut self, &R::GraphicsPipeline);
     fn bind_descriptor_sets(&mut self);
     fn push_constants(&mut self);
 }
 
 pub trait ComputeCommandBuffer<R: Resources> : ProcessingCommandBuffer<R> {
+    fn bind_compute_pipeline(&mut self, &R::ComputePipeline);
     fn dispatch(&mut self, u32, u32, u32);
     fn dispatch_indirect(&mut self);
 }
@@ -134,8 +151,6 @@ pub trait ProcessingCommandBuffer<R: Resources> : TransferCommandBuffer<R> {
     fn clear_color(&mut self, &R::RenderTargetView, ClearColor);
     fn clear_buffer(&mut self);
 
-    // TODO: consider splitting compute and graphics pso
-    fn bind_pipeline(&mut self, &R::PipelineStateObject);
     fn bind_descriptor_sets(&mut self);
     fn push_constants(&mut self);
 }

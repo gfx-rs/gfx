@@ -21,7 +21,8 @@ extern crate gfx_device_vulkanll as back;
 
 extern crate winit;
 
-use gfx_corell::{command, format, pso, state, Device, CommandPool, GraphicsCommandPool, ProcessingCommandBuffer, PrimaryCommandBuffer,
+use gfx_corell::{command, format, pso, state, target, 
+    Device, CommandPool, GraphicsCommandPool, GraphicsCommandBuffer, ProcessingCommandBuffer, PrimaryCommandBuffer,
     Primitive, Instance, Adapter, Surface, SwapChain, QueueFamily, Factory, SubPass};
 use gfx_corell::format::Formatted;
 use gfx_corell::memory::{self, ImageBarrier};
@@ -122,6 +123,15 @@ fn main() {
         factory.view_image_as_render_target(&image).unwrap()
     }).collect::<Vec<_>>();
 
+    let viewport = target::Rect {
+        x: 0, y: 0,
+        w: 1024, h: 768,
+    };
+    let scissor = target::Rect {
+        x: 0, y: 0,
+        w: 1024, h: 768,
+    };
+
     //
     'main: loop {
         for event in window.poll_events() {
@@ -140,6 +150,10 @@ fn main() {
         let submit = {
             let mut cmd_buffer = graphics_pool.acquire_command_buffer();
 
+            cmd_buffer.set_viewports(&[viewport]);
+            cmd_buffer.set_scissors(&[scissor]);
+            cmd_buffer.bind_graphics_pipeline(&pipelines[0].as_ref().unwrap());
+
             {
                 let backbuffer_barrier = ImageBarrier {
                     state_src: memory::PRESENT,
@@ -152,6 +166,8 @@ fn main() {
             }
             
             cmd_buffer.clear_color(&frame_rtvs[frame.id()], command::ClearColor::Float([0.2, 0.2, 0.2, 1.0]));
+            // TODO: correct transition from RTV_CLEAR -> RTV_RENDER(?)
+            // cmd_buffer.draw(0, 3, None);
 
             {
                 let backbuffer_barrier = ImageBarrier {

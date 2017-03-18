@@ -45,9 +45,11 @@ pub const MAX_COLOR_TARGETS: usize = 8; // Limited by D3D12
 
 /// Draw vertex count.
 pub type VertexCount = u32;
-/// Draw number of instances
+/// Draw number of instances.
 pub type InstanceCount = u32;
-/// Number of vertices in a patch
+/// Draw vertex base offset.
+pub type VertexOffset = i32;
+/// Number of vertices in a patch.
 pub type PatchSize = u8;
 
 /// Describes what geometric primitives are created from vertex data.
@@ -231,13 +233,15 @@ pub trait Resources:          Clone + Hash + Debug + Any {
     type ShaderLib:           Debug + Any + Send + Sync;
     type RenderPass:          Debug + Any + Send + Sync;
     type PipelineLayout:      Debug + Any + Send + Sync;
-    type PipelineStateObject: Debug + Any + Send + Sync;
+    type GraphicsPipeline:    Debug + Any + Send + Sync;
+    type ComputePipeline:     Debug + Any + Send + Sync;
     type Buffer:              Debug + Any + Send + Sync;
     type Image:               Debug + Any + Send + Sync;
     type ShaderResourceView:  Debug + Any + Send + Sync;
     type UnorderedAccessView: Debug + Any + Send + Sync;
     type RenderTargetView:    Debug + Any + Send + Sync;
     type DepthStencilView:    Debug + Any + Send + Sync;
+    type FrameBuffer:         Debug + Any + Send + Sync;
     type Sampler:             Debug + Any + Send + Sync;
     type Semaphore:           Debug + Any + Send + Sync;
     type Fence:               Debug + Any + Send + Sync;

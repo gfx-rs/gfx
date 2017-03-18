@@ -22,16 +22,27 @@ use std::collections::BTreeMap;
 pub struct ShaderLib {
     pub shaders: BTreeMap<pso::EntryPoint, ComPtr<winapi::ID3DBlob>>,
 }
-
 unsafe impl Send for ShaderLib {}
 unsafe impl Sync for ShaderLib {}
 
 #[derive(Clone, Debug, Hash)]
-pub struct Pipeline {
+pub struct RenderPass;
+unsafe impl Send for RenderPass {}
+unsafe impl Sync for RenderPass {}
+
+#[derive(Clone, Debug, Hash)]
+pub struct GraphicsPipeline {
     pub inner: ComPtr<winapi::ID3D12PipelineState>,
 }
-unsafe impl Send for Pipeline {}
-unsafe impl Sync for Pipeline {}
+unsafe impl Send for GraphicsPipeline {}
+unsafe impl Sync for GraphicsPipeline {}
+
+#[derive(Clone, Debug, Hash)]
+pub struct ComputePipeline {
+    pub inner: ComPtr<winapi::ID3D12PipelineState>,
+}
+unsafe impl Send for ComputePipeline {}
+unsafe impl Sync for ComputePipeline {}
 
 #[derive(Clone, Debug, Hash)]
 pub struct PipelineLayout {
@@ -74,8 +85,16 @@ pub struct RenderTargetView {
     pub handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
 }
 
+#[derive(Clone, Debug)]
+pub struct DepthStencilView {
+    pub handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
+}
+
 #[derive(Debug)]
 pub struct Fence;
 
 #[derive(Debug)]
 pub struct Semaphore;
+
+#[derive(Debug)]
+pub struct FrameBuffer;

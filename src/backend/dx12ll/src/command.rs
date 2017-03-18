@@ -17,9 +17,10 @@ use std::ptr;
 use winapi;
 use winapi::*;
 
-use core::{self, command, memory, pso, state, target, IndexType, VertexCount};
+use core::{self, command, memory, pso, state, target, IndexType, VertexCount, VertexOffset};
 use data;
-use native::{self, CommandBuffer, GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer, SubpassCommandBuffer};
+use native::{self, CommandBuffer, GeneralCommandBuffer, GraphicsCommandBuffer,
+    ComputeCommandBuffer, TransferCommandBuffer, SubpassCommandBuffer, RenderPass, FrameBuffer};
 use {Resources as R};
 
 pub struct SubmitInfo(pub ComPtr<winapi::ID3D12GraphicsCommandList>);
@@ -131,7 +132,11 @@ impl CommandBuffer {
         unimplemented!()
     }
 
-    fn bind_pipeline(&mut self, pso: &native::Pipeline) {
+    fn bind_graphics_pipeline(&mut self, pso: &native::GraphicsPipeline) {
+        unimplemented!()
+    }
+
+    fn bind_compute_pipeline(&mut self, pso: &native::ComputePipeline) {
         unimplemented!()
     }
 
@@ -163,7 +168,7 @@ impl CommandBuffer {
         }
     }
 
-    fn draw_indexed(&mut self, start: VertexCount, count: VertexCount, base: VertexCount, instances: Option<command::InstanceParams>) {
+    fn draw_indexed(&mut self, start: VertexCount, count: VertexCount, base: VertexOffset, instances: Option<command::InstanceParams>) {
         let (num_instances, start_instance) = match instances {
             Some((num_instances, start_instance)) => (num_instances, start_instance),
             None => (1, 0),
@@ -174,7 +179,7 @@ impl CommandBuffer {
                 count,          // IndexCountPerInstance
                 num_instances,  // InstanceCount
                 start,          // StartIndexLocation
-                base as INT,    // BaseVertexLocation
+                base,           // BaseVertexLocation
                 start_instance, // StartInstanceLocation
             );
         }
@@ -252,7 +257,7 @@ impl CommandBuffer {
         unimplemented!()
     }
 
-    fn clear_depth_stencil(&mut self, _: &(), depth: Option<target::Depth>, stencil: Option<target::Stencil>) {
+    fn clear_depth_stencil(&mut self, _: &native::DepthStencilView, depth: Option<target::Depth>, stencil: Option<target::Stencil>) {
         unimplemented!()
     }
 
@@ -313,10 +318,6 @@ macro_rules! impl_processing_cmd_buffer {
                 self.0.clear_buffer()
             }
 
-            fn bind_pipeline(&mut self, pso: &native::Pipeline) {
-                self.0.bind_pipeline(pso)
-            }
-
             fn bind_descriptor_sets(&mut self) {
                 self.0.bind_descriptor_sets()
             }
@@ -368,7 +369,7 @@ impl_transfer_cmd_buffer!(TransferCommandBuffer);
 macro_rules! impl_graphics_cmd_buffer {
     ($buffer:ident) => (
         impl core::GraphicsCommandBuffer<R> for $buffer {
-            fn clear_depth_stencil(&mut self, dsv: &(), depth: Option<target::Depth>, stencil: Option<target::Stencil>) {
+            fn clear_depth_stencil(&mut self, dsv: &native::DepthStencilView, depth: Option<target::Depth>, stencil: Option<target::Stencil>) {
                 self.0.clear_depth_stencil(dsv, depth, stencil)
             }
 
@@ -395,6 +396,10 @@ macro_rules! impl_graphics_cmd_buffer {
             fn set_ref_values(&mut self, rv: state::RefValues) {
                 self.0.set_ref_values(rv)
             }
+
+            fn bind_graphics_pipeline(&mut self, pipeline: &native::GraphicsPipeline) {
+                self.0.bind_graphics_pipeline(pipeline)
+            }
         }
     )
 }
@@ -413,6 +418,10 @@ macro_rules! impl_graphics_cmd_buffer {
             fn dispatch_indirect(&mut self) {
                 self.0.dispatch_indirect()
             }
+
+            fn bind_compute_pipeline(&mut self, pipeline: &native::ComputePipeline) {
+                self.0.bind_compute_pipeline(pipeline)
+            }
         }
     )
 }
@@ -421,3 +430,28 @@ impl_graphics_cmd_buffer!(GeneralCommandBuffer);
 impl_graphics_cmd_buffer!(ComputeCommandBuffer);
 
 // TODO: subpass command buffer
+
+pub struct RenderPassEncoder<'cb, 'rp, 'fb> {
+    command_list: &'cb mut GraphicsCommandBuffer,
+    render_pass: &'rp RenderPass,
+    framebuffer: &'fb FrameBuffer,
+}
+
+impl<'cb, 'rp, 'fb> command::RenderPassEncoder<'cb, 'rp, 'fb, GraphicsCommandBuffer, R> for RenderPassEncoder<'cb, 'rp, 'fb> {
+    fn begin(command_buffer: &'cb mut GraphicsCommandBuffer,
+             render_pass: &'rp RenderPass,
+             framebuffer: &'fb FrameBuffer,
+             render_area: target::Rect,
+             clear_values: &[command::ClearValue]
+    ) -> Self {
+        RenderPassEncoder {
+            command_list: command_buffer,
+            render_pass: render_pass,
+            framebuffer: framebuffer,
+        }
+    }
+
+    fn next_subpass(&mut self) {
+
+    }
+}

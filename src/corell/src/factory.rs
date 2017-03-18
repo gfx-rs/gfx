@@ -41,10 +41,16 @@ pub trait Factory<R: Resources> {
 
     ///
     fn create_graphics_pipelines<'a>(&mut self, &[(&R::ShaderLib, &R::PipelineLayout, SubPass<'a, R>, &pso::GraphicsPipelineDesc)])
-            -> Vec<Result<R::PipelineStateObject, pso::CreationError>>;
+            -> Vec<Result<R::GraphicsPipeline, pso::CreationError>>;
 
     ///
-    fn create_compute_pipelines(&mut self) -> Vec<Result<R::PipelineStateObject, pso::CreationError>>;
+    fn create_compute_pipelines(&mut self) -> Vec<Result<R::ComputePipeline, pso::CreationError>>;
+
+    ///
+    fn create_framebuffer(&mut self, renderpass: &R::RenderPass,
+        color_attachments: &[R::RenderTargetView], depth_stencil_attachments: &[R::DepthStencilView],
+        width: u32, height: u32, layers: u32
+    ) -> R::FrameBuffer;
 
     ///
     fn view_image_as_render_target(&mut self, image: &R::Image) -> Result<R::RenderTargetView, TargetViewError>;

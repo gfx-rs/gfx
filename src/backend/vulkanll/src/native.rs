@@ -13,9 +13,11 @@
 // limitations under the License.
 
 use core::pso;
-use vk;
+use ash::vk;
 use std::collections::BTreeMap;
 use std::ops::Deref;
+
+pub use command::CommandBuffer;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct ShaderLib {
@@ -41,9 +43,24 @@ pub struct RenderPass {
 unsafe impl Send for RenderPass {}
 unsafe impl Sync for RenderPass {}
 
-pub struct CommandBuffer {
-    pub inner: vk::CommandBuffer,
+#[derive(Clone, Debug, Hash)]
+pub struct FrameBuffer;
+unsafe impl Send for FrameBuffer {}
+unsafe impl Sync for FrameBuffer {}
+
+#[derive(Clone, Debug, Hash)]
+pub struct GraphicsPipeline {
+    pub pipeline: vk::Pipeline,
 }
+unsafe impl Send for GraphicsPipeline {}
+unsafe impl Sync for GraphicsPipeline {}
+
+#[derive(Clone, Debug, Hash)]
+pub struct ComputePipeline {
+    pub pipeline: vk::Pipeline,
+}
+unsafe impl Send for ComputePipeline {}
+unsafe impl Sync for ComputePipeline {}
 
 pub struct GeneralCommandBuffer(pub CommandBuffer);
 
@@ -60,3 +77,11 @@ pub struct Buffer(pub vk::Buffer);
 
 #[derive(Clone, Debug, Hash)]
 pub struct Image(pub vk::Image);
+
+#[derive(Clone, Debug, Hash)]
+pub struct RenderTargetView {
+    pub image: vk::Image,
+}
+
+#[derive(Clone, Debug, Hash)]
+pub struct DepthStencilView;

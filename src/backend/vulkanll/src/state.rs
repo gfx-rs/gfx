@@ -14,7 +14,7 @@
 
 use core::Primitive;
 use core::state;
-use vk;
+use ash::vk;
 
 pub fn map_topology(prim: Primitive) -> vk::PrimitiveTopology {
     match prim {

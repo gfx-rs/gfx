@@ -12,21 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use ash::version::DeviceV1_0;
+use ash::vk;
 use std::ptr;
+use std::sync::Arc;
 
-use core::{self, command, pso, state, target, IndexType, VertexCount};
-use native::{self, CommandBuffer, GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer, SubpassCommandBuffer};
-use {Resources as R};
+use core::{self, command, memory, pso, state, target, IndexType, VertexCount, VertexOffset};
+use native::{self, GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer, SubpassCommandBuffer};
+use {DeviceInner, Resources as R};
 
 pub struct SubmitInfo;
 
+pub struct CommandBuffer {
+    pub inner: vk::CommandBuffer,
+    pub device: Arc<DeviceInner>,
+}
 
 impl CommandBuffer {
     fn end(&mut self) -> SubmitInfo {
         unimplemented!()
     }
 
-    fn pipeline_barrier(&mut self) {
+    fn pipeline_barrier<'a>(&mut self, memory_barriers: &[memory::MemoryBarrier],
+        buffer_barriers: &[memory::BufferBarrier<'a, R>], image_barriers: &[memory::ImageBarrier<'a, R>])
+    {
         unimplemented!()
     }
 
@@ -54,16 +63,41 @@ impl CommandBuffer {
         unimplemented!()
     }
 
-    fn clear_color(&mut self, rtv: &(), value: command::ClearColor) {
-        unimplemented!()
+    fn clear_color(&mut self, rtv: &native::RenderTargetView, value: command::ClearColor) {
+        unsafe {
+            self.device.0.fp_v1_0().cmd_clear_color_image(
+                self.inner,
+                rtv.image,
+                vk::ImageLayout::TransferDstOptimal,
+                ptr::null(), // TODO: clear value
+                0,
+                ptr::null(), // TODO: ranges
+            )
+        };
     }
 
     fn clear_buffer(&mut self) {
         unimplemented!()
     }
 
-    fn bind_pipeline(&mut self, pso: &()) {
-        unimplemented!()
+    fn bind_graphics_pipeline(&mut self, pso: &native::GraphicsPipeline) {
+        unsafe {
+            self.device.0.cmd_bind_pipeline(
+                self.inner,
+                vk::PipelineBindPoint::Graphics,
+                pso.pipeline,
+            )
+        }
+    }
+
+    fn bind_compute_pipeline(&mut self, pso: &native::ComputePipeline) {
+        unsafe {
+            self.device.0.cmd_bind_pipeline(
+                self.inner,
+                vk::PipelineBindPoint::Compute,
+                pso.pipeline,
+            )
+        }
     }
 
     fn bind_descriptor_sets(&mut self) {
@@ -79,11 +113,38 @@ impl CommandBuffer {
     }
 
     fn draw(&mut self, start: VertexCount, count: VertexCount, instances: Option<command::InstanceParams>) {
-        unimplemented!()
+        let (num_instances, start_instance) = match instances {
+            Some((num_instances, start_instance)) => (num_instances, start_instance),
+            None => (1, 0),
+        };
+
+        unsafe {
+            self.device.0.cmd_draw(
+                self.inner,     // commandBuffer
+                count,          // vertexCount
+                num_instances,  // instanceCount
+                start,          // firstVertex
+                start_instance, // firstInstance
+            )
+        }
     }
 
-    fn draw_indexed(&mut self, start: VertexCount, count: VertexCount, base: VertexCount, instances: Option<command::InstanceParams>) {
-        unimplemented!()
+    fn draw_indexed(&mut self, start: VertexCount, count: VertexCount, base: VertexOffset, instances: Option<command::InstanceParams>) {
+         let (num_instances, start_instance) = match instances {
+            Some((num_instances, start_instance)) => (num_instances, start_instance),
+            None => (1, 0),
+        };
+
+        unsafe {
+            self.device.0.cmd_draw_indexed(
+                self.inner,     // commandBuffer
+                count,          // indexCount
+                num_instances,  // instanceCount
+                start,          // firstIndex
+                base,           // vertexOffset
+                start_instance, // firstInstance
+            )
+        }
     }
 
     fn draw_indirect(&mut self) {
@@ -95,7 +156,14 @@ impl CommandBuffer {
     }
 
     fn dispatch(&mut self, x: u32, y: u32, z: u32) {
-        unimplemented!()
+        unsafe {
+            self.device.0.fp_v1_0().cmd_dispatch(
+                self.inner, // commandBuffer
+                x,          // groupCountX
+                y,          // groupCountY
+                z,          // groupCountZ
+            )
+        }
     }
 
     fn dispatch_indirect(&mut self) {
@@ -111,18 +179,46 @@ impl CommandBuffer {
     }
 
     fn set_viewports(&mut self, viewports: &[target::Rect]) {
-        unimplemented!()
+        let viewports = viewports.iter().map(|viewport| {
+            vk::Viewport {
+                x: viewport.x as f32,
+                y: viewport.y as f32,
+                width: viewport.w as f32,
+                height: viewport.h as f32,
+                min_depth: 0.0,
+                max_depth: 1.0,
+            }
+        }).collect::<Vec<_>>();
+
+        unsafe {
+            self.device.0.cmd_set_viewport(self.inner, &viewports);
+        }
     }
 
     fn set_scissors(&mut self, scissors: &[target::Rect]) {
-        unimplemented!()
+        let scissors = scissors.iter().map(|scissor| {
+            vk::Rect2D {
+                offset: vk::Offset2D {
+                    x: scissor.x as i32,
+                    y: scissor.y as i32,
+                },
+                extent: vk::Extent2D {
+                    width: scissor.w as u32,
+                    height: scissor.h as u32,
+                }
+            }
+        }).collect::<Vec<_>>();
+
+        unsafe {
+            self.device.0.cmd_set_scissor(self.inner, &scissors);
+        }
     }
 
     fn set_ref_values(&mut self, _: state::RefValues) {
         unimplemented!()
     }
 
-    fn clear_depth_stencil(&mut self, _: &(), depth: Option<target::Depth>, stencil: Option<target::Stencil>) {
+    fn clear_depth_stencil(&mut self, dsv: &native::DepthStencilView, depth: Option<target::Depth>, stencil: Option<target::Stencil>) {
         unimplemented!()
     }
 
@@ -153,8 +249,10 @@ impl_cmd_buffer!(SubpassCommandBuffer);
 macro_rules! impl_primary_cmd_buffer {
     ($buffer:ident) => (
         impl core::PrimaryCommandBuffer<R> for $buffer {
-            fn pipeline_barrier(&mut self) {
-                self.0.pipeline_barrier()
+            fn pipeline_barrier<'a>(&mut self, memory_barriers: &[memory::MemoryBarrier],
+                buffer_barriers: &[memory::BufferBarrier<'a, R>], image_barriers: &[memory::ImageBarrier<'a, R>])
+            {
+                self.0.pipeline_barrier(memory_barriers, buffer_barriers, image_barriers)
             }
 
             fn execute_commands(&mut self) {
@@ -173,16 +271,12 @@ impl_primary_cmd_buffer!(TransferCommandBuffer);
 macro_rules! impl_processing_cmd_buffer {
     ($buffer:ident) => (
         impl core::ProcessingCommandBuffer<R> for $buffer {
-            fn clear_color(&mut self, rtv: &(), value: command::ClearColor) {
+            fn clear_color(&mut self, rtv: &native::RenderTargetView, value: command::ClearColor) {
                 self.0.clear_color(rtv, value)
             }
 
             fn clear_buffer(&mut self) {
                 self.0.clear_buffer()
-            }
-
-            fn bind_pipeline(&mut self, pso: &()) {
-                self.0.bind_pipeline(pso)
             }
 
             fn bind_descriptor_sets(&mut self) {
@@ -236,7 +330,7 @@ impl_transfer_cmd_buffer!(TransferCommandBuffer);
 macro_rules! impl_graphics_cmd_buffer {
     ($buffer:ident) => (
         impl core::GraphicsCommandBuffer<R> for $buffer {
-            fn clear_depth_stencil(&mut self, dsv: &(), depth: Option<target::Depth>, stencil: Option<target::Stencil>) {
+            fn clear_depth_stencil(&mut self, dsv: &native::DepthStencilView, depth: Option<target::Depth>, stencil: Option<target::Stencil>) {
                 self.0.clear_depth_stencil(dsv, depth, stencil)
             }
 
@@ -263,6 +357,10 @@ macro_rules! impl_graphics_cmd_buffer {
             fn set_ref_values(&mut self, rv: state::RefValues) {
                 self.0.set_ref_values(rv)
             }
+
+            fn bind_graphics_pipeline(&mut self, pipeline: &native::GraphicsPipeline) {
+                self.0.bind_graphics_pipeline(pipeline)
+            }
         }
     )
 }
@@ -280,6 +378,10 @@ macro_rules! impl_graphics_cmd_buffer {
 
             fn dispatch_indirect(&mut self) {
                 self.0.dispatch_indirect()
+            }
+
+            fn bind_compute_pipeline(&mut self, pipeline: &native::ComputePipeline) {
+                self.0.bind_compute_pipeline(pipeline)
             }
         }
     )
