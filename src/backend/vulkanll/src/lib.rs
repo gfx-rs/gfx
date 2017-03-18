@@ -214,10 +214,31 @@ impl core::CommandQueue for CommandQueue {
     type TransferCommandBuffer = native::TransferCommandBuffer;
     type SubpassCommandBuffer = native::SubpassCommandBuffer;
 
-    unsafe fn submit<C>(&mut self, cmd_buffers: &[Submit<C>])
+    unsafe fn submit<C>(&mut self, submits: &[Submit<C>])
         where C: core::CommandBuffer<SubmitInfo = command::SubmitInfo>
     {
-        unimplemented!()
+        let command_buffers = submits.iter().map(|submit| submit.get_info().command_buffer)
+                                            .collect::<Vec<_>>();
+
+        let submit = vk::SubmitInfo {
+            s_type: vk::StructureType::SubmitInfo,
+            p_next: ptr::null(),
+            wait_semaphore_count: 0,
+            p_wait_semaphores: ptr::null(),
+            p_wait_dst_stage_mask: ptr::null(),
+            command_buffer_count: command_buffers.len() as u32,
+            p_command_buffers: command_buffers.as_ptr(),
+            signal_semaphore_count: 0,
+            p_signal_semaphores: ptr::null(),
+        };
+
+        unsafe {
+            self.device.0.queue_submit(
+                *self.inner.0.borrow(),
+                &[submit],
+                vk::Fence::null(),
+            );
+        }
     }
 }
 

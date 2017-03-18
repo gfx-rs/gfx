@@ -121,7 +121,7 @@ impl CommandBuffer {
         unsafe {
             self.inner.ClearRenderTargetView(
                 rtv.handle,      // RenderTargetView
-                &clear_color,     // ColorRGBA
+                &clear_color,    // ColorRGBA
                 0,               // NumRects
                 ptr::null_mut(), // pRects
             );

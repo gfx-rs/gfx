@@ -208,11 +208,11 @@ impl core::CommandQueue for CommandQueue {
     type TransferCommandBuffer = native::TransferCommandBuffer;
     type SubpassCommandBuffer = native::SubpassCommandBuffer;
 
-    unsafe fn submit<C>(&mut self, cmd_buffers: &[Submit<C>])
+    unsafe fn submit<C>(&mut self, submit: &[Submit<C>])
         where C: core::CommandBuffer<SubmitInfo = command::SubmitInfo>
     {
-        let mut command_lists = cmd_buffers.iter().map(|cmd_buffer| {
-            cmd_buffer.get_info().0.as_mut_ptr()
+        let mut command_lists = submit.iter().map(|submit| {
+            submit.get_info().0.as_mut_ptr()
         }).collect::<Vec<_>>();
 
         self.inner.ExecuteCommandLists(command_lists.len() as u32, command_lists.as_mut_ptr() as *mut *mut _);

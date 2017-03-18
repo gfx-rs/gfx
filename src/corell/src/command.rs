@@ -148,6 +148,7 @@ pub trait ComputeCommandBuffer<R: Resources> : ProcessingCommandBuffer<R> {
 }
 
 pub trait ProcessingCommandBuffer<R: Resources> : TransferCommandBuffer<R> {
+    // TODO: consider to clear multiple RTVs as vulkan allows multiple subresource ranges
     fn clear_color(&mut self, &R::RenderTargetView, ClearColor);
     fn clear_buffer(&mut self);
 

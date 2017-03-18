@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use ash::vk;
+use core::command::ClearColor;
 use core::format::{SurfaceType, ChannelType};
 
 pub fn map_format(surface: SurfaceType, chan: ChannelType) -> Option<vk::Format> {
@@ -149,3 +150,10 @@ pub fn map_format(surface: SurfaceType, chan: ChannelType) -> Option<vk::Format>
     })
 }
 
+pub fn map_clear_color(value: ClearColor) -> vk::ClearColorValue {
+    match value {
+        ClearColor::Float(v) => vk::ClearColorValue::new_float32(v),
+        ClearColor::Int(v)   => vk::ClearColorValue::new_int32(v),
+        ClearColor::Uint(v)  => vk::ClearColorValue::new_uint32(v),
+    }
+}

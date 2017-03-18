@@ -18,10 +18,13 @@ use std::ptr;
 use std::sync::Arc;
 
 use core::{self, command, memory, pso, state, target, IndexType, VertexCount, VertexOffset};
+use data;
 use native::{self, GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer, SubpassCommandBuffer};
 use {DeviceInner, Resources as R};
 
-pub struct SubmitInfo;
+pub struct SubmitInfo {
+    pub command_buffer: vk::CommandBuffer,
+}
 
 pub struct CommandBuffer {
     pub inner: vk::CommandBuffer,
@@ -30,13 +33,20 @@ pub struct CommandBuffer {
 
 impl CommandBuffer {
     fn end(&mut self) -> SubmitInfo {
-        unimplemented!()
+        unsafe {
+            self.device.0.end_command_buffer(self.inner); // TODO: error handling
+        }
+
+        SubmitInfo {
+            command_buffer: self.inner,
+        }
     }
 
     fn pipeline_barrier<'a>(&mut self, memory_barriers: &[memory::MemoryBarrier],
         buffer_barriers: &[memory::BufferBarrier<'a, R>], image_barriers: &[memory::ImageBarrier<'a, R>])
     {
-        unimplemented!()
+        // TODO:
+        // unimplemented!()
     }
 
     fn execute_commands(&mut self) {
@@ -64,14 +74,24 @@ impl CommandBuffer {
     }
 
     fn clear_color(&mut self, rtv: &native::RenderTargetView, value: command::ClearColor) {
+        let clear_value = data::map_clear_color(value);
+        // TODO: use actual subresource range from rtv
+        let base_range = vk::ImageSubresourceRange {
+            aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT,
+            base_mip_level: 0, 
+            level_count: 1,
+            base_array_layer: 0,
+            layer_count: vk::VK_REMAINING_ARRAY_LAYERS,
+        };
+
         unsafe {
             self.device.0.fp_v1_0().cmd_clear_color_image(
                 self.inner,
                 rtv.image,
                 vk::ImageLayout::TransferDstOptimal,
-                ptr::null(), // TODO: clear value
-                0,
-                ptr::null(), // TODO: ranges
+                &clear_value,
+                1,
+                &base_range, // TODO: ranges
             )
         };
     }
