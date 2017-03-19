@@ -431,27 +431,122 @@ impl_graphics_cmd_buffer!(ComputeCommandBuffer);
 
 // TODO: subpass command buffer
 
-pub struct RenderPassEncoder<'cb, 'rp, 'fb> {
+pub struct RenderPassInlineEncoder<'cb, 'rp, 'fb> {
     command_list: &'cb mut GraphicsCommandBuffer,
     render_pass: &'rp RenderPass,
     framebuffer: &'fb FrameBuffer,
 }
 
-impl<'cb, 'rp, 'fb> command::RenderPassEncoder<'cb, 'rp, 'fb, GraphicsCommandBuffer, R> for RenderPassEncoder<'cb, 'rp, 'fb> {
+impl<'cb, 'rp, 'fb> command::RenderPassEncoder<'cb, 'rp, 'fb, GraphicsCommandBuffer, R> for RenderPassInlineEncoder<'cb, 'rp, 'fb> {
+    type SecondaryEncoder = RenderPassSecondaryEncoder<'cb, 'rp, 'fb>;
+    type InlineEncoder = RenderPassInlineEncoder<'cb, 'rp, 'fb>;
+
     fn begin(command_buffer: &'cb mut GraphicsCommandBuffer,
              render_pass: &'rp RenderPass,
              framebuffer: &'fb FrameBuffer,
              render_area: target::Rect,
              clear_values: &[command::ClearValue]
     ) -> Self {
-        RenderPassEncoder {
+        RenderPassInlineEncoder {
             command_list: command_buffer,
             render_pass: render_pass,
             framebuffer: framebuffer,
         }
     }
 
-    fn next_subpass(&mut self) {
+    fn next_subpass(self) -> RenderPassSecondaryEncoder<'cb, 'rp, 'fb> {
+        unimplemented!()
+    }
+
+    fn next_subpass_inline(self) -> RenderPassInlineEncoder<'cb, 'rp, 'fb>{
+        unimplemented!()
+    }
+}
+
+impl<'cb, 'rp, 'fb> command::RenderPassInlineEncoder<'cb, 'rp, 'fb, GraphicsCommandBuffer, R> for RenderPassInlineEncoder<'cb, 'rp, 'fb> {
+    fn clear_attachment(&mut self) {
+
+    }
+
+    fn draw(&mut self, start: VertexCount, count: VertexCount, instance: Option<command::InstanceParams>) {
+        self.command_list.0.draw(start, count, instance)
+    }
+
+    fn draw_indexed(&mut self, start: VertexCount, count: VertexCount, base: VertexOffset, instance: Option<command::InstanceParams>) {
+
+    }
+
+    fn draw_indirect(&mut self) {
+
+    }
+
+    fn draw_indexed_indirect(&mut self) {
+
+    }
+
+    fn bind_index_buffer(&mut self, ib: &native::Buffer, index_type: IndexType) {
+
+    }
+
+    fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<R>) {
+
+    }
+
+    fn set_viewports(&mut self, viewports: &[target::Rect]) {
+        self.command_list.0.set_viewports(viewports)
+    }
+
+    fn set_scissors(&mut self, scissors: &[target::Rect]) {
+        self.command_list.0.set_scissors(scissors)
+    }
+
+    fn set_ref_values(&mut self, rv: state::RefValues) {
+        self.command_list.0.set_ref_values(rv)
+    }
+
+    fn bind_graphics_pipeline(&mut self, pipeline: &native::GraphicsPipeline) {
+        self.command_list.0.bind_graphics_pipeline(pipeline)
+    }
+
+    fn bind_descriptor_sets(&mut self) {
+
+    }
+
+    fn push_constants(&mut self) {
 
     }
 }
+
+pub struct RenderPassSecondaryEncoder<'cb, 'rp, 'fb> {
+    command_list: &'cb mut GraphicsCommandBuffer,
+    render_pass: &'rp RenderPass,
+    framebuffer: &'fb FrameBuffer,
+}
+
+impl<'cb, 'rp, 'fb> command::RenderPassEncoder<'cb, 'rp, 'fb, GraphicsCommandBuffer, R> for RenderPassSecondaryEncoder<'cb, 'rp, 'fb> {
+    type SecondaryEncoder = RenderPassSecondaryEncoder<'cb, 'rp, 'fb>;
+    type InlineEncoder = RenderPassInlineEncoder<'cb, 'rp, 'fb>;
+
+    fn begin(command_buffer: &'cb mut GraphicsCommandBuffer,
+             render_pass: &'rp RenderPass,
+             framebuffer: &'fb FrameBuffer,
+             render_area: target::Rect,
+             clear_values: &[command::ClearValue]
+    ) -> Self {
+        RenderPassSecondaryEncoder {
+            command_list: command_buffer,
+            render_pass: render_pass,
+            framebuffer: framebuffer,
+        }
+    }
+
+    fn next_subpass(self) -> RenderPassSecondaryEncoder<'cb, 'rp, 'fb> {
+        unimplemented!()
+    }
+
+    fn next_subpass_inline(self) -> RenderPassInlineEncoder<'cb, 'rp, 'fb>{
+        unimplemented!()
+    }
+}
+
+impl<'cb, 'rp, 'fb> command::RenderPassSecondaryEncoder<'cb, 'rp, 'fb, GraphicsCommandBuffer, R> for RenderPassSecondaryEncoder<'cb, 'rp, 'fb> { }

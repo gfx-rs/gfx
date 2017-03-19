@@ -113,13 +113,49 @@ pub trait GraphicsCommandBuffer<R: Resources> : PrimaryCommandBuffer<R> {
     fn bind_graphics_pipeline(&mut self, &R::GraphicsPipeline);
 }
 
-pub trait RenderPassEncoder<'cb, 'rp, 'fb, C: GraphicsCommandBuffer<R> + 'cb, R: Resources> {
+pub trait RenderPassEncoder<'cb, 'rp, 'fb, C, R>
+    where C: GraphicsCommandBuffer<R> + 'cb,
+          R: Resources
+{
+    type SecondaryEncoder: RenderPassSecondaryEncoder<'cb, 'rp, 'fb, C, R>;
+    type InlineEncoder: RenderPassInlineEncoder<'cb, 'rp, 'fb, C, R>;
+
     fn begin(command_buffer: &'cb mut C,
              render_pass: &'rp R::RenderPass,
              framebuffer: &'fb R::FrameBuffer,
              render_area: target::Rect,
              clear_values: &[ClearValue]) -> Self;
-    fn next_subpass(&mut self);
+    fn next_subpass(self) -> Self::SecondaryEncoder;
+    fn next_subpass_inline(self) -> Self::InlineEncoder;
+}
+
+pub trait RenderPassSecondaryEncoder<'cb, 'rp, 'fb, C, R> : RenderPassEncoder<'cb, 'rp, 'fb, C, R>
+    where C: GraphicsCommandBuffer<R> + 'cb,
+          R: Resources
+{
+    // TODO: exectue supass command buffer
+}
+
+pub trait RenderPassInlineEncoder<'cb, 'rp, 'fb, C, R> : RenderPassEncoder<'cb, 'rp, 'fb, C, R>
+    where C: GraphicsCommandBuffer<R> + 'cb,
+          R: Resources
+{
+    fn clear_attachment(&mut self);
+    fn draw(&mut self, start: VertexCount, count: VertexCount, Option<InstanceParams>);
+    fn draw_indexed(&mut self, start: VertexCount, count: VertexCount, base: VertexOffset, Option<InstanceParams>);
+    fn draw_indirect(&mut self);
+    fn draw_indexed_indirect(&mut self);
+
+    fn bind_index_buffer(&mut self, &R::Buffer, IndexType);
+    fn bind_vertex_buffers(&mut self, pso::VertexBufferSet<R>);
+
+    fn set_viewports(&mut self, &[target::Rect]);
+    fn set_scissors(&mut self, &[target::Rect]);
+    fn set_ref_values(&mut self, state::RefValues);
+
+    fn bind_graphics_pipeline(&mut self, &R::GraphicsPipeline);
+    fn bind_descriptor_sets(&mut self);
+    fn push_constants(&mut self);
 }
 
 pub trait SubpassCommandBuffer<R: Resources> : SecondaryCommandBuffer<R> {
