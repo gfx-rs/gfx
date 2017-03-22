@@ -18,10 +18,10 @@ use std::{mem, ptr};
 use std::sync::Arc;
 use std::collections::BTreeMap;
 
-use core::{self, factory as f, shade, state as s};
+use core::{self, buffer, format, factory as f, image, pass, shade, state as s};
 use core::SubPass;
 use core::pso::{self, EntryPoint};
-use {native, state};
+use {data, native, state};
 use {Factory, Resources as R};
 
 impl Factory {
@@ -51,32 +51,81 @@ impl Factory {
 }
 
 impl core::Factory<R> for Factory {
-    fn create_renderpass(&mut self) -> native::RenderPass {
-        // TODO:
-        // Dummy renderpass only
-        let subpass_desc = vk::SubpassDescription {
-            flags: vk::SubpassDescriptionFlags::empty(),
-            pipeline_bind_point: vk::PipelineBindPoint::Graphics,
-            input_attachment_count: 0, // TODO
-            p_input_attachments: ptr::null(), // TODO
-            color_attachment_count: 0, // TODO
-            p_color_attachments: ptr::null(), // TODO
-            p_resolve_attachments: ptr::null(), // TODO
-            p_depth_stencil_attachment: ptr::null(), // TODO
-            preserve_attachment_count: 0, // TODO
-            p_preserve_attachments: ptr::null(), // TODO
+    fn create_renderpass(&mut self, attachments: &[pass::Attachment],
+        subpasses: &[pass::SubpassDesc], dependencies: &[pass::SubpassDependency]) -> native::RenderPass
+    {
+        let map_subpass_ref = |pass: pass::SubpassRef| {
+            match pass {
+                pass::SubpassRef::External => vk::VK_SUBPASS_EXTERNAL,
+                pass::SubpassRef::Pass(id) => id as u32,
+            }
         };
+
+        // TODO: basic implementation only, needs lot of tweaking!
+        let attachments = attachments.iter().map(|attachment| {
+            vk::AttachmentDescription {
+                flags: vk::AttachmentDescriptionFlags::empty(), // TODO: may even alias!
+                format: data::map_format(attachment.format.0, attachment.format.1).unwrap(), // TODO: error handling
+                samples: vk::SAMPLE_COUNT_1_BIT, // TODO: multisampling
+                load_op: data::map_attachment_load_op(attachment.load_op),
+                store_op: data::map_attachment_store_op(attachment.store_op),
+                stencil_load_op: data::map_attachment_load_op(attachment.stencil_load_op),
+                stencil_store_op: data::map_attachment_store_op(attachment.stencil_store_op),
+                initial_layout: data::map_image_layout(attachment.src_layout),
+                final_layout: data::map_image_layout(attachment.dst_layout),
+            }
+        }).collect::<Vec<_>>();
+
+        let mut attachment_refs = Vec::new();
+
+        let subpasses = subpasses.iter().map(|subpass| {
+            {
+                let color_attachments = subpass.color_attachments.iter()
+                .map(|&(id, layout)| vk::AttachmentReference { attachment: id as u32, layout: data::map_image_layout(layout) })
+                .collect::<Vec<_>>();
+
+                attachment_refs.push(color_attachments);
+            }
+            
+            let color_attachments = attachment_refs.last().unwrap();
+
+            vk::SubpassDescription {
+                flags: vk::SubpassDescriptionFlags::empty(),
+                pipeline_bind_point: vk::PipelineBindPoint::Graphics,
+                input_attachment_count: 0, // TODO
+                p_input_attachments: ptr::null(), // TODO
+                color_attachment_count: color_attachments.len() as u32, // TODO
+                p_color_attachments: color_attachments.as_ptr(), // TODO
+                p_resolve_attachments: ptr::null(), // TODO
+                p_depth_stencil_attachment: ptr::null(), // TODO
+                preserve_attachment_count: 0, // TODO
+                p_preserve_attachments: ptr::null(), // TODO
+            }
+        }).collect::<Vec<_>>();
+        
+        let dependencies = dependencies.iter().map(|dependency| {
+            // TODO: checks
+            vk::SubpassDependency {
+                src_subpass: map_subpass_ref(dependency.src_pass),
+                dst_subpass: map_subpass_ref(dependency.dst_pass),
+                src_stage_mask: data::map_pipeline_stage(dependency.src_stage),
+                dst_stage_mask: data::map_pipeline_stage(dependency.dst_stage),
+                src_access_mask: data::map_image_access(dependency.src_access),
+                dst_access_mask: data::map_image_access(dependency.dst_access),
+                dependency_flags: vk::DependencyFlags::empty(), // TODO
+            }
+        }).collect::<Vec<_>>();
 
         let info = vk::RenderPassCreateInfo {
             s_type: vk::StructureType::RenderPassCreateInfo,
             p_next: ptr::null(),
             flags: vk::RenderPassCreateFlags::empty(),
-            attachment_count: 0, // TODO
-            p_attachments: ptr::null(), // TODO
-            subpass_count: 1, // TODO
-            p_subpasses: &subpass_desc, // TODO
-            dependency_count: 0, // TODO
-            p_dependencies: ptr::null(), // TODO
+            attachment_count: attachments.len() as u32,
+            p_attachments: attachments.as_ptr(),
+            subpass_count: subpasses.len() as u32,
+            p_subpasses: subpasses.as_ptr(),
+            dependency_count: dependencies.len() as u32,
+            p_dependencies: dependencies.as_ptr(),
         };
 
         let renderpass = unsafe {
@@ -122,6 +171,7 @@ impl core::Factory<R> for Factory {
         let mut info_depth_stencil_states  = Vec::with_capacity(descs.len());
         let mut info_color_blend_states    = Vec::with_capacity(descs.len());
         let mut info_dynamic_states        = Vec::with_capacity(descs.len());
+        let mut color_attachments          = Vec::with_capacity(descs.len());
 
         let dynamic_states = [vk::DynamicState::Viewport, vk::DynamicState::Scissor];
 
@@ -304,14 +354,49 @@ impl core::Factory<R> for Factory {
                 max_depth_bounds: 1.0,
             });
 
+            // Build blend states for color attachments
+            {
+                let mut blend_states = Vec::with_capacity(desc.color_targets.len());
+                for color_target in desc.color_targets.iter() {
+                    let info = if let &Some(ref desc) = color_target { &desc.1 } else { break };
+                    
+                    let mut blend = vk::PipelineColorBlendAttachmentState {
+                        blend_enable: vk::VK_FALSE,
+                        src_color_blend_factor: vk::BlendFactor::Zero,
+                        dst_color_blend_factor: vk::BlendFactor::Zero,
+                        color_blend_op: vk::BlendOp::Add,
+                        src_alpha_blend_factor: vk::BlendFactor::Zero,
+                        dst_alpha_blend_factor: vk::BlendFactor::Zero,
+                        alpha_blend_op: vk::BlendOp::Add,
+                        color_write_mask: vk::ColorComponentFlags::from_flags(info.mask.bits() as u32).unwrap(),
+                    };
+
+                    if let Some(ref b) = info.color {
+                        blend.blend_enable = vk::VK_TRUE;
+                        blend.src_color_blend_factor = state::map_blend_factor(b.source, false);
+                        blend.dst_color_blend_factor = state::map_blend_factor(b.destination, false);
+                        blend.color_blend_op = state::map_blend_op(b.equation);
+                    }
+                    if let Some(ref b) = info.alpha {
+                        blend.blend_enable = vk::VK_TRUE;
+                        blend.src_alpha_blend_factor = state::map_blend_factor(b.source, true);
+                        blend.dst_alpha_blend_factor = state::map_blend_factor(b.destination, true);
+                        blend.alpha_blend_op = state::map_blend_op(b.equation);
+                    }
+
+                    blend_states.push(blend);
+                }
+                color_attachments.push(blend_states);
+            }
+
             info_color_blend_states.push(vk::PipelineColorBlendStateCreateInfo {
                 s_type: vk::StructureType::PipelineColorBlendStateCreateInfo,
                 p_next: ptr::null(),
                 flags: vk::PipelineColorBlendStateCreateFlags::empty(),
                 logic_op_enable: vk::VK_FALSE, // TODO
                 logic_op: vk::LogicOp::Clear,
-                attachment_count: 0, // TODO:
-                p_attachments: ptr::null(), // TODO:
+                attachment_count: color_attachments.last().unwrap().len() as u32,
+                p_attachments: color_attachments.last().unwrap().as_ptr(), // TODO:
                 blend_constants: [0.0; 4], // TODO:
             });
 
@@ -394,16 +479,88 @@ impl core::Factory<R> for Factory {
     }
 
     fn create_framebuffer(&mut self, renderpass: &native::RenderPass,
-        color_attachments: &[native::RenderTargetView], depth_stencil_attachments: &[native::DepthStencilView],
+        color_attachments: &[&native::RenderTargetView], depth_stencil_attachments: &[&native::DepthStencilView],
         width: u32, height: u32, layers: u32) -> native::FrameBuffer
     {
+        let attachments = {
+            let mut views = color_attachments.iter()
+                .map(|attachment| attachment.view)
+                .collect::<Vec<_>>();
+
+            views.extend(depth_stencil_attachments.iter()
+                .map(|attachment| attachment.view)
+                .collect::<Vec<_>>());
+
+            views
+        };
+
+        let info = vk::FramebufferCreateInfo {
+            s_type: vk::StructureType::FramebufferCreateInfo,
+            p_next: ptr::null(),
+            flags: vk::FramebufferCreateFlags::empty(),
+            render_pass: renderpass.inner,
+            attachment_count: attachments.len() as u32,
+            p_attachments: attachments.as_ptr(),
+            width: width,
+            height: height,
+            layers: layers,
+        };
+
+        let framebuffer = unsafe {
+            self.inner.0.create_framebuffer(&info, None)
+                        .expect("error on framebuffer creation")
+        };
+
+        native::FrameBuffer { inner: framebuffer }
+    }
+
+    ///
+    fn create_buffer(&mut self) -> Result<native::Buffer, buffer::CreationError> {
         unimplemented!()
     }
 
-    fn view_image_as_render_target(&mut self, image: &native::Image) -> Result<native::RenderTargetView, f::TargetViewError> {
+    ///
+    fn create_image(&mut self) -> Result<native::Image, image::CreationError> {
+        unimplemented!()
+    }
+
+    fn view_image_as_render_target(&mut self, image: &native::Image, format: format::Format) -> Result<native::RenderTargetView, f::TargetViewError> {
         // TODO
+        let components = vk::ComponentMapping {
+            r: vk::ComponentSwizzle::Identity,
+            g: vk::ComponentSwizzle::Identity,
+            b: vk::ComponentSwizzle::Identity,
+            a: vk::ComponentSwizzle::Identity,
+        };
+
+        // TODO
+        let subresource_range = vk::ImageSubresourceRange {
+            aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT,
+            base_mip_level: 0, 
+            level_count: 1,
+            base_array_layer: 0,
+            layer_count: vk::VK_REMAINING_ARRAY_LAYERS,
+        };
+
+        let info = vk::ImageViewCreateInfo {
+            s_type: vk::StructureType::ImageViewCreateInfo,
+            p_next: ptr::null(),
+            flags: vk::ImageViewCreateFlags::empty(), // TODO
+            image: image.0,
+            view_type: vk::ImageViewType::Type2d, // TODO
+            format: data::map_format(format.0, format.1).unwrap(), // TODO
+            components: components,
+            subresource_range: subresource_range,
+        };
+
+        let view = unsafe {
+            self.inner.0.create_image_view(&info, None)
+                        .expect("Error on image view creation")
+        };
+
         let rtv = native::RenderTargetView {
             image: image.0,
+            view: view,
         };
 
         Ok(rtv)

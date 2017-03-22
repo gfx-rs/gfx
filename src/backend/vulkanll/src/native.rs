@@ -15,7 +15,7 @@
 use core::pso;
 use ash::vk;
 use std::collections::BTreeMap;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
 pub use command::CommandBuffer;
 
@@ -44,7 +44,9 @@ unsafe impl Send for RenderPass {}
 unsafe impl Sync for RenderPass {}
 
 #[derive(Clone, Debug, Hash)]
-pub struct FrameBuffer;
+pub struct FrameBuffer {
+    pub inner: vk::Framebuffer,
+}
 unsafe impl Send for FrameBuffer {}
 unsafe impl Sync for FrameBuffer {}
 
@@ -63,8 +65,30 @@ unsafe impl Send for ComputePipeline {}
 unsafe impl Sync for ComputePipeline {}
 
 pub struct GeneralCommandBuffer(pub CommandBuffer);
+impl Deref for GeneralCommandBuffer {
+    type Target = CommandBuffer;
+    fn deref(&self) -> &CommandBuffer {
+        &self.0
+    }
+}
+impl DerefMut for GeneralCommandBuffer {
+    fn deref_mut(&mut self) -> &mut CommandBuffer {
+        &mut self.0
+    }
+}
 
 pub struct GraphicsCommandBuffer(pub CommandBuffer);
+impl Deref for GraphicsCommandBuffer {
+    type Target = CommandBuffer;
+    fn deref(&self) -> &CommandBuffer {
+        &self.0
+    }
+}
+impl DerefMut for GraphicsCommandBuffer {
+    fn deref_mut(&mut self) -> &mut CommandBuffer {
+        &mut self.0
+    }
+}
 
 pub struct ComputeCommandBuffer(pub CommandBuffer);
 
@@ -81,7 +105,11 @@ pub struct Image(pub vk::Image);
 #[derive(Clone, Debug, Hash)]
 pub struct RenderTargetView {
     pub image: vk::Image,
+    pub view: vk::ImageView,
 }
 
 #[derive(Clone, Debug, Hash)]
-pub struct DepthStencilView;
+pub struct DepthStencilView {
+    pub image: vk::Image,
+    pub view: vk::ImageView,
+}

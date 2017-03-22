@@ -37,30 +37,60 @@ unsafe impl<T: Pod, U: Pod> Pod for (T, U) {}
 
 bitflags!(
     // TODO
-    pub flags ResourceState: u16 {
+    pub flags ImageAccess: u16 {
+        const RENDER_TARGET_CLEAR = 0x20,
+        const RESOLVE_SRC         = 0x100,
+        const RESOLVE_DST         = 0x200,
+        const COLOR_ATTACHMENT_READ = 0x1,
+        const COLOR_ATTACHMENT_WRITE = 0x2,
+    }
+);
+
+bitflags!(
+    pub flags BufferState: u16 {
         const INDEX_BUFFER_READ      = 0x1,
         const VERTEX_BUFFER_READ     = 0x2,
         const CONSTANT_BUFFER_READ   = 0x4,
         const INDIRECT_COMMAND_READ  = 0x8,
-        const PRESENT     = 0x10,
-        const RENDER_TARGET_CLEAR    = 0x20,
-        const RESOLVE_SRC = 0x100,
-        const RESOLVE_DST = 0x200,
     }
 );
+
+#[derive(Copy, Clone, Debug)]
+pub enum ImageLayout {
+    General,
+    ColorAttachmentOptimal,
+    DepthStencilAttachmentOptimal,
+    DepthStencilReadOnlyOptimal,
+    ShaderReadOnlyOptimal,
+    TransferSrcOptimal,
+    TransferDstOptimal,
+    Undefined,
+    Preinitialized,
+    Present,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum ImageStateSrc {
+    Present(ImageAccess), // exclusive state
+    State(ImageAccess, ImageLayout),
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum ImageStateDst {
+    Present,
+    State(ImageAccess, ImageLayout),
+}
 
 pub struct ImageSubResource {
 
 }
 
-pub struct MemoryBarrier {
-    pub access_src: ResourceState,
-    pub access_dst: ResourceState,
-}
+// TODO: probably remove this
+pub struct MemoryBarrier;
 
 pub struct BufferBarrier<'a, R: Resources> {
-    pub state_src: ResourceState,
-    pub state_dst: ResourceState,
+    pub state_src: BufferState,
+    pub state_dst: BufferState,
 
     pub buffer: &'a R::Buffer,
     pub offset: usize,
@@ -68,8 +98,8 @@ pub struct BufferBarrier<'a, R: Resources> {
 }
 
 pub struct ImageBarrier<'a, R: Resources> {
-    pub state_src: ResourceState,
-    pub state_dst: ResourceState,
+    pub state_src: ImageStateSrc,
+    pub state_dst: ImageStateDst,
 
     pub image: &'a R::Image,
 }

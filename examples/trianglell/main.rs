@@ -21,13 +21,14 @@ extern crate gfx_device_vulkanll as back;
 
 extern crate winit;
 
-use gfx_corell::{command, format, pso, state, target, 
+use gfx_corell::{command, format, pass, pso, state, target, 
     Device, CommandPool, GraphicsCommandPool, GraphicsCommandBuffer, ProcessingCommandBuffer, PrimaryCommandBuffer,
     Primitive, Instance, Adapter, Surface, SwapChain, QueueFamily, Factory, SubPass};
+use gfx_corell::command::{RenderPassEncoder, RenderPassInlineEncoder};
 use gfx_corell::format::Formatted;
 use gfx_corell::memory::{self, ImageBarrier};
 
-pub type ColorFormat = gfx_corell::format::Rgba8;
+pub type ColorFormat = gfx_corell::format::Srgba8;
 
 struct Vertex {
     a_Pos: [f32; 2],
@@ -87,7 +88,33 @@ fn main() {
     };
 
     let pipeline_layout = factory.create_pipeline_layout();
-    let render_pass = factory.create_renderpass();
+
+    let render_pass = {
+        let attachment = pass::Attachment {
+            format: ColorFormat::get_format(),
+            load_op: pass::AttachmentLoadOp::Clear,
+            store_op: pass::AttachmentStoreOp::Store,
+            stencil_load_op: pass::AttachmentLoadOp::DontCare,
+            stencil_store_op: pass::AttachmentStoreOp::DontCare,
+            src_layout: memory::ImageLayout::Undefined, // TODO: maybe Option<_> here?
+            dst_layout: memory::ImageLayout::Present,
+        };
+
+        let subpass = pass::SubpassDesc {
+            color_attachments: &[(0, memory::ImageLayout::ColorAttachmentOptimal)],
+        };
+
+        let dependency = pass::SubpassDependency {
+            src_pass: pass::SubpassRef::External,
+            dst_pass: pass::SubpassRef::Pass(0),
+            src_stage: pso::COLOR_ATTACHMENT_OUTPUT,
+            dst_stage: pso::COLOR_ATTACHMENT_OUTPUT,
+            src_access: memory::ImageAccess::empty(),
+            dst_access: memory::COLOR_ATTACHMENT_READ | memory::COLOR_ATTACHMENT_WRITE,
+        };
+
+        factory.create_renderpass(&[attachment], &[subpass], &[dependency])
+    };
 
     //
     let mut pipeline_desc = pso::GraphicsPipelineDesc::new(
@@ -120,7 +147,11 @@ fn main() {
     let mut graphics_pool = back::GraphicsCommandPool::from_queue(&mut general_queues[0], 16);
 
     let frame_rtvs = swap_chain.get_images().iter().map(|image| {
-        factory.view_image_as_render_target(&image).unwrap()
+        factory.view_image_as_render_target(&image, ColorFormat::get_format()).unwrap()
+    }).collect::<Vec<_>>();
+
+    let framebuffers = frame_rtvs.iter().map(|frame_rtv| {
+        factory.create_framebuffer(&render_pass, &[&frame_rtv], &[], 1024, 768, 1)
     }).collect::<Vec<_>>();
 
     let viewport = target::Rect {
@@ -146,7 +177,6 @@ fn main() {
 
         let frame = swap_chain.acquire_frame();
 
-        // TODO: rendering
         let submit = {
             let mut cmd_buffer = graphics_pool.acquire_command_buffer();
 
@@ -155,30 +185,17 @@ fn main() {
             cmd_buffer.bind_graphics_pipeline(&pipelines[0].as_ref().unwrap());
 
             {
-                let backbuffer_barrier = ImageBarrier {
-                    state_src: memory::PRESENT,
-                    state_dst: memory::RENDER_TARGET_CLEAR,
+                let mut encoder = back::RenderPassInlineEncoder::begin(
+                    &mut cmd_buffer,
+                    &render_pass,
+                    &framebuffers[frame.id()],
+                    target::Rect { x: 0, y: 0, w: 1024, h: 768 },
+                    &[command::ClearValue::Color(command::ClearColor::Float([0.2, 0.2, 0.2, 1.0]))]);
 
-                    image: &swap_chain.get_images()[frame.id()],
-                };
-
-                cmd_buffer.pipeline_barrier(&[], &[], &[backbuffer_barrier]);
+                encoder.draw(0, 3, None);
             }
-            
-            cmd_buffer.clear_color(&frame_rtvs[frame.id()], command::ClearColor::Float([0.2, 0.2, 0.2, 1.0]));
-            // TODO: correct transition from RTV_CLEAR -> RTV_RENDER(?)
-            // cmd_buffer.draw(0, 3, None);
 
-            {
-                let backbuffer_barrier = ImageBarrier {
-                    state_src: memory::RENDER_TARGET_CLEAR,
-                    state_dst: memory::PRESENT,
-
-                    image: &swap_chain.get_images()[frame.id()],
-                };
-
-                cmd_buffer.pipeline_barrier(&[], &[], &[backbuffer_barrier]);
-            }
+            // TODO: should transition to (_, Present) -> Present (for d3d12)
             
             cmd_buffer.finish()
         };

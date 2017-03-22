@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use bitflags;
 use std::error::Error;
 use std::fmt;
 
@@ -198,3 +199,22 @@ impl<R: Resources> VertexBufferSet<R> {
         VertexBufferSet(Vec::new())
     }
 }
+
+bitflags!(
+    pub flags PipelineStage: u32 {
+        const TOP_OF_PIPE = 0x1,
+        const DRAW_INDIRECT = 0x2,
+        const VERTEX_INPUT = 0x4,
+        const VERTEX_SHADER = 0x8,
+        const TESSELLATION_CONTROL_SHADER = 0x10,
+        const TESSELLATION_EVALUATION_SHADER = 0x20,
+        const GEOMETRY_SHADER = 0x40,
+        const FRAGMENT_SHADER = 0x80,
+        const EARLY_FRAGMENT_TESTS = 0x100,
+        const LATE_FRAGMENT_TESTS = 0x200,
+        const COLOR_ATTACHMENT_OUTPUT = 0x400,
+        const COMPUTE_SHADER = 0x800,
+        const TRANSFER = 0x1000,
+        const BOTTOM_OF_PIPE = 0x2000,
+    }
+);

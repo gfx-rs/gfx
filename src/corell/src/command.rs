@@ -35,9 +35,9 @@ pub struct ClearDepthStencil {
     pub stencil: u32,
 }
 
-pub struct ClearValue {
-    pub color: ClearColor,
-    pub depth_stencil: ClearDepthStencil,
+pub enum ClearValue {
+    Color(ClearColor),
+    DepthStencil(ClearDepthStencil),
 }
 
 /// Region of two buffers for copying.
@@ -113,14 +113,14 @@ pub trait GraphicsCommandBuffer<R: Resources> : PrimaryCommandBuffer<R> {
     fn bind_graphics_pipeline(&mut self, &R::GraphicsPipeline);
 }
 
-pub trait RenderPassEncoder<'cb, 'rp, 'fb, C, R>
-    where C: GraphicsCommandBuffer<R> + 'cb,
+pub trait RenderPassEncoder<'cb, 'rp, 'fb, 'enc: 'cb, C, R>
+    where C: GraphicsCommandBuffer<R> + 'enc,
           R: Resources
 {
-    type SecondaryEncoder: RenderPassSecondaryEncoder<'cb, 'rp, 'fb, C, R>;
-    type InlineEncoder: RenderPassInlineEncoder<'cb, 'rp, 'fb, C, R>;
+    type SecondaryEncoder: RenderPassSecondaryEncoder<'cb, 'rp, 'fb, 'enc, C, R>;
+    type InlineEncoder: RenderPassInlineEncoder<'cb, 'rp, 'fb, 'enc, C, R>;
 
-    fn begin(command_buffer: &'cb mut C,
+    fn begin(command_buffer: &'cb mut Encoder<'enc, C>,
              render_pass: &'rp R::RenderPass,
              framebuffer: &'fb R::FrameBuffer,
              render_area: target::Rect,
@@ -129,15 +129,15 @@ pub trait RenderPassEncoder<'cb, 'rp, 'fb, C, R>
     fn next_subpass_inline(self) -> Self::InlineEncoder;
 }
 
-pub trait RenderPassSecondaryEncoder<'cb, 'rp, 'fb, C, R> : RenderPassEncoder<'cb, 'rp, 'fb, C, R>
-    where C: GraphicsCommandBuffer<R> + 'cb,
+pub trait RenderPassSecondaryEncoder<'cb, 'rp, 'fb, 'enc: 'cb, C, R> : RenderPassEncoder<'cb, 'rp, 'fb, 'enc, C, R>
+    where C: GraphicsCommandBuffer<R> + 'enc,
           R: Resources
 {
     // TODO: exectue supass command buffer
 }
 
-pub trait RenderPassInlineEncoder<'cb, 'rp, 'fb, C, R> : RenderPassEncoder<'cb, 'rp, 'fb, C, R>
-    where C: GraphicsCommandBuffer<R> + 'cb,
+pub trait RenderPassInlineEncoder<'cb, 'rp, 'fb, 'enc: 'cb, C, R> : RenderPassEncoder<'cb, 'rp, 'fb, 'enc, C, R>
+    where C: GraphicsCommandBuffer<R> + 'enc,
           R: Resources
 {
     fn clear_attachment(&mut self);

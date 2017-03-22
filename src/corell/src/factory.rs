@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use {pso, shade};
+use {buffer, format, image, pass, pso, shade};
 use {Resources, SubPass};
 
 /// Error creating either a ShaderResourceView, or UnorderedAccessView.
@@ -34,7 +34,7 @@ pub trait Factory<R: Resources> {
     // fn allocate_memory(&mut self);
 
     ///
-    fn create_renderpass(&mut self) -> R::RenderPass;
+    fn create_renderpass(&mut self, attachments: &[pass::Attachment], subpasses: &[pass::SubpassDesc], dependencies: &[pass::SubpassDependency]) -> R::RenderPass;
 
     ///
     fn create_pipeline_layout(&mut self) -> R::PipelineLayout;
@@ -48,10 +48,16 @@ pub trait Factory<R: Resources> {
 
     ///
     fn create_framebuffer(&mut self, renderpass: &R::RenderPass,
-        color_attachments: &[R::RenderTargetView], depth_stencil_attachments: &[R::DepthStencilView],
+        color_attachments: &[&R::RenderTargetView], depth_stencil_attachments: &[&R::DepthStencilView],
         width: u32, height: u32, layers: u32
     ) -> R::FrameBuffer;
 
     ///
-    fn view_image_as_render_target(&mut self, image: &R::Image) -> Result<R::RenderTargetView, TargetViewError>;
+    fn create_buffer(&mut self) -> Result<R::Buffer, buffer::CreationError>;
+
+    ///
+    fn create_image(&mut self) -> Result<R::Image, image::CreationError>;
+
+    ///
+    fn view_image_as_render_target(&mut self, image: &R::Image, format: format::Format) -> Result<R::RenderTargetView, TargetViewError>;
 }

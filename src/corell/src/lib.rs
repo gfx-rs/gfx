@@ -31,10 +31,13 @@ pub use pool::{GeneralCommandPool, GraphicsCommandPool};
 pub use command::{CommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer,
     SubpassCommandBuffer, ProcessingCommandBuffer, PrimaryCommandBuffer, SecondaryCommandBuffer};
 
+pub mod buffer;
 pub mod command;
 pub mod factory;
 pub mod format;
+pub mod image;
 pub mod memory;
+pub mod pass;
 pub mod pool;
 pub mod pso;
 pub mod queue;

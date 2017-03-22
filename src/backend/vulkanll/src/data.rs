@@ -15,6 +15,9 @@
 use ash::vk;
 use core::command::ClearColor;
 use core::format::{SurfaceType, ChannelType};
+use core::memory::{self, ImageAccess, ImageLayout};
+use core::pass::{AttachmentLoadOp, AttachmentStoreOp, AttachmentLayout};
+use core::pso::{self, PipelineStage};
 
 pub fn map_format(surface: SurfaceType, chan: ChannelType) -> Option<vk::Format> {
     use core::format::SurfaceType::*;
@@ -156,4 +159,105 @@ pub fn map_clear_color(value: ClearColor) -> vk::ClearColorValue {
         ClearColor::Int(v)   => vk::ClearColorValue::new_int32(v),
         ClearColor::Uint(v)  => vk::ClearColorValue::new_uint32(v),
     }
+}
+
+pub fn map_attachment_load_op(op: AttachmentLoadOp) -> vk::AttachmentLoadOp {
+    match op {
+        AttachmentLoadOp::Load => vk::AttachmentLoadOp::Load,
+        AttachmentLoadOp::Clear => vk::AttachmentLoadOp::Clear,
+        AttachmentLoadOp::DontCare => vk::AttachmentLoadOp::DontCare,
+    }
+}
+
+pub fn map_attachment_store_op(op: AttachmentStoreOp) -> vk::AttachmentStoreOp {
+    match op {
+        AttachmentStoreOp::Store => vk::AttachmentStoreOp::Store,
+        AttachmentStoreOp::DontCare => vk::AttachmentStoreOp::DontCare,
+    }
+}
+
+pub fn map_image_layout(layout: ImageLayout) -> vk::ImageLayout {
+    match layout {
+        ImageLayout::General => vk::ImageLayout::General,
+        ImageLayout::ColorAttachmentOptimal => vk::ImageLayout::ColorAttachmentOptimal,
+        ImageLayout::DepthStencilAttachmentOptimal => vk::ImageLayout::DepthStencilAttachmentOptimal,
+        ImageLayout::DepthStencilReadOnlyOptimal => vk::ImageLayout::DepthStencilReadOnlyOptimal,
+        ImageLayout::ShaderReadOnlyOptimal => vk::ImageLayout::ShaderReadOnlyOptimal,
+        ImageLayout::TransferSrcOptimal => vk::ImageLayout::TransferSrcOptimal,
+        ImageLayout::TransferDstOptimal => vk::ImageLayout::TransferDstOptimal,
+        ImageLayout::Undefined => vk::ImageLayout::Undefined,
+        ImageLayout::Preinitialized => vk::ImageLayout::Preinitialized,
+        ImageLayout::Present => vk::ImageLayout::PresentSrcKhr,
+    }
+}
+
+pub fn map_image_access(access: ImageAccess) -> vk::AccessFlags {
+    let mut flags = vk::AccessFlags::empty();
+
+    if access.contains(memory::RENDER_TARGET_CLEAR) {
+        unimplemented!()
+    }
+    if access.contains(memory::RESOLVE_SRC) {
+        unimplemented!()
+    }
+    if access.contains(memory::RESOLVE_DST) {
+        unimplemented!()
+    }
+    if access.contains(memory::COLOR_ATTACHMENT_READ) {
+        flags |= vk::ACCESS_COLOR_ATTACHMENT_READ_BIT;
+    }
+    if access.contains(memory::COLOR_ATTACHMENT_WRITE) {
+        flags |= vk::ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    }
+
+    flags
+}
+
+pub fn map_pipeline_stage(stage: PipelineStage) -> vk::PipelineStageFlags {
+    let mut flags = vk::PipelineStageFlags::empty();
+
+    if stage.contains(pso::TOP_OF_PIPE) {
+        flags |= vk::PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+    }
+    if stage.contains(pso::DRAW_INDIRECT) {
+        flags |= vk::PIPELINE_STAGE_DRAW_INDIRECT_BIT;
+    }
+    if stage.contains(pso::VERTEX_INPUT) {
+        flags |= vk::PIPELINE_STAGE_VERTEX_INPUT_BIT;
+    }
+    if stage.contains(pso::VERTEX_SHADER) {
+        flags |= vk::PIPELINE_STAGE_VERTEX_SHADER_BIT;
+    }
+    if stage.contains(pso::TESSELLATION_CONTROL_SHADER) {
+        flags |= vk::PIPELINE_STAGE_TESSELLATION_CONTROL_SHADER_BIT;
+    }
+    if stage.contains(pso::TESSELLATION_EVALUATION_SHADER) {
+        flags |= vk::PIPELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT;
+    }
+    if stage.contains(pso::GEOMETRY_SHADER) {
+        flags |= vk::PIPELINE_STAGE_GEOMETRY_SHADER_BIT;
+    }
+    if stage.contains(pso::FRAGMENT_SHADER) {
+        flags |= vk::PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    }
+    if stage.contains(pso::EARLY_FRAGMENT_TESTS) {
+        flags |= vk::PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    }
+    if stage.contains(pso::LATE_FRAGMENT_TESTS) {
+        flags |= vk::PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+    }
+    if stage.contains(pso::COLOR_ATTACHMENT_OUTPUT) {
+        flags |= vk::PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    }
+    if stage.contains(pso::COMPUTE_SHADER) {
+        flags |= vk::PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    }
+    if stage.contains(pso::TRANSFER) {
+        flags |= vk::PIPELINE_STAGE_TRANSFER_BIT;
+    }
+    if stage.contains(pso::BOTTOM_OF_PIPE) {
+        flags |= vk::PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    }
+
+    flags
 }
