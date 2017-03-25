@@ -230,16 +230,16 @@ pub fn map_pipeline_stage(stage: PipelineStage) -> vk::PipelineStageFlags {
     if stage.contains(pso::VERTEX_SHADER) {
         flags |= vk::PIPELINE_STAGE_VERTEX_SHADER_BIT;
     }
-    if stage.contains(pso::TESSELLATION_CONTROL_SHADER) {
+    if stage.contains(pso::HULL_SHADER) {
         flags |= vk::PIPELINE_STAGE_TESSELLATION_CONTROL_SHADER_BIT;
     }
-    if stage.contains(pso::TESSELLATION_EVALUATION_SHADER) {
+    if stage.contains(pso::DOMAIN_SHADER) {
         flags |= vk::PIPELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT;
     }
     if stage.contains(pso::GEOMETRY_SHADER) {
         flags |= vk::PIPELINE_STAGE_GEOMETRY_SHADER_BIT;
     }
-    if stage.contains(pso::FRAGMENT_SHADER) {
+    if stage.contains(pso::PIXEL_SHADER) {
         flags |= vk::PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
     }
     if stage.contains(pso::EARLY_FRAGMENT_TESTS) {
