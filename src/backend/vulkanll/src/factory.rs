@@ -18,11 +18,17 @@ use std::{mem, ptr};
 use std::sync::Arc;
 use std::collections::BTreeMap;
 
-use core::{self, buffer, format, factory as f, image, pass, shade, state as s};
-use core::SubPass;
+use core::{self, buffer, format, factory as f, image, memory, pass, shade, state as s};
+use core::{HeapType, SubPass};
 use core::pso::{self, EntryPoint};
 use {data, native, state};
 use {Factory, Resources as R};
+
+#[derive(Debug)]
+pub struct UnboundBuffer(native::Buffer);
+
+#[derive(Debug)]
+pub struct UnboundImage(native::Image);
 
 impl Factory {
     pub fn create_shader_library(&mut self, shaders: &[(EntryPoint, &[u8])]) -> Result<native::ShaderLib, shade::CreateShaderError> {
@@ -51,6 +57,22 @@ impl Factory {
 }
 
 impl core::Factory<R> for Factory {
+    fn create_heap(&mut self, heap_type: &HeapType, size: u64) -> native::Heap {
+        let info = vk::MemoryAllocateInfo {
+            s_type: vk::StructureType::MemoryAllocateInfo,
+            p_next: ptr::null(),
+            allocation_size: size,
+            memory_type_index: heap_type.id as u32,
+        };
+
+        let memory = unsafe {
+            self.inner.0.allocate_memory(&info, None)
+                        .expect("Error on heap creation") // TODO: error handling
+        };
+
+        native::Heap(memory)
+    }
+
     fn create_renderpass(&mut self, attachments: &[pass::Attachment],
         subpasses: &[pass::SubpassDesc], dependencies: &[pass::SubpassDependency]) -> native::RenderPass
     {
@@ -515,12 +537,44 @@ impl core::Factory<R> for Factory {
     }
 
     ///
-    fn create_buffer(&mut self) -> Result<native::Buffer, buffer::CreationError> {
-        unimplemented!()
+    fn create_buffer(&mut self, size: u64, usage: buffer::Usage) -> Result<UnboundBuffer, buffer::CreationError> {
+        let info = vk::BufferCreateInfo {
+            s_type: vk::StructureType::BufferCreateInfo,
+            p_next: ptr::null(),
+            flags: vk::BufferCreateFlags::empty(), // TODO:
+            size: size,
+            usage: data::map_buffer_usage(usage),
+            sharing_mode: vk::SharingMode::Exclusive, // TODO:
+            queue_family_index_count: 0,
+            p_queue_family_indices: ptr::null(),
+        };
+
+        let buffer = unsafe {
+            self.inner.0.create_buffer(&info, None)
+                        .expect("Error on buffer creation") // TODO: error handling
+        };
+        
+        Ok(UnboundBuffer(native::Buffer(buffer)))
+    }
+
+    fn get_buffer_requirements(&mut self, buffer: &UnboundBuffer) -> memory::MemoryRequirements {
+        let req = self.inner.0.get_buffer_memory_requirements((buffer.0).0);
+
+        memory::MemoryRequirements {
+            size: req.size,
+            alignment: req.alignment,
+        }
+    }
+
+    fn bind_buffer_memory(&mut self, heap: &native::Heap, offset: u64, buffer: UnboundBuffer) -> Result<native::Buffer, buffer::CreationError> {
+        // TODO: error handling
+        unsafe { self.inner.0.bind_buffer_memory((buffer.0).0, heap.0, offset); }
+
+        Ok(buffer.0)
     }
 
     ///
-    fn create_image(&mut self) -> Result<native::Image, image::CreationError> {
+    fn create_image(&mut self, heap: &native::Heap, offset: u64) -> Result<native::Image, image::CreationError> {
         unimplemented!()
     }
 

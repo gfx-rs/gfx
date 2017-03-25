@@ -19,7 +19,8 @@ use std::sync::Arc;
 use std::marker::PhantomData;
 use std::ops::DerefMut;
 
-use core::{self, command, memory, pso, state, target, IndexType, VertexCount, VertexOffset};
+use core::buffer::IndexBufferView;
+use core::{self, command, memory, pso, state, target, VertexCount, VertexOffset};
 use data;
 use native::{self, GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer, SubpassCommandBuffer};
 use {DeviceInner, Resources as R};
@@ -192,12 +193,30 @@ impl CommandBuffer {
         unimplemented!()
     }
 
-    fn bind_index_buffer(&mut self, ib: &native::Buffer, index_type: IndexType) {
-        unimplemented!()
+    fn bind_index_buffer(&mut self, ibv: IndexBufferView<R>) {
+        unsafe {
+            self.device.0.cmd_bind_index_buffer(
+                self.inner,    // commandBuffer
+                ibv.buffer.0,  // buffer
+                ibv.offset,    // offset
+                data::map_index_type(ibv.index_type), // indexType
+            );
+        }
     }
 
-    fn bind_vertex_buffers(&mut self, _: pso::VertexBufferSet<R>) {
-        unimplemented!()
+    fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<R>) {
+        let buffers = vbs.0.iter().map(|&(ref buffer, _)| buffer.0).collect::<Vec<_>>();
+        let offsets = vbs.0.iter().map(|&(_, offset)| offset as u64).collect::<Vec<_>>();
+
+        unsafe {
+            self.device.0.fp_v1_0().cmd_bind_vertex_buffers(
+                self.inner,
+                0,
+                buffers.len() as u32,
+                buffers.as_ptr(),
+                offsets.as_ptr(),
+            );
+        }
     }
 
     fn set_viewports(&mut self, viewports: &[target::Rect]) {
@@ -360,8 +379,8 @@ macro_rules! impl_graphics_cmd_buffer {
                 self.0.resolve_image()
             }
 
-            fn bind_index_buffer(&mut self, buffer: &native::Buffer, index_type: IndexType) {
-                self.0.bind_index_buffer(buffer, index_type)
+            fn bind_index_buffer(&mut self, ibv: IndexBufferView<R>) {
+                self.0.bind_index_buffer(ibv)
             }
 
             fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<R>) {
@@ -524,8 +543,8 @@ impl<'cb, 'rp, 'fb, 'enc, C> command::RenderPassInlineEncoder<'cb, 'rp, 'fb, 'en
 
     }
 
-    fn bind_index_buffer(&mut self, ib: &native::Buffer, index_type: IndexType) {
-
+    fn bind_index_buffer(&mut self, ibv: IndexBufferView<R>) {
+        self.command_buffer.bind_index_buffer(ibv)
     }
 
     fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<R>) {

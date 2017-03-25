@@ -61,6 +61,7 @@ macro_rules! impl_pool {
             }
 
             fn reset(&mut self) {
+                self.next_buffer = 0;
                 unsafe {
                     self.device.0.fp_v1_0().reset_command_pool(
                         self.device.0.handle(),

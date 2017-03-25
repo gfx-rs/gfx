@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use {buffer, format, image, pass, pso, shade};
-use {Resources, SubPass};
+use {buffer, format, image, memory, pass, pso, shade};
+use {HeapType, Resources, SubPass};
 
 /// Error creating either a ShaderResourceView, or UnorderedAccessView.
 #[derive(Clone, PartialEq, Debug)]
@@ -31,7 +31,7 @@ pub enum TargetViewError { }
 #[allow(missing_docs)]
 pub trait Factory<R: Resources> {
     /// 
-    // fn allocate_memory(&mut self);
+    fn create_heap(&mut self, heap_type: &HeapType, size: u64) -> R::Heap;
 
     ///
     fn create_renderpass(&mut self, attachments: &[pass::Attachment], subpasses: &[pass::SubpassDesc], dependencies: &[pass::SubpassDependency]) -> R::RenderPass;
@@ -53,10 +53,29 @@ pub trait Factory<R: Resources> {
     ) -> R::FrameBuffer;
 
     ///
-    fn create_buffer(&mut self) -> Result<R::Buffer, buffer::CreationError>;
+
+    // d3d12
+    // HRESULT CreatePlacedResource(
+    //  [in]                  ID3D12Heap            *pHeap,
+    //                        UINT64                HeapOffset,
+    //  [in]            const D3D12_RESOURCE_DESC   *pDesc,
+    //                        D3D12_RESOURCE_STATES InitialState,
+    //  [in, optional]  const D3D12_CLEAR_VALUE     *pOptimizedClearValue,
+    //                        REFIID                riid,
+    //  [out, optional]       void                  **ppvResource
+    //);
 
     ///
-    fn create_image(&mut self) -> Result<R::Image, image::CreationError>;
+    fn create_buffer(&mut self, size: u64, usage: buffer::Usage) -> Result<R::UnboundBuffer, buffer::CreationError>;
+
+    ///
+    fn get_buffer_requirements(&mut self, buffer: &R::UnboundBuffer) -> memory::MemoryRequirements;
+
+    ///
+    fn bind_buffer_memory(&mut self, heap: &R::Heap, offset: u64, buffer: R::UnboundBuffer) -> Result<R::Buffer, buffer::CreationError>;
+
+    ///
+    fn create_image(&mut self, heap: &R::Heap, offset: u64) -> Result<R::Image, image::CreationError>;
 
     ///
     fn view_image_as_render_target(&mut self, image: &R::Image, format: format::Format) -> Result<R::RenderTargetView, TargetViewError>;

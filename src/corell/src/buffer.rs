@@ -15,6 +15,8 @@
 use std::error::Error;
 use std::fmt;
 
+use {IndexType, Resources};
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum CreationError { }
 
@@ -28,4 +30,21 @@ impl Error for CreationError {
     fn description(&self) -> &str {
         "Could not create buffer on device."
     }
+}
+
+bitflags!(
+    pub flags Usage: u16 {
+        const TRANSFER_SRC  = 0x1,
+        const TRANSFER_DST = 0x2,
+        const CONSTANT    = 0x4,
+        const INDEX = 0x8,
+        const INDIRECT = 0x10,
+        const VERTEX = 0x20,
+    }
+);
+
+pub struct IndexBufferView<'a, R: Resources> {
+    pub buffer: &'a R::Buffer,
+    pub offset: u64,
+    pub index_type: IndexType,
 }

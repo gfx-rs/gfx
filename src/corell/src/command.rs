@@ -16,7 +16,8 @@
 
 use std::ops::{Deref, DerefMut};
 use {memory, state, pso, target};
-use {IndexType, InstanceCount, VertexCount, VertexOffset, Resources};
+use buffer::IndexBufferView;
+use {InstanceCount, VertexCount, VertexOffset, Resources};
 
 /// A universal clear color supporting integet formats
 /// as well as the standard floating-point.
@@ -103,7 +104,7 @@ pub trait GraphicsCommandBuffer<R: Resources> : PrimaryCommandBuffer<R> {
     // TODO: investigate how `blit_image` can be emulated on d3d12 e.g compute shader. (useful for mipmap generation)
     fn resolve_image(&mut self);
 
-    fn bind_index_buffer(&mut self, &R::Buffer, IndexType);
+    fn bind_index_buffer(&mut self, IndexBufferView<R>);
     fn bind_vertex_buffers(&mut self, pso::VertexBufferSet<R>);
 
     fn set_viewports(&mut self, &[target::Rect]);
@@ -146,7 +147,7 @@ pub trait RenderPassInlineEncoder<'cb, 'rp, 'fb, 'enc: 'cb, C, R> : RenderPassEn
     fn draw_indirect(&mut self);
     fn draw_indexed_indirect(&mut self);
 
-    fn bind_index_buffer(&mut self, &R::Buffer, IndexType);
+    fn bind_index_buffer<'a>(&mut self, IndexBufferView<R>);
     fn bind_vertex_buffers(&mut self, pso::VertexBufferSet<R>);
 
     fn set_viewports(&mut self, &[target::Rect]);
@@ -165,7 +166,7 @@ pub trait SubpassCommandBuffer<R: Resources> : SecondaryCommandBuffer<R> {
     fn draw_indirect(&mut self);
     fn draw_indexed_indirect(&mut self);
 
-    fn bind_index_buffer(&mut self, &R::Buffer, IndexType);
+    fn bind_index_buffer(&mut self, IndexBufferView<R>);
     fn bind_vertex_buffers(&mut self, pso::VertexBufferSet<R>);
 
     fn set_viewports(&mut self, &[target::Rect]);

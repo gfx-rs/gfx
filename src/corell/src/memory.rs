@@ -14,7 +14,6 @@
 
 //! Memory stuff
 
-use bitflags;
 use {Resources};
 
 /// A trait for plain-old-data types.
@@ -34,6 +33,19 @@ impl_pod! { ar =
 }
 
 unsafe impl<T: Pod, U: Pod> Pod for (T, U) {}
+
+bitflags!(
+    pub flags HeapProperties: u16 {
+        const DEVICE_LOCAL   = 0x1,
+        const WRITE_BACK     = 0x2,
+        const WRITE_COMBINED = 0x4,
+        const HOST_VISIBLE   = 0x8,
+        const LAZILY_ALLOCATED = 0x10,
+
+        const UPLOAD_HEAP = HOST_VISIBLE.bits | WRITE_COMBINED.bits,
+        const READBACK_HEAP = HOST_VISIBLE.bits | WRITE_BACK.bits,
+    }
+);
 
 bitflags!(
     // TODO
@@ -88,6 +100,7 @@ pub struct ImageSubResource {
 // TODO: probably remove this
 pub struct MemoryBarrier;
 
+#[derive(Clone, Copy, Debug)]
 pub struct BufferBarrier<'a, R: Resources> {
     pub state_src: BufferState,
     pub state_dst: BufferState,
@@ -97,9 +110,16 @@ pub struct BufferBarrier<'a, R: Resources> {
     pub size: usize,
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct ImageBarrier<'a, R: Resources> {
     pub state_src: ImageStateSrc,
     pub state_dst: ImageStateDst,
 
     pub image: &'a R::Image,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct MemoryRequirements {
+    pub size: u64,
+    pub alignment: u64,
 }

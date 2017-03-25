@@ -21,7 +21,7 @@ extern crate gfx_device_vulkanll as back;
 
 extern crate winit;
 
-use gfx_corell::{command, format, pass, pso, state, target, 
+use gfx_corell::{buffer, command, format, pass, pso, state, target, 
     Device, CommandPool, GraphicsCommandPool, GraphicsCommandBuffer, ProcessingCommandBuffer, PrimaryCommandBuffer,
     Primitive, Instance, Adapter, Surface, SwapChain, QueueFamily, Factory, SubPass};
 use gfx_corell::command::{RenderPassEncoder, RenderPassInlineEncoder};
@@ -55,10 +55,11 @@ fn main() {
         println!("{:?}", device.get_info());
     }
 
-    // build a new device and associated command queues
-    let Device { mut factory, mut general_queues, .. } = physical_devices[0].open(queue_descs);
+    // Build a new device and associated command queues
+    let Device { mut factory, mut general_queues, heap_types, .. } = physical_devices[0].open(queue_descs);
     let mut swap_chain = surface.build_swapchain::<ColorFormat>(&general_queues[0]);
 
+    // Setup renderpass and pipeline
     #[cfg(all(target_os = "windows", not(feature = "vulkan")))]
     let shader_lib = factory.create_shader_library(&[
             ("vs_main", include_bytes!("data/vs_main.o")),
@@ -144,8 +145,8 @@ fn main() {
 
     println!("{:?}", pipelines);
 
-    let mut graphics_pool = back::GraphicsCommandPool::from_queue(&mut general_queues[0], 16);
 
+    // Framebuffer and render target creation
     let frame_rtvs = swap_chain.get_images().iter().map(|image| {
         factory.view_image_as_render_target(&image, ColorFormat::get_format()).unwrap()
     }).collect::<Vec<_>>();
@@ -154,6 +155,25 @@ fn main() {
         factory.create_framebuffer(&render_pass, &[&frame_rtv], &[], 1024, 768, 1)
     }).collect::<Vec<_>>();
 
+
+    // Buffer allocations
+    println!("Memory heaps: {:?}", heap_types);
+
+    let heap = {
+        let upload_heap = heap_types.iter().find(|&&heap_type| heap_type.properties.contains(memory::UPLOAD_HEAP)).unwrap();
+        factory.create_heap(&heap_types[0], 1024)
+    };
+
+    let vertex_buffer = {
+        let buffer = factory.create_buffer(3 * std::mem::size_of::<Vertex>() as u64, buffer::VERTEX).unwrap();
+        println!("{:?}", buffer);
+        let buffer_req = factory.get_buffer_requirements(&buffer);
+        println!("buffer requirements: {:?}", buffer_req);
+
+        factory.bind_buffer_memory(&heap, 0, buffer).unwrap()
+    };
+
+    // Rendering setup
     let viewport = target::Rect {
         x: 0, y: 0,
         w: 1024, h: 768,
@@ -162,6 +182,8 @@ fn main() {
         x: 0, y: 0,
         w: 1024, h: 768,
     };
+
+    let mut graphics_pool = back::GraphicsCommandPool::from_queue(&mut general_queues[0], 16);
 
     //
     'main: loop {
@@ -177,12 +199,14 @@ fn main() {
 
         let frame = swap_chain.acquire_frame();
 
+        // Rendering
         let submit = {
             let mut cmd_buffer = graphics_pool.acquire_command_buffer();
 
             cmd_buffer.set_viewports(&[viewport]);
             cmd_buffer.set_scissors(&[scissor]);
             cmd_buffer.bind_graphics_pipeline(&pipelines[0].as_ref().unwrap());
+            cmd_buffer.bind_vertex_buffers(pso::VertexBufferSet(vec![(&vertex_buffer, 0)]));
 
             {
                 let mut encoder = back::RenderPassInlineEncoder::begin(
@@ -204,9 +228,6 @@ fn main() {
 
         // present frame
         swap_chain.present();
-
-        let sleep = std::time::Duration::from_millis(1000);
-        std::thread::sleep(sleep);
     }
 }
 

@@ -109,12 +109,22 @@ pub trait Instance {
     fn create_surface(&self, window: &Self::Window) -> Self::Surface;
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct HeapType {
+    pub id: usize,
+    pub properties: memory::HeapProperties,
+    pub heap_index: usize,
+}
+
 pub struct Device<R: Resources, F: Factory<R>, Q: CommandQueue> {
     pub factory: F,
     pub general_queues: Vec<GeneralQueue<Q>>,
     pub graphics_queues: Vec<GraphicsQueue<Q>>,
     pub compute_queues: Vec<ComputeQueue<Q>>,
     pub transfer_queues: Vec<TransferQueue<Q>>,
+    pub heap_types: Vec<HeapType>,
+    pub memory_heaps: Vec<u64>,
+
     pub _marker: std::marker::PhantomData<*const R>
 }
 
@@ -230,7 +240,6 @@ pub trait SwapChain {
     fn present(&mut self);
 }
 
-
 /// Different resource types of a specific API. 
 pub trait Resources:          Clone + Hash + Debug + Any {
     type ShaderLib:           Debug + Any + Send + Sync;
@@ -238,7 +247,9 @@ pub trait Resources:          Clone + Hash + Debug + Any {
     type PipelineLayout:      Debug + Any + Send + Sync;
     type GraphicsPipeline:    Debug + Any + Send + Sync;
     type ComputePipeline:     Debug + Any + Send + Sync;
+    type UnboundBuffer:       Debug + Any + Send + Sync;
     type Buffer:              Debug + Any + Send + Sync;
+    type UnboundImage:        Debug + Any + Send + Sync;
     type Image:               Debug + Any + Send + Sync;
     type ShaderResourceView:  Debug + Any + Send + Sync;
     type UnorderedAccessView: Debug + Any + Send + Sync;
@@ -248,6 +259,7 @@ pub trait Resources:          Clone + Hash + Debug + Any {
     type Sampler:             Debug + Any + Send + Sync;
     type Semaphore:           Debug + Any + Send + Sync;
     type Fence:               Debug + Any + Send + Sync;
+    type Heap:                Debug + Any;
 }
 
 /// Different types of a specific API.

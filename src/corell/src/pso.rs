@@ -188,14 +188,14 @@ impl GraphicsPipelineDesc {
 
 /// A complete set of vertex buffers to be used for vertex import in PSO.
 #[derive(Clone, Debug)]
-pub struct VertexBufferSet<R: Resources>(
+pub struct VertexBufferSet<'a, R: Resources>(
     /// Array of buffer handles with offsets in them
-    pub Vec<(R::Buffer, BufferOffset)>,
+    pub Vec<(&'a R::Buffer, BufferOffset)>,
 );
 
-impl<R: Resources> VertexBufferSet<R> {
+impl<'a, R: Resources> VertexBufferSet<'a, R> {
     /// Create an empty set
-    pub fn new() -> VertexBufferSet<R> {
+    pub fn new() -> VertexBufferSet<'a, R> {
         VertexBufferSet(Vec::new())
     }
 }

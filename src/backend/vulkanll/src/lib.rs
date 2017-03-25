@@ -27,7 +27,7 @@ extern crate kernel32;
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0, V1_0};
 use ash::vk;
 use ash::{Entry, LoadingError};
-use core::format;
+use core::{format, memory};
 use core::command::Submit;
 use std::ffi::{CStr, CString};
 use std::iter;
@@ -144,6 +144,35 @@ impl core::Adapter for Adapter {
             inner: Arc::new(DeviceInner(device_raw)),
         };
 
+        let mem_properties = self.instance.0.get_physical_device_memory_properties(self.handle);
+        let memory_heaps = mem_properties.memory_heaps[..mem_properties.memory_heap_count as usize].iter()
+                                .map(|mem| mem.size).collect::<Vec<_>>();
+        let heap_types = mem_properties.memory_types[..mem_properties.memory_type_count as usize].iter().enumerate().map(|(i, mem)| {
+            let mut type_flags = memory::HeapProperties::empty();
+
+            if mem.property_flags.intersects(vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
+                type_flags |= memory::DEVICE_LOCAL;
+            }
+            if mem.property_flags.intersects(vk::MEMORY_PROPERTY_HOST_COHERENT_BIT) {
+                type_flags |= memory::WRITE_BACK;
+            }
+            if mem.property_flags.intersects(vk::MEMORY_PROPERTY_HOST_CACHED_BIT) {
+                type_flags |= memory::WRITE_COMBINED;
+            }
+            if mem.property_flags.intersects(vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+                type_flags |= memory::HOST_VISIBLE;
+            }
+            if mem.property_flags.intersects(vk::MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT) {
+                type_flags |= memory::LAZILY_ALLOCATED;
+            }
+            
+            core::HeapType {
+                id: i,
+                properties: type_flags,
+                heap_index: mem.heap_index as usize,
+            }
+        }).collect::<Vec<_>>();
+
         // Create associated command queues for each queue type
         let queues = queue_infos.iter().flat_map(|info| {
             (0..info.queue_count).map(|id| {
@@ -167,6 +196,9 @@ impl core::Adapter for Adapter {
             graphics_queues: Vec::new(),
             compute_queues: Vec::new(),
             transfer_queues: Vec::new(),
+            heap_types: heap_types,
+            memory_heaps: memory_heaps,
+
             _marker: std::marker::PhantomData,
         }
     }
@@ -657,7 +689,9 @@ impl core::Resources for Resources {
     type PipelineLayout = native::PipelineLayout;
     type FrameBuffer = native::FrameBuffer;    type GraphicsPipeline = native::GraphicsPipeline;
     type ComputePipeline = native::ComputePipeline;
+    type UnboundBuffer = factory::UnboundBuffer;
     type Buffer = native::Buffer;
+    type UnboundImage = factory::UnboundImage;
     type Image = native::Image;
     type ShaderResourceView = ();
     type UnorderedAccessView = ();
@@ -666,4 +700,5 @@ impl core::Resources for Resources {
     type Sampler = ();
     type Semaphore = ();
     type Fence = ();
+    type Heap = native::Heap;
 }

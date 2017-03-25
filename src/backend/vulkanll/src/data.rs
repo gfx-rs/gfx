@@ -13,11 +13,13 @@
 // limitations under the License.
 
 use ash::vk;
+use core::buffer;
 use core::command::ClearColor;
 use core::format::{SurfaceType, ChannelType};
 use core::memory::{self, ImageAccess, ImageLayout};
 use core::pass::{AttachmentLoadOp, AttachmentStoreOp, AttachmentLayout};
 use core::pso::{self, PipelineStage};
+use core::IndexType;
 
 pub fn map_format(surface: SurfaceType, chan: ChannelType) -> Option<vk::Format> {
     use core::format::SurfaceType::*;
@@ -260,4 +262,36 @@ pub fn map_pipeline_stage(stage: PipelineStage) -> vk::PipelineStageFlags {
     }
 
     flags
+}
+
+pub fn map_buffer_usage(usage: buffer::Usage) -> vk::BufferUsageFlags {
+    let mut flags = vk::BufferUsageFlags::empty();
+
+    if usage.contains(buffer::TRANSFER_SRC) {
+        flags |= vk::BUFFER_USAGE_TRANSFER_SRC_BIT;
+    }
+    if usage.contains(buffer::TRANSFER_DST) {
+        flags |= vk::BUFFER_USAGE_TRANSFER_DST_BIT;
+    }
+    if usage.contains(buffer::CONSTANT) {
+        flags |= vk::BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    }
+    if usage.contains(buffer::INDEX) {
+        flags |= vk::BUFFER_USAGE_INDEX_BUFFER_BIT;
+    }
+    if usage.contains(buffer::INDIRECT) {
+        flags |= vk::BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+    }
+    if usage.contains(buffer::VERTEX) {
+        flags |= vk::BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    }
+
+    flags
+}
+
+pub fn map_index_type(index_type: IndexType) -> vk::IndexType {
+    match index_type {
+        IndexType::U16 => vk::IndexType::Uint16,
+        IndexType::U32 => vk::IndexType::Uint32,
+    }
 }
