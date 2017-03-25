@@ -201,20 +201,33 @@ impl<'a, R: Resources> VertexBufferSet<'a, R> {
 }
 
 bitflags!(
+    /// Stages of the logical pipeline.
+    ///
+    /// The pipeline is structured as given the by the ordering of the flags.
+    /// Some stages are queue type dependent.
     pub flags PipelineStage: u32 {
+        /// Beginning of the command queue.
         const TOP_OF_PIPE = 0x1,
+        /// Indirect data consumption.
         const DRAW_INDIRECT = 0x2,
+        /// Vertex data consumption.
         const VERTEX_INPUT = 0x4,
+        /// Vertex shader execution.
         const VERTEX_SHADER = 0x8,
-        const TESSELLATION_CONTROL_SHADER = 0x10,
-        const TESSELLATION_EVALUATION_SHADER = 0x20,
+        /// Hull shader execution.
+        const HULL_SHADER = 0x10,
+        /// Domain shader execution.
+        const DOMAIN_SHADER = 0x20,
+        /// Geometry shader execution.
         const GEOMETRY_SHADER = 0x40,
-        const FRAGMENT_SHADER = 0x80,
+        /// Pixel shader execution.
+        const PIXEL_SHADER = 0x80,
         const EARLY_FRAGMENT_TESTS = 0x100,
         const LATE_FRAGMENT_TESTS = 0x200,
         const COLOR_ATTACHMENT_OUTPUT = 0x400,
         const COMPUTE_SHADER = 0x800,
         const TRANSFER = 0x1000,
         const BOTTOM_OF_PIPE = 0x2000,
+        const HOST = 0x4000,
     }
 );

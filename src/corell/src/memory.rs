@@ -35,14 +35,36 @@ impl_pod! { ar =
 unsafe impl<T: Pod, U: Pod> Pod for (T, U) {}
 
 bitflags!(
+    /// Heap property flags.
     pub flags HeapProperties: u16 {
+        /// Device local heaps are located on the GPU.
         const DEVICE_LOCAL   = 0x1,
+        /// 
         const WRITE_BACK     = 0x2,
+
+        /// Cached memory writes.
+        ///
+        /// Buffer writes will be cached up for possible larger bus transactions.
+        /// It's not advised to use these heaps for reading back data.
         const WRITE_COMBINED = 0x4,
+
+        /// Host visible heaps can be accessed by the CPU.
         const HOST_VISIBLE   = 0x8,
+
+        ///
         const LAZILY_ALLOCATED = 0x10,
 
+        /// Default heap type for GPU resources.
+        ///
+        /// This heap type *must* be always supported by the backend.
+        const DEFAULT = DEVICE_LOCAL.bits,
+
+        /// Recommended heap type for uploading data (staging).
+        ///
+        /// This heap type *must* be always supported by the backend.
         const UPLOAD_HEAP = HOST_VISIBLE.bits | WRITE_COMBINED.bits,
+
+        /// Recommended heap type for reading-back/downloading data.
         const READBACK_HEAP = HOST_VISIBLE.bits | WRITE_BACK.bits,
     }
 );
@@ -102,7 +124,9 @@ pub struct MemoryBarrier;
 
 #[derive(Clone, Copy, Debug)]
 pub struct BufferBarrier<'a, R: Resources> {
+    /// Initial buffer access state.
     pub state_src: BufferState,
+    /// Final buffer access state.
     pub state_dst: BufferState,
 
     pub buffer: &'a R::Buffer,
@@ -119,7 +143,10 @@ pub struct ImageBarrier<'a, R: Resources> {
 }
 
 #[derive(Clone, Copy, Debug)]
+/// Memory requirements for a certain resource (buffer/image).
 pub struct MemoryRequirements {
+    /// Size in the memory.
     pub size: u64,
+    /// Memory alignment.
     pub alignment: u64,
 }

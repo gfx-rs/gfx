@@ -30,7 +30,9 @@ pub enum TargetViewError { }
 /// pipelines and textures. See the individual methods for more information.
 #[allow(missing_docs)]
 pub trait Factory<R: Resources> {
-    /// 
+    /// Create an heap of a specific type.
+    ///
+    /// There is only a limited amount of allocations allowed depending on the implementation!
     fn create_heap(&mut self, heap_type: &HeapType, size: u64) -> R::Heap;
 
     ///
@@ -39,11 +41,11 @@ pub trait Factory<R: Resources> {
     ///
     fn create_pipeline_layout(&mut self) -> R::PipelineLayout;
 
-    ///
+    /// Create graphics pipelines.
     fn create_graphics_pipelines<'a>(&mut self, &[(&R::ShaderLib, &R::PipelineLayout, SubPass<'a, R>, &pso::GraphicsPipelineDesc)])
             -> Vec<Result<R::GraphicsPipeline, pso::CreationError>>;
 
-    ///
+    /// Create compute pipelines.
     fn create_compute_pipelines(&mut self) -> Vec<Result<R::ComputePipeline, pso::CreationError>>;
 
     ///
@@ -52,26 +54,19 @@ pub trait Factory<R: Resources> {
         width: u32, height: u32, layers: u32
     ) -> R::FrameBuffer;
 
+    /// Create a new buffer (unbound).
     ///
-
-    // d3d12
-    // HRESULT CreatePlacedResource(
-    //  [in]                  ID3D12Heap            *pHeap,
-    //                        UINT64                HeapOffset,
-    //  [in]            const D3D12_RESOURCE_DESC   *pDesc,
-    //                        D3D12_RESOURCE_STATES InitialState,
-    //  [in, optional]  const D3D12_CLEAR_VALUE     *pOptimizedClearValue,
-    //                        REFIID                riid,
-    //  [out, optional]       void                  **ppvResource
-    //);
-
-    ///
+    /// The created buffer won't have associated memory until `bind_buffer_memory` is called.
     fn create_buffer(&mut self, size: u64, usage: buffer::Usage) -> Result<R::UnboundBuffer, buffer::CreationError>;
 
     ///
     fn get_buffer_requirements(&mut self, buffer: &R::UnboundBuffer) -> memory::MemoryRequirements;
 
+    /// Bind heap memory to a buffer.
     ///
+    /// The unbound buffer will be consumed because the binding is *immutable*.
+    /// Be sure to check that there is enough memory available for the buffer.
+    /// Use `get_buffer_requirements` to acquire the memory requirements.
     fn bind_buffer_memory(&mut self, heap: &R::Heap, offset: u64, buffer: R::UnboundBuffer) -> Result<R::Buffer, buffer::CreationError>;
 
     ///

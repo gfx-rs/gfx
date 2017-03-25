@@ -31,11 +31,13 @@ pub enum ClearColor {
     Uint([u32; 4]),
 }
 
+/// Depth-stencil target clear values.
 pub struct ClearDepthStencil {
     pub depth: f32,
     pub stencil: u32,
 }
 
+/// General clear values for attachments (color or depth-stencil).
 pub enum ClearValue {
     Color(ClearColor),
     DepthStencil(ClearDepthStencil),
@@ -99,18 +101,26 @@ impl<C: CommandBuffer> Submit<C> {
 }
 
 pub trait GraphicsCommandBuffer<R: Resources> : PrimaryCommandBuffer<R> {
+    /// Clear depth-stencil target-
     fn clear_depth_stencil(&mut self, &R::DepthStencilView, Option<target::Depth>, Option<target::Stencil>);
 
     // TODO: investigate how `blit_image` can be emulated on d3d12 e.g compute shader. (useful for mipmap generation)
     fn resolve_image(&mut self);
 
+    /// Bind index buffer view.
     fn bind_index_buffer(&mut self, IndexBufferView<R>);
+
+    /// Bind vertex buffers.
     fn bind_vertex_buffers(&mut self, pso::VertexBufferSet<R>);
 
     fn set_viewports(&mut self, &[target::Rect]);
     fn set_scissors(&mut self, &[target::Rect]);
     fn set_ref_values(&mut self, state::RefValues);
 
+    /// Bind a graphics pipeline.
+    ///
+    /// There is only *one* pipeline slot for compute and graphics.
+    /// Calling the corresponding `bind_pipeline` functions will override the slot.
     fn bind_graphics_pipeline(&mut self, &R::GraphicsPipeline);
 }
 
@@ -126,7 +136,13 @@ pub trait RenderPassEncoder<'cb, 'rp, 'fb, 'enc: 'cb, C, R>
              framebuffer: &'fb R::FrameBuffer,
              render_area: target::Rect,
              clear_values: &[ClearValue]) -> Self;
+
+    /// Move to the next subpass of the current renderpass.
+    /// The next subpass will be encoded in secondary command buffers.
     fn next_subpass(self) -> Self::SecondaryEncoder;
+
+    /// Move to the next subpass of the current renderpass.
+    /// The next subpass will be encoded inline in the primary buffer.
     fn next_subpass_inline(self) -> Self::InlineEncoder;
 }
 
@@ -142,6 +158,8 @@ pub trait RenderPassInlineEncoder<'cb, 'rp, 'fb, 'enc: 'cb, C, R> : RenderPassEn
           R: Resources
 {
     fn clear_attachment(&mut self);
+
+    /// Issue a draw command.
     fn draw(&mut self, start: VertexCount, count: VertexCount, Option<InstanceParams>);
     fn draw_indexed(&mut self, start: VertexCount, count: VertexCount, base: VertexOffset, Option<InstanceParams>);
     fn draw_indirect(&mut self);

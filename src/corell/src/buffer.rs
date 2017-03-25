@@ -33,6 +33,7 @@ impl Error for CreationError {
 }
 
 bitflags!(
+    /// Buffer usage flags.
     pub flags Usage: u16 {
         const TRANSFER_SRC  = 0x1,
         const TRANSFER_DST = 0x2,
@@ -43,6 +44,7 @@ bitflags!(
     }
 );
 
+/// Index buffer view for `bind_index_buffer`.
 pub struct IndexBufferView<'a, R: Resources> {
     pub buffer: &'a R::Buffer,
     pub offset: u64,
