@@ -30,10 +30,17 @@ use gfx_corell::memory::{self, ImageBarrier};
 
 pub type ColorFormat = gfx_corell::format::Srgba8;
 
+#[derive(Debug, Clone, Copy)]
 struct Vertex {
     a_Pos: [f32; 2],
     a_Color: [f32; 3],
 }
+
+const TRIANGLE: [Vertex; 3] = [
+    Vertex { a_Pos: [ -0.5, 0.5 ], a_Color: [1.0, 0.0, 0.0] },
+    Vertex { a_Pos: [  0.5, 0.5 ], a_Color: [0.0, 1.0, 0.0] },
+    Vertex { a_Pos: [  0.0,-0.5 ], a_Color: [0.0, 0.0, 1.0] }
+];
 
 #[cfg(any(feature = "vulkan", target_os = "windows"))]
 fn main() {
@@ -161,7 +168,7 @@ fn main() {
 
     let heap = {
         let upload_heap = heap_types.iter().find(|&&heap_type| heap_type.properties.contains(memory::UPLOAD_HEAP)).unwrap();
-        factory.create_heap(&heap_types[0], 1024)
+        factory.create_heap(upload_heap, 1024)
     };
 
     let vertex_buffer = {
@@ -172,6 +179,15 @@ fn main() {
 
         factory.bind_buffer_memory(&heap, 0, buffer).unwrap()
     };
+
+    // TODO: check transitions: read/write mapping and vertex buffer read
+
+    {
+        let mut mapping = factory.write_mapping::<Vertex>(&vertex_buffer, 0, 3).unwrap();
+        mapping.copy_from_slice(&TRIANGLE);
+
+        // TODO: flush mapping
+    }
 
     // Rendering setup
     let viewport = target::Rect {

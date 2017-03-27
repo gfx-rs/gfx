@@ -14,11 +14,11 @@
 
 use ash::vk;
 use ash::version::DeviceV1_0;
-use std::{mem, ptr};
+use std::{mem, ptr, slice};
 use std::sync::Arc;
 use std::collections::BTreeMap;
 
-use core::{self, buffer, format, factory as f, image, memory, pass, shade, state as s};
+use core::{self, buffer, format, factory as f, image, mapping, memory, pass, shade, state as s};
 use core::{HeapType, SubPass};
 use core::pso::{self, EntryPoint};
 use {data, native, state};
@@ -29,6 +29,8 @@ pub struct UnboundBuffer(native::Buffer);
 
 #[derive(Debug)]
 pub struct UnboundImage(native::Image);
+
+pub struct Mapping;
 
 impl Factory {
     pub fn create_shader_library(&mut self, shaders: &[(EntryPoint, &[u8])]) -> Result<native::ShaderLib, shade::CreateShaderError> {
@@ -184,6 +186,7 @@ impl core::Factory<R> for Factory {
     {
         // Store pipeline parameters to avoid stack usage
         let mut info_stages                = Vec::with_capacity(descs.len());
+        let mut info_vertex_descs          = Vec::with_capacity(descs.len());
         let mut info_vertex_input_states   = Vec::with_capacity(descs.len());
         let mut info_input_assembly_states = Vec::with_capacity(descs.len());
         let mut info_tessellation_states   = Vec::with_capacity(descs.len());
@@ -281,14 +284,45 @@ impl core::Factory<R> for Factory {
 
             info_stages.push(stages);
 
+            {
+                let mut vertex_bindings = Vec::new();
+                for (i, vbuf) in desc.vertex_buffers.iter().enumerate() {
+                    vertex_bindings.push(vk::VertexInputBindingDescription {
+                        binding: i as u32,
+                        stride: vbuf.stride as u32,
+                        input_rate: if vbuf.rate == 0 {
+                            vk::VertexInputRate::Vertex
+                        } else {
+                            vk::VertexInputRate::Instance
+                        },
+                    });
+                }
+                let mut vertex_attributes = Vec::new();
+                for (i, attr) in desc.attributes.iter().enumerate() {
+                    vertex_attributes.push(vk::VertexInputAttributeDescription {
+                        location: i as u32,
+                        binding: attr.0 as u32,
+                        format: match data::map_format(attr.1.format.0, attr.1.format.1) {
+                            Some(fm) => fm,
+                            None => return Err(pso::CreationError),
+                        },
+                        offset: attr.1.offset as u32,
+                    });
+                }
+
+                info_vertex_descs.push((vertex_bindings, vertex_attributes));
+            }
+
+            let &(ref vertex_bindings, ref vertex_attributes) = info_vertex_descs.last().unwrap();
+
             info_vertex_input_states.push(vk::PipelineVertexInputStateCreateInfo {
                 s_type: vk::StructureType::PipelineVertexInputStateCreateInfo,
                 p_next: ptr::null(),
                 flags: vk::PipelineVertexInputStateCreateFlags::empty(),
-                vertex_binding_description_count: 0, // TODO
-                p_vertex_binding_descriptions: ptr::null(), // TODO
-                vertex_attribute_description_count: 0, // TODO
-                p_vertex_attribute_descriptions: ptr::null(), // TODO
+                vertex_binding_description_count: vertex_bindings.len() as u32, // TODO
+                p_vertex_binding_descriptions: vertex_bindings.as_ptr(), // TODO
+                vertex_attribute_description_count: vertex_attributes.len() as u32, // TODO
+                p_vertex_attribute_descriptions: vertex_attributes.as_ptr(), // TODO
             });
 
             info_input_assembly_states.push(vk::PipelineInputAssemblyStateCreateInfo {
@@ -554,11 +588,14 @@ impl core::Factory<R> for Factory {
                         .expect("Error on buffer creation") // TODO: error handling
         };
         
-        Ok(UnboundBuffer(native::Buffer(buffer)))
+        Ok(UnboundBuffer(native::Buffer {
+            inner: buffer,
+            memory: vk::DeviceMemory::null(),
+        }))
     }
 
     fn get_buffer_requirements(&mut self, buffer: &UnboundBuffer) -> memory::MemoryRequirements {
-        let req = self.inner.0.get_buffer_memory_requirements((buffer.0).0);
+        let req = self.inner.0.get_buffer_memory_requirements((buffer.0).inner);
 
         memory::MemoryRequirements {
             size: req.size,
@@ -568,9 +605,14 @@ impl core::Factory<R> for Factory {
 
     fn bind_buffer_memory(&mut self, heap: &native::Heap, offset: u64, buffer: UnboundBuffer) -> Result<native::Buffer, buffer::CreationError> {
         // TODO: error handling
-        unsafe { self.inner.0.bind_buffer_memory((buffer.0).0, heap.0, offset); }
+        unsafe { self.inner.0.bind_buffer_memory((buffer.0).inner, heap.0, offset); }
 
-        Ok(buffer.0)
+        let buffer = native::Buffer {
+            inner: buffer.0.inner,
+            memory: heap.0,
+        };
+
+        Ok(buffer)
     }
 
     ///
@@ -618,5 +660,59 @@ impl core::Factory<R> for Factory {
         };
 
         Ok(rtv)
+    }
+
+    /// Acquire a mapping Reader.
+    fn read_mapping<'a, T>(&self, buf: &'a native::Buffer, offset: u64, size: u64)
+                               -> Result<mapping::Reader<'a, R, T>, mapping::Error>
+        where T: Copy
+    {
+        let slice = unsafe {
+            let mut data: *mut () = mem::uninitialized();
+            let err_code = self.inner.0.fp_v1_0().map_memory(
+                self.inner.0.handle(),
+                buf.memory,
+                offset,
+                size,
+                vk::MemoryMapFlags::empty(),
+                &mut data);
+
+            let x: *mut T = data as *mut T;
+            match err_code {
+                vk::Result::Success => {
+                    slice::from_raw_parts_mut(x, size as usize)
+                }
+                _ => panic!(err_code), // TODO
+            }
+        };
+
+        Ok(unsafe { mapping::Reader::new(slice, Mapping) })
+    }
+
+    /// Acquire a mapping Writer
+    fn write_mapping<'a, 'b, T>(&mut self, buf: &'a native::Buffer, offset: u64, size: u64)
+                                -> Result<mapping::Writer<'a, R, T>, mapping::Error>
+        where T: Copy
+    {
+        let slice = unsafe {
+            let mut data: *mut () = mem::uninitialized();
+            let err_code = self.inner.0.fp_v1_0().map_memory(
+                self.inner.0.handle(),
+                buf.memory,
+                offset,
+                size * mem::size_of::<T>() as u64,
+                vk::MemoryMapFlags::empty(),
+                &mut data);
+
+            let x: *mut T = data as *mut T;
+            match err_code {
+                vk::Result::Success => {
+                    slice::from_raw_parts_mut(x, size as usize)
+                }
+                _ => panic!(err_code), // TODO
+            }
+        };
+
+        Ok(unsafe { mapping::Writer::new(slice, Mapping) })
     }
 }

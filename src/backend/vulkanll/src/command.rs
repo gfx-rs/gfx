@@ -196,16 +196,16 @@ impl CommandBuffer {
     fn bind_index_buffer(&mut self, ibv: IndexBufferView<R>) {
         unsafe {
             self.device.0.cmd_bind_index_buffer(
-                self.inner,    // commandBuffer
-                ibv.buffer.0,  // buffer
-                ibv.offset,    // offset
+                self.inner,       // commandBuffer
+                ibv.buffer.inner, // buffer
+                ibv.offset,       // offset
                 data::map_index_type(ibv.index_type), // indexType
             );
         }
     }
 
     fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<R>) {
-        let buffers = vbs.0.iter().map(|&(ref buffer, _)| buffer.0).collect::<Vec<_>>();
+        let buffers = vbs.0.iter().map(|&(ref buffer, _)| buffer.inner).collect::<Vec<_>>();
         let offsets = vbs.0.iter().map(|&(_, offset)| offset as u64).collect::<Vec<_>>();
 
         unsafe {

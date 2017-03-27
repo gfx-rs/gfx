@@ -701,4 +701,5 @@ impl core::Resources for Resources {
     type Semaphore = ();
     type Fence = ();
     type Heap = native::Heap;
+    type Mapping = factory::Mapping;
 }
