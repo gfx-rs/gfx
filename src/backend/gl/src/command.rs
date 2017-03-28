@@ -176,8 +176,6 @@ struct Cache {
     stencil_state: Option<((Stencil, Stencil), s::CullFace)>,
     framebuffer: Option<(Access, FrameBuffer)>,
     index: Buffer,
-    attribute: Option<(c::AttributeSlot, Buffer, BufferElement)>,
-
 }
 
 impl Cache {
@@ -185,6 +183,7 @@ impl Cache {
         Cache {
             primitive: 0,
             index_type: c::IndexType::U16,
+            current_attr_buffer: 
             attributes: [None; c::MAX_VERTEX_ATTRIBUTES],
             resource_binds: [None; c::MAX_RESOURCE_VIEWS],
             scissor: false,
@@ -208,7 +207,6 @@ impl Cache {
             stencil_state: None,
             framebuffer: None,
             index: 0,
-            attribute: None,
         }
     }
 
@@ -255,14 +253,13 @@ impl Cache {
     }
 
     fn bind_attribute(&mut self, buf: &mut Vec<Command>, attribute_slot: c::AttributeSlot, buffer: Buffer, buffer_element: BufferElement) {
-        // BUGGO: This can potentially bind many different
-        // attributes but we only record the latest one,
-        // we'll have to keep a map of all attributes
-        // to do this right.
-        if self.attribute == Some((attribute_slot, buffer, buffer_element)) {
-            return;
+        // BUGGO:
+        // This WILL mix up attribute buffers.  Need to figure out how best to deal with this still.
+        match self.attributes[attribute_slot as usize] {
+            None => self.attributes[attribute_slot as usize] = Some(buffer_element),
+            Some(buffer_elem) if buffer_elem == buffer_element => return,
+            _ => ()
         }
-        self.attribute = Some((attribute_slot, buffer, buffer_element));
         buf.push(Command::BindAttribute(attribute_slot, buffer, buffer_element));
     }
 
