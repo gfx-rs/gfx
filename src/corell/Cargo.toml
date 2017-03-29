@@ -27,5 +27,6 @@ name = "gfx_corell"
 path = "src/lib.rs"
 
 [dependencies]
+bitflags = "0.8"
 log = "0.3"
 draw_state = "0.6"

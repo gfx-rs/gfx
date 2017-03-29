@@ -27,7 +27,7 @@ extern crate kernel32;
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0, V1_0};
 use ash::vk;
 use ash::{Entry, LoadingError};
-use core::format;
+use core::{format, memory};
 use core::command::Submit;
 use std::ffi::{CStr, CString};
 use std::iter;
@@ -45,6 +45,7 @@ mod native;
 mod pool;
 mod state;
 
+pub use command::{RenderPassInlineEncoder, RenderPassSecondaryEncoder};
 pub use pool::{GeneralCommandPool, GraphicsCommandPool,
     ComputeCommandPool, TransferCommandPool, SubpassCommandPool};
 
@@ -143,6 +144,35 @@ impl core::Adapter for Adapter {
             inner: Arc::new(DeviceInner(device_raw)),
         };
 
+        let mem_properties = self.instance.0.get_physical_device_memory_properties(self.handle);
+        let memory_heaps = mem_properties.memory_heaps[..mem_properties.memory_heap_count as usize].iter()
+                                .map(|mem| mem.size).collect::<Vec<_>>();
+        let heap_types = mem_properties.memory_types[..mem_properties.memory_type_count as usize].iter().enumerate().map(|(i, mem)| {
+            let mut type_flags = memory::HeapProperties::empty();
+
+            if mem.property_flags.intersects(vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
+                type_flags |= memory::DEVICE_LOCAL;
+            }
+            if mem.property_flags.intersects(vk::MEMORY_PROPERTY_HOST_COHERENT_BIT) {
+                type_flags |= memory::WRITE_BACK;
+            }
+            if mem.property_flags.intersects(vk::MEMORY_PROPERTY_HOST_CACHED_BIT) {
+                type_flags |= memory::WRITE_COMBINED;
+            }
+            if mem.property_flags.intersects(vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+                type_flags |= memory::HOST_VISIBLE;
+            }
+            if mem.property_flags.intersects(vk::MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT) {
+                type_flags |= memory::LAZILY_ALLOCATED;
+            }
+            
+            core::HeapType {
+                id: i,
+                properties: type_flags,
+                heap_index: mem.heap_index as usize,
+            }
+        }).collect::<Vec<_>>();
+
         // Create associated command queues for each queue type
         let queues = queue_infos.iter().flat_map(|info| {
             (0..info.queue_count).map(|id| {
@@ -154,6 +184,7 @@ impl core::Adapter for Adapter {
                     core::GeneralQueue::new(CommandQueue {
                         inner: CommandQueueInner(Rc::new(RefCell::new(queue))),
                         device: factory.inner.clone(),
+                        family_index: info.queue_family_index,
                     })
                 }
             }).collect::<Vec<_>>()
@@ -165,6 +196,9 @@ impl core::Adapter for Adapter {
             graphics_queues: Vec::new(),
             compute_queues: Vec::new(),
             transfer_queues: Vec::new(),
+            heap_types: heap_types,
+            memory_heaps: memory_heaps,
+
             _marker: std::marker::PhantomData,
         }
     }
@@ -178,7 +212,8 @@ impl core::Adapter for Adapter {
     }
 }
 
-struct DeviceInner(ash::Device<V1_0>);
+#[doc(hidden)]
+pub struct DeviceInner(ash::Device<V1_0>);
 impl Drop for DeviceInner {
     fn drop(&mut self) {
         unsafe { self.0.destroy_device(None); }
@@ -200,6 +235,7 @@ struct CommandQueueInner(Rc<RefCell<vk::Queue>>);
 pub struct CommandQueue {
     inner: CommandQueueInner,
     device: Arc<DeviceInner>,
+    family_index: u32,
 }
 
 impl core::CommandQueue for CommandQueue {
@@ -211,10 +247,31 @@ impl core::CommandQueue for CommandQueue {
     type TransferCommandBuffer = native::TransferCommandBuffer;
     type SubpassCommandBuffer = native::SubpassCommandBuffer;
 
-    unsafe fn submit<C>(&mut self, cmd_buffers: &[Submit<C>])
+    unsafe fn submit<C>(&mut self, submits: &[Submit<C>])
         where C: core::CommandBuffer<SubmitInfo = command::SubmitInfo>
     {
-        unimplemented!()
+        let command_buffers = submits.iter().map(|submit| submit.get_info().command_buffer)
+                                            .collect::<Vec<_>>();
+
+        let submit = vk::SubmitInfo {
+            s_type: vk::StructureType::SubmitInfo,
+            p_next: ptr::null(),
+            wait_semaphore_count: 0,
+            p_wait_semaphores: ptr::null(),
+            p_wait_dst_stage_mask: ptr::null(),
+            command_buffer_count: command_buffers.len() as u32,
+            p_command_buffers: command_buffers.as_ptr(),
+            signal_semaphore_count: 0,
+            p_signal_semaphores: ptr::null(),
+        };
+
+        unsafe {
+            self.device.0.queue_submit(
+                *self.inner.0.borrow(),
+                &[submit],
+                vk::Fence::null(),
+            );
+        }
     }
 }
 
@@ -337,10 +394,11 @@ impl core::Surface for Surface {
                 v.as_mut_ptr());
 
             v.set_len(count as vk::size_t);
-            v
+            v.into_iter().map(|image| native::Image(image))
+                    .collect::<Vec<_>>()
         };
 
-        // TODO: create image views for the swapchain images
+        // TODO: set initial resource states to Present
 
         SwapChain {
             inner: swapchain,
@@ -358,13 +416,19 @@ pub struct SwapChain {
     device: Arc<DeviceInner>,
     present_queue: CommandQueueInner,
     swapchain_fn: vk::SwapchainFn,
-    images: Vec<vk::Image>,
+    images: Vec<native::Image>,
 
     // Queued up frames for presentation
     frame_queue: VecDeque<usize>,
 }
 
 impl core::SwapChain for SwapChain {
+    type Image = native::Image;
+
+    fn get_images(&mut self) -> &[native::Image] {
+       &self.images
+    }
+
     fn acquire_frame(&mut self) -> core::Frame {
         // TODO: handle synchronization, requires a fence or semaphore
         // TODO: error handling
@@ -623,12 +687,18 @@ impl core::Resources for Resources {
     type ShaderLib = native::ShaderLib;
     type RenderPass = native::RenderPass;
     type PipelineLayout = native::PipelineLayout;
-    type PipelineStateObject = ();
+    type FrameBuffer = native::FrameBuffer;    type GraphicsPipeline = native::GraphicsPipeline;
+    type ComputePipeline = native::ComputePipeline;
+    type UnboundBuffer = factory::UnboundBuffer;
     type Buffer = native::Buffer;
+    type UnboundImage = factory::UnboundImage;
     type Image = native::Image;
     type ShaderResourceView = ();
     type UnorderedAccessView = ();
-    type RenderTargetView = ();
-    type DepthStencilView = ();
+    type RenderTargetView = native::RenderTargetView;
+    type DepthStencilView = native::DepthStencilView;
     type Sampler = ();
+    type Semaphore = ();
+    type Fence = ();
+    type Heap = native::Heap;
 }

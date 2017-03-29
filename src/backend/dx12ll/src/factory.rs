@@ -23,7 +23,7 @@ use std::{mem, ptr};
 use std::os::raw::c_void;
 use std::collections::BTreeMap;
 
-use core::{self, shade};
+use core::{self, shade, factory as f};
 use core::SubPass;
 use core::pso::{self, EntryPoint};
 use {data, state, mirror, native};
@@ -90,9 +90,8 @@ impl Factory {
 }
 
 impl core::Factory<R> for Factory {
-    fn create_renderpass(&mut self) -> () {
-        // unimplemented!()
-        ()
+    fn create_renderpass(&mut self) -> native::RenderPass {
+        unimplemented!()
     }
 
     fn create_pipeline_layout(&mut self) -> native::PipelineLayout {
@@ -128,7 +127,7 @@ impl core::Factory<R> for Factory {
     }
 
     fn create_graphics_pipelines<'a>(&mut self, descs: &[(&native::ShaderLib, &native::PipelineLayout, SubPass<'a, R>, &pso::GraphicsPipelineDesc)])
-        -> Vec<Result<native::Pipeline, pso::CreationError>>
+        -> Vec<Result<native::GraphicsPipeline, pso::CreationError>>
     {
         descs.iter().map(|&(shader_lib, ref signature, _, ref desc)| {
             let build_shader = |lib: &native::ShaderLib, entry: Option<EntryPoint>| {
@@ -272,14 +271,41 @@ impl core::Factory<R> for Factory {
             };
 
             if winapi::SUCCEEDED(hr) {
-                Ok(native::Pipeline { inner: pipeline })
+                Ok(native::GraphicsPipeline { inner: pipeline })
             } else {
                 Err(pso::CreationError)
             }
         }).collect()
     }
 
-    fn create_compute_pipelines(&mut self) -> Vec<Result<native::Pipeline, pso::CreationError>> {
+    fn create_compute_pipelines(&mut self) -> Vec<Result<native::ComputePipeline, pso::CreationError>> {
         unimplemented!()
+    }
+
+    fn create_framebuffer(&mut self, renderpass: &native::RenderPass,
+        color_attachments: &[native::RenderTargetView], depth_stencil_attachments: &[native::DepthStencilView],
+        width: u32, height: u32, layers: u32) -> native::FrameBuffer
+    {
+        unimplemented!()
+    }
+
+    fn view_image_as_render_target(&mut self, image: &native::Image) -> Result<native::RenderTargetView, f::TargetViewError> {
+        // TODO: basic implementation only, needs checks and multiple heaps
+        let mut handle = winapi::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: 0 };
+        unsafe { self.rtv_heap.GetCPUDescriptorHandleForHeapStart(&mut handle) };
+        handle.ptr += self.next_rtv as u64 * self.rtv_handle_size;
+
+        // create descriptor
+        unsafe {
+            self.inner.CreateRenderTargetView(
+                image.resource.as_mut_ptr(),
+                ptr::null_mut(),
+                handle
+            );
+        }
+
+        let rtv = native::RenderTargetView { handle: handle };
+        self.next_rtv += 1;
+        Ok(rtv)
     }
 }

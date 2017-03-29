@@ -14,6 +14,8 @@
 
 //! Memory stuff
 
+use {Resources};
+
 /// A trait for plain-old-data types.
 ///
 /// A POD type does not have invalid bit patterns and can be safely
@@ -31,3 +33,120 @@ impl_pod! { ar =
 }
 
 unsafe impl<T: Pod, U: Pod> Pod for (T, U) {}
+
+bitflags!(
+    /// Heap property flags.
+    pub flags HeapProperties: u16 {
+        /// Device local heaps are located on the GPU.
+        const DEVICE_LOCAL   = 0x1,
+        /// 
+        const WRITE_BACK     = 0x2,
+
+        /// Cached memory writes.
+        ///
+        /// Buffer writes will be cached up for possible larger bus transactions.
+        /// It's not advised to use these heaps for reading back data.
+        const WRITE_COMBINED = 0x4,
+
+        /// Host visible heaps can be accessed by the CPU.
+        const HOST_VISIBLE   = 0x8,
+
+        ///
+        const LAZILY_ALLOCATED = 0x10,
+
+        /// Default heap type for GPU resources.
+        ///
+        /// This heap type *must* be always supported by the backend.
+        const DEFAULT = DEVICE_LOCAL.bits,
+
+        /// Recommended heap type for uploading data (staging).
+        ///
+        /// This heap type *must* be always supported by the backend.
+        const UPLOAD_HEAP = HOST_VISIBLE.bits | WRITE_COMBINED.bits,
+
+        /// Recommended heap type for reading-back/downloading data.
+        const READBACK_HEAP = HOST_VISIBLE.bits | WRITE_BACK.bits,
+    }
+);
+
+bitflags!(
+    // TODO
+    pub flags ImageAccess: u16 {
+        const RENDER_TARGET_CLEAR = 0x20,
+        const RESOLVE_SRC         = 0x100,
+        const RESOLVE_DST         = 0x200,
+        const COLOR_ATTACHMENT_READ = 0x1,
+        const COLOR_ATTACHMENT_WRITE = 0x2,
+    }
+);
+
+bitflags!(
+    pub flags BufferState: u16 {
+        const INDEX_BUFFER_READ      = 0x1,
+        const VERTEX_BUFFER_READ     = 0x2,
+        const CONSTANT_BUFFER_READ   = 0x4,
+        const INDIRECT_COMMAND_READ  = 0x8,
+    }
+);
+
+#[derive(Copy, Clone, Debug)]
+pub enum ImageLayout {
+    General,
+    ColorAttachmentOptimal,
+    DepthStencilAttachmentOptimal,
+    DepthStencilReadOnlyOptimal,
+    ShaderReadOnlyOptimal,
+    TransferSrcOptimal,
+    TransferDstOptimal,
+    Undefined,
+    Preinitialized,
+    Present,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum ImageStateSrc {
+    Present(ImageAccess), // exclusive state
+    State(ImageAccess, ImageLayout),
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum ImageStateDst {
+    Present,
+    State(ImageAccess, ImageLayout),
+}
+
+pub struct ImageSubResource {
+
+}
+
+// TODO: probably remove this
+pub struct MemoryBarrier;
+
+#[derive(Clone, Copy, Debug)]
+pub struct BufferBarrier<'a, R: Resources> {
+    /// Initial buffer access state.
+    pub state_src: BufferState,
+    /// Final buffer access state.
+    pub state_dst: BufferState,
+
+    pub buffer: &'a R::Buffer,
+    pub offset: usize,
+    pub size: usize,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ImageBarrier<'a, R: Resources> {
+    pub state_src: ImageStateSrc,
+    pub state_dst: ImageStateDst,
+
+    pub image: &'a R::Image,
+}
+
+#[derive(Clone, Copy, Debug)]
+/// Memory requirements for a certain resource (buffer/image).
+pub struct MemoryRequirements {
+    /// Size in the memory.
+    pub size: u64,
+    /// Memory alignment.
+    pub alignment: u64,
+}

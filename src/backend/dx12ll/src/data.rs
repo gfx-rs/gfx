@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::memory::{self, ResourceState};
 use core::format::Format;
 use winapi::*;
 
@@ -126,4 +127,43 @@ pub fn map_format(format: Format, is_target: bool) -> Option<DXGI_FORMAT> {
             _ => return None,
         },
     })
+}
+
+pub fn map_resource_state(resource_state: ResourceState) -> D3D12_RESOURCE_STATES {
+    // TODO: A huge puzzle \o/
+    let mut state = D3D12_RESOURCE_STATE_COMMON;
+
+    if resource_state.contains(memory::INDEX_BUFFER_READ) {
+        state = state | D3D12_RESOURCE_STATE_INDEX_BUFFER;
+    }
+    if resource_state.contains(memory::VERTEX_BUFFER_READ) ||
+       resource_state.contains(memory::CONSTANT_BUFFER_READ)  {
+        state = state | D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+    }
+    if resource_state.contains(memory::INDIRECT_COMMAND_READ) {
+        state = state | D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
+    }
+    if resource_state.contains(memory::RENDER_TARGET_CLEAR) {
+        state = state | D3D12_RESOURCE_STATE_RENDER_TARGET;
+    }
+    /*
+    if resource_state.contains(memory::TRANSFER_SRC) {
+        state = state | D3D12_RESOURCE_STATE_COPY_SOURCE;
+    }
+    if resource_state.contains(memory::TRANSFER_DST) {
+        state = state | D3D12_RESOURCE_STATE_COPY_DEST;
+    }
+    */
+    if resource_state.contains(memory::RESOLVE_SRC) {
+        state = state | D3D12_RESOURCE_STATE_RESOLVE_SOURCE;
+    }
+    if resource_state.contains(memory::RESOLVE_DST) {
+        state = state | D3D12_RESOURCE_STATE_RESOLVE_DEST;
+    }
+
+    if resource_state.contains(memory::PRESENT) {
+        state = state | D3D12_RESOURCE_STATE_PRESENT;
+    }
+
+    state
 }

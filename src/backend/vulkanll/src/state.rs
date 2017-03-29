@@ -14,7 +14,7 @@
 
 use core::Primitive;
 use core::state;
-use vk;
+use ash::vk;
 
 pub fn map_topology(prim: Primitive) -> vk::PrimitiveTopology {
     match prim {
@@ -87,5 +87,43 @@ pub fn map_stencil_side(side: &state::StencilSide) -> vk::StencilOpState {
         compare_mask: side.mask_read as u32,
         write_mask: side.mask_write as u32,
         reference: 0,
+    }
+}
+
+pub fn map_blend_factor(factor: state::Factor, scalar: bool) -> vk::BlendFactor {
+    use core::state::BlendValue::*;
+    use core::state::Factor::*;
+    match factor {
+        Zero => vk::BlendFactor::Zero,
+        One => vk::BlendFactor::One,
+        SourceAlphaSaturated => vk::BlendFactor::SrcAlphaSaturate,
+        ZeroPlus(SourceColor) if !scalar => vk::BlendFactor::SrcColor,
+        ZeroPlus(SourceAlpha) => vk::BlendFactor::SrcAlpha,
+        ZeroPlus(DestColor) if !scalar => vk::BlendFactor::DstColor,
+        ZeroPlus(DestAlpha) => vk::BlendFactor::DstAlpha,
+        ZeroPlus(ConstColor) if !scalar => vk::BlendFactor::ConstantColor,
+        ZeroPlus(ConstAlpha) => vk::BlendFactor::ConstantAlpha,
+        OneMinus(SourceColor) if !scalar => vk::BlendFactor::OneMinusSrcColor,
+        OneMinus(SourceAlpha) => vk::BlendFactor::OneMinusSrcAlpha,
+        OneMinus(DestColor) if !scalar => vk::BlendFactor::OneMinusDstColor,
+        OneMinus(DestAlpha) => vk::BlendFactor::OneMinusDstAlpha,
+        OneMinus(ConstColor) if !scalar => vk::BlendFactor::OneMinusConstantColor,
+        OneMinus(ConstAlpha) => vk::BlendFactor::OneMinusConstantAlpha,
+        _ => {
+            error!("Invalid blend factor requested for {}: {:?}",
+                if scalar {"alpha"} else {"color"}, factor);
+            vk::BlendFactor::Zero
+        }
+    }
+}
+
+pub fn map_blend_op(equation: state::Equation) -> vk::BlendOp {
+    use core::state::Equation::*;
+    match equation {
+        Add => vk::BlendOp::Add,
+        Sub => vk::BlendOp::Subtract,
+        RevSub => vk::BlendOp::ReverseSubtract,
+        Min => vk::BlendOp::Min,
+        Max => vk::BlendOp::Max,
     }
 }

@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #[macro_use]
+extern crate bitflags;
+#[macro_use]
 extern crate log;
 extern crate draw_state;
 
@@ -29,10 +31,13 @@ pub use pool::{GeneralCommandPool, GraphicsCommandPool};
 pub use command::{CommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer,
     SubpassCommandBuffer, ProcessingCommandBuffer, PrimaryCommandBuffer, SecondaryCommandBuffer};
 
+pub mod buffer;
 pub mod command;
 pub mod factory;
 pub mod format;
+pub mod image;
 pub mod memory;
+pub mod pass;
 pub mod pool;
 pub mod pso;
 pub mod queue;
@@ -43,9 +48,11 @@ pub const MAX_COLOR_TARGETS: usize = 8; // Limited by D3D12
 
 /// Draw vertex count.
 pub type VertexCount = u32;
-/// Draw number of instances
+/// Draw number of instances.
 pub type InstanceCount = u32;
-/// Number of vertices in a patch
+/// Draw vertex base offset.
+pub type VertexOffset = i32;
+/// Number of vertices in a patch.
 pub type PatchSize = u8;
 
 /// Describes what geometric primitives are created from vertex data.
@@ -102,12 +109,22 @@ pub trait Instance {
     fn create_surface(&self, window: &Self::Window) -> Self::Surface;
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct HeapType {
+    pub id: usize,
+    pub properties: memory::HeapProperties,
+    pub heap_index: usize,
+}
+
 pub struct Device<R: Resources, F: Factory<R>, Q: CommandQueue> {
     pub factory: F,
     pub general_queues: Vec<GeneralQueue<Q>>,
     pub graphics_queues: Vec<GraphicsQueue<Q>>,
     pub compute_queues: Vec<ComputeQueue<Q>>,
     pub transfer_queues: Vec<TransferQueue<Q>>,
+    pub heap_types: Vec<HeapType>,
+    pub memory_heaps: Vec<u64>,
+
     pub _marker: std::marker::PhantomData<*const R>
 }
 
@@ -209,28 +226,40 @@ impl Frame {
     pub unsafe fn new(id: usize) -> Self {
         Frame(id)
     }
+
+    pub fn id(&self) -> usize { self.0 }
 }
 
 /// The `SwapChain` is the backend representation of the surface.
 /// It consists of multiple buffers, which will be presented on the surface.
 pub trait SwapChain {
+    type Image;
+
+    fn get_images(&mut self) -> &[Self::Image];
     fn acquire_frame(&mut self) -> Frame;
     fn present(&mut self);
 }
 
 /// Different resource types of a specific API. 
 pub trait Resources:          Clone + Hash + Debug + Any {
-    type ShaderLib:           Clone + Debug + Any + Send + Sync;
-    type RenderPass:          Clone + Debug + Any + Send + Sync;
-    type PipelineLayout:      Clone + Debug + Any + Send + Sync;
-    type PipelineStateObject: Clone + Debug + Any + Send + Sync;
-    type Buffer:              Clone + Debug + Any + Send + Sync;
-    type Image:               Clone + Debug + Any + Send + Sync;
-    type ShaderResourceView:  Clone + Debug + Any + Send + Sync;
-    type UnorderedAccessView: Clone + Debug + Any + Send + Sync;
-    type RenderTargetView:    Clone + Debug + Any + Send + Sync;
-    type DepthStencilView:    Clone + Debug + Any + Send + Sync;
-    type Sampler:             Clone + Debug + Any + Send + Sync;
+    type ShaderLib:           Debug + Any + Send + Sync;
+    type RenderPass:          Debug + Any + Send + Sync;
+    type PipelineLayout:      Debug + Any + Send + Sync;
+    type GraphicsPipeline:    Debug + Any + Send + Sync;
+    type ComputePipeline:     Debug + Any + Send + Sync;
+    type UnboundBuffer:       Debug + Any + Send + Sync;
+    type Buffer:              Debug + Any + Send + Sync;
+    type UnboundImage:        Debug + Any + Send + Sync;
+    type Image:               Debug + Any + Send + Sync;
+    type ShaderResourceView:  Debug + Any + Send + Sync;
+    type UnorderedAccessView: Debug + Any + Send + Sync;
+    type RenderTargetView:    Debug + Any + Send + Sync;
+    type DepthStencilView:    Debug + Any + Send + Sync;
+    type FrameBuffer:         Debug + Any + Send + Sync;
+    type Sampler:             Debug + Any + Send + Sync;
+    type Semaphore:           Debug + Any + Send + Sync;
+    type Fence:               Debug + Any + Send + Sync;
+    type Heap:                Debug + Any;
 }
 
 /// Different types of a specific API.

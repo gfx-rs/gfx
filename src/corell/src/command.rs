@@ -15,8 +15,9 @@
 //! Command Buffer device interface
 
 use std::ops::{Deref, DerefMut};
-use {state, pso, target};
-use {IndexType, InstanceCount, VertexCount, Resources};
+use {memory, state, pso, target};
+use buffer::IndexBufferView;
+use {InstanceCount, VertexCount, VertexOffset, Resources};
 
 /// A universal clear color supporting integet formats
 /// as well as the standard floating-point.
@@ -28,6 +29,18 @@ pub enum ClearColor {
     Int([i32; 4]),
     /// Unsigned int vector to clear uvec4 targets.
     Uint([u32; 4]),
+}
+
+/// Depth-stencil target clear values.
+pub struct ClearDepthStencil {
+    pub depth: f32,
+    pub stencil: u32,
+}
+
+/// General clear values for attachments (color or depth-stencil).
+pub enum ClearValue {
+    Color(ClearColor),
+    DepthStencil(ClearDepthStencil),
 }
 
 /// Region of two buffers for copying.
@@ -88,54 +101,112 @@ impl<C: CommandBuffer> Submit<C> {
 }
 
 pub trait GraphicsCommandBuffer<R: Resources> : PrimaryCommandBuffer<R> {
+    /// Clear depth-stencil target-
     fn clear_depth_stencil(&mut self, &R::DepthStencilView, Option<target::Depth>, Option<target::Stencil>);
 
     // TODO: investigate how `blit_image` can be emulated on d3d12 e.g compute shader. (useful for mipmap generation)
     fn resolve_image(&mut self);
 
-    fn bind_index_buffer(&mut self, &R::Buffer, IndexType);
+    /// Bind index buffer view.
+    fn bind_index_buffer(&mut self, IndexBufferView<R>);
+
+    /// Bind vertex buffers.
     fn bind_vertex_buffers(&mut self, pso::VertexBufferSet<R>);
 
     fn set_viewports(&mut self, &[target::Rect]);
     fn set_scissors(&mut self, &[target::Rect]);
     fn set_ref_values(&mut self, state::RefValues);
+
+    /// Bind a graphics pipeline.
+    ///
+    /// There is only *one* pipeline slot for compute and graphics.
+    /// Calling the corresponding `bind_pipeline` functions will override the slot.
+    fn bind_graphics_pipeline(&mut self, &R::GraphicsPipeline);
 }
 
-pub trait RenderPassEncoder<C: GraphicsCommandBuffer<R>, R: Resources> {
-    fn begin(&mut C, &R::RenderPass) -> Self;
-    fn next_subpass(&mut self);
+pub trait RenderPassEncoder<'cb, 'rp, 'fb, 'enc: 'cb, C, R>
+    where C: GraphicsCommandBuffer<R> + 'enc,
+          R: Resources
+{
+    type SecondaryEncoder: RenderPassSecondaryEncoder<'cb, 'rp, 'fb, 'enc, C, R>;
+    type InlineEncoder: RenderPassInlineEncoder<'cb, 'rp, 'fb, 'enc, C, R>;
+
+    fn begin(command_buffer: &'cb mut Encoder<'enc, C>,
+             render_pass: &'rp R::RenderPass,
+             framebuffer: &'fb R::FrameBuffer,
+             render_area: target::Rect,
+             clear_values: &[ClearValue]) -> Self;
+
+    /// Move to the next subpass of the current renderpass.
+    /// The next subpass will be encoded in secondary command buffers.
+    fn next_subpass(self) -> Self::SecondaryEncoder;
+
+    /// Move to the next subpass of the current renderpass.
+    /// The next subpass will be encoded inline in the primary buffer.
+    fn next_subpass_inline(self) -> Self::InlineEncoder;
+}
+
+pub trait RenderPassSecondaryEncoder<'cb, 'rp, 'fb, 'enc: 'cb, C, R> : RenderPassEncoder<'cb, 'rp, 'fb, 'enc, C, R>
+    where C: GraphicsCommandBuffer<R> + 'enc,
+          R: Resources
+{
+    // TODO: exectue supass command buffer
+}
+
+pub trait RenderPassInlineEncoder<'cb, 'rp, 'fb, 'enc: 'cb, C, R> : RenderPassEncoder<'cb, 'rp, 'fb, 'enc, C, R>
+    where C: GraphicsCommandBuffer<R> + 'enc,
+          R: Resources
+{
+    fn clear_attachment(&mut self);
+
+    /// Issue a draw command.
+    fn draw(&mut self, start: VertexCount, count: VertexCount, Option<InstanceParams>);
+    fn draw_indexed(&mut self, start: VertexCount, count: VertexCount, base: VertexOffset, Option<InstanceParams>);
+    fn draw_indirect(&mut self);
+    fn draw_indexed_indirect(&mut self);
+
+    fn bind_index_buffer<'a>(&mut self, IndexBufferView<R>);
+    fn bind_vertex_buffers(&mut self, pso::VertexBufferSet<R>);
+
+    fn set_viewports(&mut self, &[target::Rect]);
+    fn set_scissors(&mut self, &[target::Rect]);
+    fn set_ref_values(&mut self, state::RefValues);
+
+    fn bind_graphics_pipeline(&mut self, &R::GraphicsPipeline);
+    fn bind_descriptor_sets(&mut self);
+    fn push_constants(&mut self);
 }
 
 pub trait SubpassCommandBuffer<R: Resources> : SecondaryCommandBuffer<R> {
     fn clear_attachment(&mut self);
     fn draw(&mut self, start: VertexCount, count: VertexCount, Option<InstanceParams>);
-    fn draw_indexed(&mut self, start: VertexCount, count: VertexCount, base: VertexCount, Option<InstanceParams>);
+    fn draw_indexed(&mut self, start: VertexCount, count: VertexCount, base: VertexOffset, Option<InstanceParams>);
     fn draw_indirect(&mut self);
     fn draw_indexed_indirect(&mut self);
 
-    fn bind_index_buffer(&mut self, &R::Buffer, IndexType);
+    fn bind_index_buffer(&mut self, IndexBufferView<R>);
     fn bind_vertex_buffers(&mut self, pso::VertexBufferSet<R>);
 
     fn set_viewports(&mut self, &[target::Rect]);
     fn set_scissors(&mut self, &[target::Rect]);
     fn set_ref_values(&mut self, state::RefValues);
 
-    fn bind_pipeline(&mut self, &R::PipelineStateObject);
+    fn bind_graphics_pipeline(&mut self, &R::GraphicsPipeline);
     fn bind_descriptor_sets(&mut self);
     fn push_constants(&mut self);
 }
 
 pub trait ComputeCommandBuffer<R: Resources> : ProcessingCommandBuffer<R> {
+    fn bind_compute_pipeline(&mut self, &R::ComputePipeline);
     fn dispatch(&mut self, u32, u32, u32);
     fn dispatch_indirect(&mut self);
 }
 
 pub trait ProcessingCommandBuffer<R: Resources> : TransferCommandBuffer<R> {
+    // TODO: consider to clear multiple RTVs as vulkan allows multiple subresource ranges
     fn clear_color(&mut self, &R::RenderTargetView, ClearColor);
     fn clear_buffer(&mut self);
 
-    // TODO: consider splitting compute and graphics pso
-    fn bind_pipeline(&mut self, &R::PipelineStateObject);
     fn bind_descriptor_sets(&mut self);
     fn push_constants(&mut self);
 }
@@ -151,7 +222,7 @@ pub trait TransferCommandBuffer<R: Resources> : PrimaryCommandBuffer<R> {
 }
 
 pub trait PrimaryCommandBuffer<R: Resources>: CommandBuffer {
-    fn pipeline_barrier(&mut self);
+    fn pipeline_barrier<'a>(&mut self, &[memory::MemoryBarrier], &[memory::BufferBarrier<'a, R>], &[memory::ImageBarrier<'a, R>]);
     fn execute_commands(&mut self);
 }
 

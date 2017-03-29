@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use bitflags;
 use std::error::Error;
 use std::fmt;
 
@@ -187,14 +188,46 @@ impl GraphicsPipelineDesc {
 
 /// A complete set of vertex buffers to be used for vertex import in PSO.
 #[derive(Clone, Debug)]
-pub struct VertexBufferSet<R: Resources>(
+pub struct VertexBufferSet<'a, R: Resources>(
     /// Array of buffer handles with offsets in them
-    pub Vec<(R::Buffer, BufferOffset)>,
+    pub Vec<(&'a R::Buffer, BufferOffset)>,
 );
 
-impl<R: Resources> VertexBufferSet<R> {
+impl<'a, R: Resources> VertexBufferSet<'a, R> {
     /// Create an empty set
-    pub fn new() -> VertexBufferSet<R> {
+    pub fn new() -> VertexBufferSet<'a, R> {
         VertexBufferSet(Vec::new())
     }
 }
+
+bitflags!(
+    /// Stages of the logical pipeline.
+    ///
+    /// The pipeline is structured as given the by the ordering of the flags.
+    /// Some stages are queue type dependent.
+    pub flags PipelineStage: u32 {
+        /// Beginning of the command queue.
+        const TOP_OF_PIPE = 0x1,
+        /// Indirect data consumption.
+        const DRAW_INDIRECT = 0x2,
+        /// Vertex data consumption.
+        const VERTEX_INPUT = 0x4,
+        /// Vertex shader execution.
+        const VERTEX_SHADER = 0x8,
+        /// Hull shader execution.
+        const HULL_SHADER = 0x10,
+        /// Domain shader execution.
+        const DOMAIN_SHADER = 0x20,
+        /// Geometry shader execution.
+        const GEOMETRY_SHADER = 0x40,
+        /// Pixel shader execution.
+        const PIXEL_SHADER = 0x80,
+        const EARLY_FRAGMENT_TESTS = 0x100,
+        const LATE_FRAGMENT_TESTS = 0x200,
+        const COLOR_ATTACHMENT_OUTPUT = 0x400,
+        const COMPUTE_SHADER = 0x800,
+        const TRANSFER = 0x1000,
+        const BOTTOM_OF_PIPE = 0x2000,
+        const HOST = 0x4000,
+    }
+);
