@@ -70,7 +70,14 @@ pub trait Factory<R: Resources> {
     fn bind_buffer_memory(&mut self, heap: &R::Heap, offset: u64, buffer: R::UnboundBuffer) -> Result<R::Buffer, buffer::CreationError>;
 
     ///
-    fn create_image(&mut self, heap: &R::Heap, offset: u64) -> Result<R::Image, image::CreationError>;
+    fn create_image(&mut self, kind: image::Kind, mip_levels: image::Level, format: format::Format, usage: image::Usage)
+         -> Result<R::UnboundImage, image::CreationError>;
+
+    ///
+    fn get_image_requirements(&mut self, image: &R::UnboundImage) -> memory::MemoryRequirements;
+
+    ///
+    fn bind_image_memory(&mut self, heap: &R::Heap, offset: u64, image: R::UnboundImage) -> Result<R::Image, image::CreationError>;
 
     ///
     fn view_image_as_render_target(&mut self, image: &R::Image, format: format::Format) -> Result<R::RenderTargetView, TargetViewError>;

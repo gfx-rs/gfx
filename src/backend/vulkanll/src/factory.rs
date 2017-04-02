@@ -22,7 +22,7 @@ use core::{self, buffer, format, factory as f, image, mapping, memory, pass, sha
 use core::{HeapType, SubPass};
 use core::pso::{self, EntryPoint};
 use {data, native, state};
-use {Factory, Resources as R};
+use {DeviceInner, Factory, Resources as R};
 
 #[derive(Debug)]
 pub struct UnboundBuffer(native::Buffer);
@@ -30,7 +30,16 @@ pub struct UnboundBuffer(native::Buffer);
 #[derive(Debug)]
 pub struct UnboundImage(native::Image);
 
-pub struct Mapping;
+pub struct Mapping {
+    device: Arc<DeviceInner>,
+    memory: vk::DeviceMemory,
+}
+
+impl Drop for Mapping {
+    fn drop(&mut self) {
+        unsafe { self.device.0.unmap_memory(self.memory) }
+    }
+}
 
 impl Factory {
     pub fn create_shader_library(&mut self, shaders: &[(EntryPoint, &[u8])]) -> Result<native::ShaderLib, shade::CreateShaderError> {
@@ -616,8 +625,109 @@ impl core::Factory<R> for Factory {
     }
 
     ///
-    fn create_image(&mut self, heap: &native::Heap, offset: u64) -> Result<native::Image, image::CreationError> {
-        unimplemented!()
+    fn create_image(&mut self, kind: image::Kind, mip_levels: image::Level, format: format::Format, usage: image::Usage)
+         -> Result<UnboundImage, image::CreationError>
+    {
+        use core::image::Kind::*;
+
+        let flags = match kind {
+            Cube(_) => vk::IMAGE_CREATE_CUBE_COMPATIBLE_BIT,
+            CubeArray(_, _) => vk::IMAGE_CREATE_CUBE_COMPATIBLE_BIT,
+            _ => vk::ImageCreateFlags::empty(),
+        };
+
+        let (image_type, extent, array_layers, aa_mode) = match kind {
+            D1(width) => (
+                vk::ImageType::Type1d,
+                vk::Extent3D { width: width as u32, height: 1, depth: 1 },
+                1,
+                image::AaMode::Single,
+            ),
+            D1Array(width, layers) => (
+                vk::ImageType::Type1d,
+                vk::Extent3D { width: width as u32, height: 1, depth: 1 },
+                layers,
+                image::AaMode::Single,
+            ),
+            D2(width, height, aa_mode) => (
+                vk::ImageType::Type2d,
+                vk::Extent3D { width: width as u32, height: height as u32, depth: 1 },
+                1,
+                aa_mode,
+            ),
+            D2Array(width, height, layers, aa_mode) => (
+                vk::ImageType::Type2d,
+                vk::Extent3D { width: width as u32, height: height as u32, depth: 1 },
+                layers,
+                aa_mode,
+            ),
+            D3(width, height, depth) => (
+                vk::ImageType::Type3d,
+                vk::Extent3D { width: width as u32, height: height as u32, depth: depth as u32 },
+                1,
+                image::AaMode::Single,
+            ),
+            Cube(size) => (
+                vk::ImageType::Type2d,
+                vk::Extent3D { width: size as u32, height: size as u32, depth: 1 },
+                6,
+                image::AaMode::Single,
+            ),
+            CubeArray(size, layers) => (
+                vk::ImageType::Type2d,
+                vk::Extent3D { width: size as u32, height: size as u32, depth: 1 },
+                6 * layers,
+                image::AaMode::Single,
+            ),
+        };
+
+        let samples = match aa_mode {
+            image::AaMode::Single => vk::SAMPLE_COUNT_1_BIT,
+            _ => unimplemented!(),
+        };
+
+        let info = vk::ImageCreateInfo {
+            s_type: vk::StructureType::ImageCreateInfo,
+            p_next: ptr::null(),
+            flags: flags,
+            image_type: image_type,
+            format: data::map_format(format.0, format.1).unwrap(), // TODO
+            extent: extent,
+            mip_levels: mip_levels as u32,
+            array_layers: array_layers as u32,
+            samples: samples,
+            tiling: vk::ImageTiling::Optimal, // TODO: read back?
+            usage: data::map_image_usage(usage),
+            sharing_mode: vk::SharingMode::Exclusive, // TODO:
+            queue_family_index_count: 0,
+            p_queue_family_indices: ptr::null(),
+            initial_layout: vk::ImageLayout::Undefined,
+        };
+
+        let image = unsafe {
+            self.inner.0.create_image(&info, None)
+                        .expect("Error on image creation") // TODO: error handling
+        };
+        
+        Ok(UnboundImage(native::Image(image)))
+    }
+
+    ///
+    fn get_image_requirements(&mut self, image: &UnboundImage) -> memory::MemoryRequirements {
+        let req = self.inner.0.get_image_memory_requirements((image.0).0);
+
+        memory::MemoryRequirements {
+            size: req.size,
+            alignment: req.alignment,
+        }
+    }
+
+    ///
+    fn bind_image_memory(&mut self, heap: &native::Heap, offset: u64, image: UnboundImage) -> Result<native::Image, image::CreationError> {
+        // TODO: error handling
+        unsafe { self.inner.0.bind_image_memory((image.0).0, heap.0, offset); }
+
+        Ok(image.0)
     }
 
     fn view_image_as_render_target(&mut self, image: &native::Image, format: format::Format) -> Result<native::RenderTargetView, f::TargetViewError> {
@@ -686,7 +796,12 @@ impl core::Factory<R> for Factory {
             }
         };
 
-        Ok(unsafe { mapping::Reader::new(slice, Mapping) })
+        let mapping = Mapping {
+            device: self.inner.clone(),
+            memory: buf.memory,
+        };
+
+        Ok(unsafe { mapping::Reader::new(slice, mapping) })
     }
 
     /// Acquire a mapping Writer
@@ -713,6 +828,11 @@ impl core::Factory<R> for Factory {
             }
         };
 
-        Ok(unsafe { mapping::Writer::new(slice, Mapping) })
+        let mapping = Mapping {
+            device: self.inner.clone(),
+            memory: buf.memory,
+        };
+
+        Ok(unsafe { mapping::Writer::new(slice, mapping) })
     }
 }

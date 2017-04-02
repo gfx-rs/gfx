@@ -60,16 +60,50 @@ impl CommandBuffer {
         unimplemented!()
     }
 
-    fn copy_buffer(&mut self, src: &native::Buffer, dst: &native::Buffer, regions: Option<&[command::BufferCopy]>) {
+    fn copy_buffer(&mut self, src: &native::Buffer, dst: &native::Buffer, regions:&[command::BufferCopy]) {
         unimplemented!()
     }
 
-    fn copy_image(&mut self, src: &native::Image, dest: &native::Image) {
+    fn copy_image(&mut self, src: &native::Image, dst: &native::Image) {
         unimplemented!()
     }
 
-    fn copy_buffer_to_image(&mut self) {
-        unimplemented!()
+    fn copy_buffer_to_image(&mut self, src: &native::Buffer, dst: &native::Image, layout: memory::ImageLayout, regions: &[command::BufferImageCopy]) {
+        let regions = regions.iter().map(|region| {
+            let subresource_layers = vk::ImageSubresourceLayers {
+                aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT, // TODO
+                mip_level: region.image_mip_level as u32,
+                base_array_layer: region.image_base_layer as u32,
+                layer_count: region.image_layers as u32,
+            };
+
+            vk::BufferImageCopy {
+                buffer_offset: region.buffer_offset,
+                buffer_row_length: 0,
+                buffer_image_height: 0,
+                image_subresource: subresource_layers,
+                image_offset: vk::Offset3D {
+                    x: region.image_offset.x,
+                    y: region.image_offset.y,
+                    z: region.image_offset.z,
+                },
+                image_extent: vk::Extent3D {
+                    width:  region.image_extent.width,
+                    height: region.image_extent.height,
+                    depth:  region.image_extent.depth,
+                },
+            }
+        }).collect::<Vec<_>>();
+
+        unsafe {
+            self.device.0.cmd_copy_buffer_to_image(
+                self.inner, // commandBuffer
+                src.inner, // srcBuffer
+                dst.0, // dstImage
+                data::map_image_layout(layout), // dstImageLayout
+                &regions, // pRegions
+            );
+        }
     }
 
     fn copy_image_to_buffer(&mut self) {
@@ -343,16 +377,16 @@ macro_rules! impl_transfer_cmd_buffer {
                 self.0.update_buffer(buffer, data, offset)
             }
 
-            fn copy_buffer(&mut self, src: &native::Buffer, dest: &native::Buffer, regions: Option<&[command::BufferCopy]>) {
-                self.0.copy_buffer(src, dest, regions)
+            fn copy_buffer(&mut self, src: &native::Buffer, dst: &native::Buffer, regions: &[command::BufferCopy]) {
+                self.0.copy_buffer(src, dst, regions)
             }
 
-            fn copy_image(&mut self, src: &native::Image, dest: &native::Image) {
-                self.0.copy_image(src, dest)
+            fn copy_image(&mut self, src: &native::Image, dst: &native::Image) {
+                self.0.copy_image(src, dst)
             }
 
-            fn copy_buffer_to_image(&mut self) {
-                self.0.copy_buffer_to_image()
+            fn copy_buffer_to_image(&mut self, src: &native::Buffer, dst: &native::Image, layout: memory::ImageLayout, regions: &[command::BufferImageCopy]) {
+                self.0.copy_buffer_to_image(src, dst, layout, regions)
             }
 
             fn copy_image_to_buffer(&mut self) {
@@ -524,7 +558,7 @@ impl<'cb, 'rp, 'fb, 'enc, C> command::RenderPassInlineEncoder<'cb, 'rp, 'fb, 'en
     where C: core::GraphicsCommandBuffer<R> + DerefMut<Target=native::CommandBuffer>
 {
     fn clear_attachment(&mut self) {
-
+        unimplemented!()
     }
 
     fn draw(&mut self, start: VertexCount, count: VertexCount, instance: Option<command::InstanceParams>) {
@@ -532,15 +566,15 @@ impl<'cb, 'rp, 'fb, 'enc, C> command::RenderPassInlineEncoder<'cb, 'rp, 'fb, 'en
     }
 
     fn draw_indexed(&mut self, start: VertexCount, count: VertexCount, base: VertexOffset, instance: Option<command::InstanceParams>) {
-
+        self.command_buffer.draw_indexed(start, count, base, instance)
     }
 
     fn draw_indirect(&mut self) {
-
+        unimplemented!()
     }
 
     fn draw_indexed_indirect(&mut self) {
-
+        unimplemented!()
     }
 
     fn bind_index_buffer(&mut self, ibv: IndexBufferView<R>) {
@@ -548,7 +582,7 @@ impl<'cb, 'rp, 'fb, 'enc, C> command::RenderPassInlineEncoder<'cb, 'rp, 'fb, 'en
     }
 
     fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<R>) {
-
+        self.command_buffer.bind_vertex_buffers(vbs)
     }
 
     fn set_viewports(&mut self, viewports: &[target::Rect]) {
@@ -568,11 +602,11 @@ impl<'cb, 'rp, 'fb, 'enc, C> command::RenderPassInlineEncoder<'cb, 'rp, 'fb, 'en
     }
 
     fn bind_descriptor_sets(&mut self) {
-
+        unimplemented!()
     }
 
     fn push_constants(&mut self) {
-
+        unimplemented!()
     }
 }
 

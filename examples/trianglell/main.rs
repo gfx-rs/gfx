@@ -20,13 +20,18 @@ extern crate gfx_device_dx12ll as back;
 extern crate gfx_device_vulkanll as back;
 
 extern crate winit;
+extern crate image;
 
 use gfx_corell::{buffer, command, format, pass, pso, state, target, 
-    Device, CommandPool, GraphicsCommandPool, GraphicsCommandBuffer, ProcessingCommandBuffer, PrimaryCommandBuffer,
+    Device, CommandPool, GraphicsCommandPool,
+    GraphicsCommandBuffer, ProcessingCommandBuffer, TransferCommandBuffer, PrimaryCommandBuffer,
     Primitive, Instance, Adapter, Surface, SwapChain, QueueFamily, Factory, SubPass};
 use gfx_corell::command::{RenderPassEncoder, RenderPassInlineEncoder};
 use gfx_corell::format::Formatted;
 use gfx_corell::memory::{self, ImageBarrier};
+
+use std::io::Cursor;
+use gfx_corell::image as i;
 
 pub type ColorFormat = gfx_corell::format::Srgba8;
 
@@ -36,10 +41,14 @@ struct Vertex {
     a_Color: [f32; 3],
 }
 
-const TRIANGLE: [Vertex; 3] = [
+const TRIANGLE: [Vertex; 6] = [
     Vertex { a_Pos: [ -0.5, 0.5 ], a_Color: [1.0, 0.0, 0.0] },
     Vertex { a_Pos: [  0.5, 0.5 ], a_Color: [0.0, 1.0, 0.0] },
-    Vertex { a_Pos: [  0.0,-0.5 ], a_Color: [0.0, 0.0, 1.0] }
+    Vertex { a_Pos: [  0.0,-0.5 ], a_Color: [0.0, 0.0, 1.0] },
+
+    Vertex { a_Pos: [ -0.5, 0.5 ], a_Color: [1.0, 0.0, 0.0] },
+    Vertex { a_Pos: [  0.5, 0.5 ], a_Color: [0.0, 1.0, 0.0] },
+    Vertex { a_Pos: [  0.0, 0.8 ], a_Color: [0.0, 0.0, 1.0] },
 ];
 
 #[cfg(any(feature = "vulkan", target_os = "windows"))]
@@ -163,16 +172,15 @@ fn main() {
     }).collect::<Vec<_>>();
 
 
+    let upload_heap = heap_types.iter().find(|&&heap_type| heap_type.properties.contains(memory::UPLOAD_HEAP)).unwrap();
+
     // Buffer allocations
     println!("Memory heaps: {:?}", heap_types);
 
-    let heap = {
-        let upload_heap = heap_types.iter().find(|&&heap_type| heap_type.properties.contains(memory::UPLOAD_HEAP)).unwrap();
-        factory.create_heap(upload_heap, 1024)
-    };
+    let heap = factory.create_heap(upload_heap, 1024);
 
     let vertex_buffer = {
-        let buffer = factory.create_buffer(3 * std::mem::size_of::<Vertex>() as u64, buffer::VERTEX).unwrap();
+        let buffer = factory.create_buffer(TRIANGLE.len() as u64 * std::mem::size_of::<Vertex>() as u64, buffer::VERTEX).unwrap();
         println!("{:?}", buffer);
         let buffer_req = factory.get_buffer_requirements(&buffer);
         println!("buffer requirements: {:?}", buffer_req);
@@ -183,11 +191,41 @@ fn main() {
     // TODO: check transitions: read/write mapping and vertex buffer read
 
     {
-        let mut mapping = factory.write_mapping::<Vertex>(&vertex_buffer, 0, 3).unwrap();
+        let mut mapping = factory.write_mapping::<Vertex>(&vertex_buffer, 0, TRIANGLE.len() as u64).unwrap();
         mapping.copy_from_slice(&TRIANGLE);
 
         // TODO: flush mapping
     }
+
+    // Image
+    let img_data = include_bytes!("data/logo.png");
+
+    let img = image::load(Cursor::new(&img_data[..]), image::PNG).unwrap().to_rgba();
+    let (width, height) = img.dimensions();
+    let kind = i::Kind::D2(width as i::Size, height as i::Size, i::AaMode::Single);
+
+    let image_upload_heap = factory.create_heap(upload_heap, img_data.len() as u64);
+    let image_upload_buffer = {
+        let buffer = factory.create_buffer(img_data.len() as u64, buffer::TRANSFER_SRC).unwrap();
+        let buffer_req = factory.get_buffer_requirements(&buffer);
+        factory.bind_buffer_memory(&image_upload_heap, 0, buffer).unwrap()
+    };
+
+    // copy image data into staging buffer
+    {
+        let mut mapping = factory.write_mapping::<u8>(&image_upload_buffer, 0, img_data.len() as u64).unwrap();
+        mapping.copy_from_slice(&img_data[..]);
+    }
+
+    let image = factory.create_image(kind, 1, gfx_corell::format::Srgba8::get_format(), i::TRANSFER_DST).unwrap(); // TODO: usage
+    let image_req = factory.get_image_requirements(&image);
+
+    println!("image requirements: {:?}", image_req);
+
+    let device_heap = heap_types.iter().find(|&&heap_type| heap_type.properties.contains(memory::DEVICE_LOCAL)).unwrap();
+    let image_heap = factory.create_heap(device_heap, image_req.size);
+
+    let image_logo = factory.bind_image_memory(&image_heap, 0, image).unwrap();
 
     // Rendering setup
     let viewport = target::Rect {
@@ -201,6 +239,29 @@ fn main() {
 
     let mut graphics_pool = back::GraphicsCommandPool::from_queue(&mut general_queues[0], 16);
 
+    // copy buffer to texture
+    {
+        let submit = {
+            let mut cmd_buffer = graphics_pool.acquire_command_buffer();
+            // TODO: pipeline barrier
+            cmd_buffer.copy_buffer_to_image(
+                &image_upload_buffer,
+                &image_logo,
+                memory::ImageLayout::General, // TODO
+                &[command::BufferImageCopy {
+                    buffer_offset: 0,
+                    image_mip_level: 0,
+                    image_base_layer: 0,
+                    image_layers: 1,
+                    image_offset: command::Offset { x: 0, y: 0, z: 0 },
+                    image_extent: command::Extent { width: width, height: height, depth: 1 },
+                }]);
+            cmd_buffer.finish()
+        };
+
+        general_queues[0].submit_graphics(&[submit]);
+    }
+    
     //
     'main: loop {
         for event in window.poll_events() {
@@ -232,7 +293,7 @@ fn main() {
                     target::Rect { x: 0, y: 0, w: 1024, h: 768 },
                     &[command::ClearValue::Color(command::ClearColor::Float([0.2, 0.2, 0.2, 1.0]))]);
 
-                encoder.draw(0, 3, None);
+                encoder.draw(0, 6, None);
             }
 
             // TODO: should transition to (_, Present) -> Present (for d3d12)

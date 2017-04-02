@@ -30,7 +30,6 @@ use ash::{Entry, LoadingError};
 use core::{format, memory};
 use core::command::Submit;
 use std::ffi::{CStr, CString};
-use std::iter;
 use std::mem;
 use std::ptr;
 use std::sync::Arc;
