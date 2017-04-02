@@ -328,10 +328,10 @@ impl core::Factory<R> for Factory {
                 s_type: vk::StructureType::PipelineVertexInputStateCreateInfo,
                 p_next: ptr::null(),
                 flags: vk::PipelineVertexInputStateCreateFlags::empty(),
-                vertex_binding_description_count: vertex_bindings.len() as u32, // TODO
-                p_vertex_binding_descriptions: vertex_bindings.as_ptr(), // TODO
-                vertex_attribute_description_count: vertex_attributes.len() as u32, // TODO
-                p_vertex_attribute_descriptions: vertex_attributes.as_ptr(), // TODO
+                vertex_binding_description_count: vertex_bindings.len() as u32,
+                p_vertex_binding_descriptions: vertex_bindings.as_ptr(),
+                vertex_attribute_description_count: vertex_attributes.len() as u32,
+                p_vertex_attribute_descriptions: vertex_attributes.as_ptr(),
             });
 
             info_input_assembly_states.push(vk::PipelineInputAssemblyStateCreateInfo {
