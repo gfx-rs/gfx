@@ -100,7 +100,10 @@ pub struct SubpassCommandBuffer(pub CommandBuffer);
 pub struct Heap(pub vk::DeviceMemory);
 
 #[derive(Debug, Hash)]
-pub struct Buffer(pub vk::Buffer);
+pub struct Buffer {
+    pub inner: vk::Buffer,
+    pub memory: vk::DeviceMemory,
+}
 
 #[derive(Debug, Hash)]
 pub struct Image(pub vk::Image);

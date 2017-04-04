@@ -36,6 +36,7 @@ pub mod command;
 pub mod factory;
 pub mod format;
 pub mod image;
+pub mod mapping;
 pub mod memory;
 pub mod pass;
 pub mod pool;
@@ -260,6 +261,7 @@ pub trait Resources:          Clone + Hash + Debug + Any {
     type Semaphore:           Debug + Any + Send + Sync;
     type Fence:               Debug + Any + Send + Sync;
     type Heap:                Debug + Any;
+    type Mapping;
 }
 
 /// Different types of a specific API.

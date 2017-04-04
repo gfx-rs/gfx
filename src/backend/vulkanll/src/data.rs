@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use ash::vk;
-use core::buffer;
+use core::{buffer, image};
 use core::command::ClearColor;
 use core::format::{SurfaceType, ChannelType};
 use core::memory::{self, ImageAccess, ImageLayout};
@@ -284,6 +284,25 @@ pub fn map_buffer_usage(usage: buffer::Usage) -> vk::BufferUsageFlags {
     }
     if usage.contains(buffer::VERTEX) {
         flags |= vk::BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    }
+
+    flags
+}
+
+pub fn map_image_usage(usage: image::Usage) -> vk::ImageUsageFlags {
+    let mut flags = vk::ImageUsageFlags::empty();
+
+    if usage.contains(image::TRANSFER_SRC) {
+        flags |= vk::IMAGE_USAGE_TRANSFER_SRC_BIT;
+    }
+    if usage.contains(image::TRANSFER_DST) {
+        flags |= vk::IMAGE_USAGE_TRANSFER_DST_BIT;
+    }
+    if usage.contains(image::COLOR_ATTACHMENT) {
+        flags |= vk::IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    }
+    if usage.contains(image::DEPTH_STENCIL_ATTACHMENT) {
+        flags |= vk::IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
     }
 
     flags

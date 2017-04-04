@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use {buffer, format, image, memory, pass, pso, shade};
+use {buffer, format, image, mapping, memory, pass, pso, shade};
 use {HeapType, Resources, SubPass};
 
 /// Error creating either a ShaderResourceView, or UnorderedAccessView.
@@ -70,8 +70,31 @@ pub trait Factory<R: Resources> {
     fn bind_buffer_memory(&mut self, heap: &R::Heap, offset: u64, buffer: R::UnboundBuffer) -> Result<R::Buffer, buffer::CreationError>;
 
     ///
-    fn create_image(&mut self, heap: &R::Heap, offset: u64) -> Result<R::Image, image::CreationError>;
+    fn create_image(&mut self, kind: image::Kind, mip_levels: image::Level, format: format::Format, usage: image::Usage)
+         -> Result<R::UnboundImage, image::CreationError>;
+
+    ///
+    fn get_image_requirements(&mut self, image: &R::UnboundImage) -> memory::MemoryRequirements;
+
+    ///
+    fn bind_image_memory(&mut self, heap: &R::Heap, offset: u64, image: R::UnboundImage) -> Result<R::Image, image::CreationError>;
 
     ///
     fn view_image_as_render_target(&mut self, image: &R::Image, format: format::Format) -> Result<R::RenderTargetView, TargetViewError>;
+
+    // TODO: mapping requires further looking into.
+    // vulkan requires non-coherent mapping to round the range delimiters
+    // Nested mapping is not allowed in vulkan.
+    // How to handle it properly for backends? Explicit synchronization?
+    /// Acquire a mapping Reader.
+    fn read_mapping<'a, T>(&self, buf: &'a R::Buffer, offset: u64, size: u64)
+                               -> Result<mapping::Reader<'a, R, T>,
+                                         mapping::Error>
+        where T: Copy;
+
+    /// Acquire a mapping Writer
+    fn write_mapping<'a, 'b, T>(&mut self, buf: &'a R::Buffer, offset: u64, size: u64)
+                                -> Result<mapping::Writer<'a, R, T>,
+                                          mapping::Error>
+        where T: Copy;
 }

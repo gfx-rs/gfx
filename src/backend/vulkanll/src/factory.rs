@@ -14,21 +14,32 @@
 
 use ash::vk;
 use ash::version::DeviceV1_0;
-use std::{mem, ptr};
+use std::{mem, ptr, slice};
 use std::sync::Arc;
 use std::collections::BTreeMap;
 
-use core::{self, buffer, format, factory as f, image, memory, pass, shade, state as s};
+use core::{self, buffer, format, factory as f, image, mapping, memory, pass, shade, state as s};
 use core::{HeapType, SubPass};
 use core::pso::{self, EntryPoint};
 use {data, native, state};
-use {Factory, Resources as R};
+use {DeviceInner, Factory, Resources as R};
 
 #[derive(Debug)]
 pub struct UnboundBuffer(native::Buffer);
 
 #[derive(Debug)]
 pub struct UnboundImage(native::Image);
+
+pub struct Mapping {
+    device: Arc<DeviceInner>,
+    memory: vk::DeviceMemory,
+}
+
+impl Drop for Mapping {
+    fn drop(&mut self) {
+        unsafe { self.device.0.unmap_memory(self.memory) }
+    }
+}
 
 impl Factory {
     pub fn create_shader_library(&mut self, shaders: &[(EntryPoint, &[u8])]) -> Result<native::ShaderLib, shade::CreateShaderError> {
@@ -184,6 +195,7 @@ impl core::Factory<R> for Factory {
     {
         // Store pipeline parameters to avoid stack usage
         let mut info_stages                = Vec::with_capacity(descs.len());
+        let mut info_vertex_descs          = Vec::with_capacity(descs.len());
         let mut info_vertex_input_states   = Vec::with_capacity(descs.len());
         let mut info_input_assembly_states = Vec::with_capacity(descs.len());
         let mut info_tessellation_states   = Vec::with_capacity(descs.len());
@@ -281,14 +293,45 @@ impl core::Factory<R> for Factory {
 
             info_stages.push(stages);
 
+            {
+                let mut vertex_bindings = Vec::new();
+                for (i, vbuf) in desc.vertex_buffers.iter().enumerate() {
+                    vertex_bindings.push(vk::VertexInputBindingDescription {
+                        binding: i as u32,
+                        stride: vbuf.stride as u32,
+                        input_rate: if vbuf.rate == 0 {
+                            vk::VertexInputRate::Vertex
+                        } else {
+                            vk::VertexInputRate::Instance
+                        },
+                    });
+                }
+                let mut vertex_attributes = Vec::new();
+                for (i, attr) in desc.attributes.iter().enumerate() {
+                    vertex_attributes.push(vk::VertexInputAttributeDescription {
+                        location: i as u32,
+                        binding: attr.0 as u32,
+                        format: match data::map_format(attr.1.format.0, attr.1.format.1) {
+                            Some(fm) => fm,
+                            None => return Err(pso::CreationError),
+                        },
+                        offset: attr.1.offset as u32,
+                    });
+                }
+
+                info_vertex_descs.push((vertex_bindings, vertex_attributes));
+            }
+
+            let &(ref vertex_bindings, ref vertex_attributes) = info_vertex_descs.last().unwrap();
+
             info_vertex_input_states.push(vk::PipelineVertexInputStateCreateInfo {
                 s_type: vk::StructureType::PipelineVertexInputStateCreateInfo,
                 p_next: ptr::null(),
                 flags: vk::PipelineVertexInputStateCreateFlags::empty(),
-                vertex_binding_description_count: 0, // TODO
-                p_vertex_binding_descriptions: ptr::null(), // TODO
-                vertex_attribute_description_count: 0, // TODO
-                p_vertex_attribute_descriptions: ptr::null(), // TODO
+                vertex_binding_description_count: vertex_bindings.len() as u32,
+                p_vertex_binding_descriptions: vertex_bindings.as_ptr(),
+                vertex_attribute_description_count: vertex_attributes.len() as u32,
+                p_vertex_attribute_descriptions: vertex_attributes.as_ptr(),
             });
 
             info_input_assembly_states.push(vk::PipelineInputAssemblyStateCreateInfo {
@@ -554,11 +597,14 @@ impl core::Factory<R> for Factory {
                         .expect("Error on buffer creation") // TODO: error handling
         };
         
-        Ok(UnboundBuffer(native::Buffer(buffer)))
+        Ok(UnboundBuffer(native::Buffer {
+            inner: buffer,
+            memory: vk::DeviceMemory::null(),
+        }))
     }
 
     fn get_buffer_requirements(&mut self, buffer: &UnboundBuffer) -> memory::MemoryRequirements {
-        let req = self.inner.0.get_buffer_memory_requirements((buffer.0).0);
+        let req = self.inner.0.get_buffer_memory_requirements((buffer.0).inner);
 
         memory::MemoryRequirements {
             size: req.size,
@@ -568,14 +614,120 @@ impl core::Factory<R> for Factory {
 
     fn bind_buffer_memory(&mut self, heap: &native::Heap, offset: u64, buffer: UnboundBuffer) -> Result<native::Buffer, buffer::CreationError> {
         // TODO: error handling
-        unsafe { self.inner.0.bind_buffer_memory((buffer.0).0, heap.0, offset); }
+        unsafe { self.inner.0.bind_buffer_memory((buffer.0).inner, heap.0, offset); }
 
-        Ok(buffer.0)
+        let buffer = native::Buffer {
+            inner: buffer.0.inner,
+            memory: heap.0,
+        };
+
+        Ok(buffer)
     }
 
     ///
-    fn create_image(&mut self, heap: &native::Heap, offset: u64) -> Result<native::Image, image::CreationError> {
-        unimplemented!()
+    fn create_image(&mut self, kind: image::Kind, mip_levels: image::Level, format: format::Format, usage: image::Usage)
+         -> Result<UnboundImage, image::CreationError>
+    {
+        use core::image::Kind::*;
+
+        let flags = match kind {
+            Cube(_) => vk::IMAGE_CREATE_CUBE_COMPATIBLE_BIT,
+            CubeArray(_, _) => vk::IMAGE_CREATE_CUBE_COMPATIBLE_BIT,
+            _ => vk::ImageCreateFlags::empty(),
+        };
+
+        let (image_type, extent, array_layers, aa_mode) = match kind {
+            D1(width) => (
+                vk::ImageType::Type1d,
+                vk::Extent3D { width: width as u32, height: 1, depth: 1 },
+                1,
+                image::AaMode::Single,
+            ),
+            D1Array(width, layers) => (
+                vk::ImageType::Type1d,
+                vk::Extent3D { width: width as u32, height: 1, depth: 1 },
+                layers,
+                image::AaMode::Single,
+            ),
+            D2(width, height, aa_mode) => (
+                vk::ImageType::Type2d,
+                vk::Extent3D { width: width as u32, height: height as u32, depth: 1 },
+                1,
+                aa_mode,
+            ),
+            D2Array(width, height, layers, aa_mode) => (
+                vk::ImageType::Type2d,
+                vk::Extent3D { width: width as u32, height: height as u32, depth: 1 },
+                layers,
+                aa_mode,
+            ),
+            D3(width, height, depth) => (
+                vk::ImageType::Type3d,
+                vk::Extent3D { width: width as u32, height: height as u32, depth: depth as u32 },
+                1,
+                image::AaMode::Single,
+            ),
+            Cube(size) => (
+                vk::ImageType::Type2d,
+                vk::Extent3D { width: size as u32, height: size as u32, depth: 1 },
+                6,
+                image::AaMode::Single,
+            ),
+            CubeArray(size, layers) => (
+                vk::ImageType::Type2d,
+                vk::Extent3D { width: size as u32, height: size as u32, depth: 1 },
+                6 * layers,
+                image::AaMode::Single,
+            ),
+        };
+
+        let samples = match aa_mode {
+            image::AaMode::Single => vk::SAMPLE_COUNT_1_BIT,
+            _ => unimplemented!(),
+        };
+
+        let info = vk::ImageCreateInfo {
+            s_type: vk::StructureType::ImageCreateInfo,
+            p_next: ptr::null(),
+            flags: flags,
+            image_type: image_type,
+            format: data::map_format(format.0, format.1).unwrap(), // TODO
+            extent: extent,
+            mip_levels: mip_levels as u32,
+            array_layers: array_layers as u32,
+            samples: samples,
+            tiling: vk::ImageTiling::Optimal, // TODO: read back?
+            usage: data::map_image_usage(usage),
+            sharing_mode: vk::SharingMode::Exclusive, // TODO:
+            queue_family_index_count: 0,
+            p_queue_family_indices: ptr::null(),
+            initial_layout: vk::ImageLayout::Undefined,
+        };
+
+        let image = unsafe {
+            self.inner.0.create_image(&info, None)
+                        .expect("Error on image creation") // TODO: error handling
+        };
+        
+        Ok(UnboundImage(native::Image(image)))
+    }
+
+    ///
+    fn get_image_requirements(&mut self, image: &UnboundImage) -> memory::MemoryRequirements {
+        let req = self.inner.0.get_image_memory_requirements((image.0).0);
+
+        memory::MemoryRequirements {
+            size: req.size,
+            alignment: req.alignment,
+        }
+    }
+
+    ///
+    fn bind_image_memory(&mut self, heap: &native::Heap, offset: u64, image: UnboundImage) -> Result<native::Image, image::CreationError> {
+        // TODO: error handling
+        unsafe { self.inner.0.bind_image_memory((image.0).0, heap.0, offset); }
+
+        Ok(image.0)
     }
 
     fn view_image_as_render_target(&mut self, image: &native::Image, format: format::Format) -> Result<native::RenderTargetView, f::TargetViewError> {
@@ -618,5 +770,69 @@ impl core::Factory<R> for Factory {
         };
 
         Ok(rtv)
+    }
+
+    /// Acquire a mapping Reader.
+    fn read_mapping<'a, T>(&self, buf: &'a native::Buffer, offset: u64, size: u64)
+                               -> Result<mapping::Reader<'a, R, T>, mapping::Error>
+        where T: Copy
+    {
+        let slice = unsafe {
+            let mut data: *mut () = mem::uninitialized();
+            let err_code = self.inner.0.fp_v1_0().map_memory(
+                self.inner.0.handle(),
+                buf.memory,
+                offset,
+                size,
+                vk::MemoryMapFlags::empty(),
+                &mut data);
+
+            let x: *mut T = data as *mut T;
+            match err_code {
+                vk::Result::Success => {
+                    slice::from_raw_parts_mut(x, size as usize)
+                }
+                _ => panic!(err_code), // TODO
+            }
+        };
+
+        let mapping = Mapping {
+            device: self.inner.clone(),
+            memory: buf.memory,
+        };
+
+        Ok(unsafe { mapping::Reader::new(slice, mapping) })
+    }
+
+    /// Acquire a mapping Writer
+    fn write_mapping<'a, 'b, T>(&mut self, buf: &'a native::Buffer, offset: u64, size: u64)
+                                -> Result<mapping::Writer<'a, R, T>, mapping::Error>
+        where T: Copy
+    {
+        let slice = unsafe {
+            let mut data: *mut () = mem::uninitialized();
+            let err_code = self.inner.0.fp_v1_0().map_memory(
+                self.inner.0.handle(),
+                buf.memory,
+                offset,
+                size * mem::size_of::<T>() as u64,
+                vk::MemoryMapFlags::empty(),
+                &mut data);
+
+            let x: *mut T = data as *mut T;
+            match err_code {
+                vk::Result::Success => {
+                    slice::from_raw_parts_mut(x, size as usize)
+                }
+                _ => panic!(err_code), // TODO
+            }
+        };
+
+        let mapping = Mapping {
+            device: self.inner.clone(),
+            memory: buf.memory,
+        };
+
+        Ok(unsafe { mapping::Writer::new(slice, mapping) })
     }
 }

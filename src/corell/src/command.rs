@@ -15,7 +15,7 @@
 //! Command Buffer device interface
 
 use std::ops::{Deref, DerefMut};
-use {memory, state, pso, target};
+use {image, memory, state, pso, target};
 use buffer::IndexBufferView;
 use {InstanceCount, VertexCount, VertexOffset, Resources};
 
@@ -43,14 +43,35 @@ pub enum ClearValue {
     DepthStencil(ClearDepthStencil),
 }
 
+pub struct Offset {
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+}
+
+pub struct Extent {
+    pub width: u32,
+    pub height: u32,
+    pub depth: u32,
+}
+
 /// Region of two buffers for copying.
 pub struct BufferCopy {
     /// Buffer region source offset.
-    pub src: usize,
+    pub src: u64,
     /// Buffer region destionation offset.
-    pub dst: usize,
+    pub dst: u64,
     /// Region size.
-    pub size: usize,
+    pub size: u64,
+}
+
+pub struct BufferImageCopy {
+    pub buffer_offset: u64,
+    pub image_mip_level: image::Level,
+    pub image_base_layer: image::Layer,
+    pub image_layers: image::Layer,
+    pub image_offset: Offset,
+    pub image_extent: Extent,
 }
 
 /// Optional instance parameters: (instance count, buffer offset)
@@ -215,9 +236,9 @@ pub trait TransferCommandBuffer<R: Resources> : PrimaryCommandBuffer<R> {
     fn update_buffer(&mut self, &R::Buffer, data: &[u8], offset: usize);
 
     // TODO: memory aliasing or overlapping regions will result in undefined behavior!
-    fn copy_buffer(&mut self, src: &R::Buffer, dest: &R::Buffer, regions: Option<&[BufferCopy]>);
+    fn copy_buffer(&mut self, src: &R::Buffer, dest: &R::Buffer, regions: &[BufferCopy]);
     fn copy_image(&mut self, src: &R::Image, dest: &R::Image);
-    fn copy_buffer_to_image(&mut self);
+    fn copy_buffer_to_image(&mut self, src: &R::Buffer, dst: &R::Image, layout: memory::ImageLayout, regions: &[BufferImageCopy]);
     fn copy_image_to_buffer(&mut self); 
 }
 
