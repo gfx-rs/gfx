@@ -153,13 +153,13 @@ impl core::Adapter for Adapter {
                 type_flags |= memory::DEVICE_LOCAL;
             }
             if mem.property_flags.intersects(vk::MEMORY_PROPERTY_HOST_COHERENT_BIT) {
-                type_flags |= memory::WRITE_BACK;
+                type_flags |= memory::COHERENT;
             }
             if mem.property_flags.intersects(vk::MEMORY_PROPERTY_HOST_CACHED_BIT) {
-                type_flags |= memory::WRITE_COMBINED;
+                type_flags |= memory::CPU_CACHED;
             }
             if mem.property_flags.intersects(vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
-                type_flags |= memory::HOST_VISIBLE;
+                type_flags |= memory::CPU_VISIBLE;
             }
             if mem.property_flags.intersects(vk::MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT) {
                 type_flags |= memory::LAZILY_ALLOCATED;

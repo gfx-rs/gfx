@@ -39,33 +39,28 @@ bitflags!(
     pub flags HeapProperties: u16 {
         /// Device local heaps are located on the GPU.
         const DEVICE_LOCAL   = 0x1,
-        /// 
-        const WRITE_BACK     = 0x2,
 
-        /// Cached memory writes.
+        /// CPU-GPU coherent.
         ///
-        /// Buffer writes will be cached up for possible larger bus transactions.
-        /// It's not advised to use these heaps for reading back data.
-        const WRITE_COMBINED = 0x4,
+        /// Non-coherent heaps require explicit flushing.
+        const COHERENT     = 0x2,
 
         /// Host visible heaps can be accessed by the CPU.
-        const HOST_VISIBLE   = 0x8,
+        ///
+        /// Backends must provide at least one cpu visible heap.
+        const CPU_VISIBLE   = 0x4,
+
+        /// Cached memory by the CPU
+        const CPU_CACHED = 0x8,
+
+        /// Memory combined writes.
+        ///
+        /// Buffer writes will be combined for possible larger bus transactions.
+        /// It's not advised to use these heaps for reading back data.
+        const WRITE_COMBINED = 0x10,
 
         ///
-        const LAZILY_ALLOCATED = 0x10,
-
-        /// Default heap type for GPU resources.
-        ///
-        /// This heap type *must* be always supported by the backend.
-        const DEFAULT = DEVICE_LOCAL.bits,
-
-        /// Recommended heap type for uploading data (staging).
-        ///
-        /// This heap type *must* be always supported by the backend.
-        const UPLOAD_HEAP = HOST_VISIBLE.bits | WRITE_COMBINED.bits,
-
-        /// Recommended heap type for reading-back/downloading data.
-        const READBACK_HEAP = HOST_VISIBLE.bits | WRITE_BACK.bits,
+        const LAZILY_ALLOCATED = 0x20,
     }
 );
 

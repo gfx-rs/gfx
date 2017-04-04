@@ -172,7 +172,11 @@ fn main() {
     }).collect::<Vec<_>>();
 
 
-    let upload_heap = heap_types.iter().find(|&&heap_type| heap_type.properties.contains(memory::UPLOAD_HEAP)).unwrap();
+    let upload_heap =
+        heap_types.iter().find(|&&heap_type| {
+            heap_type.properties.contains(memory::CPU_VISIBLE | memory::COHERENT)
+        })
+        .unwrap();
 
     // Buffer allocations
     println!("Memory heaps: {:?}", heap_types);
@@ -193,8 +197,6 @@ fn main() {
     {
         let mut mapping = factory.write_mapping::<Vertex>(&vertex_buffer, 0, TRIANGLE.len() as u64).unwrap();
         mapping.copy_from_slice(&TRIANGLE);
-
-        // TODO: flush mapping
     }
 
     // Image
