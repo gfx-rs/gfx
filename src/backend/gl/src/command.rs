@@ -166,15 +166,12 @@ struct Cache {
     program: Program,
     constant_buffer: Option<c::pso::ConstantBufferParam<Resources>>,
     resource_view: Option<c::pso::ResourceViewParam<Resources>>,
-    vao_bound: bool,
     scissor_test: Option<Rect>,
     depth_state: Option<s::Depth>,
     blend_state: Option<(c::ColorSlot, s::Color)>,
     blend_color: Option<ColorValue>,
     viewport: Option<Rect>,
     rasterizer: Option<s::Rasterizer>,
-    stencil_enabled: Option<s::Stencil>,
-    stencil_state: Option<((Stencil, Stencil), s::CullFace)>,
     framebuffer: Option<(Access, FrameBuffer)>,
     index: Buffer,
 }
@@ -197,15 +194,12 @@ impl Cache {
             program: 0,
             constant_buffer: None,
             resource_view: None,
-            vao_bound: false,
             scissor_test: None,
             depth_state: None,
             blend_state: None,
             blend_color: None,
             viewport: None,
             rasterizer: None,
-            stencil_enabled: None,
-            stencil_state: None,
             framebuffer: None,
             index: 0,
         }
@@ -243,20 +237,11 @@ impl Cache {
         buf.push(Command::BindResourceView(resource_view));
     }
 
-    fn bind_vao(&mut self, buf: &mut Vec<Command>) {
-        // TODO: Double-check this is where the
-        // EnableVertexAttrib stuff happens.
-        if self.vao_bound {
-                    return;
-                }
-        self.vao_bound = true;
-        buf.push(Command::BindVao);
-    }
-
-    fn bind_index(&mut self, buf: &mut Vec<Command>, buffer: Buffer) {
-        if self.index == buffer {
+    fn bind_index(&mut self, buf: &mut Vec<Command>, buffer: Buffer, itype: c::IndexType) {
+        if self.index == buffer && itype == self.index_type {
             return;
         }
+        self.index_type = itype;
         self.index = buffer;
         buf.push(Command::BindIndex(buffer));
     }
@@ -308,23 +293,7 @@ impl Cache {
         // to completely remove all redundant calls if the
         // stencil is enabled;
         // we'll be re-enabling it over and over.
-        // BUGGO: This isn't actually removing all the
-        // bogus glDisable(cap = GL_STENCIL_TEST) calls,
-        // look into it more.
-        if let Some(stencil) = option_stencil {
-            // Enable stenciling
-            // BUGGO:
-            // We don't bother optimizing this case yet
-            // because it's a PITA, so we just continue.
-        } else {
-            // Disable stenciling
-            if self.stencil_enabled == option_stencil {
-                // Already disabled, all good.
-                return;
-            } else {
-                self.stencil_enabled = option_stencil;
-            }
-                }
+        // For now though, we just don't handle it.
         buf.push(Command::SetStencilState(option_stencil, stencils, cullface));
     }
     fn set_blend_state(&mut self, buf: &mut Vec<Command>, color_slot: c::ColorSlot, color: s::Color) {
@@ -499,8 +468,7 @@ impl command::Buffer<Resources> for CommandBuffer {
     }
 
     fn bind_index(&mut self, buf: Buffer, itype: c::IndexType) {
-        self.cache.index_type = itype;
-        self.cache.push(&mut self.buf, Command::BindIndex(buf));
+        self.cache.bind_index(&mut self.buf, buf, itype);
     }
 
     fn set_scissor(&mut self, rect: Rect) {
