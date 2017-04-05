@@ -28,7 +28,9 @@ extern crate bit_set;
 use metal::*;
 
 use core::{handle, texture as tex};
-use core::memory::{self, Usage};
+use core::SubmissionResult;
+use core::memory::{self, Usage, Bind};
+use core::command::{AccessInfo, AccessGuard};
 
 use std::cell::RefCell;
 use std::sync::Arc;
@@ -74,18 +76,13 @@ pub mod native {
     unsafe impl Send for Sampler {}
     unsafe impl Sync for Sampler {}
 
-    // HACK(fkaa): Cache the clear color inside the `Rtv` type, since metal
-    //             requires it for the renderpass creation
-    //
-    // FIXME(fkaa): Use f32 for clear color instead? Need to wrap in newtype
-    //              first because no `Eq` or `Hash` for f32..
     #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-    pub struct Rtv(pub *mut MTLTexture, pub *mut Option<[u8; 4]>);
+    pub struct Rtv(pub *mut MTLTexture);
     unsafe impl Send for Rtv {}
     unsafe impl Sync for Rtv {}
 
     #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-    pub struct Dsv(pub *mut MTLTexture, pub Option<u16>, pub *mut Option<f32>);
+    pub struct Dsv(pub *mut MTLTexture, pub Option<u16>);
     unsafe impl Send for Dsv {}
     unsafe impl Sync for Dsv {}
 
@@ -115,6 +112,27 @@ pub struct Program {
 unsafe impl Send for Program {}
 unsafe impl Sync for Program {}
 
+pub struct ShaderLibrary {
+    lib: MTLLibrary,
+}
+unsafe impl Send for ShaderLibrary {}
+unsafe impl Sync for ShaderLibrary {}
+
+// ShaderLibrary isn't handled via Device.cleanup(). Not really an issue since it will usually
+// live for the entire application lifetime and be cloned rarely.
+impl Drop for ShaderLibrary {
+    fn drop(&mut self) {
+        unsafe { self.lib.release() };
+    }
+}
+
+impl Clone for ShaderLibrary {
+    fn clone(&self) -> Self {
+        unsafe { self.lib.retain() };
+        ShaderLibrary { lib: self.lib }
+    }
+}
+
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Pipeline {
     pipeline: MTLRenderPipelineState,
@@ -132,7 +150,7 @@ unsafe impl Send for Pipeline {}
 unsafe impl Sync for Pipeline {}
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct Buffer(native::Buffer, Usage);
+pub struct Buffer(native::Buffer, Usage, Bind);
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Texture(native::Texture, Usage);
@@ -205,15 +223,19 @@ impl core::Device for Device {
         }
     }
 
-    fn submit(&mut self, cb: &mut command::CommandBuffer, _: &core::pso::AccessInfo<Resources>) {
+    fn submit(&mut self,
+              cb: &mut command::CommandBuffer,
+              access: &AccessInfo<Resources>) -> SubmissionResult<()> {
+        let _guard = try!(access.take_accesses());
         cb.commit(unsafe { *self.drawable });
+        Ok(())
     }
 
     fn fenced_submit(&mut self,
                      _: &mut Self::CommandBuffer,
-                     _: &core::pso::AccessInfo<Resources>,
+                     _: &AccessInfo<Resources>,
                      _after: Option<handle::Fence<Resources>>)
-                     -> handle::Fence<Resources> {
+                     -> SubmissionResult<handle::Fence<Resources>> {
         unimplemented!()
     }
 
@@ -265,6 +287,11 @@ impl core::Device for Device {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum InitError {
+    FeatureSet,
+}
+
 pub fn create(format: core::format::Format,
               width: u32,
               height: u32)
@@ -273,7 +300,7 @@ pub fn create(format: core::format::Format,
                          handle::RawRenderTargetView<Resources>,
                          *mut CAMetalDrawable,
                          *mut MTLTexture),
-                        ()> {
+                        InitError> {
     use core::handle::Producer;
 
     let share = Share {
@@ -290,37 +317,34 @@ pub fn create(format: core::format::Format,
             constant_buffer_supported: true,
             unordered_access_view_supported: false,
             separate_blending_slots_supported: false,
+            copy_buffer_supported: true,
         },
         handles: RefCell::new(handle::Manager::new()),
     };
 
     let mtl_device = create_system_default_device();
-
-    let get_feature_set = |_device: MTLDevice| -> Option<MTLFeatureSet> {
+    let feature_sets = {
         use metal::MTLFeatureSet::*;
-
-        let feature_sets = vec![OSX_GPUFamily1_v1,
-                                iOS_GPUFamily3_v1,
-                                iOS_GPUFamily2_v2,
-                                iOS_GPUFamily2_v1,
-                                iOS_GPUFamily1_v2,
-                                iOS_GPUFamily1_v1];
-
-        for feature in feature_sets.into_iter() {
-            if mtl_device.supports_feature_set(feature) {
-                return Some(feature);
-            }
-        }
-
-        return None;
+        [OSX_GPUFamily1_v1,
+         //OSX_GPUFamily1_v2,
+         iOS_GPUFamily3_v1,
+         iOS_GPUFamily2_v2,
+         iOS_GPUFamily2_v1,
+         iOS_GPUFamily1_v2,
+         iOS_GPUFamily1_v1]
     };
+    let selected_set = feature_sets.into_iter()
+                                   .find(|&&f| mtl_device.supports_feature_set(f));
 
     let bb = Box::into_raw(Box::new(MTLTexture::nil()));
     let d = Box::into_raw(Box::new(CAMetalDrawable::nil()));
 
     let device = Device {
         device: mtl_device,
-        feature_set: get_feature_set(mtl_device).unwrap(),
+        feature_set: match selected_set {
+            Some(&set) => set,
+            None => return Err(InitError::FeatureSet),
+        },
         share: Arc::new(share),
         frame_handles: handle::Manager::new(),
         max_resource_count: None,
@@ -332,18 +356,16 @@ pub fn create(format: core::format::Format,
     // let raw_addr: *mut MTLTexture = ptr::null_mut();//&mut MTLTexture::nil();//unsafe { mem::transmute(&(raw_tex.0).0) };
     let raw_tex = Texture(native::Texture(bb), Usage::Data);
 
-    let color_tex =
-        device.share.handles.borrow_mut().make_texture(raw_tex,
-                                                       tex::Info {
-                                                           kind: tex::Kind::D2(width as tex::Size,
-                                                                               height as tex::Size,
-                                                                               tex::AaMode::Single),
-                                                           levels: 1,
-                                                           format: format.0,
-                                                           bind: memory::RENDER_TARGET,
-                                                           usage: raw_tex.1,
-                                                       });
-
+    let color_info = tex::Info {
+        kind: tex::Kind::D2(width as tex::Size,
+                            height as tex::Size,
+                            tex::AaMode::Single),
+        levels: 1,
+        format: format.0,
+        bind: memory::RENDER_TARGET,
+        usage: raw_tex.1,
+    };
+    let color_tex = device.share.handles.borrow_mut().make_texture(raw_tex, color_info);
 
     let mut factory = Factory::new(mtl_device, device.share.clone());
 

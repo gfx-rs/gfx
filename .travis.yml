@@ -1,6 +1,9 @@
 sudo: false
 language: rust
-cache: cargo
+cache:
+  cargo: true
+  directories:
+   - $HOME/deps
 rust:
   - stable
   - nightly
@@ -17,16 +20,20 @@ notifications:
 before_install:
   - "export DISPLAY=:99.0"
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sh -e /etc/init.d/xvfb start; fi
+  # Extract SDL2 .deb into a cached directory (see cache section above and LIBRARY_PATH exports below)
+  # Will no longer be needed when Trusty build environment goes out of beta at Travis CI
+  # (assuming it will have libsdl2-dev and Rust by then)
+  # see https://docs.travis-ci.com/user/trusty-ci-environment/
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then scripts/travis-install-sdl2.sh ; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install sdl2; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew outdated cmake || brew upgrade cmake; fi
+
 addons:
   apt:
     sources:
       # install a newer cmake since at this time Travis only has version 2.8.7
       - george-edison55-precise-backports
-      # add a repository for libsdl2-dev (enable sudo before uncommenting this)
-      #- sourceline: 'ppa:zoogie/sdl2-snapshots'
     packages:
       - xdotool
       - cmake
@@ -36,17 +43,18 @@ addons:
       - libxinerama1
       - libxcursor-dev
       - libxcursor1
-      #- libsdl2-dev
       - libglfw-dev
 script:
   - export RUST_BACKTRACE=1
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then export PATH=$PATH:$HOME/deps/bin ; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then export LIBRARY_PATH=$HOME/deps/usr/lib/x86_64-linux-gnu ; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then export LD_LIBRARY_PATH=$LIBRARY_PATH ; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo build --features vulkan; else cargo build; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cargo build --features metal; else cargo build; fi
-  - cargo test -p gfx_core
-  - cargo test -p gfx
+  - cargo test --all
+  - cargo test -p gfx_window_sdl
   - cargo test -p gfx_device_gl
   - cargo test -p gfx_window_glutin
   - cargo test -p gfx_window_glfw
-  #- cargo test -p gfx_window_sdl
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo test --features vulkan; cargo test -p gfx_device_vulkan --features vulkan; cargo test -p gfx_window_vulkan --features vulkan; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cargo test --features metal; cargo test -p gfx_device_metal --features metal; cargo test -p gfx_window_metal --features metal; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo test --all --features vulkan; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cargo test --all --features metal; fi

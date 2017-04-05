@@ -18,12 +18,11 @@
 //! will want to use the typed and safe `PipelineState`. See the `pso` module inside the `gfx`
 //! crate.
 
-use {MAX_COLOR_TARGETS, MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
-     MAX_RESOURCE_VIEWS, MAX_UNORDERED_VIEWS, MAX_SAMPLERS};
-use {ConstantBufferSlot, ColorSlot, ResourceViewSlot,
-     UnorderedViewSlot, SamplerSlot,
-     Primitive, Resources};
-use {handle, format, state as s, texture};
+use {MAX_COLOR_TARGETS, MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS, MAX_RESOURCE_VIEWS,
+     MAX_UNORDERED_VIEWS, MAX_SAMPLERS};
+use {ConstantBufferSlot, ColorSlot, ResourceViewSlot, UnorderedViewSlot, SamplerSlot, Primitive,
+     Resources};
+use {format, state as s, texture};
 use shade::Usage;
 use std::error::Error;
 use std::fmt;
@@ -208,7 +207,7 @@ impl Descriptor {
 }
 
 /// A complete set of vertex buffers to be used for vertex import in PSO.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct VertexBufferSet<R: Resources>(
     /// Array of buffer handles with offsets in them
     pub [Option<(R::Buffer, BufferOffset)>; MAX_VERTEX_ATTRIBUTES]
@@ -222,19 +221,23 @@ impl<R: Resources> VertexBufferSet<R> {
 }
 
 /// A constant buffer run-time parameter for PSO.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ConstantBufferParam<R: Resources>(pub R::Buffer, pub Usage, pub ConstantBufferSlot);
 
 /// A shader resource view (SRV) run-time parameter for PSO.
-#[derive(Copy, Clone, Debug)]
-pub struct ResourceViewParam<R: Resources>(pub R::ShaderResourceView, pub Usage, pub ResourceViewSlot);
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct ResourceViewParam<R: Resources>(pub R::ShaderResourceView,
+                                           pub Usage,
+                                           pub ResourceViewSlot);
 
 /// An unordered access view (UAV) run-time parameter for PSO.
-#[derive(Copy, Clone, Debug)]
-pub struct UnorderedViewParam<R: Resources>(pub R::UnorderedAccessView, pub Usage, pub UnorderedViewSlot);
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct UnorderedViewParam<R: Resources>(pub R::UnorderedAccessView,
+                                            pub Usage,
+                                            pub UnorderedViewSlot);
 
 /// A sampler run-time parameter for PSO.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct SamplerParam<R: Resources>(pub R::Sampler, pub Usage, pub SamplerSlot);
 
 /// A complete set of render targets to be used for pixel export in PSO.
@@ -298,53 +301,3 @@ impl<R: Resources> PixelTargetSet<R> {
             .unwrap_or((1, 1, 1))
     }
 }
-
-/// Informations about what is accessed by the pipeline
-#[derive(Debug)]
-pub struct AccessInfo<R: Resources> {
-    #[doc(hidden)]
-    pub mapped_reads: Vec<handle::RawBuffer<R>>,
-    #[doc(hidden)]
-    pub mapped_writes: Vec<handle::RawBuffer<R>>,
-}
-
-impl<R: Resources> AccessInfo<R> {
-    /// Creates empty access informations
-    pub fn new() -> Self {
-        AccessInfo {
-            mapped_reads: Vec::new(),
-            mapped_writes: Vec::new(),
-        }
-    }
-
-    /// Clear access informations
-    pub fn clear(&mut self) {
-        self.mapped_reads.clear();
-        self.mapped_writes.clear();
-    }
-
-    /// Register a buffer read access
-    pub fn buffer_read(&mut self, buffer: &handle::RawBuffer<R>) {
-        if buffer.is_mapped() {
-            self.mapped_reads.push(buffer.clone());
-        }
-    }
-
-    /// Register a buffer write access
-    pub fn buffer_write(&mut self, buffer: &handle::RawBuffer<R>) {
-        if buffer.is_mapped() {
-            self.mapped_writes.push(buffer.clone());
-        }
-    }
-
-    /// Returns a slice of mappings associated to buffers that The GPU will read from
-    pub fn mapped_reads(&self) -> &[handle::RawBuffer<R>] {
-        &self.mapped_reads[..]
-    }
-
-    /// Returns a slice of mappings associated to buffers that The GPU will write to
-    pub fn mapped_writes(&self) -> &[handle::RawBuffer<R>] {
-        &self.mapped_writes[..]
-    }
-}
-

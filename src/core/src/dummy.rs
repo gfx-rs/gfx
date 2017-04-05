@@ -15,8 +15,9 @@
 //! Dummy backend implementation to test the code for compile errors
 //! outside of the graphics development environment.
 
-use {Capabilities, Device, Resources, IndexType, VertexCount};
-use {state, target, command, handle, mapping, pso, shade, texture};
+use {Capabilities, Device, SubmissionResult, Resources, IndexType, VertexCount};
+use {state, target, handle, mapping, pso, shade, texture};
+use command::{self, AccessInfo};
 
 /// Dummy device which does minimal work, just to allow testing
 /// gfx-rs apps for compilation.
@@ -73,6 +74,7 @@ impl DummyDevice {
             constant_buffer_supported: false,
             unordered_access_view_supported: false,
             separate_blending_slots_supported: false,
+            copy_buffer_supported: false,
         };
         DummyDevice {
             capabilities: caps,
@@ -118,14 +120,18 @@ impl Device for DummyDevice {
         &self.capabilities
     }
     fn pin_submitted_resources(&mut self, _: &handle::Manager<DummyResources>) {}
-    fn submit(&mut self, _: &mut DummyCommandBuffer,
-                         _: &pso::AccessInfo<Self::Resources>) {}
+    fn submit(&mut self,
+              _: &mut DummyCommandBuffer,
+              _: &AccessInfo<Self::Resources>)
+              -> SubmissionResult<()> {
+        unimplemented!()
+    }
 
     fn fenced_submit(&mut self,
                      _: &mut Self::CommandBuffer,
-                     _: &pso::AccessInfo<Self::Resources>,
+                     _: &AccessInfo<Self::Resources>,
                      _after: Option<handle::Fence<Self::Resources>>)
-                     -> handle::Fence<Self::Resources> {
+                     -> SubmissionResult<handle::Fence<Self::Resources>> {
         unimplemented!()
     }
 

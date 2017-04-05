@@ -24,7 +24,8 @@ extern crate log;
 extern crate draw_state;
 //extern crate num;
 
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
+use std::error::Error;
 use std::hash::Hash;
 use std::any::Any;
 
@@ -86,6 +87,11 @@ macro_rules! define_shaders {
             pub fn reference(&self, man: &mut handle::Manager<R>) -> &R::Shader {
                 man.ref_shader(&self.0)
             }
+
+            #[doc(hidden)]
+            pub fn new(shader: handle::Shader<R>) -> Self {
+                $name(shader)
+            }
         }
     )+}
 }
@@ -133,6 +139,7 @@ pub struct Capabilities {
     pub constant_buffer_supported: bool,
     pub unordered_access_view_supported: bool,
     pub separate_blending_slots_supported: bool,
+    pub copy_buffer_supported: bool,
 }
 
 /// Describes what geometric primitives are created from vertex data.
@@ -154,6 +161,26 @@ pub enum Primitive {
     /// Every three consecutive vertices represent a single triangle. For example, with `[a, b, c,
     /// d]`, `a`, `b`, and `c` form a triangle, and `b`, `c`, and `d` form a triangle.
     TriangleStrip,
+    /// Each quadtruplet of vertices represent a single line segment with adjacency information.
+    /// For example, with `[a, b, c, d]`, `b` and `c` form a line, and `a` and `d` are the adjacent
+    /// vertices.
+    LineListAdjacency,
+    /// Every four consecutive vertices represent a single line segment with adjacency information.
+    /// For example, with `[a, b, c, d, e]`, `[a, b, c, d]` form a line segment with adjacency, and
+    /// `[b, c, d, e]` form a line segment with adjacency.
+    LineStripAdjacency,
+    /// Each sextuplet of vertices represent a single traingle with adjacency information. For
+    /// example, with `[a, b, c, d, e, f]`, `a`, `c`, and `e` form a traingle, and `b`, `d`, and
+    /// `f` are the adjacent vertices, where `b` is adjacent to the edge formed by `a` and `c`, `d`
+    /// is adjacent to the edge `c` and `e`, and `f` is adjacent to the edge `e` and `a`.
+    TriangleListAdjacency,
+    /// Every even-numbered vertex (every other starting from the first) represents an additional
+    /// vertex for the triangle strip, while odd-numbered vertices (every other starting from the
+    /// second) represent adjacent vertices. For example, with `[a, b, c, d, e, f, g, h]`, `[a, c,
+    /// e, g]` form a triangle strip, and `[b, d, f, h]` are the adjacent vertices, where `b`, `d`,
+    /// and `f` are adjacent to the first triangle in the strip, and `d`, `f`, and `h` are adjacent
+    /// to the second.
+    TriangleStripAdjacency,
     /// Patch list,
     /// used with shaders capable of producing primitives on their own (tessellation)
     PatchList(PatchSize),
@@ -185,6 +212,33 @@ pub trait Resources:          Clone + Hash + Debug + Eq + PartialEq + Any {
     type Mapping:             Hash + Debug + Eq + PartialEq + Any + Send + Sync + mapping::Gate<Self>;
 }
 
+#[derive(Clone, Debug, PartialEq)]
+#[allow(missing_docs)]
+pub enum SubmissionError {
+    AccessOverlap,
+}
+
+impl fmt::Display for SubmissionError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::SubmissionError::*;
+        match *self {
+            AccessOverlap => write!(f, "{}", self.description()),
+        }
+    }
+}
+
+impl Error for SubmissionError {
+    fn description(&self) -> &str {
+        use self::SubmissionError::*;
+        match *self {
+            AccessOverlap => "A resource access overlaps with another"
+        }
+    }
+}
+
+#[allow(missing_docs)]
+pub type SubmissionResult<T> = Result<T, SubmissionError>;
+
 /// A `Device` is responsible for submitting `CommandBuffer`s to the GPU. 
 pub trait Device: Sized {
     /// Associated `Resources` type.
@@ -200,21 +254,113 @@ pub trait Device: Sized {
     fn pin_submitted_resources(&mut self, &handle::Manager<Self::Resources>);
 
     /// Submits a `CommandBuffer` to the GPU for execution.
-
-    fn submit(&mut self, &mut Self::CommandBuffer,
-                         access: &pso::AccessInfo<Self::Resources>);
+    fn submit(&mut self,
+              &mut Self::CommandBuffer,
+              access: &command::AccessInfo<Self::Resources>)
+              -> SubmissionResult<()>;
 
     /// Submits a `CommandBuffer` to the GPU for execution.
     /// returns a fence that is signaled after the GPU has executed all commands
     fn fenced_submit(&mut self,
                      &mut Self::CommandBuffer,
-                     access: &pso::AccessInfo<Self::Resources>,
+                     access: &command::AccessInfo<Self::Resources>,
                      after: Option<handle::Fence<Self::Resources>>)
-                     -> handle::Fence<Self::Resources>;
+                     -> SubmissionResult<handle::Fence<Self::Resources>>;
 
     /// Stalls the current thread until the fence is satisfied
     fn wait_fence(&mut self, &handle::Fence<Self::Resources>);
 
     /// Cleanup unused resources. This should be called between frames. 
     fn cleanup(&mut self);
+}
+
+/// Represents a physical or virtual device, which is capable of running the backend.
+pub trait Adapter: Sized {
+    /// Associated `CommandQueue` type.
+    type CommandQueue: CommandQueue;
+    /// Associated `Device` type.
+    type Device: Device;
+    /// Associated `QueueFamily` type.
+    type QueueFamily: QueueFamily;
+
+    /// Enumerate all available adapters supporting this backend 
+    fn enumerate_adapters() -> Vec<Self>;
+
+    /// Create a new device and command queues.
+    fn open<'a, I>(&self, queue_descs: I) -> (Self::Device, Vec<Self::CommandQueue>)
+        where I: Iterator<Item=(&'a Self::QueueFamily, u32)>;
+
+    /// Get the `AdapterInfo` for this adapater.
+    fn get_info(&self) -> &AdapterInfo;
+
+    /// Return the supported queue families for this adapter.
+    fn get_queue_families(&self) -> &[Self::QueueFamily];
+}
+
+/// Information about a backend adapater.
+#[derive(Clone, Debug)]
+pub struct AdapterInfo {
+    /// Adapter name
+    pub name: String,
+    /// Vendor PCI id of the adapter
+    pub vendor: usize,
+    /// PCI id of the adapter
+    pub device: usize,
+    /// The device is based on a software rasterizer
+    pub software_rendering: bool,
+}
+
+/// `QueueFamily` denotes a group of command queues provided by the backend
+/// with the same properties/type.
+pub trait QueueFamily: 'static {
+    /// Associated `Surface` type.
+    type Surface: Surface;
+
+    /// Check if the queue family supports presentation to a surface
+    fn supports_present(&self, surface: &Self::Surface) -> bool;
+
+    /// Return the number of available queues of this family
+    // TODO: some backends like d3d12 support infinite software queues (verify)
+    fn num_queues(&self) -> u32;
+}
+
+/// Dummy trait for command queues.
+/// CommandBuffers will be later submitted to command queues instead of the device.
+pub trait CommandQueue { }
+
+/// A `Surface` abstracts the surface of a native window, which will be presented
+pub trait Surface {
+    /// Associated `CommandQueue` type.
+    type CommandQueue: CommandQueue;
+    /// Associated `SwapChain` type.
+    type SwapChain: SwapChain;
+    /// Associated native `Window` type.
+    type Window;
+
+    /// Create a new surface from a native window.
+    fn from_window(window: &Self::Window) -> Self;
+
+    /// Create a new swapchain from the current surface with an associated present queue.
+    fn build_swapchain<T: format::RenderFormat>(&self, present_queue: &Self::CommandQueue)
+        -> Self::SwapChain;
+}
+
+/// Handle to a backbuffer of the swapchain.
+pub struct Frame(usize);
+
+impl Frame {
+    #[doc(hidden)]
+    pub fn new(id: usize) -> Self {
+        Frame(id)
+    }
+}
+
+/// The `SwapChain` is the backend representation of the surface.
+/// It consists of multiple buffers, which will be presented on the surface.
+pub trait SwapChain {
+    /// Acquire a new frame for rendering. This needs to be called before presenting.
+    fn acquire_frame(&mut self) -> Frame;
+
+    /// Present one acquired frame in FIFO order.
+    fn present(&mut self);
 }

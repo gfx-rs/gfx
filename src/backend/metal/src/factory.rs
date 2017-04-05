@@ -15,6 +15,7 @@
 use std::os::raw::c_void;
 use std::sync::Arc;
 use std::{mem, slice, str};
+use std::path::Path;
 
 // use cocoa::base::{selector, class};
 // use cocoa::foundation::{NSUInteger};
@@ -29,7 +30,7 @@ use command::CommandBuffer;
 
 use MTL_MAX_BUFFER_BINDINGS;
 
-use {Resources, Share, Texture, Buffer, Shader, Program, Pipeline};
+use {Resources, Share, Texture, Buffer, Shader, Program, ShaderLibrary, Pipeline};
 use native;
 use mirror;
 
@@ -96,7 +97,7 @@ impl Factory {
             self.device.new_buffer(info.size as u64, usage)
         };
 
-        let buf = Buffer(native::Buffer(Box::into_raw(Box::new(raw_buf))), info.usage);
+        let buf = Buffer(native::Buffer(Box::into_raw(Box::new(raw_buf))), info.usage, info.bind);
 
         // TODO(fkaa): if we have a way to track buffers in use (added on
         //             scheduling of command buffers, removed on completion),
@@ -149,6 +150,62 @@ impl Factory {
         };
 
         self.device.new_depth_stencil_state(desc)
+    }
+
+    pub fn create_library<P: AsRef<Path>>
+        (&mut self,
+         file: P)
+         -> Result<ShaderLibrary, core::shade::CreateShaderError> {
+        use core::shade::CreateShaderError;
+
+        match self.device.new_library_with_file(file) {
+            Ok(lib) => Ok(ShaderLibrary { lib: lib }),
+            Err(err) => Err(CreateShaderError::CompilationFailed(err.into())),
+        }
+    }
+
+    fn create_shader_from_library<S: AsRef<str>>
+        (&mut self,
+         stage: core::shade::Stage,
+         library: &ShaderLibrary,
+         function_name: S)
+         -> Result<handle::Shader<Resources>, core::shade::CreateShaderError> {
+        use core::shade::{CreateShaderError, Stage};
+
+        match stage {
+            Stage::Vertex | Stage::Pixel => (),
+            _ => return Err(CreateShaderError::StageNotSupported(stage)),
+        }
+
+        let shader = Shader {
+            func: library.lib.get_function(function_name.as_ref()),
+        };
+
+        Ok(self.share.handles.borrow_mut().make_shader(shader))
+    }
+
+    pub fn create_shader_vertex_from_library<S: AsRef<str>>
+        (&mut self,
+         library: &ShaderLibrary,
+         function_name: S)
+        -> Result<core::VertexShader<Resources>, core::shade::CreateShaderError> {
+        self.create_shader_from_library(
+            core::shade::Stage::Vertex,
+            library,
+            function_name)
+            .map(|s| core::VertexShader::new(s))
+    }
+
+    pub fn create_shader_pixel_from_library<S: AsRef<str>>
+        (&mut self,
+         library: &ShaderLibrary,
+         function_name: S)
+         -> Result<core::PixelShader<Resources>, core::shade::CreateShaderError> {
+        self.create_shader_from_library(
+            core::shade::Stage::Pixel,
+            library,
+            function_name)
+            .map(|s| core::PixelShader::new(s))
     }
 }
 
@@ -246,6 +303,10 @@ impl core::Factory<Resources> for Factory {
                 pso_descriptor.color_attachments()
                     .object_at(0)
                     .set_pixel_format(MTLPixelFormat::BGRA8Unorm_sRGB);
+
+                // We need fake depth attachments in case explicit writes to the depth buffer are required
+                pso_descriptor.set_depth_attachment_pixel_format(MTLPixelFormat::Depth32Float_Stencil8);
+                pso_descriptor.set_stencil_attachment_pixel_format(MTLPixelFormat::Depth32Float_Stencil8);
 
                 // TODO: prevent collision between dummy buffers and real
                 //       values
@@ -386,9 +447,11 @@ impl core::Factory<Resources> for Factory {
         }
 
         if let Some(depth_desc) = desc.depth_stencil {
-            // TODO: depthstencil
-            // pso_descriptor.set_depth_attachment_pixel_format(MTLPixelFormat::Depth32Float);
-            pso_descriptor.set_depth_attachment_pixel_format(map_depth_surface((depth_desc.0).0).unwrap());
+            let (depth_pixel_format, has_stencil) = map_depth_surface((depth_desc.0).0).expect("Unsupported depth format");
+            pso_descriptor.set_depth_attachment_pixel_format(depth_pixel_format);
+            if has_stencil {
+                pso_descriptor.set_stencil_attachment_pixel_format(depth_pixel_format);
+            }
         }
 
         let pso = self.device.new_render_pipeline_state(pso_descriptor).unwrap();
@@ -614,7 +677,7 @@ impl core::Factory<Resources> for Factory {
         // };
         //
         // let mut raw_view = ptr::null_mut();
-        // let raw_tex = self.frame_handles.ref_texture(htex).to_resource();
+        // let raw_tex = self.frame_handles.ref_texture(htex).as_resource();
         // let hr = unsafe {
         // (*self.device).CreateShaderResourceView(raw_tex, &native_desc, &mut raw_view)
         // };
@@ -642,7 +705,7 @@ impl core::Factory<Resources> for Factory {
          -> Result<handle::RawRenderTargetView<Resources>, factory::TargetViewError> {
         let raw_tex = self.frame_handles.ref_texture(htex).0;
         let size = htex.get_info().kind.get_level_dimensions(desc.level);
-        Ok(self.share.handles.borrow_mut().make_rtv(native::Rtv(raw_tex.0, Box::into_raw(Box::new(None))), htex, size))
+        Ok(self.share.handles.borrow_mut().make_rtv(native::Rtv(raw_tex.0), htex, size))
     }
 
     fn view_texture_as_depth_stencil_raw
@@ -700,7 +763,7 @@ impl core::Factory<Resources> for Factory {
         // };
         //
         // let mut raw_view = ptr::null_mut();
-        // let raw_tex = self.frame_handles.ref_texture(htex).to_resource();
+        // let raw_tex = self.frame_handles.ref_texture(htex).as_resource();
         // let hr = unsafe {
         // (*self.device).CreateDepthStencilView(raw_tex, &native_desc, &mut raw_view)
         // };
@@ -712,7 +775,7 @@ impl core::Factory<Resources> for Factory {
         // Ok(self.share.handles.borrow_mut().make_dsv(native::Dsv(raw_view), htex, dim))
         let raw_tex = self.frame_handles.ref_texture(htex).0;
         let size = htex.get_info().kind.get_level_dimensions(desc.level);
-        Ok(self.share.handles.borrow_mut().make_dsv(native::Dsv(raw_tex.0, desc.layer, Box::into_raw(Box::new(Some(0f32)))), htex, size))
+        Ok(self.share.handles.borrow_mut().make_dsv(native::Dsv(raw_tex.0, desc.layer), htex, size))
     }
 
     fn create_sampler(&mut self, info: core::texture::SamplerInfo) -> handle::Sampler<Resources> {

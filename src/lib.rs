@@ -217,8 +217,8 @@ A: Sized + ApplicationBase<gfx_device_dx11::Resources, D3D11CommandBuffer>
             }
         }
         if let Some((width, height)) = new_size {
-            device.clear_state();
-            match window.resize_swap_chain(&mut factory, width, height) {
+            use gfx_window_dxgi::update_views;
+            match update_views(&mut window, &mut factory, &mut device, width, height) {
                 Ok(new_color) => {
                     let new_depth = factory.create_depth_stencil_view_only(width, height).unwrap();
                     app.on_resize(&mut factory, WindowTargets {
@@ -227,7 +227,7 @@ A: Sized + ApplicationBase<gfx_device_dx11::Resources, D3D11CommandBuffer>
                         aspect_ratio: width as f32 / height as f32,
                     });
                 },
-                Err(hr) => error!("Resize failed with code {:X}", hr),
+                Err(e) => error!("Resize failed: {}", e),
             }
             continue;
         }

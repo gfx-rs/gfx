@@ -104,6 +104,13 @@ pub fn map_topology(primitive: Primitive) -> MTLPrimitiveTopologyClass {
         Primitive::LineStrip |
         Primitive::TriangleStrip |
         Primitive::PatchList(_) => MTLPrimitiveTopologyClass::Unspecified,
+
+        // Metal does not support geometry shaders and hence does not support
+        // adjacency primitives
+        Primitive::LineListAdjacency |
+        Primitive::LineStripAdjacency |
+        Primitive::TriangleListAdjacency |
+        Primitive::TriangleStripAdjacency => MTLPrimitiveTopologyClass::Unspecified,
     }
 }
 
@@ -315,7 +322,7 @@ pub fn map_format(format: Format, is_target: bool) -> Option<MTLPixelFormat> {
         }
         D24_S8 => {
             match (is_target, format.1) {
-                (true, _) => return None,
+                (true, _) => Depth24Unorm_Stencil8,
                 (false, Unorm) => Depth24Unorm_Stencil8,
                 (false, Uint) => return None,
                 _ => return None,
@@ -406,14 +413,18 @@ pub fn format_supports_usage(feature_set: MTLFeatureSet,
     // }
 }
 
-pub fn map_depth_surface(surface: SurfaceType) -> Option<MTLPixelFormat> {
+/// Maps a depth surface to appropriate pixel format, and a boolean indicating whether
+/// this format has a stencil component.
+pub fn map_depth_surface(surface: SurfaceType) -> Option<(MTLPixelFormat, bool)> {
     use core::format::SurfaceType::*;
 
     use metal::MTLPixelFormat::*;
 
     Some(match surface {
-        D24_S8 => Depth24Unorm_Stencil8,
-        D32 => Depth32Float,
+        //D16 => (Depth16Unorm, false), TODO: add this depth format to metal-rs, and feature gate it
+        D32 => (Depth32Float, false),
+        D24_S8 => (Depth24Unorm_Stencil8, true),
+        // D32_S8 => (Depth32Float_Stencil8, true), TODO: add this depth format to gfx (DX11 supports as well)
         _ => return None,
     })
 }

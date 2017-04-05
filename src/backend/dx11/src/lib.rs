@@ -76,12 +76,13 @@ use std::cell::RefCell;
 use std::ptr;
 use std::sync::Arc;
 use core::{handle as h, texture as tex};
+use core::SubmissionResult;
+use core::command::{AccessInfo, AccessGuard};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Buffer(native::Buffer);
 impl Buffer {
-    // TODO: 'as_resource' would be better ?
-    pub fn to_resource(&self) -> *mut winapi::ID3D11Resource {
+    pub fn as_resource(&self) -> *mut winapi::ID3D11Resource {
         type Res = *mut winapi::ID3D11Resource;
         match self.0 {
             native::Buffer(t) => t as Res,
@@ -92,8 +93,7 @@ impl Buffer {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Texture(native::Texture);
 impl Texture {
-    // TODO: 'as_resource' would be better ?
-    pub fn to_resource(&self) -> *mut winapi::ID3D11Resource {
+    pub fn as_resource(&self) -> *mut winapi::ID3D11Resource {
         type Res = *mut winapi::ID3D11Resource;
         match self.0 {
             native::Texture::D1(t) => t as Res,
@@ -199,6 +199,7 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
             constant_buffer_supported: true,
             unordered_access_view_supported: false,
             separate_blending_slots_supported: false,
+            copy_buffer_supported: true,
         },
         handles: RefCell::new(h::Manager::new()),
     };
@@ -243,16 +244,13 @@ impl Device {
         }
     }
 
-    pub fn before_submit(&mut self, gpu_access: &core::pso::AccessInfo<Resources>) {
-        self.ensure_mappings_unmapped(gpu_access.mapped_reads());
-        self.ensure_mappings_unmapped(gpu_access.mapped_writes());
-    }
-
-    fn ensure_mappings_unmapped(&mut self, buffers: &[core::handle::RawBuffer<Resources>]) {
-        for buffer in buffers {
-            let mut mapping = buffer.lock_mapping().unwrap();
+    pub fn before_submit<'a>(&mut self, gpu_access: &'a AccessInfo<Resources>)
+                             -> core::SubmissionResult<AccessGuard<'a, Resources>> {
+        let mut gpu_access = try!(gpu_access.take_accesses());
+        for (buffer, mut mapping) in gpu_access.access_mapped() {
             factory::ensure_unmapped(&mut mapping, buffer, self.context);
         }
+        Ok(gpu_access)
     }
 
     pub fn clear_state(&self) {
@@ -342,19 +340,21 @@ impl core::Device for Device {
 
     fn submit(&mut self,
               cb: &mut Self::CommandBuffer,
-              access: &core::pso::AccessInfo<Resources>)
+              access: &AccessInfo<Resources>) -> SubmissionResult<()>
     {
-    	self.before_submit(access);
+        let _guard = try!(self.before_submit(access));
         unsafe { (*self.context).ClearState(); }
         for com in &cb.parser.0 {
             execute::process(self.context, com, &cb.parser.1);
         }
+        Ok(())
     }
 
     fn fenced_submit(&mut self,
                      _: &mut Self::CommandBuffer,
-                     _: &core::pso::AccessInfo<Resources>,
-                     _after: Option<h::Fence<Resources>>) -> h::Fence<Resources>
+                     _: &AccessInfo<Resources>,
+                     _after: Option<h::Fence<Resources>>)
+                     -> SubmissionResult<h::Fence<Resources>>
     {
         unimplemented!()
     }
@@ -369,7 +369,11 @@ impl core::Device for Device {
         self.frame_handles.clear();
         self.share.handles.borrow_mut().clean_with(&mut self.context,
             |ctx, buffer| {
-                buffer.lock_mapping().map(|mut m| factory::ensure_unmapped(&mut m, buffer, *ctx));
+                buffer.mapping().map(|raw| {
+                    // we have exclusive access because it's the last reference
+                    let mut mapping = unsafe { raw.use_access() };
+                    factory::ensure_unmapped(&mut mapping, buffer, *ctx);
+                });
                 unsafe { (*(buffer.resource().0).0).Release(); }
             },
             |_, s| unsafe { //shader
@@ -391,7 +395,7 @@ impl core::Device for Device {
                 (*(v.depth_stencil as Child)).Release();
                 (*(v.blend as Child)).Release();
             },
-            |_, texture| unsafe { (*texture.resource().to_resource()).Release(); },
+            |_, texture| unsafe { (*texture.resource().as_resource()).Release(); },
             |_, v| unsafe { (*v.0).Release(); }, //SRV
             |_, _| {}, //UAV
             |_, v| unsafe { (*v.0).Release(); }, //RTV
@@ -428,9 +432,9 @@ impl core::Device for Deferred {
 
     fn submit(&mut self,
               cb: &mut Self::CommandBuffer,
-              access: &core::pso::AccessInfo<Resources>)
+              access: &AccessInfo<Resources>) -> SubmissionResult<()>
     {
-        self.0.before_submit(access);
+        let _guard = try!(self.0.before_submit(access));
         let cl = match cb.parser.1 {
             Some(cl) => cl,
             None => {
@@ -453,12 +457,14 @@ impl core::Device for Deferred {
             },
             _ => (),
         }
+        Ok(())
     }
 
     fn fenced_submit(&mut self,
                      _: &mut Self::CommandBuffer,
-                     _: &core::pso::AccessInfo<Resources>,
-                     _after: Option<h::Fence<Resources>>) -> h::Fence<Resources>
+                     _: &AccessInfo<Resources>,
+                     _after: Option<h::Fence<Resources>>)
+                     -> SubmissionResult<h::Fence<Resources>>
     {
         unimplemented!()
     }

@@ -1,8 +1,8 @@
 environment:
   matrix:
-    - TARGET: 1.13.0-x86_64-pc-windows
+    - TARGET: 1.15.1-x86_64-pc-windows
       COMPILER: gnu
-    - TARGET: 1.13.0-x86_64-pc-windows
+    - TARGET: 1.15.1-x86_64-pc-windows
       COMPILER: msvc
     - TARGET: nightly-x86_64-pc-windows
       COMPILER: msvc
@@ -17,12 +17,4 @@ install:
 build_script:
   - cargo build --features vulkan
 test_script:
-  - cargo test -p gfx_core
-  - cargo test -p gfx
-  - cargo test -p gfx_device_dx11
-  - cargo test -p gfx_window_dxgi
-  - cargo test -p gfx_device_gl
-  - cargo test -p gfx_window_glutin
-  - cargo test -p gfx_device_vulkan --features vulkan
-  - cargo test -p gfx_window_vulkan --features vulkan
-  - cargo test --features vulkan
+  - cargo test --all --features vulkan
