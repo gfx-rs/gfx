@@ -153,6 +153,7 @@ pub const RESET: [Command; 14] = [Command::BindProgram(0),
 struct Cache {
     primitive: gl::types::GLenum,
     index_type: c::IndexType,
+    current_vbs: Option<c::pso::VertexBufferSet<Resources>>,
     attributes: [Option<BufferElement>; c::MAX_VERTEX_ATTRIBUTES],
     resource_binds: [Option<gl::types::GLenum>; c::MAX_RESOURCE_VIEWS],
     scissor: bool,
@@ -183,7 +184,7 @@ impl Cache {
         Cache {
             primitive: 0,
             index_type: c::IndexType::U16,
-            current_attr_buffer: 
+            current_vbs: None,
             attributes: [None; c::MAX_VERTEX_ATTRIBUTES],
             resource_binds: [None; c::MAX_RESOURCE_VIEWS],
             scissor: false,
@@ -250,17 +251,6 @@ impl Cache {
                 }
         self.vao_bound = true;
         buf.push(Command::BindVao);
-    }
-
-    fn bind_attribute(&mut self, buf: &mut Vec<Command>, attribute_slot: c::AttributeSlot, buffer: Buffer, buffer_element: BufferElement) {
-        // BUGGO:
-        // This WILL mix up attribute buffers.  Need to figure out how best to deal with this still.
-        match self.attributes[attribute_slot as usize] {
-            None => self.attributes[attribute_slot as usize] = Some(buffer_element),
-            Some(buffer_elem) if buffer_elem == buffer_element => return,
-            _ => ()
-        }
-        buf.push(Command::BindAttribute(attribute_slot, buffer, buffer_element));
     }
 
     fn bind_index(&mut self, buf: &mut Vec<Command>, buffer: Buffer) {
@@ -418,25 +408,30 @@ impl command::Buffer<Resources> for CommandBuffer {
     }
 
     fn bind_vertex_buffers(&mut self, vbs: c::pso::VertexBufferSet<Resources>) {
-        for i in 0..c::MAX_VERTEX_ATTRIBUTES {
-            match (vbs.0[i], self.cache.attributes[i]) {
-                (None, Some(fm)) => {
-                    error!("No vertex input provided for slot {} of format {:?}", i, fm)
+        if self.cache.current_vbs == Some(vbs) {
+            return
+        } else {
+            self.cache.current_vbs = Some(vbs);
+            for i in 0..c::MAX_VERTEX_ATTRIBUTES {
+                match (vbs.0[i], self.cache.attributes[i]) {
+                    (None, Some(fm)) => {
+                        error!("No vertex input provided for slot {} of format {:?}", i, fm)
+                    }
+                    (Some((buffer, offset)), Some(mut bel)) => {
+                        bel.elem.offset += offset as gl::types::GLuint;
+                        self.cache.push(&mut self.buf, Command::BindAttribute(
+                            i as c::AttributeSlot,
+                            buffer,
+                            bel));
+                        self.active_attribs |= 1 << i;
+                    }
+                    (_, None) if self.active_attribs & (1 << i) != 0 => {
+                        self.cache.push(&mut self.buf,
+                                        Command::UnbindAttribute(i as c::AttributeSlot));
+                        self.active_attribs ^= 1 << i;
+                    }
+                    (_, None) => (),
                 }
-                (Some((buffer, offset)), Some(mut bel)) => {
-                    bel.elem.offset += offset as gl::types::GLuint;
-                    self.cache.bind_attribute(&mut self.buf,
-                                                    i as c::AttributeSlot,
-                                                    buffer,
-                                                    bel);
-                    self.active_attribs |= 1 << i;
-                }
-                (_, None) if self.active_attribs & (1 << i) != 0 => {
-                    self.cache.push(&mut self.buf,
-                                                 Command::UnbindAttribute(i as c::AttributeSlot));
-                    self.active_attribs ^= 1 << i;
-                }
-                (_, None) => (),
             }
         }
     }

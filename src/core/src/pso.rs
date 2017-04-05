@@ -207,7 +207,7 @@ impl Descriptor {
 }
 
 /// A complete set of vertex buffers to be used for vertex import in PSO.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct VertexBufferSet<R: Resources>(
     /// Array of buffer handles with offsets in them
     pub [Option<(R::Buffer, BufferOffset)>; MAX_VERTEX_ATTRIBUTES]
