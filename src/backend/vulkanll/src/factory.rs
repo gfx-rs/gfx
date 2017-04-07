@@ -499,9 +499,7 @@ impl core::Factory<R> for Factory {
         }).collect::<Vec<_>>();
 
         let valid_infos = infos.iter().filter_map(|info| info.clone().ok()).collect::<Vec<_>>();
-        
-        // TODO: create the pipelines!
-        let pipelines = if valid_infos.is_empty() {
+        let result = if valid_infos.is_empty() {
             Ok(Vec::new())
         } else {
             unsafe {
@@ -513,25 +511,37 @@ impl core::Factory<R> for Factory {
             }
         };
 
-        match pipelines {
+        match result {
             Ok(pipelines) => {
                 let mut pipelines = pipelines.iter();
                 infos.iter().map(|ref info| {
                     match **info {
                         Ok(_) => {
-                            let pipeline = native::GraphicsPipeline {
-                                pipeline: *pipelines.next().unwrap(),
-                            };
-                            Ok(pipeline)
+                            let pipeline = *pipelines.next().unwrap();
+                            Ok(native::GraphicsPipeline {
+                                pipeline: pipeline,
+                            })
                         }
                         Err(ref err) => Err(err.clone()),
                     }
                 }).collect::<Vec<_>>()
-            },
-            Err(err) => {
+            }
+            Err((pipelines, err)) => {
+                let mut pipelines = pipelines.iter();
                 infos.iter().map(|ref info| {
                     match **info {
-                        Ok(_) => Err(pso::CreationError),
+                        Ok(_) => {
+                            let pipeline = *pipelines.next().unwrap();
+
+                            // Check if pipeline compiled correctly
+                            if pipeline == vk::Pipeline::null() {
+                                Err(pso::CreationError) // TODO
+                            } else {
+                                Ok(native::GraphicsPipeline {
+                                    pipeline: pipeline,
+                                })
+                            }
+                        }
                         Err(ref err) => Err(err.clone()),
                     }
                 }).collect::<Vec<_>>()

@@ -122,13 +122,12 @@ impl CommandBuffer {
         };
 
         unsafe {
-            self.device.0.fp_v1_0().cmd_clear_color_image(
+            self.device.0.cmd_clear_color_image(
                 self.inner,
                 rtv.image,
                 vk::ImageLayout::TransferDstOptimal,
                 &clear_value,
-                1,
-                &base_range, // TODO: ranges
+                &[base_range],
             )
         };
     }
@@ -214,7 +213,7 @@ impl CommandBuffer {
 
     fn dispatch(&mut self, x: u32, y: u32, z: u32) {
         unsafe {
-            self.device.0.fp_v1_0().cmd_dispatch(
+            self.device.0.cmd_dispatch(
                 self.inner, // commandBuffer
                 x,          // groupCountX
                 y,          // groupCountY
@@ -243,12 +242,11 @@ impl CommandBuffer {
         let offsets = vbs.0.iter().map(|&(_, offset)| offset as u64).collect::<Vec<_>>();
 
         unsafe {
-            self.device.0.fp_v1_0().cmd_bind_vertex_buffers(
+            self.device.0.cmd_bind_vertex_buffers(
                 self.inner,
                 0,
-                buffers.len() as u32,
-                buffers.as_ptr(),
-                offsets.as_ptr(),
+                &buffers,
+                &offsets,
             );
         }
     }
