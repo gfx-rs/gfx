@@ -188,6 +188,17 @@ impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
         device.submit(&mut self.command_buffer, &self.access_info)
     }
 
+    /// Like `flush_no_reset` but places a fence.
+    pub fn fenced_flush_no_reset<D>(&mut self,
+                                    device: &mut D,
+                                    after: Option<handle::Fence<R>>)
+                                    -> SubmissionResult<handle::Fence<R>>
+        where D: Device<Resources=R, CommandBuffer=C>
+    {
+        device.pin_submitted_resources(&self.handles);
+        device.fenced_submit(&mut self.command_buffer, &self.access_info, after)
+    }
+
     /// Resets the encoded commands.
     pub fn reset(&mut self) {
         self.command_buffer.reset();
