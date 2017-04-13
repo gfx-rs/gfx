@@ -97,4 +97,24 @@ pub trait Factory<R: Resources> {
                                 -> Result<mapping::Writer<'a, R, T>,
                                           mapping::Error>
         where T: Copy;
+
+    fn destroy_heap(&mut self, R::Heap);
+
+    fn destroy_shader_lib(&mut self, R::ShaderLib);
+
+    fn destroy_renderpass(&mut self, R::RenderPass);
+
+    fn destroy_pipeline_layout(&mut self, R::PipelineLayout);
+
+    fn destroy_graphics_pipeline(&mut self, R::GraphicsPipeline);
+
+    fn destroy_compute_pipeline(&mut self, R::ComputePipeline);
+
+    fn destroy_framebuffer(&mut self, R::FrameBuffer);
+
+    fn destroy_buffer(&mut self, R::Buffer);
+
+    fn destroy_image(&mut self, R::Image);
+
+    fn destroy_render_target_view(&mut self, R::RenderTargetView);
 }
