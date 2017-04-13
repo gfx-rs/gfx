@@ -1,0 +1,25 @@
+[package]
+
+name = "example-piston"
+version = "0.1.0"
+authors = [
+]
+
+[[bin]]
+name = "piston"
+path = "main.rs"
+
+[dependencies.gfx]
+path = "../../../"
+
+[dependencies.glfw]
+git = "https://github.com/bjz/glfw-rs"
+
+[dependencies.glfw_platform]
+path = "../../glfw_platform"
+
+[dependencies.piston]
+git = "https://github.com/PistonDevelopers/piston"
+
+[dependencies.glfw_game_window]
+git = "https://github.com/PistonDevelopers/glfw_game_window"

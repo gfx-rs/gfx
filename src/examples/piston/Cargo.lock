@@ -1,0 +1,93 @@
+[root]
+name = "example-piston"
+version = "0.1.0"
+dependencies = [
+ "gfx 0.1.0",
+ "glfw 0.0.1 (git+https://github.com/bjz/glfw-rs#91c77bd20dd481fa0a9fc9d10d4c0367986ebac7)",
+ "glfw_game_window 0.0.0 (git+https://github.com/PistonDevelopers/glfw_game_window#54758c123227f13c579d2b23acb5cba032061871)",
+ "glfw_platform 0.1.0",
+ "piston 0.0.0 (git+https://github.com/PistonDevelopers/piston#aa13558a605b509350071ac9ca2947ccec6ce678)",
+]
+
+[[package]]
+name = "comm"
+version = "0.1.0"
+
+[[package]]
+name = "device"
+version = "0.1.0"
+dependencies = [
+ "comm 0.1.0",
+ "gl 0.0.1 (git+https://github.com/bjz/gl-rs.git#f0361dd780c1b2fb911e83fbb2071e29089cc572)",
+]
+
+[[package]]
+name = "gfx"
+version = "0.1.0"
+dependencies = [
+ "device 0.1.0",
+ "gfx_macros 0.1.0",
+ "render 0.1.0",
+]
+
+[[package]]
+name = "gfx_macros"
+version = "0.1.0"
+
+[[package]]
+name = "gl"
+version = "0.0.1"
+source = "git+https://github.com/bjz/gl-rs.git#f0361dd780c1b2fb911e83fbb2071e29089cc572"
+dependencies = [
+ "gl_generator 0.0.1 (git+https://github.com/bjz/gl-rs.git#f0361dd780c1b2fb911e83fbb2071e29089cc572)",
+]
+
+[[package]]
+name = "gl_generator"
+version = "0.0.1"
+source = "git+https://github.com/bjz/gl-rs.git#f0361dd780c1b2fb911e83fbb2071e29089cc572"
+dependencies = [
+ "sax-rs 0.0.1 (git+https://github.com/bjz/sax-rs#fa887b57b69f962f9dfd2736a3cb221cdee91f2f)",
+]
+
+[[package]]
+name = "glfw"
+version = "0.0.1"
+source = "git+https://github.com/bjz/glfw-rs#91c77bd20dd481fa0a9fc9d10d4c0367986ebac7"
+
+[[package]]
+name = "glfw_game_window"
+version = "0.0.0"
+source = "git+https://github.com/PistonDevelopers/glfw_game_window#54758c123227f13c579d2b23acb5cba032061871"
+dependencies = [
+ "gl 0.0.1 (git+https://github.com/bjz/gl-rs.git#f0361dd780c1b2fb911e83fbb2071e29089cc572)",
+ "glfw 0.0.1 (git+https://github.com/bjz/glfw-rs#91c77bd20dd481fa0a9fc9d10d4c0367986ebac7)",
+ "piston 0.0.0 (git+https://github.com/PistonDevelopers/piston#aa13558a605b509350071ac9ca2947ccec6ce678)",
+]
+
+[[package]]
+name = "glfw_platform"
+version = "0.1.0"
+dependencies = [
+ "device 0.1.0",
+ "gfx 0.1.0",
+ "glfw 0.0.1 (git+https://github.com/bjz/glfw-rs#91c77bd20dd481fa0a9fc9d10d4c0367986ebac7)",
+]
+
+[[package]]
+name = "piston"
+version = "0.0.0"
+source = "git+https://github.com/PistonDevelopers/piston#aa13558a605b509350071ac9ca2947ccec6ce678"
+
+[[package]]
+name = "render"
+version = "0.1.0"
+dependencies = [
+ "device 0.1.0",
+]
+
+[[package]]
+name = "sax-rs"
+version = "0.0.1"
+source = "git+https://github.com/bjz/sax-rs#fa887b57b69f962f9dfd2736a3cb221cdee91f2f"
+
