@@ -147,7 +147,7 @@ pub const RESET: [Command; 14] = [
     Command::SetBlendState(1, COLOR_DEFAULT),
     Command::SetBlendState(2, COLOR_DEFAULT),
     Command::SetBlendState(3, COLOR_DEFAULT),
-    Command::SetBlendColor([0f32; 4])
+    Command::SetBlendColor([0f32; 4]),
 ];
 
 struct Cache {
@@ -218,20 +218,16 @@ impl Cache {
     }
 
     fn bind_constant_buffer(&mut self, buf: &mut Vec<Command>, constant_buffer: c::pso::ConstantBufferParam<Resources>) {
-        if let Some(cb) = self.constant_buffer {
-            if cb == constant_buffer {
-                return;
-            }
+        if self.constant_buffer == Some(constant_buffer) {
+            return;
         }
         self.constant_buffer = Some(constant_buffer);
         buf.push(Command::BindConstantBuffer(constant_buffer));
     }
 
     fn bind_resource_view(&mut self, buf: &mut Vec<Command>, resource_view: c::pso::ResourceViewParam<Resources>) {
-        if let Some(rv) = self.resource_view {
-            if rv == resource_view {
-                return;
-            }
+        if self.resource_view == Some(resource_view) {
+            return;
         }
         self.resource_view = Some(resource_view);
         buf.push(Command::BindResourceView(resource_view));
@@ -247,7 +243,6 @@ impl Cache {
     }
 
     fn bind_framebuffer(&mut self, buf: &mut Vec<Command>, access: Access, fb: FrameBuffer) {
-
         if self.framebuffer == Some((access, fb)) {
             return;
         }
@@ -297,10 +292,8 @@ impl Cache {
         buf.push(Command::SetStencilState(option_stencil, stencils, cullface));
     }
     fn set_blend_state(&mut self, buf: &mut Vec<Command>, color_slot: c::ColorSlot, color: s::Color) {
-        if let Some(bs) = self.blend_state {
-            if bs == (color_slot, color) {
-                return;
-            }
+        if self.blend_state == Some((color_slot, color)) {
+            return;
         }
         self.blend_state = Some((color_slot, color));
         buf.push(Command::SetBlendState(color_slot, color));
@@ -378,29 +371,28 @@ impl command::Buffer<Resources> for CommandBuffer {
 
     fn bind_vertex_buffers(&mut self, vbs: c::pso::VertexBufferSet<Resources>) {
         if self.cache.current_vbs == Some(vbs) {
-            return
-        } else {
-            self.cache.current_vbs = Some(vbs);
-            for i in 0..c::MAX_VERTEX_ATTRIBUTES {
-                match (vbs.0[i], self.cache.attributes[i]) {
-                    (None, Some(fm)) => {
-                        error!("No vertex input provided for slot {} of format {:?}", i, fm)
-                    }
-                    (Some((buffer, offset)), Some(mut bel)) => {
-                        bel.elem.offset += offset as gl::types::GLuint;
-                        self.cache.push(&mut self.buf, Command::BindAttribute(
-                            i as c::AttributeSlot,
-                            buffer,
-                            bel));
-                        self.active_attribs |= 1 << i;
-                    }
-                    (_, None) if self.active_attribs & (1 << i) != 0 => {
-                        self.cache.push(&mut self.buf,
-                                        Command::UnbindAttribute(i as c::AttributeSlot));
-                        self.active_attribs ^= 1 << i;
-                    }
-                    (_, None) => (),
+            return;
+        }
+        self.cache.current_vbs = Some(vbs);
+        for i in 0..c::MAX_VERTEX_ATTRIBUTES {
+            match (vbs.0[i], self.cache.attributes[i]) {
+                (None, Some(fm)) => {
+                    error!("No vertex input provided for slot {} of format {:?}", i, fm)
                 }
+                (Some((buffer, offset)), Some(mut bel)) => {
+                    bel.elem.offset += offset as gl::types::GLuint;
+                    self.cache.push(&mut self.buf, Command::BindAttribute(
+                        i as c::AttributeSlot,
+                        buffer,
+                        bel));
+                    self.active_attribs |= 1 << i;
+                }
+                (_, None) if self.active_attribs & (1 << i) != 0 => {
+                    self.cache.push(&mut self.buf,
+                                    Command::UnbindAttribute(i as c::AttributeSlot));
+                    self.active_attribs ^= 1 << i;
+                }
+                (_, None) => (),
             }
         }
     }
@@ -506,11 +498,12 @@ impl command::Buffer<Resources> for CommandBuffer {
                    dst_offset_bytes: usize,
                    size_bytes: usize) {
         self.cache.push(&mut self.buf,
-                                     Command::CopyBuffer(src,
-                                                         dst,
-                                                         src_offset_bytes as gl::types::GLintptr,
-                                                         dst_offset_bytes as gl::types::GLintptr,
-                                                         size_bytes as gl::types::GLsizeiptr));
+                        Command::CopyBuffer(
+                            src,
+                            dst,
+                            src_offset_bytes as gl::types::GLintptr,
+                            dst_offset_bytes as gl::types::GLintptr,
+                            size_bytes as gl::types::GLsizeiptr));
     }
     fn update_buffer(&mut self, buf: Buffer, data: &[u8], offset_bytes: usize) {
         let ptr = self.data.add(data);
@@ -526,8 +519,9 @@ impl command::Buffer<Resources> for CommandBuffer {
         let ptr = self.data.add(data);
         match ntex {
             NewTexture::Texture(t) => {
-                self.cache.push(&mut self.buf,
-                                             Command::UpdateTexture(t, kind, face, ptr, img))
+                self.cache.push(
+                    &mut self.buf,
+                    Command::UpdateTexture(t, kind, face, ptr, img))
             }
             NewTexture::Surface(s) => {
                 error!("GL: unable to update the contents of a Surface({})", s)
@@ -567,7 +561,7 @@ impl command::Buffer<Resources> for CommandBuffer {
                  count: c::VertexCount,
                  instances: Option<command::InstanceParams>) {
         self.cache.push(&mut self.buf,
-                                     Command::Draw(self.cache.primitive, start, count, instances));
+                        Command::Draw(self.cache.primitive, start, count, instances));
     }
 
     fn call_draw_indexed(&mut self,
@@ -581,11 +575,12 @@ impl command::Buffer<Resources> for CommandBuffer {
         };
         self.cache
             .push(&mut self.buf,
-                         Command::DrawIndexed(self.cache.primitive,
-                                              gl_index,
-                                              RawOffset(offset as *const gl::types::GLvoid),
-                                              count,
-                                              base,
-                                              instances));
+                  Command::DrawIndexed(
+                      self.cache.primitive,
+                      gl_index,
+                      RawOffset(offset as *const gl::types::GLvoid),
+                      count,
+                      base,
+                      instances));
     }
 }
