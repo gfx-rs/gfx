@@ -296,12 +296,31 @@ impl CommandBuffer {
     }
 
     fn bind_descriptor_heaps(&mut self, srv_cbv_uav: Option<&native::DescriptorHeap>, samplers: Option<&native::DescriptorHeap>) {
-        // TODO: usnet all active descriptor sets?
+        // TODO: unset all active descriptor sets?
     }
 
-    fn bind_descriptor_sets(&mut self, sets: &[&native::DescriptorSet]) {
+    fn bind_descriptor_sets(
+        &mut self,
+        bind_point: vk::PipelineBindPoint,
+        layout: &native::PipelineLayout,
+        first_set: usize,
+        sets: &[&native::DescriptorSet])
+    {
         // TODO: verify sets from currently bound descriptor heap
-        // TODO
+        let sets = sets.iter().map(|set| {
+            set.inner
+        }).collect::<Vec<_>>();
+
+        unsafe {
+            self.device.0.cmd_bind_descriptor_sets(
+                self.inner, // commandBuffer
+                bind_point, // pipelineBindPoint
+                layout.layout, // layout
+                first_set as u32, // firstSet
+                &sets, // pDescriptorSets
+                &[]// pDynamicOffsets // TODO
+            );
+        }
     }
 }
 
@@ -359,10 +378,6 @@ macro_rules! impl_processing_cmd_buffer {
 
             fn bind_descriptor_heaps(&mut self, srv_cbv_uav: Option<&native::DescriptorHeap>, samplers: Option<&native::DescriptorHeap>) {
                 self.0.bind_descriptor_heaps(srv_cbv_uav, samplers)
-            }
-
-            fn bind_descriptor_sets(&mut self, sets: &[&native::DescriptorSet]) {
-                self.0.bind_descriptor_sets(sets)
             }
 
             fn push_constants(&mut self) {
@@ -443,6 +458,10 @@ macro_rules! impl_graphics_cmd_buffer {
             fn bind_graphics_pipeline(&mut self, pipeline: &native::GraphicsPipeline) {
                 self.0.bind_graphics_pipeline(pipeline)
             }
+
+            fn bind_graphics_descriptor_sets(&mut self, layout: &native::PipelineLayout, first_set: usize, sets: &[&native::DescriptorSet]) {
+                self.0.bind_descriptor_sets(vk::PipelineBindPoint::Graphics, layout, first_set, sets)
+            }
         }
     )
 }
@@ -451,7 +470,7 @@ impl_graphics_cmd_buffer!(GeneralCommandBuffer);
 impl_graphics_cmd_buffer!(GraphicsCommandBuffer);
 
 // ComputeCommandBuffer trait implementation
-macro_rules! impl_graphics_cmd_buffer {
+macro_rules! impl_compute_cmd_buffer {
     ($buffer:ident) => (
         impl core::ComputeCommandBuffer<R> for $buffer {
             fn dispatch(&mut self, x: u32, y: u32, z: u32) {
@@ -469,8 +488,8 @@ macro_rules! impl_graphics_cmd_buffer {
     )
 }
 
-impl_graphics_cmd_buffer!(GeneralCommandBuffer);
-impl_graphics_cmd_buffer!(ComputeCommandBuffer);
+impl_compute_cmd_buffer!(GeneralCommandBuffer);
+impl_compute_cmd_buffer!(ComputeCommandBuffer);
 
 // TODO: subpass command buffer
 
@@ -608,8 +627,8 @@ impl<'cb, 'rp, 'fb, 'enc, C> command::RenderPassInlineEncoder<'cb, 'rp, 'fb, 'en
         self.command_buffer.bind_graphics_pipeline(pipeline)
     }
 
-    fn bind_descriptor_sets(&mut self) {
-        unimplemented!()
+    fn bind_graphics_descriptor_sets(&mut self, layout: &native::PipelineLayout, first_set: usize, sets: &[&native::DescriptorSet]) {
+        self.command_buffer.bind_descriptor_sets(vk::PipelineBindPoint::Graphics, layout, first_set, sets)
     }
 
     fn push_constants(&mut self) {

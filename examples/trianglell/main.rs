@@ -123,7 +123,7 @@ fn main() {
             }
         ]);
 
-    let pipeline_layout = factory.create_pipeline_layout();
+    let pipeline_layout = factory.create_pipeline_layout(&[&set0_layout, &set1_layout]);
 
     let render_pass = {
         let attachment = pass::Attachment {
@@ -326,7 +326,7 @@ fn main() {
             cmd_buffer.bind_graphics_pipeline(&pipelines[0].as_ref().unwrap());
             cmd_buffer.bind_vertex_buffers(pso::VertexBufferSet(vec![(&vertex_buffer, 0)]));
             cmd_buffer.bind_descriptor_heaps(Some(&heap_srv), Some(&heap_sampler));
-            cmd_buffer.bind_descriptor_sets(&[&set0[0], &set1[0]]);
+            cmd_buffer.bind_graphics_descriptor_sets(&pipeline_layout, 0, &[&set0[0], &set1[0]]);
 
             {
                 let mut encoder = back::RenderPassInlineEncoder::begin(

@@ -170,15 +170,19 @@ impl core::Factory<R> for Factory {
         native::RenderPass { inner: renderpass }
     }
 
-    fn create_pipeline_layout(&mut self) -> native::PipelineLayout {
+    fn create_pipeline_layout(&mut self, sets: &[&native::DescriptorSetLayout]) -> native::PipelineLayout {
         // TODO:
-        // Dummy signature only
+        
+        let set_layouts = sets.iter().map(|set| {
+            set.inner
+        }).collect::<Vec<_>>();
+
         let info = vk::PipelineLayoutCreateInfo {
             s_type: vk::StructureType::PipelineLayoutCreateInfo,
             p_next: ptr::null(),
             flags: vk::PipelineLayoutCreateFlags::empty(),
-            set_layout_count: 0, // TODO
-            p_set_layouts: ptr::null(), // TODO
+            set_layout_count: set_layouts.len() as u32,
+            p_set_layouts: set_layouts.as_ptr(),
             push_constant_range_count: 0, // TODO
             p_push_constant_ranges: ptr::null(), // TODO
         };

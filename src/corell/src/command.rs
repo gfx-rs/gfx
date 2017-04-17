@@ -143,6 +143,8 @@ pub trait GraphicsCommandBuffer<R: Resources> : PrimaryCommandBuffer<R> {
     /// There is only *one* pipeline slot for compute and graphics.
     /// Calling the corresponding `bind_pipeline` functions will override the slot.
     fn bind_graphics_pipeline(&mut self, &R::GraphicsPipeline);
+
+    fn bind_graphics_descriptor_sets(&mut self, layout: &R::PipelineLayout, first_set: usize, sets: &[&R::DescriptorSet]);
 }
 
 pub trait RenderPassEncoder<'cb, 'rp, 'fb, 'enc: 'cb, C, R>
@@ -194,7 +196,7 @@ pub trait RenderPassInlineEncoder<'cb, 'rp, 'fb, 'enc: 'cb, C, R> : RenderPassEn
     fn set_ref_values(&mut self, state::RefValues);
 
     fn bind_graphics_pipeline(&mut self, &R::GraphicsPipeline);
-    fn bind_descriptor_sets(&mut self);
+    fn bind_graphics_descriptor_sets(&mut self, layout: &R::PipelineLayout, first_set: usize, sets: &[&R::DescriptorSet]);
     fn push_constants(&mut self);
 }
 
@@ -213,7 +215,7 @@ pub trait SubpassCommandBuffer<R: Resources> : SecondaryCommandBuffer<R> {
     fn set_ref_values(&mut self, state::RefValues);
 
     fn bind_graphics_pipeline(&mut self, &R::GraphicsPipeline);
-    fn bind_descriptor_sets(&mut self);
+    fn bind_graphics_descriptor_sets(&mut self, layout: &R::PipelineLayout, first_set: usize, sets: &[&R::DescriptorSet]);
     fn push_constants(&mut self);
 }
 
@@ -229,7 +231,6 @@ pub trait ProcessingCommandBuffer<R: Resources> : TransferCommandBuffer<R> {
     fn clear_buffer(&mut self);
 
     fn bind_descriptor_heaps(&mut self, srv_cbv_uav: Option<&R::DescriptorHeap>, samplers: Option<&R::DescriptorHeap>);
-    fn bind_descriptor_sets(&mut self, sets: &[&R::DescriptorSet]);
     fn push_constants(&mut self);
 }
 

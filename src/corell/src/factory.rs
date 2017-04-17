@@ -79,7 +79,7 @@ pub trait Factory<R: Resources> {
     fn create_renderpass(&mut self, attachments: &[pass::Attachment], subpasses: &[pass::SubpassDesc], dependencies: &[pass::SubpassDependency]) -> R::RenderPass;
 
     ///
-    fn create_pipeline_layout(&mut self) -> R::PipelineLayout;
+    fn create_pipeline_layout(&mut self, sets: &[&R::DescriptorSetLayout]) -> R::PipelineLayout;
 
     /// Create graphics pipelines.
     fn create_graphics_pipelines<'a>(&mut self, &[(&R::ShaderLib, &R::PipelineLayout, SubPass<'a, R>, &pso::GraphicsPipelineDesc)])
