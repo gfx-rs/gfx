@@ -701,4 +701,8 @@ impl core::Resources for Resources {
     type Fence = ();
     type Heap = native::Heap;
     type Mapping = factory::Mapping;
+    type DescriptorHeap = native::DescriptorHeap;
+    type DescriptorSetPool = native::DescriptorSetPool;
+    type DescriptorSet = native::DescriptorSet;
+    type DescriptorSetLayout = native::DescriptorSetLayout;
 }

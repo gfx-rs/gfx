@@ -13,8 +13,9 @@
 // limitations under the License.
 
 use ash::vk;
-use core::{buffer, image};
+use core::{buffer, image, shade};
 use core::command::ClearColor;
+use core::factory::DescriptorType;
 use core::format::{SurfaceType, ChannelType};
 use core::memory::{self, ImageAccess, ImageLayout};
 use core::pass::{AttachmentLoadOp, AttachmentStoreOp, AttachmentLayout};
@@ -313,4 +314,47 @@ pub fn map_index_type(index_type: IndexType) -> vk::IndexType {
         IndexType::U16 => vk::IndexType::Uint16,
         IndexType::U32 => vk::IndexType::Uint32,
     }
+}
+
+pub fn map_descriptor_type(ty: DescriptorType) -> vk::DescriptorType {
+    match ty {
+        Sampler => vk::DescriptorType::Sampler,
+        SampledImage => vk::DescriptorType::SampledImage,
+        StorageImage => vk::DescriptorType::StorageImage,
+        UniformTexelBuffer => vk::DescriptorType::UniformTexelBuffer,
+        StorageTexelBuffer => vk::DescriptorType::StorageTexelBuffer,
+        ConstantBuffer => vk::DescriptorType::UniformBuffer,
+        StorageBuffer => vk::DescriptorType::StorageBuffer,
+        InputAttachment => vk::DescriptorType::InputAttachment,
+    }
+}
+
+pub fn map_stage_flags(stages: shade::StageFlags) -> vk::ShaderStageFlags {
+    let mut flags = vk::ShaderStageFlags::empty();
+
+    if stages.contains(shade::STAGE_VERTEX) {
+        flags |= vk::SHADER_STAGE_VERTEX_BIT;
+    }
+
+    if stages.contains(shade::STAGE_HULL) {
+        flags |= vk::SHADER_STAGE_TESSELLATION_CONTROL_BIT;
+    }
+
+    if stages.contains(shade::STAGE_DOMAIN) {
+        flags |= vk::SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
+    }
+
+    if stages.contains(shade::STAGE_GEOMETRY) {
+        flags |= vk::SHADER_STAGE_GEOMETRY_BIT;
+    }
+
+    if stages.contains(shade::STAGE_PIXEL) {
+        flags |= vk::SHADER_STAGE_FRAGMENT_BIT;
+    }
+
+    if stages.contains(shade::STAGE_COMPUTE) {
+        flags |= vk::SHADER_STAGE_COMPUTE_BIT;
+    }
+
+    flags
 }

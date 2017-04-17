@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Range;
 use {buffer, format, image, mapping, memory, pass, pso, shade};
 use {HeapType, Resources, SubPass};
 
@@ -22,6 +23,45 @@ pub enum ResourceViewError { }
 /// Error creating either a RenderTargetView, or DepthStencilView.
 #[derive(Clone, PartialEq, Debug)]
 pub enum TargetViewError { }
+
+/// Type of the descriptor heap. Defines which descriptors can be placed.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum DescriptorHeapType {
+    /// Supports shader resource views (SRV), constant buffer views (CBV) and unordered access views (UAV).
+    SrvCbvUav,
+    /// Supports samplers only.
+    Sampler,
+}
+
+// TODO: reevaluate the names
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum DescriptorType {
+    Sampler,
+    SampledImage,
+    StorageImage,
+    UniformTexelBuffer,
+    StorageTexelBuffer,
+    ConstantBuffer,
+    StorageBuffer,
+    InputAttachment,
+
+    // TODO: CombinedImageSampler,
+    // ConstantBufferDynamic, StorageBufferDynamic
+}
+
+pub struct DescriptorPoolDesc {
+    pub ty: DescriptorType,
+    pub count: usize,
+}
+
+pub struct DescriptorSetLayoutBinding {
+    pub binding: usize,
+    pub ty: DescriptorType,
+    pub count: usize,
+    pub stage_flags: shade::StageFlags,
+
+    // TODO: immutable samplers?
+}
 
 /// A `Factory` is responsible for creating and managing resources for the backend it was created
 /// with.
@@ -82,10 +122,26 @@ pub trait Factory<R: Resources> {
     ///
     fn view_image_as_render_target(&mut self, image: &R::Image, format: format::Format) -> Result<R::RenderTargetView, TargetViewError>;
 
+    ///
+    fn view_image_as_shader_resource(&mut self) -> Result<R::ShaderResourceView, TargetViewError>;
+
+    ///
+    fn create_descriptor_heap(&mut self, ty: DescriptorHeapType, size: usize) -> R::DescriptorHeap;
+
+    ///
+    fn create_descriptor_set_pool(&mut self, heap: &R::DescriptorHeap, max_sets: usize, offset: usize, descriptor_pools: &[DescriptorPoolDesc]) -> R::DescriptorSetPool;
+
+    ///
+    fn create_descriptor_set_layout(&mut self, bindings: &[DescriptorSetLayoutBinding]) -> R::DescriptorSetLayout;
+
+    ///
+    fn create_descriptor_sets(&mut self, set_pool: &mut R::DescriptorSetPool, layout: &[&R::DescriptorSetLayout]) -> Vec<R::DescriptorSet>;
+
     // TODO: mapping requires further looking into.
     // vulkan requires non-coherent mapping to round the range delimiters
     // Nested mapping is not allowed in vulkan.
     // How to handle it properly for backends? Explicit synchronization?
+
     /// Acquire a mapping Reader.
     fn read_mapping<'a, T>(&self, buf: &'a R::Buffer, offset: u64, size: u64)
                                -> Result<mapping::Reader<'a, R, T>,

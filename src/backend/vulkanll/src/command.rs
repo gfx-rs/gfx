@@ -156,10 +156,6 @@ impl CommandBuffer {
         }
     }
 
-    fn bind_descriptor_sets(&mut self) {
-        unimplemented!()
-    }
-
     fn push_constants(&mut self) {
         unimplemented!()
     }
@@ -298,6 +294,15 @@ impl CommandBuffer {
     fn resolve_image(&mut self) {
         unimplemented!()
     }
+
+    fn bind_descriptor_heaps(&mut self, srv_cbv_uav: Option<&native::DescriptorHeap>, samplers: Option<&native::DescriptorHeap>) {
+        // TODO: usnet all active descriptor sets?
+    }
+
+    fn bind_descriptor_sets(&mut self, sets: &[&native::DescriptorSet]) {
+        // TODO: verify sets from currently bound descriptor heap
+        // TODO
+    }
 }
 
 // CommandBuffer trait implementation
@@ -352,8 +357,12 @@ macro_rules! impl_processing_cmd_buffer {
                 self.0.clear_buffer()
             }
 
-            fn bind_descriptor_sets(&mut self) {
-                self.0.bind_descriptor_sets()
+            fn bind_descriptor_heaps(&mut self, srv_cbv_uav: Option<&native::DescriptorHeap>, samplers: Option<&native::DescriptorHeap>) {
+                self.0.bind_descriptor_heaps(srv_cbv_uav, samplers)
+            }
+
+            fn bind_descriptor_sets(&mut self, sets: &[&native::DescriptorSet]) {
+                self.0.bind_descriptor_sets(sets)
             }
 
             fn push_constants(&mut self) {

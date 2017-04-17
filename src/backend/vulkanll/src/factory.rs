@@ -17,6 +17,7 @@ use ash::version::DeviceV1_0;
 use std::{mem, ptr, slice};
 use std::sync::Arc;
 use std::collections::BTreeMap;
+use std::ops::Range;
 
 use core::{self, buffer, format, factory as f, image, mapping, memory, pass, shade, state as s};
 use core::{HeapType, SubPass};
@@ -771,7 +772,7 @@ impl core::Factory<R> for Factory {
 
         let view = unsafe {
             self.inner.0.create_image_view(&info, None)
-                        .expect("Error on image view creation")
+                        .expect("Error on image view creation") // TODO
         };
 
         let rtv = native::RenderTargetView {
@@ -780,6 +781,103 @@ impl core::Factory<R> for Factory {
         };
 
         Ok(rtv)
+    }
+
+    fn view_image_as_shader_resource(&mut self) -> Result<(), f::TargetViewError> {
+        unimplemented!()
+    }
+
+    fn create_descriptor_heap(&mut self, ty: f::DescriptorHeapType, size: usize) -> native::DescriptorHeap {
+        native::DescriptorHeap { ty: ty, size: size }
+    }
+
+    fn create_descriptor_set_pool(&mut self, heap: &native::DescriptorHeap, max_sets: usize, offset: usize, descriptor_pools: &[f::DescriptorPoolDesc]) -> native::DescriptorSetPool {
+        let num_descriptors = descriptor_pools.iter().fold(0, |acc, pool| acc + pool.count as usize);
+        if offset + num_descriptors > heap.size {
+            panic!("Out of heap range");
+        }
+
+        if descriptor_pools.iter()
+                .any(|pool| (pool.ty == f::DescriptorType::Sampler) && (heap.ty != f::DescriptorHeapType::Sampler) ) {
+            panic!("Mismatching descriptor types");
+        }
+
+        let pools = descriptor_pools.iter().map(|pool| {
+            vk::DescriptorPoolSize {
+                typ: data::map_descriptor_type(pool.ty),
+                descriptor_count: pool.count as u32,
+            }
+        }).collect::<Vec<_>>();
+
+        let info = vk::DescriptorPoolCreateInfo {
+            s_type: vk::StructureType::DescriptorPoolCreateInfo,
+            p_next: ptr::null(),
+            flags: vk::DescriptorPoolCreateFlags::empty(), // disallow individual freeing
+            max_sets: max_sets as u32,
+            pool_size_count: pools.len() as u32,
+            p_pool_sizes: pools.as_ptr(),
+        };
+
+        let pool = unsafe {
+            self.inner.0.create_descriptor_pool(&info, None)
+                        .expect("Error on descriptor set pool creation") // TODO
+        };
+
+        native::DescriptorSetPool {
+            inner: pool,
+        }
+    }
+
+    fn create_descriptor_set_layout(&mut self, bindings: &[f::DescriptorSetLayoutBinding]) -> native::DescriptorSetLayout {
+        let bindings = bindings.iter().map(|binding| {
+            vk::DescriptorSetLayoutBinding {
+                binding: binding.binding as u32,
+                descriptor_type: data::map_descriptor_type(binding.ty),
+                descriptor_count: binding.count as u32,
+                stage_flags: data::map_stage_flags(binding.stage_flags),
+                p_immutable_samplers: ptr::null(), // TODO
+            }
+        }).collect::<Vec<_>>();
+
+        let info = vk::DescriptorSetLayoutCreateInfo {
+            s_type: vk::StructureType::DescriptorSetLayoutCreateInfo,
+            p_next: ptr::null(),
+            flags: vk::DescriptorSetLayoutCreateFlags::empty(),
+            binding_count: bindings.len() as u32,
+            p_bindings: bindings.as_ptr(),
+        };
+
+        let layout = unsafe {
+            self.inner.0.create_descriptor_set_layout(&info, None)
+                        .expect("Error on descriptor set layout creation") // TODO
+        };
+
+        native::DescriptorSetLayout {
+            inner: layout,
+        }
+    }
+
+    fn create_descriptor_sets(&mut self, set_pool: &mut native::DescriptorSetPool, layouts: &[&native::DescriptorSetLayout]) -> Vec<native::DescriptorSet> {
+        let layouts = layouts.iter().map(|layout| {
+            layout.inner
+        }).collect::<Vec<_>>();
+
+        let info = vk::DescriptorSetAllocateInfo {
+            s_type: vk::StructureType::DescriptorSetAllocateInfo,
+            p_next: ptr::null(),
+            descriptor_pool: set_pool.inner,
+            descriptor_set_count: layouts.len() as u32,
+            p_set_layouts: layouts.as_ptr(),
+        };
+
+        let descriptor_sets = unsafe {
+            self.inner.0.allocate_descriptor_sets(&info)
+                        .expect("Error on descriptor sets creation") // TODO
+        };
+
+        descriptor_sets.into_iter().map(|set| {
+            native::DescriptorSet { inner: set }
+        }).collect::<Vec<_>>()
     }
 
     /// Acquire a mapping Reader.

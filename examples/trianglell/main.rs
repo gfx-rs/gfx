@@ -22,13 +22,14 @@ extern crate gfx_device_vulkanll as back;
 extern crate winit;
 extern crate image;
 
-use gfx_corell::{buffer, command, format, pass, pso, state, target, 
+use gfx_corell::{buffer, command, format, pass, pso, shade, state, target, 
     Device, CommandPool, GraphicsCommandPool,
     GraphicsCommandBuffer, ProcessingCommandBuffer, TransferCommandBuffer, PrimaryCommandBuffer,
     Primitive, Instance, Adapter, Surface, SwapChain, QueueFamily, Factory, SubPass};
 use gfx_corell::command::{RenderPassEncoder, RenderPassInlineEncoder};
 use gfx_corell::format::Formatted;
 use gfx_corell::memory::{self, ImageBarrier};
+use gfx_corell::factory::{DescriptorHeapType, DescriptorPoolDesc, DescriptorType, DescriptorSetLayoutBinding};
 
 use std::io::Cursor;
 use gfx_corell::image as i;
@@ -104,6 +105,24 @@ fn main() {
         pixel_shader: Some("ps_main"),
     };
 
+    let set0_layout = factory.create_descriptor_set_layout(&[
+            DescriptorSetLayoutBinding {
+                binding: 0,
+                ty: DescriptorType::SampledImage,
+                count: 1,
+                stage_flags: shade::STAGE_PIXEL,
+            }
+        ]);
+
+    let set1_layout = factory.create_descriptor_set_layout(&[
+            DescriptorSetLayoutBinding {
+                binding: 0,
+                ty: DescriptorType::Sampler,
+                count: 1,
+                stage_flags: shade::STAGE_PIXEL,
+            }
+        ]);
+
     let pipeline_layout = factory.create_pipeline_layout();
 
     let render_pass = {
@@ -161,6 +180,26 @@ fn main() {
 
     println!("{:?}", pipelines);
 
+    // Descriptors
+    let heap_srv = factory.create_descriptor_heap(DescriptorHeapType::SrvCbvUav, 16);
+    let mut srv_pool = factory.create_descriptor_set_pool(
+        &heap_srv,
+        1, // sets
+        0, // offset
+        &[DescriptorPoolDesc { ty: DescriptorType::SampledImage, count: 1 }],
+    );
+
+    let set0 = factory.create_descriptor_sets(&mut srv_pool, &[&set0_layout]);
+
+    let heap_sampler = factory.create_descriptor_heap(DescriptorHeapType::Sampler, 16);
+    let mut sampler_pool = factory.create_descriptor_set_pool(
+        &heap_sampler,
+        1, // sets
+        0, // offset
+        &[DescriptorPoolDesc { ty: DescriptorType::Sampler, count: 1 }],
+    );
+
+    let set1 = factory.create_descriptor_sets(&mut sampler_pool, &[&set1_layout]);
 
     // Framebuffer and render target creation
     let frame_rtvs = swap_chain.get_images().iter().map(|image| {
@@ -286,6 +325,8 @@ fn main() {
             cmd_buffer.set_scissors(&[scissor]);
             cmd_buffer.bind_graphics_pipeline(&pipelines[0].as_ref().unwrap());
             cmd_buffer.bind_vertex_buffers(pso::VertexBufferSet(vec![(&vertex_buffer, 0)]));
+            cmd_buffer.bind_descriptor_heaps(Some(&heap_srv), Some(&heap_sampler));
+            cmd_buffer.bind_descriptor_sets(&[&set0[0], &set1[0]]);
 
             {
                 let mut encoder = back::RenderPassInlineEncoder::begin(

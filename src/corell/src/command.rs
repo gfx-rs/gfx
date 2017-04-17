@@ -228,7 +228,8 @@ pub trait ProcessingCommandBuffer<R: Resources> : TransferCommandBuffer<R> {
     fn clear_color(&mut self, &R::RenderTargetView, ClearColor);
     fn clear_buffer(&mut self);
 
-    fn bind_descriptor_sets(&mut self);
+    fn bind_descriptor_heaps(&mut self, srv_cbv_uav: Option<&R::DescriptorHeap>, samplers: Option<&R::DescriptorHeap>);
+    fn bind_descriptor_sets(&mut self, sets: &[&R::DescriptorSet]);
     fn push_constants(&mut self);
 }
 

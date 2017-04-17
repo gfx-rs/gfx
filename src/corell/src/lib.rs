@@ -262,6 +262,10 @@ pub trait Resources:          Clone + Hash + Debug + Any {
     type Fence:               Debug + Any + Send + Sync;
     type Heap:                Debug + Any;
     type Mapping;
+    type DescriptorHeap:      Debug + Any;
+    type DescriptorSetPool:   Debug + Any;
+    type DescriptorSet:       Debug + Any;
+    type DescriptorSetLayout: Debug + Any;
 }
 
 /// Different types of a specific API.
