@@ -308,6 +308,28 @@ fn main() {
         // present frame
         swap_chain.present();
     }
+
+    // cleanup!
+    factory.destroy_shader_lib(shader_lib);
+    factory.destroy_pipeline_layout(pipeline_layout);
+    factory.destroy_renderpass(render_pass);
+    factory.destroy_heap(heap);
+    factory.destroy_heap(image_heap);
+    factory.destroy_heap(image_upload_heap);
+    factory.destroy_buffer(vertex_buffer);
+    factory.destroy_buffer(image_upload_buffer);
+    factory.destroy_image(image_logo);
+    for pipeline in pipelines {
+        if let Ok(pipeline) = pipeline {
+            factory.destroy_graphics_pipeline(pipeline);
+        }
+    }
+    for framebuffer in framebuffers {
+        factory.destroy_framebuffer(framebuffer);
+    }
+    for rtv in frame_rtvs {
+        factory.destroy_render_target_view(rtv);
+    }
 }
 
 #[cfg(not(any(feature = "vulkan", target_os = "windows")))]

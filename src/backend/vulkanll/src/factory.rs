@@ -845,4 +845,46 @@ impl core::Factory<R> for Factory {
 
         Ok(unsafe { mapping::Writer::new(slice, mapping) })
     }
+
+    fn destroy_heap(&mut self, heap: native::Heap) {
+        unsafe { self.inner.0.free_memory(heap.0, None); }
+    }
+
+    fn destroy_shader_lib(&mut self, shader_lib: native::ShaderLib) {
+        for shader in shader_lib.shaders.into_iter() {
+            unsafe { self.inner.0.destroy_shader_module(shader.1, None); }
+        }
+    }
+
+    fn destroy_renderpass(&mut self, rp: native::RenderPass) {
+        unsafe { self.inner.0.destroy_render_pass(rp.inner, None); }
+    }
+
+    fn destroy_pipeline_layout(&mut self, pl: native::PipelineLayout) {
+        unsafe { self.inner.0.destroy_pipeline_layout(pl.layout, None); }
+    }
+
+    fn destroy_graphics_pipeline(&mut self, pipeline: native::GraphicsPipeline) {
+        unsafe { self.inner.0.destroy_pipeline(pipeline.pipeline, None); }
+    }
+
+    fn destroy_compute_pipeline(&mut self, pipeline: native::ComputePipeline) {
+        unsafe { self.inner.0.destroy_pipeline(pipeline.pipeline, None); }
+    }
+
+    fn destroy_framebuffer(&mut self, fb: native::FrameBuffer) {
+        unsafe { self.inner.0.destroy_framebuffer(fb.inner, None); }
+    }
+
+    fn destroy_buffer(&mut self, buffer: native::Buffer) {
+        unsafe { self.inner.0.destroy_buffer(buffer.inner, None); }
+    }
+
+    fn destroy_image(&mut self, image: native::Image) {
+        unsafe { self.inner.0.destroy_image(image.0, None); }
+    }
+
+    fn destroy_render_target_view(&mut self, rtv: native::RenderTargetView) {
+        unsafe { self.inner.0.destroy_image_view(rtv.view, None); }
+    }
 }
