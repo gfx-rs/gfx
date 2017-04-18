@@ -182,10 +182,26 @@ impl Cache {
     }
 }
 
+/// A command buffer abstraction for OpenGL.
+///
+/// Manages a list of commands that will be executed when submitted to a `Device`. Usually it is
+/// best to use a `Encoder` to manage the command buffer which implements `From<CommandBuffer>`.
+///
+/// If you want to display your rendered results to a framebuffer created externally, see the
+/// `display_fb` field.
 pub struct CommandBuffer {
     pub buf: Vec<Command>,
     pub data: DataBuffer,
     fbo: FrameBuffer,
+    /// The framebuffer to use for rendering to the main targets (0 by default).
+    ///
+    /// Use this to set the framebuffer that will be used for the screen display targets created
+    /// with `create_main_targets_raw`. Usually you don't need to set this field directly unless
+    /// your OS doesn't provide a default framebuffer with name 0 and you have to render to a
+    /// different framebuffer object that can be made visible on the screen (iOS/tvOS need this).
+    ///
+    /// This framebuffer must exist and be configured correctly (with renderbuffer attachments,
+    /// etc.) so that rendering to it can occur immediately.
     pub display_fb: FrameBuffer,
     cache: Cache,
     active_attribs: usize,
