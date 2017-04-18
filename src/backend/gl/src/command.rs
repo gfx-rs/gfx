@@ -186,6 +186,7 @@ pub struct CommandBuffer {
     pub buf: Vec<Command>,
     pub data: DataBuffer,
     fbo: FrameBuffer,
+    pub display_fb: FrameBuffer,
     cache: Cache,
     active_attribs: usize,
 }
@@ -196,6 +197,7 @@ impl CommandBuffer {
             buf: Vec::new(),
             data: DataBuffer::new(),
             fbo: fbo,
+            display_fb: 0 as FrameBuffer,
             cache: Cache::new(),
             active_attribs: 0,
         }
@@ -298,7 +300,7 @@ impl command::Buffer<Resources> for CommandBuffer {
             self.is_main_target(pts.depth) &&
             self.is_main_target(pts.stencil);
         if is_main {
-            self.buf.push(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, 0));
+            self.buf.push(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, self.display_fb));
         } else {
             let num = pts.colors.iter().position(|c| c.is_none())
                          .unwrap_or(pts.colors.len()) as c::ColorSlot;
