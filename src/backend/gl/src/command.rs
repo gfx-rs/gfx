@@ -205,82 +205,78 @@ impl Cache {
         }
     }
 
-    fn push(&self, buf: &mut Vec<Command>, command: Command) {
-        buf.push(command)
-    }
-
-    fn bind_program(&mut self, buf: &mut Vec<Command>, program: Program) {
+    fn bind_program(&mut self, program: Program) -> Option<Command> {
         if program == self.program {
-            return;
+            return None;
         }
         self.program = program;
-        buf.push(Command::BindProgram(program));
+        Some(Command::BindProgram(program))
     }
 
-    fn bind_constant_buffer(&mut self, buf: &mut Vec<Command>, constant_buffer: c::pso::ConstantBufferParam<Resources>) {
+    fn bind_constant_buffer(&mut self, constant_buffer: c::pso::ConstantBufferParam<Resources>) -> Option<Command> {
         if self.constant_buffer == Some(constant_buffer) {
-            return;
+            return None;
         }
         self.constant_buffer = Some(constant_buffer);
-        buf.push(Command::BindConstantBuffer(constant_buffer));
+        Some(Command::BindConstantBuffer(constant_buffer))
     }
 
-    fn bind_resource_view(&mut self, buf: &mut Vec<Command>, resource_view: c::pso::ResourceViewParam<Resources>) {
+    fn bind_resource_view(&mut self, resource_view: c::pso::ResourceViewParam<Resources>) -> Option<Command> {
         if self.resource_view == Some(resource_view) {
-            return;
+            return None;
         }
         self.resource_view = Some(resource_view);
-        buf.push(Command::BindResourceView(resource_view));
+        Some(Command::BindResourceView(resource_view))
     }
 
-    fn bind_index(&mut self, buf: &mut Vec<Command>, buffer: Buffer, itype: c::IndexType) {
+    fn bind_index(&mut self, buffer: Buffer, itype: c::IndexType) -> Option<Command> {
         if self.index == buffer && itype == self.index_type {
-            return;
+            return None;
         }
         self.index_type = itype;
         self.index = buffer;
-        buf.push(Command::BindIndex(buffer));
+        Some(Command::BindIndex(buffer))
     }
 
-    fn bind_framebuffer(&mut self, buf: &mut Vec<Command>, access: Access, fb: FrameBuffer) {
+    fn bind_framebuffer(&mut self, access: Access, fb: FrameBuffer) -> Option<Command> {
         if self.framebuffer == Some((access, fb)) {
-            return;
+            return None;
         }
         self.framebuffer = Some((access, fb));
-        buf.push(Command::BindFrameBuffer(access, fb));
+        Some(Command::BindFrameBuffer(access, fb))
     }
 
-    fn set_rasterizer(&mut self, buf: &mut Vec<Command>, rasterizer: s::Rasterizer) {
+    fn set_rasterizer(&mut self, rasterizer: s::Rasterizer) -> Option<Command> {
         if self.rasterizer == Some(rasterizer) {
-            return;
+            return None;
         }
         self.rasterizer = Some(rasterizer);
-        buf.push(Command::SetRasterizer(rasterizer));
+        Some(Command::SetRasterizer(rasterizer))
     }
 
-    fn set_viewport(&mut self, buf: &mut Vec<Command>, rect: Rect) {
+    fn set_viewport(&mut self, rect: Rect) -> Option<Command> {
         if self.viewport == Some(rect) {
-            return;
+            return None;
         }
         self.viewport = Some(rect);
-        buf.push(Command::SetViewport(rect));
+        Some(Command::SetViewport(rect))
     }
 
-    fn set_scissor(&mut self, buf: &mut Vec<Command>, rect: Option<Rect>) {
+    fn set_scissor(&mut self, rect: Option<Rect>) -> Option<Command> {
         if self.scissor_test == rect {
-            return;
+            return None;
         }
         self.scissor_test = rect;
-        buf.push(Command::SetScissor(rect));
+        Some(Command::SetScissor(rect))
     }
-    fn set_depth_state(&mut self, buf: &mut Vec<Command>, depth: Option<s::Depth>) {
+    fn set_depth_state(&mut self, depth: Option<s::Depth>) -> Option<Command> {
         if self.depth_state == depth {
-            return;
+            return None;
         }
         self.depth_state = depth;
-        buf.push(Command::SetDepthState(depth));
+        Some(Command::SetDepthState(depth))
     }
-    fn set_stencil_state(&mut self, buf: &mut Vec<Command>, option_stencil: Option<s::Stencil>, stencils: (Stencil, Stencil), cullface: s:: CullFace) {
+    fn set_stencil_state(&mut self, option_stencil: Option<s::Stencil>, stencils: (Stencil, Stencil), cullface: s:: CullFace) -> Option<Command> {
         // This is a little more complex 'cause if option_stencil
         // is None the stencil state is disabled, it it's Some
         // then it's enabled and parameters are set.
@@ -289,21 +285,21 @@ impl Cache {
         // stencil is enabled;
         // we'll be re-enabling it over and over.
         // For now though, we just don't handle it.
-        buf.push(Command::SetStencilState(option_stencil, stencils, cullface));
+        Some(Command::SetStencilState(option_stencil, stencils, cullface))
     }
-    fn set_blend_state(&mut self, buf: &mut Vec<Command>, color_slot: c::ColorSlot, color: s::Color) {
+    fn set_blend_state(&mut self, color_slot: c::ColorSlot, color: s::Color) -> Option<Command> {
         if self.blend_state == Some((color_slot, color)) {
-            return;
+            return None;
         }
         self.blend_state = Some((color_slot, color));
-        buf.push(Command::SetBlendState(color_slot, color));
+        Some(Command::SetBlendState(color_slot, color))
     }
-    fn set_blend_color(&mut self, buf: &mut Vec<Command>, color_value: ColorValue) {
+    fn set_blend_color(&mut self, color_value: ColorValue) -> Option<Command> {
         if self.blend_color == Some(color_value) {
-            return;
+            return None;
         }
         self.blend_color = Some(color_value);
-        buf.push(Command::SetBlendColor(color_value));
+        Some(Command::SetBlendColor(color_value))
     }
 
 }
@@ -351,21 +347,19 @@ impl command::Buffer<Resources> for CommandBuffer {
         self.cache.stencil = pso.output.stencil;
         self.cache.cull_face = cull;
         self.cache.draw_mask = pso.output.draw_mask;
-        self.cache.bind_program(&mut self.buf, pso.program);
+        self.buf.extend(self.cache.bind_program(pso.program));
         self.cache.scissor = pso.scissor;
-        self.cache.set_rasterizer(&mut self.buf, pso.rasterizer);
-        self.cache.set_depth_state(&mut self.buf, pso.output.depth);
-        self.cache.set_stencil_state(&mut self.buf,
-                                     pso.output.stencil, (0, 0), cull);
+        self.buf.extend(self.cache.set_rasterizer(pso.rasterizer));
+        self.buf.extend(self.cache.set_depth_state(pso.output.depth));
+        self.buf.extend(self.cache.set_stencil_state(pso.output.stencil, (0, 0), cull));
         for i in 0..c::MAX_COLOR_TARGETS {
             if pso.output.draw_mask & (1 << i) != 0 {
-                self.cache.set_blend_state(&mut self.buf,
-                                            i as c::ColorSlot,
-                                            pso.output.colors[i]);
+                self.buf.extend(self.cache.set_blend_state(i as c::ColorSlot,
+                                           pso.output.colors[i]));
             }
         }
         if let c::Primitive::PatchList(num) = pso.primitive {
-            self.cache.push(&mut self.buf, Command::SetPatches(num));
+            self.buf.push(Command::SetPatches(num));
         }
     }
 
@@ -381,15 +375,14 @@ impl command::Buffer<Resources> for CommandBuffer {
                 }
                 (Some((buffer, offset)), Some(mut bel)) => {
                     bel.elem.offset += offset as gl::types::GLuint;
-                    self.cache.push(&mut self.buf, Command::BindAttribute(
+                    self.buf.push(Command::BindAttribute(
                         i as c::AttributeSlot,
                         buffer,
                         bel));
                     self.active_attribs |= 1 << i;
                 }
                 (_, None) if self.active_attribs & (1 << i) != 0 => {
-                    self.cache.push(&mut self.buf,
-                                    Command::UnbindAttribute(i as c::AttributeSlot));
+                    self.buf.push(Command::UnbindAttribute(i as c::AttributeSlot));
                     self.active_attribs ^= 1 << i;
                 }
                 (_, None) => (),
@@ -399,12 +392,12 @@ impl command::Buffer<Resources> for CommandBuffer {
 
     fn bind_constant_buffers(&mut self, cbs: &[c::pso::ConstantBufferParam<Resources>]) {
         for param in cbs.iter() {
-            self.cache.bind_constant_buffer(&mut self.buf, param.clone());
+            self.buf.extend(self.cache.bind_constant_buffer(param.clone()));
         }
     }
 
     fn bind_global_constant(&mut self, loc: c::shade::Location, value: c::shade::UniformValue) {
-        self.cache.push(&mut self.buf, Command::BindUniform(loc, value));
+        self.buf.push(Command::BindUniform(loc, value));
     }
 
     fn bind_resource_views(&mut self, srvs: &[c::pso::ResourceViewParam<Resources>]) {
@@ -413,20 +406,20 @@ impl command::Buffer<Resources> for CommandBuffer {
         }
         for param in srvs.iter() {
             self.cache.resource_binds[param.2 as usize] = Some(param.0.bind);
-            self.cache.bind_resource_view(&mut self.buf, param.clone());
+            self.buf.extend(self.cache.bind_resource_view(param.clone()));
         }
     }
 
     fn bind_unordered_views(&mut self, uavs: &[c::pso::UnorderedViewParam<Resources>]) {
         for param in uavs.iter() {
-            self.cache.push(&mut self.buf, Command::BindUnorderedView(param.clone()));
+            self.buf.push(Command::BindUnorderedView(param.clone()));
         }
     }
 
     fn bind_samplers(&mut self, ss: &[c::pso::SamplerParam<Resources>]) {
         for param in ss.iter() {
             let bind = self.cache.resource_binds[param.2 as usize];
-            self.cache.push(&mut self.buf, Command::BindSampler(param.clone(), bind));
+            self.buf.push(Command::BindSampler(param.clone(), bind));
         }
     }
 
@@ -436,59 +429,56 @@ impl command::Buffer<Resources> for CommandBuffer {
                       self.is_main_target(pts.depth) &&
                       self.is_main_target(pts.stencil);
         if is_main {
-            self.cache.bind_framebuffer(&mut self.buf,
-                                         gl::DRAW_FRAMEBUFFER, 0);
+            self.buf.extend(self.cache.bind_framebuffer(gl::DRAW_FRAMEBUFFER, 0));
         } else {
             let num = pts.colors
                 .iter()
                 .position(|c| c.is_none())
                 .unwrap_or(pts.colors.len()) as c::ColorSlot;
-            self.cache.bind_framebuffer(&mut self.buf,
-                                         gl::DRAW_FRAMEBUFFER, self.fbo);
-            self.cache.push(&mut self.buf, Command::BindPixelTargets(pts));
-            self.cache.push(&mut self.buf, Command::SetDrawColorBuffers(num));
+            self.buf.extend(self.cache.bind_framebuffer(gl::DRAW_FRAMEBUFFER, self.fbo));
+            self.buf.push(Command::BindPixelTargets(pts));
+            self.buf.push(Command::SetDrawColorBuffers(num));
         }
         let view = pts.get_view();
         self.cache.target_dim = view;
-        self.cache.set_viewport(&mut self.buf,
-                                     Rect {
-                                         x: 0,
-                                         y: 0,
-                                         w: view.0,
-                                         h: view.1,
-                                     });
+        self.buf.extend(
+            self.cache.set_viewport(Rect {
+                                    x: 0,
+                                    y: 0,
+                                    w: view.0,
+                                    h: view.1,
+                                }));
     }
 
     fn bind_index(&mut self, buf: Buffer, itype: c::IndexType) {
-        self.cache.bind_index(&mut self.buf, buf, itype);
+        self.buf.extend(self.cache.bind_index(buf, itype));
     }
 
     fn set_scissor(&mut self, rect: Rect) {
         use std::cmp;
         let scissor = self.cache.scissor;
         let target_dim = self.cache.target_dim;
-        self.cache.set_scissor(&mut self.buf,
-                               if scissor {
-                                   Some(Rect {
-                                       // inverting the Y axis in order to match D3D11
-                                       y: cmp::max(target_dim.1, rect.y + rect.h) -
-                                           rect.y -
-                                           rect.h,
-                                       ..rect
-                                   })
-                               } else {
-                                         None //TODO: assert?
-                               });
+        let scissor_rect = if scissor {
+           Some(Rect {
+               // inverting the Y axis in order to match D3D11
+               y: cmp::max(target_dim.1, rect.y + rect.h) -
+                   rect.y -
+                   rect.h,
+               ..rect
+           })
+       } else {
+            None //TODO: assert?
+       };
+        self.buf.extend(self.cache.set_scissor(scissor_rect));
     }
 
     fn set_ref_values(&mut self, rv: s::RefValues) {
         let stencil = self.cache.stencil;
         let cull_face = self.cache.cull_face;
-        self.cache.set_stencil_state(&mut self.buf,
-                                     stencil,
-                                     rv.stencil,
-                                     cull_face);
-        self.cache.set_blend_color(&mut self.buf, rv.blend);
+        self.buf.extend(self.cache.set_stencil_state(stencil,
+                                                     rv.stencil,
+                                                     cull_face));
+        self.buf.extend(self.cache.set_blend_color(rv.blend));
     }
 
     fn copy_buffer(&mut self,
@@ -497,8 +487,7 @@ impl command::Buffer<Resources> for CommandBuffer {
                    src_offset_bytes: usize,
                    dst_offset_bytes: usize,
                    size_bytes: usize) {
-        self.cache.push(&mut self.buf,
-                        Command::CopyBuffer(
+        self.buf.push(Command::CopyBuffer(
                             src,
                             dst,
                             src_offset_bytes as gl::types::GLintptr,
@@ -507,7 +496,7 @@ impl command::Buffer<Resources> for CommandBuffer {
     }
     fn update_buffer(&mut self, buf: Buffer, data: &[u8], offset_bytes: usize) {
         let ptr = self.data.add(data);
-        self.cache.push(&mut self.buf, Command::UpdateBuffer(buf, ptr, offset_bytes));
+        self.buf.push(Command::UpdateBuffer(buf, ptr, offset_bytes));
     }
 
     fn update_texture(&mut self,
@@ -519,9 +508,7 @@ impl command::Buffer<Resources> for CommandBuffer {
         let ptr = self.data.add(data);
         match ntex {
             NewTexture::Texture(t) => {
-                self.cache.push(
-                    &mut self.buf,
-                    Command::UpdateTexture(t, kind, face, ptr, img))
+                self.buf.push(Command::UpdateTexture(t, kind, face, ptr, img))
             }
             NewTexture::Surface(s) => {
                 error!("GL: unable to update the contents of a Surface({})", s)
@@ -530,7 +517,7 @@ impl command::Buffer<Resources> for CommandBuffer {
     }
 
     fn generate_mipmap(&mut self, srv: ResourceView) {
-        self.cache.push(&mut self.buf, Command::GenerateMipmap(srv));
+        self.buf.push(Command::GenerateMipmap(srv));
     }
 
     fn clear_color(&mut self, target: TargetView, value: command::ClearColor) {
@@ -538,7 +525,7 @@ impl command::Buffer<Resources> for CommandBuffer {
         let mut pts = c::pso::PixelTargetSet::new();
         pts.colors[0] = Some(target);
         self.bind_pixel_targets(pts);
-        self.cache.push(&mut self.buf, Command::Clear(Some(value), None, None));
+        self.buf.push(Command::Clear(Some(value), None, None));
     }
 
     fn clear_depth_stencil(&mut self,
@@ -553,15 +540,14 @@ impl command::Buffer<Resources> for CommandBuffer {
             pts.stencil = Some(target);
         }
         self.bind_pixel_targets(pts);
-        self.cache.push(&mut self.buf, Command::Clear(None, depth, stencil));
+        self.buf.push(Command::Clear(None, depth, stencil));
     }
 
     fn call_draw(&mut self,
                  start: c::VertexCount,
                  count: c::VertexCount,
                  instances: Option<command::InstanceParams>) {
-        self.cache.push(&mut self.buf,
-                        Command::Draw(self.cache.primitive, start, count, instances));
+        self.buf.push(Command::Draw(self.cache.primitive, start, count, instances));
     }
 
     fn call_draw_indexed(&mut self,
@@ -573,8 +559,7 @@ impl command::Buffer<Resources> for CommandBuffer {
             c::IndexType::U16 => (start * 2u32, gl::UNSIGNED_SHORT),
             c::IndexType::U32 => (start * 4u32, gl::UNSIGNED_INT),
         };
-        self.cache
-            .push(&mut self.buf,
+        self.buf.push(
                   Command::DrawIndexed(
                       self.cache.primitive,
                       gl_index,
