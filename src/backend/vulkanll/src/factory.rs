@@ -884,6 +884,10 @@ impl core::Factory<R> for Factory {
         }).collect::<Vec<_>>()
     }
 
+    fn reset_descriptor_set_pool(&mut self, pool: &mut native::DescriptorSetPool) {
+        unimplemented!()
+    }
+
     /// Acquire a mapping Reader.
     fn read_mapping<'a, T>(&self, buf: &'a native::Buffer, offset: u64, size: u64)
                                -> Result<mapping::Reader<'a, R, T>, mapping::Error>
@@ -988,5 +992,15 @@ impl core::Factory<R> for Factory {
 
     fn destroy_render_target_view(&mut self, rtv: native::RenderTargetView) {
         unsafe { self.inner.0.destroy_image_view(rtv.view, None); }
+    }
+
+    fn destroy_descriptor_heap(&mut self, heap: native::DescriptorHeap) { }
+
+    fn destroy_descriptor_set_pool(&mut self, pool: native::DescriptorSetPool) {
+        unsafe { self.inner.0.destroy_descriptor_pool(pool.inner, None); }
+    }
+
+    fn destroy_descriptor_set_layout(&mut self, layout: native::DescriptorSetLayout) {
+        unsafe { self.inner.0.destroy_descriptor_set_layout(layout.inner, None); }
     }
 }

@@ -26,6 +26,7 @@ pub enum Stage {
 }
 
 bitflags!(
+    /// Combination of different shader pipeline stages.
     pub flags StageFlags: u16 {
         const STAGE_VERTEX   = 0x1,
         const STAGE_HULL     = 0x2,

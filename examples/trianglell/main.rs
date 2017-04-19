@@ -351,6 +351,12 @@ fn main() {
     }
 
     // cleanup!
+    factory.destroy_descriptor_heap(heap_srv);
+    factory.destroy_descriptor_heap(heap_sampler);
+    factory.destroy_descriptor_set_pool(srv_pool);
+    factory.destroy_descriptor_set_pool(sampler_pool);
+    factory.destroy_descriptor_set_layout(set0_layout);
+    factory.destroy_descriptor_set_layout(set1_layout);
     factory.destroy_shader_lib(shader_lib);
     factory.destroy_pipeline_layout(pipeline_layout);
     factory.destroy_renderpass(render_pass);

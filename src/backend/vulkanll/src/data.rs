@@ -318,14 +318,14 @@ pub fn map_index_type(index_type: IndexType) -> vk::IndexType {
 
 pub fn map_descriptor_type(ty: DescriptorType) -> vk::DescriptorType {
     match ty {
-        Sampler => vk::DescriptorType::Sampler,
-        SampledImage => vk::DescriptorType::SampledImage,
-        StorageImage => vk::DescriptorType::StorageImage,
-        UniformTexelBuffer => vk::DescriptorType::UniformTexelBuffer,
-        StorageTexelBuffer => vk::DescriptorType::StorageTexelBuffer,
-        ConstantBuffer => vk::DescriptorType::UniformBuffer,
-        StorageBuffer => vk::DescriptorType::StorageBuffer,
-        InputAttachment => vk::DescriptorType::InputAttachment,
+        DescriptorType::Sampler => vk::DescriptorType::Sampler,
+        DescriptorType::SampledImage => vk::DescriptorType::SampledImage,
+        DescriptorType::StorageImage => vk::DescriptorType::StorageImage,
+        DescriptorType::UniformTexelBuffer => vk::DescriptorType::UniformTexelBuffer,
+        DescriptorType::StorageTexelBuffer => vk::DescriptorType::StorageTexelBuffer,
+        DescriptorType::ConstantBuffer => vk::DescriptorType::UniformBuffer,
+        DescriptorType::StorageBuffer => vk::DescriptorType::StorageBuffer,
+        DescriptorType::InputAttachment => vk::DescriptorType::InputAttachment,
     }
 }
 
