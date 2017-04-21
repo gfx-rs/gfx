@@ -67,12 +67,12 @@ impl DataBuffer {
     }
     /// Return a reference to a stored data object.
     pub fn get(&self, ptr: DataPointer) -> &[u8] {
-        &self.0[ptr.offset as usize .. (ptr.offset + ptr.size) as usize]
+        &self.0[ptr.offset as usize..(ptr.offset + ptr.size) as usize]
     }
 }
 
 
-///Serialized device command.
+/// Serialized device command.
 #[derive(Clone, Copy, Debug)]
 pub enum Command {
     // states
@@ -112,14 +112,21 @@ pub enum Command {
                         Buffer, gl::types::GLintptr),
     // resource updates
     UpdateBuffer(Buffer, DataPointer, usize),
-    UpdateTexture(Texture, c::texture::Kind, Option<c::texture::CubeFace>,
-                  DataPointer, c::texture::RawImageInfo),
+    UpdateTexture(Texture,
+                  c::texture::Kind,
+                  Option<c::texture::CubeFace>,
+                  DataPointer,
+                  c::texture::RawImageInfo),
     GenerateMipmap(ResourceView),
     // drawing
     Clear(Option<command::ClearColor>, Option<Depth>, Option<Stencil>),
     Draw(gl::types::GLenum, c::VertexCount, c::VertexCount, Option<command::InstanceParams>),
-    DrawIndexed(gl::types::GLenum, gl::types::GLenum, RawOffset,
-                c::VertexCount, c::VertexCount, Option<command::InstanceParams>),
+    DrawIndexed(gl::types::GLenum,
+                gl::types::GLenum,
+                RawOffset,
+                c::VertexCount,
+                c::VertexCount,
+                Option<command::InstanceParams>),
     _Blit(Rect, Rect, Mirror, usize),
 }
 
@@ -131,7 +138,7 @@ pub const COLOR_DEFAULT: s::Color = s::Color {
 pub const RESET: [Command; 14] = [
     Command::BindProgram(0),
     Command::BindVao,
-    //Command::UnbindAttribute, //not needed, handled by the cache
+    // Command::UnbindAttribute, //not needed, handled by the cache
     Command::BindIndex(0),
     Command::BindFrameBuffer(gl::FRAMEBUFFER, 0),
     Command::SetRasterizer(s::Rasterizer {
@@ -141,7 +148,12 @@ pub const RESET: [Command; 14] = [
         offset: None,
         samples: None,
     }),
-    Command::SetViewport(Rect{x: 0, y: 0, w: 0, h: 0}),
+    Command::SetViewport(Rect {
+        x: 0,
+        y: 0,
+        w: 0,
+        h: 0,
+    }),
     Command::SetScissor(None),
     Command::SetDepthState(None),
     Command::SetStencilState(None, (0, 0), s::CullFace::Nothing),
@@ -155,14 +167,27 @@ pub const RESET: [Command; 14] = [
 struct Cache {
     primitive: gl::types::GLenum,
     index_type: c::IndexType,
+    current_vbs: Option<c::pso::VertexBufferSet<Resources>>,
     attributes: [Option<BufferElement>; c::MAX_VERTEX_ATTRIBUTES],
     resource_binds: [Option<gl::types::GLenum>; c::MAX_RESOURCE_VIEWS],
     scissor: bool,
     target_dim: (u16, u16, u16),
     stencil: Option<s::Stencil>,
-    //blend: Option<s::Blend>,
+    // blend: Option<s::Blend>,
     cull_face: s::CullFace,
     draw_mask: u32,
+
+    program: Program,
+    constant_buffer: Option<c::pso::ConstantBufferParam<Resources>>,
+    resource_view: Option<c::pso::ResourceViewParam<Resources>>,
+    scissor_test: Option<Rect>,
+    depth_state: Option<s::Depth>,
+    blend_state: Option<(c::ColorSlot, s::Color)>,
+    blend_color: Option<ColorValue>,
+    viewport: Option<Rect>,
+    rasterizer: Option<s::Rasterizer>,
+    framebuffer: Option<(Access, FrameBuffer)>,
+    index: Buffer,
 }
 
 impl Cache {
@@ -170,16 +195,127 @@ impl Cache {
         Cache {
             primitive: 0,
             index_type: c::IndexType::U16,
+            current_vbs: None,
             attributes: [None; c::MAX_VERTEX_ATTRIBUTES],
             resource_binds: [None; c::MAX_RESOURCE_VIEWS],
             scissor: false,
             target_dim: (0, 0, 0),
             stencil: None,
             cull_face: s::CullFace::Nothing,
-            //blend: None,
+            // blend: None,
             draw_mask: 0,
+
+            program: 0,
+            constant_buffer: None,
+            resource_view: None,
+            scissor_test: None,
+            depth_state: None,
+            blend_state: None,
+            blend_color: None,
+            viewport: None,
+            rasterizer: None,
+            framebuffer: None,
+            index: 0,
         }
     }
+
+    fn bind_program(&mut self, program: Program) -> Option<Command> {
+        if program == self.program {
+            return None;
+        }
+        self.program = program;
+        Some(Command::BindProgram(program))
+    }
+
+    fn bind_constant_buffer(&mut self, constant_buffer: c::pso::ConstantBufferParam<Resources>) -> Option<Command> {
+        if self.constant_buffer == Some(constant_buffer) {
+            return None;
+        }
+        self.constant_buffer = Some(constant_buffer);
+        Some(Command::BindConstantBuffer(constant_buffer))
+    }
+
+    fn bind_resource_view(&mut self, resource_view: c::pso::ResourceViewParam<Resources>) -> Option<Command> {
+        if self.resource_view == Some(resource_view) {
+            return None;
+        }
+        self.resource_view = Some(resource_view);
+        Some(Command::BindResourceView(resource_view))
+    }
+
+    fn bind_index(&mut self, buffer: Buffer, itype: c::IndexType) -> Option<Command> {
+        if self.index == buffer && itype == self.index_type {
+            return None;
+        }
+        self.index_type = itype;
+        self.index = buffer;
+        Some(Command::BindIndex(buffer))
+    }
+
+    fn bind_framebuffer(&mut self, access: Access, fb: FrameBuffer) -> Option<Command> {
+        if self.framebuffer == Some((access, fb)) {
+            return None;
+        }
+        self.framebuffer = Some((access, fb));
+        Some(Command::BindFrameBuffer(access, fb))
+    }
+
+    fn set_rasterizer(&mut self, rasterizer: s::Rasterizer) -> Option<Command> {
+        if self.rasterizer == Some(rasterizer) {
+            return None;
+        }
+        self.rasterizer = Some(rasterizer);
+        Some(Command::SetRasterizer(rasterizer))
+    }
+
+    fn set_viewport(&mut self, rect: Rect) -> Option<Command> {
+        if self.viewport == Some(rect) {
+            return None;
+        }
+        self.viewport = Some(rect);
+        Some(Command::SetViewport(rect))
+    }
+
+    fn set_scissor(&mut self, rect: Option<Rect>) -> Option<Command> {
+        if self.scissor_test == rect {
+            return None;
+        }
+        self.scissor_test = rect;
+        Some(Command::SetScissor(rect))
+    }
+    fn set_depth_state(&mut self, depth: Option<s::Depth>) -> Option<Command> {
+        if self.depth_state == depth {
+            return None;
+        }
+        self.depth_state = depth;
+        Some(Command::SetDepthState(depth))
+    }
+    fn set_stencil_state(&mut self, option_stencil: Option<s::Stencil>, stencils: (Stencil, Stencil), cullface: s:: CullFace) -> Option<Command> {
+        // This is a little more complex 'cause if option_stencil
+        // is None the stencil state is disabled, it it's Some
+        // then it's enabled and parameters are set.
+        // That's actually bad because it makes it impossible
+        // to completely remove all redundant calls if the
+        // stencil is enabled;
+        // we'll be re-enabling it over and over.
+        // For now though, we just don't handle it.
+        Some(Command::SetStencilState(option_stencil, stencils, cullface))
+    }
+    fn set_blend_state(&mut self, color_slot: c::ColorSlot, color: s::Color) -> Option<Command> {
+        if self.blend_state == Some((color_slot, color)) {
+            return None;
+        }
+        self.blend_state = Some((color_slot, color));
+        Some(Command::SetBlendState(color_slot, color))
+    }
+    fn set_blend_color(&mut self, color_value: ColorValue) -> Option<Command> {
+        if self.blend_color == Some(color_value) {
+            return None;
+        }
+        self.blend_color = Some(color_value);
+        Some(Command::SetBlendColor(color_value))
+    }
+
 }
 
 /// A command buffer abstraction for OpenGL.
@@ -220,7 +356,8 @@ impl CommandBuffer {
     }
     fn is_main_target(&self, tv: Option<TargetView>) -> bool {
         match tv {
-            Some(TargetView::Surface(0)) | None => true,
+            Some(TargetView::Surface(0)) |
+            None => true,
             Some(_) => false,
         }
     }
@@ -241,14 +378,15 @@ impl command::Buffer<Resources> for CommandBuffer {
         self.cache.stencil = pso.output.stencil;
         self.cache.cull_face = cull;
         self.cache.draw_mask = pso.output.draw_mask;
-        self.buf.push(Command::BindProgram(pso.program));
+        self.buf.extend(self.cache.bind_program(pso.program));
         self.cache.scissor = pso.scissor;
-        self.buf.push(Command::SetRasterizer(pso.rasterizer));
-        self.buf.push(Command::SetDepthState(pso.output.depth));
-        self.buf.push(Command::SetStencilState(pso.output.stencil, (0, 0), cull));
-        for i in 0 .. c::MAX_COLOR_TARGETS {
-            if pso.output.draw_mask & (1<<i) != 0 {
-                self.buf.push(Command::SetBlendState(i as c::ColorSlot, pso.output.colors[i]));
+        self.buf.extend(self.cache.set_rasterizer(pso.rasterizer));
+        self.buf.extend(self.cache.set_depth_state(pso.output.depth));
+        self.buf.extend(self.cache.set_stencil_state(pso.output.stencil, (0, 0), cull));
+        for i in 0..c::MAX_COLOR_TARGETS {
+            if pso.output.draw_mask & (1 << i) != 0 {
+                self.buf.extend(self.cache.set_blend_state(i as c::ColorSlot,
+                                           pso.output.colors[i]));
             }
         }
         if let c::Primitive::PatchList(num) = pso.primitive {
@@ -257,20 +395,27 @@ impl command::Buffer<Resources> for CommandBuffer {
     }
 
     fn bind_vertex_buffers(&mut self, vbs: c::pso::VertexBufferSet<Resources>) {
-        for i in 0 .. c::MAX_VERTEX_ATTRIBUTES {
+        if self.cache.current_vbs == Some(vbs) {
+            return;
+        }
+        self.cache.current_vbs = Some(vbs);
+        for i in 0..c::MAX_VERTEX_ATTRIBUTES {
             match (vbs.0[i], self.cache.attributes[i]) {
                 (None, Some(fm)) => {
                     error!("No vertex input provided for slot {} of format {:?}", i, fm)
-                },
+                }
                 (Some((buffer, offset)), Some(mut bel)) => {
                     bel.elem.offset += offset as gl::types::GLuint;
-                    self.buf.push(Command::BindAttribute(i as c::AttributeSlot, buffer, bel));
-                    self.active_attribs |= 1<<i;
-                },
-                (_, None) if self.active_attribs & (1<<i) != 0 => {
+                    self.buf.push(Command::BindAttribute(
+                        i as c::AttributeSlot,
+                        buffer,
+                        bel));
+                    self.active_attribs |= 1 << i;
+                }
+                (_, None) if self.active_attribs & (1 << i) != 0 => {
                     self.buf.push(Command::UnbindAttribute(i as c::AttributeSlot));
-                    self.active_attribs ^= 1<<i;
-                },
+                    self.active_attribs ^= 1 << i;
+                }
                 (_, None) => (),
             }
         }
@@ -278,22 +423,21 @@ impl command::Buffer<Resources> for CommandBuffer {
 
     fn bind_constant_buffers(&mut self, cbs: &[c::pso::ConstantBufferParam<Resources>]) {
         for param in cbs.iter() {
-            self.buf.push(Command::BindConstantBuffer(param.clone()));
+            self.buf.extend(self.cache.bind_constant_buffer(param.clone()));
         }
     }
 
-    fn bind_global_constant(&mut self, loc: c::shade::Location,
-                    value: c::shade::UniformValue) {
+    fn bind_global_constant(&mut self, loc: c::shade::Location, value: c::shade::UniformValue) {
         self.buf.push(Command::BindUniform(loc, value));
     }
 
     fn bind_resource_views(&mut self, srvs: &[c::pso::ResourceViewParam<Resources>]) {
-        for i in 0 .. c::MAX_RESOURCE_VIEWS {
+        for i in 0..c::MAX_RESOURCE_VIEWS {
             self.cache.resource_binds[i] = None;
         }
         for param in srvs.iter() {
             self.cache.resource_binds[param.2 as usize] = Some(param.0.bind);
-            self.buf.push(Command::BindResourceView(param.clone()));
+            self.buf.extend(self.cache.bind_resource_view(param.clone()));
         }
     }
 
@@ -312,52 +456,67 @@ impl command::Buffer<Resources> for CommandBuffer {
 
     fn bind_pixel_targets(&mut self, pts: c::pso::PixelTargetSet<Resources>) {
         let is_main = pts.colors.iter().skip(1).find(|c| c.is_some()).is_none() &&
-            self.is_main_target(pts.colors[0]) &&
-            self.is_main_target(pts.depth) &&
-            self.is_main_target(pts.stencil);
+                      self.is_main_target(pts.colors[0]) &&
+                      self.is_main_target(pts.depth) &&
+                      self.is_main_target(pts.stencil);
         if is_main {
-            self.buf.push(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, self.display_fb));
+            self.buf.extend(self.cache.bind_framebuffer(gl::DRAW_FRAMEBUFFER, self.display_fb));
         } else {
-            let num = pts.colors.iter().position(|c| c.is_none())
-                         .unwrap_or(pts.colors.len()) as c::ColorSlot;
-            self.buf.push(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, self.fbo));
+            let num = pts.colors
+                .iter()
+                .position(|c| c.is_none())
+                .unwrap_or(pts.colors.len()) as c::ColorSlot;
+            self.buf.extend(self.cache.bind_framebuffer(gl::DRAW_FRAMEBUFFER, self.fbo));
             self.buf.push(Command::BindPixelTargets(pts));
             self.buf.push(Command::SetDrawColorBuffers(num));
         }
         let view = pts.get_view();
         self.cache.target_dim = view;
-        self.buf.push(Command::SetViewport(Rect {
-            x: 0, y: 0, w: view.0, h: view.1
-        }));
+        self.buf.extend(
+            self.cache.set_viewport(Rect {
+                                    x: 0,
+                                    y: 0,
+                                    w: view.0,
+                                    h: view.1,
+                                }));
     }
 
     fn bind_index(&mut self, buf: Buffer, itype: c::IndexType) {
-        self.cache.index_type = itype;
-        self.buf.push(Command::BindIndex(buf));
+        self.buf.extend(self.cache.bind_index(buf, itype));
     }
 
     fn set_scissor(&mut self, rect: Rect) {
         use std::cmp;
-        self.buf.push(Command::SetScissor(
-            if self.cache.scissor {
-                Some(Rect {
-                    // inverting the Y axis in order to match D3D11
-                    y: cmp::max(self.cache.target_dim.1, rect.y + rect.h) - rect.y - rect.h,
-                    .. rect
-                })
-            } else {
-                None //TODO: assert?
-            }
-        ));
+        let scissor = self.cache.scissor;
+        let target_dim = self.cache.target_dim;
+        let scissor_rect = if scissor {
+           Some(Rect {
+               // inverting the Y axis in order to match D3D11
+               y: cmp::max(target_dim.1, rect.y + rect.h) -
+                   rect.y -
+                   rect.h,
+               ..rect
+           })
+       } else {
+            None //TODO: assert?
+       };
+        self.buf.extend(self.cache.set_scissor(scissor_rect));
     }
 
     fn set_ref_values(&mut self, rv: s::RefValues) {
-        self.buf.push(Command::SetStencilState(self.cache.stencil, rv.stencil, self.cache.cull_face));
-        self.buf.push(Command::SetBlendColor(rv.blend));
+        let stencil = self.cache.stencil;
+        let cull_face = self.cache.cull_face;
+        self.buf.extend(self.cache.set_stencil_state(stencil,
+                                                     rv.stencil,
+                                                     cull_face));
+        self.buf.extend(self.cache.set_blend_color(rv.blend));
     }
 
-    fn copy_buffer(&mut self, src: Buffer, dst: Buffer,
-                   src_offset_bytes: usize, dst_offset_bytes: usize,
+    fn copy_buffer(&mut self,
+                   src: Buffer,
+                   dst: Buffer,
+                   src_offset_bytes: usize,
+                   dst_offset_bytes: usize,
                    size_bytes: usize) {
         self.buf.push(Command::CopyBuffer(src, dst,
                                           src_offset_bytes as gl::types::GLintptr,
@@ -399,15 +558,20 @@ impl command::Buffer<Resources> for CommandBuffer {
         self.buf.push(Command::UpdateBuffer(buf, ptr, offset_bytes));
     }
 
-    fn update_texture(&mut self, ntex: NewTexture, kind: c::texture::Kind,
-                      face: Option<c::texture::CubeFace>, data: &[u8],
+    fn update_texture(&mut self,
+                      ntex: NewTexture,
+                      kind: c::texture::Kind,
+                      face: Option<c::texture::CubeFace>,
+                      data: &[u8],
                       img: c::texture::RawImageInfo) {
         let ptr = self.data.add(data);
         match ntex {
-            NewTexture::Texture(t) =>
-                self.buf.push(Command::UpdateTexture(t, kind, face, ptr, img)),
-            NewTexture::Surface(s) =>
-                error!("GL: unable to update the contents of a Surface({})", s),
+            NewTexture::Texture(t) => {
+                self.buf.push(Command::UpdateTexture(t, kind, face, ptr, img))
+            }
+            NewTexture::Surface(s) => {
+                error!("GL: unable to update the contents of a Surface({})", s)
+            }
         }
     }
 
@@ -423,7 +587,10 @@ impl command::Buffer<Resources> for CommandBuffer {
         self.buf.push(Command::Clear(Some(value), None, None));
     }
 
-    fn clear_depth_stencil(&mut self, target: TargetView, depth: Option<Depth>, stencil: Option<Stencil>) {
+    fn clear_depth_stencil(&mut self,
+                           target: TargetView,
+                           depth: Option<Depth>,
+                           stencil: Option<Stencil>) {
         let mut pts = c::pso::PixelTargetSet::new();
         if depth.is_some() {
             pts.depth = Some(target);
@@ -435,19 +602,29 @@ impl command::Buffer<Resources> for CommandBuffer {
         self.buf.push(Command::Clear(None, depth, stencil));
     }
 
-    fn call_draw(&mut self, start: c::VertexCount,
-                 count: c::VertexCount, instances: Option<command::InstanceParams>) {
+    fn call_draw(&mut self,
+                 start: c::VertexCount,
+                 count: c::VertexCount,
+                 instances: Option<command::InstanceParams>) {
         self.buf.push(Command::Draw(self.cache.primitive, start, count, instances));
     }
 
-    fn call_draw_indexed(&mut self, start: c::VertexCount,
-                         count: c::VertexCount, base: c::VertexCount,
+    fn call_draw_indexed(&mut self,
+                         start: c::VertexCount,
+                         count: c::VertexCount,
+                         base: c::VertexCount,
                          instances: Option<command::InstanceParams>) {
         let (offset, gl_index) = match self.cache.index_type {
             c::IndexType::U16 => (start * 2u32, gl::UNSIGNED_SHORT),
             c::IndexType::U32 => (start * 4u32, gl::UNSIGNED_INT),
         };
-        self.buf.push(Command::DrawIndexed(self.cache.primitive,
-            gl_index, RawOffset(offset as *const gl::types::GLvoid), count, base, instances));
+        self.buf.push(
+                  Command::DrawIndexed(
+                      self.cache.primitive,
+                      gl_index,
+                      RawOffset(offset as *const gl::types::GLvoid),
+                      count,
+                      base,
+                      instances));
     }
 }
