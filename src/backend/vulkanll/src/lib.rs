@@ -686,14 +686,15 @@ impl core::Resources for Resources {
     type ShaderLib = native::ShaderLib;
     type RenderPass = native::RenderPass;
     type PipelineLayout = native::PipelineLayout;
-    type FrameBuffer = native::FrameBuffer;    type GraphicsPipeline = native::GraphicsPipeline;
+    type FrameBuffer = native::FrameBuffer;
+    type GraphicsPipeline = native::GraphicsPipeline;
     type ComputePipeline = native::ComputePipeline;
     type UnboundBuffer = factory::UnboundBuffer;
     type Buffer = native::Buffer;
     type UnboundImage = factory::UnboundImage;
     type Image = native::Image;
     type ShaderResourceView = native::ShaderResourceView;
-    type UnorderedAccessView = ();
+    type UnorderedAccessView = native::UnorderedAccessView;
     type RenderTargetView = native::RenderTargetView;
     type DepthStencilView = native::DepthStencilView;
     type Sampler = native::Sampler;

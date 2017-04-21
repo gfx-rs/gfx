@@ -66,6 +66,41 @@ impl Factory {
         }
         Ok(native::ShaderLib { shaders: shader_map })
     }
+
+    fn create_image_view(&mut self, image: &native::Image, format: format::Format) -> vk::ImageView {
+        // TODO
+        let components = vk::ComponentMapping {
+            r: vk::ComponentSwizzle::Identity,
+            g: vk::ComponentSwizzle::Identity,
+            b: vk::ComponentSwizzle::Identity,
+            a: vk::ComponentSwizzle::Identity,
+        };
+
+        // TODO
+        let subresource_range = vk::ImageSubresourceRange {
+            aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT,
+            base_mip_level: 0, 
+            level_count: 1,
+            base_array_layer: 0,
+            layer_count: vk::VK_REMAINING_ARRAY_LAYERS,
+        };
+        
+        let info = vk::ImageViewCreateInfo {
+            s_type: vk::StructureType::ImageViewCreateInfo,
+            p_next: ptr::null(),
+            flags: vk::ImageViewCreateFlags::empty(), // TODO
+            image: image.0,
+            view_type: vk::ImageViewType::Type2d, // TODO
+            format: data::map_format(format.0, format.1).unwrap(), // TODO
+            components: components,
+            subresource_range: subresource_range,
+        };
+
+        unsafe {
+            self.inner.0.create_image_view(&info, None)
+                        .expect("Error on image view creation") // TODO
+        }
+    }
 }
 
 impl core::Factory<R> for Factory {
@@ -783,39 +818,7 @@ impl core::Factory<R> for Factory {
     }
 
     fn view_image_as_render_target(&mut self, image: &native::Image, format: format::Format) -> Result<native::RenderTargetView, f::TargetViewError> {
-        // TODO
-        let components = vk::ComponentMapping {
-            r: vk::ComponentSwizzle::Identity,
-            g: vk::ComponentSwizzle::Identity,
-            b: vk::ComponentSwizzle::Identity,
-            a: vk::ComponentSwizzle::Identity,
-        };
-
-        // TODO
-        let subresource_range = vk::ImageSubresourceRange {
-            aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT,
-            base_mip_level: 0, 
-            level_count: 1,
-            base_array_layer: 0,
-            layer_count: vk::VK_REMAINING_ARRAY_LAYERS,
-        };
-
-        let info = vk::ImageViewCreateInfo {
-            s_type: vk::StructureType::ImageViewCreateInfo,
-            p_next: ptr::null(),
-            flags: vk::ImageViewCreateFlags::empty(), // TODO
-            image: image.0,
-            view_type: vk::ImageViewType::Type2d, // TODO
-            format: data::map_format(format.0, format.1).unwrap(), // TODO
-            components: components,
-            subresource_range: subresource_range,
-        };
-
-        let view = unsafe {
-            self.inner.0.create_image_view(&info, None)
-                        .expect("Error on image view creation") // TODO
-        };
-
+        let view = self.create_image_view(image, format);
         let rtv = native::RenderTargetView {
             image: image.0,
             view: view,
@@ -826,42 +829,16 @@ impl core::Factory<R> for Factory {
 
     fn view_image_as_shader_resource(&mut self, image: &native::Image, format: format::Format) -> Result<native::ShaderResourceView, f::TargetViewError> {
         // TODO: check format compatibility? Allow different formats?
-
-        // TODO
-        let components = vk::ComponentMapping {
-            r: vk::ComponentSwizzle::Identity,
-            g: vk::ComponentSwizzle::Identity,
-            b: vk::ComponentSwizzle::Identity,
-            a: vk::ComponentSwizzle::Identity,
-        };
-
-        // TODO
-        let subresource_range = vk::ImageSubresourceRange {
-            aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT,
-            base_mip_level: 0, 
-            level_count: 1,
-            base_array_layer: 0,
-            layer_count: vk::VK_REMAINING_ARRAY_LAYERS,
-        };
-        
-        let info = vk::ImageViewCreateInfo {
-            s_type: vk::StructureType::ImageViewCreateInfo,
-            p_next: ptr::null(),
-            flags: vk::ImageViewCreateFlags::empty(), // TODO
-            image: image.0,
-            view_type: vk::ImageViewType::Type2d, // TODO
-            format: data::map_format(format.0, format.1).unwrap(), // TODO
-            components: components,
-            subresource_range: subresource_range,
-        };
-
-        let view = unsafe {
-            self.inner.0.create_image_view(&info, None)
-                        .expect("Error on image view creation") // TODO
-        };
-
+        let view = self.create_image_view(image, format);
         let srv = native::ShaderResourceView::Image(view);
         Ok(srv)
+    }
+
+    fn view_image_as_unordered_access(&mut self, image: &native::Image, format: format::Format) -> Result<native::UnorderedAccessView, f::TargetViewError> {
+        // TODO: check format compatibility? Allow different formats?
+        let view = self.create_image_view(image, format);
+        let uav = native::UnorderedAccessView::Image(view);
+        Ok(uav)
     }
 
     fn create_descriptor_heap(&mut self, ty: f::DescriptorHeapType, size: usize) -> native::DescriptorHeap {
@@ -978,7 +955,9 @@ impl core::Factory<R> for Factory {
                     }
                 }
 
-                f::DescriptorWrite::SampledImage(ref images) => {
+                f::DescriptorWrite::SampledImage(ref images) |
+                f::DescriptorWrite::StorageImage(ref images) |
+                f::DescriptorWrite::InputAttachment(ref images) => {
                     for &(srv, layout) in images {
                         let view = if let native::ShaderResourceView::Image(view) = *srv { view }
                                     else { panic!("Wrong shader resource view (expected image)") }; // TODO
@@ -990,6 +969,7 @@ impl core::Factory<R> for Factory {
                         });
                     }
                 }
+
                 _ => unimplemented!(), // TODO
             };
         }
@@ -1011,6 +991,21 @@ impl core::Factory<R> for Factory {
                     cur_image_index += images.len();
 
                     (vk::DescriptorType::SampledImage, images.len(),
+                        info_ptr, ptr::null(), ptr::null())
+                }
+                f::DescriptorWrite::StorageImage(ref images) => {
+                    let info_ptr = &image_infos[cur_image_index];
+                    cur_image_index += images.len();
+
+                    (vk::DescriptorType::StorageImage, images.len(),
+                        info_ptr, ptr::null(), ptr::null())
+                }
+
+                f::DescriptorWrite::InputAttachment(ref images) => {
+                    let info_ptr = &image_infos[cur_image_index];
+                    cur_image_index += images.len();
+
+                    (vk::DescriptorType::InputAttachment, images.len(),
                         info_ptr, ptr::null(), ptr::null())
                 }
                 _ => unimplemented!(), // TODO
@@ -1139,6 +1134,28 @@ impl core::Factory<R> for Factory {
 
     fn destroy_render_target_view(&mut self, rtv: native::RenderTargetView) {
         unsafe { self.inner.0.destroy_image_view(rtv.view, None); }
+    }
+
+    fn destroy_shader_resource_view(&mut self, srv: native::ShaderResourceView) {
+        match srv {
+            native::ShaderResourceView::Buffer => (),
+            native::ShaderResourceView::Image(view) => unsafe {
+                self.inner.0.destroy_image_view(view, None);
+            }
+        }
+    }
+
+    fn destroy_unordered_access_view(&mut self, uav: native::UnorderedAccessView) {
+        match uav {
+            native::UnorderedAccessView::Buffer => (),
+            native::UnorderedAccessView::Image(view) => unsafe {
+                self.inner.0.destroy_image_view(view, None);
+            }
+        }
+    }
+
+    fn destroy_sampler(&mut self, sampler: native::Sampler) {
+        unsafe { self.inner.0.destroy_sampler(sampler.0, None); }
     }
 
     fn destroy_descriptor_heap(&mut self, heap: native::DescriptorHeap) { }

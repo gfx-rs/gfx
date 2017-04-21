@@ -419,6 +419,8 @@ fn main() {
     factory.destroy_buffer(vertex_buffer);
     factory.destroy_buffer(image_upload_buffer);
     factory.destroy_image(image_logo);
+    factory.destroy_shader_resource_view(image_srv);
+    factory.destroy_sampler(sampler);
     for pipeline in pipelines {
         if let Ok(pipeline) = pipeline {
             factory.destroy_graphics_pipeline(pipeline);

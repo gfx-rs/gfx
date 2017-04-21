@@ -118,6 +118,12 @@ pub enum ShaderResourceView {
 }
 
 #[derive(Debug, Hash)]
+pub enum UnorderedAccessView {
+    Buffer,
+    Image(vk::ImageView),
+}
+
+#[derive(Debug, Hash)]
 pub struct RenderTargetView {
     pub image: vk::Image,
     pub view: vk::ImageView,

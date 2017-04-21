@@ -90,12 +90,12 @@ pub struct DescriptorSetWrite<'a, 'b, R: Resources> {
 pub enum DescriptorWrite<'a, R: Resources> {
     Sampler(Vec<&'a R::Sampler>),
     SampledImage(Vec<(&'a R::ShaderResourceView, memory::ImageLayout)>),
-    StorageImage,
+    StorageImage(Vec<(&'a R::ShaderResourceView, memory::ImageLayout)>),
     UniformTexelBuffer,
     StorageTexelBuffer,
     ConstantBuffer,
     StorageBuffer,
-    InputAttachment,
+    InputAttachment(Vec<(&'a R::ShaderResourceView, memory::ImageLayout)>),
 }
 
 /// A `Factory` is responsible for creating and managing resources for the backend it was created
@@ -162,6 +162,9 @@ pub trait Factory<R: Resources> {
 
     ///
     fn view_image_as_shader_resource(&mut self, image: &R::Image, format: format::Format) -> Result<R::ShaderResourceView, TargetViewError>;
+
+    ///
+    fn view_image_as_unordered_access(&mut self, image: &R::Image, format: format::Format) -> Result<R::UnorderedAccessView, TargetViewError>;
 
     /// Create a descriptor heap.
     ///
@@ -255,6 +258,15 @@ pub trait Factory<R: Resources> {
 
     ///
     fn destroy_render_target_view(&mut self, R::RenderTargetView);
+
+    ///
+    fn destroy_shader_resource_view(&mut self, R::ShaderResourceView);
+
+    ///
+    fn destroy_unordered_access_view(&mut self, R::UnorderedAccessView);
+
+    ///
+    fn destroy_sampler(&mut self, R::Sampler);
 
     ///
     fn destroy_descriptor_heap(&mut self, R::DescriptorHeap);
