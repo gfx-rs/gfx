@@ -19,8 +19,9 @@ use std::sync::Arc;
 use std::marker::PhantomData;
 use std::ops::DerefMut;
 
-use core::buffer::IndexBufferView;
 use core::{self, command, memory, pso, state, target, VertexCount, VertexOffset};
+use core::buffer::IndexBufferView;
+use core::memory::{ImageStateSrc, ImageStateDst};
 use data;
 use native::{self, GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer, SubpassCommandBuffer};
 use {DeviceInner, Resources as R};
@@ -48,8 +49,59 @@ impl CommandBuffer {
     fn pipeline_barrier<'a>(&mut self, memory_barriers: &[memory::MemoryBarrier],
         buffer_barriers: &[memory::BufferBarrier<'a, R>], image_barriers: &[memory::ImageBarrier<'a, R>])
     {
-        // TODO:
-        // unimplemented!()
+        let image_barriers = image_barriers.iter().map(|barrier| {
+            // TODO
+            let base_range = vk::ImageSubresourceRange {
+                aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT,
+                base_mip_level: 0, 
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: vk::VK_REMAINING_ARRAY_LAYERS,
+            };
+
+            let (src_access, old_layout) = match barrier.state_src {
+                ImageStateSrc::Present(access) => {
+                    (data::map_image_access(access), vk::ImageLayout::PresentSrcKhr)
+                }
+                ImageStateSrc::State(access, layout) => {
+                    (data::map_image_access(access), data::map_image_layout(layout))
+                }
+            };
+
+            let (dst_access, new_layout) = match barrier.state_dst {
+                ImageStateDst::Present => {
+                    (vk::AccessFlags::empty(), vk::ImageLayout::PresentSrcKhr) // TODO
+                }
+                ImageStateDst::State(access, layout) => {
+                    (data::map_image_access(access), data::map_image_layout(layout))
+                }
+            };
+
+            vk::ImageMemoryBarrier {
+                s_type: vk::StructureType::ImageMemoryBarrier,
+                p_next: ptr::null(),
+                src_access_mask: src_access,
+                dst_access_mask: dst_access,
+                old_layout: old_layout,
+                new_layout: new_layout,
+                src_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED, // TODO
+                dst_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED, // TODO
+                image: barrier.image.0,
+                subresource_range: base_range,
+            }
+        }).collect::<Vec<_>>();
+
+        unsafe {
+            self.device.0.cmd_pipeline_barrier(
+                self.inner, // commandBuffer
+                vk::PIPELINE_STAGE_ALL_GRAPHICS_BIT, // srcStageMask // TODO
+                vk::PIPELINE_STAGE_ALL_GRAPHICS_BIT, // dstStageMask // TODO
+                vk::DependencyFlags::empty(), // dependencyFlags // TODO
+                &[], // pMemoryBarriers // TODO
+                &[], // pBufferMemoryBarriers // TODO
+                &image_barriers// pImageMemoryBarriers
+            );
+        }
     }
 
     fn execute_commands(&mut self) {

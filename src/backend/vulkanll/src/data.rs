@@ -212,6 +212,15 @@ pub fn map_image_access(access: ImageAccess) -> vk::AccessFlags {
     if access.contains(memory::COLOR_ATTACHMENT_WRITE) {
         flags |= vk::ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
     }
+    if access.contains(memory::TRANSFER_READ) {
+        flags |= vk::ACCESS_TRANSFER_READ_BIT;
+    }
+    if access.contains(memory::TRANSFER_WRITE) {
+        flags |= vk::ACCESS_TRANSFER_WRITE_BIT;
+    }
+    if access.contains(memory::SHADER_READ) {
+        flags |= vk::ACCESS_SHADER_READ_BIT;
+    }
 
     flags
 }
@@ -304,6 +313,9 @@ pub fn map_image_usage(usage: image::Usage) -> vk::ImageUsageFlags {
     }
     if usage.contains(image::DEPTH_STENCIL_ATTACHMENT) {
         flags |= vk::IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    }
+    if usage.contains(image::SAMPLED) {
+        flags |= vk::IMAGE_USAGE_SAMPLED_BIT;
     }
 
     flags

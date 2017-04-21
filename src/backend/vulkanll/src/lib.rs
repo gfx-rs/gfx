@@ -692,11 +692,11 @@ impl core::Resources for Resources {
     type Buffer = native::Buffer;
     type UnboundImage = factory::UnboundImage;
     type Image = native::Image;
-    type ShaderResourceView = ();
+    type ShaderResourceView = native::ShaderResourceView;
     type UnorderedAccessView = ();
     type RenderTargetView = native::RenderTargetView;
     type DepthStencilView = native::DepthStencilView;
-    type Sampler = ();
+    type Sampler = native::Sampler;
     type Semaphore = ();
     type Fence = ();
     type Heap = native::Heap;

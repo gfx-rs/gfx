@@ -72,6 +72,9 @@ bitflags!(
         const RESOLVE_DST         = 0x200,
         const COLOR_ATTACHMENT_READ = 0x1,
         const COLOR_ATTACHMENT_WRITE = 0x2,
+        const TRANSFER_READ      = 0x4,
+        const TRANSFER_WRITE      = 0x8,
+        const SHADER_READ = 0x10,
     }
 );
 

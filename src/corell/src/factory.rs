@@ -79,6 +79,25 @@ pub struct DescriptorSetLayoutBinding {
     // TODO: immutable samplers?
 }
 
+pub struct DescriptorSetWrite<'a, 'b, R: Resources> {
+    pub set: &'a R::DescriptorSet,
+    pub binding: usize,
+    pub array_offset: usize,
+    pub write: DescriptorWrite<'b, R>,
+}
+
+// TODO
+pub enum DescriptorWrite<'a, R: Resources> {
+    Sampler(Vec<&'a R::Sampler>),
+    SampledImage(Vec<(&'a R::ShaderResourceView, memory::ImageLayout)>),
+    StorageImage,
+    UniformTexelBuffer,
+    StorageTexelBuffer,
+    ConstantBuffer,
+    StorageBuffer,
+    InputAttachment,
+}
+
 /// A `Factory` is responsible for creating and managing resources for the backend it was created
 /// with.
 ///
@@ -139,7 +158,7 @@ pub trait Factory<R: Resources> {
     fn view_image_as_render_target(&mut self, image: &R::Image, format: format::Format) -> Result<R::RenderTargetView, TargetViewError>;
 
     ///
-    fn view_image_as_shader_resource(&mut self) -> Result<R::ShaderResourceView, TargetViewError>;
+    fn view_image_as_shader_resource(&mut self, image: &R::Image, format: format::Format) -> Result<R::ShaderResourceView, TargetViewError>;
 
     /// Create a descriptor heap.
     ///
@@ -167,6 +186,10 @@ pub trait Factory<R: Resources> {
 
     ///
     fn reset_descriptor_set_pool(&mut self, &mut R::DescriptorSetPool);
+
+    ///
+    // TODO: copies
+    fn update_descriptor_sets(&mut self, writes: &[DescriptorSetWrite<R>]);
 
     // TODO: mapping requires further looking into.
     // vulkan requires non-coherent mapping to round the range delimiters

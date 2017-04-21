@@ -103,6 +103,7 @@ bitflags!(
         const TRANSFER_DST    = 0x2,
         const COLOR_ATTACHMENT  = 0x4,
         const DEPTH_STENCIL_ATTACHMENT = 0x8,
+        const SAMPLED = 0x10,
         // TODO
     }
 );

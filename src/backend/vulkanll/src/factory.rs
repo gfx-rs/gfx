@@ -787,8 +787,44 @@ impl core::Factory<R> for Factory {
         Ok(rtv)
     }
 
-    fn view_image_as_shader_resource(&mut self) -> Result<(), f::TargetViewError> {
-        unimplemented!()
+    fn view_image_as_shader_resource(&mut self, image: &native::Image, format: format::Format) -> Result<native::ShaderResourceView, f::TargetViewError> {
+        // TODO: check format compatibility? Allow different formats?
+
+        // TODO
+        let components = vk::ComponentMapping {
+            r: vk::ComponentSwizzle::Identity,
+            g: vk::ComponentSwizzle::Identity,
+            b: vk::ComponentSwizzle::Identity,
+            a: vk::ComponentSwizzle::Identity,
+        };
+
+        // TODO
+        let subresource_range = vk::ImageSubresourceRange {
+            aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT,
+            base_mip_level: 0, 
+            level_count: 1,
+            base_array_layer: 0,
+            layer_count: vk::VK_REMAINING_ARRAY_LAYERS,
+        };
+        
+        let info = vk::ImageViewCreateInfo {
+            s_type: vk::StructureType::ImageViewCreateInfo,
+            p_next: ptr::null(),
+            flags: vk::ImageViewCreateFlags::empty(), // TODO
+            image: image.0,
+            view_type: vk::ImageViewType::Type2d, // TODO
+            format: data::map_format(format.0, format.1).unwrap(), // TODO
+            components: components,
+            subresource_range: subresource_range,
+        };
+
+        let view = unsafe {
+            self.inner.0.create_image_view(&info, None)
+                        .expect("Error on image view creation") // TODO
+        };
+
+        let srv = native::ShaderResourceView::Image(view);
+        Ok(srv)
     }
 
     fn create_descriptor_heap(&mut self, ty: f::DescriptorHeapType, size: usize) -> native::DescriptorHeap {
@@ -886,6 +922,80 @@ impl core::Factory<R> for Factory {
 
     fn reset_descriptor_set_pool(&mut self, pool: &mut native::DescriptorSetPool) {
         unimplemented!()
+    }
+
+    fn update_descriptor_sets(&mut self, writes: &[f::DescriptorSetWrite<R>]) {
+        let mut image_infos = Vec::new();
+        // let mut buffer_infos = Vec::new();
+        // let mut texel_buffer_views = Vec::new();
+
+        for write in writes {
+            match write.write {
+                f::DescriptorWrite::Sampler(ref samplers) => {
+                    for sampler in samplers {
+                        image_infos.push(vk::DescriptorImageInfo {
+                            sampler: sampler.0,
+                            image_view: vk::ImageView::null(),
+                            image_layout: vk::ImageLayout::General
+                        });
+                    }
+                }
+
+                f::DescriptorWrite::SampledImage(ref images) => {
+                    for &(srv, layout) in images {
+                        let view = if let native::ShaderResourceView::Image(view) = *srv { view }
+                                    else { panic!("Wrong shader resource view (expected image)") }; // TODO
+
+                        image_infos.push(vk::DescriptorImageInfo {
+                            sampler: vk::Sampler::null(),
+                            image_view: view,
+                            image_layout: data::map_image_layout(layout),
+                        });
+                    }
+                }
+                _ => unimplemented!(), // TODO
+            };
+        }
+
+        // Track current subslice for each write
+        let mut cur_image_index = 0;
+
+        let writes = writes.iter().map(|write| {
+            let (ty, count, image_info, buffer_info, texel_buffer_view) = match write.write {
+                f::DescriptorWrite::Sampler(ref samplers) => {
+                    let info_ptr = &image_infos[cur_image_index];
+                    cur_image_index += samplers.len();
+
+                    (vk::DescriptorType::Sampler, samplers.len(),
+                        info_ptr, ptr::null(), ptr::null())
+                }
+                f::DescriptorWrite::SampledImage(ref images) => {
+                    let info_ptr = &image_infos[cur_image_index];
+                    cur_image_index += images.len();
+
+                    (vk::DescriptorType::SampledImage, images.len(),
+                        info_ptr, ptr::null(), ptr::null())
+                }
+                _ => unimplemented!(), // TODO
+            };
+
+            vk::WriteDescriptorSet {
+                s_type: vk::StructureType::WriteDescriptorSet,
+                p_next: ptr::null(),
+                dst_set: write.set.inner,
+                dst_binding: write.binding as u32,
+                dst_array_element: write.array_offset as u32,
+                descriptor_count: count as u32,
+                descriptor_type: ty,
+                p_image_info: image_info,
+                p_buffer_info: buffer_info,
+                p_texel_buffer_view: texel_buffer_view,
+            }
+        }).collect::<Vec<_>>();
+
+        unsafe {
+            self.inner.0.update_descriptor_sets(&writes, &[]);
+        }
     }
 
     /// Acquire a mapping Reader.
