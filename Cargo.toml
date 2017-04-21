@@ -1,6 +1,6 @@
 [package]
 name = "gfx_app"
-version = "0.4.0"
+version = "0.5.0"
 description = "GFX example application framework"
 homepage = "https://github.com/gfx-rs/gfx"
 keywords = ["graphics", "gamedev"]
@@ -13,27 +13,27 @@ default = []
 sdl = ["gfx_window_sdl"]
 vulkan = ["gfx_device_vulkan", "gfx_device_vulkanll", "gfx_window_vulkan"]
 metal = ["gfx_device_metal", "gfx_window_metal"]
+serialize = ["gfx/serialize", "gfx_core/serialize"]
 unstable = []
-
 
 [lib]
 name = "gfx_app"
 
 [dependencies]
 log = "0.3"
-env_logger = "0.3"
+env_logger = "0.4"
 glutin = "0.7.1"
 winit = "0.5.1"
-gfx_core = { path = "src/core", version = "0.6" }
+gfx_core = { path = "src/core", version = "0.7" }
 gfx_corell = { path = "src/corell", version = "0.1" }
-gfx = { path = "src/render", version = "0.14" }
+gfx = { path = "src/render", version = "0.15" }
 gfx_macros = { path = "src/macros", version = "0.2" }
-gfx_device_gl = { path = "src/backend/gl", version = "0.13" }
-gfx_window_glutin = { path = "src/window/glutin", version = "0.14" }
+gfx_device_gl = { path = "src/backend/gl", version = "0.14" }
+gfx_window_glutin = { path = "src/window/glutin", version = "0.15" }
 
 [dependencies.gfx_device_vulkan]
 path = "src/backend/vulkan"
-version = "0.1"
+version = "0.2"
 optional = true
 
 [dependencies.gfx_device_vulkanll]
@@ -43,32 +43,32 @@ optional = true
 
 [dependencies.gfx_window_vulkan]
 path = "src/window/vulkan"
-version = "0.1"
+version = "0.2"
 optional = true
 
 [dependencies.gfx_device_metal]
 path = "src/backend/metal"
-version = "0.1"
+version = "0.2"
 optional = true
 
 [dependencies.gfx_window_metal]
 path = "src/window/metal"
-version = "0.1"
+version = "0.2"
 optional = true
 
 [dependencies.gfx_window_sdl]
 path = "src/window/sdl"
-version = "0.5"
+version = "0.6"
 optional = true
 
 [target.'cfg(unix)'.dependencies]
-gfx_window_glfw = { path = "src/window/glfw", version = "0.13" }
-gfx_window_sdl = { path = "src/window/sdl", version = "0.5" }
+gfx_window_glfw = { path = "src/window/glfw", version = "0.14" }
+gfx_window_sdl = { path = "src/window/sdl", version = "0.6" }
 
 [target.'cfg(windows)'.dependencies]
-gfx_device_dx11 = { path = "src/backend/dx11", version = "0.5" }
+gfx_device_dx11 = { path = "src/backend/dx11", version = "0.6" }
 # gfx_device_dx12ll = { path = "src/backend/dx12ll", version = "0.1" }
-gfx_window_dxgi = { path = "src/window/dxgi", version = "0.6" }
+gfx_window_dxgi = { path = "src/window/dxgi", version = "0.7" }
 
 [[example]]
 name = "blend"
@@ -133,7 +133,6 @@ path = "examples/particle/main.rs"
 [[example]]
 name = "trianglell"
 path = "examples/trianglell/main.rs"
-
 
 [dev-dependencies]
 cgmath = "0.7"

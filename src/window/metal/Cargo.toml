@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx_window_metal"
-version = "0.1.0"
+version = "0.2.0"
 description = "Metal window for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -32,5 +32,5 @@ cocoa = "0.5"
 objc = "0.2"
 winit = "0.5"
 metal-rs = "0.3"
-gfx_core = { path = "../../core", version = "0.6" }
-gfx_device_metal = { path = "../../backend/metal", version = "0.1" }
+gfx_core = { path = "../../core", version = "0.7" }
+gfx_device_metal = { path = "../../backend/metal", version = "0.2" }

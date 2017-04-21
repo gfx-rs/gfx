@@ -17,7 +17,8 @@
 use std::mem;
 
 /// How this memory will be used.
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 #[repr(u8)]
 pub enum Usage {
     /// Full speed GPU access.
@@ -36,6 +37,7 @@ pub enum Usage {
 
 bitflags!(
     /// Memory access
+    #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
     pub flags Access: u8 {
         /// Read access
         const READ  = 0x1,
@@ -48,6 +50,7 @@ bitflags!(
 
 bitflags!(
     /// Bind flags
+    #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
     pub flags Bind: u8 {
         /// Can be rendered into.
         const RENDER_TARGET    = 0x1,

@@ -23,7 +23,7 @@ use {buffer, shade, texture, Resources};
 use memory::Typed;
 
 /// Untyped buffer handle
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct RawBuffer<R: Resources>(Arc<buffer::Raw<R>>);
 
 impl<R: Resources> ops::Deref for RawBuffer<R> {
@@ -84,7 +84,7 @@ impl<R: Resources> ops::Deref for Program<R> {
 pub struct RawPipelineState<R: Resources>(Arc<R::PipelineStateObject>, Program<R>);
 
 /// Raw texture handle
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct RawTexture<R: Resources>(Arc<texture::Raw<R>>);
 
 impl<R: Resources> ops::Deref for RawTexture<R> {
@@ -236,6 +236,7 @@ pub struct Fence<R: Resources>(Arc<R::Fence>);
 /// referencing them both by the Factory on resource creation
 /// and the Renderer during CommandBuffer population.
 #[allow(missing_docs)]
+#[derive(Debug)]
 pub struct Manager<R: Resources> {
     buffers:       Vec<Arc<buffer::Raw<R>>>,
     shaders:       Vec<Arc<R::Shader>>,

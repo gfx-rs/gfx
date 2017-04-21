@@ -28,13 +28,15 @@ macro_rules! impl_channel_type {
         /// storage allocated with `SurfaceType`.
         #[allow(missing_docs)]
         #[repr(u8)]
-        #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+        #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+        #[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
         pub enum ChannelType {
             $( $name, )*
         }
         $(
             #[allow(missing_docs)]
-            #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+            #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+            #[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
             pub enum $name {}
             impl ChannelTyped for $name {
                 type ShaderType = $shader_type;
@@ -66,7 +68,8 @@ macro_rules! impl_formats {
         /// The actual components are up to the swizzle to define.
         #[repr(u8)]
         #[allow(missing_docs, non_camel_case_types)]
-        #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+        #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+        #[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
         pub enum SurfaceType {
             $( $name, )*
         }
@@ -87,7 +90,8 @@ macro_rules! impl_formats {
         }
         $(
             #[allow(missing_docs, non_camel_case_types)]
-            #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+            #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+            #[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
             pub enum $name {}
             impl SurfaceTyped for $name {
                 type DataType = $data_type;
@@ -155,7 +159,8 @@ impl_formats! {
 /// different physical channels, some may be hardcoded to 0 or 1.
 #[allow(missing_docs)]
 #[repr(u8)]
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
 pub enum ChannelSource {
     Zero,
     One,
@@ -168,7 +173,8 @@ pub enum ChannelSource {
 /// Channel swizzle configuration for the resource views.
 /// Note: It's not currently mirrored at compile-time,
 /// thus providing less safety and convenience.
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
 pub struct Swizzle(pub ChannelSource, pub ChannelSource, pub ChannelSource, pub ChannelSource);
 
 impl Swizzle {
@@ -179,9 +185,9 @@ impl Swizzle {
 }
 
 /// Complete run-time surface format.
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
 pub struct Format(pub SurfaceType, pub ChannelType);
-
 
 /// Compile-time surface type trait.
 pub trait SurfaceTyped {
@@ -284,7 +290,8 @@ macro_rules! alias {
     { $( $name:ident = $ty:ty, )* } => {
         $(
             #[allow(missing_docs)]
-            #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+            #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+            #[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
             pub struct $name(pub $ty);
             impl From<$ty> for $name {
                 fn from(v: $ty) -> $name {
@@ -334,7 +341,6 @@ pub type Vec3<T> = [T; 3];
 /// Abstracted 4-element container for macro internal use
 pub type Vec4<T> = [T; 4];
 
-
 /// Standard 8bits RGBA format.
 pub type Rgba8 = (R8_G8_B8_A8, Unorm);
 /// Standard 8bit gamma transforming RGB format.
@@ -354,7 +360,6 @@ pub type Depth = (D24, Unorm);
 pub type DepthStencil = (D24_S8, Unorm);
 /// Standard 32-bit floating-point depth format.
 pub type Depth32F = (D32, Float);
-
 
 macro_rules! impl_simple_formats {
     { $( $container:ident< $ty:ty > = $channel:ident $surface:ident, )* } => {

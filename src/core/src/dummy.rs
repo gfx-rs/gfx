@@ -26,7 +26,7 @@ pub struct DummyDevice {
 }
 
 /// Dummy resources phantom type
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum DummyResources {}
 
 impl Resources for DummyResources {
@@ -45,11 +45,11 @@ impl Resources for DummyResources {
 }
 
 /// Dummy fence that does nothing.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct DummyFence;
 
 /// Dummy mapping which will crash on use.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct DummyMapping;
 
 impl mapping::Gate<DummyResources> for DummyMapping {

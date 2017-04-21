@@ -53,6 +53,7 @@ impl Error for CreationError {
 
 /// Color output configuration of the PSO.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct ColorInfo {
     /// Color channel mask
     pub mask: s::ColorMask,
@@ -82,6 +83,7 @@ impl From<s::Blend> for ColorInfo {
 
 /// Depth and stencil state of the PSO.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct DepthStencilInfo {
     /// Optional depth test configuration
     pub depth: Option<s::Depth>,
@@ -129,6 +131,7 @@ pub type InstanceRate = u8;
 
 /// A struct element descriptor.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct Element<F> {
     /// Element format
     pub format: F,
@@ -138,6 +141,7 @@ pub struct Element<F> {
 
 /// Vertex buffer descriptor
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct VertexBufferDesc {
     /// Total container size, in bytes
     pub stride: ElemStride,
@@ -163,6 +167,7 @@ pub type DepthStencilDesc = (format::Format, DepthStencilInfo);
 /// All the information surrounding a shader program that is required
 /// for PSO creation, including the formats of vertex buffers and pixel targets;
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct Descriptor {
     /// Type of the primitive
     pub primitive: Primitive,
@@ -208,7 +213,7 @@ impl Descriptor {
 }
 
 /// A complete set of vertex buffers to be used for vertex import in PSO.
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct VertexBufferSet<R: Resources>(
     /// Array of buffer handles with offsets in them
     pub [Option<(R::Buffer, BufferOffset)>; MAX_VERTEX_ATTRIBUTES]
@@ -222,23 +227,23 @@ impl<R: Resources> VertexBufferSet<R> {
 }
 
 /// A constant buffer run-time parameter for PSO.
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct ConstantBufferParam<R: Resources>(pub R::Buffer, pub Usage, pub ConstantBufferSlot);
 
 /// A shader resource view (SRV) run-time parameter for PSO.
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct ResourceViewParam<R: Resources>(pub R::ShaderResourceView, pub Usage, pub ResourceViewSlot);
 
 /// An unordered access view (UAV) run-time parameter for PSO.
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct UnorderedViewParam<R: Resources>(pub R::UnorderedAccessView, pub Usage, pub UnorderedViewSlot);
 
 /// A sampler run-time parameter for PSO.
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct SamplerParam<R: Resources>(pub R::Sampler, pub Usage, pub SamplerSlot);
 
 /// A complete set of render targets to be used for pixel export in PSO.
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct PixelTargetSet<R: Resources> {
     /// Array of color target views
     pub colors: [Option<R::RenderTargetView>; MAX_COLOR_TARGETS],

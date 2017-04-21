@@ -80,7 +80,8 @@ impl<R: Resources + hash::Hash> hash::Hash for Raw<R> {
 }
 
 /// Role of the memory buffer.
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 #[repr(u8)]
 pub enum Role {
     /// Generic vertex buffer
@@ -95,6 +96,7 @@ pub enum Role {
 
 /// An information block that is immutable and associated to each buffer.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct Info {
     /// Role
     pub role: Role,

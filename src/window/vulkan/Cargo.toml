@@ -1,6 +1,6 @@
 [package]
 name = "gfx_window_vulkan"
-version = "0.1.0"
+version = "0.2.0"
 description = "Vulkan window for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -15,8 +15,8 @@ name = "gfx_window_vulkan"
 [dependencies]
 winit = "0.5"
 vk-sys = { git = "https://github.com/sectopod/vulkano", branch = "bind" }
-gfx_core = { path = "../../core", version = "0.6" }
-gfx_device_vulkan = { path = "../../backend/vulkan", version = "0.1" }
+gfx_core = { path = "../../core", version = "0.7" }
+gfx_device_vulkan = { path = "../../backend/vulkan", version = "0.2" }
 
 [target.'cfg(windows)'.dependencies]
 kernel32-sys = "0.2.2"

@@ -68,7 +68,7 @@ impl<R: Resources + hash::Hash> hash::Hash for Raw<R> {
 }
 
 /// Pure texture object creation error.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum CreationError {
     /// Failed to map a given format to the device.
     Format(format::SurfaceType, Option<format::ChannelType>),
@@ -151,7 +151,8 @@ pub type NumFragments = u8;
 pub type Dimensions = (Size, Size, Size, AaMode);
 
 /// Describes the configuration of samples inside each texel.
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub enum AaMode {
     /// No additional sample information
     Single,
@@ -197,7 +198,8 @@ impl AaMode {
 /// textures. Similarly for trilinear, it is really Quadralinear(?) for 3D
 /// textures. Alas, these names are simple, and match certain intuitions
 /// ingrained by many years of public use of inaccurate terminology.
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub enum FilterMethod {
     /// The dumbest filtering possible, nearest-neighbor interpolation.
     Scale,
@@ -214,8 +216,9 @@ pub enum FilterMethod {
 }
 
 /// The face of a cube texture to do an operation on.
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 #[allow(missing_docs)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 #[repr(u8)]
 pub enum CubeFace {
     PosX,
@@ -234,7 +237,8 @@ pub const CUBE_FACES: [CubeFace; 6] = [
 ];
 
 /// Specifies the kind of a texture storage to be allocated.
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub enum Kind {
     /// A single row of texels.
     D1(Size),
@@ -308,7 +312,8 @@ impl Kind {
 
 /// Describes a subvolume of a texture, which image data can be uploaded into.
 #[allow(missing_docs)]
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct ImageInfoCommon<F> {
     pub xoffset: Size,
     pub yoffset: Size,
@@ -370,7 +375,8 @@ impl RawImageInfo {
 }
 
 /// Specifies how texture coordinates outside the range `[0, 1]` are handled.
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub enum WrapMode {
     /// Tile the texture. That is, sample the coordinate modulo `1.0`. This is
     /// the default.
@@ -385,6 +391,7 @@ pub enum WrapMode {
 
 /// A wrapper for the LOD level of a texture.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct Lod(i16);
 
 impl From<f32> for Lod {
@@ -401,6 +408,7 @@ impl Into<f32> for Lod {
 
 /// A wrapper for the 8bpp RGBA color, encoded as u32.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct PackedColor(pub u32);
 
 impl From<[f32; 4]> for PackedColor {
@@ -425,6 +433,7 @@ impl Into<[f32; 4]> for PackedColor {
 /// Specifies how to sample from a texture.
 // TODO: document the details of sampling.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct SamplerInfo {
     /// Filter method to use.
     pub filter: FilterMethod,
@@ -460,7 +469,8 @@ impl SamplerInfo {
 
 /// Texture storage descriptor.
 #[allow(missing_docs)]
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct Info {
     pub kind: Kind,
     pub levels: Level,
@@ -494,7 +504,8 @@ impl Info {
 
 /// Texture resource view descriptor.
 #[allow(missing_docs)]
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct ResourceDesc {
     pub channel: format::ChannelType,
     pub layer: Option<Layer>,
@@ -505,7 +516,8 @@ pub struct ResourceDesc {
 
 /// Texture render view descriptor.
 #[allow(missing_docs)]
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct RenderDesc {
     pub channel: format::ChannelType,
     pub level: Level,
@@ -514,6 +526,7 @@ pub struct RenderDesc {
 
 bitflags!(
     /// Depth-stencil read-only flags
+    #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
     pub flags DepthStencilFlags: u8 {
         /// Depth is read-only in the view.
         const RO_DEPTH    = 0x1,
@@ -526,7 +539,8 @@ bitflags!(
 
 /// Texture depth-stencil view descriptor.
 #[allow(missing_docs)]
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct DepthStencilDesc {
     pub level: Level,
     pub layer: Option<Layer>,

@@ -1,5 +1,8 @@
 ## Change Log
 
+### v0.15 (2017-04-21)
+  - Add optional serialization support and fixed bugs ([#1234](https://github.com/gfx-rs/gfx/pull/1234))
+
 ### v0.14 (2017-01-16)
   - fixed `Fence` and `Sync` bounds ([#1095](https://github.com/gfx-rs/gfx/pull/1095))
   - dx11 buffer mapping support ([#1099](https://github.com/gfx-rs/gfx/pull/1099), [#1105](https://github.com/gfx-rs/gfx/pull/1105))

@@ -36,7 +36,7 @@ pub trait Gate<R: Resources> {
 }
 
 /// Error accessing a mapping.
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Error {
     /// The requested mapping access did not match the expected usage.
     InvalidAccess(memory::Access, memory::Usage),
@@ -101,6 +101,7 @@ impl<R: Resources> Raw<R> {
 
 unsafe impl<R: Resources> Sync for Raw<R> {}
 
+#[derive(Debug)]
 struct Guard<'a, R: Resources> {
     raw: &'a Raw<R>,
 }
@@ -180,6 +181,7 @@ pub unsafe fn write<R, T, S>(buffer: &buffer::Raw<R>, sync: S)
 }
 
 /// Mapping reader
+#[derive(Debug)]
 pub struct Reader<'a, R: Resources, T: 'a + Copy> {
     slice: &'a [T],
     #[allow(dead_code)] mapping: Guard<'a, R>,
@@ -194,6 +196,7 @@ impl<'a, R: Resources, T: 'a + Copy> Deref for Reader<'a, R, T> {
 /// Mapping writer.
 /// Currently is not possible to make write-only slice so while it is technically possible
 /// to read from Writer, it will lead to an undefined behavior. Please do not read from it.
+#[derive(Debug)]
 pub struct Writer<'a, R: Resources, T: 'a + Copy> {
     slice: &'a mut [T],
     #[allow(dead_code)] mapping: Guard<'a, R>,
@@ -209,9 +212,9 @@ impl<'a, R: Resources, T: 'a + Copy> DerefMut for Writer<'a, R, T> {
     fn deref_mut(&mut self) -> &mut [T] { self.slice }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
-#[doc(hidden)]
 /// A service struct that can be used by backends to track the mapping status
+#[derive(Debug, Eq, Hash, PartialEq)]
+#[doc(hidden)]
 pub struct Status<R: Resources> {
     cpu_wrote: bool,
     gpu_access: Option<handle::Fence<R>>,
