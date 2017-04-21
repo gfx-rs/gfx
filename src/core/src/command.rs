@@ -22,7 +22,8 @@ use {state, target, pso, shade, texture, handle};
 
 /// A universal clear color supporting integet formats
 /// as well as the standard floating-point.
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub enum ClearColor {
     /// Standard floating-point vec4 color
     Float([f32; 4]),
@@ -207,6 +208,7 @@ impl<R: Resources> AccessInfo<R> {
 pub type AccessInfoBuffers<'a, R> = hash_set::Iter<'a, handle::RawBuffer<R>>;
 
 #[allow(missing_docs)]
+#[derive(Debug)]
 pub struct AccessGuard<'a, R: Resources> {
     inner: &'a AccessInfo<R>,
 }
@@ -255,6 +257,7 @@ impl<'a, R: Resources> Drop for AccessGuard<'a, R> {
 }
 
 #[allow(missing_docs)]
+#[derive(Debug)]
 pub struct AccessGuardBuffers<'a, R: Resources> {
     buffers: AccessInfoBuffers<'a, R>
 }
@@ -270,6 +273,7 @@ impl<'a, R: Resources> Iterator for AccessGuardBuffers<'a, R> {
 }
 
 #[allow(missing_docs)]
+#[derive(Debug)]
 pub struct AccessGuardBuffersChain<'a, R: Resources> {
     fst: AccessInfoBuffers<'a, R>,
     snd: AccessInfoBuffers<'a, R>

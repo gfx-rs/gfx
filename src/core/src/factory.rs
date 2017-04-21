@@ -26,7 +26,7 @@ use memory::{Usage, Typed, Pod, cast_slice};
 use memory::{Bind, RENDER_TARGET, DEPTH_STENCIL, SHADER_RESOURCE, UNORDERED_ACCESS};
 
 /// Error creating either a ShaderResourceView, or UnorderedAccessView.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ResourceViewError {
     /// The corresponding bind flag is not present in the texture.
     NoBindFlag,
@@ -68,7 +68,7 @@ impl Error for ResourceViewError {
 }
 
 /// Error creating either a RenderTargetView, or DepthStencilView.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TargetViewError {
     /// The `RENDER_TARGET`/`DEPTH_STENCIL` flag is not present in the texture.
     NoBindFlag,
@@ -124,7 +124,7 @@ impl Error for TargetViewError {
 }
 
 /// An error from creating textures with views at the same time.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum CombinedError {
     /// Failed to create the raw texture.
     Texture(texture::CreationError),

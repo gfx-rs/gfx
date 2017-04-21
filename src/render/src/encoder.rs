@@ -48,8 +48,13 @@ pub enum CopyError<S, D> {
     NoDstBindFlag,
 }
 
+/// Result type returned when copying a buffer into another buffer.
 pub type CopyBufferResult = Result<(), CopyError<usize, usize>>;
+
+/// Result type returned when copying buffer data into a texture.
 pub type CopyBufferTextureResult = Result<(), CopyError<usize, [texture::Size; 3]>>;
+
+/// Result type returned when copying texture data into a buffer.
 pub type CopyTextureBufferResult = Result<(), CopyError<[texture::Size; 3], usize>>;
 
 impl<S, D> fmt::Display for CopyError<S, D>
@@ -147,6 +152,7 @@ impl<T: Any + fmt::Debug + fmt::Display> Error for UpdateError<T> {
 ///
 /// The encoder exposes multiple functions that add commands to its internal `CommandBuffer`. To 
 /// submit these commands to the GPU so they can be rendered, call `flush`. 
+#[derive(Debug)]
 pub struct Encoder<R: Resources, C> {
     command_buffer: C,
     raw_pso_data: pso::RawDataSet<R>,

@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx_core"
-version = "0.6.0"
+version = "0.7.0"
 description = "Core library of Gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -28,9 +28,12 @@ name = "gfx_core"
 path = "src/lib.rs"
 
 [dependencies]
-draw_state = "0.6"
-bitflags = "0.7"
+bitflags = "0.8"
+draw_state = "0.7"
 log = "0.3"
+serde = { version = "1.0", optional = true }
+serde_derive = { version = "1.0", optional = true }
 
 [features]
+serialize = ["serde", "serde_derive", "draw_state/serialize"]
 unstable = []

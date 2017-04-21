@@ -19,10 +19,14 @@
 
 #[macro_use]
 extern crate bitflags;
-#[macro_use]
-extern crate log;
 extern crate draw_state;
-//extern crate num;
+extern crate log;
+
+#[cfg(feature = "serialize")]
+extern crate serde;
+#[cfg(feature = "serialize")]
+#[macro_use]
+extern crate serde_derive;
 
 use std::fmt::{self, Debug};
 use std::error::Error;
@@ -123,8 +127,9 @@ impl<R: Resources> ShaderSet<R> {
 
 //TODO: use the appropriate units for max vertex count, etc
 /// Features that the device supports.
-#[derive(Copy, Clone, Debug)]
 #[allow(missing_docs)] // pretty self-explanatory fields!
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct Capabilities {
     pub max_vertex_count: usize,
     pub max_index_count: usize,
@@ -143,7 +148,8 @@ pub struct Capabilities {
 }
 
 /// Describes what geometric primitives are created from vertex data.
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 #[repr(u8)]
 pub enum Primitive {
     /// Each vertex represents a single point.
@@ -187,8 +193,9 @@ pub enum Primitive {
 }
 
 /// A type of each index value in the slice's index buffer
-#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
 #[allow(missing_docs)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 #[repr(u8)]
 pub enum IndexType {
     U16,
@@ -212,8 +219,9 @@ pub trait Resources:          Clone + Hash + Debug + Eq + PartialEq + Any {
     type Mapping:             Hash + Debug + Eq + PartialEq + Any + Send + Sync + mapping::Gate<Self>;
 }
 
-#[derive(Clone, Debug, PartialEq)]
 #[allow(missing_docs)]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub enum SubmissionError {
     AccessOverlap,
 }
@@ -299,6 +307,7 @@ pub trait Adapter: Sized {
 
 /// Information about a backend adapater.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct AdapterInfo {
     /// Adapter name
     pub name: String,
@@ -346,6 +355,8 @@ pub trait Surface {
 }
 
 /// Handle to a backbuffer of the swapchain.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct Frame(usize);
 
 impl Frame {

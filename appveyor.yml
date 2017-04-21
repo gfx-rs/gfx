@@ -1,8 +1,8 @@
 environment:
   matrix:
-    - TARGET: 1.15.1-x86_64-pc-windows
+    - TARGET: 1.16.0-x86_64-pc-windows
       COMPILER: gnu
-    - TARGET: 1.15.1-x86_64-pc-windows
+    - TARGET: 1.16.0-x86_64-pc-windows
       COMPILER: msvc
     - TARGET: nightly-x86_64-pc-windows
       COMPILER: msvc
@@ -18,3 +18,4 @@ build_script:
   - cargo build --features vulkan
 test_script:
   - cargo test --all --features vulkan
+  - cargo test -p gfx -p gfx_core --features serialize

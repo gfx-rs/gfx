@@ -17,7 +17,6 @@
 //! An efficient, low-level, bindless graphics API for Rust. See [the
 //! blog](http://gfx-rs.github.io/) for explanations and annotated examples.
 
-#[macro_use]
 extern crate log;
 extern crate draw_state;
 extern crate gfx_core as core;
@@ -44,7 +43,8 @@ pub use core::memory::{self, Bind, TRANSFER_SRC, TRANSFER_DST, RENDER_TARGET,
 pub use core::command::{Buffer as CommandBuffer, InstanceParams};
 pub use core::shade::{ProgramInfo, UniformValue};
 
-pub use encoder::{Encoder, UpdateError};
+pub use encoder::{CopyBufferResult, CopyBufferTextureResult, CopyError,
+                  CopyTextureBufferResult, Encoder, UpdateError};
 pub use factory::PipelineStateError;
 pub use slice::{Slice, IntoIndexBuffer, IndexBuffer};
 pub use pso::{PipelineState};

@@ -25,31 +25,37 @@ use {AttributeSlot, ColorSlot, ConstantBufferSlot, ResourceViewSlot, SamplerSlot
 pub type Dimension = u8;
 
 /// Whether the sampler samples an array texture.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub enum IsArray { Array, NoArray }
 
 /// Whether the sampler compares the depth value upon sampling.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub enum IsComparison { Compare, NoCompare }
 
 /// Whether the sampler samples a multisample texture.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub enum IsMultiSample { MultiSample, NoMultiSample }
 
 /// Whether the sampler samples a rectangle texture.
 ///
 /// Rectangle textures are the same as 2D textures, but accessed with absolute texture coordinates
 /// (as opposed to the usual, normalized to [0, 1]).
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub enum IsRect { Rect, NoRect }
 
 /// Whether the matrix is column or row major.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub enum MatrixFormat { ColumnMajor, RowMajor }
 
 /// A type of the texture variable.
 /// This has to match the actual data we bind to the shader.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub enum TextureType {
     /// Sample from a buffer.
     Buffer,
@@ -78,12 +84,14 @@ impl TextureType {
 }
 
 /// A type of the sampler variable.
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct SamplerType(pub IsComparison, pub IsRect);
 
 /// Base type of this shader parameter.
 #[allow(missing_docs)]
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub enum BaseType {
     I32,
     U32,
@@ -93,7 +101,8 @@ pub enum BaseType {
 }
 
 /// Number of components this parameter represents.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub enum ContainerType {
     /// Scalar value
     Single,
@@ -107,7 +116,8 @@ pub enum ContainerType {
 
 /// Which program stage this shader represents.
 #[allow(missing_docs)]
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 #[repr(u8)]
 pub enum Stage {
     Vertex,
@@ -128,7 +138,8 @@ pub type Location = usize;
 // unable to derive anything for fixed arrays
 /// A value that can be uploaded to the device as a uniform.
 #[allow(missing_docs)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub enum UniformValue {
     I32(i32),
     F32(f32),
@@ -255,6 +266,7 @@ impl_const_matrix!([2,2], [3,3], [4,4], [4,3]);
 
 bitflags!(
     /// Parameter usage flags.
+    #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
     pub flags Usage: u8 {
         /// Used by the vertex shader
         const VERTEX   = 0x1,
@@ -283,7 +295,8 @@ impl From<Stage> for Usage {
 }
 
 /// Vertex information that a shader takes as input.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct AttributeVar {
     /// Name of this attribute.
     pub name: String,
@@ -297,7 +310,8 @@ pub struct AttributeVar {
 
 /// A constant in the shader - a bit of data that doesn't vary
 // between the shader execution units (vertices/pixels/etc).
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct ConstVar {
     /// Name of this constant.
     pub name: String,
@@ -313,7 +327,8 @@ pub struct ConstVar {
 }
 
 /// A constant buffer.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct ConstantBufferVar {
     /// Name of this constant buffer.
     pub name: String,
@@ -328,7 +343,8 @@ pub struct ConstantBufferVar {
 }
 
 /// Texture shader parameter.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct TextureVar {
     /// Name of this texture variable.
     pub name: String,
@@ -343,7 +359,8 @@ pub struct TextureVar {
 }
 
 /// Unordered access shader parameter.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct UnorderedVar {
     /// Name of this unordered variable.
     pub name: String,
@@ -354,7 +371,8 @@ pub struct UnorderedVar {
 }
 
 /// Sampler shader parameter.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct SamplerVar {
     /// Name of this sampler variable.
     pub name: String,
@@ -367,7 +385,8 @@ pub struct SamplerVar {
 }
 
 /// Target output variable.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct OutputVar {
     /// Name of this output variable.
     pub name: String,
@@ -380,7 +399,8 @@ pub struct OutputVar {
 }
 
 /// Metadata about a program.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct ProgramInfo {
     /// Attributes in the program
     pub vertex_attributes: Vec<AttributeVar>,
@@ -503,7 +523,7 @@ impl ConstVar {
 }
 
 /// An error type for creating shaders.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum CreateShaderError {
     /// The device does not support the requested shader model.
     ModelNotSupported,
