@@ -17,6 +17,7 @@ use core::{buffer, image, shade};
 use core::command::ClearColor;
 use core::factory::DescriptorType;
 use core::format::{SurfaceType, ChannelType};
+use core::image::{FilterMethod, PackedColor, WrapMode};
 use core::memory::{self, ImageAccess, ImageLayout};
 use core::pass::{AttachmentLoadOp, AttachmentStoreOp, AttachmentLayout};
 use core::pso::{self, PipelineStage};
@@ -369,4 +370,32 @@ pub fn map_stage_flags(stages: shade::StageFlags) -> vk::ShaderStageFlags {
     }
 
     flags
+}
+
+pub fn map_filter(filter: FilterMethod) -> (vk::Filter, vk::Filter, vk::SamplerMipmapMode, f32) {
+    match filter {
+        FilterMethod::Scale          => (vk::Filter::Nearest, vk::Filter::Nearest, vk::SamplerMipmapMode::Nearest, 0.0),
+        FilterMethod::Mipmap         => (vk::Filter::Nearest, vk::Filter::Nearest, vk::SamplerMipmapMode::Linear,  0.0),
+        FilterMethod::Bilinear       => (vk::Filter::Linear,  vk::Filter::Linear,  vk::SamplerMipmapMode::Nearest, 0.0),
+        FilterMethod::Trilinear      => (vk::Filter::Linear,  vk::Filter::Linear,  vk::SamplerMipmapMode::Linear,  0.0),
+        FilterMethod::Anisotropic(a) => (vk::Filter::Linear,  vk::Filter::Linear,  vk::SamplerMipmapMode::Linear,  a as f32),
+    }
+}
+
+pub fn map_wrap(wrap: WrapMode) -> vk::SamplerAddressMode {
+    match wrap {
+        WrapMode::Tile   => vk::SamplerAddressMode::Repeat,
+        WrapMode::Mirror => vk::SamplerAddressMode::MirroredRepeat,
+        WrapMode::Clamp  => vk::SamplerAddressMode::ClampToEdge,
+        WrapMode::Border => vk::SamplerAddressMode::ClampToBorder,
+    }
+}
+
+pub fn map_border_color(col: PackedColor) -> Option<vk::BorderColor> {
+    match col.0 {
+        0x00000000 => Some(vk::BorderColor::FloatTransparentBlack),
+        0xFF000000 => Some(vk::BorderColor::FloatOpaqueBlack),
+        0xFFFFFFFF => Some(vk::BorderColor::FloatOpaqueWhite),
+        _ => None
+    }
 }

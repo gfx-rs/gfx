@@ -129,6 +129,9 @@ pub trait Factory<R: Resources> {
         width: u32, height: u32, layers: u32
     ) -> R::FrameBuffer;
 
+    ///
+    fn create_sampler(&mut self, image::SamplerInfo) -> R::Sampler;
+
     /// Create a new buffer (unbound).
     ///
     /// The created buffer won't have associated memory until `bind_buffer_memory` is called.

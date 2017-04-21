@@ -594,6 +594,43 @@ impl core::Factory<R> for Factory {
         native::FrameBuffer { inner: framebuffer }
     }
 
+    fn create_sampler(&mut self, sampler_info: image::SamplerInfo) -> native::Sampler {
+        let (min, mag, mip, aniso) = data::map_filter(sampler_info.filter);
+        let info = vk::SamplerCreateInfo {
+            s_type: vk::StructureType::SamplerCreateInfo,
+            p_next: ptr::null(),
+            flags: vk::SamplerCreateFlags::empty(),
+            mag_filter: mag,
+            min_filter: min,
+            mipmap_mode: mip,
+            address_mode_u: data::map_wrap(sampler_info.wrap_mode.0),
+            address_mode_v: data::map_wrap(sampler_info.wrap_mode.1),
+            address_mode_w: data::map_wrap(sampler_info.wrap_mode.2),
+            mip_lod_bias: sampler_info.lod_bias.into(),
+            anisotropy_enable: if aniso > 0.0 { vk::VK_TRUE } else { vk::VK_FALSE },
+            max_anisotropy: aniso,
+            compare_enable: if sampler_info.comparison.is_some() { vk::VK_TRUE } else { vk::VK_FALSE },
+            compare_op: state::map_comparison(sampler_info.comparison.unwrap_or(core::state::Comparison::Never)),
+            min_lod: sampler_info.lod_range.0.into(),
+            max_lod: sampler_info.lod_range.1.into(),
+            border_color: match data::map_border_color(sampler_info.border) {
+                Some(bc) => bc,
+                None => {
+                    error!("Unsupported border color {:x}", sampler_info.border.0);
+                    vk::BorderColor::FloatTransparentBlack
+                }
+            },
+            unnormalized_coordinates: vk::VK_FALSE,
+        };
+
+        let sampler = unsafe {
+            self.inner.0.create_sampler(&info, None)
+                        .expect("error on sampler creation")
+        };
+
+        native::Sampler(sampler)
+    }
+
     ///
     fn create_buffer(&mut self, size: u64, usage: buffer::Usage) -> Result<UnboundBuffer, buffer::CreationError> {
         let info = vk::BufferCreateInfo {

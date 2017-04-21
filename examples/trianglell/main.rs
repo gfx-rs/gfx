@@ -45,13 +45,13 @@ struct Vertex {
 }
 
 const TRIANGLE: [Vertex; 6] = [
-    Vertex { a_Pos: [ -0.5, 0.5 ], a_Uv: [0.0, 1.0, 0.0] },
-    Vertex { a_Pos: [  0.5, 0.5 ], a_Uv: [1.0, 1.0, 0.0] },
-    Vertex { a_Pos: [  0.5,-0.5 ], a_Uv: [1.0, 0.0, 0.0] },
+    Vertex { a_Pos: [ -0.5, 0.33 ], a_Uv: [0.0, 1.0, 0.0] },
+    Vertex { a_Pos: [  0.5, 0.33 ], a_Uv: [1.0, 1.0, 0.0] },
+    Vertex { a_Pos: [  0.5,-0.33 ], a_Uv: [1.0, 0.0, 0.0] },
 
-    Vertex { a_Pos: [ -0.5, 0.5 ], a_Uv: [0.0, 1.0, 0.0] },
-    Vertex { a_Pos: [  0.5,-0.5 ], a_Uv: [1.0, 0.0, 0.0] },
-    Vertex { a_Pos: [ -0.5,-0.5 ], a_Uv: [0.0, 0.0, 0.0] },
+    Vertex { a_Pos: [ -0.5, 0.33 ], a_Uv: [0.0, 1.0, 0.0] },
+    Vertex { a_Pos: [  0.5,-0.33 ], a_Uv: [1.0, 0.0, 0.0] },
+    Vertex { a_Pos: [ -0.5,-0.33 ], a_Uv: [0.0, 0.0, 0.0] },
 ];
 
 #[cfg(any(feature = "vulkan", target_os = "windows"))]
@@ -286,6 +286,11 @@ fn main() {
     let image_logo = factory.bind_image_memory(&image_heap, 0, image).unwrap();
     let image_srv = factory.view_image_as_shader_resource(&image_logo, gfx_corell::format::Srgba8::get_format()).unwrap();
 
+    let sampler = factory.create_sampler(i::SamplerInfo::new(
+                                            i::FilterMethod::Bilinear,
+                                            i::WrapMode::Clamp,
+                                        ));
+
     factory.update_descriptor_sets(&[
         DescriptorSetWrite {
             set: &set0[0],
@@ -293,15 +298,12 @@ fn main() {
             array_offset: 0,
             write: DescriptorWrite::SampledImage(vec![(&image_srv, memory::ImageLayout::Undefined)]),
         },
-        // TODO
-        /*
         DescriptorSetWrite {
-            set: &set1,
+            set: &set1[0],
             binding: 0,
             array_offset: 0,
-            DescriptorWrite::Sampler()
+            write: DescriptorWrite::Sampler(vec![&sampler]),
         },
-        */
     ]);
 
     // Rendering setup
@@ -385,7 +387,7 @@ fn main() {
                     &render_pass,
                     &framebuffers[frame.id()],
                     target::Rect { x: 0, y: 0, w: 1024, h: 768 },
-                    &[command::ClearValue::Color(command::ClearColor::Float([0.2, 0.2, 0.2, 1.0]))]);
+                    &[command::ClearValue::Color(command::ClearColor::Float([0.8, 0.8, 0.8, 1.0]))]);
 
                 encoder.draw(0, 6, None);
             }
