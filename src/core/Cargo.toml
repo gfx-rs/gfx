@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx_core"
-version = "0.6.0"
+version = "0.6.1"
 description = "Core library of Gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
