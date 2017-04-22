@@ -213,7 +213,7 @@ impl Descriptor {
 }
 
 /// A complete set of vertex buffers to be used for vertex import in PSO.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct VertexBufferSet<R: Resources>(
     /// Array of buffer handles with offsets in them
     pub [Option<(R::Buffer, BufferOffset)>; MAX_VERTEX_ATTRIBUTES]
@@ -227,11 +227,11 @@ impl<R: Resources> VertexBufferSet<R> {
 }
 
 /// A constant buffer run-time parameter for PSO.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ConstantBufferParam<R: Resources>(pub R::Buffer, pub Usage, pub ConstantBufferSlot);
 
 /// A shader resource view (SRV) run-time parameter for PSO.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ResourceViewParam<R: Resources>(pub R::ShaderResourceView, pub Usage, pub ResourceViewSlot);
 
 /// An unordered access view (UAV) run-time parameter for PSO.
