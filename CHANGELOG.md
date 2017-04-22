@@ -1,7 +1,12 @@
 ## Change Log
 
-### v0.15 (2017-04-21)
-  - Add optional serialization support and fixed bugs ([#1234](https://github.com/gfx-rs/gfx/pull/1234))
+### v0.15 (2017-04-22)
+  - optional serialization support ([#1234](https://github.com/gfx-rs/gfx/pull/1234))
+  - better GL state caching ([#1221](https://github.com/gfx-rs/gfx/pull/1221))
+  - GL texture staging ([#1202](https://github.com/gfx-rs/gfx/pull/1202))
+  - primitives with adjacency ([#1154](https://github.com/gfx-rs/gfx/pull/1154))
+  - metal backend improvements ([#1165](https://github.com/gfx-rs/gfx/pull/1165), [#1175](https://github.com/gfx-rs/gfx/pull/1175))
+  - resource mapping improvements
 
 ### v0.14 (2017-01-16)
   - fixed `Fence` and `Sync` bounds ([#1095](https://github.com/gfx-rs/gfx/pull/1095))
