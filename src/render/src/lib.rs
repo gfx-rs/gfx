@@ -33,7 +33,7 @@ pub use draw_state::{preset, state};
 pub use draw_state::target::*;
 
 // public re-exports
-pub use core::{Device, Resources, Primitive};
+pub use core::{Device, Primitive, Resources, SubmissionError, SubmissionResult};
 pub use core::{VertexCount, InstanceCount};
 pub use core::{ShaderSet, VertexShader, HullShader, DomainShader, GeometryShader, PixelShader};
 pub use core::{buffer, format, handle, texture, mapping};
