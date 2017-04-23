@@ -25,7 +25,7 @@ extern crate image;
 use gfx_corell::{buffer, command, format, pass, pso, shade, state, target, 
     Device, CommandPool, GraphicsCommandPool,
     GraphicsCommandBuffer, ProcessingCommandBuffer, TransferCommandBuffer, PrimaryCommandBuffer,
-    Primitive, Instance, Adapter, Surface, SwapChain, QueueFamily, Factory, SubPass};
+    Primitive, Instance, Adapter, Surface, SwapChain, QueueFamily, QueueSubmit, Factory, SubPass};
 use gfx_corell::command::{RenderPassEncoder, RenderPassInlineEncoder};
 use gfx_corell::format::Formatted;
 use gfx_corell::memory::{self, ImageBarrier, ImageStateSrc, ImageStateDst, ImageLayout, ImageAccess};
@@ -353,7 +353,16 @@ fn main() {
             cmd_buffer.finish()
         };
 
-        general_queues[0].submit_graphics(&[submit]);
+        general_queues[0].submit_graphics(
+            &[
+                QueueSubmit {
+                    cmd_buffers: &[submit],
+                    wait_semaphores: &[],
+                    signal_semaphores: &[],
+                }
+            ],
+            None,
+        );
     }
     
     //
@@ -397,7 +406,16 @@ fn main() {
             cmd_buffer.finish()
         };
 
-        general_queues[0].submit_graphics(&[submit]);
+        general_queues[0].submit_graphics(
+            &[
+                QueueSubmit {
+                    cmd_buffers: &[submit],
+                    wait_semaphores: &[],
+                    signal_semaphores: &[],
+                }
+            ],
+            None,
+        );
 
         // present frame
         swap_chain.present();

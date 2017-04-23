@@ -27,7 +27,7 @@ extern crate kernel32;
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0, V1_0};
 use ash::vk;
 use ash::{Entry, LoadingError};
-use core::{format, memory};
+use core::{format, memory, QueueSubmit};
 use core::command::Submit;
 use std::ffi::{CStr, CString};
 use std::mem;
@@ -246,29 +246,37 @@ impl core::CommandQueue for CommandQueue {
     type TransferCommandBuffer = native::TransferCommandBuffer;
     type SubpassCommandBuffer = native::SubpassCommandBuffer;
 
-    unsafe fn submit<C>(&mut self, submits: &[Submit<C>])
+    unsafe fn submit<C>(&mut self, submit_infos: &[QueueSubmit<C, Resources>], fence: Option<&native::Fence>)
         where C: core::CommandBuffer<SubmitInfo = command::SubmitInfo>
     {
-        let command_buffers = submits.iter().map(|submit| submit.get_info().command_buffer)
-                                            .collect::<Vec<_>>();
+        let mut command_buffers = Vec::with_capacity(submit_infos.len());
 
-        let submit = vk::SubmitInfo {
-            s_type: vk::StructureType::SubmitInfo,
-            p_next: ptr::null(),
-            wait_semaphore_count: 0,
-            p_wait_semaphores: ptr::null(),
-            p_wait_dst_stage_mask: ptr::null(),
-            command_buffer_count: command_buffers.len() as u32,
-            p_command_buffers: command_buffers.as_ptr(),
-            signal_semaphore_count: 0,
-            p_signal_semaphores: ptr::null(),
-        };
+        let submits = submit_infos.iter().map(|submit| {
+            let cmd_buffers = submit.cmd_buffers
+                                   .iter().map(|submit| submit.get_info().command_buffer)
+                                   .collect::<Vec<_>>();
+            command_buffers.push(cmd_buffers);
+
+            vk::SubmitInfo {
+                s_type: vk::StructureType::SubmitInfo,
+                p_next: ptr::null(),
+                wait_semaphore_count: 0, // TODO
+                p_wait_semaphores: ptr::null(), // TODO
+                p_wait_dst_stage_mask: ptr::null(), // TODO
+                command_buffer_count: command_buffers.last().unwrap().len() as u32,
+                p_command_buffers: command_buffers.last().unwrap().as_ptr(),
+                signal_semaphore_count: 0, // TODO
+                p_signal_semaphores: ptr::null(), // TODO
+            }
+        }).collect::<Vec<_>>();
+
+        let fence = fence.map(|fence| fence.0).unwrap_or(vk::Fence::null());
 
         unsafe {
             self.device.0.queue_submit(
                 *self.inner.0.borrow(),
-                &[submit],
-                vk::Fence::null(),
+                &submits,
+                fence,
             );
         }
     }
@@ -698,8 +706,8 @@ impl core::Resources for Resources {
     type RenderTargetView = native::RenderTargetView;
     type DepthStencilView = native::DepthStencilView;
     type Sampler = native::Sampler;
-    type Semaphore = ();
-    type Fence = ();
+    type Semaphore = native::Semaphore;
+    type Fence = native::Fence;
     type Heap = native::Heap;
     type Mapping = factory::Mapping;
     type DescriptorHeap = native::DescriptorHeap;

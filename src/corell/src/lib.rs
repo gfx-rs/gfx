@@ -173,6 +173,12 @@ pub trait QueueFamily: 'static {
     fn num_queues(&self) -> u32;
 }
 
+pub struct QueueSubmit<'a, C: CommandBuffer + 'a, R: Resources> {
+    pub cmd_buffers: &'a [command::Submit<C>],
+    pub wait_semaphores: &'a [(&'a R::Semaphore, shade::StageFlags)],
+    pub signal_semaphores: &'a [&'a R::Semaphore],
+}
+
 /// `CommandBuffers` are submitted to a `CommandQueue` and executed in-order of submission.
 /// `CommandQueue`s may run in parallel and need to be explicitly synchronized.
 pub trait CommandQueue {
@@ -185,7 +191,7 @@ pub trait CommandQueue {
     type SubpassCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo>; // + SubpassCommandBuffer<Self::R>;
 
     /// Submit command buffers to queue for execution.
-    unsafe fn submit<C>(&mut self, cmd_buffers: &[command::Submit<C>])
+    unsafe fn submit<'a, C>(&mut self, submit_infos: &[QueueSubmit<C, Self::R>], fence: Option<&'a <Self::R as Resources>::Fence>)
         where C: CommandBuffer<SubmitInfo = Self::SubmitInfo>;
 }
 
