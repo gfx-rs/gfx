@@ -1094,6 +1094,40 @@ impl core::Factory<R> for Factory {
         Ok(unsafe { mapping::Writer::new(slice, mapping) })
     }
 
+    fn create_semaphore(&mut self) -> native::Semaphore {
+        let info = vk::SemaphoreCreateInfo {
+            s_type: vk::StructureType::SemaphoreCreateInfo,
+            p_next: ptr::null(),
+            flags: vk::SemaphoreCreateFlags::empty(),
+        };
+
+        let semaphore = unsafe {
+            self.inner.0.create_semaphore(&info, None)
+                        .expect("Error on semaphore creation") // TODO: error handling
+        };
+
+        native::Semaphore(semaphore)
+    }
+
+    fn create_fence(&mut self, signaled: bool) -> native::Fence {
+        let info = vk::FenceCreateInfo {
+            s_type: vk::StructureType::FenceCreateInfo,
+            p_next: ptr::null(),
+            flags: if signaled {
+                vk::FENCE_CREATE_SIGNALED_BIT
+            } else {
+                vk::FenceCreateFlags::empty()
+            },
+        };
+
+        let fence = unsafe {
+            self.inner.0.create_fence(&info, None)
+                        .expect("Error on fence creation") // TODO: error handling
+        };
+
+        native::Fence(fence)
+    }
+
     fn destroy_heap(&mut self, heap: native::Heap) {
         unsafe { self.inner.0.free_memory(heap.0, None); }
     }

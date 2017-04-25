@@ -215,6 +215,12 @@ pub trait Factory<R: Resources> {
         where T: Copy;
 
     ///
+    fn create_semaphore(&mut self) -> R::Semaphore;
+
+    ///
+    fn create_fence(&mut self, signaled: bool) -> R::Fence;
+
+    ///
     fn destroy_heap(&mut self, R::Heap);
 
     ///

@@ -155,3 +155,9 @@ pub struct DescriptorSet {
 pub struct DescriptorSetLayout {
     pub inner: vk::DescriptorSetLayout,
 }
+
+#[derive(Debug)]
+pub struct Semaphore(pub vk::Semaphore);
+
+#[derive(Debug)]
+pub struct Fence(pub vk::Fence);

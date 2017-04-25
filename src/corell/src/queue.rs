@@ -17,7 +17,7 @@
 //! There are different types of queues, which can create and submit associated command buffers.
 
 use std::ops::{Deref, DerefMut};
-use {CommandQueue};
+use {CommandQueue, QueueSubmit, Resources};
 use command::Submit;
 
 /// General command queue, which can execute graphics, compute and transfer command buffers.
@@ -28,17 +28,17 @@ impl<Q: CommandQueue> GeneralQueue<Q> {
         GeneralQueue(queue)
     }
 
-    pub fn submit_general(&mut self, cmd_buffers: &[Submit<Q::GeneralCommandBuffer>]) {
-        unsafe { self.submit(cmd_buffers) }
+    pub fn submit_general(&mut self, submit: &[QueueSubmit<Q::GeneralCommandBuffer, Q::R>], fence: Option<&<Q::R as Resources>::Fence>) {
+        unsafe { self.submit(submit, fence) }
     }
-    pub fn submit_graphics(&mut self, cmd_buffers: &[Submit<Q::GraphicsCommandBuffer>]) {
-        unsafe { self.submit(cmd_buffers) }
+    pub fn submit_graphics(&mut self, submit: &[QueueSubmit<Q::GraphicsCommandBuffer, Q::R>], fence: Option<&<Q::R as Resources>::Fence>) {
+        unsafe { self.submit(submit, fence) }
     }
-    pub fn submit_compute(&mut self, cmd_buffers: &[Submit<Q::ComputeCommandBuffer>]) {
-        unsafe { self.submit(cmd_buffers) }
+    pub fn submit_compute(&mut self, submit: &[QueueSubmit<Q::ComputeCommandBuffer, Q::R>], fence: Option<&<Q::R as Resources>::Fence>) {
+        unsafe { self.submit(submit, fence) }
     }
-    pub fn submit_tranfer(&mut self, cmd_buffers: &[Submit<Q::TransferCommandBuffer>]) {
-        unsafe { self.submit(cmd_buffers) }
+    pub fn submit_tranfer(&mut self, submit: &[QueueSubmit<Q::TransferCommandBuffer, Q::R>], fence: Option<&<Q::R as Resources>::Fence>) {
+        unsafe { self.submit(submit, fence) }
     }
 }
 
@@ -78,11 +78,11 @@ impl<Q: CommandQueue> GraphicsQueue<Q> {
         GraphicsQueue(queue)
     }
 
-    pub fn submit_graphics(&mut self, cmd_buffers: &[Submit<Q::GraphicsCommandBuffer>]) {
-        unsafe { self.submit(cmd_buffers) }
+    pub fn submit_graphics(&mut self, submit: &[QueueSubmit<Q::GraphicsCommandBuffer, Q::R>], fence: Option<&<Q::R as Resources>::Fence>) {
+        unsafe { self.submit(submit, fence) }
     }
-    pub fn submit_tranfer(&mut self, cmd_buffers: &[Submit<Q::TransferCommandBuffer>]) {
-        unsafe { self.submit(cmd_buffers) }
+    pub fn submit_tranfer(&mut self, submit: &[QueueSubmit<Q::TransferCommandBuffer, Q::R>], fence: Option<&<Q::R as Resources>::Fence>) {
+        unsafe { self.submit(submit, fence) }
     }
 }
 
@@ -112,11 +112,11 @@ impl<Q: CommandQueue> ComputeQueue<Q> {
         ComputeQueue(queue)
     }
 
-    pub fn submit_compute(&mut self, cmd_buffers: &[Submit<Q::ComputeCommandBuffer>]) {
-        unsafe { self.submit(cmd_buffers) }
+    pub fn submit_compute(&mut self, submit: &[QueueSubmit<Q::ComputeCommandBuffer, Q::R>], fence: Option<&<Q::R as Resources>::Fence>) {
+        unsafe { self.submit(submit, fence) }
     }
-    pub fn submit_tranfer(&mut self, cmd_buffers: &[Submit<Q::TransferCommandBuffer>]) {
-        unsafe { self.submit(cmd_buffers) }
+    pub fn submit_tranfer(&mut self, submit: &[QueueSubmit<Q::TransferCommandBuffer, Q::R>], fence: Option<&<Q::R as Resources>::Fence>) {
+        unsafe { self.submit(submit, fence) }
     }
 }
 
@@ -146,8 +146,8 @@ impl<Q: CommandQueue> TransferQueue<Q> {
         TransferQueue(queue)
     }
 
-    pub fn submit_tranfer(&mut self, cmd_buffers: &[Submit<Q::TransferCommandBuffer>]) {
-        unsafe { self.submit(cmd_buffers) }
+    pub fn submit_tranfer(&mut self, submit: &[QueueSubmit<Q::TransferCommandBuffer, Q::R>], fence: Option<&<Q::R as Resources>::Fence>) {
+        unsafe { self.submit(submit, fence) }
     }
 }
 
