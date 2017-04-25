@@ -25,6 +25,21 @@ pub enum Stage {
     Compute,
 }
 
+bitflags!(
+    /// Combination of different shader pipeline stages.
+    pub flags StageFlags: u16 {
+        const STAGE_VERTEX   = 0x1,
+        const STAGE_HULL     = 0x2,
+        const STAGE_DOMAIN   = 0x4,
+        const STAGE_GEOMETRY = 0x8,
+        const STAGE_PIXEL    = 0x10,
+        const STAGE_COMPUTE  = 0x20,
+        const STAGE_GRAPHICS = STAGE_VERTEX.bits | STAGE_HULL.bits |
+            STAGE_DOMAIN.bits | STAGE_GEOMETRY.bits | STAGE_PIXEL.bits,
+        const STAGE_ALL      = STAGE_GRAPHICS.bits | STAGE_COMPUTE.bits,
+    }
+);
+
 /// An error type for creating shaders.
 #[derive(Clone, PartialEq, Debug)]
 pub enum CreateShaderError {

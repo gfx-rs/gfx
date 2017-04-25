@@ -13,9 +13,11 @@
 // limitations under the License.
 
 use ash::vk;
-use core::{buffer, image};
+use core::{buffer, image, shade};
 use core::command::ClearColor;
+use core::factory::DescriptorType;
 use core::format::{SurfaceType, ChannelType};
+use core::image::{FilterMethod, PackedColor, WrapMode};
 use core::memory::{self, ImageAccess, ImageLayout};
 use core::pass::{AttachmentLoadOp, AttachmentStoreOp, AttachmentLayout};
 use core::pso::{self, PipelineStage};
@@ -211,6 +213,15 @@ pub fn map_image_access(access: ImageAccess) -> vk::AccessFlags {
     if access.contains(memory::COLOR_ATTACHMENT_WRITE) {
         flags |= vk::ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
     }
+    if access.contains(memory::TRANSFER_READ) {
+        flags |= vk::ACCESS_TRANSFER_READ_BIT;
+    }
+    if access.contains(memory::TRANSFER_WRITE) {
+        flags |= vk::ACCESS_TRANSFER_WRITE_BIT;
+    }
+    if access.contains(memory::SHADER_READ) {
+        flags |= vk::ACCESS_SHADER_READ_BIT;
+    }
 
     flags
 }
@@ -304,6 +315,9 @@ pub fn map_image_usage(usage: image::Usage) -> vk::ImageUsageFlags {
     if usage.contains(image::DEPTH_STENCIL_ATTACHMENT) {
         flags |= vk::IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
     }
+    if usage.contains(image::SAMPLED) {
+        flags |= vk::IMAGE_USAGE_SAMPLED_BIT;
+    }
 
     flags
 }
@@ -312,5 +326,76 @@ pub fn map_index_type(index_type: IndexType) -> vk::IndexType {
     match index_type {
         IndexType::U16 => vk::IndexType::Uint16,
         IndexType::U32 => vk::IndexType::Uint32,
+    }
+}
+
+pub fn map_descriptor_type(ty: DescriptorType) -> vk::DescriptorType {
+    match ty {
+        DescriptorType::Sampler => vk::DescriptorType::Sampler,
+        DescriptorType::SampledImage => vk::DescriptorType::SampledImage,
+        DescriptorType::StorageImage => vk::DescriptorType::StorageImage,
+        DescriptorType::UniformTexelBuffer => vk::DescriptorType::UniformTexelBuffer,
+        DescriptorType::StorageTexelBuffer => vk::DescriptorType::StorageTexelBuffer,
+        DescriptorType::ConstantBuffer => vk::DescriptorType::UniformBuffer,
+        DescriptorType::StorageBuffer => vk::DescriptorType::StorageBuffer,
+        DescriptorType::InputAttachment => vk::DescriptorType::InputAttachment,
+    }
+}
+
+pub fn map_stage_flags(stages: shade::StageFlags) -> vk::ShaderStageFlags {
+    let mut flags = vk::ShaderStageFlags::empty();
+
+    if stages.contains(shade::STAGE_VERTEX) {
+        flags |= vk::SHADER_STAGE_VERTEX_BIT;
+    }
+
+    if stages.contains(shade::STAGE_HULL) {
+        flags |= vk::SHADER_STAGE_TESSELLATION_CONTROL_BIT;
+    }
+
+    if stages.contains(shade::STAGE_DOMAIN) {
+        flags |= vk::SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
+    }
+
+    if stages.contains(shade::STAGE_GEOMETRY) {
+        flags |= vk::SHADER_STAGE_GEOMETRY_BIT;
+    }
+
+    if stages.contains(shade::STAGE_PIXEL) {
+        flags |= vk::SHADER_STAGE_FRAGMENT_BIT;
+    }
+
+    if stages.contains(shade::STAGE_COMPUTE) {
+        flags |= vk::SHADER_STAGE_COMPUTE_BIT;
+    }
+
+    flags
+}
+
+pub fn map_filter(filter: FilterMethod) -> (vk::Filter, vk::Filter, vk::SamplerMipmapMode, f32) {
+    match filter {
+        FilterMethod::Scale          => (vk::Filter::Nearest, vk::Filter::Nearest, vk::SamplerMipmapMode::Nearest, 0.0),
+        FilterMethod::Mipmap         => (vk::Filter::Nearest, vk::Filter::Nearest, vk::SamplerMipmapMode::Linear,  0.0),
+        FilterMethod::Bilinear       => (vk::Filter::Linear,  vk::Filter::Linear,  vk::SamplerMipmapMode::Nearest, 0.0),
+        FilterMethod::Trilinear      => (vk::Filter::Linear,  vk::Filter::Linear,  vk::SamplerMipmapMode::Linear,  0.0),
+        FilterMethod::Anisotropic(a) => (vk::Filter::Linear,  vk::Filter::Linear,  vk::SamplerMipmapMode::Linear,  a as f32),
+    }
+}
+
+pub fn map_wrap(wrap: WrapMode) -> vk::SamplerAddressMode {
+    match wrap {
+        WrapMode::Tile   => vk::SamplerAddressMode::Repeat,
+        WrapMode::Mirror => vk::SamplerAddressMode::MirroredRepeat,
+        WrapMode::Clamp  => vk::SamplerAddressMode::ClampToEdge,
+        WrapMode::Border => vk::SamplerAddressMode::ClampToBorder,
+    }
+}
+
+pub fn map_border_color(col: PackedColor) -> Option<vk::BorderColor> {
+    match col.0 {
+        0x00000000 => Some(vk::BorderColor::FloatTransparentBlack),
+        0xFF000000 => Some(vk::BorderColor::FloatOpaqueBlack),
+        0xFFFFFFFF => Some(vk::BorderColor::FloatOpaqueWhite),
+        _ => None
     }
 }

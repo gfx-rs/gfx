@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::pso;
+use core::{factory, pso};
 use ash::vk;
 use std::collections::BTreeMap;
 use std::ops::{Deref, DerefMut};
@@ -109,6 +109,21 @@ pub struct Buffer {
 pub struct Image(pub vk::Image);
 
 #[derive(Debug, Hash)]
+pub struct Sampler(pub vk::Sampler);
+
+#[derive(Debug, Hash)]
+pub enum ShaderResourceView {
+    Buffer,
+    Image(vk::ImageView),
+}
+
+#[derive(Debug, Hash)]
+pub enum UnorderedAccessView {
+    Buffer,
+    Image(vk::ImageView),
+}
+
+#[derive(Debug, Hash)]
 pub struct RenderTargetView {
     pub image: vk::Image,
     pub view: vk::ImageView,
@@ -118,4 +133,25 @@ pub struct RenderTargetView {
 pub struct DepthStencilView {
     pub image: vk::Image,
     pub view: vk::ImageView,
+}
+
+#[derive(Debug)]
+pub struct DescriptorHeap {
+    pub ty: factory::DescriptorHeapType,
+    pub size: usize,
+}
+
+#[derive(Debug)]
+pub struct DescriptorSetPool {
+    pub inner: vk::DescriptorPool,
+}
+
+#[derive(Debug)]
+pub struct DescriptorSet {
+    pub inner: vk::DescriptorSet,
+}
+
+#[derive(Debug)]
+pub struct DescriptorSetLayout {
+    pub inner: vk::DescriptorSetLayout,
 }

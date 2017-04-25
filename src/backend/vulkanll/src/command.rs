@@ -19,8 +19,9 @@ use std::sync::Arc;
 use std::marker::PhantomData;
 use std::ops::DerefMut;
 
-use core::buffer::IndexBufferView;
 use core::{self, command, memory, pso, state, target, VertexCount, VertexOffset};
+use core::buffer::IndexBufferView;
+use core::memory::{ImageStateSrc, ImageStateDst};
 use data;
 use native::{self, GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer, SubpassCommandBuffer};
 use {DeviceInner, Resources as R};
@@ -48,8 +49,59 @@ impl CommandBuffer {
     fn pipeline_barrier<'a>(&mut self, memory_barriers: &[memory::MemoryBarrier],
         buffer_barriers: &[memory::BufferBarrier<'a, R>], image_barriers: &[memory::ImageBarrier<'a, R>])
     {
-        // TODO:
-        // unimplemented!()
+        let image_barriers = image_barriers.iter().map(|barrier| {
+            // TODO
+            let base_range = vk::ImageSubresourceRange {
+                aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT,
+                base_mip_level: 0, 
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: vk::VK_REMAINING_ARRAY_LAYERS,
+            };
+
+            let (src_access, old_layout) = match barrier.state_src {
+                ImageStateSrc::Present(access) => {
+                    (data::map_image_access(access), vk::ImageLayout::PresentSrcKhr)
+                }
+                ImageStateSrc::State(access, layout) => {
+                    (data::map_image_access(access), data::map_image_layout(layout))
+                }
+            };
+
+            let (dst_access, new_layout) = match barrier.state_dst {
+                ImageStateDst::Present => {
+                    (vk::AccessFlags::empty(), vk::ImageLayout::PresentSrcKhr) // TODO
+                }
+                ImageStateDst::State(access, layout) => {
+                    (data::map_image_access(access), data::map_image_layout(layout))
+                }
+            };
+
+            vk::ImageMemoryBarrier {
+                s_type: vk::StructureType::ImageMemoryBarrier,
+                p_next: ptr::null(),
+                src_access_mask: src_access,
+                dst_access_mask: dst_access,
+                old_layout: old_layout,
+                new_layout: new_layout,
+                src_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED, // TODO
+                dst_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED, // TODO
+                image: barrier.image.0,
+                subresource_range: base_range,
+            }
+        }).collect::<Vec<_>>();
+
+        unsafe {
+            self.device.0.cmd_pipeline_barrier(
+                self.inner, // commandBuffer
+                vk::PIPELINE_STAGE_ALL_GRAPHICS_BIT, // srcStageMask // TODO
+                vk::PIPELINE_STAGE_ALL_GRAPHICS_BIT, // dstStageMask // TODO
+                vk::DependencyFlags::empty(), // dependencyFlags // TODO
+                &[], // pMemoryBarriers // TODO
+                &[], // pBufferMemoryBarriers // TODO
+                &image_barriers// pImageMemoryBarriers
+            );
+        }
     }
 
     fn execute_commands(&mut self) {
@@ -154,10 +206,6 @@ impl CommandBuffer {
                 pso.pipeline,
             )
         }
-    }
-
-    fn bind_descriptor_sets(&mut self) {
-        unimplemented!()
     }
 
     fn push_constants(&mut self) {
@@ -298,6 +346,34 @@ impl CommandBuffer {
     fn resolve_image(&mut self) {
         unimplemented!()
     }
+
+    fn bind_descriptor_heaps(&mut self, srv_cbv_uav: Option<&native::DescriptorHeap>, samplers: Option<&native::DescriptorHeap>) {
+        // TODO: unset all active descriptor sets?
+    }
+
+    fn bind_descriptor_sets(
+        &mut self,
+        bind_point: vk::PipelineBindPoint,
+        layout: &native::PipelineLayout,
+        first_set: usize,
+        sets: &[&native::DescriptorSet])
+    {
+        // TODO: verify sets from currently bound descriptor heap
+        let sets = sets.iter().map(|set| {
+            set.inner
+        }).collect::<Vec<_>>();
+
+        unsafe {
+            self.device.0.cmd_bind_descriptor_sets(
+                self.inner, // commandBuffer
+                bind_point, // pipelineBindPoint
+                layout.layout, // layout
+                first_set as u32, // firstSet
+                &sets, // pDescriptorSets
+                &[]// pDynamicOffsets // TODO
+            );
+        }
+    }
 }
 
 // CommandBuffer trait implementation
@@ -352,8 +428,8 @@ macro_rules! impl_processing_cmd_buffer {
                 self.0.clear_buffer()
             }
 
-            fn bind_descriptor_sets(&mut self) {
-                self.0.bind_descriptor_sets()
+            fn bind_descriptor_heaps(&mut self, srv_cbv_uav: Option<&native::DescriptorHeap>, samplers: Option<&native::DescriptorHeap>) {
+                self.0.bind_descriptor_heaps(srv_cbv_uav, samplers)
             }
 
             fn push_constants(&mut self) {
@@ -434,6 +510,10 @@ macro_rules! impl_graphics_cmd_buffer {
             fn bind_graphics_pipeline(&mut self, pipeline: &native::GraphicsPipeline) {
                 self.0.bind_graphics_pipeline(pipeline)
             }
+
+            fn bind_graphics_descriptor_sets(&mut self, layout: &native::PipelineLayout, first_set: usize, sets: &[&native::DescriptorSet]) {
+                self.0.bind_descriptor_sets(vk::PipelineBindPoint::Graphics, layout, first_set, sets)
+            }
         }
     )
 }
@@ -442,7 +522,7 @@ impl_graphics_cmd_buffer!(GeneralCommandBuffer);
 impl_graphics_cmd_buffer!(GraphicsCommandBuffer);
 
 // ComputeCommandBuffer trait implementation
-macro_rules! impl_graphics_cmd_buffer {
+macro_rules! impl_compute_cmd_buffer {
     ($buffer:ident) => (
         impl core::ComputeCommandBuffer<R> for $buffer {
             fn dispatch(&mut self, x: u32, y: u32, z: u32) {
@@ -460,8 +540,8 @@ macro_rules! impl_graphics_cmd_buffer {
     )
 }
 
-impl_graphics_cmd_buffer!(GeneralCommandBuffer);
-impl_graphics_cmd_buffer!(ComputeCommandBuffer);
+impl_compute_cmd_buffer!(GeneralCommandBuffer);
+impl_compute_cmd_buffer!(ComputeCommandBuffer);
 
 // TODO: subpass command buffer
 
@@ -599,8 +679,8 @@ impl<'cb, 'rp, 'fb, 'enc, C> command::RenderPassInlineEncoder<'cb, 'rp, 'fb, 'en
         self.command_buffer.bind_graphics_pipeline(pipeline)
     }
 
-    fn bind_descriptor_sets(&mut self) {
-        unimplemented!()
+    fn bind_graphics_descriptor_sets(&mut self, layout: &native::PipelineLayout, first_set: usize, sets: &[&native::DescriptorSet]) {
+        self.command_buffer.bind_descriptor_sets(vk::PipelineBindPoint::Graphics, layout, first_set, sets)
     }
 
     fn push_constants(&mut self) {

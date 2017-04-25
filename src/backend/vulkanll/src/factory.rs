@@ -17,6 +17,7 @@ use ash::version::DeviceV1_0;
 use std::{mem, ptr, slice};
 use std::sync::Arc;
 use std::collections::BTreeMap;
+use std::ops::Range;
 
 use core::{self, buffer, format, factory as f, image, mapping, memory, pass, shade, state as s};
 use core::{HeapType, SubPass};
@@ -64,6 +65,41 @@ impl Factory {
             shader_map.insert(entry_point, module);
         }
         Ok(native::ShaderLib { shaders: shader_map })
+    }
+
+    fn create_image_view(&mut self, image: &native::Image, format: format::Format) -> vk::ImageView {
+        // TODO
+        let components = vk::ComponentMapping {
+            r: vk::ComponentSwizzle::Identity,
+            g: vk::ComponentSwizzle::Identity,
+            b: vk::ComponentSwizzle::Identity,
+            a: vk::ComponentSwizzle::Identity,
+        };
+
+        // TODO
+        let subresource_range = vk::ImageSubresourceRange {
+            aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT,
+            base_mip_level: 0, 
+            level_count: 1,
+            base_array_layer: 0,
+            layer_count: vk::VK_REMAINING_ARRAY_LAYERS,
+        };
+        
+        let info = vk::ImageViewCreateInfo {
+            s_type: vk::StructureType::ImageViewCreateInfo,
+            p_next: ptr::null(),
+            flags: vk::ImageViewCreateFlags::empty(), // TODO
+            image: image.0,
+            view_type: vk::ImageViewType::Type2d, // TODO
+            format: data::map_format(format.0, format.1).unwrap(), // TODO
+            components: components,
+            subresource_range: subresource_range,
+        };
+
+        unsafe {
+            self.inner.0.create_image_view(&info, None)
+                        .expect("Error on image view creation") // TODO
+        }
     }
 }
 
@@ -169,15 +205,19 @@ impl core::Factory<R> for Factory {
         native::RenderPass { inner: renderpass }
     }
 
-    fn create_pipeline_layout(&mut self) -> native::PipelineLayout {
+    fn create_pipeline_layout(&mut self, sets: &[&native::DescriptorSetLayout]) -> native::PipelineLayout {
         // TODO:
-        // Dummy signature only
+        
+        let set_layouts = sets.iter().map(|set| {
+            set.inner
+        }).collect::<Vec<_>>();
+
         let info = vk::PipelineLayoutCreateInfo {
             s_type: vk::StructureType::PipelineLayoutCreateInfo,
             p_next: ptr::null(),
             flags: vk::PipelineLayoutCreateFlags::empty(),
-            set_layout_count: 0, // TODO
-            p_set_layouts: ptr::null(), // TODO
+            set_layout_count: set_layouts.len() as u32,
+            p_set_layouts: set_layouts.as_ptr(),
             push_constant_range_count: 0, // TODO
             p_push_constant_ranges: ptr::null(), // TODO
         };
@@ -589,6 +629,43 @@ impl core::Factory<R> for Factory {
         native::FrameBuffer { inner: framebuffer }
     }
 
+    fn create_sampler(&mut self, sampler_info: image::SamplerInfo) -> native::Sampler {
+        let (min, mag, mip, aniso) = data::map_filter(sampler_info.filter);
+        let info = vk::SamplerCreateInfo {
+            s_type: vk::StructureType::SamplerCreateInfo,
+            p_next: ptr::null(),
+            flags: vk::SamplerCreateFlags::empty(),
+            mag_filter: mag,
+            min_filter: min,
+            mipmap_mode: mip,
+            address_mode_u: data::map_wrap(sampler_info.wrap_mode.0),
+            address_mode_v: data::map_wrap(sampler_info.wrap_mode.1),
+            address_mode_w: data::map_wrap(sampler_info.wrap_mode.2),
+            mip_lod_bias: sampler_info.lod_bias.into(),
+            anisotropy_enable: if aniso > 0.0 { vk::VK_TRUE } else { vk::VK_FALSE },
+            max_anisotropy: aniso,
+            compare_enable: if sampler_info.comparison.is_some() { vk::VK_TRUE } else { vk::VK_FALSE },
+            compare_op: state::map_comparison(sampler_info.comparison.unwrap_or(core::state::Comparison::Never)),
+            min_lod: sampler_info.lod_range.0.into(),
+            max_lod: sampler_info.lod_range.1.into(),
+            border_color: match data::map_border_color(sampler_info.border) {
+                Some(bc) => bc,
+                None => {
+                    error!("Unsupported border color {:x}", sampler_info.border.0);
+                    vk::BorderColor::FloatTransparentBlack
+                }
+            },
+            unnormalized_coordinates: vk::VK_FALSE,
+        };
+
+        let sampler = unsafe {
+            self.inner.0.create_sampler(&info, None)
+                        .expect("error on sampler creation")
+        };
+
+        native::Sampler(sampler)
+    }
+
     ///
     fn create_buffer(&mut self, size: u64, usage: buffer::Usage) -> Result<UnboundBuffer, buffer::CreationError> {
         let info = vk::BufferCreateInfo {
@@ -741,45 +818,216 @@ impl core::Factory<R> for Factory {
     }
 
     fn view_image_as_render_target(&mut self, image: &native::Image, format: format::Format) -> Result<native::RenderTargetView, f::TargetViewError> {
-        // TODO
-        let components = vk::ComponentMapping {
-            r: vk::ComponentSwizzle::Identity,
-            g: vk::ComponentSwizzle::Identity,
-            b: vk::ComponentSwizzle::Identity,
-            a: vk::ComponentSwizzle::Identity,
-        };
-
-        // TODO
-        let subresource_range = vk::ImageSubresourceRange {
-            aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT,
-            base_mip_level: 0, 
-            level_count: 1,
-            base_array_layer: 0,
-            layer_count: vk::VK_REMAINING_ARRAY_LAYERS,
-        };
-
-        let info = vk::ImageViewCreateInfo {
-            s_type: vk::StructureType::ImageViewCreateInfo,
-            p_next: ptr::null(),
-            flags: vk::ImageViewCreateFlags::empty(), // TODO
-            image: image.0,
-            view_type: vk::ImageViewType::Type2d, // TODO
-            format: data::map_format(format.0, format.1).unwrap(), // TODO
-            components: components,
-            subresource_range: subresource_range,
-        };
-
-        let view = unsafe {
-            self.inner.0.create_image_view(&info, None)
-                        .expect("Error on image view creation")
-        };
-
+        let view = self.create_image_view(image, format);
         let rtv = native::RenderTargetView {
             image: image.0,
             view: view,
         };
 
         Ok(rtv)
+    }
+
+    fn view_image_as_shader_resource(&mut self, image: &native::Image, format: format::Format) -> Result<native::ShaderResourceView, f::TargetViewError> {
+        // TODO: check format compatibility? Allow different formats?
+        let view = self.create_image_view(image, format);
+        let srv = native::ShaderResourceView::Image(view);
+        Ok(srv)
+    }
+
+    fn view_image_as_unordered_access(&mut self, image: &native::Image, format: format::Format) -> Result<native::UnorderedAccessView, f::TargetViewError> {
+        // TODO: check format compatibility? Allow different formats?
+        let view = self.create_image_view(image, format);
+        let uav = native::UnorderedAccessView::Image(view);
+        Ok(uav)
+    }
+
+    fn create_descriptor_heap(&mut self, ty: f::DescriptorHeapType, size: usize) -> native::DescriptorHeap {
+        native::DescriptorHeap { ty: ty, size: size }
+    }
+
+    fn create_descriptor_set_pool(&mut self, heap: &native::DescriptorHeap, max_sets: usize, offset: usize, descriptor_pools: &[f::DescriptorPoolDesc]) -> native::DescriptorSetPool {
+        let num_descriptors = descriptor_pools.iter().fold(0, |acc, pool| acc + pool.count as usize);
+        if offset + num_descriptors > heap.size {
+            panic!("Out of heap range");
+        }
+
+        if descriptor_pools.iter()
+                .any(|pool| (pool.ty == f::DescriptorType::Sampler) && (heap.ty != f::DescriptorHeapType::Sampler) ) {
+            panic!("Mismatching descriptor types");
+        }
+
+        let pools = descriptor_pools.iter().map(|pool| {
+            vk::DescriptorPoolSize {
+                typ: data::map_descriptor_type(pool.ty),
+                descriptor_count: pool.count as u32,
+            }
+        }).collect::<Vec<_>>();
+
+        let info = vk::DescriptorPoolCreateInfo {
+            s_type: vk::StructureType::DescriptorPoolCreateInfo,
+            p_next: ptr::null(),
+            flags: vk::DescriptorPoolCreateFlags::empty(), // disallow individual freeing
+            max_sets: max_sets as u32,
+            pool_size_count: pools.len() as u32,
+            p_pool_sizes: pools.as_ptr(),
+        };
+
+        let pool = unsafe {
+            self.inner.0.create_descriptor_pool(&info, None)
+                        .expect("Error on descriptor set pool creation") // TODO
+        };
+
+        native::DescriptorSetPool {
+            inner: pool,
+        }
+    }
+
+    fn create_descriptor_set_layout(&mut self, bindings: &[f::DescriptorSetLayoutBinding]) -> native::DescriptorSetLayout {
+        let bindings = bindings.iter().map(|binding| {
+            vk::DescriptorSetLayoutBinding {
+                binding: binding.binding as u32,
+                descriptor_type: data::map_descriptor_type(binding.ty),
+                descriptor_count: binding.count as u32,
+                stage_flags: data::map_stage_flags(binding.stage_flags),
+                p_immutable_samplers: ptr::null(), // TODO
+            }
+        }).collect::<Vec<_>>();
+
+        let info = vk::DescriptorSetLayoutCreateInfo {
+            s_type: vk::StructureType::DescriptorSetLayoutCreateInfo,
+            p_next: ptr::null(),
+            flags: vk::DescriptorSetLayoutCreateFlags::empty(),
+            binding_count: bindings.len() as u32,
+            p_bindings: bindings.as_ptr(),
+        };
+
+        let layout = unsafe {
+            self.inner.0.create_descriptor_set_layout(&info, None)
+                        .expect("Error on descriptor set layout creation") // TODO
+        };
+
+        native::DescriptorSetLayout {
+            inner: layout,
+        }
+    }
+
+    fn create_descriptor_sets(&mut self, set_pool: &mut native::DescriptorSetPool, layouts: &[&native::DescriptorSetLayout]) -> Vec<native::DescriptorSet> {
+        let layouts = layouts.iter().map(|layout| {
+            layout.inner
+        }).collect::<Vec<_>>();
+
+        let info = vk::DescriptorSetAllocateInfo {
+            s_type: vk::StructureType::DescriptorSetAllocateInfo,
+            p_next: ptr::null(),
+            descriptor_pool: set_pool.inner,
+            descriptor_set_count: layouts.len() as u32,
+            p_set_layouts: layouts.as_ptr(),
+        };
+
+        let descriptor_sets = unsafe {
+            self.inner.0.allocate_descriptor_sets(&info)
+                        .expect("Error on descriptor sets creation") // TODO
+        };
+
+        descriptor_sets.into_iter().map(|set| {
+            native::DescriptorSet { inner: set }
+        }).collect::<Vec<_>>()
+    }
+
+    fn reset_descriptor_set_pool(&mut self, pool: &mut native::DescriptorSetPool) {
+        unimplemented!()
+    }
+
+    fn update_descriptor_sets(&mut self, writes: &[f::DescriptorSetWrite<R>]) {
+        let mut image_infos = Vec::new();
+        // let mut buffer_infos = Vec::new();
+        // let mut texel_buffer_views = Vec::new();
+
+        for write in writes {
+            match write.write {
+                f::DescriptorWrite::Sampler(ref samplers) => {
+                    for sampler in samplers {
+                        image_infos.push(vk::DescriptorImageInfo {
+                            sampler: sampler.0,
+                            image_view: vk::ImageView::null(),
+                            image_layout: vk::ImageLayout::General
+                        });
+                    }
+                }
+
+                f::DescriptorWrite::SampledImage(ref images) |
+                f::DescriptorWrite::StorageImage(ref images) |
+                f::DescriptorWrite::InputAttachment(ref images) => {
+                    for &(srv, layout) in images {
+                        let view = if let native::ShaderResourceView::Image(view) = *srv { view }
+                                    else { panic!("Wrong shader resource view (expected image)") }; // TODO
+
+                        image_infos.push(vk::DescriptorImageInfo {
+                            sampler: vk::Sampler::null(),
+                            image_view: view,
+                            image_layout: data::map_image_layout(layout),
+                        });
+                    }
+                }
+
+                _ => unimplemented!(), // TODO
+            };
+        }
+
+        // Track current subslice for each write
+        let mut cur_image_index = 0;
+
+        let writes = writes.iter().map(|write| {
+            let (ty, count, image_info, buffer_info, texel_buffer_view) = match write.write {
+                f::DescriptorWrite::Sampler(ref samplers) => {
+                    let info_ptr = &image_infos[cur_image_index];
+                    cur_image_index += samplers.len();
+
+                    (vk::DescriptorType::Sampler, samplers.len(),
+                        info_ptr, ptr::null(), ptr::null())
+                }
+                f::DescriptorWrite::SampledImage(ref images) => {
+                    let info_ptr = &image_infos[cur_image_index];
+                    cur_image_index += images.len();
+
+                    (vk::DescriptorType::SampledImage, images.len(),
+                        info_ptr, ptr::null(), ptr::null())
+                }
+                f::DescriptorWrite::StorageImage(ref images) => {
+                    let info_ptr = &image_infos[cur_image_index];
+                    cur_image_index += images.len();
+
+                    (vk::DescriptorType::StorageImage, images.len(),
+                        info_ptr, ptr::null(), ptr::null())
+                }
+
+                f::DescriptorWrite::InputAttachment(ref images) => {
+                    let info_ptr = &image_infos[cur_image_index];
+                    cur_image_index += images.len();
+
+                    (vk::DescriptorType::InputAttachment, images.len(),
+                        info_ptr, ptr::null(), ptr::null())
+                }
+                _ => unimplemented!(), // TODO
+            };
+
+            vk::WriteDescriptorSet {
+                s_type: vk::StructureType::WriteDescriptorSet,
+                p_next: ptr::null(),
+                dst_set: write.set.inner,
+                dst_binding: write.binding as u32,
+                dst_array_element: write.array_offset as u32,
+                descriptor_count: count as u32,
+                descriptor_type: ty,
+                p_image_info: image_info,
+                p_buffer_info: buffer_info,
+                p_texel_buffer_view: texel_buffer_view,
+            }
+        }).collect::<Vec<_>>();
+
+        unsafe {
+            self.inner.0.update_descriptor_sets(&writes, &[]);
+        }
     }
 
     /// Acquire a mapping Reader.
@@ -886,5 +1134,37 @@ impl core::Factory<R> for Factory {
 
     fn destroy_render_target_view(&mut self, rtv: native::RenderTargetView) {
         unsafe { self.inner.0.destroy_image_view(rtv.view, None); }
+    }
+
+    fn destroy_shader_resource_view(&mut self, srv: native::ShaderResourceView) {
+        match srv {
+            native::ShaderResourceView::Buffer => (),
+            native::ShaderResourceView::Image(view) => unsafe {
+                self.inner.0.destroy_image_view(view, None);
+            }
+        }
+    }
+
+    fn destroy_unordered_access_view(&mut self, uav: native::UnorderedAccessView) {
+        match uav {
+            native::UnorderedAccessView::Buffer => (),
+            native::UnorderedAccessView::Image(view) => unsafe {
+                self.inner.0.destroy_image_view(view, None);
+            }
+        }
+    }
+
+    fn destroy_sampler(&mut self, sampler: native::Sampler) {
+        unsafe { self.inner.0.destroy_sampler(sampler.0, None); }
+    }
+
+    fn destroy_descriptor_heap(&mut self, heap: native::DescriptorHeap) { }
+
+    fn destroy_descriptor_set_pool(&mut self, pool: native::DescriptorSetPool) {
+        unsafe { self.inner.0.destroy_descriptor_pool(pool.inner, None); }
+    }
+
+    fn destroy_descriptor_set_layout(&mut self, layout: native::DescriptorSetLayout) {
+        unsafe { self.inner.0.destroy_descriptor_set_layout(layout.inner, None); }
     }
 }

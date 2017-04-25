@@ -22,15 +22,18 @@ extern crate gfx_device_vulkanll as back;
 extern crate winit;
 extern crate image;
 
-use gfx_corell::{buffer, command, format, pass, pso, state, target, 
+use gfx_corell::{buffer, command, format, pass, pso, shade, state, target, 
     Device, CommandPool, GraphicsCommandPool,
     GraphicsCommandBuffer, ProcessingCommandBuffer, TransferCommandBuffer, PrimaryCommandBuffer,
     Primitive, Instance, Adapter, Surface, SwapChain, QueueFamily, Factory, SubPass};
 use gfx_corell::command::{RenderPassEncoder, RenderPassInlineEncoder};
 use gfx_corell::format::Formatted;
-use gfx_corell::memory::{self, ImageBarrier};
+use gfx_corell::memory::{self, ImageBarrier, ImageStateSrc, ImageStateDst, ImageLayout, ImageAccess};
+use gfx_corell::factory::{DescriptorHeapType, DescriptorPoolDesc, DescriptorType,
+    DescriptorSetLayoutBinding, DescriptorSetWrite, DescriptorWrite};
 
 use std::io::Cursor;
+use std::ops::Deref;
 use gfx_corell::image as i;
 
 pub type ColorFormat = gfx_corell::format::Srgba8;
@@ -38,17 +41,17 @@ pub type ColorFormat = gfx_corell::format::Srgba8;
 #[derive(Debug, Clone, Copy)]
 struct Vertex {
     a_Pos: [f32; 2],
-    a_Color: [f32; 3],
+    a_Uv: [f32; 3],
 }
 
 const TRIANGLE: [Vertex; 6] = [
-    Vertex { a_Pos: [ -0.5, 0.5 ], a_Color: [1.0, 0.0, 0.0] },
-    Vertex { a_Pos: [  0.5, 0.5 ], a_Color: [0.0, 1.0, 0.0] },
-    Vertex { a_Pos: [  0.0,-0.5 ], a_Color: [0.0, 0.0, 1.0] },
+    Vertex { a_Pos: [ -0.5, 0.33 ], a_Uv: [0.0, 1.0, 0.0] },
+    Vertex { a_Pos: [  0.5, 0.33 ], a_Uv: [1.0, 1.0, 0.0] },
+    Vertex { a_Pos: [  0.5,-0.33 ], a_Uv: [1.0, 0.0, 0.0] },
 
-    Vertex { a_Pos: [ -0.5, 0.5 ], a_Color: [1.0, 0.0, 0.0] },
-    Vertex { a_Pos: [  0.5, 0.5 ], a_Color: [0.0, 1.0, 0.0] },
-    Vertex { a_Pos: [  0.0, 0.8 ], a_Color: [0.0, 0.0, 1.0] },
+    Vertex { a_Pos: [ -0.5, 0.33 ], a_Uv: [0.0, 1.0, 0.0] },
+    Vertex { a_Pos: [  0.5,-0.33 ], a_Uv: [1.0, 0.0, 0.0] },
+    Vertex { a_Pos: [ -0.5,-0.33 ], a_Uv: [0.0, 0.0, 0.0] },
 ];
 
 #[cfg(any(feature = "vulkan", target_os = "windows"))]
@@ -104,7 +107,25 @@ fn main() {
         pixel_shader: Some("ps_main"),
     };
 
-    let pipeline_layout = factory.create_pipeline_layout();
+    let set0_layout = factory.create_descriptor_set_layout(&[
+            DescriptorSetLayoutBinding {
+                binding: 0,
+                ty: DescriptorType::SampledImage,
+                count: 1,
+                stage_flags: shade::STAGE_PIXEL,
+            }
+        ]);
+
+    let set1_layout = factory.create_descriptor_set_layout(&[
+            DescriptorSetLayoutBinding {
+                binding: 0,
+                ty: DescriptorType::Sampler,
+                count: 1,
+                stage_flags: shade::STAGE_PIXEL,
+            }
+        ]);
+
+    let pipeline_layout = factory.create_pipeline_layout(&[&set0_layout, &set1_layout]);
 
     let render_pass = {
         let attachment = pass::Attachment {
@@ -139,7 +160,21 @@ fn main() {
         state::Rasterizer::new_fill(),
         shader_entries);
 
-    pipeline_desc.color_targets[0] = Some((ColorFormat::get_format(), state::MASK_ALL.into()));
+    pipeline_desc.color_targets[0] = Some((
+        ColorFormat::get_format(),
+        state::Blend {
+            color: state::BlendChannel {
+                equation: state::Equation::Add,
+                source: state::Factor::ZeroPlus(state::BlendValue::SourceAlpha),
+                destination: state::Factor::OneMinus(state::BlendValue::SourceAlpha),
+            },
+            alpha: state::BlendChannel {
+                equation: state::Equation::Add,
+                source: state::Factor::One,
+                destination: state::Factor::One,
+            },
+        }.into()
+    ));
     pipeline_desc.vertex_buffers.push(pso::VertexBufferDesc {
         stride: std::mem::size_of::<Vertex>() as u8,
         rate: 0,
@@ -161,6 +196,26 @@ fn main() {
 
     println!("{:?}", pipelines);
 
+    // Descriptors
+    let heap_srv = factory.create_descriptor_heap(DescriptorHeapType::SrvCbvUav, 16);
+    let mut srv_pool = factory.create_descriptor_set_pool(
+        &heap_srv,
+        1, // sets
+        0, // offset
+        &[DescriptorPoolDesc { ty: DescriptorType::SampledImage, count: 1 }],
+    );
+
+    let set0 = factory.create_descriptor_sets(&mut srv_pool, &[&set0_layout]);
+
+    let heap_sampler = factory.create_descriptor_heap(DescriptorHeapType::Sampler, 16);
+    let mut sampler_pool = factory.create_descriptor_set_pool(
+        &heap_sampler,
+        1, // sets
+        0, // offset
+        &[DescriptorPoolDesc { ty: DescriptorType::Sampler, count: 1 }],
+    );
+
+    let set1 = factory.create_descriptor_sets(&mut sampler_pool, &[&set1_layout]);
 
     // Framebuffer and render target creation
     let frame_rtvs = swap_chain.get_images().iter().map(|image| {
@@ -206,20 +261,21 @@ fn main() {
     let (width, height) = img.dimensions();
     let kind = i::Kind::D2(width as i::Size, height as i::Size, i::AaMode::Single);
 
-    let image_upload_heap = factory.create_heap(upload_heap, img_data.len() as u64);
+    let image_upload_heap = factory.create_heap(upload_heap, img.len() as u64);
     let image_upload_buffer = {
-        let buffer = factory.create_buffer(img_data.len() as u64, buffer::TRANSFER_SRC).unwrap();
+        let buffer = factory.create_buffer(img.len() as u64, buffer::TRANSFER_SRC).unwrap();
         let buffer_req = factory.get_buffer_requirements(&buffer);
         factory.bind_buffer_memory(&image_upload_heap, 0, buffer).unwrap()
     };
 
     // copy image data into staging buffer
     {
-        let mut mapping = factory.write_mapping::<u8>(&image_upload_buffer, 0, img_data.len() as u64).unwrap();
-        mapping.copy_from_slice(&img_data[..]);
+
+        let mut mapping = factory.write_mapping::<u8>(&image_upload_buffer, 0, img.len() as u64).unwrap();
+        mapping.copy_from_slice(img.deref());
     }
 
-    let image = factory.create_image(kind, 1, gfx_corell::format::Srgba8::get_format(), i::TRANSFER_DST).unwrap(); // TODO: usage
+    let image = factory.create_image(kind, 1, gfx_corell::format::Srgba8::get_format(), i::TRANSFER_DST | i::SAMPLED).unwrap(); // TODO: usage
     let image_req = factory.get_image_requirements(&image);
 
     println!("image requirements: {:?}", image_req);
@@ -228,6 +284,27 @@ fn main() {
     let image_heap = factory.create_heap(device_heap, image_req.size);
 
     let image_logo = factory.bind_image_memory(&image_heap, 0, image).unwrap();
+    let image_srv = factory.view_image_as_shader_resource(&image_logo, gfx_corell::format::Srgba8::get_format()).unwrap();
+
+    let sampler = factory.create_sampler(i::SamplerInfo::new(
+                                            i::FilterMethod::Bilinear,
+                                            i::WrapMode::Clamp,
+                                        ));
+
+    factory.update_descriptor_sets(&[
+        DescriptorSetWrite {
+            set: &set0[0],
+            binding: 0,
+            array_offset: 0,
+            write: DescriptorWrite::SampledImage(vec![(&image_srv, memory::ImageLayout::Undefined)]),
+        },
+        DescriptorSetWrite {
+            set: &set1[0],
+            binding: 0,
+            array_offset: 0,
+            write: DescriptorWrite::Sampler(vec![&sampler]),
+        },
+    ]);
 
     // Rendering setup
     let viewport = target::Rect {
@@ -245,11 +322,18 @@ fn main() {
     {
         let submit = {
             let mut cmd_buffer = graphics_pool.acquire_command_buffer();
-            // TODO: pipeline barrier
+
+            let image_barrier = ImageBarrier {
+                state_src: ImageStateSrc::State(ImageAccess::empty(), ImageLayout::Undefined),
+                state_dst: ImageStateDst::State(memory::TRANSFER_WRITE, ImageLayout::TransferDstOptimal),
+                image: &image_logo,
+            };
+            cmd_buffer.pipeline_barrier(&[], &[], &[image_barrier]);
+
             cmd_buffer.copy_buffer_to_image(
                 &image_upload_buffer,
                 &image_logo,
-                memory::ImageLayout::General, // TODO
+                memory::ImageLayout::TransferDstOptimal,
                 &[command::BufferImageCopy {
                     buffer_offset: 0,
                     image_mip_level: 0,
@@ -258,6 +342,14 @@ fn main() {
                     image_offset: command::Offset { x: 0, y: 0, z: 0 },
                     image_extent: command::Extent { width: width, height: height, depth: 1 },
                 }]);
+
+            let image_barrier = ImageBarrier {
+                state_src: ImageStateSrc::State(memory::TRANSFER_WRITE, ImageLayout::TransferDstOptimal),
+                state_dst: ImageStateDst::State(memory::SHADER_READ, ImageLayout::ShaderReadOnlyOptimal),
+                image: &image_logo,
+            };
+            cmd_buffer.pipeline_barrier(&[], &[], &[image_barrier]);
+
             cmd_buffer.finish()
         };
 
@@ -286,6 +378,8 @@ fn main() {
             cmd_buffer.set_scissors(&[scissor]);
             cmd_buffer.bind_graphics_pipeline(&pipelines[0].as_ref().unwrap());
             cmd_buffer.bind_vertex_buffers(pso::VertexBufferSet(vec![(&vertex_buffer, 0)]));
+            cmd_buffer.bind_descriptor_heaps(Some(&heap_srv), Some(&heap_sampler));
+            cmd_buffer.bind_graphics_descriptor_sets(&pipeline_layout, 0, &[&set0[0], &set1[0]]);
 
             {
                 let mut encoder = back::RenderPassInlineEncoder::begin(
@@ -293,7 +387,7 @@ fn main() {
                     &render_pass,
                     &framebuffers[frame.id()],
                     target::Rect { x: 0, y: 0, w: 1024, h: 768 },
-                    &[command::ClearValue::Color(command::ClearColor::Float([0.2, 0.2, 0.2, 1.0]))]);
+                    &[command::ClearValue::Color(command::ClearColor::Float([0.8, 0.8, 0.8, 1.0]))]);
 
                 encoder.draw(0, 6, None);
             }
@@ -310,6 +404,12 @@ fn main() {
     }
 
     // cleanup!
+    factory.destroy_descriptor_heap(heap_srv);
+    factory.destroy_descriptor_heap(heap_sampler);
+    factory.destroy_descriptor_set_pool(srv_pool);
+    factory.destroy_descriptor_set_pool(sampler_pool);
+    factory.destroy_descriptor_set_layout(set0_layout);
+    factory.destroy_descriptor_set_layout(set1_layout);
     factory.destroy_shader_lib(shader_lib);
     factory.destroy_pipeline_layout(pipeline_layout);
     factory.destroy_renderpass(render_pass);
@@ -319,6 +419,8 @@ fn main() {
     factory.destroy_buffer(vertex_buffer);
     factory.destroy_buffer(image_upload_buffer);
     factory.destroy_image(image_logo);
+    factory.destroy_shader_resource_view(image_srv);
+    factory.destroy_sampler(sampler);
     for pipeline in pipelines {
         if let Ok(pipeline) = pipeline {
             factory.destroy_graphics_pipeline(pipeline);

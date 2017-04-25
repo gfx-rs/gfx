@@ -686,19 +686,24 @@ impl core::Resources for Resources {
     type ShaderLib = native::ShaderLib;
     type RenderPass = native::RenderPass;
     type PipelineLayout = native::PipelineLayout;
-    type FrameBuffer = native::FrameBuffer;    type GraphicsPipeline = native::GraphicsPipeline;
+    type FrameBuffer = native::FrameBuffer;
+    type GraphicsPipeline = native::GraphicsPipeline;
     type ComputePipeline = native::ComputePipeline;
     type UnboundBuffer = factory::UnboundBuffer;
     type Buffer = native::Buffer;
     type UnboundImage = factory::UnboundImage;
     type Image = native::Image;
-    type ShaderResourceView = ();
-    type UnorderedAccessView = ();
+    type ShaderResourceView = native::ShaderResourceView;
+    type UnorderedAccessView = native::UnorderedAccessView;
     type RenderTargetView = native::RenderTargetView;
     type DepthStencilView = native::DepthStencilView;
-    type Sampler = ();
+    type Sampler = native::Sampler;
     type Semaphore = ();
     type Fence = ();
     type Heap = native::Heap;
     type Mapping = factory::Mapping;
+    type DescriptorHeap = native::DescriptorHeap;
+    type DescriptorSetPool = native::DescriptorSetPool;
+    type DescriptorSet = native::DescriptorSet;
+    type DescriptorSetLayout = native::DescriptorSetLayout;
 }

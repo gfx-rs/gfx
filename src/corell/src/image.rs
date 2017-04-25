@@ -14,6 +14,7 @@
 
 use std::error::Error;
 use std::fmt;
+use state;
 
 pub use target::{Layer, Level};
 
@@ -103,6 +104,122 @@ bitflags!(
         const TRANSFER_DST    = 0x2,
         const COLOR_ATTACHMENT  = 0x4,
         const DEPTH_STENCIL_ATTACHMENT = 0x8,
+        const SAMPLED = 0x10,
         // TODO
     }
 );
+
+/// How to [filter](https://en.wikipedia.org/wiki/Texture_filtering) the
+/// texture when sampling. They correspond to increasing levels of quality,
+/// but also cost. They "layer" on top of each other: it is not possible to
+/// have bilinear filtering without mipmapping, for example.
+///
+/// These names are somewhat poor, in that "bilinear" is really just doing
+/// linear filtering on each axis, and it is only bilinear in the case of 2D
+/// textures. Similarly for trilinear, it is really Quadralinear(?) for 3D
+/// textures. Alas, these names are simple, and match certain intuitions
+/// ingrained by many years of public use of inaccurate terminology.
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+pub enum FilterMethod {
+    /// The dumbest filtering possible, nearest-neighbor interpolation.
+    Scale,
+    /// Add simple mipmapping.
+    Mipmap,
+    /// Sample multiple texels within a single mipmap level to increase
+    /// quality.
+    Bilinear,
+    /// Sample multiple texels across two mipmap levels to increase quality.
+    Trilinear,
+    /// Anisotropic filtering with a given "max", must be between 1 and 16,
+    /// inclusive.
+    Anisotropic(u8)
+}
+
+/// Specifies how texture coordinates outside the range `[0, 1]` are handled.
+#[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
+pub enum WrapMode {
+    /// Tile the texture. That is, sample the coordinate modulo `1.0`. This is
+    /// the default.
+    Tile,
+    /// Mirror the texture. Like tile, but uses abs(coord) before the modulo.
+    Mirror,
+    /// Clamp the texture to the value at `0.0` or `1.0` respectively.
+    Clamp,
+    /// Use border color.
+    Border,
+}
+
+/// A wrapper for the LOD level of a texture.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
+pub struct Lod(i16);
+
+impl From<f32> for Lod {
+    fn from(v: f32) -> Lod {
+        Lod((v * 8.0) as i16)
+    }
+}
+
+impl Into<f32> for Lod {
+    fn into(self) -> f32 {
+        self.0 as f32 / 8.0
+    }
+}
+
+/// A wrapper for the 8bpp RGBA color, encoded as u32.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
+pub struct PackedColor(pub u32);
+
+impl From<[f32; 4]> for PackedColor {
+    fn from(c: [f32; 4]) -> PackedColor {
+        PackedColor(c.iter().rev().fold(0, |u, &c| {
+            (u<<8) + (c * 255.0 + 0.5) as u32
+        }))
+    }
+}
+
+impl Into<[f32; 4]> for PackedColor {
+    fn into(self) -> [f32; 4] {
+        let mut out = [0.0; 4];
+        for i in 0 .. 4 {
+            let byte = (self.0 >> (i<<3)) & 0xFF;
+            out[i] = (byte as f32 + 0.5) / 255.0;
+        }
+        out
+    }
+}
+
+/// Specifies how to sample from a texture.
+// TODO: document the details of sampling.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
+pub struct SamplerInfo {
+    /// Filter method to use.
+    pub filter: FilterMethod,
+    /// Wrapping mode for each of the U, V, and W axis (S, T, and R in OpenGL
+    /// speak).
+    pub wrap_mode: (WrapMode, WrapMode, WrapMode),
+    /// This bias is added to every computed mipmap level (N + lod_bias). For
+    /// example, if it would select mipmap level 2 and lod_bias is 1, it will
+    /// use mipmap level 3.
+    pub lod_bias: Lod,
+    /// This range is used to clamp LOD level used for sampling.
+    pub lod_range: (Lod, Lod),
+    /// Comparison mode, used primary for a shadow map.
+    pub comparison: Option<state::Comparison>,
+    /// Border color is used when one of the wrap modes is set to border.
+    pub border: PackedColor,
+}
+
+impl SamplerInfo {
+    /// Create a new sampler description with a given filter method and wrapping mode, using no LOD
+    /// modifications.
+    pub fn new(filter: FilterMethod, wrap: WrapMode) -> SamplerInfo {
+        SamplerInfo {
+            filter: filter,
+            wrap_mode: (wrap, wrap, wrap),
+            lod_bias: Lod(0),
+            lod_range: (Lod(-8000), Lod(8000)),
+            comparison: None,
+            border: PackedColor(0),
+        }
+    }
+}
