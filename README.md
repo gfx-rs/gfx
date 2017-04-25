@@ -44,7 +44,7 @@
 - Graphics APIs are mostly designed with C and C++ in mind, and hence are dangerous and error prone, with little static safety guarantees.
 - Providing type safe wrappers around platform-specific APIs is feasible, but only pushes the problem of platform independence to a higher level of abstraction, often to the game or rendering engine.
 - Modern graphics APIs, whilst providing a great degree of flexibility and a high level of performance, often have a much higher barrier to entry than traditional [fixed-function](https://en.wikipedia.org/wiki/Fixed-function) APIs.
-- Graphics APIs like OpenGL still [require the developer to 'bind' and 'unbind' objects](http://www.arcsynthesis.org/gltut/Basics/Intro%20What%20is%20OpenGL.html#d0e887) in order to perform operations on them. This results in a large amount of boiler plate code, and brings with it the usual problems associated with global state.
+- Graphics APIs like OpenGL still [require the developer to 'bind' and 'unbind' objects](https://www.khronos.org/opengl/wiki/Buffer_Object) in order to perform operations on them. This results in a large amount of boiler plate code, and brings with it the usual problems associated with global state.
 
 ## Features
 
@@ -105,7 +105,7 @@ If you compile the example for the first time, it may take some while since all 
 If you want to build your own stand-alone gfx program, add the following to your new `Cargo.toml`:
 
 	[dependencies]
-	gfx = "0.14"
+	gfx = "0.15"
 
 
 For gfx to work, it needs access to the graphics system of the OS. This is typically provided through some window initialization API.
