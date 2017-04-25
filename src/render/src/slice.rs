@@ -55,7 +55,7 @@ use pso;
 ///
 /// A `Slice` is required to process a PSO, as it contains the needed information on in what order
 /// to draw which vertices. As such, every `draw` call on an `Encoder` requires a `Slice`.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Slice<R: Resources> {
     /// The start index of the index-buffer. Processing will start at this location in the
     /// index-buffer. 
@@ -136,7 +136,7 @@ impl<R: Resources> Slice<R> {
 /// `Buffer` of integers, using a factory.
 ///
 /// An `IndexBuffer` is exclusively used to create `Slice`s.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum IndexBuffer<R: Resources> {
     /// Represents a hypothetical index-buffer from 0 to infinity. In other words, all vertices
     /// get processed in order.
