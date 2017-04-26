@@ -16,20 +16,20 @@ extern crate cgmath;
 #[macro_use]
 extern crate gfx;
 extern crate gfx_app;
-extern crate rand;
 extern crate genmesh;
 extern crate noise;
+extern crate rand;
 extern crate winit;
 
-use rand::Rng;
-use cgmath::{SquareMatrix, Matrix4, Point3, Vector3};
-use cgmath::{Transform, AffineMatrix3};
 pub use gfx::format::{DepthStencil};
 pub use gfx_app::{ColorFormat, DepthFormat};
+
+use cgmath::{Deg, Matrix4, Point3, SquareMatrix, Vector3};
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
-use std::time::{Instant};
 use noise::{Seed, perlin2};
+use rand::Rng;
+use std::time::{Instant};
 
 gfx_defines!{
     vertex Vertex {
@@ -129,7 +129,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 model: Matrix4::identity().into(),
                 view: Matrix4::identity().into(),
                 proj: cgmath::perspective(
-                    cgmath::deg(60.0f32), window_targets.aspect_ratio, 0.1, 1000.0
+                    Deg(60.0f32), window_targets.aspect_ratio, 0.1, 1000.0
                     ).into(),
                 out_color: window_targets.color,
                 out_depth: window_targets.depth,
@@ -144,13 +144,13 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         let time = elapsed.as_secs() as f32 + elapsed.subsec_nanos() as f32 / 1000_000_000.0;
         let x = time.sin();
         let y = time.cos();
-        let view: AffineMatrix3<f32> = Transform::look_at(
+        let view = Matrix4::look_at(
             Point3::new(x * 32.0, y * 32.0, 16.0),
             Point3::new(0.0, 0.0, 0.0),
             Vector3::unit_z(),
         );
 
-        self.data.view = view.mat.into();
+        self.data.view = view.into();
         let locals = Locals {
             model: self.data.model,
             view: self.data.view,
@@ -167,7 +167,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         self.data.out_color = window_targets.color;
         self.data.out_depth = window_targets.depth;
         self.data.proj = cgmath::perspective(
-            cgmath::deg(60.0f32), window_targets.aspect_ratio, 0.1, 1000.0
+                Deg(60.0f32), window_targets.aspect_ratio, 0.1, 1000.0
             ).into();
     }
 }

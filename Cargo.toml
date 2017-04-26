@@ -10,9 +10,10 @@ documentation = "https://docs.rs/gfx_app"
 
 [features]
 default = []
-sdl = ["gfx_window_sdl"]
-vulkan = ["gfx_device_vulkan", "gfx_device_vulkanll", "gfx_window_vulkan"]
+cgmath-types = ["gfx/cgmath-types", "gfx_core/cgmath-types"]
 metal = ["gfx_device_metal", "gfx_window_metal"]
+vulkan = ["gfx_device_vulkan", "gfx_device_vulkanll", "gfx_window_vulkan"]
+sdl = ["gfx_window_sdl"]
 serialize = ["gfx/serialize", "gfx_core/serialize"]
 unstable = []
 
@@ -135,7 +136,7 @@ name = "trianglell"
 path = "examples/trianglell/main.rs"
 
 [dev-dependencies]
-cgmath = "0.7"
+cgmath = "0.14"
 gfx_gl = "0.3"
 rand = "0.3"
 genmesh = "0.4"

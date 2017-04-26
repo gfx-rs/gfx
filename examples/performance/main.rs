@@ -16,14 +16,14 @@ extern crate cgmath;
 #[macro_use]
 extern crate gfx;
 extern crate gfx_core;
+extern crate gfx_device_gl;
+extern crate gfx_gl as gl;
 extern crate gfx_window_glutin;
 extern crate glutin;
-extern crate gfx_gl as gl;
-extern crate gfx_device_gl;
 
-use cgmath::{SquareMatrix, Matrix, Point3, Vector3, Matrix3, Matrix4, Vector4};
 pub use gfx::format::{DepthStencil, Rgba8 as ColorFormat};
-//use glfw::Context;
+
+use cgmath::{Deg, Matrix, Matrix3, Matrix4, Point3, Vector3, Vector4, SquareMatrix};
 use gl::Gl;
 use gl::types::*;
 use std::{mem, ptr, str, env};
@@ -391,7 +391,7 @@ fn main() {
                 let (w, h) = r.window().get_inner_size().unwrap();
                 w as f32 / h as f32
             };
-            cgmath::perspective(cgmath::deg(45.0f32), aspect, 1.0, 10.0)
+            cgmath::perspective(Deg(45.0f32), aspect, 1.0, 10.0)
         };
         proj * view
     };

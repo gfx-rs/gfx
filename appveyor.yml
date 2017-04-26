@@ -18,4 +18,4 @@ build_script:
   - cargo build --features vulkan
 test_script:
   - cargo test --all --features vulkan
-  - cargo test -p gfx -p gfx_core --features serialize
+  - cargo test -p gfx -p gfx_core --features "cgmath-types serialize"

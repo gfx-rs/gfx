@@ -18,7 +18,6 @@ extern crate gfx;
 extern crate gfx_app;
 extern crate winit;
 
-use std::sync::{Arc, RwLock};
 pub use gfx::format::{DepthStencil};
 pub use gfx_app::{ColorFormat, DepthFormat};
 
@@ -26,6 +25,9 @@ pub use gfx_app::{ColorFormat, DepthFormat};
 pub use gfx::format::Depth32F as Depth;
 #[cfg(not(feature="metal"))]
 pub use gfx::format::Depth;
+
+use cgmath::{Deg, Matrix4, Point3, Vector3};
+use std::sync::{Arc, RwLock};
 
 // Section-1: vertex formats and shader parameters
 
@@ -162,13 +164,13 @@ fn create_plane<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F, size: i8
 // Section-3: scene definitions
 
 struct Camera {
-    mx_view: cgmath::Matrix4<f32>,
+    mx_view: Matrix4<f32>,
     projection: cgmath::PerspectiveFov<f32>,
 }
 
 struct Light<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
-    position: cgmath::Point3<f32>,
-    mx_view: cgmath::Matrix4<f32>,
+    position: Point3<f32>,
+    mx_view: Matrix4<f32>,
     projection: cgmath::Perspective<f32>,
     color: gfx::ColorValue,
     shadow: gfx::handle::DepthStencilView<R, Depth>,
@@ -177,7 +179,7 @@ struct Light<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
 
 struct Entity<R: gfx::Resources> {
     dynamic: bool,
-    mx_to_world: cgmath::Matrix4<f32>,
+    mx_to_world: Matrix4<f32>,
     batch_shadow: shadow::Data<R>,
     batch_forward: forward::Data<R>,
     slice: gfx::Slice<R>,
@@ -208,7 +210,7 @@ fn create_scene<R, F>(factory: &mut F,
     R: gfx::Resources,
     F: gfx_app::Factory<R>,
 {
-    use cgmath::{SquareMatrix, Matrix4, deg};
+    use cgmath::{InnerSpace, SquareMatrix};
     use gfx::traits::FactoryExt;
 
     // create shadows
@@ -234,19 +236,19 @@ fn create_scene<R, F>(factory: &mut F,
 
     // create lights
     struct LightDesc {
-        pos: cgmath::Point3<f32>,
+        pos: Point3<f32>,
         color: gfx::ColorValue,
         fov: f32,
     }
 
     let light_descs = vec![
         LightDesc {
-            pos: cgmath::Point3::new(7.0, -5.0, 10.0),
+            pos: Point3::new(7.0, -5.0, 10.0),
             color: [0.5, 1.0, 0.5, 1.0],
             fov: 60.0,
         },
         LightDesc {
-            pos: cgmath::Point3::new(-5.0, 7.0, 10.0),
+            pos: Point3::new(-5.0, 7.0, 10.0),
             color: [1.0, 0.5, 0.5, 1.0],
             fov: 45.0,
         },
@@ -255,13 +257,13 @@ fn create_scene<R, F>(factory: &mut F,
     let (near, far) = (1f32, 20f32);
     let lights: Vec<_> = light_descs.iter().enumerate().map(|(i, desc)| Light {
         position: desc.pos.clone(),
-        mx_view: cgmath::Matrix4::look_at(
+        mx_view: Matrix4::look_at(
             desc.pos,
-            cgmath::Point3::new(0.0, 0.0, 0.0),
-            cgmath::Vector3::unit_z(),
+            Point3::new(0.0, 0.0, 0.0),
+            Vector3::unit_z(),
         ),
         projection: cgmath::PerspectiveFov {
-            fovy: deg(desc.fov).into(),
+            fovy: Deg(desc.fov).into(),
             aspect: 1.0,
             near: near,
             far: far,
@@ -276,7 +278,7 @@ fn create_scene<R, F>(factory: &mut F,
 
     // create entities
     struct CubeDesc {
-        offset: cgmath::Vector3<f32>,
+        offset: Vector3<f32>,
         angle: f32,
         scale: f32,
     }
@@ -332,12 +334,12 @@ fn create_scene<R, F>(factory: &mut F,
     };
 
     let mut entities: Vec<_> = cube_descs.iter().map(|desc| {
-        use cgmath::{EuclideanVector, Rotation3};
-        let transform = cgmath::Decomposed {
+        use cgmath::{Decomposed, Quaternion, Rotation3};
+        let transform = Decomposed {
             disp: desc.offset.clone(),
-            rot: cgmath::Quaternion::from_axis_angle(
+            rot: Quaternion::from_axis_angle(
                 desc.offset.normalize(),
-                cgmath::deg(desc.angle).into(),
+                Deg(desc.angle),
             ),
             scale: desc.scale,
         }.into();
@@ -364,13 +366,13 @@ fn create_scene<R, F>(factory: &mut F,
 
     // create camera
     let camera = Camera {
-        mx_view: cgmath::Matrix4::look_at(
-            cgmath::Point3::new(3.0f32, -10.0, 6.0),
-            cgmath::Point3::new(0f32, 0.0, 0.0),
-            cgmath::Vector3::unit_z(),
+        mx_view: Matrix4::look_at(
+            Point3::new(3.0f32, -10.0, 6.0),
+            Point3::new(0f32, 0.0, 0.0),
+            Vector3::unit_z(),
         ),
         projection: cgmath::PerspectiveFov {
-            fovy: cgmath::deg(45.0f32).into(),
+            fovy: Deg(45.0f32).into(),
             aspect: 1.0,
             near: near,
             far: far,
@@ -403,19 +405,19 @@ struct App<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
 }
 
 impl<R: gfx::Resources, C: gfx::CommandBuffer<R>> App<R, C> {
-    fn rotate(&mut self, axis: cgmath::Vector3<f32>) {
-        use cgmath::{EuclideanVector, Matrix4, Rotation3};
-        let len = axis.length();
+    fn rotate(&mut self, axis: Vector3<f32>) {
+        use cgmath::{Decomposed, InnerSpace, Quaternion, Rotation3};
+        let len = axis.magnitude();
         for ent in self.scene.share.write().unwrap().entities.iter_mut() {
             if !ent.dynamic {
                 continue
             }
             // rotate all cubes around the axis
-            let rot = cgmath::Decomposed {
+            let rot = Decomposed {
                 scale: 1.0,
-                rot: cgmath::Quaternion::from_axis_angle(
+                rot: Quaternion::from_axis_angle(
                     axis * (1.0 / len),
-                    cgmath::deg(len * 0.3).into(),
+                    Deg(len * 0.3),
                 ),
                 disp: cgmath::vec3(0.0, 0.0, 0.0)
             };
@@ -517,7 +519,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
                 pos: [light.position.x, light.position.y, light.position.z, 1.0],
                 color: light.color,
                 proj: {
-                    let mx_proj = cgmath::Matrix4::from(light.projection);
+                    let mx_proj = Matrix4::from(light.projection);
                     (mx_proj * light.mx_view).into()
                 },
             }).collect();
@@ -548,7 +550,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
                         batch.out = light.shadow.clone();
                         let locals = ShadowLocals{
                             transform: {
-                                let mx_proj: cgmath::Matrix4<_> = light.projection.into();
+                                let mx_proj: Matrix4<_> = light.projection.into();
                                 let mx_view = mx_proj * light.mx_view;
                                 let mvp = mx_view * ent.mx_to_world;
                                 mvp.into()
@@ -578,7 +580,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
                     batch.out = light.shadow.clone();
                     let locals = ShadowLocals{
                         transform: {
-                            let mx_proj: cgmath::Matrix4<_> = light.projection.into();
+                            let mx_proj: Matrix4<_> = light.projection.into();
                             let mx_view = mx_proj * light.mx_view;
                             let mvp = mx_view * ent.mx_to_world;
                             mvp.into()
@@ -597,7 +599,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
         let mx_vp = {
             let mut proj = self.scene.camera.projection;
             proj.aspect = self.window_targets.aspect_ratio;
-            let mx_proj: cgmath::Matrix4<_> = proj.into();
+            let mx_proj: Matrix4<_> = proj.into();
             mx_proj * self.scene.camera.mx_view
         };
 

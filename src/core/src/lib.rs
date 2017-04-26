@@ -22,6 +22,9 @@ extern crate bitflags;
 extern crate draw_state;
 extern crate log;
 
+#[cfg(feature = "cgmath-types")]
+extern crate cgmath;
+
 #[cfg(feature = "serialize")]
 extern crate serde;
 #[cfg(feature = "serialize")]

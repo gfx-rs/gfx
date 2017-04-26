@@ -16,14 +16,15 @@
 extern crate gfx;
 extern crate gfx_app;
 extern crate cgmath;
-
 extern crate image;
 
-use std::io::Cursor;
-use std::time::{Instant};
 pub use gfx_app::ColorFormat;
 pub use gfx::format::{Depth, Rgba8};
+
+use cgmath::{Deg, Matrix4};
 use gfx::{Bundle, texture};
+use std::io::Cursor;
+use std::time::{Instant};
 
 gfx_defines!{
     vertex Vertex {
@@ -82,7 +83,7 @@ fn load_cubemap<R, F>(factory: &mut F, data: CubemapData) -> Result<gfx::handle:
 
 struct App<R: gfx::Resources>{
     bundle: Bundle<R, pipe::Data<R>>,
-    projection: cgmath::Matrix4<f32>,
+    projection: Matrix4<f32>,
     start_time: Instant,
 }
 
@@ -120,7 +121,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
         let sampler = factory.create_sampler_linear();
 
-        let proj = cgmath::perspective(cgmath::deg(60.0f32), window_targets.aspect_ratio, 0.01, 100.0);
+        let proj = cgmath::perspective(Deg(60.0f32), window_targets.aspect_ratio, 0.01, 100.0);
 
         let pso = factory.create_pipeline_simple(
             vs.select(backend).unwrap(),
@@ -144,14 +145,15 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
     fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
         {
-            use cgmath::{AffineMatrix3, SquareMatrix, Transform, Vector3, Point3};
+            use cgmath::{Matrix4, Point3, SquareMatrix, Vector3};
+
             // Update camera position
             let elapsed = self.start_time.elapsed();
             let time = (elapsed.as_secs() as f32 + elapsed.subsec_nanos() as f32 / 1000_000_000.0) * 0.25;
             let x = time.sin();
             let z = time.cos();
 
-            let view: AffineMatrix3<f32> = Transform::look_at(
+            let view = Matrix4::look_at(
                 Point3::new(x, x / 2.0, z),
                 Point3::new(0.0, 0.0, 0.0),
                 Vector3::unit_y(),
@@ -159,7 +161,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
             let locals = Locals {
                 inv_proj: self.projection.invert().unwrap().into(),
-                view: view.mat.into(),
+                view: view.into(),
             };
             encoder.update_constant_buffer(&self.bundle.data.locals, &locals);
         }
@@ -170,7 +172,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
     fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {
         self.bundle.data.out = window_targets.color;
-        self.projection = cgmath::perspective(cgmath::deg(60.0f32), window_targets.aspect_ratio, 0.01, 100.0);
+        self.projection = cgmath::perspective(Deg(60.0f32), window_targets.aspect_ratio, 0.01, 100.0);
     }
 }
 

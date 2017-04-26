@@ -52,7 +52,7 @@ script:
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo build --features vulkan; else cargo build; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cargo build --features metal; else cargo build; fi
   - cargo test --all
-  - cargo test -p gfx -p gfx_core --features serialize
+  - cargo test -p gfx -p gfx_core --features "cgmath-types serialize"
   - cargo test -p gfx_window_sdl
   - cargo test -p gfx_device_gl
   - cargo test -p gfx_window_glutin

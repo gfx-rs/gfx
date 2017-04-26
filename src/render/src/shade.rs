@@ -14,6 +14,9 @@
 
 //! Shader parameter handling.
 
+#[cfg(feature = "cgmath-types")]
+use cgmath::{Deg, Matrix2, Matrix3, Matrix4, Rad, Point2, Point3, Vector2, Vector3, Vector4};
+
 use std::error::Error;
 use std::fmt;
 pub use core::shade::{self as core, ConstFormat, Formatted, Usage};
@@ -24,18 +27,18 @@ pub trait ToUniform: Copy {
 }
 
 macro_rules! impl_uniforms {
-    { $( $ty_src:ty = $ty_dst:ident ,)* } => {
+    ( $( $ty_src:ty = $ty_dst:ident ,)* ) => {
         $(
-        impl ToUniform for $ty_src {
-            fn convert(self) -> core::UniformValue {
-                core::UniformValue::$ty_dst(self)
+            impl ToUniform for $ty_src {
+                fn convert(self) -> core::UniformValue {
+                    core::UniformValue::$ty_dst(self.into())
+                }
             }
-        }
         )*
     }
 }
 
-impl_uniforms!{
+impl_uniforms! {
     i32 = I32,
     f32 = F32,
     [i32; 2] = I32Vector2,
@@ -47,6 +50,32 @@ impl_uniforms!{
     [[f32; 2]; 2] = F32Matrix2,
     [[f32; 3]; 3] = F32Matrix3,
     [[f32; 4]; 4] = F32Matrix4,
+}
+
+#[cfg(feature = "cgmath-types")]
+impl ToUniform for Deg<f32> {
+    fn convert(self) -> core::UniformValue {
+        core::UniformValue::F32(self.0)
+    }
+}
+
+#[cfg(feature = "cgmath-types")]
+impl ToUniform for Rad<f32> {
+    fn convert(self) -> core::UniformValue {
+        core::UniformValue::F32(self.0)
+    }
+}
+
+#[cfg(feature = "cgmath-types")]
+impl_uniforms! {
+    Point2<f32> = F32Vector2,
+    Point3<f32> = F32Vector3,
+    Vector2<f32> = F32Vector2,
+    Vector3<f32> = F32Vector3,
+    Vector4<f32> = F32Vector4,
+    Matrix2<f32> = F32Matrix2,
+    Matrix3<f32> = F32Matrix3,
+    Matrix4<f32> = F32Matrix4,
 }
 
 /// Program linking error
