@@ -18,10 +18,9 @@ extern crate gfx;
 extern crate gfx_app;
 
 pub use gfx_app::{ColorFormat, DepthFormat};
-use gfx::{Bundle, texture};
 
-use cgmath::{Point3, Vector3};
-use cgmath::{Transform, AffineMatrix3};
+use cgmath::{Deg, Matrix4, Point3, Vector3};
+use gfx::{Bundle, texture};
 
 // Declare the vertex format suitable for drawing,
 // as well as the constants used by the shaders
@@ -145,11 +144,11 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             pipe::new()
         ).unwrap();
 
-        let proj = cgmath::perspective(cgmath::deg(45.0f32), window_targets.aspect_ratio, 1.0, 10.0);
+        let proj = cgmath::perspective(Deg(45.0f32), window_targets.aspect_ratio, 1.0, 10.0);
 
         let data = pipe::Data {
             vbuf: vbuf,
-            transform: (proj * default_view().mat).into(),
+            transform: (proj * default_view()).into(),
             locals: factory.create_constant_buffer(1),
             color: (texture_view, factory.create_sampler(sinfo)),
             out_color: window_targets.color,
@@ -174,8 +173,8 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         self.bundle.data.out_depth = window_targets.depth;
 
         // In this example the transform is static except for window resizes.
-        let proj = cgmath::perspective(cgmath::deg(45.0f32), window_targets.aspect_ratio, 1.0, 10.0);
-        self.bundle.data.transform = (proj * default_view().mat).into();
+        let proj = cgmath::perspective(Deg(45.0f32), window_targets.aspect_ratio, 1.0, 10.0);
+        self.bundle.data.transform = (proj * default_view()).into();
     }
 }
 
@@ -184,8 +183,8 @@ pub fn main() {
     App::launch_simple("Cube example");
 }
 
-fn default_view() -> AffineMatrix3<f32> {
-    Transform::look_at(
+fn default_view() -> Matrix4<f32> {
+    Matrix4::look_at(
         Point3::new(1.5f32, -5.0, 3.0),
         Point3::new(0f32, 0.0, 0.0),
         Vector3::unit_z(),

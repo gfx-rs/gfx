@@ -21,6 +21,9 @@ use std::error::Error;
 use {Resources};
 use {AttributeSlot, ColorSlot, ConstantBufferSlot, ResourceViewSlot, SamplerSlot, UnorderedViewSlot};
 
+#[cfg(feature = "cgmath-types")]
+use cgmath::{Deg, Matrix2, Matrix3, Matrix4, Point2, Point3, Rad, Vector2, Vector3, Vector4};
+
 /// Number of components in a container type (vectors/matrices)
 pub type Dimension = u8;
 
@@ -213,7 +216,7 @@ pub trait Formatted {
 }
 
 macro_rules! impl_base_type {
-    { $($name:ident = $value:ident ,)* } => {
+    ( $($name:ty = $value:ident ,)* ) => {
         $(
             impl BaseTyped for $name {
                 fn get_base_type() -> BaseType {
@@ -235,6 +238,7 @@ macro_rules! impl_const_vector {
         )*
     }
 }
+
 macro_rules! impl_const_matrix {
     ( $( [$n:expr, $m:expr] ),* ) => {
         $(
@@ -248,11 +252,44 @@ macro_rules! impl_const_matrix {
     }
 }
 
+#[cfg(feature = "cgmath-types")]
+macro_rules! impl_const_vector_cgmath {
+    ( $( $name:ident = $num:expr, )* ) => {
+        $(
+            impl<T: BaseTyped> Formatted for $name<T> {
+                fn get_format() -> ConstFormat {
+                    (T::get_base_type(), ContainerType::Vector($num))
+                }
+            }
+        )*
+    }
+}
+
+#[cfg(feature = "cgmath-types")]
+macro_rules! impl_const_matrix_cgmath {
+    ( $( $name:ident = $size:expr, )* ) => {
+        $(
+            impl<T: BaseTyped> Formatted for $name<T> {
+                fn get_format() -> ConstFormat {
+                    let mf = MatrixFormat::ColumnMajor;
+                    (T::get_base_type(), ContainerType::Matrix(mf, $size, $size))
+                }
+            }
+        )*
+    }
+}
+
 impl_base_type! {
     i32 = I32,
     u32 = U32,
     f32 = F32,
     bool = Bool,
+}
+
+#[cfg(feature = "cgmath-types")]
+impl_base_type! {
+    Deg<f32> = F32,
+    Rad<f32> = F32,
 }
 
 impl<T: BaseTyped> Formatted for T {
@@ -263,6 +300,22 @@ impl<T: BaseTyped> Formatted for T {
 
 impl_const_vector!(2, 3, 4);
 impl_const_matrix!([2,2], [3,3], [4,4], [4,3]);
+
+#[cfg(feature = "cgmath-types")]
+impl_const_vector_cgmath! {
+    Point2 = 2,
+    Point3 = 3,
+    Vector2 = 2,
+    Vector3 = 3,
+    Vector4 = 4,
+}
+
+#[cfg(feature = "cgmath-types")]
+impl_const_matrix_cgmath! {
+    Matrix2 = 2,
+    Matrix3 = 3,
+    Matrix4 = 4,
+}
 
 bitflags!(
     /// Parameter usage flags.

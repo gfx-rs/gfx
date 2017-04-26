@@ -30,10 +30,12 @@ name = "gfx"
 path = "src/lib.rs"
 
 [features]
+cgmath-types = ["gfx_core/cgmath-types", "cgmath"]
 serialize = ["gfx_core/serialize", "draw_state/serialize"]
 unstable = []
 
 [dependencies]
+cgmath = { version = "0.14", optional = true }
 draw_state = "0.7"
 gfx_core = { path = "../core", version = "0.7" }
 log = "0.3"

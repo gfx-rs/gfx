@@ -37,21 +37,21 @@ extern crate genmesh;
 extern crate noise;
 extern crate winit;
 
-use rand::Rng;
-use cgmath::{SquareMatrix, Matrix4, Point3, Vector3, EuclideanVector, deg};
-use cgmath::{Transform, AffineMatrix3};
 pub use gfx_app::ColorFormat;
-use gfx::{Bundle, texture};
-use genmesh::{Vertices, Triangulate};
-use genmesh::generators::{SharedVertex, IndexedPolygon};
-use noise::{Seed, perlin2};
-use std::time::{Instant};
-use winit::{Event, VirtualKeyCode, WindowBuilder};
 
 #[cfg(feature="metal")]
 pub use gfx::format::Depth32F as Depth;
 #[cfg(not(feature="metal"))]
 pub use gfx::format::Depth;
+
+use cgmath::{Deg, Matrix4, Point3, SquareMatrix, Vector3};
+use gfx::{Bundle, texture};
+use genmesh::{Vertices, Triangulate};
+use genmesh::generators::{SharedVertex, IndexedPolygon};
+use noise::{Seed, perlin2};
+use rand::Rng;
+use std::time::{Instant};
+use winit::{Event, VirtualKeyCode, WindowBuilder};
 
 // Remember to also change the constants in the shaders
 const NUM_LIGHTS: usize = 250;
@@ -139,6 +139,8 @@ gfx_defines!{
 }
 
 fn calculate_normal(seed: &Seed, x: f32, y: f32)-> [f32; 3] {
+    use cgmath::InnerSpace;
+
     // determine sample points
     let s_x0 = x - 0.001;
     let s_x1 = x + 0.001;
@@ -483,18 +485,18 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             let y = (0.05*time).cos();
             Point3::new(x * 32.0, y * 32.0, 16.0)
         };
-        let view: AffineMatrix3<f32> = Transform::look_at(
+        let view = Matrix4::look_at(
             cam_pos,
             Point3::new(0.0, 0.0, 0.0),
             Vector3::unit_z(),
         );
         let (width, height, _, _) = self.terrain.data.out_depth.get_dimensions();
         let aspect = width as f32 / height as f32;
-        let proj = cgmath::perspective(deg(60.0f32), aspect, 5.0, 100.0);
+        let proj = cgmath::perspective(Deg(60.0f32), aspect, 5.0, 100.0);
 
         let terrain_locals = TerrainLocals {
             model: Matrix4::identity().into(),
-            view: view.mat.into(),
+            view: view.into(),
             proj: proj.into(),
         };
         encoder.update_constant_buffer(&self.terrain.data.locals, &terrain_locals);
@@ -506,7 +508,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         encoder.update_buffer(&self.light.data.locals_ps, &[light_locals], 0).unwrap();
 
         let mut cube_locals = CubeLocals {
-            transform: (proj * view.mat).into(),
+            transform: (proj * view).into(),
             radius: LIGHT_RADIUS,
         };
         encoder.update_constant_buffer(&self.light.data.locals_vs, &cube_locals);

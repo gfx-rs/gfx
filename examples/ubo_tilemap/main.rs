@@ -13,26 +13,22 @@
 // limitations under the License.
 
 extern crate cgmath;
+extern crate genmesh;
 #[macro_use]
 extern crate gfx;
 extern crate gfx_app;
-extern crate rand;
-extern crate genmesh;
-extern crate noise;
 extern crate image;
+extern crate noise;
+extern crate rand;
 extern crate winit;
 
-use std::io::Cursor;
-
 pub use gfx_app::{ColorFormat, DepthFormat};
-use gfx::traits::{FactoryExt};
 
-use cgmath::{SquareMatrix, Matrix4, AffineMatrix3};
-use cgmath::{Point3, Vector3};
-use cgmath::{Transform};
-
+use cgmath::{Deg, Matrix4, Point3, SquareMatrix, Vector3};
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
+use gfx::traits::FactoryExt;
+use std::io::Cursor;
 
 // this is a value based on a max buffer size (and hence tilemap size) of 64x64
 // I imagine you would have a max buffer length, with multiple TileMap instances
@@ -180,7 +176,8 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
         for _ in 0..total_size {
             charmap_data.push(TileMapData::new_empty());
         }
-        let view: AffineMatrix3<f32> = Transform::look_at(
+
+        let view = Matrix4::look_at(
             Point3::new(0.0, 0.0, 800.0),
             Point3::new(0.0, 0.0, 0.0),
             Vector3::unit_y(),
@@ -191,8 +188,8 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
             params: params,
             proj_stuff: ProjectionStuff {
                 model: Matrix4::identity().into(),
-                view: view.mat.into(),
-                proj: cgmath::perspective(cgmath::deg(60.0f32), targets.aspect_ratio, 0.1, 4000.0).into(),
+                view: view.into(),
+                proj: cgmath::perspective(Deg(60.0f32), targets.aspect_ratio, 0.1, 4000.0).into(),
             },
             proj_dirty: true,
             tm_stuff: TilemapStuff {
@@ -208,7 +205,7 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
     fn resize(&mut self, targets: gfx_app::WindowTargets<R>) {
         self.params.out_color = targets.color;
         self.params.out_depth = targets.depth;
-        self.proj_stuff.proj = cgmath::perspective(cgmath::deg(60.0f32), targets.aspect_ratio, 0.1, 4000.0).into();
+        self.proj_stuff.proj = cgmath::perspective(Deg(60.0f32), targets.aspect_ratio, 0.1, 4000.0).into();
         self.proj_dirty = true;
     }
 
@@ -230,8 +227,8 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
             [16.0 / 256.0, 14.0 / 256.0, 22.0 / 256.0, 1.0]);
         encoder.clear_depth(&self.params.out_depth, 1.0);
     }
-    pub fn update_view(&mut self, view: &AffineMatrix3<f32>) {
-        self.proj_stuff.view = view.mat.into();
+    pub fn update_view(&mut self, view: &Matrix4<f32>) {
+        self.proj_stuff.view = view.clone().into();
         self.proj_dirty = true;
     }
     pub fn update_x_offset(&mut self, amt: f32) {
@@ -458,7 +455,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for TileMap<R> {
 
     fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
         // view configuration based on current position
-        let view: AffineMatrix3<f32> = Transform::look_at(
+        let view = Matrix4::look_at(
             Point3::new(self.input.x_pos, -self.input.y_pos, self.input.distance),
             Point3::new(self.input.x_pos, -self.input.y_pos, 0.0),
             Vector3::unit_y(),
