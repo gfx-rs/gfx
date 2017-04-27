@@ -94,16 +94,20 @@ impl core::Adapter for Adapter {
     type QueueFamily = QueueFamily;
 
     fn open<'a, I>(&self, queue_descs: I) -> core::Device<Resources, Factory, CommandQueue>
-        where I: Iterator<Item=(&'a QueueFamily, u32)>
+        where I: ExactSizeIterator<Item=(&'a QueueFamily, u32)>
     {
+        let mut queue_priorities = Vec::with_capacity(queue_descs.len());
+
         let queue_infos = queue_descs.map(|(family, queue_count)| {
+                queue_priorities.push(vec![0.0f32; queue_count as usize]);
+
                 vk::DeviceQueueCreateInfo {
                     s_type: vk::StructureType::DeviceQueueCreateInfo,
                     p_next: ptr::null(),
                     flags: vk::DeviceQueueCreateFlags::empty(),
                     queue_family_index: family.family_index,
                     queue_count: queue_count,
-                    p_queue_priorities: vec![0.0f32; queue_count as usize].as_ptr(),
+                    p_queue_priorities: queue_priorities.last().unwrap().as_ptr(),
                 }
             }).collect::<Vec<_>>();
 

@@ -138,7 +138,7 @@ pub trait Adapter {
 
     /// Create a new device and command queues.
     fn open<'a, I>(&self, queue_descs: I) -> Device<Self::Resources, Self::Factory, Self::CommandQueue>
-        where I: Iterator<Item=(&'a Self::QueueFamily, u32)>;
+        where I: ExactSizeIterator<Item=(&'a Self::QueueFamily, u32)>;
 
     /// Get the `AdapterInfo` for this adapater.
     fn get_info(&self) -> &AdapterInfo;
