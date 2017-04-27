@@ -27,7 +27,7 @@ extern crate kernel32;
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0, V1_0};
 use ash::vk;
 use ash::{Entry, LoadingError};
-use core::{format, memory, QueueSubmit};
+use core::{format, memory, QueueSubmit, FrameSync};
 use core::command::Submit;
 use std::ffi::{CStr, CString};
 use std::mem;
@@ -246,27 +246,41 @@ impl core::CommandQueue for CommandQueue {
     type TransferCommandBuffer = native::TransferCommandBuffer;
     type SubpassCommandBuffer = native::SubpassCommandBuffer;
 
-    unsafe fn submit<C>(&mut self, submit_infos: &[QueueSubmit<C, Resources>], fence: Option<&native::Fence>)
+    unsafe fn submit<C>(&mut self, submit_infos: &[QueueSubmit<C, Resources>], fence: Option<&mut native::Fence>)
         where C: core::CommandBuffer<SubmitInfo = command::SubmitInfo>
     {
         let mut command_buffers = Vec::with_capacity(submit_infos.len());
+        let mut wait_semaphores = Vec::with_capacity(submit_infos.len());
+        let mut wait_stages = Vec::with_capacity(submit_infos.len());
+        let mut signal_semaphores = Vec::with_capacity(submit_infos.len());
 
         let submits = submit_infos.iter().map(|submit| {
             let cmd_buffers = submit.cmd_buffers
                                    .iter().map(|submit| submit.get_info().command_buffer)
                                    .collect::<Vec<_>>();
+            let waits = submit.wait_semaphores.iter().map(|&(ref semaphore, _)| semaphore.0).collect::<Vec<_>>();
+            let stages = submit.wait_semaphores.iter().map(|&(_, stage)| data::map_pipeline_stage(stage)).collect::<Vec<_>>();
+            let signals = submit.signal_semaphores.iter().map(|semaphore| semaphore.0).collect::<Vec<_>>();
+
             command_buffers.push(cmd_buffers);
+            wait_semaphores.push(waits);
+            wait_stages.push(stages);
+            signal_semaphores.push(signals);
+
+            let wait_semaphores = wait_semaphores.last().unwrap();
+            let wait_stages = wait_stages.last().unwrap();
 
             vk::SubmitInfo {
                 s_type: vk::StructureType::SubmitInfo,
                 p_next: ptr::null(),
-                wait_semaphore_count: 0, // TODO
-                p_wait_semaphores: ptr::null(), // TODO
-                p_wait_dst_stage_mask: ptr::null(), // TODO
+                wait_semaphore_count: wait_semaphores.len() as u32,
+                p_wait_semaphores: wait_semaphores.as_ptr(),
+                // If count is zero, AMD driver crashes if nullptr is not set for stage masks
+                p_wait_dst_stage_mask: if wait_stages.is_empty() { ptr::null() } else { wait_stages.as_ptr() }, 
                 command_buffer_count: command_buffers.last().unwrap().len() as u32,
                 p_command_buffers: command_buffers.last().unwrap().as_ptr(),
-                signal_semaphore_count: 0, // TODO
-                p_signal_semaphores: ptr::null(), // TODO
+                signal_semaphore_count: signal_semaphores.last().unwrap().len() as u32,
+                p_signal_semaphores: signal_semaphores.last().unwrap().as_ptr(),
             }
         }).collect::<Vec<_>>();
 
@@ -278,6 +292,12 @@ impl core::CommandQueue for CommandQueue {
                 &submits,
                 fence,
             );
+        }
+    }
+
+    fn wait_idle(&mut self) {
+        unsafe {
+            self.device.0.queue_wait_idle(*self.inner.0.borrow());
         }
     }
 }
@@ -431,13 +451,18 @@ pub struct SwapChain {
 
 impl core::SwapChain for SwapChain {
     type Image = native::Image;
+    type R = Resources;
 
     fn get_images(&mut self) -> &[native::Image] {
        &self.images
     }
 
-    fn acquire_frame(&mut self) -> core::Frame {
-        // TODO: handle synchronization, requires a fence or semaphore
+    fn acquire_frame(&mut self, sync: FrameSync<Resources>) -> core::Frame {
+        let (semaphore, fence) = match sync {
+            FrameSync::Semaphore(semaphore) => (semaphore.0, vk::Fence::null()),
+            FrameSync::Fence(fence) => (vk::Semaphore::null(), fence.0),
+        };
+
         // TODO: error handling
         let index = unsafe {
             let mut index = mem::uninitialized();
@@ -445,8 +470,8 @@ impl core::SwapChain for SwapChain {
                     self.device.0.handle(),
                     self.inner,
                     std::u64::MAX, // will block if no image is available
-                    vk::Semaphore::null(),
-                    vk::Fence::null(),
+                    semaphore,
+                    fence,
                     &mut index);
             index
         };

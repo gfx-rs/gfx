@@ -23,9 +23,9 @@ extern crate winit;
 extern crate image;
 
 use gfx_corell::{buffer, command, format, pass, pso, shade, state, target, 
-    Device, CommandPool, GraphicsCommandPool,
+    Device, CommandPool, GraphicsCommandPool, CommandQueue,
     GraphicsCommandBuffer, ProcessingCommandBuffer, TransferCommandBuffer, PrimaryCommandBuffer,
-    Primitive, Instance, Adapter, Surface, SwapChain, QueueFamily, QueueSubmit, Factory, SubPass};
+    Primitive, Instance, Adapter, Surface, SwapChain, QueueFamily, QueueSubmit, Factory, SubPass, FrameSync};
 use gfx_corell::command::{RenderPassEncoder, RenderPassInlineEncoder};
 use gfx_corell::format::Formatted;
 use gfx_corell::memory::{self, ImageBarrier, ImageStateSrc, ImageStateDst, ImageLayout, ImageAccess};
@@ -316,6 +316,7 @@ fn main() {
         w: 1024, h: 768,
     };
 
+    let mut frame_semaphore = factory.create_semaphore();
     let mut graphics_pool = back::GraphicsCommandPool::from_queue(&mut general_queues[0], 16);
 
     // copy buffer to texture
@@ -375,9 +376,10 @@ fn main() {
             }
         }
 
-        graphics_pool.reset();
+        general_queues[0].wait_idle(); // SLOW!
 
-        let frame = swap_chain.acquire_frame();
+        graphics_pool.reset();
+        let frame = swap_chain.acquire_frame(FrameSync::Semaphore(&mut frame_semaphore));
 
         // Rendering
         let submit = {
@@ -410,12 +412,14 @@ fn main() {
             &[
                 QueueSubmit {
                     cmd_buffers: &[submit],
-                    wait_semaphores: &[],
+                    wait_semaphores: &[(&mut frame_semaphore, pso::BOTTOM_OF_PIPE)],
                     signal_semaphores: &[],
                 }
             ],
             None,
         );
+
+        general_queues[0].wait_idle(); // TODO: replace with semaphore
 
         // present frame
         swap_chain.present();
@@ -439,6 +443,7 @@ fn main() {
     factory.destroy_image(image_logo);
     factory.destroy_shader_resource_view(image_srv);
     factory.destroy_sampler(sampler);
+    factory.destroy_semaphore(frame_semaphore);
     for pipeline in pipelines {
         if let Ok(pipeline) = pipeline {
             factory.destroy_graphics_pipeline(pipeline);

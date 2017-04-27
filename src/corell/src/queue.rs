@@ -28,16 +28,16 @@ impl<Q: CommandQueue> GeneralQueue<Q> {
         GeneralQueue(queue)
     }
 
-    pub fn submit_general(&mut self, submit: &[QueueSubmit<Q::GeneralCommandBuffer, Q::R>], fence: Option<&<Q::R as Resources>::Fence>) {
+    pub fn submit_general(&mut self, submit: &[QueueSubmit<Q::GeneralCommandBuffer, Q::R>], fence: Option<&mut <Q::R as Resources>::Fence>) {
         unsafe { self.submit(submit, fence) }
     }
-    pub fn submit_graphics(&mut self, submit: &[QueueSubmit<Q::GraphicsCommandBuffer, Q::R>], fence: Option<&<Q::R as Resources>::Fence>) {
+    pub fn submit_graphics(&mut self, submit: &[QueueSubmit<Q::GraphicsCommandBuffer, Q::R>], fence: Option<&mut <Q::R as Resources>::Fence>) {
         unsafe { self.submit(submit, fence) }
     }
-    pub fn submit_compute(&mut self, submit: &[QueueSubmit<Q::ComputeCommandBuffer, Q::R>], fence: Option<&<Q::R as Resources>::Fence>) {
+    pub fn submit_compute(&mut self, submit: &[QueueSubmit<Q::ComputeCommandBuffer, Q::R>], fence: Option<&mut <Q::R as Resources>::Fence>) {
         unsafe { self.submit(submit, fence) }
     }
-    pub fn submit_tranfer(&mut self, submit: &[QueueSubmit<Q::TransferCommandBuffer, Q::R>], fence: Option<&<Q::R as Resources>::Fence>) {
+    pub fn submit_tranfer(&mut self, submit: &[QueueSubmit<Q::TransferCommandBuffer, Q::R>], fence: Option<&mut <Q::R as Resources>::Fence>) {
         unsafe { self.submit(submit, fence) }
     }
 }
@@ -78,10 +78,10 @@ impl<Q: CommandQueue> GraphicsQueue<Q> {
         GraphicsQueue(queue)
     }
 
-    pub fn submit_graphics(&mut self, submit: &[QueueSubmit<Q::GraphicsCommandBuffer, Q::R>], fence: Option<&<Q::R as Resources>::Fence>) {
+    pub fn submit_graphics(&mut self, submit: &[QueueSubmit<Q::GraphicsCommandBuffer, Q::R>], fence: Option<&mut <Q::R as Resources>::Fence>) {
         unsafe { self.submit(submit, fence) }
     }
-    pub fn submit_tranfer(&mut self, submit: &[QueueSubmit<Q::TransferCommandBuffer, Q::R>], fence: Option<&<Q::R as Resources>::Fence>) {
+    pub fn submit_tranfer(&mut self, submit: &[QueueSubmit<Q::TransferCommandBuffer, Q::R>], fence: Option<&mut <Q::R as Resources>::Fence>) {
         unsafe { self.submit(submit, fence) }
     }
 }
@@ -112,10 +112,10 @@ impl<Q: CommandQueue> ComputeQueue<Q> {
         ComputeQueue(queue)
     }
 
-    pub fn submit_compute(&mut self, submit: &[QueueSubmit<Q::ComputeCommandBuffer, Q::R>], fence: Option<&<Q::R as Resources>::Fence>) {
+    pub fn submit_compute(&mut self, submit: &[QueueSubmit<Q::ComputeCommandBuffer, Q::R>], fence: Option<&mut <Q::R as Resources>::Fence>) {
         unsafe { self.submit(submit, fence) }
     }
-    pub fn submit_tranfer(&mut self, submit: &[QueueSubmit<Q::TransferCommandBuffer, Q::R>], fence: Option<&<Q::R as Resources>::Fence>) {
+    pub fn submit_tranfer(&mut self, submit: &[QueueSubmit<Q::TransferCommandBuffer, Q::R>], fence: Option<&mut <Q::R as Resources>::Fence>) {
         unsafe { self.submit(submit, fence) }
     }
 }
@@ -146,7 +146,7 @@ impl<Q: CommandQueue> TransferQueue<Q> {
         TransferQueue(queue)
     }
 
-    pub fn submit_tranfer(&mut self, submit: &[QueueSubmit<Q::TransferCommandBuffer, Q::R>], fence: Option<&<Q::R as Resources>::Fence>) {
+    pub fn submit_tranfer(&mut self, submit: &[QueueSubmit<Q::TransferCommandBuffer, Q::R>], fence: Option<&mut <Q::R as Resources>::Fence>) {
         unsafe { self.submit(submit, fence) }
     }
 }
