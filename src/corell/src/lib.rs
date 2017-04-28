@@ -138,7 +138,7 @@ pub trait Adapter {
 
     /// Create a new device and command queues.
     fn open<'a, I>(&self, queue_descs: I) -> Device<Self::Resources, Self::Factory, Self::CommandQueue>
-        where I: Iterator<Item=(&'a Self::QueueFamily, u32)>;
+        where I: ExactSizeIterator<Item=(&'a Self::QueueFamily, u32)>;
 
     /// Get the `AdapterInfo` for this adapater.
     fn get_info(&self) -> &AdapterInfo;
@@ -175,8 +175,8 @@ pub trait QueueFamily: 'static {
 
 pub struct QueueSubmit<'a, C: CommandBuffer + 'a, R: Resources> {
     pub cmd_buffers: &'a [command::Submit<C>],
-    pub wait_semaphores: &'a [(&'a R::Semaphore, shade::StageFlags)],
-    pub signal_semaphores: &'a [&'a R::Semaphore],
+    pub wait_semaphores: &'a [(&'a mut R::Semaphore, pso::PipelineStage)],
+    pub signal_semaphores: &'a [&'a mut R::Semaphore],
 }
 
 /// `CommandBuffers` are submitted to a `CommandQueue` and executed in-order of submission.
@@ -191,8 +191,11 @@ pub trait CommandQueue {
     type SubpassCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo>; // + SubpassCommandBuffer<Self::R>;
 
     /// Submit command buffers to queue for execution.
-    unsafe fn submit<'a, C>(&mut self, submit_infos: &[QueueSubmit<C, Self::R>], fence: Option<&'a <Self::R as Resources>::Fence>)
+    unsafe fn submit<'a, C>(&mut self, submit_infos: &[QueueSubmit<C, Self::R>], fence: Option<&'a mut <Self::R as Resources>::Fence>)
         where C: CommandBuffer<SubmitInfo = Self::SubmitInfo>;
+
+    ///
+    fn wait_idle(&mut self);
 }
 
 /// `CommandPool` can allocate command buffers of a specific type only.
@@ -237,13 +240,22 @@ impl Frame {
     pub fn id(&self) -> usize { self.0 }
 }
 
+/// Synchronization primitives which will be signaled once a frame got retrieved.
+///
+/// The semaphore or fence _must_ be unsignaled.
+pub enum FrameSync<'a, R: Resources> {
+    Semaphore(&'a R::Semaphore),
+    Fence(&'a R::Fence)
+}
+
 /// The `SwapChain` is the backend representation of the surface.
 /// It consists of multiple buffers, which will be presented on the surface.
 pub trait SwapChain {
     type Image;
+    type R: Resources;
 
     fn get_images(&mut self) -> &[Self::Image];
-    fn acquire_frame(&mut self) -> Frame;
+    fn acquire_frame(&mut self, sync: FrameSync<Self::R>) -> Frame;
     fn present(&mut self);
 }
 

@@ -1128,6 +1128,13 @@ impl core::Factory<R> for Factory {
         native::Fence(fence)
     }
 
+    fn reset_fences(&mut self, fences: &[&native::Fence]) {
+        let fences = fences.iter().map(|fence| fence.0).collect::<Vec<_>>();
+        unsafe {
+            self.inner.0.reset_fences(&fences);
+        }
+    }
+
     fn destroy_heap(&mut self, heap: native::Heap) {
         unsafe { self.inner.0.free_memory(heap.0, None); }
     }
@@ -1200,5 +1207,13 @@ impl core::Factory<R> for Factory {
 
     fn destroy_descriptor_set_layout(&mut self, layout: native::DescriptorSetLayout) {
         unsafe { self.inner.0.destroy_descriptor_set_layout(layout.inner, None); }
+    }
+
+    fn destroy_fence(&mut self, fence: native::Fence) {
+        unsafe { self.inner.0.destroy_fence(fence.0, None); }
+    }
+
+    fn destroy_semaphore(&mut self, semaphore: native::Semaphore) {
+        unsafe { self.inner.0.destroy_semaphore(semaphore.0, None); }
     }
 }

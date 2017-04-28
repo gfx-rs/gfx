@@ -221,6 +221,9 @@ pub trait Factory<R: Resources> {
     fn create_fence(&mut self, signaled: bool) -> R::Fence;
 
     ///
+    fn reset_fences(&mut self, fences: &[&R::Fence]);
+
+    ///
     fn destroy_heap(&mut self, R::Heap);
 
     ///
@@ -282,4 +285,10 @@ pub trait Factory<R: Resources> {
 
     ///
     fn destroy_descriptor_set_layout(&mut self, R::DescriptorSetLayout);
+
+    ///
+    fn destroy_fence(&mut self, R::Fence);
+
+    ///
+    fn destroy_semaphore(&mut self, R::Semaphore);
 }
