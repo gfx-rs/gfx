@@ -121,7 +121,7 @@ pub trait Factory<R: Resources> {
             -> Vec<Result<R::GraphicsPipeline, pso::CreationError>>;
 
     /// Create compute pipelines.
-    fn create_compute_pipelines(&mut self) -> Vec<Result<R::ComputePipeline, pso::CreationError>>;
+    fn create_compute_pipelines(&mut self, &[(&R::ShaderLib, pso::EntryPoint, &R::PipelineLayout)]) -> Vec<Result<R::ComputePipeline, pso::CreationError>>;
 
     ///
     fn create_framebuffer(&mut self, renderpass: &R::RenderPass,
