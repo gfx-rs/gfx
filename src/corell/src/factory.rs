@@ -158,7 +158,7 @@ pub trait Factory<R: Resources> {
     fn bind_image_memory(&mut self, heap: &R::Heap, offset: u64, image: R::UnboundImage) -> Result<R::Image, image::CreationError>;
 
     ///
-    fn view_buffer_as_constant(&mut self, buffer: &R::Buffer, range: Range<usize>) -> Result<R::ConstantBufferView, TargetViewError>;
+    fn view_buffer_as_constant(&mut self, buffer: &R::Buffer, offset: usize, size: usize) -> Result<R::ConstantBufferView, TargetViewError>;
 
     ///
     fn view_image_as_render_target(&mut self, image: &R::Image, format: format::Format) -> Result<R::RenderTargetView, TargetViewError>;
@@ -270,6 +270,9 @@ pub trait Factory<R: Resources> {
 
     ///
     fn destroy_render_target_view(&mut self, R::RenderTargetView);
+
+    ///
+    fn destroy_constant_buffer_view(&mut self, R::ConstantBufferView);
 
     ///
     fn destroy_shader_resource_view(&mut self, R::ShaderResourceView);

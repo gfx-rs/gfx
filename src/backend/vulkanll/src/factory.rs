@@ -817,11 +817,11 @@ impl core::Factory<R> for Factory {
         Ok(image.0)
     }
 
-    fn view_buffer_as_constant(&mut self, buffer: &native::Buffer, range: Range<usize>) -> Result<native::ConstantBufferView, f::TargetViewError> {
+    fn view_buffer_as_constant(&mut self, buffer: &native::Buffer, offset: usize, size: usize) -> Result<native::ConstantBufferView, f::TargetViewError> {
         Ok(native::ConstantBufferView {
             buffer: buffer.inner,
-            offset: range.start,
-            size: range.end - range.start,   
+            offset: offset,
+            size: size,   
         })
     }
 
@@ -1201,6 +1201,8 @@ impl core::Factory<R> for Factory {
     fn destroy_render_target_view(&mut self, rtv: native::RenderTargetView) {
         unsafe { self.inner.0.destroy_image_view(rtv.view, None); }
     }
+
+    fn destroy_constant_buffer_view(&mut self, _: native::ConstantBufferView) { }
 
     fn destroy_shader_resource_view(&mut self, srv: native::ShaderResourceView) {
         match srv {
