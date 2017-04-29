@@ -30,7 +30,7 @@ log = "0.3"
 lazy_static = "0.2"
 shared_library = "0.1"
 gfx_corell = { path = "../../corell", version = "0.1.0" }
-ash = "0.15"
+ash = "0.15.7"
 spirv-utils = { git = "https://github.com/msiglreith/spirv-utils.git", branch = "gfx" }
 winit = "0.5"
 
