@@ -817,6 +817,14 @@ impl core::Factory<R> for Factory {
         Ok(image.0)
     }
 
+    fn view_buffer_as_constant(&mut self, buffer: &native::Buffer, range: Range<usize>) -> Result<native::ConstantBufferView, f::TargetViewError> {
+        Ok(native::ConstantBufferView {
+            buffer: buffer.inner,
+            offset: range.start,
+            size: range.end - range.start,   
+        })
+    }
+
     fn view_image_as_render_target(&mut self, image: &native::Image, format: format::Format) -> Result<native::RenderTargetView, f::TargetViewError> {
         let view = self.create_image_view(image, format);
         let rtv = native::RenderTargetView {
@@ -940,7 +948,7 @@ impl core::Factory<R> for Factory {
 
     fn update_descriptor_sets(&mut self, writes: &[f::DescriptorSetWrite<R>]) {
         let mut image_infos = Vec::new();
-        // let mut buffer_infos = Vec::new();
+        let mut buffer_infos = Vec::new();
         // let mut texel_buffer_views = Vec::new();
 
         for write in writes {
@@ -970,39 +978,56 @@ impl core::Factory<R> for Factory {
                     }
                 }
 
+                f::DescriptorWrite::ConstantBuffer(ref cbvs) => {
+                    for cbv in cbvs {
+                        buffer_infos.push(vk::DescriptorBufferInfo {
+                            buffer: cbv.buffer,
+                            offset: cbv.offset as u64,
+                            range: cbv.size as u64,
+                        });
+                    }
+                }
+
                 _ => unimplemented!(), // TODO
             };
         }
 
         // Track current subslice for each write
         let mut cur_image_index = 0;
+        let mut cur_buffer_index = 0;
 
         let writes = writes.iter().map(|write| {
             let (ty, count, image_info, buffer_info, texel_buffer_view) = match write.write {
                 f::DescriptorWrite::Sampler(ref samplers) => {
-                    let info_ptr = &image_infos[cur_image_index];
+                    let info_ptr = &image_infos[cur_image_index] as *const _;
                     cur_image_index += samplers.len();
 
                     (vk::DescriptorType::Sampler, samplers.len(),
                         info_ptr, ptr::null(), ptr::null())
                 }
                 f::DescriptorWrite::SampledImage(ref images) => {
-                    let info_ptr = &image_infos[cur_image_index];
+                    let info_ptr = &image_infos[cur_image_index] as *const _;
                     cur_image_index += images.len();
 
                     (vk::DescriptorType::SampledImage, images.len(),
                         info_ptr, ptr::null(), ptr::null())
                 }
                 f::DescriptorWrite::StorageImage(ref images) => {
-                    let info_ptr = &image_infos[cur_image_index];
+                    let info_ptr = &image_infos[cur_image_index] as *const _;
                     cur_image_index += images.len();
 
                     (vk::DescriptorType::StorageImage, images.len(),
                         info_ptr, ptr::null(), ptr::null())
                 }
+                f::DescriptorWrite::ConstantBuffer(ref cbvs) => {
+                    let info_ptr = &buffer_infos[cur_buffer_index] as *const _;
+                    cur_buffer_index += cbvs.len();
 
+                    (vk::DescriptorType::UniformBuffer, cbvs.len(),
+                        ptr::null(), info_ptr, ptr::null())
+                }
                 f::DescriptorWrite::InputAttachment(ref images) => {
-                    let info_ptr = &image_infos[cur_image_index];
+                    let info_ptr = &image_infos[cur_image_index] as *const _;
                     cur_image_index += images.len();
 
                     (vk::DescriptorType::InputAttachment, images.len(),

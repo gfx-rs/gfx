@@ -112,6 +112,13 @@ pub struct Image(pub vk::Image);
 pub struct Sampler(pub vk::Sampler);
 
 #[derive(Debug, Hash)]
+pub struct ConstantBufferView {
+    pub buffer: vk::Buffer,
+    pub offset: usize,
+    pub size: usize,
+}
+
+#[derive(Debug, Hash)]
 pub enum ShaderResourceView {
     Buffer,
     Image(vk::ImageView),
