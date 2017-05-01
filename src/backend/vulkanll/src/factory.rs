@@ -589,8 +589,80 @@ impl core::Factory<R> for Factory {
         }
     }
 
-    fn create_compute_pipelines(&mut self) -> Vec<Result<native::ComputePipeline, pso::CreationError>> {
-        unimplemented!()
+    fn create_compute_pipelines(&mut self, descs: &[(&native::ShaderLib, EntryPoint, &native::PipelineLayout)]) -> Vec<Result<native::ComputePipeline, pso::CreationError>> {
+        let infos = descs.iter().map(|&(shader_lib, entry_point, layout)| {
+            let cs_module = if let Some(module) = shader_lib.shaders.get(&entry_point)
+                    { module } else { return Err(pso::CreationError) };
+            let stage = vk::PipelineShaderStageCreateInfo {
+                s_type: vk::StructureType::PipelineShaderStageCreateInfo,
+                p_next: ptr::null(),
+                flags: vk::PipelineShaderStageCreateFlags::empty(),
+                stage: vk::SHADER_STAGE_COMPUTE_BIT,
+                module: *cs_module,
+                p_name: b"main\0".as_ptr() as *const i8, // TODO: GLSL source language
+                p_specialization_info: ptr::null(),
+            };
+
+            Ok(vk::ComputePipelineCreateInfo {
+                s_type: vk::StructureType::ComputePipelineCreateInfo,
+                p_next: ptr::null(),
+                flags: vk::PipelineCreateFlags::empty(),
+                stage: stage,
+                layout: layout.layout,
+                base_pipeline_handle: vk::Pipeline::null(),
+                base_pipeline_index: -1,
+            })
+        }).collect::<Vec<_>>();
+
+        let valid_infos = infos.iter().filter_map(|info| info.clone().ok()).collect::<Vec<_>>();
+        let result = if valid_infos.is_empty() {
+            Ok(Vec::new())
+        } else {
+            unsafe {
+                self.inner.0.create_compute_pipelines(
+                    vk::PipelineCache::null(),
+                    &valid_infos,
+                    None,
+                )
+            }
+        };
+        
+        match result {
+            Ok(pipelines) => {
+                let mut pipelines = pipelines.iter();
+                infos.iter().map(|ref info| {
+                    match **info {
+                        Ok(_) => {
+                            let pipeline = *pipelines.next().unwrap();
+                            Ok(native::ComputePipeline {
+                                pipeline: pipeline,
+                            })
+                        }
+                        Err(ref err) => Err(err.clone()),
+                    }
+                }).collect::<Vec<_>>()
+            }
+            Err((pipelines, err)) => {
+                let mut pipelines = pipelines.iter();
+                infos.iter().map(|ref info| {
+                    match **info {
+                        Ok(_) => {
+                            let pipeline = *pipelines.next().unwrap();
+
+                            // Check if pipeline compiled correctly
+                            if pipeline == vk::Pipeline::null() {
+                                Err(pso::CreationError) // TODO
+                            } else {
+                                Ok(native::ComputePipeline {
+                                    pipeline: pipeline,
+                                })
+                            }
+                        }
+                        Err(ref err) => Err(err.clone()),
+                    }
+                }).collect::<Vec<_>>()
+            }
+        }
     }
 
     fn create_framebuffer(&mut self, renderpass: &native::RenderPass,
