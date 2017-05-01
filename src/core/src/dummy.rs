@@ -40,6 +40,7 @@ impl Resources for DummyResources {
     type RenderTargetView     = ();
     type DepthStencilView     = ();
     type Sampler              = ();
+    type Semaphore            = ();
     type Fence                = DummyFence;
     type Mapping              = DummyMapping;
 }
