@@ -222,9 +222,40 @@ pub trait Resources:          Clone + Hash + Debug + Eq + PartialEq + Any {
     type RenderTargetView:    Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
     type DepthStencilView:    Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
     type Sampler:             Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
-    type Fence:               Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
+    type Fence:               Debug + Hash + Eq + PartialEq + Any + Send + Sync;
+    type Semaphore:           Debug + Any + Send + Sync;
     type Mapping:             Hash + Debug + Eq + PartialEq + Any + Send + Sync + mapping::Gate<Self>;
 }
+
+/*
+/// Different resource types of a specific API. 
+pub trait Resources:          Clone + Hash + Debug + Any {
+    type ShaderLib:           Debug + Any + Send + Sync;
+    type RenderPass:          Debug + Any + Send + Sync;
+    type PipelineLayout:      Debug + Any + Send + Sync;
+    type GraphicsPipeline:    Debug + Any + Send + Sync;
+    type ComputePipeline:     Debug + Any + Send + Sync;
+    type UnboundBuffer:       Debug + Any + Send + Sync;
+    type Buffer:              Debug + Any + Send + Sync;
+    type UnboundImage:        Debug + Any + Send + Sync;
+    type Image:               Debug + Any + Send + Sync;
+    type ConstantBufferView:  Debug + Any + Send + Sync;
+    type ShaderResourceView:  Debug + Any + Send + Sync;
+    type UnorderedAccessView: Debug + Any + Send + Sync;
+    type RenderTargetView:    Debug + Any + Send + Sync;
+    type DepthStencilView:    Debug + Any + Send + Sync;
+    type FrameBuffer:         Debug + Any + Send + Sync;
+    type Sampler:             Debug + Any + Send + Sync;
+    type Semaphore:           Debug + Any + Send + Sync;
+    type Fence:               Debug + Any + Send + Sync;
+    type Heap:                Debug + Any;
+    type Mapping;
+    type DescriptorHeap:      Debug + Any;
+    type DescriptorSetPool:   Debug + Any;
+    type DescriptorSet:       Debug + Any;
+    type DescriptorSetLayout: Debug + Any;
+}
+*/
 
 #[allow(missing_docs)]
 #[derive(Clone, Debug, PartialEq)]
@@ -348,8 +379,6 @@ pub trait CommandQueue { }
 pub trait Surface {
     /// Associated `CommandQueue` type.
     type CommandQueue: CommandQueue;
-    /// Associated `SwapChain` type.
-    type SwapChain: SwapChain;
     /// Associated native `Window` type.
     type Window;
 
@@ -357,8 +386,8 @@ pub trait Surface {
     fn from_window(window: &Self::Window) -> Self;
 
     /// Create a new swapchain from the current surface with an associated present queue.
-    fn build_swapchain<T: format::RenderFormat>(&self, present_queue: &Self::CommandQueue)
-        -> Self::SwapChain;
+    fn build_swapchain<S, T>(&self, present_queue: &Self::CommandQueue) -> S
+        where S: SwapChain, T: format::RenderFormat;
 }
 
 /// Handle to a backbuffer of the swapchain.
@@ -373,11 +402,32 @@ impl Frame {
     }
 }
 
+/// Synchronization primitives which will be signaled once a frame got retrieved.
+///
+/// The semaphore or fence _must_ be unsignaled.
+pub enum FrameSync<'a, R: Resources> {
+    /// Semaphore used for synchronization.
+    ///
+    /// Will be signaled once the frame backbuffer is available.
+    Semaphore(&'a R::Semaphore),
+
+    /// Fence used for synchronization.
+    ///
+    /// Will be signaled once the frame backbuffer is available.
+    Fence(&'a R::Fence)
+}
+
 /// The `SwapChain` is the backend representation of the surface.
 /// It consists of multiple buffers, which will be presented on the surface.
 pub trait SwapChain {
+    /// Associated `Resources` type.
+    type R: Resources;
+
+    /// Access the backbuffer images.
+    fn get_images(&mut self) -> &[<Self::R as Resources>::Texture];
+
     /// Acquire a new frame for rendering. This needs to be called before presenting.
-    fn acquire_frame(&mut self) -> Frame;
+    fn acquire_frame(&mut self, sync: FrameSync<Self::R>) -> Frame;
 
     /// Present one acquired frame in FIFO order.
     fn present(&mut self);
