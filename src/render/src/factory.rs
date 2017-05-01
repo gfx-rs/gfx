@@ -189,7 +189,27 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
         Ok(ShaderSet::Simple(vs, ps))
     }
 
-    /// Mainly for testing
+    /// Creates a `ShaderSet` from the supplied vertex, geometry, and pixel
+    /// shader source code. Mainly used for testing.
+    fn create_shader_set_geometry(&mut self, vs_code: &[u8], gs_code: &[u8], ps_code: &[u8])
+                         -> Result<ShaderSet<R>, ProgramError> {
+        let vs = match self.create_shader_vertex(vs_code) {
+            Ok(s) => s,
+            Err(e) => return Err(ProgramError::Vertex(e)),
+        };
+        let gs = match self.create_shader_geometry(gs_code) {
+            Ok(s) => s,
+            Err(e) => return Err(ProgramError::Geometry(e)),
+        };
+        let ps = match self.create_shader_pixel(ps_code) {
+            Ok(s) => s,
+            Err(e) => return Err(ProgramError::Pixel(e)),
+        };
+        Ok(ShaderSet::Geometry(vs, gs, ps))
+    }
+
+    /// Creates a `ShaderSet` from the supplied vertex, hull, domain, and pixel
+    /// shader source code. Mainly used for testing.
     fn create_shader_set_tessellation(&mut self, vs_code: &[u8], hs_code: &[u8], ds_code: &[u8], ps_code: &[u8])
                          -> Result<ShaderSet<R>, ProgramError> {
         let vs = match self.create_shader_vertex(vs_code) {

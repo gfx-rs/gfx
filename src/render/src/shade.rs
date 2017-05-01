@@ -79,14 +79,16 @@ impl_uniforms! {
 }
 
 /// Program linking error
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ProgramError {
     /// Unable to compile the vertex shader
     Vertex(core::CreateShaderError),
-    /// Unable to compile the pixel shader
+    /// Unable to compile the hull shader
     Hull(core::CreateShaderError),
-    /// Unable to compile the pixel shader
+    /// Unable to compile the domain shader
     Domain(core::CreateShaderError),
+    /// Unable to compile the geometry shader
+    Geometry(core::CreateShaderError),
     /// Unable to compile the pixel shader
     Pixel(core::CreateShaderError),
     /// Unable to link
@@ -99,6 +101,7 @@ impl fmt::Display for ProgramError {
             ProgramError::Vertex(ref e) => write!(f, "{}: {}", self.description(), e),
             ProgramError::Hull(ref e) => write!(f, "{}: {}", self.description(), e),
             ProgramError::Domain(ref e) => write!(f, "{}: {}", self.description(), e),
+            ProgramError::Geometry(ref e) => write!(f, "{}: {}", self.description(), e),
             ProgramError::Pixel(ref e) => write!(f, "{}: {}", self.description(), e),
             ProgramError::Link(ref e) => write!(f, "{}: {}", self.description(), e),
         }
@@ -111,6 +114,7 @@ impl Error for ProgramError {
             ProgramError::Vertex(_) => "Unable to compile the vertex shader",
             ProgramError::Hull(_) => "Unable to compile the hull shader",
             ProgramError::Domain(_) => "Unable to compile the domain shader",
+            ProgramError::Geometry(_) => "Unable to compile the geometry shader",
             ProgramError::Pixel(_) => "Unable to compile the pixel shader",
             ProgramError::Link(_) => "Unable to link",
         }
@@ -121,6 +125,7 @@ impl Error for ProgramError {
             ProgramError::Vertex(ref e) => Some(e),
             ProgramError::Hull(ref e) => Some(e),
             ProgramError::Domain(ref e) => Some(e),
+            ProgramError::Geometry(ref e) => Some(e),
             ProgramError::Pixel(ref e) => Some(e),
             ProgramError::Link(ref e) => Some(e),
         }
