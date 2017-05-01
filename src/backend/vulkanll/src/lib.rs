@@ -730,6 +730,7 @@ impl core::Resources for Resources {
     type Buffer = native::Buffer;
     type UnboundImage = factory::UnboundImage;
     type Image = native::Image;
+    type ConstantBufferView = native::ConstantBufferView;
     type ShaderResourceView = native::ShaderResourceView;
     type UnorderedAccessView = native::UnorderedAccessView;
     type RenderTargetView = native::RenderTargetView;

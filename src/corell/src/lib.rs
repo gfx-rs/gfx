@@ -270,6 +270,7 @@ pub trait Resources:          Clone + Hash + Debug + Any {
     type Buffer:              Debug + Any + Send + Sync;
     type UnboundImage:        Debug + Any + Send + Sync;
     type Image:               Debug + Any + Send + Sync;
+    type ConstantBufferView:  Debug + Any + Send + Sync;
     type ShaderResourceView:  Debug + Any + Send + Sync;
     type UnorderedAccessView: Debug + Any + Send + Sync;
     type RenderTargetView:    Debug + Any + Send + Sync;
