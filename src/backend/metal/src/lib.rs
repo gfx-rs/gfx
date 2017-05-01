@@ -183,6 +183,7 @@ impl core::Resources for Resources {
     type UnorderedAccessView = ();
     type Sampler = native::Sampler;
     type Fence = Fence;
+    type Semaphore = (); // TODO
     type Mapping = factory::RawMapping;
 }
 
