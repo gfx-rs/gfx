@@ -71,6 +71,7 @@ impl c::Resources for Resources {
     type UnorderedAccessView = ();
     type Sampler             = FatSampler;
     type Fence               = Fence;
+    type Semaphore           = (); // TODO
     type Mapping             = factory::MappingGate;
 }
 
