@@ -21,6 +21,8 @@
 extern crate cgmath;
 
 extern crate log;
+#[macro_use]
+extern crate derivative;
 extern crate draw_state;
 extern crate gfx_core as core;
 

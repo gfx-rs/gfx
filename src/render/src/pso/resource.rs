@@ -26,24 +26,42 @@ use super::{DataLink, DataBind, RawDataSet, AccessInfo};
 ///
 /// - init: `&str` = name of the resource
 /// - data: `ShaderResourceView<T>`
-pub struct ShaderResource<T>(RawShaderResource, PhantomData<T>);
+#[derive(Derivative)]
+#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct ShaderResource<T>(
+    RawShaderResource,
+    #[derivative(Hash = "ignore", PartialEq = "ignore")]
+    PhantomData<T>
+);
+
 /// Raw (untyped) shader resource (SRV).
 ///
 /// - init: `&str` = name of the resource. This may change in the future.
 /// - data: `RawShaderResourceView`
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct RawShaderResource(Option<(ResourceViewSlot, shade::Usage)>);
+
 /// Unordered access component (UAV). A writable resource (texture/buffer)
 /// with no defined access order across simultaneously executing shaders.
 /// Supported on DX10 and higher.
 ///
 /// - init: `&str` = name of the resource
 /// - data: `UnorderedAccessView<T>`
-pub struct UnorderedAccess<T>(Option<(UnorderedViewSlot, shade::Usage)>, PhantomData<T>);
+#[derive(Derivative)]
+#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct UnorderedAccess<T>(
+    Option<(UnorderedViewSlot, shade::Usage)>,
+    #[derivative(Hash = "ignore", PartialEq = "ignore")]
+    PhantomData<T>
+);
+
 /// Sampler component.
 ///
 /// - init: `&str` = name of the sampler
 /// - data: `Sampler`
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Sampler(Option<(SamplerSlot, shade::Usage)>);
+
 /// A convenience type for a texture paired with a sampler.
 /// It only makes sense for DX9 class hardware, where every texture by default
 /// is bundled with a sampler, hence they are represented by the same name.
@@ -51,8 +69,8 @@ pub struct Sampler(Option<(SamplerSlot, shade::Usage)>);
 ///
 /// - init: `&str` = name of the sampler/texture (assuming they match)
 /// - data: (`ShaderResourceView<T>`, `Sampler`)
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct TextureSampler<T>(ShaderResource<T>, Sampler);
-
 
 impl<'a, T> DataLink<'a> for ShaderResource<T> {
     type Init = &'a str;
@@ -78,7 +96,6 @@ impl<R: Resources, T> DataBind<R> for ShaderResource<T> {
         self.0.bind_to(out, data.raw(), man, access)
     }
 }
-
 
 impl<'a> DataLink<'a> for RawShaderResource {
     type Init = &'a str;
@@ -114,7 +131,6 @@ impl<R: Resources> DataBind<R> for RawShaderResource {
     }
 }
 
-
 impl<'a, T> DataLink<'a> for UnorderedAccess<T> {
     type Init = &'a str;
     fn new() -> Self {
@@ -149,7 +165,6 @@ impl<R: Resources, T> DataBind<R> for UnorderedAccess<T> {
     }
 }
 
-
 impl<'a> DataLink<'a> for Sampler {
     type Init = &'a str;
     fn new() -> Self {
@@ -182,7 +197,6 @@ impl<R: Resources> DataBind<R> for Sampler {
         }
     }
 }
-
 
 impl<'a, T> DataLink<'a> for TextureSampler<T> {
     type Init = &'a str;

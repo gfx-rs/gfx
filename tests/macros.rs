@@ -2,12 +2,11 @@
 extern crate gfx;
 pub use gfx::format as fm;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Rg16;
 gfx_format!(Rg16: R16_G16 = Vec2<Float>);
 
 gfx_defines!{
-    #[derive(PartialEq)]
     vertex Vertex {
         _x: i8 = "x",
         _y: f32 = "y",
@@ -21,7 +20,7 @@ gfx_defines!{
     constant Local {
         pos: [u32; 4] = "pos",
     }
-    #[derive(PartialEq)] #[derive(PartialOrd)]
+
     constant LocalMeta {
         pos: [u32; 4] = "pos_meta",
     }

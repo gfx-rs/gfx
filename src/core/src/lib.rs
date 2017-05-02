@@ -19,6 +19,8 @@
 
 #[macro_use]
 extern crate bitflags;
+#[macro_use]
+extern crate derivative;
 extern crate draw_state;
 extern crate log;
 
@@ -85,10 +87,12 @@ pub type ColorSlot = u8;
 pub type SamplerSlot = u8;
 
 macro_rules! define_shaders {
-    ($($name:ident),+) => {$(
+    ( $($name:ident),+ ) => {
+        $(
         #[allow(missing_docs)]
         #[derive(Clone, Debug, Eq, Hash, PartialEq)]
         pub struct $name<R: Resources>(handle::Shader<R>);
+
         impl<R: Resources> $name<R> {
             #[allow(missing_docs)]
             pub fn reference(&self, man: &mut handle::Manager<R>) -> &R::Shader {
@@ -100,7 +104,8 @@ macro_rules! define_shaders {
                 $name(shader)
             }
         }
-    )+}
+        )+
+    }
 }
 
 define_shaders!(VertexShader, HullShader, DomainShader, GeometryShader, PixelShader);
@@ -114,7 +119,6 @@ pub enum ShaderSet<R: Resources> {
     Geometry(VertexShader<R>, GeometryShader<R>, PixelShader<R>),
     /// Tessellated TODO: Tessellated, TessellatedGeometry, TransformFeedback
     Tessellated(VertexShader<R>, HullShader<R>, DomainShader<R>, PixelShader<R>),
-
 }
 
 impl<R: Resources> ShaderSet<R> {
@@ -131,7 +135,7 @@ impl<R: Resources> ShaderSet<R> {
 //TODO: use the appropriate units for max vertex count, etc
 /// Features that the device supports.
 #[allow(missing_docs)] // pretty self-explanatory fields!
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct Capabilities {
     pub max_vertex_count: usize,
@@ -309,7 +313,7 @@ pub trait Adapter: Sized {
 }
 
 /// Information about a backend adapater.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct AdapterInfo {
     /// Adapter name

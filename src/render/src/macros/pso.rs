@@ -21,15 +21,17 @@ macro_rules! gfx_pipeline_inner {
     } => {
         use $crate::pso::{DataLink, DataBind, Descriptor, InitError, RawDataSet, AccessInfo};
 
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, PartialEq)]
         pub struct Data<R: $crate::Resources> {
             $( pub $field: <$ty as DataBind<R>>::Data, )*
         }
 
+        #[derive(Clone, Debug, PartialEq)]
         pub struct Meta {
             $( $field: $ty, )*
         }
 
+        #[derive(Clone, Debug, PartialEq)]
         pub struct Init<'a> {
             $( pub $field: <$ty as DataLink<'a>>::Init, )*
         }

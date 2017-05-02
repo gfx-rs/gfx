@@ -136,7 +136,7 @@ impl From<u32> for ClearColor {
 }
 
 /// Informations about what is accessed by a bunch of commands.
-#[derive(Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AccessInfo<R: Resources> {
     mapped_reads: HashSet<handle::RawBuffer<R>>,
     mapped_writes: HashSet<handle::RawBuffer<R>>,
